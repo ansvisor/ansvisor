@@ -122,6 +122,29 @@ export interface DraftStart {
   sourceUrl?: string;
 }
 
+/** A page of the brand's brought in by its URL (CE-003): main content, title and schema. */
+export interface ImportedPage {
+  /** The address after redirects. */
+  url: string;
+  title: string;
+  html: string;
+}
+
+/** Why a page couldn't be brought in, as the API names it ('failed' for anything else). */
+export const PAGE_IMPORT_ERRORS = [
+  'off_site',
+  'invalid_url',
+  'blocked',
+  'not_html',
+  'http_error',
+  'too_large',
+  'timeout',
+  'unreachable',
+  'too_many_redirects',
+  'failed',
+] as const;
+export type PageImportError = (typeof PAGE_IMPORT_ERRORS)[number];
+
 /** One of the brand's pages AI already cites for a new page's prompts (CE-015). */
 export interface OverlapPage {
   url: string;

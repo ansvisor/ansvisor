@@ -25,6 +25,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
@@ -32,6 +33,7 @@ import {
   createContentDraft,
   getContentOverlap,
   getContentStartOptions,
+  importContentPage,
 } from '@/lib/actions/content-drafts';
 import { MAX_ATTACHMENT_BYTES, textToHtml } from '@/lib/content/attachments';
 import { cleanHtml } from '@/lib/content/clean-html';
@@ -41,6 +43,7 @@ import {
   type DraftMethod,
   type DraftSource,
   type DraftStartOptions,
+  type PageImportError,
   type PageType,
 } from '@/lib/content/drafts';
 import { DOCUMENT_ACCEPT, readDocumentFile } from '@/lib/content/import-document';
@@ -76,8 +79,13 @@ interface BroughtContent extends ContentSummary {
   html: string;
   /** The file's name; none for a paste. */
   fileName?: string;
+  /** The page's address, for content read from a URL. */
+  sourceUrl?: string;
   imagesRemoved: number;
 }
+
+/** Where content to optimize comes from. */
+type ContentFrom = 'url' | 'paste' | 'file';
 
 /** Where Start's first page type came from, if it was read from somewhere. */
 type DetectedFrom = 'title' | 'content' | 'page' | null;
@@ -88,6 +96,8 @@ interface StartChoice {
   title: string;
   source: DraftSource;
   bodyHtml?: string;
+  /** The page the content was read from, for content brought by URL. */
+  sourceUrl?: string;
   pageType: PageType;
   detectedFrom: DetectedFrom;
   /** The page type for a new page, to go back to from optimizing an existing one. */
@@ -131,7 +141,9 @@ export function NewContentDialog({
   const [method, setMethod] = useState<DraftMethod>('create');
   const [kind, setKind] = useState<SourceKind>('opportunity');
   const [picked, setPicked] = useState<PickerItem | null>(null);
-  const [from, setFrom] = useState<'paste' | 'file'>('paste');
+  const [from, setFrom] = useState<ContentFrom>('url');
+  const [pageUrl, setPageUrl] = useState('');
+  const [urlError, setUrlError] = useState<{ code: PageImportError; status?: number } | null>(null);
   const [pastedText, setPastedText] = useState('');
   const [content, setContent] = useState<BroughtContent | null>(null);
   const [reading, setReading] = useState(false);
@@ -190,7 +202,9 @@ export function NewContentDialog({
     setMethod('create');
     setKind('opportunity');
     setPicked(null);
-    setFrom('paste');
+    setFrom('url');
+    setPageUrl('');
+    setUrlError(null);
     setPastedText('');
     setContent(null);
     setStart(null);
@@ -218,13 +232,40 @@ export function NewContentDialog({
             meta: t('topicPrompts', { count: topic.promptCount }),
           }));
 
-  const bring = (html: string, imagesRemoved: number, fileName?: string) => {
-    const summary = summarizeContent(html, fileName ? fileTitle(fileName) : '');
+  const bring = (
+    html: string,
+    imagesRemoved: number,
+    origin: { fileName?: string; sourceUrl?: string; title?: string } = {},
+  ) => {
+    const fallback = origin.title || (origin.fileName ? fileTitle(origin.fileName) : '');
+    const summary = summarizeContent(html, fallback);
     if (!summary.characters) {
       toast.error(t('content.empty'));
       return;
     }
-    setContent({ ...summary, html, fileName, imagesRemoved });
+    setContent({ ...summary, html, imagesRemoved, ...origin });
+  };
+
+  /** A page of the brand's, read by its URL and cleaned like a paste. */
+  const readPage = async () => {
+    const address = pageUrl.trim();
+    if (!address) return;
+    setReading(true);
+    setUrlError(null);
+    try {
+      const read = await importContentPage(brandId, address);
+      if ('error' in read) {
+        setUrlError({ code: read.error, status: read.status });
+        return;
+      }
+      const cleaned = cleanHtml(read.page.html, { keepImages: true });
+      bring(cleaned.html, cleaned.imagesRemoved, {
+        sourceUrl: read.page.url,
+        title: read.page.title,
+      });
+    } finally {
+      setReading(false);
+    }
   };
 
   const onPaste = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
@@ -247,7 +288,7 @@ export function NewContentDialog({
     try {
       const doc = await readDocumentFile(file);
       if (!doc) toast.error(t('content.unsupported', { name: file.name }));
-      else bring(doc.html, doc.imagesRemoved, file.name);
+      else bring(doc.html, doc.imagesRemoved, { fileName: file.name });
     } catch (err) {
       console.error('Failed to read a file for New content:', err);
       toast.error(t('content.readFailed', { name: file.name }));
@@ -283,16 +324,21 @@ export function NewContentDialog({
       content ??
       (typed ? { ...summarizeContent(textToHtml(typed)), html: textToHtml(typed) } : null);
     if (!brought) return;
-    const type = startPageType({ title: brought.title, html: brought.html }, siteType);
+    const sourceUrl = 'sourceUrl' in brought ? brought.sourceUrl : undefined;
+    const type = startPageType(
+      { title: brought.title, html: brought.html, url: sourceUrl },
+      siteType,
+    );
     const newPageType = {
       pageType: type.pageType,
-      detectedFrom: type.detected ? ('content' as const) : null,
+      detectedFrom: type.detected ? (sourceUrl ? ('page' as const) : ('content' as const)) : null,
     };
     setStart({
       method,
       title: brought.title,
       source: { kind: 'content' },
       bodyHtml: brought.html,
+      sourceUrl,
       ...newPageType,
       newPageType,
       choice: { kind: 'create' },
@@ -308,13 +354,24 @@ export function NewContentDialog({
     if (!start) return;
     setOpening(true);
     try {
+      // An existing page Start chose to optimize brings its live text; if it
+      // can't be read, the draft starts with its title, and says so.
+      let bodyHtml = start.bodyHtml;
+      if (existing) {
+        const read = await importContentPage(brandId, existing.url);
+        if ('page' in read) bodyHtml = cleanHtml(read.page.html, { keepImages: true }).html;
+        else {
+          bodyHtml = undefined;
+          toast.warning(t('start.pageUnread', { page: pagePath(existing.url) }));
+        }
+      }
       const id = await createContentDraft(brandId, {
         method: startMethod,
         title: startTitle,
         pageType: start.pageType,
         source: start.source,
-        bodyHtml: start.bodyHtml,
-        sourceUrl: existing?.url,
+        bodyHtml,
+        sourceUrl: existing?.url ?? start.sourceUrl,
       });
       router.push(contentEditorPath(id));
     } catch (err) {
@@ -502,11 +559,13 @@ export function NewContentDialog({
                 <Tabs
                   value={from}
                   onValueChange={(value) => {
-                    setFrom(value as 'paste' | 'file');
+                    setFrom(value as ContentFrom);
+                    setUrlError(null);
                     setContent(null);
                   }}
                 >
                   <TabsList>
+                    <TabsTrigger value="url">{t('content.url')}</TabsTrigger>
                     <TabsTrigger value="paste">{t('content.paste')}</TabsTrigger>
                     <TabsTrigger value="file">{t('content.file')}</TabsTrigger>
                   </TabsList>
@@ -520,7 +579,7 @@ export function NewContentDialog({
                       </p>
                       <p className="text-xs text-muted-foreground">
                         {[
-                          content.fileName,
+                          content.fileName ?? (content.sourceUrl && pagePath(content.sourceUrl)),
                           t('content.summary', {
                             headings: content.headings,
                             characters: formatNumber(content.characters),
@@ -545,6 +604,43 @@ export function NewContentDialog({
                     >
                       <X className="h-4 w-4" />
                     </Button>
+                  </div>
+                ) : from === 'url' ? (
+                  <div className="space-y-1.5">
+                    <form
+                      className="flex gap-2"
+                      onSubmit={(e) => {
+                        e.preventDefault();
+                        void readPage();
+                      }}
+                    >
+                      <Input
+                        value={pageUrl}
+                        onChange={(e) => {
+                          setPageUrl(e.target.value);
+                          setUrlError(null);
+                        }}
+                        placeholder={t('content.urlPlaceholder')}
+                        aria-label={t('content.url')}
+                        aria-invalid={urlError !== null}
+                        inputMode="url"
+                        autoComplete="off"
+                        disabled={reading}
+                      />
+                      <Button type="submit" variant="outline" disabled={reading || !pageUrl.trim()}>
+                        {reading && <Loader2 className="h-4 w-4 animate-spin" />}
+                        {t(reading ? 'content.importing' : 'content.import')}
+                      </Button>
+                    </form>
+                    {urlError ? (
+                      <p className="text-xs text-destructive" role="alert">
+                        {urlError.code === 'http_error' && urlError.status
+                          ? t('content.urlErrors.http_status', { status: urlError.status })
+                          : t(`content.urlErrors.${urlError.code}`)}
+                      </p>
+                    ) : (
+                      <p className="text-xs text-muted-foreground">{t('content.urlHint')}</p>
+                    )}
                   </div>
                 ) : from === 'paste' ? (
                   <Textarea

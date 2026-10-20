@@ -1,6 +1,7 @@
 'use server';
 
 import { z } from 'zod';
+import { API_BASE_URL } from '@/config/api';
 import { createClient } from '@/lib/supabase/server';
 import { readAssignees } from '@/lib/action-center/assignees';
 import {
@@ -13,7 +14,10 @@ import {
   type DraftStart,
   type DraftStartOptions,
   type DraftStatus,
+  type ImportedPage,
+  type PageImportError,
   type PageType,
+  PAGE_IMPORT_ERRORS,
 } from '@/lib/content/drafts';
 import { escapeHtml } from '@/lib/content/attachments';
 import { MAX_BODY_HTML_LENGTH, MAX_TITLE_LENGTH } from '@/lib/content/editor';
@@ -257,6 +261,55 @@ async function promptsFor(
   if (error) throw new Error(error.message);
   if (!data?.length) throw new Error('not_found');
   return { promptIds: data.map((p) => p.id), opportunityId: null };
+}
+
+/**
+ * A page of the brand's, read for Optimize content › Page URL and for
+ * Start's "Optimize this page instead" (CE-003): its main content, title and
+ * schema, through the API's guarded fetch, which reads only the brand's own
+ * domains and never a private address. A page that can't be read comes back
+ * as the reason, not a throw: production hides a server action's errors.
+ */
+export async function importContentPage(
+  brandId: string,
+  url: string,
+): Promise<{ page: ImportedPage } | { error: PageImportError; status?: number }> {
+  if (!draftId.safeParse(brandId).success || !url.trim() || url.length > 2048) {
+    return { error: 'invalid_url' };
+  }
+  const supabase = await createClient();
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  if (!session) return { error: 'failed' };
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/content-pages/import`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${session.access_token}`,
+      },
+      body: JSON.stringify({ brandId, url: url.trim() }),
+    });
+    const body = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+    if (!res.ok) {
+      const code = body.code as PageImportError;
+      return {
+        error: (PAGE_IMPORT_ERRORS as readonly string[]).includes(code) ? code : 'failed',
+        ...(typeof body.status === 'number' && { status: body.status }),
+      };
+    }
+    return {
+      page: {
+        url: String(body.url),
+        title: String(body.title ?? ''),
+        html: String(body.html ?? ''),
+      },
+    };
+  } catch (err) {
+    console.error('Failed to import a page:', err);
+    return { error: 'failed' };
+  }
 }
 
 const overlapSource = startInput.shape.source;

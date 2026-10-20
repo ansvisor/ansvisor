@@ -3116,7 +3116,7 @@
         },
         "optimize": {
           "title": "Optimize content",
-          "hint": "Pasted text or a file"
+          "hint": "A page URL, pasted text or a file"
         }
       },
       "startFrom": "Start from",
@@ -3146,6 +3146,24 @@
       "retry": "Try again",
       "content": {
         "label": "Content",
+        "url": "Page URL",
+        "urlPlaceholder": "https://yourbrand.com/page",
+        "urlHint": "A page on your brand's site. Its main text, headings, links and schema come in; menus and footers stay out.",
+        "import": "Import",
+        "importing": "Reading…",
+        "urlErrors": {
+          "off_site": "Use a page on your brand's site. Its domains are in the brand settings.",
+          "invalid_url": "Enter a page's address, like https://yourbrand.com/pricing.",
+          "blocked": "That address can't be read.",
+          "not_html": "That address isn't a web page.",
+          "http_error": "The page couldn't be opened.",
+          "http_status": "The page answered {status}.",
+          "too_large": "The page is too large to bring in.",
+          "timeout": "The page took too long to answer.",
+          "unreachable": "The page couldn't be reached.",
+          "too_many_redirects": "The page redirects too many times.",
+          "failed": "Couldn't read the page. Try again."
+        },
         "paste": "Paste text",
         "file": "Upload file",
         "pastePlaceholder": "Paste from Word, Google Docs or a web page. Headings, lists, links and tables are kept.",
@@ -3170,8 +3188,9 @@
         "pageType": "Page type",
         "detectedTitle": "Picked from the title.",
         "detectedContent": "Picked from the content.",
-        "detectedPage": "Picked from the page's address.",
+        "detectedPage": "Picked from the page.",
         "openEditor": "Open editor",
+        "pageUnread": "Couldn't read {page}: the draft starts with its title.",
         "failed": "Couldn't start the draft. Try again."
       },
       "overlap": {

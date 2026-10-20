@@ -45,11 +45,11 @@ export function fileTitle(name: string): string {
 }
 
 /**
- * The page type Start picks first (CE-015): the one the title or content
- * shows, else a blog post, which every kind of site writes.
+ * The page type Start picks first (CE-015): the one the page's address,
+ * content or title shows, else a blog post, which every kind of site writes.
  */
 export function startPageType(
-  page: { title: string; html?: string },
+  page: { title: string; html?: string; url?: string },
   siteType: SiteType,
 ): { pageType: PageType; detected: boolean } {
   const detected = detectPageType(page, siteType);

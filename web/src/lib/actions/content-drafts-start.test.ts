@@ -26,7 +26,10 @@ let rpcRows: unknown[];
 vi.mock('@/lib/action-center/assignees', () => ({ readAssignees: vi.fn(async () => new Map()) }));
 vi.mock('@/lib/supabase/server', () => ({
   createClient: vi.fn(async () => ({
-    auth: { getUser: async () => ({ data: { user: { id: 'u1' } } }) },
+    auth: {
+      getUser: async () => ({ data: { user: { id: 'u1' } } }),
+      getSession: async () => ({ data: { session: { access_token: 'jwt' } } }),
+    },
     rpc: async (fn: string, args: unknown) => {
       rpcCalls.push({ fn, args });
       return { data: rpcRows, error: null };
@@ -54,7 +57,7 @@ vi.mock('@/lib/supabase/server', () => ({
   })),
 }));
 
-const { createContentDraft, getContentOverlap, getContentStartOptions } =
+const { createContentDraft, getContentOverlap, getContentStartOptions, importContentPage } =
   await import('./content-drafts');
 
 const inserted = () => calls.find((call) => call.op === 'insert')?.value as Record<string, unknown>;
@@ -324,5 +327,68 @@ describe('optimizing an existing page instead (overlap check)', () => {
       }),
     ).rejects.toThrow('invalid');
     expect(calls).toEqual([]);
+  });
+});
+
+describe('importContentPage', () => {
+  const answer = (status: number, body: unknown) =>
+    vi.fn(async () => new Response(JSON.stringify(body), { status }));
+
+  it('asks the API to read the page, with the member’s session', async () => {
+    const fetchMock = answer(200, {
+      url: 'https://northwind.example/pricing',
+      title: 'Pricing',
+      html: '<h1>Pricing</h1>',
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    await expect(importContentPage(BRAND, ' northwind.example/pricing ')).resolves.toEqual({
+      page: {
+        url: 'https://northwind.example/pricing',
+        title: 'Pricing',
+        html: '<h1>Pricing</h1>',
+      },
+    });
+    const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toMatch(/\/api\/content-pages\/import$/);
+    expect(init.headers).toMatchObject({ Authorization: 'Bearer jwt' });
+    expect(JSON.parse(init.body as string)).toEqual({
+      brandId: BRAND,
+      url: 'northwind.example/pricing',
+    });
+    vi.unstubAllGlobals();
+  });
+
+  it('names why the page couldn’t be read, and an unknown answer as failed', async () => {
+    vi.stubGlobal('fetch', answer(422, { code: 'http_error', status: 404 }));
+    await expect(importContentPage(BRAND, 'https://northwind.example/x')).resolves.toEqual({
+      error: 'http_error',
+      status: 404,
+    });
+    vi.stubGlobal('fetch', answer(500, { code: 'something_new' }));
+    await expect(importContentPage(BRAND, 'https://northwind.example/x')).resolves.toEqual({
+      error: 'failed',
+    });
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => {
+        throw new Error('ECONNREFUSED');
+      }),
+    );
+    await expect(importContentPage(BRAND, 'https://northwind.example/x')).resolves.toEqual({
+      error: 'failed',
+    });
+    vi.unstubAllGlobals();
+  });
+
+  it('asks for nothing with a malformed brand or an empty address', async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    await expect(importContentPage('nope', 'https://x.example')).resolves.toEqual({
+      error: 'invalid_url',
+    });
+    await expect(importContentPage(BRAND, '  ')).resolves.toEqual({ error: 'invalid_url' });
+    expect(fetchMock).not.toHaveBeenCalled();
+    vi.unstubAllGlobals();
   });
 });

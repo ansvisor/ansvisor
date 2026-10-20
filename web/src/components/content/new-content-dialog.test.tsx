@@ -9,14 +9,18 @@ import { NewContentDialog } from './new-content-dialog';
 const getContentStartOptions = vi.fn();
 const createContentDraft = vi.fn();
 const getContentOverlap = vi.fn();
+const importContentPage = vi.fn();
 vi.mock('@/lib/actions/content-drafts', () => ({
+  importContentPage: (...args: unknown[]) => importContentPage(...args),
   getContentStartOptions: (...args: unknown[]) => getContentStartOptions(...args),
   createContentDraft: (...args: unknown[]) => createContentDraft(...args),
   getContentOverlap: (...args: unknown[]) => getContentOverlap(...args),
 }));
 const push = vi.fn();
 vi.mock('@/i18n/navigation', () => ({ useRouter: () => ({ push }) }));
-const toast = vi.hoisted(() => Object.assign(vi.fn(), { success: vi.fn(), error: vi.fn() }));
+const toast = vi.hoisted(() =>
+  Object.assign(vi.fn(), { success: vi.fn(), error: vi.fn(), warning: vi.fn() }),
+);
 vi.mock('sonner', () => ({ toast }));
 
 (
@@ -80,6 +84,8 @@ const click = async (el: Element | undefined) => {
     (el as HTMLElement).click();
   });
 };
+const tab = (name: string) =>
+  [...document.querySelectorAll('[role="tab"]')].find((t) => t.textContent === name);
 const checkedType = () =>
   document.querySelector('[aria-labelledby="start-page-type"] [aria-checked="true"]')?.textContent;
 
@@ -90,6 +96,8 @@ beforeEach(() => {
   getContentStartOptions.mockReset().mockResolvedValue(OPTIONS);
   createContentDraft.mockReset().mockResolvedValue('d9');
   getContentOverlap.mockReset().mockResolvedValue({ totalPrompts: 2, pages: [] });
+  importContentPage.mockReset().mockResolvedValue({ error: 'failed' });
+  toast.warning.mockReset();
   push.mockReset();
   toast.error.mockReset();
 });
@@ -145,6 +153,7 @@ describe('New content', () => {
   it('optimizes pasted content, cleaned, and reads its page type from it', async () => {
     await render('ecommerce');
     await click(radio('Optimize content'));
+    await click(tab('Paste text'));
     const box = document.querySelector('textarea')!;
     const paste = new Event('paste', { bubbles: true, cancelable: true });
     Object.defineProperty(paste, 'clipboardData', {
@@ -179,6 +188,7 @@ describe('New content', () => {
   it('takes typed plain text as paragraphs, and a blog post when nothing tells the type', async () => {
     await render();
     await click(radio('Optimize content'));
+    await click(tab('Paste text'));
     const box = document.querySelector('textarea')!;
     const setValue = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!;
     await act(async () => {
@@ -198,9 +208,7 @@ describe('New content', () => {
   it('reads an uploaded Markdown file, and refuses a spreadsheet', async () => {
     await render();
     await click(radio('Optimize content'));
-    await click(
-      [...document.querySelectorAll('[role="tab"]')].find((t) => t.textContent === 'Upload file'),
-    );
+    await click(tab('Upload file'));
     const input = document.querySelector<HTMLInputElement>('input[type="file"]')!;
     const upload = async (file: File) => {
       Object.defineProperty(input, 'files', { value: [file], configurable: true });
@@ -226,6 +234,65 @@ describe('New content', () => {
     await click(button('Try again'));
     expect(getContentStartOptions).toHaveBeenCalledTimes(2);
     expect(button('Pick an opportunity')).toBeDefined();
+  });
+
+  describe('Optimize content › Page URL', () => {
+    async function importUrl(url: string) {
+      await render();
+      await click(radio('Optimize content'));
+      const input = document.querySelector<HTMLInputElement>('input[aria-label="Page URL"]')!;
+      const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!;
+      await act(async () => {
+        setValue.call(input, url);
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+      });
+      await click(button('Import'));
+      await act(async () => {});
+    }
+
+    it('reads a page of the brand’s, cleaned, and starts from its address', async () => {
+      importContentPage.mockResolvedValue({
+        page: {
+          url: 'https://northwind.example/pricing',
+          title: 'Pricing',
+          html: '<h1>Pricing</h1><p onclick="x()">Plans</p><script>track()</script>',
+        },
+      });
+      await importUrl('northwind.example/pricing');
+      expect(importContentPage).toHaveBeenCalledWith('b1', 'northwind.example/pricing');
+      expect(document.body.textContent).toContain('/pricing · 1 heading');
+
+      await click(button('Continue'));
+      expect(document.body.textContent).toContain('Optimize: Pricing');
+      expect(checkedType()).toBe('Pricing');
+      expect(document.body.textContent).toContain('Picked from the page.');
+      // Content brought to optimize has no prompts to check.
+      expect(getContentOverlap).not.toHaveBeenCalled();
+
+      await click(button('Open editor'));
+      expect(createContentDraft).toHaveBeenCalledWith('b1', {
+        method: 'optimize',
+        title: 'Pricing',
+        pageType: 'pricing',
+        source: { kind: 'content' },
+        bodyHtml: '<h1>Pricing</h1><p>Plans</p>',
+        sourceUrl: 'https://northwind.example/pricing',
+      });
+    });
+
+    it('says why a page couldn’t be read', async () => {
+      importContentPage.mockResolvedValue({ error: 'off_site' });
+      await importUrl('https://competitor.example/pricing');
+      expect(document.querySelector('[role="alert"]')!.textContent).toBe(
+        "Use a page on your brand's site. Its domains are in the brand settings.",
+      );
+      expect(button('Continue')!.disabled).toBe(true);
+
+      importContentPage.mockResolvedValue({ error: 'http_error', status: 404 });
+      await click(button('Import'));
+      await act(async () => {});
+      expect(document.querySelector('[role="alert"]')!.textContent).toBe('The page answered 404.');
+    });
   });
 
   describe('the overlap check', () => {
@@ -275,14 +342,37 @@ describe('New content', () => {
       // The draft becomes that page's: its title, and the type its address shows.
       expect(document.body.textContent).toContain('Optimize: Espresso machines for beginners');
       expect(checkedType()).toBe('Guide');
-      expect(document.body.textContent).toContain("Picked from the page's address.");
+      expect(document.body.textContent).toContain('Picked from the page.');
 
+      importContentPage.mockResolvedValue({
+        page: {
+          url: GUIDE.url,
+          title: 'Espresso machines for beginners',
+          html: '<h1>Espresso machines for beginners</h1><p style="color:red">Start here.</p>',
+        },
+      });
       await click(button('Open editor'));
+      // The page's live text comes in, cleaned like a paste.
+      expect(importContentPage).toHaveBeenCalledWith('b1', GUIDE.url);
       expect(createContentDraft).toHaveBeenCalledWith('b1', {
         method: 'optimize',
         title: 'Espresso machines for beginners',
         pageType: 'guide',
         source: { kind: 'opportunity', id: 'o1' },
+        bodyHtml: '<h1>Espresso machines for beginners</h1><p>Start here.</p>',
+        sourceUrl: GUIDE.url,
+      });
+    });
+
+    it('starts an existing page with its title when its live text can’t be read', async () => {
+      getContentOverlap.mockResolvedValue({ totalPrompts: 4, pages: [GUIDE] });
+      await startFromOpportunity();
+      await click(button('Open editor'));
+      expect(toast.warning).toHaveBeenCalledWith(
+        "Couldn't read /guides/espresso-machines-for-beginners: the draft starts with its title.",
+      );
+      expect(createContentDraft.mock.calls[0][1]).toMatchObject({
+        method: 'optimize',
         bodyHtml: undefined,
         sourceUrl: GUIDE.url,
       });
