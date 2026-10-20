@@ -4069,7 +4069,7 @@
       "sortOldest": "Oldest",
       "sortCoMentions": "Most co-mentions",
       "sortNegative": "Most negative",
-      "summary": "{mentions, plural, one {# mention} other {# mentions}} · {prompts, plural, one {# prompt} other {# prompts}}",
+      "summary": "{responses, plural, one {# response} other {# responses}} · {prompts, plural, one {# prompt} other {# prompts}}",
       "columns": {
         "prompt": "Prompt",
         "platform": "Platform",
@@ -4167,7 +4167,7 @@
       "copyBlocked": "Your browser didn't allow copying here. Allow clipboard access for this site and try again.",
       "exportFailed": "Couldn't export the mentions. Try again in a moment.",
       "nothing": "No mentions to export for these filters.",
-      "capped": "The file holds {shown} of {total} mentions. Narrow the filters to export the rest.",
+      "capped": "The file holds {shown} of {total} responses. Narrow the filters to export the rest.",
       "pickDates": "Choose a start or end date first.",
       "reports": "Reports",
       "exportSelected": "Export",
@@ -4176,11 +4176,12 @@
         "periodDays": "{from} – {to} ({days, plural, one {# day} other {# days}}, UTC)",
         "periodMoments": "{from} – {to} UTC",
         "responses": "Tracked responses (n)",
-        "mentions": "Mentions (n)",
+        "totalMentions": "Total mentions (n)",
+        "namedResponses": "Responses naming the brand (n)",
         "prompts": "Prompts with mentions (n)",
-        "inFile": "Mentions in this file (n)",
+        "inFile": "Responses in this file (n)",
         "note": "Note",
-        "capped": "Only the first {shown} of {total} mentions, in the table's order. Narrow the filters to export the rest.",
+        "capped": "Only the first {shown} of {total} responses, in the table's order. Narrow the filters to export the rest.",
         "exported": "Exported (UTC)"
       },
       "summary": {

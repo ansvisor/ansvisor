@@ -127,13 +127,15 @@ export interface MentionsQuery {
 }
 
 /**
- * The filters as a read: the range resolved to bounds in the viewer's time
- * zone, as on the Prompts page, and empty filters left out. Null for a custom
- * range with no dates yet, which is not a window to read.
+ * The filters as a read, empty filters left out. A custom range's days are
+ * UTC days: mentions_overview reads whole UTC days, as Insights does, so in
+ * the viewer's zone a viewer west of UTC who picked Oct 1–7 read Oct 2–8,
+ * and Insights' card link opened another window (gkhngyk on #1226). Null for
+ * a custom range with no dates yet, which is not a window to read.
  */
-export function mentionsQuery(filters: MentionsFilters, timeZone?: string): MentionsQuery | null {
+export function mentionsQuery(filters: MentionsFilters): MentionsQuery | null {
   if (filters.range === 'custom' && !filters.from && !filters.to) return null;
-  const range = resolvePromptRange(filters.range, { from: filters.from, to: filters.to }, timeZone);
+  const range = resolvePromptRange(filters.range, { from: filters.from, to: filters.to }, 'UTC');
   const query: MentionsQuery = { from: range.from };
   if (range.to) query.to = range.to;
   if (filters.platform) query.platform = filters.platform;

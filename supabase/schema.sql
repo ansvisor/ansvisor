@@ -26358,12 +26358,14 @@ notify pgrst, 'reload schema';
 --   * Net sentiment is (positive − negative) over the answers that name the
 --     brand, as the Mentions page computed it. Insights divided by answers
 --     that name OR cite it (#508); cited-only answers are always neutral, so
---     they pulled its net toward zero. The Insights aggregates gain the
---     answers that name the brand (`mention_results`) and the sparkline
---     series gains them per day (`days[].mention_answers`).
+--     they pulled its net toward zero. The Insights aggregates (the daily
+--     rollup read and the raw window read) gain the answers that name the
+--     brand (`mention_results`) and the sparkline series gains them per day
+--     (`days[].mention_answers`).
 --
 -- Each function is the latest definition (00164, 00131, 00157) with only
--- those fields added; existing fields are unchanged, so a web build from
+-- those fields added, and Mentions' platforms ordered by occurrences, the
+-- column they show; existing fields are unchanged, so a web build from
 -- before this migration keeps working.
 
 create or replace function public.insights_aggregates_daily(
@@ -26461,6 +26463,93 @@ as $$
       '[]'::jsonb)
   )
   from totals t;
+$$;
+
+-- The raw window read (00131's definition, still security invoker) gains the
+-- same base: reports (no `days`), the 24h window and the Daily Pulse read it,
+-- and without it they'd fall back to answers that name or cite the brand.
+CREATE OR REPLACE FUNCTION public.insights_aggregates(
+  p_brand_id   uuid,
+  p_platform   text         DEFAULT NULL,
+  p_models     text[]       DEFAULT NULL,
+  p_region     text         DEFAULT NULL,
+  p_date_from  timestamptz  DEFAULT NULL,
+  p_date_to    timestamptz  DEFAULT NULL,
+  p_prompt_id  uuid         DEFAULT NULL,
+  p_topic_id   uuid         DEFAULT NULL
+)
+RETURNS jsonb
+LANGUAGE sql
+STABLE
+SECURITY INVOKER
+SET search_path = public
+AS $$
+  WITH filtered AS (
+    SELECT pr.visibility_score, pr.mention_count, pr.citation_count,
+           pr.sentiment, pr.model_used, pr.created_at, pr.mention_position
+    FROM public.prompt_results pr
+    WHERE pr.brand_id = p_brand_id
+      AND pr.platform <> 'chatgpt-shopping'  -- #155 — isolate from Insights
+      AND (p_platform  IS NULL OR pr.platform    = p_platform)
+      AND (p_models    IS NULL OR pr.model_used  = ANY (p_models))
+      AND (p_region    IS NULL OR pr.region      = p_region)
+      AND (p_date_from IS NULL OR pr.created_at >= p_date_from)
+      AND (p_date_to   IS NULL OR pr.created_at <= p_date_to)
+      AND (p_prompt_id IS NULL OR pr.prompt_id   = p_prompt_id)
+      AND (p_topic_id  IS NULL OR EXISTS (
+             SELECT 1 FROM public.prompts p
+             WHERE p.id = pr.prompt_id AND p.topic_id = p_topic_id))
+  ),
+  totals AS (
+    SELECT
+      COUNT(*)                                                AS total_results,
+      COALESCE(SUM(visibility_score), 0)                      AS sum_visibility,
+      COALESCE(SUM(mention_count), 0)                         AS total_mentions,
+      COALESCE(SUM(citation_count), 0)                        AS total_citations,
+      COUNT(*) FILTER (WHERE sentiment = 'positive')          AS positive_count,
+      COUNT(*) FILTER (WHERE mention_count > 0
+                          OR citation_count > 0)               AS mentioning_results,
+      COUNT(*) FILTER (WHERE mention_count > 0)               AS mention_results,
+      MAX(created_at)                                         AS last_checked_at,
+      COUNT(*) FILTER (WHERE citation_count > 0)              AS citation_answers,
+      COUNT(*) FILTER (WHERE sentiment = 'negative')          AS negative_count,
+      SUM(mention_position)
+        FILTER (WHERE mention_position IS NOT NULL)           AS sum_position,
+      COUNT(*) FILTER (WHERE mention_position IS NOT NULL)    AS position_count
+    FROM filtered
+  ),
+  by_model AS (
+    SELECT
+      COALESCE(model_used, 'unknown') AS model_used,
+      SUM(visibility_score)           AS sum_visibility,
+      COUNT(*)                        AS result_count
+    FROM filtered
+    GROUP BY COALESCE(model_used, 'unknown')
+  )
+  SELECT jsonb_build_object(
+    'total_results',       t.total_results,
+    'sum_visibility',      t.sum_visibility,
+    'total_mentions',      t.total_mentions,
+    'total_citations',     t.total_citations,
+    'positive_count',      t.positive_count,
+    'mentioning_results',  t.mentioning_results,
+    'mention_results',     t.mention_results,
+    'last_checked_at',     t.last_checked_at,
+    'citation_answers',    t.citation_answers,
+    'negative_count',      t.negative_count,
+    'sum_position',        t.sum_position,
+    'position_count',      t.position_count,
+    'kpi_complete',        true,
+    'by_model', COALESCE(
+      (SELECT jsonb_agg(jsonb_build_object(
+                'model_used',     bm.model_used,
+                'sum_visibility', bm.sum_visibility,
+                'result_count',   bm.result_count)
+              ORDER BY bm.result_count DESC, bm.model_used)
+       FROM by_model bm),
+      '[]'::jsonb)
+  )
+  FROM totals t;
 $$;
 
 create or replace function public.insights_kpi_series(
@@ -26734,7 +26823,9 @@ begin
       'day_from', v_day_from, 'day_to', v_day_to),
     'current',     (select to_jsonb(t) - 'cur' from totals t where t.cur),
     'previous',    (select to_jsonb(t) - 'cur' from totals t where not t.cur),
-    'platforms',   coalesce((select jsonb_agg(to_jsonb(p) order by p.mentions desc, p.platform)
+    -- In the order of the column the table shows: occurrences, then responses.
+    'platforms',   coalesce((select jsonb_agg(to_jsonb(p)
+                                              order by p.occurrences desc, p.mentions desc, p.platform)
                              from platforms p), '[]'::jsonb),
     'daily',       coalesce((select jsonb_agg(to_jsonb(d) order by d.day) from daily d),
                             '[]'::jsonb),

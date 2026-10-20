@@ -151,7 +151,10 @@ export function useMentionsExport({
           : []),
         ...(table.competitor ? [{ label: tTable('coMentioned'), value: competitor }] : []),
         { label: t('facts.responses'), value: overview.current.answers },
-        { label: t('facts.mentions'), value: list.total },
+        // The card's Total mentions (every time a response names the brand),
+        // then the responses the rows below are.
+        { label: t('facts.totalMentions'), value: overview.current.occurrences },
+        { label: t('facts.namedResponses'), value: list.total },
         { label: t('facts.prompts'), value: list.prompts },
         { label: t('facts.inFile'), value: list.rows.length },
         ...(capped ? [{ label: t('facts.note'), value: t('facts.capped', shown) }] : []),
@@ -182,7 +185,8 @@ export function useMentionsExport({
         : t('summary.kpi', { label, value });
 
     const values = filterValues();
-    const change = relativeChange(cur.mentions, prev.mentions);
+    // As the Total mentions card counts them: every time a response names the brand.
+    const change = relativeChange(cur.occurrences, prev.occurrences);
     const total = upIsGood(change === null ? null : Math.round(change), { percent: true, locale });
     const rate = mentionRate(cur);
     const net = wholeNet(cur);
@@ -199,7 +203,7 @@ export function useMentionsExport({
       headlineSentences(overview, brand, locale, tHeadline)
         .map((s) => plain(s.key, s.values))
         .join(' '),
-      line(tKpi('totalMentions'), f.number(cur.mentions), total?.text),
+      line(tKpi('totalMentions'), f.number(cur.occurrences), total?.text),
       line(
         tKpi('mentionRate'),
         rate === null
@@ -233,7 +237,7 @@ export function useMentionsExport({
       tHeadline('basis', {
         range: windowRange(overview.window, locale),
         answers: cur.answers,
-        mentions: cur.mentions,
+        mentions: cur.occurrences,
       }),
     ].join('\n');
   };
