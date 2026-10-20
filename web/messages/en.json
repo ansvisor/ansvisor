@@ -3409,7 +3409,8 @@
         "tabs": {
           "impact": "Impact",
           "brief": "Brief",
-          "sources": "Sources"
+          "sources": "Sources",
+          "rules": "Rules"
         }
       },
       "impact": {
@@ -3564,7 +3565,7 @@
         "goal": "Goal",
         "audience": "Audience",
         "length": "Length",
-        "lengthValue": "{count} characters · from the page type",
+        "lengthValue": "{count} characters · from the rules",
         "outline": "Outline",
         "answers": "Answers “{fanout}”",
         "keywords": "Keywords",
@@ -3596,6 +3597,97 @@
           "cancel": "Cancel",
           "saved": "Brief saved",
           "failed": "Couldn't save the brief. Try again."
+        }
+      },
+      "rulesChip": "Rules {met}/{total}",
+      "rulesChipShort": "{met}/{total}",
+      "rulesChipHint": "Rules this page meets now. Open the Rules tab.",
+      "rules": {
+        "set": "Rule set",
+        "setName": "{type} · Ansvisor default",
+        "pickSet": "Pick a page type",
+        "met": "{met} of {total} rules met",
+        "typeGroup": "{type} rules",
+        "groups": {
+          "type": "Page type rules",
+          "structure": "Length and structure",
+          "fanouts": "Fan-outs and keywords",
+          "links": "Links and sources",
+          "style": "Style"
+        },
+        "names": {
+          "sentence": "Max sentence length",
+          "length": "Length",
+          "summary": "AI Overview summary at the top",
+          "h2Answer": "Direct answer under each H2",
+          "fanoutH2": "Use top fan-outs as H2s",
+          "faq": "FAQ block",
+          "fanoutFaq": "Use fan-outs in FAQ questions",
+          "keywords": "Keywords to include",
+          "internalLinks": "Internal links (anchor text)",
+          "outboundLinks": "Outbound links to trusted sources (anchor text)",
+          "datedPoint": "Dated data point in the first 100 words",
+          "citeInline": "Cite sources inline",
+          "aiTraces": "Remove AI traces (humanize)",
+          "bannedWords": "Banned words",
+          "tone": "Tone",
+          "language": "Language",
+          "comparisonTable": "Comparison table vs alternatives",
+          "whoFor": "Who it's for, in one sentence",
+          "proofPerSection": "Proof: customer number or quote",
+          "industryNamed": "Name the industry in H1 and summary",
+          "useCaseSteps": "Use case steps",
+          "sideBySide": "Side-by-side table",
+          "fairness": "Fair: name where the competitor wins",
+          "specsTable": "Specs table",
+          "feedMatch": "Price, GTIN and stock match the feed",
+          "fitQuestions": "Answer fit and sizing questions",
+          "first40Words": "Type + key attributes in the first 40 words",
+          "introText": "Intro text above products",
+          "buyingFaq": "Buying tips + FAQ",
+          "currentPrices": "Prices and dates are current",
+          "bestTime": "Best time to visit in the summary"
+        },
+        "hints": {
+          "summary": "A short summary under the H1 that answer engines can quote.",
+          "fanoutH2": "Takes the top fan-outs you keep in Sources, the most searched first, not every one.",
+          "internalLinks": "Links with descriptive anchor text to your own pages.",
+          "outboundLinks": "Descriptive anchor text to an authoritative source: research, a standards body, government or a well-known publication. Never a competitor. Opens in a new tab.",
+          "aiTraces": "Finds phrases that read as machine-written (delve, in today's fast-paced world, not only… but also). Fixing them comes with the Content Agent.",
+          "whoFor": "Who the page is for, in one sentence, e.g. \"Sales leaders at 20–200 person B2B teams\".",
+          "first40Words": "ChatGPT reads about the first 50 tokens (~40 words) of a product description. The rest is ignored.",
+          "feedMatch": "Checked against the product feed once it's connected."
+        },
+        "units": {
+          "characters": "characters",
+          "wordsMax": "words max",
+          "wordsMin": "words min",
+          "fanouts": "fan-outs",
+          "questions": "questions",
+          "links": "links",
+          "perSection": "per section",
+          "steps": "steps"
+        },
+        "toggle": "{name}: on or off",
+        "value": "{name}: value",
+        "whoForPlaceholder": "e.g. Sales leaders at 20–200 person B2B teams",
+        "note": "Values you change apply to this draft only. Rules marked AI check are judged by the Content Agent and aren't counted yet.",
+        "updated": "Rule updated for this draft",
+        "saveFailed": "Couldn't update the rule. Try again.",
+        "status": {
+          "off": "Off",
+          "over": "{count} over",
+          "found": "{count} found",
+          "partOf": "{count} of {of}",
+          "words": "{count} words",
+          "missing": "Missing",
+          "noH2": "No H2 yet",
+          "needsFaq": "Needs FAQ",
+          "notSet": "Not set",
+          "aiCheck": "AI check",
+          "needsFeed": "Needs feed",
+          "noFanouts": "No fan-outs",
+          "addKeywords": "Add keywords"
         }
       }
     },

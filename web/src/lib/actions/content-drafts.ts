@@ -24,6 +24,7 @@ import { IMPACT_PERIODS, type ContentImpact, type ContentResults } from '@/lib/c
 import { MAX_BODY_HTML_LENGTH, MAX_TITLE_LENGTH } from '@/lib/content/editor';
 import { detectPageType, siteTypeOf, type SiteType } from '@/lib/content/page-types';
 import { sanitizeDraftHtml } from '@/lib/content/sanitize-draft-html';
+import { NO_DRAFT_RULES, draftRulesSchema, type DraftRules } from '@/lib/content/rules';
 import {
   briefFromOpportunity,
   draftBriefSchema,
@@ -119,7 +120,7 @@ export async function getContentDraft(id: string): Promise<ContentDraft | null> 
   const { data, error } = await supabase
     .from('content_drafts')
     .select(
-      `id, brand_id, title, page_type, page_type_source, method, status, body_html, author, source_url, updated_at, ${BRAND_SITE}`,
+      `id, brand_id, title, page_type, page_type_source, method, status, body_html, author, source_url, rules, updated_at, ${BRAND_SITE}`,
     )
     .eq('id', id)
     .maybeSingle();
@@ -137,6 +138,7 @@ export async function getContentDraft(id: string): Promise<ContentDraft | null> 
     status: draftStatus(data.status),
     bodyHtml: data.body_html,
     author: data.author === 'agent' ? 'agent' : 'user',
+    rules: draftRulesSchema.safeParse(data.rules).data ?? NO_DRAFT_RULES,
     updatedAt: data.updated_at,
   };
 }
@@ -825,4 +827,23 @@ export async function rebuildDraftBrief(
     console.error('Failed to rebuild the brief:', err);
     return { error: 'failed' };
   }
+}
+
+/**
+ * The Rules tab (CE-009): a rule turned on or off, or given a value, for
+ * this draft ("Rule updated for this draft"). Throws 'not_found' when no
+ * row changed.
+ */
+export async function saveDraftRules(id: string, rules: DraftRules): Promise<void> {
+  const parsed = draftRulesSchema.safeParse(rules);
+  if (!draftId.safeParse(id).success || !parsed.success) throw new Error('invalid');
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from('content_drafts')
+    .update({ rules: parsed.data })
+    .eq('id', id)
+    .select('id')
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  if (!data) throw new Error('not_found');
 }

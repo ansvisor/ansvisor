@@ -5,6 +5,7 @@
  */
 
 import type { SiteType } from './page-types';
+import type { DraftRules } from '@/lib/content/rules';
 
 /** Draft → In review (an agent's draft waiting for a person) → Ready → Published. */
 export const DRAFT_STATUSES = ['draft', 'in_review', 'ready', 'published'] as const;
@@ -99,6 +100,8 @@ export interface ContentDraft {
   status: DraftStatus;
   bodyHtml: string;
   author: 'user' | 'agent';
+  /** What the person changed on the page's rules for this draft (CE-009). */
+  rules: DraftRules;
   updatedAt: string;
 }
 

@@ -840,6 +840,7 @@ export type Database = {
           page_type: string | null
           page_type_source: string
           prompt_ids: string[]
+          rules: Json | null
           source_url: string | null
           score_after: number | null
           score_before: number | null
@@ -861,6 +862,7 @@ export type Database = {
           page_type?: string | null
           page_type_source?: string
           prompt_ids?: string[]
+          rules?: Json | null
           source_url?: string | null
           score_after?: number | null
           score_before?: number | null
@@ -882,6 +884,7 @@ export type Database = {
           page_type?: string | null
           page_type_source?: string
           prompt_ids?: string[]
+          rules?: Json | null
           source_url?: string | null
           score_after?: number | null
           score_before?: number | null

@@ -22,7 +22,7 @@ import {
   htmlFromSource,
   publishableHtml,
 } from '@/lib/content/clean-html';
-import { draftTitleFromDoc, lengthTarget, safeLinkHref } from '@/lib/content/editor';
+import { draftTitleFromDoc, safeLinkHref } from '@/lib/content/editor';
 import { JsonLd } from '@/lib/content/json-ld-node';
 import { detectPageType } from '@/lib/content/page-types';
 import { cn } from '@/lib/utils';
@@ -30,6 +30,7 @@ import { DropOverlay, useAttachments } from './_attach';
 import { HtmlBlock, copyToClipboard } from './_html-block';
 import { PageTypeMenu } from './_page-type-menu';
 import { EditorSidePanel, useSidePanelOpen } from './_side-panel';
+import { useDraftRules } from './_use-draft-rules';
 import { EditorToolbar } from './_toolbar';
 import { useDraftAutosave, type SaveState } from './_use-autosave';
 
@@ -63,7 +64,9 @@ const DOCUMENT_CLASS = cn(
  * whole page, or one block, on the clipboard. The page type follows the page
  * as it is written until the person picks one (CE-023). The side panel, open
  * beside the page or closed from the header, shows what the page earns
- * (Impact, CE-016) and the sources it draws on (Sources, CE-008).
+ * (Impact, CE-016), its brief and the sources it draws on (CE-007, CE-008)
+ * and the rules it is written to (CE-009); the header's chip says how many
+ * of those rules the page meets now.
  */
 export function DraftEditor({ draft }: { draft: ContentDraft }) {
   const t = useTranslations('contentEditor.editor');
@@ -87,6 +90,8 @@ export function DraftEditor({ draft }: { draft: ContentDraft }) {
   const [dragging, setDragging] = useState(false);
   const dragDepth = useRef(0);
   const [panelOpen, togglePanel] = useSidePanelOpen();
+  // The header's rules chip opens the panel on Rules.
+  const [tabRequest, setTabRequest] = useState<{ tab: 'rules'; n: number } | null>(null);
 
   const editor = useEditor({
     extensions: [
@@ -166,6 +171,13 @@ export function DraftEditor({ draft }: { draft: ContentDraft }) {
   });
 
   const attachments = useAttachments(editor);
+  // The rules the page is written to, checked as it reads now (CE-009).
+  const rules = useDraftRules({
+    draft,
+    html: pageHtml,
+    characters: (editor?.storage.characterCount.characters() as number | undefined) ?? 0,
+    pageType,
+  });
   useEffect(() => {
     attachRef.current = (files) => void attachments.attach(files);
   });
@@ -303,11 +315,41 @@ export function DraftEditor({ draft }: { draft: ContentDraft }) {
         <span className="shrink-0">
           <DraftStatusBadge status={status} />
         </span>
+        <button
+          type="button"
+          onClick={() => {
+            if (!panelOpen) togglePanel();
+            setTabRequest((prev) => ({ tab: 'rules', n: (prev?.n ?? 0) + 1 }));
+          }}
+          title={t('rulesChipHint')}
+          aria-label={t('rulesChip', { met: rules.met, total: rules.total })}
+          className={cn(
+            'inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2 py-0.5 text-xs font-medium',
+            rules.total > 0 && rules.met === rules.total
+              ? 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950 dark:text-emerald-300'
+              : 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-300',
+          )}
+        >
+          <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-current" />
+          {/* Short on a narrow window, so the header stays one line. */}
+          <span aria-hidden className="hidden xl:inline">
+            {t('rulesChip', { met: rules.met, total: rules.total })}
+          </span>
+          <span aria-hidden className="xl:hidden">
+            {t('rulesChipShort', { met: rules.met, total: rules.total })}
+          </span>
+        </button>
         <div className="ml-auto flex shrink-0 items-center gap-3">
           <SaveIndicator state={autosave.state} onRetry={() => void autosave.retry()} />
-          <Button variant="outline" size="sm" onClick={copyPageHtml} title={t('copyHtmlHint')}>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={copyPageHtml}
+            title={t('copyHtmlHint')}
+            aria-label={t('copyHtml')}
+          >
             <Copy className="h-3.5 w-3.5" />
-            {t('copyHtml')}
+            <span className="hidden xl:inline">{t('copyHtml')}</span>
           </Button>
           <Button size="sm" disabled={!canMarkReady || marking} onClick={markReady}>
             {marking ? (
@@ -336,7 +378,7 @@ export function DraftEditor({ draft }: { draft: ContentDraft }) {
           {editor && (
             <EditorToolbar
               editor={editor}
-              target={lengthTarget(pageType)}
+              target={rules.length}
               htmlView={htmlSource !== null}
               onToggleHtml={htmlSource === null ? openHtmlView : applyHtmlView}
               onAttach={attachments.open}
@@ -383,7 +425,14 @@ export function DraftEditor({ draft }: { draft: ContentDraft }) {
           {attachments.ui}
         </div>
         {panelOpen && (
-          <EditorSidePanel draft={draft} title={title} bodyHtml={pageHtml} pageType={pageType} />
+          <EditorSidePanel
+            draft={draft}
+            title={title}
+            bodyHtml={pageHtml}
+            pageType={pageType}
+            rules={rules}
+            tabRequest={tabRequest}
+          />
         )}
       </div>
     </div>

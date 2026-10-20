@@ -15,7 +15,9 @@ const getContentResults = vi.fn();
 const getDraftSources = vi.fn();
 const getDraftBrief = vi.fn();
 const rebuildDraftBrief = vi.fn();
+const saveDraftRules = vi.fn();
 vi.mock('@/lib/actions/content-drafts', () => ({
+  saveDraftRules: (...args: unknown[]) => saveDraftRules(...args),
   getDraftSources: (...args: unknown[]) => getDraftSources(...args),
   getDraftBrief: (...args: unknown[]) => getDraftBrief(...args),
   rebuildDraftBrief: (...args: unknown[]) => rebuildDraftBrief(...args),
@@ -114,6 +116,7 @@ const draft = (over: Partial<ContentDraft> = {}): ContentDraft => ({
   status: 'in_review',
   bodyHtml: '<h1>Pipeline forecasting</h1><p>Teams trust it.</p>',
   author: 'agent',
+  rules: { set: null, overrides: {} },
   updatedAt: '2026-10-20T10:00:00Z',
   ...over,
 });
@@ -151,6 +154,7 @@ beforeEach(() => {
   getDraftSources.mockReset().mockResolvedValue(null);
   getDraftBrief.mockReset().mockResolvedValue({ brief: null });
   rebuildDraftBrief.mockReset();
+  saveDraftRules.mockReset().mockResolvedValue(undefined);
   localStorage.clear();
   brandState.activeBrandId = 'b1';
   brandState.setActiveBrand.mockReset();
@@ -589,7 +593,9 @@ describe('the side panel', () => {
     getContentDraft.mockResolvedValue(draft({ sourceUrl: 'https://acme.example.com/pricing' }));
     window.innerWidth = 1440;
     await renderPage();
-    expect(getDraftSources).not.toHaveBeenCalled();
+    // The rules read the fan-outs on opening; the tab itself isn't there yet.
+    expect(getDraftSources).toHaveBeenCalledTimes(1);
+    expect(panel()!.textContent).not.toContain('pipeline forecasting');
 
     const tab = [...panel()!.querySelectorAll<HTMLElement>('[role="tab"]')].find(
       (el) => el.textContent === 'Sources',
@@ -598,7 +604,7 @@ describe('the side panel', () => {
       tab.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
       tab.click();
     });
-    expect(getDraftSources).toHaveBeenCalledWith('d1');
+    expect(getDraftSources).toHaveBeenCalledTimes(2);
     // The draft's H1 carries the fan-out's words.
     expect(panel()!.textContent).toContain('pipeline forecasting');
     expect(panel()!.textContent).toContain('H1');
@@ -652,6 +658,7 @@ describe('the side panel', () => {
       'Impact',
       'Brief',
       'Sources',
+      'Rules',
     ]);
     await pick('Sources');
     await act(async () => button('Rebuild with selection')!.click());
@@ -669,6 +676,43 @@ describe('the side panel', () => {
     expect(selected?.textContent).toBe('Brief');
     expect(panel()!.textContent).toContain('How pipeline forecasting works');
     expect(panel()!.textContent).toContain('Win forecasting searches');
+  });
+
+  it('shows how many rules the page meets, and opens them from the header', async () => {
+    getContentDraft.mockResolvedValue(
+      draft({
+        pageType: 'blog_post',
+        bodyHtml: '<h1>Pipeline forecasting</h1><p>Teams trust it in 2026.</p>',
+      }),
+    );
+    window.innerWidth = 1024;
+    await renderPage();
+    expect(panel()).toBeNull();
+
+    const chip = container.querySelector<HTMLButtonElement>('header button[aria-label^="Rules "]')!;
+    const [met, total] = chip
+      .getAttribute('aria-label')!
+      .replace('Rules ', '')
+      .split('/')
+      .map(Number);
+    expect(total).toBeGreaterThan(met);
+
+    await act(async () => chip.click());
+    const selected = panel()!.querySelector('[role="tab"][aria-selected="true"]');
+    expect(selected?.textContent).toBe('Rules');
+    expect(panel()!.textContent).toContain(`${met} of ${total} rules met`);
+
+    // Turning a rule off for this draft saves it and takes it out of the count.
+    const sentence = panel()!.querySelector<HTMLElement>(
+      '[role="switch"][aria-label="Max sentence length: on or off"]',
+    )!;
+    await act(async () => sentence.click());
+    expect(saveDraftRules).toHaveBeenCalledWith('d1', {
+      set: null,
+      overrides: { sentence: { on: false } },
+    });
+    expect(chip.getAttribute('aria-label')).toBe(`Rules ${met - 1}/${total - 1}`);
+    expect(toast).toHaveBeenCalledWith('Rule updated for this draft');
   });
 
   it('starts open on a wide window, and remembers it closed', async () => {

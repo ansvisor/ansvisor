@@ -46,7 +46,7 @@ let root: Root;
 
 async function render(
   state: BriefState,
-  extra: { pageType?: string | null; sourceUrl?: string | null } = {},
+  extra: { pageType?: string | null; sourceUrl?: string | null; length?: number } = {},
 ) {
   await act(async () => {
     root.render(
@@ -55,6 +55,7 @@ async function render(
           draftId="d1"
           state={state}
           pageType={extra.pageType === undefined ? 'buying_guide' : extra.pageType}
+          length={extra.length ?? 3000}
           sourceUrl={
             extra.sourceUrl === undefined ? 'https://acme.example/guides/espresso' : extra.sourceUrl
           }
@@ -105,7 +106,7 @@ describe('the Brief tab', () => {
       'Target URL': '/guides/espresso',
       Goal: 'Help home baristas pick a machine',
       Audience: 'First-time espresso buyers',
-      Length: '3,000 characters · from the page type',
+      Length: '3,000 characters · from the rules',
     });
     const sections = [...container.querySelectorAll('ol > li')].map((li) => li.textContent);
     expect(sections).toEqual([
@@ -120,12 +121,15 @@ describe('the Brief tab', () => {
   });
 
   it('offers to build a brief for a new page without one', async () => {
-    await render({ status: 'ready', brief: null }, { pageType: 'product_page', sourceUrl: null });
+    await render(
+      { status: 'ready', brief: null },
+      { pageType: 'product_page', sourceUrl: null, length: 1200 },
+    );
     expect(fields()).toMatchObject({
       'Page type': 'Product page',
       'Target URL': 'A new page',
       Goal: '—',
-      Length: '1,200 characters · from the page type',
+      Length: '1,200 characters · from the rules',
     });
     expect(container.textContent).toContain('No outline yet.');
     expect(button('Edit brief')).toBeUndefined();

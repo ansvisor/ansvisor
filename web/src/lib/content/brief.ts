@@ -1,6 +1,5 @@
 import { z } from 'zod';
 import type { ContentBrief } from '@/types';
-import { lengthTarget } from '@/lib/content/editor';
 import {
   buildSourceGroups,
   readDraftDoc,
@@ -101,13 +100,13 @@ export interface RebuildSources {
 
 /**
  * The sources a rebuild uses: the ones checked in the Sources tab, as it
- * lists them; the page's H2s and H3s as written now; and the length the page
- * type asks for.
+ * lists them; the page's H2s and H3s as written now; and the length the
+ * rules ask for.
  */
 export function rebuildSources(
   data: DraftSourcesData,
   choices: DraftSourceChoice[],
-  draft: { title: string; sourceUrl: string | null; html: string; pageType: string | null },
+  draft: { title: string; sourceUrl: string | null; html: string; length: number },
 ): RebuildSources {
   const groups = buildSourceGroups(data, choices, draft);
   const kept = (kind: string) =>
@@ -130,7 +129,7 @@ export function rebuildSources(
       .headings.filter((h) => h.level > 1 && h.text)
       .map((h) => h.text)
       .slice(0, 30),
-    length: lengthTarget(draft.pageType),
+    length: draft.length,
   };
 }
 

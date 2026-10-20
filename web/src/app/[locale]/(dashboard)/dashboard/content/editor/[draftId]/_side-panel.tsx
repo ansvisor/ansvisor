@@ -3,12 +3,14 @@
 import { useEffect, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import type { ContentDraft } from '@/lib/content/drafts';
+import { isPageType, type ContentDraft } from '@/lib/content/drafts';
 import { getDraftBrief } from '@/lib/actions/content-drafts';
 import { BriefTab, type BriefState } from './_brief-tab';
 import { ImpactTab } from './_impact-tab';
+import { RulesTab } from './_rules-tab';
 import { SourcesTab } from './_sources-tab';
 import { useBriefRebuild, type PageNow } from './_use-brief-rebuild';
+import type { DraftRulesState } from './_use-draft-rules';
 
 /** Remembers whether the panel is open, across drafts and visits. */
 const PANEL_OPEN_KEY = 'aeo:content-editor-panel';
@@ -42,14 +44,14 @@ export function useSidePanelOpen(): [boolean, () => void] {
   return [open, toggle];
 }
 
-const PANEL_TABS = ['impact', 'brief', 'sources'] as const;
-type PanelTab = (typeof PANEL_TABS)[number];
+const PANEL_TABS = ['impact', 'brief', 'sources', 'rules'] as const;
+export type PanelTab = (typeof PANEL_TABS)[number];
 
 /**
  * The editor's right panel (Content Editor spec v2 §6), 400px beside the page.
  * The spec's tabs are Impact · Chat · Brief · Sources · Rules; each joins the
- * panel with the update that makes it work: Impact (CE-016), Brief (CE-007)
- * and Sources (CE-008). A tab opened once stays mounted, so switching back
+ * panel with the update that makes it work: Impact (CE-016), Brief (CE-007),
+ * Sources (CE-008) and Rules (CE-009). A tab opened once stays mounted, so switching back
  * keeps it as it was. The brief is held here: Sources' "Rebuild with
  * selection" and Impact's "Use lost prompts" rebuild it too, and open it.
  */
@@ -58,12 +60,18 @@ export function EditorSidePanel({
   title,
   bodyHtml,
   pageType,
+  rules,
+  tabRequest,
 }: {
   draft: ContentDraft;
   /** The draft's title, page and type as written now: Sources and Brief read them. */
   title: string;
   bodyHtml: string;
   pageType: string | null;
+  /** The rules, as the editor checks them (the header's chip shows the same). */
+  rules: DraftRulesState;
+  /** A tab to open, from outside the panel (the header's rules chip). */
+  tabRequest: { tab: PanelTab; n: number } | null;
 }) {
   const t = useTranslations('contentEditor.editor.panel');
   const [tab, setTab] = useState<PanelTab>('impact');
@@ -72,10 +80,10 @@ export function EditorSidePanel({
   const [briefAttempt, setBriefAttempt] = useState(0);
   // Read afresh after prompts join the draft.
   const [sourcesVersion, setSourcesVersion] = useState(0);
-  const page = useRef<PageNow>({ title, html: bodyHtml, pageType });
+  const page = useRef<PageNow>({ title, html: bodyHtml, length: rules.length });
   const briefNow = useRef(brief);
   useEffect(() => {
-    page.current = { title, html: bodyHtml, pageType };
+    page.current = { title, html: bodyHtml, length: rules.length };
     briefNow.current = brief;
   });
 
@@ -83,6 +91,13 @@ export function EditorSidePanel({
     setTab(next);
     setOpened((prev) => (prev.has(next) ? prev : new Set([...prev, next])));
   };
+
+  const requested = tabRequest?.n;
+  useEffect(() => {
+    if (tabRequest) open(tabRequest.tab);
+    // Only a new request opens a tab.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [requested]);
 
   const briefOpened = opened.has('brief');
   useEffect(() => {
@@ -144,6 +159,7 @@ export function EditorSidePanel({
               draftId={draft.id}
               state={brief}
               pageType={pageType}
+              length={rules.length}
               sourceUrl={draft.sourceUrl}
               rebuilding={rebuilding}
               onRebuild={() => void rebuild()}
@@ -166,6 +182,15 @@ export function EditorSidePanel({
               bodyHtml={bodyHtml}
               rebuilding={rebuilding}
               onRebuild={(sources) => void rebuild({ sources })}
+            />
+          </div>
+        )}
+        {opened.has('rules') && (
+          <div hidden={tab !== 'rules'}>
+            <RulesTab
+              state={rules}
+              siteType={draft.siteType}
+              draftPageType={isPageType(pageType) ? pageType : null}
             />
           </div>
         )}

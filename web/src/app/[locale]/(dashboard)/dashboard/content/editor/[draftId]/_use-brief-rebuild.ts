@@ -12,7 +12,8 @@ import type { DraftSourceChoice, DraftSourcesData } from '@/lib/content/sources'
 export interface PageNow {
   title: string;
   html: string;
-  pageType: string | null;
+  /** The length the rules ask for. */
+  length: number;
 }
 
 /**
@@ -52,7 +53,7 @@ export function useBriefRebuild({
           title: page.title,
           sourceUrl: draft.sourceUrl,
           html: page.html,
-          pageType: page.pageType,
+          length: page.length,
         }),
       );
       if ('error' in result) {

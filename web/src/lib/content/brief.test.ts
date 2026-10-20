@@ -49,7 +49,7 @@ const draft = {
   title: 'The home espresso guide',
   sourceUrl: 'https://acme.example/guides/espresso',
   html: '<h1>The home espresso guide</h1><h2>Choosing a machine</h2><p>x</p><h3>Grinders</h3><h2></h2>',
-  pageType: 'product_page',
+  length: 1200,
 };
 
 describe('rebuildSources', () => {

@@ -9,7 +9,6 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { saveDraftBrief } from '@/lib/actions/content-drafts';
 import { MAX_BRIEF_SECTIONS, builtFromCount, type DraftBrief } from '@/lib/content/brief';
-import { lengthTarget } from '@/lib/content/editor';
 import { platformNames } from '@/lib/content/impact';
 import { pagePath } from '@/lib/content/overlap';
 import { formatDateTime, formatNumber } from '@/lib/format';
@@ -31,6 +30,7 @@ export function BriefTab({
   draftId,
   state,
   pageType,
+  length,
   sourceUrl,
   rebuilding,
   onRebuild,
@@ -40,6 +40,8 @@ export function BriefTab({
   draftId: string;
   state: BriefState;
   pageType: string | null;
+  /** The length the rules ask for (CE-009). */
+  length: number;
   sourceUrl: string | null;
   rebuilding: boolean;
   onRebuild: () => void;
@@ -99,7 +101,7 @@ export function BriefTab({
         <dt className="text-muted-foreground">{t('audience')}</dt>
         <dd>{brief?.audience || '—'}</dd>
         <dt className="text-muted-foreground">{t('length')}</dt>
-        <dd>{t('lengthValue', { count: formatNumber(lengthTarget(pageType)) })}</dd>
+        <dd>{t('lengthValue', { count: formatNumber(length) })}</dd>
       </dl>
 
       {brief && brief.outline.length > 0 ? (
