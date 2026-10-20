@@ -10,6 +10,7 @@ import {
   DialogDescription,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Loader2, CheckCircle2, XCircle } from 'lucide-react';
@@ -71,6 +72,10 @@ export function WebhookSettingsDialog({ open, onOpenChange, brandId }: WebhookSe
   const handleSave = async () => {
     if (!url.trim()) {
       toast.error(t('urlRequired'));
+      return;
+    }
+    if (events.length === 0) {
+      toast.error(t('eventRequired'));
       return;
     }
     setSaving(true);
@@ -155,26 +160,32 @@ export function WebhookSettingsDialog({ open, onOpenChange, brandId }: WebhookSe
               <p className="text-xs text-muted-foreground">{t('eventsDescription')}</p>
               <div className="space-y-2 rounded-md border p-3">
                 {WEBHOOK_EVENTS.map((eventOption) => (
-                  <label key={eventOption.value} className="flex cursor-pointer items-center gap-2">
-                    <input
-                      type="checkbox"
-                      className="h-4 w-4 accent-primary"
+                  <div key={eventOption.value} className="flex items-center gap-2">
+                    <Checkbox
+                      id={`webhook-event-${eventOption.value}`}
                       checked={events.includes(eventOption.value)}
-                      onChange={(e) =>
+                      onCheckedChange={(checked) =>
                         setEvents((current) =>
-                          e.target.checked
-                            ? [
-                                ...current.filter((value) => value !== eventOption.value),
-                                eventOption.value,
-                              ]
+                          checked === true
+                            ? Array.from(new Set([...current, eventOption.value]))
                             : current.filter((value) => value !== eventOption.value),
                         )
                       }
                     />
-                    <span className="text-sm">{t(eventOption.label)}</span>
-                  </label>
+                    <Label
+                      htmlFor={`webhook-event-${eventOption.value}`}
+                      className="cursor-pointer font-normal"
+                    >
+                      {t(eventOption.label)}
+                    </Label>
+                  </div>
                 ))}
               </div>
+              {events.length === 0 && (
+                <p className="text-xs text-destructive" role="alert">
+                  {t('eventRequired')}
+                </p>
+              )}
             </fieldset>
 
             <div className="flex items-center gap-2">
