@@ -133,6 +133,8 @@ begin
     from public.ga_ai_traffic_stats g
     where g.brand_id = p_brand_id
       and g.sessions > 0
+      -- A session without a landing page would read as the home page.
+      and g.landing_page <> ''
       and g.date >= v_prev_day
       and g.date <= v_today
       and lower(public.normalize_page_path(g.landing_page)) = v_key
