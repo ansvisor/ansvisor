@@ -17,7 +17,6 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog';
 import { CONTACT_SALES_URL, PLANS, SUBSCRIBABLE_PLANS, type PlanId } from '@/config/plans';
-import { ALL_SCRAPERS } from '@/config/prompt-options';
 
 interface SubscriptionData {
   planId: string;
@@ -35,6 +34,7 @@ interface PlanSwitcherProps {
 
 export function PlanSwitcher({ subscription, onUpdate }: PlanSwitcherProps) {
   const t = useTranslations('settings');
+  const tCards = useTranslations('settings.planCards');
   const [loading, setLoading] = useState(false);
   const [cancelLoading, setCancelLoading] = useState(false);
   const [portalLoading, setPortalLoading] = useState(false);
@@ -135,6 +135,28 @@ export function PlanSwitcher({ subscription, onUpdate }: PlanSwitcherProps) {
     }
   }
 
+  /**
+   * A plan card's list, as the pricing page puts it: brands, seats, prompts,
+   * the answer engines it tracks, content briefs and site audits a month,
+   * then what the plan adds.
+   */
+  function planFeatures(planId: PlanId): string[] {
+    const { limits } = PLANS[planId];
+    return [
+      limits.maxBrands === -1
+        ? tCards('unlimitedBrands')
+        : tCards('brands', { count: limits.maxBrands }),
+      limits.maxTeamMembers === -1
+        ? tCards('unlimitedSeats')
+        : tCards('seats', { count: limits.maxTeamMembers }),
+      tCards('prompts', { count: limits.maxPrompts }),
+      tCards(`${planId}.engines`),
+      tCards('briefs', { count: limits.maxBriefGenerations }),
+      tCards('audits', { count: limits.maxSiteAudits }),
+      ...(tCards.raw(`${planId}.extras`) as string[]),
+    ];
+  }
+
   function isUpgrade(targetPlan: PlanId): boolean {
     const order = SUBSCRIBABLE_PLANS;
     return order.indexOf(targetPlan) > order.indexOf(currentPlanId);
@@ -161,7 +183,7 @@ export function PlanSwitcher({ subscription, onUpdate }: PlanSwitcherProps) {
                     </Badge>
                   )}
                 </div>
-                <p className="text-sm text-muted-foreground">{plan.tagline}</p>
+                <p className="text-sm text-muted-foreground">{tCards(`${planId}.tagline`)}</p>
               </CardHeader>
               <CardContent>
                 <div className="mb-4">
@@ -169,37 +191,13 @@ export function PlanSwitcher({ subscription, onUpdate }: PlanSwitcherProps) {
                   <span className="text-sm text-muted-foreground">/{t('month')}</span>
                 </div>
 
-                <ul className="mb-4 space-y-1 text-sm text-muted-foreground">
-                  <li>
-                    {plan.limits.maxBrands === -1 ? t('unlimited') : plan.limits.maxBrands}{' '}
-                    {t('brands')}
-                  </li>
-                  <li>
-                    {plan.limits.maxPrompts === -1 ? t('unlimited') : plan.limits.maxPrompts}{' '}
-                    {t('prompts')}
-                  </li>
-                  <li>
-                    {plan.limits.maxPlatforms} {t('platforms')}
-                    {plan.limits.allowedScrapers && plan.limits.allowedScrapers.length > 0 && (
-                      <span className="text-xs text-muted-foreground/70">
-                        {' '}
-                        (
-                        {plan.limits.allowedScrapers
-                          .map((id) => {
-                            const s = ALL_SCRAPERS.find((s) => s.id === id);
-                            return s ? s.label.replace(/\s*\(Web\)/i, '') : id;
-                          })
-                          .join(' & ')}
-                        )
-                      </span>
-                    )}
-                  </li>
-                  <li>
-                    {plan.limits.maxTeamMembers === -1
-                      ? t('unlimited')
-                      : plan.limits.maxTeamMembers}{' '}
-                    {t('teamMembers')}
-                  </li>
+                <ul className="mb-4 space-y-1.5 text-sm">
+                  {planFeatures(planId).map((feature) => (
+                    <li key={feature} className="flex items-start gap-2">
+                      <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-600 dark:text-emerald-400" />
+                      <span>{feature}</span>
+                    </li>
+                  ))}
                 </ul>
 
                 {!isCurrent && (
@@ -253,21 +251,31 @@ export function PlanSwitcher({ subscription, onUpdate }: PlanSwitcherProps) {
         })}
       </div>
 
-      {/* Enterprise / Custom Plan CTA */}
-      <div className="flex items-center justify-between gap-4 rounded-lg border bg-muted/30 p-5">
-        <div>
-          <p className="text-sm font-medium">{t('needCustomPlan')}</p>
-          <p className="text-xs text-muted-foreground">{t('customPlanDescription')}</p>
+      {/* Custom plan: what it adds, from the pricing page */}
+      <div className="space-y-3 rounded-lg border bg-muted/30 p-5">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="min-w-0 space-y-1">
+            <p className="text-sm font-medium">{t('needCustomPlan')}</p>
+            <p className="text-xs text-muted-foreground">{t('customPlanDescription')}</p>
+          </div>
+          <a
+            href={CONTACT_SALES_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex shrink-0 items-center justify-center rounded-md border bg-background px-5 py-2 text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground"
+          >
+            <Mail className="mr-2 h-4 w-4" />
+            {t('contactUs')}
+          </a>
         </div>
-        <a
-          href={CONTACT_SALES_URL}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="inline-flex shrink-0 items-center justify-center rounded-md border bg-background px-5 py-2 text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground"
-        >
-          <Mail className="mr-2 h-4 w-4" />
-          {t('contactUs')}
-        </a>
+        <ul className="grid gap-x-4 gap-y-1.5 text-xs sm:grid-cols-2">
+          {(t.raw('customPlanPoints') as string[]).map((point) => (
+            <li key={point} className="flex items-start gap-2">
+              <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-600 dark:text-emerald-400" />
+              <span>{point}</span>
+            </li>
+          ))}
+        </ul>
       </div>
 
       {/* Cancel / Reactivate + Stripe billing portal */}

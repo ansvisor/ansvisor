@@ -4829,11 +4829,6 @@
     "currentPlan": "Current Plan",
     "month": "mo",
     "year": "yr",
-    "unlimited": "Unlimited",
-    "brands": "brands",
-    "prompts": "prompt locations tracked",
-    "platforms": "answer engines",
-    "teamMembers": "team members",
     "renewsOn": "Renews on {date}",
     "cancelsOn": "Subscription ends on {date}",
     "changePlan": "Change Plan",
@@ -4862,7 +4857,34 @@
     "planChanged": "Plan updated successfully.",
     "subscriptionCanceled": "Your subscription has been canceled.",
     "needCustomPlan": "Need a custom plan?",
-    "customPlanDescription": "Get unlimited brands, custom integrations, dedicated support, and more.",
+    "customPlanDescription": "For large companies and agencies managing AI visibility at scale. Starting at $499/month.",
+    "customPlanPoints": [
+      "Unlimited brands in a custom workspace",
+      "All answer engines, Claude included",
+      "Custom prompt and location tracking",
+      "Custom KPI frameworks and data integrations",
+      "Priority support and onboarding sessions",
+      "SSO / SAML and custom feature requests"
+    ],
+    "planCards": {
+      "starter": {
+        "tagline": "For small teams getting started with AI visibility monitoring and optimization.",
+        "engines": "ChatGPT & Microsoft Copilot tracking",
+        "extras": ["MCP & API access"]
+      },
+      "growth": {
+        "tagline": "For growing teams that want to monitor AI visibility and optimize content for AI search.",
+        "engines": "ChatGPT, Perplexity, Gemini, Microsoft Copilot, Google AI Mode and Google AI Overviews tracking",
+        "extras": ["Multi-region tracking", "White-label reports & Looker Studio"]
+      },
+      "brands": "{count, plural, one {# brand} other {# brands}}",
+      "unlimitedBrands": "Unlimited brands",
+      "seats": "{count, plural, one {# seat} other {# seats}}",
+      "unlimitedSeats": "Unlimited seats",
+      "prompts": "{count, number} prompts tracked",
+      "briefs": "{count, number} content briefs a month",
+      "audits": "{count, number} site audits a month"
+    },
     "contactUs": "Contact Us",
     "integrations": "Integrations",
     "aiProviders": "AI Providers",
