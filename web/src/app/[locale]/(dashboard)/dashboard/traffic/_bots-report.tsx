@@ -21,16 +21,13 @@ import { cn } from '@/lib/utils';
 import { formatNumber } from '@/lib/format';
 import { formatRelative } from '@/lib/format-relative';
 import { botName } from '@/lib/ai-bot-names';
-import { botReportState, rowsPausedUntil, sampleBotTypes } from '@/lib/ai-bots';
-import { getBotConnections, type BotConnections } from '@/lib/actions/ai-bots';
-import {
-  getTrafficBots,
-  type BotTypeRow,
-  type TrafficBots,
-  type TrafficDateWindow,
-} from '@/lib/actions/traffic';
+import { botReportState, logsPausedUntil, rowsPausedUntil, sampleBotTypes } from '@/lib/ai-bots';
+import { type BotConnections } from '@/lib/actions/ai-bots';
+import { type BotTypeRow, type TrafficBots, type TrafficDateWindow } from '@/lib/actions/traffic';
 import { formatTrafficBucketDate } from './_charts';
 import { BotsDialog } from './_bots-connect';
+import { getBotConnections, getTrafficBots } from '@/lib/traffic-reads';
+import { useRangeReady } from './_range-ready';
 
 /** Where Upgrade goes, as on the Prompts page's usage cards. */
 const PLAN_PAGE = '/dashboard/settings?tab=billing';
@@ -223,40 +220,65 @@ export function BotsReportSection({
   const t = useTranslations('traffic.botReport');
   const tBots = useTranslations('traffic.bots');
   const key = `${brandId}|${dateWindow.dateFrom ?? ''}|${dateWindow.dateTo ?? ''}|${revision}`;
-  const [loaded, setLoaded] = useState<{
+  // The connections don't depend on the range: read again only on a change.
+  const infoKey = `${brandId}|${revision}`;
+  const [loaded, setLoaded] = useState<{ key: string; report: TrafficBots | null } | null>(null);
+  const [connections, setConnections] = useState<{
     key: string;
     info: BotConnections | null;
-    report: TrafficBots | null;
+    /** The last connections read without an error, for the dialog. */
+    lastInfo: BotConnections | null;
   } | null>(null);
   const [preview, setPreview] = useState(false);
   const [connectOpen, setConnectOpen] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
-    Promise.all([
-      getBotConnections(brandId).catch(() => ({ error: 'failed' })),
-      getTrafficBots(brandId, dateWindow).catch((err) => {
+    getBotConnections(brandId)
+      .catch(() => ({ error: 'failed' }))
+      .then((result) => {
+        if (cancelled) return;
+        const info = 'error' in result ? null : result;
+        setConnections((prev) => ({
+          key: infoKey,
+          info,
+          lastInfo: info ?? prev?.lastInfo ?? null,
+        }));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [brandId, infoKey]);
+
+  useEffect(() => {
+    let cancelled = false;
+    getTrafficBots(brandId, dateWindow)
+      .catch((err) => {
         // Best effort: the rest of the page doesn't depend on this section.
         console.error('Failed to load the AI bot report:', err);
         return null;
-      }),
-    ]).then(([info, report]) => {
-      if (!cancelled) setLoaded({ key, info: 'error' in info ? null : info, report });
-    });
+      })
+      .then((report) => {
+        if (!cancelled) setLoaded({ key, report });
+      });
     return () => {
       cancelled = true;
     };
   }, [brandId, dateWindow, key]);
 
-  const current = loaded?.key === key ? loaded : null;
-  const info = current?.info ?? null;
-  const report = current?.report ?? null;
+  const ready = loaded?.key === key && connections?.key === infoKey;
+  useRangeReady('botsReport', ready);
+  const info = ready ? (connections?.info ?? null) : null;
+  const report = ready ? (loaded?.report ?? null) : null;
   // The dialog keeps the connections it was opened with while the section
-  // reads again after a change it made (the page bumps `revision`): taken
-  // down, it would lose the new connection's secret and settings.
-  const dialogInfo = info ?? loaded?.info ?? null;
+  // reads again after a change it made (the page bumps `revision`), and when
+  // that read fails: taken down, it would lose the new connection's secret
+  // and settings.
+  const dialogInfo = info ?? connections?.lastInfo ?? null;
   const state = info ? botReportState(info, report) : null;
   const pausedUntil = info ? rowsPausedUntil(info.usage) : null;
+  // Past the raw cap log files aren't read: the report stops mid-month.
+  const logsPaused = info ? logsPausedUntil(info) : null;
 
   const sample = (
     <div className="relative min-h-[220px]">
@@ -304,7 +326,7 @@ export function BotsReportSection({
     </div>
   );
 
-  const body = !current ? (
+  const body = !ready ? (
     <div className="px-6 py-4">
       <Skeleton className="h-4 w-56" />
     </div>
@@ -340,7 +362,7 @@ export function BotsReportSection({
       </div>
 
       <div className={cn('grid grid-cols-1 gap-4', state === 'data' && 'xl:grid-cols-2')}>
-        <Card className={cn(!current && 'opacity-80')} aria-busy={!current}>
+        <Card className={cn(!ready && 'opacity-80')} aria-busy={!ready}>
           <CardHeader className="pb-2">
             <div className="flex items-center justify-between gap-2">
               <CardTitle className="text-sm font-medium">{t('typesTitle')}</CardTitle>
@@ -355,6 +377,11 @@ export function BotsReportSection({
                 {tBots('paused', {
                   day: formatTrafficBucketDate(pausedUntil),
                 })}
+              </p>
+            )}
+            {state === 'data' && logsPaused && (
+              <p className="px-6 pb-3 text-xs text-muted-foreground">
+                {tBots('logsPaused', { day: formatTrafficBucketDate(logsPaused) })}
               </p>
             )}
           </CardContent>

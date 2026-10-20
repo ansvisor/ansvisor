@@ -32,8 +32,10 @@ const toast = vi.hoisted(() => ({
   info: vi.fn(),
 }));
 vi.mock('@/lib/actions/traffic', () => ({
-  getTrafficPages: (...args: unknown[]) => getTrafficPages(...args),
   sendTrafficPagesToActionCenter: (...args: unknown[]) => sendTrafficPagesToActionCenter(...args),
+}));
+vi.mock('@/lib/traffic-reads', () => ({
+  getTrafficPages: (...args: unknown[]) => getTrafficPages(...args),
 }));
 vi.mock('@/lib/actions/audits', () => ({
   runAudit: (...args: unknown[]) => runAudit(...args),

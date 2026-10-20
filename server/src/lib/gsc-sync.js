@@ -5,8 +5,9 @@
  * live), pulls the last SYNC_WINDOW_DAYS of per-query daily stats through
  * Composio and upserts them into gsc_query_stats, and the same per page into
  * gsc_page_stats (AT-008: which pages lose clicks while impressions rise). A
- * brand's page sync reads PAGE_BACKFILL_DAYS until one gets through them all
- * for its property, so a 90-day range has a period before it (pagesSyncPlan).
+ * brand's page sync reads a week at a time, and reads its property's
+ * PAGE_BACKFILL_DAYS once, resuming where a sync stopped, so a 90-day range
+ * has a period before it (pagesSyncPlan).
  * Parameters are fully deterministic — no LLM anywhere in
  * this path. Per-brand failures are logged and skipped; one broken property
  * never aborts the run.
@@ -23,10 +24,14 @@ const ROW_LIMIT = 5000;
 // — hitting it is logged, never silent.
 const MAX_PAGES = 5;
 const UPSERT_CHUNK = 500;
-// Page stats (AT-008): the first sync reads 190 days — a 90-day range and
-// the 90 days before it, plus Google's delay — in SYNC_WINDOW_DAYS steps so
-// each step keeps the row cap; the daily prune keeps as many.
+// Page stats (AT-008): the first syncs read 190 days — a 90-day range and
+// the 90 days before it, plus Google's delay; the daily prune keeps as many.
 export const PAGE_BACKFILL_DAYS = 190;
+// A week per [page, date] pull: GSC sorts its rows by clicks, so a pull that
+// hits the row cap drops the zero-click page-days. Over a week the cap is
+// spread evenly instead of falling on the older days of a 28-day pull, which
+// are read once while recent days are re-read daily (#1177's review).
+export const PAGE_WINDOW_DAYS = 7;
 
 /** YYYY-MM-DD in UTC, `daysAgo` days before now. */
 function utcDateString(daysAgo = 0) {
@@ -59,17 +64,23 @@ export function mapPageRows(brandId, rows) {
 }
 
 /**
- * The windows a brand's page sync reads, as days ago: the last
- * SYNC_WINDOW_DAYS once its PAGE_BACKFILL_DAYS have been read, else those in
- * SYNC_WINDOW_DAYS steps.
+ * The page windows from `newest` to `oldest` days ago, both included,
+ * PAGE_WINDOW_DAYS at a time and newest first, with no gap.
  */
-export function pageSyncWindows(backfilled) {
-  if (backfilled) return [{ from: SYNC_WINDOW_DAYS, to: 0 }];
+export function pageWindows(newest, oldest) {
   const windows = [];
-  for (let to = 0; to < PAGE_BACKFILL_DAYS; to += SYNC_WINDOW_DAYS + 1) {
-    windows.push({ from: Math.min(to + SYNC_WINDOW_DAYS, PAGE_BACKFILL_DAYS), to });
+  for (let to = newest; to <= oldest; to += PAGE_WINDOW_DAYS) {
+    windows.push({ from: Math.min(to + PAGE_WINDOW_DAYS - 1, oldest), to });
   }
   return windows;
+}
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/** Whole UTC days from a YYYY-MM-DD date to `now`'s. */
+function daysSince(date, now) {
+  const today = Date.parse(new Date(now).toISOString().slice(0, 10));
+  return Math.round((today - Date.parse(date)) / DAY_MS);
 }
 
 /**
@@ -131,21 +142,36 @@ async function syncBrand(brand) {
 }
 
 /**
- * What a brand's page sync does (AT-008). Its PAGE_BACKFILL_DAYS are read
- * once per Search Console property: until a sync gets through them all
- * (gsc_pages_backfilled_property names the property), every sync reads them
- * again, so one cut short resumes the next day rather than leaving the brand
- * 28 days of history, and its 90-day range `incomplete`, for months. A brand
- * mapped to another property drops the old one's pages first. Then the last
- * SYNC_WINDOW_DAYS.
+ * What a brand's page sync does (AT-008, 00201). Every sync reads the last
+ * SYNC_WINDOW_DAYS. A property's PAGE_BACKFILL_DAYS are read once, older
+ * windows after those: gsc_pages_backfilled_property names the property the
+ * page rows belong to, and gsc_pages_backfill_from how far back its backfill
+ * has read (null once through). So a sync cut short resumes after its last
+ * window the next day, rather than reading the whole history again, and a
+ * window that keeps failing is the only one tried again. A brand mapped to
+ * another property drops the old one's pages and starts over.
  */
-export function pagesSyncPlan(brand) {
-  const backfilled = brand.gsc_pages_backfilled_property === brand.gsc_property;
+export function pagesSyncPlan(brand, now = Date.now()) {
+  const recent = pageWindows(0, SYNC_WINDOW_DAYS);
+  const started = brand.gsc_pages_backfilled_property === brand.gsc_property;
+  if (started && !brand.gsc_pages_backfill_from) {
+    return { recent, backfill: [], start: false, dropOldPages: false };
+  }
+  // Days up to SYNC_WINDOW_DAYS ago are the recent windows' every day.
+  const readTo = started
+    ? Math.max(daysSince(brand.gsc_pages_backfill_from, now), SYNC_WINDOW_DAYS)
+    : SYNC_WINDOW_DAYS;
   return {
-    windows: pageSyncWindows(backfilled),
-    dropOldPages: !backfilled && brand.gsc_pages_backfilled_property != null,
-    markBackfilled: !backfilled,
+    recent,
+    backfill: readTo < PAGE_BACKFILL_DAYS ? pageWindows(readTo + 1, PAGE_BACKFILL_DAYS) : [],
+    start: !started,
+    dropOldPages: !started && brand.gsc_pages_backfilled_property != null,
   };
+}
+
+async function updateBrand(brand, fields) {
+  const { error } = await supabaseAdmin.from('brands').update(fields).eq('id', brand.id);
+  if (error) throw new Error(error.message);
 }
 
 /** The brand's page stats (AT-008), as pagesSyncPlan says. */
@@ -156,15 +182,25 @@ async function syncBrandPages(brand) {
     if (error) throw new Error(error.message);
   }
   let total = 0;
-  for (const window of plan.windows) {
+  for (const window of plan.recent) {
     total += await pullWindow(brand, PAGES, window);
   }
-  if (plan.markBackfilled) {
-    const { error } = await supabaseAdmin
-      .from('brands')
-      .update({ gsc_pages_backfilled_property: brand.gsc_property })
-      .eq('id', brand.id);
-    if (error) throw new Error(error.message);
+  if (plan.start) {
+    // Only once the recent days are in, so a first sync cut short there
+    // starts over rather than leaving them out.
+    await updateBrand(brand, {
+      gsc_pages_backfilled_property: brand.gsc_property,
+      gsc_pages_backfill_from: utcDateString(SYNC_WINDOW_DAYS),
+    });
+  }
+  for (const window of plan.backfill) {
+    total += await pullWindow(brand, PAGES, window);
+    // Kept after each window, so the next sync resumes after it.
+    await updateBrand(brand, { gsc_pages_backfill_from: utcDateString(window.from) });
+  }
+  // Through the PAGE_BACKFILL_DAYS: from now on the recent windows only.
+  if (plan.start || brand.gsc_pages_backfill_from) {
+    await updateBrand(brand, { gsc_pages_backfill_from: null });
   }
   return total;
 }
@@ -192,7 +228,9 @@ export async function runGscSync({ organizationId, brandId } = {}) {
   // …and their active brands with a mapped property.
   let brandQuery = supabaseAdmin
     .from('brands')
-    .select('id, organization_id, gsc_property, gsc_pages_backfilled_property')
+    .select(
+      'id, organization_id, gsc_property, gsc_pages_backfilled_property, gsc_pages_backfill_from',
+    )
     .eq('is_active', true)
     .not('gsc_property', 'is', null)
     .in('organization_id', connectedOrgIds);

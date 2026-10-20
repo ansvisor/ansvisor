@@ -71,6 +71,7 @@ import { cn } from '@/lib/utils';
 import { suggestTopics, generatePromptsFromTopics, suggestCompetitors } from '@/lib/ai-brand-setup';
 import { DashboardPreview } from '@/components/onboarding/dashboard-preview';
 import { OnboardingFrame } from '@/components/onboarding/onboarding-frame';
+import { DASHBOARD_HOME } from '@/config/home';
 
 // ── Step indicator ─────────────────────────────────────────────────────────────
 
@@ -977,7 +978,7 @@ export default function OnboardingPage() {
 
       // Full page navigation bypasses Next.js router cache, ensuring
       // the server-side layout reads the fresh onboarding_completed flag.
-      window.location.href = '/dashboard/insights';
+      window.location.href = DASHBOARD_HOME;
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to save competitors');
       setSavingCompetitors(false);

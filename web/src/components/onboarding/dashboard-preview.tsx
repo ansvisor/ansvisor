@@ -14,6 +14,7 @@ import {
 } from '@/lib/dashboard-navigation';
 import { getFaviconUrl } from '@/lib/favicon';
 import { cn } from '@/lib/utils';
+import { isDashboardHomeItem } from '@/config/home';
 
 export interface DashboardPreviewCompetitor {
   name: string;
@@ -28,7 +29,6 @@ interface DashboardPreviewProps {
   competitors: DashboardPreviewCompetitor[];
 }
 
-const LANDING_HREF = '/dashboard/insights';
 const MAX_ROWS = 6;
 
 /**
@@ -101,7 +101,7 @@ export function DashboardPreview({
                       key={item.href}
                       className={cn(
                         'flex items-center gap-3 rounded-md px-2 py-1.5 text-[13px] font-medium',
-                        item.href === LANDING_HREF
+                        isDashboardHomeItem(item.href)
                           ? 'bg-accent text-accent-foreground'
                           : 'text-muted-foreground',
                       )}
