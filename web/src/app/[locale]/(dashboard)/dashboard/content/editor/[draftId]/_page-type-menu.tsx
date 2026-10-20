@@ -16,6 +16,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { isPageType, type PageType } from '@/lib/content/drafts';
+import { pagePath } from '@/lib/content/overlap';
 import { SITE_PAGE_TYPES, type SiteType } from '@/lib/content/page-types';
 import { cn } from '@/lib/utils';
 
@@ -31,6 +32,7 @@ export function PageTypeMenu({
   pageType,
   detected,
   isNew,
+  sourceUrl,
   onPick,
 }: {
   brandId: string;
@@ -40,6 +42,8 @@ export function PageTypeMenu({
   detected: boolean;
   /** A new page: the tag says so after the type. */
   isNew: boolean;
+  /** The existing page an optimize draft is for: the tag shows its path. */
+  sourceUrl: string | null;
   onPick: (type: PageType) => void;
 }) {
   const t = useTranslations('contentEditor.editor');
@@ -54,14 +58,16 @@ export function PageTypeMenu({
     <DropdownMenu>
       <DropdownMenuTrigger
         aria-label={t('pageType.change', { type: label })}
-        title={detected ? t('pageType.detectedHint') : undefined}
+        title={detected ? t('pageType.detectedHint') : (sourceUrl ?? undefined)}
         className={cn(
           badgeVariants({ variant: 'outline' }),
           'cursor-pointer gap-1 font-normal hover:bg-muted',
           !current && 'border-dashed text-muted-foreground',
         )}
       >
-        {[label, isNew ? t('newPage') : null].filter(Boolean).join(' · ')}
+        {[label, isNew ? t('newPage') : sourceUrl ? pagePath(sourceUrl) : null]
+          .filter(Boolean)
+          .join(' · ')}
         <ChevronDown className="h-3 w-3 opacity-60" />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-60">

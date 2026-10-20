@@ -8,9 +8,11 @@ import { NewContentDialog } from './new-content-dialog';
 
 const getContentStartOptions = vi.fn();
 const createContentDraft = vi.fn();
+const getContentOverlap = vi.fn();
 vi.mock('@/lib/actions/content-drafts', () => ({
   getContentStartOptions: (...args: unknown[]) => getContentStartOptions(...args),
   createContentDraft: (...args: unknown[]) => createContentDraft(...args),
+  getContentOverlap: (...args: unknown[]) => getContentOverlap(...args),
 }));
 const push = vi.fn();
 vi.mock('@/i18n/navigation', () => ({ useRouter: () => ({ push }) }));
@@ -87,6 +89,7 @@ beforeEach(() => {
   root = createRoot(container);
   getContentStartOptions.mockReset().mockResolvedValue(OPTIONS);
   createContentDraft.mockReset().mockResolvedValue('d9');
+  getContentOverlap.mockReset().mockResolvedValue({ totalPrompts: 2, pages: [] });
   push.mockReset();
   toast.error.mockReset();
 });
@@ -169,6 +172,8 @@ describe('New content', () => {
       source: { kind: 'content' },
       bodyHtml: '<h2>Returns policy</h2><p>30 days.</p>',
     });
+    // Content brought to optimize has no prompts to check.
+    expect(getContentOverlap).not.toHaveBeenCalled();
   });
 
   it('takes typed plain text as paragraphs, and a blog post when nothing tells the type', async () => {
@@ -221,5 +226,115 @@ describe('New content', () => {
     await click(button('Try again'));
     expect(getContentStartOptions).toHaveBeenCalledTimes(2);
     expect(button('Pick an opportunity')).toBeDefined();
+  });
+
+  describe('the overlap check', () => {
+    const GUIDE = {
+      url: 'https://acme.example/guides/espresso-machines-for-beginners/',
+      title: 'Espresso machines for beginners',
+      promptsInCommon: 3,
+      citations: 4,
+      gscPosition: 3.5,
+    };
+    /** Starts a new page from the first opportunity and waits for the check. */
+    async function startFromOpportunity() {
+      await render();
+      await click(button('Pick an opportunity'));
+      const option = [...document.querySelectorAll<HTMLElement>('[role="option"]')].find(
+        (o) => o.textContent === 'Northwind vs HubSpot',
+      );
+      await click(option);
+      await click(button('Continue'));
+      await act(async () => {});
+    }
+    const overlapOption = (name: string) =>
+      [...document.querySelectorAll<HTMLElement>('[role="radio"]')].find((r) =>
+        r.textContent?.startsWith(name),
+      )!;
+
+    it('says a new page is safe when no page of the brand answers its prompts', async () => {
+      await startFromOpportunity();
+      expect(getContentOverlap).toHaveBeenCalledWith('b1', { kind: 'opportunity', id: 'o1' });
+      expect(document.body.textContent).toContain('No existing page answers these prompts');
+      expect(document.body.textContent).toContain('Safe to create');
+    });
+
+    it('recommends optimizing a page that already answers most of the prompts', async () => {
+      getContentOverlap.mockResolvedValue({ totalPrompts: 4, pages: [GUIDE] });
+      await startFromOpportunity();
+
+      expect(document.body.textContent).toContain('An existing page already answers these prompts');
+      expect(document.body.textContent).toContain('3 of 4');
+      expect(document.body.textContent).toContain('#4');
+      const optimize = overlapOption('Optimize /guides/espresso-machines-for-beginners instead');
+      expect(optimize.getAttribute('aria-checked')).toBe('true');
+      expect(optimize.textContent).toContain('Recommended');
+      expect(optimize.textContent).toContain(
+        'It already answers 3 of 4 prompts, is cited 4× and ranks #4 on Google',
+      );
+      // The draft becomes that page's: its title, and the type its address shows.
+      expect(document.body.textContent).toContain('Optimize: Espresso machines for beginners');
+      expect(checkedType()).toBe('Guide');
+      expect(document.body.textContent).toContain("Picked from the page's address.");
+
+      await click(button('Open editor'));
+      expect(createContentDraft).toHaveBeenCalledWith('b1', {
+        method: 'optimize',
+        title: 'Espresso machines for beginners',
+        pageType: 'guide',
+        source: { kind: 'opportunity', id: 'o1' },
+        bodyHtml: undefined,
+        sourceUrl: GUIDE.url,
+      });
+    });
+
+    it('goes back to the new page when creating one anyway', async () => {
+      getContentOverlap.mockResolvedValue({ totalPrompts: 4, pages: [GUIDE] });
+      await startFromOpportunity();
+      await click(overlapOption('Create a new page anyway'));
+      expect(document.body.textContent).toContain('Create: Northwind vs HubSpot');
+      expect(checkedType()).toBe('Comparison');
+      await click(button('Open editor'));
+      expect(createContentDraft.mock.calls[0][1]).toMatchObject({
+        method: 'create',
+        title: 'Northwind vs HubSpot',
+        pageType: 'comparison',
+        sourceUrl: undefined,
+      });
+    });
+
+    it('recommends a new page linked from pages that answer only some prompts', async () => {
+      getContentOverlap.mockResolvedValue({
+        totalPrompts: 4,
+        pages: [
+          {
+            ...GUIDE,
+            url: 'https://acme.example/blog/grinders',
+            promptsInCommon: 1,
+            gscPosition: null,
+          },
+        ],
+      });
+      await startFromOpportunity();
+      expect(document.body.textContent).toContain('1 existing page answers some of these prompts');
+      expect(document.body.textContent).toContain('—');
+      expect(
+        overlapOption('Create a new page, link /blog/grinders to it').getAttribute('aria-checked'),
+      ).toBe('true');
+      expect(overlapOption('Add a section to /blog/grinders')).toBeDefined();
+      expect(document.body.textContent).toContain('Create: Northwind vs HubSpot');
+    });
+
+    it('lets the page start when the check fails, and tries again', async () => {
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+      getContentOverlap.mockRejectedValueOnce(new Error('down'));
+      await startFromOpportunity();
+      expect(document.body.textContent).toContain("Couldn't check for overlapping pages.");
+      expect(button('Open editor')!.disabled).toBe(false);
+      await click(button('Try again'));
+      await act(async () => {});
+      expect(getContentOverlap).toHaveBeenCalledTimes(2);
+      expect(document.body.textContent).toContain('Safe to create');
+    });
   });
 });

@@ -93,6 +93,8 @@ export interface ContentDraft {
   pageTypeSource: PageTypeSource;
   /** The brand's site type, which sets the page types on offer. */
   siteType: SiteType;
+  /** The existing page an optimize draft is for, when Start picked one. */
+  sourceUrl: string | null;
   method: DraftMethod;
   status: DraftStatus;
   bodyHtml: string;
@@ -116,6 +118,24 @@ export interface DraftStart {
   source: DraftSource;
   /** The content to optimize, as HTML. */
   bodyHtml?: string;
+  /** The existing page to optimize instead of writing a new one (overlap check). */
+  sourceUrl?: string;
+}
+
+/** One of the brand's pages AI already cites for a new page's prompts (CE-015). */
+export interface OverlapPage {
+  url: string;
+  title: string | null;
+  promptsInCommon: number;
+  citations: number;
+  /** Average Google position over the last 28 days; null without Search Console data. */
+  gscPosition: number | null;
+}
+
+/** Start's overlap check: the prompts a new page would answer, and the pages that answer them. */
+export interface ContentOverlap {
+  totalPrompts: number;
+  pages: OverlapPage[];
 }
 
 /** What New content offers to start a page from. */

@@ -838,6 +838,7 @@ export type Database = {
           page_type: string | null
           page_type_source: string
           prompt_ids: string[]
+          source_url: string | null
           score_after: number | null
           score_before: number | null
           status: string
@@ -856,6 +857,7 @@ export type Database = {
           page_type?: string | null
           page_type_source?: string
           prompt_ids?: string[]
+          source_url?: string | null
           score_after?: number | null
           score_before?: number | null
           status?: string
@@ -874,6 +876,7 @@ export type Database = {
           page_type?: string | null
           page_type_source?: string
           prompt_ids?: string[]
+          source_url?: string | null
           score_after?: number | null
           score_before?: number | null
           status?: string
@@ -3424,6 +3427,16 @@ export type Database = {
           avg_score: number
           high_impact_count: number
           sent_count: number
+        }[]
+      }
+      content_page_overlap: {
+        Args: { p_brand_id: string; p_prompt_ids: string[]; p_since?: string }
+        Returns: {
+          citations: number
+          gsc_position: number | null
+          page: string
+          prompts_in_common: number
+          title: string | null
         }[]
       }
       ga_page_ai_visibility: {

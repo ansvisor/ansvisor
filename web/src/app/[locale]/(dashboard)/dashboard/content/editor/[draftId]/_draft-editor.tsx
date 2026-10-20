@@ -288,6 +288,7 @@ export function DraftEditor({ draft }: { draft: ContentDraft }) {
             pageType={pageType}
             detected={picked === null}
             isNew={draft.method === 'create'}
+            sourceUrl={draft.sourceUrl}
             onPick={(type) => void pickPageType(type)}
           />
           <DraftMethodBadge method={draft.method} />

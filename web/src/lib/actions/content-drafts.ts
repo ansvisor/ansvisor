@@ -8,6 +8,7 @@ import {
   PAGE_TYPES,
   type ContentDraft,
   type ContentDraftListItem,
+  type ContentOverlap,
   type DraftMethod,
   type DraftStart,
   type DraftStartOptions,
@@ -98,7 +99,7 @@ export async function getContentDraft(id: string): Promise<ContentDraft | null> 
   const { data, error } = await supabase
     .from('content_drafts')
     .select(
-      `id, brand_id, title, page_type, page_type_source, method, status, body_html, author, updated_at, ${BRAND_SITE}`,
+      `id, brand_id, title, page_type, page_type_source, method, status, body_html, author, source_url, updated_at, ${BRAND_SITE}`,
     )
     .eq('id', id)
     .maybeSingle();
@@ -111,6 +112,7 @@ export async function getContentDraft(id: string): Promise<ContentDraft | null> 
     pageType: data.page_type,
     pageTypeSource: data.page_type_source === 'user' ? 'user' : 'detected',
     siteType: brandSiteType(data.brands),
+    sourceUrl: data.source_url,
     method: data.method as DraftMethod,
     status: draftStatus(data.status),
     bodyHtml: data.body_html,
@@ -192,6 +194,11 @@ const startInput = z.object({
     z.object({ kind: z.literal('content') }),
   ]),
   bodyHtml: z.string().max(MAX_BODY_HTML_LENGTH).optional(),
+  sourceUrl: z
+    .string()
+    .max(2048)
+    .regex(/^https?:\/\//i)
+    .optional(),
 });
 
 /** The most prompt ids a draft keeps (00206). */
@@ -252,16 +259,52 @@ async function promptsFor(
   return { promptIds: data.map((p) => p.id), opportunityId: null };
 }
 
+const overlapSource = startInput.shape.source;
+
+/**
+ * Start's overlap check (CE-015): the brand's own pages AI cites for the
+ * prompts a page started from this source would answer (00207), with prompts
+ * in common, citations and Google position. Nothing to check for content
+ * brought to optimize: it has no prompts yet.
+ */
+export async function getContentOverlap(
+  brandId: string,
+  source: DraftStart['source'],
+): Promise<ContentOverlap> {
+  const parsed = overlapSource.safeParse(source);
+  if (!draftId.safeParse(brandId).success || !parsed.success) throw new Error('invalid');
+  const supabase = await createClient();
+  const { promptIds } = await promptsFor(supabase, brandId, parsed.data);
+  const prompts = [...new Set(promptIds)];
+  if (!prompts.length) return { totalPrompts: 0, pages: [] };
+  const { data, error } = await supabase.rpc('content_page_overlap', {
+    p_brand_id: brandId,
+    p_prompt_ids: prompts,
+  });
+  if (error) throw new Error(error.message);
+  return {
+    totalPrompts: prompts.length,
+    pages: (data ?? []).map((row) => ({
+      url: row.page,
+      title: row.title,
+      promptsInCommon: row.prompts_in_common,
+      citations: Number(row.citations),
+      gscPosition: row.gsc_position === null ? null : Number(row.gsc_position),
+    })),
+  };
+}
+
 /**
  * A draft started from New content and Start (CE-003, CE-015), by the
  * signed-in member: the page type they picked, what it is for, and its first
- * text. A new page starts with its title as the H1; content to optimize is
- * checked against the draft allow-list, as a save is.
+ * text. A new page, or an existing one Start chose to optimize, starts with
+ * its title as the H1; content brought to optimize is checked against the
+ * draft allow-list, as a save is.
  */
 export async function createContentDraft(brandId: string, start: DraftStart): Promise<string> {
   const parsed = startInput.safeParse(start);
   if (!draftId.safeParse(brandId).success || !parsed.success) throw new Error('invalid');
-  const { method, pageType, source, bodyHtml } = parsed.data;
+  const { method, pageType, source, bodyHtml, sourceUrl } = parsed.data;
   const title = parsed.data.title.trim().slice(0, MAX_TITLE_LENGTH).trim();
 
   const supabase = await createClient();
@@ -281,12 +324,13 @@ export async function createContentDraft(brandId: string, start: DraftStart): Pr
       page_type: pageType,
       page_type_source: 'user',
       body_html:
-        method === 'optimize'
-          ? sanitizeDraftHtml(bodyHtml ?? '')
+        bodyHtml !== undefined
+          ? sanitizeDraftHtml(bodyHtml)
           : title
             ? `<h1>${escapeHtml(title)}</h1>`
             : '',
       opportunity_id: opportunityId,
+      source_url: sourceUrl ?? null,
       prompt_ids: [...new Set(promptIds)].slice(0, MAX_DRAFT_PROMPTS),
     })
     .select('id')

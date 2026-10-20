@@ -87,6 +87,7 @@ const draft = (over: Partial<ContentDraft> = {}): ContentDraft => ({
   pageType: 'feature_page',
   pageTypeSource: 'user',
   siteType: 'b2b',
+  sourceUrl: null,
   method: 'optimize',
   status: 'in_review',
   bodyHtml: '<h1>Pipeline forecasting</h1><p>Teams trust it.</p>',
@@ -271,6 +272,15 @@ describe('the content editor', () => {
       await act(async () => types.find((item) => item.textContent === 'Policy')!.click());
       expect(toast.error).toHaveBeenCalledWith("Couldn't change the page type. Try again.");
       expect(typeMenu().textContent).toBe('Product page');
+    });
+
+    it('names the existing page an optimize draft is for beside its type', async () => {
+      getContentDraft.mockResolvedValue(
+        draft({ sourceUrl: 'https://northwind.example/features/pipeline-forecasting/' }),
+      );
+      await renderPage();
+      expect(typeMenu().textContent).toBe('Feature page · /features/pipeline-forecasting');
+      expect(typeMenu().title).toBe('https://northwind.example/features/pipeline-forecasting/');
     });
 
     it('says when no type is detected yet', async () => {

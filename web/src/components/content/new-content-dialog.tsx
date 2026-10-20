@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
-import { ArrowLeft, FileText, Loader2, X } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, Check, FileText, Loader2, X } from 'lucide-react';
 import { useRouter } from '@/i18n/navigation';
 import { Button } from '@/components/ui/button';
 import {
@@ -28,18 +28,29 @@ import {
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
-import { createContentDraft, getContentStartOptions } from '@/lib/actions/content-drafts';
+import {
+  createContentDraft,
+  getContentOverlap,
+  getContentStartOptions,
+} from '@/lib/actions/content-drafts';
 import { MAX_ATTACHMENT_BYTES, textToHtml } from '@/lib/content/attachments';
 import { cleanHtml } from '@/lib/content/clean-html';
 import {
   contentEditorPath,
+  type ContentOverlap,
   type DraftMethod,
   type DraftSource,
   type DraftStartOptions,
   type PageType,
 } from '@/lib/content/drafts';
 import { DOCUMENT_ACCEPT, readDocumentFile } from '@/lib/content/import-document';
-import { SITE_PAGE_TYPES, type SiteType } from '@/lib/content/page-types';
+import {
+  adviseOverlap,
+  pagePath,
+  type OverlapChoice,
+  type OverlapOption,
+} from '@/lib/content/overlap';
+import { SITE_PAGE_TYPES, detectPageType, type SiteType } from '@/lib/content/page-types';
 import {
   fileTitle,
   startPageType,
@@ -68,6 +79,9 @@ interface BroughtContent extends ContentSummary {
   imagesRemoved: number;
 }
 
+/** Where Start's first page type came from, if it was read from somewhere. */
+type DetectedFrom = 'title' | 'content' | 'page' | null;
+
 /** What Start opens the editor with. */
 interface StartChoice {
   method: DraftMethod;
@@ -75,7 +89,18 @@ interface StartChoice {
   source: DraftSource;
   bodyHtml?: string;
   pageType: PageType;
-  detected: boolean;
+  detectedFrom: DetectedFrom;
+  /** The page type for a new page, to go back to from optimizing an existing one. */
+  newPageType: { pageType: PageType; detectedFrom: DetectedFrom };
+  /** The overlap check's pick: write the new page, or optimize an existing one. */
+  choice: OverlapChoice;
+}
+
+/** The overlap check for one source: null while it runs. */
+interface OverlapRead {
+  key: string;
+  overlap: ContentOverlap | null;
+  failed: boolean;
 }
 
 /**
@@ -112,6 +137,8 @@ export function NewContentDialog({
   const [reading, setReading] = useState(false);
   const [start, setStart] = useState<StartChoice | null>(null);
   const [opening, setOpening] = useState(false);
+  const [overlapRead, setOverlapRead] = useState<OverlapRead | null>(null);
+  const [overlapAttempt, setOverlapAttempt] = useState(0);
   const fileRef = useRef<HTMLInputElement>(null);
 
   // Each opening starts over and reads what there is to start from.
@@ -133,6 +160,32 @@ export function NewContentDialog({
     };
   }, [open, brandId, attempt]);
 
+  // Start checks the pages that already answer a new page's prompts. Content
+  // brought to optimize has no prompts to check. A page type picked in Start
+  // keeps the same source, so the check runs once per source.
+  const startSource = start?.source;
+  const overlapKey = startSource && startSource.kind !== 'content' ? sourceKey(startSource) : null;
+  useEffect(() => {
+    if (!startSource || startSource.kind === 'content') return;
+    const key = sourceKey(startSource);
+    let cancelled = false;
+    getContentOverlap(brandId, startSource)
+      .then((overlap) => {
+        if (cancelled) return;
+        setOverlapRead({ key, overlap, failed: false });
+        // The recommended option is picked first.
+        const recommended = adviseOverlap(overlap).options[0];
+        if (recommended) setStart((s) => (s ? withChoice(s, recommended.choice, siteType) : s));
+      })
+      .catch((err) => {
+        console.error('Failed to check for overlapping pages:', err);
+        if (!cancelled) setOverlapRead({ key, overlap: null, failed: true });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [brandId, startSource, siteType, overlapAttempt]);
+
   const reset = () => {
     setMethod('create');
     setKind('opportunity');
@@ -142,6 +195,7 @@ export function NewContentDialog({
     setContent(null);
     setStart(null);
     setOpening(false);
+    setOverlapRead(null);
   };
   const changeOpen = (next: boolean) => {
     if (!next) reset();
@@ -211,11 +265,17 @@ export function NewContentDialog({
       if (!picked) return;
       const title = picked.pageTitle ?? picked.label;
       const type = startPageType({ title }, siteType);
+      const newPageType = {
+        pageType: type.pageType,
+        detectedFrom: type.detected ? ('title' as const) : null,
+      };
       setStart({
         method,
         title,
         source: { kind, id: picked.value },
-        ...type,
+        ...newPageType,
+        newPageType,
+        choice: { kind: 'create' },
       });
       return;
     }
@@ -224,25 +284,37 @@ export function NewContentDialog({
       (typed ? { ...summarizeContent(textToHtml(typed)), html: textToHtml(typed) } : null);
     if (!brought) return;
     const type = startPageType({ title: brought.title, html: brought.html }, siteType);
+    const newPageType = {
+      pageType: type.pageType,
+      detectedFrom: type.detected ? ('content' as const) : null,
+    };
     setStart({
       method,
       title: brought.title,
       source: { kind: 'content' },
       bodyHtml: brought.html,
-      ...type,
+      ...newPageType,
+      newPageType,
+      choice: { kind: 'create' },
     });
   };
+
+  // Optimizing an existing page instead: the draft is that page's.
+  const existing = start?.choice.kind === 'optimize' ? start.choice.page : null;
+  const startMethod: DraftMethod = existing ? 'optimize' : (start?.method ?? 'create');
+  const startTitle = existing ? existing.title || pagePath(existing.url) : (start?.title ?? '');
 
   const openEditor = async () => {
     if (!start) return;
     setOpening(true);
     try {
       const id = await createContentDraft(brandId, {
-        method: start.method,
-        title: start.title,
+        method: startMethod,
+        title: startTitle,
         pageType: start.pageType,
         source: start.source,
         bodyHtml: start.bodyHtml,
+        sourceUrl: existing?.url,
       });
       router.push(contentEditorPath(id));
     } catch (err) {
@@ -258,9 +330,9 @@ export function NewContentDialog({
         {start ? (
           <>
             <DialogHeader>
-              <DialogTitle className="truncate pr-8" title={start.title}>
-                {t(start.method === 'create' ? 'start.titleCreate' : 'start.titleOptimize', {
-                  title: start.title || t('start.untitled'),
+              <DialogTitle className="truncate pr-8" title={startTitle}>
+                {t(startMethod === 'create' ? 'start.titleCreate' : 'start.titleOptimize', {
+                  title: startTitle || t('start.untitled'),
                 })}
               </DialogTitle>
               <DialogDescription>{t('start.description')}</DialogDescription>
@@ -276,18 +348,44 @@ export function NewContentDialog({
                   <ChoiceChip
                     key={type}
                     selected={start.pageType === type}
-                    onSelect={() => setStart({ ...start, pageType: type, detected: false })}
+                    onSelect={() =>
+                      setStart({
+                        ...start,
+                        pageType: type,
+                        detectedFrom: null,
+                        ...(start.choice.kind === 'create' && {
+                          newPageType: { pageType: type, detectedFrom: null },
+                        }),
+                      })
+                    }
                   >
                     {tTypes(type)}
                   </ChoiceChip>
                 ))}
               </div>
-              {start.detected && (
+              {start.detectedFrom && (
                 <p className="text-xs text-muted-foreground">
-                  {t(start.bodyHtml ? 'start.detectedContent' : 'start.detectedTitle')}
+                  {t(
+                    {
+                      title: 'start.detectedTitle',
+                      content: 'start.detectedContent',
+                      page: 'start.detectedPage',
+                    }[start.detectedFrom],
+                  )}
                 </p>
               )}
             </div>
+            {overlapKey && (
+              <OverlapCheck
+                read={overlapRead?.key === overlapKey ? overlapRead : null}
+                choice={start.choice}
+                onChoose={(choice) => setStart(withChoice(start, choice, siteType))}
+                onRetry={() => {
+                  setOverlapRead(null);
+                  setOverlapAttempt((n) => n + 1);
+                }}
+              />
+            )}
             <DialogFooter>
               <Button variant="ghost" onClick={() => setStart(null)} disabled={opening}>
                 <ArrowLeft className="h-4 w-4" />
@@ -504,6 +602,197 @@ export function NewContentDialog({
         )}
       </DialogContent>
     </Dialog>
+  );
+}
+
+function sourceKey(source: Exclude<DraftSource, { kind: 'content' }>) {
+  return `${source.kind}:${source.id}`;
+}
+
+/** Start with this overlap pick: an existing page brings its own title and type. */
+function withChoice(start: StartChoice, choice: OverlapChoice, siteType: SiteType): StartChoice {
+  if (choice.kind === 'create') return { ...start, choice, ...start.newPageType };
+  const detected = detectPageType({ url: choice.page.url, title: choice.page.title }, siteType);
+  return {
+    ...start,
+    choice,
+    pageType: detected ?? start.pageType,
+    detectedFrom: detected ? 'page' : null,
+  };
+}
+
+/**
+ * Start's overlap check (CE-015): the brand's pages AI already cites for these
+ * prompts, and what to do about them, the recommended option first.
+ */
+function OverlapCheck({
+  read,
+  choice,
+  onChoose,
+  onRetry,
+}: {
+  read: OverlapRead | null;
+  choice: OverlapChoice;
+  onChoose: (choice: OverlapChoice) => void;
+  onRetry: () => void;
+}) {
+  const t = useTranslations('contentEditor.newContent.overlap');
+  const overlap = read?.overlap ?? null;
+  const advice = overlap ? adviseOverlap(overlap) : null;
+  const shown = overlap?.pages.slice(0, 3) ?? [];
+  const top = overlap?.pages[0];
+  const isChosen = (option: OverlapOption) =>
+    option.choice.kind === choice.kind &&
+    (option.choice.kind === 'create' ||
+      (choice.kind === 'optimize' && option.choice.page.url === choice.page.url));
+
+  const optionText = (option: OverlapOption) => {
+    const page = top ? pagePath(top.url) : '';
+    switch (option.key) {
+      case 'optimizeInstead':
+        return {
+          title: t('options.optimizeInstead.title', { page }),
+          reason: t(
+            top?.gscPosition != null
+              ? 'options.optimizeInstead.reasonRanked'
+              : 'options.optimizeInstead.reason',
+            {
+              count: top?.promptsInCommon ?? 0,
+              total: overlap?.totalPrompts ?? 0,
+              citations: formatNumber(top?.citations ?? 0),
+              position: Math.round(top?.gscPosition ?? 0),
+            },
+          ),
+        };
+      case 'createAnyway':
+        return {
+          title: t('options.createAnyway.title'),
+          reason: t('options.createAnyway.reason'),
+        };
+      case 'createLinked':
+        return {
+          title:
+            (overlap?.pages.length ?? 0) > 1
+              ? t('options.createLinked.titleMany')
+              : t('options.createLinked.title', { page }),
+          reason: t('options.createLinked.reason'),
+        };
+      case 'addSection':
+        return {
+          title: t('options.addSection.title', { page }),
+          reason: t('options.addSection.reason'),
+        };
+    }
+  };
+
+  return (
+    <div className="space-y-2">
+      <Label>{t('label')}</Label>
+      {!read ? (
+        <p className="flex items-center gap-2 text-xs text-muted-foreground" aria-busy="true">
+          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          {t('checking')}
+        </p>
+      ) : read.failed || !advice || !overlap ? (
+        <p className="flex items-center gap-2 text-xs text-muted-foreground">
+          {t('failed')}
+          <button type="button" className="font-medium underline" onClick={onRetry}>
+            {t('retry')}
+          </button>
+        </p>
+      ) : advice.verdict === 'none' ? (
+        <div className="flex items-center justify-between gap-3 rounded-lg border px-3 py-2.5 text-sm">
+          <span>{overlap.totalPrompts ? t('none') : t('noPrompts')}</span>
+          {overlap.totalPrompts > 0 && (
+            <span className="flex shrink-0 items-center gap-1 text-xs font-medium text-emerald-600 dark:text-emerald-400">
+              <Check className="h-3.5 w-3.5" />
+              {t('safe')}
+            </span>
+          )}
+        </div>
+      ) : (
+        <>
+          <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2.5 text-sm">
+            <p className="flex items-center gap-1.5 font-medium text-amber-700 dark:text-amber-400">
+              <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+              {advice.verdict === 'covered'
+                ? t('covered')
+                : t('partial', { count: overlap.pages.length })}
+            </p>
+            <table className="mt-2 w-full table-fixed text-xs">
+              <thead className="text-[11px] tracking-wide whitespace-nowrap text-muted-foreground uppercase">
+                <tr>
+                  <th className="py-1 text-left font-medium">{t('columns.page')}</th>
+                  <th className="w-28 py-1 pl-3 text-right font-medium">{t('columns.prompts')}</th>
+                  <th className="w-28 py-1 pl-3 text-right font-medium">
+                    {t('columns.citations')}
+                  </th>
+                  <th className="w-24 py-1 pl-3 text-right font-medium">{t('columns.google')}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {shown.map((page) => (
+                  <tr key={page.url} className="border-t border-amber-500/20">
+                    <td className="truncate py-1.5 pr-2" title={page.url}>
+                      {pagePath(page.url)}
+                    </td>
+                    <td className="py-1.5 pl-3 text-right tabular-nums">
+                      {t('promptsValue', {
+                        count: page.promptsInCommon,
+                        total: overlap.totalPrompts,
+                      })}
+                    </td>
+                    <td className="py-1.5 pl-3 text-right tabular-nums">
+                      {formatNumber(page.citations)}
+                    </td>
+                    <td className="py-1.5 pl-3 text-right tabular-nums">
+                      {page.gscPosition == null ? '—' : `#${Math.round(page.gscPosition)}`}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div role="radiogroup" aria-label={t('label')} className="grid gap-1.5">
+            {advice.options.map((option) => {
+              const text = optionText(option);
+              const chosen = isChosen(option);
+              return (
+                <button
+                  key={option.key}
+                  type="button"
+                  role="radio"
+                  aria-checked={chosen}
+                  onClick={() => onChoose(option.choice)}
+                  className={cn(
+                    'flex items-start gap-2.5 rounded-xl border px-3 py-2.5 text-left transition-colors hover:bg-muted/50',
+                    chosen && 'border-foreground ring-1 ring-inset ring-foreground',
+                  )}
+                >
+                  <span
+                    className={cn(
+                      'mt-0.5 h-4 w-4 shrink-0 rounded-full border-[1.5px] border-muted-foreground/50',
+                      chosen && 'border-[5px] border-foreground',
+                    )}
+                  />
+                  <span className="min-w-0">
+                    <span className="flex flex-wrap items-center gap-1.5 text-sm font-medium">
+                      {text.title}
+                      {option.recommended && (
+                        <span className="rounded-md bg-muted px-1.5 text-[10.5px] font-medium text-muted-foreground">
+                          {t('recommended')}
+                        </span>
+                      )}
+                    </span>
+                    <span className="block text-xs text-muted-foreground">{text.reason}</span>
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </>
+      )}
+    </div>
   );
 }
 

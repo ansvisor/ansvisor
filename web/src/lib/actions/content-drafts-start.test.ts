@@ -20,11 +20,17 @@ interface Call {
 let calls: Call[];
 // What a read of each table returns: a row for maybeSingle, rows otherwise.
 let reads: Record<string, unknown>;
+let rpcCalls: { fn: string; args: unknown }[];
+let rpcRows: unknown[];
 
 vi.mock('@/lib/action-center/assignees', () => ({ readAssignees: vi.fn(async () => new Map()) }));
 vi.mock('@/lib/supabase/server', () => ({
   createClient: vi.fn(async () => ({
     auth: { getUser: async () => ({ data: { user: { id: 'u1' } } }) },
+    rpc: async (fn: string, args: unknown) => {
+      rpcCalls.push({ fn, args });
+      return { data: rpcRows, error: null };
+    },
     from: (table: string) => {
       const call: Call = { table, op: 'select', filters: [] };
       calls.push(call);
@@ -48,13 +54,16 @@ vi.mock('@/lib/supabase/server', () => ({
   })),
 }));
 
-const { createContentDraft, getContentStartOptions } = await import('./content-drafts');
+const { createContentDraft, getContentOverlap, getContentStartOptions } =
+  await import('./content-drafts');
 
 const inserted = () => calls.find((call) => call.op === 'insert')?.value as Record<string, unknown>;
 
 beforeEach(() => {
   calls = [];
   reads = {};
+  rpcCalls = [];
+  rpcRows = [];
 });
 
 describe('getContentStartOptions', () => {
@@ -144,6 +153,7 @@ describe('createContentDraft', () => {
       body_html: '<h1>CRM &lt;for&gt; agents</h1>',
       opportunity_id: OPPORTUNITY,
       prompt_ids: [PROMPT, 'p2'],
+      source_url: null,
     });
   });
 
@@ -219,5 +229,100 @@ describe('createContentDraft', () => {
     ).rejects.toThrow('invalid');
     await expect(createContentDraft('nope', start())).rejects.toThrow('invalid');
     expect(calls.some((call) => call.op === 'insert')).toBe(false);
+  });
+});
+
+describe('getContentOverlap', () => {
+  it('checks the source’s prompts against the brand’s cited pages', async () => {
+    reads = { prompts: [{ id: PROMPT }, { id: 'p2' }, { id: PROMPT }] };
+    rpcRows = [
+      {
+        page: 'https://acme.example/guides/espresso/',
+        title: 'Espresso guide',
+        prompts_in_common: 2,
+        citations: '4',
+        gsc_position: '3.5',
+      },
+      {
+        page: 'https://acme.example/blog/x',
+        title: null,
+        prompts_in_common: 1,
+        citations: 1,
+        gsc_position: null,
+      },
+    ];
+    await expect(getContentOverlap(BRAND, { kind: 'topic', id: TOPIC })).resolves.toEqual({
+      totalPrompts: 2,
+      pages: [
+        {
+          url: 'https://acme.example/guides/espresso/',
+          title: 'Espresso guide',
+          promptsInCommon: 2,
+          citations: 4,
+          gscPosition: 3.5,
+        },
+        {
+          url: 'https://acme.example/blog/x',
+          title: null,
+          promptsInCommon: 1,
+          citations: 1,
+          gscPosition: null,
+        },
+      ],
+    });
+    expect(rpcCalls).toEqual([
+      { fn: 'content_page_overlap', args: { p_brand_id: BRAND, p_prompt_ids: [PROMPT, 'p2'] } },
+    ]);
+  });
+
+  it('has nothing to check for content to optimize, or a source with no prompts', async () => {
+    await expect(getContentOverlap(BRAND, { kind: 'content' })).resolves.toEqual({
+      totalPrompts: 0,
+      pages: [],
+    });
+    reads = {
+      content_opportunities: {
+        id: OPPORTUNITY,
+        prompt_id: null,
+        cluster_id: null,
+        related_cluster_ids: [],
+      },
+    };
+    await expect(
+      getContentOverlap(BRAND, { kind: 'opportunity', id: OPPORTUNITY }),
+    ).resolves.toEqual({ totalPrompts: 0, pages: [] });
+    expect(rpcCalls).toEqual([]);
+  });
+});
+
+describe('optimizing an existing page instead (overlap check)', () => {
+  it('keeps the page’s address and starts the draft with its title as H1', async () => {
+    reads = { prompts: [{ id: PROMPT }] };
+    await createContentDraft(BRAND, {
+      method: 'optimize',
+      title: 'Espresso guide',
+      pageType: 'buying_guide',
+      source: { kind: 'topic', id: TOPIC },
+      sourceUrl: 'https://acme.example/guides/espresso/',
+    });
+    expect(inserted()).toMatchObject({
+      method: 'optimize',
+      body_html: '<h1>Espresso guide</h1>',
+      source_url: 'https://acme.example/guides/espresso/',
+      prompt_ids: [PROMPT],
+    });
+  });
+
+  it('refuses an address that isn’t a web page’s', async () => {
+    await expect(
+      createContentDraft(BRAND, {
+        method: 'optimize',
+        title: 'x',
+        pageType: 'guide',
+        source: { kind: 'content' },
+        sourceUrl: 'javascript:alert(1)',
+      }),
+    ).rejects.toThrow('invalid');
+    expect(calls).toEqual([]);
   });
 });

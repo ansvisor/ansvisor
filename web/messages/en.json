@@ -3170,8 +3170,48 @@
         "pageType": "Page type",
         "detectedTitle": "Picked from the title.",
         "detectedContent": "Picked from the content.",
+        "detectedPage": "Picked from the page's address.",
         "openEditor": "Open editor",
         "failed": "Couldn't start the draft. Try again."
+      },
+      "overlap": {
+        "label": "Overlap check",
+        "checking": "Checking your pages that answer the same prompts…",
+        "failed": "Couldn't check for overlapping pages.",
+        "retry": "Try again",
+        "none": "No existing page answers these prompts",
+        "noPrompts": "No tracked prompts to check this against yet",
+        "safe": "Safe to create",
+        "covered": "An existing page already answers these prompts",
+        "partial": "{count, plural, one {# existing page answers} other {# existing pages answer}} some of these prompts",
+        "columns": {
+          "page": "Page",
+          "prompts": "Same prompts",
+          "citations": "AI citations",
+          "google": "Google pos."
+        },
+        "promptsValue": "{count} of {total}",
+        "recommended": "Recommended",
+        "options": {
+          "optimizeInstead": {
+            "title": "Optimize {page} instead",
+            "reason": "It already answers {count} of {total} prompts and is cited {citations}×",
+            "reasonRanked": "It already answers {count} of {total} prompts, is cited {citations}× and ranks #{position} on Google"
+          },
+          "createAnyway": {
+            "title": "Create a new page anyway",
+            "reason": "Risk: two pages compete for the same prompts"
+          },
+          "createLinked": {
+            "title": "Create a new page, link {page} to it",
+            "titleMany": "Create a new page, link these pages to it",
+            "reason": "One clear page for these prompts"
+          },
+          "addSection": {
+            "title": "Add a section to {page}",
+            "reason": "A smaller change than a new page"
+          }
+        }
       }
     },
     "editor": {
