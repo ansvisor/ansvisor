@@ -9,8 +9,8 @@ import { webhookSecretsMatch } from '../lib/webhook-secret.js';
 
 const router = Router();
 
-// This endpoint is public by design, so keep a stricter IP-based limit than
-// the authenticated dashboard API. It is mounted outside /api in server.js.
+// This endpoint is public by design. The supplied secret hash gives each
+// webhook its own budget; the second limiter counts failed (401) attempts by IP.
 router.use(webhookCallbackLimiter, webhookCallbackAuthFailureLimiter);
 
 /**
