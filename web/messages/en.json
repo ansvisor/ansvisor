@@ -3442,6 +3442,7 @@
       "copy": "Copy",
       "copied": "Copied",
       "copyWorker": "Worker code",
+      "copyWorkerSecret": "Secret value (name: {name})",
       "copyDestination": "Destination",
       "copyLogpushJob": "Job settings (Cloudflare API: POST /zones/ZONE_ID/logpush/jobs)",
       "copyEndpoint": "Endpoint URL",
@@ -3469,6 +3470,7 @@
         "cloudflare_worker": [
           "In Cloudflare, open Workers & Pages and create a Worker.",
           "Replace its code with the Worker code below and deploy it.",
+          "In the Worker's Settings › Variables and Secrets, add a variable of type Secret with the name and value below.",
           "Add a route for your site, such as example.com/*, so the Worker sees its requests."
         ],
         "cloudflare_logpush": [

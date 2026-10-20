@@ -47,6 +47,8 @@ export interface NewBotConnection {
   secret: string;
   endpoint: string;
   workerScript: string | null;
+  /** The Worker Secret the script reads the connection secret from; null for other senders. */
+  workerSecretName: string | null;
   logpushJob: Record<string, unknown> | null;
   vercelDrain: { endpoint: string; format: string; headers: string[]; sources: string[] } | null;
 }
@@ -122,6 +124,7 @@ export async function createBotConnection(
     secret: String(b.secret),
     endpoint: String(b.endpoint),
     workerScript: typeof b.workerScript === 'string' ? b.workerScript : null,
+    workerSecretName: typeof b.workerSecretName === 'string' ? b.workerSecretName : null,
     logpushJob: (b.logpushJob as Record<string, unknown> | null) ?? null,
     vercelDrain: (b.vercelDrain as NewBotConnection['vercelDrain']) ?? null,
   };
