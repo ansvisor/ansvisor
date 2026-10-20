@@ -23,7 +23,7 @@ const TYPE_TONES: Record<string, string> = {
   recover: 'border-red-500/30 bg-red-500/10 text-red-700 dark:text-red-400',
   protect: 'border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-400',
   fix: 'border-orange-500/30 bg-orange-500/10 text-orange-700 dark:text-orange-400',
-  compete: 'border-violet-500/30 bg-violet-500/10 text-violet-700 dark:text-violet-400',
+  compete: 'border-sky-500/30 bg-sky-500/10 text-sky-700 dark:text-sky-400',
 };
 
 const STATUS_TONES: Record<string, string> = {

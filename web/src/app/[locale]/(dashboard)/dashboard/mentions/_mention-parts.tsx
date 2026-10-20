@@ -13,10 +13,12 @@ export interface MentionNames {
   competitors: string[];
 }
 
-/** Your brand in violet, competitors in grey (spec §7), in both themes. */
+/**
+ * Your brand in ink, competitors in grey (spec §7): the theme's primary, so
+ * a dark mark on light and a light one on dark, in the brand's colors.
+ */
 export const MARK_CLASS: Record<MentionKind, string> = {
-  brand:
-    'rounded-sm bg-violet-100 px-0.5 font-medium text-violet-900 dark:bg-violet-500/25 dark:text-violet-100',
+  brand: 'rounded-sm bg-primary px-0.5 font-medium text-primary-foreground',
   competitor: 'rounded-sm bg-muted px-0.5 text-foreground ring-1 ring-inset ring-border',
 };
 
