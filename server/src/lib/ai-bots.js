@@ -12,8 +12,8 @@
  * The ranges are fetched on first use and again once a day, and kept in
  * memory. A failed refresh keeps the last list; with none ever read, the
  * bot's requests can't be verified and aren't counted, and the list isn't
- * tried again for a few minutes. Requests that need a list being read wait
- * for that one read.
+ * tried again for a few minutes. A list past its day is still used while it
+ * is read again; only requests with no list to use wait, for that one read.
  *
  * The list is versioned like ai-sources.json: each change adds an entry to
  * `changes` and bumps `version`.
@@ -132,7 +132,9 @@ async function readRanges(url, hit, fetchImpl, now) {
 /**
  * A range file's prefixes: from memory while fresh, read again after a day.
  * A failed read keeps what was read before; null when nothing ever was, and
- * then until RANGES_RETRY_MS has passed. One read at a time per file.
+ * then until RANGES_RETRY_MS has passed. One read at a time per file, and a
+ * request with a list past its day uses it rather than waiting for the read
+ * (gkhngyk on #1251).
  */
 export async function rangesFor(url, { fetchImpl = fetch, now = Date.now() } = {}) {
   const hit = cache.get(url);
@@ -142,7 +144,7 @@ export async function rangesFor(url, { fetchImpl = fetch, now = Date.now() } = {
     read = readRanges(url, hit, fetchImpl, now).finally(() => pending.delete(url));
     pending.set(url, read);
   }
-  return read;
+  return hit?.prefixes ?? read;
 }
 
 /** Forgets every range list (tests). */

@@ -101,6 +101,33 @@ describe('rangesFor', () => {
     expect(fetchImpl).toHaveBeenCalledTimes(2);
   });
 
+  // gkhngyk on #1251: once a day, requests waited for the refresh although
+  // a usable list was still in memory.
+  it('uses the list it has while it reads it again', async () => {
+    const old = json({ prefixes: [{ ipv4Prefix: '1.2.3.0/24' }] });
+    let answer;
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValueOnce(old)
+      .mockImplementationOnce(() => new Promise((resolve) => (answer = resolve)));
+    const first = await rangesFor('https://x/e.json', { fetchImpl, now: 0 });
+
+    // Past its day: the old list at once, with one read under way.
+    const during = await rangesFor('https://x/e.json', { fetchImpl, now: RANGES_TTL_MS + 1 });
+    const again = await rangesFor('https://x/e.json', { fetchImpl, now: RANGES_TTL_MS + 2 });
+    expect(during).toBe(first);
+    expect(again).toBe(first);
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+
+    // Once read, the new list.
+    answer(json({ prefixes: [{ ipv4Prefix: '5.6.7.0/24' }, { ipv4Prefix: '8.8.8.0/24' }] }));
+    await vi.waitFor(async () => {
+      const fresh = await rangesFor('https://x/e.json', { fetchImpl, now: RANGES_TTL_MS + 3 });
+      expect(fresh).toHaveLength(2);
+    });
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+  });
+
   it('shares one read among the requests waiting for it', async () => {
     let answer;
     const fetchImpl = vi.fn(() => new Promise((resolve) => (answer = resolve)));
