@@ -237,7 +237,7 @@ export default function CitationUrlDetailPage() {
           <div className="shrink-0">
             {data &&
               (data.category === 'you' ? (
-                <Badge className="bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 border-indigo-500/30 border">
+                <Badge className="border border-primary/30 bg-primary/10 text-foreground">
                   Owned
                 </Badge>
               ) : (

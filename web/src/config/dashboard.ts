@@ -55,11 +55,43 @@ export const dashboardNav: NavGroup[] = [
         href: '/dashboard/brands',
         icon: Building2,
       },
+    ],
+  },
+  /**
+   * New Ansvisor: the groups name the two things the product does. Execution
+   * does the work (actions, the agent, content, page fixes); Analytics shows
+   * where the brand stands in AI search.
+   */
+  {
+    title: 'Execution',
+    items: [
       {
         title: 'Action Center',
         href: '/dashboard/action-center',
         icon: Target,
         badge: 'New',
+      },
+      // Right under Action Center: Chat is where you ask, or let the agent do
+      // the work. The route stays /dashboard/agent: renaming the URL would
+      // break every existing link for a label change, and the sidebar's
+      // "Set up" badge keys off that href.
+      {
+        title: 'Chat',
+        href: '/dashboard/agent',
+        icon: Sparkles,
+        requiredFeature: 'ai_agent',
+      },
+      {
+        title: 'Content Optimization',
+        href: '/dashboard/content',
+        icon: FileText,
+        requiredFeature: 'content_optimization',
+      },
+      {
+        title: 'Site Audit',
+        href: '/dashboard/audit',
+        icon: Gauge,
+        requiredFeature: 'content_optimization',
       },
     ],
   },
@@ -112,34 +144,8 @@ export const dashboardNav: NavGroup[] = [
       },
     ],
   },
-  {
-    title: 'Optimization',
-    items: [
-      {
-        title: 'Content Optimization',
-        href: '/dashboard/content',
-        icon: FileText,
-        requiredFeature: 'content_optimization',
-      },
-      {
-        title: 'Site Audit',
-        href: '/dashboard/audit',
-        icon: Gauge,
-        requiredFeature: 'content_optimization',
-      },
-      // The route stays /dashboard/agent: renaming the URL would break every
-      // existing link for a label change, and the sidebar's "Set up" badge
-      // keys off that href.
-      {
-        title: 'Chat',
-        href: '/dashboard/agent',
-        icon: Sparkles,
-        requiredFeature: 'ai_agent',
-      },
-    ],
-  },
   /**
-   * Reports sits in its own group rather than under Analytics or Optimization,
+   * Reports sits in its own group rather than under Analytics or Execution,
    * because it draws on both: of its thirteen sections, `auditScore` comes from
    * Site Audit and the rest from the analytics surfaces. Filing it under either
    * heading would understate what it covers.

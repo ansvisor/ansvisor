@@ -57,6 +57,15 @@ vi.mock('@/hooks/use-user-role', () => ({
   useUserRole: () => role,
 }));
 
+// Whether the plan has the Shopping page (ChatGPT Shopping is tracked).
+const plan = vi.hoisted(() => ({ shopping: true }));
+vi.mock('@/hooks/use-feature-gate', () => ({
+  useFeatureGate: () => ({
+    canUse: (feature: string) => feature !== 'shopping_analytics' || plan.shopping,
+    requiredPlanFor: () => 'Growth',
+  }),
+}));
+
 const setBrandShoppingMode = vi.hoisted(() => vi.fn());
 vi.mock('@/lib/actions/brand', () => ({
   deleteBrand: vi.fn(),
@@ -175,6 +184,19 @@ describe('brand settings Shopping mode', () => {
     expect(setBrandShoppingMode).toHaveBeenCalledWith(brand.id, true);
 
     await act(async () => root.unmount());
+  });
+
+  it('says ChatGPT Shopping comes with Growth on a plan that does not track it', async () => {
+    Object.assign(role, { canAdmin: true, canManage: true });
+    plan.shopping = false;
+    const { container, root } = await render();
+    expect(container.textContent).toContain('settings.shopping.planNote');
+    await act(async () => root.unmount());
+
+    plan.shopping = true;
+    const again = await render();
+    expect(again.container.textContent).not.toContain('settings.shopping.planNote');
+    await act(async () => again.root.unmount());
   });
 
   it('shows anyone else the setting without letting them change it', async () => {
