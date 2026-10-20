@@ -31,7 +31,7 @@ import {
   isShortRange,
   organicRatio,
 } from '@/lib/traffic-kpis';
-import { getPlatformName } from '@/lib/traffic-platforms';
+import { getPlatformName, isNamedPlatform } from '@/lib/traffic-platforms';
 import { googleSourceStatus, TRAFFIC_SECTION_SOURCES } from '@/lib/traffic-sources';
 import { MetricCard } from '../insights/_kpi-cards';
 import { SummaryLine } from './_summary-line';
@@ -169,7 +169,11 @@ export function TrafficKpis({
   // From the summary, not the selected range: while a new range loads, the
   // numbers on screen are still the previous range's.
   const comparable = summary?.hasPreviousPeriod ?? false;
-  const topPlatform = summary?.platformBreakdown[0];
+  // The most visits among the platforms it can name, as the summary line and
+  // the weekly e-mail pick it: a key only the public beacon sent isn't one.
+  const topPlatform = summary?.platformBreakdown.find(
+    (p) => p.visits > 0 && isNamedPlatform(p.platform),
+  );
   const totals = loaded?.key === key ? loaded.totals : null;
   const ga = totals?.ga ?? null;
   const gsc = totals?.gsc ?? null;

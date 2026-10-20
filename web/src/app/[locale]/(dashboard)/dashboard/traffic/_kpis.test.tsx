@@ -191,6 +191,21 @@ describe('TrafficKpis', () => {
     expect(card('Platforms')).toContain('3unique AI sources');
   });
 
+  // gkhngyk on #1229: the beacon is public, so a source key can be any text.
+  it('names the top platform among those it can name, as the summary line does', async () => {
+    await render({
+      sum: summary({
+        platformBreakdown: [
+          { platform: 'made-up.example', visits: 5, visitsPrev: 0, analytics: null },
+          { platform: 'chatgpt.com', visits: 1, visitsPrev: 1, analytics: null },
+        ],
+      }),
+    });
+    expect(card('Top platform')).toContain('ChatGPT');
+    expect(card('Top platform')).toContain('1 visit');
+    expect(card('Top platform')).not.toContain('made-up');
+  });
+
   it('says how many days came from Google Analytics instead of a partial pageview count (AT-004)', async () => {
     await render({
       preset: '30d',

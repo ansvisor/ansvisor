@@ -187,6 +187,31 @@ describe('sendTrafficDigestForBrand', () => {
     expect(mail.html).not.toContain('cheap-pills');
   });
 
+  // gkhngyk on #1229: the broken-link line printed the first row's page and
+  // redirect whatever they were, and the beacon is public.
+  it('names a broken link only when it is cited or known, and counts the rest', async () => {
+    state.rpc.ai_traffic_broken_links = () => ({
+      count: 3,
+      rows: [
+        { page: '/win-a-prize', target: '/prizes', visits: 6, citations: 0 },
+        { page: '/old-menu', target: '/menu', visits: 3, citations: 0 },
+        { page: '/typo', target: '/', visits: 1, citations: 0 },
+      ],
+    });
+    state.rpc.ai_traffic_known_pages = () => ['/menu'];
+
+    await sendTrafficDigestForBrand('b1', { now: MONDAY });
+
+    const read = state.rpcCalls.find((c) => c.name === 'ai_traffic_broken_links');
+    expect(read.params.p_limit).toBe(50);
+    const asked = state.rpcCalls.find((c) => c.name === 'ai_traffic_known_pages');
+    expect(asked.params).toEqual({ p_brand_id: 'b1', p_pages: ['/prizes', '/win-a-prize'] });
+    const [mail] = deliverEmail.mock.calls[0];
+    expect(mail.html).toContain('2 pages AI visitors landed on don’t exist.');
+    expect(mail.html).not.toContain('win-a-prize');
+    expect(mail.html).not.toContain('/prizes');
+  });
+
   it("reads each week to its Sunday's last second, so the Monday between them counts once", async () => {
     await sendTrafficDigestForBrand('b1', { now: MONDAY });
     const merged = state.rpcCalls.filter((c) => c.name === 'ai_traffic_merged');

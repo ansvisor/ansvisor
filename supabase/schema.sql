@@ -26631,9 +26631,10 @@ notify pgrst, 'reload schema';
 -- 00194: which pages the weekly digest may name
 -- ============================================================================
 -- Follow-up from #1196's review (AT-013). The weekly AI Traffic e-mail names
--- the pages whose AI visits moved most. The snippet's beacon is public, so a
--- page path in ai_traffic_logs can be anything a caller sent, and the e-mail
--- would print it.
+-- the pages whose AI visits moved most, and the top broken AI link with its
+-- suggested redirect. The snippet's beacon is public, so a page path in
+-- ai_traffic_logs can be anything a caller sent (00186 also picks redirects
+-- among the pages it logged), and the e-mail would print it.
 --
 -- ai_traffic_known_pages takes the page keys the digest would name (as the
 -- Pages section keys them: lower(normalize_page_path), 00178) and returns

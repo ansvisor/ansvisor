@@ -5,6 +5,7 @@ import { isCloud, isSubscriptionActive } from '../../config/plans.js';
 import { appUrl, resolveRecipients } from '../pulse/engine.js';
 import { untrackedGoogleQueries } from '../untracked-queries.js';
 import {
+  brokenCandidates,
   dailyVisits,
   digestWeek,
   formatShare,
@@ -43,6 +44,9 @@ const STALE_CLAIM_MS = 60 * 60 * 1000;
 
 /** A read is tried this many times before the brand's week waits for the next sweep. */
 const READ_ATTEMPTS = 3;
+
+/** Broken AI links read for the week's line, as the nightly signal reads them. */
+const BROKEN_LINKS_READ = 50;
 
 async function withRetries(read, waitMs) {
   for (let attempt = 1; ; attempt++) {
@@ -96,10 +100,7 @@ export async function readDigestData(brandId, week) {
   if ((Number(data.cur.visits) || 0) + (Number(data.prev.visits) || 0) === 0) return data;
 
   const until = lastSecond(week.end);
-  // The pages the changes could name, checked against sources the public
-  // beacon can't write (00194).
-  const candidates = pageCandidates(data);
-  const [totals, pages, broken, untracked, knownPages] = await Promise.all([
+  const [totals, pages, broken, untracked] = await Promise.all([
     supabaseAdmin
       .rpc('ga_traffic_totals', {
         p_brand_id: brandId,
@@ -119,11 +120,14 @@ export async function readDigestData(brandId, week) {
       p_limit: 0,
       p_offset: 0,
     }),
+    // As many as the broken_citation_target signal reads: the line counts
+    // only those it would raise (cited, or brokenLinkMinVisits), and the
+    // most visited come first.
     rpc('ai_traffic_broken_links', {
       p_brand_id: brandId,
       p_from: week.start,
       p_to: until,
-      p_limit: 1,
+      p_limit: BROKEN_LINKS_READ,
       p_offset: 0,
     }),
     untrackedGoogleQueries(brandId, {
@@ -132,20 +136,24 @@ export async function readDigestData(brandId, week) {
       latest: true,
       limit: 0,
     }),
+  ]);
+  // The pages the changes could name, and the broken link with its redirect,
+  // checked against sources the public beacon can't write (00194).
+  const candidates = [...new Set([...pageCandidates(data), ...brokenCandidates(broken)])].sort();
+  // Share and conversions only from a connected Analytics (§3.8b rule 5).
+  const gaSessions = (Number(totals?.sessions) || 0) > 0 ? Number(totals.sessions) : null;
+  const [knownPages, platformValue] = await Promise.all([
     candidates.length === 0
       ? []
       : rpc('ai_traffic_known_pages', { p_brand_id: brandId, p_pages: candidates }),
-  ]);
-  // Share and conversions only from a connected Analytics (§3.8b rule 5).
-  const gaSessions = (Number(totals?.sessions) || 0) > 0 ? Number(totals.sessions) : null;
-  const platformValue =
     gaSessions === null
       ? null
-      : await rpc('ga_platform_value', {
+      : rpc('ga_platform_value', {
           p_brand_id: brandId,
           p_since: week.firstDay,
           p_until: week.lastDay,
-        });
+        }),
+  ]);
   return {
     ...data,
     gaSessions,

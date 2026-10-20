@@ -16,6 +16,7 @@
  */
 
 import { createRequire } from 'module';
+import { ENGINE_THRESHOLDS } from '../../config/action-engine.js';
 
 // The AI Traffic page's names (web/src/lib/traffic-platforms.ts); a web test
 // keeps the two the same.
@@ -219,25 +220,53 @@ export function pageCandidates({ cur, prev }) {
 }
 
 /**
+ * The missing pages worth a line, as the broken_citation_target signal reads
+ * them (#1228): one AI answers cite from its first visit, any other from
+ * brokenLinkMinVisits. The beacon is public, so one stray or made-up 404
+ * visit doesn't reach the e-mail.
+ */
+export function brokenRows(broken) {
+  const rows = Array.isArray(broken?.rows) ? broken.rows : [];
+  return rows.filter(
+    (r) => n(r.citations) > 0 || n(r.visits) >= ENGINE_THRESHOLDS.library.brokenLinkMinVisits,
+  );
+}
+
+/**
+ * The broken link the e-mail would name and its redirect, keyed as
+ * pageCandidates are: they go to ai_traffic_known_pages too, since both can
+ * come from the beacon (00186 picks redirects among the pages it logged).
+ */
+export function brokenCandidates(broken) {
+  const [top] = brokenRows(broken);
+  if (!top) return [];
+  return [top.page, top.target].filter(Boolean).map((p) => String(p).toLowerCase());
+}
+
+/**
  * The week's top changes: broken AI links first — visitors are landing on
  * missing pages every day until someone adds a redirect — then the platforms
  * and pages whose AI visits moved most, by at least MIN_CHANGE_VISITS. Only
  * platforms the page can name, and pages a source other than the public
  * beacon knows (`knownPages`, from ai_traffic_known_pages); without it, no
- * page.
+ * page. A broken link is named when AI answers cite it or it's known, and
+ * its redirect when that's known; otherwise the line gives only the count.
  */
 export function topChanges({ cur, prev, broken, knownPages }, limit = TOP_CHANGES) {
   const changes = [];
-  const brokenRows = Array.isArray(broken?.rows) ? broken.rows : [];
-  if (brokenRows.length > 0) {
+  const known = knownPages ?? new Set();
+  const isKnown = (page) => !!page && known.has(String(page).toLowerCase());
+  const rows = brokenRows(broken);
+  if (rows.length > 0) {
+    const [top] = rows;
+    const named = n(top.citations) > 0 || isKnown(top.page);
     changes.push({
       type: 'broken',
-      count: n(broken.count) || brokenRows.length,
-      page: brokenRows[0].page,
-      target: brokenRows[0].target ?? null,
+      count: rows.length,
+      page: named ? top.page : null,
+      target: named && isKnown(top.target) ? top.target : null,
     });
   }
-  const known = knownPages ?? new Set();
   const moved = [
     ...movers(cur?.platforms, prev?.platforms, (r) => r.platform, 'platform', isNamedPlatform),
     ...movers(
@@ -265,6 +294,7 @@ export function changeText(change) {
       change.count === 1
         ? '1 page AI visitors landed on doesn’t exist'
         : `${formatNumber(change.count)} pages AI visitors landed on don’t exist`;
+    if (!change.page) return `${pages}.`;
     const redirect = change.target ? `, redirect to ${change.target}` : '';
     return `${pages}: ${change.page}${redirect}.`;
   }
