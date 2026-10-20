@@ -827,6 +827,7 @@ export type Database = {
       }
       content_drafts: {
         Row: {
+          action_id: string | null
           author: string
           body_html: string
           brand_id: string
@@ -846,6 +847,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          action_id?: string | null
           author?: string
           body_html?: string
           brand_id: string
@@ -865,6 +867,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          action_id?: string | null
           author?: string
           body_html?: string
           brand_id?: string

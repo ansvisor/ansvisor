@@ -34,6 +34,7 @@ import {
   getContentOverlap,
   getContentStartOptions,
   importContentPage,
+  sendContentDraftToActionCenter,
 } from '@/lib/actions/content-drafts';
 import { MAX_ATTACHMENT_BYTES, textToHtml } from '@/lib/content/attachments';
 import { cleanHtml } from '@/lib/content/clean-html';
@@ -106,6 +107,10 @@ interface StartChoice {
   choice: OverlapChoice;
 }
 
+/** Who does the page (Start, CE-015): the person, the Content Agent, or the team. */
+type Who = 'me' | 'agent' | 'team';
+const WHO: Who[] = ['me', 'agent', 'team'];
+
 /** The overlap check for one source: null while it runs. */
 interface OverlapRead {
   key: string;
@@ -124,11 +129,14 @@ export function NewContentDialog({
   onOpenChange,
   brandId,
   siteType,
+  onSent,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   brandId: string;
   siteType: SiteType;
+  /** A draft was sent to the Action Center: the Library lists it. */
+  onSent?: () => void;
 }) {
   const t = useTranslations('contentEditor.newContent');
   const tTypes = useTranslations('contentEditor.pageTypes');
@@ -149,6 +157,7 @@ export function NewContentDialog({
   const [reading, setReading] = useState(false);
   const [start, setStart] = useState<StartChoice | null>(null);
   const [opening, setOpening] = useState(false);
+  const [who, setWho] = useState<Who>('me');
   const [overlapRead, setOverlapRead] = useState<OverlapRead | null>(null);
   const [overlapAttempt, setOverlapAttempt] = useState(0);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -210,6 +219,7 @@ export function NewContentDialog({
     setStart(null);
     setOpening(false);
     setOverlapRead(null);
+    setWho('me');
   };
   const changeOpen = (next: boolean) => {
     if (!next) reset();
@@ -373,12 +383,41 @@ export function NewContentDialog({
         bodyHtml,
         sourceUrl: existing?.url ?? start.sourceUrl,
       });
+      if (who === 'team') {
+        await sendToTeam(id);
+        return;
+      }
       router.push(contentEditorPath(id));
     } catch (err) {
       console.error('Failed to start a draft:', err);
       toast.error(t('start.failed'));
       setOpening(false);
     }
+  };
+
+  /**
+   * Team: the draft goes to the Action Center as an action for someone to
+   * write; it stays in the Library either way.
+   */
+  const sendToTeam = async (id: string) => {
+    const sent = await sendContentDraftToActionCenter(brandId, id);
+    changeOpen(false);
+    onSent?.();
+    if ('error' in sent) {
+      toast.error(t('start.sendFailed'), {
+        description: sent.error,
+        action: { label: t('start.openDraft'), onClick: () => router.push(contentEditorPath(id)) },
+      });
+      return;
+    }
+    toast.success(t('start.sent'), {
+      description: t('start.sentDescription', { number: sent.actionNo }),
+      duration: 10_000,
+      action: {
+        label: t('start.openAction'),
+        onClick: () => router.push(`/dashboard/action-center/actions?action=${sent.actionId}`),
+      },
+    });
   };
 
   return (
@@ -443,6 +482,48 @@ export function NewContentDialog({
                 }}
               />
             )}
+            <div className="space-y-2">
+              <Label id="start-who">{t('who.label')}</Label>
+              <div
+                role="radiogroup"
+                aria-labelledby="start-who"
+                className="grid grid-cols-3 gap-1.5"
+              >
+                {WHO.map((value) => {
+                  // The Content Agent comes in its own update (CE-018/022).
+                  const soon = value === 'agent';
+                  return (
+                    <button
+                      key={value}
+                      type="button"
+                      role="radio"
+                      aria-checked={who === value}
+                      aria-disabled={soon || undefined}
+                      disabled={soon}
+                      title={soon ? t('who.agent.soon') : undefined}
+                      onClick={() => setWho(value)}
+                      className={cn(
+                        'flex items-start gap-2 rounded-xl border px-3 py-2.5 text-left transition-colors hover:bg-muted/50 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent',
+                        who === value && 'border-foreground ring-1 ring-inset ring-foreground',
+                      )}
+                    >
+                      <span
+                        className={cn(
+                          'mt-0.5 h-4 w-4 shrink-0 rounded-full border-[1.5px] border-muted-foreground/50',
+                          who === value && 'border-[5px] border-foreground',
+                        )}
+                      />
+                      <span className="min-w-0">
+                        <span className="block text-sm font-medium">{t(`who.${value}.title`)}</span>
+                        <span className="block text-xs text-muted-foreground">
+                          {soon ? t('who.agent.soon') : t(`who.${value}.hint`)}
+                        </span>
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
             <DialogFooter>
               <Button variant="ghost" onClick={() => setStart(null)} disabled={opening}>
                 <ArrowLeft className="h-4 w-4" />
@@ -450,7 +531,7 @@ export function NewContentDialog({
               </Button>
               <Button onClick={() => void openEditor()} disabled={opening}>
                 {opening && <Loader2 className="h-4 w-4 animate-spin" />}
-                {t('start.openEditor')}
+                {t(who === 'team' ? 'start.sendToTeam' : 'start.openEditor')}
               </Button>
             </DialogFooter>
           </>

@@ -10,13 +10,16 @@ const getContentStartOptions = vi.fn();
 const createContentDraft = vi.fn();
 const getContentOverlap = vi.fn();
 const importContentPage = vi.fn();
+const sendContentDraftToActionCenter = vi.fn();
 vi.mock('@/lib/actions/content-drafts', () => ({
+  sendContentDraftToActionCenter: (...args: unknown[]) => sendContentDraftToActionCenter(...args),
   importContentPage: (...args: unknown[]) => importContentPage(...args),
   getContentStartOptions: (...args: unknown[]) => getContentStartOptions(...args),
   createContentDraft: (...args: unknown[]) => createContentDraft(...args),
   getContentOverlap: (...args: unknown[]) => getContentOverlap(...args),
 }));
 const push = vi.fn();
+const onSent = vi.fn();
 vi.mock('@/i18n/navigation', () => ({ useRouter: () => ({ push }) }));
 const toast = vi.hoisted(() =>
   Object.assign(vi.fn(), { success: vi.fn(), error: vi.fn(), warning: vi.fn() }),
@@ -63,7 +66,13 @@ async function render(siteType: SiteType = 'b2b') {
   await act(async () => {
     root.render(
       <NextIntlClientProvider locale="en" messages={messages}>
-        <NewContentDialog open onOpenChange={vi.fn()} brandId="b1" siteType={siteType} />
+        <NewContentDialog
+          open
+          onOpenChange={vi.fn()}
+          brandId="b1"
+          siteType={siteType}
+          onSent={onSent}
+        />
       </NextIntlClientProvider>,
     );
   });
@@ -97,6 +106,8 @@ beforeEach(() => {
   createContentDraft.mockReset().mockResolvedValue('d9');
   getContentOverlap.mockReset().mockResolvedValue({ totalPrompts: 2, pages: [] });
   importContentPage.mockReset().mockResolvedValue({ error: 'failed' });
+  sendContentDraftToActionCenter.mockReset();
+  onSent.mockReset();
   toast.warning.mockReset();
   push.mockReset();
   toast.error.mockReset();
@@ -425,6 +436,69 @@ describe('New content', () => {
       await act(async () => {});
       expect(getContentOverlap).toHaveBeenCalledTimes(2);
       expect(document.body.textContent).toContain('Safe to create');
+    });
+  });
+
+  describe('who does it', () => {
+    async function startNewPage() {
+      await render();
+      await click(button('Pick an opportunity'));
+      const option = [...document.querySelectorAll<HTMLElement>('[role="option"]')].find(
+        (o) => o.textContent === 'Northwind vs HubSpot',
+      );
+      await click(option);
+      await click(button('Continue'));
+      await act(async () => {});
+    }
+    const whoOption = (name: string) =>
+      [
+        ...document.querySelectorAll<HTMLElement>('[aria-labelledby="start-who"] [role="radio"]'),
+      ].find((r) => r.textContent?.startsWith(name))!;
+
+    it('opens the editor for me, and offers the agent only once it exists', async () => {
+      await startNewPage();
+      expect(whoOption('Me').getAttribute('aria-checked')).toBe('true');
+      const agent = whoOption('Agent') as HTMLButtonElement;
+      expect(agent.disabled).toBe(true);
+      expect(agent.textContent).toContain('Comes with the Content Agent');
+      expect(button('Open editor')).toBeDefined();
+    });
+
+    it('sends the draft to the Action Center for the team, and keeps it in the Library', async () => {
+      sendContentDraftToActionCenter.mockResolvedValue({
+        actionId: 'a1',
+        actionNo: 214,
+        created: true,
+      });
+      await startNewPage();
+      await click(whoOption('Team'));
+      await click(button('Send to Action Center'));
+
+      expect(createContentDraft.mock.calls[0][1]).toMatchObject({ method: 'create' });
+      expect(sendContentDraftToActionCenter).toHaveBeenCalledWith('b1', 'd9');
+      expect(push).not.toHaveBeenCalled();
+      expect(onSent).toHaveBeenCalled();
+      const [message, options] = toast.success.mock.calls[0];
+      expect(message).toBe('Sent to the Action Center');
+      expect(options.description).toBe(
+        'Action #214: the draft waits in the Library for whoever writes it.',
+      );
+      options.action.onClick();
+      expect(push).toHaveBeenCalledWith('/dashboard/action-center/actions?action=a1');
+    });
+
+    it('says the draft is kept when sending it fails, and opens it on request', async () => {
+      sendContentDraftToActionCenter.mockResolvedValue({ error: 'Failed to send' });
+      await startNewPage();
+      await click(whoOption('Team'));
+      await click(button('Send to Action Center'));
+      const [message, options] = toast.error.mock.calls[0];
+      expect(message).toBe(
+        "The draft is in the Library, but it couldn't be sent to the Action Center.",
+      );
+      expect(onSent).toHaveBeenCalled();
+      options.action.onClick();
+      expect(push).toHaveBeenCalledWith('/dashboard/content/editor/d9');
     });
   });
 });

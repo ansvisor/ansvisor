@@ -20,6 +20,7 @@ import {
   TRAFFIC_PAGE_REASONS,
   sendTrafficPagesToActionCenter,
 } from '../lib/action-center/from-traffic-pages.js';
+import { sendContentDraftToActionCenter } from '../lib/action-center/from-content-draft.js';
 
 const router = Router();
 
@@ -262,6 +263,43 @@ router.post('/pages', async (req, res) => {
   } catch (error) {
     const status = error.status || 500;
     req.log.error({ err: error }, 'traffic pages action error');
+    return res.status(status).json({
+      error: 'Failed to send to the Action Center',
+      details: error.message,
+    });
+  }
+});
+
+const contentDraftSchema = z.object({
+  // guid, not uuid: seeded ids aren't RFC 4122 versions.
+  brandId: z.guid(),
+  draftId: z.guid(),
+});
+
+/**
+ * POST /api/action-center/content-drafts
+ * Body: { brandId, draftId }
+ *
+ * "Team" in the Content Editor's Start (CE-015): the draft sent as an action
+ * for someone on the team to write. Sending it again returns the action
+ * already open.
+ */
+router.post('/content-drafts', async (req, res) => {
+  try {
+    const parsed = contentDraftSchema.safeParse(req.body ?? {});
+    if (!parsed.success) {
+      return res.status(400).json({ error: 'Invalid request', details: parsed.error.message });
+    }
+    const { brandId, draftId } = parsed.data;
+    await assertBrandAccess(brandId, req.user.id);
+    const result = await sendContentDraftToActionCenter(brandId, {
+      draftId,
+      userId: req.user.id,
+    });
+    return res.status(result.created ? 201 : 200).json(result);
+  } catch (error) {
+    const status = error.status || 500;
+    req.log.error({ err: error }, 'content draft action error');
     return res.status(status).json({
       error: 'Failed to send to the Action Center',
       details: error.message,

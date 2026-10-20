@@ -72,6 +72,7 @@ import { TopicGapContext } from './topic-gap-context';
 import { TopicOpportunityContext } from './topic-opportunity-context';
 import { MentionReviewContext } from './mention-review-context';
 import { TrafficPagesContext } from './traffic-pages-context';
+import { ContentDraftContext } from './content-draft-context';
 import { TaskDetailForm, TaskDetailView, TaskTypeBadge, type TaskSendOptions } from './task-detail';
 import { hasActiveWebhook, sendActionTask } from '@/lib/actions/action-task-send';
 import { RegenerateTasks, taskWriterEnabled } from './regenerate-tasks';
@@ -579,6 +580,11 @@ export function ActionDrawer({
                 <>
                   <Separator />
                   <TrafficPagesContext payload={action.payload ?? {}} />
+                </>
+              ) : action.kind === 'content_draft' ? (
+                <>
+                  <Separator />
+                  <ContentDraftContext payload={action.payload ?? {}} />
                 </>
               ) : opportunityId ? (
                 <>

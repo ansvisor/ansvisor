@@ -312,6 +312,48 @@ export async function importContentPage(
   }
 }
 
+/**
+ * "Team" in Start (CE-015): the draft sent to the Action Center as an action
+ * for someone on the team to write (the API's from-content-draft.js), or the
+ * one still open if it was sent already. Returned, not thrown: production
+ * hides a server action's errors.
+ */
+export async function sendContentDraftToActionCenter(
+  brandId: string,
+  id: string,
+): Promise<{ actionId: string; actionNo: number; created: boolean } | { error: string }> {
+  if (!draftId.safeParse(brandId).success || !draftId.safeParse(id).success) {
+    return { error: 'invalid' };
+  }
+  const supabase = await createClient();
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  if (!session) return { error: 'Not authenticated' };
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/action-center/content-drafts`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${session.access_token}`,
+      },
+      body: JSON.stringify({ brandId, draftId: id }),
+    });
+    const body = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+    if (!res.ok) {
+      return { error: String(body.details || body.error || `Server error: ${res.status}`) };
+    }
+    return {
+      actionId: String(body.actionId),
+      actionNo: Number(body.actionNo),
+      created: Boolean(body.created),
+    };
+  } catch (err) {
+    console.error('Failed to send a draft to the Action Center:', err);
+    return { error: 'failed' };
+  }
+}
+
 const overlapSource = startInput.shape.source;
 
 /**

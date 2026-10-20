@@ -57,8 +57,13 @@ vi.mock('@/lib/supabase/server', () => ({
   })),
 }));
 
-const { createContentDraft, getContentOverlap, getContentStartOptions, importContentPage } =
-  await import('./content-drafts');
+const {
+  createContentDraft,
+  getContentOverlap,
+  getContentStartOptions,
+  importContentPage,
+  sendContentDraftToActionCenter,
+} = await import('./content-drafts');
 
 const inserted = () => calls.find((call) => call.op === 'insert')?.value as Record<string, unknown>;
 
@@ -388,6 +393,47 @@ describe('importContentPage', () => {
       error: 'invalid_url',
     });
     await expect(importContentPage(BRAND, '  ')).resolves.toEqual({ error: 'invalid_url' });
+    expect(fetchMock).not.toHaveBeenCalled();
+    vi.unstubAllGlobals();
+  });
+});
+
+describe('sendContentDraftToActionCenter', () => {
+  it('asks the API to send the draft, with the member’s session', async () => {
+    const fetchMock = vi.fn(
+      async () =>
+        new Response(JSON.stringify({ actionId: 'a1', actionNo: 214, created: true }), {
+          status: 201,
+        }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    await expect(sendContentDraftToActionCenter(BRAND, OPPORTUNITY)).resolves.toEqual({
+      actionId: 'a1',
+      actionNo: 214,
+      created: true,
+    });
+    const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toMatch(/\/api\/action-center\/content-drafts$/);
+    expect(init.headers).toMatchObject({ Authorization: 'Bearer jwt' });
+    expect(JSON.parse(init.body as string)).toEqual({ brandId: BRAND, draftId: OPPORTUNITY });
+    vi.unstubAllGlobals();
+  });
+
+  it('returns why it failed, and sends nothing for a malformed id', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        async () => new Response(JSON.stringify({ details: 'Draft not found' }), { status: 404 }),
+      ),
+    );
+    await expect(sendContentDraftToActionCenter(BRAND, OPPORTUNITY)).resolves.toEqual({
+      error: 'Draft not found',
+    });
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    await expect(sendContentDraftToActionCenter(BRAND, 'nope')).resolves.toEqual({
+      error: 'invalid',
+    });
     expect(fetchMock).not.toHaveBeenCalled();
     vi.unstubAllGlobals();
   });

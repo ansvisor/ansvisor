@@ -98,6 +98,7 @@ export default function ContentLibraryPage() {
         onOpenChange={setStarting}
         brandId={activeBrandId}
         siteType={siteTypeOf(activeBrand ?? {})}
+        onSent={() => setAttempt((n) => n + 1)}
       />
 
       <Tabs value={tab} onValueChange={(v) => changeTab(v as LibraryTab)}>

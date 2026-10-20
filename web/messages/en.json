@@ -1366,6 +1366,16 @@
           "demandValue": "{count, plural, one {# prompt} other {# prompts}} · ~{volume}/mo",
           "volume": "~{volume}/mo"
         },
+        "contentDraft": {
+          "source": "Source",
+          "sourceValue": "Content Editor",
+          "openDraft": "Open draft",
+          "pageType": "Page type",
+          "page": "Page",
+          "newPage": "A new page",
+          "prompts": "Prompts it should answer",
+          "promptsValue": "{count, plural, one {# prompt} other {# prompts}}"
+        },
         "mentionReview": {
           "source": "Source",
           "sourceValue": "Mentions & Sentiment › Mentions",
@@ -2104,6 +2114,14 @@
         "citedDescription": "Sent from AI Traffic Analytics: AI answers cited {count, plural, one {this page} other {these pages}} {citations, plural, one {# time} other {# times}} in the range, and none sent a visit.",
         "noAiDescription": "Sent from AI Traffic Analytics: {count, plural, one {a page} other {# pages}} with visitors or in your sitemap that got no AI visit in the range.",
         "goal": "Earn AI-referred visits to these pages."
+      },
+      "content_draft": {
+        "title": "Write a page for {targets}",
+        "titleGeneric": "Write a page",
+        "createTitle": "Write: {title}",
+        "optimizeTitle": "Optimize: {title}",
+        "description": "Sent from the Content Editor: a draft for someone on the team to write, with its page type and the prompts it should answer.",
+        "goal": "Publish the page and get the brand into AI answers for these prompts."
       }
     },
     "actionTasks": {
@@ -3191,7 +3209,29 @@
         "detectedPage": "Picked from the page.",
         "openEditor": "Open editor",
         "pageUnread": "Couldn't read {page}: the draft starts with its title.",
-        "failed": "Couldn't start the draft. Try again."
+        "failed": "Couldn't start the draft. Try again.",
+        "sendToTeam": "Send to Action Center",
+        "sent": "Sent to the Action Center",
+        "sentDescription": "Action #{number}: the draft waits in the Library for whoever writes it.",
+        "openAction": "Open",
+        "sendFailed": "The draft is in the Library, but it couldn't be sent to the Action Center.",
+        "openDraft": "Open draft"
+      },
+      "who": {
+        "label": "Who does it",
+        "me": {
+          "title": "Me",
+          "hint": "Open the editor"
+        },
+        "agent": {
+          "title": "Agent",
+          "hint": "Drafts, I review",
+          "soon": "Comes with the Content Agent"
+        },
+        "team": {
+          "title": "Team",
+          "hint": "Send to Action Center"
+        }
       },
       "overlap": {
         "label": "Overlap check",
