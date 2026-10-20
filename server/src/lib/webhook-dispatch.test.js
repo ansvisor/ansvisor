@@ -130,9 +130,10 @@ describe('dispatchBrandWebhook', () => {
       .mockResolvedValueOnce({ ok: false, status: 503 })
       .mockRejectedValueOnce(new Error('connection refused'));
 
-    await expect(
-      dispatchBrandWebhook('brand-1', { event: 'opportunity.sent' }),
-    ).resolves.toEqual({ sent: 0, failed: 2 });
+    await expect(dispatchBrandWebhook('brand-1', { event: 'opportunity.sent' })).resolves.toEqual({
+      sent: 0,
+      failed: 2,
+    });
   });
 
   it('does not attempt delivery when no config subscribes to the event', async () => {
