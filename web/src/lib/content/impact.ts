@@ -1,5 +1,6 @@
 import { PLATFORM_LABELS } from '@/config/platform-labels';
 import { visitChange, type VisitChange } from '@/lib/traffic-change';
+import { getPlatformName, isNamedPlatform } from '@/lib/traffic-platforms';
 
 /**
  * The editor's Impact tab (Content Editor CE-016, spec §7): what the page a
@@ -84,4 +85,84 @@ export function isLost(prompt: ImpactPrompt): boolean {
 /** Platform names for a prompt row: where it cites the page now, or did before it was lost. */
 export function platformNames(platforms: string[]): string[] {
   return [...new Set(platforms.map((p) => PLATFORM_LABELS[p] ?? p))];
+}
+
+/**
+ * Results from AI visits (spec §7), as content_page_results (00210) reads
+ * them for the same window: one row per AI source key, with its AI visits
+ * (the snippet or Analytics, never both, as the AI visits card) and Google
+ * Analytics' AI sessions landing on the page, their key events and purchases.
+ */
+export interface ResultSource {
+  platform: string;
+  visits: number;
+  sessions: number;
+  keyEvents: number;
+  keyEventSessions: number;
+  transactions: number;
+  revenue: number;
+}
+
+export interface ContentResults {
+  /** A Google Analytics property is mapped: key events and purchases come only from it. */
+  analytics: boolean;
+  /** The property reported purchases in the window, on any page. */
+  purchases: boolean;
+  sources: ResultSource[];
+}
+
+/** A source row as the tab lists it; a null name is "Other", the keys the page can't name. */
+export interface NamedResultSource extends Omit<ResultSource, 'platform'> {
+  name: string | null;
+}
+
+type ResultFigures = Omit<ResultSource, 'platform'>;
+
+const NO_RESULTS: ResultFigures = {
+  visits: 0,
+  sessions: 0,
+  keyEvents: 0,
+  keyEventSessions: 0,
+  transactions: 0,
+  revenue: 0,
+};
+
+function addFigures(a: ResultFigures, b: ResultFigures): ResultFigures {
+  return {
+    visits: a.visits + b.visits,
+    sessions: a.sessions + b.sessions,
+    keyEvents: a.keyEvents + b.keyEvents,
+    keyEventSessions: a.keyEventSessions + b.keyEventSessions,
+    transactions: a.transactions + b.transactions,
+    revenue: a.revenue + b.revenue,
+  };
+}
+
+/** All sources together: the result cards. */
+export function resultTotals(sources: ResultSource[]): ResultFigures {
+  return sources.reduce<ResultFigures>(addFigures, NO_RESULTS);
+}
+
+/**
+ * The by-source table: one row per platform name (ChatGPT's old hosts are
+ * ChatGPT), keys the page can't name folded into Other, last; the most
+ * visits first, then Analytics sessions. A source with nothing to show is
+ * left out: Analytics sessions on a day the snippet counted the visits.
+ */
+export function resultSources(sources: ResultSource[]): NamedResultSource[] {
+  const byName = new Map<string | null, ResultFigures>();
+  for (const { platform, ...figures } of sources) {
+    const name = isNamedPlatform(platform) ? getPlatformName(platform) : null;
+    byName.set(name, addFigures(byName.get(name) ?? NO_RESULTS, figures));
+  }
+  return [...byName]
+    .map(([name, figures]) => ({ name, ...figures }))
+    .filter((row) => row.visits > 0 || row.keyEvents > 0 || row.transactions > 0 || row.revenue > 0)
+    .sort(
+      (a, b) =>
+        Number(a.name === null) - Number(b.name === null) ||
+        b.visits - a.visits ||
+        b.sessions - a.sessions ||
+        (a.name ?? '').localeCompare(b.name ?? ''),
+    );
 }

@@ -3443,6 +3443,29 @@
           "wasCitedOn": "Was cited on {platforms}",
           "seeInCitations": "See in Citations"
         },
+        "results": {
+          "title": "Results from AI visits",
+          "subtitle": "AI visits that landed here",
+          "keyEvents": "Key events",
+          "rate": "Key event rate",
+          "rateLow": "Low sample · {sessions, plural, one {# session} other {# sessions}}",
+          "rateUnknown": "Not reported by Google Analytics yet",
+          "orders": "Orders",
+          "revenue": "Revenue",
+          "needsAnalytics": "Key events, orders and revenue come from Google Analytics. Connect it to see what AI visitors do after landing here.",
+          "openTraffic": "Open AI Traffic",
+          "bySource": "Results by AI source",
+          "none": "No AI visits to this page in this period.",
+          "other": "Other",
+          "columns": {
+            "source": "AI source",
+            "visits": "Visits",
+            "keyEvents": "Key events",
+            "revenue": "Revenue"
+          },
+          "legend": "Visits come from the tracking snippet, or from Google Analytics on days without it. Key events, orders and revenue are Google Analytics' sessions that started on this page from an AI assistant.",
+          "legendVisits": "Visits come from the tracking snippet."
+        },
         "overlap": {
           "title": "Your other pages for these prompts",
           "only": "{count, plural, one {The only page cited for its prompt} other {The only page cited for its # prompts}} · no overlap",

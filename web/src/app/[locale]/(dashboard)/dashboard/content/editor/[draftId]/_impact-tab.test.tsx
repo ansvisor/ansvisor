@@ -3,12 +3,14 @@ import { createRoot, type Root } from 'react-dom/client';
 import { NextIntlClientProvider } from 'next-intl';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import messages from '../../../../../../../../messages/en.json';
-import type { ContentImpact } from '@/lib/content/impact';
+import type { ContentImpact, ContentResults, ResultSource } from '@/lib/content/impact';
 import { ImpactTab } from './_impact-tab';
 
 const getContentImpact = vi.fn();
+const getContentResults = vi.fn();
 vi.mock('@/lib/actions/content-drafts', () => ({
   getContentImpact: (...args: unknown[]) => getContentImpact(...args),
+  getContentResults: (...args: unknown[]) => getContentResults(...args),
 }));
 vi.mock('@/i18n/navigation', () => ({
   Link: ({ href, children, ...props }: { href: string; children: React.ReactNode }) => (
@@ -53,6 +55,28 @@ const impact = (over: Partial<ContentImpact> = {}): ContentImpact => ({
   ...over,
 });
 
+const source = (platform: string, over: Partial<ResultSource> = {}): ResultSource => ({
+  platform,
+  visits: 0,
+  sessions: 0,
+  keyEvents: 0,
+  keyEventSessions: 0,
+  transactions: 0,
+  revenue: 0,
+  ...over,
+});
+
+const results = (over: Partial<ContentResults> = {}): ContentResults => ({
+  analytics: true,
+  purchases: false,
+  sources: [
+    source('chatgpt.com', { visits: 30, sessions: 40, keyEvents: 6, keyEventSessions: 4 }),
+    source('perplexity.ai', { visits: 8, sessions: 2, keyEvents: 1, keyEventSessions: 1 }),
+    source('unknown', { visits: 3 }),
+  ],
+  ...over,
+});
+
 let container: HTMLDivElement;
 let root: Root;
 
@@ -79,6 +103,7 @@ beforeEach(() => {
   document.body.appendChild(container);
   root = createRoot(container);
   getContentImpact.mockReset();
+  getContentResults.mockReset().mockResolvedValue(results());
 });
 
 afterEach(() => {
@@ -93,6 +118,7 @@ describe('the Impact tab', () => {
     await render();
 
     expect(getContentImpact).toHaveBeenCalledWith('b1', PAGE, 30);
+    expect(getContentResults).toHaveBeenCalledWith('b1', PAGE, 30);
     expect(periodButton('30d').getAttribute('aria-pressed')).toBe('true');
     expect(metric('Citations')).toBe('Citations45+50%');
     expect(metric('AI visits')).toBe('AI visits4Low sample');
@@ -133,6 +159,7 @@ describe('the Impact tab', () => {
     await render();
     await act(async () => periodButton('90d').click());
     expect(getContentImpact).toHaveBeenLastCalledWith('b1', PAGE, 90);
+    expect(getContentResults).toHaveBeenLastCalledWith('b1', PAGE, 90);
     expect(periodButton('90d').getAttribute('aria-pressed')).toBe('true');
     expect(container.textContent).toContain('The last 90 days against the 90 before');
   });
@@ -171,9 +198,96 @@ describe('the Impact tab', () => {
     expect(metric('Citations')).toBe('Citations45+50%');
   });
 
+  describe('results from AI visits', () => {
+    const resultRows = () =>
+      [...container.querySelectorAll('tbody tr')].map((tr) =>
+        [...tr.children].map((cell) => cell.textContent),
+      );
+    const headers = () => [...container.querySelectorAll('thead th')].map((th) => th.textContent);
+
+    it('shows the key events from AI visits and each source’s visits and key events', async () => {
+      getContentImpact.mockResolvedValue(impact());
+      await render();
+
+      expect(container.textContent).toContain('Results from AI visits');
+      expect(metric('Key events')).toBe('Key events7');
+      // 5 of 42 Analytics sessions had a key event.
+      expect(metric('Key event rate')).toBe('Key event rate11.9%');
+      expect(metric('Orders')).toBeUndefined();
+      expect(headers()).toEqual(['AI source', 'Visits', 'Key events']);
+      expect(resultRows()).toEqual([
+        ['ChatGPT', '30', '6'],
+        ['Perplexity', '8', '1'],
+        ['Other', '3', '0'],
+      ]);
+    });
+
+    it('adds orders and revenue when the property reports purchases', async () => {
+      getContentImpact.mockResolvedValue(impact());
+      getContentResults.mockResolvedValue(
+        results({
+          purchases: true,
+          sources: [
+            source('chatgpt.com', {
+              visits: 12,
+              sessions: 12,
+              keyEvents: 3,
+              keyEventSessions: 3,
+              transactions: 2,
+              revenue: 1234.6,
+            }),
+          ],
+        }),
+      );
+      await render();
+
+      expect(metric('Orders')).toBe('Orders2');
+      expect(metric('Revenue')).toBe('Revenue1,235');
+      // 12 sessions: too few for a rate.
+      expect(metric('Key event rate')).toBe('Key event rate—Low sample · 12 sessions');
+      expect(headers()).toEqual(['AI source', 'Visits', 'Key events', 'Revenue']);
+      expect(resultRows()).toEqual([['ChatGPT', '12', '3', '1,235']]);
+    });
+
+    it('lists the visits per source, and where to connect Google Analytics, without it', async () => {
+      getContentImpact.mockResolvedValue(impact());
+      getContentResults.mockResolvedValue(
+        results({ analytics: false, sources: [source('claude.ai', { visits: 5 })] }),
+      );
+      await render();
+
+      expect(metric('Key events')).toBeUndefined();
+      expect(container.textContent).toContain('come from Google Analytics');
+      expect(container.querySelector('a[href="/dashboard/traffic"]')!.textContent).toBe(
+        'Open AI Traffic',
+      );
+      expect(headers()).toEqual(['AI source', 'Visits']);
+      expect(resultRows()).toEqual([['Claude', '5']]);
+      expect(container.textContent).toContain('Visits come from the tracking snippet.');
+    });
+
+    it('says when no AI visits reached the page', async () => {
+      getContentImpact.mockResolvedValue(impact());
+      getContentResults.mockResolvedValue(results({ sources: [] }));
+      await render();
+      expect(metric('Key events')).toBe('Key events0');
+      expect(container.textContent).toContain('No AI visits to this page in this period.');
+      expect(container.querySelector('table')).toBeNull();
+    });
+
+    it('counts a failed read of the results as a failed tab', async () => {
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+      getContentImpact.mockResolvedValue(impact());
+      getContentResults.mockRejectedValueOnce(new Error('boom'));
+      await render();
+      expect(container.textContent).toContain("Couldn't load the page's impact.");
+    });
+  });
+
   it('has nothing to measure for a new page', async () => {
     await render(null);
     expect(getContentImpact).not.toHaveBeenCalled();
+    expect(getContentResults).not.toHaveBeenCalled();
     expect(container.textContent).toContain('This draft is a new page, not live yet');
   });
 });

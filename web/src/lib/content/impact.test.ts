@@ -6,7 +6,10 @@ import {
   isLost,
   platformNames,
   promptsCited,
+  resultSources,
+  resultTotals,
   type ImpactPrompt,
+  type ResultSource,
 } from './impact';
 
 const TODAY = new Date('2026-10-20T22:30:00Z');
@@ -80,5 +83,63 @@ describe('prompts', () => {
       'Google AI Overview',
     ]);
     expect(platformNames(['new-engine'])).toEqual(['new-engine']);
+  });
+});
+
+describe('results from AI visits', () => {
+  const source = (platform: string, over: Partial<ResultSource> = {}): ResultSource => ({
+    platform,
+    visits: 0,
+    sessions: 0,
+    keyEvents: 0,
+    keyEventSessions: 0,
+    transactions: 0,
+    revenue: 0,
+    ...over,
+  });
+  const sources = [
+    source('perplexity.ai', { visits: 4, sessions: 2, keyEvents: 1, keyEventSessions: 1 }),
+    source('chatgpt.com', {
+      visits: 9,
+      sessions: 12,
+      keyEvents: 5,
+      keyEventSessions: 4,
+      transactions: 1,
+      revenue: 40,
+    }),
+    source('chat.openai.com', { visits: 1, sessions: 1 }),
+    source('unknown', { visits: 20 }),
+    source('made-up.example', { visits: 2, keyEvents: 1 }),
+    source('gemini.google.com', { sessions: 4, keyEvents: 1, keyEventSessions: 1 }),
+    // Sessions on a snippet day, with nothing else: no row.
+    source('claude.ai', { sessions: 3 }),
+  ];
+
+  it('adds every source up for the cards', () => {
+    expect(resultTotals(sources)).toEqual({
+      visits: 36,
+      sessions: 22,
+      keyEvents: 8,
+      keyEventSessions: 6,
+      transactions: 1,
+      revenue: 40,
+    });
+    expect(resultTotals([])).toEqual({
+      visits: 0,
+      sessions: 0,
+      keyEvents: 0,
+      keyEventSessions: 0,
+      transactions: 0,
+      revenue: 0,
+    });
+  });
+
+  it('lists one row per platform name, the most visits first, and the rest as Other', () => {
+    expect(resultSources(sources).map((row) => [row.name, row.visits, row.keyEvents])).toEqual([
+      ['ChatGPT', 10, 5],
+      ['Perplexity', 4, 1],
+      ['Gemini', 0, 1],
+      [null, 22, 1],
+    ]);
   });
 });

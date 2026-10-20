@@ -18,7 +18,7 @@ vi.mock('@/lib/supabase/server', () => ({
   })),
 }));
 
-const { getContentImpact } = await import('./content-drafts');
+const { getContentImpact, getContentResults } = await import('./content-drafts');
 
 beforeEach(() => {
   rpcCalls = [];
@@ -56,6 +56,44 @@ describe('getContentImpact', () => {
     await expect(getContentImpact(BRAND, PAGE, 14)).rejects.toThrow('invalid');
     await expect(getContentImpact(BRAND, '/pricing', 30)).rejects.toThrow('invalid');
     await expect(getContentImpact(BRAND, 'javascript:alert(1)', 30)).rejects.toThrow('invalid');
+    expect(rpcCalls).toEqual([]);
+  });
+});
+
+describe('getContentResults', () => {
+  it('reads the page’s results over the period asked for', async () => {
+    const results = {
+      analytics: true,
+      purchases: false,
+      sources: [
+        {
+          platform: 'chatgpt.com',
+          visits: 9,
+          sessions: 12,
+          keyEvents: 5,
+          keyEventSessions: 4,
+          transactions: 0,
+          revenue: 0,
+        },
+      ],
+    };
+    rpcResult = { data: results, error: null };
+    expect(await getContentResults(BRAND, PAGE, 7)).toEqual(results);
+    expect(rpcCalls).toEqual([
+      { fn: 'content_page_results', args: { p_brand_id: BRAND, p_page: PAGE, p_days: 7 } },
+    ]);
+  });
+
+  it('returns null outside the organization and throws when the read fails', async () => {
+    expect(await getContentResults(BRAND, PAGE, 30)).toBeNull();
+    rpcResult = { data: null, error: { message: 'boom' } };
+    await expect(getContentResults(BRAND, PAGE, 30)).rejects.toThrow('boom');
+  });
+
+  it('reads nothing for a malformed brand, a period not offered, or a page without an address', async () => {
+    await expect(getContentResults('b1', PAGE, 30)).rejects.toThrow('invalid');
+    await expect(getContentResults(BRAND, PAGE, 60)).rejects.toThrow('invalid');
+    await expect(getContentResults(BRAND, '/pricing', 30)).rejects.toThrow('invalid');
     expect(rpcCalls).toEqual([]);
   });
 });

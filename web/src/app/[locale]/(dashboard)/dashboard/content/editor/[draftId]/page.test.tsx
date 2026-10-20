@@ -11,8 +11,10 @@ const markContentDraftReady = vi.fn();
 const saveContentDraft = vi.fn();
 const setContentDraftPageType = vi.fn();
 const getContentImpact = vi.fn();
+const getContentResults = vi.fn();
 vi.mock('@/lib/actions/content-drafts', () => ({
   getContentImpact: (...args: unknown[]) => getContentImpact(...args),
+  getContentResults: (...args: unknown[]) => getContentResults(...args),
   getContentDraft: (...args: unknown[]) => getContentDraft(...args),
   markContentDraftReady: (...args: unknown[]) => markContentDraftReady(...args),
   saveContentDraft: (...args: unknown[]) => saveContentDraft(...args),
@@ -139,6 +141,7 @@ beforeEach(() => {
   setContentDraftPageType.mockReset().mockResolvedValue(undefined);
   saveContentDraft.mockReset().mockResolvedValue({ updatedAt: '2026-10-20T10:00:00Z' });
   getContentImpact.mockReset().mockResolvedValue(null);
+  getContentResults.mockReset().mockResolvedValue(null);
   localStorage.clear();
   brandState.activeBrandId = 'b1';
   brandState.setActiveBrand.mockReset();
@@ -558,6 +561,7 @@ describe('the side panel', () => {
     expect(panel()!.textContent).toContain('Impact');
     // The page the draft optimizes, over 30 days.
     expect(getContentImpact).toHaveBeenCalledWith('b1', 'https://acme.example.com/pricing', 30);
+    expect(getContentResults).toHaveBeenCalledWith('b1', 'https://acme.example.com/pricing', 30);
     expect(button('Hide side panel')!.getAttribute('aria-pressed')).toBe('true');
   });
 

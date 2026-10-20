@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { Check, ExternalLink, Loader2 } from 'lucide-react';
 import { Link } from '@/i18n/navigation';
-import { getContentImpact } from '@/lib/actions/content-drafts';
+import { getContentImpact, getContentResults } from '@/lib/actions/content-drafts';
 import {
   DEFAULT_IMPACT_PERIOD,
   GSC_PAGE_DAYS,
@@ -15,6 +15,7 @@ import {
   platformNames,
   promptsCited,
   type ContentImpact,
+  type ContentResults,
   type ImpactPeriod,
 } from '@/lib/content/impact';
 import { pagePath } from '@/lib/content/overlap';
@@ -22,11 +23,13 @@ import { formatNumber } from '@/lib/format';
 import { formatPctChange } from '@/lib/traffic-kpis';
 import type { VisitChange } from '@/lib/traffic-change';
 import { cn } from '@/lib/utils';
+import { ImpactResults } from './_impact-results';
 
 /** One read of the tab, for one period: null while it runs. */
 interface ImpactRead {
   period: ImpactPeriod;
   impact: ContentImpact | null;
+  results: ContentResults | null;
   failed: boolean;
 }
 
@@ -34,8 +37,9 @@ interface ImpactRead {
  * The Impact tab (Content Editor CE-016, spec §7): what the page a draft
  * optimizes earns. Every number follows the period: citations, AI visits,
  * Google clicks and prompts cited, each against the period before; the
- * prompts themselves, always listed, the ones it lost marked; the brand's
- * other pages cited for them; and where the numbers come from.
+ * prompts themselves, always listed, the ones it lost marked; the results
+ * from AI visits, per AI source; the brand's other pages cited for the same
+ * prompts; and where the numbers come from.
  */
 export function ImpactTab({ brandId, pageUrl }: { brandId: string; pageUrl: string | null }) {
   const t = useTranslations('contentEditor.editor.impact');
@@ -46,13 +50,16 @@ export function ImpactTab({ brandId, pageUrl }: { brandId: string; pageUrl: stri
   useEffect(() => {
     if (!pageUrl) return;
     let cancelled = false;
-    getContentImpact(brandId, pageUrl, period)
-      .then((impact) => {
-        if (!cancelled) setRead({ period, impact, failed: false });
+    Promise.all([
+      getContentImpact(brandId, pageUrl, period),
+      getContentResults(brandId, pageUrl, period),
+    ])
+      .then(([impact, results]) => {
+        if (!cancelled) setRead({ period, impact, results, failed: false });
       })
       .catch((err) => {
         console.error('Failed to read the page impact:', err);
-        if (!cancelled) setRead({ period, impact: null, failed: true });
+        if (!cancelled) setRead({ period, impact: null, results: null, failed: true });
       });
     return () => {
       cancelled = true;
@@ -112,7 +119,7 @@ export function ImpactTab({ brandId, pageUrl }: { brandId: string; pageUrl: stri
           </button>
         </p>
       ) : (
-        <ImpactBody impact={impact} period={period} pageUrl={pageUrl} />
+        <ImpactBody impact={impact} results={current.results} period={period} pageUrl={pageUrl} />
       )}
     </div>
   );
@@ -120,10 +127,12 @@ export function ImpactTab({ brandId, pageUrl }: { brandId: string; pageUrl: stri
 
 function ImpactBody({
   impact,
+  results,
   period,
   pageUrl,
 }: {
   impact: ContentImpact;
+  results: ContentResults | null;
   period: ImpactPeriod;
   pageUrl: string;
 }) {
@@ -239,6 +248,8 @@ function ImpactBody({
           <ExternalLink className="h-3 w-3" />
         </Link>
       </section>
+
+      {results && <ImpactResults results={results} />}
 
       {cited.cur > 0 && (
         <section className="space-y-1.5">

@@ -20,7 +20,7 @@ import {
   PAGE_IMPORT_ERRORS,
 } from '@/lib/content/drafts';
 import { escapeHtml } from '@/lib/content/attachments';
-import { IMPACT_PERIODS, type ContentImpact } from '@/lib/content/impact';
+import { IMPACT_PERIODS, type ContentImpact, type ContentResults } from '@/lib/content/impact';
 import { MAX_BODY_HTML_LENGTH, MAX_TITLE_LENGTH } from '@/lib/content/editor';
 import { detectPageType, siteTypeOf, type SiteType } from '@/lib/content/page-types';
 import { sanitizeDraftHtml } from '@/lib/content/sanitize-draft-html';
@@ -365,13 +365,7 @@ export async function getContentImpact(
   page: string,
   days: number,
 ): Promise<ContentImpact | null> {
-  if (
-    !draftId.safeParse(brandId).success ||
-    !(IMPACT_PERIODS as readonly number[]).includes(days) ||
-    !/^https?:\/\//i.test(page)
-  ) {
-    throw new Error('invalid');
-  }
+  if (!impactArgsValid(brandId, page, days)) throw new Error('invalid');
   const supabase = await createClient();
   const { data, error } = await supabase.rpc('content_page_impact', {
     p_brand_id: brandId,
@@ -380,6 +374,37 @@ export async function getContentImpact(
   });
   if (error) throw new Error(error.message);
   return (data as ContentImpact | null) ?? null;
+}
+
+/**
+ * The Impact tab's results from AI visits (CE-016): the page's AI visits per
+ * AI source over the last `days`, with Google Analytics' key events,
+ * purchases and revenue from them (content_page_results, 00210). Null when
+ * the member can't read the brand.
+ */
+export async function getContentResults(
+  brandId: string,
+  page: string,
+  days: number,
+): Promise<ContentResults | null> {
+  if (!impactArgsValid(brandId, page, days)) throw new Error('invalid');
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc('content_page_results', {
+    p_brand_id: brandId,
+    p_page: page,
+    p_days: days,
+  });
+  if (error) throw new Error(error.message);
+  return (data as ContentResults | null) ?? null;
+}
+
+/** A brand id, a period the tab offers and a web page's address. */
+function impactArgsValid(brandId: string, page: string, days: number): boolean {
+  return (
+    draftId.safeParse(brandId).success &&
+    (IMPACT_PERIODS as readonly number[]).includes(days) &&
+    /^https?:\/\//i.test(page)
+  );
 }
 
 const overlapSource = startInput.shape.source;
