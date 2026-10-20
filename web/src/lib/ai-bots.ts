@@ -55,10 +55,14 @@ export function hasLogSender({ connections }: BotConnections): boolean {
  * (§6.3). Past it a Logpush job's or a Vercel drain's files are only
  * counted: no rows and no totals, so the report stops until then. Null
  * while under the cap, or without a log sender.
+ *
+ * Read against today's plan, as the server decides (raw < cap), not from
+ * rawCappedAt: 00184 sets that once a month and never clears it, so a raised
+ * plan reads files again under it, and a lowered one stops without it.
  */
 export function logsPausedUntil(info: BotConnections): string | null {
   const { usage } = info;
-  if (!usage.rawCappedAt || usage.rawCap <= 0 || !hasLogSender(info)) return null;
+  if (usage.rawCap <= 0 || usage.raw < usage.rawCap || !hasLogSender(info)) return null;
   return nextMonth(usage.month);
 }
 

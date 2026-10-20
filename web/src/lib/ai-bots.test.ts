@@ -70,6 +70,21 @@ describe('lastBotEvent and rowsPausedUntil', () => {
     expect(logsPausedUntil({ connections: [drain], usage: usage() })).toBeNull();
     expect(logsPausedUntil({ connections: [drain], usage: { ...capped, rawCap: -1 } })).toBeNull();
   });
+
+  // gkhngyk on #1224: rawCappedAt is set once a month and never cleared.
+  it("reads the pause against today's plan, not when the cap was first hit", () => {
+    const drain = { ...conn(null), kind: 'vercel_drain' as const };
+    // Growth hit 20M, then upgraded to Enterprise: its files are read again.
+    const raised = usage({
+      raw: 20_000_400,
+      rawCappedAt: '2026-10-18T09:00:00Z',
+      rawCap: 200_000_000,
+    });
+    expect(logsPausedUntil({ connections: [drain], usage: raised })).toBeNull();
+    // Enterprise at 30M moved down to Growth: its files stop, with no rawCappedAt yet.
+    const lowered = usage({ raw: 30_000_000, rawCappedAt: null, rawCap: 20_000_000 });
+    expect(logsPausedUntil({ connections: [drain], usage: lowered })).toBe('2026-11-01');
+  });
 });
 
 describe('botReportState and sampleBotTypes (AT-011)', () => {

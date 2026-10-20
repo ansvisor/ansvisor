@@ -3437,7 +3437,7 @@
       "usageNoCap": "This month: {stored} detailed {count, plural, one {row} other {rows}}.",
       "paused": "Detailed rows paused until {day}, totals still counted.",
       "rawUsage": "Log records this month: {raw} of {cap}.",
-      "logsPaused": "Log files paused until {day}: this month's log records are used up, so requests from Logpush or the Vercel drain aren't counted until then.",
+      "logsPaused": "Log files paused until {day}: this month's log records are used up, so requests from Logpush or the Vercel drain aren't read until then.",
       "secretOnce": "Copy these settings now: the secret in them isn't shown again. Lost it? Revoke this connection and create a new one.",
       "copy": "Copy",
       "copied": "Copied",

@@ -205,7 +205,7 @@ describe('BotsSource', () => {
     await act(async () => button('Manage')!.click());
     expect(page()).toContain('Log records this month: 20,000,400 of 20,000,000.');
     expect(page()).toContain(
-      "Log files paused until Nov 1: this month's log records are used up, so requests from Logpush or the Vercel drain aren't counted until then.",
+      "Log files paused until Nov 1: this month's log records are used up, so requests from Logpush or the Vercel drain aren't read until then.",
     );
   });
 
