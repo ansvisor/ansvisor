@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { dashboardNav } from '@/config/dashboard';
 import {
+  activeChildHref,
   dashboardNavLabelKeys,
   getDashboardNavGroupLabel,
   getDashboardNavLabel,
@@ -37,6 +38,18 @@ describe('getDashboardNavLabel', () => {
     ]);
     expect(prompts.children?.[2].href).toBe('/dashboard/prompts/topics');
     expect(items.some((item) => item.href === '/dashboard/topics')).toBe(false);
+  });
+
+  // Content Editor (CE-001): Content is a group; Opportunities keeps today's
+  // route.
+  it('lists Opportunities and the Library under Content', () => {
+    const items = dashboardNav.flatMap((group) => group.items);
+    const content = items.find((item) => item.title === 'Content')!;
+    expect(content.href).toBe('/dashboard/content');
+    expect(content.children).toEqual([
+      { title: 'Opportunities', href: '/dashboard/content' },
+      { title: 'Library', href: '/dashboard/content/library' },
+    ]);
   });
 
   it('uses the brands namespace only for Brands', () => {
@@ -106,5 +119,32 @@ describe('the sidebar groups', () => {
         expect(getDashboardNavGroupLabel(group.title, translateNav)).not.toBe(group.title);
       }
     }
+  });
+});
+
+describe('activeChildHref', () => {
+  const content = [
+    { title: 'Opportunities', href: '/dashboard/content' },
+    { title: 'Library', href: '/dashboard/content/library' },
+  ];
+
+  it('marks only the Library on the Library, though its route starts with Opportunities’', () => {
+    expect(activeChildHref(content, '/dashboard/content/library')).toBe(
+      '/dashboard/content/library',
+    );
+  });
+
+  it('keeps an opportunity’s own page under Opportunities', () => {
+    expect(activeChildHref(content, '/dashboard/content')).toBe('/dashboard/content');
+    expect(activeChildHref(content, '/dashboard/content/3f2a')).toBe('/dashboard/content');
+  });
+
+  it('counts a view’s own pages, and nothing else', () => {
+    const prompts = [{ title: 'Topics', href: '/dashboard/prompts/topics' }];
+    expect(activeChildHref(prompts, '/dashboard/prompts/topics/t1')).toBe(
+      '/dashboard/prompts/topics',
+    );
+    expect(activeChildHref(prompts, '/dashboard/prompts/topicsx')).toBeNull();
+    expect(activeChildHref(content, '/dashboard/audit')).toBeNull();
   });
 });

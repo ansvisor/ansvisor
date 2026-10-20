@@ -10,6 +10,7 @@ import { getTrackedPromptCount } from '@/lib/actions/prompt';
 import { carriedParams, PROMPTS_BASE } from '@/lib/prompts-routes';
 import { dashboardNav } from '@/config/dashboard';
 import {
+  activeChildHref,
   getDashboardNavLabel,
   getDashboardNavGroupLabel,
   shouldShowDashboardNavItem,
@@ -60,8 +61,19 @@ const NAV_VIEWPORT =
 const NAV_SCROLLBAR =
   'data-vertical:w-2 opacity-0 transition-opacity duration-300 data-hovering:opacity-100 data-scrolling:opacity-100 data-scrolling:duration-75 [&>[data-slot=scroll-area-thumb]]:bg-muted-foreground/25 [&>[data-slot=scroll-area-thumb]:hover]:bg-muted-foreground/45';
 
-/** Where the Prompts submenu's open/closed state is remembered (PROMPT-001). */
-const SUBMENU_KEY = 'ansvisor.sidebar.promptsOpen';
+/** The items that open a submenu (Prompts, Content). */
+const EXPANDABLE_HREFS = dashboardNav.flatMap((group) =>
+  group.items.filter((item) => item.children?.length).map((item) => item.href),
+);
+
+/**
+ * Where a submenu's open/closed state is remembered, per item: Prompts keeps
+ * its key from PROMPT-001 (ansvisor.sidebar.promptsOpen), Content gets
+ * ansvisor.sidebar.contentOpen.
+ */
+function submenuKey(href: string) {
+  return `ansvisor.sidebar.${href.split('/').pop()}Open`;
+}
 
 /**
  * Arrow keys in the sidebar's links (PROMPT-001): up and down move between
@@ -70,7 +82,7 @@ const SUBMENU_KEY = 'ansvisor.sidebar.promptsOpen';
  */
 function handleNavKeys(
   e: React.KeyboardEvent<HTMLElement>,
-  setSubmenuOpen: (open: boolean) => void,
+  setSubmenuOpen: (href: string, open: boolean) => void,
 ) {
   const items = [...e.currentTarget.querySelectorAll<HTMLElement>('[data-nav-item]')];
   const current = document.activeElement as HTMLElement | null;
@@ -83,15 +95,16 @@ function handleNavKeys(
   };
   const isParent = current?.dataset.navItem === 'parent';
   const isChild = current?.dataset.navItem === 'child';
+  const submenu = current?.dataset.submenu ?? '';
   if (e.key === 'ArrowDown') focus(items[i + 1]);
   else if (e.key === 'ArrowUp') focus(items[i - 1]);
   else if (e.key === 'ArrowRight' && isParent) {
     e.preventDefault();
     if (current?.getAttribute('aria-expanded') === 'true') focus(items[i + 1]);
-    else setSubmenuOpen(true);
+    else setSubmenuOpen(submenu, true);
   } else if (e.key === 'ArrowLeft' && isParent) {
     e.preventDefault();
-    setSubmenuOpen(false);
+    setSubmenuOpen(submenu, false);
   } else if (e.key === 'ArrowLeft' && isChild) {
     focus(
       items
@@ -114,9 +127,12 @@ export function Sidebar() {
   const compact = isCollapsed && !peeking && !menuOpen;
   const searchParams = useSearchParams();
   const underPrompts = pathname.startsWith(PROMPTS_BASE);
-  // The Prompts submenu: remembered per browser, and open whenever a Prompts
-  // route is showing so the current view is always visible in it.
-  const [submenuOpen, setSubmenuOpenState] = useState(true);
+  // Each submenu (Prompts, Content): remembered per browser, open until closed,
+  // and open whenever one of its routes is showing so the current view is
+  // always visible in it.
+  const [openMenus, setOpenMenus] = useState<Record<string, boolean>>({});
+  const isSubmenuOpen = (href: string) => openMenus[href] ?? true;
+  const underMenu = EXPANDABLE_HREFS.find((href) => pathname.startsWith(href)) ?? null;
   const [trackedCount, setTrackedCount] = useState<number | null>(null);
   const activeBrandId = useBrandStore((s) => s.activeBrandId);
   const t = useTranslations('nav');
@@ -166,20 +182,23 @@ export function Sidebar() {
   };
 
   useEffect(() => {
-    let stored: string | null = null;
-    try {
-      stored = localStorage.getItem(SUBMENU_KEY);
-    } catch {
-      // Storage can be unavailable (private mode); the default stands.
+    const stored: Record<string, boolean> = {};
+    for (const href of EXPANDABLE_HREFS) {
+      try {
+        const value = localStorage.getItem(submenuKey(href));
+        if (value !== null) stored[href] = value === '1';
+      } catch {
+        // Storage can be unavailable (private mode); the default stands.
+      }
     }
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    if (stored !== null) setSubmenuOpenState(stored === '1');
+    setOpenMenus((prev) => ({ ...stored, ...prev }));
   }, []);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    if (underPrompts) setSubmenuOpenState(true);
-  }, [underPrompts]);
+    if (underMenu) setOpenMenus((prev) => ({ ...prev, [underMenu]: true }));
+  }, [underMenu]);
 
   // The count beside Tracked Prompts, refreshed on brand switch and on every
   // page change so adding or deleting prompts shows up.
@@ -194,10 +213,10 @@ export function Sidebar() {
     };
   }, [activeBrandId, pathname]);
 
-  const setSubmenuOpen = (open: boolean) => {
-    setSubmenuOpenState(open);
+  const setSubmenuOpen = (href: string, open: boolean) => {
+    setOpenMenus((prev) => ({ ...prev, [href]: open }));
     try {
-      localStorage.setItem(SUBMENU_KEY, open ? '1' : '0');
+      localStorage.setItem(submenuKey(href), open ? '1' : '0');
     } catch {
       // Not remembered this time; nothing else depends on it.
     }
@@ -383,16 +402,22 @@ export function Sidebar() {
                   if (item.children?.length && !compact) {
                     // Expandable item (PROMPT-001): the row toggles the
                     // submenu, whose links are the item's views.
-                    const carry = underPrompts ? carriedParams(searchParams.toString()) : '';
+                    const carry =
+                      underPrompts && item.href === PROMPTS_BASE
+                        ? carriedParams(searchParams.toString())
+                        : '';
                     const submenuId = `submenu-${item.href.replace(/\W+/g, '-')}`;
+                    const submenuOpen = isSubmenuOpen(item.href);
+                    const currentChild = activeChildHref(item.children, pathname);
                     return (
                       <div key={item.href}>
                         <button
                           type="button"
                           data-nav-item="parent"
+                          data-submenu={item.href}
                           aria-expanded={submenuOpen}
                           aria-controls={submenuId}
-                          onClick={() => setSubmenuOpen(!submenuOpen)}
+                          onClick={() => setSubmenuOpen(item.href, !submenuOpen)}
                           className={cn(
                             'flex w-full items-center gap-3 rounded-md px-2 py-1.5 text-left text-[13px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50',
                             isActive
@@ -412,10 +437,7 @@ export function Sidebar() {
                         {submenuOpen && (
                           <ul id={submenuId} className="mt-0.5 ml-[18px] space-y-0.5 border-l pl-2">
                             {item.children.map((child) => {
-                              // A view's own pages count too: a topic's page
-                              // sits under Topics.
-                              const childActive =
-                                pathname === child.href || pathname.startsWith(`${child.href}/`);
+                              const childActive = child.href === currentChild;
                               return (
                                 <li key={child.href}>
                                   <Link

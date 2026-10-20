@@ -4,7 +4,11 @@ import { useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { usePathname, Link } from '@/i18n/navigation';
 import { dashboardNav } from '@/config/dashboard';
-import { getDashboardNavLabel, shouldShowDashboardNavItem } from '@/lib/dashboard-navigation';
+import {
+  activeChildHref,
+  getDashboardNavLabel,
+  shouldShowDashboardNavItem,
+} from '@/lib/dashboard-navigation';
 import { useFeatureGate } from '@/hooks/use-feature-gate';
 import { useAgentKeyStatus } from '@/hooks/use-agent-key-status';
 import { siteConfig } from '@/config/site';
@@ -151,7 +155,8 @@ export function MobileNav() {
                   </Link>
                 );
                 if (!item.children?.length) return link;
-                // The Prompts submenu (PROMPT-001), always shown on mobile.
+                // A submenu (Prompts, Content), always shown on mobile.
+                const currentChild = activeChildHref(item.children, pathname);
                 return (
                   <div key={item.href}>
                     {link}
@@ -161,7 +166,7 @@ export function MobileNav() {
                           <span
                             className={cn(
                               'block rounded-md px-3 py-1.5 text-sm transition-colors',
-                              pathname === child.href || pathname.startsWith(`${child.href}/`)
+                              child.href === currentChild
                                 ? 'font-medium text-primary'
                                 : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground',
                             )}

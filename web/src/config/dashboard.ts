@@ -81,11 +81,18 @@ export const dashboardNav: NavGroup[] = [
         icon: Sparkles,
         requiredFeature: 'ai_agent',
       },
+      // Content Editor (CE-001): a group, like Prompts. Opportunities is
+      // today's page and keeps /dashboard/content; the Library lists every
+      // page written or changed in Ansvisor.
       {
-        title: 'Content Optimization',
+        title: 'Content',
         href: '/dashboard/content',
         icon: FileText,
         requiredFeature: 'content_optimization',
+        children: [
+          { title: 'Opportunities', href: '/dashboard/content' },
+          { title: 'Library', href: '/dashboard/content/library' },
+        ],
       },
       {
         title: 'Site Audit',

@@ -822,6 +822,69 @@ export type Database = {
           },
         ]
       }
+      content_drafts: {
+        Row: {
+          author: string
+          body_html: string
+          brand_id: string
+          created_at: string
+          created_by: string | null
+          id: string
+          method: string
+          page_type: string | null
+          score_after: number | null
+          score_before: number | null
+          status: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          author?: string
+          body_html?: string
+          brand_id: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          method?: string
+          page_type?: string | null
+          score_after?: number | null
+          score_before?: number | null
+          status?: string
+          title?: string
+          updated_at?: string
+        }
+        Update: {
+          author?: string
+          body_html?: string
+          brand_id?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          method?: string
+          page_type?: string | null
+          score_after?: number | null
+          score_before?: number | null
+          status?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "content_drafts_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brands"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "content_drafts_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       content_opportunities: {
         Row: {
           brand_id: string

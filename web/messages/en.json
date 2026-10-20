@@ -72,6 +72,8 @@
     "topics": "Topics",
     "queryFanouts": "Query Fan-outs",
     "promptsInsights": "Insights",
+    "contentOpportunities": "Opportunities",
+    "contentLibrary": "Library",
     "toggleSubmenu": "Show or hide {label}"
   },
   "actionCenter": {
@@ -3062,6 +3064,74 @@
     },
     "appearedIn": "Appeared in {visible} of {active, plural, one {# prompt} other {# prompts}}",
     "openDetails": "Open topic details"
+  },
+  "contentEditor": {
+    "library": {
+      "title": "Library",
+      "description": "Everything you and the agents wrote or changed.",
+      "selectBrand": "Select a brand to see its content.",
+      "tabsLabel": "Library sections",
+      "tabs": {
+        "all": "All",
+        "draft": "Drafts",
+        "in_review": "In review",
+        "ready": "Ready",
+        "published": "Published"
+      },
+      "columns": {
+        "content": "Content",
+        "type": "Type",
+        "method": "Method",
+        "by": "By",
+        "status": "Status",
+        "score": "AEO score"
+      },
+      "scoreHint": "The page's AEO score, before → after the changes",
+      "untitled": "Untitled",
+      "you": "You",
+      "contentAgent": "Content Agent",
+      "formerMember": "Former member",
+      "empty": {
+        "title": "Nothing written yet",
+        "body": "Pages you and the Content Agent write or change in Ansvisor show up here."
+      },
+      "emptyTab": {
+        "draft": "No drafts.",
+        "in_review": "Nothing waiting for review.",
+        "ready": "Nothing marked ready.",
+        "published": "Nothing published yet."
+      },
+      "loadError": "Couldn't load the Library.",
+      "retry": "Try again"
+    },
+    "status": {
+      "draft": "Draft",
+      "in_review": "In review",
+      "ready": "Ready",
+      "published": "Published"
+    },
+    "method": {
+      "create": "Create",
+      "optimize": "Optimize"
+    },
+    "pageTypes": {
+      "feature_page": "Feature page",
+      "solution_page": "Solution page",
+      "comparison": "Comparison",
+      "integration": "Integration",
+      "pricing": "Pricing",
+      "guide": "Guide",
+      "blog_post": "Blog post",
+      "docs_faq": "Docs / FAQ",
+      "product_page": "Product page",
+      "category_page": "Category page",
+      "buying_guide": "Buying guide",
+      "best_of": "Best-of list",
+      "policy": "Policy",
+      "destination_page": "Destination page",
+      "itinerary": "Itinerary",
+      "help_faq": "Help & FAQ"
+    }
   },
   "content": {
     "title": "Content Opportunities",
