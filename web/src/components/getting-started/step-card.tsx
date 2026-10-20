@@ -40,6 +40,7 @@ export function GettingStartedStepCard({
   brandId,
   step,
   members,
+  canManage,
   onClose,
   onChanged,
   onReady,
@@ -47,6 +48,8 @@ export function GettingStartedStepCard({
   brandId: string;
   step: GettingStartedStep;
   members: TeamMember[];
+  /** Admins and managers: only they skip a step (00196). */
+  canManage: boolean;
   onClose: () => void;
   /** A step was skipped: read the steps again. */
   onChanged: () => void;
@@ -63,7 +66,10 @@ export function GettingStartedStepCard({
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape' && !confirmingSkip) onClose();
+      // Escape belongs to a dialog open over the page (this card's Skip
+      // question, or another), not to the card under it.
+      const dialogOpen = document.querySelector('[role="dialog"]:not([aria-modal="false"])');
+      if (event.key === 'Escape' && !confirmingSkip && !dialogOpen) onClose();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
@@ -113,7 +119,7 @@ export function GettingStartedStepCard({
             {text('open')}
             <ExternalLink className="h-3.5 w-3.5" />
           </Button>
-          {step.optional && step.state !== 'skipped' && (
+          {step.optional && step.state !== 'skipped' && canManage && (
             <Button
               variant="ghost"
               disabled={skipping}

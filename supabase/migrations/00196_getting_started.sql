@@ -38,7 +38,6 @@ create table if not exists public.getting_started_steps (
   -- migration.
   step text not null check (step ~ '^[a-z_]{1,40}$'),
   state text not null check (state in ('opened', 'skipped', 'done')),
-  updated_by uuid default auth.uid() references public.profiles(id) on delete set null,
   updated_at timestamptz not null default now(),
   primary key (brand_id, step)
 );
@@ -73,6 +72,9 @@ create policy "getting_started_steps: member select"
     )
   );
 
+-- Any member records a page they opened; skipping a step or marking one
+-- done is for admins and managers, who set the steps up (as kpi_definitions'
+-- and getting_started's writes).
 create policy "getting_started_steps: member insert"
   on public.getting_started_steps
   for insert
@@ -82,6 +84,14 @@ create policy "getting_started_steps: member insert"
       from public.brands b
       join public.profiles p on p.organization_id = b.organization_id
       where p.id = auth.uid()
+    )
+    and (
+      state = 'opened'
+      or exists (
+        select 1 from public.profiles p
+        where p.id = auth.uid()
+          and p.role = any (array['admin'::public.user_role, 'manager'::public.user_role])
+      )
     )
   );
 
@@ -94,6 +104,22 @@ create policy "getting_started_steps: member update"
       from public.brands b
       join public.profiles p on p.organization_id = b.organization_id
       where p.id = auth.uid()
+    )
+  )
+  with check (
+    brand_id in (
+      select b.id
+      from public.brands b
+      join public.profiles p on p.organization_id = b.organization_id
+      where p.id = auth.uid()
+    )
+    and (
+      state = 'opened'
+      or exists (
+        select 1 from public.profiles p
+        where p.id = auth.uid()
+          and p.role = any (array['admin'::public.user_role, 'manager'::public.user_role])
+      )
     )
   );
 

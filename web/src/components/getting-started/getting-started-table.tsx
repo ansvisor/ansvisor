@@ -191,9 +191,6 @@ export function GettingStartedTable({
                         >
                           {t('category')}
                         </Badge>
-                        <Badge variant="outline" className="text-[10px]">
-                          {t(`stages.${step.stage}`)}
-                        </Badge>
                         {step.optional && (
                           <Badge variant="outline" className={cn('text-[10px]', OPTIONAL_CHIP)}>
                             {t('optional')}

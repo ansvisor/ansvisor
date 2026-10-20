@@ -53,13 +53,14 @@ const onClose = vi.fn();
 const onChanged = vi.fn();
 const onReady = vi.fn();
 
-async function render(s: GettingStartedStep) {
+async function render(s: GettingStartedStep, { canManage = true } = {}) {
   await act(async () =>
     root.render(
       <GettingStartedStepCard
         brandId="b1"
         step={s}
         members={[]}
+        canManage={canManage}
         onClose={onClose}
         onChanged={onChanged}
         onReady={onReady}
@@ -150,6 +151,25 @@ describe('GettingStartedStepCard', () => {
     expect(asked.has('steps.mentions.name')).toBe(false);
     await render(step({ key: 'gsc', stage: 'setup', optional: true }));
     expect(asked.has('steps.gsc.name')).toBe(true);
+  });
+
+  // gkhngyk on #1234/#1236: only admins and managers skip a step.
+  it('offers no Skip to someone who can’t set the steps up', async () => {
+    await render(step({ key: 'gsc', stage: 'setup', optional: true }), { canManage: false });
+    expect(button('panel.skip')).toBeUndefined();
+    expect(button('steps.gsc.open')).toBeDefined();
+  });
+
+  it('leaves Escape to a dialog open over the page', async () => {
+    await render(step());
+    const dialog = document.createElement('div');
+    dialog.setAttribute('role', 'dialog');
+    document.body.append(dialog);
+    await act(async () => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+    });
+    expect(onClose).not.toHaveBeenCalled();
+    dialog.remove();
   });
 
   it('closes on Escape', async () => {

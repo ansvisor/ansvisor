@@ -1133,21 +1133,18 @@ export type Database = {
           state: string
           step: string
           updated_at: string
-          updated_by: string | null
         }
         Insert: {
           brand_id: string
           state: string
           step: string
           updated_at?: string
-          updated_by?: string | null
         }
         Update: {
           brand_id?: string
           state?: string
           step?: string
           updated_at?: string
-          updated_by?: string | null
         }
         Relationships: [
           {
@@ -1155,13 +1152,6 @@ export type Database = {
             columns: ["brand_id"]
             isOneToOne: false
             referencedRelation: "brands"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "getting_started_steps_updated_by_fkey"
-            columns: ["updated_by"]
-            isOneToOne: false
-            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
         ]

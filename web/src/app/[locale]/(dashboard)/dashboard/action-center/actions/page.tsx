@@ -116,6 +116,9 @@ type CardFocus = keyof typeof CARD_FILTERS | 'top';
 const GETTING_STARTED = 'getting_started';
 type CategoryChoice = ActionCategory | 'all' | typeof GETTING_STARTED;
 
+/** URL params that ask for the actions themselves, not Getting started. */
+const ACTIONS_PARAMS = ['category', 'action', 'priority', 'status', 'assignee', 'q', 'sort'];
+
 export default function ActionCenterActionsPage() {
   const brand = useBrandStore((s) => s.getActiveBrand());
   const t = useTranslations('actionCenter.actionsPage');
@@ -193,10 +196,12 @@ function ActionsContent({ brand }: { brand: Brand }) {
   // Filters, sort and search live in the URL (#896) so a refresh keeps them
   // and a filtered view can be shared. Read after mount; defaults stay out.
   const [urlRead, setUrlRead] = useState(false);
-  // A category from the URL is kept; without one, Getting started opens first.
+  // A category from the URL is kept, and so is a link to an action or a
+  // filtered list (Create action, a signal, the history drawer, an export):
+  // the actions were asked for. Without any, Getting started opens first.
   const categoryChosen = useRef(false);
   useEffect(() => {
-    categoryChosen.current = readUrlParam('category') !== '';
+    categoryChosen.current = ACTIONS_PARAMS.some((name) => readUrlParam(name) !== '');
     setCategory(
       readUrlChoice<CategoryChoice>(
         'category',
@@ -285,8 +290,12 @@ function ActionsContent({ brand }: { brand: Brand }) {
   // again when this tab is back in front.
   useEffect(() => {
     if (!startedActive) return;
+    // focus and visibilitychange both fire on the way back: read once.
+    let last = 0;
     const refresh = () => {
-      if (document.visibilityState === 'visible') refreshSteps();
+      if (document.visibilityState !== 'visible' || Date.now() - last < 1_000) return;
+      last = Date.now();
+      refreshSteps();
     };
     window.addEventListener('focus', refresh);
     document.addEventListener('visibilitychange', refresh);
@@ -856,6 +865,7 @@ function ActionsContent({ brand }: { brand: Brand }) {
           brandId={brand.id}
           step={openCard}
           members={members}
+          canManage={canManage}
           onClose={closeStep}
           onChanged={refreshSteps}
           onReady={() => {

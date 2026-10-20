@@ -275,6 +275,19 @@ describe('Getting started in the actions list', () => {
     expect(card()?.textContent).toBe('competitors');
   });
 
+  // gkhngyk on #1235: Create action, a signal and the history drawer link to
+  // ?action=<id>; on a new brand the drawer opened over the steps.
+  it('lists the actions for a link to one action, or to a filtered list', async () => {
+    for (const search of ['?action=a1', '?status=new', '?q=coffee']) {
+      window.history.replaceState(null, '', `/${search}`);
+      getGettingStarted.mockResolvedValue(started());
+      await render();
+      expect(steps(), search).toBeNull();
+      act(() => root.unmount());
+      root = createRoot(container);
+    }
+  });
+
   it('keeps a category the URL names, and lists the actions', async () => {
     window.history.replaceState(null, '', '/?category=all');
     getGettingStarted.mockResolvedValue(started());
