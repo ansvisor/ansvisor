@@ -8,6 +8,9 @@ const DRAFT = '77777777-7777-7777-7777-777777777777';
 
 const rebuildDraftBrief = vi.fn();
 const assertBrandAccess = vi.fn();
+
+// The route's modules read the Supabase client; CI has no credentials for it.
+vi.mock('../config/supabase.js', () => ({ default: {} }));
 vi.mock('../lib/content-brief.js', async (importOriginal) => ({
   ...(await importOriginal()),
   rebuildDraftBrief: (...args) => rebuildDraftBrief(...args),
