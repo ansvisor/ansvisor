@@ -38,7 +38,8 @@ function ChartContainer({
 }
 
 const HEIGHT = 220;
-const STROKE = '#6366f1';
+// Ink, the theme's primary: black on light, near-white on dark.
+const STROKE = 'var(--primary)';
 
 /**
  * The Overview's trend (MS-06): one metric per day over the window. A day

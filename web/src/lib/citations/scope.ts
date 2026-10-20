@@ -3,6 +3,27 @@ import type { SourceCategory } from './classify';
 /** Which sources the Citations URL list covers. */
 export type CitationsSourceScope = 'all' | 'own' | 'competitors' | 'third_party';
 
+/**
+ * Whether a source of this category is in the scope: the Domains and URLs
+ * tabs' rows, and the Domains tab's count, so the count is the list's.
+ */
+export function inSourceScope(
+  category: SourceCategory,
+  scope: CitationsSourceScope | undefined,
+): boolean {
+  switch (scope) {
+    case 'own':
+      return category === 'you';
+    case 'competitors':
+      return category === 'competitor';
+    case 'third_party':
+      return category !== 'you' && category !== 'competitor';
+    case 'all':
+    default:
+      return true;
+  }
+}
+
 /** The classified domain rows the Domains tab is built from. */
 interface ClassifiedDomain {
   domain: string;

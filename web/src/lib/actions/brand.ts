@@ -6,7 +6,7 @@ import { getOrgPlan } from '@/lib/guards/plan-guard';
 import { isWithinLimit } from '@/config/plans';
 import { slugify } from '@/lib/slug';
 import { API_BASE_URL } from '@/config/api';
-import type { Brand, BrandDomain } from '@/types';
+import type { Brand, BrandDomain, Industry } from '@/types';
 import { MAX_PINNED_COMPETITORS } from '@/lib/insights-trend';
 
 function mapDomainRow(d: Record<string, unknown>): BrandDomain {
@@ -252,12 +252,18 @@ export async function setBrandShoppingMode(
   const supabase = await createClient();
 
   // RLS gates this — the calling user must already have write access to
-  // the brand via their org membership.
-  const { error: updateErr } = await supabase
+  // the brand via their org membership. The updated row comes back, as in
+  // setBrandActive, so a write RLS denied (an analyst) fails instead of
+  // reporting success, and nothing below runs.
+  const { data: updated, error: updateErr } = await supabase
     .from('brands')
     .update({ shopping_mode_enabled: enabled })
-    .eq('id', brandId);
+    .eq('id', brandId)
+    .select('id');
   if (updateErr) throw new Error(updateErr.message);
+  if (!updated || updated.length === 0) {
+    throw new Error('Brand not found or you do not have permission to update it.');
+  }
 
   let promptsUpdated = 0;
 
@@ -278,15 +284,16 @@ export async function setBrandShoppingMode(
     for (const row of needsUpdate) {
       const existing = ((row as { platforms: string[] | null }).platforms ?? []) as string[];
       const next = [...existing, 'chatgpt-shopping'];
-      const { error: writeErr } = await supabase
+      const { data: written, error: writeErr } = await supabase
         .from('prompts')
         .update({ platforms: next })
-        .eq('id', (row as { id: string }).id);
-      if (writeErr) {
+        .eq('id', (row as { id: string }).id)
+        .select('id');
+      if (writeErr || !written?.length) {
         // Best-effort: log and continue. If a few prompts fail to update
         // (RLS oddity, race), the operator can toggle off+on or hit the
         // per-prompt platforms picker. Don't half-roll-back the brand flag.
-        console.error('[shopping-mode] prompt update failed:', writeErr.message);
+        console.error('[shopping-mode] prompt update failed:', writeErr?.message ?? 'no row');
         continue;
       }
       promptsUpdated += 1;
@@ -307,6 +314,43 @@ export async function setBrandShoppingMode(
 
   revalidatePath('/dashboard/brands');
   return { promptsUpdated };
+}
+
+/**
+ * Setup found the brand sells products online (competitor research's
+ * isEcommerce): its industry becomes E-commerce & Retail when it has none,
+ * and Shopping mode goes on, so Product Visibility shows in the menu. A
+ * brand already in Shopping mode is left as it is.
+ */
+export async function markBrandAsEcommerce(
+  brandId: string,
+): Promise<{ industry: string | null; promptsUpdated: number }> {
+  const supabase = await createClient();
+  const { data: brand, error } = await supabase
+    .from('brands')
+    .select('industry, shopping_mode_enabled')
+    .eq('id', brandId)
+    .single();
+  if (error || !brand) throw new Error(error?.message ?? 'Brand not found');
+
+  if (brand.shopping_mode_enabled) return { industry: brand.industry ?? null, promptsUpdated: 0 };
+
+  let industry: string | null = brand.industry ?? null;
+  if (!industry) {
+    const ecommerce: Industry = 'E-commerce & Retail';
+    const { data: updated, error: updateErr } = await supabase
+      .from('brands')
+      .update({ industry: ecommerce })
+      .eq('id', brandId)
+      .select('id');
+    if (updateErr) throw new Error(updateErr.message);
+    if (!updated || updated.length === 0) {
+      throw new Error('Brand not found or you do not have permission to update it.');
+    }
+    industry = ecommerce;
+  }
+  const { promptsUpdated } = await setBrandShoppingMode(brandId, true);
+  return { industry, promptsUpdated };
 }
 
 /**

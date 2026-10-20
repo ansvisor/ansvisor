@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { dashboardNav } from '@/config/dashboard';
 import {
   dashboardNavLabelKeys,
+  getDashboardNavGroupLabel,
   getDashboardNavLabel,
   shouldShowDashboardNavItem,
 } from '@/lib/dashboard-navigation';
@@ -72,5 +73,38 @@ describe('the Mentions item', () => {
       href: '/dashboard/mentions',
       badge: 'New',
     });
+  });
+});
+
+// New Ansvisor: Execution (do the work) above Analytics (measure it); the
+// Optimization group is gone, its items moved under Execution.
+describe('the sidebar groups', () => {
+  it('runs Brands, Execution, Analytics, then Reports', () => {
+    expect(dashboardNav.map((group) => group.title ?? null)).toEqual([
+      null,
+      'Execution',
+      'Analytics',
+      null,
+    ]);
+    expect(dashboardNav[0].items.map((item) => item.title)).toEqual(['Brands']);
+    expect(dashboardNav[3].items.map((item) => item.title)).toEqual(['Reports']);
+  });
+
+  it('puts Action Center, Chat, Content and Audit under Execution, in that order', () => {
+    const execution = dashboardNav.find((group) => group.title === 'Execution')!;
+    expect(execution.items.map((item) => item.href)).toEqual([
+      '/dashboard/action-center',
+      '/dashboard/agent',
+      '/dashboard/content',
+      '/dashboard/audit',
+    ]);
+  });
+
+  it('translates every group title', () => {
+    for (const group of dashboardNav) {
+      if (group.title) {
+        expect(getDashboardNavGroupLabel(group.title, translateNav)).not.toBe(group.title);
+      }
+    }
   });
 });
