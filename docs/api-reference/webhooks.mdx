@@ -86,7 +86,7 @@ Payloads are flat JSON objects with an `event` field at the top level.
 - `prompt` is `null` when the opportunity is not tied to a prompt.
 - `data` is the evidence behind the opportunity; its fields depend on the opportunity type.
 - `brief` is `null` until a content brief has been generated for the opportunity.
-- `callback_url` points at `POST /webhooks/content/{id}/status`; `callback_method` is `POST`. Send `{ "status": "in_progress" }` (or `new`, `reviewed`, `sent`, `done`, `dismissed`) as JSON and pass the same secret configured for this active webhook in the `X-Webhook-Secret` header. The public callback is rate-limited to 30 requests per 15 minutes per IP and does not require a dashboard JWT.
+- `callback_url` points at `POST /webhooks/content/{id}/status`; `callback_method` is `POST`. Send `{ "status": "in_progress" }` (or `new`, `reviewed`, `sent`, `done`, `dismissed`) as JSON and pass the same secret configured for this active webhook in the `X-Webhook-Secret` header. Configure a non-empty webhook secret in **Content → Configure Webhook** before using callbacks; callback authentication fails with 401 when no secret is configured. Callbacks are limited to 1,200 requests per 15 minutes per secret hash, with a separate per-IP limiter for failed (401) authentication attempts (10 per 15 minutes). They do not require a dashboard JWT.
 
 Once your endpoint responds, the opportunity is marked `sent` whatever status code you return, and that status code and the first 1,000 characters of your response body are stored on it. If the request times out or the connection fails, the opportunity keeps its previous status.
 
