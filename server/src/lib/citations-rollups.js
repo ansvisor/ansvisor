@@ -6,7 +6,8 @@
  * thing that writes them, through the `refresh_citations_daily` SQL function.
  * It rides on the Insights rollup callers (insights-rollups.js): a run's days
  * are refreshed when the run stamps, and the daily sweep re-refreshes the
- * trailing days and rebuilds brands whose prompts changed topic.
+ * trailing days and rebuilds brands whose prompts changed topic or whose
+ * domains changed.
  *
  * Best-effort like the Insights rollups: the rows are derived state, always
  * recomputable from prompt_result_citations, so a failure costs freshness
@@ -96,9 +97,12 @@ let rebuildInFlight = null;
 
 /**
  * Rebuild the brands queued by a topic move (the trigger on prompts in
- * 00118). Topic is stored in the rollup rows, so a prompt moved to another
- * topic leaves its history under the old one until this runs. A queue entry
- * is cleared only if nothing re-queued the brand while it was rebuilt.
+ * 00118) or a brand domain change (the trigger on brand_domains in 00203).
+ * Topic is stored in the rollup rows, so a prompt moved to another topic
+ * leaves its history under the old one until this runs; and Competitor Gaps'
+ * rows record whether the brand was present, which its own domains decide.
+ * A queue entry is cleared only if nothing re-queued the brand while it was
+ * rebuilt.
  *
  * Called on its own schedule and at the end of the nightly sweep. Runs never
  * overlap: a call made while one is in progress returns at once with
@@ -136,12 +140,12 @@ async function drainRebuildQueue() {
       rebuilt++;
     } catch (err) {
       failed++;
-      logger.error({ err, brandId }, '[citations-rollups] topic rebuild failed');
+      logger.error({ err, brandId }, '[citations-rollups] queued rebuild failed');
     }
   }
 
   if (rebuilt + failed > 0) {
-    logger.info({ rebuilt, failed }, '[citations-rollups] topic rebuilds complete');
+    logger.info({ rebuilt, failed }, '[citations-rollups] queued rebuilds complete');
   }
   return { rebuilt, failed };
 }
