@@ -89,6 +89,13 @@ function SetupSteps({ created }: { created: NewBotConnection }) {
       {kind === 'cloudflare_worker' && created.workerScript && (
         <CopyBlock label={t('copyWorker')} value={created.workerScript} code />
       )}
+      {kind === 'cloudflare_worker' && created.workerSecretName && (
+        // Added as a Worker Secret, so it isn't in the code anyone with the Worker can read.
+        <CopyBlock
+          label={t('copyWorkerSecret', { name: created.workerSecretName })}
+          value={created.secret}
+        />
+      )}
       {kind === 'cloudflare_logpush' && created.logpushJob && (
         <>
           <CopyBlock

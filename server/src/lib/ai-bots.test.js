@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   AI_BOTS,
+  RANGES_RETRY_MS,
   RANGES_TTL_MS,
   clearRangeCache,
   inPrefixes,
@@ -83,6 +84,33 @@ describe('rangesFor', () => {
   it('is null when a list was never read', async () => {
     const fetchImpl = vi.fn().mockRejectedValue(new Error('offline'));
     expect(await rangesFor('https://x/b.json', { fetchImpl, now: 0 })).toBeNull();
+  });
+
+  // gkhngyk on #1179: a list that failed to load was fetched again for every
+  // request with that bot's user agent, each waiting out the timeout.
+  it('waits a few minutes after a failed first read before trying again', async () => {
+    const fetchImpl = vi.fn().mockRejectedValue(new Error('timeout'));
+    for (const now of [0, 1_000, RANGES_RETRY_MS - 1]) {
+      expect(await rangesFor('https://x/c.json', { fetchImpl, now })).toBeNull();
+    }
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+
+    fetchImpl.mockResolvedValue(json({ prefixes: [{ ipv4Prefix: '1.2.3.0/24' }] }));
+    const later = await rangesFor('https://x/c.json', { fetchImpl, now: RANGES_RETRY_MS });
+    expect(later).toHaveLength(1);
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+  });
+
+  it('shares one read among the requests waiting for it', async () => {
+    let answer;
+    const fetchImpl = vi.fn(() => new Promise((resolve) => (answer = resolve)));
+    const reads = [1, 2, 3].map(() => rangesFor('https://x/d.json', { fetchImpl, now: 0 }));
+    answer(json({ prefixes: [{ ipv4Prefix: '1.2.3.0/24' }] }));
+    const lists = await Promise.all(reads);
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    expect(lists[0]).toHaveLength(1);
+    expect(lists[1]).toBe(lists[0]);
+    expect(lists[2]).toBe(lists[0]);
   });
 });
 

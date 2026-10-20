@@ -14,9 +14,10 @@ import { logger } from './logger.js';
 export async function dispatchBrandWebhook(brandId, payload) {
   const { data: configs } = await supabaseAdmin
     .from('webhook_configs')
-    .select('id, webhook_url, webhook_secret')
+    .select('id, webhook_url, webhook_secret, events')
     .eq('brand_id', brandId)
-    .eq('is_active', true);
+    .eq('is_active', true)
+    .contains('events', [payload.event]);
 
   if (!configs?.length) return { sent: 0, failed: 0 };
 

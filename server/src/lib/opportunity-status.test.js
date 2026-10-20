@@ -1,7 +1,20 @@
 import { describe, expect, it } from 'vitest';
-import { sourceDataForStatus } from './opportunity-status.js';
+import { sourceDataForStatus, VALID_OPPORTUNITY_STATUSES } from './opportunity-status.js';
 
 // CONTENT-006: why an opportunity was dismissed, kept only while it is.
+
+describe('VALID_OPPORTUNITY_STATUSES', () => {
+  it('matches the status values supported by the content workflow', () => {
+    expect(VALID_OPPORTUNITY_STATUSES).toEqual([
+      'new',
+      'reviewed',
+      'sent',
+      'in_progress',
+      'done',
+      'dismissed',
+    ]);
+  });
+});
 
 describe('sourceDataForStatus', () => {
   const sd = { promptText: 'best coffee' };

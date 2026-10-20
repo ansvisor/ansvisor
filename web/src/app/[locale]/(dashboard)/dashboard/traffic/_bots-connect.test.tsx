@@ -95,6 +95,7 @@ describe('BotsSource', () => {
       secret: 'abot_s3cret',
       endpoint: 'https://api.example/bots/ingest',
       workerScript: null,
+      workerSecretName: null,
       logpushJob: null,
       vercelDrain: {
         endpoint: 'https://api.example/bots/ingest',
@@ -124,7 +125,9 @@ describe('BotsSource', () => {
       connection: { id: 'c1', kind: 'cloudflare_worker', createdAt: 't', lastEventAt: null },
       secret: 'abot_s3cret',
       endpoint: 'https://api.example/bots/ingest',
-      workerScript: "const SECRET = 'abot_s3cret';",
+      workerScript:
+        'const ENDPOINT = "https://api.example/bots/ingest"; // env.ANSVISOR_BOT_SECRET',
+      workerSecretName: 'ANSVISOR_BOT_SECRET',
       logpushJob: null,
       vercelDrain: null,
     } satisfies NewBotConnection);
@@ -137,6 +140,27 @@ describe('BotsSource', () => {
     expect(page()).toContain('abot_s3cret');
   });
 
+  // gkhngyk on #1179: the secret sat in the Worker's code.
+  it('gives a Worker its code without the secret, and the secret to add as a Worker Secret', async () => {
+    await render();
+    await act(async () => button('Connect')!.click());
+    createBotConnection.mockResolvedValue({
+      connection: { id: 'c1', kind: 'cloudflare_worker', createdAt: 't', lastEventAt: null },
+      secret: 'abot_s3cret',
+      endpoint: 'https://api.example/bots/ingest',
+      workerScript:
+        'const ENDPOINT = "https://api.example/bots/ingest"; // env.ANSVISOR_BOT_SECRET',
+      workerSecretName: 'ANSVISOR_BOT_SECRET',
+      logpushJob: null,
+      vercelDrain: null,
+    } satisfies NewBotConnection);
+    await act(async () => button('Create connection')!.click());
+    expect(createBotConnection).toHaveBeenCalledWith('b1', 'cloudflare_worker');
+    expect(page()).toContain('add a variable of type Secret with the name and value below');
+    expect(page()).toContain('Secret value (name: ANSVISOR_BOT_SECRET)');
+    expect(page()).toContain('abot_s3cret');
+  });
+
   it('shows a Logpush job to copy: the destination and the settings', async () => {
     await render();
     await act(async () => button('Connect')!.click());
@@ -145,6 +169,7 @@ describe('BotsSource', () => {
       secret: 'abot_s3cret',
       endpoint: 'https://api.example/bots/ingest',
       workerScript: null,
+      workerSecretName: null,
       logpushJob: {
         dataset: 'http_requests',
         destination_conf:

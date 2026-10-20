@@ -3033,7 +3033,13 @@
     },
     "webhook": {
       "title": "Webhook Settings",
-      "description": "Connect your workflow automation tool (n8n, Make, Zapier) to receive opportunities.",
+      "description": "Connect your workflow automation tool (n8n, Make, Zapier) and choose which events it receives.",
+      "eventsTitle": "Events to send",
+      "eventsDescription": "Only selected events are sent. Test Webhook always sends a test event, regardless of these selections.",
+      "eventRequired": "Select at least one event for this webhook.",
+      "eventOpportunitySent": "Opportunity sent",
+      "eventDailyPulseCreated": "Daily Pulse created",
+      "eventActionTaskSent": "Action Center task sent",
       "url": "Webhook URL",
       "urlPlaceholder": "https://your-n8n-instance.com/webhook/...",
       "secret": "Secret Key (optional)",
@@ -3442,6 +3448,7 @@
       "copy": "Copy",
       "copied": "Copied",
       "copyWorker": "Worker code",
+      "copyWorkerSecret": "Secret value (name: {name})",
       "copyDestination": "Destination",
       "copyLogpushJob": "Job settings (Cloudflare API: POST /zones/ZONE_ID/logpush/jobs)",
       "copyEndpoint": "Endpoint URL",
@@ -3469,6 +3476,7 @@
         "cloudflare_worker": [
           "In Cloudflare, open Workers & Pages and create a Worker.",
           "Replace its code with the Worker code below and deploy it.",
+          "In the Worker's Settings › Variables and Secrets, add a variable of type Secret with the name and value below.",
           "Add a route for your site, such as example.com/*, so the Worker sees its requests."
         ],
         "cloudflare_logpush": [
@@ -4206,6 +4214,8 @@
     "trackedCompetitors": "Tracked Competitors",
     "selectToCompare": "Select a competitor to see head-to-head comparison.",
     "windowLast30Days": "Scores cover the last 30 days.",
+    "windowAllTime": "Scores cover all tracked history.",
+    "windowSelectedRange": "Scores reflect the selected date range.",
     "selected": "Selected",
     "noData": "No data",
     "emptyTitle": "No competitors yet",
