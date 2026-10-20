@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import rateLimit from 'express-rate-limit';
 import { verifiedBotConnection, verifiedUserId } from './verified-tokens.js';
 
