@@ -5,6 +5,7 @@ import { useTranslations } from 'next-intl';
 import { useEditorState, type Editor } from '@tiptap/react';
 import {
   Bold,
+  ExternalLink,
   Columns3,
   Heading1,
   Heading2,
@@ -53,6 +54,9 @@ export function EditorToolbar({ editor, target }: { editor: Editor; target: numb
       bold: e.isActive('bold'),
       italic: e.isActive('italic'),
       link: e.isActive('link'),
+      href: e.isActive('link')
+        ? ((e.getAttributes('link').href as string | undefined) ?? null)
+        : null,
       bulletList: e.isActive('bulletList'),
       orderedList: e.isActive('orderedList'),
       blockquote: e.isActive('blockquote'),
@@ -140,6 +144,7 @@ export function EditorToolbar({ editor, target }: { editor: Editor; target: numb
           ))}
         </div>
       ))}
+      {state.href && <LinkTarget href={state.href} />}
       {state.inTable && (
         <div className="flex items-center gap-0.5">
           <span aria-hidden="true" className="mx-1.5 h-5 w-px bg-border" />
@@ -166,6 +171,37 @@ export function EditorToolbar({ editor, target }: { editor: Editor; target: numb
       {dialog === 'link' && <LinkDialog editor={editor} onClose={() => setDialog(null)} />}
       {dialog === 'image' && <ImageDialog editor={editor} onClose={() => setDialog(null)} />}
     </div>
+  );
+}
+
+/**
+ * The link the cursor is in: its address, and a way to open it in a new tab
+ * (a path on the brand's own site has no address here to open).
+ */
+function LinkTarget({ href }: { href: string }) {
+  const t = useTranslations('contentEditor.editor.toolbar');
+  const safe = safeLinkHref(href);
+  const label = href.replace(/^https?:\/\//, '').replace(/\/$/, '');
+  const className =
+    'ml-1 flex max-w-[240px] items-center gap-1 rounded-md px-1.5 py-0.5 text-xs text-blue-600 dark:text-blue-400';
+  if (!safe || !/^https?:/.test(safe)) {
+    return (
+      <span className={cn(className, 'text-muted-foreground dark:text-muted-foreground')}>
+        <span className="truncate">{label}</span>
+      </span>
+    );
+  }
+  return (
+    <a
+      href={safe}
+      target="_blank"
+      rel="noopener noreferrer"
+      title={t('openLink')}
+      className={cn(className, 'hover:bg-muted hover:underline')}
+    >
+      <span className="truncate">{label}</span>
+      <ExternalLink className="h-3 w-3 shrink-0" aria-hidden="true" />
+    </a>
   );
 }
 

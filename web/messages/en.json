@@ -3141,6 +3141,7 @@
         "addRow": "Add a row below",
         "addColumn": "Add a column to the right",
         "deleteTable": "Delete the table",
+        "openLink": "Open the link in a new tab (or ⌘/Ctrl + click it in the page)",
         "counter": "{count} / {target} characters"
       },
       "link": {

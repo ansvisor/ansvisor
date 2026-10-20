@@ -22,11 +22,13 @@ import { EditorToolbar } from './_toolbar';
 import { useDraftAutosave, type SaveState } from './_use-autosave';
 
 /**
- * The page as it reads: the app's prose type, tables with cell borders, a
- * placeholder while empty, and the selected table cells and images marked.
+ * The page as it reads: the app's prose type, links blue and underlined so
+ * they read as links, tables with cell borders, a placeholder while empty,
+ * and the selected table cells and images marked.
  */
 const DOCUMENT_CLASS = cn(
   'prose prose-neutral max-w-none dark:prose-invert min-h-[50vh] focus:outline-none',
+  'prose-a:font-normal prose-a:text-blue-600 prose-a:underline prose-a:underline-offset-2 dark:prose-a:text-blue-400',
   'prose-h1:text-3xl prose-h1:tracking-tight prose-h2:tracking-tight',
   '[&_table]:my-4 [&_table]:w-full [&_table]:table-fixed [&_td]:border [&_td]:px-2 [&_td]:py-1.5 [&_th]:border [&_th]:bg-muted/50 [&_th]:px-2 [&_th]:py-1.5 [&_th]:text-left',
   // Cells and list items hold paragraphs; their margins would pad every row.
@@ -73,6 +75,16 @@ export function DraftEditor({ draft }: { draft: ContentDraft }) {
     immediatelyRender: false,
     editorProps: {
       attributes: { class: DOCUMENT_CLASS, 'aria-label': t('documentLabel') },
+      // A click on a link puts the cursor in it, to edit it; ⌘/Ctrl + click
+      // opens it, as in other editors. A path on the brand's own site has no
+      // address here to open.
+      handleClick: (_view, _pos, event) => {
+        if (!event.metaKey && !event.ctrlKey) return false;
+        const href = (event.target as HTMLElement).closest('a')?.getAttribute('href');
+        if (!href || !/^https?:/.test(safeLinkHref(href) ?? '')) return false;
+        window.open(href, '_blank', 'noopener,noreferrer');
+        return true;
+      },
     },
     onUpdate: ({ editor: e }) => {
       const next = draftTitleFromDoc(e.getJSON());
