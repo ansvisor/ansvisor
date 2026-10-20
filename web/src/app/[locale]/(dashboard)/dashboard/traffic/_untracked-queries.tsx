@@ -19,12 +19,10 @@ import { cn } from '@/lib/utils';
 import { formatNumber } from '@/lib/format';
 import { getLocationQuota } from '@/lib/actions/prompt';
 import { trackPagePrompts } from '@/lib/actions/prompt-suggestions';
-import {
-  getUntrackedGoogleQueries,
-  type TrafficDateWindow,
-  type TrafficUntrackedQueries,
-} from '@/lib/actions/traffic';
+import { type TrafficDateWindow, type TrafficUntrackedQueries } from '@/lib/actions/traffic';
 import { formatTrafficBucketDate } from './_charts';
+import { getUntrackedGoogleQueries } from '@/lib/traffic-reads';
+import { useRangeReady } from './_range-ready';
 
 /**
  * Prompt slots left on the plan: null when the plan has no cap, or it
@@ -65,30 +63,45 @@ export function UntrackedQueriesCard({
   const [loaded, setLoaded] = useState<{
     key: string;
     result: TrafficUntrackedQueries | null;
-    slotsLeft: number | null;
   } | null>(null);
+  // The prompt slots left don't depend on the range: read again only after
+  // a Track.
+  const quotaKey = `${brandId}|${reloads}`;
+  const [quota, setQuota] = useState<{ key: string; slotsLeft: number | null } | null>(null);
   const [tracking, setTracking] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     let cancelled = false;
-    Promise.all([
-      getUntrackedGoogleQueries(brandId, dateWindow).catch((err) => {
+    getUntrackedGoogleQueries(brandId, dateWindow)
+      .catch((err) => {
         // Best effort: the rest of the page doesn't depend on this card.
         console.error('Failed to load the untracked Google queries:', err);
         return null;
-      }),
-      getLocationQuota(brandId).catch(() => null),
-    ]).then(([result, quota]) => {
-      if (!cancelled) setLoaded({ key, result, slotsLeft: slotsLeftOf(quota) });
-    });
+      })
+      .then((result) => {
+        if (!cancelled) setLoaded({ key, result });
+      });
     return () => {
       cancelled = true;
     };
   }, [brandId, dateWindow, key, reloads]);
 
-  const current = loaded?.key === key ? loaded : null;
+  useEffect(() => {
+    let cancelled = false;
+    getLocationQuota(brandId)
+      .catch(() => null)
+      .then((q) => {
+        if (!cancelled) setQuota({ key: quotaKey, slotsLeft: slotsLeftOf(q) });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [brandId, quotaKey]);
+
+  useRangeReady('untrackedQueries', loaded?.key === key && quota?.key === quotaKey);
+  const current = loaded?.key === key && quota?.key === quotaKey ? loaded : null;
   const result = current?.result ?? null;
-  const slotsLeft = current?.slotsLeft ?? null;
+  const slotsLeft = current ? (quota?.slotsLeft ?? null) : null;
   const busy = tracking.size > 0;
 
   const track = async (queries: string[]) => {

@@ -108,6 +108,25 @@ describe('getTrafficBrokenLinks', () => {
     });
   });
 
+  // 00200: a single-page app's route that shows its not-found page with a 200.
+  it('reads a soft 404, and an unknown status as a 404', async () => {
+    rpc.mockResolvedValue({
+      data: {
+        count: 2,
+        rows: [
+          { ...link, page: '/app/old-route', status: 'soft404' },
+          { ...link, page: '/x', status: 'teapot' },
+        ],
+      },
+      error: null,
+    });
+    const result = await getTrafficBrokenLinks(BRAND, WEEK);
+    expect(result.rows.map((r) => [r.page, r.status])).toEqual([
+      ['/app/old-route', 'soft404'],
+      ['/x', '404'],
+    ]);
+  });
+
   it('throws on a failed read', async () => {
     rpc.mockResolvedValue({ data: null, error: { message: 'permission denied' } });
     await expect(getTrafficBrokenLinks(BRAND, WEEK)).rejects.toThrow('permission denied');

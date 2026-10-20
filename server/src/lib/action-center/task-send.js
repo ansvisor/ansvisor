@@ -10,6 +10,8 @@
  *
  * Send to webhook posts the task to the brand's active webhooks, in the shape
  * Content's opportunity.sent uses, for a workflow outside Ansvisor to pick up.
+ * A webhook must have `action_task.sent` selected; an active but unsubscribed
+ * webhook is reported separately from a missing webhook.
  *
  * Either way the task records where it went (details.sent), the action's
  * History says so, and a task that has been sent survives "Regenerate tasks".
@@ -261,13 +263,30 @@ export async function sendTaskToWebhook({ taskId, title, userId, loaded }) {
   const name = text(task.title) || text(title);
   if (!name) throw new TaskSendError('no_title', 'The task has no text to send.');
 
-  const [{ data: brand }, { data: domains }] = await Promise.all([
-    supabaseAdmin.from('brands').select('name, industry').eq('id', action.brand_id).single(),
-    supabaseAdmin
-      .from('brand_domains')
-      .select('domain, is_primary')
-      .eq('brand_id', action.brand_id),
-  ]);
+  const [{ data: brand }, { data: domains }, { data: webhookConfigs, error: webhookConfigError }] =
+    await Promise.all([
+      supabaseAdmin.from('brands').select('name, industry').eq('id', action.brand_id).single(),
+      supabaseAdmin
+        .from('brand_domains')
+        .select('domain, is_primary')
+        .eq('brand_id', action.brand_id),
+      supabaseAdmin
+        .from('webhook_configs')
+        .select('id, events')
+        .eq('brand_id', action.brand_id)
+        .eq('is_active', true),
+    ]);
+  if (webhookConfigError) throw new Error(webhookConfigError.message);
+  if (!webhookConfigs?.length) {
+    throw new TaskSendError('no_webhook', 'This brand has no active webhook.', 409);
+  }
+  if (!webhookConfigs.some((config) => config.events?.includes('action_task.sent'))) {
+    throw new TaskSendError(
+      'webhook_not_subscribed',
+      'The active webhook is not subscribed to Action Center tasks.',
+      409,
+    );
+  }
   const primary = (domains ?? []).find((d) => d.is_primary) ?? (domains ?? [])[0];
   const d = task.details ?? {};
 

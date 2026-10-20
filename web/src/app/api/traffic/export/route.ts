@@ -30,6 +30,7 @@ import {
   type ExportLabel,
   type TrafficExportData,
   type TrafficExportSection,
+  type UnreadSection,
 } from '@/lib/traffic-export';
 
 /**
@@ -95,6 +96,15 @@ export async function GET(req: Request) {
   const window = { dateFrom: q.from, dateTo: q.to };
   const wholePage = !q.section;
 
+  // A failed read of these is left out, so the rest still exports; its
+  // sheet says it couldn't be read rather than reading as empty.
+  const unread: UnreadSection[] = [];
+  const leftOut = (section: UnreadSection) => (err: unknown) => {
+    console.error(`[traffic-export] ${section} not read:`, err);
+    unread.push(section);
+    return null;
+  };
+
   try {
     const [
       summary,
@@ -135,13 +145,18 @@ export async function GET(req: Request) {
         ? getTrafficGooglePages(q.brandId, window, { limit: TRAFFIC_EXPORT_MAX_ROWS })
         : undefined,
       // Every Google query no tracked prompt covers, as far as the server checks (AT-009).
+      // Left out when the API fails, so the rest still exports.
       needs('googleQueries')
-        ? getUntrackedGoogleQueries(q.brandId, window, { limit: UNTRACKED_QUERY_SCAN })
+        ? getUntrackedGoogleQueries(q.brandId, window, { limit: UNTRACKED_QUERY_SCAN }).catch(
+            leftOut('googleQueries'),
+          )
         : undefined,
       // Every page AI bots read, with the bot types (AT-011).
       // Left out when it fails (a timeout on a large site), so the rest still exports.
-      needs('bots', 'botPages')
-        ? getTrafficBots(q.brandId, window, { limit: TRAFFIC_EXPORT_MAX_ROWS }).catch(() => null)
+      needs('bots', 'botPages', 'uncrawledPages')
+        ? getTrafficBots(q.brandId, window, { limit: TRAFFIC_EXPORT_MAX_ROWS }).catch(
+            leftOut('bots'),
+          )
         : undefined,
       // Every broken AI link, as the redirect list (AT-012).
       needs('brokenLinks')
@@ -172,6 +187,7 @@ export async function GET(req: Request) {
       bots,
       brokenLinks,
       sources,
+      unread,
     };
 
     const fileName = trafficExportFileName({

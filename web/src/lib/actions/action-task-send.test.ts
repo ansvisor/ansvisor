@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-let configs: { id: string }[] = [];
+let configs: { id: string; events?: string[] }[] = [];
 let filters: [string, unknown][] = [];
 let selected = '';
 vi.mock('@/lib/supabase/server', () => ({
@@ -28,13 +28,15 @@ afterEach(() => {
 
 describe('hasActiveWebhook', () => {
   it('asks only whether an active one exists, never for its secret', async () => {
-    configs = [{ id: 'w1' }];
+    configs = [{ id: 'w1', events: ['action_task.sent'] }];
     expect(await hasActiveWebhook('b1')).toBe(true);
-    expect(selected).toBe('id');
+    expect(selected).toBe('id, events');
     expect(filters).toEqual([
       ['brand_id', 'b1'],
       ['is_active', true],
     ]);
+    configs = [{ id: 'w1', events: ['opportunity.sent'] }];
+    expect(await hasActiveWebhook('b1')).toBe(false);
     configs = [];
     expect(await hasActiveWebhook('b1')).toBe(false);
   });

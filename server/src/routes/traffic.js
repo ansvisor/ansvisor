@@ -130,10 +130,30 @@ router.post('/track/:trackingCode', trafficLimiter, beaconBody, async (req, res)
     // page's title said "not found".
     const httpStatus =
       Number.isInteger(body.st) && body.st >= 100 && body.st <= 599 ? body.st : null;
-    const notFoundTitle = httpStatus === null && body.nf === 1;
+    // The title counts without a status, or with a 2xx: a soft 404 (00200).
+    const notFoundTitle =
+      body.nf === 1 && (httpStatus === null || (httpStatus >= 200 && httpStatus < 300));
 
     const userAgent = (body.a || '').slice(0, 512) || null;
     const ipAddress = ip || null;
+
+    // The snippet's second word on a visit it just sent: a single-page app's
+    // title read not found only after load (00200). It marks that pageview
+    // (the same address, IP and browser in the last minutes, with no status
+    // or a 2xx) rather than counting another visit.
+    if (body.k === 'nf') {
+      if (httpStatus !== null && (httpStatus < 200 || httpStatus > 299)) {
+        return res.status(204).end();
+      }
+      await markNotFoundTitle({
+        brandId: brand.id,
+        url: (body.u || '').slice(0, 2048),
+        ipAddress,
+        userAgent,
+        httpStatus,
+      });
+      return res.status(204).end();
+    }
 
     // A reload or a second link from the same answer continues the visit
     // rather than counting as another (AT-003). If the lookup fails the
@@ -172,5 +192,43 @@ router.post('/track/:trackingCode', trafficLimiter, beaconBody, async (req, res)
     return res.status(500).json({ ok: false });
   }
 });
+
+/** How long after a visit its pageview may still be marked as a soft 404. */
+const NOT_FOUND_MARK_WINDOW_MS = 10 * 60 * 1000;
+
+/**
+ * Marks the latest pageview of this address, IP and browser in the last
+ * minutes as a not-found title. Best effort: a failure is logged, the
+ * beacon can't be retried.
+ */
+async function markNotFoundTitle({ brandId, url, ipAddress, userAgent, httpStatus }) {
+  try {
+    const since = new Date(Date.now() - NOT_FOUND_MARK_WINDOW_MS).toISOString();
+    let query = supabaseAdmin
+      .from('ai_traffic_logs')
+      .select('id')
+      .eq('brand_id', brandId)
+      .eq('url', url)
+      .eq('not_found_title', false)
+      .gte('created_at', since);
+    query = ipAddress ? query.eq('ip_address', ipAddress) : query.is('ip_address', null);
+    query = userAgent ? query.eq('user_agent', userAgent) : query.is('user_agent', null);
+    query =
+      httpStatus === null ? query.is('http_status', null) : query.eq('http_status', httpStatus);
+    const { data, error } = await query
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    if (!data) return;
+    const { error: updateError } = await supabaseAdmin
+      .from('ai_traffic_logs')
+      .update({ not_found_title: true })
+      .eq('id', data.id);
+    if (updateError) throw new Error(updateError.message);
+  } catch (err) {
+    logger.error({ err }, 'traffic not-found mark failed');
+  }
+}
 
 export default router;

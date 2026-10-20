@@ -11,31 +11,50 @@ import { buildTrackingScript } from './tracking-script.js';
 
 const SCRIPT = buildTrackingScript();
 
-/** Runs t.js on a page; returns the beacon it sent, or null. */
-function visit({
+/**
+ * Runs t.js on a page, then lets the page go on: `then` changes it after the
+ * script ran (a single-page app setting its title), and pending timers run.
+ * Returns the visit's beacon (or null), every beacon it sent, its timers and
+ * a way to fire the page's events.
+ */
+function run({
   referrer = '',
   search = '',
   alreadyTracked = false,
   title = 'Menu · Acme Coffee',
   navigation,
+  readyState = 'complete',
+  then,
+  runTimers = true,
 } = {}) {
   const sent = [];
+  const timers = [];
+  const listeners = {};
+  const on = (scope) => (type, fn) => (listeners[`${scope}:${type}`] ||= []).push(fn);
+  const fire = (key) => (listeners[key] || []).forEach((fn) => fn());
   const window = alreadyTracked ? { __at: 1 } : {};
+  window.addEventListener = on('window');
+  const document = {
+    title,
+    referrer,
+    readyState,
+    visibilityState: 'visible',
+    addEventListener: on('document'),
+    currentScript: {
+      src: 'https://api.ansvisor.test/t.js',
+      getAttribute: (name) => (name === 'data-t' ? 'abcdef123' : null),
+    },
+  };
+  const location = { href: `https://acme.example/menu${search}`, search };
   runInNewContext(SCRIPT, {
     window,
     // A browser without the navigation entry (older Safari) has none.
     ...(navigation === undefined
       ? {}
       : { performance: { getEntriesByType: () => (navigation ? [navigation] : []) } }),
-    document: {
-      title,
-      referrer,
-      currentScript: {
-        src: 'https://api.ansvisor.test/t.js',
-        getAttribute: (name) => (name === 'data-t' ? 'abcdef123' : null),
-      },
-    },
-    location: { href: `https://acme.example/menu${search}`, search },
+    document,
+    location,
+    setTimeout: (fn, ms) => timers.push({ fn, ms }),
     navigator: {
       userAgent: 'Mozilla/5.0',
       language: 'en-US',
@@ -53,9 +72,24 @@ function visit({
     Date,
     String,
   });
-  if (sent.length === 0) return null;
-  return { url: sent[0].url, ...JSON.parse(sent[0].blob.text) };
+  then?.({ document, location });
+  if (runTimers) for (const timer of timers) timer.fn();
+  // Read when asked, so a beacon sent after a later event or timer counts.
+  const parse = () => sent.map((b) => ({ url: b.url, ...JSON.parse(b.blob.text) }));
+  return {
+    get beacon() {
+      return parse()[0] ?? null;
+    },
+    get beacons() {
+      return parse();
+    },
+    timers,
+    fire,
+  };
 }
+
+/** The beacon a visit sent, or null. */
+const visit = (options) => run(options).beacon;
 
 describe('the tracking snippet', () => {
   it("sends the source's key and the list version to the brand's beacon", () => {
@@ -102,10 +136,84 @@ describe('the tracking snippet', () => {
       st: 404,
       nf: 0,
     });
-    // A status says it all, whatever the title.
+    // A 2xx page that only mentions 404s is an ordinary page.
     expect(
       visit({ ...from, navigation: { responseStatus: 200 }, title: 'How we fixed our 404s' }),
     ).toMatchObject({ st: 200, nf: 0 });
+    // Any other status says it all, whatever the title.
+    expect(
+      visit({ ...from, navigation: { responseStatus: 404 }, title: 'Page not found' }),
+    ).toMatchObject({ st: 404, nf: 0 });
+  });
+
+  // gkhngyk on #1192: a single-page app answers 200 and shows its own
+  // not-found route, so soft 404s were never seen.
+  it("reads a 2xx page's title as a soft 404 only when it's the not-found page's own", () => {
+    const ok = { referrer: 'https://chatgpt.com/', navigation: { responseStatus: 200 } };
+    for (const title of [
+      '404',
+      '404 | Acme Coffee',
+      '404 Not Found',
+      'Page Not Found – Acme',
+      'Acme Coffee - Page not found',
+      'Error 404 · Acme',
+    ]) {
+      expect(visit({ ...ok, title }), title).toMatchObject({ st: 200, nf: 1 });
+    }
+    for (const title of ['Error 404 explained', 'Lost and not found | Books', 'Menu · Acme']) {
+      expect(visit({ ...ok, title }), title).toMatchObject({ st: 200, nf: 0 });
+    }
+  });
+
+  // gkhngyk on #1247: the visit's beacon waited for load on every page.
+  it('sends the visit at once, and says so later when the app shows its not-found page', () => {
+    const { beacons, timers } = run({
+      referrer: 'https://chatgpt.com/',
+      navigation: { responseStatus: 200 },
+      title: 'Acme Coffee',
+      // The app's router resolves the route and shows its not-found page.
+      then: ({ document, location }) => {
+        document.title = 'Page not found | Acme Coffee';
+        location.href = 'https://acme.example/elsewhere';
+      },
+    });
+    expect(timers.map((t) => t.ms)).toEqual([1500]);
+    expect(beacons).toHaveLength(2);
+    expect(beacons[0]).toMatchObject({ st: 200, nf: 0, u: 'https://acme.example/menu' });
+    // The address the visit landed on, not where the app went since; a mark, not a visit.
+    expect(beacons[1]).toEqual({
+      url: 'https://api.ansvisor.test/track/abcdef123',
+      k: 'nf',
+      u: 'https://acme.example/menu',
+      s: 'chatgpt.com',
+      a: 'Mozilla/5.0',
+      st: 200,
+    });
+  });
+
+  it("doesn't wait for the page to load, and checks the title again only after it", () => {
+    const loading = run({
+      referrer: 'https://chatgpt.com/',
+      navigation: { responseStatus: 200 },
+      readyState: 'loading',
+      runTimers: false,
+    });
+    expect(loading.beacons).toHaveLength(1);
+    expect(loading.timers).toHaveLength(0);
+    loading.fire('window:load');
+    expect(loading.timers).toHaveLength(1);
+    // The title still reads as a page: nothing more.
+    loading.timers[0].fn();
+    expect(loading.beacons).toHaveLength(1);
+
+    // Nothing to check again: a 404, or a title that already said not found.
+    expect(
+      run({ referrer: 'https://chatgpt.com/', navigation: { responseStatus: 404 } }).timers,
+    ).toHaveLength(0);
+    expect(
+      run({ referrer: 'https://chatgpt.com/', navigation: { responseStatus: 200 }, title: '404' })
+        .timers,
+    ).toHaveLength(0);
   });
 
   it('says whether the title reads "not found" when the browser gives no status', () => {

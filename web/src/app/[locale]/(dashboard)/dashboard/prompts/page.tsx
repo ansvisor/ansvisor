@@ -3924,7 +3924,7 @@ function SimilarTopicsList({ volumes }: { volumes: PromptVolume[] }) {
             </span>
             <div className="flex-1 h-1.5 rounded-full bg-muted overflow-hidden">
               <div
-                className="h-full rounded-full bg-indigo-500 transition-all"
+                className="h-full rounded-full bg-foreground/60 transition-all"
                 style={{ width: `${(item.volume / maxVol) * 100}%` }}
               />
             </div>

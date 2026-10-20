@@ -20,7 +20,10 @@ vi.mock('@/i18n/navigation', () => ({
 }));
 // The AI bots card reads its connections on its own (AT-010, tested in
 // _bots-connect.test.tsx): here it stays loading.
-vi.mock('@/lib/actions/ai-bots', () => ({ getBotConnections: () => new Promise(() => {}) }));
+vi.mock('@/lib/actions/ai-bots', () => ({}));
+vi.mock('@/lib/traffic-reads', () => ({
+  getBotConnections: () => new Promise(() => {}),
+}));
 
 const { SourcesStrip } = await import('./_sources-strip');
 

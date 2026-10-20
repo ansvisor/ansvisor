@@ -51,6 +51,23 @@ describe('summaryLine', () => {
     expect(summaryLine(input({ totalVisits: 50, totalVisitsPrev: 100 })).change).toBe(-50);
   });
 
+  // gkhngyk on #1229: the e-mail's "X sent the most" skips keys it can't name.
+  it('names the top platform among those it can name, as the weekly e-mail does', () => {
+    const line = summaryLine(
+      input({
+        platforms: [
+          { platform: 'made-up.example', visits: 90, analytics: null },
+          { platform: 'unknown', visits: 60, analytics: null },
+          { platform: 'perplexity.ai', visits: 20, analytics: null },
+        ],
+      }),
+    );
+    expect(line.top).toEqual({ platform: 'perplexity.ai', visits: 20 });
+    expect(
+      summaryLine(input({ platforms: [{ platform: 'unknown', visits: 9, analytics: null }] })).top,
+    ).toBeNull();
+  });
+
   it('says nothing about cited pages while their count is unknown or zero', () => {
     expect(summaryLine(input({ citedNotClicked: null })).citedNotClicked).toBe(0);
     expect(summaryLine(input({ platforms: [] })).top).toBeNull();

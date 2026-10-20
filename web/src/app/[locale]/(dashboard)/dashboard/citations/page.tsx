@@ -1055,6 +1055,8 @@ export default function CitationsPage() {
   }, [sourceTab, activeBrandId, gapFilters, urlRead]);
 
   const totals = data?.totals;
+  // Within the selected scope, as the Domains tab and the URL count under it.
+  const domainsInScope = filteredDomainRows.length;
   const kpis = useMemo(
     () => [
       {
@@ -1067,7 +1069,7 @@ export default function CitationsPage() {
       },
       {
         title: t('kpiUniqueDomains'),
-        value: totals ? totals.domains.toLocaleString() : '—',
+        value: totals ? domainsInScope.toLocaleString() : '—',
         sub: t('kpiUniqueDomainsSub', {
           urls: totals?.urls ?? 0,
         }),
@@ -1080,7 +1082,7 @@ export default function CitationsPage() {
         icon: Layers,
       },
     ],
-    [totals, t],
+    [totals, domainsInScope, t],
   );
 
   const handleExportCsv = useCallback(() => {
