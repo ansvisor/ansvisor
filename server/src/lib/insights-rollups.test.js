@@ -24,16 +24,52 @@ vi.mock('./mentions-rollups.js', () => ({
 }));
 
 import {
+  rebuildQueuedInsightsRollups,
   refreshInsightsDaily,
   refreshForCompletedRun,
   sweepInsightsRollups,
   utcDay,
+  REBUILD_CHUNK_DAYS,
   SWEEP_DAYS,
 } from './insights-rollups.js';
+
+/**
+ * The admin client's from(): the brands list, and the rebuild queue (00192)
+ * with the deletes made on it.
+ */
+let brandRows = [];
+let brandsError = null;
+let queueRows = [];
+const queueDeletes = [];
+function tables() {
+  from.mockImplementation((table) => {
+    if (table === 'brands') {
+      return { select: () => Promise.resolve({ data: brandRows, error: brandsError }) };
+    }
+    const filters = [];
+    const chain = {
+      eq: (...a) => (filters.push(['eq', ...a]), chain),
+      lte: (...a) => {
+        filters.push(['lte', ...a]);
+        queueDeletes.push(filters);
+        return Promise.resolve({ error: null });
+      },
+    };
+    return {
+      select: () => Promise.resolve({ data: queueRows, error: null }),
+      delete: () => chain,
+    };
+  });
+}
 
 beforeEach(() => {
   rpc.mockReset();
   from.mockReset();
+  brandRows = [];
+  brandsError = null;
+  queueRows = [];
+  queueDeletes.length = 0;
+  tables();
   refreshCitationsDaily.mockReset().mockResolvedValue(true);
   refreshMentionsDaily.mockReset().mockResolvedValue(true);
   rebuildQueuedCitationRollups.mockReset().mockResolvedValue({ rebuilt: 0, failed: 0 });
@@ -116,7 +152,8 @@ describe('refreshForCompletedRun', () => {
 
 describe('sweepInsightsRollups', () => {
   function brandsList(rows, error = null) {
-    from.mockReturnValue({ select: () => Promise.resolve({ data: rows, error }) });
+    brandRows = rows;
+    brandsError = error;
   }
 
   it('refreshes the trailing window for every brand, today included', async () => {
@@ -176,5 +213,73 @@ describe('sweepInsightsRollups', () => {
     const res = await sweepInsightsRollups();
     expect(res).toEqual({ refreshed: 0, failed: 0 });
     expect(rpc).not.toHaveBeenCalled();
+  });
+});
+
+describe('rebuildQueuedInsightsRollups (00192)', () => {
+  const entry = {
+    brand_id: 'b1',
+    day_from: '2026-06-01',
+    day_to: '2026-08-10',
+    requested_at: '2026-08-21T05:00:00.123456+00:00',
+  };
+
+  it("refreshes a deleted prompt's days in chunks, then clears the entry", async () => {
+    queueRows = [entry];
+    rpc.mockResolvedValue({ error: null });
+
+    expect(await rebuildQueuedInsightsRollups()).toEqual({ rebuilt: 1, failed: 0 });
+
+    expect(REBUILD_CHUNK_DAYS).toBe(31);
+    expect(rpc.mock.calls.map(([, args]) => [args.p_day_from, args.p_day_to])).toEqual([
+      ['2026-06-01', '2026-07-01'],
+      ['2026-07-02', '2026-08-01'],
+      ['2026-08-02', '2026-08-10'],
+    ]);
+    // Only if nothing re-queued the brand meanwhile.
+    expect(queueDeletes).toEqual([
+      [
+        ['eq', 'brand_id', 'b1'],
+        ['lte', 'requested_at', entry.requested_at],
+      ],
+    ]);
+  });
+
+  it('keeps the entry for the next drain when a refresh fails', async () => {
+    queueRows = [entry, { ...entry, brand_id: 'b2', day_from: '2026-08-01' }];
+    rpc.mockResolvedValueOnce({ error: { message: 'timeout' } }).mockResolvedValue({ error: null });
+
+    expect(await rebuildQueuedInsightsRollups()).toEqual({ rebuilt: 1, failed: 1 });
+    // b1 stopped at its first chunk; b2 was refreshed and cleared.
+    expect(rpc.mock.calls[0][1].p_brand_id).toBe('b1');
+    expect(rpc.mock.calls.slice(1).every(([, args]) => args.p_brand_id === 'b2')).toBe(true);
+    expect(queueDeletes).toHaveLength(1);
+    expect(queueDeletes[0][0]).toEqual(['eq', 'brand_id', 'b2']);
+  });
+
+  it('never runs twice at once', async () => {
+    queueRows = [entry];
+    let release;
+    rpc.mockReturnValueOnce(new Promise((resolve) => (release = resolve)));
+    rpc.mockResolvedValue({ error: null });
+
+    const first = rebuildQueuedInsightsRollups();
+    expect(await rebuildQueuedInsightsRollups()).toEqual({ rebuilt: 0, failed: 0, skipped: true });
+    release({ error: null });
+    expect(await first).toEqual({ rebuilt: 1, failed: 0 });
+  });
+
+  it('runs at the end of the nightly sweep', async () => {
+    brandRows = [];
+    queueRows = [entry];
+    rpc.mockResolvedValue({ error: null });
+
+    await sweepInsightsRollups();
+
+    expect(rpc).toHaveBeenCalledWith('refresh_insights_daily', {
+      p_brand_id: 'b1',
+      p_day_from: '2026-06-01',
+      p_day_to: '2026-07-01',
+    });
   });
 });
