@@ -1,0 +1,74 @@
+{
+  "amazon": {
+    "hosts": [
+      "amazon.com",
+      "amazon.co.uk",
+      "amazon.de",
+      "amazon.fr",
+      "amazon.it",
+      "amazon.es",
+      "amazon.ca",
+      "amazon.com.mx",
+      "amazon.com.br",
+      "amazon.co.jp",
+      "amazon.in",
+      "amazon.com.au",
+      "amazon.nl",
+      "amazon.se",
+      "amazon.pl",
+      "amazon.ae",
+      "amazon.sa",
+      "amazon.sg",
+      "amazon.eg",
+      "amazon.tr",
+      "amazon.com.be",
+      "a.co",
+      "amzn.to"
+    ],
+    "redirectHosts": []
+  },
+  "ebay": {
+    "hosts": [
+      "ebay.com",
+      "ebay.co.uk",
+      "ebay.de",
+      "ebay.fr",
+      "ebay.it",
+      "ebay.es",
+      "ebay.ca",
+      "ebay.com.au",
+      "ebay.nl",
+      "ebay.be",
+      "ebay.at",
+      "ebay.ch",
+      "ebay.ie",
+      "ebay.pl",
+      "ebay.ph"
+    ],
+    "redirectHosts": []
+  },
+  "walmart": {
+    "hosts": ["walmart.com", "walmart.ca"],
+    "redirectHosts": ["goto.walmart.com"]
+  },
+  "etsy": {
+    "hosts": ["etsy.com", "etsy.me"],
+    "redirectHosts": []
+  },
+  "aliexpress": {
+    "hosts": ["aliexpress.com", "aliexpress.us", "aliexpress.ru"],
+    "redirectHosts": ["s.click.aliexpress.com"]
+  },
+  "temu": {
+    "hosts": ["temu.com", "temu.to"],
+    "redirectHosts": []
+  },
+  "trendyol": {
+    "hosts": ["trendyol.com", "ty.gl"],
+    "redirectHosts": []
+  },
+  "hepsiburada": {
+    "hosts": ["hepsiburada.com"],
+    "redirectHosts": ["app.hb.biz"]
+  }
+}
