@@ -61,18 +61,36 @@ describe('the draft’s rules', () => {
     row = { ...base, rules: { set: 'guide', overrides: { faq: { on: false } } } };
     expect((await getContentDraft(DRAFT))?.rules).toEqual({
       set: 'guide',
+      source: null,
       overrides: { faq: { on: false } },
+      textRules: [],
     });
     row = { ...base, rules: null };
-    expect((await getContentDraft(DRAFT))?.rules).toEqual({ set: null, overrides: {} });
+    expect((await getContentDraft(DRAFT))?.rules).toEqual({
+      set: null,
+      source: null,
+      overrides: {},
+      textRules: [],
+    });
     row = { ...base, rules: { set: 'nope', overrides: {} } };
-    expect((await getContentDraft(DRAFT))?.rules).toEqual({ set: null, overrides: {} });
+    expect((await getContentDraft(DRAFT))?.rules).toEqual({
+      set: null,
+      source: null,
+      overrides: {},
+      textRules: [],
+    });
   });
 
   it('are saved for this draft', async () => {
     const rules = { set: null, overrides: { sentence: { value: '120' } } };
     await saveDraftRules(DRAFT, rules);
-    expect(updates).toEqual([{ op: 'update', value: { rules }, filters: [['id', DRAFT]] }]);
+    expect(updates).toEqual([
+      {
+        op: 'update',
+        value: { rules: { ...rules, source: null, textRules: [] } },
+        filters: [['id', DRAFT]],
+      },
+    ]);
   });
 
   it('refuses rules out of shape, and says when the draft isn’t found', async () => {

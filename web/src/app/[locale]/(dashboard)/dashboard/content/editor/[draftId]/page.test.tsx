@@ -16,7 +16,11 @@ const getDraftSources = vi.fn();
 const getDraftBrief = vi.fn();
 const rebuildDraftBrief = vi.fn();
 const saveDraftRules = vi.fn();
+const getMyRuleSets = vi.fn();
+const saveMyRuleSet = vi.fn();
 vi.mock('@/lib/actions/content-drafts', () => ({
+  getMyRuleSets: (...args: unknown[]) => getMyRuleSets(...args),
+  saveMyRuleSet: (...args: unknown[]) => saveMyRuleSet(...args),
   saveDraftRules: (...args: unknown[]) => saveDraftRules(...args),
   getDraftSources: (...args: unknown[]) => getDraftSources(...args),
   getDraftBrief: (...args: unknown[]) => getDraftBrief(...args),
@@ -116,7 +120,7 @@ const draft = (over: Partial<ContentDraft> = {}): ContentDraft => ({
   status: 'in_review',
   bodyHtml: '<h1>Pipeline forecasting</h1><p>Teams trust it.</p>',
   author: 'agent',
-  rules: { set: null, overrides: {} },
+  rules: { set: null, source: null, overrides: {}, textRules: [] },
   updatedAt: '2026-10-20T10:00:00Z',
   ...over,
 });
@@ -155,6 +159,8 @@ beforeEach(() => {
   getDraftBrief.mockReset().mockResolvedValue({ brief: null });
   rebuildDraftBrief.mockReset();
   saveDraftRules.mockReset().mockResolvedValue(undefined);
+  getMyRuleSets.mockReset().mockResolvedValue({});
+  saveMyRuleSet.mockReset().mockResolvedValue(undefined);
   localStorage.clear();
   brandState.activeBrandId = 'b1';
   brandState.setActiveBrand.mockReset();
@@ -709,10 +715,56 @@ describe('the side panel', () => {
     await act(async () => sentence.click());
     expect(saveDraftRules).toHaveBeenCalledWith('d1', {
       set: null,
+      source: 'default',
       overrides: { sentence: { on: false } },
+      textRules: [],
     });
     expect(chip.getAttribute('aria-label')).toBe(`Rules ${met - 1}/${total - 1}`);
     expect(toast).toHaveBeenCalledWith('Rule updated for this draft');
+  });
+
+  it('starts a draft from the workspace’s My rules, and saves a draft’s set as them', async () => {
+    getMyRuleSets.mockResolvedValue({
+      blog_post: {
+        overrides: { sentence: { on: false } },
+        textRules: [{ id: 'm1', text: 'Mention free shipping', on: true }],
+      },
+    });
+    getContentDraft.mockResolvedValue(draft({ pageType: 'blog_post' }));
+    window.innerWidth = 1440;
+    await renderPage();
+
+    const rulesTab = [...panel()!.querySelectorAll<HTMLElement>('[role="tab"]')].find(
+      (el) => el.textContent === 'Rules',
+    )!;
+    await act(async () => {
+      rulesTab.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
+      rulesTab.click();
+    });
+    expect(getMyRuleSets).toHaveBeenCalledWith('b1');
+    expect(panel()!.textContent).toContain('My rules · Blog post');
+    expect(panel()!.textContent).toContain('Your text rules');
+    expect(
+      panel()!
+        .querySelector('[role="switch"][aria-label="Max sentence length: on or off"]')!
+        .getAttribute('aria-checked'),
+    ).toBe('false');
+    // Nothing is saved on the draft until something changes.
+    expect(saveDraftRules).not.toHaveBeenCalled();
+
+    const save = [...panel()!.querySelectorAll('button')].find(
+      (b) => b.textContent === 'Save as my rules',
+    )!;
+    await act(async () => save.click());
+    expect(saveMyRuleSet).toHaveBeenCalledWith('b1', 'blog_post', {
+      overrides: { sentence: { on: false } },
+      textRules: [{ id: 'm1', text: 'Mention free shipping', on: true }],
+    });
+    expect(saveDraftRules).toHaveBeenCalledWith(
+      'd1',
+      expect.objectContaining({ source: 'mine', overrides: { sentence: { on: false } } }),
+    );
+    expect(toast).toHaveBeenCalledWith('Saved as My rules for Blog post');
   });
 
   it('starts open on a wide window, and remembers it closed', async () => {

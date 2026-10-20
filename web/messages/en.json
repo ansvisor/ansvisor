@@ -3671,7 +3671,7 @@
         "toggle": "{name}: on or off",
         "value": "{name}: value",
         "whoForPlaceholder": "e.g. Sales leaders at 20–200 person B2B teams",
-        "note": "Values you change apply to this draft only. Rules marked AI check are judged by the Content Agent and aren't counted yet.",
+        "note": "Values you change apply to this draft only. Save as my rules keeps them for the workspace's next drafts of this type. Rules marked AI check are judged by the Content Agent and aren't counted yet.",
         "updated": "Rule updated for this draft",
         "saveFailed": "Couldn't update the rule. Try again.",
         "status": {
@@ -3687,7 +3687,33 @@
           "aiCheck": "AI check",
           "needsFeed": "Needs feed",
           "noFanouts": "No fan-outs",
-          "addKeywords": "Add keywords"
+          "addKeywords": "Add keywords",
+          "numberCheck": "Number check"
+        },
+        "mineName": "My rules · {type}",
+        "setPicked": "Rule set changed for this draft",
+        "saveMine": "Save as my rules",
+        "reset": "Reset",
+        "savedMine": "Saved as My rules for {type}",
+        "saveMineFailed": "Couldn't save My rules. Try again.",
+        "resetDone": "Back to the default set",
+        "text": {
+          "title": "Your text rules",
+          "write": "Write a rule",
+          "placeholder": "Write a rule in your own words, e.g. \"Mention free shipping in the first paragraph\"",
+          "help": "Numbers become checks. Other lines are checked by AI.",
+          "add": "Add",
+          "pasteMany": "Paste many",
+          "pasteTitle": "Paste rules as text",
+          "pasteDescription": "Paste your style guide or a list of rules. Each line becomes a rule you can edit or turn off. Rules guide the writing only.",
+          "addMany": "{count, plural, =0 {Add rules} one {Add # rule} other {Add # rules}}",
+          "cancel": "Cancel",
+          "edit": "Edit rule",
+          "added": "{count, plural, one {# rule added for this draft} other {# rules added for this draft}}",
+          "removed": "Rule removed",
+          "tooMany": "A draft keeps {max} text rules at most.",
+          "numberCheckHint": "Checked as a number when the draft is scored.",
+          "aiCheckHint": "Checked by AI when the draft is scored."
         }
       }
     },

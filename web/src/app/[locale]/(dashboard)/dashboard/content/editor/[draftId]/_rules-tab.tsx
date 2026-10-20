@@ -2,6 +2,16 @@
 
 import { useState } from 'react';
 import { useTranslations } from 'next-intl';
+import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Textarea } from '@/components/ui/textarea';
 import {
   Select,
   SelectContent,
@@ -11,7 +21,14 @@ import {
 } from '@/components/ui/select';
 import { isPageType, type PageType } from '@/lib/content/drafts';
 import { SITE_PAGE_TYPES, type SiteType } from '@/lib/content/page-types';
-import { RULE_GROUPS, type ActiveRule, type RuleStatus } from '@/lib/content/rules';
+import {
+  MAX_TEXT_RULE_LENGTH,
+  RULE_GROUPS,
+  splitRules,
+  type ActiveRule,
+  type RuleStatus,
+  type TextRule,
+} from '@/lib/content/rules';
 import { formatNumber } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import type { DraftRulesState } from './_use-draft-rules';
@@ -34,7 +51,9 @@ const HINTED = new Set([
  * keywords, links and sources, style — each with an on/off switch, a value
  * the person can change for this draft, and its status as the page reads
  * now. "N of M rules met" counts the rules on that the page can say; the
- * header's chip shows the same.
+ * header's chip shows the same. Rules in the person's own words follow
+ * ("Your text rules"); Save as my rules keeps the set for the workspace's
+ * drafts of the type, and Reset goes back to Ansvisor's default.
  */
 export function RulesTab({
   state,
@@ -48,10 +67,19 @@ export function RulesTab({
   const t = useTranslations('contentEditor.editor.rules');
   const tTypes = useTranslations('contentEditor.pageTypes');
   const types = [...SITE_PAGE_TYPES[siteType]];
-  for (const type of [draftPageType, state.setType]) {
+  for (const type of [draftPageType, state.setType, ...state.mineTypes]) {
     if (type && !types.includes(type)) types.push(type);
   }
-  const items = types.map((type) => ({ value: type, label: t('setName', { type: tTypes(type) }) }));
+  const items = [
+    ...types.map((type) => ({
+      value: `default:${type}`,
+      label: t('setName', { type: tTypes(type) }),
+    })),
+    ...state.mineTypes.map((type) => ({
+      value: `mine:${type}`,
+      label: t('mineName', { type: tTypes(type) }),
+    })),
+  ];
 
   return (
     <div className="space-y-4 text-sm">
@@ -59,10 +87,11 @@ export function RulesTab({
         <span className="text-xs text-muted-foreground">{t('set')}</span>
         <Select
           items={items}
-          value={state.setType ?? ''}
+          value={state.setType ? `${state.source}:${state.setType}` : ''}
           onValueChange={(value) => {
-            if (!isPageType(value)) return;
-            state.pickSet(value === draftPageType ? null : value);
+            const [source, type] = String(value ?? '').split(':');
+            if (!isPageType(type) || (source !== 'default' && source !== 'mine')) return;
+            state.pickSet(type, source);
           }}
         >
           <SelectTrigger aria-label={t('set')} className="w-full">
@@ -105,7 +134,165 @@ export function RulesTab({
         );
       })}
 
+      {state.textRules.length > 0 && (
+        <section className="space-y-1.5">
+          <h4 className="text-xs font-medium text-muted-foreground">{t('text.title')}</h4>
+          <ul className="divide-y rounded-lg border">
+            {state.textRules.map(({ rule, check }) => (
+              <TextRuleRow
+                key={rule.id}
+                rule={rule}
+                check={check}
+                onChange={(change) => state.changeTextRule(rule.id, change)}
+              />
+            ))}
+          </ul>
+        </section>
+      )}
+
+      <AddTextRules onAdd={state.addTextRules} />
+
+      <div className="flex flex-wrap gap-2">
+        <Button size="sm" disabled={!state.setType} onClick={state.saveAsMine}>
+          {t('saveMine')}
+        </Button>
+        <Button size="sm" variant="outline" onClick={state.reset}>
+          {t('reset')}
+        </Button>
+      </div>
+
       <p className="text-[11px] text-muted-foreground">{t('note')}</p>
+    </div>
+  );
+}
+
+/** A rule in the person's own words: edited in place, turned off, removed when emptied. */
+function TextRuleRow({
+  rule,
+  check,
+  onChange,
+}: {
+  rule: TextRule;
+  check: 'numberCheck' | 'aiCheck';
+  onChange: (change: { text?: string; on?: boolean }) => void;
+}) {
+  const t = useTranslations('contentEditor.editor.rules');
+  const [text, setText] = useState(rule.text);
+  const [editing, setEditing] = useState(false);
+  const commit = () => {
+    setEditing(false);
+    if (text.trim() !== rule.text) onChange({ text });
+  };
+  return (
+    <li className={cn('flex items-center gap-2 px-3 py-2', !rule.on && 'opacity-60')}>
+      <Switch
+        on={rule.on}
+        label={t('toggle', { name: rule.text })}
+        onToggle={() => onChange({ on: !rule.on })}
+      />
+      <input
+        value={editing ? text : rule.text}
+        title={rule.text}
+        aria-label={t('text.edit')}
+        maxLength={MAX_TEXT_RULE_LENGTH}
+        onFocus={() => {
+          setText(rule.text);
+          setEditing(true);
+        }}
+        onChange={(e) => setText(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') e.currentTarget.blur();
+          if (e.key === 'Escape') {
+            setText(rule.text);
+            setEditing(false);
+          }
+        }}
+        className="h-6 min-w-0 flex-1 rounded-md border border-transparent bg-transparent px-1 text-xs outline-none hover:border-border focus-visible:border-border focus-visible:ring-2 focus-visible:ring-ring/50"
+      />
+      <span
+        className="w-20 shrink-0 text-right text-[11px] text-muted-foreground"
+        title={t(`text.${check}Hint`)}
+      >
+        {rule.on ? t(`status.${check}`) : t('status.off')}
+      </span>
+    </li>
+  );
+}
+
+/** Write a rule, or paste many: each line becomes a rule (bullets and numbering taken off). */
+function AddTextRules({ onAdd }: { onAdd: (lines: string[]) => void }) {
+  const t = useTranslations('contentEditor.editor.rules.text');
+  const [text, setText] = useState('');
+  const [pasting, setPasting] = useState(false);
+  const [pasted, setPasted] = useState('');
+  const lines = splitRules(text);
+  const pastedLines = splitRules(pasted);
+
+  return (
+    <div className="space-y-1.5 rounded-lg border p-2">
+      <Textarea
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        placeholder={t('placeholder')}
+        aria-label={t('write')}
+        rows={2}
+        className="min-h-0 resize-none border-0 p-1 text-xs shadow-none focus-visible:ring-0"
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' && !e.shiftKey && lines.length) {
+            e.preventDefault();
+            onAdd(lines);
+            setText('');
+          }
+        }}
+      />
+      <div className="flex items-center gap-2">
+        <span className="min-w-0 flex-1 text-[11px] text-muted-foreground">{t('help')}</span>
+        <Button size="sm" variant="ghost" onClick={() => setPasting(true)}>
+          {t('pasteMany')}
+        </Button>
+        <Button
+          size="sm"
+          variant="outline"
+          disabled={!lines.length}
+          onClick={() => {
+            onAdd(lines);
+            setText('');
+          }}
+        >
+          {t('add')}
+        </Button>
+      </div>
+      <Dialog open={pasting} onOpenChange={setPasting}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>{t('pasteTitle')}</DialogTitle>
+            <DialogDescription>{t('pasteDescription')}</DialogDescription>
+          </DialogHeader>
+          <Textarea
+            value={pasted}
+            onChange={(e) => setPasted(e.target.value)}
+            aria-label={t('pasteTitle')}
+            rows={8}
+            className="text-xs"
+          />
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPasting(false)}>
+              {t('cancel')}
+            </Button>
+            <Button
+              disabled={!pastedLines.length}
+              onClick={() => {
+                onAdd(pastedLines);
+                setPasted('');
+                setPasting(false);
+              }}
+            >
+              {t('addMany', { count: pastedLines.length })}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -124,24 +311,11 @@ function RuleRow({
   return (
     <li className={cn('px-3 py-2', !rule.on && 'opacity-60')}>
       <div className="flex items-center gap-2">
-        <button
-          type="button"
-          role="switch"
-          aria-checked={rule.on}
-          aria-label={t('toggle', { name })}
-          onClick={() => onChange({ on: !rule.on })}
-          className={cn(
-            'relative h-4 w-7 shrink-0 rounded-full transition-colors',
-            rule.on ? 'bg-primary' : 'bg-muted-foreground/30',
-          )}
-        >
-          <span
-            className={cn(
-              'absolute top-0.5 h-3 w-3 rounded-full bg-background transition-all',
-              rule.on ? 'left-3.5' : 'left-0.5',
-            )}
-          />
-        </button>
+        <Switch
+          on={rule.on}
+          label={t('toggle', { name })}
+          onToggle={() => onChange({ on: !rule.on })}
+        />
         <span
           className="min-w-0 flex-1 text-xs"
           title={HINTED.has(rule.key) ? t(`hints.${rule.key}`) : undefined}
@@ -244,5 +418,28 @@ function StatusBadge({ on, status }: { on: boolean; status: RuleStatus }) {
     >
       {text}
     </span>
+  );
+}
+
+function Switch({ on, label, onToggle }: { on: boolean; label: string; onToggle: () => void }) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={on}
+      aria-label={label}
+      onClick={onToggle}
+      className={cn(
+        'relative h-4 w-7 shrink-0 rounded-full transition-colors',
+        on ? 'bg-primary' : 'bg-muted-foreground/30',
+      )}
+    >
+      <span
+        className={cn(
+          'absolute top-0.5 h-3 w-3 rounded-full bg-background transition-all',
+          on ? 'left-3.5' : 'left-0.5',
+        )}
+      />
+    </button>
   );
 }

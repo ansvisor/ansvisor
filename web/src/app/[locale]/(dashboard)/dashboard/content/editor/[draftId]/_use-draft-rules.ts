@@ -3,41 +3,73 @@
 import { useDeferredValue, useEffect, useMemo, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
-import { getDraftBrief, getDraftSources, saveDraftRules } from '@/lib/actions/content-drafts';
+import {
+  getDraftBrief,
+  getDraftSources,
+  getMyRuleSets,
+  saveDraftRules,
+  saveMyRuleSet,
+} from '@/lib/actions/content-drafts';
 import { isPageType, type ContentDraft, type PageType } from '@/lib/content/drafts';
 import {
+  MAX_TEXT_RULES,
   activeRules,
   checkRule,
+  effectiveRules,
   readPage,
   ruleLength,
   ruleSet,
   rulesMet,
+  textRuleCheck,
   type ActiveRule,
   type DraftRules,
   type RuleContext,
   type RuleStatus,
+  type SavedRuleSet,
+  type TextRule,
 } from '@/lib/content/rules';
 import { buildSourceGroups } from '@/lib/content/sources';
 
 export interface DraftRulesState {
   /** The page type whose set applies. */
   setType: PageType | null;
+  /** The set the draft's rules come from: Ansvisor's default or the workspace's My rules. */
+  source: 'default' | 'mine';
   rules: { rule: ActiveRule; status: RuleStatus }[];
+  /** The person's own rules, each checked as a number or by AI (not counted). */
+  textRules: { rule: TextRule; check: 'numberCheck' | 'aiCheck' }[];
+  /** The page types the workspace has My rules for. */
+  mineTypes: PageType[];
   met: number;
   total: number;
   /** The page length the rules ask for. */
   length: number;
   /** Turns a rule on or off, or gives it a value, for this draft. */
   change: (key: string, change: { on?: boolean; value?: string }) => void;
-  /** Applies another page type's set, or the draft's own (null). */
-  pickSet: (type: PageType | null) => void;
+  /** Loads a set into the draft: a type's Ansvisor default, or the workspace's My rules for it. */
+  pickSet: (type: PageType, source: 'default' | 'mine') => void;
+  /** Adds rules in the person's own words, one per line. */
+  addTextRules: (lines: string[]) => void;
+  /** Edits a text rule, turns it on or off; an empty text removes it. */
+  changeTextRule: (id: string, change: { text?: string; on?: boolean }) => void;
+  /** Save as my rules: the draft's choices become the workspace's set for the type. */
+  saveAsMine: () => void;
+  /** Back to Ansvisor's default set for the type. */
+  reset: () => void;
 }
+
+const newId = () =>
+  typeof crypto !== 'undefined' && 'randomUUID' in crypto
+    ? crypto.randomUUID()
+    : `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
 
 /**
  * The draft's rules (CE-009) as the editor reads them: the set for its page
  * type with the person's changes, each checked against the page as written —
- * the header's chip and the Rules tab show the same. The brand's domains,
- * the fan-outs kept and the brief's keywords are read once.
+ * the header's chip and the Rules tab show the same. A draft no one has set
+ * rules on starts from the workspace's My rules for its type, if it has
+ * them. The brand's domains, the fan-outs kept, the brief's keywords and the
+ * workspace's sets are read once.
  */
 export function useDraftRules({
   draft,
@@ -51,6 +83,7 @@ export function useDraftRules({
   pageType: string | null;
 }): DraftRulesState {
   const t = useTranslations('contentEditor.editor.rules');
+  const tTypes = useTranslations('contentEditor.pageTypes');
   const [choices, setChoices] = useState<DraftRules>(draft.rules);
   const [ctx, setCtx] = useState<RuleContext>({
     brandDomains: [],
@@ -58,11 +91,19 @@ export function useDraftRules({
     fanouts: [],
   });
   const [keywords, setKeywords] = useState<string[]>([]);
+  const [mine, setMine] = useState<Partial<Record<PageType, SavedRuleSet>>>({});
 
   useEffect(() => {
     let cancelled = false;
-    Promise.all([getDraftSources(draft.id), getDraftBrief(draft.id)])
-      .then(([sources, brief]) => {
+    Promise.all([
+      getDraftSources(draft.id),
+      getDraftBrief(draft.id),
+      getMyRuleSets(draft.brandId).catch((err) => {
+        console.error('Failed to read My rules:', err);
+        return {};
+      }),
+    ])
+      .then(([sources, brief, sets]) => {
         if (cancelled) return;
         if (sources) {
           const fanouts = buildSourceGroups(sources.data, sources.choices, {
@@ -79,18 +120,23 @@ export function useDraftRules({
           });
         }
         if (brief?.brief) setKeywords(brief.brief.keywords);
+        setMine(sets);
       })
       .catch((err) => console.error('Failed to read what the rules check against:', err));
     return () => {
       cancelled = true;
     };
-  }, [draft.id, draft.title, draft.sourceUrl]);
+  }, [draft.id, draft.brandId, draft.title, draft.sourceUrl]);
 
   const draftType = isPageType(pageType) ? pageType : null;
   const setType = choices.set ?? draftType;
+  const effective = useMemo(
+    () => effectiveRules(choices, setType ? mine[setType] : undefined),
+    [choices, setType, mine],
+  );
   const rules = useMemo(
-    () => activeRules(ruleSet(setType, { keywords }), choices),
-    [setType, keywords, choices],
+    () => activeRules(ruleSet(setType, { keywords }), effective),
+    [setType, keywords, effective],
   );
   // The checks follow the page a beat behind typing.
   const deferredHtml = useDeferredValue(html);
@@ -105,29 +151,92 @@ export function useDraftRules({
   );
   const { met, total } = rulesMet(checked);
 
-  const save = (next: DraftRules) => {
+  const save = (next: DraftRules, message: string) => {
     const before = choices;
     setChoices(next);
     saveDraftRules(draft.id, next)
-      .then(() => toast(t('updated')))
+      .then(() => toast(message))
       .catch((err) => {
         console.error('Failed to save the rules:', err);
         setChoices(before);
         toast.error(t('saveFailed'));
       });
   };
+  // A change keeps the set the draft's rules come from.
+  const edited = (change: Partial<DraftRules>, message = t('updated')) =>
+    save({ ...effective, source: effective.source ?? 'default', ...change }, message);
+  const typeName = (type: PageType | null) => (type ? tTypes(type) : '');
 
   return {
     setType,
+    source: effective.source ?? 'default',
     rules: checked,
+    textRules: effective.textRules.map((rule) => ({ rule, check: textRuleCheck(rule.text) })),
+    mineTypes: (Object.keys(mine) as PageType[]).filter((type) => mine[type]),
     met,
     total,
     length: ruleLength(rules, setType),
     change: (key, change) =>
-      save({
-        ...choices,
-        overrides: { ...choices.overrides, [key]: { ...choices.overrides[key], ...change } },
+      edited({
+        overrides: { ...effective.overrides, [key]: { ...effective.overrides[key], ...change } },
       }),
-    pickSet: (type) => save({ ...choices, set: type }),
+    pickSet: (type, source) => {
+      const set = source === 'mine' ? mine[type] : undefined;
+      save(
+        {
+          set: type === draftType ? null : type,
+          source,
+          overrides: set?.overrides ?? {},
+          textRules: set?.textRules ?? [],
+        },
+        t('setPicked'),
+      );
+    },
+    addTextRules: (lines) => {
+      const room = MAX_TEXT_RULES - effective.textRules.length;
+      if (room <= 0) {
+        toast.error(t('text.tooMany', { max: MAX_TEXT_RULES }));
+        return;
+      }
+      const added = lines.slice(0, room).map((text) => ({ id: newId(), text, on: true }));
+      edited(
+        { textRules: [...effective.textRules, ...added] },
+        t('text.added', { count: added.length }),
+      );
+    },
+    changeTextRule: (id, change) => {
+      const removed = change.text !== undefined && !change.text.trim();
+      edited(
+        {
+          textRules: removed
+            ? effective.textRules.filter((r) => r.id !== id)
+            : effective.textRules.map((r) =>
+                r.id === id
+                  ? {
+                      ...r,
+                      ...change,
+                      ...(change.text !== undefined && { text: change.text.trim() }),
+                    }
+                  : r,
+              ),
+        },
+        removed ? t('text.removed') : t('updated'),
+      );
+    },
+    saveAsMine: () => {
+      if (!setType) return;
+      const set: SavedRuleSet = { overrides: effective.overrides, textRules: effective.textRules };
+      saveMyRuleSet(draft.brandId, setType, set)
+        .then(() => {
+          setMine((prev) => ({ ...prev, [setType]: set }));
+          save({ ...effective, source: 'mine' }, t('savedMine', { type: typeName(setType) }));
+        })
+        .catch((err) => {
+          console.error('Failed to save My rules:', err);
+          toast.error(t('saveMineFailed'));
+        });
+    },
+    reset: () =>
+      save({ set: choices.set, source: 'default', overrides: {}, textRules: [] }, t('resetDone')),
   };
 }

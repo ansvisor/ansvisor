@@ -2,6 +2,9 @@ import { describe, expect, it } from 'vitest';
 import {
   NO_DRAFT_RULES,
   activeRules,
+  effectiveRules,
+  splitRules,
+  textRuleCheck,
   checkRule,
   draftRulesSchema,
   readPage,
@@ -29,7 +32,7 @@ const rule = (
 ): ActiveRule => {
   const rules = activeRules(
     ruleSet(pageType),
-    value === undefined ? NO_DRAFT_RULES : { set: null, overrides: { [key]: { value } } },
+    value === undefined ? NO_DRAFT_RULES : { overrides: { [key]: { value } } },
   );
   const found = rules.find((r) => r.key === key);
   if (!found) throw new Error(`no rule ${key}`);
@@ -62,7 +65,6 @@ describe('rule sets', () => {
 
   it('applies the draft’s choices', () => {
     const rules = activeRules(ruleSet('category_page'), {
-      set: null,
       overrides: { length: { value: '1000' }, faq: { on: false } },
     });
     expect(rules.find((r) => r.key === 'length')).toMatchObject({
@@ -74,7 +76,6 @@ describe('rule sets', () => {
     expect(rules.find((r) => r.key === 'sentence')).toMatchObject({ changed: false });
     expect(ruleLength(rules, 'category_page')).toBe(1000);
     const off = activeRules(ruleSet('category_page'), {
-      set: null,
       overrides: { length: { on: false } },
     });
     expect(ruleLength(off, 'category_page')).toBe(800);
@@ -86,8 +87,7 @@ describe('rule sets', () => {
     ).toBe(true);
     expect(draftRulesSchema.safeParse({ set: 'nope', overrides: {} }).success).toBe(false);
     expect(
-      draftRulesSchema.safeParse({ set: null, overrides: { tone: { value: 'x'.repeat(501) } } })
-        .success,
+      draftRulesSchema.safeParse({ overrides: { tone: { value: 'x'.repeat(501) } } }).success,
     ).toBe(false);
   });
 });
@@ -295,7 +295,6 @@ describe('page type rules', () => {
 describe('rulesMet', () => {
   it('counts the rules on that the page can say', () => {
     const rules = activeRules(ruleSet('blog_post'), {
-      set: null,
       overrides: { sentence: { on: false } },
     });
     const p = page('<h1>T</h1><p>Short summary.</p>', 10);
@@ -305,5 +304,45 @@ describe('rulesMet', () => {
     expect(total).toBe(12);
     expect(met).toBeGreaterThan(0);
     expect(met).toBeLessThan(total);
+  });
+});
+
+describe('My rules and text rules', () => {
+  const mine = {
+    overrides: { sentence: { value: '120' } },
+    textRules: [{ id: 'm1', text: 'Mention free shipping', on: true }],
+  };
+
+  it('starts an untouched draft from the workspace’s My rules', () => {
+    expect(effectiveRules(NO_DRAFT_RULES, mine)).toEqual({ set: null, source: 'mine', ...mine });
+    expect(effectiveRules(NO_DRAFT_RULES, undefined)).toEqual(NO_DRAFT_RULES);
+  });
+
+  it('keeps a draft’s own choices, and a reset draft on the default', () => {
+    const own = { ...NO_DRAFT_RULES, overrides: { faq: { on: false } } };
+    expect(effectiveRules(own, mine)).toEqual(own);
+    const reset = { ...NO_DRAFT_RULES, source: 'default' as const };
+    expect(effectiveRules(reset, mine)).toEqual(reset);
+  });
+
+  it('reads rules saved before text rules with none', () => {
+    expect(draftRulesSchema.parse({ set: 'guide', overrides: {} })).toEqual({
+      set: 'guide',
+      source: null,
+      overrides: {},
+      textRules: [],
+    });
+  });
+
+  it('splits pasted rules into lines, bullets and numbering off', () => {
+    expect(
+      splitRules('- Mention free shipping\n\n2) Use 3 images\n• Keep it short  \n1. '),
+    ).toEqual(['Mention free shipping', 'Use 3 images', 'Keep it short']);
+    expect(splitRules('x'.repeat(400))[0]).toHaveLength(300);
+  });
+
+  it('checks a rule with a number as a number, the rest by AI', () => {
+    expect(textRuleCheck('Use at least 3 images')).toBe('numberCheck');
+    expect(textRuleCheck('Mention free shipping')).toBe('aiCheck');
   });
 });

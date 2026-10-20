@@ -825,6 +825,33 @@ export type Database = {
           },
         ]
       }
+      content_rule_sets: {
+        Row: {
+          organization_id: string
+          overrides: Json
+          page_type: string
+          text_rules: Json
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          organization_id: string
+          overrides?: Json
+          page_type: string
+          text_rules?: Json
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          organization_id?: string
+          overrides?: Json
+          page_type?: string
+          text_rules?: Json
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
       content_drafts: {
         Row: {
           action_id: string | null

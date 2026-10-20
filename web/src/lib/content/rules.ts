@@ -195,19 +195,83 @@ export function ruleSet(
   ];
 }
 
+/** Per rule: whether it is on, and the value used. */
+const overridesSchema = z
+  .record(
+    z.string().max(40),
+    z.object({ on: z.boolean().optional(), value: z.string().max(500).optional() }),
+  )
+  .refine((o) => Object.keys(o).length <= 60);
+
+/** A rule written in the person's own words ("Your text rules"). */
+export const MAX_TEXT_RULES = 50;
+export const MAX_TEXT_RULE_LENGTH = 300;
+export const textRuleSchema = z.object({
+  id: z.string().min(1).max(40),
+  text: z.string().trim().min(1).max(MAX_TEXT_RULE_LENGTH),
+  on: z.boolean(),
+});
+export type TextRule = z.infer<typeof textRuleSchema>;
+
 /** The draft's choices on its rules (content_drafts.rules, 00213). */
 export const draftRulesSchema = z.object({
   /** The page type whose set applies; null follows the draft's type. */
   set: z.enum(PAGE_TYPES).nullable(),
-  overrides: z
-    .record(
-      z.string().max(40),
-      z.object({ on: z.boolean().optional(), value: z.string().max(500).optional() }),
-    )
-    .refine((o) => Object.keys(o).length <= 60),
+  /**
+   * The set the draft started from: Ansvisor's default, or the workspace's
+   * My rules (00214). Null until the person changes something: the
+   * workspace's My rules for the type apply, if it has them.
+   */
+  source: z.enum(['default', 'mine']).nullable().default(null),
+  overrides: overridesSchema,
+  textRules: z.array(textRuleSchema).max(MAX_TEXT_RULES).default([]),
 });
 export type DraftRules = z.infer<typeof draftRulesSchema>;
-export const NO_DRAFT_RULES: DraftRules = { set: null, overrides: {} };
+/** As saved: the source and text rules may be left out (rules from before 00214 have neither). */
+export type DraftRulesInput = z.input<typeof draftRulesSchema>;
+export const NO_DRAFT_RULES: DraftRules = {
+  set: null,
+  source: null,
+  overrides: {},
+  textRules: [],
+};
+
+/** A workspace's My rules for one page type (content_rule_sets, 00214). */
+export const savedRuleSetSchema = z.object({
+  overrides: overridesSchema,
+  textRules: z.array(textRuleSchema).max(MAX_TEXT_RULES),
+});
+export type SavedRuleSet = z.infer<typeof savedRuleSetSchema>;
+
+/**
+ * The choices in effect: the draft's own; or, for a draft no one has set
+ * rules on yet, the workspace's My rules for the set's type, as a template.
+ */
+export function effectiveRules(rules: DraftRules, mine: SavedRuleSet | undefined): DraftRules {
+  const untouched =
+    rules.source === null && !Object.keys(rules.overrides).length && !rules.textRules.length;
+  if (untouched && mine) {
+    return { ...rules, source: 'mine', overrides: mine.overrides, textRules: mine.textRules };
+  }
+  return rules;
+}
+
+/**
+ * Paste many: one rule per line, bullets and numbering taken off ("- ",
+ * "• ", "1. ", "2) "), empty lines dropped, each cut to the limit.
+ */
+export function splitRules(text: string): string[] {
+  return text
+    .split(/\r?\n+/)
+    .map((line) => line.replace(/^\s*(?:[-*•–]|\d+[.)])\s*/, '').trim())
+    .filter(Boolean)
+    .map((line) => line.slice(0, MAX_TEXT_RULE_LENGTH));
+}
+
+/** How a text rule is checked: a number makes it a number check; anything else, AI. */
+export function textRuleCheck(text: string): 'numberCheck' | 'aiCheck' {
+  return /\d/.test(text) ? 'numberCheck' : 'aiCheck';
+}
 
 export interface ActiveRule extends RuleDef {
   on: boolean;
@@ -216,7 +280,7 @@ export interface ActiveRule extends RuleDef {
   changed: boolean;
 }
 
-export function activeRules(defs: RuleDef[], rules: DraftRules): ActiveRule[] {
+export function activeRules(defs: RuleDef[], rules: Pick<DraftRules, 'overrides'>): ActiveRule[] {
   return defs.map((def) => {
     const override = rules.overrides[def.key];
     const current = override?.value ?? def.value;

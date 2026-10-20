@@ -24,7 +24,13 @@ import { IMPACT_PERIODS, type ContentImpact, type ContentResults } from '@/lib/c
 import { MAX_BODY_HTML_LENGTH, MAX_TITLE_LENGTH } from '@/lib/content/editor';
 import { detectPageType, siteTypeOf, type SiteType } from '@/lib/content/page-types';
 import { sanitizeDraftHtml } from '@/lib/content/sanitize-draft-html';
-import { NO_DRAFT_RULES, draftRulesSchema, type DraftRules } from '@/lib/content/rules';
+import {
+  NO_DRAFT_RULES,
+  draftRulesSchema,
+  savedRuleSetSchema,
+  type DraftRulesInput,
+  type SavedRuleSet,
+} from '@/lib/content/rules';
 import {
   briefFromOpportunity,
   draftBriefSchema,
@@ -834,7 +840,7 @@ export async function rebuildDraftBrief(
  * this draft ("Rule updated for this draft"). Throws 'not_found' when no
  * row changed.
  */
-export async function saveDraftRules(id: string, rules: DraftRules): Promise<void> {
+export async function saveDraftRules(id: string, rules: DraftRulesInput): Promise<void> {
   const parsed = draftRulesSchema.safeParse(rules);
   if (!draftId.safeParse(id).success || !parsed.success) throw new Error('invalid');
   const supabase = await createClient();
@@ -846,4 +852,78 @@ export async function saveDraftRules(id: string, rules: DraftRules): Promise<voi
     .maybeSingle();
   if (error) throw new Error(error.message);
   if (!data) throw new Error('not_found');
+}
+
+/**
+ * The workspace's My rules (CE-009, 00214), by page type: what a new draft
+ * of the type starts from. Sets that don't read as rules are left out.
+ */
+export async function getMyRuleSets(
+  brandId: string,
+): Promise<Partial<Record<PageType, SavedRuleSet>>> {
+  if (!draftId.safeParse(brandId).success) throw new Error('invalid');
+  const supabase = await createClient();
+  const { data: brand, error: brandError } = await supabase
+    .from('brands')
+    .select('organization_id')
+    .eq('id', brandId)
+    .maybeSingle();
+  if (brandError) throw new Error(brandError.message);
+  if (!brand?.organization_id) return {};
+  const { data, error } = await supabase
+    .from('content_rule_sets')
+    .select('page_type, overrides, text_rules')
+    .eq('organization_id', brand.organization_id);
+  if (error) throw new Error(error.message);
+  const sets: Partial<Record<PageType, SavedRuleSet>> = {};
+  for (const row of data ?? []) {
+    const set = savedRuleSetSchema.safeParse({
+      overrides: row.overrides,
+      textRules: row.text_rules,
+    });
+    if (pageTypeInput.safeParse(row.page_type).success && set.success) {
+      sets[row.page_type as PageType] = set.data;
+    }
+  }
+  return sets;
+}
+
+/**
+ * Save as my rules (CE-009): a draft's rule choices become the workspace's
+ * set for the page type, for every draft of it that starts after.
+ */
+export async function saveMyRuleSet(
+  brandId: string,
+  pageType: PageType,
+  set: SavedRuleSet,
+): Promise<void> {
+  const parsed = savedRuleSetSchema.safeParse(set);
+  if (
+    !draftId.safeParse(brandId).success ||
+    !pageTypeInput.safeParse(pageType).success ||
+    !parsed.success
+  ) {
+    throw new Error('invalid');
+  }
+  const supabase = await createClient();
+  const [userRes, brandRes] = await Promise.all([
+    supabase.auth.getUser(),
+    supabase.from('brands').select('organization_id').eq('id', brandId).maybeSingle(),
+  ]);
+  if (brandRes.error) throw new Error(brandRes.error.message);
+  const userId = userRes.data.user?.id;
+  const organizationId = brandRes.data?.organization_id;
+  if (!userId || !organizationId) throw new Error('not_found');
+  const { error } = await supabase.from('content_rule_sets').upsert(
+    {
+      organization_id: organizationId,
+      page_type: pageType,
+      overrides: parsed.data.overrides,
+      text_rules: parsed.data.textRules,
+      updated_by: userId,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: 'organization_id,page_type' },
+  );
+  if (error) throw new Error(error.message);
 }
