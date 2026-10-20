@@ -18,7 +18,7 @@ import type { HeadToHeadData, HeadToHeadGroup, HeadToHeadRun } from '@/lib/head-
 import { getFaviconUrl } from '@/lib/favicon';
 import { toCsv } from '@/lib/csv';
 import { slugify } from '@/lib/slug';
-import { readUrlParam, writeUrlParams } from '@/lib/url-state';
+import { readUrlChoice, readUrlParam, writeUrlParams } from '@/lib/url-state';
 import { DateRangeFilter, type DateRangePreset } from '@/components/filters/date-range-filter';
 import { getDateRange } from '@/lib/date-range';
 import { MODEL_LABELS } from '@/config/platform-labels';
@@ -1229,8 +1229,9 @@ export default function CompetitorsPage() {
   const [datePreset, setDatePreset] = useState<CompetitorDatePreset>('30d');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
-  const loadedBrandId = useRef<string | null>(null);
-  const loadRequestId = useRef(0);
+  const [dateParamsReady, setDateParamsReady] = useState(false);
+  const competitorsRequestId = useRef(0);
+  const comparisonRequestId = useRef(0);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [suggestDialogOpen, setSuggestDialogOpen] = useState(false);
   const [deleting, setDeleting] = useState<string | null>(null);
@@ -1245,7 +1246,16 @@ export default function CompetitorsPage() {
 
   useEffect(() => {
     setLinkedCompetitorId(readUrlParam('competitor') || null);
+    setDatePreset(readUrlChoice('preset', COMPETITOR_DATE_PRESETS, '30d'));
+    setDateFrom(readUrlParam('from'));
+    setDateTo(readUrlParam('to'));
+    setDateParamsReady(true);
   }, []);
+
+  useEffect(() => {
+    if (!dateParamsReady) return;
+    writeUrlParams({ preset: datePreset, from: dateFrom, to: dateTo }, { preset: '30d' });
+  }, [dateParamsReady, dateFrom, datePreset, dateTo]);
 
   const selectCompetitor = useCallback((id: string | null) => {
     setSelectedCompetitorId(id);
@@ -1254,37 +1264,56 @@ export default function CompetitorsPage() {
   const [h2hData, setH2hData] = useState<HeadToHeadData | null>(null);
   const [h2hLoading, setH2hLoading] = useState(false);
 
-  const loadData = useCallback(async () => {
+  const loadCompetitors = useCallback(async () => {
     if (!brand) return;
-    const brandChanged = loadedBrandId.current !== brand.id;
-    const requestId = ++loadRequestId.current;
-    if (brandChanged) setLoading(true);
-    else setComparisonLoading(true);
+    const requestId = ++competitorsRequestId.current;
+    setLoading(true);
     try {
-      const [comps, comparison] = await Promise.all([
-        getCompetitors(brand.id),
-        getCompetitorComparison(
-          brand.id,
-          competitorComparisonWindow(datePreset, { from: dateFrom, to: dateTo }),
-        ),
-      ]);
-      if (requestId !== loadRequestId.current) return;
+      const comps = await getCompetitors(brand.id);
+      if (requestId !== competitorsRequestId.current) return;
       setCompetitors(comps);
-      setComparisonData(comparison.brands.length > 1 ? comparison : null);
-      loadedBrandId.current = brand.id;
     } catch {
-      if (requestId === loadRequestId.current) toast.error(t('loadError'));
+      if (requestId === competitorsRequestId.current) toast.error(t('loadError'));
     } finally {
-      if (requestId === loadRequestId.current) {
-        setLoading(false);
-        setComparisonLoading(false);
-      }
+      if (requestId === competitorsRequestId.current) setLoading(false);
     }
-  }, [brand, dateFrom, datePreset, dateTo, t]);
+  }, [brand, t]);
+
+  const loadComparison = useCallback(async () => {
+    const requestId = ++comparisonRequestId.current;
+    if (!brand || !dateParamsReady) return;
+
+    // Custom is not a query until both bounds are selected. Keep the previous
+    // comparison visible rather than accidentally turning an incomplete range
+    // into an unbounded all-time read.
+    if (datePreset === 'custom' && (!dateFrom || !dateTo)) {
+      setComparisonLoading(false);
+      return;
+    }
+
+    setComparisonLoading(true);
+    try {
+      const comparison = await getCompetitorComparison(
+        brand.id,
+        competitorComparisonWindow(datePreset, { from: dateFrom, to: dateTo }),
+      );
+      if (requestId !== comparisonRequestId.current) return;
+      setComparisonData(comparison.brands.length > 1 ? comparison : null);
+    } catch {
+      if (requestId === comparisonRequestId.current) toast.error(t('loadError'));
+    } finally {
+      if (requestId === comparisonRequestId.current) setComparisonLoading(false);
+    }
+  }, [brand, dateFrom, dateParamsReady, datePreset, dateTo, t]);
 
   useEffect(() => {
-    loadData();
-  }, [loadData]);
+    loadCompetitors();
+  }, [loadCompetitors]);
+
+  useEffect(() => {
+    loadComparison();
+  }, [loadComparison]);
+
 
   useEffect(() => {
     if (!linkedCompetitorId || loading) return;
@@ -1381,7 +1410,8 @@ export default function CompetitorsPage() {
     if (!brand) return;
     await addCompetitor(brand.id, { name, domain });
     toast.success(t('addSuccess'));
-    loadData();
+    void loadCompetitors();
+    void loadComparison();
   }
 
   async function handleAddSuggested(
@@ -1401,15 +1431,21 @@ export default function CompetitorsPage() {
       // Refresh in place rather than toggling the page-wide initial loader:
       // the suggestion dialog should remain open when some inserts fail.
       try {
+        const comparisonPromise =
+          datePreset === 'custom' && (!dateFrom || !dateTo)
+            ? Promise.resolve(null)
+            : getCompetitorComparison(
+                brand.id,
+                competitorComparisonWindow(datePreset, { from: dateFrom, to: dateTo }),
+              );
         const [currentCompetitors, comparison] = await Promise.all([
           getCompetitors(brand.id),
-          getCompetitorComparison(
-            brand.id,
-            competitorComparisonWindow(datePreset, { from: dateFrom, to: dateTo }),
-          ),
+          comparisonPromise,
         ]);
         setCompetitors(currentCompetitors);
-        setComparisonData(comparison.brands.length > 1 ? comparison : null);
+        if (comparison) {
+          setComparisonData(comparison.brands.length > 1 ? comparison : null);
+        }
       } catch {
         toast.error(t('loadError'));
       }
@@ -1425,7 +1461,8 @@ export default function CompetitorsPage() {
       if (selectedCompetitorId === id) {
         selectCompetitor(null);
       }
-      loadData();
+      void loadCompetitors();
+      void loadComparison();
     } catch {
       toast.error(t('deleteError'));
     } finally {
