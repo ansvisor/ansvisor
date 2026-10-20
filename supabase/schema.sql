@@ -26204,3 +26204,423 @@ create policy "ai_traffic_digests: member select" on public.ai_traffic_digests
 comment on table public.ai_traffic_digests is
   'AI Traffic weekly digests sent (AT-013): one per brand and week, claimed before sending so a week is never mailed twice.';
 
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00189_ai_bot_ingest_file.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00189: a bot log file read in one transaction, and bot rows pruned in batches
+-- ============================================================================
+-- Follow-ups from #1179's review (AT-010).
+--
+-- A Logpush file or a Vercel drain's delivery was read in steps, each its own
+-- transaction: its claim (ai_bot_ingested_files), its raw records
+-- (ai_bot_count_raw), then its verified events 500 at a time (ai_bot_ingest).
+-- When a later step failed, the claim was given back, and the sender's retry
+-- counted the raw records, and the chunks already written, a second time.
+--
+-- ai_bot_ingest_file takes all three steps in one transaction: a failure
+-- leaves nothing behind, so the retry is read as new. A delivery of the same
+-- file that arrives meanwhile waits on the claim's key, then reads as a
+-- duplicate. A file holds at most 20,000 lines (bot-log-formats.js), so its
+-- events fit one call.
+--
+-- ai_bot_prune deletes at most p_limit rows past their retention from each
+-- bot table per call. The daily run calls it until a call deletes fewer, so
+-- no single DELETE runs into the statement timeout at Enterprise volume.
+
+create or replace function public.ai_bot_ingest_file(
+  p_connection_id uuid,
+  p_body_hash text,
+  p_records bigint,
+  p_raw_cap bigint,
+  p_cap bigint,
+  p_events jsonb
+)
+returns jsonb
+language plpgsql
+volatile
+security definer
+set search_path to 'public'
+as $$
+declare
+  v_claimed integer;
+  v_raw jsonb;
+  v_ingest jsonb;
+begin
+  insert into public.ai_bot_ingested_files (connection_id, body_hash)
+  values (p_connection_id, p_body_hash)
+  on conflict (connection_id, body_hash) do nothing;
+  get diagnostics v_claimed = row_count;
+  if v_claimed = 0 then
+    return jsonb_build_object('duplicate', true);
+  end if;
+
+  -- Raised rather than returned, so the claim rolls back with the rest.
+  v_raw := public.ai_bot_count_raw(p_connection_id, p_records, p_raw_cap);
+  if v_raw ? 'error' then
+    raise exception 'ai_bot_count_raw: %', v_raw ->> 'error';
+  end if;
+  -- Past the month's raw cap the file is only counted.
+  if not (v_raw ->> 'allowed')::boolean then
+    return jsonb_build_object('raw_capped', true, 'raw', v_raw -> 'raw');
+  end if;
+  if coalesce(jsonb_array_length(p_events), 0) = 0 then
+    return jsonb_build_object('received', 0, 'stored', 0, 'raw', v_raw -> 'raw');
+  end if;
+
+  v_ingest := public.ai_bot_ingest(p_connection_id, p_cap, p_events);
+  if v_ingest ? 'error' then
+    raise exception 'ai_bot_ingest: %', v_ingest ->> 'error';
+  end if;
+  return v_ingest || jsonb_build_object('raw', v_raw -> 'raw');
+end;
+$$;
+
+revoke all on function public.ai_bot_ingest_file(uuid, text, bigint, bigint, bigint, jsonb)
+  from public, anon, authenticated;
+grant execute on function public.ai_bot_ingest_file(uuid, text, bigint, bigint, bigint, jsonb)
+  to service_role;
+
+comment on function public.ai_bot_ingest_file(uuid, text, bigint, bigint, bigint, jsonb) is
+  'AI bots (AT-010): one log file of a connection in one transaction: claims it by its body hash (a duplicate returns {duplicate}), adds its records to the month''s raw count (past p_raw_cap returns {raw_capped}), then writes its verified events as ai_bot_ingest does. A failure rolls the claim back too. Service role only.';
+
+create or replace function public.ai_bot_prune(
+  p_events_before timestamptz,
+  p_daily_before date,
+  p_files_before timestamptz,
+  p_limit integer
+)
+returns jsonb
+language plpgsql
+volatile
+security definer
+set search_path to 'public'
+as $$
+declare
+  v_events integer;
+  v_daily integer;
+  v_files integer;
+begin
+  delete from public.ai_bot_events e
+  where e.id in (
+    select o.id from public.ai_bot_events o
+    where o.occurred_at < p_events_before
+    limit p_limit
+  );
+  get diagnostics v_events = row_count;
+
+  delete from public.ai_bot_daily d
+  using (
+    select o.brand_id, o.day, o.bot, o.page from public.ai_bot_daily o
+    where o.day < p_daily_before
+    limit p_limit
+  ) old
+  where d.brand_id = old.brand_id and d.day = old.day and d.bot = old.bot and d.page = old.page;
+  get diagnostics v_daily = row_count;
+
+  delete from public.ai_bot_ingested_files f
+  using (
+    select o.connection_id, o.body_hash from public.ai_bot_ingested_files o
+    where o.received_at < p_files_before
+    limit p_limit
+  ) old
+  where f.connection_id = old.connection_id and f.body_hash = old.body_hash;
+  get diagnostics v_files = row_count;
+
+  return jsonb_build_object('events', v_events, 'daily', v_daily, 'files', v_files);
+end;
+$$;
+
+revoke all on function public.ai_bot_prune(timestamptz, date, timestamptz, integer)
+  from public, anon, authenticated;
+grant execute on function public.ai_bot_prune(timestamptz, date, timestamptz, integer)
+  to service_role;
+
+comment on function public.ai_bot_prune(timestamptz, date, timestamptz, integer) is
+  'AI bots (AT-010): deletes at most p_limit rows from each of ai_bot_events (occurred_at), ai_bot_daily (day) and ai_bot_ingested_files (received_at) older than the given bounds, and returns how many it deleted from each. The daily run calls it until a call deletes fewer than p_limit. Service role only.';
+
+notify pgrst, 'reload schema';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00192_rollup_integrity.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00192: the Mentions rollups refresh one at a time, and a deleted prompt
+--        leaves the Insights rollups
+-- ============================================================================
+-- Two ways the Insights and Mentions pages could still show different numbers
+-- for the same days once they count the same things (00191).
+--
+-- 1. refresh_mentions_daily (00157) deletes a day range and inserts it again
+--    with no lock. A run's refresh and the nightly sweep (or a backfill) for
+--    the same brand could overlap: both delete, both insert, and the days
+--    they share are counted twice. refresh_insights_daily had the same gap
+--    until 00164 (#1020). It now takes the same per-brand advisory lock, rows
+--    written twice before are dropped (the copy with the latest answer is
+--    kept; the next refresh of those days rewrites them anyway), and unique
+--    keys make a second copy impossible.
+--
+-- 2. Deleting a prompt cascades its prompt_results. The Mentions page drops
+--    its rows at read time (it reads existing prompts only), but
+--    insights_brand_daily keeps them until something refreshes those days,
+--    and the nightly sweep only covers the last 3. A trigger now queues the
+--    brand with the deleted prompt's day range (read from
+--    insights_prompt_daily before the delete), and the server refreshes that
+--    range, as the citation rollups' queue does (00118).
+
+-- ─── One refresh per brand at a time ────────────────────────────────────────
+
+create or replace function public.refresh_mentions_daily(
+  p_brand_id uuid,
+  p_day_from date,
+  p_day_to   date
+) returns void
+language plpgsql
+set search_path to 'public'
+as $$
+declare
+  -- The range's bounds as instants, so the answers are found by range.
+  v_from timestamptz := p_day_from::timestamp at time zone 'utc';
+  v_to   timestamptz := (p_day_to + 1)::timestamp at time zone 'utc';
+begin
+  -- One refresh per brand at a time, as refresh_insights_daily (00164); the
+  -- lock releases at commit.
+  perform pg_advisory_xact_lock(
+    hashtextextended('refresh_mentions_daily:' || p_brand_id::text, 0));
+
+  delete from public.mentions_prompt_daily
+    where brand_id = p_brand_id and day between p_day_from and p_day_to;
+  delete from public.mentions_competitor_daily
+    where brand_id = p_brand_id and day between p_day_from and p_day_to;
+
+  insert into public.mentions_prompt_daily (
+    brand_id, day, prompt_id, platform, region,
+    answer_count, mention_answers, mention_occurrences,
+    positive_answers, negative_answers, position_sum, position_count, last_answer_at)
+  select
+    p_brand_id,
+    (pr.created_at at time zone 'utc')::date,
+    pr.prompt_id, pr.platform, pr.region,
+    count(*),
+    count(*) filter (where pr.mention_count > 0),
+    coalesce(sum(pr.mention_count), 0),
+    count(*) filter (where pr.mention_count > 0 and pr.sentiment = 'positive'),
+    count(*) filter (where pr.mention_count > 0 and pr.sentiment = 'negative'),
+    coalesce(sum(pr.mention_position)
+      filter (where pr.mention_count > 0 and pr.mention_position is not null), 0),
+    count(*) filter (where pr.mention_count > 0 and pr.mention_position is not null),
+    max(pr.created_at)
+  from public.prompt_results pr
+  where pr.brand_id = p_brand_id
+    and pr.prompt_id is not null
+    and pr.platform <> 'chatgpt-shopping'
+    and pr.created_at >= v_from
+    and pr.created_at < v_to
+  group by 2, pr.prompt_id, pr.platform, pr.region;
+
+  insert into public.mentions_competitor_daily (
+    brand_id, day, prompt_id, platform, region, competitor_id,
+    mention_answers, co_mention_answers)
+  select
+    p_brand_id,
+    (pr.created_at at time zone 'utc')::date,
+    pr.prompt_id, pr.platform, pr.region,
+    cm.value->>'competitor_id',
+    count(*),
+    count(*) filter (where pr.mention_count > 0)
+  from public.prompt_results pr
+  cross join lateral jsonb_array_elements(coalesce(pr.competitor_mentions, '[]'::jsonb)) cm
+  where pr.brand_id = p_brand_id
+    and pr.prompt_id is not null
+    and pr.platform <> 'chatgpt-shopping'
+    and pr.created_at >= v_from
+    and pr.created_at < v_to
+    and cm.value ? 'competitor_id'
+    and coalesce((cm.value->>'mention_count')::int, 0) > 0
+  group by 2, pr.prompt_id, pr.platform, pr.region, cm.value->>'competitor_id';
+end;
+$$;
+
+revoke execute on function public.refresh_mentions_daily(uuid, date, date)
+  from public, anon, authenticated;
+
+-- ─── Rows written twice ─────────────────────────────────────────────────────
+
+delete from public.mentions_prompt_daily d
+using (
+  select ctid,
+         row_number() over (
+           partition by brand_id, day, prompt_id, platform, region
+           order by last_answer_at desc, answer_count desc) as n
+  from public.mentions_prompt_daily
+) x
+where d.ctid = x.ctid and x.n > 1;
+
+delete from public.mentions_competitor_daily d
+using (
+  select ctid,
+         row_number() over (
+           partition by brand_id, day, prompt_id, platform, region, competitor_id
+           order by mention_answers desc) as n
+  from public.mentions_competitor_daily
+) x
+where d.ctid = x.ctid and x.n > 1;
+
+-- On large tables, build these by hand first with `create unique index
+-- concurrently`, which doesn't hold back the refreshes; these statements then
+-- find them in place. A null platform or region is one key, not many.
+create unique index if not exists mentions_prompt_daily_key
+  on public.mentions_prompt_daily (brand_id, day, prompt_id, platform, region)
+  nulls not distinct;
+
+create unique index if not exists mentions_competitor_daily_key
+  on public.mentions_competitor_daily (brand_id, day, prompt_id, platform, region, competitor_id)
+  nulls not distinct;
+
+-- ─── A deleted prompt queues its days ───────────────────────────────────────
+
+-- No foreign key on purpose, as citation_rollup_rebuilds: a brand delete must
+-- never fail on it. A brand gone by the time the server reads its entry has
+-- no rows left, so the refresh is a no-op and the entry is cleared.
+create table if not exists public.insights_rollup_rebuilds (
+  brand_id     uuid primary key,
+  day_from     date not null,
+  day_to       date not null,
+  requested_at timestamptz not null default now()
+);
+
+-- Service role only: no policies.
+alter table public.insights_rollup_rebuilds enable row level security;
+
+-- Before the delete, so the prompt's rows are still there to give its days.
+create or replace function public.queue_insights_rollup_rebuild()
+returns trigger
+language plpgsql
+security definer
+set search_path to 'public'
+as $$
+declare
+  v_brand uuid;
+  v_from  date;
+  v_to    date;
+begin
+  -- Only for a brand that still exists: during a brand delete the cascade
+  -- removes the brand first, so its prompts queue nothing.
+  select ps.brand_id into v_brand
+  from public.prompt_sets ps
+  join public.brands b on b.id = ps.brand_id
+  where ps.id = old.prompt_set_id;
+  if v_brand is null then
+    return old;
+  end if;
+
+  select min(d.day), max(d.day) into v_from, v_to
+  from public.insights_prompt_daily d
+  where d.brand_id = v_brand and d.prompt_id = old.id;
+  if v_from is null then
+    return old;
+  end if;
+
+  insert into public.insights_rollup_rebuilds as q (brand_id, day_from, day_to)
+  values (v_brand, v_from, v_to)
+  on conflict (brand_id) do update
+    set day_from = least(q.day_from, excluded.day_from),
+        day_to = greatest(q.day_to, excluded.day_to),
+        requested_at = now();
+  return old;
+end;
+$$;
+
+revoke execute on function public.queue_insights_rollup_rebuild()
+  from public, anon, authenticated;
+
+drop trigger if exists prompts_queue_insights_rollup_rebuild on public.prompts;
+create trigger prompts_queue_insights_rollup_rebuild
+  before delete on public.prompts
+  for each row execute function public.queue_insights_rollup_rebuild();
+
+notify pgrst, 'reload schema';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00193_ai_traffic_platforms_seen.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00193: "is this AI platform new?" reads only the platforms in question
+-- ============================================================================
+-- Follow-up from #1195's review (AT-013). The nightly "new AI platform" check
+-- (server signals/traffic-platforms.js) read the brand's whole AI traffic
+-- history before the week with ai_traffic_merged (00176), pages and days
+-- included, only to learn which platforms had sent a visit before.
+--
+-- ai_traffic_platforms_seen answers that directly, for the few platforms the
+-- week put forward: whether the brand had any AI visit before p_before, and
+-- which of p_platforms did. A snippet visit or an Analytics session counts,
+-- whichever day it fell on: for "seen before" any evidence will do, where
+-- ai_traffic_merged keeps one source per day so visits aren't counted twice.
+--
+-- Each platform is an index probe on the new (brand_id, source_platform,
+-- created_at) index; Analytics rows are daily and few. On a large
+-- ai_traffic_logs, build the index by hand first with `create index
+-- concurrently`, which doesn't hold back the beacon's writes; this statement
+-- then finds it in place.
+
+create index if not exists idx_ai_traffic_logs_brand_platform_time
+  on public.ai_traffic_logs (brand_id, source_platform, created_at)
+  where visit_of is null;
+
+create or replace function public.ai_traffic_platforms_seen(
+  p_brand_id uuid,
+  p_before timestamptz,
+  p_platforms text[]
+)
+returns jsonb
+language sql
+stable
+security invoker
+set search_path to 'public'
+as $$
+  select jsonb_build_object(
+    'any_before',
+      exists (
+        select 1 from public.ai_traffic_logs l
+        where l.brand_id = p_brand_id
+          and l.visit_of is null
+          and l.created_at < p_before
+      )
+      or exists (
+        select 1 from public.ga_ai_traffic_stats g
+        where g.brand_id = p_brand_id
+          and g.sessions > 0
+          and g.date < (p_before at time zone 'utc')::date
+      ),
+    'seen', coalesce((
+      select jsonb_agg(p.platform order by p.platform)
+      from unnest(p_platforms) as p(platform)
+      where exists (
+          select 1 from public.ai_traffic_logs l
+          where l.brand_id = p_brand_id
+            and l.visit_of is null
+            and l.source_platform = p.platform
+            and l.created_at < p_before
+        )
+        or exists (
+          select 1 from public.ga_ai_traffic_stats g
+          where g.brand_id = p_brand_id
+            and g.sessions > 0
+            and coalesce(g.platform, g.source) = p.platform
+            and g.date < (p_before at time zone 'utc')::date
+        )
+    ), '[]'::jsonb)
+  );
+$$;
+
+revoke all on function public.ai_traffic_platforms_seen(uuid, timestamptz, text[])
+  from public, anon;
+grant execute on function public.ai_traffic_platforms_seen(uuid, timestamptz, text[])
+  to authenticated, service_role;
+
+comment on function public.ai_traffic_platforms_seen(uuid, timestamptz, text[]) is
+  'AI Traffic (AT-013): whether a brand had any AI-referred visit before p_before (snippet or Analytics), and which of p_platforms sent one, for the nightly new-platform check. Security invoker: RLS decides the brand.';
+
+notify pgrst, 'reload schema';
+

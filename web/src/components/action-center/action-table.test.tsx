@@ -128,3 +128,25 @@ describe('ActionTable row menu', () => {
     expect(container.querySelector('button[aria-label^="Actions for"]')).toBeNull();
   });
 });
+
+// New Ansvisor (AC-ALT2): no one assigned means the whole workspace's.
+describe('ActionTable assignee', () => {
+  const assigneeCell = () => container.querySelectorAll('tbody tr td')[3];
+
+  it('shows an action with no one on it as Everyone', () => {
+    render();
+    expect(assigneeCell().textContent).toBe('Everyone');
+    expect(assigneeCell().querySelector('[title]')?.getAttribute('title')).toBe(
+      'Everyone in the workspace: no one is assigned yet',
+    );
+  });
+
+  it("shows an assigned member's initials", () => {
+    render({
+      actions: [
+        { ...action, assignee: { id: 'u1', fullName: 'Ayse Kaya', email: null, avatarUrl: null } },
+      ],
+    });
+    expect(assigneeCell().textContent).toBe('AK');
+  });
+});
