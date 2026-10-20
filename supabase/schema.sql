@@ -26204,3 +26204,38 @@ create policy "ai_traffic_digests: member select" on public.ai_traffic_digests
 comment on table public.ai_traffic_digests is
   'AI Traffic weekly digests sent (AT-013): one per brand and week, claimed before sending so a week is never mailed twice.';
 
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00188_webhook_event_subscriptions.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00188: per-webhook event subscriptions
+-- ============================================================================
+-- Keep existing integrations receiving the events they already receive. Event
+-- subscription controls are now available in Content → Configure Webhook.
+-- Test deliveries use webhook.test directly and are not stored subscriptions.
+
+alter table public.webhook_configs
+  alter column events set default
+    array['opportunity.sent', 'daily_pulse.created', 'action_task.sent']::text[];
+
+update public.webhook_configs as config
+set events = (
+  select array_agg(subscription.event order by subscription.event)
+  from (
+    select distinct event
+    from unnest(
+      coalesce(config.events, array[]::text[])
+      || array['opportunity.sent', 'daily_pulse.created', 'action_task.sent']::text[]
+    ) as existing(event)
+    where event is not null
+  ) as subscription
+);
+
+alter table public.webhook_configs
+  alter column events set not null;
+
+comment on column public.webhook_configs.events is
+  'Event types subscribed to by this webhook (opportunity.sent, daily_pulse.created, action_task.sent). webhook.test is always sent by the test action and is not stored here.';
+
+notify pgrst, 'reload schema';
+
