@@ -583,6 +583,11 @@ export async function saveWebhookConfig(
   },
 ): Promise<WebhookConfig> {
   const supabase = await createClient();
+  const allowedEvents = ['opportunity.sent', 'daily_pulse.created', 'action_task.sent'];
+  const events = Array.from(new Set(config.events)).filter((event) =>
+    allowedEvents.includes(event),
+  );
+  if (events.length === 0) throw new Error('Select at least one webhook event.');
 
   const { data, error } = await supabase
     .from('webhook_configs')
@@ -592,7 +597,7 @@ export async function saveWebhookConfig(
         name: 'Default',
         webhook_url: config.webhookUrl,
         webhook_secret: config.webhookSecret || null,
-        events: config.events,
+        events,
         is_active: config.isActive ?? true,
         updated_at: new Date().toISOString(),
       },
