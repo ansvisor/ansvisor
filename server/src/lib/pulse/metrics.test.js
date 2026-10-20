@@ -4,7 +4,14 @@ import { describe, expect, it, vi } from 'vitest';
 // SUPABASE_* env is absent (as in CI) — stub it before the import chain.
 vi.mock('../../config/supabase.js', () => ({ default: {} }));
 
-import { daily, isTransientDbError, series, trailingDayWindows, windowParams } from './metrics.js';
+import {
+  daily,
+  isTransientDbError,
+  positiveSentimentPct,
+  series,
+  trailingDayWindows,
+  windowParams,
+} from './metrics.js';
 
 /**
  * Pulse metric execution shape (#687).
@@ -142,5 +149,29 @@ describe('rollup routing', () => {
       p_date_from: from.toISOString(),
       p_date_to: to.toISOString(),
     });
+  });
+});
+
+/**
+ * The e-mail's positive sentiment uses the base Insights and Action Center
+ * use (00191, gkhngyk on #1226): answers that name the brand. Cited-only
+ * answers are always neutral, so counting them pulled the share down.
+ */
+describe('positiveSentimentPct', () => {
+  it('divides by the answers that name the brand', () => {
+    expect(
+      positiveSentimentPct({ positive_count: 3, mentioning_results: 6, mention_results: 4 }),
+    ).toBe(75);
+  });
+
+  it('falls back to answers that name or cite it before 00191', () => {
+    expect(positiveSentimentPct({ positive_count: 3, mentioning_results: 6 })).toBe(50);
+  });
+
+  it('reads 0 without named answers or a row', () => {
+    expect(
+      positiveSentimentPct({ positive_count: 0, mentioning_results: 2, mention_results: 0 }),
+    ).toBe(0);
+    expect(positiveSentimentPct(null)).toBe(0);
   });
 });

@@ -67,12 +67,20 @@ const overview: MentionsOverview = {
   current: totals({
     answers: 400,
     mentions: 100,
+    occurrences: 130,
     positive: 48,
     negative: 14,
     prompts: 20,
     promptsWithMentions: 15,
   }),
-  previous: totals({ answers: 400, mentions: 80, positive: 40, negative: 8, prompts: 20 }),
+  previous: totals({
+    answers: 400,
+    mentions: 80,
+    occurrences: 100,
+    positive: 40,
+    negative: 8,
+    prompts: 20,
+  }),
   platforms: [],
   daily: [],
   competitors: [
@@ -198,12 +206,13 @@ describe('MentionsHeaderActions', () => {
         'Mentions & Sentiment · Acme Coffee',
         'All platforms · All countries · All topics',
         'Net sentiment is +34 (↓ 6 vs the previous 30 days). AI usually names Acme Coffee next to Crema Club.',
-        'Total mentions: 100 (+25%)',
+        // Total mentions counts every time a response names the brand, as the card does.
+        'Total mentions: 130 (+30%)',
         'Mention rate: 25.0% of 400 tracked responses',
         'Prompts with mentions: 15 of 20 tracked prompts',
         'Net sentiment: +34 · 48% positive, 38% neutral, 14% negative (n=100)',
         'Built from aggregates with a fixed template, no LLM call · Sep 18 – Oct 17 · ' +
-          '400 tracked responses · 100 mentions',
+          '400 tracked responses · 130 mentions',
       ].join('\n'),
     );
     expect(toast.success).toHaveBeenCalledWith('Summary copied');
@@ -215,6 +224,7 @@ describe('MentionsHeaderActions', () => {
       current: totals({
         answers: 12,
         mentions: 3,
+        occurrences: 4,
         positive: 2,
         prompts: 2,
         promptsWithMentions: 1,
@@ -233,7 +243,7 @@ describe('MentionsHeaderActions', () => {
     const lines = (writeText.mock.calls[0][0] as string).split('\n');
     expect(lines[1]).toBe('Gemini · Germany · Beans · Search: “espresso”');
     expect(lines.slice(3, 7)).toEqual([
-      'Total mentions: 3',
+      'Total mentions: 4',
       'Mention rate: 25.0% · Low sample · 12 responses',
       'Prompts with mentions: 1 of 2 tracked prompts',
       'Net sentiment: +67 · Low sample · 3 responses',
@@ -269,21 +279,22 @@ describe('MentionsHeaderActions', () => {
     );
     expect(saved[0].name).toMatch(/^ansvisor_acme-coffee_mentions_\d{4}-\d{2}-\d{2}\.csv$/);
     const lines = (await savedText()).split('\n');
-    expect(lines.slice(0, 10)).toEqual([
+    expect(lines.slice(0, 11)).toEqual([
       'Mentions & Sentiment,Acme Coffee',
       'Period,"2026-09-18 – 2026-10-17 (30 days, UTC)"',
       'Platform,All platforms',
       'Country,All countries',
       'Topic,All topics',
       'Tracked responses (n),400',
-      'Mentions (n),2',
+      'Total mentions (n),130',
+      'Responses naming the brand (n),2',
       'Prompts with mentions (n),1',
-      'Mentions in this file (n),2',
+      'Responses in this file (n),2',
       expect.stringMatching(/^Exported \(UTC\),\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/),
     ]);
-    expect(lines[10]).toBe('');
-    expect(lines[11]).toMatch(/^date_utc,prompt,topic,platform/);
-    expect(lines).toHaveLength(14);
+    expect(lines[11]).toBe('');
+    expect(lines[12]).toMatch(/^date_utc,prompt,topic,platform/);
+    expect(lines).toHaveLength(15);
   });
 
   it("takes the table's filters from the Mentions tab, and notes a file cut at the cap", async () => {
@@ -304,10 +315,10 @@ describe('MentionsHeaderActions', () => {
     const text = await savedText();
     expect(text).toContain('Sentiment,Negative\nCo-mentioned,Crema Club\n');
     expect(text).toContain(
-      'Note,"Only the first 2 of 12,345 mentions, in the table\'s order. Narrow the filters to export the rest."',
+      'Note,"Only the first 2 of 12,345 responses, in the table\'s order. Narrow the filters to export the rest."',
     );
     expect(toast.warning).toHaveBeenCalledWith(
-      'The file holds 2 of 12,345 mentions. Narrow the filters to export the rest.',
+      'The file holds 2 of 12,345 responses. Narrow the filters to export the rest.',
     );
   });
 
