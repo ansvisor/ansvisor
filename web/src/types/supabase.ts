@@ -3064,6 +3064,24 @@ export type Database = {
           strength: number
         }[]
       }
+      citation_competitor_sources_daily: {
+        Args: {
+          p_brand_domains: string[]
+          p_brand_id: string
+          p_competitor_domains: string[]
+          p_day_from?: string
+          p_day_to?: string
+          p_models?: string[]
+          p_regions?: string[]
+          p_topic_ids?: string[]
+        }
+        Returns: {
+          answers_feeding: number
+          competitor_id: string
+          domain: string
+          strength: number
+        }[]
+      }
       citation_gap_domains: {
         Args: {
           p_brand_domains: string[]
@@ -3073,6 +3091,27 @@ export type Database = {
           p_date_to?: string
           p_models?: string[]
           p_prompt_ids?: string[]
+          p_regions?: string[]
+          p_topic_ids?: string[]
+        }
+        Returns: {
+          appears_in_ours: boolean
+          competitor_answers: number
+          competitor_names: string[]
+          domain: string
+          our_answer_count: number
+          strength: number
+          total_answers: number
+        }[]
+      }
+      citation_gap_domains_daily: {
+        Args: {
+          p_brand_domains: string[]
+          p_brand_id: string
+          p_competitor_domains: string[]
+          p_day_from?: string
+          p_day_to?: string
+          p_models?: string[]
           p_regions?: string[]
           p_topic_ids?: string[]
         }
