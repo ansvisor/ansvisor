@@ -255,6 +255,25 @@ export function memberLabel(member: { fullName: string | null; email: string }):
   return member.fullName?.trim() || member.email;
 }
 
+/**
+ * The assignee an action shows the moment one is picked, before the list is
+ * read again: the member's name, avatar and e-mail, so a member without a
+ * name is named by e-mail at once (assigneeLabel), not left blank.
+ */
+export function pickedAssignee(
+  assigneeId: string | null,
+  members: { userId: string; email: string; fullName: string | null; avatarUrl: string | null }[],
+): ActionItem['assignee'] {
+  if (!assigneeId) return null;
+  const member = members.find((m) => m.userId === assigneeId);
+  return {
+    id: assigneeId,
+    fullName: member?.fullName ?? null,
+    avatarUrl: member?.avatarUrl ?? null,
+    email: member?.email ?? null,
+  };
+}
+
 /** An action's assignee named as the picker names them: null when nothing is known. */
 export function assigneeLabel(assignee: {
   fullName: string | null;
