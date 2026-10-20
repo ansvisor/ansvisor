@@ -125,13 +125,15 @@ export interface SuggestedCompetitor {
 
 export interface SuggestCompetitorsResult {
   competitors: SuggestedCompetitor[];
+  /** Whether the research found the brand sells products online (an online store). */
+  isEcommerce: boolean;
 }
 
 /**
  * POST /api/competitors/suggest
  *
- * Returns the list of suggested competitors (name + domain).
- * Throws if the request fails.
+ * Returns the list of suggested competitors (name + domain), and whether the
+ * brand itself sells products online. Throws if the request fails.
  */
 export async function suggestCompetitors(
   params: BrandSetupParams & { region?: string },
@@ -161,5 +163,5 @@ export async function suggestCompetitors(
     name: c.name,
     domain: c.domain,
   }));
-  return { competitors };
+  return { competitors, isEcommerce: data.isEcommerce === true };
 }

@@ -19,6 +19,7 @@
 import type { TrafficEngagement } from '@/lib/actions/traffic';
 import { LOW_SAMPLE_VISITS, visitChange } from '@/lib/traffic-change';
 import { formatShare } from '@/lib/traffic-kpis';
+import { isNamedPlatform } from '@/lib/traffic-platforms';
 
 /** Key events a platform needs before its conversions are compared (§5.4). */
 export const MIN_COMPARED_KEY_EVENTS = 5;
@@ -72,13 +73,14 @@ export function summaryLine(input: SummaryLineInput): SummaryLine {
   const change = visitChange(input.totalVisits, input.totalVisitsPrev, {
     comparable: input.hasPreviousPeriod,
   });
-  const top = input.platforms[0];
+  // The most visits among the platforms it can name, as the weekly e-mail picks it.
+  const top = input.platforms.find((p) => p.visits > 0 && isNamedPlatform(p.platform));
   const ga = input.gaSessions !== null;
   return {
     visits: input.totalVisits,
     share: ga ? formatShare(input.totalVisits, input.gaSessions ?? 0) : null,
     change: change.kind === 'pct' ? change.pct : null,
-    top: top && top.visits > 0 ? { platform: top.platform, visits: top.visits } : null,
+    top: top ? { platform: top.platform, visits: top.visits } : null,
     best: ga ? bestConvertingPlatform(input.platforms) : null,
     citedNotClicked: input.citedNotClicked ?? 0,
     untrackedQueries: input.untrackedQueries ?? 0,

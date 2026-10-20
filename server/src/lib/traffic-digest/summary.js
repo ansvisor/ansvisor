@@ -16,6 +16,7 @@
  */
 
 import { createRequire } from 'module';
+import { ENGINE_THRESHOLDS } from '../../config/action-engine.js';
 
 // The AI Traffic page's names (web/src/lib/traffic-platforms.ts); a web test
 // keeps the two the same.
@@ -34,6 +35,14 @@ export const MIN_CHANGE_VISITS = 3;
 export const TOP_CHANGES = 3;
 
 export const platformName = (key) => PLATFORM_NAMES[key] ?? key;
+
+/**
+ * A platform the page can name. The snippet's beacon is public, so a source
+ * key can be anything a caller sent; the e-mail names only the platforms it
+ * knows (old keys included), never `unknown`.
+ */
+export const isNamedPlatform = (key) =>
+  key !== 'unknown' && Object.hasOwn(PLATFORM_NAMES, String(key ?? ''));
 
 const n = (value) => Number(value) || 0;
 const formatNumber = (value) => Math.round(value).toLocaleString('en-US');
@@ -78,7 +87,7 @@ export function dailyVisits(week, days = []) {
 export function topPlatforms(platforms = [], limit = 5) {
   return platforms
     .map((p) => ({ platform: String(p.platform ?? ''), visits: n(p.visits) }))
-    .filter((p) => p.visits > 0 && p.platform)
+    .filter((p) => p.visits > 0 && isNamedPlatform(p.platform))
     .sort((a, b) => b.visits - a.visits || a.platform.localeCompare(b.platform))
     .slice(0, limit);
 }
@@ -136,7 +145,7 @@ export function summarySentences(input) {
   sentences.push(`${first.join(', ')}.`);
 
   const top = [...(input.platforms ?? [])]
-    .filter((p) => n(p.visits) > 0)
+    .filter((p) => n(p.visits) > 0 && isNamedPlatform(p.platform))
     .sort((a, b) => n(b.visits) - n(a.visits))[0];
   const best = input.gaSessions !== null ? bestConvertingPlatform(input.platformValue ?? []) : null;
   const rate = best ? `${best.rate.toLocaleString('en-US')}%` : '';
@@ -173,7 +182,7 @@ export function summarySentences(input) {
   return sentences;
 }
 
-function movers(cur = [], prev = [], keyOf, type) {
+function movers(cur = [], prev = [], keyOf, type, accept) {
   const before = new Map();
   const now = new Map();
   const names = new Map();
@@ -185,6 +194,7 @@ function movers(cur = [], prev = [], keyOf, type) {
       const raw = keyOf(row);
       if (!raw || raw === 'unknown') continue;
       const key = type === 'page' ? raw.toLowerCase() : raw;
+      if (accept && !accept(key)) continue;
       if (!names.has(key)) names.set(key, raw);
       into.set(key, (into.get(key) ?? 0) + n(row.visits));
     }
@@ -198,24 +208,74 @@ function movers(cur = [], prev = [], keyOf, type) {
 }
 
 /**
+ * The pages whose AI visits moved by MIN_CHANGE_VISITS or more, keyed as the
+ * Pages section keys them: the ones the digest asks ai_traffic_known_pages
+ * (00194) about before it may name them.
+ */
+export function pageCandidates({ cur, prev }) {
+  return movers(cur?.pages, prev?.pages, (r) => r.page, 'page')
+    .filter((m) => Math.abs(m.now - m.before) >= MIN_CHANGE_VISITS)
+    .map((m) => m.name.toLowerCase())
+    .sort();
+}
+
+/**
+ * The missing pages worth a line, as the broken_citation_target signal reads
+ * them (#1228): one AI answers cite from its first visit, any other from
+ * brokenLinkMinVisits. The beacon is public, so one stray or made-up 404
+ * visit doesn't reach the e-mail.
+ */
+export function brokenRows(broken) {
+  const rows = Array.isArray(broken?.rows) ? broken.rows : [];
+  return rows.filter(
+    (r) => n(r.citations) > 0 || n(r.visits) >= ENGINE_THRESHOLDS.library.brokenLinkMinVisits,
+  );
+}
+
+/**
+ * The broken link the e-mail would name and its redirect, keyed as
+ * pageCandidates are: they go to ai_traffic_known_pages too, since both can
+ * come from the beacon (00186 picks redirects among the pages it logged).
+ */
+export function brokenCandidates(broken) {
+  const [top] = brokenRows(broken);
+  if (!top) return [];
+  return [top.page, top.target].filter(Boolean).map((p) => String(p).toLowerCase());
+}
+
+/**
  * The week's top changes: broken AI links first — visitors are landing on
  * missing pages every day until someone adds a redirect — then the platforms
- * and pages whose AI visits moved most, by at least MIN_CHANGE_VISITS.
+ * and pages whose AI visits moved most, by at least MIN_CHANGE_VISITS. Only
+ * platforms the page can name, and pages a source other than the public
+ * beacon knows (`knownPages`, from ai_traffic_known_pages); without it, no
+ * page. A broken link is named when AI answers cite it or it's known, and
+ * its redirect when that's known; otherwise the line gives only the count.
  */
-export function topChanges({ cur, prev, broken }, limit = TOP_CHANGES) {
+export function topChanges({ cur, prev, broken, knownPages }, limit = TOP_CHANGES) {
   const changes = [];
-  const brokenRows = Array.isArray(broken?.rows) ? broken.rows : [];
-  if (brokenRows.length > 0) {
+  const known = knownPages ?? new Set();
+  const isKnown = (page) => !!page && known.has(String(page).toLowerCase());
+  const rows = brokenRows(broken);
+  if (rows.length > 0) {
+    const [top] = rows;
+    const named = n(top.citations) > 0 || isKnown(top.page);
     changes.push({
       type: 'broken',
-      count: n(broken.count) || brokenRows.length,
-      page: brokenRows[0].page,
-      target: brokenRows[0].target ?? null,
+      count: rows.length,
+      page: named ? top.page : null,
+      target: named && isKnown(top.target) ? top.target : null,
     });
   }
   const moved = [
-    ...movers(cur?.platforms, prev?.platforms, (r) => r.platform, 'platform'),
-    ...movers(cur?.pages, prev?.pages, (r) => r.page, 'page'),
+    ...movers(cur?.platforms, prev?.platforms, (r) => r.platform, 'platform', isNamedPlatform),
+    ...movers(
+      cur?.pages,
+      prev?.pages,
+      (r) => r.page,
+      'page',
+      (key) => known.has(key),
+    ),
   ]
     .filter((m) => Math.abs(m.now - m.before) >= MIN_CHANGE_VISITS)
     .sort(
@@ -234,6 +294,7 @@ export function changeText(change) {
       change.count === 1
         ? '1 page AI visitors landed on doesn’t exist'
         : `${formatNumber(change.count)} pages AI visitors landed on don’t exist`;
+    if (!change.page) return `${pages}.`;
     const redirect = change.target ? `, redirect to ${change.target}` : '';
     return `${pages}: ${change.page}${redirect}.`;
   }

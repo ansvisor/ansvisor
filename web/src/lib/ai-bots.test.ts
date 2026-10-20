@@ -3,6 +3,7 @@ import {
   botReportState,
   botsCardState,
   lastBotEvent,
+  logsPausedUntil,
   rowsPausedUntil,
   sampleBotTypes,
 } from './ai-bots';
@@ -16,6 +17,9 @@ const usage = (over: Partial<BotUsage> = {}): BotUsage => ({
   counted: 0,
   cappedAt: null,
   cap: 2_000_000,
+  raw: 0,
+  rawCappedAt: null,
+  rawCap: 20_000_000,
   ...over,
 });
 const conn = (lastEventAt: string | null, id = 'c1') => ({
@@ -55,6 +59,31 @@ describe('lastBotEvent and rowsPausedUntil', () => {
     );
     expect(rowsPausedUntil(usage())).toBeNull();
     expect(rowsPausedUntil(usage({ cap: -1, cappedAt: '2026-10-20T00:00:00Z' }))).toBeNull();
+  });
+
+  it('pauses log files past the raw cap, only for a brand with a log sender', () => {
+    const drain = { ...conn(null), kind: 'vercel_drain' as const };
+    const capped = usage({ raw: 20_000_400, rawCappedAt: '2026-10-18T09:00:00Z' });
+    expect(logsPausedUntil({ connections: [drain], usage: capped })).toBe('2026-11-01');
+    // A Worker's batches don't count against it.
+    expect(logsPausedUntil({ connections: [conn(null)], usage: capped })).toBeNull();
+    expect(logsPausedUntil({ connections: [drain], usage: usage() })).toBeNull();
+    expect(logsPausedUntil({ connections: [drain], usage: { ...capped, rawCap: -1 } })).toBeNull();
+  });
+
+  // gkhngyk on #1224: rawCappedAt is set once a month and never cleared.
+  it("reads the pause against today's plan, not when the cap was first hit", () => {
+    const drain = { ...conn(null), kind: 'vercel_drain' as const };
+    // Growth hit 20M, then upgraded to Enterprise: its files are read again.
+    const raised = usage({
+      raw: 20_000_400,
+      rawCappedAt: '2026-10-18T09:00:00Z',
+      rawCap: 200_000_000,
+    });
+    expect(logsPausedUntil({ connections: [drain], usage: raised })).toBeNull();
+    // Enterprise at 30M moved down to Growth: its files stop, with no rawCappedAt yet.
+    const lowered = usage({ raw: 30_000_000, rawCappedAt: null, rawCap: 20_000_000 });
+    expect(logsPausedUntil({ connections: [drain], usage: lowered })).toBe('2026-11-01');
   });
 });
 

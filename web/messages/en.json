@@ -52,15 +52,15 @@
     "traffic": "AI Referral Traffic",
     "prompts": "Prompts",
     "content": "Content",
-    "audit": "Site Audit",
+    "audit": "Audit",
     "competitors": "Competitors",
     "citations": "Citations",
     "mentions": "Mentions",
-    "shopping": "Shopping",
+    "shopping": "Product Visibility",
     "reports": "Reports",
     "settings": "Settings",
+    "execution": "Execution",
     "analytics": "Analytics",
-    "optimization": "Optimization",
     "toggleMenu": "Toggle navigation menu",
     "keepSidebarOpen": "Keep sidebar open",
     "collapseSidebar": "Collapse sidebar",
@@ -838,7 +838,7 @@
         "status": "Status",
         "assignee": "Assignee",
         "all": "All",
-        "unassigned": "Unassigned",
+        "unassigned": "Everyone",
         "search": "Search actions…",
         "clear": "Clear filters"
       },
@@ -866,6 +866,8 @@
         "dismissed": "Dismissed"
       },
       "taskProgress": "{completed}/{total} tasks",
+      "everyone": "Everyone",
+      "everyoneTitle": "Everyone in the workspace: no one is assigned yet",
       "tags": {
         "signals": "{count, plural, one {1 signal} other {# signals}}",
         "prompts": "{count, plural, one {1 prompt} other {# prompts}}",
@@ -1389,6 +1391,284 @@
           "pages": "Pages when sent",
           "figures": "{citations, plural, one {# citation} other {# citations}} · {sessions, plural, one {# session} other {# sessions}} · {aiVisits, plural, one {# AI visit} other {# AI visits}}"
         }
+      }
+    },
+    "gettingStarted": {
+      "category": "Getting started",
+      "card": {
+        "title": "Getting started",
+        "value": "{done} / {total}",
+        "sub": "steps done · at your own pace"
+      },
+      "firstSignals": "Start with your first signals",
+      "note": "AI actions start here as soon as your first signals appear. Usually within a few days.",
+      "table": {
+        "stage": "Stage",
+        "ready": "Ready"
+      },
+      "stages": {
+        "setup": "Set up",
+        "explore": "Explore",
+        "act": "Act",
+        "ready": "Ready"
+      },
+      "status": {
+        "new": "New",
+        "done": "Done",
+        "waiting": "Waiting for data",
+        "skipped": "Skipped"
+      },
+      "optional": "Optional",
+      "everyone": "Everyone in the workspace",
+      "readyWhen": {
+        "setup": "Now",
+        "explore": "First answers · ~3h",
+        "dataPrompts": "24h after Search Console or Analytics",
+        "act": "Suggestions · ~24h",
+        "ready": "After the steps above"
+      },
+      "opensWhenReady": "Opens when its data is ready: {when}",
+      "steps": {
+        "kpis": {
+          "title": "Set your KPIs",
+          "summary": "Pick 3–5 goals. We track them for you.",
+          "open": "Open KPIs",
+          "doneWhen": "1 KPI saved",
+          "why": [
+            "KPIs turn your data into goals you can track.",
+            "Action Center shows your progress against them every week."
+          ],
+          "how": [
+            "Open KPIs",
+            "Pick 3–5, like AI visibility or citations",
+            "Set a goal for each and save"
+          ]
+        },
+        "competitors": {
+          "title": "Add at least 3 competitors",
+          "summary": "Works best with 5–20 competitors.",
+          "open": "Add competitors",
+          "doneWhen": "3 competitors",
+          "why": [
+            "Every AI answer is compared with your competitors.",
+            "5–20 competitors give the clearest picture."
+          ],
+          "how": ["Open Competitors", "Add the brands buyers compare you with", "Aim for 5–20"]
+        },
+        "topics": {
+          "title": "Add at least 3 topics",
+          "summary": "Pick from topic suggestions.",
+          "open": "Open topic suggestions",
+          "doneWhen": "3 topics",
+          "why": [
+            "Topics group your prompts and show where you lead or lag.",
+            "Suggestions come from your site and market."
+          ],
+          "how": ["Open Topics", "Pick 3 topics that match what you sell", "Add them"]
+        },
+        "prompts": {
+          "title": "Add 3 prompts per topic",
+          "summary": "Pick from prompt suggestions.",
+          "open": "Open prompt suggestions",
+          "doneWhen": "3 prompts in every topic",
+          "why": [
+            "Prompts are the questions buyers ask AI.",
+            "3 per topic is enough to see a trend."
+          ],
+          "how": [
+            "Open Prompt Suggestions",
+            "Pick 3 prompts for each topic",
+            "Add them. First answers arrive within hours"
+          ]
+        },
+        "gsc": {
+          "title": "Connect Google Search Console",
+          "summary": "Strongly recommended.",
+          "name": "Google Search Console",
+          "open": "Connect",
+          "doneWhen": "Connected",
+          "why": [
+            "We start analyzing your data within 24 hours.",
+            "Prompt and content suggestions come from real searches.",
+            "Shows whether your work brings clicks."
+          ],
+          "how": [
+            "Click Connect",
+            "Sign in with Google and pick your property",
+            "Allow read-only access"
+          ]
+        },
+        "ga": {
+          "title": "Connect Google Analytics",
+          "summary": "See which AI visits engage and convert.",
+          "name": "Google Analytics",
+          "open": "Connect",
+          "doneWhen": "Connected",
+          "why": [
+            "Shows which AI visits engage and convert.",
+            "Needed for traffic and conversion reports."
+          ],
+          "how": ["Click Connect", "Pick your GA4 property", "Allow read-only access"]
+        },
+        "snippet": {
+          "title": "Add the AI Traffic snippet",
+          "summary": "One line in your site’s head.",
+          "open": "Get the code",
+          "doneWhen": "First visit detected",
+          "why": [
+            "Counts visits from ChatGPT, Gemini, Perplexity and more.",
+            "Works without Google Analytics."
+          ],
+          "how": [
+            "Copy the code",
+            "Paste it in your site’s head",
+            "Publish. We detect the first visit"
+          ]
+        },
+        "visibility": {
+          "title": "See where you stand in Visibility",
+          "summary": "Your share of AI answers vs competitors.",
+          "open": "Open Visibility",
+          "doneWhen": "Page opened",
+          "why": ["Your share of AI answers vs competitors.", "The starting point for every goal."],
+          "how": ["Open Visibility", "Check your rank and the leader", "Note your weakest platform"]
+        },
+        "answers": {
+          "title": "Read your first AI answers",
+          "summary": "Answers and follow-up searches, per prompt.",
+          "open": "Open Prompts",
+          "doneWhen": "Page opened",
+          "why": ["See exactly what AI tells your buyers."],
+          "how": ["Open Prompts", "Open one prompt", "Read the answer and its follow-up searches"]
+        },
+        "data_prompts": {
+          "title": "Track high-value prompt suggestions",
+          "summary": "Built from your Search Console and Analytics data.",
+          "open": "Open prompt suggestions",
+          "doneWhen": "5 suggested prompts tracked",
+          "why": [
+            "Built from the searches and pages that bring you visitors.",
+            "So you track what matters for revenue."
+          ],
+          "how": [
+            "Open Prompt Suggestions",
+            "Filter: From your data",
+            "Track the ones that fit, 5 or more"
+          ]
+        },
+        "mentions": {
+          "title": "Check what AI says about you",
+          "summary": "Mentions and tone.",
+          "open": "Open Mentions",
+          "doneWhen": "Page opened",
+          "why": ["How often AI names you, and in what tone."],
+          "how": ["Open Mentions", "Check your share and sentiment"]
+        },
+        "citations": {
+          "title": "See who AI quotes",
+          "summary": "The pages and sites AI uses as sources.",
+          "open": "Open Citations",
+          "doneWhen": "Page opened",
+          "why": ["The sources AI trusts. Where you should be listed."],
+          "how": ["Open Citations", "See which sites AI quotes most"]
+        },
+        "traffic": {
+          "title": "See visits from AI",
+          "summary": "Which platforms send visitors, to which pages.",
+          "open": "Open AI Traffic",
+          "doneWhen": "Page opened",
+          "why": ["Which AI platforms send visitors, and to which pages."],
+          "how": ["Open AI Traffic", "Check your top pages"]
+        },
+        "pick_content": {
+          "title": "Pick content from suggestions",
+          "summary": "Choose 1–3 suggestions.",
+          "open": "Open Content",
+          "doneWhen": "1 suggestion picked",
+          "why": ["Suggestions are built from your prompts and searches."],
+          "how": [
+            "Open Content",
+            "Pick 1–3 suggestions: review them, create a brief or send them to Action Center"
+          ]
+        },
+        "create_content": {
+          "title": "Create your first content",
+          "summary": "Draft in your brand voice, then publish.",
+          "open": "Open Content",
+          "doneWhen": "Sent to your CMS, or its action completed",
+          "why": ["Content is the main way to appear in more answers."],
+          "how": [
+            "Open Content",
+            "Create a brief for one suggestion",
+            "Publish it: send it to your CMS, or complete its action"
+          ]
+        },
+        "optimize_page": {
+          "title": "Optimize a page",
+          "summary": "Audit a page, then apply its fixes.",
+          "open": "Open Audit",
+          "doneWhen": "1 page audited",
+          "why": ["Small fixes on pages AI already reads can win fast."],
+          "how": ["Open Audit", "Audit one page", "Apply the fixes it suggests"]
+        },
+        "ready": {
+          "title": "You’re ready",
+          "summary": "AI actions start appearing here.",
+          "open": "See what’s next",
+          "doneWhen": "Automatic",
+          "why": ["From now on, AI turns your signals into actions here."],
+          "how": ["Keep checking Action Center each week"]
+        }
+      },
+      "panel": {
+        "close": "Close",
+        "ready": "Ready: {when}",
+        "optionalRecommended": "Optional · recommended",
+        "why": "Why it’s important",
+        "how": "How to do this",
+        "videosSoon": "Videos coming soon",
+        "doneWhen": "Done when: {condition}",
+        "doneAuto": "Done · checked automatically",
+        "inNewTab": "Finish it in the new tab. This step updates when you come back.",
+        "skip": "Skip",
+        "skippedNote": "Skipped. Suggestions may be less accurate. You can still connect it."
+      },
+      "skipDialog": {
+        "title": "Skip {name}?",
+        "body": "This is the last time we suggest it. Without it:",
+        "lessAccurate": "Prompt and content suggestions are less accurate",
+        "noClicks": "We can’t show whether your work brings clicks",
+        "later": "You can connect it any time from Settings.",
+        "skip": "Skip anyway",
+        "connect": "Connect now",
+        "skipped": "Skipped · you can connect it later",
+        "failed": "Couldn’t skip the step. Try again."
+      },
+      "start": {
+        "button": "Start getting started",
+        "hint": "For admins and managers · about 15 min",
+        "started": "{count, plural, =0 {Getting started is on} one {Getting started · # step already done} other {Getting started · # steps already done}}",
+        "failed": "Couldn’t start Getting started. Try again."
+      },
+      "skip": {
+        "button": "Skip getting started",
+        "title": "Skip getting started?",
+        "body": "Your actions list goes back to normal. Steps you finished stay done.",
+        "later": "You can start again any time from the same button.",
+        "confirm": "Skip",
+        "keep": "Keep going",
+        "done": "Back to your actions",
+        "failed": "Couldn’t skip Getting started. Try again."
+      },
+      "secondBrand": {
+        "title": "Run Getting started for {brand}?",
+        "body": "You already know Ansvisor. Run the setup steps for this brand, or skip them.",
+        "runLine": "Run: KPIs, competitors, topics and prompts for {brand}, guided",
+        "skipLine": "Skip: go straight to the actions list",
+        "run": "Run Getting started",
+        "skip": "Skip",
+        "ran": "Getting started is on for {brand}",
+        "skipped": "Skipped · {brand} goes straight to the actions"
       }
     },
     "actionTexts": {
@@ -3039,7 +3319,13 @@
     },
     "webhook": {
       "title": "Webhook Settings",
-      "description": "Connect your workflow automation tool (n8n, Make, Zapier) to receive opportunities.",
+      "description": "Connect your workflow automation tool (n8n, Make, Zapier) and choose which events it receives.",
+      "eventsTitle": "Events to send",
+      "eventsDescription": "Only selected events are sent. Test Webhook always sends a test event, regardless of these selections.",
+      "eventRequired": "Select at least one event for this webhook.",
+      "eventOpportunitySent": "Opportunity sent",
+      "eventDailyPulseCreated": "Daily Pulse created",
+      "eventActionTaskSent": "Action Center task sent",
       "url": "Webhook URL",
       "urlPlaceholder": "https://your-n8n-instance.com/webhook/...",
       "secret": "Secret Key (optional)",
@@ -3124,6 +3410,7 @@
     "newSignalGainLost": "Completed earlier, but the gain did not hold: visibility on these prompts was {after}% after the work and is {now}% now."
   },
   "traffic": {
+    "loadingRange": "Loading the selected range",
     "title": "AI Traffic Analytics",
     "description": "Track which AI bots are crawling your website.",
     "totalCrawls": "Total Crawls",
@@ -3444,10 +3731,13 @@
       "usage": "This month: {stored} of {cap} detailed rows.",
       "usageNoCap": "This month: {stored} detailed {count, plural, one {row} other {rows}}.",
       "paused": "Detailed rows paused until {day}, totals still counted.",
+      "rawUsage": "Log records this month: {raw} of {cap}.",
+      "logsPaused": "Log files paused until {day}: this month's log records are used up, so requests from Logpush or the Vercel drain aren't read until then.",
       "secretOnce": "Copy these settings now: the secret in them isn't shown again. Lost it? Revoke this connection and create a new one.",
       "copy": "Copy",
       "copied": "Copied",
       "copyWorker": "Worker code",
+      "copyWorkerSecret": "Secret value (name: {name})",
       "copyDestination": "Destination",
       "copyLogpushJob": "Job settings (Cloudflare API: POST /zones/ZONE_ID/logpush/jobs)",
       "copyEndpoint": "Endpoint URL",
@@ -3475,6 +3765,7 @@
         "cloudflare_worker": [
           "In Cloudflare, open Workers & Pages and create a Worker.",
           "Replace its code with the Worker code below and deploy it.",
+          "In the Worker's Settings › Variables and Secrets, add a variable of type Secret with the name and value below.",
           "Add a route for your site, such as example.com/*, so the Worker sees its requests."
         ],
         "cloudflare_logpush": [
@@ -3522,8 +3813,9 @@
       "moreUncrawled": "and {count} more",
       "allCrawled": "Every page AI answers cited in the last 30 days was read by a search bot.",
       "alertStarts": "The search-bot alert starts on {day}, 30 days after the first AI-bot request.",
-      "alertStale": "The search-bot alert is paused: no connection has sent AI-bot requests in the last 2 days, or the month's cap was reached, so the pages search bots read aren't complete.",
-      "allTimeCapped": "last 90 days"
+      "alertStale": "The search-bot alert is paused: the bot data doesn't cover the last 30 days (no connection sent in the last 2 days, or one stopped or was replaced within them), or the month's cap was reached, so the pages search bots read aren't complete.",
+      "allTimeCapped": "last 90 days",
+      "yesterdayAndToday": "yesterday and today (UTC)"
     },
     "gate": {
       "needs": "Needs {source}",
@@ -4211,6 +4503,8 @@
     "trackedCompetitors": "Tracked Competitors",
     "selectToCompare": "Select a competitor to see head-to-head comparison.",
     "windowLast30Days": "Scores cover the last 30 days.",
+    "windowAllTime": "Scores cover all tracked history.",
+    "windowSelectedRange": "Scores reflect the selected date range.",
     "selected": "Selected",
     "noData": "No data",
     "emptyTitle": "No competitors yet",
@@ -4289,7 +4583,7 @@
     "noBrandDescription": "Select or create a brand to see the citations AI platforms use when answering about it."
   },
   "shopping": {
-    "title": "Shopping",
+    "title": "Product Visibility",
     "description": "Product cards AI engines surface — your products versus the competitive set.",
     "kpiCardRate": "Shopping card rate",
     "kpiCardRateSub": "Tracked prompts that returned ≥1 card",
@@ -4397,7 +4691,7 @@
       "promptPerformance": "Prompts",
       "queryFanout": "Fan-out",
       "aiTraffic": "AI Traffic",
-      "shoppingVisibility": "Shopping",
+      "shoppingVisibility": "Product Visibility",
       "auditScore": "Audit Score",
       "citations": "Citations",
       "mentionEvidence": "Mention Evidence",
@@ -4448,11 +4742,11 @@
     "aiTrafficNew": "new",
     "aiTrafficLowSample": "Low sample",
     "aiTrafficLowSampleHint": "Fewer than 30 visits in this period or the one before, so a % change would mislead.",
-    "shoppingVisibility": "Shopping Visibility",
+    "shoppingVisibility": "Product Visibility",
     "auditScore": "Site Audit Score",
     "auditedOn": "Audited on",
     "shopping": {
-      "sov": "Shopping SoV",
+      "sov": "Product SoV",
       "products": "Products Surfaced",
       "cardRate": "Card Rate",
       "topMerchant": "Top Merchant"
@@ -4725,7 +5019,8 @@
       "created": "Brand created successfully!",
       "back": "Back",
       "next": "Next",
-      "finish": "Finish Setup"
+      "finish": "Finish Setup",
+      "ecommerceDetected": "{brand} looks like an online store, so we turned on Product Visibility: ChatGPT Shopping is tracked for your prompts on plans that include it. You can turn it off in brand settings."
     },
     "settings": {
       "title": "Brand Settings",
@@ -4745,10 +5040,11 @@
       "deleteButton": "Delete Brand Permanently",
       "shopping": {
         "title": "Shopping mode",
-        "description": "Turn this on if this brand is in e-commerce. We’ll add ChatGPT Shopping to every prompt under this brand and reveal the Shopping dashboard.",
+        "description": "Turn this on if this brand is in e-commerce. We’ll add ChatGPT Shopping to every prompt under this brand and show Product Visibility in the menu.",
         "label": "This brand is in e-commerce / shopping",
         "help": "Adds <code>chatgpt-shopping</code> to every existing prompt's platform list and enables the Shopping platform on this brand.",
         "managersOnly": "Only admins and managers can change this setting.",
+        "planNote": "ChatGPT Shopping comes with the {plan} plan. On this plan the prompts keep it, but it isn’t tracked.",
         "on": "Shopping mode on",
         "onWithPrompts": "Shopping mode on: {count, plural, one {# prompt} other {# prompts}} updated",
         "off": "Shopping mode off",

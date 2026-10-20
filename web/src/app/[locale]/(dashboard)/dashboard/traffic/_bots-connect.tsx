@@ -17,16 +17,22 @@ import {
 import { cn } from '@/lib/utils';
 import { formatNumber } from '@/lib/format';
 import { formatRelative } from '@/lib/format-relative';
-import { botsCardState, lastBotEvent, rowsPausedUntil } from '@/lib/ai-bots';
+import {
+  botsCardState,
+  hasLogSender,
+  lastBotEvent,
+  logsPausedUntil,
+  rowsPausedUntil,
+} from '@/lib/ai-bots';
 import {
   createBotConnection,
-  getBotConnections,
   revokeBotConnection,
   type BotConnectionKind,
   type BotConnections,
   type NewBotConnection,
 } from '@/lib/actions/ai-bots';
 import { SourceCard } from './_source-card';
+import { getBotConnections } from '@/lib/traffic-reads';
 
 const KINDS: BotConnectionKind[] = ['cloudflare_worker', 'cloudflare_logpush', 'vercel_drain'];
 
@@ -88,6 +94,13 @@ function SetupSteps({ created }: { created: NewBotConnection }) {
       </ol>
       {kind === 'cloudflare_worker' && created.workerScript && (
         <CopyBlock label={t('copyWorker')} value={created.workerScript} code />
+      )}
+      {kind === 'cloudflare_worker' && created.workerSecretName && (
+        // Added as a Worker Secret, so it isn't in the code anyone with the Worker can read.
+        <CopyBlock
+          label={t('copyWorkerSecret', { name: created.workerSecretName })}
+          value={created.secret}
+        />
       )}
       {kind === 'cloudflare_logpush' && created.logpushJob && (
         <>
@@ -181,6 +194,13 @@ export function BotsDialog({
 
   const { usage, connections } = info;
   const pausedUntil = rowsPausedUntil(usage);
+  const logsPaused = logsPausedUntil(info);
+  const shortDay = (day: string) =>
+    new Date(`${day}T00:00:00Z`).toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      timeZone: 'UTC',
+    });
 
   return (
     <Dialog open={open} onOpenChange={close}>
@@ -258,9 +278,18 @@ export function BotsDialog({
                         stored: formatNumber(usage.stored),
                         cap: formatNumber(usage.cap),
                       })}
-                  {pausedUntil &&
-                    ` ${t('paused', { day: new Date(`${pausedUntil}T00:00:00Z`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' }) })}`}
+                  {pausedUntil && ` ${t('paused', { day: shortDay(pausedUntil) })}`}
                 </p>
+                {/* Log senders' records count against their own cap (§6.3). */}
+                {hasLogSender(info) && usage.rawCap > 0 && (
+                  <p className="text-xs text-muted-foreground">
+                    {t('rawUsage', {
+                      raw: formatNumber(usage.raw),
+                      cap: formatNumber(usage.rawCap),
+                    })}
+                    {logsPaused && ` ${t('logsPaused', { day: shortDay(logsPaused) })}`}
+                  </p>
+                )}
               </section>
             )}
 
@@ -336,22 +365,44 @@ export function BotsSource({
 }) {
   const t = useTranslations('traffic.sources');
   const tCommon = useTranslations('common');
-  const [info, setInfo] = useState<BotConnections | { error: string } | null>(null);
+  // A failed read keeps the last connections read, as the report section
+  // does: the dialog reads them again after a create, and taken down it
+  // would lose the new connection's one-time secret. Kept per brand.
+  const [loaded, setLoaded] = useState<{
+    brandId: string;
+    info: BotConnections | null;
+    failed: boolean;
+  } | null>(null);
   const [open, setOpen] = useState(false);
 
   const load = useCallback(() => {
+    const done = (next: BotConnections | null) =>
+      setLoaded((prev) => ({
+        brandId,
+        info: next ?? (prev?.brandId === brandId ? prev.info : null),
+        failed: next === null,
+      }));
     getBotConnections(brandId)
-      .then(setInfo)
-      .catch((err: Error) => setInfo({ error: err.message }));
+      .then((result) => done('error' in result ? null : result))
+      .catch(() => done(null));
   }, [brandId]);
 
   useEffect(() => {
     load();
   }, [load, revision]);
 
+  const current = loaded?.brandId === brandId ? loaded : null;
+  const info = current?.info ?? null;
   const title = t('bots');
-  if (!info) return <SourceCard tone="off" title={title} line={t('botsLoading')} />;
-  if ('error' in info) return <SourceCard tone="off" title={title} line={t('botsFailed')} />;
+  if (!info) {
+    return (
+      <SourceCard
+        tone="off"
+        title={title}
+        line={current?.failed ? t('botsFailed') : t('botsLoading')}
+      />
+    );
+  }
 
   const state = botsCardState(info);
   const button = (label: string, primary: boolean) => (
@@ -367,7 +418,9 @@ export function BotsSource({
 
   return (
     <>
-      {state === 'locked' ? (
+      {current?.failed ? (
+        <SourceCard tone="off" title={title} line={t('botsFailed')} />
+      ) : state === 'locked' ? (
         <SourceCard
           tone="off"
           title={title}

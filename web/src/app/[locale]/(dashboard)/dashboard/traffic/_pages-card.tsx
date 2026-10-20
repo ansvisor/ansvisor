@@ -30,7 +30,6 @@ import { formatRelative } from '@/lib/format-relative';
 import { getPlatformName } from '@/lib/traffic-platforms';
 import { citationState, pageStatuses, pageUrl } from '@/lib/traffic-pages';
 import {
-  getTrafficPages,
   type TrafficBrokenLink,
   type TrafficDateWindow,
   type TrafficPageRow,
@@ -41,6 +40,8 @@ import {
 import { runAudit } from '@/lib/actions/audits';
 import { PAGE_ACTION_MAX, auditBlock, usePageActions } from './_use-page-actions';
 import { PagePromptsDialog } from './_page-prompts-dialog';
+import { getTrafficPages } from '@/lib/traffic-reads';
+import { useRangeReady } from './_range-ready';
 
 /**
  * Pages: which answers send visitors (AT-006, spec §3.5, "the
@@ -231,6 +232,7 @@ export function PagesCard({
       cancelled = true;
     };
   }, [brandId, dateWindow, tab, limit, key]);
+  useRangeReady('pagesCard', loaded?.key === key);
 
   const result = loaded?.result ?? null;
   const stale = loaded !== null && loaded.key !== key;

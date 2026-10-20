@@ -3,10 +3,18 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Brand } from '@/types';
 import type { ActionItem } from '@/lib/actions/action-center';
+import {
+  buildGettingStarted,
+  type GettingStartedFacts,
+  type GettingStartedStatus,
+  type GettingStartedStep,
+} from '@/lib/getting-started/steps';
 
 /**
  * The actions list's Export CSV (AC-005): it reads what each listed action's
  * Affected tab names, then downloads the list with it, as UTF-8 Excel reads.
+ * And Getting started (AC-ALT2 §4): its steps open the page while a brand
+ * runs it, and the page is unchanged for a brand that doesn't.
  */
 
 (
@@ -50,10 +58,24 @@ const action: ActionItem = {
   priorityReason: null,
 };
 
-const { getActionsAffected, saveBlob, toast } = vi.hoisted(() => ({
+const {
+  getActions,
+  getActionsAffected,
+  getGettingStarted,
+  startGettingStarted,
+  skipGettingStarted,
+  role,
+  saveBlob,
+  toast,
+} = vi.hoisted(() => ({
+  getActions: vi.fn(),
   getActionsAffected: vi.fn(),
+  getGettingStarted: vi.fn(),
+  startGettingStarted: vi.fn(),
+  skipGettingStarted: vi.fn(),
+  role: { canManage: true },
   saveBlob: vi.fn(),
-  toast: { error: vi.fn(), success: vi.fn() },
+  toast: Object.assign(vi.fn(), { error: vi.fn(), success: vi.fn() }),
 }));
 
 vi.mock('next-intl', () => ({
@@ -63,16 +85,45 @@ vi.mock('@/stores/use-brand-store', () => ({
   useBrandStore: (selector: (state: { getActiveBrand: () => Brand }) => unknown) =>
     selector({ getActiveBrand: () => brand }),
 }));
-vi.mock('@/lib/actions/action-center', () => ({
-  getActions: vi.fn(async () => [action]),
-  getActionsAffected,
+vi.mock('@/lib/actions/action-center', () => ({ getActions, getActionsAffected }));
+vi.mock('@/lib/actions/getting-started', () => ({
+  getGettingStarted,
+  startGettingStarted,
+  skipGettingStarted,
 }));
+vi.mock('@/hooks/use-user-role', () => ({ useUserRole: () => role }));
 vi.mock('@/lib/actions/team', () => ({ listMembers: vi.fn(async () => []) }));
 vi.mock('@/lib/download', () => ({ saveBlob }));
 vi.mock('sonner', () => ({ toast }));
 vi.mock('@/components/action-center/action-center-tabs', () => ({ ActionCenterTabs: () => null }));
 vi.mock('@/components/action-center/action-table', () => ({ ActionTable: () => null }));
 vi.mock('@/components/action-center/action-drawer', () => ({ ActionDrawer: () => null }));
+vi.mock('@/components/getting-started/getting-started-table', () => ({
+  GettingStartedTable: ({
+    steps,
+    showNote,
+    onSelect,
+  }: {
+    steps: GettingStartedStep[];
+    showNote: boolean;
+    onSelect: (step: GettingStartedStep) => void;
+  }) => (
+    <div data-testid="steps">
+      <span data-testid="steps-summary">{`${steps.length} steps${showNote ? ', with the note' : ''}`}</span>
+      {steps.map((step) => (
+        <button key={step.key} data-step={step.key} onClick={() => onSelect(step)}>
+          {step.key}
+        </button>
+      ))}
+    </div>
+  ),
+  readyWhenKey: () => 'setup',
+}));
+vi.mock('@/components/getting-started/step-card', () => ({
+  GettingStartedStepCard: ({ step }: { step: GettingStartedStep }) => (
+    <div data-testid="card">{step.key}</div>
+  ),
+}));
 
 const { default: ActionCenterActionsPage } = await import('./page');
 
@@ -87,6 +138,12 @@ async function render() {
 }
 
 beforeEach(() => {
+  window.history.replaceState(null, '', '/');
+  getActions.mockReset().mockResolvedValue([action]);
+  getGettingStarted.mockReset().mockResolvedValue(null);
+  startGettingStarted.mockReset().mockResolvedValue(undefined);
+  skipGettingStarted.mockReset().mockResolvedValue(undefined);
+  role.canManage = true;
   container = document.createElement('div');
   document.body.append(container);
   root = createRoot(container);
@@ -145,5 +202,186 @@ describe('the actions list Export CSV', () => {
     expect(saveBlob).not.toHaveBeenCalled();
     // Mounted again for afterEach's unmount.
     root = createRoot(container);
+  });
+});
+
+const started = (over: Partial<GettingStartedFacts> = {}): GettingStartedStatus =>
+  buildGettingStarted({
+    startedAt: '2026-10-20T10:00:00Z',
+    dismissedAt: null,
+    confirmedAt: '2026-10-20T10:00:00Z',
+    records: {},
+    recordedAt: {},
+    kpiSetupAt: null,
+    competitors: 1,
+    topicPrompts: [],
+    gsc: false,
+    ga: false,
+    firstAnswer: false,
+    firstVisit: false,
+    dataSuggestions: 0,
+    dataTracked: 0,
+    contentSuggestions: 0,
+    contentPicked: 0,
+    contentCreated: 0,
+    contentRecent: 0,
+    audits: 0,
+    ...over,
+  });
+
+const steps = () => container.querySelector('[data-testid="steps"]');
+const text = () => container.textContent ?? '';
+
+describe('Getting started in the actions list', () => {
+  it("leaves the page as it is for a brand that doesn't run it", async () => {
+    getGettingStarted.mockResolvedValue(started({ startedAt: null }));
+    await render();
+
+    expect(steps()).toBeNull();
+    expect(text()).not.toContain('card.title');
+    expect(text()).toContain('cards.priority');
+    expect(exportButton()).toBeDefined();
+  });
+
+  it('opens on its steps for a new brand, the ranking cards waiting for the first signals', async () => {
+    getActions.mockResolvedValue([]);
+    getGettingStarted.mockResolvedValue(started());
+    await render();
+
+    expect(container.querySelector('[data-testid="steps-summary"]')?.textContent).toBe(
+      '17 steps, with the note',
+    );
+    expect(text()).toContain('card.title');
+    expect(text().match(/firstSignals/g)).toHaveLength(3);
+    // Getting started takes Highest Priority's place; the filters are for actions.
+    expect(text()).not.toContain('cards.priority');
+    expect(exportButton()).toBeUndefined();
+  });
+
+  it("opens a step's card, and says when a step still waiting for data opens", async () => {
+    getGettingStarted.mockResolvedValue(started());
+    await render();
+    const card = () => container.querySelector('[data-testid="card"]');
+    expect(card()).toBeNull();
+
+    const stepButton = (key: string) =>
+      container.querySelector<HTMLButtonElement>(`[data-step="${key}"]`)!;
+    await act(async () => stepButton('competitors').click());
+    expect(card()?.textContent).toBe('competitors');
+
+    // Mentions waits for the first answers.
+    await act(async () => stepButton('mentions').click());
+    expect(toast).toHaveBeenCalledWith('opensWhenReady');
+    expect(card()?.textContent).toBe('competitors');
+  });
+
+  // gkhngyk on #1235: Create action, a signal and the history drawer link to
+  // ?action=<id>; on a new brand the drawer opened over the steps.
+  it('lists the actions for a link to one action, or to a filtered list', async () => {
+    for (const search of ['?action=a1', '?status=new', '?q=coffee']) {
+      window.history.replaceState(null, '', `/${search}`);
+      getGettingStarted.mockResolvedValue(started());
+      await render();
+      expect(steps(), search).toBeNull();
+      act(() => root.unmount());
+      root = createRoot(container);
+    }
+  });
+
+  it('keeps a category the URL names, and lists the actions', async () => {
+    window.history.replaceState(null, '', '/?category=all');
+    getGettingStarted.mockResolvedValue(started());
+    await render();
+
+    expect(steps()).toBeNull();
+    expect(text()).toContain('card.title');
+    expect(exportButton()).toBeDefined();
+  });
+
+  it('reads as before when Getting started cannot be read', async () => {
+    getGettingStarted.mockRejectedValue(new Error('offline'));
+    await render();
+
+    expect(steps()).toBeNull();
+    expect(text()).toContain('cards.priority');
+  });
+});
+
+// Dialogs open in a portal on the body.
+const pageText = () => document.body.textContent ?? '';
+const buttonNamed = (label: string) =>
+  [...document.querySelectorAll('button')].find((b) => b.textContent?.trim() === label);
+
+// AC-ALT2 §5: existing customers, skipping, and a brand added beside others.
+describe('starting and skipping Getting started', () => {
+  it('offers Start to a manager whose brand isn’t set up, and runs it', async () => {
+    getGettingStarted
+      .mockResolvedValueOnce(started({ startedAt: null }))
+      .mockResolvedValue(started({ competitors: 4 }));
+    await render();
+    expect(text()).toContain('start.hint');
+    await act(async () => buttonNamed('start.button')!.click());
+
+    expect(startGettingStarted).toHaveBeenCalledWith('brand-id');
+    expect(toast.success).toHaveBeenCalledWith('start.started');
+    expect(steps()).not.toBeNull();
+  });
+
+  it('offers nothing to a brand that is set up, nor to someone who can’t set it up', async () => {
+    const setUp = { startedAt: null, competitors: 3, topicPrompts: [3, 3, 3], gsc: true };
+    getGettingStarted.mockResolvedValue(started({ ...setUp, contentRecent: 1 }));
+    await render();
+    expect(buttonNamed('start.button')).toBeUndefined();
+
+    act(() => root.unmount());
+    root = createRoot(container);
+    role.canManage = false;
+    getGettingStarted.mockResolvedValue(started({ startedAt: null }));
+    await render();
+    expect(buttonNamed('start.button')).toBeUndefined();
+  });
+
+  it('skips it only after asking, then lists the actions', async () => {
+    getGettingStarted
+      .mockResolvedValueOnce(started())
+      .mockResolvedValue(started({ dismissedAt: '2026-10-20T12:00:00Z' }));
+    await render();
+    await act(async () => buttonNamed('skip.button')!.click());
+    expect(skipGettingStarted).not.toHaveBeenCalled();
+    expect(pageText()).toContain('skip.body');
+
+    await act(async () => buttonNamed('skip.confirm')!.click());
+    expect(skipGettingStarted).toHaveBeenCalledWith('brand-id');
+    expect(toast.success).toHaveBeenCalledWith('skip.done');
+    expect(steps()).toBeNull();
+    // Start stays available after a skip.
+    expect(buttonNamed('start.button')).toBeDefined();
+  });
+
+  it("closes the new brand's question when the answer can't be saved, and keeps it closed", async () => {
+    getGettingStarted.mockResolvedValue(started({ confirmedAt: null }));
+    startGettingStarted.mockRejectedValue(new Error('missing column confirmed_at'));
+    await render();
+    expect(pageText()).toContain('secondBrand.title');
+
+    await act(async () => buttonNamed('secondBrand.run')!.click());
+    expect(toast.error).toHaveBeenCalledWith('start.failed');
+    expect(pageText()).not.toContain('secondBrand.title');
+    // Start takes the question's place, to run it later.
+    expect(buttonNamed('start.button')).toBeDefined();
+  });
+
+  it('asks a manager whether to run it for a brand added beside others', async () => {
+    getGettingStarted
+      .mockResolvedValueOnce(started({ confirmedAt: null }))
+      .mockResolvedValue(started());
+    await render();
+    expect(pageText()).toContain('secondBrand.title');
+    expect(steps()).toBeNull();
+
+    await act(async () => buttonNamed('secondBrand.run')!.click());
+    expect(startGettingStarted).toHaveBeenCalledWith('brand-id');
+    expect(toast.success).toHaveBeenCalledWith('secondBrand.ran');
+    expect(steps()).not.toBeNull();
   });
 });

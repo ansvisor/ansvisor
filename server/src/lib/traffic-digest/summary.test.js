@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
   bestConvertingPlatform,
+  brokenCandidates,
   changeText,
   dailyVisits,
   digestWeek,
+  pageCandidates,
   summarySentences,
   topChanges,
   topPlatforms,
@@ -59,6 +61,9 @@ describe('the charts', () => {
         { platform: 'perplexity.ai', visits: 11 },
         { platform: 'claude.ai', visits: 0 },
         { platform: 'chatgpt.com', visits: '21' },
+        // A key only the public beacon sent, and a referrer nobody named.
+        { platform: 'made-up.example', visits: 90 },
+        { platform: 'unknown', visits: 40 },
       ]),
     ).toEqual([
       { platform: 'chatgpt.com', visits: 21 },
@@ -151,19 +156,93 @@ describe('topChanges', () => {
           { platform: 'chatgpt.com', visits: 12 },
           { platform: 'perplexity.ai', visits: 11 },
           { platform: 'grok.com', visits: 3 },
+          // The beacon is public: a key it was sent isn't a platform.
+          { platform: 'made-up.example', visits: 500 },
         ],
         [
           { page: '/menu', visits: 8 },
           { page: '/gifts', visits: 6 },
+          // Nor is a path no source but the beacon knows.
+          { page: '/buy-now-spam', visits: 400 },
         ],
       ),
-      broken: { count: 2, rows: [{ page: '/old-menu', target: '/menu' }] },
+      broken: {
+        count: 2,
+        rows: [
+          { page: '/old-menu', target: '/menu', visits: 4, citations: 2 },
+          { page: '/old-gifts', target: null, visits: 3, citations: 0 },
+        ],
+      },
+      knownPages: new Set(['/menu', '/gifts']),
     });
     expect(changes).toEqual([
       { type: 'broken', count: 2, page: '/old-menu', target: '/menu' },
       { type: 'platform', name: 'chatgpt.com', before: 30, now: 12 },
       { type: 'page', name: '/menu', before: 25, now: 8 },
     ]);
+  });
+
+  it('asks about the pages that moved, and names none it was not told are known', () => {
+    const data = {
+      prev: week(
+        [],
+        [
+          { page: '/Menu', visits: 10 },
+          { page: '/a', visits: 1 },
+        ],
+      ),
+      cur: week(
+        [],
+        [
+          { page: '/menu', visits: 2 },
+          { page: '/b', visits: 4 },
+        ],
+      ),
+      broken: null,
+    };
+    expect(pageCandidates(data)).toEqual(['/b', '/menu']);
+    expect(topChanges(data)).toEqual([]);
+  });
+
+  // gkhngyk on #1229: the beacon is public, so a broken page or its redirect
+  // can be any text a caller sent; and #1228's rule decides what counts.
+  it('counts broken links that are cited or have 3 visits, and names only known pages', () => {
+    const broken = {
+      count: 3,
+      rows: [
+        { page: '/Free-Crypto-Here', target: '/free-crypto', visits: 5, citations: 0 },
+        { page: '/old-menu', target: '/menu-2025', visits: 3, citations: 0 },
+        // One stray 404 visit isn't a broken link worth a line.
+        { page: '/typo', target: '/', visits: 1, citations: 0 },
+      ],
+    };
+    expect(brokenCandidates(broken)).toEqual(['/free-crypto-here', '/free-crypto']);
+    // Neither the page nor the redirect is known: only the count.
+    expect(topChanges({ broken, knownPages: new Set(['/menu']) })).toEqual([
+      { type: 'broken', count: 2, page: null, target: null },
+    ]);
+    // The page is known, its redirect isn't.
+    expect(topChanges({ broken, knownPages: new Set(['/free-crypto-here']) })).toEqual([
+      { type: 'broken', count: 2, page: '/Free-Crypto-Here', target: null },
+    ]);
+    // AI answers cite it: named, as the signal lists it.
+    const cited = {
+      count: 1,
+      rows: [{ page: '/old-menu', target: '/menu', visits: 1, citations: 4 }],
+    };
+    expect(topChanges({ broken: cited, knownPages: new Set(['/menu']) })).toEqual([
+      { type: 'broken', count: 1, page: '/old-menu', target: '/menu' },
+    ]);
+    // Only stray visits: no line at all.
+    const stray = {
+      count: 2,
+      rows: [
+        { page: '/a', visits: 2 },
+        { page: '/b', visits: 1 },
+      ],
+    };
+    expect(topChanges({ broken: stray })).toEqual([]);
+    expect(brokenCandidates(stray)).toEqual([]);
   });
 
   it('names nothing that moved by less than 3 visits', () => {
@@ -182,6 +261,9 @@ describe('topChanges', () => {
     );
     expect(changeText({ type: 'broken', count: 1, page: '/', target: null })).toBe(
       '1 page AI visitors landed on doesn’t exist: /.',
+    );
+    expect(changeText({ type: 'broken', count: 3, page: null, target: null })).toBe(
+      '3 pages AI visitors landed on don’t exist.',
     );
     expect(changeText({ type: 'platform', name: 'chatgpt.com', before: 30, now: 12 })).toBe(
       'ChatGPT sent 12 AI visits, down from 30.',

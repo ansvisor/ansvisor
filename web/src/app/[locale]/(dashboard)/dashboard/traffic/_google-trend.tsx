@@ -6,11 +6,9 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { formatTrafficBucketDate, GoogleTrendChart } from './_charts';
 import { googleTrend, googleTrendDays } from '@/lib/traffic-google-trend';
-import {
-  getTrafficGoogleTrend,
-  type TrafficGoogleTrend,
-  type TrafficTrendPoint,
-} from '@/lib/actions/traffic';
+import { type TrafficGoogleTrend, type TrafficTrendPoint } from '@/lib/actions/traffic';
+import { getTrafficGoogleTrend } from '@/lib/traffic-reads';
+import { useRangeReady } from './_range-ready';
 
 /** Search Console's part when it isn't connected: no clicks, no days. */
 const NO_GOOGLE = { clicks: [], firstDay: null, lastDay: null };
@@ -69,6 +67,7 @@ export function GoogleTrendView({
       cancelled = true;
     };
   }, [brandId, since, until, key]);
+  useRangeReady('googleTrend', !since || !until || loaded?.key === key);
 
   if (days === null) {
     return (

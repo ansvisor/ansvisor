@@ -22,7 +22,7 @@ import {
   cleanupStalePendingTasks,
 } from './lib/job-manager.js';
 import { runTrackingJob, recoverWaitingJobs } from './lib/job-runner.js';
-import { sweepInsightsRollups } from './lib/insights-rollups.js';
+import { rebuildQueuedInsightsRollups, sweepInsightsRollups } from './lib/insights-rollups.js';
 import { rebuildQueuedCitationRollups, REBUILD_QUEUE_SCHEDULE } from './lib/citations-rollups.js';
 import { sweepActionValidation } from './lib/action-center/validate.js';
 import { sweepImproveOutcomes } from './lib/action-center/improve-outcome.js';
@@ -30,6 +30,7 @@ import { parseScraperResponse } from './lib/cloro-scraper.js';
 import { handleScraperResult } from './lib/cloro-result-handler.js';
 import { verifyCloroWebhook } from './lib/cloro-webhook-verify.js';
 import { generateBriefForOpportunity } from './routes/content.js';
+import webhookContentCallbackRoutes from './routes/webhook-content-callback.js';
 import { sendImproveActionForKeyUser } from './routes/prompts.js';
 import { readOpportunityInbox, startAutoAudits, startSiteAuditForBrand } from './routes/audits.js';
 import { sweepAutoAudits } from './lib/audit/auto-audit-sweep.js';
@@ -58,17 +59,16 @@ const server = http.createServer(app);
 // payload exactly as sent, and express.json()'s parse/re-serialize would break it.
 // Mounted first so the global JSON parser skips this path (body already consumed).
 app.use('/cloro/callback', express.raw({ type: 'application/json', limit: '50mb' }));
-// AI-bot senders (AT-010) post a Worker's JSON, a gzipped Logpush file or a
-// Vercel drain's logs: read raw, before the JSON and form parsers take them.
-app.use('/bots/ingest', express.raw({ type: () => true, limit: '20mb' }));
+// AI-bot requests from brands' Cloudflare / Vercel (AT-010): authenticated by
+// each connection's secret, server to server. Mounted before the JSON and form
+// parsers: the route checks the secret first, then reads the Worker's JSON,
+// the gzipped Logpush file or the Vercel drain's logs raw itself.
+app.use('/', botIngestRoutes);
 app.use(bodyParser.json({ limit: '50mb' }));
 app.use(bodyParser.urlencoded({ limit: '50mb', extended: true }));
 
 // --- Public traffic tracking (before helmet/cors — needs its own CORS for any origin) ---
 app.use('/', trafficRoutes);
-// AI-bot requests from brands' Cloudflare / Vercel (AT-010): authenticated by
-// each connection's secret, server to server.
-app.use('/', botIngestRoutes);
 
 // --- Request logger (before everything to catch all requests) ---
 app.use(requestIdMiddleware);
@@ -707,6 +707,10 @@ app.post('/cloro/callback', async (req, res) => {
   }
 });
 
+// Public, webhook-secret-authenticated status callback for external workflows.
+// It is mounted outside /api so no dashboard JWT is required; the router has its own stricter limiter.
+app.use('/webhooks/content', webhookContentCallbackRoutes);
+
 // --- Authenticated API routes ---
 app.use('/api', Middleware.decodeToken.bind(Middleware), routes);
 
@@ -760,14 +764,17 @@ server.listen(PORT, async () => {
   setInterval(recover, 60_000);
 
   // Rebuild the citation rollups of brands whose prompts changed topic
-  // (00118) within minutes, not at the nightly sweep, so the Citations topic
-  // filter catches up soon after a move. An empty queue costs one select, and
-  // the function itself refuses to overlap with a run still in progress.
-  cron.schedule(REBUILD_QUEUE_SCHEDULE, () =>
+  // (00118), and the Insights days of deleted prompts (00192), within
+  // minutes, not at the nightly sweep. An empty queue costs one select, and
+  // each function refuses to overlap with a run of its own still in progress.
+  cron.schedule(REBUILD_QUEUE_SCHEDULE, () => {
     rebuildQueuedCitationRollups().catch((err) =>
       logger.error({ err }, '[citations-rollups] scheduled rebuild crashed'),
-    ),
-  );
+    );
+    rebuildQueuedInsightsRollups().catch((err) =>
+      logger.error({ err }, '[insights-rollups] scheduled rebuild crashed'),
+    );
+  });
 
   if (!isCloud()) {
     const schedule = process.env.DAILY_CRON_SCHEDULE || '0 6 * * *';

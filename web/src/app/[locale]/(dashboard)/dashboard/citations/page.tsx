@@ -56,6 +56,7 @@ import { getBrandPrompts } from '@/lib/actions/tracking';
 import { toCsv } from '@/lib/csv';
 import type { Topic } from '@/types';
 import { SOURCE_CATEGORY_LABELS, type SourceCategory } from '@/lib/citations/classify';
+import { inSourceScope } from '@/lib/citations/scope';
 import {
   CategoryBadge,
   DomainFavicon,
@@ -87,12 +88,13 @@ import { cn } from '@/lib/utils';
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
+// As the category badges (source-cells.tsx): You in ink, Social in rose.
 const CATEGORY_COLORS: Record<SourceCategory, string> = {
-  you: '#6366f1',
+  you: 'var(--primary)',
   competitor: '#f97316',
   editorial: '#3b82f6',
   forum: '#22c55e',
-  social: '#a855f7',
+  social: '#f43f5e',
   review: '#eab308',
   institutional: '#14b8a6',
   other: '#94a3b8',
@@ -865,43 +867,19 @@ export default function CitationsPage() {
   const [hasAnyCitations, setHasAnyCitations] = useState<boolean | null>(null);
   const [loadFailed, setLoadFailed] = useState(false);
 
-  const filteredDomainRows = (data?.rows ?? []).filter((row) => {
-    switch (filters.sourceScope) {
-      case 'own':
-        return row.category === 'you';
-
-      case 'competitors':
-        return row.category === 'competitor';
-
-      case 'third_party':
-        return row.category !== 'you' && row.category !== 'competitor';
-
-      case 'all':
-      default:
-        return true;
-    }
-  });
+  // Every cited domain arrives (the list isn't capped), so the scope is
+  // applied here, and the Domains tab counts these rows rather than all of them.
+  const filteredDomainRows = (data?.rows ?? []).filter((row) =>
+    inSourceScope(row.category, filters.sourceScope),
+  );
 
   // The server already scoped these (#745). This is kept for the moment
   // between picking a scope and the refetch landing, when `data` still holds
   // the previous scope's rows — without it the table would show the old scope
   // under the new one's name. Once the fresh rows arrive it filters nothing.
-  const filteredUrlRows = (data?.urlRows ?? []).filter((urlRow) => {
-    switch (filters.sourceScope) {
-      case 'own':
-        return urlRow.category === 'you';
-
-      case 'competitors':
-        return urlRow.category === 'competitor';
-
-      case 'third_party':
-        return urlRow.category !== 'you' && urlRow.category !== 'competitor';
-
-      case 'all':
-      default:
-        return true;
-    }
-  });
+  const filteredUrlRows = (data?.urlRows ?? []).filter((urlRow) =>
+    inSourceScope(urlRow.category, filters.sourceScope),
+  );
 
   // Pagination — resets to page 0 whenever any filter changes
   const filterKey = JSON.stringify(filters);
@@ -1077,6 +1055,8 @@ export default function CitationsPage() {
   }, [sourceTab, activeBrandId, gapFilters, urlRead]);
 
   const totals = data?.totals;
+  // Within the selected scope, as the Domains tab and the URL count under it.
+  const domainsInScope = filteredDomainRows.length;
   const kpis = useMemo(
     () => [
       {
@@ -1089,7 +1069,7 @@ export default function CitationsPage() {
       },
       {
         title: t('kpiUniqueDomains'),
-        value: totals ? totals.domains.toLocaleString() : '—',
+        value: totals ? domainsInScope.toLocaleString() : '—',
         sub: t('kpiUniqueDomainsSub', {
           urls: totals?.urls ?? 0,
         }),
@@ -1102,7 +1082,7 @@ export default function CitationsPage() {
         icon: Layers,
       },
     ],
-    [totals, t],
+    [totals, domainsInScope, t],
   );
 
   const handleExportCsv = useCallback(() => {
@@ -1278,7 +1258,8 @@ export default function CitationsPage() {
                 >
                   <TabsList>
                     <TabsTrigger value="domains">
-                      {t('tabDomains')} ({data?.totals.domains ?? 0})
+                      {/* The scope's domains, as the table lists them; All counts every one. */}
+                      {t('tabDomains')} ({filteredDomainRows.length})
                     </TabsTrigger>
                     <TabsTrigger value="urls">
                       {t('tabUrls')} ({data?.totals.urls ?? 0})
