@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { apiLimiterKey, botIngestKey } from './rate-limiter.js';
+import { apiLimiterKey, botIngestKey, webhookCallbackKey } from './rate-limiter.js';
 import {
   markBotSenderVerified,
   markTokenVerified,
