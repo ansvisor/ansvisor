@@ -27,7 +27,12 @@ describe('classifyMerchant', () => {
 
   it.each([
     ['Amazon US', 'https://www.amazon.com/dp/B0C123ABCD?tag=tracked', 'amazon', 'B0C123ABCD'],
-    ['Amazon slugged detail path', 'https://www.amazon.com/a-product-slug/dp/B0C123ABCD/ref=detail?tag=tracked', 'amazon', 'B0C123ABCD'],
+    [
+      'Amazon slugged detail path',
+      'https://www.amazon.com/a-product-slug/dp/B0C123ABCD/ref=detail?tag=tracked',
+      'amazon',
+      'B0C123ABCD',
+    ],
     ['Amazon Belgium', 'https://www.amazon.com.be/dp/B0C123ABCD', 'amazon', 'B0C123ABCD'],
     ['Amazon South Africa', 'https://www.amazon.co.za/dp/B0C123ABCD', 'amazon', 'B0C123ABCD'],
     ['Amazon short link', 'https://amzn.to/3example', 'amazon', null],
@@ -40,18 +45,8 @@ describe('classifyMerchant', () => {
       '1234567890',
     ],
     ['Amazon subdomain', 'https://affiliate.amazon.co.uk/dp/abc123def4', 'amazon', 'ABC123DEF4'],
-    [
-      'eBay Austria',
-      'https://www.ebay.at/itm/123456789012',
-      'ebay',
-      '123456789012',
-    ],
-    [
-      'eBay Switzerland',
-      'https://www.ebay.ch/itm/123456789012',
-      'ebay',
-      '123456789012',
-    ],
+    ['eBay Austria', 'https://www.ebay.at/itm/123456789012', 'ebay', '123456789012'],
+    ['eBay Switzerland', 'https://www.ebay.ch/itm/123456789012', 'ebay', '123456789012'],
     ['eBay US short link', 'https://ebay.us/abc123', 'ebay', null],
     [
       'eBay direct item path',
