@@ -11,7 +11,9 @@
  *
  * The ranges are fetched on first use and again once a day, and kept in
  * memory. A failed refresh keeps the last list; with none ever read, the
- * bot's requests can't be verified and aren't counted.
+ * bot's requests can't be verified and aren't counted, and the list isn't
+ * tried again for a few minutes. Requests that need a list being read wait
+ * for that one read.
  *
  * The list is versioned like ai-sources.json: each change adds an entry to
  * `changes` and bumps `version`.
@@ -96,33 +98,57 @@ export function readRangeFile(json) {
   return list.map((p) => parsePrefix(p?.ipv4Prefix ?? p?.ipv6Prefix)).filter(Boolean);
 }
 
-const cache = new Map();
-
 /**
- * A range file's prefixes: from memory while fresh, read again after a day.
- * A failed read keeps what was read before; null when nothing ever was.
+ * After a failed read with no list to fall back on, the next try waits this
+ * long: a batch's requests for that bot would otherwise each wait out the
+ * fetch's timeout, one after another (#1179's review).
  */
-export async function rangesFor(url, { fetchImpl = fetch, now = Date.now() } = {}) {
-  const hit = cache.get(url);
-  if (hit && now - hit.at < RANGES_TTL_MS) return hit.prefixes;
+export const RANGES_RETRY_MS = 5 * 60 * 1000;
+
+/** A failed refresh keeps the last list this long before the next try. */
+const STALE_KEEP_MS = 60 * 60 * 1000;
+
+/** url → { until, prefixes }: prefixes null after a failed first read. */
+const cache = new Map();
+/** url → the read under way, which concurrent requests share. */
+const pending = new Map();
+
+async function readRanges(url, hit, fetchImpl, now) {
   try {
     const res = await fetchImpl(url, { signal: AbortSignal.timeout(10_000) });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const prefixes = readRangeFile(await res.json());
     if (prefixes.length === 0) throw new Error('no prefixes');
-    cache.set(url, { at: now, prefixes });
+    cache.set(url, { until: now + RANGES_TTL_MS, prefixes });
     return prefixes;
   } catch (err) {
     logger.warn({ err, url }, '[ai-bots] range list not refreshed');
-    // Keep the last list for another hour before trying again.
-    if (hit) cache.set(url, { at: now - RANGES_TTL_MS + 60 * 60 * 1000, prefixes: hit.prefixes });
-    return hit?.prefixes ?? null;
+    const prefixes = hit?.prefixes ?? null;
+    cache.set(url, { until: now + (prefixes ? STALE_KEEP_MS : RANGES_RETRY_MS), prefixes });
+    return prefixes;
   }
+}
+
+/**
+ * A range file's prefixes: from memory while fresh, read again after a day.
+ * A failed read keeps what was read before; null when nothing ever was, and
+ * then until RANGES_RETRY_MS has passed. One read at a time per file.
+ */
+export async function rangesFor(url, { fetchImpl = fetch, now = Date.now() } = {}) {
+  const hit = cache.get(url);
+  if (hit && now < hit.until) return hit.prefixes;
+  let read = pending.get(url);
+  if (!read) {
+    read = readRanges(url, hit, fetchImpl, now).finally(() => pending.delete(url));
+    pending.set(url, read);
+  }
+  return read;
 }
 
 /** Forgets every range list (tests). */
 export function clearRangeCache() {
   cache.clear();
+  pending.clear();
 }
 
 /**

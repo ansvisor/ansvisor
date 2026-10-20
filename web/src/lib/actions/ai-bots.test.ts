@@ -28,12 +28,30 @@ describe('AI bot connection actions', () => {
     fetchMock.mockResolvedValue(
       json({
         connections: [{ id: 'c1', kind: 'vercel_drain', created_at: 't0', last_event_at: null }],
-        usage: { month: '2026-10-01', stored: '12', counted: 15, cappedAt: null, cap: 2000000 },
+        usage: {
+          month: '2026-10-01',
+          stored: '12',
+          counted: 15,
+          cappedAt: null,
+          cap: 2000000,
+          raw: 20_000_400,
+          rawCappedAt: '2026-10-18T09:00:00Z',
+          rawCap: 20_000_000,
+        },
       }),
     );
     expect(await getBotConnections('b1')).toEqual({
       connections: [{ id: 'c1', kind: 'vercel_drain', createdAt: 't0', lastEventAt: null }],
-      usage: { month: '2026-10-01', stored: 12, counted: 15, cappedAt: null, cap: 2000000 },
+      usage: {
+        month: '2026-10-01',
+        stored: 12,
+        counted: 15,
+        cappedAt: null,
+        cap: 2000000,
+        raw: 20_000_400,
+        rawCappedAt: '2026-10-18T09:00:00Z',
+        rawCap: 20_000_000,
+      },
     });
     expect(fetchMock).toHaveBeenCalledWith('http://api.test/api/bots/connections/b1', {
       headers: { Authorization: 'Bearer tok' },
@@ -53,6 +71,7 @@ describe('AI bot connection actions', () => {
           secret: 'abot_x',
           endpoint: 'https://api.test/bots/ingest',
           workerScript: '// worker',
+          workerSecretName: 'ANSVISOR_BOT_SECRET',
           logpushJob: null,
           vercelDrain: null,
         },
@@ -63,6 +82,7 @@ describe('AI bot connection actions', () => {
     expect(made).toMatchObject({
       secret: 'abot_x',
       workerScript: '// worker',
+      workerSecretName: 'ANSVISOR_BOT_SECRET',
       connection: { id: 'c2' },
     });
     expect(fetchMock.mock.calls[0][1]).toMatchObject({

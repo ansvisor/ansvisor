@@ -32,7 +32,16 @@ const { BotsSource } = await import('./_bots-connect');
 
 const info = (over: Partial<BotConnections> = {}): BotConnections => ({
   connections: [],
-  usage: { month: '2026-10-01', stored: 0, counted: 0, cappedAt: null, cap: 2_000_000 },
+  usage: {
+    month: '2026-10-01',
+    stored: 0,
+    counted: 0,
+    cappedAt: null,
+    cap: 2_000_000,
+    raw: 0,
+    rawCappedAt: null,
+    rawCap: 20_000_000,
+  },
   ...over,
 });
 const hoursAgo = (h: number) => new Date(Date.now() - h * 3_600_000).toISOString();
@@ -95,6 +104,7 @@ describe('BotsSource', () => {
       secret: 'abot_s3cret',
       endpoint: 'https://api.example/bots/ingest',
       workerScript: null,
+      workerSecretName: null,
       logpushJob: null,
       vercelDrain: {
         endpoint: 'https://api.example/bots/ingest',
@@ -116,6 +126,50 @@ describe('BotsSource', () => {
     expect(getBotConnections).toHaveBeenCalledTimes(2);
   });
 
+  // gkhngyk on #1225: a failed read after the create took the dialog down.
+  it('keeps the settings with the secret when the read after a create fails', async () => {
+    await render();
+    await act(async () => button('Connect')!.click());
+    createBotConnection.mockResolvedValue({
+      connection: { id: 'c1', kind: 'cloudflare_worker', createdAt: 't', lastEventAt: null },
+      secret: 'abot_s3cret',
+      endpoint: 'https://api.example/bots/ingest',
+      workerScript:
+        'const ENDPOINT = "https://api.example/bots/ingest"; // env.ANSVISOR_BOT_SECRET',
+      workerSecretName: 'ANSVISOR_BOT_SECRET',
+      logpushJob: null,
+      vercelDrain: null,
+    } satisfies NewBotConnection);
+    getBotConnections.mockResolvedValue({ error: 'Server error: 502' });
+    await act(async () => button('Create connection')!.click());
+
+    expect(getBotConnections).toHaveBeenCalledTimes(2);
+    expect(card()).toContain("Cloudflare / Vercel · couldn't be read");
+    expect(page()).toContain("the secret in them isn't shown again");
+    expect(page()).toContain('abot_s3cret');
+  });
+
+  // gkhngyk on #1179: the secret sat in the Worker's code.
+  it('gives a Worker its code without the secret, and the secret to add as a Worker Secret', async () => {
+    await render();
+    await act(async () => button('Connect')!.click());
+    createBotConnection.mockResolvedValue({
+      connection: { id: 'c1', kind: 'cloudflare_worker', createdAt: 't', lastEventAt: null },
+      secret: 'abot_s3cret',
+      endpoint: 'https://api.example/bots/ingest',
+      workerScript:
+        'const ENDPOINT = "https://api.example/bots/ingest"; // env.ANSVISOR_BOT_SECRET',
+      workerSecretName: 'ANSVISOR_BOT_SECRET',
+      logpushJob: null,
+      vercelDrain: null,
+    } satisfies NewBotConnection);
+    await act(async () => button('Create connection')!.click());
+    expect(createBotConnection).toHaveBeenCalledWith('b1', 'cloudflare_worker');
+    expect(page()).toContain('add a variable of type Secret with the name and value below');
+    expect(page()).toContain('Secret value (name: ANSVISOR_BOT_SECRET)');
+    expect(page()).toContain('abot_s3cret');
+  });
+
   it('shows a Logpush job to copy: the destination and the settings', async () => {
     await render();
     await act(async () => button('Connect')!.click());
@@ -124,6 +178,7 @@ describe('BotsSource', () => {
       secret: 'abot_s3cret',
       endpoint: 'https://api.example/bots/ingest',
       workerScript: null,
+      workerSecretName: null,
       logpushJob: {
         dataset: 'http_requests',
         destination_conf:
@@ -154,6 +209,9 @@ describe('BotsSource', () => {
           counted: 2_400_000,
           cappedAt: '2026-10-25T00:00:00Z',
           cap: 2_000_000,
+          raw: 0,
+          rawCappedAt: null,
+          rawCap: 20_000_000,
         },
       }),
     );
@@ -162,11 +220,39 @@ describe('BotsSource', () => {
     await act(async () => button('Manage')!.click());
     expect(page()).toContain('This month: 2,000,000 of 2,000,000 detailed rows.');
     expect(page()).toContain('Detailed rows paused until Nov 1, totals still counted.');
+    // A Worker's batches don't count against the log records cap.
+    expect(page()).not.toContain('Log records this month');
 
     await act(async () => button('Revoke')!.click());
     await act(async () => button('Revoke: stop reading it')!.click());
     expect(revokeBotConnection).toHaveBeenCalledWith('b1', 'c1');
     expect(toast.success).toHaveBeenCalled();
+  });
+
+  it("shows a log sender's records against the raw cap, and when its files are read again", async () => {
+    getBotConnections.mockResolvedValue(
+      info({
+        connections: [
+          { id: 'c1', kind: 'vercel_drain', createdAt: 't', lastEventAt: hoursAgo(30) },
+        ],
+        usage: {
+          month: '2026-10-01',
+          stored: 1_000,
+          counted: 1_000,
+          cappedAt: null,
+          cap: 2_000_000,
+          raw: 20_000_400,
+          rawCappedAt: '2026-10-18T09:00:00Z',
+          rawCap: 20_000_000,
+        },
+      }),
+    );
+    await render();
+    await act(async () => button('Manage')!.click());
+    expect(page()).toContain('Log records this month: 20,000,400 of 20,000,000.');
+    expect(page()).toContain(
+      "Log files paused until Nov 1: this month's log records are used up, so requests from Logpush or the Vercel drain aren't read until then.",
+    );
   });
 
   it('waits for the first request, and keeps members from connecting', async () => {

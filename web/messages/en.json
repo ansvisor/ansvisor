@@ -3311,7 +3311,13 @@
     },
     "webhook": {
       "title": "Webhook Settings",
-      "description": "Connect your workflow automation tool (n8n, Make, Zapier) to receive opportunities.",
+      "description": "Connect your workflow automation tool (n8n, Make, Zapier) and choose which events it receives.",
+      "eventsTitle": "Events to send",
+      "eventsDescription": "Only selected events are sent. Test Webhook always sends a test event, regardless of these selections.",
+      "eventRequired": "Select at least one event for this webhook.",
+      "eventOpportunitySent": "Opportunity sent",
+      "eventDailyPulseCreated": "Daily Pulse created",
+      "eventActionTaskSent": "Action Center task sent",
       "url": "Webhook URL",
       "urlPlaceholder": "https://your-n8n-instance.com/webhook/...",
       "secret": "Secret Key (optional)",
@@ -3716,10 +3722,13 @@
       "usage": "This month: {stored} of {cap} detailed rows.",
       "usageNoCap": "This month: {stored} detailed {count, plural, one {row} other {rows}}.",
       "paused": "Detailed rows paused until {day}, totals still counted.",
+      "rawUsage": "Log records this month: {raw} of {cap}.",
+      "logsPaused": "Log files paused until {day}: this month's log records are used up, so requests from Logpush or the Vercel drain aren't read until then.",
       "secretOnce": "Copy these settings now: the secret in them isn't shown again. Lost it? Revoke this connection and create a new one.",
       "copy": "Copy",
       "copied": "Copied",
       "copyWorker": "Worker code",
+      "copyWorkerSecret": "Secret value (name: {name})",
       "copyDestination": "Destination",
       "copyLogpushJob": "Job settings (Cloudflare API: POST /zones/ZONE_ID/logpush/jobs)",
       "copyEndpoint": "Endpoint URL",
@@ -3747,6 +3756,7 @@
         "cloudflare_worker": [
           "In Cloudflare, open Workers & Pages and create a Worker.",
           "Replace its code with the Worker code below and deploy it.",
+          "In the Worker's Settings › Variables and Secrets, add a variable of type Secret with the name and value below.",
           "Add a route for your site, such as example.com/*, so the Worker sees its requests."
         ],
         "cloudflare_logpush": [
@@ -3794,8 +3804,9 @@
       "moreUncrawled": "and {count} more",
       "allCrawled": "Every page AI answers cited in the last 30 days was read by a search bot.",
       "alertStarts": "The search-bot alert starts on {day}, 30 days after the first AI-bot request.",
-      "alertStale": "The search-bot alert is paused: no connection has sent AI-bot requests in the last 2 days, or the month's cap was reached, so the pages search bots read aren't complete.",
-      "allTimeCapped": "last 90 days"
+      "alertStale": "The search-bot alert is paused: the bot data doesn't cover the last 30 days (no connection sent in the last 2 days, or one stopped or was replaced within them), or the month's cap was reached, so the pages search bots read aren't complete.",
+      "allTimeCapped": "last 90 days",
+      "yesterdayAndToday": "yesterday and today (UTC)"
     },
     "gate": {
       "needs": "Needs {source}",
@@ -4483,6 +4494,8 @@
     "trackedCompetitors": "Tracked Competitors",
     "selectToCompare": "Select a competitor to see head-to-head comparison.",
     "windowLast30Days": "Scores cover the last 30 days.",
+    "windowAllTime": "Scores cover all tracked history.",
+    "windowSelectedRange": "Scores reflect the selected date range.",
     "selected": "Selected",
     "noData": "No data",
     "emptyTitle": "No competitors yet",

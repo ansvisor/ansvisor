@@ -26342,6 +26342,231 @@ comment on function public.ai_bot_prune(timestamptz, date, timestamptz, integer)
 notify pgrst, 'reload schema';
 
 -- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00190_ai_bot_report_coverage.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00190: the AI bot report's alert waits for 30 whole days of bot data
+-- ============================================================================
+-- Follow-ups from #1182's review (AT-011).
+--
+-- The "cited pages no search bot read in 30 days" list (ai_bot_report's
+-- `uncrawled`) only means something while the bot data covers those 30
+-- days. 00185 checked their ends: the first bot day 30 days back, and a
+-- live connection that sent in the last 2 days. A connection revoked on day
+-- -25 with a new one made yesterday passed both, and every page crawled less
+-- often than the new data's one day was listed as unread. The alert now also
+-- looks at every one of the 30 days: no run of more than 7 days in a row
+-- without rows. A site bots read once a week still passes; a hole of weeks
+-- doesn't, however old the connection: a sender past the month's raw cap
+-- (its files are only counted), a Worker route taken down for a while, a
+-- Logpush job paused and resumed. Otherwise 'stale', which also pauses the
+-- cited_page_uncrawled signals (they read as unread, #1195).
+--
+-- The gate's '(other)' check scanned the brand's 30 days of rows on every
+-- read; a partial index on those rows makes it a probe. On a large
+-- ai_bot_daily, build it by hand first with `create index concurrently`,
+-- which doesn't hold back the ingest's writes; this statement then finds it
+-- in place.
+--
+-- The rest of ai_bot_report is unchanged from 00185.
+
+create index if not exists ai_bot_daily_other_idx
+  on public.ai_bot_daily (brand_id, day)
+  where page = '(other)';
+
+create or replace function public.ai_bot_report(
+  p_brand_id uuid,
+  p_since date,
+  p_until date,
+  p_limit integer default 20
+)
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path to 'public'
+as $$
+declare
+  v_first date;
+  v_last_day date;
+  v_last timestamptz;
+  v_since date;
+  v_alert text;
+  v_result jsonb;
+begin
+  if not exists (
+    select 1 from public.brands b
+    join public.profiles pf on pf.organization_id = b.organization_id
+    where b.id = p_brand_id and pf.id = auth.uid()
+  ) and auth.role() is distinct from 'service_role' then
+    return null;
+  end if;
+
+  select d.day into v_first
+  from public.ai_bot_daily d
+  where d.brand_id = p_brand_id
+  order by d.day
+  limit 1;
+  select d.day into v_last_day
+  from public.ai_bot_daily d
+  where d.brand_id = p_brand_id
+  order by d.day desc
+  limit 1;
+  select max(d.last_seen) into v_last
+  from public.ai_bot_daily d
+  where d.brand_id = p_brand_id and d.day = v_last_day;
+
+  v_since := coalesce(p_since, current_date - 89);
+
+  v_alert := case
+    when v_first is null or v_first > current_date - 29 then 'waiting'
+    when not exists (
+      select 1 from public.ai_bot_connections c
+      where c.brand_id = p_brand_id
+        and c.revoked_at is null
+        and c.last_event_at >= now() - interval '2 days'
+    ) or exists (
+      select 1 from public.ai_bot_daily d
+      where d.brand_id = p_brand_id
+        and d.bot_type = 'search'
+        and d.page = '(other)'
+        and d.day >= current_date - 29
+    ) then 'stale'
+    -- The whole 30 days, not only their ends: the longest run of days
+    -- without rows (one probe per day, then gaps and islands) is at most 7.
+    when (
+      select coalesce(max(r.days), 0)
+      from (
+        select count(*) as days
+        from (
+          select n, n - row_number() over (order by n) as run
+          from generate_series(0, 29) n
+          where not exists (
+            select 1 from public.ai_bot_daily d
+            where d.brand_id = p_brand_id and d.day = current_date - n
+          )
+        ) empty
+        group by empty.run
+      ) r
+    ) > 7 then 'stale'
+    else 'on'
+  end;
+
+  with g as (
+    -- Each bot's hits on each page in the range, added up once.
+    select
+      d.bot_type,
+      d.bot,
+      d.page,
+      sum(d.hits)::bigint as hits,
+      max(d.last_seen) as last_seen
+    from public.ai_bot_daily d
+    where d.brand_id = p_brand_id
+      and d.day >= v_since
+      and d.day <= p_until
+    group by d.bot_type, d.bot, d.page
+  ),
+  types as (
+    select
+      g.bot_type,
+      sum(g.hits)::bigint as hits,
+      count(distinct g.page) filter (where g.page <> '(other)')::bigint as pages,
+      max(g.last_seen) as last_seen,
+      array_agg(distinct g.bot order by g.bot) as bots
+    from g
+    group by g.bot_type
+  ),
+  bots as (
+    select
+      g.bot,
+      min(g.bot_type) as bot_type,
+      sum(g.hits)::bigint as hits,
+      count(*) filter (where g.page <> '(other)')::bigint as pages,
+      max(g.last_seen) as last_seen
+    from g
+    group by g.bot
+  ),
+  -- Hits folded past the month's cap ('(other)') aren't a page.
+  pages as (
+    select
+      g.page,
+      sum(g.hits)::bigint as hits,
+      max(g.last_seen) filter (where g.bot_type = 'training') as training_last,
+      max(g.last_seen) filter (where g.bot_type = 'search') as search_last,
+      max(g.last_seen) filter (where g.bot_type = 'user') as user_last
+    from g
+    where g.page <> '(other)'
+    group by g.page
+  ),
+  -- The alert reads its own 30 days, whatever the range.
+  uncrawled as (
+    select c.page, c.citations
+    from public.ai_traffic_page_citations(p_brand_id, current_date - 29, current_date) c
+    where v_alert = 'on'
+      and not exists (
+        select 1 from public.ai_bot_daily d
+        where d.brand_id = p_brand_id
+          and d.bot_type = 'search'
+          and d.page = c.page_key
+          and d.day >= current_date - 29
+      )
+  )
+  select jsonb_build_object(
+    'first_day', v_first,
+    'last_seen', v_last,
+    'types', coalesce((
+      select jsonb_agg(
+        jsonb_build_object(
+          'type', t.bot_type, 'hits', t.hits, 'pages', t.pages,
+          'last_seen', t.last_seen, 'bots', to_jsonb(t.bots)
+        )
+        order by array_position(array['training', 'search', 'user'], t.bot_type)
+      )
+      from types t
+    ), '[]'::jsonb),
+    'bots', coalesce((
+      select jsonb_agg(
+        jsonb_build_object(
+          'bot', b.bot, 'type', b.bot_type, 'hits', b.hits, 'pages', b.pages,
+          'last_seen', b.last_seen
+        )
+        order by b.hits desc, b.bot
+      )
+      from bots b
+    ), '[]'::jsonb),
+    'page_count', (select count(*) from pages),
+    'pages', coalesce((
+      select jsonb_agg(to_jsonb(p) order by p.hits desc, p.page)
+      from (select * from pages order by hits desc, page limit p_limit) p
+    ), '[]'::jsonb),
+    -- Null unless the bot data is whole (alert_state 'on').
+    'uncrawled_count', case when v_alert = 'on' then (select count(*) from uncrawled) end,
+    'uncrawled', case
+      when v_alert = 'on' then coalesce((
+        select jsonb_agg(to_jsonb(u) order by u.citations desc, u.page)
+        from (select * from uncrawled order by citations desc, page limit 10) u
+      ), '[]'::jsonb)
+    end,
+    'alert_state', v_alert,
+    'alert_from', case when v_first is not null then v_first + 29 end,
+    'since', v_since
+  )
+  into v_result;
+
+  return v_result;
+end;
+$$;
+
+revoke all on function public.ai_bot_report(uuid, date, date, integer) from public, anon;
+grant execute on function public.ai_bot_report(uuid, date, date, integer)
+  to authenticated, service_role;
+
+comment on function public.ai_bot_report(uuid, date, date, integer) is
+  'AI Traffic "AI bots reading your site" (AT-011, spec §3.7): verified AI-bot hits between two days by type (training, search, user) and by bot, the most read pages with each type''s last read, and the cited pages no search bot read in the last 30 days (null until bot data covers those 30 days: rows on 28 of them, or a live connection 29+ days old that sent in the last 2). Security definer with an organization check.';
+
+notify pgrst, 'reload schema';
+
+-- ─────────────────────────────────────────────────────────────────────────
 -- migrations/00192_rollup_integrity.sql
 -- ─────────────────────────────────────────────────────────────────────────
 -- ============================================================================
@@ -26538,6 +26763,89 @@ drop trigger if exists prompts_queue_insights_rollup_rebuild on public.prompts;
 create trigger prompts_queue_insights_rollup_rebuild
   before delete on public.prompts
   for each row execute function public.queue_insights_rollup_rebuild();
+
+notify pgrst, 'reload schema';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00193_ai_traffic_platforms_seen.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00193: "is this AI platform new?" reads only the platforms in question
+-- ============================================================================
+-- Follow-up from #1195's review (AT-013). The nightly "new AI platform" check
+-- (server signals/traffic-platforms.js) read the brand's whole AI traffic
+-- history before the week with ai_traffic_merged (00176), pages and days
+-- included, only to learn which platforms had sent a visit before.
+--
+-- ai_traffic_platforms_seen answers that directly, for the few platforms the
+-- week put forward: whether the brand had any AI visit before p_before, and
+-- which of p_platforms did. A snippet visit or an Analytics session counts,
+-- whichever day it fell on: for "seen before" any evidence will do, where
+-- ai_traffic_merged keeps one source per day so visits aren't counted twice.
+--
+-- Each platform is an index probe on the new (brand_id, source_platform,
+-- created_at) index; Analytics rows are daily and few. On a large
+-- ai_traffic_logs, build the index by hand first with `create index
+-- concurrently`, which doesn't hold back the beacon's writes; this statement
+-- then finds it in place.
+
+create index if not exists idx_ai_traffic_logs_brand_platform_time
+  on public.ai_traffic_logs (brand_id, source_platform, created_at)
+  where visit_of is null;
+
+create or replace function public.ai_traffic_platforms_seen(
+  p_brand_id uuid,
+  p_before timestamptz,
+  p_platforms text[]
+)
+returns jsonb
+language sql
+stable
+security invoker
+set search_path to 'public'
+as $$
+  select jsonb_build_object(
+    'any_before',
+      exists (
+        select 1 from public.ai_traffic_logs l
+        where l.brand_id = p_brand_id
+          and l.visit_of is null
+          and l.created_at < p_before
+      )
+      or exists (
+        select 1 from public.ga_ai_traffic_stats g
+        where g.brand_id = p_brand_id
+          and g.sessions > 0
+          and g.date < (p_before at time zone 'utc')::date
+      ),
+    'seen', coalesce((
+      select jsonb_agg(p.platform order by p.platform)
+      from unnest(p_platforms) as p(platform)
+      where exists (
+          select 1 from public.ai_traffic_logs l
+          where l.brand_id = p_brand_id
+            and l.visit_of is null
+            and l.source_platform = p.platform
+            and l.created_at < p_before
+        )
+        or exists (
+          select 1 from public.ga_ai_traffic_stats g
+          where g.brand_id = p_brand_id
+            and g.sessions > 0
+            and coalesce(g.platform, g.source) = p.platform
+            and g.date < (p_before at time zone 'utc')::date
+        )
+    ), '[]'::jsonb)
+  );
+$$;
+
+revoke all on function public.ai_traffic_platforms_seen(uuid, timestamptz, text[])
+  from public, anon;
+grant execute on function public.ai_traffic_platforms_seen(uuid, timestamptz, text[])
+  to authenticated, service_role;
+
+comment on function public.ai_traffic_platforms_seen(uuid, timestamptz, text[]) is
+  'AI Traffic (AT-013): whether a brand had any AI-referred visit before p_before (snippet or Analytics), and which of p_platforms sent one, for the nightly new-platform check. Security invoker: RLS decides the brand.';
 
 notify pgrst, 'reload schema';
 
@@ -27007,4 +27315,197 @@ revoke all on function public.getting_started_facts(uuid) from public, anon;
 grant execute on function public.getting_started_facts(uuid) to authenticated;
 
 notify pgrst, 'reload schema';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00198_webhook_event_subscriptions.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00198: per-webhook event subscriptions
+-- ============================================================================
+-- Keep existing integrations receiving the events they already receive. Event
+-- subscription controls are now available in Content → Configure Webhook.
+-- Test deliveries use webhook.test directly and are not stored subscriptions.
+
+alter table public.webhook_configs
+  alter column events set default
+    array['opportunity.sent', 'daily_pulse.created', 'action_task.sent']::text[];
+
+update public.webhook_configs as config
+set events = (
+  select array_agg(subscription.event order by subscription.event)
+  from (
+    select distinct event
+    from unnest(
+      coalesce(config.events, array[]::text[])
+      || array['opportunity.sent', 'daily_pulse.created', 'action_task.sent']::text[]
+    ) as existing(event)
+    where event = any(array['opportunity.sent', 'daily_pulse.created', 'action_task.sent']::text[])
+  ) as subscription
+);
+
+alter table public.webhook_configs
+  alter column events set not null;
+
+alter table public.webhook_configs
+  drop constraint if exists webhook_configs_events_allowed;
+
+alter table public.webhook_configs
+  add constraint webhook_configs_events_allowed
+  check (events <@ array['opportunity.sent', 'daily_pulse.created', 'action_task.sent']::text[]);
+
+comment on column public.webhook_configs.events is
+  'Event types subscribed to by this webhook (opportunity.sent, daily_pulse.created, action_task.sent). webhook.test is always sent by the test action and is not stored here.';
+
+notify pgrst, 'reload schema';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00199_serialize_citation_refreshes.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00199: the Citations rollups refresh one at a time (#1020)
+-- ============================================================================
+-- refresh_citations_daily (00118) deletes a brand's citation_*_daily rows for
+-- a day range and inserts them again, with no lock and no unique key. A run's
+-- refresh, the nightly sweep and the topic-move rebuild can overlap on the
+-- same brand: the second refresh's delete waits for the first to commit, but
+-- its snapshot predates the first one's insert, so it skips those rows and
+-- adds its own, and the days they share are counted twice.
+--
+-- As 00164 did for refresh_insights_daily and 00192 for
+-- refresh_mentions_daily: the function takes a per-brand advisory lock, rows
+-- written twice before are dropped, and unique keys make a second copy
+-- impossible.
+--
+-- The lock lasts one call. refreshCitationHistory rebuilds a brand in
+-- 14-day calls (HISTORY_CHUNK_DAYS), so a refresh queued behind a rebuild
+-- waits for one chunk, well inside the service role's 120s statement_timeout
+-- (00100). The body is 00118's unchanged apart from the lock.
+
+-- ─── One refresh per brand at a time ────────────────────────────────────────
+
+create or replace function public.refresh_citations_daily(
+  p_brand_id uuid,
+  p_day_from date,
+  p_day_to date
+) returns void
+language plpgsql
+set search_path to 'public'
+set work_mem to '256MB'
+as $$
+declare
+  ts_from timestamptz := p_day_from::timestamp at time zone 'utc';
+  ts_to   timestamptz := (p_day_to + 1)::timestamp at time zone 'utc';
+begin
+  -- One refresh per brand at a time, as refresh_insights_daily (00164) and
+  -- refresh_mentions_daily (00192); the lock releases at commit.
+  perform pg_advisory_xact_lock(
+    hashtextextended('refresh_citations_daily:' || p_brand_id::text, 0));
+
+  delete from public.citation_result_daily
+    where brand_id = p_brand_id and day between p_day_from and p_day_to;
+  delete from public.citation_domain_daily
+    where brand_id = p_brand_id and day between p_day_from and p_day_to;
+  delete from public.citation_url_daily
+    where brand_id = p_brand_id and day between p_day_from and p_day_to;
+
+  insert into public.citation_result_daily (
+    brand_id, day, model_used, platform, region, topic_id, answers)
+  select p_brand_id,
+         (pr.created_at at time zone 'utc')::date,
+         pr.model_used, pr.platform, pr.region, p.topic_id,
+         count(*)
+  from public.prompt_results pr
+  left join public.prompts p on p.id = pr.prompt_id
+  where pr.brand_id = p_brand_id
+    and pr.platform <> 'chatgpt-shopping'  -- #155 — isolate from analytics
+    and pr.created_at >= ts_from and pr.created_at < ts_to
+  group by 2, pr.model_used, pr.platform, pr.region, p.topic_id;
+
+  -- A citation row carries its answer's created_at, so the citation index
+  -- bounds the scan; the answer supplies the bucket.
+  insert into public.citation_domain_daily (
+    brand_id, day, model_used, platform, region, topic_id, domain, citations, results)
+  select p_brand_id,
+         (pr.created_at at time zone 'utc')::date,
+         pr.model_used, pr.platform, pr.region, p.topic_id, cu.domain,
+         count(*),
+         count(distinct c.prompt_result_id)
+  from public.prompt_result_citations c
+  join public.prompt_results pr on pr.id = c.prompt_result_id
+  left join public.prompts p on p.id = pr.prompt_id
+  join public.citation_urls cu on cu.id = c.url_id
+  where c.brand_id = p_brand_id
+    and c.created_at >= ts_from and c.created_at < ts_to
+    and pr.platform <> 'chatgpt-shopping'
+  group by 2, pr.model_used, pr.platform, pr.region, p.topic_id, cu.domain;
+
+  insert into public.citation_url_daily (
+    brand_id, day, model_used, platform, region, topic_id, url_id, citations, results)
+  select p_brand_id,
+         (pr.created_at at time zone 'utc')::date,
+         pr.model_used, pr.platform, pr.region, p.topic_id, c.url_id,
+         count(*),
+         count(distinct c.prompt_result_id)
+  from public.prompt_result_citations c
+  join public.prompt_results pr on pr.id = c.prompt_result_id
+  left join public.prompts p on p.id = pr.prompt_id
+  where c.brand_id = p_brand_id
+    and c.created_at >= ts_from and c.created_at < ts_to
+    and pr.platform <> 'chatgpt-shopping'
+  group by 2, pr.model_used, pr.platform, pr.region, p.topic_id, c.url_id;
+end;
+$$;
+
+revoke execute on function public.refresh_citations_daily(uuid, date, date)
+  from public, anon, authenticated;
+
+-- ─── Rows written twice ─────────────────────────────────────────────────────
+-- Copies from an overlap are the same counts computed twice; keep one. The
+-- next refresh of those days rewrites them anyway.
+
+delete from public.citation_result_daily d
+using (
+  select ctid,
+         row_number() over (
+           partition by brand_id, day, model_used, platform, region, topic_id
+           order by answers desc) as n
+  from public.citation_result_daily
+) x
+where d.ctid = x.ctid and x.n > 1;
+
+delete from public.citation_domain_daily d
+using (
+  select ctid,
+         row_number() over (
+           partition by brand_id, day, model_used, platform, region, topic_id, domain
+           order by citations desc, results desc) as n
+  from public.citation_domain_daily
+) x
+where d.ctid = x.ctid and x.n > 1;
+
+delete from public.citation_url_daily d
+using (
+  select ctid,
+         row_number() over (
+           partition by brand_id, day, model_used, platform, region, topic_id, url_id
+           order by citations desc, results desc) as n
+  from public.citation_url_daily
+) x
+where d.ctid = x.ctid and x.n > 1;
+
+-- On large tables, build these by hand first with `create unique index
+-- concurrently`, which doesn't hold back the refreshes; these statements then
+-- find them in place. A null model, platform, region or topic is one key, not
+-- many.
+create unique index if not exists citation_result_daily_key
+  on public.citation_result_daily (brand_id, day, model_used, platform, region, topic_id)
+  nulls not distinct;
+
+create unique index if not exists citation_domain_daily_key
+  on public.citation_domain_daily (brand_id, day, model_used, platform, region, topic_id, domain)
+  nulls not distinct;
+
+create unique index if not exists citation_url_daily_key
+  on public.citation_url_daily (brand_id, day, model_used, platform, region, topic_id, url_id)
+  nulls not distinct;
 

@@ -34,6 +34,12 @@ export interface BotUsage {
   cappedAt: string | null;
   /** Rows a month: -1 no cap, 0 the report is locked (Starter). */
   cap: number;
+  /** Log records (Logpush, Vercel drain) received this month, read or not. */
+  raw: number;
+  /** When this month's raw cap was reached: log files aren't read after it. */
+  rawCappedAt: string | null;
+  /** Log records a month: -1 no cap, 0 the report is locked. */
+  rawCap: number;
 }
 
 export interface BotConnections {
@@ -47,6 +53,8 @@ export interface NewBotConnection {
   secret: string;
   endpoint: string;
   workerScript: string | null;
+  /** The Worker Secret the script reads the connection secret from; null for other senders. */
+  workerSecretName: string | null;
   logpushJob: Record<string, unknown> | null;
   vercelDrain: { endpoint: string; format: string; headers: string[]; sources: string[] } | null;
 }
@@ -103,6 +111,9 @@ export async function getBotConnections(brandId: string): Promise<BotConnections
       counted: n(usage.counted),
       cappedAt: typeof usage.cappedAt === 'string' ? usage.cappedAt : null,
       cap: Number(usage.cap ?? 0),
+      raw: n(usage.raw),
+      rawCappedAt: typeof usage.rawCappedAt === 'string' ? usage.rawCappedAt : null,
+      rawCap: Number(usage.rawCap ?? 0),
     },
   };
 }
@@ -122,6 +133,7 @@ export async function createBotConnection(
     secret: String(b.secret),
     endpoint: String(b.endpoint),
     workerScript: typeof b.workerScript === 'string' ? b.workerScript : null,
+    workerSecretName: typeof b.workerSecretName === 'string' ? b.workerSecretName : null,
     logpushJob: (b.logpushJob as Record<string, unknown> | null) ?? null,
     vercelDrain: (b.vercelDrain as NewBotConnection['vercelDrain']) ?? null,
   };

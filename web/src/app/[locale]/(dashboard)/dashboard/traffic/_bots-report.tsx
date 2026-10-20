@@ -21,7 +21,7 @@ import { cn } from '@/lib/utils';
 import { formatNumber } from '@/lib/format';
 import { formatRelative } from '@/lib/format-relative';
 import { botName } from '@/lib/ai-bot-names';
-import { botReportState, rowsPausedUntil, sampleBotTypes } from '@/lib/ai-bots';
+import { botReportState, logsPausedUntil, rowsPausedUntil, sampleBotTypes } from '@/lib/ai-bots';
 import { getBotConnections, type BotConnections } from '@/lib/actions/ai-bots';
 import {
   getTrafficBots,
@@ -227,6 +227,8 @@ export function BotsReportSection({
     key: string;
     info: BotConnections | null;
     report: TrafficBots | null;
+    /** The last connections read without an error, for the dialog. */
+    lastInfo: BotConnections | null;
   } | null>(null);
   const [preview, setPreview] = useState(false);
   const [connectOpen, setConnectOpen] = useState(false);
@@ -240,8 +242,10 @@ export function BotsReportSection({
         console.error('Failed to load the AI bot report:', err);
         return null;
       }),
-    ]).then(([info, report]) => {
-      if (!cancelled) setLoaded({ key, info: 'error' in info ? null : info, report });
+    ]).then(([result, report]) => {
+      if (cancelled) return;
+      const info = 'error' in result ? null : result;
+      setLoaded((prev) => ({ key, info, report, lastInfo: info ?? prev?.lastInfo ?? null }));
     });
     return () => {
       cancelled = true;
@@ -252,11 +256,14 @@ export function BotsReportSection({
   const info = current?.info ?? null;
   const report = current?.report ?? null;
   // The dialog keeps the connections it was opened with while the section
-  // reads again after a change it made (the page bumps `revision`): taken
-  // down, it would lose the new connection's secret and settings.
-  const dialogInfo = info ?? loaded?.info ?? null;
+  // reads again after a change it made (the page bumps `revision`), and when
+  // that read fails: taken down, it would lose the new connection's secret
+  // and settings.
+  const dialogInfo = info ?? loaded?.lastInfo ?? null;
   const state = info ? botReportState(info, report) : null;
   const pausedUntil = info ? rowsPausedUntil(info.usage) : null;
+  // Past the raw cap log files aren't read: the report stops mid-month.
+  const logsPaused = info ? logsPausedUntil(info) : null;
 
   const sample = (
     <div className="relative min-h-[220px]">
@@ -355,6 +362,11 @@ export function BotsReportSection({
                 {tBots('paused', {
                   day: formatTrafficBucketDate(pausedUntil),
                 })}
+              </p>
+            )}
+            {state === 'data' && logsPaused && (
+              <p className="px-6 pb-3 text-xs text-muted-foreground">
+                {tBots('logsPaused', { day: formatTrafficBucketDate(logsPaused) })}
               </p>
             )}
           </CardContent>
