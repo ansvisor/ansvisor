@@ -3164,6 +3164,7 @@
         "googleQueries": "Untracked Google queries",
         "bots": "AI bots",
         "botPages": "Pages AI bots read",
+        "uncrawledPages": "Cited pages no search bot read",
         "visits": "Visits"
       },
       "columns": {
@@ -3214,6 +3215,7 @@
         "query": "Query",
         "bot": "Bot",
         "botType": "Bot type",
+        "bots": "Bots",
         "hits": "Hits",
         "pagesRead": "Pages read",
         "lastSeen": "Last seen (UTC)",
@@ -3251,6 +3253,9 @@
         "noUntrackedQueries": "Every Google query with clicks in this range is tracked",
         "queriesCapped": "Only the 5,000 most clicked queries were checked",
         "noBots": "No AI-bot requests in this range",
+        "uncrawledWaiting": "Listed once the AI bots have sent 30 days of whole data",
+        "noUncrawled": "Every cited page was read by an AI search bot in the last 30 days",
+        "uncrawledMore": "{count, plural, one {# more page not listed} other {# more pages not listed}}",
         "noBrokenLinks": "No AI visitor landed on a missing page in this range"
       },
       "botTypes": {

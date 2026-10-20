@@ -165,6 +165,7 @@ describe('GET /api/traffic/export', () => {
       'Untracked Google queries',
       'AI bots',
       'Pages AI bots read',
+      'Cited pages no search bot read',
       'Visits',
     ]);
 
@@ -206,6 +207,7 @@ describe('GET /api/traffic/export', () => {
       'untracked-google-queries.csv',
       'ai-bots.csv',
       'pages-ai-bots-read.csv',
+      'cited-pages-no-search-bot-read.csv',
       'visits.csv',
     ]);
     for (const file of Object.values(files)) expect(startsWithBom(file)).toBe(true);
@@ -328,6 +330,16 @@ describe('GET /api/traffic/export', () => {
     loaders.getTrafficBots.mockRejectedValue(new Error('statement timeout'));
     const res = await get({ format: 'xlsx' });
     expect(res.status).toBe(200);
+  });
+
+  // gkhngyk's note on #1178: an API 5xx on the untracked queries failed the whole export.
+  it('exports the rest when the untracked Google queries fail', async () => {
+    loaders.getUntrackedGoogleQueries.mockRejectedValue(new Error('502'));
+    const res = await get({ format: 'zip' });
+    expect(res.status).toBe(200);
+    const files = unzipSync(new Uint8Array(await res.arrayBuffer()));
+    expect(strFromU8(files['untracked-google-queries.csv'])).toContain('Note');
+    expect(strFromU8(files['visits.csv'])).toContain('/menu');
   });
 
   it('reports a failed read as an error, not as an empty file', async () => {

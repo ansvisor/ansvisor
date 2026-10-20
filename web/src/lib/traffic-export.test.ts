@@ -498,7 +498,16 @@ describe('trafficTable: AI bots (AT-011)', () => {
   const bots = (): NonNullable<TrafficExportData['bots']> => ({
     firstDay: '2026-09-01',
     lastSeen: '2026-10-19T09:30:00Z',
-    types: [],
+    types: [
+      {
+        type: 'training',
+        hits: 120,
+        pages: 40,
+        lastSeen: '2026-10-19T09:30:00Z',
+        bots: ['gptbot', 'claudebot'],
+      },
+      { type: 'user', hits: 3, pages: 2, lastSeen: null, bots: ['perplexity-user'] },
+    ],
     bots: [
       { bot: 'gptbot', type: 'training', hits: 120, pages: 40, lastSeen: '2026-10-19T09:30:00Z' },
       { bot: 'perplexity-user', type: 'user', hits: 3, pages: 2, lastSeen: null },
@@ -520,12 +529,12 @@ describe('trafficTable: AI bots (AT-011)', () => {
     since: '2026-10-12',
   });
 
-  it('holds each bot with its type, and each page with every type last read', () => {
+  it('holds each bot type with its bots, as the By bot type card, and each page with every type last read', () => {
     expect(trafficTable('bots', data({ bots: bots() }), label)).toEqual({
-      headers: ['Bot', 'Bot type', 'Hits', 'Pages read', 'Last seen (UTC)'],
+      headers: ['Bot type', 'Bots', 'Hits', 'Pages read', 'Last seen (UTC)'],
       rows: [
-        ['GPTBot', 'Training', 120, 40, '2026-10-19 09:30'],
-        ['Perplexity-User', 'User fetch', 3, 2, null],
+        ['Training', 'GPTBot, ClaudeBot', 120, 40, '2026-10-19 09:30'],
+        ['User fetch', 'Perplexity-User', 3, 2, null],
       ],
     });
     expect(trafficTable('botPages', data({ bots: bots() }), label)).toEqual({
@@ -546,6 +555,44 @@ describe('trafficTable: AI bots (AT-011)', () => {
     ]);
     expect(trafficTable('botPages', data({}), label).rows).toEqual([
       ['No AI-bot requests in this range'],
+    ]);
+    expect(trafficTable('uncrawledPages', data({}), label).rows).toEqual([
+      ['No AI-bot requests in this range'],
+    ]);
+  });
+
+  it('lists the cited pages no search bot read, as the report does, with how many more', () => {
+    const report = {
+      ...bots(),
+      uncrawledCount: 12,
+      uncrawled: [
+        { page: '/guides/espresso', citations: 14 },
+        { page: '/gifts', citations: 9 },
+      ],
+    };
+    expect(trafficTable('uncrawledPages', data({ bots: report }), label)).toEqual({
+      headers: ['Page', 'Citations'],
+      rows: [
+        ['/guides/espresso', 14],
+        ['/gifts', 9],
+        ['10 more pages not listed', null],
+      ],
+    });
+  });
+
+  it('says why no uncrawled page is listed', () => {
+    expect(trafficTable('uncrawledPages', data({ bots: bots() }), label).rows).toEqual([
+      ['Every cited page was read by an AI search bot in the last 30 days'],
+    ]);
+    // Under 30 days of bot data, or the data isn't whole.
+    const waiting = {
+      ...bots(),
+      uncrawledCount: null,
+      uncrawled: null,
+      alertState: 'stale' as const,
+    };
+    expect(trafficTable('uncrawledPages', data({ bots: waiting }), label).rows).toEqual([
+      ['Listed once the AI bots have sent 30 days of whole data'],
     ]);
   });
 });
@@ -675,6 +722,7 @@ describe('trafficWorkbook', () => {
       'Untracked Google queries',
       'AI bots',
       'Pages AI bots read',
+      'Cited pages no search bot read',
       'Visits',
     ]);
     // A bold header row, then the rows with their numbers as numbers.

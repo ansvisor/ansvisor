@@ -135,12 +135,15 @@ export async function GET(req: Request) {
         ? getTrafficGooglePages(q.brandId, window, { limit: TRAFFIC_EXPORT_MAX_ROWS })
         : undefined,
       // Every Google query no tracked prompt covers, as far as the server checks (AT-009).
+      // Left out when the API fails, so the rest still exports.
       needs('googleQueries')
-        ? getUntrackedGoogleQueries(q.brandId, window, { limit: UNTRACKED_QUERY_SCAN })
+        ? getUntrackedGoogleQueries(q.brandId, window, { limit: UNTRACKED_QUERY_SCAN }).catch(
+            () => null,
+          )
         : undefined,
       // Every page AI bots read, with the bot types (AT-011).
       // Left out when it fails (a timeout on a large site), so the rest still exports.
-      needs('bots', 'botPages')
+      needs('bots', 'botPages', 'uncrawledPages')
         ? getTrafficBots(q.brandId, window, { limit: TRAFFIC_EXPORT_MAX_ROWS }).catch(() => null)
         : undefined,
       // Every broken AI link, as the redirect list (AT-012).

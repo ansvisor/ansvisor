@@ -48,6 +48,7 @@ export const TRAFFIC_EXPORT_SECTIONS = [
   'googleQueries',
   'bots',
   'botPages',
+  'uncrawledPages',
   'visits',
 ] as const;
 
@@ -449,27 +450,52 @@ function googleQueries(data: TrafficExportData, label: ExportLabel): ExportTable
   return { ...table, rows: [...table.rows, [label('notes.queriesCapped'), null, null, null]] };
 }
 
-/** AI bots reading the site (AT-011): each bot with its type, hits, pages and last request. */
+/**
+ * AI bots reading the site (AT-011), as the By bot type card lists them:
+ * each type with its bots, hits, pages and last request.
+ */
 function bots(data: TrafficExportData, label: ExportLabel): ExportTable {
-  const rows = data.bots?.bots ?? [];
+  const rows = data.bots?.types ?? [];
   if (rows.length === 0)
     return { headers: [label('columns.note')], rows: [[label('notes.noBots')]] };
   return {
     headers: [
-      label('columns.bot'),
       label('columns.botType'),
+      label('columns.bots'),
       label('columns.hits'),
       label('columns.pagesRead'),
       label('columns.lastSeen'),
     ],
     rows: rows.map((row) => [
-      botName(row.bot),
       label(`botTypes.${row.type}`),
+      row.bots.map(botName).join(', '),
       row.hits,
       row.pages,
       row.lastSeen ? utcMinute(row.lastSeen) : null,
     ]),
   };
+}
+
+/**
+ * The cited pages no AI search bot read in the last 30 days (AT-011), as the
+ * report lists them: the most cited first, then how many more there are.
+ */
+function uncrawledPages(data: TrafficExportData, label: ExportLabel): ExportTable {
+  const report = data.bots;
+  const note = (key: string, values?: Record<string, number>) => ({
+    headers: [label('columns.note')],
+    rows: [[label(key, values)]],
+  });
+  if (!report) return note('notes.noBots');
+  // Waiting for 30 days of bot data, or the data isn't whole (00185).
+  if (report.uncrawledCount === null || report.uncrawled === null) {
+    return note('notes.uncrawledWaiting');
+  }
+  if (report.uncrawledCount === 0) return note('notes.noUncrawled');
+  const rows: Cell[][] = report.uncrawled.map((row) => [row.page, row.citations]);
+  const more = report.uncrawledCount - report.uncrawled.length;
+  if (more > 0) rows.push([label('notes.uncrawledMore', { count: more }), null]);
+  return { headers: [label('columns.page'), label('columns.citations')], rows };
 }
 
 /** The pages AI bots read (AT-011), with when each type last read them. */
@@ -550,6 +576,8 @@ export function trafficTable(
       return bots(data, label);
     case 'botPages':
       return botPages(data, label);
+    case 'uncrawledPages':
+      return uncrawledPages(data, label);
     case 'visits':
       return visits(data, label);
   }
