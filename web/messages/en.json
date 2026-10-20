@@ -3158,6 +3158,7 @@
         "deleteTable": "Delete the table",
         "html": "Edit as HTML",
         "htmlBack": "Back to visual",
+        "openLink": "Open the link in a new tab (or ⌘/Ctrl + click it in the page)",
         "counter": "{count} / {target} characters"
       },
       "link": {

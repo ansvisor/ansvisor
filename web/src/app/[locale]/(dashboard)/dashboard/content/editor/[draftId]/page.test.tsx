@@ -194,6 +194,18 @@ describe('the content editor', () => {
     expect(container.querySelector('header')!.textContent).toContain('Saved');
   });
 
+  it('shows the link the cursor is in, to open in a new tab', async () => {
+    getContentDraft.mockResolvedValue(
+      draft({ bodyHtml: '<p><a href="https://gartner.com/x">Gartner</a> says so.</p>' }),
+    );
+    await renderPage();
+    const target = container.querySelector<HTMLAnchorElement>('[role="toolbar"] a')!;
+    expect(target.getAttribute('href')).toBe('https://gartner.com/x');
+    expect(target.target).toBe('_blank');
+    expect(target.rel).toBe('noopener noreferrer');
+    expect(target.textContent).toBe('gartner.com/x');
+  });
+
   it('follows the draft’s brand in the sidebar', async () => {
     getContentDraft.mockResolvedValue(draft({ brandId: 'b2' }));
     await renderPage();
