@@ -26,7 +26,7 @@ import { loadClusters } from '../lib/prompt-clusters.js';
 import { sendToActionCenter } from '../lib/action-center/from-opportunity.js';
 import { IDEA_MAX_LENGTH } from '../lib/opportunity-generator.js';
 import { cleanStoredOpportunity } from '../lib/opportunity-text.js';
-import { sourceDataForStatus } from '../lib/opportunity-status.js';
+import { sourceDataForStatus, VALID_OPPORTUNITY_STATUSES } from '../lib/opportunity-status.js';
 import {
   openOpportunityForPrompt,
   promptClusterId,
@@ -750,7 +750,7 @@ router.post('/bulk/status', async (req, res) => {
       return res.status(400).json({ error: 'ids must be a non-empty array' });
     }
 
-    const validStatuses = ['new', 'reviewed', 'sent', 'in_progress', 'done', 'dismissed'];
+    const validStatuses = VALID_OPPORTUNITY_STATUSES;
     if (!validStatuses.includes(status)) {
       return res
         .status(400)
@@ -849,10 +849,16 @@ router.post('/bulk/send-webhook', async (req, res) => {
       .eq('brand_id', brandId)
       .eq('is_active', true)
       .limit(1)
-      .single();
+      .maybeSingle();
 
     if (!webhookConfig) {
-      return res.status(400).json({ error: 'No workflow connected' });
+      return res.status(400).json({ error: 'No workflow connected', code: 'no_webhook' });
+    }
+    if (!webhookConfig.events?.includes('opportunity.sent')) {
+      return res.status(409).json({
+        error: 'Webhook is not subscribed to Opportunity sent events.',
+        code: 'webhook_not_subscribed',
+      });
     }
 
     const { data: brand } = await supabaseAdmin
@@ -911,7 +917,8 @@ router.post('/bulk/send-webhook', async (req, res) => {
             domain: domains?.[0]?.domain || '',
             industry: brand?.industry || '',
           },
-          callback_url: `${serverUrl}/api/content/${opportunity.id}/status`,
+          callback_url: `${serverUrl}/webhooks/content/${opportunity.id}/status`,
+          callback_method: 'POST',
         };
 
         const webhookRes = await fetch(webhookConfig.webhook_url, {
@@ -923,6 +930,9 @@ router.post('/bulk/send-webhook', async (req, res) => {
 
         const responseBody = await webhookRes.text().catch(() => '');
 
+        // A workflow may call callback_url before it sends its HTTP response.
+        // Guard the write with the state observed before POST so this delayed
+        // response cannot overwrite a newer in_progress/done callback.
         await supabaseAdmin
           .from('content_opportunities')
           .update({
@@ -934,7 +944,9 @@ router.post('/bulk/send-webhook', async (req, res) => {
             },
             updated_at: new Date().toISOString(),
           })
-          .eq('id', opportunity.id);
+          .eq('id', stored.id)
+          .eq('status', stored.status)
+          .eq('updated_at', stored.updated_at);
 
         sent++;
       } catch {
@@ -961,7 +973,7 @@ router.patch('/:id/status', async (req, res) => {
     const { id } = req.params;
     const { status, reason } = req.body;
 
-    const validStatuses = ['new', 'reviewed', 'sent', 'in_progress', 'done', 'dismissed'];
+    const validStatuses = VALID_OPPORTUNITY_STATUSES;
     if (!validStatuses.includes(status)) {
       return res
         .status(400)
@@ -1031,10 +1043,16 @@ router.post('/:id/send-webhook', async (req, res) => {
       .eq('brand_id', opportunity.brand_id)
       .eq('is_active', true)
       .limit(1)
-      .single();
+      .maybeSingle();
 
     if (!webhookConfig) {
-      return res.status(400).json({ error: 'No workflow connected' });
+      return res.status(400).json({ error: 'No workflow connected', code: 'no_webhook' });
+    }
+    if (!webhookConfig.events?.includes('opportunity.sent')) {
+      return res.status(409).json({
+        error: 'Webhook is not subscribed to Opportunity sent events.',
+        code: 'webhook_not_subscribed',
+      });
     }
 
     const { data: brand } = await supabaseAdmin
@@ -1081,7 +1099,8 @@ router.post('/:id/send-webhook', async (req, res) => {
         domain: domains?.[0]?.domain || '',
         industry: brand?.industry || '',
       },
-      callback_url: `${serverUrl}/api/content/${opportunity.id}/status`,
+      callback_url: `${serverUrl}/webhooks/content/${opportunity.id}/status`,
+      callback_method: 'POST',
     };
 
     const headers = { 'Content-Type': 'application/json' };
@@ -1098,7 +1117,7 @@ router.post('/:id/send-webhook', async (req, res) => {
 
     const responseBody = await webhookRes.text().catch(() => '');
 
-    await supabaseAdmin
+    const { data: statusUpdate } = await supabaseAdmin
       .from('content_opportunities')
       .update({
         status: 'sent',
@@ -1109,12 +1128,29 @@ router.post('/:id/send-webhook', async (req, res) => {
         },
         updated_at: new Date().toISOString(),
       })
-      .eq('id', id);
+      .eq('id', id)
+      .eq('status', stored.status)
+      .eq('updated_at', stored.updated_at)
+      .select('status')
+      .maybeSingle();
+
+    // If the conditional write missed, a callback or user changed the record
+    // during delivery. Return the actual latest status instead of claiming it
+    // was changed to sent.
+    let opportunityStatus = statusUpdate?.status;
+    if (!statusUpdate) {
+      const { data: latest } = await supabaseAdmin
+        .from('content_opportunities')
+        .select('status')
+        .eq('id', id)
+        .maybeSingle();
+      opportunityStatus = latest?.status ?? stored.status;
+    }
 
     return res.json({
       success: true,
       webhookStatus: webhookRes.status,
-      opportunityStatus: 'sent',
+      opportunityStatus,
     });
   } catch (error) {
     req.log.error({ err: error }, 'send webhook error');

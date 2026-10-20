@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from '@/i18n/navigation';
 import { useTranslations } from 'next-intl';
 import { useBrandStore } from '@/stores/use-brand-store';
@@ -18,7 +18,9 @@ import type { HeadToHeadData, HeadToHeadGroup, HeadToHeadRun } from '@/lib/head-
 import { getFaviconUrl } from '@/lib/favicon';
 import { toCsv } from '@/lib/csv';
 import { slugify } from '@/lib/slug';
-import { readUrlParam, writeUrlParams } from '@/lib/url-state';
+import { readUrlChoice, readUrlParam, writeUrlParams } from '@/lib/url-state';
+import { DateRangeFilter, type DateRangePreset } from '@/components/filters/date-range-filter';
+import { getDateRange } from '@/lib/date-range';
 import { MODEL_LABELS } from '@/config/platform-labels';
 import type { Competitor } from '@/types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -1158,13 +1160,24 @@ function HeadToHeadSection({
   );
 }
 
-/** The trailing 30 calendar days ending today (UTC), as Insights' 30d preset. */
-function last30Days() {
-  const dayTo = new Date().toISOString().slice(0, 10);
-  const from = new Date(`${dayTo}T00:00:00Z`);
-  from.setUTCDate(from.getUTCDate() - 29);
-  const dayFrom = from.toISOString().slice(0, 10);
-  return { dateFrom: `${dayFrom}T00:00:00.000Z`, days: { dayFrom, dayTo } };
+type CompetitorDatePreset = Exclude<DateRangePreset, '24h'>;
+
+const COMPETITOR_DATE_PRESETS: readonly CompetitorDatePreset[] = [
+  '7d',
+  '30d',
+  '90d',
+  'all',
+  'custom',
+];
+
+function competitorComparisonWindow(
+  preset: CompetitorDatePreset,
+  custom: { from: string; to: string },
+) {
+  const range = getDateRange(preset, custom);
+  // Always provide a days window so competitor_aggregates_daily is used, even
+  // for all-time and partially specified custom ranges.
+  return { ...range, days: range.days ?? {} };
 }
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
@@ -1212,6 +1225,13 @@ export default function CompetitorsPage() {
   const [competitors, setCompetitors] = useState<Competitor[]>([]);
   const [comparisonData, setComparisonData] = useState<CompetitorComparisonData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [comparisonLoading, setComparisonLoading] = useState(false);
+  const [datePreset, setDatePreset] = useState<CompetitorDatePreset>('30d');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
+  const [dateParamsReady, setDateParamsReady] = useState(false);
+  const competitorsRequestId = useRef(0);
+  const comparisonRequestId = useRef(0);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [suggestDialogOpen, setSuggestDialogOpen] = useState(false);
   const [deleting, setDeleting] = useState<string | null>(null);
@@ -1226,7 +1246,16 @@ export default function CompetitorsPage() {
 
   useEffect(() => {
     setLinkedCompetitorId(readUrlParam('competitor') || null);
+    setDatePreset(readUrlChoice('preset', COMPETITOR_DATE_PRESETS, '30d'));
+    setDateFrom(readUrlParam('from'));
+    setDateTo(readUrlParam('to'));
+    setDateParamsReady(true);
   }, []);
+
+  useEffect(() => {
+    if (!dateParamsReady) return;
+    writeUrlParams({ preset: datePreset, from: dateFrom, to: dateTo }, { preset: '30d' });
+  }, [dateParamsReady, dateFrom, datePreset, dateTo]);
 
   const selectCompetitor = useCallback((id: string | null) => {
     setSelectedCompetitorId(id);
@@ -1235,29 +1264,55 @@ export default function CompetitorsPage() {
   const [h2hData, setH2hData] = useState<HeadToHeadData | null>(null);
   const [h2hLoading, setH2hLoading] = useState(false);
 
-  const loadData = useCallback(async () => {
+  const loadCompetitors = useCallback(async () => {
     if (!brand) return;
+    const requestId = ++competitorsRequestId.current;
     setLoading(true);
     try {
-      const [comps, comparison] = await Promise.all([
-        getCompetitors(brand.id),
-        // The last 30 days, served from the daily rollups. All-time read
-        // every rollup row the brand ever had and was nearing the 8s
-        // statement timeout on the largest brand.
-        getCompetitorComparison(brand.id, last30Days()),
-      ]);
+      const comps = await getCompetitors(brand.id);
+      if (requestId !== competitorsRequestId.current) return;
       setCompetitors(comps);
-      setComparisonData(comparison.brands.length > 1 ? comparison : null);
     } catch {
-      toast.error(t('loadError'));
+      if (requestId === competitorsRequestId.current) toast.error(t('loadError'));
     } finally {
-      setLoading(false);
+      if (requestId === competitorsRequestId.current) setLoading(false);
     }
   }, [brand, t]);
 
+  const loadComparison = useCallback(async () => {
+    const requestId = ++comparisonRequestId.current;
+    if (!brand || !dateParamsReady) return;
+
+    // Custom is not a query until both bounds are selected. Keep the previous
+    // comparison visible rather than accidentally turning an incomplete range
+    // into an unbounded all-time read.
+    if (datePreset === 'custom' && (!dateFrom || !dateTo)) {
+      setComparisonLoading(false);
+      return;
+    }
+
+    setComparisonLoading(true);
+    try {
+      const comparison = await getCompetitorComparison(
+        brand.id,
+        competitorComparisonWindow(datePreset, { from: dateFrom, to: dateTo }),
+      );
+      if (requestId !== comparisonRequestId.current) return;
+      setComparisonData(comparison.brands.length > 1 ? comparison : null);
+    } catch {
+      if (requestId === comparisonRequestId.current) toast.error(t('loadError'));
+    } finally {
+      if (requestId === comparisonRequestId.current) setComparisonLoading(false);
+    }
+  }, [brand, dateFrom, dateParamsReady, datePreset, dateTo, t]);
+
   useEffect(() => {
-    loadData();
-  }, [loadData]);
+    loadCompetitors();
+  }, [loadCompetitors]);
+
+  useEffect(() => {
+    loadComparison();
+  }, [loadComparison]);
 
   useEffect(() => {
     if (!linkedCompetitorId || loading) return;
@@ -1354,7 +1409,8 @@ export default function CompetitorsPage() {
     if (!brand) return;
     await addCompetitor(brand.id, { name, domain });
     toast.success(t('addSuccess'));
-    loadData();
+    void loadCompetitors();
+    void loadComparison();
   }
 
   async function handleAddSuggested(
@@ -1374,12 +1430,21 @@ export default function CompetitorsPage() {
       // Refresh in place rather than toggling the page-wide initial loader:
       // the suggestion dialog should remain open when some inserts fail.
       try {
+        const comparisonPromise =
+          datePreset === 'custom' && (!dateFrom || !dateTo)
+            ? Promise.resolve(null)
+            : getCompetitorComparison(
+                brand.id,
+                competitorComparisonWindow(datePreset, { from: dateFrom, to: dateTo }),
+              );
         const [currentCompetitors, comparison] = await Promise.all([
           getCompetitors(brand.id),
-          getCompetitorComparison(brand.id, last30Days()),
+          comparisonPromise,
         ]);
         setCompetitors(currentCompetitors);
-        setComparisonData(comparison.brands.length > 1 ? comparison : null);
+        if (comparison) {
+          setComparisonData(comparison.brands.length > 1 ? comparison : null);
+        }
       } catch {
         toast.error(t('loadError'));
       }
@@ -1395,7 +1460,8 @@ export default function CompetitorsPage() {
       if (selectedCompetitorId === id) {
         selectCompetitor(null);
       }
-      loadData();
+      void loadCompetitors();
+      void loadComparison();
     } catch {
       toast.error(t('deleteError'));
     } finally {
@@ -1461,12 +1527,29 @@ export default function CompetitorsPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">{t('title')}</h1>
           <p className="text-muted-foreground">{t('description')}</p>
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap items-end gap-3">
+          <div className="flex items-center gap-2">
+            <DateRangeFilter
+              value={datePreset}
+              presets={COMPETITOR_DATE_PRESETS}
+              onChange={setDatePreset}
+              from={dateFrom}
+              to={dateTo}
+              onFromChange={setDateFrom}
+              onToChange={setDateTo}
+            />
+            {comparisonLoading && (
+              <Loader2
+                className="mb-2 h-4 w-4 animate-spin text-muted-foreground"
+                aria-hidden="true"
+              />
+            )}
+          </div>
           <Button variant="outline" className="gap-2" onClick={() => setSuggestDialogOpen(true)}>
             <Sparkles className="h-4 w-4" />
             {t('suggestCompetitors')}
@@ -1508,7 +1591,12 @@ export default function CompetitorsPage() {
                 </Button>
               </div>
               <p className="text-xs text-muted-foreground">
-                {t('selectToCompare')} {t('windowLast30Days')}
+                {t('selectToCompare')}{' '}
+                {datePreset === '30d'
+                  ? t('windowLast30Days')
+                  : datePreset === 'all'
+                    ? t('windowAllTime')
+                    : t('windowSelectedRange')}
               </p>
             </CardHeader>
             <CardContent>

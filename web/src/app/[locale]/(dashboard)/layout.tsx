@@ -8,6 +8,7 @@ import { PlanProvider } from '@/components/providers/plan-provider';
 import { RoleProvider, type TeamRole } from '@/components/providers/role-provider';
 import { BrandLoader } from '@/components/providers/brand-loader';
 import { BrandGuard } from '@/components/providers/brand-guard';
+import { GettingStartedPageOpened } from '@/components/getting-started/page-opened';
 import { getBrands } from '@/lib/actions/brand';
 import { getPlan, isCloud, type PlanId } from '@/config/plans';
 import { evaluateSubscriptionAccess } from '@/lib/billing/subscription-access';
@@ -83,6 +84,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
     <>
       <AuthProvider user={user} />
       <BrandLoader brands={brands} />
+      <GettingStartedPageOpened />
       <PlanProvider planId={planId} allowedModelIds={allowedModelIds}>
         <RoleProvider role={role}>
           <div className="flex h-screen overflow-hidden">

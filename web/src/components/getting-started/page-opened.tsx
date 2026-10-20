@@ -1,0 +1,44 @@
+'use client';
+
+import { useEffect } from 'react';
+import { usePathname } from '@/i18n/navigation';
+import { useBrandStore } from '@/stores/use-brand-store';
+import { markGettingStartedPageOpened } from '@/lib/actions/getting-started';
+import { pageOpenedStep } from '@/lib/getting-started/steps';
+
+/**
+ * Getting started's explore steps ("See where you stand in Visibility" and
+ * the like) are done when their page is opened. Mounted once in the
+ * dashboard layout, so it counts the page however it was reached: the step's
+ * button, the sidebar or a link. Each brand and step is sent until the
+ * server records it, then remembered in this browser.
+ */
+export function GettingStartedPageOpened() {
+  const pathname = usePathname();
+  const brandId = useBrandStore((s) => s.activeBrandId);
+
+  useEffect(() => {
+    const step = pageOpenedStep(pathname);
+    if (!step || !brandId) return;
+    const key = `aeo:getting-started:${brandId}:${step}`;
+    try {
+      if (localStorage.getItem(key)) return;
+    } catch {
+      // Storage blocked: ask the server, which keeps it once.
+    }
+    markGettingStartedPageOpened(brandId, step)
+      .then((recorded) => {
+        if (!recorded) return;
+        try {
+          localStorage.setItem(key, '1');
+        } catch {
+          // Nothing to remember it in; the next visit asks again.
+        }
+      })
+      .catch(() => {
+        // A database without 00196, or offline: the step stays open.
+      });
+  }, [pathname, brandId]);
+
+  return null;
+}

@@ -1098,6 +1098,61 @@ export type Database = {
           },
         ]
       }
+      getting_started: {
+        Row: {
+          brand_id: string
+          dismissed_at: string | null
+          started_at: string
+        }
+        Insert: {
+          brand_id: string
+          dismissed_at?: string | null
+          started_at?: string
+        }
+        Update: {
+          brand_id?: string
+          dismissed_at?: string | null
+          started_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "getting_started_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: true
+            referencedRelation: "brands"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      getting_started_steps: {
+        Row: {
+          brand_id: string
+          state: string
+          step: string
+          updated_at: string
+        }
+        Insert: {
+          brand_id: string
+          state: string
+          step: string
+          updated_at?: string
+        }
+        Update: {
+          brand_id?: string
+          state?: string
+          step?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "getting_started_steps_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brands"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       gsc_page_stats: {
         Row: {
           brand_id: string
@@ -3322,6 +3377,14 @@ export type Database = {
               isSetofReturn: true
             }
           }
+      getting_started_facts: {
+        Args: { p_brand_id: string }
+        Returns: Json
+      }
+      getting_started_page_opened: {
+        Args: { p_brand_id: string; p_step: string }
+        Returns: boolean
+      }
       gsc_candidate_queries: {
         Args: { p_brand_id: string; p_min_impressions: number; p_since: string }
         Returns: {

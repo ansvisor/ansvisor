@@ -21,7 +21,7 @@ import { cn } from '@/lib/utils';
 import { formatNumber } from '@/lib/format';
 import { formatRelative } from '@/lib/format-relative';
 import { botName } from '@/lib/ai-bot-names';
-import { botReportState, rowsPausedUntil, sampleBotTypes } from '@/lib/ai-bots';
+import { botReportState, logsPausedUntil, rowsPausedUntil, sampleBotTypes } from '@/lib/ai-bots';
 import { type BotConnections } from '@/lib/actions/ai-bots';
 import { type BotTypeRow, type TrafficBots, type TrafficDateWindow } from '@/lib/actions/traffic';
 import { formatTrafficBucketDate } from './_charts';
@@ -226,6 +226,8 @@ export function BotsReportSection({
   const [connections, setConnections] = useState<{
     key: string;
     info: BotConnections | null;
+    /** The last connections read without an error, for the dialog. */
+    lastInfo: BotConnections | null;
   } | null>(null);
   const [preview, setPreview] = useState(false);
   const [connectOpen, setConnectOpen] = useState(false);
@@ -234,8 +236,14 @@ export function BotsReportSection({
     let cancelled = false;
     getBotConnections(brandId)
       .catch(() => ({ error: 'failed' }))
-      .then((info) => {
-        if (!cancelled) setConnections({ key: infoKey, info: 'error' in info ? null : info });
+      .then((result) => {
+        if (cancelled) return;
+        const info = 'error' in result ? null : result;
+        setConnections((prev) => ({
+          key: infoKey,
+          info,
+          lastInfo: info ?? prev?.lastInfo ?? null,
+        }));
       });
     return () => {
       cancelled = true;
@@ -263,11 +271,14 @@ export function BotsReportSection({
   const info = ready ? (connections?.info ?? null) : null;
   const report = ready ? (loaded?.report ?? null) : null;
   // The dialog keeps the connections it was opened with while the section
-  // reads again after a change it made (the page bumps `revision`): taken
-  // down, it would lose the new connection's secret and settings.
-  const dialogInfo = info ?? connections?.info ?? null;
+  // reads again after a change it made (the page bumps `revision`), and when
+  // that read fails: taken down, it would lose the new connection's secret
+  // and settings.
+  const dialogInfo = info ?? connections?.lastInfo ?? null;
   const state = info ? botReportState(info, report) : null;
   const pausedUntil = info ? rowsPausedUntil(info.usage) : null;
+  // Past the raw cap log files aren't read: the report stops mid-month.
+  const logsPaused = info ? logsPausedUntil(info) : null;
 
   const sample = (
     <div className="relative min-h-[220px]">
@@ -366,6 +377,11 @@ export function BotsReportSection({
                 {tBots('paused', {
                   day: formatTrafficBucketDate(pausedUntil),
                 })}
+              </p>
+            )}
+            {state === 'data' && logsPaused && (
+              <p className="px-6 pb-3 text-xs text-muted-foreground">
+                {tBots('logsPaused', { day: formatTrafficBucketDate(logsPaused) })}
               </p>
             )}
           </CardContent>
