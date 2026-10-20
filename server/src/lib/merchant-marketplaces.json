@@ -58,65 +58,37 @@
     "redirects": []
   },
   "walmart": {
-    "hosts": [
-      "walmart.com",
-      "walmart.ca",
-      "walmart.com.mx"
-    ],
+    "hosts": ["walmart.com", "walmart.ca", "walmart.com.mx"],
     "redirects": [
       {
-        "hosts": [
-          "goto.walmart.com"
-        ],
-        "parameters": [
-          "u"
-        ]
+        "hosts": ["goto.walmart.com"],
+        "parameters": ["u"]
       }
     ]
   },
   "etsy": {
-    "hosts": [
-      "etsy.com",
-      "etsy.co.uk",
-      "etsy.de"
-    ],
+    "hosts": ["etsy.com", "etsy.co.uk", "etsy.de"],
     "redirects": []
   },
   "aliexpress": {
-    "hosts": [
-      "aliexpress.com",
-      "aliexpress.us",
-      "aliexpress.ru"
-    ],
+    "hosts": ["aliexpress.com", "aliexpress.us", "aliexpress.ru"],
     "redirects": [
       {
-        "hosts": [
-          "s.click.aliexpress.com"
-        ],
-        "parameters": [
-          "dl_target_url"
-        ]
+        "hosts": ["s.click.aliexpress.com"],
+        "parameters": ["dl_target_url"]
       }
     ]
   },
   "temu": {
-    "hosts": [
-      "temu.com",
-      "temu.co.uk",
-      "temu.com.tr"
-    ],
+    "hosts": ["temu.com", "temu.co.uk", "temu.com.tr"],
     "redirects": []
   },
   "trendyol": {
-    "hosts": [
-      "trendyol.com"
-    ],
+    "hosts": ["trendyol.com"],
     "redirects": []
   },
   "hepsiburada": {
-    "hosts": [
-      "hepsiburada.com"
-    ],
+    "hosts": ["hepsiburada.com"],
     "redirects": []
   }
 }
