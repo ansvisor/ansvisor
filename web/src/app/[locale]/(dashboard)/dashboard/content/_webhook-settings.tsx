@@ -163,7 +163,10 @@ export function WebhookSettingsDialog({ open, onOpenChange, brandId }: WebhookSe
                       onChange={(e) =>
                         setEvents((current) =>
                           e.target.checked
-                            ? [...current.filter((value) => value !== eventOption.value), eventOption.value]
+                            ? [
+                                ...current.filter((value) => value !== eventOption.value),
+                                eventOption.value,
+                              ]
                             : current.filter((value) => value !== eventOption.value),
                         )
                       }
