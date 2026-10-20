@@ -505,12 +505,17 @@ function ActionsContent({ brand }: { brand: Brand }) {
   // and the brand's setup is incomplete, or after a skip.
   const [confirmingSkip, setConfirmingSkip] = useState(false);
   const [switching, setSwitching] = useState(false);
+  // The new brand's question, once answered or closed, stays closed for
+  // this visit, even when the answer couldn't be saved or read back: it
+  // never traps anyone on the page.
+  const [askClosed, setAskClosed] = useState(false);
   const switchGettingStarted = async (
     change: (brandId: string) => Promise<void>,
     done: (started: GettingStartedStatus | null) => string,
     failed: string,
   ) => {
     setSwitching(true);
+    setAskClosed(true);
     try {
       await change(brand.id);
       const started = await getGettingStarted(brand.id).catch(() => null);
@@ -586,8 +591,13 @@ function ActionsContent({ brand }: { brand: Brand }) {
       </Dialog>
 
       {/* A brand added beside others asks before running it. */}
-      <Dialog open={canManage && Boolean(gettingStarted?.asking) && !switching}>
-        <DialogContent className="sm:max-w-md" showCloseButton={false}>
+      <Dialog
+        open={canManage && Boolean(gettingStarted?.asking) && !askClosed}
+        onOpenChange={(open) => {
+          if (!open) setAskClosed(true);
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>{tStarted('secondBrand.title', { brand: brand.name })}</DialogTitle>
             <DialogDescription>{tStarted('secondBrand.body')}</DialogDescription>

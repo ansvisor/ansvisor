@@ -358,6 +358,17 @@ describe('starting and skipping Getting started', () => {
     expect(buttonNamed('start.button')).toBeDefined();
   });
 
+  it("closes the new brand's question when the answer can't be saved, and keeps it closed", async () => {
+    getGettingStarted.mockResolvedValue(started({ confirmedAt: null }));
+    startGettingStarted.mockRejectedValue(new Error('missing column confirmed_at'));
+    await render();
+    expect(pageText()).toContain('secondBrand.title');
+
+    await act(async () => buttonNamed('secondBrand.run')!.click());
+    expect(toast.error).toHaveBeenCalledWith('start.failed');
+    expect(pageText()).not.toContain('secondBrand.title');
+  });
+
   it('asks a manager whether to run it for a brand added beside others', async () => {
     getGettingStarted
       .mockResolvedValueOnce(started({ confirmedAt: null }))

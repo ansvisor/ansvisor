@@ -322,6 +322,17 @@ describe('parseGettingStartedFacts', () => {
     });
   });
 
+  // gkhngyk on #1243: until 00197 is applied, the facts have no confirmed_at,
+  // and every running brand would ask "Run Getting started?".
+  it('reads a running brand as confirmed on a database without 00197', () => {
+    const facts = parseGettingStartedFacts({ started_at: '2026-10-20T10:00:00+00:00' });
+    expect(facts?.confirmedAt).toBe('2026-10-20T10:00:00+00:00');
+    expect(
+      parseGettingStartedFacts({ started_at: '2026-10-20T10:00:00+00:00', confirmed_at: null })
+        ?.confirmedAt,
+    ).toBeNull();
+  });
+
   it('gives null for a brand the caller can’t see', () => {
     expect(parseGettingStartedFacts(null)).toBeNull();
   });

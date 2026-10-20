@@ -1638,7 +1638,7 @@
       },
       "start": {
         "button": "Start getting started",
-        "hint": "Only you see this · about 15 min",
+        "hint": "For admins and managers · about 15 min",
         "started": "{count, plural, =0 {Getting started is on} one {Getting started · # step already done} other {Getting started · # steps already done}}",
         "failed": "Couldn’t start Getting started. Try again."
       },

@@ -181,7 +181,8 @@ export function parseGettingStartedFacts(raw: unknown): GettingStartedFacts | nu
   return {
     startedAt: str(r.started_at),
     dismissedAt: str(r.dismissed_at),
-    confirmedAt: str(r.confirmed_at),
+    // A database without 00197 has no confirmed_at: what started runs.
+    confirmedAt: 'confirmed_at' in r ? str(r.confirmed_at) : str(r.started_at),
     records,
     recordedAt,
     kpiSetupAt: str(r.kpi_setup_at),
