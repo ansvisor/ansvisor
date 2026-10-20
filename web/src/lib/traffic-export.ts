@@ -48,6 +48,7 @@ export const TRAFFIC_EXPORT_SECTIONS = [
   'googleQueries',
   'bots',
   'botPages',
+  'uncrawledPages',
   'visits',
 ] as const;
 
@@ -100,6 +101,19 @@ export interface TrafficExportData {
   /** AI bots reading the site, every page (AT-011). */
   bots?: TrafficBots | null;
   sources?: TrafficSources | null;
+  /**
+   * Sections whose read failed while the rest exported: their sheets say so
+   * rather than reading as empty (gkhngyk on #1244).
+   */
+  unread?: UnreadSection[];
+}
+
+/** The reads an export leaves out when they fail, so the rest still exports. */
+export type UnreadSection = 'googleQueries' | 'bots';
+
+/** A sheet that is only a note. */
+function noteTable(label: ExportLabel, key: string, values?: Record<string, number>): ExportTable {
+  return { headers: [label('columns.note')], rows: [[label(key, values)]] };
 }
 
 type Cell = string | number | null;
@@ -433,6 +447,7 @@ function googlePages(data: TrafficExportData, label: ExportLabel): ExportTable {
 function googleQueries(data: TrafficExportData, label: ExportLabel): ExportTable {
   const q = data.googleQueries;
   const note = (key: string) => ({ headers: [label('columns.note')], rows: [[label(key)]] });
+  if (data.unread?.includes('googleQueries')) return note('notes.readFailed');
   if (!q || !q.lastDay) return note('notes.noGoogleQueries');
   if (q.rows.length === 0) return note('notes.noUntrackedQueries');
   const days = q.since ? `${q.since} – ${q.until}` : `${label('filters.start')} – ${q.until}`;
@@ -449,22 +464,25 @@ function googleQueries(data: TrafficExportData, label: ExportLabel): ExportTable
   return { ...table, rows: [...table.rows, [label('notes.queriesCapped'), null, null, null]] };
 }
 
-/** AI bots reading the site (AT-011): each bot with its type, hits, pages and last request. */
+/**
+ * AI bots reading the site (AT-011), as the By bot type card lists them:
+ * each type with its bots, hits, pages and last request.
+ */
 function bots(data: TrafficExportData, label: ExportLabel): ExportTable {
-  const rows = data.bots?.bots ?? [];
-  if (rows.length === 0)
-    return { headers: [label('columns.note')], rows: [[label('notes.noBots')]] };
+  const rows = data.bots?.types ?? [];
+  if (data.unread?.includes('bots')) return noteTable(label, 'notes.readFailed');
+  if (rows.length === 0) return noteTable(label, 'notes.noBots');
   return {
     headers: [
-      label('columns.bot'),
       label('columns.botType'),
+      label('columns.bots'),
       label('columns.hits'),
       label('columns.pagesRead'),
       label('columns.lastSeen'),
     ],
     rows: rows.map((row) => [
-      botName(row.bot),
       label(`botTypes.${row.type}`),
+      row.bots.map(botName).join(', '),
       row.hits,
       row.pages,
       row.lastSeen ? utcMinute(row.lastSeen) : null,
@@ -472,11 +490,33 @@ function bots(data: TrafficExportData, label: ExportLabel): ExportTable {
   };
 }
 
+/**
+ * The cited pages no AI search bot read in the last 30 days (AT-011), as the
+ * report lists them: the most cited first, then how many more there are.
+ */
+function uncrawledPages(data: TrafficExportData, label: ExportLabel): ExportTable {
+  const report = data.bots;
+  if (data.unread?.includes('bots')) return noteTable(label, 'notes.readFailed');
+  if (!report) return noteTable(label, 'notes.noBots');
+  if (report.uncrawledCount === null || report.uncrawled === null) {
+    // Paused, as the report says it (its data isn't whole), or still under 30 days.
+    return noteTable(
+      label,
+      report.alertState === 'stale' ? 'notes.uncrawledStale' : 'notes.uncrawledWaiting',
+    );
+  }
+  if (report.uncrawledCount === 0) return noteTable(label, 'notes.noUncrawled');
+  const rows: Cell[][] = report.uncrawled.map((row) => [row.page, row.citations]);
+  const more = report.uncrawledCount - report.uncrawled.length;
+  if (more > 0) rows.push([label('notes.uncrawledMore', { count: more }), null]);
+  return { headers: [label('columns.page'), label('columns.citations')], rows };
+}
+
 /** The pages AI bots read (AT-011), with when each type last read them. */
 function botPages(data: TrafficExportData, label: ExportLabel): ExportTable {
   const rows = data.bots?.pages ?? [];
-  if (rows.length === 0)
-    return { headers: [label('columns.note')], rows: [[label('notes.noBots')]] };
+  if (data.unread?.includes('bots')) return noteTable(label, 'notes.readFailed');
+  if (rows.length === 0) return noteTable(label, 'notes.noBots');
   const at = (iso: string | null) => (iso ? utcMinute(iso) : null);
   return {
     headers: [
@@ -550,6 +590,8 @@ export function trafficTable(
       return bots(data, label);
     case 'botPages':
       return botPages(data, label);
+    case 'uncrawledPages':
+      return uncrawledPages(data, label);
     case 'visits':
       return visits(data, label);
   }

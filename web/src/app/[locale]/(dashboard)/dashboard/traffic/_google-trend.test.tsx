@@ -13,7 +13,8 @@ import type { GoogleTrendPoint } from '@/lib/traffic-google-trend';
  */
 
 const getTrafficGoogleTrend = vi.fn();
-vi.mock('@/lib/actions/traffic', () => ({
+vi.mock('@/lib/actions/traffic', () => ({}));
+vi.mock('@/lib/traffic-reads', () => ({
   getTrafficGoogleTrend: (...args: unknown[]) => getTrafficGoogleTrend(...args),
 }));
 

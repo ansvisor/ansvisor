@@ -11,18 +11,40 @@ import { AI_SOURCES_VERSION } from '../lib/ai-sources.js';
 const inserted = [];
 const findVisitOf = vi.fn();
 let insertError = null;
+// The not-found mark (k: "nf"): the filters of its lookup, what it finds, what it updates.
+const filters = [];
+let latestPageview = null;
+const updated = [];
 
 vi.mock('../config/supabase.js', () => ({
   default: {
-    from: (table) => ({
-      select: () => ({
-        eq: () => ({ single: async () => ({ data: { id: 'b1' }, error: null }) }),
-      }),
-      insert: async (row) => {
-        inserted.push({ table, row });
-        return { error: insertError };
-      },
-    }),
+    from: (table) => {
+      const filter = (op) => (col, val) => {
+        if (table === 'ai_traffic_logs') filters.push([op, col, val]);
+        return chain;
+      };
+      const chain = {
+        select: () => chain,
+        eq: filter('eq'),
+        is: filter('is'),
+        gte: filter('gte'),
+        order: () => chain,
+        limit: () => chain,
+        single: async () => ({ data: { id: 'b1' }, error: null }),
+        maybeSingle: async () => ({ data: latestPageview, error: null }),
+        insert: async (row) => {
+          inserted.push({ table, row });
+          return { error: insertError };
+        },
+        update: (fields) => ({
+          eq: async (col, val) => {
+            updated.push({ table, fields, [col]: val });
+            return { error: null };
+          },
+        }),
+      };
+      return chain;
+    },
   },
 }));
 vi.mock('../middleware/rate-limiter.js', () => ({ trafficLimiter: (req, res, next) => next() }));
@@ -51,6 +73,9 @@ beforeEach(() => {
   inserted.length = 0;
   insertError = null;
   findVisitOf.mockReset();
+  filters.length = 0;
+  latestPageview = null;
+  updated.length = 0;
 });
 
 const beacon = (body = {}) =>
@@ -142,14 +167,19 @@ describe('POST /track/:trackingCode', () => {
     await beacon({ st: 404, nf: 0 });
     // Safari: no status, and the title said "not found".
     await beacon({ st: 0, nf: 1 });
-    // A status wins over the title.
+    // A 2xx whose title said not found: a soft 404 (00200).
     await beacon({ st: 200, nf: 1 });
+    // Any other status wins over the title.
+    await beacon({ st: 301, nf: 1 });
+    await beacon({ st: 404, nf: 1 });
     // An older snippet sends neither.
     await beacon();
     expect(inserted.map((i) => [i.row.http_status, i.row.not_found_title])).toEqual([
       [404, false],
       [null, true],
-      [200, false],
+      [200, true],
+      [301, false],
+      [404, false],
       [null, false],
     ]);
   });
@@ -175,5 +205,47 @@ describe('POST /track/:trackingCode', () => {
     const res = await beacon();
     expect(res.status).toBe(204);
     expect(logger.error).toHaveBeenCalledWith({ err: insertError }, 'traffic track insert failed');
+  });
+
+  // gkhngyk on #1247: the visit's beacon goes at once again; a single-page
+  // app's not-found title, read after load, marks that pageview.
+  it("marks the visit's pageview when the app shows its not-found page later, without counting a visit", async () => {
+    latestPageview = { id: 'pv9' };
+    const res = await beacon({ k: 'nf', st: 200 });
+    expect(res.status).toBe(204);
+    expect(inserted).toEqual([]);
+    expect(findVisitOf).not.toHaveBeenCalled();
+    expect(filters).toEqual(
+      expect.arrayContaining([
+        ['eq', 'url', 'https://acme.example/menu'],
+        ['eq', 'ip_address', '203.0.113.7'],
+        ['eq', 'user_agent', 'Mozilla/5.0'],
+        ['eq', 'http_status', 200],
+        ['eq', 'not_found_title', false],
+      ]),
+    );
+    expect(filters.find(([op]) => op === 'gte')?.[1]).toBe('created_at');
+    expect(updated).toEqual([
+      { table: 'ai_traffic_logs', fields: { not_found_title: true }, id: 'pv9' },
+    ]);
+  });
+
+  it('marks nothing without a recent pageview to mark, or for a status that says it all', async () => {
+    await beacon({ k: 'nf', st: 200 });
+    expect(updated).toEqual([]);
+
+    // A 404 says it all: no lookup at all.
+    latestPageview = { id: 'pv9' };
+    const lookedUp = filters.length;
+    await beacon({ k: 'nf', st: 404 });
+    expect(updated).toEqual([]);
+    expect(filters).toHaveLength(lookedUp);
+
+    // Safari reports no status: the pageview has none either.
+    filters.length = 0;
+    await beacon({ k: 'nf', st: 0 });
+    expect(filters).toContainEqual(['is', 'http_status', null]);
+    expect(updated).toHaveLength(1);
+    expect(inserted).toEqual([]);
   });
 });

@@ -243,6 +243,10 @@ export const ENGINE_THRESHOLDS = Object.freeze({
      *  week before (AT-013, spec §3.8; 30 is the page's Low sample floor). */
     aiVisitsWeeklyDropRatio: 0.4,
     aiVisitsWeeklyMinVisits: 30,
+    /** A missing page AI answers cite raises its signal from the first visit
+     *  (the citations come from tracking); any other needs this many, since
+     *  the beacon is public and one stray or made-up 404 visit would do. */
+    brokenLinkMinVisits: 3,
     /** Key events per session above this multiple of the site's rate is a
      *  winning page; engagement below `underperform` of it is a weak one. */
     landingWinnerMultiple: 1.5,

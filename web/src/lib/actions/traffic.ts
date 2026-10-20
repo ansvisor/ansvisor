@@ -574,8 +574,12 @@ export interface TrafficBrokenLink {
   /** Times tracked AI answers cited it in the range. */
   citations: number;
   lastVisit: string;
-  /** The status the browser reported, or 'title' when only the title said so. */
-  status: '404' | '410' | 'title';
+  /**
+   * The status the browser reported; 'soft404' when it answered 2xx with a
+   * not-found title (a single-page app's route, 00200), 'title' when it
+   * reported none and only the title said so.
+   */
+  status: '404' | '410' | 'soft404' | 'title';
   /** Where to redirect it: a working page; none for the home page itself or a route on a page. */
   target: string | null;
   /**
@@ -590,7 +594,7 @@ export interface TrafficBrokenLinks {
   rows: TrafficBrokenLink[];
 }
 
-const BROKEN_STATUSES = new Set(['404', '410', 'title']);
+const BROKEN_STATUSES = new Set(['404', '410', 'soft404', 'title']);
 const TARGET_REASONS = new Set(['similar', 'parent', 'home', 'query']);
 
 /** Broken AI links (AT-012, spec §3.5; 00186), from the snippet alone. */

@@ -35,6 +35,7 @@ import {
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { formatNumber } from '@/lib/format';
+import { readUrlChoice } from '@/lib/url-state';
 import {
   getPromptSuggestions,
   refreshPromptSuggestions,
@@ -43,6 +44,7 @@ import {
   type PromptSuggestion,
 } from '@/lib/actions/prompt-suggestions';
 import {
+  fromYourData,
   gaSourceData,
   gscSourceData,
   type GaSuggestionSourceData,
@@ -195,10 +197,13 @@ function SourceBadges({ suggestion }: { suggestion: PromptSuggestion }) {
 }
 
 /** Which data source a row carries, for the source filter. */
-type SourceFilter = 'all' | 'gsc' | 'ga' | 'agents';
+type SourceFilter = 'all' | 'data' | 'gsc' | 'ga' | 'agents';
 
 const SOURCE_FILTER_LABELS: Record<SourceFilter, string> = {
   all: 'All sources',
+  // Either Google source: Getting started's high-value prompts step links here
+  // with ?source=data.
+  data: 'From your data',
   gsc: 'Google Search Console',
   ga: 'Google Analytics (GA4)',
   agents: 'Ansvisor Agents only',
@@ -265,6 +270,16 @@ export function SuggestionsCard({ brandId, onAccepted, sourceStates }: Props) {
   const [refreshing, setRefreshing] = useState(false);
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [sourceFilter, setSourceFilter] = useState<SourceFilter>('all');
+  // A link can open the list on a source (?source=data).
+  useEffect(() => {
+    setSourceFilter(
+      readUrlChoice<SourceFilter>(
+        'source',
+        Object.keys(SOURCE_FILTER_LABELS) as SourceFilter[],
+        'all',
+      ),
+    );
+  }, []);
   const [search, setSearch] = useState('');
   const [clearing, setClearing] = useState(false);
   const [, startTransition] = useTransition();
@@ -319,9 +334,10 @@ export function SuggestionsCard({ brandId, onAccepted, sourceStates }: Props) {
   const visible = useMemo(() => {
     const q = search.trim().toLowerCase();
     return suggestions.filter((s) => {
+      if (sourceFilter === 'data' && !fromYourData(s)) return false;
       if (sourceFilter === 'gsc' && !gscSourceData(s)) return false;
       if (sourceFilter === 'ga' && !gaSourceData(s)) return false;
-      if (sourceFilter === 'agents' && (gscSourceData(s) || gaSourceData(s))) return false;
+      if (sourceFilter === 'agents' && fromYourData(s)) return false;
       if (!q) return true;
       return (
         s.suggestedText.toLowerCase().includes(q) ||

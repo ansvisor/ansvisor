@@ -13,9 +13,13 @@ import type { TrafficDateWindow, TrafficSummary } from '@/lib/actions/traffic';
 
 const getTrafficPages = vi.fn();
 const getUntrackedGoogleQueries = vi.fn();
-vi.mock('@/lib/actions/traffic', () => ({
-  getTrafficPages: (...args: unknown[]) => getTrafficPages(...args),
-  getUntrackedGoogleQueries: (...args: unknown[]) => getUntrackedGoogleQueries(...args),
+vi.mock('@/lib/actions/traffic', () => ({}));
+// The counts the Pages card's and the Google section's reads carry (shared
+// in lib/traffic-reads).
+vi.mock('@/lib/traffic-reads', () => ({
+  getTrafficPageCounts: async (...args: unknown[]) =>
+    ((await getTrafficPages(...args)) as ReturnType<typeof cited>).counts,
+  getUntrackedQueryCount: (...args: unknown[]) => getUntrackedGoogleQueries(...args),
 }));
 
 const { SummaryLine } = await import('./_summary-line');
@@ -98,7 +102,7 @@ const text = () => container.textContent ?? '';
 describe('SummaryLine', () => {
   it('says the range in one or two sentences, with Analytics connected', async () => {
     await render();
-    expect(getTrafficPages).toHaveBeenCalledWith('b1', WEEK, { tab: 'citedNotClicked', limit: 0 });
+    expect(getTrafficPages).toHaveBeenCalledWith('b1', WEEK);
     expect(text()).toBe(
       'Last 7 days: 64 AI-referred visits, 0.8% of all traffic, up 12% on the previous period. ' +
         'ChatGPT sent the most (38); Perplexity visitors convert best (16.1% of their visits had a key event). ' +
@@ -144,7 +148,7 @@ describe('SummaryLine', () => {
   it('states the untracked Google queries only with Search Console (AT-009)', async () => {
     getUntrackedGoogleQueries.mockResolvedValue({ count: 14, capped: false, rows: [] });
     await render({ gscReady: true });
-    expect(getUntrackedGoogleQueries).toHaveBeenCalledWith('b1', WEEK, { limit: 0 });
+    expect(getUntrackedGoogleQueries).toHaveBeenCalledWith('b1', WEEK);
     expect(text()).toContain("14 Google queries with clicks aren't tracked as prompts.");
 
     // Tracking some from the page counts them again.

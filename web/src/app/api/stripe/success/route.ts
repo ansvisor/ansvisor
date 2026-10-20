@@ -3,6 +3,7 @@ import { stripe } from '@/lib/stripe';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { alignPromptsToPlanForOrg } from '@/lib/plan-engines';
 import { API_BASE_URL } from '@/config/api';
+import { DASHBOARD_HOME } from '@/config/home';
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
@@ -10,7 +11,7 @@ export async function GET(req: NextRequest) {
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
 
   if (!sessionId) {
-    return NextResponse.redirect(`${appUrl}/dashboard/insights`);
+    return NextResponse.redirect(`${appUrl}${DASHBOARD_HOME}`);
   }
 
   let trackingJobId: string | null = null;
@@ -139,7 +140,9 @@ export async function GET(req: NextRequest) {
     console.error('[stripe/success] Error:', err);
   }
 
-  const redirectUrl = new URL(`${appUrl}/dashboard/insights`);
+  // The first tracking run's id rides along: TrackingJobHandoff keeps it for
+  // Visibility's progress bar.
+  const redirectUrl = new URL(`${appUrl}${DASHBOARD_HOME}`);
   if (trackingJobId) {
     redirectUrl.searchParams.set('jobId', trackingJobId);
   }

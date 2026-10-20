@@ -22,15 +22,13 @@ import { formatNumber } from '@/lib/format';
 import { googleSourceStatus } from '@/lib/traffic-sources';
 import type { SourceState } from '@/lib/actions/integrations';
 import { GOOGLE_PAGES_MIN_IMPRESSIONS, ctrPct, impressionsRise } from '@/lib/traffic-google-pages';
-import {
-  getTrafficGooglePages,
-  type TrafficDateWindow,
-  type TrafficGooglePages,
-} from '@/lib/actions/traffic';
+import { type TrafficDateWindow, type TrafficGooglePages } from '@/lib/actions/traffic';
 import { formatTrafficBucketDate } from './_charts';
 import { PagePromptsDialog } from './_page-prompts-dialog';
 import { NeedsTag, SourceUnavailable } from './_source-gate';
 import { UntrackedQueriesCard } from './_untracked-queries';
+import { getTrafficGooglePages } from '@/lib/traffic-reads';
+import { useRangeReady } from './_range-ready';
 
 /** CTR as the table shows it: "3.1%". */
 function ctr(clicks: number, impressions: number): string {
@@ -118,6 +116,7 @@ export function GoogleSection({
     };
   }, [brandId, dateWindow, key, gscReady, reloads]);
 
+  useRangeReady('googleSection', !gscReady || loaded?.key === key);
   const current = loaded?.key === key ? loaded : null;
   const result = current?.result ?? null;
 

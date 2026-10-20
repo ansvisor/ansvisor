@@ -12,7 +12,8 @@ import type { TrafficDateWindow, TrafficUntrackedQueries } from '@/lib/actions/t
  */
 
 const getUntrackedGoogleQueries = vi.fn();
-vi.mock('@/lib/actions/traffic', () => ({
+vi.mock('@/lib/actions/traffic', () => ({}));
+vi.mock('@/lib/traffic-reads', () => ({
   getUntrackedGoogleQueries: (...args: unknown[]) => getUntrackedGoogleQueries(...args),
 }));
 const getLocationQuota = vi.fn();

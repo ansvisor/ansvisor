@@ -27,3 +27,13 @@ const PLATFORM_NAMES: Record<string, string> = {
 export function getPlatformName(platform: string): string {
   return PLATFORM_NAMES[platform] ?? platform;
 }
+
+/**
+ * A platform the page can name. The snippet's beacon is public, so a source
+ * key can be anything a caller sent. The weekly digest's isNamedPlatform
+ * (platform-names.json, the same names) reads it the same way, so the two
+ * name the same platform as the one that sent the most.
+ */
+export function isNamedPlatform(platform: string): boolean {
+  return platform !== 'unknown' && Object.hasOwn(PLATFORM_NAMES, platform);
+}

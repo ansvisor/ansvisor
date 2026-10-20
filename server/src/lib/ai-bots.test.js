@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   AI_BOTS,
+  RANGES_RETRY_MS,
   RANGES_TTL_MS,
   clearRangeCache,
   inPrefixes,
@@ -83,6 +84,60 @@ describe('rangesFor', () => {
   it('is null when a list was never read', async () => {
     const fetchImpl = vi.fn().mockRejectedValue(new Error('offline'));
     expect(await rangesFor('https://x/b.json', { fetchImpl, now: 0 })).toBeNull();
+  });
+
+  // gkhngyk on #1179: a list that failed to load was fetched again for every
+  // request with that bot's user agent, each waiting out the timeout.
+  it('waits a few minutes after a failed first read before trying again', async () => {
+    const fetchImpl = vi.fn().mockRejectedValue(new Error('timeout'));
+    for (const now of [0, 1_000, RANGES_RETRY_MS - 1]) {
+      expect(await rangesFor('https://x/c.json', { fetchImpl, now })).toBeNull();
+    }
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+
+    fetchImpl.mockResolvedValue(json({ prefixes: [{ ipv4Prefix: '1.2.3.0/24' }] }));
+    const later = await rangesFor('https://x/c.json', { fetchImpl, now: RANGES_RETRY_MS });
+    expect(later).toHaveLength(1);
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+  });
+
+  // gkhngyk on #1251: once a day, requests waited for the refresh although
+  // a usable list was still in memory.
+  it('uses the list it has while it reads it again', async () => {
+    const old = json({ prefixes: [{ ipv4Prefix: '1.2.3.0/24' }] });
+    let answer;
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValueOnce(old)
+      .mockImplementationOnce(() => new Promise((resolve) => (answer = resolve)));
+    const first = await rangesFor('https://x/e.json', { fetchImpl, now: 0 });
+
+    // Past its day: the old list at once, with one read under way.
+    const during = await rangesFor('https://x/e.json', { fetchImpl, now: RANGES_TTL_MS + 1 });
+    const again = await rangesFor('https://x/e.json', { fetchImpl, now: RANGES_TTL_MS + 2 });
+    expect(during).toBe(first);
+    expect(again).toBe(first);
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+
+    // Once read, the new list.
+    answer(json({ prefixes: [{ ipv4Prefix: '5.6.7.0/24' }, { ipv4Prefix: '8.8.8.0/24' }] }));
+    await vi.waitFor(async () => {
+      const fresh = await rangesFor('https://x/e.json', { fetchImpl, now: RANGES_TTL_MS + 3 });
+      expect(fresh).toHaveLength(2);
+    });
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+  });
+
+  it('shares one read among the requests waiting for it', async () => {
+    let answer;
+    const fetchImpl = vi.fn(() => new Promise((resolve) => (answer = resolve)));
+    const reads = [1, 2, 3].map(() => rangesFor('https://x/d.json', { fetchImpl, now: 0 }));
+    answer(json({ prefixes: [{ ipv4Prefix: '1.2.3.0/24' }] }));
+    const lists = await Promise.all(reads);
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    expect(lists[0]).toHaveLength(1);
+    expect(lists[1]).toBe(lists[0]);
+    expect(lists[2]).toBe(lists[0]);
   });
 });
 

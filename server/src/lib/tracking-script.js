@@ -13,7 +13,18 @@
  * It also sends the landing page's HTTP status as the browser saw it, for
  * Broken AI links (AT-012): st, from the navigation entry, or 0 where the
  * browser doesn't report one (Safari); then nf is 1 when the page's title
- * reads "404" or "not found".
+ * reads "404" or "not found". With a 2xx, nf is 1 only when the title is
+ * the not-found page's own ("404", "Page not found | Acme"): a single-page
+ * app answers every path with 200 and shows its own not-found route (a soft
+ * 404), while "How we fixed our 404s" is an ordinary page. Both patterns are
+ * English only: "Seite nicht gefunden" reads as a working page.
+ *
+ * The visit's beacon goes at once, as it always has, so the visits counted
+ * don't depend on the page loading. Such an app sets its title later, so
+ * when the title didn't read not found, the snippet reads it again a moment
+ * after load and, if it now does, sends k: "nf" for the address it landed
+ * on: the server marks that visit's pageview, it doesn't count another
+ * (gkhngyk on #1247).
  *
  * Plain ES5 apart from URL / URLSearchParams, as before: it runs on the
  * customer's pages, in whatever browser their visitors have.
@@ -54,13 +65,23 @@ if(!pf){try{pf=m(new URLSearchParams(location.search).get("utm_source"),true)}ca
 if(!pf)return;
 window.__at=1;
 var c=document.currentScript,k=c.getAttribute("data-t"),o=c.src.replace(/\\/t\\.js(\\?.*)?$/,"");
-var st=0,nf=0;
+var u=location.href,st=0,x=o+"/track/"+k;
 try{var n=performance.getEntriesByType("navigation")[0];st=n&&n.responseStatus||0}catch(e){}
-if(!st&&/(^|[^0-9])404([^0-9]|$)|not found/i.test(document.title||""))nf=1;
-var b=JSON.stringify({u:location.href,r:r,s:pf,v:V,a:navigator.userAgent,t:Date.now(),l:navigator.language,d:screen.width+"x"+screen.height,st:st,nf:nf});
-var x=o+"/track/"+k;
+function post(d){
+var b=JSON.stringify(d);
 if(navigator.sendBeacon)navigator.sendBeacon(x,new Blob([b],{type:"text/plain;charset=UTF-8"}));
 else fetch(x,{method:"POST",body:b,headers:{"Content-Type":"text/plain;charset=UTF-8"},keepalive:!0}).catch(function(){});
+}
+function nfOf(ti){
+if(!st)return /(^|[^0-9])404([^0-9]|$)|not found/i.test(ti)?1:0;
+return st>199&&st<300&&/(^|[|:\\u00b7\\u2022\\u2013\\u2014-]\\s*)(404 page not found|404 not found|404 error|error 404|page not found|not found|404)\\s*([|:\\u00b7\\u2022\\u2013\\u2014-]|$)/i.test(ti)?1:0;
+}
+var nf=nfOf(document.title||"");
+post({u:u,r:r,s:pf,v:V,a:navigator.userAgent,t:Date.now(),l:navigator.language,d:screen.width+"x"+screen.height,st:st,nf:nf});
+if(!nf&&(!st||st>199&&st<300)){
+var again=function(){setTimeout(function(){if(nfOf(document.title||""))post({k:"nf",u:u,s:pf,a:navigator.userAgent,st:st})},1500)};
+if(document.readyState==="complete")again();else window.addEventListener("load",again);
+}
 })();
 `;
 }
