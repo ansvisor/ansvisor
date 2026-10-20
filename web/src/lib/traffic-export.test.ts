@@ -584,15 +584,36 @@ describe('trafficTable: AI bots (AT-011)', () => {
     expect(trafficTable('uncrawledPages', data({ bots: bots() }), label).rows).toEqual([
       ['Every cited page was read by an AI search bot in the last 30 days'],
     ]);
-    // Under 30 days of bot data, or the data isn't whole.
+    // Under 30 days of bot data.
     const waiting = {
       ...bots(),
       uncrawledCount: null,
       uncrawled: null,
-      alertState: 'stale' as const,
+      alertState: 'waiting' as const,
     };
     expect(trafficTable('uncrawledPages', data({ bots: waiting }), label).rows).toEqual([
-      ['Listed once the AI bots have sent 30 days of whole data'],
+      ['Listed once the AI bots have sent 30 days of data'],
+    ]);
+    // gkhngyk on #1244: paused, not short, as the report says it.
+    const stale = { ...waiting, alertState: 'stale' as const };
+    expect(trafficTable('uncrawledPages', data({ bots: stale }), label).rows).toEqual([
+      [
+        "Paused: the bot data doesn't cover the last 30 days, or the month's cap was reached, so the pages search bots read aren't complete",
+      ],
+    ]);
+  });
+
+  // gkhngyk on #1244: a failed read said there was no data.
+  it("says a section couldn't be read rather than that it's empty", () => {
+    const failed = data({ unread: ['bots', 'googleQueries'] });
+    for (const section of ['bots', 'botPages', 'uncrawledPages', 'googleQueries'] as const) {
+      expect(trafficTable(section, failed, label).rows, section).toEqual([
+        ["Couldn't read this section; export again to include it"],
+      ]);
+    }
+    // Only the section that failed.
+    expect(trafficTable('bots', data({ unread: ['googleQueries'] }), label).rows).toEqual([
+      ['No AI-bot requests in this range'],
     ]);
   });
 });

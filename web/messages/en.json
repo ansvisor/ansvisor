@@ -3255,7 +3255,9 @@
         "noUntrackedQueries": "Every Google query with clicks in this range is tracked",
         "queriesCapped": "Only the 5,000 most clicked queries were checked",
         "noBots": "No AI-bot requests in this range",
-        "uncrawledWaiting": "Listed once the AI bots have sent 30 days of whole data",
+        "uncrawledWaiting": "Listed once the AI bots have sent 30 days of data",
+        "uncrawledStale": "Paused: the bot data doesn't cover the last 30 days, or the month's cap was reached, so the pages search bots read aren't complete",
+        "readFailed": "Couldn't read this section; export again to include it",
         "noUncrawled": "Every cited page was read by an AI search bot in the last 30 days",
         "uncrawledMore": "{count, plural, one {# more page not listed} other {# more pages not listed}}",
         "noBrokenLinks": "No AI visitor landed on a missing page in this range"
