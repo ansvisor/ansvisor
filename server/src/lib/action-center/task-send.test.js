@@ -111,6 +111,7 @@ beforeEach(() => {
     ],
     brands: [{ id: 'b1', name: 'Acme Coffee', industry: 'Coffee' }],
     brand_domains: [{ brand_id: 'b1', domain: 'acme.example', is_primary: true }],
+    webhook_configs: [{ id: 'w1', brand_id: 'b1', is_active: true, events: ['action_task.sent'] }],
     content_opportunities: [],
   };
 });
@@ -213,12 +214,24 @@ describe('sendTaskToWebhook', () => {
     expect(db.action_tasks[0].details.sent.webhook).toMatchObject({ delivered: 1 });
   });
 
-  it('says when there is no webhook, or it refused the task, and records nothing', async () => {
-    dispatchBrandWebhook.mockResolvedValueOnce({ sent: 0, failed: 0 });
+  it('distinguishes no active webhook from an active webhook without the task subscription', async () => {
+    db.webhook_configs = [];
     await expect(sendTaskToWebhook({ taskId: 't1', title: '' })).rejects.toMatchObject({
       code: 'no_webhook',
       status: 409,
     });
+
+    db.webhook_configs = [
+      { id: 'w1', brand_id: 'b1', is_active: true, events: ['opportunity.sent'] },
+    ];
+    await expect(sendTaskToWebhook({ taskId: 't1', title: '' })).rejects.toMatchObject({
+      code: 'webhook_not_subscribed',
+      status: 409,
+    });
+
+    db.webhook_configs = [
+      { id: 'w1', brand_id: 'b1', is_active: true, events: ['action_task.sent'] },
+    ];
     dispatchBrandWebhook.mockResolvedValueOnce({ sent: 0, failed: 1 });
     await expect(sendTaskToWebhook({ taskId: 't1', title: '' })).rejects.toMatchObject({
       code: 'webhook_failed',
