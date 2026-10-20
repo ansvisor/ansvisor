@@ -11,7 +11,8 @@ vi.mock('../../config/supabase.js', () => ({ default: { rpc: (...args) => rpc(..
 const logger = vi.hoisted(() => ({ info: vi.fn(), warn: vi.fn(), error: vi.fn() }));
 vi.mock('../logger.js', () => ({ logger }));
 
-const { newAiPlatformCandidates, newPlatforms } = await import('./traffic-platforms.js');
+const { newAiPlatformCandidates, newPlatforms, weekCandidates } =
+  await import('./traffic-platforms.js');
 
 const NOW = new Date('2026-10-19T06:30:00Z');
 
@@ -21,15 +22,9 @@ beforeEach(() => {
 });
 
 describe('newPlatforms', () => {
-  const before = {
-    visits: 40,
-    platforms: [
-      { platform: 'chatgpt.com', visits: 30 },
-      { platform: 'gemini.google.com', visits: 10 },
-      // Listed, but with no visits: never sent one.
-      { platform: 'claude.ai', visits: 0 },
-    ],
-  };
+  // As ai_traffic_platforms_seen answers it (00193): of the candidates asked
+  // about, ChatGPT sent visits before the week.
+  const before = { anyBefore: true, seen: new Set(['chatgpt.com']) };
 
   it('names the platforms sending visits for the first time, with their first day', () => {
     const week = {
@@ -56,33 +51,44 @@ describe('newPlatforms', () => {
       { platform: 'claude.ai', visits: 5, firstDay: '2026-10-14' },
       { platform: 'perplexity.ai', visits: 3, firstDay: '2026-10-17' },
     ]);
+    // Only these are asked about before the week.
+    expect(weekCandidates(week).map((p) => p.platform)).toEqual([
+      'chatgpt.com',
+      'claude.ai',
+      'perplexity.ai',
+    ]);
   });
 
   it('has nothing new for a brand with no AI visits before the week', () => {
     const week = { visits: 3, platforms: [{ platform: 'chatgpt.com', visits: 3 }] };
-    expect(newPlatforms(week, { visits: 0, platforms: [] })).toEqual([]);
+    expect(newPlatforms(week, { anyBefore: false, seen: new Set() })).toEqual([]);
     expect(newPlatforms(week, null)).toEqual([]);
   });
 });
 
 describe('newAiPlatformCandidates', () => {
-  it('reads the last seven whole days against everything before them', async () => {
-    rpc.mockImplementation(async (_name, params) => ({
-      data:
-        params.p_from === null
-          ? { visits: 12, platforms: [{ platform: 'chatgpt.com', visits: 12 }] }
-          : {
-              visits: 4,
-              // A list of days, as ai_traffic_merged returns it (00176).
-              analytics_days: [],
-              platforms: [{ platform: 'perplexity.ai', visits: 4 }],
-              days: [{ day: '2026-10-16', platform: 'perplexity.ai', visits: 4 }],
-            },
+  const weekRead = (analyticsDays = []) => ({
+    visits: 16,
+    // A list of days, as ai_traffic_merged returns it (00176).
+    analytics_days: analyticsDays,
+    platforms: [
+      { platform: 'chatgpt.com', visits: 12 },
+      { platform: 'perplexity.ai', visits: 4 },
+    ],
+    days: [{ day: '2026-10-16', platform: 'perplexity.ai', visits: 4 }],
+  });
+  const reads = (week, seen = { any_before: true, seen: ['chatgpt.com'] }) =>
+    rpc.mockImplementation(async (name) => ({
+      data: name === 'ai_traffic_merged' ? week : seen,
       error: null,
     }));
 
+  it("reads the week, then asks only about its candidates' visits before it", async () => {
+    reads(weekRead());
+
     const found = await newAiPlatformCandidates('b1', { now: NOW });
 
+    expect(rpc).toHaveBeenCalledTimes(2);
     expect(rpc).toHaveBeenCalledWith('ai_traffic_merged', {
       p_brand_id: 'b1',
       p_from: '2026-10-12T00:00:00.000Z',
@@ -91,12 +97,11 @@ describe('newAiPlatformCandidates', () => {
       p_to_inclusive: true,
       p_analytics: true,
     });
-    expect(rpc).toHaveBeenCalledWith('ai_traffic_merged', {
+    // Not the whole history before the week (00193).
+    expect(rpc).toHaveBeenCalledWith('ai_traffic_platforms_seen', {
       p_brand_id: 'b1',
-      p_from: null,
-      p_to: '2026-10-11T23:59:59.000Z',
-      p_to_inclusive: true,
-      p_analytics: true,
+      p_before: '2026-10-12T00:00:00.000Z',
+      p_platforms: ['chatgpt.com', 'perplexity.ai'],
     });
     expect(found).toEqual([
       {
@@ -111,19 +116,14 @@ describe('newAiPlatformCandidates', () => {
     ]);
   });
 
+  it('reads nothing more on a week with no candidate', async () => {
+    reads({ visits: 2, analytics_days: [], platforms: [{ platform: 'claude.ai', visits: 2 }] });
+    expect(await newAiPlatformCandidates('b1', { now: NOW })).toEqual([]);
+    expect(rpc).toHaveBeenCalledTimes(1);
+  });
+
   it('says Analytics when the week read it', async () => {
-    rpc.mockImplementation(async (_name, params) => ({
-      data:
-        params.p_from === null
-          ? { visits: 12, platforms: [{ platform: 'chatgpt.com', visits: 12 }] }
-          : {
-              visits: 4,
-              analytics_days: ['2026-10-16'],
-              platforms: [{ platform: 'perplexity.ai', visits: 4 }],
-              days: [{ day: '2026-10-16', platform: 'perplexity.ai', visits: 4 }],
-            },
-      error: null,
-    }));
+    reads(weekRead(['2026-10-16']));
     const [found] = await newAiPlatformCandidates('b1', { now: NOW });
     expect(found.source).toEqual(['ga4']);
   });

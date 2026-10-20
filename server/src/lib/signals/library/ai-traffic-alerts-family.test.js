@@ -102,7 +102,7 @@ describe('the AI Traffic alerts family', () => {
           },
           {
             page: '/',
-            visits: '1',
+            visits: '3',
             platforms: [],
             citations: null,
             status: 'title',
@@ -132,7 +132,7 @@ describe('the AI Traffic alerts family', () => {
             {
               id: '/',
               label: '/',
-              visits: 1,
+              visits: 3,
               status: 'title',
               citations: 0,
               redirectTo: null,
@@ -145,6 +145,38 @@ describe('the AI Traffic alerts family', () => {
         changeValue: null,
       },
     ]);
+  });
+
+  it('needs a citation, or a few visits, before a missing page raises it', async () => {
+    const row = (page, visits, citations) => ({
+      page,
+      visits,
+      platforms: [],
+      citations,
+      status: '404',
+      target: null,
+      target_reason: null,
+    });
+    const [found] = await alerts({
+      prev: week(0),
+      cur: week(0),
+      broken: {
+        count: 3,
+        rows: [
+          // Cited by AI answers: tracking says so, not the public beacon.
+          row('/cited', 1, 4),
+          // One visit to a page no answer cites: stray, or made up.
+          row('/one-visit', 1, 0),
+          row('/three-visits', 3, 0),
+        ],
+      },
+    });
+    expect(found.payload.targets.map((p) => p.id)).toEqual(['/cited', '/three-visits']);
+    expect(found.currentValue).toBe(2);
+
+    expect(
+      await alerts({ prev: week(0), cur: week(0), broken: { count: 1, rows: [row('/x', 2, 0)] } }),
+    ).toEqual([]);
   });
 
   it('raises nothing when no AI visitor landed on a missing page, or the read answers nothing', async () => {

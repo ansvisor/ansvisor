@@ -51,6 +51,7 @@ const {
   logFileHash,
   logFileRead,
   newConnectionSecret,
+  onBrandSite,
   pruneBotEvents,
   publicIngestEndpoint,
 } = await import('./bot-ingest.js');
@@ -62,7 +63,13 @@ const fetchImpl = vi.fn(async (url) => ({
     prefixes: [{ ipv4Prefix: url.includes('openai') ? '20.171.206.0/24' : '160.79.104.0/23' }],
   }),
 }));
-const connection = { id: 'c1', brandId: 'b1', kind: 'cloudflare_worker', organizationId: 'o1' };
+const connection = {
+  id: 'c1',
+  brandId: 'b1',
+  kind: 'cloudflare_worker',
+  organizationId: 'o1',
+  domains: ['acme.example'],
+};
 const gpt = (over = {}) => ({
   userAgent: 'Mozilla/5.0; compatible; GPTBot/1.2; +https://openai.com/gptbot',
   ip: '20.171.206.9',
@@ -108,7 +115,7 @@ describe('ingestBotRequests', () => {
       received: 6,
       verified: 2,
       stored: 2,
-      skipped: { invalid: 2, unknown_agent: 1, unverified_ip: 1, no_ranges: 0 },
+      skipped: { invalid: 2, other_host: 0, unknown_agent: 1, unverified_ip: 1, no_ranges: 0 },
     });
     expect(getBotEventCap).toHaveBeenCalledWith('o1');
     expect(rpc).toHaveBeenCalledWith('ai_bot_ingest', {
@@ -175,6 +182,63 @@ describe('ingestBotRequests', () => {
   });
 });
 
+// gkhngyk on #1180: a Logpush zone with several hostnames, or a team-wide
+// Vercel drain, sent other sites' requests too.
+describe("the brand's own site", () => {
+  it('skips requests for other sites before verifying them', async () => {
+    const result = await ingestBotRequests(
+      { ...connection, domains: ['acme.example', 'https://www.acme-shop.example/'] },
+      [
+        gpt({ url: 'https://acme.example/menu' }),
+        gpt({ url: 'https://blog.acme.example/beans' }),
+        gpt({ url: 'https://acme-shop.example/cart' }),
+        // A bare path comes from a Worker on the brand's own route.
+        gpt({ url: '/gifts' }),
+        gpt({ url: 'https://other.example/menu' }),
+        gpt({ url: 'https://notacme.example/menu' }),
+      ],
+      { fetchImpl, now: NOW },
+    );
+    expect(result).toMatchObject({ received: 6, verified: 4 });
+    expect(result.skipped).toMatchObject({ other_host: 2 });
+    const pages = rpc.mock.calls[0][1].p_events.map((e) => e.page);
+    expect(pages).toEqual([
+      'https://acme.example/menu',
+      'https://blog.acme.example/beans',
+      'https://acme-shop.example/cart',
+      '/gifts',
+    ]);
+  });
+
+  it('reads every page of a brand with no domain stored', () => {
+    expect(onBrandSite('https://other.example/', [])).toBe(true);
+    expect(onBrandSite('https://other.example/', undefined)).toBe(true);
+    expect(onBrandSite('https://ACME.example:8443/x', ['acme.example'])).toBe(true);
+    expect(onBrandSite('https://acme.example.evil.com/', ['acme.example'])).toBe(false);
+  });
+
+  it("still counts other sites' records in a log file against the raw cap", async () => {
+    rpc.mockResolvedValue({
+      data: { received: 1, stored: 1, used: 1, crossed80: false, raw: 3 },
+      error: null,
+    });
+    const drain = { ...connection, kind: 'vercel_drain' };
+    const parsed = {
+      records: 3,
+      requests: [
+        gpt(),
+        gpt({ url: 'https://other.example/a' }),
+        gpt({ url: 'https://x.example/' }),
+      ],
+    };
+    const result = await ingestLogFile(drain, 'h9', parsed, { fetchImpl, now: NOW });
+    expect(result).toMatchObject({ received: 3, verified: 1, skipped: { other_host: 2 } });
+    const [, args] = rpc.mock.calls[0];
+    expect(args.p_records).toBe(3);
+    expect(args.p_events.map((e) => e.page)).toEqual(['https://acme.example/menu?x=1']);
+  });
+});
+
 describe('connection secrets', () => {
   it('makes a fresh secret each time and finds a connection by its hash only', async () => {
     const a = newConnectionSecret();
@@ -186,7 +250,7 @@ describe('connection secrets', () => {
       brand_id: 'b1',
       kind: 'cloudflare_worker',
       revoked_at: null,
-      brands: { organization_id: 'o1' },
+      brands: { organization_id: 'o1', brand_domains: [{ domain: 'acme.example' }] },
     };
     expect(await connectionForSecret(a)).toEqual(connection);
     expect(selects).toContainEqual(['secret_hash', hashSecret(a)]);

@@ -38,7 +38,16 @@ const hoursAgo = (h: number) => new Date(Date.now() - h * 3_600_000).toISOString
 
 const info = (over: Partial<BotConnections> = {}): BotConnections => ({
   connections: [{ id: 'c1', kind: 'cloudflare_worker', createdAt: 't', lastEventAt: hoursAgo(1) }],
-  usage: { month: '2026-10-01', stored: 10, counted: 10, cappedAt: null, cap: 2_000_000 },
+  usage: {
+    month: '2026-10-01',
+    stored: 10,
+    counted: 10,
+    cappedAt: null,
+    cap: 2_000_000,
+    raw: 0,
+    rawCappedAt: null,
+    rawCap: 20_000_000,
+  },
   ...over,
 });
 const report = (over: Partial<TrafficBots> = {}): TrafficBots => ({
@@ -176,6 +185,29 @@ describe('BotsReportSection', () => {
     await render();
     expect(text()).toContain('The search-bot alert is paused');
     expect(text()).not.toContain('The search-bot alert starts on');
+  });
+
+  it("says why the report stops mid-month once a log sender's raw cap is reached", async () => {
+    getBotConnections.mockResolvedValue(
+      info({
+        connections: [
+          { id: 'c1', kind: 'cloudflare_logpush', createdAt: 't', lastEventAt: hoursAgo(30) },
+        ],
+        usage: {
+          month: '2026-10-01',
+          stored: 10,
+          counted: 10,
+          cappedAt: null,
+          cap: 2_000_000,
+          raw: 20_000_400,
+          rawCappedAt: '2026-10-18T09:00:00Z',
+          rawCap: 20_000_000,
+        },
+      }),
+    );
+    await render();
+    expect(text()).toContain('Log files paused until');
+    expect(text()).toContain("this month's log records are used up");
   });
 
   it('says "last 90 days" for All time, which is what it covers', async () => {

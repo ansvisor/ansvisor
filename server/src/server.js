@@ -30,6 +30,7 @@ import { parseScraperResponse } from './lib/cloro-scraper.js';
 import { handleScraperResult } from './lib/cloro-result-handler.js';
 import { verifyCloroWebhook } from './lib/cloro-webhook-verify.js';
 import { generateBriefForOpportunity } from './routes/content.js';
+import webhookContentCallbackRoutes from './routes/webhook-content-callback.js';
 import { sendImproveActionForKeyUser } from './routes/prompts.js';
 import { readOpportunityInbox, startAutoAudits, startSiteAuditForBrand } from './routes/audits.js';
 import { sweepAutoAudits } from './lib/audit/auto-audit-sweep.js';
@@ -705,6 +706,10 @@ app.post('/cloro/callback', async (req, res) => {
     req.log.error({ err }, 'cloro callback: error processing webhook');
   }
 });
+
+// Public, webhook-secret-authenticated status callback for external workflows.
+// It is mounted outside /api so no dashboard JWT is required; the router has its own stricter limiter.
+app.use('/webhooks/content', webhookContentCallbackRoutes);
 
 // --- Authenticated API routes ---
 app.use('/api', Middleware.decodeToken.bind(Middleware), routes);

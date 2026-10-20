@@ -21,7 +21,7 @@ import { cn } from '@/lib/utils';
 import { formatNumber } from '@/lib/format';
 import { formatRelative } from '@/lib/format-relative';
 import { botName } from '@/lib/ai-bot-names';
-import { botReportState, rowsPausedUntil, sampleBotTypes } from '@/lib/ai-bots';
+import { botReportState, logsPausedUntil, rowsPausedUntil, sampleBotTypes } from '@/lib/ai-bots';
 import { getBotConnections, type BotConnections } from '@/lib/actions/ai-bots';
 import {
   getTrafficBots,
@@ -257,6 +257,8 @@ export function BotsReportSection({
   const dialogInfo = info ?? loaded?.info ?? null;
   const state = info ? botReportState(info, report) : null;
   const pausedUntil = info ? rowsPausedUntil(info.usage) : null;
+  // Past the raw cap log files aren't read: the report stops mid-month.
+  const logsPaused = info ? logsPausedUntil(info) : null;
 
   const sample = (
     <div className="relative min-h-[220px]">
@@ -355,6 +357,11 @@ export function BotsReportSection({
                 {tBots('paused', {
                   day: formatTrafficBucketDate(pausedUntil),
                 })}
+              </p>
+            )}
+            {state === 'data' && logsPaused && (
+              <p className="px-6 pb-3 text-xs text-muted-foreground">
+                {tBots('logsPaused', { day: formatTrafficBucketDate(logsPaused) })}
               </p>
             )}
           </CardContent>
