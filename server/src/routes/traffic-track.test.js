@@ -142,7 +142,7 @@ describe('POST /track/:trackingCode', () => {
     await beacon({ st: 404, nf: 0 });
     // Safari: no status, and the title said "not found".
     await beacon({ st: 0, nf: 1 });
-    // A 2xx whose title said not found: a soft 404 (00198).
+    // A 2xx whose title said not found: a soft 404 (00200).
     await beacon({ st: 200, nf: 1 });
     // Any other status wins over the title.
     await beacon({ st: 301, nf: 1 });

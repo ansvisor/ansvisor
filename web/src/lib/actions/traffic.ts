@@ -576,7 +576,7 @@ export interface TrafficBrokenLink {
   lastVisit: string;
   /**
    * The status the browser reported; 'soft404' when it answered 2xx with a
-   * not-found title (a single-page app's route, 00198), 'title' when it
+   * not-found title (a single-page app's route, 00200), 'title' when it
    * reported none and only the title said so.
    */
   status: '404' | '410' | 'soft404' | 'title';

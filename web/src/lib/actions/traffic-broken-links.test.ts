@@ -108,7 +108,7 @@ describe('getTrafficBrokenLinks', () => {
     });
   });
 
-  // 00198: a single-page app's route that shows its not-found page with a 200.
+  // 00200: a single-page app's route that shows its not-found page with a 200.
   it('reads a soft 404, and an unknown status as a 404', async () => {
     rpc.mockResolvedValue({
       data: {
