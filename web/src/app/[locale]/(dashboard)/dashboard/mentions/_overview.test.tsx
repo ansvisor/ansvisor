@@ -218,6 +218,31 @@ describe('OverviewKpis', () => {
     expect(text).toContain('+34±0');
   });
 
+  // gkhngyk on #1230: the summary line also needs both shared windows to pass.
+  it('shows no rate or net change when a shared window is a low sample', () => {
+    render(
+      <OverviewKpis
+        overview={{
+          ...overview,
+          // The whole windows are large; the prompts both answered are few.
+          same: {
+            prompts: 2,
+            newPrompts: 13,
+            droppedPrompts: 10,
+            current: totals({ answers: 18, mentions: 9, positive: 6, negative: 1 }),
+            previous: totals({ answers: 30, mentions: 15, positive: 5, negative: 5 }),
+          },
+        }}
+        brand="Ansvisor"
+      />,
+    );
+    const text = container.textContent ?? '';
+    expect(text).toContain('25.0%');
+    expect(text).not.toMatch(/25\.0%[+−±]/);
+    expect(text).toContain('+34');
+    expect(text).not.toMatch(/\+34[+−±]/);
+  });
+
   it('marks net sentiment over fewer than 20 mentions as a low sample, without a change', () => {
     render(
       <OverviewKpis

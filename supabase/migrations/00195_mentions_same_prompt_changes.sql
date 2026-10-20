@@ -11,7 +11,8 @@
 -- prompts both windows answered, how many are new or dropped, and both
 -- windows' totals over the shared ones; each platform row gains the same
 -- counts on them (same_*, same_prev_*). The page takes every change from
--- these. Existing fields are unchanged, so either deploy order works.
+-- these. Existing fields are unchanged, so either deploy order works; the
+-- platforms keep 00191's order by occurrences.
 
 create or replace function public.mentions_overview(
   p_brand_id  uuid,
@@ -243,7 +244,9 @@ begin
                      'dropped_prompts', (select count(*) from presence where in_prev and not in_cur),
                      'current',  (select to_jsonb(t) - 'cur' from same_totals t where t.cur),
                      'previous', (select to_jsonb(t) - 'cur' from same_totals t where not t.cur)),
-    'platforms',   coalesce((select jsonb_agg(to_jsonb(p) order by p.mentions desc, p.platform)
+    -- In the order of the column the table shows: occurrences, then responses.
+    'platforms',   coalesce((select jsonb_agg(to_jsonb(p)
+                                              order by p.occurrences desc, p.mentions desc, p.platform)
                              from platforms p), '[]'::jsonb),
     'daily',       coalesce((select jsonb_agg(to_jsonb(d) order by d.day) from daily d),
                             '[]'::jsonb),

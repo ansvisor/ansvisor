@@ -54,6 +54,12 @@ export function OverviewKpis({ overview, brand }: { overview: MentionsOverview; 
   const baseRate = mentionRate(base);
   const prevRate = mentionRate(prev);
   const lowAnswers = cur.answers < LOW_SAMPLE_MENTIONS;
+  // A change also needs both shared windows to clear the floor, as the
+  // summary line's does (mentions-headline.ts), each over its own sample:
+  // the rate's is the responses, the net's the responses naming the brand.
+  const rateChangeLow =
+    lowAnswers || base.answers < LOW_SAMPLE_MENTIONS || prev.answers < LOW_SAMPLE_MENTIONS;
+  const netChangeLow = isLowSample(cur) || isLowSample(base) || isLowSample(prev);
   const net = wholeNet(cur);
   const baseNet = wholeNet(base);
   const prevNet = wholeNet(prev);
@@ -81,7 +87,7 @@ export function OverviewKpis({ overview, brand }: { overview: MentionsOverview; 
         icon={Percent}
         value={rate === null ? '—' : f.percent(rate, 1)}
         delta={
-          lowAnswers || rate === null || baseRate === null || prevRate === null
+          rateChangeLow || rate === null || baseRate === null || prevRate === null
             ? null
             : upIsGood(round(baseRate - prevRate, 1), { locale })
         }
@@ -120,7 +126,7 @@ export function OverviewKpis({ overview, brand }: { overview: MentionsOverview; 
         icon={Smile}
         value={net === null ? '—' : signedValue(net, locale)}
         delta={
-          isLowSample(cur) || net === null || baseNet === null || prevNet === null
+          netChangeLow || net === null || baseNet === null || prevNet === null
             ? null
             : upIsGood(baseNet - prevNet, { locale })
         }
