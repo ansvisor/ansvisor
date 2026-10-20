@@ -30,7 +30,7 @@ const brandState = vi.hoisted(() => ({
 vi.mock('@/stores/use-brand-store', () => ({
   useBrandStore: (selector: (state: typeof brandState) => unknown) => selector(brandState),
 }));
-const toast = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn() }));
+const toast = vi.hoisted(() => Object.assign(vi.fn(), { success: vi.fn(), error: vi.fn() }));
 vi.mock('sonner', () => ({ toast }));
 
 (
@@ -78,9 +78,10 @@ beforeEach(() => {
   root = createRoot(container);
   getContentDraft.mockReset();
   markContentDraftReady.mockReset();
-  saveContentDraft.mockReset();
+  saveContentDraft.mockReset().mockResolvedValue({ updatedAt: '2026-10-20T10:00:00Z' });
   brandState.activeBrandId = 'b1';
   brandState.setActiveBrand.mockReset();
+  toast.mockReset();
   toast.success.mockReset();
 });
 
@@ -142,6 +143,55 @@ describe('the content editor', () => {
     expect(toast.success).toHaveBeenCalled();
     expect(container.querySelector('header')!.textContent).toContain('Ready');
     expect(button('Mark ready')!.disabled).toBe(true);
+  });
+
+  it('shows the page as HTML, and cleans it when it switches back', async () => {
+    getContentDraft.mockResolvedValue(
+      draft({
+        bodyHtml:
+          '<h1>Trail Runner X</h1><script type="application/ld+json">{"@type":"Product"}</script>',
+      }),
+    );
+    await renderPage();
+    // Schema JSON-LD shows as a labelled block, not as text.
+    expect(container.querySelector('[data-json-ld]')!.textContent).toBe(
+      '{ } Schema · Product (JSON-LD)',
+    );
+
+    await act(async () => button('Edit as HTML')!.click());
+    const source = container.querySelector('textarea')!;
+    expect(source.value).toBe(
+      '<h1>Trail Runner X</h1>\n<script type="application/ld+json">{"@type":"Product"}</script>',
+    );
+    // The other tools wait while the HTML view is open.
+    expect(button('Bold')!.disabled).toBe(true);
+
+    const setValue = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!;
+    await act(async () => {
+      setValue.call(
+        source,
+        `${source.value}<p style="color:red">New <script>alert(1)</script>line</p>`,
+      );
+      source.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    await act(async () => button('Back to visual')!.click());
+
+    expect(container.querySelector('textarea')).toBeNull();
+    expect(toast).toHaveBeenCalledWith('HTML applied · 1 unsafe tag removed');
+    const page = container.querySelector('.ProseMirror')!;
+    expect(page.querySelector('p')!.outerHTML).toBe('<p>New line</p>');
+    expect(page.querySelector('[data-json-ld]')).not.toBeNull();
+    expect(page.textContent).not.toContain('alert');
+  });
+
+  it('goes back from an unedited HTML view without saving anything', async () => {
+    getContentDraft.mockResolvedValue(draft());
+    await renderPage();
+    await act(async () => button('Edit as HTML')!.click());
+    await act(async () => button('Back to visual')!.click());
+    expect(container.querySelector('textarea')).toBeNull();
+    expect(toast).not.toHaveBeenCalled();
+    expect(container.querySelector('header')!.textContent).toContain('Saved');
   });
 
   it('follows the draft’s brand in the sidebar', async () => {

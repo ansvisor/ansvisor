@@ -1,0 +1,39 @@
+import sanitizeHtml from 'sanitize-html';
+import {
+  ALLOWED_ATTRIBUTES,
+  ALLOWED_TAGS,
+  DEMOTED_HEADINGS,
+  JSON_LD_SLOT,
+  cleanHref,
+  extractJsonLd,
+  restoreJsonLd,
+} from './html-allowlist';
+
+/**
+ * The server's check of a draft's HTML before it is saved (Content Editor
+ * CE-005, spec §12: "The server re-checks the HTML before saving"). The
+ * editor sends clean HTML already; this keeps a request made without it to
+ * the same allow-list, so a draft never stores a script, an event handler or
+ * a javascript: link. Schema JSON-LD stays, written again from its JSON.
+ */
+export function sanitizeDraftHtml(html: string): string {
+  const { html: withSlots, blocks } = extractJsonLd(html);
+  const clean = sanitizeHtml(withSlots, {
+    allowedTags: [...ALLOWED_TAGS, JSON_LD_SLOT],
+    allowedAttributes: { ...ALLOWED_ATTRIBUTES, [JSON_LD_SLOT]: ['data-i'] },
+    allowedSchemes: ['http', 'https', 'mailto'],
+    allowedSchemesByTag: { img: ['http', 'https'] },
+    allowProtocolRelative: false,
+    transformTags: {
+      ...Object.fromEntries(DEMOTED_HEADINGS.map((tag) => [tag, 'h3'])),
+      a: (tagName, attribs) => {
+        const href = cleanHref(attribs.href ?? '');
+        const kept: sanitizeHtml.Attributes = href ? { href } : {};
+        return { tagName, attribs: kept };
+      },
+    },
+    // An image whose address was refused is no image at all.
+    exclusiveFilter: (frame) => frame.tag === 'img' && !frame.attribs.src,
+  });
+  return restoreJsonLd(clean, blocks);
+}

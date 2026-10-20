@@ -11,6 +11,7 @@ import {
   type DraftStatus,
 } from '@/lib/content/drafts';
 import { MAX_BODY_HTML_LENGTH, MAX_TITLE_LENGTH } from '@/lib/content/editor';
+import { sanitizeDraftHtml } from '@/lib/content/sanitize-draft-html';
 
 /**
  * Content drafts (Content Editor, CE-002), read through the signed-in member's
@@ -117,7 +118,8 @@ const saveInput = z.object({
 });
 
 /**
- * The editor's autosave: the body and the title read from it. Throws
+ * The editor's autosave: the body, checked against the draft allow-list
+ * again (sanitizeDraftHtml), and the title read from it. Throws
  * 'not_found' when no row changed (another organization's draft, or one that
  * no longer exists), so a save RLS refused isn't reported as saved.
  */
@@ -130,7 +132,7 @@ export async function saveContentDraft(
   const supabase = await createClient();
   const { data, error } = await supabase
     .from('content_drafts')
-    .update({ title: parsed.data.title, body_html: parsed.data.bodyHtml })
+    .update({ title: parsed.data.title, body_html: sanitizeDraftHtml(parsed.data.bodyHtml) })
     .eq('id', id)
     .select('updated_at')
     .maybeSingle();

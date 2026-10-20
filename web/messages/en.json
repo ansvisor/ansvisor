@@ -3112,6 +3112,21 @@
       "newPage": "New page",
       "placeholder": "Start with the page's H1, then write…",
       "documentLabel": "Page content",
+      "jsonLd": "Schema · {type} (JSON-LD)",
+      "jsonLdUntyped": "Schema (JSON-LD)",
+      "paste": {
+        "cleaned": "Pasted · formatting cleaned (headings, lists, links and tables kept)",
+        "cleanedNoImages": "Pasted · formatting cleaned. Images were left out; add them with Insert an image.",
+        "plain": "Pasted as plain text"
+      },
+      "html": {
+        "title": "HTML view",
+        "hint": "paste or edit HTML; it applies when you switch back. Scripts, iframes and inline styles are removed; schema JSON-LD is kept.",
+        "back": "Back to visual",
+        "label": "The page's HTML",
+        "applied": "HTML applied · formatting cleaned",
+        "appliedUnsafe": "HTML applied · {count, plural, one {# unsafe tag} other {# unsafe tags}} removed"
+      },
       "markReady": "Mark ready",
       "markedReady": "Marked ready. Publish it on your site when you're ready.",
       "markReadyFailed": "Couldn't mark it ready. Try again.",
@@ -3141,6 +3156,8 @@
         "addRow": "Add a row below",
         "addColumn": "Add a column to the right",
         "deleteTable": "Delete the table",
+        "html": "Edit as HTML",
+        "htmlBack": "Back to visual",
         "counter": "{count} / {target} characters"
       },
       "link": {

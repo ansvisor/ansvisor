@@ -69,6 +69,15 @@ describe('saveContentDraft', () => {
     });
   });
 
+  it('checks the body against the draft allow-list again before saving it', async () => {
+    updated = { updated_at: '2026-10-20T15:00:00Z' };
+    await saveContentDraft(DRAFT, {
+      title: 'Hi',
+      bodyHtml: '<p onclick="steal()">Hi</p><script>alert(1)</script>',
+    });
+    expect(calls[0].value).toEqual({ title: 'Hi', body_html: '<p>Hi</p>' });
+  });
+
   it('says so when no row changed, rather than reporting it saved', async () => {
     await expect(saveContentDraft(DRAFT, { title: '', bodyHtml: '' })).rejects.toThrow('not_found');
   });

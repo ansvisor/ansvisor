@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 import { EditorContent, useEditor } from '@tiptap/react';
@@ -16,7 +16,9 @@ import { buttonVariants } from '@/components/ui/button-variants';
 import { DraftMethodBadge, DraftStatusBadge } from '@/components/content/draft-badges';
 import { markContentDraftReady } from '@/lib/actions/content-drafts';
 import { CONTENT_LIBRARY_PATH, isPageType, type ContentDraft } from '@/lib/content/drafts';
+import { cleanHtml, formatHtmlSource } from '@/lib/content/clean-html';
 import { draftTitleFromDoc, lengthTarget, safeLinkHref } from '@/lib/content/editor';
+import { JsonLd } from '@/lib/content/json-ld-node';
 import { cn } from '@/lib/utils';
 import { EditorToolbar } from './_toolbar';
 import { useDraftAutosave, type SaveState } from './_use-autosave';
@@ -40,6 +42,11 @@ const DOCUMENT_CLASS = cn(
  * draft's title, page type and method, whether it's saved, and Mark ready;
  * the toolbar; and the page itself, rich text that saves as you write. The
  * draft's title is its first heading, as the Library lists it.
+ *
+ * A paste is cleaned on the way in (CE-005): headings, lists, links and
+ * tables stay; fonts, colors, styles and tracking parameters go; ⌘/Ctrl +
+ * Shift + V pastes plain text. The HTML view (CE-020) shows the page's
+ * source, and cleans it the same way when it switches back.
  */
 export function DraftEditor({ draft }: { draft: ContentDraft }) {
   const t = useTranslations('contentEditor.editor');
@@ -48,6 +55,9 @@ export function DraftEditor({ draft }: { draft: ContentDraft }) {
   const [title, setTitle] = useState(draft.title);
   const [status, setStatus] = useState(draft.status);
   const [marking, setMarking] = useState(false);
+  // The HTML view's text while it is open; null in the visual editor.
+  const [htmlSource, setHtmlSource] = useState<string | null>(null);
+  const [htmlEdited, setHtmlEdited] = useState(false);
 
   const editor = useEditor({
     extensions: [
@@ -67,12 +77,28 @@ export function DraftEditor({ draft }: { draft: ContentDraft }) {
       Image,
       CharacterCount,
       Placeholder.configure({ placeholder: t('placeholder') }),
+      JsonLd.configure({
+        label: (type) => (type ? t('jsonLd', { type }) : t('jsonLdUntyped')),
+      }),
     ],
     content: draft.bodyHtml,
     // Rendered on the client only, so the server's HTML can't disagree with it.
     immediatelyRender: false,
     editorProps: {
       attributes: { class: DOCUMENT_CLASS, 'aria-label': t('documentLabel') },
+      transformPastedHTML: (html) => {
+        // A copy from this editor keeps its images, and needs no word about it.
+        if (html.includes('data-pm-slice')) return cleanHtml(html, { keepImages: true }).html;
+        // Images from elsewhere wait for attachments (CE-006): Docs' and
+        // Word's are temporary addresses or embedded data.
+        const cleaned = cleanHtml(html, { keepImages: false });
+        toast(cleaned.imagesRemoved ? t('paste.cleanedNoImages') : t('paste.cleaned'));
+        return cleaned.html;
+      },
+      transformPastedText: (text, plain) => {
+        if (plain) toast(t('paste.plain'));
+        return text;
+      },
     },
     onUpdate: ({ editor: e }) => {
       const next = draftTitleFromDoc(e.getJSON());
@@ -80,6 +106,37 @@ export function DraftEditor({ draft }: { draft: ContentDraft }) {
       autosave.schedule({ title: next, bodyHtml: e.getHTML() });
     },
   });
+
+  const openHtmlView = () => {
+    if (!editor) return;
+    setHtmlSource(formatHtmlSource(editor.getHTML()));
+    setHtmlEdited(false);
+  };
+  const applyHtmlView = () => {
+    if (!editor || htmlSource === null) return;
+    // Nothing edited: back to the page as it was, with nothing to save.
+    if (!htmlEdited) {
+      setHtmlSource(null);
+      return;
+    }
+    const cleaned = cleanHtml(htmlSource, { keepImages: true });
+    // Emits an update, so the title and the autosave follow.
+    editor.commands.setContent(cleaned.html);
+    setHtmlSource(null);
+    toast(
+      cleaned.unsafeRemoved
+        ? t('html.appliedUnsafe', { count: cleaned.unsafeRemoved })
+        : t('html.applied'),
+    );
+  };
+
+  // HTML edited but not applied isn't saved yet: leaving asks first.
+  useEffect(() => {
+    if (!htmlEdited || htmlSource === null) return;
+    const warn = (e: BeforeUnloadEvent) => e.preventDefault();
+    window.addEventListener('beforeunload', warn);
+    return () => window.removeEventListener('beforeunload', warn);
+  }, [htmlEdited, htmlSource]);
 
   const canMarkReady = status === 'draft' || status === 'in_review';
   const markReady = async () => {
@@ -143,10 +200,43 @@ export function DraftEditor({ draft }: { draft: ContentDraft }) {
         </div>
       </header>
 
-      {editor && <EditorToolbar editor={editor} target={lengthTarget(draft.pageType)} />}
+      {editor && (
+        <EditorToolbar
+          editor={editor}
+          target={lengthTarget(draft.pageType)}
+          htmlView={htmlSource !== null}
+          onToggleHtml={htmlSource === null ? openHtmlView : applyHtmlView}
+        />
+      )}
+
+      {htmlSource !== null && (
+        <div className="flex items-center gap-2 border-b bg-muted/40 px-4 py-1.5 text-xs text-muted-foreground">
+          <span>
+            <span className="font-medium text-foreground">{t('html.title')}</span> ·{' '}
+            {t('html.hint')}
+          </span>
+          <Button size="sm" className="ml-auto h-7" onClick={applyHtmlView}>
+            {t('html.back')}
+          </Button>
+        </div>
+      )}
 
       <div className="min-h-0 flex-1 overflow-y-auto">
-        <div className="mx-auto max-w-[720px] px-7 pt-7 pb-20">
+        {htmlSource !== null && (
+          <textarea
+            value={htmlSource}
+            onChange={(e) => {
+              setHtmlSource(e.target.value);
+              setHtmlEdited(true);
+            }}
+            spellCheck={false}
+            aria-label={t('html.label')}
+            className="block h-full min-h-[600px] w-full resize-none bg-muted/20 px-7 py-5 font-mono text-[12.5px] leading-relaxed outline-none"
+          />
+        )}
+        <div
+          className={cn('mx-auto max-w-[720px] px-7 pt-7 pb-20', htmlSource !== null && 'hidden')}
+        >
           <EditorContent editor={editor} />
         </div>
       </div>

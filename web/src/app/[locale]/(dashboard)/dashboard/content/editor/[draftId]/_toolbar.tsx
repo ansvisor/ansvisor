@@ -36,10 +36,21 @@ import { cn } from '@/lib/utils';
 
 /**
  * The editor's toolbar (CE-004, spec §6): H1 H2 H3 · B I link · lists,
- * quote · table, image, and the length counter against the page type's
- * target. Inside a table it adds a row, a column, or removes the table.
+ * quote · table, image · </> HTML, and the length counter against the page
+ * type's target. Inside a table it adds a row, a column, or removes the
+ * table. While the HTML view is open, only its own button works.
  */
-export function EditorToolbar({ editor, target }: { editor: Editor; target: number }) {
+export function EditorToolbar({
+  editor,
+  target,
+  htmlView,
+  onToggleHtml,
+}: {
+  editor: Editor;
+  target: number;
+  htmlView: boolean;
+  onToggleHtml: () => void;
+}) {
   const t = useTranslations('contentEditor.editor.toolbar');
   const [dialog, setDialog] = useState<'link' | 'image' | null>(null);
 
@@ -134,13 +145,27 @@ export function EditorToolbar({ editor, target }: { editor: Editor; target: numb
         <div key={i} className="flex items-center gap-0.5">
           {i > 0 && <span aria-hidden="true" className="mx-1.5 h-5 w-px bg-border" />}
           {group.map((tool) => (
-            <ToolButton key={tool.key} label={t(tool.key)} pressed={tool.on} onClick={tool.run}>
+            <ToolButton
+              key={tool.key}
+              label={t(tool.key)}
+              pressed={!htmlView && tool.on}
+              disabled={htmlView}
+              onClick={tool.run}
+            >
               <tool.icon className="h-4 w-4" />
             </ToolButton>
           ))}
         </div>
       ))}
-      {state.inTable && (
+      <span aria-hidden="true" className="mx-1.5 h-5 w-px bg-border" />
+      <ToolButton
+        label={htmlView ? t('htmlBack') : t('html')}
+        pressed={htmlView}
+        onClick={onToggleHtml}
+      >
+        <span className="font-mono text-[11.5px] font-medium">&lt;/&gt; HTML</span>
+      </ToolButton>
+      {state.inTable && !htmlView && (
         <div className="flex items-center gap-0.5">
           <span aria-hidden="true" className="mx-1.5 h-5 w-px bg-border" />
           {tableTools.map((tool) => (
@@ -172,11 +197,13 @@ export function EditorToolbar({ editor, target }: { editor: Editor; target: numb
 function ToolButton({
   label,
   pressed,
+  disabled,
   onClick,
   children,
 }: {
   label: string;
   pressed?: boolean;
+  disabled?: boolean;
   onClick: () => void;
   children: React.ReactNode;
 }) {
@@ -186,11 +213,12 @@ function ToolButton({
       title={label}
       aria-label={label}
       aria-pressed={pressed}
+      disabled={disabled}
       // Keep the editor's selection: a click on the toolbar mustn't move focus first.
       onMouseDown={(e) => e.preventDefault()}
       onClick={onClick}
       className={cn(
-        'flex h-7 min-w-7 items-center justify-center rounded-md px-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50',
+        'flex h-7 min-w-7 items-center justify-center rounded-md px-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-40',
         pressed && 'bg-muted text-foreground',
       )}
     >
