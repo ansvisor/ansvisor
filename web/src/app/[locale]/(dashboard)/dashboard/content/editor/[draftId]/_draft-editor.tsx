@@ -382,7 +382,9 @@ export function DraftEditor({ draft }: { draft: ContentDraft }) {
           </div>
           {attachments.ui}
         </div>
-        {panelOpen && <EditorSidePanel draft={draft} title={title} bodyHtml={pageHtml} />}
+        {panelOpen && (
+          <EditorSidePanel draft={draft} title={title} bodyHtml={pageHtml} pageType={pageType} />
+        )}
       </div>
     </div>
   );

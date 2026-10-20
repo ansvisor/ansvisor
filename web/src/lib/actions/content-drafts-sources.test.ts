@@ -35,6 +35,7 @@ vi.mock('@/lib/supabase/server', () => ({
       const chain: Record<string, unknown> = {
         select: () => chain,
         eq: (col: string, v: unknown) => (call.filters.push([col, v]), chain),
+        in: (col: string, v: unknown) => (call.filters.push([col, v]), chain),
         update: (value: unknown) => ((call.op = 'update'), (call.value = value), chain),
         upsert: (value: unknown, options: unknown) => (
           (call.op = 'upsert'),
@@ -147,7 +148,7 @@ describe('addDraftSource', () => {
         filters: [
           ['draft_id', DRAFT],
           ['kind', 'prompt'],
-          ['ref', PROMPT],
+          ['ref', [PROMPT]],
         ],
       }),
     ]);

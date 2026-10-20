@@ -25,6 +25,13 @@ import { MAX_BODY_HTML_LENGTH, MAX_TITLE_LENGTH } from '@/lib/content/editor';
 import { detectPageType, siteTypeOf, type SiteType } from '@/lib/content/page-types';
 import { sanitizeDraftHtml } from '@/lib/content/sanitize-draft-html';
 import {
+  briefFromOpportunity,
+  draftBriefSchema,
+  type DraftBrief,
+  type RebuildSources,
+} from '@/lib/content/brief';
+import type { ContentBrief } from '@/types';
+import {
   DRAFT_SOURCE_KINDS,
   SOURCES_DAYS,
   normalizeQuery,
@@ -680,31 +687,7 @@ export async function addDraftSource(id: string, source: AddedDraftSource): Prom
   const now = new Date().toISOString();
 
   if (parsed.data.kind === 'prompt') {
-    const { promptId } = parsed.data;
-    const { data: draft, error } = await supabase
-      .from('content_drafts')
-      .select('prompt_ids')
-      .eq('id', id)
-      .maybeSingle();
-    if (error) throw new Error(error.message);
-    if (!draft) throw new Error('not_found');
-    const promptIds: string[] = draft.prompt_ids ?? [];
-    if (!promptIds.includes(promptId)) {
-      // check_content_draft_links (00206) refuses a prompt of another brand.
-      const { error: updateError } = await supabase
-        .from('content_drafts')
-        .update({ prompt_ids: [...promptIds, promptId] })
-        .eq('id', id);
-      if (updateError) throw new Error(updateError.message);
-    }
-    // A prompt left out before is back in.
-    const { error: choiceError } = await supabase
-      .from('content_draft_sources')
-      .update({ included: true, updated_at: now })
-      .eq('draft_id', id)
-      .eq('kind', 'prompt')
-      .eq('ref', promptId);
-    if (choiceError) throw new Error(choiceError.message);
+    await addDraftPrompts(id, [parsed.data.promptId]);
     return;
   }
 
@@ -717,4 +700,129 @@ export async function addDraftSource(id: string, source: AddedDraftSource): Prom
       { onConflict: 'draft_id,kind,ref' },
     );
   if (error) throw new Error(error.message);
+}
+
+const promptIdList = z.array(z.guid()).min(1).max(100);
+
+/**
+ * Prompts join the draft's prompts (Sources' + Add source, Impact's "Use
+ * lost prompts"); one left out of the sources before is back in. Throws
+ * 'not_found' when the draft isn't the member's.
+ */
+export async function addDraftPrompts(id: string, promptIds: string[]): Promise<void> {
+  const parsed = promptIdList.safeParse(promptIds);
+  if (!draftId.safeParse(id).success || !parsed.success) throw new Error('invalid');
+  const supabase = await createClient();
+  const { data: draft, error } = await supabase
+    .from('content_drafts')
+    .select('prompt_ids')
+    .eq('id', id)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  if (!draft) throw new Error('not_found');
+  const current: string[] = draft.prompt_ids ?? [];
+  const added = parsed.data.filter((promptId) => !current.includes(promptId));
+  if (added.length) {
+    // check_content_draft_links (00206) refuses a prompt of another brand.
+    const { error: updateError } = await supabase
+      .from('content_drafts')
+      .update({ prompt_ids: [...current, ...added] })
+      .eq('id', id);
+    if (updateError) throw new Error(updateError.message);
+  }
+  const { error: choiceError } = await supabase
+    .from('content_draft_sources')
+    .update({ included: true, updated_at: new Date().toISOString() })
+    .eq('draft_id', id)
+    .eq('kind', 'prompt')
+    .in('ref', parsed.data);
+  if (choiceError) throw new Error(choiceError.message);
+}
+
+/**
+ * The Brief tab (CE-007): the draft's brief, or, until it has one, the brief
+ * of the opportunity it started from. Null when the member can't read the
+ * draft.
+ */
+export async function getDraftBrief(id: string): Promise<{ brief: DraftBrief | null } | null> {
+  if (!draftId.safeParse(id).success) throw new Error('invalid');
+  const supabase = await createClient();
+  const { data: draft, error } = await supabase
+    .from('content_drafts')
+    .select('brief, opportunity_id')
+    .eq('id', id)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  if (!draft) return null;
+  const own = draftBriefSchema.safeParse(draft.brief);
+  if (own.success) return { brief: own.data };
+  if (!draft.opportunity_id) return { brief: null };
+  const { data: opportunity, error: oppError } = await supabase
+    .from('content_opportunities')
+    .select('brief')
+    .eq('id', draft.opportunity_id)
+    .maybeSingle();
+  if (oppError) throw new Error(oppError.message);
+  const brief = opportunity?.brief as ContentBrief | null | undefined;
+  return { brief: brief?.outline ? briefFromOpportunity(brief) : null };
+}
+
+/** Edit brief (CE-007): the brief as the person wrote it. Throws 'not_found' when no row changed. */
+export async function saveDraftBrief(id: string, brief: DraftBrief): Promise<DraftBrief> {
+  const parsed = draftBriefSchema.safeParse({ ...brief, origin: 'edit' });
+  if (!draftId.safeParse(id).success || !parsed.success) throw new Error('invalid');
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from('content_drafts')
+    .update({ brief: parsed.data })
+    .eq('id', id)
+    .select('id')
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  if (!data) throw new Error('not_found');
+  return parsed.data;
+}
+
+const BRIEF_REBUILD_ERRORS = ['ai_budget', 'no_sources', 'failed'] as const;
+export type BriefRebuildError = (typeof BRIEF_REBUILD_ERRORS)[number];
+
+/**
+ * Rebuild outline (CE-007): the server writes the brief from the sources
+ * kept, metered from the organization's AI usage (content-brief.js).
+ */
+export async function rebuildDraftBrief(
+  id: string,
+  brandId: string,
+  sources: RebuildSources,
+): Promise<{ brief: DraftBrief } | { error: BriefRebuildError }> {
+  if (!draftId.safeParse(id).success || !draftId.safeParse(brandId).success) {
+    return { error: 'failed' };
+  }
+  const supabase = await createClient();
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  if (!session) return { error: 'failed' };
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/content-drafts/${id}/brief`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${session.access_token}`,
+      },
+      body: JSON.stringify({ brandId, sources }),
+    });
+    const body = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+    if (!res.ok) {
+      const code = body.code as BriefRebuildError;
+      return {
+        error: (BRIEF_REBUILD_ERRORS as readonly string[]).includes(code) ? code : 'failed',
+      };
+    }
+    const brief = draftBriefSchema.safeParse(body.brief);
+    return brief.success ? { brief: brief.data } : { error: 'failed' };
+  } catch (err) {
+    console.error('Failed to rebuild the brief:', err);
+    return { error: 'failed' };
+  }
 }

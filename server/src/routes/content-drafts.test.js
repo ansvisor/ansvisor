@@ -1,0 +1,102 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import express from 'express';
+
+/** POST /api/content-drafts/:draftId/brief (CE-007): Rebuild outline. */
+
+const BRAND = '33333333-3333-3333-3333-333333333333';
+const DRAFT = '77777777-7777-7777-7777-777777777777';
+
+const rebuildDraftBrief = vi.fn();
+const assertBrandAccess = vi.fn();
+vi.mock('../lib/content-brief.js', async (importOriginal) => ({
+  ...(await importOriginal()),
+  rebuildDraftBrief: (...args) => rebuildDraftBrief(...args),
+}));
+vi.mock('../lib/access.js', () => ({ assertBrandAccess: (...args) => assertBrandAccess(...args) }));
+
+const { default: router } = await import('./content-drafts.js');
+const { PlanLimitError } = await import('../lib/plan-guard.js');
+
+let server;
+let baseUrl;
+
+beforeEach(async () => {
+  rebuildDraftBrief.mockReset().mockResolvedValue({ goal: 'g', outline: [] });
+  assertBrandAccess.mockReset().mockResolvedValue({});
+  const app = express();
+  app.use(express.json());
+  app.use((req, _res, next) => {
+    req.user = { id: 'u1' };
+    req.log = { error: vi.fn() };
+    next();
+  });
+  app.use('/api/content-drafts', router);
+  await new Promise((resolve) => {
+    server = app.listen(0, resolve);
+  });
+  baseUrl = `http://127.0.0.1:${server.address().port}/api/content-drafts`;
+});
+
+afterEach(() => new Promise((resolve) => server.close(resolve)));
+
+const sources = {
+  promptIds: [],
+  fanouts: [{ query: 'espresso', platforms: ['copilot-web'] }],
+  pages: [],
+  queries: [],
+  headings: [],
+  length: 3000,
+};
+
+const rebuild = (body, draftId = DRAFT) =>
+  fetch(`${baseUrl}/${draftId}/brief`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+
+describe('POST /api/content-drafts/:draftId/brief', () => {
+  it('rebuilds the brief for a member of the brand', async () => {
+    const res = await rebuild({ brandId: BRAND, sources });
+    expect(res.status).toBe(200);
+    await expect(res.json()).resolves.toEqual({ brief: { goal: 'g', outline: [] } });
+    expect(assertBrandAccess).toHaveBeenCalledWith(BRAND, 'u1');
+    expect(rebuildDraftBrief).toHaveBeenCalledWith({ draftId: DRAFT, brandId: BRAND, sources });
+  });
+
+  it('refuses a malformed draft, brand or source list', async () => {
+    for (const [body, draftId] of [
+      [{ brandId: BRAND, sources }, 'd1'],
+      [{ brandId: 'b1', sources }, DRAFT],
+      [{ brandId: BRAND, sources: { ...sources, length: 5 } }, DRAFT],
+      [{ brandId: BRAND, sources: { ...sources, promptIds: ['p1'] } }, DRAFT],
+    ]) {
+      const res = await rebuild(body, draftId);
+      expect(res.status).toBe(400);
+    }
+    expect(rebuildDraftBrief).not.toHaveBeenCalled();
+  });
+
+  it('says why it didn’t rebuild', async () => {
+    assertBrandAccess.mockRejectedValueOnce(Object.assign(new Error('Forbidden'), { status: 403 }));
+    let res = await rebuild({ brandId: BRAND, sources });
+    expect(res.status).toBe(403);
+
+    rebuildDraftBrief.mockRejectedValueOnce(new PlanLimitError('used up', 429));
+    res = await rebuild({ brandId: BRAND, sources });
+    expect(res.status).toBe(429);
+    await expect(res.json()).resolves.toMatchObject({ code: 'ai_budget' });
+
+    rebuildDraftBrief.mockRejectedValueOnce(
+      Object.assign(new Error('none'), { status: 422, code: 'no_sources' }),
+    );
+    res = await rebuild({ brandId: BRAND, sources });
+    expect(res.status).toBe(422);
+    await expect(res.json()).resolves.toMatchObject({ code: 'no_sources' });
+
+    rebuildDraftBrief.mockRejectedValueOnce(new Error('model down'));
+    res = await rebuild({ brandId: BRAND, sources });
+    expect(res.status).toBe(502);
+    await expect(res.json()).resolves.toMatchObject({ code: 'failed' });
+  });
+});

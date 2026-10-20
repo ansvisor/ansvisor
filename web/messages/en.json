@@ -3408,6 +3408,7 @@
         "hide": "Hide side panel",
         "tabs": {
           "impact": "Impact",
+          "brief": "Brief",
           "sources": "Sources"
         }
       },
@@ -3442,7 +3443,8 @@
           "cited": "Cited {count}×",
           "lostBadge": "Lost",
           "wasCitedOn": "Was cited on {platforms}",
-          "seeInCitations": "See in Citations"
+          "seeInCitations": "See in Citations",
+          "useLost": "{count, plural, one {Use the lost prompt in this draft} other {Use the # lost prompts in this draft}}"
         },
         "results": {
           "title": "Results from AI visits",
@@ -3480,7 +3482,7 @@
         "retry": "Retry",
         "summary": "{count, plural, one {Built from # source} other {Built from # sources}}",
         "summaryParts": "{prompts, plural, one {# prompt} other {# prompts}} · {fanouts, plural, one {# fan-out} other {# fan-outs}} · {pages, plural, one {# cited page} other {# cited pages}} · {queries, plural, one {# Search Console query} other {# Search Console queries}}",
-        "hint": "Each source shows where the draft uses it. Uncheck one to leave it out of the brief and the agent's work.",
+        "hint": "Each source shows where the draft uses it. Uncheck one to leave it out, then rebuild the brief.",
         "empty": "No sources yet. Add a prompt, a page or a Search Console query.",
         "toggleFailed": "Couldn't change the source. Try again.",
         "include": "Use {name}",
@@ -3549,6 +3551,51 @@
           "submit": "Add",
           "added": "Source added",
           "failed": "Couldn't add the source. Try again."
+        },
+        "rebuild": "Rebuild with selection"
+      },
+      "brief": {
+        "loadError": "Couldn't load the brief.",
+        "retry": "Retry",
+        "pageType": "Page type",
+        "targetUrl": "Target URL",
+        "newPage": "A new page",
+        "notSet": "Not set",
+        "goal": "Goal",
+        "audience": "Audience",
+        "length": "Length",
+        "lengthValue": "{count} characters · from the page type",
+        "outline": "Outline",
+        "answers": "Answers “{fanout}”",
+        "keywords": "Keywords",
+        "empty": "No outline yet. Rebuild outline writes one from the sources you keep, each H2 answering a search AI ran.",
+        "fromOpportunity": "From the opportunity's brief. Rebuild outline maps each H2 to a fan-out.",
+        "edited": "Edited by you.",
+        "builtFrom": "{count, plural, one {Built from # source} other {Built from # sources}} · {date}",
+        "rebuild": "Rebuild outline",
+        "build": "Build brief",
+        "edit": "Edit brief",
+        "usage": "Rebuilding uses your workspace's AI usage.",
+        "rebuilt": "{count, plural, one {Brief rebuilt from # source} other {Brief rebuilt from # sources}}",
+        "rebuildErrors": {
+          "ai_budget": "This month's AI usage is used up. It resets when your subscription renews.",
+          "no_sources": "Keep at least one prompt, fan-out or Search Console query to build from.",
+          "failed": "Couldn't rebuild the brief. Try again."
+        },
+        "editor": {
+          "goal": "Goal",
+          "audience": "Audience",
+          "outline": "Outline",
+          "heading": "Section {index} heading",
+          "remove": "Remove section {index}",
+          "points": "Section {index} key points",
+          "pointsPlaceholder": "One key point per line",
+          "addSection": "Add section",
+          "keywords": "Keywords, separated by commas",
+          "save": "Save brief",
+          "cancel": "Cancel",
+          "saved": "Brief saved",
+          "failed": "Couldn't save the brief. Try again."
         }
       }
     },

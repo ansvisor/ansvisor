@@ -3,7 +3,7 @@
 import { useDeferredValue, useEffect, useMemo, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
-import { Loader2, Plus } from 'lucide-react';
+import { Loader2, Plus, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { getDraftSources, setDraftSourceIncluded } from '@/lib/actions/content-drafts';
@@ -39,12 +39,17 @@ export function SourcesTab({
   title,
   sourceUrl,
   bodyHtml,
+  rebuilding,
+  onRebuild,
 }: {
   draftId: string;
   brandId: string;
   title: string;
   sourceUrl: string | null;
   bodyHtml: string;
+  /** Rebuild with selection: the brief from the sources as checked here. */
+  rebuilding: boolean;
+  onRebuild: (sources: { data: DraftSourcesData; choices: DraftSourceChoice[] }) => void;
 }) {
   const t = useTranslations('contentEditor.editor.sources');
   const [read, setRead] = useState<SourcesRead | null>(null);
@@ -161,10 +166,24 @@ export function SourcesTab({
         )
       )}
 
-      <Button variant="outline" size="sm" onClick={() => setAdding(true)}>
-        <Plus className="h-3.5 w-3.5" />
-        {t('add.button')}
-      </Button>
+      <div className="flex flex-wrap gap-2">
+        <Button
+          size="sm"
+          disabled={rebuilding || total === 0}
+          onClick={() => onRebuild({ data: read.data, choices: read.choices })}
+        >
+          {rebuilding ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          ) : (
+            <RefreshCw className="h-3.5 w-3.5" />
+          )}
+          {t('rebuild')}
+        </Button>
+        <Button variant="outline" size="sm" onClick={() => setAdding(true)}>
+          <Plus className="h-3.5 w-3.5" />
+          {t('add.button')}
+        </Button>
+      </div>
       <AddSourceDialog
         open={adding}
         onOpenChange={setAdding}

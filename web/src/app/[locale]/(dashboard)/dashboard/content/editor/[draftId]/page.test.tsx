@@ -13,8 +13,12 @@ const setContentDraftPageType = vi.fn();
 const getContentImpact = vi.fn();
 const getContentResults = vi.fn();
 const getDraftSources = vi.fn();
+const getDraftBrief = vi.fn();
+const rebuildDraftBrief = vi.fn();
 vi.mock('@/lib/actions/content-drafts', () => ({
   getDraftSources: (...args: unknown[]) => getDraftSources(...args),
+  getDraftBrief: (...args: unknown[]) => getDraftBrief(...args),
+  rebuildDraftBrief: (...args: unknown[]) => rebuildDraftBrief(...args),
   getContentImpact: (...args: unknown[]) => getContentImpact(...args),
   getContentResults: (...args: unknown[]) => getContentResults(...args),
   getContentDraft: (...args: unknown[]) => getContentDraft(...args),
@@ -145,6 +149,8 @@ beforeEach(() => {
   getContentImpact.mockReset().mockResolvedValue(null);
   getContentResults.mockReset().mockResolvedValue(null);
   getDraftSources.mockReset().mockResolvedValue(null);
+  getDraftBrief.mockReset().mockResolvedValue({ brief: null });
+  rebuildDraftBrief.mockReset();
   localStorage.clear();
   brandState.activeBrandId = 'b1';
   brandState.setActiveBrand.mockReset();
@@ -597,6 +603,72 @@ describe('the side panel', () => {
     expect(panel()!.textContent).toContain('pipeline forecasting');
     expect(panel()!.textContent).toContain('H1');
     expect(getContentImpact).toHaveBeenCalledTimes(1);
+  });
+
+  it('rebuilds the brief from Sources and opens it', async () => {
+    getDraftSources.mockResolvedValue({
+      data: {
+        prompts: [],
+        fanouts: [{ query: 'pipeline forecasting', platforms: ['copilot-web'], searched: 2 }],
+        citedPages: [],
+        gscQueries: [],
+        brandDomains: [],
+        competitorDomains: [],
+      },
+      choices: [],
+    });
+    rebuildDraftBrief.mockResolvedValue({
+      brief: {
+        goal: 'Win forecasting searches',
+        audience: 'Sales leaders',
+        outline: [
+          {
+            heading: 'How pipeline forecasting works',
+            keyPoints: [],
+            fanout: 'pipeline forecasting',
+            platform: 'copilot-web',
+          },
+        ],
+        keywords: [],
+        origin: 'rebuild',
+        builtAt: '2026-10-21T10:00:00Z',
+        builtFrom: { prompts: 0, fanouts: 1, pages: 0, queries: 0 },
+      },
+    });
+    getContentDraft.mockResolvedValue(draft({ sourceUrl: 'https://acme.example.com/pricing' }));
+    window.innerWidth = 1440;
+    await renderPage();
+
+    const pick = async (name: string) => {
+      const tab = [...panel()!.querySelectorAll<HTMLElement>('[role="tab"]')].find(
+        (el) => el.textContent === name,
+      )!;
+      await act(async () => {
+        tab.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
+        tab.click();
+      });
+    };
+    expect([...panel()!.querySelectorAll('[role="tab"]')].map((el) => el.textContent)).toEqual([
+      'Impact',
+      'Brief',
+      'Sources',
+    ]);
+    await pick('Sources');
+    await act(async () => button('Rebuild with selection')!.click());
+
+    expect(rebuildDraftBrief).toHaveBeenCalledWith('d1', 'b1', {
+      promptIds: [],
+      fanouts: [{ query: 'pipeline forecasting', platforms: ['copilot-web'] }],
+      pages: [],
+      queries: [],
+      headings: [],
+      length: 3000,
+    });
+    expect(toast.success).toHaveBeenCalledWith('Brief rebuilt from 1 source');
+    const selected = panel()!.querySelector('[role="tab"][aria-selected="true"]');
+    expect(selected?.textContent).toBe('Brief');
+    expect(panel()!.textContent).toContain('How pipeline forecasting works');
+    expect(panel()!.textContent).toContain('Win forecasting searches');
   });
 
   it('starts open on a wide window, and remembers it closed', async () => {

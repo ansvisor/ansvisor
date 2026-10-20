@@ -80,11 +80,17 @@ const results = (over: Partial<ContentResults> = {}): ContentResults => ({
 let container: HTMLDivElement;
 let root: Root;
 
-async function render(pageUrl: string | null = PAGE) {
+const onUseLostPrompts = vi.fn();
+
+async function render(pageUrl: string | null = PAGE, withLostPrompts = true) {
   await act(async () => {
     root.render(
       <NextIntlClientProvider locale="en" messages={messages}>
-        <ImpactTab brandId="b1" pageUrl={pageUrl} />
+        <ImpactTab
+          brandId="b1"
+          pageUrl={pageUrl}
+          onUseLostPrompts={withLostPrompts ? onUseLostPrompts : undefined}
+        />
       </NextIntlClientProvider>,
     );
   });
@@ -140,6 +146,21 @@ describe('the Impact tab', () => {
     expect(
       container.querySelector('a[href^="/dashboard/citations/url"]')!.getAttribute('href'),
     ).toBe(`/dashboard/citations/url?u=${encodeURIComponent(PAGE)}`);
+  });
+
+  it('uses the lost prompts in the draft', async () => {
+    onUseLostPrompts.mockReset();
+    getContentImpact.mockResolvedValue(impact());
+    await render();
+    await act(async () => periodButton('Use the lost prompt in this draft').click());
+    expect(onUseLostPrompts).toHaveBeenCalledWith(['p2']);
+
+    // Nothing lost, or nowhere to use them: no button.
+    getContentImpact.mockResolvedValue(impact({ prompts: impact().prompts.slice(0, 1) }));
+    await act(async () => periodButton('7d').click());
+    expect(container.textContent).not.toContain('lost prompt');
+    await render(PAGE, false);
+    expect(container.textContent).not.toContain('in this draft');
   });
 
   it('names the brand’s other pages cited for the same prompts', async () => {

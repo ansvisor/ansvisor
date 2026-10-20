@@ -16,6 +16,7 @@ vi.mock('@/lib/actions/content-drafts', () => ({
   addDraftSource: (...args: unknown[]) => addDraftSource(...args),
   getContentStartOptions: (...args: unknown[]) => getContentStartOptions(...args),
 }));
+const onRebuild = vi.fn();
 const toast = vi.hoisted(() => Object.assign(vi.fn(), { success: vi.fn(), error: vi.fn() }));
 vi.mock('sonner', () => ({ toast }));
 
@@ -79,6 +80,8 @@ function Tab({ bodyHtml }: { bodyHtml: string }) {
         title="The home espresso guide"
         sourceUrl={PAGE}
         bodyHtml={bodyHtml}
+        rebuilding={false}
+        onRebuild={onRebuild}
       />
     </NextIntlClientProvider>
   );
@@ -102,6 +105,7 @@ beforeEach(() => {
   getContentStartOptions
     .mockReset()
     .mockResolvedValue({ opportunities: [], prompts: [], topics: [] });
+  onRebuild.mockReset();
   toast.mockReset();
   toast.success.mockReset();
   toast.error.mockReset();
@@ -166,6 +170,19 @@ describe('the Sources tab', () => {
     await act(async () => checkbox('home espresso grinder').click());
     expect(rows()[1].checked).toBe('false');
     expect(toast.error).toHaveBeenCalledWith("Couldn't change the source. Try again.");
+  });
+
+  it('rebuilds the brief from the sources as checked here', async () => {
+    await render();
+    await act(async () => checkbox('home espresso grinder').click());
+    const rebuild = [...container.querySelectorAll('button')].find(
+      (b) => b.textContent === 'Rebuild with selection',
+    )!;
+    await act(async () => rebuild.click());
+    expect(onRebuild).toHaveBeenCalledWith({
+      data: data(),
+      choices: [{ kind: 'fanout', ref: 'home espresso grinder', included: false, added: false }],
+    });
   });
 
   it('lists a source left out unchecked', async () => {

@@ -830,6 +830,7 @@ export type Database = {
           action_id: string | null
           author: string
           body_html: string
+          brief: Json | null
           brand_id: string
           created_at: string
           created_by: string | null
@@ -850,6 +851,7 @@ export type Database = {
           action_id?: string | null
           author?: string
           body_html?: string
+          brief?: Json | null
           brand_id: string
           created_at?: string
           created_by?: string | null
@@ -870,6 +872,7 @@ export type Database = {
           action_id?: string | null
           author?: string
           body_html?: string
+          brief?: Json | null
           brand_id?: string
           created_at?: string
           created_by?: string | null
