@@ -122,7 +122,13 @@ function detectMarketplace(host) {
       return marketplace;
     }
   }
-  return null;
+
+  // When a known affiliate URL has no usable destination parameter, classify
+  // its redirect host itself instead of treating the merchant as a reseller.
+  const redirect = REDIRECTS.find((entry) =>
+    entry.hosts.some((registered) => hostMatches(host, registered)),
+  );
+  return redirect?.marketplace ?? null;
 }
 
 function isOwnDomain(url, brandDomains) {
