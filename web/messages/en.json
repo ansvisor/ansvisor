@@ -4257,6 +4257,14 @@
       "none": "No prompts are {label} in this range.",
       "showAll": "Show all performance",
       "order": "Furthest behind first: late or missing on the most AI platforms, then the worse average position."
+    },
+    "improve": {
+      "quota": {
+        "left": "{count, plural, one {About # generation left this month} other {About # generations left this month}}",
+        "percentLeft": "{percent}% of this month's budget left",
+        "usedUp": "This month's suggestion budget is used up. It resets when your subscription renews.",
+        "upgrade": "Upgrade for more"
+      }
     }
   },
   "mentions": {

@@ -52,7 +52,10 @@ export const PLANS = {
       maxDomainsPerBrand: 3,
       maxVolumeAnalyses: 4,
       maxBriefGenerations: 10,
-      improveMonthlyBudgetUsd: 0,
+      // A $1 trial of Improve, not 1% of the $49 price: enough for a few
+      // generations a month, so Starter can see what it does (Growth+ was
+      // PROMPT-003's call). Shared with the Content Editor's AI later.
+      improveMonthlyBudgetUsd: 1,
       // 0.1% of the $49 price, spent rating suggestions' relevance (VIS-011).
       relevanceMonthlyBudgetUsd: 0.049,
       maxOpportunitiesPerMonth: 10,
@@ -81,6 +84,7 @@ export const PLANS = {
         'custom_reports',
         'api_access',
         'ai_agent',
+        'prompt_improve',
       ],
     },
   },

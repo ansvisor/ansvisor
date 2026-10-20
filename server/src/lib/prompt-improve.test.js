@@ -311,11 +311,10 @@ describe('improveRangeKey', () => {
 });
 
 describe('Improve plan limits', () => {
-  it('is a Growth+ feature with a budget of 1% of the plan price', async () => {
+  it('is on every plan: a $1 trial on Starter, 1% of the plan price above it', async () => {
     const { PLANS } = await import('../config/plans.js');
-    expect(PLANS.starter.limits.features).not.toContain('prompt_improve');
-    expect(PLANS.starter.limits.improveMonthlyBudgetUsd).toBe(0);
-    for (const id of ['growth', 'enterprise', 'self_hosted']) {
+    expect(PLANS.starter.limits.improveMonthlyBudgetUsd).toBe(1);
+    for (const id of ['starter', 'growth', 'enterprise', 'self_hosted']) {
       expect(PLANS[id].limits.features).toContain('prompt_improve');
     }
     expect(PLANS.growth.limits.improveMonthlyBudgetUsd).toBe(2.49);
