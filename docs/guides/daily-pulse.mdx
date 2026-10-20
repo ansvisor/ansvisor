@@ -102,7 +102,7 @@ Highlights other than first citations and new engines compare the last 7 days wi
 
 ## Webhook delivery
 
-Every generated pulse is also sent as a `daily_pulse.created` event to the brand's active webhook, configured under **Content → Configure Webhook**. This works on self-hosted instances too, where it is the only delivery channel.
+Every generated pulse is also sent as a `daily_pulse.created` event to the brand's active webhook, if it is subscribed to that event, configured under **Content → Configure Webhook**. This works on self-hosted instances too, where it is the only delivery channel.
 
 The webhook payload contains the same KPIs, highlights and warnings as the email, plus the pulse date, the frequency and a link to Insights. The frequency setting applies to the webhook as well: **Off** sends nothing, **Weekly** sends on Mondays only. The recipient list does not.
 
