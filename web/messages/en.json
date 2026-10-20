@@ -3034,6 +3034,7 @@
       "description": "Connect your workflow automation tool (n8n, Make, Zapier) and choose which events it receives.",
       "eventsTitle": "Events to send",
       "eventsDescription": "Only selected events are sent. Test Webhook always sends a test event, regardless of these selections.",
+      "eventRequired": "Select at least one event for this webhook.",
       "eventOpportunitySent": "Opportunity sent",
       "eventDailyPulseCreated": "Daily Pulse created",
       "eventActionTaskSent": "Action Center task sent",
