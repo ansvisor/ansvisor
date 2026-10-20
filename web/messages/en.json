@@ -4891,7 +4891,9 @@
       "unlimitedSeats": "Unlimited seats",
       "prompts": "{count, number} prompts tracked",
       "briefs": "{count, number} content briefs a month",
-      "audits": "{count, number} site audits a month"
+      "audits": "{count, number} site audits a month",
+      "aiUsage": "{count}x AI usage",
+      "aiUsageHint": "A monthly allowance for Ansvisor's AI features: Improve suggestions and the Content Editor's AI. Agent Chat runs on your own AI key."
     },
     "contactUs": "Contact Us",
     "integrations": "Integrations",

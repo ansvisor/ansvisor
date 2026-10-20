@@ -52,9 +52,11 @@ export const PLANS = {
       maxDomainsPerBrand: 3,
       maxVolumeAnalyses: 4,
       maxBriefGenerations: 10,
-      // A $1 trial of Improve, not 1% of the $49 price: enough for a few
-      // generations a month, so Starter can see what it does (Growth+ was
-      // PROMPT-003's call). Shared with the Content Editor's AI later.
+      // AI usage, in tiers the billing cards show as multiples of Starter's:
+      // $1 here (1x), Growth $5 (5x), Enterprise $10 or 1% of its contract.
+      // Spent on Improve and, later, the Content Editor's AI. Starter's is a
+      // trial: enough for a few generations a month (Growth+ was PROMPT-003's
+      // call).
       improveMonthlyBudgetUsd: 1,
       // 0.1% of the $49 price, spent rating suggestions' relevance (VIS-011).
       relevanceMonthlyBudgetUsd: 0.049,
@@ -99,8 +101,8 @@ export const PLANS = {
       maxDomainsPerBrand: 10,
       maxVolumeAnalyses: 10,
       maxBriefGenerations: 50,
-      // 1% of the $249 price, spent on Improve model calls (PROMPT-003).
-      improveMonthlyBudgetUsd: 2.49,
+      // AI usage: 5x Starter's $1 (the billing card's "5x AI usage").
+      improveMonthlyBudgetUsd: 5,
       // 0.1% of the $249 price, spent rating suggestions' relevance (VIS-011).
       relevanceMonthlyBudgetUsd: 0.249,
       maxOpportunitiesPerMonth: 50,
@@ -142,9 +144,10 @@ export const PLANS = {
       maxVolumeAnalyses: -1,
       // Per-customer: override via organizations.plan_overrides in the DB.
       maxBriefGenerations: -1,
-      // 1% of the $499 floor. plan_overrides.contractMonthlyUsd raises it to 1%
-      // of the contract; an explicit plan_overrides.improveMonthlyBudgetUsd wins.
-      improveMonthlyBudgetUsd: 4.99,
+      // AI usage: $10 at the least, above Growth's $5.
+      // plan_overrides.contractMonthlyUsd raises it to 1% of the contract; an
+      // explicit plan_overrides.improveMonthlyBudgetUsd wins.
+      improveMonthlyBudgetUsd: 10,
       // 0.1% of the $499 floor, raised to 0.1% of contractMonthlyUsd; an
       // explicit plan_overrides.relevanceMonthlyBudgetUsd wins.
       relevanceMonthlyBudgetUsd: 0.499,

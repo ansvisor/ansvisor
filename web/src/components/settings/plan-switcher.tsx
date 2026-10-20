@@ -138,11 +138,16 @@ export function PlanSwitcher({ subscription, onUpdate }: PlanSwitcherProps) {
   /**
    * A plan card's list, as the pricing page puts it: brands, seats, prompts,
    * the answer engines it tracks, content briefs and site audits a month,
-   * then what the plan adds.
+   * AI usage as a multiple of Starter's, then what the plan adds.
    */
-  function planFeatures(planId: PlanId): string[] {
+  function planFeatures(planId: PlanId): { text: string; hint?: string }[] {
     const { limits } = PLANS[planId];
-    return [
+    const starterAi = PLANS.starter.limits.improveMonthlyBudgetUsd;
+    const aiUsage =
+      starterAi > 0 && limits.improveMonthlyBudgetUsd > 0
+        ? Math.round(limits.improveMonthlyBudgetUsd / starterAi)
+        : null;
+    const items = [
       limits.maxBrands === -1
         ? tCards('unlimitedBrands')
         : tCards('brands', { count: limits.maxBrands }),
@@ -153,7 +158,13 @@ export function PlanSwitcher({ subscription, onUpdate }: PlanSwitcherProps) {
       tCards(`${planId}.engines`),
       tCards('briefs', { count: limits.maxBriefGenerations }),
       tCards('audits', { count: limits.maxSiteAudits }),
-      ...(tCards.raw(`${planId}.extras`) as string[]),
+    ].map((text) => ({ text }));
+    return [
+      ...items,
+      ...(aiUsage
+        ? [{ text: tCards('aiUsage', { count: aiUsage }), hint: tCards('aiUsageHint') }]
+        : []),
+      ...(tCards.raw(`${planId}.extras`) as string[]).map((text) => ({ text })),
     ];
   }
 
@@ -193,9 +204,18 @@ export function PlanSwitcher({ subscription, onUpdate }: PlanSwitcherProps) {
 
                 <ul className="mb-4 space-y-1.5 text-sm">
                   {planFeatures(planId).map((feature) => (
-                    <li key={feature} className="flex items-start gap-2">
+                    <li key={feature.text} className="flex items-start gap-2">
                       <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-600 dark:text-emerald-400" />
-                      <span>{feature}</span>
+                      <span
+                        title={feature.hint}
+                        className={
+                          feature.hint
+                            ? 'cursor-help underline decoration-dotted underline-offset-4'
+                            : undefined
+                        }
+                      >
+                        {feature.text}
+                      </span>
                     </li>
                   ))}
                 </ul>

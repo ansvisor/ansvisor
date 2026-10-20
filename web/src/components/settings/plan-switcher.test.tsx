@@ -67,6 +67,7 @@ describe('the plan cards', () => {
         'ChatGPT & Microsoft Copilot tracking',
         '10 content briefs a month',
         '100 site audits a month',
+        '1x AI usage',
         'MCP & API access',
       ],
       Growth: [
@@ -76,11 +77,17 @@ describe('the plan cards', () => {
         'ChatGPT, Perplexity, Gemini, Microsoft Copilot, Google AI Mode and Google AI Overviews tracking',
         '50 content briefs a month',
         '500 site audits a month',
+        '5x AI usage',
         'Multi-region tracking',
         'White-label reports & Looker Studio',
       ],
     });
     expect(container.textContent).not.toContain('8 answer engines');
+    // AI usage says what it covers on hover.
+    const ai = [...container.querySelectorAll('li span')].find(
+      (el) => el.textContent === '5x AI usage',
+    );
+    expect(ai?.getAttribute('title')).toContain('Improve suggestions and the Content Editor');
     expect(container.textContent).toContain(
       'For small teams getting started with AI visibility monitoring and optimization.',
     );
