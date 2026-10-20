@@ -610,6 +610,7 @@ export type Database = {
           created_at: string
           description: string | null
           ga_property_id: string | null
+          gsc_pages_backfill_from: string | null
           gsc_pages_backfilled_property: string | null
           gsc_property: string | null
           id: string
@@ -632,6 +633,7 @@ export type Database = {
           created_at?: string
           description?: string | null
           ga_property_id?: string | null
+          gsc_pages_backfill_from?: string | null
           gsc_pages_backfilled_property?: string | null
           gsc_property?: string | null
           id?: string
@@ -654,6 +656,7 @@ export type Database = {
           created_at?: string
           description?: string | null
           ga_property_id?: string | null
+          gsc_pages_backfill_from?: string | null
           gsc_pages_backfilled_property?: string | null
           gsc_property?: string | null
           id?: string
