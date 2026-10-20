@@ -57,7 +57,8 @@ export const GETTING_STARTED_STEPS: readonly GettingStartedStepDef[] = [
   { key: 'snippet', stage: 'setup', href: '/dashboard/traffic' },
   { key: 'visibility', stage: 'explore', href: '/dashboard/insights' },
   { key: 'answers', stage: 'explore', href: '/dashboard/prompts/tracked' },
-  { key: 'data_prompts', stage: 'explore', href: '/dashboard/prompts/suggestions' },
+  // Opens on Prompt Suggestions' "From your data" filter.
+  { key: 'data_prompts', stage: 'explore', href: '/dashboard/prompts/suggestions?source=data' },
   { key: 'mentions', stage: 'explore', href: '/dashboard/mentions' },
   { key: 'citations', stage: 'explore', href: '/dashboard/citations' },
   { key: 'traffic', stage: 'explore', href: '/dashboard/traffic' },

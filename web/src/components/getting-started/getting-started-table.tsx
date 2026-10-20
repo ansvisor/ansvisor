@@ -87,7 +87,7 @@ export function StepStatusBadge({ state }: { state: GettingStartedState }) {
 }
 
 /** Getting started is everyone's: the workspace's first members, then a count. */
-function WorkspaceAvatars({ members }: { members: TeamMember[] }) {
+export function WorkspaceAvatars({ members }: { members: TeamMember[] }) {
   const t = useTranslations('actionCenter.gettingStarted');
   if (members.length === 0) return <span className="text-xs text-muted-foreground">—</span>;
   const shown = members.slice(0, 3);
@@ -114,11 +114,14 @@ export function GettingStartedTable({
   steps,
   members,
   onSelect,
+  selectedKey,
   showNote,
 }: {
   steps: GettingStartedStep[];
   members: TeamMember[];
   onSelect: (step: GettingStartedStep) => void;
+  /** The step whose card is open. */
+  selectedKey: string | null;
   /** Says where the AI actions will appear, while there are none yet. */
   showNote: boolean;
 }) {
@@ -147,7 +150,12 @@ export function GettingStartedTable({
             return (
               <TableRow
                 key={step.key}
-                className={waiting ? 'cursor-default' : 'cursor-pointer'}
+                aria-selected={step.key === selectedKey}
+                className={cn(
+                  waiting ? 'cursor-default' : 'cursor-pointer',
+                  step.key === selectedKey &&
+                    'bg-muted/50 shadow-[inset_3px_0_0_var(--foreground)]',
+                )}
                 onClick={() => onSelect(step)}
               >
                 <TableCell className="max-w-[380px]">

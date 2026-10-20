@@ -7,6 +7,7 @@ import {
   buildGettingStarted,
   type GettingStartedFacts,
   type GettingStartedStatus,
+  type GettingStartedStep,
 } from '@/lib/getting-started/steps';
 
 /**
@@ -81,10 +82,30 @@ vi.mock('@/components/action-center/action-center-tabs', () => ({ ActionCenterTa
 vi.mock('@/components/action-center/action-table', () => ({ ActionTable: () => null }));
 vi.mock('@/components/action-center/action-drawer', () => ({ ActionDrawer: () => null }));
 vi.mock('@/components/getting-started/getting-started-table', () => ({
-  GettingStartedTable: ({ steps, showNote }: { steps: unknown[]; showNote: boolean }) => (
-    <div data-testid="steps">{`${steps.length} steps${showNote ? ', with the note' : ''}`}</div>
+  GettingStartedTable: ({
+    steps,
+    showNote,
+    onSelect,
+  }: {
+    steps: GettingStartedStep[];
+    showNote: boolean;
+    onSelect: (step: GettingStartedStep) => void;
+  }) => (
+    <div data-testid="steps">
+      <span data-testid="steps-summary">{`${steps.length} steps${showNote ? ', with the note' : ''}`}</span>
+      {steps.map((step) => (
+        <button key={step.key} data-step={step.key} onClick={() => onSelect(step)}>
+          {step.key}
+        </button>
+      ))}
+    </div>
   ),
   readyWhenKey: () => 'setup',
+}));
+vi.mock('@/components/getting-started/step-card', () => ({
+  GettingStartedStepCard: ({ step }: { step: GettingStartedStep }) => (
+    <div data-testid="card">{step.key}</div>
+  ),
 }));
 
 const { default: ActionCenterActionsPage } = await import('./page');
@@ -205,12 +226,31 @@ describe('Getting started in the actions list', () => {
     getGettingStarted.mockResolvedValue(started());
     await render();
 
-    expect(steps()?.textContent).toBe('17 steps, with the note');
+    expect(container.querySelector('[data-testid="steps-summary"]')?.textContent).toBe(
+      '17 steps, with the note',
+    );
     expect(text()).toContain('card.title');
     expect(text().match(/firstSignals/g)).toHaveLength(3);
     // Getting started takes Highest Priority's place; the filters are for actions.
     expect(text()).not.toContain('cards.priority');
     expect(exportButton()).toBeUndefined();
+  });
+
+  it("opens a step's card, and says when a step still waiting for data opens", async () => {
+    getGettingStarted.mockResolvedValue(started());
+    await render();
+    const card = () => container.querySelector('[data-testid="card"]');
+    expect(card()).toBeNull();
+
+    const stepButton = (key: string) =>
+      container.querySelector<HTMLButtonElement>(`[data-step="${key}"]`)!;
+    await act(async () => stepButton('competitors').click());
+    expect(card()?.textContent).toBe('competitors');
+
+    // Mentions waits for the first answers.
+    await act(async () => stepButton('mentions').click());
+    expect(toast).toHaveBeenCalledWith('opensWhenReady');
+    expect(card()?.textContent).toBe('competitors');
   });
 
   it('keeps a category the URL names, and lists the actions', async () => {

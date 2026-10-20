@@ -60,6 +60,7 @@ import {
   readyWhenKey,
 } from '@/components/getting-started/getting-started-table';
 import { GettingStartedSummaryCard } from '@/components/getting-started/summary-card';
+import { GettingStartedStepCard } from '@/components/getting-started/step-card';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -137,6 +138,8 @@ function ActionsContent({ brand }: { brand: Brand }) {
   // Null for a brand that doesn't run Getting started, or when it can't be
   // read: the page is then exactly as without it.
   const [gettingStarted, setGettingStarted] = useState<GettingStartedStatus | null>(null);
+  // The step whose card is open.
+  const [stepKey, setStepKey] = useState<string | null>(null);
   const [members, setMembers] = useState<TeamMember[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [loadFailed, setLoadFailed] = useState(false);
@@ -245,17 +248,20 @@ function ActionsContent({ brand }: { brand: Brand }) {
     }
   }, [gettingStarted, category]);
 
+  const refreshSteps = useCallback(() => {
+    getGettingStarted(brand.id)
+      .then((started) => {
+        if (started && mounted.current) setGettingStarted(started);
+      })
+      .catch(() => {});
+  }, [brand.id]);
+
   // A step is done in another tab (its page opens in one): read the steps
   // again when this tab is back in front.
   useEffect(() => {
     if (!startedActive) return;
     const refresh = () => {
-      if (document.visibilityState !== 'visible') return;
-      getGettingStarted(brand.id)
-        .then((started) => {
-          if (started && mounted.current) setGettingStarted(started);
-        })
-        .catch(() => {});
+      if (document.visibilityState === 'visible') refreshSteps();
     };
     window.addEventListener('focus', refresh);
     document.addEventListener('visibilitychange', refresh);
@@ -263,20 +269,17 @@ function ActionsContent({ brand }: { brand: Brand }) {
       window.removeEventListener('focus', refresh);
       document.removeEventListener('visibilitychange', refresh);
     };
-  }, [startedActive, brand.id]);
+  }, [startedActive, refreshSteps]);
 
+  // A step opens its card; one still waiting for its data says when it opens.
   const openStep = (step: GettingStartedStep) => {
     if (step.state === 'waiting') {
       toast(tStarted('opensWhenReady', { when: tStarted(`readyWhen.${readyWhenKey(step)}`) }));
       return;
     }
-    // The last step points at the actions themselves.
-    if (step.key === 'ready') {
-      setCategory('all');
-      return;
-    }
-    window.open(step.href, '_blank', 'noopener');
+    setStepKey(step.key);
   };
+  const closeStep = useCallback(() => setStepKey(null), []);
 
   // A change made in the drawer, shown in its row at once: reading the whole
   // list again after each one held the drawer for seconds.
@@ -501,6 +504,7 @@ function ActionsContent({ brand }: { brand: Brand }) {
 
   const list = actions ?? [];
   const showSteps = startedActive && gettingStarted !== null && category === GETTING_STARTED;
+  const openCard = showSteps ? gettingStarted.steps.find((s) => s.key === stepKey) : undefined;
   // Before the first signals, the cards that rank actions have nothing to say.
   const noActions = list.length === 0;
   const showStepsCategory = () => {
@@ -518,7 +522,8 @@ function ActionsContent({ brand }: { brand: Brand }) {
       : { value, sub, isActive: focus === card, onClick: () => toggleFocus(card) };
 
   return (
-    <div className="space-y-4">
+    // With a step's card open, the list makes room for it on wide screens.
+    <div className={cn('space-y-4', openCard && 'min-[1300px]:pr-[440px]')}>
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
         {startedActive && gettingStarted && (
           <GettingStartedSummaryCard
@@ -688,6 +693,7 @@ function ActionsContent({ brand }: { brand: Brand }) {
           steps={gettingStarted.steps}
           members={members}
           onSelect={openStep}
+          selectedKey={openCard?.key ?? null}
           showNote={noActions}
         />
       ) : visible.length > 0 ? (
@@ -706,6 +712,20 @@ function ActionsContent({ brand }: { brand: Brand }) {
             {t('filters.clear')}
           </Button>
         </div>
+      )}
+
+      {openCard && (
+        <GettingStartedStepCard
+          brandId={brand.id}
+          step={openCard}
+          members={members}
+          onClose={closeStep}
+          onChanged={refreshSteps}
+          onReady={() => {
+            closeStep();
+            setCategory('all');
+          }}
+        />
       )}
 
       <ActionDrawer
