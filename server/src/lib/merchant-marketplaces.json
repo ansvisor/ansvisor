@@ -1,0 +1,86 @@
+{
+  "amazon": {
+    "hosts": [
+      "amazon.com",
+      "amazon.ca",
+      "amazon.com.mx",
+      "amazon.com.br",
+      "amazon.co.uk",
+      "amazon.de",
+      "amazon.fr",
+      "amazon.it",
+      "amazon.es",
+      "amazon.nl",
+      "amazon.se",
+      "amazon.pl",
+      "amazon.be",
+      "amazon.ie",
+      "amazon.at",
+      "amazon.ch",
+      "amazon.com.au",
+      "amazon.co.jp",
+      "amazon.in",
+      "amazon.sg",
+      "amazon.ae",
+      "amazon.sa",
+      "amazon.com.tr",
+      "amazon.eg"
+    ],
+    "redirects": []
+  },
+  "ebay": {
+    "hosts": [
+      "ebay.com",
+      "ebay.co.uk",
+      "ebay.de",
+      "ebay.fr",
+      "ebay.it",
+      "ebay.es",
+      "ebay.nl",
+      "ebay.pl",
+      "ebay.ie",
+      "ebay.be",
+      "ebay.ca",
+      "ebay.com.au",
+      "ebay.com.sg",
+      "ebay.com.my",
+      "ebay.ph",
+      "ebay.com.hk"
+    ],
+    "redirects": []
+  },
+  "walmart": {
+    "hosts": ["walmart.com", "walmart.ca", "walmart.com.mx"],
+    "redirects": [
+      {
+        "hosts": ["goto.walmart.com"],
+        "parameters": ["u"]
+      }
+    ]
+  },
+  "etsy": {
+    "hosts": ["etsy.com", "etsy.co.uk", "etsy.de"],
+    "redirects": []
+  },
+  "aliexpress": {
+    "hosts": ["aliexpress.com", "aliexpress.us", "aliexpress.ru"],
+    "redirects": [
+      {
+        "hosts": ["s.click.aliexpress.com"],
+        "parameters": ["dl_target_url"]
+      }
+    ]
+  },
+  "temu": {
+    "hosts": ["temu.com", "temu.co.uk", "temu.com.tr"],
+    "redirects": []
+  },
+  "trendyol": {
+    "hosts": ["trendyol.com"],
+    "redirects": []
+  },
+  "hepsiburada": {
+    "hosts": ["hepsiburada.com"],
+    "redirects": []
+  }
+}
