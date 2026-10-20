@@ -56,7 +56,7 @@
     "competitors": "Competitors",
     "citations": "Citations",
     "mentions": "Mentions",
-    "shopping": "Shopping",
+    "shopping": "Product Visibility",
     "reports": "Reports",
     "settings": "Settings",
     "analytics": "Analytics",
@@ -4281,7 +4281,7 @@
     "noBrandDescription": "Select or create a brand to see the citations AI platforms use when answering about it."
   },
   "shopping": {
-    "title": "Shopping",
+    "title": "Product Visibility",
     "description": "Product cards AI engines surface — your products versus the competitive set.",
     "kpiCardRate": "Shopping card rate",
     "kpiCardRateSub": "Tracked prompts that returned ≥1 card",
@@ -4389,7 +4389,7 @@
       "promptPerformance": "Prompts",
       "queryFanout": "Fan-out",
       "aiTraffic": "AI Traffic",
-      "shoppingVisibility": "Shopping",
+      "shoppingVisibility": "Product Visibility",
       "auditScore": "Audit Score",
       "citations": "Citations",
       "mentionEvidence": "Mention Evidence",
@@ -4440,11 +4440,11 @@
     "aiTrafficNew": "new",
     "aiTrafficLowSample": "Low sample",
     "aiTrafficLowSampleHint": "Fewer than 30 visits in this period or the one before, so a % change would mislead.",
-    "shoppingVisibility": "Shopping Visibility",
+    "shoppingVisibility": "Product Visibility",
     "auditScore": "Site Audit Score",
     "auditedOn": "Audited on",
     "shopping": {
-      "sov": "Shopping SoV",
+      "sov": "Product SoV",
       "products": "Products Surfaced",
       "cardRate": "Card Rate",
       "topMerchant": "Top Merchant"
@@ -4717,7 +4717,8 @@
       "created": "Brand created successfully!",
       "back": "Back",
       "next": "Next",
-      "finish": "Finish Setup"
+      "finish": "Finish Setup",
+      "ecommerceDetected": "{brand} looks like an online store, so we turned on Product Visibility: ChatGPT Shopping is tracked for your prompts on plans that include it. You can turn it off in brand settings."
     },
     "settings": {
       "title": "Brand Settings",
@@ -4737,7 +4738,7 @@
       "deleteButton": "Delete Brand Permanently",
       "shopping": {
         "title": "Shopping mode",
-        "description": "Turn this on if this brand is in e-commerce. We’ll add ChatGPT Shopping to every prompt under this brand and reveal the Shopping dashboard.",
+        "description": "Turn this on if this brand is in e-commerce. We’ll add ChatGPT Shopping to every prompt under this brand and show Product Visibility in the menu.",
         "label": "This brand is in e-commerce / shopping",
         "help": "Adds <code>chatgpt-shopping</code> to every existing prompt's platform list and enables the Shopping platform on this brand.",
         "managersOnly": "Only admins and managers can change this setting.",
