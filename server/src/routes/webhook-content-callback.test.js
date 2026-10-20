@@ -10,7 +10,8 @@ vi.mock('../config/supabase.js', () => ({
   default: { from: mockFrom },
 }));
 vi.mock('../middleware/rate-limiter.js', () => ({
-  publicLimiter: (_req, _res, next) => next(),
+  webhookCallbackLimiter: (_req, _res, next) => next(),
+  webhookCallbackAuthFailureLimiter: (_req, _res, next) => next(),
 }));
 
 const { default: router } = await import('./webhook-content-callback.js');
@@ -54,13 +55,16 @@ async function startApp() {
   await new Promise((resolve) => {
     server = app.listen(0, resolve);
   });
-  baseUrl = 'http://127.0.0.1:' + server.address().port + '/webhooks/content/opp-1/status';
+  baseUrl =
+    'http://127.0.0.1:' +
+    server.address().port +
+    '/webhooks/content/5e8cd4c2-2bc4-4fb7-8711-bc0ad1bb4a29/status';
 }
 
 beforeEach(async () => {
   state.opportunities = [
     {
-      id: 'opp-1',
+      id: '5e8cd4c2-2bc4-4fb7-8711-bc0ad1bb4a29',
       brand_id: 'brand-1',
       status: 'sent',
       source_data: { kept: true },
@@ -77,8 +81,13 @@ afterEach(async () => {
   await new Promise((resolve) => server.close(resolve));
 });
 
-async function send({ secret, status = 'in_progress' } = {}) {
-  return fetch(baseUrl, {
+async function send({
+  secret,
+  status = 'in_progress',
+  id = '5e8cd4c2-2bc4-4fb7-8711-bc0ad1bb4a29',
+} = {}) {
+  const url = baseUrl.replace('5e8cd4c2-2bc4-4fb7-8711-bc0ad1bb4a29', id);
+  return fetch(url, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -99,6 +108,40 @@ describe('POST /webhooks/content/:id/status', () => {
     const response = await send({ secret: 'wrong-secret' });
     expect(response.status).toBe(401);
     expect(state.opportunities[0].status).toBe('sent');
+  });
+
+  it('rejects a secret belonging to another brand', async () => {
+    state.configs.push({
+      brand_id: 'brand-2',
+      is_active: true,
+      webhook_secret: 'other-brand-secret',
+    });
+    const response = await send({ secret: 'other-brand-secret' });
+    expect(response.status).toBe(401);
+    expect(state.opportunities[0].status).toBe('sent');
+  });
+
+  it('rejects callbacks when the active config has no secret configured', async () => {
+    state.configs[0].webhook_secret = null;
+    const response = await send({ secret: 'shared-secret' });
+    expect(response.status).toBe(401);
+    expect(state.opportunities[0].status).toBe('sent');
+  });
+
+  it('returns 401 for a valid UUID that does not exist', async () => {
+    state.opportunities = [];
+    const response = await send({
+      secret: 'shared-secret',
+      id: '3b77bbdb-df2c-44da-aa57-823d2bccb991',
+    });
+    expect(response.status).toBe(401);
+    await expect(response.json()).resolves.toEqual({ error: 'Invalid webhook credentials' });
+  });
+
+  it('returns the same 401 for a malformed identifier without querying Postgres', async () => {
+    const response = await send({ secret: 'shared-secret', id: 'not-a-uuid' });
+    expect(response.status).toBe(401);
+    expect(mockFrom).not.toHaveBeenCalled();
   });
 
   it('updates the opportunity when the webhook secret matches', async () => {
