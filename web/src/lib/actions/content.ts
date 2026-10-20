@@ -575,7 +575,12 @@ export async function getWebhookConfig(brandId: string): Promise<WebhookConfig |
 
 export async function saveWebhookConfig(
   brandId: string,
-  config: { webhookUrl: string; webhookSecret?: string; isActive?: boolean },
+  config: {
+    webhookUrl: string;
+    webhookSecret?: string;
+    events: string[];
+    isActive?: boolean;
+  },
 ): Promise<WebhookConfig> {
   const supabase = await createClient();
 
@@ -587,6 +592,7 @@ export async function saveWebhookConfig(
         name: 'Default',
         webhook_url: config.webhookUrl,
         webhook_secret: config.webhookSecret || null,
+        events: config.events,
         is_active: config.isActive ?? true,
         updated_at: new Date().toISOString(),
       },
