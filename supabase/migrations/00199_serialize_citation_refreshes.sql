@@ -1,5 +1,5 @@
 -- ============================================================================
--- 00198: the Citations rollups refresh one at a time (#1020)
+-- 00199: the Citations rollups refresh one at a time (#1020)
 -- ============================================================================
 -- refresh_citations_daily (00118) deletes a brand's citation_*_daily rows for
 -- a day range and inserts them again, with no lock and no unique key. A run's
