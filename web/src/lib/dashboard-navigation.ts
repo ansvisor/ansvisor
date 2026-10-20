@@ -50,16 +50,23 @@ export function getDashboardNavLabel(title: string, t: Translator, tBrands: Tran
 }
 
 /**
- * The submenu entry the current page belongs to: its own route or a page
- * under it (a topic's page sits under Topics). When one entry's route holds
- * another's (Opportunities is /dashboard/content, the Library is
- * /dashboard/content/library), the longer one wins, so only one is current.
+ * The submenu entry the current page belongs to: its own route, one it is
+ * `activeFor` (the editor, for the Library), or a page under either (a
+ * topic's page sits under Topics). When one entry's route holds another's
+ * (Opportunities is /dashboard/content, the Library is
+ * /dashboard/content/library), the longer match wins, so only one is current.
  */
 export function activeChildHref(children: NavChild[], pathname: string): string | null {
   let best: string | null = null;
+  let bestLength = -1;
   for (const child of children) {
-    const matches = pathname === child.href || pathname.startsWith(`${child.href}/`);
-    if (matches && (best === null || child.href.length > best.length)) best = child.href;
+    for (const route of [child.href, ...(child.activeFor ?? [])]) {
+      const matches = pathname === route || pathname.startsWith(`${route}/`);
+      if (matches && route.length > bestLength) {
+        best = child.href;
+        bestLength = route.length;
+      }
+    }
   }
   return best;
 }

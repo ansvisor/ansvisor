@@ -2,13 +2,16 @@
 
 import { useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
-import { Loader2 } from 'lucide-react';
+import { toast } from 'sonner';
+import { Loader2, Plus } from 'lucide-react';
+import { useRouter } from '@/i18n/navigation';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { getContentDrafts } from '@/lib/actions/content-drafts';
+import { createContentDraft, getContentDrafts } from '@/lib/actions/content-drafts';
 import {
   LIBRARY_TABS,
+  contentEditorPath,
   draftsInTab,
   libraryTabCounts,
   type ContentDraftListItem,
@@ -37,6 +40,8 @@ export default function ContentLibraryPage() {
   const [tab, setTab] = useState<LibraryTab>('all');
   const [read, setRead] = useState<LibraryRead | null>(null);
   const [attempt, setAttempt] = useState(0);
+  const [creating, setCreating] = useState(false);
+  const router = useRouter();
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- one read of the URL after mount
@@ -59,6 +64,21 @@ export default function ContentLibraryPage() {
     };
   }, [activeBrandId, attempt]);
 
+  // New content opens a blank draft in the editor; the Start screen (CE-015)
+  // takes this over, asking for the page type and checking overlaps first.
+  const newContent = async () => {
+    if (!activeBrandId) return;
+    setCreating(true);
+    try {
+      const id = await createContentDraft(activeBrandId);
+      router.push(contentEditorPath(id));
+    } catch (err) {
+      console.error('Failed to start a draft:', err);
+      toast.error(t('createFailed'));
+      setCreating(false);
+    }
+  };
+
   const changeTab = (next: LibraryTab) => {
     setTab(next);
     writeUrlParams({ tab: next }, { tab: 'all' });
@@ -79,9 +99,15 @@ export default function ContentLibraryPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">{t('title')}</h1>
-        <p className="text-sm text-muted-foreground">{t('description')}</p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">{t('title')}</h1>
+          <p className="text-sm text-muted-foreground">{t('description')}</p>
+        </div>
+        <Button className="gap-2" onClick={newContent} disabled={creating}>
+          {creating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+          {t('newContent')}
+        </Button>
       </div>
 
       <Tabs value={tab} onValueChange={(v) => changeTab(v as LibraryTab)}>

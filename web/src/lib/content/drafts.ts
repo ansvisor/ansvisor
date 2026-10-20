@@ -76,6 +76,19 @@ export interface ContentDraftListItem {
   updatedAt: string;
 }
 
+/** A draft as the editor opens it. */
+export interface ContentDraft {
+  id: string;
+  brandId: string;
+  title: string;
+  pageType: string | null;
+  method: DraftMethod;
+  status: DraftStatus;
+  bodyHtml: string;
+  author: 'user' | 'agent';
+  updatedAt: string;
+}
+
 export function draftsInTab(drafts: ContentDraftListItem[], tab: LibraryTab) {
   return tab === 'all' ? drafts : drafts.filter((d) => d.status === tab);
 }

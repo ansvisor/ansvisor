@@ -28,6 +28,8 @@ export type BrandPrefKey = 'shoppingModeEnabled';
 export interface NavChild {
   title: string;
   href: string;
+  /** Other routes that belong to this entry, e.g. the editor to the Library. */
+  activeFor?: string[];
 }
 
 export interface NavItem {
@@ -91,7 +93,12 @@ export const dashboardNav: NavGroup[] = [
         requiredFeature: 'content_optimization',
         children: [
           { title: 'Opportunities', href: '/dashboard/content' },
-          { title: 'Library', href: '/dashboard/content/library' },
+          // A draft opens in the editor from the Library (CE-004).
+          {
+            title: 'Library',
+            href: '/dashboard/content/library',
+            activeFor: ['/dashboard/content/editor'],
+          },
         ],
       },
       {

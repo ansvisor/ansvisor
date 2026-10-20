@@ -48,7 +48,11 @@ describe('getDashboardNavLabel', () => {
     expect(content.href).toBe('/dashboard/content');
     expect(content.children).toEqual([
       { title: 'Opportunities', href: '/dashboard/content' },
-      { title: 'Library', href: '/dashboard/content/library' },
+      {
+        title: 'Library',
+        href: '/dashboard/content/library',
+        activeFor: ['/dashboard/content/editor'],
+      },
     ]);
   });
 
@@ -132,6 +136,15 @@ describe('activeChildHref', () => {
     expect(activeChildHref(content, '/dashboard/content/library')).toBe(
       '/dashboard/content/library',
     );
+  });
+
+  it('marks the Library while a draft is open in the editor', () => {
+    const items = dashboardNav.flatMap((group) => group.items);
+    const children = items.find((item) => item.title === 'Content')!.children!;
+    expect(activeChildHref(children, '/dashboard/content/editor/d1')).toBe(
+      '/dashboard/content/library',
+    );
+    expect(activeChildHref(children, '/dashboard/content/3f2a')).toBe('/dashboard/content');
   });
 
   it('keeps an opportunity’s own page under Opportunities', () => {

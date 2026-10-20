@@ -3102,7 +3102,66 @@
         "published": "Nothing published yet."
       },
       "loadError": "Couldn't load the Library.",
-      "retry": "Try again"
+      "retry": "Try again",
+      "newContent": "New content",
+      "createFailed": "Couldn't start a draft. Try again."
+    },
+    "editor": {
+      "back": "Back to the Library",
+      "untitled": "Untitled",
+      "newPage": "New page",
+      "placeholder": "Start with the page's H1, then write…",
+      "documentLabel": "Page content",
+      "markReady": "Mark ready",
+      "markedReady": "Marked ready. Publish it on your site when you're ready.",
+      "markReadyFailed": "Couldn't mark it ready. Try again.",
+      "loadError": "Couldn't open this draft.",
+      "notFound": "This draft doesn't exist, or it belongs to another workspace.",
+      "retryLoad": "Try again",
+      "save": {
+        "saved": "Saved",
+        "unsaved": "Unsaved changes",
+        "saving": "Saving…",
+        "failed": "Couldn't save.",
+        "retry": "Retry"
+      },
+      "toolbar": {
+        "label": "Formatting",
+        "h1": "Heading 1",
+        "h2": "Heading 2",
+        "h3": "Heading 3",
+        "bold": "Bold",
+        "italic": "Italic",
+        "link": "Link",
+        "bulletList": "Bulleted list",
+        "orderedList": "Numbered list",
+        "quote": "Quote",
+        "table": "Insert a table",
+        "image": "Insert an image",
+        "addRow": "Add a row below",
+        "addColumn": "Add a column to the right",
+        "deleteTable": "Delete the table",
+        "counter": "{count} / {target} characters"
+      },
+      "link": {
+        "title": "Add a link",
+        "editTitle": "Edit the link",
+        "label": "Address",
+        "placeholder": "https://… or /a-page-on-your-site",
+        "invalid": "Enter a web address (https://…), a path on your site (/…) or an e-mail (mailto:…).",
+        "remove": "Remove the link",
+        "cancel": "Cancel",
+        "apply": "Apply"
+      },
+      "image": {
+        "title": "Insert an image",
+        "srcLabel": "Image address",
+        "altLabel": "Alt text",
+        "altPlaceholder": "What the image shows",
+        "invalid": "Enter the image's web address (https://…).",
+        "cancel": "Cancel",
+        "insert": "Insert"
+      }
     },
     "status": {
       "draft": "Draft",
