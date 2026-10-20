@@ -53,6 +53,7 @@ describe('AI bot connection actions', () => {
           secret: 'abot_x',
           endpoint: 'https://api.test/bots/ingest',
           workerScript: '// worker',
+          workerSecretName: 'ANSVISOR_BOT_SECRET',
           logpushJob: null,
           vercelDrain: null,
         },
@@ -63,6 +64,7 @@ describe('AI bot connection actions', () => {
     expect(made).toMatchObject({
       secret: 'abot_x',
       workerScript: '// worker',
+      workerSecretName: 'ANSVISOR_BOT_SECRET',
       connection: { id: 'c2' },
     });
     expect(fetchMock.mock.calls[0][1]).toMatchObject({

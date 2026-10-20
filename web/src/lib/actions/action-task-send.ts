@@ -11,12 +11,12 @@ export async function hasActiveWebhook(brandId: string): Promise<boolean> {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from('webhook_configs')
-    .select('id')
+    .select('id, events')
     .eq('brand_id', brandId)
     .eq('is_active', true)
     .limit(1);
   if (error) return false;
-  return (data ?? []).length > 0;
+  return (data ?? []).some((config) => config.events?.includes('action_task.sent'));
 }
 
 /**

@@ -21,7 +21,7 @@ import {
   newConnectionSecret,
   publicIngestEndpoint,
 } from '../lib/bot-ingest.js';
-import { buildWorkerScript } from '../lib/bot-worker-script.js';
+import { WORKER_SECRET_NAME, buildWorkerScript } from '../lib/bot-worker-script.js';
 import { logpushJob, vercelDrain } from '../lib/bot-sender-setup.js';
 
 const router = Router();
@@ -124,7 +124,9 @@ router.post('/connections/:brandId', async (req, res) => {
       connection,
       secret,
       endpoint,
-      workerScript: kind === 'cloudflare_worker' ? buildWorkerScript({ endpoint, secret }) : null,
+      // The Worker reads the secret from a Secret of this name, not from its code.
+      workerScript: kind === 'cloudflare_worker' ? buildWorkerScript({ endpoint }) : null,
+      workerSecretName: kind === 'cloudflare_worker' ? WORKER_SECRET_NAME : null,
       logpushJob: kind === 'cloudflare_logpush' ? logpushJob({ endpoint, secret }) : null,
       vercelDrain: kind === 'vercel_drain' ? vercelDrain({ endpoint, secret }) : null,
     });
