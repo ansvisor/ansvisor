@@ -16,11 +16,17 @@ let calls: Call[];
 // What the next update returns: its row, or none (RLS, or not found).
 let updated: Record<string, unknown> | null;
 let row: Record<string, unknown> | null;
+// What a list read returns (History's versions).
+let list: Record<string, unknown>[];
+// Database functions called, and what the next one returns.
+let rpcCalls: [string, unknown][];
+let rpcResult: { data: unknown; error: { message: string } | null };
 
 vi.mock('@/lib/action-center/assignees', () => ({ readAssignees: vi.fn(async () => new Map()) }));
 vi.mock('@/lib/supabase/server', () => ({
   createClient: vi.fn(async () => ({
     auth: { getUser: async () => ({ data: { user: { id: 'u1' } } }) },
+    rpc: async (name: string, args: unknown) => (rpcCalls.push([name, args]), rpcResult),
     from: () => {
       const call: Call = { op: 'select', filters: [] };
       calls.push(call);
@@ -34,6 +40,9 @@ vi.mock('@/lib/supabase/server', () => ({
         select: () => chain,
         eq: (col: string, v: unknown) => (call.filters.push(['eq', col, v]), chain),
         in: (col: string, v: unknown) => (call.filters.push(['in', col, v]), chain),
+        gte: (col: string, v: unknown) => (call.filters.push(['gte', col, v]), chain),
+        order: () => chain,
+        limit: async () => ({ data: list, error: null }),
         update: (value: unknown) => ((call.op = 'update'), (call.value = value), chain),
         insert: (value: unknown) => ((call.op = 'insert'), (call.value = value), chain),
         maybeSingle: async () => result(),
@@ -44,13 +53,23 @@ vi.mock('@/lib/supabase/server', () => ({
   })),
 }));
 
-const { getContentDraft, markContentDraftReady, saveContentDraft, setContentDraftPageType } =
-  await import('./content-drafts');
+const {
+  createContentDraft,
+  getContentDraft,
+  getDraftVersions,
+  markContentDraftReady,
+  restoreDraftVersion,
+  saveContentDraft,
+  setContentDraftPageType,
+} = await import('./content-drafts');
 
 beforeEach(() => {
   calls = [];
   updated = null;
   row = null;
+  list = [];
+  rpcCalls = [];
+  rpcResult = { data: 'v-new', error: null };
 });
 
 describe('saveContentDraft', () => {
@@ -192,6 +211,88 @@ describe('markContentDraftReady', () => {
 
   it('says so when the draft isn’t the member’s', async () => {
     await expect(markContentDraftReady(DRAFT)).rejects.toThrow('not_found');
+  });
+
+  it('keeps the ready page in History, and only when it became ready', async () => {
+    updated = { status: 'ready' };
+    await markContentDraftReady(DRAFT);
+    expect(rpcCalls).toEqual([
+      ['content_draft_snapshot', { p_draft_id: DRAFT, p_origin: 'ready' }],
+    ]);
+
+    rpcCalls = [];
+    updated = null;
+    row = { id: DRAFT, brand_id: 'b1', status: 'ready', author: 'user' };
+    await markContentDraftReady(DRAFT);
+    expect(rpcCalls).toEqual([]);
+  });
+
+  it('is ready even when History couldn’t keep the version', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    updated = { status: 'ready' };
+    rpcResult = { data: null, error: { message: 'timeout' } };
+    await expect(markContentDraftReady(DRAFT)).resolves.toBe('ready');
+    expect(error).toHaveBeenCalled();
+    error.mockRestore();
+  });
+});
+
+describe('History', () => {
+  const BRAND = '9a1b2c3d-4e5f-4a6b-8c7d-0e1f2a3b4c5d';
+  const start = {
+    method: 'optimize' as const,
+    title: 'Pricing',
+    pageType: 'pricing' as const,
+    source: { kind: 'content' as const },
+  };
+
+  it('starts a page brought in from its address with the live page', async () => {
+    await createContentDraft(BRAND, {
+      ...start,
+      bodyHtml: '<h1>Pricing</h1>',
+      sourceUrl: 'https://acme.example/pricing',
+    });
+    expect(rpcCalls).toEqual([
+      ['content_draft_snapshot', { p_draft_id: 'new-draft', p_origin: 'import' }],
+    ]);
+
+    rpcCalls = [];
+    await createContentDraft(BRAND, { ...start, bodyHtml: '<h1>Pasted</h1>' });
+    await createContentDraft(BRAND, { ...start, sourceUrl: 'https://acme.example/pricing' });
+    expect(rpcCalls).toEqual([]);
+  });
+
+  it('lists the versions of the last 90 days, the known origins only', async () => {
+    list = [
+      { id: 'v2', origin: 'ready', title: 'A', created_at: '2026-10-20T10:00:00Z' },
+      { id: 'v3', origin: 'something_new', title: 'B', created_at: '2026-10-19T10:00:00Z' },
+      { id: 'v1', origin: 'import', title: 'C', created_at: '2026-10-12T10:00:00Z' },
+    ];
+    await expect(getDraftVersions(DRAFT)).resolves.toEqual([
+      { id: 'v2', origin: 'ready', title: 'A', createdAt: '2026-10-20T10:00:00Z' },
+      { id: 'v1', origin: 'import', title: 'C', createdAt: '2026-10-12T10:00:00Z' },
+    ]);
+    const [, since] = calls[0].filters.find(([op]) => op === 'gte')!.slice(1);
+    const days = (Date.now() - Date.parse(since as string)) / (24 * 60 * 60 * 1000);
+    expect(Math.round(days)).toBe(90);
+    expect(calls[0].filters).toContainEqual(['eq', 'draft_id', DRAFT]);
+  });
+
+  it('restores a version and returns the page the server has now', async () => {
+    rpcResult = {
+      data: { title: 'Old', bodyHtml: '<h1>Old</h1>', updatedAt: '2026-10-21T10:00:00Z' },
+      error: null,
+    };
+    await expect(restoreDraftVersion(DRAFT)).resolves.toEqual({
+      title: 'Old',
+      bodyHtml: '<h1>Old</h1>',
+      updatedAt: '2026-10-21T10:00:00Z',
+    });
+    expect(rpcCalls).toEqual([['content_draft_restore', { p_version_id: DRAFT }]]);
+
+    rpcResult = { data: null, error: null };
+    await expect(restoreDraftVersion(DRAFT)).rejects.toThrow('not_found');
+    await expect(restoreDraftVersion('../etc')).rejects.toThrow('invalid');
   });
 });
 

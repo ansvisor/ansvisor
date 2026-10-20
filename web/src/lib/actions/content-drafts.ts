@@ -39,6 +39,14 @@ import {
 } from '@/lib/content/brief';
 import type { ContentBrief } from '@/types';
 import {
+  HISTORY_DAYS,
+  HISTORY_LIMIT,
+  isVersionOrigin,
+  type DraftVersion,
+  type RestoredDraft,
+  type VersionOrigin,
+} from '@/lib/content/history';
+import {
   DRAFT_SOURCE_KINDS,
   SOURCES_DAYS,
   normalizeQuery,
@@ -507,6 +515,8 @@ export async function createContentDraft(brandId: string, start: DraftStart): Pr
     .select('id')
     .single();
   if (error) throw new Error(error.message);
+  // A page brought in from its address starts History as the live page.
+  if (sourceUrl && bodyHtml !== undefined) await keepVersion(supabase, data.id, 'import');
   return data.id;
 }
 
@@ -598,10 +608,72 @@ export async function markContentDraftReady(id: string): Promise<DraftStatus> {
     .select('status')
     .maybeSingle();
   if (error) throw new Error(error.message);
-  if (data) return draftStatus(data.status);
+  if (data) {
+    await keepVersion(supabase, id, 'ready');
+    return draftStatus(data.status);
+  }
   const current = await getContentDraft(id);
   if (!current) throw new Error('not_found');
   return current.status;
+}
+
+/**
+ * Keeps the draft as it is now in its History (CE-018, 00215
+ * content_draft_snapshot). A failure is logged, not thrown: the step it
+ * records has already happened.
+ */
+async function keepVersion(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  id: string,
+  origin: Exclude<VersionOrigin, 'restore'>,
+): Promise<void> {
+  const { error } = await supabase.rpc('content_draft_snapshot', {
+    p_draft_id: id,
+    p_origin: origin,
+  });
+  if (error) console.error(`Failed to keep the draft's ${origin} version:`, error.message);
+}
+
+/** History (CE-018): the draft's versions of the last 90 days, the latest first. */
+export async function getDraftVersions(id: string): Promise<DraftVersion[]> {
+  if (!draftId.safeParse(id).success) throw new Error('invalid');
+  const supabase = await createClient();
+  const since = new Date(Date.now() - HISTORY_DAYS * 24 * 60 * 60 * 1000).toISOString();
+  const { data, error } = await supabase
+    .from('content_draft_versions')
+    .select('id, origin, title, created_at')
+    .eq('draft_id', id)
+    .gte('created_at', since)
+    .order('created_at', { ascending: false })
+    .limit(HISTORY_LIMIT);
+  if (error) throw new Error(error.message);
+  return (data ?? []).flatMap((row) =>
+    isVersionOrigin(row.origin)
+      ? [{ id: row.id, origin: row.origin, title: row.title, createdAt: row.created_at }]
+      : [],
+  );
+}
+
+/**
+ * Restores a version (CE-018): the draft as it is now is kept in History
+ * first, so nothing is lost, then takes the version's title and body
+ * (00215 content_draft_restore). Throws 'not_found' when the version is
+ * unknown, past its 90 days, or another organization's.
+ */
+export async function restoreDraftVersion(versionId: string): Promise<RestoredDraft> {
+  if (!draftId.safeParse(versionId).success) throw new Error('invalid');
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc('content_draft_restore', {
+    p_version_id: versionId,
+  });
+  if (error) throw new Error(error.message);
+  if (!data) throw new Error('not_found');
+  const restored = data as unknown as RestoredDraft;
+  return {
+    title: restored.title,
+    bodyHtml: restored.bodyHtml,
+    updatedAt: restored.updatedAt,
+  };
 }
 
 /**

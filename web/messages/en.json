@@ -3349,6 +3349,39 @@
         "insert": "Add block"
       },
       "markedReady": "Marked ready. Publish it on your site when you're ready.",
+      "history": {
+        "button": "History",
+        "hint": "Earlier versions of this page, to restore any of them",
+        "title": "Version history",
+        "kept": "kept {days} days",
+        "now": "Now",
+        "nowNote": "This draft, as you see it",
+        "loading": "Reading the history…",
+        "failed": "Couldn't read the history. Try again.",
+        "empty": "No earlier versions yet. Mark ready keeps one.",
+        "today": "Today {time}",
+        "origin": {
+          "import": "Live page",
+          "agent_before": "Before agent changes",
+          "ready": "Marked ready",
+          "publish": "Published",
+          "restore": "Before a restore"
+        },
+        "note": {
+          "import": "imported from the URL",
+          "agent_before": "auto-saved",
+          "ready": "kept on Mark ready",
+          "publish": "kept on publish",
+          "restore": "kept when another version was restored"
+        },
+        "restore": "Restore",
+        "restoreLabel": "Restore {version}, {when}",
+        "footer": "Restoring makes a new version. Nothing is lost.",
+        "restored": "Restored “{version}”. The page before it is in History.",
+        "restoreFailed": "Couldn't restore it. Try again.",
+        "htmlOpen": "Go back to the page to use History",
+        "restoring": "Restoring…"
+      },
       "markReadyFailed": "Couldn't mark it ready. Try again.",
       "loadError": "Couldn't open this draft.",
       "notFound": "This draft doesn't exist, or it belongs to another workspace.",

@@ -14,8 +14,13 @@ import { Link } from '@/i18n/navigation';
 import { Button } from '@/components/ui/button';
 import { buttonVariants } from '@/components/ui/button-variants';
 import { DraftMethodBadge, DraftStatusBadge } from '@/components/content/draft-badges';
-import { markContentDraftReady, setContentDraftPageType } from '@/lib/actions/content-drafts';
+import {
+  markContentDraftReady,
+  restoreDraftVersion,
+  setContentDraftPageType,
+} from '@/lib/actions/content-drafts';
 import { CONTENT_LIBRARY_PATH, type ContentDraft, type PageType } from '@/lib/content/drafts';
+import type { DraftVersion } from '@/lib/content/history';
 import {
   cleanHtml,
   formatHtmlSource,
@@ -27,6 +32,7 @@ import { JsonLd } from '@/lib/content/json-ld-node';
 import { detectPageType } from '@/lib/content/page-types';
 import { cn } from '@/lib/utils';
 import { DropOverlay, useAttachments } from './_attach';
+import { HistoryMenu } from './_history-menu';
 import { HtmlBlock, copyToClipboard } from './_html-block';
 import { PageTypeMenu } from './_page-type-menu';
 import { EditorSidePanel, useSidePanelOpen } from './_side-panel';
@@ -66,7 +72,8 @@ const DOCUMENT_CLASS = cn(
  * beside the page or closed from the header, shows what the page earns
  * (Impact, CE-016), its brief and the sources it draws on (CE-007, CE-008)
  * and the rules it is written to (CE-009); the header's chip says how many
- * of those rules the page meets now.
+ * of those rules the page meets now. History keeps earlier versions (the
+ * imported live page, each Mark ready) and restores any of them (CE-018).
  */
 export function DraftEditor({ draft }: { draft: ContentDraft }) {
   const t = useTranslations('contentEditor.editor');
@@ -76,6 +83,7 @@ export function DraftEditor({ draft }: { draft: ContentDraft }) {
   const [pageHtml, setPageHtml] = useState(draft.bodyHtml);
   const [status, setStatus] = useState(draft.status);
   const [marking, setMarking] = useState(false);
+  const [restoring, setRestoring] = useState(false);
   // A picked page type, or the one the page shows as it is written.
   const [picked, setPicked] = useState(draft.pageTypeSource === 'user' ? draft.pageType : null);
   const [detectedType, setDetectedType] = useState(() =>
@@ -258,8 +266,9 @@ export function DraftEditor({ draft }: { draft: ContentDraft }) {
   const markReady = async () => {
     setMarking(true);
     try {
-      // What's waiting goes out first, so the ready draft is the one on screen.
-      await autosave.retry();
+      // What's waiting goes out first, so the ready draft (and the version
+      // History keeps of it) is the one on screen.
+      await autosave.settle();
       const next = await markContentDraftReady(draft.id);
       setStatus(next);
       toast.success(t('markedReady'));
@@ -268,6 +277,33 @@ export function DraftEditor({ draft }: { draft: ContentDraft }) {
       toast.error(t('markReadyFailed'));
     } finally {
       setMarking(false);
+    }
+  };
+
+  // A version from History replaces the page: what's waiting is saved first,
+  // as the server keeps the page it replaces, and the page can't change
+  // while the restore runs.
+  const restoreVersion = async (version: DraftVersion, label: string) => {
+    if (!editor || restoring) return;
+    setRestoring(true);
+    editor.setEditable(false, false);
+    try {
+      await autosave.settle();
+      const restored = await restoreDraftVersion(version.id);
+      editor.commands.setContent(restored.bodyHtml, { emitUpdate: false });
+      // The server has this page now: nothing from before it is still to save.
+      autosave.discard();
+      const html = editor.getHTML();
+      setTitle(restored.title);
+      setPageHtml(html);
+      setDetectedType(detectPageType({ title: restored.title, html }, draft.siteType));
+      toast.success(t('history.restored', { version: label }));
+    } catch (err) {
+      console.error('Failed to restore the version:', err);
+      toast.error(t('history.restoreFailed'));
+    } finally {
+      editor.setEditable(true, false);
+      setRestoring(false);
     }
   };
 
@@ -341,6 +377,17 @@ export function DraftEditor({ draft }: { draft: ContentDraft }) {
         </button>
         <div className="ml-auto flex shrink-0 items-center gap-3">
           <SaveIndicator state={autosave.state} onRetry={() => void autosave.retry()} />
+          <HistoryMenu
+            draftId={draft.id}
+            disabled={
+              htmlSource !== null
+                ? t('history.htmlOpen')
+                : restoring
+                  ? t('history.restoring')
+                  : null
+            }
+            onRestore={(version, label) => void restoreVersion(version, label)}
+          />
           <Button
             variant="outline"
             size="sm"

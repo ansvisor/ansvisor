@@ -18,7 +18,11 @@ const rebuildDraftBrief = vi.fn();
 const saveDraftRules = vi.fn();
 const getMyRuleSets = vi.fn();
 const saveMyRuleSet = vi.fn();
+const getDraftVersions = vi.fn();
+const restoreDraftVersion = vi.fn();
 vi.mock('@/lib/actions/content-drafts', () => ({
+  getDraftVersions: (...args: unknown[]) => getDraftVersions(...args),
+  restoreDraftVersion: (...args: unknown[]) => restoreDraftVersion(...args),
   getMyRuleSets: (...args: unknown[]) => getMyRuleSets(...args),
   saveMyRuleSet: (...args: unknown[]) => saveMyRuleSet(...args),
   saveDraftRules: (...args: unknown[]) => saveDraftRules(...args),
@@ -161,6 +165,8 @@ beforeEach(() => {
   saveDraftRules.mockReset().mockResolvedValue(undefined);
   getMyRuleSets.mockReset().mockResolvedValue({});
   saveMyRuleSet.mockReset().mockResolvedValue(undefined);
+  getDraftVersions.mockReset().mockResolvedValue([]);
+  restoreDraftVersion.mockReset();
   localStorage.clear();
   brandState.activeBrandId = 'b1';
   brandState.setActiveBrand.mockReset();
@@ -340,6 +346,126 @@ describe('the content editor', () => {
     expect(toast.success).toHaveBeenCalled();
     expect(container.querySelector('header')!.textContent).toContain('Ready');
     expect(button('Mark ready')!.disabled).toBe(true);
+  });
+
+  describe('history', () => {
+    const versions = [
+      {
+        id: 'v2',
+        origin: 'ready',
+        title: 'Pipeline forecasting',
+        createdAt: '2026-10-19T09:00:00Z',
+      },
+      { id: 'v1', origin: 'import', title: 'Old title', createdAt: '2026-10-12T09:42:00Z' },
+    ];
+    /** Opens History and returns its versions. */
+    async function openHistory() {
+      const trigger = button('History')!;
+      await act(async () => {
+        trigger.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
+        trigger.click();
+      });
+      await act(async () => {});
+      return [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')];
+    }
+
+    it('lists earlier versions with their origin', async () => {
+      getContentDraft.mockResolvedValue(draft());
+      getDraftVersions.mockResolvedValue(versions);
+      await renderPage();
+
+      const items = await openHistory();
+      expect(getDraftVersions).toHaveBeenCalledWith('d1');
+      expect(document.body.textContent).toContain('Version history · kept 90 days');
+      expect(document.body.textContent).toContain('NowThis draft, as you see it');
+      expect(items.map((item) => item.textContent)).toEqual([
+        expect.stringMatching(/^Marked ready.* · kept on Mark readyRestore$/),
+        expect.stringMatching(/^Live page.* · imported from the URLRestore$/),
+      ]);
+      expect(document.body.textContent).toContain(
+        'Restoring makes a new version. Nothing is lost.',
+      );
+    });
+
+    it('says when there is nothing to restore yet', async () => {
+      getContentDraft.mockResolvedValue(draft());
+      await renderPage();
+      expect(await openHistory()).toHaveLength(0);
+      expect(document.body.textContent).toContain('No earlier versions yet. Mark ready keeps one.');
+    });
+
+    it('restores a version in place, after saving what was waiting', async () => {
+      getContentDraft.mockResolvedValue(draft());
+      getDraftVersions.mockResolvedValue(versions);
+      restoreDraftVersion.mockResolvedValue({
+        title: 'Old title',
+        bodyHtml: '<h1>Old title</h1><p>As the live page had it.</p>',
+        updatedAt: '2026-10-21T10:00:00Z',
+      });
+      await renderPage();
+      // An edit still waiting for its save.
+      await act(async () => button('Edit as HTML')!.click());
+      const source = container.querySelector('textarea')!;
+      await act(async () => {
+        Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!.call(
+          source,
+          '<h1>Pipeline forecasting</h1><p>Edited.</p>',
+        );
+        source.dispatchEvent(new Event('input', { bubbles: true }));
+      });
+      await act(async () => button('Back to visual')!.click());
+      expect(saveContentDraft).not.toHaveBeenCalled();
+
+      const items = await openHistory();
+      await act(async () => items[1].click());
+      await act(async () => {});
+
+      expect(saveContentDraft).toHaveBeenCalledWith('d1', {
+        title: 'Pipeline forecasting',
+        bodyHtml: '<h1>Pipeline forecasting</h1><p>Edited.</p>',
+      });
+      expect(restoreDraftVersion).toHaveBeenCalledWith('v1');
+      expect(saveContentDraft.mock.invocationCallOrder[0]).toBeLessThan(
+        restoreDraftVersion.mock.invocationCallOrder[0],
+      );
+      expect(container.querySelector('.ProseMirror')!.textContent).toBe(
+        'Old titleAs the live page had it.',
+      );
+      expect(container.querySelector('header h1')!.textContent).toBe('Old title');
+      expect(toast.success).toHaveBeenCalledWith(
+        'Restored “Live page”. The page before it is in History.',
+      );
+      // Nothing from before the restore is sent after it.
+      expect(saveContentDraft).toHaveBeenCalledTimes(1);
+      expect(container.querySelector('header')!.textContent).toContain('Saved');
+    });
+
+    it('keeps the page when the restore fails', async () => {
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+      getContentDraft.mockResolvedValue(draft());
+      getDraftVersions.mockResolvedValue(versions);
+      restoreDraftVersion.mockRejectedValue(new Error('not_found'));
+      await renderPage();
+
+      const items = await openHistory();
+      await act(async () => items[0].click());
+      await act(async () => {});
+
+      expect(toast.error).toHaveBeenCalledWith("Couldn't restore it. Try again.");
+      expect(container.querySelector('.ProseMirror')!.textContent).toBe(
+        'Pipeline forecastingTeams trust it.',
+      );
+    });
+
+    it('waits while the HTML view is open', async () => {
+      getContentDraft.mockResolvedValue(draft());
+      await renderPage();
+      await act(async () => button('Edit as HTML')!.click());
+      expect(button('History')!.title).toBe('Go back to the page to use History');
+      expect(button('History')!.disabled || button('History')!.hasAttribute('data-disabled')).toBe(
+        true,
+      );
+    });
   });
 
   it('shows the page as HTML, and cleans it when it switches back', async () => {

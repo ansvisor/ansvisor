@@ -981,6 +981,51 @@ export type Database = {
           },
         ]
       }
+      content_draft_versions: {
+        Row: {
+          body_html: string
+          created_at: string
+          created_by: string | null
+          draft_id: string
+          id: string
+          origin: string
+          title: string
+        }
+        Insert: {
+          body_html?: string
+          created_at?: string
+          created_by?: string | null
+          draft_id: string
+          id?: string
+          origin: string
+          title?: string
+        }
+        Update: {
+          body_html?: string
+          created_at?: string
+          created_by?: string | null
+          draft_id?: string
+          id?: string
+          origin?: string
+          title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "content_draft_versions_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "content_draft_versions_draft_id_fkey"
+            columns: ["draft_id"]
+            isOneToOne: false
+            referencedRelation: "content_drafts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       content_opportunities: {
         Row: {
           brand_id: string
@@ -3506,6 +3551,16 @@ export type Database = {
       content_draft_sources: {
         Args: { p_days?: number; p_draft_id: string }
         Returns: Json
+      }
+      content_draft_member: { Args: { p_draft_id: string }; Returns: boolean }
+      content_draft_restore: { Args: { p_version_id: string }; Returns: Json }
+      content_draft_snapshot: {
+        Args: { p_draft_id: string; p_origin: string }
+        Returns: string
+      }
+      content_draft_versions_prune: {
+        Args: { p_before: string; p_limit: number }
+        Returns: number
       }
       content_page_impact: {
         Args: { p_brand_id: string; p_days: number; p_page: string }

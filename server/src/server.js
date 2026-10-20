@@ -15,6 +15,7 @@ import routes from './routes/index.js';
 import trafficRoutes from './routes/traffic.js';
 import botIngestRoutes from './routes/bot-ingest.js';
 import { pruneBotEvents } from './lib/bot-ingest.js';
+import { pruneContentVersions } from './lib/content-history.js';
 import {
   createJob,
   cleanupStaleJobs,
@@ -266,6 +267,11 @@ async function runDailyTracking() {
   // AI-bot rows past their retention (AT-010): 90 days, counters 400.
   pruneBotEvents().catch((err) => {
     logger.error({ err }, '[ai-bots] daily prune failed');
+  });
+
+  // Content Editor versions past their 90 days (CE-018).
+  pruneContentVersions().catch((err) => {
+    logger.error({ err }, '[content-history] daily prune failed');
   });
 
   // Google Analytics sync (#704) — same contract as the Search Console sync

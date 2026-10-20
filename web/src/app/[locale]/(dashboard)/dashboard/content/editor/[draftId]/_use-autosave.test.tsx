@@ -1,4 +1,4 @@
-import { act } from 'react';
+import { act, useState } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useDraftAutosave } from './_use-autosave';
@@ -19,9 +19,21 @@ const BODIES = ['<p>a</p>', '<p>ab</p>', '<p>1</p>', '<p>12</p>', '<p>x</p>', '<
 /** The hook behind buttons, as the editor drives it: one per text, and Retry. */
 function Harness() {
   const autosave = useDraftAutosave('d1');
+  const [settled, setSettled] = useState('');
   return (
     <div>
       <output>{autosave.state}</output>
+      <span data-settled>{settled}</span>
+      <button
+        data-settle
+        onClick={() =>
+          void autosave.settle().then(
+            () => setSettled('settled'),
+            () => setSettled('unsaved'),
+          )
+        }
+      />
+      <button data-discard onClick={() => autosave.discard()} />
       {BODIES.map((body) => (
         <button key={body} data-body={body} onClick={() => autosave.schedule(content(body))} />
       ))}
@@ -40,6 +52,9 @@ const edit = (body: string) =>
   act(() => container.querySelector<HTMLButtonElement>(`[data-body="${body}"]`)!.click());
 const retry = () =>
   act(async () => container.querySelector<HTMLButtonElement>('[data-retry]')!.click());
+const press = (name: string) =>
+  act(async () => container.querySelector<HTMLButtonElement>(`[data-${name}]`)!.click());
+const settled = () => container.querySelector('[data-settled]')!.textContent;
 
 beforeEach(async () => {
   vi.useFakeTimers();
@@ -120,5 +135,45 @@ describe('the editor’s autosave', () => {
     act(() => root.unmount());
     expect(saveContentDraft).toHaveBeenCalledWith('d1', content('<p>last</p>'));
     root = createRoot(container);
+  });
+
+  it('settles: waits for a save under way, then sends what is waiting', async () => {
+    let finish!: () => void;
+    saveContentDraft.mockImplementationOnce(
+      () => new Promise((resolve) => (finish = () => resolve({ updatedAt: 'now' }))),
+    );
+    edit('<p>1</p>');
+    await act(async () => vi.advanceTimersByTime(1500));
+    edit('<p>12</p>');
+
+    await press('settle');
+    expect(settled()).toBe('');
+    await act(async () => finish());
+    await act(async () => vi.advanceTimersByTime(200));
+
+    expect(saveContentDraft).toHaveBeenCalledTimes(2);
+    expect(saveContentDraft).toHaveBeenLastCalledWith('d1', content('<p>12</p>'));
+    expect(settled()).toBe('settled');
+    expect(state()).toBe('saved');
+  });
+
+  it('does not settle when the save fails', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    saveContentDraft.mockRejectedValueOnce(new Error('offline'));
+    edit('<p>x</p>');
+
+    await press('settle');
+    expect(settled()).toBe('unsaved');
+    expect(state()).toBe('failed');
+    error.mockRestore();
+  });
+
+  it('discards what is waiting once the server has the page', async () => {
+    edit('<p>x</p>');
+    await press('discard');
+    await act(async () => vi.advanceTimersByTime(1500));
+
+    expect(saveContentDraft).not.toHaveBeenCalled();
+    expect(state()).toBe('saved');
   });
 });
