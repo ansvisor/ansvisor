@@ -14,7 +14,7 @@ import {
   tailRemainder,
   UNAVAILABLE_PLATFORMS,
 } from './tracking-worker.js';
-import { PLANS } from '../config/plans.js';
+import { getPlan, PLANS } from '../config/plans.js';
 
 /**
  * Ghost detection for the Cloro drain loop (#687).
@@ -257,19 +257,6 @@ describe('runnablePlatforms', () => {
   });
 });
 
-/**
- * The short tail for watched runs.
- *
- * A brand's first analysis is started from the UI and its progress bar stays on
- * screen for as long as the drain loop polls. One measured run delivered all
- * 292 of its results in four and a half minutes, then held the bar at 292/294
- * for another twenty-five waiting on two google-aio tasks that were never going
- * to call back. Across ten days, runs spent an average of 19 minutes waiting on
- * ghosts against 14 minutes actually receiving results.
- *
- * Nothing is lost by leaving early: /cloro/callback inserts a late delivery
- * whether or not the loop is still watching.
- */
 describe('shoppingTracked', () => {
   const on = { shopping_mode_enabled: true };
 
@@ -285,8 +272,32 @@ describe('shoppingTracked', () => {
     expect(shoppingTracked({ shopping_mode_enabled: false }, PLANS.growth)).toBe(false);
     expect(shoppingTracked({ shopping_mode_enabled: false }, null)).toBe(false);
   });
+
+  it('fails closed on cloud for a plan id it does not know', () => {
+    vi.stubEnv('IS_CLOUD', 'true');
+    try {
+      // getPlan falls back to Starter, which has no Shopping page.
+      expect(shoppingTracked(on, getPlan('bogus'))).toBe(false);
+      expect(shoppingTracked(on, getPlan('growth'))).toBe(true);
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
 });
 
+/**
+ * The short tail for watched runs.
+ *
+ * A brand's first analysis is started from the UI and its progress bar stays on
+ * screen for as long as the drain loop polls. One measured run delivered all
+ * 292 of its results in four and a half minutes, then held the bar at 292/294
+ * for another twenty-five waiting on two google-aio tasks that were never going
+ * to call back. Across ten days, runs spent an average of 19 minutes waiting on
+ * ghosts against 14 minutes actually receiving results.
+ *
+ * Nothing is lost by leaving early: /cloro/callback inserts a late delivery
+ * whether or not the loop is still watching.
+ */
 describe('tailRemainder', () => {
   it('scales with the run for a large brand', () => {
     expect(tailRemainder(294)).toBe(15);

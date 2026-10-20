@@ -58,17 +58,16 @@ const server = http.createServer(app);
 // payload exactly as sent, and express.json()'s parse/re-serialize would break it.
 // Mounted first so the global JSON parser skips this path (body already consumed).
 app.use('/cloro/callback', express.raw({ type: 'application/json', limit: '50mb' }));
-// AI-bot senders (AT-010) post a Worker's JSON, a gzipped Logpush file or a
-// Vercel drain's logs: read raw, before the JSON and form parsers take them.
-app.use('/bots/ingest', express.raw({ type: () => true, limit: '20mb' }));
+// AI-bot requests from brands' Cloudflare / Vercel (AT-010): authenticated by
+// each connection's secret, server to server. Mounted before the JSON and form
+// parsers: the route checks the secret first, then reads the Worker's JSON,
+// the gzipped Logpush file or the Vercel drain's logs raw itself.
+app.use('/', botIngestRoutes);
 app.use(bodyParser.json({ limit: '50mb' }));
 app.use(bodyParser.urlencoded({ limit: '50mb', extended: true }));
 
 // --- Public traffic tracking (before helmet/cors — needs its own CORS for any origin) ---
 app.use('/', trafficRoutes);
-// AI-bot requests from brands' Cloudflare / Vercel (AT-010): authenticated by
-// each connection's secret, server to server.
-app.use('/', botIngestRoutes);
 
 // --- Request logger (before everything to catch all requests) ---
 app.use(requestIdMiddleware);
