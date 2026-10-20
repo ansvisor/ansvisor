@@ -1,86 +1,122 @@
 {
   "amazon": {
     "hosts": [
-      "amazon.com",
-      "amazon.ca",
-      "amazon.com.mx",
-      "amazon.com.br",
-      "amazon.co.uk",
-      "amazon.de",
-      "amazon.fr",
-      "amazon.it",
-      "amazon.es",
-      "amazon.nl",
-      "amazon.se",
-      "amazon.pl",
-      "amazon.be",
-      "amazon.ie",
-      "amazon.at",
-      "amazon.ch",
-      "amazon.com.au",
-      "amazon.co.jp",
-      "amazon.in",
-      "amazon.sg",
+      "a.co",
       "amazon.ae",
-      "amazon.sa",
+      "amazon.at",
+      "amazon.be",
+      "amazon.ca",
+      "amazon.ch",
+      "amazon.co.jp",
+      "amazon.co.uk",
+      "amazon.co.za",
+      "amazon.com",
+      "amazon.com.au",
+      "amazon.com.be",
+      "amazon.com.br",
+      "amazon.com.mx",
       "amazon.com.tr",
-      "amazon.eg"
+      "amazon.de",
+      "amazon.eg",
+      "amazon.es",
+      "amazon.fr",
+      "amazon.ie",
+      "amazon.in",
+      "amazon.it",
+      "amazon.nl",
+      "amazon.pl",
+      "amazon.sa",
+      "amazon.se",
+      "amazon.sg",
+      "amzn.eu",
+      "amzn.to"
     ],
     "redirects": []
   },
   "ebay": {
     "hosts": [
-      "ebay.com",
-      "ebay.co.uk",
-      "ebay.de",
-      "ebay.fr",
-      "ebay.it",
-      "ebay.es",
-      "ebay.nl",
-      "ebay.pl",
-      "ebay.ie",
+      "ebay.at",
       "ebay.be",
       "ebay.ca",
+      "ebay.ch",
+      "ebay.co.uk",
+      "ebay.com",
       "ebay.com.au",
-      "ebay.com.sg",
+      "ebay.com.hk",
       "ebay.com.my",
+      "ebay.com.sg",
+      "ebay.de",
+      "ebay.es",
+      "ebay.fr",
+      "ebay.ie",
+      "ebay.it",
+      "ebay.nl",
       "ebay.ph",
-      "ebay.com.hk"
+      "ebay.pl",
+      "ebay.us"
     ],
     "redirects": []
   },
   "walmart": {
-    "hosts": ["walmart.com", "walmart.ca", "walmart.com.mx"],
+    "hosts": [
+      "walmart.com",
+      "walmart.ca",
+      "walmart.com.mx"
+    ],
     "redirects": [
       {
-        "hosts": ["goto.walmart.com"],
-        "parameters": ["u"]
+        "hosts": [
+          "goto.walmart.com"
+        ],
+        "parameters": [
+          "u"
+        ]
       }
     ]
   },
   "etsy": {
-    "hosts": ["etsy.com", "etsy.co.uk", "etsy.de"],
+    "hosts": [
+      "etsy.com",
+      "etsy.co.uk",
+      "etsy.de"
+    ],
     "redirects": []
   },
   "aliexpress": {
-    "hosts": ["aliexpress.com", "aliexpress.us", "aliexpress.ru"],
+    "hosts": [
+      "aliexpress.com",
+      "aliexpress.us",
+      "aliexpress.ru"
+    ],
     "redirects": [
       {
-        "hosts": ["s.click.aliexpress.com"],
-        "parameters": ["dl_target_url"]
+        "hosts": [
+          "s.click.aliexpress.com"
+        ],
+        "parameters": [
+          "dl_target_url"
+        ]
       }
     ]
   },
   "temu": {
-    "hosts": ["temu.com", "temu.co.uk", "temu.com.tr"],
+    "hosts": [
+      "temu.com",
+      "temu.co.uk",
+      "temu.com.tr"
+    ],
     "redirects": []
   },
   "trendyol": {
-    "hosts": ["trendyol.com"],
+    "hosts": [
+      "trendyol.com"
+    ],
     "redirects": []
   },
   "hepsiburada": {
-    "hosts": ["hepsiburada.com"],
+    "hosts": [
+      "hepsiburada.com"
+    ],
     "redirects": []
   }
 }
