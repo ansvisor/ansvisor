@@ -457,6 +457,9 @@ const GAP_MAX_COMPETITOR_CHIPS = 6;
  * competitor in an answer where we're absent and never appears in an answer
  * where we're present. Each co-occurrence is weighted by `1 / distinct sources
  * in the answer`, so a focused 2-source answer counts more than a 20-source one.
+ *
+ * Read from the daily rollups (00203) over whole UTC days, as the other tabs
+ * are, unless a single prompt is selected (#1002).
  */
 export async function getCitationGaps(
   brandId: string,
@@ -464,10 +467,10 @@ export async function getCitationGaps(
 ): Promise<CitationGaps> {
   const supabase = await createClient();
 
-  const [{ data: brandDomainRows }, { data: competitorRows }, topicPromptIds] = await Promise.all([
+  const [{ data: brandDomainRows }, { data: competitorRows }, window] = await Promise.all([
     supabase.from('brand_domains').select('domain').eq('brand_id', brandId),
     supabase.from('competitors').select('id, name, domain').eq('brand_id', brandId),
-    resolveTopicPromptIds(supabase, filters),
+    rollupWindow(supabase, brandId, filters),
   ]);
   const brandDomains = (brandDomainRows ?? [])
     .map((r) => normalizeDomain((r as { domain: string }).domain))
@@ -506,14 +509,24 @@ export async function getCitationGaps(
     strength: number;
   }
 
-  const rpcArgs = {
-    ...overviewArgs(brandId, filters, topicPromptIds),
-    p_brand_domains: brandDomains,
-    p_competitor_domains: competitorDomains,
-  };
+  // Daily rollups (00203) unless the filters need the raw rows, as on the
+  // other tabs (see rollupWindow). The raw path resolves a topic to its
+  // prompts; the rollups carry topic.
+  const domainArgs = { p_brand_domains: brandDomains, p_competitor_domains: competitorDomains };
+  const daily = window ? { ...dailyArgs(brandId, filters, window), ...domainArgs } : null;
+  const rawArgs = window
+    ? null
+    : {
+        ...overviewArgs(brandId, filters, await resolveTopicPromptIds(supabase, filters)),
+        ...domainArgs,
+      };
   const [gapRes, compRes] = await Promise.all([
-    supabase.rpc('citation_gap_domains', rpcArgs),
-    supabase.rpc('citation_competitor_sources', rpcArgs),
+    daily
+      ? supabase.rpc('citation_gap_domains_daily', daily)
+      : supabase.rpc('citation_gap_domains', rawArgs!),
+    daily
+      ? supabase.rpc('citation_competitor_sources_daily', daily)
+      : supabase.rpc('citation_competitor_sources', rawArgs!),
   ]);
   if (gapRes.error) throw new Error(gapRes.error.message);
   if (compRes.error) throw new Error(compRes.error.message);
