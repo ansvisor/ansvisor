@@ -174,7 +174,12 @@ export const CitedPassages = Extension.create<{ onHeld: (edit: HeldEdit) => void
             // touched can gain or lose one.
             let marks = value.marks.map(tr.mapping, tr.doc);
             for (const { pos, node } of blocksIn(tr.doc, changedRanges(tr).after)) {
-              marks = marks.remove(marks.find(pos, pos + node.nodeSize));
+              // find() also returns the marks that only touch the block's
+              // edges (its neighbours'): only its own is taken off.
+              const end = pos + node.nodeSize;
+              marks = marks.remove(
+                marks.find(pos, end).filter((d) => d.from === pos && d.to === end),
+              );
               const mark = markOf(node, pos, value.locks);
               if (mark) marks = marks.add(tr.doc, [mark]);
             }

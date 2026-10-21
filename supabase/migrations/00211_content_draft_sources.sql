@@ -103,7 +103,8 @@ declare
   v_result jsonb;
 begin
   select d.brand_id, d.prompt_ids, lower(public.normalize_page_path(d.source_url)),
-    lower(regexp_replace(substring(d.source_url from '^https?://([^/:?#]+)'), '^www\.', ''))
+    -- Lower-cased first: a scheme may be written HTTPS://.
+    regexp_replace(substring(lower(d.source_url) from '^https?://([^/:?#]+)'), '^www\.', '')
     into v_brand_id, v_prompt_ids, v_page_key, v_host
   from public.content_drafts d
   where d.id = p_draft_id;
