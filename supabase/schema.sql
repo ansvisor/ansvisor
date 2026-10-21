@@ -28747,6 +28747,9 @@ comment on column public.content_drafts.page_type_source is
 --
 -- Both must belong to the draft's brand: a check trigger turns away another
 -- brand's opportunity or prompts, which the foreign key alone would accept.
+-- It checks only the prompt ids a write adds, and a deleted prompt leaves
+-- every draft's prompt_ids (it has no foreign key to do that), so a draft
+-- that had one can still take more.
 
 alter table public.content_drafts
   add column if not exists opportunity_id uuid
@@ -28788,12 +28791,14 @@ begin
      and exists (
        select 1
        from unnest(new.prompt_ids) as wanted(id)
-       where not exists (
-         select 1
-         from public.prompts p
-         join public.prompt_sets s on s.id = p.prompt_set_id
-         where p.id = wanted.id and s.brand_id = new.brand_id
-       )
+       -- Only what this write adds: the ids already there were checked.
+       where wanted.id <> all(case when tg_op = 'UPDATE' then old.prompt_ids else '{}' end)
+         and not exists (
+           select 1
+           from public.prompts p
+           join public.prompt_sets s on s.id = p.prompt_set_id
+           where p.id = wanted.id and s.brand_id = new.brand_id
+         )
      )
   then
     raise exception 'content draft prompt belongs to another brand'
@@ -28806,6 +28811,33 @@ $$;
 create or replace trigger content_drafts_check_links
   before insert or update on public.content_drafts
   for each row execute function public.check_content_draft_links();
+
+-- A deleted prompt leaves the drafts that had it, in one update per delete
+-- statement (a topic's prompts go together). Definer: the drafts may be ones
+-- the deleting member can't write, and the deletion is theirs to make.
+create or replace function public.forget_deleted_draft_prompts()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_gone uuid[];
+begin
+  select coalesce(array_agg(id), '{}') into v_gone from deleted_prompts;
+  update public.content_drafts d
+  set prompt_ids = array(select x from unnest(d.prompt_ids) as x where x <> all(v_gone))
+  where d.prompt_ids && v_gone;
+  return null;
+end;
+$$;
+
+revoke execute on function public.forget_deleted_draft_prompts() from public, anon, authenticated;
+
+create or replace trigger prompts_forget_in_content_drafts
+  after delete on public.prompts
+  referencing old table as deleted_prompts
+  for each statement execute function public.forget_deleted_draft_prompts();
 
 -- ─────────────────────────────────────────────────────────────────────────
 -- migrations/00207_content_page_overlap.sql

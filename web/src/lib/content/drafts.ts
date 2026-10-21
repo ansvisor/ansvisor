@@ -115,6 +115,8 @@ export interface DraftStart {
   method: DraftMethod;
   title: string;
   pageType: PageType;
+  /** The person picked the type; otherwise it was Start's guess, and follows the page. */
+  typePicked?: boolean;
   source: DraftSource;
   /** The content to optimize, as HTML. */
   bodyHtml?: string;

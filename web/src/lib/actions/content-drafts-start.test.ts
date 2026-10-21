@@ -149,12 +149,26 @@ describe('createContentDraft', () => {
       method: 'create',
       title: 'CRM <for> agents',
       page_type: 'solution_page',
-      page_type_source: 'user',
+      // Start's guess: it follows the page until someone picks a type.
+      page_type_source: 'detected',
       body_html: '<h1>CRM &lt;for&gt; agents</h1>',
       opportunity_id: OPPORTUNITY,
       prompt_ids: [PROMPT, 'p2'],
       source_url: null,
     });
+  });
+
+  it('keeps a type the person picked as theirs', async () => {
+    reads = {
+      content_opportunities: {
+        id: OPPORTUNITY,
+        prompt_id: PROMPT,
+        cluster_id: null,
+        related_cluster_ids: [],
+      },
+    };
+    await createContentDraft(BRAND, start({ typePicked: true }));
+    expect(inserted()).toMatchObject({ page_type: 'solution_page', page_type_source: 'user' });
   });
 
   it('takes the one prompt of an opportunity with no clusters', async () => {
