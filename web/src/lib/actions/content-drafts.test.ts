@@ -55,6 +55,9 @@ vi.mock('@/lib/supabase/server', () => ({
 
 const {
   createContentDraft,
+  decideDraftSuggestions,
+  getDraftSuggestions,
+  keepAgentBeforeVersion,
   getCitedPassages,
   getContentDraft,
   getDraftVersions,
@@ -358,5 +361,70 @@ describe('getCitedPassages', () => {
     await expect(getCitedPassages(DRAFT, [QUOTED])).resolves.toBeNull();
     await expect(getCitedPassages('../etc', [QUOTED])).rejects.toThrow('invalid');
     await expect(getCitedPassages(DRAFT, ['x'.repeat(5_001)])).rejects.toThrow('invalid');
+  });
+});
+
+describe('agent suggestions', () => {
+  const row = (over: Record<string, unknown>) => ({
+    id: 's1',
+    batch_id: 'new',
+    action_id: 'a1',
+    kind: 'replace',
+    block_text: 'Our forecasting is very accurate.',
+    before_text: 'very accurate',
+    after_text: 'shown per team',
+    reason: 'answer a fan-out',
+    rule_keys: ['dated'],
+    position: 0,
+    status: 'open',
+    created_at: '2026-10-21T10:00:00Z',
+    actions: { action_no: 214 },
+    ...over,
+  });
+
+  it('reads the latest batch, in the agent’s order, with its action', async () => {
+    list = [
+      row({ id: 's2', position: 1, kind: 'insert', before_text: '' }),
+      row({ id: 's1', position: 0 }),
+      row({ id: 'old', batch_id: 'older', created_at: '2026-10-01T10:00:00Z' }),
+    ];
+    const read = await getDraftSuggestions(DRAFT);
+    expect(read.map((s) => s.id)).toEqual(['s1', 's2']);
+    expect(read[0]).toEqual({
+      id: 's1',
+      batchId: 'new',
+      actionId: 'a1',
+      actionNo: 214,
+      kind: 'replace',
+      blockText: 'Our forecasting is very accurate.',
+      beforeText: 'very accurate',
+      afterText: 'shown per team',
+      reason: 'answer a fan-out',
+      ruleKeys: ['dated'],
+      status: 'open',
+    });
+    expect(calls[0].filters).toContainEqual(['eq', 'draft_id', DRAFT]);
+  });
+
+  it('keeps who decided through the database function', async () => {
+    rpcResult = { data: 2, error: null };
+    await expect(decideDraftSuggestions([DRAFT, DRAFT], 'accepted')).resolves.toBe(2);
+    expect(rpcCalls).toEqual([
+      ['content_draft_decide_suggestions', { p_ids: [DRAFT, DRAFT], p_status: 'accepted' }],
+    ]);
+
+    rpcResult = { data: 0, error: null };
+    await expect(decideDraftSuggestions([DRAFT], 'open')).rejects.toThrow('not_found');
+    await expect(decideDraftSuggestions([], 'open')).rejects.toThrow('invalid');
+    await expect(decideDraftSuggestions([DRAFT], 'maybe' as unknown as 'open')).rejects.toThrow(
+      'invalid',
+    );
+  });
+
+  it('keeps the page before agent changes in History', async () => {
+    await keepAgentBeforeVersion(DRAFT);
+    expect(rpcCalls).toEqual([
+      ['content_draft_snapshot', { p_draft_id: DRAFT, p_origin: 'agent_before' }],
+    ]);
   });
 });

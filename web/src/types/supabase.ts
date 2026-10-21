@@ -981,6 +981,85 @@ export type Database = {
           },
         ]
       }
+      content_draft_suggestions: {
+        Row: {
+          action_id: string | null
+          after_text: string
+          agent: string
+          batch_id: string
+          before_text: string
+          block_text: string
+          created_at: string
+          decided_at: string | null
+          decided_by: string | null
+          draft_id: string
+          id: string
+          kind: string
+          position: number
+          reason: string
+          rule_keys: string[]
+          status: string
+        }
+        Insert: {
+          action_id?: string | null
+          after_text: string
+          agent?: string
+          batch_id: string
+          before_text?: string
+          block_text: string
+          created_at?: string
+          decided_at?: string | null
+          decided_by?: string | null
+          draft_id: string
+          id?: string
+          kind: string
+          position?: number
+          reason: string
+          rule_keys?: string[]
+          status?: string
+        }
+        Update: {
+          action_id?: string | null
+          after_text?: string
+          agent?: string
+          batch_id?: string
+          before_text?: string
+          block_text?: string
+          created_at?: string
+          decided_at?: string | null
+          decided_by?: string | null
+          draft_id?: string
+          id?: string
+          kind?: string
+          position?: number
+          reason?: string
+          rule_keys?: string[]
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "content_draft_suggestions_action_id_fkey"
+            columns: ["action_id"]
+            isOneToOne: false
+            referencedRelation: "actions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "content_draft_suggestions_decided_by_fkey"
+            columns: ["decided_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "content_draft_suggestions_draft_id_fkey"
+            columns: ["draft_id"]
+            isOneToOne: false
+            referencedRelation: "content_drafts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       content_draft_versions: {
         Row: {
           body_html: string
@@ -3555,6 +3634,10 @@ export type Database = {
       content_draft_cited_answers: {
         Args: { p_days?: number; p_draft_id: string }
         Returns: Json
+      }
+      content_draft_decide_suggestions: {
+        Args: { p_ids: string[]; p_status: string }
+        Returns: number
       }
       content_draft_member: { Args: { p_draft_id: string }; Returns: boolean }
       content_draft_restore: { Args: { p_version_id: string }; Returns: Json }

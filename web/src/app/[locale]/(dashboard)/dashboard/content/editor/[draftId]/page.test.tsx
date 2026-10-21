@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import messages from '../../../../../../../../messages/en.json';
 import type { Editor } from '@tiptap/core';
 import type { ContentDraft } from '@/lib/content/drafts';
+import type { DraftSuggestion } from '@/lib/content/suggestions';
 import { passageKey } from '@/lib/content/cited-passages';
 import ContentEditorPage from './page';
 
@@ -23,7 +24,13 @@ const saveMyRuleSet = vi.fn();
 const getDraftVersions = vi.fn();
 const restoreDraftVersion = vi.fn();
 const getCitedPassages = vi.fn();
+const getDraftSuggestions = vi.fn();
+const decideDraftSuggestions = vi.fn();
+const keepAgentBeforeVersion = vi.fn();
 vi.mock('@/lib/actions/content-drafts', () => ({
+  getDraftSuggestions: (...args: unknown[]) => getDraftSuggestions(...args),
+  decideDraftSuggestions: (...args: unknown[]) => decideDraftSuggestions(...args),
+  keepAgentBeforeVersion: (...args: unknown[]) => keepAgentBeforeVersion(...args),
   getCitedPassages: (...args: unknown[]) => getCitedPassages(...args),
   getDraftVersions: (...args: unknown[]) => getDraftVersions(...args),
   restoreDraftVersion: (...args: unknown[]) => restoreDraftVersion(...args),
@@ -172,6 +179,9 @@ beforeEach(() => {
   getDraftVersions.mockReset().mockResolvedValue([]);
   restoreDraftVersion.mockReset();
   getCitedPassages.mockReset().mockResolvedValue([]);
+  getDraftSuggestions.mockReset().mockResolvedValue([]);
+  decideDraftSuggestions.mockReset().mockResolvedValue(1);
+  keepAgentBeforeVersion.mockReset().mockResolvedValue(undefined);
   localStorage.clear();
   brandState.activeBrandId = 'b1';
   brandState.setActiveBrand.mockReset();
@@ -610,6 +620,186 @@ describe('the content editor', () => {
       await act(async () => dialogButton('Edit anyway').click());
       await typeX();
       expect(dialogText()).toBeNull();
+    });
+  });
+
+  describe('agent suggestions', () => {
+    const VAGUE = 'Our forecasting is very accurate.';
+    const page = draft({
+      bodyHtml: `<h1>Pipeline forecasting</h1><p>${VAGUE}</p><p>Teams trust it.</p>`,
+    });
+    const suggestion = (over: Partial<DraftSuggestion>): DraftSuggestion => ({
+      id: 's1',
+      batchId: 'b1',
+      actionId: 'a1',
+      actionNo: 214,
+      kind: 'replace',
+      blockText: VAGUE,
+      beforeText: VAGUE,
+      afterText: 'Accuracy is shown per team, each week, against closed revenue.',
+      reason: 'answer fan-out “how accurate is CRM forecasting”',
+      ruleKeys: [],
+      status: 'open',
+      ...over,
+    });
+    const batch = [
+      suggestion({}),
+      suggestion({
+        id: 's2',
+        kind: 'insert',
+        blockText: 'Teams trust it.',
+        beforeText: '',
+        afterText: '<h2>FAQ</h2><p>Does it work with custom stages? Yes, any stage.</p>',
+        reason: 'add FAQ block (rule: 5 questions)',
+      }),
+    ];
+    const cardOf = (id: string) =>
+      container.querySelector<HTMLElement>(`.ProseMirror [data-suggestion="${id}"]`);
+    const press = async (id: string, label: string) => {
+      const target = [...cardOf(id)!.querySelectorAll('button')].find(
+        (b) => b.textContent === label,
+      )!;
+      await act(async () => target.click());
+      await act(async () => {});
+    };
+    const bar = () => container.querySelector('[role="region"][aria-label="Agent suggestions"]');
+    const barButton = (label: string) =>
+      [...bar()!.querySelectorAll('button')].find((b) => b.textContent === label)!;
+    /** The page's own text: the cards are drawn over it, not part of it. */
+    const pageText = () =>
+      (container.querySelector('.ProseMirror') as HTMLElement & { editor: Editor }).editor.state.doc
+        .textContent;
+
+    it('shows each open suggestion where it applies, with the agent bar', async () => {
+      getContentDraft.mockResolvedValue(page);
+      getDraftSuggestions.mockResolvedValue(batch);
+      await renderPage();
+
+      expect(getDraftSuggestions).toHaveBeenCalledWith('d1');
+      expect(bar()!.textContent).toContain(
+        'Content Agent suggested 2 changes · from Action AC-214',
+      );
+      expect(bar()!.querySelector('a')!.getAttribute('href')).toBe(
+        '/dashboard/action-center/actions?action=a1',
+      );
+      const replace = cardOf('s1')!;
+      expect(replace.textContent).toContain(
+        'Content Agent · answer fan-out “how accurate is CRM forecasting”',
+      );
+      expect(replace.querySelector('del')!.textContent).toBe(VAGUE);
+      expect(replace.querySelector('ins')!.textContent).toBe(
+        'Accuracy is shown per team, each week, against closed revenue.',
+      );
+      expect(cardOf('s2')!.textContent).toContain('Does it work with custom stages?');
+      // The page itself is unchanged until one is accepted.
+      expect(pageText()).not.toContain('Accuracy is shown');
+    });
+
+    it('accepts one into the page, keeping the page before it in History, and undoes it', async () => {
+      getContentDraft.mockResolvedValue(page);
+      getDraftSuggestions.mockResolvedValue(batch);
+      await renderPage();
+
+      await press('s1', 'Accept');
+      expect(keepAgentBeforeVersion).toHaveBeenCalledWith('d1');
+      expect(decideDraftSuggestions).toHaveBeenCalledWith(['s1'], 'accepted');
+      expect(pageText()).toContain(
+        'Accuracy is shown per team, each week, against closed revenue.',
+      );
+      expect(pageText()).not.toContain(VAGUE);
+      expect(cardOf('s1')!.textContent).toContain('Accepted');
+      expect(container.querySelector('.ProseMirror .agent-accepted-text')!.textContent).toBe(
+        'Accuracy is shown per team, each week, against closed revenue.',
+      );
+      expect(bar()!.textContent).toContain('suggested 1 change');
+
+      await press('s1', 'Undo');
+      expect(decideDraftSuggestions).toHaveBeenLastCalledWith(['s1'], 'open');
+      expect(pageText()).toContain(VAGUE);
+      expect(cardOf('s1')!.querySelector('del')).not.toBeNull();
+      // History kept the page once, before the first change.
+      await press('s1', 'Accept');
+      expect(keepAgentBeforeVersion).toHaveBeenCalledTimes(1);
+    });
+
+    it('rejects one, and restores it to review', async () => {
+      getContentDraft.mockResolvedValue(page);
+      getDraftSuggestions.mockResolvedValue(batch);
+      await renderPage();
+
+      await press('s2', 'Reject');
+      expect(decideDraftSuggestions).toHaveBeenCalledWith(['s2'], 'rejected');
+      expect(cardOf('s2')!.textContent).toContain('Rejected');
+      expect(pageText()).not.toContain('FAQ');
+
+      await press('s2', 'Restore');
+      expect(decideDraftSuggestions).toHaveBeenLastCalledWith(['s2'], 'open');
+      expect(cardOf('s2')!.textContent).toContain('Accept');
+    });
+
+    it('accepts all, says what is left, and undoes all', async () => {
+      getContentDraft.mockResolvedValue(page);
+      getDraftSuggestions.mockResolvedValue(batch);
+      await renderPage();
+
+      await act(async () => barButton('Accept all').click());
+      await act(async () => {});
+      expect(decideDraftSuggestions).toHaveBeenCalledWith(['s1', 's2'], 'accepted');
+      expect(pageText()).toContain(
+        'Accuracy is shown per team, each week, against closed revenue.Teams trust it.FAQDoes it work with custom stages? Yes, any stage.',
+      );
+      expect(bar()!.textContent).toMatch(/^2 accepted · 0 rejected · \d+ rules? still open/);
+
+      await act(async () => barButton('Undo all').click());
+      await act(async () => {});
+      expect(decideDraftSuggestions).toHaveBeenLastCalledWith(['s2', 's1'], 'open');
+      expect(pageText()).toBe(`Pipeline forecasting${VAGUE}Teams trust it.`);
+      expect(bar()!.textContent).toContain('suggested 2 changes');
+    });
+
+    it('never applies one to a passage AI quotes, or to one the page changed', async () => {
+      getContentDraft.mockResolvedValue(
+        draft({
+          sourceUrl: 'https://acme.example/forecasting',
+          bodyHtml: `<h1>Pipeline forecasting</h1><p>${VAGUE}</p><p>Teams trust it.</p>`,
+        }),
+      );
+      getCitedPassages.mockResolvedValue([
+        { key: passageKey(VAGUE), platforms: [{ platform: 'chatgpt-web', answers: 3 }] },
+      ]);
+      getDraftSuggestions.mockResolvedValue([
+        suggestion({}),
+        suggestion({ id: 's3', blockText: 'Gone since.', beforeText: 'Gone since.' }),
+      ]);
+      await renderPage();
+
+      const locked = cardOf('s1')!;
+      expect(locked.textContent).toContain("AI quotes this passage, so agents don't change it.");
+      expect(
+        [...locked.querySelectorAll('button')].find((b) => b.textContent === 'Accept')!.disabled,
+      ).toBe(true);
+      const stale = cardOf('s3')!;
+      expect(stale.textContent).toContain('The page changed here since the agent read it.');
+
+      await act(async () => barButton('Accept all').click());
+      await act(async () => {});
+      expect(pageText()).toContain(VAGUE);
+      expect(decideDraftSuggestions).not.toHaveBeenCalled();
+      expect(toast).toHaveBeenCalledWith(
+        "2 suggestions couldn't be applied: the page changed there, or AI quotes the passage.",
+      );
+    });
+
+    it('waits with the HTML view until they are decided', async () => {
+      getContentDraft.mockResolvedValue(page);
+      getDraftSuggestions.mockResolvedValue(batch);
+      await renderPage();
+
+      await act(async () => button('Edit as HTML')!.click());
+      expect(container.querySelector('textarea')).toBeNull();
+      expect(toast).toHaveBeenCalledWith(
+        'Accept or reject the 2 agent suggestions first, then edit as HTML.',
+      );
     });
   });
 

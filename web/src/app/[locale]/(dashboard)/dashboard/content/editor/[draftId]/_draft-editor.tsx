@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useFormatter, useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 import { EditorContent, useEditor } from '@tiptap/react';
@@ -24,7 +24,10 @@ import {
 import { PLATFORM_LABELS } from '@/config/platform-labels';
 import { DraftMethodBadge, DraftStatusBadge } from '@/components/content/draft-badges';
 import {
+  decideDraftSuggestions,
   getCitedPassages,
+  getDraftSuggestions,
+  keepAgentBeforeVersion,
   markContentDraftReady,
   restoreDraftVersion,
   setContentDraftPageType,
@@ -32,6 +35,7 @@ import {
 import { CONTENT_LIBRARY_PATH, type ContentDraft, type PageType } from '@/lib/content/drafts';
 import { CITED_DAYS, MAX_PASSAGES, type CitedPassage } from '@/lib/content/cited-passages';
 import type { DraftVersion } from '@/lib/content/history';
+import type { DraftSuggestion, SuggestionStatus } from '@/lib/content/suggestions';
 import {
   cleanHtml,
   formatHtmlSource,
@@ -42,6 +46,7 @@ import { draftTitleFromDoc, safeLinkHref } from '@/lib/content/editor';
 import { JsonLd } from '@/lib/content/json-ld-node';
 import { detectPageType } from '@/lib/content/page-types';
 import { cn } from '@/lib/utils';
+import { AgentBar } from './_agent-bar';
 import { DropOverlay, useAttachments } from './_attach';
 import {
   CITED_EDIT_ALLOWED,
@@ -55,6 +60,14 @@ import { HistoryMenu } from './_history-menu';
 import { HtmlBlock, copyToClipboard } from './_html-block';
 import { PageTypeMenu } from './_page-type-menu';
 import { EditorSidePanel, useSidePanelOpen } from './_side-panel';
+import {
+  AgentSuggestions,
+  acceptInto,
+  suggestionsKey,
+  undoInto,
+  type SuggestionDecision,
+  type SuggestionLabels,
+} from './_suggestions';
 import { useDraftRules } from './_use-draft-rules';
 import { EditorToolbar } from './_toolbar';
 import { useDraftAutosave, type SaveState } from './_use-autosave';
@@ -75,6 +88,9 @@ const DOCUMENT_CLASS = cn(
   // Locked passages (CE-018): a green line, and what quotes them above.
   '[&_.cited-passage]:rounded-r-md [&_.cited-passage]:border-l-[3px] [&_.cited-passage]:border-emerald-300 [&_.cited-passage]:bg-emerald-50/70 [&_.cited-passage]:py-1 [&_.cited-passage]:pr-2 [&_.cited-passage]:pl-3 dark:[&_.cited-passage]:border-emerald-700 dark:[&_.cited-passage]:bg-emerald-950/30',
   '[&_.cited-passage]:before:mb-0.5 [&_.cited-passage]:before:block [&_.cited-passage]:before:text-[11.5px] [&_.cited-passage]:before:leading-snug [&_.cited-passage]:before:font-medium [&_.cited-passage]:before:tracking-normal [&_.cited-passage]:before:text-emerald-700 [&_.cited-passage]:before:content-[attr(data-cited-label)] dark:[&_.cited-passage]:before:text-emerald-400',
+  // An accepted agent suggestion (CE-018): a thin green line, the words it put in underlined.
+  '[&_.agent-accepted]:border-l-2 [&_.agent-accepted]:border-emerald-300 [&_.agent-accepted]:pl-2.5 dark:[&_.agent-accepted]:border-emerald-700',
+  '[&_.agent-accepted-text]:underline [&_.agent-accepted-text]:decoration-emerald-300 [&_.agent-accepted-text]:decoration-2 [&_.agent-accepted-text]:underline-offset-4 dark:[&_.agent-accepted-text]:decoration-emerald-700',
   '[&_.is-editor-empty:first-child]:before:pointer-events-none [&_.is-editor-empty:first-child]:before:float-left [&_.is-editor-empty:first-child]:before:h-0 [&_.is-editor-empty:first-child]:before:text-muted-foreground [&_.is-editor-empty:first-child]:before:content-[attr(data-placeholder)]',
 );
 
@@ -97,7 +113,8 @@ const DOCUMENT_CLASS = cn(
  * of those rules the page meets now. History keeps earlier versions (the
  * imported live page, each Mark ready) and restores any of them; passages
  * AI answers quote today are locked: marked, and changed only after a
- * warning (CE-018).
+ * warning; an agent's suggestions sit in the page as cards to accept or
+ * reject, with the agent bar over it (CE-018).
  */
 export function DraftEditor({ draft }: { draft: ContentDraft }) {
   const t = useTranslations('contentEditor.editor');
@@ -114,6 +131,14 @@ export function DraftEditor({ draft }: { draft: ContentDraft }) {
   // What quotes each locked passage, for the warning: "ChatGPT 14× and …".
   const citedBy = useRef(new Map<string, string>());
   const [citedCount, setCitedCount] = useState(0);
+  // An agent's suggestions (CE-018): its latest batch, with what was decided.
+  const [suggestions, setSuggestions] = useState<DraftSuggestion[]>([]);
+  const suggestionsNow = useRef(suggestions);
+  const [deciding, setDeciding] = useState(false);
+  const [barClosed, setBarClosed] = useState(false);
+  // History keeps the page before the first suggestion accepted here.
+  const agentBeforeKept = useRef(false);
+  const onDecide = useRef<(id: string, decision: SuggestionDecision) => void>(() => {});
   // A picked page type, or the one the page shows as it is written.
   const [picked, setPicked] = useState(draft.pageTypeSource === 'user' ? draft.pageType : null);
   const [detectedType, setDetectedType] = useState(() =>
@@ -159,6 +184,7 @@ export function DraftEditor({ draft }: { draft: ContentDraft }) {
         // person can't type while the question is open.
         onHeld: (edit) => setHeld((current) => current ?? edit),
       }),
+      AgentSuggestions.configure({ onDecide: (id, decision) => onDecide.current(id, decision) }),
     ],
     content: draft.bodyHtml,
     // Rendered on the client only, so the server's HTML can't disagree with it.
@@ -224,6 +250,7 @@ export function DraftEditor({ draft }: { draft: ContentDraft }) {
   });
   useEffect(() => {
     attachRef.current = (files) => void attachments.attach(files);
+    onDecide.current = (id, decision) => void decide([id], decision);
   });
 
   /** "ChatGPT 14× and Perplexity 6×": the platforms quoting a passage, the most first. */
@@ -306,6 +333,108 @@ export function DraftEditor({ draft }: { draft: ContentDraft }) {
     editor.commands.focus();
   };
 
+  const suggestionLabels = useMemo<SuggestionLabels>(
+    () => ({
+      agent: t('suggestions.agent'),
+      accept: t('suggestions.accept'),
+      reject: t('suggestions.reject'),
+      accepted: t('suggestions.accepted'),
+      rejected: t('suggestions.rejected'),
+      undo: t('suggestions.undo'),
+      restore: t('suggestions.restore'),
+      locked: t('suggestions.locked'),
+      stale: t('suggestions.stale'),
+    }),
+    [t],
+  );
+
+  // The latest batch, read when the editor opens.
+  useEffect(() => {
+    if (!editor) return;
+    getDraftSuggestions(draft.id)
+      .then(setSuggestions)
+      .catch((err) => console.error('Failed to read the agent suggestions:', err));
+  }, [editor, draft.id]);
+
+  // The page shows them as they are now.
+  useEffect(() => {
+    suggestionsNow.current = suggestions;
+    if (!editor || editor.isDestroyed) return;
+    editor.view.dispatch(
+      editor.state.tr.setMeta(suggestionsKey, { suggestions, labels: suggestionLabels }),
+    );
+  }, [editor, suggestions, suggestionLabels]);
+
+  /**
+   * Accept, reject, undo (an accepted one) or restore (a rejected one): the
+   * page changes first, then the decision is kept. Accepting keeps the page
+   * as it was in History before the first agent change.
+   */
+  const decide = async (ids: string[], decision: SuggestionDecision | 'undo_all') => {
+    if (!editor || deciding) return;
+    const all = suggestionsNow.current;
+    const next = all.map((s) => ({ ...s }));
+    const picked = next.filter((s) => ids.includes(s.id));
+    const changed: string[] = [];
+    let status: SuggestionStatus = 'open';
+    setDeciding(true);
+    try {
+      if (decision === 'accept') {
+        const open = picked.filter((s) => s.status === 'open');
+        if (open.length > 0 && !agentBeforeKept.current) {
+          await autosave.settle();
+          await keepAgentBeforeVersion(draft.id);
+          agentBeforeKept.current = true;
+        }
+        const tr = editor.state.tr;
+        for (const s of open) {
+          if (acceptInto(tr, editor.state, s, next)) {
+            s.status = 'accepted';
+            changed.push(s.id);
+          }
+        }
+        if (tr.docChanged) editor.view.dispatch(tr);
+        status = 'accepted';
+        if (open.length > changed.length) {
+          toast(t('suggestions.notApplied', { count: open.length - changed.length }));
+        }
+      } else if (decision === 'reject') {
+        for (const s of picked.filter((s) => s.status === 'open')) {
+          s.status = 'rejected';
+          changed.push(s.id);
+        }
+        status = 'rejected';
+      } else {
+        // Undo, Restore and Undo all send suggestions back to review.
+        const tr = editor.state.tr;
+        for (const s of [...picked].reverse()) {
+          if (s.status === 'accepted' && decision !== 'restore') {
+            if (!undoInto(tr, editor.state, s, next)) continue;
+          } else if (s.status !== 'rejected' || decision === 'undo') {
+            continue;
+          }
+          s.status = 'open';
+          changed.push(s.id);
+        }
+        if (tr.docChanged) editor.view.dispatch(tr);
+      }
+      if (changed.length === 0) return;
+      setSuggestions(next);
+      if (decision === 'accept')
+        toast.success(t('suggestions.acceptedToast', { count: changed.length }));
+      else if (decision === 'reject')
+        toast(t('suggestions.rejectedToast', { count: changed.length }));
+      else toast(t('suggestions.undoneToast', { count: changed.length }));
+      await decideDraftSuggestions(changed, status);
+    } catch (err) {
+      console.error('Failed to decide the suggestions:', err);
+      toast.error(t('suggestions.saveFailed'));
+    } finally {
+      setDeciding(false);
+    }
+  };
+  const openSuggestions = suggestions.filter((s) => s.status === 'open').length;
+
   // A drag with files over the page shows where they go; one dropped beside
   // the page (not on its text) goes in at the cursor.
   const withFiles = (e: React.DragEvent) =>
@@ -335,6 +464,11 @@ export function DraftEditor({ draft }: { draft: ContentDraft }) {
 
   const openHtmlView = () => {
     if (!editor) return;
+    // The cards aren't in the HTML: decide them first.
+    if (openSuggestions > 0) {
+      toast(t('suggestions.htmlBlocked', { count: openSuggestions }));
+      return;
+    }
     setHtmlSource(formatHtmlSource(editor.getHTML()));
     setHtmlEdited(false);
   };
@@ -555,6 +689,32 @@ export function DraftEditor({ draft }: { draft: ContentDraft }) {
 
       <div className="flex min-h-0 flex-1">
         <div className="flex min-w-0 flex-1 flex-col">
+          {suggestions.length > 0 && !(barClosed && openSuggestions === 0) && (
+            <AgentBar
+              suggestions={suggestions}
+              rulesOpen={Math.max(0, rules.total - rules.met)}
+              busy={deciding}
+              onAcceptAll={() =>
+                void decide(
+                  suggestions.filter((s) => s.status === 'open').map((s) => s.id),
+                  'accept',
+                )
+              }
+              onRejectAll={() =>
+                void decide(
+                  suggestions.filter((s) => s.status === 'open').map((s) => s.id),
+                  'reject',
+                )
+              }
+              onUndoAll={() =>
+                void decide(
+                  suggestions.filter((s) => s.status !== 'open').map((s) => s.id),
+                  'undo_all',
+                )
+              }
+              onClose={() => setBarClosed(true)}
+            />
+          )}
           {editor && (
             <EditorToolbar
               editor={editor}

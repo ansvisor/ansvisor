@@ -46,6 +46,12 @@ import {
   type CitedPassage,
 } from '@/lib/content/cited-passages';
 import {
+  MAX_DECIDE,
+  SUGGESTION_STATUSES,
+  type DraftSuggestion,
+  type SuggestionStatus,
+} from '@/lib/content/suggestions';
+import {
   HISTORY_DAYS,
   HISTORY_LIMIT,
   isVersionOrigin,
@@ -681,6 +687,85 @@ export async function restoreDraftVersion(versionId: string): Promise<RestoredDr
     bodyHtml: restored.bodyHtml,
     updatedAt: restored.updatedAt,
   };
+}
+
+/**
+ * History keeps the page before an agent's suggestions change it (CE-018):
+ * the editor saves what is waiting, then calls this before the first one it
+ * accepts. A failure is logged, not thrown: the suggestion can be undone.
+ */
+export async function keepAgentBeforeVersion(id: string): Promise<void> {
+  if (!draftId.safeParse(id).success) throw new Error('invalid');
+  const supabase = await createClient();
+  await keepVersion(supabase, id, 'agent_before');
+}
+
+/**
+ * An agent's suggestions on the draft (CE-018, 00217): its latest batch, in
+ * the order the agent left them, with the Action Center action it came from.
+ */
+export async function getDraftSuggestions(id: string): Promise<DraftSuggestion[]> {
+  if (!draftId.safeParse(id).success) throw new Error('invalid');
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from('content_draft_suggestions')
+    .select(
+      'id, batch_id, action_id, kind, block_text, before_text, after_text, reason, rule_keys, position, status, created_at, actions(action_no)',
+    )
+    .eq('draft_id', id)
+    .order('created_at', { ascending: false })
+    .limit(MAX_DECIDE);
+  if (error) throw new Error(error.message);
+  const rows = data ?? [];
+  const batch = rows[0]?.batch_id;
+  const statuses: readonly string[] = SUGGESTION_STATUSES;
+  return rows
+    .filter((row) => row.batch_id === batch && statuses.includes(row.status))
+    .sort((a, b) => a.position - b.position)
+    .map((row) => {
+      const action = (Array.isArray(row.actions) ? row.actions[0] : row.actions) as {
+        action_no: number;
+      } | null;
+      return {
+        id: row.id,
+        batchId: row.batch_id,
+        actionId: row.action_id,
+        actionNo: action?.action_no ?? null,
+        kind: row.kind === 'insert' ? 'insert' : 'replace',
+        blockText: row.block_text,
+        beforeText: row.before_text,
+        afterText: row.after_text,
+        reason: row.reason,
+        ruleKeys: row.rule_keys ?? [],
+        status: row.status as SuggestionStatus,
+      };
+    });
+}
+
+const decideInput = z.object({
+  ids: z.array(z.guid()).min(1).max(MAX_DECIDE),
+  status: z.enum(SUGGESTION_STATUSES),
+});
+
+/**
+ * Accepts, rejects or sends back to review (open) a draft's suggestions,
+ * recording who decided (00217 content_draft_decide_suggestions). Throws
+ * 'not_found' when none changed.
+ */
+export async function decideDraftSuggestions(
+  ids: string[],
+  status: SuggestionStatus,
+): Promise<number> {
+  const parsed = decideInput.safeParse({ ids, status });
+  if (!parsed.success) throw new Error('invalid');
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc('content_draft_decide_suggestions', {
+    p_ids: parsed.data.ids,
+    p_status: parsed.data.status,
+  });
+  if (error) throw new Error(error.message);
+  if (!data) throw new Error('not_found');
+  return data;
 }
 
 const citedInput = z.array(z.string().max(5_000)).max(MAX_PASSAGES);
