@@ -7,6 +7,13 @@
 /** How long typing pauses before the draft saves itself. */
 export const AUTOSAVE_DELAY_MS = 1500;
 
+/**
+ * How long typing pauses before the side panel and the type chip read the
+ * page again: reading it re-renders the editor and parses the page, too much
+ * for every keystroke.
+ */
+export const PAGE_READ_DELAY_MS = 400;
+
 /** The largest body a draft saves, in characters of HTML (about 100 pages). */
 export const MAX_BODY_HTML_LENGTH = 500_000;
 
