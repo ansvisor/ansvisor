@@ -278,6 +278,36 @@ describe('the Content plan', () => {
     );
   });
 
+  it('draws both shares to the larger one’s scale, never past the track', async () => {
+    await renderPage();
+    const widths = (bar: 'ai' | 'yours') =>
+      [
+        ...container.querySelectorAll<HTMLElement>(
+          `section[aria-labelledby="plan-mix-title"] [data-bar="${bar}"]`,
+        ),
+      ].map((el) => Math.round(parseFloat(el.style.width)));
+    // Guides 67% · 33%, blog posts 33% · 67%: the brand's 67% fills the track as AI's does.
+    expect(widths('ai')).toEqual([100, 49]);
+    expect(widths('yours')).toEqual([49, 100]);
+  });
+
+  it('opens in its final layout: one spinner until the list and the sections are both in', async () => {
+    let insightsIn: (value: typeof INSIGHTS) => void = () => {};
+    getContentPlanInsights.mockReturnValue(
+      new Promise<typeof INSIGHTS>((resolve) => (insightsIn = resolve)),
+    );
+    await renderPage();
+    // The list is read, but it waits for the sections above it.
+    expect(rowTexts()).toEqual([]);
+    expect(container.querySelector('[aria-busy="true"]')).not.toBeNull();
+    expect(container.querySelector('section[aria-labelledby="plan-mix-title"]')).toBeNull();
+
+    await act(async () => insightsIn(INSIGHTS));
+    expect(rowTexts()).toHaveLength(3);
+    expect(container.querySelector('section[aria-labelledby="plan-mix-title"]')).not.toBeNull();
+    expect(container.querySelector('[aria-busy="true"]')).toBeNull();
+  });
+
   it('filters the list by a page type, and clears it on a second click', async () => {
     await renderPage();
     const guide = () =>

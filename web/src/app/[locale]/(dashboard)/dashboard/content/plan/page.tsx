@@ -126,8 +126,12 @@ export default function ContentPlanPage() {
     () => (current?.data ? buildPlan({ ...current.data, siteType }) : null),
     [current, siteType],
   );
-  const shown =
-    insights?.brandId === activeBrandId && insights.days === days ? insights.data : null;
+  const insightsRead = insights?.brandId === activeBrandId && insights.days === days;
+  const shown = insightsRead ? insights.data : null;
+  // One spinner until both reads are in, so the page opens in its final
+  // layout rather than the list first and the sections above it after. A
+  // list that failed says so at once.
+  const loading = !current?.failed && !(current && insightsRead);
   const mix = useMemo(
     () => (shown ? pageTypeMix(shown.citations, siteType, shown.totalCitations) : null),
     [shown, siteType],
@@ -245,65 +249,75 @@ export default function ContentPlanPage() {
         ))}
       </div>
 
-      {shown && current && <AiResultsStrip results={shown.results} days={current.days} />}
-      {mix && (
-        <PageTypeMix
-          rows={mix.rows}
-          covered={mix.covered}
-          selected={typeFilter}
-          onSelect={setMixType}
-        />
-      )}
-
-      <div className="space-y-2">
-        <div className="flex flex-wrap items-baseline justify-between gap-2">
-          <h2 className="text-sm font-medium">{t('listTitle')}</h2>
-          <p className="text-xs text-muted-foreground">{filtered ? t('filtered') : t('ranked')}</p>
+      {loading ? (
+        <div className="flex items-center justify-center py-16" aria-busy="true">
+          <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
         </div>
-        {current?.data && earlier !== 'full' && earlier !== null && (
-          <p className="text-xs text-muted-foreground">
-            {t(earlier === 'none' ? 'earlier.none' : 'earlier.partial', {
-              days: current.days,
-              since: current.data.tracking.trackedSince
-                ? format.dateTime(new Date(`${current.data.tracking.trackedSince}T00:00:00Z`), {
-                    month: 'short',
-                    day: 'numeric',
-                    timeZone: 'UTC',
-                  })
-                : '—',
-            })}
-          </p>
-        )}
-        <Card className="py-0">
-          <CardContent className="px-0">
-            {current?.failed ? (
-              <div className="flex flex-col items-center gap-3 px-6 py-12 text-center">
-                <p className="text-sm text-muted-foreground">{t('loadError')}</p>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    setRead(null);
-                    setAttempt((n) => n + 1);
-                  }}
-                >
-                  {t('retry')}
-                </Button>
-              </div>
-            ) : !plan ? (
-              <div className="flex items-center justify-center py-12" aria-busy="true">
-                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-              </div>
-            ) : rows.length === 0 ? (
-              <p className="px-6 py-12 text-center text-sm text-muted-foreground">
-                {filtered ? t('emptyFiltered') : t('empty')}
+      ) : (
+        <>
+          {shown && current && <AiResultsStrip results={shown.results} days={current.days} />}
+          {mix && (
+            <PageTypeMix
+              rows={mix.rows}
+              covered={mix.covered}
+              selected={typeFilter}
+              onSelect={setMixType}
+            />
+          )}
+
+          <div className="space-y-2">
+            <div className="flex flex-wrap items-baseline justify-between gap-2">
+              <h2 className="text-sm font-medium">{t('listTitle')}</h2>
+              <p className="text-xs text-muted-foreground">
+                {filtered ? t('filtered') : t('ranked')}
               </p>
-            ) : (
-              <PlanTable rows={rows} days={current?.days ?? 30} onStart={startRow} />
+            </div>
+            {current?.data && earlier !== 'full' && earlier !== null && (
+              <p className="text-xs text-muted-foreground">
+                {t(earlier === 'none' ? 'earlier.none' : 'earlier.partial', {
+                  days: current.days,
+                  since: current.data.tracking.trackedSince
+                    ? format.dateTime(new Date(`${current.data.tracking.trackedSince}T00:00:00Z`), {
+                        month: 'short',
+                        day: 'numeric',
+                        timeZone: 'UTC',
+                      })
+                    : '—',
+                })}
+              </p>
             )}
-          </CardContent>
-        </Card>
-      </div>
+            <Card className="py-0">
+              <CardContent className="px-0">
+                {current?.failed ? (
+                  <div className="flex flex-col items-center gap-3 px-6 py-12 text-center">
+                    <p className="text-sm text-muted-foreground">{t('loadError')}</p>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setRead(null);
+                        setAttempt((n) => n + 1);
+                      }}
+                    >
+                      {t('retry')}
+                    </Button>
+                  </div>
+                ) : !plan ? (
+                  <div className="flex items-center justify-center py-12" aria-busy="true">
+                    <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                  </div>
+                ) : rows.length === 0 ? (
+                  <p className="px-6 py-12 text-center text-sm text-muted-foreground">
+                    {filtered ? t('emptyFiltered') : t('empty')}
+                  </p>
+                ) : (
+                  <PlanTable rows={rows} days={current?.days ?? 30} onStart={startRow} />
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        </>
+      )}
     </div>
   );
 }
