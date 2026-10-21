@@ -50,6 +50,15 @@ describe('detectAmazonShareDrop', () => {
     expect(detectAmazonShareDrop(fixture([20, 20, 20, 20, 11]))).toBeNull();
   });
 
+  it('alerts at exactly ten percentage points despite floating-point representation', () => {
+    expect(detectAmazonShareDrop(fixture([18, 18, 18, 18, 8]))).toEqual({
+      fromShare: 0.18,
+      toShare: 0.08,
+      baselineCards: 400,
+      currentCards: 100,
+    });
+  });
+
   it('requires five consecutive weeks', () => {
     const weeks = fixture([31, 31, 31, 31, 4]);
     weeks[2] = { ...weeks[2], weekStart: '2026-10-06' };
