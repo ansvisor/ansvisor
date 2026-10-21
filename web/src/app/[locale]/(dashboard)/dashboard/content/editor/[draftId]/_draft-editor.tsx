@@ -64,7 +64,7 @@ const DOCUMENT_CLASS = cn(
  */
 export function DraftEditor({ draft }: { draft: ContentDraft }) {
   const t = useTranslations('contentEditor.editor');
-  const autosave = useDraftAutosave(draft.id);
+  const autosave = useDraftAutosave(draft.id, draft);
   const [title, setTitle] = useState(draft.title);
   const [status, setStatus] = useState(draft.status);
   const [marking, setMarking] = useState(false);
@@ -239,8 +239,14 @@ export function DraftEditor({ draft }: { draft: ContentDraft }) {
   const markReady = async () => {
     setMarking(true);
     try {
-      // What's waiting goes out first, so the ready draft is the one on screen.
-      await autosave.retry();
+      // What's waiting goes out first, so the ready draft is the one on screen;
+      // a page that can't be saved isn't marked ready.
+      try {
+        await autosave.settle();
+      } catch {
+        toast.error(t('markReadyUnsaved'));
+        return;
+      }
       const next = await markContentDraftReady(draft.id);
       setStatus(next);
       toast.success(t('markedReady'));
@@ -364,6 +370,31 @@ export function DraftEditor({ draft }: { draft: ContentDraft }) {
 
 function SaveIndicator({ state, onRetry }: { state: SaveState; onRetry: () => void }) {
   const t = useTranslations('contentEditor.editor.save');
+  if (state === 'conflict') {
+    return (
+      <span
+        className="flex items-center gap-1.5 text-xs text-destructive"
+        role="status"
+        title={t('conflictHint')}
+      >
+        {t('conflict')}
+        <button
+          type="button"
+          className="font-medium underline"
+          onClick={() => window.location.reload()}
+        >
+          {t('reload')}
+        </button>
+      </span>
+    );
+  }
+  if (state === 'too_large') {
+    return (
+      <span className="text-xs text-destructive" role="status" title={t('tooLargeHint')}>
+        {t('tooLarge')}
+      </span>
+    );
+  }
   if (state === 'failed') {
     return (
       <span className="flex items-center gap-1.5 text-xs text-destructive" role="status">
