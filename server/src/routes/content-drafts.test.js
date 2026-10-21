@@ -1,12 +1,16 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import express from 'express';
 
-/** POST /api/content-drafts/:draftId/brief (CE-007): Rebuild outline. */
+/**
+ * POST /api/content-drafts/:draftId/brief (CE-007): Rebuild outline;
+ * POST /api/content-drafts/:draftId/suggestions (CE-018): Fix open rules with agent.
+ */
 
 const BRAND = '33333333-3333-3333-3333-333333333333';
 const DRAFT = '77777777-7777-7777-7777-777777777777';
 
 const rebuildDraftBrief = vi.fn();
+const fixDraftRules = vi.fn();
 const assertBrandAccess = vi.fn();
 
 // The route's modules read the Supabase client; CI has no credentials for it.
@@ -14,6 +18,10 @@ vi.mock('../config/supabase.js', () => ({ default: {} }));
 vi.mock('../lib/content-brief.js', async (importOriginal) => ({
   ...(await importOriginal()),
   rebuildDraftBrief: (...args) => rebuildDraftBrief(...args),
+}));
+vi.mock('../lib/content-agent.js', async (importOriginal) => ({
+  ...(await importOriginal()),
+  fixDraftRules: (...args) => fixDraftRules(...args),
 }));
 vi.mock('../lib/access.js', () => ({ assertBrandAccess: (...args) => assertBrandAccess(...args) }));
 
@@ -25,6 +33,7 @@ let baseUrl;
 
 beforeEach(async () => {
   rebuildDraftBrief.mockReset().mockResolvedValue({ goal: 'g', outline: [] });
+  fixDraftRules.mockReset().mockResolvedValue({ count: 2, batchId: 'b1' });
   assertBrandAccess.mockReset().mockResolvedValue({});
   const app = express();
   app.use(express.json());
@@ -106,5 +115,46 @@ describe('POST /api/content-drafts/:draftId/brief', () => {
     res = await rebuild({ brandId: BRAND, sources });
     expect(res.status).toBe(502);
     await expect(res.json()).resolves.toMatchObject({ code: 'failed' });
+  });
+});
+
+const fix = (body) =>
+  fetch(`${baseUrl}/${DRAFT}/suggestions`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+
+describe('POST /api/content-drafts/:draftId/suggestions', () => {
+  const rules = [{ key: 'faq', name: 'FAQ', detail: 'missing' }];
+
+  it('runs the agent for a member of the brand', async () => {
+    const res = await fix({ brandId: BRAND, rules });
+    expect(res.status).toBe(200);
+    await expect(res.json()).resolves.toEqual({ count: 2, batchId: 'b1' });
+    expect(fixDraftRules).toHaveBeenCalledWith({
+      draftId: DRAFT,
+      brandId: BRAND,
+      input: { rules, textRules: [], locked: [] },
+    });
+  });
+
+  it('says why it didn’t run', async () => {
+    fixDraftRules.mockRejectedValueOnce(new PlanLimitError('used up', 429));
+    let res = await fix({ brandId: BRAND, rules });
+    expect(res.status).toBe(429);
+    await expect(res.json()).resolves.toMatchObject({ code: 'ai_budget' });
+
+    fixDraftRules.mockRejectedValueOnce(new PlanLimitError('no subscription', 402));
+    res = await fix({ brandId: BRAND, rules });
+    expect(res.status).toBe(402);
+    await expect(res.json()).resolves.toMatchObject({ code: 'no_subscription' });
+
+    for (const code of ['open_suggestions', 'published']) {
+      fixDraftRules.mockRejectedValueOnce(Object.assign(new Error(code), { status: 409, code }));
+      res = await fix({ brandId: BRAND, rules });
+      expect(res.status).toBe(409);
+      await expect(res.json()).resolves.toMatchObject({ code });
+    }
   });
 });
