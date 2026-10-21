@@ -517,3 +517,52 @@ describe('analyzeNewPrompt', () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 });
+
+describe('getPromptVisibilitySummaries', () => {
+  afterEach(() => {
+    rpcMock = vi.fn(async () => ({ data: insightsAggregatesRow, error: null }));
+  });
+
+  it('keeps every prompt of a brand past 1000, reading the summaries a page at a time', async () => {
+    const rows = Array.from({ length: 1200 }, (_, i) => ({
+      prompt_id: `p-${i}`,
+      runs: 5,
+      visible_runs: 1,
+      mention_answers: 1,
+      citation_answers: 0,
+      total_mentions: 2,
+      total_citations: 0,
+      avg_visibility: 10,
+      avg_visibility_visible: 50,
+      position_factor: 0.5,
+      last_run_at: '2026-10-16T00:00:00.000Z',
+    }));
+    const ranges: [number, number][] = [];
+    // Served as PostgREST would: a ranged request gets its slice, never more
+    // than 1000 rows.
+    rpcMock = vi.fn(() => {
+      let slice: [number, number] = [0, 999];
+      const chain = {
+        order: () => chain,
+        range: (from: number, to: number) => {
+          slice = [from, to];
+          ranges.push([from, to]);
+          return chain;
+        },
+        then: (resolve: (value: unknown) => unknown) =>
+          resolve({ data: rows.slice(slice[0], slice[1] + 1), error: null }),
+      };
+      return chain;
+    }) as unknown as typeof rpcMock;
+    const { getPromptVisibilitySummaries } = await import('./tracking');
+
+    const summaries = await getPromptVisibilitySummaries('brand-id', { days: 90 });
+
+    expect(Object.keys(summaries)).toHaveLength(1200);
+    expect(summaries['p-1199'].totalMentions).toBe(2);
+    expect(ranges).toEqual([
+      [0, 999],
+      [1000, 1999],
+    ]);
+  });
+});
