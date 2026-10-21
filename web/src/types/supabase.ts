@@ -3836,6 +3836,15 @@ export type Database = {
           runs: number
         }[]
       }
+      prompt_position_summaries_json: {
+        Args: {
+          p_brand_id: string
+          p_date_from?: string
+          p_date_to?: string
+          p_region?: string
+        }
+        Returns: Json
+      }
       prompt_usage_summary: {
         Args: { p_brand_id: string }
         Returns: {
