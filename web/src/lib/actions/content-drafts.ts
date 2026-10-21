@@ -1477,6 +1477,7 @@ const AGENT_WRITE_ERRORS = [
   'no_subscription',
   'writing',
   'org_writing',
+  'open_suggestions',
   'not_draft',
   'failed',
 ] as const;
