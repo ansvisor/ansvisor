@@ -185,6 +185,27 @@ describe('the Sources tab', () => {
     });
   });
 
+  it('changes each row on its own, and puts back only the one that failed', async () => {
+    await render();
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    let fail!: (err: Error) => void;
+    setDraftSourceIncluded
+      .mockImplementationOnce(() => new Promise((_, reject) => (fail = reject)))
+      .mockResolvedValueOnce(undefined);
+    // Two quick toggles: the second doesn't undo the first.
+    await act(async () => {
+      checkbox('home espresso grinder').click();
+      checkbox('Best espresso machines under $500?').click();
+    });
+    expect(rows()[1].checked).toBe('false');
+    expect(rows()[0].checked).toBe('false');
+
+    // The first one fails: only its row goes back.
+    await act(async () => fail(new Error('boom')));
+    expect(rows()[1].checked).toBe('true');
+    expect(rows()[0].checked).toBe('false');
+  });
+
   it('lists a source left out unchecked', async () => {
     await render(undefined, [{ kind: 'prompt', ref: 'p1', included: false, added: false }]);
     expect(rows()[0].checked).toBe('false');
