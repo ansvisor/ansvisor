@@ -278,6 +278,21 @@ describe('the Content plan', () => {
     );
   });
 
+  it('opens the mix closed, with its count, and opens it on a click', async () => {
+    await renderPage();
+    const mix = container.querySelector('section[aria-labelledby="plan-mix-title"]')!;
+    const toggle = mix.querySelector<HTMLButtonElement>('h2 button')!;
+    expect(toggle.getAttribute('aria-expanded')).toBe('false');
+    expect(mix.textContent).toContain('2 page types · 1 gap');
+    const body = document.getElementById(toggle.getAttribute('aria-controls')!)!;
+    expect(body.className).toContain('hidden');
+
+    await act(async () => toggle.click());
+    expect(toggle.getAttribute('aria-expanded')).toBe('true');
+    expect(body.className).not.toContain('hidden');
+    expect(mix.textContent).not.toContain('2 page types · 1 gap');
+  });
+
   it('draws both shares to the larger one’s scale, never past the track', async () => {
     await renderPage();
     const widths = (bar: 'ai' | 'yours') =>
@@ -312,7 +327,7 @@ describe('the Content plan', () => {
     await renderPage();
     const guide = () =>
       container.querySelector<HTMLButtonElement>(
-        'section[aria-labelledby="plan-mix-title"] button',
+        'section[aria-labelledby="plan-mix-title"] li button',
       )!;
     await act(async () => guide().click());
     expect(guide().getAttribute('aria-pressed')).toBe('true');
@@ -344,7 +359,7 @@ describe('the Content plan', () => {
     await renderPage();
     const guide = () =>
       container.querySelector<HTMLButtonElement>(
-        'section[aria-labelledby="plan-mix-title"] button',
+        'section[aria-labelledby="plan-mix-title"] li button',
       )!;
     await act(async () => guide().click());
     await act(async () => button('Overlaps').click());

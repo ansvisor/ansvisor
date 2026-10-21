@@ -1,7 +1,8 @@
 'use client';
 
+import { useId, useState } from 'react';
 import { useTranslations } from 'next-intl';
-import { Sparkles } from 'lucide-react';
+import { ChevronDown, Sparkles } from 'lucide-react';
 import { Link } from '@/i18n/navigation';
 import type { PageType } from '@/lib/content/drafts';
 import type { MixRow, PlanResults } from '@/lib/content/plan-mix';
@@ -103,17 +104,46 @@ export function PageTypeMix({
 }) {
   const t = useTranslations('contentEditor.plan.mix');
   const tTypes = useTranslations('contentEditor.pageTypes');
+  // Closed until opened, as Tracked Prompts' usage header: the list is the
+  // page's work. Kept mounted while closed, so it opens at once.
+  const [open, setOpen] = useState(false);
+  const bodyId = useId();
   // The largest share, AI's or the brand's, fills the track; the others are
   // drawn to its scale, so neither bar runs past it.
   const scale = Math.max(1, ...rows.map((r) => Math.max(r.aiShare, r.yourShare)));
+  const gaps = rows.filter((r) => r.gap).length;
 
   return (
     <section aria-labelledby="plan-mix-title" className="space-y-2">
-      <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <h2 id="plan-mix-title" className="text-sm font-medium">
-          {t('title')}
-        </h2>
-        <span className="flex items-center gap-3 text-xs text-muted-foreground">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
+          <h2 id="plan-mix-title" className="text-sm font-medium">
+            <button
+              type="button"
+              aria-expanded={open}
+              aria-controls={bodyId}
+              onClick={() => setOpen((o) => !o)}
+              className="-ml-1 flex items-center gap-1.5 rounded-md px-1 py-0.5 hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+            >
+              <ChevronDown
+                aria-hidden
+                className={cn(
+                  'h-4 w-4 shrink-0 text-muted-foreground transition-transform',
+                  !open && '-rotate-90',
+                )}
+              />
+              {t('title')}
+            </button>
+          </h2>
+          {!open && rows.length > 0 && (
+            <span className="text-xs text-muted-foreground">
+              {t('collapsed', { types: rows.length, gaps })}
+            </span>
+          )}
+        </div>
+        <span
+          className={cn('flex items-center gap-3 text-xs text-muted-foreground', !open && 'hidden')}
+        >
           <span className="flex items-center gap-1.5">
             <span aria-hidden className="h-2 w-2 rounded-sm bg-muted-foreground/40" />
             {t('aiShare')}
@@ -124,50 +154,52 @@ export function PageTypeMix({
           </span>
         </span>
       </div>
-      {rows.length === 0 ? (
-        <p className="rounded-xl border px-4 py-3 text-sm text-muted-foreground">{t('empty')}</p>
-      ) : (
-        <ul className="divide-y rounded-xl border">
-          {rows.map((row) => (
-            <li key={row.pageType}>
-              <button
-                type="button"
-                aria-pressed={selected === row.pageType}
-                onClick={() => onSelect(selected === row.pageType ? null : row.pageType)}
-                className={cn(
-                  'grid w-full grid-cols-[minmax(0,10rem)_1fr_auto] items-center gap-3 px-4 py-2 text-left text-sm transition-colors hover:bg-muted/40 sm:grid-cols-[minmax(0,12rem)_1fr_5.5rem_8rem]',
-                  selected === row.pageType && 'bg-muted/60',
-                )}
-              >
-                <span className="truncate">{tTypes(row.pageType)}</span>
-                <MixBars aiShare={row.aiShare} yourShare={row.yourShare} scale={scale} />
-                <span className="text-right text-xs tabular-nums text-muted-foreground">
-                  {t('shares', { ai: row.aiShare, yours: row.yourShare })}
-                  {/* On a phone the gap goes under the shares. */}
-                  {row.gap && (
-                    <span className="block font-medium text-amber-700 sm:hidden dark:text-amber-400">
-                      {t('gap', { count: row.pages })}
-                    </span>
-                  )}
-                </span>
-                <span
+      <div id={bodyId} className={cn('space-y-2', !open && 'hidden')}>
+        {rows.length === 0 ? (
+          <p className="rounded-xl border px-4 py-3 text-sm text-muted-foreground">{t('empty')}</p>
+        ) : (
+          <ul className="divide-y rounded-xl border">
+            {rows.map((row) => (
+              <li key={row.pageType}>
+                <button
+                  type="button"
+                  aria-pressed={selected === row.pageType}
+                  onClick={() => onSelect(selected === row.pageType ? null : row.pageType)}
                   className={cn(
-                    'hidden text-right text-xs sm:block',
-                    row.gap
-                      ? 'font-medium text-amber-700 dark:text-amber-400'
-                      : 'text-muted-foreground',
+                    'grid w-full grid-cols-[minmax(0,10rem)_1fr_auto] items-center gap-3 px-4 py-2 text-left text-sm transition-colors hover:bg-muted/40 sm:grid-cols-[minmax(0,12rem)_1fr_5.5rem_8rem]',
+                    selected === row.pageType && 'bg-muted/60',
                   )}
                 >
-                  {row.gap ? t('gap', { count: row.pages }) : t('pages', { count: row.pages })}
-                </span>
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
-      {rows.length > 0 && covered < 100 && (
-        <p className="text-xs text-muted-foreground">{t('covered', { pct: covered })}</p>
-      )}
+                  <span className="truncate">{tTypes(row.pageType)}</span>
+                  <MixBars aiShare={row.aiShare} yourShare={row.yourShare} scale={scale} />
+                  <span className="text-right text-xs tabular-nums text-muted-foreground">
+                    {t('shares', { ai: row.aiShare, yours: row.yourShare })}
+                    {/* On a phone the gap goes under the shares. */}
+                    {row.gap && (
+                      <span className="block font-medium text-amber-700 sm:hidden dark:text-amber-400">
+                        {t('gap', { count: row.pages })}
+                      </span>
+                    )}
+                  </span>
+                  <span
+                    className={cn(
+                      'hidden text-right text-xs sm:block',
+                      row.gap
+                        ? 'font-medium text-amber-700 dark:text-amber-400'
+                        : 'text-muted-foreground',
+                    )}
+                  >
+                    {row.gap ? t('gap', { count: row.pages }) : t('pages', { count: row.pages })}
+                  </span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+        {rows.length > 0 && covered < 100 && (
+          <p className="text-xs text-muted-foreground">{t('covered', { pct: covered })}</p>
+        )}
+      </div>
     </section>
   );
 }

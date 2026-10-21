@@ -3115,6 +3115,7 @@
       },
       "mix": {
         "title": "What AI cites in your topics",
+        "collapsed": "{types, plural, one {# page type} other {# page types}} · {gaps, plural, =0 {no gap} one {# gap} other {# gaps}}",
         "aiShare": "Share of AI citations",
         "yourShare": "Your pages' mix",
         "shares": "{ai}% · {yours}%",
