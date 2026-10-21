@@ -2,6 +2,7 @@
 
 import { unstable_cache } from 'next/cache';
 import { dbClient, withDbClient } from '@/lib/supabase/scoped';
+import { readAllRpcRows } from '@/lib/supabase/rpc-pages';
 import { expandDateToEndOfDay } from '@/lib/dates';
 import { runDayWindow } from '@/lib/citations/rollup-window';
 import {
@@ -2338,18 +2339,23 @@ export async function getPromptVisibilitySummaries(
   // 1000 rows (wrong health columns on busy brands — the #430/#464 defect
   // family) and its transfer cost slowed the Prompts page's first load.
   // The RPC excludes chatgpt-shopping (#155) like every analytical surface.
-  const { data, error } = await supabase.rpc('prompt_visibility_summaries', {
-    p_brand_id: brandId,
-    p_date_from: since,
-    p_date_to: opts?.to ?? undefined,
-    // One tracked location, or every location blended when absent (#691).
-    p_region: opts?.region ?? undefined,
-  });
-
-  if (error) throw new Error(error.message);
+  // One row per prompt, read a page at a time so a brand past 1000 prompts
+  // keeps them all.
+  const data = await readAllRpcRows((from, to) =>
+    supabase
+      .rpc('prompt_visibility_summaries', {
+        p_brand_id: brandId,
+        p_date_from: since,
+        p_date_to: opts?.to ?? undefined,
+        // One tracked location, or every location blended when absent (#691).
+        p_region: opts?.region ?? undefined,
+      })
+      .order('prompt_id')
+      .range(from, to),
+  );
 
   const result: Record<string, PromptVisibilitySummary> = {};
-  for (const row of data ?? []) {
+  for (const row of data) {
     const runs = Number(row.runs ?? 0);
     const visibleRuns = Number(row.visible_runs ?? 0);
     const mentionAnswers = Number(row.mention_answers ?? 0);
