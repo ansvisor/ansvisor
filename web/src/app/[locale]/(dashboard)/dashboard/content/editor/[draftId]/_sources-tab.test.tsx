@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import messages from '../../../../../../../../messages/en.json';
 import type { DraftSourceChoice, DraftSourcesData } from '@/lib/content/sources';
 import { SourcesTab } from './_sources-tab';
+import { useDraftReads } from './_use-draft-reads';
 
 const getDraftSources = vi.fn();
 const setDraftSourceIncluded = vi.fn();
@@ -12,6 +13,7 @@ const addDraftSource = vi.fn();
 const getContentStartOptions = vi.fn();
 vi.mock('@/lib/actions/content-drafts', () => ({
   getDraftSources: (...args: unknown[]) => getDraftSources(...args),
+  getDraftBrief: async () => null,
   setDraftSourceIncluded: (...args: unknown[]) => setDraftSourceIncluded(...args),
   addDraftSource: (...args: unknown[]) => addDraftSource(...args),
   getContentStartOptions: (...args: unknown[]) => getContentStartOptions(...args),
@@ -71,10 +73,15 @@ async function render(
   });
 }
 
+/** The tab as the editor gives it its sources: one read, shared (useDraftReads). */
 function Tab({ bodyHtml }: { bodyHtml: string }) {
+  const reads = useDraftReads('d1');
   return (
     <NextIntlClientProvider locale="en" messages={messages}>
       <SourcesTab
+        read={reads.sources}
+        setRead={reads.setSources}
+        onReload={reads.reloadSources}
         draftId="d1"
         brandId="b1"
         title="The home espresso guide"

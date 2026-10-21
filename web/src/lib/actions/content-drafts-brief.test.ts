@@ -143,6 +143,7 @@ describe('rebuildDraftBrief', () => {
   it('names why it didn’t, and anything unexpected as failed', async () => {
     for (const [body, ok, error] of [
       [{ code: 'ai_budget' }, false, 'ai_budget'],
+      [{ code: 'no_subscription' }, false, 'no_subscription'],
       [{ code: 'no_sources' }, false, 'no_sources'],
       [{ code: 'forbidden' }, false, 'failed'],
       [{ brief: { goal: 1 } }, true, 'failed'],
