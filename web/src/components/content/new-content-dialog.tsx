@@ -552,7 +552,8 @@ export function NewContentDialog({
 
   return (
     <Dialog open={open} onOpenChange={changeOpen}>
-      <DialogContent className="sm:max-w-xl">
+      {/* One column no wider than the dialog: a long title or pick truncates instead of widening it. */}
+      <DialogContent className="grid-cols-[minmax(0,1fr)] sm:max-w-xl">
         {start ? (
           <>
             <DialogHeader>
@@ -735,7 +736,9 @@ export function NewContentDialog({
                       title={picked?.label}
                     >
                       {options ? (
-                        <ComboboxValue placeholder={t(`sources.${kind}.placeholder`)} />
+                        <span className="min-w-0 flex-1 truncate text-left">
+                          <ComboboxValue placeholder={t(`sources.${kind}.placeholder`)} />
+                        </span>
                       ) : (
                         <span className="flex items-center gap-2 text-muted-foreground">
                           <Loader2 className="h-3.5 w-3.5 animate-spin" />
