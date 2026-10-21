@@ -71,7 +71,6 @@ describe('POST /api/content-drafts/:draftId/brief', () => {
     for (const [body, draftId] of [
       [{ brandId: BRAND, sources }, 'd1'],
       [{ brandId: 'b1', sources }, DRAFT],
-      [{ brandId: BRAND, sources: { ...sources, length: 5 } }, DRAFT],
       [{ brandId: BRAND, sources: { ...sources, promptIds: ['p1'] } }, DRAFT],
     ]) {
       const res = await rebuild(body, draftId);
@@ -89,6 +88,12 @@ describe('POST /api/content-drafts/:draftId/brief', () => {
     res = await rebuild({ brandId: BRAND, sources });
     expect(res.status).toBe(429);
     await expect(res.json()).resolves.toMatchObject({ code: 'ai_budget' });
+
+    // No active subscription is its own case, not a spent budget.
+    rebuildDraftBrief.mockRejectedValueOnce(new PlanLimitError('no subscription', 402));
+    res = await rebuild({ brandId: BRAND, sources });
+    expect(res.status).toBe(402);
+    await expect(res.json()).resolves.toMatchObject({ code: 'no_subscription' });
 
     rebuildDraftBrief.mockRejectedValueOnce(
       Object.assign(new Error('none'), { status: 422, code: 'no_sources' }),

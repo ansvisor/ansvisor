@@ -3632,6 +3632,7 @@
         "rebuilt": "{count, plural, one {Brief rebuilt from # source} other {Brief rebuilt from # sources}}",
         "rebuildErrors": {
           "ai_budget": "This month's AI usage is used up. It resets when your subscription renews.",
+          "no_subscription": "Rebuilding needs an active subscription. Choose a plan in Settings › Billing.",
           "no_sources": "Keep at least one prompt, fan-out or Search Console query to build from.",
           "failed": "Couldn't rebuild the brief. Try again."
         },
