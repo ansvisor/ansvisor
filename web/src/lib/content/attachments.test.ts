@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { attachmentKind, tableHtml, tableRows, textToHtml } from './attachments';
+import { attachmentKind, rowsThatFit, tableHtml, tableRows, textToHtml } from './attachments';
 
 describe('attachmentKind', () => {
   it('reads a file’s kind from its extension, whatever its case', () => {
@@ -53,6 +53,26 @@ describe('tableHtml', () => {
       '<table><tbody><tr><th><p>Name</p></th><th><p>Note</p></th></tr>' +
         '<tr><td><p>&lt;b&gt;X&lt;/b&gt;</p></td><td><p>A &amp; &quot;B&quot;</p></td></tr></tbody></table>',
     );
+  });
+});
+
+describe('rowsThatFit', () => {
+  // As the editor saves them: 350 for the table, 9 a row, 40 a cell plus its text.
+  const rows = [['a'], ['xx'], ['xx']];
+
+  it('counts the data rows that fit after the header, as the editor saves a table', () => {
+    expect(rowsThatFit(rows, 10_000)).toBe(2);
+    expect(rowsThatFit(rows, 400 + 51)).toBe(1);
+    expect(rowsThatFit(rows, 400 + 50)).toBe(0);
+  });
+
+  it('says when not even the header fits', () => {
+    expect(rowsThatFit(rows, 399)).toBe(-1);
+  });
+
+  it('counts a cell’s text as it is escaped', () => {
+    expect(rowsThatFit([['a'], ['<<']], 400 + 9 + 40 + 8)).toBe(1);
+    expect(rowsThatFit([['a'], ['<<']], 400 + 9 + 40 + 7)).toBe(0);
   });
 });
 
