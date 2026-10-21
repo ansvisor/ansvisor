@@ -51,7 +51,8 @@ export default function ContentPlanPage() {
   const activeBrandId = useBrandStore((s) => s.activeBrandId);
   const activeBrand = useBrandStore((s) => s.brands.find((b) => b.id === s.activeBrandId));
   const siteType = siteTypeOf(activeBrand ?? {});
-  const [days, setDays] = useState<PlanPeriod>(30);
+  // Null until the URL is read, so ?days=7 reads 7 days once, not 30 first.
+  const [days, setDays] = useState<PlanPeriod | null>(null);
   const [card, setCard] = useState<PlanCard | null>(null);
   const [read, setRead] = useState<PlanRead | null>(null);
   const [attempt, setAttempt] = useState(0);
@@ -64,7 +65,7 @@ export default function ContentPlanPage() {
   }, []);
 
   useEffect(() => {
-    if (!activeBrandId) return;
+    if (!activeBrandId || days === null) return;
     let cancelled = false;
     getContentPlan(activeBrandId, days)
       .then((data) => {
@@ -95,7 +96,12 @@ export default function ContentPlanPage() {
   const startRow = (row: PlanRow) => {
     setPreset(
       row.opportunityId
-        ? { kind: 'opportunity', id: row.opportunityId }
+        ? {
+            kind: 'opportunity',
+            id: row.opportunityId,
+            // An opportunity for an existing page starts on that page.
+            page: row.page ? { url: row.page, title: row.title } : null,
+          }
         : { kind: 'page', url: row.page! },
     );
     setStarting(true);
@@ -220,7 +226,7 @@ export default function ContentPlanPage() {
                 {card ? t('emptyFiltered') : t('empty')}
               </p>
             ) : (
-              <PlanTable rows={rows} days={days} onStart={startRow} />
+              <PlanTable rows={rows} days={current?.days ?? 30} onStart={startRow} />
             )}
           </CardContent>
         </Card>

@@ -291,6 +291,25 @@ describe('New content', () => {
       expect(document.body.textContent).toContain('Optimize: Pricing');
     });
 
+    it('starts an opportunity for an existing page on that page, whatever the check recommends', async () => {
+      // The check would recommend a new page: no page of the brand answers the prompts.
+      getContentOverlap.mockResolvedValue({ totalPrompts: 2, pages: [] });
+      await render('b2b', {
+        kind: 'opportunity',
+        id: 'o2',
+        page: { url: 'https://northwind.example/pricing', title: 'Pricing' },
+      });
+      await act(async () => {});
+      expect(document.body.textContent).toContain('Optimize: Pricing');
+      await click(button('Open editor'));
+      expect(createContentDraft.mock.calls[0][1]).toMatchObject({
+        method: 'optimize',
+        title: 'Pricing',
+        source: { kind: 'opportunity', id: 'o2' },
+        sourceUrl: 'https://northwind.example/pricing',
+      });
+    });
+
     it('leaves an opportunity no longer open to pick', async () => {
       await render('b2b', { kind: 'opportunity', id: 'gone' });
       expect(button('Continue')).toBeDefined();
