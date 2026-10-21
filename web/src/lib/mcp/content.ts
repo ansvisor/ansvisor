@@ -7,6 +7,7 @@ import {
   type AgentSuggestionInput,
   type DroppedReason,
 } from '@/lib/content/agent-suggestions';
+import { classifyDomain, extractHostname, normalizeDomain } from '@/lib/citations/classify';
 import { CITED_DAYS, passageKey, quotedPassages } from '@/lib/content/cited-passages';
 import { contentEditorPath, isPageType, type PageType } from '@/lib/content/drafts';
 import { IMPACT_PERIODS } from '@/lib/content/impact';
@@ -79,6 +80,40 @@ async function lockedKeys(draft: DraftRow, texts: string[]): Promise<Set<string>
   if (error) throw new Error(error.message);
   const answers = (data ?? []) as { platform: string; response: string }[];
   return new Set(quotedPassages(texts, answers).map((p) => p.key));
+}
+
+/** How many of a draft's newest suggestions are read to find its latest batch. */
+const LATEST_BATCH_ROWS = 200;
+
+/**
+ * The draft's latest batch's suggestions still waiting for a person: the
+ * editor shows only that batch, so a new one would hide them (and Undo on
+ * the ones accepted).
+ */
+async function openSuggestionsOf(draftId: string) {
+  const { data, error } = await supabaseAdmin
+    .from('content_draft_suggestions')
+    .select('id, kind, reason, batch_id, status, created_at')
+    .eq('draft_id', draftId)
+    .order('created_at', { ascending: false })
+    .limit(LATEST_BATCH_ROWS);
+  if (error) throw new Error(error.message);
+  const batch = data?.[0]?.batch_id;
+  return (data ?? [])
+    .filter((s) => s.batch_id === batch && s.status === 'open')
+    .map((s) => ({ id: s.id, kind: s.kind, reason: s.reason }));
+}
+
+/** Whether the address is on one of the brand's domains, or a subdomain of one. */
+async function onBrandDomain(brandId: string, url: string): Promise<boolean> {
+  const { data, error } = await supabaseAdmin
+    .from('brand_domains')
+    .select('domain')
+    .eq('brand_id', brandId);
+  if (error) throw new Error(error.message);
+  const host = extractHostname(url);
+  const brandDomains = (data ?? []).map((r) => normalizeDomain(r.domain)).filter(Boolean);
+  return !!host && classifyDomain(host, { brandDomains, competitorDomains: [] }) === 'you';
 }
 
 export interface McpDraftSummary {
@@ -162,15 +197,7 @@ export async function getContentDraftFor(
     draft,
     passages.map((p) => p.text),
   );
-  const { data: suggestions, error } = await supabaseAdmin
-    .from('content_draft_suggestions')
-    .select('id, kind, reason, batch_id, created_at')
-    .eq('draft_id', draft.id)
-    .eq('status', 'open')
-    .order('created_at', { ascending: false })
-    .limit(200);
-  if (error) throw new Error(error.message);
-  const batch = suggestions?.[0]?.batch_id;
+  const openSuggestions = await openSuggestionsOf(draft.id);
 
   return {
     id: draft.id,
@@ -190,9 +217,7 @@ export async function getContentDraftFor(
       text: p.text,
       locked: locked.has(passageKey(p.text)),
     })),
-    open_suggestions: (suggestions ?? [])
-      .filter((s) => s.batch_id === batch)
-      .map((s) => ({ id: s.id, kind: s.kind, reason: s.reason })),
+    open_suggestions: openSuggestions,
   };
 }
 
@@ -211,13 +236,21 @@ export interface CreateDraftInput {
  * agent, so it goes to the Library's In review for a person. Its HTML is
  * checked against the draft allow-list, as a save is; the page type is the
  * one given, or the one the page shows; prompts are kept to the brand's.
- * Null for a brand outside the organization.
+ * Null for a brand outside the organization; 'off_domain' for a source_url
+ * that isn't on one of the brand's domains.
  */
 export async function createContentDraftFor(
   auth: McpAuthContext,
   input: CreateDraftInput,
-): Promise<{ id: string; status: string; page_type: string | null; editor_path: string } | null> {
+): Promise<
+  | { id: string; status: string; page_type: string | null; editor_path: string }
+  | 'off_domain'
+  | null
+> {
   if (!(await brandInOrg(auth, input.brandId))) return null;
+  if (input.sourceUrl && !(await onBrandDomain(input.brandId, input.sourceUrl))) {
+    return 'off_domain';
+  }
   const { data: brand, error: brandError } = await supabaseAdmin
     .from('brands')
     .select('site_type, industry, shopping_mode_enabled')
@@ -241,11 +274,12 @@ export async function createContentDraftFor(
 
   let promptIds: string[] = [];
   if (input.promptIds?.length) {
+    // Through the prompt's set, not its topic: a prompt may have no topic.
     const { data: prompts, error: promptsError } = await supabaseAdmin
       .from('prompts')
-      .select('id, topics!inner(brand_id)')
+      .select('id, prompt_sets!inner(brand_id)')
       .in('id', input.promptIds)
-      .eq('topics.brand_id', input.brandId);
+      .eq('prompt_sets.brand_id', input.brandId);
     if (promptsError) throw new Error(promptsError.message);
     promptIds = (prompts ?? []).map((p) => p.id);
   }
@@ -337,9 +371,9 @@ export async function addContentSourceFor(
   if (source.kind === 'prompt') {
     const { data: prompt, error } = await supabaseAdmin
       .from('prompts')
-      .select('id, topics!inner(brand_id)')
+      .select('id, prompt_sets!inner(brand_id)')
       .eq('id', source.promptId)
-      .eq('topics.brand_id', draft.brand_id)
+      .eq('prompt_sets.brand_id', draft.brand_id)
       .maybeSingle();
     if (error) throw new Error(error.message);
     if (!prompt) return 'not_found';
@@ -367,7 +401,8 @@ export async function addContentSourceFor(
  * batch (CE-018, 00217), linked to the draft's Action Center action. Passages
  * are numbered as get_content_draft lists them; what the editor can't apply
  * is dropped with the reason. Null outside the organization; 'published' for
- * a draft that is live already.
+ * a draft that is live already; 'open_suggestions' while a person still has
+ * the latest batch's suggestions to decide.
  */
 export async function suggestContentChangesFor(
   auth: McpAuthContext,
@@ -376,11 +411,13 @@ export async function suggestContentChangesFor(
 ): Promise<
   | { kept: number; batch_id: string | null; dropped: { index: number; reason: DroppedReason }[] }
   | 'published'
+  | 'open_suggestions'
   | null
 > {
   const draft = await draftFor(auth, draftId);
   if (!draft) return null;
   if (draft.status === 'published') return 'published';
+  if ((await openSuggestionsOf(draft.id)).length) return 'open_suggestions';
   const passages = draftPassages(draft.body_html);
   const locked = await lockedKeys(
     draft,
@@ -404,22 +441,24 @@ export async function suggestContentChangesFor(
 }
 
 /**
- * Ready (spec §6): a draft, or an agent's draft in review, is ready to
- * publish, and History keeps it as a version. A draft already ready or
- * published keeps its status. Null outside the organization.
+ * Ready (spec §6): a draft is ready to publish, and History keeps it as a
+ * version. An agent's draft in review waits for a person to mark it ready in
+ * the editor ('in_review'): the key that wrote it can't approve it. A draft
+ * already ready or published keeps its status. Null outside the organization.
  */
 export async function setContentDraftReadyFor(
   auth: McpAuthContext,
   draftId: string,
-): Promise<{ status: string } | null> {
+): Promise<{ status: string } | 'in_review' | null> {
   const draft = await draftFor(auth, draftId);
   if (!draft) return null;
-  if (draft.status !== 'draft' && draft.status !== 'in_review') return { status: draft.status };
+  if (draft.status === 'in_review') return 'in_review';
+  if (draft.status !== 'draft') return { status: draft.status };
   const { data, error } = await supabaseAdmin
     .from('content_drafts')
     .update({ status: 'ready' })
     .eq('id', draft.id)
-    .in('status', ['draft', 'in_review'])
+    .eq('status', 'draft')
     .select('status')
     .maybeSingle();
   if (error) throw new Error(error.message);

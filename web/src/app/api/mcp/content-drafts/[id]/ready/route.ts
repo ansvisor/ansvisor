@@ -13,6 +13,12 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   }
   try {
     const result = await setContentDraftReadyFor(auth, id);
+    if (result === 'in_review') {
+      return NextResponse.json(
+        { error: 'The draft is in review: a person marks it ready in the editor' },
+        { status: 409 },
+      );
+    }
     if (!result) return NextResponse.json({ error: 'Draft not found' }, { status: 404 });
     return NextResponse.json(result);
   } catch (err) {
