@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { useTranslations } from 'next-intl';
+import { useFormatter, useTranslations } from 'next-intl';
 import { Loader2, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -14,6 +14,7 @@ import {
   PLAN_CARDS,
   PLAN_PERIODS,
   buildPlan,
+  earlierPeriod,
   rowsFor,
   type PlanCard,
   type PlanPeriod,
@@ -50,14 +51,15 @@ const CARD_DOT: Record<PlanCard, string> = {
 
 /**
  * The Content plan (Content Editor CE-014, spec v2 §4): what to create,
- * optimize or protect next, for the last 7 or 30 days. Four cards count the
- * work and filter the list; the list ranks it, and each row starts it in New
- * content (Start for an opportunity, an existing page read to optimize) or
- * opens the draft already being written. The period lives in the URL
- * (?days=7).
+ * optimize or protect next, for the last 7, 30 or 90 days. Four cards count
+ * the work and filter the list, as a row of the page-type mix does; the list
+ * ranks it, and each row starts it in New content (Start for an opportunity,
+ * an existing page read to optimize) or opens the draft already being
+ * written. The period lives in the URL (?days=7).
  */
 export default function ContentPlanPage() {
   const t = useTranslations('contentEditor.plan');
+  const format = useFormatter();
   const activeBrandId = useBrandStore((s) => s.activeBrandId);
   const activeBrand = useBrandStore((s) => s.brands.find((b) => b.id === s.activeBrandId));
   const siteType = siteTypeOf(activeBrand ?? {});
@@ -70,6 +72,13 @@ export default function ContentPlanPage() {
   const [attempt, setAttempt] = useState(0);
   const [starting, setStarting] = useState(false);
   const [preset, setPreset] = useState<DialogPreset | null>(null);
+  // Another brand starts unfiltered: its cards and types are its own.
+  const [filtersFor, setFiltersFor] = useState(activeBrandId);
+  if (filtersFor !== activeBrandId) {
+    setFiltersFor(activeBrandId);
+    setCard(null);
+    setMixType(null);
+  }
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- one read of the URL after mount
@@ -93,8 +102,9 @@ export default function ContentPlanPage() {
     };
   }, [activeBrandId, days, attempt]);
 
+  // Read again with the brand or the period only: a draft sent changes nothing in them.
   useEffect(() => {
-    if (!activeBrandId) return;
+    if (!activeBrandId || days === null) return;
     let cancelled = false;
     getContentPlanInsights(activeBrandId, days)
       .then((data) => {
@@ -108,7 +118,7 @@ export default function ContentPlanPage() {
     return () => {
       cancelled = true;
     };
-  }, [activeBrandId, days, attempt]);
+  }, [activeBrandId, days]);
 
   // A read for another brand or period (just switched) counts as still loading.
   const current = read?.brandId === activeBrandId && read.days === days ? read : null;
@@ -119,9 +129,12 @@ export default function ContentPlanPage() {
   const shown =
     insights?.brandId === activeBrandId && insights.days === days ? insights.data : null;
   const mix = useMemo(
-    () => (shown ? pageTypeMix(shown.citations, siteType) : null),
+    () => (shown ? pageTypeMix(shown.citations, siteType, shown.totalCitations) : null),
     [shown, siteType],
   );
+  // A type picked in another period's mix filters only while this one lists it.
+  const typeFilter = mix?.rows.some((r) => r.pageType === mixType) ? mixType : null;
+  const earlier = current?.data ? earlierPeriod(current.data.answers, current.data.tracking) : null;
 
   const changeDays = (next: PlanPeriod) => {
     setDays(next);
@@ -150,10 +163,8 @@ export default function ContentPlanPage() {
     );
   }
 
-  const rows = plan
-    ? rowsFor(plan.rows, card).filter((row) => !mixType || row.pageType === mixType)
-    : [];
-  const filtered = card !== null || mixType !== null;
+  const rows = plan ? rowsFor(plan.rows, card, typeFilter) : [];
+  const filtered = card !== null || typeFilter !== null;
 
   return (
     <div className="space-y-6">
@@ -234,9 +245,14 @@ export default function ContentPlanPage() {
         ))}
       </div>
 
-      {shown && <AiResultsStrip results={shown.results} days={days} />}
+      {shown && current && <AiResultsStrip results={shown.results} days={current.days} />}
       {mix && (
-        <PageTypeMix rows={mix.rows} unread={mix.unread} selected={mixType} onSelect={setMixType} />
+        <PageTypeMix
+          rows={mix.rows}
+          covered={mix.covered}
+          selected={typeFilter}
+          onSelect={setMixType}
+        />
       )}
 
       <div className="space-y-2">
@@ -244,6 +260,20 @@ export default function ContentPlanPage() {
           <h2 className="text-sm font-medium">{t('listTitle')}</h2>
           <p className="text-xs text-muted-foreground">{filtered ? t('filtered') : t('ranked')}</p>
         </div>
+        {current?.data && earlier !== 'full' && earlier !== null && (
+          <p className="text-xs text-muted-foreground">
+            {t(earlier === 'none' ? 'earlier.none' : 'earlier.partial', {
+              days: current.days,
+              since: current.data.tracking.trackedSince
+                ? format.dateTime(new Date(`${current.data.tracking.trackedSince}T00:00:00Z`), {
+                    month: 'short',
+                    day: 'numeric',
+                    timeZone: 'UTC',
+                  })
+                : '—',
+            })}
+          </p>
+        )}
         <Card className="py-0">
           <CardContent className="px-0">
             {current?.failed ? (

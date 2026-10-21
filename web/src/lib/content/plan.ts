@@ -28,6 +28,16 @@ export interface PlanAnswers {
   prev: number;
 }
 
+/**
+ * When the brand's tracking began, against the earlier period's first day
+ * (UTC dates): an earlier period before it is only partly tracked, or not
+ * at all, so pages are compared per answer, or not at all.
+ */
+export interface PlanTracking {
+  prevFrom: string | null;
+  trackedSince: string | null;
+}
+
 /** One of the brand's pages, as content_plan_pages (00220) reads it. */
 export interface PlanPage {
   page: string;
@@ -260,14 +270,35 @@ export function buildPlan({
   };
 }
 
-/** The rows a card shows, the first MAX_ROWS: its action's, or the pages competing; all without a card. */
-export function rowsFor(rows: PlanRow[], card: PlanCard | null): PlanRow[] {
-  const shown = !card
-    ? rows
-    : card === 'overlaps'
-      ? rows.filter((r) => r.overlaps > 0)
-      : rows.filter((r) => r.action === card);
-  return shown.slice(0, MAX_ROWS);
+/**
+ * The rows a card shows, the first MAX_ROWS: its action's, or the pages
+ * competing; all without a card. A page type (the mix's filter) narrows them
+ * before the cut, so its rows are never cut off by others.
+ */
+export function rowsFor(
+  rows: PlanRow[],
+  card: PlanCard | null,
+  pageType: PageType | null = null,
+): PlanRow[] {
+  return rows
+    .filter(
+      (r) =>
+        (!card || (card === 'overlaps' ? r.overlaps > 0 : r.action === card)) &&
+        (!pageType || r.pageType === pageType),
+    )
+    .slice(0, MAX_ROWS);
+}
+
+/** Whether the earlier period was tracked in full, partly, or not at all. */
+export function earlierPeriod(
+  answers: PlanAnswers,
+  tracking: PlanTracking,
+): 'full' | 'partial' | 'none' {
+  if (answers.prev <= 0) return 'none';
+  if (tracking.prevFrom && tracking.trackedSince && tracking.trackedSince > tracking.prevFrom) {
+    return 'partial';
+  }
+  return 'full';
 }
 
 /**

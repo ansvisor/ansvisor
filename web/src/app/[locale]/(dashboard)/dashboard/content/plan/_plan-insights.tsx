@@ -53,19 +53,19 @@ export function AiResultsStrip({ results, days }: { results: PlanResults; days: 
 
 /**
  * "What AI cites in your topics" (CE-014): per page type, the share of AI
- * citations (light bar) and the brand's own share (dark bar), with a gap
- * flagged in amber. A row filters the priority list to its type; clicking it
- * again clears it.
+ * citations (light bar) and the type's share of the brand's own cited pages
+ * (dark bar), two mixes of 100 each, with a gap flagged in amber. A row
+ * filters the priority list to its type; clicking it again clears it.
  */
 export function PageTypeMix({
   rows,
-  unread,
+  covered,
   selected,
   onSelect,
 }: {
   rows: MixRow[];
-  /** The share of citations on pages whose type can't be read, in whole percent. */
-  unread: number;
+  /** The share of all the period's citations the shares are of, in whole percent. */
+  covered: number;
   selected: PageType | null;
   onSelect: (type: PageType | null) => void;
 }) {
@@ -119,6 +119,12 @@ export function PageTypeMix({
                 </span>
                 <span className="text-right text-xs tabular-nums text-muted-foreground">
                   {t('shares', { ai: row.aiShare, yours: row.yourShare })}
+                  {/* On a phone the gap goes under the shares. */}
+                  {row.gap && (
+                    <span className="block font-medium text-amber-700 sm:hidden dark:text-amber-400">
+                      {t('gap', { count: row.pages })}
+                    </span>
+                  )}
                 </span>
                 <span
                   className={cn(
@@ -135,8 +141,8 @@ export function PageTypeMix({
           ))}
         </ul>
       )}
-      {unread > 0 && (
-        <p className="text-xs text-muted-foreground">{t('unread', { pct: unread })}</p>
+      {rows.length > 0 && covered < 100 && (
+        <p className="text-xs text-muted-foreground">{t('covered', { pct: covered })}</p>
       )}
     </section>
   );
