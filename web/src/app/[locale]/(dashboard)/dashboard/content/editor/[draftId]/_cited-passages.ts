@@ -53,7 +53,7 @@ export function citedLocks(state: EditorState): CitedLocks {
  * worked out once, not on every keystroke.
  */
 const passageKeys = new WeakMap<PmNode, string>();
-function keyOf(node: PmNode): string {
+export function blockKey(node: PmNode): string {
   let key = passageKeys.get(node);
   if (key === undefined) {
     key = passageKey(node.textContent);
@@ -103,7 +103,7 @@ function changedRanges(tr: Transaction): { before: [number, number][]; after: [n
 function lockedCounts(blocks: { node: PmNode }[], locks: CitedLocks): Map<string, number> {
   const counts = new Map<string, number>();
   for (const { node } of blocks) {
-    const key = keyOf(node);
+    const key = blockKey(node);
     if (isLocked(key, locks)) counts.set(key, (counts.get(key) ?? 0) + 1);
   }
   return counts;
@@ -111,7 +111,7 @@ function lockedCounts(blocks: { node: PmNode }[], locks: CitedLocks): Map<string
 
 /** The mark of a quoted passage, if this block is one. */
 function markOf(node: PmNode, pos: number, locks: CitedLocks): Decoration | null {
-  const label = locks.labels.get(keyOf(node));
+  const label = locks.labels.get(blockKey(node));
   return label
     ? Decoration.node(pos, pos + node.nodeSize, {
         class: 'cited-passage',
@@ -140,7 +140,7 @@ function lockedAtSelection(state: EditorState, locks: CitedLocks): string | null
   state.doc.nodesBetween(from, to, (node) => {
     if (found) return false;
     if (!node.isTextblock) return true;
-    const key = keyOf(node);
+    const key = blockKey(node);
     if (isLocked(key, locks)) found = key;
     return false;
   });

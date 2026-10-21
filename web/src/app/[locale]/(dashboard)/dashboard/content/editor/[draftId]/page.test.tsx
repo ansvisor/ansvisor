@@ -802,6 +802,37 @@ describe('the content editor', () => {
       );
     });
 
+    it('leaves the page and the card as they were when the decision can’t be saved', async () => {
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+      getContentDraft.mockResolvedValue(page);
+      getDraftSuggestions.mockResolvedValue([suggestion({})]);
+      decideDraftSuggestions.mockRejectedValueOnce(new Error('offline'));
+      await renderPage();
+
+      await press('s1', 'Accept');
+      expect(pageText()).toContain(VAGUE);
+      expect(cardOf('s1')!.textContent).toContain('Accept');
+      expect(toast.error).toHaveBeenCalled();
+    });
+
+    it('takes text with $ in it as written, so an accepted one can be undone', async () => {
+      // String.replace would read "$$" in the page's words as "$".
+      const before = 'Plans start at $$49, or $& with add-ons.';
+      getContentDraft.mockResolvedValue(
+        draft({ bodyHtml: `<h1>Pipeline forecasting</h1><p>${before}</p>` }),
+      );
+      getDraftSuggestions.mockResolvedValue([
+        suggestion({ blockText: before, beforeText: before, afterText: 'Plans start at $49.' }),
+      ]);
+      decideDraftSuggestions.mockResolvedValue(undefined);
+      await renderPage();
+
+      await press('s1', 'Accept');
+      expect(pageText()).toContain('Plans start at $49.');
+      await press('s1', 'Undo');
+      expect(pageText()).toContain(before);
+    });
+
     it('waits with the HTML view until they are decided', async () => {
       getContentDraft.mockResolvedValue(page);
       getDraftSuggestions.mockResolvedValue(batch);

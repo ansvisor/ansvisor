@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useFormatter, useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 import { EditorContent, useEditor } from '@tiptap/react';
-import { TextSelection } from '@tiptap/pm/state';
+import { TextSelection, type Transaction } from '@tiptap/pm/state';
 import StarterKit from '@tiptap/starter-kit';
 import { TableKit } from '@tiptap/extension-table';
 import Image from '@tiptap/extension-image';
@@ -387,6 +387,8 @@ export function DraftEditor({ draft }: { draft: ContentDraft }) {
     const picked = next.filter((s) => ids.includes(s.id));
     const changed: string[] = [];
     let status: SuggestionStatus = 'open';
+    // The page's change, applied only once the decision is saved.
+    let tr: Transaction | null = null;
     setDeciding(true);
     try {
       if (decision === 'accept') {
@@ -396,14 +398,13 @@ export function DraftEditor({ draft }: { draft: ContentDraft }) {
           await keepAgentBeforeVersion(draft.id);
           agentBeforeKept.current = true;
         }
-        const tr = editor.state.tr;
+        tr = editor.state.tr;
         for (const s of open) {
           if (acceptInto(tr, editor.state, s, next)) {
             s.status = 'accepted';
             changed.push(s.id);
           }
         }
-        if (tr.docChanged) editor.view.dispatch(tr);
         status = 'accepted';
         if (open.length > changed.length) {
           toast(t('suggestions.notApplied', { count: open.length - changed.length }));
@@ -416,7 +417,7 @@ export function DraftEditor({ draft }: { draft: ContentDraft }) {
         status = 'rejected';
       } else {
         // Undo, Restore and Undo all send suggestions back to review.
-        const tr = editor.state.tr;
+        tr = editor.state.tr;
         for (const s of [...picked].reverse()) {
           if (s.status === 'accepted' && decision !== 'restore') {
             if (!undoInto(tr, editor.state, s, next)) continue;
@@ -426,16 +427,24 @@ export function DraftEditor({ draft }: { draft: ContentDraft }) {
           s.status = 'open';
           changed.push(s.id);
         }
-        if (tr.docChanged) editor.view.dispatch(tr);
       }
       if (changed.length === 0) return;
+      // The decision is saved first, with the page held still: when it fails,
+      // neither the page nor the cards change, so they stay in step.
+      const editable = editor.isEditable;
+      editor.setEditable(false, false);
+      try {
+        await decideDraftSuggestions(changed, status);
+      } finally {
+        if (editable) editor.setEditable(true, false);
+      }
+      if (tr?.docChanged && tr.before.eq(editor.state.doc)) editor.view.dispatch(tr);
       setSuggestions(next);
       if (decision === 'accept')
         toast.success(t('suggestions.acceptedToast', { count: changed.length }));
       else if (decision === 'reject')
         toast(t('suggestions.rejectedToast', { count: changed.length }));
       else toast(t('suggestions.undoneToast', { count: changed.length }));
-      await decideDraftSuggestions(changed, status);
     } catch (err) {
       console.error('Failed to decide the suggestions:', err);
       toast.error(t('suggestions.saveFailed'));
