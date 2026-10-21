@@ -6,6 +6,7 @@ import {
   type SourceState,
   type SuggestionSourceStates,
 } from '@/lib/actions/integrations';
+import type { PlanId } from '@/config/plans';
 import { DataSourcesPanel } from './_data-sources-panel';
 import { SuggestionsCard } from './_suggestions-card';
 
@@ -28,9 +29,13 @@ const MAX_POLLS = 20;
 export function SuggestionsTab({
   brandId,
   onAccepted,
+  planId,
+  limitActions,
 }: {
   brandId: string;
   onAccepted?: () => void;
+  planId?: PlanId;
+  limitActions?: React.ReactNode;
 }) {
   // undefined while loading; null when the read failed — both render nothing
   // source-related, so a status failure never gets in the way of suggestions.
@@ -63,7 +68,13 @@ export function SuggestionsTab({
   return (
     <>
       <DataSourcesPanel states={states} />
-      <SuggestionsCard brandId={brandId} onAccepted={onAccepted} sourceStates={states ?? null} />
+      <SuggestionsCard
+        brandId={brandId}
+        onAccepted={onAccepted}
+        sourceStates={states ?? null}
+        planId={planId}
+        limitActions={limitActions}
+      />
     </>
   );
 }
