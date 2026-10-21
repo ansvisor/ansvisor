@@ -21,16 +21,16 @@ export interface AmazonShareDropAlert {
 function median(values: number[]): number {
   const sorted = [...values].sort((a, b) => a - b);
   const middle = Math.floor(sorted.length / 2);
-  return sorted.length % 2 === 0
-    ? (sorted[middle - 1] + sorted[middle]) / 2
-    : sorted[middle];
+  return sorted.length % 2 === 0 ? (sorted[middle - 1] + sorted[middle]) / 2 : sorted[middle];
 }
 
 function isConsecutiveWeeks(weeks: WeeklyAmazonShare[]): boolean {
   const weekStarts = weeks.map((week) => Date.parse(`${week.weekStart}T00:00:00.000Z`));
   if (weekStarts.some((date) => !Number.isFinite(date))) return false;
   const sevenDays = 7 * 24 * 60 * 60 * 1000;
-  return weekStarts.every((date, index) => index === 0 || date - weekStarts[index - 1] === sevenDays);
+  return weekStarts.every(
+    (date, index) => index === 0 || date - weekStarts[index - 1] === sevenDays,
+  );
 }
 
 /**
