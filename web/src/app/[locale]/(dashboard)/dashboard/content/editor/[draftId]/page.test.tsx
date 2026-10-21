@@ -4,6 +4,7 @@ import { NextIntlClientProvider } from 'next-intl';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import messages from '../../../../../../../../messages/en.json';
 import type { Editor } from '@tiptap/core';
+import { RoleProvider } from '@/components/providers/role-provider';
 import type { ContentDraft } from '@/lib/content/drafts';
 import type { DraftSuggestion } from '@/lib/content/suggestions';
 import { passageKey } from '@/lib/content/cited-passages';
@@ -149,7 +150,9 @@ async function renderPage() {
   await act(async () => {
     root.render(
       <NextIntlClientProvider locale="en" messages={messages}>
-        <ContentEditorPage />
+        <RoleProvider role="admin">
+          <ContentEditorPage />
+        </RoleProvider>
       </NextIntlClientProvider>,
     );
   });
@@ -802,6 +805,37 @@ describe('the content editor', () => {
       );
     });
 
+    it('leaves the page and the card as they were when the decision can’t be saved', async () => {
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+      getContentDraft.mockResolvedValue(page);
+      getDraftSuggestions.mockResolvedValue([suggestion({})]);
+      decideDraftSuggestions.mockRejectedValueOnce(new Error('offline'));
+      await renderPage();
+
+      await press('s1', 'Accept');
+      expect(pageText()).toContain(VAGUE);
+      expect(cardOf('s1')!.textContent).toContain('Accept');
+      expect(toast.error).toHaveBeenCalled();
+    });
+
+    it('takes text with $ in it as written, so an accepted one can be undone', async () => {
+      // String.replace would read "$$" in the page's words as "$".
+      const before = 'Plans start at $$49, or $& with add-ons.';
+      getContentDraft.mockResolvedValue(
+        draft({ bodyHtml: `<h1>Pipeline forecasting</h1><p>${before}</p>` }),
+      );
+      getDraftSuggestions.mockResolvedValue([
+        suggestion({ blockText: before, beforeText: before, afterText: 'Plans start at $49.' }),
+      ]);
+      decideDraftSuggestions.mockResolvedValue(undefined);
+      await renderPage();
+
+      await press('s1', 'Accept');
+      expect(pageText()).toContain('Plans start at $49.');
+      await press('s1', 'Undo');
+      expect(pageText()).toContain(before);
+    });
+
     it('waits with the HTML view until they are decided', async () => {
       getContentDraft.mockResolvedValue(page);
       getDraftSuggestions.mockResolvedValue(batch);
@@ -1093,7 +1127,7 @@ describe('the side panel', () => {
     getContentDraft.mockResolvedValue(draft({ sourceUrl: 'https://acme.example.com/pricing' }));
     window.innerWidth = 1440;
     await renderPage();
-    // The rules read the fan-outs on opening; the tab itself isn't there yet.
+    // The editor reads the sources once on opening; the tab itself isn't there yet.
     expect(getDraftSources).toHaveBeenCalledTimes(1);
     expect(panel()!.textContent).not.toContain('pipeline forecasting');
 
@@ -1104,7 +1138,8 @@ describe('the side panel', () => {
       tab.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
       tab.click();
     });
-    expect(getDraftSources).toHaveBeenCalledTimes(2);
+    // The tab shows the editor's one read: nothing is read again.
+    expect(getDraftSources).toHaveBeenCalledTimes(1);
     // The draft's H1 carries the fan-out's words.
     expect(panel()!.textContent).toContain('pipeline forecasting');
     expect(panel()!.textContent).toContain('H1');
@@ -1135,7 +1170,7 @@ describe('the side panel', () => {
             platform: 'copilot-web',
           },
         ],
-        keywords: [],
+        keywords: ['forecast accuracy', 'pipeline'],
         origin: 'rebuild',
         builtAt: '2026-10-21T10:00:00Z',
         builtFrom: { prompts: 0, fanouts: 1, pages: 0, queries: 0 },
@@ -1176,6 +1211,12 @@ describe('the side panel', () => {
     expect(selected?.textContent).toBe('Brief');
     expect(panel()!.textContent).toContain('How pipeline forecasting works');
     expect(panel()!.textContent).toContain('Win forecasting searches');
+
+    // The rules check against the brief just rebuilt, without a reload.
+    await pick('Rules');
+    expect(
+      [...panel()!.querySelectorAll<HTMLInputElement>('input')].map((input) => input.value),
+    ).toContain('forecast accuracy, pipeline');
   });
 
   it('shows how many rules the page meets, and opens them from the header', async () => {
