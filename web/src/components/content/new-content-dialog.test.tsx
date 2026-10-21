@@ -156,6 +156,8 @@ describe('New content', () => {
       method: 'create',
       title: 'Northwind vs HubSpot',
       pageType: 'guide',
+      // Picked, so it stays; Start's guess would follow the page.
+      typePicked: true,
       source: { kind: 'opportunity', id: 'o1' },
       bodyHtml: undefined,
     });
@@ -202,6 +204,7 @@ describe('New content', () => {
       method: 'optimize',
       title: 'Returns policy',
       pageType: 'policy',
+      typePicked: false,
       source: { kind: 'content' },
       bodyHtml: '<h2>Returns policy</h2><p>30 days.</p>',
     });
@@ -333,6 +336,7 @@ describe('New content', () => {
         method: 'optimize',
         title: 'Pricing',
         pageType: 'pricing',
+        typePicked: false,
         source: { kind: 'content' },
         bodyHtml: '<h1>Pricing</h1><p>Plans</p>',
         sourceUrl: 'https://northwind.example/pricing',
@@ -417,6 +421,8 @@ describe('New content', () => {
         method: 'optimize',
         title: 'Espresso machines for beginners',
         pageType: 'guide',
+        // Read from the page's address, so it follows the page.
+        typePicked: false,
         source: { kind: 'opportunity', id: 'o1' },
         bodyHtml: '<h1>Espresso machines for beginners</h1><p>Start here.</p>',
         sourceUrl: GUIDE.url,
