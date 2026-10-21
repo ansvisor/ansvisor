@@ -14,7 +14,6 @@ import {
   impactChange,
   isLost,
   platformNames,
-  promptsCited,
   type ContentImpact,
   type ContentResults,
   type ImpactPeriod,
@@ -161,9 +160,10 @@ function ImpactBody({
 }) {
   const t = useTranslations('contentEditor.editor.impact');
   const coverage = gscCoverage(impact.gscSince, period);
-  const cited = promptsCited(impact.prompts);
+  const cited = impact.promptCounts;
+  const lost = impact.promptCounts.lost;
+  // The lost prompts listed, to use in the draft (the list is capped at 100).
   const lostPrompts = impact.prompts.filter(isLost);
-  const lost = lostPrompts.length;
   const promptDelta = cited.cur - cited.prev;
 
   return (
@@ -272,7 +272,7 @@ function ImpactBody({
             {t('prompts.seeInCitations')}
             <ExternalLink className="h-3 w-3" />
           </Link>
-          {lost > 0 && onUseLostPrompts && (
+          {lostPrompts.length > 0 && onUseLostPrompts && (
             <Button
               size="sm"
               variant="outline"
@@ -280,7 +280,7 @@ function ImpactBody({
               onClick={() => onUseLostPrompts(lostPrompts.map((p) => p.id))}
             >
               {rebuilding && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-              {t('prompts.useLost', { count: lost })}
+              {t('prompts.useLost', { count: lostPrompts.length })}
             </Button>
           )}
         </div>

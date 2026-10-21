@@ -195,6 +195,21 @@ describe('the page type on save (CE-023)', () => {
     });
   });
 
+  it('keeps the type it had when the page shows none, as Start’s guess', async () => {
+    updated = {
+      updated_at: '2026-10-20T15:00:00Z',
+      page_type: 'blog_post',
+      page_type_source: 'detected',
+      brands: shop,
+    };
+    await saveContentDraft(DRAFT, {
+      title: 'Our spring update',
+      bodyHtml: '<h1>Our spring update</h1>',
+      base,
+    });
+    expect(calls.map((call) => call.op)).toEqual(['update']);
+  });
+
   it('writes nothing more when the type is unchanged, or the person picked it', async () => {
     updated = {
       updated_at: '2026-10-20T15:00:00Z',
