@@ -291,12 +291,18 @@ export async function PATCH(req: NextRequest) {
   }
 }
 
-/** DELETE — cancel subscription at period end */
+/** DELETE — cancel subscription at period end (admins only, as changing the plan is) */
 export async function DELETE() {
   try {
     const org = await getOrgStripeIds();
     if (!org) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    if (org.role !== 'admin') {
+      return NextResponse.json(
+        { error: 'Only admins can cancel the plan', code: 'admin_only' },
+        { status: 403 },
+      );
     }
 
     if (!org.stripe_subscription_id) {
