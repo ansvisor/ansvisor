@@ -516,6 +516,16 @@ describe('New content', () => {
       expect(onSent).toHaveBeenCalled();
     });
 
+    it('says the draft is the person’s to write when the agent is busy with another', async () => {
+      startAgentWriting.mockResolvedValue({ error: 'org_writing' });
+      await startNewPage();
+      await click(whoOption('Agent'));
+      await click(button('Start the agent'));
+      expect(toast.error.mock.calls[0][0]).toBe(
+        "The agent is writing another of your team's drafts, so it didn't start. The draft is in the Library for you to write.",
+      );
+    });
+
     it('sends the draft to the Action Center for the team, and keeps it in the Library', async () => {
       sendContentDraftToActionCenter.mockResolvedValue({
         actionId: 'a1',
