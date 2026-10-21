@@ -3150,6 +3150,9 @@
         "insertTable": "Insert as table",
         "confirmLong": "This table has {count} rows. That's a lot for a page: insert all of them?",
         "insertAll": "Insert all {count} rows",
+        "confirmCut": "Only the first {fit} of {count} rows fit in the page's size limit. A page over it can't be saved.",
+        "insertFirst": "Insert the first {count} rows",
+        "noRoom": "The page is too close to its size limit for this table. Shorten the page, or attach a smaller sheet.",
         "cancel": "Cancel",
         "tableInserted": "Table inserted from {name} · {count, plural, one {# row} other {# rows}}",
         "imported": "{name} imported",
@@ -3183,6 +3186,7 @@
       },
       "markedReady": "Marked ready. Publish it on your site when you're ready.",
       "markReadyFailed": "Couldn't mark it ready. Try again.",
+      "markReadyUnsaved": "The page has changes that aren't saved, so it wasn't marked ready.",
       "loadError": "Couldn't open this draft.",
       "notFound": "This draft doesn't exist, or it belongs to another workspace.",
       "retryLoad": "Try again",
@@ -3191,7 +3195,12 @@
         "unsaved": "Unsaved changes",
         "saving": "Saving…",
         "failed": "Couldn't save.",
-        "retry": "Retry"
+        "retry": "Retry",
+        "conflict": "Changed elsewhere.",
+        "conflictHint": "Someone else changed this page since you opened it, so your latest changes weren't saved over theirs. Reload to see their version.",
+        "reload": "Reload",
+        "tooLarge": "Too long to save.",
+        "tooLargeHint": "The page is over the size limit. Shorten it (a big table, for example) and it saves again."
       },
       "toolbar": {
         "label": "Formatting",
