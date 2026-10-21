@@ -141,6 +141,8 @@ export async function listContentDraftsFor(
     .from('content_drafts')
     .select('id, title, status, method, page_type, author, source_url, updated_at')
     .eq('brand_id', brandId)
+    // Archived drafts (00233) are set aside in the Library, and here.
+    .is('archived_at', null)
     .order('updated_at', { ascending: false })
     .limit(LIST_LIMIT);
   if (status) query = query.eq('status', status);

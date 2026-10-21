@@ -26,7 +26,9 @@ const draft = (id: string, status: DraftStatus): ContentDraftListItem => ({
   scoreBefore: null,
   scoreAfter: null,
   agentState: null,
+  createdAt: '2026-10-18T09:00:00Z',
   updatedAt: '2026-10-20T10:00:00Z',
+  archivedAt: null,
 });
 
 const drafts = [
@@ -44,13 +46,23 @@ describe('the Library tabs', () => {
       in_review: 2,
       ready: 0,
       published: 1,
+      archived: 0,
     });
   });
 
   it('lists a tab’s drafts in their order, and every draft under All', () => {
     expect(draftsInTab(drafts, 'in_review').map((d) => d.id)).toEqual(['b', 'c']);
     expect(draftsInTab(drafts, 'ready')).toEqual([]);
-    expect(draftsInTab(drafts, 'all')).toBe(drafts);
+    expect(draftsInTab(drafts, 'all')).toEqual(drafts);
+  });
+
+  it('keeps archived drafts under Archived only, with their status kept for Restore', () => {
+    const shelved = { ...draft('e', 'published'), archivedAt: '2026-10-21T08:00:00Z' };
+    const all = [...drafts, shelved];
+    expect(libraryTabCounts(all)).toMatchObject({ all: 4, published: 1, archived: 1 });
+    expect(draftsInTab(all, 'all').map((d) => d.id)).toEqual(['a', 'b', 'c', 'd']);
+    expect(draftsInTab(all, 'published').map((d) => d.id)).toEqual(['d']);
+    expect(draftsInTab(all, 'archived')).toEqual([shelved]);
   });
 });
 

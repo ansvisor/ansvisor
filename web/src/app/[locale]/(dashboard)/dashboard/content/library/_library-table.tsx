@@ -1,10 +1,27 @@
 'use client';
 
 import { useTranslations } from 'next-intl';
-import { Bot, FileText } from 'lucide-react';
+import {
+  Archive,
+  ArchiveRestore,
+  Bot,
+  Check,
+  FileText,
+  MoreHorizontal,
+  Trash2,
+} from 'lucide-react';
 import { Link } from '@/i18n/navigation';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import {
   Table,
   TableBody,
@@ -20,20 +37,46 @@ import {
 } from '@/components/content/draft-badges';
 import { assigneeLabel, labelInitials } from '@/lib/action-center/display';
 import {
-  aeoScoreText,
+  DRAFT_STATUSES,
   contentEditorPath,
   isPageType,
   type ContentDraftListItem,
+  type DraftStatus,
   type LibraryTab,
 } from '@/lib/content/drafts';
+import { formatDate, formatMonthDay } from '@/lib/format';
+
+/** A date this year as "Oct 16", an older one with its year, so the table fits at 1024 px. */
+function tableDate(iso: string): string {
+  return new Date(iso).getFullYear() === new Date().getFullYear()
+    ? formatMonthDay(iso)
+    : formatDate(iso);
+}
+
+export interface LibraryRowActions {
+  /** Admins and managers: archive, restore and delete too. */
+  canManage: boolean;
+  onStatus: (draft: ContentDraftListItem, status: DraftStatus) => void;
+  onArchive: (draft: ContentDraftListItem, archived: boolean) => void;
+  onDelete: (draft: ContentDraftListItem) => void;
+}
 
 /**
  * The Library's list (CE-002): one row per draft, the latest changed first.
- * Columns as the spec's: Content · Type · Method (Create / Optimize) · By
- * (a person or the Content Agent) · Status · AEO score (before → after).
- * A row opens the draft in the editor.
+ * Columns: Content · Type · Method (Create / Optimize) · By (a person or the
+ * Content Agent) · Status · Created · Updated. A row opens the draft in the
+ * editor; its menu sets the status and, for admins and managers, archives
+ * or deletes it (00233).
  */
-export function LibraryTable({ drafts, tab }: { drafts: ContentDraftListItem[]; tab: LibraryTab }) {
+export function LibraryTable({
+  drafts,
+  tab,
+  actions,
+}: {
+  drafts: ContentDraftListItem[];
+  tab: LibraryTab;
+  actions: LibraryRowActions;
+}) {
   const t = useTranslations('contentEditor.library');
   const tTypes = useTranslations('contentEditor.pageTypes');
 
@@ -58,17 +101,18 @@ export function LibraryTable({ drafts, tab }: { drafts: ContentDraftListItem[]; 
           <TableHead>{t('columns.method')}</TableHead>
           <TableHead>{t('columns.by')}</TableHead>
           <TableHead>{t('columns.status')}</TableHead>
-          <TableHead className="pr-6 text-right" title={t('scoreHint')}>
-            {t('columns.score')}
+          <TableHead>{t('columns.created')}</TableHead>
+          <TableHead>{t('columns.updated')}</TableHead>
+          <TableHead className="w-8 pl-0 pr-4">
+            <span className="sr-only">{t('columns.menu')}</span>
           </TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
         {drafts.map((draft) => {
-          const score = aeoScoreText(draft.scoreBefore, draft.scoreAfter);
           return (
             <TableRow key={draft.id}>
-              <TableCell className="max-w-[320px] pl-6">
+              <TableCell className="max-w-[180px] pl-6 xl:max-w-[320px]">
                 <Link
                   href={contentEditorPath(draft.id)}
                   className="block truncate font-medium hover:underline"
@@ -100,14 +144,79 @@ export function LibraryTable({ drafts, tab }: { drafts: ContentDraftListItem[]; 
                   <DraftStatusBadge status={draft.status} />
                 )}
               </TableCell>
-              <TableCell className="pr-6 text-right tabular-nums">
-                {score ?? <span className="text-muted-foreground">—</span>}
+              <TableCell className="whitespace-nowrap text-xs text-muted-foreground tabular-nums">
+                <time dateTime={draft.createdAt} title={formatDate(draft.createdAt)}>
+                  {tableDate(draft.createdAt)}
+                </time>
+              </TableCell>
+              <TableCell className="whitespace-nowrap text-xs text-muted-foreground tabular-nums">
+                <time dateTime={draft.updatedAt} title={formatDate(draft.updatedAt)}>
+                  {tableDate(draft.updatedAt)}
+                </time>
+              </TableCell>
+              <TableCell className="pl-0 pr-4">
+                <RowMenu draft={draft} actions={actions} />
               </TableCell>
             </TableRow>
           );
         })}
       </TableBody>
     </Table>
+  );
+}
+
+/** A row's menu: its status, then archive or restore, and delete (admins and managers). */
+function RowMenu({ draft, actions }: { draft: ContentDraftListItem; actions: LibraryRowActions }) {
+  const t = useTranslations('contentEditor.library.rowMenu');
+  const tStatus = useTranslations('contentEditor.status');
+  const title = draft.title.trim() || null;
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        className="rounded p-1 text-muted-foreground hover:bg-muted"
+        aria-label={t('label', { title: title ?? '—' })}
+      >
+        <MoreHorizontal className="h-4 w-4" />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-48">
+        <DropdownMenuGroup>
+          <DropdownMenuLabel>{t('status')}</DropdownMenuLabel>
+          {DRAFT_STATUSES.map((status) => (
+            <DropdownMenuItem
+              key={status}
+              disabled={status === draft.status}
+              onClick={() => actions.onStatus(draft, status)}
+            >
+              <Check
+                aria-hidden="true"
+                className={status === draft.status ? 'h-4 w-4' : 'h-4 w-4 opacity-0'}
+              />
+              {tStatus(status)}
+            </DropdownMenuItem>
+          ))}
+        </DropdownMenuGroup>
+        {actions.canManage && (
+          <>
+            <DropdownMenuSeparator />
+            {draft.archivedAt ? (
+              <DropdownMenuItem onClick={() => actions.onArchive(draft, false)}>
+                <ArchiveRestore className="h-4 w-4" />
+                {t('restore')}
+              </DropdownMenuItem>
+            ) : (
+              <DropdownMenuItem onClick={() => actions.onArchive(draft, true)}>
+                <Archive className="h-4 w-4" />
+                {t('archive')}
+              </DropdownMenuItem>
+            )}
+            <DropdownMenuItem variant="destructive" onClick={() => actions.onDelete(draft)}>
+              <Trash2 className="h-4 w-4" />
+              {t('delete')}
+            </DropdownMenuItem>
+          </>
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 

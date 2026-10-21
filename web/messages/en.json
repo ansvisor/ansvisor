@@ -3175,10 +3175,11 @@
       "tabsLabel": "Library sections",
       "tabs": {
         "all": "All",
-        "draft": "Drafts",
+        "draft": "In progress",
         "in_review": "In review",
         "ready": "Ready",
-        "published": "Published"
+        "published": "Published",
+        "archived": "Archived"
       },
       "columns": {
         "content": "Content",
@@ -3186,9 +3187,29 @@
         "method": "Method",
         "by": "By",
         "status": "Status",
-        "score": "AEO score"
+        "created": "Created",
+        "updated": "Updated",
+        "menu": "Row actions"
       },
-      "scoreHint": "The page's AEO score, before → after the changes",
+      "rowMenu": {
+        "label": "Actions for {title}",
+        "status": "Status",
+        "archive": "Send to Archive",
+        "restore": "Restore",
+        "delete": "Delete",
+        "archived": "Archived: {title}",
+        "restored": "Restored: {title}",
+        "deleted": "Deleted: {title}",
+        "undo": "Undo",
+        "failed": "Couldn't save that. Try again.",
+        "forbidden": "Only admins and managers can archive or delete content."
+      },
+      "deleteDialog": {
+        "title": "Delete “{title}”?",
+        "description": "It leaves the Library for good, with its versions and suggestions. An Action Center task it was sent as stays. This can't be undone.",
+        "cancel": "Cancel",
+        "confirm": "Delete"
+      },
       "latestOnly": "Showing the {shown} changed most recently of {count}.",
       "untitled": "Untitled",
       "you": "You",
@@ -3199,10 +3220,11 @@
         "body": "Pages you and the Content Agent write or change in Ansvisor show up here."
       },
       "emptyTab": {
-        "draft": "No drafts.",
+        "draft": "Nothing in progress.",
         "in_review": "Nothing waiting for review.",
         "ready": "Nothing marked ready.",
-        "published": "Nothing published yet."
+        "published": "Nothing published yet.",
+        "archived": "Nothing archived."
       },
       "loadError": "Couldn't load the Library.",
       "retry": "Try again",
@@ -3960,7 +3982,7 @@
       }
     },
     "status": {
-      "draft": "Draft",
+      "draft": "In progress",
       "in_review": "In review",
       "ready": "Ready",
       "published": "Published"

@@ -8,6 +8,10 @@ import ContentLibraryPage from './page';
 
 const getContentDrafts = vi.fn();
 const getContentStartOptions = vi.fn();
+const markContentDraftReady = vi.fn();
+const setContentDraftStatus = vi.fn();
+const archiveContentDraft = vi.fn();
+const deleteContentDraft = vi.fn();
 vi.mock('@/lib/actions/content-drafts', () => ({
   // A list stands for a brand under the cap: its tabs count its rows.
   getContentDrafts: async (...args: unknown[]) => {
@@ -16,7 +20,13 @@ vi.mock('@/lib/actions/content-drafts', () => ({
   },
   getContentStartOptions: (...args: unknown[]) => getContentStartOptions(...args),
   createContentDraft: vi.fn(),
+  markContentDraftReady: (...args: unknown[]) => markContentDraftReady(...args),
+  setContentDraftStatus: (...args: unknown[]) => setContentDraftStatus(...args),
+  archiveContentDraft: (...args: unknown[]) => archiveContentDraft(...args),
+  deleteContentDraft: (...args: unknown[]) => deleteContentDraft(...args),
 }));
+const role = vi.hoisted(() => ({ canManage: true }));
+vi.mock('@/hooks/use-user-role', () => ({ useUserRole: () => role }));
 const push = vi.fn();
 vi.mock('@/i18n/navigation', () => ({
   Link: ({ href, children, ...props }: { href: string; children: React.ReactNode }) => (
@@ -26,7 +36,7 @@ vi.mock('@/i18n/navigation', () => ({
   ),
   useRouter: () => ({ push }),
 }));
-const toast = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn() }));
+const toast = vi.hoisted(() => Object.assign(vi.fn(), { success: vi.fn(), error: vi.fn() }));
 vi.mock('sonner', () => ({ toast }));
 const brandState = vi.hoisted(() => ({
   activeBrandId: 'brand-1' as string | null,
@@ -54,7 +64,9 @@ const row = (over: Partial<ContentDraftListItem>): ContentDraftListItem => ({
   scoreBefore: 62,
   scoreAfter: 78,
   agentState: null,
+  createdAt: '2026-10-18T09:00:00Z',
   updatedAt: '2026-10-20T10:00:00Z',
+  archivedAt: null,
   ...over,
 });
 
@@ -89,7 +101,14 @@ beforeEach(() => {
     topics: [],
   });
   push.mockReset();
+  toast.mockReset();
   toast.error.mockReset();
+  toast.success.mockReset();
+  markContentDraftReady.mockReset().mockResolvedValue({ status: 'ready', tasksDone: 0 });
+  setContentDraftStatus.mockReset().mockResolvedValue(undefined);
+  archiveContentDraft.mockReset().mockResolvedValue(undefined);
+  deleteContentDraft.mockReset().mockResolvedValue(undefined);
+  role.canManage = true;
 });
 
 afterEach(() => {
@@ -99,6 +118,8 @@ afterEach(() => {
 
 describe('the Content Library', () => {
   it('lists the brand’s drafts with who wrote them, and counts each tab', async () => {
+    // Dates this year read "Oct 18"; an older one keeps its year.
+    vi.useFakeTimers({ now: new Date('2026-10-22T12:00:00Z'), toFake: ['Date'] });
     getContentDrafts.mockResolvedValue([
       row({}),
       row({
@@ -120,9 +141,11 @@ describe('the Content Library', () => {
         createdBy: { id: 'u2', fullName: null, avatarUrl: null, email: 'grace@acme.com' },
         scoreBefore: 81,
         scoreAfter: null,
+        createdAt: '2025-12-30T10:00:00Z',
       }),
     ]);
     await renderPage();
+    vi.useRealTimers();
 
     expect(getContentDrafts).toHaveBeenCalledWith('brand-1');
     expect(tab('All').textContent).toBe('All3');
@@ -132,26 +155,38 @@ describe('the Content Library', () => {
     const rows = [...container.querySelectorAll('tbody tr')].map((tr) =>
       [...tr.querySelectorAll('td')].map((td) => td.textContent),
     );
+    // Created and Updated where the AEO score was; the last cell is the row menu.
     expect(rows[0]).toEqual([
       'Pipeline forecasting',
       'Feature page',
       'Optimize',
       'AL' + 'You',
       'In review',
-      '62 → 78',
+      'Oct 18',
+      'Oct 20',
+      '',
     ]);
-    expect(rows[1]).toEqual([
+    expect(rows[1].slice(0, 5)).toEqual([
       'Northwind vs HubSpot',
       'Comparison',
       'Create',
       'Content Agent',
       'In review',
-      '—',
     ]);
     // No title yet; a teammate with no name is named by e-mail.
     expect(rows[2][0]).toBe('Untitled');
     expect(rows[2][3]).toBe('Ggrace@acme.com');
-    expect(rows[2][5]).toBe('81');
+    expect(rows[2][5]).toBe('Dec 30, 2025');
+    expect([...container.querySelectorAll('thead th')].map((th) => th.textContent)).toEqual([
+      'Content',
+      'Type',
+      'Method',
+      'By',
+      'Status',
+      'Created',
+      'Updated',
+      'Row actions',
+    ]);
 
     const link = container.querySelector('tbody a')!;
     expect(link.getAttribute('href')).toBe('/dashboard/content/editor/d1');
@@ -160,7 +195,7 @@ describe('the Content Library', () => {
   it('counts each tab in all past the cap, and says the list holds the latest', async () => {
     getContentDrafts.mockResolvedValue({
       drafts: [row({}), row({ id: 'd2', status: 'published' })],
-      counts: { all: 812, draft: 300, in_review: 12, ready: 0, published: 500 },
+      counts: { all: 812, draft: 300, in_review: 12, ready: 0, published: 500, archived: 3 },
     });
     await renderPage();
     expect(tab('All').textContent).toBe('All812');
@@ -267,5 +302,102 @@ describe('the Content Library', () => {
     await renderPage();
     expect(getContentDrafts).not.toHaveBeenCalled();
     expect(container.textContent).toContain('Select a brand to see its content.');
+  });
+});
+
+describe('a Library row’s menu (00233)', () => {
+  const menuItems = async (title: string) => {
+    const trigger = container.querySelector<HTMLElement>(`[aria-label="Actions for ${title}"]`)!;
+    await act(async () => trigger.click());
+    return [...document.body.querySelectorAll<HTMLElement>('[role="menuitem"]')];
+  };
+  const pick = async (title: string, item: string) => {
+    const found = (await menuItems(title)).find((el) => el.textContent === item)!;
+    await act(async () => found.click());
+  };
+
+  it('sets a status, Ready as the editor’s Mark ready, and reads the list again', async () => {
+    getContentDrafts.mockResolvedValue([row({})]);
+    await renderPage();
+    const items = await menuItems('Pipeline forecasting');
+    expect(items.map((el) => el.textContent)).toEqual([
+      'In progress',
+      'In review',
+      'Ready',
+      'Published',
+      'Send to Archive',
+      'Delete',
+    ]);
+    // Its own status is the one already set.
+    expect(items[1].hasAttribute('data-disabled')).toBe(true);
+
+    await act(async () => items[2].click());
+    expect(markContentDraftReady).toHaveBeenCalledWith('d1');
+    expect(getContentDrafts).toHaveBeenCalledTimes(2);
+
+    await pick('Pipeline forecasting', 'Published');
+    expect(setContentDraftStatus).toHaveBeenCalledWith('d1', 'published');
+  });
+
+  it('lets members set a status only', async () => {
+    role.canManage = false;
+    getContentDrafts.mockResolvedValue([row({})]);
+    await renderPage();
+    expect((await menuItems('Pipeline forecasting')).map((el) => el.textContent)).toEqual([
+      'In progress',
+      'In review',
+      'Ready',
+      'Published',
+    ]);
+  });
+
+  it('archives with an Undo, and keeps archived drafts under Archived, to restore', async () => {
+    getContentDrafts.mockResolvedValue([
+      row({}),
+      row({ id: 'd2', title: 'Old pricing page', archivedAt: '2026-10-21T08:00:00Z' }),
+    ]);
+    await renderPage();
+    expect(tab('All').textContent).toBe('All1');
+    expect(tab('Archived').textContent).toBe('Archived1');
+    expect(container.textContent).not.toContain('Old pricing page');
+
+    await pick('Pipeline forecasting', 'Send to Archive');
+    expect(archiveContentDraft).toHaveBeenCalledWith('d1', true);
+    expect(toast).toHaveBeenCalledWith('Archived: Pipeline forecasting', {
+      action: { label: 'Undo', onClick: expect.any(Function) },
+    });
+    await act(async () => toast.mock.calls[0][1].action.onClick());
+    expect(archiveContentDraft).toHaveBeenLastCalledWith('d1', false);
+
+    await act(async () => tab('Archived').click());
+    expect(container.textContent).toContain('Old pricing page');
+    await pick('Old pricing page', 'Restore');
+    expect(archiveContentDraft).toHaveBeenLastCalledWith('d2', false);
+  });
+
+  it('deletes only once confirmed', async () => {
+    getContentDrafts.mockResolvedValue([row({})]);
+    await renderPage();
+    await pick('Pipeline forecasting', 'Delete');
+    expect(deleteContentDraft).not.toHaveBeenCalled();
+    expect(document.body.textContent).toContain('Delete “Pipeline forecasting”?');
+
+    const confirm = [...document.body.querySelectorAll<HTMLButtonElement>('button')].find(
+      (b) => b.textContent === 'Delete',
+    )!;
+    await act(async () => confirm.click());
+    expect(deleteContentDraft).toHaveBeenCalledWith('d1');
+    expect(toast.success).toHaveBeenCalledWith('Deleted: Pipeline forecasting');
+    expect(getContentDrafts).toHaveBeenCalledTimes(2);
+  });
+
+  it('says so when the server refuses the archive', async () => {
+    archiveContentDraft.mockRejectedValue(new Error('forbidden'));
+    getContentDrafts.mockResolvedValue([row({})]);
+    await renderPage();
+    await pick('Pipeline forecasting', 'Send to Archive');
+    expect(toast.error).toHaveBeenCalledWith(
+      'Only admins and managers can archive or delete content.',
+    );
   });
 });

@@ -67,6 +67,8 @@ export async function getContentPlan(
       .select('id, author, created_by, method, opportunity_id, source_url')
       .eq('brand_id', brandId)
       .in('status', ['draft', 'in_review', 'ready'])
+      // An archived draft (00233) is set aside: the row starts afresh.
+      .is('archived_at', null)
       .order('updated_at', { ascending: false })
       .limit(DRAFT_LIMIT),
   ]);

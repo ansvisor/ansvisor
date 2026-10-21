@@ -860,6 +860,8 @@ export type Database = {
           action_id: string | null
           agent_state: string | null
           agent_state_at: string | null
+          archived_at: string | null
+          archived_by: string | null
           author: string
           body_html: string
           brief: Json | null
@@ -884,6 +886,8 @@ export type Database = {
           action_id?: string | null
           agent_state?: string | null
           agent_state_at?: string | null
+          archived_at?: string | null
+          archived_by?: string | null
           author?: string
           body_html?: string
           brief?: Json | null
@@ -908,6 +912,8 @@ export type Database = {
           action_id?: string | null
           agent_state?: string | null
           agent_state_at?: string | null
+          archived_at?: string | null
+          archived_by?: string | null
           author?: string
           body_html?: string
           brief?: Json | null

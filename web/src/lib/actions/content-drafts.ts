@@ -118,7 +118,9 @@ async function countLibraryTabs(
         .from('content_drafts')
         .select('id', { count: 'exact', head: true })
         .eq('brand_id', brandId);
-      if (tab !== 'all') query = query.eq('status', tab);
+      if (tab === 'archived') query = query.not('archived_at', 'is', null);
+      else query = query.is('archived_at', null);
+      if (tab !== 'all' && tab !== 'archived') query = query.eq('status', tab);
       const { count, error } = await query;
       if (error) throw new Error(error.message);
       return [tab, count ?? 0] as const;
@@ -138,7 +140,7 @@ export async function getContentDrafts(brandId: string): Promise<ContentLibrary>
     supabase
       .from('content_drafts')
       .select(
-        'id, title, page_type, method, status, author, created_by, score_before, score_after, agent_state, agent_state_at, updated_at',
+        'id, title, page_type, method, status, author, created_by, score_before, score_after, agent_state, agent_state_at, created_at, updated_at, archived_at',
       )
       .eq('brand_id', brandId)
       .order('updated_at', { ascending: false })
@@ -169,7 +171,9 @@ export async function getContentDrafts(brandId: string): Promise<ContentLibrary>
       scoreBefore: row.score_before,
       scoreAfter: row.score_after,
       agentState: agentStateOf(row.agent_state, row.agent_state_at),
+      createdAt: row.created_at,
       updatedAt: row.updated_at,
+      archivedAt: row.archived_at,
     }),
   );
   // Under the cap the rows are every draft; at it, each tab is counted on its own.
@@ -951,6 +955,62 @@ export async function setContentDraftPageType(id: string, pageType: PageType): P
     .maybeSingle();
   if (error) throw new Error(error.message);
   if (!data) throw new Error('not_found');
+}
+
+/** The statuses the Library's row menu sets directly; Ready goes through markContentDraftReady. */
+const ROW_STATUSES = ['draft', 'in_review', 'published'] as const;
+
+/**
+ * Set a draft's status from the Library's row menu (any member, as the
+ * editor's own status changes). Ready keeps a History version and completes
+ * the draft's task, so it goes through markContentDraftReady instead.
+ */
+export async function setContentDraftStatus(
+  id: string,
+  status: (typeof ROW_STATUSES)[number],
+): Promise<void> {
+  if (!draftId.safeParse(id).success || !(ROW_STATUSES as readonly string[]).includes(status)) {
+    throw new Error('invalid');
+  }
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from('content_drafts')
+    .update({ status })
+    .eq('id', id)
+    .select('id')
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  if (!data) throw new Error('not_found');
+}
+
+/**
+ * Send a draft to the Library's archive, or restore it (admins and
+ * managers; 00233's trigger refuses anyone else). It keeps its status.
+ */
+export async function archiveContentDraft(id: string, archived: boolean): Promise<void> {
+  if (!draftId.safeParse(id).success) throw new Error('invalid');
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from('content_drafts')
+    .update({ archived_at: archived ? new Date().toISOString() : null })
+    .eq('id', id)
+    .select('id')
+    .maybeSingle();
+  if (error) throw new Error(error.code === '42501' ? 'forbidden' : error.message);
+  if (!data) throw new Error('not_found');
+}
+
+/**
+ * Delete a draft for good (admins and managers; content_drafts' delete
+ * policy, 00233). Its versions, sources and suggestions go with it.
+ */
+export async function deleteContentDraft(id: string): Promise<void> {
+  if (!draftId.safeParse(id).success) throw new Error('invalid');
+  const supabase = await createClient();
+  const { data, error } = await supabase.from('content_drafts').delete().eq('id', id).select('id');
+  if (error) throw new Error(error.message);
+  // No row: not the member's to delete, or gone already.
+  if (!data?.length) throw new Error('forbidden');
 }
 
 /**

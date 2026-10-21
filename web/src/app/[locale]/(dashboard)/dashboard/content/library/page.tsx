@@ -2,24 +2,41 @@
 
 import { useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
+import { toast } from 'sonner';
 import { Loader2, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { NewContentDialog } from '@/components/content/new-content-dialog';
-import { getContentDrafts } from '@/lib/actions/content-drafts';
+import { useUserRole } from '@/hooks/use-user-role';
+import {
+  archiveContentDraft,
+  deleteContentDraft,
+  getContentDrafts,
+  markContentDraftReady,
+  setContentDraftStatus,
+} from '@/lib/actions/content-drafts';
 import {
   AGENT_POLL_MS,
   LIBRARY_TABS,
   draftsInTab,
   type ContentDraftListItem,
+  type DraftStatus,
   type LibraryTab,
 } from '@/lib/content/drafts';
 import { siteTypeOf } from '@/lib/content/page-types';
 import { formatNumber } from '@/lib/format';
 import { readUrlChoice, writeUrlParams } from '@/lib/url-state';
 import { useBrandStore } from '@/stores/use-brand-store';
-import { LibraryTable } from './_library-table';
+import { LibraryTable, type LibraryRowActions } from './_library-table';
 
 /** A read of the brand's drafts: null until it comes back. */
 interface LibraryRead {
@@ -32,8 +49,10 @@ interface LibraryRead {
 
 /**
  * The Content Library (Content Editor, CE-002): everything a person or the
- * Content Agent wrote or changed in Ansvisor, by status. The tab lives in the
- * URL (?tab=in_review), so a link can open "Library › In review".
+ * Content Agent wrote or changed in Ansvisor, by status, and what was
+ * archived (00233). A row's menu sets its status; admins and managers also
+ * archive, restore and delete. The tab lives in the URL (?tab=in_review), so
+ * a link can open "Library › In review".
  */
 export default function ContentLibraryPage() {
   const t = useTranslations('contentEditor.library');
@@ -43,6 +62,10 @@ export default function ContentLibraryPage() {
   const [read, setRead] = useState<LibraryRead | null>(null);
   const [attempt, setAttempt] = useState(0);
   const [starting, setStarting] = useState(false);
+  const { canManage } = useUserRole();
+  // The draft whose Delete waits for a confirmation.
+  const [deleting, setDeleting] = useState<ContentDraftListItem | null>(null);
+  const [deletePending, setDeletePending] = useState(false);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- one read of the URL after mount
@@ -75,6 +98,61 @@ export default function ContentLibraryPage() {
     const timer = setTimeout(() => setAttempt((n) => n + 1), AGENT_POLL_MS);
     return () => clearTimeout(timer);
   }, [agentWriting, read]);
+
+  const reload = () => setAttempt((n) => n + 1);
+  const titleOf = (draft: ContentDraftListItem) => draft.title.trim() || t('untitled');
+  const failed = (err: unknown) => {
+    console.error('Failed to change the Library draft:', err);
+    toast.error(
+      t(
+        err instanceof Error && err.message === 'forbidden'
+          ? 'rowMenu.forbidden'
+          : 'rowMenu.failed',
+      ),
+    );
+  };
+
+  const archive = async (draft: ContentDraftListItem, archived: boolean) => {
+    try {
+      await archiveContentDraft(draft.id, archived);
+      reload();
+      toast(t(archived ? 'rowMenu.archived' : 'rowMenu.restored', { title: titleOf(draft) }), {
+        action: archived
+          ? { label: t('rowMenu.undo'), onClick: () => void archive(draft, false) }
+          : undefined,
+      });
+    } catch (err) {
+      failed(err);
+    }
+  };
+
+  const rowActions: LibraryRowActions = {
+    canManage,
+    onStatus: (draft: ContentDraftListItem, status: DraftStatus) => {
+      // Ready keeps a History version and completes the draft's task, as the editor's Mark ready.
+      const change =
+        status === 'ready'
+          ? markContentDraftReady(draft.id)
+          : setContentDraftStatus(draft.id, status);
+      change.then(reload, failed);
+    },
+    onArchive: (draft, archived) => void archive(draft, archived),
+    onDelete: setDeleting,
+  };
+
+  const confirmDelete = async () => {
+    if (!deleting) return;
+    setDeletePending(true);
+    try {
+      await deleteContentDraft(deleting.id);
+      toast.success(t('rowMenu.deleted', { title: titleOf(deleting) }));
+      setDeleting(null);
+      reload();
+    } catch (err) {
+      failed(err);
+    }
+    setDeletePending(false);
+  };
 
   const changeTab = (next: LibraryTab) => {
     setTab(next);
@@ -147,10 +225,32 @@ export default function ContentLibraryPage() {
               <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
             </div>
           ) : (
-            <LibraryTable drafts={listed} tab={tab} />
+            <LibraryTable drafts={listed} tab={tab} actions={rowActions} />
           )}
         </CardContent>
       </Card>
+      <Dialog open={deleting !== null} onOpenChange={(open) => !open && setDeleting(null)}>
+        <DialogContent className="grid-cols-[minmax(0,1fr)] sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="pr-6 leading-snug [overflow-wrap:anywhere]">
+              {t('deleteDialog.title', { title: deleting ? titleOf(deleting) : '' })}
+            </DialogTitle>
+            <DialogDescription>{t('deleteDialog.description')}</DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleting(null)} disabled={deletePending}>
+              {t('deleteDialog.cancel')}
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => void confirmDelete()}
+              disabled={deletePending}
+            >
+              {t('deleteDialog.confirm')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       {counts && listed.length < counts[tab] && (
         <p className="text-xs text-muted-foreground">
           {t('latestOnly', {
