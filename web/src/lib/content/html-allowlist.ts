@@ -122,7 +122,9 @@ const JSON_LD_TYPE = /\btype\s*=\s*["']?application\/ld\+json/;
  * the time grows with the length only.
  */
 export function jsonLdScripts(html: string): { start: number; end: number; text: string }[] {
-  const lower = html.toLowerCase();
+  // ASCII letters only: lower-casing all of it changes the length ('İ'
+  // becomes two units), and the positions found must fit the HTML.
+  const lower = html.replace(/[A-Z]+/g, (s) => s.toLowerCase());
   const found: { start: number; end: number; text: string }[] = [];
   let from = 0;
   for (;;) {
