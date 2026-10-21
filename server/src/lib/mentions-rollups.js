@@ -54,6 +54,34 @@ export async function refreshMentionsDaily(brandId, dayFrom, dayTo) {
 }
 
 /**
+ * Rebuild the Perception tab's daily rollups (00231) from the answers' terms
+ * already written, a week per call: for the days a deleted prompt leaves,
+ * whose terms went with its answers (the terms refresh above rebuilds them
+ * itself). No answer text is read. Resolves to true when every call
+ * succeeds, false at the first that fails; never throws.
+ */
+export async function refreshMentionTermsDaily(brandId, dayFrom, dayTo) {
+  for (const [from, to] of dayChunks(dayFrom, dayTo, MENTION_TERMS_ROLLUP_CHUNK_DAYS)) {
+    const { error } = await supabaseAdmin.rpc('refresh_mention_terms_daily', {
+      p_brand_id: brandId,
+      p_day_from: from,
+      p_day_to: to,
+    });
+    if (error) {
+      logger.error(
+        { err: error, brandId, dayFrom: from, dayTo: to },
+        '[mentions-rollups] terms rollup refresh failed',
+      );
+      return false;
+    }
+  }
+  return true;
+}
+
+/** Days per terms rollup call: a week of the largest brand's terms, counted. */
+export const MENTION_TERMS_ROLLUP_CHUNK_DAYS = 7;
+
+/**
  * Days per history refresh call. Shorter than the citation rollups' two
  * weeks: the terms (00161) read each answer's text, a few milliseconds per
  * answer and entity named. The largest brand's busiest days take tens of

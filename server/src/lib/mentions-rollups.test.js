@@ -8,7 +8,11 @@ vi.mock('../config/supabase.js', () => ({
   default: { rpc: (...a) => rpc(...a), from: (...a) => from(...a) },
 }));
 
-import { refreshMentionHistory, refreshMentionsDaily } from './mentions-rollups.js';
+import {
+  refreshMentionHistory,
+  refreshMentionTermsDaily,
+  refreshMentionsDaily,
+} from './mentions-rollups.js';
 
 /** A prompt_results bound query: first call ascending (first day), then descending. */
 function resultBounds(first, last) {
@@ -55,6 +59,29 @@ describe('refreshMentionsDaily', () => {
   it('reports a failed terms refresh too', async () => {
     rpc.mockResolvedValueOnce({ error: null }).mockResolvedValueOnce({ error: { message: 'x' } });
     await expect(refreshMentionsDaily('brand-1', '2026-10-17', '2026-10-17')).resolves.toBe(false);
+  });
+});
+
+describe('refreshMentionTermsDaily (00231)', () => {
+  it('rebuilds the Perception rollups a week at a time', async () => {
+    rpc.mockResolvedValue({ error: null });
+    await expect(refreshMentionTermsDaily('brand-1', '2026-10-01', '2026-10-16')).resolves.toBe(
+      true,
+    );
+    const args = (from, to) => ({ p_brand_id: 'brand-1', p_day_from: from, p_day_to: to });
+    expect(rpc.mock.calls).toEqual([
+      ['refresh_mention_terms_daily', args('2026-10-01', '2026-10-07')],
+      ['refresh_mention_terms_daily', args('2026-10-08', '2026-10-14')],
+      ['refresh_mention_terms_daily', args('2026-10-15', '2026-10-16')],
+    ]);
+  });
+
+  it('stops at a failed week and says so, without throwing', async () => {
+    rpc.mockResolvedValueOnce({ error: { message: 'timeout' } });
+    await expect(refreshMentionTermsDaily('brand-1', '2026-10-01', '2026-10-16')).resolves.toBe(
+      false,
+    );
+    expect(rpc).toHaveBeenCalledTimes(1);
   });
 });
 
