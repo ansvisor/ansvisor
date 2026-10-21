@@ -39,12 +39,14 @@ vi.mock('@/components/content/new-content-dialog', () => ({
     return null;
   },
 }));
+const push = vi.fn();
 vi.mock('@/i18n/navigation', () => ({
   Link: ({ href, children, ...props }: { href: string; children: React.ReactNode }) => (
     <a href={href} {...props}>
       {children}
     </a>
   ),
+  useRouter: () => ({ push }),
 }));
 const brandState = vi.hoisted(() => ({
   activeBrandId: 'brand-1' as string | null,
@@ -160,6 +162,7 @@ beforeEach(() => {
   toast.mockReset();
   toast.error.mockReset();
   role.canManage = true;
+  push.mockReset();
   dialog.props = null;
 });
 
@@ -566,5 +569,50 @@ describe('a Plan row’s menu', () => {
     expect(container.querySelector('[data-testid="assign-dialog"]')!.textContent).toBe(
       'Espresso guide',
     );
+  });
+});
+
+describe('Getting started’s content steps (00234)', () => {
+  it('opens Start on the top Create row, on the Create card, once', async () => {
+    window.history.replaceState(null, '', '/dashboard/content/plan?start=create');
+    await renderPage();
+    expect(dialog.props).toMatchObject({
+      open: true,
+      preset: { kind: 'opportunity', id: 'o1', page: null },
+    });
+    expect(button('Create').getAttribute('aria-pressed')).toBe('true');
+    // A reload opens the plan as it is.
+    expect(window.location.search).toBe('');
+  });
+
+  it('opens the draft already written for the top Optimize row', async () => {
+    window.history.replaceState(null, '', '/dashboard/content/plan?start=optimize');
+    getContentPlan.mockResolvedValue({
+      ...PLAN,
+      drafts: [
+        {
+          id: 'd1',
+          author: 'user',
+          isMine: true,
+          method: 'optimize',
+          opportunityId: null,
+          sourceUrl: 'https://acme.example/guides/coffee-subscriptions',
+          actionId: null,
+          assignee: null,
+        },
+      ],
+    });
+    await renderPage();
+    expect(push).toHaveBeenCalledWith('/dashboard/content/editor/d1');
+    expect(dialog.props).toMatchObject({ open: false });
+  });
+
+  it('shows the empty card when the plan has no row of that action', async () => {
+    window.history.replaceState(null, '', '/dashboard/content/plan?start=optimize');
+    getContentPlan.mockResolvedValue({ ...PLAN, pages: [] });
+    await renderPage();
+    expect(button('Optimize').getAttribute('aria-pressed')).toBe('true');
+    expect(dialog.props).toMatchObject({ open: false });
+    expect(push).not.toHaveBeenCalled();
   });
 });

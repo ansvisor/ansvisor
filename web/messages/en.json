@@ -1613,23 +1613,27 @@
         },
         "create_content": {
           "title": "Create your first content",
-          "summary": "Draft in your brand voice, then publish.",
-          "open": "Open Content",
-          "doneWhen": "Sent to your CMS, or its action completed",
+          "summary": "Start the new page your Content Plan ranks first.",
+          "open": "Open the Plan",
+          "doneWhen": "A new page marked ready or published, or sent to your CMS",
           "why": ["Content is the main way to appear in more answers."],
           "how": [
-            "Open Content",
-            "Create a brief for one suggestion",
-            "Publish it: send it to your CMS, or complete its action"
+            "Open the Plan: its top new page opens in Start",
+            "Pick who writes it: you, the Content Agent or your team",
+            "Mark it ready, then publish it"
           ]
         },
         "optimize_page": {
           "title": "Optimize a page",
-          "summary": "Audit a page, then apply its fixes.",
-          "open": "Open Audit",
-          "doneWhen": "1 page audited",
+          "summary": "Improve the page your Content Plan ranks first to optimize.",
+          "open": "Open the Plan",
+          "doneWhen": "An optimized page marked ready or published, or a page audited",
           "why": ["Small fixes on pages AI already reads can win fast."],
-          "how": ["Open Audit", "Audit one page", "Apply the fixes it suggests"]
+          "how": [
+            "Open the Plan: its top page to optimize opens in Start",
+            "Improve it in the editor, with its rules and sources",
+            "Mark it ready, then publish it"
+          ]
         },
         "ready": {
           "title": "You’re ready",
@@ -1665,14 +1669,14 @@
         "failed": "Couldn’t skip the step. Try again."
       },
       "start": {
-        "button": "Start getting started",
+        "button": "Get Started",
         "hint": "For admins and managers · about 15 min",
         "started": "{count, plural, =0 {Getting started is on} one {Getting started · # step already done} other {Getting started · # steps already done}}",
         "failed": "Couldn’t start Getting started. Try again."
       },
       "skip": {
-        "button": "Skip getting started",
-        "title": "Skip getting started?",
+        "button": "Skip Get Started",
+        "title": "Skip Get Started?",
         "body": "Your actions list goes back to normal. Steps you finished stay done.",
         "later": "You can start again any time from the same button.",
         "confirm": "Skip",
