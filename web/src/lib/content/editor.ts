@@ -10,8 +10,38 @@ export const AUTOSAVE_DELAY_MS = 1500;
 /** The largest body a draft saves, in characters of HTML (about 100 pages). */
 export const MAX_BODY_HTML_LENGTH = 500_000;
 
-/** content_drafts.title's limit (00203). */
+/** content_drafts.title's limit (00204). */
 export const MAX_TITLE_LENGTH = 300;
+
+/** The saved page the editor last saw: a save only goes over this version. */
+export interface SavedVersion {
+  updatedAt: string;
+  bodyHash: string;
+}
+
+/**
+ * What a save came to. Typed rather than thrown: in production Next.js hides
+ * a server action's error message, and the editor says something different
+ * for each.
+ *   - conflict: someone else changed the page since (another tab, a teammate,
+ *     the Content Agent), and it wasn't overwritten;
+ *   - too_large: over MAX_BODY_HTML_LENGTH, which no retry can save;
+ *   - not_found: the draft is gone, or isn't the member's.
+ */
+export type SaveDraftResult =
+  | ({ ok: true } & SavedVersion)
+  | { ok: false; reason: 'conflict' | 'too_large' | 'not_found' | 'invalid' };
+
+/**
+ * A fingerprint of a page (SHA-256 of its HTML, in hex), the same in the
+ * browser and on the server. A save sends the one it last saw, so the server
+ * can tell a page someone else changed from a draft where only another
+ * column changed (its status, its type).
+ */
+export async function bodyHash(html: string): Promise<string> {
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(html));
+  return Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, '0')).join('');
+}
 
 /**
  * The counter's target until the Rules tab (CE-009) lets it be changed: the
