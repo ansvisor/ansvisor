@@ -503,7 +503,8 @@ export function PlanSwitcher({ subscription, onUpdate }: PlanSwitcherProps) {
         </div>
       )}
       <div className="flex items-center justify-between gap-4">
-        {subscription.cancelAtPeriodEnd ? (
+        {/* Cancelling is the admins', as changing the plan is. */}
+        {subscription.cancelAtPeriodEnd || !canAdmin ? (
           <span />
         ) : (
           <Button
