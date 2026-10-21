@@ -986,6 +986,11 @@ function OverlapCheck({
             },
           ),
         };
+      case 'createNew':
+        return {
+          title: t('options.createNew.title'),
+          reason: t('options.createNew.reason'),
+        };
       case 'createAnyway':
         return {
           title: t('options.createAnyway.title'),
@@ -1007,6 +1012,46 @@ function OverlapCheck({
     }
   };
 
+  const optionGroup = options.length > 0 && (
+    <div role="radiogroup" aria-label={t('label')} className="grid gap-1.5">
+      {options.map((option) => {
+        const text = optionText(option);
+        const chosen = isChosen(option);
+        return (
+          <button
+            key={option.key}
+            type="button"
+            role="radio"
+            aria-checked={chosen}
+            onClick={() => onChoose(option.choice)}
+            className={cn(
+              'flex items-start gap-2.5 rounded-xl border px-3 py-2.5 text-left transition-colors hover:bg-muted/50',
+              chosen && 'border-foreground ring-1 ring-inset ring-foreground',
+            )}
+          >
+            <span
+              className={cn(
+                'mt-0.5 h-4 w-4 shrink-0 rounded-full border-[1.5px] border-muted-foreground/50',
+                chosen && 'border-[5px] border-foreground',
+              )}
+            />
+            <span className="min-w-0">
+              <span className="flex flex-wrap items-center gap-1.5 text-sm font-medium">
+                {text.title}
+                {option.recommended && (
+                  <span className="rounded-md bg-muted px-1.5 text-[10.5px] font-medium text-muted-foreground">
+                    {t('recommended')}
+                  </span>
+                )}
+              </span>
+              <span className="block text-xs text-muted-foreground">{text.reason}</span>
+            </span>
+          </button>
+        );
+      })}
+    </div>
+  );
+
   return (
     <div className="space-y-2">
       <Label>{t('label')}</Label>
@@ -1023,15 +1068,18 @@ function OverlapCheck({
           </button>
         </p>
       ) : advice.verdict === 'none' ? (
-        <div className="flex items-center justify-between gap-3 rounded-lg border px-3 py-2.5 text-sm">
-          <span>{overlap.totalPrompts ? t('none') : t('noPrompts')}</span>
-          {overlap.totalPrompts > 0 && (
-            <span className="flex shrink-0 items-center gap-1 text-xs font-medium text-emerald-600 dark:text-emerald-400">
-              <Check className="h-3.5 w-3.5" />
-              {t('safe')}
-            </span>
-          )}
-        </div>
+        <>
+          <div className="flex items-center justify-between gap-3 rounded-lg border px-3 py-2.5 text-sm">
+            <span>{overlap.totalPrompts ? t('none') : t('noPrompts')}</span>
+            {overlap.totalPrompts > 0 && (
+              <span className="flex shrink-0 items-center gap-1 text-xs font-medium text-emerald-600 dark:text-emerald-400">
+                <Check className="h-3.5 w-3.5" />
+                {t('safe')}
+              </span>
+            )}
+          </div>
+          {optionGroup}
+        </>
       ) : (
         <>
           <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2.5 text-sm">
@@ -1075,43 +1123,7 @@ function OverlapCheck({
               </tbody>
             </table>
           </div>
-          <div role="radiogroup" aria-label={t('label')} className="grid gap-1.5">
-            {options.map((option) => {
-              const text = optionText(option);
-              const chosen = isChosen(option);
-              return (
-                <button
-                  key={option.key}
-                  type="button"
-                  role="radio"
-                  aria-checked={chosen}
-                  onClick={() => onChoose(option.choice)}
-                  className={cn(
-                    'flex items-start gap-2.5 rounded-xl border px-3 py-2.5 text-left transition-colors hover:bg-muted/50',
-                    chosen && 'border-foreground ring-1 ring-inset ring-foreground',
-                  )}
-                >
-                  <span
-                    className={cn(
-                      'mt-0.5 h-4 w-4 shrink-0 rounded-full border-[1.5px] border-muted-foreground/50',
-                      chosen && 'border-[5px] border-foreground',
-                    )}
-                  />
-                  <span className="min-w-0">
-                    <span className="flex flex-wrap items-center gap-1.5 text-sm font-medium">
-                      {text.title}
-                      {option.recommended && (
-                        <span className="rounded-md bg-muted px-1.5 text-[10.5px] font-medium text-muted-foreground">
-                          {t('recommended')}
-                        </span>
-                      )}
-                    </span>
-                    <span className="block text-xs text-muted-foreground">{text.reason}</span>
-                  </span>
-                </button>
-              );
-            })}
-          </div>
+          {optionGroup}
         </>
       )}
     </div>

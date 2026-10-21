@@ -301,12 +301,34 @@ describe('New content', () => {
       });
       await act(async () => {});
       expect(document.body.textContent).toContain('Optimize: Pricing');
+      // Nothing overlaps, and Start still shows the draft optimizes the plan's page.
+      expect(document.body.textContent).toContain('No existing page answers these prompts');
+      expect(radio('Optimize /pricing').getAttribute('aria-checked')).toBe('true');
       await click(button('Open editor'));
       expect(createContentDraft.mock.calls[0][1]).toMatchObject({
         method: 'optimize',
         title: 'Pricing',
         source: { kind: 'opportunity', id: 'o2' },
         sourceUrl: 'https://northwind.example/pricing',
+      });
+    });
+
+    it('lets a person write a new page instead of the plan’s page when nothing overlaps', async () => {
+      getContentOverlap.mockResolvedValue({ totalPrompts: 2, pages: [] });
+      await render('b2b', {
+        kind: 'opportunity',
+        id: 'o2',
+        page: { url: 'https://northwind.example/pricing', title: 'Pricing' },
+      });
+      await act(async () => {});
+
+      await click(radio('Create a new page instead'));
+      expect(document.body.textContent).toContain('Create: CRM for real estate teams');
+      expect(radio('Optimize /pricing').getAttribute('aria-checked')).toBe('false');
+      await click(button('Open editor'));
+      expect(createContentDraft.mock.calls[0][1]).toMatchObject({
+        method: 'create',
+        title: 'CRM for real estate teams',
       });
     });
 

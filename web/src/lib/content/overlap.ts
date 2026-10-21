@@ -20,6 +20,7 @@ export type OverlapChoice = { kind: 'create' } | { kind: 'optimize'; page: Overl
 
 export type OverlapOptionKey =
   | 'optimizeGiven'
+  | 'createNew'
   | 'optimizeInstead'
   | 'createAnyway'
   | 'createLinked'
@@ -62,10 +63,18 @@ export function adviseOverlap(overlap: ContentOverlap): OverlapAdvice {
 /**
  * The options Start offers: the advice's, after the page the Content plan
  * named when the advice doesn't offer that page, so a person who picks
- * another option can come back to it.
+ * another option can come back to it. With nothing overlapping, the plan's
+ * page and a new page: Start shows which one the draft will be, and lets
+ * the person switch.
  */
 export function overlapOptions(advice: OverlapAdvice, given: OverlapPage | null): OverlapOption[] {
   if (!given) return advice.options;
+  if (advice.options.length === 0) {
+    return [
+      { key: 'optimizeGiven', choice: { kind: 'optimize', page: given }, recommended: false },
+      { key: 'createNew', choice: { kind: 'create' }, recommended: false },
+    ];
+  }
   const offered = advice.options.some(
     (o) => o.choice.kind === 'optimize' && samePage(o.choice.page.url, given.url),
   );

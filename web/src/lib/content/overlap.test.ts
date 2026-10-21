@@ -53,6 +53,17 @@ describe('overlapOptions', () => {
     );
   });
 
+  it('offers the plan’s page and a new page when nothing overlaps', () => {
+    const given = page({ url: 'https://acme.example/pricing', promptsInCommon: 0 });
+    const none = adviseOverlap({ totalPrompts: 2, pages: [] });
+    expect(overlapOptions(none, given)).toEqual([
+      { key: 'optimizeGiven', choice: { kind: 'optimize', page: given }, recommended: false },
+      { key: 'createNew', choice: { kind: 'create' }, recommended: false },
+    ]);
+    // With no page from the plan, nothing to choose.
+    expect(overlapOptions(none, null)).toEqual([]);
+  });
+
   it('offers the page the plan named first when the advice offers another', () => {
     const given = page({ url: 'https://acme.example/pricing', promptsInCommon: 0 });
     expect(overlapOptions(advice, given)).toEqual([

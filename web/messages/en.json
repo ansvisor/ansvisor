@@ -3357,6 +3357,10 @@
             "reason": "It already answers {count} of {total} prompts and is cited {citations}×",
             "reasonRanked": "It already answers {count} of {total} prompts, is cited {citations}× and ranks #{position} on Google"
           },
+          "createNew": {
+            "title": "Create a new page instead",
+            "reason": "Write a new page for these prompts"
+          },
           "createAnyway": {
             "title": "Create a new page anyway",
             "reason": "Risk: two pages compete for the same prompts"
