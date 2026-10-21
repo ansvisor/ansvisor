@@ -1,4 +1,4 @@
-import { relativeChange } from '@/lib/mentions-overview';
+import { LOW_SAMPLE_MENTIONS, relativeChange } from '@/lib/mentions-overview';
 
 /**
  * The Mentions & Sentiment Perception tab's figures (MS-09), as
@@ -130,13 +130,15 @@ export interface PerceptionGap {
 /**
  * The biggest gap (spec §9): the attribute where a competitor is most
  * strongly associated and the brand least, by the widest margin, at least
- * GAP_POINTS. Null when no competitor leads anything by that much.
+ * GAP_POINTS. Null when no competitor leads anything by that much. Shares
+ * taken over fewer than LOW_SAMPLE_MENTIONS mentions are left out, as the
+ * Overview does: one answer would otherwise read as 100%.
  */
 export function biggestGap(
   p: Pick<MentionsPerception, 'entities' | 'attributes'>,
 ): PerceptionGap | null {
   const brandIndex = p.entities.findIndex((e) => e.isBrand);
-  if (brandIndex < 0) return null;
+  if (brandIndex < 0 || p.entities[brandIndex].mentions < LOW_SAMPLE_MENTIONS) return null;
   let best: PerceptionGap | null = null;
   let bestMargin = GAP_POINTS;
   for (const row of attributeShares(p)) {
@@ -144,6 +146,7 @@ export function biggestGap(
     for (let i = 0; i < row.shares.length; i++) {
       const share = row.shares[i];
       if (i === brandIndex || share === null || share - brandShare < bestMargin) continue;
+      if (p.entities[i].mentions < LOW_SAMPLE_MENTIONS) continue;
       bestMargin = share - brandShare;
       const placed = row.shares.filter((s): s is number => s !== null && s > 0);
       best = {

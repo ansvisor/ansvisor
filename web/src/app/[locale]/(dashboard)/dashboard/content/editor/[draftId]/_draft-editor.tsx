@@ -482,18 +482,20 @@ export function DraftEditor({
         if (editable) editor.setEditable(true, false);
       }
       if (tr?.docChanged) {
-        let change = tr;
-        if (!tr.before.eq(editor.state.doc)) {
+        if (tr.before.eq(editor.state.doc)) {
+          editor.view.dispatch(tr);
+        } else {
           // The page changed while the decision was saved: the change is made
-          // again on the page as it is now. What it no longer fits goes back
-          // to how it was, saved as well, so the cards and the page agree.
+          // again on the page as it is now, at once, before the page can
+          // change again. What it no longer fits goes back to how it was,
+          // saved as well, so the cards and the page agree.
           const redo = redoDecision(
             editor.state,
             all,
             changed,
             decision === 'accept' ? 'accept' : 'undo',
           );
-          change = redo.tr;
+          if (redo.tr.docChanged) editor.view.dispatch(redo.tr);
           if (redo.failed.length > 0) {
             const back: SuggestionStatus = decision === 'accept' ? 'open' : 'accepted';
             await decideDraftSuggestions(redo.failed, back);
@@ -501,7 +503,6 @@ export function DraftEditor({
             toast(t('suggestions.notApplied', { count: redo.failed.length }));
           }
         }
-        if (change.docChanged) editor.view.dispatch(change);
       }
       setSuggestions(next);
       if (decision === 'accept')

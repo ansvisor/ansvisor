@@ -5,6 +5,7 @@ import { z } from 'zod';
 import supabaseAdmin from '../config/supabase.js';
 import { resolveModel } from './ai-provider.js';
 import { contentBriefModelId, recordUsage } from './content-brief.js';
+import { pageTypeFormat } from './content-page-types.js';
 import { getLanguageName } from './languages.js';
 import { enforceImproveQuota } from './plan-guard.js';
 
@@ -241,7 +242,7 @@ Industry: ${brand?.industry || 'Not specified'}
 Description: ${brand?.description || 'N/A'}
 
 Page: ${draft.title || 'Untitled'}
-Page type: ${draft.page_type || 'not set'}
+Page type: ${pageTypeFormat(draft.page_type)}
 
 Rules the page doesn't meet yet (key: rule — what it asks and how the page reads now):
 ${rules.join('\n')}

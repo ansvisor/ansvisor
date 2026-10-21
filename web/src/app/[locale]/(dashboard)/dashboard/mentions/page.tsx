@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslations } from 'next-intl';
-import { Card, CardContent } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { getCompetitors } from '@/lib/actions/competitor';
 import { getTopics } from '@/lib/actions/topic';
@@ -23,6 +22,7 @@ import { MentionsFilterBar } from './_filter-bar';
 import { MentionsHeaderActions } from './_header-actions';
 import { MentionsListTab } from './_mentions-tab';
 import { MentionsOverviewTab } from './_overview';
+import { MentionsPerceptionTab } from './_perception';
 import { useMentionsExport } from './_use-mentions-export';
 
 /**
@@ -150,11 +150,9 @@ export default function MentionsPage() {
           )}
         </TabsContent>
         <TabsContent value="perception" className="mt-4">
-          <Card>
-            <CardContent className="py-10 text-center text-sm text-muted-foreground">
-              {t('comingSoon')}
-            </CardContent>
-          </Card>
+          {urlRead && (
+            <MentionsPerceptionTab brandId={activeBrandId} brand={brandName} filters={filters} />
+          )}
         </TabsContent>
       </Tabs>
     </div>

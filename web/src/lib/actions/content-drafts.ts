@@ -862,6 +862,7 @@ export async function saveContentDraft(
   if (!draftId.safeParse(id).success || !parsed.success) return { ok: false, reason: 'invalid' };
   const { title, base } = parsed.data;
   const bodyHtml = sanitizeDraftHtml(parsed.data.bodyHtml);
+  const savingHash = await bodyHash(bodyHtml);
   const supabase = await createClient();
   let expected = base.updatedAt;
   // While the Content Agent writes the page (CE-015), a tab left open waits:
@@ -884,11 +885,14 @@ export async function saveContentDraft(
         const detected = detectPageType({ title, html: bodyHtml }, brandSiteType(data.brands));
         // A page that shows no type keeps the one it had (Start's guess).
         if (detected && detected !== data.page_type) {
+          // Only over this save: a write in between would otherwise become
+          // the editor's base, and its next autosave would go over it.
           const { data: typed, error: typeError } = await supabase
             .from('content_drafts')
             .update({ page_type: detected })
             .eq('id', id)
             .eq('page_type_source', 'detected')
+            .eq('updated_at', data.updated_at)
             .select('updated_at')
             .maybeSingle();
           // The page is saved; its type catches up on the next save.
@@ -899,7 +903,7 @@ export async function saveContentDraft(
           }
         }
       }
-      return { ok: true, updatedAt, bodyHash: await bodyHash(bodyHtml) };
+      return { ok: true, updatedAt, bodyHash: savingHash };
     }
 
     const { data: current, error: readError } = await supabase
@@ -914,7 +918,13 @@ export async function saveContentDraft(
       return { ok: false, reason: 'conflict' };
     }
     const currentHash = await bodyHash(current.body_html);
-    if (currentHash !== base.bodyHash && currentHash !== base.unconfirmedHash) {
+    // The page the editor last saw, its lost save's, or already this one:
+    // writing over any of them loses nothing.
+    if (
+      currentHash !== base.bodyHash &&
+      currentHash !== base.unconfirmedHash &&
+      currentHash !== savingHash
+    ) {
       return { ok: false, reason: 'conflict' };
     }
     expected = current.updated_at;
@@ -1071,6 +1081,8 @@ export async function restoreDraftVersion(id: string, versionId: string): Promis
         .update({ page_type: detected })
         .eq('id', id)
         .eq('page_type_source', 'detected')
+        // Only over the restore, as after a save.
+        .eq('updated_at', restored.updatedAt)
         .select('updated_at')
         .maybeSingle();
       // The page is restored; its type catches up on the next save.
@@ -1555,8 +1567,9 @@ export async function saveDraftRules(id: string, rules: DraftRulesInput): Promis
 }
 
 /**
- * The workspace's My rules (CE-009, 00214), by page type: what a new draft
- * of the type starts from. Sets that don't read as rules are left out.
+ * The workspace's My rules (CE-009, 00214) for the brand's kind of site
+ * (00227), by page type: what a new draft of the type starts from. Sets that
+ * don't read as rules are left out.
  */
 export async function getMyRuleSets(
   brandId: string,
@@ -1565,7 +1578,7 @@ export async function getMyRuleSets(
   const supabase = await createClient();
   const { data: brand, error: brandError } = await supabase
     .from('brands')
-    .select('organization_id')
+    .select('organization_id, site_type, industry, shopping_mode_enabled')
     .eq('id', brandId)
     .maybeSingle();
   if (brandError) throw new Error(brandError.message);
@@ -1573,7 +1586,8 @@ export async function getMyRuleSets(
   const { data, error } = await supabase
     .from('content_rule_sets')
     .select('page_type, overrides, text_rules')
-    .eq('organization_id', brand.organization_id);
+    .eq('organization_id', brand.organization_id)
+    .eq('site_type', brandSiteType(brand));
   if (error) throw new Error(error.message);
   const sets: Partial<Record<PageType, SavedRuleSet>> = {};
   for (const row of data ?? []) {
@@ -1590,7 +1604,8 @@ export async function getMyRuleSets(
 
 /**
  * Save as my rules (CE-009): a draft's rule choices become the workspace's
- * set for the page type, for every draft of it that starts after.
+ * set for the page type on the brand's kind of site (00227), for every draft
+ * of it that starts after.
  */
 export async function saveMyRuleSet(
   brandId: string,
@@ -1609,7 +1624,11 @@ export async function saveMyRuleSet(
   const supabase = await createClient();
   const [userRes, brandRes] = await Promise.all([
     supabase.auth.getUser(),
-    supabase.from('brands').select('organization_id').eq('id', brandId).maybeSingle(),
+    supabase
+      .from('brands')
+      .select('organization_id, site_type, industry, shopping_mode_enabled')
+      .eq('id', brandId)
+      .maybeSingle(),
   ]);
   if (brandRes.error) throw new Error(brandRes.error.message);
   const userId = userRes.data.user?.id;
@@ -1618,13 +1637,14 @@ export async function saveMyRuleSet(
   const { error } = await supabase.from('content_rule_sets').upsert(
     {
       organization_id: organizationId,
+      site_type: brandSiteType(brandRes.data),
       page_type: pageType,
       overrides: parsed.data.overrides,
       text_rules: parsed.data.textRules,
       updated_by: userId,
       updated_at: new Date().toISOString(),
     },
-    { onConflict: 'organization_id,page_type' },
+    { onConflict: 'organization_id,site_type,page_type' },
   );
   if (error) throw new Error(error.message);
 }

@@ -3151,7 +3151,7 @@
         "competitors": "{names} cited · you aren't",
         "competitorsVisibility": "{names} cited · you {visibility}%",
         "opportunity": "{count, plural, =0 {A page AI needs} one {Answers # prompt AI asks} other {Answers # prompts AI asks}}",
-        "citationsDown": "Citations −{pct}%",
+        "citationsDown": "Citation rate −{pct}%",
         "on": "on {platforms}",
         "top": "Top page · {citations, plural, one {{citationsText} citation} other {{citationsText} citations}} · {visits, plural, one {{visitsText} AI visit} other {{visitsText} AI visits}}",
         "overlap": "Competes with {count, plural, one {# of your pages} other {# of your pages}} for the same prompts"
@@ -3348,10 +3348,18 @@
         "promptsValue": "{count} of {total}",
         "recommended": "Recommended",
         "options": {
+          "optimizeGiven": {
+            "title": "Optimize {page}",
+            "reason": "The page your Content plan picked"
+          },
           "optimizeInstead": {
             "title": "Optimize {page} instead",
             "reason": "It already answers {count} of {total} prompts and is cited {citations}×",
             "reasonRanked": "It already answers {count} of {total} prompts, is cited {citations}× and ranks #{position} on Google"
+          },
+          "createNew": {
+            "title": "Create a new page instead",
+            "reason": "Write a new page for these prompts"
           },
           "createAnyway": {
             "title": "Create a new page anyway",
@@ -3910,6 +3918,8 @@
           "needsFeed": "Needs feed",
           "noFanouts": "No fan-outs",
           "addKeywords": "Add keywords",
+          "notHowTo": "Not a how-to",
+          "englishOnly": "English only",
           "numberCheck": "Number check"
         },
         "mineName": "My rules · {type}",
@@ -5216,7 +5226,6 @@
       "search": "Search",
       "searchPlaceholder": "Search prompts…"
     },
-    "comingSoon": "This view is on its way: its figures and charts arrive with the next updates.",
     "overview": {
       "sectionLabel": "Mentions overview",
       "loadError": "Couldn't load the overview. Try again in a moment.",
@@ -5432,6 +5441,47 @@
         "kpi": "{label}: {value}",
         "kpiChange": "{label}: {value} ({change})",
         "net": "{net} · {split} (n={count})"
+      }
+    },
+    "perception": {
+      "sectionLabel": "Perception",
+      "loadError": "Couldn't load the perception figures. Try again in a moment.",
+      "unavailable": "Perception isn't available yet. It appears once the mentions data has been prepared.",
+      "pickDates": "Choose a start or end date to see the perception figures.",
+      "noMentions": "AI didn't name {brand} in the tracked responses of this period.",
+      "method": "Terms come from the sentences that name each brand, by rule (no LLM). A sentence naming two brands lends its words to both.",
+      "terms": {
+        "title": "What AI associates with {brand}",
+        "note": "Words and phrases next to your brand, by responses",
+        "tableLabel": "Terms AI uses next to your brand",
+        "responses": "{count, plural, one {# response} other {# responses}}",
+        "share": "{share} of responses naming {brand}",
+        "none": "No terms yet. They appear once this period's responses have been prepared."
+      },
+      "shape": {
+        "title": "Brand shape: you vs top competitors",
+        "chartLabel": "Share of the responses naming each brand, on the attributes that tell them apart",
+        "notEnough": "The shape needs at least three attributes and one competitor named in this period."
+      },
+      "gap": {
+        "title": "Biggest gap",
+        "unplaced": "“{term}”: {competitor} in {competitorShare} of the responses naming it; AI doesn't use it for {brand}.",
+        "ranked": "“{term}”: {competitor} in {competitorShare} of the responses naming it; {brand} in {brandShare} (#{rank})."
+      },
+      "heatmap": {
+        "title": "Brand × attribute",
+        "note": "Share of the responses naming each brand",
+        "tableLabel": "Each attribute's share of the responses naming each brand",
+        "attribute": "Attribute",
+        "you": "You",
+        "none": "No attributes yet for this period."
+      },
+      "coMentions": {
+        "title": "Frequently mentioned with",
+        "tableLabel": "Competitors named in the same responses as you",
+        "note": "The trend shows whether the AI's consideration set around you is changing.",
+        "responses": "{count, plural, one {# response} other {# responses}}",
+        "none": "No competitor is named in the same responses as you in this period."
       }
     }
   },

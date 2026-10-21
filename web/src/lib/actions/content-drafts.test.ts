@@ -163,6 +163,18 @@ describe('saveContentDraft', () => {
     expect(result).toMatchObject({ ok: true, updatedAt: '2026-10-20T15:01:00Z' });
   });
 
+  it('takes a page that already holds what is being saved as its own', async () => {
+    // A lost save wrote this very page; the editor sends it again.
+    updates = [null, { updated_at: '2026-10-20T15:01:00Z' }];
+    row = { updated_at: '2026-10-20T14:30:00Z', body_html: '<h1>Mine</h1><p>More</p>' };
+    const result = await saveContentDraft(DRAFT, {
+      title: 'Mine',
+      bodyHtml: '<h1>Mine</h1><p>More</p>',
+      base: await base(),
+    });
+    expect(result).toMatchObject({ ok: true, updatedAt: '2026-10-20T15:01:00Z' });
+  });
+
   it('doesn’t overwrite a page someone else changed', async () => {
     row = { updated_at: '2026-10-20T14:30:00Z', body_html: '<h1>Their version</h1>' };
     await expect(
@@ -231,6 +243,8 @@ describe('the page type on save (CE-023)', () => {
       filters: [
         ['eq', 'id', DRAFT],
         ['eq', 'page_type_source', 'detected'],
+        // Only over this save: a write in between keeps its own version.
+        ['eq', 'updated_at', '2026-10-20T15:00:00Z'],
       ],
     });
   });
@@ -448,6 +462,8 @@ describe('History', () => {
     const typed = calls.find((call) => call.op === 'update')!;
     expect(typed.value).toEqual({ page_type: 'comparison' });
     expect(typed.filters).toContainEqual(['eq', 'page_type_source', 'detected']);
+    // Only over the restore.
+    expect(typed.filters).toContainEqual(['eq', 'updated_at', 't1']);
 
     // A type the person picked stays.
     calls = [];

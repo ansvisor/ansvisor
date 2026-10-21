@@ -115,6 +115,14 @@ const SIZING: BySite = { ecommerce: 'sizing_guide' };
 const COLLECTION: BySite = { ecommerce: 'collection_page' };
 
 /**
+ * "What is …" asks for a definition, but not "what is the best …", "what is
+ * the difference between …", "what are the benefits of …" or "what is new":
+ * the words after it that ask for something else.
+ */
+const NOT_DEFINED =
+  'best|differences?|costs?|prices?|benefits?|advantages?|disadvantages?|pros|cons|new|latest';
+
+/**
  * URL paths, the most specific first: /blog/hubspot-vs-salesforce is a
  * comparison before it is a blog post. Matched on the lowercased path with
  * no trailing slash or file extension.
@@ -124,7 +132,12 @@ const PATH_SIGNS: [RegExp, BySite][] = [
   [/\/(size-?(guides?|charts?)|sizing(-guides?)?|fit-guides?)([/-]|$)/, SIZING],
   [/(^|[/-])alternatives?([/-]|$)/, ALTERNATIVES],
   [/(^|[/-])(vs|versus)([/-]|$)|\/(compare|comparisons?)(\/|$)/, COMPARISON],
-  [/\/(glossary|definitions?|dictionary|what-is|what-are)([/-]|$)/, DEFINITION],
+  [
+    new RegExp(
+      `\\/(glossary|definitions?|dictionary)([/-]|$)|\\/what-(is|are)(?!-(the-)?(${NOT_DEFINED})([/-]|$))([/-]|$)`,
+    ),
+    DEFINITION,
+  ],
   [
     /\/(shipping|delivery|returns?|refunds?|exchanges?|warranty|polic(y|ies)|terms|privacy|legal)([/-]|$)/,
     POLICY,
@@ -132,16 +145,18 @@ const PATH_SIGNS: [RegExp, BySite][] = [
   [/\/(docs|documentation|help|help-center|support|faqs?|knowledge-base|kb)(\/|$)/, FAQ],
   [/\/(integrations?|apps|marketplace|connectors?)\//, { b2b: 'integration' }],
   [/\/(buying-guides?|buyers?-guides?|how-to-choose)([/-]|$)/, BUYING_GUIDE],
-  [/\/(the-)?(best(?!-(practices?|time|ways?)([/-]|$))|top-?\d+)([/-]|$)/, BEST_OF],
+  [/\/(the-)?(best(?!-(practices?|time|ways?|sellers?)([/-]|$))|top-?\d+)([/-]|$)/, BEST_OF],
   [/\/(features?|capabilities|platform)(\/|$)/, { b2b: 'feature_page' }],
   [
     /\/(solutions?|industries|industry|use-cases?|teams)(\/|$)|\/for-[a-z]/,
     { b2b: 'solution_page' },
   ],
   [/\/(products?|p|dp|items?)\/[^/]+/, { b2b: 'feature_page', ecommerce: 'product_page' }],
-  // A themed collection (gifts, bundles, "for …") before a shop's categories.
+  // A themed collection (gifts, bundles, "for …") before a shop's categories,
+  // on whole words of the slug: /collections/kitchen and /collections/limited-edition
+  // are categories.
   [
-    /\/collections?\/[^/]*(gifts?|bundles?|kits?|sets?|best-?sellers?|new-arrivals?|for-[a-z]|-for-|picks|edit)/,
+    /\/collections?\/(?:[^/]*-)?(gifts?|bundles?|kits?|sets?|best-?sellers?|new-arrivals?|picks|edit)(?:-|\/|$)|\/collections?\/(?:[^/]*-)?for-[a-z]/,
     COLLECTION,
   ],
   [
@@ -194,11 +209,23 @@ const TITLE_SIGNS: [RegExp, BySite][] = [
   [/\b(vs\.?|versus)\s/i, COMPARISON],
   [/\bpricing\b/i, { b2b: 'pricing' }],
   [/\bpolic(y|ies)\b/i, POLICY],
+  // "Shipping FAQ" is a policy page, as /pages/shipping-faq is: the policy
+  // words before FAQ, in the paths' order.
+  [
+    /^(?=.*\b(faqs?|frequently asked)\b).*\b(shipping|delivery|returns?|refunds?|exchanges?|warranty|terms|privacy|legal)\b/i,
+    POLICY,
+  ],
   [/\bfaqs?\b|\bfrequently asked\b/i, FAQ],
   [/\bbuying guide\b|\bhow to choose\b/i, BUYING_GUIDE],
   [/^(the\s+)?(\d+\s+)?best\b(?!\s+(time|way|practices?)\b)|\btop\s+\d+\b/i, BEST_OF],
-  // "What is single-origin coffee?", not "What is the best …".
-  [/^what\s+(is|are)\s+(?!the\s+best\b)|\b(definition|meaning) of\b|\bglossary\b/i, DEFINITION],
+  // "What is single-origin coffee?", not "What is the best …" (NOT_DEFINED).
+  [
+    new RegExp(
+      `^what\\s+(is|are)\\s+(?!(the\\s+)?(${NOT_DEFINED})\\b)|\\b(definition|meaning) of\\b|\\bglossary\\b`,
+      'i',
+    ),
+    DEFINITION,
+  ],
   [/\bgifts? for\b|\bcollection\b/i, COLLECTION],
   [/\b\d+[-\s]days?\b|\bitinerar(y|ies)\b/i, { b2c: 'itinerary' }],
   [/\bintegrations?\b|\bintegrates? with\b/i, { b2b: 'integration' }],

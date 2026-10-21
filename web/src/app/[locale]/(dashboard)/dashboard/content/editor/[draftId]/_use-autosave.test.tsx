@@ -21,6 +21,8 @@ vi.mock('@/lib/content/editor', async (importOriginal) => ({
 
 const LOADED = { updatedAt: 't0', bodyHtml: '<p>loaded</p>' };
 const BIG = `<p>${'x'.repeat(500_000)}</p>`;
+/** A page sanitize-html rewrites: <br> becomes <br />, links lose target and rel. */
+const REAL = '<p><a href="https://acme.example/" target="_blank" rel="noopener">Acme</a><br></p>';
 const BODIES = ['<p>a</p>', '<p>ab</p>', '<p>1</p>', '<p>12</p>', '<p>x</p>', '<p>last</p>'];
 
 /** The hook behind buttons, as the editor drives it: one per text, Retry, and settle. */
@@ -35,6 +37,7 @@ function Harness() {
         <button key={body} data-body={body} onClick={() => autosave.schedule(content(body))} />
       ))}
       <button data-big onClick={() => autosave.schedule(content(BIG))} />
+      <button data-real onClick={() => autosave.schedule(content(REAL))} />
       <button data-retry onClick={() => void autosave.retry()} />
       <button
         data-discard
@@ -127,6 +130,8 @@ describe('the editor’s autosave', () => {
     saveContentDraft.mockRejectedValueOnce(new Error('offline'));
     edit('<p>x</p>');
     await act(async () => vi.advanceTimersByTime(1500));
+    // The lost save's page is fingerprinted once the sanitizer has loaded.
+    await act(() => vi.dynamicImportSettled());
     expect(state()).toBe('failed');
 
     await retry();
@@ -142,6 +147,19 @@ describe('the editor’s autosave', () => {
     edit('<p>last</p>');
     await act(async () => vi.advanceTimersByTime(1500));
     expect(saveContentDraft.mock.calls[2][1].base).toEqual({ updatedAt: 'now', bodyHash: 'h1' });
+    error.mockRestore();
+  });
+
+  it('sends the lost save as the server stores it: sanitized', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    saveContentDraft.mockRejectedValueOnce(new Error('offline'));
+    act(() => container.querySelector<HTMLButtonElement>('[data-real]')!.click());
+    await act(async () => vi.advanceTimersByTime(1500));
+    await act(() => vi.dynamicImportSettled());
+    await retry();
+    const sent = saveContentDraft.mock.calls[1][1].base.unconfirmedHash;
+    expect(sent).toBe('hash:<p><a href="https://acme.example/">Acme</a><br /></p>');
+    expect(sent).not.toBe(`hash:${REAL}`);
     error.mockRestore();
   });
 
