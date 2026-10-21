@@ -15,6 +15,8 @@ interface Call {
 let calls: Call[];
 // What the next update returns: its row, or none (RLS, or not found).
 let updated: Record<string, unknown> | null;
+// Or, update by update, when a test needs more than one.
+let updates: (Record<string, unknown> | null)[];
 let row: Record<string, unknown> | null;
 
 vi.mock('@/lib/action-center/assignees', () => ({ readAssignees: vi.fn(async () => new Map()) }));
@@ -26,7 +28,7 @@ vi.mock('@/lib/supabase/server', () => ({
       calls.push(call);
       const result = () =>
         call.op === 'update'
-          ? { data: updated, error: null }
+          ? { data: updates.length ? updates.shift()! : updated, error: null }
           : call.op === 'insert'
             ? { data: { id: 'new-draft' }, error: null }
             : { data: row, error: null };
@@ -46,41 +48,83 @@ vi.mock('@/lib/supabase/server', () => ({
 
 const { createContentDraft, getContentDraft, markContentDraftReady, saveContentDraft } =
   await import('./content-drafts');
+const { bodyHash } = await import('@/lib/content/editor');
 
 beforeEach(() => {
   calls = [];
   updated = null;
+  updates = [];
   row = null;
 });
 
 describe('saveContentDraft', () => {
-  it('saves the body and the title read from it', async () => {
+  const LOADED = '<h1>Pipeline</h1>';
+  const base = async (html = LOADED) => ({
+    updatedAt: '2026-10-20T14:00:00Z',
+    bodyHash: await bodyHash(html),
+  });
+
+  it('saves the body and the title over the version the editor last saw', async () => {
     updated = { updated_at: '2026-10-20T15:00:00Z' };
     await expect(
       saveContentDraft(DRAFT, {
         title: 'Pipeline forecasting',
         bodyHtml: '<h1>Pipeline forecasting</h1>',
+        base: await base(),
       }),
-    ).resolves.toEqual({ updatedAt: '2026-10-20T15:00:00Z' });
+    ).resolves.toEqual({
+      ok: true,
+      updatedAt: '2026-10-20T15:00:00Z',
+      bodyHash: await bodyHash('<h1>Pipeline forecasting</h1>'),
+    });
     expect(calls[0]).toMatchObject({
       op: 'update',
       value: { title: 'Pipeline forecasting', body_html: '<h1>Pipeline forecasting</h1>' },
-      filters: [['eq', 'id', DRAFT]],
+      filters: [
+        ['eq', 'id', DRAFT],
+        ['eq', 'updated_at', '2026-10-20T14:00:00Z'],
+      ],
     });
   });
 
-  it('says so when no row changed, rather than reporting it saved', async () => {
-    await expect(saveContentDraft(DRAFT, { title: '', bodyHtml: '' })).rejects.toThrow('not_found');
+  it('goes over a change to the draft’s other columns, the page being the same', async () => {
+    // Marked ready meanwhile: a newer updated_at, the page as the editor saw it.
+    updates = [null, { updated_at: '2026-10-20T15:01:00Z' }];
+    row = { updated_at: '2026-10-20T14:30:00Z', body_html: LOADED };
+    const result = await saveContentDraft(DRAFT, {
+      title: 'Pipeline',
+      bodyHtml: '<h1>Pipeline</h1><p>More</p>',
+      base: await base(),
+    });
+    expect(result).toMatchObject({ ok: true, updatedAt: '2026-10-20T15:01:00Z' });
+    expect(calls.map((c) => c.op)).toEqual(['update', 'select', 'update']);
+    expect(calls[2].filters).toContainEqual(['eq', 'updated_at', '2026-10-20T14:30:00Z']);
   });
 
-  it('refuses a body or title over the limits, and a malformed id, before writing', async () => {
+  it('doesn’t overwrite a page someone else changed', async () => {
+    row = { updated_at: '2026-10-20T14:30:00Z', body_html: '<h1>Their version</h1>' };
     await expect(
-      saveContentDraft(DRAFT, { title: '', bodyHtml: 'x'.repeat(500_001) }),
-    ).rejects.toThrow('invalid');
-    await expect(saveContentDraft(DRAFT, { title: 'x'.repeat(301), bodyHtml: '' })).rejects.toThrow(
-      'invalid',
-    );
-    await expect(saveContentDraft('nope', { title: '', bodyHtml: '' })).rejects.toThrow('invalid');
+      saveContentDraft(DRAFT, { title: 'Mine', bodyHtml: '<h1>Mine</h1>', base: await base() }),
+    ).resolves.toEqual({ ok: false, reason: 'conflict' });
+    expect(calls.map((c) => c.op)).toEqual(['update', 'select']);
+  });
+
+  it('says so when the draft is gone or not the member’s, rather than reporting it saved', async () => {
+    await expect(
+      saveContentDraft(DRAFT, { title: '', bodyHtml: '', base: await base() }),
+    ).resolves.toEqual({ ok: false, reason: 'not_found' });
+  });
+
+  it('says a body over the limit is too large, and refuses a bad title or id, before writing', async () => {
+    await expect(
+      saveContentDraft(DRAFT, { title: '', bodyHtml: 'x'.repeat(500_001), base: await base() }),
+    ).resolves.toEqual({ ok: false, reason: 'too_large' });
+    await expect(
+      saveContentDraft(DRAFT, { title: 'x'.repeat(301), bodyHtml: '', base: await base() }),
+    ).resolves.toEqual({ ok: false, reason: 'invalid' });
+    await expect(
+      saveContentDraft('nope', { title: '', bodyHtml: '', base: await base() }),
+    ).resolves.toEqual({ ok: false, reason: 'invalid' });
     expect(calls).toEqual([]);
   });
 });
