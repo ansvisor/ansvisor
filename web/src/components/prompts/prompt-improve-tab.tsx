@@ -25,6 +25,7 @@ import {
   Sparkles,
   X,
 } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 import { Link } from '@/i18n/navigation';
 import { Badge } from '@/components/ui/badge';
@@ -65,6 +66,8 @@ export interface ImproveController {
   set: ImproveSet | null;
   /** Generations left this period; null while unknown. */
   quota: ImproveQuota | null;
+  /** The org's plan: a Starter whose budget is spent is offered an upgrade. */
+  planId: PlanId | null;
   drafts: DraftSuggestion[];
   setDrafts: React.Dispatch<React.SetStateAction<DraftSuggestion[]>>;
   error: string | null;
@@ -128,8 +131,15 @@ export function useImprove({
         // failed read lands on the error state, whose Retry reads again: a
         // retry should never be a paid call the user didn't ask for.
         if (op === 'generate' && result.code !== 'plan_limit') {
-          setState((s) => ({ ...s, key: forKey, status: 'ready', error: result.error }));
-          if (result.code === 'quota_exceeded') {
+          // A spent budget is said by the quota note, with the way out.
+          const spent = result.code === 'quota_exceeded';
+          setState((s) => ({
+            ...s,
+            key: forKey,
+            status: 'ready',
+            error: spent ? null : result.error,
+          }));
+          if (spent) {
             setQuota((q) =>
               q ? { ...q, exhausted: true, generationsLeft: 0, percentLeft: 0 } : q,
             );
@@ -222,6 +232,7 @@ export function useImprove({
     status,
     set,
     quota,
+    planId,
     drafts,
     setDrafts,
     error: current?.error ?? null,
@@ -238,8 +249,20 @@ export function useImprove({
 // ─── Tab ──────────────────────────────────────────────────────────────────────
 
 export function ImproveTab({ improve }: { improve: ImproveController }) {
-  const { status, set, quota, drafts, setDrafts, error, dirty, generate, reload, send, sending } =
-    improve;
+  const {
+    status,
+    set,
+    quota,
+    planId,
+    drafts,
+    setDrafts,
+    error,
+    dirty,
+    generate,
+    reload,
+    send,
+    sending,
+  } = improve;
   const [confirmRegenerate, setConfirmRegenerate] = useState(false);
   const outOfQuota = !!quota?.exhausted;
 
@@ -277,7 +300,7 @@ export function ImproveTab({ improve }: { improve: ImproveController }) {
             <Sparkles />
             Generate suggestions
           </Button>
-          <QuotaNote quota={quota} />
+          <QuotaNote quota={quota} planId={planId} />
         </div>
       </div>
     );
@@ -358,7 +381,7 @@ export function ImproveTab({ improve }: { improve: ImproveController }) {
           <span className="ml-2 text-muted-foreground/70">
             Generated {new Date(set.generatedAt).toLocaleString()}
           </span>
-          <QuotaNote quota={quota} className="ml-2" />
+          <QuotaNote quota={quota} planId={planId} className="ml-2" />
           {sentLatest && (
             <span className="mt-1 flex items-center gap-1 text-emerald-700 dark:text-emerald-400">
               <CircleCheck className="h-3.5 w-3.5" />
@@ -421,10 +444,22 @@ function friendlyError(error: string | null, fallback = 'Failed to generate sugg
   return error || fallback;
 }
 
-/** "About 185 generations left this month"; nothing on unlimited plans. */
-function QuotaNote({ quota, className }: { quota: ImproveQuota | null; className?: string }) {
+/**
+ * "About 185 generations left this month"; nothing on unlimited plans. A
+ * spent budget says when it resets, and offers Starter, on its $1 trial,
+ * the upgrade.
+ */
+function QuotaNote({
+  quota,
+  planId,
+  className,
+}: {
+  quota: ImproveQuota | null;
+  planId: PlanId | null;
+  className?: string;
+}) {
+  const t = useTranslations('prompts.improve.quota');
   if (!quota || quota.unlimited) return null;
-  const n = quota.generationsLeft ?? 0;
   return (
     <span
       className={cn(
@@ -433,12 +468,21 @@ function QuotaNote({ quota, className }: { quota: ImproveQuota | null; className
         className,
       )}
       title={
-        quota.percentLeft !== null ? `${quota.percentLeft}% of this month's budget left` : undefined
+        quota.percentLeft !== null ? t('percentLeft', { percent: quota.percentLeft }) : undefined
       }
     >
-      {quota.exhausted
-        ? "This month's suggestion budget is used up. It resets when your subscription renews."
-        : `About ${n} generation${n === 1 ? '' : 's'} left this month`}
+      {quota.exhausted ? t('usedUp') : t('left', { count: quota.generationsLeft ?? 0 })}
+      {quota.exhausted && planId === 'starter' && (
+        <>
+          {' '}
+          <Link
+            href="/dashboard/settings?tab=billing"
+            className="font-medium text-foreground underline underline-offset-2"
+          >
+            {t('upgrade')}
+          </Link>
+        </>
+      )}
     </span>
   );
 }
