@@ -4,7 +4,12 @@
  * Run after migration 00225:
  *   node src/scripts/backfill-shopping-card-merchants.js
  *
- * Pages across the normalized card table and uses the same pure classifier as
+ * Add --all to reclassify every row with a merchant URL after brand-domain changes:
+ *   node src/scripts/backfill-shopping-card-merchants.js --all
+ *
+ * By default, only unclassified rows are selected, so an interrupted run can be
+ * safely resumed by running the command again. Pages across the normalized
+ * card table and uses the same pure classifier as
  * the live result handler. Cards without a merchant URL remain unclassified.
  */
 import 'dotenv/config';
