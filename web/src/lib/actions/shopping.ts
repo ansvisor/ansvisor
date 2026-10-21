@@ -2,6 +2,7 @@
 
 import { createClient } from '@/lib/supabase/server';
 import { expandDateToEndOfDay } from '@/lib/dates';
+import { detectAmazonShareDrop, type AmazonShareDropAlert } from '@/lib/shopping-amazon-share-alert';
 
 /**
  * Server actions for the Shopping dashboard page. Reads from the
@@ -181,6 +182,34 @@ export async function getShoppingOverview(
  * values that actually appear in this brand's data — all of it, not the first
  * 1,000 results.
  */
+/**
+ * Returns a week-over-week Amazon share alert for own-product cards. The RPC
+ * aggregates in Postgres so this stays accurate beyond PostgREST's 1,000-row
+ * cap; only cards with a persisted merchant classification enter the counts.
+ */
+export async function getShoppingAmazonShareDropAlert(
+  brandId: string,
+): Promise<AmazonShareDropAlert | null> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc('shopping_amazon_share_weekly', {
+    p_brand_id: brandId,
+  });
+  if (error) throw new Error(error.message);
+
+  const rows = (data ?? []) as Array<{
+    week_start: string;
+    amazon_cards: number | string;
+    classified_cards: number | string;
+  }>;
+  return detectAmazonShareDrop(
+    rows.map((row) => ({
+      weekStart: row.week_start,
+      amazonCards: Number(row.amazon_cards),
+      classifiedCards: Number(row.classified_cards),
+    })),
+  );
+}
+
 export async function getShoppingFilterOptions(brandId: string): Promise<{
   platforms: string[];
   regions: string[];
