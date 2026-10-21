@@ -29884,7 +29884,10 @@ comment on table public.content_rule_sets is
 --   * restore: the page a restore replaced, so a restore loses nothing.
 -- "Now" is the draft itself. Versions are kept 90 days: the server's daily
 -- run prunes older ones (content_draft_versions_prune), and reads leave them
--- out until then.
+-- out until then. A draft keeps its newest 50 (History lists 50), and a
+-- version that would repeat the draft's latest one (a restore after a
+-- restore, Mark ready on an unchanged page) isn't kept again. Members write
+-- import, agent_before and ready versions; publish is the server's.
 --
 -- A version is a copy of the draft's own title and body, which every save
 -- checks against the draft allow-list. So members only read versions; the two
@@ -29942,8 +29945,57 @@ $$;
 revoke all on function public.content_draft_member(uuid) from public, anon;
 grant execute on function public.content_draft_member(uuid) to authenticated, service_role;
 
+-- Keeps the draft as it is now as a version of the given origin, unless its
+-- latest version is already this page (that one's id comes back), and keeps
+-- only the draft's newest 50. Called by the two functions below, not by
+-- members.
+create or replace function public.content_draft_keep_version(p_draft_id uuid, p_origin text)
+returns uuid
+language plpgsql
+volatile
+security definer
+set search_path to 'public'
+as $$
+declare
+  v_latest public.content_draft_versions%rowtype;
+  v_id uuid;
+begin
+  select * into v_latest
+  from public.content_draft_versions v
+  where v.draft_id = p_draft_id
+  order by v.created_at desc, v.id desc
+  limit 1;
+  if v_latest.id is not null and exists (
+    select 1 from public.content_drafts d
+    where d.id = p_draft_id and d.title = v_latest.title and d.body_html = v_latest.body_html
+  ) then
+    return v_latest.id;
+  end if;
+
+  insert into public.content_draft_versions (draft_id, origin, title, body_html, created_by)
+  select d.id, p_origin, d.title, d.body_html, auth.uid()
+  from public.content_drafts d
+  where d.id = p_draft_id
+  returning id into v_id;
+
+  delete from public.content_draft_versions v
+  where v.draft_id = p_draft_id
+    and v.id not in (
+      select o.id from public.content_draft_versions o
+      where o.draft_id = p_draft_id
+      order by o.created_at desc, o.id desc
+      limit 50
+    );
+  return v_id;
+end;
+$$;
+
+revoke all on function public.content_draft_keep_version(uuid, text)
+  from public, anon, authenticated;
+
 -- Keeps the draft as it is now as a version of the given origin. Returns the
--- version's id, or null when the caller can't change the draft.
+-- version's id, or null when the caller can't change the draft, or (a
+-- publish) isn't the server.
 create or replace function public.content_draft_snapshot(p_draft_id uuid, p_origin text)
 returns uuid
 language plpgsql
@@ -29958,15 +30010,12 @@ begin
   if p_origin is null or p_origin not in ('import', 'agent_before', 'ready', 'publish') then
     raise exception 'content_draft_snapshot: unknown origin %', p_origin using errcode = '22023';
   end if;
-  if not public.content_draft_member(p_draft_id) then
+  if not public.content_draft_member(p_draft_id)
+     or (p_origin = 'publish' and auth.role() is distinct from 'service_role') then
     return null;
   end if;
 
-  insert into public.content_draft_versions (draft_id, origin, title, body_html, created_by)
-  select d.id, p_origin, d.title, d.body_html, auth.uid()
-  from public.content_drafts d
-  where d.id = p_draft_id
-  returning id into v_id;
+  v_id := public.content_draft_keep_version(p_draft_id, p_origin);
   return v_id;
 end;
 $$;
@@ -29975,7 +30024,9 @@ revoke all on function public.content_draft_snapshot(uuid, text) from public, an
 grant execute on function public.content_draft_snapshot(uuid, text) to authenticated, service_role;
 
 -- Restores a version: the draft as it is now is kept first (origin restore),
--- then the draft takes the version's title and body. Nothing is deleted.
+-- then the draft takes the version's title and body; a draft that is already
+-- that page is left as it is. Only versions past the draft's newest 50 are
+-- ever deleted.
 -- Returns the draft's title, body and updated_at after, or null when the
 -- version is unknown, past its 90 days, or the caller can't change the draft.
 create or replace function public.content_draft_restore(p_version_id uuid)
@@ -29996,15 +30047,17 @@ begin
     return null;
   end if;
 
-  insert into public.content_draft_versions (draft_id, origin, title, body_html, created_by)
-  select d.id, 'restore', d.title, d.body_html, auth.uid()
-  from public.content_drafts d
-  where d.id = v_version.draft_id;
+  select * into v_draft from public.content_drafts d where d.id = v_version.draft_id;
+  -- Already this page: nothing to keep or change.
+  if v_draft.title is distinct from v_version.title
+     or v_draft.body_html is distinct from v_version.body_html then
+    perform public.content_draft_keep_version(v_version.draft_id, 'restore');
 
-  update public.content_drafts d
-  set title = v_version.title, body_html = v_version.body_html
-  where d.id = v_version.draft_id
-  returning * into v_draft;
+    update public.content_drafts d
+    set title = v_version.title, body_html = v_version.body_html
+    where d.id = v_version.draft_id
+    returning * into v_draft;
+  end if;
 
   return jsonb_build_object(
     'title', v_draft.title,
