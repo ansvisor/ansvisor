@@ -45,7 +45,6 @@ const page = (path: string, over: Partial<PlanPage> = {}): PlanPage => ({
   page: `https://acme.example${path}`,
   title: null,
   citations: { cur: 2, prev: 2 },
-  prompts: 1,
   platformsDown: [],
   aiVisits: 0,
   overlaps: 0,
@@ -77,6 +76,7 @@ const PLAN = {
       overlaps: 1,
     }),
   ],
+  answers: { cur: 100, prev: 100 },
   opportunities: [opportunity],
   drafts: [],
 };
@@ -155,14 +155,14 @@ describe('the Content plan', () => {
 
     expect(rowTexts()).toEqual([
       [
-        'Coffee subscriptionsGuide/guides/coffee-subscriptions',
-        'Optimize',
-        'Citations −70% on ChatGPT and PerplexityCitations',
-      ],
-      [
         'Office coffee subscriptionsNew page',
         'Create',
         'Daily Grind Co. and Origin Box cited · you 6%Opportunity',
+      ],
+      [
+        'Coffee subscriptionsGuide/guides/coffee-subscriptions',
+        'Optimize',
+        'Citations −70% on ChatGPT and PerplexityCitations',
       ],
       [
         'Espresso guideGuide/guides/espresso⚠ Overlap',
@@ -198,6 +198,36 @@ describe('the Content plan', () => {
     expect(container.textContent).toContain('From AI visits · last 90 days:');
   });
 
+  it('opens on the period in the URL, read once', async () => {
+    window.history.replaceState(null, '', '/dashboard/content/plan?days=7');
+    await renderPage();
+    expect(getContentPlan.mock.calls).toEqual([['brand-1', 7]]);
+  });
+
+  it('starts an opportunity for an existing page on that page', async () => {
+    getContentPlan.mockResolvedValue({
+      ...PLAN,
+      pages: [],
+      opportunities: [
+        {
+          ...opportunity,
+          decision: 'optimize',
+          targetPage: 'https://acme.example/pricing',
+          targetTitle: 'Pricing',
+        },
+      ],
+    });
+    await renderPage();
+    await act(async () => container.querySelector<HTMLButtonElement>('tbody tr button')!.click());
+    expect(dialog.props).toMatchObject({
+      preset: {
+        kind: 'opportunity',
+        id: 'o1',
+        page: { url: 'https://acme.example/pricing', title: 'Pricing' },
+      },
+    });
+  });
+
   it('starts a row in New content, or opens the draft already being written', async () => {
     getContentPlan.mockResolvedValue({
       ...PLAN,
@@ -215,7 +245,7 @@ describe('the Content plan', () => {
     await renderPage();
     const rows = container.querySelectorAll('tbody tr');
 
-    await act(async () => rows[0].querySelector('button')!.click());
+    await act(async () => rows[1].querySelector('button')!.click());
     expect(dialog.props).toMatchObject({
       open: true,
       preset: { kind: 'page', url: 'https://acme.example/guides/coffee-subscriptions' },
@@ -223,8 +253,8 @@ describe('the Content plan', () => {
     await act(async () => (dialog.props!.onOpenChange as (open: boolean) => void)(false));
     expect(dialog.props).toMatchObject({ open: false, preset: null });
 
-    await act(async () => rows[1].querySelector('button')!.click());
-    expect(dialog.props).toMatchObject({ preset: { kind: 'opportunity', id: 'o1' } });
+    await act(async () => rows[0].querySelector('button')!.click());
+    expect(dialog.props).toMatchObject({ preset: { kind: 'opportunity', id: 'o1', page: null } });
 
     expect(rows[2].textContent).toContain('Agent');
     expect(rows[2].querySelector('a')!.getAttribute('href')).toBe('/dashboard/content/editor/d1');

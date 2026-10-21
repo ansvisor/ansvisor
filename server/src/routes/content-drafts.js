@@ -61,7 +61,8 @@ const fixBody = fixRulesInput.extend({ brandId: z.guid() });
  * POST /api/content-drafts/:draftId/suggestions
  * Body: { brandId, rules: [{ key, name, detail }], textRules, locked }
  * Answers { count, batchId }: the suggestions left for review (none when the
- * agent found nothing it could change).
+ * agent found nothing it could change); 409 `open_suggestions` while the
+ * latest batch is undecided, 409 `published` for a published draft.
  */
 router.post('/:draftId/suggestions', async (req, res) => {
   const draftId = z.guid().safeParse(req.params.draftId);
@@ -76,7 +77,9 @@ router.post('/:draftId/suggestions', async (req, res) => {
     return res.json(result);
   } catch (err) {
     if (err instanceof PlanLimitError) {
-      return res.status(err.statusCode).json({ error: err.message, code: 'ai_budget' });
+      // 402: no active subscription, not a spent budget.
+      const code = err.statusCode === 402 ? 'no_subscription' : 'ai_budget';
+      return res.status(err.statusCode).json({ error: err.message, code });
     }
     if (ERROR_CODES[err?.status]) {
       return res
@@ -95,7 +98,8 @@ const writeBody = writeDraftInput.extend({ brandId: z.guid() });
  * Body: { brandId, sources, rules, textRules, locked }
  * Answers 202 { started: true } at once: the agent runs in the background
  * and the draft shows where it is (agent_state). 409 when the draft isn't a
- * draft any more (code not_draft) or the agent is on it (code writing).
+ * draft any more (code not_draft), the agent is on it (code writing) or on
+ * another of the organization's drafts (code org_writing).
  */
 router.post('/:draftId/write', async (req, res) => {
   const draftId = z.guid().safeParse(req.params.draftId);
@@ -110,7 +114,9 @@ router.post('/:draftId/write', async (req, res) => {
     return res.status(202).json(result);
   } catch (err) {
     if (err instanceof PlanLimitError) {
-      return res.status(err.statusCode).json({ error: err.message, code: 'ai_budget' });
+      // 402: no active subscription, not a spent budget.
+      const code = err.statusCode === 402 ? 'no_subscription' : 'ai_budget';
+      return res.status(err.statusCode).json({ error: err.message, code });
     }
     if (ERROR_CODES[err?.status]) {
       return res

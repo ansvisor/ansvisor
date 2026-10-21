@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import {
+  MAX_ROWS,
+  OVERLAP_SCORE,
   buildPlan,
   citationsDownScore,
   protectScore,
   rowsFor,
+  type PlanAnswers,
   type PlanDraft,
   type PlanOpportunity,
   type PlanPage,
@@ -19,7 +22,6 @@ const page = (path: string, over: Partial<PlanPage> = {}): PlanPage => ({
   page: `https://acme.example${path}`,
   title: path.slice(1),
   citations: { cur: 2, prev: 2 },
-  prompts: 1,
   platformsDown: [],
   aiVisits: 0,
   overlaps: 0,
@@ -38,8 +40,12 @@ const opportunity = (id: string, over: Partial<PlanOpportunity> = {}): PlanOppor
   prompts: 3,
   ...over,
 });
-const plan = (pages: PlanPage[], opportunities: PlanOpportunity[] = [], drafts: PlanDraft[] = []) =>
-  buildPlan({ pages, opportunities, drafts, siteType: 'b2b' });
+const plan = (
+  pages: PlanPage[],
+  opportunities: PlanOpportunity[] = [],
+  drafts: PlanDraft[] = [],
+  answers: PlanAnswers = { cur: 100, prev: 100 },
+) => buildPlan({ pages, answers, opportunities, drafts, siteType: 'b2b' });
 
 describe('buildPlan', () => {
   it('creates a new page for an opportunity, named by its brief, with its evidence', () => {
@@ -93,6 +99,32 @@ describe('buildPlan', () => {
     expect(rows[1]).toMatchObject({ action: 'protect', title: 'features/email' });
   });
 
+  it('compares citations per tracked answer, so fewer runs or prompts move no page', () => {
+    const pages = [page('/features/forecasting', { citations: { cur: 5, prev: 10 } })];
+    // Half the answers this period (a weekly brand before its run, prompts removed).
+    expect(plan(pages, [], [], { cur: 50, prev: 100 }).rows[0]).toMatchObject({
+      action: 'protect',
+    });
+    // The same answers: down 50%, 5 citations lost.
+    expect(plan(pages).rows[0]).toMatchObject({
+      why: { kind: 'citationsDown', pct: 50 },
+      score: citationsDownScore(50, 5),
+    });
+    // Twice the answers and the same citations: down 50% per answer, 15 lost.
+    expect(plan(pages, [], [], { cur: 200, prev: 100 }).rows[0]).toMatchObject({
+      why: { kind: 'citationsDown', pct: 75 },
+      score: citationsDownScore(75, 15),
+    });
+    // No answers before: nothing to compare with.
+    expect(plan(pages, [], [], { cur: 100, prev: 0 }).rows[0]).toMatchObject({
+      action: 'protect',
+    });
+  });
+
+  it('ranks a drop by the citations lost more than by its share', () => {
+    expect(citationsDownScore(41, 82)).toBeGreaterThan(citationsDownScore(100, 3));
+  });
+
   it('keeps one row for a page an opportunity targets, with the period’s signal when it is losing', () => {
     const { rows } = plan(
       [page('/guides/espresso/', { citations: { cur: 2, prev: 8 }, overlaps: 2 })],
@@ -129,6 +161,49 @@ describe('buildPlan', () => {
       why: { kind: 'top', citations: 30, aiVisits: 10 },
       score: protectScore(30),
     });
+  });
+
+  it('protects a page an opportunity says to defend', () => {
+    const { rows } = plan(
+      [],
+      [
+        opportunity('o1', {
+          decision: 'defend',
+          targetPage: 'https://acme.example/pricing',
+          targetTitle: 'Pricing',
+        }),
+      ],
+    );
+    expect(rows[0]).toMatchObject({ action: 'protect', page: 'https://acme.example/pricing' });
+  });
+
+  it('lists a top page past the five protected when it competes with another', () => {
+    const pages = [5, 6, 7, 8, 9, 30].map((cur, i) =>
+      page(`/p${i}`, { citations: { cur, prev: cur }, overlaps: i === 0 ? 2 : 0 }),
+    );
+    const { rows, counts } = plan(pages);
+    expect(counts.protect).toBe(5);
+    expect(rows.find((r) => r.title === 'p0')).toMatchObject({
+      action: 'optimize',
+      why: { kind: 'overlap', pages: 2 },
+      score: OVERLAP_SCORE,
+    });
+  });
+
+  it('counts every row, and each card lists its own first rows', () => {
+    const opportunities = Array.from({ length: 60 }, (_, i) =>
+      opportunity(`o${i}`, { score: 99 - (i % 30) }),
+    );
+    const pages = [
+      page('/top', { citations: { cur: 30, prev: 30 } }),
+      page('/blog/a', { overlaps: 1 }),
+    ];
+    const { rows, counts } = plan(pages, opportunities);
+    expect(counts).toEqual({ create: 60, optimize: 1, protect: 1, overlaps: 1 });
+    expect(rowsFor(rows, null)).toHaveLength(MAX_ROWS);
+    // Below the 50 opportunities on score, and still shown on their cards.
+    expect(rowsFor(rows, 'protect').map((r) => r.title)).toEqual(['top']);
+    expect(rowsFor(rows, 'overlaps').map((r) => r.title)).toEqual(['blog/a']);
   });
 
   it('lists a page that only competes with others, and counts every page competing', () => {
@@ -171,6 +246,7 @@ describe('buildPlan', () => {
       [opportunity('o1')],
       drafts,
     );
-    expect(rows.map((r) => r.draft?.id)).toEqual(['d2', 'd1']);
+    // The opportunity (70) ranks over the page losing ground (1 of 9: 66).
+    expect(rows.map((r) => r.draft?.id)).toEqual(['d1', 'd2']);
   });
 });

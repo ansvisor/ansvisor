@@ -175,12 +175,14 @@ describe('the Content Library', () => {
       getContentDrafts.mockResolvedValue([
         row({ status: 'draft', author: 'agent', agentState: 'writing' }),
         row({ id: 'd2', status: 'draft', agentState: 'failed' }),
+        // Written by hand after the agent failed, and marked ready.
+        row({ id: 'd3', status: 'ready', agentState: 'failed' }),
       ]);
       await renderPage();
       const status = [...container.querySelectorAll('tbody tr')].map(
         (tr) => tr.querySelectorAll('td')[4].textContent,
       );
-      expect(status).toEqual(['Agent writing…', 'Agent failed']);
+      expect(status).toEqual(['Agent writing…', 'Agent failed', 'Ready']);
       expect(getContentDrafts).toHaveBeenCalledTimes(1);
 
       getContentDrafts.mockResolvedValue([row({ status: 'in_review', author: 'agent' })]);

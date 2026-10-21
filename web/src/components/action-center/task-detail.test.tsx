@@ -224,6 +224,23 @@ describe('sending a task (AC-004)', () => {
     ]);
   });
 
+  it('writes a writing task in the Content Editor, not through Send to Content', () => {
+    render(
+      <TaskDetailView
+        details={details}
+        disabled={false}
+        onEdit={() => {}}
+        send={send()}
+        draftWork={{ method: 'create', pages: [], drafts: [], onStart: vi.fn() }}
+      />,
+    );
+    expect([...container.querySelectorAll('button')].map((b) => b.textContent)).toEqual([
+      'Create content',
+      'Edit',
+      'Send to webhook',
+    ]);
+  });
+
   it('offers nothing it cannot do', () => {
     render(
       <TaskDetailView

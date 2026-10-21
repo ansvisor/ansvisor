@@ -30,6 +30,7 @@ const db = {
       select: () => chain,
       eq: (col: string, v: unknown) => (op.filters.push(['eq', col, v]), chain),
       in: (col: string, v: unknown) => (op.filters.push(['in', col, v]), chain),
+      is: (col: string, v: unknown) => (op.filters.push(['is', col, v]), chain),
       limit: () => chain,
       update: (value: unknown) => ((op.op = 'update'), (op.value = value), chain),
       insert: (value: unknown) => ((op.op = 'insert'), (op.value = value), chain),
@@ -90,7 +91,13 @@ describe('completeDraftTasks', () => {
     rows.actions = [{ payload: { pages: ['https://a.example/pricing'] } }];
     await expect(completeDraftTasks(db, draft, 'u1')).resolves.toBe(1);
 
-    expect(ops[0]).toMatchObject({ table: 'actions', filters: [['eq', 'id', 'act-1']] });
+    expect(ops[0]).toMatchObject({
+      table: 'actions',
+      filters: [
+        ['eq', 'id', 'act-1'],
+        ['is', 'deleted_at', null],
+      ],
+    });
     expect(ops[1].filters).toContainEqual([
       'in',
       'task_key',
@@ -150,14 +157,22 @@ describe('completeDraftTasks', () => {
   });
 
   it('completes a new page’s task without reading pages', async () => {
+    rows.actions = [{ payload: { pages: ['https://a.example/pricing'] } }];
     rows.action_tasks = [{ id: 't-draft', status: 'todo' }];
     await expect(completeDraftTasks(db, { ...draft, method: 'create' }, null)).resolves.toBe(1);
-    expect(ops[0]).toMatchObject({
+    expect(ops.some((op) => op.table === 'content_drafts')).toBe(false);
+    expect(ops[1]).toMatchObject({
       table: 'action_tasks',
       filters: [
         ['eq', 'action_id', 'act-1'],
         ['in', 'task_key', ['create_content_draft']],
       ],
     });
+  });
+
+  it('leaves a deleted action’s tasks as they were', async () => {
+    rows.action_tasks = [{ id: 't-draft', status: 'todo' }];
+    await expect(completeDraftTasks(db, { ...draft, method: 'create' }, 'u1')).resolves.toBe(0);
+    expect(ops.map((op) => op.table)).toEqual(['actions']);
   });
 });

@@ -4,7 +4,9 @@
  * Content Opportunities (new pages AI needs, pages to improve; tasks sent
  * from the Action Center become opportunities too) and its own pages as AI
  * cites them (content_plan_pages, 00220): pages losing citations, the top
- * pages, and pages competing for the same prompts.
+ * pages, and pages competing for the same prompts. A page loses ground when
+ * it is cited less per tracked answer than in the period before, so a week
+ * with fewer runs, or prompts added or removed, moves no page.
  */
 
 import { detectPageType, type SiteType } from './page-types';
@@ -20,13 +22,18 @@ export type PlanAction = 'create' | 'optimize' | 'protect';
 export const PLAN_CARDS = ['create', 'optimize', 'protect', 'overlaps'] as const;
 export type PlanCard = (typeof PLAN_CARDS)[number];
 
+/** The brand's tracked answers in each period: what makes their citations comparable. */
+export interface PlanAnswers {
+  cur: number;
+  prev: number;
+}
+
 /** One of the brand's pages, as content_plan_pages (00220) reads it. */
 export interface PlanPage {
   page: string;
   title: string | null;
   citations: { cur: number; prev: number };
-  prompts: number;
-  /** Platform keys citing it less than before, the biggest drop first. */
+  /** Platform keys citing it at a lower rate than before, the biggest drop first. */
   platformsDown: string[];
   aiVisits: number;
   /** The brand's other pages cited for two or more of the same prompts. */
@@ -83,7 +90,10 @@ export interface PlanRow {
   draft: PlanDraft | null;
 }
 
-/** A page losing this share of its citations, from at least this many, is losing ground. */
+/**
+ * A page losing this share of its citations per answer, from at least this
+ * many citations, is losing ground.
+ */
 export const DROP_SHARE = 0.2;
 export const MIN_PREV_CITATIONS = 3;
 /** Top pages: cited at least this often, and not losing ground. */
@@ -94,12 +104,13 @@ export const MAX_ROWS = 50;
 /**
  * The rank of each kind of row, on the opportunities' 0–100 scale: an
  * opportunity keeps its own score; a page losing citations ranks by how much
- * it lost (40 + half the drop in percent + up to 20 for the citations lost);
+ * it lost, the citations more than the share (40 + a fifth of the drop in
+ * percent + up to 40 for the citations lost), so 200 → 118 outranks 3 → 0;
  * a page only competing with others, 45; a top page by how much it is cited
  * (20 + citations, at most 60), so protecting comes after the work to do.
  */
 export function citationsDownScore(pct: number, lost: number): number {
-  return Math.min(100, 40 + Math.round(pct / 2) + Math.min(20, lost));
+  return Math.min(100, 40 + Math.round(pct / 5) + Math.min(40, lost));
 }
 export const OVERLAP_SCORE = 45;
 export function protectScore(citations: number): number {
@@ -107,14 +118,23 @@ export function protectScore(citations: number): number {
 }
 
 const CREATE_DECISIONS = new Set(['create']);
+/** An opportunity to defend a page the brand holds: protecting it, not optimizing. */
+const PROTECT_DECISIONS = new Set(['defend']);
 
+/**
+ * Every row, ranked, and what each card counts: the list shows the first
+ * MAX_ROWS of a card's rows (rowsFor), so a card never counts rows it can't
+ * show.
+ */
 export function buildPlan({
   pages,
+  answers,
   opportunities,
   drafts,
   siteType,
 }: {
   pages: PlanPage[];
+  answers: PlanAnswers;
   opportunities: PlanOpportunity[];
   drafts: PlanDraft[];
   siteType: SiteType;
@@ -146,23 +166,24 @@ export function buildPlan({
     const page = key ? byPage.get(key) : undefined;
     // A new page by the title its brief suggests; an existing one by its own.
     const title = (create ? o.pageTitle : o.targetTitle) || o.title;
-    const dropping = page && isDropping(page);
+    const drop = page ? dropOf(page, answers) : null;
     rows.push({
       key: `opportunity:${o.id}`,
-      action: create ? 'create' : 'optimize',
+      action: create ? 'create' : PROTECT_DECISIONS.has(o.decision ?? '') ? 'protect' : 'optimize',
       title,
       page: create ? null : o.targetPage,
       pageType: typeOf(title, create ? null : o.targetPage),
       // The period's own signal, when the page is losing ground, says more.
-      why: dropping
-        ? dropWhy(page)
-        : o.competitorsCited.length
-          ? { kind: 'competitors', names: o.competitorsCited, visibility: o.visibility }
-          : { kind: 'opportunity', prompts: o.prompts },
-      source: dropping ? 'citations' : 'opportunity',
+      why:
+        page && drop
+          ? dropWhy(page, drop)
+          : o.competitorsCited.length
+            ? { kind: 'competitors', names: o.competitorsCited, visibility: o.visibility }
+            : { kind: 'opportunity', prompts: o.prompts },
+      source: drop ? 'citations' : 'opportunity',
       overlaps: page?.overlaps ?? 0,
-      score: dropping
-        ? Math.max(o.score, citationsDownScore(dropPct(page), lost(page)))
+      score: drop
+        ? Math.max(o.score, citationsDownScore(drop.pct, drop.lost))
         : Math.round(o.score),
       opportunityId: o.id,
       draft: draftFor(o.id, create ? null : o.targetPage),
@@ -182,14 +203,15 @@ export function buildPlan({
       opportunityId: null,
       draft: draftFor(null, page.page),
     };
-    if (isDropping(page)) {
+    const drop = dropOf(page, answers);
+    if (drop) {
       rows.push({
         ...base,
         key: `page:${key}`,
         action: 'optimize',
-        why: dropWhy(page),
+        why: dropWhy(page, drop),
         source: 'citations',
-        score: citationsDownScore(dropPct(page), lost(page)),
+        score: citationsDownScore(drop.pct, drop.lost),
       });
     } else if (page.citations.cur >= MIN_TOP_CITATIONS) {
       protect.push({
@@ -213,41 +235,58 @@ export function buildPlan({
   }
   protect.sort((a, b) => b.score - a.score || a.title.localeCompare(b.title));
   rows.push(...protect.slice(0, MAX_PROTECT));
+  // A top page past the five protected still gets its row when it competes.
+  for (const row of protect.slice(MAX_PROTECT)) {
+    if (row.overlaps > 0) {
+      rows.push({
+        ...row,
+        action: 'optimize',
+        why: { kind: 'overlap', pages: row.overlaps },
+        source: 'overlap',
+        score: OVERLAP_SCORE,
+      });
+    }
+  }
 
   rows.sort((a, b) => b.score - a.score || a.title.localeCompare(b.title));
-  const kept = rows.slice(0, MAX_ROWS);
   return {
-    rows: kept,
+    rows,
     counts: {
-      create: kept.filter((r) => r.action === 'create').length,
-      optimize: kept.filter((r) => r.action === 'optimize').length,
-      protect: kept.filter((r) => r.action === 'protect').length,
-      overlaps: kept.filter((r) => r.overlaps > 0).length,
+      create: rows.filter((r) => r.action === 'create').length,
+      optimize: rows.filter((r) => r.action === 'optimize').length,
+      protect: rows.filter((r) => r.action === 'protect').length,
+      overlaps: rows.filter((r) => r.overlaps > 0).length,
     },
   };
 }
 
-/** The rows a card shows: its action's, or the pages competing; all without a card. */
+/** The rows a card shows, the first MAX_ROWS: its action's, or the pages competing; all without a card. */
 export function rowsFor(rows: PlanRow[], card: PlanCard | null): PlanRow[] {
-  if (!card) return rows;
-  if (card === 'overlaps') return rows.filter((r) => r.overlaps > 0);
-  return rows.filter((r) => r.action === card);
+  const shown = !card
+    ? rows
+    : card === 'overlaps'
+      ? rows.filter((r) => r.overlaps > 0)
+      : rows.filter((r) => r.action === card);
+  return shown.slice(0, MAX_ROWS);
 }
 
-function isDropping(page: PlanPage): boolean {
+/**
+ * How much ground a page lost, per tracked answer: null when it isn't losing
+ * any (or the brand had no answers in a period to compare). `lost` is the
+ * citations it would have had at the earlier rate, less the ones it got.
+ */
+function dropOf(page: PlanPage, answers: PlanAnswers): { pct: number; lost: number } | null {
   const { cur, prev } = page.citations;
-  return prev >= MIN_PREV_CITATIONS && cur <= prev * (1 - DROP_SHARE);
+  if (prev < MIN_PREV_CITATIONS || answers.cur <= 0 || answers.prev <= 0) return null;
+  const rateNow = cur / answers.cur;
+  const rateBefore = prev / answers.prev;
+  if (rateNow > rateBefore * (1 - DROP_SHARE)) return null;
+  return {
+    pct: Math.round(((rateBefore - rateNow) / rateBefore) * 100),
+    lost: Math.max(0, Math.round(rateBefore * answers.cur - cur)),
+  };
 }
 
-function dropPct(page: PlanPage): number {
-  const { cur, prev } = page.citations;
-  return prev > 0 ? Math.round(((prev - cur) / prev) * 100) : 0;
-}
-
-function lost(page: PlanPage): number {
-  return Math.max(0, page.citations.prev - page.citations.cur);
-}
-
-function dropWhy(page: PlanPage): PlanWhy {
-  return { kind: 'citationsDown', pct: dropPct(page), platforms: page.platformsDown };
+function dropWhy(page: PlanPage, drop: { pct: number }): PlanWhy {
+  return { kind: 'citationsDown', pct: drop.pct, platforms: page.platformsDown };
 }

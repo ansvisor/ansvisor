@@ -92,8 +92,9 @@ export function LibraryTable({ drafts, tab }: { drafts: ContentDraftListItem[]; 
                 <DraftAuthorCell draft={draft} />
               </TableCell>
               <TableCell>
-                {/* The agent works on drafts only: its state says more than "Draft". */}
-                {draft.agentState ? (
+                {/* The agent works on drafts only: its state says more than "Draft".
+                    One marked ready by hand since reads Ready. */}
+                {draft.agentState && draft.status === 'draft' ? (
                   <AgentStateBadge state={draft.agentState} />
                 ) : (
                   <DraftStatusBadge status={draft.status} />

@@ -6,6 +6,7 @@ import type { DraftMethod } from '@/lib/content/drafts';
 import type { CitedAddress, PlanResults } from '@/lib/content/plan-mix';
 import {
   PLAN_PERIODS,
+  type PlanAnswers,
   type PlanDraft,
   type PlanOpportunity,
   type PlanPage,
@@ -38,7 +39,12 @@ const text = (value: unknown) => (typeof value === 'string' ? value.trim() : '')
 export async function getContentPlan(
   brandId: string,
   days: PlanPeriod,
-): Promise<{ pages: PlanPage[]; opportunities: PlanOpportunity[]; drafts: PlanDraft[] } | null> {
+): Promise<{
+  pages: PlanPage[];
+  answers: PlanAnswers;
+  opportunities: PlanOpportunity[];
+  drafts: PlanDraft[];
+} | null> {
   if (!planInput.safeParse({ brandId, days }).success) throw new Error('invalid');
   const supabase = await createClient();
   const [userRes, pagesRes, opportunitiesRes, draftsRes] = await Promise.all([
@@ -67,11 +73,15 @@ export async function getContentPlan(
   if (!pagesRes.data) return null;
   const me = userRes.data.user?.id ?? null;
 
-  const pages = ((pagesRes.data as unknown as { pages?: PlanPage[] }).pages ?? []).map((p) => ({
+  const read = pagesRes.data as unknown as { pages?: PlanPage[]; answers?: Partial<PlanAnswers> };
+  const answers = {
+    cur: Number(read.answers?.cur ?? 0),
+    prev: Number(read.answers?.prev ?? 0),
+  };
+  const pages = (read.pages ?? []).map((p) => ({
     page: p.page,
     title: p.title ?? null,
     citations: { cur: Number(p.citations?.cur ?? 0), prev: Number(p.citations?.prev ?? 0) },
-    prompts: Number(p.prompts ?? 0),
     platformsDown: Array.isArray(p.platformsDown) ? p.platformsDown : [],
     aiVisits: Number(p.aiVisits ?? 0),
     overlaps: Number(p.overlaps ?? 0),
@@ -110,7 +120,7 @@ export async function getContentPlan(
     }),
   );
 
-  return { pages, opportunities, drafts };
+  return { pages, answers, opportunities, drafts };
 }
 
 /**
