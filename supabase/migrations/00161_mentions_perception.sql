@@ -190,6 +190,13 @@ declare
   v_from timestamptz := p_day_from::timestamp at time zone 'utc';
   v_to   timestamptz := (p_day_to + 1)::timestamp at time zone 'utc';
 begin
+  -- One refresh per brand at a time, as refresh_mentions_daily (00192): a
+  -- run's refresh and the nightly sweep can cover the same days, and the
+  -- second insert would fail on the (result_id, entity) key. The lock
+  -- releases at commit.
+  perform pg_advisory_xact_lock(
+    hashtextextended('refresh_mention_terms:' || p_brand_id::text, 0));
+
   delete from public.mentions_answer_terms
     where brand_id = p_brand_id and created_at >= v_from and created_at < v_to;
 

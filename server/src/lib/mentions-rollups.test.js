@@ -33,13 +33,15 @@ beforeEach(() => {
 });
 
 describe('refreshMentionsDaily', () => {
-  it('refreshes the rollups, then the terms, for the brand and inclusive day range', async () => {
+  it('refreshes the rollups for the range, then the terms a day at a time', async () => {
     rpc.mockResolvedValue({ error: null });
     await expect(refreshMentionsDaily('brand-1', '2026-10-15', '2026-10-17')).resolves.toBe(true);
-    const args = { p_brand_id: 'brand-1', p_day_from: '2026-10-15', p_day_to: '2026-10-17' };
+    const args = (from, to) => ({ p_brand_id: 'brand-1', p_day_from: from, p_day_to: to });
     expect(rpc.mock.calls).toEqual([
-      ['refresh_mentions_daily', args],
-      ['refresh_mention_terms', args],
+      ['refresh_mentions_daily', args('2026-10-15', '2026-10-17')],
+      ['refresh_mention_terms', args('2026-10-15', '2026-10-15')],
+      ['refresh_mention_terms', args('2026-10-16', '2026-10-16')],
+      ['refresh_mention_terms', args('2026-10-17', '2026-10-17')],
     ]);
   });
 

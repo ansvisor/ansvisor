@@ -20,17 +20,31 @@ import { dayChunks, resultDayBound } from './citations-rollups.js';
 
 /**
  * Recompute one brand's mention rollups (00157) and its answers' terms
- * (00161) for an inclusive UTC day range. Two calls, because a sentiment
- * correction (00160) refreshes only the rollups. Resolves to true when both
- * succeed, false otherwise; never throws.
+ * (00161) for an inclusive UTC day range. Separate calls, because a
+ * sentiment correction (00160) refreshes only the rollups: the rollups in
+ * one, then the terms a day per call, since they read each answer's text
+ * and a few busy days of the largest brand would near the service role's
+ * statement timeout (MENTION_HISTORY_CHUNK_DAYS). Resolves to true when
+ * every call succeeds, false at the first that fails; never throws.
  */
 export async function refreshMentionsDaily(brandId, dayFrom, dayTo) {
-  const args = { p_brand_id: brandId, p_day_from: dayFrom, p_day_to: dayTo };
-  for (const fn of ['refresh_mentions_daily', 'refresh_mention_terms']) {
-    const { error } = await supabaseAdmin.rpc(fn, args);
+  const calls = [
+    ['refresh_mentions_daily', dayFrom, dayTo],
+    ...dayChunks(dayFrom, dayTo, MENTION_HISTORY_CHUNK_DAYS).map(([from, to]) => [
+      'refresh_mention_terms',
+      from,
+      to,
+    ]),
+  ];
+  for (const [fn, from, to] of calls) {
+    const { error } = await supabaseAdmin.rpc(fn, {
+      p_brand_id: brandId,
+      p_day_from: from,
+      p_day_to: to,
+    });
     if (error) {
       logger.error(
-        { err: error, brandId, dayFrom, dayTo, fn },
+        { err: error, brandId, dayFrom: from, dayTo: to, fn },
         '[mentions-rollups] refresh failed',
       );
       return false;
