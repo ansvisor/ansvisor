@@ -623,7 +623,7 @@ describe('the side panel', () => {
     getContentDraft.mockResolvedValue(draft({ sourceUrl: 'https://acme.example.com/pricing' }));
     window.innerWidth = 1440;
     await renderPage();
-    // The rules read the fan-outs on opening; the tab itself isn't there yet.
+    // The editor reads the sources once on opening; the tab itself isn't there yet.
     expect(getDraftSources).toHaveBeenCalledTimes(1);
     expect(panel()!.textContent).not.toContain('pipeline forecasting');
 
@@ -634,7 +634,8 @@ describe('the side panel', () => {
       tab.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
       tab.click();
     });
-    expect(getDraftSources).toHaveBeenCalledTimes(2);
+    // The tab shows the editor's one read: nothing is read again.
+    expect(getDraftSources).toHaveBeenCalledTimes(1);
     // The draft's H1 carries the fan-out's words.
     expect(panel()!.textContent).toContain('pipeline forecasting');
     expect(panel()!.textContent).toContain('H1');
@@ -665,7 +666,7 @@ describe('the side panel', () => {
             platform: 'copilot-web',
           },
         ],
-        keywords: [],
+        keywords: ['forecast accuracy', 'pipeline'],
         origin: 'rebuild',
         builtAt: '2026-10-21T10:00:00Z',
         builtFrom: { prompts: 0, fanouts: 1, pages: 0, queries: 0 },
@@ -706,6 +707,12 @@ describe('the side panel', () => {
     expect(selected?.textContent).toBe('Brief');
     expect(panel()!.textContent).toContain('How pipeline forecasting works');
     expect(panel()!.textContent).toContain('Win forecasting searches');
+
+    // The rules check against the brief just rebuilt, without a reload.
+    await pick('Rules');
+    expect(
+      [...panel()!.querySelectorAll<HTMLInputElement>('input')].map((input) => input.value),
+    ).toContain('forecast accuracy, pipeline');
   });
 
   it('shows how many rules the page meets, and opens them from the header', async () => {

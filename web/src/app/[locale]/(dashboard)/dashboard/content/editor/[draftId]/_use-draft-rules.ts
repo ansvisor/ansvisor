@@ -3,13 +3,7 @@
 import { useDeferredValue, useEffect, useMemo, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
-import {
-  getDraftBrief,
-  getDraftSources,
-  getMyRuleSets,
-  saveDraftRules,
-  saveMyRuleSet,
-} from '@/lib/actions/content-drafts';
+import { getMyRuleSets, saveDraftRules, saveMyRuleSet } from '@/lib/actions/content-drafts';
 import { isPageType, type ContentDraft, type PageType } from '@/lib/content/drafts';
 import {
   MAX_TEXT_RULES,
@@ -29,6 +23,7 @@ import {
   type TextRule,
 } from '@/lib/content/rules';
 import { buildSourceGroups } from '@/lib/content/sources';
+import type { DraftReads } from './_use-draft-reads';
 
 export interface DraftRulesState {
   /** The page type whose set applies. */
@@ -68,65 +63,62 @@ const newId = () =>
  * type with the person's changes, each checked against the page as written —
  * the header's chip and the Rules tab show the same. A draft no one has set
  * rules on starts from the workspace's My rules for its type, if it has
- * them. The brand's domains, the fan-outs kept, the brief's keywords and the
- * workspace's sets are read once.
+ * them, read once. The brand's domains, the fan-outs kept and the brief's
+ * keywords come from the editor's one read of the sources and the brief
+ * (useDraftReads), so a rebuild, an edit or a source checked shows in the
+ * rules at once.
  */
 export function useDraftRules({
   draft,
   html,
   characters,
   pageType,
+  reads,
 }: {
   draft: ContentDraft;
   html: string;
   characters: number;
   pageType: string | null;
+  reads: Pick<DraftReads, 'brief' | 'sources'>;
 }): DraftRulesState {
   const t = useTranslations('contentEditor.editor.rules');
   const tTypes = useTranslations('contentEditor.pageTypes');
   const [choices, setChoices] = useState<DraftRules>(draft.rules);
-  const [ctx, setCtx] = useState<RuleContext>({
-    brandDomains: [],
-    competitorDomains: [],
-    fanouts: [],
-  });
-  const [keywords, setKeywords] = useState<string[]>([]);
   const [mine, setMine] = useState<Partial<Record<PageType, SavedRuleSet>>>({});
 
   useEffect(() => {
     let cancelled = false;
-    Promise.all([
-      getDraftSources(draft.id),
-      getDraftBrief(draft.id),
-      getMyRuleSets(draft.brandId).catch((err) => {
-        console.error('Failed to read My rules:', err);
-        return {};
-      }),
-    ])
-      .then(([sources, brief, sets]) => {
-        if (cancelled) return;
-        if (sources) {
-          const fanouts = buildSourceGroups(sources.data, sources.choices, {
-            title: draft.title,
-            sourceUrl: draft.sourceUrl,
-          })
-            .find((g) => g.kind === 'fanout')
-            ?.rows.filter((r) => r.included)
-            .map((r) => r.name);
-          setCtx({
-            brandDomains: sources.data.brandDomains,
-            competitorDomains: sources.data.competitorDomains,
-            fanouts: fanouts ?? [],
-          });
-        }
-        if (brief?.brief) setKeywords(brief.brief.keywords);
-        setMine(sets);
+    getMyRuleSets(draft.brandId)
+      .then((sets) => {
+        if (!cancelled) setMine(sets);
       })
-      .catch((err) => console.error('Failed to read what the rules check against:', err));
+      .catch((err) => console.error('Failed to read My rules:', err));
     return () => {
       cancelled = true;
     };
-  }, [draft.id, draft.brandId, draft.title, draft.sourceUrl]);
+  }, [draft.brandId]);
+
+  const sources = reads.sources;
+  const ctx = useMemo<RuleContext>(() => {
+    if (!sources || sources.failed) return { brandDomains: [], competitorDomains: [], fanouts: [] };
+    const fanouts = buildSourceGroups(sources.data, sources.choices, {
+      title: draft.title,
+      sourceUrl: draft.sourceUrl,
+    })
+      .find((g) => g.kind === 'fanout')
+      ?.rows.filter((r) => r.included)
+      .map((r) => r.name);
+    return {
+      brandDomains: sources.data.brandDomains,
+      competitorDomains: sources.data.competitorDomains,
+      fanouts: fanouts ?? [],
+    };
+  }, [sources, draft.title, draft.sourceUrl]);
+  const brief = reads.brief;
+  const keywords = useMemo(
+    () => (brief.status === 'ready' ? (brief.brief?.keywords ?? []) : []),
+    [brief],
+  );
 
   const draftType = isPageType(pageType) ? pageType : null;
   const setType = choices.set ?? draftType;

@@ -293,11 +293,19 @@ export function activeRules(defs: RuleDef[], rules: Pick<DraftRules, 'overrides'
   });
 }
 
-/** The page length the rules ask for: the Length rule's value while it is on. */
+/** The lengths a brief is built for (content-brief.js BRIEF_LENGTH_MIN/MAX), in characters. */
+export const RULE_LENGTH_MIN = 100;
+export const RULE_LENGTH_MAX = 50_000;
+
+/**
+ * The page length the rules ask for: the Length rule's value while it is on,
+ * within the range Rebuild outline builds for.
+ */
 export function ruleLength(rules: ActiveRule[], pageType: PageType | null): number {
   const rule = rules.find((r) => r.key === 'length');
   const value = rule?.on ? Number(rule.current) : NaN;
-  return Number.isFinite(value) && value > 0 ? value : lengthTarget(pageType);
+  if (!Number.isFinite(value) || value <= 0) return lengthTarget(pageType);
+  return Math.min(RULE_LENGTH_MAX, Math.max(RULE_LENGTH_MIN, value));
 }
 
 // ─── The page as written ────────────────────────────────────────────────────
