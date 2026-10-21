@@ -3,6 +3,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { NextIntlClientProvider } from 'next-intl';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import messages from '../../../../../../../../messages/en.json';
+import { RoleProvider } from '@/components/providers/role-provider';
 import type { ContentDraft } from '@/lib/content/drafts';
 import ContentEditorPage from './page';
 
@@ -132,7 +133,9 @@ async function renderPage() {
   await act(async () => {
     root.render(
       <NextIntlClientProvider locale="en" messages={messages}>
-        <ContentEditorPage />
+        <RoleProvider role="admin">
+          <ContentEditorPage />
+        </RoleProvider>
       </NextIntlClientProvider>,
     );
   });

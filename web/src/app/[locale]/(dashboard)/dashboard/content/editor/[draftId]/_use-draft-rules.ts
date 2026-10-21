@@ -35,6 +35,8 @@ export interface DraftRulesState {
   textRules: { rule: TextRule; check: 'numberCheck' | 'aiCheck' }[];
   /** The page types the workspace has My rules for. */
   mineTypes: PageType[];
+  /** My rules have been read: until then a change would leave the workspace's set out. */
+  ready: boolean;
   met: number;
   total: number;
   /** The page length the rules ask for. */
@@ -85,6 +87,7 @@ export function useDraftRules({
   const tTypes = useTranslations('contentEditor.pageTypes');
   const [choices, setChoices] = useState<DraftRules>(draft.rules);
   const [mine, setMine] = useState<Partial<Record<PageType, SavedRuleSet>>>({});
+  const [mineRead, setMineRead] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -92,7 +95,10 @@ export function useDraftRules({
       .then((sets) => {
         if (!cancelled) setMine(sets);
       })
-      .catch((err) => console.error('Failed to read My rules:', err));
+      .catch((err) => console.error('Failed to read My rules:', err))
+      .finally(() => {
+        if (!cancelled) setMineRead(true);
+      });
     return () => {
       cancelled = true;
     };
@@ -144,6 +150,8 @@ export function useDraftRules({
   const { met, total } = rulesMet(checked);
 
   const save = (next: DraftRules, message: string) => {
+    // Before My rules are read, the draft would save Ansvisor's set over the workspace's.
+    if (!mineRead) return;
     const before = choices;
     setChoices(next);
     saveDraftRules(draft.id, next)
@@ -165,6 +173,7 @@ export function useDraftRules({
     rules: checked,
     textRules: effective.textRules.map((rule) => ({ rule, check: textRuleCheck(rule.text) })),
     mineTypes: (Object.keys(mine) as PageType[]).filter((type) => mine[type]),
+    ready: mineRead,
     met,
     total,
     length: ruleLength(rules, setType),
