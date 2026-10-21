@@ -129,8 +129,10 @@ describe('giving the team three days', () => {
     );
   });
 
-  it('isn’t offered when the plan renews within those days', async () => {
+  it('isn’t offered when the plan renews within those days, or a day after', async () => {
     await render(inDays(2));
+    expect(button('Send and give us 3 days')).toBeUndefined();
+    await render(inDays(3.5));
     expect(button('Send and give us 3 days')).toBeUndefined();
     expect(document.body.textContent).not.toContain('Give us 3 days?');
     await render(null);

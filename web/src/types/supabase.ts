@@ -724,6 +724,53 @@ export type Database = {
           },
         ]
       }
+      cancellation_feedback: {
+        Row: {
+          choice: string
+          created_at: string
+          created_by: string | null
+          email_status: string | null
+          id: string
+          message: string
+          organization_id: string
+          plan: string | null
+          reasons: string[]
+          subscription_status: string | null
+        }
+        Insert: {
+          choice: string
+          created_at?: string
+          created_by?: string | null
+          email_status?: string | null
+          id?: string
+          message?: string
+          organization_id: string
+          plan?: string | null
+          reasons?: string[]
+          subscription_status?: string | null
+        }
+        Update: {
+          choice?: string
+          created_at?: string
+          created_by?: string | null
+          email_status?: string | null
+          id?: string
+          message?: string
+          organization_id?: string
+          plan?: string | null
+          reasons?: string[]
+          subscription_status?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cancellation_feedback_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       citation_urls: {
         Row: {
           domain: string

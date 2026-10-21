@@ -7,6 +7,7 @@ import express from 'express';
  */
 
 let profile;
+let org;
 let sentToday;
 const inserted = [];
 const updated = [];
@@ -15,16 +16,7 @@ function table(name) {
   const state = {};
   const result = () => {
     if (name === 'profiles') return { data: profile, error: null };
-    if (name === 'organizations')
-      return {
-        data: {
-          name: 'Acme Coffee',
-          plan: 'starter',
-          subscription_status: 'trialing',
-          subscription_ends_at: '2026-10-30T00:00:00Z',
-        },
-        error: null,
-      };
+    if (name === 'organizations') return { data: org, error: null };
     if (name === 'cancellation_feedback') {
       if (state.insert) return { data: { id: 'f1' }, error: null };
       if (state.update) return { data: null, error: null };
@@ -68,8 +60,16 @@ let server;
 let baseUrl;
 
 beforeEach(async () => {
-  vi.stubEnv('CANCEL_FEEDBACK_EMAILS', 'cg@ansvisor.com,support@ansvisor.com');
+  vi.stubEnv('CANCEL_FEEDBACK_EMAILS', 'owner@example.com,support@example.com');
   profile = { organization_id: 'o1', role: 'admin', full_name: 'Ada' };
+  org = {
+    name: 'Acme Coffee',
+    plan: 'starter',
+    subscription_status: 'trialing',
+    // Ten days on: room for the three days and a day to spare.
+    subscription_ends_at: new Date(Date.now() + 10 * 86_400_000).toISOString(),
+    stripe_subscription_id: 'sub_1',
+  };
   sentToday = 0;
   inserted.length = 0;
   updated.length = 0;
@@ -121,7 +121,7 @@ describe('POST /api/billing/cancel-feedback', () => {
     ]);
     expect(deliverEmail).toHaveBeenCalledTimes(1);
     const mail = deliverEmail.mock.calls[0][0];
-    expect(mail.to).toEqual(['cg@ansvisor.com', 'support@ansvisor.com']);
+    expect(mail.to).toEqual(['owner@example.com', 'support@example.com']);
     expect(mail.replyTo).toBe('ada@acme.example');
     expect(mail.subject).toBe('Acme Coffee asks us to act within 3 days before cancelling');
     expect(updated).toEqual([{ email_status: 'sent' }]);
@@ -142,6 +142,40 @@ describe('POST /api/billing/cancel-feedback', () => {
     expect((await res.json()).code).toBe('too_many');
     expect(inserted).toHaveLength(0);
     expect(deliverEmail).not.toHaveBeenCalled();
+  });
+
+  it('is the admins’: anyone else is refused before anything is kept or sent', async () => {
+    for (const role of ['manager', 'analyst', 'agency_partner']) {
+      profile = { ...profile, role };
+      const res = await send({ choice: 'cancel' });
+      expect(res.status).toBe(403);
+      expect((await res.json()).code).toBe('admin_only');
+    }
+    expect(inserted).toHaveLength(0);
+    expect(deliverEmail).not.toHaveBeenCalled();
+  });
+
+  it('needs a plan to cancel, and time to answer before it renews', async () => {
+    org = { ...org, stripe_subscription_id: null };
+    let res = await send({ choice: 'cancel' });
+    expect(res.status).toBe(400);
+    expect((await res.json()).code).toBe('no_subscription');
+
+    org = { ...org, stripe_subscription_id: 'sub_1', subscription_status: 'canceled' };
+    expect((await send({ choice: 'cancel' })).status).toBe(400);
+
+    // Renewing in three days and a few hours: no day left after the answer.
+    org = {
+      ...org,
+      subscription_status: 'active',
+      subscription_ends_at: new Date(Date.now() + 3.2 * 86_400_000).toISOString(),
+    };
+    res = await send({ choice: 'wait' });
+    expect(res.status).toBe(400);
+    expect((await res.json()).code).toBe('too_late');
+    // Cancelling then is still fine.
+    expect((await send({ choice: 'cancel' })).status).toBe(201);
+    expect(inserted).toHaveLength(1);
   });
 
   it('refuses a malformed answer, or a user with no organization', async () => {

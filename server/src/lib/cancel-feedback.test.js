@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   buildCancelFeedbackEmail,
+  canWait,
   cancelFeedbackSchema,
   feedbackRecipients,
 } from './cancel-feedback.js';
@@ -43,9 +44,9 @@ describe('cancelFeedbackSchema', () => {
 
 describe('feedbackRecipients', () => {
   it('reads the comma-separated addresses, and none when unset', () => {
-    expect(feedbackRecipients(' cg@ansvisor.com, support@ansvisor.com ,')).toEqual([
-      'cg@ansvisor.com',
-      'support@ansvisor.com',
+    expect(feedbackRecipients(' owner@example.com, support@example.com ,')).toEqual([
+      'owner@example.com',
+      'support@example.com',
     ]);
     expect(feedbackRecipients('')).toEqual([]);
   });
@@ -70,7 +71,8 @@ describe('buildCancelFeedbackEmail', () => {
     });
     expect(subject).toBe('Acme Coffee asks us to act within 3 days before cancelling');
     expect(html).toContain('Wait 3 days for us to act');
-    expect(html).toContain('October 24, 2026');
+    // The moment to act by, with its time: the customer sees it in their own zone.
+    expect(html).toContain('October 24, 2026, 12:00 UTC');
     expect(html).toContain('November 3, 2026');
     expect(html).toContain('growth · active');
     expect(html).toContain('Ada &lt;ada@acme.example&gt; (admin)');
@@ -102,5 +104,16 @@ describe('buildCancelFeedbackEmail', () => {
     expect(html).not.toContain('<script>');
     expect(html).not.toContain('<b>Acme</b>');
     expect(html).toContain('&lt;script&gt;alert(1)&lt;/script&gt;');
+  });
+});
+
+describe('canWait', () => {
+  const now = new Date('2026-10-21T12:00:00Z');
+  it('offers three days only with a day to spare before the plan renews', () => {
+    expect(canWait('2026-10-25T12:00:01Z', now)).toBe(true);
+    expect(canWait('2026-10-25T12:00:00Z', now)).toBe(false);
+    expect(canWait('2026-10-24T13:00:00Z', now)).toBe(false);
+    expect(canWait(null, now)).toBe(false);
+    expect(canWait('not a date', now)).toBe(false);
   });
 });

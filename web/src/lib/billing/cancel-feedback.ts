@@ -32,11 +32,12 @@ export function waitUntil(now = new Date()): Date {
 
 /**
  * Whether waiting is offered: only when the plan renews (or the trial ends)
- * after the team has answered, so no one is charged while they wait. With
- * no known period end, it isn't.
+ * at least a day after the team has answered, so no one is charged while
+ * they wait and there is still time to cancel after hearing back. With no
+ * known period end, it isn't. The server checks the same rule.
  */
 export function canWait(currentPeriodEnd: string | null, now = new Date()): boolean {
   if (!currentPeriodEnd) return false;
   const end = new Date(currentPeriodEnd).getTime();
-  return Number.isFinite(end) && end > waitUntil(now).getTime();
+  return Number.isFinite(end) && end > waitUntil(now).getTime() + DAY_MS;
 }

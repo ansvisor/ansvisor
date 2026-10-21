@@ -12,7 +12,9 @@ import supabaseAdmin from '../config/supabase.js';
 import { deliverEmail } from '../lib/email.js';
 import {
   DAILY_LIMIT,
+  SUBSCRIBED_STATUSES,
   buildCancelFeedbackEmail,
+  canWait,
   cancelFeedbackSchema,
   feedbackRecipients,
 } from '../lib/cancel-feedback.js';
@@ -32,6 +34,27 @@ router.post('/cancel-feedback', async (req, res) => {
       .single();
     const orgId = profile?.organization_id;
     if (!orgId) return res.status(403).json({ error: 'No organization' });
+    // Cancelling is the admins', as the web's DELETE is: no one else can
+    // tell the team the plan was cancelled, or ask for three days.
+    if (profile.role !== 'admin') {
+      return res.status(403).json({ error: 'Only admins can cancel the plan', code: 'admin_only' });
+    }
+
+    const { data: org } = await supabaseAdmin
+      .from('organizations')
+      .select('name, plan, subscription_status, subscription_ends_at, stripe_subscription_id')
+      .eq('id', orgId)
+      .single();
+    // The browser's checks, again here: a direct request can't report a
+    // plan that isn't there, or promise an answer after it renews.
+    if (!org?.stripe_subscription_id || !SUBSCRIBED_STATUSES.includes(org.subscription_status)) {
+      return res.status(400).json({ error: 'No subscription to cancel', code: 'no_subscription' });
+    }
+    if (feedback.choice === 'wait' && !canWait(org.subscription_ends_at)) {
+      return res
+        .status(400)
+        .json({ error: 'The plan renews before we could answer', code: 'too_late' });
+    }
 
     const { count } = await supabaseAdmin
       .from('cancellation_feedback')
@@ -43,12 +66,6 @@ router.post('/cancel-feedback', async (req, res) => {
         .status(429)
         .json({ error: 'Too many messages today. Please write to support.', code: 'too_many' });
     }
-
-    const { data: org } = await supabaseAdmin
-      .from('organizations')
-      .select('name, plan, subscription_status, subscription_ends_at')
-      .eq('id', orgId)
-      .single();
 
     // Kept before the e-mail goes, so a failed send loses nothing.
     const { data: row, error } = await supabaseAdmin

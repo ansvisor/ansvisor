@@ -33,6 +33,22 @@ const REASON_LABELS = {
 /** How long the team has to act when the customer waits. */
 export const WAIT_DAYS = 3;
 
+const DAY_MS = 86_400_000;
+
+/** The subscription states with a plan to cancel or keep. */
+export const SUBSCRIBED_STATUSES = ['active', 'trialing', 'past_due'];
+
+/**
+ * Whether waiting can be offered: the plan renews (or the trial ends) at
+ * least a day after the team's answer is due, so the customer still has
+ * time to cancel after hearing back. The web's canWait is the same rule.
+ */
+export function canWait(periodEnd, now = new Date()) {
+  if (!periodEnd) return false;
+  const end = new Date(periodEnd).getTime();
+  return Number.isFinite(end) && end > now.getTime() + (WAIT_DAYS + 1) * DAY_MS;
+}
+
 /** Answers an organization can send in a day: room to change their mind, not a flood of e-mail. */
 export const DAILY_LIMIT = 5;
 
@@ -73,6 +89,17 @@ const formatDate = (date) =>
   });
 
 /**
+ * The moment with its time, in UTC: "October 24, 2026, 17:00 UTC". The
+ * customer sees the same moment in their own time zone, which can fall on
+ * another day.
+ */
+const formatMoment = (date) => {
+  const d = new Date(date);
+  const time = `${String(d.getUTCHours()).padStart(2, '0')}:${String(d.getUTCMinutes()).padStart(2, '0')}`;
+  return `${formatDate(d)}, ${time} UTC`;
+};
+
+/**
  * The e-mail to the team: what the customer chose in the subject, then who
  * they are, their plan, and what they said. Plain tables and inline styles,
  * for any mail client.
@@ -87,7 +114,7 @@ export function buildCancelFeedbackEmail({ org, user, feedback, now = new Date()
   const who = user.name ? `${user.name} <${user.email ?? ''}>` : (user.email ?? 'Unknown');
   const rows = [
     ['Chose', wait ? `Wait ${WAIT_DAYS} days for us to act` : 'Cancel at the end of the period'],
-    ...(wait ? [['Act by', formatDate(now.getTime() + WAIT_DAYS * 86_400_000)]] : []),
+    ...(wait ? [['Act by', formatMoment(now.getTime() + WAIT_DAYS * DAY_MS)]] : []),
     ['Organization', orgName],
     ['Plan', [org?.plan, org?.subscription_status].filter(Boolean).join(' · ') || '—'],
     ...(org?.subscription_ends_at

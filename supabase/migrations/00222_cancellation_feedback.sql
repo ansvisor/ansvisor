@@ -11,7 +11,8 @@
 -- counted later.
 --
 -- Written and read by the Express server's service-role client only: RLS on,
--- no policies.
+-- no policies, and the default grants to anon and authenticated revoked (as
+-- 00183 does), since the table holds customers' free-text messages.
 
 create table if not exists public.cancellation_feedback (
   id uuid primary key default gen_random_uuid(),
@@ -33,6 +34,7 @@ create index if not exists cancellation_feedback_org_created_idx
   on public.cancellation_feedback (organization_id, created_at desc);
 
 alter table public.cancellation_feedback enable row level security;
+revoke all on public.cancellation_feedback from anon, authenticated;
 
 comment on table public.cancellation_feedback is
   'Why a customer cancels, or asks the team for three days first (Settings › Billing). E-mailed to CANCEL_FEEDBACK_EMAILS; server-only.';

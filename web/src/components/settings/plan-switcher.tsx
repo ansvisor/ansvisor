@@ -525,13 +525,16 @@ export function PlanSwitcher({ subscription, onUpdate }: PlanSwitcherProps) {
           <ExternalLink className="ml-2 h-4 w-4" />
         </Button>
       </div>
-      {/* Mounted outside the button's branch: it still sends the answer once the plan is cancelled */}
-      <CancelSubscriptionDialog
-        open={cancelOpen}
-        onOpenChange={setCancelOpen}
-        currentPeriodEnd={subscription.currentPeriodEnd}
-        onCancel={handleCancel}
-      />
+      {/* Mounted outside the button's branch: it still sends the answer once
+          the plan is cancelled. Admins only, as the button is. */}
+      {canAdmin && (
+        <CancelSubscriptionDialog
+          open={cancelOpen}
+          onOpenChange={setCancelOpen}
+          currentPeriodEnd={subscription.currentPeriodEnd}
+          onCancel={handleCancel}
+        />
+      )}
     </div>
   );
 }
