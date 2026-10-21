@@ -54,7 +54,9 @@ import {
 import { DOCUMENT_ACCEPT, readDocumentFile } from '@/lib/content/import-document';
 import {
   adviseOverlap,
+  overlapOptions,
   pagePath,
+  samePage,
   type OverlapChoice,
   type OverlapOption,
 } from '@/lib/content/overlap';
@@ -112,6 +114,8 @@ interface StartChoice {
   newPageType: { pageType: PageType; detectedFrom: DetectedFrom; picked: boolean };
   /** The overlap check's pick: write the new page, or optimize an existing one. */
   choice: OverlapChoice;
+  /** The page the Content plan named for this opportunity, offered beside the check's options. */
+  givenPage?: OverlapPage;
 }
 
 /**
@@ -400,6 +404,7 @@ export function NewContentDialog({
       ...newPageType,
       newPageType,
       choice: { kind: 'create' },
+      givenPage: page,
     };
     choiceGiven.current = !!page;
     setStart(page ? withChoice(next, { kind: 'optimize', page }, siteType) : next);
@@ -606,6 +611,7 @@ export function NewContentDialog({
               <OverlapCheck
                 read={overlapRead?.key === overlapKey ? overlapRead : null}
                 choice={start.choice}
+                given={start.givenPage ?? null}
                 onChoose={(choice) => setStart(withChoice(start, choice, siteType))}
                 onRetry={() => {
                   setOverlapRead(null);
@@ -936,11 +942,13 @@ function withChoice(start: StartChoice, choice: OverlapChoice, siteType: SiteTyp
 function OverlapCheck({
   read,
   choice,
+  given,
   onChoose,
   onRetry,
 }: {
   read: OverlapRead | null;
   choice: OverlapChoice;
+  given: OverlapPage | null;
   onChoose: (choice: OverlapChoice) => void;
   onRetry: () => void;
 }) {
@@ -949,14 +957,20 @@ function OverlapCheck({
   const advice = overlap ? adviseOverlap(overlap) : null;
   const shown = overlap?.pages.slice(0, 3) ?? [];
   const top = overlap?.pages[0];
+  const options = advice ? overlapOptions(advice, given) : [];
   const isChosen = (option: OverlapOption) =>
     option.choice.kind === choice.kind &&
     (option.choice.kind === 'create' ||
-      (choice.kind === 'optimize' && option.choice.page.url === choice.page.url));
+      (choice.kind === 'optimize' && samePage(option.choice.page.url, choice.page.url)));
 
   const optionText = (option: OverlapOption) => {
     const page = top ? pagePath(top.url) : '';
     switch (option.key) {
+      case 'optimizeGiven':
+        return {
+          title: t('options.optimizeGiven.title', { page: given ? pagePath(given.url) : '' }),
+          reason: t('options.optimizeGiven.reason'),
+        };
       case 'optimizeInstead':
         return {
           title: t('options.optimizeInstead.title', { page }),
@@ -1062,7 +1076,7 @@ function OverlapCheck({
             </table>
           </div>
           <div role="radiogroup" aria-label={t('label')} className="grid gap-1.5">
-            {advice.options.map((option) => {
+            {options.map((option) => {
               const text = optionText(option);
               const chosen = isChosen(option);
               return (

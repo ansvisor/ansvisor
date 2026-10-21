@@ -121,6 +121,7 @@ describe('the page as the agent reads it', () => {
     expect(prompt).toContain('- dated: A dated data point — missing');
     expect(prompt).toContain('- Say “we” for the brand');
     expect(prompt).toContain('Write in English.');
+    expect(prompt).toContain('Page type: How-to guide: numbered steps');
     expect(prompt).not.toContain('The page goes on');
   });
 

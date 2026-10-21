@@ -480,7 +480,7 @@ export type RuleStatus =
   | { state: 'bad'; code: 'current'; count: number }
   | { state: 'bad'; code: 'words'; count: number }
   | { state: 'bad'; code: 'missing' | 'noH2' | 'needsFaq' | 'notSet' }
-  | { state: 'info'; code: 'aiCheck' | 'needsFeed' | 'noFanouts' | 'addKeywords' };
+  | { state: 'info'; code: 'aiCheck' | 'needsFeed' | 'noFanouts' | 'addKeywords' | 'notHowTo' };
 
 export interface RuleContext {
   brandDomains: string[];
@@ -554,6 +554,30 @@ function faqQuestions(blocks: PageBlock[]): string[] | null {
     if ((block.tag === 'h3' || isText(block)) && isQuestion(block)) questions.push(block.text);
   }
   return questions;
+}
+
+/** A title that promises steps: "How to …", "… step by step", a tutorial. */
+const HOW_TO_TITLE =
+  /\bhow to\b|\bstep[-\s]by[-\s]step\b|\btutorial\b|\b\d+\s+(easy\s+|simple\s+)?steps\b/i;
+
+/** How far into its first sentence a definition names what the term is. */
+const DEFINING_WORDS = 8;
+
+/** Subjects that make "… is …" a remark, not a definition: "Many say it is great." */
+const PRONOUNS = /^(it|this|that|these|those|there|which|who|he|she|they|we|you|i)$/i;
+
+/**
+ * "X is …": the first sentence says what its subject is, means or refers to
+ * within its first few words, and the subject isn't a pronoun.
+ */
+function definesAtOnce(text: string): boolean {
+  const sentence = text.trim().split(/(?<=[.!?])\s/)[0];
+  const words = sentence.split(/\s+/).slice(0, DEFINING_WORDS);
+  const verb = words.findIndex(
+    (w, i) =>
+      /^(is|are|means)$/i.test(w) || (/^refers$/i.test(w) && /^to$/i.test(words[i + 1] ?? '')),
+  );
+  return verb > 0 && !PRONOUNS.test(words[verb - 1].replace(/[^\p{L}]/gu, ''));
 }
 
 const atLeast = (have: number, want: number): RuleStatus =>
@@ -679,6 +703,10 @@ export function checkRule(rule: ActiveRule, page: PageRead, ctx: RuleContext): R
     case 'useCaseSteps':
     case 'howToSteps':
     case 'measureSteps': {
+      // A guide that isn't a how-to (a travel guide, a resource page) has no steps to count.
+      if (rule.key === 'howToSteps' && !HOW_TO_TITLE.test(blocks[h1]?.text ?? '')) {
+        return { state: 'info', code: 'notHowTo' };
+      }
       const most = Math.max(
         0,
         ...blocks.filter((b) => b.tag.startsWith('ol:')).map((b) => Number(b.tag.slice(3))),
@@ -701,9 +729,7 @@ export function checkRule(rule: ActiveRule, page: PageRead, ctx: RuleContext): R
     case 'definitionFirst':
       // The term defined at once: "X is …" in a short first paragraph.
       if (!summary || !summary.words) return { state: 'bad', code: 'missing' };
-      if (!/\b(is|are|refers to|means)\b/i.test(summary.text)) {
-        return { state: 'bad', code: 'missing' };
-      }
+      if (!definesAtOnce(summary.text)) return { state: 'bad', code: 'missing' };
       return summary.words <= n
         ? { state: 'ok' }
         : { state: 'bad', code: 'words', count: summary.words };

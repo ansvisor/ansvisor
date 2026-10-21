@@ -2,6 +2,7 @@ import { NoObjectGeneratedError, generateObject } from 'ai';
 import { z } from 'zod';
 import supabaseAdmin from '../config/supabase.js';
 import { resolveModel } from './ai-provider.js';
+import { pageTypeFormat } from './content-page-types.js';
 import { generationCostUsd } from './improve-cost.js';
 import { getLanguageName } from './languages.js';
 import { logger } from './logger.js';
@@ -256,7 +257,7 @@ Industry: ${brand?.industry || 'Not specified'}
 Description: ${brand?.description || 'N/A'}
 
 Page: ${draft.title || 'Untitled'}
-Page type: ${draft.page_type || 'not set'}
+Page type: ${pageTypeFormat(draft.page_type)}
 ${draft.method === 'optimize' && draft.source_url ? `Existing page to improve: ${draft.source_url}` : 'A new page.'}
 Length: about ${sources.length} characters.
 

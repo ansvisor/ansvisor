@@ -310,6 +310,7 @@ describe('the brief prompt', () => {
       sources: sources({ fanouts: [], pages: [], queries: ['burr grinder'], headings: [] }),
     });
     expect(prompt).toContain('A new page.');
+    expect(prompt).toContain('Page type: not set');
     expect(prompt).toContain('Prompts the page must answer:\n- none');
     expect(prompt).toContain('- burr grinder');
     expect(prompt).not.toContain('headings now');

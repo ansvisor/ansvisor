@@ -3151,7 +3151,7 @@
         "competitors": "{names} cited · you aren't",
         "competitorsVisibility": "{names} cited · you {visibility}%",
         "opportunity": "{count, plural, =0 {A page AI needs} one {Answers # prompt AI asks} other {Answers # prompts AI asks}}",
-        "citationsDown": "Citations −{pct}%",
+        "citationsDown": "Citation rate −{pct}%",
         "on": "on {platforms}",
         "top": "Top page · {citations, plural, one {{citationsText} citation} other {{citationsText} citations}} · {visits, plural, one {{visitsText} AI visit} other {{visitsText} AI visits}}",
         "overlap": "Competes with {count, plural, one {# of your pages} other {# of your pages}} for the same prompts"
@@ -3348,6 +3348,10 @@
         "promptsValue": "{count} of {total}",
         "recommended": "Recommended",
         "options": {
+          "optimizeGiven": {
+            "title": "Optimize {page}",
+            "reason": "The page your Content plan picked"
+          },
           "optimizeInstead": {
             "title": "Optimize {page} instead",
             "reason": "It already answers {count} of {total} prompts and is cited {citations}×",
@@ -3910,6 +3914,7 @@
           "needsFeed": "Needs feed",
           "noFanouts": "No fan-outs",
           "addKeywords": "Add keywords",
+          "notHowTo": "Not a how-to",
           "numberCheck": "Number check"
         },
         "mineName": "My rules · {type}",
