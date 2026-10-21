@@ -94,6 +94,34 @@ export function tableHtml(rows: string[][]): string {
   return `<table><tbody>${body}</tbody></table>`;
 }
 
+/** What the editor adds around each cell's text when it saves a table. */
+const SAVED_CELL_OVERHEAD = '<td colspan="1" rowspan="1"><p></p></td>'.length;
+const SAVED_ROW_OVERHEAD = '<tr></tr>'.length;
+/** The table's own tags, its column widths included: a generous allowance. */
+const SAVED_TABLE_OVERHEAD = 200 + MAX_TABLE_COLUMNS * '<col>'.length;
+
+/**
+ * How many of a sheet's data rows fit in `room` characters of the saved
+ * page, the header always going in. Measured as the editor saves a table
+ * (`<td colspan="1" rowspan="1"><p>…</p></td>` for each cell), so a table
+ * that fits here doesn't put the page over its size limit. -1 when not even
+ * the header fits.
+ */
+export function rowsThatFit(rows: string[][], room: number): number {
+  const rowLength = (row: string[]) =>
+    SAVED_ROW_OVERHEAD +
+    row.reduce((sum, cell) => sum + SAVED_CELL_OVERHEAD + escapeHtml(cell).length, 0);
+  let used = SAVED_TABLE_OVERHEAD + (rows[0] ? rowLength(rows[0]) : 0);
+  if (used > room) return -1;
+  let fit = 0;
+  for (const row of rows.slice(1)) {
+    used += rowLength(row);
+    if (used > room) break;
+    fit++;
+  }
+  return fit;
+}
+
 /** Plain text as paragraphs: blank lines part them, a single newline breaks a line. */
 export function textToHtml(text: string): string {
   return text
