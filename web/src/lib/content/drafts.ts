@@ -102,6 +102,8 @@ export interface ContentDraft {
   author: 'user' | 'agent';
   /** What the person changed on the page's rules for this draft (CE-009). */
   rules: DraftRules;
+  /** The Action Center action the draft is the work of (CE-022), shown as "from Action AC-214". */
+  action: { id: string; number: number } | null;
   updatedAt: string;
 }
 

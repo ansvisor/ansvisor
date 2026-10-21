@@ -9,7 +9,7 @@ import StarterKit from '@tiptap/starter-kit';
 import { TableKit } from '@tiptap/extension-table';
 import Image from '@tiptap/extension-image';
 import { CharacterCount, Placeholder } from '@tiptap/extensions';
-import { ArrowLeft, Check, Copy, Loader2, PanelRight } from 'lucide-react';
+import { ArrowLeft, Check, Copy, Loader2, PanelRight, Target } from 'lucide-react';
 import { Link } from '@/i18n/navigation';
 import { Button } from '@/components/ui/button';
 import { buttonVariants } from '@/components/ui/button-variants';
@@ -598,8 +598,12 @@ export function DraftEditor({ draft }: { draft: ContentDraft }) {
       // History keeps of it) is the one on screen.
       await autosave.settle();
       const next = await markContentDraftReady(draft.id);
-      setStatus(next);
-      toast.success(t('markedReady'));
+      setStatus(next.status);
+      toast.success(
+        next.tasksDone > 0 && draft.action
+          ? t('markedReadyAction', { no: draft.action.number, count: next.tasksDone })
+          : t('markedReady'),
+      );
     } catch (err) {
       console.error('Failed to mark the draft ready:', err);
       toast.error(t('markReadyFailed'));
@@ -766,6 +770,26 @@ export function DraftEditor({ draft }: { draft: ContentDraft }) {
 
       <div className="flex min-h-0 flex-1">
         <div className="flex min-w-0 flex-1 flex-col">
+          {/* The action this draft is the work of (CE-022): under the header,
+              which has no room left at 1024px, and Mark ready completes its task. */}
+          {draft.action && (
+            <p className="flex items-center gap-2 border-b bg-muted/40 px-4 py-1.5 text-[13px] text-muted-foreground">
+              <Target aria-hidden className="h-3.5 w-3.5 shrink-0" />
+              <span className="min-w-0">
+                {t.rich(canMarkReady ? 'actionBar' : 'actionBarDone', {
+                  no: draft.action.number,
+                  link: (chunks) => (
+                    <Link
+                      href={`/dashboard/action-center/actions?action=${draft.action!.id}`}
+                      className="font-medium text-foreground underline underline-offset-2 hover:no-underline"
+                    >
+                      {chunks}
+                    </Link>
+                  ),
+                })}
+              </span>
+            </p>
+          )}
           {suggestions.length > 0 && !(barClosed && openSuggestions === 0) && (
             <AgentBar
               suggestions={suggestions}

@@ -23,6 +23,12 @@ let rpcCalls: [string, unknown][];
 let rpcResult: { data: unknown; error: { message: string } | null };
 
 vi.mock('@/lib/action-center/assignees', () => ({ readAssignees: vi.fn(async () => new Map()) }));
+vi.mock('@/lib/supabase/admin', () => ({ supabaseAdmin: {} }));
+const completeDraftTasks = vi.hoisted(() => vi.fn());
+vi.mock('@/lib/content/action-drafts', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/content/action-drafts')>()),
+  completeDraftTasks,
+}));
 vi.mock('@/lib/supabase/server', () => ({
   createClient: vi.fn(async () => ({
     auth: {
@@ -78,6 +84,7 @@ beforeEach(() => {
   list = [];
   rpcCalls = [];
   rpcResult = { data: 'v-new', error: null };
+  completeDraftTasks.mockReset().mockResolvedValue(0);
 });
 
 describe('saveContentDraft', () => {
@@ -191,7 +198,8 @@ describe('setContentDraftPageType', () => {
 describe('markContentDraftReady', () => {
   it('moves a draft or an agent draft in review to ready', async () => {
     updated = { status: 'ready' };
-    await expect(markContentDraftReady(DRAFT)).resolves.toBe('ready');
+    await expect(markContentDraftReady(DRAFT)).resolves.toEqual({ status: 'ready', tasksDone: 0 });
+    expect(completeDraftTasks).not.toHaveBeenCalled();
     expect(calls[0]).toMatchObject({
       op: 'update',
       value: { status: 'ready' },
@@ -214,7 +222,27 @@ describe('markContentDraftReady', () => {
       author: 'user',
       updated_at: '2026-10-20T15:00:00Z',
     };
-    await expect(markContentDraftReady(DRAFT)).resolves.toBe('published');
+    await expect(markContentDraftReady(DRAFT)).resolves.toEqual({
+      status: 'published',
+      tasksDone: 0,
+    });
+    expect(completeDraftTasks).not.toHaveBeenCalled();
+  });
+
+  it('completes the task of the action the draft is the work of (CE-022)', async () => {
+    updated = { status: 'ready', brand_id: 'b1', method: 'optimize', action_id: 'act-1' };
+    completeDraftTasks.mockResolvedValue(1);
+    await expect(markContentDraftReady(DRAFT)).resolves.toEqual({ status: 'ready', tasksDone: 1 });
+    expect(completeDraftTasks).toHaveBeenCalledWith(
+      expect.anything(),
+      { id: DRAFT, brandId: 'b1', actionId: 'act-1', method: 'optimize' },
+      'u1',
+    );
+
+    // The draft is ready even when the task couldn't be completed.
+    completeDraftTasks.mockRejectedValue(new Error('rls'));
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    await expect(markContentDraftReady(DRAFT)).resolves.toEqual({ status: 'ready', tasksDone: 0 });
   });
 
   it('says so when the draft isn’t the member’s', async () => {
@@ -239,7 +267,7 @@ describe('markContentDraftReady', () => {
     const error = vi.spyOn(console, 'error').mockImplementation(() => {});
     updated = { status: 'ready' };
     rpcResult = { data: null, error: { message: 'timeout' } };
-    await expect(markContentDraftReady(DRAFT)).resolves.toBe('ready');
+    await expect(markContentDraftReady(DRAFT)).resolves.toEqual({ status: 'ready', tasksDone: 0 });
     expect(error).toHaveBeenCalled();
     error.mockRestore();
   });

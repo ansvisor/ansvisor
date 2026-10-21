@@ -19,6 +19,7 @@ let rpcResult: { data: unknown; error: { message: string } | null };
 let reads: Record<string, unknown>;
 
 vi.mock('@/lib/action-center/assignees', () => ({ readAssignees: vi.fn(async () => new Map()) }));
+vi.mock('@/lib/supabase/admin', () => ({ supabaseAdmin: {} }));
 vi.mock('@/lib/supabase/server', () => ({
   createClient: vi.fn(async () => ({
     rpc: async (fn: string, args: unknown) => {

@@ -9,6 +9,7 @@ let row: Record<string, unknown> | null;
 let updated: { id: string } | null;
 
 vi.mock('@/lib/action-center/assignees', () => ({ readAssignees: vi.fn(async () => new Map()) }));
+vi.mock('@/lib/supabase/admin', () => ({ supabaseAdmin: {} }));
 vi.mock('@/lib/supabase/server', () => ({
   createClient: vi.fn(async () => ({
     from: () => {

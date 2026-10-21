@@ -24,6 +24,26 @@ let rpcCalls: { fn: string; args: unknown }[];
 let rpcRows: unknown[];
 
 vi.mock('@/lib/action-center/assignees', () => ({ readAssignees: vi.fn(async () => new Map()) }));
+// The server's writes: a draft linked to an action (CE-022).
+const admin = vi.hoisted(() => ({
+  inserts: [] as { table: string; value: Record<string, unknown> }[],
+  result: { data: { id: 'action-draft' }, error: null } as {
+    data: { id: string } | null;
+    error: { code: string; message: string } | null;
+  },
+  onInsert: null as (() => void) | null,
+}));
+vi.mock('@/lib/supabase/admin', () => ({
+  supabaseAdmin: {
+    from: (table: string) => ({
+      insert: (value: Record<string, unknown>) => {
+        admin.inserts.push({ table, value });
+        admin.onInsert?.();
+        return { select: () => ({ single: async () => admin.result }) };
+      },
+    }),
+  },
+}));
 vi.mock('@/lib/supabase/server', () => ({
   createClient: vi.fn(async () => ({
     auth: {
@@ -40,7 +60,9 @@ vi.mock('@/lib/supabase/server', () => ({
       const result = () =>
         call.op === 'insert'
           ? { data: { id: 'new-draft' }, error: null }
-          : { data: reads[table] ?? null, error: null };
+          : call.op === 'update'
+            ? { data: null, error: null }
+            : { data: reads[table] ?? null, error: null };
       const chain: Record<string, unknown> = {
         select: () => chain,
         eq: (col: string, v: unknown) => (call.filters.push(['eq', col, v]), chain),
@@ -48,6 +70,7 @@ vi.mock('@/lib/supabase/server', () => ({
         order: () => chain,
         limit: () => chain,
         insert: (value: unknown) => ((call.op = 'insert'), (call.value = value), chain),
+        update: (value: unknown) => ((call.op = 'update'), (call.value = value), chain),
         maybeSingle: async () => result(),
         single: async () => result(),
         then: (resolve: (r: unknown) => void) => resolve(result()),
@@ -63,6 +86,7 @@ const {
   getContentStartOptions,
   importContentPage,
   sendContentDraftToActionCenter,
+  startDraftFromAction,
 } = await import('./content-drafts');
 
 const inserted = () => calls.find((call) => call.op === 'insert')?.value as Record<string, unknown>;
@@ -72,6 +96,9 @@ beforeEach(() => {
   reads = {};
   rpcCalls = [];
   rpcRows = [];
+  admin.inserts = [];
+  admin.result = { data: { id: 'action-draft' }, error: null };
+  admin.onInsert = null;
 });
 
 describe('getContentStartOptions', () => {
@@ -436,5 +463,189 @@ describe('sendContentDraftToActionCenter', () => {
     });
     expect(fetchMock).not.toHaveBeenCalled();
     vi.unstubAllGlobals();
+  });
+});
+
+describe('startDraftFromAction', () => {
+  const ACTION = '77777777-7777-7777-7777-777777777777';
+  const TASK = '88888888-8888-8888-8888-888888888888';
+  const PAGE = 'https://northwind.example/forecasting';
+  const DELETED_PROMPT = '99999999-9999-9999-9999-999999999999';
+  const action = (payload: Record<string, unknown> = {}) => ({
+    id: ACTION,
+    payload: {
+      title: 'Pipeline forecasting',
+      pages: [PAGE, 'https://northwind.example/pricing'],
+      promptIds: [PROMPT, DELETED_PROMPT, 'not-an-id'],
+      opportunityId: OPPORTUNITY,
+      ...payload,
+    },
+  });
+  const start = (page: string | null = PAGE) =>
+    startDraftFromAction(BRAND, ACTION, TASK, { page, title: 'Recover visibility' });
+
+  it('writes the draft for the page, linked to the action, and starts the task', async () => {
+    reads = {
+      actions: action({ title: undefined }),
+      action_tasks: { id: TASK, task_key: 'optimize_content', status: 'todo' },
+      content_drafts: [],
+      brands: { site_type: 'b2b', industry: 'Software', shopping_mode_enabled: false },
+      prompts: [{ id: PROMPT }],
+      content_opportunities: { id: OPPORTUNITY },
+    };
+    const fetchMock = vi.fn(
+      async () =>
+        new Response(
+          JSON.stringify({
+            url: PAGE,
+            title: 'Forecasting',
+            html: '<h1>Forecasting</h1><p onclick="x()">Forecast every deal.</p>',
+          }),
+          { status: 200 },
+        ),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(start()).resolves.toEqual({
+      draftId: 'action-draft',
+      created: true,
+      importFailed: false,
+    });
+    expect(
+      JSON.parse((fetchMock.mock.calls[0] as unknown as [string, RequestInit])[1].body as string),
+    ).toEqual({ brandId: BRAND, url: PAGE });
+    expect(admin.inserts).toEqual([
+      {
+        table: 'content_drafts',
+        value: expect.objectContaining({
+          brand_id: BRAND,
+          created_by: 'u1',
+          author: 'user',
+          method: 'optimize',
+          title: 'Forecasting',
+          page_type_source: 'detected',
+          body_html: '<h1>Forecasting</h1><p>Forecast every deal.</p>',
+          source_url: PAGE,
+          opportunity_id: OPPORTUNITY,
+          prompt_ids: [PROMPT],
+          action_id: ACTION,
+        }),
+      },
+    ]);
+    // Only the brand's prompts, read through the member's session.
+    expect(calls.find((call) => call.table === 'prompts')!.filters).toEqual([
+      ['eq', 'prompt_sets.brand_id', BRAND],
+      ['in', 'id', [PROMPT, DELETED_PROMPT]],
+    ]);
+    expect(rpcCalls).toEqual([
+      { fn: 'content_draft_snapshot', args: { p_draft_id: 'action-draft', p_origin: 'import' } },
+    ]);
+    const taskUpdate = calls.find((call) => call.table === 'action_tasks' && call.op === 'update');
+    expect(taskUpdate).toMatchObject({
+      value: { status: 'in_progress' },
+      filters: [
+        ['eq', 'action_id', ACTION],
+        ['eq', 'id', TASK],
+      ],
+    });
+    vi.unstubAllGlobals();
+  });
+
+  it('opens the draft already written for that work, writing nothing', async () => {
+    reads = {
+      actions: action(),
+      action_tasks: { id: TASK, task_key: 'refresh_content', status: 'in_progress' },
+      content_drafts: [
+        {
+          id: 'd-pricing',
+          method: 'optimize',
+          source_url: 'https://northwind.example/pricing',
+          status: 'draft',
+        },
+        { id: 'd-page', method: 'optimize', source_url: PAGE, status: 'ready' },
+      ],
+    };
+    await expect(start()).resolves.toEqual({
+      draftId: 'd-page',
+      created: false,
+      importFailed: false,
+    });
+    expect(admin.inserts).toEqual([]);
+  });
+
+  it('starts a new page with its title when the live page can’t be read, and a create task has no page', async () => {
+    reads = {
+      actions: action(),
+      action_tasks: { id: TASK, task_key: 'create_content_draft', status: 'completed' },
+      content_drafts: [{ id: 'd-page', method: 'optimize', source_url: PAGE, status: 'draft' }],
+      brands: { site_type: 'b2b', industry: null, shopping_mode_enabled: false },
+      prompts: [],
+      content_opportunities: null,
+    };
+    await expect(start(null)).resolves.toMatchObject({ created: true, importFailed: false });
+    expect(admin.inserts[0].value).toMatchObject({
+      method: 'create',
+      title: 'Pipeline forecasting',
+      body_html: '<h1>Pipeline forecasting</h1>',
+      source_url: null,
+      opportunity_id: null,
+    });
+    // A task already past To do keeps its status.
+    expect(calls.some((call) => call.table === 'action_tasks' && call.op === 'update')).toBe(false);
+
+    admin.inserts = [];
+    reads.action_tasks = { id: TASK, task_key: 'optimize_content', status: 'todo' };
+    reads.content_drafts = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response('{}', { status: 502 })),
+    );
+    await expect(start()).resolves.toMatchObject({ created: true, importFailed: true });
+    expect(admin.inserts[0].value).toMatchObject({
+      title: 'Pipeline forecasting',
+      body_html: '<h1>Pipeline forecasting</h1>',
+      source_url: PAGE,
+    });
+    vi.unstubAllGlobals();
+  });
+
+  it('refuses a page the action doesn’t name, a task that isn’t writing, or an unreadable action', async () => {
+    reads = {
+      actions: action(),
+      action_tasks: { id: TASK, task_key: 'optimize_content', status: 'todo' },
+    };
+    await expect(start('https://elsewhere.example/')).resolves.toEqual({ error: 'invalid' });
+    reads.action_tasks = { id: TASK, task_key: 'create_content_draft', status: 'todo' };
+    await expect(start(PAGE)).resolves.toEqual({ error: 'invalid' });
+    reads.action_tasks = { id: TASK, task_key: 'publish_content', status: 'todo' };
+    await expect(start(null)).resolves.toEqual({ error: 'invalid' });
+    reads.actions = null;
+    await expect(start(null)).resolves.toEqual({ error: 'not_found' });
+    await expect(
+      startDraftFromAction(BRAND, 'nope', TASK, { page: null, title: '' }),
+    ).resolves.toEqual({ error: 'invalid' });
+    expect(admin.inserts).toEqual([]);
+  });
+
+  it('opens the draft another start wrote at the same time', async () => {
+    reads = {
+      actions: action({ pages: [] }),
+      action_tasks: { id: TASK, task_key: 'create_content_draft', status: 'todo' },
+      content_drafts: [],
+      brands: null,
+      prompts: [],
+      content_opportunities: null,
+    };
+    admin.result = { data: null, error: { code: '23505', message: 'duplicate key' } };
+    admin.onInsert = () => {
+      reads.content_drafts = [
+        { id: 'd-first', method: 'create', source_url: null, status: 'draft' },
+      ];
+    };
+    await expect(start(null)).resolves.toEqual({
+      draftId: 'd-first',
+      created: false,
+      importFailed: false,
+    });
   });
 });

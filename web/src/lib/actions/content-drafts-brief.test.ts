@@ -18,6 +18,7 @@ let reads: Record<string, unknown>;
 let session: { access_token: string } | null;
 
 vi.mock('@/lib/action-center/assignees', () => ({ readAssignees: vi.fn(async () => new Map()) }));
+vi.mock('@/lib/supabase/admin', () => ({ supabaseAdmin: {} }));
 vi.mock('@/lib/supabase/server', () => ({
   createClient: vi.fn(async () => ({
     auth: { getSession: async () => ({ data: { session } }) },

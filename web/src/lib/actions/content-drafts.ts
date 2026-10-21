@@ -60,6 +60,15 @@ import {
   type VersionOrigin,
 } from '@/lib/content/history';
 import {
+  actionPages,
+  completeDraftTasks,
+  draftMethodForTask,
+  findActionDraft,
+  setDraftTasksStatus,
+  type ActionDraft,
+} from '@/lib/content/action-drafts';
+import { supabaseAdmin } from '@/lib/supabase/admin';
+import {
   DRAFT_SOURCE_KINDS,
   SOURCES_DAYS,
   normalizeQuery,
@@ -147,7 +156,7 @@ export async function getContentDraft(id: string): Promise<ContentDraft | null> 
   const { data, error } = await supabase
     .from('content_drafts')
     .select(
-      `id, brand_id, title, page_type, page_type_source, method, status, body_html, author, source_url, rules, updated_at, ${BRAND_SITE}`,
+      `id, brand_id, title, page_type, page_type_source, method, status, body_html, author, source_url, rules, action_id, updated_at, ${BRAND_SITE}, actions(action_no)`,
     )
     .eq('id', id)
     .maybeSingle();
@@ -166,6 +175,10 @@ export async function getContentDraft(id: string): Promise<ContentDraft | null> 
     bodyHtml: data.body_html,
     author: data.author === 'agent' ? 'agent' : 'user',
     rules: draftRulesSchema.safeParse(data.rules).data ?? NO_DRAFT_RULES,
+    action:
+      data.action_id && data.actions
+        ? { id: data.action_id, number: data.actions.action_no }
+        : null,
     updatedAt: data.updated_at,
   };
 }
@@ -399,6 +412,212 @@ export async function sendContentDraftToActionCenter(
   }
 }
 
+/** The drafts linked to an action (CE-022), for its writing tasks: open one, or start it. */
+async function readActionDrafts(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  brandId: string,
+  actionId: string,
+): Promise<ActionDraft[]> {
+  const { data, error } = await supabase
+    .from('content_drafts')
+    .select('id, method, source_url, status')
+    .eq('brand_id', brandId)
+    .eq('action_id', actionId)
+    .order('created_at', { ascending: true });
+  if (error) throw new Error(error.message);
+  return (data ?? []).map((row) => ({
+    id: row.id,
+    method: row.method === 'create' ? 'create' : 'optimize',
+    sourceUrl: row.source_url,
+    status: draftStatus(row.status),
+  }));
+}
+
+/** The drafts written for an action's tasks, for the Action Center drawer. */
+export async function getActionDrafts(brandId: string, actionId: string): Promise<ActionDraft[]> {
+  if (!draftId.safeParse(brandId).success || !draftId.safeParse(actionId).success) return [];
+  return readActionDrafts(await createClient(), brandId, actionId);
+}
+
+const actionStartInput = z.object({
+  brandId: z.guid(),
+  actionId: z.guid(),
+  taskId: z.guid(),
+  page: z.string().max(2048).nullable(),
+  // The action's own title, for one whose payload names none.
+  title: z.string().max(5_000),
+});
+
+/**
+ * "Create content" or "Optimize page" on an action's writing task (CE-022,
+ * spec §15): the draft for that work, linked to the action, or the one
+ * already written for it. A new draft takes what the action knows: its
+ * title, the page it names (brought in from the live site, as Start does),
+ * its prompts and its opportunity; the page type is detected and follows the
+ * page. The task moves to In progress.
+ *
+ * The action and task are read through the member's session, so only their
+ * organization's can start one; the draft is then written by the server, as
+ * its action_id is server-set (00208), with the member as its author. Two
+ * starts at once find the same draft (00218). Returned, not thrown:
+ * production hides a server action's errors.
+ */
+export async function startDraftFromAction(
+  brandId: string,
+  actionId: string,
+  taskId: string,
+  options: { page: string | null; title: string },
+): Promise<
+  | { draftId: string; created: boolean; importFailed: boolean }
+  | { error: 'invalid' | 'not_found' | 'failed' }
+> {
+  const parsed = actionStartInput.safeParse({ brandId, actionId, taskId, ...options });
+  if (!parsed.success) return { error: 'invalid' };
+  const { page } = parsed.data;
+  try {
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) return { error: 'failed' };
+
+    const [actionRes, taskRes] = await Promise.all([
+      supabase
+        .from('actions')
+        .select('id, payload')
+        .eq('brand_id', brandId)
+        .eq('id', actionId)
+        .maybeSingle(),
+      supabase
+        .from('action_tasks')
+        .select('id, task_key, status')
+        .eq('action_id', actionId)
+        .eq('id', taskId)
+        .maybeSingle(),
+    ]);
+    if (actionRes.error) throw new Error(actionRes.error.message);
+    if (taskRes.error) throw new Error(taskRes.error.message);
+    if (!actionRes.data || !taskRes.data) return { error: 'not_found' };
+    const payload = (actionRes.data.payload ?? {}) as Record<string, unknown>;
+    const method = draftMethodForTask(taskRes.data.task_key);
+    // A page is one the action names, and only an existing page's work has one.
+    if (
+      !method ||
+      (page !== null && (method === 'create' || !actionPages(payload).includes(page)))
+    ) {
+      return { error: 'invalid' };
+    }
+
+    const linked = await readActionDrafts(supabase, brandId, actionId);
+    const existing = findActionDraft(linked, method, page);
+    if (existing) return { draftId: existing.id, created: false, importFailed: false };
+
+    let title = typeof payload.title === 'string' ? payload.title.trim() : '';
+    let bodyHtml: string | undefined;
+    let importFailed = false;
+    if (page) {
+      const imported = await importContentPage(brandId, page);
+      if ('page' in imported) {
+        bodyHtml = imported.page.html;
+        title ||= imported.page.title.trim();
+      } else {
+        importFailed = true;
+      }
+    }
+    title = (title || parsed.data.title.trim()).slice(0, MAX_TITLE_LENGTH).trim();
+    const body =
+      bodyHtml !== undefined
+        ? sanitizeDraftHtml(bodyHtml)
+        : title
+          ? `<h1>${escapeHtml(title)}</h1>`
+          : '';
+
+    const wantedPrompts = Array.isArray(payload.promptIds)
+      ? payload.promptIds
+          .filter((id): id is string => typeof id === 'string' && draftId.safeParse(id).success)
+          .slice(0, MAX_DRAFT_PROMPTS)
+      : [];
+    const opportunity =
+      typeof payload.opportunityId === 'string' && draftId.safeParse(payload.opportunityId).success
+        ? payload.opportunityId
+        : null;
+    // Only what the member's brand still has: a deleted prompt or opportunity drops out.
+    const [brandRes, promptsRes, opportunityRes] = await Promise.all([
+      supabase
+        .from('brands')
+        .select('site_type, industry, shopping_mode_enabled')
+        .eq('id', brandId)
+        .maybeSingle(),
+      wantedPrompts.length
+        ? supabase
+            .from('prompts')
+            .select('id, prompt_sets!inner(brand_id)')
+            .eq('prompt_sets.brand_id', brandId)
+            .in('id', wantedPrompts)
+        : Promise.resolve({ data: [] as { id: string }[], error: null }),
+      opportunity
+        ? supabase
+            .from('content_opportunities')
+            .select('id')
+            .eq('brand_id', brandId)
+            .eq('id', opportunity)
+            .maybeSingle()
+        : Promise.resolve({ data: null, error: null }),
+    ]);
+    if (brandRes.error) throw new Error(brandRes.error.message);
+    if (promptsRes.error) throw new Error(promptsRes.error.message);
+    if (opportunityRes.error) throw new Error(opportunityRes.error.message);
+
+    const { data: inserted, error } = await supabaseAdmin
+      .from('content_drafts')
+      .insert({
+        brand_id: brandId,
+        created_by: user.id,
+        author: 'user',
+        method,
+        title,
+        page_type: detectPageType({ title, html: body }, brandSiteType(brandRes.data)),
+        page_type_source: 'detected',
+        body_html: body,
+        opportunity_id: opportunityRes.data?.id ?? null,
+        source_url: page,
+        prompt_ids: [...new Set((promptsRes.data ?? []).map((p) => p.id))],
+        action_id: actionId,
+      })
+      .select('id')
+      .single();
+    if (error) {
+      // Started twice at once: the other start wrote it.
+      if (error.code === '23505') {
+        const winner = findActionDraft(
+          await readActionDrafts(supabase, brandId, actionId),
+          method,
+          page,
+        );
+        if (winner) return { draftId: winner.id, created: false, importFailed: false };
+      }
+      throw new Error(error.message);
+    }
+
+    // A page brought in from its address starts History as the live page.
+    if (bodyHtml !== undefined) await keepVersion(supabase, inserted.id, 'import');
+    if (taskRes.data.status === 'todo') {
+      // The draft is started either way; the task's status can be set in the drawer.
+      await setDraftTasksStatus(
+        supabase,
+        { id: inserted.id, brandId, actionId },
+        [taskId],
+        'in_progress',
+        user.id,
+      ).catch((err) => console.error("Failed to start the action's task:", err));
+    }
+    return { draftId: inserted.id, created: true, importFailed };
+  } catch (err) {
+    console.error('Failed to start a draft from an action:', err);
+    return { error: 'failed' };
+  }
+}
+
 /**
  * The Impact tab (CE-016): what the page a draft optimizes earns over the
  * last `days` against the `days` before (content_page_impact, 00209). Null
@@ -608,9 +827,12 @@ export async function setContentDraftPageType(id: string, pageType: PageType): P
  * Mark ready: a draft, or an agent's draft in review, is ready to publish.
  * Ansvisor never publishes it; the person does (CE-013 records the URL).
  * Returns the status the draft has after, so a draft already ready or
- * published keeps its own.
+ * published keeps its own, and how many of its action's tasks it completed
+ * (CE-022; completeDraftTasks).
  */
-export async function markContentDraftReady(id: string): Promise<DraftStatus> {
+export async function markContentDraftReady(
+  id: string,
+): Promise<{ status: DraftStatus; tasksDone: number }> {
   if (!draftId.safeParse(id).success) throw new Error('invalid');
   const supabase = await createClient();
   const { data, error } = await supabase
@@ -618,16 +840,37 @@ export async function markContentDraftReady(id: string): Promise<DraftStatus> {
     .update({ status: 'ready' })
     .eq('id', id)
     .in('status', ['draft', 'in_review'])
-    .select('status')
+    .select('status, brand_id, method, action_id')
     .maybeSingle();
   if (error) throw new Error(error.message);
   if (data) {
     await keepVersion(supabase, id, 'ready');
-    return draftStatus(data.status);
+    let tasksDone = 0;
+    if (data.action_id) {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      // The draft is ready either way; a task left open can be ticked in the drawer.
+      try {
+        tasksDone = await completeDraftTasks(
+          supabase,
+          {
+            id,
+            brandId: data.brand_id,
+            actionId: data.action_id,
+            method: data.method === 'create' ? 'create' : 'optimize',
+          },
+          user?.id ?? null,
+        );
+      } catch (err) {
+        console.error("Failed to complete the action's task:", err);
+      }
+    }
+    return { status: draftStatus(data.status), tasksDone };
   }
   const current = await getContentDraft(id);
   if (!current) throw new Error('not_found');
-  return current.status;
+  return { status: current.status, tasksDone: 0 };
 }
 
 /**

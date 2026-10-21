@@ -1288,7 +1288,14 @@
           "sendToWebhookAgain": "Send to webhook again",
           "sentToContent": "Sent to Content as an opportunity ·",
           "openInContent": "Open",
-          "sentToWebhook": "Sent to the webhook on {date}"
+          "sentToWebhook": "Sent to the webhook on {date}",
+          "createContent": "Create content",
+          "optimizePage": "Optimize page",
+          "optimize": "Optimize",
+          "openDraft": "Open draft",
+          "pagesToOptimize": "Pages to optimize",
+          "draftFailed": "Couldn't open the Content Editor. Try again.",
+          "pageNotRead": "Couldn't read the live page, so the draft starts with its title. Paste the page into the editor."
         },
         "noSignalsOpportunity": "This action was sent from Content Optimization. Its evidence is the opportunity on the Overview tab, not detection signals.",
         "opportunity": {
@@ -3349,6 +3356,9 @@
         "insert": "Add block"
       },
       "markedReady": "Marked ready. Publish it on your site when you're ready.",
+      "markedReadyAction": "Marked ready, and {count, plural, one {its task} other {its # tasks}} in Action AC-{no} {count, plural, one {is} other {are}} done. Publish it on your site when you're ready.",
+      "actionBar": "This draft is the work of <link>Action AC-{no}</link>. Mark ready completes its task there.",
+      "actionBarDone": "This draft is the work of <link>Action AC-{no}</link>.",
       "suggestions": {
         "bar": "Agent suggestions",
         "agent": "Content Agent",

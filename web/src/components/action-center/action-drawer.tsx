@@ -73,8 +73,17 @@ import { TopicOpportunityContext } from './topic-opportunity-context';
 import { MentionReviewContext } from './mention-review-context';
 import { TrafficPagesContext } from './traffic-pages-context';
 import { ContentDraftContext } from './content-draft-context';
-import { TaskDetailForm, TaskDetailView, TaskTypeBadge, type TaskSendOptions } from './task-detail';
+import {
+  TaskDetailForm,
+  TaskDetailView,
+  TaskTypeBadge,
+  type TaskDraftWork,
+  type TaskSendOptions,
+} from './task-detail';
 import { hasActiveWebhook, sendActionTask } from '@/lib/actions/action-task-send';
+import { getActionDrafts, startDraftFromAction } from '@/lib/actions/content-drafts';
+import { actionPages, draftMethodForTask, type ActionDraft } from '@/lib/content/action-drafts';
+import { contentEditorPath } from '@/lib/content/drafts';
 import { RegenerateTasks, taskWriterEnabled } from './regenerate-tasks';
 import { hasTaskSpec, type TaskDetailsEdit } from '@/lib/action-center/task-details';
 import { ImproveOutcomeCard } from './improve-outcome-card';
@@ -133,6 +142,8 @@ export function ActionDrawer({
   const [detail, setDetail] = useState<ActionDetail | null>(null);
   const [isBusy, setIsBusy] = useState(false);
   const tSend = useTranslations('actionCenter.actionsPage.drawer.send');
+  // The drafts written for the action's writing tasks (CE-022), once read.
+  const [drafts, setDrafts] = useState<ActionDraft[]>([]);
 
   // Whether a task can go to the brand's webhook (AC-004). Best effort: no
   // answer is no button.
@@ -185,9 +196,26 @@ export function ActionDrawer({
     setTab('overview');
     setDetail(null);
     setDueDraft(null);
+    setDrafts([]);
     if (action) void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [action?.id]);
+
+  // Read once the action shows a writing task: its buttons open the draft
+  // already written rather than starting another. Best effort: without an
+  // answer they start one, and the server finds it (startDraftFromAction).
+  const hasWritingTask = !!detail?.tasks.some((task) => draftMethodForTask(task.taskKey));
+  useEffect(() => {
+    if (!action || !hasWritingTask) return;
+    const id = action.id;
+    getActionDrafts(brandId, id).then(
+      (next) => {
+        if (openId.current === id) setDrafts(next);
+      },
+      () => undefined,
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [brandId, action?.id, hasWritingTask]);
 
   // The signals the action rests on, what they affect, their prompts' demand
   // and the Why and Goal they tell (AC-003), as the History drawer reads them.
@@ -245,6 +273,28 @@ export function ActionDrawer({
       );
       await load();
       onChanged();
+    } finally {
+      setIsBusy(false);
+    }
+  };
+
+  /**
+   * Create content / Optimize page (CE-022): the draft for the task's work,
+   * linked to the action, opened in the Content Editor.
+   */
+  const startDraft = async (taskId: string, page: string | null) => {
+    setIsBusy(true);
+    try {
+      const result = await startDraftFromAction(brandId, action.id, taskId, {
+        page,
+        title: texts.title,
+      });
+      if ('error' in result) {
+        toast.error(t('drawer.task.draftFailed'));
+        return;
+      }
+      if (result.importFailed) toast.warning(t('drawer.task.pageNotRead'));
+      router.push(contentEditorPath(result.draftId));
     } finally {
       setIsBusy(false);
     }
@@ -606,31 +656,43 @@ export function ActionDrawer({
                 {t('drawer.tasksProgress', taskProgress(detail.tasks.map((task) => task.status)))}
               </p>
               <div className="mt-3 space-y-2">
-                {detail.tasks.map((task) => (
-                  <TaskRow
-                    key={task.id}
-                    task={task}
-                    disabled={isBusy}
-                    text={taskText(task, tTasks)}
-                    statusLabel={tTaskStatus}
-                    t={t}
-                    onStatusChange={(status, skipReason) =>
-                      void mutate(() =>
-                        updateTaskStatus(brandId, action.id, task.id, status, skipReason),
-                      )
-                    }
-                    onEdit={(edit) =>
-                      mutate(() => updateTaskDetails(brandId, action.id, task.id, edit))
-                    }
-                    onDelete={() => void mutate(() => deleteTask(brandId, action.id, task.id))}
-                    send={{
-                      // A content task, unless the action itself came from Content.
-                      content: task.details?.type === 'content' && !opportunityId,
-                      webhook: webhookReady,
-                      onSend: (to) => void sendTask(task.id, taskText(task, tTasks), to),
-                    }}
-                  />
-                ))}
+                {detail.tasks.map((task) => {
+                  const method = draftMethodForTask(task.taskKey);
+                  const draftWork: TaskDraftWork | undefined = method
+                    ? {
+                        method,
+                        pages: method === 'optimize' ? actionPages(action.payload) : [],
+                        drafts,
+                        onStart: (page) => void startDraft(task.id, page),
+                      }
+                    : undefined;
+                  return (
+                    <TaskRow
+                      key={task.id}
+                      task={task}
+                      disabled={isBusy}
+                      text={taskText(task, tTasks)}
+                      statusLabel={tTaskStatus}
+                      t={t}
+                      onStatusChange={(status, skipReason) =>
+                        void mutate(() =>
+                          updateTaskStatus(brandId, action.id, task.id, status, skipReason),
+                        )
+                      }
+                      onEdit={(edit) =>
+                        mutate(() => updateTaskDetails(brandId, action.id, task.id, edit))
+                      }
+                      onDelete={() => void mutate(() => deleteTask(brandId, action.id, task.id))}
+                      send={{
+                        // A content task, unless the action itself came from Content.
+                        content: task.details?.type === 'content' && !opportunityId,
+                        webhook: webhookReady,
+                        onSend: (to) => void sendTask(task.id, taskText(task, tTasks), to),
+                      }}
+                      draftWork={draftWork}
+                    />
+                  );
+                })}
               </div>
               <AddTaskForm
                 disabled={isBusy}
@@ -747,6 +809,7 @@ function TaskRow({
   onEdit,
   onDelete,
   send,
+  draftWork,
 }: {
   task: ActionTask;
   text: string;
@@ -758,6 +821,7 @@ function TaskRow({
   onEdit: (edit: TaskDetailsEdit & { title: string | null }) => Promise<boolean>;
   onDelete: () => void;
   send: TaskSendOptions;
+  draftWork?: TaskDraftWork;
 }) {
   // A task sent from the Improve tab opens on its suggestion, as it always
   // showed it; the rest open on a click.
@@ -856,6 +920,7 @@ function TaskRow({
             disabled={disabled || skipDraft !== null}
             onEdit={() => setEditing(true)}
             send={send}
+            draftWork={draftWork}
           />
         ))}
 

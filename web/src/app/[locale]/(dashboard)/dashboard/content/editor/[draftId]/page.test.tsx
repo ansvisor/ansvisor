@@ -138,6 +138,7 @@ const draft = (over: Partial<ContentDraft> = {}): ContentDraft => ({
   bodyHtml: '<h1>Pipeline forecasting</h1><p>Teams trust it.</p>',
   author: 'agent',
   rules: { set: null, source: null, overrides: {}, textRules: [] },
+  action: null,
   updatedAt: '2026-10-20T10:00:00Z',
   ...over,
 });
@@ -356,14 +357,38 @@ describe('the content editor', () => {
 
   it('marks the draft ready once', async () => {
     getContentDraft.mockResolvedValue(draft());
-    markContentDraftReady.mockResolvedValue('ready');
+    markContentDraftReady.mockResolvedValue({ status: 'ready', tasksDone: 0 });
     await renderPage();
 
     await act(async () => button('Mark ready')!.click());
     expect(markContentDraftReady).toHaveBeenCalledWith('d1');
-    expect(toast.success).toHaveBeenCalled();
+    expect(toast.success).toHaveBeenCalledWith(
+      "Marked ready. Publish it on your site when you're ready.",
+    );
     expect(container.querySelector('header')!.textContent).toContain('Ready');
     expect(button('Mark ready')!.disabled).toBe(true);
+  });
+
+  it('links the action the draft is the work of, and says Ready completed its task', async () => {
+    getContentDraft.mockResolvedValue(draft({ action: { id: 'act-1', number: 214 } }));
+    markContentDraftReady.mockResolvedValue({ status: 'ready', tasksDone: 1 });
+    await renderPage();
+
+    const note = [...container.querySelectorAll('p')].find((p) =>
+      p.textContent?.startsWith('This draft is the work of'),
+    )!;
+    expect(note.textContent).toBe(
+      'This draft is the work of Action AC-214. Mark ready completes its task there.',
+    );
+    expect(note.querySelector('a')!.getAttribute('href')).toBe(
+      '/dashboard/action-center/actions?action=act-1',
+    );
+
+    await act(async () => button('Mark ready')!.click());
+    expect(toast.success).toHaveBeenCalledWith(
+      "Marked ready, and its task in Action AC-214 is done. Publish it on your site when you're ready.",
+    );
+    expect(note.textContent).toBe('This draft is the work of Action AC-214.');
   });
 
   describe('history', () => {
