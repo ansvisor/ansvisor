@@ -3349,6 +3349,16 @@
         "insert": "Add block"
       },
       "markedReady": "Marked ready. Publish it on your site when you're ready.",
+      "cited": {
+        "platform": "{name} {count}×",
+        "label": "✓ Cited by {platforms} in {days} days · keep wording",
+        "chip": "{count, plural, one {# cited passage kept} other {# cited passages kept}}",
+        "chipHint": "Passages AI answers quote today. Agents never change them, and you're asked before you do.",
+        "holdTitle": "AI quotes this passage",
+        "holdDescription": "{platforms} quoted this wording in the last {days} days. Changing it may cost the page those citations.",
+        "keep": "Keep wording",
+        "editAnyway": "Edit anyway"
+      },
       "history": {
         "button": "History",
         "hint": "Earlier versions of this page, to restore any of them",

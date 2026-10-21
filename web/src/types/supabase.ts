@@ -3552,6 +3552,10 @@ export type Database = {
         Args: { p_days?: number; p_draft_id: string }
         Returns: Json
       }
+      content_draft_cited_answers: {
+        Args: { p_days?: number; p_draft_id: string }
+        Returns: Json
+      }
       content_draft_member: { Args: { p_draft_id: string }; Returns: boolean }
       content_draft_restore: { Args: { p_version_id: string }; Returns: Json }
       content_draft_snapshot: {

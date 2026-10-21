@@ -1,7 +1,7 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
-import { useTranslations } from 'next-intl';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { useFormatter, useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 import { EditorContent, useEditor } from '@tiptap/react';
 import { TextSelection } from '@tiptap/pm/state';
@@ -13,13 +13,24 @@ import { ArrowLeft, Check, Copy, Loader2, PanelRight } from 'lucide-react';
 import { Link } from '@/i18n/navigation';
 import { Button } from '@/components/ui/button';
 import { buttonVariants } from '@/components/ui/button-variants';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { PLATFORM_LABELS } from '@/config/platform-labels';
 import { DraftMethodBadge, DraftStatusBadge } from '@/components/content/draft-badges';
 import {
+  getCitedPassages,
   markContentDraftReady,
   restoreDraftVersion,
   setContentDraftPageType,
 } from '@/lib/actions/content-drafts';
 import { CONTENT_LIBRARY_PATH, type ContentDraft, type PageType } from '@/lib/content/drafts';
+import { CITED_DAYS, MAX_PASSAGES, type CitedPassage } from '@/lib/content/cited-passages';
 import type { DraftVersion } from '@/lib/content/history';
 import {
   cleanHtml,
@@ -32,6 +43,14 @@ import { JsonLd } from '@/lib/content/json-ld-node';
 import { detectPageType } from '@/lib/content/page-types';
 import { cn } from '@/lib/utils';
 import { DropOverlay, useAttachments } from './_attach';
+import {
+  CITED_EDIT_ALLOWED,
+  CitedPassages,
+  citedLocks,
+  citedPassagesKey,
+  lockedPassageCount,
+  type HeldEdit,
+} from './_cited-passages';
 import { HistoryMenu } from './_history-menu';
 import { HtmlBlock, copyToClipboard } from './_html-block';
 import { PageTypeMenu } from './_page-type-menu';
@@ -53,6 +72,9 @@ const DOCUMENT_CLASS = cn(
   // Cells and list items hold paragraphs; their margins would pad every row.
   '[&_td>p]:my-0 [&_th>p]:my-0 [&_li>p]:my-0 prose-li:my-1',
   '[&_.selectedCell]:bg-primary/10 [&_img]:rounded-md [&_.ProseMirror-selectednode]:ring-2 [&_.ProseMirror-selectednode]:ring-ring/50',
+  // Locked passages (CE-018): a green line, and what quotes them above.
+  '[&_.cited-passage]:rounded-r-md [&_.cited-passage]:border-l-[3px] [&_.cited-passage]:border-emerald-300 [&_.cited-passage]:bg-emerald-50/70 [&_.cited-passage]:py-1 [&_.cited-passage]:pr-2 [&_.cited-passage]:pl-3 dark:[&_.cited-passage]:border-emerald-700 dark:[&_.cited-passage]:bg-emerald-950/30',
+  '[&_.cited-passage]:before:mb-0.5 [&_.cited-passage]:before:block [&_.cited-passage]:before:text-[11.5px] [&_.cited-passage]:before:leading-snug [&_.cited-passage]:before:font-medium [&_.cited-passage]:before:tracking-normal [&_.cited-passage]:before:text-emerald-700 [&_.cited-passage]:before:content-[attr(data-cited-label)] dark:[&_.cited-passage]:before:text-emerald-400',
   '[&_.is-editor-empty:first-child]:before:pointer-events-none [&_.is-editor-empty:first-child]:before:float-left [&_.is-editor-empty:first-child]:before:h-0 [&_.is-editor-empty:first-child]:before:text-muted-foreground [&_.is-editor-empty:first-child]:before:content-[attr(data-placeholder)]',
 );
 
@@ -73,7 +95,9 @@ const DOCUMENT_CLASS = cn(
  * (Impact, CE-016), its brief and the sources it draws on (CE-007, CE-008)
  * and the rules it is written to (CE-009); the header's chip says how many
  * of those rules the page meets now. History keeps earlier versions (the
- * imported live page, each Mark ready) and restores any of them (CE-018).
+ * imported live page, each Mark ready) and restores any of them; passages
+ * AI answers quote today are locked: marked, and changed only after a
+ * warning (CE-018).
  */
 export function DraftEditor({ draft }: { draft: ContentDraft }) {
   const t = useTranslations('contentEditor.editor');
@@ -84,6 +108,12 @@ export function DraftEditor({ draft }: { draft: ContentDraft }) {
   const [status, setStatus] = useState(draft.status);
   const [marking, setMarking] = useState(false);
   const [restoring, setRestoring] = useState(false);
+  const format = useFormatter();
+  // A change to a locked passage, waiting for the person (CE-018).
+  const [held, setHeld] = useState<HeldEdit | null>(null);
+  // What quotes each locked passage, for the warning: "ChatGPT 14× and …".
+  const citedBy = useRef(new Map<string, string>());
+  const [citedCount, setCitedCount] = useState(0);
   // A picked page type, or the one the page shows as it is written.
   const [picked, setPicked] = useState(draft.pageTypeSource === 'user' ? draft.pageType : null);
   const [detectedType, setDetectedType] = useState(() =>
@@ -123,6 +153,12 @@ export function DraftEditor({ draft }: { draft: ContentDraft }) {
         label: (type) => (type ? t('jsonLd', { type }) : t('jsonLdUntyped')),
       }),
       HtmlBlock,
+      CitedPassages.configure({
+        // The first change held is the one asked about: some keyboards
+        // still send the text of a key whose keydown was held, and the
+        // person can't type while the question is open.
+        onHeld: (edit) => setHeld((current) => current ?? edit),
+      }),
     ],
     content: draft.bodyHtml,
     // Rendered on the client only, so the server's HTML can't disagree with it.
@@ -190,6 +226,86 @@ export function DraftEditor({ draft }: { draft: ContentDraft }) {
     attachRef.current = (files) => void attachments.attach(files);
   });
 
+  /** "ChatGPT 14× and Perplexity 6×": the platforms quoting a passage, the most first. */
+  const quotedBy = useCallback(
+    (passage: CitedPassage) => {
+      const byName = new Map<string, number>();
+      for (const { platform, answers } of passage.platforms) {
+        const name = PLATFORM_LABELS[platform] ?? platform;
+        byName.set(name, (byName.get(name) ?? 0) + answers);
+      }
+      return format.list(
+        [...byName]
+          .sort((a, b) => b[1] - a[1])
+          .map(([name, count]) => t('cited.platform', { name, count })),
+        { type: 'conjunction' },
+      );
+    },
+    [format, t],
+  );
+
+  // The page's passages AI answers quote, for a draft of an existing page:
+  // read when it opens, and again after a restore.
+  const loadCited = useCallback(async () => {
+    if (!editor || !draft.sourceUrl) return;
+    const texts = new Set<string>();
+    editor.state.doc.descendants((node) => {
+      if (!node.isTextblock) return true;
+      if (node.textContent.trim()) texts.add(node.textContent.slice(0, 5_000));
+      return false;
+    });
+    try {
+      const cited = await getCitedPassages(draft.id, [...texts].slice(0, MAX_PASSAGES));
+      if (!cited || editor.isDestroyed) return;
+      const labels = new Map<string, string>();
+      citedBy.current = new Map();
+      for (const passage of cited) {
+        const platforms = quotedBy(passage);
+        citedBy.current.set(passage.key, platforms);
+        labels.set(passage.key, t('cited.label', { platforms, days: CITED_DAYS }));
+      }
+      editor.view.dispatch(
+        editor.state.tr.setMeta(citedPassagesKey, { labels, unlocked: new Set() }),
+      );
+    } catch (err) {
+      console.error('Failed to read the cited passages:', err);
+    }
+  }, [editor, draft.id, draft.sourceUrl, quotedBy, t]);
+
+  useEffect(() => {
+    void loadCited();
+    // Once per editor: a restore reads them again itself.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editor]);
+
+  // The header's count follows the page.
+  useEffect(() => {
+    if (!editor) return;
+    const count = () => setCitedCount(lockedPassageCount(editor.state));
+    editor.on('transaction', count);
+    return () => {
+      editor.off('transaction', count);
+    };
+  }, [editor]);
+
+  /** "Edit anyway": the passage is the person's to change now. */
+  const editAnyway = () => {
+    if (!editor || !held) return;
+    const locks = citedLocks(editor.state);
+    editor.view.dispatch(
+      editor.state.tr.setMeta(citedPassagesKey, {
+        ...locks,
+        unlocked: new Set(locks.unlocked).add(held.key),
+      }),
+    );
+    // A held paste, cut or join goes through; typed text is typed again.
+    if (held.tr && held.tr.before.eq(editor.state.doc)) {
+      editor.view.dispatch(held.tr.setMeta(CITED_EDIT_ALLOWED, true));
+    }
+    setHeld(null);
+    editor.commands.focus();
+  };
+
   // A drag with files over the page shows where they go; one dropped beside
   // the page (not on its text) goes in at the cursor.
   const withFiles = (e: React.DragEvent) =>
@@ -233,8 +349,9 @@ export function DraftEditor({ draft }: { draft: ContentDraft }) {
       keepImages: true,
       keepHtmlBlocks: true,
     });
-    // Emits an update, so the title and the autosave follow.
-    editor.commands.setContent(cleaned.html);
+    // Emits an update, so the title and the autosave follow. HTML edited by
+    // hand may change locked passages: it was the person's to write.
+    editor.chain().setMeta(CITED_EDIT_ALLOWED, true).setContent(cleaned.html).run();
     setHtmlSource(null);
     toast(
       cleaned.unsafeRemoved
@@ -290,7 +407,11 @@ export function DraftEditor({ draft }: { draft: ContentDraft }) {
     try {
       await autosave.settle();
       const restored = await restoreDraftVersion(version.id);
-      editor.commands.setContent(restored.bodyHtml, { emitUpdate: false });
+      editor
+        .chain()
+        .setMeta(CITED_EDIT_ALLOWED, true)
+        .setContent(restored.bodyHtml, { emitUpdate: false })
+        .run();
       // The server has this page now: nothing from before it is still to save.
       autosave.discard();
       const html = editor.getHTML();
@@ -298,6 +419,7 @@ export function DraftEditor({ draft }: { draft: ContentDraft }) {
       setPageHtml(html);
       setDetectedType(detectPageType({ title: restored.title, html }, draft.siteType));
       toast.success(t('history.restored', { version: label }));
+      void loadCited();
     } catch (err) {
       console.error('Failed to restore the version:', err);
       toast.error(t('history.restoreFailed'));
@@ -375,6 +497,17 @@ export function DraftEditor({ draft }: { draft: ContentDraft }) {
             {t('rulesChipShort', { met: rules.met, total: rules.total })}
           </span>
         </button>
+        {/* Wide windows only: the page's green lines show them anyway, and
+            the header stays one line at 1024px. */}
+        {citedCount > 0 && (
+          <span
+            title={t('cited.chipHint')}
+            className="hidden shrink-0 items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700 xl:inline-flex dark:border-emerald-900 dark:bg-emerald-950 dark:text-emerald-300"
+          >
+            <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-current" />
+            {t('cited.chip', { count: citedCount })}
+          </span>
+        )}
         <div className="ml-auto flex shrink-0 items-center gap-3">
           <SaveIndicator state={autosave.state} onRetry={() => void autosave.retry()} />
           <HistoryMenu
@@ -482,6 +615,33 @@ export function DraftEditor({ draft }: { draft: ContentDraft }) {
           />
         )}
       </div>
+
+      <Dialog open={held !== null} onOpenChange={(open) => !open && setHeld(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>{t('cited.holdTitle')}</DialogTitle>
+            <DialogDescription>
+              {t('cited.holdDescription', {
+                platforms: (held && citedBy.current.get(held.key)) ?? '',
+                days: CITED_DAYS,
+              })}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={editAnyway}>
+              {t('cited.editAnyway')}
+            </Button>
+            <Button
+              onClick={() => {
+                setHeld(null);
+                editor?.commands.focus();
+              }}
+            >
+              {t('cited.keep')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

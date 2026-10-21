@@ -3,7 +3,9 @@ import { createRoot, type Root } from 'react-dom/client';
 import { NextIntlClientProvider } from 'next-intl';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import messages from '../../../../../../../../messages/en.json';
+import type { Editor } from '@tiptap/core';
 import type { ContentDraft } from '@/lib/content/drafts';
+import { passageKey } from '@/lib/content/cited-passages';
 import ContentEditorPage from './page';
 
 const getContentDraft = vi.fn();
@@ -20,7 +22,9 @@ const getMyRuleSets = vi.fn();
 const saveMyRuleSet = vi.fn();
 const getDraftVersions = vi.fn();
 const restoreDraftVersion = vi.fn();
+const getCitedPassages = vi.fn();
 vi.mock('@/lib/actions/content-drafts', () => ({
+  getCitedPassages: (...args: unknown[]) => getCitedPassages(...args),
   getDraftVersions: (...args: unknown[]) => getDraftVersions(...args),
   restoreDraftVersion: (...args: unknown[]) => restoreDraftVersion(...args),
   getMyRuleSets: (...args: unknown[]) => getMyRuleSets(...args),
@@ -167,6 +171,7 @@ beforeEach(() => {
   saveMyRuleSet.mockReset().mockResolvedValue(undefined);
   getDraftVersions.mockReset().mockResolvedValue([]);
   restoreDraftVersion.mockReset();
+  getCitedPassages.mockReset().mockResolvedValue([]);
   localStorage.clear();
   brandState.activeBrandId = 'b1';
   brandState.setActiveBrand.mockReset();
@@ -465,6 +470,146 @@ describe('the content editor', () => {
       expect(button('History')!.disabled || button('History')!.hasAttribute('data-disabled')).toBe(
         true,
       );
+    });
+  });
+
+  describe('locked passages', () => {
+    const QUOTED =
+      'Northwind forecasts each deal from real activity: emails, meetings and stage changes.';
+    const page = draft({
+      sourceUrl: 'https://acme.example/forecasting',
+      bodyHtml: `<h1>Pipeline forecasting</h1><p>${QUOTED}</p><p>Teams trust it.</p>`,
+    });
+    const cited = [
+      {
+        key: passageKey(QUOTED),
+        platforms: [
+          { platform: 'chatgpt-web', answers: 14 },
+          { platform: 'perplexity-web', answers: 6 },
+        ],
+      },
+    ];
+    const editorOf = () =>
+      (container.querySelector('.ProseMirror') as HTMLElement & { editor: Editor }).editor;
+    /** Where the quoted passage's text starts in the page. */
+    const quotedAt = () => {
+      let at = 0;
+      editorOf().state.doc.descendants((node, pos) => {
+        if (node.textContent === QUOTED && node.isTextblock) at = pos + 1;
+        return !at;
+      });
+      return at;
+    };
+    const dialogText = () => document.querySelector('[role="dialog"]')?.textContent ?? null;
+    const dialogButton = (name: string) =>
+      [...document.querySelectorAll<HTMLButtonElement>('[role="dialog"] button')].find(
+        (b) => b.textContent === name,
+      )!;
+
+    it('marks the passages AI answers quote, and counts them in the header', async () => {
+      getContentDraft.mockResolvedValue(page);
+      getCitedPassages.mockResolvedValue(cited);
+      await renderPage();
+
+      expect(getCitedPassages).toHaveBeenCalledWith('d1', [
+        'Pipeline forecasting',
+        QUOTED,
+        'Teams trust it.',
+      ]);
+      const marked = container.querySelectorAll('.ProseMirror .cited-passage');
+      expect(marked).toHaveLength(1);
+      expect(marked[0].textContent).toBe(QUOTED);
+      expect(marked[0].getAttribute('data-cited-label')).toBe(
+        '✓ Cited by ChatGPT 14× and Perplexity 6× in 30 days · keep wording',
+      );
+      expect(container.querySelector('header')!.textContent).toContain('1 cited passage kept');
+    });
+
+    it('reads nothing for a new page', async () => {
+      getContentDraft.mockResolvedValue(draft({ sourceUrl: null }));
+      await renderPage();
+      expect(getCitedPassages).not.toHaveBeenCalled();
+      expect(container.querySelector('.cited-passage')).toBeNull();
+    });
+
+    it('asks before typing in one, and keeps the wording', async () => {
+      getContentDraft.mockResolvedValue(page);
+      getCitedPassages.mockResolvedValue(cited);
+      await renderPage();
+
+      await act(async () => {
+        editorOf().commands.setTextSelection(quotedAt() + 4);
+        editorOf().view.dom.dispatchEvent(
+          new KeyboardEvent('keydown', { key: 'x', bubbles: true, cancelable: true }),
+        );
+      });
+      expect(dialogText()).toContain('AI quotes this passage');
+      expect(dialogText()).toContain(
+        'ChatGPT 14× and Perplexity 6× quoted this wording in the last 30 days.',
+      );
+
+      await act(async () => dialogButton('Keep wording').click());
+      expect(dialogText()).toBeNull();
+      expect(container.querySelector('.cited-passage')!.textContent).toBe(QUOTED);
+    });
+
+    it('holds a change over one until the person says to edit anyway', async () => {
+      getContentDraft.mockResolvedValue(page);
+      getCitedPassages.mockResolvedValue(cited);
+      await renderPage();
+
+      const from = quotedAt();
+      await act(async () => {
+        editorOf().commands.insertContentAt({ from, to: from + QUOTED.length }, 'Rewritten.');
+      });
+      expect(container.querySelector('.cited-passage')!.textContent).toBe(QUOTED);
+      expect(saveContentDraft).not.toHaveBeenCalled();
+      expect(dialogText()).toContain('AI quotes this passage');
+
+      await act(async () => dialogButton('Edit anyway').click());
+      expect(dialogText()).toBeNull();
+      expect(container.querySelector('.ProseMirror')!.textContent).toBe(
+        'Pipeline forecastingRewritten.Teams trust it.',
+      );
+      // No longer the quoted wording: no longer locked or counted.
+      expect(container.querySelector('.cited-passage')).toBeNull();
+      expect(container.querySelector('header')!.textContent).not.toContain('cited passage');
+    });
+
+    it('holds a key once, even when its text follows the held keydown', async () => {
+      getContentDraft.mockResolvedValue(page);
+      getCitedPassages.mockResolvedValue(cited);
+      await renderPage();
+
+      const at = quotedAt() + 4;
+      await act(async () => {
+        editorOf().commands.setTextSelection(at);
+        editorOf().view.dom.dispatchEvent(
+          new KeyboardEvent('keydown', { key: 'x', bubbles: true, cancelable: true }),
+        );
+        // The same keystroke's text, as some keyboards still send it.
+        editorOf().commands.insertContentAt(at, 'x');
+      });
+      await act(async () => dialogButton('Edit anyway').click());
+      expect(container.querySelector('.cited-passage')!.textContent).toBe(QUOTED);
+    });
+
+    it('lets typing through once the person chose to edit it', async () => {
+      getContentDraft.mockResolvedValue(page);
+      getCitedPassages.mockResolvedValue(cited);
+      await renderPage();
+      const typeX = () =>
+        act(async () => {
+          editorOf().commands.setTextSelection(quotedAt() + 4);
+          editorOf().view.dom.dispatchEvent(
+            new KeyboardEvent('keydown', { key: 'x', bubbles: true, cancelable: true }),
+          );
+        });
+
+      await typeX();
+      await act(async () => dialogButton('Edit anyway').click());
+      await typeX();
+      expect(dialogText()).toBeNull();
     });
   });
 

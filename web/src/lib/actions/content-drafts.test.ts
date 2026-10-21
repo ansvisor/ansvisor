@@ -55,6 +55,7 @@ vi.mock('@/lib/supabase/server', () => ({
 
 const {
   createContentDraft,
+  getCitedPassages,
   getContentDraft,
   getDraftVersions,
   markContentDraftReady,
@@ -329,5 +330,33 @@ describe('getContentDraft', () => {
   it('reads nothing for a malformed id', async () => {
     await expect(getContentDraft('../etc')).resolves.toBeNull();
     expect(calls).toEqual([]);
+  });
+});
+
+describe('getCitedPassages', () => {
+  const QUOTED = 'Northwind forecasts each deal from real activity: emails, meetings.';
+
+  it('matches the page’s passages against the answers citing it, on the server', async () => {
+    rpcResult = {
+      data: [
+        { platform: 'chatgpt-web', response: `They say: ${QUOTED}` },
+        { platform: 'gemini-web', response: 'Unrelated.' },
+      ],
+      error: null,
+    };
+    await expect(getCitedPassages(DRAFT, [QUOTED, 'Teams trust it.'])).resolves.toEqual([
+      {
+        key: 'northwind forecasts each deal from real activity emails meetings',
+        platforms: [{ platform: 'chatgpt-web', answers: 1 }],
+      },
+    ]);
+    expect(rpcCalls).toEqual([['content_draft_cited_answers', { p_draft_id: DRAFT, p_days: 30 }]]);
+  });
+
+  it('is null for a draft the member can’t read, and refuses a malformed request', async () => {
+    rpcResult = { data: null, error: null };
+    await expect(getCitedPassages(DRAFT, [QUOTED])).resolves.toBeNull();
+    await expect(getCitedPassages('../etc', [QUOTED])).rejects.toThrow('invalid');
+    await expect(getCitedPassages(DRAFT, ['x'.repeat(5_001)])).rejects.toThrow('invalid');
   });
 });

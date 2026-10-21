@@ -39,6 +39,13 @@ import {
 } from '@/lib/content/brief';
 import type { ContentBrief } from '@/types';
 import {
+  CITED_DAYS,
+  MAX_PASSAGES,
+  quotedPassages,
+  type CitedAnswer,
+  type CitedPassage,
+} from '@/lib/content/cited-passages';
+import {
   HISTORY_DAYS,
   HISTORY_LIMIT,
   isVersionOrigin,
@@ -674,6 +681,31 @@ export async function restoreDraftVersion(versionId: string): Promise<RestoredDr
     bodyHtml: restored.bodyHtml,
     updatedAt: restored.updatedAt,
   };
+}
+
+const citedInput = z.array(z.string().max(5_000)).max(MAX_PASSAGES);
+
+/**
+ * Locked passages (CE-018): which of the page's passages the AI answers that
+ * cite it quote, over the last 30 days (00216 content_draft_cited_answers),
+ * matched here so the answers stay on the server. Null when the member can't
+ * read the draft; none for a draft without a page.
+ */
+export async function getCitedPassages(
+  id: string,
+  passages: string[],
+): Promise<CitedPassage[] | null> {
+  if (!draftId.safeParse(id).success || !citedInput.safeParse(passages).success) {
+    throw new Error('invalid');
+  }
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc('content_draft_cited_answers', {
+    p_draft_id: id,
+    p_days: CITED_DAYS,
+  });
+  if (error) throw new Error(error.message);
+  if (!data) return null;
+  return quotedPassages(passages, data as unknown as CitedAnswer[]);
 }
 
 /**
