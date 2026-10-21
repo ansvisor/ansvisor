@@ -113,15 +113,26 @@ export function SourcesTab({
   const total = Object.values(counts).reduce((a, b) => a + b, 0);
   const listed = groups.reduce((n, g) => n + g.rows.length, 0);
 
+  // Each toggle changes its own row from the latest state, so quick toggles
+  // don't overwrite each other, and a failed one puts back only that row.
   const toggle = async (row: DraftSourceRow, included: boolean) => {
-    const choices = read.choices.filter((c) => !(c.kind === row.kind && c.ref === row.ref));
-    const next: DraftSourceChoice = { kind: row.kind, ref: row.ref, included, added: row.added };
-    setRead({ ...read, choices: [...choices, next] });
+    const isRow = (c: DraftSourceChoice) => c.kind === row.kind && c.ref === row.ref;
+    const before = read.choices.find(isRow);
+    const withRow =
+      (choice: DraftSourceChoice | undefined) =>
+      (prev: SourcesRead | null): SourcesRead | null =>
+        prev && !prev.failed
+          ? {
+              ...prev,
+              choices: [...prev.choices.filter((c) => !isRow(c)), ...(choice ? [choice] : [])],
+            }
+          : prev;
+    setRead(withRow({ kind: row.kind, ref: row.ref, included, added: row.added }));
     try {
       await setDraftSourceIncluded(draftId, { kind: row.kind, ref: row.ref, included });
     } catch (err) {
       console.error('Failed to change a draft source:', err);
-      setRead(read);
+      setRead(withRow(before));
       toast.error(t('toggleFailed'));
     }
   };

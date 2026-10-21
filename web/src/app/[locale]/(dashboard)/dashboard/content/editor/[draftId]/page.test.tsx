@@ -267,6 +267,8 @@ describe('the content editor', () => {
       expect(typeMenu().title).toBe('Detected from the page as you write. Pick a type to keep it.');
 
       await rewrite('<h1>How to clean CRM data</h1>');
+      // It reads the page once typing pauses.
+      await act(() => new Promise((resolve) => setTimeout(resolve, 450)));
       expect(typeMenu().textContent).toBe('Guide');
 
       const types = await openTypes();
@@ -288,6 +290,7 @@ describe('the content editor', () => {
 
       // Picked: the page no longer changes it.
       await rewrite('<h1>Northwind vs HubSpot</h1>');
+      await act(() => new Promise((resolve) => setTimeout(resolve, 450)));
       expect(typeMenu().textContent).toBe('Pricing');
     });
 
