@@ -24,6 +24,7 @@ import {
   periodPrice,
   type BillingInterval,
 } from '@/lib/billing/plan-purchase';
+import { useUserRole } from '@/hooks/use-user-role';
 import { formatNumber } from '@/lib/format';
 import { cn } from '@/lib/utils';
 
@@ -44,6 +45,9 @@ interface PlanSwitcherProps {
 export function PlanSwitcher({ subscription, onUpdate }: PlanSwitcherProps) {
   const t = useTranslations('settings');
   const tCards = useTranslations('settings.planCards');
+  // Buying or changing the plan charges the organization's card: admins only,
+  // as the subscription route checks.
+  const { canAdmin } = useUserRole();
   const [loading, setLoading] = useState(false);
   const [cancelLoading, setCancelLoading] = useState(false);
   const [portalLoading, setPortalLoading] = useState(false);
@@ -207,6 +211,7 @@ export function PlanSwitcher({ subscription, onUpdate }: PlanSwitcherProps) {
 
   return (
     <div className="space-y-4">
+      {!canAdmin && <p className="text-sm text-muted-foreground">{t('planAdminOnly')}</p>}
       {/* Billing period: a year up front saves 20% */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div
@@ -322,7 +327,7 @@ export function PlanSwitcher({ subscription, onUpdate }: PlanSwitcherProps) {
                   ))}
                 </ul>
 
-                {action && (
+                {action && canAdmin && (
                   <Button
                     className="w-full"
                     variant={
@@ -493,9 +498,11 @@ export function PlanSwitcher({ subscription, onUpdate }: PlanSwitcherProps) {
               })}
             </p>
           </div>
-          <Button variant="outline" size="sm" onClick={handleReactivate} disabled={loading}>
-            {t('reactivate')}
-          </Button>
+          {canAdmin && (
+            <Button variant="outline" size="sm" onClick={handleReactivate} disabled={loading}>
+              {t('reactivate')}
+            </Button>
+          )}
         </div>
       )}
       <div className="flex items-center justify-between gap-4">

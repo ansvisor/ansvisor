@@ -50,7 +50,7 @@ async function getOrgStripeIds() {
 
   const { data: profile } = await supabase
     .from('profiles')
-    .select('organization_id')
+    .select('organization_id, role')
     .eq('id', user.id)
     .single();
 
@@ -64,7 +64,13 @@ async function getOrgStripeIds() {
     .eq('id', profile.organization_id)
     .single();
 
-  return org;
+  return org ? { ...org, role: profile.role as string | null } : null;
+}
+
+/** A card the charge needs was declined, or its bank wants it confirmed. */
+function paymentFailed(err: unknown) {
+  const message = err instanceof Error ? err.message : 'Payment failed';
+  return NextResponse.json({ error: message, code: 'payment_failed' }, { status: 402 });
 }
 
 /** GET — current subscription details */
@@ -138,6 +144,14 @@ export async function PATCH(req: NextRequest) {
     const org = await getOrgStripeIds();
     if (!org) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    // Buying, changing or reactivating the plan charges the organization's
+    // card: admins only, as the Anthropic key and team management are.
+    if (org.role !== 'admin') {
+      return NextResponse.json(
+        { error: 'Only admins can change the plan', code: 'admin_only' },
+        { status: 403 },
+      );
     }
 
     if (!org.stripe_subscription_id) {
@@ -222,15 +236,22 @@ export async function PATCH(req: NextRequest) {
           metadata: { plan_id: change.planId, organization_id: org.id },
         })) as unknown as SubscriptionRaw;
       } catch (err) {
-        const message = err instanceof Error ? err.message : 'Payment failed';
-        return NextResponse.json({ error: message, code: 'payment_failed' }, { status: 402 });
+        return paymentFailed(err);
       }
     } else {
-      updated = (await stripe.subscriptions.update(subscriptionId, {
-        items: [{ id: itemId, price: priceId }],
-        metadata: { plan_id: change.planId, organization_id: org.id },
-        proration_behavior: 'create_prorations',
-      })) as unknown as SubscriptionRaw;
+      try {
+        // A new billing period is invoiced at once: as when buying, nothing
+        // changes unless it's paid, so a declined card leaves the plan as it
+        // was rather than on the new period and past due.
+        updated = (await stripe.subscriptions.update(subscriptionId, {
+          items: [{ id: itemId, price: priceId }],
+          metadata: { plan_id: change.planId, organization_id: org.id },
+          proration_behavior: 'create_prorations',
+          payment_behavior: 'error_if_incomplete',
+        })) as unknown as SubscriptionRaw;
+      } catch (err) {
+        return paymentFailed(err);
+      }
     }
 
     // Optimistic DB update. Stripe has already accepted the change, so this

@@ -8,6 +8,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
  */
 
 let org: Record<string, unknown>;
+let role: string;
 
 /** A Supabase query that answers `single()` with the row given. */
 const row = (data: unknown) => {
@@ -18,7 +19,7 @@ const row = (data: unknown) => {
 vi.mock('@/lib/supabase/server', () => ({
   createClient: async () => ({
     auth: { getUser: async () => ({ data: { user: { id: 'u1' } } }) },
-    from: (table: string) => row(table === 'profiles' ? { organization_id: 'org1' } : org),
+    from: (table: string) => row(table === 'profiles' ? { organization_id: 'org1', role } : org),
   }),
 }));
 
@@ -86,6 +87,7 @@ beforeEach(() => {
   vi.spyOn(console, 'log').mockImplementation(() => {});
   delete process.env.GROWTH_ANNUAL_SET;
   org = { id: 'org1', plan: 'starter', stripe_subscription_id: 'sub1' };
+  role = 'admin';
   align.mockResolvedValue({ promptCount: 0, platforms: [], models: [] });
   db.eq.mockResolvedValue({});
 });
@@ -164,6 +166,28 @@ describe('buying a trial now', () => {
     expect(db.update).not.toHaveBeenCalled();
   });
 
+  it('buys without a discount when the code field is left empty', async () => {
+    stripeApi.retrieve.mockResolvedValue(subscription('trialing'));
+    stripeApi.update.mockResolvedValue(subscription('active'));
+
+    const res = await patch({ buyNow: true, promoCode: '' });
+
+    expect(res.status).toBe(200);
+    expect(stripeApi.listCodes).not.toHaveBeenCalled();
+    expect(stripeApi.update.mock.calls[0][1].discounts).toBeUndefined();
+  });
+
+  it('leaves buying to admins, before anything is charged', async () => {
+    for (const other of ['manager', 'analyst', 'agency_partner']) {
+      role = other;
+      const res = await patch({ buyNow: true, newPlanId: 'growth' });
+      expect(res.status).toBe(403);
+      expect(await res.json()).toMatchObject({ code: 'admin_only' });
+    }
+    expect(stripeApi.retrieve).not.toHaveBeenCalled();
+    expect(stripeApi.update).not.toHaveBeenCalled();
+  });
+
   it('is only for a trial', async () => {
     stripeApi.retrieve.mockResolvedValue(subscription('active'));
 
@@ -186,8 +210,23 @@ describe('changing a paid plan', () => {
       items: [{ id: 'si1', price: 'price_starter_year' }],
       metadata: { plan_id: 'starter', organization_id: 'org1' },
       proration_behavior: 'create_prorations',
+      payment_behavior: 'error_if_incomplete',
     });
     expect(await res.json()).toMatchObject({ planId: 'starter', interval: 'year' });
+  });
+
+  it('keeps the plan as it was when the new period’s invoice is declined', async () => {
+    stripeApi.retrieve.mockResolvedValue(subscription('active'));
+    stripeApi.update.mockRejectedValue(new Error('Your card was declined.'));
+
+    const res = await patch({ interval: 'year' });
+
+    expect(res.status).toBe(402);
+    expect(await res.json()).toEqual({
+      error: 'Your card was declined.',
+      code: 'payment_failed',
+    });
+    expect(db.update).not.toHaveBeenCalled();
   });
 
   it('says so when an annual price is not set up in Stripe', async () => {

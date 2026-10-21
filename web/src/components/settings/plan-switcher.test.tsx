@@ -4,6 +4,8 @@ import { NextIntlClientProvider } from 'next-intl';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import messages from '../../../messages/en.json';
 import { toast } from 'sonner';
+import { RoleProvider } from '@/components/providers/role-provider';
+import type { TeamRole } from '@/components/providers/role-provider';
 import { PlanSwitcher } from './plan-switcher';
 
 vi.mock('sonner', () => ({ toast: Object.assign(vi.fn(), { success: vi.fn(), error: vi.fn() }) }));
@@ -18,21 +20,30 @@ let container: HTMLDivElement;
 let root: Root;
 const onUpdate = vi.fn();
 
-async function render(planId = 'starter', { status = 'active', interval = 'month' } = {}) {
+async function render(
+  planId = 'starter',
+  {
+    status = 'active',
+    interval = 'month',
+    role = 'admin',
+  }: { status?: string; interval?: string; role?: TeamRole } = {},
+) {
   await act(async () => {
     root.render(
       <NextIntlClientProvider locale="en" messages={messages}>
-        <PlanSwitcher
-          subscription={{
-            planId,
-            status,
-            currentPeriodEnd: null,
-            cancelAtPeriodEnd: false,
-            priceAmount: 49,
-            interval,
-          }}
-          onUpdate={onUpdate}
-        />
+        <RoleProvider role={role}>
+          <PlanSwitcher
+            subscription={{
+              planId,
+              status,
+              currentPeriodEnd: null,
+              cancelAtPeriodEnd: false,
+              priceAmount: 49,
+              interval,
+            }}
+            onUpdate={onUpdate}
+          />
+        </RoleProvider>
       </NextIntlClientProvider>,
     );
   });
@@ -172,6 +183,18 @@ describe('buying during the free trial', () => {
         Response.json({ planId: 'growth', status: 'active', interval: 'month', priceAmount: 249 }),
       ),
     );
+  });
+
+  it('leaves buying and changing the plan to admins', async () => {
+    await render('starter', { status: 'trialing', role: 'manager' });
+    expect(document.body.textContent).toContain(
+      'Only admins can buy or change the plan. Ask an admin in your organization.',
+    );
+    expect(
+      [...document.querySelectorAll('button')].filter((b) =>
+        /^(Buy|Upgrade|Downgrade|Switch)/.test(b.textContent?.trim() ?? ''),
+      ),
+    ).toEqual([]);
   });
 
   it('offers every plan now, with the first-month code on monthly', async () => {
