@@ -28747,6 +28747,9 @@ comment on column public.content_drafts.page_type_source is
 --
 -- Both must belong to the draft's brand: a check trigger turns away another
 -- brand's opportunity or prompts, which the foreign key alone would accept.
+-- It checks only the prompt ids a write adds, and a deleted prompt leaves
+-- every draft's prompt_ids (it has no foreign key to do that), so a draft
+-- that had one can still take more.
 
 alter table public.content_drafts
   add column if not exists opportunity_id uuid
@@ -28788,12 +28791,14 @@ begin
      and exists (
        select 1
        from unnest(new.prompt_ids) as wanted(id)
-       where not exists (
-         select 1
-         from public.prompts p
-         join public.prompt_sets s on s.id = p.prompt_set_id
-         where p.id = wanted.id and s.brand_id = new.brand_id
-       )
+       -- Only what this write adds: the ids already there were checked.
+       where wanted.id <> all(case when tg_op = 'UPDATE' then old.prompt_ids else '{}' end)
+         and not exists (
+           select 1
+           from public.prompts p
+           join public.prompt_sets s on s.id = p.prompt_set_id
+           where p.id = wanted.id and s.brand_id = new.brand_id
+         )
      )
   then
     raise exception 'content draft prompt belongs to another brand'
@@ -28806,6 +28811,33 @@ $$;
 create or replace trigger content_drafts_check_links
   before insert or update on public.content_drafts
   for each row execute function public.check_content_draft_links();
+
+-- A deleted prompt leaves the drafts that had it, in one update per delete
+-- statement (a topic's prompts go together). Definer: the drafts may be ones
+-- the deleting member can't write, and the deletion is theirs to make.
+create or replace function public.forget_deleted_draft_prompts()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_gone uuid[];
+begin
+  select coalesce(array_agg(id), '{}') into v_gone from deleted_prompts;
+  update public.content_drafts d
+  set prompt_ids = array(select x from unnest(d.prompt_ids) as x where x <> all(v_gone))
+  where d.prompt_ids && v_gone;
+  return null;
+end;
+$$;
+
+revoke execute on function public.forget_deleted_draft_prompts() from public, anon, authenticated;
+
+create or replace trigger prompts_forget_in_content_drafts
+  after delete on public.prompts
+  referencing old table as deleted_prompts
+  for each statement execute function public.forget_deleted_draft_prompts();
 
 -- ─────────────────────────────────────────────────────────────────────────
 -- migrations/00207_content_page_overlap.sql
@@ -28827,7 +28859,12 @@ create or replace trigger content_drafts_check_links
 --     common first. Security definer with an organization check, as
 --     ai_traffic_page_citations (00176): citation_urls has no member select
 --     policy. Read through citation_urls' domain index first, as
---     ga_page_ai_visibility does.
+--     ga_page_ai_visibility does. The window's answers to the prompts come
+--     from idx_prompt_results_brand_created_cover alone (an index-only scan,
+--     hash-joined), never from prompt_results' wide rows one citation at a
+--     time; ChatGPT Shopping is left out, as in Impact (00209). Planned for
+--     each call's own values (plan_cache_mode): a generic plan of these
+--     estimates is far slower.
 --   * content_drafts.source_url: the existing page a draft optimizes, when
 --     there is one (Start's "Optimize … instead"); the editor shows it beside
 --     the page type.
@@ -28858,6 +28895,7 @@ language plpgsql
 stable
 security definer
 set search_path to 'public'
+set plan_cache_mode to 'force_custom_plan'
 as $$
 begin
   if not exists (
@@ -28877,20 +28915,28 @@ begin
     from public.brand_domains bd
     where bd.brand_id = p_brand_id
   ),
-  own_urls as (
+  own_urls as materialized (
     select cu.id, cu.url, cu.title, lower(public.normalize_page_path(cu.url)) as page_key
     from public.citation_urls cu
     where cu.domain in (select domain from own_domains)
   ),
+  -- The window's answers to these prompts, from the (brand_id, created_at)
+  -- cover index alone.
+  answers as materialized (
+    select pr.id, pr.prompt_id
+    from public.prompt_results pr
+    where pr.brand_id = p_brand_id
+      and pr.created_at >= p_since
+      and pr.prompt_id = any(p_prompt_ids)
+      and pr.platform is distinct from 'chatgpt-shopping'
+  ),
   cited as (
-    select ou.page_key, ou.url, ou.title, pr.prompt_id
-    from own_urls ou
-    join public.prompt_result_citations prc
-      on prc.url_id = ou.id
-     and prc.brand_id = p_brand_id
-     and prc.created_at >= p_since
-    join public.prompt_results pr on pr.id = prc.prompt_result_id
-    where pr.prompt_id = any(p_prompt_ids)
+    select ou.page_key, ou.url, ou.title, a.prompt_id
+    from public.prompt_result_citations prc
+    join answers a on a.id = prc.prompt_result_id
+    join own_urls ou on ou.id = prc.url_id
+    where prc.brand_id = p_brand_id
+      and prc.created_at >= p_since
   ),
   pages as (
     select
@@ -29010,13 +29056,25 @@ $$;
 --   * gscClicks {cur, prev} and gscSince, the first day of Search Console page
 --     data the brand has (null without any): page stats are kept 190 days, so
 --     a window starting earlier is incomplete and the caller says so;
+--   * promptCounts {cur, prev, lost}: prompts citing the page in each window,
+--     and the ones it lost (cited before, not now), counted over all of them;
 --   * prompts: each prompt that cited the page in either window, with its
---     citations and platforms in each, the most cited first (at most 100);
+--     citations and platforms in each, the most cited first (at most 100, to
+--     list: the counts don't come from it);
 --   * overlap: the brand's other pages cited in this window for the prompts
 --     citing this one, with how many of them (at most 3): pages competing
 --     with it for the same answers.
 -- A page is one lower(normalize_page_path) key, so /x/ and /x?utm_source=…
--- are one page. Windows are whole UTC days, today included.
+-- are one page. Windows are whole UTC days ending yesterday: today's partial
+-- day would read as a drop against whole ones.
+--
+-- Both windows' answers come from idx_prompt_results_brand_created_cover
+-- alone (brand_id, created_at, with id, platform and prompt_id included),
+-- materialized and hash-joined, never from prompt_results' wide rows one
+-- citation at a time. The brand's other pages are found from the prompts
+-- citing this one outward. Planned for each call's own values
+-- (plan_cache_mode): after five calls plpgsql would switch to a generic plan,
+-- many times slower here.
 --
 -- Security definer with an organization check, as ai_traffic_page_citations
 -- (00176): citation_urls has no member select policy.
@@ -29031,10 +29089,12 @@ language plpgsql
 stable
 security definer
 set search_path to 'public'
+set plan_cache_mode to 'force_custom_plan'
 as $$
 declare
   v_key text := lower(public.normalize_page_path(p_page));
-  v_today date := (now() at time zone 'utc')::date;
+  -- The last whole day.
+  v_last_day date := (now() at time zone 'utc')::date - 1;
   v_cur_day date;
   v_prev_day date;
   v_cur timestamptz;
@@ -29054,18 +29114,18 @@ begin
       using errcode = '22023';
   end if;
 
-  v_cur_day := v_today - p_days + 1;
+  v_cur_day := v_last_day - p_days + 1;
   v_prev_day := v_cur_day - p_days;
   v_cur := v_cur_day::timestamp at time zone 'utc';
   v_prev := v_prev_day::timestamp at time zone 'utc';
-  v_until := (v_today + 1)::timestamp at time zone 'utc';
+  v_until := (v_last_day + 1)::timestamp at time zone 'utc';
 
   with own_domains as (
     select lower(regexp_replace(bd.domain, '^www\.', '')) as domain
     from public.brand_domains bd
     where bd.brand_id = p_brand_id
   ),
-  own_all as (
+  own_all as materialized (
     select cu.id, cu.url, lower(public.normalize_page_path(cu.url)) as page_key
     from public.citation_urls cu
     where cu.domain in (select domain from own_domains)
@@ -29073,16 +29133,23 @@ begin
   own_urls as (
     select o.id from own_all o where o.page_key = v_key
   ),
+  -- Both windows' answers, from the cover index alone.
+  answers as materialized (
+    select pr.id, pr.prompt_id, pr.platform, pr.created_at >= v_cur as is_cur
+    from public.prompt_results pr
+    where pr.brand_id = p_brand_id
+      and pr.created_at >= v_prev
+      and pr.created_at < v_until
+      and pr.platform is distinct from 'chatgpt-shopping'
+  ),
   cites as (
-    select pr.prompt_id, pr.platform, prc.created_at >= v_cur as is_cur
-    from own_urls u
-    join public.prompt_result_citations prc
-      on prc.url_id = u.id
-     and prc.brand_id = p_brand_id
-     and prc.created_at >= v_prev
-     and prc.created_at < v_until
-    join public.prompt_results pr on pr.id = prc.prompt_result_id
-    where pr.platform is distinct from 'chatgpt-shopping'
+    select a.prompt_id, a.platform, a.is_cur
+    from public.prompt_result_citations prc
+    join answers a on a.id = prc.prompt_result_id
+    where prc.url_id in (select u.id from own_urls u)
+      and prc.brand_id = p_brand_id
+      and prc.created_at >= v_prev
+      and prc.created_at < v_until
   ),
   per_prompt as (
     select
@@ -29094,17 +29161,24 @@ begin
     from cites c
     group by c.prompt_id
   ),
+  -- This window's answers to the prompts citing the page, then their
+  -- citations, then the brand's other pages among them.
+  citing_answers as materialized (
+    select a.id, a.prompt_id
+    from answers a
+    where a.is_cur
+      and a.prompt_id in (select pp.prompt_id from per_prompt pp where pp.cur > 0)
+  ),
   other_pages as (
-    select o.page_key, min(o.url) as page, count(distinct pr.prompt_id) as prompts
-    from own_all o
+    select o.page_key, min(o.url) as page, count(distinct ca.prompt_id) as prompts
+    from citing_answers ca
     join public.prompt_result_citations prc
-      on prc.url_id = o.id
+      on prc.prompt_result_id = ca.id
      and prc.brand_id = p_brand_id
      and prc.created_at >= v_cur
      and prc.created_at < v_until
-    join public.prompt_results pr on pr.id = prc.prompt_result_id
+    join own_all o on o.id = prc.url_id
     where o.page_key <> v_key
-      and pr.prompt_id in (select pp.prompt_id from per_prompt pp where pp.cur > 0)
     group by o.page_key
   ),
   snippet_days as (
@@ -29131,7 +29205,7 @@ begin
       -- A session without a landing page would read as the home page.
       and g.landing_page <> ''
       and g.date >= v_prev_day
-      and g.date <= v_today
+      and g.date <= v_last_day
       and lower(public.normalize_page_path(g.landing_page)) = v_key
       and not exists (select 1 from snippet_days s where s.day = g.date)
   ),
@@ -29141,11 +29215,19 @@ begin
     where g.brand_id = p_brand_id
       and g.page_key = v_key
       and g.date >= v_prev_day
-      and g.date <= v_today
+      and g.date <= v_last_day
   )
   select jsonb_build_object(
     'citations', (
       select jsonb_build_object('cur', coalesce(sum(cur), 0), 'prev', coalesce(sum(prev), 0))
+      from per_prompt
+    ),
+    'promptCounts', (
+      select jsonb_build_object(
+        'cur', count(*) filter (where cur > 0),
+        'prev', count(*) filter (where prev > 0),
+        'lost', count(*) filter (where cur = 0 and prev > 0)
+      )
       from per_prompt
     ),
     'aiVisits', (
@@ -29195,7 +29277,7 @@ grant execute on function public.content_page_impact(uuid, text, integer)
   to authenticated, service_role;
 
 comment on function public.content_page_impact(uuid, text, integer) is
-  'Content Editor (CE-016): one page''s citations, AI visits, Google clicks and citing prompts over the last N whole UTC days and the N before. Security definer with an organization check.';
+  'Content Editor (CE-016): one page''s citations, AI visits, Google clicks and citing prompts over the last N whole UTC days (ending yesterday) and the N before. Security definer with an organization check.';
 
 -- ─────────────────────────────────────────────────────────────────────────
 -- migrations/00210_content_page_results.sql
