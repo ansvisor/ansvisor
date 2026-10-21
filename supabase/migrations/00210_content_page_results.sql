@@ -6,7 +6,7 @@
 -- page a draft optimizes, and which assistant sent them.
 --
 -- content_page_results(brand, page, days) returns one jsonb over the last N
--- whole UTC days, today included, as content_page_impact (00209) counts them:
+-- whole UTC days, ending yesterday, as content_page_impact (00209) counts them:
 --   * analytics: whether the brand has a Google Analytics property mapped;
 --     conversions come only from it until the snippet records goals (CE-017);
 --   * purchases: whether the property reported purchases in the window, on
@@ -23,7 +23,8 @@
 -- A page is one lower(normalize_page_path) key, as in 00209. Analytics rows
 -- without a landing page are left out: normalize_page_path('') is '/'.
 --
--- Security definer with an organization check, as content_page_impact.
+-- Security definer with an organization check, as content_page_impact, and
+-- planned for each call's own values, as it is (plan_cache_mode).
 
 create or replace function public.content_page_results(
   p_brand_id uuid,
@@ -35,10 +36,12 @@ language plpgsql
 stable
 security definer
 set search_path to 'public'
+set plan_cache_mode to 'force_custom_plan'
 as $$
 declare
   v_key text := lower(public.normalize_page_path(p_page));
-  v_today date := (now() at time zone 'utc')::date;
+  -- The last whole day.
+  v_last_day date := (now() at time zone 'utc')::date - 1;
   v_day date;
   v_from timestamptz;
   v_until timestamptz;
@@ -56,9 +59,9 @@ begin
       using errcode = '22023';
   end if;
 
-  v_day := v_today - p_days + 1;
+  v_day := v_last_day - p_days + 1;
   v_from := v_day::timestamp at time zone 'utc';
-  v_until := (v_today + 1)::timestamp at time zone 'utc';
+  v_until := (v_last_day + 1)::timestamp at time zone 'utc';
 
   with snippet_days as (
     select distinct (l.created_at at time zone 'utc')::date as day
@@ -84,7 +87,7 @@ begin
       and g.sessions > 0
       and g.landing_page <> ''
       and g.date >= v_day
-      and g.date <= v_today
+      and g.date <= v_last_day
       and lower(public.normalize_page_path(g.landing_page)) = v_key
       and not exists (select 1 from snippet_days s where s.day = g.date)
     group by 1
@@ -101,7 +104,7 @@ begin
     where g.brand_id = p_brand_id
       and g.landing_page <> ''
       and g.date >= v_day
-      and g.date <= v_today
+      and g.date <= v_last_day
       and lower(public.normalize_page_path(g.landing_page)) = v_key
     group by 1
   ),
@@ -127,13 +130,13 @@ begin
       select 1 from public.ga_ai_traffic_stats g
       where g.brand_id = p_brand_id
         and g.date >= v_day
-        and g.date <= v_today
+        and g.date <= v_last_day
         and (g.transactions > 0 or g.purchase_revenue > 0)
     ) or exists (
       select 1 from public.ga_channel_stats c
       where c.brand_id = p_brand_id
         and c.date >= v_day
-        and c.date <= v_today
+        and c.date <= v_last_day
         and (c.transactions > 0 or c.purchase_revenue > 0)
     ),
     'sources', coalesce((
@@ -158,4 +161,4 @@ grant execute on function public.content_page_results(uuid, text, integer)
   to authenticated, service_role;
 
 comment on function public.content_page_results(uuid, text, integer) is
-  'Content Editor (CE-016): one page''s AI visits per AI source over the last N whole UTC days, with Google Analytics'' AI sessions landing on it, their key events, purchases and revenue. Security definer with an organization check.';
+  'Content Editor (CE-016): one page''s AI visits per AI source over the last N whole UTC days (ending yesterday), with Google Analytics'' AI sessions landing on it, their key events, purchases and revenue. Security definer with an organization check.';
