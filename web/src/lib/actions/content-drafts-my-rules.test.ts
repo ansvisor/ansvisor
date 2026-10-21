@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-/** My rules (CE-009, 00214): the workspace's rule set per page type. */
+/** My rules (CE-009, 00214, 00227): the workspace's rule set per kind of site and page type. */
 
 const BRAND = '33333333-3333-3333-3333-333333333333';
 
@@ -39,14 +39,21 @@ const set = {
 };
 
 beforeEach(() => {
-  reads = { brands: { organization_id: 'org1' } };
+  reads = {
+    brands: {
+      organization_id: 'org1',
+      site_type: null,
+      industry: 'E-commerce & Retail',
+      shopping_mode_enabled: false,
+    },
+  };
   upserts = [];
   filters = [];
   user = { id: 'u1' };
 });
 
 describe('getMyRuleSets', () => {
-  it('reads the organization’s sets by page type, leaving out ones that don’t read as rules', async () => {
+  it('reads the organization’s sets for the brand’s kind of site, leaving out ones that don’t read as rules', async () => {
     reads.content_rule_sets = [
       { page_type: 'blog_post', overrides: set.overrides, text_rules: set.textRules },
       { page_type: 'nope', overrides: {}, text_rules: [] },
@@ -56,7 +63,16 @@ describe('getMyRuleSets', () => {
     expect(filters).toEqual([
       ['brands', 'id', BRAND],
       ['content_rule_sets', 'organization_id', 'org1'],
+      // No site type chosen: the brand's industry guesses a shop.
+      ['content_rule_sets', 'site_type', 'ecommerce'],
     ]);
+  });
+
+  it('reads the kind of site the brand chose', async () => {
+    reads.brands = { organization_id: 'org1', site_type: 'b2c', industry: null };
+    reads.content_rule_sets = [];
+    await getMyRuleSets(BRAND);
+    expect(filters).toContainEqual(['content_rule_sets', 'site_type', 'b2c']);
   });
 
   it('has none for a brand the member can’t read', async () => {
@@ -67,19 +83,20 @@ describe('getMyRuleSets', () => {
 });
 
 describe('saveMyRuleSet', () => {
-  it('keeps the set for the organization and page type, as the member', async () => {
+  it('keeps the set for the organization, the brand’s kind of site and the page type, as the member', async () => {
     await saveMyRuleSet(BRAND, 'blog_post', set);
     expect(upserts).toEqual([
       {
         table: 'content_rule_sets',
         value: expect.objectContaining({
           organization_id: 'org1',
+          site_type: 'ecommerce',
           page_type: 'blog_post',
           overrides: set.overrides,
           text_rules: set.textRules,
           updated_by: 'u1',
         }),
-        options: { onConflict: 'organization_id,page_type' },
+        options: { onConflict: 'organization_id,site_type,page_type' },
       },
     ]);
   });

@@ -830,6 +830,7 @@ export type Database = {
           organization_id: string
           overrides: Json
           page_type: string
+          site_type: string
           text_rules: Json
           updated_at: string
           updated_by: string | null
@@ -838,6 +839,7 @@ export type Database = {
           organization_id: string
           overrides?: Json
           page_type: string
+          site_type: string
           text_rules?: Json
           updated_at?: string
           updated_by?: string | null
@@ -846,6 +848,7 @@ export type Database = {
           organization_id?: string
           overrides?: Json
           page_type?: string
+          site_type?: string
           text_rules?: Json
           updated_at?: string
           updated_by?: string | null
