@@ -484,7 +484,8 @@ export async function setContentDraftReadyFor(
           actionId: draft.action_id,
           method: draft.method === 'create' ? 'create' : 'optimize',
         },
-        null,
+        // The API key's user, as update_task_status records it.
+        auth.userId,
       );
     } catch (err) {
       console.error("Failed to complete the action's task:", err);

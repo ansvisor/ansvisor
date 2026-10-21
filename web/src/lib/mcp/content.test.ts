@@ -28,6 +28,7 @@ vi.mock('@/lib/supabase/admin', () => ({
         select: () => chain,
         eq: (col: string, v: unknown) => (db.filters.push([table, col, v]), chain),
         in: () => chain,
+        is: (col: string, v: unknown) => (db.filters.push([table, col, v]), chain),
         order: () => chain,
         limit: () => chain,
         insert: (value: unknown) => (db.writes.push({ table, op: 'insert', value }), chain),
@@ -260,6 +261,7 @@ describe('suggestContentChangesFor', () => {
 describe('setContentDraftReadyFor', () => {
   it('marks a draft ready, keeps the version and completes its action’s task, once', async () => {
     db.rows.content_drafts = draftRow({ status: 'draft' });
+    db.rows.actions = { payload: {} };
     db.rows.action_tasks = [{ id: 't-optimize', status: 'in_progress' }];
     // The update reads back the same row; its status is what the update set.
     const result = await setContentDraftReadyFor(auth, 'd1');
@@ -277,7 +279,7 @@ describe('setContentDraftReadyFor', () => {
         action_id: 'act-1',
         event: 'task_status',
         data: { taskId: 't-optimize', to: 'completed', draftId: 'd1' },
-        actor_id: null,
+        actor_id: 'user-1',
       },
     });
     expect(db.rpcCalls).toContainEqual([
