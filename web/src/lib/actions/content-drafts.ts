@@ -7,6 +7,7 @@ import { readAssignees } from '@/lib/action-center/assignees';
 import {
   DRAFT_STATUSES,
   PAGE_TYPES,
+  agentStateOf,
   type ContentDraft,
   type ContentDraftListItem,
   type ContentOverlap,
@@ -59,6 +60,7 @@ import {
   type RestoredDraft,
   type VersionOrigin,
 } from '@/lib/content/history';
+import type { AgentWriteRequest } from '@/lib/content/agent-write';
 import {
   actionPages,
   completeDraftTasks,
@@ -93,7 +95,7 @@ export async function getContentDrafts(brandId: string): Promise<ContentDraftLis
     supabase
       .from('content_drafts')
       .select(
-        'id, title, page_type, method, status, author, created_by, score_before, score_after, updated_at',
+        'id, title, page_type, method, status, author, created_by, score_before, score_after, agent_state, agent_state_at, updated_at',
       )
       .eq('brand_id', brandId)
       .order('updated_at', { ascending: false })
@@ -122,6 +124,7 @@ export async function getContentDrafts(brandId: string): Promise<ContentDraftLis
     isMine: me !== null && row.created_by === me,
     scoreBefore: row.score_before,
     scoreAfter: row.score_after,
+    agentState: agentStateOf(row.agent_state, row.agent_state_at),
     updatedAt: row.updated_at,
   }));
 }
@@ -156,7 +159,7 @@ export async function getContentDraft(id: string): Promise<ContentDraft | null> 
   const { data, error } = await supabase
     .from('content_drafts')
     .select(
-      `id, brand_id, title, page_type, page_type_source, method, status, body_html, author, source_url, rules, action_id, updated_at, ${BRAND_SITE}, actions(action_no)`,
+      `id, brand_id, title, page_type, page_type_source, method, status, body_html, author, source_url, rules, action_id, agent_state, agent_state_at, updated_at, ${BRAND_SITE}, actions(action_no)`,
     )
     .eq('id', id)
     .maybeSingle();
@@ -179,6 +182,7 @@ export async function getContentDraft(id: string): Promise<ContentDraft | null> 
       data.action_id && data.actions
         ? { id: data.action_id, number: data.actions.action_no }
         : null,
+    agentState: agentStateOf(data.agent_state, data.agent_state_at),
     updatedAt: data.updated_at,
   };
 }
@@ -1324,6 +1328,48 @@ export async function fixDraftRules(
     return { count: Number(body.count) || 0 };
   } catch (err) {
     console.error('Failed to run the Content Agent:', err);
+    return { error: 'failed' };
+  }
+}
+
+const AGENT_WRITE_ERRORS = ['ai_budget', 'writing', 'not_draft', 'failed'] as const;
+export type AgentWriteError = (typeof AGENT_WRITE_ERRORS)[number];
+
+/**
+ * Start's Agent (CE-015): the API's Content Agent does the draft in the
+ * background (content-writer.js) — a new page written whole, an existing
+ * page's suggestions left — and the draft goes to In review. Returns once it
+ * has started. Returned, not thrown: production hides a server action's
+ * errors.
+ */
+export async function startAgentWriting(
+  id: string,
+  brandId: string,
+  request: AgentWriteRequest,
+): Promise<{ started: true } | { error: AgentWriteError }> {
+  if (!draftId.safeParse(id).success || !draftId.safeParse(brandId).success) {
+    return { error: 'failed' };
+  }
+  const supabase = await createClient();
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  if (!session) return { error: 'failed' };
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/content-drafts/${id}/write`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${session.access_token}`,
+      },
+      body: JSON.stringify({ brandId, ...request }),
+    });
+    if (res.ok) return { started: true };
+    const body = (await res.json().catch(() => ({}))) as { code?: string };
+    const code = body.code as AgentWriteError;
+    return { error: AGENT_WRITE_ERRORS.includes(code) ? code : 'failed' };
+  } catch (err) {
+    console.error('Failed to start the Content Agent:', err);
     return { error: 'failed' };
   }
 }

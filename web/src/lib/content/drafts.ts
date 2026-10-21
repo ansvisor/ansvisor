@@ -15,6 +15,29 @@ export type DraftStatus = (typeof DRAFT_STATUSES)[number];
 export type DraftMethod = 'create' | 'optimize';
 
 /**
+ * Where the Content Agent is on a draft Start gave it (CE-015,
+ * content_drafts.agent_state, 00219): writing it, or couldn't finish.
+ */
+export type AgentState = 'writing' | 'failed' | null;
+
+/** A 'writing' this old was left by a server that stopped (content-writer.js). */
+export const WRITING_STALE_MS = 10 * 60_000;
+
+/** How often the Library and the editor look again while the agent writes. */
+export const AGENT_POLL_MS = 5_000;
+
+/** The agent's state as the app shows it: a 'writing' gone stale reads as failed. */
+export function agentStateOf(
+  state: string | null,
+  at: string | null,
+  now: number = Date.now(),
+): AgentState {
+  if (state === 'failed') return 'failed';
+  if (state !== 'writing') return null;
+  return at && now - new Date(at).getTime() < WRITING_STALE_MS ? 'writing' : 'failed';
+}
+
+/**
  * The page types a draft can be, across brand types (B2B, e-commerce, B2C;
  * SITE_PAGE_TYPES says which). Stored as these keys (content_drafts.page_type);
  * named in en.json under contentEditor.pageTypes.
@@ -76,6 +99,8 @@ export interface ContentDraftListItem {
   isMine: boolean;
   scoreBefore: number | null;
   scoreAfter: number | null;
+  /** Where the Content Agent is on it (CE-015). */
+  agentState: AgentState;
   updatedAt: string;
 }
 
@@ -104,6 +129,8 @@ export interface ContentDraft {
   rules: DraftRules;
   /** The Action Center action the draft is the work of (CE-022), shown as "from Action AC-214". */
   action: { id: string; number: number } | null;
+  /** Where the Content Agent is on it (CE-015): the editor waits while it writes. */
+  agentState: AgentState;
   updatedAt: string;
 }
 

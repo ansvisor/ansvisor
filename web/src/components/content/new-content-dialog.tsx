@@ -35,9 +35,12 @@ import {
   getContentStartOptions,
   importContentPage,
   sendContentDraftToActionCenter,
+  startAgentWriting,
 } from '@/lib/actions/content-drafts';
+import { agentWriteRequest, useRuleDescriber } from '@/lib/content/agent-write';
 import { MAX_ATTACHMENT_BYTES, textToHtml } from '@/lib/content/attachments';
 import { cleanHtml } from '@/lib/content/clean-html';
+import { NO_DRAFT_RULES } from '@/lib/content/rules';
 import {
   contentEditorPath,
   type ContentOverlap,
@@ -141,6 +144,7 @@ export function NewContentDialog({
   const t = useTranslations('contentEditor.newContent');
   const tTypes = useTranslations('contentEditor.pageTypes');
   const router = useRouter();
+  const describeRule = useRuleDescriber();
 
   const [options, setOptions] = useState<DraftStartOptions | null>(null);
   const [optionsFailed, setOptionsFailed] = useState(false);
@@ -387,12 +391,59 @@ export function NewContentDialog({
         await sendToTeam(id);
         return;
       }
+      if (who === 'agent') {
+        await sendToAgent(id, bodyHtml);
+        return;
+      }
       router.push(contentEditorPath(id));
     } catch (err) {
       console.error('Failed to start a draft:', err);
       toast.error(t('start.failed'));
       setOpening(false);
     }
+  };
+
+  /**
+   * Agent: the Content Agent does the page in the background — a new page
+   * written, an existing one's suggestions left — and the draft waits in
+   * Library › In review. It stays in the Library as a draft if it can't start.
+   */
+  const sendToAgent = async (id: string, bodyHtml: string | undefined) => {
+    const openDraft = {
+      label: t('start.openDraft'),
+      onClick: () => router.push(contentEditorPath(id)),
+    };
+    let started: Awaited<ReturnType<typeof startAgentWriting>>;
+    try {
+      const request = await agentWriteRequest(
+        {
+          id,
+          brandId,
+          title: startTitle,
+          pageType: start?.pageType ?? null,
+          method: startMethod,
+          sourceUrl: existing?.url ?? start?.sourceUrl ?? null,
+          bodyHtml: bodyHtml ?? '',
+          rules: NO_DRAFT_RULES,
+        },
+        describeRule,
+      );
+      started = await startAgentWriting(id, brandId, request);
+    } catch (err) {
+      console.error('Failed to hand the draft to the Content Agent:', err);
+      started = { error: 'failed' };
+    }
+    changeOpen(false);
+    onSent?.();
+    if ('error' in started) {
+      toast.error(t(`start.agentErrors.${started.error}`), { action: openDraft });
+      return;
+    }
+    toast.success(t('start.agentStarted'), {
+      description: t('start.agentStartedDescription'),
+      duration: 10_000,
+      action: openDraft,
+    });
   };
 
   /**
@@ -489,39 +540,32 @@ export function NewContentDialog({
                 aria-labelledby="start-who"
                 className="grid grid-cols-3 gap-1.5"
               >
-                {WHO.map((value) => {
-                  // The Content Agent comes in its own update (CE-018/022).
-                  const soon = value === 'agent';
-                  return (
-                    <button
-                      key={value}
-                      type="button"
-                      role="radio"
-                      aria-checked={who === value}
-                      aria-disabled={soon || undefined}
-                      disabled={soon}
-                      title={soon ? t('who.agent.soon') : undefined}
-                      onClick={() => setWho(value)}
+                {WHO.map((value) => (
+                  <button
+                    key={value}
+                    type="button"
+                    role="radio"
+                    aria-checked={who === value}
+                    onClick={() => setWho(value)}
+                    className={cn(
+                      'flex items-start gap-2 rounded-xl border px-3 py-2.5 text-left transition-colors hover:bg-muted/50',
+                      who === value && 'border-foreground ring-1 ring-inset ring-foreground',
+                    )}
+                  >
+                    <span
                       className={cn(
-                        'flex items-start gap-2 rounded-xl border px-3 py-2.5 text-left transition-colors hover:bg-muted/50 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent',
-                        who === value && 'border-foreground ring-1 ring-inset ring-foreground',
+                        'mt-0.5 h-4 w-4 shrink-0 rounded-full border-[1.5px] border-muted-foreground/50',
+                        who === value && 'border-[5px] border-foreground',
                       )}
-                    >
-                      <span
-                        className={cn(
-                          'mt-0.5 h-4 w-4 shrink-0 rounded-full border-[1.5px] border-muted-foreground/50',
-                          who === value && 'border-[5px] border-foreground',
-                        )}
-                      />
-                      <span className="min-w-0">
-                        <span className="block text-sm font-medium">{t(`who.${value}.title`)}</span>
-                        <span className="block text-xs text-muted-foreground">
-                          {soon ? t('who.agent.soon') : t(`who.${value}.hint`)}
-                        </span>
+                    />
+                    <span className="min-w-0">
+                      <span className="block text-sm font-medium">{t(`who.${value}.title`)}</span>
+                      <span className="block text-xs text-muted-foreground">
+                        {t(`who.${value}.hint`)}
                       </span>
-                    </button>
-                  );
-                })}
+                    </span>
+                  </button>
+                ))}
               </div>
             </div>
             <DialogFooter>
@@ -531,7 +575,13 @@ export function NewContentDialog({
               </Button>
               <Button onClick={() => void openEditor()} disabled={opening}>
                 {opening && <Loader2 className="h-4 w-4 animate-spin" />}
-                {t(who === 'team' ? 'start.sendToTeam' : 'start.openEditor')}
+                {t(
+                  who === 'team'
+                    ? 'start.sendToTeam'
+                    : who === 'agent'
+                      ? 'start.startAgent'
+                      : 'start.openEditor',
+                )}
               </Button>
             </DialogFooter>
           </>

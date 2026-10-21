@@ -43,7 +43,7 @@ export const fixRulesInput = z.object({
   locked: z.array(z.string().max(5000)).max(500).default([]),
 });
 
-const suggestionsSchema = z.object({
+export const suggestionsSchema = z.object({
   suggestions: z
     .array(
       z.object({

@@ -3,19 +3,20 @@ import { z } from 'zod';
 import { assertBrandAccess } from '../lib/access.js';
 import { fixDraftRules, fixRulesInput } from '../lib/content-agent.js';
 import { rebuildDraftBrief, rebuildSources } from '../lib/content-brief.js';
+import { startDraftWriting, writeDraftInput } from '../lib/content-writer.js';
 import { PlanLimitError } from '../lib/plan-guard.js';
 
 /**
  * Content Editor drafts: Rebuild outline in the editor's Brief tab writes
  * the draft's brief from the sources the person kept (CE-007); Fix open
  * rules with agent leaves the Content Agent's suggestions for review
- * (CE-018).
+ * (CE-018); Start's Agent has the Content Agent do the page (CE-015).
  */
 
 const router = Router();
 
 /** The person-facing reason, by status, when the error names none. */
-const ERROR_CODES = { 403: 'forbidden', 404: 'not_found', 422: 'invalid' };
+const ERROR_CODES = { 403: 'forbidden', 404: 'not_found', 409: 'conflict', 422: 'invalid' };
 
 const rebuildBody = z.object({
   // guid, not uuid: brand ids aren't all RFC 4122 versions (seeded ones).
@@ -82,6 +83,40 @@ router.post('/:draftId/suggestions', async (req, res) => {
     }
     req.log.error({ err }, 'content draft agent fix error');
     return res.status(502).json({ error: 'The agent could not run', code: 'failed' });
+  }
+});
+
+const writeBody = writeDraftInput.extend({ brandId: z.guid() });
+
+/**
+ * POST /api/content-drafts/:draftId/write
+ * Body: { brandId, sources, rules, textRules, locked }
+ * Answers 202 { started: true } at once: the agent runs in the background
+ * and the draft shows where it is (agent_state). 409 when the draft isn't a
+ * draft any more (code not_draft) or the agent is on it (code writing).
+ */
+router.post('/:draftId/write', async (req, res) => {
+  const draftId = z.guid().safeParse(req.params.draftId);
+  const parsed = writeBody.safeParse(req.body ?? {});
+  if (!draftId.success || !parsed.success) {
+    return res.status(400).json({ error: 'Invalid request', code: 'invalid' });
+  }
+  const { brandId, ...input } = parsed.data;
+  try {
+    await assertBrandAccess(brandId, req.user.id);
+    const result = await startDraftWriting({ draftId: draftId.data, brandId, input });
+    return res.status(202).json(result);
+  } catch (err) {
+    if (err instanceof PlanLimitError) {
+      return res.status(err.statusCode).json({ error: err.message, code: 'ai_budget' });
+    }
+    if (ERROR_CODES[err?.status]) {
+      return res
+        .status(err.status)
+        .json({ error: err.message, code: err.code ?? ERROR_CODES[err.status] });
+    }
+    req.log.error({ err }, 'content draft agent write error');
+    return res.status(502).json({ error: 'The agent could not start', code: 'failed' });
   }
 });
 

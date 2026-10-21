@@ -1,9 +1,10 @@
 'use client';
 
 import { useTranslations } from 'next-intl';
+import { Loader2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
-import type { DraftMethod, DraftStatus } from '@/lib/content/drafts';
+import type { AgentState, DraftMethod, DraftStatus } from '@/lib/content/drafts';
 
 /**
  * A draft's status and method, as the Library and the editor show them
@@ -44,6 +45,24 @@ export function DraftMethodBadge({
   return (
     <Badge variant="outline" className={cn(DRAFT_METHOD_BADGE[method], className)}>
       {t(method)}
+    </Badge>
+  );
+}
+
+/** Where the Content Agent is on a draft Start gave it (CE-015): writing, or couldn't finish. */
+export function AgentStateBadge({ state }: { state: Exclude<AgentState, null> }) {
+  const t = useTranslations('contentEditor.agentState');
+  return (
+    <Badge
+      variant="outline"
+      className={
+        state === 'writing'
+          ? 'border-border bg-muted/50 text-muted-foreground'
+          : 'border-red-500/30 bg-red-500/10 text-red-600 dark:text-red-400'
+      }
+    >
+      {state === 'writing' && <Loader2 aria-hidden className="h-3 w-3 animate-spin" />}
+      {t(state)}
     </Badge>
   );
 }

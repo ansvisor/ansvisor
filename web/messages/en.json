@@ -3091,6 +3091,10 @@
     "openDetails": "Open topic details"
   },
   "contentEditor": {
+    "agentState": {
+      "writing": "Agent writing…",
+      "failed": "Agent failed"
+    },
     "library": {
       "title": "Library",
       "description": "Everything you and the agents wrote or changed.",
@@ -3222,7 +3226,16 @@
         "sentDescription": "Action #{number}: the draft waits in the Library for whoever writes it.",
         "openAction": "Open",
         "sendFailed": "The draft is in the Library, but it couldn't be sent to the Action Center.",
-        "openDraft": "Open draft"
+        "openDraft": "Open draft",
+        "startAgent": "Start the agent",
+        "agentStarted": "Content Agent is drafting",
+        "agentStartedDescription": "You'll review it in Library › In review.",
+        "agentErrors": {
+          "ai_budget": "This month's AI usage is spent, so the agent didn't start. The draft is in the Library for you to write.",
+          "writing": "The agent is already working on this draft.",
+          "not_draft": "This draft is no longer a draft, so the agent didn't start.",
+          "failed": "The agent couldn't start. The draft is in the Library for you to write."
+        }
       },
       "who": {
         "label": "Who does it",
@@ -3232,8 +3245,7 @@
         },
         "agent": {
           "title": "Agent",
-          "hint": "Drafts, I review",
-          "soon": "Comes with the Content Agent"
+          "hint": "Drafts, I review"
         },
         "team": {
           "title": "Team",
@@ -3357,6 +3369,21 @@
       },
       "markedReady": "Marked ready. Publish it on your site when you're ready.",
       "markedReadyAction": "Marked ready, and {count, plural, one {its task} other {its # tasks}} in Action AC-{no} {count, plural, one {is} other {are}} done. Publish it on your site when you're ready.",
+      "agentWriting": {
+        "title": "Content Agent is writing this page",
+        "body": "It opens here for your review when it's done, usually within a minute or two. You can leave this page meanwhile; it waits in Library › In review."
+      },
+      "agentFailed": {
+        "text": "The Content Agent couldn't finish this page. Write it yourself, or try again.",
+        "retry": "Try again",
+        "dismiss": "Close",
+        "errors": {
+          "ai_budget": "This month's AI usage is spent, so the agent didn't start.",
+          "writing": "The agent is already working on this draft.",
+          "not_draft": "This draft is no longer a draft, so the agent didn't start.",
+          "failed": "The agent couldn't start. Try again in a moment."
+        }
+      },
       "actionBar": "This draft is the work of <link>Action AC-{no}</link>. Mark ready completes its task there.",
       "actionBarDone": "This draft is the work of <link>Action AC-{no}</link>.",
       "suggestions": {

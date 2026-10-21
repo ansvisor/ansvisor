@@ -13,7 +13,11 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { DraftMethodBadge, DraftStatusBadge } from '@/components/content/draft-badges';
+import {
+  AgentStateBadge,
+  DraftMethodBadge,
+  DraftStatusBadge,
+} from '@/components/content/draft-badges';
 import { assigneeLabel, labelInitials } from '@/lib/action-center/display';
 import {
   aeoScoreText,
@@ -88,7 +92,12 @@ export function LibraryTable({ drafts, tab }: { drafts: ContentDraftListItem[]; 
                 <DraftAuthorCell draft={draft} />
               </TableCell>
               <TableCell>
-                <DraftStatusBadge status={draft.status} />
+                {/* The agent works on drafts only: its state says more than "Draft". */}
+                {draft.agentState ? (
+                  <AgentStateBadge state={draft.agentState} />
+                ) : (
+                  <DraftStatusBadge status={draft.status} />
+                )}
               </TableCell>
               <TableCell className="pr-6 text-right tabular-nums">
                 {score ?? <span className="text-muted-foreground">—</span>}

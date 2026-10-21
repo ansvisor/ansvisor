@@ -11,12 +11,21 @@ const createContentDraft = vi.fn();
 const getContentOverlap = vi.fn();
 const importContentPage = vi.fn();
 const sendContentDraftToActionCenter = vi.fn();
+const startAgentWriting = vi.fn();
 vi.mock('@/lib/actions/content-drafts', () => ({
   sendContentDraftToActionCenter: (...args: unknown[]) => sendContentDraftToActionCenter(...args),
+  startAgentWriting: (...args: unknown[]) => startAgentWriting(...args),
   importContentPage: (...args: unknown[]) => importContentPage(...args),
   getContentStartOptions: (...args: unknown[]) => getContentStartOptions(...args),
   createContentDraft: (...args: unknown[]) => createContentDraft(...args),
   getContentOverlap: (...args: unknown[]) => getContentOverlap(...args),
+}));
+// What the agent is given is agent-write.test.ts's; here, that Start hands it over.
+const agentWriteRequest = vi.fn();
+const describeRule = vi.fn();
+vi.mock('@/lib/content/agent-write', () => ({
+  agentWriteRequest: (...args: unknown[]) => agentWriteRequest(...args),
+  useRuleDescriber: () => describeRule,
 }));
 const push = vi.fn();
 const onSent = vi.fn();
@@ -107,10 +116,13 @@ beforeEach(() => {
   getContentOverlap.mockReset().mockResolvedValue({ totalPrompts: 2, pages: [] });
   importContentPage.mockReset().mockResolvedValue({ error: 'failed' });
   sendContentDraftToActionCenter.mockReset();
+  startAgentWriting.mockReset();
+  agentWriteRequest.mockReset().mockResolvedValue({ sources: 'kept', rules: [] });
   onSent.mockReset();
   toast.warning.mockReset();
   push.mockReset();
   toast.error.mockReset();
+  toast.success.mockReset();
 });
 
 afterEach(() => {
@@ -455,13 +467,47 @@ describe('New content', () => {
         ...document.querySelectorAll<HTMLElement>('[aria-labelledby="start-who"] [role="radio"]'),
       ].find((r) => r.textContent?.startsWith(name))!;
 
-    it('opens the editor for me, and offers the agent only once it exists', async () => {
+    it('opens the editor for me by default', async () => {
       await startNewPage();
       expect(whoOption('Me').getAttribute('aria-checked')).toBe('true');
-      const agent = whoOption('Agent') as HTMLButtonElement;
-      expect(agent.disabled).toBe(true);
-      expect(agent.textContent).toContain('Comes with the Content Agent');
+      expect(whoOption('Agent').textContent).toBe('AgentDrafts, I review');
       expect(button('Open editor')).toBeDefined();
+    });
+
+    it('hands the draft to the Content Agent, which drafts it for review in the Library', async () => {
+      startAgentWriting.mockResolvedValue({ started: true });
+      await startNewPage();
+      await click(whoOption('Agent'));
+      await click(button('Start the agent'));
+
+      expect(agentWriteRequest).toHaveBeenCalledWith(
+        expect.objectContaining({
+          id: 'd9',
+          brandId: 'b1',
+          method: 'create',
+          rules: { set: null, source: null, overrides: {}, textRules: [] },
+        }),
+        describeRule,
+      );
+      expect(startAgentWriting).toHaveBeenCalledWith('d9', 'b1', { sources: 'kept', rules: [] });
+      expect(push).not.toHaveBeenCalled();
+      expect(onSent).toHaveBeenCalled();
+      const [message, options] = toast.success.mock.calls[0];
+      expect(message).toBe('Content Agent is drafting');
+      expect(options.description).toBe("You'll review it in Library › In review.");
+      options.action.onClick();
+      expect(push).toHaveBeenCalledWith('/dashboard/content/editor/d9');
+    });
+
+    it('keeps the draft for me when the agent can’t start', async () => {
+      startAgentWriting.mockResolvedValue({ error: 'ai_budget' });
+      await startNewPage();
+      await click(whoOption('Agent'));
+      await click(button('Start the agent'));
+      expect(toast.error.mock.calls[0][0]).toBe(
+        "This month's AI usage is spent, so the agent didn't start. The draft is in the Library for you to write.",
+      );
+      expect(onSent).toHaveBeenCalled();
     });
 
     it('sends the draft to the Action Center for the team, and keeps it in the Library', async () => {

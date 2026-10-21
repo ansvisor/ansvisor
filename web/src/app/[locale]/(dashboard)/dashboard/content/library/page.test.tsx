@@ -49,6 +49,7 @@ const row = (over: Partial<ContentDraftListItem>): ContentDraftListItem => ({
   isMine: true,
   scoreBefore: 62,
   scoreAfter: 78,
+  agentState: null,
   updatedAt: '2026-10-20T10:00:00Z',
   ...over,
 });
@@ -166,6 +167,31 @@ describe('the Content Library', () => {
       tab('Ready').click();
     });
     expect(container.textContent).toContain('Nothing marked ready.');
+  });
+
+  it('shows where the Content Agent is, and reads the list again while it writes', async () => {
+    vi.useFakeTimers();
+    try {
+      getContentDrafts.mockResolvedValue([
+        row({ status: 'draft', author: 'agent', agentState: 'writing' }),
+        row({ id: 'd2', status: 'draft', agentState: 'failed' }),
+      ]);
+      await renderPage();
+      const status = [...container.querySelectorAll('tbody tr')].map(
+        (tr) => tr.querySelectorAll('td')[4].textContent,
+      );
+      expect(status).toEqual(['Agent writing…', 'Agent failed']);
+      expect(getContentDrafts).toHaveBeenCalledTimes(1);
+
+      getContentDrafts.mockResolvedValue([row({ status: 'in_review', author: 'agent' })]);
+      await act(async () => void (await vi.advanceTimersByTimeAsync(5_000)));
+      expect(getContentDrafts).toHaveBeenCalledTimes(2);
+      expect(container.querySelector('tbody tr td:nth-child(5)')!.textContent).toBe('In review');
+      await act(async () => void (await vi.advanceTimersByTimeAsync(10_000)));
+      expect(getContentDrafts).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('opens the tab the URL names', async () => {

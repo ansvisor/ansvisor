@@ -855,6 +855,8 @@ export type Database = {
       content_drafts: {
         Row: {
           action_id: string | null
+          agent_state: string | null
+          agent_state_at: string | null
           author: string
           body_html: string
           brief: Json | null
@@ -877,6 +879,8 @@ export type Database = {
         }
         Insert: {
           action_id?: string | null
+          agent_state?: string | null
+          agent_state_at?: string | null
           author?: string
           body_html?: string
           brief?: Json | null
@@ -899,6 +903,8 @@ export type Database = {
         }
         Update: {
           action_id?: string | null
+          agent_state?: string | null
+          agent_state_at?: string | null
           author?: string
           body_html?: string
           brief?: Json | null

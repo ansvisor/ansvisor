@@ -9,6 +9,7 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { NewContentDialog } from '@/components/content/new-content-dialog';
 import { getContentDrafts } from '@/lib/actions/content-drafts';
 import {
+  AGENT_POLL_MS,
   LIBRARY_TABS,
   draftsInTab,
   libraryTabCounts,
@@ -62,6 +63,15 @@ export default function ContentLibraryPage() {
       cancelled = true;
     };
   }, [activeBrandId, attempt]);
+
+  // While the Content Agent writes a draft (CE-015), the list is read again
+  // now and then, so it moves to In review without a reload.
+  const agentWriting = !!read?.drafts?.some((draft) => draft.agentState === 'writing');
+  useEffect(() => {
+    if (!agentWriting) return;
+    const timer = setTimeout(() => setAttempt((n) => n + 1), AGENT_POLL_MS);
+    return () => clearTimeout(timer);
+  }, [agentWriting, read]);
 
   const changeTab = (next: LibraryTab) => {
     setTab(next);

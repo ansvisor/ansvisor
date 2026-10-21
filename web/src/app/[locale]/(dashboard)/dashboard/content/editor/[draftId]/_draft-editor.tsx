@@ -9,7 +9,7 @@ import StarterKit from '@tiptap/starter-kit';
 import { TableKit } from '@tiptap/extension-table';
 import Image from '@tiptap/extension-image';
 import { CharacterCount, Placeholder } from '@tiptap/extensions';
-import { ArrowLeft, Check, Copy, Loader2, PanelRight, Target } from 'lucide-react';
+import { ArrowLeft, Bot, Check, Copy, Loader2, PanelRight, Target, X } from 'lucide-react';
 import { Link } from '@/i18n/navigation';
 import { Button } from '@/components/ui/button';
 import { buttonVariants } from '@/components/ui/button-variants';
@@ -32,7 +32,9 @@ import {
   markContentDraftReady,
   restoreDraftVersion,
   setContentDraftPageType,
+  startAgentWriting,
 } from '@/lib/actions/content-drafts';
+import { agentWriteRequest, useRuleDescriber } from '@/lib/content/agent-write';
 import { CONTENT_LIBRARY_PATH, type ContentDraft, type PageType } from '@/lib/content/drafts';
 import { CITED_DAYS, MAX_PASSAGES, type CitedPassage } from '@/lib/content/cited-passages';
 import type { DraftVersion } from '@/lib/content/history';
@@ -120,7 +122,14 @@ const DOCUMENT_CLASS = cn(
  * reject, with the agent bar over it, and Fix open rules with agent asks the
  * Content Agent for a new batch (CE-018).
  */
-export function DraftEditor({ draft }: { draft: ContentDraft }) {
+export function DraftEditor({
+  draft,
+  onAgentStarted,
+}: {
+  draft: ContentDraft;
+  /** The Content Agent took the draft again (Try again): the page waits for it. */
+  onAgentStarted?: () => void;
+}) {
   const t = useTranslations('contentEditor.editor');
   const autosave = useDraftAutosave(draft.id);
   const [title, setTitle] = useState(draft.title);
@@ -128,6 +137,10 @@ export function DraftEditor({ draft }: { draft: ContentDraft }) {
   const [pageHtml, setPageHtml] = useState(draft.bodyHtml);
   const [status, setStatus] = useState(draft.status);
   const [marking, setMarking] = useState(false);
+  // The Content Agent couldn't finish the page Start gave it (CE-015).
+  const [agentFailed, setAgentFailed] = useState(draft.agentState === 'failed');
+  const [retrying, setRetrying] = useState(false);
+  const describeRule = useRuleDescriber();
   const [restoring, setRestoring] = useState(false);
   const format = useFormatter();
   // A change to a locked passage, waiting for the person (CE-018).
@@ -590,6 +603,46 @@ export function DraftEditor({ draft }: { draft: ContentDraft }) {
     );
   };
 
+  /**
+   * Try again: the agent takes the page as saved now, with the rules in
+   * effect here, and the page waits for it.
+   */
+  const retryAgent = async () => {
+    if (!editor) return;
+    setRetrying(true);
+    try {
+      await autosave.settle();
+      const request = await agentWriteRequest(
+        {
+          id: draft.id,
+          brandId: draft.brandId,
+          title,
+          pageType,
+          method: draft.method,
+          sourceUrl: draft.sourceUrl,
+          bodyHtml: editor.getHTML(),
+          rules: draft.rules,
+        },
+        describeRule,
+        {
+          rules: rules.rules.filter(({ rule }) => rule.on).map(({ rule }) => rule),
+          textRules: rules.textRules.filter(({ rule }) => rule.on).map(({ rule }) => rule.text),
+        },
+      );
+      const result = await startAgentWriting(draft.id, draft.brandId, request);
+      if ('error' in result) {
+        toast.error(t(`agentFailed.errors.${result.error}`));
+        return;
+      }
+      onAgentStarted?.();
+    } catch (err) {
+      console.error('Failed to start the Content Agent again:', err);
+      toast.error(t('agentFailed.errors.failed'));
+    } finally {
+      setRetrying(false);
+    }
+  };
+
   const canMarkReady = status === 'draft' || status === 'in_review';
   const markReady = async () => {
     setMarking(true);
@@ -770,6 +823,36 @@ export function DraftEditor({ draft }: { draft: ContentDraft }) {
 
       <div className="flex min-h-0 flex-1">
         <div className="flex min-w-0 flex-1 flex-col">
+          {agentFailed && status === 'draft' && (
+            <div
+              role="alert"
+              className="flex flex-wrap items-center gap-x-3 gap-y-1.5 border-b border-amber-200 bg-amber-50 px-4 py-1.5 text-[13px] text-amber-800 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-300"
+            >
+              <Bot aria-hidden className="h-3.5 w-3.5 shrink-0" />
+              <span className="min-w-0 flex-1">{t('agentFailed.text')}</span>
+              <span className="flex shrink-0 items-center gap-1">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-7"
+                  disabled={retrying || !editor}
+                  onClick={() => void retryAgent()}
+                >
+                  {retrying && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                  {t('agentFailed.retry')}
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label={t('agentFailed.dismiss')}
+                  title={t('agentFailed.dismiss')}
+                  onClick={() => setAgentFailed(false)}
+                >
+                  <X className="h-3.5 w-3.5" />
+                </Button>
+              </span>
+            </div>
+          )}
           {/* The action this draft is the work of (CE-022): under the header,
               which has no room left at 1024px, and Mark ready completes its task. */}
           {draft.action && (

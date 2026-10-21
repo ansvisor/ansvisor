@@ -28,8 +28,10 @@ const getDraftSuggestions = vi.fn();
 const decideDraftSuggestions = vi.fn();
 const keepAgentBeforeVersion = vi.fn();
 const fixDraftRules = vi.fn();
+const startAgentWriting = vi.fn();
 vi.mock('@/lib/actions/content-drafts', () => ({
   fixDraftRules: (...args: unknown[]) => fixDraftRules(...args),
+  startAgentWriting: (...args: unknown[]) => startAgentWriting(...args),
   getDraftSuggestions: (...args: unknown[]) => getDraftSuggestions(...args),
   decideDraftSuggestions: (...args: unknown[]) => decideDraftSuggestions(...args),
   keepAgentBeforeVersion: (...args: unknown[]) => keepAgentBeforeVersion(...args),
@@ -139,6 +141,7 @@ const draft = (over: Partial<ContentDraft> = {}): ContentDraft => ({
   author: 'agent',
   rules: { set: null, source: null, overrides: {}, textRules: [] },
   action: null,
+  agentState: null,
   updatedAt: '2026-10-20T10:00:00Z',
   ...over,
 });
@@ -186,6 +189,7 @@ beforeEach(() => {
   decideDraftSuggestions.mockReset().mockResolvedValue(1);
   keepAgentBeforeVersion.mockReset().mockResolvedValue(undefined);
   fixDraftRules.mockReset().mockResolvedValue({ count: 0 });
+  startAgentWriting.mockReset().mockResolvedValue({ started: true });
   localStorage.clear();
   brandState.activeBrandId = 'b1';
   brandState.setActiveBrand.mockReset();
@@ -352,6 +356,76 @@ describe('the content editor', () => {
       );
       await renderPage();
       expect(typeMenu().textContent).toBe('Set page type · New page');
+    });
+  });
+
+  describe('the Content Agent writing it (CE-015)', () => {
+    it('waits while the agent writes, then opens on what it wrote', async () => {
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+      try {
+        getContentDraft.mockResolvedValue(
+          draft({
+            status: 'draft',
+            agentState: 'writing',
+            bodyHtml: '<h1>Pipeline forecasting</h1>',
+          }),
+        );
+        await renderPage();
+        expect(container.querySelector('[role="status"]')!.textContent).toContain(
+          'Content Agent is writing this page',
+        );
+        expect(container.querySelector('.ProseMirror')).toBeNull();
+
+        getContentDraft.mockResolvedValue(
+          draft({
+            status: 'in_review',
+            author: 'agent',
+            bodyHtml: '<h1>Pipeline</h1><p>Written.</p>',
+          }),
+        );
+        await act(async () => void (await vi.advanceTimersByTimeAsync(5_000)));
+        await act(async () => {});
+        expect(getContentDraft).toHaveBeenCalledTimes(2);
+        expect(container.querySelector('.ProseMirror')!.textContent).toContain('Written.');
+        expect(container.querySelector('header')!.textContent).toContain('In review');
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('says the agent couldn’t finish, and tries again with the page and rules in effect', async () => {
+      getContentDraft.mockResolvedValue(draft({ status: 'draft', agentState: 'failed' }));
+      await renderPage();
+      const alert = container.querySelector('[role="alert"]')!;
+      expect(alert.textContent).toContain("The Content Agent couldn't finish this page.");
+
+      await act(async () => button('Try again')!.click());
+      await act(async () => {});
+      expect(startAgentWriting).toHaveBeenCalledWith(
+        'd1',
+        'b1',
+        expect.objectContaining({ textRules: [], locked: [] }),
+      );
+      const [, , request] = startAgentWriting.mock.calls[0];
+      expect(request.rules.length).toBeGreaterThan(0);
+      // The page now waits for the agent.
+      expect(container.querySelector('[role="status"]')!.textContent).toContain(
+        'Content Agent is writing this page',
+      );
+    });
+
+    it('keeps the page when the agent can’t start again', async () => {
+      startAgentWriting.mockResolvedValue({ error: 'ai_budget' });
+      getContentDraft.mockResolvedValue(draft({ status: 'draft', agentState: 'failed' }));
+      await renderPage();
+      await act(async () => button('Try again')!.click());
+      await act(async () => {});
+      expect(toast.error).toHaveBeenCalledWith(
+        "This month's AI usage is spent, so the agent didn't start.",
+      );
+      expect(container.querySelector('.ProseMirror')).not.toBeNull();
+      await act(async () => button('Close')!.click());
+      expect(container.querySelector('[role="alert"]')).toBeNull();
     });
   });
 

@@ -86,6 +86,7 @@ const {
   getContentStartOptions,
   importContentPage,
   sendContentDraftToActionCenter,
+  startAgentWriting,
   startDraftFromAction,
 } = await import('./content-drafts');
 
@@ -647,5 +648,49 @@ describe('startDraftFromAction', () => {
       created: false,
       importFailed: false,
     });
+  });
+});
+
+describe('startAgentWriting', () => {
+  const request = {
+    sources: { promptIds: [], fanouts: [], pages: [], queries: [], headings: [], length: 3000 },
+    rules: [],
+    textRules: [],
+    locked: [],
+  };
+
+  it('starts the API’s Content Agent with the member’s session', async () => {
+    const fetchMock = vi.fn(async () => new Response('{"started":true}', { status: 202 }));
+    vi.stubGlobal('fetch', fetchMock);
+    await expect(startAgentWriting(OPPORTUNITY, BRAND, request)).resolves.toEqual({
+      started: true,
+    });
+    const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toMatch(new RegExp(`/api/content-drafts/${OPPORTUNITY}/write$`));
+    expect(init.headers).toMatchObject({ Authorization: 'Bearer jwt' });
+    expect(JSON.parse(init.body as string)).toEqual({ brandId: BRAND, ...request });
+    vi.unstubAllGlobals();
+  });
+
+  it('says why it didn’t start, and sends nothing for a malformed id', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response('{"code":"ai_budget"}', { status: 429 })),
+    );
+    await expect(startAgentWriting(OPPORTUNITY, BRAND, request)).resolves.toEqual({
+      error: 'ai_budget',
+    });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response('{"code":"something_new"}', { status: 500 })),
+    );
+    await expect(startAgentWriting(OPPORTUNITY, BRAND, request)).resolves.toEqual({
+      error: 'failed',
+    });
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    await expect(startAgentWriting('nope', BRAND, request)).resolves.toEqual({ error: 'failed' });
+    expect(fetchMock).not.toHaveBeenCalled();
+    vi.unstubAllGlobals();
   });
 });

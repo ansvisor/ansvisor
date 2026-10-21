@@ -3,7 +3,9 @@ import messages from '../../../messages/en.json';
 import {
   DRAFT_STATUSES,
   PAGE_TYPES,
+  WRITING_STALE_MS,
   aeoScoreText,
+  agentStateOf,
   contentEditorPath,
   draftsInTab,
   isPageType,
@@ -23,6 +25,7 @@ const draft = (id: string, status: DraftStatus): ContentDraftListItem => ({
   isMine: true,
   scoreBefore: null,
   scoreAfter: null,
+  agentState: null,
   updatedAt: '2026-10-20T10:00:00Z',
 });
 
@@ -84,5 +87,18 @@ describe('page types and labels', () => {
 
   it('opens a draft in the editor', () => {
     expect(contentEditorPath('d1')).toBe('/dashboard/content/editor/d1');
+  });
+});
+
+describe('agentStateOf', () => {
+  const now = Date.parse('2026-10-21T12:00:00Z');
+  it('reads the agent writing, failed, or done — a writing left long ago as failed', () => {
+    expect(agentStateOf(null, null, now)).toBeNull();
+    expect(agentStateOf('failed', '2026-10-21T11:59:00Z', now)).toBe('failed');
+    expect(agentStateOf('writing', '2026-10-21T11:58:00Z', now)).toBe('writing');
+    expect(agentStateOf('writing', new Date(now - WRITING_STALE_MS - 1).toISOString(), now)).toBe(
+      'failed',
+    );
+    expect(agentStateOf('writing', null, now)).toBe('failed');
   });
 });
