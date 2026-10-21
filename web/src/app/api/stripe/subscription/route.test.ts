@@ -4,7 +4,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 /**
  * PATCH /api/stripe/subscription: buy a free trial now on any plan and
  * period (with the first-month code on a monthly plan), or change the plan or
- * billing period of a paid one.
+ * billing period of a paid one. DELETE: cancel at the period's end. Both are
+ * the admins'.
  */
 
 let org: Record<string, unknown>;
@@ -54,7 +55,7 @@ vi.mock('@/lib/stripe', () => ({
 const align = vi.hoisted(() => vi.fn());
 vi.mock('@/lib/plan-engines', () => ({ alignPromptsToPlanForOrg: align }));
 
-const { PATCH } = await import('./route');
+const { DELETE, PATCH } = await import('./route');
 
 const patch = (body: unknown) =>
   PATCH(
@@ -245,5 +246,26 @@ describe('changing a paid plan', () => {
     expect((await patch({ newPlanId: 'starter', interval: 'month' })).status).toBe(400);
     expect((await patch({ newPlanId: 'enterprise' })).status).toBe(400);
     expect(stripeApi.update).not.toHaveBeenCalled();
+  });
+});
+
+describe('cancelling', () => {
+  it('cancels at the period’s end for an admin, and for no one else', async () => {
+    org = { stripe_subscription_id: 'sub_1' };
+    stripeApi.update.mockReset().mockResolvedValue({
+      items: { data: [{ current_period_end: 1_800_000_000 }] },
+    });
+    for (const other of ['manager', 'analyst', 'agency_partner']) {
+      role = other;
+      const res = await DELETE();
+      expect(res.status).toBe(403);
+      expect(await res.json()).toMatchObject({ code: 'admin_only' });
+    }
+    expect(stripeApi.update).not.toHaveBeenCalled();
+
+    role = 'admin';
+    const res = await DELETE();
+    expect(res.status).toBe(200);
+    expect(stripeApi.update).toHaveBeenCalledWith('sub_1', { cancel_at_period_end: true });
   });
 });

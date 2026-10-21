@@ -205,6 +205,17 @@ describe('buying during the free trial', () => {
     ).toEqual([]);
   });
 
+  it('leaves cancelling to admins', async () => {
+    const cancel = () =>
+      [...document.querySelectorAll('button')].find(
+        (b) => b.textContent?.trim() === 'Cancel Subscription',
+      );
+    await render('growth', { status: 'active', role: 'manager' });
+    expect(cancel()).toBeUndefined();
+    await render('growth', { status: 'active', role: 'admin' });
+    expect(cancel()).toBeDefined();
+  });
+
   it('offers every plan now, with the first-month code on monthly', async () => {
     await render('starter', { status: 'trialing' });
     expect(button('Buy Starter now')).toBeDefined();
