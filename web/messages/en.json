@@ -4658,6 +4658,16 @@
     "gaps": "Content Gaps",
     "suggestions": {
       "measuredSuggestionsKept": "Search Console and Analytics suggestions were kept — dismiss them individually to hide them for 30 days.",
+      "addAll": "Add All",
+      "addingAll": "Adding…",
+      "addAllTitle": "Add every suggestion listed below to your tracked prompts",
+      "addAllDone": "{count, plural, one {# prompt added to your tracked list} other {# prompts added to your tracked list}}",
+      "addAllHandled": "These suggestions were already added or dismissed",
+      "addAllFailed": "Couldn't add the suggestions",
+      "limitTitle": "{count, plural, one {# suggestion couldn't be added} other {# suggestions couldn't be added}}",
+      "limitBody": "{added, plural, =0 {Your plan's prompt limit is reached.} one {# was added before your plan's prompt limit was reached.} other {# were added before your plan's prompt limit was reached.}} {plan, select, growth {Contact us to raise your limit} enterprise {Contact us to raise your limit} other {Upgrade your plan}}, or pause {count, plural, one {# prompt} other {# prompts}} in Tracked Prompts first and try again.",
+      "openTracked": "Go to Tracked Prompts",
+      "closeLimitNote": "Close",
       "include": "Include this prompt",
       "topic": "Topic",
       "selectTopic": "Select a topic",
@@ -4784,6 +4794,14 @@
       "none": "No prompts are {label} in this range.",
       "showAll": "Show all performance",
       "order": "Furthest behind first: late or missing on the most AI platforms, then the worse average position."
+    },
+    "improve": {
+      "quota": {
+        "left": "{count, plural, one {About # generation left this month} other {About # generations left this month}}",
+        "percentLeft": "{percent}% of this month's budget left",
+        "usedUp": "This month's suggestion budget is used up. It resets when your subscription renews.",
+        "upgrade": "Upgrade for more"
+      }
     }
   },
   "mentions": {
@@ -5356,11 +5374,6 @@
     "currentPlan": "Current Plan",
     "month": "mo",
     "year": "yr",
-    "unlimited": "Unlimited",
-    "brands": "brands",
-    "prompts": "prompt locations tracked",
-    "platforms": "answer engines",
-    "teamMembers": "team members",
     "renewsOn": "Renews on {date}",
     "cancelsOn": "Subscription ends on {date}",
     "changePlan": "Change Plan",
@@ -5389,7 +5402,36 @@
     "planChanged": "Plan updated successfully.",
     "subscriptionCanceled": "Your subscription has been canceled.",
     "needCustomPlan": "Need a custom plan?",
-    "customPlanDescription": "Get unlimited brands, custom integrations, dedicated support, and more.",
+    "customPlanDescription": "For large companies and agencies managing AI visibility at scale. Starting at $499/month.",
+    "customPlanPoints": [
+      "Unlimited brands in a custom workspace",
+      "All answer engines, Claude included",
+      "Custom prompt and location tracking",
+      "Custom KPI frameworks and data integrations",
+      "Priority support and onboarding sessions",
+      "SSO / SAML and custom feature requests"
+    ],
+    "planCards": {
+      "starter": {
+        "tagline": "For small teams getting started with AI visibility monitoring and optimization.",
+        "engines": "ChatGPT & Microsoft Copilot tracking",
+        "extras": ["MCP & API access"]
+      },
+      "growth": {
+        "tagline": "For growing teams that want to monitor AI visibility and optimize content for AI search.",
+        "engines": "ChatGPT, Perplexity, Gemini, Microsoft Copilot, Google AI Mode and Google AI Overviews tracking",
+        "extras": ["Multi-region tracking", "White-label reports & Looker Studio"]
+      },
+      "brands": "{count, plural, one {# brand} other {# brands}}",
+      "unlimitedBrands": "Unlimited brands",
+      "seats": "{count, plural, one {# seat} other {# seats}}",
+      "unlimitedSeats": "Unlimited seats",
+      "prompts": "{count, number} prompts tracked",
+      "briefs": "{count, number} content briefs a month",
+      "audits": "{count, number} site audits a month",
+      "aiUsage": "{count}x AI usage",
+      "aiUsageHint": "A monthly allowance for Ansvisor's AI features: Improve suggestions and the Content Editor's AI. Agent Chat runs on your own AI key."
+    },
     "contactUs": "Contact Us",
     "integrations": "Integrations",
     "aiProviders": "AI Providers",
