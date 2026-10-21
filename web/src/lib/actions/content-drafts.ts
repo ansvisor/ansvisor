@@ -497,6 +497,8 @@ export async function startDraftFromAction(
         .select('id, payload')
         .eq('brand_id', brandId)
         .eq('id', actionId)
+        // A deleted action (00168) starts no work.
+        .is('deleted_at', null)
         .maybeSingle(),
       supabase
         .from('action_tasks')
@@ -586,7 +588,8 @@ export async function startDraftFromAction(
         author: 'user',
         method,
         title,
-        page_type: detectPageType({ title, html: body }, brandSiteType(brandRes.data)),
+        // The page's address is the strongest sign of its type, as in Start.
+        page_type: detectPageType({ title, html: body, url: page }, brandSiteType(brandRes.data)),
         page_type_source: 'detected',
         body_html: body,
         opportunity_id: opportunityRes.data?.id ?? null,
@@ -1316,7 +1319,14 @@ export async function rebuildDraftBrief(
   }
 }
 
-const AGENT_FIX_ERRORS = ['ai_budget', 'empty', 'failed'] as const;
+const AGENT_FIX_ERRORS = [
+  'ai_budget',
+  'no_subscription',
+  'empty',
+  'open_suggestions',
+  'published',
+  'failed',
+] as const;
 export type AgentFixError = (typeof AGENT_FIX_ERRORS)[number];
 
 /** What Fix open rules with agent sends: the rules still open, and the passages kept locked. */
