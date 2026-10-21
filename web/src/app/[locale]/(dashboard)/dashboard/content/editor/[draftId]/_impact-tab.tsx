@@ -13,7 +13,6 @@ import {
   impactChange,
   isLost,
   platformNames,
-  promptsCited,
   type ContentImpact,
   type ImpactPeriod,
 } from '@/lib/content/impact';
@@ -129,8 +128,8 @@ function ImpactBody({
 }) {
   const t = useTranslations('contentEditor.editor.impact');
   const coverage = gscCoverage(impact.gscSince, period);
-  const cited = promptsCited(impact.prompts);
-  const lost = impact.prompts.filter(isLost).length;
+  const cited = impact.promptCounts;
+  const lost = impact.promptCounts.lost;
   const promptDelta = cited.cur - cited.prev;
 
   return (

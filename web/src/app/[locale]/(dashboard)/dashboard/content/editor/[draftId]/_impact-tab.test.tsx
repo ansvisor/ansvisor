@@ -28,6 +28,7 @@ const PAGE = 'https://acme.example.com/pricing';
 
 const impact = (over: Partial<ContentImpact> = {}): ContentImpact => ({
   citations: { cur: 45, prev: 30 },
+  promptCounts: { cur: 1, prev: 2, lost: 1 },
   aiVisits: { cur: 4, prev: 2 },
   gscClicks: { cur: 12, prev: 0 },
   gscSince: '2026-01-01',
@@ -116,6 +117,14 @@ describe('the Impact tab', () => {
     ).toBe(`/dashboard/citations/url?u=${encodeURIComponent(PAGE)}`);
   });
 
+  it('counts the prompts over all of them, not the list it shows', async () => {
+    // The list is cut at 100 (lost prompts last); the counts come whole.
+    getContentImpact.mockResolvedValue(impact({ promptCounts: { cur: 140, prev: 150, lost: 12 } }));
+    await render();
+    expect(metric('Prompts cited')).toBe('Prompts cited140−10');
+    expect(container.textContent).toContain('Prompts cited · 140 · 12 lost');
+  });
+
   it('names the brand’s other pages cited for the same prompts', async () => {
     getContentImpact.mockResolvedValue(impact());
     await render();
@@ -153,7 +162,12 @@ describe('the Impact tab', () => {
 
   it('says when no prompt cited the page', async () => {
     getContentImpact.mockResolvedValue(
-      impact({ citations: { cur: 0, prev: 0 }, prompts: [], overlap: [] }),
+      impact({
+        citations: { cur: 0, prev: 0 },
+        promptCounts: { cur: 0, prev: 0, lost: 0 },
+        prompts: [],
+        overlap: [],
+      }),
     );
     await render();
     expect(container.textContent).toContain('No tracked prompt cited this page');
