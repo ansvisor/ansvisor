@@ -1,0 +1,1746 @@
+import { act } from 'react';
+import { createRoot, type Root } from 'react-dom/client';
+import { NextIntlClientProvider } from 'next-intl';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import messages from '../../../../../../../../messages/en.json';
+import type { Editor } from '@tiptap/core';
+import { RoleProvider } from '@/components/providers/role-provider';
+import type { ContentDraft } from '@/lib/content/drafts';
+import type { DraftSuggestion } from '@/lib/content/suggestions';
+import { passageKey, type CitedPassage } from '@/lib/content/cited-passages';
+import { encodeHtmlBlock } from '@/lib/content/html-allowlist';
+import ContentEditorPage from './page';
+
+const getContentDraft = vi.fn();
+const markContentDraftReady = vi.fn();
+const saveContentDraft = vi.fn();
+const setContentDraftPageType = vi.fn();
+const getContentImpact = vi.fn();
+const getContentResults = vi.fn();
+const getDraftSources = vi.fn();
+const getDraftBrief = vi.fn();
+const rebuildDraftBrief = vi.fn();
+const saveDraftRules = vi.fn();
+const getMyRuleSets = vi.fn();
+const saveMyRuleSet = vi.fn();
+const getDraftVersions = vi.fn();
+const restoreDraftVersion = vi.fn();
+const getCitedPassages = vi.fn();
+const getDraftSuggestions = vi.fn();
+const decideDraftSuggestions = vi.fn();
+const keepAgentBeforeVersion = vi.fn();
+const fixDraftRules = vi.fn();
+const startAgentWriting = vi.fn();
+vi.mock('@/lib/actions/content-drafts', () => ({
+  fixDraftRules: (...args: unknown[]) => fixDraftRules(...args),
+  startAgentWriting: (...args: unknown[]) => startAgentWriting(...args),
+  getDraftSuggestions: (...args: unknown[]) => getDraftSuggestions(...args),
+  decideDraftSuggestions: (...args: unknown[]) => decideDraftSuggestions(...args),
+  keepAgentBeforeVersion: (...args: unknown[]) => keepAgentBeforeVersion(...args),
+  getCitedPassages: (...args: unknown[]) => getCitedPassages(...args),
+  getDraftVersions: (...args: unknown[]) => getDraftVersions(...args),
+  restoreDraftVersion: (...args: unknown[]) => restoreDraftVersion(...args),
+  getMyRuleSets: (...args: unknown[]) => getMyRuleSets(...args),
+  saveMyRuleSet: (...args: unknown[]) => saveMyRuleSet(...args),
+  saveDraftRules: (...args: unknown[]) => saveDraftRules(...args),
+  getDraftSources: (...args: unknown[]) => getDraftSources(...args),
+  getDraftBrief: (...args: unknown[]) => getDraftBrief(...args),
+  rebuildDraftBrief: (...args: unknown[]) => rebuildDraftBrief(...args),
+  getContentImpact: (...args: unknown[]) => getContentImpact(...args),
+  getContentResults: (...args: unknown[]) => getContentResults(...args),
+  getContentDraft: (...args: unknown[]) => getContentDraft(...args),
+  markContentDraftReady: (...args: unknown[]) => markContentDraftReady(...args),
+  saveContentDraft: (...args: unknown[]) => saveContentDraft(...args),
+  setContentDraftPageType: (...args: unknown[]) => setContentDraftPageType(...args),
+}));
+vi.mock('next/navigation', () => ({ useParams: () => ({ draftId: 'd1' }) }));
+vi.mock('@/i18n/navigation', () => ({
+  Link: ({ href, children, ...props }: { href: string; children: React.ReactNode }) => (
+    <a href={href} {...props}>
+      {children}
+    </a>
+  ),
+}));
+const brandState = vi.hoisted(() => ({
+  activeBrandId: 'b1' as string | null,
+  brands: [{ id: 'b1' }, { id: 'b2' }],
+  setActiveBrand: vi.fn(),
+}));
+vi.mock('@/stores/use-brand-store', () => ({
+  useBrandStore: (selector: (state: typeof brandState) => unknown) => selector(brandState),
+}));
+const toast = vi.hoisted(() =>
+  Object.assign(vi.fn(), { success: vi.fn(), error: vi.fn(), info: vi.fn() }),
+);
+vi.mock('mammoth', () => ({
+  default: {
+    convertToHtml: async () => ({
+      value:
+        '<h2>From Word</h2><p>Body <strong>bold</strong> <img src="data:image/png;base64,AA"></p>',
+    }),
+  },
+}));
+vi.mock('sonner', () => ({ toast }));
+
+(
+  globalThis as typeof globalThis & {
+    IS_REACT_ACT_ENVIRONMENT: boolean;
+  }
+).IS_REACT_ACT_ENVIRONMENT = true;
+
+// jsdom has no layout, and its ranges can't be measured. ProseMirror measures
+// one when it scrolls the cursor into view (after inserting a block), which
+// otherwise throws after the test, on a timer.
+// Nor can jsdom's files be read as text or bytes, as browsers' can.
+function readBlob<T>(blob: Blob, read: (reader: FileReader) => void): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as T);
+    reader.onerror = () => reject(reader.error);
+    read(reader);
+  });
+}
+if (!('text' in Blob.prototype)) {
+  Object.assign(Blob.prototype, {
+    text(this: Blob) {
+      return readBlob<string>(this, (r) => r.readAsText(this));
+    },
+    arrayBuffer(this: Blob) {
+      return readBlob<ArrayBuffer>(this, (r) => r.readAsArrayBuffer(this));
+    },
+  });
+}
+if (!('getClientRects' in Range.prototype)) {
+  Object.assign(Range.prototype, {
+    getClientRects: () => [] as unknown as DOMRectList,
+    getBoundingClientRect: () => new DOMRect(),
+  });
+}
+
+// An in-memory localStorage: the test environment has none.
+const store = new Map<string, string>();
+Object.defineProperty(window, 'localStorage', {
+  configurable: true,
+  value: {
+    getItem: (key: string) => store.get(key) ?? null,
+    setItem: (key: string, value: string) => void store.set(key, value),
+    removeItem: (key: string) => void store.delete(key),
+    clear: () => store.clear(),
+  },
+});
+
+const draft = (over: Partial<ContentDraft> = {}): ContentDraft => ({
+  id: 'd1',
+  brandId: 'b1',
+  title: 'Pipeline forecasting',
+  pageType: 'feature_page',
+  pageTypeSource: 'user',
+  siteType: 'b2b',
+  sourceUrl: null,
+  method: 'optimize',
+  status: 'in_review',
+  bodyHtml: '<h1>Pipeline forecasting</h1><p>Teams trust it.</p>',
+  author: 'agent',
+  rules: { set: null, source: null, overrides: {}, textRules: [] },
+  action: null,
+  agentState: null,
+  updatedAt: '2026-10-20T10:00:00Z',
+  ...over,
+});
+
+let container: HTMLDivElement;
+let root: Root;
+
+async function renderPage() {
+  await act(async () => {
+    root.render(
+      <NextIntlClientProvider locale="en" messages={messages}>
+        <RoleProvider role="admin">
+          <ContentEditorPage />
+        </RoleProvider>
+      </NextIntlClientProvider>,
+    );
+  });
+  // The editor mounts on the client after the first render.
+  await act(async () => {});
+}
+
+const button = (name: string) =>
+  [...container.querySelectorAll('button')].find(
+    (b) => b.getAttribute('aria-label') === name || b.textContent === name,
+  );
+
+beforeEach(() => {
+  container = document.createElement('div');
+  document.body.appendChild(container);
+  root = createRoot(container);
+  getContentDraft.mockReset();
+  markContentDraftReady.mockReset();
+  setContentDraftPageType.mockReset().mockResolvedValue(undefined);
+  saveContentDraft
+    .mockReset()
+    .mockResolvedValue({ ok: true, updatedAt: '2026-10-20T10:00:00Z', bodyHash: 'h0' });
+  getContentImpact.mockReset().mockResolvedValue(null);
+  getContentResults.mockReset().mockResolvedValue(null);
+  getDraftSources.mockReset().mockResolvedValue(null);
+  getDraftBrief.mockReset().mockResolvedValue({ brief: null });
+  rebuildDraftBrief.mockReset();
+  saveDraftRules.mockReset().mockResolvedValue(undefined);
+  getMyRuleSets.mockReset().mockResolvedValue({});
+  saveMyRuleSet.mockReset().mockResolvedValue(undefined);
+  getDraftVersions.mockReset().mockResolvedValue([]);
+  restoreDraftVersion.mockReset();
+  getCitedPassages.mockReset().mockResolvedValue([]);
+  getDraftSuggestions.mockReset().mockResolvedValue([]);
+  decideDraftSuggestions.mockReset().mockResolvedValue(1);
+  keepAgentBeforeVersion.mockReset().mockResolvedValue(undefined);
+  fixDraftRules.mockReset().mockResolvedValue({ count: 0 });
+  startAgentWriting.mockReset().mockResolvedValue({ started: true });
+  localStorage.clear();
+  brandState.activeBrandId = 'b1';
+  brandState.setActiveBrand.mockReset();
+  toast.mockReset();
+  toast.success.mockReset();
+  toast.error.mockReset();
+  toast.info.mockReset();
+});
+
+afterEach(() => {
+  act(() => root.unmount());
+  container.remove();
+});
+
+describe('the content editor', () => {
+  it('opens the draft with its title, type, method, status and length', async () => {
+    getContentDraft.mockResolvedValue(draft());
+    await renderPage();
+
+    expect(getContentDraft).toHaveBeenCalledWith('d1');
+    const header = container.querySelector('header')!;
+    expect(header.querySelector('h1')!.textContent).toBe('Pipeline forecasting');
+    expect(header.textContent).toContain('Feature page');
+    expect(header.textContent).toContain('Optimize');
+    expect(header.textContent).toContain('In review');
+    expect(header.textContent).toContain('Saved');
+    expect(container.querySelector('a[href="/dashboard/content/library"]')).not.toBeNull();
+
+    // The page's text, against a feature page's 3,000-character target.
+    expect(container.querySelector('[role="toolbar"]')!.textContent).toContain(
+      '35 / 3,000 characters',
+    );
+    for (const name of ['Heading 1', 'Bold', 'Link', 'Numbered list', 'Insert a table']) {
+      expect(button(name)).toBeDefined();
+    }
+    expect(container.querySelector('.ProseMirror h1')!.textContent).toBe('Pipeline forecasting');
+  });
+
+  it('tags a new page as one', async () => {
+    getContentDraft.mockResolvedValue(
+      draft({
+        method: 'create',
+        pageType: 'product_page',
+        status: 'draft',
+        title: '',
+        bodyHtml: '',
+      }),
+    );
+    await renderPage();
+    const header = container.querySelector('header')!;
+    expect(header.textContent).toContain('Product page · New page');
+    expect(header.querySelector('h1')!.textContent).toBe('Untitled');
+    expect(container.querySelector('[role="toolbar"]')!.textContent).toContain(
+      '0 / 1,200 characters',
+    );
+  });
+
+  describe('the page type', () => {
+    const typeMenu = () =>
+      container.querySelector<HTMLButtonElement>('header button[aria-label^="Page type:"]')!;
+    /** Opens the page type menu and returns its types. */
+    async function openTypes() {
+      const trigger = typeMenu();
+      await act(async () => {
+        trigger.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
+        trigger.click();
+      });
+      return [...document.querySelectorAll<HTMLElement>('[role="menuitemradio"]')];
+    }
+    /** Replaces the page through the HTML view. */
+    async function rewrite(html: string) {
+      await act(async () => button('Edit as HTML')!.click());
+      const source = container.querySelector('textarea')!;
+      const setValue = Object.getOwnPropertyDescriptor(
+        HTMLTextAreaElement.prototype,
+        'value',
+      )!.set!;
+      await act(async () => {
+        setValue.call(source, html);
+        source.dispatchEvent(new Event('input', { bubbles: true }));
+      });
+      await act(async () => button('Back to visual')!.click());
+    }
+
+    it('follows the page while it is detected, and keeps the type the person picks', async () => {
+      getContentDraft.mockResolvedValue(
+        draft({
+          title: 'Northwind vs HubSpot',
+          bodyHtml: '<h1>Northwind vs HubSpot</h1>',
+          pageType: 'comparison',
+          pageTypeSource: 'detected',
+        }),
+      );
+      await renderPage();
+      expect(typeMenu().textContent).toBe('Comparison');
+      expect(typeMenu().title).toBe('Detected from the page as you write. Pick a type to keep it.');
+
+      await rewrite('<h1>How to clean CRM data</h1>');
+      // It reads the page once typing pauses.
+      await act(() => new Promise((resolve) => setTimeout(resolve, 450)));
+      expect(typeMenu().textContent).toBe('How-to guide');
+
+      const types = await openTypes();
+      expect(types.map((item) => item.textContent)).toEqual([
+        'Feature page',
+        'Use case page',
+        'Comparison',
+        'Alternatives page',
+        'Best-of list',
+        'How-to guide',
+        'Definition page',
+        'Integration',
+        'Pricing',
+        'Docs / FAQ',
+        'Blog post',
+      ]);
+      expect(document.body.textContent).toContain('B2B SaaS page types');
+      await act(async () => types.find((item) => item.textContent === 'Pricing')!.click());
+      expect(setContentDraftPageType).toHaveBeenCalledWith('d1', 'pricing');
+      expect(typeMenu().textContent).toBe('Pricing');
+      expect(typeMenu().title).toBe('');
+
+      // Picked: the page no longer changes it.
+      await rewrite('<h1>Northwind vs HubSpot</h1>');
+      await act(() => new Promise((resolve) => setTimeout(resolve, 450)));
+      expect(typeMenu().textContent).toBe('Pricing');
+    });
+
+    it('offers a shop its own types, and keeps a type from another kind of site listed', async () => {
+      getContentDraft.mockResolvedValue(
+        draft({ siteType: 'ecommerce', pageType: 'feature_page', method: 'create' }),
+      );
+      await renderPage();
+      expect(typeMenu().textContent).toBe('Feature page · New page');
+      const types = await openTypes();
+      expect(types.map((item) => item.textContent)).toEqual([
+        'Product page',
+        'Category page',
+        'Collection page',
+        'Buying guide',
+        'Best-of list',
+        'Comparison',
+        'Alternatives page',
+        'How-to guide',
+        'Definition page',
+        'Sizing guide',
+        'Help & FAQ',
+        'Policy',
+        'Blog post',
+        'Feature page',
+      ]);
+    });
+
+    it('puts the type back when picking it fails', async () => {
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+      setContentDraftPageType.mockRejectedValue(new Error('not_found'));
+      getContentDraft.mockResolvedValue(draft({ siteType: 'ecommerce', pageType: 'product_page' }));
+      await renderPage();
+      const types = await openTypes();
+      await act(async () => types.find((item) => item.textContent === 'Policy')!.click());
+      expect(toast.error).toHaveBeenCalledWith("Couldn't change the page type. Try again.");
+      expect(typeMenu().textContent).toBe('Product page');
+    });
+
+    it('names the existing page an optimize draft is for beside its type', async () => {
+      getContentDraft.mockResolvedValue(
+        draft({ sourceUrl: 'https://northwind.example/features/pipeline-forecasting/' }),
+      );
+      await renderPage();
+      expect(typeMenu().textContent).toBe('Feature page · /features/pipeline-forecasting');
+      expect(typeMenu().title).toBe('https://northwind.example/features/pipeline-forecasting/');
+    });
+
+    it('keeps the type it had while the page shows none, as a save does', async () => {
+      getContentDraft.mockResolvedValue(
+        draft({
+          title: 'Notes',
+          bodyHtml: '<h1>Notes</h1>',
+          pageType: 'blog_post',
+          pageTypeSource: 'detected',
+        }),
+      );
+      await renderPage();
+      expect(typeMenu().textContent).toContain('Blog post');
+      await rewrite('<h1>Northwind vs HubSpot</h1>');
+      // It reads the page once typing pauses.
+      await act(() => new Promise((resolve) => setTimeout(resolve, 450)));
+      expect(typeMenu().textContent).toContain('Comparison');
+      // Then nothing on the page tells a type: the last one stays.
+      await rewrite('<h1>More notes</h1>');
+      await act(() => new Promise((resolve) => setTimeout(resolve, 450)));
+      expect(typeMenu().textContent).toContain('Comparison');
+    });
+
+    it('says when no type is detected yet', async () => {
+      getContentDraft.mockResolvedValue(
+        draft({ pageType: null, pageTypeSource: 'detected', method: 'create' }),
+      );
+      await renderPage();
+      expect(typeMenu().textContent).toBe('Set page type · New page');
+    });
+  });
+
+  describe('the Content Agent writing it (CE-015)', () => {
+    it('waits while the agent writes, then opens on what it wrote', async () => {
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+      try {
+        getContentDraft.mockResolvedValue(
+          draft({
+            status: 'draft',
+            agentState: 'writing',
+            bodyHtml: '<h1>Pipeline forecasting</h1>',
+          }),
+        );
+        await renderPage();
+        expect(container.querySelector('[role="status"]')!.textContent).toContain(
+          'Content Agent is writing this page',
+        );
+        expect(container.querySelector('.ProseMirror')).toBeNull();
+
+        getContentDraft.mockResolvedValue(
+          draft({
+            status: 'in_review',
+            author: 'agent',
+            bodyHtml: '<h1>Pipeline</h1><p>Written.</p>',
+          }),
+        );
+        await act(async () => void (await vi.advanceTimersByTimeAsync(5_000)));
+        await act(async () => {});
+        expect(getContentDraft).toHaveBeenCalledTimes(2);
+        expect(container.querySelector('.ProseMirror')!.textContent).toContain('Written.');
+        expect(container.querySelector('header')!.textContent).toContain('In review');
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('says the agent couldn’t finish, and tries again with the page and rules in effect', async () => {
+      getContentDraft.mockResolvedValue(draft({ status: 'draft', agentState: 'failed' }));
+      await renderPage();
+      const alert = container.querySelector('[role="alert"]')!;
+      expect(alert.textContent).toContain("The Content Agent couldn't finish this page.");
+
+      await act(async () => button('Try again')!.click());
+      await act(async () => {});
+      expect(startAgentWriting).toHaveBeenCalledWith(
+        'd1',
+        'b1',
+        expect.objectContaining({ textRules: [], locked: [] }),
+      );
+      const [, , request] = startAgentWriting.mock.calls[0];
+      expect(request.rules.length).toBeGreaterThan(0);
+      // The page now waits for the agent.
+      expect(container.querySelector('[role="status"]')!.textContent).toContain(
+        'Content Agent is writing this page',
+      );
+    });
+
+    it('keeps the page when the agent can’t start again', async () => {
+      startAgentWriting.mockResolvedValue({ error: 'ai_budget' });
+      getContentDraft.mockResolvedValue(draft({ status: 'draft', agentState: 'failed' }));
+      await renderPage();
+      await act(async () => button('Try again')!.click());
+      await act(async () => {});
+      expect(toast.error).toHaveBeenCalledWith(
+        "This month's AI usage is spent, so the agent didn't start.",
+      );
+      expect(container.querySelector('.ProseMirror')).not.toBeNull();
+      await act(async () => button('Close')!.click());
+      expect(container.querySelector('[role="alert"]')).toBeNull();
+    });
+  });
+
+  it('marks the draft ready once', async () => {
+    getContentDraft.mockResolvedValue(draft());
+    markContentDraftReady.mockResolvedValue({ status: 'ready', tasksDone: 0 });
+    await renderPage();
+
+    await act(async () => button('Mark ready')!.click());
+    expect(markContentDraftReady).toHaveBeenCalledWith('d1');
+    expect(toast.success).toHaveBeenCalledWith(
+      "Marked ready. Publish it on your site when you're ready.",
+    );
+    expect(container.querySelector('header')!.textContent).toContain('Ready');
+    expect(button('Mark ready')!.disabled).toBe(true);
+  });
+
+  it('links the action the draft is the work of, and says Ready completed its task', async () => {
+    getContentDraft.mockResolvedValue(draft({ action: { id: 'act-1', number: 214 } }));
+    markContentDraftReady.mockResolvedValue({ status: 'ready', tasksDone: 1 });
+    await renderPage();
+
+    const note = [...container.querySelectorAll('p')].find((p) =>
+      p.textContent?.startsWith('This draft is the work of'),
+    )!;
+    expect(note.textContent).toBe(
+      'This draft is the work of Action AC-214. Mark ready completes its task there.',
+    );
+    expect(note.querySelector('a')!.getAttribute('href')).toBe(
+      '/dashboard/action-center/actions?action=act-1',
+    );
+
+    await act(async () => button('Mark ready')!.click());
+    expect(toast.success).toHaveBeenCalledWith(
+      "Marked ready, and its task in Action AC-214 is done. Publish it on your site when you're ready.",
+    );
+    expect(note.textContent).toBe('This draft is the work of Action AC-214.');
+  });
+
+  describe('history', () => {
+    const versions = [
+      {
+        id: 'v2',
+        origin: 'ready',
+        title: 'Pipeline forecasting',
+        createdAt: '2026-10-19T09:00:00Z',
+      },
+      { id: 'v1', origin: 'import', title: 'Old title', createdAt: '2026-10-12T09:42:00Z' },
+    ];
+    /** Opens History and returns its versions. */
+    async function openHistory() {
+      const trigger = button('History')!;
+      await act(async () => {
+        trigger.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
+        trigger.click();
+      });
+      await act(async () => {});
+      return [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')];
+    }
+
+    it('lists earlier versions with their origin', async () => {
+      getContentDraft.mockResolvedValue(draft());
+      getDraftVersions.mockResolvedValue(versions);
+      await renderPage();
+
+      const items = await openHistory();
+      expect(getDraftVersions).toHaveBeenCalledWith('d1');
+      expect(document.body.textContent).toContain('Version history · kept 90 days');
+      expect(document.body.textContent).toContain('NowThis draft, as you see it');
+      expect(items.map((item) => item.textContent)).toEqual([
+        expect.stringMatching(/^Marked ready.* · kept on Mark readyRestore$/),
+        expect.stringMatching(/^Live page.* · imported from the URLRestore$/),
+      ]);
+      expect(document.body.textContent).toContain(
+        'Restoring makes a new version. Nothing is lost.',
+      );
+    });
+
+    it('says when there is nothing to restore yet', async () => {
+      getContentDraft.mockResolvedValue(draft());
+      await renderPage();
+      expect(await openHistory()).toHaveLength(0);
+      expect(document.body.textContent).toContain('No earlier versions yet. Mark ready keeps one.');
+    });
+
+    it('restores a version in place, after saving what was waiting', async () => {
+      getContentDraft.mockResolvedValue(draft());
+      getDraftVersions.mockResolvedValue(versions);
+      restoreDraftVersion.mockResolvedValue({
+        title: 'Old title',
+        bodyHtml: '<h1>Old title</h1><p>As the live page had it.</p>',
+        updatedAt: '2026-10-21T10:00:00Z',
+      });
+      await renderPage();
+      // An edit still waiting for its save.
+      await act(async () => button('Edit as HTML')!.click());
+      const source = container.querySelector('textarea')!;
+      await act(async () => {
+        Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!.call(
+          source,
+          '<h1>Pipeline forecasting</h1><p>Edited.</p>',
+        );
+        source.dispatchEvent(new Event('input', { bubbles: true }));
+      });
+      await act(async () => button('Back to visual')!.click());
+      expect(saveContentDraft).not.toHaveBeenCalled();
+
+      const items = await openHistory();
+      await act(async () => items[1].click());
+      await act(async () => {});
+
+      expect(saveContentDraft).toHaveBeenCalledWith('d1', {
+        title: 'Pipeline forecasting',
+        bodyHtml: '<h1>Pipeline forecasting</h1><p>Edited.</p>',
+        base: {
+          updatedAt: '2026-10-20T10:00:00Z',
+          bodyHash: expect.stringMatching(/^[0-9a-f]{64}$/),
+        },
+      });
+      expect(restoreDraftVersion).toHaveBeenCalledWith('d1', 'v1');
+      expect(saveContentDraft.mock.invocationCallOrder[0]).toBeLessThan(
+        restoreDraftVersion.mock.invocationCallOrder[0],
+      );
+      expect(container.querySelector('.ProseMirror')!.textContent).toBe(
+        'Old titleAs the live page had it.',
+      );
+      expect(container.querySelector('header h1')!.textContent).toBe('Old title');
+      expect(toast.success).toHaveBeenCalledWith(
+        'Restored “Live page”. The page before it is in History.',
+      );
+      // Nothing from before the restore is sent after it.
+      expect(saveContentDraft).toHaveBeenCalledTimes(1);
+      expect(container.querySelector('header')!.textContent).toContain('Saved');
+    });
+
+    it('keeps the page when the restore fails', async () => {
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+      getContentDraft.mockResolvedValue(draft());
+      getDraftVersions.mockResolvedValue(versions);
+      restoreDraftVersion.mockRejectedValue(new Error('not_found'));
+      await renderPage();
+
+      const items = await openHistory();
+      await act(async () => items[0].click());
+      await act(async () => {});
+
+      expect(toast.error).toHaveBeenCalledWith("Couldn't restore it. Try again.");
+      expect(container.querySelector('.ProseMirror')!.textContent).toBe(
+        'Pipeline forecastingTeams trust it.',
+      );
+    });
+
+    it('waits while the HTML view is open', async () => {
+      getContentDraft.mockResolvedValue(draft());
+      await renderPage();
+      await act(async () => button('Edit as HTML')!.click());
+      expect(button('History')!.title).toBe('Go back to the page to use History');
+      expect(button('History')!.disabled || button('History')!.hasAttribute('data-disabled')).toBe(
+        true,
+      );
+    });
+  });
+
+  describe('locked passages', () => {
+    const QUOTED =
+      'Northwind forecasts each deal from real activity: emails, meetings and stage changes.';
+    const page = draft({
+      sourceUrl: 'https://acme.example/forecasting',
+      bodyHtml: `<h1>Pipeline forecasting</h1><p>${QUOTED}</p><p>Teams trust it.</p>`,
+    });
+    const cited = [
+      {
+        key: passageKey(QUOTED),
+        platforms: [
+          { platform: 'chatgpt-web', answers: 14 },
+          { platform: 'perplexity-web', answers: 6 },
+        ],
+      },
+    ];
+    const editorOf = () =>
+      (container.querySelector('.ProseMirror') as HTMLElement & { editor: Editor }).editor;
+    /** Where the quoted passage's text starts in the page. */
+    const quotedAt = () => {
+      let at = 0;
+      editorOf().state.doc.descendants((node, pos) => {
+        if (node.textContent === QUOTED && node.isTextblock) at = pos + 1;
+        return !at;
+      });
+      return at;
+    };
+    const dialogText = () => document.querySelector('[role="dialog"]')?.textContent ?? null;
+    const dialogButton = (name: string) =>
+      [...document.querySelectorAll<HTMLButtonElement>('[role="dialog"] button')].find(
+        (b) => b.textContent === name,
+      )!;
+
+    it('marks the passages AI answers quote, and counts them in the header', async () => {
+      getContentDraft.mockResolvedValue(page);
+      getCitedPassages.mockResolvedValue(cited);
+      await renderPage();
+
+      expect(getCitedPassages).toHaveBeenCalledWith('d1', [
+        'Pipeline forecasting',
+        QUOTED,
+        'Teams trust it.',
+      ]);
+      const marked = container.querySelectorAll('.ProseMirror .cited-passage');
+      expect(marked).toHaveLength(1);
+      expect(marked[0].textContent).toBe(QUOTED);
+      expect(marked[0].getAttribute('data-cited-label')).toBe(
+        '✓ Cited by ChatGPT 14× and Perplexity 6× in 30 days · keep wording',
+      );
+      expect(container.querySelector('header')!.textContent).toContain('1 cited passage kept');
+    });
+
+    it('reads nothing for a new page', async () => {
+      getContentDraft.mockResolvedValue(draft({ sourceUrl: null }));
+      await renderPage();
+      expect(getCitedPassages).not.toHaveBeenCalled();
+      expect(container.querySelector('.cited-passage')).toBeNull();
+    });
+
+    it('asks before typing in one, and keeps the wording', async () => {
+      getContentDraft.mockResolvedValue(page);
+      getCitedPassages.mockResolvedValue(cited);
+      await renderPage();
+
+      await act(async () => {
+        editorOf().commands.setTextSelection(quotedAt() + 4);
+        editorOf().view.dom.dispatchEvent(
+          new KeyboardEvent('keydown', { key: 'x', bubbles: true, cancelable: true }),
+        );
+      });
+      expect(dialogText()).toContain('AI quotes this passage');
+      expect(dialogText()).toContain(
+        'ChatGPT 14× and Perplexity 6× quoted this wording in the last 30 days.',
+      );
+
+      await act(async () => dialogButton('Keep wording').click());
+      expect(dialogText()).toBeNull();
+      expect(container.querySelector('.cited-passage')!.textContent).toBe(QUOTED);
+    });
+
+    it('holds a change over one until the person says to edit anyway', async () => {
+      getContentDraft.mockResolvedValue(page);
+      getCitedPassages.mockResolvedValue(cited);
+      await renderPage();
+
+      const from = quotedAt();
+      await act(async () => {
+        editorOf().commands.insertContentAt({ from, to: from + QUOTED.length }, 'Rewritten.');
+      });
+      expect(container.querySelector('.cited-passage')!.textContent).toBe(QUOTED);
+      expect(saveContentDraft).not.toHaveBeenCalled();
+      expect(dialogText()).toContain('AI quotes this passage');
+
+      await act(async () => dialogButton('Edit anyway').click());
+      expect(dialogText()).toBeNull();
+      expect(container.querySelector('.ProseMirror')!.textContent).toBe(
+        'Pipeline forecastingRewritten.Teams trust it.',
+      );
+      // No longer the quoted wording: no longer locked or counted.
+      expect(container.querySelector('.cited-passage')).toBeNull();
+      expect(container.querySelector('header')!.textContent).not.toContain('cited passage');
+    });
+
+    it('holds a key once, even when its text follows the held keydown, and types it on Edit anyway', async () => {
+      getContentDraft.mockResolvedValue(page);
+      getCitedPassages.mockResolvedValue(cited);
+      await renderPage();
+
+      const at = quotedAt() + 4;
+      await act(async () => {
+        editorOf().commands.setTextSelection(at);
+        editorOf().view.dom.dispatchEvent(
+          new KeyboardEvent('keydown', { key: 'x', bubbles: true, cancelable: true }),
+        );
+        // The same keystroke's text, as some keyboards still send it.
+        editorOf().commands.insertContentAt(at, 'x');
+      });
+      await act(async () => dialogButton('Edit anyway').click());
+      // The key pressed is typed, once.
+      expect(container.querySelector('.ProseMirror')!.textContent).toContain(
+        `${QUOTED.slice(0, 4)}x${QUOTED.slice(4)}`,
+      );
+      expect(container.querySelector('.cited-passage')).toBeNull();
+    });
+
+    it('deletes the character a held Backspace would, on Edit anyway', async () => {
+      getContentDraft.mockResolvedValue(page);
+      getCitedPassages.mockResolvedValue(cited);
+      await renderPage();
+
+      await act(async () => {
+        editorOf().commands.setTextSelection(quotedAt() + 4);
+        editorOf().view.dom.dispatchEvent(
+          new KeyboardEvent('keydown', { key: 'Backspace', bubbles: true, cancelable: true }),
+        );
+      });
+      await act(async () => dialogButton('Edit anyway').click());
+      expect(container.querySelector('.ProseMirror')!.textContent).toContain(
+        `${QUOTED.slice(0, 3)}${QUOTED.slice(4)}`,
+      );
+    });
+
+    it('lets typing through once the person chose to edit it', async () => {
+      getContentDraft.mockResolvedValue(page);
+      getCitedPassages.mockResolvedValue(cited);
+      await renderPage();
+      const typeX = () =>
+        act(async () => {
+          editorOf().commands.setTextSelection(quotedAt() + 4);
+          editorOf().view.dom.dispatchEvent(
+            new KeyboardEvent('keydown', { key: 'x', bubbles: true, cancelable: true }),
+          );
+        });
+
+      await typeX();
+      await act(async () => dialogButton('Edit anyway').click());
+      await typeX();
+      expect(dialogText()).toBeNull();
+    });
+  });
+
+  describe('agent suggestions', () => {
+    const VAGUE = 'Our forecasting is very accurate.';
+    const page = draft({
+      bodyHtml: `<h1>Pipeline forecasting</h1><p>${VAGUE}</p><p>Teams trust it.</p>`,
+    });
+    const suggestion = (over: Partial<DraftSuggestion>): DraftSuggestion => ({
+      id: 's1',
+      batchId: 'b1',
+      actionId: 'a1',
+      actionNo: 214,
+      kind: 'replace',
+      blockText: VAGUE,
+      beforeText: VAGUE,
+      afterText: 'Accuracy is shown per team, each week, against closed revenue.',
+      reason: 'answer fan-out “how accurate is CRM forecasting”',
+      ruleKeys: [],
+      status: 'open',
+      ...over,
+    });
+    const batch = [
+      suggestion({}),
+      suggestion({
+        id: 's2',
+        kind: 'insert',
+        blockText: 'Teams trust it.',
+        beforeText: '',
+        afterText: '<h2>FAQ</h2><p>Does it work with custom stages? Yes, any stage.</p>',
+        reason: 'add FAQ block (rule: 5 questions)',
+      }),
+    ];
+    const cardOf = (id: string) =>
+      container.querySelector<HTMLElement>(`.ProseMirror [data-suggestion="${id}"]`);
+    const press = async (id: string, label: string) => {
+      const target = [...cardOf(id)!.querySelectorAll('button')].find(
+        (b) => b.textContent === label,
+      )!;
+      await act(async () => target.click());
+      await act(async () => {});
+    };
+    const bar = () => container.querySelector('[role="region"][aria-label="Agent suggestions"]');
+    const barButton = (label: string) =>
+      [...bar()!.querySelectorAll('button')].find((b) => b.textContent === label)!;
+    /** The page's own text: the cards are drawn over it, not part of it. */
+    const pageText = () =>
+      (container.querySelector('.ProseMirror') as HTMLElement & { editor: Editor }).editor.state.doc
+        .textContent;
+
+    it('shows each open suggestion where it applies, with the agent bar', async () => {
+      getContentDraft.mockResolvedValue(page);
+      getDraftSuggestions.mockResolvedValue(batch);
+      await renderPage();
+
+      expect(getDraftSuggestions).toHaveBeenCalledWith('d1');
+      expect(bar()!.textContent).toContain(
+        'Content Agent suggested 2 changes · from Action AC-214',
+      );
+      expect(bar()!.querySelector('a')!.getAttribute('href')).toBe(
+        '/dashboard/action-center/actions?action=a1',
+      );
+      const replace = cardOf('s1')!;
+      expect(replace.textContent).toContain(
+        'Content Agent · answer fan-out “how accurate is CRM forecasting”',
+      );
+      expect(replace.querySelector('del')!.textContent).toBe(VAGUE);
+      expect(replace.querySelector('ins')!.textContent).toBe(
+        'Accuracy is shown per team, each week, against closed revenue.',
+      );
+      expect(cardOf('s2')!.textContent).toContain('Does it work with custom stages?');
+      // The page itself is unchanged until one is accepted.
+      expect(pageText()).not.toContain('Accuracy is shown');
+    });
+
+    it('accepts one into the page, keeping the page before it in History, and undoes it', async () => {
+      getContentDraft.mockResolvedValue(page);
+      getDraftSuggestions.mockResolvedValue(batch);
+      await renderPage();
+
+      await press('s1', 'Accept');
+      expect(keepAgentBeforeVersion).toHaveBeenCalledWith('d1');
+      expect(decideDraftSuggestions).toHaveBeenCalledWith(['s1'], 'accepted');
+      expect(pageText()).toContain(
+        'Accuracy is shown per team, each week, against closed revenue.',
+      );
+      expect(pageText()).not.toContain(VAGUE);
+      expect(cardOf('s1')!.textContent).toContain('Accepted');
+      expect(container.querySelector('.ProseMirror .agent-accepted-text')!.textContent).toBe(
+        'Accuracy is shown per team, each week, against closed revenue.',
+      );
+      expect(bar()!.textContent).toContain('suggested 1 change');
+
+      await press('s1', 'Undo');
+      expect(decideDraftSuggestions).toHaveBeenLastCalledWith(['s1'], 'open');
+      expect(pageText()).toContain(VAGUE);
+      expect(cardOf('s1')!.querySelector('del')).not.toBeNull();
+      // History kept the page once, before the first change.
+      await press('s1', 'Accept');
+      expect(keepAgentBeforeVersion).toHaveBeenCalledTimes(1);
+    });
+
+    it('makes an accept again on the page when it changed while the decision was saved', async () => {
+      getContentDraft.mockResolvedValue(page);
+      getDraftSuggestions.mockResolvedValue(batch);
+      let saved: () => void = () => {};
+      decideDraftSuggestions.mockReturnValueOnce(new Promise<void>((r) => (saved = r)));
+      await renderPage();
+
+      await act(async () => {
+        cardOf('s1')!
+          .querySelectorAll('button')
+          .forEach((b) => b.textContent === 'Accept' && b.click());
+      });
+      // An attachment read in while the decision is being saved.
+      const editor = (container.querySelector('.ProseMirror') as HTMLElement & { editor: Editor })
+        .editor;
+      await act(async () => {
+        editor.commands.insertContentAt(editor.state.doc.content.size, '<p>From a file.</p>');
+      });
+      await act(async () => saved());
+      await act(async () => {});
+
+      expect(pageText()).toContain(
+        'Accuracy is shown per team, each week, against closed revenue.',
+      );
+      expect(pageText()).toContain('From a file.');
+      expect(cardOf('s1')!.textContent).toContain('Accepted');
+    });
+
+    it('rejects one, and restores it to review', async () => {
+      getContentDraft.mockResolvedValue(page);
+      getDraftSuggestions.mockResolvedValue(batch);
+      await renderPage();
+
+      await press('s2', 'Reject');
+      expect(decideDraftSuggestions).toHaveBeenCalledWith(['s2'], 'rejected');
+      expect(cardOf('s2')!.textContent).toContain('Rejected');
+      expect(pageText()).not.toContain('FAQ');
+
+      await press('s2', 'Restore');
+      expect(decideDraftSuggestions).toHaveBeenLastCalledWith(['s2'], 'open');
+      expect(cardOf('s2')!.textContent).toContain('Accept');
+    });
+
+    it('accepts all, says what is left, and undoes all', async () => {
+      getContentDraft.mockResolvedValue(page);
+      getDraftSuggestions.mockResolvedValue(batch);
+      await renderPage();
+
+      await act(async () => barButton('Accept all').click());
+      await act(async () => {});
+      expect(decideDraftSuggestions).toHaveBeenCalledWith(['s1', 's2'], 'accepted');
+      expect(pageText()).toContain(
+        'Accuracy is shown per team, each week, against closed revenue.Teams trust it.FAQDoes it work with custom stages? Yes, any stage.',
+      );
+      expect(bar()!.textContent).toMatch(/^2 accepted · 0 rejected · \d+ rules? still open/);
+
+      await act(async () => barButton('Undo all').click());
+      await act(async () => {});
+      expect(decideDraftSuggestions).toHaveBeenLastCalledWith(['s2', 's1'], 'open');
+      expect(pageText()).toBe(`Pipeline forecasting${VAGUE}Teams trust it.`);
+      expect(bar()!.textContent).toContain('suggested 2 changes');
+    });
+
+    it('never applies one to a passage AI quotes, or to one the page changed', async () => {
+      getContentDraft.mockResolvedValue(
+        draft({
+          sourceUrl: 'https://acme.example/forecasting',
+          bodyHtml: `<h1>Pipeline forecasting</h1><p>${VAGUE}</p><p>Teams trust it.</p>`,
+        }),
+      );
+      getCitedPassages.mockResolvedValue([
+        { key: passageKey(VAGUE), platforms: [{ platform: 'chatgpt-web', answers: 3 }] },
+      ]);
+      getDraftSuggestions.mockResolvedValue([
+        suggestion({}),
+        suggestion({ id: 's3', blockText: 'Gone since.', beforeText: 'Gone since.' }),
+      ]);
+      await renderPage();
+
+      const locked = cardOf('s1')!;
+      expect(locked.textContent).toContain("AI quotes this passage, so agents don't change it.");
+      expect(
+        [...locked.querySelectorAll('button')].find((b) => b.textContent === 'Accept')!.disabled,
+      ).toBe(true);
+      const stale = cardOf('s3')!;
+      expect(stale.textContent).toContain('The page changed here since the agent read it.');
+
+      await act(async () => barButton('Accept all').click());
+      await act(async () => {});
+      expect(pageText()).toContain(VAGUE);
+      expect(decideDraftSuggestions).not.toHaveBeenCalled();
+      expect(toast).toHaveBeenCalledWith(
+        "2 suggestions couldn't be applied: the page changed there, or AI quotes the passage.",
+      );
+    });
+
+    it('leaves the page and the card as they were when the decision can’t be saved', async () => {
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+      getContentDraft.mockResolvedValue(page);
+      getDraftSuggestions.mockResolvedValue([suggestion({})]);
+      decideDraftSuggestions.mockRejectedValueOnce(new Error('offline'));
+      await renderPage();
+
+      await press('s1', 'Accept');
+      expect(pageText()).toContain(VAGUE);
+      expect(cardOf('s1')!.textContent).toContain('Accept');
+      expect(toast.error).toHaveBeenCalled();
+    });
+
+    it('takes text with $ in it as written, so an accepted one can be undone', async () => {
+      // String.replace would read "$$" in the page's words as "$".
+      const before = 'Plans start at $$49, or $& with add-ons.';
+      getContentDraft.mockResolvedValue(
+        draft({ bodyHtml: `<h1>Pipeline forecasting</h1><p>${before}</p>` }),
+      );
+      getDraftSuggestions.mockResolvedValue([
+        suggestion({ blockText: before, beforeText: before, afterText: 'Plans start at $49.' }),
+      ]);
+      decideDraftSuggestions.mockResolvedValue(undefined);
+      await renderPage();
+
+      await press('s1', 'Accept');
+      expect(pageText()).toContain('Plans start at $49.');
+      await press('s1', 'Undo');
+      expect(pageText()).toContain(before);
+    });
+
+    it('waits with the HTML view until they are decided', async () => {
+      getContentDraft.mockResolvedValue(page);
+      getDraftSuggestions.mockResolvedValue(batch);
+      await renderPage();
+
+      await act(async () => button('Edit as HTML')!.click());
+      expect(container.querySelector('textarea')).toBeNull();
+      expect(toast).toHaveBeenCalledWith(
+        'Accept or reject the 2 agent suggestions first, then edit as HTML.',
+      );
+    });
+  });
+
+  it('shows the page as HTML, and cleans it when it switches back', async () => {
+    getContentDraft.mockResolvedValue(
+      draft({
+        bodyHtml:
+          '<h1>Trail Runner X</h1><script type="application/ld+json">{"@type":"Product"}</script>',
+      }),
+    );
+    await renderPage();
+    // Schema JSON-LD shows as a labelled block, not as text.
+    expect(container.querySelector('[data-json-ld]')!.textContent).toBe(
+      '{ } Schema · Product (JSON-LD)',
+    );
+
+    await act(async () => button('Edit as HTML')!.click());
+    const source = container.querySelector('textarea')!;
+    expect(source.value).toBe(
+      '<h1>Trail Runner X</h1>\n<script type="application/ld+json">{"@type":"Product"}</script>',
+    );
+    // The other tools wait while the HTML view is open.
+    expect(button('Bold')!.disabled).toBe(true);
+
+    const setValue = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!;
+    await act(async () => {
+      setValue.call(
+        source,
+        `${source.value}<p style="color:red">New <script>alert(1)</script>line</p>`,
+      );
+      source.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    await act(async () => button('Back to visual')!.click());
+
+    expect(container.querySelector('textarea')).toBeNull();
+    expect(toast).toHaveBeenCalledWith('HTML applied · 1 unsafe tag removed');
+    const page = container.querySelector('.ProseMirror')!;
+    expect(page.querySelector('p')!.outerHTML).toBe('<p>New line</p>');
+    expect(page.querySelector('[data-json-ld]')).not.toBeNull();
+    expect(page.textContent).not.toContain('alert');
+  });
+
+  it('goes back from an unedited HTML view without saving anything', async () => {
+    getContentDraft.mockResolvedValue(draft());
+    await renderPage();
+    await act(async () => button('Edit as HTML')!.click());
+    await act(async () => button('Back to visual')!.click());
+    expect(container.querySelector('textarea')).toBeNull();
+    expect(toast).not.toHaveBeenCalled();
+    expect(container.querySelector('header')!.textContent).toContain('Saved');
+  });
+
+  it('keeps HTML blocks only in a paste copied from this editor', async () => {
+    getContentDraft.mockResolvedValue(
+      draft({
+        bodyHtml: `<h1>Trail Runner X</h1><div data-html-block="${encodeHtmlBlock('<p>hi</p>')}"></div><p>End.</p>`,
+      }),
+    );
+    await renderPage();
+    const editor = (container.querySelector('.ProseMirror') as HTMLElement & { editor: Editor })
+      .editor;
+    const blocks = () => container.querySelectorAll('[data-html-block-view]').length;
+    expect(blocks()).toBe(1);
+
+    // jsdom has no ClipboardEvent, which pasteHTML makes.
+    if (!('ClipboardEvent' in globalThis)) {
+      Object.assign(globalThis, { ClipboardEvent: class extends Event {} });
+    }
+    // Copied here: the editor's own clipboard HTML.
+    const { dom } = editor.view.serializeForClipboard(
+      editor.state.doc.slice(0, editor.state.doc.content.size),
+    );
+    const own = dom.innerHTML;
+    // Another ProseMirror site's copy says data-pm-slice too, without this tab's mark.
+    const foreign = own.replace(/ data-ce-copy="[^"]*"/g, '');
+    expect(foreign).toContain('data-pm-slice');
+    await act(async () => {
+      editor.commands.setTextSelection(editor.state.doc.content.size - 1);
+      editor.view.pasteHTML(foreign);
+    });
+    expect(blocks()).toBe(1);
+    await act(async () => {
+      editor.view.pasteHTML(own);
+    });
+    expect(blocks()).toBe(2);
+  });
+
+  it('adds HTML blocks, shows their code as text, and copies one or the whole page', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+    getContentDraft.mockResolvedValue(draft({ bodyHtml: '<h1>Trail Runner X</h1>' }));
+    await renderPage();
+
+    const code =
+      '<iframe src="https://www.youtube.com/embed/x"></iframe>\n<script>track()</script>';
+    await act(async () => button('Add an HTML block')!.click());
+    const field = document.querySelector<HTMLTextAreaElement>('textarea[aria-label="Code"]')!;
+    const setValue = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!;
+    await act(async () => {
+      setValue.call(field, code);
+      field.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    await act(async () => {
+      [...document.querySelectorAll('button')].find((b) => b.textContent === 'Add block')!.click();
+    });
+    await act(async () => {});
+
+    const block = container.querySelector('[data-html-block-view]')!;
+    expect(block.textContent).toContain('HTML block');
+    expect(block.textContent).toContain('2 lines');
+    // The code is text on the page, never markup: no iframe, no script runs.
+    expect(block.querySelector('pre')!.textContent).toBe(code);
+    expect(container.querySelector('.ProseMirror iframe, .ProseMirror script')).toBeNull();
+
+    const copyBlock = [...block.querySelectorAll<HTMLButtonElement>('button')].find(
+      (b) => b.textContent === 'Copy HTML',
+    )!;
+    await act(async () => copyBlock.click());
+    expect(writeText).toHaveBeenLastCalledWith(code);
+
+    const copyPage = [...container.querySelectorAll<HTMLButtonElement>('header button')].find(
+      (b) => b.textContent === 'Copy HTML',
+    )!;
+    await act(async () => copyPage.click());
+    // The block went in where the cursor was: the start, as nothing was clicked.
+    expect(writeText).toHaveBeenLastCalledWith(`${code}\n<h1>Trail Runner X</h1>`);
+    expect(toast.success).toHaveBeenLastCalledWith('HTML copied');
+  });
+
+  it('shows the link the cursor is in, to open in a new tab', async () => {
+    getContentDraft.mockResolvedValue(
+      draft({ bodyHtml: '<p><a href="https://gartner.com/x">Gartner</a> says so.</p>' }),
+    );
+    await renderPage();
+    const target = container.querySelector<HTMLAnchorElement>('[role="toolbar"] a')!;
+    expect(target.getAttribute('href')).toBe('https://gartner.com/x');
+    expect(target.target).toBe('_blank');
+    expect(target.rel).toBe('noopener noreferrer');
+    expect(target.textContent).toBe('gartner.com/x');
+  });
+
+  describe('attaching files', () => {
+    const said = () =>
+      toast.success.mock.calls.length +
+      toast.error.mock.calls.length +
+      toast.info.mock.calls.length;
+    /** Attaches the files, and waits until each has said something or a preview opened. */
+    async function attach(...files: File[]) {
+      const input = container.querySelector<HTMLInputElement>('input[type="file"]')!;
+      Object.defineProperty(input, 'files', { value: files, configurable: true });
+      const before = said();
+      await act(async () => {
+        input.dispatchEvent(new Event('change', { bubbles: true }));
+      });
+      // Reading a file, and loading its reader the first time, take real time.
+      for (let i = 0; i < 80; i++) {
+        if (said() - before >= files.length || document.querySelector('[role="dialog"]')) break;
+        await act(() => new Promise((resolve) => setTimeout(resolve, 25)));
+      }
+    }
+    const dialogButton = (name: string) =>
+      [...document.querySelectorAll<HTMLButtonElement>('[role="dialog"] button')].find(
+        (b) => b.textContent === name,
+      );
+
+    beforeEach(async () => {
+      getContentDraft.mockResolvedValue(draft({ bodyHtml: '<p>Intro</p>' }));
+      await renderPage();
+    });
+
+    it('previews a CSV and inserts it as a table, its first row the header', async () => {
+      await attach(new File(['Keyword,Volume\ncrm forecasting,210\npipeline,96\n'], 'kw.csv'));
+      const dialog = document.querySelector('[role="dialog"]')!;
+      expect(dialog.textContent).toContain('kw.csv');
+      expect(dialog.textContent).toContain('2 rows · 2 columns');
+
+      await act(async () => dialogButton('Insert as table')!.click());
+      const table = container.querySelector('.ProseMirror table')!;
+      expect([...table.querySelectorAll('th')].map((c) => c.textContent)).toEqual([
+        'Keyword',
+        'Volume',
+      ]);
+      expect(table.querySelectorAll('tr')).toHaveLength(3);
+      expect(toast.success).toHaveBeenCalledWith('Table inserted from kw.csv · 2 rows');
+    });
+
+    it('puts the next import under a table, not in its cell', async () => {
+      await attach(new File(['A,B\n1,2\n'], 'one.csv'));
+      await act(async () => dialogButton('Insert as table')!.click());
+      await attach(new File(['After the table'], 'note.txt'));
+      const page = container.querySelector('.ProseMirror')!;
+      expect(page.querySelectorAll('table')).toHaveLength(1);
+      expect(page.querySelector('table')!.textContent).not.toContain('After the table');
+      expect(page.textContent).toContain('After the table');
+    });
+
+    it('asks before inserting a table over 200 rows', async () => {
+      const csv = ['n', ...Array.from({ length: 250 }, (_, i) => String(i))].join('\n');
+      await attach(new File([csv], 'long.csv'));
+      await act(async () => dialogButton('Insert as table')!.click());
+      expect(container.querySelector('.ProseMirror table')).toBeNull();
+      expect(document.querySelector('[role="dialog"]')!.textContent).toContain(
+        'This table has 250 rows.',
+      );
+      await act(async () => dialogButton('Insert all 250 rows')!.click());
+      expect(container.querySelectorAll('.ProseMirror table tr')).toHaveLength(251);
+    });
+
+    it('inserts only the rows that fit in the page’s size limit, after saying so', async () => {
+      const cell = 'x'.repeat(1000);
+      const csv = ['a,b,c', ...Array.from({ length: 1000 }, () => `${cell},${cell},${cell}`)].join(
+        '\n',
+      );
+      await attach(new File([csv], 'big.csv'));
+      await act(async () => dialogButton('Insert as table')!.click());
+      expect(container.querySelector('.ProseMirror table')).toBeNull();
+      const note = document.querySelector('[role="dialog"]')!.textContent!;
+      const fit = Number(
+        /Only the first ([\d,]+) of 1,000 rows fit/.exec(note)![1].replace(',', ''),
+      );
+      expect(fit).toBeGreaterThan(100);
+      expect(fit).toBeLessThan(1000);
+      await act(async () => dialogButton(`Insert the first ${fit} rows`)!.click());
+      expect(container.querySelectorAll('.ProseMirror table tr')).toHaveLength(fit + 1);
+      // As the editor saves it, the page stays under the limit.
+      const editorHtml = container.querySelector('.ProseMirror')!.innerHTML;
+      expect(editorHtml.length).toBeLessThan(500_000);
+    });
+
+    it('imports Markdown and Word as content, cleaned like a paste', async () => {
+      await attach(
+        new File(
+          ['## From Markdown\n\nA *note* with a [link](https://acme.com/?utm_source=x).'],
+          'notes.md',
+        ),
+      );
+      const page = container.querySelector('.ProseMirror')!;
+      expect(page.querySelector('h2')!.textContent).toBe('From Markdown');
+      expect(page.querySelector('a')!.getAttribute('href')).toBe('https://acme.com/');
+      expect(toast.success).toHaveBeenLastCalledWith('notes.md imported');
+
+      await attach(new File(['PK'], 'brief.docx'));
+      expect([...page.querySelectorAll('h2')].map((h) => h.textContent)).toContain('From Word');
+      expect(page.querySelector('img')).toBeNull();
+      expect(toast.success).toHaveBeenLastCalledWith('brief.docx imported · 1 image left out');
+    });
+
+    it('says what it can’t take: images, old formats, large files', async () => {
+      await attach(
+        new File(['x'], 'shoe.png'),
+        new File(['x'], 'old.xls'),
+        new File(['x'.repeat(10 * 1024 * 1024 + 1)], 'huge.txt'),
+      );
+      expect(toast.info).toHaveBeenCalledWith(
+        "Images can't be attached yet. Add shoe.png with Insert an image, by its address.",
+      );
+      expect(toast.error).toHaveBeenCalledWith('Save old.xls as .xlsx or .docx, then attach it.');
+      expect(toast.error).toHaveBeenCalledWith('huge.txt is over 10 MB.');
+      expect(container.querySelector('.ProseMirror')!.textContent).toBe('Intro');
+    });
+  });
+
+  it('follows the draft’s brand in the sidebar', async () => {
+    getContentDraft.mockResolvedValue(draft({ brandId: 'b2' }));
+    await renderPage();
+    expect(brandState.setActiveBrand).toHaveBeenCalledWith('b2');
+  });
+
+  it('says when the draft can’t be opened', async () => {
+    getContentDraft.mockResolvedValue(null);
+    await renderPage();
+    expect(container.textContent).toContain(
+      "This draft doesn't exist, or it belongs to another workspace.",
+    );
+    expect(container.querySelector('a[href="/dashboard/content/library"]')).not.toBeNull();
+  });
+});
+
+describe('the side panel', () => {
+  const panel = () => container.querySelector('aside');
+  const innerWidth = window.innerWidth;
+  afterEach(() => {
+    window.innerWidth = innerWidth;
+  });
+
+  it('starts closed on a narrow window, and the header opens it', async () => {
+    getContentDraft.mockResolvedValue(draft({ sourceUrl: 'https://acme.example.com/pricing' }));
+    window.innerWidth = 1024;
+    await renderPage();
+    expect(panel()).toBeNull();
+    expect(getContentImpact).not.toHaveBeenCalled();
+
+    await act(async () => button('Show side panel')!.click());
+    expect(panel()!.getAttribute('aria-label')).toBe('Side panel');
+    expect(panel()!.textContent).toContain('Impact');
+    // The page the draft optimizes, over 30 days.
+    expect(getContentImpact).toHaveBeenCalledWith('b1', 'https://acme.example.com/pricing', 30);
+    expect(getContentResults).toHaveBeenCalledWith('b1', 'https://acme.example.com/pricing', 30);
+    expect(button('Hide side panel')!.getAttribute('aria-pressed')).toBe('true');
+  });
+
+  it('opens Sources only when its tab is picked, and keeps Impact as it was', async () => {
+    getDraftSources.mockResolvedValue({
+      data: {
+        prompts: [],
+        fanouts: [{ query: 'pipeline forecasting', platforms: ['copilot-web'], searched: 2 }],
+        citedPages: [],
+        gscQueries: [],
+        brandDomains: [],
+        competitorDomains: [],
+      },
+      choices: [],
+    });
+    getContentDraft.mockResolvedValue(draft({ sourceUrl: 'https://acme.example.com/pricing' }));
+    window.innerWidth = 1440;
+    await renderPage();
+    // The editor reads the sources once on opening; the tab itself isn't there yet.
+    expect(getDraftSources).toHaveBeenCalledTimes(1);
+    expect(panel()!.textContent).not.toContain('pipeline forecasting');
+
+    const tab = [...panel()!.querySelectorAll<HTMLElement>('[role="tab"]')].find(
+      (el) => el.textContent === 'Sources',
+    )!;
+    await act(async () => {
+      tab.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
+      tab.click();
+    });
+    // The tab shows the editor's one read: nothing is read again.
+    expect(getDraftSources).toHaveBeenCalledTimes(1);
+    // The draft's H1 carries the fan-out's words.
+    expect(panel()!.textContent).toContain('pipeline forecasting');
+    expect(panel()!.textContent).toContain('H1');
+    expect(getContentImpact).toHaveBeenCalledTimes(1);
+  });
+
+  it('rebuilds the brief from Sources and opens it', async () => {
+    getDraftSources.mockResolvedValue({
+      data: {
+        prompts: [],
+        fanouts: [{ query: 'pipeline forecasting', platforms: ['copilot-web'], searched: 2 }],
+        citedPages: [],
+        gscQueries: [],
+        brandDomains: [],
+        competitorDomains: [],
+      },
+      choices: [],
+    });
+    rebuildDraftBrief.mockResolvedValue({
+      brief: {
+        goal: 'Win forecasting searches',
+        audience: 'Sales leaders',
+        outline: [
+          {
+            heading: 'How pipeline forecasting works',
+            keyPoints: [],
+            fanout: 'pipeline forecasting',
+            platform: 'copilot-web',
+          },
+        ],
+        keywords: ['forecast accuracy', 'pipeline'],
+        origin: 'rebuild',
+        builtAt: '2026-10-21T10:00:00Z',
+        builtFrom: { prompts: 0, fanouts: 1, pages: 0, queries: 0 },
+      },
+    });
+    getContentDraft.mockResolvedValue(draft({ sourceUrl: 'https://acme.example.com/pricing' }));
+    window.innerWidth = 1440;
+    await renderPage();
+
+    const pick = async (name: string) => {
+      const tab = [...panel()!.querySelectorAll<HTMLElement>('[role="tab"]')].find(
+        (el) => el.textContent === name,
+      )!;
+      await act(async () => {
+        tab.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
+        tab.click();
+      });
+    };
+    expect([...panel()!.querySelectorAll('[role="tab"]')].map((el) => el.textContent)).toEqual([
+      'Impact',
+      'Brief',
+      'Sources',
+      'Rules',
+    ]);
+    await pick('Sources');
+    await act(async () => button('Rebuild with selection')!.click());
+
+    expect(rebuildDraftBrief).toHaveBeenCalledWith('d1', 'b1', {
+      promptIds: [],
+      fanouts: [{ query: 'pipeline forecasting', platforms: ['copilot-web'] }],
+      pages: [],
+      queries: [],
+      headings: [],
+      length: 3000,
+    });
+    expect(toast.success).toHaveBeenCalledWith('Brief rebuilt from 1 source');
+    const selected = panel()!.querySelector('[role="tab"][aria-selected="true"]');
+    expect(selected?.textContent).toBe('Brief');
+    expect(panel()!.textContent).toContain('How pipeline forecasting works');
+    expect(panel()!.textContent).toContain('Win forecasting searches');
+
+    // The rules check against the brief just rebuilt, without a reload.
+    await pick('Rules');
+    expect(
+      [...panel()!.querySelectorAll<HTMLInputElement>('input')].map((input) => input.value),
+    ).toContain('forecast accuracy, pipeline');
+  });
+
+  it('shows how many rules the page meets, and opens them from the header', async () => {
+    getContentDraft.mockResolvedValue(
+      draft({
+        pageType: 'blog_post',
+        bodyHtml: '<h1>Pipeline forecasting</h1><p>Teams trust it in 2026.</p>',
+      }),
+    );
+    window.innerWidth = 1024;
+    await renderPage();
+    expect(panel()).toBeNull();
+
+    const chip = container.querySelector<HTMLButtonElement>('header button[aria-label^="Rules "]')!;
+    const [met, total] = chip
+      .getAttribute('aria-label')!
+      .replace('Rules ', '')
+      .split('/')
+      .map(Number);
+    expect(total).toBeGreaterThan(met);
+
+    await act(async () => chip.click());
+    const selected = panel()!.querySelector('[role="tab"][aria-selected="true"]');
+    expect(selected?.textContent).toBe('Rules');
+    expect(panel()!.textContent).toContain(`${met} of ${total} rules met`);
+
+    // Turning a rule off for this draft saves it and takes it out of the count.
+    const sentence = panel()!.querySelector<HTMLElement>(
+      '[role="switch"][aria-label="Max sentence length: on or off"]',
+    )!;
+    await act(async () => sentence.click());
+    expect(saveDraftRules).toHaveBeenCalledWith('d1', {
+      set: null,
+      source: 'default',
+      overrides: { sentence: { on: false } },
+      textRules: [],
+    });
+    expect(chip.getAttribute('aria-label')).toBe(`Rules ${met - 1}/${total - 1}`);
+    expect(toast).toHaveBeenCalledWith('Rule updated for this draft');
+  });
+
+  it('saves rule changes one at a time, the latest last, and says so once', async () => {
+    getContentDraft.mockResolvedValue(draft({ pageType: 'blog_post' }));
+    let finish: () => void = () => {};
+    saveDraftRules.mockImplementationOnce(() => new Promise<void>((r) => (finish = r)));
+    window.innerWidth = 1024;
+    await renderPage();
+    const chip = container.querySelector<HTMLButtonElement>('header button[aria-label^="Rules "]')!;
+    await act(async () => chip.click());
+    const toggle = (label: string) =>
+      act(async () =>
+        panel()!
+          .querySelector<HTMLElement>(`[role="switch"][aria-label="${label}: on or off"]`)!
+          .click(),
+      );
+
+    await toggle('Max sentence length');
+    await toggle('FAQ block');
+    await toggle('Max sentence length');
+    // The first save is still under way: the others wait.
+    expect(saveDraftRules).toHaveBeenCalledTimes(1);
+    await act(async () => finish());
+    await act(async () => {});
+    // Then only the latest goes, holding every change.
+    expect(saveDraftRules).toHaveBeenCalledTimes(2);
+    expect(saveDraftRules.mock.calls[1][1].overrides).toEqual({
+      sentence: { on: true },
+      faq: { on: false },
+    });
+    expect(
+      vi.mocked(toast).mock.calls.filter(([m]) => m === 'Rule updated for this draft'),
+    ).toHaveLength(1);
+  });
+
+  it('says when the rules are too long to save, rather than failing the save', async () => {
+    // 40 rules of 300 characters in a script of 3 bytes each: past the 32 KB check.
+    const textRules = Array.from({ length: 40 }, (_, i) => ({
+      id: `r${i}`,
+      text: '日'.repeat(300),
+      on: true,
+    }));
+    getContentDraft.mockResolvedValue(
+      draft({
+        pageType: 'blog_post',
+        rules: { set: null, source: 'default', overrides: {}, textRules },
+      }),
+    );
+    window.innerWidth = 1024;
+    await renderPage();
+    const chip = container.querySelector<HTMLButtonElement>('header button[aria-label^="Rules "]')!;
+    await act(async () => chip.click());
+    await act(async () =>
+      panel()!
+        .querySelector<HTMLElement>('[role="switch"][aria-label="Max sentence length: on or off"]')!
+        .click(),
+    );
+    expect(saveDraftRules).not.toHaveBeenCalled();
+    expect(toast.error).toHaveBeenCalledWith(
+      'These rules are too long to save. Shorten or remove a rule first.',
+    );
+  });
+
+  it('sets the Language rule from the brand’s language', async () => {
+    brandState.brands = [{ id: 'b1', language: 'tr' } as never, { id: 'b2' }];
+    try {
+      getContentDraft.mockResolvedValue(draft({ pageType: 'blog_post' }));
+      window.innerWidth = 1024;
+      await renderPage();
+      const chip = container.querySelector<HTMLButtonElement>(
+        'header button[aria-label^="Rules "]',
+      )!;
+      await act(async () => chip.click());
+      const values = [...panel()!.querySelectorAll<HTMLInputElement>('input')].map((i) => i.value);
+      expect(values).toContain('Turkish');
+      expect(values).not.toContain('English (US)');
+    } finally {
+      brandState.brands = [{ id: 'b1' }, { id: 'b2' }];
+    }
+  });
+
+  describe('Fix open rules with agent', () => {
+    const traced = draft({
+      pageType: 'blog_post',
+      bodyHtml: '<h1>Pipeline forecasting</h1><p>We delve into how teams forecast.</p>',
+    });
+    const agentSuggestion = {
+      id: 'n1',
+      batchId: 'b2',
+      actionId: null,
+      actionNo: null,
+      kind: 'replace' as const,
+      blockText: 'We delve into how teams forecast.',
+      beforeText: 'delve into',
+      afterText: 'look at',
+      reason: 'remove an AI trace (rule)',
+      ruleKeys: ['aiTraces'],
+      status: 'open' as const,
+    };
+    /** Opens the Rules tab from the header's chip. */
+    async function openRules() {
+      window.innerWidth = 1024;
+      await renderPage();
+      const chip = container.querySelector<HTMLButtonElement>(
+        'header button[aria-label^="Rules "]',
+      )!;
+      await act(async () => chip.click());
+    }
+    const panelButton = (label: string) =>
+      [...panel()!.querySelectorAll<HTMLButtonElement>('button')].find(
+        (b) => b.textContent === label,
+      )!;
+
+    it('sends the open rules and leaves the agent’s batch for review', async () => {
+      getContentDraft.mockResolvedValue(traced);
+      getDraftSuggestions.mockResolvedValueOnce([]).mockResolvedValueOnce([agentSuggestion]);
+      fixDraftRules.mockResolvedValue({ count: 1 });
+      await openRules();
+
+      await act(async () => panelButton('Fix open rules with agent').click());
+      await act(async () => {});
+
+      const [id, brandId, request] = fixDraftRules.mock.calls[0];
+      expect([id, brandId]).toEqual(['d1', 'b1']);
+      expect(request.rules).toContainEqual({
+        key: 'aiTraces',
+        name: 'Remove AI traces (humanize)',
+        detail: 'now: 1 found · phrases found: delve',
+      });
+      expect(request.rules.every((r: { key: string }) => r.key !== 'sentence')).toBe(true);
+      expect(request).toMatchObject({ textRules: [], locked: [] });
+      expect(
+        container.querySelector('[role="region"][aria-label="Agent suggestions"]')!.textContent,
+      ).toContain('Content Agent suggested 1 change');
+      expect(toast.success).toHaveBeenCalledWith(
+        'Content Agent suggested 1 change · review them in the page',
+      );
+    });
+
+    it('fixes only the AI traces from their rule', async () => {
+      getContentDraft.mockResolvedValue(traced);
+      await openRules();
+
+      await act(async () => panelButton('Fix').click());
+      await act(async () => {});
+
+      expect(fixDraftRules.mock.calls[0][2].rules.map((r: { key: string }) => r.key)).toEqual([
+        'aiTraces',
+      ]);
+      expect(toast).toHaveBeenCalledWith(
+        'Content Agent found nothing it could change without new facts.',
+      );
+    });
+
+    it('says when the AI usage is spent', async () => {
+      getContentDraft.mockResolvedValue(traced);
+      fixDraftRules.mockResolvedValue({ error: 'ai_budget' });
+      await openRules();
+
+      await act(async () => panelButton('Fix open rules with agent').click());
+      await act(async () => {});
+      expect(toast.error).toHaveBeenCalledWith(
+        "This month's AI usage is spent. Upgrade for more, or try again next month.",
+      );
+    });
+
+    it('waits until the open suggestions are decided', async () => {
+      getContentDraft.mockResolvedValue(traced);
+      getDraftSuggestions.mockResolvedValue([agentSuggestion]);
+      await openRules();
+
+      const fix = panelButton('Fix open rules with agent');
+      expect(fix.disabled).toBe(true);
+      expect(fix.title).toBe('Accept or reject the open suggestions first.');
+    });
+
+    it('waits until the passages AI quotes are read, so they go to the agent locked', async () => {
+      getContentDraft.mockResolvedValue({
+        ...traced,
+        sourceUrl: 'https://acme.example/forecasting',
+      });
+      let read: (cited: CitedPassage[]) => void = () => {};
+      getCitedPassages.mockReturnValue(new Promise((resolve) => (read = resolve)));
+      await openRules();
+
+      const fix = () => panelButton('Fix open rules with agent');
+      expect(fix().disabled).toBe(true);
+      expect(fix().title).toBe(
+        'Reading which passages AI quotes, so the agent leaves them as they are…',
+      );
+      await act(async () => read([]));
+      expect(fix().disabled).toBe(false);
+    });
+
+    it('shows the open suggestions another tab left, when the agent is refused for them', async () => {
+      getContentDraft.mockResolvedValue(traced);
+      getDraftSuggestions.mockResolvedValueOnce([]).mockResolvedValueOnce([agentSuggestion]);
+      fixDraftRules.mockResolvedValue({ error: 'open_suggestions' });
+      await openRules();
+
+      await act(async () => panelButton('Fix open rules with agent').click());
+      await act(async () => {});
+      expect(toast.error).toHaveBeenCalledWith(
+        "This page has open suggestions, maybe from another tab. They're shown now: accept or reject them first.",
+      );
+      expect(
+        container.querySelector('[role="region"][aria-label="Agent suggestions"]')!.textContent,
+      ).toContain('Content Agent suggested 1 change');
+    });
+  });
+
+  it('starts a draft from the workspace’s My rules, and saves a draft’s set as them', async () => {
+    getMyRuleSets.mockResolvedValue({
+      blog_post: {
+        overrides: { sentence: { on: false } },
+        textRules: [{ id: 'm1', text: 'Mention free shipping', on: true }],
+      },
+    });
+    getContentDraft.mockResolvedValue(draft({ pageType: 'blog_post' }));
+    window.innerWidth = 1440;
+    await renderPage();
+
+    const rulesTab = [...panel()!.querySelectorAll<HTMLElement>('[role="tab"]')].find(
+      (el) => el.textContent === 'Rules',
+    )!;
+    await act(async () => {
+      rulesTab.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
+      rulesTab.click();
+    });
+    expect(getMyRuleSets).toHaveBeenCalledWith('b1');
+    expect(panel()!.textContent).toContain('My rules · Blog post');
+    expect(panel()!.textContent).toContain('Your text rules');
+    expect(
+      panel()!
+        .querySelector('[role="switch"][aria-label="Max sentence length: on or off"]')!
+        .getAttribute('aria-checked'),
+    ).toBe('false');
+    // Nothing is saved on the draft until something changes.
+    expect(saveDraftRules).not.toHaveBeenCalled();
+
+    const save = [...panel()!.querySelectorAll('button')].find(
+      (b) => b.textContent === 'Save as my rules',
+    )!;
+    await act(async () => save.click());
+    expect(saveMyRuleSet).toHaveBeenCalledWith('b1', 'blog_post', {
+      overrides: { sentence: { on: false } },
+      textRules: [{ id: 'm1', text: 'Mention free shipping', on: true }],
+    });
+    expect(saveDraftRules).toHaveBeenCalledWith(
+      'd1',
+      expect.objectContaining({ source: 'mine', overrides: { sentence: { on: false } } }),
+    );
+    expect(toast).toHaveBeenCalledWith('Saved as My rules for Blog post');
+  });
+
+  it('starts open on a wide window, and remembers it closed', async () => {
+    getContentDraft.mockResolvedValue(draft({ method: 'create' }));
+    window.innerWidth = 1440;
+    await renderPage();
+    // A new page: nothing to measure yet.
+    expect(panel()!.textContent).toContain('This draft is a new page, not live yet');
+    expect(getContentImpact).not.toHaveBeenCalled();
+
+    await act(async () => button('Hide side panel')!.click());
+    expect(panel()).toBeNull();
+    expect(localStorage.getItem('aeo:content-editor-panel')).toBe('0');
+
+    act(() => root.unmount());
+    root = createRoot(container);
+    await renderPage();
+    expect(panel()).toBeNull();
+  });
+});

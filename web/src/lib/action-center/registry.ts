@@ -112,7 +112,9 @@ export type ActionKind =
   // Sent by a person from answers on the Mentions tab (MS-08).
   | 'mention_review'
   // Sent by a person from AI Traffic's Pages section (AT-006).
-  | 'traffic_pages';
+  | 'traffic_pages'
+  // Sent by a person from the Content Editor's Start, as Team (CE-015).
+  | 'content_draft';
 
 export type TaskStatus =
   | 'todo'
@@ -248,6 +250,7 @@ export const ACTION_KINDS: readonly ActionKind[] = [
   'topic_opportunity',
   'mention_review',
   'traffic_pages',
+  'content_draft',
 ];
 
 /**

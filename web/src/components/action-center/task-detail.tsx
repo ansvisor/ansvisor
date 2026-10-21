@@ -6,6 +6,7 @@ import { ArrowUpRight } from 'lucide-react';
 import { Link } from '@/i18n/navigation';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { buttonVariants } from '@/components/ui/button-variants';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
@@ -24,6 +25,10 @@ import {
   type ActionTaskDetails,
   type TaskDetailsEdit,
 } from '@/lib/action-center/task-details';
+import { findActionDraft, type ActionDraft } from '@/lib/content/action-drafts';
+import { contentEditorPath, type DraftMethod } from '@/lib/content/drafts';
+import { pagePath } from '@/lib/content/overlap';
+import { cn } from '@/lib/utils';
 
 /** The type of work, beside the task's text (AC-004). */
 export function TaskTypeBadge({ type }: { type: ActionTaskDetails['type'] }) {
@@ -45,6 +50,67 @@ export interface TaskSendOptions {
   onSend: (to: 'content' | 'webhook') => void;
 }
 
+/** A writing task's work in the Content Editor (CE-022), and starting it. */
+export interface TaskDraftWork {
+  method: DraftMethod;
+  /** The pages the action names, for an existing page's work. */
+  pages: string[];
+  /** The drafts already linked to the action. */
+  drafts: ActionDraft[];
+  onStart: (page: string | null) => void;
+}
+
+/**
+ * "Create content" or "Optimize page" (CE-022): opens the Content Editor on
+ * the draft for this work, started when there is none yet, and "Open draft"
+ * once there is. An action naming several pages lists them, one draft each.
+ */
+function DraftWorkButtons({ work, disabled }: { work: TaskDraftWork; disabled: boolean }) {
+  const t = useTranslations('actionCenter.actionsPage.drawer.task');
+  const button = (page: string | null, label: string) => {
+    const draft = findActionDraft(work.drafts, work.method, page);
+    return draft ? (
+      <Link
+        href={contentEditorPath(draft.id)}
+        className={cn(buttonVariants({ variant: 'outline', size: 'sm' }), 'h-7 shrink-0 text-xs')}
+      >
+        {t('openDraft')}
+      </Link>
+    ) : (
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        disabled={disabled}
+        onClick={() => work.onStart(page)}
+        className="h-7 shrink-0 text-xs"
+      >
+        {label}
+      </Button>
+    );
+  };
+
+  if (work.method === 'create' || work.pages.length === 0) {
+    return button(null, t(work.method === 'create' ? 'createContent' : 'optimizePage'));
+  }
+  if (work.pages.length === 1) return button(work.pages[0], t('optimizePage'));
+  return (
+    <div className="w-full space-y-1">
+      <p className="text-xs text-muted-foreground">{t('pagesToOptimize')}</p>
+      <ul className="space-y-1">
+        {work.pages.map((page) => (
+          <li key={page} className="flex items-center justify-between gap-2 text-xs">
+            <span className="min-w-0 truncate" title={page}>
+              {pagePath(page)}
+            </span>
+            {button(page, t('optimize'))}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 /**
  * An opened task (AC-004): where to do it, why, how, when it counts as done
  * and what it takes, where it was sent, and for a task sent from the Improve
@@ -55,11 +121,14 @@ export function TaskDetailView({
   disabled,
   onEdit,
   send,
+  draftWork,
 }: {
   details: ActionTaskDetails | null;
   disabled: boolean;
   onEdit: () => void;
   send?: TaskSendOptions;
+  /** A writing task's draft (CE-022). */
+  draftWork?: TaskDraftWork;
 }) {
   const t = useTranslations('actionCenter.actionsPage.drawer.task');
   const format = useFormatter();
@@ -141,6 +210,7 @@ export function TaskDetailView({
         </div>
       )}
       <div className="flex flex-wrap gap-2">
+        {draftWork && <DraftWorkButtons work={draftWork} disabled={disabled} />}
         <Button
           type="button"
           variant="outline"
@@ -151,7 +221,8 @@ export function TaskDetailView({
         >
           {t('edit')}
         </Button>
-        {send?.content && !sentContent && (
+        {/* A writing task is written in the Content Editor: Create content / Optimize page. */}
+        {send?.content && !sentContent && !draftWork && (
           <Button
             type="button"
             variant="outline"

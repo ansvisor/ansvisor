@@ -25,6 +25,8 @@ export interface Brand {
   language?: string;
   trackingCode?: string;
   shoppingModeEnabled: boolean;
+  /** b2b, ecommerce or b2c (Content Editor page types); unset = guessed (siteTypeOf). */
+  siteType?: string;
   isActive: boolean;
   domains: BrandDomain[];
   createdAt: string;

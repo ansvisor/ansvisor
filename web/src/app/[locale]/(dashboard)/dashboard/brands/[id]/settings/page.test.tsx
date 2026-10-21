@@ -67,11 +67,12 @@ vi.mock('@/hooks/use-feature-gate', () => ({
 }));
 
 const setBrandShoppingMode = vi.hoisted(() => vi.fn());
+const updateBrand = vi.hoisted(() => vi.fn());
 vi.mock('@/lib/actions/brand', () => ({
   deleteBrand: vi.fn(),
   setBrandActive: vi.fn(),
   setBrandShoppingMode,
-  updateBrand: vi.fn(),
+  updateBrand,
 }));
 
 vi.mock('@/lib/actions/brand-domain', () => ({
@@ -99,6 +100,9 @@ import BrandSettingsPage from './page';
 
 afterEach(() => {
   brand.state = 'CA';
+  brand.industry = 'Technology';
+  brand.siteType = undefined;
+  updateBrand.mockReset();
   Object.assign(role, { canAdmin: true, canManage: true });
   setBrandShoppingMode.mockReset();
   document.body.replaceChildren();
@@ -124,6 +128,7 @@ describe('brand settings location selects', () => {
 
     expect(values.map((value) => value.textContent)).toEqual([
       'Technology',
+      'siteTypes.b2b',
       'United States',
       'California',
     ]);
@@ -151,8 +156,52 @@ describe('brand settings location selects', () => {
 
     const values = Array.from(container.querySelectorAll('[data-slot="select-value"]'));
 
-    expect(values[2]?.textContent).toBe('Translated Nationwide');
+    expect(values[3]?.textContent).toBe('Translated Nationwide');
 
+    await act(async () => root.unmount());
+  });
+});
+
+describe('brand settings site type', () => {
+  async function render() {
+    const container = document.createElement('div');
+    document.body.append(container);
+    const root = createRoot(container);
+    await act(async () => {
+      root.render(
+        <Suspense>
+          <BrandSettingsPage params={Promise.resolve({ id: brand.id })} />
+        </Suspense>,
+      );
+    });
+    const siteType = container.querySelector('#site-type [data-slot="select-value"]');
+    return { container, root, siteType };
+  }
+
+  it('shows the guess from the industry until one is picked, and saves no guess', async () => {
+    brand.industry = 'Travel & Hospitality';
+    updateBrand.mockResolvedValue({ ...brand });
+    const { container, root, siteType } = await render();
+    expect(siteType?.textContent).toBe('siteTypes.b2c');
+    expect(container.textContent).toContain('settings.siteTypeGuessed');
+
+    const save = [...container.querySelectorAll('button')].find(
+      (b) => b.textContent === 'settings.saveChanges',
+    )!;
+    await act(async () => save.click());
+    expect(updateBrand).toHaveBeenCalledWith(
+      brand.id,
+      expect.not.objectContaining({ siteType: expect.anything() }),
+    );
+    await act(async () => root.unmount());
+  });
+
+  it('shows the site type the brand chose, with no word of a guess', async () => {
+    brand.siteType = 'ecommerce';
+    const { container, root, siteType } = await render();
+    expect(siteType?.textContent).toBe('siteTypes.ecommerce');
+    expect(container.textContent).toContain('settings.siteTypeHint');
+    expect(container.textContent).not.toContain('settings.siteTypeGuessed');
     await act(async () => root.unmount());
   });
 });

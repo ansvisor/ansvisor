@@ -1,0 +1,163 @@
+'use client';
+
+import { useEffect, useState } from 'react';
+import { useParams } from 'next/navigation';
+import { useTranslations } from 'next-intl';
+import { ArrowLeft, Bot, Loader2 } from 'lucide-react';
+import { Link } from '@/i18n/navigation';
+import { Button } from '@/components/ui/button';
+import { buttonVariants } from '@/components/ui/button-variants';
+import { getContentDraft } from '@/lib/actions/content-drafts';
+import { AGENT_POLL_MS, CONTENT_LIBRARY_PATH, type ContentDraft } from '@/lib/content/drafts';
+import { useBrandStore } from '@/stores/use-brand-store';
+import { DraftEditor } from './_draft-editor';
+
+type DraftRead = { id: string; draft: ContentDraft } | { id: string; draft: null; failed: boolean };
+
+/**
+ * A draft in the editor (Content Editor, CE-004), opened from the Library.
+ * Full height, as Chat is: the editor scrolls inside, under its header.
+ */
+export default function ContentEditorPage() {
+  const t = useTranslations('contentEditor.editor');
+  const { draftId } = useParams<{ draftId: string }>();
+  const [read, setRead] = useState<DraftRead | null>(null);
+  const [attempt, setAttempt] = useState(0);
+  const brands = useBrandStore((s) => s.brands);
+  const activeBrandId = useBrandStore((s) => s.activeBrandId);
+  const setActiveBrand = useBrandStore((s) => s.setActiveBrand);
+
+  useEffect(() => {
+    let cancelled = false;
+    getContentDraft(draftId)
+      .then((draft) => {
+        if (cancelled) return;
+        setRead(draft ? { id: draftId, draft } : { id: draftId, draft: null, failed: false });
+      })
+      .catch((err) => {
+        console.error('Failed to open the draft:', err);
+        if (!cancelled) setRead({ id: draftId, draft: null, failed: true });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [draftId, attempt]);
+
+  // A draft opened from a link to another of the member's brands: the
+  // sidebar follows it, so the rest of the app shows the same brand.
+  const draftBrandId = read?.draft?.brandId;
+  useEffect(() => {
+    if (
+      draftBrandId &&
+      draftBrandId !== activeBrandId &&
+      brands.some((b) => b.id === draftBrandId)
+    ) {
+      setActiveBrand(draftBrandId);
+    }
+  }, [draftBrandId, activeBrandId, brands, setActiveBrand]);
+
+  const current = read?.id === draftId ? read : null;
+
+  // While the Content Agent writes the draft (CE-015), the page waits and
+  // looks again; the editor opens on what it wrote.
+  const writing = current?.draft?.agentState === 'writing';
+  useEffect(() => {
+    if (!writing) return;
+    let cancelled = false;
+    const timer = setTimeout(() => {
+      getContentDraft(draftId).then(
+        (draft) => {
+          if (!cancelled && draft) setRead({ id: draftId, draft });
+        },
+        // A failed look leaves the page waiting; the next one tries again.
+        () => !cancelled && setRead((prev) => (prev ? { ...prev } : prev)),
+      );
+    }, AGENT_POLL_MS);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [draftId, writing, read]);
+
+  return (
+    <div className="-m-6 flex h-[calc(100vh-4rem)] flex-col md:h-screen">
+      {!current ? (
+        <div className="flex flex-1 items-center justify-center" aria-busy="true">
+          <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+        </div>
+      ) : current.draft && writing ? (
+        <AgentWriting title={current.draft.title} />
+      ) : current.draft ? (
+        <DraftEditor
+          key={current.draft.id}
+          draft={current.draft}
+          onAgentStarted={() =>
+            setRead((prev) =>
+              prev?.draft ? { id: prev.id, draft: { ...prev.draft, agentState: 'writing' } } : prev,
+            )
+          }
+        />
+      ) : (
+        <div className="flex flex-1 flex-col items-center justify-center gap-3 px-6 text-center">
+          <p className="text-sm text-muted-foreground">
+            {current.failed ? t('loadError') : t('notFound')}
+          </p>
+          <div className="flex gap-2">
+            {current.failed && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setRead(null);
+                  setAttempt((n) => n + 1);
+                }}
+              >
+                {t('retryLoad')}
+              </Button>
+            )}
+            <Link
+              href={CONTENT_LIBRARY_PATH}
+              className={buttonVariants({ variant: 'outline', size: 'sm' })}
+            >
+              {t('back')}
+            </Link>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** The draft while the Content Agent writes it: nothing to edit yet. */
+function AgentWriting({ title }: { title: string }) {
+  const t = useTranslations('contentEditor.editor');
+  return (
+    <>
+      <header className="flex items-center gap-2.5 border-b px-4 py-2.5">
+        <Link
+          href={CONTENT_LIBRARY_PATH}
+          aria-label={t('back')}
+          title={t('back')}
+          className={buttonVariants({ variant: 'ghost', size: 'icon-sm' })}
+        >
+          <ArrowLeft className="h-4 w-4" />
+        </Link>
+        <h1 className="min-w-0 truncate text-sm font-medium">{title.trim() || t('untitled')}</h1>
+      </header>
+      <div
+        role="status"
+        className="flex flex-1 flex-col items-center justify-center gap-3 px-6 text-center"
+      >
+        <span className="relative">
+          <Bot aria-hidden className="h-6 w-6 text-muted-foreground" />
+          <Loader2
+            aria-hidden
+            className="absolute -right-2 -bottom-2 h-3.5 w-3.5 animate-spin text-muted-foreground"
+          />
+        </span>
+        <p className="text-sm font-medium">{t('agentWriting.title')}</p>
+        <p className="max-w-sm text-sm text-muted-foreground">{t('agentWriting.body')}</p>
+      </div>
+    </>
+  );
+}
