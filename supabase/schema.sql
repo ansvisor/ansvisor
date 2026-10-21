@@ -29811,7 +29811,9 @@ comment on column public.content_drafts.rules is
 --     same shapes as content_drafts.rules (00213). Pasted rule text is
 --     writing guidance for the editor and the agent only; it changes no
 --     access or safety rule (spec §10, CHAT-05).
---   * Members of the organization read and save them, as they do drafts.
+--   * Members of the organization read them; admins and managers save them,
+--     as they do the workspace's other settings (brand_domains), since every
+--     new draft of the type starts from them.
 
 create table if not exists public.content_rule_sets (
   organization_id uuid not null references public.organizations(id) on delete cascade,
@@ -29833,20 +29835,31 @@ create policy "content_rule_sets: member select"
   for select
   using (organization_id in (select p.organization_id from public.profiles p where p.id = auth.uid()));
 
-create policy "content_rule_sets: member insert"
+create policy "content_rule_sets: manager insert"
   on public.content_rule_sets
   for insert
   with check (
-    organization_id in (select p.organization_id from public.profiles p where p.id = auth.uid())
+    organization_id in (
+      select p.organization_id from public.profiles p
+      where p.id = auth.uid() and p.role in ('admin', 'manager')
+    )
     and updated_by = auth.uid()
   );
 
-create policy "content_rule_sets: member update"
+create policy "content_rule_sets: manager update"
   on public.content_rule_sets
   for update
-  using (organization_id in (select p.organization_id from public.profiles p where p.id = auth.uid()))
+  using (
+    organization_id in (
+      select p.organization_id from public.profiles p
+      where p.id = auth.uid() and p.role in ('admin', 'manager')
+    )
+  )
   with check (
-    organization_id in (select p.organization_id from public.profiles p where p.id = auth.uid())
+    organization_id in (
+      select p.organization_id from public.profiles p
+      where p.id = auth.uid() and p.role in ('admin', 'manager')
+    )
     and updated_by = auth.uid()
   );
 

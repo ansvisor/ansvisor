@@ -36,6 +36,7 @@ import { HistoryMenu } from './_history-menu';
 import { HtmlBlock, copyToClipboard } from './_html-block';
 import { PageTypeMenu } from './_page-type-menu';
 import { EditorSidePanel, useSidePanelOpen } from './_side-panel';
+import { useDraftReads } from './_use-draft-reads';
 import { useDraftRules } from './_use-draft-rules';
 import { EditorToolbar } from './_toolbar';
 import { useDraftAutosave, type SaveState } from './_use-autosave';
@@ -186,11 +187,14 @@ export function DraftEditor({ draft }: { draft: ContentDraft }) {
 
   const attachments = useAttachments(editor);
   // The rules the page is written to, checked as it reads now (CE-009).
+  // The brief and sources, read once: the rules check against them, the panel shows them.
+  const reads = useDraftReads(draft.id);
   const rules = useDraftRules({
     draft,
     html: pageHtml,
     characters: (editor?.storage.characterCount.characters() as number | undefined) ?? 0,
     pageType,
+    reads,
   });
   useEffect(() => {
     attachRef.current = (files) => void attachments.attach(files);
@@ -501,6 +505,7 @@ export function DraftEditor({ draft }: { draft: ContentDraft }) {
             bodyHtml={pageHtml}
             pageType={pageType}
             rules={rules}
+            reads={reads}
             tabRequest={tabRequest}
           />
         )}
