@@ -8,6 +8,7 @@ import { RoleProvider } from '@/components/providers/role-provider';
 import type { ContentDraft } from '@/lib/content/drafts';
 import type { DraftSuggestion } from '@/lib/content/suggestions';
 import { passageKey, type CitedPassage } from '@/lib/content/cited-passages';
+import { encodeHtmlBlock } from '@/lib/content/html-allowlist';
 import ContentEditorPage from './page';
 
 const getContentDraft = vi.fn();
@@ -563,7 +564,7 @@ describe('the content editor', () => {
           bodyHash: expect.stringMatching(/^[0-9a-f]{64}$/),
         },
       });
-      expect(restoreDraftVersion).toHaveBeenCalledWith('v1');
+      expect(restoreDraftVersion).toHaveBeenCalledWith('d1', 'v1');
       expect(saveContentDraft.mock.invocationCallOrder[0]).toBeLessThan(
         restoreDraftVersion.mock.invocationCallOrder[0],
       );
@@ -710,7 +711,7 @@ describe('the content editor', () => {
       expect(container.querySelector('header')!.textContent).not.toContain('cited passage');
     });
 
-    it('holds a key once, even when its text follows the held keydown', async () => {
+    it('holds a key once, even when its text follows the held keydown, and types it on Edit anyway', async () => {
       getContentDraft.mockResolvedValue(page);
       getCitedPassages.mockResolvedValue(cited);
       await renderPage();
@@ -725,7 +726,28 @@ describe('the content editor', () => {
         editorOf().commands.insertContentAt(at, 'x');
       });
       await act(async () => dialogButton('Edit anyway').click());
-      expect(container.querySelector('.cited-passage')!.textContent).toBe(QUOTED);
+      // The key pressed is typed, once.
+      expect(container.querySelector('.ProseMirror')!.textContent).toContain(
+        `${QUOTED.slice(0, 4)}x${QUOTED.slice(4)}`,
+      );
+      expect(container.querySelector('.cited-passage')).toBeNull();
+    });
+
+    it('deletes the character a held Backspace would, on Edit anyway', async () => {
+      getContentDraft.mockResolvedValue(page);
+      getCitedPassages.mockResolvedValue(cited);
+      await renderPage();
+
+      await act(async () => {
+        editorOf().commands.setTextSelection(quotedAt() + 4);
+        editorOf().view.dom.dispatchEvent(
+          new KeyboardEvent('keydown', { key: 'Backspace', bubbles: true, cancelable: true }),
+        );
+      });
+      await act(async () => dialogButton('Edit anyway').click());
+      expect(container.querySelector('.ProseMirror')!.textContent).toContain(
+        `${QUOTED.slice(0, 3)}${QUOTED.slice(4)}`,
+      );
     });
 
     it('lets typing through once the person chose to edit it', async () => {
@@ -1005,6 +1027,41 @@ describe('the content editor', () => {
     expect(container.querySelector('textarea')).toBeNull();
     expect(toast).not.toHaveBeenCalled();
     expect(container.querySelector('header')!.textContent).toContain('Saved');
+  });
+
+  it('keeps HTML blocks only in a paste copied from this editor', async () => {
+    getContentDraft.mockResolvedValue(
+      draft({
+        bodyHtml: `<h1>Trail Runner X</h1><div data-html-block="${encodeHtmlBlock('<p>hi</p>')}"></div><p>End.</p>`,
+      }),
+    );
+    await renderPage();
+    const editor = (container.querySelector('.ProseMirror') as HTMLElement & { editor: Editor })
+      .editor;
+    const blocks = () => container.querySelectorAll('[data-html-block-view]').length;
+    expect(blocks()).toBe(1);
+
+    // jsdom has no ClipboardEvent, which pasteHTML makes.
+    if (!('ClipboardEvent' in globalThis)) {
+      Object.assign(globalThis, { ClipboardEvent: class extends Event {} });
+    }
+    // Copied here: the editor's own clipboard HTML.
+    const { dom } = editor.view.serializeForClipboard(
+      editor.state.doc.slice(0, editor.state.doc.content.size),
+    );
+    const own = dom.innerHTML;
+    // Another ProseMirror site's copy says data-pm-slice too, without this tab's mark.
+    const foreign = own.replace(/ data-ce-copy="[^"]*"/g, '');
+    expect(foreign).toContain('data-pm-slice');
+    await act(async () => {
+      editor.commands.setTextSelection(editor.state.doc.content.size - 1);
+      editor.view.pasteHTML(foreign);
+    });
+    expect(blocks()).toBe(1);
+    await act(async () => {
+      editor.view.pasteHTML(own);
+    });
+    expect(blocks()).toBe(2);
   });
 
   it('adds HTML blocks, shows their code as text, and copies one or the whole page', async () => {
@@ -1365,6 +1422,85 @@ describe('the side panel', () => {
     });
     expect(chip.getAttribute('aria-label')).toBe(`Rules ${met - 1}/${total - 1}`);
     expect(toast).toHaveBeenCalledWith('Rule updated for this draft');
+  });
+
+  it('saves rule changes one at a time, the latest last, and says so once', async () => {
+    getContentDraft.mockResolvedValue(draft({ pageType: 'blog_post' }));
+    let finish: () => void = () => {};
+    saveDraftRules.mockImplementationOnce(() => new Promise<void>((r) => (finish = r)));
+    window.innerWidth = 1024;
+    await renderPage();
+    const chip = container.querySelector<HTMLButtonElement>('header button[aria-label^="Rules "]')!;
+    await act(async () => chip.click());
+    const toggle = (label: string) =>
+      act(async () =>
+        panel()!
+          .querySelector<HTMLElement>(`[role="switch"][aria-label="${label}: on or off"]`)!
+          .click(),
+      );
+
+    await toggle('Max sentence length');
+    await toggle('FAQ block');
+    await toggle('Max sentence length');
+    // The first save is still under way: the others wait.
+    expect(saveDraftRules).toHaveBeenCalledTimes(1);
+    await act(async () => finish());
+    await act(async () => {});
+    // Then only the latest goes, holding every change.
+    expect(saveDraftRules).toHaveBeenCalledTimes(2);
+    expect(saveDraftRules.mock.calls[1][1].overrides).toEqual({
+      sentence: { on: true },
+      faq: { on: false },
+    });
+    expect(
+      vi.mocked(toast).mock.calls.filter(([m]) => m === 'Rule updated for this draft'),
+    ).toHaveLength(1);
+  });
+
+  it('says when the rules are too long to save, rather than failing the save', async () => {
+    // 40 rules of 300 characters in a script of 3 bytes each: past the 32 KB check.
+    const textRules = Array.from({ length: 40 }, (_, i) => ({
+      id: `r${i}`,
+      text: '日'.repeat(300),
+      on: true,
+    }));
+    getContentDraft.mockResolvedValue(
+      draft({
+        pageType: 'blog_post',
+        rules: { set: null, source: 'default', overrides: {}, textRules },
+      }),
+    );
+    window.innerWidth = 1024;
+    await renderPage();
+    const chip = container.querySelector<HTMLButtonElement>('header button[aria-label^="Rules "]')!;
+    await act(async () => chip.click());
+    await act(async () =>
+      panel()!
+        .querySelector<HTMLElement>('[role="switch"][aria-label="Max sentence length: on or off"]')!
+        .click(),
+    );
+    expect(saveDraftRules).not.toHaveBeenCalled();
+    expect(toast.error).toHaveBeenCalledWith(
+      'These rules are too long to save. Shorten or remove a rule first.',
+    );
+  });
+
+  it('sets the Language rule from the brand’s language', async () => {
+    brandState.brands = [{ id: 'b1', language: 'tr' } as never, { id: 'b2' }];
+    try {
+      getContentDraft.mockResolvedValue(draft({ pageType: 'blog_post' }));
+      window.innerWidth = 1024;
+      await renderPage();
+      const chip = container.querySelector<HTMLButtonElement>(
+        'header button[aria-label^="Rules "]',
+      )!;
+      await act(async () => chip.click());
+      const values = [...panel()!.querySelectorAll<HTMLInputElement>('input')].map((i) => i.value);
+      expect(values).toContain('Turkish');
+      expect(values).not.toContain('English (US)');
+    } finally {
+      brandState.brands = [{ id: 'b1' }, { id: 'b2' }];
+    }
   });
 
   describe('Fix open rules with agent', () => {

@@ -12,7 +12,6 @@ import {
   AGENT_POLL_MS,
   LIBRARY_TABS,
   draftsInTab,
-  libraryTabCounts,
   type ContentDraftListItem,
   type LibraryTab,
 } from '@/lib/content/drafts';
@@ -26,6 +25,8 @@ import { LibraryTable } from './_library-table';
 interface LibraryRead {
   brandId: string;
   drafts: ContentDraftListItem[] | null;
+  /** Each tab's drafts in all: past the Library's cap, more than it lists. */
+  counts: Record<LibraryTab, number> | null;
   failed: boolean;
 }
 
@@ -52,12 +53,14 @@ export default function ContentLibraryPage() {
     if (!activeBrandId) return;
     let cancelled = false;
     getContentDrafts(activeBrandId)
-      .then((drafts) => {
-        if (!cancelled) setRead({ brandId: activeBrandId, drafts, failed: false });
+      .then(({ drafts, counts }) => {
+        if (!cancelled) setRead({ brandId: activeBrandId, drafts, counts, failed: false });
       })
       .catch((err) => {
         console.error('Failed to load the content library:', err);
-        if (!cancelled) setRead({ brandId: activeBrandId, drafts: null, failed: true });
+        if (!cancelled) {
+          setRead({ brandId: activeBrandId, drafts: null, counts: null, failed: true });
+        }
       });
     return () => {
       cancelled = true;
@@ -89,7 +92,8 @@ export default function ContentLibraryPage() {
   // A read for another brand (just switched) counts as still loading.
   const current = read?.brandId === activeBrandId ? read : null;
   const drafts = current?.drafts ?? null;
-  const counts = drafts ? libraryTabCounts(drafts) : null;
+  const counts = current?.counts ?? null;
+  const listed = drafts ? draftsInTab(drafts, tab) : [];
 
   return (
     <div className="space-y-6">
@@ -143,10 +147,18 @@ export default function ContentLibraryPage() {
               <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
             </div>
           ) : (
-            <LibraryTable drafts={draftsInTab(drafts, tab)} tab={tab} />
+            <LibraryTable drafts={listed} tab={tab} />
           )}
         </CardContent>
       </Card>
+      {counts && listed.length < counts[tab] && (
+        <p className="text-xs text-muted-foreground">
+          {t('latestOnly', {
+            shown: formatNumber(listed.length),
+            count: formatNumber(counts[tab]),
+          })}
+        </p>
+      )}
     </div>
   );
 }

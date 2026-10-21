@@ -3,13 +3,17 @@ import { createRoot, type Root } from 'react-dom/client';
 import { NextIntlClientProvider } from 'next-intl';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import messages from '../../../../../../../messages/en.json';
-import type { ContentDraftListItem } from '@/lib/content/drafts';
+import { libraryTabCounts, type ContentDraftListItem } from '@/lib/content/drafts';
 import ContentLibraryPage from './page';
 
 const getContentDrafts = vi.fn();
 const getContentStartOptions = vi.fn();
 vi.mock('@/lib/actions/content-drafts', () => ({
-  getContentDrafts: (...args: unknown[]) => getContentDrafts(...args),
+  // A list stands for a brand under the cap: its tabs count its rows.
+  getContentDrafts: async (...args: unknown[]) => {
+    const read = await getContentDrafts(...args);
+    return Array.isArray(read) ? { drafts: read, counts: libraryTabCounts(read) } : read;
+  },
   getContentStartOptions: (...args: unknown[]) => getContentStartOptions(...args),
   createContentDraft: vi.fn(),
 }));
@@ -151,6 +155,22 @@ describe('the Content Library', () => {
 
     const link = container.querySelector('tbody a')!;
     expect(link.getAttribute('href')).toBe('/dashboard/content/editor/d1');
+  });
+
+  it('counts each tab in all past the cap, and says the list holds the latest', async () => {
+    getContentDrafts.mockResolvedValue({
+      drafts: [row({}), row({ id: 'd2', status: 'published' })],
+      counts: { all: 812, draft: 300, in_review: 12, ready: 0, published: 500 },
+    });
+    await renderPage();
+    expect(tab('All').textContent).toBe('All812');
+    expect(tab('Published').textContent).toBe('Published500');
+    expect(container.textContent).toContain('Showing the 2 changed most recently of 812.');
+
+    await act(async () => {
+      tab('Ready').click();
+    });
+    expect(container.textContent).not.toContain('changed most recently');
   });
 
   it('shows a tab’s drafts only, and keeps the tab in the URL', async () => {

@@ -120,6 +120,22 @@ describe('the Brief tab', () => {
     expect(onRebuild).toHaveBeenCalled();
   });
 
+  it('asks before rebuilding a brief the person edited', async () => {
+    await render({ status: 'ready', brief: { ...brief, origin: 'edit' } });
+    await act(async () => button('Rebuild outline').click());
+    expect(onRebuild).not.toHaveBeenCalled();
+    expect(container.querySelector('[role="alert"]')!.textContent).toContain(
+      'Rebuild outline writes a new brief over the one you edited.',
+    );
+    await act(async () => button('Keep my brief').click());
+    expect(container.querySelector('[role="alert"]')).toBeNull();
+    expect(onRebuild).not.toHaveBeenCalled();
+
+    await act(async () => button('Rebuild outline').click());
+    await act(async () => button('Rebuild anyway').click());
+    expect(onRebuild).toHaveBeenCalledTimes(1);
+  });
+
   it('offers to build a brief for a new page without one', async () => {
     await render(
       { status: 'ready', brief: null },

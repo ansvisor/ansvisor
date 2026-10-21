@@ -51,6 +51,8 @@ export function BriefTab({
   const t = useTranslations('contentEditor.editor.brief');
   const tTypes = useTranslations('contentEditor.pageTypes');
   const [editing, setEditing] = useState(false);
+  // A brief edited by hand is rebuilt only once the person says so.
+  const [confirming, setConfirming] = useState(false);
 
   if (state.status === 'loading') {
     return (
@@ -172,8 +174,34 @@ export function BriefTab({
         </p>
       )}
 
+      {confirming && (
+        <div role="alert" className="space-y-2 rounded-md border px-3 py-2 text-xs">
+          <p>{t('rebuildEdited')}</p>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                setConfirming(false);
+                onRebuild();
+              }}
+            >
+              {t('rebuildAnyway')}
+            </Button>
+            <Button size="sm" variant="ghost" onClick={() => setConfirming(false)}>
+              {t('keepEdited')}
+            </Button>
+          </div>
+        </div>
+      )}
+
       <div className="flex flex-wrap gap-2">
-        <Button size="sm" variant="outline" disabled={rebuilding} onClick={onRebuild}>
+        <Button
+          size="sm"
+          variant="outline"
+          disabled={rebuilding || confirming}
+          onClick={() => (brief?.origin === 'edit' ? setConfirming(true) : onRebuild())}
+        >
           {rebuilding ? (
             <Loader2 className="h-3.5 w-3.5 animate-spin" />
           ) : (

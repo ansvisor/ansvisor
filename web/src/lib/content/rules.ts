@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { LANGUAGES } from '@/config/prompt-options';
 import { classifyDomain, normalizeDomain } from '@/lib/citations/classify';
 import { PAGE_TYPES, type PageType } from '@/lib/content/drafts';
 import { lengthTarget } from '@/lib/content/editor';
@@ -240,15 +241,26 @@ const TYPE_RULES: Partial<Record<PageType, RuleDef[]>> = {
 };
 
 /** The rules of a set: the type's own, then the shared groups, with the type's length. */
+/**
+ * The Language rule's value for the brand's language (brands.language, as
+ * the brief and the agent write in): its name, US English for English or
+ * none.
+ */
+export function languageRuleValue(code: string | null | undefined): string {
+  const label = code && code !== 'en' ? LANGUAGES.find((l) => l.code === code)?.label : undefined;
+  return label ? label.replace(/\s*\([^)]*\)$/, '') : 'English (US)';
+}
+
 export function ruleSet(
   pageType: PageType | null,
-  defaults: { keywords?: string[] } = {},
+  defaults: { keywords?: string[]; language?: string | null } = {},
 ): RuleDef[] {
   const own = (pageType && TYPE_RULES[pageType]) || [];
   return [
     ...own,
     ...SHARED_RULES.map((rule) => {
       if (rule.key === 'length') return { ...rule, value: String(lengthTarget(pageType)) };
+      if (rule.key === 'language') return { ...rule, value: languageRuleValue(defaults.language) };
       if (rule.key === 'keywords' && defaults.keywords?.length) {
         return { ...rule, value: defaults.keywords.join(', ') };
       }
@@ -304,6 +316,39 @@ export const savedRuleSetSchema = z.object({
   textRules: z.array(textRuleSchema).max(MAX_TEXT_RULES),
 });
 export type SavedRuleSet = z.infer<typeof savedRuleSetSchema>;
+
+/**
+ * The database's size checks, in bytes of the JSON as stored: a draft's
+ * rules (00213), and a set's overrides and text rules (00214). The zod
+ * limits count characters, and text outside Latin script takes 2–4 bytes
+ * each, so a save is checked against these first.
+ */
+export const MAX_DRAFT_RULES_BYTES = 32_768;
+export const MAX_SET_OVERRIDES_BYTES = 16_384;
+export const MAX_SET_TEXT_RULES_BYTES = 32_768;
+
+/**
+ * At least the bytes a value takes as jsonb text: its UTF-8 JSON, plus the
+ * space jsonb writes after each ':' and ',' (counted for every one, so the
+ * size errs high).
+ */
+export function storedBytes(value: unknown): number {
+  const json = JSON.stringify(value);
+  return new TextEncoder().encode(json).length + (json.match(/[:,]/g)?.length ?? 0);
+}
+
+/** Whether a draft's rules fit the database's check. */
+export function draftRulesFit(rules: DraftRules): boolean {
+  return storedBytes(rules) <= MAX_DRAFT_RULES_BYTES;
+}
+
+/** Whether a set fits the database's checks. */
+export function ruleSetFits(set: SavedRuleSet): boolean {
+  return (
+    storedBytes(set.overrides) <= MAX_SET_OVERRIDES_BYTES &&
+    storedBytes(set.textRules) <= MAX_SET_TEXT_RULES_BYTES
+  );
+}
 
 /**
  * The choices in effect: the draft's own; or, for a draft no one has set

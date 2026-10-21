@@ -3189,6 +3189,7 @@
         "score": "AEO score"
       },
       "scoreHint": "The page's AEO score, before → after the changes",
+      "latestOnly": "Showing the {shown} changed most recently of {count}.",
       "untitled": "Untitled",
       "you": "You",
       "contentAgent": "Content Agent",
@@ -3780,6 +3781,9 @@
         "edited": "Edited by you.",
         "builtFrom": "{count, plural, one {Built from # source} other {Built from # sources}} · {date}",
         "rebuild": "Rebuild outline",
+        "rebuildEdited": "Rebuild outline writes a new brief over the one you edited.",
+        "rebuildAnyway": "Rebuild anyway",
+        "keepEdited": "Keep my brief",
         "build": "Build brief",
         "edit": "Edit brief",
         "usage": "Rebuilding uses your workspace's AI usage.",
@@ -3888,6 +3892,8 @@
         "note": "Values you change apply to this draft only. Save as my rules keeps them for the workspace's next drafts of this type. Rules marked AI check are judged by the Content Agent and aren't counted yet.",
         "updated": "Rule updated for this draft",
         "saveFailed": "Couldn't update the rule. Try again.",
+        "tooLong": "These rules are too long to save. Shorten or remove a rule first.",
+        "tooLongMine": "These rules are too long to keep as My rules. Shorten or remove a rule first.",
         "status": {
           "off": "Off",
           "over": "{count} over",

@@ -72,6 +72,8 @@ export async function agentWriteRequest(
     sourceUrl: string | null;
     bodyHtml: string;
     rules: DraftRules;
+    /** The brand's language, the Language rule's default. */
+    language?: string | null;
   },
   describe: RuleDescriber,
   inEffect?: { rules: ActiveRule[]; textRules: string[] },
@@ -89,7 +91,8 @@ export async function agentWriteRequest(
   ]);
   const effective = effectiveRules(draft.rules, setType ? mine?.[setType] : undefined);
   const rules = (
-    inEffect?.rules ?? activeRules(ruleSet(setType), effective).filter((rule) => rule.on)
+    inEffect?.rules ??
+    activeRules(ruleSet(setType, { language: draft.language }), effective).filter((rule) => rule.on)
   ).filter((rule) => rule.check !== 'feed');
   const textRules =
     inEffect?.textRules ?? effective.textRules.filter((rule) => rule.on).map((rule) => rule.text);

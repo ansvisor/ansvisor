@@ -13,6 +13,9 @@ import {
   rulesMet,
   type ActiveRule,
   type RuleContext,
+  draftRulesFit,
+  ruleSetFits,
+  storedBytes,
 } from './rules';
 
 const ctx: RuleContext = {
@@ -61,6 +64,41 @@ describe('rule sets', () => {
       ruleSet('guide', { keywords: ['espresso', 'grinder'] }).find((r) => r.key === 'keywords')
         ?.value,
     ).toBe('espresso, grinder');
+  });
+
+  it('checks the rules against the database’s size in bytes, not characters', () => {
+    const rule = (text: string, i: number) => ({ id: `r${i}`, text, on: true });
+    const latin = Array.from({ length: 40 }, (_, i) => rule('a'.repeat(300), i));
+    const cjk = Array.from({ length: 40 }, (_, i) => rule('日'.repeat(300), i));
+    const rules = (textRules: typeof latin) => ({
+      set: null,
+      source: 'default' as const,
+      overrides: {},
+      textRules,
+    });
+    expect(draftRulesFit(rules(latin))).toBe(true);
+    expect(draftRulesFit(rules(cjk))).toBe(false);
+    expect(ruleSetFits({ overrides: {}, textRules: latin })).toBe(true);
+    expect(
+      ruleSetFits({
+        overrides: Object.fromEntries(
+          Array.from({ length: 40 }, (_, i) => [`k${i}`, { value: 'ü'.repeat(300) }]),
+        ),
+        textRules: [],
+      }),
+    ).toBe(false);
+    // jsonb writes a space after each ':' and ',': the count errs high, never low.
+    expect(storedBytes({ a: [1, 2] })).toBeGreaterThanOrEqual('{"a": [1, 2]}'.length);
+  });
+
+  it('writes in the brand’s language by default, US English for English or none', () => {
+    const language = (code?: string | null) =>
+      ruleSet('guide', { language: code }).find((r) => r.key === 'language')?.value;
+    expect(language('tr')).toBe('Turkish');
+    expect(language('pt')).toBe('Portuguese');
+    expect(language('en')).toBe('English (US)');
+    expect(language(null)).toBe('English (US)');
+    expect(language('xx')).toBe('English (US)');
   });
 
   it('applies the draft’s choices', () => {

@@ -28,7 +28,11 @@ export interface CitedLocks {
 export interface HeldEdit {
   /** The passage it touches. */
   key: string;
-  /** The change itself, to apply on "Edit anyway"; none for typing, which is typed again. */
+  /**
+   * The change itself, to apply on "Edit anyway": a held key's too (its
+   * character, or the one character it deletes). None for a key that joins
+   * blocks, which is pressed again.
+   */
   tr: Transaction | null;
 }
 
@@ -152,6 +156,22 @@ export function lockedPassageCount(state: EditorState): number {
   return citedPassagesKey.getState(state)?.marks.find().length ?? 0;
 }
 
+/**
+ * What a held key would do, for Edit anyway: type its character over the
+ * selection, or delete the selection or the one character beside the cursor
+ * in its block. Null when it would join two blocks.
+ */
+export function keyTransaction(state: EditorState, key: string): Transaction | null {
+  const { selection } = state;
+  if (key.length === 1) return state.tr.insertText(key);
+  if (!selection.empty) return state.tr.deleteSelection();
+  const { $from, from } = selection;
+  if (key === 'Backspace') {
+    return $from.parentOffset > 0 ? state.tr.delete(from - 1, from) : null;
+  }
+  return $from.parentOffset < $from.parent.content.size ? state.tr.delete(from, from + 1) : null;
+}
+
 export const CitedPassages = Extension.create<{ onHeld: (edit: HeldEdit) => void }>({
   name: 'citedPassages',
 
@@ -211,7 +231,7 @@ export const CitedPassages = Extension.create<{ onHeld: (edit: HeldEdit) => void
             if (!edits) return false;
             const key = lockedAtSelection(view.state, citedLocks(view.state));
             if (!key) return false;
-            onHeld({ key, tr: null });
+            onHeld({ key, tr: keyTransaction(view.state, event.key) });
             return true;
           },
         },

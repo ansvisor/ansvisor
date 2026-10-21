@@ -6,9 +6,11 @@ import { createClient } from '@/lib/supabase/server';
 import { readAssignees } from '@/lib/action-center/assignees';
 import {
   DRAFT_STATUSES,
+  LIBRARY_TABS,
   PAGE_TYPES,
   WRITING_STALE_MS,
   agentStateOf,
+  libraryTabCounts,
   type ContentDraft,
   type ContentDraftListItem,
   type ContentOverlap,
@@ -17,6 +19,7 @@ import {
   type DraftStartOptions,
   type DraftStatus,
   type ImportedPage,
+  type LibraryTab,
   type PageImportError,
   type PageType,
   PAGE_IMPORT_ERRORS,
@@ -33,7 +36,9 @@ import { detectPageType, siteTypeOf, type SiteType } from '@/lib/content/page-ty
 import { sanitizeDraftHtml } from '@/lib/content/sanitize-draft-html';
 import {
   NO_DRAFT_RULES,
+  draftRulesFit,
   draftRulesSchema,
+  ruleSetFits,
   savedRuleSetSchema,
   type DraftRulesInput,
   type SavedRuleSet,
@@ -93,8 +98,40 @@ import {
 /** How many drafts the Library lists, the latest changed first. */
 const LIBRARY_LIMIT = 500;
 
-/** The brand's drafts for the Library, with who started each. */
-export async function getContentDrafts(brandId: string): Promise<ContentDraftListItem[]> {
+/** The Library: the latest drafts, and how many each tab holds in all. */
+export interface ContentLibrary {
+  drafts: ContentDraftListItem[];
+  counts: Record<LibraryTab, number>;
+}
+
+/**
+ * Each tab's drafts counted on their own, for a brand past the Library's
+ * cap: the listed rows would undercount them.
+ */
+async function countLibraryTabs(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  brandId: string,
+): Promise<Record<LibraryTab, number>> {
+  const counted = await Promise.all(
+    LIBRARY_TABS.map(async (tab) => {
+      let query = supabase
+        .from('content_drafts')
+        .select('id', { count: 'exact', head: true })
+        .eq('brand_id', brandId);
+      if (tab !== 'all') query = query.eq('status', tab);
+      const { count, error } = await query;
+      if (error) throw new Error(error.message);
+      return [tab, count ?? 0] as const;
+    }),
+  );
+  return Object.fromEntries(counted) as Record<LibraryTab, number>;
+}
+
+/**
+ * The brand's drafts for the Library, the latest LIBRARY_LIMIT, with who
+ * started each, and each tab's count of all its drafts.
+ */
+export async function getContentDrafts(brandId: string): Promise<ContentLibrary> {
   const supabase = await createClient();
   const [userRes, draftsRes] = await Promise.all([
     supabase.auth.getUser(),
@@ -119,20 +156,28 @@ export async function getContentDrafts(brandId: string): Promise<ContentDraftLis
     rows.flatMap((row) => (row.created_by ? [row.created_by] : [])),
   );
 
-  return rows.map((row) => ({
-    id: row.id,
-    title: row.title,
-    pageType: row.page_type,
-    method: row.method as DraftMethod,
-    status: draftStatus(row.status),
-    author: row.author === 'agent' ? 'agent' : 'user',
-    createdBy: row.created_by ? (people.get(row.created_by) ?? null) : null,
-    isMine: me !== null && row.created_by === me,
-    scoreBefore: row.score_before,
-    scoreAfter: row.score_after,
-    agentState: agentStateOf(row.agent_state, row.agent_state_at),
-    updatedAt: row.updated_at,
-  }));
+  const drafts = rows.map(
+    (row): ContentDraftListItem => ({
+      id: row.id,
+      title: row.title,
+      pageType: row.page_type,
+      method: row.method as DraftMethod,
+      status: draftStatus(row.status),
+      author: row.author === 'agent' ? 'agent' : 'user',
+      createdBy: row.created_by ? (people.get(row.created_by) ?? null) : null,
+      isMine: me !== null && row.created_by === me,
+      scoreBefore: row.score_before,
+      scoreAfter: row.score_after,
+      agentState: agentStateOf(row.agent_state, row.agent_state_at),
+      updatedAt: row.updated_at,
+    }),
+  );
+  // Under the cap the rows are every draft; at it, each tab is counted on its own.
+  const counts =
+    rows.length < LIBRARY_LIMIT
+      ? libraryTabCounts(drafts)
+      : await countLibraryTabs(supabase, brandId);
+  return { drafts, counts };
 }
 
 function draftStatus(value: string): DraftStatus {
@@ -215,25 +260,24 @@ export async function getContentStartOptions(brandId: string): Promise<DraftStar
       .limit(START_LIMIT),
     supabase
       .from('prompts')
-      .select('id, text, topic_id, prompt_sets!inner(brand_id)')
+      .select('id, text, prompt_sets!inner(brand_id)')
       .eq('prompt_sets.brand_id', brandId)
       .eq('is_active', true)
       .order('text')
       .limit(START_LIMIT),
+    // Each topic's active prompts counted in the database: the prompt list
+    // above stops at START_LIMIT, and would undercount a big brand's topics.
     supabase
       .from('topics')
-      .select('id, name')
+      .select('id, name, prompts(count)')
       .eq('brand_id', brandId)
       .eq('is_active', true)
+      .eq('prompts.is_active', true)
       .order('name'),
   ]);
   const failed = opportunities.error ?? prompts.error ?? topics.error;
   if (failed) throw new Error(failed.message);
 
-  const perTopic = new Map<string, number>();
-  for (const p of prompts.data ?? []) {
-    if (p.topic_id) perTopic.set(p.topic_id, (perTopic.get(p.topic_id) ?? 0) + 1);
-  }
   return {
     opportunities: (opportunities.data ?? []).map((o) => {
       const suggested = (o.brief as { suggestedTitle?: unknown } | null)?.suggestedTitle;
@@ -250,7 +294,9 @@ export async function getContentStartOptions(brandId: string): Promise<DraftStar
       .map((topic) => ({
         id: topic.id,
         name: topic.name,
-        promptCount: perTopic.get(topic.id) ?? 0,
+        promptCount: Number(
+          (topic.prompts as unknown as { count: number }[] | null)?.[0]?.count ?? 0,
+        ),
       }))
       .filter((topic) => topic.promptCount > 0),
   };
@@ -975,11 +1021,15 @@ export async function getDraftVersions(id: string): Promise<DraftVersion[]> {
 /**
  * Restores a version (CE-018): the draft as it is now is kept in History
  * first, so nothing is lost, then takes the version's title and body
- * (00215 content_draft_restore). Throws 'not_found' when the version is
- * unknown, past its 90 days, or another organization's.
+ * (00215 content_draft_restore). A draft whose type follows its page gets
+ * the restored page's type, as a save would give it, so the Library shows
+ * it. Throws 'not_found' when the version is unknown, past its 90 days, or
+ * another organization's.
  */
-export async function restoreDraftVersion(versionId: string): Promise<RestoredDraft> {
-  if (!draftId.safeParse(versionId).success) throw new Error('invalid');
+export async function restoreDraftVersion(id: string, versionId: string): Promise<RestoredDraft> {
+  if (!draftId.safeParse(id).success || !draftId.safeParse(versionId).success) {
+    throw new Error('invalid');
+  }
   const supabase = await createClient();
   const { data, error } = await supabase.rpc('content_draft_restore', {
     p_version_id: versionId,
@@ -987,11 +1037,36 @@ export async function restoreDraftVersion(versionId: string): Promise<RestoredDr
   if (error) throw new Error(error.message);
   if (!data) throw new Error('not_found');
   const restored = data as unknown as RestoredDraft;
-  return {
-    title: restored.title,
-    bodyHtml: restored.bodyHtml,
-    updatedAt: restored.updatedAt,
-  };
+  let updatedAt = restored.updatedAt;
+
+  // Read back, so the type is detected only on the draft the version restored.
+  const { data: row, error: rowError } = await supabase
+    .from('content_drafts')
+    .select(`page_type, page_type_source, body_html, ${BRAND_SITE}`)
+    .eq('id', id)
+    .maybeSingle();
+  if (rowError) {
+    console.error('Failed to read the restored draft:', rowError.message);
+  } else if (row?.page_type_source === 'detected' && row.body_html === restored.bodyHtml) {
+    const detected = detectPageType(
+      { title: restored.title, html: restored.bodyHtml },
+      brandSiteType(row.brands),
+    );
+    // A page that shows no type keeps the one it had, as on a save.
+    if (detected && detected !== row.page_type) {
+      const { data: typed, error: typeError } = await supabase
+        .from('content_drafts')
+        .update({ page_type: detected })
+        .eq('id', id)
+        .eq('page_type_source', 'detected')
+        .select('updated_at')
+        .maybeSingle();
+      // The page is restored; its type catches up on the next save.
+      if (typeError) console.error('Failed to update the detected page type:', typeError.message);
+      else if (typed) updatedAt = typed.updated_at;
+    }
+  }
+  return { title: restored.title, bodyHtml: restored.bodyHtml, updatedAt };
 }
 
 /**
@@ -1454,6 +1529,7 @@ export async function startAgentWriting(
 export async function saveDraftRules(id: string, rules: DraftRulesInput): Promise<void> {
   const parsed = draftRulesSchema.safeParse(rules);
   if (!draftId.safeParse(id).success || !parsed.success) throw new Error('invalid');
+  if (!draftRulesFit(parsed.data)) throw new Error('too_large');
   const supabase = await createClient();
   const { data, error } = await supabase
     .from('content_drafts')
@@ -1516,6 +1592,7 @@ export async function saveMyRuleSet(
   ) {
     throw new Error('invalid');
   }
+  if (!ruleSetFits(parsed.data)) throw new Error('too_large');
   const supabase = await createClient();
   const [userRes, brandRes] = await Promise.all([
     supabase.auth.getUser(),

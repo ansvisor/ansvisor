@@ -1,6 +1,6 @@
 'use client';
 
-import { useDeferredValue, useEffect, useMemo, useState } from 'react';
+import { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 import { getMyRuleSets, saveDraftRules, saveMyRuleSet } from '@/lib/actions/content-drafts';
@@ -9,10 +9,12 @@ import {
   MAX_TEXT_RULES,
   activeRules,
   checkRule,
+  draftRulesFit,
   effectiveRules,
   readPage,
   ruleLength,
   ruleSet,
+  ruleSetFits,
   rulesMet,
   textRuleCheck,
   type ActiveRule,
@@ -23,6 +25,7 @@ import {
   type TextRule,
 } from '@/lib/content/rules';
 import { buildSourceGroups } from '@/lib/content/sources';
+import { useBrandStore } from '@/stores/use-brand-store';
 import type { DraftReads } from './_use-draft-reads';
 
 export interface DraftRulesState {
@@ -88,6 +91,11 @@ export function useDraftRules({
   const [choices, setChoices] = useState<DraftRules>(draft.rules);
   const [mine, setMine] = useState<Partial<Record<PageType, SavedRuleSet>>>({});
   const [mineRead, setMineRead] = useState(false);
+  const language = useBrandStore((s) => s.brands.find((b) => b.id === draft.brandId)?.language);
+  // One save at a time, the latest waiting; what the database holds, to go back to.
+  const saving = useRef(false);
+  const waiting = useRef<{ rules: DraftRules; message: string } | null>(null);
+  const saved = useRef<DraftRules>(draft.rules);
 
   useEffect(() => {
     let cancelled = false;
@@ -133,8 +141,8 @@ export function useDraftRules({
     [choices, setType, mine],
   );
   const rules = useMemo(
-    () => activeRules(ruleSet(setType, { keywords }), effective),
-    [setType, keywords, effective],
+    () => activeRules(ruleSet(setType, { keywords, language }), effective),
+    [setType, keywords, language, effective],
   );
   // The checks follow the page a beat behind typing.
   const deferredHtml = useDeferredValue(html);
@@ -149,18 +157,45 @@ export function useDraftRules({
   );
   const { met, total } = rulesMet(checked);
 
+  /**
+   * Saves the latest change: one save at a time, so two quick changes can't
+   * land out of order. A change made meanwhile waits and goes next (it holds
+   * the earlier ones); only the last says it saved, or failed, and a failure
+   * puts back what the database holds.
+   */
+  const flush = () => {
+    if (saving.current || !waiting.current) return;
+    const { rules: next, message } = waiting.current;
+    waiting.current = null;
+    saving.current = true;
+    saveDraftRules(draft.id, next)
+      .then(() => {
+        saved.current = next;
+        if (!waiting.current) toast(message);
+      })
+      .catch((err) => {
+        console.error('Failed to save the rules:', err);
+        if (!waiting.current) {
+          setChoices(saved.current);
+          toast.error(t('saveFailed'));
+        }
+      })
+      .finally(() => {
+        saving.current = false;
+        flush();
+      });
+  };
   const save = (next: DraftRules, message: string) => {
     // Before My rules are read, the draft would save Ansvisor's set over the workspace's.
     if (!mineRead) return;
-    const before = choices;
+    // Past the database's size check the save would fail: the change stays out.
+    if (!draftRulesFit(next)) {
+      toast.error(t('tooLong'));
+      return;
+    }
     setChoices(next);
-    saveDraftRules(draft.id, next)
-      .then(() => toast(message))
-      .catch((err) => {
-        console.error('Failed to save the rules:', err);
-        setChoices(before);
-        toast.error(t('saveFailed'));
-      });
+    waiting.current = { rules: next, message };
+    flush();
   };
   // A change keeps the set the draft's rules come from.
   const edited = (change: Partial<DraftRules>, message = t('updated')) =>
@@ -227,6 +262,10 @@ export function useDraftRules({
     saveAsMine: () => {
       if (!setType) return;
       const set: SavedRuleSet = { overrides: effective.overrides, textRules: effective.textRules };
+      if (!ruleSetFits(set)) {
+        toast.error(t('tooLongMine'));
+        return;
+      }
       saveMyRuleSet(draft.brandId, setType, set)
         .then(() => {
           setMine((prev) => ({ ...prev, [setType]: set }));

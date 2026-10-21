@@ -67,6 +67,7 @@ import {
 } from '@/lib/content/start';
 import { formatNumber } from '@/lib/format';
 import { cn } from '@/lib/utils';
+import { useBrandStore } from '@/stores/use-brand-store';
 
 type SourceKind = 'opportunity' | 'prompt' | 'topic';
 const SOURCE_KINDS: SourceKind[] = ['opportunity', 'prompt', 'topic'];
@@ -159,6 +160,8 @@ export function NewContentDialog({
   preset?: DialogPreset | null;
 }) {
   const t = useTranslations('contentEditor.newContent');
+  // The Language rule's default for the agent: the brand's language.
+  const brandLanguage = useBrandStore((s) => s.brands.find((b) => b.id === brandId)?.language);
   const tTypes = useTranslations('contentEditor.pageTypes');
   const router = useRouter();
   const describeRule = useRuleDescriber();
@@ -500,6 +503,7 @@ export function NewContentDialog({
           sourceUrl: existing?.url ?? start?.sourceUrl ?? null,
           bodyHtml: bodyHtml ?? '',
           rules: NO_DRAFT_RULES,
+          language: brandLanguage,
         },
         describeRule,
       );

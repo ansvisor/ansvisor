@@ -116,12 +116,13 @@ describe('getContentStartOptions', () => {
         { id: 'o2', title: 'Refresh the pricing page', decision: 'refresh', brief: null },
       ],
       prompts: [
-        { id: PROMPT, text: 'best crm for realtors', topic_id: TOPIC },
-        { id: 'p2', text: 'crm pricing', topic_id: null },
+        { id: PROMPT, text: 'best crm for realtors' },
+        { id: 'p2', text: 'crm pricing' },
       ],
+      // Counted in the database: a big brand's topics past the listed prompts too.
       topics: [
-        { id: TOPIC, name: 'Real estate' },
-        { id: 't2', name: 'Empty topic' },
+        { id: TOPIC, name: 'Real estate', prompts: [{ count: 640 }] },
+        { id: 't2', name: 'Empty topic', prompts: [{ count: 0 }] },
       ],
     };
     await expect(getContentStartOptions(BRAND)).resolves.toEqual({
@@ -138,7 +139,7 @@ describe('getContentStartOptions', () => {
         { id: PROMPT, text: 'best crm for realtors' },
         { id: 'p2', text: 'crm pricing' },
       ],
-      topics: [{ id: TOPIC, name: 'Real estate', promptCount: 1 }],
+      topics: [{ id: TOPIC, name: 'Real estate', promptCount: 640 }],
     });
     expect(calls.find((call) => call.table === 'content_opportunities')!.filters).toEqual([
       ['eq', 'brand_id', BRAND],
@@ -147,6 +148,11 @@ describe('getContentStartOptions', () => {
     expect(calls.find((call) => call.table === 'prompts')!.filters).toEqual([
       ['eq', 'prompt_sets.brand_id', BRAND],
       ['eq', 'is_active', true],
+    ]);
+    expect(calls.find((call) => call.table === 'topics')!.filters).toEqual([
+      ['eq', 'brand_id', BRAND],
+      ['eq', 'is_active', true],
+      ['eq', 'prompts.is_active', true],
     ]);
   });
 });

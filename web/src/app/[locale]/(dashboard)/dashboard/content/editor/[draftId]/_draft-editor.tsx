@@ -62,6 +62,7 @@ import {
 } from './_cited-passages';
 import { HistoryMenu } from './_history-menu';
 import { HtmlBlock, copyToClipboard } from './_html-block';
+import { OwnCopies, ownCopyHtml } from './_own-copies';
 import { PageTypeMenu } from './_page-type-menu';
 import { ruleStatusText, type AgentFix } from './_rules-tab';
 import { EditorSidePanel, useSidePanelOpen } from './_side-panel';
@@ -204,6 +205,7 @@ export function DraftEditor({
         label: (type) => (type ? t('jsonLd', { type }) : t('jsonLdUntyped')),
       }),
       HtmlBlock,
+      OwnCopies,
       CitedPassages.configure({
         // The first change held is the one asked about: some keyboards
         // still send the text of a key whose keydown was held, and the
@@ -218,9 +220,11 @@ export function DraftEditor({
     editorProps: {
       attributes: { class: DOCUMENT_CLASS, 'aria-label': t('documentLabel') },
       transformPastedHTML: (html) => {
-        // A copy from this editor keeps its images, and needs no word about it.
-        if (html.includes('data-pm-slice')) {
-          return cleanHtml(html, { keepImages: true, keepHtmlBlocks: true }).html;
+        // A copy from this editor keeps its images and HTML blocks, and needs
+        // no word about it. Only this tab's copies carry its mark.
+        const own = ownCopyHtml(html);
+        if (own !== null) {
+          return cleanHtml(own, { keepImages: true, keepHtmlBlocks: true }).html;
         }
         // Images from elsewhere wait for attachments (CE-006): Docs' and
         // Word's are temporary addresses or embedded data.
@@ -362,7 +366,7 @@ export function DraftEditor({
         unlocked: new Set(locks.unlocked).add(held.key),
       }),
     );
-    // A held paste, cut or join goes through; typed text is typed again.
+    // The held change goes through: a paste, a cut, or the key pressed.
     if (held.tr && held.tr.before.eq(editor.state.doc)) {
       editor.view.dispatch(held.tr.setMeta(CITED_EDIT_ALLOWED, true));
     }
@@ -716,7 +720,7 @@ export function DraftEditor({
     editor.setEditable(false, false);
     try {
       await autosave.settle();
-      const restored = await restoreDraftVersion(version.id);
+      const restored = await restoreDraftVersion(draft.id, version.id);
       editor
         .chain()
         .setMeta(CITED_EDIT_ALLOWED, true)
