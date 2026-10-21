@@ -156,7 +156,9 @@ beforeEach(() => {
   getContentDraft.mockReset();
   markContentDraftReady.mockReset();
   setContentDraftPageType.mockReset().mockResolvedValue(undefined);
-  saveContentDraft.mockReset().mockResolvedValue({ updatedAt: '2026-10-20T10:00:00Z' });
+  saveContentDraft
+    .mockReset()
+    .mockResolvedValue({ ok: true, updatedAt: '2026-10-20T10:00:00Z', bodyHash: 'h0' });
   getContentImpact.mockReset().mockResolvedValue(null);
   getContentResults.mockReset().mockResolvedValue(null);
   getDraftSources.mockReset().mockResolvedValue(null);
@@ -423,6 +425,10 @@ describe('the content editor', () => {
       expect(saveContentDraft).toHaveBeenCalledWith('d1', {
         title: 'Pipeline forecasting',
         bodyHtml: '<h1>Pipeline forecasting</h1><p>Edited.</p>',
+        base: {
+          updatedAt: '2026-10-20T10:00:00Z',
+          bodyHash: expect.stringMatching(/^[0-9a-f]{64}$/),
+        },
       });
       expect(restoreDraftVersion).toHaveBeenCalledWith('v1');
       expect(saveContentDraft.mock.invocationCallOrder[0]).toBeLessThan(
