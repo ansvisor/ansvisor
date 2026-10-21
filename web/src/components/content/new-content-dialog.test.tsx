@@ -4,7 +4,7 @@ import { NextIntlClientProvider } from 'next-intl';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import messages from '../../../messages/en.json';
 import type { SiteType } from '@/lib/content/page-types';
-import { NewContentDialog } from './new-content-dialog';
+import { NewContentDialog, type DialogPreset } from './new-content-dialog';
 
 const getContentStartOptions = vi.fn();
 const createContentDraft = vi.fn();
@@ -71,7 +71,7 @@ const OPTIONS = {
 let container: HTMLDivElement;
 let root: Root;
 
-async function render(siteType: SiteType = 'b2b') {
+async function render(siteType: SiteType = 'b2b', preset: DialogPreset | null = null) {
   await act(async () => {
     root.render(
       <NextIntlClientProvider locale="en" messages={messages}>
@@ -81,6 +81,7 @@ async function render(siteType: SiteType = 'b2b') {
           brandId="b1"
           siteType={siteType}
           onSent={onSent}
+          preset={preset}
         />
       </NextIntlClientProvider>,
     );
@@ -257,6 +258,41 @@ describe('New content', () => {
     await click(button('Try again'));
     expect(getContentStartOptions).toHaveBeenCalledTimes(2);
     expect(button('Pick an opportunity')).toBeDefined();
+  });
+
+  describe('opened from the Content plan (CE-014)', () => {
+    it('goes straight to Start for the opportunity', async () => {
+      await render('b2b', { kind: 'opportunity', id: 'o2' });
+      expect(document.body.textContent).toContain('Create: CRM for real estate teams');
+      await click(button('Open editor'));
+      expect(createContentDraft.mock.calls[0][1]).toMatchObject({
+        method: 'create',
+        title: 'CRM for real estate teams',
+        source: { kind: 'opportunity', id: 'o2' },
+      });
+    });
+
+    it('reads the page to optimize', async () => {
+      importContentPage.mockResolvedValue({
+        page: {
+          url: 'https://northwind.example/pricing',
+          title: 'Pricing',
+          html: '<h1>Pricing</h1>',
+        },
+      });
+      await render('b2b', { kind: 'page', url: 'https://northwind.example/pricing' });
+      await act(async () => {});
+      expect(importContentPage).toHaveBeenCalledWith('b1', 'https://northwind.example/pricing');
+      expect(radio('Optimize content')!.getAttribute('aria-checked')).toBe('true');
+      await click(button('Continue'));
+      expect(document.body.textContent).toContain('Optimize: Pricing');
+    });
+
+    it('leaves an opportunity no longer open to pick', async () => {
+      await render('b2b', { kind: 'opportunity', id: 'gone' });
+      expect(button('Continue')).toBeDefined();
+      expect(document.body.textContent).toContain('Pick an opportunity');
+    });
   });
 
   describe('Optimize content › Page URL', () => {

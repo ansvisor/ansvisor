@@ -74,6 +74,7 @@
     "promptsInsights": "Insights",
     "contentOpportunities": "Opportunities",
     "contentLibrary": "Library",
+    "contentPlan": "Plan",
     "toggleSubmenu": "Show or hide {label}"
   },
   "actionCenter": {
@@ -3091,6 +3092,56 @@
     "openDetails": "Open topic details"
   },
   "contentEditor": {
+    "plan": {
+      "title": "Content plan",
+      "description": "What to create, optimize or protect next.",
+      "selectBrand": "Select a brand to see its content plan.",
+      "period": "Period",
+      "periods": "Last {days} days",
+      "newContent": "New content",
+      "cards": {
+        "create": { "title": "Create", "hint": "New pages AI needs" },
+        "optimize": { "title": "Optimize", "hint": "Pages losing ground" },
+        "protect": { "title": "Protect", "hint": "Top pages · edit with care" },
+        "overlaps": { "title": "Overlaps", "hint": "Pages competing for the same prompts" }
+      },
+      "listTitle": "Priority list",
+      "ranked": "Ranked by impact · overlaps checked",
+      "filtered": "Filtered · click the card again to clear",
+      "columns": {
+        "page": "Page",
+        "action": "Action",
+        "why": "Why · last {days} days",
+        "who": "Who",
+        "start": "Start"
+      },
+      "newPage": "New page",
+      "overlap": "⚠ Overlap",
+      "overlapHint": "{count, plural, one {# other page of yours is} other {# other pages of yours are}} cited for the same prompts",
+      "actions": { "create": "Create", "optimize": "Optimize", "protect": "Protect" },
+      "sources": {
+        "opportunity": "Opportunity",
+        "citations": "Citations",
+        "protect": "Protect",
+        "overlap": "Overlap"
+      },
+      "why": {
+        "competitors": "{names} cited · you aren't",
+        "competitorsVisibility": "{names} cited · you {visibility}%",
+        "opportunity": "{count, plural, =0 {A page AI needs} one {Answers # prompt AI asks} other {Answers # prompts AI asks}}",
+        "citationsDown": "Citations −{pct}%",
+        "on": "on {platforms}",
+        "top": "Top page · {citations, plural, one {{citationsText} citation} other {{citationsText} citations}} · {visits, plural, one {{visitsText} AI visit} other {{visitsText} AI visits}}",
+        "overlap": "Competes with {count, plural, one {# of your pages} other {# of your pages}} for the same prompts"
+      },
+      "who": { "you": "You", "agent": "Agent", "team": "Teammate" },
+      "start": { "create": "Create", "optimize": "Optimize", "protect": "View" },
+      "openDraft": "Open draft",
+      "empty": "Nothing to work on yet. New opportunities and your pages' AI citations show up here.",
+      "emptyFiltered": "Nothing here for this period.",
+      "loadError": "Couldn't load the content plan.",
+      "retry": "Try again"
+    },
     "agentState": {
       "writing": "Agent writing…",
       "failed": "Agent failed"

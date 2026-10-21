@@ -165,13 +165,21 @@ export function MobileNav() {
                         <Link key={child.href} href={child.href} onClick={() => setOpen(false)}>
                           <span
                             className={cn(
-                              'block rounded-md px-3 py-1.5 text-sm transition-colors',
+                              'flex items-center gap-2 rounded-md px-3 py-1.5 text-sm transition-colors',
                               child.href === currentChild
                                 ? 'font-medium text-primary'
                                 : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground',
                             )}
                           >
                             {getDashboardNavLabel(child.title, t, tBrands)}
+                            {child.badge && (
+                              <Badge
+                                variant="secondary"
+                                className="h-4 px-1.5 text-[10px] font-normal"
+                              >
+                                {child.badge}
+                              </Badge>
+                            )}
                           </span>
                         </Link>
                       ))}

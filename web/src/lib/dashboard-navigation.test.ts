@@ -40,13 +40,14 @@ describe('getDashboardNavLabel', () => {
     expect(items.some((item) => item.href === '/dashboard/topics')).toBe(false);
   });
 
-  // Content Editor (CE-001): Content is a group; Opportunities keeps today's
-  // route.
-  it('lists Opportunities and the Library under Content', () => {
+  // Content Editor (CE-001): Content is a group, the Plan first and new
+  // (CE-014); Opportunities keeps today's route.
+  it('lists the Plan, Opportunities and the Library under Content', () => {
     const items = dashboardNav.flatMap((group) => group.items);
     const content = items.find((item) => item.title === 'Content')!;
     expect(content.href).toBe('/dashboard/content');
     expect(content.children).toEqual([
+      { title: 'Plan', href: '/dashboard/content/plan', badge: 'New' },
       { title: 'Opportunities', href: '/dashboard/content' },
       {
         title: 'Library',
@@ -145,6 +146,7 @@ describe('activeChildHref', () => {
       '/dashboard/content/library',
     );
     expect(activeChildHref(children, '/dashboard/content/3f2a')).toBe('/dashboard/content');
+    expect(activeChildHref(children, '/dashboard/content/plan')).toBe('/dashboard/content/plan');
   });
 
   it('keeps an opportunity’s own page under Opportunities', () => {

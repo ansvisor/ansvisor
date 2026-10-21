@@ -454,6 +454,14 @@ export function Sidebar() {
                                     <span className="flex-1 truncate">
                                       {getDashboardNavLabel(child.title, t, tBrands)}
                                     </span>
+                                    {child.badge && (
+                                      <Badge
+                                        variant="secondary"
+                                        className="h-4 shrink-0 px-1.5 text-[10px] font-normal"
+                                      >
+                                        {child.badge}
+                                      </Badge>
+                                    )}
                                     {child.href.endsWith('/tracked') && trackedCount !== null && (
                                       <span className="text-[11px] tabular-nums text-muted-foreground">
                                         {trackedCount.toLocaleString()}

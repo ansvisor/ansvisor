@@ -20,6 +20,7 @@ export const dashboardNavLabelKeys: Record<string, NavLabelKey> = {
   'Query Fan-outs': { namespace: 'nav', key: 'queryFanouts' },
   'Prompts Insights': { namespace: 'nav', key: 'promptsInsights' },
   Content: { namespace: 'nav', key: 'content' },
+  Plan: { namespace: 'nav', key: 'contentPlan' },
   Opportunities: { namespace: 'nav', key: 'contentOpportunities' },
   Library: { namespace: 'nav', key: 'contentLibrary' },
   'Site Audit': { namespace: 'nav', key: 'audit' },

@@ -110,6 +110,9 @@ interface StartChoice {
   choice: OverlapChoice;
 }
 
+/** What the dialog opens on, from the Content plan (CE-014). */
+export type DialogPreset = { kind: 'opportunity'; id: string } | { kind: 'page'; url: string };
+
 /** Who does the page (Start, CE-015): the person, the Content Agent, or the team. */
 type Who = 'me' | 'agent' | 'team';
 const WHO: Who[] = ['me', 'agent', 'team'];
@@ -133,6 +136,7 @@ export function NewContentDialog({
   brandId,
   siteType,
   onSent,
+  preset = null,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -140,6 +144,11 @@ export function NewContentDialog({
   siteType: SiteType;
   /** A draft was sent to the Action Center: the Library lists it. */
   onSent?: () => void;
+  /**
+   * What the Content plan (CE-014) opens it on: Start for an opportunity, or
+   * an existing page read to optimize.
+   */
+  preset?: DialogPreset | null;
 }) {
   const t = useTranslations('contentEditor.newContent');
   const tTypes = useTranslations('contentEditor.pageTypes');
@@ -185,6 +194,34 @@ export function NewContentDialog({
     };
   }, [open, brandId, attempt]);
 
+  // From the Content plan: Start for its opportunity once the options are in
+  // (one no longer open is left to pick), or its page read to optimize.
+  const presetApplied = useRef(false);
+  useEffect(() => {
+    if (!open || !preset || presetApplied.current) return;
+    if (preset.kind === 'page') {
+      presetApplied.current = true;
+      setMethod('optimize');
+      setFrom('url');
+      setPageUrl(preset.url);
+      void readPage(preset.url);
+      return;
+    }
+    if (!options) return;
+    presetApplied.current = true;
+    const opportunity = options.opportunities.find((o) => o.id === preset.id);
+    if (!opportunity) return;
+    const item = {
+      value: opportunity.id,
+      label: opportunity.title,
+      pageTitle: opportunity.pageTitle ?? undefined,
+    };
+    setKind('opportunity');
+    setPicked(item);
+    startFrom(item, 'opportunity');
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- once per opening
+  }, [open, preset, options]);
+
   // Start checks the pages that already answer a new page's prompts. Content
   // brought to optimize has no prompts to check. A page type picked in Start
   // keeps the same source, so the check runs once per source.
@@ -212,6 +249,7 @@ export function NewContentDialog({
   }, [brandId, startSource, siteType, overlapAttempt]);
 
   const reset = () => {
+    presetApplied.current = false;
     setMethod('create');
     setKind('opportunity');
     setPicked(null);
@@ -261,8 +299,7 @@ export function NewContentDialog({
   };
 
   /** A page of the brand's, read by its URL and cleaned like a paste. */
-  const readPage = async () => {
-    const address = pageUrl.trim();
+  const readPage = async (address = pageUrl.trim()) => {
     if (!address) return;
     setReading(true);
     setUrlError(null);
@@ -315,23 +352,27 @@ export function NewContentDialog({
   const canContinue =
     method === 'create' ? picked !== null : content !== null || (from === 'paste' && !!typed);
 
+  /** Start for a new page from what was picked: its title, and the page type it reads as. */
+  const startFrom = (item: PickerItem, from: SourceKind) => {
+    const title = item.pageTitle ?? item.label;
+    const type = startPageType({ title }, siteType);
+    const newPageType = {
+      pageType: type.pageType,
+      detectedFrom: type.detected ? ('title' as const) : null,
+    };
+    setStart({
+      method: 'create',
+      title,
+      source: { kind: from, id: item.value },
+      ...newPageType,
+      newPageType,
+      choice: { kind: 'create' },
+    });
+  };
+
   const toStart = () => {
     if (method === 'create') {
-      if (!picked) return;
-      const title = picked.pageTitle ?? picked.label;
-      const type = startPageType({ title }, siteType);
-      const newPageType = {
-        pageType: type.pageType,
-        detectedFrom: type.detected ? ('title' as const) : null,
-      };
-      setStart({
-        method,
-        title,
-        source: { kind, id: picked.value },
-        ...newPageType,
-        newPageType,
-        choice: { kind: 'create' },
-      });
+      if (picked) startFrom(picked, kind);
       return;
     }
     const brought =
