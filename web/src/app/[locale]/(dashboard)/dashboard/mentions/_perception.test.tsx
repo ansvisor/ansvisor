@@ -108,7 +108,9 @@ describe('TermsCard', () => {
       // Nothing before to compare with.
       ['pricing', '', '5 responses', '—'],
     ]);
-    expect(rows[0].querySelectorAll('td')[2].getAttribute('title')).toBe('40% of mentions');
+    expect(rows[0].querySelectorAll('td')[2].getAttribute('title')).toBe(
+      '40% of responses naming Ansvisor',
+    );
   });
 
   it('says when there are no terms yet', () => {
@@ -128,7 +130,7 @@ describe('HeatmapCard', () => {
       ['open source', '0%', '0%', '30%', '5%', '—'],
     ]);
     const [, , profound, , otterly] = [...rows[1].querySelectorAll('td')] as HTMLElement[];
-    expect(profound.style.backgroundColor).toBe('rgba(99, 102, 241, 0.4)');
+    expect(profound.style.backgroundColor).toBe('rgba(120, 113, 108, 0.4)');
     expect(otterly.style.backgroundColor).toBe('');
   });
 });
@@ -159,12 +161,12 @@ describe('GapNote', () => {
     };
     render(<GapNote gap={gap} brand="Ansvisor" />);
     expect(container.textContent).toBe(
-      'Biggest gap: “enterprise”: Profound in 60% of its mentions; Ansvisor in 10% (#2).',
+      'Biggest gap: “enterprise”: Profound in 60% of the responses naming it; Ansvisor in 10% (#2).',
     );
 
     render(<GapNote gap={{ ...gap, brandShare: 0, brandRank: null }} brand="Ansvisor" />);
     expect(container.textContent).toBe(
-      "Biggest gap: “enterprise”: Profound in 60% of its mentions; AI doesn't use it for Ansvisor.",
+      "Biggest gap: “enterprise”: Profound in 60% of the responses naming it; AI doesn't use it for Ansvisor.",
     );
   });
 });
@@ -173,13 +175,14 @@ describe('BrandShapeCard', () => {
   it('draws the brand and its top three competitors, with the biggest gap beneath', () => {
     render(<BrandShapeCard perception={perception} brand="Ansvisor" />);
     expect(container.querySelector('[data-testid="radar"]')?.textContent).toBe(
-      'Ansvisor #22c55e, Profound #1e3a8a, Peec AI #a855f7, Otterly AI #f97316',
+      // Your brand in ink, as the rest of the page; no violet.
+      'Ansvisor var(--primary), Profound #f97316, Peec AI #0d9488, Otterly AI #ef4444',
     );
     expect(container.querySelector('figcaption')?.textContent).toBe(
       'AnsvisorProfoundPeec AIOtterly AI',
     );
     expect(container.textContent).toContain(
-      'Biggest gap: “enterprise”: Profound in 60% of its mentions; Ansvisor in 10% (#2).',
+      'Biggest gap: “enterprise”: Profound in 60% of the responses naming it; Ansvisor in 10% (#2).',
     );
   });
 

@@ -4526,23 +4526,23 @@
         "note": "Words and phrases next to your brand, by responses",
         "tableLabel": "Terms AI uses next to your brand",
         "responses": "{count, plural, one {# response} other {# responses}}",
-        "share": "{share} of mentions",
+        "share": "{share} of responses naming {brand}",
         "none": "No terms yet. They appear once this period's responses have been prepared."
       },
       "shape": {
         "title": "Brand shape: you vs top competitors",
-        "chartLabel": "Share of each brand's mentions on the attributes that tell them apart",
+        "chartLabel": "Share of the responses naming each brand, on the attributes that tell them apart",
         "notEnough": "The shape needs at least three attributes and one competitor named in this period."
       },
       "gap": {
         "title": "Biggest gap",
-        "unplaced": "“{term}”: {competitor} in {competitorShare} of its mentions; AI doesn't use it for {brand}.",
-        "ranked": "“{term}”: {competitor} in {competitorShare} of its mentions; {brand} in {brandShare} (#{rank})."
+        "unplaced": "“{term}”: {competitor} in {competitorShare} of the responses naming it; AI doesn't use it for {brand}.",
+        "ranked": "“{term}”: {competitor} in {competitorShare} of the responses naming it; {brand} in {brandShare} (#{rank})."
       },
       "heatmap": {
         "title": "Brand × attribute",
-        "note": "Share of each brand's mentions",
-        "tableLabel": "Each attribute's share of each brand's mentions",
+        "note": "Share of the responses naming each brand",
+        "tableLabel": "Each attribute's share of the responses naming each brand",
         "attribute": "Attribute",
         "you": "You",
         "none": "No attributes yet for this period."

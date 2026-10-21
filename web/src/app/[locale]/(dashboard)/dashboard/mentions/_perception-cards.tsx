@@ -35,7 +35,7 @@ function Bar({ value, max }: { value: number; max: number }) {
 
 /**
  * "What AI associates with you" (MS-09): the brand's top terms, each with
- * the responses it comes in, its share of the brand's mentions and its change
+ * the responses it comes in, its share of the responses naming the brand and its change
  * against the window before.
  */
 export function TermsCard({
@@ -75,7 +75,9 @@ export function TermsCard({
                     <td
                       className="w-24 px-2 py-1.5 text-right text-xs text-muted-foreground tabular-nums"
                       title={
-                        share === null ? undefined : t('share', { share: f.percent(share, 0) })
+                        share === null
+                          ? undefined
+                          : t('share', { share: f.percent(share, 0), brand })
                       }
                     >
                       {t('responses', { count: term.answers })}
@@ -140,10 +142,13 @@ export function HeatmapCard({
                     <td
                       key={perception.entities[i].entity}
                       className="px-2 py-1.5 text-center text-xs tabular-nums"
-                      // The share as a tint of the brand indigo, readable on both themes.
+                      // The share as a neutral tint (the brand has no colour on this
+                      // page, only ink), readable on both themes.
                       style={
                         share
-                          ? { backgroundColor: `rgba(99, 102, 241, ${Math.min(0.6, share / 150)})` }
+                          ? {
+                              backgroundColor: `rgba(120, 113, 108, ${Math.min(0.45, share / 150)})`,
+                            }
                           : undefined
                       }
                     >

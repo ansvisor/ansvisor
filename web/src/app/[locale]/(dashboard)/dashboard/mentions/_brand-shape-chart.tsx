@@ -42,7 +42,7 @@ export interface ShapeSeries {
 }
 
 /**
- * "Brand shape" (MS-09): each brand's share of mentions on the attributes
+ * "Brand shape" (MS-09): each brand's share of the responses naming it, on the attributes
  * that tell them apart, one outline per brand. The axis ends at the next ten
  * above the highest share, so a low-share set still fills the chart.
  */

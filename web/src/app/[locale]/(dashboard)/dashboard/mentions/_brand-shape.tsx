@@ -4,7 +4,6 @@ import dynamic from 'next/dynamic';
 import { useTranslations } from 'next-intl';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import { COMPETITOR_PALETTE, OWN_BRAND_COLOR } from '@/lib/insights-trend';
 import { attributeShares, biggestGap, type MentionsPerception } from '@/lib/mentions-perception';
 import { GapNote } from './_perception-cards';
 import type { ShapeSeries } from './_brand-shape-chart';
@@ -16,6 +15,12 @@ const BrandShapeChart = dynamic(
 
 /** The radar compares you with up to this many competitors (spec §9). */
 const RADAR_COMPETITORS = 3;
+/**
+ * Your brand in ink, as the rest of the Mentions page draws it (#1217,
+ * #1220); the competitors in hues that aren't the brand's or violet.
+ */
+const BRAND_STROKE = 'var(--primary)';
+const COMPETITOR_STROKES = ['#f97316', '#0d9488', '#ef4444'];
 /** A shape needs at least this many attributes to have one. */
 const MIN_ATTRIBUTES = 3;
 
@@ -39,7 +44,7 @@ export function BrandShapeCard({
   const series: ShapeSeries[] = entities.map((e, i) => ({
     key: `e${i}`,
     name: e.isBrand ? brand : e.name,
-    color: e.isBrand ? OWN_BRAND_COLOR : COMPETITOR_PALETTE[(i - 1) % COMPETITOR_PALETTE.length],
+    color: e.isBrand ? BRAND_STROKE : COMPETITOR_STROKES[(i - 1) % COMPETITOR_STROKES.length],
   }));
   const data = rows.map((row) => ({
     attribute: row.term,
