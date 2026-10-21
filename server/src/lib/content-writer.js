@@ -6,6 +6,7 @@ import { resolveModel } from './ai-provider.js';
 import {
   MAX_AGENT_SUGGESTIONS,
   draftPassages,
+  hasOpenSuggestions,
   keepSuggestions,
   passageKey,
   promptPassages,
@@ -268,6 +269,14 @@ export async function startDraftWriting({ draftId, brandId, input }) {
       code: 'writing',
     });
   }
+  // An existing page's run leaves a new batch, which would hide the open
+  // one (the editor shows the latest), as Fix open rules and the API refuse.
+  if (draft.method === 'optimize' && (await hasOpenSuggestions(draftId))) {
+    throw Object.assign(new Error('Decide the open suggestions first'), {
+      status: 409,
+      code: 'open_suggestions',
+    });
+  }
 
   const { data: brand, error: brandError } = await supabaseAdmin
     .from('brands')
@@ -419,6 +428,15 @@ export async function runDraftWriting({ draft, brand, model, modelId, input }) {
       new Set(input.rules.map((r) => r.key)),
     );
     if (!rows.length) throw new Error('The agent left no suggestion it could place');
+    // A batch that landed during the run (Fix open rules, the API) stays the
+    // one to decide: this one isn't added over it.
+    if (await hasOpenSuggestions(draft.id)) {
+      logger.info(
+        { draftId: draft.id },
+        '[content-writer] open suggestions came in during the run',
+      );
+      return await letGo(draft.id);
+    }
     const batchId = randomUUID();
     const { error: insertError } = await supabaseAdmin.from('content_draft_suggestions').insert(
       rows.map((row, position) => ({

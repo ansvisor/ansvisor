@@ -64,6 +64,11 @@ vi.mock('./plan-guard.js', async (importOriginal) => ({
   enforceImproveQuota: (...args) => enforceImproveQuota(...args),
 }));
 vi.mock('./logger.js', () => ({ logger: { error: vi.fn(), info: vi.fn() } }));
+const hasOpenSuggestions = vi.hoisted(() => vi.fn());
+vi.mock('./content-agent.js', async (importOriginal) => ({
+  ...(await importOriginal()),
+  hasOpenSuggestions: (...args) => hasOpenSuggestions(...args),
+}));
 
 const { briefText, renderPage, runDraftWriting, startDraftWriting } =
   await import('./content-writer.js');
@@ -132,6 +137,7 @@ beforeEach(() => {
     usage: { inputTokens: 10, outputTokens: 20 },
   });
   enforceImproveQuota.mockReset().mockResolvedValue(undefined);
+  hasOpenSuggestions.mockReset().mockResolvedValue(false);
 });
 
 const draftUpdates = () =>
@@ -229,6 +235,25 @@ describe('startDraftWriting', () => {
     claimed = null;
     await expect(start()).rejects.toMatchObject({ status: 409, code: 'writing' });
     expect(generateObject).not.toHaveBeenCalled();
+  });
+
+  it('waits on an existing page while its suggestions are open, before charging', async () => {
+    rows.content_drafts = draftRow({ method: 'optimize', source_url: 'https://acme.example/x' });
+    hasOpenSuggestions.mockResolvedValue(true);
+    await expect(
+      startDraftWriting({ draftId: DRAFT, brandId: BRAND, input: input() }),
+    ).rejects.toMatchObject({ status: 409, code: 'open_suggestions' });
+    expect(hasOpenSuggestions).toHaveBeenCalledWith(DRAFT);
+    expect(enforceImproveQuota).not.toHaveBeenCalled();
+    expect(writes).toEqual([]);
+
+    // A new page is written whole: its run adds no batch.
+    rows.content_drafts = draftRow();
+    hasOpenSuggestions.mockClear();
+    await expect(
+      startDraftWriting({ draftId: DRAFT, brandId: BRAND, input: input() }),
+    ).resolves.toEqual({ started: true });
+    expect(hasOpenSuggestions).not.toHaveBeenCalled();
   });
 
   it('writes one of the organization’s drafts at a time', async () => {
@@ -346,6 +371,21 @@ describe('runDraftWriting on an existing page', () => {
     expect(draftUpdates()).toEqual([
       { status: 'in_review', agent_state: null, agent_state_at: expect.any(String) },
     ]);
+  });
+
+  it('adds no batch over one that came in during the run', async () => {
+    generateObject.mockResolvedValue({
+      object: {
+        suggestions: [
+          { kind: 'replace', passage: 3, before: 'good', after: 'fresh', reason: 'x', rules: [] },
+        ],
+      },
+      usage: {},
+    });
+    hasOpenSuggestions.mockResolvedValue(true);
+    await expect(run()).resolves.toEqual({ skipped: true });
+    expect(writes.some((w) => w.table === 'content_draft_suggestions')).toBe(false);
+    expect(draftUpdates()).toEqual([{ agent_state: null, agent_state_at: expect.any(String) }]);
   });
 
   it('drops its suggestions when the draft was marked ready during the run', async () => {
