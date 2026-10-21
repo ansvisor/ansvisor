@@ -830,6 +830,7 @@ export type Database = {
           organization_id: string
           overrides: Json
           page_type: string
+          site_type: string
           text_rules: Json
           updated_at: string
           updated_by: string | null
@@ -838,6 +839,7 @@ export type Database = {
           organization_id: string
           overrides?: Json
           page_type: string
+          site_type: string
           text_rules?: Json
           updated_at?: string
           updated_by?: string | null
@@ -846,6 +848,7 @@ export type Database = {
           organization_id?: string
           overrides?: Json
           page_type?: string
+          site_type?: string
           text_rules?: Json
           updated_at?: string
           updated_by?: string | null
@@ -2835,6 +2838,54 @@ export type Database = {
           },
         ]
       }
+      mentions_answer_terms: {
+        Row: {
+          brand_id: string
+          created_at: string
+          entity: string
+          platform: string
+          prompt_id: string
+          region: string | null
+          result_id: string
+          terms: string[]
+        }
+        Insert: {
+          brand_id: string
+          created_at: string
+          entity: string
+          platform: string
+          prompt_id: string
+          region?: string | null
+          result_id: string
+          terms?: string[]
+        }
+        Update: {
+          brand_id?: string
+          created_at?: string
+          entity?: string
+          platform?: string
+          prompt_id?: string
+          region?: string | null
+          result_id?: string
+          terms?: string[]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "mentions_answer_terms_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brands"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "mentions_answer_terms_result_id_fkey"
+            columns: ["result_id"]
+            isOneToOne: false
+            referencedRelation: "prompt_results"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       sentiment_overrides: {
         Row: {
           brand_id: string
@@ -4030,6 +4081,18 @@ export type Database = {
         }
         Returns: Json
       }
+      mentions_perception: {
+        Args: {
+          p_brand_id: string
+          p_date_from: string
+          p_date_to?: string
+          p_platform?: string
+          p_region?: string
+          p_search?: string
+          p_topic_id?: string
+        }
+        Returns: Json
+      }
       override_mention_sentiment: {
         Args: { p_note?: string; p_result_id: string; p_sentiment: string }
         Returns: Json
@@ -4053,6 +4116,10 @@ export type Database = {
           brand_id: string
           locations: number
         }[]
+      }
+      organization_has_other_members: {
+        Args: { p_except: string; p_org: string }
+        Returns: boolean
       }
       prompt_performance_aggregates: {
         Args: {

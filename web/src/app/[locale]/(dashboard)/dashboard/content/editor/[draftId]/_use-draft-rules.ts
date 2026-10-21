@@ -114,7 +114,9 @@ export function useDraftRules({
 
   const sources = reads.sources;
   const ctx = useMemo<RuleContext>(() => {
-    if (!sources || sources.failed) return { brandDomains: [], competitorDomains: [], fanouts: [] };
+    if (!sources || sources.failed) {
+      return { brandDomains: [], competitorDomains: [], fanouts: [], language };
+    }
     const fanouts = buildSourceGroups(sources.data, sources.choices, {
       title: draft.title,
       sourceUrl: draft.sourceUrl,
@@ -126,8 +128,9 @@ export function useDraftRules({
       brandDomains: sources.data.brandDomains,
       competitorDomains: sources.data.competitorDomains,
       fanouts: fanouts ?? [],
+      language,
     };
-  }, [sources, draft.title, draft.sourceUrl]);
+  }, [sources, draft.title, draft.sourceUrl, language]);
   const brief = reads.brief;
   const keywords = useMemo(
     () => (brief.status === 'ready' ? (brief.brief?.keywords ?? []) : []),

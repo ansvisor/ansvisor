@@ -368,6 +368,41 @@ describe('the formats www.ansvisor.com offers', () => {
       state: 'bad',
       code: 'missing',
     });
+    // "is" somewhere in the paragraph isn't a definition: a pronoun's, or past the first words.
+    expect(define('<h1>Cold brew</h1><p>Many people say it is great.</p>')).toEqual({
+      state: 'bad',
+      code: 'missing',
+    });
+    expect(
+      define(
+        '<h1>Cold brew</h1><p>On hot summer days in the city many cafés sell what is cold brew.</p>',
+      ),
+    ).toEqual({ state: 'bad', code: 'missing' });
+    expect(
+      define('<h1>Cold brew</h1><p>Cold brew. Summer drinkers say it is the best way.</p>'),
+    ).toEqual({ state: 'bad', code: 'missing' });
+    expect(
+      define('<h1>CRM</h1><p>Customer relationship management (CRM) refers to tools that…</p>'),
+    ).toEqual({ state: 'ok' });
+    // Punctuation beside the verb doesn't hide it.
+    expect(define('<h1>Cold brew</h1><p>Cold brew is, simply, coffee steeped cold.</p>')).toEqual({
+      state: 'ok',
+    });
+    // Read in English words only: another language's page isn't counted.
+    expect(
+      checkRule(
+        rule('definitionFirst', 'definition'),
+        page('<h1>Soğuk demleme</h1><p>Soğuk demleme, soğuk suyla demlenen kahvedir.</p>'),
+        { ...ctx, language: 'tr' },
+      ),
+    ).toEqual({ state: 'info', code: 'englishOnly' });
+    expect(
+      checkRule(
+        rule('definitionFirst', 'definition'),
+        page('<h1>Cold brew</h1><p>Cold brew is coffee steeped in cold water.</p>'),
+        { ...ctx, language: 'en' },
+      ),
+    ).toEqual({ state: 'ok' });
     expect(define(`<h1>Cold brew</h1><p>Cold brew is ${'very '.repeat(60)}cold.</p>`)).toEqual({
       state: 'bad',
       code: 'words',
@@ -380,7 +415,21 @@ describe('the formats www.ansvisor.com offers', () => {
 
   it('checks a how-to guide’s and a sizing guide’s steps, and a size chart', () => {
     const steps = '<ol><li>a</li><li>b</li><li>c</li></ol>';
-    expect(check('howToSteps', steps, undefined, 'guide')).toEqual({ state: 'ok' });
+    expect(
+      check('howToSteps', `<h1>How to make cold brew</h1>${steps}`, undefined, 'guide'),
+    ).toEqual({ state: 'ok' });
+    expect(
+      check(
+        'howToSteps',
+        '<h1>Cold brew in 5 easy steps</h1><ol><li>a</li></ol>',
+        undefined,
+        'guide',
+      ),
+    ).toEqual({ state: 'bad', code: 'partOf', count: 1, of: 3 });
+    // A guide that isn't a how-to has no steps to count.
+    expect(
+      check('howToSteps', '<h1>The Azores in winter</h1><p>Mild.</p>', undefined, 'guide'),
+    ).toEqual({ state: 'info', code: 'notHowTo' });
     expect(check('measureSteps', '<ol><li>a</li></ol>', undefined, 'sizing_guide')).toEqual({
       state: 'bad',
       code: 'partOf',

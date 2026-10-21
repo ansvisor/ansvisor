@@ -5,7 +5,7 @@
  * that type of page, and the share of the brand's own cited pages' citations
  * that type holds. A type AI leans on 10 points or more beyond the brand's
  * own mix is a gap: AI cites it, the brand's cited pages don't cover it. The
- * addresses come from content_plan_insights (00221): every own page and the
+ * addresses come from content_plan_insights (00221): the own pages and the
  * others cited most; their type is read from the address and title, as the
  * editor detects a page's (page-types.ts).
  */

@@ -47,6 +47,7 @@ describe('detectPageType from the URL', () => {
     ['/best-crm-for-startups', 'best_of'],
     ['/glossary/lead-scoring', 'definition'],
     ['/blog/what-is-pipeline-coverage', 'definition'],
+    ['/what-is', 'definition'],
     ['/integrations/slack', 'integration'],
     ['/en/pricing', 'pricing'],
     ['/guides/clean-crm-data', 'guide'],
@@ -63,7 +64,20 @@ describe('detectPageType from the URL', () => {
     ['https://shop.example/products/trail-runner-x?variant=2', 'product_page'],
     ['/p/daypack-22l.html', 'product_page'],
     ['/collections/ultralight-tents', 'category_page'],
+    ['/collections/kitchen', 'category_page'],
+    ['/collections/kitchen-appliances', 'category_page'],
+    ['/collections/closets', 'category_page'],
+    ['/collections/sunset-lamps', 'category_page'],
+    ['/collections/limited-edition', 'category_page'],
+    ['/collections/toothpicks', 'category_page'],
     ['/collections/gifts-for-hikers', 'collection_page'],
+    ['/collections/camp-kitchen-kits', 'collection_page'],
+    ['/collections/gift-sets/', 'collection_page'],
+    ['/collections/best-sellers', 'collection_page'],
+    ['/collections/editors-picks', 'collection_page'],
+    ['/collections/the-edit', 'collection_page'],
+    ['/collections/for-her', 'collection_page'],
+    ['/collections/tents-for-beginners', 'collection_page'],
     ['/pages/size-guide', 'sizing_guide'],
     ['/nespresso-alternatives', 'alternatives'],
     ['/compare/tent-a-vs-tent-b', 'comparison'],
@@ -153,7 +167,9 @@ describe('detectPageType from the page', () => {
     ['What is single-origin coffee?', 'ecommerce', 'definition'],
     ['Shoe size chart', 'ecommerce', 'sizing_guide'],
     ['Gifts for coffee lovers', 'ecommerce', 'collection_page'],
-    ['Shipping FAQ', 'ecommerce', 'help_faq'],
+    ['Shipping FAQ', 'ecommerce', 'policy'],
+    ['Frequently asked questions about returns', 'ecommerce', 'policy'],
+    ['Espresso machine FAQ', 'ecommerce', 'help_faq'],
     ['CRM for real estate teams', 'b2b', 'solution_page'],
     ['Slack integration', 'b2b', 'integration'],
     ['How to clean CRM data', 'b2b', 'guide'],
@@ -167,8 +183,26 @@ describe('detectPageType from the page', () => {
     expect(detectPageType({ title }, site)).toBe(type);
   });
 
-  it('doesn’t read “What is the best …” as a definition', () => {
-    expect(detectPageType({ title: 'What is the best espresso machine?' }, 'ecommerce')).toBeNull();
+  it.each([
+    'What is the best espresso machine?',
+    'What is the difference between a latte and a flat white?',
+    'What are the benefits of single-origin coffee?',
+    'What is the cost of an espresso machine?',
+    'What is new in espresso this year',
+  ])('doesn’t read “%s” as a definition', (title) => {
+    expect(detectPageType({ title }, 'ecommerce')).toBeNull();
+  });
+
+  it.each(['/what-is-the-best-crm', '/what-is-new', '/blog/what-are-the-benefits-of-a-crm'])(
+    'doesn’t read the path %s as a definition',
+    (url) => {
+      expect(detectPageType({ url }, 'b2b')).not.toBe('definition');
+    },
+  );
+
+  it('reads a shipping FAQ as Start reads its address: a policy page', () => {
+    expect(detectPageType({ url: '/pages/shipping-faq' }, 'ecommerce')).toBe('policy');
+    expect(detectPageType({ title: 'Shipping FAQ' }, 'ecommerce')).toBe('policy');
   });
 
   it('finds nothing when no sign tells', () => {

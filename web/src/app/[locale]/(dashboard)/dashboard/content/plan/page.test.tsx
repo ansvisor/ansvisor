@@ -162,7 +162,7 @@ describe('the Content plan', () => {
       [
         'Coffee subscriptionsHow-to guide/guides/coffee-subscriptions',
         'Optimize',
-        'Citations −70% on ChatGPT and PerplexityCitations',
+        'Citation rate −70% on ChatGPT and PerplexityCitations',
       ],
       [
         'Espresso guideHow-to guide/guides/espresso⚠ Overlap',

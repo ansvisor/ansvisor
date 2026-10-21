@@ -54,7 +54,9 @@ import {
 import { DOCUMENT_ACCEPT, readDocumentFile } from '@/lib/content/import-document';
 import {
   adviseOverlap,
+  overlapOptions,
   pagePath,
+  samePage,
   type OverlapChoice,
   type OverlapOption,
 } from '@/lib/content/overlap';
@@ -112,6 +114,8 @@ interface StartChoice {
   newPageType: { pageType: PageType; detectedFrom: DetectedFrom; picked: boolean };
   /** The overlap check's pick: write the new page, or optimize an existing one. */
   choice: OverlapChoice;
+  /** The page the Content plan named for this opportunity, offered beside the check's options. */
+  givenPage?: OverlapPage;
 }
 
 /**
@@ -400,6 +404,7 @@ export function NewContentDialog({
       ...newPageType,
       newPageType,
       choice: { kind: 'create' },
+      givenPage: page,
     };
     choiceGiven.current = !!page;
     setStart(page ? withChoice(next, { kind: 'optimize', page }, siteType) : next);
@@ -552,7 +557,12 @@ export function NewContentDialog({
 
   return (
     <Dialog open={open} onOpenChange={changeOpen}>
-      <DialogContent className="sm:max-w-xl">
+      {/*
+        One column no wider than the dialog: a long title or pick truncates
+        instead of widening it. No taller than the window: Start scrolls,
+        its buttons kept in view.
+      */}
+      <DialogContent className="max-h-[calc(100dvh-2rem)] grid-cols-[minmax(0,1fr)] overflow-y-auto sm:max-w-2xl">
         {start ? (
           <>
             <DialogHeader>
@@ -606,6 +616,7 @@ export function NewContentDialog({
               <OverlapCheck
                 read={overlapRead?.key === overlapKey ? overlapRead : null}
                 choice={start.choice}
+                given={start.givenPage ?? null}
                 onChoose={(choice) => setStart(withChoice(start, choice, siteType))}
                 onRetry={() => {
                   setOverlapRead(null);
@@ -648,7 +659,7 @@ export function NewContentDialog({
                 ))}
               </div>
             </div>
-            <DialogFooter>
+            <DialogFooter className="sticky -bottom-4 z-10 bg-muted">
               <Button variant="ghost" onClick={() => setStart(null)} disabled={opening}>
                 <ArrowLeft className="h-4 w-4" />
                 {t('back')}
@@ -735,7 +746,9 @@ export function NewContentDialog({
                       title={picked?.label}
                     >
                       {options ? (
-                        <ComboboxValue placeholder={t(`sources.${kind}.placeholder`)} />
+                        <span className="min-w-0 flex-1 truncate text-left">
+                          <ComboboxValue placeholder={t(`sources.${kind}.placeholder`)} />
+                        </span>
                       ) : (
                         <span className="flex items-center gap-2 text-muted-foreground">
                           <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -897,7 +910,7 @@ export function NewContentDialog({
               </div>
             )}
 
-            <DialogFooter>
+            <DialogFooter className="sticky -bottom-4 z-10 bg-muted">
               <Button variant="ghost" onClick={() => changeOpen(false)}>
                 {t('cancel')}
               </Button>
@@ -936,11 +949,13 @@ function withChoice(start: StartChoice, choice: OverlapChoice, siteType: SiteTyp
 function OverlapCheck({
   read,
   choice,
+  given,
   onChoose,
   onRetry,
 }: {
   read: OverlapRead | null;
   choice: OverlapChoice;
+  given: OverlapPage | null;
   onChoose: (choice: OverlapChoice) => void;
   onRetry: () => void;
 }) {
@@ -949,14 +964,20 @@ function OverlapCheck({
   const advice = overlap ? adviseOverlap(overlap) : null;
   const shown = overlap?.pages.slice(0, 3) ?? [];
   const top = overlap?.pages[0];
+  const options = advice ? overlapOptions(advice, given) : [];
   const isChosen = (option: OverlapOption) =>
     option.choice.kind === choice.kind &&
     (option.choice.kind === 'create' ||
-      (choice.kind === 'optimize' && option.choice.page.url === choice.page.url));
+      (choice.kind === 'optimize' && samePage(option.choice.page.url, choice.page.url)));
 
   const optionText = (option: OverlapOption) => {
     const page = top ? pagePath(top.url) : '';
     switch (option.key) {
+      case 'optimizeGiven':
+        return {
+          title: t('options.optimizeGiven.title', { page: given ? pagePath(given.url) : '' }),
+          reason: t('options.optimizeGiven.reason'),
+        };
       case 'optimizeInstead':
         return {
           title: t('options.optimizeInstead.title', { page }),
@@ -971,6 +992,11 @@ function OverlapCheck({
               position: Math.round(top?.gscPosition ?? 0),
             },
           ),
+        };
+      case 'createNew':
+        return {
+          title: t('options.createNew.title'),
+          reason: t('options.createNew.reason'),
         };
       case 'createAnyway':
         return {
@@ -993,6 +1019,46 @@ function OverlapCheck({
     }
   };
 
+  const optionGroup = options.length > 0 && (
+    <div role="radiogroup" aria-label={t('label')} className="grid gap-1.5">
+      {options.map((option) => {
+        const text = optionText(option);
+        const chosen = isChosen(option);
+        return (
+          <button
+            key={option.key}
+            type="button"
+            role="radio"
+            aria-checked={chosen}
+            onClick={() => onChoose(option.choice)}
+            className={cn(
+              'flex items-start gap-2.5 rounded-xl border px-3 py-2.5 text-left transition-colors hover:bg-muted/50',
+              chosen && 'border-foreground ring-1 ring-inset ring-foreground',
+            )}
+          >
+            <span
+              className={cn(
+                'mt-0.5 h-4 w-4 shrink-0 rounded-full border-[1.5px] border-muted-foreground/50',
+                chosen && 'border-[5px] border-foreground',
+              )}
+            />
+            <span className="min-w-0">
+              <span className="flex flex-wrap items-center gap-1.5 text-sm font-medium">
+                {text.title}
+                {option.recommended && (
+                  <span className="rounded-md bg-muted px-1.5 text-[10.5px] font-medium text-muted-foreground">
+                    {t('recommended')}
+                  </span>
+                )}
+              </span>
+              <span className="block text-xs text-muted-foreground">{text.reason}</span>
+            </span>
+          </button>
+        );
+      })}
+    </div>
+  );
+
   return (
     <div className="space-y-2">
       <Label>{t('label')}</Label>
@@ -1009,15 +1075,18 @@ function OverlapCheck({
           </button>
         </p>
       ) : advice.verdict === 'none' ? (
-        <div className="flex items-center justify-between gap-3 rounded-lg border px-3 py-2.5 text-sm">
-          <span>{overlap.totalPrompts ? t('none') : t('noPrompts')}</span>
-          {overlap.totalPrompts > 0 && (
-            <span className="flex shrink-0 items-center gap-1 text-xs font-medium text-emerald-600 dark:text-emerald-400">
-              <Check className="h-3.5 w-3.5" />
-              {t('safe')}
-            </span>
-          )}
-        </div>
+        <>
+          <div className="flex items-center justify-between gap-3 rounded-lg border px-3 py-2.5 text-sm">
+            <span>{overlap.totalPrompts ? t('none') : t('noPrompts')}</span>
+            {overlap.totalPrompts > 0 && (
+              <span className="flex shrink-0 items-center gap-1 text-xs font-medium text-emerald-600 dark:text-emerald-400">
+                <Check className="h-3.5 w-3.5" />
+                {t('safe')}
+              </span>
+            )}
+          </div>
+          {optionGroup}
+        </>
       ) : (
         <>
           <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2.5 text-sm">
@@ -1061,43 +1130,7 @@ function OverlapCheck({
               </tbody>
             </table>
           </div>
-          <div role="radiogroup" aria-label={t('label')} className="grid gap-1.5">
-            {advice.options.map((option) => {
-              const text = optionText(option);
-              const chosen = isChosen(option);
-              return (
-                <button
-                  key={option.key}
-                  type="button"
-                  role="radio"
-                  aria-checked={chosen}
-                  onClick={() => onChoose(option.choice)}
-                  className={cn(
-                    'flex items-start gap-2.5 rounded-xl border px-3 py-2.5 text-left transition-colors hover:bg-muted/50',
-                    chosen && 'border-foreground ring-1 ring-inset ring-foreground',
-                  )}
-                >
-                  <span
-                    className={cn(
-                      'mt-0.5 h-4 w-4 shrink-0 rounded-full border-[1.5px] border-muted-foreground/50',
-                      chosen && 'border-[5px] border-foreground',
-                    )}
-                  />
-                  <span className="min-w-0">
-                    <span className="flex flex-wrap items-center gap-1.5 text-sm font-medium">
-                      {text.title}
-                      {option.recommended && (
-                        <span className="rounded-md bg-muted px-1.5 text-[10.5px] font-medium text-muted-foreground">
-                          {t('recommended')}
-                        </span>
-                      )}
-                    </span>
-                    <span className="block text-xs text-muted-foreground">{text.reason}</span>
-                  </span>
-                </button>
-              );
-            })}
-          </div>
+          {optionGroup}
         </>
       )}
     </div>

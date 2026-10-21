@@ -917,6 +917,51 @@ describe('the content editor', () => {
       expect(cardOf('s1')!.textContent).toContain('Accepted');
     });
 
+    it('makes the change again at once, before saving back what no longer fits', async () => {
+      getContentDraft.mockResolvedValue(page);
+      getDraftSuggestions.mockResolvedValue(batch);
+      let firstSaved: () => void = () => {};
+      let backSaved: () => void = () => {};
+      decideDraftSuggestions
+        .mockReturnValueOnce(new Promise<void>((r) => (firstSaved = r)))
+        .mockReturnValueOnce(new Promise<void>((r) => (backSaved = r)));
+      await renderPage();
+
+      await act(async () => barButton('Accept all').click());
+      const editor = (container.querySelector('.ProseMirror') as HTMLElement & { editor: Editor })
+        .editor;
+      // While the decision is saved, the passage s2 goes after is rewritten.
+      await act(async () => {
+        let range: { from: number; to: number } | null = null;
+        editor.state.doc.descendants((node, pos) => {
+          if (node.isText && node.text === 'Teams trust it.') {
+            range = { from: pos, to: pos + node.nodeSize };
+          }
+        });
+        editor.commands.insertContentAt(range!, 'Teams rely on it.');
+      });
+      await act(async () => firstSaved());
+      await act(async () => {});
+      // s1 is on the page already; s2 goes back to review, and the page changes again meanwhile.
+      expect(decideDraftSuggestions).toHaveBeenLastCalledWith(['s2'], 'open');
+      expect(pageText()).toContain(
+        'Accuracy is shown per team, each week, against closed revenue.',
+      );
+      await act(async () => {
+        editor.commands.insertContentAt(editor.state.doc.content.size, '<p>From a file.</p>');
+      });
+      await act(async () => backSaved());
+      await act(async () => {});
+
+      expect(pageText()).toContain(
+        'Accuracy is shown per team, each week, against closed revenue.',
+      );
+      expect(pageText()).toContain('Teams rely on it.');
+      expect(pageText()).toContain('From a file.');
+      expect(pageText()).not.toContain('FAQ');
+      expect(cardOf('s1')!.textContent).toContain('Accepted');
+    });
+
     it('rejects one, and restores it to review', async () => {
       getContentDraft.mockResolvedValue(page);
       getDraftSuggestions.mockResolvedValue(batch);

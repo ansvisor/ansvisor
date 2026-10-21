@@ -211,6 +211,7 @@ describe('startDraftWriting', () => {
     expect(prompt).toContain('- ratio?');
     expect(prompt).toContain('- "pour over ratio"');
     expect(prompt).toContain('- faq: FAQ with 5 questions — aim: 5');
+    expect(prompt).toContain('Page type: How-to guide: numbered steps to get one thing done');
   });
 
   it('refuses another brand’s draft, one past Draft, or one the agent is on — before charging', async () => {
