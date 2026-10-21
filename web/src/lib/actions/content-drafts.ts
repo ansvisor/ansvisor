@@ -21,7 +21,12 @@ import {
 } from '@/lib/content/drafts';
 import { escapeHtml } from '@/lib/content/attachments';
 import { IMPACT_PERIODS, type ContentImpact, type ContentResults } from '@/lib/content/impact';
-import { MAX_BODY_HTML_LENGTH, MAX_TITLE_LENGTH } from '@/lib/content/editor';
+import {
+  MAX_BODY_HTML_LENGTH,
+  MAX_TITLE_LENGTH,
+  bodyHash,
+  type SaveDraftResult,
+} from '@/lib/content/editor';
 import { detectPageType, siteTypeOf, type SiteType } from '@/lib/content/page-types';
 import { sanitizeDraftHtml } from '@/lib/content/sanitize-draft-html';
 import {
@@ -529,52 +534,89 @@ export async function createContentDraft(brandId: string, start: DraftStart): Pr
 
 const saveInput = z.object({
   title: z.string().max(MAX_TITLE_LENGTH),
-  bodyHtml: z.string().max(MAX_BODY_HTML_LENGTH),
+  bodyHtml: z.string(),
+  base: z.object({
+    updatedAt: z.string().min(1),
+    bodyHash: z.string().regex(/^[0-9a-f]{64}$/),
+  }),
 });
+
+/** Saves that find the draft written meanwhile, then try again over it. */
+const SAVE_ATTEMPTS = 3;
 
 /**
  * The editor's autosave: the body, checked against the draft allow-list
- * again (sanitizeDraftHtml), and the title read from it. Throws
- * 'not_found' when no row changed (another organization's draft, or one that
- * no longer exists), so a save RLS refused isn't reported as saved.
+ * again (sanitizeDraftHtml), and the title read from it, written only over
+ * the version the editor last saw (`base`). When another write came first,
+ * the page tells which kind: the same page means only the draft's other
+ * columns changed (Mark ready, its type), and the save goes over them;
+ * another page means someone else changed it (another tab, a teammate, the
+ * Content Agent), and nothing is overwritten. A save RLS refused, or of a
+ * draft that no longer exists, comes back not_found rather than saved.
  *
  * Until a person picks the page type, it follows the page (CE-023): detected
  * again from what was saved, and written only while it is still detected, so
- * a pick made meanwhile stays.
+ * a pick made meanwhile stays. That second write makes the version the
+ * editor goes on from.
  */
 export async function saveContentDraft(
   id: string,
-  input: { title: string; bodyHtml: string },
-): Promise<{ updatedAt: string }> {
-  const parsed = saveInput.safeParse(input);
-  if (!draftId.safeParse(id).success || !parsed.success) throw new Error('invalid');
-  const supabase = await createClient();
-  const bodyHtml = sanitizeDraftHtml(parsed.data.bodyHtml);
-  const { data, error } = await supabase
-    .from('content_drafts')
-    .update({ title: parsed.data.title, body_html: bodyHtml })
-    .eq('id', id)
-    .select(`updated_at, page_type, page_type_source, ${BRAND_SITE}`)
-    .maybeSingle();
-  if (error) throw new Error(error.message);
-  if (!data) throw new Error('not_found');
-
-  if (data.page_type_source === 'detected') {
-    const detected = detectPageType(
-      { title: parsed.data.title, html: bodyHtml },
-      brandSiteType(data.brands),
-    );
-    if (detected !== data.page_type) {
-      const { error: typeError } = await supabase
-        .from('content_drafts')
-        .update({ page_type: detected })
-        .eq('id', id)
-        .eq('page_type_source', 'detected');
-      // The page is saved; its type catches up on the next save.
-      if (typeError) console.error('Failed to update the detected page type:', typeError.message);
-    }
+  input: { title: string; bodyHtml: string; base: { updatedAt: string; bodyHash: string } },
+): Promise<SaveDraftResult> {
+  if (typeof input?.bodyHtml === 'string' && input.bodyHtml.length > MAX_BODY_HTML_LENGTH) {
+    return { ok: false, reason: 'too_large' };
   }
-  return { updatedAt: data.updated_at };
+  const parsed = saveInput.safeParse(input);
+  if (!draftId.safeParse(id).success || !parsed.success) return { ok: false, reason: 'invalid' };
+  const { title, base } = parsed.data;
+  const bodyHtml = sanitizeDraftHtml(parsed.data.bodyHtml);
+  const supabase = await createClient();
+  let expected = base.updatedAt;
+  for (let attempt = 0; attempt < SAVE_ATTEMPTS; attempt++) {
+    const { data, error } = await supabase
+      .from('content_drafts')
+      .update({ title, body_html: bodyHtml })
+      .eq('id', id)
+      .eq('updated_at', expected)
+      .select(`updated_at, page_type, page_type_source, ${BRAND_SITE}`)
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    if (data) {
+      let updatedAt: string = data.updated_at;
+      if (data.page_type_source === 'detected') {
+        const detected = detectPageType({ title, html: bodyHtml }, brandSiteType(data.brands));
+        if (detected !== data.page_type) {
+          const { data: typed, error: typeError } = await supabase
+            .from('content_drafts')
+            .update({ page_type: detected })
+            .eq('id', id)
+            .eq('page_type_source', 'detected')
+            .select('updated_at')
+            .maybeSingle();
+          // The page is saved; its type catches up on the next save.
+          if (typeError) {
+            console.error('Failed to update the detected page type:', typeError.message);
+          } else if (typed) {
+            updatedAt = typed.updated_at;
+          }
+        }
+      }
+      return { ok: true, updatedAt, bodyHash: await bodyHash(bodyHtml) };
+    }
+
+    const { data: current, error: readError } = await supabase
+      .from('content_drafts')
+      .select('updated_at, body_html')
+      .eq('id', id)
+      .maybeSingle();
+    if (readError) throw new Error(readError.message);
+    if (!current) return { ok: false, reason: 'not_found' };
+    if ((await bodyHash(current.body_html)) !== base.bodyHash) {
+      return { ok: false, reason: 'conflict' };
+    }
+    expected = current.updated_at;
+  }
+  return { ok: false, reason: 'conflict' };
 }
 
 const pageTypeInput = z.enum(PAGE_TYPES);

@@ -160,7 +160,9 @@ beforeEach(() => {
   getContentDraft.mockReset();
   markContentDraftReady.mockReset();
   setContentDraftPageType.mockReset().mockResolvedValue(undefined);
-  saveContentDraft.mockReset().mockResolvedValue({ updatedAt: '2026-10-20T10:00:00Z' });
+  saveContentDraft
+    .mockReset()
+    .mockResolvedValue({ ok: true, updatedAt: '2026-10-20T10:00:00Z', bodyHash: 'h0' });
   getContentImpact.mockReset().mockResolvedValue(null);
   getContentResults.mockReset().mockResolvedValue(null);
   getDraftSources.mockReset().mockResolvedValue(null);
@@ -428,6 +430,10 @@ describe('the content editor', () => {
       expect(saveContentDraft).toHaveBeenCalledWith('d1', {
         title: 'Pipeline forecasting',
         bodyHtml: '<h1>Pipeline forecasting</h1><p>Edited.</p>',
+        base: {
+          updatedAt: '2026-10-20T10:00:00Z',
+          bodyHash: expect.stringMatching(/^[0-9a-f]{64}$/),
+        },
       });
       expect(restoreDraftVersion).toHaveBeenCalledWith('v1');
       expect(saveContentDraft.mock.invocationCallOrder[0]).toBeLessThan(
@@ -781,6 +787,27 @@ describe('the content editor', () => {
       );
       await act(async () => dialogButton('Insert all 250 rows')!.click());
       expect(container.querySelectorAll('.ProseMirror table tr')).toHaveLength(251);
+    });
+
+    it('inserts only the rows that fit in the page’s size limit, after saying so', async () => {
+      const cell = 'x'.repeat(1000);
+      const csv = ['a,b,c', ...Array.from({ length: 1000 }, () => `${cell},${cell},${cell}`)].join(
+        '\n',
+      );
+      await attach(new File([csv], 'big.csv'));
+      await act(async () => dialogButton('Insert as table')!.click());
+      expect(container.querySelector('.ProseMirror table')).toBeNull();
+      const note = document.querySelector('[role="dialog"]')!.textContent!;
+      const fit = Number(
+        /Only the first ([\d,]+) of 1,000 rows fit/.exec(note)![1].replace(',', ''),
+      );
+      expect(fit).toBeGreaterThan(100);
+      expect(fit).toBeLessThan(1000);
+      await act(async () => dialogButton(`Insert the first ${fit} rows`)!.click());
+      expect(container.querySelectorAll('.ProseMirror table tr')).toHaveLength(fit + 1);
+      // As the editor saves it, the page stays under the limit.
+      const editorHtml = container.querySelector('.ProseMirror')!.innerHTML;
+      expect(editorHtml.length).toBeLessThan(500_000);
     });
 
     it('imports Markdown and Word as content, cleaned like a paste', async () => {
