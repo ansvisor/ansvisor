@@ -73,6 +73,33 @@ describe('extractKeptBlocks and restoreKeptBlocks', () => {
     expect(extractKeptBlocks(input, { htmlBlocks: false }).kept).toEqual([]);
   });
 
+  it('reads tags in any case, and skips other tags and plain scripts', () => {
+    const { html, kept } = extractKeptBlocks(
+      '<SCRIPT TYPE="Application/LD+JSON">{"@type":"Product"}</SCRIPT>' +
+        '<scripts type="application/ld+json">{}</scripts>' +
+        '<script>var s = "<script type=application/ld+json>{}";</script><p>b</p>',
+      { htmlBlocks: false },
+    );
+    expect(kept).toEqual(['<script type="application/ld+json">{"@type":"Product"}</script>']);
+    expect(html).toBe(
+      '<kept-slot data-i="0"></kept-slot><scripts type="application/ld+json">{}</scripts>' +
+        '<script>var s = "<script type=application/ld+json>{}";</script><p>b</p>',
+    );
+  });
+
+  it('takes time in proportion to the length on input built to backtrack', () => {
+    const unclosed = '<script type=application/ld+json '.repeat(15_000);
+    const unended = '<script type="application/ld+json">{"a":1}'.repeat(11_000);
+    for (const input of [unclosed, unended]) {
+      expect(input.length).toBeGreaterThan(450_000);
+      const started = performance.now();
+      const { html, kept } = extractKeptBlocks(input, { htmlBlocks: true });
+      expect(performance.now() - started).toBeLessThan(500);
+      expect(kept).toEqual([]);
+      expect(html).toBe(input);
+    }
+  });
+
   it('fills a slot nobody kept with nothing', () => {
     expect(restoreKeptBlocks('<kept-slot data-i="7"></kept-slot><p>a</p>', [])).toBe('<p>a</p>');
   });
