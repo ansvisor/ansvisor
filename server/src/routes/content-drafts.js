@@ -15,7 +15,7 @@ import { PlanLimitError } from '../lib/plan-guard.js';
 const router = Router();
 
 /** The person-facing reason, by status, when the error names none. */
-const ERROR_CODES = { 403: 'forbidden', 404: 'not_found', 422: 'invalid' };
+const ERROR_CODES = { 403: 'forbidden', 404: 'not_found', 409: 'conflict', 422: 'invalid' };
 
 const rebuildBody = z.object({
   // guid, not uuid: brand ids aren't all RFC 4122 versions (seeded ones).
@@ -60,7 +60,8 @@ const fixBody = fixRulesInput.extend({ brandId: z.guid() });
  * POST /api/content-drafts/:draftId/suggestions
  * Body: { brandId, rules: [{ key, name, detail }], textRules, locked }
  * Answers { count, batchId }: the suggestions left for review (none when the
- * agent found nothing it could change).
+ * agent found nothing it could change); 409 `open_suggestions` while the
+ * latest batch is undecided, 409 `published` for a published draft.
  */
 router.post('/:draftId/suggestions', async (req, res) => {
   const draftId = z.guid().safeParse(req.params.draftId);
@@ -75,7 +76,9 @@ router.post('/:draftId/suggestions', async (req, res) => {
     return res.json(result);
   } catch (err) {
     if (err instanceof PlanLimitError) {
-      return res.status(err.statusCode).json({ error: err.message, code: 'ai_budget' });
+      // 402: no active subscription, not a spent budget.
+      const code = err.statusCode === 402 ? 'no_subscription' : 'ai_budget';
+      return res.status(err.statusCode).json({ error: err.message, code });
     }
     if (ERROR_CODES[err?.status]) {
       return res
