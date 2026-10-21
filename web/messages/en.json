@@ -72,6 +72,9 @@
     "topics": "Topics",
     "queryFanouts": "Query Fan-outs",
     "promptsInsights": "Insights",
+    "contentOpportunities": "Opportunities",
+    "contentLibrary": "Library",
+    "contentPlan": "Plan",
     "toggleSubmenu": "Show or hide {label}"
   },
   "actionCenter": {
@@ -1286,7 +1289,14 @@
           "sendToWebhookAgain": "Send to webhook again",
           "sentToContent": "Sent to Content as an opportunity ·",
           "openInContent": "Open",
-          "sentToWebhook": "Sent to the webhook on {date}"
+          "sentToWebhook": "Sent to the webhook on {date}",
+          "createContent": "Create content",
+          "optimizePage": "Optimize page",
+          "optimize": "Optimize",
+          "openDraft": "Open draft",
+          "pagesToOptimize": "Pages to optimize",
+          "draftFailed": "Couldn't open the Content Editor. Try again.",
+          "pageNotRead": "Couldn't read the live page, so the draft starts with its title. Paste the page into the editor."
         },
         "noSignalsOpportunity": "This action was sent from Content Optimization. Its evidence is the opportunity on the Overview tab, not detection signals.",
         "opportunity": {
@@ -1363,6 +1373,16 @@
           "demand": "Suggested prompts when sent",
           "demandValue": "{count, plural, one {# prompt} other {# prompts}} · ~{volume}/mo",
           "volume": "~{volume}/mo"
+        },
+        "contentDraft": {
+          "source": "Source",
+          "sourceValue": "Content Editor",
+          "openDraft": "Open draft",
+          "pageType": "Page type",
+          "page": "Page",
+          "newPage": "A new page",
+          "prompts": "Prompts it should answer",
+          "promptsValue": "{count, plural, one {# prompt} other {# prompts}}"
         },
         "mentionReview": {
           "source": "Source",
@@ -2102,6 +2122,14 @@
         "citedDescription": "Sent from AI Traffic Analytics: AI answers cited {count, plural, one {this page} other {these pages}} {citations, plural, one {# time} other {# times}} in the range, and none sent a visit.",
         "noAiDescription": "Sent from AI Traffic Analytics: {count, plural, one {a page} other {# pages}} with visitors or in your sitemap that got no AI visit in the range.",
         "goal": "Earn AI-referred visits to these pages."
+      },
+      "content_draft": {
+        "title": "Write a page for {targets}",
+        "titleGeneric": "Write a page",
+        "createTitle": "Write: {title}",
+        "optimizeTitle": "Optimize: {title}",
+        "description": "Sent from the Content Editor: a draft for someone on the team to write, with its page type and the prompts it should answer.",
+        "goal": "Publish the page and get the brand into AI answers for these prompts."
       }
     },
     "actionTasks": {
@@ -3062,6 +3090,907 @@
     },
     "appearedIn": "Appeared in {visible} of {active, plural, one {# prompt} other {# prompts}}",
     "openDetails": "Open topic details"
+  },
+  "contentEditor": {
+    "plan": {
+      "title": "Content plan",
+      "description": "What to create, optimize or protect next.",
+      "selectBrand": "Select a brand to see its content plan.",
+      "period": "Period",
+      "periods": "Last {days} days",
+      "newContent": "New content",
+      "cards": {
+        "create": { "title": "Create", "hint": "New pages AI needs" },
+        "optimize": { "title": "Optimize", "hint": "Pages losing ground" },
+        "protect": { "title": "Protect", "hint": "Top pages · edit with care" },
+        "overlaps": { "title": "Overlaps", "hint": "Pages competing for the same prompts" }
+      },
+      "results": {
+        "label": "From AI visits · {days} full days to yesterday (UTC):",
+        "visits": "{count, plural, one {{value} visit} other {{value} visits}}",
+        "keyEvents": "{count, plural, one {{value} key event} other {{value} key events}}",
+        "orders": "{count, plural, one {{value} order} other {{value} orders}}",
+        "revenue": "{value} revenue",
+        "needsAnalytics": "<link>Connect Google Analytics</link> to see what they did next."
+      },
+      "mix": {
+        "title": "What AI cites in your topics",
+        "aiShare": "Share of AI citations",
+        "yourShare": "Your pages' mix",
+        "shares": "{ai}% · {yours}%",
+        "pages": "{count, plural, =0 {No page} one {# page} other {# pages}}",
+        "gap": "{count, plural, =0 {Gap · no page} one {Gap · # page} other {Gap · # pages}}",
+        "empty": "No cited pages with a known type in this period yet.",
+        "covered": "The shares cover {pct}% of the period's AI citations: the most cited addresses whose type shows. Forums, encyclopedias, news and the long tail of less cited pages aren't in them."
+      },
+      "listTitle": "Priority list",
+      "earlier": {
+        "none": "No page reads as losing ground yet: tracking began {since}, so the {days} days before aren't tracked to compare with.",
+        "partial": "The {days} days before are tracked only since {since}: pages are compared per tracked answer."
+      },
+      "ranked": "Ranked by impact · overlaps checked",
+      "filtered": "Filtered · click it again to clear",
+      "columns": {
+        "page": "Page",
+        "action": "Action",
+        "why": "Why · last {days} days",
+        "who": "Who",
+        "start": "Start"
+      },
+      "newPage": "New page",
+      "overlap": "⚠ Overlap",
+      "overlapHint": "{count, plural, one {# other page of yours is} other {# other pages of yours are}} cited for the same prompts",
+      "actions": { "create": "Create", "optimize": "Optimize", "protect": "Protect" },
+      "sources": {
+        "opportunity": "Opportunity",
+        "citations": "Citations",
+        "protect": "Protect",
+        "overlap": "Overlap"
+      },
+      "why": {
+        "competitors": "{names} cited · you aren't",
+        "competitorsVisibility": "{names} cited · you {visibility}%",
+        "opportunity": "{count, plural, =0 {A page AI needs} one {Answers # prompt AI asks} other {Answers # prompts AI asks}}",
+        "citationsDown": "Citation rate −{pct}%",
+        "on": "on {platforms}",
+        "top": "Top page · {citations, plural, one {{citationsText} citation} other {{citationsText} citations}} · {visits, plural, one {{visitsText} AI visit} other {{visitsText} AI visits}}",
+        "overlap": "Competes with {count, plural, one {# of your pages} other {# of your pages}} for the same prompts"
+      },
+      "who": { "you": "You", "agent": "Agent", "team": "Teammate" },
+      "start": { "create": "Create", "optimize": "Optimize", "protect": "View" },
+      "openDraft": "Open draft",
+      "empty": "Nothing to work on yet. New opportunities and your pages' AI citations show up here.",
+      "emptyFiltered": "Nothing here for this period.",
+      "loadError": "Couldn't load the content plan.",
+      "retry": "Try again"
+    },
+    "agentState": {
+      "writing": "Agent writing…",
+      "failed": "Agent failed"
+    },
+    "library": {
+      "title": "Library",
+      "description": "Everything you and the agents wrote or changed.",
+      "selectBrand": "Select a brand to see its content.",
+      "tabsLabel": "Library sections",
+      "tabs": {
+        "all": "All",
+        "draft": "Drafts",
+        "in_review": "In review",
+        "ready": "Ready",
+        "published": "Published"
+      },
+      "columns": {
+        "content": "Content",
+        "type": "Type",
+        "method": "Method",
+        "by": "By",
+        "status": "Status",
+        "score": "AEO score"
+      },
+      "scoreHint": "The page's AEO score, before → after the changes",
+      "latestOnly": "Showing the {shown} changed most recently of {count}.",
+      "untitled": "Untitled",
+      "you": "You",
+      "contentAgent": "Content Agent",
+      "formerMember": "Former member",
+      "empty": {
+        "title": "Nothing written yet",
+        "body": "Pages you and the Content Agent write or change in Ansvisor show up here."
+      },
+      "emptyTab": {
+        "draft": "No drafts.",
+        "in_review": "Nothing waiting for review.",
+        "ready": "Nothing marked ready.",
+        "published": "Nothing published yet."
+      },
+      "loadError": "Couldn't load the Library.",
+      "retry": "Try again",
+      "newContent": "New content"
+    },
+    "newContent": {
+      "title": "New content",
+      "description": "Pick how you want to start.",
+      "methodLabel": "How to start",
+      "methods": {
+        "create": {
+          "title": "Create from scratch",
+          "hint": "From an opportunity, a prompt or a topic"
+        },
+        "optimize": {
+          "title": "Optimize content",
+          "hint": "A page URL, pasted text or a file"
+        }
+      },
+      "startFrom": "Start from",
+      "sources": {
+        "opportunity": {
+          "tab": "Opportunity",
+          "placeholder": "Pick an opportunity",
+          "search": "Search opportunities",
+          "empty": "No open opportunities."
+        },
+        "prompt": {
+          "tab": "Prompt",
+          "placeholder": "Pick a tracked prompt",
+          "search": "Search prompts",
+          "empty": "No tracked prompts."
+        },
+        "topic": {
+          "tab": "Topic",
+          "placeholder": "Pick a topic",
+          "search": "Search topics",
+          "empty": "No topics with tracked prompts."
+        }
+      },
+      "topicPrompts": "{count, plural, one {# prompt} other {# prompts}}",
+      "loading": "Loading…",
+      "loadError": "Couldn't load what to start from.",
+      "retry": "Try again",
+      "content": {
+        "label": "Content",
+        "url": "Page URL",
+        "urlPlaceholder": "https://yourbrand.com/page",
+        "urlHint": "A page on your brand's site. Its main text, headings, links and schema come in; menus and footers stay out.",
+        "import": "Import",
+        "importing": "Reading…",
+        "urlErrors": {
+          "off_site": "Use a page on your brand's site. Its domains are in the brand settings.",
+          "invalid_url": "Enter a page's address, like https://yourbrand.com/pricing.",
+          "blocked": "That address can't be read.",
+          "not_html": "That address isn't a web page.",
+          "http_error": "The page couldn't be opened.",
+          "http_status": "The page answered {status}.",
+          "too_large": "The page is too large to bring in.",
+          "timeout": "The page took too long to answer.",
+          "unreachable": "The page couldn't be reached.",
+          "too_many_redirects": "The page redirects too many times.",
+          "failed": "Couldn't read the page. Try again."
+        },
+        "paste": "Paste text",
+        "file": "Upload file",
+        "pastePlaceholder": "Paste from Word, Google Docs or a web page. Headings, lists, links and tables are kept.",
+        "choose": "Choose a file or drop it here",
+        "fileHint": "Word, Markdown, HTML or text · up to 10 MB",
+        "summary": "{headings, plural, =0 {No headings} one {# heading} other {# headings}} · {characters} characters",
+        "imagesLeftOut": "{count, plural, one {# image} other {# images}} left out",
+        "clear": "Remove this content",
+        "empty": "There's no text in it to optimize.",
+        "tooLarge": "{name} is over 10 MB.",
+        "unsupported": "{name} isn't a file this reads: use Word, Markdown, HTML or text.",
+        "readFailed": "Couldn't read {name}."
+      },
+      "cancel": "Cancel",
+      "continue": "Continue",
+      "back": "Back",
+      "start": {
+        "titleCreate": "Create: {title}",
+        "titleOptimize": "Optimize: {title}",
+        "untitled": "Untitled",
+        "description": "Pick what kind of page this is. You can change it later in the editor.",
+        "pageType": "Page type",
+        "detectedTitle": "Picked from the title.",
+        "detectedContent": "Picked from the content.",
+        "detectedPage": "Picked from the page.",
+        "openEditor": "Open editor",
+        "pageUnread": "Couldn't read {page}: the draft starts with its title.",
+        "failed": "Couldn't start the draft. Try again.",
+        "sendToTeam": "Send to Action Center",
+        "sent": "Sent to the Action Center",
+        "sentDescription": "Action #{number}: the draft waits in the Library for whoever writes it.",
+        "openAction": "Open",
+        "sendFailed": "The draft is in the Library, but it couldn't be sent to the Action Center.",
+        "openDraft": "Open draft",
+        "startAgent": "Start the agent",
+        "agentStarted": "Content Agent is drafting",
+        "agentStartedDescription": "You'll review it in Library › In review.",
+        "agentErrors": {
+          "ai_budget": "This month's AI usage is spent, so the agent didn't start. The draft is in the Library for you to write.",
+          "no_subscription": "The agent needs an active subscription, so it didn't start. The draft is in the Library for you to write.",
+          "writing": "The agent is already working on this draft.",
+          "org_writing": "The agent is writing another of your team's drafts, so it didn't start. The draft is in the Library for you to write.",
+          "open_suggestions": "This page has suggestions waiting for review, so the agent didn't start. Accept or reject them in the editor first.",
+          "not_draft": "This draft is no longer a draft, so the agent didn't start.",
+          "failed": "The agent couldn't start. The draft is in the Library for you to write."
+        }
+      },
+      "who": {
+        "label": "Who does it",
+        "me": {
+          "title": "Me",
+          "hint": "Open the editor"
+        },
+        "agent": {
+          "title": "Agent",
+          "hint": "Drafts, I review"
+        },
+        "team": {
+          "title": "Team",
+          "hint": "Send to Action Center"
+        }
+      },
+      "overlap": {
+        "label": "Overlap check",
+        "checking": "Checking your pages that answer the same prompts…",
+        "failed": "Couldn't check for overlapping pages.",
+        "retry": "Try again",
+        "none": "No existing page answers these prompts",
+        "noPrompts": "No tracked prompts to check this against yet",
+        "safe": "Safe to create",
+        "covered": "An existing page already answers these prompts",
+        "partial": "{count, plural, one {# existing page answers} other {# existing pages answer}} some of these prompts",
+        "columns": {
+          "page": "Page",
+          "prompts": "Same prompts",
+          "citations": "AI citations",
+          "google": "Google pos."
+        },
+        "promptsValue": "{count} of {total}",
+        "recommended": "Recommended",
+        "options": {
+          "optimizeGiven": {
+            "title": "Optimize {page}",
+            "reason": "The page your Content plan picked"
+          },
+          "optimizeInstead": {
+            "title": "Optimize {page} instead",
+            "reason": "It already answers {count} of {total} prompts and is cited {citations}×",
+            "reasonRanked": "It already answers {count} of {total} prompts, is cited {citations}× and ranks #{position} on Google"
+          },
+          "createNew": {
+            "title": "Create a new page instead",
+            "reason": "Write a new page for these prompts"
+          },
+          "createAnyway": {
+            "title": "Create a new page anyway",
+            "reason": "Risk: two pages compete for the same prompts"
+          },
+          "createLinked": {
+            "title": "Create a new page, link {page} to it",
+            "titleMany": "Create a new page, link these pages to it",
+            "reason": "One clear page for these prompts"
+          },
+          "addSection": {
+            "title": "Add a section to {page}",
+            "reason": "A smaller change than a new page"
+          }
+        }
+      }
+    },
+    "editor": {
+      "back": "Back to the Library",
+      "untitled": "Untitled",
+      "newPage": "New page",
+      "pageType": {
+        "title": "{site} page types",
+        "none": "Set page type",
+        "change": "Page type: {type}. Change it",
+        "detectedHint": "Detected from the page as you write. Pick a type to keep it.",
+        "pickedHint": "You picked this type, so changes to the page don't change it.",
+        "siteSettings": "Change the site type in brand settings",
+        "failed": "Couldn't change the page type. Try again."
+      },
+      "placeholder": "Start with the page's H1, then write…",
+      "documentLabel": "Page content",
+      "jsonLd": "Schema · {type} (JSON-LD)",
+      "jsonLdUntyped": "Schema (JSON-LD)",
+      "paste": {
+        "cleaned": "Pasted · formatting cleaned (headings, lists, links and tables kept)",
+        "cleanedNoImages": "Pasted · formatting cleaned. Images were left out; add them with Insert an image.",
+        "plain": "Pasted as plain text"
+      },
+      "html": {
+        "title": "HTML view",
+        "hint": "paste or edit HTML; it applies when you switch back. Scripts, iframes and inline styles are removed; schema JSON-LD and code between {marker} markers are kept as written.",
+        "back": "Back to visual",
+        "label": "The page's HTML",
+        "applied": "HTML applied · formatting cleaned",
+        "appliedUnsafe": "HTML applied · {count, plural, one {# unsafe tag} other {# unsafe tags}} removed"
+      },
+      "markReady": "Mark ready",
+      "copyHtml": "Copy HTML",
+      "copyHtmlHint": "Copy the page as HTML to publish, HTML blocks and schema included",
+      "copyHtmlDone": "HTML copied",
+      "copyHtmlFailed": "Couldn't copy. Open {html} and copy it from there.",
+      "attach": {
+        "dropTitle": "Drop files to add them",
+        "dropHint": "Excel, CSV, Word, Markdown, HTML or text · up to 10 MB each",
+        "previewSummary": "{rows} rows · {columns} columns · the first row is the header",
+        "previewMore": "and {count} more rows",
+        "sheet": "Sheet",
+        "insertTable": "Insert as table",
+        "confirmLong": "This table has {count} rows. That's a lot for a page: insert all of them?",
+        "insertAll": "Insert all {count} rows",
+        "confirmCut": "Only the first {fit} of {count} rows fit in the page's size limit. A page over it can't be saved.",
+        "insertFirst": "Insert the first {count} rows",
+        "noRoom": "The page is too close to its size limit for this table. Shorten the page, or attach a smaller sheet.",
+        "cancel": "Cancel",
+        "tableInserted": "Table inserted from {name} · {count, plural, one {# row} other {# rows}}",
+        "imported": "{name} imported",
+        "unsafeRemoved": "{count, plural, one {# unsafe tag} other {# unsafe tags}} removed",
+        "imagesLeftOut": "{count, plural, one {# image} other {# images}} left out",
+        "empty": "Nothing to import from {name}.",
+        "tooLarge": "{name} is over 10 MB.",
+        "imageLater": "Images can't be attached yet. Add {name} with Insert an image, by its address.",
+        "legacyOffice": "Save {name} as .xlsx or .docx, then attach it.",
+        "unsupported": "{name} isn't a file the editor reads: attach Excel, CSV, Word, Markdown, HTML or text.",
+        "readFailed": "Couldn't read {name}."
+      },
+      "htmlBlock": {
+        "label": "HTML block",
+        "lines": "{count, plural, one {# line} other {# lines}}",
+        "edit": "Edit",
+        "copy": "Copy HTML",
+        "copied": "Block HTML copied",
+        "copyFailed": "Couldn't copy. Open Edit and copy the code from there.",
+        "addTitle": "Add an HTML block",
+        "editTitle": "Edit the HTML block",
+        "description": "Code the page carries as written: an embed, a widget, a form. Ansvisor never runs it; Copy HTML gives it back unchanged.",
+        "codeLabel": "Code",
+        "placeholder": "For example {example}",
+        "count": "{count} / {max} characters",
+        "tooLong": "Over {max} characters. Split it into two blocks.",
+        "remove": "Remove the block",
+        "cancel": "Cancel",
+        "save": "Save",
+        "insert": "Add block"
+      },
+      "markedReady": "Marked ready. Publish it on your site when you're ready.",
+      "markedReadyAction": "Marked ready, and {count, plural, one {its task} other {its # tasks}} in Action AC-{no} {count, plural, one {is} other {are}} done. Publish it on your site when you're ready.",
+      "agentWriting": {
+        "title": "Content Agent is writing this page",
+        "body": "It opens here for your review when it's done, usually within a minute or two. You can leave this page meanwhile; it waits in Library › In review."
+      },
+      "agentFailed": {
+        "text": "The Content Agent couldn't finish this page. Write it yourself, or try again.",
+        "retry": "Try again",
+        "dismiss": "Close",
+        "errors": {
+          "ai_budget": "This month's AI usage is spent, so the agent didn't start.",
+          "no_subscription": "The agent needs an active subscription. Choose a plan in Settings › Billing.",
+          "writing": "The agent is already working on this draft.",
+          "org_writing": "The agent is writing another of your team's drafts. Try again in a minute or two.",
+          "open_suggestions": "Accept or reject the open suggestions first, then try again.",
+          "not_draft": "This draft is no longer a draft, so the agent didn't start.",
+          "failed": "The agent couldn't start. Try again in a moment."
+        }
+      },
+      "actionBar": "This draft is the work of <link>Action AC-{no}</link>. Mark ready completes its task there.",
+      "actionBarDone": "This draft is the work of <link>Action AC-{no}</link>.",
+      "suggestions": {
+        "bar": "Agent suggestions",
+        "agent": "Content Agent",
+        "suggested": "suggested {count, plural, one {# change} other {# changes}}",
+        "fromAction": "from Action AC-{no}",
+        "decided": "{accepted} accepted · {rejected} rejected",
+        "rulesOpen": "{count, plural, one {# rule still open} other {# rules still open}}",
+        "acceptAll": "Accept all",
+        "rejectAll": "Reject all",
+        "undoAll": "Undo all",
+        "close": "Close",
+        "accept": "Accept",
+        "reject": "Reject",
+        "accepted": "Accepted",
+        "rejected": "Rejected",
+        "undo": "Undo",
+        "restore": "Restore",
+        "locked": "AI quotes this passage, so agents don't change it.",
+        "stale": "The page changed here since the agent read it.",
+        "acceptedToast": "{count, plural, one {Accepted} other {# changes accepted}} · undo any time",
+        "rejectedToast": "{count, plural, one {Rejected} other {# changes rejected}} · restore any time",
+        "undoneToast": "{count, plural, one {Undone · back to the suggestion} other {# undone · the suggestions are back}}",
+        "notApplied": "{count, plural, one {# suggestion couldn't be applied} other {# suggestions couldn't be applied}}: the page changed there, or AI quotes the passage.",
+        "saveFailed": "Couldn't keep the decision. Try again.",
+        "htmlBlocked": "Accept or reject the {count, plural, one {# agent suggestion} other {# agent suggestions}} first, then edit as HTML.",
+        "fixRules": "Fix open rules with agent",
+        "fixing": "Content Agent is working…",
+        "fixed": "{count, plural, one {Content Agent suggested # change} other {Content Agent suggested # changes}} · review them in the page",
+        "nothingToFix": "Content Agent found nothing it could change without new facts.",
+        "decideFirst": "Accept or reject the open suggestions first.",
+        "citedLoading": "Reading which passages AI quotes, so the agent leaves them as they are…",
+        "fixErrors": {
+          "ai_budget": "This month's AI usage is spent. Upgrade for more, or try again next month.",
+          "no_subscription": "Content Agent needs an active subscription. Choose a plan in Settings › Billing.",
+          "empty": "Write something first: the agent improves the page you have.",
+          "open_suggestions": "This page has open suggestions, maybe from another tab. They're shown now: accept or reject them first.",
+          "published": "This page is published. Content Agent suggests changes to drafts only.",
+          "failed": "Content Agent couldn't run. Try again."
+        }
+      },
+      "cited": {
+        "platform": "{name} {count}×",
+        "label": "✓ Cited by {platforms} in {days} days · keep wording",
+        "chip": "{count, plural, one {# cited passage kept} other {# cited passages kept}}",
+        "chipHint": "Passages AI answers quote today. Agents never change them, and you're asked before you do.",
+        "holdTitle": "AI quotes this passage",
+        "holdDescription": "{platforms} quoted this wording in the last {days} days. Changing it may cost the page those citations.",
+        "keep": "Keep wording",
+        "editAnyway": "Edit anyway"
+      },
+      "history": {
+        "button": "History",
+        "hint": "Earlier versions of this page, to restore any of them",
+        "title": "Version history",
+        "kept": "kept {days} days",
+        "now": "Now",
+        "nowNote": "This draft, as you see it",
+        "loading": "Reading the history…",
+        "failed": "Couldn't read the history. Try again.",
+        "empty": "No earlier versions yet. Mark ready keeps one.",
+        "today": "Today {time}",
+        "origin": {
+          "import": "Live page",
+          "agent_before": "Before agent changes",
+          "ready": "Marked ready",
+          "publish": "Published",
+          "restore": "Before a restore"
+        },
+        "note": {
+          "import": "imported from the URL",
+          "agent_before": "auto-saved",
+          "ready": "kept on Mark ready",
+          "publish": "kept on publish",
+          "restore": "kept when another version was restored"
+        },
+        "restore": "Restore",
+        "restoreLabel": "Restore {version}, {when}",
+        "footer": "Restoring makes a new version. Nothing is lost.",
+        "restored": "Restored “{version}”. The page before it is in History.",
+        "restoreFailed": "Couldn't restore it. Try again.",
+        "htmlOpen": "Go back to the page to use History",
+        "restoring": "Restoring…"
+      },
+      "markReadyFailed": "Couldn't mark it ready. Try again.",
+      "markReadyUnsaved": "The page has changes that aren't saved, so it wasn't marked ready.",
+      "loadError": "Couldn't open this draft.",
+      "notFound": "This draft doesn't exist, or it belongs to another workspace.",
+      "retryLoad": "Try again",
+      "save": {
+        "saved": "Saved",
+        "unsaved": "Unsaved changes",
+        "saving": "Saving…",
+        "failed": "Couldn't save.",
+        "retry": "Retry",
+        "conflict": "Changed elsewhere.",
+        "conflictHint": "Someone else changed this page since you opened it, so your latest changes weren't saved over theirs. Reload to see their version.",
+        "reload": "Reload",
+        "tooLarge": "Too long to save.",
+        "tooLargeHint": "The page is over the size limit. Shorten it (a big table, for example) and it saves again."
+      },
+      "toolbar": {
+        "label": "Formatting",
+        "h1": "Heading 1",
+        "h2": "Heading 2",
+        "h3": "Heading 3",
+        "bold": "Bold",
+        "italic": "Italic",
+        "link": "Link",
+        "bulletList": "Bulleted list",
+        "orderedList": "Numbered list",
+        "quote": "Quote",
+        "table": "Insert a table",
+        "image": "Insert an image",
+        "addRow": "Add a row below",
+        "addColumn": "Add a column to the right",
+        "deleteTable": "Delete the table",
+        "htmlBlock": "Add an HTML block",
+        "attach": "Attach a file: Excel, CSV, Word, Markdown, HTML or text",
+        "html": "Edit as HTML",
+        "htmlBack": "Back to visual",
+        "openLink": "Open the link in a new tab (or ⌘/Ctrl + click it in the page)",
+        "counter": "{count} / {target} characters"
+      },
+      "link": {
+        "title": "Add a link",
+        "editTitle": "Edit the link",
+        "label": "Address",
+        "placeholder": "https://… or /a-page-on-your-site",
+        "invalid": "Enter a web address (https://…), a path on your site (/…) or an e-mail (mailto:…).",
+        "remove": "Remove the link",
+        "cancel": "Cancel",
+        "apply": "Apply"
+      },
+      "image": {
+        "title": "Insert an image",
+        "srcLabel": "Image address",
+        "altLabel": "Alt text",
+        "altPlaceholder": "What the image shows",
+        "invalid": "Enter the image's web address (https://…).",
+        "cancel": "Cancel",
+        "insert": "Insert"
+      },
+      "panel": {
+        "label": "Side panel",
+        "show": "Show side panel",
+        "hide": "Hide side panel",
+        "tabs": {
+          "impact": "Impact",
+          "brief": "Brief",
+          "sources": "Sources",
+          "rules": "Rules"
+        }
+      },
+      "impact": {
+        "newPage": "This draft is a new page, not live yet, so there's nothing to measure. Impact shows when a draft optimizes a live page.",
+        "thisPage": "This page",
+        "periodLabel": "Period",
+        "periods": {
+          "7": "7d",
+          "30": "30d",
+          "90": "90d",
+          "365": "1y"
+        },
+        "loadError": "Couldn't load the page's impact.",
+        "retry": "Retry",
+        "metrics": {
+          "citations": "Citations",
+          "aiVisits": "AI visits",
+          "gscClicks": "Google clicks",
+          "promptsCited": "Prompts cited"
+        },
+        "noSearchConsole": "No Search Console data",
+        "change": {
+          "new": "New",
+          "low": "Low sample",
+          "lowHint": "Fewer than 30 in this period or the one before, so a % change would mislead."
+        },
+        "prompts": {
+          "title": "Prompts cited · {count}",
+          "lost": "{count} lost",
+          "none": "No tracked prompt cited this page in this period or the one before.",
+          "cited": "Cited {count}×",
+          "lostBadge": "Lost",
+          "wasCitedOn": "Was cited on {platforms}",
+          "seeInCitations": "See in Citations",
+          "useLost": "{count, plural, one {Use the lost prompt in this draft} other {Use the # lost prompts in this draft}}"
+        },
+        "results": {
+          "title": "Results from AI visits",
+          "subtitle": "AI visits that landed here",
+          "keyEvents": "Key events",
+          "rate": "Key event rate",
+          "rateLow": "Low sample · {sessions, plural, one {# session} other {# sessions}}",
+          "rateUnknown": "Not reported by Google Analytics yet",
+          "orders": "Orders",
+          "revenue": "Revenue",
+          "needsAnalytics": "Key events, orders and revenue come from Google Analytics. Connect it to see what AI visitors do after landing here.",
+          "openTraffic": "Open AI Traffic",
+          "bySource": "Results by AI source",
+          "none": "No AI visits to this page in this period.",
+          "other": "Other",
+          "columns": {
+            "source": "AI source",
+            "visits": "Visits",
+            "keyEvents": "Key events",
+            "revenue": "Revenue"
+          },
+          "legend": "Visits come from the tracking snippet, or from Google Analytics on days without it. Key events, orders and revenue are Google Analytics' sessions that started on this page from an AI assistant.",
+          "legendVisits": "Visits come from the tracking snippet."
+        },
+        "overlap": {
+          "title": "Your other pages for these prompts",
+          "only": "{count, plural, one {The only page cited for its prompt} other {The only page cited for its # prompts}} · no overlap",
+          "shared": "{count} of {total, plural, one {# prompt} other {# prompts}}"
+        },
+        "note": "The last {days} days against the {days} before, in whole UTC days. Citations come from tracked prompts, AI visits from the tracking snippet or Google Analytics, clicks from Search Console.",
+        "gscWindow": "Search Console keeps {days} days of page data, so older clicks aren't counted or compared."
+      },
+      "sources": {
+        "loadError": "Couldn't load the sources.",
+        "retry": "Retry",
+        "summary": "{count, plural, one {Built from # source} other {Built from # sources}}",
+        "summaryParts": "{prompts, plural, one {# prompt} other {# prompts}} · {fanouts, plural, one {# fan-out} other {# fan-outs}} · {pages, plural, one {# cited page} other {# cited pages}} · {queries, plural, one {# Search Console query} other {# Search Console queries}}",
+        "hint": "Each source shows where the draft uses it. Uncheck one to leave it out, then rebuild the brief.",
+        "empty": "No sources yet. Add a prompt, a page or a Search Console query.",
+        "toggleFailed": "Couldn't change the source. Try again.",
+        "include": "Use {name}",
+        "usedInHint": "Where the draft uses this source, as written now",
+        "groups": {
+          "prompt": "Prompts",
+          "fanout": "Fan-outs",
+          "cited_page": "Cited pages (what AI quotes today)",
+          "gsc_query": "Search Console"
+        },
+        "detail": {
+          "answers": "{count, plural, one {# answer} other {# answers}}",
+          "named": "you're named in {count}",
+          "citesPage": "cites this page",
+          "searched": "searched {count}×",
+          "citations": "{count, plural, one {# citation} other {# citations}}",
+          "clicks": "{count, plural, one {# click} other {# clicks}}",
+          "impressions": "{count, plural, one {# impression} other {# impressions}}",
+          "added": "added by you",
+          "categories": {
+            "you": "yours",
+            "competitor": "competitor",
+            "editorial": "publication",
+            "forum": "forum",
+            "social": "social",
+            "review": "review site",
+            "institutional": "institution",
+            "other": "other"
+          }
+        },
+        "usedIn": {
+          "none": "Not used",
+          "h1": "H1",
+          "heading": "H{level} · {text}",
+          "paragraph": "Paragraph {index}",
+          "thisPage": "This page",
+          "internalLink": "Internal link",
+          "outboundLink": "Outbound link"
+        },
+        "add": {
+          "button": "Add source",
+          "title": "Add a source",
+          "description": "A prompt joins the draft's prompts, with its fan-outs and cited pages. A page or a Search Console query is kept as added by you.",
+          "kinds": {
+            "prompt": "Prompt",
+            "cited_page": "Page URL",
+            "gsc_query": "Search Console query"
+          },
+          "placeholders": {
+            "prompt": "Pick a prompt",
+            "cited_page": "Page address",
+            "gsc_query": "Pick a query"
+          },
+          "urlLabel": "Page address",
+          "search": "Search…",
+          "loading": "Loading…",
+          "empty": {
+            "prompt": "No other prompts.",
+            "cited_page": "No pages.",
+            "gsc_query": "No other Search Console queries."
+          },
+          "promptsFailed": "Couldn't load the prompts.",
+          "clicks": "{count, plural, one {# click} other {# clicks}}",
+          "gscHint": "{count, plural, one {The brand's Search Console query over the last 28 days.} other {The brand's # Search Console queries over the last 28 days, the most clicked first.}}",
+          "cancel": "Cancel",
+          "submit": "Add",
+          "added": "Source added",
+          "failed": "Couldn't add the source. Try again."
+        },
+        "rebuild": "Rebuild with selection"
+      },
+      "brief": {
+        "loadError": "Couldn't load the brief.",
+        "retry": "Retry",
+        "pageType": "Page type",
+        "targetUrl": "Target URL",
+        "newPage": "A new page",
+        "notSet": "Not set",
+        "goal": "Goal",
+        "audience": "Audience",
+        "length": "Length",
+        "lengthValue": "{count} characters · from the rules",
+        "outline": "Outline",
+        "answers": "Answers “{fanout}”",
+        "keywords": "Keywords",
+        "empty": "No outline yet. Rebuild outline writes one from the sources you keep, each H2 answering a search AI ran.",
+        "fromOpportunity": "From the opportunity's brief. Rebuild outline maps each H2 to a fan-out.",
+        "edited": "Edited by you.",
+        "builtFrom": "{count, plural, one {Built from # source} other {Built from # sources}} · {date}",
+        "rebuild": "Rebuild outline",
+        "rebuildEdited": "Rebuild outline writes a new brief over the one you edited.",
+        "rebuildAnyway": "Rebuild anyway",
+        "keepEdited": "Keep my brief",
+        "build": "Build brief",
+        "edit": "Edit brief",
+        "usage": "Rebuilding uses your workspace's AI usage.",
+        "rebuilt": "{count, plural, one {Brief rebuilt from # source} other {Brief rebuilt from # sources}}",
+        "rebuildErrors": {
+          "ai_budget": "This month's AI usage is used up. It resets when your subscription renews.",
+          "no_subscription": "Rebuilding needs an active subscription. Choose a plan in Settings › Billing.",
+          "no_sources": "Keep at least one prompt, fan-out or Search Console query to build from.",
+          "failed": "Couldn't rebuild the brief. Try again."
+        },
+        "editor": {
+          "goal": "Goal",
+          "audience": "Audience",
+          "outline": "Outline",
+          "heading": "Section {index} heading",
+          "remove": "Remove section {index}",
+          "points": "Section {index} key points",
+          "pointsPlaceholder": "One key point per line",
+          "addSection": "Add section",
+          "keywords": "Keywords, separated by commas",
+          "save": "Save brief",
+          "cancel": "Cancel",
+          "saved": "Brief saved",
+          "failed": "Couldn't save the brief. Try again."
+        }
+      },
+      "rulesChip": "Rules {met}/{total}",
+      "rulesChipShort": "{met}/{total}",
+      "rulesChipHint": "Rules this page meets now. Open the Rules tab.",
+      "rules": {
+        "set": "Rule set",
+        "setName": "{type} · Ansvisor default",
+        "pickSet": "Pick a page type",
+        "met": "{met} of {total} rules met",
+        "typeGroup": "{type} rules",
+        "groups": {
+          "type": "Page type rules",
+          "structure": "Length and structure",
+          "fanouts": "Fan-outs and keywords",
+          "links": "Links and sources",
+          "style": "Style"
+        },
+        "names": {
+          "sentence": "Max sentence length",
+          "length": "Length",
+          "summary": "AI Overview summary at the top",
+          "h2Answer": "Direct answer under each H2",
+          "fanoutH2": "Use top fan-outs as H2s",
+          "faq": "FAQ block",
+          "fanoutFaq": "Use fan-outs in FAQ questions",
+          "keywords": "Keywords to include",
+          "internalLinks": "Internal links (anchor text)",
+          "outboundLinks": "Outbound links to trusted sources (anchor text)",
+          "datedPoint": "Dated data point in the first 100 words",
+          "citeInline": "Cite sources inline",
+          "aiTraces": "Remove AI traces (humanize)",
+          "bannedWords": "Banned words",
+          "tone": "Tone",
+          "language": "Language",
+          "comparisonTable": "Comparison table vs alternatives",
+          "whoFor": "Who it's for, in one sentence",
+          "proofPerSection": "Proof: customer number or quote",
+          "industryNamed": "Name the industry in H1 and summary",
+          "useCaseSteps": "Use case steps",
+          "sideBySide": "Side-by-side table",
+          "fairness": "Fair: name where the competitor wins",
+          "specsTable": "Specs table",
+          "feedMatch": "Price, GTIN and stock match the feed",
+          "fitQuestions": "Answer fit and sizing questions",
+          "first40Words": "Type + key attributes in the first 40 words",
+          "introText": "Intro text above products",
+          "buyingFaq": "Buying tips + FAQ",
+          "currentPrices": "Prices and dates are current",
+          "bestTime": "Best time to visit in the summary",
+          "howToSteps": "Steps as a numbered list",
+          "definitionFirst": "Definition in the first sentence",
+          "examplesSection": "An examples section",
+          "sizeChart": "Size chart table",
+          "measureSteps": "How to measure, as numbered steps"
+        },
+        "hints": {
+          "summary": "A short summary under the H1 that answer engines can quote.",
+          "fanoutH2": "Takes the top fan-outs you keep in Sources, the most searched first, not every one.",
+          "internalLinks": "Links with descriptive anchor text to your own pages.",
+          "outboundLinks": "Descriptive anchor text to an authoritative source: research, a standards body, government or a well-known publication. Never a competitor. Opens in a new tab.",
+          "aiTraces": "Finds phrases that read as machine-written (delve, in today's fast-paced world, not only… but also). Fixing them comes with the Content Agent.",
+          "whoFor": "Who the page is for, in one sentence, e.g. \"Sales leaders at 20–200 person B2B teams\".",
+          "first40Words": "ChatGPT reads about the first 50 tokens (~40 words) of a product description. The rest is ignored.",
+          "feedMatch": "Checked against the product feed once it's connected.",
+          "definitionFirst": "The paragraph under the H1 says what the term is (\"X is …\") in a few words: what answer engines quote for \"what is\" prompts.",
+          "measureSteps": "The longest numbered list on the page counts as the steps."
+        },
+        "units": {
+          "characters": "characters",
+          "wordsMax": "words max",
+          "wordsMin": "words min",
+          "fanouts": "fan-outs",
+          "questions": "questions",
+          "links": "links",
+          "perSection": "per section",
+          "steps": "steps"
+        },
+        "toggle": "{name}: on or off",
+        "value": "{name}: value",
+        "whoForPlaceholder": "e.g. Sales leaders at 20–200 person B2B teams",
+        "note": "Values you change apply to this draft only. Save as my rules keeps them for the workspace's next drafts of this type. Rules marked AI check are judged by the Content Agent and aren't counted yet.",
+        "updated": "Rule updated for this draft",
+        "saveFailed": "Couldn't update the rule. Try again.",
+        "tooLong": "These rules are too long to save. Shorten or remove a rule first.",
+        "tooLongMine": "These rules are too long to keep as My rules. Shorten or remove a rule first.",
+        "status": {
+          "off": "Off",
+          "over": "{count} over",
+          "found": "{count} found",
+          "partOf": "{count} of {of}",
+          "words": "{count} words",
+          "missing": "Missing",
+          "noH2": "No H2 yet",
+          "needsFaq": "Needs FAQ",
+          "notSet": "Not set",
+          "aiCheck": "AI check",
+          "needsFeed": "Needs feed",
+          "noFanouts": "No fan-outs",
+          "addKeywords": "Add keywords",
+          "notHowTo": "Not a how-to",
+          "englishOnly": "English only",
+          "numberCheck": "Number check"
+        },
+        "mineName": "My rules · {type}",
+        "setPicked": "Rule set changed for this draft",
+        "agentFix": "Fix open rules with agent",
+        "agentFixing": "Content Agent is working…",
+        "agentFixHint": "Content Agent suggests changes for the rules not met yet, for you to review in the page",
+        "fixTrace": "Fix",
+        "fixTraceHint": "Content Agent rewrites only these phrases, for you to review",
+        "agent": {
+          "aim": "aim",
+          "now": "now",
+          "phrases": "phrases found"
+        },
+        "saveMine": "Save as my rules",
+        "reset": "Reset",
+        "savedMine": "Saved as My rules for {type}",
+        "saveMineFailed": "Couldn't save My rules. Try again.",
+        "resetDone": "Back to the default set",
+        "text": {
+          "title": "Your text rules",
+          "write": "Write a rule",
+          "placeholder": "Write a rule in your own words, e.g. \"Mention free shipping in the first paragraph\"",
+          "help": "Numbers become checks. Other lines are checked by AI.",
+          "add": "Add",
+          "pasteMany": "Paste many",
+          "pasteTitle": "Paste rules as text",
+          "pasteDescription": "Paste your style guide or a list of rules. Each line becomes a rule you can edit or turn off. Rules guide the writing only.",
+          "addMany": "{count, plural, =0 {Add rules} one {Add # rule} other {Add # rules}}",
+          "cancel": "Cancel",
+          "edit": "Edit rule",
+          "added": "{count, plural, one {# rule added for this draft} other {# rules added for this draft}}",
+          "removed": "Rule removed",
+          "tooMany": "A draft keeps {max} text rules at most.",
+          "numberCheckHint": "Checked as a number when the draft is scored.",
+          "aiCheckHint": "Checked by AI when the draft is scored."
+        }
+      }
+    },
+    "status": {
+      "draft": "Draft",
+      "in_review": "In review",
+      "ready": "Ready",
+      "published": "Published"
+    },
+    "method": {
+      "create": "Create",
+      "optimize": "Optimize"
+    },
+    "pageTypes": {
+      "feature_page": "Feature page",
+      "solution_page": "Use case page",
+      "comparison": "Comparison",
+      "integration": "Integration",
+      "pricing": "Pricing",
+      "guide": "How-to guide",
+      "blog_post": "Blog post",
+      "docs_faq": "Docs / FAQ",
+      "product_page": "Product page",
+      "category_page": "Category page",
+      "buying_guide": "Buying guide",
+      "best_of": "Best-of list",
+      "policy": "Policy",
+      "destination_page": "Destination page",
+      "itinerary": "Itinerary",
+      "help_faq": "Help & FAQ",
+      "definition": "Definition page",
+      "alternatives": "Alternatives page",
+      "collection_page": "Collection page",
+      "sizing_guide": "Sizing guide"
+    }
   },
   "content": {
     "title": "Content Opportunities",
@@ -4297,7 +5226,6 @@
       "search": "Search",
       "searchPlaceholder": "Search prompts…"
     },
-    "comingSoon": "This view is on its way: its figures and charts arrive with the next updates.",
     "overview": {
       "sectionLabel": "Mentions overview",
       "loadError": "Couldn't load the overview. Try again in a moment.",
@@ -4513,6 +5441,47 @@
         "kpi": "{label}: {value}",
         "kpiChange": "{label}: {value} ({change})",
         "net": "{net} · {split} (n={count})"
+      }
+    },
+    "perception": {
+      "sectionLabel": "Perception",
+      "loadError": "Couldn't load the perception figures. Try again in a moment.",
+      "unavailable": "Perception isn't available yet. It appears once the mentions data has been prepared.",
+      "pickDates": "Choose a start or end date to see the perception figures.",
+      "noMentions": "AI didn't name {brand} in the tracked responses of this period.",
+      "method": "Terms come from the sentences that name each brand, by rule (no LLM). A sentence naming two brands lends its words to both.",
+      "terms": {
+        "title": "What AI associates with {brand}",
+        "note": "Words and phrases next to your brand, by responses",
+        "tableLabel": "Terms AI uses next to your brand",
+        "responses": "{count, plural, one {# response} other {# responses}}",
+        "share": "{share} of responses naming {brand}",
+        "none": "No terms yet. They appear once this period's responses have been prepared."
+      },
+      "shape": {
+        "title": "Brand shape: you vs top competitors",
+        "chartLabel": "Share of the responses naming each brand, on the attributes that tell them apart",
+        "notEnough": "The shape needs at least three attributes and one competitor named in this period."
+      },
+      "gap": {
+        "title": "Biggest gap",
+        "unplaced": "“{term}”: {competitor} in {competitorShare} of the responses naming it; AI doesn't use it for {brand}.",
+        "ranked": "“{term}”: {competitor} in {competitorShare} of the responses naming it; {brand} in {brandShare} (#{rank})."
+      },
+      "heatmap": {
+        "title": "Brand × attribute",
+        "note": "Share of the responses naming each brand",
+        "tableLabel": "Each attribute's share of the responses naming each brand",
+        "attribute": "Attribute",
+        "you": "You",
+        "none": "No attributes yet for this period."
+      },
+      "coMentions": {
+        "title": "Frequently mentioned with",
+        "tableLabel": "Competitors named in the same responses as you",
+        "note": "The trend shows whether the AI's consideration set around you is changing.",
+        "responses": "{count, plural, one {# response} other {# responses}}",
+        "none": "No competitor is named in the same responses as you in this period."
       }
     }
   },
@@ -5099,6 +6068,12 @@
     "domainPlaceholder": "e.g. example.com",
     "countryPlaceholder": "e.g. US, TR (optional)",
     "industryPlaceholder": "Select an industry",
+    "siteType": "Site type",
+    "siteTypes": {
+      "b2b": "B2B SaaS",
+      "ecommerce": "E-commerce",
+      "b2c": "B2C"
+    },
     "descriptionPlaceholder": "Short description of this brand...",
     "domainCount": "{count, plural, one {# domain} other {# domains}}",
     "wizard": {
@@ -5128,6 +6103,8 @@
       "stateOptional": "State (optional)",
       "nationwide": "Nationwide (no state)",
       "stateHint": "Localizes AI answers to this state from the next tracking run onward.",
+      "siteTypeHint": "Sets the page types the Content Editor offers: feature and comparison pages for B2B SaaS, product and category pages for e-commerce, destination and help pages for B2C.",
+      "siteTypeGuessed": "Guessed from the industry and Shopping mode until you pick one.",
       "deleteWarning": "This action cannot be undone. All data for this brand (insights, content, competitors) will be permanently deleted.",
       "confirmDelete": "Type the brand name to confirm:",
       "deleteConfirmPlaceholder": "Brand name",

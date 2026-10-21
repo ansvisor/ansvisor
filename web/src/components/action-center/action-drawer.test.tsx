@@ -21,9 +21,19 @@ const server = vi.hoisted(() => ({
   updateTaskStatus: vi.fn(),
   updateTaskTitle: vi.fn(),
 }));
-const toast = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn() }));
-vi.mock('@/i18n/navigation', () => ({ useRouter: () => ({ push: vi.fn() }) }));
+const toast = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn(), warning: vi.fn() }));
+const push = vi.hoisted(() => vi.fn());
+const drafts = vi.hoisted(() => ({ getActionDrafts: vi.fn(), startDraftFromAction: vi.fn() }));
+vi.mock('@/i18n/navigation', () => ({
+  useRouter: () => ({ push }),
+  Link: ({ href, children, ...rest }: { href: string; children: React.ReactNode }) => (
+    <a href={href} {...rest}>
+      {children}
+    </a>
+  ),
+}));
 vi.mock('@/lib/actions/action-center', () => server);
+vi.mock('@/lib/actions/content-drafts', () => drafts);
 vi.mock('sonner', () => ({ toast }));
 
 const { ActionDrawer } = await import('./action-drawer');
@@ -62,6 +72,7 @@ const emptyDetail = { tasks: [], signals: [], events: [], kpis: [], positionOutc
 beforeEach(() => {
   vi.clearAllMocks();
   server.getActionDetail.mockResolvedValue(emptyDetail);
+  drafts.getActionDrafts.mockResolvedValue([]);
   for (const fn of [server.addTask, server.setActionDueDate]) fn.mockResolvedValue(undefined);
   container = document.createElement('div');
   document.body.appendChild(container);
@@ -73,13 +84,13 @@ afterEach(() => {
   container.remove();
 });
 
-async function renderDrawer() {
+async function renderDrawer(shown: ActionItem = action) {
   await act(async () => {
     root.render(
       <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
         <ActionDrawer
           brandId="b1"
-          action={action}
+          action={shown}
           members={[]}
           onOpenChange={() => {}}
           onChanged={onChanged}
@@ -212,6 +223,106 @@ describe('ActionDrawer', () => {
         expect.objectContaining({ taskTotal: 2, taskCompleted: 1 }),
       );
       expect(onChanged).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('writing tasks (CE-022)', () => {
+    const PRICING = 'https://acme.example/pricing';
+    const FEATURES = 'https://acme.example/features';
+    const task = (id: string, taskKey: string, title: string) => ({
+      id,
+      position: 1,
+      status: 'todo',
+      taskKey,
+      title,
+      titleParams: {},
+      dependsOn: [],
+      details: null,
+    });
+    const button = (name: string) =>
+      [...document.querySelectorAll<HTMLButtonElement>('button')].find(
+        (b) => b.textContent?.trim() === name || b.textContent?.startsWith(`${name} (`),
+      );
+    const openTask = async (title: string) => {
+      await act(async () => button('Tasks')!.click());
+      await act(async () => button(`1. ${title}`)!.click());
+    };
+
+    it('opens the Content Editor on a draft for the page the action names', async () => {
+      server.getActionDetail.mockResolvedValue({
+        ...emptyDetail,
+        tasks: [task('t1', 'optimize_content', 'Optimize the page')],
+      });
+      drafts.startDraftFromAction.mockResolvedValue({
+        draftId: 'd-new',
+        created: true,
+        importFailed: false,
+      });
+      await renderDrawer({ ...action, payload: { pages: [PRICING] } });
+      await openTask('Optimize the page');
+
+      await act(async () => button('Optimize page')!.click());
+      expect(drafts.startDraftFromAction).toHaveBeenCalledWith('b1', 'a1', 't1', {
+        page: PRICING,
+        title: expect.any(String),
+      });
+      expect(push).toHaveBeenCalledWith('/dashboard/content/editor/d-new');
+    });
+
+    it('opens the draft already written, and lists each page when the action names several', async () => {
+      server.getActionDetail.mockResolvedValue({
+        ...emptyDetail,
+        tasks: [task('t1', 'refresh_content', 'Refresh the pages')],
+      });
+      drafts.getActionDrafts.mockResolvedValue([
+        { id: 'd-pricing', method: 'optimize', sourceUrl: PRICING, status: 'draft' },
+      ]);
+      await renderDrawer({ ...action, payload: { pages: [PRICING, FEATURES] } });
+      await openTask('Refresh the pages');
+
+      expect(drafts.getActionDrafts).toHaveBeenCalledWith('b1', 'a1');
+      const rows = [...document.querySelectorAll('li')].filter((li) =>
+        li.textContent?.startsWith('/'),
+      );
+      expect(rows.map((li) => li.textContent)).toEqual(['/pricingOpen draft', '/featuresOptimize']);
+      expect(rows[0].querySelector('a')!.getAttribute('href')).toBe(
+        '/dashboard/content/editor/d-pricing',
+      );
+      await act(async () => rows[1].querySelector('button')!.click());
+      expect(drafts.startDraftFromAction).toHaveBeenCalledWith(
+        'b1',
+        'a1',
+        't1',
+        expect.objectContaining({ page: FEATURES }),
+      );
+    });
+
+    it('starts a new page without one, and says so when it can’t', async () => {
+      server.getActionDetail.mockResolvedValue({
+        ...emptyDetail,
+        tasks: [
+          task('t1', 'create_content_draft', 'Write the draft'),
+          task('t2', 'create_content_brief', 'Write the brief'),
+        ],
+      });
+      drafts.startDraftFromAction.mockResolvedValue({ error: 'failed' });
+      await renderDrawer({ ...action, payload: { pages: [PRICING] } });
+      await openTask('Write the draft');
+
+      await act(async () => button('Create content')!.click());
+      expect(drafts.startDraftFromAction).toHaveBeenCalledWith(
+        'b1',
+        'a1',
+        't1',
+        expect.objectContaining({ page: null }),
+      );
+      expect(toast.error).toHaveBeenCalledWith("Couldn't open the Content Editor. Try again.");
+      expect(push).not.toHaveBeenCalled();
+      // Only the writing task has one.
+      await act(async () => button('1. Write the brief')!.click());
+      expect(
+        [...document.querySelectorAll('button')].filter((b) => b.textContent === 'Create content'),
+      ).toHaveLength(1);
     });
   });
 });

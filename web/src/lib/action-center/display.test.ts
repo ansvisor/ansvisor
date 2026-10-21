@@ -54,8 +54,8 @@ describe('actionTexts', () => {
     expect(() => actionGoal(kind, t)).not.toThrow();
   });
 
-  it('holds copy for all sixty-two definitions and the six person-sent kinds', () => {
-    expect(ACTION_KINDS).toHaveLength(68);
+  it('holds copy for all sixty-two definitions and the seven person-sent kinds', () => {
+    expect(ACTION_KINDS).toHaveLength(69);
   });
 
   it('names pages sent from AI Traffic after their list and page, or how many (AT-006)', () => {
@@ -163,6 +163,30 @@ describe('actionTexts', () => {
       t,
     );
     expect(texts.title).toBe('Expand the tool list');
+  });
+
+  it('names a draft sent from the Content Editor after its page (CE-015)', () => {
+    const write = actionTexts(
+      action({
+        kind: 'content_draft',
+        payload: { title: 'CRM for real estate teams', method: 'create' },
+      }),
+      t,
+    );
+    expect(write.title).toBe('Write: CRM for real estate teams');
+    expect(write.description).toBe(messages.actionCenter.actionTexts.content_draft.description);
+    const optimize = actionTexts(
+      action({ kind: 'content_draft', payload: { title: 'Pricing', method: 'optimize' } }),
+      t,
+    );
+    expect(optimize.title).toBe('Optimize: Pricing');
+    // An untitled draft is named by its prompts, as every kind is.
+    expect(
+      actionTexts(
+        action({ kind: 'content_draft', payload: { targetCount: 3, targetEntity: 'prompts' } }),
+        t,
+      ).title,
+    ).not.toBe('');
   });
 
   /**

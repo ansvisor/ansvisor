@@ -624,6 +624,7 @@ export type Database = {
           organization_id: string
           region: string | null
           shopping_mode_enabled: boolean
+          site_type: string | null
           slug: string
           state: string | null
           tracking_code: string
@@ -647,6 +648,7 @@ export type Database = {
           organization_id: string
           region?: string | null
           shopping_mode_enabled?: boolean
+          site_type?: string | null
           slug: string
           state?: string | null
           tracking_code?: string
@@ -670,6 +672,7 @@ export type Database = {
           organization_id?: string
           region?: string | null
           shopping_mode_enabled?: boolean
+          site_type?: string | null
           slug?: string
           state?: string | null
           tracking_code?: string
@@ -869,16 +872,315 @@ export type Database = {
           },
         ]
       }
+      content_rule_sets: {
+        Row: {
+          organization_id: string
+          overrides: Json
+          page_type: string
+          site_type: string
+          text_rules: Json
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          organization_id: string
+          overrides?: Json
+          page_type: string
+          site_type: string
+          text_rules?: Json
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          organization_id?: string
+          overrides?: Json
+          page_type?: string
+          site_type?: string
+          text_rules?: Json
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
+      content_drafts: {
+        Row: {
+          action_id: string | null
+          agent_state: string | null
+          agent_state_at: string | null
+          author: string
+          body_html: string
+          brief: Json | null
+          brand_id: string
+          created_at: string
+          created_by: string | null
+          id: string
+          method: string
+          opportunity_id: string | null
+          page_type: string | null
+          page_type_source: string
+          prompt_ids: string[]
+          rules: Json | null
+          source_url: string | null
+          score_after: number | null
+          score_before: number | null
+          status: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          action_id?: string | null
+          agent_state?: string | null
+          agent_state_at?: string | null
+          author?: string
+          body_html?: string
+          brief?: Json | null
+          brand_id: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          method?: string
+          opportunity_id?: string | null
+          page_type?: string | null
+          page_type_source?: string
+          prompt_ids?: string[]
+          rules?: Json | null
+          source_url?: string | null
+          score_after?: number | null
+          score_before?: number | null
+          status?: string
+          title?: string
+          updated_at?: string
+        }
+        Update: {
+          action_id?: string | null
+          agent_state?: string | null
+          agent_state_at?: string | null
+          author?: string
+          body_html?: string
+          brief?: Json | null
+          brand_id?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          method?: string
+          opportunity_id?: string | null
+          page_type?: string | null
+          page_type_source?: string
+          prompt_ids?: string[]
+          rules?: Json | null
+          source_url?: string | null
+          score_after?: number | null
+          score_before?: number | null
+          status?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "content_drafts_opportunity_id_fkey"
+            columns: ["opportunity_id"]
+            isOneToOne: false
+            referencedRelation: "content_opportunities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "content_drafts_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brands"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "content_drafts_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "content_drafts_action_id_fkey"
+            columns: ["action_id"]
+            isOneToOne: false
+            referencedRelation: "actions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      content_draft_sources: {
+        Row: {
+          added: boolean
+          created_at: string
+          draft_id: string
+          included: boolean
+          kind: string
+          ref: string
+          updated_at: string
+        }
+        Insert: {
+          added?: boolean
+          created_at?: string
+          draft_id: string
+          included?: boolean
+          kind: string
+          ref: string
+          updated_at?: string
+        }
+        Update: {
+          added?: boolean
+          created_at?: string
+          draft_id?: string
+          included?: boolean
+          kind?: string
+          ref?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "content_draft_sources_draft_id_fkey"
+            columns: ["draft_id"]
+            isOneToOne: false
+            referencedRelation: "content_drafts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      content_draft_suggestions: {
+        Row: {
+          action_id: string | null
+          after_text: string
+          agent: string
+          batch_id: string
+          before_text: string
+          block_text: string
+          created_at: string
+          decided_at: string | null
+          decided_by: string | null
+          draft_id: string
+          id: string
+          kind: string
+          position: number
+          reason: string
+          rule_keys: string[]
+          status: string
+        }
+        Insert: {
+          action_id?: string | null
+          after_text: string
+          agent?: string
+          batch_id: string
+          before_text?: string
+          block_text: string
+          created_at?: string
+          decided_at?: string | null
+          decided_by?: string | null
+          draft_id: string
+          id?: string
+          kind: string
+          position?: number
+          reason: string
+          rule_keys?: string[]
+          status?: string
+        }
+        Update: {
+          action_id?: string | null
+          after_text?: string
+          agent?: string
+          batch_id?: string
+          before_text?: string
+          block_text?: string
+          created_at?: string
+          decided_at?: string | null
+          decided_by?: string | null
+          draft_id?: string
+          id?: string
+          kind?: string
+          position?: number
+          reason?: string
+          rule_keys?: string[]
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "content_draft_suggestions_action_id_fkey"
+            columns: ["action_id"]
+            isOneToOne: false
+            referencedRelation: "actions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "content_draft_suggestions_decided_by_fkey"
+            columns: ["decided_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "content_draft_suggestions_draft_id_fkey"
+            columns: ["draft_id"]
+            isOneToOne: false
+            referencedRelation: "content_drafts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      content_draft_versions: {
+        Row: {
+          body_html: string
+          created_at: string
+          created_by: string | null
+          draft_id: string
+          id: string
+          origin: string
+          title: string
+        }
+        Insert: {
+          body_html?: string
+          created_at?: string
+          created_by?: string | null
+          draft_id: string
+          id?: string
+          origin: string
+          title?: string
+        }
+        Update: {
+          body_html?: string
+          created_at?: string
+          created_by?: string | null
+          draft_id?: string
+          id?: string
+          origin?: string
+          title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "content_draft_versions_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "content_draft_versions_draft_id_fkey"
+            columns: ["draft_id"]
+            isOneToOne: false
+            referencedRelation: "content_drafts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       content_opportunities: {
         Row: {
           brand_id: string
           brief: Json | null
+          cluster_id: string | null
           created_at: string | null
+          decision: string | null
           description: string | null
           id: string
           impact: string
           opportunity_score: number | null
           prompt_id: string | null
+          related_cluster_ids: string[]
           source_data: Json | null
           status: string
           title: string
@@ -890,12 +1192,15 @@ export type Database = {
         Insert: {
           brand_id: string
           brief?: Json | null
+          cluster_id?: string | null
           created_at?: string | null
+          decision?: string | null
           description?: string | null
           id?: string
           impact?: string
           opportunity_score?: number | null
           prompt_id?: string | null
+          related_cluster_ids?: string[]
           source_data?: Json | null
           status?: string
           title: string
@@ -907,12 +1212,15 @@ export type Database = {
         Update: {
           brand_id?: string
           brief?: Json | null
+          cluster_id?: string | null
           created_at?: string | null
+          decision?: string | null
           description?: string | null
           id?: string
           impact?: string
           opportunity_score?: number | null
           prompt_id?: string | null
+          related_cluster_ids?: string[]
           source_data?: Json | null
           status?: string
           title?: string
@@ -1893,6 +2201,29 @@ export type Database = {
           },
         ]
       }
+      prompt_cluster_members: {
+        Row: {
+          cluster_id: string
+          prompt_id: string
+        }
+        Insert: {
+          cluster_id: string
+          prompt_id: string
+        }
+        Update: {
+          cluster_id?: string
+          prompt_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "prompt_cluster_members_prompt_id_fkey"
+            columns: ["prompt_id"]
+            isOneToOne: true
+            referencedRelation: "prompts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       prompt_notes: {
         Row: {
           author_id: string | null
@@ -2541,6 +2872,54 @@ export type Database = {
             columns: ["brand_id"]
             isOneToOne: false
             referencedRelation: "brands"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      mentions_answer_terms: {
+        Row: {
+          brand_id: string
+          created_at: string
+          entity: string
+          platform: string
+          prompt_id: string
+          region: string | null
+          result_id: string
+          terms: string[]
+        }
+        Insert: {
+          brand_id: string
+          created_at: string
+          entity: string
+          platform: string
+          prompt_id: string
+          region?: string | null
+          result_id: string
+          terms?: string[]
+        }
+        Update: {
+          brand_id?: string
+          created_at?: string
+          entity?: string
+          platform?: string
+          prompt_id?: string
+          region?: string | null
+          result_id?: string
+          terms?: string[]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "mentions_answer_terms_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brands"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "mentions_answer_terms_result_id_fkey"
+            columns: ["result_id"]
+            isOneToOne: false
+            referencedRelation: "prompt_results"
             referencedColumns: ["id"]
           },
         ]
@@ -3359,6 +3738,54 @@ export type Database = {
           sent_count: number
         }[]
       }
+      content_draft_sources: {
+        Args: { p_days?: number; p_draft_id: string }
+        Returns: Json
+      }
+      content_draft_cited_answers: {
+        Args: { p_days?: number; p_draft_id: string }
+        Returns: Json
+      }
+      content_draft_decide_suggestions: {
+        Args: { p_ids: string[]; p_status: string }
+        Returns: number
+      }
+      content_draft_member: { Args: { p_draft_id: string }; Returns: boolean }
+      content_draft_restore: { Args: { p_version_id: string }; Returns: Json }
+      content_draft_snapshot: {
+        Args: { p_draft_id: string; p_origin: string }
+        Returns: string
+      }
+      content_draft_versions_prune: {
+        Args: { p_before: string; p_limit: number }
+        Returns: number
+      }
+      content_page_impact: {
+        Args: { p_brand_id: string; p_days: number; p_page: string }
+        Returns: Json
+      }
+      content_page_results: {
+        Args: { p_brand_id: string; p_days: number; p_page: string }
+        Returns: Json
+      }
+      content_plan_insights: {
+        Args: { p_brand_id: string; p_days?: number }
+        Returns: Json
+      }
+      content_plan_pages: {
+        Args: { p_brand_id: string; p_days?: number }
+        Returns: Json
+      }
+      content_page_overlap: {
+        Args: { p_brand_id: string; p_prompt_ids: string[]; p_since?: string }
+        Returns: {
+          citations: number
+          gsc_position: number | null
+          page: string
+          prompts_in_common: number
+          title: string | null
+        }[]
+      }
       ga_page_ai_visibility: {
         Args: { p_brand_id: string; p_since: string }
         Returns: {
@@ -3692,6 +4119,18 @@ export type Database = {
         }
         Returns: Json
       }
+      mentions_perception: {
+        Args: {
+          p_brand_id: string
+          p_date_from: string
+          p_date_to?: string
+          p_platform?: string
+          p_region?: string
+          p_search?: string
+          p_topic_id?: string
+        }
+        Returns: Json
+      }
       override_mention_sentiment: {
         Args: { p_note?: string; p_result_id: string; p_sentiment: string }
         Returns: Json
@@ -3715,6 +4154,10 @@ export type Database = {
           brand_id: string
           locations: number
         }[]
+      }
+      organization_has_other_members: {
+        Args: { p_except: string; p_org: string }
+        Returns: boolean
       }
       prompt_performance_aggregates: {
         Args: {

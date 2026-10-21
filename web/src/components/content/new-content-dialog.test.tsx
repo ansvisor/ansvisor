@@ -1,0 +1,725 @@
+import { act } from 'react';
+import { createRoot, type Root } from 'react-dom/client';
+import { NextIntlClientProvider } from 'next-intl';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import messages from '../../../messages/en.json';
+import type { SiteType } from '@/lib/content/page-types';
+import { NewContentDialog, type DialogPreset } from './new-content-dialog';
+
+const getContentStartOptions = vi.fn();
+const createContentDraft = vi.fn();
+const getContentOverlap = vi.fn();
+const importContentPage = vi.fn();
+const sendContentDraftToActionCenter = vi.fn();
+const startAgentWriting = vi.fn();
+vi.mock('@/lib/actions/content-drafts', () => ({
+  sendContentDraftToActionCenter: (...args: unknown[]) => sendContentDraftToActionCenter(...args),
+  startAgentWriting: (...args: unknown[]) => startAgentWriting(...args),
+  importContentPage: (...args: unknown[]) => importContentPage(...args),
+  getContentStartOptions: (...args: unknown[]) => getContentStartOptions(...args),
+  createContentDraft: (...args: unknown[]) => createContentDraft(...args),
+  getContentOverlap: (...args: unknown[]) => getContentOverlap(...args),
+}));
+// What the agent is given is agent-write.test.ts's; here, that Start hands it over.
+const agentWriteRequest = vi.fn();
+const describeRule = vi.fn();
+vi.mock('@/lib/content/agent-write', () => ({
+  agentWriteRequest: (...args: unknown[]) => agentWriteRequest(...args),
+  useRuleDescriber: () => describeRule,
+}));
+const push = vi.fn();
+const onSent = vi.fn();
+vi.mock('@/i18n/navigation', () => ({ useRouter: () => ({ push }) }));
+const toast = vi.hoisted(() =>
+  Object.assign(vi.fn(), { success: vi.fn(), error: vi.fn(), warning: vi.fn() }),
+);
+vi.mock('sonner', () => ({ toast }));
+
+(
+  globalThis as typeof globalThis & {
+    IS_REACT_ACT_ENVIRONMENT: boolean;
+  }
+).IS_REACT_ACT_ENVIRONMENT = true;
+
+// jsdom's files can't be read as text, as browsers' can.
+if (!('text' in Blob.prototype)) {
+  Object.assign(Blob.prototype, {
+    text(this: Blob) {
+      return new Promise<string>((resolve) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.readAsText(this);
+      });
+    },
+  });
+}
+
+const OPTIONS = {
+  opportunities: [
+    { id: 'o1', title: 'Northwind vs HubSpot', decision: 'create', pageTitle: null },
+    {
+      id: 'o2',
+      title: 'Create a page for realtors',
+      decision: 'create',
+      pageTitle: 'CRM for real estate teams',
+    },
+  ],
+  prompts: [{ id: 'p1', text: 'best crm for realtors' }],
+  topics: [{ id: 't1', name: 'Real estate', promptCount: 3 }],
+};
+
+let container: HTMLDivElement;
+let root: Root;
+
+async function render(siteType: SiteType = 'b2b', preset: DialogPreset | null = null) {
+  await act(async () => {
+    root.render(
+      <NextIntlClientProvider locale="en" messages={messages}>
+        <NewContentDialog
+          open
+          onOpenChange={vi.fn()}
+          brandId="b1"
+          siteType={siteType}
+          onSent={onSent}
+          preset={preset}
+        />
+      </NextIntlClientProvider>,
+    );
+  });
+  await act(async () => {});
+}
+
+const button = (name: string) =>
+  [...document.querySelectorAll<HTMLButtonElement>('button')].find(
+    (b) => b.textContent?.trim() === name || b.getAttribute('aria-label') === name,
+  );
+const radio = (name: string) =>
+  [...document.querySelectorAll<HTMLElement>('[role="radio"]')].find((r) =>
+    r.textContent?.startsWith(name),
+  )!;
+const click = async (el: Element | undefined) => {
+  await act(async () => {
+    el!.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
+    (el as HTMLElement).click();
+  });
+};
+const tab = (name: string) =>
+  [...document.querySelectorAll('[role="tab"]')].find((t) => t.textContent === name);
+const checkedType = () =>
+  document.querySelector('[aria-labelledby="start-page-type"] [aria-checked="true"]')?.textContent;
+
+beforeEach(() => {
+  container = document.createElement('div');
+  document.body.appendChild(container);
+  root = createRoot(container);
+  getContentStartOptions.mockReset().mockResolvedValue(OPTIONS);
+  createContentDraft.mockReset().mockResolvedValue('d9');
+  getContentOverlap.mockReset().mockResolvedValue({ totalPrompts: 2, pages: [] });
+  importContentPage.mockReset().mockResolvedValue({ error: 'failed' });
+  sendContentDraftToActionCenter.mockReset();
+  startAgentWriting.mockReset();
+  agentWriteRequest.mockReset().mockResolvedValue({ sources: 'kept', rules: [] });
+  onSent.mockReset();
+  toast.warning.mockReset();
+  push.mockReset();
+  toast.error.mockReset();
+  toast.success.mockReset();
+});
+
+afterEach(() => {
+  act(() => root.unmount());
+  container.remove();
+  document.body.replaceChildren();
+});
+
+describe('New content', () => {
+  it('starts a new page from an opportunity, the page type picked from its title', async () => {
+    await render();
+    expect(getContentStartOptions).toHaveBeenCalledWith('b1');
+    expect(button('Continue')!.disabled).toBe(true);
+
+    await click(button('Pick an opportunity'));
+    const option = [...document.querySelectorAll<HTMLElement>('[role="option"]')].find(
+      (o) => o.textContent === 'Northwind vs HubSpot',
+    );
+    await click(option);
+    await click(button('Continue'));
+
+    expect(document.body.textContent).toContain('Create: Northwind vs HubSpot');
+    expect(checkedType()).toBe('Comparison');
+    expect(document.body.textContent).toContain('Picked from the title.');
+
+    await click(radio('How-to guide'));
+    expect(checkedType()).toBe('How-to guide');
+    await click(button('Open editor'));
+    expect(createContentDraft).toHaveBeenCalledWith('b1', {
+      method: 'create',
+      title: 'Northwind vs HubSpot',
+      pageType: 'guide',
+      // Picked, so it stays; Start's guess would follow the page.
+      typePicked: true,
+      source: { kind: 'opportunity', id: 'o1' },
+      bodyHtml: undefined,
+    });
+    expect(push).toHaveBeenCalledWith('/dashboard/content/editor/d9');
+  });
+
+  it('keeps a long pick and a long title inside the dialog', async () => {
+    await render();
+    // A single column no wider than the dialog: content can't widen it. No
+    // taller than the window either: it scrolls, its buttons kept in view.
+    const dialog = document.querySelector('[data-slot="dialog-content"]')!;
+    expect(dialog.className).toContain('grid-cols-[minmax(0,1fr)]');
+    expect(dialog.className).toContain('max-h-[calc(100dvh-2rem)]');
+    expect(dialog.className).toContain('overflow-y-auto');
+    expect(document.querySelector('[data-slot="dialog-footer"]')!.className).toContain('sticky');
+
+    await click(button('Pick an opportunity'));
+    const option = [...document.querySelectorAll<HTMLElement>('[role="option"]')].find(
+      (o) => o.textContent === 'Northwind vs HubSpot',
+    );
+    await click(option);
+    // The pick truncates inside the trigger, beside its chevron.
+    const value = [...document.querySelectorAll('span.truncate')].find(
+      (s) => s.textContent === 'Northwind vs HubSpot',
+    );
+    expect(value?.closest('[data-slot="combobox-trigger"]')).not.toBeNull();
+  });
+
+  it('names the page by the opportunity’s brief title when it has one', async () => {
+    await render();
+    await click(button('Pick an opportunity'));
+    const option = [...document.querySelectorAll<HTMLElement>('[role="option"]')].find(
+      (o) => o.textContent === 'Create a page for realtors',
+    );
+    await click(option);
+    await click(button('Continue'));
+    expect(document.body.textContent).toContain('Create: CRM for real estate teams');
+    expect(checkedType()).toBe('Use case page');
+  });
+
+  it('optimizes pasted content, cleaned, and reads its page type from it', async () => {
+    await render('ecommerce');
+    await click(radio('Optimize content'));
+    await click(tab('Paste text'));
+    const box = document.querySelector('textarea')!;
+    const paste = new Event('paste', { bubbles: true, cancelable: true });
+    Object.defineProperty(paste, 'clipboardData', {
+      value: {
+        getData: (type: string) =>
+          type === 'text/html'
+            ? '<h2 style="color:red">Returns policy</h2><p>30 days.</p><script>x()</script>'
+            : '',
+      },
+    });
+    await act(async () => box.dispatchEvent(paste));
+
+    expect(document.body.textContent).toContain('Returns policy');
+    expect(document.body.textContent).toContain('1 heading · 23 characters');
+    await click(button('Continue'));
+    expect(document.body.textContent).toContain('Optimize: Returns policy');
+    expect(checkedType()).toBe('Policy');
+    expect(document.body.textContent).toContain('Picked from the content.');
+
+    await click(button('Open editor'));
+    expect(createContentDraft).toHaveBeenCalledWith('b1', {
+      method: 'optimize',
+      title: 'Returns policy',
+      pageType: 'policy',
+      typePicked: false,
+      source: { kind: 'content' },
+      bodyHtml: '<h2>Returns policy</h2><p>30 days.</p>',
+    });
+    // Content brought to optimize has no prompts to check.
+    expect(getContentOverlap).not.toHaveBeenCalled();
+  });
+
+  it('takes typed plain text as paragraphs, and a blog post when nothing tells the type', async () => {
+    await render();
+    await click(radio('Optimize content'));
+    await click(tab('Paste text'));
+    const box = document.querySelector('textarea')!;
+    const setValue = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!;
+    await act(async () => {
+      setValue.call(box, 'Our onboarding checklist\n\nStep one.');
+      box.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    await click(button('Continue'));
+    expect(checkedType()).toBe('Blog post');
+    expect(document.body.textContent).not.toContain('Picked from');
+    await click(button('Open editor'));
+    expect(createContentDraft.mock.calls[0][1]).toMatchObject({
+      title: 'Our onboarding checklist',
+      bodyHtml: '<p>Our onboarding checklist</p><p>Step one.</p>',
+    });
+  });
+
+  it('reads an uploaded Markdown file, and refuses a spreadsheet', async () => {
+    await render();
+    await click(radio('Optimize content'));
+    await click(tab('Upload file'));
+    const input = document.querySelector<HTMLInputElement>('input[type="file"]')!;
+    const upload = async (file: File) => {
+      Object.defineProperty(input, 'files', { value: [file], configurable: true });
+      await act(async () => input.dispatchEvent(new Event('change', { bubbles: true })));
+      await act(async () => new Promise((resolve) => setTimeout(resolve, 50)));
+    };
+
+    await upload(new File(['a,b'], 'keywords.csv'));
+    expect(toast.error).toHaveBeenCalledWith(
+      "keywords.csv isn't a file this reads: use Word, Markdown, HTML or text.",
+    );
+    await upload(new File(['# Pipeline forecasting\n\nTeams trust it.'], 'forecast.md'));
+    expect(document.body.textContent).toContain('Pipeline forecasting');
+    expect(document.body.textContent).toContain('forecast.md · 1 heading');
+    expect(button('Continue')!.disabled).toBe(false);
+  });
+
+  it('says so when what to start from can’t be read, and tries again', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    getContentStartOptions.mockRejectedValueOnce(new Error('down'));
+    await render();
+    expect(document.body.textContent).toContain("Couldn't load what to start from.");
+    await click(button('Try again'));
+    expect(getContentStartOptions).toHaveBeenCalledTimes(2);
+    expect(button('Pick an opportunity')).toBeDefined();
+  });
+
+  describe('opened from the Content plan (CE-014)', () => {
+    it('goes straight to Start for the opportunity', async () => {
+      await render('b2b', { kind: 'opportunity', id: 'o2' });
+      expect(document.body.textContent).toContain('Create: CRM for real estate teams');
+      await click(button('Open editor'));
+      expect(createContentDraft.mock.calls[0][1]).toMatchObject({
+        method: 'create',
+        title: 'CRM for real estate teams',
+        source: { kind: 'opportunity', id: 'o2' },
+      });
+    });
+
+    it('reads the page to optimize', async () => {
+      importContentPage.mockResolvedValue({
+        page: {
+          url: 'https://northwind.example/pricing',
+          title: 'Pricing',
+          html: '<h1>Pricing</h1>',
+        },
+      });
+      await render('b2b', { kind: 'page', url: 'https://northwind.example/pricing' });
+      await act(async () => {});
+      expect(importContentPage).toHaveBeenCalledWith('b1', 'https://northwind.example/pricing');
+      expect(radio('Optimize content')!.getAttribute('aria-checked')).toBe('true');
+      await click(button('Continue'));
+      expect(document.body.textContent).toContain('Optimize: Pricing');
+    });
+
+    it('starts an opportunity for an existing page on that page, whatever the check recommends', async () => {
+      // The check would recommend a new page: no page of the brand answers the prompts.
+      getContentOverlap.mockResolvedValue({ totalPrompts: 2, pages: [] });
+      await render('b2b', {
+        kind: 'opportunity',
+        id: 'o2',
+        page: { url: 'https://northwind.example/pricing', title: 'Pricing' },
+      });
+      await act(async () => {});
+      expect(document.body.textContent).toContain('Optimize: Pricing');
+      // Nothing overlaps, and Start still shows the draft optimizes the plan's page.
+      expect(document.body.textContent).toContain('No existing page answers these prompts');
+      expect(radio('Optimize /pricing').getAttribute('aria-checked')).toBe('true');
+      await click(button('Open editor'));
+      expect(createContentDraft.mock.calls[0][1]).toMatchObject({
+        method: 'optimize',
+        title: 'Pricing',
+        source: { kind: 'opportunity', id: 'o2' },
+        sourceUrl: 'https://northwind.example/pricing',
+      });
+    });
+
+    it('lets a person write a new page instead of the plan’s page when nothing overlaps', async () => {
+      getContentOverlap.mockResolvedValue({ totalPrompts: 2, pages: [] });
+      await render('b2b', {
+        kind: 'opportunity',
+        id: 'o2',
+        page: { url: 'https://northwind.example/pricing', title: 'Pricing' },
+      });
+      await act(async () => {});
+
+      await click(radio('Create a new page instead'));
+      expect(document.body.textContent).toContain('Create: CRM for real estate teams');
+      expect(radio('Optimize /pricing').getAttribute('aria-checked')).toBe('false');
+      await click(button('Open editor'));
+      expect(createContentDraft.mock.calls[0][1]).toMatchObject({
+        method: 'create',
+        title: 'CRM for real estate teams',
+      });
+    });
+
+    it('offers the plan’s page beside the check’s options, to come back to', async () => {
+      getContentOverlap.mockResolvedValue({
+        totalPrompts: 4,
+        pages: [
+          {
+            url: 'https://northwind.example/blog/crm-guide',
+            title: 'CRM guide',
+            promptsInCommon: 1,
+            citations: 6,
+            gscPosition: null,
+          },
+        ],
+      });
+      await render('b2b', {
+        kind: 'opportunity',
+        id: 'o2',
+        page: { url: 'https://northwind.example/pricing', title: 'Pricing' },
+      });
+      await act(async () => {});
+
+      const given = radio('Optimize /pricing');
+      expect(given.textContent).toContain('The page your Content plan picked');
+      expect(given.getAttribute('aria-checked')).toBe('true');
+      expect(radio('Create a new page, link /blog/crm-guide to it')).toBeDefined();
+
+      await click(radio('Add a section to /blog/crm-guide'));
+      expect(radio('Optimize /pricing').getAttribute('aria-checked')).toBe('false');
+      await click(radio('Optimize /pricing'));
+      expect(radio('Optimize /pricing').getAttribute('aria-checked')).toBe('true');
+      await click(button('Open editor'));
+      expect(createContentDraft.mock.calls[0][1]).toMatchObject({
+        method: 'optimize',
+        sourceUrl: 'https://northwind.example/pricing',
+      });
+    });
+
+    it('offers no second option for the plan’s page when the check names it too', async () => {
+      getContentOverlap.mockResolvedValue({
+        totalPrompts: 4,
+        pages: [
+          {
+            url: 'https://www.northwind.example/pricing/',
+            title: 'Pricing',
+            promptsInCommon: 3,
+            citations: 6,
+            gscPosition: null,
+          },
+        ],
+      });
+      await render('b2b', {
+        kind: 'opportunity',
+        id: 'o2',
+        page: { url: 'https://northwind.example/pricing', title: 'Pricing' },
+      });
+      await act(async () => {});
+
+      expect(document.body.textContent).not.toContain('The page your Content plan picked');
+      expect(radio('Optimize /pricing instead').getAttribute('aria-checked')).toBe('true');
+    });
+
+    it('leaves an opportunity no longer open to pick', async () => {
+      await render('b2b', { kind: 'opportunity', id: 'gone' });
+      expect(button('Continue')).toBeDefined();
+      expect(document.body.textContent).toContain('Pick an opportunity');
+    });
+  });
+
+  describe('Optimize content › Page URL', () => {
+    async function importUrl(url: string) {
+      await render();
+      await click(radio('Optimize content'));
+      const input = document.querySelector<HTMLInputElement>('input[aria-label="Page URL"]')!;
+      const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!;
+      await act(async () => {
+        setValue.call(input, url);
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+      });
+      await click(button('Import'));
+      await act(async () => {});
+    }
+
+    it('reads a page of the brand’s, cleaned, and starts from its address', async () => {
+      importContentPage.mockResolvedValue({
+        page: {
+          url: 'https://northwind.example/pricing',
+          title: 'Pricing',
+          html: '<h1>Pricing</h1><p onclick="x()">Plans</p><script>track()</script>',
+        },
+      });
+      await importUrl('northwind.example/pricing');
+      expect(importContentPage).toHaveBeenCalledWith('b1', 'northwind.example/pricing');
+      expect(document.body.textContent).toContain('/pricing · 1 heading');
+
+      await click(button('Continue'));
+      expect(document.body.textContent).toContain('Optimize: Pricing');
+      expect(checkedType()).toBe('Pricing');
+      expect(document.body.textContent).toContain('Picked from the page.');
+      // Content brought to optimize has no prompts to check.
+      expect(getContentOverlap).not.toHaveBeenCalled();
+
+      await click(button('Open editor'));
+      expect(createContentDraft).toHaveBeenCalledWith('b1', {
+        method: 'optimize',
+        title: 'Pricing',
+        pageType: 'pricing',
+        typePicked: false,
+        source: { kind: 'content' },
+        bodyHtml: '<h1>Pricing</h1><p>Plans</p>',
+        sourceUrl: 'https://northwind.example/pricing',
+      });
+    });
+
+    it('says why a page couldn’t be read', async () => {
+      importContentPage.mockResolvedValue({ error: 'off_site' });
+      await importUrl('https://competitor.example/pricing');
+      expect(document.querySelector('[role="alert"]')!.textContent).toBe(
+        "Use a page on your brand's site. Its domains are in the brand settings.",
+      );
+      expect(button('Continue')!.disabled).toBe(true);
+
+      importContentPage.mockResolvedValue({ error: 'http_error', status: 404 });
+      await click(button('Import'));
+      await act(async () => {});
+      expect(document.querySelector('[role="alert"]')!.textContent).toBe('The page answered 404.');
+    });
+  });
+
+  describe('the overlap check', () => {
+    const GUIDE = {
+      url: 'https://acme.example/guides/espresso-machines-for-beginners/',
+      title: 'Espresso machines for beginners',
+      promptsInCommon: 3,
+      citations: 4,
+      gscPosition: 3.5,
+    };
+    /** Starts a new page from the first opportunity and waits for the check. */
+    async function startFromOpportunity() {
+      await render();
+      await click(button('Pick an opportunity'));
+      const option = [...document.querySelectorAll<HTMLElement>('[role="option"]')].find(
+        (o) => o.textContent === 'Northwind vs HubSpot',
+      );
+      await click(option);
+      await click(button('Continue'));
+      await act(async () => {});
+    }
+    const overlapOption = (name: string) =>
+      [...document.querySelectorAll<HTMLElement>('[role="radio"]')].find((r) =>
+        r.textContent?.startsWith(name),
+      )!;
+
+    it('says a new page is safe when no page of the brand answers its prompts', async () => {
+      await startFromOpportunity();
+      expect(getContentOverlap).toHaveBeenCalledWith('b1', { kind: 'opportunity', id: 'o1' });
+      expect(document.body.textContent).toContain('No existing page answers these prompts');
+      expect(document.body.textContent).toContain('Safe to create');
+    });
+
+    it('recommends optimizing a page that already answers most of the prompts', async () => {
+      getContentOverlap.mockResolvedValue({ totalPrompts: 4, pages: [GUIDE] });
+      await startFromOpportunity();
+
+      expect(document.body.textContent).toContain('An existing page already answers these prompts');
+      expect(document.body.textContent).toContain('3 of 4');
+      expect(document.body.textContent).toContain('#4');
+      const optimize = overlapOption('Optimize /guides/espresso-machines-for-beginners instead');
+      expect(optimize.getAttribute('aria-checked')).toBe('true');
+      expect(optimize.textContent).toContain('Recommended');
+      expect(optimize.textContent).toContain(
+        'It already answers 3 of 4 prompts, is cited 4× and ranks #4 on Google',
+      );
+      // The draft becomes that page's: its title, and the type its address shows.
+      expect(document.body.textContent).toContain('Optimize: Espresso machines for beginners');
+      expect(checkedType()).toBe('How-to guide');
+      expect(document.body.textContent).toContain('Picked from the page.');
+
+      importContentPage.mockResolvedValue({
+        page: {
+          url: GUIDE.url,
+          title: 'Espresso machines for beginners',
+          html: '<h1>Espresso machines for beginners</h1><p style="color:red">Start here.</p>',
+        },
+      });
+      await click(button('Open editor'));
+      // The page's live text comes in, cleaned like a paste.
+      expect(importContentPage).toHaveBeenCalledWith('b1', GUIDE.url);
+      expect(createContentDraft).toHaveBeenCalledWith('b1', {
+        method: 'optimize',
+        title: 'Espresso machines for beginners',
+        pageType: 'guide',
+        // Read from the page's address, so it follows the page.
+        typePicked: false,
+        source: { kind: 'opportunity', id: 'o1' },
+        bodyHtml: '<h1>Espresso machines for beginners</h1><p>Start here.</p>',
+        sourceUrl: GUIDE.url,
+      });
+    });
+
+    it('starts an existing page with its title when its live text can’t be read', async () => {
+      getContentOverlap.mockResolvedValue({ totalPrompts: 4, pages: [GUIDE] });
+      await startFromOpportunity();
+      await click(button('Open editor'));
+      expect(toast.warning).toHaveBeenCalledWith(
+        "Couldn't read /guides/espresso-machines-for-beginners: the draft starts with its title.",
+      );
+      expect(createContentDraft.mock.calls[0][1]).toMatchObject({
+        method: 'optimize',
+        bodyHtml: undefined,
+        sourceUrl: GUIDE.url,
+      });
+    });
+
+    it('goes back to the new page when creating one anyway', async () => {
+      getContentOverlap.mockResolvedValue({ totalPrompts: 4, pages: [GUIDE] });
+      await startFromOpportunity();
+      await click(overlapOption('Create a new page anyway'));
+      expect(document.body.textContent).toContain('Create: Northwind vs HubSpot');
+      expect(checkedType()).toBe('Comparison');
+      await click(button('Open editor'));
+      expect(createContentDraft.mock.calls[0][1]).toMatchObject({
+        method: 'create',
+        title: 'Northwind vs HubSpot',
+        pageType: 'comparison',
+        sourceUrl: undefined,
+      });
+    });
+
+    it('recommends a new page linked from pages that answer only some prompts', async () => {
+      getContentOverlap.mockResolvedValue({
+        totalPrompts: 4,
+        pages: [
+          {
+            ...GUIDE,
+            url: 'https://acme.example/blog/grinders',
+            promptsInCommon: 1,
+            gscPosition: null,
+          },
+        ],
+      });
+      await startFromOpportunity();
+      expect(document.body.textContent).toContain('1 existing page answers some of these prompts');
+      expect(document.body.textContent).toContain('—');
+      expect(
+        overlapOption('Create a new page, link /blog/grinders to it').getAttribute('aria-checked'),
+      ).toBe('true');
+      expect(overlapOption('Add a section to /blog/grinders')).toBeDefined();
+      expect(document.body.textContent).toContain('Create: Northwind vs HubSpot');
+    });
+
+    it('lets the page start when the check fails, and tries again', async () => {
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+      getContentOverlap.mockRejectedValueOnce(new Error('down'));
+      await startFromOpportunity();
+      expect(document.body.textContent).toContain("Couldn't check for overlapping pages.");
+      expect(button('Open editor')!.disabled).toBe(false);
+      await click(button('Try again'));
+      await act(async () => {});
+      expect(getContentOverlap).toHaveBeenCalledTimes(2);
+      expect(document.body.textContent).toContain('Safe to create');
+    });
+  });
+
+  describe('who does it', () => {
+    async function startNewPage() {
+      await render();
+      await click(button('Pick an opportunity'));
+      const option = [...document.querySelectorAll<HTMLElement>('[role="option"]')].find(
+        (o) => o.textContent === 'Northwind vs HubSpot',
+      );
+      await click(option);
+      await click(button('Continue'));
+      await act(async () => {});
+    }
+    const whoOption = (name: string) =>
+      [
+        ...document.querySelectorAll<HTMLElement>('[aria-labelledby="start-who"] [role="radio"]'),
+      ].find((r) => r.textContent?.startsWith(name))!;
+
+    it('opens the editor for me by default', async () => {
+      await startNewPage();
+      expect(whoOption('Me').getAttribute('aria-checked')).toBe('true');
+      expect(whoOption('Agent').textContent).toBe('AgentDrafts, I review');
+      expect(button('Open editor')).toBeDefined();
+    });
+
+    it('hands the draft to the Content Agent, which drafts it for review in the Library', async () => {
+      startAgentWriting.mockResolvedValue({ started: true });
+      await startNewPage();
+      await click(whoOption('Agent'));
+      await click(button('Start the agent'));
+
+      expect(agentWriteRequest).toHaveBeenCalledWith(
+        expect.objectContaining({
+          id: 'd9',
+          brandId: 'b1',
+          method: 'create',
+          rules: { set: null, source: null, overrides: {}, textRules: [] },
+        }),
+        describeRule,
+      );
+      expect(startAgentWriting).toHaveBeenCalledWith('d9', 'b1', { sources: 'kept', rules: [] });
+      expect(push).not.toHaveBeenCalled();
+      expect(onSent).toHaveBeenCalled();
+      const [message, options] = toast.success.mock.calls[0];
+      expect(message).toBe('Content Agent is drafting');
+      expect(options.description).toBe("You'll review it in Library › In review.");
+      options.action.onClick();
+      expect(push).toHaveBeenCalledWith('/dashboard/content/editor/d9');
+    });
+
+    it('keeps the draft for me when the agent can’t start', async () => {
+      startAgentWriting.mockResolvedValue({ error: 'ai_budget' });
+      await startNewPage();
+      await click(whoOption('Agent'));
+      await click(button('Start the agent'));
+      expect(toast.error.mock.calls[0][0]).toBe(
+        "This month's AI usage is spent, so the agent didn't start. The draft is in the Library for you to write.",
+      );
+      expect(onSent).toHaveBeenCalled();
+    });
+
+    it('says the draft is the person’s to write when the agent is busy with another', async () => {
+      startAgentWriting.mockResolvedValue({ error: 'org_writing' });
+      await startNewPage();
+      await click(whoOption('Agent'));
+      await click(button('Start the agent'));
+      expect(toast.error.mock.calls[0][0]).toBe(
+        "The agent is writing another of your team's drafts, so it didn't start. The draft is in the Library for you to write.",
+      );
+    });
+
+    it('sends the draft to the Action Center for the team, and keeps it in the Library', async () => {
+      sendContentDraftToActionCenter.mockResolvedValue({
+        actionId: 'a1',
+        actionNo: 214,
+        created: true,
+      });
+      await startNewPage();
+      await click(whoOption('Team'));
+      await click(button('Send to Action Center'));
+
+      expect(createContentDraft.mock.calls[0][1]).toMatchObject({ method: 'create' });
+      expect(sendContentDraftToActionCenter).toHaveBeenCalledWith('b1', 'd9');
+      expect(push).not.toHaveBeenCalled();
+      expect(onSent).toHaveBeenCalled();
+      const [message, options] = toast.success.mock.calls[0];
+      expect(message).toBe('Sent to the Action Center');
+      expect(options.description).toBe(
+        'Action #214: the draft waits in the Library for whoever writes it.',
+      );
+      options.action.onClick();
+      expect(push).toHaveBeenCalledWith('/dashboard/action-center/actions?action=a1');
+    });
+
+    it('says the draft is kept when sending it fails, and opens it on request', async () => {
+      sendContentDraftToActionCenter.mockResolvedValue({ error: 'Failed to send' });
+      await startNewPage();
+      await click(whoOption('Team'));
+      await click(button('Send to Action Center'));
+      const [message, options] = toast.error.mock.calls[0];
+      expect(message).toBe(
+        "The draft is in the Library, but it couldn't be sent to the Action Center.",
+      );
+      expect(onSent).toHaveBeenCalled();
+      options.action.onClick();
+      expect(push).toHaveBeenCalledWith('/dashboard/content/editor/d9');
+    });
+  });
+});

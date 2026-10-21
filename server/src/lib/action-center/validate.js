@@ -240,9 +240,11 @@ export async function validateAction(action, { now = new Date() } = {}) {
   // An Improve action (PROMPT-004) likewise, on its one prompt, and a topic
   // gap (VIS-010) or opportunity (VIS-011) sent from Insights on the topic's
   // prompts, answers sent from Mentions (MS-08) on their prompts, and pages
-  // sent from AI Traffic (AT-006) on those pages.
+  // sent from AI Traffic (AT-006) on those pages. A draft sent from the
+  // Content Editor (CE-015) on its prompts and its page.
   if (
     action.kind === 'content_opportunity' ||
+    action.kind === 'content_draft' ||
     action.kind === 'prompt_improve' ||
     action.kind === 'topic_competitor_gap' ||
     action.kind === 'topic_opportunity' ||
