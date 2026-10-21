@@ -80,6 +80,10 @@ describe('getContentPlan', () => {
           competitorsCited: ['Daily Grind Co.', '', 'Origin Box'],
           visibilityScore: 6,
           prompts: ['p1', 'p2'],
+          assets: [
+            { key: 'a1', type: 'pillar_guide' },
+            { key: 'a2', type: 'backlink' },
+          ],
         },
       },
     ];
@@ -119,6 +123,7 @@ describe('getContentPlan', () => {
           competitorsCited: ['Daily Grind Co.', 'Origin Box'],
           visibility: 6,
           prompts: 2,
+          assetType: 'pillar_guide',
         },
       ],
       drafts: [

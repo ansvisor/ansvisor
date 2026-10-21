@@ -60,6 +60,7 @@ import {
   type OverlapChoice,
   type OverlapOption,
 } from '@/lib/content/overlap';
+import { opportunityPageType } from '@/lib/content/asset-types';
 import { SITE_PAGE_TYPES, detectPageType, type SiteType } from '@/lib/content/page-types';
 import {
   fileTitle,
@@ -80,6 +81,8 @@ interface PickerItem {
   meta?: string;
   /** The page's title, when it isn't the label (an opportunity's brief title). */
   pageTitle?: string;
+  /** The page type an opportunity names for its page, when the site writes it. */
+  pageType?: PageType;
 }
 
 /** Content brought to optimize: cleaned HTML, what it holds, and where it came from. */
@@ -96,7 +99,7 @@ interface BroughtContent extends ContentSummary {
 type ContentFrom = 'url' | 'paste' | 'file';
 
 /** Where Start's first page type came from, if it was read from somewhere. */
-type DetectedFrom = 'title' | 'content' | 'page' | null;
+type DetectedFrom = 'title' | 'content' | 'page' | 'opportunity' | null;
 
 /** What Start opens the editor with. */
 interface StartChoice {
@@ -228,11 +231,7 @@ export function NewContentDialog({
     presetApplied.current = true;
     const opportunity = options.opportunities.find((o) => o.id === preset.id);
     if (!opportunity) return;
-    const item = {
-      value: opportunity.id,
-      label: opportunity.title,
-      pageTitle: opportunity.pageTitle ?? undefined,
-    };
+    const item = opportunityItem(opportunity, siteType);
     setKind('opportunity');
     setPicked(item);
     startFrom(
@@ -303,11 +302,7 @@ export function NewContentDialog({
   const items: PickerItem[] = !options
     ? []
     : kind === 'opportunity'
-      ? options.opportunities.map((o) => ({
-          value: o.id,
-          label: o.title,
-          pageTitle: o.pageTitle ?? undefined,
-        }))
+      ? options.opportunities.map((o) => opportunityItem(o, siteType))
       : kind === 'prompt'
         ? options.prompts.map((p) => ({ value: p.id, label: p.text }))
         : options.topics.map((topic) => ({
@@ -386,17 +381,20 @@ export function NewContentDialog({
 
   /**
    * Start for a new page from what was picked: its title, and the page type
-   * it reads as. With a page (an opportunity for an existing page, from the
-   * plan), Start optimizes that page, and the overlap check leaves it chosen.
+   * its opportunity names, else the one it reads as. With a page (an
+   * opportunity for an existing page, from the plan), Start optimizes that
+   * page, and the overlap check leaves it chosen.
    */
   const startFrom = (item: PickerItem, from: SourceKind, page?: OverlapPage) => {
     const title = item.pageTitle ?? item.label;
     const type = startPageType({ title }, siteType);
-    const newPageType = {
-      pageType: type.pageType,
-      detectedFrom: type.detected ? ('title' as const) : null,
-      picked: false,
-    };
+    const newPageType = item.pageType
+      ? { pageType: item.pageType, detectedFrom: 'opportunity' as const, picked: false }
+      : {
+          pageType: type.pageType,
+          detectedFrom: type.detected ? ('title' as const) : null,
+          picked: false,
+        };
     const next: StartChoice = {
       method: 'create',
       title,
@@ -607,6 +605,7 @@ export function NewContentDialog({
                       title: 'start.detectedTitle',
                       content: 'start.detectedContent',
                       page: 'start.detectedPage',
+                      opportunity: 'start.detectedOpportunity',
                     }[start.detectedFrom],
                   )}
                 </p>
@@ -925,14 +924,34 @@ export function NewContentDialog({
   );
 }
 
+/** An opportunity to pick, with the page type it names when the site writes it. */
+function opportunityItem(
+  opportunity: DraftStartOptions['opportunities'][number],
+  siteType: SiteType,
+): PickerItem {
+  return {
+    value: opportunity.id,
+    label: opportunity.title,
+    pageTitle: opportunity.pageTitle ?? undefined,
+    pageType: opportunityPageType(opportunity.assetType, siteType) ?? undefined,
+  };
+}
+
 function sourceKey(source: Exclude<DraftSource, { kind: 'content' }>) {
   return `${source.kind}:${source.id}`;
 }
 
-/** Start with this overlap pick: an existing page brings its own title and type. */
+/**
+ * Start with this overlap pick: an existing page brings its own title and
+ * the type its address or title shows; when they show none, the type its
+ * opportunity names, unless the person picked one.
+ */
 function withChoice(start: StartChoice, choice: OverlapChoice, siteType: SiteType): StartChoice {
   if (choice.kind === 'create') return { ...start, choice, ...start.newPageType };
   const detected = detectPageType({ url: choice.page.url, title: choice.page.title }, siteType);
+  if (!detected && !start.picked && start.newPageType.detectedFrom === 'opportunity') {
+    return { ...start, choice, ...start.newPageType };
+  }
   return {
     ...start,
     choice,

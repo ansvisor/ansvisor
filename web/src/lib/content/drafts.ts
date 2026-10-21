@@ -205,8 +205,15 @@ export interface DraftStartOptions {
   /**
    * pageTitle: the page title its brief suggests, once one is generated;
    * the opportunity's own title says what to do, not what to call the page.
+   * assetType: its primary asset's type as stored (lib/content/asset-types.ts).
    */
-  opportunities: { id: string; title: string; decision: string | null; pageTitle: string | null }[];
+  opportunities: {
+    id: string;
+    title: string;
+    decision: string | null;
+    pageTitle: string | null;
+    assetType: string | null;
+  }[];
   prompts: { id: string; text: string }[];
   topics: { id: string; name: string; promptCount: number }[];
 }

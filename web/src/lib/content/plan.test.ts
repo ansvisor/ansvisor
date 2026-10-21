@@ -38,6 +38,7 @@ const opportunity = (id: string, over: Partial<PlanOpportunity> = {}): PlanOppor
   competitorsCited: [],
   visibility: null,
   prompts: 3,
+  assetType: null,
   ...over,
 });
 const plan = (
@@ -75,6 +76,43 @@ describe('buildPlan', () => {
       }),
     ]);
     expect(counts).toEqual({ create: 1, optimize: 0, protect: 0, overlaps: 0 });
+  });
+
+  it("types an opportunity's page as the opportunity does, when the site writes that type", () => {
+    const { rows } = plan(
+      [],
+      [
+        // An older type, read as this B2B site's page type.
+        opportunity('o1', { pageTitle: 'Northwind vs HubSpot', assetType: 'faq_page', score: 90 }),
+        opportunity('o2', { pageTitle: 'Northwind vs Pipedrive', assetType: 'alternatives' }),
+        // A shop's type, and the older default: the title tells instead.
+        opportunity('o3', {
+          pageTitle: 'Northwind vs Close',
+          assetType: 'sizing_guide',
+          score: 50,
+        }),
+        opportunity('o4', { pageTitle: 'Northwind vs Zoho', assetType: 'blog_post', score: 40 }),
+      ],
+    );
+    expect(rows.map((r) => r.pageType)).toEqual([
+      'docs_faq',
+      'alternatives',
+      'comparison',
+      'comparison',
+    ]);
+  });
+
+  it('types an existing page by its own address first, then by its opportunity', () => {
+    const optimize = (id: string, targetPage: string, assetType: string) =>
+      opportunity(id, { decision: 'optimize', targetPage, targetTitle: 'Our page', assetType });
+    const { rows } = plan(
+      [],
+      [optimize('o1', '/shipping', 'landing_page'), optimize('o2', '/crm-tips', 'comparison_page')],
+    );
+    expect(rows.map((r) => [r.page, r.pageType])).toEqual([
+      ['/shipping', 'docs_faq'],
+      ['/crm-tips', 'comparison'],
+    ]);
   });
 
   it('optimizes a page losing citations, by how much it lost, with the platforms citing it less', () => {

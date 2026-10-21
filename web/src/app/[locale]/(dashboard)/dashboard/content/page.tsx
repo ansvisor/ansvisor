@@ -61,6 +61,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useBrandStore } from '@/stores/use-brand-store';
+import { useAssetTypeLabel } from '@/hooks/use-asset-type-label';
 import {
   generateOpportunitiesOnDemand,
   getGenerationJobStatus,
@@ -330,6 +331,7 @@ interface PromptFilterItem {
 
 export default function ContentPage() {
   const t = useTranslations('content');
+  const assetTypeLabel = useAssetTypeLabel();
   const tCommon = useTranslations('common');
   const locale = useLocale();
   const activeBrandId = useBrandStore((s) => s.activeBrandId);
@@ -1569,6 +1571,11 @@ export default function ContentPage() {
                             <Badge variant="secondary" className="text-[10px]">
                               {t(`decision.${opp.decision}`)}
                             </Badge>
+                          )}
+                          {assetTypeLabel(opp.sourceData?.assets?.[0]?.type) && (
+                            <span className="text-[11px] leading-tight text-muted-foreground">
+                              {assetTypeLabel(opp.sourceData?.assets?.[0]?.type)}
+                            </span>
                           )}
                         </div>
                       </TableCell>

@@ -56,12 +56,19 @@ if (!('text' in Blob.prototype)) {
 
 const OPTIONS = {
   opportunities: [
-    { id: 'o1', title: 'Northwind vs HubSpot', decision: 'create', pageTitle: null },
+    {
+      id: 'o1',
+      title: 'Northwind vs HubSpot',
+      decision: 'create',
+      pageTitle: null,
+      assetType: null,
+    },
     {
       id: 'o2',
       title: 'Create a page for realtors',
       decision: 'create',
       pageTitle: 'CRM for real estate teams',
+      assetType: null,
     },
   ],
   prompts: [{ id: 'p1', text: 'best crm for realtors' }],
@@ -333,6 +340,61 @@ describe('New content', () => {
         source: { kind: 'opportunity', id: 'o2' },
         sourceUrl: 'https://northwind.example/pricing',
       });
+    });
+
+    it("picks the opportunity's page type for a new page, and for its page when that shows none", async () => {
+      getContentStartOptions.mockResolvedValue({
+        ...OPTIONS,
+        opportunities: [
+          // An older type, read as this B2B site's: Docs / FAQ, not the title's comparison.
+          { ...OPTIONS.opportunities[0], id: 'o3', decision: 'expand', assetType: 'faq_page' },
+        ],
+      });
+      await render('b2b', {
+        kind: 'opportunity',
+        id: 'o3',
+        // Nothing in its address or title says what the page is.
+        page: { url: 'https://northwind.example/crm-tips', title: 'CRM tips' },
+      });
+      await act(async () => {});
+      expect(document.body.textContent).toContain('Optimize: CRM tips');
+      expect(checkedType()).toBe('Docs / FAQ');
+      expect(document.body.textContent).toContain('Picked from the opportunity.');
+
+      await click(radio('Create a new page instead'));
+      expect(checkedType()).toBe('Docs / FAQ');
+      await click(button('Open editor'));
+      expect(createContentDraft.mock.calls[0][1]).toMatchObject({
+        method: 'create',
+        pageType: 'docs_faq',
+        typePicked: false,
+      });
+    });
+
+    it("types an existing page by its own address first, then by the opportunity's type", async () => {
+      getContentStartOptions.mockResolvedValue({
+        ...OPTIONS,
+        opportunities: [{ ...OPTIONS.opportunities[0], decision: 'expand', assetType: 'faq_page' }],
+      });
+      await render('b2b', {
+        kind: 'opportunity',
+        id: 'o1',
+        page: { url: 'https://northwind.example/pricing', title: 'Pricing' },
+      });
+      await act(async () => {});
+      // An older opportunity's "FAQ page" doesn't make /pricing anything but pricing.
+      expect(checkedType()).toBe('Pricing');
+      expect(document.body.textContent).toContain('Picked from the page.');
+    });
+
+    it("guesses from the title when the site doesn't write the opportunity's type", async () => {
+      getContentStartOptions.mockResolvedValue({
+        ...OPTIONS,
+        opportunities: [{ ...OPTIONS.opportunities[0], assetType: 'sizing_guide' }],
+      });
+      await render('b2b', { kind: 'opportunity', id: 'o1' });
+      expect(checkedType()).toBe('Comparison');
+      expect(document.body.textContent).toContain('Picked from the title.');
     });
 
     it('lets a person write a new page instead of the plan’s page when nothing overlaps', async () => {

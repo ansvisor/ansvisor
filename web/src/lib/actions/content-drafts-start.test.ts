@@ -112,8 +112,16 @@ describe('getContentStartOptions', () => {
           title: 'Create a CRM page for real estate',
           decision: 'create',
           brief: { suggestedTitle: ' CRM for real estate teams ' },
+          assetType: 'solution_page',
         },
-        { id: 'o2', title: 'Refresh the pricing page', decision: 'refresh', brief: null },
+        // Written before opportunities had assets.
+        {
+          id: 'o2',
+          title: 'Refresh the pricing page',
+          decision: 'refresh',
+          brief: null,
+          assetType: null,
+        },
       ],
       prompts: [
         { id: PROMPT, text: 'best crm for realtors' },
@@ -132,8 +140,15 @@ describe('getContentStartOptions', () => {
           title: 'Create a CRM page for real estate',
           decision: 'create',
           pageTitle: 'CRM for real estate teams',
+          assetType: 'solution_page',
         },
-        { id: 'o2', title: 'Refresh the pricing page', decision: 'refresh', pageTitle: null },
+        {
+          id: 'o2',
+          title: 'Refresh the pricing page',
+          decision: 'refresh',
+          pageTitle: null,
+          assetType: null,
+        },
       ],
       prompts: [
         { id: PROMPT, text: 'best crm for realtors' },

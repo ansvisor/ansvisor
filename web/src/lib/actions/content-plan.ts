@@ -119,6 +119,9 @@ export async function getContentPlan(
         : [],
       visibility: typeof sd.visibilityScore === 'number' ? sd.visibilityScore : null,
       prompts: Array.isArray(sd.prompts) ? sd.prompts.length : 0,
+      assetType: Array.isArray(sd.assets)
+        ? text((sd.assets as { type?: unknown }[])[0]?.type) || null
+        : null,
     };
   });
 

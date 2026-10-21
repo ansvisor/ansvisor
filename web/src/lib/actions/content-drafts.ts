@@ -253,7 +253,7 @@ export async function getContentStartOptions(brandId: string): Promise<DraftStar
   const [opportunities, prompts, topics] = await Promise.all([
     supabase
       .from('content_opportunities')
-      .select('id, title, decision, brief')
+      .select('id, title, decision, brief, assetType:source_data->assets->0->>type')
       .eq('brand_id', brandId)
       .in('status', OPEN_OPPORTUNITY_STATUSES)
       .order('opportunity_score', { ascending: false, nullsFirst: false })
@@ -286,6 +286,7 @@ export async function getContentStartOptions(brandId: string): Promise<DraftStar
         title: o.title,
         decision: o.decision,
         pageTitle: typeof suggested === 'string' && suggested.trim() ? suggested.trim() : null,
+        assetType: typeof o.assetType === 'string' ? o.assetType : null,
       };
     }),
     prompts: (prompts.data ?? []).map((p) => ({ id: p.id, text: p.text })),

@@ -61,6 +61,7 @@ const opportunity: PlanOpportunity = {
   competitorsCited: ['Daily Grind Co.', 'Origin Box'],
   visibility: 6,
   prompts: 2,
+  assetType: null,
 };
 const PLAN = {
   pages: [

@@ -9,6 +9,7 @@
  * with fewer runs, or prompts added or removed, moves no page.
  */
 
+import { opportunityPageType } from './asset-types';
 import { detectPageType, type SiteType } from './page-types';
 import type { DraftMethod, PageType } from './drafts';
 import { pageKey } from './sources';
@@ -64,6 +65,8 @@ export interface PlanOpportunity {
   competitorsCited: string[];
   visibility: number | null;
   prompts: number;
+  /** Its primary asset's type as stored (asset-types.ts): the page type it names. */
+  assetType: string | null;
 }
 
 /** A draft still being written, to open rather than start another. */
@@ -182,7 +185,11 @@ export function buildPlan({
       action: create ? 'create' : PROTECT_DECISIONS.has(o.decision ?? '') ? 'protect' : 'optimize',
       title,
       page: create ? null : o.targetPage,
-      pageType: typeOf(title, create ? null : o.targetPage),
+      // A new page is what the opportunity names; an existing one is what
+      // its address or title shows, else what the opportunity names.
+      pageType: create
+        ? (opportunityPageType(o.assetType, siteType) ?? typeOf(title, null))
+        : (typeOf(title, o.targetPage) ?? opportunityPageType(o.assetType, siteType)),
       // The period's own signal, when the page is losing ground, says more.
       why:
         page && drop

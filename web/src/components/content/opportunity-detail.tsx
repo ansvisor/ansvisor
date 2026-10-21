@@ -57,6 +57,7 @@ import {
   TargetPagesCard,
 } from '@/components/content/opportunity-basket';
 import { opportunityToMarkdown } from '@/lib/content/opportunity-markdown';
+import { useAssetTypeLabel } from '@/hooks/use-asset-type-label';
 import { toast } from 'sonner';
 import { suggestedDate } from '@/lib/suggested-date';
 
@@ -129,6 +130,7 @@ export function OpportunityDetail({
   onChanged?: () => void;
 }) {
   const t = useTranslations('content');
+  const assetTypeLabel = useAssetTypeLabel();
   const locale = useLocale();
 
   const [opportunity, setOpportunity] = useState<ContentOpportunity | null>(null);
@@ -343,6 +345,8 @@ export function OpportunityDetail({
   }
 
   const sd = opportunity.sourceData;
+  // What the opportunity makes: its primary asset's type.
+  const primaryType = assetTypeLabel(sd.assets?.[0]?.type);
   const canSendToActionCenter = !['dismissed', 'archived', 'done'].includes(opportunity.status);
   const quotaLimited = quota !== null && quota.limit !== -1;
   const quotaExhausted = quotaLimited && quota.remaining <= 0;
@@ -351,7 +355,9 @@ export function OpportunityDetail({
 
   const handleCopy = async () => {
     try {
-      await navigator.clipboard.writeText(opportunityToMarkdown(opportunity, brief, fanoutQueries));
+      await navigator.clipboard.writeText(
+        opportunityToMarkdown(opportunity, brief, fanoutQueries, assetTypeLabel),
+      );
       toast.success(t('copiedToast'));
     } catch {
       toast.error(t('copyError'));
@@ -401,6 +407,11 @@ export function OpportunityDetail({
           >
             {t(`type.${opportunity.type}` as 'type.owned' | 'type.earned')}
           </Badge>
+          {primaryType && (
+            <Badge variant="outline" className="text-xs">
+              {primaryType}
+            </Badge>
+          )}
           <Badge variant="outline" className={cn('text-xs', IMPACT_COLORS[opportunity.impact])}>
             {t(`impact.${opportunity.impact}` as 'impact.high' | 'impact.medium' | 'impact.low')}
           </Badge>
