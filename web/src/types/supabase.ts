@@ -3729,6 +3729,10 @@ export type Database = {
         Args: { p_brand_id: string; p_days?: number }
         Returns: Json
       }
+      content_start_prompts: {
+        Args: { p_brand_id: string; p_days?: number; p_limit?: number }
+        Returns: Json
+      }
       content_page_overlap: {
         Args: { p_brand_id: string; p_prompt_ids: string[]; p_since?: string }
         Returns: {

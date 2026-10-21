@@ -3234,7 +3234,9 @@
           "tab": "Prompt",
           "placeholder": "Pick a tracked prompt",
           "search": "Search prompts",
-          "empty": "No tracked prompts."
+          "empty": "No tracked prompts.",
+          "seen": "{count, plural, one {# prompt} other {# prompts}} where AI already names or cites you in the last 30 days {count, plural, one {isn't} other {aren't}} listed: {count, plural, one {it needs} other {they need}} no new page.",
+          "allSeen": "AI already names or cites you for every tracked prompt in the last 30 days."
         },
         "topic": {
           "tab": "Topic",
