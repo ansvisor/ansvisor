@@ -31,11 +31,15 @@ describe('detectAmazonShareDrop', () => {
   });
 
   it('does not alert when the current week has fewer than 30 classified cards', () => {
-    expect(detectAmazonShareDrop(fixture([31, 31, 31, 31, 4], [100, 100, 100, 100, 29]))).toBeNull();
+    expect(
+      detectAmazonShareDrop(fixture([31, 31, 31, 31, 4], [100, 100, 100, 100, 29])),
+    ).toBeNull();
   });
 
   it('does not alert if any week in the four-week baseline has fewer than 30 cards', () => {
-    expect(detectAmazonShareDrop(fixture([31, 31, 31, 31, 4], [100, 29, 100, 100, 100]))).toBeNull();
+    expect(
+      detectAmazonShareDrop(fixture([31, 31, 31, 31, 4], [100, 29, 100, 100, 100])),
+    ).toBeNull();
   });
 
   it('does not alert unless the current share is below half of the baseline', () => {
