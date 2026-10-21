@@ -3,12 +3,14 @@
 import { useEffect, useState, useCallback, useMemo, useTransition, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslations } from 'next-intl';
+import { Link } from '@/i18n/navigation';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
+import { Button, buttonVariants } from '@/components/ui/button';
 import {
   Sparkles,
   Plus,
+  ListPlus,
   X,
   RefreshCw,
   Loader2,
@@ -41,8 +43,10 @@ import {
   refreshPromptSuggestions,
   acceptSuggestion,
   dismissSuggestion,
+  trackSuggestions,
   type PromptSuggestion,
 } from '@/lib/actions/prompt-suggestions';
+import type { PlanId } from '@/config/plans';
 import {
   fromYourData,
   gaSourceData,
@@ -218,7 +222,14 @@ interface Props {
   onAccepted?: () => void;
   /** Connected sources and whether their data has landed; null when unknown. */
   sourceStates: SuggestionSourceStates | null;
+  /** The organization's plan, for the prompt limit note's wording; absent while unknown. */
+  planId?: PlanId;
+  /** Where to go for more prompts (upgrade or contact us), shown in the prompt limit note. */
+  limitActions?: React.ReactNode;
 }
+
+/** The most suggestions trackSuggestions takes in one call. */
+const TRACK_BATCH = 25;
 
 const SOURCE_NAMES = { gsc: 'Search Console', ga: 'Analytics' } as const;
 
@@ -261,7 +272,13 @@ function sourceNotice(
   return null;
 }
 
-export function SuggestionsCard({ brandId, onAccepted, sourceStates }: Props) {
+export function SuggestionsCard({
+  brandId,
+  onAccepted,
+  sourceStates,
+  planId,
+  limitActions,
+}: Props) {
   const t = useTranslations('prompts.suggestions');
   const [suggestions, setSuggestions] = useState<PromptSuggestion[]>([]);
   const [loading, setLoading] = useState(false);
@@ -282,6 +299,9 @@ export function SuggestionsCard({ brandId, onAccepted, sourceStates }: Props) {
   }, []);
   const [search, setSearch] = useState('');
   const [clearing, setClearing] = useState(false);
+  const [adding, setAdding] = useState(false);
+  // What Add All left behind when the plan's prompt limit stopped it.
+  const [limitNote, setLimitNote] = useState<{ added: number; left: number } | null>(null);
   const [, startTransition] = useTransition();
 
   const load = useCallback(async () => {
@@ -304,6 +324,7 @@ export function SuggestionsCard({ brandId, onAccepted, sourceStates }: Props) {
     setLoaded(false);
     setSuggestions([]);
     setError(null);
+    setLimitNote(null);
   }, [brandId]);
 
   // Fetching on mount is safe here because this component only mounts when
@@ -376,6 +397,48 @@ export function SuggestionsCard({ brandId, onAccepted, sourceStates }: Props) {
         }
       })
       .finally(() => setClearing(false));
+  };
+
+  /**
+   * Track every suggestion on screen, in batches trackSuggestions takes. Each
+   * prompt passes the same plan check as a single add, so a run stops where
+   * the plan's prompt limit is reached: what was added leaves the list, the
+   * rest stay and the note says how to make room for them.
+   */
+  const handleAddAll = async () => {
+    const ids = visible.map((s) => s.id);
+    if (ids.length === 0) return;
+    setAdding(true);
+    setLimitNote(null);
+    const added: string[] = [];
+    const gone: string[] = [];
+    let failure: { error: string; code?: 'plan_limit' } | null = null;
+    try {
+      for (let i = 0; i < ids.length && !failure; i += TRACK_BATCH) {
+        const result = await trackSuggestions(ids.slice(i, i + TRACK_BATCH));
+        added.push(...result.trackedIds);
+        // Accepted or dismissed elsewhere: they leave the list too.
+        gone.push(...result.skippedIds);
+        if (result.error) failure = { error: result.error, code: result.code };
+      }
+    } catch (err) {
+      failure = { error: err instanceof Error ? err.message : t('addAllFailed') };
+    }
+
+    const leaving = new Set([...added, ...gone]);
+    if (leaving.size > 0) setSuggestions((prev) => prev.filter((x) => !leaving.has(x.id)));
+    if (added.length > 0) {
+      onAccepted?.();
+      toast.success(t('addAllDone', { count: added.length }));
+    }
+    if (failure?.code === 'plan_limit') {
+      setLimitNote({ added: added.length, left: ids.length - leaving.size });
+    } else if (failure) {
+      toast.error(failure.error);
+    } else if (added.length === 0) {
+      toast.info(t('addAllHandled'));
+    }
+    setAdding(false);
   };
 
   const handleAccept = (s: PromptSuggestion) => {
@@ -480,8 +543,24 @@ export function SuggestionsCard({ brandId, onAccepted, sourceStates }: Props) {
               </Button>
 
               <Button
+                onClick={handleAddAll}
+                disabled={adding || clearing || visible.length === 0}
+                size="sm"
+                variant="outline"
+                className="gap-2"
+                title={t('addAllTitle')}
+              >
+                {adding ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <ListPlus className="h-3.5 w-3.5" />
+                )}
+                {adding ? t('addingAll') : t('addAll')}
+              </Button>
+
+              <Button
                 onClick={handleClearAll}
-                disabled={clearing || visible.length === 0}
+                disabled={clearing || adding || visible.length === 0}
                 size="sm"
                 variant="outline"
                 className="gap-2 text-muted-foreground"
@@ -499,6 +578,47 @@ export function SuggestionsCard({ brandId, onAccepted, sourceStates }: Props) {
         </div>
       </CardHeader>
       <CardContent>
+        {limitNote && (
+          <div
+            role="alert"
+            className="mb-4 flex items-start gap-2.5 rounded-lg border border-amber-200 bg-amber-50 p-3 dark:border-amber-900/50 dark:bg-amber-950/30"
+          >
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600 dark:text-amber-500" />
+            <div className="min-w-0 flex-1 space-y-2.5 text-sm">
+              <div>
+                <p className="font-medium text-amber-900 dark:text-amber-200">
+                  {t('limitTitle', { count: limitNote.left })}
+                </p>
+                <p className="text-amber-800/80 dark:text-amber-300/80">
+                  {t('limitBody', {
+                    added: limitNote.added,
+                    count: limitNote.left,
+                    plan: planId ?? 'unknown',
+                  })}
+                </p>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <Link
+                  href="/dashboard/prompts/tracked"
+                  className={buttonVariants({ variant: 'outline', size: 'sm' })}
+                >
+                  {t('openTracked')}
+                </Link>
+                {limitActions}
+              </div>
+            </div>
+            <Button
+              size="icon"
+              variant="ghost"
+              className="-my-1 h-7 w-7 shrink-0 text-amber-800/80 dark:text-amber-300/80"
+              onClick={() => setLimitNote(null)}
+              aria-label={t('closeLimitNote')}
+              title={t('closeLimitNote')}
+            >
+              <X className="h-3.5 w-3.5" />
+            </Button>
+          </div>
+        )}
         {loaded && !loading && !error && notice && (
           <div
             className={cn(

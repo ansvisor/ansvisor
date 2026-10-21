@@ -18,7 +18,7 @@ export const MODEL_PRICES = {
 
 export const FALLBACK_PRICE = { input: 5, output: 25 };
 
-/** Share of the plan price the Improve feature may spend on model calls. */
+/** Share of an Enterprise contract's monthly value its AI usage budget may spend (plan-guard.js). */
 export const IMPROVE_BUDGET_SHARE = 0.01;
 
 /**

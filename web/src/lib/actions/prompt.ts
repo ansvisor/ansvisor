@@ -1059,8 +1059,8 @@ export async function getPromptsPageData(
       region: opts?.region,
     }),
     // The Positions column scans every answer in the window and the one
-    // before it. A timeout, or the web deploying before 00123 is applied,
-    // shows — in that column instead of failing the table.
+    // before it. A timeout shows — in that column instead of failing the
+    // table; the web deploying before 00153 falls back to 00123's rows.
     getPositionRows(brandId, window, opts?.region).catch((err) => {
       console.error('[prompts] position summaries fetch failed, rendering without them:', err);
       return noPositionRows();
@@ -1141,22 +1141,55 @@ async function getPositionRows(
   return { included, current, previous };
 }
 
+/** A prompt and platform's sums, as prompt_position_summaries_json (00153) returns them. */
+interface PositionSummaryRow {
+  prompt_id: string;
+  platform: string;
+  runs: number;
+  mention_answers: number;
+  position_sum: number;
+  position_count: number;
+  entity_sum: number;
+  entity_count: number;
+}
+
 async function positionSums(
   brandId: string,
   window: { from: string; to?: string },
   region?: string,
 ): Promise<Map<string, PlatformPositionRow[]>> {
   const supabase = await createClient();
-  const { data, error } = await supabase.rpc('prompt_position_summaries', {
+  // One jsonb array (00153). A busy brand's 30 or 90 days come to thousands
+  // of prompt × platform rows, past PostgREST's 1000-row cap, which dropped
+  // the rest and left most prompts reading —; a single value isn't cut, so
+  // one call reads them all at the aggregate's own cost.
+  const { data, error } = await supabase.rpc('prompt_position_summaries_json', {
     p_brand_id: brandId,
     p_date_from: window.from,
     p_date_to: window.to ?? undefined,
     p_region: region ?? undefined,
   });
-  if (error) throw new Error(error.message);
+  let rows: PositionSummaryRow[];
+  if (error?.code === 'PGRST202') {
+    // The web deployed before 00153 was applied: 00123's rows, as before,
+    // which only a brand past 1000 prompt × platform rows loses any of.
+    const legacy = await supabase.rpc('prompt_position_summaries', {
+      p_brand_id: brandId,
+      p_date_from: window.from,
+      p_date_to: window.to ?? undefined,
+      p_region: region ?? undefined,
+    });
+    if (legacy.error) throw new Error(legacy.error.message);
+    rows = legacy.data ?? [];
+  } else if (error) {
+    throw new Error(error.message);
+  } else {
+    // Null when the caller isn't a member of the brand's organization.
+    rows = (data ?? []) as unknown as PositionSummaryRow[];
+  }
 
   const byPrompt = new Map<string, PlatformPositionRow[]>();
-  for (const row of data ?? []) {
+  for (const row of rows) {
     const list = byPrompt.get(row.prompt_id) ?? [];
     list.push({
       platform: row.platform,
