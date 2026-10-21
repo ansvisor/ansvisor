@@ -58,6 +58,32 @@ describe('extractJsonLd and restoreJsonLd', () => {
     );
   });
 
+  it('reads tags in any case, and skips other tags and plain scripts', () => {
+    const { html, blocks } = extractJsonLd(
+      '<SCRIPT TYPE="Application/LD+JSON">{"@type":"Product"}</SCRIPT>' +
+        '<scripts type="application/ld+json">{}</scripts>' +
+        '<script>var s = "<script type=application/ld+json>{}";</script><p>b</p>',
+    );
+    expect(blocks).toEqual(['{"@type":"Product"}']);
+    expect(html).toBe(
+      '<jsonld-slot data-i="0"></jsonld-slot><scripts type="application/ld+json">{}</scripts>' +
+        '<script>var s = "<script type=application/ld+json>{}";</script><p>b</p>',
+    );
+  });
+
+  it('takes time in proportion to the length on input built to backtrack', () => {
+    const unclosed = '<script type=application/ld+json '.repeat(15_000);
+    const unended = '<script type="application/ld+json">{"a":1}'.repeat(11_000);
+    for (const input of [unclosed, unended]) {
+      expect(input.length).toBeGreaterThan(450_000);
+      const started = performance.now();
+      const { html, blocks } = extractJsonLd(input);
+      expect(performance.now() - started).toBeLessThan(500);
+      expect(blocks).toEqual([]);
+      expect(html).toBe(input);
+    }
+  });
+
   it('fills a slot nobody kept with nothing', () => {
     expect(restoreJsonLd('<jsonld-slot data-i="7"></jsonld-slot><p>a</p>', [])).toBe('<p>a</p>');
   });

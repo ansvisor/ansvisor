@@ -111,8 +111,42 @@ export function jsonLdType(json: string): string | null {
   }
 }
 
-const JSON_LD_SCRIPT =
-  /<script\b[^>]*\btype\s*=\s*["']?application\/ld\+json["']?[^>]*>([\s\S]*?)<\/script\s*>/gi;
+/** A script tag's attributes that say it holds schema JSON-LD. */
+const JSON_LD_TYPE = /\btype\s*=\s*["']?application\/ld\+json/;
+
+/**
+ * The schema JSON-LD scripts in the HTML: where each starts and ends, and
+ * its text. Found by a scan, not a regex: a pattern over a script tag's
+ * attributes backtracks on input with many unclosed tags (cubic time), and
+ * the server runs this on every save. Each step moves past what it read, so
+ * the time grows with the length only.
+ */
+export function jsonLdScripts(html: string): { start: number; end: number; text: string }[] {
+  const lower = html.toLowerCase();
+  const found: { start: number; end: number; text: string }[] = [];
+  let from = 0;
+  for (;;) {
+    const open = lower.indexOf('<script', from);
+    if (open === -1) break;
+    // "<scripts>" or "<script-x>" is another tag.
+    if (/[^\s>/]/.test(lower.charAt(open + 7))) {
+      from = open + 7;
+      continue;
+    }
+    const tagEnd = lower.indexOf('>', open);
+    if (tagEnd === -1) break;
+    // A script's text isn't markup: the next tag is its end tag.
+    const close = lower.indexOf('</script', tagEnd + 1);
+    if (close === -1) break;
+    const closeEnd = lower.indexOf('>', close);
+    if (closeEnd === -1) break;
+    if (JSON_LD_TYPE.test(lower.slice(open, tagEnd))) {
+      found.push({ start: open, end: closeEnd + 1, text: html.slice(tagEnd + 1, close) });
+    }
+    from = closeEnd + 1;
+  }
+  return found;
+}
 
 /** Where a kept JSON-LD block waits while the rest of the HTML is cleaned. */
 export const JSON_LD_SLOT = 'jsonld-slot';
@@ -125,13 +159,18 @@ const SLOT_PATTERN = new RegExp(`<${JSON_LD_SLOT} data-i="(\\d+)"></${JSON_LD_SL
  */
 export function extractJsonLd(html: string): { html: string; blocks: string[] } {
   const blocks: string[] = [];
-  const out = html.replace(JSON_LD_SCRIPT, (_, text: string) => {
-    const json = normalizeJsonLd(text.trim());
-    if (!json) return '';
-    blocks.push(json);
-    return `<${JSON_LD_SLOT} data-i="${blocks.length - 1}"></${JSON_LD_SLOT}>`;
-  });
-  return { html: out, blocks };
+  let out = '';
+  let last = 0;
+  for (const script of jsonLdScripts(html)) {
+    out += html.slice(last, script.start);
+    const json = normalizeJsonLd(script.text.trim());
+    if (json) {
+      blocks.push(json);
+      out += `<${JSON_LD_SLOT} data-i="${blocks.length - 1}"></${JSON_LD_SLOT}>`;
+    }
+    last = script.end;
+  }
+  return { html: out + html.slice(last), blocks };
 }
 
 /** Puts the kept blocks back as script elements of our own, with only their JSON. */

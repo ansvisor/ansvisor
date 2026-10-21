@@ -12,9 +12,15 @@ import {
 /**
  * The server's check of a draft's HTML before it is saved (Content Editor
  * CE-005, spec §12: "The server re-checks the HTML before saving"). The
- * editor sends clean HTML already; this keeps a request made without it to
- * the same allow-list, so a draft never stores a script, an event handler or
- * a javascript: link. Schema JSON-LD stays, written again from its JSON.
+ * editor sends clean HTML already; this keeps a save made without it to the
+ * same allow-list, so the save action never stores a script, an event
+ * handler or a javascript: link. Schema JSON-LD stays, written again from
+ * its JSON.
+ *
+ * Stored HTML is still untrusted: a member can also write
+ * content_drafts.body_html straight through PostgREST (the update policy in
+ * 00204), past this check. Whatever reads it parses it through the editor's
+ * schema or cleans it again; nothing renders or hands it on raw.
  */
 export function sanitizeDraftHtml(html: string): string {
   const { html: withSlots, blocks } = extractJsonLd(html);
