@@ -87,6 +87,16 @@ describe('extractKeptBlocks and restoreKeptBlocks', () => {
     );
   });
 
+  it('finds a block after letters whose lower case is longer, as Turkish İ', () => {
+    const { html, blocks } = extractJsonLd(
+      '<h1>İstanbul İçin İyi Kahve</h1><script type="application/ld+json">{"@type":"Product"}</script><p>Sonra.</p>',
+    );
+    expect(blocks).toEqual(['{"@type":"Product"}']);
+    expect(html).toBe(
+      '<h1>İstanbul İçin İyi Kahve</h1><jsonld-slot data-i="0"></jsonld-slot><p>Sonra.</p>',
+    );
+  });
+
   it('takes time in proportion to the length on input built to backtrack', () => {
     const unclosed = '<script type=application/ld+json '.repeat(15_000);
     const unended = '<script type="application/ld+json">{"a":1}'.repeat(11_000);
