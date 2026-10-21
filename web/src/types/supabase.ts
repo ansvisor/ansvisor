@@ -825,6 +825,36 @@ export type Database = {
           },
         ]
       }
+      content_plan_marks: {
+        Row: {
+          brand_id: string
+          hidden_at: string | null
+          priority: boolean
+          restore_status: string | null
+          row_key: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          brand_id: string
+          hidden_at?: string | null
+          priority?: boolean
+          restore_status?: string | null
+          row_key: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          brand_id?: string
+          hidden_at?: string | null
+          priority?: boolean
+          restore_status?: string | null
+          row_key?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
       content_rule_sets: {
         Row: {
           organization_id: string

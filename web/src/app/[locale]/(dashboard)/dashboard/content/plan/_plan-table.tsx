@@ -1,10 +1,17 @@
 'use client';
 
 import { useFormatter, useTranslations } from 'next-intl';
-import { Bot, User } from 'lucide-react';
+import { Bot, EyeOff, MoreHorizontal, Star, User, UserPlus } from 'lucide-react';
 import { Link } from '@/i18n/navigation';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { buttonVariants } from '@/components/ui/button-variants';
 import {
   Table,
@@ -32,16 +39,26 @@ export const PLAN_ACTION_BADGE: Record<PlanAction, string> = {
 /**
  * The Plan's priority list (CE-014): rank, the page (a new one, or the
  * brand's own), the action, why for the period with where it comes from,
- * who is on it, and the button that starts it — or opens its draft.
+ * who is on it, the button that starts it — or opens its draft — and a row
+ * menu: assign it to a teammate, and for admins and managers, mark it as a
+ * priority or hide it.
  */
 export function PlanTable({
   rows,
   days,
+  canManage,
   onStart,
+  onAssign,
+  onPriority,
+  onHide,
 }: {
   rows: PlanRow[];
   days: PlanPeriod;
+  canManage: boolean;
   onStart: (row: PlanRow) => void;
+  onAssign: (row: PlanRow) => void;
+  onPriority: (row: PlanRow, priority: boolean) => void;
+  onHide: (row: PlanRow) => void;
 }) {
   const t = useTranslations('contentEditor.plan');
   const tTypes = useTranslations('contentEditor.pageTypes');
@@ -56,8 +73,11 @@ export function PlanTable({
           <TableHead>{t('columns.why', { days })}</TableHead>
           {/* Wide windows only: the row's button says the same once a draft exists. */}
           <TableHead className="hidden xl:table-cell">{t('columns.who')}</TableHead>
-          <TableHead className="pr-6">
+          <TableHead>
             <span className="sr-only">{t('columns.start')}</span>
+          </TableHead>
+          <TableHead className="w-8 pl-0 pr-3">
+            <span className="sr-only">{t('columns.menu')}</span>
           </TableHead>
         </TableRow>
       </TableHeader>
@@ -65,9 +85,17 @@ export function PlanTable({
         {rows.map((row, i) => (
           <TableRow key={row.key}>
             <TableCell className="pl-6 tabular-nums text-muted-foreground">{i + 1}</TableCell>
-            <TableCell className="max-w-[260px]">
-              <p className="truncate font-medium" title={row.title}>
-                {row.title}
+            <TableCell className="max-w-[250px]">
+              <p className="flex min-w-0 items-center gap-1.5 font-medium">
+                <span className="truncate" title={row.title}>
+                  {row.title}
+                </span>
+                {row.priority && (
+                  <Badge variant="outline" className="shrink-0 gap-1 font-normal">
+                    <Star aria-hidden className="h-3 w-3" />
+                    {t('priority')}
+                  </Badge>
+                )}
               </p>
               <p className="mt-0.5 flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
                 {isPageType(row.pageType) && (
@@ -92,7 +120,12 @@ export function PlanTable({
               </span>
             </TableCell>
             <TableCell className="hidden text-muted-foreground xl:table-cell">
-              {row.draft ? (
+              {row.draft?.assignee ? (
+                <span className="inline-flex items-center gap-1.5">
+                  <User aria-hidden className="h-3.5 w-3.5" />
+                  {row.draft.assignee.name}
+                </span>
+              ) : row.draft ? (
                 <span className="inline-flex items-center gap-1.5">
                   {row.draft.author === 'agent' ? (
                     <Bot aria-hidden className="h-3.5 w-3.5" />
@@ -109,7 +142,7 @@ export function PlanTable({
                 '—'
               )}
             </TableCell>
-            <TableCell className="pr-6 text-right">
+            <TableCell className="text-right">
               {row.draft ? (
                 <Link
                   href={contentEditorPath(row.draft.id)}
@@ -127,10 +160,64 @@ export function PlanTable({
                 </Button>
               )}
             </TableCell>
+            <TableCell className="pl-0 pr-3">
+              <RowMenu
+                row={row}
+                canManage={canManage}
+                onAssign={onAssign}
+                onPriority={onPriority}
+                onHide={onHide}
+              />
+            </TableCell>
           </TableRow>
         ))}
       </TableBody>
     </Table>
+  );
+}
+
+function RowMenu({
+  row,
+  canManage,
+  onAssign,
+  onPriority,
+  onHide,
+}: {
+  row: PlanRow;
+  canManage: boolean;
+  onAssign: (row: PlanRow) => void;
+  onPriority: (row: PlanRow, priority: boolean) => void;
+  onHide: (row: PlanRow) => void;
+}) {
+  const t = useTranslations('contentEditor.plan.rowMenu');
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        className="rounded p-1 text-muted-foreground hover:bg-muted"
+        aria-label={t('label', { title: row.title })}
+      >
+        <MoreHorizontal className="h-4 w-4" />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-48">
+        <DropdownMenuItem onClick={() => onAssign(row)}>
+          <UserPlus className="h-4 w-4" />
+          {t('assign')}
+        </DropdownMenuItem>
+        {canManage && (
+          <>
+            <DropdownMenuItem onClick={() => onPriority(row, !row.priority)}>
+              <Star className="h-4 w-4" />
+              {row.priority ? t('unmarkPriority') : t('markPriority')}
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={() => onHide(row)}>
+              <EyeOff className="h-4 w-4" />
+              {t('hide')}
+            </DropdownMenuItem>
+          </>
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 

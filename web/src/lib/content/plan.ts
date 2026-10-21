@@ -20,8 +20,8 @@ export const PLAN_PERIODS = [7, 30, 90] as const;
 export type PlanPeriod = (typeof PLAN_PERIODS)[number];
 
 export type PlanAction = 'create' | 'optimize' | 'protect';
-/** The cards over the list, each a filter by its action. */
-export const PLAN_CARDS = ['create', 'optimize', 'protect'] as const;
+/** The cards over the list, each a filter: by its action, or the rows marked as a priority. */
+export const PLAN_CARDS = ['create', 'optimize', 'protect', 'priority'] as const;
 export type PlanCard = (typeof PLAN_CARDS)[number];
 
 /** The brand's tracked answers in each period: what makes their citations comparable. */
@@ -74,6 +74,16 @@ export interface PlanDraft {
   method: DraftMethod;
   opportunityId: string | null;
   sourceUrl: string | null;
+  /** The Action Center task it was sent as (Start's Team), and who it is assigned to. */
+  actionId: string | null;
+  assignee: { id: string; name: string } | null;
+}
+
+/** An admin's or manager's mark on a row (content_plan_marks, 00229), by the row's key. */
+export interface PlanMark {
+  rowKey: string;
+  priority: boolean;
+  hidden: boolean;
 }
 
 /** Why a row is on the list, and where the signal comes from. */
@@ -95,6 +105,8 @@ export interface PlanRow {
   score: number;
   opportunityId: string | null;
   draft: PlanDraft | null;
+  /** Marked as a priority: at the top of the list, tagged. */
+  priority: boolean;
 }
 
 /**
@@ -130,21 +142,24 @@ const PROTECT_DECISIONS = new Set(['defend']);
 /**
  * Every row, ranked, and what each card counts: the list shows the first
  * MAX_ROWS of a card's rows (rowsFor), so a card never counts rows it can't
- * show.
+ * show. Rows marked as a priority come first; hidden rows leave the list
+ * and its counts for `hidden`, to be shown again.
  */
 export function buildPlan({
   pages,
   answers,
   opportunities,
   drafts,
+  marks = [],
   siteType,
 }: {
   pages: PlanPage[];
   answers: PlanAnswers;
   opportunities: PlanOpportunity[];
   drafts: PlanDraft[];
+  marks?: PlanMark[];
   siteType: SiteType;
-}): { rows: PlanRow[]; counts: Record<PlanCard, number> } {
+}): { rows: PlanRow[]; hidden: PlanRow[]; counts: Record<PlanCard, number> } {
   const byPage = new Map<string, PlanPage>();
   for (const page of pages) {
     const key = pageKey(page.page);
@@ -192,6 +207,7 @@ export function buildPlan({
         : Math.round(o.score),
       opportunityId: o.id,
       draft: draftFor(o.id, create ? null : o.targetPage),
+      priority: false,
     });
     if (key && !create) pagesTaken.add(key);
   }
@@ -206,6 +222,7 @@ export function buildPlan({
       pageType: typeOf(title, page.page),
       opportunityId: null,
       draft: draftFor(null, page.page),
+      priority: false,
     };
     const drop = dropOf(page, answers);
     if (drop) {
@@ -231,21 +248,33 @@ export function buildPlan({
   protect.sort((a, b) => b.score - a.score || a.title.localeCompare(b.title));
   rows.push(...protect.slice(0, MAX_PROTECT));
 
-  rows.sort((a, b) => b.score - a.score || a.title.localeCompare(b.title));
+  const markOf = new Map(marks.map((m) => [m.rowKey, m]));
+  const hidden: PlanRow[] = [];
+  const listed: PlanRow[] = [];
+  for (const row of rows) {
+    const mark = markOf.get(row.key);
+    if (mark?.hidden) hidden.push(row);
+    else listed.push({ ...row, priority: Boolean(mark?.priority) });
+  }
+  const ranked = (a: PlanRow, b: PlanRow) => b.score - a.score || a.title.localeCompare(b.title);
+  listed.sort((a, b) => Number(b.priority) - Number(a.priority) || ranked(a, b));
+  hidden.sort(ranked);
   return {
-    rows,
+    rows: listed,
+    hidden,
     counts: {
-      create: rows.filter((r) => r.action === 'create').length,
-      optimize: rows.filter((r) => r.action === 'optimize').length,
-      protect: rows.filter((r) => r.action === 'protect').length,
+      create: listed.filter((r) => r.action === 'create').length,
+      optimize: listed.filter((r) => r.action === 'optimize').length,
+      protect: listed.filter((r) => r.action === 'protect').length,
+      priority: listed.filter((r) => r.priority).length,
     },
   };
 }
 
 /**
- * The rows a card shows, the first MAX_ROWS: its action's; all without a
- * card. A page type (the mix's filter) narrows them before the cut, so its
- * rows are never cut off by others.
+ * The rows a card shows, the first MAX_ROWS: its action's, or the
+ * priorities; all without a card. A page type (the mix's filter) narrows
+ * them before the cut, so its rows are never cut off by others.
  */
 export function rowsFor(
   rows: PlanRow[],
@@ -253,7 +282,11 @@ export function rowsFor(
   pageType: PageType | null = null,
 ): PlanRow[] {
   return rows
-    .filter((r) => (!card || r.action === card) && (!pageType || r.pageType === pageType))
+    .filter(
+      (r) =>
+        (!card || (card === 'priority' ? r.priority : r.action === card)) &&
+        (!pageType || r.pageType === pageType),
+    )
     .slice(0, MAX_ROWS);
 }
 

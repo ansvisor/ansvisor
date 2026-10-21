@@ -21,6 +21,57 @@ vi.mock('@/lib/actions/content-drafts', () => ({
   getContentOverlap: (...args: unknown[]) => getContentOverlap(...args),
 }));
 // What the agent is given is agent-write.test.ts's; here, that Start hands it over.
+const listMembers = vi.fn();
+vi.mock('@/lib/actions/team', () => ({
+  listMembers: (...args: unknown[]) => listMembers(...args),
+}));
+const assignAction = vi.fn();
+vi.mock('@/lib/actions/action-center', () => ({
+  assignAction: (...args: unknown[]) => assignAction(...args),
+}));
+// Team's assignee picker as a native select: Base UI's popup doesn't open in jsdom.
+vi.mock('@/components/ui/select', () => ({
+  Select: ({
+    value,
+    onValueChange,
+    children,
+  }: {
+    value: string | null;
+    onValueChange: (value: string | null) => void;
+    children: React.ReactNode;
+  }) => (
+    <select data-select value={value ?? ''} onChange={(e) => onValueChange(e.target.value || null)}>
+      <option value="" />
+      {children}
+    </select>
+  ),
+  SelectTrigger: () => null,
+  SelectValue: () => null,
+  SelectContent: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+  SelectItem: ({ value, children }: { value: string; children: React.ReactNode }) => (
+    <option value={value}>{children}</option>
+  ),
+}));
+const MEMBERS = [
+  {
+    userId: 'u1',
+    email: 'me@northwind.example',
+    fullName: 'Mia Chen',
+    avatarUrl: null,
+    role: 'admin',
+    createdAt: '2026-01-01',
+    isCurrentUser: true,
+  },
+  {
+    userId: 'u2',
+    email: 'ada@northwind.example',
+    fullName: 'Ada Lovelace',
+    avatarUrl: null,
+    role: 'member',
+    createdAt: '2026-01-02',
+    isCurrentUser: false,
+  },
+];
 const agentWriteRequest = vi.fn();
 const describeRule = vi.fn();
 vi.mock('@/lib/content/agent-write', () => ({
@@ -117,6 +168,8 @@ beforeEach(() => {
   getContentOverlap.mockReset().mockResolvedValue({ totalPrompts: 2, pages: [] });
   importContentPage.mockReset().mockResolvedValue({ error: 'failed' });
   sendContentDraftToActionCenter.mockReset();
+  listMembers.mockReset().mockResolvedValue(MEMBERS);
+  assignAction.mockReset().mockResolvedValue(undefined);
   startAgentWriting.mockReset();
   agentWriteRequest.mockReset().mockResolvedValue({ sources: 'kept', rules: [] });
   onSent.mockReset();
@@ -417,6 +470,16 @@ describe('New content', () => {
       expect(radio('Optimize /pricing instead')).toBeUndefined();
     });
 
+    it('opens on Team when the plan asks to assign the work', async () => {
+      await render('b2b', { kind: 'opportunity', id: 'o2', who: 'team' });
+      await act(async () => {});
+      const team = [
+        ...document.querySelectorAll<HTMLElement>('[aria-labelledby="start-who"] [role="radio"]'),
+      ].find((r) => r.textContent?.startsWith('Team'))!;
+      expect(team.getAttribute('aria-checked')).toBe('true');
+      expect(listMembers).toHaveBeenCalled();
+    });
+
     it('leaves an opportunity no longer open to pick', async () => {
       await render('b2b', { kind: 'opportunity', id: 'gone' });
       expect(button('Continue')).toBeDefined();
@@ -703,6 +766,45 @@ describe('New content', () => {
       );
       options.action.onClick();
       expect(push).toHaveBeenCalledWith('/dashboard/action-center/actions?action=a1');
+    });
+
+    it('assigns the task to the teammate picked under Team', async () => {
+      sendContentDraftToActionCenter.mockResolvedValue({
+        actionId: 'a1',
+        actionNo: 214,
+        created: true,
+      });
+      await startNewPage();
+      await click(whoOption('Team'));
+      await act(async () => {});
+      expect(document.body.textContent).toContain('Assign to');
+      const picker = document.querySelector<HTMLSelectElement>('select[data-select]')!;
+      expect([...picker.options].map((o) => o.textContent)).toEqual([
+        '',
+        'Mia Chen',
+        'Ada Lovelace',
+      ]);
+      await act(async () => {
+        picker.value = 'u2';
+        picker.dispatchEvent(new Event('change', { bubbles: true }));
+      });
+      await click(button('Send to Action Center'));
+
+      expect(sendContentDraftToActionCenter).toHaveBeenCalledWith('b1', 'd9');
+      expect(assignAction).toHaveBeenCalledWith('b1', 'a1', 'u2');
+      expect(toast.success.mock.calls[0][0]).toBe('Sent to the Action Center');
+    });
+
+    it('sends the task unassigned when no one is picked', async () => {
+      sendContentDraftToActionCenter.mockResolvedValue({
+        actionId: 'a1',
+        actionNo: 214,
+        created: true,
+      });
+      await startNewPage();
+      await click(whoOption('Team'));
+      await click(button('Send to Action Center'));
+      expect(assignAction).not.toHaveBeenCalled();
     });
 
     it('says the draft is kept when sending it fails, and opens it on request', async () => {

@@ -27,6 +27,13 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
 import {
@@ -37,6 +44,9 @@ import {
   sendContentDraftToActionCenter,
   startAgentWriting,
 } from '@/lib/actions/content-drafts';
+import { assignAction } from '@/lib/actions/action-center';
+import { listMembers, type TeamMember } from '@/lib/actions/team';
+import { memberLabel } from '@/lib/action-center/display';
 import { agentWriteRequest, useRuleDescriber } from '@/lib/content/agent-write';
 import { MAX_ATTACHMENT_BYTES, textToHtml } from '@/lib/content/attachments';
 import { cleanHtml } from '@/lib/content/clean-html';
@@ -121,9 +131,13 @@ interface StartChoice {
  * What the dialog opens on, from the Content plan (CE-014): an opportunity
  * (for an existing page, Start optimizes that page), or a page to read.
  */
-export type DialogPreset =
+export type DialogPreset = (
   | { kind: 'opportunity'; id: string; page?: { url: string; title: string | null } | null }
-  | { kind: 'page'; url: string };
+  | { kind: 'page'; url: string }
+) & {
+  /** Opened to assign the work (the Plan's "Assign to…"): Start chooses Team. */
+  who?: 'team';
+};
 
 /** Who does the page (Start, CE-015): the person, the Content Agent, or the team. */
 type Who = 'me' | 'agent' | 'team';
@@ -185,6 +199,9 @@ export function NewContentDialog({
   const [start, setStart] = useState<StartChoice | null>(null);
   const [opening, setOpening] = useState(false);
   const [who, setWho] = useState<Who>('me');
+  // Team's assignee: the task goes to this teammate once it is sent.
+  const [members, setMembers] = useState<TeamMember[]>([]);
+  const [assigneeId, setAssigneeId] = useState<string | null>(null);
   const [overlapRead, setOverlapRead] = useState<OverlapRead | null>(null);
   const [overlapAttempt, setOverlapAttempt] = useState(0);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -208,11 +225,22 @@ export function NewContentDialog({
     };
   }, [open, brandId, attempt]);
 
+  // The team, for Team's assignee: read once, when Team is first chosen.
+  const membersRead = useRef(false);
+  useEffect(() => {
+    if (who !== 'team' || membersRead.current) return;
+    membersRead.current = true;
+    listMembers()
+      .then(setMembers)
+      .catch((err) => console.error('Failed to load the team:', err));
+  }, [who]);
+
   // From the Content plan: Start for its opportunity once the options are in
   // (one no longer open is left to pick), or its page read to optimize.
   const presetApplied = useRef(false);
   useEffect(() => {
     if (!open || !preset || presetApplied.current) return;
+    if (preset.who === 'team') setWho('team');
     if (preset.kind === 'page') {
       presetApplied.current = true;
       setMethod('optimize');
@@ -286,6 +314,7 @@ export function NewContentDialog({
     setOpening(false);
     setOverlapRead(null);
     setWho('me');
+    setAssigneeId(null);
   };
   const changeOpen = (next: boolean) => {
     if (!next) reset();
@@ -536,6 +565,15 @@ export function NewContentDialog({
       });
       return;
     }
+    if (assigneeId) {
+      try {
+        await assignAction(brandId, sent.actionId, assigneeId);
+      } catch (err) {
+        // The task is sent all the same; it can be assigned in the Action Center.
+        console.error('Failed to assign the sent draft:', err);
+        toast.warning(t('who.assignFailed'));
+      }
+    }
     toast.success(t('start.sent'), {
       description: t('start.sentDescription', { number: sent.actionNo }),
       duration: 10_000,
@@ -649,6 +687,32 @@ export function NewContentDialog({
                   </button>
                 ))}
               </div>
+              {who === 'team' && (
+                <div className="space-y-1.5">
+                  <Label htmlFor="start-assignee" className="text-xs text-muted-foreground">
+                    {t('who.assignTo')}
+                  </Label>
+                  <Select
+                    value={assigneeId}
+                    onValueChange={(value) => setAssigneeId(value as string | null)}
+                    items={members.map((member) => ({
+                      value: member.userId,
+                      label: memberLabel(member),
+                    }))}
+                  >
+                    <SelectTrigger id="start-assignee" className="w-full">
+                      <SelectValue placeholder={t('who.assignNone')} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {members.map((member) => (
+                        <SelectItem key={member.userId} value={member.userId}>
+                          {memberLabel(member)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
             </div>
             <DialogFooter className="sticky -bottom-4 z-10 bg-muted">
               <Button variant="ghost" onClick={() => setStart(null)} disabled={opening}>

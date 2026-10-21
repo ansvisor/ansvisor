@@ -3102,7 +3102,8 @@
       "cards": {
         "create": { "title": "Create", "hint": "New pages AI needs" },
         "optimize": { "title": "Optimize", "hint": "Pages losing ground" },
-        "protect": { "title": "Protect", "hint": "Top pages · edit with care" }
+        "protect": { "title": "Protect", "hint": "Top pages · edit with care" },
+        "priority": { "title": "Priority", "hint": "Marked by your team" }
       },
       "results": {
         "label": "From AI visits · {days} full days to yesterday (UTC):",
@@ -3134,7 +3135,8 @@
         "action": "Action",
         "why": "Why · last {days} days",
         "who": "Who",
-        "start": "Start"
+        "start": "Start",
+        "menu": "Row actions"
       },
       "newPage": "New page",
       "actions": { "create": "Create", "optimize": "Optimize", "protect": "Protect" },
@@ -3157,7 +3159,32 @@
       "empty": "Nothing to work on yet. New opportunities and your pages' AI citations show up here.",
       "emptyFiltered": "Nothing here for this period.",
       "loadError": "Couldn't load the content plan.",
-      "retry": "Try again"
+      "retry": "Try again",
+      "priority": "Priority",
+      "rowMenu": {
+        "label": "Actions for {title}",
+        "assign": "Assign to…",
+        "markPriority": "Mark as priority",
+        "unmarkPriority": "Remove priority",
+        "hide": "Hide from the plan",
+        "hidden": "Hidden: {title}",
+        "undo": "Undo",
+        "failed": "Couldn't save that. Try again."
+      },
+      "hidden": {
+        "toggle": "{count, plural, one {# hidden row} other {# hidden rows}} · {open, select, true {Hide} other {Show}}",
+        "show": "Show again"
+      },
+      "assign": {
+        "title": "Assign “{title}”",
+        "description": "It goes to the Action Center as a task for this teammate.",
+        "member": "Teammate",
+        "pick": "Pick a teammate",
+        "submit": "Assign",
+        "cancel": "Cancel",
+        "done": "Assigned to {name}",
+        "failed": "Couldn't assign it. Try again."
+      }
     },
     "agentState": {
       "writing": "Agent writing…",
@@ -3322,7 +3349,10 @@
         "team": {
           "title": "Team",
           "hint": "Send to Action Center"
-        }
+        },
+        "assignTo": "Assign to",
+        "assignNone": "No one yet",
+        "assignFailed": "Sent, but couldn't assign it. Assign it in the Action Center."
       },
       "overlap": {
         "label": "Overview",

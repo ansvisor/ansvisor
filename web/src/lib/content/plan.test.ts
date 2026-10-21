@@ -7,6 +7,7 @@ import {
   rowsFor,
   type PlanAnswers,
   type PlanDraft,
+  type PlanMark,
   type PlanOpportunity,
   type PlanPage,
 } from './plan';
@@ -43,7 +44,8 @@ const plan = (
   opportunities: PlanOpportunity[] = [],
   drafts: PlanDraft[] = [],
   answers: PlanAnswers = { cur: 100, prev: 100 },
-) => buildPlan({ pages, answers, opportunities, drafts, siteType: 'b2b' });
+  marks: PlanMark[] = [],
+) => buildPlan({ pages, answers, opportunities, drafts, marks, siteType: 'b2b' });
 
 describe('buildPlan', () => {
   it('creates a new page for an opportunity, named by its brief, with its evidence', () => {
@@ -72,7 +74,7 @@ describe('buildPlan', () => {
         draft: null,
       }),
     ]);
-    expect(counts).toEqual({ create: 1, optimize: 0, protect: 0 });
+    expect(counts).toEqual({ create: 1, optimize: 0, protect: 0, priority: 0 });
   });
 
   it('optimizes a page losing citations, by how much it lost, with the platforms citing it less', () => {
@@ -192,7 +194,7 @@ describe('buildPlan', () => {
       page('/guides/losing', { citations: { cur: 2, prev: 8 } }),
     ];
     const { rows, counts } = plan(pages, opportunities);
-    expect(counts).toEqual({ create: 60, optimize: 1, protect: 1 });
+    expect(counts).toEqual({ create: 60, optimize: 1, protect: 1, priority: 0 });
     expect(rowsFor(rows, null)).toHaveLength(MAX_ROWS);
     // Below the 50 opportunities on score, and still shown on their cards.
     expect(rowsFor(rows, 'protect').map((r) => r.title)).toEqual(['top']);
@@ -206,7 +208,7 @@ describe('buildPlan', () => {
       page('/guides/espresso', { citations: { cur: 12, prev: 10 } }),
     ]);
     expect(rows.map((r) => [r.action, r.why.kind])).toEqual([['protect', 'top']]);
-    expect(counts).toEqual({ create: 0, optimize: 0, protect: 1 });
+    expect(counts).toEqual({ create: 0, optimize: 0, protect: 1, priority: 0 });
   });
 
   it('finds the draft being written for an opportunity or a page', () => {
@@ -218,6 +220,8 @@ describe('buildPlan', () => {
         method: 'create',
         opportunityId: 'o1',
         sourceUrl: null,
+        actionId: null,
+        assignee: null,
       },
       {
         id: 'd2',
@@ -226,6 +230,8 @@ describe('buildPlan', () => {
         method: 'optimize',
         opportunityId: null,
         sourceUrl: 'https://acme.example/features/forecasting/',
+        actionId: 'a1',
+        assignee: { id: 'u2', name: 'Ada Lovelace' },
       },
     ];
     const { rows } = plan(
@@ -235,5 +241,41 @@ describe('buildPlan', () => {
     );
     // The opportunity (70) ranks over the page losing ground (1 of 9: 66).
     expect(rows.map((r) => r.draft?.id)).toEqual(['d1', 'd2']);
+    expect(rows[1].draft?.assignee).toEqual({ id: 'u2', name: 'Ada Lovelace' });
+  });
+
+  it('puts the rows marked as a priority first, and counts them', () => {
+    const marks: PlanMark[] = [{ rowKey: 'page:acme.example/top', priority: true, hidden: false }];
+    const { rows, counts } = plan(
+      [page('/top', { citations: { cur: 30, prev: 30 } })],
+      [opportunity('o1', { score: 90 })],
+      [],
+      undefined,
+      marks,
+    );
+    // The protected page (50) outranks the opportunity (90) once it is a priority.
+    expect(rows.map((r) => [r.title, r.priority])).toEqual([
+      ['top', true],
+      ['Opportunity o1', false],
+    ]);
+    expect(counts.priority).toBe(1);
+    expect(rowsFor(rows, 'priority').map((r) => r.title)).toEqual(['top']);
+  });
+
+  it('takes hidden rows off the list and its counts, to show again', () => {
+    const marks: PlanMark[] = [
+      { rowKey: 'opportunity:o1', priority: true, hidden: true },
+      { rowKey: 'page:acme.example/losing', priority: false, hidden: true },
+    ];
+    const { rows, hidden, counts } = plan(
+      [page('/losing', { citations: { cur: 2, prev: 8 } })],
+      [opportunity('o1'), opportunity('o2')],
+      [],
+      undefined,
+      marks,
+    );
+    expect(rows.map((r) => r.key)).toEqual(['opportunity:o2']);
+    expect(hidden.map((r) => r.key)).toEqual(['opportunity:o1', 'page:acme.example/losing']);
+    expect(counts).toEqual({ create: 1, optimize: 0, protect: 0, priority: 0 });
   });
 });
