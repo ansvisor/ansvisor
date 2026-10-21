@@ -58,6 +58,12 @@ describe('sanitizeDraftHtml', () => {
     ).toBe(`<p>a</p>${block}`);
   });
 
+  it('keeps the schema and the text after it on a page with Turkish İ before it', () => {
+    const html =
+      '<h1>İzmir İçin İpuçları</h1><script type="application/ld+json">{"@type":"FAQPage"}</script><p>After the schema.</p>';
+    expect(sanitizeDraftHtml(html)).toBe(html);
+  });
+
   it('cleans a 500,000-character page built to backtrack within the save’s time', () => {
     const input = '<script type=application/ld+json '.repeat(15_000);
     const started = performance.now();
