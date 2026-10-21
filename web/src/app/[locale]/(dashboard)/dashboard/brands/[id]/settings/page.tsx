@@ -57,6 +57,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { getPublicApiBaseUrl } from '@/config/api';
+import { SITE_TYPES, guessSiteType, isSiteType, type SiteType } from '@/lib/content/page-types';
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -159,8 +160,17 @@ function GeneralTab({
   const [description, setDescription] = useState(brand.description ?? '');
   const [region, setRegion] = useState(brand.region ?? 'US');
   const [usState, setUsState] = useState(brand.state ?? '');
+  // Null until someone picks one: the guess follows the industry meanwhile.
+  const [siteType, setSiteType] = useState<SiteType | null>(
+    isSiteType(brand.siteType) ? brand.siteType : null,
+  );
   const [isSaving, setIsSaving] = useState(false);
   const stateItems = [{ value: 'nationwide', label: t('settings.nationwide') }, ...US_STATE_ITEMS];
+  const siteTypeItems = SITE_TYPES.map((value) => ({ value, label: t(`siteTypes.${value}`) }));
+  const guessedSiteType = guessSiteType({
+    industry,
+    shoppingModeEnabled: brand.shoppingModeEnabled,
+  });
 
   const handleSave = async () => {
     if (!name.trim()) return;
@@ -175,6 +185,7 @@ function GeneralTab({
         description: description || null,
         region,
         state: region === 'US' ? usState || null : null,
+        ...(siteType ? { siteType } : {}),
       });
       onUpdate({
         name: updated.name,
@@ -184,6 +195,7 @@ function GeneralTab({
         description: updated.description,
         region: updated.region,
         state: updated.state,
+        siteType: updated.siteType,
         updatedAt: updated.updatedAt,
       });
       toast.success(t('settings.saved'));
@@ -244,6 +256,32 @@ function GeneralTab({
               ))}
             </SelectContent>
           </Select>
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="site-type">{t('siteType')}</Label>
+          <Select
+            items={siteTypeItems}
+            value={siteType ?? guessedSiteType}
+            onValueChange={(v) => {
+              if (isSiteType(v)) setSiteType(v);
+            }}
+          >
+            <SelectTrigger id="site-type">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {siteTypeItems.map((item) => (
+                <SelectItem key={item.value} value={item.value}>
+                  {item.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <p className="text-xs text-muted-foreground">
+            {t('settings.siteTypeHint')}
+            {siteType === null && ` ${t('settings.siteTypeGuessed')}`}
+          </p>
         </div>
 
         <div className="space-y-2">

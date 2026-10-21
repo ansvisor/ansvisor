@@ -2758,7 +2758,7 @@ const UNCOUNTED_TASK_STATUSES = ['skipped', 'failed'];
 const MCP_SIGNAL_COLUMNS =
   'id, category, kind, impact, status, source, detected_at, last_detected_at, resolved_at, previous_value, current_value, change_value, payload, kpi_keys, action_id';
 
-async function brandInOrg(auth: McpAuthContext, brandId: string): Promise<boolean> {
+export async function brandInOrg(auth: McpAuthContext, brandId: string): Promise<boolean> {
   if (!auth.organizationId) return false;
   const { data } = await supabaseAdmin
     .from('brands')
