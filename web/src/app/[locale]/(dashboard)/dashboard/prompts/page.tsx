@@ -1984,7 +1984,14 @@ export default function PromptsPage() {
           {view === 'suggestions' ? (
             activeBrandId && (
               <>
-                <SuggestionsTab brandId={activeBrandId} onAccepted={reloadAfterChange} />
+                <SuggestionsTab
+                  brandId={activeBrandId}
+                  onAccepted={reloadAfterChange}
+                  planId={locationQuota?.planId}
+                  limitActions={
+                    locationQuota ? <PromptLimitActions planId={locationQuota.planId} /> : null
+                  }
+                />
               </>
             )
           ) : (
