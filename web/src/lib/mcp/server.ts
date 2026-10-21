@@ -1511,9 +1511,9 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
         'naming it, with responses and share of the responses naming it, now and before; the ' +
         "attributes that tell the brand and its top competitors apart, as each one's share of " +
         'the responses naming it; competitors named in the same responses; and the biggest ' +
-        'gap, an attribute a competitor leads by 20+ points (null when none, or under 20 ' +
-        'mentions). Terms are found by rule, no LLM: a ' +
-        'sentence naming two brands lends its words to both.',
+        'gap, an attribute a competitor leads by 20+ points (null when none does, or when ' +
+        'the brand or that competitor has fewer than 20 mentions). Terms are found by rule, ' +
+        'no LLM: a sentence naming two brands lends its words to both.',
       inputSchema: mentionFilters,
     },
     async (args) => {
