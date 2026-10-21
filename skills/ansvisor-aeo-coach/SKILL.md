@@ -80,8 +80,8 @@ API directly from this skill (that's a different skill).
   signed number **without a % sign** ("net +21"). Neutral counts in the
   total.
 - `lowSample: true` means fewer than 20 mentions. Say so, and don't
-  read a change into it: the `changes` fields are already `null` there,
-  as is the mention rate's change under 20 tracked responses.
+  read a change into it: `changes.netSentimentPoints` is already `null`
+  there, as is the mention rate's change under 20 tracked responses.
 - Sentiment is measured for the **brand only**. Competitors have
   mentions and co-mentions, not a tone.
 
@@ -479,7 +479,8 @@ When the user asks how AI describes the brand, why sentiment moved
    (`sameResponseAsYou`, `mentionsChangePct`); for **what AI associates
    with it**, `get_mentions_perception`: `brandTerms` with their
    `sharePct`, and `biggestGap`, an attribute a competitor owns and the
-   brand doesn't (null when none leads by 20+ points).
+   brand doesn't (null when none leads by 20+ points, or when the brand
+   or the leading competitor has fewer than 20 mentions).
 5. Report it like this:
 
    > **`<brand_name>` — how AI talks about you, last 30 days**
