@@ -1,7 +1,7 @@
 /**
  * Classify destinations on existing normalized shopping-card rows.
  *
- * Run after migration 00204:
+ * Run after migration 00225:
  *   node src/scripts/backfill-shopping-card-merchants.js
  *
  * Pages across the normalized card table and uses the same pure classifier as
@@ -37,11 +37,12 @@ async function updateBatch(rows, domainCache) {
     const slice = withUrls.slice(start, start + UPDATE_CONCURRENCY);
     const results = await Promise.all(
       slice.map(async (row) => {
-        let domains = domainCache.get(row.brand_id);
-        if (!domains) {
-          domains = await loadBrandDomains(row.brand_id);
-          domainCache.set(row.brand_id, domains);
+        let domainsPromise = domainCache.get(row.brand_id);
+        if (!domainsPromise) {
+          domainsPromise = loadBrandDomains(row.brand_id);
+          domainCache.set(row.brand_id, domainsPromise);
         }
+        const domains = await domainsPromise;
         const destination = classifyMerchant(row.merchant_url, { brandDomains: domains });
         const { error } = await supabaseAdmin
           .from('prompt_result_shopping_cards')
@@ -71,19 +72,25 @@ async function updateBatch(rows, domainCache) {
 
 async function main() {
   const domainCache = new Map();
-  let offset = 0;
+  const reclassifyAll = process.argv.includes('--all');
+  let lastId = null;
   let scanned = 0;
   let updated = 0;
   let skipped = 0;
   let failed = 0;
 
   while (true) {
-    const { data: rows, error } = await supabaseAdmin
+    let query = supabaseAdmin
       .from('prompt_result_shopping_cards')
       .select('id, brand_id, merchant_url')
-      .order('created_at', { ascending: true })
+      .not('merchant_url', 'is', null)
       .order('id', { ascending: true })
-      .range(offset, offset + BATCH_SIZE - 1);
+      .limit(BATCH_SIZE);
+
+    if (!reclassifyAll) query = query.is('merchant_kind', null);
+    if (lastId) query = query.gt('id', lastId);
+
+    const { data: rows, error } = await query;
 
     if (error) throw new Error(`Failed to read shopping cards: ${error.message}`);
     if (!rows?.length) break;
@@ -97,7 +104,10 @@ async function main() {
       `[backfill] scanned=${scanned} updated=${updated} skipped(no URL)=${skipped} failed=${failed}`,
     );
 
-    offset += rows.length;
+    // The keyset cursor is stable while merchant_kind updates rows that this
+    // default run has already classified. It also avoids OFFSET skipping rows
+    // if older cards are concurrently deleted.
+    lastId = rows[rows.length - 1].id;
     if (rows.length < BATCH_SIZE) break;
   }
 
