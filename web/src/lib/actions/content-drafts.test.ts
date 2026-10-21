@@ -243,6 +243,8 @@ describe('the page type on save (CE-023)', () => {
       filters: [
         ['eq', 'id', DRAFT],
         ['eq', 'page_type_source', 'detected'],
+        // Only over this save: a write in between keeps its own version.
+        ['eq', 'updated_at', '2026-10-20T15:00:00Z'],
       ],
     });
   });
@@ -460,6 +462,8 @@ describe('History', () => {
     const typed = calls.find((call) => call.op === 'update')!;
     expect(typed.value).toEqual({ page_type: 'comparison' });
     expect(typed.filters).toContainEqual(['eq', 'page_type_source', 'detected']);
+    // Only over the restore.
+    expect(typed.filters).toContainEqual(['eq', 'updated_at', 't1']);
 
     // A type the person picked stays.
     calls = [];

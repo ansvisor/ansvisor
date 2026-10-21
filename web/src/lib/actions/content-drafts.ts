@@ -885,11 +885,14 @@ export async function saveContentDraft(
         const detected = detectPageType({ title, html: bodyHtml }, brandSiteType(data.brands));
         // A page that shows no type keeps the one it had (Start's guess).
         if (detected && detected !== data.page_type) {
+          // Only over this save: a write in between would otherwise become
+          // the editor's base, and its next autosave would go over it.
           const { data: typed, error: typeError } = await supabase
             .from('content_drafts')
             .update({ page_type: detected })
             .eq('id', id)
             .eq('page_type_source', 'detected')
+            .eq('updated_at', data.updated_at)
             .select('updated_at')
             .maybeSingle();
           // The page is saved; its type catches up on the next save.
@@ -1078,6 +1081,8 @@ export async function restoreDraftVersion(id: string, versionId: string): Promis
         .update({ page_type: detected })
         .eq('id', id)
         .eq('page_type_source', 'detected')
+        // Only over the restore, as after a save.
+        .eq('updated_at', restored.updatedAt)
         .select('updated_at')
         .maybeSingle();
       // The page is restored; its type catches up on the next save.
