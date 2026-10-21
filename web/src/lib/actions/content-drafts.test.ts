@@ -163,6 +163,18 @@ describe('saveContentDraft', () => {
     expect(result).toMatchObject({ ok: true, updatedAt: '2026-10-20T15:01:00Z' });
   });
 
+  it('takes a page that already holds what is being saved as its own', async () => {
+    // A lost save wrote this very page; the editor sends it again.
+    updates = [null, { updated_at: '2026-10-20T15:01:00Z' }];
+    row = { updated_at: '2026-10-20T14:30:00Z', body_html: '<h1>Mine</h1><p>More</p>' };
+    const result = await saveContentDraft(DRAFT, {
+      title: 'Mine',
+      bodyHtml: '<h1>Mine</h1><p>More</p>',
+      base: await base(),
+    });
+    expect(result).toMatchObject({ ok: true, updatedAt: '2026-10-20T15:01:00Z' });
+  });
+
   it('doesn’t overwrite a page someone else changed', async () => {
     row = { updated_at: '2026-10-20T14:30:00Z', body_html: '<h1>Their version</h1>' };
     await expect(

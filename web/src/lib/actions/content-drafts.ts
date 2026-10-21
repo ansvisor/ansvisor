@@ -862,6 +862,7 @@ export async function saveContentDraft(
   if (!draftId.safeParse(id).success || !parsed.success) return { ok: false, reason: 'invalid' };
   const { title, base } = parsed.data;
   const bodyHtml = sanitizeDraftHtml(parsed.data.bodyHtml);
+  const savingHash = await bodyHash(bodyHtml);
   const supabase = await createClient();
   let expected = base.updatedAt;
   // While the Content Agent writes the page (CE-015), a tab left open waits:
@@ -899,7 +900,7 @@ export async function saveContentDraft(
           }
         }
       }
-      return { ok: true, updatedAt, bodyHash: await bodyHash(bodyHtml) };
+      return { ok: true, updatedAt, bodyHash: savingHash };
     }
 
     const { data: current, error: readError } = await supabase
@@ -914,7 +915,13 @@ export async function saveContentDraft(
       return { ok: false, reason: 'conflict' };
     }
     const currentHash = await bodyHash(current.body_html);
-    if (currentHash !== base.bodyHash && currentHash !== base.unconfirmedHash) {
+    // The page the editor last saw, its lost save's, or already this one:
+    // writing over any of them loses nothing.
+    if (
+      currentHash !== base.bodyHash &&
+      currentHash !== base.unconfirmedHash &&
+      currentHash !== savingHash
+    ) {
       return { ok: false, reason: 'conflict' };
     }
     expected = current.updated_at;

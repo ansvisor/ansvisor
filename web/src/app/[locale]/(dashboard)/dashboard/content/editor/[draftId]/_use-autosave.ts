@@ -106,8 +106,12 @@ export function useDraftAutosave(draftId: string, loaded: { updatedAt: string; b
       }
     } catch (err) {
       console.error('Failed to save the draft:', err);
-      // No answer: the write may have gone through all the same.
-      unconfirmed.current = await bodyHash(content.bodyHtml).catch(() => null);
+      // No answer: the write may have gone through all the same. The server
+      // stores the page as sanitizeDraftHtml leaves it, so that is what it
+      // compares; the sanitizer loads only here, out of the editor's bundle.
+      unconfirmed.current = await import('@/lib/content/sanitize-draft-html')
+        .then(({ sanitizeDraftHtml }) => bodyHash(sanitizeDraftHtml(content.bodyHtml)))
+        .catch(() => null);
       saving.current = false;
       failed.current = true;
       pending.current ??= content;
