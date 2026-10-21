@@ -27,9 +27,11 @@ import {
   CONFIRM_TABLE_ROWS,
   MAX_ATTACHMENT_BYTES,
   attachmentKind,
+  rowsThatFit,
   tableHtml,
   tableRows,
 } from '@/lib/content/attachments';
+import { MAX_BODY_HTML_LENGTH } from '@/lib/content/editor';
 import { readDocumentFile } from '@/lib/content/import-document';
 import { formatNumber } from '@/lib/format';
 import { cellsToText, parseCsv } from '@/lib/prompt-import';
@@ -173,6 +175,7 @@ export function useAttachments(editor: Editor | null) {
         <SheetPreviewDialog
           key={queue[0].name + queue.length}
           file={queue[0]}
+          room={editor ? MAX_BODY_HTML_LENGTH - editor.getHTML().length : 0}
           onInsert={(rows) => insertTable(rows, queue[0].name)}
           onClose={() => setQueue((q) => q.slice(1))}
         />
@@ -183,12 +186,21 @@ export function useAttachments(editor: Editor | null) {
   return { open: () => inputRef.current?.click(), attach, ui };
 }
 
+/**
+ * A sheet before it goes in: its first rows, and how many there are. A table
+ * the page can't hold is cut to the rows that fit, said so first, since a
+ * page over the size limit can't be saved; one with no room at all can't go
+ * in.
+ */
 function SheetPreviewDialog({
   file,
+  room,
   onInsert,
   onClose,
 }: {
   file: SheetFile;
+  /** Characters the page can still take before its size limit. */
+  room: number;
   onInsert: (rows: string[][]) => void;
   onClose: () => void;
 }) {
@@ -198,13 +210,17 @@ function SheetPreviewDialog({
   const sheet = file.sheets.find((s) => s.name === sheetName) ?? file.sheets[0];
   const dataRows = sheet.rows.length - 1;
   const [header, ...rest] = sheet.rows;
+  const fit = rowsThatFit(sheet.rows, room);
+  const noRoom = fit < 1 && dataRows > 0;
+  const cut = !noRoom && fit < dataRows;
+  const inserted = cut ? fit : dataRows;
 
   const insert = () => {
-    if (dataRows > CONFIRM_TABLE_ROWS && !confirming) {
+    if ((inserted > CONFIRM_TABLE_ROWS || cut) && !confirming) {
       setConfirming(true);
       return;
     }
-    onInsert(sheet.rows);
+    onInsert(sheet.rows.slice(0, inserted + 1));
     onClose();
   };
 
@@ -225,6 +241,7 @@ function SheetPreviewDialog({
             <span className="text-muted-foreground">{t('sheet')}</span>
             <Select
               value={sheetName}
+              items={file.sheets.map((s) => ({ value: s.name, label: s.name }))}
               onValueChange={(v) => {
                 if (!v) return;
                 setSheetName(v);
@@ -232,7 +249,7 @@ function SheetPreviewDialog({
               }}
             >
               <SelectTrigger className="w-60">
-                <SelectValue>{(v: string) => v}</SelectValue>
+                <SelectValue />
               </SelectTrigger>
               <SelectContent>
                 {file.sheets.map((s) => (
@@ -273,15 +290,27 @@ function SheetPreviewDialog({
             {t('previewMore', { count: formatNumber(dataRows - PREVIEW_ROWS) })}
           </p>
         )}
-        {confirming && (
-          <p className="rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-700 dark:text-amber-400">
-            {t('confirmLong', { count: formatNumber(dataRows) })}
+        {noRoom ? (
+          <p className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
+            {t('noRoom')}
           </p>
+        ) : (
+          confirming && (
+            <p className="rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-700 dark:text-amber-400">
+              {cut
+                ? t('confirmCut', { fit: formatNumber(fit), count: formatNumber(dataRows) })
+                : t('confirmLong', { count: formatNumber(dataRows) })}
+            </p>
+          )
         )}
         <DialogFooter>
           <DialogClose render={<Button variant="outline" />}>{t('cancel')}</DialogClose>
-          <Button onClick={insert}>
-            {confirming ? t('insertAll', { count: formatNumber(dataRows) }) : t('insertTable')}
+          <Button onClick={insert} disabled={noRoom}>
+            {!confirming
+              ? t('insertTable')
+              : cut
+                ? t('insertFirst', { count: formatNumber(fit) })
+                : t('insertAll', { count: formatNumber(dataRows) })}
           </Button>
         </DialogFooter>
       </DialogContent>
