@@ -30048,11 +30048,14 @@ grant execute on function public.content_draft_versions_prune(timestamptz, integ
 -- changing it.
 --
 -- content_draft_cited_answers(draft, days) returns the answers of the last N
--- days (30 by default) whose citations name the page the draft optimizes
--- (content_drafts.source_url on one of the brand's domains), the latest
--- first: one {platform, response} each, at most 200, each response cut to
--- 12,000 characters. The editor finds the passages they quote. ChatGPT
--- Shopping cards are left out, as the Citations page does.
+-- days (30 by default) whose citations name the page the draft optimizes,
+-- the latest first: one {platform, response} each, at most 200, each
+-- response cut to 12,000 characters. The editor finds the passages they
+-- quote. ChatGPT Shopping cards are left out, as the Citations page does.
+-- The page is content_drafts.source_url's path on that URL's host, which
+-- must be one of the brand's domains, as in content_draft_sources (00211):
+-- /pricing on another site of the brand's isn't it. The 200 answers are
+-- picked first, and only their responses are read.
 --
 -- Security definer with an organization check through the draft's brand:
 -- citation_urls has no member select policy. A draft without a page gets [];
@@ -30066,15 +30069,18 @@ language plpgsql
 stable
 security definer
 set search_path to 'public'
+set plan_cache_mode to 'force_custom_plan'
 as $$
 declare
   v_brand_id uuid;
   v_page_key text;
+  v_host text;
   v_since timestamptz;
   v_result jsonb;
 begin
-  select d.brand_id, lower(public.normalize_page_path(d.source_url))
-    into v_brand_id, v_page_key
+  select d.brand_id, lower(public.normalize_page_path(d.source_url)),
+    lower(regexp_replace(substring(d.source_url from '^https?://([^/:?#]+)'), '^www\.', ''))
+    into v_brand_id, v_page_key, v_host
   from public.content_drafts d
   where d.id = p_draft_id;
 
@@ -30090,17 +30096,18 @@ begin
   if p_days is null or p_days < 1 or p_days > 90 then
     raise exception 'content_draft_cited_answers: 1 to 90 days are needed' using errcode = '22023';
   end if;
-  if v_page_key is null then
+  -- No page, or a page on a site that isn't the brand's: nothing cites it.
+  if v_page_key is null or v_host is null or not exists (
+    select 1 from public.brand_domains bd
+    where bd.brand_id = v_brand_id
+      and lower(regexp_replace(bd.domain, '^www\.', '')) = v_host
+  ) then
     return '[]'::jsonb;
   end if;
 
   v_since := now() - make_interval(days => p_days);
 
-  with own_domains as (
-    select lower(regexp_replace(bd.domain, '^www\.', '')) as domain
-    from public.brand_domains bd
-    where bd.brand_id = v_brand_id
-  ),
+  with
   -- Each answer once, however many of its citations name the page.
   citing as (
     select distinct prc.prompt_result_id
@@ -30109,11 +30116,12 @@ begin
       on prc.url_id = cu.id
      and prc.brand_id = v_brand_id
      and prc.created_at >= v_since
-    where cu.domain in (select domain from own_domains)
+    where cu.domain = v_host
       and lower(public.normalize_page_path(cu.url)) = v_page_key
   ),
-  answers as (
-    select pr.platform, left(pr.response, 12000) as response, pr.created_at
+  -- The latest 200 first; only their responses are read.
+  latest as (
+    select pr.id, pr.created_at
     from citing c
     join public.prompt_results pr on pr.id = c.prompt_result_id
     where pr.platform is distinct from 'chatgpt-shopping'
@@ -30123,13 +30131,14 @@ begin
   )
   select coalesce(
     jsonb_agg(
-      jsonb_build_object('platform', a.platform, 'response', a.response)
-      order by a.created_at desc
+      jsonb_build_object('platform', pr.platform, 'response', left(pr.response, 12000))
+      order by l.created_at desc
     ),
     '[]'::jsonb
   )
     into v_result
-  from answers a;
+  from latest l
+  join public.prompt_results pr on pr.id = l.id;
 
   return v_result;
 end;
