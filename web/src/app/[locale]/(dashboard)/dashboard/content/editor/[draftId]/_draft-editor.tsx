@@ -138,6 +138,9 @@ export function DraftEditor({ draft }: { draft: ContentDraft }) {
   // What quotes each locked passage, for the warning: "ChatGPT 14× and …".
   const citedBy = useRef(new Map<string, string>());
   const [citedCount, setCitedCount] = useState(0);
+  // Whether the locked passages have been read: until then the agent would
+  // be told none are locked (a new page has none to read).
+  const [citedRead, setCitedRead] = useState(!draft.sourceUrl);
   // An agent's suggestions (CE-018): its latest batch, with what was decided.
   const [suggestions, setSuggestions] = useState<DraftSuggestion[]>([]);
   const suggestionsNow = useRef(suggestions);
@@ -292,6 +295,7 @@ export function DraftEditor({ draft }: { draft: ContentDraft }) {
   // read when it opens, and again after a restore.
   const loadCited = useCallback(async () => {
     if (!editor || !draft.sourceUrl) return;
+    setCitedRead(false);
     const texts = new Set<string>();
     editor.state.doc.descendants((node) => {
       if (!node.isTextblock) return true;
@@ -313,6 +317,9 @@ export function DraftEditor({ draft }: { draft: ContentDraft }) {
       );
     } catch (err) {
       console.error('Failed to read the cited passages:', err);
+    } finally {
+      // Read or not, the editor's locks are what the agent is told.
+      if (!editor.isDestroyed) setCitedRead(true);
     }
   }, [editor, draft.id, draft.sourceUrl, quotedBy, t]);
 
@@ -468,7 +475,7 @@ export function DraftEditor({ draft }: { draft: ContentDraft }) {
    * batch of suggestions for review.
    */
   const fixRules = async (only?: string[]) => {
-    if (!editor || fixing) return;
+    if (!editor || fixing || !citedRead) return;
     if (openSuggestions > 0) {
       toast(t('suggestions.decideFirst'));
       return;
@@ -507,6 +514,11 @@ export function DraftEditor({ draft }: { draft: ContentDraft }) {
       const result = await fixDraftRules(draft.id, draft.brandId, request);
       if ('error' in result) {
         toast.error(t(`suggestions.fixErrors.${result.error}`));
+        // Another tab (or the API) left them: show them here to decide.
+        if (result.error === 'open_suggestions') {
+          setSuggestions(await getDraftSuggestions(draft.id));
+          setBarClosed(false);
+        }
         return;
       }
       if (result.count === 0) {
@@ -528,7 +540,12 @@ export function DraftEditor({ draft }: { draft: ContentDraft }) {
   const agentFix: AgentFix = {
     run: (only) => void fixRules(only),
     running: fixing,
-    blocked: openSuggestions > 0 ? t('suggestions.decideFirst') : null,
+    blocked:
+      openSuggestions > 0
+        ? t('suggestions.decideFirst')
+        : !citedRead
+          ? t('suggestions.citedLoading')
+          : null,
   };
 
   // A drag with files over the page shows where they go; one dropped beside

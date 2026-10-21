@@ -21,6 +21,8 @@ vi.mock('../config/supabase.js', () => ({
       const chain = {
         select: () => chain,
         eq: () => chain,
+        order: () => chain,
+        limit: async () => result(),
         insert: async (value) => (writes.push({ table, value }), { error: null }),
         maybeSingle: async () => result(),
         single: async () => result(),
@@ -43,7 +45,9 @@ const {
   draftPassages,
   fixDraftRules,
   keepSuggestions,
+  MAX_PROMPT_PASSAGE_CHARS,
   passageKey,
+  promptPassages,
 } = await import('./content-agent.js');
 const { PlanLimitError } = await import('./plan-guard.js');
 
@@ -81,6 +85,7 @@ beforeEach(() => {
       body_html: BODY,
       page_type: 'guide',
       action_id: 'act-1',
+      status: 'draft',
     },
     brands: { name: 'Acme Coffee', organization_id: 'org-1', language: 'en' },
   };
@@ -116,6 +121,29 @@ describe('the page as the agent reads it', () => {
     expect(prompt).toContain('- dated: A dated data point — missing');
     expect(prompt).toContain('- Say “we” for the brand');
     expect(prompt).toContain('Write in English.');
+    expect(prompt).not.toContain('The page goes on');
+  });
+
+  it('sends a long page only up to its cap, and no passage too long to change', () => {
+    const long = { tag: 'p', text: 'x'.repeat(5_001) };
+    const passage = { tag: 'p', text: 'y'.repeat(4_000) };
+    const many = Array.from({ length: 20 }, () => passage);
+    const sent = promptPassages([long, ...many]);
+    expect(sent.more).toBe(true);
+    expect(sent.passages).toHaveLength(MAX_PROMPT_PASSAGE_CHARS / 4_000);
+    expect(sent.passages).not.toContain(long);
+    expect(promptPassages(draftPassages(BODY))).toEqual({
+      passages: draftPassages(BODY),
+      more: false,
+    });
+    const prompt = buildFixPrompt({
+      brand: { name: 'Acme Coffee', language: 'en' },
+      draft: rows.content_drafts,
+      ...sent,
+      lockedKeys: new Set(),
+      input: input(),
+    });
+    expect(prompt).toContain('(The page goes on; suggest changes only to the passages above.)');
   });
 });
 
@@ -249,6 +277,36 @@ describe('fixDraftRules', () => {
     ).rejects.toMatchObject({ status: 422, code: 'empty' });
     expect(enforceImproveQuota).not.toHaveBeenCalled();
     expect(generateObject).not.toHaveBeenCalled();
+  });
+
+  it('refuses a published draft, or one whose latest batch is still open, before charging', async () => {
+    rows.content_drafts.status = 'published';
+    await expect(
+      fixDraftRules({ draftId: DRAFT, brandId: BRAND, input: input() }),
+    ).rejects.toMatchObject({ status: 409, code: 'published' });
+
+    rows.content_drafts.status = 'ready';
+    // Newest first: the latest batch b2 has an open row.
+    rows.content_draft_suggestions = [
+      { batch_id: 'b2', status: 'accepted' },
+      { batch_id: 'b2', status: 'open' },
+      { batch_id: 'b1', status: 'open' },
+    ];
+    await expect(
+      fixDraftRules({ draftId: DRAFT, brandId: BRAND, input: input() }),
+    ).rejects.toMatchObject({ status: 409, code: 'open_suggestions' });
+    expect(enforceImproveQuota).not.toHaveBeenCalled();
+    expect(generateObject).not.toHaveBeenCalled();
+
+    // An older batch left open doesn't count: the editor shows the latest.
+    rows.content_draft_suggestions = [
+      { batch_id: 'b2', status: 'rejected' },
+      { batch_id: 'b1', status: 'open' },
+    ];
+    generateObject.mockResolvedValue({ object: { suggestions: [] }, usage: {} });
+    await expect(
+      fixDraftRules({ draftId: DRAFT, brandId: BRAND, input: input() }),
+    ).resolves.toEqual({ count: 0, batchId: null });
   });
 
   it('stops at the budget', async () => {

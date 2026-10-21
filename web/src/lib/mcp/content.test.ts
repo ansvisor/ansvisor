@@ -97,9 +97,11 @@ describe('getContentDraftFor', () => {
     db.rpc.content_draft_cited_answers = [
       { platform: 'chatgpt-web', response: `They say: ${QUOTED}` },
     ];
+    // Newest first: an older batch's open one isn't the editor's to show.
     db.rows.content_draft_suggestions = [
-      { id: 's2', kind: 'insert', reason: 'add FAQ', batch_id: 'new' },
-      { id: 's1', kind: 'replace', reason: 'old batch', batch_id: 'old' },
+      { id: 's3', kind: 'replace', reason: 'decided', batch_id: 'new', status: 'accepted' },
+      { id: 's2', kind: 'insert', reason: 'add FAQ', batch_id: 'new', status: 'open' },
+      { id: 's1', kind: 'replace', reason: 'old batch', batch_id: 'old', status: 'open' },
     ];
 
     const draft = await getContentDraftFor(auth, 'd1');
@@ -138,6 +140,8 @@ describe('createContentDraftFor', () => {
       promptIds: ['p1', 'p-other'],
     });
 
+    // Through the prompt's set: a prompt without a topic is the brand's too.
+    expect(db.filters).toContainEqual(['prompts', 'prompt_sets.brand_id', 'b1']);
     expect(created).toEqual({
       id: 'd-new',
       status: 'in_review',
@@ -153,6 +157,27 @@ describe('createContentDraftFor', () => {
       page_type_source: 'detected',
       prompt_ids: ['p1'],
       body_html: '<h1>How to clean CRM data</h1><p>Start here.</p>',
+    });
+  });
+
+  it('takes a live page only on one of the brand’s domains', async () => {
+    db.rows.brands = { site_type: 'b2b', industry: 'Software', shopping_mode_enabled: false };
+    db.rows.brand_domains = [{ domain: 'https://www.Acme.example/' }];
+    db.rows.content_drafts = { id: 'd-new', status: 'in_review', page_type: 'feature_page' };
+    const optimize = (sourceUrl: string) =>
+      createContentDraftFor(auth, {
+        brandId: 'b1',
+        title: 'Pipeline forecasting',
+        bodyHtml: '<h1>Pipeline forecasting</h1><p>x</p>',
+        method: 'optimize',
+        sourceUrl,
+      });
+
+    await expect(optimize('https://elsewhere.example/forecasting')).resolves.toBe('off_domain');
+    await expect(optimize('https://acme.example.evil.example/x')).resolves.toBe('off_domain');
+    expect(db.writes).toEqual([]);
+    await expect(optimize('https://docs.acme.example/forecasting')).resolves.toMatchObject({
+      id: 'd-new',
     });
   });
 
@@ -208,6 +233,19 @@ describe('suggestContentChangesFor', () => {
     ]);
   });
 
+  it('waits while a person still has the latest batch to decide', async () => {
+    db.rows.content_drafts = draftRow();
+    db.rows.content_draft_suggestions = [
+      { id: 's1', kind: 'replace', reason: 'x', batch_id: 'b1', status: 'open' },
+    ];
+    await expect(
+      suggestContentChangesFor(auth, 'd1', [
+        { kind: 'insert', passage: 1, after: '<p>x</p>', reason: 'y' },
+      ]),
+    ).resolves.toBe('open_suggestions');
+    expect(db.writes).toEqual([]);
+  });
+
   it('leaves a published draft alone', async () => {
     db.rows.content_drafts = draftRow({ status: 'published' });
     await expect(
@@ -220,8 +258,8 @@ describe('suggestContentChangesFor', () => {
 });
 
 describe('setContentDraftReadyFor', () => {
-  it('marks it ready, keeps the version and completes its action’s task, once', async () => {
-    db.rows.content_drafts = draftRow({ status: 'in_review' });
+  it('marks a draft ready, keeps the version and completes its action’s task, once', async () => {
+    db.rows.content_drafts = draftRow({ status: 'draft' });
     db.rows.action_tasks = [{ id: 't-optimize', status: 'in_progress' }];
     // The update reads back the same row; its status is what the update set.
     const result = await setContentDraftReadyFor(auth, 'd1');
@@ -230,7 +268,8 @@ describe('setContentDraftReadyFor', () => {
       op: 'update',
       value: { status: 'ready' },
     });
-    expect(result).toEqual({ status: 'in_review', action_tasks_done: 1 });
+    expect(db.filters).toContainEqual(['content_drafts', 'status', 'draft']);
+    expect(result).toEqual({ status: 'draft', action_tasks_done: 1 });
     expect(db.writes).toContainEqual({
       table: 'action_events',
       op: 'insert',
@@ -253,6 +292,13 @@ describe('setContentDraftReadyFor', () => {
       action_tasks_done: 0,
     });
     expect(db.writes).toEqual([]);
+  });
+
+  it('leaves an agent’s draft in review to a person', async () => {
+    db.rows.content_drafts = draftRow({ status: 'in_review', author: 'agent' });
+    await expect(setContentDraftReadyFor(auth, 'd1')).resolves.toBe('in_review');
+    expect(db.writes).toEqual([]);
+    expect(db.rpcCalls).toEqual([]);
   });
 });
 

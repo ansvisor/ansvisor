@@ -3392,9 +3392,13 @@
         "fixed": "{count, plural, one {Content Agent suggested # change} other {Content Agent suggested # changes}} · review them in the page",
         "nothingToFix": "Content Agent found nothing it could change without new facts.",
         "decideFirst": "Accept or reject the open suggestions first.",
+        "citedLoading": "Reading which passages AI quotes, so the agent leaves them as they are…",
         "fixErrors": {
           "ai_budget": "This month's AI usage is spent. Upgrade for more, or try again next month.",
+          "no_subscription": "Content Agent needs an active subscription. Choose a plan in Settings › Billing.",
           "empty": "Write something first: the agent improves the page you have.",
+          "open_suggestions": "This page has open suggestions, maybe from another tab. They're shown now: accept or reject them first.",
+          "published": "This page is published. Content Agent suggests changes to drafts only.",
           "failed": "Content Agent couldn't run. Try again."
         }
       },

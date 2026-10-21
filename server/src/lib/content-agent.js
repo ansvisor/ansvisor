@@ -24,6 +24,18 @@ export const MAX_AGENT_SUGGESTIONS = 8;
 /** How long the model may take: the editor waits for it. */
 const CALL_TIMEOUT_MS = 60_000;
 
+/** The longest passage the agent may change: keepSuggestions skips longer ones. */
+const MAX_PASSAGE_CHARS = 5_000;
+
+/**
+ * How much of the page the model reads, in characters: a very long page is
+ * sent up to here, so one run can't spend far past the AI usage budget.
+ */
+export const MAX_PROMPT_PASSAGE_CHARS = 60_000;
+
+/** How many of a draft's newest suggestions are read to find its latest batch. */
+const LATEST_BATCH_ROWS = 50;
+
 /** What the editor sends: the rules still open, and the passages it keeps locked. */
 export const fixRulesInput = z.object({
   rules: z
@@ -158,7 +170,7 @@ export function keepSuggestions(raw, passages, lockedKeys, ruleKeys) {
     if (kept.length >= MAX_AGENT_SUGGESTIONS) break;
     const passage = passages[s.passage - 1];
     const reason = s.reason.trim().slice(0, 300);
-    if (!passage || !reason || passage.text.length > 5000) continue;
+    if (!passage || !reason || passage.text.length > MAX_PASSAGE_CHARS) continue;
     const rules = [...new Set(s.rules.filter((key) => ruleKeys.has(key)))];
     if (s.kind === 'replace') {
       if (lockedKeys.has(passageKey(passage.text))) continue;
@@ -196,12 +208,32 @@ export function keepSuggestions(raw, passages, lockedKeys, ruleKeys) {
   return kept;
 }
 
+/**
+ * The passages the model reads: the ones it may change (up to
+ * MAX_PASSAGE_CHARS each), in order, until MAX_PROMPT_PASSAGE_CHARS.
+ * `more` says the page goes on past them.
+ */
+export function promptPassages(passages) {
+  const sent = [];
+  let chars = 0;
+  for (const passage of passages) {
+    if (passage.text.length > MAX_PASSAGE_CHARS) continue;
+    if (chars + passage.text.length > MAX_PROMPT_PASSAGE_CHARS) {
+      return { passages: sent, more: true };
+    }
+    chars += passage.text.length;
+    sent.push(passage);
+  }
+  return { passages: sent, more: false };
+}
+
 /** What the model is told: the brand, the page's passages, and the rules to fix. */
-export function buildFixPrompt({ brand, draft, passages, lockedKeys, input }) {
+export function buildFixPrompt({ brand, draft, passages, more = false, lockedKeys, input }) {
   const lines = passages.map((p, i) => {
     const locked = lockedKeys.has(passageKey(p.text)) ? ', LOCKED' : '';
     return `[${i + 1}] (${p.tag}${locked}) ${p.text}`;
   });
+  if (more) lines.push('(The page goes on; suggest changes only to the passages above.)');
   const rules = input.rules.map((r) => `- ${r.key}: ${r.name}${r.detail ? ` — ${r.detail}` : ''}`);
   const own = input.textRules.map((text) => `- ${text}`);
   return `Brand: ${brand?.name || 'Unknown'}
@@ -221,25 +253,52 @@ Write in ${getLanguageName(brand?.language)}.`;
 }
 
 /**
+ * Whether the draft's latest batch still has suggestions nobody decided:
+ * the editor shows only that batch, so a new one would hide them (and Undo
+ * on the ones accepted).
+ */
+export async function hasOpenSuggestions(draftId) {
+  const { data, error } = await supabaseAdmin
+    .from('content_draft_suggestions')
+    .select('batch_id, status')
+    .eq('draft_id', draftId)
+    .order('created_at', { ascending: false })
+    .limit(LATEST_BATCH_ROWS);
+  if (error) throw error;
+  const latest = data?.[0]?.batch_id;
+  return (data ?? []).some((row) => row.batch_id === latest && row.status === 'open');
+}
+
+/**
  * Runs the agent on a draft: reads it and its brand, charges the AI usage
  * budget, asks the model, and keeps the suggestions the editor can apply as
  * one new batch, linked to the draft's Action Center action if it has one.
- * Throws with `.status` 404 for a draft outside the brand, 422 for an empty
- * page, PlanLimitError once the budget is spent.
+ * Throws with `.status` 404 for a draft outside the brand, 409 for a
+ * published draft or one whose suggestions are still open, 422 for an empty
+ * page, PlanLimitError once the budget is spent — all before charging.
  */
 export async function fixDraftRules({ draftId, brandId, input }) {
   const { data: draft, error: draftError } = await supabaseAdmin
     .from('content_drafts')
-    .select('id, brand_id, title, body_html, page_type, action_id')
+    .select('id, brand_id, title, body_html, page_type, action_id, status')
     .eq('id', draftId)
     .maybeSingle();
   if (draftError) throw draftError;
   if (!draft || draft.brand_id !== brandId) {
     throw Object.assign(new Error('Draft not found'), { status: 404 });
   }
-  const passages = draftPassages(draft.body_html);
+  if (draft.status === 'published') {
+    throw Object.assign(new Error('The draft is published'), { status: 409, code: 'published' });
+  }
+  const { passages, more } = promptPassages(draftPassages(draft.body_html));
   if (!passages.length) {
     throw Object.assign(new Error('The page has no text to fix'), { status: 422, code: 'empty' });
+  }
+  if (await hasOpenSuggestions(draftId)) {
+    throw Object.assign(new Error('Decide the open suggestions first'), {
+      status: 409,
+      code: 'open_suggestions',
+    });
   }
 
   const { data: brand, error: brandError } = await supabaseAdmin
@@ -257,7 +316,7 @@ export async function fixDraftRules({ draftId, brandId, input }) {
     model: resolveModel(modelId),
     schema: suggestionsSchema,
     system: SYSTEM_PROMPT,
-    prompt: buildFixPrompt({ brand, draft, passages, lockedKeys, input }),
+    prompt: buildFixPrompt({ brand, draft, passages, more, lockedKeys, input }),
     abortSignal: AbortSignal.timeout(CALL_TIMEOUT_MS),
   });
   await recordUsage({ organizationId: brand.organization_id, draftId, modelId, usage });

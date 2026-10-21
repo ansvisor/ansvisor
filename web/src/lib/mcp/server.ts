@@ -61,6 +61,7 @@ import {
   createDraftShape,
   impactDays,
   listDraftsShape,
+  sourceRefError,
   suggestionsShape,
 } from './content-schemas';
 
@@ -1399,6 +1400,17 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
         sourceUrl: args.source_url,
         promptIds: args.prompt_ids,
       });
+      if (created === 'off_domain') {
+        return {
+          content: [
+            {
+              type: 'text' as const,
+              text: "source_url must be a page on one of the brand's domains",
+            },
+          ],
+          isError: true,
+        };
+      }
       return created ? json(created) : notFound('Brand');
     },
   );
@@ -1452,11 +1464,9 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
     },
     async (args) => {
       const ref = args.ref.trim();
-      if (args.kind === 'prompt' && !relaxedUuid.safeParse(ref).success) {
-        return {
-          content: [{ type: 'text' as const, text: 'ref must be a prompt UUID' }],
-          isError: true,
-        };
+      const refError = sourceRefError(args.kind, ref);
+      if (refError) {
+        return { content: [{ type: 'text' as const, text: refError }], isError: true };
       }
       const result = await addContentSourceFor(
         auth,
@@ -1471,7 +1481,7 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
   server.registerTool(
     'suggest_content_changes',
     {
-      description: `Leave changes on a draft for a person to accept or reject in the editor — never applied by the agent. Read the draft with get_content_draft first: each suggestion names a passage by its number. A replace changes words in that passage ("before" copied exactly as the passage has it, "after" as plain text); an insert adds blocks after it ("after" as simple HTML: h2, h3, p, ul, ol, li, strong, em). Never change a locked passage. At most ${MAX_API_SUGGESTIONS}; ones the editor can't apply come back in "dropped" with the reason (no_passage, locked, not_in_passage, no_change, empty, duplicate, too_many).`,
+      description: `Leave changes on a draft for a person to accept or reject in the editor — never applied by the agent. Read the draft with get_content_draft first: each suggestion names a passage by its number. A replace changes words in that passage ("before" copied exactly as the passage has it, "after" as plain text); an insert adds blocks after it ("after" as simple HTML: h2, h3, p, ul, ol, li, strong, em). Never change a locked passage. While a person still has the draft's open suggestions to decide, no new ones are taken: wait until get_content_draft lists none. At most ${MAX_API_SUGGESTIONS}; ones the editor can't apply come back in "dropped" with the reason (no_passage, locked, not_in_passage, no_change, empty, duplicate, too_many).`,
       inputSchema: {
         draft_id: relaxedUuid.describe('Draft UUID.'),
         ...suggestionsShape,
@@ -1487,6 +1497,17 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
           isError: true,
         };
       }
+      if (result === 'open_suggestions') {
+        return {
+          content: [
+            {
+              type: 'text' as const,
+              text: 'A person still has open suggestions on this draft to accept or reject; suggest again once get_content_draft lists none',
+            },
+          ],
+          isError: true,
+        };
+      }
       return result ? json(result) : notFound('Draft');
     },
   );
@@ -1495,13 +1516,24 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
     'set_content_draft_ready',
     {
       description:
-        "Mark a draft ready to publish, as the editor's Mark ready does: from draft or in review; History keeps the page as a version, and a draft linked to an Action Center action completes the action's writing task (action_tasks_done). Ansvisor never publishes — a person does. Only on explicit user intent.",
+        "Mark a draft ready to publish, as the editor's Mark ready does: from draft only — an agent's draft in review waits for a person to mark it ready in the editor. History keeps the page as a version, and a draft linked to an Action Center action completes the action's writing task (action_tasks_done). Ansvisor never publishes — a person does. Only on explicit user intent.",
       inputSchema: {
         draft_id: relaxedUuid.describe('Draft UUID.'),
       },
     },
     async (args) => {
       const result = await setContentDraftReadyFor(auth, args.draft_id);
+      if (result === 'in_review') {
+        return {
+          content: [
+            {
+              type: 'text' as const,
+              text: 'The draft is in review: a person marks it ready in the editor',
+            },
+          ],
+          isError: true,
+        };
+      }
       return result ? json(result) : notFound('Draft');
     },
   );

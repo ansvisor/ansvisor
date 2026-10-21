@@ -1312,7 +1312,14 @@ export async function rebuildDraftBrief(
   }
 }
 
-const AGENT_FIX_ERRORS = ['ai_budget', 'empty', 'failed'] as const;
+const AGENT_FIX_ERRORS = [
+  'ai_budget',
+  'no_subscription',
+  'empty',
+  'open_suggestions',
+  'published',
+  'failed',
+] as const;
 export type AgentFixError = (typeof AGENT_FIX_ERRORS)[number];
 
 /** What Fix open rules with agent sends: the rules still open, and the passages kept locked. */
