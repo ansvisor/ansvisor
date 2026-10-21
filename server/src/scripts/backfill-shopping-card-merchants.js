@@ -101,7 +101,9 @@ async function main() {
     if (rows.length < BATCH_SIZE) break;
   }
 
-  console.log(`[backfill] complete: scanned=${scanned}, updated=${updated}, skipped=${skipped}, failed=${failed}`);
+  console.log(
+    `[backfill] complete: scanned=${scanned}, updated=${updated}, skipped=${skipped}, failed=${failed}`,
+  );
   if (failed > 0) process.exitCode = 1;
 }
 
