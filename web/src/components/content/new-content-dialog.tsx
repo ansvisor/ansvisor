@@ -104,8 +104,10 @@ interface StartChoice {
   sourceUrl?: string;
   pageType: PageType;
   detectedFrom: DetectedFrom;
+  /** The person picked the type from the chips; otherwise it follows the page. */
+  picked: boolean;
   /** The page type for a new page, to go back to from optimizing an existing one. */
-  newPageType: { pageType: PageType; detectedFrom: DetectedFrom };
+  newPageType: { pageType: PageType; detectedFrom: DetectedFrom; picked: boolean };
   /** The overlap check's pick: write the new page, or optimize an existing one. */
   choice: OverlapChoice;
 }
@@ -359,6 +361,7 @@ export function NewContentDialog({
     const newPageType = {
       pageType: type.pageType,
       detectedFrom: type.detected ? ('title' as const) : null,
+      picked: false,
     };
     setStart({
       method: 'create',
@@ -387,6 +390,7 @@ export function NewContentDialog({
     const newPageType = {
       pageType: type.pageType,
       detectedFrom: type.detected ? (sourceUrl ? ('page' as const) : ('content' as const)) : null,
+      picked: false,
     };
     setStart({
       method,
@@ -424,6 +428,7 @@ export function NewContentDialog({
         method: startMethod,
         title: startTitle,
         pageType: start.pageType,
+        typePicked: start.picked,
         source: start.source,
         bodyHtml,
         sourceUrl: existing?.url ?? start.sourceUrl,
@@ -541,8 +546,9 @@ export function NewContentDialog({
                         ...start,
                         pageType: type,
                         detectedFrom: null,
+                        picked: true,
                         ...(start.choice.kind === 'create' && {
-                          newPageType: { pageType: type, detectedFrom: null },
+                          newPageType: { pageType: type, detectedFrom: null, picked: true },
                         }),
                       })
                     }
@@ -886,6 +892,7 @@ function withChoice(start: StartChoice, choice: OverlapChoice, siteType: SiteTyp
     choice,
     pageType: detected ?? start.pageType,
     detectedFrom: detected ? 'page' : null,
+    picked: detected ? false : start.picked,
   };
 }
 

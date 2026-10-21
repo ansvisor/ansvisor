@@ -23,7 +23,14 @@
 --     as page-prompt-suggestions.js does;
 --   * brandDomains and competitorDomains, to name each cited page's kind.
 -- Security definer with an organization check through the draft's brand:
--- citation_urls has no member select policy.
+-- citation_urls has no member select policy. The page a draft optimizes is
+-- its source URL's path on that URL's host, which must be one of the brand's
+-- domains: /pricing on another site of the brand's, or on a site not the
+-- brand's, isn't it. Prompts are the brand's through their prompt set, as
+-- everywhere else (a prompt needs no topic). Bounded by the brand and the
+-- window on (brand_id, created_at), with citations grouped by address before
+-- any address is read, and planned for each call's own values
+-- (plan_cache_mode).
 --
 -- content_draft_sources (the table) keeps a person's choices: a source left
 -- out (included false), and a page address or Search Console query added by
@@ -69,6 +76,10 @@ create policy "content_draft_sources: member delete"
 
 grant select, insert, update, delete on public.content_draft_sources to authenticated;
 
+create or replace trigger content_draft_sources_updated_at
+  before update on public.content_draft_sources
+  for each row execute function public.handle_updated_at();
+
 comment on table public.content_draft_sources is
   'Content Editor (CE-008): a person''s choices on a draft''s sources — one left out (included false), or a page address or Search Console query added by hand (added true).';
 
@@ -81,16 +92,19 @@ language plpgsql
 stable
 security definer
 set search_path to 'public'
+set plan_cache_mode to 'force_custom_plan'
 as $$
 declare
   v_brand_id uuid;
   v_prompt_ids uuid[];
   v_page_key text;
+  v_host text;
   v_since timestamptz;
   v_result jsonb;
 begin
-  select d.brand_id, d.prompt_ids, lower(public.normalize_page_path(d.source_url))
-    into v_brand_id, v_prompt_ids, v_page_key
+  select d.brand_id, d.prompt_ids, lower(public.normalize_page_path(d.source_url)),
+    lower(regexp_replace(substring(d.source_url from '^https?://([^/:?#]+)'), '^www\.', ''))
+    into v_brand_id, v_prompt_ids, v_page_key, v_host
   from public.content_drafts d
   where d.id = p_draft_id;
 
@@ -108,40 +122,67 @@ begin
   end if;
 
   v_since := now() - make_interval(days => p_days);
+  -- A page on a site that isn't the brand's is no page of the brand's.
+  if v_host is null or not exists (
+    select 1 from public.brand_domains bd
+    where bd.brand_id = v_brand_id
+      and lower(regexp_replace(bd.domain, '^www\.', '')) = v_host
+  ) then
+    v_page_key := null;
+  end if;
 
   with own_domains as (
     select lower(regexp_replace(bd.domain, '^www\.', '')) as domain
     from public.brand_domains bd
     where bd.brand_id = v_brand_id
   ),
+  -- The page's addresses: its path on its host.
+  page_urls as materialized (
+    select cu.id
+    from public.citation_urls cu
+    where v_page_key is not null
+      and cu.domain = v_host
+      and lower(public.normalize_page_path(cu.url)) = v_page_key
+  ),
+  -- The window's answers, from idx_prompt_results_brand_created_cover alone:
+  -- only for a draft with a page, to find the prompts citing it.
+  window_answers as materialized (
+    select pr.id, pr.prompt_id
+    from public.prompt_results pr
+    where v_page_key is not null
+      and pr.brand_id = v_brand_id
+      and pr.created_at >= v_since
+      and pr.platform is distinct from 'chatgpt-shopping'
+  ),
   -- The prompts whose answers cited the page the draft optimizes.
   page_prompts as (
-    select distinct pr.prompt_id
-    from public.citation_urls cu
-    join public.prompt_result_citations prc
-      on prc.url_id = cu.id
-     and prc.brand_id = v_brand_id
-     and prc.created_at >= v_since
-    join public.prompt_results pr on pr.id = prc.prompt_result_id
-    where v_page_key is not null
-      and cu.domain in (select domain from own_domains)
-      and lower(public.normalize_page_path(cu.url)) = v_page_key
-      and pr.platform is distinct from 'chatgpt-shopping'
+    select distinct wa.prompt_id
+    from public.prompt_result_citations prc
+    join window_answers wa on wa.id = prc.prompt_result_id
+    where prc.url_id in (select pu.id from page_urls pu)
+      and prc.brand_id = v_brand_id
+      and prc.created_at >= v_since
   ),
   source_prompts as (
     select p.id, p.text, p.id = any(v_prompt_ids) as in_draft,
       p.id in (select prompt_id from page_prompts) as cites_page
     from public.prompts p
-    join public.topics t on t.id = p.topic_id
-    where t.brand_id = v_brand_id
+    join public.prompt_sets ps on ps.id = p.prompt_set_id
+    where ps.brand_id = v_brand_id
       and (p.id = any(v_prompt_ids) or p.id in (select prompt_id from page_prompts))
   ),
-  answers as (
+  answers as materialized (
     select pr.id, pr.prompt_id, pr.platform, pr.mention_count, pr.search_queries
     from public.prompt_results pr
-    where pr.prompt_id in (select id from source_prompts)
+    where pr.brand_id = v_brand_id
       and pr.created_at >= v_since
+      and pr.prompt_id in (select id from source_prompts)
       and pr.platform is distinct from 'chatgpt-shopping'
+  ),
+  prompt_counts as (
+    select a.prompt_id, count(*) as answers, count(*) filter (where a.mention_count > 0) as mentioned
+    from answers a
+    group by a.prompt_id
   ),
   fanout_rows as (
     select
@@ -163,14 +204,22 @@ begin
     order by count(distinct answer_id) desc, min(query)
     limit 30
   ),
-  cited as (
-    select cu.url, cu.title, cu.domain, count(*) as citations, count(distinct a.id) as answers
+  -- Citations grouped by address first; only the top 20 addresses are read.
+  cited_ids as (
+    select prc.url_id, count(*) as citations, count(distinct a.id) as answers
     from answers a
-    join public.prompt_result_citations prc on prc.prompt_result_id = a.id
-    join public.citation_urls cu on cu.id = prc.url_id
-    group by cu.id, cu.url, cu.title, cu.domain
-    order by count(*) desc, count(distinct a.id) desc, cu.url
+    join public.prompt_result_citations prc
+      on prc.prompt_result_id = a.id
+     and prc.brand_id = v_brand_id
+     and prc.created_at >= v_since
+    group by prc.url_id
+    order by count(*) desc, count(distinct a.id) desc, prc.url_id
     limit 20
+  ),
+  cited as (
+    select cu.url, cu.title, cu.domain, ci.citations, ci.answers
+    from cited_ids ci
+    join public.citation_urls cu on cu.id = ci.url_id
   ),
   queries as (
     select g.query, sum(g.clicks)::bigint as clicks, sum(g.impressions)::bigint as impressions
@@ -188,10 +237,11 @@ begin
           'text', sp.text,
           'inDraft', sp.in_draft,
           'citesPage', sp.cites_page,
-          'answers', (select count(*) from answers a where a.prompt_id = sp.id),
-          'mentioned', (select count(*) from answers a where a.prompt_id = sp.id and a.mention_count > 0)
+          'answers', coalesce(pc.answers, 0),
+          'mentioned', coalesce(pc.mentioned, 0)
         ) order by sp.in_draft desc, sp.text)
       from source_prompts sp
+      left join prompt_counts pc on pc.prompt_id = sp.id
     ), '[]'::jsonb),
     'fanouts', coalesce((
       select jsonb_agg(jsonb_build_object(

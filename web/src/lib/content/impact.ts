@@ -32,20 +32,23 @@ export interface ImpactPrompt {
 
 export interface ContentImpact {
   citations: ImpactCount;
+  /** Prompts citing the page in each window, and the ones it lost: counted over all of them. */
+  promptCounts: ImpactCount & { lost: number };
   aiVisits: ImpactCount;
   gscClicks: ImpactCount;
   /** The first day of Search Console page data the brand has; null without any. */
   gscSince: string | null;
+  /** The prompts to list, the most cited first: at most 100, so not to count from. */
   prompts: ImpactPrompt[];
   /** The brand's other pages cited now for this page's prompts. */
   overlap: { page: string; prompts: number }[];
 }
 
-/** The first day of each window, as content_page_impact counts them: whole UTC days, today included. */
+/** The first day of each window, as content_page_impact counts them: whole UTC days ending yesterday. */
 export function impactWindows(days: number, today = new Date()): { cur: string; prev: string } {
   const utc = Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate());
   const day = (offset: number) => new Date(utc - offset * 86_400_000).toISOString().slice(0, 10);
-  return { cur: day(days - 1), prev: day(2 * days - 1) };
+  return { cur: day(days), prev: day(2 * days) };
 }
 
 /**
@@ -67,14 +70,6 @@ export function gscCoverage(
 /** A count's change, as the AI Traffic page reads one; none when the previous window isn't whole. */
 export function impactChange(count: ImpactCount, comparable = true): VisitChange {
   return visitChange(count.cur, count.prev, { comparable });
-}
-
-/** Prompts citing the page in each window: the "Prompts cited" card. */
-export function promptsCited(prompts: ImpactPrompt[]): ImpactCount {
-  return {
-    cur: prompts.filter((p) => p.cur > 0).length,
-    prev: prompts.filter((p) => p.prev > 0).length,
-  };
 }
 
 /** A prompt the page lost: cited in the previous window, not in this one. */
