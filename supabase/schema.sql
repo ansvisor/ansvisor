@@ -31201,11 +31201,10 @@ comment on function public.content_plan_pages(uuid, integer) is
 --         brand come from the Mentions rollup (mentions_prompt_daily, 00157)
 --         for the window's whole UTC days, and from the answer rows of its
 --         first, partial day only;
---       - the fan-outs are read from each prompt's latest 30 answers in the
---         window, the only answer rows fetched whole (search_queries), so
---         "searched N×" counts those;
---       - the citations come from prompt_result_citations_brand_created_cover_idx,
---         hash-joined to the answers.
+--       - the fan-outs and the cited pages are read from each prompt's
+--         latest 30 answers in the window, so "searched N×" and a page's
+--         citations count those: they are the only answer rows fetched whole
+--         (search_queries), and their citations a fifth of the window's.
 --   * content_plan_pages (00220, as 00221 redefined it): the overlaps' pairs
 --     take their window from the current answers alone. A date bound on the
 --     citations too is estimated from prompt_result_citations' last analyze
@@ -31468,15 +31467,18 @@ begin
     order by count(distinct answer_id) desc, min(query)
     limit 30
   ),
-  -- Citations grouped by address first; only the top 20 addresses are read.
-  -- The window's citations come from the (brand_id, created_at) cover index,
-  -- which carries url_id and prompt_result_id, joined to the answers by hash.
+  -- The citations of the same sample as the fan-outs, each prompt's latest
+  -- 30 answers: every answer in the window is 100k+ citations on a large
+  -- brand, read one answer at a time. Grouped by address first; only the
+  -- top 20 addresses are read.
   cited_ids as (
     select prc.url_id, count(*) as citations, count(distinct prc.prompt_result_id) as answers
-    from public.prompt_result_citations prc
-    join answers a on a.id = prc.prompt_result_id
-    where prc.brand_id = v_brand_id
-      and prc.created_at >= v_since
+    from answers a
+    join public.prompt_result_citations prc
+      on prc.prompt_result_id = a.id
+     and prc.brand_id = v_brand_id
+     and prc.created_at >= v_since
+    where a.recency <= 30
     group by prc.url_id
     order by count(*) desc, count(distinct prc.prompt_result_id) desc, prc.url_id
     limit 20
