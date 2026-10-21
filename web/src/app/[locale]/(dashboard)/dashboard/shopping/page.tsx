@@ -123,7 +123,9 @@ export default function ShoppingPage() {
   const [kpis, setKpis] = useState<ShoppingKpis | null>(null);
   const [charts, setCharts] = useState<ShoppingChartData | null>(null);
   const [loading, setLoading] = useState(false);
-  const [amazonShareDropAlert, setAmazonShareDropAlert] = useState<AmazonShareDropAlert | null>(null);
+  const [amazonShareDropAlert, setAmazonShareDropAlert] = useState<AmazonShareDropAlert | null>(
+    null,
+  );
 
   const [ownProducts, setOwnProducts] = useState<ShoppingProduct[]>([]);
   const [competitorProducts, setCompetitorProducts] = useState<ShoppingProduct[]>([]);
