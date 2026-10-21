@@ -5039,6 +5039,8 @@
     }
   },
   "prompts": {
+    "loadError": "Couldn't load your prompts.",
+    "visibilityDegraded": "Visibility figures are temporarily unavailable — showing prompts without them.",
     "positions": {
       "answers": "{count, plural, one {# answer} other {# answers}}",
       "answersInPeriod": "{count, plural, one {# answer} other {# answers}} in this period",
@@ -5445,7 +5447,7 @@
     },
     "perception": {
       "sectionLabel": "Perception",
-      "loadError": "Couldn't load the perception figures. Try again in a moment.",
+      "loadError": "Couldn't load the perception figures.",
       "unavailable": "Perception isn't available yet. It appears once the mentions data has been prepared.",
       "pickDates": "Choose a start or end date to see the perception figures.",
       "noMentions": "AI didn't name {brand} in the tracked responses of this period.",
