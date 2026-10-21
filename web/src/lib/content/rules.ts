@@ -240,7 +240,6 @@ const TYPE_RULES: Partial<Record<PageType, RuleDef[]>> = {
   ],
 };
 
-/** The rules of a set: the type's own, then the shared groups, with the type's length. */
 /**
  * The Language rule's value for the brand's language (brands.language, as
  * the brief and the agent write in): its name, US English for English or
@@ -251,6 +250,7 @@ export function languageRuleValue(code: string | null | undefined): string {
   return label ? label.replace(/\s*\([^)]*\)$/, '') : 'English (US)';
 }
 
+/** The rules of a set: the type's own, then the shared groups, with the type's length. */
 export function ruleSet(
   pageType: PageType | null,
   defaults: { keywords?: string[]; language?: string | null } = {},
