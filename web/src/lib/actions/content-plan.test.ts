@@ -33,6 +33,10 @@ vi.mock('@/lib/supabase/server', () => ({
   })),
 }));
 
+const getSuggestionSourceStates = vi.hoisted(() => vi.fn());
+vi.mock('@/lib/actions/integrations', () => ({ getSuggestionSourceStates }));
+const GA_CONNECTED = { configured: true, connected: true, mapped: true, lastDataAt: '2026-10-20' };
+
 const { getContentPlan, getContentPlanInsights } = await import('./content-plan');
 
 beforeEach(() => {
@@ -40,18 +44,21 @@ beforeEach(() => {
   rpcResult = { days: 30, pages: [] };
   rpcCalls = [];
   filters = [];
+  getSuggestionSourceStates.mockReset().mockResolvedValue({ ga: GA_CONNECTED });
 });
 
 describe('getContentPlan', () => {
   it('reads the pages, the open opportunities for own pages and the drafts being written', async () => {
     rpcResult = {
       days: 7,
+      answers: { cur: 120, prev: 140 },
+      prevFrom: '2026-10-07',
+      trackedSince: '2026-09-09',
       pages: [
         {
           page: 'https://acme.example/guides/espresso',
           title: 'Espresso guide',
           citations: { cur: 4, prev: 9 },
-          prompts: 3,
           platformsDown: ['chatgpt-web'],
           aiVisits: 12,
           overlaps: 1,
@@ -93,12 +100,13 @@ describe('getContentPlan', () => {
           page: 'https://acme.example/guides/espresso',
           title: 'Espresso guide',
           citations: { cur: 4, prev: 9 },
-          prompts: 3,
           platformsDown: ['chatgpt-web'],
           aiVisits: 12,
           overlaps: 1,
         },
       ],
+      answers: { cur: 120, prev: 140 },
+      tracking: { prevFrom: '2026-10-07', trackedSince: '2026-09-09' },
       opportunities: [
         {
           id: 'o1',
@@ -156,16 +164,14 @@ describe('getContentPlanInsights', () => {
       citations: [
         { url: 'https://acme.example/vs/hubspot', title: null, own: true, citations: '7' },
       ],
-      results: { visits: 40, sessions: 22, keyEvents: 5, analytics: true, purchases: false },
+      results: { visits: 40, keyEvents: 5, analytics: true, purchases: false },
     };
     await expect(getContentPlanInsights(BRAND, 30)).resolves.toEqual({
       totalCitations: 120,
       citations: [{ url: 'https://acme.example/vs/hubspot', title: null, own: true, citations: 7 }],
       results: {
         visits: 40,
-        sessions: 22,
         keyEvents: 5,
-        keyEventSessions: 0,
         transactions: 0,
         revenue: 0,
         analytics: true,
@@ -173,6 +179,17 @@ describe('getContentPlanInsights', () => {
       },
     });
     expect(rpcCalls).toEqual([['content_plan_insights', { p_brand_id: BRAND, p_days: 30 }]]);
+  });
+
+  it('counts Analytics as connected only as AI Traffic does: connected and synced', async () => {
+    rpcResult = { totalCitations: 0, citations: [], results: { analytics: true } };
+    getSuggestionSourceStates.mockResolvedValue({ ga: { ...GA_CONNECTED, lastDataAt: null } });
+    expect((await getContentPlanInsights(BRAND, 30))!.results.analytics).toBe(false);
+    getSuggestionSourceStates.mockResolvedValue({ ga: { ...GA_CONNECTED, connected: false } });
+    expect((await getContentPlanInsights(BRAND, 30))!.results.analytics).toBe(false);
+    // The connection can't be read: the property set says it.
+    getSuggestionSourceStates.mockRejectedValue(new Error('down'));
+    expect((await getContentPlanInsights(BRAND, 30))!.results.analytics).toBe(true);
   });
 
   it('reads nothing of another organization’s brand', async () => {

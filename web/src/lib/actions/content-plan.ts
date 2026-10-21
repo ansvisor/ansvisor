@@ -2,15 +2,19 @@
 
 import { z } from 'zod';
 import { createClient } from '@/lib/supabase/server';
+import { getSuggestionSourceStates } from '@/lib/actions/integrations';
 import type { DraftMethod } from '@/lib/content/drafts';
 import type { CitedAddress, PlanResults } from '@/lib/content/plan-mix';
 import {
   PLAN_PERIODS,
+  type PlanAnswers,
   type PlanDraft,
   type PlanOpportunity,
   type PlanPage,
   type PlanPeriod,
+  type PlanTracking,
 } from '@/lib/content/plan';
+import { googleSourceStatus } from '@/lib/traffic-sources';
 
 /**
  * What the Content plan (CE-014) is built from, read through the signed-in
@@ -38,7 +42,13 @@ const text = (value: unknown) => (typeof value === 'string' ? value.trim() : '')
 export async function getContentPlan(
   brandId: string,
   days: PlanPeriod,
-): Promise<{ pages: PlanPage[]; opportunities: PlanOpportunity[]; drafts: PlanDraft[] } | null> {
+): Promise<{
+  pages: PlanPage[];
+  answers: PlanAnswers;
+  tracking: PlanTracking;
+  opportunities: PlanOpportunity[];
+  drafts: PlanDraft[];
+} | null> {
   if (!planInput.safeParse({ brandId, days }).success) throw new Error('invalid');
   const supabase = await createClient();
   const [userRes, pagesRes, opportunitiesRes, draftsRes] = await Promise.all([
@@ -67,11 +77,24 @@ export async function getContentPlan(
   if (!pagesRes.data) return null;
   const me = userRes.data.user?.id ?? null;
 
-  const pages = ((pagesRes.data as unknown as { pages?: PlanPage[] }).pages ?? []).map((p) => ({
+  const read = pagesRes.data as unknown as {
+    pages?: PlanPage[];
+    answers?: Partial<PlanAnswers>;
+    prevFrom?: string;
+    trackedSince?: string | null;
+  };
+  const answers = {
+    cur: Number(read.answers?.cur ?? 0),
+    prev: Number(read.answers?.prev ?? 0),
+  };
+  const tracking = {
+    prevFrom: read.prevFrom ?? null,
+    trackedSince: read.trackedSince ?? null,
+  };
+  const pages = (read.pages ?? []).map((p) => ({
     page: p.page,
     title: p.title ?? null,
     citations: { cur: Number(p.citations?.cur ?? 0), prev: Number(p.citations?.prev ?? 0) },
-    prompts: Number(p.prompts ?? 0),
     platformsDown: Array.isArray(p.platformsDown) ? p.platformsDown : [],
     aiVisits: Number(p.aiVisits ?? 0),
     overlaps: Number(p.overlaps ?? 0),
@@ -110,13 +133,15 @@ export async function getContentPlan(
     }),
   );
 
-  return { pages, opportunities, drafts };
+  return { pages, answers, tracking, opportunities, drafts };
 }
 
 /**
  * What AI cites in the brand's tracked answers, and what AI visits brought
  * in, for the Plan's page-type mix and results strip (content_plan_insights,
- * 00221). Null outside the member's organization.
+ * 00221). Analytics counts as connected as AI Traffic says it is: the
+ * property set, the connection live and data synced (googleSourceStatus).
+ * Null outside the member's organization.
  */
 export async function getContentPlanInsights(
   brandId: string,
@@ -124,10 +149,14 @@ export async function getContentPlanInsights(
 ): Promise<{ citations: CitedAddress[]; totalCitations: number; results: PlanResults } | null> {
   if (!planInput.safeParse({ brandId, days }).success) throw new Error('invalid');
   const supabase = await createClient();
-  const { data, error } = await supabase.rpc('content_plan_insights', {
-    p_brand_id: brandId,
-    p_days: days,
-  });
+  const [{ data, error }, gaConnected] = await Promise.all([
+    supabase.rpc('content_plan_insights', { p_brand_id: brandId, p_days: days }),
+    getSuggestionSourceStates(brandId).then(
+      (states) => googleSourceStatus(states.ga) === 'connected',
+      // The property alone decides then, as before.
+      () => null,
+    ),
+  ]);
   if (error) throw new Error(error.message);
   if (!data) return null;
   const read = data as unknown as {
@@ -146,12 +175,10 @@ export async function getContentPlanInsights(
     })),
     results: {
       visits: Number(r.visits ?? 0),
-      sessions: Number(r.sessions ?? 0),
       keyEvents: Number(r.keyEvents ?? 0),
-      keyEventSessions: Number(r.keyEventSessions ?? 0),
       transactions: Number(r.transactions ?? 0),
       revenue: Number(r.revenue ?? 0),
-      analytics: Boolean(r.analytics),
+      analytics: Boolean(r.analytics) && gaConnected !== false,
       purchases: Boolean(r.purchases),
     },
   };

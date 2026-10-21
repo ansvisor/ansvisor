@@ -103,22 +103,24 @@ export async function setDraftTasksStatus(
 /**
  * Marking a linked draft Ready completes the action's task for that work.
  * An action naming several pages has one draft per page: its task is done
- * once each page has a draft that is ready (or published). Returns how many
- * tasks it completed.
+ * once each page has a draft that is ready (or published). A deleted action
+ * (00168) keeps its tasks as they were. Returns how many tasks it completed.
  */
 export async function completeDraftTasks(
   db: SupabaseClient,
   draft: { id: string; brandId: string; actionId: string; method: DraftMethod },
   actorId: string | null,
 ): Promise<number> {
+  const { data: action, error: actionError } = await db
+    .from('actions')
+    .select('payload')
+    .eq('id', draft.actionId)
+    .is('deleted_at', null)
+    .maybeSingle();
+  if (actionError) throw new Error(actionError.message);
+  if (!action) return 0;
   if (draft.method === 'optimize') {
-    const { data: action, error: actionError } = await db
-      .from('actions')
-      .select('payload')
-      .eq('id', draft.actionId)
-      .maybeSingle();
-    if (actionError) throw new Error(actionError.message);
-    const pages = actionPages(action?.payload);
+    const pages = actionPages(action.payload);
     if (pages.length > 1) {
       const { data: done, error: doneError } = await db
         .from('content_drafts')

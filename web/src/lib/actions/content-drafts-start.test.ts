@@ -67,6 +67,7 @@ vi.mock('@/lib/supabase/server', () => ({
         select: () => chain,
         eq: (col: string, v: unknown) => (call.filters.push(['eq', col, v]), chain),
         in: (col: string, v: unknown) => (call.filters.push(['in', col, v]), chain),
+        is: (col: string, v: unknown) => (call.filters.push(['is', col, v]), chain),
         order: () => chain,
         limit: () => chain,
         insert: (value: unknown) => ((call.op = 'insert'), (call.value = value), chain),
@@ -529,6 +530,12 @@ describe('startDraftFromAction', () => {
     expect(
       JSON.parse((fetchMock.mock.calls[0] as unknown as [string, RequestInit])[1].body as string),
     ).toEqual({ brandId: BRAND, url: PAGE });
+    // A deleted action starts no work.
+    expect(calls.find((call) => call.table === 'actions')!.filters).toContainEqual([
+      'is',
+      'deleted_at',
+      null,
+    ]);
     expect(admin.inserts).toEqual([
       {
         table: 'content_drafts',
@@ -620,6 +627,16 @@ describe('startDraftFromAction', () => {
       title: 'Pipeline forecasting',
       body_html: '<h1>Pipeline forecasting</h1>',
       source_url: PAGE,
+    });
+
+    // The page's address tells its type, even when the page can't be read.
+    admin.inserts = [];
+    await expect(start('https://northwind.example/pricing')).resolves.toMatchObject({
+      created: true,
+    });
+    expect(admin.inserts[0].value).toMatchObject({
+      page_type: 'pricing',
+      source_url: 'https://northwind.example/pricing',
     });
     vi.unstubAllGlobals();
   });

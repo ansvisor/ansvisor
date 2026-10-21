@@ -24,6 +24,15 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         { status: 409 },
       );
     }
+    if (result === 'open_suggestions') {
+      return NextResponse.json(
+        {
+          error:
+            'A person still has open suggestions on this draft to accept or reject; suggest again once the draft lists none',
+        },
+        { status: 409 },
+      );
+    }
     if (!result) return NextResponse.json({ error: 'Draft not found' }, { status: 404 });
     return NextResponse.json(result, { status: result.kept ? 201 : 200 });
   } catch (err) {

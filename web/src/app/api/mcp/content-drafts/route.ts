@@ -59,6 +59,12 @@ export async function POST(req: Request) {
       sourceUrl: body.source_url,
       promptIds: body.prompt_ids,
     });
+    if (created === 'off_domain') {
+      return NextResponse.json(
+        { error: "source_url must be a page on one of the brand's domains" },
+        { status: 422 },
+      );
+    }
     if (!created) return NextResponse.json({ error: 'Brand not found' }, { status: 404 });
     return NextResponse.json(created, { status: 201 });
   } catch (err) {

@@ -25,7 +25,10 @@ const ENTITIES: Record<string, string> = {
   quot: '"',
   apos: "'",
   '#39': "'",
-  nbsp: ' ',
+  // Written as an escape: the editor keeps a non-breaking space as one
+  // (U+00A0), and so must a passage's text, or a replace across it never
+  // matches there.
+  nbsp: '\u00a0',
 };
 
 function decodeEntities(text: string): string {

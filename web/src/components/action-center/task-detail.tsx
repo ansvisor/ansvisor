@@ -221,7 +221,8 @@ export function TaskDetailView({
         >
           {t('edit')}
         </Button>
-        {send?.content && !sentContent && (
+        {/* A writing task is written in the Content Editor: Create content / Optimize page. */}
+        {send?.content && !sentContent && !draftWork && (
           <Button
             type="button"
             variant="outline"

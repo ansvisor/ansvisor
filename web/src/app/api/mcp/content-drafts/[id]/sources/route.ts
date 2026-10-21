@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { authenticateMcpRequest } from '@/lib/mcp-auth';
 import { addContentSourceFor, getContentSourcesFor } from '@/lib/mcp/content';
-import { addSourceShape, contentUuid } from '@/lib/mcp/content-schemas';
+import { addSourceShape, contentUuid, sourceRefError } from '@/lib/mcp/content-schemas';
 
 /** GET /api/mcp/content-drafts/[id]/sources — REST mirror of `get_content_sources`. */
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -37,9 +37,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     return NextResponse.json({ error: 'Invalid request' }, { status: 400 });
   }
   const { kind, ref } = parsed.data;
-  if (kind === 'prompt' && !contentUuid.safeParse(ref).success) {
-    return NextResponse.json({ error: 'ref must be a prompt UUID' }, { status: 400 });
-  }
+  const refError = sourceRefError(kind, ref);
+  if (refError) return NextResponse.json({ error: refError }, { status: 400 });
   try {
     const result = await addContentSourceFor(
       auth,

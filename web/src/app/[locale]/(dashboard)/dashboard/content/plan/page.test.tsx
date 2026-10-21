@@ -45,7 +45,6 @@ const page = (path: string, over: Partial<PlanPage> = {}): PlanPage => ({
   page: `https://acme.example${path}`,
   title: null,
   citations: { cur: 2, prev: 2 },
-  prompts: 1,
   platformsDown: [],
   aiVisits: 0,
   overlaps: 0,
@@ -77,12 +76,15 @@ const PLAN = {
       overlaps: 1,
     }),
   ],
+  answers: { cur: 100, prev: 100 },
+  tracking: { prevFrom: '2026-08-23', trackedSince: '2026-06-01' },
   opportunities: [opportunity],
   drafts: [],
 };
 
 const INSIGHTS = {
-  totalCitations: 60,
+  // The listed addresses hold 80; the tail beyond them 40 more.
+  totalCitations: 120,
   citations: [
     {
       url: 'https://rival.example/guides/espresso-machines',
@@ -96,9 +98,7 @@ const INSIGHTS = {
   ],
   results: {
     visits: 1240,
-    sessions: 300,
     keyEvents: 48,
-    keyEventSessions: 30,
     transactions: 12,
     revenue: 3210.4,
     analytics: true,
@@ -155,14 +155,14 @@ describe('the Content plan', () => {
 
     expect(rowTexts()).toEqual([
       [
-        'Coffee subscriptionsHow-to guide/guides/coffee-subscriptions',
-        'Optimize',
-        'Citations −70% on ChatGPT and PerplexityCitations',
-      ],
-      [
         'Office coffee subscriptionsNew page',
         'Create',
         'Daily Grind Co. and Origin Box cited · you 6%Opportunity',
+      ],
+      [
+        'Coffee subscriptionsHow-to guide/guides/coffee-subscriptions',
+        'Optimize',
+        'Citations −70% on ChatGPT and PerplexityCitations',
       ],
       [
         'Espresso guideHow-to guide/guides/espresso⚠ Overlap',
@@ -195,7 +195,37 @@ describe('the Content plan', () => {
     expect(getContentPlan).toHaveBeenLastCalledWith('brand-1', 90);
     expect(getContentPlanInsights).toHaveBeenLastCalledWith('brand-1', 90);
     expect(window.location.search).toBe('?days=90');
-    expect(container.textContent).toContain('From AI visits · last 90 days:');
+    expect(container.textContent).toContain('From AI visits · 90 full days to yesterday (UTC):');
+  });
+
+  it('opens on the period in the URL, read once', async () => {
+    window.history.replaceState(null, '', '/dashboard/content/plan?days=7');
+    await renderPage();
+    expect(getContentPlan.mock.calls).toEqual([['brand-1', 7]]);
+  });
+
+  it('starts an opportunity for an existing page on that page', async () => {
+    getContentPlan.mockResolvedValue({
+      ...PLAN,
+      pages: [],
+      opportunities: [
+        {
+          ...opportunity,
+          decision: 'optimize',
+          targetPage: 'https://acme.example/pricing',
+          targetTitle: 'Pricing',
+        },
+      ],
+    });
+    await renderPage();
+    await act(async () => container.querySelector<HTMLButtonElement>('tbody tr button')!.click());
+    expect(dialog.props).toMatchObject({
+      preset: {
+        kind: 'opportunity',
+        id: 'o1',
+        page: { url: 'https://acme.example/pricing', title: 'Pricing' },
+      },
+    });
   });
 
   it('starts a row in New content, or opens the draft already being written', async () => {
@@ -215,7 +245,7 @@ describe('the Content plan', () => {
     await renderPage();
     const rows = container.querySelectorAll('tbody tr');
 
-    await act(async () => rows[0].querySelector('button')!.click());
+    await act(async () => rows[1].querySelector('button')!.click());
     expect(dialog.props).toMatchObject({
       open: true,
       preset: { kind: 'page', url: 'https://acme.example/guides/coffee-subscriptions' },
@@ -223,8 +253,8 @@ describe('the Content plan', () => {
     await act(async () => (dialog.props!.onOpenChange as (open: boolean) => void)(false));
     expect(dialog.props).toMatchObject({ open: false, preset: null });
 
-    await act(async () => rows[1].querySelector('button')!.click());
-    expect(dialog.props).toMatchObject({ preset: { kind: 'opportunity', id: 'o1' } });
+    await act(async () => rows[0].querySelector('button')!.click());
+    expect(dialog.props).toMatchObject({ preset: { kind: 'opportunity', id: 'o1', page: null } });
 
     expect(rows[2].textContent).toContain('Agent');
     expect(rows[2].querySelector('a')!.getAttribute('href')).toBe('/dashboard/content/editor/d1');
@@ -234,15 +264,17 @@ describe('the Content plan', () => {
     await renderPage();
     expect(getContentPlanInsights).toHaveBeenCalledWith('brand-1', 30);
     expect(container.textContent).toContain(
-      'From AI visits · last 30 days:1,240 visits · 48 key events · 12 orders · 3,210 revenue',
+      'From AI visits · 30 full days to yesterday (UTC):1,240 visits · 48 key events · 12 orders · 3,210 revenue',
     );
     const mix = container.querySelector('section[aria-labelledby="plan-mix-title"]')!;
+    // AI's mix (guides 40 of 60 typed) against the brand's own pages' (guides 10 of 30).
+    // The gap shows twice: under the shares on a phone, in its column on wider screens.
     expect([...mix.querySelectorAll('li')].map((li) => li.textContent)).toEqual([
-      'How-to guide67% · 17%Gap · 1 page',
-      'Blog post33% · 33%1 page',
+      'How-to guide67% · 33%Gap · 1 pageGap · 1 page',
+      'Blog post33% · 67%1 page',
     ]);
     expect(mix.querySelector('p')!.textContent).toBe(
-      "25% of these citations go to pages whose type the address doesn't show (forums, encyclopedias, news…). They aren't in the shares above.",
+      "The shares cover 50% of the period's AI citations: the most cited addresses whose type shows. Forums, encyclopedias, news and the long tail of less cited pages aren't in them.",
     );
   });
 
@@ -269,13 +301,72 @@ describe('the Content plan', () => {
     });
     await renderPage();
     expect(container.textContent).toContain(
-      'From AI visits · last 30 days:1,240 visitsConnect Google Analytics to see what they did next.',
+      'From AI visits · 30 full days to yesterday (UTC):1,240 visitsConnect Google Analytics to see what they did next.',
     );
     expect(
       [...container.querySelectorAll('a')]
         .find((a) => a.textContent === 'Connect Google Analytics')!
         .getAttribute('href'),
     ).toBe('/dashboard/traffic');
+  });
+
+  it('drops a page-type filter the period’s mix no longer lists, and a brand’s filters on switching', async () => {
+    await renderPage();
+    const guide = () =>
+      container.querySelector<HTMLButtonElement>(
+        'section[aria-labelledby="plan-mix-title"] button',
+      )!;
+    await act(async () => guide().click());
+    await act(async () => button('Overlaps').click());
+    expect(rowTexts()).toHaveLength(1);
+
+    // The 7 days' mix has no guide: the list isn't filtered by it.
+    getContentPlanInsights.mockResolvedValue({
+      ...INSIGHTS,
+      citations: [
+        { url: 'https://acme.example/blog/latte-art', title: null, own: true, citations: 5 },
+      ],
+    });
+    await act(async () => button('Last 7 days').click());
+    await act(async () => button('Overlaps').click());
+    expect(container.textContent).not.toContain('Filtered');
+    expect(rowTexts()).toHaveLength(3);
+
+    await act(async () => button('Overlaps').click());
+    brandState.activeBrandId = 'brand-2';
+    brandState.brands.push({ id: 'brand-2', siteType: 'b2b' });
+    await renderPage();
+    expect(button('Overlaps').getAttribute('aria-pressed')).toBe('false');
+    brandState.brands.pop();
+  });
+
+  it('says when the earlier period is tracked only in part, or not at all', async () => {
+    getContentPlan.mockResolvedValue({
+      ...PLAN,
+      tracking: { prevFrom: '2026-08-23', trackedSince: '2026-09-09' },
+    });
+    await renderPage();
+    expect(container.textContent).toContain(
+      'The 30 days before are tracked only since Sep 9: pages are compared per tracked answer.',
+    );
+
+    getContentPlan.mockResolvedValue({
+      ...PLAN,
+      answers: { cur: 100, prev: 0 },
+      tracking: { prevFrom: '2026-04-24', trackedSince: '2026-09-09' },
+    });
+    await act(async () => button('Last 90 days').click());
+    expect(container.textContent).toContain(
+      "No page reads as losing ground yet: tracking began Sep 9, so the 90 days before aren't tracked to compare with.",
+    );
+  });
+
+  it('reads the mix again with the period, not after a draft is sent', async () => {
+    await renderPage();
+    expect(getContentPlanInsights).toHaveBeenCalledTimes(1);
+    await act(async () => (dialog.props!.onSent as () => void)());
+    expect(getContentPlan).toHaveBeenCalledTimes(2);
+    expect(getContentPlanInsights).toHaveBeenCalledTimes(1);
   });
 
   it('says so when the plan can’t be read, and tries again', async () => {

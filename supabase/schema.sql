@@ -30333,9 +30333,13 @@ grant execute on function public.content_draft_decide_suggestions(uuid[], text)
 --
 -- Start › Team (00208) links one draft to the action it creates, so the
 -- drafts linked so far already meet it.
+--
+-- The page is indexed by its md5: an address may run to 2,048 characters,
+-- and a non-ASCII one near that would pass btree's ~2.7 KB row limit and
+-- fail the insert.
 
 create unique index if not exists content_drafts_action_work_key
-  on public.content_drafts (action_id, method, coalesce(source_url, ''))
+  on public.content_drafts (action_id, method, md5(coalesce(source_url, '')))
   where action_id is not null;
 
 comment on index public.content_drafts_action_work_key is
@@ -30424,23 +30428,31 @@ $$;
 -- 00220: the brand's pages for the Content plan (Content Editor, CE-014)
 -- ============================================================================
 -- The Plan (spec v2 §4) answers what to work on first. Content Opportunities
--- name the new pages AI needs; this reads the brand's own pages, the way the
--- editor's Impact tab reads one (content_page_impact, 00209), so the Plan can
--- tell which to optimize, which to protect and which compete:
+-- name the new pages AI needs; this reads the brand's own pages, so the Plan
+-- can tell which to optimize, which to protect and which compete:
 --
+--   * answers {cur, prev}: the brand's tracked answers in each window, the
+--     denominator that makes the two windows comparable (a brand tracked
+--     weekly, prompts added or removed);
 --   * citations {cur, prev}: AI answers' citations of the page over the last
---     p_days whole UTC days and the p_days before, ChatGPT Shopping left out
---     (as 00209);
---   * prompts: the tracked prompts citing it in the last p_days;
---   * platformsDown: the platforms citing it less than before, the biggest
---     drop first;
---   * aiVisits: AI-referred visits in the last p_days, by ai_traffic_merged's
---     rule (00176): the snippet's visits, and Analytics' sessions on days the
---     snippet has none;
+--     p_days whole UTC days to yesterday and the p_days before. Today is left
+--     out: its runs land through the morning (UTC), so it would read short;
+--   * platformsDown: the platforms citing it at a lower rate (citations per
+--     answer of that platform) than before, the biggest drop first;
+--   * aiVisits: AI-referred visits in the current window, by
+--     ai_traffic_merged's rule (00176): the snippet's visits, and Analytics'
+--     sessions on days the snippet has none;
 --   * overlaps: how many of the brand's other pages are cited for at least
---     two of the same prompts in the last p_days (pages competing).
+--     two of the same prompts in the current window (pages competing).
 --
--- The 100 pages cited most over both periods. Security definer with an
+-- Citations come from the daily rollups (citation_url_daily, answers from
+-- citation_result_daily), as ai_traffic_page_citations reads them, so the
+-- cost follows the window and not the brand's history; ChatGPT Shopping is
+-- left out, as there. Only the overlaps need each citation's prompt: raw
+-- rows of the current window, for the chosen pages, through the covering
+-- indexes (00207, 00209).
+--
+-- The 100 pages cited most over both windows. Security definer with an
 -- organization check, as 00209; null outside the member's organization.
 
 create or replace function public.content_plan_pages(
@@ -30452,13 +30464,14 @@ language plpgsql
 stable
 security definer
 set search_path to 'public'
+-- A cached generic plan can't see the brand's size (00207).
+set plan_cache_mode to 'force_custom_plan'
 as $$
 declare
-  v_today date := (now() at time zone 'utc')::date;
+  v_last date := (now() at time zone 'utc')::date - 1;
   v_cur_day date;
   v_prev_day date;
   v_cur timestamptz;
-  v_prev timestamptz;
   v_until timestamptz;
   v_result jsonb;
 begin
@@ -30473,75 +30486,111 @@ begin
     raise exception 'p_days must be 7 or 30';
   end if;
 
-  v_cur_day := v_today - p_days + 1;
+  v_cur_day := v_last - p_days + 1;
   v_prev_day := v_cur_day - p_days;
   v_cur := v_cur_day::timestamp at time zone 'utc';
-  v_prev := v_prev_day::timestamp at time zone 'utc';
-  v_until := (v_today + 1)::timestamp at time zone 'utc';
+  v_until := (v_last + 1)::timestamp at time zone 'utc';
 
   with own_domains as (
     select lower(regexp_replace(bd.domain, '^www\.', '')) as domain
     from public.brand_domains bd
     where bd.brand_id = p_brand_id
   ),
-  own_urls as (
+  own_urls as materialized (
     select cu.id, cu.url, cu.title, lower(public.normalize_page_path(cu.url)) as page_key
     from public.citation_urls cu
     where cu.domain in (select domain from own_domains)
   ),
-  cites as (
+  url_counts as materialized (
+    select d.url_id, d.platform, d.day >= v_cur_day as is_cur, sum(d.citations)::bigint as n
+    from public.citation_url_daily d
+    where d.brand_id = p_brand_id
+      and d.day >= v_prev_day
+      and d.day <= v_last
+      and d.url_id in (select id from own_urls)
+      and d.platform is distinct from 'chatgpt-shopping'
+    group by d.url_id, d.platform, d.day >= v_cur_day
+  ),
+  url_totals as (
     select
       u.page_key,
       u.url,
       u.title,
-      pr.prompt_id,
-      pr.platform,
-      prc.created_at >= v_cur as is_cur
-    from own_urls u
-    join public.prompt_result_citations prc
-      on prc.url_id = u.id
-     and prc.brand_id = p_brand_id
-     and prc.created_at >= v_prev
-     and prc.created_at < v_until
-    join public.prompt_results pr on pr.id = prc.prompt_result_id
-    where pr.platform is distinct from 'chatgpt-shopping'
+      coalesce(sum(c.n) filter (where c.is_cur), 0) as cur,
+      coalesce(sum(c.n) filter (where not c.is_cur), 0) as prev
+    from url_counts c
+    join own_urls u on u.id = c.url_id
+    group by u.page_key, u.url, u.title
   ),
-  pages as (
+  pages as materialized (
     select
-      c.page_key,
+      t.page_key,
       -- The address cited most often stands for the page.
-      mode() within group (order by c.url) as page,
-      max(c.title) as title,
-      count(*) filter (where c.is_cur) as cur,
-      count(*) filter (where not c.is_cur) as prev,
-      count(distinct c.prompt_id) filter (where c.is_cur) as prompts
-    from cites c
-    group by c.page_key
-    order by count(*) desc, c.page_key
+      (array_agg(t.url order by t.cur + t.prev desc, t.url))[1] as page,
+      max(t.title) as title,
+      sum(t.cur)::bigint as cur,
+      sum(t.prev)::bigint as prev
+    from url_totals t
+    group by t.page_key
+    order by sum(t.cur + t.prev) desc, t.page_key
     limit 100
+  ),
+  answers as (
+    select
+      r.platform,
+      coalesce(sum(r.answers) filter (where r.day >= v_cur_day), 0)::bigint as cur,
+      coalesce(sum(r.answers) filter (where r.day < v_cur_day), 0)::bigint as prev
+    from public.citation_result_daily r
+    where r.brand_id = p_brand_id
+      and r.day >= v_prev_day
+      and r.day <= v_last
+      and r.platform is distinct from 'chatgpt-shopping'
+    group by r.platform
   ),
   per_platform as (
     select
-      c.page_key,
+      u.page_key,
       c.platform,
-      count(*) filter (where c.is_cur) as cur,
-      count(*) filter (where not c.is_cur) as prev
-    from cites c
-    where c.page_key in (select p.page_key from pages p)
-    group by c.page_key, c.platform
+      coalesce(sum(c.n) filter (where c.is_cur), 0) as cur,
+      coalesce(sum(c.n) filter (where not c.is_cur), 0) as prev
+    from url_counts c
+    join own_urls u on u.id = c.url_id
+    where u.page_key in (select p.page_key from pages p)
+      and c.platform is not null
+    group by u.page_key, c.platform
   ),
   down as (
+    -- A platform tracked in both windows, citing the page at a lower rate.
     select
       pp.page_key,
-      array_agg(pp.platform order by pp.prev - pp.cur desc, pp.platform) as platforms
+      array_agg(
+        pp.platform
+        order by pp.prev::numeric / a.prev - pp.cur::numeric / a.cur desc, pp.platform
+      ) as platforms
     from per_platform pp
-    where pp.prev > pp.cur and pp.platform is not null
+    join answers a on a.platform = pp.platform
+    where a.prev > 0
+      and a.cur > 0
+      and pp.prev::numeric / a.prev > pp.cur::numeric / a.cur
     group by pp.page_key
   ),
+  cur_answers as materialized (
+    select pr.id, pr.prompt_id
+    from public.prompt_results pr
+    where pr.brand_id = p_brand_id
+      and pr.created_at >= v_cur
+      and pr.created_at < v_until
+      and pr.platform is distinct from 'chatgpt-shopping'
+  ),
   page_prompts as (
-    select distinct c.page_key, c.prompt_id
-    from cites c
-    where c.is_cur and c.page_key in (select p.page_key from pages p)
+    select distinct u.page_key, a.prompt_id
+    from public.prompt_result_citations prc
+    join own_urls u on u.id = prc.url_id
+    join cur_answers a on a.id = prc.prompt_result_id
+    where prc.brand_id = p_brand_id
+      and prc.created_at >= v_cur
+      and prc.created_at < v_until
+      and u.page_key in (select p.page_key from pages p)
   ),
   competing as (
     select a.page_key, b.page_key as other
@@ -30578,7 +30627,7 @@ begin
       -- A session without a landing page would read as the home page.
       and g.landing_page <> ''
       and g.date >= v_cur_day
-      and g.date <= v_today
+      and g.date <= v_last
       and not exists (select 1 from snippet_days s where s.day = g.date)
   ),
   page_visits as (
@@ -30589,13 +30638,19 @@ begin
   )
   select jsonb_build_object(
     'days', p_days,
+    'answers', (
+      select jsonb_build_object(
+        'cur', coalesce(sum(a.cur), 0),
+        'prev', coalesce(sum(a.prev), 0)
+      )
+      from answers a
+    ),
     'pages', coalesce((
       select jsonb_agg(
         jsonb_build_object(
           'page', p.page,
           'title', p.title,
           'citations', jsonb_build_object('cur', p.cur, 'prev', p.prev),
-          'prompts', p.prompts,
           'platformsDown', coalesce(to_jsonb(d.platforms[1:3]), '[]'::jsonb),
           'aiVisits', coalesce(pv.visits, 0),
           'overlaps', coalesce(o.pages, 0)
@@ -30618,7 +30673,7 @@ revoke all on function public.content_plan_pages(uuid, integer) from public, ano
 grant execute on function public.content_plan_pages(uuid, integer) to authenticated, service_role;
 
 comment on function public.content_plan_pages(uuid, integer) is
-  'Content Editor (CE-014): the brand''s 100 most cited pages over the last N (7 or 30) whole UTC days and the N before: citations, citing prompts, platforms citing less, AI visits and how many of its other pages compete for the same prompts. Security definer with an organization check.';
+  'Content Editor (CE-014): the brand''s 100 most cited pages over the last N (7 or 30) whole UTC days to yesterday and the N before, from the daily rollups: citations, the brand''s answers in each window, platforms citing at a lower rate, AI visits and how many of its other pages compete for the same prompts. Security definer with an organization check.';
 
 -- ─────────────────────────────────────────────────────────────────────────
 -- migrations/00221_content_plan_insights.sql
@@ -30630,22 +30685,23 @@ comment on function public.content_plan_pages(uuid, integer) is
 --
 --   * "What AI cites in your topics": one row per page type with the share
 --     of AI citations in the brand's tracked answers going to that type of
---     page, and the brand's own share. Page types are read from the address
---     and title (lib/content/page-types.ts), so this returns the addresses:
---     the 1,000 cited most over the last p_days whole UTC days, from the
---     nightly rollup (citation_url_daily, 00118), ChatGPT Shopping left out,
---     each with whether it is one of the brand's pages; and the total, so
---     the share the list covers is known;
+--     page, and the brand's own mix. Page types are read from the address
+--     and title (lib/content/page-types.ts), so this returns the addresses
+--     over the last p_days whole UTC days to yesterday (as the Plan's pages,
+--     00220), from the nightly rollup (citation_url_daily, 00118), ChatGPT
+--     Shopping left out: every one of the brand's own (at most a few
+--     thousand, so its mix is whole), and the 1,000 others cited most; with
+--     the total, so the share the list covers is known;
 --   * the AI results strip: what AI-referred visitors did on the whole site
 --     over the same days, as the Impact tab's results (00210) read one page:
 --     visits by ai_traffic_merged's rule (00176), and Google Analytics' AI
---     sessions with their key events, sessions with one, purchases and
---     revenue; whether Analytics is connected, and whether the property
---     reported any purchase.
+--     key events, purchases and revenue; whether a property is set (the app
+--     checks the connection too), and whether it reported any purchase.
 --
 -- The Plan's period is now 7, 30 or 90 days (a quarter), so
--- content_plan_pages (00220) is redefined to take 90 as well; nothing else
--- in it changes.
+-- content_plan_pages (00220) is redefined to take 90 as well, and to say
+-- since when the brand is tracked: few brands have 180 days of history, so
+-- at 90 days the earlier window is often only partly tracked, or not at all.
 --
 -- Security definer with an organization check, as 00209–00220.
 
@@ -30660,7 +30716,8 @@ security definer
 set search_path to 'public'
 as $$
 declare
-  v_today date := (now() at time zone 'utc')::date;
+  -- Whole days to yesterday, as the Plan's pages (00220).
+  v_last date := (now() at time zone 'utc')::date - 1;
   v_day date;
   v_from timestamptz;
   v_until timestamptz;
@@ -30677,29 +30734,38 @@ begin
     raise exception 'p_days must be 7, 30 or 90';
   end if;
 
-  v_day := v_today - p_days + 1;
+  v_day := v_last - p_days + 1;
   v_from := v_day::timestamp at time zone 'utc';
-  v_until := (v_today + 1)::timestamp at time zone 'utc';
+  v_until := (v_last + 1)::timestamp at time zone 'utc';
 
   with own_domains as (
     select lower(regexp_replace(bd.domain, '^www\.', '')) as domain
     from public.brand_domains bd
     where bd.brand_id = p_brand_id
   ),
-  cited as (
+  cited as materialized (
     select d.url_id, sum(d.citations)::bigint as citations
     from public.citation_url_daily d
     where d.brand_id = p_brand_id
       and d.day >= v_day
-      and d.day <= v_today
+      and d.day <= v_last
       and d.platform is distinct from 'chatgpt-shopping'
     group by d.url_id
   ),
-  top_urls as (
-    select c.url_id, c.citations
+  addresses as (
+    select c.url_id, c.citations, cu.url, cu.title, cu.domain in (select domain from own_domains) as own
     from cited c
-    order by c.citations desc, c.url_id
-    limit 1000
+    join public.citation_urls cu on cu.id = c.url_id
+  ),
+  top_urls as (
+    select a.* from addresses a where a.own
+    union all
+    (
+      select a.* from addresses a
+      where not a.own
+      order by a.citations desc, a.url_id
+      limit 1000
+    )
   ),
   snippet_days as (
     select distinct (l.created_at at time zone 'utc')::date as day
@@ -30722,20 +30788,18 @@ begin
     where g.brand_id = p_brand_id
       and g.sessions > 0
       and g.date >= v_day
-      and g.date <= v_today
+      and g.date <= v_last
       and not exists (select 1 from snippet_days s where s.day = g.date)
   ),
   analytics as (
     select
-      coalesce(sum(g.sessions), 0)::bigint as sessions,
       coalesce(sum(g.key_events), 0)::bigint as key_events,
-      coalesce(sum(g.key_event_sessions), 0)::bigint as key_event_sessions,
       coalesce(sum(g.transactions), 0)::bigint as transactions,
       coalesce(sum(g.purchase_revenue), 0)::numeric as revenue
     from public.ga_ai_traffic_stats g
     where g.brand_id = p_brand_id
       and g.date >= v_day
-      and g.date <= v_today
+      and g.date <= v_last
   )
   select jsonb_build_object(
     'days', p_days,
@@ -30743,22 +30807,19 @@ begin
     'citations', coalesce((
       select jsonb_agg(
         jsonb_build_object(
-          'url', cu.url,
-          'title', cu.title,
-          'own', cu.domain in (select domain from own_domains),
+          'url', t.url,
+          'title', t.title,
+          'own', t.own,
           'citations', t.citations
         )
-        order by t.citations desc, cu.url
+        order by t.citations desc, t.url
       )
       from top_urls t
-      join public.citation_urls cu on cu.id = t.url_id
     ), '[]'::jsonb),
     'results', (
       select jsonb_build_object(
         'visits', (select coalesce(sum(v.n), 0) from visits v),
-        'sessions', a.sessions,
         'keyEvents', a.key_events,
-        'keyEventSessions', a.key_event_sessions,
         'transactions', a.transactions,
         'revenue', a.revenue,
         'analytics', (
@@ -30769,7 +30830,7 @@ begin
           select 1 from public.ga_channel_stats c
           where c.brand_id = p_brand_id
             and c.date >= v_day
-            and c.date <= v_today
+            and c.date <= v_last
             and (c.transactions > 0 or c.purchase_revenue > 0)
         )
       )
@@ -30786,9 +30847,11 @@ revoke all on function public.content_plan_insights(uuid, integer) from public, 
 grant execute on function public.content_plan_insights(uuid, integer) to authenticated, service_role;
 
 comment on function public.content_plan_insights(uuid, integer) is
-  'Content Editor (CE-014): the 1,000 addresses AI answers cite most for the brand over the last N (7, 30 or 90) whole UTC days (from citation_url_daily, own pages marked) with the total, and what AI-referred visitors did on the site: visits, Google Analytics AI sessions, key events, purchases and revenue. Security definer with an organization check.';
+  'Content Editor (CE-014): the addresses AI answers cite for the brand over the last N (7, 30 or 90) whole UTC days to yesterday (from citation_url_daily): every own page and the 1,000 others cited most, with the total; and what AI-referred visitors did on the site: visits, Google Analytics AI key events, purchases and revenue. Security definer with an organization check.';
 
 -- ─── content_plan_pages (00220), taking 90 days too ─────────────────────────
+-- As 00220, with 90 days and the windows' tracking: 'prevFrom' and
+-- 'trackedSince' tell the Plan when the earlier window isn't fully tracked.
 
 create or replace function public.content_plan_pages(
   p_brand_id uuid,
@@ -30799,13 +30862,14 @@ language plpgsql
 stable
 security definer
 set search_path to 'public'
+-- A cached generic plan can't see the brand's size (00207).
+set plan_cache_mode to 'force_custom_plan'
 as $$
 declare
-  v_today date := (now() at time zone 'utc')::date;
+  v_last date := (now() at time zone 'utc')::date - 1;
   v_cur_day date;
   v_prev_day date;
   v_cur timestamptz;
-  v_prev timestamptz;
   v_until timestamptz;
   v_result jsonb;
 begin
@@ -30820,75 +30884,111 @@ begin
     raise exception 'p_days must be 7, 30 or 90';
   end if;
 
-  v_cur_day := v_today - p_days + 1;
+  v_cur_day := v_last - p_days + 1;
   v_prev_day := v_cur_day - p_days;
   v_cur := v_cur_day::timestamp at time zone 'utc';
-  v_prev := v_prev_day::timestamp at time zone 'utc';
-  v_until := (v_today + 1)::timestamp at time zone 'utc';
+  v_until := (v_last + 1)::timestamp at time zone 'utc';
 
   with own_domains as (
     select lower(regexp_replace(bd.domain, '^www\.', '')) as domain
     from public.brand_domains bd
     where bd.brand_id = p_brand_id
   ),
-  own_urls as (
+  own_urls as materialized (
     select cu.id, cu.url, cu.title, lower(public.normalize_page_path(cu.url)) as page_key
     from public.citation_urls cu
     where cu.domain in (select domain from own_domains)
   ),
-  cites as (
+  url_counts as materialized (
+    select d.url_id, d.platform, d.day >= v_cur_day as is_cur, sum(d.citations)::bigint as n
+    from public.citation_url_daily d
+    where d.brand_id = p_brand_id
+      and d.day >= v_prev_day
+      and d.day <= v_last
+      and d.url_id in (select id from own_urls)
+      and d.platform is distinct from 'chatgpt-shopping'
+    group by d.url_id, d.platform, d.day >= v_cur_day
+  ),
+  url_totals as (
     select
       u.page_key,
       u.url,
       u.title,
-      pr.prompt_id,
-      pr.platform,
-      prc.created_at >= v_cur as is_cur
-    from own_urls u
-    join public.prompt_result_citations prc
-      on prc.url_id = u.id
-     and prc.brand_id = p_brand_id
-     and prc.created_at >= v_prev
-     and prc.created_at < v_until
-    join public.prompt_results pr on pr.id = prc.prompt_result_id
-    where pr.platform is distinct from 'chatgpt-shopping'
+      coalesce(sum(c.n) filter (where c.is_cur), 0) as cur,
+      coalesce(sum(c.n) filter (where not c.is_cur), 0) as prev
+    from url_counts c
+    join own_urls u on u.id = c.url_id
+    group by u.page_key, u.url, u.title
   ),
-  pages as (
+  pages as materialized (
     select
-      c.page_key,
+      t.page_key,
       -- The address cited most often stands for the page.
-      mode() within group (order by c.url) as page,
-      max(c.title) as title,
-      count(*) filter (where c.is_cur) as cur,
-      count(*) filter (where not c.is_cur) as prev,
-      count(distinct c.prompt_id) filter (where c.is_cur) as prompts
-    from cites c
-    group by c.page_key
-    order by count(*) desc, c.page_key
+      (array_agg(t.url order by t.cur + t.prev desc, t.url))[1] as page,
+      max(t.title) as title,
+      sum(t.cur)::bigint as cur,
+      sum(t.prev)::bigint as prev
+    from url_totals t
+    group by t.page_key
+    order by sum(t.cur + t.prev) desc, t.page_key
     limit 100
+  ),
+  answers as (
+    select
+      r.platform,
+      coalesce(sum(r.answers) filter (where r.day >= v_cur_day), 0)::bigint as cur,
+      coalesce(sum(r.answers) filter (where r.day < v_cur_day), 0)::bigint as prev
+    from public.citation_result_daily r
+    where r.brand_id = p_brand_id
+      and r.day >= v_prev_day
+      and r.day <= v_last
+      and r.platform is distinct from 'chatgpt-shopping'
+    group by r.platform
   ),
   per_platform as (
     select
-      c.page_key,
+      u.page_key,
       c.platform,
-      count(*) filter (where c.is_cur) as cur,
-      count(*) filter (where not c.is_cur) as prev
-    from cites c
-    where c.page_key in (select p.page_key from pages p)
-    group by c.page_key, c.platform
+      coalesce(sum(c.n) filter (where c.is_cur), 0) as cur,
+      coalesce(sum(c.n) filter (where not c.is_cur), 0) as prev
+    from url_counts c
+    join own_urls u on u.id = c.url_id
+    where u.page_key in (select p.page_key from pages p)
+      and c.platform is not null
+    group by u.page_key, c.platform
   ),
   down as (
+    -- A platform tracked in both windows, citing the page at a lower rate.
     select
       pp.page_key,
-      array_agg(pp.platform order by pp.prev - pp.cur desc, pp.platform) as platforms
+      array_agg(
+        pp.platform
+        order by pp.prev::numeric / a.prev - pp.cur::numeric / a.cur desc, pp.platform
+      ) as platforms
     from per_platform pp
-    where pp.prev > pp.cur and pp.platform is not null
+    join answers a on a.platform = pp.platform
+    where a.prev > 0
+      and a.cur > 0
+      and pp.prev::numeric / a.prev > pp.cur::numeric / a.cur
     group by pp.page_key
   ),
+  cur_answers as materialized (
+    select pr.id, pr.prompt_id
+    from public.prompt_results pr
+    where pr.brand_id = p_brand_id
+      and pr.created_at >= v_cur
+      and pr.created_at < v_until
+      and pr.platform is distinct from 'chatgpt-shopping'
+  ),
   page_prompts as (
-    select distinct c.page_key, c.prompt_id
-    from cites c
-    where c.is_cur and c.page_key in (select p.page_key from pages p)
+    select distinct u.page_key, a.prompt_id
+    from public.prompt_result_citations prc
+    join own_urls u on u.id = prc.url_id
+    join cur_answers a on a.id = prc.prompt_result_id
+    where prc.brand_id = p_brand_id
+      and prc.created_at >= v_cur
+      and prc.created_at < v_until
+      and u.page_key in (select p.page_key from pages p)
   ),
   competing as (
     select a.page_key, b.page_key as other
@@ -30925,7 +31025,7 @@ begin
       -- A session without a landing page would read as the home page.
       and g.landing_page <> ''
       and g.date >= v_cur_day
-      and g.date <= v_today
+      and g.date <= v_last
       and not exists (select 1 from snippet_days s where s.day = g.date)
   ),
   page_visits as (
@@ -30936,13 +31036,25 @@ begin
   )
   select jsonb_build_object(
     'days', p_days,
+    -- The earlier window's first day, and the brand's first tracked day: a
+    -- window before it is only partly tracked, or not at all.
+    'prevFrom', v_prev_day,
+    'trackedSince', (
+      select min(r.day) from public.citation_result_daily r where r.brand_id = p_brand_id
+    ),
+    'answers', (
+      select jsonb_build_object(
+        'cur', coalesce(sum(a.cur), 0),
+        'prev', coalesce(sum(a.prev), 0)
+      )
+      from answers a
+    ),
     'pages', coalesce((
       select jsonb_agg(
         jsonb_build_object(
           'page', p.page,
           'title', p.title,
           'citations', jsonb_build_object('cur', p.cur, 'prev', p.prev),
-          'prompts', p.prompts,
           'platformsDown', coalesce(to_jsonb(d.platforms[1:3]), '[]'::jsonb),
           'aiVisits', coalesce(pv.visits, 0),
           'overlaps', coalesce(o.pages, 0)
@@ -30965,5 +31077,5 @@ revoke all on function public.content_plan_pages(uuid, integer) from public, ano
 grant execute on function public.content_plan_pages(uuid, integer) to authenticated, service_role;
 
 comment on function public.content_plan_pages(uuid, integer) is
-  'Content Editor (CE-014): the brand''s 100 most cited pages over the last N (7, 30 or 90) whole UTC days and the N before: citations, citing prompts, platforms citing less, AI visits and how many of its other pages compete for the same prompts. Security definer with an organization check.';
+  'Content Editor (CE-014): the brand''s 100 most cited pages over the last N (7, 30 or 90) whole UTC days to yesterday and the N before, from the daily rollups: citations, the brand''s answers in each window, platforms citing at a lower rate, AI visits and how many of its other pages compete for the same prompts; with the earlier window''s first day and the brand''s first tracked day. Security definer with an organization check.';
 
