@@ -493,6 +493,27 @@ describe('the content editor', () => {
       expect(container.querySelectorAll('.ProseMirror table tr')).toHaveLength(251);
     });
 
+    it('inserts only the rows that fit in the page’s size limit, after saying so', async () => {
+      const cell = 'x'.repeat(1000);
+      const csv = ['a,b,c', ...Array.from({ length: 1000 }, () => `${cell},${cell},${cell}`)].join(
+        '\n',
+      );
+      await attach(new File([csv], 'big.csv'));
+      await act(async () => dialogButton('Insert as table')!.click());
+      expect(container.querySelector('.ProseMirror table')).toBeNull();
+      const note = document.querySelector('[role="dialog"]')!.textContent!;
+      const fit = Number(
+        /Only the first ([\d,]+) of 1,000 rows fit/.exec(note)![1].replace(',', ''),
+      );
+      expect(fit).toBeGreaterThan(100);
+      expect(fit).toBeLessThan(1000);
+      await act(async () => dialogButton(`Insert the first ${fit} rows`)!.click());
+      expect(container.querySelectorAll('.ProseMirror table tr')).toHaveLength(fit + 1);
+      // As the editor saves it, the page stays under the limit.
+      const editorHtml = container.querySelector('.ProseMirror')!.innerHTML;
+      expect(editorHtml.length).toBeLessThan(500_000);
+    });
+
     it('imports Markdown and Word as content, cleaned like a paste', async () => {
       await attach(
         new File(
