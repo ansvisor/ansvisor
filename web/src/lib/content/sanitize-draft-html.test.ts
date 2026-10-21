@@ -57,4 +57,11 @@ describe('sanitizeDraftHtml', () => {
       ),
     ).toBe(`<p>a</p>${block}`);
   });
+
+  it('cleans a 500,000-character page built to backtrack within the save’s time', () => {
+    const input = '<script type=application/ld+json '.repeat(15_000);
+    const started = performance.now();
+    sanitizeDraftHtml(input);
+    expect(performance.now() - started).toBeLessThan(2000);
+  });
 });
