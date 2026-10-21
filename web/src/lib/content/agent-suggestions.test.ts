@@ -15,7 +15,8 @@ describe('draftPassages', () => {
       { tag: 'p', text: 'Use good coffee & hot water.' },
       { tag: 'p', text: 'A dripper' },
       { tag: 'p', text: 'Ratio' },
-      { tag: 'p', text: 'Pour slowly.' },
+      // A non-breaking space, as the editor keeps it.
+      { tag: 'p', text: 'Pour\u00a0slowly.' },
     ]);
   });
 });

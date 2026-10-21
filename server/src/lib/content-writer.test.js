@@ -12,27 +12,42 @@ const DRAFT = '77777777-7777-7777-7777-777777777777';
 let rows;
 let writes;
 let claimed;
+let finished;
+let rpcCalls;
+let reads;
 const generateObject = vi.fn();
 const enforceImproveQuota = vi.fn();
 
 vi.mock('../config/supabase.js', () => ({
   default: {
+    rpc: async (name, args) => (rpcCalls.push([name, args]), { data: 'v1', error: null }),
     from: (table) => {
       const op = { table, kind: 'select', filters: [] };
       const result = () => {
-        if (op.kind === 'select') return { data: rows[table] ?? null, error: null };
+        if (op.kind === 'select') {
+          reads.push(op);
+          // The organization's other drafts being written.
+          if (op.filters.some(([col]) => col === 'brands.organization_id')) {
+            return { data: rows.writingInOrg ?? [], error: null };
+          }
+          return { data: rows[table] ?? null, error: null };
+        }
         writes.push(op);
-        // The claim reads back its row; other writes read nothing.
+        // The claim and the finish read back their row, when they matched one.
         const claim = op.kind === 'update' && op.value.agent_state === 'writing';
-        return { data: claim ? claimed : null, error: null };
+        return { data: claim ? claimed : op.kind === 'update' ? finished : null, error: null };
       };
       const chain = {
         select: () => chain,
         eq: (col, v) => (op.filters.push([col, v]), chain),
+        neq: (col, v) => (op.filters.push([`${col}<>`, v]), chain),
+        gt: (col, v) => (op.filters.push([`${col}>`, v]), chain),
         in: (col, v) => (op.filters.push([col, v]), chain),
         or: (v) => (op.filters.push(['or', v]), chain),
+        limit: () => chain,
         update: (value) => ((op.kind = 'update'), (op.value = value), chain),
         insert: (value) => ((op.kind = 'insert'), (op.value = value), chain),
+        delete: () => ((op.kind = 'delete'), chain),
         maybeSingle: async () => result(),
         single: async () => result(),
         then: (resolve, reject) => Promise.resolve(result()).then(resolve, reject),
@@ -48,7 +63,7 @@ vi.mock('./plan-guard.js', async (importOriginal) => ({
   ...(await importOriginal()),
   enforceImproveQuota: (...args) => enforceImproveQuota(...args),
 }));
-vi.mock('./logger.js', () => ({ logger: { error: vi.fn() } }));
+vi.mock('./logger.js', () => ({ logger: { error: vi.fn(), info: vi.fn() } }));
 
 const { briefText, renderPage, runDraftWriting, startDraftWriting } =
   await import('./content-writer.js');
@@ -107,7 +122,10 @@ const page = {
 
 beforeEach(() => {
   writes = [];
+  rpcCalls = [];
+  reads = [];
   claimed = { id: DRAFT };
+  finished = { id: DRAFT };
   rows = { content_drafts: draftRow(), brands: brand, prompts: [{ id: 'p1', text: 'ratio?' }] };
   generateObject.mockReset().mockResolvedValue({
     object: page,
@@ -178,6 +196,10 @@ describe('startDraftWriting', () => {
     );
     const finish = writes.filter((w) => w.table === 'content_drafts')[1];
     expect(finish.filters).toContainEqual(['agent_state', 'writing']);
+    // Only while it is still a draft: one marked ready meanwhile keeps its page.
+    expect(finish.filters).toContainEqual(['status', 'draft']);
+    // A new page holds only its H1: nothing of the person's to keep first.
+    expect(rpcCalls).toEqual([]);
     expect(writes.some((w) => w.table === 'prompt_improve_usage')).toBe(true);
     const { prompt } = generateObject.mock.calls[0][0];
     expect(prompt).toContain('- ratio?');
@@ -209,6 +231,15 @@ describe('startDraftWriting', () => {
     expect(generateObject).not.toHaveBeenCalled();
   });
 
+  it('writes one of the organization’s drafts at a time', async () => {
+    rows.writingInOrg = [{ id: 'other-draft' }];
+    await expect(
+      startDraftWriting({ draftId: DRAFT, brandId: BRAND, input: input() }),
+    ).rejects.toMatchObject({ status: 409, code: 'org_writing' });
+    expect(writes).toEqual([]);
+    expect(generateObject).not.toHaveBeenCalled();
+  });
+
   it('fails at once when the model isn’t set up, claiming nothing', async () => {
     resolveModel.mockImplementationOnce(() => {
       throw new Error('Provider "google" is not configured');
@@ -225,6 +256,37 @@ describe('startDraftWriting', () => {
       startDraftWriting({ draftId: DRAFT, brandId: BRAND, input: input() }),
     ).rejects.toBeInstanceOf(PlanLimitError);
     expect(writes).toEqual([]);
+  });
+});
+
+describe('runDraftWriting on a new page', () => {
+  const run = (draft) =>
+    runDraftWriting({ draft, brand, model: 'model:m', modelId: 'm', input: input() });
+
+  it('keeps the person’s text in History before writing over it, and reads prompts by their set', async () => {
+    const tried = draftRow({
+      agent_state: 'failed',
+      body_html: '<h1>How to brew pour-over coffee</h1><p>My own notes.</p>',
+    });
+    await expect(run(tried)).resolves.toEqual({ written: true });
+    expect(rpcCalls).toEqual([
+      ['content_draft_snapshot', { p_draft_id: DRAFT, p_origin: 'agent_before' }],
+    ]);
+    // A prompt without a topic is the brand's too.
+    expect(reads.find((r) => r.table === 'prompts').filters).toContainEqual([
+      'prompt_sets.brand_id',
+      BRAND,
+    ]);
+  });
+
+  it('leaves a draft marked ready during the run as it is', async () => {
+    finished = null;
+    await expect(run(draftRow())).resolves.toEqual({ skipped: true });
+    // The page wasn't written; the agent let go of the draft.
+    expect(draftUpdates().at(-1)).toEqual({
+      agent_state: null,
+      agent_state_at: expect.any(String),
+    });
   });
 });
 
@@ -284,6 +346,24 @@ describe('runDraftWriting on an existing page', () => {
     expect(draftUpdates()).toEqual([
       { status: 'in_review', agent_state: null, agent_state_at: expect.any(String) },
     ]);
+  });
+
+  it('drops its suggestions when the draft was marked ready during the run', async () => {
+    generateObject.mockResolvedValue({
+      object: {
+        suggestions: [
+          { kind: 'replace', passage: 3, before: 'good', after: 'fresh', reason: 'x', rules: [] },
+        ],
+      },
+      usage: {},
+    });
+    finished = null;
+    await expect(run()).resolves.toEqual({ skipped: true });
+    const batch = writes.find(
+      (w) => w.table === 'content_draft_suggestions' && w.kind === 'insert',
+    );
+    const drop = writes.find((w) => w.table === 'content_draft_suggestions' && w.kind === 'delete');
+    expect(drop.filters).toEqual([['batch_id', batch.value[0].batch_id]]);
   });
 
   it('says it failed when the model fails or leaves nothing to place', async () => {

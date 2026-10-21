@@ -7,7 +7,7 @@ import type { Editor } from '@tiptap/core';
 import { RoleProvider } from '@/components/providers/role-provider';
 import type { ContentDraft } from '@/lib/content/drafts';
 import type { DraftSuggestion } from '@/lib/content/suggestions';
-import { passageKey } from '@/lib/content/cited-passages';
+import { passageKey, type CitedPassage } from '@/lib/content/cited-passages';
 import ContentEditorPage from './page';
 
 const getContentDraft = vi.fn();
@@ -1450,6 +1450,40 @@ describe('the side panel', () => {
       const fix = panelButton('Fix open rules with agent');
       expect(fix.disabled).toBe(true);
       expect(fix.title).toBe('Accept or reject the open suggestions first.');
+    });
+
+    it('waits until the passages AI quotes are read, so they go to the agent locked', async () => {
+      getContentDraft.mockResolvedValue({
+        ...traced,
+        sourceUrl: 'https://acme.example/forecasting',
+      });
+      let read: (cited: CitedPassage[]) => void = () => {};
+      getCitedPassages.mockReturnValue(new Promise((resolve) => (read = resolve)));
+      await openRules();
+
+      const fix = () => panelButton('Fix open rules with agent');
+      expect(fix().disabled).toBe(true);
+      expect(fix().title).toBe(
+        'Reading which passages AI quotes, so the agent leaves them as they are…',
+      );
+      await act(async () => read([]));
+      expect(fix().disabled).toBe(false);
+    });
+
+    it('shows the open suggestions another tab left, when the agent is refused for them', async () => {
+      getContentDraft.mockResolvedValue(traced);
+      getDraftSuggestions.mockResolvedValueOnce([]).mockResolvedValueOnce([agentSuggestion]);
+      fixDraftRules.mockResolvedValue({ error: 'open_suggestions' });
+      await openRules();
+
+      await act(async () => panelButton('Fix open rules with agent').click());
+      await act(async () => {});
+      expect(toast.error).toHaveBeenCalledWith(
+        "This page has open suggestions, maybe from another tab. They're shown now: accept or reject them first.",
+      );
+      expect(
+        container.querySelector('[role="region"][aria-label="Agent suggestions"]')!.textContent,
+      ).toContain('Content Agent suggested 1 change');
     });
   });
 

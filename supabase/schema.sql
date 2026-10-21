@@ -30333,9 +30333,13 @@ grant execute on function public.content_draft_decide_suggestions(uuid[], text)
 --
 -- Start › Team (00208) links one draft to the action it creates, so the
 -- drafts linked so far already meet it.
+--
+-- The page is indexed by its md5: an address may run to 2,048 characters,
+-- and a non-ASCII one near that would pass btree's ~2.7 KB row limit and
+-- fail the insert.
 
 create unique index if not exists content_drafts_action_work_key
-  on public.content_drafts (action_id, method, coalesce(source_url, ''))
+  on public.content_drafts (action_id, method, md5(coalesce(source_url, '')))
   where action_id is not null;
 
 comment on index public.content_drafts_action_work_key is
