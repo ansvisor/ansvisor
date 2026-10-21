@@ -21,7 +21,6 @@ import {
 } from '@/lib/content/drafts';
 import { escapeHtml } from '@/lib/content/attachments';
 import { IMPACT_PERIODS, type ContentImpact, type ContentResults } from '@/lib/content/impact';
-import { IMPACT_PERIODS, type ContentImpact } from '@/lib/content/impact';
 import {
   MAX_BODY_HTML_LENGTH,
   MAX_TITLE_LENGTH,
