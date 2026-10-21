@@ -17,7 +17,13 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
-import { CONTACT_SALES_URL, PLANS, SUBSCRIBABLE_PLANS, type PlanId } from '@/config/plans';
+import {
+  CONTACT_SALES_URL,
+  PLANS,
+  PRICING_URL,
+  SUBSCRIBABLE_PLANS,
+  type PlanId,
+} from '@/config/plans';
 import {
   FIRST_MONTH_CODE,
   annualSaving,
@@ -372,6 +378,19 @@ export function PlanSwitcher({ subscription, onUpdate }: PlanSwitcherProps) {
             </Card>
           );
         })}
+      </div>
+
+      {/* The cards list the highlights; the pricing page has every feature */}
+      <div className="flex justify-center">
+        <a
+          href={PRICING_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-1.5 text-sm text-muted-foreground underline-offset-4 transition-colors hover:text-foreground hover:underline"
+        >
+          {t('seeAllPlanFeatures')}
+          <ExternalLink className="h-3.5 w-3.5" />
+        </a>
       </div>
 
       {/* Buy now / change confirmation */}

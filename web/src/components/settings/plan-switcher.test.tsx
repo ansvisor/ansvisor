@@ -142,6 +142,14 @@ describe('the plan cards', () => {
       container.querySelector('a[href="https://www.ansvisor.com/contact-us"]')?.textContent,
     ).toBe('Contact Us');
   });
+
+  it('links to every feature on the pricing page, in a new tab, for any role', async () => {
+    await render('starter', { role: 'manager' });
+    const link = container.querySelector('a[href="https://www.ansvisor.com/pricing"]');
+    expect(link?.textContent).toBe('See everything each plan includes');
+    expect(link?.getAttribute('target')).toBe('_blank');
+    expect(link?.getAttribute('rel')).toBe('noopener noreferrer');
+  });
 });
 
 describe('the billing period', () => {

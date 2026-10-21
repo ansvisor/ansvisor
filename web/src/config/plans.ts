@@ -314,6 +314,9 @@ export const SUBSCRIBABLE_PLANS: PlanId[] = ['starter', 'growth'];
 /** Where a plan the app can't sell by itself (Enterprise, add-ons) is asked for. */
 export const CONTACT_SALES_URL = 'https://www.ansvisor.com/contact-us';
 
+/** The pricing page: every plan's features side by side. */
+export const PRICING_URL = 'https://www.ansvisor.com/pricing';
+
 /**
  * Self-hosted instances bypass all limits.
  * Cloud is determined by NEXT_PUBLIC_IS_CLOUD env var.

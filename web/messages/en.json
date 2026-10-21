@@ -4866,6 +4866,7 @@
     "firstMonthOffer": "50% off your first month with code {code}",
     "buyPlanNow": "Buy {plan} now",
     "planAdminOnly": "Only admins can buy or change the plan. Ask an admin in your organization.",
+    "seeAllPlanFeatures": "See everything each plan includes",
     "switchToAnnual": "Switch to annual billing",
     "switchToMonthly": "Switch to monthly billing",
     "buyNowTitle": "Buy {plan} now?",
