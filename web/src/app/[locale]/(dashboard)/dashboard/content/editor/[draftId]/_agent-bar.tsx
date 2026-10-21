@@ -1,7 +1,7 @@
 'use client';
 
 import { useTranslations } from 'next-intl';
-import { Bot, X } from 'lucide-react';
+import { Bot, Loader2, X } from 'lucide-react';
 import { Link } from '@/i18n/navigation';
 import { Button } from '@/components/ui/button';
 import { suggestionCounts, type DraftSuggestion } from '@/lib/content/suggestions';
@@ -10,8 +10,8 @@ import { suggestionCounts, type DraftSuggestion } from '@/lib/content/suggestion
  * The agent bar over the page (CE-018): while an agent's suggestions are
  * open, who left how many and from which action, with Reject all and Accept
  * all (open ones only); once all are decided, how many were accepted and
- * rejected and how many rules are still open. Undo all brings every decided
- * one back to review.
+ * rejected and how many rules are still open, with Fix open rules with
+ * agent for a new batch. Undo all brings every decided one back to review.
  */
 export function AgentBar({
   suggestions,
@@ -21,6 +21,8 @@ export function AgentBar({
   onRejectAll,
   onUndoAll,
   onClose,
+  onFixRules,
+  fixing,
 }: {
   suggestions: DraftSuggestion[];
   rulesOpen: number;
@@ -29,6 +31,9 @@ export function AgentBar({
   onRejectAll: () => void;
   onUndoAll: () => void;
   onClose: () => void;
+  /** Fix open rules with agent: new suggestions, again for review. */
+  onFixRules: () => void;
+  fixing: boolean;
 }) {
   const t = useTranslations('contentEditor.editor.suggestions');
   const { open, accepted, rejected } = suggestionCounts(suggestions);
@@ -95,15 +100,29 @@ export function AgentBar({
             </Button>
           </>
         ) : (
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            aria-label={t('close')}
-            title={t('close')}
-            onClick={onClose}
-          >
-            <X className="h-3.5 w-3.5" />
-          </Button>
+          <>
+            {rulesOpen > 0 && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-7"
+                disabled={busy || fixing}
+                onClick={onFixRules}
+              >
+                {fixing && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                {fixing ? t('fixing') : t('fixRules')}
+              </Button>
+            )}
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              aria-label={t('close')}
+              title={t('close')}
+              onClick={onClose}
+            >
+              <X className="h-3.5 w-3.5" />
+            </Button>
+          </>
         )}
       </span>
     </div>

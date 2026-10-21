@@ -1024,6 +1024,67 @@ export async function rebuildDraftBrief(
   }
 }
 
+const AGENT_FIX_ERRORS = ['ai_budget', 'empty', 'failed'] as const;
+export type AgentFixError = (typeof AGENT_FIX_ERRORS)[number];
+
+/** What Fix open rules with agent sends: the rules still open, and the passages kept locked. */
+export interface AgentFixRequest {
+  rules: { key: string; name: string; detail: string }[];
+  /** Rules in the person's own words, to follow as well. */
+  textRules: string[];
+  /** The locked passages, by passageKey. */
+  locked: string[];
+}
+
+/**
+ * Fix open rules with agent (CE-018): the Content Agent reads the draft as
+ * saved and leaves suggestions on the rules sent, for review in the page,
+ * metered from the organization's AI usage (content-agent.js). count is how
+ * many it left: none when it found nothing it could change.
+ */
+export async function fixDraftRules(
+  id: string,
+  brandId: string,
+  request: AgentFixRequest,
+): Promise<{ count: number } | { error: AgentFixError }> {
+  if (!draftId.safeParse(id).success || !draftId.safeParse(brandId).success) {
+    return { error: 'failed' };
+  }
+  const supabase = await createClient();
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  if (!session) return { error: 'failed' };
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/content-drafts/${id}/suggestions`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${session.access_token}`,
+      },
+      body: JSON.stringify({
+        brandId,
+        rules: request.rules.slice(0, 40).map((rule) => ({
+          key: rule.key.slice(0, 60),
+          name: rule.name.slice(0, 200),
+          detail: rule.detail.slice(0, 500),
+        })),
+        textRules: request.textRules.slice(0, 50).map((text) => text.slice(0, 300)),
+        locked: request.locked.slice(0, 500).map((key) => key.slice(0, 5000)),
+      }),
+    });
+    const body = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+    if (!res.ok) {
+      const code = body.code as AgentFixError;
+      return { error: (AGENT_FIX_ERRORS as readonly string[]).includes(code) ? code : 'failed' };
+    }
+    return { count: Number(body.count) || 0 };
+  } catch (err) {
+    console.error('Failed to run the Content Agent:', err);
+    return { error: 'failed' };
+  }
+}
+
 /**
  * The Rules tab (CE-009): a rule turned on or off, or given a value, for
  * this draft ("Rule updated for this draft"). Throws 'not_found' when no

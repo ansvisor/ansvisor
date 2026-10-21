@@ -211,7 +211,8 @@ ${list(sources.pages.map((p) => `${p.url} (${p.kind})`))}
 ${sources.headings.length ? `The page's headings now:\n${list(sources.headings)}\n\n` : ''}Write the brief in ${getLanguageName(brand?.language)}.`;
 }
 
-async function recordUsage({ organizationId, draftId, modelId, usage }) {
+/** Records an editor AI call on the AI usage budget, with the draft it was for. */
+export async function recordUsage({ organizationId, draftId, modelId, usage }) {
   const { error } = await supabaseAdmin.from('prompt_improve_usage').insert({
     organization_id: organizationId,
     content_draft_id: draftId,

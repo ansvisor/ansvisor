@@ -403,6 +403,15 @@ function count(text: string, phrase: string): number {
   );
 }
 
+/** The machine-written phrases the page has, each once: what "Remove AI traces" counts. */
+export function aiTracesFound(text: string): string[] {
+  return [
+    ...new Set(
+      AI_TRACES.filter((phrase) => count(text, phrase) > 0).map((p) => p.replace('’', "'")),
+    ),
+  ];
+}
+
 /** A link's host, or null for one on the page's own site (a path or an anchor). */
 function linkHost(href: string): string | null {
   if (!/^https?:\/\//i.test(href)) return null;

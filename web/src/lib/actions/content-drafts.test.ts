@@ -25,7 +25,10 @@ let rpcResult: { data: unknown; error: { message: string } | null };
 vi.mock('@/lib/action-center/assignees', () => ({ readAssignees: vi.fn(async () => new Map()) }));
 vi.mock('@/lib/supabase/server', () => ({
   createClient: vi.fn(async () => ({
-    auth: { getUser: async () => ({ data: { user: { id: 'u1' } } }) },
+    auth: {
+      getUser: async () => ({ data: { user: { id: 'u1' } } }),
+      getSession: async () => ({ data: { session: { access_token: 'tok' } } }),
+    },
     rpc: async (name: string, args: unknown) => (rpcCalls.push([name, args]), rpcResult),
     from: () => {
       const call: Call = { op: 'select', filters: [] };
@@ -55,6 +58,7 @@ vi.mock('@/lib/supabase/server', () => ({
 
 const {
   createContentDraft,
+  fixDraftRules,
   decideDraftSuggestions,
   getDraftSuggestions,
   keepAgentBeforeVersion,
@@ -426,5 +430,41 @@ describe('agent suggestions', () => {
     expect(rpcCalls).toEqual([
       ['content_draft_snapshot', { p_draft_id: DRAFT, p_origin: 'agent_before' }],
     ]);
+  });
+});
+
+describe('fixDraftRules', () => {
+  const BRAND = '9a1b2c3d-4e5f-4a6b-8c7d-0e1f2a3b4c5d';
+  const request = {
+    rules: [{ key: 'aiTraces', name: 'Remove AI traces', detail: 'phrases found: delve' }],
+    textRules: ['Say “we”'],
+    locked: ['northwind forecasts each deal'],
+  };
+
+  it('asks the server’s agent with the session, and says how many it left', async () => {
+    const fetchMock = vi.fn(async () => Response.json({ count: 3, batchId: 'b' }));
+    vi.stubGlobal('fetch', fetchMock);
+    await expect(fixDraftRules(DRAFT, BRAND, request)).resolves.toEqual({ count: 3 });
+    const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toMatch(new RegExp(`/api/content-drafts/${DRAFT}/suggestions$`));
+    expect((init.headers as Record<string, string>).Authorization).toBe('Bearer tok');
+    expect(JSON.parse(init.body as string)).toEqual({ brandId: BRAND, ...request });
+    vi.unstubAllGlobals();
+  });
+
+  it('names the budget and the empty page, and anything else as failed', async () => {
+    for (const [body, error] of [
+      [{ code: 'ai_budget' }, 'ai_budget'],
+      [{ code: 'empty' }, 'empty'],
+      [{ code: 'teapot' }, 'failed'],
+    ] as const) {
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(async () => Response.json(body, { status: 402 })),
+      );
+      await expect(fixDraftRules(DRAFT, BRAND, request)).resolves.toEqual({ error });
+    }
+    vi.unstubAllGlobals();
+    await expect(fixDraftRules('../etc', BRAND, request)).resolves.toEqual({ error: 'failed' });
   });
 });

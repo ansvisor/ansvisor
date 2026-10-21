@@ -1,12 +1,15 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { assertBrandAccess } from '../lib/access.js';
+import { fixDraftRules, fixRulesInput } from '../lib/content-agent.js';
 import { rebuildDraftBrief, rebuildSources } from '../lib/content-brief.js';
 import { PlanLimitError } from '../lib/plan-guard.js';
 
 /**
- * Content Editor drafts (CE-007): Rebuild outline in the editor's Brief tab
- * writes the draft's brief from the sources the person kept.
+ * Content Editor drafts: Rebuild outline in the editor's Brief tab writes
+ * the draft's brief from the sources the person kept (CE-007); Fix open
+ * rules with agent leaves the Content Agent's suggestions for review
+ * (CE-018).
  */
 
 const router = Router();
@@ -46,6 +49,39 @@ router.post('/:draftId/brief', async (req, res) => {
     }
     req.log.error({ err }, 'content draft brief rebuild error');
     return res.status(502).json({ error: 'The brief could not be written', code: 'failed' });
+  }
+});
+
+const fixBody = fixRulesInput.extend({ brandId: z.guid() });
+
+/**
+ * POST /api/content-drafts/:draftId/suggestions
+ * Body: { brandId, rules: [{ key, name, detail }], textRules, locked }
+ * Answers { count, batchId }: the suggestions left for review (none when the
+ * agent found nothing it could change).
+ */
+router.post('/:draftId/suggestions', async (req, res) => {
+  const draftId = z.guid().safeParse(req.params.draftId);
+  const parsed = fixBody.safeParse(req.body ?? {});
+  if (!draftId.success || !parsed.success) {
+    return res.status(400).json({ error: 'Invalid request', code: 'invalid' });
+  }
+  const { brandId, ...input } = parsed.data;
+  try {
+    await assertBrandAccess(brandId, req.user.id);
+    const result = await fixDraftRules({ draftId: draftId.data, brandId, input });
+    return res.json(result);
+  } catch (err) {
+    if (err instanceof PlanLimitError) {
+      return res.status(err.statusCode).json({ error: err.message, code: 'ai_budget' });
+    }
+    if (ERROR_CODES[err?.status]) {
+      return res
+        .status(err.status)
+        .json({ error: err.message, code: err.code ?? ERROR_CODES[err.status] });
+    }
+    req.log.error({ err }, 'content draft agent fix error');
+    return res.status(502).json({ error: 'The agent could not run', code: 'failed' });
   }
 });
 

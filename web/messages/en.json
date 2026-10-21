@@ -3373,7 +3373,17 @@
         "undoneToast": "{count, plural, one {Undone · back to the suggestion} other {# undone · the suggestions are back}}",
         "notApplied": "{count, plural, one {# suggestion couldn't be applied} other {# suggestions couldn't be applied}}: the page changed there, or AI quotes the passage.",
         "saveFailed": "Couldn't keep the decision. Try again.",
-        "htmlBlocked": "Accept or reject the {count, plural, one {# agent suggestion} other {# agent suggestions}} first, then edit as HTML."
+        "htmlBlocked": "Accept or reject the {count, plural, one {# agent suggestion} other {# agent suggestions}} first, then edit as HTML.",
+        "fixRules": "Fix open rules with agent",
+        "fixing": "Content Agent is working…",
+        "fixed": "{count, plural, one {Content Agent suggested # change} other {Content Agent suggested # changes}} · review them in the page",
+        "nothingToFix": "Content Agent found nothing it could change without new facts.",
+        "decideFirst": "Accept or reject the open suggestions first.",
+        "fixErrors": {
+          "ai_budget": "This month's AI usage is spent. Upgrade for more, or try again next month.",
+          "empty": "Write something first: the agent improves the page you have.",
+          "failed": "Content Agent couldn't run. Try again."
+        }
       },
       "cited": {
         "platform": "{name} {count}×",
@@ -3761,6 +3771,16 @@
         },
         "mineName": "My rules · {type}",
         "setPicked": "Rule set changed for this draft",
+        "agentFix": "Fix open rules with agent",
+        "agentFixing": "Content Agent is working…",
+        "agentFixHint": "Content Agent suggests changes for the rules not met yet, for you to review in the page",
+        "fixTrace": "Fix",
+        "fixTraceHint": "Content Agent rewrites only these phrases, for you to review",
+        "agent": {
+          "aim": "aim",
+          "now": "now",
+          "phrases": "phrases found"
+        },
         "saveMine": "Save as my rules",
         "reset": "Reset",
         "savedMine": "Saved as My rules for {type}",
