@@ -164,6 +164,28 @@ describe('New content', () => {
     expect(push).toHaveBeenCalledWith('/dashboard/content/editor/d9');
   });
 
+  it('keeps a long pick and a long title inside the dialog', async () => {
+    await render();
+    // A single column no wider than the dialog: content can't widen it. No
+    // taller than the window either: it scrolls, its buttons kept in view.
+    const dialog = document.querySelector('[data-slot="dialog-content"]')!;
+    expect(dialog.className).toContain('grid-cols-[minmax(0,1fr)]');
+    expect(dialog.className).toContain('max-h-[calc(100dvh-2rem)]');
+    expect(dialog.className).toContain('overflow-y-auto');
+    expect(document.querySelector('[data-slot="dialog-footer"]')!.className).toContain('sticky');
+
+    await click(button('Pick an opportunity'));
+    const option = [...document.querySelectorAll<HTMLElement>('[role="option"]')].find(
+      (o) => o.textContent === 'Northwind vs HubSpot',
+    );
+    await click(option);
+    // The pick truncates inside the trigger, beside its chevron.
+    const value = [...document.querySelectorAll('span.truncate')].find(
+      (s) => s.textContent === 'Northwind vs HubSpot',
+    );
+    expect(value?.closest('[data-slot="combobox-trigger"]')).not.toBeNull();
+  });
+
   it('names the page by the opportunity’s brief title when it has one', async () => {
     await render();
     await click(button('Pick an opportunity'));

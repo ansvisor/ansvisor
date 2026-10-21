@@ -33,14 +33,16 @@ beforeEach(() => {
 });
 
 describe('refreshMentionsDaily', () => {
-  it('calls the refresh function with the brand and inclusive day range', async () => {
+  it('refreshes the rollups for the range, then the terms a day at a time', async () => {
     rpc.mockResolvedValue({ error: null });
     await expect(refreshMentionsDaily('brand-1', '2026-10-15', '2026-10-17')).resolves.toBe(true);
-    expect(rpc).toHaveBeenCalledWith('refresh_mentions_daily', {
-      p_brand_id: 'brand-1',
-      p_day_from: '2026-10-15',
-      p_day_to: '2026-10-17',
-    });
+    const args = (from, to) => ({ p_brand_id: 'brand-1', p_day_from: from, p_day_to: to });
+    expect(rpc.mock.calls).toEqual([
+      ['refresh_mentions_daily', args('2026-10-15', '2026-10-17')],
+      ['refresh_mention_terms', args('2026-10-15', '2026-10-15')],
+      ['refresh_mention_terms', args('2026-10-16', '2026-10-16')],
+      ['refresh_mention_terms', args('2026-10-17', '2026-10-17')],
+    ]);
   });
 
   // Derived state: a failed refresh costs freshness until the next sweep and
@@ -49,19 +51,26 @@ describe('refreshMentionsDaily', () => {
     rpc.mockResolvedValue({ error: { message: 'boom' } });
     await expect(refreshMentionsDaily('brand-1', '2026-10-17', '2026-10-17')).resolves.toBe(false);
   });
+
+  it('reports a failed terms refresh too', async () => {
+    rpc.mockResolvedValueOnce({ error: null }).mockResolvedValueOnce({ error: { message: 'x' } });
+    await expect(refreshMentionsDaily('brand-1', '2026-10-17', '2026-10-17')).resolves.toBe(false);
+  });
 });
 
 describe('refreshMentionHistory', () => {
-  it('recomputes the whole history in two-week chunks', async () => {
-    resultBounds('2026-09-01', '2026-10-17');
+  it('recomputes the whole history a day at a time', async () => {
+    resultBounds('2026-10-01', '2026-10-03');
     rpc.mockResolvedValue({ error: null });
 
-    await expect(refreshMentionHistory('brand-1')).resolves.toBe(4);
-    expect(rpc.mock.calls.map(([, args]) => [args.p_day_from, args.p_day_to])).toEqual([
-      ['2026-09-01', '2026-09-14'],
-      ['2026-09-15', '2026-09-28'],
-      ['2026-09-29', '2026-10-12'],
-      ['2026-10-13', '2026-10-17'],
+    await expect(refreshMentionHistory('brand-1')).resolves.toBe(3);
+    expect(rpc.mock.calls.map(([fn, args]) => [fn, args.p_day_from, args.p_day_to])).toEqual([
+      ['refresh_mentions_daily', '2026-10-01', '2026-10-01'],
+      ['refresh_mention_terms', '2026-10-01', '2026-10-01'],
+      ['refresh_mentions_daily', '2026-10-02', '2026-10-02'],
+      ['refresh_mention_terms', '2026-10-02', '2026-10-02'],
+      ['refresh_mentions_daily', '2026-10-03', '2026-10-03'],
+      ['refresh_mention_terms', '2026-10-03', '2026-10-03'],
     ]);
   });
 
@@ -73,9 +82,12 @@ describe('refreshMentionHistory', () => {
 
   it('stops at a failed chunk so the backfill can be run again', async () => {
     resultBounds('2026-09-01', '2026-10-17');
-    rpc.mockResolvedValueOnce({ error: null }).mockResolvedValueOnce({ error: { message: 'x' } });
+    rpc
+      .mockResolvedValueOnce({ error: null })
+      .mockResolvedValueOnce({ error: null })
+      .mockResolvedValueOnce({ error: { message: 'x' } });
     await expect(refreshMentionHistory('brand-1')).rejects.toThrow(
-      'mention rollup refresh failed for brand-1 2026-09-15..2026-09-28',
+      'mention rollup refresh failed for brand-1 2026-09-02..2026-09-02',
     );
   });
 });
