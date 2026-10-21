@@ -76,6 +76,8 @@ interface StartChoice {
   bodyHtml?: string;
   pageType: PageType;
   detected: boolean;
+  /** The person picked the type from the chips. */
+  picked: boolean;
 }
 
 /**
@@ -216,6 +218,7 @@ export function NewContentDialog({
         title,
         source: { kind, id: picked.value },
         ...type,
+        picked: false,
       });
       return;
     }
@@ -230,6 +233,7 @@ export function NewContentDialog({
       source: { kind: 'content' },
       bodyHtml: brought.html,
       ...type,
+      picked: false,
     });
   };
 
@@ -241,6 +245,7 @@ export function NewContentDialog({
         method: start.method,
         title: start.title,
         pageType: start.pageType,
+        typePicked: start.picked,
         source: start.source,
         bodyHtml: start.bodyHtml,
       });
@@ -276,7 +281,9 @@ export function NewContentDialog({
                   <ChoiceChip
                     key={type}
                     selected={start.pageType === type}
-                    onSelect={() => setStart({ ...start, pageType: type, detected: false })}
+                    onSelect={() =>
+                      setStart({ ...start, pageType: type, detected: false, picked: true })
+                    }
                   >
                     {tTypes(type)}
                   </ChoiceChip>
