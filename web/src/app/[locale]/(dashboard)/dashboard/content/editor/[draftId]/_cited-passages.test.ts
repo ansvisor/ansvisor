@@ -73,6 +73,15 @@ describe('locked passages', () => {
     expect(held).toEqual([]);
   });
 
+  it('keeps the mark when typing in the paragraph just before or after the quoted one', () => {
+    for (const neighbour of ['Paragraph 4 of the guide.', 'Paragraph 6 of the guide.']) {
+      const { from } = paragraphAt(neighbour);
+      editor.view.dispatch(editor.state.tr.insertText('x', from + 2));
+    }
+    expect(editor.view.dom.querySelectorAll('.cited-passage')).toHaveLength(1);
+    expect(lockedPassageCount(editor.state)).toBe(1);
+  });
+
   it('holds a change that takes the quoted passage out, and lets one through when allowed', () => {
     const { from, to } = paragraphAt(QUOTED);
     editor.view.dispatch(editor.state.tr.delete(from, to));
