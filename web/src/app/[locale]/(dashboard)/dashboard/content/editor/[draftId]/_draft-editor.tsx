@@ -122,7 +122,7 @@ const DOCUMENT_CLASS = cn(
  */
 export function DraftEditor({ draft }: { draft: ContentDraft }) {
   const t = useTranslations('contentEditor.editor');
-  const autosave = useDraftAutosave(draft.id);
+  const autosave = useDraftAutosave(draft.id, draft);
   const [title, setTitle] = useState(draft.title);
   // The page as written now, for the side panel's Sources.
   const [pageHtml, setPageHtml] = useState(draft.bodyHtml);
@@ -595,8 +595,14 @@ export function DraftEditor({ draft }: { draft: ContentDraft }) {
     setMarking(true);
     try {
       // What's waiting goes out first, so the ready draft (and the version
-      // History keeps of it) is the one on screen.
-      await autosave.settle();
+      // History keeps of it) is the one on screen; a page that can't be saved
+      // isn't marked ready.
+      try {
+        await autosave.settle();
+      } catch {
+        toast.error(t('markReadyUnsaved'));
+        return;
+      }
       const next = await markContentDraftReady(draft.id);
       setStatus(next);
       toast.success(t('markedReady'));
@@ -623,8 +629,9 @@ export function DraftEditor({ draft }: { draft: ContentDraft }) {
         .setMeta(CITED_EDIT_ALLOWED, true)
         .setContent(restored.bodyHtml, { emitUpdate: false })
         .run();
-      // The server has this page now: nothing from before it is still to save.
-      autosave.discard();
+      // The server has this page now: nothing from before it is still to
+      // save, and saves go on from the restored version.
+      autosave.discard(restored);
       const html = editor.getHTML();
       setTitle(restored.title);
       setPageHtml(html);
@@ -888,6 +895,31 @@ export function DraftEditor({ draft }: { draft: ContentDraft }) {
 
 function SaveIndicator({ state, onRetry }: { state: SaveState; onRetry: () => void }) {
   const t = useTranslations('contentEditor.editor.save');
+  if (state === 'conflict') {
+    return (
+      <span
+        className="flex items-center gap-1.5 text-xs text-destructive"
+        role="status"
+        title={t('conflictHint')}
+      >
+        {t('conflict')}
+        <button
+          type="button"
+          className="font-medium underline"
+          onClick={() => window.location.reload()}
+        >
+          {t('reload')}
+        </button>
+      </span>
+    );
+  }
+  if (state === 'too_large') {
+    return (
+      <span className="text-xs text-destructive" role="status" title={t('tooLargeHint')}>
+        {t('tooLarge')}
+      </span>
+    );
+  }
   if (state === 'failed') {
     return (
       <span className="flex items-center gap-1.5 text-xs text-destructive" role="status">
