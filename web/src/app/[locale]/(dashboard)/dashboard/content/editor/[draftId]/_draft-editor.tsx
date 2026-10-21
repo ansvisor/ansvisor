@@ -22,7 +22,12 @@ import {
   htmlFromSource,
   publishableHtml,
 } from '@/lib/content/clean-html';
-import { draftTitleFromDoc, lengthTarget, safeLinkHref } from '@/lib/content/editor';
+import {
+  PAGE_READ_DELAY_MS,
+  draftTitleFromDoc,
+  lengthTarget,
+  safeLinkHref,
+} from '@/lib/content/editor';
 import { JsonLd } from '@/lib/content/json-ld-node';
 import { detectPageType } from '@/lib/content/page-types';
 import { cn } from '@/lib/utils';
@@ -71,6 +76,8 @@ export function DraftEditor({ draft }: { draft: ContentDraft }) {
   const [title, setTitle] = useState(draft.title);
   // The page as written now, for the side panel's Sources.
   const [pageHtml, setPageHtml] = useState(draft.bodyHtml);
+  const pageReadTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  useEffect(() => () => clearTimeout(pageReadTimer.current), []);
   const [status, setStatus] = useState(draft.status);
   const [marking, setMarking] = useState(false);
   // A picked page type, or the one the page shows as it is written.
@@ -159,9 +166,13 @@ export function DraftEditor({ draft }: { draft: ContentDraft }) {
       const next = draftTitleFromDoc(e.getJSON());
       const bodyHtml = e.getHTML();
       setTitle(next);
-      setPageHtml(bodyHtml);
-      setDetectedType(detectPageType({ title: next, html: bodyHtml }, draft.siteType));
       autosave.schedule({ title: next, bodyHtml });
+      // The panel and the type chip catch up once typing pauses.
+      clearTimeout(pageReadTimer.current);
+      pageReadTimer.current = setTimeout(() => {
+        setPageHtml(bodyHtml);
+        setDetectedType(detectPageType({ title: next, html: bodyHtml }, draft.siteType));
+      }, PAGE_READ_DELAY_MS);
     },
   });
 
