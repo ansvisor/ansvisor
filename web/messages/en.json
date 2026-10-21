@@ -3285,7 +3285,8 @@
           "ai_budget": "This month's AI usage is spent, so the agent didn't start. The draft is in the Library for you to write.",
           "no_subscription": "The agent needs an active subscription, so it didn't start. The draft is in the Library for you to write.",
           "writing": "The agent is already working on this draft.",
-          "org_writing": "The agent is writing another of your team's drafts. The draft is in the Library: start the agent there in a minute or two, or write it yourself.",
+          "org_writing": "The agent is writing another of your team's drafts, so it didn't start. The draft is in the Library for you to write.",
+          "open_suggestions": "This page has suggestions waiting for review, so the agent didn't start. Accept or reject them in the editor first.",
           "not_draft": "This draft is no longer a draft, so the agent didn't start.",
           "failed": "The agent couldn't start. The draft is in the Library for you to write."
         }
@@ -3438,6 +3439,7 @@
           "no_subscription": "The agent needs an active subscription. Choose a plan in Settings › Billing.",
           "writing": "The agent is already working on this draft.",
           "org_writing": "The agent is writing another of your team's drafts. Try again in a minute or two.",
+          "open_suggestions": "Accept or reject the open suggestions first, then try again.",
           "not_draft": "This draft is no longer a draft, so the agent didn't start.",
           "failed": "The agent couldn't start. Try again in a moment."
         }
