@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useFormatter, useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 import { EditorContent, useEditor } from '@tiptap/react';
-import { TextSelection } from '@tiptap/pm/state';
+import { TextSelection, type Transaction } from '@tiptap/pm/state';
 import StarterKit from '@tiptap/starter-kit';
 import { TableKit } from '@tiptap/extension-table';
 import Image from '@tiptap/extension-image';
@@ -73,6 +73,7 @@ import {
   type SuggestionDecision,
   type SuggestionLabels,
 } from './_suggestions';
+import { useDraftReads } from './_use-draft-reads';
 import { useDraftRules } from './_use-draft-rules';
 import { EditorToolbar } from './_toolbar';
 import { useDraftAutosave, type SaveState } from './_use-autosave';
@@ -268,11 +269,14 @@ export function DraftEditor({
 
   const attachments = useAttachments(editor);
   // The rules the page is written to, checked as it reads now (CE-009).
+  // The brief and sources, read once: the rules check against them, the panel shows them.
+  const reads = useDraftReads(draft.id);
   const rules = useDraftRules({
     draft,
     html: pageHtml,
     characters: (editor?.storage.characterCount.characters() as number | undefined) ?? 0,
     pageType,
+    reads,
   });
   useEffect(() => {
     attachRef.current = (files) => void attachments.attach(files);
@@ -403,6 +407,8 @@ export function DraftEditor({
     const picked = next.filter((s) => ids.includes(s.id));
     const changed: string[] = [];
     let status: SuggestionStatus = 'open';
+    // The page's change, applied only once the decision is saved.
+    let tr: Transaction | null = null;
     setDeciding(true);
     try {
       if (decision === 'accept') {
@@ -412,14 +418,13 @@ export function DraftEditor({
           await keepAgentBeforeVersion(draft.id);
           agentBeforeKept.current = true;
         }
-        const tr = editor.state.tr;
+        tr = editor.state.tr;
         for (const s of open) {
           if (acceptInto(tr, editor.state, s, next)) {
             s.status = 'accepted';
             changed.push(s.id);
           }
         }
-        if (tr.docChanged) editor.view.dispatch(tr);
         status = 'accepted';
         if (open.length > changed.length) {
           toast(t('suggestions.notApplied', { count: open.length - changed.length }));
@@ -432,7 +437,7 @@ export function DraftEditor({
         status = 'rejected';
       } else {
         // Undo, Restore and Undo all send suggestions back to review.
-        const tr = editor.state.tr;
+        tr = editor.state.tr;
         for (const s of [...picked].reverse()) {
           if (s.status === 'accepted' && decision !== 'restore') {
             if (!undoInto(tr, editor.state, s, next)) continue;
@@ -442,16 +447,24 @@ export function DraftEditor({
           s.status = 'open';
           changed.push(s.id);
         }
-        if (tr.docChanged) editor.view.dispatch(tr);
       }
       if (changed.length === 0) return;
+      // The decision is saved first, with the page held still: when it fails,
+      // neither the page nor the cards change, so they stay in step.
+      const editable = editor.isEditable;
+      editor.setEditable(false, false);
+      try {
+        await decideDraftSuggestions(changed, status);
+      } finally {
+        if (editable) editor.setEditable(true, false);
+      }
+      if (tr?.docChanged && tr.before.eq(editor.state.doc)) editor.view.dispatch(tr);
       setSuggestions(next);
       if (decision === 'accept')
         toast.success(t('suggestions.acceptedToast', { count: changed.length }));
       else if (decision === 'reject')
         toast(t('suggestions.rejectedToast', { count: changed.length }));
       else toast(t('suggestions.undoneToast', { count: changed.length }));
-      await decideDraftSuggestions(changed, status);
     } catch (err) {
       console.error('Failed to decide the suggestions:', err);
       toast.error(t('suggestions.saveFailed'));
@@ -980,6 +993,7 @@ export function DraftEditor({
             bodyHtml={pageHtml}
             pageType={pageType}
             rules={rules}
+            reads={reads}
             tabRequest={tabRequest}
             agentFix={agentFix}
           />

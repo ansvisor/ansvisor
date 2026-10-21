@@ -11,6 +11,7 @@ import {
   rulesMet,
   type DraftRules,
 } from '@/lib/content/rules';
+import { RoleProvider, type TeamRole } from '@/components/providers/role-provider';
 import { RulesTab } from './_rules-tab';
 import type { DraftRulesState } from './_use-draft-rules';
 
@@ -46,6 +47,7 @@ function state(
     rules: checked,
     textRules: [],
     mineTypes: [],
+    ready: true,
     ...rulesMet(checked),
     length: 3000,
     change,
@@ -61,11 +63,13 @@ function state(
 let container: HTMLDivElement;
 let root: Root;
 
-async function render(s: DraftRulesState) {
+async function render(s: DraftRulesState, role: TeamRole = 'admin') {
   await act(async () => {
     root.render(
       <NextIntlClientProvider locale="en" messages={messages}>
-        <RulesTab state={s} siteType="b2b" draftPageType="feature_page" />
+        <RoleProvider role={role}>
+          <RulesTab state={s} siteType="b2b" draftPageType="feature_page" />
+        </RoleProvider>
       </NextIntlClientProvider>,
     );
   });
@@ -207,5 +211,32 @@ describe('the Rules tab', () => {
     expect(saveAsMine).toHaveBeenCalled();
     await act(async () => button('Reset').click());
     expect(reset).toHaveBeenCalled();
+  });
+
+  it('leaves saving My rules to admins and managers', async () => {
+    const saveButton = () =>
+      [...container.querySelectorAll('button')].find((b) => b.textContent === 'Save as my rules');
+    await render(state(), 'manager');
+    expect(saveButton()).toBeDefined();
+    for (const role of ['analyst', 'agency_partner'] as const) {
+      await render(state(), role);
+      expect(saveButton()).toBeUndefined();
+      // Reset is the draft's own: anyone can.
+      expect(container.textContent).toContain('Reset');
+    }
+  });
+
+  it('keeps every control off until My rules are read', async () => {
+    await render(state(undefined, { ready: false }));
+    expect(container.querySelector('fieldset')!.disabled).toBe(true);
+    await render(state());
+    expect(container.querySelector('fieldset')!.disabled).toBe(false);
+  });
+
+  it('shows Ansvisor’s set when a draft on My rules has none for its type', async () => {
+    await render(state(undefined, { source: 'mine', mineTypes: [] }));
+    const trigger = container.querySelector('[aria-label="Rule set"]')!;
+    expect(trigger.textContent).toContain('Feature page · Ansvisor default');
+    expect(trigger.textContent).not.toContain('mine:');
   });
 });

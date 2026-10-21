@@ -41,7 +41,9 @@ router.post('/:draftId/brief', async (req, res) => {
     return res.json({ brief });
   } catch (err) {
     if (err instanceof PlanLimitError) {
-      return res.status(err.statusCode).json({ error: err.message, code: 'ai_budget' });
+      // 402: no active subscription, not a spent budget.
+      const code = err.statusCode === 402 ? 'no_subscription' : 'ai_budget';
+      return res.status(err.statusCode).json({ error: err.message, code });
     }
     if (ERROR_CODES[err?.status]) {
       return res
