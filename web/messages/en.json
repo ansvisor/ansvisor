@@ -3215,7 +3215,7 @@
       "methods": {
         "create": {
           "title": "Create from scratch",
-          "hint": "From an opportunity, a prompt or a topic"
+          "hint": "From a content opportunity, a prompt or a topic"
         },
         "optimize": {
           "title": "Optimize content",
@@ -3225,10 +3225,10 @@
       "startFrom": "Start from",
       "sources": {
         "opportunity": {
-          "tab": "Opportunity",
-          "placeholder": "Pick an opportunity",
-          "search": "Search opportunities",
-          "empty": "No open opportunities."
+          "tab": "Content Opportunity",
+          "placeholder": "Pick a content opportunity",
+          "search": "Search content opportunities",
+          "empty": "No open content opportunities."
         },
         "prompt": {
           "tab": "Prompt",
