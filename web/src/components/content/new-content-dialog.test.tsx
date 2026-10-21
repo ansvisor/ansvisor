@@ -166,9 +166,13 @@ describe('New content', () => {
 
   it('keeps a long pick and a long title inside the dialog', async () => {
     await render();
-    // A single column no wider than the dialog: content can't widen it.
+    // A single column no wider than the dialog: content can't widen it. No
+    // taller than the window either: it scrolls, its buttons kept in view.
     const dialog = document.querySelector('[data-slot="dialog-content"]')!;
     expect(dialog.className).toContain('grid-cols-[minmax(0,1fr)]');
+    expect(dialog.className).toContain('max-h-[calc(100dvh-2rem)]');
+    expect(dialog.className).toContain('overflow-y-auto');
+    expect(document.querySelector('[data-slot="dialog-footer"]')!.className).toContain('sticky');
 
     await click(button('Pick an opportunity'));
     const option = [...document.querySelectorAll<HTMLElement>('[role="option"]')].find(

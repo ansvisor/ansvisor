@@ -552,8 +552,12 @@ export function NewContentDialog({
 
   return (
     <Dialog open={open} onOpenChange={changeOpen}>
-      {/* One column no wider than the dialog: a long title or pick truncates instead of widening it. */}
-      <DialogContent className="grid-cols-[minmax(0,1fr)] sm:max-w-xl">
+      {/*
+        One column no wider than the dialog: a long title or pick truncates
+        instead of widening it. No taller than the window: Start scrolls,
+        its buttons kept in view.
+      */}
+      <DialogContent className="max-h-[calc(100dvh-2rem)] grid-cols-[minmax(0,1fr)] overflow-y-auto sm:max-w-2xl">
         {start ? (
           <>
             <DialogHeader>
@@ -649,7 +653,7 @@ export function NewContentDialog({
                 ))}
               </div>
             </div>
-            <DialogFooter>
+            <DialogFooter className="sticky -bottom-4 z-10 bg-muted">
               <Button variant="ghost" onClick={() => setStart(null)} disabled={opening}>
                 <ArrowLeft className="h-4 w-4" />
                 {t('back')}
@@ -900,7 +904,7 @@ export function NewContentDialog({
               </div>
             )}
 
-            <DialogFooter>
+            <DialogFooter className="sticky -bottom-4 z-10 bg-muted">
               <Button variant="ghost" onClick={() => changeOpen(false)}>
                 {t('cancel')}
               </Button>
