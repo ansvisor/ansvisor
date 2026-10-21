@@ -15,7 +15,6 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from '@/components/ui/dialog';
 import { CONTACT_SALES_URL, PLANS, SUBSCRIBABLE_PLANS, type PlanId } from '@/config/plans';
 import {
@@ -27,6 +26,7 @@ import {
 import { useUserRole } from '@/hooks/use-user-role';
 import { formatNumber } from '@/lib/format';
 import { cn } from '@/lib/utils';
+import { CancelSubscriptionDialog } from './cancel-subscription-dialog';
 
 interface SubscriptionData {
   planId: string;
@@ -49,7 +49,6 @@ export function PlanSwitcher({ subscription, onUpdate }: PlanSwitcherProps) {
   // as the subscription route checks.
   const { canAdmin } = useUserRole();
   const [loading, setLoading] = useState(false);
-  const [cancelLoading, setCancelLoading] = useState(false);
   const [portalLoading, setPortalLoading] = useState(false);
   const [cancelOpen, setCancelOpen] = useState(false);
   // The plan a card's button asked for: bought now during a trial, or changed to.
@@ -105,7 +104,6 @@ export function PlanSwitcher({ subscription, onUpdate }: PlanSwitcherProps) {
   }
 
   async function handleCancel() {
-    setCancelLoading(true);
     try {
       const res = await fetch('/api/stripe/subscription', { method: 'DELETE' });
       if (!res.ok) {
@@ -119,11 +117,10 @@ export function PlanSwitcher({ subscription, onUpdate }: PlanSwitcherProps) {
         currentPeriodEnd: data.currentPeriodEnd,
       });
       toast.success(t('subscriptionCanceled'));
-      setCancelOpen(false);
+      return true;
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to cancel');
-    } finally {
-      setCancelLoading(false);
+      return false;
     }
   }
 
@@ -509,26 +506,13 @@ export function PlanSwitcher({ subscription, onUpdate }: PlanSwitcherProps) {
         {subscription.cancelAtPeriodEnd ? (
           <span />
         ) : (
-          <Dialog open={cancelOpen} onOpenChange={setCancelOpen}>
-            <DialogTrigger
-              render={
-                <Button variant="ghost" className="text-destructive hover:text-destructive" />
-              }
-            >
-              {t('cancelSubscription')}
-            </DialogTrigger>
-            <DialogContent className="max-w-md">
-              <DialogHeader>
-                <DialogTitle>{t('cancelConfirmTitle')}</DialogTitle>
-                <DialogDescription>{t('cancelConfirmDescription')}</DialogDescription>
-              </DialogHeader>
-              <DialogFooter>
-                <Button variant="destructive" onClick={handleCancel} disabled={cancelLoading}>
-                  {cancelLoading ? t('processing') : t('cancelConfirm')}
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
+          <Button
+            variant="ghost"
+            className="text-destructive hover:text-destructive"
+            onClick={() => setCancelOpen(true)}
+          >
+            {t('cancelSubscription')}
+          </Button>
         )}
         <Button
           variant="outline"
@@ -540,6 +524,13 @@ export function PlanSwitcher({ subscription, onUpdate }: PlanSwitcherProps) {
           <ExternalLink className="ml-2 h-4 w-4" />
         </Button>
       </div>
+      {/* Mounted outside the button's branch: it still sends the answer once the plan is cancelled */}
+      <CancelSubscriptionDialog
+        open={cancelOpen}
+        onOpenChange={setCancelOpen}
+        currentPeriodEnd={subscription.currentPeriodEnd}
+        onCancel={handleCancel}
+      />
     </div>
   );
 }
