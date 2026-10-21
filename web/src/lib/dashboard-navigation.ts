@@ -1,4 +1,4 @@
-import type { BrandPrefKey, NavItem } from '@/config/dashboard';
+import type { BrandPrefKey, NavChild, NavItem } from '@/config/dashboard';
 
 type Translator = (key: string) => string;
 
@@ -19,7 +19,10 @@ export const dashboardNavLabelKeys: Record<string, NavLabelKey> = {
   Topics: { namespace: 'nav', key: 'topics' },
   'Query Fan-outs': { namespace: 'nav', key: 'queryFanouts' },
   'Prompts Insights': { namespace: 'nav', key: 'promptsInsights' },
-  'Content Optimization': { namespace: 'nav', key: 'content' },
+  Content: { namespace: 'nav', key: 'content' },
+  Plan: { namespace: 'nav', key: 'contentPlan' },
+  Opportunities: { namespace: 'nav', key: 'contentOpportunities' },
+  Library: { namespace: 'nav', key: 'contentLibrary' },
   'Site Audit': { namespace: 'nav', key: 'audit' },
   Citations: { namespace: 'nav', key: 'citations' },
   Mentions: { namespace: 'nav', key: 'mentions' },
@@ -45,6 +48,28 @@ export function getDashboardNavLabel(title: string, t: Translator, tBrands: Tran
   if (!label) return title;
 
   return label.namespace === 'brands' ? tBrands(label.key) : t(label.key);
+}
+
+/**
+ * The submenu entry the current page belongs to: its own route, one it is
+ * `activeFor` (the editor, for the Library), or a page under either (a
+ * topic's page sits under Topics). When one entry's route holds another's
+ * (Opportunities is /dashboard/content, the Library is
+ * /dashboard/content/library), the longer match wins, so only one is current.
+ */
+export function activeChildHref(children: NavChild[], pathname: string): string | null {
+  let best: string | null = null;
+  let bestLength = -1;
+  for (const child of children) {
+    for (const route of [child.href, ...(child.activeFor ?? [])]) {
+      const matches = pathname === route || pathname.startsWith(`${route}/`);
+      if (matches && route.length > bestLength) {
+        best = child.href;
+        bestLength = route.length;
+      }
+    }
+  }
+  return best;
 }
 
 /** Brand preferences hide a navigation item entirely; they are intentionally

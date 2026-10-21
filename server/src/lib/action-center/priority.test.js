@@ -304,6 +304,22 @@ describe('scorePriority', () => {
     );
     expect(content.reason.subject).toEqual({ entity: 'prompts', count: 4 });
     expect(content.score).toBeGreaterThan(0);
+    // A draft sent from the Content Editor's Start (CE-015) is the same work.
+    const draft = scorePriority(
+      {
+        action: action({
+          kind: 'content_draft',
+          category: 'growth',
+          impact: 'medium',
+          created_at: daysAgo(0),
+          payload: { promptIds: ['p1'], targetEntity: 'prompts', targetCount: 3 },
+        }),
+        prompts: demand([['p1', 300, 'how-to']]),
+      },
+      NOW,
+    );
+    expect(draft.reason).toMatchObject({ change: 'gap', subject: { entity: 'prompts', count: 3 } });
+    expect(draft.score).toBeGreaterThan(0);
   });
 
   it('scores pages sent from AI Traffic on their list, sessions and value (AT-006)', () => {
