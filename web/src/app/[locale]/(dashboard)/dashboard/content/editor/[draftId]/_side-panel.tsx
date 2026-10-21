@@ -4,12 +4,12 @@ import { useEffect, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { isPageType, type ContentDraft } from '@/lib/content/drafts';
-import { getDraftBrief } from '@/lib/actions/content-drafts';
-import { BriefTab, type BriefState } from './_brief-tab';
+import { BriefTab } from './_brief-tab';
 import { ImpactTab } from './_impact-tab';
 import { RulesTab } from './_rules-tab';
 import { SourcesTab } from './_sources-tab';
 import { useBriefRebuild, type PageNow } from './_use-brief-rebuild';
+import type { DraftReads } from './_use-draft-reads';
 import type { DraftRulesState } from './_use-draft-rules';
 
 /** Remembers whether the panel is open, across drafts and visits. */
@@ -52,8 +52,9 @@ export type PanelTab = (typeof PANEL_TABS)[number];
  * The spec's tabs are Impact · Chat · Brief · Sources · Rules; each joins the
  * panel with the update that makes it work: Impact (CE-016), Brief (CE-007),
  * Sources (CE-008) and Rules (CE-009). A tab opened once stays mounted, so switching back
- * keeps it as it was. The brief is held here: Sources' "Rebuild with
- * selection" and Impact's "Use lost prompts" rebuild it too, and open it.
+ * keeps it as it was. The brief and the sources are the editor's one read
+ * (useDraftReads), which the rules check against too: Sources' "Rebuild with
+ * selection" and Impact's "Use lost prompts" rebuild the brief, and open it.
  */
 export function EditorSidePanel({
   draft,
@@ -61,6 +62,7 @@ export function EditorSidePanel({
   bodyHtml,
   pageType,
   rules,
+  reads,
   tabRequest,
 }: {
   draft: ContentDraft;
@@ -70,21 +72,19 @@ export function EditorSidePanel({
   pageType: string | null;
   /** The rules, as the editor checks them (the header's chip shows the same). */
   rules: DraftRulesState;
+  /** The draft's brief and sources, read once for the editor. */
+  reads: DraftReads;
   /** A tab to open, from outside the panel (the header's rules chip). */
   tabRequest: { tab: PanelTab; n: number } | null;
 }) {
   const t = useTranslations('contentEditor.editor.panel');
   const [tab, setTab] = useState<PanelTab>('impact');
   const [opened, setOpened] = useState<Set<PanelTab>>(() => new Set(['impact']));
-  const [brief, setBrief] = useState<BriefState>({ status: 'loading' });
-  const [briefAttempt, setBriefAttempt] = useState(0);
-  // Read afresh after prompts join the draft.
-  const [sourcesVersion, setSourcesVersion] = useState(0);
   const page = useRef<PageNow>({ title, html: bodyHtml, length: rules.length });
-  const briefNow = useRef(brief);
+  const sourcesNow = useRef(reads.sources);
   useEffect(() => {
     page.current = { title, html: bodyHtml, length: rules.length };
-    briefNow.current = brief;
+    sourcesNow.current = reads.sources;
   });
 
   const open = (next: PanelTab) => {
@@ -100,29 +100,13 @@ export function EditorSidePanel({
   }, [requested]);
 
   const briefOpened = opened.has('brief');
-  useEffect(() => {
-    // A brief already in hand (a rebuild from Sources or Impact) isn't read again.
-    if (!briefOpened || briefNow.current.status !== 'loading') return;
-    let cancelled = false;
-    getDraftBrief(draft.id)
-      .then((result) => {
-        if (!cancelled)
-          setBrief(result ? { status: 'ready', brief: result.brief } : { status: 'failed' });
-      })
-      .catch((err) => {
-        console.error('Failed to read the brief:', err);
-        if (!cancelled) setBrief({ status: 'failed' });
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [draft.id, briefOpened, briefAttempt]);
 
   const { rebuilding, rebuild } = useBriefRebuild({
     draft,
     pageNow: () => page.current,
+    sourcesNow: () => sourcesNow.current,
     onRebuilt: (next) => {
-      setBrief({ status: 'ready', brief: next });
+      reads.setBrief(next);
       open('brief');
     },
   });
@@ -149,7 +133,7 @@ export function EditorSidePanel({
             pageUrl={draft.sourceUrl}
             rebuilding={rebuilding}
             onUseLostPrompts={(promptIds) =>
-              void rebuild({ addPrompts: promptIds }).then(() => setSourcesVersion((n) => n + 1))
+              void rebuild({ addPrompts: promptIds }).then(() => reads.reloadSources())
             }
           />
         </div>
@@ -157,24 +141,23 @@ export function EditorSidePanel({
           <div hidden={tab !== 'brief'}>
             <BriefTab
               draftId={draft.id}
-              state={brief}
+              state={reads.brief}
               pageType={pageType}
               length={rules.length}
               sourceUrl={draft.sourceUrl}
               rebuilding={rebuilding}
               onRebuild={() => void rebuild()}
-              onRetry={() => {
-                setBrief({ status: 'loading' });
-                setBriefAttempt((n) => n + 1);
-              }}
-              onSaved={(saved) => setBrief({ status: 'ready', brief: saved })}
+              onRetry={reads.reloadBrief}
+              onSaved={(saved) => reads.setBrief(saved)}
             />
           </div>
         )}
         {opened.has('sources') && (
           <div hidden={tab !== 'sources'}>
             <SourcesTab
-              key={sourcesVersion}
+              read={reads.sources}
+              setRead={reads.setSources}
+              onReload={reads.reloadSources}
               draftId={draft.id}
               brandId={draft.brandId}
               title={title}
