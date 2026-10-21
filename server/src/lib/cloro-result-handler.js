@@ -25,6 +25,7 @@ import {
 import { updateTargetUrlStats } from './target-url-stats.js';
 import { persistCitationRows } from './citation-rows.js';
 import { logger } from './logger.js';
+import { classifyMerchant } from './merchant-detection.js';
 
 /**
  * @param {object} args
@@ -154,6 +155,9 @@ export async function persistShoppingCards({
 
   const rows = normalized.map((card) => {
     const match = matchCardBrand(card, brandInfo, competitors);
+    const destination = card.merchant_url
+      ? classifyMerchant(card.merchant_url, { brandDomains: brandInfo.domains })
+      : null;
     return {
       prompt_result_id: promptResultId,
       brand_id: brandId,
@@ -165,6 +169,9 @@ export async function persistShoppingCards({
       image_url: card.image_url,
       merchant_url: card.merchant_url,
       merchant_domain: card.merchant_domain,
+      merchant_kind: destination?.kind ?? null,
+      marketplace: destination?.marketplace ?? null,
+      listing_id: destination?.listingId ?? null,
       rating: card.rating,
       review_count: card.review_count,
       raw: card.raw,
