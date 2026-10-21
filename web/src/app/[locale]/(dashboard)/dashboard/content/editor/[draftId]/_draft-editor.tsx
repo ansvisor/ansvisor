@@ -150,7 +150,17 @@ export function DraftEditor({ draft }: { draft: ContentDraft }) {
         </span>
         <div className="ml-auto flex shrink-0 items-center gap-3">
           <SaveIndicator state={autosave.state} onRetry={() => void autosave.retry()} />
-          <Button size="sm" disabled={!canMarkReady || marking} onClick={markReady}>
+          <Button
+            size="sm"
+            // A page that can't be saved can't be marked ready; the save state says why.
+            disabled={
+              !canMarkReady ||
+              marking ||
+              autosave.state === 'conflict' ||
+              autosave.state === 'too_large'
+            }
+            onClick={markReady}
+          >
             {marking ? (
               <Loader2 className="h-3.5 w-3.5 animate-spin" />
             ) : (
