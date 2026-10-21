@@ -78,14 +78,6 @@ export function PlanTable({
                 <span className="truncate" title={row.page ?? undefined}>
                   {row.page ? pagePath(row.page) : t('newPage')}
                 </span>
-                {row.overlaps > 0 && (
-                  <span
-                    className="shrink-0 font-medium text-amber-700 dark:text-amber-400"
-                    title={t('overlapHint', { count: row.overlaps })}
-                  >
-                    {t('overlap')}
-                  </span>
-                )}
               </p>
             </TableCell>
             <TableCell>
@@ -180,7 +172,5 @@ function WhyText({ why }: { why: PlanWhy }) {
           })}
         </span>
       );
-    case 'overlap':
-      return <span>{t('overlap', { count: why.pages })}</span>;
   }
 }

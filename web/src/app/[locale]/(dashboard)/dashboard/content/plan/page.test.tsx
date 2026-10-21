@@ -47,7 +47,6 @@ const page = (path: string, over: Partial<PlanPage> = {}): PlanPage => ({
   citations: { cur: 2, prev: 2 },
   platformsDown: [],
   aiVisits: 0,
-  overlaps: 0,
   ...over,
 });
 const opportunity: PlanOpportunity = {
@@ -73,7 +72,6 @@ const PLAN = {
       title: 'Espresso guide',
       citations: { cur: 12, prev: 10 },
       aiVisits: 42,
-      overlaps: 1,
     }),
   ],
   answers: { cur: 100, prev: 100 },
@@ -151,7 +149,8 @@ describe('the Content plan', () => {
     expect(button('Create').textContent).toBe('Create1New pages AI needs');
     expect(button('Optimize').textContent).toBe('Optimize1Pages losing ground');
     expect(button('Protect').textContent).toBe('Protect1Top pages · edit with care');
-    expect(button('Overlaps').textContent).toBe('Overlaps1Pages competing for the same prompts');
+    // Pages cited for the same prompts are no warning: no Overlaps card.
+    expect(button('Overlaps')).toBeUndefined();
 
     expect(rowTexts()).toEqual([
       [
@@ -165,7 +164,7 @@ describe('the Content plan', () => {
         'Citation rate −70% on ChatGPT and PerplexityCitations',
       ],
       [
-        'Espresso guideHow-to guide/guides/espresso⚠ Overlap',
+        'Espresso guideHow-to guide/guides/espresso',
         'Protect',
         'Top page · 12 citations · 42 AI visitsProtect',
       ],
@@ -175,12 +174,12 @@ describe('the Content plan', () => {
 
   it('filters the list by a card, and clears it on a second click', async () => {
     await renderPage();
-    await act(async () => button('Overlaps').click());
-    expect(button('Overlaps').getAttribute('aria-pressed')).toBe('true');
+    await act(async () => button('Protect').click());
+    expect(button('Protect').getAttribute('aria-pressed')).toBe('true');
     expect(rowTexts().map((r) => r[1])).toEqual(['Protect']);
     expect(container.textContent).toContain('Filtered · click it again to clear');
 
-    await act(async () => button('Overlaps').click());
+    await act(async () => button('Protect').click());
     expect(rowTexts()).toHaveLength(3);
   });
 
@@ -288,7 +287,7 @@ describe('the Content plan', () => {
     expect(guide().getAttribute('aria-pressed')).toBe('true');
     expect(rowTexts().map((r) => r[0])).toEqual([
       'Coffee subscriptionsHow-to guide/guides/coffee-subscriptions',
-      'Espresso guideHow-to guide/guides/espresso⚠ Overlap',
+      'Espresso guideHow-to guide/guides/espresso',
     ]);
     await act(async () => guide().click());
     expect(rowTexts()).toHaveLength(3);
@@ -317,7 +316,7 @@ describe('the Content plan', () => {
         'section[aria-labelledby="plan-mix-title"] button',
       )!;
     await act(async () => guide().click());
-    await act(async () => button('Overlaps').click());
+    await act(async () => button('Protect').click());
     expect(rowTexts()).toHaveLength(1);
 
     // The 7 days' mix has no guide: the list isn't filtered by it.
@@ -328,15 +327,15 @@ describe('the Content plan', () => {
       ],
     });
     await act(async () => button('Last 7 days').click());
-    await act(async () => button('Overlaps').click());
+    await act(async () => button('Protect').click());
     expect(container.textContent).not.toContain('Filtered');
     expect(rowTexts()).toHaveLength(3);
 
-    await act(async () => button('Overlaps').click());
+    await act(async () => button('Protect').click());
     brandState.activeBrandId = 'brand-2';
     brandState.brands.push({ id: 'brand-2', siteType: 'b2b' });
     await renderPage();
-    expect(button('Overlaps').getAttribute('aria-pressed')).toBe('false');
+    expect(button('Protect').getAttribute('aria-pressed')).toBe('false');
     brandState.brands.pop();
   });
 

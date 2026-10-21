@@ -97,7 +97,6 @@ export async function getContentPlan(
     citations: { cur: Number(p.citations?.cur ?? 0), prev: Number(p.citations?.prev ?? 0) },
     platformsDown: Array.isArray(p.platformsDown) ? p.platformsDown : [],
     aiVisits: Number(p.aiVisits ?? 0),
-    overlaps: Number(p.overlaps ?? 0),
   }));
 
   const opportunities = (opportunitiesRes.data ?? []).map((o): PlanOpportunity => {

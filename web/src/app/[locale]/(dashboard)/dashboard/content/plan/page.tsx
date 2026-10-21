@@ -41,17 +41,16 @@ type InsightsRead = {
   data: Awaited<ReturnType<typeof getContentPlanInsights>>;
 };
 
-/** Each card's color, as its action's tag: Create blue, Optimize amber, Protect green, Overlaps red. */
+/** Each card's color, as its action's tag: Create blue, Optimize amber, Protect green. */
 const CARD_DOT: Record<PlanCard, string> = {
   create: 'bg-blue-600 dark:bg-blue-400',
   optimize: 'bg-amber-600 dark:bg-amber-400',
   protect: 'bg-green-600 dark:bg-green-400',
-  overlaps: 'bg-red-600 dark:bg-red-400',
 };
 
 /**
  * The Content plan (Content Editor CE-014, spec v2 §4): what to create,
- * optimize or protect next, for the last 7, 30 or 90 days. Four cards count
+ * optimize or protect next, for the last 7, 30 or 90 days. Three cards count
  * the work and filter the list, as a row of the page-type mix does; the list
  * ranks it, and each row starts it in New content (Start for an opportunity,
  * an existing page read to optimize) or opens the draft already being
@@ -220,7 +219,7 @@ export default function ContentPlanPage() {
         onSent={() => setAttempt((n) => n + 1)}
       />
 
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         {PLAN_CARDS.map((value) => (
           <button
             key={value}

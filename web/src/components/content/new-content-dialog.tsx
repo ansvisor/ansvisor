@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
-import { AlertTriangle, ArrowLeft, Check, FileText, Loader2, X } from 'lucide-react';
+import { ArrowLeft, FileText, Loader2, X } from 'lucide-react';
 import { useRouter } from '@/i18n/navigation';
 import { Button } from '@/components/ui/button';
 import {
@@ -53,7 +53,6 @@ import {
 } from '@/lib/content/drafts';
 import { DOCUMENT_ACCEPT, readDocumentFile } from '@/lib/content/import-document';
 import {
-  adviseOverlap,
   overlapOptions,
   pagePath,
   samePage,
@@ -112,7 +111,7 @@ interface StartChoice {
   picked: boolean;
   /** The page type for a new page, to go back to from optimizing an existing one. */
   newPageType: { pageType: PageType; detectedFrom: DetectedFrom; picked: boolean };
-  /** The overlap check's pick: write the new page, or optimize an existing one. */
+  /** The Overview's pick: write the new page, or optimize an existing one. */
   choice: OverlapChoice;
   /** The page the Content plan named for this opportunity, offered beside the check's options. */
   givenPage?: OverlapPage;
@@ -130,7 +129,7 @@ export type DialogPreset =
 type Who = 'me' | 'agent' | 'team';
 const WHO: Who[] = ['me', 'agent', 'team'];
 
-/** The overlap check for one source: null while it runs. */
+/** The Overview's read for one source: null while it runs. */
 interface OverlapRead {
   key: string;
   overlap: ContentOverlap | null;
@@ -212,8 +211,6 @@ export function NewContentDialog({
   // From the Content plan: Start for its opportunity once the options are in
   // (one no longer open is left to pick), or its page read to optimize.
   const presetApplied = useRef(false);
-  // The plan named the page to optimize: the overlap check doesn't replace it.
-  const choiceGiven = useRef(false);
   useEffect(() => {
     if (!open || !preset || presetApplied.current) return;
     if (preset.kind === 'page') {
@@ -251,9 +248,10 @@ export function NewContentDialog({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- once per opening
   }, [open, preset, options]);
 
-  // Start checks the pages that already answer a new page's prompts. Content
-  // brought to optimize has no prompts to check. A page type picked in Start
-  // keeps the same source, so the check runs once per source.
+  // Start reads the brand's pages AI already cites for a new page's prompts
+  // (the Overview). Content brought to optimize has no prompts to read for. A
+  // page type picked in Start keeps the same source, so it reads once per
+  // source.
   const startSource = start?.source;
   const overlapKey = startSource && startSource.kind !== 'content' ? sourceKey(startSource) : null;
   useEffect(() => {
@@ -264,24 +262,18 @@ export function NewContentDialog({
       .then((overlap) => {
         if (cancelled) return;
         setOverlapRead({ key, overlap, failed: false });
-        // The recommended option is picked first, unless the plan named the page.
-        const recommended = adviseOverlap(overlap).options[0];
-        if (recommended && !choiceGiven.current) {
-          setStart((s) => (s ? withChoice(s, recommended.choice, siteType) : s));
-        }
       })
       .catch((err) => {
-        console.error('Failed to check for overlapping pages:', err);
+        console.error('Failed to read the pages cited for these prompts:', err);
         if (!cancelled) setOverlapRead({ key, overlap: null, failed: true });
       });
     return () => {
       cancelled = true;
     };
-  }, [brandId, startSource, siteType, overlapAttempt]);
+  }, [brandId, startSource, overlapAttempt]);
 
   const reset = () => {
     presetApplied.current = false;
-    choiceGiven.current = false;
     setMethod('create');
     setKind('opportunity');
     setPicked(null);
@@ -387,7 +379,7 @@ export function NewContentDialog({
   /**
    * Start for a new page from what was picked: its title, and the page type
    * it reads as. With a page (an opportunity for an existing page, from the
-   * plan), Start optimizes that page, and the overlap check leaves it chosen.
+   * plan), Start optimizes that page, and it stays chosen.
    */
   const startFrom = (item: PickerItem, from: SourceKind, page?: OverlapPage) => {
     const title = item.pageTitle ?? item.label;
@@ -406,7 +398,6 @@ export function NewContentDialog({
       choice: { kind: 'create' },
       givenPage: page,
     };
-    choiceGiven.current = !!page;
     setStart(page ? withChoice(next, { kind: 'optimize', page }, siteType) : next);
   };
 
@@ -943,8 +934,9 @@ function withChoice(start: StartChoice, choice: OverlapChoice, siteType: SiteTyp
 }
 
 /**
- * Start's overlap check (CE-015): the brand's pages AI already cites for these
- * prompts, and what to do about them, the recommended option first.
+ * Start's Overview (CE-015): the brand's pages AI already cites for these
+ * prompts, as information, and the choice between a new page and one of
+ * them. The action the person picked stays chosen.
  */
 function OverlapCheck({
   read,
@@ -961,10 +953,10 @@ function OverlapCheck({
 }) {
   const t = useTranslations('contentEditor.newContent.overlap');
   const overlap = read?.overlap ?? null;
-  const advice = overlap ? adviseOverlap(overlap) : null;
   const shown = overlap?.pages.slice(0, 3) ?? [];
   const top = overlap?.pages[0];
-  const options = advice ? overlapOptions(advice, given) : [];
+  const options = overlap ? overlapOptions(overlap, given) : [];
+  const nothingCited = !overlap || overlap.totalPrompts === 0 || overlap.pages.length === 0;
   const isChosen = (option: OverlapOption) =>
     option.choice.kind === choice.kind &&
     (option.choice.kind === 'create' ||
@@ -998,24 +990,6 @@ function OverlapCheck({
           title: t('options.createNew.title'),
           reason: t('options.createNew.reason'),
         };
-      case 'createAnyway':
-        return {
-          title: t('options.createAnyway.title'),
-          reason: t('options.createAnyway.reason'),
-        };
-      case 'createLinked':
-        return {
-          title:
-            (overlap?.pages.length ?? 0) > 1
-              ? t('options.createLinked.titleMany')
-              : t('options.createLinked.title', { page }),
-          reason: t('options.createLinked.reason'),
-        };
-      case 'addSection':
-        return {
-          title: t('options.addSection.title', { page }),
-          reason: t('options.addSection.reason'),
-        };
     }
   };
 
@@ -1045,11 +1019,6 @@ function OverlapCheck({
             <span className="min-w-0">
               <span className="flex flex-wrap items-center gap-1.5 text-sm font-medium">
                 {text.title}
-                {option.recommended && (
-                  <span className="rounded-md bg-muted px-1.5 text-[10.5px] font-medium text-muted-foreground">
-                    {t('recommended')}
-                  </span>
-                )}
               </span>
               <span className="block text-xs text-muted-foreground">{text.reason}</span>
             </span>
@@ -1067,68 +1036,60 @@ function OverlapCheck({
           <Loader2 className="h-3.5 w-3.5 animate-spin" />
           {t('checking')}
         </p>
-      ) : read.failed || !advice || !overlap ? (
+      ) : read.failed || !overlap ? (
         <p className="flex items-center gap-2 text-xs text-muted-foreground">
           {t('failed')}
           <button type="button" className="font-medium underline" onClick={onRetry}>
             {t('retry')}
           </button>
         </p>
-      ) : advice.verdict === 'none' ? (
-        <>
-          <div className="flex items-center justify-between gap-3 rounded-lg border px-3 py-2.5 text-sm">
-            <span>{overlap.totalPrompts ? t('none') : t('noPrompts')}</span>
-            {overlap.totalPrompts > 0 && (
-              <span className="flex shrink-0 items-center gap-1 text-xs font-medium text-emerald-600 dark:text-emerald-400">
-                <Check className="h-3.5 w-3.5" />
-                {t('safe')}
-              </span>
-            )}
-          </div>
-          {optionGroup}
-        </>
       ) : (
         <>
-          <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2.5 text-sm">
-            <p className="flex items-center gap-1.5 font-medium text-amber-700 dark:text-amber-400">
-              <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
-              {advice.verdict === 'covered'
-                ? t('covered')
-                : t('partial', { count: overlap.pages.length })}
-            </p>
-            <table className="mt-2 w-full table-fixed text-xs">
-              <thead className="text-[11px] tracking-wide whitespace-nowrap text-muted-foreground uppercase">
-                <tr>
-                  <th className="py-1 text-left font-medium">{t('columns.page')}</th>
-                  <th className="w-28 py-1 pl-3 text-right font-medium">{t('columns.prompts')}</th>
-                  <th className="w-28 py-1 pl-3 text-right font-medium">
-                    {t('columns.citations')}
-                  </th>
-                  <th className="w-24 py-1 pl-3 text-right font-medium">{t('columns.google')}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {shown.map((page) => (
-                  <tr key={page.url} className="border-t border-amber-500/20">
-                    <td className="truncate py-1.5 pr-2" title={page.url}>
-                      {pagePath(page.url)}
-                    </td>
-                    <td className="py-1.5 pl-3 text-right tabular-nums">
-                      {t('promptsValue', {
-                        count: page.promptsInCommon,
-                        total: overlap.totalPrompts,
-                      })}
-                    </td>
-                    <td className="py-1.5 pl-3 text-right tabular-nums">
-                      {formatNumber(page.citations)}
-                    </td>
-                    <td className="py-1.5 pl-3 text-right tabular-nums">
-                      {page.gscPosition == null ? '—' : `#${Math.round(page.gscPosition)}`}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div className="rounded-lg border px-3 py-2.5 text-sm">
+            {nothingCited ? (
+              <p>{overlap.totalPrompts ? t('none') : t('noPrompts')}</p>
+            ) : (
+              <>
+                <p className="font-medium">{t('cited', { count: overlap.pages.length })}</p>
+                <table className="mt-2 w-full table-fixed text-xs">
+                  <thead className="text-[11px] tracking-wide whitespace-nowrap text-muted-foreground uppercase">
+                    <tr>
+                      <th className="py-1 text-left font-medium">{t('columns.page')}</th>
+                      <th className="w-28 py-1 pl-3 text-right font-medium">
+                        {t('columns.prompts')}
+                      </th>
+                      <th className="w-28 py-1 pl-3 text-right font-medium">
+                        {t('columns.citations')}
+                      </th>
+                      <th className="w-24 py-1 pl-3 text-right font-medium">
+                        {t('columns.google')}
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {shown.map((page) => (
+                      <tr key={page.url} className="border-t">
+                        <td className="truncate py-1.5 pr-2" title={page.url}>
+                          {pagePath(page.url)}
+                        </td>
+                        <td className="py-1.5 pl-3 text-right tabular-nums">
+                          {t('promptsValue', {
+                            count: page.promptsInCommon,
+                            total: overlap.totalPrompts,
+                          })}
+                        </td>
+                        <td className="py-1.5 pl-3 text-right tabular-nums">
+                          {formatNumber(page.citations)}
+                        </td>
+                        <td className="py-1.5 pl-3 text-right tabular-nums">
+                          {page.gscPosition == null ? '—' : `#${Math.round(page.gscPosition)}`}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </>
+            )}
           </div>
           {optionGroup}
         </>
