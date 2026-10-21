@@ -7,6 +7,11 @@ const saveContentDraft = vi.fn();
 vi.mock('@/lib/actions/content-drafts', () => ({
   saveContentDraft: (...args: unknown[]) => saveContentDraft(...args),
 }));
+// A fingerprint that settles in a microtask, so fake timers drive the saves.
+vi.mock('@/lib/content/editor', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/content/editor')>()),
+  bodyHash: async (html: string) => `hash:${html}`,
+}));
 
 (
   globalThis as typeof globalThis & {
@@ -14,30 +19,36 @@ vi.mock('@/lib/actions/content-drafts', () => ({
   }
 ).IS_REACT_ACT_ENVIRONMENT = true;
 
+const LOADED = { updatedAt: 't0', bodyHtml: '<p>loaded</p>' };
+const BIG = `<p>${'x'.repeat(500_000)}</p>`;
 const BODIES = ['<p>a</p>', '<p>ab</p>', '<p>1</p>', '<p>12</p>', '<p>x</p>', '<p>last</p>'];
 
-/** The hook behind buttons, as the editor drives it: one per text, and Retry. */
+/** The hook behind buttons, as the editor drives it: one per text, Retry, and settle. */
 function Harness() {
-  const autosave = useDraftAutosave('d1');
+  const autosave = useDraftAutosave('d1', LOADED);
   const [settled, setSettled] = useState('');
   return (
     <div>
       <output>{autosave.state}</output>
       <span data-settled>{settled}</span>
+      {BODIES.map((body) => (
+        <button key={body} data-body={body} onClick={() => autosave.schedule(content(body))} />
+      ))}
+      <button data-big onClick={() => autosave.schedule(content(BIG))} />
+      <button data-retry onClick={() => void autosave.retry()} />
+      <button
+        data-discard
+        onClick={() => autosave.discard({ updatedAt: 't9', bodyHtml: '<p>restored</p>' })}
+      />
       <button
         data-settle
         onClick={() =>
           void autosave.settle().then(
-            () => setSettled('settled'),
+            () => setSettled('saved'),
             () => setSettled('unsaved'),
           )
         }
       />
-      <button data-discard onClick={() => autosave.discard()} />
-      {BODIES.map((body) => (
-        <button key={body} data-body={body} onClick={() => autosave.schedule(content(body))} />
-      ))}
-      <button data-retry onClick={() => void autosave.retry()} />
     </div>
   );
 }
@@ -47,18 +58,20 @@ let root: Root;
 function content(bodyHtml: string) {
   return { title: 'T', bodyHtml };
 }
+const loadedBase = { updatedAt: 't0', bodyHash: 'hash:<p>loaded</p>' };
+const saved = (updatedAt = 'now', bodyHash = 'h1') => ({ ok: true, updatedAt, bodyHash });
 const state = () => container.querySelector('output')!.textContent;
+const settled = () => container.querySelector('[data-settled]')!.textContent;
 const edit = (body: string) =>
   act(() => container.querySelector<HTMLButtonElement>(`[data-body="${body}"]`)!.click());
 const retry = () =>
   act(async () => container.querySelector<HTMLButtonElement>('[data-retry]')!.click());
-const press = (name: string) =>
-  act(async () => container.querySelector<HTMLButtonElement>(`[data-${name}]`)!.click());
-const settled = () => container.querySelector('[data-settled]')!.textContent;
+const settle = () =>
+  act(async () => container.querySelector<HTMLButtonElement>('[data-settle]')!.click());
 
 beforeEach(async () => {
   vi.useFakeTimers();
-  saveContentDraft.mockReset().mockResolvedValue({ updatedAt: 'now' });
+  saveContentDraft.mockReset().mockResolvedValue(saved());
   container = document.createElement('div');
   root = createRoot(container);
   await act(async () => root.render(<Harness />));
@@ -70,7 +83,7 @@ afterEach(() => {
 });
 
 describe('the editor’s autosave', () => {
-  it('saves once typing pauses, with the latest text', async () => {
+  it('saves once typing pauses, with the latest text, over the version it loaded', async () => {
     edit('<p>a</p>');
     edit('<p>ab</p>');
     expect(state()).toBe('unsaved');
@@ -78,14 +91,17 @@ describe('the editor’s autosave', () => {
 
     await act(async () => vi.advanceTimersByTime(1500));
     expect(saveContentDraft).toHaveBeenCalledTimes(1);
-    expect(saveContentDraft).toHaveBeenCalledWith('d1', content('<p>ab</p>'));
+    expect(saveContentDraft).toHaveBeenCalledWith('d1', {
+      ...content('<p>ab</p>'),
+      base: loadedBase,
+    });
     expect(state()).toBe('saved');
   });
 
-  it('sends a change made during a save after it, never at the same time', async () => {
+  it('sends a change made during a save after it, over the version that save made', async () => {
     let finish!: () => void;
     saveContentDraft.mockImplementationOnce(
-      () => new Promise((resolve) => (finish = () => resolve({ updatedAt: 'now' }))),
+      () => new Promise((resolve) => (finish = () => resolve(saved('t1', 'h1')))),
     );
     edit('<p>1</p>');
     await act(async () => vi.advanceTimersByTime(1500));
@@ -99,7 +115,10 @@ describe('the editor’s autosave', () => {
     expect(state()).toBe('unsaved');
     await act(async () => vi.advanceTimersByTime(1500));
     expect(saveContentDraft).toHaveBeenCalledTimes(2);
-    expect(saveContentDraft).toHaveBeenLastCalledWith('d1', content('<p>12</p>'));
+    expect(saveContentDraft).toHaveBeenLastCalledWith('d1', {
+      ...content('<p>12</p>'),
+      base: { updatedAt: 't1', bodyHash: 'h1' },
+    });
     expect(state()).toBe('saved');
   });
 
@@ -112,9 +131,87 @@ describe('the editor’s autosave', () => {
 
     await retry();
     expect(saveContentDraft).toHaveBeenCalledTimes(2);
-    expect(saveContentDraft).toHaveBeenLastCalledWith('d1', content('<p>x</p>'));
+    expect(saveContentDraft).toHaveBeenLastCalledWith('d1', {
+      ...content('<p>x</p>'),
+      base: loadedBase,
+    });
     expect(state()).toBe('saved');
     error.mockRestore();
+  });
+
+  it('stops saving when the page was changed elsewhere, rather than overwriting it', async () => {
+    saveContentDraft.mockResolvedValueOnce({ ok: false, reason: 'conflict' });
+    edit('<p>x</p>');
+    await act(async () => vi.advanceTimersByTime(1500));
+    expect(state()).toBe('conflict');
+
+    edit('<p>last</p>');
+    await act(async () => vi.advanceTimersByTime(1500));
+    await retry();
+    expect(saveContentDraft).toHaveBeenCalledTimes(1);
+    expect(state()).toBe('conflict');
+  });
+
+  it('doesn’t send a page over the size limit, and saves again once it is shorter', async () => {
+    act(() => container.querySelector<HTMLButtonElement>('[data-big]')!.click());
+    expect(state()).toBe('too_large');
+    await act(async () => vi.advanceTimersByTime(1500));
+    expect(saveContentDraft).not.toHaveBeenCalled();
+
+    edit('<p>x</p>');
+    await act(async () => vi.advanceTimersByTime(1500));
+    expect(saveContentDraft).toHaveBeenCalledTimes(1);
+    expect(state()).toBe('saved');
+  });
+
+  it('settles: saves what is waiting first, and says when the page can’t be saved', async () => {
+    edit('<p>x</p>');
+    await settle();
+    expect(saveContentDraft).toHaveBeenCalledTimes(1);
+    expect(settled()).toBe('saved');
+
+    saveContentDraft.mockResolvedValueOnce({ ok: false, reason: 'conflict' });
+    edit('<p>last</p>');
+    await settle();
+    expect(settled()).toBe('unsaved');
+  });
+
+  it('settles after a save under way, then sends what is waiting', async () => {
+    let finish!: () => void;
+    saveContentDraft.mockImplementationOnce(
+      () => new Promise((resolve) => (finish = () => resolve(saved('t1', 'h1')))),
+    );
+    edit('<p>1</p>');
+    await act(async () => vi.advanceTimersByTime(1500));
+    edit('<p>12</p>');
+
+    await settle();
+    expect(settled()).toBe('');
+    await act(async () => finish());
+    await act(async () => vi.advanceTimersByTime(200));
+
+    expect(saveContentDraft).toHaveBeenCalledTimes(2);
+    expect(saveContentDraft).toHaveBeenLastCalledWith('d1', {
+      ...content('<p>12</p>'),
+      base: { updatedAt: 't1', bodyHash: 'h1' },
+    });
+    expect(settled()).toBe('saved');
+    expect(state()).toBe('saved');
+  });
+
+  it('discards what is waiting once the server has the page, and saves go on from it', async () => {
+    edit('<p>x</p>');
+    await act(async () => container.querySelector<HTMLButtonElement>('[data-discard]')!.click());
+    await act(async () => vi.advanceTimersByTime(1500));
+    expect(saveContentDraft).not.toHaveBeenCalled();
+    expect(state()).toBe('saved');
+
+    edit('<p>last</p>');
+    await act(async () => vi.advanceTimersByTime(1500));
+    expect(saveContentDraft).toHaveBeenCalledWith('d1', {
+      ...content('<p>last</p>'),
+      base: { updatedAt: 't9', bodyHash: 'hash:<p>restored</p>' },
+    });
   });
 
   it('asks before leaving the page while something is unsaved', async () => {
@@ -133,47 +230,11 @@ describe('the editor’s autosave', () => {
   it('saves what is waiting when the editor closes', async () => {
     edit('<p>last</p>');
     act(() => root.unmount());
-    expect(saveContentDraft).toHaveBeenCalledWith('d1', content('<p>last</p>'));
+    await act(async () => {});
+    expect(saveContentDraft).toHaveBeenCalledWith('d1', {
+      ...content('<p>last</p>'),
+      base: loadedBase,
+    });
     root = createRoot(container);
-  });
-
-  it('settles: waits for a save under way, then sends what is waiting', async () => {
-    let finish!: () => void;
-    saveContentDraft.mockImplementationOnce(
-      () => new Promise((resolve) => (finish = () => resolve({ updatedAt: 'now' }))),
-    );
-    edit('<p>1</p>');
-    await act(async () => vi.advanceTimersByTime(1500));
-    edit('<p>12</p>');
-
-    await press('settle');
-    expect(settled()).toBe('');
-    await act(async () => finish());
-    await act(async () => vi.advanceTimersByTime(200));
-
-    expect(saveContentDraft).toHaveBeenCalledTimes(2);
-    expect(saveContentDraft).toHaveBeenLastCalledWith('d1', content('<p>12</p>'));
-    expect(settled()).toBe('settled');
-    expect(state()).toBe('saved');
-  });
-
-  it('does not settle when the save fails', async () => {
-    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
-    saveContentDraft.mockRejectedValueOnce(new Error('offline'));
-    edit('<p>x</p>');
-
-    await press('settle');
-    expect(settled()).toBe('unsaved');
-    expect(state()).toBe('failed');
-    error.mockRestore();
-  });
-
-  it('discards what is waiting once the server has the page', async () => {
-    edit('<p>x</p>');
-    await press('discard');
-    await act(async () => vi.advanceTimersByTime(1500));
-
-    expect(saveContentDraft).not.toHaveBeenCalled();
-    expect(state()).toBe('saved');
   });
 });
