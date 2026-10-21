@@ -10,7 +10,12 @@ import {
   type DraftMethod,
   type DraftStatus,
 } from '@/lib/content/drafts';
-import { MAX_BODY_HTML_LENGTH, MAX_TITLE_LENGTH } from '@/lib/content/editor';
+import {
+  MAX_BODY_HTML_LENGTH,
+  MAX_TITLE_LENGTH,
+  bodyHash,
+  type SaveDraftResult,
+} from '@/lib/content/editor';
 import { sanitizeDraftHtml } from '@/lib/content/sanitize-draft-html';
 
 /**
@@ -114,31 +119,63 @@ export async function createContentDraft(brandId: string): Promise<string> {
 
 const saveInput = z.object({
   title: z.string().max(MAX_TITLE_LENGTH),
-  bodyHtml: z.string().max(MAX_BODY_HTML_LENGTH),
+  bodyHtml: z.string(),
+  base: z.object({
+    updatedAt: z.string().min(1),
+    bodyHash: z.string().regex(/^[0-9a-f]{64}$/),
+  }),
 });
+
+/** Saves that find the draft written meanwhile, then try again over it. */
+const SAVE_ATTEMPTS = 3;
 
 /**
  * The editor's autosave: the body, checked against the draft allow-list
- * again (sanitizeDraftHtml), and the title read from it. Throws
- * 'not_found' when no row changed (another organization's draft, or one that
- * no longer exists), so a save RLS refused isn't reported as saved.
+ * again (sanitizeDraftHtml), and the title read from it, written only over
+ * the version the editor last saw (`base`). When another write came first,
+ * the page tells which kind: the same page means only the draft's other
+ * columns changed (Mark ready, its type), and the save goes over them;
+ * another page means someone else changed it (another tab, a teammate, the
+ * Content Agent), and nothing is overwritten. A save RLS refused, or of a
+ * draft that no longer exists, comes back not_found rather than saved.
  */
 export async function saveContentDraft(
   id: string,
-  input: { title: string; bodyHtml: string },
-): Promise<{ updatedAt: string }> {
+  input: { title: string; bodyHtml: string; base: { updatedAt: string; bodyHash: string } },
+): Promise<SaveDraftResult> {
+  if (typeof input?.bodyHtml === 'string' && input.bodyHtml.length > MAX_BODY_HTML_LENGTH) {
+    return { ok: false, reason: 'too_large' };
+  }
   const parsed = saveInput.safeParse(input);
-  if (!draftId.safeParse(id).success || !parsed.success) throw new Error('invalid');
+  if (!draftId.safeParse(id).success || !parsed.success) return { ok: false, reason: 'invalid' };
+  const { title, base } = parsed.data;
+  const bodyHtml = sanitizeDraftHtml(parsed.data.bodyHtml);
   const supabase = await createClient();
-  const { data, error } = await supabase
-    .from('content_drafts')
-    .update({ title: parsed.data.title, body_html: sanitizeDraftHtml(parsed.data.bodyHtml) })
-    .eq('id', id)
-    .select('updated_at')
-    .maybeSingle();
-  if (error) throw new Error(error.message);
-  if (!data) throw new Error('not_found');
-  return { updatedAt: data.updated_at };
+  let expected = base.updatedAt;
+  for (let attempt = 0; attempt < SAVE_ATTEMPTS; attempt++) {
+    const { data, error } = await supabase
+      .from('content_drafts')
+      .update({ title, body_html: bodyHtml })
+      .eq('id', id)
+      .eq('updated_at', expected)
+      .select('updated_at')
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    if (data) return { ok: true, updatedAt: data.updated_at, bodyHash: await bodyHash(bodyHtml) };
+
+    const { data: current, error: readError } = await supabase
+      .from('content_drafts')
+      .select('updated_at, body_html')
+      .eq('id', id)
+      .maybeSingle();
+    if (readError) throw new Error(readError.message);
+    if (!current) return { ok: false, reason: 'not_found' };
+    if ((await bodyHash(current.body_html)) !== base.bodyHash) {
+      return { ok: false, reason: 'conflict' };
+    }
+    expected = current.updated_at;
+  }
+  return { ok: false, reason: 'conflict' };
 }
 
 /**
