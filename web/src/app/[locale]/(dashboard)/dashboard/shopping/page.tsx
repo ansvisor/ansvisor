@@ -211,8 +211,8 @@ export default function ShoppingPage() {
     void loadData();
   }, [loadData]);
 
-  // This alert always evaluates the current and preceding four UTC weeks; it
-  // is independent of the selected display window/platform/region filters.
+  // This alert always evaluates five consecutive rolling seven-day windows
+  // ending at query time, independently of display/platform/region filters.
   useEffect(() => {
     if (!activeBrandId) {
       setAmazonShareDropAlert(null);
@@ -255,10 +255,13 @@ export default function ShoppingPage() {
       {amazonShareDropAlert && (
         <div
           role="alert"
-          className="flex items-start gap-3 rounded-lg border border-amber-500/40 px-4 py-3"
+          className="flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 dark:border-amber-900/50 dark:bg-amber-950/30"
         >
-          <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" aria-hidden="true" />
-          <p className="text-sm">
+          <AlertTriangle
+            className="mt-0.5 h-5 w-5 shrink-0 text-amber-600 dark:text-amber-500"
+            aria-hidden="true"
+          />
+          <p className="text-sm text-amber-900 dark:text-amber-200">
             {t('amazonShareDropAlert', {
               from: Math.round(amazonShareDropAlert.fromShare * 100),
               to: Math.round(amazonShareDropAlert.toShare * 100),
