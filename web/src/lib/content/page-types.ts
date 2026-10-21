@@ -1,6 +1,6 @@
 import type { Industry } from '@/types';
 import type { PageType } from './drafts';
-import { JSON_LD_SCRIPT } from './html-allowlist';
+import { jsonLdScripts } from './html-allowlist';
 
 /**
  * Page types by kind of site, and a page's type found from the page itself
@@ -276,7 +276,7 @@ function schemaTypes(html: string): Set<string> {
     visit(item['@graph']);
     visit(item.mainEntity);
   };
-  for (const [, text] of html.matchAll(JSON_LD_SCRIPT)) {
+  for (const { text } of jsonLdScripts(html)) {
     try {
       visit(JSON.parse(text));
     } catch {
