@@ -4045,6 +4045,10 @@ export type Database = {
           locations: number
         }[]
       }
+      organization_has_other_members: {
+        Args: { p_except: string; p_org: string }
+        Returns: boolean
+      }
       prompt_performance_aggregates: {
         Args: {
           p_brand_id: string
