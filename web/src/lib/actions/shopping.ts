@@ -181,14 +181,9 @@ export async function getShoppingOverview(
 }
 
 /**
- * Collected once at page load so the filter bar shows only platform / region
- * values that actually appear in this brand's data — all of it, not the first
- * 1,000 results.
- */
-/**
- * Returns a week-over-week Amazon share alert for own-product cards. The RPC
- * aggregates in Postgres so this stays accurate beyond PostgREST's 1,000-row
- * cap; only cards with a persisted merchant classification enter the counts.
+ * Returns an Amazon share-drop alert for own-product cards across five rolling
+ * seven-day windows. The RPC aggregates in Postgres so this stays accurate
+ * beyond PostgREST's 1,000-row cap; only classified cards enter the counts.
  */
 export async function getShoppingAmazonShareDropAlert(
   brandId: string,
@@ -213,6 +208,11 @@ export async function getShoppingAmazonShareDropAlert(
   );
 }
 
+/**
+ * Collected once at page load so the filter bar shows only platform / region
+ * values that actually appear in this brand's data — all of it, not the first
+ * 1,000 results.
+ */
 export async function getShoppingFilterOptions(brandId: string): Promise<{
   platforms: string[];
   regions: string[];
