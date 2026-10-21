@@ -114,51 +114,48 @@ export function PageTypeMix({
   const gaps = rows.filter((r) => r.gap).length;
 
   return (
-    <section aria-labelledby="plan-mix-title" className="space-y-2">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
-          <h2 id="plan-mix-title" className="text-sm font-medium">
-            <button
-              type="button"
-              aria-expanded={open}
-              aria-controls={bodyId}
-              onClick={() => setOpen((o) => !o)}
-              className="-ml-1 flex items-center gap-1.5 rounded-md px-1 py-0.5 hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
-            >
-              <ChevronDown
-                aria-hidden
-                className={cn(
-                  'h-4 w-4 shrink-0 text-muted-foreground transition-transform',
-                  !open && '-rotate-90',
-                )}
-              />
-              {t('title')}
-            </button>
-          </h2>
+    <section aria-labelledby="plan-mix-title" className="overflow-hidden rounded-xl border bg-card">
+      {/* The whole bar opens it: "Show" and a chevron pointing down say so. */}
+      <h2 className="text-sm font-medium">
+        <button
+          type="button"
+          aria-expanded={open}
+          aria-controls={bodyId}
+          onClick={() => setOpen((o) => !o)}
+          className="group flex w-full cursor-pointer flex-wrap items-center gap-x-2.5 gap-y-1 px-4 py-2.5 text-left transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/50"
+        >
+          <span id="plan-mix-title">{t('title')}</span>
           {!open && rows.length > 0 && (
-            <span className="text-xs text-muted-foreground">
+            <span className="text-xs font-normal text-muted-foreground">
               {t('collapsed', { types: rows.length, gaps })}
             </span>
           )}
-        </div>
-        <span
-          className={cn('flex items-center gap-3 text-xs text-muted-foreground', !open && 'hidden')}
-        >
-          <span className="flex items-center gap-1.5">
-            <span aria-hidden className="h-2 w-2 rounded-sm bg-muted-foreground/40" />
-            {t('aiShare')}
+          <span className="ml-auto flex items-center gap-1 text-xs font-medium text-foreground group-hover:underline">
+            {open ? t('hide') : t('show')}
+            <ChevronDown
+              aria-hidden
+              className={cn('h-4 w-4 shrink-0 transition-transform', open && 'rotate-180')}
+            />
           </span>
-          <span className="flex items-center gap-1.5">
-            <span aria-hidden className="h-2 w-2 rounded-sm bg-foreground" />
-            {t('yourShare')}
-          </span>
-        </span>
-      </div>
-      <div id={bodyId} className={cn('space-y-2', !open && 'hidden')}>
+        </button>
+      </h2>
+      <div id={bodyId} className={cn('border-t', !open && 'hidden')}>
+        {rows.length > 0 && (
+          <div className="flex flex-wrap items-center justify-end gap-3 px-4 pt-2.5 pb-1 text-xs text-muted-foreground">
+            <span className="flex items-center gap-1.5">
+              <span aria-hidden className="h-2 w-2 rounded-sm bg-muted-foreground/40" />
+              {t('aiShare')}
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span aria-hidden className="h-2 w-2 rounded-sm bg-foreground" />
+              {t('yourShare')}
+            </span>
+          </div>
+        )}
         {rows.length === 0 ? (
-          <p className="rounded-xl border px-4 py-3 text-sm text-muted-foreground">{t('empty')}</p>
+          <p className="px-4 py-3 text-sm text-muted-foreground">{t('empty')}</p>
         ) : (
-          <ul className="divide-y rounded-xl border">
+          <ul className="divide-y">
             {rows.map((row) => (
               <li key={row.pageType}>
                 <button
@@ -197,7 +194,9 @@ export function PageTypeMix({
           </ul>
         )}
         {rows.length > 0 && covered < 100 && (
-          <p className="text-xs text-muted-foreground">{t('covered', { pct: covered })}</p>
+          <p className="border-t px-4 py-2.5 text-xs text-muted-foreground">
+            {t('covered', { pct: covered })}
+          </p>
         )}
       </div>
     </section>
