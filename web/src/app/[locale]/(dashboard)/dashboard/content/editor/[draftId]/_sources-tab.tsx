@@ -1,12 +1,12 @@
 'use client';
 
-import { useDeferredValue, useEffect, useMemo, useState } from 'react';
+import { useDeferredValue, useMemo, useState, type Dispatch, type SetStateAction } from 'react';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 import { Loader2, Plus, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
-import { getDraftSources, setDraftSourceIncluded } from '@/lib/actions/content-drafts';
+import { setDraftSourceIncluded } from '@/lib/actions/content-drafts';
 import { platformNames } from '@/lib/content/impact';
 import {
   buildSourceGroups,
@@ -21,10 +21,7 @@ import {
 import { formatNumber } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { AddSourceDialog } from './_add-source-dialog';
-
-type SourcesRead =
-  | { data: DraftSourcesData; choices: DraftSourceChoice[]; failed: false }
-  | { data: null; choices: []; failed: true };
+import type { SourcesRead } from './_use-draft-reads';
 
 /**
  * The Sources tab (Content Editor CE-008, spec §10): every source the draft
@@ -32,8 +29,13 @@ type SourcesRead =
  * pages their answers cite, and the brand's Search Console queries — each
  * with its numbers and where the draft uses it as written now. A person
  * unchecks a source to leave it out, or adds a prompt, a page or a query.
+ * The sources are the editor's read (useDraftReads), which the rules check
+ * against too.
  */
 export function SourcesTab({
+  read,
+  setRead,
+  onReload,
   draftId,
   brandId,
   title,
@@ -42,6 +44,11 @@ export function SourcesTab({
   rebuilding,
   onRebuild,
 }: {
+  /** The sources as the editor read them; null while reading. */
+  read: SourcesRead | null;
+  setRead: Dispatch<SetStateAction<SourcesRead | null>>;
+  /** Reads them again: after a failure, or once a source was added. */
+  onReload: () => void;
   draftId: string;
   brandId: string;
   title: string;
@@ -52,29 +59,7 @@ export function SourcesTab({
   onRebuild: (sources: { data: DraftSourcesData; choices: DraftSourceChoice[] }) => void;
 }) {
   const t = useTranslations('contentEditor.editor.sources');
-  const [read, setRead] = useState<SourcesRead | null>(null);
-  const [attempt, setAttempt] = useState(0);
   const [adding, setAdding] = useState(false);
-
-  useEffect(() => {
-    let cancelled = false;
-    getDraftSources(draftId)
-      .then((result) => {
-        if (cancelled) return;
-        setRead(
-          result
-            ? { data: result.data, choices: result.choices, failed: false }
-            : { data: null, choices: [], failed: true },
-        );
-      })
-      .catch((err) => {
-        console.error('Failed to read the draft sources:', err);
-        if (!cancelled) setRead({ data: null, choices: [], failed: true });
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [draftId, attempt]);
 
   // Where each source is used follows the page as it is written, a beat behind typing.
   const html = useDeferredValue(bodyHtml);
@@ -95,14 +80,7 @@ export function SourcesTab({
     return (
       <p className="flex items-center gap-2 text-xs text-muted-foreground">
         {t('loadError')}
-        <button
-          type="button"
-          className="font-medium underline"
-          onClick={() => {
-            setRead(null);
-            setAttempt((n) => n + 1);
-          }}
-        >
+        <button type="button" className="font-medium underline" onClick={onReload}>
           {t('retry')}
         </button>
       </p>
@@ -202,7 +180,7 @@ export function SourcesTab({
         brandId={brandId}
         gscQueries={read.data.gscQueries}
         listed={groups.flatMap((g) => g.rows.map((r) => `${r.kind}:${r.ref}`))}
-        onAdded={() => setAttempt((n) => n + 1)}
+        onAdded={onReload}
       />
     </div>
   );

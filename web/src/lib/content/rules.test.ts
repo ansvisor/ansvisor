@@ -79,6 +79,15 @@ describe('rule sets', () => {
       overrides: { length: { on: false } },
     });
     expect(ruleLength(off, 'category_page')).toBe(800);
+    // Kept within what Rebuild outline builds for.
+    const tiny = activeRules(ruleSet('category_page'), {
+      overrides: { length: { value: '50' } },
+    });
+    expect(ruleLength(tiny, 'category_page')).toBe(100);
+    const huge = activeRules(ruleSet('category_page'), {
+      overrides: { length: { value: '600000' } },
+    });
+    expect(ruleLength(huge, 'category_page')).toBe(50_000);
   });
 
   it('keeps the draft’s choices to their limits', () => {
