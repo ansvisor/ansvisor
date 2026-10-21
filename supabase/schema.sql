@@ -28747,6 +28747,9 @@ comment on column public.content_drafts.page_type_source is
 --
 -- Both must belong to the draft's brand: a check trigger turns away another
 -- brand's opportunity or prompts, which the foreign key alone would accept.
+-- It checks only the prompt ids a write adds, and a deleted prompt leaves
+-- every draft's prompt_ids (it has no foreign key to do that), so a draft
+-- that had one can still take more.
 
 alter table public.content_drafts
   add column if not exists opportunity_id uuid
@@ -28788,12 +28791,14 @@ begin
      and exists (
        select 1
        from unnest(new.prompt_ids) as wanted(id)
-       where not exists (
-         select 1
-         from public.prompts p
-         join public.prompt_sets s on s.id = p.prompt_set_id
-         where p.id = wanted.id and s.brand_id = new.brand_id
-       )
+       -- Only what this write adds: the ids already there were checked.
+       where wanted.id <> all(case when tg_op = 'UPDATE' then old.prompt_ids else '{}' end)
+         and not exists (
+           select 1
+           from public.prompts p
+           join public.prompt_sets s on s.id = p.prompt_set_id
+           where p.id = wanted.id and s.brand_id = new.brand_id
+         )
      )
   then
     raise exception 'content draft prompt belongs to another brand'
@@ -28806,6 +28811,33 @@ $$;
 create or replace trigger content_drafts_check_links
   before insert or update on public.content_drafts
   for each row execute function public.check_content_draft_links();
+
+-- A deleted prompt leaves the drafts that had it, in one update per delete
+-- statement (a topic's prompts go together). Definer: the drafts may be ones
+-- the deleting member can't write, and the deletion is theirs to make.
+create or replace function public.forget_deleted_draft_prompts()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_gone uuid[];
+begin
+  select coalesce(array_agg(id), '{}') into v_gone from deleted_prompts;
+  update public.content_drafts d
+  set prompt_ids = array(select x from unnest(d.prompt_ids) as x where x <> all(v_gone))
+  where d.prompt_ids && v_gone;
+  return null;
+end;
+$$;
+
+revoke execute on function public.forget_deleted_draft_prompts() from public, anon, authenticated;
+
+create or replace trigger prompts_forget_in_content_drafts
+  after delete on public.prompts
+  referencing old table as deleted_prompts
+  for each statement execute function public.forget_deleted_draft_prompts();
 
 -- ─────────────────────────────────────────────────────────────────────────
 -- migrations/00207_content_page_overlap.sql
@@ -28827,7 +28859,12 @@ create or replace trigger content_drafts_check_links
 --     common first. Security definer with an organization check, as
 --     ai_traffic_page_citations (00176): citation_urls has no member select
 --     policy. Read through citation_urls' domain index first, as
---     ga_page_ai_visibility does.
+--     ga_page_ai_visibility does. The window's answers to the prompts come
+--     from idx_prompt_results_brand_created_cover alone (an index-only scan,
+--     hash-joined), never from prompt_results' wide rows one citation at a
+--     time; ChatGPT Shopping is left out, as in Impact (00209). Planned for
+--     each call's own values (plan_cache_mode): a generic plan of these
+--     estimates is far slower.
 --   * content_drafts.source_url: the existing page a draft optimizes, when
 --     there is one (Start's "Optimize … instead"); the editor shows it beside
 --     the page type.
@@ -28858,6 +28895,7 @@ language plpgsql
 stable
 security definer
 set search_path to 'public'
+set plan_cache_mode to 'force_custom_plan'
 as $$
 begin
   if not exists (
@@ -28877,20 +28915,28 @@ begin
     from public.brand_domains bd
     where bd.brand_id = p_brand_id
   ),
-  own_urls as (
+  own_urls as materialized (
     select cu.id, cu.url, cu.title, lower(public.normalize_page_path(cu.url)) as page_key
     from public.citation_urls cu
     where cu.domain in (select domain from own_domains)
   ),
+  -- The window's answers to these prompts, from the (brand_id, created_at)
+  -- cover index alone.
+  answers as materialized (
+    select pr.id, pr.prompt_id
+    from public.prompt_results pr
+    where pr.brand_id = p_brand_id
+      and pr.created_at >= p_since
+      and pr.prompt_id = any(p_prompt_ids)
+      and pr.platform is distinct from 'chatgpt-shopping'
+  ),
   cited as (
-    select ou.page_key, ou.url, ou.title, pr.prompt_id
-    from own_urls ou
-    join public.prompt_result_citations prc
-      on prc.url_id = ou.id
-     and prc.brand_id = p_brand_id
-     and prc.created_at >= p_since
-    join public.prompt_results pr on pr.id = prc.prompt_result_id
-    where pr.prompt_id = any(p_prompt_ids)
+    select ou.page_key, ou.url, ou.title, a.prompt_id
+    from public.prompt_result_citations prc
+    join answers a on a.id = prc.prompt_result_id
+    join own_urls ou on ou.id = prc.url_id
+    where prc.brand_id = p_brand_id
+      and prc.created_at >= p_since
   ),
   pages as (
     select

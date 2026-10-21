@@ -198,6 +198,7 @@ const startInput = z.object({
   // A prompt's text can run longer than a title: cut to fit, not refused.
   title: z.string().max(5_000),
   pageType: z.enum(PAGE_TYPES),
+  typePicked: z.boolean().default(false),
   source: z.discriminatedUnion('kind', [
     z.object({ kind: z.enum(['opportunity', 'prompt', 'topic']), id: z.guid() }),
     z.object({ kind: z.literal('content') }),
@@ -354,15 +355,16 @@ export async function getContentOverlap(
 
 /**
  * A draft started from New content and Start (CE-003, CE-015), by the
- * signed-in member: the page type they picked, what it is for, and its first
- * text. A new page, or an existing one Start chose to optimize, starts with
- * its title as the H1; content brought to optimize is checked against the
- * draft allow-list, as a save is.
+ * signed-in member: its page type, what it is for, and its first text. A new
+ * page, or an existing one Start chose to optimize, starts with its title as
+ * the H1; content brought to optimize is checked against the draft
+ * allow-list, as a save is. A type the person picked stays; Start's guess is
+ * stored as detected, so it follows the page (CE-023).
  */
 export async function createContentDraft(brandId: string, start: DraftStart): Promise<string> {
   const parsed = startInput.safeParse(start);
   if (!draftId.safeParse(brandId).success || !parsed.success) throw new Error('invalid');
-  const { method, pageType, source, bodyHtml, sourceUrl } = parsed.data;
+  const { method, pageType, typePicked, source, bodyHtml, sourceUrl } = parsed.data;
   const title = parsed.data.title.trim().slice(0, MAX_TITLE_LENGTH).trim();
 
   const supabase = await createClient();
@@ -380,7 +382,7 @@ export async function createContentDraft(brandId: string, start: DraftStart): Pr
       method,
       title,
       page_type: pageType,
-      page_type_source: 'user',
+      page_type_source: typePicked ? 'user' : 'detected',
       body_html:
         bodyHtml !== undefined
           ? sanitizeDraftHtml(bodyHtml)
@@ -450,7 +452,8 @@ export async function saveContentDraft(
       let updatedAt: string = data.updated_at;
       if (data.page_type_source === 'detected') {
         const detected = detectPageType({ title, html: bodyHtml }, brandSiteType(data.brands));
-        if (detected !== data.page_type) {
+        // A page that shows no type keeps the one it had (Start's guess).
+        if (detected && detected !== data.page_type) {
           const { data: typed, error: typeError } = await supabase
             .from('content_drafts')
             .update({ page_type: detected })
