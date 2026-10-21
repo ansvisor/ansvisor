@@ -1272,7 +1272,7 @@ export async function saveDraftBrief(id: string, brief: DraftBrief): Promise<Dra
   return parsed.data;
 }
 
-const BRIEF_REBUILD_ERRORS = ['ai_budget', 'no_sources', 'failed'] as const;
+const BRIEF_REBUILD_ERRORS = ['ai_budget', 'no_subscription', 'no_sources', 'failed'] as const;
 export type BriefRebuildError = (typeof BRIEF_REBUILD_ERRORS)[number];
 
 /**
