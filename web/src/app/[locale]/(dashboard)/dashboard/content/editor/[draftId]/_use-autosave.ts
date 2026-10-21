@@ -28,8 +28,10 @@ interface DraftContent {
  *
  * Each save goes only over the version this editor loaded or last saved, so
  * a page someone else changed meanwhile is never overwritten: the editor says
- * so and stops saving until it's reloaded. A page over the size limit isn't
- * sent at all.
+ * so and stops saving until it's reloaded. A save whose answer never came
+ * back may have been written: its page goes along with the next save, which
+ * then takes it as this editor's own. A page over the size limit isn't sent
+ * at all.
  *
  * Before a step that reads the saved page (Mark ready keeps it in History) or
  * replaces it (a restore), settle() saves what is waiting and waits for a
@@ -51,10 +53,16 @@ export function useDraftAutosave(draftId: string, loaded: { updatedAt: string; b
     bodyHash: null,
   });
   const loadedBody = useRef(loaded.bodyHtml);
+  // The page of a save sent whose answer never came back.
+  const unconfirmed = useRef<string | null>(null);
 
   const baseVersion = useCallback(async () => {
     base.current.bodyHash ??= await bodyHash(loadedBody.current);
-    return { updatedAt: base.current.updatedAt, bodyHash: base.current.bodyHash };
+    return {
+      updatedAt: base.current.updatedAt,
+      bodyHash: base.current.bodyHash,
+      ...(unconfirmed.current && { unconfirmedHash: unconfirmed.current }),
+    };
   }, []);
 
   const flush = useCallback(async () => {
@@ -87,6 +95,7 @@ export function useDraftAutosave(draftId: string, loaded: { updatedAt: string; b
         return;
       }
       base.current = { updatedAt: result.updatedAt, bodyHash: result.bodyHash };
+      unconfirmed.current = null;
       failed.current = false;
       if (pending.current) {
         // Typed while it saved: that waits for its own pause.
@@ -97,6 +106,8 @@ export function useDraftAutosave(draftId: string, loaded: { updatedAt: string; b
       }
     } catch (err) {
       console.error('Failed to save the draft:', err);
+      // No answer: the write may have gone through all the same.
+      unconfirmed.current = await bodyHash(content.bodyHtml).catch(() => null);
       saving.current = false;
       failed.current = true;
       pending.current ??= content;
@@ -141,6 +152,7 @@ export function useDraftAutosave(draftId: string, loaded: { updatedAt: string; b
     pending.current = null;
     failed.current = false;
     stopped.current = false;
+    unconfirmed.current = null;
     base.current = { updatedAt: version.updatedAt, bodyHash: null };
     loadedBody.current = version.bodyHtml;
     if (!saving.current) setState('saved');

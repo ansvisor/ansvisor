@@ -108,6 +108,7 @@ export function EditorSidePanel({
     draft,
     pageNow: () => page.current,
     sourcesNow: () => sourcesNow.current,
+    onSourcesRead: (read) => reads.setSources(read),
     onRebuilt: (next) => {
       reads.setBrief(next);
       open('brief');
@@ -135,9 +136,7 @@ export function EditorSidePanel({
             brandId={draft.brandId}
             pageUrl={draft.sourceUrl}
             rebuilding={rebuilding}
-            onUseLostPrompts={(promptIds) =>
-              void rebuild({ addPrompts: promptIds }).then(() => reads.reloadSources())
-            }
+            onUseLostPrompts={(promptIds) => void rebuild({ addPrompts: promptIds })}
           />
         </div>
         {briefOpened && (

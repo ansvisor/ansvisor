@@ -369,6 +369,27 @@ describe('the content editor', () => {
       expect(typeMenu().title).toBe('https://northwind.example/features/pipeline-forecasting/');
     });
 
+    it('keeps the type it had while the page shows none, as a save does', async () => {
+      getContentDraft.mockResolvedValue(
+        draft({
+          title: 'Notes',
+          bodyHtml: '<h1>Notes</h1>',
+          pageType: 'blog_post',
+          pageTypeSource: 'detected',
+        }),
+      );
+      await renderPage();
+      expect(typeMenu().textContent).toContain('Blog post');
+      await rewrite('<h1>Northwind vs HubSpot</h1>');
+      // It reads the page once typing pauses.
+      await act(() => new Promise((resolve) => setTimeout(resolve, 450)));
+      expect(typeMenu().textContent).toContain('Comparison');
+      // Then nothing on the page tells a type: the last one stays.
+      await rewrite('<h1>More notes</h1>');
+      await act(() => new Promise((resolve) => setTimeout(resolve, 450)));
+      expect(typeMenu().textContent).toContain('Comparison');
+    });
+
     it('says when no type is detected yet', async () => {
       getContentDraft.mockResolvedValue(
         draft({ pageType: null, pageTypeSource: 'detected', method: 'create' }),
@@ -866,6 +887,34 @@ describe('the content editor', () => {
       // History kept the page once, before the first change.
       await press('s1', 'Accept');
       expect(keepAgentBeforeVersion).toHaveBeenCalledTimes(1);
+    });
+
+    it('makes an accept again on the page when it changed while the decision was saved', async () => {
+      getContentDraft.mockResolvedValue(page);
+      getDraftSuggestions.mockResolvedValue(batch);
+      let saved: () => void = () => {};
+      decideDraftSuggestions.mockReturnValueOnce(new Promise<void>((r) => (saved = r)));
+      await renderPage();
+
+      await act(async () => {
+        cardOf('s1')!
+          .querySelectorAll('button')
+          .forEach((b) => b.textContent === 'Accept' && b.click());
+      });
+      // An attachment read in while the decision is being saved.
+      const editor = (container.querySelector('.ProseMirror') as HTMLElement & { editor: Editor })
+        .editor;
+      await act(async () => {
+        editor.commands.insertContentAt(editor.state.doc.content.size, '<p>From a file.</p>');
+      });
+      await act(async () => saved());
+      await act(async () => {});
+
+      expect(pageText()).toContain(
+        'Accuracy is shown per team, each week, against closed revenue.',
+      );
+      expect(pageText()).toContain('From a file.');
+      expect(cardOf('s1')!.textContent).toContain('Accepted');
     });
 
     it('rejects one, and restores it to review', async () => {

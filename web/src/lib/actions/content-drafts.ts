@@ -819,6 +819,11 @@ const saveInput = z.object({
   base: z.object({
     updatedAt: z.string().min(1),
     bodyHash: z.string().regex(/^[0-9a-f]{64}$/),
+    /** The page of a save whose answer never came back: it may be this editor's own write. */
+    unconfirmedHash: z
+      .string()
+      .regex(/^[0-9a-f]{64}$/)
+      .optional(),
   }),
 });
 
@@ -832,8 +837,10 @@ const SAVE_ATTEMPTS = 3;
  * the page tells which kind: the same page means only the draft's other
  * columns changed (Mark ready, its type), and the save goes over them;
  * another page means someone else changed it (another tab, a teammate, the
- * Content Agent), and nothing is overwritten. A save RLS refused, or of a
- * draft that no longer exists, comes back not_found rather than saved.
+ * Content Agent), and nothing is overwritten. A page that is the editor's
+ * own last save whose answer was lost (`unconfirmedHash`) counts as the
+ * same page. A save RLS refused, or of a draft that no longer exists, comes
+ * back not_found rather than saved.
  *
  * Until a person picks the page type, it follows the page (CE-023): detected
  * again from what was saved, and written only while it is still detected, so
@@ -842,7 +849,11 @@ const SAVE_ATTEMPTS = 3;
  */
 export async function saveContentDraft(
   id: string,
-  input: { title: string; bodyHtml: string; base: { updatedAt: string; bodyHash: string } },
+  input: {
+    title: string;
+    bodyHtml: string;
+    base: { updatedAt: string; bodyHash: string; unconfirmedHash?: string };
+  },
 ): Promise<SaveDraftResult> {
   if (typeof input?.bodyHtml === 'string' && input.bodyHtml.length > MAX_BODY_HTML_LENGTH) {
     return { ok: false, reason: 'too_large' };
@@ -902,7 +913,8 @@ export async function saveContentDraft(
     if (agentStateOf(current.agent_state, current.agent_state_at) === 'writing') {
       return { ok: false, reason: 'conflict' };
     }
-    if ((await bodyHash(current.body_html)) !== base.bodyHash) {
+    const currentHash = await bodyHash(current.body_html);
+    if (currentHash !== base.bodyHash && currentHash !== base.unconfirmedHash) {
       return { ok: false, reason: 'conflict' };
     }
     expected = current.updated_at;

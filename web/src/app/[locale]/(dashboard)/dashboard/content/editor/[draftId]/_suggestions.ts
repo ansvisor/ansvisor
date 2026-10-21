@@ -265,6 +265,34 @@ export function undoInto(
   return false;
 }
 
+/**
+ * A decision's page change made again on the page as it is now, for when the
+ * page changed while the decision was saved (an attachment read in, say):
+ * each suggestion in the order it was first applied. An undo leaves alone a
+ * suggestion that was only rejected (it changed nothing on the page).
+ * `failed` names the ones the page no longer has room for.
+ */
+export function redoDecision(
+  state: EditorState,
+  all: DraftSuggestion[],
+  ids: string[],
+  kind: 'accept' | 'undo',
+): { tr: Transaction; failed: string[] } {
+  const tr = state.tr;
+  const list = all.map((s) => ({ ...s }));
+  const failed: string[] = [];
+  for (const id of ids) {
+    const s = list.find((x) => x.id === id);
+    if (!s || (kind === 'undo' && s.status !== 'accepted')) continue;
+    if (kind === 'accept' ? acceptInto(tr, state, s, list) : undoInto(tr, state, s, list)) {
+      s.status = kind === 'accept' ? 'accepted' : 'open';
+    } else {
+      failed.push(id);
+    }
+  }
+  return { tr, failed };
+}
+
 // ─── The cards ────────────────────────────────────────────────────────────────
 
 const BUTTON =

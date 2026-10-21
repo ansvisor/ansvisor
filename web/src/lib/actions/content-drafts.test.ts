@@ -151,6 +151,18 @@ describe('saveContentDraft', () => {
     expect(calls[2].filters).toContainEqual(['eq', 'updated_at', '2026-10-20T14:30:00Z']);
   });
 
+  it('takes the page of its own save whose answer was lost as its own', async () => {
+    // The lost save wrote "<h1>Mine</h1>"; the editor still holds the loaded base.
+    updates = [null, { updated_at: '2026-10-20T15:01:00Z' }];
+    row = { updated_at: '2026-10-20T14:30:00Z', body_html: '<h1>Mine</h1>' };
+    const result = await saveContentDraft(DRAFT, {
+      title: 'Mine',
+      bodyHtml: '<h1>Mine</h1><p>More</p>',
+      base: { ...(await base()), unconfirmedHash: await bodyHash('<h1>Mine</h1>') },
+    });
+    expect(result).toMatchObject({ ok: true, updatedAt: '2026-10-20T15:01:00Z' });
+  });
+
   it('doesn’t overwrite a page someone else changed', async () => {
     row = { updated_at: '2026-10-20T14:30:00Z', body_html: '<h1>Their version</h1>' };
     await expect(

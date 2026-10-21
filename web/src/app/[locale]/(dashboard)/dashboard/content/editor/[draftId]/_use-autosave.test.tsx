@@ -131,12 +131,26 @@ describe('the editor’s autosave', () => {
 
     await retry();
     expect(saveContentDraft).toHaveBeenCalledTimes(2);
+    // The lost save may have been written: its page goes along, to be taken as ours.
     expect(saveContentDraft).toHaveBeenLastCalledWith('d1', {
       ...content('<p>x</p>'),
-      base: loadedBase,
+      base: { ...loadedBase, unconfirmedHash: 'hash:<p>x</p>' },
     });
     expect(state()).toBe('saved');
+
+    // Once a save is answered, nothing is unconfirmed.
+    edit('<p>last</p>');
+    await act(async () => vi.advanceTimersByTime(1500));
+    expect(saveContentDraft.mock.calls[2][1].base).toEqual({ updatedAt: 'now', bodyHash: 'h1' });
     error.mockRestore();
+  });
+
+  it('sends no unconfirmed page after a save the server answered with a failure', async () => {
+    saveContentDraft.mockResolvedValueOnce({ ok: false, reason: 'invalid' });
+    edit('<p>x</p>');
+    await act(async () => vi.advanceTimersByTime(1500));
+    await retry();
+    expect(saveContentDraft.mock.calls[1][1].base).toEqual(loadedBase);
   });
 
   it('stops saving when the page was changed elsewhere, rather than overwriting it', async () => {

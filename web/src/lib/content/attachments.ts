@@ -98,8 +98,13 @@ export function tableHtml(rows: string[][]): string {
 /** What the editor adds around each cell's text when it saves a table. */
 const SAVED_CELL_OVERHEAD = '<td colspan="1" rowspan="1"><p></p></td>'.length;
 const SAVED_ROW_OVERHEAD = '<tr></tr>'.length;
-/** The table's own tags, its column widths included: a generous allowance. */
-const SAVED_TABLE_OVERHEAD = 200 + MAX_TABLE_COLUMNS * '<col>'.length;
+/**
+ * The table's own tags as the editor saves them: one column width per
+ * column (`<col style="min-width: 25px">`), and an allowance for
+ * `<table style="min-width: …px"><colgroup>…</colgroup><tbody>…</tbody></table>`.
+ */
+const SAVED_COLUMN_OVERHEAD = '<col style="min-width: 25px">'.length;
+const SAVED_TABLE_OVERHEAD = 100;
 
 /**
  * How many of a sheet's data rows fit in `room` characters of the saved
@@ -112,7 +117,12 @@ export function rowsThatFit(rows: string[][], room: number): number {
   const rowLength = (row: string[]) =>
     SAVED_ROW_OVERHEAD +
     row.reduce((sum, cell) => sum + SAVED_CELL_OVERHEAD + escapeHtml(cell).length, 0);
-  let used = SAVED_TABLE_OVERHEAD + (rows[0] ? rowLength(rows[0]) : 0);
+  const columns = Math.min(
+    MAX_TABLE_COLUMNS,
+    rows.reduce((most, row) => Math.max(most, row.length), 0),
+  );
+  let used =
+    SAVED_TABLE_OVERHEAD + columns * SAVED_COLUMN_OVERHEAD + (rows[0] ? rowLength(rows[0]) : 0);
   if (used > room) return -1;
   let fit = 0;
   for (const row of rows.slice(1)) {

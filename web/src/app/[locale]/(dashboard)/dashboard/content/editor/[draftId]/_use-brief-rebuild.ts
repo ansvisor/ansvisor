@@ -28,12 +28,15 @@ export function useBriefRebuild({
   draft,
   pageNow,
   sourcesNow,
+  onSourcesRead,
   onRebuilt,
 }: {
   draft: ContentDraft;
   pageNow: () => PageNow;
   /** The sources as the editor has them; null until read. */
   sourcesNow: () => SourcesRead | null;
+  /** The sources read afresh once prompts were added: the editor's copy, so they aren't read again. */
+  onSourcesRead: (read: SourcesRead) => void;
   onRebuilt: (brief: DraftBrief) => void;
 }) {
   const t = useTranslations('contentEditor.editor.brief');
@@ -49,10 +52,21 @@ export function useBriefRebuild({
     try {
       const added = !!options.addPrompts?.length;
       if (added) await addDraftPrompts(draft.id, options.addPrompts!);
-      // Prompts just added aren't in the sources in hand: those are read afresh.
+      // Prompts just added aren't in the sources in hand: those are read
+      // afresh, and the fresh read becomes the editor's.
       const inHand = added ? null : sourcesNow();
-      const read =
-        options.sources ?? (inHand && !inHand.failed ? inHand : await getDraftSources(draft.id));
+      let read: { data: DraftSourcesData; choices: DraftSourceChoice[] } | null =
+        options.sources ?? (inHand && !inHand.failed ? inHand : null);
+      if (!read) {
+        read = await getDraftSources(draft.id);
+        if (added) {
+          onSourcesRead(
+            read
+              ? { data: read.data, choices: read.choices, failed: false }
+              : { data: null, choices: [], failed: true },
+          );
+        }
+      }
       if (!read) throw new Error('not_found');
       const page = pageNow();
       const result = await rebuildDraftBrief(
