@@ -1,0 +1,24 @@
+import { NextResponse } from 'next/server';
+import { authenticateMcpRequest } from '@/lib/mcp-auth';
+import { setContentDraftReadyFor } from '@/lib/mcp/content';
+import { contentUuid } from '@/lib/mcp/content-schemas';
+
+/** POST /api/mcp/content-drafts/[id]/ready — REST mirror of `set_content_draft_ready`. */
+export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const auth = await authenticateMcpRequest(req);
+  if (auth instanceof NextResponse) return auth;
+  const { id } = await params;
+  if (!contentUuid.safeParse(id).success) {
+    return NextResponse.json({ error: 'id must be a draft UUID' }, { status: 400 });
+  }
+  try {
+    const result = await setContentDraftReadyFor(auth, id);
+    if (!result) return NextResponse.json({ error: 'Draft not found' }, { status: 404 });
+    return NextResponse.json(result);
+  } catch (err) {
+    return NextResponse.json(
+      { error: err instanceof Error ? err.message : 'Failed' },
+      { status: 500 },
+    );
+  }
+}

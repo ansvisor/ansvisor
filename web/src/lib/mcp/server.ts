@@ -45,6 +45,24 @@ import {
   createImproveActionFor,
 } from './data';
 import { exportActionFor } from './action-export';
+import {
+  addContentSourceFor,
+  createContentDraftFor,
+  getContentDraftFor,
+  getContentImpactFor,
+  getContentSourcesFor,
+  listContentDraftsFor,
+  setContentDraftReadyFor,
+  suggestContentChangesFor,
+} from './content';
+import { MAX_API_SUGGESTIONS } from '@/lib/content/agent-suggestions';
+import {
+  addSourceShape,
+  createDraftShape,
+  impactDays,
+  listDraftsShape,
+  suggestionsShape,
+} from './content-schemas';
 
 /**
  * Build a fresh MCP server bound to a single authenticated request.
@@ -1323,6 +1341,168 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
       return {
         content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
       };
+    },
+  );
+
+  // ─── Content Editor (CE-022): drafts, read and written as a person would ───
+
+  const json = (value: unknown) => ({
+    content: [{ type: 'text' as const, text: JSON.stringify(value, null, 2) }],
+  });
+  const notFound = (what: string) => ({
+    content: [{ type: 'text' as const, text: `${what} not found` }],
+    isError: true,
+  });
+
+  server.registerTool(
+    'list_content_drafts',
+    {
+      description:
+        "List a brand's Content Editor drafts, the latest changed first (up to 100): title, status (draft, in_review, ready, published), method (create or optimize), page type, author (user or agent), the live page it optimizes, how many agent suggestions wait for review, and the editor path.",
+      inputSchema: listDraftsShape,
+    },
+    async (args) => {
+      const drafts = await listContentDraftsFor(auth, args.brand_id, args.status);
+      return drafts ? json(drafts) : notFound('Brand');
+    },
+  );
+
+  server.registerTool(
+    'get_content_draft',
+    {
+      description:
+        'Read one Content Editor draft: its HTML, and the page passage by passage (numbered, as suggest_content_changes refers to them). Passages marked locked are quoted by AI answers today: never suggest changing them. Also the action it belongs to and the agent suggestions still waiting for review.',
+      inputSchema: {
+        draft_id: relaxedUuid.describe('Draft UUID, from list_content_drafts.'),
+      },
+    },
+    async (args) => {
+      const draft = await getContentDraftFor(auth, args.draft_id);
+      return draft ? json(draft) : notFound('Draft');
+    },
+  );
+
+  server.registerTool(
+    'create_content_draft',
+    {
+      description:
+        "Write a new Content Editor draft as the agent. It goes to the Library's In review for a person to read, edit and mark ready — the agent never publishes. The HTML is checked against the editor's allow-list (headings, paragraphs, lists, tables, links, schema JSON-LD). Without page_type, it is detected from the page. It is a write logged as the agent's — only on explicit user intent.",
+      inputSchema: createDraftShape,
+    },
+    async (args) => {
+      const created = await createContentDraftFor(auth, {
+        brandId: args.brand_id,
+        title: args.title,
+        bodyHtml: args.body_html,
+        method: args.method,
+        pageType: args.page_type,
+        sourceUrl: args.source_url,
+        promptIds: args.prompt_ids,
+      });
+      return created ? json(created) : notFound('Brand');
+    },
+  );
+
+  server.registerTool(
+    'get_content_impact',
+    {
+      description:
+        "What the draft's live page earns, as the editor's Impact tab reads it: citations in AI answers, AI visits, Google clicks and the prompts citing it, against the period before. Only for a draft of a live page (method optimize, or published).",
+      inputSchema: {
+        draft_id: relaxedUuid.describe('Draft UUID.'),
+        days: impactDays,
+      },
+    },
+    async (args) => {
+      const impact = await getContentImpactFor(auth, args.draft_id, args.days);
+      if (impact === 'no_page') {
+        return {
+          content: [{ type: 'text' as const, text: 'This draft is a new page, not live yet' }],
+          isError: true,
+        };
+      }
+      return impact ? json(impact) : notFound('Draft');
+    },
+  );
+
+  server.registerTool(
+    'get_content_sources',
+    {
+      description:
+        "The brand's data the draft draws on over 30 days, as the Sources tab shows it: its prompts, the AI searches (fan-outs) run for them, the pages AI cites, Search Console queries, and the person's choices (sources left out or added).",
+      inputSchema: {
+        draft_id: relaxedUuid.describe('Draft UUID.'),
+      },
+    },
+    async (args) => {
+      const sources = await getContentSourcesFor(auth, args.draft_id);
+      return sources ? json(sources) : notFound('Draft');
+    },
+  );
+
+  server.registerTool(
+    'add_content_source',
+    {
+      description:
+        "Add a source to a draft, as the Sources tab's Add does: a tracked prompt (by id) joins the draft's prompts; a page address or a Search Console query is kept as added.",
+      inputSchema: {
+        draft_id: relaxedUuid.describe('Draft UUID.'),
+        ...addSourceShape,
+      },
+    },
+    async (args) => {
+      const ref = args.ref.trim();
+      if (args.kind === 'prompt' && !relaxedUuid.safeParse(ref).success) {
+        return {
+          content: [{ type: 'text' as const, text: 'ref must be a prompt UUID' }],
+          isError: true,
+        };
+      }
+      const result = await addContentSourceFor(
+        auth,
+        args.draft_id,
+        args.kind === 'prompt' ? { kind: 'prompt', promptId: ref } : { kind: args.kind, ref },
+      );
+      if (result === 'not_found') return notFound('Prompt');
+      return result ? json(result) : notFound('Draft');
+    },
+  );
+
+  server.registerTool(
+    'suggest_content_changes',
+    {
+      description: `Leave changes on a draft for a person to accept or reject in the editor — never applied by the agent. Read the draft with get_content_draft first: each suggestion names a passage by its number. A replace changes words in that passage ("before" copied exactly as the passage has it, "after" as plain text); an insert adds blocks after it ("after" as simple HTML: h2, h3, p, ul, ol, li, strong, em). Never change a locked passage. At most ${MAX_API_SUGGESTIONS}; ones the editor can't apply come back in "dropped" with the reason (no_passage, locked, not_in_passage, no_change, empty, duplicate, too_many).`,
+      inputSchema: {
+        draft_id: relaxedUuid.describe('Draft UUID.'),
+        ...suggestionsShape,
+      },
+    },
+    async (args) => {
+      const result = await suggestContentChangesFor(auth, args.draft_id, args.suggestions);
+      if (result === 'published') {
+        return {
+          content: [
+            { type: 'text' as const, text: 'The draft is published; suggest on a new draft' },
+          ],
+          isError: true,
+        };
+      }
+      return result ? json(result) : notFound('Draft');
+    },
+  );
+
+  server.registerTool(
+    'set_content_draft_ready',
+    {
+      description:
+        "Mark a draft ready to publish, as the editor's Mark ready does: from draft or in review; History keeps the page as a version. Ansvisor never publishes — a person does. Only on explicit user intent.",
+      inputSchema: {
+        draft_id: relaxedUuid.describe('Draft UUID.'),
+      },
+    },
+    async (args) => {
+      const result = await setContentDraftReadyFor(auth, args.draft_id);
+      return result ? json(result) : notFound('Draft');
     },
   );
 
