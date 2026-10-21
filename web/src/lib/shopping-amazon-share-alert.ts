@@ -10,9 +10,9 @@ export interface WeeklyAmazonShare {
 }
 
 export interface AmazonShareDropAlert {
-  /** Median Amazon share across the previous four complete weekly buckets. */
+  /** Median Amazon share across the previous four complete rolling seven-day windows. */
   fromShare: number;
-  /** Amazon share in the current UTC week. */
+  /** Amazon share in the latest complete seven-day window ending at query time. */
   toShare: number;
   baselineCards: number;
   currentCards: number;
@@ -35,8 +35,8 @@ function isConsecutiveWeeks(weeks: WeeklyAmazonShare[]): boolean {
 
 /**
  * Detect a meaningful drop in Amazon's share of classified cards for a brand's
- * own products. Requires five consecutive UTC weeks with at least 30 classified
- * cards each, so low-volume weeks never trigger the alert.
+ * own products. Requires five consecutive rolling seven-day windows with at
+ * least 30 classified cards each, so low-volume windows never trigger the alert.
  */
 export function detectAmazonShareDrop(
   input: readonly WeeklyAmazonShare[],
@@ -65,7 +65,7 @@ export function detectAmazonShareDrop(
 
   if (
     currentShare >= baselineShare * AMAZON_SHARE_MAX_CURRENT_RATIO ||
-    absoluteDrop < AMAZON_SHARE_MIN_ABSOLUTE_DROP
+    absoluteDrop < AMAZON_SHARE_MIN_ABSOLUTE_DROP - 1e-9
   ) {
     return null;
   }
