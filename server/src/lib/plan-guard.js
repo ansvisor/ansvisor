@@ -36,9 +36,9 @@ export class PlanLimitError extends Error {
  * organizations.plan_overrides (jsonb) — mirrors web getOrgPlan().
  *
  * `contractMonthlyUsd` is the contract's monthly value, entered when the deal
- * is signed. It sets the Improve budget to the same 1% share of the contract
- * the other plans get of their price (never below the plan default), unless
- * `improveMonthlyBudgetUsd` is set explicitly, which wins. The relevance
+ * is signed. It sets the Improve budget to 1% of the contract (never below
+ * the plan default), unless `improveMonthlyBudgetUsd` is set explicitly,
+ * which wins. The relevance
  * budget (VIS-011) follows the same rule at 0.1%, rounded down so it never
  * passes the share.
  */
@@ -319,9 +319,10 @@ async function improveSpendThisPeriod(orgId) {
 }
 
 /**
- * Improve-tab budget (PROMPT-003): a monthly USD budget per organization,
- * 1% of the plan price (plan.limits.improveMonthlyBudgetUsd), charged with
- * each generation's real token cost so the share holds for any model. Users
+ * Improve-tab budget (PROMPT-003): a monthly USD budget per organization
+ * (plan.limits.improveMonthlyBudgetUsd: Starter $1, Growth $5, Enterprise
+ * $10 or 1% of its contract), charged with each generation's real token
+ * cost so the budget holds for any model. Users
  * see an estimate of generations left, not dollars. -1 is unlimited.
  */
 export async function getImproveQuotaStatus(orgId, modelId) {
