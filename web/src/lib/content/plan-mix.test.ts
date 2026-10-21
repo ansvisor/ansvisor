@@ -19,7 +19,7 @@ describe('pageTypeMix', () => {
     const { rows, unread } = pageTypeMix(
       [
         cited('https://rival.example/compare/acme-vs-rival', 30),
-        cited('https://review.example/alternatives/crm', 10),
+        cited('https://review.example/compare/crm', 10),
         cited('https://acme.example/vs/hubspot', 5, { own: true }),
         cited('https://acme.example/features/forecasting', 25, { own: true }),
         cited('https://acme.example/features/email-sync/', 5, { own: true }),

@@ -3831,7 +3831,12 @@
           "introText": "Intro text above products",
           "buyingFaq": "Buying tips + FAQ",
           "currentPrices": "Prices and dates are current",
-          "bestTime": "Best time to visit in the summary"
+          "bestTime": "Best time to visit in the summary",
+          "howToSteps": "Steps as a numbered list",
+          "definitionFirst": "Definition in the first sentence",
+          "examplesSection": "An examples section",
+          "sizeChart": "Size chart table",
+          "measureSteps": "How to measure, as numbered steps"
         },
         "hints": {
           "summary": "A short summary under the H1 that answer engines can quote.",
@@ -3841,7 +3846,9 @@
           "aiTraces": "Finds phrases that read as machine-written (delve, in today's fast-paced world, not only… but also). Fixing them comes with the Content Agent.",
           "whoFor": "Who the page is for, in one sentence, e.g. \"Sales leaders at 20–200 person B2B teams\".",
           "first40Words": "ChatGPT reads about the first 50 tokens (~40 words) of a product description. The rest is ignored.",
-          "feedMatch": "Checked against the product feed once it's connected."
+          "feedMatch": "Checked against the product feed once it's connected.",
+          "definitionFirst": "The paragraph under the H1 says what the term is (\"X is …\") in a few words: what answer engines quote for \"what is\" prompts.",
+          "measureSteps": "The longest numbered list on the page counts as the steps."
         },
         "units": {
           "characters": "characters",
@@ -3924,11 +3931,11 @@
     },
     "pageTypes": {
       "feature_page": "Feature page",
-      "solution_page": "Solution page",
+      "solution_page": "Use case page",
       "comparison": "Comparison",
       "integration": "Integration",
       "pricing": "Pricing",
-      "guide": "Guide",
+      "guide": "How-to guide",
       "blog_post": "Blog post",
       "docs_faq": "Docs / FAQ",
       "product_page": "Product page",
@@ -3938,7 +3945,11 @@
       "policy": "Policy",
       "destination_page": "Destination page",
       "itinerary": "Itinerary",
-      "help_faq": "Help & FAQ"
+      "help_faq": "Help & FAQ",
+      "definition": "Definition page",
+      "alternatives": "Alternatives page",
+      "collection_page": "Collection page",
+      "sizing_guide": "Sizing guide"
     }
   },
   "content": {

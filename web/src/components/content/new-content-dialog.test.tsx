@@ -149,8 +149,8 @@ describe('New content', () => {
     expect(checkedType()).toBe('Comparison');
     expect(document.body.textContent).toContain('Picked from the title.');
 
-    await click(radio('Guide'));
-    expect(checkedType()).toBe('Guide');
+    await click(radio('How-to guide'));
+    expect(checkedType()).toBe('How-to guide');
     await click(button('Open editor'));
     expect(createContentDraft).toHaveBeenCalledWith('b1', {
       method: 'create',
@@ -171,7 +171,7 @@ describe('New content', () => {
     await click(option);
     await click(button('Continue'));
     expect(document.body.textContent).toContain('Create: CRM for real estate teams');
-    expect(checkedType()).toBe('Solution page');
+    expect(checkedType()).toBe('Use case page');
   });
 
   it('optimizes pasted content, cleaned, and reads its page type from it', async () => {
@@ -400,7 +400,7 @@ describe('New content', () => {
       );
       // The draft becomes that page's: its title, and the type its address shows.
       expect(document.body.textContent).toContain('Optimize: Espresso machines for beginners');
-      expect(checkedType()).toBe('Guide');
+      expect(checkedType()).toBe('How-to guide');
       expect(document.body.textContent).toContain('Picked from the page.');
 
       importContentPage.mockResolvedValue({

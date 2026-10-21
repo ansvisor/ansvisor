@@ -15,12 +15,15 @@ export const MAX_TITLE_LENGTH = 300;
 
 /**
  * The counter's target until the Rules tab (CE-009) lets it be changed: the
- * spec's default Length rule, 3,000 characters, 1,200 for a product page and
- * 800 for a category page.
+ * spec's default Length rule, 3,000 characters; 1,200 for a product page,
+ * 800 for a category or collection page, 1,000 for a sizing guide and 1,500
+ * for a definition page.
  */
 export function lengthTarget(pageType: string | null): number {
   if (pageType === 'product_page') return 1200;
-  if (pageType === 'category_page') return 800;
+  if (pageType === 'category_page' || pageType === 'collection_page') return 800;
+  if (pageType === 'sizing_guide') return 1000;
+  if (pageType === 'definition') return 1500;
   return 3000;
 }
 

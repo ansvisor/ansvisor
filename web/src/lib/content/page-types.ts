@@ -6,8 +6,11 @@ import { JSON_LD_SCRIPT } from './html-allowlist';
  * Page types by kind of site, and a page's type found from the page itself
  * (Content Editor CE-023, spec §4). A B2B SaaS site writes feature,
  * comparison and pricing pages; a shop, product and category pages; a B2C
- * site, destination and help pages. The brand's site type is set in its
- * settings (brands.site_type, 00205), guessed until someone does.
+ * site, destination and help pages. Every kind also writes the formats
+ * www.ansvisor.com offers that fit it: how-to guides, comparisons,
+ * definitions, best-of lists and FAQs; alternatives, collections and sizing
+ * guides where they apply. The brand's site type is set in its settings
+ * (brands.site_type, 00205), guessed until someone does.
  */
 
 export const SITE_TYPES = ['b2b', 'ecommerce', 'b2c'] as const;
@@ -23,14 +26,40 @@ export const SITE_PAGE_TYPES: Record<SiteType, readonly PageType[]> = {
     'feature_page',
     'solution_page',
     'comparison',
+    'alternatives',
+    'best_of',
+    'guide',
+    'definition',
     'integration',
     'pricing',
-    'guide',
-    'blog_post',
     'docs_faq',
+    'blog_post',
   ],
-  ecommerce: ['product_page', 'category_page', 'buying_guide', 'best_of', 'policy', 'blog_post'],
-  b2c: ['destination_page', 'itinerary', 'guide', 'best_of', 'help_faq', 'blog_post'],
+  ecommerce: [
+    'product_page',
+    'category_page',
+    'collection_page',
+    'buying_guide',
+    'best_of',
+    'comparison',
+    'alternatives',
+    'guide',
+    'definition',
+    'sizing_guide',
+    'help_faq',
+    'policy',
+    'blog_post',
+  ],
+  b2c: [
+    'destination_page',
+    'itinerary',
+    'guide',
+    'best_of',
+    'comparison',
+    'definition',
+    'help_faq',
+    'blog_post',
+  ],
 };
 
 /**
@@ -72,9 +101,18 @@ export function siteTypeOf(brand: BrandSite): SiteType {
 type BySite = Partial<Record<SiteType, PageType>>;
 
 const ANY_SITE = (type: PageType): BySite => ({ b2b: type, ecommerce: type, b2c: type });
-const COMPARISON: BySite = { b2b: 'comparison', ecommerce: 'best_of', b2c: 'best_of' };
-const HELP: BySite = { b2b: 'docs_faq', ecommerce: 'policy', b2c: 'help_faq' };
-const GUIDE: BySite = { b2b: 'guide', ecommerce: 'buying_guide', b2c: 'guide' };
+const COMPARISON = ANY_SITE('comparison');
+const BEST_OF = ANY_SITE('best_of');
+const DEFINITION = ANY_SITE('definition');
+/** A B2C site has no alternatives page: an "X alternatives" page compares. */
+const ALTERNATIVES: BySite = { b2b: 'alternatives', ecommerce: 'alternatives', b2c: 'comparison' };
+const FAQ: BySite = { b2b: 'docs_faq', ecommerce: 'help_faq', b2c: 'help_faq' };
+const POLICY: BySite = { b2b: 'docs_faq', ecommerce: 'policy', b2c: 'help_faq' };
+const GUIDE = ANY_SITE('guide');
+/** How to choose: a shop's buying guide, elsewhere a how-to guide. */
+const BUYING_GUIDE: BySite = { b2b: 'guide', ecommerce: 'buying_guide', b2c: 'guide' };
+const SIZING: BySite = { ecommerce: 'sizing_guide' };
+const COLLECTION: BySite = { ecommerce: 'collection_page' };
 
 /**
  * URL paths, the most specific first: /blog/hubspot-vs-salesforce is a
@@ -83,24 +121,29 @@ const GUIDE: BySite = { b2b: 'guide', ecommerce: 'buying_guide', b2c: 'guide' };
  */
 const PATH_SIGNS: [RegExp, BySite][] = [
   [/\/(pricing|plans|plans-and-pricing)(\/|$)/, { b2b: 'pricing' }],
-  [
-    /(^|[/-])(vs|versus)([/-]|$)|\/(compare|comparisons?)(\/|$)|[/-]alternatives?([/-]|$)/,
-    COMPARISON,
-  ],
+  [/\/(size-?(guides?|charts?)|sizing(-guides?)?|fit-guides?)([/-]|$)/, SIZING],
+  [/(^|[/-])alternatives?([/-]|$)/, ALTERNATIVES],
+  [/(^|[/-])(vs|versus)([/-]|$)|\/(compare|comparisons?)(\/|$)/, COMPARISON],
+  [/\/(glossary|definitions?|dictionary|what-is|what-are)([/-]|$)/, DEFINITION],
   [
     /\/(shipping|delivery|returns?|refunds?|exchanges?|warranty|polic(y|ies)|terms|privacy|legal)([/-]|$)/,
-    HELP,
+    POLICY,
   ],
-  [/\/(docs|documentation|help|help-center|support|faqs?|knowledge-base|kb)(\/|$)/, HELP],
+  [/\/(docs|documentation|help|help-center|support|faqs?|knowledge-base|kb)(\/|$)/, FAQ],
   [/\/(integrations?|apps|marketplace|connectors?)\//, { b2b: 'integration' }],
-  [/\/(buying-guides?|buyers?-guides?|how-to-choose)([/-]|$)/, GUIDE],
-  [/\/(the-)?(best(?!-(practices?|time|ways?)([/-]|$))|top-?\d+)([/-]|$)/, COMPARISON],
+  [/\/(buying-guides?|buyers?-guides?|how-to-choose)([/-]|$)/, BUYING_GUIDE],
+  [/\/(the-)?(best(?!-(practices?|time|ways?)([/-]|$))|top-?\d+)([/-]|$)/, BEST_OF],
   [/\/(features?|capabilities|platform)(\/|$)/, { b2b: 'feature_page' }],
   [
     /\/(solutions?|industries|industry|use-cases?|teams)(\/|$)|\/for-[a-z]/,
     { b2b: 'solution_page' },
   ],
   [/\/(products?|p|dp|items?)\/[^/]+/, { b2b: 'feature_page', ecommerce: 'product_page' }],
+  // A themed collection (gifts, bundles, "for …") before a shop's categories.
+  [
+    /\/collections?\/[^/]*(gifts?|bundles?|kits?|sets?|best-?sellers?|new-arrivals?|for-[a-z]|-for-|picks|edit)/,
+    COLLECTION,
+  ],
   [
     /\/(collections?|categor(y|ies)|c|shop|catalog|departments?)(\/|$)/,
     { ecommerce: 'category_page' },
@@ -137,19 +180,26 @@ const SCHEMA_SIGNS: [readonly string[], BySite][] = [
   ],
   [['Service'], { b2b: 'solution_page', b2c: 'destination_page' }],
   [['CollectionPage', 'OfferCatalog'], { ecommerce: 'category_page' }],
+  [['DefinedTerm', 'DefinedTermSet'], DEFINITION],
   [['HowTo'], GUIDE],
   [['BlogPosting', 'Article', 'NewsArticle', 'TechArticle'], ANY_SITE('blog_post')],
-  [['FAQPage'], HELP],
-  [['ItemList'], COMPARISON],
+  [['FAQPage'], FAQ],
+  [['ItemList'], BEST_OF],
 ];
 
 /** Words in the title, for a page with no telling URL or schema. */
 const TITLE_SIGNS: [RegExp, BySite][] = [
-  [/\b(vs\.?|versus)\s|\balternatives?\b/i, COMPARISON],
+  [/\bsize (guide|chart)s?\b|\bsizing\b|\bfit guide\b/i, SIZING],
+  [/\balternatives?\b/i, ALTERNATIVES],
+  [/\b(vs\.?|versus)\s/i, COMPARISON],
   [/\bpricing\b/i, { b2b: 'pricing' }],
-  [/\bpolic(y|ies)\b|\bfaqs?\b|\bfrequently asked\b/i, HELP],
-  [/\bbuying guide\b|\bhow to choose\b/i, GUIDE],
-  [/^(the\s+)?(\d+\s+)?best\b(?!\s+(time|way|practices?)\b)|\btop\s+\d+\b/i, COMPARISON],
+  [/\bpolic(y|ies)\b/i, POLICY],
+  [/\bfaqs?\b|\bfrequently asked\b/i, FAQ],
+  [/\bbuying guide\b|\bhow to choose\b/i, BUYING_GUIDE],
+  [/^(the\s+)?(\d+\s+)?best\b(?!\s+(time|way|practices?)\b)|\btop\s+\d+\b/i, BEST_OF],
+  // "What is single-origin coffee?", not "What is the best …".
+  [/^what\s+(is|are)\s+(?!the\s+best\b)|\b(definition|meaning) of\b|\bglossary\b/i, DEFINITION],
+  [/\bgifts? for\b|\bcollection\b/i, COLLECTION],
   [/\b\d+[-\s]days?\b|\bitinerar(y|ies)\b/i, { b2c: 'itinerary' }],
   [/\bintegrations?\b|\bintegrates? with\b/i, { b2b: 'integration' }],
   [

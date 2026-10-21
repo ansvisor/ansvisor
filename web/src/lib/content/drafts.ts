@@ -59,6 +59,11 @@ export const PAGE_TYPES = [
   'destination_page',
   'itinerary',
   'help_faq',
+  // The formats www.ansvisor.com offers (content intelligence page).
+  'definition',
+  'alternatives',
+  'collection_page',
+  'sizing_guide',
 ] as const;
 export type PageType = (typeof PAGE_TYPES)[number];
 

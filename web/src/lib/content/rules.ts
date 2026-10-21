@@ -175,6 +175,68 @@ const TYPE_RULES: Partial<Record<PageType, RuleDef[]>> = {
     { key: 'currentPrices', group: 'type', kind: 'switch', value: '', check: 'ai' },
     { key: 'bestTime', group: 'type', kind: 'switch', value: '', check: 'page' },
   ],
+  guide: [
+    {
+      key: 'howToSteps',
+      group: 'type',
+      kind: 'number',
+      value: '3',
+      unit: 'steps',
+      check: 'page',
+    },
+  ],
+  definition: [
+    {
+      key: 'definitionFirst',
+      group: 'type',
+      kind: 'number',
+      value: '60',
+      unit: 'wordsMax',
+      check: 'page',
+    },
+    { key: 'examplesSection', group: 'type', kind: 'switch', value: '', check: 'page' },
+  ],
+  alternatives: [
+    { key: 'sideBySide', group: 'type', kind: 'switch', value: '', check: 'page' },
+    { key: 'fairness', group: 'type', kind: 'switch', value: '', check: 'ai' },
+  ],
+  collection_page: [
+    {
+      key: 'introText',
+      group: 'type',
+      kind: 'number',
+      value: '120',
+      unit: 'wordsMin',
+      check: 'page',
+    },
+    {
+      key: 'buyingFaq',
+      group: 'type',
+      kind: 'number',
+      value: '3',
+      unit: 'questions',
+      check: 'page',
+    },
+  ],
+  sizing_guide: [
+    { key: 'sizeChart', group: 'type', kind: 'switch', value: '', check: 'page' },
+    {
+      key: 'measureSteps',
+      group: 'type',
+      kind: 'number',
+      value: '3',
+      unit: 'steps',
+      check: 'page',
+    },
+    {
+      key: 'fitQuestions',
+      group: 'type',
+      kind: 'number',
+      value: '3',
+      unit: 'questions',
+      check: 'page',
+    },
+  ],
 };
 
 /** The rules of a set: the type's own, then the shared groups, with the type's length. */
@@ -548,6 +610,7 @@ export function checkRule(rule: ActiveRule, page: PageRead, ctx: RuleContext): R
     case 'comparisonTable':
     case 'sideBySide':
     case 'specsTable':
+    case 'sizeChart':
       return blocks.some((b) => b.tag === 'table')
         ? { state: 'ok' }
         : { state: 'bad', code: 'missing' };
@@ -560,7 +623,9 @@ export function checkRule(rule: ActiveRule, page: PageRead, ctx: RuleContext): R
       ).length;
       return atLeast(proven, sections.length);
     }
-    case 'useCaseSteps': {
+    case 'useCaseSteps':
+    case 'howToSteps':
+    case 'measureSteps': {
       const most = Math.max(
         0,
         ...blocks.filter((b) => b.tag.startsWith('ol:')).map((b) => Number(b.tag.slice(3))),
@@ -580,6 +645,19 @@ export function checkRule(rule: ActiveRule, page: PageRead, ctx: RuleContext): R
         .reduce((sum, b) => sum + b.words, 0);
       return words >= n ? { state: 'ok' } : { state: 'bad', code: 'current', count: words };
     }
+    case 'definitionFirst':
+      // The term defined at once: "X is …" in a short first paragraph.
+      if (!summary || !summary.words) return { state: 'bad', code: 'missing' };
+      if (!/\b(is|are|refers to|means)\b/i.test(summary.text)) {
+        return { state: 'bad', code: 'missing' };
+      }
+      return summary.words <= n
+        ? { state: 'ok' }
+        : { state: 'bad', code: 'words', count: summary.words };
+    case 'examplesSection':
+      return blocks.some((b) => isHeading(b) && /\bexamples?\b/i.test(b.text))
+        ? { state: 'ok' }
+        : { state: 'bad', code: 'missing' };
     case 'bestTime':
       return summary && /\bbest time\b/i.test(summary.text)
         ? { state: 'ok' }

@@ -43,7 +43,10 @@ describe('detectPageType from the URL', () => {
     ['/solutions/real-estate', 'solution_page'],
     ['/for-agencies', 'solution_page'],
     ['/blog/northwind-vs-hubspot', 'comparison'],
-    ['/hubspot-alternatives/', 'comparison'],
+    ['/hubspot-alternatives/', 'alternatives'],
+    ['/best-crm-for-startups', 'best_of'],
+    ['/glossary/lead-scoring', 'definition'],
+    ['/blog/what-is-pipeline-coverage', 'definition'],
     ['/integrations/slack', 'integration'],
     ['/en/pricing', 'pricing'],
     ['/guides/clean-crm-data', 'guide'],
@@ -60,6 +63,12 @@ describe('detectPageType from the URL', () => {
     ['https://shop.example/products/trail-runner-x?variant=2', 'product_page'],
     ['/p/daypack-22l.html', 'product_page'],
     ['/collections/ultralight-tents', 'category_page'],
+    ['/collections/gifts-for-hikers', 'collection_page'],
+    ['/pages/size-guide', 'sizing_guide'],
+    ['/nespresso-alternatives', 'alternatives'],
+    ['/compare/tent-a-vs-tent-b', 'comparison'],
+    ['/faq', 'help_faq'],
+    ['/guides/how-to-pitch-a-tent', 'guide'],
     ['/buying-guides/tents', 'buying_guide'],
     ['/best-hiking-boots', 'best_of'],
     ['/pages/returns-policy', 'policy'],
@@ -76,6 +85,8 @@ describe('detectPageType from the URL', () => {
     ['/best-hotels-in-porto', 'best_of'],
     ['/help/cancellation', 'help_faq'],
     ['/guides/azores-in-winter', 'guide'],
+    ['/porto-vs-lisbon', 'comparison'],
+    ['/airbnb-alternatives', 'comparison'],
     ['/blog/best-time-to-visit-madeira', 'blog_post'],
   ])('B2C: %s → %s', (url, type) => {
     expect(detectPageType({ url }, 'b2c')).toBe(type);
@@ -83,7 +94,9 @@ describe('detectPageType from the URL', () => {
 
   it('gives a sign the site’s own type, or skips it when the site writes no such page', () => {
     expect(detectPageType({ url: '/vs/hubspot' }, 'b2b')).toBe('comparison');
-    expect(detectPageType({ url: '/vs/hubspot' }, 'ecommerce')).toBe('best_of');
+    expect(detectPageType({ url: '/vs/hubspot' }, 'ecommerce')).toBe('comparison');
+    // Only a shop writes sizing guides.
+    expect(detectPageType({ url: '/size-guide' }, 'b2b')).toBeNull();
     // A shop has no pricing page type: the URL tells nothing, the title does.
     expect(
       detectPageType({ url: '/pricing', title: 'Daypack 22L buying guide' }, 'ecommerce'),
@@ -134,7 +147,13 @@ describe('detectPageType from the page', () => {
 
   it.each([
     ['Northwind vs HubSpot', 'b2b', 'comparison'],
-    ['Best HubSpot alternatives', 'b2b', 'comparison'],
+    ['Best HubSpot alternatives', 'b2b', 'alternatives'],
+    ['HubSpot vs Salesforce', 'b2b', 'comparison'],
+    ['The 10 best CRMs for startups', 'b2b', 'best_of'],
+    ['What is single-origin coffee?', 'ecommerce', 'definition'],
+    ['Shoe size chart', 'ecommerce', 'sizing_guide'],
+    ['Gifts for coffee lovers', 'ecommerce', 'collection_page'],
+    ['Shipping FAQ', 'ecommerce', 'help_faq'],
     ['CRM for real estate teams', 'b2b', 'solution_page'],
     ['Slack integration', 'b2b', 'integration'],
     ['How to clean CRM data', 'b2b', 'guide'],
@@ -146,6 +165,10 @@ describe('detectPageType from the page', () => {
     ['Cancellation policy', 'b2c', 'help_faq'],
   ] as const)('reads the title "%s" on a %s site as %s', (title, site, type) => {
     expect(detectPageType({ title }, site)).toBe(type);
+  });
+
+  it('doesn’t read “What is the best …” as a definition', () => {
+    expect(detectPageType({ title: 'What is the best espresso machine?' }, 'ecommerce')).toBeNull();
   });
 
   it('finds nothing when no sign tells', () => {

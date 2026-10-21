@@ -292,6 +292,64 @@ describe('page type rules', () => {
   });
 });
 
+describe('the formats www.ansvisor.com offers', () => {
+  it('gives each new page type its own rules and length', () => {
+    const own = (type: Parameters<typeof ruleSet>[0]) =>
+      ruleSet(type)
+        .filter((r) => r.group === 'type')
+        .map((r) => r.key);
+    expect(own('guide')).toEqual(['howToSteps']);
+    expect(own('definition')).toEqual(['definitionFirst', 'examplesSection']);
+    expect(own('alternatives')).toEqual(['sideBySide', 'fairness']);
+    expect(own('collection_page')).toEqual(['introText', 'buyingFaq']);
+    expect(own('sizing_guide')).toEqual(['sizeChart', 'measureSteps', 'fitQuestions']);
+    const length = (type: Parameters<typeof ruleSet>[0]) =>
+      ruleSet(type).find((r) => r.key === 'length')?.value;
+    expect([length('definition'), length('sizing_guide'), length('collection_page')]).toEqual([
+      '1500',
+      '1000',
+      '800',
+    ]);
+  });
+
+  it('checks a definition in the first sentence, short, and an examples section', () => {
+    const define = (html: string) => check('definitionFirst', html, undefined, 'definition');
+    expect(define('<h1>Cold brew</h1><p>Cold brew is coffee steeped in cold water.</p>')).toEqual({
+      state: 'ok',
+    });
+    expect(define('<h1>Cold brew</h1><p>Many people love it in summer.</p>')).toEqual({
+      state: 'bad',
+      code: 'missing',
+    });
+    expect(define(`<h1>Cold brew</h1><p>Cold brew is ${'very '.repeat(60)}cold.</p>`)).toEqual({
+      state: 'bad',
+      code: 'words',
+      count: 64,
+    });
+    expect(
+      check('examplesSection', '<h2>Examples of cold brew</h2>', undefined, 'definition'),
+    ).toEqual({ state: 'ok' });
+  });
+
+  it('checks a how-to guide’s and a sizing guide’s steps, and a size chart', () => {
+    const steps = '<ol><li>a</li><li>b</li><li>c</li></ol>';
+    expect(check('howToSteps', steps, undefined, 'guide')).toEqual({ state: 'ok' });
+    expect(check('measureSteps', '<ol><li>a</li></ol>', undefined, 'sizing_guide')).toEqual({
+      state: 'bad',
+      code: 'partOf',
+      count: 1,
+      of: 3,
+    });
+    expect(
+      check('sizeChart', '<table><tr><td>M</td></tr></table>', undefined, 'sizing_guide'),
+    ).toEqual({ state: 'ok' });
+    expect(check('sizeChart', '<p>M fits most</p>', undefined, 'sizing_guide')).toEqual({
+      state: 'bad',
+      code: 'missing',
+    });
+  });
+});
+
 describe('rulesMet', () => {
   it('counts the rules on that the page can say', () => {
     const rules = activeRules(ruleSet('blog_post'), {
