@@ -15,7 +15,12 @@
 --     common first. Security definer with an organization check, as
 --     ai_traffic_page_citations (00176): citation_urls has no member select
 --     policy. Read through citation_urls' domain index first, as
---     ga_page_ai_visibility does.
+--     ga_page_ai_visibility does. The window's answers to the prompts come
+--     from idx_prompt_results_brand_created_cover alone (an index-only scan,
+--     hash-joined), never from prompt_results' wide rows one citation at a
+--     time; ChatGPT Shopping is left out, as in Impact (00209). Planned for
+--     each call's own values (plan_cache_mode): a generic plan of these
+--     estimates is far slower.
 --   * content_drafts.source_url: the existing page a draft optimizes, when
 --     there is one (Start's "Optimize … instead"); the editor shows it beside
 --     the page type.
@@ -46,6 +51,7 @@ language plpgsql
 stable
 security definer
 set search_path to 'public'
+set plan_cache_mode to 'force_custom_plan'
 as $$
 begin
   if not exists (
@@ -65,20 +71,28 @@ begin
     from public.brand_domains bd
     where bd.brand_id = p_brand_id
   ),
-  own_urls as (
+  own_urls as materialized (
     select cu.id, cu.url, cu.title, lower(public.normalize_page_path(cu.url)) as page_key
     from public.citation_urls cu
     where cu.domain in (select domain from own_domains)
   ),
+  -- The window's answers to these prompts, from the (brand_id, created_at)
+  -- cover index alone.
+  answers as materialized (
+    select pr.id, pr.prompt_id
+    from public.prompt_results pr
+    where pr.brand_id = p_brand_id
+      and pr.created_at >= p_since
+      and pr.prompt_id = any(p_prompt_ids)
+      and pr.platform is distinct from 'chatgpt-shopping'
+  ),
   cited as (
-    select ou.page_key, ou.url, ou.title, pr.prompt_id
-    from own_urls ou
-    join public.prompt_result_citations prc
-      on prc.url_id = ou.id
-     and prc.brand_id = p_brand_id
-     and prc.created_at >= p_since
-    join public.prompt_results pr on pr.id = prc.prompt_result_id
-    where pr.prompt_id = any(p_prompt_ids)
+    select ou.page_key, ou.url, ou.title, a.prompt_id
+    from public.prompt_result_citations prc
+    join answers a on a.id = prc.prompt_result_id
+    join own_urls ou on ou.id = prc.url_id
+    where prc.brand_id = p_brand_id
+      and prc.created_at >= p_since
   ),
   pages as (
     select
