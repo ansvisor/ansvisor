@@ -7,8 +7,10 @@ import type { PlanOpportunity, PlanPage } from '@/lib/content/plan';
 import ContentPlanPage from './page';
 
 const getContentPlan = vi.fn();
+const getContentPlanInsights = vi.fn();
 vi.mock('@/lib/actions/content-plan', () => ({
   getContentPlan: (...args: unknown[]) => getContentPlan(...args),
+  getContentPlanInsights: (...args: unknown[]) => getContentPlanInsights(...args),
 }));
 // New content is new-content-dialog.test.tsx's; here, what the Plan opens it on.
 const dialog = vi.hoisted(() => ({ props: null as Record<string, unknown> | null }));
@@ -79,6 +81,31 @@ const PLAN = {
   drafts: [],
 };
 
+const INSIGHTS = {
+  totalCitations: 60,
+  citations: [
+    {
+      url: 'https://rival.example/guides/espresso-machines',
+      title: null,
+      own: false,
+      citations: 30,
+    },
+    { url: 'https://acme.example/guides/espresso', title: null, own: true, citations: 10 },
+    { url: 'https://acme.example/blog/latte-art', title: null, own: true, citations: 20 },
+    { url: 'https://www.reddit.com/r/espresso/x', title: null, own: false, citations: 20 },
+  ],
+  results: {
+    visits: 1240,
+    sessions: 300,
+    keyEvents: 48,
+    keyEventSessions: 30,
+    transactions: 12,
+    revenue: 3210.4,
+    analytics: true,
+    purchases: true,
+  },
+};
+
 let container: HTMLDivElement;
 let root: Root;
 
@@ -108,6 +135,7 @@ beforeEach(() => {
   document.body.appendChild(container);
   root = createRoot(container);
   getContentPlan.mockReset().mockResolvedValue(PLAN);
+  getContentPlanInsights.mockReset().mockResolvedValue(INSIGHTS);
   dialog.props = null;
 });
 
@@ -150,18 +178,24 @@ describe('the Content plan', () => {
     await act(async () => button('Overlaps').click());
     expect(button('Overlaps').getAttribute('aria-pressed')).toBe('true');
     expect(rowTexts().map((r) => r[1])).toEqual(['Protect']);
-    expect(container.textContent).toContain('Filtered · click the card again to clear');
+    expect(container.textContent).toContain('Filtered · click it again to clear');
 
     await act(async () => button('Overlaps').click());
     expect(rowTexts()).toHaveLength(3);
   });
 
-  it('reads the other period, and keeps it in the URL', async () => {
+  it('reads the other periods, a quarter too, and keeps the period in the URL', async () => {
     await renderPage();
     await act(async () => button('Last 7 days').click());
     expect(getContentPlan).toHaveBeenLastCalledWith('brand-1', 7);
     expect(window.location.search).toBe('?days=7');
     expect(container.querySelector('thead')!.textContent).toContain('Why · last 7 days');
+
+    await act(async () => button('Last 90 days').click());
+    expect(getContentPlan).toHaveBeenLastCalledWith('brand-1', 90);
+    expect(getContentPlanInsights).toHaveBeenLastCalledWith('brand-1', 90);
+    expect(window.location.search).toBe('?days=90');
+    expect(container.textContent).toContain('From AI visits · last 90 days:');
   });
 
   it('starts a row in New content, or opens the draft already being written', async () => {
@@ -194,6 +228,54 @@ describe('the Content plan', () => {
 
     expect(rows[2].textContent).toContain('Agent');
     expect(rows[2].querySelector('a')!.getAttribute('href')).toBe('/dashboard/content/editor/d1');
+  });
+
+  it('shows what AI visits brought in, and what AI cites by page type', async () => {
+    await renderPage();
+    expect(getContentPlanInsights).toHaveBeenCalledWith('brand-1', 30);
+    expect(container.textContent).toContain(
+      'From AI visits · last 30 days:1,240 visits · 48 key events · 12 orders · 3,210 revenue',
+    );
+    const mix = container.querySelector('section[aria-labelledby="plan-mix-title"]')!;
+    expect([...mix.querySelectorAll('li')].map((li) => li.textContent)).toEqual([
+      'Guide67% · 17%Gap · 1 page',
+      'Blog post33% · 33%1 page',
+    ]);
+    expect(mix.querySelector('p')!.textContent).toBe(
+      "25% of these citations go to pages whose type the address doesn't show (forums, encyclopedias, news…). They aren't in the shares above.",
+    );
+  });
+
+  it('filters the list by a page type, and clears it on a second click', async () => {
+    await renderPage();
+    const guide = () =>
+      container.querySelector<HTMLButtonElement>(
+        'section[aria-labelledby="plan-mix-title"] button',
+      )!;
+    await act(async () => guide().click());
+    expect(guide().getAttribute('aria-pressed')).toBe('true');
+    expect(rowTexts().map((r) => r[0])).toEqual([
+      'Coffee subscriptionsGuide/guides/coffee-subscriptions',
+      'Espresso guideGuide/guides/espresso⚠ Overlap',
+    ]);
+    await act(async () => guide().click());
+    expect(rowTexts()).toHaveLength(3);
+  });
+
+  it('asks for Google Analytics to show what AI visitors did', async () => {
+    getContentPlanInsights.mockResolvedValue({
+      ...INSIGHTS,
+      results: { ...INSIGHTS.results, analytics: false, purchases: false },
+    });
+    await renderPage();
+    expect(container.textContent).toContain(
+      'From AI visits · last 30 days:1,240 visitsConnect Google Analytics to see what they did next.',
+    );
+    expect(
+      [...container.querySelectorAll('a')]
+        .find((a) => a.textContent === 'Connect Google Analytics')!
+        .getAttribute('href'),
+    ).toBe('/dashboard/traffic');
   });
 
   it('says so when the plan can’t be read, and tries again', async () => {

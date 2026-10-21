@@ -33,7 +33,7 @@ vi.mock('@/lib/supabase/server', () => ({
   })),
 }));
 
-const { getContentPlan } = await import('./content-plan');
+const { getContentPlan, getContentPlanInsights } = await import('./content-plan');
 
 beforeEach(() => {
   reads = {};
@@ -143,7 +143,41 @@ describe('getContentPlan', () => {
   it('reads nothing of another organization’s brand, and refuses another period', async () => {
     rpcResult = null;
     await expect(getContentPlan(BRAND, 30)).resolves.toBeNull();
-    await expect(getContentPlan(BRAND, 90 as 30)).rejects.toThrow('invalid');
+    await expect(getContentPlan(BRAND, 14 as 30)).rejects.toThrow('invalid');
     await expect(getContentPlan('nope', 30)).rejects.toThrow('invalid');
+  });
+});
+
+describe('getContentPlanInsights', () => {
+  it('reads what AI cites and what AI visits brought in', async () => {
+    rpcResult = {
+      days: 30,
+      totalCitations: 120,
+      citations: [
+        { url: 'https://acme.example/vs/hubspot', title: null, own: true, citations: '7' },
+      ],
+      results: { visits: 40, sessions: 22, keyEvents: 5, analytics: true, purchases: false },
+    };
+    await expect(getContentPlanInsights(BRAND, 30)).resolves.toEqual({
+      totalCitations: 120,
+      citations: [{ url: 'https://acme.example/vs/hubspot', title: null, own: true, citations: 7 }],
+      results: {
+        visits: 40,
+        sessions: 22,
+        keyEvents: 5,
+        keyEventSessions: 0,
+        transactions: 0,
+        revenue: 0,
+        analytics: true,
+        purchases: false,
+      },
+    });
+    expect(rpcCalls).toEqual([['content_plan_insights', { p_brand_id: BRAND, p_days: 30 }]]);
+  });
+
+  it('reads nothing of another organization’s brand', async () => {
+    rpcResult = null;
+    await expect(getContentPlanInsights(BRAND, 7)).resolves.toBeNull();
+    await expect(getContentPlanInsights(BRAND, 14 as 7)).rejects.toThrow('invalid');
   });
 });

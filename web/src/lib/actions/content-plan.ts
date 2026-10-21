@@ -3,6 +3,7 @@
 import { z } from 'zod';
 import { createClient } from '@/lib/supabase/server';
 import type { DraftMethod } from '@/lib/content/drafts';
+import type { CitedAddress, PlanResults } from '@/lib/content/plan-mix';
 import {
   PLAN_PERIODS,
   type PlanDraft,
@@ -25,7 +26,11 @@ const DRAFT_LIMIT = 500;
 
 const planInput = z.object({
   brandId: z.guid(),
-  days: z.union(PLAN_PERIODS.map((d) => z.literal(d)) as [z.ZodLiteral<7>, z.ZodLiteral<30>]),
+  days: z.union([
+    z.literal(PLAN_PERIODS[0]),
+    z.literal(PLAN_PERIODS[1]),
+    z.literal(PLAN_PERIODS[2]),
+  ]),
 });
 
 const text = (value: unknown) => (typeof value === 'string' ? value.trim() : '');
@@ -106,4 +111,48 @@ export async function getContentPlan(
   );
 
   return { pages, opportunities, drafts };
+}
+
+/**
+ * What AI cites in the brand's tracked answers, and what AI visits brought
+ * in, for the Plan's page-type mix and results strip (content_plan_insights,
+ * 00221). Null outside the member's organization.
+ */
+export async function getContentPlanInsights(
+  brandId: string,
+  days: PlanPeriod,
+): Promise<{ citations: CitedAddress[]; totalCitations: number; results: PlanResults } | null> {
+  if (!planInput.safeParse({ brandId, days }).success) throw new Error('invalid');
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc('content_plan_insights', {
+    p_brand_id: brandId,
+    p_days: days,
+  });
+  if (error) throw new Error(error.message);
+  if (!data) return null;
+  const read = data as unknown as {
+    totalCitations?: number;
+    citations?: CitedAddress[];
+    results?: Partial<PlanResults>;
+  };
+  const r = read.results ?? {};
+  return {
+    totalCitations: Number(read.totalCitations ?? 0),
+    citations: (read.citations ?? []).map((c) => ({
+      url: c.url,
+      title: c.title ?? null,
+      own: Boolean(c.own),
+      citations: Number(c.citations ?? 0),
+    })),
+    results: {
+      visits: Number(r.visits ?? 0),
+      sessions: Number(r.sessions ?? 0),
+      keyEvents: Number(r.keyEvents ?? 0),
+      keyEventSessions: Number(r.keyEventSessions ?? 0),
+      transactions: Number(r.transactions ?? 0),
+      revenue: Number(r.revenue ?? 0),
+      analytics: Boolean(r.analytics),
+      purchases: Boolean(r.purchases),
+    },
+  };
 }

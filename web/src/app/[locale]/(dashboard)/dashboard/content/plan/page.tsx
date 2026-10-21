@@ -6,7 +6,9 @@ import { Loader2, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { NewContentDialog, type DialogPreset } from '@/components/content/new-content-dialog';
-import { getContentPlan } from '@/lib/actions/content-plan';
+import { getContentPlan, getContentPlanInsights } from '@/lib/actions/content-plan';
+import type { PageType } from '@/lib/content/drafts';
+import { pageTypeMix } from '@/lib/content/plan-mix';
 import { siteTypeOf } from '@/lib/content/page-types';
 import {
   PLAN_CARDS,
@@ -21,6 +23,7 @@ import { formatNumber } from '@/lib/format';
 import { readUrlChoice, writeUrlParams } from '@/lib/url-state';
 import { cn } from '@/lib/utils';
 import { useBrandStore } from '@/stores/use-brand-store';
+import { AiResultsStrip, PageTypeMix } from './_plan-insights';
 import { PlanTable } from './_plan-table';
 
 type PlanRead = {
@@ -28,6 +31,13 @@ type PlanRead = {
   days: PlanPeriod;
   data: Awaited<ReturnType<typeof getContentPlan>>;
   failed: boolean;
+};
+
+/** The page-type mix and results strip, read on their own: either can fail alone. */
+type InsightsRead = {
+  brandId: string;
+  days: PlanPeriod;
+  data: Awaited<ReturnType<typeof getContentPlanInsights>>;
 };
 
 /** Each card's color, as its action's tag: Create blue, Optimize amber, Protect green, Overlaps red. */
@@ -53,6 +63,8 @@ export default function ContentPlanPage() {
   const siteType = siteTypeOf(activeBrand ?? {});
   const [days, setDays] = useState<PlanPeriod>(30);
   const [card, setCard] = useState<PlanCard | null>(null);
+  const [mixType, setMixType] = useState<PageType | null>(null);
+  const [insights, setInsights] = useState<InsightsRead | null>(null);
   const [read, setRead] = useState<PlanRead | null>(null);
   const [attempt, setAttempt] = useState(0);
   const [starting, setStarting] = useState(false);
@@ -60,7 +72,7 @@ export default function ContentPlanPage() {
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- one read of the URL after mount
-    setDays(Number(readUrlChoice('days', ['7', '30'], '30')) as PlanPeriod);
+    setDays(Number(readUrlChoice('days', ['7', '30', '90'], '30')) as PlanPeriod);
   }, []);
 
   useEffect(() => {
@@ -80,11 +92,34 @@ export default function ContentPlanPage() {
     };
   }, [activeBrandId, days, attempt]);
 
+  useEffect(() => {
+    if (!activeBrandId) return;
+    let cancelled = false;
+    getContentPlanInsights(activeBrandId, days)
+      .then((data) => {
+        if (!cancelled) setInsights({ brandId: activeBrandId, days, data });
+      })
+      .catch((err) => {
+        // The list still works without them; the sections stay hidden.
+        console.error('Failed to load what AI cites for the content plan:', err);
+        if (!cancelled) setInsights({ brandId: activeBrandId, days, data: null });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [activeBrandId, days, attempt]);
+
   // A read for another brand or period (just switched) counts as still loading.
   const current = read?.brandId === activeBrandId && read.days === days ? read : null;
   const plan = useMemo(
     () => (current?.data ? buildPlan({ ...current.data, siteType }) : null),
     [current, siteType],
+  );
+  const shown =
+    insights?.brandId === activeBrandId && insights.days === days ? insights.data : null;
+  const mix = useMemo(
+    () => (shown ? pageTypeMix(shown.citations, siteType) : null),
+    [shown, siteType],
   );
 
   const changeDays = (next: PlanPeriod) => {
@@ -109,7 +144,10 @@ export default function ContentPlanPage() {
     );
   }
 
-  const rows = plan ? rowsFor(plan.rows, card) : [];
+  const rows = plan
+    ? rowsFor(plan.rows, card).filter((row) => !mixType || row.pageType === mixType)
+    : [];
+  const filtered = card !== null || mixType !== null;
 
   return (
     <div className="space-y-6">
@@ -190,10 +228,15 @@ export default function ContentPlanPage() {
         ))}
       </div>
 
+      {shown && <AiResultsStrip results={shown.results} days={days} />}
+      {mix && (
+        <PageTypeMix rows={mix.rows} unread={mix.unread} selected={mixType} onSelect={setMixType} />
+      )}
+
       <div className="space-y-2">
         <div className="flex flex-wrap items-baseline justify-between gap-2">
           <h2 className="text-sm font-medium">{t('listTitle')}</h2>
-          <p className="text-xs text-muted-foreground">{card ? t('filtered') : t('ranked')}</p>
+          <p className="text-xs text-muted-foreground">{filtered ? t('filtered') : t('ranked')}</p>
         </div>
         <Card className="py-0">
           <CardContent className="px-0">
@@ -217,7 +260,7 @@ export default function ContentPlanPage() {
               </div>
             ) : rows.length === 0 ? (
               <p className="px-6 py-12 text-center text-sm text-muted-foreground">
-                {card ? t('emptyFiltered') : t('empty')}
+                {filtered ? t('emptyFiltered') : t('empty')}
               </p>
             ) : (
               <PlanTable rows={rows} days={days} onStart={startRow} />

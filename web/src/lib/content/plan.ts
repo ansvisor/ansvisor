@@ -11,7 +11,8 @@ import { detectPageType, type SiteType } from './page-types';
 import type { DraftMethod, PageType } from './drafts';
 import { pageKey } from './sources';
 
-export const PLAN_PERIODS = [7, 30] as const;
+/** The Plan's periods: a week, a month, a quarter. */
+export const PLAN_PERIODS = [7, 30, 90] as const;
 export type PlanPeriod = (typeof PLAN_PERIODS)[number];
 
 export type PlanAction = 'create' | 'optimize' | 'protect';

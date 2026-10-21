@@ -3105,9 +3105,27 @@
         "protect": { "title": "Protect", "hint": "Top pages · edit with care" },
         "overlaps": { "title": "Overlaps", "hint": "Pages competing for the same prompts" }
       },
+      "results": {
+        "label": "From AI visits · last {days} days:",
+        "visits": "{count, plural, one {{value} visit} other {{value} visits}}",
+        "keyEvents": "{count, plural, one {{value} key event} other {{value} key events}}",
+        "orders": "{count, plural, one {{value} order} other {{value} orders}}",
+        "revenue": "{value} revenue",
+        "needsAnalytics": "<link>Connect Google Analytics</link> to see what they did next."
+      },
+      "mix": {
+        "title": "What AI cites in your topics",
+        "aiShare": "Share of AI citations",
+        "yourShare": "Your share",
+        "shares": "{ai}% · {yours}%",
+        "pages": "{count, plural, =0 {No page} one {# page} other {# pages}}",
+        "gap": "{count, plural, =0 {Gap · no page} one {Gap · # page} other {Gap · # pages}}",
+        "empty": "No cited pages with a known type in this period yet.",
+        "unread": "{pct}% of these citations go to pages whose type the address doesn't show (forums, encyclopedias, news…). They aren't in the shares above."
+      },
       "listTitle": "Priority list",
       "ranked": "Ranked by impact · overlaps checked",
-      "filtered": "Filtered · click the card again to clear",
+      "filtered": "Filtered · click it again to clear",
       "columns": {
         "page": "Page",
         "action": "Action",

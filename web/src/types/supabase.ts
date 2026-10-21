@@ -3670,6 +3670,10 @@ export type Database = {
         Args: { p_brand_id: string; p_days: number; p_page: string }
         Returns: Json
       }
+      content_plan_insights: {
+        Args: { p_brand_id: string; p_days?: number }
+        Returns: Json
+      }
       content_plan_pages: {
         Args: { p_brand_id: string; p_days?: number }
         Returns: Json
