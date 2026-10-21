@@ -2,7 +2,10 @@
 
 import { createClient } from '@/lib/supabase/server';
 import { expandDateToEndOfDay } from '@/lib/dates';
-import { detectAmazonShareDrop, type AmazonShareDropAlert } from '@/lib/shopping-amazon-share-alert';
+import {
+  detectAmazonShareDrop,
+  type AmazonShareDropAlert,
+} from '@/lib/shopping-amazon-share-alert';
 
 /**
  * Server actions for the Shopping dashboard page. Reads from the
