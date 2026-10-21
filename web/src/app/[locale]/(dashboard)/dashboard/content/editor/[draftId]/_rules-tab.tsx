@@ -32,6 +32,7 @@ import {
 } from '@/lib/content/rules';
 import { formatNumber } from '@/lib/format';
 import { cn } from '@/lib/utils';
+import { useUserRole } from '@/hooks/use-user-role';
 import type { DraftRulesState } from './_use-draft-rules';
 
 /** Rules with an explanation on hover (spec §10). */
@@ -78,6 +79,8 @@ export function RulesTab({
 }) {
   const t = useTranslations('contentEditor.editor.rules');
   const tTypes = useTranslations('contentEditor.pageTypes');
+  // The workspace's sets are saved by admins and managers, as its other settings are.
+  const { canManage } = useUserRole();
   const types = [...SITE_PAGE_TYPES[siteType]];
   for (const type of [draftPageType, state.setType, ...state.mineTypes]) {
     if (type && !types.includes(type)) types.push(type);
@@ -93,13 +96,25 @@ export function RulesTab({
     })),
   ];
 
+  // A draft on My rules for a type the workspace has none for (its type
+  // changed, or My rules couldn't be read) shows Ansvisor's set for it.
+  const source =
+    state.source === 'mine' && state.setType && state.mineTypes.includes(state.setType)
+      ? 'mine'
+      : 'default';
+
   return (
-    <div className="space-y-4 text-sm">
+    // Nothing changes before My rules are read: a change would leave them out.
+    <fieldset
+      disabled={!state.ready}
+      aria-busy={!state.ready}
+      className="m-0 min-w-0 space-y-4 border-0 p-0 text-sm"
+    >
       <div className="space-y-1.5">
         <span className="text-xs text-muted-foreground">{t('set')}</span>
         <Select
           items={items}
-          value={state.setType ? `${state.source}:${state.setType}` : ''}
+          value={state.setType ? `${source}:${state.setType}` : ''}
           onValueChange={(value) => {
             const [source, type] = String(value ?? '').split(':');
             if (!isPageType(type) || (source !== 'default' && source !== 'mine')) return;
@@ -183,16 +198,18 @@ export function RulesTab({
       <AddTextRules onAdd={state.addTextRules} />
 
       <div className="flex flex-wrap gap-2">
-        <Button size="sm" disabled={!state.setType} onClick={state.saveAsMine}>
-          {t('saveMine')}
-        </Button>
+        {canManage && (
+          <Button size="sm" disabled={!state.setType} onClick={state.saveAsMine}>
+            {t('saveMine')}
+          </Button>
+        )}
         <Button size="sm" variant="outline" onClick={state.reset}>
           {t('reset')}
         </Button>
       </div>
 
       <p className="text-[11px] text-muted-foreground">{t('note')}</p>
-    </div>
+    </fieldset>
   );
 }
 

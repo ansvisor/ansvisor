@@ -35,7 +35,15 @@ vi.mock('../config/supabase.js', () => ({
     },
   },
 }));
-vi.mock('ai', () => ({ generateObject: (...args) => generateObject(...args) }));
+class NoObjectGeneratedError extends Error {
+  static isInstance(err) {
+    return err instanceof NoObjectGeneratedError;
+  }
+}
+vi.mock('ai', () => ({
+  generateObject: (...args) => generateObject(...args),
+  NoObjectGeneratedError,
+}));
 vi.mock('./ai-provider.js', () => ({ resolveModel: vi.fn((id) => `model:${id}`) }));
 vi.mock('./plan-guard.js', async (importOriginal) => ({
   ...(await importOriginal()),
@@ -43,7 +51,8 @@ vi.mock('./plan-guard.js', async (importOriginal) => ({
 }));
 vi.mock('./logger.js', () => ({ logger: { error: vi.fn() } }));
 
-const { buildBriefPrompt, mapOutline, rebuildDraftBrief } = await import('./content-brief.js');
+const { buildBriefPrompt, mapOutline, rebuildDraftBrief, rebuildSources } =
+  await import('./content-brief.js');
 const { PlanLimitError } = await import('./plan-guard.js');
 
 const sources = (over = {}) => ({
@@ -163,7 +172,7 @@ describe('rebuildDraftBrief', () => {
     // Only the brand's prompts are read.
     expect(filters.find((f) => f.table === 'prompts').filters).toEqual([
       ['in', 'id', [PROMPT]],
-      ['eq', 'topics.brand_id', BRAND],
+      ['eq', 'prompt_sets.brand_id', BRAND],
     ]);
   });
 
@@ -199,6 +208,68 @@ describe('rebuildDraftBrief', () => {
     expect(generateObject).not.toHaveBeenCalled();
   });
 
+  it('reads the prompts through their prompt set, so a prompt with no topic counts', async () => {
+    await rebuildDraftBrief({ draftId: DRAFT, brandId: BRAND, sources: sources() });
+    expect(filters.find((call) => call.table === 'prompts').filters).toContainEqual([
+      'eq',
+      'prompt_sets.brand_id',
+      BRAND,
+    ]);
+  });
+
+  it('cuts the model’s answer to the limits the editor reads a brief with', async () => {
+    generateObject.mockResolvedValue({
+      object: {
+        goal: 'g'.repeat(600),
+        audience: 'Home baristas',
+        outline: [
+          { heading: '   ', keyPoints: ['Lost'], fanout: null, platform: null },
+          {
+            heading: 'h'.repeat(400),
+            keyPoints: Array.from({ length: 10 }, (_, i) => `${i}`.repeat(600)),
+            fanout: null,
+            platform: null,
+          },
+          ...Array.from({ length: 14 }, (_, i) => ({
+            heading: `Section ${i}`,
+            keyPoints: [],
+            fanout: null,
+            platform: null,
+          })),
+        ],
+        keywords: Array.from({ length: 20 }, (_, i) => `${i} ${'k'.repeat(90)}`),
+      },
+      usage: { inputTokens: 1000, outputTokens: 500 },
+    });
+    const brief = await rebuildDraftBrief({ draftId: DRAFT, brandId: BRAND, sources: sources() });
+    expect(brief.goal).toHaveLength(500);
+    // The empty heading went; the rest is capped at 12 sections.
+    expect(brief.outline).toHaveLength(12);
+    expect(brief.outline[0].heading).toHaveLength(300);
+    expect(brief.outline[0].keyPoints).toHaveLength(8);
+    expect(brief.outline[0].keyPoints.every((p) => p.length === 500)).toBe(true);
+    expect(brief.keywords).toHaveLength(15);
+    expect(brief.keywords.every((k) => k.length <= 80)).toBe(true);
+  });
+
+  it('charges a call whose answer didn’t fit, then fails', async () => {
+    generateObject.mockRejectedValue(
+      Object.assign(new NoObjectGeneratedError('no object'), {
+        usage: { inputTokens: 900, outputTokens: 300 },
+      }),
+    );
+    await expect(
+      rebuildDraftBrief({ draftId: DRAFT, brandId: BRAND, sources: sources() }),
+    ).rejects.toBeInstanceOf(NoObjectGeneratedError);
+    expect(writes).toEqual([
+      expect.objectContaining({
+        table: 'prompt_improve_usage',
+        op: 'insert',
+        value: expect.objectContaining({ input_tokens: 900, output_tokens: 300 }),
+      }),
+    ]);
+  });
+
   it('stops when the AI usage budget is spent', async () => {
     enforceImproveQuota.mockRejectedValue(new PlanLimitError('used up', 429));
     await expect(
@@ -206,6 +277,27 @@ describe('rebuildDraftBrief', () => {
     ).rejects.toBeInstanceOf(PlanLimitError);
     expect(generateObject).not.toHaveBeenCalled();
     expect(writes).toEqual([]);
+  });
+});
+
+describe('rebuildSources', () => {
+  it('cuts long text and drops empty items rather than refusing the rebuild', () => {
+    const parsed = rebuildSources.parse(
+      sources({
+        headings: ['x'.repeat(400), '   ', 'Care'],
+        queries: [' espresso ', ''],
+        fanouts: [{ query: 'q'.repeat(350), platforms: ['p'.repeat(70)] }],
+      }),
+    );
+    expect(parsed.headings).toEqual(['x'.repeat(300), 'Care']);
+    expect(parsed.queries).toEqual(['espresso']);
+    expect(parsed.fanouts[0].query).toHaveLength(300);
+    expect(parsed.fanouts[0].platforms[0]).toHaveLength(60);
+  });
+
+  it('brings the length into the range a rebuild takes', () => {
+    expect(rebuildSources.parse(sources({ length: 50 })).length).toBe(100);
+    expect(rebuildSources.parse(sources({ length: 60_000 })).length).toBe(50_000);
   });
 });
 

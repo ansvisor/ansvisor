@@ -1,4 +1,4 @@
-import { generateObject } from 'ai';
+import { NoObjectGeneratedError, generateObject } from 'ai';
 import { z } from 'zod';
 import supabaseAdmin from '../config/supabase.js';
 import { resolveModel } from './ai-provider.js';
@@ -29,27 +29,64 @@ export function contentBriefModelId() {
 /** How long the model may take: the dashboard waits for it. */
 const CALL_TIMEOUT_MS = 60_000;
 
-/** What the Sources tab keeps, as the web sends it. */
+/** A string cut to `max` characters after trimming: a long one is shortened, not refused. */
+const cut = (max) =>
+  z
+    .string()
+    .max(10_000)
+    .transform((s) => s.trim().slice(0, max));
+
+/** A list of strings, each cut to `max`; the ones left empty are dropped. */
+const cutList = (max, count) =>
+  z
+    .array(cut(max))
+    .max(count)
+    .transform((items) => items.filter(Boolean));
+
+/** The length a rebuild asks for, in characters. */
+export const BRIEF_LENGTH_MIN = 100;
+export const BRIEF_LENGTH_MAX = 50_000;
+
+/**
+ * What the Sources tab keeps, as the web sends it. Text is cut to fit, and
+ * the length is brought into range, rather than refusing the whole rebuild
+ * over one long heading or a Length rule out of range.
+ */
 export const rebuildSources = z.object({
   promptIds: z.array(z.guid()).max(100),
   fanouts: z
-    .array(
-      z.object({
-        query: z.string().trim().min(1).max(300),
-        platforms: z.array(z.string().trim().min(1).max(60)).max(12),
-      }),
-    )
-    .max(40),
-  pages: z
-    .array(z.object({ url: z.string().trim().max(2048), kind: z.string().trim().max(30) }))
-    .max(30),
-  queries: z.array(z.string().trim().min(1).max(300)).max(20),
+    .array(z.object({ query: cut(300), platforms: cutList(60, 12) }))
+    .max(40)
+    .transform((items) => items.filter((f) => f.query)),
+  pages: z.array(z.object({ url: cut(2048), kind: cut(30) })).max(30),
+  queries: cutList(300, 20),
   /** The page's headings as written now, for a draft optimizing a page. */
-  headings: z.array(z.string().trim().min(1).max(300)).max(30),
+  headings: cutList(300, 30),
   /** The length the page type's rules ask for, in characters. */
-  length: z.number().int().min(100).max(50_000),
+  length: z
+    .number()
+    .int()
+    .transform((n) => Math.min(BRIEF_LENGTH_MAX, Math.max(BRIEF_LENGTH_MIN, n))),
 });
 
+/**
+ * The limits the web reads a brief with (web/src/lib/content/brief.ts
+ * draftBriefSchema): the model's output is cut to them, so a brief saved and
+ * charged for is one the editor can show.
+ */
+export const BRIEF_LIMITS = {
+  goal: 500,
+  audience: 500,
+  sections: 12,
+  heading: 300,
+  keyPoints: 8,
+  keyPoint: 500,
+  keywords: 15,
+  keyword: 80,
+};
+
+// No counts or lengths enforced on the model: a miss would fail the whole
+// call (charged all the same). They are asked for here and cut afterwards.
 const outlineSchema = z.object({
   goal: z.string().describe('What the page must achieve for the brand, in one sentence.'),
   audience: z.string().describe('Who the page is for, in one sentence.'),
@@ -57,7 +94,7 @@ const outlineSchema = z.object({
     .array(
       z.object({
         heading: z.string().describe('The H2, worded as the answer a reader looks for.'),
-        keyPoints: z.array(z.string()).max(5).describe('What the section must cover.'),
+        keyPoints: z.array(z.string()).describe('What the section must cover: up to 5 points.'),
         fanout: z
           .string()
           .nullable()
@@ -68,9 +105,8 @@ const outlineSchema = z.object({
           .describe('The platform key that ran that search, from its list, or null.'),
       }),
     )
-    .min(3)
-    .max(10),
-  keywords: z.array(z.string()).max(10),
+    .describe('3 to 10 sections.'),
+  keywords: z.array(z.string()).describe('Up to 10 keywords.'),
 });
 
 const SYSTEM_PROMPT = `You are a senior content strategist for Answer Engine Optimization (AEO). You plan one web page so AI assistants (ChatGPT, Perplexity, Gemini, Copilot, Google's AI Overviews) cite it.
@@ -112,9 +148,9 @@ export async function rebuildDraftBrief({ draftId, brandId, sources }) {
     sources.promptIds.length
       ? supabaseAdmin
           .from('prompts')
-          .select('id, text, topics!inner(brand_id)')
+          .select('id, text, prompt_sets!inner(brand_id)')
           .in('id', sources.promptIds)
-          .eq('topics.brand_id', brandId)
+          .eq('prompt_sets.brand_id', brandId)
       : Promise.resolve({ data: [], error: null }),
   ]);
   if (brandRes.error) throw brandRes.error;
@@ -132,20 +168,40 @@ export async function rebuildDraftBrief({ draftId, brandId, sources }) {
   const modelId = contentBriefModelId();
   await enforceImproveQuota(brand.organization_id, modelId);
 
-  const { object, usage } = await generateObject({
-    model: resolveModel(modelId),
-    schema: outlineSchema,
-    system: SYSTEM_PROMPT,
-    prompt: buildBriefPrompt({ brand, draft, prompts, sources }),
-    abortSignal: AbortSignal.timeout(CALL_TIMEOUT_MS),
-  });
+  let generated;
+  try {
+    generated = await generateObject({
+      model: resolveModel(modelId),
+      schema: outlineSchema,
+      system: SYSTEM_PROMPT,
+      prompt: buildBriefPrompt({ brand, draft, prompts, sources }),
+      abortSignal: AbortSignal.timeout(CALL_TIMEOUT_MS),
+    });
+  } catch (err) {
+    // An answer that didn't fit the schema was still paid for: charged as
+    // Improve charges it, so retries don't run free.
+    if (NoObjectGeneratedError.isInstance(err) && err.usage) {
+      await recordUsage({
+        organizationId: brand.organization_id,
+        draftId,
+        modelId,
+        usage: err.usage,
+      });
+    }
+    throw err;
+  }
+  const { object, usage } = generated;
   await recordUsage({ organizationId: brand.organization_id, draftId, modelId, usage });
 
   const brief = {
-    goal: object.goal.trim(),
-    audience: object.audience.trim(),
+    goal: object.goal.trim().slice(0, BRIEF_LIMITS.goal),
+    audience: object.audience.trim().slice(0, BRIEF_LIMITS.audience),
     outline: mapOutline(object.outline, sources.fanouts),
-    keywords: [...new Set(object.keywords.map((k) => k.trim()).filter(Boolean))],
+    keywords: [
+      ...new Set(
+        object.keywords.map((k) => k.trim().slice(0, BRIEF_LIMITS.keyword)).filter(Boolean),
+      ),
+    ].slice(0, BRIEF_LIMITS.keywords),
     origin: 'rebuild',
     builtAt: new Date().toISOString(),
     builtFrom: {
@@ -165,23 +221,31 @@ export async function rebuildDraftBrief({ draftId, brandId, sources }) {
 
 /**
  * Keeps an H2's fan-out only when it is one the person kept, written as
- * listed, and its platform only when that search ran there.
+ * listed, and its platform only when that search ran there. Cut to the
+ * limits the web reads a brief with (BRIEF_LIMITS): a heading or key point
+ * left empty goes, long text is shortened, and the lists are capped.
  */
 export function mapOutline(outline, fanouts) {
   const byQuery = new Map(fanouts.map((f) => [norm(f.query), f]));
-  return outline.map((section) => {
-    const fanout = section.fanout ? byQuery.get(norm(section.fanout)) : undefined;
-    const platform =
-      fanout && fanout.platforms.includes(section.platform)
-        ? section.platform
-        : (fanout?.platforms[0] ?? null);
-    return {
-      heading: section.heading.trim(),
-      keyPoints: section.keyPoints.map((p) => p.trim()).filter(Boolean),
-      fanout: fanout?.query ?? null,
-      platform: fanout ? platform : null,
-    };
-  });
+  return outline
+    .map((section) => {
+      const fanout = section.fanout ? byQuery.get(norm(section.fanout)) : undefined;
+      const platform =
+        fanout && fanout.platforms.includes(section.platform)
+          ? section.platform
+          : (fanout?.platforms[0] ?? null);
+      return {
+        heading: (section.heading ?? '').trim().slice(0, BRIEF_LIMITS.heading),
+        keyPoints: (section.keyPoints ?? [])
+          .map((p) => p.trim().slice(0, BRIEF_LIMITS.keyPoint))
+          .filter(Boolean)
+          .slice(0, BRIEF_LIMITS.keyPoints),
+        fanout: fanout?.query ?? null,
+        platform: fanout ? platform : null,
+      };
+    })
+    .filter((section) => section.heading)
+    .slice(0, BRIEF_LIMITS.sections);
 }
 
 /** What the model is told: the brand, the page, and the sources kept. */

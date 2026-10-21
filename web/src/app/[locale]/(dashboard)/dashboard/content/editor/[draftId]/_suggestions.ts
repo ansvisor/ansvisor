@@ -1,11 +1,16 @@
 import { Extension } from '@tiptap/core';
-import { DOMParser as PmDOMParser, type Fragment, type Node as PmNode } from '@tiptap/pm/model';
+import {
+  DOMParser as PmDOMParser,
+  type Fragment,
+  type Node as PmNode,
+  type Schema,
+} from '@tiptap/pm/model';
 import { Plugin, PluginKey, type EditorState, type Transaction } from '@tiptap/pm/state';
 import { Decoration, DecorationSet } from '@tiptap/pm/view';
 import { cleanHtml } from '@/lib/content/clean-html';
 import { passageKey } from '@/lib/content/cited-passages';
 import type { DraftSuggestion } from '@/lib/content/suggestions';
-import { citedLocks } from './_cited-passages';
+import { blockKey, citedLocks, citedPassagesKey, type CitedLocks } from './_cited-passages';
 
 /**
  * An agent's suggestions in the page (CE-018): each open one is a card where
@@ -36,7 +41,12 @@ interface SuggestionView {
   labels: SuggestionLabels | null;
 }
 
-export const suggestionsKey = new PluginKey<SuggestionView>('agentSuggestions');
+/** The plugin's state: the suggestions, and their cards and marks where the page has them. */
+interface SuggestionState extends SuggestionView {
+  marks: DecorationSet;
+}
+
+export const suggestionsKey = new PluginKey<SuggestionState>('agentSuggestions');
 
 const NO_SUGGESTIONS: SuggestionView = { suggestions: [], labels: null };
 
@@ -52,7 +62,8 @@ function currentKey(s: DraftSuggestion, all: DraftSuggestion[]): string {
       other.status === 'accepted' &&
       other.blockText === s.blockText
     ) {
-      text = text.replace(other.beforeText, other.afterText);
+      // A function, so $ in the agent's text is taken as written.
+      text = text.replace(other.beforeText, () => other.afterText);
     }
   }
   return passageKey(text);
@@ -101,11 +112,23 @@ function topBlock(doc: PmNode, pos: number): { index: number; from: number; to: 
   return found;
 }
 
+/** Inserts' blocks already read, by schema and HTML: cleaning and parsing is the slow part. */
+const insertCache = new WeakMap<Schema, Map<string, Fragment>>();
+
 /** An insert's blocks, as the page's schema reads its HTML (checked like a paste). */
 export function insertBlocks(state: EditorState, html: string): Fragment {
+  let bySchema = insertCache.get(state.schema);
+  if (!bySchema) {
+    bySchema = new Map();
+    insertCache.set(state.schema, bySchema);
+  }
+  const known = bySchema.get(html);
+  if (known) return known;
   const holder = document.createElement('div');
   holder.innerHTML = cleanHtml(html, { keepImages: false }).html;
-  return PmDOMParser.fromSchema(state.schema).parse(holder).content;
+  const blocks = PmDOMParser.fromSchema(state.schema).parse(holder).content;
+  bySchema.set(html, blocks);
+  return blocks;
 }
 
 type Placed =
@@ -134,7 +157,8 @@ export function placeSuggestion(
       const block = findBlock(doc, (node) => {
         const text = node.textContent;
         return (
-          text.includes(s.afterText) && passageKey(text.replace(s.afterText, s.beforeText)) === key
+          text.includes(s.afterText) &&
+          passageKey(text.replace(s.afterText, () => s.beforeText)) === key
         );
       });
       if (!block) return null;
@@ -148,7 +172,7 @@ export function placeSuggestion(
     }
     const block = findBlock(
       doc,
-      (node) => passageKey(node.textContent) === key && node.textContent.includes(s.beforeText),
+      (node) => blockKey(node) === key && node.textContent.includes(s.beforeText),
     );
     if (!block) return null;
     const offset = block.node.textContent.indexOf(s.beforeText);
@@ -160,7 +184,7 @@ export function placeSuggestion(
     };
   }
 
-  const anchor = findBlock(doc, (node) => passageKey(node.textContent) === key);
+  const anchor = findBlock(doc, (node) => blockKey(node) === key);
   if (!anchor) return null;
   const top = topBlock(doc, anchor.pos);
   if (!top) return null;
@@ -176,9 +200,8 @@ export function placeSuggestion(
 }
 
 /** Whether a passage is locked (AI quotes it) and not opened for editing. */
-function lockedBlock(state: EditorState, block: Block): boolean {
-  const locks = citedLocks(state);
-  const key = passageKey(block.node.textContent);
+function lockedBlock(block: Block, locks: CitedLocks): boolean {
+  const key = blockKey(block.node);
   return locks.labels.has(key) && !locks.unlocked.has(key);
 }
 
@@ -188,10 +211,11 @@ export function blockedReason(
   s: DraftSuggestion,
   all: DraftSuggestion[],
   doc: PmNode = state.doc,
+  locks: CitedLocks = citedLocks(state),
 ): 'stale' | 'locked' | null {
   const placed = placeSuggestion(state, { ...s, status: 'open' }, all, doc);
   if (!placed) return 'stale';
-  if (placed.at === 'words' && lockedBlock(state, placed.block)) return 'locked';
+  if (placed.at === 'words' && lockedBlock(placed.block, locks)) return 'locked';
   return null;
 }
 
@@ -375,78 +399,96 @@ export const AgentSuggestions = Extension.create<{
   addProseMirrorPlugins() {
     const decide = (id: string, decision: SuggestionDecision) =>
       this.options.onDecide(id, decision);
+    /** The cards and marks for the suggestions where the page has them now. */
+    const placeMarks = (
+      state: EditorState,
+      view: SuggestionView,
+      locks: CitedLocks,
+    ): DecorationSet => {
+      const { suggestions, labels } = view;
+      if (!labels || suggestions.length === 0) return DecorationSet.empty;
+      const marks: Decoration[] = [];
+      // Cards for suggestions the page no longer has a place for go first.
+      const unplaced: DraftSuggestion[] = [];
+      for (const s of suggestions) {
+        const placed = placeSuggestion(state, s, suggestions);
+        const blocked =
+          s.status === 'open' ? blockedReason(state, s, suggestions, state.doc, locks) : null;
+        const widget = (pos: number) =>
+          Decoration.widget(pos, () => card(s, labels, blocked, decide), {
+            key: `${s.id}:${s.status}:${blocked ?? ''}:${s.reason}`,
+            side: -1,
+            ignoreSelection: true,
+            stopEvent: () => true,
+          });
+        if (!placed) {
+          if (s.status !== 'accepted') unplaced.push(s);
+          continue;
+        }
+        if (placed.at === 'words') {
+          marks.push(widget(placed.block.pos));
+          if (s.status === 'open') {
+            marks.push(
+              Decoration.inline(placed.from, placed.to, {
+                class: 'rounded-sm bg-amber-100 dark:bg-amber-900/40',
+              }),
+            );
+          }
+        } else if (placed.at === 'gap') {
+          marks.push(widget(placed.pos));
+        } else if (placed.at === 'added') {
+          marks.push(widget(placed.block.pos));
+          marks.push(
+            Decoration.node(placed.block.pos, placed.block.pos + placed.block.node.nodeSize, {
+              class: 'agent-accepted',
+            }),
+            Decoration.inline(placed.from, placed.to, { class: 'agent-accepted-text' }),
+          );
+        } else {
+          marks.push(widget(placed.from));
+          state.doc.nodesBetween(placed.from, placed.to, (node, pos) => {
+            if (pos >= placed.from && pos + node.nodeSize <= placed.to) {
+              marks.push(Decoration.node(pos, pos + node.nodeSize, { class: 'agent-accepted' }));
+            }
+            return false;
+          });
+        }
+      }
+      for (const s of unplaced) {
+        const blocked = s.status === 'open' ? 'stale' : null;
+        marks.push(
+          Decoration.widget(0, () => card(s, labels, blocked, decide), {
+            key: `${s.id}:${s.status}:unplaced`,
+            side: -1,
+            ignoreSelection: true,
+            stopEvent: () => true,
+          }),
+        );
+      }
+      return DecorationSet.create(state.doc, marks);
+    };
     return [
-      new Plugin<SuggestionView>({
+      new Plugin<SuggestionState>({
         key: suggestionsKey,
         state: {
-          init: () => NO_SUGGESTIONS,
-          apply: (tr, view) => (tr.getMeta(suggestionsKey) as SuggestionView | undefined) ?? view,
+          init: () => ({ ...NO_SUGGESTIONS, marks: DecorationSet.empty }),
+          // The cards and marks are placed again only when the page, the
+          // suggestions or the locks change, not on every selection move.
+          apply: (tr, value, old, state) => {
+            const view = tr.getMeta(suggestionsKey) as SuggestionView | undefined;
+            const newLocks = tr.getMeta(citedPassagesKey) as CitedLocks | undefined;
+            if (!view && !tr.docChanged && !newLocks) return value;
+            const next = view ?? { suggestions: value.suggestions, labels: value.labels };
+            if (!next.labels || next.suggestions.length === 0) {
+              return { ...next, marks: DecorationSet.empty };
+            }
+            // The locks plugin may not have taken this transaction yet: its
+            // locks come from the transaction when it changes them, else as they were.
+            return { ...next, marks: placeMarks(state, next, newLocks ?? citedLocks(old)) };
+          },
         },
         props: {
-          decorations: (state) => {
-            const { suggestions, labels } = suggestionsKey.getState(state) ?? NO_SUGGESTIONS;
-            if (!labels || suggestions.length === 0) return null;
-            const marks: Decoration[] = [];
-            // Cards for suggestions the page no longer has a place for go first.
-            const unplaced: DraftSuggestion[] = [];
-            for (const s of suggestions) {
-              const placed = placeSuggestion(state, s, suggestions);
-              const blocked = s.status === 'open' ? blockedReason(state, s, suggestions) : null;
-              const widget = (pos: number) =>
-                Decoration.widget(pos, () => card(s, labels, blocked, decide), {
-                  key: `${s.id}:${s.status}:${blocked ?? ''}:${s.reason}`,
-                  side: -1,
-                  ignoreSelection: true,
-                  stopEvent: () => true,
-                });
-              if (!placed) {
-                if (s.status !== 'accepted') unplaced.push(s);
-                continue;
-              }
-              if (placed.at === 'words') {
-                marks.push(widget(placed.block.pos));
-                if (s.status === 'open') {
-                  marks.push(
-                    Decoration.inline(placed.from, placed.to, {
-                      class: 'rounded-sm bg-amber-100 dark:bg-amber-900/40',
-                    }),
-                  );
-                }
-              } else if (placed.at === 'gap') {
-                marks.push(widget(placed.pos));
-              } else if (placed.at === 'added') {
-                marks.push(widget(placed.block.pos));
-                marks.push(
-                  Decoration.node(placed.block.pos, placed.block.pos + placed.block.node.nodeSize, {
-                    class: 'agent-accepted',
-                  }),
-                  Decoration.inline(placed.from, placed.to, { class: 'agent-accepted-text' }),
-                );
-              } else {
-                marks.push(widget(placed.from));
-                state.doc.nodesBetween(placed.from, placed.to, (node, pos) => {
-                  if (pos >= placed.from && pos + node.nodeSize <= placed.to) {
-                    marks.push(
-                      Decoration.node(pos, pos + node.nodeSize, { class: 'agent-accepted' }),
-                    );
-                  }
-                  return false;
-                });
-              }
-            }
-            for (const s of unplaced) {
-              const blocked = s.status === 'open' ? 'stale' : null;
-              marks.push(
-                Decoration.widget(0, () => card(s, labels, blocked, decide), {
-                  key: `${s.id}:${s.status}:unplaced`,
-                  side: -1,
-                  ignoreSelection: true,
-                  stopEvent: () => true,
-                }),
-              );
-            }
-            return DecorationSet.create(state.doc, marks);
-          },
+          decorations: (state) => suggestionsKey.getState(state)?.marks ?? null,
         },
       }),
     ];
