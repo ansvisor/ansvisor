@@ -480,13 +480,18 @@ export type RuleStatus =
   | { state: 'bad'; code: 'current'; count: number }
   | { state: 'bad'; code: 'words'; count: number }
   | { state: 'bad'; code: 'missing' | 'noH2' | 'needsFaq' | 'notSet' }
-  | { state: 'info'; code: 'aiCheck' | 'needsFeed' | 'noFanouts' | 'addKeywords' | 'notHowTo' };
+  | {
+      state: 'info';
+      code: 'aiCheck' | 'needsFeed' | 'noFanouts' | 'addKeywords' | 'notHowTo' | 'englishOnly';
+    };
 
 export interface RuleContext {
   brandDomains: string[];
   competitorDomains: string[];
   /** The fan-outs the draft keeps, the most searched first. */
   fanouts: string[];
+  /** The brand's language (brands.language); none reads as English. */
+  language?: string | null;
 }
 
 /** Phrases that read as machine-written (spec §10, "Remove AI traces"). */
@@ -572,12 +577,16 @@ const PRONOUNS = /^(it|this|that|these|those|there|which|who|he|she|they|we|you|
  */
 function definesAtOnce(text: string): boolean {
   const sentence = text.trim().split(/(?<=[.!?])\s/)[0];
-  const words = sentence.split(/\s+/).slice(0, DEFINING_WORDS);
+  // Words without their punctuation: "Cold brew is, simply, …" defines too.
+  const words = sentence
+    .split(/\s+/)
+    .slice(0, DEFINING_WORDS)
+    .map((w) => w.replace(/[^\p{L}]/gu, ''));
   const verb = words.findIndex(
     (w, i) =>
       /^(is|are|means)$/i.test(w) || (/^refers$/i.test(w) && /^to$/i.test(words[i + 1] ?? '')),
   );
-  return verb > 0 && !PRONOUNS.test(words[verb - 1].replace(/[^\p{L}]/gu, ''));
+  return verb > 0 && !PRONOUNS.test(words[verb - 1]);
 }
 
 const atLeast = (have: number, want: number): RuleStatus =>
@@ -727,7 +736,9 @@ export function checkRule(rule: ActiveRule, page: PageRead, ctx: RuleContext): R
       return words >= n ? { state: 'ok' } : { state: 'bad', code: 'current', count: words };
     }
     case 'definitionFirst':
-      // The term defined at once: "X is …" in a short first paragraph.
+      // The term defined at once: "X is …" in a short first paragraph. Read
+      // in English words only, so another language's page isn't counted.
+      if (ctx.language && ctx.language !== 'en') return { state: 'info', code: 'englishOnly' };
       if (!summary || !summary.words) return { state: 'bad', code: 'missing' };
       if (!definesAtOnce(summary.text)) return { state: 'bad', code: 'missing' };
       return summary.words <= n

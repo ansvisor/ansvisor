@@ -384,6 +384,25 @@ describe('the formats www.ansvisor.com offers', () => {
     expect(
       define('<h1>CRM</h1><p>Customer relationship management (CRM) refers to tools that…</p>'),
     ).toEqual({ state: 'ok' });
+    // Punctuation beside the verb doesn't hide it.
+    expect(define('<h1>Cold brew</h1><p>Cold brew is, simply, coffee steeped cold.</p>')).toEqual({
+      state: 'ok',
+    });
+    // Read in English words only: another language's page isn't counted.
+    expect(
+      checkRule(
+        rule('definitionFirst', 'definition'),
+        page('<h1>Soğuk demleme</h1><p>Soğuk demleme, soğuk suyla demlenen kahvedir.</p>'),
+        { ...ctx, language: 'tr' },
+      ),
+    ).toEqual({ state: 'info', code: 'englishOnly' });
+    expect(
+      checkRule(
+        rule('definitionFirst', 'definition'),
+        page('<h1>Cold brew</h1><p>Cold brew is coffee steeped in cold water.</p>'),
+        { ...ctx, language: 'en' },
+      ),
+    ).toEqual({ state: 'ok' });
     expect(define(`<h1>Cold brew</h1><p>Cold brew is ${'very '.repeat(60)}cold.</p>`)).toEqual({
       state: 'bad',
       code: 'words',

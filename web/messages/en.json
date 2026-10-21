@@ -3919,6 +3919,7 @@
           "noFanouts": "No fan-outs",
           "addKeywords": "Add keywords",
           "notHowTo": "Not a how-to",
+          "englishOnly": "English only",
           "numberCheck": "Number check"
         },
         "mineName": "My rules · {type}",
