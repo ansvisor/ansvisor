@@ -8,6 +8,7 @@ import {
   draftPassages,
   keepSuggestions,
   passageKey,
+  promptPassages,
   suggestionsSchema,
 } from './content-agent.js';
 import { contentBriefModelId, rebuildSources, recordUsage } from './content-brief.js';
@@ -26,7 +27,9 @@ import { enforceImproveQuota } from './plan-guard.js';
  * Start doesn't wait for it. The draft says where the agent is
  * (content_drafts.agent_state, 00219): 'writing' while it runs here in the
  * background, then In review, or 'failed'. It is metered from the
- * organization's AI usage, as the brief and the agent's fixes are.
+ * organization's AI usage, as the brief and the agent's fixes are, and one
+ * draft of an organization is written at a time: the budget is checked
+ * before a run, so runs started together could all pass it.
  */
 
 /** How long the model may take: nobody waits on the request. */
@@ -158,7 +161,16 @@ Call to action: ${opportunityBrief.callToAction || '—'}`;
 }
 
 /** What the model is told, for a new page or an existing one. */
-export function buildWritePrompt({ brand, draft, prompts, brief, input, passages, lockedKeys }) {
+export function buildWritePrompt({
+  brand,
+  draft,
+  prompts,
+  brief,
+  input,
+  passages,
+  more = false,
+  lockedKeys,
+}) {
   const { sources } = input;
   const rules = input.rules.map((r) => `${r.key}: ${r.name}${r.detail ? ` — ${r.detail}` : ''}`);
   const own = input.textRules.map((text) => `- ${text}`);
@@ -168,7 +180,9 @@ export function buildWritePrompt({ brand, draft, prompts, brief, input, passages
           const locked = lockedKeys.has(passageKey(p.text)) ? ', LOCKED' : '';
           return `[${i + 1}] (${p.tag}${locked}) ${p.text}`;
         })
-        .join('\n')}`
+        .join(
+          '\n',
+        )}${more ? '\n(The page goes on; suggest changes only to the passages above.)' : ''}`
     : `Write a new page titled about: ${draft.title || 'the questions below'}.`;
   return `Brand: ${brand?.name || 'Unknown'}
 Industry: ${brand?.industry || 'Not specified'}
@@ -201,12 +215,30 @@ Write in ${getLanguageName(brand?.language)}.`;
 }
 
 /**
+ * Whether the agent is writing another of the organization's drafts now (a
+ * 'writing' left by a stopped server doesn't count).
+ */
+async function organizationWriting(organizationId, draftId, staleBefore) {
+  const { data, error } = await supabaseAdmin
+    .from('content_drafts')
+    .select('id, brands!inner(organization_id)')
+    .eq('brands.organization_id', organizationId)
+    .eq('agent_state', 'writing')
+    .gt('agent_state_at', staleBefore)
+    .neq('id', draftId)
+    .limit(1);
+  if (error) throw error;
+  return (data ?? []).length > 0;
+}
+
+/**
  * Starts the agent on a draft: checks it is the brand's and still a draft,
- * that the agent isn't already on it, the AI usage budget and the model;
- * marks it 'writing' and runs the model in the background. Throws with
- * `.status` 404 for a draft outside the brand, 409 (code 'not_draft' or
- * 'writing'), PlanLimitError once the budget is spent, and the provider's
- * error when the model isn't set up — all before anything runs.
+ * that the agent isn't already on it or on another of the organization's
+ * drafts, the AI usage budget and the model; marks it 'writing' and runs the
+ * model in the background. Throws with `.status` 404 for a draft outside the
+ * brand, 409 (code 'not_draft', 'writing' or 'org_writing'), PlanLimitError
+ * once the budget is spent, and the provider's error when the model isn't
+ * set up — all before anything runs.
  */
 export async function startDraftWriting({ draftId, brandId, input }) {
   const { data: draft, error: draftError } = await supabaseAdmin
@@ -245,6 +277,12 @@ export async function startDraftWriting({ draftId, brandId, input }) {
   if (brandError) throw brandError;
   const modelId = contentBriefModelId();
   await enforceImproveQuota(brand.organization_id, modelId);
+  if (await organizationWriting(brand.organization_id, draftId, staleBefore)) {
+    throw Object.assign(new Error('The agent is writing another draft'), {
+      status: 409,
+      code: 'org_writing',
+    });
+  }
   // A provider that isn't set up fails here, before anything is claimed.
   const model = resolveModel(modelId);
 
@@ -271,14 +309,28 @@ export async function startDraftWriting({ draftId, brandId, input }) {
   return { started: true };
 }
 
-/** The agent's state as it ends, only while it is still the run's to end. */
-async function finish(draftId, values) {
-  const { error } = await supabaseAdmin
+/**
+ * The agent's state as it ends, only while it is still the run's to end;
+ * with `draftOnly`, only while the draft is still a draft (not marked ready
+ * meanwhile). Answers whether it ended it.
+ */
+async function finish(draftId, values, { draftOnly = false } = {}) {
+  let query = supabaseAdmin
     .from('content_drafts')
     .update({ ...values, agent_state_at: new Date().toISOString() })
     .eq('id', draftId)
     .eq('agent_state', 'writing');
+  if (draftOnly) query = query.eq('status', 'draft');
+  const { data, error } = await query.select('id').maybeSingle();
   if (error) throw error;
+  return !!data;
+}
+
+/** A draft that left Draft during the run keeps its page; the agent lets go of it. */
+async function letGo(draftId) {
+  await finish(draftId, { agent_state: null });
+  logger.info({ draftId }, '[content-writer] the draft left Draft during the run');
+  return { skipped: true };
 }
 
 /**
@@ -290,10 +342,11 @@ export async function runDraftWriting({ draft, brand, model, modelId, input }) {
     const [promptsRes, opportunityRes] = await Promise.all([
       input.sources.promptIds.length
         ? supabaseAdmin
+            // Through the prompt's set, not its topic: a prompt may have no topic.
             .from('prompts')
-            .select('id, text, topics!inner(brand_id)')
+            .select('id, text, prompt_sets!inner(brand_id)')
             .in('id', input.sources.promptIds)
-            .eq('topics.brand_id', draft.brand_id)
+            .eq('prompt_sets.brand_id', draft.brand_id)
         : Promise.resolve({ data: [], error: null }),
       draft.opportunity_id && !draft.brief
         ? supabaseAdmin
@@ -324,24 +377,38 @@ export async function runDraftWriting({ draft, brand, model, modelId, input }) {
         usage,
       });
       const title = clean(object.title).slice(0, 300) || draft.title;
-      await finish(draft.id, {
-        title,
-        body_html: renderPage({ ...object, title }),
-        status: 'in_review',
-        author: 'agent',
-        agent_state: null,
-      });
-      return { written: true };
+      // Try again over a page the person has written in: History keeps it
+      // first. Their saves wait while the agent writes (saveContentDraft).
+      if (draftPassages(draft.body_html).some((p) => p.tag !== 'h1')) {
+        const { error: keepError } = await supabaseAdmin.rpc('content_draft_snapshot', {
+          p_draft_id: draft.id,
+          p_origin: 'agent_before',
+        });
+        if (keepError) throw keepError;
+      }
+      const written = await finish(
+        draft.id,
+        {
+          title,
+          body_html: renderPage({ ...object, title }),
+          status: 'in_review',
+          author: 'agent',
+          agent_state: null,
+        },
+        { draftOnly: true },
+      );
+      // Awaited here, so a failure to let go is caught below.
+      return written ? { written: true } : await letGo(draft.id);
     }
 
-    const passages = draftPassages(draft.body_html);
+    const { passages, more } = promptPassages(draftPassages(draft.body_html));
     if (!passages.length) throw new Error('The page has no text to improve');
     const lockedKeys = new Set(input.locked.map(passageKey));
     const { object, usage } = await generateObject({
       model,
       schema: suggestionsSchema,
       system: SUGGEST_SYSTEM_PROMPT,
-      prompt: buildWritePrompt({ brand, draft, prompts, brief, input, passages, lockedKeys }),
+      prompt: buildWritePrompt({ brand, draft, prompts, brief, input, passages, more, lockedKeys }),
       abortSignal: AbortSignal.timeout(CALL_TIMEOUT_MS),
     });
     await recordUsage({ organizationId: brand.organization_id, draftId: draft.id, modelId, usage });
@@ -363,7 +430,17 @@ export async function runDraftWriting({ draft, brand, model, modelId, input }) {
       })),
     );
     if (insertError) throw insertError;
-    await finish(draft.id, { status: 'in_review', agent_state: null });
+    if (
+      !(await finish(draft.id, { status: 'in_review', agent_state: null }, { draftOnly: true }))
+    ) {
+      // Nobody reviews suggestions on a page already marked ready.
+      const { error: dropError } = await supabaseAdmin
+        .from('content_draft_suggestions')
+        .delete()
+        .eq('batch_id', batchId);
+      if (dropError) throw dropError;
+      return await letGo(draft.id);
+    }
     return { suggestions: rows.length };
   } catch (err) {
     logger.error({ err, draftId: draft.id }, '[content-writer] the agent could not finish');

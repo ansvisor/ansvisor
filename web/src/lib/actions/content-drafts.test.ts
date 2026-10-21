@@ -52,6 +52,7 @@ vi.mock('@/lib/supabase/server', () => ({
         eq: (col: string, v: unknown) => (call.filters.push(['eq', col, v]), chain),
         in: (col: string, v: unknown) => (call.filters.push(['in', col, v]), chain),
         gte: (col: string, v: unknown) => (call.filters.push(['gte', col, v]), chain),
+        or: (v: string) => (call.filters.push(['or', v, null]), chain),
         order: () => chain,
         limit: async () => ({ data: list, error: null }),
         update: (value: unknown) => ((call.op = 'update'), (call.value = value), chain),
@@ -117,6 +118,8 @@ describe('saveContentDraft', () => {
       filters: [
         ['eq', 'id', DRAFT],
         ['eq', 'updated_at', '2026-10-20T14:00:00Z'],
+        // Not while the Content Agent writes it.
+        ['or', expect.stringMatching(/^agent_state\.is\.null,agent_state\.neq\.writing,/), null],
       ],
     });
   });
@@ -149,6 +152,19 @@ describe('saveContentDraft', () => {
 
   it('doesn’t overwrite a page someone else changed', async () => {
     row = { updated_at: '2026-10-20T14:30:00Z', body_html: '<h1>Their version</h1>' };
+    await expect(
+      saveContentDraft(DRAFT, { title: 'Mine', bodyHtml: '<h1>Mine</h1>', base: await base() }),
+    ).resolves.toEqual({ ok: false, reason: 'conflict' });
+    expect(calls.map((c) => c.op)).toEqual(['update', 'select']);
+  });
+
+  it('waits while the Content Agent writes the page, the page being the same', async () => {
+    row = {
+      updated_at: '2026-10-20T14:30:00Z',
+      body_html: LOADED,
+      agent_state: 'writing',
+      agent_state_at: new Date().toISOString(),
+    };
     await expect(
       saveContentDraft(DRAFT, { title: 'Mine', bodyHtml: '<h1>Mine</h1>', base: await base() }),
     ).resolves.toEqual({ ok: false, reason: 'conflict' });

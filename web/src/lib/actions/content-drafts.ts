@@ -7,6 +7,7 @@ import { readAssignees } from '@/lib/action-center/assignees';
 import {
   DRAFT_STATUSES,
   PAGE_TYPES,
+  WRITING_STALE_MS,
   agentStateOf,
   type ContentDraft,
   type ContentDraftListItem,
@@ -806,12 +807,17 @@ export async function saveContentDraft(
   const bodyHtml = sanitizeDraftHtml(parsed.data.bodyHtml);
   const supabase = await createClient();
   let expected = base.updatedAt;
+  // While the Content Agent writes the page (CE-015), a tab left open waits:
+  // the agent's page would go over its save. A 'writing' left by a stopped
+  // server doesn't hold it.
+  const writingSince = new Date(Date.now() - WRITING_STALE_MS).toISOString();
   for (let attempt = 0; attempt < SAVE_ATTEMPTS; attempt++) {
     const { data, error } = await supabase
       .from('content_drafts')
       .update({ title, body_html: bodyHtml })
       .eq('id', id)
       .eq('updated_at', expected)
+      .or(`agent_state.is.null,agent_state.neq.writing,agent_state_at.lt."${writingSince}"`)
       .select(`updated_at, page_type, page_type_source, ${BRAND_SITE}`)
       .maybeSingle();
     if (error) throw new Error(error.message);
@@ -841,11 +847,15 @@ export async function saveContentDraft(
 
     const { data: current, error: readError } = await supabase
       .from('content_drafts')
-      .select('updated_at, body_html')
+      .select('updated_at, body_html, agent_state, agent_state_at')
       .eq('id', id)
       .maybeSingle();
     if (readError) throw new Error(readError.message);
     if (!current) return { ok: false, reason: 'not_found' };
+    // The page is changing elsewhere: Reload opens it as the agent leaves it.
+    if (agentStateOf(current.agent_state, current.agent_state_at) === 'writing') {
+      return { ok: false, reason: 'conflict' };
+    }
     if ((await bodyHash(current.body_html)) !== base.bodyHash) {
       return { ok: false, reason: 'conflict' };
     }
@@ -1387,7 +1397,14 @@ export async function fixDraftRules(
   }
 }
 
-const AGENT_WRITE_ERRORS = ['ai_budget', 'writing', 'not_draft', 'failed'] as const;
+const AGENT_WRITE_ERRORS = [
+  'ai_budget',
+  'no_subscription',
+  'writing',
+  'org_writing',
+  'not_draft',
+  'failed',
+] as const;
 export type AgentWriteError = (typeof AGENT_WRITE_ERRORS)[number];
 
 /**
