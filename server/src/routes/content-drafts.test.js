@@ -140,7 +140,8 @@ describe('POST /api/content-drafts/:draftId/write', () => {
   });
 
   it('refuses a malformed request, and says why it didn’t start', async () => {
-    let res = await write({ brandId: BRAND, sources: { ...sources, length: 5 } });
+    // A length out of range is brought into it (rebuildSources); a malformed prompt id isn't.
+    let res = await write({ brandId: BRAND, sources: { ...sources, promptIds: ['p1'] } });
     expect(res.status).toBe(400);
     expect(startDraftWriting).not.toHaveBeenCalled();
 
