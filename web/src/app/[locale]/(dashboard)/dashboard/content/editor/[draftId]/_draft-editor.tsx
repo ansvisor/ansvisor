@@ -36,6 +36,7 @@ import {
 } from '@/lib/actions/content-drafts';
 import { agentWriteRequest, useRuleDescriber } from '@/lib/content/agent-write';
 import {
+  AGENT_POLL_MS,
   CONTENT_LIBRARY_PATH,
   isPageType,
   type ContentDraft,
@@ -76,6 +77,7 @@ import { HistoryMenu } from './_history-menu';
 import { HtmlBlock, copyToClipboard } from './_html-block';
 import { OwnCopies, ownCopyHtml } from './_own-copies';
 import { PageTypeMenu } from './_page-type-menu';
+import type { AgentRewrite } from './_brief-tab';
 import { ruleStatusText, type AgentFix } from './_rules-tab';
 import { EditorPanelRail, EditorSidePanel, useSidePanelOpen, type PanelTab } from './_side-panel';
 import {
@@ -113,6 +115,27 @@ const DOCUMENT_CLASS = cn(
   '[&_.agent-accepted-text]:underline [&_.agent-accepted-text]:decoration-emerald-300 [&_.agent-accepted-text]:decoration-2 [&_.agent-accepted-text]:underline-offset-4 dark:[&_.agent-accepted-text]:decoration-emerald-700',
   '[&_.is-editor-empty:first-child]:before:pointer-events-none [&_.is-editor-empty:first-child]:before:float-left [&_.is-editor-empty:first-child]:before:h-0 [&_.is-editor-empty:first-child]:before:text-muted-foreground [&_.is-editor-empty:first-child]:before:content-[attr(data-placeholder)]',
 );
+
+/**
+ * How long Fix open rules waits for the agent's batch when its answer didn't
+ * come back: past the API's model call (content-agent.js, 60 s) and the
+ * batch's save.
+ */
+const FIX_WAIT_MS = 90_000;
+
+/**
+ * The draft's suggestions once a new open batch lands, read every few
+ * seconds until the deadline; null if none did. Fix open rules only runs
+ * with none open, so any open one is the agent's.
+ */
+async function agentBatch(draftId: string, until: number): Promise<DraftSuggestion[] | null> {
+  while (Date.now() < until) {
+    await new Promise((resolve) => setTimeout(resolve, AGENT_POLL_MS));
+    const read = await getDraftSuggestions(draftId).catch(() => null);
+    if (read?.some((s) => s.status === 'open')) return read;
+  }
+  return null;
+}
 
 /**
  * The content editor (Content Editor, CE-004, spec §6): a header with the
@@ -156,7 +179,7 @@ export function DraftEditor({
   const [marking, setMarking] = useState(false);
   // The Content Agent couldn't finish the page Start gave it (CE-015).
   const [agentFailed, setAgentFailed] = useState(draft.agentState === 'failed');
-  const [retrying, setRetrying] = useState(false);
+  const [starting, setStarting] = useState(false);
   const describeRule = useRuleDescriber();
   const [restoring, setRestoring] = useState(false);
   const format = useFormatter();
@@ -571,10 +594,30 @@ export function DraftEditor({
       })(),
     };
     setFixing(true);
+    const asked = Date.now();
     try {
       // The agent reads the page as saved.
       await autosave.settle();
-      const result = await fixDraftRules(draft.id, draft.brandId, request);
+      const result = await fixDraftRules(draft.id, draft.brandId, request).catch((err) => {
+        // The call itself gave up (a timeout on the way): the agent may still finish.
+        console.error('Failed to hear back from the Content Agent:', err);
+        return { error: 'unconfirmed' as const };
+      });
+      if ('error' in result && result.error === 'unconfirmed') {
+        // No answer is not a failure: its batch shows if it lands in time.
+        const landed = await agentBatch(draft.id, asked + FIX_WAIT_MS);
+        if (!landed) {
+          toast.error(t('suggestions.fixErrors.failed'));
+          return;
+        }
+        setSuggestions(landed);
+        setBarClosed(false);
+        agentBeforeKept.current = false;
+        toast.success(
+          t('suggestions.fixed', { count: landed.filter((s) => s.status === 'open').length }),
+        );
+        return;
+      }
       if ('error' in result) {
         toast.error(t(`suggestions.fixErrors.${result.error}`));
         // Another tab (or the API) left them: show them here to decide.
@@ -705,12 +748,13 @@ export function DraftEditor({
   };
 
   /**
-   * Try again: the agent takes the page as saved now, with the rules in
-   * effect here, and the page waits for it.
+   * The agent on this draft again (Try again, Rewrite from brief): it takes
+   * the page as saved now, with the brief, the sources and the rules in effect
+   * here, and the page waits for it.
    */
-  const retryAgent = async () => {
+  const startAgent = async () => {
     if (!editor) return;
-    setRetrying(true);
+    setStarting(true);
     try {
       await autosave.settle();
       const request = await agentWriteRequest(
@@ -740,11 +784,20 @@ export function DraftEditor({
       console.error('Failed to start the Content Agent again:', err);
       toast.error(t('agentFailed.errors.failed'));
     } finally {
-      setRetrying(false);
+      setStarting(false);
     }
   };
 
   const canMarkReady = status === 'draft' || status === 'in_review';
+  // Rewrite from brief, while the page is still open to the agent (not ready
+  // or published), as the API allows.
+  const agentRewrite: AgentRewrite | undefined = canMarkReady
+    ? {
+        run: () => void startAgent(),
+        running: starting,
+        blocked: openSuggestions > 0 ? t('suggestions.decideFirst') : null,
+      }
+    : undefined;
   const markReady = async () => {
     setMarking(true);
     try {
@@ -933,7 +986,7 @@ export function DraftEditor({
 
       <div className="flex min-h-0 flex-1">
         <div className="flex min-w-0 flex-1 flex-col">
-          {agentFailed && status === 'draft' && (
+          {agentFailed && canMarkReady && (
             <div
               role="alert"
               className="flex flex-wrap items-center gap-x-3 gap-y-1.5 border-b border-amber-200 bg-amber-50 px-4 py-1.5 text-[13px] text-amber-800 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-300"
@@ -945,10 +998,10 @@ export function DraftEditor({
                   variant="outline"
                   size="sm"
                   className="h-7"
-                  disabled={retrying || !editor}
-                  onClick={() => void retryAgent()}
+                  disabled={starting || !editor}
+                  onClick={() => void startAgent()}
                 >
-                  {retrying && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                  {starting && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
                   {t('agentFailed.retry')}
                 </Button>
                 <Button
@@ -1070,6 +1123,7 @@ export function DraftEditor({
             reads={reads}
             tabRequest={tabRequest}
             agentFix={agentFix}
+            agentRewrite={agentRewrite}
           />
         ) : (
           <EditorPanelRail onOpen={openPanelTab} />

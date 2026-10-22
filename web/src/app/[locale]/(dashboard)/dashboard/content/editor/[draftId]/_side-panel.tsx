@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { isPageType, type ContentDraft } from '@/lib/content/drafts';
-import { BriefTab } from './_brief-tab';
+import { BriefTab, type AgentRewrite } from './_brief-tab';
 import { ImpactTab } from './_impact-tab';
 import { RulesTab, type AgentFix } from './_rules-tab';
 import { SourcesTab } from './_sources-tab';
@@ -95,6 +95,7 @@ export function EditorSidePanel({
   reads,
   tabRequest,
   agentFix,
+  agentRewrite,
 }: {
   draft: ContentDraft;
   /** The draft's title, page and type as written now: Sources and Brief read them. */
@@ -109,6 +110,8 @@ export function EditorSidePanel({
   tabRequest: { tab: PanelTab; n: number } | null;
   /** Fix open rules with agent, for the Rules tab (CE-018). */
   agentFix?: AgentFix;
+  /** Rewrite from brief, for the Brief tab; absent once the page is ready or published. */
+  agentRewrite?: AgentRewrite;
 }) {
   const t = useTranslations('contentEditor.editor.panel');
   const [tab, setTab] = useState<PanelTab>('rules');
@@ -169,10 +172,12 @@ export function EditorSidePanel({
               pageType={pageType}
               length={rules.length}
               sourceUrl={draft.sourceUrl}
+              method={draft.method}
               rebuilding={rebuilding}
               onRebuild={() => void rebuild()}
               onRetry={reads.reloadBrief}
               onSaved={(saved) => reads.setBrief(saved)}
+              rewrite={agentRewrite}
             />
           </div>
         )}

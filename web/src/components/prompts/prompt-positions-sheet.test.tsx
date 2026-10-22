@@ -23,7 +23,9 @@ vi.mock('@/i18n/navigation', () => ({
   Link: ({ href, children }: { href: string; children: React.ReactNode }) => (
     <a href={href}>{children}</a>
   ),
+  useRouter: () => ({ push: vi.fn() }),
 }));
+vi.mock('@/lib/actions/content-drafts', () => ({ getDraftForPrompt: async () => null }));
 
 const { PromptPositionsSheet } = await import('./prompt-positions-sheet');
 
@@ -94,13 +96,27 @@ function data({ locked = false, unanswered = false } = {}): PromptPositionsData 
     summary,
     platforms,
     improving: null,
+    citedPage: null,
   };
+}
+
+/** Two answers that neither name nor cite the brand. */
+function unnamed(): PromptPositionsData {
+  const { summary, platforms } = summarizePositions(
+    [answer({ createdAt: '2026-10-08T02:00:00Z' }), answer({ createdAt: '2026-10-09T02:00:00Z' })],
+    [{ id: 'chatgpt-web', label: 'ChatGPT', access: { state: 'included' } }],
+    WEEK,
+  );
+  return { ...data(), summary, platforms };
 }
 
 let container: HTMLDivElement;
 let root: Root;
 
-async function open(preset: '7d' | '24h' = '7d') {
+async function open(
+  preset: '7d' | '24h' = '7d',
+  more: Partial<React.ComponentProps<typeof PromptPositionsSheet>> = {},
+) {
   await act(async () =>
     root.render(
       <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
@@ -111,6 +127,7 @@ async function open(preset: '7d' | '24h' = '7d') {
           onRangeChange={() => {}}
           region=""
           onClose={() => {}}
+          {...more}
         />
       </NextIntlClientProvider>,
     ),
@@ -130,6 +147,30 @@ afterEach(() => {
 });
 
 describe('PromptPositionsSheet', () => {
+  it('offers content first in the Improve tab when no answer names the brand', async () => {
+    getPromptPositions.mockResolvedValue(unnamed());
+    const onStartContent = vi.fn();
+    await open('7d', { initialTab: 'improve', brandId: 'b1', onStartContent });
+    await act(async () => {});
+    expect(document.body.textContent).toContain('No answer mentions or cites you here');
+    const create = [...document.querySelectorAll('button')].find(
+      (b) => b.textContent === 'Create content',
+    )!;
+    await act(async () => create.click());
+    expect(onStartContent).toHaveBeenCalledWith({
+      kind: 'prompt',
+      id: 'p1',
+      text: 'Best coffee subscription?',
+      method: 'create',
+    });
+  });
+
+  it('offers no content step where the page gives no way to start', async () => {
+    getPromptPositions.mockResolvedValue(unnamed());
+    await open('7d', { initialTab: 'improve' });
+    expect(document.body.textContent).not.toContain('Create content');
+  });
+
   it("puts the table's answer, mention and citation counts beside the days", async () => {
     await open();
     const text = document.body.textContent ?? '';

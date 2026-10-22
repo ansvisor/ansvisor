@@ -249,6 +249,8 @@ describe('the content editor', () => {
     for (const name of ['Heading 1', 'Bold', 'Link', 'Numbered list', 'Insert a table']) {
       expect(button(name)).toBeDefined();
     }
+    // The HTML block is named, not only an icon.
+    expect(button('Add an HTML block')!.textContent).toBe('Add HTML');
     expect(container.querySelector('.ProseMirror h1')!.textContent).toBe('Pipeline forecasting');
   });
 
@@ -1482,6 +1484,50 @@ describe('the side panel', () => {
     expect(getContentImpact).not.toHaveBeenCalled();
   });
 
+  // Item 12 of the editor round: the brief built, the agent works from it.
+  it('hands a page in review to the agent from its brief, and waits for it', async () => {
+    getDraftBrief.mockResolvedValue({
+      brief: {
+        goal: 'Win forecasting searches',
+        audience: 'Sales leaders',
+        outline: [
+          {
+            heading: 'How pipeline forecasting works',
+            keyPoints: [],
+            fanout: null,
+            platform: null,
+          },
+        ],
+        keywords: [],
+        origin: 'rebuild',
+        builtAt: '2026-10-21T10:00:00Z',
+        builtFrom: { prompts: 0, fanouts: 1, pages: 0, queries: 0 },
+      },
+    });
+    getContentDraft.mockResolvedValue(draft({ status: 'in_review' }));
+    window.innerWidth = 1440;
+    await renderPage();
+    const tab = [...panel()!.querySelectorAll<HTMLElement>('[role="tab"]')].find(
+      (el) => el.textContent === 'Brief',
+    )!;
+    await act(async () => {
+      tab.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
+      tab.click();
+    });
+
+    await act(async () => button('Suggest changes from brief')!.click());
+    await act(async () => button('Start the agent')!.click());
+    await act(async () => {});
+    expect(startAgentWriting).toHaveBeenCalledWith(
+      'd1',
+      'b1',
+      expect.objectContaining({ textRules: [], locked: [] }),
+    );
+    expect(container.querySelector('[role="status"]')!.textContent).toContain(
+      'Content Agent is writing this page',
+    );
+  });
+
   it('rebuilds the brief from Sources and opens it', async () => {
     getDraftSources.mockResolvedValue({
       data: {
@@ -1720,6 +1766,56 @@ describe('the side panel', () => {
       expect(toast.success).toHaveBeenCalledWith(
         'Content Agent suggested 1 change · review them in the page',
       );
+    });
+
+    // A timeout on the way back is not the agent failing: it may still finish.
+    it('shows the agent’s batch when it lands after the answer didn’t come back', async () => {
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
+      try {
+        getContentDraft.mockResolvedValue(traced);
+        getDraftSuggestions
+          .mockResolvedValueOnce([])
+          .mockResolvedValueOnce([])
+          .mockResolvedValueOnce([agentSuggestion]);
+        fixDraftRules.mockRejectedValue(new Error('An unexpected response was received'));
+        await openRules();
+
+        await act(async () => panelButton('Fix open rules with agent').click());
+        await act(async () => void (await vi.advanceTimersByTimeAsync(5_000)));
+        expect(toast.error).not.toHaveBeenCalled();
+        await act(async () => void (await vi.advanceTimersByTimeAsync(5_000)));
+        await act(async () => {});
+
+        expect(getDraftSuggestions).toHaveBeenCalledTimes(3);
+        expect(
+          container.querySelector('[role="region"][aria-label="Agent suggestions"]')!.textContent,
+        ).toContain('Content Agent suggested 1 change');
+        expect(toast.success).toHaveBeenCalledWith(
+          'Content Agent suggested 1 change · review them in the page',
+        );
+        expect(toast.error).not.toHaveBeenCalled();
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('says the agent couldn’t run when no batch lands in time', async () => {
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
+      try {
+        getContentDraft.mockResolvedValue(traced);
+        getDraftSuggestions.mockResolvedValue([]);
+        fixDraftRules.mockResolvedValue({ error: 'unconfirmed' });
+        await openRules();
+
+        await act(async () => panelButton('Fix open rules with agent').click());
+        await act(async () => void (await vi.advanceTimersByTimeAsync(85_000)));
+        expect(toast.error).not.toHaveBeenCalled();
+        await act(async () => void (await vi.advanceTimersByTimeAsync(10_000)));
+        await act(async () => {});
+        expect(toast.error).toHaveBeenCalledWith("Content Agent couldn't run. Try again.");
+      } finally {
+        vi.useRealTimers();
+      }
     });
 
     it('fixes only the AI traces from their rule', async () => {

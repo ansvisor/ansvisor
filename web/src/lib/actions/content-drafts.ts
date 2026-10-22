@@ -389,6 +389,30 @@ export async function getContentStartOptions(brandId: string): Promise<DraftStar
   };
 }
 
+/**
+ * The draft being written for a tracked prompt (Tracked Prompts' Create
+ * content): the latest one not yet published whose prompts include it, from
+ * the prompt itself, its topic or an opportunity. Opened instead of starting
+ * a second page. Null when there is none, or the member can't read it.
+ */
+export async function getDraftForPrompt(brandId: string, promptId: string): Promise<string | null> {
+  if (!draftId.safeParse(brandId).success || !draftId.safeParse(promptId).success) return null;
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from('content_drafts')
+    .select('id')
+    .eq('brand_id', brandId)
+    .contains('prompt_ids', [promptId])
+    .in('status', ['draft', 'in_review', 'ready'])
+    // An archived draft isn't the one to open (00233).
+    .is('archived_at', null)
+    .order('updated_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  return data?.id ?? null;
+}
+
 /** How many opportunities one Open draft lookup covers: a page of the list. */
 const MAX_DRAFT_LOOKUPS = 200;
 
@@ -1622,6 +1646,8 @@ const AGENT_FIX_ERRORS = [
   'open_suggestions',
   'published',
   'failed',
+  /** No answer from the API (a timeout on the way): the agent may still finish. */
+  'unconfirmed',
 ] as const;
 export type AgentFixError = (typeof AGENT_FIX_ERRORS)[number];
 
@@ -1673,13 +1699,15 @@ export async function fixDraftRules(
     });
     const body = (await res.json().catch(() => ({}))) as Record<string, unknown>;
     if (!res.ok) {
+      // The API says why; a gateway's page (a timeout) says nothing of the run.
+      if (typeof body.code !== 'string') return { error: 'unconfirmed' };
       const code = body.code as AgentFixError;
       return { error: (AGENT_FIX_ERRORS as readonly string[]).includes(code) ? code : 'failed' };
     }
     return { count: Number(body.count) || 0 };
   } catch (err) {
     console.error('Failed to run the Content Agent:', err);
-    return { error: 'failed' };
+    return { error: 'unconfirmed' };
   }
 }
 

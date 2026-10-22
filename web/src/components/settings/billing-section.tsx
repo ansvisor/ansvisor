@@ -179,7 +179,7 @@ export function BillingSection() {
 
           {subscription.currentPeriodEnd && !subscription.cancelAtPeriodEnd && (
             <p className="text-sm text-muted-foreground">
-              {t('renewsOn', {
+              {t(subscription.status === 'trialing' ? 'trialEndsOn' : 'renewsOn', {
                 date: new Date(subscription.currentPeriodEnd).toLocaleDateString('en-US', {
                   year: 'numeric',
                   month: 'long',
