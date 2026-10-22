@@ -39,12 +39,14 @@ vi.mock('@/components/content/new-content-dialog', () => ({
     return null;
   },
 }));
+const push = vi.fn();
 vi.mock('@/i18n/navigation', () => ({
   Link: ({ href, children, ...props }: { href: string; children: React.ReactNode }) => (
     <a href={href} {...props}>
       {children}
     </a>
   ),
+  useRouter: () => ({ push }),
 }));
 const brandState = vi.hoisted(() => ({
   activeBrandId: 'brand-1' as string | null,
@@ -141,9 +143,12 @@ const button = (name: string) =>
   [...container.querySelectorAll<HTMLButtonElement>('button')].find((b) =>
     b.textContent?.startsWith(name),
   )!;
+/** A row's Start button: past the Priority Score, which is a button too. */
+const START = 'td:nth-child(n+3) button';
+// The page, the action and why: after the rank and the Priority Score.
 const rowTexts = () =>
   [...container.querySelectorAll('tbody tr')].map((tr) =>
-    [...tr.querySelectorAll('td')].slice(1, 4).map((td) => td.textContent),
+    [...tr.querySelectorAll('td')].slice(2, 5).map((td) => td.textContent),
   );
 
 beforeEach(() => {
@@ -161,6 +166,7 @@ beforeEach(() => {
   toast.mockReset();
   toast.error.mockReset();
   role.canManage = true;
+  push.mockReset();
   dialog.props = null;
 });
 
@@ -198,6 +204,23 @@ describe('the Content plan', () => {
       ],
     ]);
     expect(container.querySelector('thead')!.textContent).toContain('Why · last 30 days');
+  });
+
+  it("shows each row's Priority Score, and on focus how it is worked out", async () => {
+    await renderPage();
+    const scores = [...container.querySelectorAll('tbody tr')].map((tr) => tr.children[1]);
+    // The opportunity's 74; 40 + 14 for −70% + 7 citations lost; 20 + 12 citations.
+    expect(scores.map((td) => td.textContent)).toEqual(['74Medium', '61Medium', '32Low']);
+    expect(container.querySelector('thead')!.textContent).toContain('Priority Score');
+
+    const trigger = scores[1].querySelector('button')!;
+    expect(trigger.getAttribute('aria-label')).toBe('Priority Score 61: how it is worked out');
+    act(() => trigger.focus());
+    await act(() => new Promise((resolve) => setTimeout(resolve, 400)));
+    expect(document.querySelector('[data-slot="tooltip-content"]')?.textContent).toBe(
+      'How this score is worked out' +
+        '40 + 14 for 70% fewer citations + 7 for 7 citations lost = 61',
+    );
   });
 
   it('filters the list by a card, and clears it on a second click', async () => {
@@ -245,7 +268,7 @@ describe('the Content plan', () => {
       ],
     });
     await renderPage();
-    await act(async () => container.querySelector<HTMLButtonElement>('tbody tr button')!.click());
+    await act(async () => container.querySelector<HTMLButtonElement>(`tbody tr ${START}`)!.click());
     expect(dialog.props).toMatchObject({
       preset: {
         kind: 'opportunity',
@@ -272,7 +295,7 @@ describe('the Content plan', () => {
     await renderPage();
     const rows = container.querySelectorAll('tbody tr');
 
-    await act(async () => rows[1].querySelector('button')!.click());
+    await act(async () => rows[1].querySelector<HTMLButtonElement>(START)!.click());
     expect(dialog.props).toMatchObject({
       open: true,
       preset: { kind: 'page', url: 'https://acme.example/guides/coffee-subscriptions' },
@@ -280,7 +303,7 @@ describe('the Content plan', () => {
     await act(async () => (dialog.props!.onOpenChange as (open: boolean) => void)(false));
     expect(dialog.props).toMatchObject({ open: false, preset: null });
 
-    await act(async () => rows[0].querySelector('button')!.click());
+    await act(async () => rows[0].querySelector<HTMLButtonElement>(START)!.click());
     expect(dialog.props).toMatchObject({ preset: { kind: 'opportunity', id: 'o1', page: null } });
 
     expect(rows[2].textContent).toContain('Agent');
@@ -367,6 +390,27 @@ describe('the Content plan', () => {
     ]);
     await act(async () => guide().click());
     expect(rowTexts()).toHaveLength(3);
+  });
+
+  it('names the type filtering the list while the section is closed, and clears it', async () => {
+    await renderPage();
+    const section = () =>
+      container.querySelector<HTMLElement>('section[aria-labelledby="plan-mix-title"]')!;
+    const bar = () => section().querySelector<HTMLButtonElement>('h2 button')!;
+    await act(async () => bar().click());
+    await act(async () => section().querySelector<HTMLButtonElement>('li button')!.click());
+    // Open, the pressed row says it; no line under the bar.
+    expect(section().textContent).not.toContain('Priority list filtered to');
+    await act(async () => bar().click());
+    expect(bar().getAttribute('aria-expanded')).toBe('false');
+    expect(section().textContent).toContain('Priority list filtered to How-to guide');
+    expect(rowTexts()).toHaveLength(2);
+    const clear = [...section().querySelectorAll<HTMLButtonElement>('button')].find(
+      (b) => b.textContent === 'Clear',
+    )!;
+    await act(async () => clear.click());
+    expect(rowTexts()).toHaveLength(3);
+    expect(section().textContent).not.toContain('Priority list filtered to');
   });
 
   it('asks for Google Analytics to show what AI visitors did', async () => {
@@ -585,5 +629,50 @@ describe('a Plan row’s menu', () => {
     expect(container.querySelector('[data-testid="assign-dialog"]')!.textContent).toBe(
       'Espresso guide',
     );
+  });
+});
+
+describe('Getting started’s content steps (00234)', () => {
+  it('opens Start on the top Create row, on the Create card, once', async () => {
+    window.history.replaceState(null, '', '/dashboard/content/plan?start=create');
+    await renderPage();
+    expect(dialog.props).toMatchObject({
+      open: true,
+      preset: { kind: 'opportunity', id: 'o1', page: null },
+    });
+    expect(button('Create').getAttribute('aria-pressed')).toBe('true');
+    // A reload opens the plan as it is.
+    expect(window.location.search).toBe('');
+  });
+
+  it('opens the draft already written for the top Optimize row', async () => {
+    window.history.replaceState(null, '', '/dashboard/content/plan?start=optimize');
+    getContentPlan.mockResolvedValue({
+      ...PLAN,
+      drafts: [
+        {
+          id: 'd1',
+          author: 'user',
+          isMine: true,
+          method: 'optimize',
+          opportunityId: null,
+          sourceUrl: 'https://acme.example/guides/coffee-subscriptions',
+          actionId: null,
+          assignee: null,
+        },
+      ],
+    });
+    await renderPage();
+    expect(push).toHaveBeenCalledWith('/dashboard/content/editor/d1');
+    expect(dialog.props).toMatchObject({ open: false });
+  });
+
+  it('shows the empty card when the plan has no row of that action', async () => {
+    window.history.replaceState(null, '', '/dashboard/content/plan?start=optimize');
+    getContentPlan.mockResolvedValue({ ...PLAN, pages: [] });
+    await renderPage();
+    expect(button('Optimize').getAttribute('aria-pressed')).toBe('true');
+    expect(dialog.props).toMatchObject({ open: false });
+    expect(push).not.toHaveBeenCalled();
   });
 });

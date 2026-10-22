@@ -28,13 +28,29 @@ export interface MentionTotals {
   lastAnswerAt: string | null;
 }
 
+type PlatformCounts = Pick<MentionTotals, 'answers' | 'mentions' | 'positive' | 'negative'>;
+
 export interface MentionPlatformRow {
   platform: string;
   answers: number;
   mentions: number;
+  /** Times the brand is named on the platform (00191; 0 before it). */
+  occurrences: number;
   positive: number;
   negative: number;
-  previous: Pick<MentionTotals, 'answers' | 'mentions' | 'positive' | 'negative'>;
+  previous: PlatformCounts;
+  /** The platform on the prompts both windows answered, for its change (00195; absent before it). */
+  same?: { current: PlatformCounts; previous: PlatformCounts } | null;
+}
+
+/** The prompts both windows answered, and each window's totals on them (00195). */
+export interface MentionComparison {
+  prompts: number;
+  /** Answered now but not before, and before but not now: left out of every change. */
+  newPrompts: number;
+  droppedPrompts: number;
+  current: MentionTotals;
+  previous: MentionTotals;
 }
 
 export interface MentionDay {
@@ -42,6 +58,8 @@ export interface MentionDay {
   day: string;
   answers: number;
   mentions: number;
+  /** Times the brand is named that day (00191; 0 before it). */
+  occurrences: number;
   positive: number;
   negative: number;
 }
@@ -69,6 +87,8 @@ export interface MentionsOverview {
   };
   current: MentionTotals;
   previous: MentionTotals;
+  /** What every change is taken on (00195; absent before it). */
+  same?: MentionComparison | null;
   platforms: MentionPlatformRow[];
   daily: MentionDay[];
   competitors: MentionCompetitorRow[];
@@ -107,6 +127,27 @@ function totals(r: Raw | null | undefined): MentionTotals {
   };
 }
 
+function platformCounts(r: Raw, prefix: string): PlatformCounts {
+  return {
+    answers: num(r, `${prefix}answers`),
+    mentions: num(r, `${prefix}mentions`),
+    positive: num(r, `${prefix}positive`),
+    negative: num(r, `${prefix}negative`),
+  };
+}
+
+function comparison(raw: unknown): MentionComparison | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const s = raw as Raw;
+  return {
+    prompts: num(s, 'prompts'),
+    newPrompts: num(s, 'new_prompts'),
+    droppedPrompts: num(s, 'dropped_prompts'),
+    current: totals(s.current as Raw | null),
+    previous: totals(s.previous as Raw | null),
+  };
+}
+
 /**
  * The function's jsonb as the page's shape; null when there is nothing to
  * read (the caller isn't in the brand's organization).
@@ -126,10 +167,12 @@ export function parseMentionsOverview(raw: unknown): MentionsOverview | null {
     },
     current: totals(r.current as Raw | null),
     previous: totals(r.previous as Raw | null),
+    same: comparison(r.same),
     platforms: rows(r.platforms).map((p) => ({
       platform: String(p.platform ?? ''),
       answers: num(p, 'answers'),
       mentions: num(p, 'mentions'),
+      occurrences: num(p, 'occurrences'),
       positive: num(p, 'positive'),
       negative: num(p, 'negative'),
       previous: {
@@ -138,11 +181,16 @@ export function parseMentionsOverview(raw: unknown): MentionsOverview | null {
         positive: num(p, 'prev_positive'),
         negative: num(p, 'prev_negative'),
       },
+      same:
+        'same_answers' in p
+          ? { current: platformCounts(p, 'same_'), previous: platformCounts(p, 'same_prev_') }
+          : null,
     })),
     daily: rows(r.daily).map((d) => ({
       day: String(d.day ?? ''),
       answers: num(d, 'answers'),
       mentions: num(d, 'mentions'),
+      occurrences: num(d, 'occurrences'),
       positive: num(d, 'positive'),
       negative: num(d, 'negative'),
     })),
@@ -201,6 +249,20 @@ export function averagePosition(t: Pick<MentionTotals, 'positionSum' | 'position
 }
 
 /** A count's change against the window before, in percent; null when there was nothing before. */
+/**
+ * The two windows every change is taken on: the prompts both answered (00195),
+ * as Insights takes its changes, so adding or removing prompts doesn't read as
+ * a rise or a fall; before 00195, all of each window's.
+ */
+export function changeBasis(o: Pick<MentionsOverview, 'current' | 'previous' | 'same'>): {
+  current: MentionTotals;
+  previous: MentionTotals;
+} {
+  return o.same
+    ? { current: o.same.current, previous: o.same.previous }
+    : { current: o.current, previous: o.previous };
+}
+
 export function relativeChange(current: number, previous: number): number | null {
   return previous > 0 ? ((current - previous) * 100) / previous : null;
 }
@@ -209,7 +271,10 @@ export function relativeChange(current: number, previous: number): number | null
 export interface MentionTrendDay {
   day: string;
   answers: number;
+  /** Responses naming the brand: the base of the day's rate and net sentiment. */
   mentions: number;
+  /** Times the brand is named: the Mentions line, as Total mentions counts them. */
+  occurrences: number;
   /** Null on a day without answers. */
   rate: number | null;
   /** Null on a day without mentions. */
@@ -231,11 +296,19 @@ export function mentionTrend(o: Pick<MentionsOverview, 'window' | 'daily'>): Men
     days.push(...byDay.keys());
   }
   return days.map((day) => {
-    const d = byDay.get(day) ?? { day, answers: 0, mentions: 0, positive: 0, negative: 0 };
+    const d = byDay.get(day) ?? {
+      day,
+      answers: 0,
+      mentions: 0,
+      occurrences: 0,
+      positive: 0,
+      negative: 0,
+    };
     return {
       day,
       answers: d.answers,
       mentions: d.mentions,
+      occurrences: d.occurrences,
       rate: mentionRate(d),
       net: netSentiment(d),
     };

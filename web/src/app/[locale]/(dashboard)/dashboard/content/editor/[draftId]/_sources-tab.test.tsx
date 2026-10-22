@@ -111,7 +111,7 @@ beforeEach(() => {
   addDraftSource.mockReset().mockResolvedValue(undefined);
   getContentStartOptions
     .mockReset()
-    .mockResolvedValue({ opportunities: [], prompts: [], topics: [] });
+    .mockResolvedValue({ opportunities: [], prompts: [], promptsSeen: 0, topics: [] });
   onRebuild.mockReset();
   toast.mockReset();
   toast.success.mockReset();

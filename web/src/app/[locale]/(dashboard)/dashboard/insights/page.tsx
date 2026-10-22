@@ -31,6 +31,7 @@ import {
 import { getTopics } from '@/lib/actions/topic';
 import { MODEL_PROVIDER_LABELS, PLATFORM_LABELS } from '@/config/platform-labels';
 import { formatRegionDisplay } from '@/lib/region';
+import { mentionsHref } from '@/lib/mentions-filters';
 import type { Topic } from '@/types';
 import {
   ALL_DATE_PRESETS,
@@ -1251,6 +1252,13 @@ export default function InsightsPage() {
                   setBreakdownMetric(metric);
                 }}
                 onNavigate={(path) => router.push(path)}
+                mentionsHref={mentionsHref({
+                  range: filters.datePreset,
+                  from: filters.dateFrom,
+                  to: filters.dateTo,
+                  region: filters.region,
+                  topic: filters.topic,
+                })}
               />
 
               {/* Competitor Comparison */}

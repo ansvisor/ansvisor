@@ -106,6 +106,8 @@ export interface PlanRow {
   why: PlanWhy;
   source: 'opportunity' | 'citations' | 'protect';
   score: number;
+  /** What the score is made of (the Priority Score's breakdown). */
+  scoreParts: PlanScorePart[];
   opportunityId: string | null;
   draft: PlanDraft | null;
   /** Marked as a priority: at the top of the list, tagged. */
@@ -123,6 +125,14 @@ export const MIN_TOP_CITATIONS = 5;
 export const MAX_PROTECT = 5;
 export const MAX_ROWS = 50;
 
+const DROP_BASE = 40;
+const PROTECT_BASE = 20;
+const MAX_PROTECT_SCORE = 60;
+/** A drop's points: a fifth of the drop in percent, and the citations lost (up to 40). */
+function citationsDownPoints(pct: number, lost: number) {
+  return { pct: Math.round(pct / 5), lost: Math.min(40, lost) };
+}
+
 /**
  * The rank of each kind of row, on the opportunities' 0–100 scale: an
  * opportunity keeps its own score; a page losing citations ranks by how much
@@ -132,10 +142,55 @@ export const MAX_ROWS = 50;
  * protecting comes after the work to do.
  */
 export function citationsDownScore(pct: number, lost: number): number {
-  return Math.min(100, 40 + Math.round(pct / 5) + Math.min(40, lost));
+  const points = citationsDownPoints(pct, lost);
+  return Math.min(100, DROP_BASE + points.pct + points.lost);
 }
 export function protectScore(citations: number): number {
-  return Math.min(60, 20 + citations);
+  return Math.min(MAX_PROTECT_SCORE, PROTECT_BASE + citations);
+}
+
+/**
+ * What a row's score is made of, for the Priority Score's breakdown: the
+ * opportunity's own score; for a page losing citations, the base and the
+ * points for the drop and the citations lost; for a top page, the base and
+ * its citations. An opportunity whose page is losing ground has both, and
+ * ranks by the higher. `max` is where a score stops.
+ */
+export type PlanScorePart =
+  | { kind: 'opportunity'; score: number }
+  | {
+      kind: 'citationsDown';
+      base: number;
+      pct: number;
+      pctPoints: number;
+      lost: number;
+      lostPoints: number;
+      max: number;
+      score: number;
+    }
+  | { kind: 'protect'; base: number; citations: number; max: number; score: number };
+
+function citationsDownPart(drop: { pct: number; lost: number }): PlanScorePart {
+  const points = citationsDownPoints(drop.pct, drop.lost);
+  return {
+    kind: 'citationsDown',
+    base: DROP_BASE,
+    pct: drop.pct,
+    pctPoints: points.pct,
+    lost: drop.lost,
+    lostPoints: points.lost,
+    max: 100,
+    score: citationsDownScore(drop.pct, drop.lost),
+  };
+}
+function protectPart(citations: number): PlanScorePart {
+  return {
+    kind: 'protect',
+    base: PROTECT_BASE,
+    citations,
+    max: MAX_PROTECT_SCORE,
+    score: protectScore(citations),
+  };
 }
 
 const CREATE_DECISIONS = new Set(['create']);
@@ -212,6 +267,10 @@ export function buildPlan({
       score: drop
         ? Math.max(o.score, citationsDownScore(drop.pct, drop.lost))
         : Math.round(o.score),
+      scoreParts: [
+        { kind: 'opportunity', score: Math.round(o.score) },
+        ...(drop ? [citationsDownPart(drop)] : []),
+      ],
       opportunityId: o.id,
       draft: draftFor(o.id, create ? null : o.targetPage),
       priority: false,
@@ -240,6 +299,7 @@ export function buildPlan({
         why: dropWhy(page, drop),
         source: 'citations',
         score: citationsDownScore(drop.pct, drop.lost),
+        scoreParts: [citationsDownPart(drop)],
       });
     } else if (page.citations.cur >= MIN_TOP_CITATIONS) {
       protect.push({
@@ -249,6 +309,7 @@ export function buildPlan({
         why: { kind: 'top', citations: page.citations.cur, aiVisits: page.aiVisits },
         source: 'protect',
         score: protectScore(page.citations.cur),
+        scoreParts: [protectPart(page.citations.cur)],
       });
     }
   }

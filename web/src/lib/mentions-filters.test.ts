@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   DEFAULT_MENTIONS_FILTERS,
+  mentionsHref,
   mentionsQuery,
   mentionsStateParams,
   readMentionsState,
@@ -111,18 +112,43 @@ describe('mentionsQuery', () => {
     });
   });
 
-  it('reads a custom range as whole days in the given time zone', () => {
-    const q = at('2026-10-17T12:00:00.000Z')(() =>
-      mentionsQuery(
-        { ...DEFAULT_MENTIONS_FILTERS, range: 'custom', from: '2026-10-01', to: '2026-10-14' },
-        'UTC',
-      ),
-    );
-    expect(q?.from).toBe('2026-10-01T00:00:00.000Z');
-    expect(q?.to).toBe('2026-10-14T23:59:59.999Z');
+  // The days Insights reads and mentions_overview reads, wherever the viewer is.
+  it('reads a custom range as whole UTC days, west of UTC too', () => {
+    const zone = process.env.TZ;
+    process.env.TZ = 'America/New_York';
+    try {
+      const q = at('2026-10-17T12:00:00.000Z')(() =>
+        mentionsQuery({
+          ...DEFAULT_MENTIONS_FILTERS,
+          range: 'custom',
+          from: '2026-10-01',
+          to: '2026-10-14',
+        }),
+      );
+      expect(q?.from).toBe('2026-10-01T00:00:00.000Z');
+      expect(q?.to).toBe('2026-10-14T23:59:59.999Z');
+    } finally {
+      process.env.TZ = zone;
+    }
   });
 
   it('is null for a custom range with no dates yet', () => {
     expect(mentionsQuery({ ...DEFAULT_MENTIONS_FILTERS, range: 'custom' })).toBeNull();
+  });
+});
+
+describe('mentionsHref', () => {
+  it("opens Mentions on another page's range and filters", () => {
+    expect(mentionsHref({ range: '7d', region: 'us', topic: 't1' })).toBe(
+      '/dashboard/mentions?range=7d&region=us&topic=t1',
+    );
+    expect(mentionsHref({ range: 'custom', from: '2026-10-01', to: '2026-10-14' })).toBe(
+      '/dashboard/mentions?range=custom&from=2026-10-01&to=2026-10-14',
+    );
+  });
+
+  it("leaves Mentions' default range out, and opens it for a range it lacks", () => {
+    expect(mentionsHref({ range: '30d' })).toBe('/dashboard/mentions');
+    expect(mentionsHref({ range: 'all', region: 'us' })).toBe('/dashboard/mentions?region=us');
   });
 });
