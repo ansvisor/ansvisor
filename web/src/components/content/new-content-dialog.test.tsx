@@ -453,14 +453,16 @@ describe('New content', () => {
       ],
     };
 
-    // The Overview (#1320) informs and offers; the person picks the page.
-    it('offers the cited pages to optimize when none is given, and the person picks one', async () => {
+    // The person picked Optimize: with no cited page, the Overview's first
+    // page to optimize is picked once its read lands (#1320 keeps that pick).
+    it('picks the first page to optimize from the Overview when none is cited', async () => {
       getContentOverlap.mockResolvedValue(partial);
       await render('b2b', { ...prompt, method: 'optimize' });
       await act(async () => {});
-      expect(document.body.textContent).toContain('Create: best crm for realtors');
-      await click(radio('Optimize /blog/crm-guide instead'));
       expect(document.body.textContent).toContain('Optimize: CRM guide');
+      // A pick of the person's own stays.
+      await click(radio('Create a new page'));
+      expect(document.body.textContent).toContain('Create: best crm for realtors');
     });
 
     it('stays on a new page when writing one', async () => {

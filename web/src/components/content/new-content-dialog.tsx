@@ -134,8 +134,9 @@ interface StartChoice {
  * What the dialog opens on, from the Content plan (CE-014): an opportunity
  * (for an existing page, Start optimizes that page), or a page to read. From
  * Tracked Prompts: a prompt, to write a page for or, with `method`
- * 'optimize', to optimize its cited `page`; with no page, Start's overlap
- * check offers the pages to optimize.
+ * 'optimize', to optimize its cited `page`; with no page, the Overview's
+ * first page to optimize is picked once its read lands (the person picked
+ * Optimize), and they can pick another.
  */
 export type DialogPreset = (
   | { kind: 'opportunity'; id: string; page?: { url: string; title: string | null } | null }
@@ -251,6 +252,10 @@ export function NewContentDialog({
   // From the Content plan: Start for its opportunity once the options are in
   // (one no longer open is left to pick), or its page read to optimize.
   const presetApplied = useRef(false);
+  // Opened to optimize a prompt with no cited page: the Overview's first page
+  // to optimize is picked once, when its read lands. A pick of the person's
+  // own, or a retry, leaves the choice to them.
+  const optimizeOnce = useRef(false);
   useEffect(() => {
     if (!open || !preset || presetApplied.current) return;
     if (preset.who === 'team') setWho('team');
@@ -264,6 +269,7 @@ export function NewContentDialog({
     }
     if (preset.kind === 'prompt') {
       presetApplied.current = true;
+      optimizeOnce.current = preset.method === 'optimize' && !preset.page;
       const item = { value: preset.id, label: preset.text };
       setKind('prompt');
       setPicked(item);
@@ -295,6 +301,11 @@ export function NewContentDialog({
       .then((overlap) => {
         if (cancelled) return;
         setOverlapRead({ key, overlap, failed: false });
+        if (optimizeOnce.current && overlap) {
+          optimizeOnce.current = false;
+          const optimize = overlapOptions(overlap, null).find((o) => o.choice.kind === 'optimize');
+          if (optimize) setStart((s) => (s ? withChoice(s, optimize.choice, siteType) : s));
+        }
       })
       .catch((err) => {
         console.error('Failed to read the pages cited for these prompts:', err);
@@ -303,10 +314,11 @@ export function NewContentDialog({
     return () => {
       cancelled = true;
     };
-  }, [brandId, startSource, overlapAttempt]);
+  }, [brandId, startSource, siteType, overlapAttempt]);
 
   const reset = () => {
     presetApplied.current = false;
+    optimizeOnce.current = false;
     setMethod('create');
     setKind('opportunity');
     setPicked(null);
@@ -653,8 +665,12 @@ export function NewContentDialog({
                 choice={start.choice}
                 given={start.givenPage ?? null}
                 givenCited={start.source.kind === 'prompt'}
-                onChoose={(choice) => setStart(withChoice(start, choice, siteType))}
+                onChoose={(choice) => {
+                  optimizeOnce.current = false;
+                  setStart(withChoice(start, choice, siteType));
+                }}
                 onRetry={() => {
+                  optimizeOnce.current = false;
                   setOverlapRead(null);
                   setOverlapAttempt((n) => n + 1);
                 }}
