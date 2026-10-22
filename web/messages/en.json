@@ -3938,6 +3938,7 @@
           "measureSteps": "How to measure, as numbered steps"
         },
         "hints": {
+          "length": "A target, not a minimum: within 20% of it meets the rule. A page well over it is open, and Apply rules with Agent shortens it a few passages at a time.",
           "summary": "A short summary under the H1 that answer engines can quote.",
           "fanoutH2": "Takes the top fan-outs you keep in Sources, the most searched first, not every one.",
           "internalLinks": "Links with descriptive anchor text to your own pages.",
@@ -3973,6 +3974,10 @@
           "found": "{count} found",
           "partOf": "{count} of {of}",
           "words": "{count} words",
+          "short": "{count, number} · under",
+          "long": "{count, number} · over",
+          "shortDetail": "{count, number} characters, under {min, number}–{max, number}",
+          "longDetail": "{count, number} characters, over {min, number}–{max, number}",
           "missing": "Missing",
           "noH2": "No H2 yet",
           "needsFaq": "Needs FAQ",

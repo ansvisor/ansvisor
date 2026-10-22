@@ -37,6 +37,7 @@ import type { DraftRulesState } from './_use-draft-rules';
 
 /** Rules with an explanation on hover (spec §10). */
 const HINTED = new Set([
+  'length',
   'summary',
   'fanoutH2',
   'internalLinks',
@@ -466,6 +467,20 @@ export function ruleStatusText(
   return t(status.code);
 }
 
+/**
+ * The same in full, for the badge's hover and what the agent is told: a
+ * length out of its band with the band ("15,921 characters, over 2,400–3,600").
+ */
+export function ruleStatusDetail(
+  t: (key: string, values?: Record<string, number>) => string,
+  status: RuleStatus,
+): string {
+  if (status.state === 'bad' && (status.code === 'short' || status.code === 'long')) {
+    return t(`${status.code}Detail`, { count: status.count, min: status.min, max: status.max });
+  }
+  return ruleStatusText(t, status);
+}
+
 function StatusBadge({ on, status }: { on: boolean; status: RuleStatus }) {
   const t = useTranslations('contentEditor.editor.rules.status');
   if (!on) {
@@ -476,13 +491,13 @@ function StatusBadge({ on, status }: { on: boolean; status: RuleStatus }) {
   const text = ruleStatusText(t, status);
   return (
     <span
+      title={ruleStatusDetail(t, status)}
       className={cn(
         'w-20 shrink-0 truncate text-right text-[11px] font-medium',
         status.state === 'ok' && 'text-emerald-600 dark:text-emerald-400',
         status.state === 'bad' && 'text-amber-600 dark:text-amber-400',
         status.state === 'info' && 'font-normal text-muted-foreground',
       )}
-      title={text}
     >
       {text}
     </span>

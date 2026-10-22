@@ -35,7 +35,8 @@ function state(
   const rules = activeRules(ruleSet('feature_page'), choices);
   const page = readPage(
     '<h1>Pipeline forecasting</h1><p>A seamless way to forecast in 2026.</p><table><tr><td>x</td></tr></table>',
-    2610,
+    // The user's case: a 3,000-character rule over a 15,921-character page.
+    15921,
   );
   const checked = rules.map((rule) => ({
     rule,
@@ -109,7 +110,11 @@ describe('the Rules tab', () => {
     expect(container.textContent).toContain(`${s.met} of ${s.total} rules met`);
     expect(row('Comparison table vs alternatives').textContent).toContain('✓');
     expect(row("Who it's for").textContent).toContain('Not set');
-    expect(row('Length').textContent).toContain('2,610');
+    // Over the band, said short on the badge and in full on hover.
+    expect(row('Length').textContent).toContain('15,921 · over');
+    expect(row('Length').querySelector('[title*="characters"]')?.getAttribute('title')).toBe(
+      '15,921 characters, over 2,400–3,600',
+    );
     expect(row('Banned words').textContent).toContain('1 found');
     expect(row('Tone').textContent).toContain('AI check');
     expect(row('Use top fan-outs as H2s').textContent).toContain('No fan-outs');

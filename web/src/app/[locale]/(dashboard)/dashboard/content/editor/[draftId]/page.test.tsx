@@ -1759,6 +1759,13 @@ describe('the side panel', () => {
         detail: 'now: 1 found · phrases found: delve',
       });
       expect(request.rules.every((r: { key: string }) => r.key !== 'sentence')).toBe(true);
+      // The length as a target band, so the agent knows how far off the page is.
+      expect(request.rules).toContainEqual(
+        expect.objectContaining({
+          key: 'length',
+          detail: expect.stringMatching(/now: \d+ characters, under [\d,]+–[\d,]+$/),
+        }),
+      );
       expect(request).toMatchObject({ textRules: [], locked: [] });
       expect(
         container.querySelector('[role="region"][aria-label="Agent suggestions"]')!.textContent,
