@@ -178,6 +178,11 @@ const textOf = (html) =>
 
 const isHeading = (tag) => /^h[1-6]$/.test(tag);
 
+/** A question, then what follows it: "?" before a space, or a full-width "？". */
+const QUESTION_AND_ANSWER = /^([\s\S]+?(?:\?(?=\s)|？))\s*(\S[\s\S]*)$/;
+/** How an answer ends: a sentence. */
+const ANSWER_END = /[.!。！]$/;
+
 /** Where the first block of a cleaned HTML starts. */
 const BLOCK_START = /<(?:h[2-4]|p|ul|ol|li)>/;
 
@@ -202,9 +207,9 @@ function paragraph(text) {
  * heading and its answer (or a whole FAQ) as the replace, which would glue
  * them onto the heading's line. The words are its leading text, or its first
  * block when that is of the passage's kind; the rest is an insert. On a
- * heading, plain text that answers its question ("What is X? X is …", the
- * answer MIN_ANSWER_CHARS or more) keeps the question, and the answer becomes
- * a paragraph.
+ * heading, words that answer its question ("What is X? X is …", the answer
+ * a sentence of MIN_ANSWER_CHARS or more) keep the question, and the answer
+ * becomes the first paragraph under it.
  */
 export function splitReplace(after, tag) {
   const html = cleanInsertHtml(after);
@@ -224,11 +229,19 @@ export function splitReplace(after, tag) {
   words = textOf(words)
     .replace(/[ \t\r\n\f]+/g, ' ')
     .trim();
-  if (isHeading(tag) && !blocks) {
-    const answered = words.match(/^(.+?[?？])\s+(\S.*)$/);
-    if (answered && (answered[2].length >= MIN_ANSWER_CHARS || words.length > headingLimit(tag))) {
+  if (isHeading(tag)) {
+    // A question and its answer ("What is X? X is …"): the answer goes under
+    // the heading first, before any blocks that came with it. A subtitle that
+    // fits ("What is AEO? The Complete Guide") isn't one: an answer ends a
+    // sentence. Past the heading's limit, the rest is never the heading's.
+    const answered = words.match(QUESTION_AND_ANSWER);
+    if (
+      answered &&
+      (words.length > headingLimit(tag) ||
+        (ANSWER_END.test(answered[2]) && answered[2].length >= MIN_ANSWER_CHARS))
+    ) {
       words = answered[1];
-      blocks = paragraph(answered[2]);
+      blocks = paragraph(answered[2]) + blocks;
     }
   }
   return { words, blocks: blocks.trim() };

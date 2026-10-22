@@ -342,6 +342,47 @@ describe('a replace on a heading', () => {
     });
   });
 
+  it('puts the answer first under the heading when blocks come with it', () => {
+    expect(
+      splitReplace(
+        'What is LLM SEO? LLM SEO optimizes pages for large language models.<ul><li>a</li></ul>',
+        'h2',
+      ),
+    ).toEqual({
+      words: 'What is LLM SEO?',
+      blocks: '<p>LLM SEO optimizes pages for large language models.</p><ul><li>a</li></ul>',
+    });
+    expect(
+      splitReplace(
+        '<h2>What is LLM SEO? LLM SEO optimizes pages for large language models.</h2><p>More.</p>',
+        'h2',
+      ),
+    ).toEqual({
+      words: 'What is LLM SEO?',
+      blocks: '<p>LLM SEO optimizes pages for large language models.</p><p>More.</p>',
+    });
+  });
+
+  it('keeps a subtitle that fits, and splits after a full-width ？ with no space', () => {
+    const subtitle = 'What is AEO? The Complete Guide to Answer Engine Optimization';
+    expect(splitReplace(subtitle, 'h1')).toEqual({ words: subtitle, blocks: '' });
+    expect(
+      splitReplace(
+        'AEOとは？AEOはAIアシスタントの回答に引用されるための最適化の方法です。詳しく順番に説明します。',
+        'h2',
+      ),
+    ).toEqual({
+      words: 'AEOとは？',
+      blocks:
+        '<p>AEOはAIアシスタントの回答に引用されるための最適化の方法です。詳しく順番に説明します。</p>',
+    });
+    // "?" inside a word is no question's end.
+    expect(splitReplace('What?No. A long enough sentence that ends here.', 'h2').blocks).toBe('');
+    // Past the heading's limit the rest goes under it, a full stop or not.
+    const long = `What is LLM SEO? ${'LLM SEO optimizes pages for large language models '.repeat(2)}`;
+    expect(splitReplace(long, 'h2').words).toBe('What is LLM SEO?');
+  });
+
   it('moves blocks sent with a paragraph replace after it', () => {
     expect(splitReplace('<p>Use 15 g.</p><ul><li>a scale</li></ul>', 'p')).toEqual({
       words: 'Use 15 g.',

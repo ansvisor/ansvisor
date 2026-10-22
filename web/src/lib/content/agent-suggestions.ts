@@ -76,6 +76,11 @@ const levelOf = (tag: string) => Number(tag.slice(1));
 /** The shortest answer a heading's replace may carry for it to go under the heading. */
 const MIN_ANSWER_CHARS = 40;
 
+/** A question, then what follows it: "?" before a space, or a full-width "？". */
+const QUESTION_AND_ANSWER = /^([\s\S]+?(?:\?(?=\s)|？))\s*(\S[\s\S]*)$/;
+/** How an answer ends: a sentence. */
+const ANSWER_END = /[.!。！]$/;
+
 /** Where the first block of a cleaned HTML starts. */
 const BLOCK_START = /<(?:h[2-4]|p|ul|ol|li)>/;
 
@@ -89,9 +94,9 @@ const escapeHtml = (text: string) =>
  * under a heading write the heading and its answer (or a whole FAQ) as the
  * replace, which would glue them onto the heading's line. The words are its
  * leading text, or its first block when that is of the passage's kind; the
- * rest is an insert. On a heading, plain text that answers its question
- * ("What is X? X is …", the answer MIN_ANSWER_CHARS or more) keeps the
- * question, and the answer becomes a paragraph.
+ * rest is an insert. On a heading, words that answer its question ("What
+ * is X? X is …", the answer a sentence of MIN_ANSWER_CHARS or more) keep the
+ * question, and the answer becomes the first paragraph under it.
  */
 export function splitReplace(after: string, tag: string): { words: string; blocks: string } {
   const html = cleanInsertHtml(after);
@@ -111,14 +116,19 @@ export function splitReplace(after: string, tag: string): { words: string; block
   words = textOf(words)
     .replace(/[ \t\r\n\f]+/g, ' ')
     .trim();
-  if (isHeading(tag) && !blocks) {
-    const answered = words.match(/^(.+?[?？])\s+(\S.*)$/);
+  if (isHeading(tag)) {
+    // A question and its answer ("What is X? X is …"): the answer goes under
+    // the heading first, before any blocks that came with it. A subtitle that
+    // fits ("What is AEO? The Complete Guide") isn't one: an answer ends a
+    // sentence. Past the heading's limit, the rest is never the heading's.
+    const answered = words.match(QUESTION_AND_ANSWER);
     if (
       answered &&
-      (answered[2].length >= MIN_ANSWER_CHARS || words.length > headingLimit(levelOf(tag)))
+      (words.length > headingLimit(levelOf(tag)) ||
+        (ANSWER_END.test(answered[2]) && answered[2].length >= MIN_ANSWER_CHARS))
     ) {
       words = answered[1];
-      blocks = `<p>${escapeHtml(answered[2])}</p>`;
+      blocks = `<p>${escapeHtml(answered[2])}</p>${blocks}`;
     }
   }
   return { words, blocks: blocks.trim() };
@@ -159,8 +169,8 @@ export type DroppedReason =
  * words found in it as written, changed, and never on a locked passage; an
  * insert's HTML cleaned and not empty; each change once. A replace that
  * carries blocks, or an answer on a heading, is split into a replace and an
- * insert after it (splitReplace); one that would still leave a heading over
- * grow a heading past its limit (growsPastLimit) is dropped.
+ * insert after it (splitReplace); one that would still grow a heading past
+ * its limit (growsPastLimit) is dropped.
  */
 export function keepAgentSuggestions(
   raw: AgentSuggestionInput[],
