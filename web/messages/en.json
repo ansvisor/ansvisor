@@ -6032,6 +6032,23 @@
     "month": "mo",
     "year": "yr",
     "renewsOn": "Renews on {date}",
+    "aiUsageMeter": {
+      "title": "This period's AI usage",
+      "description": "Improve suggestions, the Content Editor's AI and the Action Center's task writing share your plan's monthly AI allowance.",
+      "used": "{percent} used",
+      "resets": "Resets on {date}",
+      "exhausted": "This period's AI usage is used up. AI features resume on {date}.",
+      "exhaustedNoDate": "This period's AI usage is used up. AI features resume when it resets.",
+      "morePlans": "A bigger plan below comes with more.",
+      "features": {
+        "improve": "Improve suggestions",
+        "content": "Content Editor (briefs, Content Agent)",
+        "action_center": "Action Center task writing",
+        "other": "Other"
+      },
+      "chat": "Agent Chat runs on your own AI key, so it doesn't use this allowance.",
+      "failed": "Couldn't read this period's AI usage. Try again later."
+    },
     "cancelsOn": "Subscription ends on {date}",
     "changePlan": "Change Plan",
     "upgradeTo": "Upgrade to {plan}",
@@ -6133,7 +6150,7 @@
       "briefs": "{count, number} content briefs a month",
       "audits": "{count, number} site audits a month",
       "aiUsage": "{count}x AI usage",
-      "aiUsageHint": "A monthly allowance for Ansvisor's AI features: Improve suggestions and the Content Editor's AI. Agent Chat runs on your own AI key."
+      "aiUsageHint": "A monthly allowance for Ansvisor's AI features: Improve suggestions, the Content Editor's AI and the Action Center's task writing. Agent Chat runs on your own AI key."
     },
     "contactUs": "Contact Us",
     "integrations": "Integrations",

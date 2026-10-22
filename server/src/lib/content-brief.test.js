@@ -164,6 +164,7 @@ describe('rebuildDraftBrief', () => {
         value: expect.objectContaining({
           organization_id: 'o1',
           content_draft_id: DRAFT,
+          feature: 'content',
           input_tokens: 1000,
         }),
       },

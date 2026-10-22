@@ -354,6 +354,61 @@ export async function enforceImproveQuota(orgId, modelId) {
   return quota;
 }
 
+/** What the workspace's AI budget is spent on, as prompt_improve_usage.feature says (00242). */
+export const AI_USAGE_FEATURES = ['improve', 'content', 'action_center'];
+
+const tenths = (n) => Math.round(n * 10) / 10;
+
+/**
+ * This period's AI usage, for the Billing page's meter: how much of the
+ * workspace's AI budget (plan.limits.improveMonthlyBudgetUsd, the one
+ * Improve, the Content Editor's AI and the Action Center's task writer all
+ * charge) is used, by feature, and when it renews. Shares of the budget, in
+ * percent to a tenth; dollars stay on the server, as the Improve tab's quota
+ * does. Spend past the budget (calls already running when it ran out) reads
+ * as 100%, its features scaled to fit. Rows whose feature isn't known (from
+ * before 00242, their item deleted) count as 'other', listed only when there
+ * are some. Unlimited plans (self-hosted) show no meter.
+ */
+export async function getAiUsage(orgId) {
+  const plan = await resolveOrgPlanByOrgId(orgId);
+  const periodStart = await quotaPeriodStart(orgId);
+  const base = {
+    plan: plan.id,
+    planName: plan.name,
+    periodStart: periodStart.toISOString(),
+    periodEnd: shiftMonthClamped(periodStart, 1).toISOString(),
+  };
+  const budget = plan.limits.improveMonthlyBudgetUsd ?? -1;
+  if (budget === -1) return { ...base, unlimited: true, percentUsed: null, features: [] };
+
+  const { data, error } = await supabaseAdmin.rpc('ai_usage_by_feature', {
+    p_organization_id: orgId,
+    p_since: base.periodStart,
+  });
+  if (error) throw new Error(error.message);
+  const spentOn = new Map((data ?? []).map((r) => [r.feature, Number(r.cost_usd) || 0]));
+  const spent = [...spentOn.values()].reduce((a, b) => a + b, 0);
+  const scale = budget > 0 && spent > budget ? budget / spent : 1;
+  const percentOf = (usd) => (budget > 0 ? tenths((usd * scale * 100) / budget) : 0);
+  const other = spentOn.get('other') ?? 0;
+  return {
+    ...base,
+    unlimited: false,
+    // 100 only once it's spent, as enforceImproveQuota stops there (a budget
+    // of 0 included); just under reads as 99.9, never rounded up to "used up".
+    percentUsed:
+      budget <= 0 || spent >= budget ? 100 : Math.min(99.9, tenths((spent * 100) / budget)),
+    features: [
+      ...AI_USAGE_FEATURES.map((feature) => ({
+        feature,
+        percent: percentOf(spentOn.get(feature) ?? 0),
+      })),
+      ...(other > 0 ? [{ feature: 'other', percent: percentOf(other) }] : []),
+    ],
+  };
+}
+
 /**
  * Suggestion-relevance allowance (VIS-011): a monthly USD budget per
  * organization, 0.1% of the plan price (plan.limits.relevanceMonthlyBudgetUsd),
