@@ -131,8 +131,9 @@ function competitorScore(t: SamePromptTotals, id: string): number | null {
   });
 }
 
+// Of the answers naming the brand, as Net sentiment (00191).
 const sentimentPct = (t: SamePromptTotals) =>
-  t.mentioning_answers > 0 ? Math.round((t.positive_count / t.mentioning_answers) * 100) : 0;
+  t.mention_answers > 0 ? Math.round((t.positive_count * 100) / t.mention_answers) : 0;
 
 export interface SamePromptChanges {
   /** Visibility on the shared prompts in each window, and the change in points. */
@@ -163,7 +164,7 @@ export function samePromptChanges(same: SamePromptComparison): SamePromptChanges
     kpiRates({
       answers: t.answers,
       citationAnswers: t.citation_answers,
-      mentioning: t.mentioning_answers,
+      named: t.mention_answers,
       positive: t.positive_count,
       negative: t.negative_count,
       sumPosition: t.sum_position,

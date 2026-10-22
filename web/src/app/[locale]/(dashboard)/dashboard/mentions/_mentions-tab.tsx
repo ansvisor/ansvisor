@@ -250,7 +250,7 @@ export function MentionsListTab({
       />
       {loaded?.status === 'ok' && loaded.list && (
         <span className="ml-auto pb-1.5 text-xs text-muted-foreground tabular-nums">
-          {t('summary', { mentions: loaded.list.total, prompts: loaded.list.prompts })}
+          {t('summary', { responses: loaded.list.total, prompts: loaded.list.prompts })}
         </span>
       )}
     </div>

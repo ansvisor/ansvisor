@@ -78,7 +78,14 @@ export function AddSourceDialog({
     let cancelled = false;
     getContentStartOptions(brandId)
       .then((options) => {
-        if (!cancelled) setPrompts(options.prompts.map((p) => ({ value: p.id, label: p.text })));
+        // Every prompt, seen or not (New content lists the unseen first), by text.
+        if (!cancelled) {
+          setPrompts(
+            [...options.prompts]
+              .sort((a, b) => a.text.localeCompare(b.text))
+              .map((p) => ({ value: p.id, label: p.text })),
+          );
+        }
       })
       .catch((err) => {
         console.error('Failed to read the prompts:', err);

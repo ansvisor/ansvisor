@@ -1965,6 +1965,54 @@ export type Database = {
           },
         ]
       }
+      organization_ai_keys: {
+        Row: {
+          active: boolean
+          key_encrypted: string
+          key_last4: string
+          organization_id: string
+          provider: string
+          set_at: string
+          set_by: string | null
+          settings: Json
+        }
+        Insert: {
+          active?: boolean
+          key_encrypted: string
+          key_last4: string
+          organization_id: string
+          provider: string
+          set_at?: string
+          set_by?: string | null
+          settings?: Json
+        }
+        Update: {
+          active?: boolean
+          key_encrypted?: string
+          key_last4?: string
+          organization_id?: string
+          provider?: string
+          set_at?: string
+          set_by?: string | null
+          settings?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "organization_ai_keys_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "organization_ai_keys_set_by_fkey"
+            columns: ["set_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       organizations: {
         Row: {
           anthropic_api_key_encrypted: string | null
@@ -3814,6 +3862,10 @@ export type Database = {
         Args: { p_brand_id: string; p_days?: number }
         Returns: Json
       }
+      content_start_prompts: {
+        Args: { p_brand_id: string; p_days?: number; p_limit?: number }
+        Returns: Json
+      }
       content_page_overlap: {
         Args: { p_brand_id: string; p_prompt_ids: string[]; p_since?: string }
         Returns: {
@@ -4270,6 +4322,10 @@ export type Database = {
         Args: { p_brand_id: string; p_day_from: string; p_day_to: string }
         Returns: undefined
       }
+      remove_ai_provider_key: {
+        Args: { p_organization_id: string; p_provider: string }
+        Returns: string
+      }
       report_citation_evidence: {
         Args: {
           p_brand_id: string
@@ -4349,6 +4405,14 @@ export type Database = {
       }
       seed_kpi_presets: {
         Args: { p_brand_id: string; p_kpis: Json }
+        Returns: boolean
+      }
+      set_active_ai_provider: {
+        Args: {
+          p_only_if_none?: boolean
+          p_organization_id: string
+          p_provider: string
+        }
         Returns: boolean
       }
       share_of_voice_aggregates: {

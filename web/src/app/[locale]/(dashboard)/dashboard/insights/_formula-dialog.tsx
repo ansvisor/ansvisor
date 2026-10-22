@@ -120,7 +120,8 @@ export function FormulaDialog() {
                 of the score.
               </p>
               <Formula>
-                Net sentiment = positive answers % − negative answers % (of answers mentioning you)
+                Net sentiment = positive answers % − negative answers % (of answers naming you, as
+                on the Mentions page)
               </Formula>
             </Section>
 
