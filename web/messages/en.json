@@ -4024,6 +4024,13 @@
     "openPlan": "Open Plan",
     "moreActions": "More actions",
     "rowActions": "Actions for {title}",
+    "exportOne": {
+      "button": "Export",
+      "csv": "Export CSV",
+      "excel": "Export Excel",
+      "word": "Export Word",
+      "failed": "Couldn't export this opportunity. Please try again."
+    },
     "openInActions": "Open in Actions",
     "sendAgain": "Send Again",
     "copyAllData": "Copy All Data",

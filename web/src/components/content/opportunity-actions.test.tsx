@@ -26,6 +26,7 @@ const handlers = {
   alternative: vi.fn(),
   workflow: vi.fn(),
   copy: vi.fn(),
+  export: vi.fn(),
   reviewed: vi.fn(),
   dismiss: vi.fn(),
 };
@@ -45,6 +46,7 @@ const props = (over: Partial<Props> = {}): Props => ({
   alternative: { running: false, onOpen: handlers.alternative },
   workflow: { sending: false, sentBefore: false, onSend: handlers.workflow },
   onCopy: handlers.copy,
+  onExport: handlers.export,
   onReviewed: handlers.reviewed,
   onDismiss: handlers.dismiss,
   ...over,
@@ -89,7 +91,7 @@ afterEach(() => {
 describe('OpportunityActions', () => {
   it('puts Send to Actions, Generate Brief and Send to Editor in front, in that order', async () => {
     await render(props());
-    expect(front()).toEqual(['Send to Actions', 'Generate Brief', 'Send to Editor']);
+    expect(front()).toEqual(['Send to Actions', 'Generate Brief', 'Send to Editor', 'Export']);
     await act(async () => button('Send to Editor').click());
     expect(handlers.start).toHaveBeenCalled();
   });
@@ -102,7 +104,7 @@ describe('OpportunityActions', () => {
         content: { ...props().content, draftId: 'd7' },
       }),
     );
-    expect(front()).toEqual(['Open in Actions', 'Brief Generated', 'Open draft']);
+    expect(front()).toEqual(['Open in Actions', 'Brief Generated', 'Open draft', 'Export']);
     expect(container.querySelector('a')!.getAttribute('href')).toBe(
       '/dashboard/action-center/actions?action=a7',
     );
@@ -114,7 +116,24 @@ describe('OpportunityActions', () => {
     await render(props({ content: { ...props().content, draftId: undefined } }));
     expect(button('Send to Editor').disabled).toBe(true);
     await render(props({ content: { ...props().content, canStart: false } }));
-    expect(front()).toEqual(['Send to Actions', 'Generate Brief']);
+    expect(front()).toEqual(['Send to Actions', 'Generate Brief', 'Export']);
+  });
+
+  it('offers Export CSV, Excel and Word, one under the other', async () => {
+    await render(props());
+    const trigger = button('Export');
+    await act(async () => {
+      trigger.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
+      trigger.click();
+    });
+    const items = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')];
+    expect(items.map((i) => i.textContent?.trim())).toEqual([
+      'Export CSV',
+      'Export Excel',
+      'Export Word',
+    ]);
+    await act(async () => items[2].click());
+    expect(handlers.export).toHaveBeenCalledWith('docx');
   });
 
   it('keeps the rest in the "…" menu', async () => {
