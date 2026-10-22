@@ -29,6 +29,8 @@ const store = vi.hoisted(() => ({
   setActiveBrand: vi.fn(),
 }));
 vi.mock('@/stores/use-brand-store', () => ({ useBrandStore: () => store }));
+const role = vi.hoisted(() => ({ canManage: true }));
+vi.mock('@/hooks/use-user-role', () => ({ useUserRole: () => role }));
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT =
   true;
@@ -65,6 +67,7 @@ beforeEach(() => {
   store.activeBrandId = 'b1';
   push.mockReset();
   onNavigate.mockReset();
+  role.canManage = true;
 });
 
 afterEach(() => {
@@ -106,6 +109,21 @@ describe('BrandSwitcher', () => {
     const items = await openMenu();
     await act(async () => items[3].click());
     expect(push).toHaveBeenCalledWith('/dashboard/brands/new');
+  });
+
+  // brands: admin/manager insert — the others would hit the wizard's first error.
+  it('offers Add Brand to admins and managers only', async () => {
+    role.canManage = false;
+    await render();
+    const items = await openMenu();
+    expect(items.map((i) => i.textContent?.trim()).slice(2)).toEqual(['Show My All Brands']);
+
+    act(() => root.unmount());
+    document.body.replaceChildren(container);
+    root = createRoot(container);
+    store.brands = [];
+    await render();
+    expect(container.textContent).toBe('');
   });
 
   it('has no room for the settings link when the sidebar is collapsed', async () => {

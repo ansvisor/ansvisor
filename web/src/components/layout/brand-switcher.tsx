@@ -3,6 +3,7 @@
 import { useTranslations } from 'next-intl';
 import { Link, useRouter } from '@/i18n/navigation';
 import { useBrandStore } from '@/stores/use-brand-store';
+import { useUserRole } from '@/hooks/use-user-role';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -34,6 +35,8 @@ export function BrandSwitcher({ collapsed = false, onOpenChange, onNavigate }: B
   const t = useTranslations('brands');
   const router = useRouter();
   const { brands, activeBrandId, setActiveBrand } = useBrandStore();
+  // Only admins and managers add a brand (brands: admin/manager insert).
+  const { canManage } = useUserRole();
 
   const activeBrand = brands.find((b) => b.id === activeBrandId) ?? null;
 
@@ -43,6 +46,7 @@ export function BrandSwitcher({ collapsed = false, onOpenChange, onNavigate }: B
   };
 
   if (brands.length === 0) {
+    if (!canManage) return null;
     return (
       <button
         onClick={() => go('/dashboard/brands/new')}
@@ -145,15 +149,17 @@ export function BrandSwitcher({ collapsed = false, onOpenChange, onNavigate }: B
             </div>
             <span className="text-sm">{t('showAllBrands')}</span>
           </DropdownMenuItem>
-          <DropdownMenuItem
-            onClick={() => go('/dashboard/brands/new')}
-            className="flex items-center gap-2 text-muted-foreground"
-          >
-            <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md border">
-              <Plus className="h-3 w-3" />
-            </div>
-            <span className="text-sm">{t('addBrand')}</span>
-          </DropdownMenuItem>
+          {canManage && (
+            <DropdownMenuItem
+              onClick={() => go('/dashboard/brands/new')}
+              className="flex items-center gap-2 text-muted-foreground"
+            >
+              <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md border">
+                <Plus className="h-3 w-3" />
+              </div>
+              <span className="text-sm">{t('addBrand')}</span>
+            </DropdownMenuItem>
+          )}
         </DropdownMenuContent>
       </DropdownMenu>
       {/* The selected brand's settings; too narrow beside the logo when collapsed. */}
