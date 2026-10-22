@@ -22,10 +22,17 @@ import type { PromptVolume } from '@/types';
 import { formatCompactNumber } from '@/lib/format';
 import { keywordVolumeEstimate, promptVolumeEstimate, sumEstimates } from '@/lib/volume-estimate';
 import { useTranslations } from 'next-intl';
-import { EstimateBadge, EstimateRange } from '@/components/prompts/volume-estimate';
+import {
+  EstimateBadge,
+  EstimateNoteTooltip,
+  EstimateRange,
+  createEstimateNoteHandle,
+} from '@/components/prompts/volume-estimate';
 
 export default function SimilarTopicsPage() {
   const t = useTranslations('prompts.similarTopics');
+  // One method note for the whole table: it lists every keyword.
+  const rowNote = useMemo(() => createEstimateNoteHandle(), []);
   const { getActiveBrand } = useBrandStore();
   const brand = getActiveBrand();
   const [volumes, setVolumes] = useState<PromptVolume[]>([]);
@@ -200,6 +207,7 @@ export default function SimilarTopicsPage() {
                             cluster.aiVolumeMultiplier,
                             cluster.fetchedAt,
                           )}
+                          handle={rowNote}
                         />
                       </TableCell>
                       <TableCell className="text-center">
@@ -229,6 +237,7 @@ export default function SimilarTopicsPage() {
               )}
             </TableBody>
           </Table>
+          <EstimateNoteTooltip handle={rowNote} />
         </CardContent>
       </Card>
     </div>

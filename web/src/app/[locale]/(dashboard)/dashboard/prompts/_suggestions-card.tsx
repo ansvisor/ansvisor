@@ -38,7 +38,11 @@ import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { formatNumber } from '@/lib/format';
 import { guessedVolumeEstimate } from '@/lib/volume-estimate';
-import { EstimateRange } from '@/components/prompts/volume-estimate';
+import {
+  EstimateNoteTooltip,
+  EstimateRange,
+  createEstimateNoteHandle,
+} from '@/components/prompts/volume-estimate';
 import { readUrlChoice } from '@/lib/url-state';
 import {
   getPromptSuggestions,
@@ -282,6 +286,8 @@ export function SuggestionsCard({
   limitActions,
 }: Props) {
   const t = useTranslations('prompts.suggestions');
+  // One method note for the list's volume ranges (PROMPT-013).
+  const volumeNote = useMemo(() => createEstimateNoteHandle(), []);
   const [suggestions, setSuggestions] = useState<PromptSuggestion[]>([]);
   const [loading, setLoading] = useState(false);
   const [loaded, setLoaded] = useState(false);
@@ -759,6 +765,7 @@ export function SuggestionsCard({
                                 {/* An AI's guess: a range, always low confidence (PROMPT-013). */}
                                 <EstimateRange
                                   estimate={guessedVolumeEstimate(s.estVolume, s.generatedAt)}
+                                  handle={volumeNote}
                                   perMonth
                                 />
                               </Badge>
@@ -816,6 +823,7 @@ export function SuggestionsCard({
             )}
           </div>
         )}
+        <EstimateNoteTooltip handle={volumeNote} />
       </CardContent>
     </Card>
   );
