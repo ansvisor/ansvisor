@@ -93,7 +93,10 @@ export async function agentWriteRequest(
   const effective = effectiveRules(draft.rules, setType ? mine?.[setType] : undefined);
   const rules = (
     inEffect?.rules ??
-    activeRules(ruleSet(setType, { language: draft.language }), effective).filter((rule) => rule.on)
+    activeRules(
+      ruleSet(setType, { language: draft.language, length: draft.rules.importLength }),
+      effective,
+    ).filter((rule) => rule.on)
   )
     // Heading levels are the editor's (one H1), never the agent's.
     .filter((rule) => rule.check !== 'feed' && !NOT_FOR_AGENT.has(rule.key));

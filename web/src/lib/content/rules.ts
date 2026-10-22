@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { LANGUAGES } from '@/config/prompt-options';
 import { classifyDomain, normalizeDomain } from '@/lib/citations/classify';
-import { PAGE_TYPES, type PageType } from '@/lib/content/drafts';
+import { PAGE_TYPES, type DraftMethod, type PageType } from '@/lib/content/drafts';
 import { lengthTarget } from '@/lib/content/editor';
 import { decodeHtmlBlock } from '@/lib/content/html-allowlist';
 import { wordsOf } from '@/lib/content/sources';
@@ -255,16 +255,21 @@ export function languageRuleValue(code: string | null | undefined): string {
   return label ? label.replace(/\s*\([^)]*\)$/, '') : 'English (US)';
 }
 
-/** The rules of a set: the type's own, then the shared groups, with the type's length. */
+/**
+ * The rules of a set: the type's own, then the shared groups, with the
+ * type's length, or the page's own when it was brought in to optimize.
+ */
 export function ruleSet(
   pageType: PageType | null,
-  defaults: { keywords?: string[]; language?: string | null } = {},
+  defaults: { keywords?: string[]; language?: string | null; length?: number | null } = {},
 ): RuleDef[] {
   const own = (pageType && TYPE_RULES[pageType]) || [];
   return [
     ...own,
     ...SHARED_RULES.map((rule) => {
-      if (rule.key === 'length') return { ...rule, value: String(lengthTarget(pageType)) };
+      if (rule.key === 'length') {
+        return { ...rule, value: String(defaults.length ?? lengthTarget(pageType)) };
+      }
       if (rule.key === 'language') return { ...rule, value: languageRuleValue(defaults.language) };
       if (rule.key === 'keywords' && defaults.keywords?.length) {
         return { ...rule, value: defaults.keywords.join(', ') };
@@ -304,6 +309,12 @@ export const draftRulesSchema = z.object({
   source: z.enum(['default', 'mine']).nullable().default(null),
   overrides: overridesSchema,
   textRules: z.array(textRuleSchema).max(MAX_TEXT_RULES).default([]),
+  /**
+   * A page brought in to optimize: its length when it came in, in
+   * characters. Its Length rule aims there (±20%), not at the type's length
+   * for a new page; the person can still change it.
+   */
+  importLength: z.number().int().min(1).max(10_000_000).optional(),
 });
 export type DraftRules = z.infer<typeof draftRulesSchema>;
 /** As saved: the source and text rules may be left out (rules from before 00214 have neither). */
@@ -363,9 +374,76 @@ export function effectiveRules(rules: DraftRules, mine: SavedRuleSet | undefined
   const untouched =
     rules.source === null && !Object.keys(rules.overrides).length && !rules.textRules.length;
   if (untouched && mine) {
-    return { ...rules, source: 'mine', overrides: mine.overrides, textRules: mine.textRules };
+    return {
+      ...rules,
+      source: 'mine',
+      overrides: overridesForImport(mine.overrides, rules.importLength),
+      textRules: mine.textRules,
+    };
   }
   return rules;
+}
+
+/**
+ * A set's choices as a page brought in to optimize takes them: the set's
+ * Length value is for a new page, so the page's own length (importLength)
+ * stands in for it; on or off still follows the set.
+ */
+export function overridesForImport(
+  overrides: SavedRuleSet['overrides'],
+  importLength: number | undefined,
+): SavedRuleSet['overrides'] {
+  const length = overrides.length;
+  if (!importLength || length?.value === undefined) return overrides;
+  return { ...overrides, length: { on: length.on } };
+}
+
+/**
+ * The set Save as my rules keeps from a draft. A page brought in shows its
+ * own length, which isn't a choice: the workspace's Length value stays.
+ */
+export function setToSave(rules: DraftRules, mine: SavedRuleSet | undefined): SavedRuleSet {
+  const kept = mine?.overrides.length?.value;
+  const length = rules.overrides.length;
+  if (!rules.importLength || length?.value !== undefined || kept === undefined) {
+    return { overrides: rules.overrides, textRules: rules.textRules };
+  }
+  return {
+    overrides: { ...rules.overrides, length: { ...length, value: kept } },
+    textRules: rules.textRules,
+  };
+}
+
+/**
+ * A page's text length in characters, about as the editor counts it: the
+ * words without tags, runs of spaces as one (a space between blocks, where
+ * the editor counts none, so a little over). Read where there is no editor
+ * to count: on the server, and before a draft opens.
+ */
+export function pageTextLength(html: string): number {
+  return html
+    .replace(/<(script|style)\b[\s\S]*?<\/\1>/gi, ' ')
+    .replace(/<\/?(p|h[1-6]|li|td|th|blockquote|br|div)\b[^>]*>/gi, ' ')
+    .replace(/<[^>]*>/g, '')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&[#a-z0-9]+;/gi, 'x')
+    .replace(/\s+/g, ' ')
+    .trim().length;
+}
+
+/**
+ * The rules a draft starts with. A page brought in to optimize aims its
+ * Length rule at its own length (within the range the rule takes), not a
+ * new page's; anything else starts with none.
+ */
+export function startingRules(method: DraftMethod, bodyHtml: string | undefined): DraftRules {
+  if (method !== 'optimize' || bodyHtml === undefined) return NO_DRAFT_RULES;
+  const length = pageTextLength(bodyHtml);
+  if (!length) return NO_DRAFT_RULES;
+  return {
+    ...NO_DRAFT_RULES,
+    importLength: Math.min(RULE_LENGTH_MAX, Math.max(RULE_LENGTH_MIN, length)),
+  };
 }
 
 /**

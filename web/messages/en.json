@@ -4011,7 +4011,7 @@
           "measureSteps": "How to measure, as numbered steps"
         },
         "hints": {
-          "length": "A target, not a minimum: within 20% of it meets the rule. A page well over it is open, and Apply rules with Agent shortens it a few passages at a time.",
+          "length": "A target, not a minimum: within 20% of it meets the rule. A page brought in to optimize starts at its own length. A page well over it is open, and Apply rules with Agent shortens it a few passages at a time.",
           "oneH1": "A page has one H1, its title. Make any other H1 an H2 in the toolbar: Content Agent doesn't change heading levels.",
           "summary": "A short summary under the H1 that answer engines can quote.",
           "fanoutH2": "Takes the top fan-outs you keep in Sources, the most searched first, not every one.",

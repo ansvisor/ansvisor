@@ -11,11 +11,13 @@ import {
   checkRule,
   draftRulesFit,
   effectiveRules,
+  overridesForImport,
   readPage,
   ruleLength,
   ruleSet,
   ruleSetFits,
   rulesMet,
+  setToSave,
   textRuleCheck,
   type ActiveRule,
   type DraftRules,
@@ -144,7 +146,11 @@ export function useDraftRules({
     [choices, setType, mine],
   );
   const rules = useMemo(
-    () => activeRules(ruleSet(setType, { keywords, language }), effective),
+    () =>
+      activeRules(
+        ruleSet(setType, { keywords, language, length: effective.importLength }),
+        effective,
+      ),
     [setType, keywords, language, effective],
   );
   // The checks follow the page a beat behind typing.
@@ -225,8 +231,10 @@ export function useDraftRules({
         {
           set: type === draftType ? null : type,
           source,
-          overrides: set?.overrides ?? {},
+          // The page's own length stays the Length rule's starting point.
+          overrides: overridesForImport(set?.overrides ?? {}, effective.importLength),
           textRules: set?.textRules ?? [],
+          ...(effective.importLength ? { importLength: effective.importLength } : {}),
         },
         t('setPicked'),
       );
@@ -264,7 +272,7 @@ export function useDraftRules({
     },
     saveAsMine: () => {
       if (!setType) return;
-      const set: SavedRuleSet = { overrides: effective.overrides, textRules: effective.textRules };
+      const set = setToSave(effective, mine[setType]);
       if (!ruleSetFits(set)) {
         toast.error(t('tooLongMine'));
         return;
@@ -280,6 +288,16 @@ export function useDraftRules({
         });
     },
     reset: () =>
-      save({ set: choices.set, source: 'default', overrides: {}, textRules: [] }, t('resetDone')),
+      save(
+        {
+          set: choices.set,
+          source: 'default',
+          overrides: {},
+          textRules: [],
+          // The page's own length isn't a choice: Reset keeps it.
+          ...(effective.importLength ? { importLength: effective.importLength } : {}),
+        },
+        t('resetDone'),
+      ),
   };
 }

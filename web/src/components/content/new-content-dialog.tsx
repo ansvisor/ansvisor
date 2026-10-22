@@ -51,7 +51,7 @@ import { agentWriteRequest, useRuleDescriber } from '@/lib/content/agent-write';
 import { MAX_ATTACHMENT_BYTES, textToHtml } from '@/lib/content/attachments';
 import { cleanHtml } from '@/lib/content/clean-html';
 import { oneH1Html } from '@/lib/content/one-h1';
-import { NO_DRAFT_RULES } from '@/lib/content/rules';
+import { startingRules } from '@/lib/content/rules';
 import {
   contentEditorPath,
   type ContentOverlap,
@@ -552,7 +552,8 @@ export function NewContentDialog({
           method: startMethod,
           sourceUrl: existing?.url ?? start?.sourceUrl ?? null,
           bodyHtml: bodyHtml ?? '',
-          rules: NO_DRAFT_RULES,
+          // As the draft started: a page brought in aims at its own length.
+          rules: startingRules(startMethod, bodyHtml),
           language: brandLanguage,
         },
         describeRule,

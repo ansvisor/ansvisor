@@ -42,6 +42,7 @@ import {
   draftRulesSchema,
   ruleSetFits,
   savedRuleSetSchema,
+  startingRules,
   type DraftRulesInput,
   type SavedRuleSet,
 } from '@/lib/content/rules';
@@ -781,6 +782,7 @@ export async function startDraftFromAction(
         : title
           ? `<h1>${escapeHtml(title)}</h1>`
           : '';
+    const rules = startingRules(method, bodyHtml !== undefined ? body : undefined);
 
     const wantedPrompts = Array.isArray(payload.promptIds)
       ? payload.promptIds
@@ -834,6 +836,8 @@ export async function startDraftFromAction(
         source_url: page,
         prompt_ids: [...new Set((promptsRes.data ?? []).map((p) => p.id))],
         action_id: actionId,
+        // A page brought in to optimize aims at its own length, not a new page's.
+        ...(rules.importLength ? { rules } : {}),
       })
       .select('id')
       .single();
@@ -985,6 +989,8 @@ export async function createContentDraft(brandId: string, start: DraftStart): Pr
     title,
     html: bodyHtml !== undefined ? bodyHtmlKept : '',
   });
+  // A page brought in to optimize aims at its own length, not a new page's.
+  const rules = startingRules(method, bodyHtml !== undefined ? bodyHtmlKept : undefined);
 
   const { data, error } = await supabase
     .from('content_drafts')
@@ -999,6 +1005,7 @@ export async function createContentDraft(brandId: string, start: DraftStart): Pr
       opportunity_id: opportunityId,
       source_url: sourceUrl ?? null,
       prompt_ids: [...new Set(promptIds)].slice(0, MAX_DRAFT_PROMPTS),
+      ...(rules.importLength ? { rules } : {}),
     })
     .select('id')
     .single();
