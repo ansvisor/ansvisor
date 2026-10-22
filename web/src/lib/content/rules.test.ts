@@ -181,6 +181,11 @@ describe('length and structure', () => {
       code: 'found',
       count: 2,
     });
+    // An empty H1 line is no title; an HTML block's H1 is the page's.
+    expect(check('oneH1', '<h1>T</h1><h1></h1>')).toEqual({ state: 'ok' });
+    expect(
+      check('oneH1', `<h1>T</h1><div data-html-block="${btoa('<h1>Hero</h1>')}"></div>`),
+    ).toEqual({ state: 'bad', code: 'found', count: 2 });
     // The agent changes words, never a heading's level.
     expect(NOT_FOR_AGENT.has('oneH1')).toBe(true);
     expect(ruleSet('blog_post').some((r) => r.key === 'oneH1')).toBe(true);

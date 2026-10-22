@@ -64,6 +64,13 @@ describe('OneH1', () => {
     expect(html(e)).toBe('<h1>One</h1><h1>Two</h1>');
   });
 
+  it('never lets an empty H1 line stay over the title', () => {
+    const e = open('<h1></h1><p>Text</p>');
+    e.commands.insertContentAt(e.state.doc.content.size, '<h1>Title</h1>');
+    expect(html(e)).toContain('<h1>Title</h1>');
+    expect(h1Positions(e.state.doc)).toHaveLength(1);
+  });
+
   it('finds the H1s in lists and cells too', () => {
     const e = open('<h1>A</h1><ul><li><h1>B</h1></li></ul>');
     expect(h1Positions(e.state.doc)).toHaveLength(2);

@@ -14,11 +14,16 @@ import { Plugin, PluginKey } from '@tiptap/pm/state';
 /** Meta on a transaction that writes a page as it was (History's restore): left as it is. */
 export const ONE_H1_AS_IS = 'oneH1AsIs';
 
-/** Where a page's H1s start, in order. */
+/**
+ * Where a page's H1s with words start, in order: an empty H1 line is no
+ * title, so it never counts or stays over one with words.
+ */
 export function h1Positions(doc: PmNode): number[] {
   const found: number[] = [];
   doc.descendants((node, pos) => {
-    if (node.type.name === 'heading' && node.attrs.level === 1) found.push(pos);
+    if (node.type.name === 'heading' && node.attrs.level === 1 && node.textContent.trim()) {
+      found.push(pos);
+    }
     // Headings may sit in lists or cells; a paragraph's text holds none.
     return !node.isTextblock;
   });
