@@ -145,7 +145,7 @@ describe('New content', () => {
     expect(getContentStartOptions).toHaveBeenCalledWith('b1');
     expect(button('Continue')!.disabled).toBe(true);
 
-    await click(button('Pick an opportunity'));
+    await click(button('Pick a content opportunity'));
     const option = [...document.querySelectorAll<HTMLElement>('[role="option"]')].find(
       (o) => o.textContent === 'Northwind vs HubSpot',
     );
@@ -181,7 +181,7 @@ describe('New content', () => {
     expect(dialog.className).toContain('overflow-y-auto');
     expect(document.querySelector('[data-slot="dialog-footer"]')!.className).toContain('sticky');
 
-    await click(button('Pick an opportunity'));
+    await click(button('Pick a content opportunity'));
     const option = [...document.querySelectorAll<HTMLElement>('[role="option"]')].find(
       (o) => o.textContent === 'Northwind vs HubSpot',
     );
@@ -195,7 +195,7 @@ describe('New content', () => {
 
   it('names the page by the opportunity’s brief title when it has one', async () => {
     await render();
-    await click(button('Pick an opportunity'));
+    await click(button('Pick a content opportunity'));
     const option = [...document.querySelectorAll<HTMLElement>('[role="option"]')].find(
       (o) => o.textContent === 'Create a page for realtors',
     );
@@ -289,7 +289,7 @@ describe('New content', () => {
     expect(document.body.textContent).toContain("Couldn't load what to start from.");
     await click(button('Try again'));
     expect(getContentStartOptions).toHaveBeenCalledTimes(2);
-    expect(button('Pick an opportunity')).toBeDefined();
+    expect(button('Pick a content opportunity')).toBeDefined();
   });
 
   describe('opened from the Content plan (CE-014)', () => {
@@ -320,8 +320,7 @@ describe('New content', () => {
       expect(document.body.textContent).toContain('Optimize: Pricing');
     });
 
-    it('starts an opportunity for an existing page on that page, whatever the check recommends', async () => {
-      // The check would recommend a new page: no page of the brand answers the prompts.
+    it('starts an opportunity for an existing page on that page, whatever else is cited', async () => {
       getContentOverlap.mockResolvedValue({ totalPrompts: 2, pages: [] });
       await render('b2b', {
         kind: 'opportunity',
@@ -330,8 +329,10 @@ describe('New content', () => {
       });
       await act(async () => {});
       expect(document.body.textContent).toContain('Optimize: Pricing');
-      // Nothing overlaps, and Start still shows the draft optimizes the plan's page.
-      expect(document.body.textContent).toContain('No existing page answers these prompts');
+      // Nothing else cited, and Start still shows the draft optimizes the plan's page.
+      expect(document.body.textContent).toContain(
+        'None of your pages is cited for these prompts yet',
+      );
       expect(radio('Optimize /pricing').getAttribute('aria-checked')).toBe('true');
       await click(button('Open editor'));
       expect(createContentDraft.mock.calls[0][1]).toMatchObject({
@@ -361,7 +362,7 @@ describe('New content', () => {
       expect(checkedType()).toBe('Docs / FAQ');
       expect(document.body.textContent).toContain('Picked from the opportunity.');
 
-      await click(radio('Create a new page instead'));
+      await click(radio('Create a new page'));
       expect(checkedType()).toBe('Docs / FAQ');
       await click(button('Open editor'));
       expect(createContentDraft.mock.calls[0][1]).toMatchObject({
@@ -406,7 +407,7 @@ describe('New content', () => {
       });
       await act(async () => {});
 
-      await click(radio('Create a new page instead'));
+      await click(radio('Create a new page'));
       expect(document.body.textContent).toContain('Create: CRM for real estate teams');
       expect(radio('Optimize /pricing').getAttribute('aria-checked')).toBe('false');
       await click(button('Open editor'));
@@ -416,7 +417,7 @@ describe('New content', () => {
       });
     });
 
-    it('offers the plan’s page beside the check’s options, to come back to', async () => {
+    it('offers the plan’s page beside a new page and the page cited most, to come back to', async () => {
       getContentOverlap.mockResolvedValue({
         totalPrompts: 4,
         pages: [
@@ -439,9 +440,9 @@ describe('New content', () => {
       const given = radio('Optimize /pricing');
       expect(given.textContent).toContain('The page your Content plan picked');
       expect(given.getAttribute('aria-checked')).toBe('true');
-      expect(radio('Create a new page, link /blog/crm-guide to it')).toBeDefined();
+      expect(radio('Create a new page').getAttribute('aria-checked')).toBe('false');
 
-      await click(radio('Add a section to /blog/crm-guide'));
+      await click(radio('Optimize /blog/crm-guide instead'));
       expect(radio('Optimize /pricing').getAttribute('aria-checked')).toBe('false');
       await click(radio('Optimize /pricing'));
       expect(radio('Optimize /pricing').getAttribute('aria-checked')).toBe('true');
@@ -452,7 +453,7 @@ describe('New content', () => {
       });
     });
 
-    it('offers no second option for the plan’s page when the check names it too', async () => {
+    it('offers the plan’s page once when it is also the page cited most', async () => {
       getContentOverlap.mockResolvedValue({
         totalPrompts: 4,
         pages: [
@@ -472,14 +473,16 @@ describe('New content', () => {
       });
       await act(async () => {});
 
-      expect(document.body.textContent).not.toContain('The page your Content plan picked');
-      expect(radio('Optimize /pricing instead').getAttribute('aria-checked')).toBe('true');
+      // Offered once, as the plan's page.
+      expect(radio('Optimize /pricing').textContent).toContain('The page your Content plan picked');
+      expect(radio('Optimize /pricing').getAttribute('aria-checked')).toBe('true');
+      expect(radio('Optimize /pricing instead')).toBeUndefined();
     });
 
     it('leaves an opportunity no longer open to pick', async () => {
       await render('b2b', { kind: 'opportunity', id: 'gone' });
       expect(button('Continue')).toBeDefined();
-      expect(document.body.textContent).toContain('Pick an opportunity');
+      expect(document.body.textContent).toContain('Pick a content opportunity');
     });
   });
 
@@ -543,7 +546,7 @@ describe('New content', () => {
     });
   });
 
-  describe('the overlap check', () => {
+  describe('the Overview', () => {
     const GUIDE = {
       url: 'https://acme.example/guides/espresso-machines-for-beginners/',
       title: 'Espresso machines for beginners',
@@ -551,10 +554,10 @@ describe('New content', () => {
       citations: 4,
       gscPosition: 3.5,
     };
-    /** Starts a new page from the first opportunity and waits for the check. */
+    /** Starts a new page from the first opportunity and waits for the Overview. */
     async function startFromOpportunity() {
       await render();
-      await click(button('Pick an opportunity'));
+      await click(button('Pick a content opportunity'));
       const option = [...document.querySelectorAll<HTMLElement>('[role="option"]')].find(
         (o) => o.textContent === 'Northwind vs HubSpot',
       );
@@ -567,27 +570,37 @@ describe('New content', () => {
         r.textContent?.startsWith(name),
       )!;
 
-    it('says a new page is safe when no page of the brand answers its prompts', async () => {
+    it('says when none of the brand’s pages is cited for the prompts, with nothing to choose', async () => {
       await startFromOpportunity();
       expect(getContentOverlap).toHaveBeenCalledWith('b1', { kind: 'opportunity', id: 'o1' });
-      expect(document.body.textContent).toContain('No existing page answers these prompts');
-      expect(document.body.textContent).toContain('Safe to create');
+      expect(document.body.textContent).toContain('Overview');
+      expect(document.body.textContent).toContain(
+        'None of your pages is cited for these prompts yet',
+      );
+      expect(document.body.textContent).not.toContain('Safe to create');
+      expect(overlapOption('Create a new page')).toBeUndefined();
     });
 
-    it('recommends optimizing a page that already answers most of the prompts', async () => {
+    it('keeps Create chosen, and offers the page cited most without recommending it', async () => {
       getContentOverlap.mockResolvedValue({ totalPrompts: 4, pages: [GUIDE] });
       await startFromOpportunity();
 
-      expect(document.body.textContent).toContain('An existing page already answers these prompts');
+      // Information, not a warning: no amber box, no recommendation.
+      expect(document.body.textContent).toContain('1 of your pages is cited for these prompts');
       expect(document.body.textContent).toContain('3 of 4');
       expect(document.body.textContent).toContain('#4');
+      expect(document.querySelector('[role="dialog"] .text-amber-700')).toBeNull();
+      expect(document.body.textContent).not.toContain('Recommended');
+      expect(overlapOption('Create a new page').getAttribute('aria-checked')).toBe('true');
+      expect(document.body.textContent).toContain('Create: Northwind vs HubSpot');
       const optimize = overlapOption('Optimize /guides/espresso-machines-for-beginners instead');
-      expect(optimize.getAttribute('aria-checked')).toBe('true');
-      expect(optimize.textContent).toContain('Recommended');
+      expect(optimize.getAttribute('aria-checked')).toBe('false');
       expect(optimize.textContent).toContain(
         'It already answers 3 of 4 prompts, is cited 4× and ranks #4 on Google',
       );
-      // The draft becomes that page's: its title, and the type its address shows.
+
+      // Picked, the draft becomes that page's: its title, and the type its address shows.
+      await click(optimize);
       expect(document.body.textContent).toContain('Optimize: Espresso machines for beginners');
       expect(checkedType()).toBe('How-to guide');
       expect(document.body.textContent).toContain('Picked from the page.');
@@ -617,6 +630,7 @@ describe('New content', () => {
     it('starts an existing page with its title when its live text can’t be read', async () => {
       getContentOverlap.mockResolvedValue({ totalPrompts: 4, pages: [GUIDE] });
       await startFromOpportunity();
+      await click(overlapOption('Optimize /guides/espresso-machines-for-beginners instead'));
       await click(button('Open editor'));
       expect(toast.warning).toHaveBeenCalledWith(
         "Couldn't read /guides/espresso-machines-for-beginners: the draft starts with its title.",
@@ -628,10 +642,11 @@ describe('New content', () => {
       });
     });
 
-    it('goes back to the new page when creating one anyway', async () => {
+    it('goes back to the new page after picking an existing one', async () => {
       getContentOverlap.mockResolvedValue({ totalPrompts: 4, pages: [GUIDE] });
       await startFromOpportunity();
-      await click(overlapOption('Create a new page anyway'));
+      await click(overlapOption('Optimize /guides/espresso-machines-for-beginners instead'));
+      await click(overlapOption('Create a new page'));
       expect(document.body.textContent).toContain('Create: Northwind vs HubSpot');
       expect(checkedType()).toBe('Comparison');
       await click(button('Open editor'));
@@ -643,45 +658,27 @@ describe('New content', () => {
       });
     });
 
-    it('recommends a new page linked from pages that answer only some prompts', async () => {
-      getContentOverlap.mockResolvedValue({
-        totalPrompts: 4,
-        pages: [
-          {
-            ...GUIDE,
-            url: 'https://acme.example/blog/grinders',
-            promptsInCommon: 1,
-            gscPosition: null,
-          },
-        ],
-      });
-      await startFromOpportunity();
-      expect(document.body.textContent).toContain('1 existing page answers some of these prompts');
-      expect(document.body.textContent).toContain('—');
-      expect(
-        overlapOption('Create a new page, link /blog/grinders to it').getAttribute('aria-checked'),
-      ).toBe('true');
-      expect(overlapOption('Add a section to /blog/grinders')).toBeDefined();
-      expect(document.body.textContent).toContain('Create: Northwind vs HubSpot');
-    });
-
-    it('lets the page start when the check fails, and tries again', async () => {
+    it('lets the page start when the read fails, and tries again', async () => {
       vi.spyOn(console, 'error').mockImplementation(() => {});
       getContentOverlap.mockRejectedValueOnce(new Error('down'));
       await startFromOpportunity();
-      expect(document.body.textContent).toContain("Couldn't check for overlapping pages.");
+      expect(document.body.textContent).toContain(
+        "Couldn't read your pages cited for these prompts.",
+      );
       expect(button('Open editor')!.disabled).toBe(false);
       await click(button('Try again'));
       await act(async () => {});
       expect(getContentOverlap).toHaveBeenCalledTimes(2);
-      expect(document.body.textContent).toContain('Safe to create');
+      expect(document.body.textContent).toContain(
+        'None of your pages is cited for these prompts yet',
+      );
     });
   });
 
   describe('who does it', () => {
     async function startNewPage() {
       await render();
-      await click(button('Pick an opportunity'));
+      await click(button('Pick a content opportunity'));
       const option = [...document.querySelectorAll<HTMLElement>('[role="option"]')].find(
         (o) => o.textContent === 'Northwind vs HubSpot',
       );
