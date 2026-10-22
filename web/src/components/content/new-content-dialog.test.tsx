@@ -191,7 +191,7 @@ describe('New content', () => {
     expect(getContentStartOptions).toHaveBeenCalledWith('b1');
     expect(button('Continue')!.disabled).toBe(true);
 
-    await click(button('Pick an opportunity'));
+    await click(button('Pick a content opportunity'));
     const option = [...document.querySelectorAll<HTMLElement>('[role="option"]')].find(
       (o) => o.textContent === 'Northwind vs HubSpot',
     );
@@ -227,7 +227,7 @@ describe('New content', () => {
     expect(dialog.className).toContain('overflow-y-auto');
     expect(document.querySelector('[data-slot="dialog-footer"]')!.className).toContain('sticky');
 
-    await click(button('Pick an opportunity'));
+    await click(button('Pick a content opportunity'));
     const option = [...document.querySelectorAll<HTMLElement>('[role="option"]')].find(
       (o) => o.textContent === 'Northwind vs HubSpot',
     );
@@ -241,7 +241,7 @@ describe('New content', () => {
 
   it('names the page by the opportunity’s brief title when it has one', async () => {
     await render();
-    await click(button('Pick an opportunity'));
+    await click(button('Pick a content opportunity'));
     const option = [...document.querySelectorAll<HTMLElement>('[role="option"]')].find(
       (o) => o.textContent === 'Create a page for realtors',
     );
@@ -335,7 +335,7 @@ describe('New content', () => {
     expect(document.body.textContent).toContain("Couldn't load what to start from.");
     await click(button('Try again'));
     expect(getContentStartOptions).toHaveBeenCalledTimes(2);
-    expect(button('Pick an opportunity')).toBeDefined();
+    expect(button('Pick a content opportunity')).toBeDefined();
   });
 
   describe('opened from the Content plan (CE-014)', () => {
@@ -483,7 +483,7 @@ describe('New content', () => {
     it('leaves an opportunity no longer open to pick', async () => {
       await render('b2b', { kind: 'opportunity', id: 'gone' });
       expect(button('Continue')).toBeDefined();
-      expect(document.body.textContent).toContain('Pick an opportunity');
+      expect(document.body.textContent).toContain('Pick a content opportunity');
     });
   });
 
@@ -558,7 +558,7 @@ describe('New content', () => {
     /** Starts a new page from the first opportunity and waits for the Overview. */
     async function startFromOpportunity() {
       await render();
-      await click(button('Pick an opportunity'));
+      await click(button('Pick a content opportunity'));
       const option = [...document.querySelectorAll<HTMLElement>('[role="option"]')].find(
         (o) => o.textContent === 'Northwind vs HubSpot',
       );
@@ -679,7 +679,7 @@ describe('New content', () => {
   describe('who does it', () => {
     async function startNewPage() {
       await render();
-      await click(button('Pick an opportunity'));
+      await click(button('Pick a content opportunity'));
       const option = [...document.querySelectorAll<HTMLElement>('[role="option"]')].find(
         (o) => o.textContent === 'Northwind vs HubSpot',
       );

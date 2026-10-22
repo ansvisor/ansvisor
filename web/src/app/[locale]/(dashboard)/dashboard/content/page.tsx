@@ -234,14 +234,16 @@ function KpiCard({
   icon: Icon,
   value,
   sub,
+  className,
 }: {
   title: string;
   icon: React.ElementType;
   value: React.ReactNode;
   sub: React.ReactNode;
+  className?: string;
 }) {
   return (
-    <Card>
+    <Card className={className}>
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-1">
         <CardTitle className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
           {title}
@@ -1022,13 +1024,13 @@ export default function ContentPage() {
         <>
           <div
             className={cn(
-              'grid grid-cols-2 gap-4 sm:grid-cols-4',
-              hasContentQuota(contentUsage) && 'xl:grid-cols-[1.4fr_repeat(4,minmax(0,1fr))]',
+              'grid grid-cols-2 gap-4 sm:grid-cols-3',
+              hasContentQuota(contentUsage) && 'xl:grid-cols-[1.4fr_repeat(3,minmax(0,1fr))]',
             )}
           >
             <ContentUsageCard
               usage={contentUsage}
-              className="col-span-2 sm:col-span-4 xl:col-span-1"
+              className="col-span-2 sm:col-span-3 xl:col-span-1"
             />
             <KpiCard
               title={t('kpi.total')}
@@ -1046,17 +1048,13 @@ export default function ContentPage() {
               value={aggregates.highImpactCount}
               sub={t('kpi.opportunities')}
             />
+            {/* Two to a row on a phone: the third takes the row's width. */}
             <KpiCard
               title={t('kpi.avgScore')}
               icon={BarChart3}
               value={aggregates.avgScore}
               sub={t('kpi.outOf100')}
-            />
-            <KpiCard
-              title={t('kpi.sentToWorkflow')}
-              icon={Send}
-              value={aggregates.sentCount}
-              sub={t('kpi.sentOrInProgress')}
+              className="col-span-2 sm:col-span-1"
             />
           </div>
 
