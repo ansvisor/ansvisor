@@ -1,6 +1,5 @@
 import {
   BarChart3,
-  Building2,
   FileBarChart,
   FileText,
   Gauge,
@@ -51,16 +50,11 @@ export interface NavGroup {
   items: NavItem[];
 }
 
+/**
+ * The brands page has no item here: the brand switcher above the menu opens
+ * it ("Show My All Brands") and the selected brand's settings.
+ */
 export const dashboardNav: NavGroup[] = [
-  {
-    items: [
-      {
-        title: 'Brands',
-        href: '/dashboard/brands',
-        icon: Building2,
-      },
-    ],
-  },
   /**
    * New Ansvisor: the groups name the two things the product does. Execution
    * does the work (actions, the agent, content, page fixes); Analytics shows

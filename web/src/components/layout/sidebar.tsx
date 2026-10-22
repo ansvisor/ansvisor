@@ -136,7 +136,6 @@ export function Sidebar() {
   const [trackedCount, setTrackedCount] = useState<number | null>(null);
   const activeBrandId = useBrandStore((s) => s.activeBrandId);
   const t = useTranslations('nav');
-  const tBrands = useTranslations('brands');
   const { canUse, requiredPlanFor, isCloud } = useFeatureGate();
   // Probe once per session whether the org has a provider key for Chat.
   // Returns 'configured' immediately on self-host (no network call).
@@ -355,7 +354,7 @@ export function Sidebar() {
                     item.href === '/dashboard'
                       ? pathname === '/dashboard'
                       : pathname.startsWith(item.href);
-                  const label = getDashboardNavLabel(item.title, t, tBrands);
+                  const label = getDashboardNavLabel(item.title, t);
 
                   // Dynamic badge override: show "Set up" on the Agent item
                   // when the org has no provider key for Chat (cloud only).
@@ -452,7 +451,7 @@ export function Sidebar() {
                                     )}
                                   >
                                     <span className="flex-1 truncate">
-                                      {getDashboardNavLabel(child.title, t, tBrands)}
+                                      {getDashboardNavLabel(child.title, t)}
                                     </span>
                                     {child.badge && (
                                       <Badge

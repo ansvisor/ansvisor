@@ -3,6 +3,8 @@
 import { useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { useEditorState, type Editor } from '@tiptap/react';
+import { FloatingMenu } from '@tiptap/react/menus';
+import type { EditorState } from '@tiptap/pm/state';
 import {
   Bold,
   Code2,
@@ -21,6 +23,7 @@ import {
   Rows3,
   Table2,
   Trash2,
+  type LucideIcon,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -39,10 +42,27 @@ import { cn } from '@/lib/utils';
 import { HtmlBlockDialog } from './_html-block';
 
 /**
+ * Where the insert menu shows: the cursor on an empty paragraph between the
+ * page's blocks, in a page with something on it (an empty page shows its
+ * placeholder there instead).
+ */
+export function onEmptyLine(editor: Editor, state: EditorState): boolean {
+  const { $anchor, empty } = state.selection;
+  return (
+    empty &&
+    !editor.isEmpty &&
+    $anchor.depth === 1 &&
+    $anchor.parent.type.name === 'paragraph' &&
+    $anchor.parent.childCount === 0
+  );
+}
+
+/**
  * The editor's toolbar (CE-004, spec §6): H1 H2 H3 · B I link · lists,
- * quote · table, image, HTML block, attach a file · </> HTML, and the length counter against the page
+ * quote · table, image, Add HTML, attach a file · </> HTML, and the length counter against the page
  * type's target. Inside a table it adds a row, a column, or removes the
- * table. While the HTML view is open, only its own button works.
+ * table. While the HTML view is open, only its own button works. On an empty
+ * line, a small menu offers an HTML block, a table or an image there.
  */
 export function EditorToolbar({
   editor,
@@ -82,64 +102,73 @@ export function EditorToolbar({
   });
 
   const chain = () => editor.chain().focus();
-  const tools = [
+  const insertTable = () => chain().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run();
+  const tools: { key: string; icon: LucideIcon; on: boolean; run: () => void; text?: string }[][] =
     [
-      {
-        key: 'h1',
-        icon: Heading1,
-        on: state.h1,
-        run: () => chain().toggleHeading({ level: 1 }).run(),
-      },
-      {
-        key: 'h2',
-        icon: Heading2,
-        on: state.h2,
-        run: () => chain().toggleHeading({ level: 2 }).run(),
-      },
-      {
-        key: 'h3',
-        icon: Heading3,
-        on: state.h3,
-        run: () => chain().toggleHeading({ level: 3 }).run(),
-      },
-    ],
-    [
-      { key: 'bold', icon: Bold, on: state.bold, run: () => chain().toggleBold().run() },
-      { key: 'italic', icon: Italic, on: state.italic, run: () => chain().toggleItalic().run() },
-      { key: 'link', icon: Link2, on: state.link, run: () => setDialog('link') },
-    ],
-    [
-      {
-        key: 'bulletList',
-        icon: List,
-        on: state.bulletList,
-        run: () => chain().toggleBulletList().run(),
-      },
-      {
-        key: 'orderedList',
-        icon: ListOrdered,
-        on: state.orderedList,
-        run: () => chain().toggleOrderedList().run(),
-      },
-      {
-        key: 'quote',
-        icon: Quote,
-        on: state.blockquote,
-        run: () => chain().toggleBlockquote().run(),
-      },
-    ],
-    [
-      {
-        key: 'table',
-        icon: Table2,
-        on: state.inTable,
-        run: () => chain().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run(),
-      },
-      { key: 'image', icon: ImagePlus, on: false, run: () => setDialog('image') },
-      { key: 'htmlBlock', icon: Code2, on: false, run: () => setDialog('htmlBlock') },
-      { key: 'attach', icon: Paperclip, on: false, run: onAttach },
-    ],
-  ];
+      [
+        {
+          key: 'h1',
+          icon: Heading1,
+          on: state.h1,
+          run: () => chain().toggleHeading({ level: 1 }).run(),
+        },
+        {
+          key: 'h2',
+          icon: Heading2,
+          on: state.h2,
+          run: () => chain().toggleHeading({ level: 2 }).run(),
+        },
+        {
+          key: 'h3',
+          icon: Heading3,
+          on: state.h3,
+          run: () => chain().toggleHeading({ level: 3 }).run(),
+        },
+      ],
+      [
+        { key: 'bold', icon: Bold, on: state.bold, run: () => chain().toggleBold().run() },
+        { key: 'italic', icon: Italic, on: state.italic, run: () => chain().toggleItalic().run() },
+        { key: 'link', icon: Link2, on: state.link, run: () => setDialog('link') },
+      ],
+      [
+        {
+          key: 'bulletList',
+          icon: List,
+          on: state.bulletList,
+          run: () => chain().toggleBulletList().run(),
+        },
+        {
+          key: 'orderedList',
+          icon: ListOrdered,
+          on: state.orderedList,
+          run: () => chain().toggleOrderedList().run(),
+        },
+        {
+          key: 'quote',
+          icon: Quote,
+          on: state.blockquote,
+          run: () => chain().toggleBlockquote().run(),
+        },
+      ],
+      [
+        {
+          key: 'table',
+          icon: Table2,
+          on: state.inTable,
+          run: insertTable,
+        },
+        { key: 'image', icon: ImagePlus, on: false, run: () => setDialog('image') },
+        // Named, not only an icon: the way to put any HTML in the page.
+        {
+          key: 'htmlBlock',
+          icon: Code2,
+          on: false,
+          run: () => setDialog('htmlBlock'),
+          text: t('addHtml'),
+        },
+        { key: 'attach', icon: Paperclip, on: false, run: onAttach },
+      ],
+    ];
   const tableTools = [
     { key: 'addRow', icon: Rows3, run: () => chain().addRowAfter().run() },
     { key: 'addColumn', icon: Columns3, run: () => chain().addColumnAfter().run() },
@@ -164,6 +193,7 @@ export function EditorToolbar({
               onClick={tool.run}
             >
               <tool.icon className="h-4 w-4" />
+              {tool.text && <span className="ml-1 text-xs font-medium">{tool.text}</span>}
             </ToolButton>
           ))}
         </div>
@@ -198,6 +228,30 @@ export function EditorToolbar({
           target: formatNumber(target),
         })}
       </span>
+
+      {/* On an empty line, what can go there, as Webflow offers between
+          blocks; not on an empty page, which shows its placeholder. */}
+      <FloatingMenu
+        editor={editor}
+        shouldShow={({ editor: e, state: s }) =>
+          e.isEditable && e.view.hasFocus() && onEmptyLine(e, s)
+        }
+        className="flex items-center gap-0.5 rounded-md border bg-popover p-0.5 shadow-sm"
+      >
+        <span className="px-1.5 text-xs text-muted-foreground">{t('insert.label')}</span>
+        {(
+          [
+            { key: 'html', icon: Code2, run: () => setDialog('htmlBlock') },
+            { key: 'table', icon: Table2, run: insertTable },
+            { key: 'image', icon: ImagePlus, run: () => setDialog('image') },
+          ] as const
+        ).map((item) => (
+          <ToolButton key={item.key} label={t(`insert.${item.key}Hint`)} onClick={item.run}>
+            <item.icon className="h-3.5 w-3.5" />
+            <span className="ml-1 text-xs font-medium">{t(`insert.${item.key}`)}</span>
+          </ToolButton>
+        ))}
+      </FloatingMenu>
 
       {/* Mounted while open, so each opening starts from the selection. */}
       {dialog === 'link' && <LinkDialog editor={editor} onClose={() => setDialog(null)} />}

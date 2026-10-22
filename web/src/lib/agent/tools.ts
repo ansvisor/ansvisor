@@ -16,6 +16,35 @@ import {
   getSiteAuditFor,
   listSiteAuditsFor,
 } from '@/lib/mcp/data';
+import {
+  getMentionCompetitorsFor,
+  getMentionFor,
+  getMentionsPerceptionFor,
+  getMentionsSummaryFor,
+  listMentionsFor,
+} from '@/lib/mcp/mentions';
+import { MENTION_SENTIMENTS, MENTION_SORTS } from '@/lib/mentions-list';
+
+/** The Mentions & Sentiment page's filters, the same on every mentions tool. */
+const mentionFilters = {
+  brand_id: z.string().uuid(),
+  date_from: z.string().optional(),
+  date_to: z.string().optional(),
+  platform: z.string().optional(),
+  region: z.string().optional(),
+  topic_id: z.string().uuid().optional(),
+  search: z.string().optional(),
+};
+
+const mentionParams = (args: z.infer<z.ZodObject<typeof mentionFilters>>) => ({
+  brandId: args.brand_id,
+  dateFrom: args.date_from,
+  dateTo: args.date_to,
+  platform: args.platform,
+  region: args.region,
+  topicId: args.topic_id,
+  search: args.search,
+});
 
 /**
  * Vercel AI SDK tool definitions for the in-product agent. Each tool is a
@@ -206,6 +235,54 @@ export function buildAgentTools(auth: McpAuthContext) {
           model: args.model,
           region: args.region,
         }),
+    }),
+
+    get_mentions_summary: tool({
+      description:
+        'Mentions & Sentiment overview for a brand: times named (timesNamed, the page\'s Total mentions), responses naming it, mention rate, prompts with mentions, average position and sentiment (counts, shares, net −100…+100), now and in the window before, with changes taken on the prompts both windows answered (changes.basis), as the page\'s cards; the platform that moved net sentiment most; each platform; each day. Use for "how is AI talking about us?" / "why did sentiment drop on Gemini?". Platform ids look like "chatgpt-web", "gemini-web". 30 days when date_from is left out.',
+      inputSchema: z.object(mentionFilters),
+      execute: async (args) => getMentionsSummaryFor(auth, mentionParams(args)),
+    }),
+
+    list_mentions: tool({
+      description:
+        'The responses naming the brand, 100 a page: prompt, platform, country, sentiment, position, competitors in the same response and an excerpt. Filter by sentiment or competitor_id ("none" for responses naming no competitor); sort newest, oldest, co_mentions or negative. Use to quote what AI actually said.',
+      inputSchema: z.object({
+        ...mentionFilters,
+        sentiment: z.enum(MENTION_SENTIMENTS).optional(),
+        competitor_id: z.string().optional(),
+        sort: z.enum(MENTION_SORTS).optional(),
+        page: z.number().int().min(1).optional(),
+      }),
+      execute: async (args) =>
+        listMentionsFor(auth, {
+          ...mentionParams(args),
+          sentiment: args.sentiment,
+          competitorId: args.competitor_id,
+          sort: args.sort,
+          page: args.page,
+        }),
+    }),
+
+    get_mention: tool({
+      description:
+        'One response in full, by the id list_mentions returns: the stored text, citations, competitors it names, sentiment and its latest correction.',
+      inputSchema: z.object({ id: z.string().uuid() }),
+      execute: async (args) => getMentionFor(auth, args.id),
+    }),
+
+    get_mention_competitors: tool({
+      description:
+        "How often AI names each competitor in the brand's tracked responses (count, share, change against the window before) and how often in the same response as the brand.",
+      inputSchema: z.object(mentionFilters),
+      execute: async (args) => getMentionCompetitorsFor(auth, mentionParams(args)),
+    }),
+
+    get_mentions_perception: tool({
+      description:
+        'What AI associates with the brand: the terms next to it (with share of the responses naming it, now and before), the attributes that set it apart from its top competitors, co-mentions, and the biggest gap (an attribute a competitor leads by 20+ points). Found by rule, no LLM.',
+      inputSchema: z.object(mentionFilters),
+      execute: async (args) => getMentionsPerceptionFor(auth, mentionParams(args)),
     }),
 
     run_site_audit: tool({

@@ -49,7 +49,6 @@ export function DashboardPreview({
   competitors,
 }: DashboardPreviewProps) {
   const t = useTranslations('nav');
-  const tBrands = useTranslations('brands');
   const { resolvedTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
   useEffect(() => {
@@ -107,9 +106,7 @@ export function DashboardPreview({
                       )}
                     >
                       <item.icon className="h-4 w-4 shrink-0" />
-                      <span className="truncate">
-                        {getDashboardNavLabel(item.title, t, tBrands)}
-                      </span>
+                      <span className="truncate">{getDashboardNavLabel(item.title, t)}</span>
                     </div>
                   ))}
               </div>

@@ -3395,7 +3395,8 @@
         "options": {
           "optimizeGiven": {
             "title": "Optimize {page}",
-            "reason": "The page your Content plan picked"
+            "reason": "The page your Content plan picked",
+            "reasonCited": "The page AI engines cite for this prompt"
           },
           "optimizeInstead": {
             "title": "Optimize {page} instead",
@@ -3626,6 +3627,16 @@
         "addColumn": "Add a column to the right",
         "deleteTable": "Delete the table",
         "htmlBlock": "Add an HTML block",
+        "addHtml": "Add HTML",
+        "insert": {
+          "label": "Add",
+          "html": "HTML",
+          "htmlHint": "Add an HTML block on this line",
+          "table": "Table",
+          "tableHint": "Insert a table on this line",
+          "image": "Image",
+          "imageHint": "Insert an image on this line"
+        },
         "attach": "Attach a file: Excel, CSV, Word, Markdown, HTML or text",
         "html": "Edit as HTML",
         "htmlBack": "Back to visual",
@@ -5247,6 +5258,18 @@
       "showAll": "Show all performance",
       "order": "Furthest behind first: late or missing on the most AI platforms, then the worse average position."
     },
+    "content": {
+      "create": "Create content",
+      "optimize": "Optimize content",
+      "openDraft": "Open draft",
+      "createTitle": "No answer mentions or cites you here",
+      "createBody": "None of this period's {answers, plural, one {# answer} other {# answers}} names your brand or cites your site. A page written for this prompt gives AI engines something of yours to use.",
+      "rareTitle": "Mentioned in {pct}% of answers",
+      "lateTitle": "Mentioned at #{position} on average",
+      "optimizePage": "Optimize {page}, the page AI engines cite here, so they name you more often and earlier.",
+      "optimizePick": "Start lists your pages that answer this prompt: pick the one to optimize.",
+      "draftNote": "A draft for this prompt is already being written."
+    },
     "improve": {
       "quota": {
         "left": "{count, plural, one {About # generation left this month} other {About # generations left this month}}",
@@ -5874,8 +5897,32 @@
     "upgradeTo": "Upgrade to {plan}",
     "downgradeTo": "Downgrade to {plan}",
     "changePlanConfirmTitle": "Change to {plan}?",
-    "changePlanConfirmDescription": "You will be switched to the {plan} plan at ${price}/mo. Proration will be applied to your next invoice.",
+    "changePlanConfirmDescription": "You will be switched to the {plan} plan at ${price}/{interval, select, year {yr} other {mo}}. Proration will be applied to your next invoice.",
     "changePlanConfirm": "Confirm Change",
+    "changePeriodTitle": "Switch to {interval, select, year {annual} other {monthly}} billing?",
+    "changePeriodDescription": "Your {plan} plan will cost ${price} a {interval, select, year {year} other {month}}. Proration will be applied to your next invoice.",
+    "billingPeriod": "Billing period",
+    "monthly": "Monthly",
+    "annual": "Annual",
+    "savePercent": "Save {percent}%",
+    "popular": "Popular",
+    "regularPrice": "Regular price",
+    "firstMonthOffer": "50% off your first month with code {code}",
+    "buyPlanNow": "Buy {plan} now",
+    "planAdminOnly": "Only admins can buy or change the plan. Ask an admin in your organization.",
+    "seeAllPlanFeatures": "See everything each plan includes",
+    "switchToAnnual": "Switch to annual billing",
+    "switchToMonthly": "Switch to monthly billing",
+    "buyNowTitle": "Buy {plan} now?",
+    "buyNowDescription": "Your free trial ends today and the card you added is charged ${price} for the first {interval, select, year {year} other {month}}. The plan then renews every {interval, select, year {year} other {month}}.",
+    "promoCode": "Promo code",
+    "firstMonthWithCode": "With {code}, your first month is ${price}.",
+    "buyNowConfirm": "Buy now",
+    "planBought": "Your {plan} plan is active. Thank you!",
+    "paymentFailed": "The payment didn't go through.",
+    "paymentFailedHint": "Your free trial carries on. Update your card on Stripe, then try again.",
+    "updateCard": "Update card",
+    "trialEndsOn": "Your free trial ends on {date}",
     "processing": "Processing...",
     "cancelSubscription": "Cancel Subscription",
     "cancelConfirmTitle": "Cancel your subscription?",
@@ -6103,6 +6150,9 @@
     "title": "Brands",
     "description": "Manage all the brands you track across AI platforms.",
     "addBrand": "Add Brand",
+    "showAllBrands": "Show My All Brands",
+    "visitBrandSettings": "Visit Brand Setting",
+    "workspaceSettings": "Workspace Settings",
     "editBrand": "Edit Brand",
     "deleteBrand": "Delete Brand",
     "noBrands": "No brands yet",
@@ -6166,6 +6216,8 @@
       "confirmDelete": "Type the brand name to confirm:",
       "deleteConfirmPlaceholder": "Brand name",
       "deleteButton": "Delete Brand Permanently",
+      "managersOnlyEdit": "Only admins and managers can change these settings.",
+      "adminsOnlyDelete": "Only admins can delete a brand.",
       "shopping": {
         "title": "Shopping mode",
         "description": "Turn this on if this brand is in e-commerce. We’ll add ChatGPT Shopping to every prompt under this brand and show Product Visibility in the menu.",
