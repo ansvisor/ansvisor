@@ -2,24 +2,52 @@
 
 import { useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
+import { toast } from 'sonner';
 import { Loader2, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { NewContentDialog } from '@/components/content/new-content-dialog';
-import { getContentDrafts } from '@/lib/actions/content-drafts';
+import { useUserRole } from '@/hooks/use-user-role';
+import {
+  archiveContentDraft,
+  deleteContentDraft,
+  getContentDrafts,
+  markContentDraftReady,
+  setContentDraftStatus,
+} from '@/lib/actions/content-drafts';
 import {
   AGENT_POLL_MS,
+  CREATED_RANGES,
   LIBRARY_TABS,
+  draftsCreatedIn,
   draftsInTab,
   type ContentDraftListItem,
+  type CreatedRange,
+  type DraftStatus,
   type LibraryTab,
 } from '@/lib/content/drafts';
 import { siteTypeOf } from '@/lib/content/page-types';
 import { formatNumber } from '@/lib/format';
 import { readUrlChoice, writeUrlParams } from '@/lib/url-state';
 import { useBrandStore } from '@/stores/use-brand-store';
-import { LibraryTable } from './_library-table';
+import { LibraryExportMenu, useLibraryExport } from './_library-export';
+import { LibraryTable, type LibraryRowActions } from './_library-table';
 
 /** A read of the brand's drafts: null until it comes back. */
 interface LibraryRead {
@@ -32,22 +60,32 @@ interface LibraryRead {
 
 /**
  * The Content Library (Content Editor, CE-002): everything a person or the
- * Content Agent wrote or changed in Ansvisor, by status. The tab lives in the
- * URL (?tab=in_review), so a link can open "Library › In review".
+ * Content Agent wrote or changed in Ansvisor, by status, and what was
+ * archived (00233). A row's menu sets its status; admins and managers also
+ * archive, restore and delete. The tab lives in the URL (?tab=in_review), so
+ * a link can open "Library › In review".
  */
 export default function ContentLibraryPage() {
   const t = useTranslations('contentEditor.library');
   const activeBrandId = useBrandStore((s) => s.activeBrandId);
   const activeBrand = useBrandStore((s) => s.brands.find((b) => b.id === s.activeBrandId));
   const [tab, setTab] = useState<LibraryTab>('all');
+  // When the drafts listed (and exported) were created: ?created=30d.
+  const [created, setCreated] = useState<CreatedRange>('all');
   const [read, setRead] = useState<LibraryRead | null>(null);
   const [attempt, setAttempt] = useState(0);
   const [starting, setStarting] = useState(false);
+  const { canManage } = useUserRole();
+  // The draft whose Delete waits for a confirmation.
+  const [deleting, setDeleting] = useState<ContentDraftListItem | null>(null);
+  const [deletePending, setDeletePending] = useState(false);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- one read of the URL after mount
     setTab(readUrlChoice('tab', LIBRARY_TABS, 'all'));
+    setCreated(readUrlChoice('created', CREATED_RANGES, 'all'));
   }, []);
+  const { exporting, exportList, exportDraft } = useLibraryExport(activeBrandId);
 
   useEffect(() => {
     if (!activeBrandId) return;
@@ -76,9 +114,71 @@ export default function ContentLibraryPage() {
     return () => clearTimeout(timer);
   }, [agentWriting, read]);
 
+  const reload = () => setAttempt((n) => n + 1);
+  const titleOf = (draft: ContentDraftListItem) => draft.title.trim() || t('untitled');
+  const failed = (err: unknown) => {
+    console.error('Failed to change the Library draft:', err);
+    toast.error(
+      t(
+        err instanceof Error && err.message === 'forbidden'
+          ? 'rowMenu.forbidden'
+          : err instanceof Error && err.message === 'newer_draft'
+            ? 'rowMenu.newerDraft'
+            : 'rowMenu.failed',
+      ),
+    );
+  };
+
+  const archive = async (draft: ContentDraftListItem, archived: boolean) => {
+    try {
+      await archiveContentDraft(draft.id, archived);
+      reload();
+      toast(t(archived ? 'rowMenu.archived' : 'rowMenu.restored', { title: titleOf(draft) }), {
+        action: archived
+          ? { label: t('rowMenu.undo'), onClick: () => void archive(draft, false) }
+          : undefined,
+      });
+    } catch (err) {
+      failed(err);
+    }
+  };
+
+  const rowActions: LibraryRowActions = {
+    canManage,
+    onStatus: (draft: ContentDraftListItem, status: DraftStatus) => {
+      // Ready keeps a History version and completes the draft's task, as the editor's Mark ready.
+      const change =
+        status === 'ready'
+          ? markContentDraftReady(draft.id)
+          : setContentDraftStatus(draft.id, status);
+      change.then(reload, failed);
+    },
+    onArchive: (draft, archived) => void archive(draft, archived),
+    onDelete: setDeleting,
+    onExport: (draft, format) => void exportDraft(draft, format),
+  };
+
+  const confirmDelete = async () => {
+    if (!deleting) return;
+    setDeletePending(true);
+    try {
+      await deleteContentDraft(deleting.id);
+      toast.success(t('rowMenu.deleted', { title: titleOf(deleting) }));
+      setDeleting(null);
+      reload();
+    } catch (err) {
+      failed(err);
+    }
+    setDeletePending(false);
+  };
+
   const changeTab = (next: LibraryTab) => {
     setTab(next);
     writeUrlParams({ tab: next }, { tab: 'all' });
+  };
+  const changeCreated = (next: CreatedRange) => {
+    setCreated(next);
+    writeUrlParams({ created: next }, { created: 'all' });
   };
 
   if (!activeBrandId) {
@@ -93,7 +193,8 @@ export default function ContentLibraryPage() {
   const current = read?.brandId === activeBrandId ? read : null;
   const drafts = current?.drafts ?? null;
   const counts = current?.counts ?? null;
-  const listed = drafts ? draftsInTab(drafts, tab) : [];
+  const inTab = drafts ? draftsInTab(drafts, tab) : [];
+  const listed = draftsCreatedIn(inTab, created);
 
   return (
     <div className="space-y-6">
@@ -102,10 +203,17 @@ export default function ContentLibraryPage() {
           <h1 className="text-2xl font-bold tracking-tight">{t('title')}</h1>
           <p className="text-sm text-muted-foreground">{t('description')}</p>
         </div>
-        <Button className="gap-2" onClick={() => setStarting(true)}>
-          <Plus className="h-4 w-4" />
-          {t('newContent')}
-        </Button>
+        <div className="flex items-center gap-2">
+          <LibraryExportMenu
+            disabled={listed.length === 0}
+            exporting={exporting}
+            onExport={(format) => void exportList(listed, tab, format)}
+          />
+          <Button className="gap-2" onClick={() => setStarting(true)}>
+            <Plus className="h-4 w-4" />
+            {t('newContent')}
+          </Button>
+        </div>
       </div>
       <NewContentDialog
         open={starting}
@@ -115,16 +223,38 @@ export default function ContentLibraryPage() {
         onSent={() => setAttempt((n) => n + 1)}
       />
 
-      <Tabs value={tab} onValueChange={(v) => changeTab(v as LibraryTab)}>
-        <TabsList variant="line" aria-label={t('tabsLabel')}>
-          {LIBRARY_TABS.map((id) => (
-            <TabsTrigger key={id} value={id}>
-              {t(`tabs.${id}`)}
-              {counts && <TabCount count={counts[id]} />}
-            </TabsTrigger>
-          ))}
-        </TabsList>
-      </Tabs>
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <Tabs value={tab} onValueChange={(v) => changeTab(v as LibraryTab)}>
+          <TabsList variant="line" aria-label={t('tabsLabel')}>
+            {LIBRARY_TABS.map((id) => (
+              <TabsTrigger key={id} value={id}>
+                {t(`tabs.${id}`)}
+                {counts && <TabCount count={counts[id]} />}
+              </TabsTrigger>
+            ))}
+          </TabsList>
+        </Tabs>
+        <Select
+          value={created}
+          onValueChange={(value) => changeCreated(value as CreatedRange)}
+          items={CREATED_RANGES.map((range) => ({
+            value: range,
+            label: `${t('created.label')}: ${t(`created.${range}`)}`,
+          }))}
+        >
+          {/* On the tabs' line when it fits, else on its own, on the right. */}
+          <SelectTrigger size="sm" className="ml-auto" aria-label={t('created.label')}>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent align="end">
+            {CREATED_RANGES.map((range) => (
+              <SelectItem key={range} value={range}>
+                {t(`created.${range}`)}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
 
       <Card className="py-0">
         <CardContent className="px-0">
@@ -146,12 +276,38 @@ export default function ContentLibraryPage() {
             <div className="flex items-center justify-center py-12" aria-busy="true">
               <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
             </div>
+          ) : listed.length === 0 && inTab.length > 0 ? (
+            <p className="px-6 py-12 text-center text-sm text-muted-foreground">
+              {t('created.empty')}
+            </p>
           ) : (
-            <LibraryTable drafts={listed} tab={tab} />
+            <LibraryTable drafts={listed} tab={tab} actions={rowActions} />
           )}
         </CardContent>
       </Card>
-      {counts && listed.length < counts[tab] && (
+      <Dialog open={deleting !== null} onOpenChange={(open) => !open && setDeleting(null)}>
+        <DialogContent className="grid-cols-[minmax(0,1fr)] sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="pr-6 leading-snug [overflow-wrap:anywhere]">
+              {t('deleteDialog.title', { title: deleting ? titleOf(deleting) : '' })}
+            </DialogTitle>
+            <DialogDescription>{t('deleteDialog.description')}</DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleting(null)} disabled={deletePending}>
+              {t('deleteDialog.cancel')}
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => void confirmDelete()}
+              disabled={deletePending}
+            >
+              {t('deleteDialog.confirm')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      {counts && created === 'all' && listed.length < counts[tab] && (
         <p className="text-xs text-muted-foreground">
           {t('latestOnly', {
             shown: formatNumber(listed.length),

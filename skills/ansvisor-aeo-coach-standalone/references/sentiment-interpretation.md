@@ -5,6 +5,28 @@ Sentiment is **not** part of the visibility score (see
 [`visibility-scoring.md`](visibility-scoring.md)), but it's the loudest
 **signal** about why a number changed.
 
+## Net sentiment (Mentions & Sentiment)
+
+The Mentions tools add up the tags over the responses that name the
+brand:
+
+- **Net sentiment** = positive share − negative share, from −100 to
+  +100. Quote it signed, without a % sign: "net +21". +20 with 40%
+  positive and 20% negative reads very differently from +20 with 20%
+  positive and 0% negative, so give the split when it matters.
+- **Low sample:** under 20 responses naming the brand, a figure
+  carries `lowSample: true` and its change is `null`. Say "low sample,
+  n = 12" and don't compare it with another window.
+- **Per platform:** each platform has its own net. A platform with a
+  much lower net than the rest is where to look first. Two platforms
+  40+ points apart usually describe the brand differently, which is
+  worth quoting from `list_mentions` (`GET /mentions`) excerpts.
+- **Corrections:** a person can mark a response's sentiment as wrong.
+  The corrected tone counts everywhere, and `get_mention`
+  (`GET /mentions/{id}`) shows who corrected it and why.
+- **Brand only:** competitors have no sentiment yet. Don't describe a
+  competitor's tone.
+
 ## Three rules of thumb
 
 1. **No mention = no sentiment.** If `mention_count = 0`, sentiment is
@@ -31,8 +53,10 @@ Sentiment is **not** part of the visibility score (see
 
 ## When sentiment is noise
 
-- **Small `resultCount` (< 10).** A single negative response moves the
-  average disproportionately. Caveat the answer.
+- **Small samples.** Under 20 responses naming the brand
+  (`lowSample`), or a `resultCount` under 10 elsewhere, a single
+  negative response moves the figure disproportionately. Caveat the
+  answer.
 - **Brand-comparison prompts.** "Should I use X or Y?" answers often
   read as neutral-negative for both brands because the AI is being
   even-handed. Don't treat that as a reputation problem.

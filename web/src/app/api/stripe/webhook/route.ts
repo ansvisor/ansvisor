@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { stripe } from '@/lib/stripe';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { alignPromptsToPlanForOrg } from '@/lib/plan-engines';
+import { periodEndIso } from '@/lib/billing/period-end';
 import type Stripe from 'stripe';
 
 /**
@@ -65,6 +66,10 @@ export async function POST(req: NextRequest) {
           );
 
           if (orgId) {
+            // The period end too: no update event follows a new subscription
+            // until it renews or changes, and the quota period and Cancel's
+            // "give us 3 days" read it.
+            const endsAt = periodEndIso(subscription);
             const { error } = await supabaseAdmin
               .from('organizations')
               .update({
@@ -73,6 +78,7 @@ export async function POST(req: NextRequest) {
                 plan: planId || 'starter',
                 stripe_customer_id: customerId,
                 stripe_subscription_id: subscriptionId,
+                ...(endsAt ? { subscription_ends_at: endsAt } : {}),
               })
               .eq('id', orgId);
             if (error) {
@@ -102,22 +108,12 @@ export async function POST(req: NextRequest) {
             : subscription.customer?.id;
 
         if (customerId) {
-          // Stripe API 2025-03-31 moved current_period_end to the item level.
-          // Read item-level first, fall back to subscription-level for older
-          // API versions, and skip the field entirely if neither is present.
-          const subItems = subscription as unknown as {
-            items?: { data?: Array<{ current_period_end?: number }> };
-            current_period_end?: number;
-          };
-          const epochSeconds =
-            subItems.items?.data?.[0]?.current_period_end ?? subItems.current_period_end;
-
           const updates: Record<string, unknown> = {
             subscription_status: subscription.status,
           };
-          if (typeof epochSeconds === 'number') {
-            updates.subscription_ends_at = new Date(epochSeconds * 1000).toISOString();
-          }
+          // Skipped when Stripe gives no period end, rather than cleared.
+          const endsAt = periodEndIso(subscription);
+          if (endsAt) updates.subscription_ends_at = endsAt;
 
           // Update plan if metadata has plan_id
           const newPlanId = subscription.metadata.plan_id;

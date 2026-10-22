@@ -1,3 +1,5 @@
+import type { Sheet } from 'write-excel-file/browser';
+import { toCsv } from '@/lib/csv';
 import { slugify } from '@/lib/slug';
 import { safeLinkHref } from './editor';
 
@@ -160,9 +162,14 @@ const text = (runs: DraftRun[]) => runs.map((r) => (r.break ? '\n' : r.text)).jo
  * The page as blocks. A page without an H1 opens with its title as one, so
  * the file says what it is.
  */
-export function draftBlocks(title: string, html: string): DraftBlock[] {
+export function draftBlocks(
+  title: string,
+  html: string,
+  /** Shared by pages that go in one file, so each list numbers on its own. */
+  counter: { lists: number } = { lists: 0 },
+): DraftBlock[] {
   const doc = new DOMParser().parseFromString(`<body>${html}</body>`, 'text/html');
-  const blocks = blocksIn(doc.body, { lists: 0 });
+  const blocks = blocksIn(doc.body, counter);
   const hasTitle = blocks.some((b) => b.kind === 'heading' && b.level === 1);
   return hasTitle || !title.trim()
     ? blocks
@@ -246,59 +253,46 @@ export function draftMarkdown(title: string, html: string): string {
   return `${parts.join('')}\n`;
 }
 
-/** Export Word: the blocks as a document, the lists numbered and bulleted as on the page. */
-export async function draftDocx(title: string, html: string): Promise<Blob> {
-  // Loaded on the click: the library is only needed to write the file.
-  const {
-    AlignmentType,
-    Document,
-    ExternalHyperlink,
-    HeadingLevel,
-    LevelFormat,
-    Packer,
-    Paragraph,
-    Table,
-    TableCell,
-    TableRow,
-    TextRun,
-    WidthType,
-  } = await import('docx');
-  const blocks = draftBlocks(title, html);
+type Docx = typeof import('docx');
+type DocxChild = InstanceType<Docx['Paragraph']> | InstanceType<Docx['Table']>;
+
+/** The blocks as Word paragraphs and tables, the lists numbered and bulleted as on the page. */
+function docxBlocks(m: Docx, blocks: DraftBlock[]): DocxChild[] {
   const HEADING = {
-    1: HeadingLevel.HEADING_1,
-    2: HeadingLevel.HEADING_2,
-    3: HeadingLevel.HEADING_3,
+    1: m.HeadingLevel.HEADING_1,
+    2: m.HeadingLevel.HEADING_2,
+    3: m.HeadingLevel.HEADING_3,
   } as const;
 
   const children = (runs: DraftRun[], extra: { bold?: boolean; italics?: boolean } = {}) =>
     runs.map((run) => {
-      if (run.break) return new TextRun({ text: '', break: 1 });
-      const textRun = new TextRun({
+      if (run.break) return new m.TextRun({ text: '', break: 1 });
+      const textRun = new m.TextRun({
         text: run.text,
         bold: run.bold || extra.bold,
         italics: run.italics || extra.italics,
         ...(run.link ? { style: 'Hyperlink' } : {}),
       });
-      return run.link ? new ExternalHyperlink({ link: run.link, children: [textRun] }) : textRun;
+      return run.link ? new m.ExternalHyperlink({ link: run.link, children: [textRun] }) : textRun;
     });
 
-  const content = (
-    list: DraftBlock[],
-  ): (InstanceType<typeof Paragraph> | InstanceType<typeof Table>)[] =>
+  const content = (list: DraftBlock[]): DocxChild[] =>
     list.flatMap((block) => {
       switch (block.kind) {
         case 'heading':
-          return [new Paragraph({ heading: HEADING[block.level], children: children(block.runs) })];
+          return [
+            new m.Paragraph({ heading: HEADING[block.level], children: children(block.runs) }),
+          ];
         case 'paragraph':
-          return [new Paragraph({ children: children(block.runs) })];
+          return [new m.Paragraph({ children: children(block.runs) })];
         case 'quote':
           return block.paragraphs.map(
             (p) =>
-              new Paragraph({ indent: { left: 720 }, children: children(p, { italics: true }) }),
+              new m.Paragraph({ indent: { left: 720 }, children: children(p, { italics: true }) }),
           );
         case 'item':
           return [
-            new Paragraph({
+            new m.Paragraph({
               children: children(block.runs),
               ...(block.ordered
                 ? { numbering: { reference: 'numbered', level: block.level, instance: block.list } }
@@ -307,17 +301,17 @@ export async function draftDocx(title: string, html: string): Promise<Blob> {
           ];
         case 'table':
           return [
-            new Table({
-              width: { size: 100, type: WidthType.PERCENTAGE },
+            new m.Table({
+              width: { size: 100, type: m.WidthType.PERCENTAGE },
               rows: block.rows.map(
                 (row) =>
-                  new TableRow({
+                  new m.TableRow({
                     tableHeader: row.header,
                     children: row.cells.map(
                       (cell) =>
-                        new TableCell({
+                        new m.TableCell({
                           children: [
-                            new Paragraph({ children: children(cell, { bold: row.header }) }),
+                            new m.Paragraph({ children: children(cell, { bold: row.header }) }),
                           ],
                         }),
                     ),
@@ -329,26 +323,38 @@ export async function draftDocx(title: string, html: string): Promise<Blob> {
           return content(block.blocks);
       }
     });
+  return content(blocks);
+}
 
-  const document = new Document({
-    title: title.trim() || text(blocks.find((b) => b.kind === 'heading')?.runs ?? []),
+/** A Word document of sections, each starting on a page of its own, with the lists' numbering. */
+function docxDocument(m: Docx, title: string, sections: DocxChild[][]) {
+  return new m.Document({
+    title,
     numbering: {
       config: [
         {
           reference: 'numbered',
           levels: [0, 1, 2, 3].map((level) => ({
             level,
-            format: LevelFormat.DECIMAL,
+            format: m.LevelFormat.DECIMAL,
             text: `%${level + 1}.`,
-            alignment: AlignmentType.START,
+            alignment: m.AlignmentType.START,
             style: { paragraph: { indent: { left: 720 * (level + 1), hanging: 360 } } },
           })),
         },
       ],
     },
-    sections: [{ children: content(blocks) }],
+    sections: sections.map((children) => ({ children })),
   });
-  return Packer.toBlob(document);
+}
+
+/** Export Word: the blocks as a document, the lists numbered and bulleted as on the page. */
+export async function draftDocx(title: string, html: string): Promise<Blob> {
+  // Loaded on the click: the library is only needed to write the file.
+  const m = await import('docx');
+  const blocks = draftBlocks(title, html);
+  const name = title.trim() || text(blocks.find((b) => b.kind === 'heading')?.runs ?? []);
+  return m.Packer.toBlob(docxDocument(m, name, [docxBlocks(m, blocks)]));
 }
 
 /** The file for a format: Word built on the click, HTML and Markdown as UTF-8 text. */
@@ -367,4 +373,171 @@ export async function draftExportBlob(
 export function draftExportFileName(title: string, format: DraftExportFormat): string {
   const slug = slugify(title).slice(0, 60).replace(/-+$/, '') || 'page';
   return `ansvisor_content_${slug}.${format}`;
+}
+
+// ─── The Library's Export (CE-002) ──────────────────────────────────────────
+
+export type LibraryExportFormat = 'csv' | 'xlsx' | 'docx';
+
+/** A draft as the Library's Export writes it: its labels as the Library shows them. */
+export interface LibraryExportItem {
+  title: string;
+  status: string;
+  method: string;
+  pageType: string;
+  author: string;
+  createdAt: string;
+  updatedAt: string;
+  /** The live page an optimize draft is for. */
+  url: string | null;
+  /** The page as Copy HTML gives it. */
+  html: string;
+}
+
+/** The CSV's and the sheet's header. */
+export const LIBRARY_EXPORT_HEADERS = [
+  'Title',
+  'Status',
+  'Method',
+  'Page type',
+  'By',
+  'Created',
+  'Updated',
+  'Page URL',
+  'Characters',
+  'Content',
+];
+
+/** A spreadsheet cell holds at most this many characters (Excel's limit). */
+const CELL_LIMIT = 32_767;
+
+/** "2026-10-22": a date that sorts as text. */
+const day = (iso: string) => iso.slice(0, 10);
+
+/**
+ * The page's text, a block a line: list items marked and indented, quotes
+ * with ">", a table's cells joined with " | ", an HTML block's text.
+ */
+export function draftText(title: string, html: string): string {
+  const lines: string[] = [];
+  const add = (blocks: DraftBlock[]) => {
+    for (const block of blocks) {
+      switch (block.kind) {
+        case 'heading':
+        case 'paragraph':
+          lines.push(text(block.runs));
+          break;
+        case 'quote':
+          for (const p of block.paragraphs) lines.push(`> ${text(p)}`);
+          break;
+        case 'item':
+          lines.push(
+            `${'  '.repeat(block.level)}${block.ordered ? `${block.n}.` : '-'} ${text(block.runs)}`,
+          );
+          break;
+        case 'table':
+          for (const row of block.rows) lines.push(row.cells.map(text).join(' | '));
+          break;
+        case 'html':
+          add(block.blocks);
+          break;
+      }
+    }
+  };
+  add(draftBlocks(title, html));
+  return lines.join('\n');
+}
+
+/** One row a draft, in the header's order: its page's text in full. */
+export function libraryRows(items: LibraryExportItem[]): Record<string, string | number>[] {
+  return items.map((item) => {
+    const content = draftText(item.title, item.html);
+    const values: (string | number)[] = [
+      item.title,
+      item.status,
+      item.method,
+      item.pageType,
+      item.author,
+      day(item.createdAt),
+      day(item.updatedAt),
+      item.url ?? '',
+      content.replace(/\n/g, '').length,
+      content,
+    ];
+    return Object.fromEntries(LIBRARY_EXPORT_HEADERS.map((header, i) => [header, values[i]]));
+  });
+}
+
+/** Export CSV: one row a draft. */
+export function libraryCsv(items: LibraryExportItem[]): string {
+  return toCsv(libraryRows(items), LIBRARY_EXPORT_HEADERS);
+}
+
+/** Export Excel: one row a draft; a page past a cell's limit is cut, and says so. */
+export function libraryWorkbook(items: LibraryExportItem[]): Sheet<Blob>[] {
+  const bold = (value: string) => ({ value, fontWeight: 'bold' as const });
+  return [
+    {
+      sheet: 'Library',
+      columns: [
+        { width: 40 },
+        { width: 12 },
+        { width: 10 },
+        { width: 18 },
+        { width: 18 },
+        { width: 12 },
+        { width: 12 },
+        { width: 40 },
+        { width: 11 },
+        { width: 80 },
+      ],
+      data: [
+        LIBRARY_EXPORT_HEADERS.map(bold),
+        ...libraryRows(items).map((row) =>
+          LIBRARY_EXPORT_HEADERS.map((header) => {
+            const value = row[header];
+            return typeof value === 'string' && value.length > CELL_LIMIT
+              ? `${value.slice(0, CELL_LIMIT - 1)}…`
+              : value;
+          }),
+        ),
+      ],
+    },
+  ];
+}
+
+/**
+ * Export Word: every draft in one document, each from a page of its own,
+ * under a line saying where it stands.
+ */
+export async function libraryDocx(items: LibraryExportItem[]): Promise<Blob> {
+  const m = await import('docx');
+  // One count for the whole file, so a list doesn't go on from another page's.
+  const counter = { lists: 0 };
+  const sections = items.map((item) => [
+    new m.Paragraph({
+      children: [
+        new m.TextRun({
+          text: [
+            item.status,
+            item.method,
+            item.pageType,
+            `Updated ${day(item.updatedAt)}`,
+            item.url,
+          ]
+            .filter(Boolean)
+            .join(' · '),
+          italics: true,
+          color: '666666',
+        }),
+      ],
+    }),
+    ...docxBlocks(m, draftBlocks(item.title, item.html, counter)),
+  ]);
+  return m.Packer.toBlob(docxDocument(m, 'Content Library', sections));
+}
+
+/** "ansvisor_content_library_in-review_2026-10-22.xlsx". */
+export function libraryExportFileName(tab: string, format: LibraryExportFormat, now: Date): string {
+  return `ansvisor_content_library_${tab.replace(/_/g, '-')}_${now.toISOString().slice(0, 10)}.${format}`;
 }

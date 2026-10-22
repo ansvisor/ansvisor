@@ -79,6 +79,15 @@ describe('collectHealthReport', () => {
     expect(PROBES.some((p) => p.probe === 'topics_overview_aggregates')).toBe(false);
   });
 
+  it("times the Mentions & Sentiment tabs' reads last, at 30 and 90 days", () => {
+    expect(PROBES.slice(-4)).toEqual([
+      { probe: 'mentions_list', days: 30 },
+      { probe: 'mentions_list', days: 90 },
+      { probe: 'mentions_perception', days: 30 },
+      { probe: 'mentions_perception', days: 90 },
+    ]);
+  });
+
   it('skips the probes when they are not configured', async () => {
     delete process.env.HEALTH_PROBE_BRAND_ID;
     const report = await collectHealthReport(NOW);

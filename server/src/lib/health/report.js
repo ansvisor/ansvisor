@@ -26,6 +26,9 @@ export const WARN_AT_S = 4;
  * Citations windows it measured their cache eviction rather than its own cost.
  * Topics is timed as the tab reads it (topics_overview_window, 00236): the
  * fixed topics_overview_aggregates it timed before is no read of the page's.
+ * Mentions & Sentiment goes last (00239): the Mentions table's first page and
+ * the Perception figures at 30 and 90 days, the windows that ran past the
+ * budget, timed after the rest so they read as cold as a user's first visit.
  */
 export const PROBES = [
   { probe: 'topics_overview_window', days: 1 },
@@ -36,6 +39,10 @@ export const PROBES = [
   { probe: 'citations_urls_daily', days: 30 },
   { probe: 'insights_aggregates_daily', days: 30 },
   { probe: 'competitor_aggregates_daily', days: 30 },
+  { probe: 'mentions_list', days: 30 },
+  { probe: 'mentions_list', days: 90 },
+  { probe: 'mentions_perception', days: 30 },
+  { probe: 'mentions_perception', days: 90 },
 ];
 
 const DAY_MS = 24 * 60 * 60 * 1000;

@@ -38,6 +38,14 @@ describe('deliverEmail', () => {
     expect(await deliverEmail(message)).toBe('unknown');
   });
 
+  it('sends a reply to replyTo when given', async () => {
+    fetchMock.mockResolvedValue(answer(200));
+    await deliverEmail({ ...message, replyTo: 'ada@customer.example' });
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body).reply_to).toBe('ada@customer.example');
+    await deliverEmail(message);
+    expect(JSON.parse(fetchMock.mock.calls[1][1].body)).not.toHaveProperty('reply_to');
+  });
+
   it('skips without config or recipients', async () => {
     expect(await deliverEmail({ ...message, to: [] })).toBe('skipped');
     vi.stubEnv('RESEND_API_KEY', '');

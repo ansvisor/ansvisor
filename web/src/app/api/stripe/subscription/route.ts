@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { stripe, priceIdFor } from '@/lib/stripe';
 import { alignPromptsToPlanForOrg } from '@/lib/plan-engines';
+import { periodEndIso } from '@/lib/billing/period-end';
 import { planChange, planRequestSchema, type BillingInterval } from '@/lib/billing/plan-purchase';
 
 type SubscriptionItem = {
@@ -24,21 +25,6 @@ type SubscriptionRaw = {
   // Newer versions (2025-03-31+) moved it to subscription items.
   current_period_end?: number;
 };
-
-/**
- * Stripe API 2025-03-31 moved `current_period_end` from the subscription
- * onto each subscription item. Read item-level first, fall back to the
- * subscription-level for older API versions, and return null if neither is
- * present (so callers can skip emitting an Invalid Date).
- */
-function getCurrentPeriodEndIso(sub: SubscriptionRaw): string | null {
-  const itemEnd = sub.items?.data?.[0]?.current_period_end;
-  const subEnd = sub.current_period_end;
-  const epochSeconds =
-    typeof itemEnd === 'number' ? itemEnd : typeof subEnd === 'number' ? subEnd : null;
-  if (epochSeconds == null) return null;
-  return new Date(epochSeconds * 1000).toISOString();
-}
 
 async function getOrgStripeIds() {
   const supabase = await createClient();
@@ -102,7 +88,7 @@ export async function GET() {
     return NextResponse.json({
       planId: org.plan ?? 'starter',
       status: sub.status,
-      currentPeriodEnd: getCurrentPeriodEndIso(sub),
+      currentPeriodEnd: periodEndIso(sub),
       cancelAtPeriodEnd: sub.cancel_at_period_end,
       priceAmount: price?.unit_amount ? price.unit_amount / 100 : null,
       interval: price?.recurring?.interval ?? null,
@@ -128,7 +114,7 @@ function subscriptionBody(planId: string, sub: SubscriptionRaw) {
   return {
     planId,
     status: sub.status,
-    currentPeriodEnd: getCurrentPeriodEndIso(sub),
+    currentPeriodEnd: periodEndIso(sub),
     cancelAtPeriodEnd: sub.cancel_at_period_end,
     priceAmount: price?.unit_amount ? price.unit_amount / 100 : null,
     interval: price?.recurring?.interval ?? null,
@@ -174,7 +160,7 @@ export async function PATCH(req: NextRequest) {
       return NextResponse.json({
         status: updated.status,
         cancelAtPeriodEnd: false,
-        currentPeriodEnd: getCurrentPeriodEndIso(updated),
+        currentPeriodEnd: periodEndIso(updated),
       });
     }
 
@@ -315,7 +301,7 @@ export async function DELETE() {
 
     return NextResponse.json({
       cancelAtPeriodEnd: true,
-      currentPeriodEnd: getCurrentPeriodEndIso(updated),
+      currentPeriodEnd: periodEndIso(updated),
     });
   } catch (err) {
     console.error('[stripe/subscription] DELETE error:', err);

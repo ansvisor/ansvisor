@@ -149,13 +149,25 @@ describe('length and structure', () => {
     expect(check('sentence', '<p>Short. Also short!</p>')).toEqual({ state: 'ok' });
   });
 
-  it('reads the length from the editor’s count', () => {
-    expect(checkRule(rule('length'), page('', 2610), ctx)).toEqual({
+  it('reads the length from the editor’s count, as a target within 20%', () => {
+    // A 3,000 target: 2,400–3,600 meets it.
+    expect(checkRule(rule('length'), page('', 2610), ctx)).toEqual({ state: 'ok' });
+    expect(checkRule(rule('length'), page('', 3600), ctx)).toEqual({ state: 'ok' });
+    expect(checkRule(rule('length'), page('', 2000), ctx)).toEqual({
       state: 'bad',
-      code: 'current',
-      count: 2610,
+      code: 'short',
+      count: 2000,
+      min: 2400,
+      max: 3600,
     });
-    expect(checkRule(rule('length'), page('', 3000), ctx)).toEqual({ state: 'ok' });
+    // A page far over its target is open, for Apply rules with Agent to shorten.
+    expect(checkRule(rule('length'), page('', 15921), ctx)).toEqual({
+      state: 'bad',
+      code: 'long',
+      count: 15921,
+      min: 2400,
+      max: 3600,
+    });
   });
 
   it('wants a short summary under the H1, and a short answer under each H2', () => {
