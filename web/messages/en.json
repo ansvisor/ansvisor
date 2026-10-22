@@ -5064,6 +5064,8 @@
       "subtitle": "Every tracked prompt for this brand · edit or pause any row in place",
       "subtitleReadOnly": "Read-only overview of every tracked prompt for this brand",
       "planAndUsage": "Plan & usage",
+      "show": "Show",
+      "hide": "Hide",
       "planPill": "{plan} plan",
       "planLabel": {
         "self_hosted": "Self-Hosted",
