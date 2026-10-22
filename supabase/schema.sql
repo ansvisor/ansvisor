@@ -31786,6 +31786,7 @@ grant execute on function public.shopping_amazon_share_weekly(uuid, timestamptz)
 
 notify pgrst, 'reload schema';
 
+-- ─────────────────────────────────────────────────────────────────────────
 -- migrations/00226_content_reads_bounded.sql
 -- ─────────────────────────────────────────────────────────────────────────
 -- ============================================================================
