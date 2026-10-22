@@ -97,8 +97,9 @@ export function AgentWriting({
                   <Circle aria-hidden className="h-4 w-4 shrink-0 text-muted-foreground/60" />
                 )}
                 <span className="min-w-0 flex-1">{t(`agentWriting.steps.${method}.${step}`)}</span>
+                {/* Hidden from screen readers: a status that reads out every second. */}
                 {i === WRITING && seconds !== null && (
-                  <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
+                  <span aria-hidden className="shrink-0 text-xs text-muted-foreground tabular-nums">
                     {clock(seconds)}
                   </span>
                 )}

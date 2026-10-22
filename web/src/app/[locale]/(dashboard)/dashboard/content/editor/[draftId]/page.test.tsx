@@ -1556,7 +1556,7 @@ describe('the side panel', () => {
       expect.objectContaining({ textRules: [], locked: [] }),
     );
     expect(container.querySelector('[role="status"]')!.textContent).toContain(
-      'Content Agent is writing this page',
+      'Content Agent is working on this page',
     );
   });
 
