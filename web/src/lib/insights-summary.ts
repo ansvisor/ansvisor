@@ -162,7 +162,7 @@ export function rankSummary(
 
 // ─── Leaderboard (VIS-004) ──────────────────────────────────────────────────
 
-/** Up to this many brands, the leaderboard lists them all. */
+/** Up to this many brands, the leaderboard lists them all; past it, it shows at least this many. */
 const LEADERBOARD_SHOW_ALL_UP_TO = 5;
 
 /** A leaderboard line: a brand (its index in rank order), or "n more" skipped brands. */
@@ -171,21 +171,29 @@ export type LeaderboardItem = { kind: 'brand'; index: number } | { kind: 'more';
 /**
  * The leaderboard's lines as in the v2 mockup: ranks 1 and 2, then the brand
  * directly ahead of yours, yours and the one directly behind, with "n more"
- * where brands are skipped in between. `hidden` counts every brand left out,
- * for "Show all"; short lists, or one without the brand, start from the top.
+ * where two or more brands are skipped in between. Never fewer than five
+ * brands: a brand near the top or at the bottom fills up with the next ranks
+ * from the top, and yours is always there. `hidden` counts every brand left out, for "Show
+ * all"; short lists, or one without the brand, start from the top.
  */
 export function leaderboardLines(
   count: number,
   ownIndex: number,
 ): { items: LeaderboardItem[]; hidden: number } {
-  const shown =
-    count <= LEADERBOARD_SHOW_ALL_UP_TO
-      ? [...Array(count).keys()]
-      : ownIndex < 0
-        ? [...Array(LEADERBOARD_SHOW_ALL_UP_TO).keys()]
-        : [...new Set([0, 1, ownIndex - 1, ownIndex, ownIndex + 1])]
-            .filter((i) => i >= 0 && i < count)
-            .sort((a, b) => a - b);
+  let shown: number[];
+  if (count <= LEADERBOARD_SHOW_ALL_UP_TO) {
+    shown = [...Array(count).keys()];
+  } else if (ownIndex < 0) {
+    shown = [...Array(LEADERBOARD_SHOW_ALL_UP_TO).keys()];
+  } else {
+    const picked = new Set(
+      [0, 1, ownIndex - 1, ownIndex, ownIndex + 1].filter((i) => i >= 0 && i < count),
+    );
+    for (let i = 0; picked.size < LEADERBOARD_SHOW_ALL_UP_TO; i++) picked.add(i);
+    // A single brand between two shown takes the line "1 more" would: show it.
+    for (const i of [...picked]) if (picked.has(i + 2)) picked.add(i + 1);
+    shown = [...picked].sort((a, b) => a - b);
+  }
 
   const items: LeaderboardItem[] = [];
   shown.forEach((index, n) => {

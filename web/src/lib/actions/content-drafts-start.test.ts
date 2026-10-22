@@ -69,6 +69,7 @@ vi.mock('@/lib/supabase/server', () => ({
         eq: (col: string, v: unknown) => (call.filters.push(['eq', col, v]), chain),
         in: (col: string, v: unknown) => (call.filters.push(['in', col, v]), chain),
         is: (col: string, v: unknown) => (call.filters.push(['is', col, v]), chain),
+        contains: (col: string, v: unknown) => (call.filters.push(['contains', col, v]), chain),
         order: () => chain,
         limit: () => chain,
         insert: (value: unknown) => ((call.op = 'insert'), (call.value = value), chain),
@@ -83,6 +84,7 @@ vi.mock('@/lib/supabase/server', () => ({
 }));
 
 const {
+  getDraftForPrompt,
   getOpportunityDrafts,
   createContentDraft,
   getContentOverlap,
@@ -251,6 +253,30 @@ describe('getOpportunityDrafts', () => {
     await expect(getOpportunityDrafts(BRAND, [])).resolves.toEqual({});
     await expect(getOpportunityDrafts('x', [OPPORTUNITY])).resolves.toEqual({});
     expect(calls).toEqual([]);
+  });
+});
+
+describe('getDraftForPrompt', () => {
+  it('finds the latest draft not yet published among those for the prompt', async () => {
+    reads = { content_drafts: { id: 'd7' } };
+    await expect(getDraftForPrompt(BRAND, PROMPT)).resolves.toBe('d7');
+    expect(calls).toEqual([
+      {
+        table: 'content_drafts',
+        op: 'select',
+        filters: [
+          ['eq', 'brand_id', BRAND],
+          ['contains', 'prompt_ids', [PROMPT]],
+          ['in', 'status', ['draft', 'in_review', 'ready']],
+        ],
+      },
+    ]);
+  });
+
+  it("is null when there is none, and doesn't read for an id that isn't one", async () => {
+    await expect(getDraftForPrompt(BRAND, PROMPT)).resolves.toBeNull();
+    await expect(getDraftForPrompt(BRAND, 'not-an-id')).resolves.toBeNull();
+    expect(calls).toHaveLength(1);
   });
 });
 

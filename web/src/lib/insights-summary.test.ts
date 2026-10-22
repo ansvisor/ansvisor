@@ -278,13 +278,18 @@ describe('leaderboardLines', () => {
     expect(lines(20, 5)).toEqual({ lines: [1, 2, '2 more', 5, 6, 7], hidden: 15 });
   });
 
-  it('skips nothing in between when the brand is near the top', () => {
-    expect(lines(8, 2)).toEqual({ lines: [1, 2, 3, 4], hidden: 4 });
-    expect(lines(8, 0)).toEqual({ lines: [1, 2], hidden: 6 });
+  it('shows at least five brands when the brand is near the top', () => {
+    expect(lines(8, 0)).toEqual({ lines: [1, 2, 3, 4, 5], hidden: 3 });
+    expect(lines(8, 1)).toEqual({ lines: [1, 2, 3, 4, 5], hidden: 3 });
+    expect(lines(8, 2)).toEqual({ lines: [1, 2, 3, 4, 5], hidden: 3 });
+    expect(lines(8, 3)).toEqual({ lines: [1, 2, 3, 4, 5], hidden: 3 });
   });
 
-  it('shows the brand directly ahead when last', () => {
-    expect(lines(8, 7)).toEqual({ lines: [1, 2, '4 more', 7, 8], hidden: 4 });
+  it('shows the brand directly ahead when last, and fills up from the top', () => {
+    expect(lines(8, 7)).toEqual({ lines: [1, 2, 3, '3 more', 7, 8], hidden: 3 });
+    // One brand in between is shown, not folded into "1 more".
+    expect(lines(6, 5)).toEqual({ lines: [1, 2, 3, 4, 5, 6], hidden: 0 });
+    expect(lines(20, 4)).toEqual({ lines: [1, 2, 3, 4, 5, 6], hidden: 14 });
   });
 
   it('lists short boards whole, and starts from the top without the brand', () => {
