@@ -6,9 +6,11 @@ description: |
   AI search engines (ChatGPT, Gemini, Perplexity, Claude, Copilot, Grok,
   Google AI Overviews, AI Mode), why visibility changed, how they compare
   to competitors, which sources cite them, or what to do next (Action
-  Center, content gaps, Improve suggestions, page audits). Uses the
-  Ansvisor MCP server tools (`list_brands`, `get_visibility_summary`,
-  `get_competitor_comparison`, `list_actions`, …) to fetch the data,
+  Center, content gaps, Improve suggestions, page audits), or how AI
+  talks about the brand (mentions, sentiment, what AI associates with
+  it). Uses the Ansvisor MCP server tools (`list_brands`,
+  `get_visibility_summary`, `get_competitor_comparison`,
+  `get_mentions_summary`, `list_actions`, …) to fetch the data,
   then interprets it the way a marketing analyst would — not just
   dumping numbers, but pointing at what changed and what to do about it.
   Requires the Ansvisor MCP server to be connected to the client (Claude
@@ -37,6 +39,8 @@ Activate this skill when the user asks anything in the shape of:
 - _"Did anything change recently?" / "Why did visibility drop?"_
 - _"Who are my competitors right now?" / "How do we compare?"_
 - _"Which sites does AI cite for us?"_
+- _"How is AI talking about us?" / "Why did sentiment drop on Gemini?"_
+- _"What does AI associate us with?"_
 - _"What should we work on next?" / "Did last month's work pay off?"_
 - _"Give me a daily / weekly standup on `<brand name>`."_
 
@@ -67,6 +71,32 @@ API directly from this skill (that's a different skill).
 - `totals.avgVisibility` and each competitor's `avgVisibility` are
   **deprecated** legacy averages. Don't quote them.
 
+**Mentions & sentiment** (from the Mentions tools below):
+
+- **Mentions**, as the page's _Total mentions_ counts them, are every
+  time AI names the brand (`timesNamed`), twice in one response
+  included: quote this one for "how many mentions". `mentions` is the
+  responses naming the brand at least once: the base of the **mention
+  rate** (their share of the tracked responses, `%`), net sentiment and
+  `lowSample`.
+- **Net sentiment** is the positive share minus the negative share of
+  the responses naming the brand, from −100 to +100. Quote it as a
+  signed number **without a % sign** ("net +21"). Neutral counts in the
+  total.
+- `changes` are taken as the page's cards take them: on the prompts
+  both windows answered (`changes.basis.sharedPrompts`), so adding or
+  removing prompts doesn't read as a rise or a fall. The `current` and
+  `previous` figures are the whole windows', so quote `changes` rather
+  than working a change out from them, and say how many prompts were
+  new or dropped (`newPrompts`, `droppedPrompts`) when there were some.
+  `changes.mentionsPct` is the change in times named.
+- `lowSample: true` means fewer than 20 responses naming the brand.
+  Say so, and don't read a change into it: `changes.netSentimentPoints`
+  is already `null` there, as is the mention rate's change when either
+  window has under 20 tracked responses.
+- Sentiment is measured for the **brand only**. Competitors have
+  mentions and co-mentions, not a tone.
+
 ## Tools available (from the Ansvisor MCP server)
 
 Every tool except `list_brands` and `get_site_audit_quota` needs a
@@ -92,6 +122,36 @@ timestamps (`date_from` / `date_to`).
   `competitor` or `external`.
 - **`get_ai_traffic`** — visits referred by AI engines: per platform,
   top landing pages, countries.
+
+**Mentions & sentiment**
+
+These take the Mentions page's filters: `date_from` / `date_to` (the
+last 30 days when left out), `platform` (e.g. `gemini-web`), `region`,
+`topic_id` and `search` over the prompts' text. They read the stored
+answers; no LLM is called.
+
+- **`get_mentions_summary`** — the Overview: `current` and `previous`
+  times named, mentions, mention rate, prompts with mentions, average
+  position and `sentiment` (counts, shares, `net`, `lowSample`);
+  `changes` with their `basis`; the
+  platform that moved net sentiment most and the competitors named
+  beside the brand (`headline`); `platforms[]`; `daily[]`.
+- **`list_mentions`** — the responses naming the brand, 100 a page,
+  each with sentiment, position, the competitors in the same response
+  and an `excerpt`. Filters: `sentiment`, `competitor_id` (`none` for
+  responses naming no competitor), `sort` (`newest`, `oldest`,
+  `co_mentions`, `negative`), `page`.
+- **`get_mention`** — one response in full by its `id`: text,
+  citations, competitors named, sentiment and its latest correction.
+- **`get_mention_competitors`** — each competitor's mentions, share of
+  responses, change, and how often it shares a response with the brand
+  (`sameResponseAsYou`).
+- **`get_mentions_perception`** — what AI associates with the brand:
+  `brandTerms`, `attributes` (each entity's share, in `entities`
+  order), `coMentions` and `biggestGap`.
+- **`override_mention_sentiment`** — "Sentiment is wrong": correct one
+  response's sentiment, with an optional `note`. Needs an admin or
+  manager key *(write)*.
 
 **Prompts & topics**
 
@@ -410,6 +470,48 @@ work:
    early.
 3. Summarise: how many improved, how many didn't move, and what the
    improved ones had in common.
+
+### 10. Mentions & sentiment ("how is AI talking about us?")
+
+When the user asks how AI describes the brand, why sentiment moved
+(_"why did sentiment drop on Gemini?"_), or what AI associates with it:
+
+1. Call `get_mentions_summary` for the window (30 days when `date_from`
+   is left out). Lead with `current.sentiment.net` and
+   `changes.netSentimentPoints`, then times named and mention rate.
+2. Find **where**: `headline.mover` names the platform that moved net
+   sentiment most (with its `change`); `platforms[]` has each one's
+   `netSentiment` and `netSentimentChange`. Skip platforms marked
+   `lowSample`.
+3. Find **why**: call `list_mentions` with that `platform` and
+   `sentiment: "negative"` (or `sort: "negative"`) and quote one or two
+   `excerpt`s, so the user sees what AI actually said. Call
+   `get_mention` for the full response and its citations when an excerpt
+   isn't enough.
+4. For **who AI names beside the brand**, use `get_mention_competitors`
+   (`sameResponseAsYou`, `mentionsChangePct`); for **what AI associates
+   with it**, `get_mentions_perception`: `brandTerms` with their
+   `sharePct`, and `biggestGap`, an attribute a competitor owns and the
+   brand doesn't (null when none leads by 20+ points, or when the brand
+   or the leading competitor has fewer than 20 mentions).
+5. Report it like this:
+
+   > **`<brand_name>` — how AI talks about you, last 30 days**
+   >
+   > Net sentiment **`<+n>`** (Δ `<±n>`), named in **`<rate>%`** of
+   > **`<n>`** tracked responses
+   > Most of the move is on **`<platform>`** (`<±n>`): _"`<excerpt>`"_
+   >
+   > **What it means:** `<one sentence>`
+   > **Next:** `<one suggestion>`
+
+6. If the user says a response's sentiment is wrong, offer
+   `override_mention_sentiment` with the right sentiment and a short
+   note, and call it only after they confirm. It needs an admin or
+   manager key, and every figure follows the corrected tone *(write)*.
+7. See
+   [`references/sentiment-interpretation.md`](references/sentiment-interpretation.md)
+   for when a sentiment move matters and when it's noise.
 
 ## Formatting principles
 

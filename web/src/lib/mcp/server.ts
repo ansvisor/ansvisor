@@ -1625,7 +1625,7 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
     'get_content_impact',
     {
       description:
-        "What the draft's live page earns, as the editor's Impact tab reads it: citations in AI answers, AI visits, Google clicks and the prompts citing it, against the period before. Only for a draft of a live page (method optimize, or published).",
+        "What the draft's live page earns, as the editor's Live page tab reads it: citations in AI answers, AI visits, Google clicks and the prompts citing it, against the period before. Only for a draft of a live page (method optimize, or published).",
       inputSchema: {
         draft_id: relaxedUuid.describe('Draft UUID.'),
         days: impactDays,

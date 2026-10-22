@@ -34,6 +34,7 @@ vi.mock('@/lib/supabase/server', () => ({
           if (col === 'id') byId = true;
           return chain;
         },
+        is: (col: string, v: unknown) => (filters.push([table, 'is', col, v]), chain),
         order: () => chain,
         limit: () => chain,
         upsert: async (value: unknown, options: unknown) => {
@@ -191,6 +192,8 @@ describe('getContentPlan', () => {
     expect(readAssignees).toHaveBeenCalledWith(expect.anything(), BRAND, ['u2']);
     expect(rpcCalls).toEqual([['content_plan_pages', { p_brand_id: BRAND, p_days: 7 }]]);
     expect(filters).toContainEqual(['content_opportunities', 'eq', 'type', 'owned']);
+    // An archived draft (00233) leaves the Plan: its row starts afresh.
+    expect(filters).toContainEqual(['content_drafts', 'is', 'archived_at', null]);
     expect(filters).toContainEqual([
       'content_opportunities',
       'in',

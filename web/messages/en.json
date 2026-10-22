@@ -3211,16 +3211,33 @@
       "failed": "Agent failed"
     },
     "library": {
+      "export": {
+        "button": "Export",
+        "hint": "Download the drafts listed here, with their pages",
+        "csv": "Export CSV",
+        "xlsx": "Export Excel",
+        "docx": "Export Word",
+        "failed": "Couldn't export. Try again."
+      },
+      "created": {
+        "label": "Created",
+        "all": "Any time",
+        "7d": "Last 7 days",
+        "30d": "Last 30 days",
+        "90d": "Last 90 days",
+        "empty": "Nothing in this tab was created in this period."
+      },
       "title": "Library",
       "description": "Everything you and the agents wrote or changed.",
       "selectBrand": "Select a brand to see its content.",
       "tabsLabel": "Library sections",
       "tabs": {
         "all": "All",
-        "draft": "Drafts",
+        "draft": "In progress",
         "in_review": "In review",
         "ready": "Ready",
-        "published": "Published"
+        "published": "Published",
+        "archived": "Archived"
       },
       "columns": {
         "content": "Content",
@@ -3228,9 +3245,30 @@
         "method": "Method",
         "by": "By",
         "status": "Status",
-        "score": "AEO score"
+        "created": "Created",
+        "updated": "Updated",
+        "menu": "Row actions"
       },
-      "scoreHint": "The page's AEO score, before → after the changes",
+      "rowMenu": {
+        "label": "Actions for {title}",
+        "status": "Status",
+        "archive": "Send to Archive",
+        "restore": "Restore",
+        "delete": "Delete",
+        "archived": "Archived: {title}",
+        "restored": "Restored: {title}",
+        "deleted": "Deleted: {title}",
+        "undo": "Undo",
+        "failed": "Couldn't save that. Try again.",
+        "forbidden": "Only admins and managers can archive or delete content.",
+        "newerDraft": "A newer draft does this task's work. Archive or delete it first, then restore this one."
+      },
+      "deleteDialog": {
+        "title": "Delete “{title}”?",
+        "description": "It leaves the Library for good, with its versions and suggestions. An Action Center task it was sent as stays. This can't be undone.",
+        "cancel": "Cancel",
+        "confirm": "Delete"
+      },
       "latestOnly": "Showing the {shown} changed most recently of {count}.",
       "untitled": "Untitled",
       "you": "You",
@@ -3241,10 +3279,11 @@
         "body": "Pages you and the Content Agent write or change in Ansvisor show up here."
       },
       "emptyTab": {
-        "draft": "No drafts.",
+        "draft": "Nothing in progress.",
         "in_review": "Nothing waiting for review.",
         "ready": "Nothing marked ready.",
-        "published": "Nothing published yet."
+        "published": "Nothing published yet.",
+        "archived": "Nothing archived."
       },
       "loadError": "Couldn't load the Library.",
       "retry": "Try again",
@@ -3347,8 +3386,6 @@
         "sendFailed": "The draft is in the Library, but it couldn't be sent to the Action Center.",
         "openDraft": "Open draft",
         "startAgent": "Start the agent",
-        "agentStarted": "Content Agent is drafting",
-        "agentStartedDescription": "You'll review it in Library › In review.",
         "agentErrors": {
           "ai_budget": "This month's AI usage is spent, so the agent didn't start. The draft is in the Library for you to write.",
           "no_subscription": "The agent needs an active subscription, so it didn't start. The draft is in the Library for you to write.",
@@ -3491,8 +3528,24 @@
       "markedReady": "Marked ready. Publish it on your site when you're ready.",
       "markedReadyAction": "Marked ready, and {count, plural, one {its task} other {its # tasks}} in Action AC-{no} {count, plural, one {is} other {are}} done. Publish it on your site when you're ready.",
       "agentWriting": {
-        "title": "Content Agent is writing this page",
-        "body": "It opens here for your review when it's done, usually within a minute or two. You can leave this page meanwhile; it waits in Library › In review."
+        "title": "Content Agent is working on this page",
+        "usual": "Usually a minute or two.",
+        "slow": "Taking longer than usual. If it can't finish within a few minutes, this page says so and you can try again.",
+        "leave": "You can leave this page meanwhile: the draft waits in Library › In review.",
+        "steps": {
+          "create": {
+            "read": "Read the sources and the brief",
+            "rules": "Set out the page type's rules",
+            "write": "Writing the page",
+            "review": "Opens here for you to review"
+          },
+          "optimize": {
+            "read": "Read the live page and its sources",
+            "rules": "Set aside the passages AI answers quote",
+            "write": "Suggesting changes",
+            "review": "Opens here with the suggestions to review"
+          }
+        }
       },
       "agentFailed": {
         "text": "The Content Agent couldn't finish this page. Write it yourself, or try again.",
@@ -3535,7 +3588,7 @@
         "notApplied": "{count, plural, one {# suggestion couldn't be applied} other {# suggestions couldn't be applied}}: the page changed there, or AI quotes the passage.",
         "saveFailed": "Couldn't keep the decision. Try again.",
         "htmlBlocked": "Accept or reject the {count, plural, one {# agent suggestion} other {# agent suggestions}} first, then edit as HTML.",
-        "fixRules": "Fix open rules with agent",
+        "fixRules": "Apply rules with Agent",
         "fixing": "Content Agent is working…",
         "fixed": "{count, plural, one {Content Agent suggested # change} other {Content Agent suggested # changes}} · review them in the page",
         "nothingToFix": "Content Agent found nothing it could change without new facts.",
@@ -3668,15 +3721,16 @@
         "hide": "Hide side panel",
         "openTab": "Open {tab} in the side panel",
         "tabs": {
-          "impact": "Impact",
+          "impact": "Live page",
           "brief": "Brief",
           "sources": "Sources",
           "rules": "Rules"
         }
       },
       "impact": {
-        "newPage": "This draft is a new page, not live yet, so there's nothing to measure. Impact shows when a draft optimizes a live page.",
-        "thisPage": "This page",
+        "newPage": "This draft is a new page, not live yet, so there's nothing to measure. This tab shows the live page's numbers when a draft optimizes one.",
+        "thisPage": "The live page today",
+        "notForecast": "How the live page does now, not a forecast of what this draft will get.",
         "periodLabel": "Period",
         "periods": {
           "7": "7d",
@@ -3684,7 +3738,7 @@
           "90": "90d",
           "365": "1y"
         },
-        "loadError": "Couldn't load the page's impact.",
+        "loadError": "Couldn't load the live page's numbers.",
         "retry": "Retry",
         "metrics": {
           "citations": "Citations",
@@ -3938,6 +3992,7 @@
           "measureSteps": "How to measure, as numbered steps"
         },
         "hints": {
+          "length": "A target, not a minimum: within 20% of it meets the rule. A page well over it is open, and Apply rules with Agent shortens it a few passages at a time.",
           "summary": "A short summary under the H1 that answer engines can quote.",
           "fanoutH2": "Takes the top fan-outs you keep in Sources, the most searched first, not every one.",
           "internalLinks": "Links with descriptive anchor text to your own pages.",
@@ -3973,6 +4028,10 @@
           "found": "{count} found",
           "partOf": "{count} of {of}",
           "words": "{count} words",
+          "short": "{count, number} · under",
+          "long": "{count, number} · over",
+          "shortDetail": "{count, number} characters, under {min, number}–{max, number}",
+          "longDetail": "{count, number} characters, over {min, number}–{max, number}",
           "missing": "Missing",
           "noH2": "No H2 yet",
           "needsFaq": "Needs FAQ",
@@ -3987,7 +4046,7 @@
         },
         "mineName": "My rules · {type}",
         "setPicked": "Rule set changed for this draft",
-        "agentFix": "Fix open rules with agent",
+        "agentFix": "Apply rules with Agent",
         "agentFixing": "Content Agent is working…",
         "agentFixHint": "Content Agent suggests changes for the rules not met yet, for you to review in the page",
         "fixTrace": "Fix",
@@ -4023,7 +4082,7 @@
       }
     },
     "status": {
-      "draft": "Draft",
+      "draft": "In progress",
       "in_review": "In review",
       "ready": "Ready",
       "published": "Published"
@@ -5987,9 +6046,31 @@
     "trialEndsOn": "Your free trial ends on {date}",
     "processing": "Processing...",
     "cancelSubscription": "Cancel Subscription",
-    "cancelConfirmTitle": "Cancel your subscription?",
     "cancelConfirmDescription": "Your subscription will remain active until the end of the current billing period. After that, you will lose access to paid features.",
-    "cancelConfirm": "Yes, Cancel",
+    "cancelFeedbackTitle": "Before you go, what went wrong?",
+    "cancelFeedbackDescription": "Your answer goes straight to our team. Tick what applies or tell us in your own words; both are optional.",
+    "cancelReasonsLabel": "Reasons for cancelling",
+    "cancelReasons": {
+      "too_expensive": "Too expensive",
+      "missing_feature": "Missing a feature I need",
+      "no_results": "Not seeing results",
+      "switching": "Switching to another tool",
+      "temporary": "Only needed it for a while",
+      "other": "Something else"
+    },
+    "cancelMessageLabel": "Your message",
+    "cancelMessagePlaceholder": "Tell us more (optional)",
+    "cancelWaitOffer": "<b>Give us {days} days?</b> We'll get back to you by {date} and try to put it right. Your plan stays as it is, and you can still cancel any time.",
+    "cancelWaitNeedsInput": "Tick a reason or write a message so we know what to fix.",
+    "sendAndCancel": "Send and cancel",
+    "sendAndWait": "Send and give us {days} days",
+    "cancelWaitSentTitle": "Thanks, we're on it",
+    "cancelWaitSent": "We'll get back to you by {date}. Your plan stays as it is.",
+    "cancelWaitClose": "Close",
+    "cancelFeedbackTooMany": "You've sent several messages today. Please write to our support team instead.",
+    "cancelFeedbackFailed": "Couldn't send your message. Please try again.",
+    "cancelFeedbackTooLate": "Your plan renews before we could get back to you. You can still cancel it here.",
+    "cancelFeedbackNotSent": "Your message didn't reach our team. Please write to our support team, or cancel the plan here.",
     "reactivate": "Reactivate Subscription",
     "subscriptionReactivated": "Subscription reactivated.",
     "manageBilling": "Manage Billing",

@@ -6,9 +6,13 @@ import messages from '../../../messages/en.json';
 import { toast } from 'sonner';
 import { RoleProvider } from '@/components/providers/role-provider';
 import type { TeamRole } from '@/components/providers/role-provider';
+import { sendCancelFeedback } from '@/lib/actions/cancel-feedback';
 import { PlanSwitcher } from './plan-switcher';
 
 vi.mock('sonner', () => ({ toast: Object.assign(vi.fn(), { success: vi.fn(), error: vi.fn() }) }));
+vi.mock('@/lib/actions/cancel-feedback', () => ({
+  sendCancelFeedback: vi.fn(async () => ({ ok: true })),
+}));
 
 (
   globalThis as typeof globalThis & {
@@ -281,5 +285,33 @@ describe('buying during the free trial', () => {
     expect(onUpdate).not.toHaveBeenCalled();
     // The dialog stays open to try again.
     expect(document.body.textContent).toContain('Buy Starter now?');
+  });
+});
+
+describe('cancelling', () => {
+  it('asks what went wrong first, then cancels at the end of the period and tells the team', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () =>
+        Response.json({ cancelAtPeriodEnd: true, currentPeriodEnd: '2026-11-20T00:00:00Z' }),
+      ),
+    );
+    await render('growth');
+    await click('Cancel Subscription');
+    const dialog = document.querySelector('[role="dialog"]')!;
+    expect(dialog.textContent).toContain('Before you go, what went wrong?');
+    await act(async () => {
+      [...dialog.querySelectorAll('button')]
+        .find((b) => b.textContent?.trim() === 'Cancel Subscription')!
+        .click();
+    });
+    expect(fetch).toHaveBeenCalledWith('/api/stripe/subscription', { method: 'DELETE' });
+    expect(onUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        cancelAtPeriodEnd: true,
+        currentPeriodEnd: '2026-11-20T00:00:00Z',
+      }),
+    );
+    expect(sendCancelFeedback).toHaveBeenCalledWith({ reasons: [], message: '', choice: 'cancel' });
   });
 });
