@@ -20,6 +20,7 @@ let container: HTMLDivElement;
 let root: Root;
 const handlers = {
   start: vi.fn(),
+  retry: vi.fn(),
   openDraft: vi.fn(),
   plan: vi.fn(),
   openPlan: vi.fn(),
@@ -101,6 +102,17 @@ describe('OpportunityRowMenu', () => {
     expect(labels(items).slice(0, 2)).toEqual(['Open draft', 'Open in Plan']);
     await act(async () => items[0].click());
     expect(handlers.openDraft).toHaveBeenCalledWith('d7');
+  });
+
+  it('offers to check again when the draft lookup failed, never Start', async () => {
+    const items = await open(
+      props({ editor: { ...props().editor, lookupFailed: true, onRetry: handlers.retry } }),
+    );
+    expect(labels(items)[0]).toBe("Couldn't check for a draft · Retry");
+    expect(labels(items)).not.toContain('Send to Editor');
+    await act(async () => items[0].click());
+    expect(handlers.retry).toHaveBeenCalled();
+    expect(handlers.start).not.toHaveBeenCalled();
   });
 
   it('waits for its lookups, and leaves out what the row has no use for', async () => {

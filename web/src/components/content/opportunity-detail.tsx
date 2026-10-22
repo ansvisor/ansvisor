@@ -132,12 +132,18 @@ export function OpportunityDetail({
   id,
   inDrawer = false,
   onChanged,
+  onPrioritized,
 }: {
   id: string;
   /** In the list's drawer: no back link, and the layout follows the drawer's width. */
   inDrawer?: boolean;
   /** Called after any change to the opportunity, so the list can refresh. */
   onChanged?: () => void;
+  /**
+   * Called once Send to Plan marked it as a priority: the list keeps its
+   * rows' marks (they aren't read again on a refresh), so its menu agrees.
+   */
+  onPrioritized?: (id: string) => void;
 }) {
   const t = useTranslations('content');
   const assetTypeLabel = useAssetTypeLabel();
@@ -151,23 +157,38 @@ export function OpportunityDetail({
   const [quota, setQuota] = useState<BriefQuota | null>(null);
   const [fanoutQueries, setFanoutQueries] = useState<FanoutSubQuery[]>([]);
   const router = useRouter();
-  const activeBrand = useBrandStore((s) => s.brands.find((b) => b.id === s.activeBrandId));
+  // Start's page types are the opportunity's brand's, which may not be the
+  // active one (/dashboard/content/[id] opens any of the org's brands).
+  const opportunityBrand = useBrandStore((s) =>
+    s.brands.find((b) => b.id === (opportunity?.brandId ?? s.activeBrandId)),
+  );
   // Send to Editor: Start for this opportunity, over the panel.
   const [contentPreset, setContentPreset] = useState<DialogPreset | null>(null);
-  // The draft being written for it, opened instead of starting another.
-  const [draft, setDraft] = useState<{ opportunityId: string; id: string | null } | null>(null);
+  // The draft being written for it, opened instead of starting another. A
+  // failed read is not "no draft": it offers to check again.
+  const [draft, setDraft] = useState<{
+    opportunityId: string;
+    id: string | null;
+    failed: boolean;
+  } | null>(null);
+  const [draftAttempt, setDraftAttempt] = useState(0);
   const brandId = opportunity?.brandId;
   useEffect(() => {
     if (!brandId) return;
     let cancelled = false;
     getOpportunityDrafts(brandId, [id]).then(
-      (drafts) => !cancelled && setDraft({ opportunityId: id, id: drafts[id] ?? null }),
-      () => !cancelled && setDraft({ opportunityId: id, id: null }),
+      (drafts) =>
+        !cancelled && setDraft({ opportunityId: id, id: drafts[id] ?? null, failed: false }),
+      () => !cancelled && setDraft({ opportunityId: id, id: null, failed: true }),
     );
     return () => {
       cancelled = true;
     };
-  }, [brandId, id]);
+  }, [brandId, id, draftAttempt]);
+  const retryDraft = () => {
+    setDraft(null);
+    setDraftAttempt((n) => n + 1);
+  };
   // Send to Plan: whether its Plan row is a priority already (admins and
   // managers mark Plan rows).
   const { canManage } = useUserRole();
@@ -188,6 +209,7 @@ export function OpportunityDetail({
     try {
       await setPlanRowPriority(brandId, `opportunity:${id}`, true);
       setPriority({ opportunityId: id, on: true });
+      onPrioritized?.(id);
       toast.success(t('sentToPlan'), {
         action: { label: t('openPlan'), onClick: () => router.push('/dashboard/content/plan') },
       });
@@ -529,7 +551,10 @@ export function OpportunityDetail({
             onGenerate: () => void handleGenerateBrief(),
           }}
           content={{
-            draftId: draft?.opportunityId === opportunity.id ? draft.id : undefined,
+            draftId:
+              draft?.opportunityId === opportunity.id && !draft.failed ? draft.id : undefined,
+            lookupFailed: draft?.opportunityId === opportunity.id && draft.failed,
+            onRetry: retryDraft,
             canStart: canWriteOpportunity(opportunity),
             onStart: () => setContentPreset(opportunityStart(opportunity)),
             onOpenDraft: (draftId) => router.push(contentEditorPath(draftId)),
@@ -877,7 +902,7 @@ export function OpportunityDetail({
         open={contentPreset !== null}
         onOpenChange={(open) => !open && setContentPreset(null)}
         brandId={opportunity.brandId}
-        siteType={siteTypeOf(activeBrand ?? {})}
+        siteType={siteTypeOf(opportunityBrand ?? {})}
         preset={contentPreset}
       />
     </div>

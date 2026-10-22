@@ -100,6 +100,7 @@ import {
   Pause,
   Play,
   Lightbulb,
+  RotateCw,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
@@ -188,6 +189,7 @@ import {
   type SortDir,
 } from './prompt-sort';
 import { BulkActionBar } from './_bulk-action-bar';
+import { promptsTableState } from './table-state';
 import { formatCompactNumber, formatDate, formatNumber } from '@/lib/format';
 import { usePagination, TablePager } from '@/components/table-pager';
 import { PromptPositionsSheet } from '@/components/prompts/prompt-positions-sheet';
@@ -1263,6 +1265,8 @@ export default function PromptsPage() {
   const [visibility, setVisibility] = useState<Record<string, PromptVisibilitySummary>>({});
   const [positions, setPositions] = useState<Record<string, PromptPositionCell>>({});
   const [loading, setLoading] = useState(true);
+  // The last read failed: the table says so, rather than that there are no prompts.
+  const [loadFailed, setLoadFailed] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
   const [analysisProgress, setAnalysisProgress] = useState<{
     done: number;
@@ -1282,6 +1286,7 @@ export default function PromptsPage() {
   const activeBrandId = useBrandStore((s) => s.activeBrandId);
   const tCommon = useTranslations('common');
   const tNav = useTranslations('nav');
+  const tPrompts = useTranslations('prompts');
   const activeBrand = useBrandStore(
     (s) => s.brands.find((brand) => brand.id === s.activeBrandId) ?? null,
   );
@@ -1467,6 +1472,7 @@ export default function PromptsPage() {
       }
 
       setLoading(true);
+      setLoadFailed(false);
       try {
         // One consolidated server action: Next.js queues client-fired server
         // actions sequentially, so the old three separate calls cost their
@@ -1487,15 +1493,17 @@ export default function PromptsPage() {
         if (page.volumesDegraded) {
           toast.warning('Volume data is temporarily unavailable — showing prompts without it.');
         }
+        if (page.visibilityDegraded) toast.warning(tPrompts('visibilityDegraded'));
       } catch (err) {
         if (isCancelled?.()) return;
         console.error('Failed to load prompt data:', err);
+        setLoadFailed(true);
         toast.error('Failed to load prompt data');
       } finally {
         if (!isCancelled?.()) setLoading(false);
       }
     },
-    [activeBrandId, range, regionFilter],
+    [activeBrandId, range, regionFilter, tPrompts],
   );
 
   useEffect(() => {
@@ -2045,6 +2053,8 @@ export default function PromptsPage() {
               )}
               <AllPromptsTab
                 loading={loading}
+                failed={loadFailed}
+                onRetry={() => void loadData()}
                 prompts={allPrompts}
                 activeBrandId={activeBrandId}
                 volumeByPromptId={volumeByPromptId}
@@ -2662,6 +2672,8 @@ const WORK_FILTER_LABELS: Record<string, string> = {
 
 function AllPromptsTab({
   loading,
+  failed,
+  onRetry,
   prompts: allRows,
   activeBrandId,
   volumeByPromptId,
@@ -2678,6 +2690,9 @@ function AllPromptsTab({
   onChanged,
 }: {
   loading: boolean;
+  /** The last read failed: say so and offer to read again, never "No prompts yet". */
+  failed: boolean;
+  onRetry: () => void;
   prompts: Prompt[];
   activeBrandId: string;
   volumeByPromptId: Map<string, PromptVolume>;
@@ -2702,6 +2717,7 @@ function AllPromptsTab({
   onChanged: () => void;
 }) {
   const tCommon = useTranslations('common');
+  const tPrompts = useTranslations('prompts');
   // One tooltip for every prompt and topic the table cuts short.
   const fullText = useMemo(() => createClampedTextHandle(), []);
   const tUsage = useTranslations('prompts.usage');
@@ -3331,7 +3347,8 @@ function AllPromptsTab({
     });
   }, []);
 
-  if (loading) {
+  const state = promptsTableState({ loading, failed, rows: prompts.length });
+  if (state === 'loading') {
     return (
       <div className="flex items-center justify-center py-10">
         <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
@@ -3339,7 +3356,22 @@ function AllPromptsTab({
     );
   }
 
-  if (prompts.length === 0) {
+  if (state === 'failed') {
+    return (
+      <Card>
+        <CardContent className="py-14 text-center text-sm">
+          <AlertCircle className="mx-auto h-9 w-9 text-destructive/60" />
+          <p className="mt-2 font-medium">{tPrompts('loadError')}</p>
+          <Button className="mt-4 gap-2" size="sm" variant="outline" onClick={onRetry}>
+            <RotateCw className="h-4 w-4" />
+            {tCommon('retry')}
+          </Button>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (state === 'empty') {
     return (
       <Card>
         <CardContent className="flex flex-col items-center justify-center py-16 gap-4">

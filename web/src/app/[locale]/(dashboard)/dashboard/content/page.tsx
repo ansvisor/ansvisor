@@ -242,14 +242,16 @@ function KpiCard({
   icon: Icon,
   value,
   sub,
+  className,
 }: {
   title: string;
   icon: React.ElementType;
   value: React.ReactNode;
   sub: React.ReactNode;
+  className?: string;
 }) {
   return (
-    <Card>
+    <Card className={className}>
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-1">
         <CardTitle className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
           {title}
@@ -499,25 +501,33 @@ export default function ContentPage() {
   const router = useRouter();
   const activeBrand = useBrandStore((s) => s.brands.find((b) => b.id === s.activeBrandId));
   const [contentPreset, setContentPreset] = useState<DialogPreset | null>(null);
-  // The drafts being written for the rows on screen, which open instead.
+  // The drafts being written for the rows on screen, which open instead. A
+  // failed read is not "no draft": the rows offer to check again, so Start
+  // never writes a second draft for the same opportunity.
   const shownIds = opportunities.map((o) => o.id).join(',');
-  const [drafts, setDrafts] = useState<{ key: string; byOpportunity: Record<string, string> }>({
-    key: '',
-    byOpportunity: {},
-  });
+  const [drafts, setDrafts] = useState<{
+    key: string;
+    byOpportunity: Record<string, string>;
+    failed: boolean;
+  }>({ key: '', byOpportunity: {}, failed: false });
+  const [draftsAttempt, setDraftsAttempt] = useState(0);
   useEffect(() => {
     if (!activeBrandId || !shownIds) return;
     let cancelled = false;
     getOpportunityDrafts(activeBrandId, shownIds.split(',')).then(
-      (byOpportunity) => !cancelled && setDrafts({ key: shownIds, byOpportunity }),
-      () => !cancelled && setDrafts({ key: shownIds, byOpportunity: {} }),
+      (byOpportunity) => !cancelled && setDrafts({ key: shownIds, byOpportunity, failed: false }),
+      () => !cancelled && setDrafts({ key: shownIds, byOpportunity: {}, failed: true }),
     );
     return () => {
       cancelled = true;
     };
-  }, [activeBrandId, shownIds]);
+  }, [activeBrandId, shownIds, draftsAttempt]);
   // Null until the rows' drafts are known: their button waits.
-  const draftsShown = drafts.key === shownIds ? drafts.byOpportunity : null;
+  const draftsShown = drafts.key === shownIds ? drafts : null;
+  const retryDrafts = () => {
+    setDrafts((d) => ({ ...d, key: '' }));
+    setDraftsAttempt((n) => n + 1);
+  };
   // Send to Plan: which rows are a priority in the Content plan already.
   const { canManage } = useUserRole();
   const [priorities, setPriorities] = useState<{ key: string; ids: string[] }>({
@@ -536,11 +546,14 @@ export default function ContentPage() {
     };
   }, [activeBrandId, shownIds, canManage]);
   const prioritiesShown = priorities.key === shownIds ? priorities.ids : null;
+  // A row marked here or from the panel: its menu says Open in Plan then.
+  const markPrioritized = (id: string) =>
+    setPriorities((p) => (p.ids.includes(id) ? p : { ...p, ids: [...p.ids, id] }));
   const handleSendToPlan = async (id: string) => {
     if (!activeBrandId) return;
     try {
       await setPlanRowPriority(activeBrandId, `opportunity:${id}`, true);
-      setPriorities((p) => ({ ...p, ids: [...p.ids, id] }));
+      markPrioritized(id);
       toast.success(t('sentToPlan'), {
         action: { label: t('openPlan'), onClick: () => router.push('/dashboard/content/plan') },
       });
@@ -1084,13 +1097,13 @@ export default function ContentPage() {
         <>
           <div
             className={cn(
-              'grid grid-cols-2 gap-4 sm:grid-cols-4',
-              hasContentQuota(contentUsage) && 'xl:grid-cols-[1.4fr_repeat(4,minmax(0,1fr))]',
+              'grid grid-cols-2 gap-4 sm:grid-cols-3',
+              hasContentQuota(contentUsage) && 'xl:grid-cols-[1.4fr_repeat(3,minmax(0,1fr))]',
             )}
           >
             <ContentUsageCard
               usage={contentUsage}
-              className="col-span-2 sm:col-span-4 xl:col-span-1"
+              className="col-span-2 sm:col-span-3 xl:col-span-1"
             />
             <KpiCard
               title={t('kpi.total')}
@@ -1108,17 +1121,13 @@ export default function ContentPage() {
               value={aggregates.highImpactCount}
               sub={t('kpi.opportunities')}
             />
+            {/* Two to a row on a phone: the third takes the row's width. */}
             <KpiCard
               title={t('kpi.avgScore')}
               icon={BarChart3}
               value={aggregates.avgScore}
               sub={t('kpi.outOf100')}
-            />
-            <KpiCard
-              title={t('kpi.sentToWorkflow')}
-              icon={Send}
-              value={aggregates.sentCount}
-              sub={t('kpi.sentOrInProgress')}
+              className="col-span-2 sm:col-span-1"
             />
           </div>
 
@@ -1667,7 +1676,12 @@ export default function ContentPage() {
                         <OpportunityRowMenu
                           title={opp.title}
                           editor={{
-                            draftId: draftsShown ? (draftsShown[opp.id] ?? null) : undefined,
+                            draftId:
+                              draftsShown && !draftsShown.failed
+                                ? (draftsShown.byOpportunity[opp.id] ?? null)
+                                : undefined,
+                            lookupFailed: draftsShown?.failed ?? false,
+                            onRetry: retryDrafts,
                             canStart: canWriteOpportunity(opp),
                             onStart: () => setContentPreset(opportunityStart(opp)),
                             onOpenDraft: (draftId) => router.push(contentEditorPath(draftId)),
@@ -1751,6 +1765,7 @@ export default function ContentPage() {
                 id={openOpportunityId}
                 inDrawer
                 onChanged={() => loadData(true)}
+                onPrioritized={markPrioritized}
               />
             )}
           </div>

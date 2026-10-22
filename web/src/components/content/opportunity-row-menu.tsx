@@ -9,6 +9,7 @@ import {
   ListPlus,
   Loader2,
   MoreHorizontal,
+  RotateCcw,
   Send,
   X,
 } from 'lucide-react';
@@ -37,9 +38,15 @@ export function OpportunityRowMenu({
 }: {
   /** The opportunity's title, naming the menu for screen readers. */
   title: string;
-  /** The draft written for it (undefined while looked up), or Start for one when `canStart`. */
+  /**
+   * The draft written for it (undefined while looked up), or Start for one
+   * when `canStart`. A lookup that failed offers to check again instead of
+   * Start, so it never turns into a second draft.
+   */
   editor: {
     draftId: string | null | undefined;
+    lookupFailed?: boolean;
+    onRetry?: () => void;
     canStart: boolean;
     onStart: () => void;
     onOpenDraft: (draftId: string) => void;
@@ -63,7 +70,12 @@ export function OpportunityRowMenu({
         <MoreHorizontal className="h-4 w-4" />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-52">
-        {draftId ? (
+        {editor.lookupFailed ? (
+          <DropdownMenuItem className="gap-2" onClick={editor.onRetry}>
+            <RotateCcw className="h-3.5 w-3.5" />
+            {t('draftCheckFailed')}
+          </DropdownMenuItem>
+        ) : draftId ? (
           <DropdownMenuItem className="gap-2" onClick={() => editor.onOpenDraft(draftId)}>
             <FileText className="h-3.5 w-3.5" />
             {t('openDraft')}

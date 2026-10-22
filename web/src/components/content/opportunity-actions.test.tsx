@@ -20,6 +20,7 @@ const handlers = {
   send: vi.fn(),
   brief: vi.fn(),
   start: vi.fn(),
+  retry: vi.fn(),
   openDraft: vi.fn(),
   plan: vi.fn(),
   openPlan: vi.fn(),
@@ -136,6 +137,20 @@ describe('OpportunityActions', () => {
     expect(handlers.export).toHaveBeenCalledWith('docx');
   });
 
+  it('offers to check again when the draft lookup failed, never Start', async () => {
+    await render(
+      props({ content: { ...props().content, lookupFailed: true, onRetry: handlers.retry } }),
+    );
+    expect(front()).toEqual([
+      'Send to Actions',
+      'Generate Brief',
+      "Couldn't check for a draft · Retry",
+    ]);
+    await act(async () => button("Couldn't check for a draft · Retry").click());
+    expect(handlers.retry).toHaveBeenCalled();
+    expect(handlers.start).not.toHaveBeenCalled();
+  });
+
   it('keeps the rest in the "…" menu', async () => {
     await render(props());
     const items = await openMenu();
@@ -147,6 +162,10 @@ describe('OpportunityActions', () => {
       'Mark as reviewed',
       'Dismiss',
     ]);
+    // Another angle says what it does on hover.
+    expect(items[1].getAttribute('title')).toBe(
+      'Suggest one more opportunity for the same need, with a different angle',
+    );
     await act(async () => items[5].click());
     expect(handlers.dismiss).toHaveBeenCalled();
   });
