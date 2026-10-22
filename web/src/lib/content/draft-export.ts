@@ -496,9 +496,10 @@ export function libraryWorkbook(items: LibraryExportItem[]): Sheet<Blob>[] {
         ...libraryRows(items).map((row) =>
           LIBRARY_EXPORT_HEADERS.map((header) => {
             const value = row[header];
-            return typeof value === 'string' && value.length > CELL_LIMIT
-              ? `${value.slice(0, CELL_LIMIT - 1)}…`
-              : value;
+            if (typeof value !== 'string') return value;
+            const cell = value.length > CELL_LIMIT ? `${value.slice(0, CELL_LIMIT - 1)}…` : value;
+            // A page is a block a line: wrapped, so Excel doesn't run them together.
+            return cell.includes('\n') ? { value: cell, wrap: true } : cell;
           }),
         ),
       ],

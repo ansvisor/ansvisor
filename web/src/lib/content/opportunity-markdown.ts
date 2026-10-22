@@ -1,4 +1,9 @@
 import type { ContentBrief, ContentOpportunity } from '@/types';
+import {
+  formatEstimateRange,
+  snapshotVolumeEstimate,
+  type VolumeEstimate,
+} from '@/lib/volume-estimate';
 
 /** `blog_post` → `Blog post`. */
 function humanize(slug: string): string {
@@ -42,14 +47,30 @@ function section(title: string | null, lines: Maybe<OpportunityLine>[]): Opportu
   return { title, lines: lines.filter((l): l is OpportunityLine => !!l) };
 }
 
+/**
+ * The AI volume an opportunity kept when it was made or last updated, as a
+ * low estimate (PROMPT-013): what shows when its prompts' current estimates
+ * can't be read. Null when it kept none.
+ */
+export function keptVolume(opportunity: ContentOpportunity): VolumeEstimate | null {
+  const kept = opportunity.sourceData.estAiVolume;
+  return kept && kept > 0 ? snapshotVolumeEstimate(kept) : null;
+}
+
 export function opportunityDocument(
   opportunity: ContentOpportunity,
   brief: ContentBrief | null,
   fanoutQueries: { query: string }[] = [],
   /** An asset's type as the page names it (useAssetTypeLabel); else its key, humanized. */
   assetTypeLabel: (type: string) => string | null = () => null,
+  /**
+   * Its prompts' current AI volume, summed (PROMPT-013); else the volume kept
+   * when it was made or last updated, as an estimate too.
+   */
+  volume?: VolumeEstimate | null,
 ): OpportunityDocument {
   const sd = opportunity.sourceData;
+  const estimate = volume ?? keptVolume(opportunity);
   const sections: OpportunitySection[] = [];
 
   sections.push(
@@ -117,7 +138,15 @@ export function opportunityDocument(
       field('Related prompt', sd.promptText),
       field('Cluster', sd.clusterLabel),
       field('Topic', sd.topicName),
-      sd.estAiVolume != null && field('Est. AI volume', fmt(sd.estAiVolume)),
+      estimate && field('Est. AI volume', `${formatEstimateRange(estimate)}/mo`),
+      estimate &&
+        field(
+          'Volume type',
+          estimate.basis === 'snapshot'
+            ? 'Estimate, kept when it was made or last updated'
+            : 'Estimate',
+        ),
+      estimate && field('Volume confidence', humanize(estimate.confidence)),
       sd.visibilityScore != null && field('Visibility', `${Math.round(sd.visibilityScore)}%`),
       sd.competitorGap != null && field('Competitor gap', `${Math.round(sd.competitorGap)}%`),
       field('Intent', sd.intent),
@@ -189,8 +218,9 @@ export function opportunityToMarkdown(
   fanoutQueries: { query: string }[] = [],
   /** An asset's type as the page names it (useAssetTypeLabel); else its key, humanized. */
   assetTypeLabel: (type: string) => string | null = () => null,
+  volume?: VolumeEstimate | null,
 ): string {
-  const doc = opportunityDocument(opportunity, brief, fanoutQueries, assetTypeLabel);
+  const doc = opportunityDocument(opportunity, brief, fanoutQueries, assetTypeLabel, volume);
   const parts = [
     [`# ${doc.title}`, doc.description].filter(Boolean).join('\n\n'),
     ...doc.sections.map((s) => {

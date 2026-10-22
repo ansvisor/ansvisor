@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { ContentBrief, ContentOpportunity } from '@/types';
+import { sumEstimates, keywordVolumeEstimate } from '@/lib/volume-estimate';
 import { opportunityToMarkdown } from './opportunity-markdown';
 
 const base: ContentOpportunity = {
@@ -81,9 +82,25 @@ describe('opportunityToMarkdown', () => {
     expect([...positions].sort((a, b) => a - b)).toEqual(positions);
 
     expect(md).toContain('- Flat feet shoe comparison (Comparison page, Owned, Expand)');
-    expect(md).toContain('- Est. AI volume: 18,660');
+    // No current estimates given: the volume kept on it, half to twice.
+    expect(md).toContain(
+      '- Est. AI volume: 9.3–38k/mo\n- Volume type: Estimate, kept when it was made or last updated\n- Volume confidence: Low',
+    );
+    expect(md).not.toContain('18,660');
     expect(md).toContain('- Visibility: 0%');
     expect(md).toContain('1. What flat feet need\n   - Arch support\n   - Stability\n2. The shoes');
+  });
+
+  it("writes its prompts' current estimate when the page has it (PROMPT-013)", () => {
+    const now = new Date('2026-10-20T00:00:00Z');
+    const volume = sumEstimates([
+      keywordVolumeEstimate(10000, 0.5, '2026-10-01T00:00:00Z', now),
+      keywordVolumeEstimate(6000, 0.5, '2026-10-01T00:00:00Z', now),
+    ]);
+    const md = opportunityToMarkdown(base, brief, [], undefined, volume);
+    expect(md).toContain(
+      '- Est. AI volume: 5.9–10.1k/mo\n- Volume type: Estimate\n- Volume confidence: Medium',
+    );
   });
 
   it("names each asset's type as the page does", () => {

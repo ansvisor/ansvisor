@@ -15,6 +15,7 @@ import { opportunityPageType } from './asset-types';
 import { detectPageType, type SiteType } from './page-types';
 import type { DraftMethod, PageType } from './drafts';
 import { pageKey } from './sources';
+import type { PriorityLevel } from '@/lib/action-center/priority';
 
 /** The Plan's periods: a week, a month, a quarter. */
 export const PLAN_PERIODS = [7, 30, 90] as const;
@@ -125,72 +126,143 @@ export const MIN_TOP_CITATIONS = 5;
 export const MAX_PROTECT = 5;
 export const MAX_ROWS = 50;
 
-const DROP_BASE = 40;
-const PROTECT_BASE = 20;
-const MAX_PROTECT_SCORE = 60;
-/** A drop's points: a fifth of the drop in percent, and the citations lost (up to 40). */
-function citationsDownPoints(pct: number, lost: number) {
-  return { pct: Math.round(pct / 5), lost: Math.min(40, lost) };
+/**
+ * The Priority Score (spec v2: the Action Center's model, AC-006 priority.js):
+ * 0–100 from four factors, each 0–1 and weighted. An unknown value counts as
+ * neutral, not as zero, so a brand without AI traffic data, or a page still
+ * to write, isn't pushed down for what nobody can know yet.
+ */
+export const SCORE_WEIGHTS = { severity: 40, opportunity: 30, pageValue: 20, citations: 10 };
+
+/**
+ * The Plan badge's level from its score: its own cut-offs, not the Action
+ * Center's 90/75/50. Under SCORE_WEIGHTS a new page tops out at 60, an
+ * existing page with no drop at 74 and a top page with no opportunity at 50,
+ * so on those nearly every row read Low. Here a new page reads High from an
+ * opportunity score of about 82, an existing page can too, a top page with
+ * no opportunity tops out at Medium (a defend opportunity can reach High),
+ * and only a page losing citations can be Critical.
+ */
+export const PLAN_LEVEL_CUTOFFS = { critical: 75, high: 55, medium: 40 } as const;
+
+export function planPriorityLevel(score: number): PriorityLevel {
+  if (score >= PLAN_LEVEL_CUTOFFS.critical) return 'critical';
+  if (score >= PLAN_LEVEL_CUTOFFS.high) return 'high';
+  if (score >= PLAN_LEVEL_CUTOFFS.medium) return 'medium';
+  return 'low';
+}
+
+/** How bad the signal is, by what the row is (a drop is reckoned, 0.6–1). */
+const SEVERITY = { create: 0.5, opportunity: 0.35, protect: 0.2 } as const;
+/** A page row with no opportunity behind it: neither good nor bad. */
+const NO_OPPORTUNITY = 0.4;
+/** A page still to write, or a brand with no AI traffic data. */
+const NEUTRAL_PAGE_VALUE = 0.5;
+/** AI visits in the period that count in full (on a log scale), and citations. */
+const FULL_VISITS = 1000;
+const FULL_CITATIONS = 30;
+/** Citations lost that make a drop as bad as losing them all. */
+const FULL_LOST = 20;
+
+/** A drop's severity: 0.6, and up to 0.4 more for its share or the citations lost, whichever says more. */
+export function dropSeverity(pct: number, lost: number): number {
+  return Math.min(1, 0.6 + 0.4 * Math.max(pct / 100, Math.min(1, lost / FULL_LOST)));
+}
+/** A page's AI visits as value: log10(1 + visits) against FULL_VISITS'. */
+export function visitsValue(visits: number): number {
+  return Math.min(1, Math.log10(1 + Math.max(0, visits)) / Math.log10(1 + FULL_VISITS));
 }
 
 /**
- * The rank of each kind of row, on the opportunities' 0–100 scale: an
- * opportunity keeps its own score; a page losing citations ranks by how much
- * it lost, the citations more than the share (40 + a fifth of the drop in
- * percent + up to 40 for the citations lost), so 200 → 118 outranks 3 → 0;
- * a top page by how much it is cited (20 + citations, at most 60), so
- * protecting comes after the work to do.
+ * What a row's score is made of, for the Priority Score's breakdown: each
+ * factor's value (0–1) and the points it gives (value × weight, to one
+ * decimal). The score is their sum.
  */
-export function citationsDownScore(pct: number, lost: number): number {
-  const points = citationsDownPoints(pct, lost);
-  return Math.min(100, DROP_BASE + points.pct + points.lost);
-}
-export function protectScore(citations: number): number {
-  return Math.min(MAX_PROTECT_SCORE, PROTECT_BASE + citations);
+export type PlanScorePart = { value: number; points: number; max: number } & (
+  | { kind: 'severity'; reason: 'drop'; pct: number; lost: number }
+  | { kind: 'severity'; reason: 'create' | 'opportunity' | 'protect' }
+  | { kind: 'opportunity'; score: number | null }
+  | { kind: 'pageValue'; reason: 'visits'; visits: number }
+  | { kind: 'pageValue'; reason: 'newPage' | 'unknown' }
+  | { kind: 'citations'; citations: number }
+);
+
+/** A part's own fields: its points and weight follow from them. */
+type PartFields = PlanScorePart extends infer P
+  ? P extends PlanScorePart
+    ? Omit<P, 'points' | 'max'>
+    : never
+  : never;
+/** To one decimal: whole points would tie pages a citation apart. */
+const round1 = (n: number) => Math.round(n * 10) / 10;
+function part(fields: PartFields): PlanScorePart {
+  const max = SCORE_WEIGHTS[fields.kind];
+  return { ...fields, max, points: round1(fields.value * max) } as PlanScorePart;
 }
 
-/**
- * What a row's score is made of, for the Priority Score's breakdown: the
- * opportunity's own score; for a page losing citations, the base and the
- * points for the drop and the citations lost; for a top page, the base and
- * its citations. An opportunity whose page is losing ground has both, and
- * ranks by the higher. `max` is where a score stops.
- */
-export type PlanScorePart =
-  | { kind: 'opportunity'; score: number }
-  | {
-      kind: 'citationsDown';
-      base: number;
-      pct: number;
-      pctPoints: number;
-      lost: number;
-      lostPoints: number;
-      max: number;
-      score: number;
-    }
-  | { kind: 'protect'; base: number; citations: number; max: number; score: number };
-
-function citationsDownPart(drop: { pct: number; lost: number }): PlanScorePart {
-  const points = citationsDownPoints(drop.pct, drop.lost);
-  return {
-    kind: 'citationsDown',
-    base: DROP_BASE,
-    pct: drop.pct,
-    pctPoints: points.pct,
-    lost: drop.lost,
-    lostPoints: points.lost,
-    max: 100,
-    score: citationsDownScore(drop.pct, drop.lost),
-  };
+/** The score: the parts' points, at most 100, to one decimal (shown whole). */
+export function scoreOf(parts: PlanScorePart[]): number {
+  return round1(
+    Math.min(
+      100,
+      parts.reduce((sum, p) => sum + p.points, 0),
+    ),
+  );
 }
-function protectPart(citations: number): PlanScorePart {
-  return {
-    kind: 'protect',
-    base: PROTECT_BASE,
-    citations,
-    max: MAX_PROTECT_SCORE,
-    score: protectScore(citations),
-  };
+
+/** The four parts of a row's score, from what the row is and the page it works on. */
+function scoreParts({
+  action,
+  drop,
+  opportunityScore,
+  page,
+  trafficKnown,
+}: {
+  action: PlanAction;
+  drop: { pct: number; lost: number } | null;
+  /** The opportunity's own score; null for a page row with none. */
+  opportunityScore: number | null;
+  /** The page as AI cites it; absent for a new page, or one not cited. */
+  page: PlanPage | undefined;
+  /** Whether the brand has AI traffic data at all. */
+  trafficKnown: boolean;
+}): PlanScorePart[] {
+  const create = action === 'create';
+  return [
+    drop
+      ? part({
+          kind: 'severity',
+          reason: 'drop',
+          pct: drop.pct,
+          lost: drop.lost,
+          value: dropSeverity(drop.pct, drop.lost),
+        })
+      : part({
+          kind: 'severity',
+          reason: create ? 'create' : action === 'protect' ? 'protect' : 'opportunity',
+          value: SEVERITY[create ? 'create' : action === 'protect' ? 'protect' : 'opportunity'],
+        }),
+    part({
+      kind: 'opportunity',
+      score: opportunityScore,
+      value: opportunityScore === null ? NO_OPPORTUNITY : opportunityScore / 100,
+    }),
+    create
+      ? part({ kind: 'pageValue', reason: 'newPage', value: NEUTRAL_PAGE_VALUE })
+      : trafficKnown && page
+        ? part({
+            kind: 'pageValue',
+            reason: 'visits',
+            visits: page.aiVisits,
+            value: visitsValue(page.aiVisits),
+          })
+        : part({ kind: 'pageValue', reason: 'unknown', value: NEUTRAL_PAGE_VALUE }),
+    part({
+      kind: 'citations',
+      citations: create ? 0 : (page?.citations.cur ?? 0),
+      value: create ? 0 : Math.min(1, (page?.citations.cur ?? 0) / FULL_CITATIONS),
+    }),
+  ];
 }
 
 const CREATE_DECISIONS = new Set(['create']);
@@ -239,6 +311,10 @@ export function buildPlan({
   const rows: PlanRow[] = [];
   const pagesTaken = new Set<string>();
 
+  // No page with an AI visit: the brand has no AI traffic data (no
+  // Analytics, no snippet), so a page's value is unknown, not nothing.
+  const trafficKnown = pages.some((p) => p.aiVisits > 0);
+
   for (const o of opportunities) {
     const create = !o.decision || CREATE_DECISIONS.has(o.decision) || !o.targetPage;
     const key = o.targetPage ? pageKey(o.targetPage) : null;
@@ -246,9 +322,21 @@ export function buildPlan({
     // A new page by the title its brief suggests; an existing one by its own.
     const title = (create ? o.pageTitle : o.targetTitle) || o.title;
     const drop = page ? dropOf(page, answers) : null;
+    const action: PlanAction = create
+      ? 'create'
+      : PROTECT_DECISIONS.has(o.decision ?? '')
+        ? 'protect'
+        : 'optimize';
+    const parts = scoreParts({
+      action,
+      drop,
+      opportunityScore: Math.round(o.score),
+      page,
+      trafficKnown,
+    });
     rows.push({
       key: `opportunity:${o.id}`,
-      action: create ? 'create' : PROTECT_DECISIONS.has(o.decision ?? '') ? 'protect' : 'optimize',
+      action,
       title,
       page: create ? null : o.targetPage,
       // A new page is what the opportunity names; an existing one is what
@@ -264,13 +352,8 @@ export function buildPlan({
             ? { kind: 'competitors', names: o.competitorsCited, visibility: o.visibility }
             : { kind: 'opportunity', prompts: o.prompts },
       source: drop ? 'citations' : 'opportunity',
-      score: drop
-        ? Math.max(o.score, citationsDownScore(drop.pct, drop.lost))
-        : Math.round(o.score),
-      scoreParts: [
-        { kind: 'opportunity', score: Math.round(o.score) },
-        ...(drop ? [citationsDownPart(drop)] : []),
-      ],
+      score: scoreOf(parts),
+      scoreParts: parts,
       opportunityId: o.id,
       draft: draftFor(o.id, create ? null : o.targetPage),
       priority: false,
@@ -292,24 +375,38 @@ export function buildPlan({
     };
     const drop = dropOf(page, answers);
     if (drop) {
+      const parts = scoreParts({
+        action: 'optimize',
+        drop,
+        opportunityScore: null,
+        page,
+        trafficKnown,
+      });
       rows.push({
         ...base,
         key: `page:${key}`,
         action: 'optimize',
         why: dropWhy(page, drop),
         source: 'citations',
-        score: citationsDownScore(drop.pct, drop.lost),
-        scoreParts: [citationsDownPart(drop)],
+        score: scoreOf(parts),
+        scoreParts: parts,
       });
     } else if (page.citations.cur >= MIN_TOP_CITATIONS) {
+      const parts = scoreParts({
+        action: 'protect',
+        drop: null,
+        opportunityScore: null,
+        page,
+        trafficKnown,
+      });
       protect.push({
         ...base,
         key: `page:${key}`,
         action: 'protect',
         why: { kind: 'top', citations: page.citations.cur, aiVisits: page.aiVisits },
         source: 'protect',
-        score: protectScore(page.citations.cur),
-        scoreParts: [protectPart(page.citations.cur)],
+        score: scoreOf(parts),
+        scoreParts: parts,
       });
     }
   }

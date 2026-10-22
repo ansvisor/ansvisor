@@ -112,7 +112,10 @@ const texts: ExportTexts = {
     {
       entity: 'Prompt',
       label: 'Which tools track AI search?',
-      volume: '~25.1k',
+      volume: '18–32k',
+      volumeType: 'estimate',
+      volumeConfidence: 'medium',
+      volumeConfidenceLabel: 'Medium',
       platforms: ['ChatGPT', 'Gemini'],
       lostPages: ['https://acme.example/blog/best-tools'],
       citedInstead: ['https://profound.com/features'],
@@ -198,7 +201,7 @@ describe('actionMarkdown', () => {
         'link: https://app.example/dashboard/action-center/actions?action=a1',
         '',
         '## affectedHeading(1)',
-        '- Which tools track AI search? · ~25.1k · ChatGPT, Gemini · lostPage: https://acme.example/blog/best-tools · citedInstead: https://profound.com/features',
+        '- Which tools track AI search? · estimatedVolume(18–32k,Medium) · ChatGPT, Gemini · lostPage: https://acme.example/blog/best-tools · citedInstead: https://profound.com/features',
         '',
         '## tasksHeading(2)',
         '1. Add a 2026 comparison table to /blog/best-tools (Completed)',
@@ -259,7 +262,7 @@ describe('actionCsv', () => {
       'signal,AC-52',
     ]);
     expect(rows[0]).toContain(
-      '~25.1k,https://acme.example/blog/best-tools,https://profound.com/features,ChatGPT; Gemini',
+      '18–32k,estimate,medium,https://acme.example/blog/best-tools,https://profound.com/features,ChatGPT; Gemini',
     );
     // A cell a spreadsheet would run as a formula is kept as text.
     expect(rows[2]).toContain(`"'=HYPERLINK(""x"")"`);
@@ -330,10 +333,12 @@ describe('actionWorkbook', () => {
       { value: 'Platforms at send time', fontWeight: 'bold' },
       'Gemini · No runs; ChatGPT · Not cited',
     ]);
-    expect(sheets[1].data[1].slice(0, 4)).toEqual([
+    expect(sheets[1].data[1].slice(0, 6)).toEqual([
       'Prompt',
       'Which tools track AI search?',
-      '~25.1k',
+      '18–32k',
+      'estimate',
+      'Medium',
       'ChatGPT, Gemini',
     ]);
     expect(sheets[2].data[0][1]).toEqual({ value: 'task', fontWeight: 'bold' });

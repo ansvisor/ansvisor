@@ -1,5 +1,6 @@
 'use client';
 
+import { useMemo } from 'react';
 import { useTranslations } from 'next-intl';
 import { ArrowUpRight, BarChart3 } from 'lucide-react';
 import { Link } from '@/i18n/navigation';
@@ -22,7 +23,12 @@ import {
   type AffectedPrompt,
 } from '@/lib/action-center/affected';
 import { getPlatformName } from '@/lib/traffic-platforms';
-import { formatCompactNumber } from '@/lib/format';
+import type { VolumeEstimate } from '@/lib/volume-estimate';
+import {
+  EstimateNoteTooltip,
+  EstimateRange,
+  createEstimateNoteHandle,
+} from '@/components/prompts/volume-estimate';
 import { SignalWhereLine } from './signal-table';
 
 /**
@@ -38,7 +44,7 @@ export function AffectedTab({
 }: {
   affected: Affected;
   /** Estimated monthly AI searches per prompt id; null until read, or when they can't be. */
-  volumes: Map<string, number> | null;
+  volumes: Map<string, VolumeEstimate> | null;
 }) {
   const t = useTranslations('actionCenter.actionsPage.drawer.affected');
   const hasRows = affected.prompts.length > 0 || affected.pages.length > 0;
@@ -68,9 +74,11 @@ function PromptsTable({
 }: {
   rows: AffectedPrompt[];
   total: number;
-  volumes: Map<string, number> | null;
+  volumes: Map<string, VolumeEstimate> | null;
 }) {
   const t = useTranslations('actionCenter.actionsPage.drawer.affected');
+  // One method note for the column's ranges, as the Prompts tables do.
+  const volumeNote = useMemo(() => createEstimateNoteHandle(), []);
   const volumeOf = (row: AffectedPrompt) => (row.id ? (volumes?.get(row.id) ?? null) : null);
   const show = {
     volume: rows.some((row) => volumeOf(row) !== null),
@@ -137,7 +145,11 @@ function PromptsTable({
                   </TableCell>
                   {show.volume && (
                     <TableCell className="text-right align-top text-xs tabular-nums">
-                      {volume !== null ? `~${formatCompactNumber(volume)}` : '—'}
+                      {volume !== null ? (
+                        <EstimateRange estimate={volume} handle={volumeNote} />
+                      ) : (
+                        '—'
+                      )}
                     </TableCell>
                   )}
                   {show.platforms && (
@@ -177,6 +189,7 @@ function PromptsTable({
             })}
           </TableBody>
         </Table>
+        <EstimateNoteTooltip handle={volumeNote} />
       </div>
     </section>
   );

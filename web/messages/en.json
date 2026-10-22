@@ -1027,6 +1027,9 @@
         "sentToWebhook": "Sent to the webhook",
         "item": "Item",
         "volume": "Volume",
+        "volumeType": "Volume type",
+        "volumeConfidence": "Volume confidence",
+        "estimatedVolume": "{volume} (estimate, {confidence} confidence)",
         "lostPage": "Lost page",
         "citedInstead": "Cited instead",
         "affectedPrompt": "Prompt",
@@ -1093,7 +1096,7 @@
             "page": "{label}",
             "topic": "prompts in {label}",
             "inTopic": " in {topic}",
-            "volume": " (~{volume} AI searches a month)"
+            "volume": " ({volume} AI searches a month, estimated)"
           },
           "noun": {
             "prompts": "{count, plural, one {prompt} other {prompts}}",
@@ -1371,8 +1374,7 @@
           "planNew": "Write new content: none of your prompts tracked this topic when it was sent",
           "planExpand": "Grow what covers it: your prompts tracked this topic when it was sent",
           "demand": "Suggested prompts when sent",
-          "demandValue": "{count, plural, one {# prompt} other {# prompts}} · ~{volume}/mo",
-          "volume": "~{volume}/mo"
+          "demandValue": "{count, plural, one {# prompt} other {# prompts}} · <range></range>"
         },
         "contentDraft": {
           "source": "Source",
@@ -2101,7 +2103,7 @@
         "goal": "Lead the topic, or close most of the gap."
       },
       "topic_opportunity": {
-        "title": "Capture ~{demand}/mo of AI demand in {topic}",
+        "title": "Capture {demand}/mo of estimated AI demand in {topic}",
         "titleGeneric": "Capture the AI demand in a topic",
         "description": "Sent from Insights: prompts suggested for one of your topics, with the monthly AI demand behind them.",
         "goal": "Get the brand into AI answers for the topic's suggested prompts."
@@ -3011,7 +3013,6 @@
       "topicKind": "Topic",
       "promptKind": "Prompt",
       "prompts": "{count, plural, one {# prompt} other {# prompts}}",
-      "volume": "~{volume}/mo",
       "notTracked": "not tracked",
       "competitorLeads": "{name} leads",
       "leaderScore": "leader {score}",
@@ -3175,11 +3176,24 @@
       "score": {
         "label": "Priority Score {score}: how it is worked out",
         "title": "How this score is worked out",
-        "opportunity": "The content opportunity's own score: {score}",
-        "citationsDown": "{base} + {pctPoints} for {pct}% fewer citations + {lostPoints} for {lost, plural, one {# citation} other {# citations}} lost = {score}{capped, select, true { (at most {max})} other {}}",
-        "protect": "{base} + {citations, plural, one {# citation} other {# citations}} = {score}{capped, select, true { (at most {max})} other {}}",
-        "higher": "The higher of the two counts.",
-        "marked": "Marked as a priority, so it's listed first."
+        "severity": {
+          "drop": "Losing citations: {pct}% fewer, {lost, plural, one {# citation} other {# citations}} lost",
+          "create": "A new page AI needs",
+          "opportunity": "An existing page to improve",
+          "protect": "A page to protect"
+        },
+        "opportunity": "Content opportunity scored {score}",
+        "opportunityNone": "No content opportunity behind it (neutral)",
+        "pageValue": {
+          "visits": "{visits, plural, one {# AI visit} other {# AI visits}} this period",
+          "newPage": "A new page, no visits yet (neutral)",
+          "unknown": "No AI traffic data (neutral)"
+        },
+        "citations": "{citations, plural, =0 {Not cited} one {# citation} other {# citations}} this period",
+        "points": "{text}: {points} of {max}",
+        "total": "Together: {score} of 100",
+        "marked": "Marked as a priority, so it's listed first.",
+        "planOnly": "This score ranks the Plan. The Action Center scores its tasks on its own."
       },
       "rowMenu": {
         "label": "Actions for {title}",
@@ -5188,6 +5202,24 @@
     },
     "title": "Prompt Volumes",
     "description": "Discover query volumes and trends across AI platforms.",
+    "similarTopics": {
+      "aiTitle": "Est. AI Volume",
+      "aiSub": "monthly AI searches, across prompts"
+    },
+    "volumeInsights": {
+      "totalTitle": "Total Est. AI Volume",
+      "detailTitle": "AI searches a month",
+      "totalSub": "from {google} Google searches",
+      "averageTitle": "Avg. AI Volume",
+      "averageSub": "per prompt",
+      "googleColumn": "Google Vol.",
+      "googleTip": "The prompt's monthly Google searches: the median of its related keywords that have search data.",
+      "aiColumn": "Est. AI Vol.",
+      "aiTip": "Estimated monthly AI searches, as a range: the related keywords' Google searches × the AI adoption rate. Grey when the confidence is low.",
+      "footnote": "* Est. AI Volume is an estimate, shown as a range: the median Google searches of the prompt's related keywords × the AI adoption rate. Hover a range for its sources, confidence and date. For planning, not a measured count.",
+      "opportunityVolumeTip": "Estimated monthly AI searches, highest first. Low-confidence estimates aren't listed on their own.",
+      "opportunityLevelTip": "Opportunity level from the estimated AI volume: High = {high}+/mo, Medium = {min}–{high}/mo. A low-confidence estimate gets no level by itself."
+    },
     "totalVolume": "Total Volume",
     "trending": "Trending",
     "presenceRate": "Presence Rate",
@@ -5313,7 +5345,7 @@
         "mentions": "How often AI answers named your brand over the {range}.",
         "citations": "How often AI answers cited your pages over the {range}.",
         "positions": "Where AI answers name your brand, on average, over the {range}. Lower is better.",
-        "volume": "Estimated monthly AI searches for this prompt.",
+        "volume": "Estimated monthly AI searches for this prompt, as a range. Grey when the confidence is low; those sort after the rest.",
         "competition": "Google Ads competition for its keywords: Low, Medium or High.",
         "runs": "AI answers collected over the {range}. One run is one AI platform answering this prompt once.",
         "added": "When this prompt was added.",
@@ -5353,6 +5385,43 @@
         "upgrade": "Upgrade for more"
       }
     }
+  },
+  "volumeEstimate": {
+    "title": "How we estimate AI search volume",
+    "method": "The median monthly Google searches for this prompt's related keywords × the share of Google searches that now get an AI answer ({rate}%).",
+    "methodTotal": "The sum of {count, plural, one {# prompt's estimate} other {# prompts' estimates}}. Each is the median monthly Google searches for its related keywords × the share of Google searches that now get an AI answer ({rate}%).",
+    "methodKeyword": "This keyword's monthly Google searches × the share of Google searches that now get an AI answer ({rate}%). Its Google volume is measured; the AI share is an estimate, so the range is ±25%.",
+    "methodGuess": "An AI's estimate for a prompt you don't track yet, scaled to your tracked prompts' estimates. Track the prompt to get one from its keywords' Google searches.",
+    "methodSnapshot": "The sum of this opportunity's prompts' estimates when it was made or last updated. Their current estimates couldn't be read, so this one may be out of date.",
+    "methodGuessTotal": "The sum of an AI's estimates for suggested prompts you don't track yet, each scaled to your tracked prompts' estimates. Track them to get estimates from their keywords' Google searches.",
+    "methodAverage": "The average of {count, plural, one {# prompt's estimate} other {# prompts' estimates}}. Each is the median monthly Google searches for its related keywords × the share of Google searches that now get an AI answer ({rate}%).",
+    "keywords": "{measured} of {keywords} related keywords have Google search data.",
+    "noKeywords": "None of its related keywords has Google search data yet.",
+    "rangeSpread": "The range is the AI share of the middle half of them, within half to twice the estimate.",
+    "rangeOne": "With one to go by, the range is half to twice the estimate.",
+    "mix": "Confidence by prompt: {high} high, {medium} medium, {low} low.",
+    "sources": "Sources: Google search volume from DataForSEO ({month}) and an AI answer share of {rate}%.",
+    "sourcesSnapshot": "Source: the opportunity's prompts' estimates, kept when it was made or last updated.",
+    "sourcesGuess": "Source: Ansvisor's AI, from your tracked prompts' estimates.",
+    "sourcesUndated": "Sources: Google search volume from DataForSEO and an AI answer share of {rate}%.",
+    "confidence": "Confidence: {level} · updated {date}",
+    "confidenceSuggested": "Confidence: {level} · suggested {date}",
+    "confidenceUndated": "Confidence: {level}",
+    "stale": "Fetched over six months ago, so one level less sure. Refresh volumes for a newer estimate.",
+    "lowNote": "Low confidence: shown in grey, and not used to rank on its own.",
+    "lowNoteSnapshot": "Low confidence: an old sum, shown in grey.",
+    "lowNoteGuess": "Low confidence: an AI's guess, shown in grey.",
+    "measuredNote": "Measured numbers, such as your visibility or Search Console clicks, never carry this badge.",
+    "level": {
+      "high": "High",
+      "medium": "Medium",
+      "low": "Low"
+    },
+    "badge": "Estimate",
+    "badgeLow": "Estimate · low confidence",
+    "badgeLabel": "Estimate, {level} confidence: how it's built",
+    "label": "{range} a month, estimated, {level} confidence",
+    "perMonth": "/mo"
   },
   "mentions": {
     "title": "Mentions & Sentiment",

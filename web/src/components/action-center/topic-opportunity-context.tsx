@@ -3,7 +3,13 @@
 import { useTranslations } from 'next-intl';
 import { ExternalLink } from 'lucide-react';
 import { Link } from '@/i18n/navigation';
-import { formatCompactNumber } from '@/lib/format';
+import { useMemo } from 'react';
+import { guessedVolumeEstimate } from '@/lib/volume-estimate';
+import {
+  EstimateNoteTooltip,
+  EstimateRange,
+  createEstimateNoteHandle,
+} from '@/components/prompts/volume-estimate';
 
 interface SuggestedPrompt {
   text: string;
@@ -18,6 +24,8 @@ interface SuggestedPrompt {
  */
 export function TopicOpportunityContext({ payload }: { payload: Record<string, unknown> }) {
   const t = useTranslations('actionCenter.actionsPage.drawer.topicOpportunity');
+  // One method note for the suggestions' ranges, however many were sent.
+  const suggestionNote = useMemo(() => createEstimateNoteHandle(), []);
   const topicId = typeof payload.topicId === 'string' ? payload.topicId : null;
   const topicName = typeof payload.topicName === 'string' ? payload.topicName : null;
   const demand = typeof payload.demand === 'number' ? payload.demand : null;
@@ -62,9 +70,16 @@ export function TopicOpportunityContext({ payload }: { payload: Record<string, u
           <p className="text-xs font-medium text-muted-foreground">{t('demand')}</p>
           {demand !== null && (
             <p className="mt-1 tabular-nums">
-              {t('demandValue', {
+              {/* The suggestions' AI-guessed demand: a grey range (PROMPT-013). */}
+              {t.rich('demandValue', {
                 count: suggestions.length,
-                volume: formatCompactNumber(demand),
+                range: () => (
+                  <EstimateRange
+                    estimate={guessedVolumeEstimate(demand, null)}
+                    kind="total"
+                    perMonth
+                  />
+                ),
               })}
             </p>
           )}
@@ -73,11 +88,16 @@ export function TopicOpportunityContext({ payload }: { payload: Record<string, u
               <li key={s.text} className="flex items-baseline justify-between gap-3">
                 <span className="min-w-0">{s.text}</span>
                 <span className="shrink-0 tabular-nums text-muted-foreground">
-                  {t('volume', { volume: formatCompactNumber(s.volume) })}
+                  <EstimateRange
+                    estimate={guessedVolumeEstimate(s.volume, null)}
+                    handle={suggestionNote}
+                    perMonth
+                  />
                 </span>
               </li>
             ))}
           </ul>
+          <EstimateNoteTooltip handle={suggestionNote} />
         </div>
       )}
     </section>

@@ -26,7 +26,11 @@ import {
   type LibraryExportFormat,
   type LibraryExportItem,
 } from '@/lib/content/draft-export';
-import type { ContentDraftListItem, LibraryTab } from '@/lib/content/drafts';
+import {
+  DRAFT_PAGES_PER_CALL,
+  type ContentDraftListItem,
+  type LibraryTab,
+} from '@/lib/content/drafts';
 import { saveBlob } from '@/lib/download';
 
 /**
@@ -69,14 +73,15 @@ export function useLibraryExport(brandId: string | null) {
     if (!brandId || drafts.length === 0) return;
     setExporting(true);
     try {
-      const pages = new Map(
-        (
-          await getContentDraftPages(
-            brandId,
-            drafts.map((d) => d.id),
-          )
-        ).map((p) => [p.id, p]),
-      );
+      // A call's pages come back whole, so the list is read a slice at a
+      // time; ids a call left for its response's size go first in the next.
+      const pages = new Map<string, DraftPage>();
+      let queue = drafts.map((d) => d.id);
+      while (queue.length > 0) {
+        const read = await getContentDraftPages(brandId, queue.slice(0, DRAFT_PAGES_PER_CALL));
+        for (const page of read.pages) pages.set(page.id, page);
+        queue = [...read.rest, ...queue.slice(DRAFT_PAGES_PER_CALL)];
+      }
       const items = drafts.flatMap((draft) => {
         const page = pages.get(draft.id);
         return page ? [item(draft, page)] : [];
@@ -105,7 +110,9 @@ export function useLibraryExport(brandId: string | null) {
   const exportDraft = async (draft: ContentDraftListItem, format: DraftExportFormat) => {
     if (!brandId) return;
     try {
-      const [page] = await getContentDraftPages(brandId, [draft.id]);
+      const {
+        pages: [page],
+      } = await getContentDraftPages(brandId, [draft.id]);
       if (!page) throw new Error('not_found');
       const title = titleOf(draft);
       saveBlob(

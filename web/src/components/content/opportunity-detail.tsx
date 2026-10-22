@@ -34,6 +34,8 @@ import {
   getGenerationJobStatus,
   type BriefQuota,
 } from '@/lib/actions/content';
+import { EstimateBadge, EstimateRange } from '@/components/prompts/volume-estimate';
+import { Skeleton } from '@/components/ui/skeleton';
 import {
   AlternativeDialog,
   DismissReasonDialog,
@@ -49,6 +51,7 @@ import {
   TargetPagesCard,
 } from '@/components/content/opportunity-basket';
 import { opportunityDocument, opportunityToMarkdown } from '@/lib/content/opportunity-markdown';
+import { useOpportunityVolume } from '@/hooks/use-opportunity-volume';
 import {
   opportunityCsv,
   opportunityDocx,
@@ -114,7 +117,7 @@ function StatCard({
       <Icon className="h-4 w-4 text-muted-foreground shrink-0" />
       <div>
         <p className="text-xs text-muted-foreground">{label}</p>
-        <p className="text-sm font-medium">{value}</p>
+        <div className="text-sm font-medium">{value}</div>
       </div>
     </div>
   );
@@ -156,6 +159,7 @@ export function OpportunityDetail({
   const [brief, setBrief] = useState<ContentBrief | null>(null);
   const [quota, setQuota] = useState<BriefQuota | null>(null);
   const [fanoutQueries, setFanoutQueries] = useState<FanoutSubQuery[]>([]);
+  const { basket, basketFailed, volume } = useOpportunityVolume(opportunity);
   const router = useRouter();
   // Start's page types are the opportunity's brand's, which may not be the
   // active one (/dashboard/content/[id] opens any of the org's brands).
@@ -432,7 +436,7 @@ export function OpportunityDetail({
 
   // Export (the user's spec): what Copy All Data copies, as a file.
   const handleExport = async (format: OpportunityExportFormat) => {
-    const doc = opportunityDocument(opportunity, brief, fanoutQueries, assetTypeLabel);
+    const doc = opportunityDocument(opportunity, brief, fanoutQueries, assetTypeLabel, volume);
     const fileName = opportunityExportFileName(doc, format);
     try {
       if (format === 'csv') {
@@ -455,7 +459,7 @@ export function OpportunityDetail({
   const handleCopy = async () => {
     try {
       await navigator.clipboard.writeText(
-        opportunityToMarkdown(opportunity, brief, fanoutQueries, assetTypeLabel),
+        opportunityToMarkdown(opportunity, brief, fanoutQueries, assetTypeLabel, volume),
       );
       toast.success(t('copiedToast'));
     } catch {
@@ -632,7 +636,7 @@ export function OpportunityDetail({
               onSend={canSendToActionCenter ? handleSendToActionCenter : undefined}
               sendingKey={sendingAction}
             />
-            <OpportunityBasketCard opportunityId={opportunity.id} />
+            <OpportunityBasketCard basket={basket} failed={basketFailed} />
           </div>
           <div className="space-y-4">
             {(Object.keys(sd.actions ?? {}).length > 0 || (sd.pastActions ?? []).length > 0) && (
@@ -661,11 +665,30 @@ export function OpportunityDetail({
               )}
 
               <div className="grid grid-cols-2 gap-3">
-                {sd.estAiVolume !== undefined && (
+                {(sd.estAiVolume !== undefined || volume !== null) && (
                   <StatCard
                     icon={TrendingUp}
                     label={t('detail.estAiVolume')}
-                    value={`~${sd.estAiVolume.toLocaleString()}/mo`}
+                    value={
+                      volume === undefined ? (
+                        <Skeleton className="h-6 w-24" />
+                      ) : volume === null ? (
+                        '—'
+                      ) : (
+                        // The prompts' current estimates, summed (PROMPT-013).
+                        <span className="flex flex-col items-start gap-1">
+                          <EstimateRange
+                            estimate={volume}
+                            kind={'count' in volume ? 'total' : 'prompt'}
+                            perMonth
+                          />
+                          <EstimateBadge
+                            estimate={volume}
+                            kind={'count' in volume ? 'total' : 'prompt'}
+                          />
+                        </span>
+                      )
+                    }
                   />
                 )}
                 {sd.visibilityScore !== undefined && (

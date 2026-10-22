@@ -27,8 +27,14 @@ import { DRAFT_METHOD_BADGE, DRAFT_STATUS_BADGE } from '@/components/content/dra
 import { contentEditorPath, isPageType } from '@/lib/content/drafts';
 import { platformNames } from '@/lib/content/impact';
 import { pagePath } from '@/lib/content/overlap';
-import type { PlanAction, PlanPeriod, PlanRow, PlanScorePart, PlanWhy } from '@/lib/content/plan';
-import { priorityLevelOf } from '@/lib/action-center/priority';
+import {
+  planPriorityLevel,
+  type PlanAction,
+  type PlanPeriod,
+  type PlanRow,
+  type PlanScorePart,
+  type PlanWhy,
+} from '@/lib/content/plan';
 import { formatNumber } from '@/lib/format';
 import { cn } from '@/lib/utils';
 
@@ -234,8 +240,9 @@ function RowMenu({
 }
 
 /**
- * The row's Priority Score, coloured by its level as the Action Center's
- * are, and on hover or focus what it is made of.
+ * The row's Priority Score, coloured by its level in the Action Center's
+ * colours but at the Plan's own cut-offs (planPriorityLevel), and on hover or
+ * focus what it is made of.
  */
 function ScoreBadge({ row }: { row: PlanRow }) {
   const t = useTranslations('contentEditor.plan.score');
@@ -255,7 +262,7 @@ function ScoreBadge({ row }: { row: PlanRow }) {
       >
         <PriorityBadge
           score={score}
-          level={priorityLevelOf(score)}
+          level={planPriorityLevel(score)}
           levelClassName="hidden xl:inline"
         />
       </TooltipTrigger>
@@ -266,38 +273,34 @@ function ScoreBadge({ row }: { row: PlanRow }) {
             <ScorePartText part={part} />
           </p>
         ))}
-        {row.scoreParts.length > 1 && <p className="opacity-80">{t('higher')}</p>}
+        <p className="opacity-80">{t('total', { score })}</p>
         {row.priority && <p className="opacity-80">{t('marked')}</p>}
+        <p className="opacity-80">{t('planOnly')}</p>
       </TooltipContent>
     </Tooltip>
   );
 }
 
+/** One factor of the score, and the points it gives out of its weight. */
 function ScorePartText({ part }: { part: PlanScorePart }) {
   const t = useTranslations('contentEditor.plan.score');
-  switch (part.kind) {
-    case 'opportunity':
-      return t('opportunity', { score: part.score });
-    case 'citationsDown':
-      return t('citationsDown', {
-        base: part.base,
-        pct: part.pct,
-        pctPoints: part.pctPoints,
-        lost: part.lost,
-        lostPoints: part.lostPoints,
-        score: part.score,
-        capped: String(part.base + part.pctPoints + part.lostPoints > part.max),
-        max: part.max,
-      });
-    case 'protect':
-      return t('protect', {
-        base: part.base,
-        citations: part.citations,
-        score: part.score,
-        capped: String(part.base + part.citations > part.max),
-        max: part.max,
-      });
-  }
+  const text = (() => {
+    switch (part.kind) {
+      case 'severity':
+        return part.reason === 'drop'
+          ? t('severity.drop', { pct: part.pct, lost: part.lost })
+          : t(`severity.${part.reason}`);
+      case 'opportunity':
+        return part.score === null ? t('opportunityNone') : t('opportunity', { score: part.score });
+      case 'pageValue':
+        return part.reason === 'visits'
+          ? t('pageValue.visits', { visits: part.visits })
+          : t(`pageValue.${part.reason}`);
+      case 'citations':
+        return t('citations', { citations: part.citations });
+    }
+  })();
+  return t('points', { text, points: formatNumber(part.points), max: part.max });
 }
 
 function WhyText({ why }: { why: PlanWhy }) {

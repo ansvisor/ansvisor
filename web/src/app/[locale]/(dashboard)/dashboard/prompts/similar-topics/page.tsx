@@ -20,8 +20,19 @@ import { aggregatePromptVolumeClusters } from '@/lib/prompt-volume-clusters';
 import { useBrandStore } from '@/stores/use-brand-store';
 import type { PromptVolume } from '@/types';
 import { formatCompactNumber } from '@/lib/format';
+import { keywordVolumeEstimate, promptVolumeEstimate, sumEstimates } from '@/lib/volume-estimate';
+import { useTranslations } from 'next-intl';
+import {
+  EstimateBadge,
+  EstimateNoteTooltip,
+  EstimateRange,
+  createEstimateNoteHandle,
+} from '@/components/prompts/volume-estimate';
 
 export default function SimilarTopicsPage() {
+  const t = useTranslations('prompts.similarTopics');
+  // One method note for the whole table: it lists every keyword.
+  const rowNote = useMemo(() => createEstimateNoteHandle(), []);
   const { getActiveBrand } = useBrandStore();
   const brand = getActiveBrand();
   const [volumes, setVolumes] = useState<PromptVolume[]>([]);
@@ -68,7 +79,8 @@ export default function SimilarTopicsPage() {
     () => ({
       clusters: aggregatePromptVolumeClusters(volumes).length,
       googleVolume: volumes.reduce((sum, volume) => sum + volume.totalGoogleVolume, 0),
-      aiVolume: volumes.reduce((sum, volume) => sum + volume.estAiVolume, 0),
+      // The prompts' estimates added up: a range, as on Insights (PROMPT-013).
+      aiEstimate: sumEstimates(volumes.map((volume) => promptVolumeEstimate(volume))),
     }),
     [volumes],
   );
@@ -120,13 +132,18 @@ export default function SimilarTopicsPage() {
         </Card>
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Est. AI Volume</CardTitle>
+            <CardTitle className="text-sm font-medium">{t('aiTitle')}</CardTitle>
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-semibold tabular-nums">
-              {formatCompactNumber(totals.aiVolume)}
+          <CardContent className="space-y-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <EstimateRange
+                estimate={totals.aiEstimate}
+                kind="total"
+                className="text-2xl font-semibold"
+              />
+              <EstimateBadge estimate={totals.aiEstimate} kind="total" />
             </div>
-            <p className="text-xs text-muted-foreground">monthly AI queries, across prompts</p>
+            <p className="text-xs text-muted-foreground">{t('aiSub')}</p>
           </CardContent>
         </Card>
       </div>
@@ -183,8 +200,15 @@ export default function SimilarTopicsPage() {
                       <TableCell className="text-right font-medium tabular-nums">
                         {formatCompactNumber(cluster.volume)}
                       </TableCell>
-                      <TableCell className="text-right tabular-nums">
-                        {formatCompactNumber(cluster.estimatedAiVolume)}
+                      <TableCell className="text-right">
+                        <EstimateRange
+                          estimate={keywordVolumeEstimate(
+                            cluster.volume,
+                            cluster.aiVolumeMultiplier,
+                            cluster.fetchedAt,
+                          )}
+                          handle={rowNote}
+                        />
                       </TableCell>
                       <TableCell className="text-center">
                         <Badge variant="outline">{cluster.occurrences}</Badge>
@@ -213,6 +237,7 @@ export default function SimilarTopicsPage() {
               )}
             </TableBody>
           </Table>
+          <EstimateNoteTooltip handle={rowNote} />
         </CardContent>
       </Card>
     </div>

@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState, type ComponentType, useCallback } from 'react';
 import { useParams } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import { Link, useRouter } from '@/i18n/navigation';
 import { buildCitationDetailHref } from '@/components/citations/filter-bar';
 import {
@@ -36,7 +37,11 @@ import {
   MessageSquareText,
   Quote,
   RotateCw,
+  TrendingUp,
 } from 'lucide-react';
+import { getPromptVolume, type PromptVolumeEstimateRow } from '@/lib/actions/prompt-volume';
+import { promptVolumeEstimate } from '@/lib/volume-estimate';
+import { EstimateBadge, EstimateRange } from '@/components/prompts/volume-estimate';
 import { cn } from '@/lib/utils';
 import { formatRegionDisplay } from '@/lib/region';
 import { toast } from 'sonner';
@@ -233,7 +238,7 @@ function KpiCard({
   icon: Icon,
 }: {
   title: string;
-  value: string | number;
+  value: React.ReactNode;
   icon: ComponentType<{ className?: string }>;
 }) {
   return (
@@ -241,7 +246,7 @@ function KpiCard({
       <CardContent className="flex items-center gap-3 p-4">
         <Icon className="h-5 w-5 text-muted-foreground" />
         <div>
-          <p className="text-2xl font-bold tabular-nums">{value}</p>
+          <div className="text-2xl font-bold tabular-nums">{value}</div>
           <p className="text-xs text-muted-foreground">{title}</p>
         </div>
       </CardContent>
@@ -662,6 +667,9 @@ export default function PromptDetailPage() {
   const [notes, setNotes] = useState<PromptNote[]>([]);
   const [targetUrls, setTargetUrls] = useState<PromptTargetUrl[]>([]);
   const [error, setError] = useState<string | null>(null);
+  // The prompt's estimated AI searches (PROMPT-013); no card without one.
+  const [volume, setVolume] = useState<PromptVolumeEstimateRow | null>(null);
+  const tVolumes = useTranslations('prompts.volumeInsights');
 
   // Workflow data is independent of the date window — load it once per
   // prompt, outside the main load cycle, so date changes don't refetch it.
@@ -675,6 +683,19 @@ export default function PromptDetailPage() {
         setTargetUrls(wf.targetUrls);
       })
       .catch((err) => console.error('Failed to load prompt workflow:', err));
+    return () => {
+      cancelled = true;
+    };
+  }, [promptId]);
+
+  // Like the workflow, the volume doesn't depend on the date window.
+  useEffect(() => {
+    let cancelled = false;
+    getPromptVolume(promptId)
+      .then((row) => {
+        if (!cancelled) setVolume(row);
+      })
+      .catch((err) => console.error('Failed to load prompt volume:', err));
     return () => {
       cancelled = true;
     };
@@ -911,7 +932,12 @@ export default function PromptDetailPage() {
           </div>
         )}
         <div className={cn('space-y-6', isRefetching && 'opacity-60')}>
-          <div className="grid gap-4 sm:grid-cols-3">
+          <div
+            className={cn(
+              'grid gap-4',
+              volume ? 'sm:grid-cols-2 lg:grid-cols-4' : 'sm:grid-cols-3',
+            )}
+          >
             <KpiCard
               title={`Visibility — mentioned in ${data.summary.mentionAnswers} of ${data.summary.totalResults} answers, cited in ${data.summary.citationAnswers}`}
               value={data.summary.score ?? 0}
@@ -927,6 +953,18 @@ export default function PromptDetailPage() {
               value={data.summary.totalCitations.toLocaleString()}
               icon={Quote}
             />
+            {volume && (
+              <KpiCard
+                title={tVolumes('detailTitle')}
+                value={
+                  <span className="flex flex-col items-start gap-1">
+                    <EstimateRange estimate={promptVolumeEstimate(volume)} />
+                    <EstimateBadge estimate={promptVolumeEstimate(volume)} />
+                  </span>
+                }
+                icon={TrendingUp}
+              />
+            )}
           </div>
 
           <Card>

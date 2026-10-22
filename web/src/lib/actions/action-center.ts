@@ -24,6 +24,7 @@ import { OPEN_SIGNAL_STATUSES, type SignalStatus } from '@/lib/signals/registry'
 import { readPromptPlaces } from '@/lib/signals/prompt-places';
 import { affectedOf, affectedSignals, affectedSummary } from '@/lib/action-center/affected';
 import { readPromptDemand } from '@/lib/action-center/prompt-demand';
+import type { VolumeEstimate } from '@/lib/volume-estimate';
 import { readAssignees } from '@/lib/action-center/assignees';
 import {
   ACTION_COLUMNS,
@@ -518,7 +519,7 @@ export async function deleteTask(brandId: string, actionId: string, taskId: stri
 export async function getPromptDemand(
   brandId: string,
   promptIds: string[],
-): Promise<Record<string, number>> {
+): Promise<Record<string, VolumeEstimate>> {
   if (promptIds.length === 0) return {};
   const supabase = await createClient();
   return Object.fromEntries(await readPromptDemand(supabase, brandId, promptIds));

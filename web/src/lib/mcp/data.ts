@@ -24,6 +24,7 @@ import { readPromptPlaces } from '@/lib/signals/prompt-places';
 import { currentActionFirst, signalDetailForApi, type SignalActionRef } from '@/lib/signals/detail';
 import { parseTaskDetails } from '@/lib/action-center/task-details';
 import { locationCode, isValidLocation } from '@/lib/region';
+import { promptVolumeEstimate, type EstimateConfidence } from '@/lib/volume-estimate';
 import { getOrgLocationUsage, locationLimitMessage } from '@/lib/prompt-locations';
 import {
   filterPromptSuggestionEngines,
@@ -2286,6 +2287,16 @@ export interface PromptVolumeRow {
   google_volumes: Record<string, number>;
   total_google_volume: number;
   est_ai_volume: number;
+  /**
+   * The estimate's likely range (PROMPT-013): from the spread of the measured
+   * keyword volumes, never under half or over twice est_ai_volume.
+   */
+  est_ai_volume_low: number;
+  est_ai_volume_high: number;
+  /** How far the measured keywords agree; one level less after six months. */
+  volume_confidence: EstimateConfidence;
+  /** Always 'estimate': AI engines publish no search volumes. */
+  volume_type: 'estimate';
   ai_volume_multiplier: number;
   /** Volume-weighted competition index 0-100, or null if unknown. */
   competition_index: number | null;
@@ -2358,8 +2369,19 @@ export async function getPromptVolumesFor(
       prompts: { text: string } | Array<{ text: string }> | null;
     }> | null) ?? [];
 
+  const now = new Date();
   return rows.map((r) => {
     const prompt = Array.isArray(r.prompts) ? (r.prompts[0] ?? null) : r.prompts;
+    const estimate = promptVolumeEstimate(
+      {
+        estAiVolume: Number(r.est_ai_volume ?? 0),
+        googleVolumes: r.google_volumes ?? {},
+        aiVolumeMultiplier: Number(r.ai_volume_multiplier ?? 0),
+        keywords: r.keywords ?? [],
+        fetchedAt: r.fetched_at as string,
+      },
+      now,
+    );
     return {
       prompt_id: r.prompt_id,
       prompt_text: prompt?.text ?? null,
@@ -2368,6 +2390,10 @@ export async function getPromptVolumesFor(
       google_volumes: r.google_volumes ?? {},
       total_google_volume: Number(r.total_google_volume ?? 0),
       est_ai_volume: Number(r.est_ai_volume ?? 0),
+      est_ai_volume_low: estimate.low,
+      est_ai_volume_high: estimate.high,
+      volume_confidence: estimate.confidence,
+      volume_type: 'estimate' as const,
       ai_volume_multiplier: Number(r.ai_volume_multiplier ?? 0),
       competition_index: r.competition_index,
       competition: r.competition,

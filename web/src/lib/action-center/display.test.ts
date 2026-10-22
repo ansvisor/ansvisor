@@ -121,7 +121,7 @@ describe('actionTexts', () => {
   it('names a topic opportunity after its topic and demand (VIS-011)', () => {
     const payload = { topicName: 'GEO tools for agencies', demand: 92_000 };
     expect(actionTexts(action({ kind: 'topic_opportunity', payload }), t).title).toBe(
-      'Capture ~92k/mo of AI demand in GEO tools for agencies',
+      'Capture 46–190k/mo of estimated AI demand in GEO tools for agencies',
     );
     const tags = actionContextTags(
       action({ kind: 'topic_opportunity', payload, signalCount: 0 }),

@@ -86,6 +86,13 @@ export function contentEditorPath(draftId: string) {
 export const LIBRARY_TABS = ['all', ...DRAFT_STATUSES, 'archived'] as const;
 export type LibraryTab = (typeof LIBRARY_TABS)[number];
 
+/**
+ * Drafts' pages read per Export call: each comes back with its whole page
+ * (about 30 KB on average, up to 500 KB), so a list is read in calls of this
+ * many rather than in one response.
+ */
+export const DRAFT_PAGES_PER_CALL = 50;
+
 export interface DraftAuthor {
   id: string;
   fullName: string | null;

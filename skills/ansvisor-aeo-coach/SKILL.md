@@ -97,6 +97,26 @@ API directly from this skill (that's a different skill).
 - Sentiment is measured for the **brand only**. Competitors have
   mentions and co-mentions, not a tone.
 
+**AI search volumes** (from `get_prompt_volumes`):
+
+- `est_ai_volume` is an **estimate**, not a measurement: AI engines
+  publish no search volumes (`volume_type` is always `"estimate"`). It
+  is the prompt's Google volume (the median of its keywords' volumes)
+  × the share of Google searches that now get an AI answer
+  (`ai_volume_multiplier`).
+- Quote its range, `est_ai_volume_low`–`est_ai_volume_high`, and say
+  "estimated": "3.3–8.2k AI searches a month, estimated", never "5,400
+  searches". Add `volume_confidence` when it isn't `high`.
+- `volume_confidence` is `high` when at least three keywords were
+  measured and agree, `medium` with two or more that roughly agree,
+  and `low` otherwise. It drops one level once the volumes are over six
+  months old (`fetched_at`). Don't rank prompts on a `low` number alone:
+  the dashboard shows them in grey and sorts them after the others.
+- A content opportunity's `source_data.estAiVolume` is the sum of its
+  prompts' estimates kept when it was made or last updated: an
+  estimate, possibly out of date. For its demand now, read its prompts'
+  rows in `get_prompt_volumes`.
+
 ## Tools available (from the Ansvisor MCP server)
 
 Every tool except `list_brands` and `get_site_audit_quota` needs a
@@ -165,7 +185,9 @@ answers; no LLM is called.
   (`visibility`, `mentions`, `citations`, `appearances`) and `order`.
   Use for "best / worst prompt this week?".
 - **`get_prompt_volumes`** — per-prompt search demand: Google volumes,
-  `est_ai_volume` and competition. Use to prioritise.
+  `est_ai_volume` with its range (`est_ai_volume_low` / `_high`) and
+  `volume_confidence`, and competition. Use to prioritise, quoting the
+  range (see *AI search volumes* above).
 - **`get_prompt_usage`** — the plan's prompt allowance, as on the
   Tracked Prompts usage cards: the brand's `active`, `paused` and
   `total` prompts, and the account's `activePrompts` across `brands`
@@ -185,7 +207,7 @@ answers; no LLM is called.
 - **`list_content_opportunities`** — content gaps ranked by opportunity
   score. Filters: `status`, `impact`, `type`.
 - **`get_content_opportunity`** — one gap in full, including an
-  existing brief.
+  existing brief. Its `source_data.estAiVolume` is a kept estimate.
 - **`generate_content_brief`** — writes a fresh AI brief, overwriting
   the old one. Costs an LLM call *(write)*.
 - **`update_opportunity_status`** — move a gap through `new`,
@@ -384,7 +406,8 @@ or any "do I have gaps" question:
    `list_topic_suggestions` may already hold ideas; offer to accept one
    rather than inventing topics.
 5. `get_prompt_volumes` tells you which prompts carry real demand —
-   use it to say which gaps matter most.
+   use it to say which gaps matter most. Quote the estimated range, and
+   lean less on `low`-confidence rows.
 6. Before suggesting new prompts, call `get_prompt_usage(brand_id)`
    to see how many slots are left. A `null` `plan.locationLimit` means
    no limit (self-hosted, or an Enterprise account whose limit isn't
@@ -535,6 +558,8 @@ When the user asks how AI describes the brand, why sentiment moved
 - **Don't mix windows in the same sentence.** Pick one frame per claim.
 - **Don't quote deprecated fields.** `avgVisibility` is not the
   dashboard's Visibility number; `aiVisibilityScore` is.
+- **Don't present an AI search volume as measured.** It is an estimate:
+  give its range and say so.
 - **Don't claim a citation count is good or bad in isolation.** It
   only matters relative to mentions (see scoring reference).
 - **Don't call a write tool to "check" something.** Read tools exist

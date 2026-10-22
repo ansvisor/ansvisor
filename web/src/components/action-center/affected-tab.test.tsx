@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import messages from '../../../messages/en.json';
 import type { Affected } from '@/lib/action-center/affected';
 import { AffectedTab } from './affected-tab';
+import { promptVolumeEstimate } from '@/lib/volume-estimate';
 
 vi.mock('@/i18n/navigation', () => ({
   Link: ({ href, children, ...rest }: { href: string; children: React.ReactNode }) => (
@@ -76,12 +77,26 @@ describe('AffectedTab', () => {
             },
           ],
         }}
-        volumes={new Map([['p1', 25100]])}
+        volumes={
+          new Map([
+            [
+              'p1',
+              promptVolumeEstimate({
+                estAiVolume: 25_100,
+                googleVolumes: { a: 40_000, b: 55_800, c: 70_000 },
+                aiVolumeMultiplier: 0.45,
+                keywords: ['a', 'b', 'c'],
+                fetchedAt: new Date(Date.now() - 12 * 86_400_000).toISOString(),
+              }),
+            ],
+          ])
+        }
       />,
     );
     expect(headers()).toEqual(['Prompt', 'Volume', 'Lost on', 'Your lost page', 'Cited instead']);
     const cells = [...container.querySelectorAll('td')].map((td) => td.textContent);
-    expect(cells[1]).toBe('~25.1k');
+    // An estimate: its range (PROMPT-013).
+    expect(cells[1]).toBe('18–32k');
     expect(cells[3]).toContain('/blog/best-tools');
     expect(cells[4]).toContain('profound.com');
     // The prompt opens its page; its chart icon, the Positions panel.

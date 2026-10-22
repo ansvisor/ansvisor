@@ -5,6 +5,9 @@ export interface PromptVolumeCluster {
   /** The keyword's monthly Google volume, counted once. */
   volume: number;
   estimatedAiVolume: number;
+  /** The AI adoption rate behind estimatedAiVolume, and when the volume was fetched (PROMPT-013). */
+  aiVolumeMultiplier: number;
+  fetchedAt: string | null;
   /** How many prompts use the keyword. */
   occurrences: number;
   /** Those prompts, each with its own volumes (the prompt's, not the keyword's). */
@@ -54,6 +57,11 @@ export function aggregatePromptVolumeClusters(volumes: PromptVolume[]): PromptVo
         if (volume > existing.volume) {
           existing.volume = volume;
           existing.estimatedAiVolume = Math.round(volume * v.aiVolumeMultiplier);
+          existing.aiVolumeMultiplier = v.aiVolumeMultiplier;
+        }
+        // Dated by its latest fetch.
+        if (v.fetchedAt && (!existing.fetchedAt || v.fetchedAt > existing.fetchedAt)) {
+          existing.fetchedAt = v.fetchedAt;
         }
         existing.occurrences += 1;
         existing.prompts.push(prompt);
@@ -62,6 +70,8 @@ export function aggregatePromptVolumeClusters(volumes: PromptVolume[]): PromptVo
           keyword: kw,
           volume,
           estimatedAiVolume: Math.round(volume * v.aiVolumeMultiplier),
+          aiVolumeMultiplier: v.aiVolumeMultiplier,
+          fetchedAt: v.fetchedAt ?? null,
           occurrences: 1,
           prompts: [prompt],
         });
