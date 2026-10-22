@@ -242,9 +242,7 @@ describe('MentionsPerceptionTab', () => {
     await act(async () => {
       await vi.advanceTimersByTimeAsync(250);
     });
-    expect(container.textContent).toBe(
-      "Couldn't load the perception figures. Try again in a moment.",
-    );
+    expect(container.textContent).toBe("Couldn't load the perception figures.Try again");
 
     render(
       <MentionsPerceptionTab
@@ -255,6 +253,30 @@ describe('MentionsPerceptionTab', () => {
     );
     expect(container.textContent).toBe('');
     expect(container.querySelector('[aria-hidden]')).not.toBeNull();
+  });
+
+  it('reads the same filters again on Try again, with the skeleton meanwhile', async () => {
+    vi.useFakeTimers();
+    getMentionsPerception
+      .mockRejectedValueOnce(new Error('timeout'))
+      .mockResolvedValueOnce(perception);
+    render(
+      <MentionsPerceptionTab brandId="b1" brand="Ansvisor" filters={DEFAULT_MENTIONS_FILTERS} />,
+    );
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(250);
+    });
+    const retry = [...container.querySelectorAll('button')].find(
+      (b) => b.textContent === 'Try again',
+    )!;
+    await act(async () => retry.click());
+    expect(container.querySelector('[aria-hidden]')).not.toBeNull();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(250);
+    });
+    expect(getMentionsPerception).toHaveBeenCalledTimes(2);
+    expect(getMentionsPerception.mock.calls[1]).toEqual(getMentionsPerception.mock.calls[0]);
+    expect(container.textContent).toContain('What AI associates with Ansvisor');
   });
 
   it('asks for dates on a custom range without any', () => {

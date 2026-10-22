@@ -100,7 +100,14 @@ import {
   Pause,
   Play,
   Lightbulb,
+  FilePlus,
+  FileText,
+  RotateCw,
 } from 'lucide-react';
+import { NewContentDialog, type DialogPreset } from '@/components/content/new-content-dialog';
+import { getDraftForPrompt } from '@/lib/actions/content-drafts';
+import { contentEditorPath } from '@/lib/content/drafts';
+import { siteTypeOf } from '@/lib/content/page-types';
 import { cn } from '@/lib/utils';
 import {
   compareLateness,
@@ -188,6 +195,7 @@ import {
   type SortDir,
 } from './prompt-sort';
 import { BulkActionBar } from './_bulk-action-bar';
+import { promptsTableState } from './table-state';
 import { formatCompactNumber, formatDate, formatNumber } from '@/lib/format';
 import { usePagination, TablePager } from '@/components/table-pager';
 import { PromptPositionsSheet } from '@/components/prompts/prompt-positions-sheet';
@@ -1263,6 +1271,8 @@ export default function PromptsPage() {
   const [visibility, setVisibility] = useState<Record<string, PromptVisibilitySummary>>({});
   const [positions, setPositions] = useState<Record<string, PromptPositionCell>>({});
   const [loading, setLoading] = useState(true);
+  // The last read failed: the table says so, rather than that there are no prompts.
+  const [loadFailed, setLoadFailed] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
   const [analysisProgress, setAnalysisProgress] = useState<{
     done: number;
@@ -1282,6 +1292,7 @@ export default function PromptsPage() {
   const activeBrandId = useBrandStore((s) => s.activeBrandId);
   const tCommon = useTranslations('common');
   const tNav = useTranslations('nav');
+  const tPrompts = useTranslations('prompts');
   const activeBrand = useBrandStore(
     (s) => s.brands.find((brand) => brand.id === s.activeBrandId) ?? null,
   );
@@ -1467,6 +1478,7 @@ export default function PromptsPage() {
       }
 
       setLoading(true);
+      setLoadFailed(false);
       try {
         // One consolidated server action: Next.js queues client-fired server
         // actions sequentially, so the old three separate calls cost their
@@ -1487,15 +1499,17 @@ export default function PromptsPage() {
         if (page.volumesDegraded) {
           toast.warning('Volume data is temporarily unavailable — showing prompts without it.');
         }
+        if (page.visibilityDegraded) toast.warning(tPrompts('visibilityDegraded'));
       } catch (err) {
         if (isCancelled?.()) return;
         console.error('Failed to load prompt data:', err);
+        setLoadFailed(true);
         toast.error('Failed to load prompt data');
       } finally {
         if (!isCancelled?.()) setLoading(false);
       }
     },
-    [activeBrandId, range, regionFilter],
+    [activeBrandId, range, regionFilter, tPrompts],
   );
 
   useEffect(() => {
@@ -2045,6 +2059,8 @@ export default function PromptsPage() {
               )}
               <AllPromptsTab
                 loading={loading}
+                failed={loadFailed}
+                onRetry={() => void loadData()}
                 prompts={allPrompts}
                 activeBrandId={activeBrandId}
                 volumeByPromptId={volumeByPromptId}
@@ -2543,6 +2559,7 @@ const SUGGEST_CALLS = { start: suggestContentForPrompt, getStatus: getGeneration
  */
 function RowActionsMenu({
   prompt,
+  brandId,
   onEdit,
   onToggleActive,
   onImprove,
@@ -2550,9 +2567,11 @@ function RowActionsMenu({
   onOpenSuggestion,
   suggesting,
   suggestDisabledReason,
+  onCreateContent,
   onDelete,
 }: {
   prompt: Prompt;
+  brandId: string;
   onEdit: () => void;
   onToggleActive: () => void;
   onImprove: () => void;
@@ -2564,20 +2583,30 @@ function RowActionsMenu({
   suggesting: boolean;
   /** Why Suggest content can't run now (the month's quota is used up, or a bulk run is going). */
   suggestDisabledReason: string | null;
+  /** Opens New content › Start for a new page for this prompt. */
+  onCreateContent: () => void;
   onDelete: () => void;
 }) {
+  const t = useTranslations('prompts.content');
+  const router = useRouter();
   // With the month's quota used up, a prompt that already has a suggestion
   // can still open it, which costs nothing; the menu asks as it opens.
   const [openSuggestionId, setOpenSuggestionId] = useState<string | null>(null);
-  const lookUpSuggestion = (open: boolean) => {
-    if (!open || suggestDisabledReason === null) return;
+  // A draft already being written for the prompt opens instead of a second
+  // one; undefined while the menu asks.
+  const [draftId, setDraftId] = useState<string | null | undefined>(undefined);
+  const lookUp = (open: boolean) => {
+    if (!open) return;
+    setDraftId(undefined);
+    getDraftForPrompt(brandId, prompt.id).then(setDraftId, () => setDraftId(null));
+    if (suggestDisabledReason === null) return;
     getOpenSuggestionForPrompt(prompt.id).then(setOpenSuggestionId, () =>
       setOpenSuggestionId(null),
     );
   };
 
   return (
-    <DropdownMenu onOpenChange={lookUpSuggestion}>
+    <DropdownMenu onOpenChange={lookUp}>
       <DropdownMenuTrigger
         className="inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
         aria-label={`Actions for ${prompt.text}`}
@@ -2621,6 +2650,28 @@ function RowActionsMenu({
             </span>
           </DropdownMenuItem>
         )}
+        {draftId ? (
+          <DropdownMenuItem
+            className="gap-2"
+            onClick={() => router.push(contentEditorPath(draftId))}
+          >
+            <FileText className="h-3.5 w-3.5" />
+            {t('openDraft')}
+          </DropdownMenuItem>
+        ) : (
+          <DropdownMenuItem
+            className="gap-2"
+            onClick={onCreateContent}
+            disabled={draftId === undefined}
+          >
+            {draftId === undefined ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <FilePlus className="h-3.5 w-3.5" />
+            )}
+            {t('create')}
+          </DropdownMenuItem>
+        )}
         <DropdownMenuSeparator />
         <DropdownMenuItem
           className="gap-2 text-red-600 focus:text-red-600 dark:text-red-400"
@@ -2662,6 +2713,8 @@ const WORK_FILTER_LABELS: Record<string, string> = {
 
 function AllPromptsTab({
   loading,
+  failed,
+  onRetry,
   prompts: allRows,
   activeBrandId,
   volumeByPromptId,
@@ -2678,6 +2731,9 @@ function AllPromptsTab({
   onChanged,
 }: {
   loading: boolean;
+  /** The last read failed: say so and offer to read again, never "No prompts yet". */
+  failed: boolean;
+  onRetry: () => void;
   prompts: Prompt[];
   activeBrandId: string;
   volumeByPromptId: Map<string, PromptVolume>;
@@ -2702,6 +2758,7 @@ function AllPromptsTab({
   onChanged: () => void;
 }) {
   const tCommon = useTranslations('common');
+  const tPrompts = useTranslations('prompts');
   // One tooltip for every prompt and topic the table cuts short.
   const fullText = useMemo(() => createClampedTextHandle(), []);
   const tUsage = useTranslations('prompts.usage');
@@ -2723,6 +2780,12 @@ function AllPromptsTab({
   );
   const [confirmDelete, setConfirmDelete] = useState<Prompt[] | null>(null);
   const [positionsTab, setPositionsTab] = useState<'platforms' | 'improve'>('platforms');
+  // New content › Start for a prompt, from its row menu or its Improve tab.
+  const [contentPreset, setContentPreset] = useState<DialogPreset | null>(null);
+  // Bumped when Start sends a draft to the Agent or the Team and the panel
+  // stays open, so its content step looks for that draft again.
+  const [contentSent, setContentSent] = useState(0);
+  const activeBrand = useBrandStore((s) => s.brands.find((b) => b.id === s.activeBrandId));
   const prompts = useMemo(
     () => allRows.filter((p) => !pendingDeletes.has(p.id)),
     [allRows, pendingDeletes],
@@ -3331,7 +3394,8 @@ function AllPromptsTab({
     });
   }, []);
 
-  if (loading) {
+  const state = promptsTableState({ loading, failed, rows: prompts.length });
+  if (state === 'loading') {
     return (
       <div className="flex items-center justify-center py-10">
         <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
@@ -3339,7 +3403,22 @@ function AllPromptsTab({
     );
   }
 
-  if (prompts.length === 0) {
+  if (state === 'failed') {
+    return (
+      <Card>
+        <CardContent className="py-14 text-center text-sm">
+          <AlertCircle className="mx-auto h-9 w-9 text-destructive/60" />
+          <p className="mt-2 font-medium">{tPrompts('loadError')}</p>
+          <Button className="mt-4 gap-2" size="sm" variant="outline" onClick={onRetry}>
+            <RotateCw className="h-4 w-4" />
+            {tCommon('retry')}
+          </Button>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (state === 'empty') {
     return (
       <Card>
         <CardContent className="flex flex-col items-center justify-center py-16 gap-4">
@@ -3787,6 +3866,7 @@ function AllPromptsTab({
                     <TableCell className="text-right pr-6">
                       <RowActionsMenu
                         prompt={p}
+                        brandId={activeBrandId}
                         onEdit={() => onEditPrompt(p)}
                         onToggleActive={() => void toggleActive(p)}
                         onImprove={() => openPositionsPanel(p.id, 'improve')}
@@ -3796,6 +3876,14 @@ function AllPromptsTab({
                         suggestDisabledReason={
                           suggestDisabledReason ??
                           (bulkSuggesting ? 'Wait for the selected prompts' : null)
+                        }
+                        onCreateContent={() =>
+                          setContentPreset({
+                            kind: 'prompt',
+                            id: p.id,
+                            text: p.text,
+                            method: 'create',
+                          })
                         }
                         onDelete={() => setConfirmDelete([p])}
                       />
@@ -3854,7 +3942,20 @@ function AllPromptsTab({
         onRangeChange={setPositionsRange}
         region={regionFilter}
         initialTab={positionsTab}
-        onClose={() => setPositionsId(null)}
+        // Escape and a click outside belong to Start while it is open over the
+        // panel: they close Start, and the panel stays.
+        onClose={() => contentPreset === null && setPositionsId(null)}
+        brandId={activeBrandId}
+        onStartContent={setContentPreset}
+        contentSent={contentSent}
+      />
+      <NewContentDialog
+        open={contentPreset !== null}
+        onOpenChange={(open) => !open && setContentPreset(null)}
+        brandId={activeBrandId}
+        siteType={siteTypeOf(activeBrand ?? {})}
+        preset={contentPreset}
+        onSent={() => setContentSent((n) => n + 1)}
       />
       <Dialog open={confirmDelete !== null} onOpenChange={(v) => !v && setConfirmDelete(null)}>
         <DialogContent className="sm:max-w-md">

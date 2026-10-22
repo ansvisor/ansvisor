@@ -4,6 +4,7 @@ import { PLANS, type Plan } from '@/config/plans';
 import {
   POSITION_PLATFORMS,
   brandCitationPosition,
+  brandCitedPage,
   countRuns,
   platformAccess,
   summarizePositions,
@@ -87,6 +88,45 @@ describe('positionTone', () => {
 
   it('calls the only entry Early', () => {
     expect(positionTone(1, 1)).toBe('Early');
+  });
+});
+
+describe('brandCitedPage', () => {
+  const brand = ['acme.example'];
+  const cite = (url: string, title?: string) => ({ url, title });
+
+  it('is the brand page cited in the most answers, whatever its address carries', () => {
+    expect(
+      brandCitedPage(
+        [
+          [
+            cite('https://rival.example/a'),
+            cite('https://acme.example/guide?utm_source=chatgpt.com'),
+          ],
+          [
+            cite('https://www.acme.example/guide/', 'The guide'),
+            cite('https://acme.example/pricing'),
+          ],
+          // Twice in one answer counts once.
+          [cite('https://blog.acme.example/x'), cite('https://blog.acme.example/x#top')],
+        ],
+        brand,
+      ),
+    ).toEqual({ url: 'https://acme.example/guide', title: 'The guide', answers: 2 });
+  });
+
+  it('breaks a tie for the newest answer, the first list', () => {
+    expect(
+      brandCitedPage(
+        [[cite('https://acme.example/new')], [cite('https://acme.example/old')]],
+        brand,
+      ),
+    ).toMatchObject({ url: 'https://acme.example/new', answers: 1 });
+  });
+
+  it('is null with no source of the brand, or no domains', () => {
+    expect(brandCitedPage([[cite('https://rival.example/a')], null, 'x'], brand)).toBeNull();
+    expect(brandCitedPage([[cite('https://acme.example/a')]], [])).toBeNull();
   });
 });
 

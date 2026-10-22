@@ -14,7 +14,7 @@ import { usePlanContext } from '@/components/providers/plan-provider';
 import { BillingSection } from '@/components/settings/billing-section';
 import { TeamSection } from '@/components/settings/team-section';
 import { ApiKeysSection } from '@/components/settings/api-keys-section';
-import { AgentSection } from '@/components/settings/agent-section';
+import { AiProvidersSection } from '@/components/settings/ai-providers-section';
 import { NotificationsSection } from '@/components/settings/notifications-section';
 import { IntegrationsSection } from '@/components/settings/integrations-section';
 import { OrganizationSection } from '@/components/settings/organization-section';
@@ -179,7 +179,7 @@ export function SettingsView({ section }: { section: SettingsSection }) {
           {active === 'api-keys' && <ApiKeysSection />}
 
           {/* AI Providers (cloud BYOK) */}
-          {active === 'ai-providers' && isCloud && <AgentSection />}
+          {active === 'ai-providers' && isCloud && <AiProvidersSection />}
 
           {/* Billing */}
           {active === 'billing' && isCloud && <BillingSection />}

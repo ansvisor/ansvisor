@@ -2,6 +2,8 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslations } from 'next-intl';
+import { RotateCw } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { getMentionsPerception } from '@/lib/actions/mentions';
@@ -44,9 +46,12 @@ export function MentionsPerceptionTab({
   filters: MentionsFilters;
 }) {
   const t = useTranslations('mentions.perception');
+  const common = useTranslations('common');
   const query = useMemo(() => mentionsQuery(filters), [filters]);
   const key = query ? JSON.stringify([brandId, query]) : null;
   const [loaded, setLoaded] = useState<Loaded | null>(null);
+  // Try again reads the same filters once more.
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     if (!key || !query) return;
@@ -64,12 +69,30 @@ export function MentionsPerceptionTab({
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [brandId, key, query]);
+  }, [brandId, key, query, attempt]);
 
   if (!query) return <Message>{t('pickDates')}</Message>;
   if (!loaded || loaded.brandId !== brandId) return <PerceptionSkeleton />;
   if (loaded.status === 'error') {
-    return loaded.key === key ? <Message>{t('loadError')}</Message> : <PerceptionSkeleton />;
+    return loaded.key === key ? (
+      <Message>
+        <p>{t('loadError')}</p>
+        <Button
+          className="mt-4 gap-2"
+          size="sm"
+          variant="outline"
+          onClick={() => {
+            setLoaded(null);
+            setAttempt((n) => n + 1);
+          }}
+        >
+          <RotateCw className="h-4 w-4" />
+          {common('retry')}
+        </Button>
+      </Message>
+    ) : (
+      <PerceptionSkeleton />
+    );
   }
   if (!loaded.perception) return <Message>{t('unavailable')}</Message>;
 

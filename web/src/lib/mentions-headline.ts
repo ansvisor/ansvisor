@@ -1,6 +1,7 @@
 import { PLATFORM_LABELS } from '@/config/platform-labels';
 import { POSITION_PLATFORMS } from '@/lib/prompt-positions';
 import {
+  changeBasis,
   isLowSample,
   LOW_SAMPLE_MENTIONS,
   netSentiment,
@@ -44,12 +45,20 @@ export interface MentionsHeadline {
 
 export function mentionsHeadline(o: MentionsOverview): MentionsHeadline {
   const net = wholeNet(o.current);
-  const previous = wholeNet(o.previous);
   const lowSample = isLowSample(o.current);
-  // Like the KPI cards: no change from or to a low sample.
+  // Like the KPI cards: taken on the prompts both windows answered, and no
+  // change from or to a low sample.
+  const basis = changeBasis(o);
+  const now = wholeNet(basis.current);
+  const previous = wholeNet(basis.previous);
   const netChange =
-    net !== null && previous !== null && !lowSample && !isLowSample(o.previous)
-      ? net - previous
+    net !== null &&
+    now !== null &&
+    previous !== null &&
+    !lowSample &&
+    !isLowSample(basis.current) &&
+    !isLowSample(basis.previous)
+      ? now - previous
       : null;
 
   let mover: MentionsHeadline['mover'] = null;
@@ -77,15 +86,18 @@ export function mentionsHeadline(o: MentionsOverview): MentionsHeadline {
 }
 
 /**
- * A platform's net sentiment change against the window before, only when both
- * windows have enough mentions to say so (fewer than 20 is a low sample).
+ * A platform's net sentiment change against the window before, on the prompts
+ * both windows answered (00195; all of them before it), only when both have
+ * enough mentions to say so (fewer than 20 is a low sample).
  */
 export function platformNetChange(row: MentionPlatformRow): number | null {
-  if (row.mentions < LOW_SAMPLE_MENTIONS || row.previous.mentions < LOW_SAMPLE_MENTIONS) {
+  const current = row.same?.current ?? row;
+  const previous = row.same?.previous ?? row.previous;
+  if (current.mentions < LOW_SAMPLE_MENTIONS || previous.mentions < LOW_SAMPLE_MENTIONS) {
     return null;
   }
-  const now = wholeNet(row);
-  const before = wholeNet(row.previous);
+  const now = wholeNet(current);
+  const before = wholeNet(previous);
   return now !== null && before !== null ? now - before : null;
 }
 

@@ -63,8 +63,9 @@ export const GETTING_STARTED_STEPS: readonly GettingStartedStepDef[] = [
   { key: 'citations', stage: 'explore', href: '/dashboard/citations' },
   { key: 'traffic', stage: 'explore', href: '/dashboard/traffic' },
   { key: 'pick_content', stage: 'act', href: '/dashboard/content' },
-  { key: 'create_content', stage: 'act', href: '/dashboard/content' },
-  { key: 'optimize_page', stage: 'act', href: '/dashboard/audit' },
+  // The Content Plan's top Create row and top Optimize row, open in Start (00234).
+  { key: 'create_content', stage: 'act', href: '/dashboard/content/plan?start=create' },
+  { key: 'optimize_page', stage: 'act', href: '/dashboard/content/plan?start=optimize' },
   { key: 'ready', stage: 'ready', href: '/dashboard/action-center/actions' },
 ];
 
@@ -122,6 +123,9 @@ export interface GettingStartedFacts {
   /** Content sent to the CMS or completed in the last 30 days. */
   contentRecent: number;
   audits: number;
+  /** Content Editor drafts made ready or published, by method (00234). */
+  draftsCreated: number;
+  draftsOptimized: number;
 }
 
 export interface GettingStartedProgress {
@@ -199,6 +203,8 @@ export function parseGettingStartedFacts(raw: unknown): GettingStartedFacts | nu
     contentCreated: num(r.content_created),
     contentRecent: num(r.content_recent),
     audits: num(r.audits),
+    draftsCreated: num(r.drafts_created),
+    draftsOptimized: num(r.drafts_optimized),
   };
 }
 
@@ -272,10 +278,18 @@ function stepState(
     }
     case 'pick_content':
       return { state: stateOf(f.contentPicked > 0, f.contentSuggestions > 0), progress: null };
+    // A draft made ready or published in the Content Editor completes them
+    // (00234); the old ways still count, so a step already done stays done.
     case 'create_content':
-      return { state: stateOf(f.contentCreated > 0, f.contentSuggestions > 0), progress: null };
+      return {
+        state: stateOf(f.contentCreated > 0 || f.draftsCreated > 0, f.contentSuggestions > 0),
+        progress: null,
+      };
     case 'optimize_page':
-      return { state: stateOf(f.audits > 0, f.contentSuggestions > 0), progress: null };
+      return {
+        state: stateOf(f.draftsOptimized > 0 || f.audits > 0, f.contentSuggestions > 0),
+        progress: null,
+      };
     case 'ready':
       // Filled in once the others are known.
       return { state: 'waiting', progress: null };

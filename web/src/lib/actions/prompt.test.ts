@@ -350,4 +350,21 @@ describe('getPromptsPageData', () => {
       expect.any(Error),
     );
   });
+
+  it('shows the prompts without their visibility when that read times out, and says so', async () => {
+    vi.mocked(getPromptVisibilitySummaries).mockRejectedValue(
+      new Error('canceling statement due to statement timeout'),
+    );
+
+    const page = await getPromptsPageData('b1');
+
+    expect(page.promptSets[0].prompts.map((p) => p.id)).toEqual(['p1']);
+    expect(page.visibility).toEqual({});
+    expect(page.visibilityDegraded).toBe(true);
+    expect(page.volumesDegraded).toBe(false);
+    expect(console.error).toHaveBeenCalledWith(
+      expect.stringContaining('visibility summaries'),
+      expect.any(Error),
+    );
+  });
 });

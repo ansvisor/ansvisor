@@ -117,8 +117,9 @@ describe('samePromptChanges', () => {
 
     // Coverage of the shared prompts: 160/200 = 80% vs 150/200 = 75%.
     expect(changes.coverageChange).toBe(5);
-    // Net sentiment: (40% − 10%) vs (27% − 9%).
-    expect(changes.netSentimentChange).toBe(12);
+    // Net sentiment over the answers naming the brand (00191): (44% − 11%)
+    // vs (30% − 10%); the 10 answers that only cite it don't dilute it.
+    expect(changes.netSentimentChange).toBe(13);
     // Avg. position: 1.8 vs 2.0, an improvement.
     expect(changes.avgPositionChange).toBe(-0.2);
     // Citation rate: 15% vs 10%.

@@ -1613,23 +1613,27 @@
         },
         "create_content": {
           "title": "Create your first content",
-          "summary": "Draft in your brand voice, then publish.",
-          "open": "Open Content",
-          "doneWhen": "Sent to your CMS, or its action completed",
+          "summary": "Start the new page your Content Plan ranks first.",
+          "open": "Open the Plan",
+          "doneWhen": "A new page marked ready or published, or sent to your CMS",
           "why": ["Content is the main way to appear in more answers."],
           "how": [
-            "Open Content",
-            "Create a brief for one suggestion",
-            "Publish it: send it to your CMS, or complete its action"
+            "Open the Plan: its top new page opens in Start",
+            "Pick who writes it: you, the Content Agent or your team",
+            "Mark it ready, then publish it"
           ]
         },
         "optimize_page": {
           "title": "Optimize a page",
-          "summary": "Audit a page, then apply its fixes.",
-          "open": "Open Audit",
-          "doneWhen": "1 page audited",
+          "summary": "Improve the page your Content Plan ranks first to optimize.",
+          "open": "Open the Plan",
+          "doneWhen": "An optimized page marked ready or published, or a page audited",
           "why": ["Small fixes on pages AI already reads can win fast."],
-          "how": ["Open Audit", "Audit one page", "Apply the fixes it suggests"]
+          "how": [
+            "Open the Plan: its top page to optimize opens in Start",
+            "Improve it in the editor, with its rules and sources",
+            "Mark it ready, then publish it"
+          ]
         },
         "ready": {
           "title": "You’re ready",
@@ -1665,14 +1669,14 @@
         "failed": "Couldn’t skip the step. Try again."
       },
       "start": {
-        "button": "Start getting started",
+        "button": "Get Started",
         "hint": "For admins and managers · about 15 min",
         "started": "{count, plural, =0 {Getting started is on} one {Getting started · # step already done} other {Getting started · # steps already done}}",
         "failed": "Couldn’t start Getting started. Try again."
       },
       "skip": {
-        "button": "Skip getting started",
-        "title": "Skip getting started?",
+        "button": "Skip Get Started",
+        "title": "Skip Get Started?",
         "body": "Your actions list goes back to normal. Steps you finished stay done.",
         "later": "You can start again any time from the same button.",
         "confirm": "Skip",
@@ -2457,8 +2461,8 @@
     "emptyExample1": "“how is my brand doing?”",
     "emptyBodyOr": "or",
     "emptyExample2": "“who's gaining share of voice this month?”",
-    "keyMissingTitle": "Add your Anthropic API key",
-    "keyMissingBody": "The agent uses your own Anthropic key to call Claude directly — usage is billed to your Anthropic account, not to Ansvisor. Paste a key in Settings to unlock the chat.",
+    "keyMissingTitle": "Add an AI provider key",
+    "keyMissingBody": "Chat uses your own key for Anthropic, OpenAI, Google Gemini, Microsoft Azure OpenAI or OpenRouter — usage is billed to that account, not to Ansvisor. Add a key in Settings to unlock the chat.",
     "goToSettings": "Go to Settings",
     "planGateTitle": "Agent is a {plan} feature",
     "planGateBody": "Upgrade your plan to chat with your dashboard about visibility, competitors, citations, and content gaps."
@@ -2849,6 +2853,7 @@
       "openPrompts": "Tracked prompts: open Prompts",
       "openCitations": "Citations: open Citations",
       "openMentions": "Mentions: open Mentions",
+      "openSentiment": "Net sentiment: open Mentions",
       "visibility": "Visibility",
       "visibilityTip": "AI Visibility Score (0–100) from how often answers name you, cite your site and how early you're named. See Formulas.",
       "rankOf": "#{rank} of {count} brands",
@@ -2867,7 +2872,7 @@
       "citationsTip": "Times answers cited your pages. The change is against the previous period.",
       "vsPrevious": "vs previous period",
       "netSentiment": "Net sentiment",
-      "netSentimentTip": "Positive minus negative share of the answers that name or cite your brand.",
+      "netSentimentTip": "Positive minus negative share of the answers that name your brand, as on the Mentions page.",
       "sentimentSplit": "{positive} pos · {negative} neg",
       "sampleTip": {
         "all": "{count, plural, one {Based on # answer} other {Based on # answers}} in this period.",
@@ -3103,7 +3108,7 @@
         "create": { "title": "Create", "hint": "New pages AI needs" },
         "optimize": { "title": "Optimize", "hint": "Pages losing ground" },
         "protect": { "title": "Protect", "hint": "Top pages · edit with care" },
-        "overlaps": { "title": "Overlaps", "hint": "Pages competing for the same prompts" }
+        "priority": { "title": "Priority", "hint": "Marked by your team" }
       },
       "results": {
         "label": "From AI visits · {days} full days to yesterday (UTC):",
@@ -3115,6 +3120,11 @@
       },
       "mix": {
         "title": "What AI cites in your topics",
+        "collapsed": "{types, plural, one {# page type} other {# page types}} · {gaps, plural, =0 {no gap} one {# gap} other {# gaps}}",
+        "show": "Show",
+        "hide": "Hide",
+        "filteredBy": "Priority list filtered to {type}",
+        "clearFilter": "Clear",
         "aiShare": "Share of AI citations",
         "yourShare": "Your pages' mix",
         "shares": "{ai}% · {yours}%",
@@ -3128,24 +3138,23 @@
         "none": "No page reads as losing ground yet: tracking began {since}, so the {days} days before aren't tracked to compare with.",
         "partial": "The {days} days before are tracked only since {since}: pages are compared per tracked answer."
       },
-      "ranked": "Ranked by impact · overlaps checked",
+      "ranked": "Ranked by impact",
       "filtered": "Filtered · click it again to clear",
       "columns": {
+        "score": "Priority Score",
         "page": "Page",
         "action": "Action",
         "why": "Why · last {days} days",
         "who": "Who",
-        "start": "Start"
+        "start": "Start",
+        "menu": "Row actions"
       },
       "newPage": "New page",
-      "overlap": "⚠ Overlap",
-      "overlapHint": "{count, plural, one {# other page of yours is} other {# other pages of yours are}} cited for the same prompts",
       "actions": { "create": "Create", "optimize": "Optimize", "protect": "Protect" },
       "sources": {
         "opportunity": "Opportunity",
         "citations": "Citations",
-        "protect": "Protect",
-        "overlap": "Overlap"
+        "protect": "Protect"
       },
       "why": {
         "competitors": "{names} cited · you aren't",
@@ -3153,8 +3162,7 @@
         "opportunity": "{count, plural, =0 {A page AI needs} one {Answers # prompt AI asks} other {Answers # prompts AI asks}}",
         "citationsDown": "Citation rate −{pct}%",
         "on": "on {platforms}",
-        "top": "Top page · {citations, plural, one {{citationsText} citation} other {{citationsText} citations}} · {visits, plural, one {{visitsText} AI visit} other {{visitsText} AI visits}}",
-        "overlap": "Competes with {count, plural, one {# of your pages} other {# of your pages}} for the same prompts"
+        "top": "Top page · {citations, plural, one {{citationsText} citation} other {{citationsText} citations}} · {visits, plural, one {{visitsText} AI visit} other {{visitsText} AI visits}}"
       },
       "who": { "you": "You", "agent": "Agent", "team": "Teammate" },
       "start": { "create": "Create", "optimize": "Optimize", "protect": "View" },
@@ -3162,7 +3170,41 @@
       "empty": "Nothing to work on yet. New opportunities and your pages' AI citations show up here.",
       "emptyFiltered": "Nothing here for this period.",
       "loadError": "Couldn't load the content plan.",
-      "retry": "Try again"
+      "retry": "Try again",
+      "priority": "Priority",
+      "score": {
+        "label": "Priority Score {score}: how it is worked out",
+        "title": "How this score is worked out",
+        "opportunity": "The content opportunity's own score: {score}",
+        "citationsDown": "{base} + {pctPoints} for {pct}% fewer citations + {lostPoints} for {lost, plural, one {# citation} other {# citations}} lost = {score}{capped, select, true { (at most {max})} other {}}",
+        "protect": "{base} + {citations, plural, one {# citation} other {# citations}} = {score}{capped, select, true { (at most {max})} other {}}",
+        "higher": "The higher of the two counts.",
+        "marked": "Marked as a priority, so it's listed first."
+      },
+      "rowMenu": {
+        "label": "Actions for {title}",
+        "assign": "Assign to…",
+        "markPriority": "Mark as priority",
+        "unmarkPriority": "Remove priority",
+        "hide": "Hide from the plan",
+        "hidden": "Hidden: {title}",
+        "undo": "Undo",
+        "failed": "Couldn't save that. Try again."
+      },
+      "hidden": {
+        "toggle": "{count, plural, one {# hidden row} other {# hidden rows}} · {open, select, true {Hide} other {Show}}",
+        "show": "Show again"
+      },
+      "assign": {
+        "title": "Assign “{title}”",
+        "description": "It goes to the Action Center as a task for this teammate.",
+        "member": "Teammate",
+        "pick": "Pick a teammate",
+        "submit": "Assign",
+        "cancel": "Cancel",
+        "done": "Assigned to {name}",
+        "failed": "Couldn't assign it. Try again."
+      }
     },
     "agentState": {
       "writing": "Agent writing…",
@@ -3215,7 +3257,7 @@
       "methods": {
         "create": {
           "title": "Create from scratch",
-          "hint": "From an opportunity, a prompt or a topic"
+          "hint": "From a content opportunity, a prompt or a topic"
         },
         "optimize": {
           "title": "Optimize content",
@@ -3225,16 +3267,18 @@
       "startFrom": "Start from",
       "sources": {
         "opportunity": {
-          "tab": "Opportunity",
-          "placeholder": "Pick an opportunity",
-          "search": "Search opportunities",
-          "empty": "No open opportunities."
+          "tab": "Content Opportunity",
+          "placeholder": "Pick a content opportunity",
+          "search": "Search content opportunities",
+          "empty": "No open content opportunities."
         },
         "prompt": {
           "tab": "Prompt",
           "placeholder": "Pick a tracked prompt",
           "search": "Search prompts",
-          "empty": "No tracked prompts."
+          "empty": "No tracked prompts.",
+          "seen": "{count, plural, one {# prompt} other {# prompts}} where AI already names or cites you in the last 30 days {count, plural, one {isn't} other {aren't}} listed: {count, plural, one {it needs} other {they need}} no new page.",
+          "allSeen": "AI already names or cites you for every tracked prompt in the last 30 days."
         },
         "topic": {
           "tab": "Topic",
@@ -3292,6 +3336,7 @@
         "detectedTitle": "Picked from the title.",
         "detectedContent": "Picked from the content.",
         "detectedPage": "Picked from the page.",
+        "detectedOpportunity": "Picked from the opportunity.",
         "openEditor": "Open editor",
         "pageUnread": "Couldn't read {page}: the draft starts with its title.",
         "failed": "Couldn't start the draft. Try again.",
@@ -3327,18 +3372,19 @@
         "team": {
           "title": "Team",
           "hint": "Send to Action Center"
-        }
+        },
+        "assignTo": "Assign to",
+        "assignNone": "No one yet",
+        "assignFailed": "Sent, but couldn't assign it. Assign it in the Action Center."
       },
       "overlap": {
-        "label": "Overlap check",
-        "checking": "Checking your pages that answer the same prompts…",
-        "failed": "Couldn't check for overlapping pages.",
+        "label": "Overview",
+        "checking": "Reading your pages AI cites for these prompts…",
+        "failed": "Couldn't read your pages cited for these prompts.",
         "retry": "Try again",
-        "none": "No existing page answers these prompts",
+        "none": "None of your pages is cited for these prompts yet",
         "noPrompts": "No tracked prompts to check this against yet",
-        "safe": "Safe to create",
-        "covered": "An existing page already answers these prompts",
-        "partial": "{count, plural, one {# existing page answers} other {# existing pages answer}} some of these prompts",
+        "cited": "{count, plural, one {# of your pages is} other {# of your pages are}} cited for these prompts",
         "columns": {
           "page": "Page",
           "prompts": "Same prompts",
@@ -3346,11 +3392,11 @@
           "google": "Google pos."
         },
         "promptsValue": "{count} of {total}",
-        "recommended": "Recommended",
         "options": {
           "optimizeGiven": {
             "title": "Optimize {page}",
-            "reason": "The page your Content plan picked"
+            "reason": "The page your Content plan picked",
+            "reasonCited": "The page AI engines cite for this prompt"
           },
           "optimizeInstead": {
             "title": "Optimize {page} instead",
@@ -3358,21 +3404,8 @@
             "reasonRanked": "It already answers {count} of {total} prompts, is cited {citations}× and ranks #{position} on Google"
           },
           "createNew": {
-            "title": "Create a new page instead",
-            "reason": "Write a new page for these prompts"
-          },
-          "createAnyway": {
-            "title": "Create a new page anyway",
-            "reason": "Risk: two pages compete for the same prompts"
-          },
-          "createLinked": {
-            "title": "Create a new page, link {page} to it",
-            "titleMany": "Create a new page, link these pages to it",
-            "reason": "One clear page for these prompts"
-          },
-          "addSection": {
-            "title": "Add a section to {page}",
-            "reason": "A smaller change than a new page"
+            "title": "Create a new page",
+            "reason": "Another page of yours for AI to cite"
           }
         }
       }
@@ -3998,13 +4031,22 @@
     "opportunities": "Opportunities",
     "autoGeneratedHint": "Opportunities are generated automatically as your tracking data comes in.",
     "generating": "Generating…",
-    "send": "Send",
     "sendToWorkflow": "Send to Workflow",
     "generateBrief": "Generate Brief",
     "generatingBrief": "Generating...",
     "briefGenerated": "Brief Generated",
     "briefLimitReached": "You've used this month's content briefs",
     "sendToActions": "Send to Actions",
+    "draftCheckFailed": "Couldn't check for a draft · Retry",
+    "sendToEditor": "Send to Editor",
+    "openDraft": "Open draft",
+    "sendToPlan": "Send to Plan",
+    "openInPlan": "Open in Plan",
+    "sentToPlan": "Added to the Plan's priority list",
+    "sendToPlanError": "Couldn't add it to the Plan. Please try again.",
+    "openPlan": "Open Plan",
+    "moreActions": "More actions",
+    "rowActions": "Actions for {title}",
     "openInActions": "Open in Actions",
     "sendAgain": "Send Again",
     "copyAllData": "Copy All Data",
@@ -4062,12 +4104,10 @@
     "kpi": {
       "total": "Total Opportunities",
       "highImpact": "High Impact",
-      "sentToWorkflow": "Sent to Workflow",
       "avgScore": "Avg. Score",
       "shown": "{count} shown",
       "opportunities": "opportunities",
       "outOf100": "out of 100",
-      "sentOrInProgress": "sent or in progress",
       "fromSignals": "from {count, plural, one {# signal} other {# signals}} analyzed"
     },
     "filters": {
@@ -4313,14 +4353,6 @@
       "defend": "You are already visible here. Keep this page ahead of competitors."
     },
     "assetType": {
-      "blog_post": "Blog post",
-      "pillar_guide": "Pillar guide",
-      "landing_page": "Landing page",
-      "comparison_page": "Comparison page",
-      "glossary_page": "Glossary page",
-      "faq_page": "FAQ page",
-      "product_page": "Product page",
-      "category_page": "Category page",
       "third_party_article": "Third-party article",
       "backlink": "Backlink"
     },
@@ -5039,6 +5071,8 @@
     }
   },
   "prompts": {
+    "loadError": "Couldn't load your prompts.",
+    "visibilityDegraded": "Visibility figures are temporarily unavailable — showing prompts without them.",
     "positions": {
       "answers": "{count, plural, one {# answer} other {# answers}}",
       "answersInPeriod": "{count, plural, one {# answer} other {# answers}} in this period",
@@ -5082,6 +5116,8 @@
       "subtitle": "Every tracked prompt for this brand · edit or pause any row in place",
       "subtitleReadOnly": "Read-only overview of every tracked prompt for this brand",
       "planAndUsage": "Plan & usage",
+      "show": "Show",
+      "hide": "Hide",
       "planPill": "{plan} plan",
       "planLabel": {
         "self_hosted": "Self-Hosted",
@@ -5197,6 +5233,18 @@
       "showAll": "Show all performance",
       "order": "Furthest behind first: late or missing on the most AI platforms, then the worse average position."
     },
+    "content": {
+      "create": "Create content",
+      "optimize": "Optimize content",
+      "openDraft": "Open draft",
+      "createTitle": "No answer mentions or cites you here",
+      "createBody": "None of this period's {answers, plural, one {# answer} other {# answers}} names your brand or cites your site. A page written for this prompt gives AI engines something of yours to use.",
+      "rareTitle": "Mentioned in {pct}% of answers",
+      "lateTitle": "Mentioned at #{position} on average",
+      "optimizePage": "Optimize {page}, the page AI engines cite here, so they name you more often and earlier.",
+      "optimizePick": "Start lists your pages that answer this prompt: pick the one to optimize.",
+      "draftNote": "A draft for this prompt is already being written."
+    },
     "improve": {
       "quota": {
         "left": "{count, plural, one {About # generation left this month} other {About # generations left this month}}",
@@ -5236,7 +5284,7 @@
         "label": "Summary",
         "net": "Net sentiment is <b>{net}</b>.",
         "netChange": "Net sentiment is <b>{net}</b> (<tone>{change}</tone> vs the previous {period}).",
-        "netLowSample": "Net sentiment is <b>{net}</b> (low sample: {count, plural, one {# mention} other {# mentions}}).",
+        "netLowSample": "Net sentiment is <b>{net}</b> (low sample: {count, plural, one {# response naming you} other {# responses naming you}}).",
         "noMentions": "AI didn't name {brand} in the tracked responses of this period.",
         "moverDown": "Most of the drop is on <b>{platform} ({change})</b>.",
         "moverUp": "Most of the rise is on <b>{platform} ({change})</b>.",
@@ -5248,8 +5296,8 @@
       },
       "kpi": {
         "totalMentions": "Total mentions",
-        "totalMentionsTip": "Responses that name {brand} at least once. A response naming you twice counts once.",
-        "totalMentionsSub": "responses naming {brand}",
+        "totalMentionsTip": "Every time the responses name {brand}: a response naming you three times counts three, as on the Insights page.",
+        "totalMentionsSub": "times responses named {brand}",
         "mentionRate": "Mention rate",
         "mentionRateTip": "The share of tracked responses that name {brand}.",
         "mentionRateSub": "of {count} tracked responses",
@@ -5296,7 +5344,7 @@
         "description": "How often AI names each brand, and how often in the same responses as you.",
         "tableLabel": "Mentions of your brand and competitors",
         "brand": "Brand",
-        "mentions": "Mentions",
+        "mentions": "Responses",
         "rate": "Rate",
         "alsoNamesYou": "Also names you",
         "alsoNamesYouTip": "Of the responses naming this competitor, how many name {brand} too, and what share of its mentions that is.",
@@ -5321,7 +5369,7 @@
       "sortOldest": "Oldest",
       "sortCoMentions": "Most co-mentions",
       "sortNegative": "Most negative",
-      "summary": "{mentions, plural, one {# mention} other {# mentions}} · {prompts, plural, one {# prompt} other {# prompts}}",
+      "summary": "{responses, plural, one {# response} other {# responses}} · {prompts, plural, one {# prompt} other {# prompts}}",
       "columns": {
         "prompt": "Prompt",
         "platform": "Platform",
@@ -5419,7 +5467,7 @@
       "copyBlocked": "Your browser didn't allow copying here. Allow clipboard access for this site and try again.",
       "exportFailed": "Couldn't export the mentions. Try again in a moment.",
       "nothing": "No mentions to export for these filters.",
-      "capped": "The file holds {shown} of {total} mentions. Narrow the filters to export the rest.",
+      "capped": "The file holds {shown} of {total} responses. Narrow the filters to export the rest.",
       "pickDates": "Choose a start or end date first.",
       "reports": "Reports",
       "exportSelected": "Export",
@@ -5428,11 +5476,12 @@
         "periodDays": "{from} – {to} ({days, plural, one {# day} other {# days}}, UTC)",
         "periodMoments": "{from} – {to} UTC",
         "responses": "Tracked responses (n)",
-        "mentions": "Mentions (n)",
+        "totalMentions": "Total mentions (n)",
+        "namedResponses": "Responses naming the brand (n)",
         "prompts": "Prompts with mentions (n)",
-        "inFile": "Mentions in this file (n)",
+        "inFile": "Responses in this file (n)",
         "note": "Note",
-        "capped": "Only the first {shown} of {total} mentions, in the table's order. Narrow the filters to export the rest.",
+        "capped": "Only the first {shown} of {total} responses, in the table's order. Narrow the filters to export the rest.",
         "exported": "Exported (UTC)"
       },
       "summary": {
@@ -5445,7 +5494,7 @@
     },
     "perception": {
       "sectionLabel": "Perception",
-      "loadError": "Couldn't load the perception figures. Try again in a moment.",
+      "loadError": "Couldn't load the perception figures.",
       "unavailable": "Perception isn't available yet. It appears once the mentions data has been prepared.",
       "pickDates": "Choose a start or end date to see the perception figures.",
       "noMentions": "AI didn't name {brand} in the tracked responses of this period.",
@@ -5591,6 +5640,7 @@
     "kpiTopMerchantSub": "Most frequent merchant domain",
     "platformBreakdownTitle": "Card rate by platform",
     "trendTitle": "Your shopping presence — last 30 days",
+    "amazonShareDropAlert": "Amazon's share fell from {from}% to {to}% over the last seven days. AI may be leaving Amazon out; your own store link matters more.",
     "filterRegion": "Region",
     "filterPlatform": "Platform",
     "filterDateRange": "Date range",
@@ -5822,8 +5872,32 @@
     "upgradeTo": "Upgrade to {plan}",
     "downgradeTo": "Downgrade to {plan}",
     "changePlanConfirmTitle": "Change to {plan}?",
-    "changePlanConfirmDescription": "You will be switched to the {plan} plan at ${price}/mo. Proration will be applied to your next invoice.",
+    "changePlanConfirmDescription": "You will be switched to the {plan} plan at ${price}/{interval, select, year {yr} other {mo}}. Proration will be applied to your next invoice.",
     "changePlanConfirm": "Confirm Change",
+    "changePeriodTitle": "Switch to {interval, select, year {annual} other {monthly}} billing?",
+    "changePeriodDescription": "Your {plan} plan will cost ${price} a {interval, select, year {year} other {month}}. Proration will be applied to your next invoice.",
+    "billingPeriod": "Billing period",
+    "monthly": "Monthly",
+    "annual": "Annual",
+    "savePercent": "Save {percent}%",
+    "popular": "Popular",
+    "regularPrice": "Regular price",
+    "firstMonthOffer": "50% off your first month with code {code}",
+    "buyPlanNow": "Buy {plan} now",
+    "planAdminOnly": "Only admins can buy or change the plan. Ask an admin in your organization.",
+    "seeAllPlanFeatures": "See everything each plan includes",
+    "switchToAnnual": "Switch to annual billing",
+    "switchToMonthly": "Switch to monthly billing",
+    "buyNowTitle": "Buy {plan} now?",
+    "buyNowDescription": "Your free trial ends today and the card you added is charged ${price} for the first {interval, select, year {year} other {month}}. The plan then renews every {interval, select, year {year} other {month}}.",
+    "promoCode": "Promo code",
+    "firstMonthWithCode": "With {code}, your first month is ${price}.",
+    "buyNowConfirm": "Buy now",
+    "planBought": "Your {plan} plan is active. Thank you!",
+    "paymentFailed": "The payment didn't go through.",
+    "paymentFailedHint": "Your free trial carries on. Update your card on Stripe, then try again.",
+    "updateCard": "Update card",
+    "trialEndsOn": "Your free trial ends on {date}",
     "processing": "Processing...",
     "cancelSubscription": "Cancel Subscription",
     "cancelConfirmTitle": "Cancel your subscription?",
@@ -5880,7 +5954,7 @@
     "revokeApiKey": "Revoke API key",
     "revokeApiKeyConfirm": "Revoke this API key? Clients using it will lose access immediately.",
     "revoke": "Revoke",
-    "agent_removeKeyConfirm": "Remove the Anthropic API key? Team members will lose access to the agent until a new key is saved.",
+    "agent_removeKeyConfirm": "Remove the {provider} API key? If Chat uses it, Chat switches to the most recently saved other key, or stays locked until a new one is saved.",
     "remove": "Remove",
     "apiKeys_description": "Long-lived tokens for the Ansvisor MCP server and other external clients. Keys are shown once at creation — store them somewhere safe.",
     "apiKeys_mcpEndpoint": "MCP endpoint",
@@ -5912,19 +5986,67 @@
       "zed": "Add to your Zed settings.json."
     },
     "apiKeys_name": "Name",
-    "agent_description": "Ansvisor's Chat answers with an AI model on your own account with its provider. Add your Anthropic API key: Chat calls Claude with it, the usage is billed to your Anthropic account rather than to Ansvisor, and the key is stored encrypted.",
-    "agent_keyConfigured": "Key configured",
+    "agent_description": "Ansvisor's Chat answers with an AI model on your own account with its provider, so the usage is billed to that account rather than to Ansvisor. Add a key for one or more providers and choose the one Chat uses. Keys are stored encrypted; Ansvisor support cannot read them.",
+    "agent_usedByChat": "Used by Chat",
+    "agent_keySaved": "Key saved",
     "agent_savedAt": "Saved {date}",
     "agent_savedBy": "by {email}",
-    "agent_noKey": "No key configured. The agent will be locked for everyone in this organization until a key is saved.",
-    "agent_replaceKey": "Replace key",
-    "agent_anthropicKeyLabel": "Anthropic API key",
-    "agent_keyPlaceholder": "sk-ant-…",
+    "agent_modelInUse": "Model {model}",
+    "agent_noKey": "No key yet. Chat stays locked for everyone in this organization until a key is saved.",
+    "agent_addKey": "Add key",
     "agent_replace": "Replace",
-    "agent_keyHint": "Get a key from <link>console.anthropic.com</link>. The key is encrypted at rest; Ansvisor support cannot read it.",
+    "agent_useForChat": "Use for Chat",
+    "agent_apiKeyLabel": "API key",
+    "agent_endpointLabel": "Endpoint",
+    "agent_endpointPlaceholder": "https://your-resource.openai.azure.com",
+    "agent_deploymentLabel": "Deployment name",
+    "agent_deploymentPlaceholder": "gpt-5-chat",
+    "agent_modelLabel": "Model",
+    "agent_modelOptional": "Optional. Leave empty to use {model}.",
+    "agent_openrouterModelHint": "The model's OpenRouter id, for example {model}.",
+    "agent_invalid": {
+      "endpoint": "Enter your resource's endpoint, for example https://your-resource.openai.azure.com.",
+      "deployment": "Enter the deployment's name: letters, digits, dots, dashes or underscores.",
+      "model": "Enter a model id."
+    },
+    "agent_saved": "{provider} key saved",
+    "agent_switched": "Chat now uses {provider}",
+    "agent_removed": "Key removed",
     "agent_removeKey": "Remove key",
     "agent_adminOnly": "Admin-only setting",
-    "agent_adminOnlyHint": "Only org admins can add, replace, or remove the Anthropic API key. Ask an admin if you need it changed.",
+    "agent_adminOnlyHint": "Only org admins can add, replace, or remove AI provider keys. Ask an admin if you need one changed.",
+    "agent_providers": {
+      "anthropic": {
+        "name": "Anthropic",
+        "about": "Claude models, billed to your Anthropic account.",
+        "keyPlaceholder": "sk-ant-…",
+        "keyHint": "Get a key from <link>console.anthropic.com</link>."
+      },
+      "openai": {
+        "name": "OpenAI",
+        "about": "GPT models, billed to your OpenAI account.",
+        "keyPlaceholder": "sk-…",
+        "keyHint": "Get a key from <link>platform.openai.com</link>."
+      },
+      "google": {
+        "name": "Google Gemini",
+        "about": "Gemini models, billed to your Google AI Studio account.",
+        "keyPlaceholder": "AIza…",
+        "keyHint": "Get a key from <link>aistudio.google.com</link>."
+      },
+      "azure": {
+        "name": "Microsoft Azure OpenAI",
+        "about": "OpenAI models deployed in your own Azure subscription.",
+        "keyPlaceholder": "Key 1 or Key 2",
+        "keyHint": "Find the key and the endpoint under your resource's Keys and Endpoint in the <link>Azure portal</link>."
+      },
+      "openrouter": {
+        "name": "OpenRouter",
+        "about": "One key for models from many providers, billed to your OpenRouter account.",
+        "keyPlaceholder": "sk-or-…",
+        "keyHint": "Get a key from <link>openrouter.ai</link>."
+      }
+    },
     "integrations_cancel": "Cancel",
     "integrations_connecting": "Connecting…",
     "integrations_connect": "Connect",

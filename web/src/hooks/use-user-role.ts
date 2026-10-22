@@ -7,7 +7,7 @@ export interface UserRoleInfo {
   role: TeamRole;
   /** admin or manager — can write to prompts, brands, topics, etc. */
   canManage: boolean;
-  /** admin only — can manage team members, API keys, billing, the Anthropic key. */
+  /** admin only — can manage team members, API keys, billing, AI provider keys. */
   canAdmin: boolean;
 }
 
@@ -17,7 +17,7 @@ export interface UserRoleInfo {
  * matches the admin-or-manager RLS gate used across `prompts`,
  * `prompt_sets`, `brand_domains`, `content_opportunities`, etc.;
  * `canAdmin` is the stricter admin-only gate used by team management
- * and the Settings → Agent API key.
+ * and Settings › AI Providers' keys.
  *
  * The plan-gating equivalent is [`useFeatureGate`](./use-feature-gate.ts).
  * They compose cleanly: feature gate decides "is this product surface

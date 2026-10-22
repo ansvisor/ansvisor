@@ -1,10 +1,17 @@
 'use client';
 
 import { useFormatter, useTranslations } from 'next-intl';
-import { Bot, User } from 'lucide-react';
+import { Bot, EyeOff, MoreHorizontal, Star, User, UserPlus } from 'lucide-react';
 import { Link } from '@/i18n/navigation';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { buttonVariants } from '@/components/ui/button-variants';
 import {
   Table,
@@ -14,11 +21,14 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { PriorityBadge } from '@/components/action-center/action-table';
 import { DRAFT_METHOD_BADGE, DRAFT_STATUS_BADGE } from '@/components/content/draft-badges';
 import { contentEditorPath, isPageType } from '@/lib/content/drafts';
 import { platformNames } from '@/lib/content/impact';
 import { pagePath } from '@/lib/content/overlap';
-import type { PlanAction, PlanPeriod, PlanRow, PlanWhy } from '@/lib/content/plan';
+import type { PlanAction, PlanPeriod, PlanRow, PlanScorePart, PlanWhy } from '@/lib/content/plan';
+import { priorityLevelOf } from '@/lib/action-center/priority';
 import { formatNumber } from '@/lib/format';
 import { cn } from '@/lib/utils';
 
@@ -30,18 +40,29 @@ export const PLAN_ACTION_BADGE: Record<PlanAction, string> = {
 };
 
 /**
- * The Plan's priority list (CE-014): rank, the page (a new one, or the
- * brand's own), the action, why for the period with where it comes from,
- * who is on it, and the button that starts it — or opens its draft.
+ * The Plan's priority list (CE-014): rank, the Priority Score (what the
+ * list is ranked by, with how it was worked out), the page (a new one, or
+ * the brand's own), the action, why for the period with where it comes from,
+ * who is on it, the button that starts it — or opens its draft — and a row
+ * menu: assign it to a teammate, and for admins and managers, mark it as a
+ * priority or hide it.
  */
 export function PlanTable({
   rows,
   days,
+  canManage,
   onStart,
+  onAssign,
+  onPriority,
+  onHide,
 }: {
   rows: PlanRow[];
   days: PlanPeriod;
+  canManage: boolean;
   onStart: (row: PlanRow) => void;
+  onAssign: (row: PlanRow) => void;
+  onPriority: (row: PlanRow, priority: boolean) => void;
+  onHide: (row: PlanRow) => void;
 }) {
   const t = useTranslations('contentEditor.plan');
   const tTypes = useTranslations('contentEditor.pageTypes');
@@ -51,13 +72,20 @@ export function PlanTable({
       <TableHeader>
         <TableRow>
           <TableHead className="w-10 pl-6">#</TableHead>
+          {/* Narrow windows: two lines, and the score without its level's name. */}
+          <TableHead className="w-16 whitespace-normal leading-tight xl:w-auto xl:whitespace-nowrap">
+            {t('columns.score')}
+          </TableHead>
           <TableHead>{t('columns.page')}</TableHead>
           <TableHead>{t('columns.action')}</TableHead>
           <TableHead>{t('columns.why', { days })}</TableHead>
           {/* Wide windows only: the row's button says the same once a draft exists. */}
           <TableHead className="hidden xl:table-cell">{t('columns.who')}</TableHead>
-          <TableHead className="pr-6">
+          <TableHead>
             <span className="sr-only">{t('columns.start')}</span>
+          </TableHead>
+          <TableHead className="w-8 pl-0 pr-3">
+            <span className="sr-only">{t('columns.menu')}</span>
           </TableHead>
         </TableRow>
       </TableHeader>
@@ -65,9 +93,21 @@ export function PlanTable({
         {rows.map((row, i) => (
           <TableRow key={row.key}>
             <TableCell className="pl-6 tabular-nums text-muted-foreground">{i + 1}</TableCell>
-            <TableCell className="max-w-[260px]">
-              <p className="truncate font-medium" title={row.title}>
-                {row.title}
+            <TableCell>
+              <ScoreBadge row={row} />
+            </TableCell>
+            {/* Narrower below xl, to leave room for the Priority Score at 1024 px. */}
+            <TableCell className="max-w-[200px] xl:max-w-[250px]">
+              <p className="flex min-w-0 items-center gap-1.5 font-medium">
+                <span className="truncate" title={row.title}>
+                  {row.title}
+                </span>
+                {row.priority && (
+                  <Badge variant="outline" className="shrink-0 gap-1 font-normal">
+                    <Star aria-hidden className="h-3 w-3" />
+                    {t('priority')}
+                  </Badge>
+                )}
               </p>
               <p className="mt-0.5 flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
                 {isPageType(row.pageType) && (
@@ -78,14 +118,6 @@ export function PlanTable({
                 <span className="truncate" title={row.page ?? undefined}>
                   {row.page ? pagePath(row.page) : t('newPage')}
                 </span>
-                {row.overlaps > 0 && (
-                  <span
-                    className="shrink-0 font-medium text-amber-700 dark:text-amber-400"
-                    title={t('overlapHint', { count: row.overlaps })}
-                  >
-                    {t('overlap')}
-                  </span>
-                )}
               </p>
             </TableCell>
             <TableCell>
@@ -100,7 +132,12 @@ export function PlanTable({
               </span>
             </TableCell>
             <TableCell className="hidden text-muted-foreground xl:table-cell">
-              {row.draft ? (
+              {row.draft?.assignee ? (
+                <span className="inline-flex items-center gap-1.5">
+                  <User aria-hidden className="h-3.5 w-3.5" />
+                  {row.draft.assignee.name}
+                </span>
+              ) : row.draft ? (
                 <span className="inline-flex items-center gap-1.5">
                   {row.draft.author === 'agent' ? (
                     <Bot aria-hidden className="h-3.5 w-3.5" />
@@ -117,7 +154,7 @@ export function PlanTable({
                 '—'
               )}
             </TableCell>
-            <TableCell className="pr-6 text-right">
+            <TableCell className="text-right">
               {row.draft ? (
                 <Link
                   href={contentEditorPath(row.draft.id)}
@@ -135,11 +172,132 @@ export function PlanTable({
                 </Button>
               )}
             </TableCell>
+            <TableCell className="pl-0 pr-3">
+              <RowMenu
+                row={row}
+                canManage={canManage}
+                onAssign={onAssign}
+                onPriority={onPriority}
+                onHide={onHide}
+              />
+            </TableCell>
           </TableRow>
         ))}
       </TableBody>
     </Table>
   );
+}
+
+function RowMenu({
+  row,
+  canManage,
+  onAssign,
+  onPriority,
+  onHide,
+}: {
+  row: PlanRow;
+  canManage: boolean;
+  onAssign: (row: PlanRow) => void;
+  onPriority: (row: PlanRow, priority: boolean) => void;
+  onHide: (row: PlanRow) => void;
+}) {
+  const t = useTranslations('contentEditor.plan.rowMenu');
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        className="rounded p-1 text-muted-foreground hover:bg-muted"
+        aria-label={t('label', { title: row.title })}
+      >
+        <MoreHorizontal className="h-4 w-4" />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-48">
+        <DropdownMenuItem onClick={() => onAssign(row)}>
+          <UserPlus className="h-4 w-4" />
+          {t('assign')}
+        </DropdownMenuItem>
+        {canManage && (
+          <>
+            <DropdownMenuItem onClick={() => onPriority(row, !row.priority)}>
+              <Star className="h-4 w-4" />
+              {row.priority ? t('unmarkPriority') : t('markPriority')}
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={() => onHide(row)}>
+              <EyeOff className="h-4 w-4" />
+              {t('hide')}
+            </DropdownMenuItem>
+          </>
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+/**
+ * The row's Priority Score, coloured by its level as the Action Center's
+ * are, and on hover or focus what it is made of.
+ */
+function ScoreBadge({ row }: { row: PlanRow }) {
+  const t = useTranslations('contentEditor.plan.score');
+  const score = Math.round(row.score);
+  return (
+    <Tooltip>
+      <TooltipTrigger
+        delay={300}
+        closeDelay={0}
+        render={
+          <button
+            type="button"
+            className="rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+            aria-label={t('label', { score })}
+          />
+        }
+      >
+        <PriorityBadge
+          score={score}
+          level={priorityLevelOf(score)}
+          levelClassName="hidden xl:inline"
+        />
+      </TooltipTrigger>
+      <TooltipContent className="max-w-72 space-y-1">
+        <p className="font-medium">{t('title')}</p>
+        {row.scoreParts.map((part) => (
+          <p key={part.kind}>
+            <ScorePartText part={part} />
+          </p>
+        ))}
+        {row.scoreParts.length > 1 && <p className="opacity-80">{t('higher')}</p>}
+        {row.priority && <p className="opacity-80">{t('marked')}</p>}
+      </TooltipContent>
+    </Tooltip>
+  );
+}
+
+function ScorePartText({ part }: { part: PlanScorePart }) {
+  const t = useTranslations('contentEditor.plan.score');
+  switch (part.kind) {
+    case 'opportunity':
+      return t('opportunity', { score: part.score });
+    case 'citationsDown':
+      return t('citationsDown', {
+        base: part.base,
+        pct: part.pct,
+        pctPoints: part.pctPoints,
+        lost: part.lost,
+        lostPoints: part.lostPoints,
+        score: part.score,
+        capped: String(part.base + part.pctPoints + part.lostPoints > part.max),
+        max: part.max,
+      });
+    case 'protect':
+      return t('protect', {
+        base: part.base,
+        citations: part.citations,
+        score: part.score,
+        capped: String(part.base + part.citations > part.max),
+        max: part.max,
+      });
+  }
 }
 
 function WhyText({ why }: { why: PlanWhy }) {
@@ -180,7 +338,5 @@ function WhyText({ why }: { why: PlanWhy }) {
           })}
         </span>
       );
-    case 'overlap':
-      return <span>{t('overlap', { count: why.pages })}</span>;
   }
 }
