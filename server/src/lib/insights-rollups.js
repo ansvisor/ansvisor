@@ -22,7 +22,7 @@
 import supabaseAdmin from '../config/supabase.js';
 import { logger } from './logger.js';
 import { rebuildQueuedCitationRollups, refreshCitationsDaily } from './citations-rollups.js';
-import { refreshMentionsDaily } from './mentions-rollups.js';
+import { refreshMentionTermsDaily, refreshMentionsDaily } from './mentions-rollups.js';
 
 /** How many trailing days the daily sweep recomputes, today included. */
 export const SWEEP_DAYS = 3;
@@ -122,6 +122,8 @@ async function drainRebuildQueue() {
       const end = addDays(from, REBUILD_CHUNK_DAYS - 1);
       ok = await refreshInsightsDaily(brandId, from, end < dayTo ? end : dayTo);
     }
+    // The Perception rollups (00231) still count the deleted prompt's terms.
+    if (ok) ok = await refreshMentionTermsDaily(brandId, dayFrom, dayTo);
     // A failed refresh logged itself; the entry stays for the next drain.
     if (!ok) {
       failed++;

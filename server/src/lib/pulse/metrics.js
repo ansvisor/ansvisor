@@ -174,14 +174,23 @@ async function visibilityRate(brandId, from, to, days = null) {
   return { visible, total, rate: score };
 }
 
+/**
+ * Positive answers over the answers that name the brand (00191's
+ * `mention_results`), the base Insights and Action Center use. Before 00191
+ * the aggregates carry only answers that name or cite it, so fall back.
+ */
+export function positiveSentimentPct(agg) {
+  const named = agg?.mention_results ?? agg?.mentioning_results ?? 0;
+  return named > 0 ? Math.round(((agg?.positive_count ?? 0) / named) * 100) : 0;
+}
+
 async function insightsWindow(brandId, from, to, days = null) {
   const agg = await rpc(daily('insights_aggregates', days), windowParams(brandId, from, to, days));
-  const mentioning = agg?.mentioning_results ?? 0;
   return {
     totalResults: agg?.total_results ?? 0,
     mentions: agg?.total_mentions ?? 0,
     citations: agg?.total_citations ?? 0,
-    sentimentPct: mentioning > 0 ? Math.round(((agg?.positive_count ?? 0) / mentioning) * 100) : 0,
+    sentimentPct: positiveSentimentPct(agg),
   };
 }
 

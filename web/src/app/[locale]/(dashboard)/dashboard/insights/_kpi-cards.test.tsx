@@ -38,7 +38,11 @@ let root: Root;
 const onBreakdown = vi.fn();
 const onNavigate = vi.fn();
 
-function render(trackedPrompts: TrackedPromptsKpi, over: Partial<InsightsSummary> = {}) {
+function render(
+  trackedPrompts: TrackedPromptsKpi,
+  over: Partial<InsightsSummary> = {},
+  props: { mentionsHref?: string } = {},
+) {
   act(() => {
     root.render(
       <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
@@ -53,6 +57,7 @@ function render(trackedPrompts: TrackedPromptsKpi, over: Partial<InsightsSummary
           series={null}
           onBreakdown={onBreakdown}
           onNavigate={onNavigate}
+          {...props}
         />
       </NextIntlClientProvider>,
     );
@@ -116,6 +121,17 @@ describe('the Mentions and Citations cards', () => {
     act(() => card('Citations: open Citations').click());
     expect(onNavigate).toHaveBeenLastCalledWith('/dashboard/citations');
     expect(onBreakdown).not.toHaveBeenCalled();
+  });
+
+  it('opens Mentions on the same range from Mentions and Net sentiment', () => {
+    render(plan(47, 50), {}, { mentionsHref: '/dashboard/mentions?range=7d' });
+    const card = (label: string) =>
+      container.querySelector(`[role=button][aria-label="${label}"]`) as HTMLElement;
+    act(() => card('Mentions: open Mentions').click());
+    expect(onNavigate).toHaveBeenLastCalledWith('/dashboard/mentions?range=7d');
+    onNavigate.mockClear();
+    act(() => card('Net sentiment: open Mentions').click());
+    expect(onNavigate).toHaveBeenLastCalledWith('/dashboard/mentions?range=7d');
   });
 
   it('say nothing of a change they do not have', () => {

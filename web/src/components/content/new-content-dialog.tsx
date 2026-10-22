@@ -27,6 +27,13 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
 import {
@@ -37,6 +44,9 @@ import {
   sendContentDraftToActionCenter,
   startAgentWriting,
 } from '@/lib/actions/content-drafts';
+import { assignAction } from '@/lib/actions/action-center';
+import { listMembers, type TeamMember } from '@/lib/actions/team';
+import { memberLabel } from '@/lib/action-center/display';
 import { agentWriteRequest, useRuleDescriber } from '@/lib/content/agent-write';
 import { MAX_ATTACHMENT_BYTES, textToHtml } from '@/lib/content/attachments';
 import { cleanHtml } from '@/lib/content/clean-html';
@@ -59,6 +69,7 @@ import {
   type OverlapChoice,
   type OverlapOption,
 } from '@/lib/content/overlap';
+import { opportunityPageType } from '@/lib/content/asset-types';
 import { SITE_PAGE_TYPES, detectPageType, type SiteType } from '@/lib/content/page-types';
 import {
   fileTitle,
@@ -79,6 +90,8 @@ interface PickerItem {
   meta?: string;
   /** The page's title, when it isn't the label (an opportunity's brief title). */
   pageTitle?: string;
+  /** The page type an opportunity names for its page, when the site writes it. */
+  pageType?: PageType;
 }
 
 /** Content brought to optimize: cleaned HTML, what it holds, and where it came from. */
@@ -95,7 +108,7 @@ interface BroughtContent extends ContentSummary {
 type ContentFrom = 'url' | 'paste' | 'file';
 
 /** Where Start's first page type came from, if it was read from somewhere. */
-type DetectedFrom = 'title' | 'content' | 'page' | null;
+type DetectedFrom = 'title' | 'content' | 'page' | 'opportunity' | null;
 
 /** What Start opens the editor with. */
 interface StartChoice {
@@ -121,9 +134,13 @@ interface StartChoice {
  * What the dialog opens on, from the Content plan (CE-014): an opportunity
  * (for an existing page, Start optimizes that page), or a page to read.
  */
-export type DialogPreset =
+export type DialogPreset = (
   | { kind: 'opportunity'; id: string; page?: { url: string; title: string | null } | null }
-  | { kind: 'page'; url: string };
+  | { kind: 'page'; url: string }
+) & {
+  /** Opened to assign the work (the Plan's "Assign to…"): Start chooses Team. */
+  who?: 'team';
+};
 
 /** Who does the page (Start, CE-015): the person, the Content Agent, or the team. */
 type Who = 'me' | 'agent' | 'team';
@@ -185,6 +202,9 @@ export function NewContentDialog({
   const [start, setStart] = useState<StartChoice | null>(null);
   const [opening, setOpening] = useState(false);
   const [who, setWho] = useState<Who>('me');
+  // Team's assignee: the task goes to this teammate once it is sent.
+  const [members, setMembers] = useState<TeamMember[]>([]);
+  const [assigneeId, setAssigneeId] = useState<string | null>(null);
   const [overlapRead, setOverlapRead] = useState<OverlapRead | null>(null);
   const [overlapAttempt, setOverlapAttempt] = useState(0);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -208,11 +228,22 @@ export function NewContentDialog({
     };
   }, [open, brandId, attempt]);
 
+  // The team, for Team's assignee: read once, when Team is first chosen.
+  const membersRead = useRef(false);
+  useEffect(() => {
+    if (who !== 'team' || membersRead.current) return;
+    membersRead.current = true;
+    listMembers()
+      .then(setMembers)
+      .catch((err) => console.error('Failed to load the team:', err));
+  }, [who]);
+
   // From the Content plan: Start for its opportunity once the options are in
   // (one no longer open is left to pick), or its page read to optimize.
   const presetApplied = useRef(false);
   useEffect(() => {
     if (!open || !preset || presetApplied.current) return;
+    if (preset.who === 'team') setWho('team');
     if (preset.kind === 'page') {
       presetApplied.current = true;
       setMethod('optimize');
@@ -225,11 +256,7 @@ export function NewContentDialog({
     presetApplied.current = true;
     const opportunity = options.opportunities.find((o) => o.id === preset.id);
     if (!opportunity) return;
-    const item = {
-      value: opportunity.id,
-      label: opportunity.title,
-      pageTitle: opportunity.pageTitle ?? undefined,
-    };
+    const item = opportunityItem(opportunity, siteType);
     setKind('opportunity');
     setPicked(item);
     startFrom(
@@ -286,6 +313,7 @@ export function NewContentDialog({
     setOpening(false);
     setOverlapRead(null);
     setWho('me');
+    setAssigneeId(null);
   };
   const changeOpen = (next: boolean) => {
     if (!next) reset();
@@ -295,13 +323,10 @@ export function NewContentDialog({
   const items: PickerItem[] = !options
     ? []
     : kind === 'opportunity'
-      ? options.opportunities.map((o) => ({
-          value: o.id,
-          label: o.title,
-          pageTitle: o.pageTitle ?? undefined,
-        }))
+      ? options.opportunities.map((o) => opportunityItem(o, siteType))
       : kind === 'prompt'
-        ? options.prompts.map((p) => ({ value: p.id, label: p.text }))
+        ? // A prompt the brand is already named in or cited for needs no new page.
+          options.prompts.filter((p) => !p.seen).map((p) => ({ value: p.id, label: p.text }))
         : options.topics.map((topic) => ({
             value: topic.id,
             label: topic.name,
@@ -378,17 +403,20 @@ export function NewContentDialog({
 
   /**
    * Start for a new page from what was picked: its title, and the page type
-   * it reads as. With a page (an opportunity for an existing page, from the
-   * plan), Start optimizes that page, and it stays chosen.
+   * its opportunity names, else the one it reads as. With a page (an
+   * opportunity for an existing page, from the plan), Start optimizes that
+   * page, and it stays chosen.
    */
   const startFrom = (item: PickerItem, from: SourceKind, page?: OverlapPage) => {
     const title = item.pageTitle ?? item.label;
     const type = startPageType({ title }, siteType);
-    const newPageType = {
-      pageType: type.pageType,
-      detectedFrom: type.detected ? ('title' as const) : null,
-      picked: false,
-    };
+    const newPageType = item.pageType
+      ? { pageType: item.pageType, detectedFrom: 'opportunity' as const, picked: false }
+      : {
+          pageType: type.pageType,
+          detectedFrom: type.detected ? ('title' as const) : null,
+          picked: false,
+        };
     const next: StartChoice = {
       method: 'create',
       title,
@@ -536,6 +564,15 @@ export function NewContentDialog({
       });
       return;
     }
+    if (assigneeId) {
+      try {
+        await assignAction(brandId, sent.actionId, assigneeId);
+      } catch (err) {
+        // The task is sent all the same; it can be assigned in the Action Center.
+        console.error('Failed to assign the sent draft:', err);
+        toast.warning(t('who.assignFailed'));
+      }
+    }
     toast.success(t('start.sent'), {
       description: t('start.sentDescription', { number: sent.actionNo }),
       duration: 10_000,
@@ -598,6 +635,7 @@ export function NewContentDialog({
                       title: 'start.detectedTitle',
                       content: 'start.detectedContent',
                       page: 'start.detectedPage',
+                      opportunity: 'start.detectedOpportunity',
                     }[start.detectedFrom],
                   )}
                 </p>
@@ -649,6 +687,32 @@ export function NewContentDialog({
                   </button>
                 ))}
               </div>
+              {who === 'team' && (
+                <div className="space-y-1.5">
+                  <Label htmlFor="start-assignee" className="text-xs text-muted-foreground">
+                    {t('who.assignTo')}
+                  </Label>
+                  <Select
+                    value={assigneeId}
+                    onValueChange={(value) => setAssigneeId(value as string | null)}
+                    items={members.map((member) => ({
+                      value: member.userId,
+                      label: memberLabel(member),
+                    }))}
+                  >
+                    <SelectTrigger id="start-assignee" className="w-full">
+                      <SelectValue placeholder={t('who.assignNone')} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {members.map((member) => (
+                        <SelectItem key={member.userId} value={member.userId}>
+                          {memberLabel(member)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
             </div>
             <DialogFooter className="sticky -bottom-4 z-10 bg-muted">
               <Button variant="ghost" onClick={() => setStart(null)} disabled={opening}>
@@ -750,7 +814,12 @@ export function NewContentDialog({
                     <ComboboxContent>
                       <ComboboxInput placeholder={t(`sources.${kind}.search`)} />
                       <ComboboxList>
-                        <ComboboxEmpty>{t(`sources.${kind}.empty`)}</ComboboxEmpty>
+                        <ComboboxEmpty>
+                          {/* "All seen" only when nothing is left to list, not on a search miss. */}
+                          {kind === 'prompt' && items.length === 0 && options?.promptsSeen
+                            ? t('sources.prompt.allSeen')
+                            : t(`sources.${kind}.empty`)}
+                        </ComboboxEmpty>
                         <ComboboxCollection>
                           {(item: PickerItem) => (
                             <ComboboxItem key={item.value} value={item} title={item.label}>
@@ -766,6 +835,11 @@ export function NewContentDialog({
                       </ComboboxList>
                     </ComboboxContent>
                   </Combobox>
+                )}
+                {kind === 'prompt' && options && options.promptsSeen > 0 && (
+                  <p className="text-xs text-muted-foreground">
+                    {t('sources.prompt.seen', { count: options.promptsSeen })}
+                  </p>
                 )}
               </div>
             ) : (
@@ -916,14 +990,34 @@ export function NewContentDialog({
   );
 }
 
+/** An opportunity to pick, with the page type it names when the site writes it. */
+function opportunityItem(
+  opportunity: DraftStartOptions['opportunities'][number],
+  siteType: SiteType,
+): PickerItem {
+  return {
+    value: opportunity.id,
+    label: opportunity.title,
+    pageTitle: opportunity.pageTitle ?? undefined,
+    pageType: opportunityPageType(opportunity.assetType, siteType) ?? undefined,
+  };
+}
+
 function sourceKey(source: Exclude<DraftSource, { kind: 'content' }>) {
   return `${source.kind}:${source.id}`;
 }
 
-/** Start with this overlap pick: an existing page brings its own title and type. */
+/**
+ * Start with this overlap pick: an existing page brings its own title and
+ * the type its address or title shows; when they show none, the type its
+ * opportunity names, unless the person picked one.
+ */
 function withChoice(start: StartChoice, choice: OverlapChoice, siteType: SiteType): StartChoice {
   if (choice.kind === 'create') return { ...start, choice, ...start.newPageType };
   const detected = detectPageType({ url: choice.page.url, title: choice.page.title }, siteType);
+  if (!detected && !start.picked && start.newPageType.detectedFrom === 'opportunity') {
+    return { ...start, choice, ...start.newPageType };
+  }
   return {
     ...start,
     choice,

@@ -7,6 +7,7 @@ import {
   rowsFor,
   type PlanAnswers,
   type PlanDraft,
+  type PlanMark,
   type PlanOpportunity,
   type PlanPage,
 } from './plan';
@@ -36,6 +37,7 @@ const opportunity = (id: string, over: Partial<PlanOpportunity> = {}): PlanOppor
   competitorsCited: [],
   visibility: null,
   prompts: 3,
+  assetType: null,
   ...over,
 });
 const plan = (
@@ -43,7 +45,8 @@ const plan = (
   opportunities: PlanOpportunity[] = [],
   drafts: PlanDraft[] = [],
   answers: PlanAnswers = { cur: 100, prev: 100 },
-) => buildPlan({ pages, answers, opportunities, drafts, siteType: 'b2b' });
+  marks: PlanMark[] = [],
+) => buildPlan({ pages, answers, opportunities, drafts, marks, siteType: 'b2b' });
 
 describe('buildPlan', () => {
   it('creates a new page for an opportunity, named by its brief, with its evidence', () => {
@@ -72,7 +75,44 @@ describe('buildPlan', () => {
         draft: null,
       }),
     ]);
-    expect(counts).toEqual({ create: 1, optimize: 0, protect: 0 });
+    expect(counts).toEqual({ create: 1, optimize: 0, protect: 0, priority: 0 });
+  });
+
+  it("types an opportunity's page as the opportunity does, when the site writes that type", () => {
+    const { rows } = plan(
+      [],
+      [
+        // An older type, read as this B2B site's page type.
+        opportunity('o1', { pageTitle: 'Northwind vs HubSpot', assetType: 'faq_page', score: 90 }),
+        opportunity('o2', { pageTitle: 'Northwind vs Pipedrive', assetType: 'alternatives' }),
+        // A shop's type, and the older default: the title tells instead.
+        opportunity('o3', {
+          pageTitle: 'Northwind vs Close',
+          assetType: 'sizing_guide',
+          score: 50,
+        }),
+        opportunity('o4', { pageTitle: 'Northwind vs Zoho', assetType: 'blog_post', score: 40 }),
+      ],
+    );
+    expect(rows.map((r) => r.pageType)).toEqual([
+      'docs_faq',
+      'alternatives',
+      'comparison',
+      'comparison',
+    ]);
+  });
+
+  it('types an existing page by its own address first, then by its opportunity', () => {
+    const optimize = (id: string, targetPage: string, assetType: string) =>
+      opportunity(id, { decision: 'optimize', targetPage, targetTitle: 'Our page', assetType });
+    const { rows } = plan(
+      [],
+      [optimize('o1', '/shipping', 'landing_page'), optimize('o2', '/crm-tips', 'comparison_page')],
+    );
+    expect(rows.map((r) => [r.page, r.pageType])).toEqual([
+      ['/shipping', 'docs_faq'],
+      ['/crm-tips', 'comparison'],
+    ]);
   });
 
   it('optimizes a page losing citations, by how much it lost, with the platforms citing it less', () => {
@@ -192,7 +232,7 @@ describe('buildPlan', () => {
       page('/guides/losing', { citations: { cur: 2, prev: 8 } }),
     ];
     const { rows, counts } = plan(pages, opportunities);
-    expect(counts).toEqual({ create: 60, optimize: 1, protect: 1 });
+    expect(counts).toEqual({ create: 60, optimize: 1, protect: 1, priority: 0 });
     expect(rowsFor(rows, null)).toHaveLength(MAX_ROWS);
     // Below the 50 opportunities on score, and still shown on their cards.
     expect(rowsFor(rows, 'protect').map((r) => r.title)).toEqual(['top']);
@@ -206,7 +246,7 @@ describe('buildPlan', () => {
       page('/guides/espresso', { citations: { cur: 12, prev: 10 } }),
     ]);
     expect(rows.map((r) => [r.action, r.why.kind])).toEqual([['protect', 'top']]);
-    expect(counts).toEqual({ create: 0, optimize: 0, protect: 1 });
+    expect(counts).toEqual({ create: 0, optimize: 0, protect: 1, priority: 0 });
   });
 
   it('finds the draft being written for an opportunity or a page', () => {
@@ -218,6 +258,8 @@ describe('buildPlan', () => {
         method: 'create',
         opportunityId: 'o1',
         sourceUrl: null,
+        actionId: null,
+        assignee: null,
       },
       {
         id: 'd2',
@@ -226,6 +268,8 @@ describe('buildPlan', () => {
         method: 'optimize',
         opportunityId: null,
         sourceUrl: 'https://acme.example/features/forecasting/',
+        actionId: 'a1',
+        assignee: { id: 'u2', name: 'Ada Lovelace' },
       },
     ];
     const { rows } = plan(
@@ -235,5 +279,104 @@ describe('buildPlan', () => {
     );
     // The opportunity (70) ranks over the page losing ground (1 of 9: 66).
     expect(rows.map((r) => r.draft?.id)).toEqual(['d1', 'd2']);
+    expect(rows[1].draft?.assignee).toEqual({ id: 'u2', name: 'Ada Lovelace' });
+  });
+
+  it('puts the rows marked as a priority first, and counts them', () => {
+    const marks: PlanMark[] = [{ rowKey: 'page:acme.example/top', priority: true, hidden: false }];
+    const { rows, counts } = plan(
+      [page('/top', { citations: { cur: 30, prev: 30 } })],
+      [opportunity('o1', { score: 90 })],
+      [],
+      undefined,
+      marks,
+    );
+    // The protected page (50) outranks the opportunity (90) once it is a priority.
+    expect(rows.map((r) => [r.title, r.priority])).toEqual([
+      ['top', true],
+      ['Opportunity o1', false],
+    ]);
+    expect(counts.priority).toBe(1);
+    expect(rowsFor(rows, 'priority').map((r) => r.title)).toEqual(['top']);
+  });
+
+  it('takes hidden rows off the list and its counts, to show again', () => {
+    const marks: PlanMark[] = [
+      { rowKey: 'opportunity:o1', priority: true, hidden: true },
+      { rowKey: 'page:acme.example/losing', priority: false, hidden: true },
+    ];
+    const { rows, hidden, counts } = plan(
+      [page('/losing', { citations: { cur: 2, prev: 8 } })],
+      [opportunity('o1'), opportunity('o2')],
+      [],
+      undefined,
+      marks,
+    );
+    expect(rows.map((r) => r.key)).toEqual(['opportunity:o2']);
+    expect(hidden.map((r) => r.key)).toEqual(['opportunity:o1', 'page:acme.example/losing']);
+    expect(counts).toEqual({ create: 1, optimize: 0, protect: 0, priority: 0 });
+  });
+});
+
+// The Priority Score column shows each row's score and what it is made of.
+describe("a row's score breakdown", () => {
+  it("is the opportunity's own score, rounded as the row's", () => {
+    const { rows } = plan([], [opportunity('o1', { score: 81.4 })]);
+    expect(rows[0].score).toBe(81);
+    expect(rows[0].scoreParts).toEqual([{ kind: 'opportunity', score: 81 }]);
+  });
+
+  it("adds up a drop's points to the row's score", () => {
+    const { rows } = plan([page('/features/forecasting', { citations: { cur: 6, prev: 10 } })]);
+    // Down 40% (+8), 4 citations lost (+4), on a base of 40.
+    expect(rows[0].scoreParts).toEqual([
+      {
+        kind: 'citationsDown',
+        base: 40,
+        pct: 40,
+        pctPoints: 8,
+        lost: 4,
+        lostPoints: 4,
+        max: 100,
+        score: 52,
+      },
+    ]);
+    expect(rows[0].score).toBe(52);
+  });
+
+  it('gives an opportunity on a page losing ground both parts, the higher counting', () => {
+    const { rows } = plan(
+      [page('/guides/espresso', { citations: { cur: 2, prev: 8 } })],
+      [
+        opportunity('o1', {
+          decision: 'optimize',
+          targetPage: 'https://acme.example/guides/espresso',
+          score: 50,
+        }),
+      ],
+    );
+    expect(rows[0].scoreParts.map((p) => [p.kind, p.score])).toEqual([
+      ['opportunity', 50],
+      ['citationsDown', citationsDownScore(75, 6)],
+    ]);
+    expect(rows[0].score).toBe(Math.max(...rows[0].scoreParts.map((p) => p.score)));
+  });
+
+  it("counts a top page's citations on a base of 20, up to 60", () => {
+    const { rows } = plan([
+      page('/a', { citations: { cur: 18, prev: 18 } }),
+      page('/b', { citations: { cur: 55, prev: 55 } }),
+    ]);
+    expect(rows.map((r) => r.scoreParts)).toEqual([
+      [{ kind: 'protect', base: 20, citations: 55, max: 60, score: 60 }],
+      [{ kind: 'protect', base: 20, citations: 18, max: 60, score: 38 }],
+    ]);
+  });
+
+  it('caps a drop at 100 and its citations lost at 40 points', () => {
+    const { rows } = plan([page('/x', { citations: { cur: 0, prev: 90 } })]);
+    expect(rows[0].scoreParts).toEqual([
+      expect.objectContaining({ pctPoints: 20, lost: 90, lostPoints: 40, score: 100 }),
+    ]);
   });
 });

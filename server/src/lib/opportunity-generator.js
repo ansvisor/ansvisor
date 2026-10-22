@@ -43,12 +43,13 @@ import {
   releaseOpportunitySlots,
 } from './plan-guard.js';
 import {
-  ASSET_TYPES,
   DECISIONS,
   MAX_SUPPORTING_ASSETS,
+  assetTypes,
   buildAssets,
   candidatePages,
 } from './page-matching.js';
+import { SITE_TYPE_NAMES, sitePageTypeLines, siteTypeOf } from './content-page-types.js';
 
 /** Existing opportunities shown to the model for the cross-topic check. */
 const EXISTING_SHOWN = 60;
@@ -77,13 +78,14 @@ Rules:
   - consolidate: two or more listed pages are each mainly about this same need, close to duplicates, and split its signals. Merge them into one. Pages of different kinds (a head-to-head comparison and a general list, a glossary entry and a guide) are not duplicates: pick the page closest to the need and expand or optimize it instead.
   - defend: the brand is already visible for this need and a listed page answers it. Keep it ahead of competitors.
   Set pageIndexes to the bracketed P indexes of the pages the decision is about, and leave it empty for create. The title should say what to do with which page, for example "Expand the AI rank tracker comparison with Google AI Overviews coverage".
-- The opportunity is the primary asset above. Set assetType to what that content is.
-- Add supporting assets only when the data calls for them, up to ${MAX_SUPPORTING_ASSETS}, each a different piece of work. For example: a comparison page when people compare named products; a glossary or FAQ page for a definition the main content relies on; an earned third-party article when competitors are visible and the brand is not; a backlink when the brand's page exists but is not cited. Give each a short title saying what to make or do. Most opportunities need none or one.
+- The opportunity is the primary asset above. Set assetType to what that content is: the content type, of those listed for the brand's site, that answers this need there.
+- Add supporting assets only when the data calls for them, up to ${MAX_SUPPORTING_ASSETS}, each a different piece of work. Owned ones are of the brand's content types too. For example: a comparison or alternatives page when people compare named products; a definition or FAQ page for a term the main content relies on; an earned third-party article when competitors are visible and the brand is not; a backlink when the brand's page exists but is not cited. Give each a short title saying what to make or do. Most opportunities need none or one.
 - Earned assets (third_party_article, backlink) live on other sites: set their channel to "earned", decision to "create" and pageIndexes to empty.
 - Write for the brand's marketing team: do not use the words "cluster" or "prompt" in titles or descriptions.
 - Refer to clusters and existing opportunities only through clusterIndex and sameAs. Never mention a bracketed index in a title or description.`;
 
-function buildSchema(count) {
+/** @param {string[]} types - what an asset can be on the brand's site (assetTypes) */
+function buildSchema(count, types) {
   return z.object({
     opportunities: z
       .array(
@@ -103,11 +105,11 @@ function buildSchema(count) {
           pageIndexes: z
             .array(z.number())
             .describe('The P indexes of the existing pages the decision is about'),
-          assetType: z.enum(ASSET_TYPES).describe('What the primary content is'),
+          assetType: z.enum(types).describe('What the primary content is'),
           supportingAssets: z
             .array(
               z.object({
-                type: z.enum(ASSET_TYPES),
+                type: z.enum(types),
                 channel: z.enum(['owned', 'earned']),
                 decision: z.enum(DECISIONS),
                 pageIndexes: z.array(z.number()),
@@ -309,7 +311,7 @@ export async function generateContentOpportunities(
 
   const { data: brand } = await supabaseAdmin
     .from('brands')
-    .select('id, name, industry, language, organization_id')
+    .select('id, name, industry, language, organization_id, site_type, shopping_mode_enabled')
     .eq('id', brandId)
     .single();
   if (!brand) return { generated: 0, merged: 0 };
@@ -526,9 +528,22 @@ Brand pages that may cover this need:
 ${pages.map(pageLine).join('\n') || 'none found'}`;
   };
 
+  // The content types follow the brand's kind of site, as the Content Editor's
+  // page types do: a shop gets product pages, a SaaS brand feature pages.
+  const siteType = siteTypeOf({
+    siteType: brand.site_type,
+    industry: brand.industry,
+    shoppingModeEnabled: brand.shopping_mode_enabled,
+  });
+  const types = assetTypes(siteType);
+
   const userPrompt = `Brand: ${brand.name}
 Industry: ${brand.industry || 'Not specified'}
 Domain: ${(domainsRes.data || []).map((d) => d.domain).join(', ') || 'N/A'}
+Site type: ${SITE_TYPE_NAMES[siteType]}
+
+Content types for the brand's site (owned assets):
+${sitePageTypeLines(siteType)}
 
 Clusters (highest opportunity first):
 ${picked.map(clusterLine).join('\n\n')}
@@ -547,7 +562,7 @@ ${alternativeOf ? `${alternativeInstruction(alternativeOf)}\n\n` : ''}${
   onProgress?.({ phase: 'analyzing', message: 'Generating opportunities with AI...' });
   const { object } = await generateObject({
     model: resolveModel(model),
-    schema: buildSchema(picked.length),
+    schema: buildSchema(picked.length, types),
     system: SYSTEM_PROMPT,
     prompt: userPrompt,
   }).catch(async (err) => {
@@ -629,6 +644,7 @@ ${alternativeOf ? `${alternativeInstruction(alternativeOf)}\n\n` : ''}${
       },
       opp.supportingAssets,
       pagesFor.get(cand.id),
+      types,
     );
     const [primary] = assets;
     inserts.push({

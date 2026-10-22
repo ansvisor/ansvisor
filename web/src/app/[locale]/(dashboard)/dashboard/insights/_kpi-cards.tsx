@@ -279,6 +279,8 @@ interface KpiRowsProps {
   /** Visibility's breakdown; Mentions opens its own page. */
   onBreakdown: (metric: 'visibility') => void;
   onNavigate: (path: string) => void;
+  /** The Mentions page on the same range and filters, for the Mentions and Net sentiment cards. */
+  mentionsHref?: string;
 }
 
 /**
@@ -297,6 +299,7 @@ export function KpiRows({
   series,
   onBreakdown,
   onNavigate,
+  mentionsHref = '/dashboard/mentions',
 }: KpiRowsProps) {
   const t = useTranslations('insights.kpi');
   const locale = useLocale();
@@ -409,7 +412,7 @@ export function KpiRows({
           delta={upIsGood(summary.mentionsChange, { percent: true, locale })}
           sub={vsPrevious(summary.mentionsChange)}
           spark={daily('mentions')}
-          onClick={() => onNavigate('/dashboard/mentions')}
+          onClick={() => onNavigate(mentionsHref)}
           clickLabel={t('openMentions')}
         />
         <MetricCard
@@ -440,6 +443,8 @@ export function KpiRows({
             summary.netSentiment !== null,
           )}
           spark={daily('netSentiment')}
+          onClick={() => onNavigate(mentionsHref)}
+          clickLabel={t('openSentiment')}
         />
       </div>
 

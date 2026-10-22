@@ -11,6 +11,7 @@
  * with fewer runs, or prompts added or removed, moves no page.
  */
 
+import { opportunityPageType } from './asset-types';
 import { detectPageType, type SiteType } from './page-types';
 import type { DraftMethod, PageType } from './drafts';
 import { pageKey } from './sources';
@@ -20,8 +21,8 @@ export const PLAN_PERIODS = [7, 30, 90] as const;
 export type PlanPeriod = (typeof PLAN_PERIODS)[number];
 
 export type PlanAction = 'create' | 'optimize' | 'protect';
-/** The cards over the list, each a filter by its action. */
-export const PLAN_CARDS = ['create', 'optimize', 'protect'] as const;
+/** The cards over the list, each a filter: by its action, or the rows marked as a priority. */
+export const PLAN_CARDS = ['create', 'optimize', 'protect', 'priority'] as const;
 export type PlanCard = (typeof PLAN_CARDS)[number];
 
 /** The brand's tracked answers in each period: what makes their citations comparable. */
@@ -64,6 +65,8 @@ export interface PlanOpportunity {
   competitorsCited: string[];
   visibility: number | null;
   prompts: number;
+  /** Its primary asset's type as stored (asset-types.ts): the page type it names. */
+  assetType: string | null;
 }
 
 /** A draft still being written, to open rather than start another. */
@@ -74,6 +77,16 @@ export interface PlanDraft {
   method: DraftMethod;
   opportunityId: string | null;
   sourceUrl: string | null;
+  /** The Action Center task it was sent as (Start's Team), and who it is assigned to. */
+  actionId: string | null;
+  assignee: { id: string; name: string } | null;
+}
+
+/** An admin's or manager's mark on a row (content_plan_marks, 00229), by the row's key. */
+export interface PlanMark {
+  rowKey: string;
+  priority: boolean;
+  hidden: boolean;
 }
 
 /** Why a row is on the list, and where the signal comes from. */
@@ -93,8 +106,12 @@ export interface PlanRow {
   why: PlanWhy;
   source: 'opportunity' | 'citations' | 'protect';
   score: number;
+  /** What the score is made of (the Priority Score's breakdown). */
+  scoreParts: PlanScorePart[];
   opportunityId: string | null;
   draft: PlanDraft | null;
+  /** Marked as a priority: at the top of the list, tagged. */
+  priority: boolean;
 }
 
 /**
@@ -108,6 +125,14 @@ export const MIN_TOP_CITATIONS = 5;
 export const MAX_PROTECT = 5;
 export const MAX_ROWS = 50;
 
+const DROP_BASE = 40;
+const PROTECT_BASE = 20;
+const MAX_PROTECT_SCORE = 60;
+/** A drop's points: a fifth of the drop in percent, and the citations lost (up to 40). */
+function citationsDownPoints(pct: number, lost: number) {
+  return { pct: Math.round(pct / 5), lost: Math.min(40, lost) };
+}
+
 /**
  * The rank of each kind of row, on the opportunities' 0–100 scale: an
  * opportunity keeps its own score; a page losing citations ranks by how much
@@ -117,10 +142,55 @@ export const MAX_ROWS = 50;
  * protecting comes after the work to do.
  */
 export function citationsDownScore(pct: number, lost: number): number {
-  return Math.min(100, 40 + Math.round(pct / 5) + Math.min(40, lost));
+  const points = citationsDownPoints(pct, lost);
+  return Math.min(100, DROP_BASE + points.pct + points.lost);
 }
 export function protectScore(citations: number): number {
-  return Math.min(60, 20 + citations);
+  return Math.min(MAX_PROTECT_SCORE, PROTECT_BASE + citations);
+}
+
+/**
+ * What a row's score is made of, for the Priority Score's breakdown: the
+ * opportunity's own score; for a page losing citations, the base and the
+ * points for the drop and the citations lost; for a top page, the base and
+ * its citations. An opportunity whose page is losing ground has both, and
+ * ranks by the higher. `max` is where a score stops.
+ */
+export type PlanScorePart =
+  | { kind: 'opportunity'; score: number }
+  | {
+      kind: 'citationsDown';
+      base: number;
+      pct: number;
+      pctPoints: number;
+      lost: number;
+      lostPoints: number;
+      max: number;
+      score: number;
+    }
+  | { kind: 'protect'; base: number; citations: number; max: number; score: number };
+
+function citationsDownPart(drop: { pct: number; lost: number }): PlanScorePart {
+  const points = citationsDownPoints(drop.pct, drop.lost);
+  return {
+    kind: 'citationsDown',
+    base: DROP_BASE,
+    pct: drop.pct,
+    pctPoints: points.pct,
+    lost: drop.lost,
+    lostPoints: points.lost,
+    max: 100,
+    score: citationsDownScore(drop.pct, drop.lost),
+  };
+}
+function protectPart(citations: number): PlanScorePart {
+  return {
+    kind: 'protect',
+    base: PROTECT_BASE,
+    citations,
+    max: MAX_PROTECT_SCORE,
+    score: protectScore(citations),
+  };
 }
 
 const CREATE_DECISIONS = new Set(['create']);
@@ -130,21 +200,24 @@ const PROTECT_DECISIONS = new Set(['defend']);
 /**
  * Every row, ranked, and what each card counts: the list shows the first
  * MAX_ROWS of a card's rows (rowsFor), so a card never counts rows it can't
- * show.
+ * show. Rows marked as a priority come first; hidden rows leave the list
+ * and its counts for `hidden`, to be shown again.
  */
 export function buildPlan({
   pages,
   answers,
   opportunities,
   drafts,
+  marks = [],
   siteType,
 }: {
   pages: PlanPage[];
   answers: PlanAnswers;
   opportunities: PlanOpportunity[];
   drafts: PlanDraft[];
+  marks?: PlanMark[];
   siteType: SiteType;
-}): { rows: PlanRow[]; counts: Record<PlanCard, number> } {
+}): { rows: PlanRow[]; hidden: PlanRow[]; counts: Record<PlanCard, number> } {
   const byPage = new Map<string, PlanPage>();
   for (const page of pages) {
     const key = pageKey(page.page);
@@ -178,7 +251,11 @@ export function buildPlan({
       action: create ? 'create' : PROTECT_DECISIONS.has(o.decision ?? '') ? 'protect' : 'optimize',
       title,
       page: create ? null : o.targetPage,
-      pageType: typeOf(title, create ? null : o.targetPage),
+      // A new page is what the opportunity names; an existing one is what
+      // its address or title shows, else what the opportunity names.
+      pageType: create
+        ? (opportunityPageType(o.assetType, siteType) ?? typeOf(title, null))
+        : (typeOf(title, o.targetPage) ?? opportunityPageType(o.assetType, siteType)),
       // The period's own signal, when the page is losing ground, says more.
       why:
         page && drop
@@ -190,8 +267,13 @@ export function buildPlan({
       score: drop
         ? Math.max(o.score, citationsDownScore(drop.pct, drop.lost))
         : Math.round(o.score),
+      scoreParts: [
+        { kind: 'opportunity', score: Math.round(o.score) },
+        ...(drop ? [citationsDownPart(drop)] : []),
+      ],
       opportunityId: o.id,
       draft: draftFor(o.id, create ? null : o.targetPage),
+      priority: false,
     });
     if (key && !create) pagesTaken.add(key);
   }
@@ -206,6 +288,7 @@ export function buildPlan({
       pageType: typeOf(title, page.page),
       opportunityId: null,
       draft: draftFor(null, page.page),
+      priority: false,
     };
     const drop = dropOf(page, answers);
     if (drop) {
@@ -216,6 +299,7 @@ export function buildPlan({
         why: dropWhy(page, drop),
         source: 'citations',
         score: citationsDownScore(drop.pct, drop.lost),
+        scoreParts: [citationsDownPart(drop)],
       });
     } else if (page.citations.cur >= MIN_TOP_CITATIONS) {
       protect.push({
@@ -225,27 +309,40 @@ export function buildPlan({
         why: { kind: 'top', citations: page.citations.cur, aiVisits: page.aiVisits },
         source: 'protect',
         score: protectScore(page.citations.cur),
+        scoreParts: [protectPart(page.citations.cur)],
       });
     }
   }
   protect.sort((a, b) => b.score - a.score || a.title.localeCompare(b.title));
   rows.push(...protect.slice(0, MAX_PROTECT));
 
-  rows.sort((a, b) => b.score - a.score || a.title.localeCompare(b.title));
+  const markOf = new Map(marks.map((m) => [m.rowKey, m]));
+  const hidden: PlanRow[] = [];
+  const listed: PlanRow[] = [];
+  for (const row of rows) {
+    const mark = markOf.get(row.key);
+    if (mark?.hidden) hidden.push(row);
+    else listed.push({ ...row, priority: Boolean(mark?.priority) });
+  }
+  const ranked = (a: PlanRow, b: PlanRow) => b.score - a.score || a.title.localeCompare(b.title);
+  listed.sort((a, b) => Number(b.priority) - Number(a.priority) || ranked(a, b));
+  hidden.sort(ranked);
   return {
-    rows,
+    rows: listed,
+    hidden,
     counts: {
-      create: rows.filter((r) => r.action === 'create').length,
-      optimize: rows.filter((r) => r.action === 'optimize').length,
-      protect: rows.filter((r) => r.action === 'protect').length,
+      create: listed.filter((r) => r.action === 'create').length,
+      optimize: listed.filter((r) => r.action === 'optimize').length,
+      protect: listed.filter((r) => r.action === 'protect').length,
+      priority: listed.filter((r) => r.priority).length,
     },
   };
 }
 
 /**
- * The rows a card shows, the first MAX_ROWS: its action's; all without a
- * card. A page type (the mix's filter) narrows them before the cut, so its
- * rows are never cut off by others.
+ * The rows a card shows, the first MAX_ROWS: its action's, or the
+ * priorities; all without a card. A page type (the mix's filter) narrows
+ * them before the cut, so its rows are never cut off by others.
  */
 export function rowsFor(
   rows: PlanRow[],
@@ -253,7 +350,11 @@ export function rowsFor(
   pageType: PageType | null = null,
 ): PlanRow[] {
   return rows
-    .filter((r) => (!card || r.action === card) && (!pageType || r.pageType === pageType))
+    .filter(
+      (r) =>
+        (!card || (card === 'priority' ? r.priority : r.action === card)) &&
+        (!pageType || r.pageType === pageType),
+    )
     .slice(0, MAX_ROWS);
 }
 
