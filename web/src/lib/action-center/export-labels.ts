@@ -21,7 +21,7 @@ import { isKpiKey } from '@/lib/kpis/registry';
 import { isSuperseded, signalAffected, signalTexts, signalTypeLabel } from '@/lib/signals/display';
 import { platformName } from '@/lib/signals/names';
 import { getPlatformName } from '@/lib/traffic-platforms';
-import { formatCompactNumber } from '@/lib/format';
+import { formatEstimateRange, type VolumeEstimate } from '@/lib/volume-estimate';
 
 /**
  * An action's export, labelled (AC-005): what the drawer's Copy Data, Export
@@ -166,7 +166,7 @@ export function sentFromFacts(
 /** The Affected tab's rows, labelled for the exports (AC-003). */
 export function exportAffectedRows(
   affected: Affected | null,
-  volumes: Map<string, number> | null,
+  volumes: Map<string, VolumeEstimate> | null,
   origin: string,
   t: ExportTranslators,
 ): ExportAffected[] {
@@ -175,6 +175,8 @@ export function exportAffectedRows(
     entity: '',
     label: '',
     volume: '',
+    volumeType: '',
+    volumeConfidence: '',
     platforms: [],
     lostPages: [],
     citedInstead: [],
@@ -189,7 +191,10 @@ export function exportAffectedRows(
       return row({
         entity: t.export('affectedPrompt'),
         label: prompt.text,
-        volume: volume ? `~${formatCompactNumber(volume)}` : '',
+        // An estimate (PROMPT-013): its range, marked as such.
+        volume: volume ? formatEstimateRange(volume) : '',
+        volumeType: volume ? 'estimate' : '',
+        volumeConfidence: volume?.confidence ?? '',
         platforms: prompt.platforms.map(platformName),
         lostPages: prompt.lostPages,
         citedInstead: prompt.citedInstead,
@@ -227,7 +232,7 @@ export interface ActionExportInput {
   detail: ActionDetail;
   /** The Affected tab's list and its prompts' demand (AC-003). */
   affected: Affected | null;
-  volumes: Map<string, number> | null;
+  volumes: Map<string, VolumeEstimate> | null;
   /** Why and Goal in the action's own terms (AC-003); null for an action a person sent. */
   story: ActionStory | null;
   /** A Content action's opportunity, read by the caller. */

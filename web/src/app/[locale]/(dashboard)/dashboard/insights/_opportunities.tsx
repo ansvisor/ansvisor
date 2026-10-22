@@ -23,6 +23,8 @@ import {
   type OpportunitySuggestion,
 } from '@/lib/insights-opportunities';
 import type { TopicCompetitors } from '@/lib/insights-topics';
+import { guessedVolumeEstimate } from '@/lib/volume-estimate';
+import { EstimateRange } from '@/components/prompts/volume-estimate';
 
 /** Items shown, as in the mockup; "See all" opens the rest. */
 const VISIBLE_ITEMS = 4;
@@ -257,9 +259,17 @@ export function Opportunities({
     }
   };
 
-  const meta = (item: Opportunity): string => {
-    const volume = item.volume === null ? null : t('volume', { volume: f.compact(item.volume) });
-    if (item.kind === 'prompt') return [volume, t('notTracked')].filter(Boolean).join(' · ');
+  /** The parts of a row's line under its title, between dots. */
+  const dotted = (parts: React.ReactNode[]) =>
+    parts.filter(Boolean).flatMap((part, i) => (i === 0 ? [part] : [' · ', part]));
+
+  const meta = (item: Opportunity): React.ReactNode[] => {
+    // The suggestions' volume is an AI's guess: a grey range with its note (PROMPT-013).
+    const volume =
+      item.volume === null ? null : (
+        <EstimateRange key="volume" estimate={guessedVolumeEstimate(item.volume, null)} perMonth />
+      );
+    if (item.kind === 'prompt') return dotted([volume, t('notTracked')]);
     const s = item.standing;
     const standing =
       s.kind === 'competitor'
@@ -271,9 +281,7 @@ export function Opportunities({
           : s.kind === 'notTracked'
             ? t('notTracked')
             : null;
-    return [t('prompts', { count: item.suggestionIds.length }), volume, standing]
-      .filter(Boolean)
-      .join(' · ');
+    return dotted([t('prompts', { count: item.suggestionIds.length }), volume, standing]);
   };
 
   return (

@@ -6,6 +6,7 @@ import { getPromptDemand } from '@/lib/actions/action-center';
 import type { Signal } from '@/lib/signals/map';
 import { affectedOf, affectedSignals, type Affected } from '@/lib/action-center/affected';
 import { actionStory, type ActionStory } from '@/lib/action-center/story';
+import type { VolumeEstimate } from '@/lib/volume-estimate';
 
 /** What the story reads of an action. */
 export interface StoryAction {
@@ -29,7 +30,7 @@ export function useActionStory(
   signals: Signal[] | null,
 ): {
   affected: Affected | null;
-  volumes: Map<string, number> | null;
+  volumes: Map<string, VolumeEstimate> | null;
   story: ActionStory | null;
   ready: boolean;
 } {
@@ -55,7 +56,7 @@ export function useActionStory(
   const demandKey = `${brandId}:${promptIdsKey}`;
   const [demand, setDemand] = useState<{
     key: string;
-    volumes: Map<string, number> | null;
+    volumes: Map<string, VolumeEstimate> | null;
   } | null>(null);
   useEffect(() => {
     if (!promptIdsKey) return;

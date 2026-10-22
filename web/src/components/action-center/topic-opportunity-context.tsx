@@ -3,7 +3,8 @@
 import { useTranslations } from 'next-intl';
 import { ExternalLink } from 'lucide-react';
 import { Link } from '@/i18n/navigation';
-import { formatCompactNumber } from '@/lib/format';
+import { guessedVolumeEstimate } from '@/lib/volume-estimate';
+import { EstimateRange } from '@/components/prompts/volume-estimate';
 
 interface SuggestedPrompt {
   text: string;
@@ -62,10 +63,9 @@ export function TopicOpportunityContext({ payload }: { payload: Record<string, u
           <p className="text-xs font-medium text-muted-foreground">{t('demand')}</p>
           {demand !== null && (
             <p className="mt-1 tabular-nums">
-              {t('demandValue', {
-                count: suggestions.length,
-                volume: formatCompactNumber(demand),
-              })}
+              {t('demandValue', { count: suggestions.length })} ·{' '}
+              {/* The suggestions' AI-guessed demand: a grey range (PROMPT-013). */}
+              <EstimateRange estimate={guessedVolumeEstimate(demand, null)} perMonth />
             </p>
           )}
           <ul className="mt-1.5 space-y-1 text-xs">
@@ -73,7 +73,7 @@ export function TopicOpportunityContext({ payload }: { payload: Record<string, u
               <li key={s.text} className="flex items-baseline justify-between gap-3">
                 <span className="min-w-0">{s.text}</span>
                 <span className="shrink-0 tabular-nums text-muted-foreground">
-                  {t('volume', { volume: formatCompactNumber(s.volume) })}
+                  <EstimateRange estimate={guessedVolumeEstimate(s.volume, null)} perMonth />
                 </span>
               </li>
             ))}

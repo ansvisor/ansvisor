@@ -1027,6 +1027,9 @@
         "sentToWebhook": "Sent to the webhook",
         "item": "Item",
         "volume": "Volume",
+        "volumeType": "Volume type",
+        "volumeConfidence": "Volume confidence",
+        "estimatedVolume": "{volume} (estimate, {confidence} confidence)",
         "lostPage": "Lost page",
         "citedInstead": "Cited instead",
         "affectedPrompt": "Prompt",
@@ -1093,7 +1096,7 @@
             "page": "{label}",
             "topic": "prompts in {label}",
             "inTopic": " in {topic}",
-            "volume": " (~{volume} AI searches a month)"
+            "volume": " ({volume} AI searches a month, estimated)"
           },
           "noun": {
             "prompts": "{count, plural, one {prompt} other {prompts}}",
@@ -1371,8 +1374,7 @@
           "planNew": "Write new content: none of your prompts tracked this topic when it was sent",
           "planExpand": "Grow what covers it: your prompts tracked this topic when it was sent",
           "demand": "Suggested prompts when sent",
-          "demandValue": "{count, plural, one {# prompt} other {# prompts}} · ~{volume}/mo",
-          "volume": "~{volume}/mo"
+          "demandValue": "{count, plural, one {# prompt} other {# prompts}}"
         },
         "contentDraft": {
           "source": "Source",
@@ -2101,7 +2103,7 @@
         "goal": "Lead the topic, or close most of the gap."
       },
       "topic_opportunity": {
-        "title": "Capture ~{demand}/mo of AI demand in {topic}",
+        "title": "Capture {demand}/mo of estimated AI demand in {topic}",
         "titleGeneric": "Capture the AI demand in a topic",
         "description": "Sent from Insights: prompts suggested for one of your topics, with the monthly AI demand behind them.",
         "goal": "Get the brand into AI answers for the topic's suggested prompts."
@@ -3011,7 +3013,6 @@
       "topicKind": "Topic",
       "promptKind": "Prompt",
       "prompts": "{count, plural, one {# prompt} other {# prompts}}",
-      "volume": "~{volume}/mo",
       "notTracked": "not tracked",
       "competitorLeads": "{name} leads",
       "leaderScore": "leader {score}",

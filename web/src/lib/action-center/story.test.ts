@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import messages from '../../../messages/en.json';
 import type { Signal } from '@/lib/signals/map';
 import { actionStory, storyFamily, type StoryFamily } from './story';
+import type { VolumeEstimate } from '@/lib/volume-estimate';
 
 // Days are read where the reader is; pin it so the fixtures' days hold anywhere.
 process.env.TZ = 'UTC';
@@ -42,9 +43,23 @@ const signal = (over: Partial<Signal> = {}): Signal =>
     ...over,
   }) as Signal;
 
+/** A prompt's volume as an estimate (PROMPT-013): ±20% around it, medium. */
+const est = (value: number): VolumeEstimate => ({
+  basis: 'keywords',
+  value,
+  low: value * 0.8,
+  high: value * 1.2,
+  confidence: 'medium',
+  measured: 3,
+  keywords: 5,
+  rate: 0.45,
+  asOf: '2026-10-10T00:00:00Z',
+  stale: false,
+});
+
 const tell = (
   signals: Signal[],
-  opts: { volumes?: Map<string, number>; dueDate?: string | null } = {},
+  opts: { volumes?: Map<string, VolumeEstimate>; dueDate?: string | null } = {},
 ) =>
   actionStory(
     {
@@ -80,12 +95,12 @@ const lostSeven = Array.from({ length: 7 }, (_, i) =>
 
 describe('actionStory', () => {
   it('names the prompts, their topic and demand, the domain, the platforms and the days', () => {
-    const volumes = new Map(lostSeven.map((_, i) => [`p${i}`, 5_000]));
+    const volumes = new Map(lostSeven.map((_, i) => [`p${i}`, est(5_000)]));
     const told = tell(lostSeven, { volumes })!;
 
     expect(told.family).toBe('citationLoss');
     expect(told.why).toBe(
-      '7 prompts in AI Rank Tracker (~35k AI searches a month) lost their citations to acme.example on Gemini, Google AI Overview, and ChatGPT between Oct 2 and Oct 9.',
+      '7 prompts in AI Rank Tracker (28–42k AI searches a month, estimated) lost their citations to acme.example on Gemini, Google AI Overview, and ChatGPT between Oct 2 and Oct 9.',
     );
     // 70% of 7, rounded up; 30 days after the action was raised.
     expect(told.goal).toBe('Citations back on ≥5 of 7 prompts by Nov 8.');
@@ -107,7 +122,7 @@ describe('actionStory', () => {
       },
       currentValue: 60,
     });
-    const told = tell([grouped], { volumes: new Map([['p1', 9_000]]) })!;
+    const told = tell([grouped], { volumes: new Map([['p1', est(9_000)]]) })!;
     expect(told.why).toBe('Your brand is missing from AI answers to 60 prompts on Oct 9.');
     expect(told.goal).toBe('In AI answers to ≥42 of 60 prompts by Nov 8.');
   });

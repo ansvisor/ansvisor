@@ -35,7 +35,14 @@ vi.mock('@/lib/supabase/admin', () => ({
         },
         then: (resolve: (value: unknown) => unknown) =>
           resolve({
-            data: ids.map((id) => ({ prompt_id: id, est_ai_volume: id === 'p2' ? 0 : 1200 })),
+            data: ids.map((id) => ({
+              prompt_id: id,
+              est_ai_volume: id === 'p2' ? 0 : 1200,
+              google_volumes: { a: 2400, b: 2700, c: 3000 },
+              ai_volume_multiplier: '0.450',
+              keywords: ['a', 'b', 'c'],
+              fetched_at: '2026-10-10T19:28:41Z',
+            })),
             error: null,
           }),
       };
@@ -56,11 +63,14 @@ describe('getPromptDemand', () => {
     visible = [{ id: 'p1' }];
     const demand = await getPromptDemand('b1', ['p1', 'other-brand']);
     expect(volumeReads).toEqual([['p1']]);
-    expect(demand).toEqual({ p1: 1200 });
+    // Each as an estimate (PROMPT-013): three keywords close together read high.
+    expect(demand).toEqual({
+      p1: expect.objectContaining({ value: 1200, low: 900, high: 1500, confidence: 'high' }),
+    });
   });
 
   it('leaves out a prompt without demand', async () => {
-    await expect(getPromptDemand('b1', ['p1', 'p2'])).resolves.toEqual({ p1: 1200 });
+    expect(Object.keys(await getPromptDemand('b1', ['p1', 'p2']))).toEqual(['p1']);
   });
 
   it('reads nothing for no prompts', async () => {

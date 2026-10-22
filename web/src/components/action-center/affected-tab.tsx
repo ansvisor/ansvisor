@@ -22,7 +22,8 @@ import {
   type AffectedPrompt,
 } from '@/lib/action-center/affected';
 import { getPlatformName } from '@/lib/traffic-platforms';
-import { formatCompactNumber } from '@/lib/format';
+import type { VolumeEstimate } from '@/lib/volume-estimate';
+import { EstimateRange } from '@/components/prompts/volume-estimate';
 import { SignalWhereLine } from './signal-table';
 
 /**
@@ -38,7 +39,7 @@ export function AffectedTab({
 }: {
   affected: Affected;
   /** Estimated monthly AI searches per prompt id; null until read, or when they can't be. */
-  volumes: Map<string, number> | null;
+  volumes: Map<string, VolumeEstimate> | null;
 }) {
   const t = useTranslations('actionCenter.actionsPage.drawer.affected');
   const hasRows = affected.prompts.length > 0 || affected.pages.length > 0;
@@ -68,7 +69,7 @@ function PromptsTable({
 }: {
   rows: AffectedPrompt[];
   total: number;
-  volumes: Map<string, number> | null;
+  volumes: Map<string, VolumeEstimate> | null;
 }) {
   const t = useTranslations('actionCenter.actionsPage.drawer.affected');
   const volumeOf = (row: AffectedPrompt) => (row.id ? (volumes?.get(row.id) ?? null) : null);
@@ -137,7 +138,7 @@ function PromptsTable({
                   </TableCell>
                   {show.volume && (
                     <TableCell className="text-right align-top text-xs tabular-nums">
-                      {volume !== null ? `~${formatCompactNumber(volume)}` : '—'}
+                      {volume !== null ? <EstimateRange estimate={volume} /> : '—'}
                     </TableCell>
                   )}
                   {show.platforms && (
