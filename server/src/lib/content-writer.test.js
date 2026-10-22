@@ -403,6 +403,9 @@ describe('runDraftWriting on an existing page', () => {
     );
     // Links only to the pages and sources listed (A); none asked for here.
     expect(generateObject.mock.calls[0][0].system).toContain('Never invent a URL');
+    expect(generateObject.mock.calls[0][0].system).toContain(
+      'Call a change a fan-out answer only when it uses a fan-out listed',
+    );
     expect(readLinkTargets).toHaveBeenCalledWith(
       expect.objectContaining({ draftId: DRAFT, ruleKeys: new Set(['faq']) }),
     );

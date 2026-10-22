@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   NO_DRAFT_RULES,
   NOT_FOR_AGENT,
+  fanoutsToUse,
   openRulesForAgent,
   activeRules,
   effectiveRules,
@@ -241,11 +242,13 @@ describe('fan-outs and keywords', () => {
         '2',
       ),
     ).toEqual({ state: 'ok' });
+    // It names the ones still to use, so the agent writes those.
     expect(check('fanoutH2', '<h2>Best espresso machines under $500</h2>')).toEqual({
       state: 'bad',
       code: 'partOf',
       count: 1,
       of: 3,
+      missing: ['home espresso grinder', 'espresso machine reviews 2026'],
     });
     expect(checkRule(rule('fanoutH2'), page('<h2>x</h2>'), { ...ctx, fanouts: [] })).toEqual({
       state: 'info',
@@ -260,8 +263,36 @@ describe('fan-outs and keywords', () => {
     expect(check('faq', faq)).toEqual({ state: 'bad', code: 'partOf', count: 2, of: 5 });
     expect(check('faq', faq, '2')).toEqual({ state: 'ok' });
     expect(check('faq', '<h2>Questions</h2>')).toEqual({ state: 'bad', code: 'missing' });
-    expect(check('fanoutFaq', faq)).toEqual({ state: 'bad', code: 'partOf', count: 1, of: 3 });
-    expect(check('fanoutFaq', '<p>x</p>')).toEqual({ state: 'bad', code: 'needsFaq' });
+    expect(check('fanoutFaq', faq)).toEqual({
+      state: 'bad',
+      code: 'partOf',
+      count: 1,
+      of: 3,
+      missing: ['best espresso machine under 500', 'espresso machine reviews 2026'],
+    });
+    // No FAQ yet: still the fan-outs its questions should use.
+    expect(check('fanoutFaq', '<p>x</p>')).toEqual({
+      state: 'bad',
+      code: 'needsFaq',
+      missing: [
+        'best espresso machine under 500',
+        'home espresso grinder',
+        'espresso machine reviews 2026',
+      ],
+    });
+  });
+
+  it('quotes the fan-outs still to use for the agent, as many as fit', () => {
+    const status = check('fanoutH2', '<h2>x</h2>');
+    expect(fanoutsToUse(status)).toBe(
+      '"best espresso machine under 500"; "home espresso grinder"; "espresso machine reviews 2026"',
+    );
+    expect(fanoutsToUse(status, 40)).toBe('"best espresso machine under 500"');
+    // One that doesn't fit doesn't stop a shorter one after it.
+    expect(fanoutsToUse(status, 60)).toBe(
+      '"best espresso machine under 500"; "home espresso grinder"',
+    );
+    expect(fanoutsToUse({ state: 'ok' })).toBeNull();
   });
 
   it('counts the keywords on the page', () => {

@@ -18,6 +18,7 @@ vi.mock('@/lib/actions/content-drafts', () => ({
 }));
 
 const { agentWriteRequest } = await import('./agent-write');
+const { fanoutsToUse } = await import('./rules');
 
 const data: DraftSourcesData = {
   prompts: [
@@ -82,6 +83,39 @@ describe('agentWriteRequest', () => {
     // A new page has nothing AI quotes yet.
     expect(getCitedPassages).not.toHaveBeenCalled();
     expect(request.locked).toEqual([]);
+  });
+
+  it('gives the fan-out rules the fan-outs the page doesn’t use yet', async () => {
+    const seen: Record<string, string | null> = {};
+    const request = await agentWriteRequest(
+      draft({ bodyHtml: '<h1>Burr grinders</h1><h2>Hand grinders</h2>' }),
+      (rule, status) => {
+        seen[rule.key] = status ? fanoutsToUse(status) : null;
+        return { name: rule.key, detail: '' };
+      },
+    );
+    expect(request.rules.map((rule) => rule.key)).toContain('fanoutH2');
+    // A page the agent writes anew uses none of them yet: named, in their words.
+    expect(seen.fanoutH2).toBe('"burr grinder under 200"');
+    expect(seen.fanoutFaq).toBe('"burr grinder under 200"');
+    // Only the fan-out rules carry a status.
+    expect(seen.length).toBeNull();
+  });
+
+  it('names only what an existing page doesn’t use yet', async () => {
+    const seen: Record<string, string | null> = {};
+    await agentWriteRequest(
+      draft({
+        method: 'optimize',
+        sourceUrl: 'https://acme.example/grinders',
+        bodyHtml: '<h1>Burr grinders</h1><h2>The best burr grinder under 200</h2>',
+      }),
+      (rule, status) => {
+        seen[rule.key] = status ? fanoutsToUse(status) : null;
+        return { name: rule.key, detail: '' };
+      },
+    );
+    expect(seen.fanoutH2).toBeNull();
   });
 
   it('locks what AI quotes on an existing page, and takes the editor’s rules as given', async () => {

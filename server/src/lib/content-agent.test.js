@@ -532,6 +532,8 @@ describe('links to the pages and sources given', () => {
     // Only the rule asked for: no outbound list.
     expect(prompt).not.toContain('Sources you may link to');
     expect(system).toContain('Never invent a URL');
+    // The fan-outs a rule names, in their words (B).
+    expect(system).toContain('fanoutH2 wants an H2, fanoutFaq a question');
     expect(result.count).toBe(1);
     const batch = writes.find((w) => w.table === 'content_draft_suggestions');
     expect(batch.value[0]).toMatchObject({

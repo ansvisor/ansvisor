@@ -495,12 +495,21 @@ const isQuestion = (b: PageBlock) => b.text.trim().endsWith('?');
 export type RuleStatus =
   | { state: 'ok' }
   | { state: 'bad'; code: 'over' | 'found'; count: number }
-  | { state: 'bad'; code: 'partOf'; count: number; of: number }
+  | {
+      state: 'bad';
+      code: 'partOf';
+      count: number;
+      of: number;
+      /** The fan-outs still to use, the most searched first (fanoutH2, fanoutFaq). */
+      missing?: string[];
+    }
   | { state: 'bad'; code: 'current'; count: number }
   /** Out of the Length rule's band, as it reads (lengthBand). */
   | { state: 'bad'; code: 'short' | 'long'; count: number; min: number; max: number }
   | { state: 'bad'; code: 'words'; count: number }
-  | { state: 'bad'; code: 'missing' | 'noH2' | 'needsFaq' | 'notSet' }
+  | { state: 'bad'; code: 'missing' | 'noH2' | 'notSet' }
+  /** No FAQ yet: the fan-outs its questions should use, the most searched first. */
+  | { state: 'bad'; code: 'needsFaq'; missing?: string[] }
   | {
       state: 'info';
       code: 'aiCheck' | 'needsFeed' | 'noFanouts' | 'addKeywords' | 'notHowTo' | 'englishOnly';
@@ -633,6 +642,25 @@ const atLeast = (have: number, want: number): RuleStatus =>
 export const NOT_FOR_AGENT = new Set(['oneH1']);
 
 /**
+ * The fan-outs a rule still needs (fanoutH2, fanoutFaq), quoted for the
+ * agent, the most searched first and as many as fit in `max` characters:
+ * the rule's detail it is sent has room for 500. Null when there are none.
+ */
+export function fanoutsToUse(status: RuleStatus, max = 300): string | null {
+  if (status.state !== 'bad' || !('missing' in status) || !status.missing?.length) return null;
+  const quoted: string[] = [];
+  let length = 0;
+  for (const fanout of status.missing) {
+    const item = `"${fanout}"`;
+    // One too long for what's left: a shorter one after it may still fit.
+    if (length + item.length > max) continue;
+    quoted.push(item);
+    length += item.length + 2;
+  }
+  return quoted.length ? quoted.join('; ') : null;
+}
+
+/**
  * The rules on that the page doesn't meet (of `only`, when given): the ones
  * the Content Agent is asked to fix, and those it can't.
  */
@@ -708,7 +736,17 @@ export function checkRule(rule: ActiveRule, page: PageRead, ctx: RuleContext): R
       const top = ctx.fanouts.slice(0, n);
       if (!top.length) return { state: 'info', code: 'noFanouts' };
       const h2s = blocks.filter((b) => b.tag === 'h2');
-      return atLeast(top.filter((f) => h2s.some((h) => carries(f, h.text))).length, top.length);
+      // Which ones, so the agent writes those, not H2s of its own.
+      const missing = top.filter((f) => !h2s.some((h) => carries(f, h.text)));
+      return missing.length
+        ? {
+            state: 'bad',
+            code: 'partOf',
+            count: top.length - missing.length,
+            of: top.length,
+            missing,
+          }
+        : { state: 'ok' };
     }
     case 'faq':
     case 'buyingFaq': {
@@ -718,10 +756,21 @@ export function checkRule(rule: ActiveRule, page: PageRead, ctx: RuleContext): R
     }
     case 'fanoutFaq': {
       const questions = faqQuestions(blocks);
-      if (!questions) return { state: 'bad', code: 'needsFaq' };
+      if (!questions) {
+        // A new page has no FAQ yet: still name the fan-outs it should ask.
+        const missing = ctx.fanouts.slice(0, n);
+        return missing.length
+          ? { state: 'bad', code: 'needsFaq', missing }
+          : { state: 'bad', code: 'needsFaq' };
+      }
       if (!ctx.fanouts.length) return { state: 'info', code: 'noFanouts' };
       const used = questions.filter((q) => ctx.fanouts.some((f) => carries(f, q))).length;
-      return atLeast(used, n);
+      if (used >= n) return { state: 'ok' };
+      // The most searched ones no question uses yet, as many as are still needed.
+      const missing = ctx.fanouts
+        .filter((f) => !questions.some((q) => carries(f, q)))
+        .slice(0, n - used);
+      return { state: 'bad', code: 'partOf', count: used, of: n, missing };
     }
     case 'keywords': {
       const wanted = list(rule.current);
