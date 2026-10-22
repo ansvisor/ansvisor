@@ -64,7 +64,8 @@ const OPTIONS = {
       pageTitle: 'CRM for real estate teams',
     },
   ],
-  prompts: [{ id: 'p1', text: 'best crm for realtors' }],
+  prompts: [{ id: 'p1', text: 'best crm for realtors', seen: false }],
+  promptsSeen: 0,
   topics: [{ id: 't1', name: 'Real estate', promptCount: 3 }],
 };
 
@@ -184,6 +185,67 @@ describe('New content', () => {
       (s) => s.textContent === 'Northwind vs HubSpot',
     );
     expect(value?.closest('[data-slot="combobox-trigger"]')).not.toBeNull();
+  });
+
+  it('lists the prompts AI doesn’t name or cite the brand for yet, and says how many are left out', async () => {
+    getContentStartOptions.mockResolvedValue({
+      ...OPTIONS,
+      prompts: [
+        { id: 'p1', text: 'best crm for realtors', seen: false },
+        { id: 'p2', text: 'crm pricing', seen: true },
+        { id: 'p3', text: 'crm for teams', seen: true },
+      ],
+      promptsSeen: 2,
+    });
+    await render();
+    await click(tab('Prompt'));
+    expect(document.body.textContent).toContain(
+      "2 prompts where AI already names or cites you in the last 30 days aren't listed: they need no new page.",
+    );
+    await click(button('Pick a tracked prompt'));
+    expect([...document.querySelectorAll('[role="option"]')].map((o) => o.textContent)).toEqual([
+      'best crm for realtors',
+    ]);
+  });
+
+  it('says so when AI already names or cites the brand for every prompt', async () => {
+    getContentStartOptions.mockResolvedValue({
+      ...OPTIONS,
+      prompts: [{ id: 'p2', text: 'crm pricing', seen: true }],
+      promptsSeen: 1,
+    });
+    await render();
+    await click(tab('Prompt'));
+    await click(button('Pick a tracked prompt'));
+    expect(document.querySelectorAll('[role="option"]')).toHaveLength(0);
+    expect(document.body.textContent).toContain(
+      'AI already names or cites you for every tracked prompt in the last 30 days.',
+    );
+  });
+
+  it('says no prompt matches on a search miss, not that every prompt is seen', async () => {
+    getContentStartOptions.mockResolvedValue({
+      ...OPTIONS,
+      prompts: [
+        { id: 'p1', text: 'best crm for realtors', seen: false },
+        { id: 'p2', text: 'crm pricing', seen: true },
+      ],
+      promptsSeen: 1,
+    });
+    await render();
+    await click(tab('Prompt'));
+    await click(button('Pick a tracked prompt'));
+    const search = document.querySelector<HTMLInputElement>('input[placeholder="Search prompts"]')!;
+    const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!;
+    await act(async () => {
+      setValue.call(search, 'zzz no such prompt');
+      search.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    expect(document.querySelectorAll('[role="option"]')).toHaveLength(0);
+    expect(document.body.textContent).toContain('No tracked prompts.');
+    expect(document.body.textContent).not.toContain(
+      'AI already names or cites you for every tracked prompt',
+    );
   });
 
   it('names the page by the opportunity’s brief title when it has one', async () => {

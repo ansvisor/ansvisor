@@ -106,9 +106,11 @@ describe('the Positive Sentiment KPI', () => {
       totalCitations: 0,
     });
     dailyRows = {
-      [daysAgo(6)]: { positive_count: 3, mentioning_results: 4 },
+      // Over the answers naming the brand (00191), not those only citing it.
+      [daysAgo(6)]: { positive_count: 3, mentioning_results: 6, mention_results: 4 },
       // daysAgo(5): no answer named the brand.
-      [daysAgo(4)]: { positive_count: 1, mentioning_results: 3 },
+      [daysAgo(4)]: { positive_count: 1, mentioning_results: 3, mention_results: 3 },
+      // Before 00191 the day has only the old base.
       [daysAgo(0)]: { positive_count: 0, mentioning_results: 2 },
     };
 

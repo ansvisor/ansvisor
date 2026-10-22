@@ -301,7 +301,8 @@ export function NewContentDialog({
           pageTitle: o.pageTitle ?? undefined,
         }))
       : kind === 'prompt'
-        ? options.prompts.map((p) => ({ value: p.id, label: p.text }))
+        ? // A prompt the brand is already named in or cited for needs no new page.
+          options.prompts.filter((p) => !p.seen).map((p) => ({ value: p.id, label: p.text }))
         : options.topics.map((topic) => ({
             value: topic.id,
             label: topic.name,
@@ -750,7 +751,12 @@ export function NewContentDialog({
                     <ComboboxContent>
                       <ComboboxInput placeholder={t(`sources.${kind}.search`)} />
                       <ComboboxList>
-                        <ComboboxEmpty>{t(`sources.${kind}.empty`)}</ComboboxEmpty>
+                        <ComboboxEmpty>
+                          {/* "All seen" only when nothing is left to list, not on a search miss. */}
+                          {kind === 'prompt' && items.length === 0 && options?.promptsSeen
+                            ? t('sources.prompt.allSeen')
+                            : t(`sources.${kind}.empty`)}
+                        </ComboboxEmpty>
                         <ComboboxCollection>
                           {(item: PickerItem) => (
                             <ComboboxItem key={item.value} value={item} title={item.label}>
@@ -766,6 +772,11 @@ export function NewContentDialog({
                       </ComboboxList>
                     </ComboboxContent>
                   </Combobox>
+                )}
+                {kind === 'prompt' && options && options.promptsSeen > 0 && (
+                  <p className="text-xs text-muted-foreground">
+                    {t('sources.prompt.seen', { count: options.promptsSeen })}
+                  </p>
                 )}
               </div>
             ) : (

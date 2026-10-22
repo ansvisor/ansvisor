@@ -64,7 +64,7 @@ function render(state: PromptUsageState, newCount = 0, { open = true } = {}) {
     );
   });
   // The cards open folded; most tests read them open.
-  const toggle = container.querySelector('h2 button') as HTMLButtonElement;
+  const toggle = container.querySelector('button[aria-expanded]') as HTMLButtonElement;
   if (open && toggle.getAttribute('aria-expanded') === 'false') act(() => toggle.click());
 }
 
@@ -185,21 +185,32 @@ describe('PromptUsageCards', () => {
     expect(container.textContent).toContain('of 500 on Team plan');
   });
 
-  it('opens folded under the title, and opens on the arrow', () => {
+  it('opens folded, with Show on the right after Plan & usage, and the whole bar opens it', () => {
     render({ status: 'ready', usage: summary() }, 0, { open: false });
-    const toggle = container.querySelector('h2 button') as HTMLButtonElement;
-    expect(toggle.textContent).toBe('Tracked Prompts');
+    const toggle = container.querySelector('button[aria-expanded]') as HTMLButtonElement;
+    expect(toggle.textContent).toBe('Tracked Prompts: Show');
     expect(toggle.getAttribute('aria-expanded')).toBe('false');
     const body = document.getElementById(toggle.getAttribute('aria-controls')!)!;
     expect(body.className).toContain('hidden');
-    expect(container.textContent).toContain('Plan & usage');
+    // Show sits after Plan & usage, at the bar's right end.
+    const plan = [...container.querySelectorAll('a')].find(
+      (a) => a.textContent === 'Plan & usage',
+    )!;
+    expect(plan.compareDocumentPosition(toggle) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
 
     act(() => toggle.click());
     expect(toggle.getAttribute('aria-expanded')).toBe('true');
+    expect(toggle.textContent).toBe('Tracked Prompts: Hide');
     expect(body.className).not.toContain('hidden');
     expect(values()[0]).toBe('44');
 
-    act(() => toggle.click());
+    // The bar itself, e.g. its title, folds it again.
+    act(() => (container.querySelector('h2') as HTMLElement).click());
+    expect(body.className).toContain('hidden');
+
+    // Plan & usage goes to its page without folding or unfolding.
+    plan.addEventListener('click', (e) => e.preventDefault());
+    act(() => plan.click());
     expect(body.className).toContain('hidden');
   });
 
@@ -224,7 +235,7 @@ describe('PromptUsageCards', () => {
     expect(pill()?.className).toContain('red');
 
     // Open, the cards carry it instead.
-    act(() => (container.querySelector('h2 button') as HTMLButtonElement).click());
+    act(() => (container.querySelector('button[aria-expanded]') as HTMLButtonElement).click());
     expect(pill()).toBeUndefined();
   });
 

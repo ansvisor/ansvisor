@@ -126,7 +126,8 @@ export function Headline({ overview, brand }: { overview: MentionsOverview; bran
         {t('basis', {
           range: windowRange(overview.window, locale),
           answers: overview.current.answers,
-          mentions: overview.current.mentions,
+          // As Total mentions counts them: every time a response names the brand.
+          mentions: overview.current.occurrences,
         })}
       </p>
     </section>
