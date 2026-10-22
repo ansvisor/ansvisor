@@ -3485,7 +3485,7 @@
         "notApplied": "{count, plural, one {# suggestion couldn't be applied} other {# suggestions couldn't be applied}}: the page changed there, or AI quotes the passage.",
         "saveFailed": "Couldn't keep the decision. Try again.",
         "htmlBlocked": "Accept or reject the {count, plural, one {# agent suggestion} other {# agent suggestions}} first, then edit as HTML.",
-        "fixRules": "Fix open rules with agent",
+        "fixRules": "Apply rules with Agent",
         "fixing": "Content Agent is working…",
         "fixed": "{count, plural, one {Content Agent suggested # change} other {Content Agent suggested # changes}} · review them in the page",
         "nothingToFix": "Content Agent found nothing it could change without new facts.",
@@ -3607,15 +3607,16 @@
         "show": "Show side panel",
         "hide": "Hide side panel",
         "tabs": {
-          "impact": "Impact",
+          "impact": "Live page",
           "brief": "Brief",
           "sources": "Sources",
           "rules": "Rules"
         }
       },
       "impact": {
-        "newPage": "This draft is a new page, not live yet, so there's nothing to measure. Impact shows when a draft optimizes a live page.",
-        "thisPage": "This page",
+        "newPage": "This draft is a new page, not live yet, so there's nothing to measure. This tab shows the live page's numbers when a draft optimizes one.",
+        "thisPage": "The live page today",
+        "notForecast": "How the live page does now, not a forecast of what this draft will get.",
         "periodLabel": "Period",
         "periods": {
           "7": "7d",
@@ -3623,7 +3624,7 @@
           "90": "90d",
           "365": "1y"
         },
-        "loadError": "Couldn't load the page's impact.",
+        "loadError": "Couldn't load the live page's numbers.",
         "retry": "Retry",
         "metrics": {
           "citations": "Citations",
@@ -3907,7 +3908,7 @@
         },
         "mineName": "My rules · {type}",
         "setPicked": "Rule set changed for this draft",
-        "agentFix": "Fix open rules with agent",
+        "agentFix": "Apply rules with Agent",
         "agentFixing": "Content Agent is working…",
         "agentFixHint": "Content Agent suggests changes for the rules not met yet, for you to review in the page",
         "fixTrace": "Fix",

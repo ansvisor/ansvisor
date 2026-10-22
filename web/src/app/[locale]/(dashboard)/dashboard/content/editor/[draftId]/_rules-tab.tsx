@@ -57,7 +57,7 @@ const HINTED = new Set([
  * ("Your text rules"); Save as my rules keeps the set for the workspace's
  * drafts of the type, and Reset goes back to Ansvisor's default.
  */
-/** Fix open rules with agent (CE-018), as the editor runs it. */
+/** Apply rules with Agent (CE-018), as the editor runs it. */
 export interface AgentFix {
   /** Runs the agent on the open rules, or only on the ones named. */
   run: (only?: string[]) => void;

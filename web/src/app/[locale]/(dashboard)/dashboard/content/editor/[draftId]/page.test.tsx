@@ -1365,7 +1365,7 @@ describe('the side panel', () => {
 
     await act(async () => button('Show side panel')!.click());
     expect(panel()!.getAttribute('aria-label')).toBe('Side panel');
-    expect(panel()!.textContent).toContain('Impact');
+    expect(panel()!.textContent).toContain('Live page');
     // The page the draft optimizes, over 30 days.
     expect(getContentImpact).toHaveBeenCalledWith('b1', 'https://acme.example.com/pricing', 30);
     expect(getContentResults).toHaveBeenCalledWith('b1', 'https://acme.example.com/pricing', 30);
@@ -1450,7 +1450,7 @@ describe('the side panel', () => {
       });
     };
     expect([...panel()!.querySelectorAll('[role="tab"]')].map((el) => el.textContent)).toEqual([
-      'Impact',
+      'Live page',
       'Brief',
       'Sources',
       'Rules',
@@ -1597,7 +1597,7 @@ describe('the side panel', () => {
     }
   });
 
-  describe('Fix open rules with agent', () => {
+  describe('Apply rules with Agent', () => {
     const traced = draft({
       pageType: 'blog_post',
       bodyHtml: '<h1>Pipeline forecasting</h1><p>We delve into how teams forecast.</p>',
@@ -1635,7 +1635,7 @@ describe('the side panel', () => {
       fixDraftRules.mockResolvedValue({ count: 1 });
       await openRules();
 
-      await act(async () => panelButton('Fix open rules with agent').click());
+      await act(async () => panelButton('Apply rules with Agent').click());
       await act(async () => {});
 
       const [id, brandId, request] = fixDraftRules.mock.calls[0];
@@ -1675,7 +1675,7 @@ describe('the side panel', () => {
       fixDraftRules.mockResolvedValue({ error: 'ai_budget' });
       await openRules();
 
-      await act(async () => panelButton('Fix open rules with agent').click());
+      await act(async () => panelButton('Apply rules with Agent').click());
       await act(async () => {});
       expect(toast.error).toHaveBeenCalledWith(
         "This month's AI usage is spent. Upgrade for more, or try again next month.",
@@ -1687,7 +1687,7 @@ describe('the side panel', () => {
       getDraftSuggestions.mockResolvedValue([agentSuggestion]);
       await openRules();
 
-      const fix = panelButton('Fix open rules with agent');
+      const fix = panelButton('Apply rules with Agent');
       expect(fix.disabled).toBe(true);
       expect(fix.title).toBe('Accept or reject the open suggestions first.');
     });
@@ -1701,7 +1701,7 @@ describe('the side panel', () => {
       getCitedPassages.mockReturnValue(new Promise((resolve) => (read = resolve)));
       await openRules();
 
-      const fix = () => panelButton('Fix open rules with agent');
+      const fix = () => panelButton('Apply rules with Agent');
       expect(fix().disabled).toBe(true);
       expect(fix().title).toBe(
         'Reading which passages AI quotes, so the agent leaves them as they are…',
@@ -1716,7 +1716,7 @@ describe('the side panel', () => {
       fixDraftRules.mockResolvedValue({ error: 'open_suggestions' });
       await openRules();
 
-      await act(async () => panelButton('Fix open rules with agent').click());
+      await act(async () => panelButton('Apply rules with Agent').click());
       await act(async () => {});
       expect(toast.error).toHaveBeenCalledWith(
         "This page has open suggestions, maybe from another tab. They're shown now: accept or reject them first.",
