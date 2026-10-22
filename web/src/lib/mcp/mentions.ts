@@ -21,6 +21,7 @@ import {
 } from '@/lib/mentions-list';
 import {
   averagePosition,
+  changeBasis,
   isLowSample,
   LOW_SAMPLE_MENTIONS,
   mentionRate,
@@ -178,13 +179,21 @@ export interface MentionsSummary {
   window: MentionsOverview['window'];
   current: MentionFigures;
   previous: MentionFigures;
+  /**
+   * Each change as the page's cards take it (00195): on the prompts both
+   * windows answered (`basis`), while the figures above are the whole windows'.
+   */
   changes: {
-    /** Mentions against the window before, in percent; null with none before. */
+    /** Total mentions (times named, as the page counts them) against before, in percent; null with none before. */
     mentionsPct: number | null;
-    /** Mention rate's change in points; null under 20 responses now, as on the page's card. */
+    /** Mention rate's change in points; null when a window has under 20 responses, as on the page's card. */
     mentionRatePoints: number | null;
-    /** Net sentiment's change in points; null when either window is a low sample. */
+    /** Prompts with mentions against before, in percent; null with none before. */
+    promptsWithMentionsPct: number | null;
+    /** Net sentiment's change in points; null when a window is a low sample. */
     netSentimentPoints: number | null;
+    /** The prompts both windows answered, and those left out of every change; null before 00195. */
+    basis: { sharedPrompts: number; newPrompts: number; droppedPrompts: number } | null;
   };
   /** What the page's summary line says: the platform that moved the net most, and who AI names beside you. */
   headline: {
@@ -196,6 +205,8 @@ export interface MentionsSummary {
     label: string;
     trackedResponses: number;
     mentions: number;
+    /** Times named on the platform. */
+    timesNamed: number;
     mentionRate: number | null;
     netSentiment: number | null;
     /** Against the window before; null when either has under 20 mentions. */
@@ -206,6 +217,8 @@ export interface MentionsSummary {
     day: string;
     trackedResponses: number;
     mentions: number;
+    /** Times named that day: the page's Mentions line. */
+    timesNamed: number;
     mentionRate: number | null;
     netSentiment: number | null;
   }>;
@@ -232,8 +245,16 @@ export async function getMentionsSummaryFor(
   if (!o) return null;
 
   const { current: cur, previous: prev } = o;
+  // As the page's cards: every change on the prompts both windows answered,
+  // and none read from or into a window under the floor.
+  const { current: base, previous: before } = changeBasis(o);
   const rate = mentionRate(cur);
-  const prevRate = mentionRate(prev);
+  const baseRate = mentionRate(base);
+  const beforeRate = mentionRate(before);
+  const rateChangeLow =
+    cur.answers < LOW_SAMPLE_MENTIONS ||
+    base.answers < LOW_SAMPLE_MENTIONS ||
+    before.answers < LOW_SAMPLE_MENTIONS;
   const headline = mentionsHeadline(o);
 
   return {
@@ -242,12 +263,22 @@ export async function getMentionsSummaryFor(
     current: figures(cur),
     previous: figures(prev),
     changes: {
-      mentionsPct: whole(relativeChange(cur.mentions, prev.mentions)),
+      mentionsPct: whole(relativeChange(base.occurrences, before.occurrences)),
       mentionRatePoints:
-        rate === null || prevRate === null || cur.answers < LOW_SAMPLE_MENTIONS
+        rateChangeLow || rate === null || baseRate === null || beforeRate === null
           ? null
-          : round1(rate - prevRate),
+          : round1(baseRate - beforeRate),
+      promptsWithMentionsPct: whole(
+        relativeChange(base.promptsWithMentions, before.promptsWithMentions),
+      ),
       netSentimentPoints: headline.netChange,
+      basis: o.same
+        ? {
+            sharedPrompts: o.same.prompts,
+            newPrompts: o.same.newPrompts,
+            droppedPrompts: o.same.droppedPrompts,
+          }
+        : null,
     },
     headline: {
       mover: headline.mover
@@ -260,6 +291,7 @@ export async function getMentionsSummaryFor(
       label: mentionPlatformLabel(row.platform),
       trackedResponses: row.answers,
       mentions: row.mentions,
+      timesNamed: row.occurrences,
       mentionRate: round1(mentionRate(row)),
       netSentiment: wholeNet(row),
       netSentimentChange: platformNetChange(row),
@@ -269,6 +301,7 @@ export async function getMentionsSummaryFor(
       day: d.day,
       trackedResponses: d.answers,
       mentions: d.mentions,
+      timesNamed: d.occurrences,
       mentionRate: round1(d.rate),
       netSentiment: whole(d.net),
     })),

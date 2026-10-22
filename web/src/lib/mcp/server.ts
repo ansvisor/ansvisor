@@ -1405,9 +1405,11 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
     'get_mentions_summary',
     {
       description:
-        "The Mentions & Sentiment page's Overview for a brand: responses naming it, mention " +
-        'rate, prompts with mentions, average position and sentiment (counts, shares, net), ' +
-        'now and in the window before, with `changes`; the platform that moved net sentiment ' +
+        "The Mentions & Sentiment page's Overview for a brand: times named (`timesNamed`, the " +
+        "page's Total mentions), responses naming it, mention rate, prompts with mentions, " +
+        'average position and sentiment (counts, shares, net), now and in the window before, ' +
+        "with `changes` taken as the page's cards take them: on the prompts both windows " +
+        'answered (`changes.basis`), mentionsPct on times named; the platform that moved net sentiment ' +
         'most and the competitors AI names beside the brand (`headline`); each platform; and ' +
         'each day. Use it for "how is AI talking about us" / "why did sentiment drop on ' +
         'Gemini?". ' +

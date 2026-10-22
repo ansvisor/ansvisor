@@ -89,7 +89,15 @@ const overview = {
     prompts: 20,
     prompts_with_mentions: 15,
   }),
-  previous: totals({ answers: 400, mentions: 80, positive: 40, negative: 8, prompts: 20 }),
+  previous: totals({
+    answers: 400,
+    mentions: 80,
+    occurrences: 104,
+    positive: 40,
+    negative: 8,
+    prompts: 20,
+    prompts_with_mentions: 12,
+  }),
   platforms: [
     {
       platform: 'gemini-web',
@@ -103,7 +111,9 @@ const overview = {
       prev_negative: 10,
     },
   ],
-  daily: [{ day: '2026-10-17', answers: 10, mentions: 4, positive: 2, negative: 1 }],
+  daily: [
+    { day: '2026-10-17', answers: 10, mentions: 4, occurrences: 6, positive: 2, negative: 1 },
+  ],
   competitors: [
     { competitor_id: 'c2', name: 'Origin Box', mentions: 90, co_mentions: 36, prev_mentions: 0 },
     { competitor_id: 'c1', name: 'Crema Club', mentions: 260, co_mentions: 41, prev_mentions: 200 },
@@ -178,10 +188,13 @@ describe('getMentionsSummaryFor', () => {
         lowSample: false,
       },
     });
+    // Without the shared prompts (before 00195), the windows' totals.
     expect(summary?.changes).toEqual({
       mentionsPct: 25,
       mentionRatePoints: 5,
+      promptsWithMentionsPct: 25,
       netSentimentPoints: -6,
+      basis: null,
     });
     expect(summary?.headline).toEqual({
       mover: { platform: 'gemini-web', label: 'Gemini', change: -18 },
@@ -199,10 +212,18 @@ describe('getMentionsSummaryFor', () => {
         day: '2026-10-16',
         trackedResponses: 0,
         mentions: 0,
+        timesNamed: 0,
         mentionRate: null,
         netSentiment: null,
       },
-      { day: '2026-10-17', trackedResponses: 10, mentions: 4, mentionRate: 40, netSentiment: 25 },
+      {
+        day: '2026-10-17',
+        trackedResponses: 10,
+        mentions: 4,
+        timesNamed: 6,
+        mentionRate: 40,
+        netSentiment: 25,
+      },
     ]);
   });
 
@@ -219,8 +240,14 @@ describe('getMentionsSummaryFor', () => {
     rpc.mockResolvedValue({
       data: {
         ...overview,
-        current: totals({ answers: 12, mentions: 3, positive: 2 }),
-        previous: totals({ answers: 400, mentions: 80, positive: 40, negative: 8 }),
+        current: totals({ answers: 12, mentions: 3, occurrences: 4, positive: 2 }),
+        previous: totals({
+          answers: 400,
+          mentions: 80,
+          occurrences: 100,
+          positive: 40,
+          negative: 8,
+        }),
       },
       error: null,
     });
@@ -229,17 +256,63 @@ describe('getMentionsSummaryFor', () => {
     expect(summary?.changes).toEqual({
       mentionsPct: -96,
       mentionRatePoints: null,
+      promptsWithMentionsPct: null,
       netSentimentPoints: null,
+      basis: null,
     });
   });
-  it("reads the rate's change against a small window before, as the page's card does", async () => {
+  it("reads no rate change from a window before under 20 responses, as the page's card", async () => {
     rpc.mockResolvedValue({
       data: { ...overview, previous: totals({ answers: 10, mentions: 1 }) },
       error: null,
     });
     const summary = await getMentionsSummaryFor(auth, { brandId: 'b1' });
-    expect(summary?.changes.mentionRatePoints).toBe(15);
+    expect(summary?.changes.mentionRatePoints).toBeNull();
     expect(summary?.changes.netSentimentPoints).toBeNull();
+  });
+
+  // 00195: as the page's cards, each change on the prompts both windows
+  // answered; the figures stay the whole windows'.
+  it('takes every change on the prompts both windows answered, and says which', async () => {
+    rpc.mockResolvedValue({
+      data: {
+        ...overview,
+        same: {
+          prompts: 18,
+          new_prompts: 2,
+          dropped_prompts: 1,
+          current: totals({
+            answers: 360,
+            mentions: 90,
+            occurrences: 120,
+            positive: 45,
+            negative: 9,
+            prompts_with_mentions: 14,
+          }),
+          previous: totals({
+            answers: 360,
+            mentions: 72,
+            occurrences: 80,
+            positive: 36,
+            negative: 7,
+            prompts_with_mentions: 10,
+          }),
+        },
+      },
+      error: null,
+    });
+    const summary = await getMentionsSummaryFor(auth, { brandId: 'b1' });
+    expect(summary?.current.timesNamed).toBe(130);
+    expect(summary?.changes).toEqual({
+      // 120 against 80 times named, on the shared prompts.
+      mentionsPct: 50,
+      // 25% against 20% of the shared prompts' responses.
+      mentionRatePoints: 5,
+      promptsWithMentionsPct: 40,
+      // +40 against +40 on the shared prompts.
+      netSentimentPoints: 0,
+      basis: { sharedPrompts: 18, newPrompts: 2, droppedPrompts: 1 },
+    });
   });
 });
 
