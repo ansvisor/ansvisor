@@ -47,6 +47,14 @@ const text = (value: unknown) => (typeof value === 'string' ? value.trim() : '')
 
 const OPPORTUNITY_COLUMNS = 'id, title, decision, opportunity_score, brief, source_data';
 const OPPORTUNITY_KEY = 'opportunity:';
+/**
+ * The opportunity a row's key names (`opportunity:<id>`), or null for a
+ * page's row. The server reads it from the key the mark is written under,
+ * so a row's status change can't land on another opportunity.
+ */
+function opportunityIdOf(rowKey: string): string | null {
+  return rowKey.startsWith(OPPORTUNITY_KEY) ? rowKey.slice(OPPORTUNITY_KEY.length) : null;
+}
 
 export async function getContentPlan(
   brandId: string,
@@ -117,17 +125,20 @@ export async function getContentPlan(
   const marks = (marksRes.data ?? []).map(
     (m): PlanMark => ({ rowKey: m.row_key, priority: m.priority, hidden: m.hidden_at !== null }),
   );
-  // A hidden opportunity's row was dismissed with it: read it too, to show again.
+  // A hidden opportunity's row was dismissed with it: read it too, to show
+  // again, while it is still dismissed (not completed or reopened since).
   const openIds = new Set((opportunitiesRes.data ?? []).map((o) => o.id));
   const hiddenIds = marks
-    .filter((m) => m.hidden && m.rowKey.startsWith(OPPORTUNITY_KEY))
-    .map((m) => m.rowKey.slice(OPPORTUNITY_KEY.length))
+    .filter((m) => m.hidden)
+    .map((m) => opportunityIdOf(m.rowKey))
+    .filter((id): id is string => id !== null && z.guid().safeParse(id).success)
     .filter((id) => !openIds.has(id));
   const hiddenRes = hiddenIds.length
     ? await supabase
         .from('content_opportunities')
         .select(OPPORTUNITY_COLUMNS)
         .eq('brand_id', brandId)
+        .eq('status', 'dismissed')
         .in('id', hiddenIds)
     : { data: [], error: null };
   if (hiddenRes.error) throw new Error(hiddenRes.error.message);
@@ -204,6 +215,13 @@ const markInput = z.object({
   rowKey: z.string().min(1).max(600),
 });
 
+/** A row key's opportunity, checked: 'invalid' for an opportunity key without a uuid. */
+function checkedOpportunityId(rowKey: string): string | null {
+  const id = opportunityIdOf(rowKey);
+  if (id !== null && !z.guid().safeParse(id).success) throw new Error('invalid');
+  return id;
+}
+
 /**
  * Mark a Plan row as a priority, or take the mark off (admins and managers;
  * content_plan_marks' policies refuse anyone else).
@@ -263,13 +281,9 @@ export async function getPlanPriorities(
  * opportunity's row dismisses the opportunity too, so the Opportunities page
  * agrees, and remembers the status it had for showing it again.
  */
-export async function hidePlanRow(
-  brandId: string,
-  rowKey: string,
-  opportunityId: string | null,
-): Promise<void> {
+export async function hidePlanRow(brandId: string, rowKey: string): Promise<void> {
   if (!markInput.safeParse({ brandId, rowKey }).success) throw new Error('invalid');
-  if (opportunityId && !z.guid().safeParse(opportunityId).success) throw new Error('invalid');
+  const opportunityId = checkedOpportunityId(rowKey);
   const supabase = await createClient();
   const { data: user } = await supabase.auth.getUser();
   if (!user.user) throw new Error('not_found');
@@ -301,14 +315,14 @@ export async function hidePlanRow(
   if (opportunityId) await updateOpportunityStatus(opportunityId, 'dismissed');
 }
 
-/** Show a hidden Plan row again; an opportunity gets back the status it had. */
-export async function showPlanRow(
-  brandId: string,
-  rowKey: string,
-  opportunityId: string | null,
-): Promise<void> {
+/**
+ * Show a hidden Plan row again. An opportunity still dismissed gets back the
+ * status it had; one completed or reopened elsewhere since keeps its status,
+ * and only the mark goes.
+ */
+export async function showPlanRow(brandId: string, rowKey: string): Promise<void> {
   if (!markInput.safeParse({ brandId, rowKey }).success) throw new Error('invalid');
-  if (opportunityId && !z.guid().safeParse(opportunityId).success) throw new Error('invalid');
+  const opportunityId = checkedOpportunityId(rowKey);
   const supabase = await createClient();
   const { data: user } = await supabase.auth.getUser();
   if (!user.user) throw new Error('not_found');
@@ -335,7 +349,17 @@ export async function showPlanRow(
   if (error) throw new Error(error.message);
   // No row changed: not the member's to write.
   if (!data) throw new Error('not_found');
-  if (opportunityId) await updateOpportunityStatus(opportunityId, mark.restore_status ?? 'new');
+  if (!opportunityId) return;
+  const { data: opportunity, error: statusError } = await supabase
+    .from('content_opportunities')
+    .select('status')
+    .eq('id', opportunityId)
+    .eq('brand_id', brandId)
+    .maybeSingle();
+  if (statusError) throw new Error(statusError.message);
+  if (opportunity?.status === 'dismissed') {
+    await updateOpportunityStatus(opportunityId, mark.restore_status ?? 'new');
+  }
 }
 
 /**

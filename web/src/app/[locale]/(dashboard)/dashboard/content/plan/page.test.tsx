@@ -325,6 +325,24 @@ describe('the Content plan', () => {
     );
   });
 
+  it('opens the mix closed, with its count, and opens it on a click', async () => {
+    await renderPage();
+    const mix = container.querySelector('section[aria-labelledby="plan-mix-title"]')!;
+    const toggle = mix.querySelector<HTMLButtonElement>('h2 button')!;
+    expect(toggle.getAttribute('aria-expanded')).toBe('false');
+    // The whole bar is the button, and says it opens.
+    expect(toggle.textContent).toBe('What AI cites in your topics2 page types · 1 gapShow');
+    expect(mix.textContent).toContain('2 page types · 1 gap');
+    const body = document.getElementById(toggle.getAttribute('aria-controls')!)!;
+    expect(body.className).toContain('hidden');
+
+    await act(async () => toggle.click());
+    expect(toggle.getAttribute('aria-expanded')).toBe('true');
+    expect(toggle.textContent).toBe('What AI cites in your topicsHide');
+    expect(body.className).not.toContain('hidden');
+    expect(mix.textContent).not.toContain('2 page types · 1 gap');
+  });
+
   it('draws both shares to the larger one’s scale, never past the track', async () => {
     await renderPage();
     const widths = (bar: 'ai' | 'yours') =>
@@ -359,7 +377,7 @@ describe('the Content plan', () => {
     await renderPage();
     const guide = () =>
       container.querySelector<HTMLButtonElement>(
-        'section[aria-labelledby="plan-mix-title"] button',
+        'section[aria-labelledby="plan-mix-title"] li button',
       )!;
     await act(async () => guide().click());
     expect(guide().getAttribute('aria-pressed')).toBe('true');
@@ -391,7 +409,7 @@ describe('the Content plan', () => {
     await renderPage();
     const guide = () =>
       container.querySelector<HTMLButtonElement>(
-        'section[aria-labelledby="plan-mix-title"] button',
+        'section[aria-labelledby="plan-mix-title"] li button',
       )!;
     await act(async () => guide().click());
     await act(async () => button('Protect').click());
@@ -505,13 +523,13 @@ describe('a Plan row’s menu', () => {
   it('hides a row, with an undo, and lists the hidden rows to show again', async () => {
     await renderPage();
     await clickItem('Office coffee subscriptions', 'Hide from the plan');
-    expect(hidePlanRow).toHaveBeenCalledWith('brand-1', 'opportunity:o1', 'o1');
+    expect(hidePlanRow).toHaveBeenCalledWith('brand-1', 'opportunity:o1');
     expect(getContentPlan).toHaveBeenCalledTimes(2);
     expect(toast).toHaveBeenCalledWith('Hidden: Office coffee subscriptions', {
       action: { label: 'Undo', onClick: expect.any(Function) },
     });
     await act(async () => toast.mock.calls[0][1].action.onClick());
-    expect(showPlanRow).toHaveBeenCalledWith('brand-1', 'opportunity:o1', 'o1');
+    expect(showPlanRow).toHaveBeenCalledWith('brand-1', 'opportunity:o1');
 
     getContentPlan.mockResolvedValue({
       ...PLAN,
@@ -527,7 +545,7 @@ describe('a Plan row’s menu', () => {
     expect(hidden.textContent).toBe('Office coffee subscriptionsShow again');
     showPlanRow.mockClear();
     await act(async () => hidden.querySelector('button')!.click());
-    expect(showPlanRow).toHaveBeenCalledWith('brand-1', 'opportunity:o1', 'o1');
+    expect(showPlanRow).toHaveBeenCalledWith('brand-1', 'opportunity:o1');
     expect(button('1 hidden row · Hide').getAttribute('aria-expanded')).toBe('true');
   });
 

@@ -64,6 +64,43 @@ describe('persistShoppingCards – ChatGPT inline products (#1183)', () => {
     expect(upsert.mock.calls[0][0][0].position).toBe(1);
   });
 
+  it('persists the merchant classification and keeps cards without a URL unclassified', async () => {
+    const inserted = await persistShoppingCards({
+      ...base,
+      rawCards: [
+        {
+          products: [
+            {
+              title: 'Acme Trail Runner on Amazon',
+              url: 'https://www.amazon.com/dp/B0C123ABCD?tag=tracking',
+              price: '$75.00',
+            },
+            {
+              title: 'Acme Trail Runner Store',
+              url: 'https://shop.acme.com/products/trail-runner',
+              price: '$75.00',
+            },
+            {
+              title: 'Acme Trail Runner Reseller',
+              url: 'https://shop.example/products/trail-runner',
+              price: '$70.00',
+            },
+            { title: 'Acme Trail Runner without merchant URL', price: '$75.00' },
+          ],
+        },
+      ],
+    });
+
+    expect(inserted).toBe(4);
+    const rows = upsert.mock.calls[0][0];
+    expect(rows.map((row) => [row.merchant_kind, row.marketplace, row.listing_id])).toEqual([
+      ['marketplace', 'amazon', 'B0C123ABCD'],
+      ['own', null, null],
+      ['reseller', null, null],
+      [null, null, null],
+    ]);
+  });
+
   it('writes nothing when there are neither cards nor inline products', async () => {
     const inserted = await persistShoppingCards({ ...base, rawCards: [] });
     expect(inserted).toBe(0);
