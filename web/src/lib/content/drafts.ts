@@ -214,7 +214,13 @@ export interface DraftStartOptions {
     pageTitle: string | null;
     assetType: string | null;
   }[];
-  prompts: { id: string; text: string }[];
+  /**
+   * seen: the brand was named in or cited for it lately, so it needs no new
+   * page (New content leaves it out; Add source keeps it). Not seen first.
+   */
+  prompts: { id: string; text: string; seen: boolean }[];
+  /** How many active prompts are seen, past the listed ones too. */
+  promptsSeen: number;
   topics: { id: string; name: string; promptCount: number }[];
 }
 

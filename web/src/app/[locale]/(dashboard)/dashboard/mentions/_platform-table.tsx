@@ -82,7 +82,10 @@ export function PlatformTable({
                     </span>
                     {negative && <span className="sr-only"> ({t('negativeNet')})</span>}
                   </td>
-                  <td className="px-2 py-2.5 text-right tabular-nums">{f.number(row.mentions)}</td>
+                  {/* Every time it names the brand, as Total mentions counts them. */}
+                  <td className="px-2 py-2.5 text-right tabular-nums">
+                    {f.number(row.occurrences)}
+                  </td>
                   <td className="px-2 py-2.5 text-right tabular-nums">
                     {rate === null ? '—' : f.percent(rate, 0)}
                   </td>

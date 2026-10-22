@@ -16,7 +16,8 @@ import {
 } from '@/lib/actions/content-plan';
 import { listMembers, type TeamMember } from '@/lib/actions/team';
 import { useUserRole } from '@/hooks/use-user-role';
-import type { PageType } from '@/lib/content/drafts';
+import { useRouter } from '@/i18n/navigation';
+import { contentEditorPath, type PageType } from '@/lib/content/drafts';
 import { pageTypeMix } from '@/lib/content/plan-mix';
 import { siteTypeOf } from '@/lib/content/page-types';
 import {
@@ -25,12 +26,13 @@ import {
   buildPlan,
   earlierPeriod,
   rowsFor,
+  type PlanAction,
   type PlanCard,
   type PlanPeriod,
   type PlanRow,
 } from '@/lib/content/plan';
 import { formatNumber } from '@/lib/format';
-import { readUrlChoice, writeUrlParams } from '@/lib/url-state';
+import { readUrlChoice, readUrlParam, writeUrlParams } from '@/lib/url-state';
 import { cn } from '@/lib/utils';
 import { useBrandStore } from '@/stores/use-brand-store';
 import { AssignDialog } from './_assign-dialog';
@@ -62,6 +64,18 @@ const CARD_DOT: Record<PlanCard, string> = {
   priority: 'bg-foreground',
 };
 
+/** What New content opens on for a row: its opportunity in Start, or its page to optimize. */
+function presetFor(row: PlanRow): DialogPreset {
+  return row.opportunityId
+    ? {
+        kind: 'opportunity',
+        id: row.opportunityId,
+        // An opportunity for an existing page starts on that page.
+        page: row.page ? { url: row.page, title: row.title } : null,
+      }
+    : { kind: 'page', url: row.page! };
+}
+
 /**
  * The Content plan (Content Editor CE-014, spec v2 §4): what to create,
  * optimize or protect next, for the last 7, 30 or 90 days. The cards count
@@ -71,7 +85,8 @@ const CARD_DOT: Record<PlanCard, string> = {
  * to optimize) or opens the draft already being written. A row's menu
  * assigns it to a teammate, and lets admins and managers mark it as a
  * priority or hide it; hidden rows can be shown again below the list. The
- * period lives in the URL (?days=7).
+ * period lives in the URL (?days=7). Getting started's content steps open
+ * the Plan on its top Create or Optimize row (?start=create, 00234).
  */
 export default function ContentPlanPage() {
   const t = useTranslations('contentEditor.plan');
@@ -100,9 +115,21 @@ export default function ContentPlanPage() {
     setMixType(null);
   }
 
+  // Getting started's create or optimize step: start the top row of that action once the plan is in.
+  const [startFrom, setStartFrom] = useState<Extract<PlanAction, 'create' | 'optimize'> | null>(
+    null,
+  );
+  const router = useRouter();
+
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- one read of the URL after mount
     setDays(Number(readUrlChoice('days', ['7', '30', '90'], '30')) as PlanPeriod);
+    const start = readUrlParam('start');
+    if (start === 'create' || start === 'optimize') {
+      setStartFrom(start);
+      // Once: a reload or a shared link opens the plan as it is.
+      writeUrlParams({ start: null });
+    }
   }, []);
 
   useEffect(() => {
@@ -165,16 +192,6 @@ export default function ContentPlanPage() {
     writeUrlParams({ days: String(next) }, { days: '30' });
   };
 
-  const presetFor = (row: PlanRow): DialogPreset =>
-    row.opportunityId
-      ? {
-          kind: 'opportunity',
-          id: row.opportunityId,
-          // An opportunity for an existing page starts on that page.
-          page: row.page ? { url: row.page, title: row.title } : null,
-        }
-      : { kind: 'page', url: row.page! };
-
   const startRow = (row: PlanRow) => {
     setPreset(presetFor(row));
     setStarting(true);
@@ -198,6 +215,25 @@ export default function ContentPlanPage() {
     setPreset({ ...presetFor(row), who: 'team' });
     setStarting(true);
   };
+
+  // The step's row: the top one of its action not being written yet, or the
+  // draft already being written for the top one. With none, the card shows
+  // that there is none.
+  useEffect(() => {
+    if (!startFrom || !plan) return;
+    const ofAction = plan.rows.filter((r) => r.action === startFrom);
+    const row = ofAction.find((r) => !r.draft) ?? ofAction[0];
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- one start per visit from Getting started
+    setStartFrom(null);
+    setCard(startFrom);
+    if (!row) return;
+    if (row.draft) {
+      router.push(contentEditorPath(row.draft.id));
+      return;
+    }
+    setPreset(presetFor(row));
+    setStarting(true);
+  }, [startFrom, plan, router]);
 
   const reload = () => setAttempt((n) => n + 1);
 

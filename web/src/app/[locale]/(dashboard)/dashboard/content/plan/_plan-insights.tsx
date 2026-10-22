@@ -2,7 +2,7 @@
 
 import { useId, useState } from 'react';
 import { useTranslations } from 'next-intl';
-import { ChevronDown, Sparkles } from 'lucide-react';
+import { ChevronDown, Sparkles, X } from 'lucide-react';
 import { Link } from '@/i18n/navigation';
 import type { PageType } from '@/lib/content/drafts';
 import type { MixRow, PlanResults } from '@/lib/content/plan-mix';
@@ -88,7 +88,9 @@ function MixBars({
  * citations (light bar) and the type's share of the brand's own cited pages
  * (dark bar), two mixes of 100 each drawn to one scale, with a gap flagged
  * in amber. A row
- * filters the priority list to its type; clicking it again clears it.
+ * filters the priority list to its type; clicking it again clears it. While
+ * the section is closed, a line under its bar names the type filtering the
+ * list and clears it.
  */
 export function PageTypeMix({
   rows,
@@ -139,6 +141,20 @@ export function PageTypeMix({
           </span>
         </button>
       </h2>
+      {/* Closed, the rows that filter the list are out of sight: say which one does. */}
+      {!open && selected && (
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 border-t px-4 py-2 text-xs text-muted-foreground">
+          <span>{t('filteredBy', { type: tTypes(selected) })}</span>
+          <button
+            type="button"
+            onClick={() => onSelect(null)}
+            className="inline-flex items-center gap-1 rounded font-medium text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+          >
+            <X aria-hidden className="h-3.5 w-3.5" />
+            {t('clearFilter')}
+          </button>
+        </div>
+      )}
       <div id={bodyId} className={cn('border-t', !open && 'hidden')}>
         {rows.length > 0 && (
           <div className="flex flex-wrap items-center justify-end gap-3 px-4 pt-2.5 pb-1 text-xs text-muted-foreground">
