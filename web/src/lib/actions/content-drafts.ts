@@ -234,6 +234,7 @@ export async function getContentDraft(id: string): Promise<ContentDraft | null> 
         ? { id: data.action_id, number: data.actions.action_no }
         : null,
     agentState: agentStateOf(data.agent_state, data.agent_state_at),
+    agentSince: data.agent_state_at,
     updatedAt: data.updated_at,
   };
 }

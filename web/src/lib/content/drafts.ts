@@ -136,6 +136,8 @@ export interface ContentDraft {
   action: { id: string; number: number } | null;
   /** Where the Content Agent is on it (CE-015): the editor waits while it writes. */
   agentState: AgentState;
+  /** When the agent's state last changed: while it writes, when it started. */
+  agentSince: string | null;
   updatedAt: string;
 }
 

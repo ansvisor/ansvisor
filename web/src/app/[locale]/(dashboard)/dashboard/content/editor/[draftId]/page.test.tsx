@@ -144,6 +144,7 @@ const draft = (over: Partial<ContentDraft> = {}): ContentDraft => ({
   rules: { set: null, source: null, overrides: {}, textRules: [] },
   action: null,
   agentState: null,
+  agentSince: null,
   updatedAt: '2026-10-20T10:00:00Z',
   ...over,
 });
@@ -407,13 +408,26 @@ describe('the content editor', () => {
           draft({
             status: 'draft',
             agentState: 'writing',
+            agentSince: new Date(Date.now() - 65_000).toISOString(),
             bodyHtml: '<h1>Pipeline forecasting</h1>',
           }),
         );
         await renderPage();
-        expect(container.querySelector('[role="status"]')!.textContent).toContain(
-          'Content Agent is writing this page',
-        );
+        const status = container.querySelector('[role="status"]')!;
+        expect(status.textContent).toContain('Content Agent is working on this page');
+        // Its steps on a live page, the one it is on with the time it has taken.
+        const steps = [...status.querySelectorAll('li')];
+        expect(steps.map((li) => li.textContent?.replace(/\d+:\d\d$/, ''))).toEqual([
+          'Read the live page and its sources',
+          'Set aside the passages AI answers quote',
+          'Suggesting changes',
+          'Opens here with the suggestions to review',
+        ]);
+        expect(steps[2].getAttribute('aria-current')).toBe('step');
+        expect(steps[2].textContent).toMatch(/1:0[56]$/);
+        // Under two minutes, the usual wait.
+        expect(status.textContent).toContain('Usually a minute or two.');
+        expect(status.textContent).not.toContain('Taking longer than usual');
         expect(container.querySelector('.ProseMirror')).toBeNull();
 
         getContentDraft.mockResolvedValue(
@@ -433,6 +447,24 @@ describe('the content editor', () => {
       }
     });
 
+    it('says when the wait is longer than usual', async () => {
+      getContentDraft.mockResolvedValue(
+        draft({
+          status: 'draft',
+          method: 'create',
+          agentState: 'writing',
+          agentSince: new Date(Date.now() - 150_000).toISOString(),
+        }),
+      );
+      await renderPage();
+      const status = container.querySelector('[role="status"]')!;
+      expect(status.querySelector('[aria-current="step"]')!.textContent).toMatch(
+        /^Writing the page2:3[01]$/,
+      );
+      expect(status.textContent).toContain('Taking longer than usual.');
+      expect(status.textContent).not.toContain('Usually a minute or two.');
+    });
+
     it('says the agent couldn’t finish, and tries again with the page and rules in effect', async () => {
       getContentDraft.mockResolvedValue(draft({ status: 'draft', agentState: 'failed' }));
       await renderPage();
@@ -450,7 +482,7 @@ describe('the content editor', () => {
       expect(request.rules.length).toBeGreaterThan(0);
       // The page now waits for the agent.
       expect(container.querySelector('[role="status"]')!.textContent).toContain(
-        'Content Agent is writing this page',
+        'Content Agent is working on this page',
       );
     });
 
