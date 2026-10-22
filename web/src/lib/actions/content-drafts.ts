@@ -5,6 +5,7 @@ import { API_BASE_URL } from '@/config/api';
 import { createClient } from '@/lib/supabase/server';
 import { readAssignees } from '@/lib/action-center/assignees';
 import {
+  DRAFT_PAGES_PER_CALL,
   DRAFT_STATUSES,
   LIBRARY_TABS,
   PAGE_TYPES,
@@ -249,44 +250,58 @@ export interface DraftPage {
   sourceUrl: string | null;
 }
 
-/** Ids read at a time: the list goes in the request's address. */
-const PAGES_PER_READ = 100;
+/**
+ * A call's pages stop at about this many characters, well inside a
+ * serverless response's 4.5 MB: fifty pages can each be up to 500 KB.
+ */
+const PAGES_RESPONSE_BUDGET = 3_000_000;
+
+/** What one Export call returns: the pages, and the ids it left for the next. */
+export interface DraftPagesRead {
+  pages: DraftPage[];
+  /** Ids not read for the response's size, in order; empty when all were. */
+  rest: string[];
+}
 
 /**
  * The Library's Export (CE-002): the stored page of each draft given, of the
- * brand, in the order given; at most the Library's own count. A draft gone
- * meanwhile is left out.
+ * brand, in the order given. At most DRAFT_PAGES_PER_CALL a call, and pages
+ * up to PAGES_RESPONSE_BUDGET, since every page comes back in the response:
+ * the Library reads a longer list in calls, starting each with `rest`. Always
+ * at least one page, so a list moves on. A draft gone meanwhile is left out.
  */
-export async function getContentDraftPages(brandId: string, ids: string[]): Promise<DraftPage[]> {
-  const parsed = z.array(z.guid()).max(LIBRARY_LIMIT).safeParse(ids);
+export async function getContentDraftPages(
+  brandId: string,
+  ids: string[],
+): Promise<DraftPagesRead> {
+  const parsed = z.array(z.guid()).max(DRAFT_PAGES_PER_CALL).safeParse(ids);
   if (!draftId.safeParse(brandId).success || !parsed.success) throw new Error('invalid');
   const supabase = await createClient();
-  const chunks = [];
-  for (let i = 0; i < parsed.data.length; i += PAGES_PER_READ) {
-    chunks.push(parsed.data.slice(i, i + PAGES_PER_READ));
-  }
-  const reads = await Promise.all(
-    chunks.map((chunk) =>
-      supabase
-        .from('content_drafts')
-        .select('id, title, body_html, source_url')
-        .eq('brand_id', brandId)
-        .in('id', chunk),
-    ),
+  const { data, error } = await supabase
+    .from('content_drafts')
+    .select('id, title, body_html, source_url')
+    .eq('brand_id', brandId)
+    .in('id', parsed.data);
+  if (error) throw new Error(error.message);
+  const byId = new Map<string, DraftPage>(
+    (data ?? []).map((row) => [
+      row.id,
+      { id: row.id, title: row.title, bodyHtml: row.body_html, sourceUrl: row.source_url },
+    ]),
   );
-  const byId = new Map<string, DraftPage>();
-  for (const { data, error } of reads) {
-    if (error) throw new Error(error.message);
-    for (const row of data ?? []) {
-      byId.set(row.id, {
-        id: row.id,
-        title: row.title,
-        bodyHtml: row.body_html,
-        sourceUrl: row.source_url,
-      });
+  const pages: DraftPage[] = [];
+  let size = 0;
+  for (const [i, id] of parsed.data.entries()) {
+    const page = byId.get(id);
+    if (!page) continue;
+    const pageSize = page.bodyHtml.length + page.title.length + (page.sourceUrl?.length ?? 0);
+    if (pages.length > 0 && size + pageSize > PAGES_RESPONSE_BUDGET) {
+      return { pages, rest: parsed.data.slice(i) };
     }
+    pages.push(page);
+    size += pageSize;
   }
-  return parsed.data.flatMap((id) => byId.get(id) ?? []);
+  return { pages, rest: [] };
 }
 
 /** Opportunities still open to write for, the highest scored first. */
