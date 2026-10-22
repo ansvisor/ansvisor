@@ -71,6 +71,14 @@ describe('collectHealthReport', () => {
     expect(report.probes.results.every((r) => r.status === 'green')).toBe(true);
   });
 
+  it("times the Topics tab's own reads first: its 24 hours and 90 days", () => {
+    expect(PROBES.slice(0, 2)).toEqual([
+      { probe: 'topics_overview_window', days: 1 },
+      { probe: 'topics_overview_window', days: 90 },
+    ]);
+    expect(PROBES.some((p) => p.probe === 'topics_overview_aggregates')).toBe(false);
+  });
+
   it('skips the probes when they are not configured', async () => {
     delete process.env.HEALTH_PROBE_BRAND_ID;
     const report = await collectHealthReport(NOW);
