@@ -28,6 +28,10 @@ export type BrandPrefKey = 'shoppingModeEnabled';
 export interface NavChild {
   title: string;
   href: string;
+  /** Other routes that belong to this entry, e.g. the editor to the Library. */
+  activeFor?: string[];
+  /** A short tag after the label, e.g. "New". */
+  badge?: string;
 }
 
 export interface NavItem {
@@ -81,11 +85,25 @@ export const dashboardNav: NavGroup[] = [
         icon: Sparkles,
         requiredFeature: 'ai_agent',
       },
+      // Content Editor (CE-001): a group, like Prompts. The Plan says what to
+      // do next (CE-014); Opportunities is today's page and keeps
+      // /dashboard/content; the Library lists every page written or changed
+      // in Ansvisor.
       {
-        title: 'Content Optimization',
+        title: 'Content',
         href: '/dashboard/content',
         icon: FileText,
         requiredFeature: 'content_optimization',
+        children: [
+          { title: 'Plan', href: '/dashboard/content/plan', badge: 'New' },
+          { title: 'Opportunities', href: '/dashboard/content' },
+          // A draft opens in the editor from the Library (CE-004).
+          {
+            title: 'Library',
+            href: '/dashboard/content/library',
+            activeFor: ['/dashboard/content/editor'],
+          },
+        ],
       },
       {
         title: 'Site Audit',

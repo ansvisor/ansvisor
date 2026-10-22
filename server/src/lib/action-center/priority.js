@@ -351,7 +351,9 @@ function sentByHand(action) {
       subject: { entity: 'platforms', count: gaps.length },
     };
   }
-  if (action.kind === 'content_opportunity') {
+  // A draft sent from the Content Editor (CE-015) is the same work as an
+  // opportunity's page: content for its prompts.
+  if (action.kind === 'content_opportunity' || action.kind === 'content_draft') {
     return {
       change: 'gap',
       severity: 0.45,
