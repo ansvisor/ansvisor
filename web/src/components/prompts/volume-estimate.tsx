@@ -31,6 +31,21 @@ function monthOf(iso: string): string {
   });
 }
 
+/** The confidence line's wording for each dated basis: when the estimate is from. */
+const CONFIDENCE_KEY = {
+  keywords: 'confidence',
+  keyword: 'confidence',
+  guess: 'confidenceSuggested',
+} as const;
+
+/** What low confidence means for each basis. */
+const LOW_NOTE_KEY = {
+  keywords: 'lowNote',
+  keyword: 'lowNote',
+  guess: 'lowNoteGuess',
+  snapshot: 'lowNoteSnapshot',
+} as const;
+
 /** How the estimate is built, from what, how sure it is and since when (PROMPT-013). */
 function EstimateNote({ estimate, kind }: { estimate: Estimate; kind: EstimateKind }) {
   const t = useTranslations('volumeEstimate');
@@ -39,7 +54,9 @@ function EstimateNote({ estimate, kind }: { estimate: Estimate; kind: EstimateKi
   return (
     <>
       <p className="font-medium">{t('title')}</p>
-      {estimate.basis === 'guess' ? (
+      {estimate.basis === 'snapshot' ? (
+        <p>{t('methodSnapshot')}</p>
+      ) : estimate.basis === 'guess' ? (
         <p>{t(kind === 'total' ? 'methodGuessTotal' : 'methodGuess')}</p>
       ) : estimate.basis === 'keyword' ? (
         <p>{t('methodKeyword', { rate })}</p>
@@ -71,15 +88,17 @@ function EstimateNote({ estimate, kind }: { estimate: Estimate; kind: EstimateKi
         </>
       )}
       <p>
-        {estimate.basis === 'guess'
-          ? t('sourcesGuess')
-          : estimate.asOf
-            ? t('sources', { month: monthOf(estimate.asOf), rate })
-            : t('sourcesUndated', { rate })}
+        {estimate.basis === 'snapshot'
+          ? t('sourcesSnapshot')
+          : estimate.basis === 'guess'
+            ? t('sourcesGuess')
+            : estimate.asOf
+              ? t('sources', { month: monthOf(estimate.asOf), rate })
+              : t('sourcesUndated', { rate })}
       </p>
       <p>
-        {estimate.asOf
-          ? t(estimate.basis === 'guess' ? 'confidenceSuggested' : 'confidence', {
+        {estimate.asOf && estimate.basis !== 'snapshot'
+          ? t(CONFIDENCE_KEY[estimate.basis], {
               level,
               date: formatDate(estimate.asOf),
             })
@@ -87,8 +106,9 @@ function EstimateNote({ estimate, kind }: { estimate: Estimate; kind: EstimateKi
       </p>
       {estimate.stale && <p>{t('stale')}</p>}
       {estimate.confidence === 'low' && (
-        // An AI's guess can still rank (Opportunities, a topic action's impact).
-        <p>{t(estimate.basis === 'guess' ? 'lowNoteGuess' : 'lowNote')}</p>
+        // A guess or an old sum can still rank (Opportunities, a topic action's
+        // impact, a content opportunity's score): only a prompt's isn't.
+        <p>{t(LOW_NOTE_KEY[estimate.basis])}</p>
       )}
       <p className="opacity-80">{t('measuredNote')}</p>
     </>

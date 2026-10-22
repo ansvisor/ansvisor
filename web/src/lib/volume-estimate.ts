@@ -22,7 +22,7 @@ export type EstimateConfidence = 'high' | 'medium' | 'low';
  * own Google volume (Similar Topics), or an AI's guess for a prompt not
  * tracked yet (Prompt Suggestions).
  */
-export type EstimateBasis = 'keywords' | 'keyword' | 'guess';
+export type EstimateBasis = 'keywords' | 'keyword' | 'guess' | 'snapshot';
 
 export interface VolumeEstimate {
   basis: EstimateBasis;
@@ -186,6 +186,15 @@ export function guessedVolumeEstimate(value: number, asOf: string | null): Volum
     asOf,
     stale: false,
   };
+}
+
+/**
+ * A sum kept from when something was made or last updated, e.g. a content
+ * opportunity's prompts' estimates at the time, shown when their current ones
+ * can't be read: low, ×½ to ×2, undated (a merge rewrites it unrecorded).
+ */
+export function snapshotVolumeEstimate(value: number): VolumeEstimate {
+  return { ...guessedVolumeEstimate(value, null), basis: 'snapshot' };
 }
 
 export interface EstimateTotal extends VolumeEstimate {

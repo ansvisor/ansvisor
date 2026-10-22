@@ -7,6 +7,7 @@ import {
   guessedVolumeEstimate,
   keywordVolumeEstimate,
   promptVolumeEstimate,
+  snapshotVolumeEstimate,
   sumEstimates,
   type VolumeEstimate,
 } from '@/lib/volume-estimate';
@@ -131,6 +132,20 @@ describe("the note for a sum of an AI's guesses", () => {
     expect(note).toContain("The sum of an AI's estimates for suggested prompts");
     expect(note).toContain("Low confidence: an AI's guess, shown in grey.");
     expect(note).not.toContain('not used to rank');
+  });
+});
+
+describe("the note for an opportunity's kept sum", () => {
+  it('says it is an old sum of its prompts, undated, in grey', async () => {
+    render(<EstimateRange estimate={snapshotVolumeEstimate(18_660)} perMonth />);
+    expect(container.querySelector('button')!.textContent).toBe('9.3–38k/mo');
+    const note = await noteOf(container.querySelector('button')!);
+    expect(note).toContain("The sum of this opportunity's prompts' estimates when it was made");
+    expect(note).toContain('kept when it was made or last updated.');
+    expect(note).toContain('Confidence: Low');
+    expect(note).not.toContain('·');
+    expect(note).toContain('Low confidence: an old sum, shown in grey.');
+    expect(note).not.toContain('DataForSEO');
   });
 });
 

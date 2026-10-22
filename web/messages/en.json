@@ -5316,6 +5316,7 @@
     "methodTotal": "The sum of {count, plural, one {# prompt's estimate} other {# prompts' estimates}}. Each is the median monthly Google searches for its related keywords × the share of Google searches that now get an AI answer ({rate}%).",
     "methodKeyword": "This keyword's monthly Google searches × the share of Google searches that now get an AI answer ({rate}%). Its Google volume is measured; the AI share is an estimate, so the range is ±25%.",
     "methodGuess": "An AI's estimate for a prompt you don't track yet, scaled to your tracked prompts' estimates. Track the prompt to get one from its keywords' Google searches.",
+    "methodSnapshot": "The sum of this opportunity's prompts' estimates when it was made or last updated. Their current estimates couldn't be read, so this one may be out of date.",
     "methodGuessTotal": "The sum of an AI's estimates for suggested prompts you don't track yet, each scaled to your tracked prompts' estimates. Track them to get estimates from their keywords' Google searches.",
     "methodAverage": "The average of {count, plural, one {# prompt's estimate} other {# prompts' estimates}}. Each is the median monthly Google searches for its related keywords × the share of Google searches that now get an AI answer ({rate}%).",
     "keywords": "{measured} of {keywords} related keywords have Google search data.",
@@ -5324,6 +5325,7 @@
     "rangeOne": "With one to go by, the range is half to twice the estimate.",
     "mix": "Confidence by prompt: {high} high, {medium} medium, {low} low.",
     "sources": "Sources: Google search volume from DataForSEO ({month}) and an AI answer share of {rate}%.",
+    "sourcesSnapshot": "Source: the opportunity's prompts' estimates, kept when it was made or last updated.",
     "sourcesGuess": "Source: Ansvisor's AI, from your tracked prompts' estimates.",
     "sourcesUndated": "Sources: Google search volume from DataForSEO and an AI answer share of {rate}%.",
     "confidence": "Confidence: {level} · updated {date}",
@@ -5331,6 +5333,7 @@
     "confidenceUndated": "Confidence: {level}",
     "stale": "Fetched over six months ago, so one level less sure. Refresh volumes for a newer estimate.",
     "lowNote": "Low confidence: shown in grey, and not used to rank on its own.",
+    "lowNoteSnapshot": "Low confidence: an old sum, shown in grey.",
     "lowNoteGuess": "Low confidence: an AI's guess, shown in grey.",
     "measuredNote": "Measured numbers, such as your visibility or Search Console clicks, never carry this badge.",
     "level": {
