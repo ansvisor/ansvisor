@@ -78,13 +78,23 @@ Hold it in execution memory for the session.
 
 - **Mentions** are responses that name the brand at least once;
   **mention rate** is their share of the tracked responses (`%`).
+  **Times named** (`timesNamed`) counts every time AI names the brand,
+  twice in one response included: the page's _Total mentions_.
 - **Net sentiment** is the positive share minus the negative share of
   the responses naming the brand, from −100 to +100. Quote it as a
   signed number **without a % sign** ("net +21"). Neutral counts in the
   total.
+- `changes` are taken as the page's cards take them: on the prompts
+  both windows answered (`changes.basis.sharedPrompts`), so adding or
+  removing prompts doesn't read as a rise or a fall. The `current` and
+  `previous` figures are the whole windows', so quote `changes` rather
+  than working a change out from them, and say how many prompts were
+  new or dropped (`newPrompts`, `droppedPrompts`) when there were some.
+  `changes.mentionsPct` is the change in times named.
 - `lowSample: true` means fewer than 20 mentions. Say so, and don't
   read a change into it: `changes.netSentimentPoints` is already `null`
-  there, as is the mention rate's change under 20 tracked responses.
+  there, as is the mention rate's change when either window has under
+  20 tracked responses.
 - Sentiment is measured for the **brand only**. Competitors have
   mentions and co-mentions, not a tone.
 
@@ -115,7 +125,7 @@ text. They read the stored answers; no LLM is called.
 
 | Endpoint | Query / body | Returns |
 | --- | --- | --- |
-| `GET /mentions/summary` | the filters | the Overview: `current` and `previous` (mentions, mention rate, prompts with mentions, average position, `sentiment` with `net` and `lowSample`), `changes`, `headline` (the platform that moved net sentiment most, competitors named beside the brand), `platforms[]`, `daily[]` |
+| `GET /mentions/summary` | the filters | the Overview: `current` and `previous` (times named, mentions, mention rate, prompts with mentions, average position, `sentiment` with `net` and `lowSample`), `changes` with their `basis`, `headline` (the platform that moved net sentiment most, competitors named beside the brand), `platforms[]`, `daily[]` |
 | `GET /mentions` | the filters, `sentiment`, `competitor_id` (`none` = no competitor), `sort` (`newest`/`oldest`/`co_mentions`/`negative`), `page` | `{ total, prompts, page, pageSize, mentions: [...] }`: 100 a page, each with sentiment, position, competitors in the same response and an `excerpt` |
 | `GET /mentions/{id}` | — | one response in full: text, citations, competitors named, sentiment, latest correction |
 | `GET /mentions/competitors` | the filters | each competitor's mentions, share of responses, change, and `sameResponseAsYou` |
@@ -454,7 +464,7 @@ When the user asks how AI describes the brand, why sentiment moved
 
 1. Call `GET /mentions/summary` for the window (30 days when `date_from`
    is left out). Lead with `current.sentiment.net` and
-   `changes.netSentimentPoints`, then mentions and mention rate.
+   `changes.netSentimentPoints`, then times named and mention rate.
 2. Find **where**: `headline.mover` names the platform that moved net
    sentiment most (with its `change`); `platforms[]` has each one's
    `netSentiment` and `netSentimentChange`. Skip platforms marked
