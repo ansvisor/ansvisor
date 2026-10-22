@@ -34,6 +34,12 @@ describe('cleanInsertHtml', () => {
       ),
     ).toBe('<h2>FAQ</h2><p>How long? 3 min</p>');
   });
+
+  it('makes an agent’s H1 an H2: the page has its title', () => {
+    expect(cleanInsertHtml('<h1 class="x">New title</h1><p>Text</p>')).toBe(
+      '<h2>New title</h2><p>Text</p>',
+    );
+  });
 });
 
 describe('keepAgentSuggestions', () => {

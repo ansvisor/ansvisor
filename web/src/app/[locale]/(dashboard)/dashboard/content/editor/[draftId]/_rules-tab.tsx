@@ -38,6 +38,7 @@ import type { DraftRulesState } from './_use-draft-rules';
 /** Rules with an explanation on hover (spec §10). */
 const HINTED = new Set([
   'length',
+  'oneH1',
   'summary',
   'fanoutH2',
   'internalLinks',
@@ -362,11 +363,16 @@ function RuleRow({
   return (
     <li className={cn('px-3 py-2', !rule.on && 'opacity-60')}>
       <div className="flex items-center gap-2">
-        <Switch
-          on={rule.on}
-          label={t('toggle', { name })}
-          onToggle={() => onChange({ on: !rule.on })}
-        />
+        {rule.fixed ? (
+          // Always on: the editor keeps it, so it has no switch.
+          <span aria-hidden="true" className="w-7 shrink-0" />
+        ) : (
+          <Switch
+            on={rule.on}
+            label={t('toggle', { name })}
+            onToggle={() => onChange({ on: !rule.on })}
+          />
+        )}
         <span
           className="min-w-0 flex-1 text-xs"
           title={HINTED.has(rule.key) ? t(`hints.${rule.key}`) : undefined}

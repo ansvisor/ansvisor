@@ -59,7 +59,7 @@ import {
 import { PAGE_READ_DELAY_MS, draftTitleFromDoc, safeLinkHref } from '@/lib/content/editor';
 import { JsonLd } from '@/lib/content/json-ld-node';
 import { detectPageType } from '@/lib/content/page-types';
-import { aiTracesFound } from '@/lib/content/rules';
+import { aiTracesFound, openRulesForAgent } from '@/lib/content/rules';
 import { saveBlob } from '@/lib/download';
 import { cn } from '@/lib/utils';
 import { AgentBar } from './_agent-bar';
@@ -89,6 +89,7 @@ import {
   type SuggestionDecision,
   type SuggestionLabels,
 } from './_suggestions';
+import { ONE_H1_AS_IS, OneH1 } from './_one-h1';
 import { useDraftReads } from './_use-draft-reads';
 import { useDraftRules } from './_use-draft-rules';
 import { EditorToolbar } from './_toolbar';
@@ -260,6 +261,7 @@ export function DraftEditor({
         onHeld: (edit) => setHeld((current) => current ?? edit),
       }),
       AgentSuggestions.configure({ onDecide: (id, decision) => onDecide.current(id, decision) }),
+      OneH1,
     ],
     content: draft.bodyHtml,
     // Rendered on the client only, so the server's HTML can't disagree with it.
@@ -567,10 +569,12 @@ export function DraftEditor({
       toast(t('suggestions.decideFirst'));
       return;
     }
-    const open = rules.rules.filter(
-      ({ rule, status }) => rule.on && status.state === 'bad' && (!only || only.includes(rule.key)),
-    );
-    if (open.length === 0) return;
+    const { forAgent: open, notForAgent } = openRulesForAgent(rules.rules, only);
+    if (open.length === 0) {
+      // Only rules it can't fix are open: say what to do instead.
+      if (notForAgent.length) toast(t('suggestions.notForAgent'));
+      return;
+    }
     const pageText = editor.getText({ blockSeparator: '\n' });
     const request = {
       rules: open.map(({ rule, status }) => ({
@@ -839,6 +843,8 @@ export function DraftEditor({
       editor
         .chain()
         .setMeta(CITED_EDIT_ALLOWED, true)
+        // The version as it was, its H1s too: the page on the server is it.
+        .setMeta(ONE_H1_AS_IS, true)
         .setContent(restored.bodyHtml, { emitUpdate: false })
         .run();
       // The server has this page now: nothing from before it is still to

@@ -36,6 +36,8 @@ export interface RuleDef {
   unit?: RuleUnit;
   /** How it is checked: from the page as written, by AI, or against the product feed. */
   check: 'page' | 'ai' | 'feed';
+  /** Always on, without a switch: a rule the editor itself keeps. */
+  fixed?: true;
 }
 
 const SHARED_RULES: RuleDef[] = [
@@ -55,6 +57,8 @@ const SHARED_RULES: RuleDef[] = [
     unit: 'characters',
     check: 'page',
   },
+  // The editor keeps it too: a second H1 becomes an H2 (_one-h1.ts).
+  { key: 'oneH1', group: 'structure', kind: 'switch', value: '', check: 'page', fixed: true },
   {
     key: 'summary',
     group: 'structure',
@@ -393,7 +397,7 @@ export function activeRules(defs: RuleDef[], rules: Pick<DraftRules, 'overrides'
     const current = override?.value ?? def.value;
     return {
       ...def,
-      on: override?.on ?? true,
+      on: def.fixed ? true : (override?.on ?? true),
       current,
       changed: (override?.on !== undefined && override.on !== true) || current !== def.value,
     };
@@ -607,6 +611,29 @@ export function lengthBand(target: number): { min: number; max: number } {
 const atLeast = (have: number, want: number): RuleStatus =>
   have >= want ? { state: 'ok' } : { state: 'bad', code: 'partOf', count: have, of: want };
 
+/**
+ * Rules the Content Agent can't fix: it changes words and adds blocks, never
+ * a heading's level, so a page's extra H1s are made H2s in the editor.
+ */
+export const NOT_FOR_AGENT = new Set(['oneH1']);
+
+/**
+ * The rules on that the page doesn't meet (of `only`, when given): the ones
+ * the Content Agent is asked to fix, and those it can't.
+ */
+export function openRulesForAgent<T extends { rule: ActiveRule; status: RuleStatus }>(
+  rules: T[],
+  only?: string[],
+): { forAgent: T[]; notForAgent: T[] } {
+  const open = rules.filter(
+    ({ rule, status }) => rule.on && status.state === 'bad' && (!only || only.includes(rule.key)),
+  );
+  return {
+    forAgent: open.filter(({ rule }) => !NOT_FOR_AGENT.has(rule.key)),
+    notForAgent: open.filter(({ rule }) => NOT_FOR_AGENT.has(rule.key)),
+  };
+}
+
 /** Checks one rule against the page as written. */
 export function checkRule(rule: ActiveRule, page: PageRead, ctx: RuleContext): RuleStatus {
   if (rule.check === 'feed') return { state: 'info', code: 'needsFeed' };
@@ -698,6 +725,11 @@ export function checkRule(rule: ActiveRule, page: PageRead, ctx: RuleContext): R
       );
     case 'outboundLinks':
       return atLeast(links.filter(outbound).length, n);
+    case 'oneH1': {
+      // One H1, the page's title: more blur what the page is about.
+      const h1s = blocks.filter((b) => b.tag === 'h1').length;
+      return h1s > 1 ? { state: 'bad', code: 'found', count: h1s } : { state: 'ok' };
+    }
     case 'datedPoint': {
       const first100 = page.text.split(/\s+/).slice(0, 100).join(' ');
       return /\b(19|20)\d{2}\b/.test(first100)

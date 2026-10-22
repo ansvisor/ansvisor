@@ -61,6 +61,8 @@ export function cleanInsertHtml(html: string): string {
   return sanitizeHtml(html ?? '', {
     allowedTags: ['h2', 'h3', 'h4', 'p', 'ul', 'ol', 'li', 'strong', 'em', 'b', 'i', 'br'],
     allowedAttributes: {},
+    // The page has its H1, its title: an agent's heading is an H2 at most.
+    transformTags: { h1: 'h2' },
     nonTextTags: ['script', 'style', 'textarea', 'option', 'noscript', 'template', 'title'],
   }).trim();
 }

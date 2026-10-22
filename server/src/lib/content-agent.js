@@ -160,6 +160,10 @@ const INSERT_TAGS = new Set([
 export function cleanInsertHtml(html) {
   const $ = cheerio.load(html || '', null, false);
   $('script, style, iframe, object, embed, noscript, template, head, title').remove();
+  // The page has its H1, its title: an agent's heading is an H2 at most.
+  $('h1').each((_, el) => {
+    el.name = 'h2';
+  });
   for (const el of $('*').get().reverse()) {
     if (!INSERT_TAGS.has(el.tagName?.toLowerCase())) {
       $(el).replaceWith($(el).contents());

@@ -57,6 +57,31 @@ describe('extractPageContent', () => {
     expect(body.html).toBe('<p>Just text</p>');
   });
 
+  it('keeps one H1, its first, and makes the others H2s', () => {
+    const { html } = extractPageContent(
+      '<body><main><h1>AEO vs SEO</h1><p>Intro.</p><h1>Key takeaways</h1><p>Short.</p></main></body>',
+      'https://acme.example/aeo',
+    );
+    expect(html).toBe('<h1>AEO vs SEO</h1><p>Intro.</p><h2>Key takeaways</h2><p>Short.</p>');
+  });
+
+  it('keeps the article’s H1, not a logo’s or a site name’s before it', () => {
+    const lead = 'Forecasts that sales leaders trust, built from real activity. '.repeat(6);
+    const logo = extractPageContent(
+      `<body><div id="page"><div class="top"><h1><a href="/"><img alt="Acme" src="/logo.png"></a></h1></div><div class="content"><h1>Pipeline forecasting</h1><p>${lead}</p><p>${lead}</p></div></div></body>`,
+      'https://acme.example/forecasting',
+    );
+    expect(logo.html).toContain('<h1>Pipeline forecasting</h1>');
+    expect(logo.html.match(/<h1/g)).toHaveLength(1);
+
+    const branding = extractPageContent(
+      `<body><main><div class="site-branding"><h1>Acme</h1></div><article><h1>Pipeline forecasting</h1><p>${lead}</p><p>${lead}</p></article></main></body>`,
+      'https://acme.example/forecasting',
+    );
+    expect(branding.html).toContain('<h2>Acme</h2>');
+    expect(branding.html).toContain('<h1>Pipeline forecasting</h1>');
+  });
+
   it('heads the content with the page title when its H1 sits outside it', () => {
     const { html, title } = extractPageContent(
       '<head><title>Lisbon &amp; more</title></head><body><div class="hero"><h1>Lisbon &amp; Porto</h1></div><main><p>Days out.</p></main></body>',

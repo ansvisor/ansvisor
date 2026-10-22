@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
   NO_DRAFT_RULES,
+  NOT_FOR_AGENT,
+  openRulesForAgent,
   activeRules,
   effectiveRules,
   splitRules,
@@ -168,6 +170,39 @@ describe('length and structure', () => {
       min: 2400,
       max: 3600,
     });
+  });
+
+  it('wants one H1 per page, and leaves the agent out of it', () => {
+    expect(check('oneH1', '<h1>T</h1><h2>A</h2>')).toEqual({ state: 'ok' });
+    expect(check('oneH1', '<p>No title yet.</p>')).toEqual({ state: 'ok' });
+    expect(check('oneH1', '<h1>T</h1><p>x</p><h1>Again</h1>')).toEqual({
+      state: 'bad',
+      code: 'found',
+      count: 2,
+    });
+    // The agent changes words, never a heading's level.
+    expect(NOT_FOR_AGENT.has('oneH1')).toBe(true);
+    expect(ruleSet('blog_post').some((r) => r.key === 'oneH1')).toBe(true);
+    // Always on: a draft's or a saved set's "off" doesn't turn it off.
+    const [oneH1] = activeRules(
+      ruleSet('blog_post').filter((r) => r.key === 'oneH1'),
+      { overrides: { oneH1: { on: false } } },
+    );
+    expect(oneH1.on).toBe(true);
+  });
+
+  it('asks the agent only for what it can fix, and names the rest', () => {
+    const rules = activeRules(ruleSet('blog_post'), NO_DRAFT_RULES);
+    const p = page('<h1>T</h1><p>delve</p><h1>Again</h1>', 30);
+    const statuses = rules.map((r) => ({ rule: r, status: checkRule(r, p, ctx) }));
+    const all = openRulesForAgent(statuses);
+    expect(all.forAgent.some(({ rule }) => rule.key === 'oneH1')).toBe(false);
+    expect(all.notForAgent.map(({ rule }) => rule.key)).toEqual(['oneH1']);
+    // Asked for one rule only, the rest stay out.
+    const one = openRulesForAgent(statuses, ['aiTraces']);
+    expect(one.forAgent.map(({ rule }) => rule.key)).toEqual(['aiTraces']);
+    expect(one.notForAgent).toEqual([]);
+    expect(openRulesForAgent(statuses, ['oneH1']).forAgent).toEqual([]);
   });
 
   it('wants a short summary under the H1, and a short answer under each H2', () => {
@@ -466,8 +501,8 @@ describe('rulesMet', () => {
     const p = page('<h1>T</h1><p>Short summary.</p>', 10);
     const statuses = rules.map((r) => ({ rule: r, status: checkRule(r, p, ctx) }));
     const { met, total } = rulesMet(statuses);
-    // 16 shared rules: sentence off; tone, language and keywords (none set) can't say.
-    expect(total).toBe(12);
+    // 17 shared rules: sentence off; tone, language and keywords (none set) can't say.
+    expect(total).toBe(13);
     expect(met).toBeGreaterThan(0);
     expect(met).toBeLessThan(total);
   });

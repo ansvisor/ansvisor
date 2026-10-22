@@ -255,6 +255,23 @@ describe('the content editor', () => {
     expect(container.querySelector('.ProseMirror h1')!.textContent).toBe('Pipeline forecasting');
   });
 
+  it('keeps one H1: Heading 1 is off outside the title', async () => {
+    getContentDraft.mockResolvedValue(draft());
+    await renderPage();
+    const editor = (container.querySelector('.ProseMirror') as HTMLElement & { editor: Editor })
+      .editor;
+
+    await act(async () => void editor.commands.setTextSelection(editor.state.doc.content.size - 2));
+    // Off, yet still says why on hover.
+    const off = button('A page has one H1, its title: use Heading 2 here')!;
+    expect(off.getAttribute('aria-disabled')).toBe('true');
+    expect(off.title).toBe('A page has one H1, its title: use Heading 2 here');
+    await act(async () => off.click());
+    expect(editor.getHTML()).not.toContain('<h1>Teams trust it.</h1>');
+    await act(async () => void editor.commands.setTextSelection(2));
+    expect(button('Heading 1')!.getAttribute('aria-disabled')).toBeNull();
+  });
+
   it('tags a new page as one', async () => {
     getContentDraft.mockResolvedValue(
       draft({
@@ -1884,6 +1901,23 @@ describe('the side panel', () => {
       } finally {
         vi.useRealTimers();
       }
+    });
+
+    it('leaves a second H1 out of what the agent is asked, saying how to fix it', async () => {
+      getContentDraft.mockResolvedValue(
+        draft({ bodyHtml: '<h1>Pipeline forecasting</h1><p>Teams trust it.</p><h1>Again</h1>' }),
+      );
+      await openRules();
+      expect(panel()!.textContent).toContain('One H1 per page');
+      // Always on: the editor keeps it, so it has no switch.
+      expect(panel()!.querySelector('[aria-label="One H1 per page: on or off"]')).toBeNull();
+      expect(panel()!.querySelector('[aria-label="Length: on or off"]')).not.toBeNull();
+
+      await act(async () => panelButton('Apply rules with Agent').click());
+      await act(async () => {});
+      const asked = fixDraftRules.mock.calls[0][2].rules.map((r: { key: string }) => r.key);
+      expect(asked).not.toContain('oneH1');
+      expect(asked.length).toBeGreaterThan(0);
     });
 
     it('fixes only the AI traces from their rule', async () => {
