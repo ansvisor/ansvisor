@@ -341,6 +341,27 @@ describe('the Content plan', () => {
     expect(rowTexts()).toHaveLength(3);
   });
 
+  it('names the type filtering the list while the section is closed, and clears it', async () => {
+    await renderPage();
+    const section = () =>
+      container.querySelector<HTMLElement>('section[aria-labelledby="plan-mix-title"]')!;
+    const bar = () => section().querySelector<HTMLButtonElement>('h2 button')!;
+    await act(async () => bar().click());
+    await act(async () => section().querySelector<HTMLButtonElement>('li button')!.click());
+    // Open, the pressed row says it; no line under the bar.
+    expect(section().textContent).not.toContain('Priority list filtered to');
+    await act(async () => bar().click());
+    expect(bar().getAttribute('aria-expanded')).toBe('false');
+    expect(section().textContent).toContain('Priority list filtered to How-to guide');
+    expect(rowTexts()).toHaveLength(2);
+    const clear = [...section().querySelectorAll<HTMLButtonElement>('button')].find(
+      (b) => b.textContent === 'Clear',
+    )!;
+    await act(async () => clear.click());
+    expect(rowTexts()).toHaveLength(3);
+    expect(section().textContent).not.toContain('Priority list filtered to');
+  });
+
   it('asks for Google Analytics to show what AI visitors did', async () => {
     getContentPlanInsights.mockResolvedValue({
       ...INSIGHTS,

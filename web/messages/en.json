@@ -3117,6 +3117,8 @@
         "collapsed": "{types, plural, one {# page type} other {# page types}} · {gaps, plural, =0 {no gap} one {# gap} other {# gaps}}",
         "show": "Show",
         "hide": "Hide",
+        "filteredBy": "Priority list filtered to {type}",
+        "clearFilter": "Clear",
         "aiShare": "Share of AI citations",
         "yourShare": "Your pages' mix",
         "shares": "{ai}% · {yours}%",
