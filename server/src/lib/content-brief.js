@@ -3,10 +3,8 @@ import { z } from 'zod';
 import supabaseAdmin from '../config/supabase.js';
 import { resolveModel } from './ai-provider.js';
 import { pageTypeFormat } from './content-page-types.js';
-import { generationCostUsd } from './improve-cost.js';
 import { getLanguageName } from './languages.js';
-import { logger } from './logger.js';
-import { enforceImproveQuota } from './plan-guard.js';
+import { reserveAiBudget } from './plan-guard.js';
 
 /**
  * The Content Editor's brief (CE-007, spec §10): Rebuild outline writes a
@@ -167,7 +165,12 @@ export async function rebuildDraftBrief({ draftId, brandId, sources }) {
   }
 
   const modelId = contentBriefModelId();
-  await enforceImproveQuota(brand.organization_id, modelId);
+  // Held on the budget before the call, so calls at once can't pass it.
+  const budget = await reserveAiBudget(brand.organization_id, {
+    feature: 'content',
+    modelId,
+    draftId,
+  });
 
   let generated;
   try {
@@ -178,21 +181,17 @@ export async function rebuildDraftBrief({ draftId, brandId, sources }) {
       prompt: buildBriefPrompt({ brand, draft, prompts, sources }),
       abortSignal: AbortSignal.timeout(CALL_TIMEOUT_MS),
     });
+    await budget.charge(generated.usage);
   } catch (err) {
     // An answer that didn't fit the schema was still paid for: charged as
     // Improve charges it, so retries don't run free.
-    if (NoObjectGeneratedError.isInstance(err) && err.usage) {
-      await recordUsage({
-        organizationId: brand.organization_id,
-        draftId,
-        modelId,
-        usage: err.usage,
-      });
-    }
+    if (NoObjectGeneratedError.isInstance(err) && err.usage) await budget.charge(err.usage);
     throw err;
+  } finally {
+    // Nothing charged (a timeout, a refusal): the hold goes.
+    await budget.release();
   }
-  const { object, usage } = generated;
-  await recordUsage({ organizationId: brand.organization_id, draftId, modelId, usage });
+  const { object } = generated;
 
   const brief = {
     goal: object.goal.trim().slice(0, BRIEF_LIMITS.goal),
@@ -274,18 +273,4 @@ Pages AI cites for these prompts today:
 ${list(sources.pages.map((p) => `${p.url} (${p.kind})`))}
 
 ${sources.headings.length ? `The page's headings now:\n${list(sources.headings)}\n\n` : ''}Write the brief in ${getLanguageName(brand?.language)}.`;
-}
-
-/** Records an editor AI call on the AI usage budget, with the draft it was for. */
-export async function recordUsage({ organizationId, draftId, modelId, usage }) {
-  const { error } = await supabaseAdmin.from('prompt_improve_usage').insert({
-    organization_id: organizationId,
-    content_draft_id: draftId,
-    feature: 'content',
-    model: modelId,
-    input_tokens: usage?.inputTokens ?? null,
-    output_tokens: usage?.outputTokens ?? null,
-    cost_usd: generationCostUsd(modelId, usage),
-  });
-  if (error) logger.error({ err: error, draftId }, '[content-brief] usage insert failed');
 }

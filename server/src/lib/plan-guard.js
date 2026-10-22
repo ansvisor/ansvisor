@@ -10,9 +10,11 @@ import { anchoredPeriodStart, shiftMonthClamped } from './quota-period.js';
 import {
   IMPROVE_BUDGET_SHARE,
   estimateGenerationsLeft,
+  generationCostUsd,
   medianCost,
   typicalCostUsd,
 } from './improve-cost.js';
+import { logger } from './logger.js';
 import { RELEVANCE_BUDGET_SHARE } from './suggestion-relevance.js';
 import { AUDIT_RUN_TIMEOUT_MS } from './audit/history.js';
 import {
@@ -342,16 +344,87 @@ export async function getImproveQuotaStatus(orgId, modelId) {
   };
 }
 
-/** Throws PlanLimitError (429) once the period's Improve budget is spent. */
-export async function enforceImproveQuota(orgId, modelId) {
-  const quota = await getImproveQuotaStatus(orgId, modelId);
-  if (!quota.unlimited && quota.remainingUsd <= 0) {
-    throw new PlanLimitError(
-      `This month's suggestion budget on the ${quota.planName} plan is used up. It resets when your subscription renews.`,
-      429,
-    );
+/**
+ * Holds a call's share of the workspace's AI budget before it runs (00243),
+ * so calls running at once can't all pass a nearly spent budget: the
+ * period's spend, reservations included, is read and the call's estimated
+ * cost written under a per-organization lock. A call runs while the spend
+ * is under the budget, as it did when the spend was only read; once it is
+ * spent, PlanLimitError (429).
+ *
+ * Returns the call's meter:
+ *   - charge(usage): one model attempt at its real token cost. The first
+ *     turns the reservation into it; any later one (a retry, a second call)
+ *     adds its own row. Errors are logged, not thrown: what the user paid
+ *     for still goes out.
+ *   - release(): when nothing was charged (the call failed before an
+ *     answer), the reservation goes. Safe to call more than once; call it
+ *     in a finally.
+ * An unlimited budget (self-hosted) reserves nothing; charge() still writes
+ * the rows, as before.
+ */
+export async function reserveAiBudget(
+  orgId,
+  { feature, modelId, promptId = null, actionId = null, draftId = null },
+) {
+  const plan = await resolveOrgPlanByOrgId(orgId);
+  const budget = plan.limits.improveMonthlyBudgetUsd ?? -1;
+  let reservedId = null;
+  if (budget !== -1) {
+    const { data, error } = await supabaseAdmin.rpc('reserve_ai_usage', {
+      p_organization_id: orgId,
+      p_since: (await quotaPeriodStart(orgId)).toISOString(),
+      p_budget: budget,
+      p_cost: typicalCostUsd(modelId),
+      p_feature: feature,
+      p_model: modelId,
+      p_prompt_id: promptId,
+      p_action_id: actionId,
+      p_content_draft_id: draftId,
+    });
+    if (error) throw new Error(error.message);
+    if (!data) {
+      throw new PlanLimitError(
+        `This month's suggestion budget on the ${plan.name} plan is used up. It resets when your subscription renews.`,
+        429,
+      );
+    }
+    reservedId = data;
   }
-  return quota;
+
+  let charged = false;
+  return {
+    async charge(usage) {
+      const cost = {
+        model: modelId,
+        input_tokens: usage?.inputTokens ?? null,
+        output_tokens: usage?.outputTokens ?? null,
+        cost_usd: generationCostUsd(modelId, usage),
+      };
+      const first = reservedId && !charged;
+      charged = true;
+      const { error } = first
+        ? await supabaseAdmin.from('prompt_improve_usage').update(cost).eq('id', reservedId)
+        : await supabaseAdmin.from('prompt_improve_usage').insert({
+            organization_id: orgId,
+            feature,
+            prompt_id: promptId,
+            action_id: actionId,
+            content_draft_id: draftId,
+            ...cost,
+          });
+      if (error) logger.error({ err: error, orgId, feature }, '[ai-budget] usage write failed');
+    },
+    async release() {
+      if (!reservedId || charged) return;
+      charged = true;
+      const { error } = await supabaseAdmin
+        .from('prompt_improve_usage')
+        .delete()
+        .eq('id', reservedId);
+      if (error) logger.error({ err: error, orgId, feature }, '[ai-budget] release failed');
+    },
+  };
 }
 
 /** What the workspace's AI budget is spent on, as prompt_improve_usage.feature says (00242). */
@@ -395,8 +468,8 @@ export async function getAiUsage(orgId) {
   return {
     ...base,
     unlimited: false,
-    // 100 only once it's spent, as enforceImproveQuota stops there (a budget
-    // of 0 included); just under reads as 99.9, never rounded up to "used up".
+    // 100 only once it's spent, as reserveAiBudget stops there (a budget of
+    // 0 included); just under reads as 99.9, never rounded up to "used up".
     percentUsed:
       budget <= 0 || spent >= budget ? 100 : Math.min(99.9, tenths((spent * 100) / budget)),
     features: [

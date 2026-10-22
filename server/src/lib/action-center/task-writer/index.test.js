@@ -85,10 +85,13 @@ vi.mock('ai', () => ({
 vi.mock('../../ai-provider.js', () => ({ resolveModel: () => ({}) }));
 vi.mock('../../logger.js', () => ({ logger: { error: vi.fn(), info: vi.fn(), warn: vi.fn() } }));
 
-const enforceImproveQuota = vi.fn();
+// The budget hold (reserveAiBudget): what each call charged, and its release.
+const charges = [];
+const release = vi.fn();
+const reserveAiBudget = vi.fn();
 class PlanLimitError extends Error {}
 vi.mock('../../plan-guard.js', () => ({
-  enforceImproveQuota: (...args) => enforceImproveQuota(...args),
+  reserveAiBudget: (...args) => reserveAiBudget(...args),
   PlanLimitError,
 }));
 vi.mock('../definitions/index.js', () => ({
@@ -116,7 +119,12 @@ const answer = (tasks) => ({ object: { tasks }, usage: { inputTokens: 1000, outp
 beforeEach(() => {
   ops = [];
   generateObject.mockReset();
-  enforceImproveQuota.mockReset();
+  charges.length = 0;
+  release.mockReset();
+  reserveAiBudget.mockReset().mockResolvedValue({
+    charge: async (usage) => charges.push(usage),
+    release,
+  });
   process.env.ACTION_TASKS_AI = 'true';
   db = {
     actions: [
@@ -253,13 +261,17 @@ describe('writeTasksForAction', () => {
     ]);
     expect(tasks[2].details).toMatchObject({ source: 'ai', type: 'content', refs: ['page:1'] });
 
-    const usage = ops.filter((op) => op.table === 'prompt_improve_usage');
-    expect(usage).toHaveLength(2);
-    expect(usage[0].payload).toMatchObject({
-      organization_id: 'o1',
-      action_id: 'a1',
+    // Held on the budget once, then both calls charged to it.
+    expect(reserveAiBudget).toHaveBeenCalledWith('o1', {
       feature: 'action_center',
+      modelId: expect.any(String),
+      actionId: 'a1',
     });
+    expect(charges).toEqual([
+      { inputTokens: 1000, outputTokens: 500 },
+      { inputTokens: 1000, outputTokens: 500 },
+    ]);
+    expect(release).toHaveBeenCalled();
     expect(ops.find((op) => op.table === 'action_events').payload).toMatchObject({
       event: 'tasks_generated',
       data: { count: 3, kept: 2, trigger: 'regenerate' },
@@ -274,7 +286,7 @@ describe('writeTasksForAction', () => {
     expect(result.status).toBe('preview');
     expect(result.costUsd).toBeGreaterThan(0);
     expect(ops).toEqual([]);
-    expect(enforceImproveQuota).not.toHaveBeenCalled();
+    expect(reserveAiBudget).not.toHaveBeenCalled();
   });
 
   it('calls no model when the signals name nothing to work on', async () => {
@@ -286,13 +298,20 @@ describe('writeTasksForAction', () => {
   });
 
   it('leaves the tasks as they are once the budget is spent', async () => {
-    enforceImproveQuota.mockRejectedValueOnce(new PlanLimitError('Budget used up'));
+    reserveAiBudget.mockRejectedValueOnce(new PlanLimitError('Budget used up'));
     await expect(writeTasksForAction('a1', { trigger: 'regenerate' })).rejects.toThrow(
       'Budget used up',
     );
     expect(generateObject).not.toHaveBeenCalled();
     expect(ops.filter((op) => op.table !== 'actions')).toEqual([]);
     expect(db.actions[0].tasks_writing_since).toBeNull();
+  });
+
+  it('lets the hold on the budget go when the model fails', async () => {
+    generateObject.mockRejectedValue(new Error('timeout'));
+    await expect(writeTasksForAction('a1', { trigger: 'regenerate' })).rejects.toThrow();
+    expect(charges).toEqual([]);
+    expect(release).toHaveBeenCalled();
   });
 
   it('leaves a plan someone is working through to the night, and releases its claim', async () => {
@@ -326,9 +345,9 @@ describe('sweepActionTasks', () => {
   it('skips the rest of a brand once its budget is spent', async () => {
     db.actions.push({ ...db.actions[0], id: 'a2' });
     db.action_tasks = [];
-    enforceImproveQuota.mockRejectedValue(new PlanLimitError('Budget used up'));
+    reserveAiBudget.mockRejectedValue(new PlanLimitError('Budget used up'));
     const outcome = await sweepActionTasks();
     expect(outcome).toEqual({ written: 0, skipped: 0, failed: 1 });
-    expect(enforceImproveQuota).toHaveBeenCalledTimes(1);
+    expect(reserveAiBudget).toHaveBeenCalledTimes(1);
   });
 });

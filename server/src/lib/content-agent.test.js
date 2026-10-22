@@ -12,7 +12,7 @@ const DRAFT = '77777777-7777-7777-7777-777777777777';
 let rows;
 let writes;
 const generateObject = vi.fn();
-const enforceImproveQuota = vi.fn();
+const reserveAiBudget = vi.fn();
 
 vi.mock('../config/supabase.js', () => ({
   default: {
@@ -35,7 +35,7 @@ vi.mock('ai', () => ({ generateObject: (...args) => generateObject(...args) }));
 vi.mock('./ai-provider.js', () => ({ resolveModel: vi.fn((id) => `model:${id}`) }));
 vi.mock('./plan-guard.js', async (importOriginal) => ({
   ...(await importOriginal()),
-  enforceImproveQuota: (...args) => enforceImproveQuota(...args),
+  reserveAiBudget: (...args) => reserveAiBudget(...args),
 }));
 vi.mock('./logger.js', () => ({ logger: { error: vi.fn() } }));
 
@@ -50,6 +50,8 @@ const {
   promptPassages,
 } = await import('./content-agent.js');
 const { PlanLimitError } = await import('./plan-guard.js');
+// The real hold: self-hosted here, so it reserves nothing and writes each charge.
+const realGuard = await vi.importActual('./plan-guard.js');
 
 const BODY =
   '<h1>How to brew pour-over coffee</h1><p>Pour-over coffee tastes better than other methods.</p>' +
@@ -90,7 +92,7 @@ beforeEach(() => {
     brands: { name: 'Acme Coffee', organization_id: 'org-1', language: 'en' },
   };
   generateObject.mockReset();
-  enforceImproveQuota.mockReset().mockResolvedValue(undefined);
+  reserveAiBudget.mockReset().mockImplementation(realGuard.reserveAiBudget);
 });
 
 describe('the page as the agent reads it', () => {
@@ -237,7 +239,10 @@ describe('fixDraftRules', () => {
 
     const result = await fixDraftRules({ draftId: DRAFT, brandId: BRAND, input: input() });
 
-    expect(enforceImproveQuota).toHaveBeenCalledWith('org-1', expect.any(String));
+    expect(reserveAiBudget).toHaveBeenCalledWith(
+      'org-1',
+      expect.objectContaining({ feature: 'content', modelId: expect.any(String) }),
+    );
     expect(generateObject).toHaveBeenCalledWith(
       expect.objectContaining({ model: expect.stringMatching(/^model:/) }),
     );
@@ -280,7 +285,7 @@ describe('fixDraftRules', () => {
     await expect(
       fixDraftRules({ draftId: DRAFT, brandId: BRAND, input: input() }),
     ).rejects.toMatchObject({ status: 422, code: 'empty' });
-    expect(enforceImproveQuota).not.toHaveBeenCalled();
+    expect(reserveAiBudget).not.toHaveBeenCalled();
     expect(generateObject).not.toHaveBeenCalled();
   });
 
@@ -300,7 +305,7 @@ describe('fixDraftRules', () => {
     await expect(
       fixDraftRules({ draftId: DRAFT, brandId: BRAND, input: input() }),
     ).rejects.toMatchObject({ status: 409, code: 'open_suggestions' });
-    expect(enforceImproveQuota).not.toHaveBeenCalled();
+    expect(reserveAiBudget).not.toHaveBeenCalled();
     expect(generateObject).not.toHaveBeenCalled();
 
     // An older batch left open doesn't count: the editor shows the latest.
@@ -315,10 +320,21 @@ describe('fixDraftRules', () => {
   });
 
   it('stops at the budget', async () => {
-    enforceImproveQuota.mockRejectedValue(new PlanLimitError('AI usage is spent', 'starter'));
+    reserveAiBudget.mockRejectedValue(new PlanLimitError('AI usage is spent', 'starter'));
     await expect(
       fixDraftRules({ draftId: DRAFT, brandId: BRAND, input: input() }),
     ).rejects.toBeInstanceOf(PlanLimitError);
     expect(generateObject).not.toHaveBeenCalled();
+  });
+
+  it('lets the hold on the budget go when the model fails', async () => {
+    const held = { charge: vi.fn(), release: vi.fn() };
+    reserveAiBudget.mockResolvedValueOnce(held);
+    generateObject.mockRejectedValueOnce(new Error('timeout'));
+    await expect(fixDraftRules({ draftId: DRAFT, brandId: BRAND, input: input() })).rejects.toThrow(
+      'timeout',
+    );
+    expect(held.charge).not.toHaveBeenCalled();
+    expect(held.release).toHaveBeenCalled();
   });
 });

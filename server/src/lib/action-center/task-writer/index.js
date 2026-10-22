@@ -21,7 +21,7 @@ import { logger } from '../../logger.js';
 import { resolveModel } from '../../ai-provider.js';
 import { withRetry } from '../../retry.js';
 import { generationCostUsd } from '../../improve-cost.js';
-import { PlanLimitError, enforceImproveQuota } from '../../plan-guard.js';
+import { PlanLimitError, reserveAiBudget } from '../../plan-guard.js';
 import { loadDefinitions } from '../definitions/index.js';
 import { getTask } from '../tasks/registry.js';
 import { IMPROVE_ACTION_KIND } from '../from-prompt-improve.js';
@@ -94,19 +94,6 @@ export class TaskWriterError extends Error {
     this.code = code;
     this.status = status;
   }
-}
-
-async function recordUsage({ organizationId, actionId, modelId, usage }) {
-  const { error } = await supabaseAdmin.from('prompt_improve_usage').insert({
-    organization_id: organizationId,
-    action_id: actionId,
-    feature: 'action_center',
-    model: modelId,
-    input_tokens: usage?.inputTokens ?? null,
-    output_tokens: usage?.outputTokens ?? null,
-    cost_usd: generationCostUsd(modelId, usage),
-  });
-  if (error) logger.error({ err: error, actionId }, '[task-writer] usage insert failed');
 }
 
 /** What the writer needs: the action, its brand, its signals. */
@@ -282,51 +269,61 @@ async function compose({ action, brand, domains, signals, name, trigger, userId,
   }
 
   const modelId = taskWriterModelId();
-  if (!dryRun) await enforceImproveQuota(brand.organization_id, modelId);
+  // Held on the budget before the first call, so actions written at once
+  // (a sweep, a regenerate) can't pass it. A dry run charges nothing.
+  const budget = dryRun
+    ? null
+    : await reserveAiBudget(brand.organization_id, {
+        feature: 'action_center',
+        modelId,
+        actionId,
+      });
+  try {
+    let costUsd = 0;
+    const charge = async (usage) => {
+      costUsd += generationCostUsd(modelId, usage);
+      await budget?.charge(usage);
+    };
 
-  let costUsd = 0;
-  const charge = async (usage) => {
-    costUsd += generationCostUsd(modelId, usage);
-    if (!dryRun) {
-      await recordUsage({ organizationId: brand.organization_id, actionId, modelId, usage });
+    const shown = evidenceForPrompt(evidence);
+    const base = buildTaskWriterPrompt({
+      action: { name, category: action.category },
+      brand: { name: brand.name, description: brand.description, domains },
+      evidence: shown,
+    });
+    const first = sift(await callModel({ modelId, ...base, charge }), evidence, []);
+    let tasks = first.accepted;
+    let refused = first.refused;
+
+    // Refused tasks come back once, with their reasons.
+    const missing = Math.min(refused.length, MAX_TASKS - tasks.length);
+    if (missing > 0) {
+      const retry = buildRetryPrompt({ base, kept: tasks, refused, count: missing });
+      const second = sift(await callModel({ modelId, ...retry, charge }), evidence, tasks);
+      tasks = [...tasks, ...second.accepted];
+      // Both rounds' refusals, so a review sees how often the first answer misses.
+      refused = [...refused, ...second.refused];
     }
-  };
 
-  const shown = evidenceForPrompt(evidence);
-  const base = buildTaskWriterPrompt({
-    action: { name, category: action.category },
-    brand: { name: brand.name, description: brand.description, domains },
-    evidence: shown,
-  });
-  const first = sift(await callModel({ modelId, ...base, charge }), evidence, []);
-  let tasks = first.accepted;
-  let refused = first.refused;
+    if (dryRun) return { status: 'preview', tasks, refused, costUsd, evidence: shown };
+    if (tasks.length === 0) {
+      await markWritten(actionId, now);
+      return { status: 'skipped', reason: 'no_valid_tasks', refused, costUsd };
+    }
 
-  // Refused tasks come back once, with their reasons.
-  const missing = Math.min(refused.length, MAX_TASKS - tasks.length);
-  if (missing > 0) {
-    const retry = buildRetryPrompt({ base, kept: tasks, refused, count: missing });
-    const second = sift(await callModel({ modelId, ...retry, charge }), evidence, tasks);
-    tasks = [...tasks, ...second.accepted];
-    // Both rounds' refusals, so a review sees how often the first answer misses.
-    refused = [...refused, ...second.refused];
+    const kept = await replaceTasks(actionId, tasks, { now });
+    await markWritten(actionId, now, { changed: true });
+    await supabaseAdmin.from('action_events').insert({
+      action_id: actionId,
+      event: 'tasks_generated',
+      data: { count: tasks.length, kept, trigger },
+      actor_id: userId,
+    });
+    return { status: 'written', tasks, refused, kept, costUsd };
+  } finally {
+    // Nothing charged (the first call failed): the hold goes.
+    await budget?.release();
   }
-
-  if (dryRun) return { status: 'preview', tasks, refused, costUsd, evidence: shown };
-  if (tasks.length === 0) {
-    await markWritten(actionId, now);
-    return { status: 'skipped', reason: 'no_valid_tasks', refused, costUsd };
-  }
-
-  const kept = await replaceTasks(actionId, tasks, { now });
-  await markWritten(actionId, now, { changed: true });
-  await supabaseAdmin.from('action_events').insert({
-    action_id: actionId,
-    event: 'tasks_generated',
-    data: { count: tasks.length, kept, trigger },
-    actor_id: userId,
-  });
-  return { status: 'written', tasks, refused, kept, costUsd };
 }
 
 /** Record the writing; the action counts as updated only when its tasks changed. */
