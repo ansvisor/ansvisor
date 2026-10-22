@@ -3350,7 +3350,8 @@
         "options": {
           "optimizeGiven": {
             "title": "Optimize {page}",
-            "reason": "The page your Content plan picked"
+            "reason": "The page your Content plan picked",
+            "reasonCited": "The page AI engines cite for this prompt"
           },
           "optimizeInstead": {
             "title": "Optimize {page} instead",
@@ -5196,6 +5197,18 @@
       "none": "No prompts are {label} in this range.",
       "showAll": "Show all performance",
       "order": "Furthest behind first: late or missing on the most AI platforms, then the worse average position."
+    },
+    "content": {
+      "create": "Create content",
+      "optimize": "Optimize content",
+      "openDraft": "Open draft",
+      "createTitle": "No answer mentions or cites you here",
+      "createBody": "None of this period's {answers, plural, one {# answer} other {# answers}} names your brand or cites your site. A page written for this prompt gives AI engines something of yours to use.",
+      "rareTitle": "Mentioned in {pct}% of answers",
+      "lateTitle": "Mentioned at #{position} on average",
+      "optimizePage": "Optimize {page}, the page AI engines cite here, so they name you more often and earlier.",
+      "optimizePick": "Start lists your pages that answer this prompt: pick the one to optimize.",
+      "draftNote": "A draft for this prompt is already being written."
     },
     "improve": {
       "quota": {

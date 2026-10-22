@@ -285,6 +285,67 @@ describe('New content', () => {
     expect(button('Pick an opportunity')).toBeDefined();
   });
 
+  describe('opened from Tracked Prompts', () => {
+    const prompt = { kind: 'prompt' as const, id: 'p1', text: 'best crm for realtors' };
+
+    it('goes straight to Start for a new page for the prompt', async () => {
+      await render('b2b', { ...prompt, method: 'create' });
+      expect(document.body.textContent).toContain('Create: best crm for realtors');
+      await click(button('Open editor'));
+      expect(createContentDraft.mock.calls[0][1]).toMatchObject({
+        method: 'create',
+        title: 'best crm for realtors',
+        source: { kind: 'prompt', id: 'p1' },
+      });
+    });
+
+    it('optimizes the page AI cites for the prompt', async () => {
+      await render('b2b', {
+        ...prompt,
+        method: 'optimize',
+        page: { url: 'https://northwind.example/blog/crm-guide', title: 'CRM guide' },
+      });
+      await act(async () => {});
+      expect(document.body.textContent).toContain('Optimize: CRM guide');
+      expect(document.body.textContent).toContain('The page AI engines cite for this prompt');
+      await click(button('Open editor'));
+      expect(createContentDraft.mock.calls[0][1]).toMatchObject({
+        method: 'optimize',
+        title: 'CRM guide',
+        source: { kind: 'prompt', id: 'p1' },
+        sourceUrl: 'https://northwind.example/blog/crm-guide',
+      });
+    });
+
+    // A page covering part of the prompts: a new linked page is recommended.
+    const partial = {
+      totalPrompts: 4,
+      pages: [
+        {
+          url: 'https://northwind.example/blog/crm-guide',
+          title: 'CRM guide',
+          promptsInCommon: 1,
+          citations: 6,
+          gscPosition: null,
+        },
+      ],
+    };
+
+    it('picks a page to optimize from the check when none is cited', async () => {
+      getContentOverlap.mockResolvedValue(partial);
+      await render('b2b', { ...prompt, method: 'optimize' });
+      await act(async () => {});
+      expect(document.body.textContent).toContain('Optimize: CRM guide');
+    });
+
+    it('keeps the check’s recommendation when writing a new page', async () => {
+      getContentOverlap.mockResolvedValue(partial);
+      await render('b2b', { ...prompt, method: 'create' });
+      await act(async () => {});
+      expect(document.body.textContent).toContain('Create: best crm for realtors');
+    });
+  });
+
   describe('opened from the Content plan (CE-014)', () => {
     it('goes straight to Start for the opportunity', async () => {
       await render('b2b', { kind: 'opportunity', id: 'o2' });

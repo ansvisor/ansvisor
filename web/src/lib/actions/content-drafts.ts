@@ -302,6 +302,28 @@ export async function getContentStartOptions(brandId: string): Promise<DraftStar
   };
 }
 
+/**
+ * The draft being written for a tracked prompt (Tracked Prompts' Create
+ * content): the latest one not yet published whose prompts include it, from
+ * the prompt itself, its topic or an opportunity. Opened instead of starting
+ * a second page. Null when there is none, or the member can't read it.
+ */
+export async function getDraftForPrompt(brandId: string, promptId: string): Promise<string | null> {
+  if (!draftId.safeParse(brandId).success || !draftId.safeParse(promptId).success) return null;
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from('content_drafts')
+    .select('id')
+    .eq('brand_id', brandId)
+    .contains('prompt_ids', [promptId])
+    .in('status', ['draft', 'in_review', 'ready'])
+    .order('updated_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  return data?.id ?? null;
+}
+
 const startInput = z.object({
   method: z.enum(['create', 'optimize']),
   // A prompt's text can run longer than a title: cut to fit, not refused.

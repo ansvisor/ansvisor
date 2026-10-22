@@ -100,7 +100,13 @@ import {
   Pause,
   Play,
   Lightbulb,
+  FilePlus,
+  FileText,
 } from 'lucide-react';
+import { NewContentDialog, type DialogPreset } from '@/components/content/new-content-dialog';
+import { getDraftForPrompt } from '@/lib/actions/content-drafts';
+import { contentEditorPath } from '@/lib/content/drafts';
+import { siteTypeOf } from '@/lib/content/page-types';
 import { cn } from '@/lib/utils';
 import {
   compareLateness,
@@ -2543,6 +2549,7 @@ const SUGGEST_CALLS = { start: suggestContentForPrompt, getStatus: getGeneration
  */
 function RowActionsMenu({
   prompt,
+  brandId,
   onEdit,
   onToggleActive,
   onImprove,
@@ -2550,9 +2557,11 @@ function RowActionsMenu({
   onOpenSuggestion,
   suggesting,
   suggestDisabledReason,
+  onCreateContent,
   onDelete,
 }: {
   prompt: Prompt;
+  brandId: string;
   onEdit: () => void;
   onToggleActive: () => void;
   onImprove: () => void;
@@ -2564,20 +2573,30 @@ function RowActionsMenu({
   suggesting: boolean;
   /** Why Suggest content can't run now (the month's quota is used up, or a bulk run is going). */
   suggestDisabledReason: string | null;
+  /** Opens New content › Start for a new page for this prompt. */
+  onCreateContent: () => void;
   onDelete: () => void;
 }) {
+  const t = useTranslations('prompts.content');
+  const router = useRouter();
   // With the month's quota used up, a prompt that already has a suggestion
   // can still open it, which costs nothing; the menu asks as it opens.
   const [openSuggestionId, setOpenSuggestionId] = useState<string | null>(null);
-  const lookUpSuggestion = (open: boolean) => {
-    if (!open || suggestDisabledReason === null) return;
+  // A draft already being written for the prompt opens instead of a second
+  // one; undefined while the menu asks.
+  const [draftId, setDraftId] = useState<string | null | undefined>(undefined);
+  const lookUp = (open: boolean) => {
+    if (!open) return;
+    setDraftId(undefined);
+    getDraftForPrompt(brandId, prompt.id).then(setDraftId, () => setDraftId(null));
+    if (suggestDisabledReason === null) return;
     getOpenSuggestionForPrompt(prompt.id).then(setOpenSuggestionId, () =>
       setOpenSuggestionId(null),
     );
   };
 
   return (
-    <DropdownMenu onOpenChange={lookUpSuggestion}>
+    <DropdownMenu onOpenChange={lookUp}>
       <DropdownMenuTrigger
         className="inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
         aria-label={`Actions for ${prompt.text}`}
@@ -2619,6 +2638,28 @@ function RowActionsMenu({
                 <span className="text-[11px] text-muted-foreground">{suggestDisabledReason}</span>
               )}
             </span>
+          </DropdownMenuItem>
+        )}
+        {draftId ? (
+          <DropdownMenuItem
+            className="gap-2"
+            onClick={() => router.push(contentEditorPath(draftId))}
+          >
+            <FileText className="h-3.5 w-3.5" />
+            {t('openDraft')}
+          </DropdownMenuItem>
+        ) : (
+          <DropdownMenuItem
+            className="gap-2"
+            onClick={onCreateContent}
+            disabled={draftId === undefined}
+          >
+            {draftId === undefined ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <FilePlus className="h-3.5 w-3.5" />
+            )}
+            {t('create')}
           </DropdownMenuItem>
         )}
         <DropdownMenuSeparator />
@@ -2723,6 +2764,9 @@ function AllPromptsTab({
   );
   const [confirmDelete, setConfirmDelete] = useState<Prompt[] | null>(null);
   const [positionsTab, setPositionsTab] = useState<'platforms' | 'improve'>('platforms');
+  // New content › Start for a prompt, from its row menu or its Improve tab.
+  const [contentPreset, setContentPreset] = useState<DialogPreset | null>(null);
+  const activeBrand = useBrandStore((s) => s.brands.find((b) => b.id === s.activeBrandId));
   const prompts = useMemo(
     () => allRows.filter((p) => !pendingDeletes.has(p.id)),
     [allRows, pendingDeletes],
@@ -3787,6 +3831,7 @@ function AllPromptsTab({
                     <TableCell className="text-right pr-6">
                       <RowActionsMenu
                         prompt={p}
+                        brandId={activeBrandId}
                         onEdit={() => onEditPrompt(p)}
                         onToggleActive={() => void toggleActive(p)}
                         onImprove={() => openPositionsPanel(p.id, 'improve')}
@@ -3796,6 +3841,14 @@ function AllPromptsTab({
                         suggestDisabledReason={
                           suggestDisabledReason ??
                           (bulkSuggesting ? 'Wait for the selected prompts' : null)
+                        }
+                        onCreateContent={() =>
+                          setContentPreset({
+                            kind: 'prompt',
+                            id: p.id,
+                            text: p.text,
+                            method: 'create',
+                          })
                         }
                         onDelete={() => setConfirmDelete([p])}
                       />
@@ -3854,7 +3907,18 @@ function AllPromptsTab({
         onRangeChange={setPositionsRange}
         region={regionFilter}
         initialTab={positionsTab}
-        onClose={() => setPositionsId(null)}
+        // Escape and a click outside belong to Start while it is open over the
+        // panel: they close Start, and the panel stays.
+        onClose={() => contentPreset === null && setPositionsId(null)}
+        brandId={activeBrandId}
+        onStartContent={setContentPreset}
+      />
+      <NewContentDialog
+        open={contentPreset !== null}
+        onOpenChange={(open) => !open && setContentPreset(null)}
+        brandId={activeBrandId}
+        siteType={siteTypeOf(activeBrand ?? {})}
+        preset={contentPreset}
       />
       <Dialog open={confirmDelete !== null} onOpenChange={(v) => !v && setConfirmDelete(null)}>
         <DialogContent className="sm:max-w-md">

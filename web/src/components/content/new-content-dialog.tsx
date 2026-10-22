@@ -120,11 +120,21 @@ interface StartChoice {
 
 /**
  * What the dialog opens on, from the Content plan (CE-014): an opportunity
- * (for an existing page, Start optimizes that page), or a page to read.
+ * (for an existing page, Start optimizes that page), or a page to read. From
+ * Tracked Prompts: a prompt, to write a page for or, with `method`
+ * 'optimize', to optimize its cited `page`; with no page, Start's overlap
+ * check offers the pages to optimize.
  */
 export type DialogPreset =
   | { kind: 'opportunity'; id: string; page?: { url: string; title: string | null } | null }
-  | { kind: 'page'; url: string };
+  | { kind: 'page'; url: string }
+  | {
+      kind: 'prompt';
+      id: string;
+      text: string;
+      method: 'create' | 'optimize';
+      page?: { url: string; title: string | null } | null;
+    };
 
 /** Who does the page (Start, CE-015): the person, the Content Agent, or the team. */
 type Who = 'me' | 'agent' | 'team';
@@ -214,6 +224,8 @@ export function NewContentDialog({
   const presetApplied = useRef(false);
   // The plan named the page to optimize: the overlap check doesn't replace it.
   const choiceGiven = useRef(false);
+  // Opened to optimize: the overlap check picks a page to optimize first.
+  const preferOptimize = useRef(false);
   useEffect(() => {
     if (!open || !preset || presetApplied.current) return;
     if (preset.kind === 'page') {
@@ -222,6 +234,15 @@ export function NewContentDialog({
       setFrom('url');
       setPageUrl(preset.url);
       void readPage(preset.url);
+      return;
+    }
+    if (preset.kind === 'prompt') {
+      presetApplied.current = true;
+      preferOptimize.current = preset.method === 'optimize';
+      const item = { value: preset.id, label: preset.text };
+      setKind('prompt');
+      setPicked(item);
+      startFrom(item, 'prompt', preset.page ? givenPage(preset.page) : undefined);
       return;
     }
     if (!options) return;
@@ -235,19 +256,7 @@ export function NewContentDialog({
     };
     setKind('opportunity');
     setPicked(item);
-    startFrom(
-      item,
-      'opportunity',
-      preset.page
-        ? {
-            url: preset.page.url,
-            title: preset.page.title,
-            promptsInCommon: 0,
-            citations: 0,
-            gscPosition: null,
-          }
-        : undefined,
-    );
+    startFrom(item, 'opportunity', preset.page ? givenPage(preset.page) : undefined);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- once per opening
   }, [open, preset, options]);
 
@@ -264,8 +273,12 @@ export function NewContentDialog({
       .then((overlap) => {
         if (cancelled) return;
         setOverlapRead({ key, overlap, failed: false });
-        // The recommended option is picked first, unless the plan named the page.
-        const recommended = adviseOverlap(overlap).options[0];
+        // The recommended option is picked first, unless the plan named the
+        // page; opened to optimize, the first page to optimize.
+        const { options: advised } = adviseOverlap(overlap);
+        const recommended =
+          (preferOptimize.current && advised.find((o) => o.choice.kind === 'optimize')) ||
+          advised[0];
         if (recommended && !choiceGiven.current) {
           setStart((s) => (s ? withChoice(s, recommended.choice, siteType) : s));
         }
@@ -282,6 +295,7 @@ export function NewContentDialog({
   const reset = () => {
     presetApplied.current = false;
     choiceGiven.current = false;
+    preferOptimize.current = false;
     setMethod('create');
     setKind('opportunity');
     setPicked(null);
@@ -617,6 +631,7 @@ export function NewContentDialog({
                 read={overlapRead?.key === overlapKey ? overlapRead : null}
                 choice={start.choice}
                 given={start.givenPage ?? null}
+                givenCited={start.source.kind === 'prompt'}
                 onChoose={(choice) => setStart(withChoice(start, choice, siteType))}
                 onRetry={() => {
                   setOverlapRead(null);
@@ -925,6 +940,11 @@ export function NewContentDialog({
   );
 }
 
+/** A page a preset names, as Start's overlap options carry one. */
+function givenPage(page: { url: string; title: string | null }): OverlapPage {
+  return { url: page.url, title: page.title, promptsInCommon: 0, citations: 0, gscPosition: null };
+}
+
 function sourceKey(source: Exclude<DraftSource, { kind: 'content' }>) {
   return `${source.kind}:${source.id}`;
 }
@@ -950,12 +970,15 @@ function OverlapCheck({
   read,
   choice,
   given,
+  givenCited,
   onChoose,
   onRetry,
 }: {
   read: OverlapRead | null;
   choice: OverlapChoice;
   given: OverlapPage | null;
+  /** The given page is the one AI cites for the prompt (Tracked Prompts), not the plan's pick. */
+  givenCited: boolean;
   onChoose: (choice: OverlapChoice) => void;
   onRetry: () => void;
 }) {
@@ -976,7 +999,9 @@ function OverlapCheck({
       case 'optimizeGiven':
         return {
           title: t('options.optimizeGiven.title', { page: given ? pagePath(given.url) : '' }),
-          reason: t('options.optimizeGiven.reason'),
+          reason: t(
+            givenCited ? 'options.optimizeGiven.reasonCited' : 'options.optimizeGiven.reason',
+          ),
         };
       case 'optimizeInstead':
         return {
