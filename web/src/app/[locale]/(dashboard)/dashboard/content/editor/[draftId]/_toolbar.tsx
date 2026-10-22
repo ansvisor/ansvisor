@@ -67,12 +67,15 @@ export function onEmptyLine(editor: Editor, state: EditorState): boolean {
 export function EditorToolbar({
   editor,
   target,
+  lengthWarning,
   htmlView,
   onToggleHtml,
   onAttach,
 }: {
   editor: Editor;
   target: number;
+  /** The Length rule is on and reads short or long (lengthWarns): amber. */
+  lengthWarning: boolean;
   htmlView: boolean;
   onToggleHtml: () => void;
   onAttach: () => void;
@@ -220,7 +223,7 @@ export function EditorToolbar({
       <span
         className={cn(
           'ml-auto text-xs font-medium tabular-nums text-muted-foreground',
-          state.characters > target && 'text-amber-700 dark:text-amber-400',
+          lengthWarning && 'text-amber-700 dark:text-amber-400',
         )}
       >
         {t('counter', {

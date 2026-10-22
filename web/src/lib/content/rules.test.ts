@@ -9,6 +9,7 @@ import {
   draftRulesSchema,
   readPage,
   ruleLength,
+  lengthWarns,
   ruleSet,
   rulesMet,
   type ActiveRule,
@@ -470,6 +471,24 @@ describe('rulesMet', () => {
     expect(total).toBe(12);
     expect(met).toBeGreaterThan(0);
     expect(met).toBeLessThan(total);
+  });
+});
+
+describe('lengthWarns', () => {
+  const statuses = (html: string, characters: number, on = true, value?: string) =>
+    activeRules(ruleSet('blog_post'), {
+      overrides: { length: { on, ...(value ? { value } : {}) } },
+    }).map((r) => ({ rule: r, status: checkRule(r, page(html, characters), ctx) }));
+
+  it('warns exactly when the Length rule reads short or long, as the Rules tab does', () => {
+    // A 3,000 target passes 2,400–3,600: a page a little over it is fine.
+    expect(lengthWarns(statuses('<h1>T</h1>', 3_300, true, '3000'))).toBe(false);
+    expect(lengthWarns(statuses('<h1>T</h1>', 2_000, true, '3000'))).toBe(true);
+    expect(lengthWarns(statuses('<h1>T</h1>', 3_700, true, '3000'))).toBe(true);
+  });
+
+  it('stays quiet with the Length rule off, even on an empty page', () => {
+    expect(lengthWarns(statuses('', 0, false))).toBe(false);
   });
 });
 

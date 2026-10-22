@@ -788,6 +788,17 @@ function splitSections(blocks: PageBlock[]): PageBlock[][] {
   return sections;
 }
 
+/**
+ * Whether the editor's length counter warns: exactly when the Length rule is
+ * on and reads short or long, so the counter and the Rules tab never
+ * disagree, whatever value or default the rule has.
+ */
+export function lengthWarns(statuses: { rule: ActiveRule; status: RuleStatus }[]): boolean {
+  return statuses.some(
+    ({ rule, status }) => rule.key === 'length' && rule.on && status.state === 'bad',
+  );
+}
+
 /** How many of the rules in effect are met: off rules and ones the page can't say don't count. */
 export function rulesMet(statuses: { rule: ActiveRule; status: RuleStatus }[]): {
   met: number;

@@ -59,7 +59,7 @@ import {
 import { PAGE_READ_DELAY_MS, draftTitleFromDoc, safeLinkHref } from '@/lib/content/editor';
 import { JsonLd } from '@/lib/content/json-ld-node';
 import { detectPageType } from '@/lib/content/page-types';
-import { aiTracesFound } from '@/lib/content/rules';
+import { aiTracesFound, lengthWarns } from '@/lib/content/rules';
 import { saveBlob } from '@/lib/download';
 import { cn } from '@/lib/utils';
 import { AgentBar } from './_agent-bar';
@@ -1068,6 +1068,7 @@ export function DraftEditor({
             <EditorToolbar
               editor={editor}
               target={rules.length}
+              lengthWarning={lengthWarns(rules.rules)}
               htmlView={htmlSource !== null}
               onToggleHtml={htmlSource === null ? openHtmlView : applyHtmlView}
               onAttach={attachments.open}
