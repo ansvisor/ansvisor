@@ -332,6 +332,40 @@ describe('MentionsListTab', () => {
     );
   });
 
+  it('says why a content suggestion failed, in plain words', async () => {
+    listMentions.mockResolvedValue(list());
+    getMentionResponse.mockResolvedValue({ response: 'Acme Coffee.', citations: [] });
+    suggestContentForPrompt.mockResolvedValue({
+      ok: false,
+      error: 'Unauthorized',
+      failure: 'workspace',
+    });
+    render(tab());
+    await settle();
+    await act(async () => {
+      (container.querySelector('tbody tr[tabindex]') as HTMLElement).click();
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    const drawer = document.body.querySelector('[role="dialog"]') as HTMLElement;
+    await act(async () => {
+      (
+        [...drawer.querySelectorAll('button')].find(
+          (b) => b.textContent === 'Suggest content',
+        ) as HTMLElement
+      ).click();
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    // Not the raw "Unauthorized": the reason, and what to do about it.
+    expect(toast.error).toHaveBeenCalledWith(
+      "This brand isn't in your workspace. Switch to one of your brands.",
+      expect.objectContaining({
+        id: 'toast-1',
+        description: 'Best espresso beans?',
+        action: expect.objectContaining({ label: 'Your brands' }),
+      }),
+    );
+  });
+
   it("shows an answer's last correction, and lets a manager correct it", async () => {
     listMentions.mockResolvedValue(list());
     getMentionResponse.mockResolvedValue({

@@ -18,8 +18,9 @@ export type ApiFailure = (typeof API_FAILURES)[number];
 /**
  * Read from the server's own codes, not the status alone: a 403 is another
  * workspace's brand only when the server says so, and a 429 is a used-up
- * allowance only with quota_exhausted. Anything not recognised is a plain
- * failure rather than a wrong reason with a wrong thing to do.
+ * allowance only with quota_exhausted or plan_limit. Anything not
+ * recognised is a plain failure rather than a wrong reason with a wrong
+ * thing to do.
  */
 export function apiFailure(status: number, body: Record<string, unknown> = {}): ApiFailure {
   if (status === 401) return 'session';
