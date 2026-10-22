@@ -266,38 +266,33 @@ function ScoreBadge({ row }: { row: PlanRow }) {
             <ScorePartText part={part} />
           </p>
         ))}
-        {row.scoreParts.length > 1 && <p className="opacity-80">{t('higher')}</p>}
+        <p className="opacity-80">{t('total', { score })}</p>
         {row.priority && <p className="opacity-80">{t('marked')}</p>}
       </TooltipContent>
     </Tooltip>
   );
 }
 
+/** One factor of the score, and the points it gives out of its weight. */
 function ScorePartText({ part }: { part: PlanScorePart }) {
   const t = useTranslations('contentEditor.plan.score');
-  switch (part.kind) {
-    case 'opportunity':
-      return t('opportunity', { score: part.score });
-    case 'citationsDown':
-      return t('citationsDown', {
-        base: part.base,
-        pct: part.pct,
-        pctPoints: part.pctPoints,
-        lost: part.lost,
-        lostPoints: part.lostPoints,
-        score: part.score,
-        capped: String(part.base + part.pctPoints + part.lostPoints > part.max),
-        max: part.max,
-      });
-    case 'protect':
-      return t('protect', {
-        base: part.base,
-        citations: part.citations,
-        score: part.score,
-        capped: String(part.base + part.citations > part.max),
-        max: part.max,
-      });
-  }
+  const text = (() => {
+    switch (part.kind) {
+      case 'severity':
+        return part.reason === 'drop'
+          ? t('severity.drop', { pct: part.pct, lost: part.lost })
+          : t(`severity.${part.reason}`);
+      case 'opportunity':
+        return part.score === null ? t('opportunityNone') : t('opportunity', { score: part.score });
+      case 'pageValue':
+        return part.reason === 'visits'
+          ? t('pageValue.visits', { visits: part.visits })
+          : t(`pageValue.${part.reason}`);
+      case 'citations':
+        return t('citations', { citations: part.citations });
+    }
+  })();
+  return t('points', { text, points: formatNumber(part.points), max: part.max });
 }
 
 function WhyText({ why }: { why: PlanWhy }) {

@@ -209,17 +209,22 @@ describe('the Content plan', () => {
   it("shows each row's Priority Score, and on focus how it is worked out", async () => {
     await renderPage();
     const scores = [...container.querySelectorAll('tbody tr')].map((tr) => tr.children[1]);
-    // The opportunity's 74; 40 + 14 for −70% + 7 citations lost; 20 + 12 citations.
-    expect(scores.map((td) => td.textContent)).toEqual(['74Medium', '61Medium', '32Low']);
+    // 40 severity, 30 opportunity, 20 page value, 10 citations: the new page
+    // (74) 52.2; the page losing ground, with no AI visits, 48.2; the top page 34.9.
+    expect(scores.map((td) => td.textContent)).toEqual(['52Medium', '48Low', '35Low']);
     expect(container.querySelector('thead')!.textContent).toContain('Priority Score');
 
     const trigger = scores[1].querySelector('button')!;
-    expect(trigger.getAttribute('aria-label')).toBe('Priority Score 61: how it is worked out');
+    expect(trigger.getAttribute('aria-label')).toBe('Priority Score 48: how it is worked out');
     act(() => trigger.focus());
     await act(() => new Promise((resolve) => setTimeout(resolve, 400)));
     expect(document.querySelector('[data-slot="tooltip-content"]')?.textContent).toBe(
       'How this score is worked out' +
-        '40 + 14 for 70% fewer citations + 7 for 7 citations lost = 61',
+        'Losing citations: 70% fewer, 7 citations lost: 35.2 of 40' +
+        'No content opportunity behind it (neutral): 12 of 30' +
+        '0 AI visits this period: 0 of 20' +
+        '3 citations this period: 1 of 10' +
+        'Together: 48 of 100',
     );
   });
 

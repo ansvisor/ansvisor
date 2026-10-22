@@ -3175,10 +3175,22 @@
       "score": {
         "label": "Priority Score {score}: how it is worked out",
         "title": "How this score is worked out",
-        "opportunity": "The content opportunity's own score: {score}",
-        "citationsDown": "{base} + {pctPoints} for {pct}% fewer citations + {lostPoints} for {lost, plural, one {# citation} other {# citations}} lost = {score}{capped, select, true { (at most {max})} other {}}",
-        "protect": "{base} + {citations, plural, one {# citation} other {# citations}} = {score}{capped, select, true { (at most {max})} other {}}",
-        "higher": "The higher of the two counts.",
+        "severity": {
+          "drop": "Losing citations: {pct}% fewer, {lost, plural, one {# citation} other {# citations}} lost",
+          "create": "A new page AI needs",
+          "opportunity": "An existing page to improve",
+          "protect": "A page to protect"
+        },
+        "opportunity": "Content opportunity scored {score}",
+        "opportunityNone": "No content opportunity behind it (neutral)",
+        "pageValue": {
+          "visits": "{visits, plural, one {# AI visit} other {# AI visits}} this period",
+          "newPage": "A new page, no visits yet (neutral)",
+          "unknown": "No AI traffic data (neutral)"
+        },
+        "citations": "{citations, plural, =0 {Not cited} one {# citation} other {# citations}} this period",
+        "points": "{text}: {points} of {max}",
+        "total": "Together: {score} of 100",
         "marked": "Marked as a priority, so it's listed first."
       },
       "rowMenu": {
