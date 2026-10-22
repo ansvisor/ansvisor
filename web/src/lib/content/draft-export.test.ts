@@ -228,9 +228,19 @@ describe('the Library’s Export', () => {
   it('cuts a page past a spreadsheet cell’s limit', () => {
     const long = `<h1>T</h1><p>${'a'.repeat(40_000)}</p>`;
     const [{ data }] = libraryWorkbook([item({ html: long })]);
-    const content = data[1][9] as string;
+    const content = (data[1][9] as { value: string }).value;
     expect(content).toHaveLength(32_767);
     expect(content.endsWith('…')).toBe(true);
+  });
+
+  it('wraps the page text, a block a line, so Excel keeps its lines apart', () => {
+    const [{ data }] = libraryWorkbook([item()]);
+    expect(data[1][9]).toEqual({
+      value: 'Pipeline forecasting\nTeams trust it.\n1. Import\n2. Stage',
+      wrap: true,
+    });
+    // A one-line value stays a plain cell.
+    expect(typeof data[1][0]).toBe('string');
   });
 
   it('puts every draft in one Word document, each on its own page', async () => {

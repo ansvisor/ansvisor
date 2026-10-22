@@ -9,11 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useAssetTypeLabel } from '@/hooks/use-asset-type-label';
-import {
-  getOpportunityActions,
-  getOpportunityBasket,
-  type OpportunityActionResult,
-} from '@/lib/actions/content';
+import { getOpportunityActions, type OpportunityActionResult } from '@/lib/actions/content';
 import type {
   ContentOpportunityDecision,
   ContentOpportunitySourceData,
@@ -67,19 +63,19 @@ export function ScoreBreakdown({ sourceData }: { sourceData: ContentOpportunityS
 
 /**
  * The prompts a cluster opportunity answers and the searches AI engines ran
- * for them, included and excluded, read live from the cluster.
+ * for them, included and excluded, read live from the cluster. The page reads
+ * the basket once, for this card and the AI volume of its prompts.
  */
-export function OpportunityBasketCard({ opportunityId }: { opportunityId: string }) {
+export function OpportunityBasketCard({
+  basket,
+  failed,
+}: {
+  /** Null while it is read. */
+  basket: OpportunityBasket | null;
+  failed: boolean;
+}) {
   const t = useTranslations('content.detail');
-  const [basket, setBasket] = useState<OpportunityBasket | null>(null);
-  const [failed, setFailed] = useState(false);
   const [showExcluded, setShowExcluded] = useState(false);
-
-  useEffect(() => {
-    getOpportunityBasket(opportunityId)
-      .then(setBasket)
-      .catch(() => setFailed(true));
-  }, [opportunityId]);
 
   if (failed) return null;
 

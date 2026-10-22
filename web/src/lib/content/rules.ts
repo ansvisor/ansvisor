@@ -3,6 +3,7 @@ import { LANGUAGES } from '@/config/prompt-options';
 import { classifyDomain, normalizeDomain } from '@/lib/citations/classify';
 import { PAGE_TYPES, type PageType } from '@/lib/content/drafts';
 import { lengthTarget } from '@/lib/content/editor';
+import { decodeHtmlBlock } from '@/lib/content/html-allowlist';
 import { wordsOf } from '@/lib/content/sources';
 
 /**
@@ -434,6 +435,8 @@ export interface PageRead {
   text: string;
   /** The editor's character count, as the toolbar shows it. */
   characters: number;
+  /** H1s with words inside the page's HTML blocks. */
+  htmlBlockH1s?: number;
 }
 
 const BLOCK_TAGS = 'h1, h2, h3, p, li, table, ol, ul, blockquote';
@@ -456,6 +459,17 @@ export function readPage(html: string, characters: number): PageRead {
       links: [...el.querySelectorAll('a[href]')].map((a) => a.getAttribute('href') ?? ''),
     });
   }
+  // An HTML block's H1s are the page's too (One H1 per page): the editor
+  // doesn't rewrite them, so the rule says so.
+  let htmlBlockH1s = 0;
+  for (const el of doc.body.querySelectorAll('[data-html-block]')) {
+    const inner = decodeHtmlBlock(el.getAttribute('data-html-block') ?? '');
+    if (!inner) continue;
+    const block = new DOMParser().parseFromString(inner, 'text/html');
+    htmlBlockH1s += [...block.body.querySelectorAll('h1')].filter((h) =>
+      h.textContent?.trim(),
+    ).length;
+  }
   return {
     blocks,
     text: blocks
@@ -463,6 +477,7 @@ export function readPage(html: string, characters: number): PageRead {
       .map((b) => b.text)
       .join(' '),
     characters,
+    htmlBlockH1s,
   };
 }
 
@@ -727,7 +742,7 @@ export function checkRule(rule: ActiveRule, page: PageRead, ctx: RuleContext): R
       return atLeast(links.filter(outbound).length, n);
     case 'oneH1': {
       // One H1, the page's title: more blur what the page is about.
-      const h1s = blocks.filter((b) => b.tag === 'h1').length;
+      const h1s = blocks.filter((b) => b.tag === 'h1' && b.text).length + (page.htmlBlockH1s ?? 0);
       return h1s > 1 ? { state: 'bad', code: 'found', count: h1s } : { state: 'ok' };
     }
     case 'datedPoint': {
@@ -818,6 +833,17 @@ function splitSections(blocks: PageBlock[]): PageBlock[][] {
     else if (sections.length && !isHeading(block)) sections[sections.length - 1].push(block);
   }
   return sections;
+}
+
+/**
+ * Whether the editor's length counter warns: exactly when the Length rule is
+ * on and reads short or long, so the counter and the Rules tab never
+ * disagree, whatever value or default the rule has.
+ */
+export function lengthWarns(statuses: { rule: ActiveRule; status: RuleStatus }[]): boolean {
+  return statuses.some(
+    ({ rule, status }) => rule.key === 'length' && rule.on && status.state === 'bad',
+  );
 }
 
 /** How many of the rules in effect are met: off rules and ones the page can't say don't count. */

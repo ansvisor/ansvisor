@@ -189,14 +189,26 @@ import { toCsv } from '@/lib/csv';
 import { formatRelative } from '@/lib/format-relative';
 import {
   compareNullsLast,
+  comparePromptSortRows,
   isAllPromptsSortKey,
-  promptSortValue,
   type AllPromptsSortKey,
   type SortDir,
 } from './prompt-sort';
 import { BulkActionBar } from './_bulk-action-bar';
 import { promptsTableState } from './table-state';
 import { formatCompactNumber, formatDate, formatNumber } from '@/lib/format';
+import {
+  averageEstimate,
+  promptVolumeEstimate,
+  sumEstimates,
+  type VolumeEstimate,
+} from '@/lib/volume-estimate';
+import {
+  EstimateBadge,
+  EstimateNoteTooltip,
+  EstimateRange,
+  createEstimateNoteHandle,
+} from '@/components/prompts/volume-estimate';
 import { usePagination, TablePager } from '@/components/table-pager';
 import { PromptPositionsSheet } from '@/components/prompts/prompt-positions-sheet';
 import {
@@ -337,6 +349,12 @@ const promptExportHeaders = (suffix: string) => [
   'is_active',
   'created_at',
   'est_ai_volume',
+  // PROMPT-013: the AI volume is an estimate; these say how sure it is.
+  'volume_type',
+  'volume_confidence',
+  'est_ai_volume_low',
+  'est_ai_volume_high',
+  'volume_date',
   'total_google_volume',
   'intent',
   `ai_visibility_score_${suffix}`,
@@ -1258,10 +1276,6 @@ function volumeErrorMessage(code: VolumeErrorCode, fallback: string): string {
   }
 }
 
-function VolumePill({ value }: { value: number }) {
-  return <span className="tabular-nums text-sm font-semibold">~{formatCompactNumber(value)}</span>;
-}
-
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function PromptsPage() {
@@ -1293,6 +1307,10 @@ export default function PromptsPage() {
   const tCommon = useTranslations('common');
   const tNav = useTranslations('nav');
   const tPrompts = useTranslations('prompts');
+  const tVolumes = useTranslations('prompts.volumeInsights');
+  // One method note per table: these tables list every analyzed prompt.
+  const volumeTableNote = useMemo(() => createEstimateNoteHandle(), []);
+  const opportunityTableNote = useMemo(() => createEstimateNoteHandle(), []);
   const activeBrand = useBrandStore(
     (s) => s.brands.find((brand) => brand.id === s.activeBrandId) ?? null,
   );
@@ -1751,8 +1769,21 @@ export default function PromptsPage() {
 
   const handleReanalyzeAll = () => runVolumeAnalysis(true);
 
+  // Each volume as an estimate: a range and how sure it is (PROMPT-013).
+  const estimateByPromptId = useMemo(() => {
+    const m = new Map<string, VolumeEstimate>();
+    for (const v of volumes) m.set(v.promptId, promptVolumeEstimate(v));
+    return m;
+  }, [volumes]);
   const totalGoogleVol = volumes.reduce((s, v) => s + v.totalGoogleVolume, 0);
   const totalAiVol = volumes.reduce((s, v) => s + v.estAiVolume, 0);
+  const totalEstimate = sumEstimates(volumes.map((v) => estimateByPromptId.get(v.promptId)!));
+  const averagePerPrompt = averageEstimate(totalEstimate);
+  const estimateOf = (v: PromptVolume) => estimateByPromptId.get(v.promptId)!;
+  // High Opportunity Prompts: a low-confidence estimate isn't listed on its own.
+  const opportunityRows = volumes
+    .filter((v) => opportunityLevel(v.estAiVolume, estimateOf(v).confidence))
+    .sort((a, b) => b.estAiVolume - a.estAiVolume);
   // Distinct keywords: prompts share many, as Similar Topics counts them.
   const totalKeywords = new Set(
     volumes.flatMap((v) => v.keywords.map((k) => k.trim().toLowerCase())),
@@ -1805,6 +1836,11 @@ export default function PromptsPage() {
       is_active: p.isActive,
       created_at: p.createdAt,
       est_ai_volume: volumeByPromptId.get(p.id)?.estAiVolume ?? '',
+      volume_type: estimateByPromptId.has(p.id) ? 'estimate' : '',
+      volume_confidence: estimateByPromptId.get(p.id)?.confidence ?? '',
+      est_ai_volume_low: estimateByPromptId.get(p.id)?.low ?? '',
+      est_ai_volume_high: estimateByPromptId.get(p.id)?.high ?? '',
+      volume_date: volumeByPromptId.get(p.id)?.fetchedAt ?? '',
       total_google_volume: volumeByPromptId.get(p.id)?.totalGoogleVolume ?? '',
       intent: volumeByPromptId.get(p.id)?.intent ?? '',
       [`ai_visibility_score_${rangeSuffix}`]: visibility[p.id]?.score ?? '',
@@ -1829,7 +1865,15 @@ export default function PromptsPage() {
     link.click();
 
     URL.revokeObjectURL(url);
-  }, [activeBrand?.slug, canExport, allPrompts, visibility, volumeByPromptId, rangePreset]);
+  }, [
+    activeBrand?.slug,
+    canExport,
+    allPrompts,
+    visibility,
+    volumeByPromptId,
+    estimateByPromptId,
+    rangePreset,
+  ]);
 
   if (!activeBrandId) {
     return (
@@ -2064,6 +2108,7 @@ export default function PromptsPage() {
                 prompts={allPrompts}
                 activeBrandId={activeBrandId}
                 volumeByPromptId={volumeByPromptId}
+                estimateByPromptId={estimateByPromptId}
                 visibility={visibility}
                 positions={positions}
                 rangeLabel={rangeLabel}
@@ -2227,10 +2272,16 @@ export default function PromptsPage() {
                   sub={`across ${totalKeywords} keywords`}
                 />
                 <KpiCard
-                  title="Total Est. AI Volume"
+                  title={tVolumes('totalTitle')}
                   icon={BarChart3}
-                  value={`~${formatCompactNumber(totalAiVol)}`}
-                  sub={`from ${formatCompactNumber(totalGoogleVol)} Google searches`}
+                  value={
+                    // The range, then its Estimate badge beneath (PROMPT-013 mockup).
+                    <span className="flex flex-col items-start gap-1">
+                      <EstimateRange estimate={totalEstimate} kind="total" className="text-2xl" />
+                      <EstimateBadge estimate={totalEstimate} kind="total" />
+                    </span>
+                  }
+                  sub={tVolumes('totalSub', { google: formatCompactNumber(totalGoogleVol) })}
                 />
                 <KpiCard
                   title="AI Adoption Rate"
@@ -2239,10 +2290,19 @@ export default function PromptsPage() {
                   sub="of Google search volume"
                 />
                 <KpiCard
-                  title="Avg. AI Volume"
+                  title={tVolumes('averageTitle')}
                   icon={BarChart3}
-                  value={`~${formatCompactNumber(Math.round(totalAiVol / volumes.length))}`}
-                  sub="per prompt"
+                  value={
+                    <span className="flex flex-col items-start gap-1">
+                      <EstimateRange
+                        estimate={averagePerPrompt}
+                        kind="average"
+                        className="text-2xl"
+                      />
+                      <EstimateBadge estimate={averagePerPrompt} kind="average" />
+                    </span>
+                  }
+                  sub={tVolumes('averageSub')}
                 />
               </div>
 
@@ -2258,7 +2318,7 @@ export default function PromptsPage() {
                     </p>
                   </CardHeader>
                   <CardContent>
-                    <PlatformVolumeChart totalVolume={totalAiVol} />
+                    <PlatformVolumeChart totalVolume={totalAiVol} totalRange={totalEstimate} />
                   </CardContent>
                 </Card>
 
@@ -2307,17 +2367,11 @@ export default function PromptsPage() {
                       <TableRow>
                         <TableHead className="pl-6">Prompt</TableHead>
 
-                        <ColHead
-                          className="text-right"
-                          tooltip="Total monthly Google search volume across all extracted keywords."
-                        >
-                          Google Vol.
+                        <ColHead className="text-right" tooltip={tVolumes('googleTip')}>
+                          {tVolumes('googleColumn')}
                         </ColHead>
-                        <ColHead
-                          className="text-right"
-                          tooltip="Estimated monthly AI prompt volume. Calculated as total Google volume multiplied by the AI adoption rate."
-                        >
-                          Est. AI Vol.
+                        <ColHead className="text-right" tooltip={tVolumes('aiTip')}>
+                          {tVolumes('aiColumn')}
                         </ColHead>
                         <ColHead
                           className="text-center"
@@ -2338,7 +2392,11 @@ export default function PromptsPage() {
                             {formatNumber(row.totalGoogleVolume)}
                           </TableCell>
                           <TableCell className="text-right">
-                            <VolumePill value={row.estAiVolume} />
+                            <EstimateRange
+                              estimate={estimateOf(row)}
+                              handle={volumeTableNote}
+                              className="text-sm font-semibold"
+                            />
                           </TableCell>
                           <TableCell className="text-center">
                             <Badge
@@ -2355,23 +2413,20 @@ export default function PromptsPage() {
                       ))}
                     </TableBody>
                   </Table>
+                  <EstimateNoteTooltip handle={volumeTableNote} />
                   {filtered.length === 0 && (
                     <div className="py-10 text-center text-sm text-muted-foreground">
                       No prompts match your search.
                     </div>
                   )}
                   <div className="px-6 py-2 border-t">
-                    <p className="text-xs text-muted-foreground">
-                      * Est. AI Volume = the median Google search volume of the prompt&apos;s
-                      extracted keywords × AI adoption rate. Figures are approximations for planning
-                      purposes.
-                    </p>
+                    <p className="text-xs text-muted-foreground">{tVolumes('footnote')}</p>
                   </div>
                 </CardContent>
               </Card>
 
               {/* High Opportunity Prompts */}
-              {volumes.some((v) => opportunityLevel(v.estAiVolume)) && (
+              {opportunityRows.length > 0 && (
                 <Card>
                   <CardHeader className="pb-2">
                     <div className="flex items-center gap-2">
@@ -2391,7 +2446,7 @@ export default function PromptsPage() {
                           <TableHead className="pl-6">Prompt</TableHead>
                           <ColHead
                             className="text-right"
-                            tooltip="Estimated monthly AI prompt volume. Sorted by highest volume first."
+                            tooltip={tVolumes('opportunityVolumeTip')}
                           >
                             Est. AI Volume
                           </ColHead>
@@ -2400,49 +2455,58 @@ export default function PromptsPage() {
                           </ColHead>
                           <ColHead
                             className="text-right pr-6"
-                            tooltip={`Opportunity level based on estimated AI volume. High = ${formatCompactNumber(OPPORTUNITY_HIGH_VOLUME)}+/mo, Medium = ${formatCompactNumber(OPPORTUNITY_MIN_VOLUME)}–${formatCompactNumber(OPPORTUNITY_HIGH_VOLUME)}/mo.`}
+                            tooltip={tVolumes('opportunityLevelTip', {
+                              high: formatCompactNumber(OPPORTUNITY_HIGH_VOLUME),
+                              min: formatCompactNumber(OPPORTUNITY_MIN_VOLUME),
+                            })}
                           >
                             Opportunity
                           </ColHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {volumes
-                          .filter((v) => opportunityLevel(v.estAiVolume))
-                          .sort((a, b) => b.estAiVolume - a.estAiVolume)
-                          .map((row) => (
-                            <TableRow key={row.id} className="hover:bg-muted/50">
-                              <TableCell className="pl-6 font-medium text-sm">
-                                {row.promptText}
-                              </TableCell>
-                              <TableCell className="text-right">
-                                <VolumePill value={row.estAiVolume} />
-                              </TableCell>
-                              <TableCell className="text-center">
-                                <Badge
-                                  variant="outline"
-                                  className={cn('text-xs', INTENT_COLORS[row.intent] || '')}
-                                >
-                                  {INTENT_LABELS[row.intent] || row.intent}
-                                </Badge>
-                              </TableCell>
-                              <TableCell className="text-right pr-6">
-                                <Badge
-                                  variant="outline"
-                                  className={cn(
-                                    'text-xs',
-                                    opportunityLevel(row.estAiVolume) === 'high'
-                                      ? 'border-red-500/30 bg-red-500/10 text-red-600 dark:text-red-400'
-                                      : 'border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400',
-                                  )}
-                                >
-                                  {opportunityLevel(row.estAiVolume) === 'high' ? 'High' : 'Medium'}
-                                </Badge>
-                              </TableCell>
-                            </TableRow>
-                          ))}
+                        {opportunityRows.map((row) => (
+                          <TableRow key={row.id} className="hover:bg-muted/50">
+                            <TableCell className="pl-6 font-medium text-sm">
+                              {row.promptText}
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <EstimateRange
+                                estimate={estimateOf(row)}
+                                handle={opportunityTableNote}
+                                className="text-sm font-semibold"
+                              />
+                            </TableCell>
+                            <TableCell className="text-center">
+                              <Badge
+                                variant="outline"
+                                className={cn('text-xs', INTENT_COLORS[row.intent] || '')}
+                              >
+                                {INTENT_LABELS[row.intent] || row.intent}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="text-right pr-6">
+                              <Badge
+                                variant="outline"
+                                className={cn(
+                                  'text-xs',
+                                  opportunityLevel(row.estAiVolume, estimateOf(row).confidence) ===
+                                    'high'
+                                    ? 'border-red-500/30 bg-red-500/10 text-red-600 dark:text-red-400'
+                                    : 'border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400',
+                                )}
+                              >
+                                {opportunityLevel(row.estAiVolume, estimateOf(row).confidence) ===
+                                'high'
+                                  ? 'High'
+                                  : 'Medium'}
+                              </Badge>
+                            </TableCell>
+                          </TableRow>
+                        ))}
                       </TableBody>
                     </Table>
+                    <EstimateNoteTooltip handle={opportunityTableNote} />
                   </CardContent>
                 </Card>
               )}
@@ -2718,6 +2782,7 @@ function AllPromptsTab({
   prompts: allRows,
   activeBrandId,
   volumeByPromptId,
+  estimateByPromptId,
   visibility,
   positions,
   rangeLabel,
@@ -2737,6 +2802,8 @@ function AllPromptsTab({
   prompts: Prompt[];
   activeBrandId: string;
   volumeByPromptId: Map<string, PromptVolume>;
+  /** Each volume as an estimate, keyed like volumeByPromptId (PROMPT-013). */
+  estimateByPromptId: Map<string, VolumeEstimate>;
   visibility: Record<string, PromptVisibilitySummary>;
   /** The Positions column per prompt id. */
   positions: Record<string, PromptPositionCell>;
@@ -2761,6 +2828,7 @@ function AllPromptsTab({
   const tPrompts = useTranslations('prompts');
   // One tooltip for every prompt and topic the table cuts short.
   const fullText = useMemo(() => createClampedTextHandle(), []);
+  const volumeNote = useMemo(() => createEstimateNoteHandle(), []);
   const tUsage = useTranslations('prompts.usage');
   const format = useFormatter();
   const tDelete = useTranslations('prompts.bulkDelete');
@@ -3334,15 +3402,20 @@ function AllPromptsTab({
       );
     }
 
-    const valueOf = (p: Prompt): number | null =>
-      promptSortValue(activeSort, {
+    const rowOf = (p: Prompt) => {
+      const volume = volumeByPromptId.get(p.id);
+      return {
         createdAt: p.createdAt,
         visibility: visibility[p.id],
         position: positions[p.id],
-        volume: volumeByPromptId.get(p.id),
-      });
+        volume: volume && {
+          estAiVolume: volume.estAiVolume,
+          confidence: estimateByPromptId.get(p.id)?.confidence,
+        },
+      };
+    };
 
-    const sorted = list.sort((a, b) => compareNullsLast(valueOf(a), valueOf(b), dir));
+    const sorted = list.sort((a, b) => comparePromptSortRows(activeSort, rowOf(a), rowOf(b), dir));
     // Until a column is picked, prompts added within the last day lead: Track
     // on Insights opens this table to show them.
     return isAllPromptsSortKey(rawSort) ? sorted : newFirst(sorted, now);
@@ -3356,6 +3429,7 @@ function AllPromptsTab({
     visibility,
     positions,
     volumeByPromptId,
+    estimateByPromptId,
     now,
   ]);
 
@@ -3830,7 +3904,11 @@ function AllPromptsTab({
                   </TableCell>
                   <TableCell className="text-right">
                     {vol ? (
-                      <VolumePill value={vol.estAiVolume} />
+                      <EstimateRange
+                        estimate={estimateByPromptId.get(p.id)!}
+                        handle={volumeNote}
+                        className="text-sm font-semibold"
+                      />
                     ) : (
                       <span className="text-xs text-muted-foreground">—</span>
                     )}
@@ -3895,6 +3973,7 @@ function AllPromptsTab({
           </TableBody>
         </Table>
         <ClampedTextTooltip handle={fullText} />
+        <EstimateNoteTooltip handle={volumeNote} />
         <TablePager
           page={promptsPager.page}
           totalPages={promptsPager.totalPages}

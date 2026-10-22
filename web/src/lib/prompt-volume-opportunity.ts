@@ -1,3 +1,5 @@
+import { rankable, type EstimateConfidence } from '@/lib/volume-estimate';
+
 /**
  * Insights' High Opportunity Prompts: a prompt makes the list from
  * OPPORTUNITY_MIN_VOLUME estimated AI searches a month, and is High rather
@@ -12,7 +14,12 @@
 export const OPPORTUNITY_MIN_VOLUME = 1500;
 export const OPPORTUNITY_HIGH_VOLUME = 3000;
 
-export function opportunityLevel(estAiVolume: number): 'high' | 'medium' | null {
+export function opportunityLevel(
+  estAiVolume: number,
+  confidence?: EstimateConfidence,
+): 'high' | 'medium' | null {
+  // A low-confidence estimate isn't ranked on its own (PROMPT-013).
+  if (confidence && !rankable({ confidence })) return null;
   if (estAiVolume >= OPPORTUNITY_HIGH_VOLUME) return 'high';
   if (estAiVolume >= OPPORTUNITY_MIN_VOLUME) return 'medium';
   return null;

@@ -50,6 +50,7 @@ import { memberLabel } from '@/lib/action-center/display';
 import { agentWriteRequest, useRuleDescriber } from '@/lib/content/agent-write';
 import { MAX_ATTACHMENT_BYTES, textToHtml } from '@/lib/content/attachments';
 import { cleanHtml } from '@/lib/content/clean-html';
+import { oneH1Html } from '@/lib/content/one-h1';
 import { NO_DRAFT_RULES } from '@/lib/content/rules';
 import {
   contentEditorPath,
@@ -356,10 +357,12 @@ export function NewContentDialog({
           }));
 
   const bring = (
-    html: string,
+    incoming: string,
     imagesRemoved: number,
     origin: { fileName?: string; sourceUrl?: string; title?: string } = {},
   ) => {
+    // One H1 per page, its title, whichever way the page comes in.
+    const html = oneH1Html(incoming);
     const fallback = origin.title || (origin.fileName ? fileTitle(origin.fileName) : '');
     const summary = summarizeContent(html, fallback);
     if (!summary.characters) {

@@ -165,7 +165,17 @@ beforeEach(() => {
         topics: null,
       },
     ],
-    prompt_volumes: [{ prompt_id: 'p1', est_ai_volume: 5500 }],
+    prompt_volumes: [
+      {
+        prompt_id: 'p1',
+        est_ai_volume: 5500,
+        google_volumes: { a: 10_000, b: 12_200, c: 14_000 },
+        ai_volume_multiplier: '0.450',
+        keywords: ['a', 'b', 'c'],
+        // Recent, so the confidence doesn't drop for its age whenever this runs.
+        fetched_at: new Date(Date.now() - 12 * 86_400_000).toISOString(),
+      },
+    ],
   };
 });
 
@@ -186,7 +196,8 @@ describe('exportActionFor', () => {
     expect(md).toContain('Link: https://app.example.com/dashboard/action-center/actions?action=a1');
     expect(md).toContain('## Affected (1)');
     expect(md).toContain('Best coffee subscription?');
-    expect(md).toContain('~5.5k');
+    // An estimate: its range and how sure (PROMPT-013).
+    expect(md).toContain('4.1–6.9k (estimate, High confidence)');
     expect(md).toContain('## Tasks (1)\n1. Add a 2026 table to /pricing (To Do)');
     expect(md).toContain('## Signals (1)');
     // The Why in the action's own terms, from its signal, with the day in UTC.
@@ -197,7 +208,7 @@ describe('exportActionFor', () => {
     failing.add('prompt_volumes');
     const md = (await exportActionFor(auth, 'a1', 'markdown'))!.body;
     expect(md).toContain('Best coffee subscription?');
-    expect(md).not.toContain('~5.5k');
+    expect(md).not.toContain('(estimate,');
   });
 
   it('dates the goal by its due date on a server east of UTC', async () => {

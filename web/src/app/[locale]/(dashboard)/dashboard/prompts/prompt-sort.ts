@@ -1,3 +1,5 @@
+import { rankable, type EstimateConfidence } from '@/lib/volume-estimate';
+
 export type SortDir = 'asc' | 'desc';
 
 /**
@@ -54,7 +56,7 @@ export interface PromptSortRow {
     lastRunAt: string;
   };
   position?: { avg: number | null };
-  volume?: { estAiVolume: number };
+  volume?: { estAiVolume: number; confidence?: EstimateConfidence };
 }
 
 /** A row's value in a column; null when it has none, so it sorts last. */
@@ -78,4 +80,25 @@ export function promptSortValue(key: AllPromptsSortKey, row: PromptSortRow): num
     case 'lastRun':
       return vis?.lastRunAt ? new Date(vis.lastRunAt).getTime() : null;
   }
+}
+
+/**
+ * Two rows in a column's order. By volume, a low-confidence estimate isn't
+ * ranked on its own (PROMPT-013): it sorts after the confident ones in both
+ * directions, and before the rows with no volume at all.
+ */
+export function comparePromptSortRows(
+  key: AllPromptsSortKey,
+  a: PromptSortRow,
+  b: PromptSortRow,
+  dir: SortDir,
+): number {
+  const av = promptSortValue(key, a);
+  const bv = promptSortValue(key, b);
+  if (key === 'volume' && av !== null && bv !== null) {
+    const aLow = !rankable({ confidence: a.volume?.confidence ?? 'medium' });
+    const bLow = !rankable({ confidence: b.volume?.confidence ?? 'medium' });
+    if (aLow !== bLow) return aLow ? 1 : -1;
+  }
+  return compareNullsLast(av, bv, dir);
 }

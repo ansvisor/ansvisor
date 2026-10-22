@@ -1,6 +1,6 @@
 import type { ActionEvent, ActionItem } from '@/lib/actions/action-center';
 import { isActionKind } from '@/lib/action-center/registry';
-import { formatCompactNumber } from '@/lib/format';
+import { formatEstimateRange, guessedVolumeEstimate } from '@/lib/volume-estimate';
 
 /**
  * Composes what an action row shows from `kind` + `payload`, mirroring the
@@ -117,7 +117,8 @@ export function actionTexts(
   ) {
     return {
       title: t(`${action.kind}.title`, {
-        demand: formatCompactNumber(p.demand),
+        // The suggestions' AI-guessed demand: a range, not a count (PROMPT-013).
+        demand: formatEstimateRange(guessedVolumeEstimate(p.demand, null)),
         topic: p.topicName,
       }),
       description: t(`${action.kind}.description`),

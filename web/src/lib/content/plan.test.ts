@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest';
 import {
   MAX_ROWS,
   buildPlan,
-  citationsDownScore,
-  protectScore,
+  dropSeverity,
+  planPriorityLevel,
   rowsFor,
   type PlanAnswers,
   type PlanDraft,
@@ -70,7 +70,8 @@ describe('buildPlan', () => {
         pageType: 'comparison',
         why: { kind: 'competitors', names: ['HubSpot'], visibility: 6 },
         source: 'opportunity',
-        score: 81,
+        // 20 a new page + 24.3 the opportunity's 81 + 10 page value (neutral) + 0 citations.
+        score: 54.3,
         opportunityId: 'o1',
         draft: null,
       }),
@@ -132,7 +133,8 @@ describe('buildPlan', () => {
       page: 'https://acme.example/features/forecasting',
       why: { kind: 'citationsDown', pct: 40, platforms: ['chatgpt-web', 'perplexity-web'] },
       source: 'citations',
-      score: citationsDownScore(40, 4),
+      // 30.4 the drop + 12 no opportunity + 10 page value (no traffic data) + 2 citations.
+      score: 54.4,
     });
     expect(rows[1]).toMatchObject({ action: 'protect', title: 'features/email' });
   });
@@ -146,12 +148,12 @@ describe('buildPlan', () => {
     // The same answers: down 50%, 5 citations lost.
     expect(plan(pages).rows[0]).toMatchObject({
       why: { kind: 'citationsDown', pct: 50 },
-      score: citationsDownScore(50, 5),
+      score: 55.7,
     });
     // Twice the answers and the same citations: down 50% per answer, 15 lost.
     expect(plan(pages, [], [], { cur: 200, prev: 100 }).rows[0]).toMatchObject({
       why: { kind: 'citationsDown', pct: 75 },
-      score: citationsDownScore(75, 15),
+      score: 59.7,
     });
     // No answers before: nothing to compare with.
     expect(plan(pages, [], [], { cur: 100, prev: 0 }).rows[0]).toMatchObject({
@@ -159,8 +161,12 @@ describe('buildPlan', () => {
     });
   });
 
-  it('ranks a drop by the citations lost more than by its share', () => {
-    expect(citationsDownScore(41, 82)).toBeGreaterThan(citationsDownScore(100, 3));
+  it('reckons a drop as bad as its share or its citations lost say, whichever says more', () => {
+    expect(dropSeverity(20, 2)).toBeCloseTo(0.68);
+    expect(dropSeverity(20, 10)).toBeCloseTo(0.8);
+    // 82 citations lost is as bad as losing them all.
+    expect(dropSeverity(41, 82)).toBe(1);
+    expect(dropSeverity(100, 3)).toBe(1);
   });
 
   it('keeps one row for a page an opportunity targets, with the period’s signal when it is losing', () => {
@@ -183,7 +189,8 @@ describe('buildPlan', () => {
       opportunityId: 'o1',
       source: 'citations',
       why: { kind: 'citationsDown', pct: 75 },
-      score: citationsDownScore(75, 6),
+      // 36 the drop + 15 the opportunity's 50 + 10 page value + 0.7 citations.
+      score: 61.7,
     });
   });
 
@@ -196,7 +203,8 @@ describe('buildPlan', () => {
     expect(rows.map((r) => r.title)).toEqual(['Opportunity o1', 'p5', 'p4', 'p3', 'p2', 'p1']);
     expect(rows[1]).toMatchObject({
       why: { kind: 'top', citations: 30, aiVisits: 10 },
-      score: protectScore(30),
+      // 8 protect + 12 no opportunity + 6.9 for 10 AI visits + 10 for 30 citations.
+      score: 36.9,
     });
   });
 
@@ -277,9 +285,9 @@ describe('buildPlan', () => {
       [opportunity('o1')],
       drafts,
     );
-    // The opportunity (70) ranks over the page losing ground (1 of 9: 66).
-    expect(rows.map((r) => r.draft?.id)).toEqual(['d1', 'd2']);
-    expect(rows[1].draft?.assignee).toEqual({ id: 'u2', name: 'Ada Lovelace' });
+    // The page losing ground (1 of 9: 60.5) ranks over the new page (70: 51).
+    expect(rows.map((r) => r.draft?.id)).toEqual(['d2', 'd1']);
+    expect(rows[0].draft?.assignee).toEqual({ id: 'u2', name: 'Ada Lovelace' });
   });
 
   it('puts the rows marked as a priority first, and counts them', () => {
@@ -313,38 +321,53 @@ describe('buildPlan', () => {
       marks,
     );
     expect(rows.map((r) => r.key)).toEqual(['opportunity:o2']);
-    expect(hidden.map((r) => r.key)).toEqual(['opportunity:o1', 'page:acme.example/losing']);
+    expect(hidden.map((r) => r.key)).toEqual(['page:acme.example/losing', 'opportunity:o1']);
     expect(counts).toEqual({ create: 1, optimize: 0, protect: 0, priority: 0 });
   });
 });
 
-// The Priority Score column shows each row's score and what it is made of.
+// The Priority Score column shows each row's score and what it is made of:
+// 40 severity, 30 opportunity, 20 page value, 10 citation strength.
 describe("a row's score breakdown", () => {
-  it("is the opportunity's own score, rounded as the row's", () => {
+  it('gives a new page its opportunity, a neutral page value and no citations', () => {
     const { rows } = plan([], [opportunity('o1', { score: 81.4 })]);
-    expect(rows[0].score).toBe(81);
-    expect(rows[0].scoreParts).toEqual([{ kind: 'opportunity', score: 81 }]);
-  });
-
-  it("adds up a drop's points to the row's score", () => {
-    const { rows } = plan([page('/features/forecasting', { citations: { cur: 6, prev: 10 } })]);
-    // Down 40% (+8), 4 citations lost (+4), on a base of 40.
     expect(rows[0].scoreParts).toEqual([
-      {
-        kind: 'citationsDown',
-        base: 40,
-        pct: 40,
-        pctPoints: 8,
-        lost: 4,
-        lostPoints: 4,
-        max: 100,
-        score: 52,
-      },
+      { kind: 'severity', reason: 'create', value: 0.5, points: 20, max: 40 },
+      { kind: 'opportunity', score: 81, value: 0.81, points: 24.3, max: 30 },
+      { kind: 'pageValue', reason: 'newPage', value: 0.5, points: 10, max: 20 },
+      { kind: 'citations', citations: 0, value: 0, points: 0, max: 10 },
     ]);
-    expect(rows[0].score).toBe(52);
+    expect(rows[0].score).toBe(54.3);
   });
 
-  it('gives an opportunity on a page losing ground both parts, the higher counting', () => {
+  it("reckons a drop's severity, and a page with no opportunity as neutral", () => {
+    const { rows } = plan([page('/features/forecasting', { citations: { cur: 6, prev: 10 } })]);
+    expect(rows[0].scoreParts).toEqual([
+      { kind: 'severity', reason: 'drop', pct: 40, lost: 4, value: 0.76, points: 30.4, max: 40 },
+      { kind: 'opportunity', score: null, value: 0.4, points: 12, max: 30 },
+      // No page with AI visits: the brand has no traffic data, so value is unknown.
+      { kind: 'pageValue', reason: 'unknown', value: 0.5, points: 10, max: 20 },
+      { kind: 'citations', citations: 6, value: 0.2, points: 2, max: 10 },
+    ]);
+    expect(rows[0].score).toBe(54.4);
+  });
+
+  it('values a page by its AI visits once the brand has traffic data, 1,000 counting in full', () => {
+    const { rows } = plan([
+      page('/a', { citations: { cur: 18, prev: 18 }, aiVisits: 1000 }),
+      page('/b', { citations: { cur: 55, prev: 55 }, aiVisits: 0 }),
+    ]);
+    expect(rows.map((r) => [r.title, r.scoreParts[2], r.score])).toEqual([
+      [
+        'a',
+        { kind: 'pageValue', reason: 'visits', visits: 1000, value: 1, points: 20, max: 20 },
+        46,
+      ],
+      ['b', { kind: 'pageValue', reason: 'visits', visits: 0, value: 0, points: 0, max: 20 }, 30],
+    ]);
+  });
+
+  it('gives an opportunity on a page losing ground the drop and the opportunity both', () => {
     const { rows } = plan(
       [page('/guides/espresso', { citations: { cur: 2, prev: 8 } })],
       [
@@ -355,28 +378,65 @@ describe("a row's score breakdown", () => {
         }),
       ],
     );
-    expect(rows[0].scoreParts.map((p) => [p.kind, p.score])).toEqual([
-      ['opportunity', 50],
-      ['citationsDown', citationsDownScore(75, 6)],
+    expect(rows[0].scoreParts.map((p) => [p.kind, p.points])).toEqual([
+      ['severity', 36],
+      ['opportunity', 15],
+      ['pageValue', 10],
+      ['citations', 0.7],
     ]);
-    expect(rows[0].score).toBe(Math.max(...rows[0].scoreParts.map((p) => p.score)));
+    expect(rows[0].score).toBe(61.7);
   });
 
-  it("counts a top page's citations on a base of 20, up to 60", () => {
-    const { rows } = plan([
-      page('/a', { citations: { cur: 18, prev: 18 } }),
-      page('/b', { citations: { cur: 55, prev: 55 } }),
-    ]);
-    expect(rows.map((r) => r.scoreParts)).toEqual([
-      [{ kind: 'protect', base: 20, citations: 55, max: 60, score: 60 }],
-      [{ kind: 'protect', base: 20, citations: 18, max: 60, score: 38 }],
+  it('ranks a drop first, then new and existing pages, protecting last', () => {
+    const { rows } = plan(
+      [
+        page('/losing', { citations: { cur: 2, prev: 8 } }),
+        page('/top', { citations: { cur: 30, prev: 30 } }),
+        page('/existing', { citations: { cur: 3, prev: 3 } }),
+      ],
+      [
+        opportunity('new', { score: 80 }),
+        opportunity('improve', {
+          decision: 'optimize',
+          targetPage: 'https://acme.example/existing',
+          score: 70,
+        }),
+      ],
+    );
+    expect(rows.map((r) => [r.action, r.title])).toEqual([
+      ['optimize', 'losing'],
+      ['create', 'Opportunity new'],
+      ['optimize', 'Opportunity improve'],
+      ['protect', 'top'],
     ]);
   });
 
-  it('caps a drop at 100 and its citations lost at 40 points', () => {
+  it('caps a drop at full severity', () => {
     const { rows } = plan([page('/x', { citations: { cur: 0, prev: 90 } })]);
-    expect(rows[0].scoreParts).toEqual([
-      expect.objectContaining({ pctPoints: 20, lost: 90, lostPoints: 40, score: 100 }),
-    ]);
+    expect(rows[0].scoreParts[0]).toEqual(
+      expect.objectContaining({ pct: 100, lost: 90, value: 1, points: 40 }),
+    );
+  });
+});
+
+describe("the Plan badge's level", () => {
+  it("uses the Plan's own cut-offs, so each kind of row can read above Low", () => {
+    // An existing page with no drop tops out at 74, a top page with no opportunity at 50.
+    expect(planPriorityLevel(74)).toBe('high');
+    expect(planPriorityLevel(50)).toBe('medium');
+    expect(planPriorityLevel(39.9)).toBe('low');
+    // Only a page losing citations reaches Critical.
+    expect(planPriorityLevel(75)).toBe('critical');
+  });
+
+  it('reads a strong new page High, a middling one Medium', () => {
+    const levelOf = (score: number) => {
+      const [row] = plan([], [opportunity('o1', { score })]).rows;
+      return planPriorityLevel(Math.round(row.score));
+    };
+    // 20 a new page + 25.5 the opportunity's 85 + 10 page value (neutral): 55.5.
+    expect(levelOf(85)).toBe('high');
+    // The fixture's 70: 20 + 21 + 10 = 51.
+    expect(levelOf(70)).toBe('medium');
   });
 });

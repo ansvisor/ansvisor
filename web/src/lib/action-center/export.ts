@@ -61,8 +61,14 @@ export interface ExportAffected {
   /** "Prompt", "Page", "Competitor", "Topic". */
   entity: string;
   label: string;
-  /** "~5.5k", or empty when unknown. */
+  /** "4.4–7.5k", or empty when unknown. */
   volume: string;
+  /** 'estimate' beside a volume (PROMPT-013), else empty. */
+  volumeType: string;
+  /** high, medium or low beside a volume, else empty: the CSV's code. */
+  volumeConfidence: string;
+  /** The same, worded for people ("Medium"): Markdown and Excel. */
+  volumeConfidenceLabel: string;
   /** Display names. */
   platforms: string[];
   /** The brand's pages that lost a citation, and those cited instead. */
@@ -253,7 +259,9 @@ function signalLine(signal: ExportSignal): string {
 function affectedLine(item: ExportAffected, label: Labels): string {
   return [
     item.label,
-    item.volume,
+    item.volume
+      ? label('estimatedVolume', { volume: item.volume, confidence: item.volumeConfidenceLabel })
+      : '',
     item.platforms.join(', '),
     item.lostPages.length ? `${label('lostPage')}: ${item.lostPages.join(', ')}` : '',
     item.citedInstead.length ? `${label('citedInstead')}: ${item.citedInstead.join(', ')}` : '',
@@ -348,6 +356,8 @@ export const ACTION_CSV_HEADERS = [
   'category',
   'impact',
   'volume',
+  'volume_type',
+  'volume_confidence',
   'lost_pages',
   'cited_instead',
   'platforms',
@@ -368,6 +378,8 @@ export function actionCsv(a: ActionExport): string {
       type: item.entity,
       details: item.details,
       volume: item.volume,
+      volume_type: item.volumeType,
+      volume_confidence: item.volumeConfidence,
       lost_pages: item.lostPages.join('; '),
       cited_instead: item.citedInstead.join('; '),
       platforms: item.platforms.join('; '),
@@ -510,6 +522,8 @@ export function actionWorkbook(a: ActionExport, label: Labels): Sheet<Blob>[] {
               { width: 10 },
               { width: 60 },
               { width: 10 },
+              { width: 10 },
+              { width: 12 },
               { width: 24 },
               { width: 40 },
               { width: 40 },
@@ -521,6 +535,8 @@ export function actionWorkbook(a: ActionExport, label: Labels): Sheet<Blob>[] {
                 label('type'),
                 label('item'),
                 label('volume'),
+                label('volumeType'),
+                label('volumeConfidence'),
                 label('platforms'),
                 label('lostPage'),
                 label('citedInstead'),
@@ -531,6 +547,8 @@ export function actionWorkbook(a: ActionExport, label: Labels): Sheet<Blob>[] {
                 item.entity,
                 item.label,
                 item.volume,
+                item.volumeType,
+                item.volumeConfidenceLabel,
                 item.platforms.join(', '),
                 item.lostPages.join(', '),
                 item.citedInstead.join(', '),

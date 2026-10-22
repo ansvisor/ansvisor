@@ -122,14 +122,15 @@ beforeEach(() => {
   setContentDraftStatus.mockReset().mockResolvedValue(undefined);
   archiveContentDraft.mockReset().mockResolvedValue(undefined);
   deleteContentDraft.mockReset().mockResolvedValue(undefined);
-  getContentDraftPages.mockReset().mockImplementation(async (_brand: string, ids: string[]) =>
-    ids.map((id) => ({
+  getContentDraftPages.mockReset().mockImplementation(async (_brand: string, ids: string[]) => ({
+    pages: ids.map((id) => ({
       id,
       title: 'Pipeline forecasting',
       bodyHtml: '<h1>Pipeline forecasting</h1><p>Teams trust it.</p>',
       sourceUrl: 'https://acme.example/pricing',
     })),
-  );
+    rest: [],
+  }));
   saveBlob.mockReset();
   role.canManage = true;
 });
@@ -460,6 +461,52 @@ describe('the Library’s Export and Created filter (CE-002)', () => {
     });
     return [...document.body.querySelectorAll<HTMLElement>('[role="menuitem"]')];
   };
+
+  it('reads a long list’s pages fifty at a time, in order', async () => {
+    getContentDrafts.mockResolvedValue(
+      Array.from({ length: 120 }, (_, i) => row({ id: `d${i}`, title: `Draft ${i}` })),
+    );
+    await renderPage();
+    const items = await openExport();
+    await act(async () => items[0].click());
+    await act(async () => {});
+
+    const calls = getContentDraftPages.mock.calls as [string, string[]][];
+    expect(calls.map(([, ids]) => ids.length)).toEqual([50, 50, 20]);
+    expect(calls.flatMap(([, ids]) => ids)).toEqual(Array.from({ length: 120 }, (_, i) => `d${i}`));
+    const csv = await readText((saveBlob.mock.calls[0] as [Blob, string])[0]);
+    // Every draft once: a row starts with its title (a page's text spans lines).
+    expect(csv.match(/^Draft \d+,/gm)).toHaveLength(120);
+  });
+
+  it('goes on from the ids a call left for its size, before the next slice', async () => {
+    getContentDrafts.mockResolvedValue(
+      Array.from({ length: 60 }, (_, i) => row({ id: `d${i}`, title: `Draft ${i}` })),
+    );
+    const page = (id: string) => ({
+      id,
+      title: 'Pipeline forecasting',
+      bodyHtml: '<p>x</p>',
+      sourceUrl: null,
+    });
+    // The first call reads 30 of its 50 and leaves 20.
+    getContentDraftPages.mockImplementationOnce(async (_brand: string, ids: string[]) => ({
+      pages: ids.slice(0, 30).map(page),
+      rest: ids.slice(30),
+    }));
+    await renderPage();
+    const items = await openExport();
+    await act(async () => items[0].click());
+    await act(async () => {});
+
+    const calls = getContentDraftPages.mock.calls as [string, string[]][];
+    expect(calls.map(([, ids]) => [ids[0], ids.length])).toEqual([
+      ['d0', 50],
+      ['d30', 30],
+    ]);
+    const csv = await readText((saveBlob.mock.calls[0] as [Blob, string])[0]);
+    expect(csv.match(/^Draft \d+,/gm)).toHaveLength(60);
+  });
 
   it('exports the drafts listed, with their pages, as CSV', async () => {
     getContentDrafts.mockResolvedValue([

@@ -13,4 +13,10 @@ describe('opportunityLevel', () => {
     expect(opportunityLevel(3000)).toBe('high');
     expect(opportunityLevel(3645)).toBe('high');
   });
+
+  it('gives a low-confidence estimate no level on its own', () => {
+    expect(opportunityLevel(5000, 'low')).toBeNull();
+    expect(opportunityLevel(5000, 'medium')).toBe('high');
+    expect(opportunityLevel(1500, 'high')).toBe('medium');
+  });
 });

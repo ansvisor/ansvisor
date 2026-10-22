@@ -69,4 +69,15 @@ describe('aggregatePromptVolumeClusters', () => {
     ]);
     expect(cluster.prompts[0]).toMatchObject({ id: 'a', volume: 8100, estimatedAiVolume: 1215 });
   });
+
+  it('carries the rate and the latest fetch, for the estimate shown beside it', () => {
+    const [cluster] = aggregatePromptVolumeClusters([
+      prompt('a', ['seo tools'], { 'seo tools': 110000 }, 110000),
+      {
+        ...prompt('b', ['SEO tools'], { 'SEO tools': 110000 }, 110000),
+        fetchedAt: '2026-10-20T00:00:00Z',
+      },
+    ]);
+    expect(cluster).toMatchObject({ aiVolumeMultiplier: 0.15, fetchedAt: '2026-10-20T00:00:00Z' });
+  });
 });

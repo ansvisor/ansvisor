@@ -33,6 +33,7 @@ import { viewerTimeZone } from '@/lib/time-zone';
 import { affectedCounts, type Affected } from '@/lib/action-center/affected';
 import type { ActionStory } from '@/lib/action-center/story';
 import { saveBlob } from '@/lib/download';
+import type { VolumeEstimate } from '@/lib/volume-estimate';
 
 /**
  * Copy all, Export CSV and Export Excel for one action (AC-005): what every
@@ -52,7 +53,7 @@ export function ActionExportButtons({
   detail: ActionDetail | null;
   /** The Affected tab's list and its prompts' demand, as the drawer shows them (AC-003). */
   affected?: Affected | null;
-  volumes?: Map<string, number> | null;
+  volumes?: Map<string, VolumeEstimate> | null;
   /** Why and Goal as the drawer words them, from the action's data (AC-003). */
   story?: ActionStory | null;
 }) {
@@ -75,6 +76,7 @@ export function ActionExportButtons({
     signalCategories: useTranslations(EXPORT_NAMESPACES.signalCategories),
     priority: useTranslations(EXPORT_NAMESPACES.priority),
     affected: useTranslations(EXPORT_NAMESPACES.affected),
+    estimate: useTranslations(EXPORT_NAMESPACES.estimate),
   };
   const [isBusy, setIsBusy] = useState(false);
   // The Markdown Copy Data shows, and what to say once it is copied.

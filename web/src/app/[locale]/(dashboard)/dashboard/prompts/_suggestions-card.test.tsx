@@ -221,3 +221,28 @@ describe('SuggestionsCard — Add All', () => {
     expect(toast.info).toHaveBeenCalledWith('These suggestions were already added or dismissed');
   });
 });
+
+describe('SuggestionsCard — estimated volume', () => {
+  it("shows an AI's guess as a grey range, never a bare number", async () => {
+    actions.getPromptSuggestions.mockResolvedValue({
+      suggestions: [{ ...suggestion(1), estVolume: 1200 }],
+    });
+    await act(async () => {
+      root.render(
+        <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
+          <SuggestionsCard
+            brandId="b1"
+            onAccepted={onAccepted}
+            sourceStates={null}
+            planId="growth"
+          />
+        </NextIntlClientProvider>,
+      );
+    });
+    const range = container.querySelector<HTMLButtonElement>('button[aria-label*="a month"]')!;
+    expect(range.textContent).toBe('600–2.4k/mo');
+    expect(range.getAttribute('aria-label')).toBe('600–2.4k a month, estimated, Low confidence');
+    expect(range.className).toContain('text-muted-foreground');
+    expect(container.textContent).not.toContain('~1,200');
+  });
+});

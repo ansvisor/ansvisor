@@ -2,7 +2,7 @@ import type { Signal } from '@/lib/signals/map';
 import { signalWhereValue } from '@/lib/signals/detail';
 import { SIGNAL_KINDS, isSignalKind } from '@/lib/signals/registry';
 import { platformName } from '@/lib/signals/names';
-import { formatCompactNumber } from '@/lib/format';
+import { formatEstimateRange, sumEstimates, type VolumeEstimate } from '@/lib/volume-estimate';
 import { affectedOf, bareUrl, hostOf, type Affected } from './affected';
 
 /**
@@ -215,8 +215,8 @@ export function actionStory(
   }: {
     /** The signals the Affected list was built from. */
     signals: Signal[];
-    /** Estimated monthly AI searches per prompt id, when read. */
-    volumes: Map<string, number> | null;
+    /** Estimated monthly AI searches per prompt id, when read (PROMPT-013). */
+    volumes: Map<string, VolumeEstimate> | null;
     createdAt: string;
     dueDate: string | null;
   },
@@ -231,7 +231,7 @@ export function actionStory(
   const affected = affectedOf(mine);
   const subject = subjectOf(affected, family, mine);
 
-  // The subject: "7 prompts in AI Rank Tracker (~41k AI searches a month)".
+  // The subject: "7 prompts in AI Rank Tracker (28–42k AI searches a month, estimated)".
   // The goal names the same items without their demand.
   let named = '';
   let demand = '';
@@ -263,11 +263,14 @@ export function actionStory(
     if (topic) named += t('subject.inTopic', { topic });
     // Only when every prompt is listed: a sum over the first 50 would undercount.
     if (volumes && affected.prompts.length === affected.promptTotal) {
-      const volume = affected.prompts.reduce(
-        (sum, row) => sum + (row.id ? (volumes.get(row.id) ?? 0) : 0),
-        0,
+      // An estimate, so a range: the prompts' lows to their highs.
+      const total = sumEstimates(
+        affected.prompts.flatMap((row) => {
+          const estimate = row.id ? volumes.get(row.id) : undefined;
+          return estimate ? [estimate] : [];
+        }),
       );
-      if (volume > 0) demand = t('subject.volume', { volume: formatCompactNumber(volume) });
+      if (total.value > 0) demand = t('subject.volume', { volume: formatEstimateRange(total) });
     }
   }
 

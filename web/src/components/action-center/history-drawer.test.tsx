@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import messages from '../../../messages/en.json';
 import type { ActionHistoryItem } from '@/lib/action-center/history';
 import type { Signal } from '@/lib/signals/map';
+import { guessedVolumeEstimate } from '@/lib/volume-estimate';
 
 /**
  * The History drawer's goal and what happened, told from the action's own
@@ -112,7 +113,7 @@ describe('HistoryDrawer', () => {
   it("tells the goal and what happened from the action's signals once they are read", async () => {
     let answer: (value: unknown) => void = () => {};
     getActionSignals.mockReturnValue(new Promise((resolve) => (answer = resolve)));
-    getPromptDemand.mockResolvedValue({ p1: 5500 });
+    getPromptDemand.mockResolvedValue({ p1: guessedVolumeEstimate(5500, null) });
     render(<HistoryDrawer brandId="b1" item={item} onOpenChange={() => {}} />);
 
     // Placeholders while reading, not the general sentences.
@@ -122,7 +123,7 @@ describe('HistoryDrawer', () => {
     await act(async () => answer([signal]));
     const happened = under('What happened?');
     expect(happened).toContain('Best coffee subscription?');
-    expect(happened).toContain('~5.5k');
+    expect(happened).toContain('2.7–11k AI searches a month, estimated');
     expect(happened).toContain('Oct 9');
     // The goal is dated by the action's due date.
     expect(under('What was the goal?')).toContain('Nov 9');
