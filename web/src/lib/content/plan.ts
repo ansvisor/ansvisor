@@ -3,8 +3,10 @@
  * what to create, optimize or protect next, built from the brand's open
  * Content Opportunities (new pages AI needs, pages to improve; tasks sent
  * from the Action Center become opportunities too) and its own pages as AI
- * cites them (content_plan_pages, 00220): pages losing citations, the top
- * pages, and pages competing for the same prompts. A page loses ground when
+ * cites them (content_plan_pages, 00220): pages losing citations and the
+ * top pages. More of the brand's pages cited for the same prompts is no
+ * loss (AI answers aren't a ranking), so that is not a reason to list a
+ * page. A page loses ground when
  * it is cited less per tracked answer than in the period before, so a week
  * with fewer runs, or prompts added or removed, moves no page.
  */
@@ -19,8 +21,8 @@ export const PLAN_PERIODS = [7, 30, 90] as const;
 export type PlanPeriod = (typeof PLAN_PERIODS)[number];
 
 export type PlanAction = 'create' | 'optimize' | 'protect';
-/** The cards over the list, each a filter: the actions, and the pages competing. */
-export const PLAN_CARDS = ['create', 'optimize', 'protect', 'overlaps'] as const;
+/** The cards over the list, each a filter: by its action, or the rows marked as a priority. */
+export const PLAN_CARDS = ['create', 'optimize', 'protect', 'priority'] as const;
 export type PlanCard = (typeof PLAN_CARDS)[number];
 
 /** The brand's tracked answers in each period: what makes their citations comparable. */
@@ -47,8 +49,6 @@ export interface PlanPage {
   /** Platform keys citing it at a lower rate than before, the biggest drop first. */
   platformsDown: string[];
   aiVisits: number;
-  /** The brand's other pages cited for two or more of the same prompts. */
-  overlaps: number;
 }
 
 /** An open opportunity for one of the brand's own pages. */
@@ -77,6 +77,16 @@ export interface PlanDraft {
   method: DraftMethod;
   opportunityId: string | null;
   sourceUrl: string | null;
+  /** The Action Center task it was sent as (Start's Team), and who it is assigned to. */
+  actionId: string | null;
+  assignee: { id: string; name: string } | null;
+}
+
+/** An admin's or manager's mark on a row (content_plan_marks, 00229), by the row's key. */
+export interface PlanMark {
+  rowKey: string;
+  priority: boolean;
+  hidden: boolean;
 }
 
 /** Why a row is on the list, and where the signal comes from. */
@@ -84,8 +94,7 @@ export type PlanWhy =
   | { kind: 'competitors'; names: string[]; visibility: number | null }
   | { kind: 'opportunity'; prompts: number }
   | { kind: 'citationsDown'; pct: number; platforms: string[] }
-  | { kind: 'top'; citations: number; aiVisits: number }
-  | { kind: 'overlap'; pages: number };
+  | { kind: 'top'; citations: number; aiVisits: number };
 
 export interface PlanRow {
   key: string;
@@ -95,12 +104,12 @@ export interface PlanRow {
   page: string | null;
   pageType: PageType | null;
   why: PlanWhy;
-  source: 'opportunity' | 'citations' | 'protect' | 'overlap';
-  /** The brand's other pages competing with this one. */
-  overlaps: number;
+  source: 'opportunity' | 'citations' | 'protect';
   score: number;
   opportunityId: string | null;
   draft: PlanDraft | null;
+  /** Marked as a priority: at the top of the list, tagged. */
+  priority: boolean;
 }
 
 /**
@@ -119,13 +128,12 @@ export const MAX_ROWS = 50;
  * opportunity keeps its own score; a page losing citations ranks by how much
  * it lost, the citations more than the share (40 + a fifth of the drop in
  * percent + up to 40 for the citations lost), so 200 → 118 outranks 3 → 0;
- * a page only competing with others, 45; a top page by how much it is cited
- * (20 + citations, at most 60), so protecting comes after the work to do.
+ * a top page by how much it is cited (20 + citations, at most 60), so
+ * protecting comes after the work to do.
  */
 export function citationsDownScore(pct: number, lost: number): number {
   return Math.min(100, 40 + Math.round(pct / 5) + Math.min(40, lost));
 }
-export const OVERLAP_SCORE = 45;
 export function protectScore(citations: number): number {
   return Math.min(60, 20 + citations);
 }
@@ -137,21 +145,24 @@ const PROTECT_DECISIONS = new Set(['defend']);
 /**
  * Every row, ranked, and what each card counts: the list shows the first
  * MAX_ROWS of a card's rows (rowsFor), so a card never counts rows it can't
- * show.
+ * show. Rows marked as a priority come first; hidden rows leave the list
+ * and its counts for `hidden`, to be shown again.
  */
 export function buildPlan({
   pages,
   answers,
   opportunities,
   drafts,
+  marks = [],
   siteType,
 }: {
   pages: PlanPage[];
   answers: PlanAnswers;
   opportunities: PlanOpportunity[];
   drafts: PlanDraft[];
+  marks?: PlanMark[];
   siteType: SiteType;
-}): { rows: PlanRow[]; counts: Record<PlanCard, number> } {
+}): { rows: PlanRow[]; hidden: PlanRow[]; counts: Record<PlanCard, number> } {
   const byPage = new Map<string, PlanPage>();
   for (const page of pages) {
     const key = pageKey(page.page);
@@ -198,12 +209,12 @@ export function buildPlan({
             ? { kind: 'competitors', names: o.competitorsCited, visibility: o.visibility }
             : { kind: 'opportunity', prompts: o.prompts },
       source: drop ? 'citations' : 'opportunity',
-      overlaps: page?.overlaps ?? 0,
       score: drop
         ? Math.max(o.score, citationsDownScore(drop.pct, drop.lost))
         : Math.round(o.score),
       opportunityId: o.id,
       draft: draftFor(o.id, create ? null : o.targetPage),
+      priority: false,
     });
     if (key && !create) pagesTaken.add(key);
   }
@@ -216,9 +227,9 @@ export function buildPlan({
       title,
       page: page.page,
       pageType: typeOf(title, page.page),
-      overlaps: page.overlaps,
       opportunityId: null,
       draft: draftFor(null, page.page),
+      priority: false,
     };
     const drop = dropOf(page, answers);
     if (drop) {
@@ -239,48 +250,38 @@ export function buildPlan({
         source: 'protect',
         score: protectScore(page.citations.cur),
       });
-    } else if (page.overlaps > 0) {
-      rows.push({
-        ...base,
-        key: `page:${key}`,
-        action: 'optimize',
-        why: { kind: 'overlap', pages: page.overlaps },
-        source: 'overlap',
-        score: OVERLAP_SCORE,
-      });
     }
   }
   protect.sort((a, b) => b.score - a.score || a.title.localeCompare(b.title));
   rows.push(...protect.slice(0, MAX_PROTECT));
-  // A top page past the five protected still gets its row when it competes.
-  for (const row of protect.slice(MAX_PROTECT)) {
-    if (row.overlaps > 0) {
-      rows.push({
-        ...row,
-        action: 'optimize',
-        why: { kind: 'overlap', pages: row.overlaps },
-        source: 'overlap',
-        score: OVERLAP_SCORE,
-      });
-    }
-  }
 
-  rows.sort((a, b) => b.score - a.score || a.title.localeCompare(b.title));
+  const markOf = new Map(marks.map((m) => [m.rowKey, m]));
+  const hidden: PlanRow[] = [];
+  const listed: PlanRow[] = [];
+  for (const row of rows) {
+    const mark = markOf.get(row.key);
+    if (mark?.hidden) hidden.push(row);
+    else listed.push({ ...row, priority: Boolean(mark?.priority) });
+  }
+  const ranked = (a: PlanRow, b: PlanRow) => b.score - a.score || a.title.localeCompare(b.title);
+  listed.sort((a, b) => Number(b.priority) - Number(a.priority) || ranked(a, b));
+  hidden.sort(ranked);
   return {
-    rows,
+    rows: listed,
+    hidden,
     counts: {
-      create: rows.filter((r) => r.action === 'create').length,
-      optimize: rows.filter((r) => r.action === 'optimize').length,
-      protect: rows.filter((r) => r.action === 'protect').length,
-      overlaps: rows.filter((r) => r.overlaps > 0).length,
+      create: listed.filter((r) => r.action === 'create').length,
+      optimize: listed.filter((r) => r.action === 'optimize').length,
+      protect: listed.filter((r) => r.action === 'protect').length,
+      priority: listed.filter((r) => r.priority).length,
     },
   };
 }
 
 /**
- * The rows a card shows, the first MAX_ROWS: its action's, or the pages
- * competing; all without a card. A page type (the mix's filter) narrows them
- * before the cut, so its rows are never cut off by others.
+ * The rows a card shows, the first MAX_ROWS: its action's, or the
+ * priorities; all without a card. A page type (the mix's filter) narrows
+ * them before the cut, so its rows are never cut off by others.
  */
 export function rowsFor(
   rows: PlanRow[],
@@ -290,7 +291,7 @@ export function rowsFor(
   return rows
     .filter(
       (r) =>
-        (!card || (card === 'overlaps' ? r.overlaps > 0 : r.action === card)) &&
+        (!card || (card === 'priority' ? r.priority : r.action === card)) &&
         (!pageType || r.pageType === pageType),
     )
     .slice(0, MAX_ROWS);

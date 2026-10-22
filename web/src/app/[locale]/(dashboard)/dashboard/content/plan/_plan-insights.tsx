@@ -51,10 +51,42 @@ export function AiResultsStrip({ results, days }: { results: PlanResults; days: 
   );
 }
 
+/** The two shares as two bars on one scale: AI's light above, the brand's dark below. */
+function MixBars({
+  aiShare,
+  yourShare,
+  scale,
+}: {
+  aiShare: number;
+  yourShare: number;
+  scale: number;
+}) {
+  const width = (share: number) => `${Math.min(100, (share / scale) * 100)}%`;
+  return (
+    <span aria-hidden className="flex flex-col gap-1">
+      <span className="h-1.5 overflow-hidden rounded-full bg-muted">
+        <span
+          data-bar="ai"
+          className="block h-full rounded-full bg-muted-foreground/40"
+          style={{ width: width(aiShare) }}
+        />
+      </span>
+      <span className="h-1.5 overflow-hidden rounded-full bg-muted">
+        <span
+          data-bar="yours"
+          className="block h-full rounded-full bg-foreground"
+          style={{ width: width(yourShare) }}
+        />
+      </span>
+    </span>
+  );
+}
+
 /**
  * "What AI cites in your topics" (CE-014): per page type, the share of AI
  * citations (light bar) and the type's share of the brand's own cited pages
- * (dark bar), two mixes of 100 each, with a gap flagged in amber. A row
+ * (dark bar), two mixes of 100 each drawn to one scale, with a gap flagged
+ * in amber. A row
  * filters the priority list to its type; clicking it again clears it.
  */
 export function PageTypeMix({
@@ -71,8 +103,9 @@ export function PageTypeMix({
 }) {
   const t = useTranslations('contentEditor.plan.mix');
   const tTypes = useTranslations('contentEditor.pageTypes');
-  // The most cited type fills the track; the others are drawn to its scale.
-  const scale = Math.max(1, ...rows.map((r) => r.aiShare));
+  // The largest share, AI's or the brand's, fills the track; the others are
+  // drawn to its scale, so neither bar runs past it.
+  const scale = Math.max(1, ...rows.map((r) => Math.max(r.aiShare, r.yourShare)));
 
   return (
     <section aria-labelledby="plan-mix-title" className="space-y-2">
@@ -82,7 +115,7 @@ export function PageTypeMix({
         </h2>
         <span className="flex items-center gap-3 text-xs text-muted-foreground">
           <span className="flex items-center gap-1.5">
-            <span aria-hidden className="h-2 w-2 rounded-sm bg-muted-foreground/30" />
+            <span aria-hidden className="h-2 w-2 rounded-sm bg-muted-foreground/40" />
             {t('aiShare')}
           </span>
           <span className="flex items-center gap-1.5">
@@ -107,16 +140,7 @@ export function PageTypeMix({
                 )}
               >
                 <span className="truncate">{tTypes(row.pageType)}</span>
-                <span aria-hidden className="relative h-2 rounded-full bg-muted">
-                  <span
-                    className="absolute inset-y-0 left-0 rounded-full bg-muted-foreground/30"
-                    style={{ width: `${(row.aiShare / scale) * 100}%` }}
-                  />
-                  <span
-                    className="absolute inset-y-0 left-0 rounded-full bg-foreground"
-                    style={{ width: `${(row.yourShare / scale) * 100}%` }}
-                  />
-                </span>
+                <MixBars aiShare={row.aiShare} yourShare={row.yourShare} scale={scale} />
                 <span className="text-right text-xs tabular-nums text-muted-foreground">
                   {t('shares', { ai: row.aiShare, yours: row.yourShare })}
                   {/* On a phone the gap goes under the shares. */}

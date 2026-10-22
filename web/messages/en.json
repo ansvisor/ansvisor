@@ -3103,7 +3103,7 @@
         "create": { "title": "Create", "hint": "New pages AI needs" },
         "optimize": { "title": "Optimize", "hint": "Pages losing ground" },
         "protect": { "title": "Protect", "hint": "Top pages · edit with care" },
-        "overlaps": { "title": "Overlaps", "hint": "Pages competing for the same prompts" }
+        "priority": { "title": "Priority", "hint": "Marked by your team" }
       },
       "results": {
         "label": "From AI visits · {days} full days to yesterday (UTC):",
@@ -3128,24 +3128,22 @@
         "none": "No page reads as losing ground yet: tracking began {since}, so the {days} days before aren't tracked to compare with.",
         "partial": "The {days} days before are tracked only since {since}: pages are compared per tracked answer."
       },
-      "ranked": "Ranked by impact · overlaps checked",
+      "ranked": "Ranked by impact",
       "filtered": "Filtered · click it again to clear",
       "columns": {
         "page": "Page",
         "action": "Action",
         "why": "Why · last {days} days",
         "who": "Who",
-        "start": "Start"
+        "start": "Start",
+        "menu": "Row actions"
       },
       "newPage": "New page",
-      "overlap": "⚠ Overlap",
-      "overlapHint": "{count, plural, one {# other page of yours is} other {# other pages of yours are}} cited for the same prompts",
       "actions": { "create": "Create", "optimize": "Optimize", "protect": "Protect" },
       "sources": {
         "opportunity": "Opportunity",
         "citations": "Citations",
-        "protect": "Protect",
-        "overlap": "Overlap"
+        "protect": "Protect"
       },
       "why": {
         "competitors": "{names} cited · you aren't",
@@ -3153,8 +3151,7 @@
         "opportunity": "{count, plural, =0 {A page AI needs} one {Answers # prompt AI asks} other {Answers # prompts AI asks}}",
         "citationsDown": "Citation rate −{pct}%",
         "on": "on {platforms}",
-        "top": "Top page · {citations, plural, one {{citationsText} citation} other {{citationsText} citations}} · {visits, plural, one {{visitsText} AI visit} other {{visitsText} AI visits}}",
-        "overlap": "Competes with {count, plural, one {# of your pages} other {# of your pages}} for the same prompts"
+        "top": "Top page · {citations, plural, one {{citationsText} citation} other {{citationsText} citations}} · {visits, plural, one {{visitsText} AI visit} other {{visitsText} AI visits}}"
       },
       "who": { "you": "You", "agent": "Agent", "team": "Teammate" },
       "start": { "create": "Create", "optimize": "Optimize", "protect": "View" },
@@ -3162,7 +3159,32 @@
       "empty": "Nothing to work on yet. New opportunities and your pages' AI citations show up here.",
       "emptyFiltered": "Nothing here for this period.",
       "loadError": "Couldn't load the content plan.",
-      "retry": "Try again"
+      "retry": "Try again",
+      "priority": "Priority",
+      "rowMenu": {
+        "label": "Actions for {title}",
+        "assign": "Assign to…",
+        "markPriority": "Mark as priority",
+        "unmarkPriority": "Remove priority",
+        "hide": "Hide from the plan",
+        "hidden": "Hidden: {title}",
+        "undo": "Undo",
+        "failed": "Couldn't save that. Try again."
+      },
+      "hidden": {
+        "toggle": "{count, plural, one {# hidden row} other {# hidden rows}} · {open, select, true {Hide} other {Show}}",
+        "show": "Show again"
+      },
+      "assign": {
+        "title": "Assign “{title}”",
+        "description": "It goes to the Action Center as a task for this teammate.",
+        "member": "Teammate",
+        "pick": "Pick a teammate",
+        "submit": "Assign",
+        "cancel": "Cancel",
+        "done": "Assigned to {name}",
+        "failed": "Couldn't assign it. Try again."
+      }
     },
     "agentState": {
       "writing": "Agent writing…",
@@ -3328,18 +3350,19 @@
         "team": {
           "title": "Team",
           "hint": "Send to Action Center"
-        }
+        },
+        "assignTo": "Assign to",
+        "assignNone": "No one yet",
+        "assignFailed": "Sent, but couldn't assign it. Assign it in the Action Center."
       },
       "overlap": {
-        "label": "Overlap check",
-        "checking": "Checking your pages that answer the same prompts…",
-        "failed": "Couldn't check for overlapping pages.",
+        "label": "Overview",
+        "checking": "Reading your pages AI cites for these prompts…",
+        "failed": "Couldn't read your pages cited for these prompts.",
         "retry": "Try again",
-        "none": "No existing page answers these prompts",
+        "none": "None of your pages is cited for these prompts yet",
         "noPrompts": "No tracked prompts to check this against yet",
-        "safe": "Safe to create",
-        "covered": "An existing page already answers these prompts",
-        "partial": "{count, plural, one {# existing page answers} other {# existing pages answer}} some of these prompts",
+        "cited": "{count, plural, one {# of your pages is} other {# of your pages are}} cited for these prompts",
         "columns": {
           "page": "Page",
           "prompts": "Same prompts",
@@ -3347,7 +3370,6 @@
           "google": "Google pos."
         },
         "promptsValue": "{count} of {total}",
-        "recommended": "Recommended",
         "options": {
           "optimizeGiven": {
             "title": "Optimize {page}",
@@ -3359,21 +3381,8 @@
             "reasonRanked": "It already answers {count} of {total} prompts, is cited {citations}× and ranks #{position} on Google"
           },
           "createNew": {
-            "title": "Create a new page instead",
-            "reason": "Write a new page for these prompts"
-          },
-          "createAnyway": {
-            "title": "Create a new page anyway",
-            "reason": "Risk: two pages compete for the same prompts"
-          },
-          "createLinked": {
-            "title": "Create a new page, link {page} to it",
-            "titleMany": "Create a new page, link these pages to it",
-            "reason": "One clear page for these prompts"
-          },
-          "addSection": {
-            "title": "Add a section to {page}",
-            "reason": "A smaller change than a new page"
+            "title": "Create a new page",
+            "reason": "Another page of yours for AI to cite"
           }
         }
       }
