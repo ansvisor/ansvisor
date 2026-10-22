@@ -2270,10 +2270,10 @@ export type Database = {
           image_url: string | null
           listing_id: string | null
           marketplace: string | null
-          merchant_kind: string | null
           matched_brand_id: string | null
           matched_brand_role: string
           merchant_domain: string | null
+          merchant_kind: string | null
           merchant_url: string | null
           platform: string
           position: number
@@ -2294,10 +2294,10 @@ export type Database = {
           image_url?: string | null
           listing_id?: string | null
           marketplace?: string | null
-          merchant_kind?: string | null
           matched_brand_id?: string | null
           matched_brand_role?: string
           merchant_domain?: string | null
+          merchant_kind?: string | null
           merchant_url?: string | null
           platform: string
           position: number
@@ -2318,10 +2318,10 @@ export type Database = {
           image_url?: string | null
           listing_id?: string | null
           marketplace?: string | null
-          merchant_kind?: string | null
           matched_brand_id?: string | null
           matched_brand_role?: string
           merchant_domain?: string | null
+          merchant_kind?: string | null
           merchant_url?: string | null
           platform?: string
           position?: number
