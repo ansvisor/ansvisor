@@ -3626,6 +3626,16 @@
         "addColumn": "Add a column to the right",
         "deleteTable": "Delete the table",
         "htmlBlock": "Add an HTML block",
+        "addHtml": "Add HTML",
+        "insert": {
+          "label": "Add",
+          "html": "HTML",
+          "htmlHint": "Add an HTML block on this line",
+          "table": "Table",
+          "tableHint": "Insert a table on this line",
+          "image": "Image",
+          "imageHint": "Insert an image on this line"
+        },
         "attach": "Attach a file: Excel, CSV, Word, Markdown, HTML or text",
         "html": "Edit as HTML",
         "htmlBack": "Back to visual",

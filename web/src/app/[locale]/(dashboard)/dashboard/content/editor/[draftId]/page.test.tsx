@@ -231,6 +231,8 @@ describe('the content editor', () => {
     for (const name of ['Heading 1', 'Bold', 'Link', 'Numbered list', 'Insert a table']) {
       expect(button(name)).toBeDefined();
     }
+    // The HTML block is named, not only an icon.
+    expect(button('Add an HTML block')!.textContent).toBe('Add HTML');
     expect(container.querySelector('.ProseMirror h1')!.textContent).toBe('Pipeline forecasting');
   });
 
