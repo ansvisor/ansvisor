@@ -323,14 +323,14 @@ export function ApiKeysSection() {
                 </Select>
               </div>
               <p className="text-xs text-muted-foreground">{t(`apiKeysConnectWhere.${client}`)}</p>
-              <div className="relative">
-                <pre className="max-h-56 overflow-auto rounded-md border bg-muted/40 p-3 pr-10 font-mono text-xs whitespace-pre">
+              <div className="flex items-start gap-2">
+                <pre className="max-h-56 min-w-0 flex-1 overflow-auto rounded-md border bg-muted/40 p-3 font-mono text-xs whitespace-pre">
                   {mcpClientSnippet(client, mcpEndpoint, revealedToken)}
                 </pre>
                 <Button
                   size="sm"
                   variant="ghost"
-                  className="absolute right-1 top-1 h-7 px-2"
+                  className="h-7 shrink-0 px-2"
                   onClick={() => copy(mcpClientSnippet(client, mcpEndpoint, revealedToken))}
                   aria-label={t('apiKeys_copySnippet')}
                 >
