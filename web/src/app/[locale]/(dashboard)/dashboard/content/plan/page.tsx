@@ -55,13 +55,13 @@ type InsightsRead = {
 
 /**
  * Each card's color, as its action's tag: Create blue, Optimize amber,
- * Protect green; Priority, the rows marked, violet.
+ * Protect green; Priority, the rows marked, in ink as its outline badge.
  */
 const CARD_DOT: Record<PlanCard, string> = {
   create: 'bg-blue-600 dark:bg-blue-400',
   optimize: 'bg-amber-600 dark:bg-amber-400',
   protect: 'bg-green-600 dark:bg-green-400',
-  priority: 'bg-violet-600 dark:bg-violet-400',
+  priority: 'bg-foreground',
 };
 
 /** What New content opens on for a row: its opportunity in Start, or its page to optimize. */
@@ -251,7 +251,7 @@ export default function ContentPlanPage() {
   const showRow = async (row: PlanRow) => {
     if (!activeBrandId) return;
     try {
-      await showPlanRow(activeBrandId, row.key, row.opportunityId);
+      await showPlanRow(activeBrandId, row.key);
       reload();
     } catch (err) {
       console.error('Failed to show the Plan row:', err);
@@ -262,7 +262,7 @@ export default function ContentPlanPage() {
   const hideRow = async (row: PlanRow) => {
     if (!activeBrandId) return;
     try {
-      await hidePlanRow(activeBrandId, row.key, row.opportunityId);
+      await hidePlanRow(activeBrandId, row.key);
       reload();
       toast(t('rowMenu.hidden', { title: row.title }), {
         action: { label: t('rowMenu.undo'), onClick: () => void showRow(row) },

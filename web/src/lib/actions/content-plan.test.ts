@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
  */
 
 const BRAND = '33333333-3333-3333-3333-333333333333';
+const O9 = '99999999-9999-9999-9999-999999999999';
 
 let reads: Record<string, unknown>;
 let rpcResult: unknown;
@@ -208,15 +209,19 @@ describe('the Plan’s row marks (00229)', () => {
       { id: 'o1', title: 'Open one', decision: 'create', opportunity_score: 50, source_data: {} },
     ];
     reads['content_opportunities#id'] = [
-      { id: 'o9', title: 'Hidden one', decision: 'create', opportunity_score: 40, source_data: {} },
+      { id: O9, title: 'Hidden one', decision: 'create', opportunity_score: 40, source_data: {} },
     ];
     reads.content_plan_marks = [
-      { row_key: 'opportunity:o9', priority: false, hidden_at: '2026-10-21T10:00:00Z' },
+      { row_key: `opportunity:${O9}`, priority: false, hidden_at: '2026-10-21T10:00:00Z' },
+      // Not an opportunity's id: never read.
+      { row_key: 'opportunity:o8', priority: false, hidden_at: '2026-10-21T10:00:00Z' },
     ];
     const plan = await getContentPlan(BRAND, 30);
-    expect(plan?.opportunities.map((o) => o.id)).toEqual(['o1', 'o9']);
-    expect(plan?.marks).toEqual([{ rowKey: 'opportunity:o9', priority: false, hidden: true }]);
-    expect(filters).toContainEqual(['content_opportunities', 'in', 'id', ['o9']]);
+    expect(plan?.opportunities.map((o) => o.id)).toEqual(['o1', O9]);
+    expect(plan?.marks[0]).toEqual({ rowKey: `opportunity:${O9}`, priority: false, hidden: true });
+    expect(filters).toContainEqual(['content_opportunities', 'in', 'id', [O9]]);
+    // Only while it is still dismissed: one completed or reopened since isn't hidden.
+    expect(filters).toContainEqual(['content_opportunities', 'eq', 'status', 'dismissed']);
   });
 
   it('marks a row as a priority, as the member', async () => {
@@ -238,11 +243,7 @@ describe('the Plan’s row marks (00229)', () => {
 
   it('hides an opportunity’s row and dismisses it, keeping the status it had', async () => {
     single.content_opportunities = { status: 'reviewed' };
-    await hidePlanRow(
-      BRAND,
-      'opportunity:22222222-2222-2222-2222-222222222222',
-      '22222222-2222-2222-2222-222222222222',
-    );
+    await hidePlanRow(BRAND, 'opportunity:22222222-2222-2222-2222-222222222222');
     expect(writes[0]).toMatchObject({
       table: 'content_plan_marks',
       op: 'upsert',
@@ -259,14 +260,15 @@ describe('the Plan’s row marks (00229)', () => {
   });
 
   it('hides a page’s row without touching any opportunity', async () => {
-    await hidePlanRow(BRAND, 'page:acme.example/blog/a', null);
+    await hidePlanRow(BRAND, 'page:acme.example/blog/a');
     expect(writes[0]).toMatchObject({ value: { restore_status: null } });
     expect(updateOpportunityStatus).not.toHaveBeenCalled();
   });
 
   it('shows a row again, giving its opportunity back the status it had', async () => {
     single.content_plan_marks = { restore_status: 'sent', row_key: 'opportunity:o' };
-    await showPlanRow(BRAND, 'opportunity:o', '22222222-2222-2222-2222-222222222222');
+    single.content_opportunities = { status: 'dismissed' };
+    await showPlanRow(BRAND, 'opportunity:22222222-2222-2222-2222-222222222222');
     expect(writes).toEqual([
       {
         table: 'content_plan_marks',
@@ -280,11 +282,25 @@ describe('the Plan’s row marks (00229)', () => {
     );
   });
 
+  it('leaves an opportunity completed or reopened while hidden as it is', async () => {
+    single.content_plan_marks = { restore_status: 'new', row_key: 'opportunity:o' };
+    single.content_opportunities = { status: 'completed' };
+    await showPlanRow(BRAND, 'opportunity:22222222-2222-2222-2222-222222222222');
+    expect(writes).toEqual([
+      expect.objectContaining({ table: 'content_plan_marks', op: 'update' }),
+    ]);
+    expect(updateOpportunityStatus).not.toHaveBeenCalled();
+  });
+
   it('shows nothing it can’t write, and refuses what isn’t a row key', async () => {
-    await expect(showPlanRow(BRAND, 'page:acme.example/x', null)).rejects.toThrow('not_found');
+    await expect(showPlanRow(BRAND, 'page:acme.example/x')).rejects.toThrow('not_found');
     await expect(setPlanRowPriority('b1', 'page:x', true)).rejects.toThrow('invalid');
-    await expect(hidePlanRow(BRAND, '', null)).rejects.toThrow('invalid');
+    await expect(hidePlanRow(BRAND, '')).rejects.toThrow('invalid');
+    // The opportunity comes from the key: one without an id is refused.
+    await expect(hidePlanRow(BRAND, 'opportunity:not-an-id')).rejects.toThrow('invalid');
+    await expect(showPlanRow(BRAND, 'opportunity:not-an-id')).rejects.toThrow('invalid');
     expect(writes).toEqual([]);
+    expect(updateOpportunityStatus).not.toHaveBeenCalled();
   });
 });
 
