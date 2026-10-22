@@ -196,6 +196,11 @@ describe('getContentStartOptions', () => {
     rpcError = { code: '57014', message: 'canceling statement due to statement timeout' };
     await expect(getContentStartOptions(BRAND)).rejects.toThrow('statement timeout');
   });
+
+  it('throws on a payload the schema doesn’t know, rather than list no prompts', async () => {
+    rpcRows = { prompts: 'not a list', seen: 'x' };
+    await expect(getContentStartOptions(BRAND)).rejects.toThrow();
+  });
 });
 
 describe('createContentDraft', () => {

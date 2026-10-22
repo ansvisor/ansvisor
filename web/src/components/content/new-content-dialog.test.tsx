@@ -223,6 +223,31 @@ describe('New content', () => {
     );
   });
 
+  it('says no prompt matches on a search miss, not that every prompt is seen', async () => {
+    getContentStartOptions.mockResolvedValue({
+      ...OPTIONS,
+      prompts: [
+        { id: 'p1', text: 'best crm for realtors', seen: false },
+        { id: 'p2', text: 'crm pricing', seen: true },
+      ],
+      promptsSeen: 1,
+    });
+    await render();
+    await click(tab('Prompt'));
+    await click(button('Pick a tracked prompt'));
+    const search = document.querySelector<HTMLInputElement>('input[placeholder="Search prompts"]')!;
+    const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!;
+    await act(async () => {
+      setValue.call(search, 'zzz no such prompt');
+      search.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    expect(document.querySelectorAll('[role="option"]')).toHaveLength(0);
+    expect(document.body.textContent).toContain('No tracked prompts.');
+    expect(document.body.textContent).not.toContain(
+      'AI already names or cites you for every tracked prompt',
+    );
+  });
+
   it('names the page by the opportunity’s brief title when it has one', async () => {
     await render();
     await click(button('Pick a content opportunity'));

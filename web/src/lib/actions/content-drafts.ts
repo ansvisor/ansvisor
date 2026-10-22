@@ -267,9 +267,11 @@ async function readStartPrompts(
   });
   if (read.error?.code !== 'PGRST202') {
     if (read.error) throw new Error(read.error.message);
-    const parsed = startPromptsSchema.safeParse(read.data);
-    // Null: not the member's brand.
-    return parsed.success ? parsed.data : { prompts: [], seen: 0 };
+    // Null: not the member's brand. Any other shape is drift between the
+    // function and this schema, which throws (New content says it couldn't
+    // load) rather than empty the picker.
+    if (read.data === null) return { prompts: [], seen: 0 };
+    return startPromptsSchema.parse(read.data);
   }
   const { data, error } = await supabase
     .from('prompts')

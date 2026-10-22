@@ -752,7 +752,8 @@ export function NewContentDialog({
                       <ComboboxInput placeholder={t(`sources.${kind}.search`)} />
                       <ComboboxList>
                         <ComboboxEmpty>
-                          {kind === 'prompt' && options?.promptsSeen
+                          {/* "All seen" only when nothing is left to list, not on a search miss. */}
+                          {kind === 'prompt' && items.length === 0 && options?.promptsSeen
                             ? t('sources.prompt.allSeen')
                             : t(`sources.${kind}.empty`)}
                         </ComboboxEmpty>
