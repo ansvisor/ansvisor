@@ -44,15 +44,45 @@ export function useSidePanelOpen(): [boolean, () => void] {
   return [open, toggle];
 }
 
-const PANEL_TABS = ['impact', 'brief', 'sources', 'rules'] as const;
+// Rules first: what to act on before anything else (the user's call over the
+// spec's Impact-first order); the panel opens on it.
+const PANEL_TABS = ['rules', 'brief', 'sources', 'impact'] as const;
 export type PanelTab = (typeof PANEL_TABS)[number];
+
+/**
+ * The panel's tabs while it is closed, down the editor's right edge, so the
+ * panel is never out of sight (it starts closed on a narrow window). A tab
+ * opens the panel on it.
+ */
+export function EditorPanelRail({ onOpen }: { onOpen: (tab: PanelTab) => void }) {
+  const t = useTranslations('contentEditor.editor.panel');
+  return (
+    <nav
+      aria-label={t('label')}
+      className="flex w-9 shrink-0 flex-col items-center gap-1 border-l bg-card py-2"
+    >
+      {PANEL_TABS.map((value) => (
+        <button
+          key={value}
+          type="button"
+          onClick={() => onOpen(value)}
+          title={t('openTab', { tab: t(`tabs.${value}`) })}
+          className="rounded-md px-1.5 py-2.5 text-xs font-medium text-muted-foreground transition-colors [writing-mode:vertical-rl] hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none"
+        >
+          {t(`tabs.${value}`)}
+        </button>
+      ))}
+    </nav>
+  );
+}
 
 /**
  * The editor's right panel (Content Editor spec v2 §6), 400px beside the page.
  * The spec's tabs are Impact · Chat · Brief · Sources · Rules; each joins the
  * panel with the update that makes it work: Impact (CE-016), Brief (CE-007),
- * Sources (CE-008) and Rules (CE-009). A tab opened once stays mounted, so switching back
- * keeps it as it was. The brief and the sources are the editor's one read
+ * Sources (CE-008) and Rules (CE-009). Rules comes first and the panel opens
+ * on it; each other tab mounts (and reads) when first opened, and stays
+ * mounted, so switching back keeps it as it was. The brief and the sources are the editor's one read
  * (useDraftReads), which the rules check against too: Sources' "Rebuild with
  * selection" and Impact's "Use lost prompts" rebuild the brief, and open it.
  */
@@ -81,8 +111,8 @@ export function EditorSidePanel({
   agentFix?: AgentFix;
 }) {
   const t = useTranslations('contentEditor.editor.panel');
-  const [tab, setTab] = useState<PanelTab>('impact');
-  const [opened, setOpened] = useState<Set<PanelTab>>(() => new Set(['impact']));
+  const [tab, setTab] = useState<PanelTab>('rules');
+  const [opened, setOpened] = useState<Set<PanelTab>>(() => new Set(['rules']));
   const page = useRef<PageNow>({ title, html: bodyHtml, length: rules.length });
   const sourcesNow = useRef(reads.sources);
   useEffect(() => {
@@ -131,14 +161,6 @@ export function EditorSidePanel({
         </TabsList>
       </Tabs>
       <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
-        <div hidden={tab !== 'impact'}>
-          <ImpactTab
-            brandId={draft.brandId}
-            pageUrl={draft.sourceUrl}
-            rebuilding={rebuilding}
-            onUseLostPrompts={(promptIds) => void rebuild({ addPrompts: promptIds })}
-          />
-        </div>
         {briefOpened && (
           <div hidden={tab !== 'brief'}>
             <BriefTab
@@ -177,6 +199,16 @@ export function EditorSidePanel({
               state={rules}
               siteType={draft.siteType}
               draftPageType={isPageType(pageType) ? pageType : null}
+            />
+          </div>
+        )}
+        {opened.has('impact') && (
+          <div hidden={tab !== 'impact'}>
+            <ImpactTab
+              brandId={draft.brandId}
+              pageUrl={draft.sourceUrl}
+              rebuilding={rebuilding}
+              onUseLostPrompts={(promptIds) => void rebuild({ addPrompts: promptIds })}
             />
           </div>
         )}

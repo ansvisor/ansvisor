@@ -70,7 +70,7 @@ import { HtmlBlock, copyToClipboard } from './_html-block';
 import { OwnCopies, ownCopyHtml } from './_own-copies';
 import { PageTypeMenu } from './_page-type-menu';
 import { ruleStatusText, type AgentFix } from './_rules-tab';
-import { EditorSidePanel, useSidePanelOpen } from './_side-panel';
+import { EditorPanelRail, EditorSidePanel, useSidePanelOpen, type PanelTab } from './_side-panel';
 import {
   AgentSuggestions,
   acceptInto,
@@ -192,8 +192,13 @@ export function DraftEditor({
   const [dragging, setDragging] = useState(false);
   const dragDepth = useRef(0);
   const [panelOpen, togglePanel] = useSidePanelOpen();
-  // The header's rules chip opens the panel on Rules.
-  const [tabRequest, setTabRequest] = useState<{ tab: 'rules'; n: number } | null>(null);
+  // The header's rules chip opens the panel on Rules, and the closed panel's
+  // strip on the tab picked there.
+  const [tabRequest, setTabRequest] = useState<{ tab: PanelTab; n: number } | null>(null);
+  const openPanelTab = (tab: PanelTab) => {
+    if (!panelOpen) togglePanel();
+    setTabRequest((prev) => ({ tab, n: (prev?.n ?? 0) + 1 }));
+  };
 
   const editor = useEditor({
     extensions: [
@@ -793,21 +798,78 @@ export function DraftEditor({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      {/* One line at any width: the title shortens, the tags give way on a
-          narrow window, and the save state and Mark ready never move. */}
-      <header className="flex items-center gap-2.5 border-b px-4 py-2.5">
-        <Link
-          href={CONTENT_LIBRARY_PATH}
-          aria-label={t('back')}
-          title={t('back')}
-          className={buttonVariants({ variant: 'ghost', size: 'icon-sm' })}
-        >
-          <ArrowLeft className="h-4 w-4" />
-        </Link>
-        <h1 className="min-w-0 truncate text-sm font-medium" title={title.trim() || undefined}>
-          {title.trim() || t('untitled')}
-        </h1>
-        <div className="hidden shrink-0 items-center gap-2 lg:flex">
+      {/* Two lines: the title and what you do with the page on top, which
+          stays light (the title shortens, the save state and Mark ready never
+          move), and the page's tags under the title, all of them at any width. */}
+      <header className="border-b px-4 pt-2.5 pb-2">
+        <div className="flex items-center gap-2.5">
+          <Link
+            href={CONTENT_LIBRARY_PATH}
+            aria-label={t('back')}
+            title={t('back')}
+            className={buttonVariants({ variant: 'ghost', size: 'icon-sm' })}
+          >
+            <ArrowLeft className="h-4 w-4" />
+          </Link>
+          <h1 className="min-w-0 truncate text-sm font-medium" title={title.trim() || undefined}>
+            {title.trim() || t('untitled')}
+          </h1>
+          <div className="ml-auto flex shrink-0 items-center gap-3">
+            <SaveIndicator state={autosave.state} onRetry={() => void autosave.retry()} />
+            <HistoryMenu
+              draftId={draft.id}
+              disabled={
+                htmlSource !== null
+                  ? t('history.htmlOpen')
+                  : restoring
+                    ? t('history.restoring')
+                    : null
+              }
+              onRestore={(version, label) => void restoreVersion(version, label)}
+            />
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={copyPageHtml}
+              title={t('copyHtmlHint')}
+              aria-label={t('copyHtml')}
+            >
+              <Copy className="h-3.5 w-3.5" />
+              <span className="hidden xl:inline">{t('copyHtml')}</span>
+            </Button>
+            <Button
+              size="sm"
+              // A page that can't be saved can't be marked ready; the save state says why.
+              disabled={
+                !canMarkReady ||
+                marking ||
+                autosave.state === 'conflict' ||
+                autosave.state === 'too_large'
+              }
+              onClick={markReady}
+            >
+              {marking ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                !canMarkReady && <Check className="h-3.5 w-3.5" />
+              )}
+              {t('markReady')}
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              aria-pressed={panelOpen}
+              aria-label={panelOpen ? t('panel.hide') : t('panel.show')}
+              title={panelOpen ? t('panel.hide') : t('panel.show')}
+              onClick={togglePanel}
+              className={cn(panelOpen && 'bg-muted')}
+            >
+              <PanelRight className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+        {/* Lined up under the title (the back button's 28px and the 10px gap). */}
+        <div className="mt-1.5 flex flex-wrap items-center gap-2 pl-[38px]">
           <PageTypeMenu
             brandId={draft.brandId}
             siteType={draft.siteType}
@@ -818,97 +880,31 @@ export function DraftEditor({
             onPick={(type) => void pickPageType(type)}
           />
           <DraftMethodBadge method={draft.method} />
-        </div>
-        <span className="shrink-0">
           <DraftStatusBadge status={status} />
-        </span>
-        <button
-          type="button"
-          onClick={() => {
-            if (!panelOpen) togglePanel();
-            setTabRequest((prev) => ({ tab: 'rules', n: (prev?.n ?? 0) + 1 }));
-          }}
-          title={t('rulesChipHint')}
-          aria-label={t('rulesChip', { met: rules.met, total: rules.total })}
-          className={cn(
-            'inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2 py-0.5 text-xs font-medium',
-            rules.total > 0 && rules.met === rules.total
-              ? 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950 dark:text-emerald-300'
-              : 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-300',
-          )}
-        >
-          <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-current" />
-          {/* Short on a narrow window, so the header stays one line. */}
-          <span aria-hidden className="hidden xl:inline">
-            {t('rulesChip', { met: rules.met, total: rules.total })}
-          </span>
-          <span aria-hidden className="xl:hidden">
-            {t('rulesChipShort', { met: rules.met, total: rules.total })}
-          </span>
-        </button>
-        {/* Wide windows only: the page's green lines show them anyway, and
-            the header stays one line at 1024px. */}
-        {citedCount > 0 && (
-          <span
-            title={t('cited.chipHint')}
-            className="hidden shrink-0 items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700 xl:inline-flex dark:border-emerald-900 dark:bg-emerald-950 dark:text-emerald-300"
+          <button
+            type="button"
+            onClick={() => openPanelTab('rules')}
+            title={t('rulesChipHint')}
+            aria-label={t('rulesChip', { met: rules.met, total: rules.total })}
+            className={cn(
+              'inline-flex h-5 shrink-0 items-center gap-1.5 rounded-full border px-2 text-xs font-medium',
+              rules.total > 0 && rules.met === rules.total
+                ? 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950 dark:text-emerald-300'
+                : 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-300',
+            )}
           >
             <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-current" />
-            {t('cited.chip', { count: citedCount })}
-          </span>
-        )}
-        <div className="ml-auto flex shrink-0 items-center gap-3">
-          <SaveIndicator state={autosave.state} onRetry={() => void autosave.retry()} />
-          <HistoryMenu
-            draftId={draft.id}
-            disabled={
-              htmlSource !== null
-                ? t('history.htmlOpen')
-                : restoring
-                  ? t('history.restoring')
-                  : null
-            }
-            onRestore={(version, label) => void restoreVersion(version, label)}
-          />
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={copyPageHtml}
-            title={t('copyHtmlHint')}
-            aria-label={t('copyHtml')}
-          >
-            <Copy className="h-3.5 w-3.5" />
-            <span className="hidden xl:inline">{t('copyHtml')}</span>
-          </Button>
-          <Button
-            size="sm"
-            // A page that can't be saved can't be marked ready; the save state says why.
-            disabled={
-              !canMarkReady ||
-              marking ||
-              autosave.state === 'conflict' ||
-              autosave.state === 'too_large'
-            }
-            onClick={markReady}
-          >
-            {marking ? (
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-            ) : (
-              !canMarkReady && <Check className="h-3.5 w-3.5" />
-            )}
-            {t('markReady')}
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            aria-pressed={panelOpen}
-            aria-label={panelOpen ? t('panel.hide') : t('panel.show')}
-            title={panelOpen ? t('panel.hide') : t('panel.show')}
-            onClick={togglePanel}
-            className={cn(panelOpen && 'bg-muted')}
-          >
-            <PanelRight className="h-4 w-4" />
-          </Button>
+            {t('rulesChip', { met: rules.met, total: rules.total })}
+          </button>
+          {citedCount > 0 && (
+            <span
+              title={t('cited.chipHint')}
+              className="inline-flex h-5 shrink-0 items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-2 text-xs font-medium text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950 dark:text-emerald-300"
+            >
+              <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-current" />
+              {t('cited.chip', { count: citedCount })}
+            </span>
+          )}
         </div>
       </header>
 
@@ -1041,7 +1037,7 @@ export function DraftEditor({
           </div>
           {attachments.ui}
         </div>
-        {panelOpen && (
+        {panelOpen ? (
           <EditorSidePanel
             draft={draft}
             title={title}
@@ -1052,6 +1048,8 @@ export function DraftEditor({
             tabRequest={tabRequest}
             agentFix={agentFix}
           />
+        ) : (
+          <EditorPanelRail onOpen={openPanelTab} />
         )}
       </div>
 
