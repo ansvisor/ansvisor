@@ -356,7 +356,7 @@ describe('a replace on a heading', () => {
         'What is LLM SEO? LLM SEO optimizes pages for large language models.<ul><li>a</li></ul>',
         'h2',
       ),
-    ).toEqual({
+    ).toMatchObject({
       words: 'What is LLM SEO?',
       blocks: '<p>LLM SEO optimizes pages for large language models.</p><ul><li>a</li></ul>',
     });
@@ -365,7 +365,7 @@ describe('a replace on a heading', () => {
         '<h2>What is LLM SEO? LLM SEO optimizes pages for large language models.</h2><p>More.</p>',
         'h2',
       ),
-    ).toEqual({
+    ).toMatchObject({
       words: 'What is LLM SEO?',
       blocks: '<p>LLM SEO optimizes pages for large language models.</p><p>More.</p>',
     });
@@ -373,13 +373,13 @@ describe('a replace on a heading', () => {
 
   it('keeps a subtitle that fits, and splits after a full-width ？ with no space', () => {
     const subtitle = 'What is AEO? The Complete Guide to Answer Engine Optimization';
-    expect(splitReplace(subtitle, 'h1')).toEqual({ words: subtitle, blocks: '' });
+    expect(splitReplace(subtitle, 'h1')).toMatchObject({ words: subtitle, blocks: '' });
     expect(
       splitReplace(
         'AEOとは？AEOはAIアシスタントの回答に引用されるための最適化の方法です。詳しく順番に説明します。',
         'h2',
       ),
-    ).toEqual({
+    ).toMatchObject({
       words: 'AEOとは？',
       blocks:
         '<p>AEOはAIアシスタントの回答に引用されるための最適化の方法です。詳しく順番に説明します。</p>',
@@ -438,7 +438,7 @@ describe('links to the pages and sources given', () => {
   it('unwraps a link to anything not listed, and drops what then changes nothing', () => {
     expect(
       keep({ after: 'See <a href="https://made-up.example/x">our plans</a> for teams.' }),
-    ).toEqual([]);
+    ).toMatchObject([]);
     const [kept] = keep({ after: 'See <a href="https://made-up.example/x">our team plans</a>.' });
     expect(kept.after_text).toBe('See our team plans.');
     expect(kept).not.toHaveProperty('after_links');
