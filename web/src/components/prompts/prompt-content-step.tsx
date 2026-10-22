@@ -23,12 +23,19 @@ export function PromptContentStep({
   summary,
   citedPage,
   onStart,
+  recheck = 0,
 }: {
   brandId: string;
   prompt: { id: string; text: string };
   summary: PositionsSummary;
   citedPage: CitedPage | null;
   onStart: (preset: DialogPreset) => void;
+  /**
+   * Changes when Start sent a draft to the Agent or the Team and the panel
+   * stayed open: the lookup runs again, so the step offers Open draft rather
+   * than a second draft.
+   */
+  recheck?: number;
 }) {
   const t = useTranslations('prompts.content');
   const router = useRouter();
@@ -46,7 +53,7 @@ export function PromptContentStep({
     return () => {
       cancelled = true;
     };
-  }, [brandId, prompt.id, wanted]);
+  }, [brandId, prompt.id, wanted, recheck]);
 
   if (!step) return null;
   const draftId = draft?.promptId === prompt.id ? draft.id : undefined;

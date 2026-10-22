@@ -2782,6 +2782,9 @@ function AllPromptsTab({
   const [positionsTab, setPositionsTab] = useState<'platforms' | 'improve'>('platforms');
   // New content › Start for a prompt, from its row menu or its Improve tab.
   const [contentPreset, setContentPreset] = useState<DialogPreset | null>(null);
+  // Bumped when Start sends a draft to the Agent or the Team and the panel
+  // stays open, so its content step looks for that draft again.
+  const [contentSent, setContentSent] = useState(0);
   const activeBrand = useBrandStore((s) => s.brands.find((b) => b.id === s.activeBrandId));
   const prompts = useMemo(
     () => allRows.filter((p) => !pendingDeletes.has(p.id)),
@@ -3944,6 +3947,7 @@ function AllPromptsTab({
         onClose={() => contentPreset === null && setPositionsId(null)}
         brandId={activeBrandId}
         onStartContent={setContentPreset}
+        contentSent={contentSent}
       />
       <NewContentDialog
         open={contentPreset !== null}
@@ -3951,6 +3955,7 @@ function AllPromptsTab({
         brandId={activeBrandId}
         siteType={siteTypeOf(activeBrand ?? {})}
         preset={contentPreset}
+        onSent={() => setContentSent((n) => n + 1)}
       />
       <Dialog open={confirmDelete !== null} onOpenChange={(v) => !v && setConfirmDelete(null)}>
         <DialogContent className="sm:max-w-md">

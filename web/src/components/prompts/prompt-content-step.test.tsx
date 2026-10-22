@@ -43,7 +43,7 @@ let container: HTMLDivElement;
 let root: Root;
 const onStart = vi.fn();
 
-async function render(s: PositionsSummary, citedPage: CitedPage | null = null) {
+async function render(s: PositionsSummary, citedPage: CitedPage | null = null, recheck = 0) {
   await act(async () =>
     root.render(
       <NextIntlClientProvider locale="en" messages={messages}>
@@ -53,6 +53,7 @@ async function render(s: PositionsSummary, citedPage: CitedPage | null = null) {
           summary={s}
           citedPage={citedPage}
           onStart={onStart}
+          recheck={recheck}
         />
       </NextIntlClientProvider>,
     ),
@@ -111,6 +112,18 @@ describe('PromptContentStep', () => {
     await act(async () => button().click());
     expect(push).toHaveBeenCalledWith('/dashboard/content/editor/d7');
     expect(onStart).not.toHaveBeenCalled();
+  });
+
+  // Start sent to the Agent or the Team closes over the panel, which stays
+  // open: the step must not offer a second draft.
+  it('looks for the draft again once Start sent one, and opens it then', async () => {
+    const lost = summary({ mentionedAnswers: 0, citedAnswers: 0 });
+    await render(lost);
+    expect(button().textContent).toBe('Create content');
+    getDraftForPrompt.mockResolvedValue('d9');
+    await render(lost, null, 1);
+    expect(getDraftForPrompt).toHaveBeenCalledTimes(2);
+    expect(button().textContent).toBe('Open draft');
   });
 
   it('shows nothing, and looks up nothing, when the prompt does well', async () => {

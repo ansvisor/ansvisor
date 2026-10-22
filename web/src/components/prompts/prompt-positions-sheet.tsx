@@ -91,6 +91,8 @@ interface Props {
   brandId?: string;
   /** Opens New content › Start for the prompt; without it the Improve tab offers no content step. */
   onStartContent?: (preset: DialogPreset) => void;
+  /** Bumped when Start sent a draft (Agent or Team): the content step looks for it again. */
+  contentSent?: number;
 }
 
 const DAYS_PAGE = 10;
@@ -144,6 +146,7 @@ export function PromptPositionsSheet({
   onClose,
   brandId,
   onStartContent,
+  contentSent = 0,
 }: Props) {
   const preset = range.preset;
   // A range change asked for while the Improve tab has unsent edits waits here
@@ -198,6 +201,7 @@ export function PromptPositionsSheet({
         summary={loaded.summary}
         citedPage={loaded.citedPage}
         onStart={onStartContent}
+        recheck={contentSent}
       />
     ) : null;
 
