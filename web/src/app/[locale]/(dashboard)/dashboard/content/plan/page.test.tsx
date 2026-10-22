@@ -502,13 +502,13 @@ describe('a Plan row’s menu', () => {
   it('hides a row, with an undo, and lists the hidden rows to show again', async () => {
     await renderPage();
     await clickItem('Office coffee subscriptions', 'Hide from the plan');
-    expect(hidePlanRow).toHaveBeenCalledWith('brand-1', 'opportunity:o1', 'o1');
+    expect(hidePlanRow).toHaveBeenCalledWith('brand-1', 'opportunity:o1');
     expect(getContentPlan).toHaveBeenCalledTimes(2);
     expect(toast).toHaveBeenCalledWith('Hidden: Office coffee subscriptions', {
       action: { label: 'Undo', onClick: expect.any(Function) },
     });
     await act(async () => toast.mock.calls[0][1].action.onClick());
-    expect(showPlanRow).toHaveBeenCalledWith('brand-1', 'opportunity:o1', 'o1');
+    expect(showPlanRow).toHaveBeenCalledWith('brand-1', 'opportunity:o1');
 
     getContentPlan.mockResolvedValue({
       ...PLAN,
@@ -524,7 +524,7 @@ describe('a Plan row’s menu', () => {
     expect(hidden.textContent).toBe('Office coffee subscriptionsShow again');
     showPlanRow.mockClear();
     await act(async () => hidden.querySelector('button')!.click());
-    expect(showPlanRow).toHaveBeenCalledWith('brand-1', 'opportunity:o1', 'o1');
+    expect(showPlanRow).toHaveBeenCalledWith('brand-1', 'opportunity:o1');
     expect(button('1 hidden row · Hide').getAttribute('aria-expanded')).toBe('true');
   });
 
