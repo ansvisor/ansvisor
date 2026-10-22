@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { usePathname, Link } from '@/i18n/navigation';
 import { dashboardNav } from '@/config/dashboard';
+import { BrandSwitcher } from '@/components/layout/brand-switcher';
 import {
   activeChildHref,
   getDashboardNavLabel,
@@ -27,7 +28,6 @@ export function MobileNav() {
   const [open, setOpen] = useState(false);
   const pathname = usePathname();
   const t = useTranslations('nav');
-  const tBrands = useTranslations('brands');
   const { canUse, requiredPlanFor, isCloud } = useFeatureGate();
   // Probe once per session — shares the module-level cache with sidebar.tsx
   // so at most one network request is made even when both components mount.
@@ -72,6 +72,11 @@ export function MobileNav() {
           {/* Left of the sheet's close button, which sits at its top right. */}
           <ThemeToggle className="ml-auto mr-8" />
         </div>
+        {/* The brand switcher, as the sidebar has it: the brands page and the
+            brand's settings are reached from it. */}
+        <div className="border-b px-3 py-2">
+          <BrandSwitcher onNavigate={() => setOpen(false)} />
+        </div>
         <div className="min-h-0 flex-1 overflow-y-auto">
           <nav className="space-y-0.5 p-3">
             {activeBrandId && (
@@ -102,7 +107,7 @@ export function MobileNav() {
                   item.href === '/dashboard'
                     ? pathname === '/dashboard'
                     : pathname.startsWith(item.href);
-                const label = getDashboardNavLabel(item.title, t, tBrands);
+                const label = getDashboardNavLabel(item.title, t);
 
                 // Dynamic badge override: show "Set up" on the Agent item
                 // when the org has no provider key for Chat (cloud only).
@@ -171,7 +176,7 @@ export function MobileNav() {
                                 : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground',
                             )}
                           >
-                            {getDashboardNavLabel(child.title, t, tBrands)}
+                            {getDashboardNavLabel(child.title, t)}
                             {child.badge && (
                               <Badge
                                 variant="secondary"

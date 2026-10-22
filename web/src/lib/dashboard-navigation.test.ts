@@ -9,7 +9,6 @@ import {
 } from '@/lib/dashboard-navigation';
 
 const translateNav = (key: string) => `nav.${key}`;
-const translateBrands = (key: string) => `brands.${key}`;
 
 describe('getDashboardNavLabel', () => {
   it('maps every dashboard item through an i18n key', () => {
@@ -20,7 +19,7 @@ describe('getDashboardNavLabel', () => {
     expect(Object.keys(dashboardNavLabelKeys).sort()).toEqual([...titles].sort());
 
     for (const title of titles) {
-      expect(getDashboardNavLabel(title, translateNav, translateBrands)).not.toBe(title);
+      expect(getDashboardNavLabel(title, translateNav)).not.toBe(title);
     }
   });
 
@@ -57,13 +56,12 @@ describe('getDashboardNavLabel', () => {
     ]);
   });
 
-  it('uses the brands namespace only for Brands', () => {
-    expect(getDashboardNavLabel('Brands', translateNav, translateBrands)).toBe('brands.title');
-    expect(getDashboardNavLabel('Shopping', translateNav, translateBrands)).toBe('nav.shopping');
+  it('reads each title from the nav namespace', () => {
+    expect(getDashboardNavLabel('Shopping', translateNav)).toBe('nav.shopping');
   });
 
   it('leaves an unknown title unchanged', () => {
-    expect(getDashboardNavLabel('Unknown', translateNav, translateBrands)).toBe('Unknown');
+    expect(getDashboardNavLabel('Unknown', translateNav)).toBe('Unknown');
   });
 });
 
@@ -97,15 +95,18 @@ describe('the Mentions item', () => {
 // New Ansvisor: Execution (do the work) above Analytics (measure it); the
 // Optimization group is gone, its items moved under Execution.
 describe('the sidebar groups', () => {
-  it('runs Brands, Execution, Analytics, then Reports', () => {
+  it('runs Execution, Analytics, then Reports', () => {
     expect(dashboardNav.map((group) => group.title ?? null)).toEqual([
-      null,
       'Execution',
       'Analytics',
       null,
     ]);
-    expect(dashboardNav[0].items.map((item) => item.title)).toEqual(['Brands']);
-    expect(dashboardNav[3].items.map((item) => item.title)).toEqual(['Reports']);
+    expect(dashboardNav[2].items.map((item) => item.title)).toEqual(['Reports']);
+  });
+
+  it('leaves the brands page to the brand switcher', () => {
+    const hrefs = dashboardNav.flatMap((group) => group.items.map((item) => item.href));
+    expect(hrefs).not.toContain('/dashboard/brands');
   });
 
   it('puts Action Center, Chat, Content and Audit under Execution, in that order', () => {

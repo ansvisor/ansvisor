@@ -2,32 +2,29 @@ import type { BrandPrefKey, NavChild, NavItem } from '@/config/dashboard';
 
 type Translator = (key: string) => string;
 
-type NavLabelKey = { namespace: 'nav'; key: string } | { namespace: 'brands'; key: 'title' };
-
 /** Every dashboard title rendered from dashboardNav is resolved through this
  * map. Keeping it outside either layout component prevents the desktop and
  * mobile menus from silently falling out of sync. */
-export const dashboardNavLabelKeys: Record<string, NavLabelKey> = {
-  Brands: { namespace: 'brands', key: 'title' },
-  Chat: { namespace: 'nav', key: 'chat' },
-  'Action Center': { namespace: 'nav', key: 'actionCenter' },
-  'Answer Engine Insights': { namespace: 'nav', key: 'insights' },
-  'AI Referral Traffic': { namespace: 'nav', key: 'traffic' },
-  Prompts: { namespace: 'nav', key: 'prompts' },
-  'Tracked Prompts': { namespace: 'nav', key: 'trackedPrompts' },
-  'Prompt Suggestions': { namespace: 'nav', key: 'promptSuggestions' },
-  Topics: { namespace: 'nav', key: 'topics' },
-  'Query Fan-outs': { namespace: 'nav', key: 'queryFanouts' },
-  'Prompts Insights': { namespace: 'nav', key: 'promptsInsights' },
-  Content: { namespace: 'nav', key: 'content' },
-  Plan: { namespace: 'nav', key: 'contentPlan' },
-  Opportunities: { namespace: 'nav', key: 'contentOpportunities' },
-  Library: { namespace: 'nav', key: 'contentLibrary' },
-  'Site Audit': { namespace: 'nav', key: 'audit' },
-  Citations: { namespace: 'nav', key: 'citations' },
-  Mentions: { namespace: 'nav', key: 'mentions' },
-  Shopping: { namespace: 'nav', key: 'shopping' },
-  Reports: { namespace: 'nav', key: 'reports' },
+export const dashboardNavLabelKeys: Record<string, string> = {
+  Chat: 'chat',
+  'Action Center': 'actionCenter',
+  'Answer Engine Insights': 'insights',
+  'AI Referral Traffic': 'traffic',
+  Prompts: 'prompts',
+  'Tracked Prompts': 'trackedPrompts',
+  'Prompt Suggestions': 'promptSuggestions',
+  Topics: 'topics',
+  'Query Fan-outs': 'queryFanouts',
+  'Prompts Insights': 'promptsInsights',
+  Content: 'content',
+  Plan: 'contentPlan',
+  Opportunities: 'contentOpportunities',
+  Library: 'contentLibrary',
+  'Site Audit': 'audit',
+  Citations: 'citations',
+  Mentions: 'mentions',
+  Shopping: 'shopping',
+  Reports: 'reports',
 };
 
 /** Map from the static group title string in dashboard.ts to its nav key. */
@@ -43,11 +40,9 @@ export function getDashboardNavGroupLabel(title: string, t: Translator): string 
   return key ? t(key) : title;
 }
 
-export function getDashboardNavLabel(title: string, t: Translator, tBrands: Translator): string {
-  const label = dashboardNavLabelKeys[title];
-  if (!label) return title;
-
-  return label.namespace === 'brands' ? tBrands(label.key) : t(label.key);
+export function getDashboardNavLabel(title: string, t: Translator): string {
+  const key = dashboardNavLabelKeys[title];
+  return key ? t(key) : title;
 }
 
 /**
