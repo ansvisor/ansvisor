@@ -34,3 +34,79 @@ export function pageTypeFormat(pageType) {
   if (!pageType) return 'not set';
   return Object.hasOwn(PAGE_TYPE_FORMATS, pageType) ? PAGE_TYPE_FORMATS[pageType] : pageType;
 }
+
+/** Kinds of site (brands.site_type, 00205), as web/src/lib/content/page-types.ts has them. */
+export const SITE_TYPES = ['b2b', 'ecommerce', 'b2c'];
+
+/** Each kind of site as Brand settings names it (web/messages/en.json, siteTypes). */
+export const SITE_TYPE_NAMES = { b2b: 'B2B SaaS', ecommerce: 'E-commerce', b2c: 'B2C' };
+
+/** The page types each kind of site writes, in the order the editor offers them. */
+export const SITE_PAGE_TYPES = {
+  b2b: [
+    'feature_page',
+    'solution_page',
+    'comparison',
+    'alternatives',
+    'best_of',
+    'guide',
+    'definition',
+    'integration',
+    'pricing',
+    'docs_faq',
+    'blog_post',
+  ],
+  ecommerce: [
+    'product_page',
+    'category_page',
+    'collection_page',
+    'buying_guide',
+    'best_of',
+    'comparison',
+    'alternatives',
+    'guide',
+    'definition',
+    'sizing_guide',
+    'help_faq',
+    'policy',
+    'blog_post',
+  ],
+  b2c: [
+    'destination_page',
+    'itinerary',
+    'guide',
+    'best_of',
+    'comparison',
+    'definition',
+    'help_faq',
+    'blog_post',
+  ],
+};
+
+/** Industries that point away from B2B, as the editor guesses them. */
+const INDUSTRY_SITE_TYPES = {
+  'E-commerce & Retail': 'ecommerce',
+  'Fashion & Apparel': 'ecommerce',
+  'Consumer Goods': 'ecommerce',
+  'Food & Beverage': 'ecommerce',
+  Automotive: 'ecommerce',
+  'Travel & Hospitality': 'b2c',
+};
+
+/**
+ * The brand's kind of site: the one picked in Brand settings, else the
+ * editor's guess (a shop when Shopping mode is on, else by industry, and B2B
+ * when nothing says otherwise).
+ *
+ * @param {{ siteType?: string|null, industry?: string|null, shoppingModeEnabled?: boolean|null }} brand
+ */
+export function siteTypeOf({ siteType, industry, shoppingModeEnabled } = {}) {
+  if (SITE_TYPES.includes(siteType)) return siteType;
+  if (shoppingModeEnabled) return 'ecommerce';
+  return Object.hasOwn(INDUSTRY_SITE_TYPES, industry ?? '') ? INDUSTRY_SITE_TYPES[industry] : 'b2b';
+}
+
+/** The page types this kind of site writes, one a line with its format, for a model prompt. */
+export function sitePageTypeLines(siteType) {
+  return SITE_PAGE_TYPES[siteType].map((type) => `- ${type}: ${pageTypeFormat(type)}`).join('\n');
+}

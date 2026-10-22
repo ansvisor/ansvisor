@@ -173,13 +173,16 @@ async function fetchDailyInsightTotals(brandId: string) {
         total_citations?: number;
         positive_count?: number;
         mentioning_results?: number;
+        mention_results?: number;
       };
       return {
         date: day,
         mentions: Number(agg.total_mentions ?? 0),
         citations: Number(agg.total_citations ?? 0),
         positive: Number(agg.positive_count ?? 0),
-        mentioning: Number(agg.mentioning_results ?? 0),
+        // Answers naming the brand, the card's base (00191; before it, the
+        // answers naming or citing it).
+        named: Number(agg.mention_results ?? agg.mentioning_results ?? 0),
       };
     }),
   );
@@ -236,8 +239,8 @@ function buildSnapshot(
       // A day without an answer naming the brand has no share; it is left
       // out rather than drawn as 0%.
       trend = metrics.dailyTotals
-        .filter((d) => d.mentioning > 0)
-        .map((d) => ({ date: d.date, value: Math.round((d.positive * 100) / d.mentioning) }));
+        .filter((d) => d.named > 0)
+        .map((d) => ({ date: d.date, value: Math.round((d.positive * 100) / d.named) }));
       break;
     }
     case 'share_of_voice': {

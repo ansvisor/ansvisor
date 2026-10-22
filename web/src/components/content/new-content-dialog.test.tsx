@@ -21,6 +21,57 @@ vi.mock('@/lib/actions/content-drafts', () => ({
   getContentOverlap: (...args: unknown[]) => getContentOverlap(...args),
 }));
 // What the agent is given is agent-write.test.ts's; here, that Start hands it over.
+const listMembers = vi.fn();
+vi.mock('@/lib/actions/team', () => ({
+  listMembers: (...args: unknown[]) => listMembers(...args),
+}));
+const assignAction = vi.fn();
+vi.mock('@/lib/actions/action-center', () => ({
+  assignAction: (...args: unknown[]) => assignAction(...args),
+}));
+// Team's assignee picker as a native select: Base UI's popup doesn't open in jsdom.
+vi.mock('@/components/ui/select', () => ({
+  Select: ({
+    value,
+    onValueChange,
+    children,
+  }: {
+    value: string | null;
+    onValueChange: (value: string | null) => void;
+    children: React.ReactNode;
+  }) => (
+    <select data-select value={value ?? ''} onChange={(e) => onValueChange(e.target.value || null)}>
+      <option value="" />
+      {children}
+    </select>
+  ),
+  SelectTrigger: () => null,
+  SelectValue: () => null,
+  SelectContent: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+  SelectItem: ({ value, children }: { value: string; children: React.ReactNode }) => (
+    <option value={value}>{children}</option>
+  ),
+}));
+const MEMBERS = [
+  {
+    userId: 'u1',
+    email: 'me@northwind.example',
+    fullName: 'Mia Chen',
+    avatarUrl: null,
+    role: 'admin',
+    createdAt: '2026-01-01',
+    isCurrentUser: true,
+  },
+  {
+    userId: 'u2',
+    email: 'ada@northwind.example',
+    fullName: 'Ada Lovelace',
+    avatarUrl: null,
+    role: 'member',
+    createdAt: '2026-01-02',
+    isCurrentUser: false,
+  },
+];
 const agentWriteRequest = vi.fn();
 const describeRule = vi.fn();
 vi.mock('@/lib/content/agent-write', () => ({
@@ -56,15 +107,23 @@ if (!('text' in Blob.prototype)) {
 
 const OPTIONS = {
   opportunities: [
-    { id: 'o1', title: 'Northwind vs HubSpot', decision: 'create', pageTitle: null },
+    {
+      id: 'o1',
+      title: 'Northwind vs HubSpot',
+      decision: 'create',
+      pageTitle: null,
+      assetType: null,
+    },
     {
       id: 'o2',
       title: 'Create a page for realtors',
       decision: 'create',
       pageTitle: 'CRM for real estate teams',
+      assetType: null,
     },
   ],
-  prompts: [{ id: 'p1', text: 'best crm for realtors' }],
+  prompts: [{ id: 'p1', text: 'best crm for realtors', seen: false }],
+  promptsSeen: 0,
   topics: [{ id: 't1', name: 'Real estate', promptCount: 3 }],
 };
 
@@ -117,6 +176,8 @@ beforeEach(() => {
   getContentOverlap.mockReset().mockResolvedValue({ totalPrompts: 2, pages: [] });
   importContentPage.mockReset().mockResolvedValue({ error: 'failed' });
   sendContentDraftToActionCenter.mockReset();
+  listMembers.mockReset().mockResolvedValue(MEMBERS);
+  assignAction.mockReset().mockResolvedValue(undefined);
   startAgentWriting.mockReset();
   agentWriteRequest.mockReset().mockResolvedValue({ sources: 'kept', rules: [] });
   onSent.mockReset();
@@ -184,6 +245,67 @@ describe('New content', () => {
       (s) => s.textContent === 'Northwind vs HubSpot',
     );
     expect(value?.closest('[data-slot="combobox-trigger"]')).not.toBeNull();
+  });
+
+  it('lists the prompts AI doesn’t name or cite the brand for yet, and says how many are left out', async () => {
+    getContentStartOptions.mockResolvedValue({
+      ...OPTIONS,
+      prompts: [
+        { id: 'p1', text: 'best crm for realtors', seen: false },
+        { id: 'p2', text: 'crm pricing', seen: true },
+        { id: 'p3', text: 'crm for teams', seen: true },
+      ],
+      promptsSeen: 2,
+    });
+    await render();
+    await click(tab('Prompt'));
+    expect(document.body.textContent).toContain(
+      "2 prompts where AI already names or cites you in the last 30 days aren't listed: they need no new page.",
+    );
+    await click(button('Pick a tracked prompt'));
+    expect([...document.querySelectorAll('[role="option"]')].map((o) => o.textContent)).toEqual([
+      'best crm for realtors',
+    ]);
+  });
+
+  it('says so when AI already names or cites the brand for every prompt', async () => {
+    getContentStartOptions.mockResolvedValue({
+      ...OPTIONS,
+      prompts: [{ id: 'p2', text: 'crm pricing', seen: true }],
+      promptsSeen: 1,
+    });
+    await render();
+    await click(tab('Prompt'));
+    await click(button('Pick a tracked prompt'));
+    expect(document.querySelectorAll('[role="option"]')).toHaveLength(0);
+    expect(document.body.textContent).toContain(
+      'AI already names or cites you for every tracked prompt in the last 30 days.',
+    );
+  });
+
+  it('says no prompt matches on a search miss, not that every prompt is seen', async () => {
+    getContentStartOptions.mockResolvedValue({
+      ...OPTIONS,
+      prompts: [
+        { id: 'p1', text: 'best crm for realtors', seen: false },
+        { id: 'p2', text: 'crm pricing', seen: true },
+      ],
+      promptsSeen: 1,
+    });
+    await render();
+    await click(tab('Prompt'));
+    await click(button('Pick a tracked prompt'));
+    const search = document.querySelector<HTMLInputElement>('input[placeholder="Search prompts"]')!;
+    const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!;
+    await act(async () => {
+      setValue.call(search, 'zzz no such prompt');
+      search.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    expect(document.querySelectorAll('[role="option"]')).toHaveLength(0);
+    expect(document.body.textContent).toContain('No tracked prompts.');
+    expect(document.body.textContent).not.toContain(
+      'AI already names or cites you for every tracked prompt',
+    );
   });
 
   it('names the page by the opportunity’s brief title when it has one', async () => {
@@ -400,6 +522,61 @@ describe('New content', () => {
       });
     });
 
+    it("picks the opportunity's page type for a new page, and for its page when that shows none", async () => {
+      getContentStartOptions.mockResolvedValue({
+        ...OPTIONS,
+        opportunities: [
+          // An older type, read as this B2B site's: Docs / FAQ, not the title's comparison.
+          { ...OPTIONS.opportunities[0], id: 'o3', decision: 'expand', assetType: 'faq_page' },
+        ],
+      });
+      await render('b2b', {
+        kind: 'opportunity',
+        id: 'o3',
+        // Nothing in its address or title says what the page is.
+        page: { url: 'https://northwind.example/crm-tips', title: 'CRM tips' },
+      });
+      await act(async () => {});
+      expect(document.body.textContent).toContain('Optimize: CRM tips');
+      expect(checkedType()).toBe('Docs / FAQ');
+      expect(document.body.textContent).toContain('Picked from the opportunity.');
+
+      await click(radio('Create a new page'));
+      expect(checkedType()).toBe('Docs / FAQ');
+      await click(button('Open editor'));
+      expect(createContentDraft.mock.calls[0][1]).toMatchObject({
+        method: 'create',
+        pageType: 'docs_faq',
+        typePicked: false,
+      });
+    });
+
+    it("types an existing page by its own address first, then by the opportunity's type", async () => {
+      getContentStartOptions.mockResolvedValue({
+        ...OPTIONS,
+        opportunities: [{ ...OPTIONS.opportunities[0], decision: 'expand', assetType: 'faq_page' }],
+      });
+      await render('b2b', {
+        kind: 'opportunity',
+        id: 'o1',
+        page: { url: 'https://northwind.example/pricing', title: 'Pricing' },
+      });
+      await act(async () => {});
+      // An older opportunity's "FAQ page" doesn't make /pricing anything but pricing.
+      expect(checkedType()).toBe('Pricing');
+      expect(document.body.textContent).toContain('Picked from the page.');
+    });
+
+    it("guesses from the title when the site doesn't write the opportunity's type", async () => {
+      getContentStartOptions.mockResolvedValue({
+        ...OPTIONS,
+        opportunities: [{ ...OPTIONS.opportunities[0], assetType: 'sizing_guide' }],
+      });
+      await render('b2b', { kind: 'opportunity', id: 'o1' });
+      expect(checkedType()).toBe('Comparison');
+      expect(document.body.textContent).toContain('Picked from the title.');
+    });
+
     it('lets a person write a new page instead of the plan’s page when nothing overlaps', async () => {
       getContentOverlap.mockResolvedValue({ totalPrompts: 2, pages: [] });
       await render('b2b', {
@@ -479,6 +656,16 @@ describe('New content', () => {
       expect(radio('Optimize /pricing').textContent).toContain('The page your Content plan picked');
       expect(radio('Optimize /pricing').getAttribute('aria-checked')).toBe('true');
       expect(radio('Optimize /pricing instead')).toBeUndefined();
+    });
+
+    it('opens on Team when the plan asks to assign the work', async () => {
+      await render('b2b', { kind: 'opportunity', id: 'o2', who: 'team' });
+      await act(async () => {});
+      const team = [
+        ...document.querySelectorAll<HTMLElement>('[aria-labelledby="start-who"] [role="radio"]'),
+      ].find((r) => r.textContent?.startsWith('Team'))!;
+      expect(team.getAttribute('aria-checked')).toBe('true');
+      expect(listMembers).toHaveBeenCalled();
     });
 
     it('leaves an opportunity no longer open to pick', async () => {
@@ -767,6 +954,45 @@ describe('New content', () => {
       );
       options.action.onClick();
       expect(push).toHaveBeenCalledWith('/dashboard/action-center/actions?action=a1');
+    });
+
+    it('assigns the task to the teammate picked under Team', async () => {
+      sendContentDraftToActionCenter.mockResolvedValue({
+        actionId: 'a1',
+        actionNo: 214,
+        created: true,
+      });
+      await startNewPage();
+      await click(whoOption('Team'));
+      await act(async () => {});
+      expect(document.body.textContent).toContain('Assign to');
+      const picker = document.querySelector<HTMLSelectElement>('select[data-select]')!;
+      expect([...picker.options].map((o) => o.textContent)).toEqual([
+        '',
+        'Mia Chen',
+        'Ada Lovelace',
+      ]);
+      await act(async () => {
+        picker.value = 'u2';
+        picker.dispatchEvent(new Event('change', { bubbles: true }));
+      });
+      await click(button('Send to Action Center'));
+
+      expect(sendContentDraftToActionCenter).toHaveBeenCalledWith('b1', 'd9');
+      expect(assignAction).toHaveBeenCalledWith('b1', 'a1', 'u2');
+      expect(toast.success.mock.calls[0][0]).toBe('Sent to the Action Center');
+    });
+
+    it('sends the task unassigned when no one is picked', async () => {
+      sendContentDraftToActionCenter.mockResolvedValue({
+        actionId: 'a1',
+        actionNo: 214,
+        created: true,
+      });
+      await startNewPage();
+      await click(whoOption('Team'));
+      await click(button('Send to Action Center'));
+      expect(assignAction).not.toHaveBeenCalled();
     });
 
     it('says the draft is kept when sending it fails, and opens it on request', async () => {

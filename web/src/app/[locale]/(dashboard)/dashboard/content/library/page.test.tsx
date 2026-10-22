@@ -17,6 +17,9 @@ vi.mock('@/lib/actions/content-drafts', () => ({
   getContentStartOptions: (...args: unknown[]) => getContentStartOptions(...args),
   createContentDraft: vi.fn(),
 }));
+// Start's Team: its assignee picker reads the team, and the sent task is assigned.
+vi.mock('@/lib/actions/team', () => ({ listMembers: vi.fn(async () => []) }));
+vi.mock('@/lib/actions/action-center', () => ({ assignAction: vi.fn() }));
 const push = vi.fn();
 vi.mock('@/i18n/navigation', () => ({
   Link: ({ href, children, ...props }: { href: string; children: React.ReactNode }) => (
@@ -86,6 +89,7 @@ beforeEach(() => {
   getContentStartOptions.mockReset().mockResolvedValue({
     opportunities: [],
     prompts: [],
+    promptsSeen: 0,
     topics: [],
   });
   push.mockReset();

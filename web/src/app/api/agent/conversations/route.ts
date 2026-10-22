@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { resolveAgentAuth } from '@/lib/agent/auth';
 import { getPlan, hasFeature, type PlanId } from '@/config/plans';
-import { isAnthropicKeyConfigured } from '@/lib/agent/key';
+import { isAgentKeyConfigured } from '@/lib/agent/key';
 
 /**
  * GET /api/agent/conversations
@@ -60,11 +60,11 @@ export async function POST(req: Request) {
 
   // BYOK gate — match the chat endpoint so "+ new chat" can't create a row
   // the user can never send a message to. UI uses the same code to route
-  // to the Settings → Agent CTA.
-  const hasKey = await isAnthropicKeyConfigured(organizationId);
+  // to the Settings › AI Providers CTA.
+  const hasKey = await isAgentKeyConfigured(organizationId);
   if (!hasKey) {
     return NextResponse.json(
-      { error: 'Anthropic API key required', code: 'missing_anthropic_key' },
+      { error: 'AI provider key required', code: 'missing_ai_key' },
       { status: 403 },
     );
   }

@@ -8,10 +8,29 @@ import ContentPlanPage from './page';
 
 const getContentPlan = vi.fn();
 const getContentPlanInsights = vi.fn();
+const setPlanRowPriority = vi.fn();
+const hidePlanRow = vi.fn();
+const showPlanRow = vi.fn();
 vi.mock('@/lib/actions/content-plan', () => ({
   getContentPlan: (...args: unknown[]) => getContentPlan(...args),
   getContentPlanInsights: (...args: unknown[]) => getContentPlanInsights(...args),
+  setPlanRowPriority: (...args: unknown[]) => setPlanRowPriority(...args),
+  hidePlanRow: (...args: unknown[]) => hidePlanRow(...args),
+  showPlanRow: (...args: unknown[]) => showPlanRow(...args),
 }));
+const listMembers = vi.fn();
+vi.mock('@/lib/actions/team', () => ({
+  listMembers: (...args: unknown[]) => listMembers(...args),
+}));
+// Assigning a draft's task is _assign-dialog's; here, which rows open it.
+vi.mock('./_assign-dialog', () => ({
+  AssignDialog: ({ row }: { row: { title: string } | null }) =>
+    row ? <div data-testid="assign-dialog">{row.title}</div> : null,
+}));
+const role = vi.hoisted(() => ({ canManage: true }));
+vi.mock('@/hooks/use-user-role', () => ({ useUserRole: () => role }));
+const toast = vi.hoisted(() => Object.assign(vi.fn(), { error: vi.fn(), success: vi.fn() }));
+vi.mock('sonner', () => ({ toast }));
 // New content is new-content-dialog.test.tsx's; here, what the Plan opens it on.
 const dialog = vi.hoisted(() => ({ props: null as Record<string, unknown> | null }));
 vi.mock('@/components/content/new-content-dialog', () => ({
@@ -20,12 +39,14 @@ vi.mock('@/components/content/new-content-dialog', () => ({
     return null;
   },
 }));
+const push = vi.fn();
 vi.mock('@/i18n/navigation', () => ({
   Link: ({ href, children, ...props }: { href: string; children: React.ReactNode }) => (
     <a href={href} {...props}>
       {children}
     </a>
   ),
+  useRouter: () => ({ push }),
 }));
 const brandState = vi.hoisted(() => ({
   activeBrandId: 'brand-1' as string | null,
@@ -60,6 +81,7 @@ const opportunity: PlanOpportunity = {
   competitorsCited: ['Daily Grind Co.', 'Origin Box'],
   visibility: 6,
   prompts: 2,
+  assetType: null,
 };
 const PLAN = {
   pages: [
@@ -121,9 +143,12 @@ const button = (name: string) =>
   [...container.querySelectorAll<HTMLButtonElement>('button')].find((b) =>
     b.textContent?.startsWith(name),
   )!;
+/** A row's Start button: past the Priority Score, which is a button too. */
+const START = 'td:nth-child(n+3) button';
+// The page, the action and why: after the rank and the Priority Score.
 const rowTexts = () =>
   [...container.querySelectorAll('tbody tr')].map((tr) =>
-    [...tr.querySelectorAll('td')].slice(1, 4).map((td) => td.textContent),
+    [...tr.querySelectorAll('td')].slice(2, 5).map((td) => td.textContent),
   );
 
 beforeEach(() => {
@@ -134,6 +159,14 @@ beforeEach(() => {
   root = createRoot(container);
   getContentPlan.mockReset().mockResolvedValue(PLAN);
   getContentPlanInsights.mockReset().mockResolvedValue(INSIGHTS);
+  setPlanRowPriority.mockReset().mockResolvedValue(undefined);
+  hidePlanRow.mockReset().mockResolvedValue(undefined);
+  showPlanRow.mockReset().mockResolvedValue(undefined);
+  listMembers.mockReset().mockResolvedValue([]);
+  toast.mockReset();
+  toast.error.mockReset();
+  role.canManage = true;
+  push.mockReset();
   dialog.props = null;
 });
 
@@ -149,6 +182,7 @@ describe('the Content plan', () => {
     expect(button('Create').textContent).toBe('Create1New pages AI needs');
     expect(button('Optimize').textContent).toBe('Optimize1Pages losing ground');
     expect(button('Protect').textContent).toBe('Protect1Top pages · edit with care');
+    expect(button('Priority').textContent).toBe('Priority0Marked by your team');
     // Pages cited for the same prompts are no warning: no Overlaps card.
     expect(button('Overlaps')).toBeUndefined();
 
@@ -170,6 +204,23 @@ describe('the Content plan', () => {
       ],
     ]);
     expect(container.querySelector('thead')!.textContent).toContain('Why · last 30 days');
+  });
+
+  it("shows each row's Priority Score, and on focus how it is worked out", async () => {
+    await renderPage();
+    const scores = [...container.querySelectorAll('tbody tr')].map((tr) => tr.children[1]);
+    // The opportunity's 74; 40 + 14 for −70% + 7 citations lost; 20 + 12 citations.
+    expect(scores.map((td) => td.textContent)).toEqual(['74Medium', '61Medium', '32Low']);
+    expect(container.querySelector('thead')!.textContent).toContain('Priority Score');
+
+    const trigger = scores[1].querySelector('button')!;
+    expect(trigger.getAttribute('aria-label')).toBe('Priority Score 61: how it is worked out');
+    act(() => trigger.focus());
+    await act(() => new Promise((resolve) => setTimeout(resolve, 400)));
+    expect(document.querySelector('[data-slot="tooltip-content"]')?.textContent).toBe(
+      'How this score is worked out' +
+        '40 + 14 for 70% fewer citations + 7 for 7 citations lost = 61',
+    );
   });
 
   it('filters the list by a card, and clears it on a second click', async () => {
@@ -217,7 +268,7 @@ describe('the Content plan', () => {
       ],
     });
     await renderPage();
-    await act(async () => container.querySelector<HTMLButtonElement>('tbody tr button')!.click());
+    await act(async () => container.querySelector<HTMLButtonElement>(`tbody tr ${START}`)!.click());
     expect(dialog.props).toMatchObject({
       preset: {
         kind: 'opportunity',
@@ -244,7 +295,7 @@ describe('the Content plan', () => {
     await renderPage();
     const rows = container.querySelectorAll('tbody tr');
 
-    await act(async () => rows[1].querySelector('button')!.click());
+    await act(async () => rows[1].querySelector<HTMLButtonElement>(START)!.click());
     expect(dialog.props).toMatchObject({
       open: true,
       preset: { kind: 'page', url: 'https://acme.example/guides/coffee-subscriptions' },
@@ -252,7 +303,7 @@ describe('the Content plan', () => {
     await act(async () => (dialog.props!.onOpenChange as (open: boolean) => void)(false));
     expect(dialog.props).toMatchObject({ open: false, preset: null });
 
-    await act(async () => rows[0].querySelector('button')!.click());
+    await act(async () => rows[0].querySelector<HTMLButtonElement>(START)!.click());
     expect(dialog.props).toMatchObject({ preset: { kind: 'opportunity', id: 'o1', page: null } });
 
     expect(rows[2].textContent).toContain('Agent');
@@ -341,6 +392,27 @@ describe('the Content plan', () => {
     expect(rowTexts()).toHaveLength(3);
   });
 
+  it('names the type filtering the list while the section is closed, and clears it', async () => {
+    await renderPage();
+    const section = () =>
+      container.querySelector<HTMLElement>('section[aria-labelledby="plan-mix-title"]')!;
+    const bar = () => section().querySelector<HTMLButtonElement>('h2 button')!;
+    await act(async () => bar().click());
+    await act(async () => section().querySelector<HTMLButtonElement>('li button')!.click());
+    // Open, the pressed row says it; no line under the bar.
+    expect(section().textContent).not.toContain('Priority list filtered to');
+    await act(async () => bar().click());
+    expect(bar().getAttribute('aria-expanded')).toBe('false');
+    expect(section().textContent).toContain('Priority list filtered to How-to guide');
+    expect(rowTexts()).toHaveLength(2);
+    const clear = [...section().querySelectorAll<HTMLButtonElement>('button')].find(
+      (b) => b.textContent === 'Clear',
+    )!;
+    await act(async () => clear.click());
+    expect(rowTexts()).toHaveLength(3);
+    expect(section().textContent).not.toContain('Priority list filtered to');
+  });
+
   it('asks for Google Analytics to show what AI visitors did', async () => {
     getContentPlanInsights.mockResolvedValue({
       ...INSIGHTS,
@@ -423,5 +495,184 @@ describe('the Content plan', () => {
     await act(async () => button('Try again').click());
     expect(getContentPlan).toHaveBeenCalledTimes(2);
     expect(rowTexts()).toHaveLength(3);
+  });
+});
+
+describe('a Plan row’s menu', () => {
+  const ESPRESSO = 'page:acme.example/guides/espresso';
+  const menuItems = async (title: string) => {
+    const trigger = container.querySelector<HTMLElement>(`[aria-label="Actions for ${title}"]`)!;
+    await act(async () => trigger.click());
+    return [...document.body.querySelectorAll<HTMLElement>('[role="menuitem"]')];
+  };
+  const hiddenList = (toggle: string) => button(toggle).parentElement!.querySelector('ul')!;
+  const clickItem = async (title: string, item: string) => {
+    const found = (await menuItems(title)).find((el) => el.textContent === item)!;
+    await act(async () => found.click());
+  };
+
+  it('puts the rows marked as a priority on top, tagged, with a card to filter them', async () => {
+    getContentPlan.mockResolvedValue({
+      ...PLAN,
+      marks: [{ rowKey: ESPRESSO, priority: true, hidden: false }],
+    });
+    await renderPage();
+    expect(rowTexts().map((r) => r[0])).toEqual([
+      'Espresso guidePriorityHow-to guide/guides/espresso',
+      'Office coffee subscriptionsNew page',
+      'Coffee subscriptionsHow-to guide/guides/coffee-subscriptions',
+    ]);
+    expect(button('Priority').textContent).toBe('Priority1Marked by your team');
+
+    await act(async () => button('Priority').click());
+    expect(rowTexts().map((r) => r[1])).toEqual(['Protect']);
+
+    await clickItem('Espresso guide', 'Remove priority');
+    expect(setPlanRowPriority).toHaveBeenCalledWith('brand-1', ESPRESSO, false);
+  });
+
+  it('marks a row as a priority, and reads the plan again', async () => {
+    await renderPage();
+    const items = await menuItems('Espresso guide');
+    expect(items.map((el) => el.textContent)).toEqual([
+      'Assign to…',
+      'Mark as priority',
+      'Hide from the plan',
+    ]);
+    await act(async () => items[1].click());
+    expect(setPlanRowPriority).toHaveBeenCalledWith('brand-1', ESPRESSO, true);
+    expect(getContentPlan).toHaveBeenCalledTimes(2);
+  });
+
+  it('hides a row, with an undo, and lists the hidden rows to show again', async () => {
+    await renderPage();
+    await clickItem('Office coffee subscriptions', 'Hide from the plan');
+    expect(hidePlanRow).toHaveBeenCalledWith('brand-1', 'opportunity:o1');
+    expect(getContentPlan).toHaveBeenCalledTimes(2);
+    expect(toast).toHaveBeenCalledWith('Hidden: Office coffee subscriptions', {
+      action: { label: 'Undo', onClick: expect.any(Function) },
+    });
+    await act(async () => toast.mock.calls[0][1].action.onClick());
+    expect(showPlanRow).toHaveBeenCalledWith('brand-1', 'opportunity:o1');
+
+    getContentPlan.mockResolvedValue({
+      ...PLAN,
+      marks: [{ rowKey: 'opportunity:o1', priority: false, hidden: true }],
+    });
+    await act(async () => button('Last 7 days').click());
+    expect(rowTexts()).toHaveLength(2);
+    expect(button('Create').textContent).toBe('Create0New pages AI needs');
+    expect(container.textContent).not.toContain('Show again');
+
+    await act(async () => button('1 hidden row · Show').click());
+    const hidden = hiddenList('1 hidden row · Hide');
+    expect(hidden.textContent).toBe('Office coffee subscriptionsShow again');
+    showPlanRow.mockClear();
+    await act(async () => hidden.querySelector('button')!.click());
+    expect(showPlanRow).toHaveBeenCalledWith('brand-1', 'opportunity:o1');
+    expect(button('1 hidden row · Hide').getAttribute('aria-expanded')).toBe('true');
+  });
+
+  it('says so when a mark can’t be saved', async () => {
+    hidePlanRow.mockRejectedValue(new Error('denied'));
+    await renderPage();
+    await clickItem('Espresso guide', 'Hide from the plan');
+    expect(toast.error).toHaveBeenCalledWith("Couldn't save that. Try again.");
+    expect(getContentPlan).toHaveBeenCalledTimes(1);
+  });
+
+  it('lets members assign a row, but not mark, hide or show one', async () => {
+    role.canManage = false;
+    getContentPlan.mockResolvedValue({
+      ...PLAN,
+      marks: [{ rowKey: 'opportunity:o1', priority: false, hidden: true }],
+    });
+    await renderPage();
+    expect((await menuItems('Espresso guide')).map((el) => el.textContent)).toEqual(['Assign to…']);
+    await act(async () => button('1 hidden row · Show').click());
+    expect(hiddenList('1 hidden row · Hide').textContent).toBe('Office coffee subscriptions');
+  });
+
+  it('assigns a row without a draft in Start, on Team; one with a draft, its task', async () => {
+    getContentPlan.mockResolvedValue({
+      ...PLAN,
+      drafts: [
+        {
+          id: 'd1',
+          author: 'user',
+          isMine: false,
+          method: 'optimize',
+          opportunityId: null,
+          sourceUrl: 'https://acme.example/guides/espresso',
+          actionId: 'a1',
+          assignee: { id: 'u2', name: 'Ada Lovelace' },
+        },
+      ],
+    });
+    await renderPage();
+    // Who does it: the teammate the task is assigned to.
+    expect(container.querySelectorAll('tbody tr')[2].textContent).toContain('Ada Lovelace');
+
+    await clickItem('Coffee subscriptions', 'Assign to…');
+    expect(listMembers).toHaveBeenCalledTimes(1);
+    expect(dialog.props).toMatchObject({
+      open: true,
+      preset: {
+        kind: 'page',
+        url: 'https://acme.example/guides/coffee-subscriptions',
+        who: 'team',
+      },
+    });
+    expect(container.querySelector('[data-testid="assign-dialog"]')).toBeNull();
+
+    await clickItem('Espresso guide', 'Assign to…');
+    expect(container.querySelector('[data-testid="assign-dialog"]')!.textContent).toBe(
+      'Espresso guide',
+    );
+  });
+});
+
+describe('Getting started’s content steps (00234)', () => {
+  it('opens Start on the top Create row, on the Create card, once', async () => {
+    window.history.replaceState(null, '', '/dashboard/content/plan?start=create');
+    await renderPage();
+    expect(dialog.props).toMatchObject({
+      open: true,
+      preset: { kind: 'opportunity', id: 'o1', page: null },
+    });
+    expect(button('Create').getAttribute('aria-pressed')).toBe('true');
+    // A reload opens the plan as it is.
+    expect(window.location.search).toBe('');
+  });
+
+  it('opens the draft already written for the top Optimize row', async () => {
+    window.history.replaceState(null, '', '/dashboard/content/plan?start=optimize');
+    getContentPlan.mockResolvedValue({
+      ...PLAN,
+      drafts: [
+        {
+          id: 'd1',
+          author: 'user',
+          isMine: true,
+          method: 'optimize',
+          opportunityId: null,
+          sourceUrl: 'https://acme.example/guides/coffee-subscriptions',
+          actionId: null,
+          assignee: null,
+        },
+      ],
+    });
+    await renderPage();
+    expect(push).toHaveBeenCalledWith('/dashboard/content/editor/d1');
+    expect(dialog.props).toMatchObject({ open: false });
+  });
+
+  it('shows the empty card when the plan has no row of that action', async () => {
+    window.history.replaceState(null, '', '/dashboard/content/plan?start=optimize');
+    getContentPlan.mockResolvedValue({ ...PLAN, pages: [] });
+    await renderPage();
+    expect(button('Optimize').getAttribute('aria-pressed')).toBe('true');
+    expect(dialog.props).toMatchObject({ open: false });
+    expect(push).not.toHaveBeenCalled();
   });
 });

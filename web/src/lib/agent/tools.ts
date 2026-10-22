@@ -291,7 +291,21 @@ export function buildAgentTools(auth: McpAuthContext) {
 
         categoryScores: z.record(z.string(), z.unknown()).describe('Per-category audit scores.'),
 
-        recommendations: z.array(z.unknown()).describe('AI-generated audit recommendations.'),
+        // Typed items, not z.unknown(): an untyped `items: {}` is a schema
+        // Gemini may refuse, and that fails every Chat turn on it.
+        recommendations: z
+          .array(
+            z.object({
+              signalKey: z.string().optional(),
+              label: z.string().optional(),
+              category: z.string().nullable().optional(),
+              priority: z.enum(['high', 'medium', 'low']).optional(),
+              recommendation: z.string(),
+              draft: z.string().nullable().optional(),
+              code: z.string().nullable().optional(),
+            }),
+          )
+          .describe('AI-generated audit recommendations, as get_site_audit returns them.'),
 
         signalsEvaluated: z.number().nullable().describe('Number of audit signals evaluated.'),
 
