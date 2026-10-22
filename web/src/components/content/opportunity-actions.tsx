@@ -61,11 +61,15 @@ export function OpportunityActions({
   };
   /**
    * The Content Editor: the draft written for this opportunity (undefined
-   * while looked up), or Start for one; null when it isn't offered (earned
-   * work lives on other sites; a closed opportunity has nothing to write).
+   * while looked up), or Start for one when `canStart` (earned work lives on
+   * other sites; a closed opportunity has nothing to write). A lookup that
+   * failed offers to check again instead of Start, so it never turns into a
+   * second draft.
    */
   content: {
     draftId: string | null | undefined;
+    lookupFailed?: boolean;
+    onRetry?: () => void;
     canStart: boolean;
     onStart: () => void;
     onOpenDraft: (draftId: string) => void;
@@ -83,7 +87,7 @@ export function OpportunityActions({
 }) {
   const t = useTranslations('content');
   const draftId = content.draftId;
-  const showContent = !!draftId || content.canStart;
+  const showContent = !!draftId || content.canStart || !!content.lookupFailed;
 
   return (
     <div className="flex flex-wrap items-center gap-2">
@@ -135,7 +139,12 @@ export function OpportunityActions({
         </Button>
       )}
       {showContent &&
-        (draftId ? (
+        (content.lookupFailed ? (
+          <Button size="sm" variant="outline" className="gap-2" onClick={content.onRetry}>
+            <RotateCcw className="h-4 w-4" />
+            {t('draftCheckFailed')}
+          </Button>
+        ) : draftId ? (
           <Button size="sm" className="gap-2" onClick={() => content.onOpenDraft(draftId)}>
             <FileText className="h-4 w-4" />
             {t('openDraft')}
@@ -185,6 +194,7 @@ export function OpportunityActions({
               className="gap-2"
               onClick={alternative.onOpen}
               disabled={alternative.running}
+              title={t('alternative.hint')}
             >
               {alternative.running ? (
                 <Loader2 className="h-3.5 w-3.5 animate-spin" />

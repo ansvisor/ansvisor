@@ -68,7 +68,6 @@ vi.mock('@/lib/supabase/server', () => ({
         eq: (col: string, v: unknown) => (call.filters.push(['eq', col, v]), chain),
         in: (col: string, v: unknown) => (call.filters.push(['in', col, v]), chain),
         is: (col: string, v: unknown) => (call.filters.push(['is', col, v]), chain),
-        contains: (col: string, v: unknown) => (call.filters.push(['contains', col, v]), chain),
         order: () => chain,
         limit: () => chain,
         insert: (value: unknown) => ((call.op = 'insert'), (call.value = value), chain),
