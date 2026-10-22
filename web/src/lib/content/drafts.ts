@@ -228,6 +228,21 @@ export interface DraftStartOptions {
   topics: { id: string; name: string; promptCount: number }[];
 }
 
+/** The Library's Created filter (CE-002): any time, or the last 7, 30 or 90 days. */
+export const CREATED_RANGES = ['all', '7d', '30d', '90d'] as const;
+export type CreatedRange = (typeof CREATED_RANGES)[number];
+
+/** The drafts created in the range, counted back from `now`. */
+export function draftsCreatedIn(
+  drafts: ContentDraftListItem[],
+  range: CreatedRange,
+  now: number = Date.now(),
+): ContentDraftListItem[] {
+  if (range === 'all') return drafts;
+  const since = now - Number.parseInt(range, 10) * 86_400_000;
+  return drafts.filter((d) => new Date(d.createdAt).getTime() >= since);
+}
+
 export function draftsInTab(drafts: ContentDraftListItem[], tab: LibraryTab) {
   if (tab === 'archived') return drafts.filter((d) => d.archivedAt !== null);
   const live = drafts.filter((d) => d.archivedAt === null);

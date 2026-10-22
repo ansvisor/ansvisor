@@ -3211,6 +3211,22 @@
       "failed": "Agent failed"
     },
     "library": {
+      "export": {
+        "button": "Export",
+        "hint": "Download the drafts listed here, with their pages",
+        "csv": "Export CSV",
+        "xlsx": "Export Excel",
+        "docx": "Export Word",
+        "failed": "Couldn't export. Try again."
+      },
+      "created": {
+        "label": "Created",
+        "all": "Any time",
+        "7d": "Last 7 days",
+        "30d": "Last 30 days",
+        "90d": "Last 90 days",
+        "empty": "Nothing in this tab was created in this period."
+      },
       "title": "Library",
       "description": "Everything you and the agents wrote or changed.",
       "selectBrand": "Select a brand to see its content.",

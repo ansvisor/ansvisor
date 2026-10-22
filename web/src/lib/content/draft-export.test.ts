@@ -7,6 +7,13 @@ import {
   draftExportFileName,
   draftHtmlDocument,
   draftMarkdown,
+  draftText,
+  libraryCsv,
+  libraryDocx,
+  libraryExportFileName,
+  libraryRows,
+  libraryWorkbook,
+  type LibraryExportItem,
 } from './draft-export';
 
 // The page as Copy HTML gives it: one block per line, an HTML block as its
@@ -167,5 +174,87 @@ describe('draftExportBlob and draftExportFileName', () => {
       'ansvisor_content_pipeline-forecasting-a-guide.docx',
     );
     expect(draftExportFileName('—', 'md')).toBe('ansvisor_content_page.md');
+  });
+});
+
+describe('the Library’s Export', () => {
+  const item = (over: Partial<LibraryExportItem> = {}): LibraryExportItem => ({
+    title: 'Pipeline forecasting',
+    status: 'In review',
+    method: 'Optimize',
+    pageType: 'Blog post',
+    author: 'Content Agent',
+    createdAt: '2026-10-20T09:00:00Z',
+    updatedAt: '2026-10-21T15:30:00Z',
+    url: 'https://acme.example/blog/forecasting',
+    html: '<h1>Pipeline forecasting</h1><p>Teams <strong>trust</strong> it.</p><ol><li>Import</li><li>Stage</li></ol>',
+    ...over,
+  });
+
+  it('reads a page as text, a block a line', () => {
+    expect(draftText('T', PAGE)).toBe(
+      [
+        'Pipeline forecasting',
+        'Teams trust it, every week. See our pricing.',
+        'How it works',
+        '- Weighted stages',
+        '  - By deal size',
+        '- Rep calls',
+        '1. Import deals',
+        '2. Set the stages',
+        '> It saved us a week.',
+        'Plan | Price',
+        'Starter | $49 | month',
+        'Free for 14 days',
+      ].join('\n'),
+    );
+  });
+
+  it('writes one row a draft, in the header’s order, with its page’s text', () => {
+    const csv = libraryCsv([item()]);
+    const [header, row] = csv.split('\n');
+    expect(header).toBe(
+      'Title,Status,Method,Page type,By,Created,Updated,Page URL,Characters,Content',
+    );
+    expect(row).toContain(
+      'Pipeline forecasting,In review,Optimize,Blog post,Content Agent,2026-10-20,2026-10-21,https://acme.example/blog/forecasting,',
+    );
+    expect(libraryRows([item()])[0]).toMatchObject({
+      Characters: 'Pipeline forecastingTeams trust it.1. Import2. Stage'.length,
+      Content: 'Pipeline forecasting\nTeams trust it.\n1. Import\n2. Stage',
+    });
+  });
+
+  it('cuts a page past a spreadsheet cell’s limit', () => {
+    const long = `<h1>T</h1><p>${'a'.repeat(40_000)}</p>`;
+    const [{ data }] = libraryWorkbook([item({ html: long })]);
+    const content = data[1][9] as string;
+    expect(content).toHaveLength(32_767);
+    expect(content.endsWith('…')).toBe(true);
+  });
+
+  it('puts every draft in one Word document, each on its own page', async () => {
+    const files = unzipSync(
+      await read(
+        await libraryDocx([
+          item(),
+          item({ title: 'Churn', html: '<h1>Churn</h1><ol><li>One</li></ol>' }),
+        ]),
+      ),
+    );
+    const xml = strFromU8(files['word/document.xml']);
+    expect(xml).toContain('In review · Optimize · Blog post · Updated 2026-10-21');
+    expect(xml).toContain('Churn');
+    // Two sections: the second starts a new page.
+    expect(xml.match(/<w:sectPr/g)).toHaveLength(2);
+    // Each draft's numbered list counts on its own.
+    const numbering = strFromU8(files['word/numbering.xml']);
+    expect(numbering.match(/<w:num w:numId=/g)!.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('names the file by tab and day', () => {
+    expect(libraryExportFileName('in_review', 'xlsx', new Date('2026-10-22T10:00:00Z'))).toBe(
+      'ansvisor_content_library_in-review_2026-10-22.xlsx',
+    );
   });
 });

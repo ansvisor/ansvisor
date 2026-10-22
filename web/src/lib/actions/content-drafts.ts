@@ -240,6 +240,54 @@ export async function getContentDraft(id: string): Promise<ContentDraft | null> 
   };
 }
 
+/** A draft's page, for the Library's Export. */
+export interface DraftPage {
+  id: string;
+  title: string;
+  bodyHtml: string;
+  sourceUrl: string | null;
+}
+
+/** Ids read at a time: the list goes in the request's address. */
+const PAGES_PER_READ = 100;
+
+/**
+ * The Library's Export (CE-002): the stored page of each draft given, of the
+ * brand, in the order given; at most the Library's own count. A draft gone
+ * meanwhile is left out.
+ */
+export async function getContentDraftPages(brandId: string, ids: string[]): Promise<DraftPage[]> {
+  const parsed = z.array(z.guid()).max(LIBRARY_LIMIT).safeParse(ids);
+  if (!draftId.safeParse(brandId).success || !parsed.success) throw new Error('invalid');
+  const supabase = await createClient();
+  const chunks = [];
+  for (let i = 0; i < parsed.data.length; i += PAGES_PER_READ) {
+    chunks.push(parsed.data.slice(i, i + PAGES_PER_READ));
+  }
+  const reads = await Promise.all(
+    chunks.map((chunk) =>
+      supabase
+        .from('content_drafts')
+        .select('id, title, body_html, source_url')
+        .eq('brand_id', brandId)
+        .in('id', chunk),
+    ),
+  );
+  const byId = new Map<string, DraftPage>();
+  for (const { data, error } of reads) {
+    if (error) throw new Error(error.message);
+    for (const row of data ?? []) {
+      byId.set(row.id, {
+        id: row.id,
+        title: row.title,
+        bodyHtml: row.body_html,
+        sourceUrl: row.source_url,
+      });
+    }
+  }
+  return parsed.data.flatMap((id) => byId.get(id) ?? []);
+}
+
 /** Opportunities still open to write for, the highest scored first. */
 const OPEN_OPPORTUNITY_STATUSES = ['new', 'reviewed', 'sent', 'in_progress'];
 

@@ -6,6 +6,7 @@ import {
   ArchiveRestore,
   Bot,
   Check,
+  Download,
   FileText,
   MoreHorizontal,
   Trash2,
@@ -44,6 +45,7 @@ import {
   type DraftStatus,
   type LibraryTab,
 } from '@/lib/content/drafts';
+import type { DraftExportFormat } from '@/lib/content/draft-export';
 import { formatDate, formatMonthDay } from '@/lib/format';
 
 /** A date this year as "Oct 16", an older one with its year, so the table fits at 1024 px. */
@@ -59,6 +61,8 @@ export interface LibraryRowActions {
   onStatus: (draft: ContentDraftListItem, status: DraftStatus) => void;
   onArchive: (draft: ContentDraftListItem, archived: boolean) => void;
   onDelete: (draft: ContentDraftListItem) => void;
+  /** The draft's page as Word, HTML or Markdown, as the editor's Export. */
+  onExport: (draft: ContentDraftListItem, format: DraftExportFormat) => void;
 }
 
 /**
@@ -169,6 +173,7 @@ export function LibraryTable({
 function RowMenu({ draft, actions }: { draft: ContentDraftListItem; actions: LibraryRowActions }) {
   const t = useTranslations('contentEditor.library.rowMenu');
   const tStatus = useTranslations('contentEditor.status');
+  const tExport = useTranslations('contentEditor.editor.export');
   const title = draft.title.trim() || null;
   return (
     <DropdownMenu>
@@ -195,6 +200,13 @@ function RowMenu({ draft, actions }: { draft: ContentDraftListItem; actions: Lib
             </DropdownMenuItem>
           ))}
         </DropdownMenuGroup>
+        <DropdownMenuSeparator />
+        {(['docx', 'html', 'md'] as const).map((format) => (
+          <DropdownMenuItem key={format} onClick={() => actions.onExport(draft, format)}>
+            <Download className="h-4 w-4" />
+            {tExport(format)}
+          </DropdownMenuItem>
+        ))}
         {actions.canManage && (
           <>
             <DropdownMenuSeparator />

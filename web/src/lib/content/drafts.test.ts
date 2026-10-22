@@ -6,6 +6,7 @@ import {
   WRITING_STALE_MS,
   agentStateOf,
   contentEditorPath,
+  draftsCreatedIn,
   draftsInTab,
   isPageType,
   libraryTabCounts,
@@ -34,6 +35,26 @@ const drafts = [
   draft('c', 'in_review'),
   draft('d', 'published'),
 ];
+
+describe('the Library’s Created filter', () => {
+  const at = (id: string, createdAt: string) => ({ ...draft(id, 'draft'), createdAt });
+  const now = Date.parse('2026-10-22T12:00:00Z');
+  const list = [
+    at('today', '2026-10-22T08:00:00Z'),
+    at('week', '2026-10-16T12:00:00Z'),
+    at('month', '2026-09-25T12:00:00Z'),
+    at('old', '2026-06-01T12:00:00Z'),
+  ];
+  const ids = (range: Parameters<typeof draftsCreatedIn>[1]) =>
+    draftsCreatedIn(list, range, now).map((d) => d.id);
+
+  it('keeps the drafts created in the range, counted back from now', () => {
+    expect(ids('all')).toEqual(['today', 'week', 'month', 'old']);
+    expect(ids('7d')).toEqual(['today', 'week']);
+    expect(ids('30d')).toEqual(['today', 'week', 'month']);
+    expect(ids('90d')).toEqual(['today', 'week', 'month']);
+  });
+});
 
 describe('the Library tabs', () => {
   it('counts every draft under All and each under its status', () => {

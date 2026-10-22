@@ -12,7 +12,9 @@ const markContentDraftReady = vi.fn();
 const setContentDraftStatus = vi.fn();
 const archiveContentDraft = vi.fn();
 const deleteContentDraft = vi.fn();
+const getContentDraftPages = vi.fn();
 vi.mock('@/lib/actions/content-drafts', () => ({
+  getContentDraftPages: (...args: unknown[]) => getContentDraftPages(...args),
   // A list stands for a brand under the cap: its tabs count its rows.
   getContentDrafts: async (...args: unknown[]) => {
     const read = await getContentDrafts(...args);
@@ -41,6 +43,16 @@ vi.mock('@/i18n/navigation', () => ({
 }));
 const toast = vi.hoisted(() => Object.assign(vi.fn(), { success: vi.fn(), error: vi.fn() }));
 vi.mock('sonner', () => ({ toast }));
+const saveBlob = vi.hoisted(() => vi.fn());
+vi.mock('@/lib/download', () => ({ saveBlob }));
+
+/** jsdom's Blob has no text(): read it as a browser's FileReader would. */
+const readText = (blob: Blob) =>
+  new Promise<string>((resolve) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.readAsText(blob);
+  });
 const brandState = vi.hoisted(() => ({
   activeBrandId: 'brand-1' as string | null,
   brands: [{ id: 'brand-1', industry: 'Travel & Hospitality', shoppingModeEnabled: false }],
@@ -110,6 +122,15 @@ beforeEach(() => {
   setContentDraftStatus.mockReset().mockResolvedValue(undefined);
   archiveContentDraft.mockReset().mockResolvedValue(undefined);
   deleteContentDraft.mockReset().mockResolvedValue(undefined);
+  getContentDraftPages.mockReset().mockImplementation(async (_brand: string, ids: string[]) =>
+    ids.map((id) => ({
+      id,
+      title: 'Pipeline forecasting',
+      bodyHtml: '<h1>Pipeline forecasting</h1><p>Teams trust it.</p>',
+      sourceUrl: 'https://acme.example/pricing',
+    })),
+  );
+  saveBlob.mockReset();
   role.canManage = true;
 });
 
@@ -323,6 +344,9 @@ describe('a Library row’s menu (00233)', () => {
       'In review',
       'Ready',
       'Published',
+      'Export Word',
+      'Export HTML',
+      'Export Markdown',
       'Send to Archive',
       'Delete',
     ]);
@@ -346,6 +370,9 @@ describe('a Library row’s menu (00233)', () => {
       'In review',
       'Ready',
       'Published',
+      'Export Word',
+      'Export HTML',
+      'Export Markdown',
     ]);
   });
 
@@ -400,6 +427,17 @@ describe('a Library row’s menu (00233)', () => {
     );
   });
 
+  it('exports one draft’s page, as the editor’s Export', async () => {
+    getContentDrafts.mockResolvedValue([row({})]);
+    await renderPage();
+    await pick('Pipeline forecasting', 'Export Markdown');
+    await act(async () => {});
+    expect(getContentDraftPages).toHaveBeenCalledWith('brand-1', ['d1']);
+    const [blob, name] = saveBlob.mock.calls[0] as [Blob, string];
+    expect(name).toBe('ansvisor_content_pipeline-forecasting.md');
+    expect(await readText(blob)).toBe('# Pipeline forecasting\n\nTeams trust it.\n');
+  });
+
   it('says so when the server refuses the archive', async () => {
     archiveContentDraft.mockRejectedValue(new Error('forbidden'));
     getContentDrafts.mockResolvedValue([row({})]);
@@ -408,5 +446,72 @@ describe('a Library row’s menu (00233)', () => {
     expect(toast.error).toHaveBeenCalledWith(
       'Only admins and managers can archive or delete content.',
     );
+  });
+});
+
+describe('the Library’s Export and Created filter (CE-002)', () => {
+  const openExport = async () => {
+    const trigger = [...container.querySelectorAll<HTMLButtonElement>('button')].find(
+      (b) => b.textContent === 'Export',
+    )!;
+    await act(async () => {
+      trigger.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
+      trigger.click();
+    });
+    return [...document.body.querySelectorAll<HTMLElement>('[role="menuitem"]')];
+  };
+
+  it('exports the drafts listed, with their pages, as CSV', async () => {
+    getContentDrafts.mockResolvedValue([
+      row({}),
+      row({ id: 'd2', title: 'Churn guide', author: 'agent', status: 'ready' }),
+    ]);
+    await renderPage();
+    const items = await openExport();
+    expect(items.map((el) => el.textContent)).toEqual([
+      'Export CSV',
+      'Export Excel',
+      'Export Word',
+    ]);
+    await act(async () => items[0].click());
+    await act(async () => {});
+
+    expect(getContentDraftPages).toHaveBeenCalledWith('brand-1', ['d1', 'd2']);
+    const [blob, name] = saveBlob.mock.calls[0] as [Blob, string];
+    expect(name).toMatch(/^ansvisor_content_library_all_\d{4}-\d{2}-\d{2}\.csv$/);
+    const csv = await readText(blob);
+    expect(csv).toContain(
+      'Pipeline forecasting,In review,Optimize,Feature page,Ada Lovelace,2026-10-18',
+    );
+    expect(csv).toContain('Churn guide,Ready,Optimize,Feature page,Content Agent');
+    expect(csv).toContain('Teams trust it.');
+  });
+
+  it('lists only the drafts created in the range the URL names, and exports those', async () => {
+    window.history.replaceState(null, '', '/dashboard/content/library?created=7d');
+    const recent = new Date(Date.now() - 2 * 86_400_000).toISOString();
+    getContentDrafts.mockResolvedValue([
+      row({ id: 'new', title: 'Fresh page', createdAt: recent }),
+      row({ id: 'old', title: 'Old page', createdAt: '2026-01-05T09:00:00Z' }),
+    ]);
+    await renderPage();
+    expect(container.textContent).toContain('Fresh page');
+    expect(container.textContent).not.toContain('Old page');
+
+    const items = await openExport();
+    await act(async () => items[0].click());
+    await act(async () => {});
+    expect(getContentDraftPages).toHaveBeenCalledWith('brand-1', ['new']);
+  });
+
+  it('says when nothing in the tab was created in the range', async () => {
+    window.history.replaceState(null, '', '/dashboard/content/library?created=30d');
+    getContentDrafts.mockResolvedValue([row({ createdAt: '2026-01-05T09:00:00Z' })]);
+    await renderPage();
+    expect(container.textContent).toContain('Nothing in this tab was created in this period.');
+    const exportButton = [...container.querySelectorAll<HTMLButtonElement>('button')].find(
+      (b) => b.textContent === 'Export',
+    )!;
+    expect(exportButton.disabled).toBe(true);
   });
 });
