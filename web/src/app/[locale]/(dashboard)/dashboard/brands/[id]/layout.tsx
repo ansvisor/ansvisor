@@ -7,6 +7,7 @@ import { useBrandStore } from '@/stores/use-brand-store';
 import { Button } from '@/components/ui/button';
 import { BrandAvatar } from '@/components/brand-avatar';
 import { BrandSwitchItems } from '@/components/layout/brand-switcher';
+import { WorkspaceSettingsMenu } from '@/components/layout/workspace-settings-menu';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -49,8 +50,8 @@ export default function BrandDetailLayout({
 
   return (
     <div className="space-y-6">
-      {/* Brand header + back */}
-      <div className="flex items-center gap-4">
+      {/* Brand header + back; Workspace Settings wraps below it on a phone. */}
+      <div className="flex flex-wrap items-center gap-4">
         <Link href="/dashboard/brands">
           <Button variant="ghost" size="icon" aria-label="Back to brands list">
             <ArrowLeft className="h-4 w-4" />
@@ -93,6 +94,9 @@ export default function BrandDetailLayout({
             </div>
           </div>
         )}
+        <div className="ml-auto">
+          <WorkspaceSettingsMenu />
+        </div>
       </div>
 
       {/* Sub-nav */}

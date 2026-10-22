@@ -3,6 +3,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { NextIntlClientProvider } from 'next-intl';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import messages from '../../../../../../../messages/en.json';
+import { RoleProvider, type TeamRole } from '@/components/providers/role-provider';
 import BrandDetailLayout from './layout';
 
 const push = vi.fn();
@@ -40,15 +41,17 @@ let root: Root;
 const params = (id: string) =>
   Object.assign(Promise.resolve({ id }), { status: 'fulfilled', value: { id } });
 
-async function render(id = 'b1') {
+async function render(id = 'b1', role: TeamRole = 'analyst') {
   await act(async () =>
     root.render(
       <NextIntlClientProvider locale="en" messages={messages}>
-        <Suspense>
-          <BrandDetailLayout params={params(id)}>
-            <p>page</p>
-          </BrandDetailLayout>
-        </Suspense>
+        <RoleProvider role={role}>
+          <Suspense>
+            <BrandDetailLayout params={params(id)}>
+              <p>page</p>
+            </BrandDetailLayout>
+          </Suspense>
+        </RoleProvider>
       </NextIntlClientProvider>,
     ),
   );
@@ -95,6 +98,15 @@ describe('the brand header', () => {
     const items = await openSwitch();
     await act(async () => items[1].click());
     expect(push).toHaveBeenCalledWith('/dashboard/brands/b2/prompts');
+  });
+
+  it('has Workspace Settings for admins and managers, not for others', async () => {
+    const workspace = () =>
+      [...container.querySelectorAll('button')].find((b) => b.textContent === 'Workspace Settings');
+    await render('b1', 'manager');
+    expect(workspace()).toBeDefined();
+    await render('b1', 'analyst');
+    expect(workspace()).toBeUndefined();
   });
 
   it('stays put when the same brand is picked', async () => {

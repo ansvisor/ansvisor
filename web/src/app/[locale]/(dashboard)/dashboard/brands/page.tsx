@@ -5,6 +5,7 @@ import { getBrands } from '@/lib/actions/brand';
 import { getPlan, isCloud as checkIsCloud } from '@/config/plans';
 import { getOrgPlan } from '@/lib/guards/plan-guard';
 import { BrandsClient } from './_brands-client';
+import { WorkspaceSettingsMenu } from '@/components/layout/workspace-settings-menu';
 import { Button } from '@/components/ui/button';
 import { Crown, Plus } from 'lucide-react';
 
@@ -17,12 +18,13 @@ function BrandsHeader({
 }) {
   const t = useTranslations('brands');
   return (
-    <div className="flex items-center justify-between">
+    <div className="flex flex-wrap items-center justify-between gap-4">
       <div>
         <h1 className="text-2xl font-bold tracking-tight">{t('title')}</h1>
         <p className="text-muted-foreground text-sm">{t('description')}</p>
       </div>
       <div className="flex items-center gap-2">
+        <WorkspaceSettingsMenu />
         {canAddBrand ? (
           <Link href="/dashboard/brands/new">
             <Button className="gap-2">
