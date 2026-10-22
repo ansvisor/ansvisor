@@ -250,6 +250,26 @@ intent, not during exploratory queries.
 | `list_reports` | Saved report snapshots for a brand, newest first; returns metadata without the full payload (default 50, max 100 per call). | |
 | `get_report` | Full immutable snapshot for one saved report, including its stored payload; does not regenerate it. | |
 
+### Mentions & sentiment
+
+The Mentions & Sentiment page's figures, under the page's filters: `date_from` / `date_to` (the last 30 days when left out), `platform`, `region`, `topic_id` and `search` over the prompts' text. They are built from the stored answers with no LLM call. Net sentiment runs from −100 to +100, and under 20 mentions a figure is marked `lowSample`, with no change read into it. Sentiment is measured for your brand only.
+
+| Tool | What it does | Writes |
+| --- | --- | --- |
+| `get_mentions_summary` | The Overview: times named (the page's Total mentions), mentions, mention rate, prompts with mentions, average position and sentiment, now and in the window before, with each change taken on the prompts both windows answered (`changes.basis`), as the page's cards; the platform that moved net sentiment most, each platform and each day. | |
+| `list_mentions` | The responses naming the brand, 100 a page, with sentiment, position, competitors in the same response and an excerpt; filter by `sentiment` or `competitor_id` (`none` for no competitor) and sort. | |
+| `get_mention` | One response in full: text, citations, competitors named, sentiment and its latest correction. | |
+| `get_mention_competitors` | How often AI names each competitor in the brand's responses, and how often in the same response as the brand. | |
+| `get_mentions_perception` | What AI associates with the brand: its terms, the attributes that set it apart from its top competitors, co-mentions and the biggest gap. | |
+| `override_mention_sentiment` | "Sentiment is wrong": correct one response's sentiment, with an optional note. The key's user must be an admin or manager. | **yes** |
+
+The same reads are available over REST with the same `ans_` key: `GET /api/mcp/mentions/summary`, `/api/mcp/mentions`, `/api/mcp/mentions/<id>`, `/api/mcp/mentions/competitors` and `/api/mcp/mentions/perception`, with the filters as query parameters. A correction is `POST /api/mcp/mentions/<id>/sentiment-override` with `{ "sentiment": "negative", "note": "…" }`.
+
+```bash
+curl "https://app.ansvisor.com/api/mcp/mentions/summary?brand_id=<brand_id>&platform=gemini-web" \
+  -H "Authorization: Bearer ans_..."
+```
+
 ### Topics & prompts
 
 | Tool | What it does | Writes |
@@ -327,6 +347,7 @@ Ask your client things like:
 - _"Are my topics balanced?" / "Which topic has the most prompts?"_
 - _"Show me the prompts in my pricing topic."_
 - _"Who are my top 5 competitors by mention count this month?"_
+- _"Why did our sentiment drop on Gemini?"_
 
 The model picks the right tool, fills in the brand id and filters, and
 answers in plain English using the returned data.

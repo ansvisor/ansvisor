@@ -52,6 +52,8 @@ import { PROMPT_RANGE_PRESETS, type PromptRangePreset } from '@/config/prompt-op
 import type { PositionsRange } from '@/lib/positions-range';
 import { DateRangeFilter } from '@/components/filters/date-range-filter';
 import { ImproveTab, useImprove, type ImproveController } from './prompt-improve-tab';
+import { PromptContentStep } from './prompt-content-step';
+import type { DialogPreset } from '@/components/content/new-content-dialog';
 import { getPromptPositions, type PromptPositionsData } from '@/lib/actions/prompt-positions';
 import { viewerTimeZone } from '@/lib/time-zone';
 import type {
@@ -85,6 +87,12 @@ interface Props {
   /** The tab the panel opens on: Improve when opened from the row menu (PROMPT-006). */
   initialTab?: 'platforms' | 'improve';
   onClose: () => void;
+  /** The prompt's brand, for the Improve tab's way into the Content Editor. */
+  brandId?: string;
+  /** Opens New content › Start for the prompt; without it the Improve tab offers no content step. */
+  onStartContent?: (preset: DialogPreset) => void;
+  /** Bumped when Start sent a draft (Agent or Team): the content step looks for it again. */
+  contentSent?: number;
 }
 
 const DAYS_PAGE = 10;
@@ -136,6 +144,9 @@ export function PromptPositionsSheet({
   region,
   initialTab = 'platforms',
   onClose,
+  brandId,
+  onStartContent,
+  contentSent = 0,
 }: Props) {
   const preset = range.preset;
   // A range change asked for while the Improve tab has unsent edits waits here
@@ -182,6 +193,17 @@ export function PromptPositionsSheet({
   const current = loaded?.key === key && key !== '' ? loaded : null;
   const data = current?.data ?? null;
   const latestMode = preset === '24h';
+  const contentStepFor = (loaded: PromptPositionsData) =>
+    brandId && onStartContent ? (
+      <PromptContentStep
+        brandId={brandId}
+        prompt={loaded.prompt}
+        summary={loaded.summary}
+        citedPage={loaded.citedPage}
+        onStart={onStartContent}
+        recheck={contentSent}
+      />
+    ) : null;
 
   const improve = useImprove({
     promptId: prompt?.id ?? null,
@@ -302,9 +324,19 @@ export function PromptPositionsSheet({
           {current?.error && <LoadError message={current.error} onRetry={retry} />}
           {data &&
             (latestMode ? (
-              <LatestView data={data} improve={improve} initialTab={initialTab} />
+              <LatestView
+                data={data}
+                improve={improve}
+                initialTab={initialTab}
+                content={contentStepFor(data)}
+              />
             ) : (
-              <PeriodView data={data} improve={improve} initialTab={initialTab} />
+              <PeriodView
+                data={data}
+                improve={improve}
+                initialTab={initialTab}
+                content={contentStepFor(data)}
+              />
             ))}
         </div>
 
@@ -560,9 +592,12 @@ function LatestView({
   data,
   improve,
   initialTab,
+  content,
 }: {
   data: PromptPositionsData;
   improve: ImproveController;
+  /** The Improve tab's content step, first in the tab. */
+  content: React.ReactNode;
   initialTab: 'platforms' | 'improve';
 }) {
   const included = data.platforms.filter((p) => p.access.state === 'included');
@@ -619,7 +654,8 @@ function LatestView({
             )}
           </div>
         </TabsContent>
-        <TabsContent value="improve" className="mt-3">
+        <TabsContent value="improve" className="mt-3 space-y-3">
+          {content}
           <ImproveTab improve={improve} />
         </TabsContent>
       </Tabs>
@@ -682,9 +718,12 @@ function PeriodView({
   data,
   improve,
   initialTab,
+  content,
 }: {
   data: PromptPositionsData;
   improve: ImproveController;
+  /** The Improve tab's content step, first in the tab. */
+  content: React.ReactNode;
   initialTab: 'platforms' | 'improve';
 }) {
   const s = data.summary;
@@ -753,7 +792,8 @@ function PeriodView({
         <TabsContent value="history" className="mt-3">
           <DailyHistory platforms={data.platforms} />
         </TabsContent>
-        <TabsContent value="improve" className="mt-3">
+        <TabsContent value="improve" className="mt-3 space-y-3">
+          {content}
           <ImproveTab improve={improve} />
         </TabsContent>
       </Tabs>

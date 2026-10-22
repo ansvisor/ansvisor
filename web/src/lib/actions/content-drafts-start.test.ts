@@ -21,7 +21,8 @@ let calls: Call[];
 // What a read of each table returns: a row for maybeSingle, rows otherwise.
 let reads: Record<string, unknown>;
 let rpcCalls: { fn: string; args: unknown }[];
-let rpcRows: unknown[];
+let rpcRows: unknown;
+let rpcError: { code: string; message: string } | null;
 
 vi.mock('@/lib/action-center/assignees', () => ({ readAssignees: vi.fn(async () => new Map()) }));
 // The server's writes: a draft linked to an action (CE-022).
@@ -52,7 +53,7 @@ vi.mock('@/lib/supabase/server', () => ({
     },
     rpc: async (fn: string, args: unknown) => {
       rpcCalls.push({ fn, args });
-      return { data: rpcRows, error: null };
+      return { data: rpcError ? null : rpcRows, error: rpcError };
     },
     from: (table: string) => {
       const call: Call = { table, op: 'select', filters: [] };
@@ -68,6 +69,7 @@ vi.mock('@/lib/supabase/server', () => ({
         eq: (col: string, v: unknown) => (call.filters.push(['eq', col, v]), chain),
         in: (col: string, v: unknown) => (call.filters.push(['in', col, v]), chain),
         is: (col: string, v: unknown) => (call.filters.push(['is', col, v]), chain),
+        contains: (col: string, v: unknown) => (call.filters.push(['contains', col, v]), chain),
         order: () => chain,
         limit: () => chain,
         insert: (value: unknown) => ((call.op = 'insert'), (call.value = value), chain),
@@ -82,6 +84,8 @@ vi.mock('@/lib/supabase/server', () => ({
 }));
 
 const {
+  getDraftForPrompt,
+  getOpportunityDrafts,
   createContentDraft,
   getContentOverlap,
   getContentStartOptions,
@@ -98,6 +102,7 @@ beforeEach(() => {
   reads = {};
   rpcCalls = [];
   rpcRows = [];
+  rpcError = null;
   admin.inserts = [];
   admin.result = { data: { id: 'action-draft' }, error: null };
   admin.onInsert = null;
@@ -112,18 +117,30 @@ describe('getContentStartOptions', () => {
           title: 'Create a CRM page for real estate',
           decision: 'create',
           brief: { suggestedTitle: ' CRM for real estate teams ' },
+          assetType: 'solution_page',
         },
-        { id: 'o2', title: 'Refresh the pricing page', decision: 'refresh', brief: null },
-      ],
-      prompts: [
-        { id: PROMPT, text: 'best crm for realtors' },
-        { id: 'p2', text: 'crm pricing' },
+        // Written before opportunities had assets.
+        {
+          id: 'o2',
+          title: 'Refresh the pricing page',
+          decision: 'refresh',
+          brief: null,
+          assetType: null,
+        },
       ],
       // Counted in the database: a big brand's topics past the listed prompts too.
       topics: [
         { id: TOPIC, name: 'Real estate', prompts: [{ count: 640 }] },
         { id: 't2', name: 'Empty topic', prompts: [{ count: 0 }] },
       ],
+    };
+    // The prompts, marked where the brand already shows (00230), not seen first.
+    rpcRows = {
+      prompts: [
+        { id: PROMPT, text: 'best crm for realtors', seen: false },
+        { id: 'p2', text: 'crm pricing', seen: true },
+      ],
+      seen: 7,
     };
     await expect(getContentStartOptions(BRAND)).resolves.toEqual({
       opportunities: [
@@ -132,28 +149,134 @@ describe('getContentStartOptions', () => {
           title: 'Create a CRM page for real estate',
           decision: 'create',
           pageTitle: 'CRM for real estate teams',
+          assetType: 'solution_page',
         },
-        { id: 'o2', title: 'Refresh the pricing page', decision: 'refresh', pageTitle: null },
+        {
+          id: 'o2',
+          title: 'Refresh the pricing page',
+          decision: 'refresh',
+          pageTitle: null,
+          assetType: null,
+        },
       ],
       prompts: [
-        { id: PROMPT, text: 'best crm for realtors' },
-        { id: 'p2', text: 'crm pricing' },
+        { id: PROMPT, text: 'best crm for realtors', seen: false },
+        { id: 'p2', text: 'crm pricing', seen: true },
       ],
+      // Every seen prompt, past the listed ones too.
+      promptsSeen: 7,
       topics: [{ id: TOPIC, name: 'Real estate', promptCount: 640 }],
     });
+    expect(rpcCalls).toEqual([
+      {
+        fn: 'content_start_prompts',
+        args: { p_brand_id: BRAND, p_days: 30, p_limit: 500 },
+      },
+    ]);
     expect(calls.find((call) => call.table === 'content_opportunities')!.filters).toEqual([
       ['eq', 'brand_id', BRAND],
       ['in', 'status', ['new', 'reviewed', 'sent', 'in_progress']],
     ]);
-    expect(calls.find((call) => call.table === 'prompts')!.filters).toEqual([
-      ['eq', 'prompt_sets.brand_id', BRAND],
-      ['eq', 'is_active', true],
-    ]);
+    expect(calls.find((call) => call.table === 'prompts')).toBeUndefined();
     expect(calls.find((call) => call.table === 'topics')!.filters).toEqual([
       ['eq', 'brand_id', BRAND],
       ['eq', 'is_active', true],
       ['eq', 'prompts.is_active', true],
     ]);
+  });
+
+  it('lists every active prompt, none seen, before the function exists', async () => {
+    rpcError = { code: 'PGRST202', message: 'Could not find the function' };
+    reads = {
+      prompts: [
+        { id: PROMPT, text: 'best crm for realtors' },
+        { id: 'p2', text: 'crm pricing' },
+      ],
+    };
+    const options = await getContentStartOptions(BRAND);
+    expect(options.prompts).toEqual([
+      { id: PROMPT, text: 'best crm for realtors', seen: false },
+      { id: 'p2', text: 'crm pricing', seen: false },
+    ]);
+    expect(options.promptsSeen).toBe(0);
+    expect(calls.find((call) => call.table === 'prompts')!.filters).toEqual([
+      ['eq', 'prompt_sets.brand_id', BRAND],
+      ['eq', 'is_active', true],
+    ]);
+  });
+
+  it('lists no prompts for a brand that isn’t the member’s, and says so when the read fails', async () => {
+    rpcRows = null;
+    await expect(getContentStartOptions(BRAND)).resolves.toMatchObject({
+      prompts: [],
+      promptsSeen: 0,
+    });
+    rpcError = { code: '57014', message: 'canceling statement due to statement timeout' };
+    await expect(getContentStartOptions(BRAND)).rejects.toThrow('statement timeout');
+  });
+
+  it('throws on a payload the schema doesn’t know, rather than list no prompts', async () => {
+    rpcRows = { prompts: 'not a list', seen: 'x' };
+    await expect(getContentStartOptions(BRAND)).rejects.toThrow();
+  });
+});
+
+describe('getOpportunityDrafts', () => {
+  it('maps each opportunity to the latest draft not yet published started from it', async () => {
+    reads = {
+      content_drafts: [
+        { id: 'd9', opportunity_id: OPPORTUNITY },
+        { id: 'd3', opportunity_id: OPPORTUNITY },
+        { id: 'd4', opportunity_id: 'o2' },
+      ],
+    };
+    await expect(
+      getOpportunityDrafts(BRAND, [OPPORTUNITY, OPPORTUNITY, 'not-an-id']),
+    ).resolves.toEqual({
+      [OPPORTUNITY]: 'd9',
+      o2: 'd4',
+    });
+    expect(calls).toEqual([
+      {
+        table: 'content_drafts',
+        op: 'select',
+        filters: [
+          ['eq', 'brand_id', BRAND],
+          ['in', 'opportunity_id', [OPPORTUNITY]],
+          ['in', 'status', ['draft', 'in_review', 'ready']],
+        ],
+      },
+    ]);
+  });
+
+  it('reads nothing without an opportunity to look up', async () => {
+    await expect(getOpportunityDrafts(BRAND, [])).resolves.toEqual({});
+    await expect(getOpportunityDrafts('x', [OPPORTUNITY])).resolves.toEqual({});
+    expect(calls).toEqual([]);
+  });
+});
+
+describe('getDraftForPrompt', () => {
+  it('finds the latest draft not yet published among those for the prompt', async () => {
+    reads = { content_drafts: { id: 'd7' } };
+    await expect(getDraftForPrompt(BRAND, PROMPT)).resolves.toBe('d7');
+    expect(calls).toEqual([
+      {
+        table: 'content_drafts',
+        op: 'select',
+        filters: [
+          ['eq', 'brand_id', BRAND],
+          ['contains', 'prompt_ids', [PROMPT]],
+          ['in', 'status', ['draft', 'in_review', 'ready']],
+        ],
+      },
+    ]);
+  });
+
+  it("is null when there is none, and doesn't read for an id that isn't one", async () => {
+    await expect(getDraftForPrompt(BRAND, PROMPT)).resolves.toBeNull();
+    await expect(getDraftForPrompt(BRAND, 'not-an-id')).resolves.toBeNull();
+    expect(calls).toHaveLength(1);
   });
 });
 

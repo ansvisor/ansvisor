@@ -9,6 +9,7 @@
  */
 import { PLANS, PLAN_ORDER, type Plan } from '@/config/plans';
 import { extractHostname, normalizeDomain } from '@/lib/citations/classify';
+import { pageKey } from '@/lib/content/sources';
 import { dayIn, nextDay, startOfDayIn } from '@/lib/time-zone';
 import type { Sentiment } from '@/types';
 
@@ -101,6 +102,49 @@ export function brandCitationPosition(
     if (host && domains.some((d) => host === d || host.endsWith(`.${d}`))) rank = total;
   }
   return rank === null ? null : { rank, total };
+}
+
+/** The brand's page AI engines cite most for a prompt, and in how many answers. */
+export interface CitedPage {
+  url: string;
+  title: string | null;
+  answers: number;
+}
+
+/**
+ * The brand's page cited in the most answers, on brandCitationPosition's
+ * host rule. One page however its address is written: query, fragment,
+ * www and a trailing slash don't count (ChatGPT adds ?utm_source=…). A tie
+ * goes to the page cited in the newest answer, as `sourceLists` comes
+ * newest first. Null when no source is the brand's.
+ */
+export function brandCitedPage(sourceLists: unknown[], brandDomains: string[]): CitedPage | null {
+  const domains = brandDomains.map(normalizeDomain).filter(Boolean);
+  if (domains.length === 0) return null;
+  const pages = new Map<string, CitedPage>();
+  for (const citations of sourceLists) {
+    if (!Array.isArray(citations)) continue;
+    const inAnswer = new Set<string>();
+    for (const cite of citations) {
+      const url = typeof cite?.url === 'string' ? cite.url.trim() : '';
+      const host = url ? extractHostname(url) : null;
+      if (!host || !domains.some((d) => host === d || host.endsWith(`.${d}`))) continue;
+      const key = pageKey(url);
+      if (!key || inAnswer.has(key)) continue;
+      inAnswer.add(key);
+      const title = typeof cite?.title === 'string' && cite.title.trim() ? cite.title.trim() : null;
+      const page = pages.get(key);
+      if (page) {
+        page.answers += 1;
+        page.title ??= title;
+      } else {
+        pages.set(key, { url: url.split(/[?#]/)[0], title, answers: 1 });
+      }
+    }
+  }
+  let top: CitedPage | null = null;
+  for (const page of pages.values()) if (!top || page.answers > top.answers) top = page;
+  return top;
 }
 
 /** One stored answer, reduced to what the panel needs. */

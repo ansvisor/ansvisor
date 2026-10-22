@@ -825,6 +825,36 @@ export type Database = {
           },
         ]
       }
+      content_plan_marks: {
+        Row: {
+          brand_id: string
+          hidden_at: string | null
+          priority: boolean
+          restore_status: string | null
+          row_key: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          brand_id: string
+          hidden_at?: string | null
+          priority?: boolean
+          restore_status?: string | null
+          row_key: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          brand_id?: string
+          hidden_at?: string | null
+          priority?: boolean
+          restore_status?: string | null
+          row_key?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
       content_rule_sets: {
         Row: {
           organization_id: string
@@ -2934,6 +2964,82 @@ export type Database = {
           },
         ]
       }
+      mentions_entities_daily: {
+        Row: {
+          answers: number
+          brand_id: string
+          day: string
+          entity: string
+          platform: string
+          region: string | null
+          with_brand: number
+        }
+        Insert: {
+          answers: number
+          brand_id: string
+          day: string
+          entity: string
+          platform: string
+          region?: string | null
+          with_brand: number
+        }
+        Update: {
+          answers?: number
+          brand_id?: string
+          day?: string
+          entity?: string
+          platform?: string
+          region?: string | null
+          with_brand?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "mentions_entities_daily_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brands"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      mentions_terms_daily: {
+        Row: {
+          answers: number
+          brand_id: string
+          day: string
+          entity: string
+          platform: string
+          region: string | null
+          term: string
+        }
+        Insert: {
+          answers: number
+          brand_id: string
+          day: string
+          entity: string
+          platform: string
+          region?: string | null
+          term: string
+        }
+        Update: {
+          answers?: number
+          brand_id?: string
+          day?: string
+          entity?: string
+          platform?: string
+          region?: string | null
+          term?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "mentions_terms_daily_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brands"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       sentiment_overrides: {
         Row: {
           brand_id: string
@@ -3786,6 +3892,10 @@ export type Database = {
         Args: { p_brand_id: string; p_days?: number }
         Returns: Json
       }
+      content_start_prompts: {
+        Args: { p_brand_id: string; p_days?: number; p_limit?: number }
+        Returns: Json
+      }
       content_page_overlap: {
         Args: { p_brand_id: string; p_prompt_ids: string[]; p_since?: string }
         Returns: {
@@ -4142,7 +4252,12 @@ export type Database = {
         Returns: Json
       }
       override_mention_sentiment: {
-        Args: { p_note?: string; p_result_id: string; p_sentiment: string }
+        Args: {
+          p_note?: string
+          p_result_id: string
+          p_sentiment: string
+          p_user_id?: string
+        }
         Returns: Json
       }
       normalize_page_path: { Args: { p_url: string }; Returns: string }

@@ -4,7 +4,8 @@ import { NextIntlClientProvider } from 'next-intl';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import messages from '../../../../../../../../messages/en.json';
 import type { DraftBrief } from '@/lib/content/brief';
-import { BriefTab, type BriefState } from './_brief-tab';
+import type { DraftMethod } from '@/lib/content/drafts';
+import { BriefTab, type AgentRewrite, type BriefState } from './_brief-tab';
 
 const saveDraftBrief = vi.fn();
 vi.mock('@/lib/actions/content-drafts', () => ({
@@ -46,7 +47,13 @@ let root: Root;
 
 async function render(
   state: BriefState,
-  extra: { pageType?: string | null; sourceUrl?: string | null; length?: number } = {},
+  extra: {
+    pageType?: string | null;
+    sourceUrl?: string | null;
+    length?: number;
+    method?: DraftMethod;
+    rewrite?: AgentRewrite;
+  } = {},
 ) {
   await act(async () => {
     root.render(
@@ -59,10 +66,12 @@ async function render(
           sourceUrl={
             extra.sourceUrl === undefined ? 'https://acme.example/guides/espresso' : extra.sourceUrl
           }
+          method={extra.method ?? 'optimize'}
           rebuilding={false}
           onRebuild={onRebuild}
           onRetry={onRetry}
           onSaved={onSaved}
+          rewrite={extra.rewrite}
         />
       </NextIntlClientProvider>,
     );
@@ -214,6 +223,51 @@ describe('the Brief tab', () => {
     expect(toast.error).toHaveBeenCalledWith("Couldn't save the brief. Try again.");
     expect(button('Save brief')).toBeDefined();
     expect(onSaved).not.toHaveBeenCalled();
+  });
+
+  it('rewrites a new page from the brief, once the person says so', async () => {
+    const run = vi.fn();
+    await render(
+      { status: 'ready', brief },
+      { method: 'create', sourceUrl: null, rewrite: { run, running: false, blocked: null } },
+    );
+    await act(async () => button('Rewrite from brief').click());
+    expect(run).not.toHaveBeenCalled();
+    expect(container.querySelector('[role="alert"]')!.textContent).toContain(
+      'The page you have now stays in History.',
+    );
+    await act(async () => button('Start the agent').click());
+    expect(run).toHaveBeenCalledTimes(1);
+  });
+
+  it('suggests changes to a live page from the brief, and waits for open suggestions', async () => {
+    const run = vi.fn();
+    await render(
+      { status: 'ready', brief },
+      { rewrite: { run, running: false, blocked: 'Accept or reject the open suggestions first.' } },
+    );
+    const suggest = button('Suggest changes from brief');
+    expect(suggest.disabled).toBe(true);
+    expect(suggest.title).toBe('Accept or reject the open suggestions first.');
+
+    await render({ status: 'ready', brief }, { rewrite: { run, running: false, blocked: null } });
+    await act(async () => button('Suggest changes from brief').click());
+    expect(container.querySelector('[role="alert"]')!.textContent).toContain(
+      'Passages AI answers quote stay as they are.',
+    );
+    await act(async () => button('Cancel').click());
+    expect(run).not.toHaveBeenCalled();
+  });
+
+  it('offers no rewrite without an outline, or once the page is ready', async () => {
+    const run = vi.fn();
+    await render(
+      { status: 'ready', brief: { ...brief, outline: [] } },
+      { rewrite: { run, running: false, blocked: null } },
+    );
+    expect(button('Suggest changes from brief')).toBeUndefined();
+    await render({ status: 'ready', brief });
+    expect(button('Suggest changes from brief')).toBeUndefined();
   });
 
   it('offers to retry when the brief can’t be read', async () => {

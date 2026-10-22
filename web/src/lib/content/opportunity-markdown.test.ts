@@ -86,6 +86,13 @@ describe('opportunityToMarkdown', () => {
     expect(md).toContain('1. What flat feet need\n   - Arch support\n   - Stability\n2. The shoes');
   });
 
+  it("names each asset's type as the page does", () => {
+    const md = opportunityToMarkdown(base, brief, [], (type) =>
+      type === 'comparison_page' ? 'Comparison' : null,
+    );
+    expect(md).toContain('- Flat feet shoe comparison (Comparison, Owned, Expand)');
+  });
+
   it('copies the opportunity and its source data before a brief exists', () => {
     const md = opportunityToMarkdown(
       { ...base, clusterId: null, decision: null, sourceData: { promptText: 'Best shoes?' } },

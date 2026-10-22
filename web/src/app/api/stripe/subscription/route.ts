@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { supabaseAdmin } from '@/lib/supabase/admin';
-import { stripe, PRICE_IDS } from '@/lib/stripe';
-import { SUBSCRIBABLE_PLANS } from '@/config/plans';
+import { stripe, priceIdFor } from '@/lib/stripe';
 import { alignPromptsToPlanForOrg } from '@/lib/plan-engines';
+import { planChange, planRequestSchema, type BillingInterval } from '@/lib/billing/plan-purchase';
 
 type SubscriptionItem = {
   id: string;
@@ -50,7 +50,7 @@ async function getOrgStripeIds() {
 
   const { data: profile } = await supabase
     .from('profiles')
-    .select('organization_id')
+    .select('organization_id, role')
     .eq('id', user.id)
     .single();
 
@@ -64,7 +64,13 @@ async function getOrgStripeIds() {
     .eq('id', profile.organization_id)
     .single();
 
-  return org;
+  return org ? { ...org, role: profile.role as string | null } : null;
+}
+
+/** A card the charge needs was declined, or its bank wants it confirmed. */
+function paymentFailed(err: unknown) {
+  const message = err instanceof Error ? err.message : 'Payment failed';
+  return NextResponse.json({ error: message, code: 'payment_failed' }, { status: 402 });
 }
 
 /** GET — current subscription details */
@@ -110,28 +116,58 @@ export async function GET() {
   }
 }
 
-/** PATCH — change plan (upgrade/downgrade) or reactivate */
+/** The subscription's billing period, from its first item's price. */
+function intervalOf(sub: SubscriptionRaw): BillingInterval | null {
+  const interval = sub.items.data[0]?.price?.recurring?.interval;
+  return interval === 'month' || interval === 'year' ? interval : null;
+}
+
+/** The subscription as GET returns it, after a change. */
+function subscriptionBody(planId: string, sub: SubscriptionRaw) {
+  const price = sub.items.data[0]?.price;
+  return {
+    planId,
+    status: sub.status,
+    currentPeriodEnd: getCurrentPeriodEndIso(sub),
+    cancelAtPeriodEnd: sub.cancel_at_period_end,
+    priceAmount: price?.unit_amount ? price.unit_amount / 100 : null,
+    interval: price?.recurring?.interval ?? null,
+  };
+}
+
+/**
+ * PATCH — reactivate, change plan or billing period (upgrade/downgrade,
+ * monthly ↔ annual), or buy a free trial now.
+ */
 export async function PATCH(req: NextRequest) {
   try {
     const org = await getOrgStripeIds();
     if (!org) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+    // Buying, changing or reactivating the plan charges the organization's
+    // card: admins only, as the Anthropic key and team management are.
+    if (org.role !== 'admin') {
+      return NextResponse.json(
+        { error: 'Only admins can change the plan', code: 'admin_only' },
+        { status: 403 },
+      );
+    }
 
     if (!org.stripe_subscription_id) {
       return NextResponse.json({ error: 'No active subscription' }, { status: 400 });
     }
 
-    const body = await req.json();
-    const { newPlanId, reactivate } = body as {
-      newPlanId?: 'starter' | 'growth';
-      reactivate?: boolean;
-    };
+    const parsed = planRequestSchema.safeParse(await req.json().catch(() => null));
+    if (!parsed.success) {
+      return NextResponse.json({ error: 'Invalid request' }, { status: 400 });
+    }
+    const body = parsed.data;
 
     const subscriptionId = org.stripe_subscription_id as string;
 
     // Reactivate a canceled-at-period-end subscription
-    if (reactivate) {
+    if (body.reactivate) {
       const updated = (await stripe.subscriptions.update(subscriptionId, {
         cancel_at_period_end: false,
       })) as unknown as SubscriptionRaw;
@@ -140,20 +176,6 @@ export async function PATCH(req: NextRequest) {
         cancelAtPeriodEnd: false,
         currentPeriodEnd: getCurrentPeriodEndIso(updated),
       });
-    }
-
-    // Plan change
-    if (!newPlanId || !SUBSCRIBABLE_PLANS.includes(newPlanId)) {
-      return NextResponse.json({ error: 'Invalid plan' }, { status: 400 });
-    }
-
-    if (newPlanId === org.plan) {
-      return NextResponse.json({ error: 'Already on this plan' }, { status: 400 });
-    }
-
-    const priceId = PRICE_IDS[newPlanId]?.monthly;
-    if (!priceId) {
-      return NextResponse.json({ error: 'Price not configured' }, { status: 400 });
     }
 
     const currentSub = (await stripe.subscriptions.retrieve(
@@ -165,16 +187,80 @@ export async function PATCH(req: NextRequest) {
       return NextResponse.json({ error: 'Subscription item not found' }, { status: 400 });
     }
 
-    const updated = (await stripe.subscriptions.update(subscriptionId, {
-      items: [{ id: itemId, price: priceId }],
-      metadata: { plan_id: newPlanId, organization_id: org.id },
-      proration_behavior: 'create_prorations',
-    })) as unknown as SubscriptionRaw;
+    const change = planChange(
+      {
+        status: currentSub.status,
+        planId: (org.plan as string | null) ?? 'starter',
+        interval: intervalOf(currentSub),
+      },
+      body,
+    );
+    if (change.kind === 'refused') {
+      return NextResponse.json({ error: change.error }, { status: 400 });
+    }
 
-    // Optimistic DB update. Stripe has already accepted the plan change, so
-    // this is the server mirroring its own decision, not the caller writing
-    // their own plan — hence the service role, same as the webhook.
-    await supabaseAdmin.from('organizations').update({ plan: newPlanId }).eq('id', org.id);
+    const priceId = priceIdFor(change.planId, change.interval);
+    if (!priceId) {
+      return NextResponse.json({ error: 'Price not configured' }, { status: 400 });
+    }
+
+    let updated: SubscriptionRaw;
+    if (change.kind === 'buy_now') {
+      let promotionCodeId: string | null = null;
+      if (change.promoCode) {
+        const { data: codes } = await stripe.promotionCodes.list({
+          code: change.promoCode,
+          active: true,
+          limit: 1,
+        });
+        promotionCodeId = codes[0]?.id ?? null;
+        if (!promotionCodeId) {
+          return NextResponse.json(
+            { error: "That promo code isn't valid", code: 'invalid_promo_code' },
+            { status: 400 },
+          );
+        }
+      }
+      try {
+        // The trial ends today and the first period is invoiced at once on
+        // the card added for the trial. Nothing changes unless it's paid:
+        // a declined card (or one its bank wants confirmed) is an error, and
+        // the trial carries on.
+        updated = (await stripe.subscriptions.update(subscriptionId, {
+          items: [{ id: itemId, price: priceId }],
+          trial_end: 'now',
+          cancel_at_period_end: false,
+          proration_behavior: 'none',
+          payment_behavior: 'error_if_incomplete',
+          ...(promotionCodeId ? { discounts: [{ promotion_code: promotionCodeId }] } : {}),
+          metadata: { plan_id: change.planId, organization_id: org.id },
+        })) as unknown as SubscriptionRaw;
+      } catch (err) {
+        return paymentFailed(err);
+      }
+    } else {
+      try {
+        // A new billing period is invoiced at once: as when buying, nothing
+        // changes unless it's paid, so a declined card leaves the plan as it
+        // was rather than on the new period and past due.
+        updated = (await stripe.subscriptions.update(subscriptionId, {
+          items: [{ id: itemId, price: priceId }],
+          metadata: { plan_id: change.planId, organization_id: org.id },
+          proration_behavior: 'create_prorations',
+          payment_behavior: 'error_if_incomplete',
+        })) as unknown as SubscriptionRaw;
+      } catch (err) {
+        return paymentFailed(err);
+      }
+    }
+
+    // Optimistic DB update. Stripe has already accepted the change, so this
+    // is the server mirroring its own decision, not the caller writing their
+    // own plan — hence the service role, same as the webhook.
+    await supabaseAdmin
+      .from('organizations')
+      .update({ plan: change.planId, subscription_status: updated.status })
+      .eq('id', org.id);
 
     // Align prompts to the new plan's engine set so an upgrade actually
     // expands (Starter → Growth: 2 → 8 engines) or trims (Growth → Starter:
@@ -182,26 +268,20 @@ export async function PATCH(req: NextRequest) {
     // route (#78) and the webhook (#79). We do it here too because PATCH
     // performs the optimistic plan write itself — by the time the matching
     // `subscription.updated` webhook arrives, the snapshot guard there
-    // would see "plan unchanged" and skip alignment.
-    try {
-      const result = await alignPromptsToPlanForOrg(org.id, newPlanId);
-      console.log(
-        `[stripe/subscription] Aligned ${result.promptCount} prompt(s) to plan=${newPlanId} (${result.platforms.length} scrapers, ${result.models.length} models) for org ${org.id}`,
-      );
-    } catch (alignErr) {
-      console.error('[stripe/subscription] Plan-engine alignment threw:', alignErr);
+    // would see "plan unchanged" and skip alignment. A period change alone
+    // keeps the plan's engines.
+    if (change.planId !== org.plan) {
+      try {
+        const result = await alignPromptsToPlanForOrg(org.id, change.planId);
+        console.log(
+          `[stripe/subscription] Aligned ${result.promptCount} prompt(s) to plan=${change.planId} (${result.platforms.length} scrapers, ${result.models.length} models) for org ${org.id}`,
+        );
+      } catch (alignErr) {
+        console.error('[stripe/subscription] Plan-engine alignment threw:', alignErr);
+      }
     }
 
-    const newPrice = updated.items.data[0]?.price;
-
-    return NextResponse.json({
-      planId: newPlanId,
-      status: updated.status,
-      currentPeriodEnd: getCurrentPeriodEndIso(updated),
-      cancelAtPeriodEnd: updated.cancel_at_period_end,
-      priceAmount: newPrice?.unit_amount ? newPrice.unit_amount / 100 : null,
-      interval: newPrice?.recurring?.interval ?? null,
-    });
+    return NextResponse.json(subscriptionBody(change.planId, updated));
   } catch (err) {
     console.error('[stripe/subscription] PATCH error:', err);
     return NextResponse.json(
@@ -211,12 +291,18 @@ export async function PATCH(req: NextRequest) {
   }
 }
 
-/** DELETE — cancel subscription at period end */
+/** DELETE — cancel subscription at period end (admins only, as changing the plan is) */
 export async function DELETE() {
   try {
     const org = await getOrgStripeIds();
     if (!org) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    if (org.role !== 'admin') {
+      return NextResponse.json(
+        { error: 'Only admins can cancel the plan', code: 'admin_only' },
+        { status: 403 },
+      );
     }
 
     if (!org.stripe_subscription_id) {

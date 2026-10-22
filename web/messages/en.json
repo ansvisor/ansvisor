@@ -1613,23 +1613,27 @@
         },
         "create_content": {
           "title": "Create your first content",
-          "summary": "Draft in your brand voice, then publish.",
-          "open": "Open Content",
-          "doneWhen": "Sent to your CMS, or its action completed",
+          "summary": "Start the new page your Content Plan ranks first.",
+          "open": "Open the Plan",
+          "doneWhen": "A new page marked ready or published, or sent to your CMS",
           "why": ["Content is the main way to appear in more answers."],
           "how": [
-            "Open Content",
-            "Create a brief for one suggestion",
-            "Publish it: send it to your CMS, or complete its action"
+            "Open the Plan: its top new page opens in Start",
+            "Pick who writes it: you, the Content Agent or your team",
+            "Mark it ready, then publish it"
           ]
         },
         "optimize_page": {
           "title": "Optimize a page",
-          "summary": "Audit a page, then apply its fixes.",
-          "open": "Open Audit",
-          "doneWhen": "1 page audited",
+          "summary": "Improve the page your Content Plan ranks first to optimize.",
+          "open": "Open the Plan",
+          "doneWhen": "An optimized page marked ready or published, or a page audited",
           "why": ["Small fixes on pages AI already reads can win fast."],
-          "how": ["Open Audit", "Audit one page", "Apply the fixes it suggests"]
+          "how": [
+            "Open the Plan: its top page to optimize opens in Start",
+            "Improve it in the editor, with its rules and sources",
+            "Mark it ready, then publish it"
+          ]
         },
         "ready": {
           "title": "You’re ready",
@@ -1665,14 +1669,14 @@
         "failed": "Couldn’t skip the step. Try again."
       },
       "start": {
-        "button": "Start getting started",
+        "button": "Get Started",
         "hint": "For admins and managers · about 15 min",
         "started": "{count, plural, =0 {Getting started is on} one {Getting started · # step already done} other {Getting started · # steps already done}}",
         "failed": "Couldn’t start Getting started. Try again."
       },
       "skip": {
-        "button": "Skip getting started",
-        "title": "Skip getting started?",
+        "button": "Skip Get Started",
+        "title": "Skip Get Started?",
         "body": "Your actions list goes back to normal. Steps you finished stay done.",
         "later": "You can start again any time from the same button.",
         "confirm": "Skip",
@@ -3103,7 +3107,8 @@
       "cards": {
         "create": { "title": "Create", "hint": "New pages AI needs" },
         "optimize": { "title": "Optimize", "hint": "Pages losing ground" },
-        "protect": { "title": "Protect", "hint": "Top pages · edit with care" }
+        "protect": { "title": "Protect", "hint": "Top pages · edit with care" },
+        "priority": { "title": "Priority", "hint": "Marked by your team" }
       },
       "results": {
         "label": "From AI visits · {days} full days to yesterday (UTC):",
@@ -3118,6 +3123,8 @@
         "collapsed": "{types, plural, one {# page type} other {# page types}} · {gaps, plural, =0 {no gap} one {# gap} other {# gaps}}",
         "show": "Show",
         "hide": "Hide",
+        "filteredBy": "Priority list filtered to {type}",
+        "clearFilter": "Clear",
         "aiShare": "Share of AI citations",
         "yourShare": "Your pages' mix",
         "shares": "{ai}% · {yours}%",
@@ -3134,11 +3141,13 @@
       "ranked": "Ranked by impact",
       "filtered": "Filtered · click it again to clear",
       "columns": {
+        "score": "Priority Score",
         "page": "Page",
         "action": "Action",
         "why": "Why · last {days} days",
         "who": "Who",
-        "start": "Start"
+        "start": "Start",
+        "menu": "Row actions"
       },
       "newPage": "New page",
       "actions": { "create": "Create", "optimize": "Optimize", "protect": "Protect" },
@@ -3161,7 +3170,41 @@
       "empty": "Nothing to work on yet. New opportunities and your pages' AI citations show up here.",
       "emptyFiltered": "Nothing here for this period.",
       "loadError": "Couldn't load the content plan.",
-      "retry": "Try again"
+      "retry": "Try again",
+      "priority": "Priority",
+      "score": {
+        "label": "Priority Score {score}: how it is worked out",
+        "title": "How this score is worked out",
+        "opportunity": "The content opportunity's own score: {score}",
+        "citationsDown": "{base} + {pctPoints} for {pct}% fewer citations + {lostPoints} for {lost, plural, one {# citation} other {# citations}} lost = {score}{capped, select, true { (at most {max})} other {}}",
+        "protect": "{base} + {citations, plural, one {# citation} other {# citations}} = {score}{capped, select, true { (at most {max})} other {}}",
+        "higher": "The higher of the two counts.",
+        "marked": "Marked as a priority, so it's listed first."
+      },
+      "rowMenu": {
+        "label": "Actions for {title}",
+        "assign": "Assign to…",
+        "markPriority": "Mark as priority",
+        "unmarkPriority": "Remove priority",
+        "hide": "Hide from the plan",
+        "hidden": "Hidden: {title}",
+        "undo": "Undo",
+        "failed": "Couldn't save that. Try again."
+      },
+      "hidden": {
+        "toggle": "{count, plural, one {# hidden row} other {# hidden rows}} · {open, select, true {Hide} other {Show}}",
+        "show": "Show again"
+      },
+      "assign": {
+        "title": "Assign “{title}”",
+        "description": "It goes to the Action Center as a task for this teammate.",
+        "member": "Teammate",
+        "pick": "Pick a teammate",
+        "submit": "Assign",
+        "cancel": "Cancel",
+        "done": "Assigned to {name}",
+        "failed": "Couldn't assign it. Try again."
+      }
     },
     "agentState": {
       "writing": "Agent writing…",
@@ -3233,7 +3276,9 @@
           "tab": "Prompt",
           "placeholder": "Pick a tracked prompt",
           "search": "Search prompts",
-          "empty": "No tracked prompts."
+          "empty": "No tracked prompts.",
+          "seen": "{count, plural, one {# prompt} other {# prompts}} where AI already names or cites you in the last 30 days {count, plural, one {isn't} other {aren't}} listed: {count, plural, one {it needs} other {they need}} no new page.",
+          "allSeen": "AI already names or cites you for every tracked prompt in the last 30 days."
         },
         "topic": {
           "tab": "Topic",
@@ -3291,6 +3336,7 @@
         "detectedTitle": "Picked from the title.",
         "detectedContent": "Picked from the content.",
         "detectedPage": "Picked from the page.",
+        "detectedOpportunity": "Picked from the opportunity.",
         "openEditor": "Open editor",
         "pageUnread": "Couldn't read {page}: the draft starts with its title.",
         "failed": "Couldn't start the draft. Try again.",
@@ -3326,7 +3372,10 @@
         "team": {
           "title": "Team",
           "hint": "Send to Action Center"
-        }
+        },
+        "assignTo": "Assign to",
+        "assignNone": "No one yet",
+        "assignFailed": "Sent, but couldn't assign it. Assign it in the Action Center."
       },
       "overlap": {
         "label": "Overview",
@@ -3346,7 +3395,8 @@
         "options": {
           "optimizeGiven": {
             "title": "Optimize {page}",
-            "reason": "The page your Content plan picked"
+            "reason": "The page your Content plan picked",
+            "reasonCited": "The page AI engines cite for this prompt"
           },
           "optimizeInstead": {
             "title": "Optimize {page} instead",
@@ -3577,6 +3627,16 @@
         "addColumn": "Add a column to the right",
         "deleteTable": "Delete the table",
         "htmlBlock": "Add an HTML block",
+        "addHtml": "Add HTML",
+        "insert": {
+          "label": "Add",
+          "html": "HTML",
+          "htmlHint": "Add an HTML block on this line",
+          "table": "Table",
+          "tableHint": "Insert a table on this line",
+          "image": "Image",
+          "imageHint": "Insert an image on this line"
+        },
         "attach": "Attach a file: Excel, CSV, Word, Markdown, HTML or text",
         "html": "Edit as HTML",
         "htmlBack": "Back to visual",
@@ -3606,6 +3666,7 @@
         "label": "Side panel",
         "show": "Show side panel",
         "hide": "Hide side panel",
+        "openTab": "Open {tab} in the side panel",
         "tabs": {
           "impact": "Live page",
           "brief": "Brief",
@@ -3775,6 +3836,18 @@
         "edited": "Edited by you.",
         "builtFrom": "{count, plural, one {Built from # source} other {Built from # sources}} · {date}",
         "rebuild": "Rebuild outline",
+        "rewrite": {
+          "button": {
+            "create": "Rewrite from brief",
+            "optimize": "Suggest changes from brief"
+          },
+          "confirm": {
+            "create": "Content Agent writes the page again from this brief, the sources you keep and the rules. The page you have now stays in History. It uses this month's AI usage.",
+            "optimize": "Content Agent suggests changes to the page from this brief, the sources you keep and the rules, for you to accept or reject. Passages AI answers quote stay as they are. It uses this month's AI usage."
+          },
+          "start": "Start the agent",
+          "cancel": "Cancel"
+        },
         "rebuildEdited": "Rebuild outline writes a new brief over the one you edited.",
         "rebuildAnyway": "Rebuild anyway",
         "keepEdited": "Keep my brief",
@@ -3804,8 +3877,15 @@
           "failed": "Couldn't save the brief. Try again."
         }
       },
+      "export": {
+        "button": "Export",
+        "hint": "Download the page as it is now",
+        "docx": "Export Word",
+        "html": "Export HTML",
+        "md": "Export Markdown",
+        "failed": "Couldn't export the page. Try again."
+      },
       "rulesChip": "Rules {met}/{total}",
-      "rulesChipShort": "{met}/{total}",
       "rulesChipHint": "Rules this page meets now. Open the Rules tab.",
       "rules": {
         "set": "Rule set",
@@ -3982,13 +4062,29 @@
     "opportunities": "Opportunities",
     "autoGeneratedHint": "Opportunities are generated automatically as your tracking data comes in.",
     "generating": "Generating…",
-    "send": "Send",
     "sendToWorkflow": "Send to Workflow",
     "generateBrief": "Generate Brief",
     "generatingBrief": "Generating...",
     "briefGenerated": "Brief Generated",
     "briefLimitReached": "You've used this month's content briefs",
     "sendToActions": "Send to Actions",
+    "draftCheckFailed": "Couldn't check for a draft · Retry",
+    "sendToEditor": "Send to Editor",
+    "openDraft": "Open draft",
+    "sendToPlan": "Send to Plan",
+    "openInPlan": "Open in Plan",
+    "sentToPlan": "Added to the Plan's priority list",
+    "sendToPlanError": "Couldn't add it to the Plan. Please try again.",
+    "openPlan": "Open Plan",
+    "moreActions": "More actions",
+    "rowActions": "Actions for {title}",
+    "exportOne": {
+      "button": "Export",
+      "csv": "Export CSV",
+      "excel": "Export Excel",
+      "word": "Export Word",
+      "failed": "Couldn't export this opportunity. Please try again."
+    },
     "openInActions": "Open in Actions",
     "sendAgain": "Send Again",
     "copyAllData": "Copy All Data",
@@ -4295,14 +4391,6 @@
       "defend": "You are already visible here. Keep this page ahead of competitors."
     },
     "assetType": {
-      "blog_post": "Blog post",
-      "pillar_guide": "Pillar guide",
-      "landing_page": "Landing page",
-      "comparison_page": "Comparison page",
-      "glossary_page": "Glossary page",
-      "faq_page": "FAQ page",
-      "product_page": "Product page",
-      "category_page": "Category page",
       "third_party_article": "Third-party article",
       "backlink": "Backlink"
     },
@@ -5066,6 +5154,8 @@
       "subtitle": "Every tracked prompt for this brand · edit or pause any row in place",
       "subtitleReadOnly": "Read-only overview of every tracked prompt for this brand",
       "planAndUsage": "Plan & usage",
+      "show": "Show",
+      "hide": "Hide",
       "planPill": "{plan} plan",
       "planLabel": {
         "self_hosted": "Self-Hosted",
@@ -5180,6 +5270,18 @@
       "none": "No prompts are {label} in this range.",
       "showAll": "Show all performance",
       "order": "Furthest behind first: late or missing on the most AI platforms, then the worse average position."
+    },
+    "content": {
+      "create": "Create content",
+      "optimize": "Optimize content",
+      "openDraft": "Open draft",
+      "createTitle": "No answer mentions or cites you here",
+      "createBody": "None of this period's {answers, plural, one {# answer} other {# answers}} names your brand or cites your site. A page written for this prompt gives AI engines something of yours to use.",
+      "rareTitle": "Mentioned in {pct}% of answers",
+      "lateTitle": "Mentioned at #{position} on average",
+      "optimizePage": "Optimize {page}, the page AI engines cite here, so they name you more often and earlier.",
+      "optimizePick": "Start lists your pages that answer this prompt: pick the one to optimize.",
+      "draftNote": "A draft for this prompt is already being written."
     },
     "improve": {
       "quota": {
@@ -5808,8 +5910,32 @@
     "upgradeTo": "Upgrade to {plan}",
     "downgradeTo": "Downgrade to {plan}",
     "changePlanConfirmTitle": "Change to {plan}?",
-    "changePlanConfirmDescription": "You will be switched to the {plan} plan at ${price}/mo. Proration will be applied to your next invoice.",
+    "changePlanConfirmDescription": "You will be switched to the {plan} plan at ${price}/{interval, select, year {yr} other {mo}}. Proration will be applied to your next invoice.",
     "changePlanConfirm": "Confirm Change",
+    "changePeriodTitle": "Switch to {interval, select, year {annual} other {monthly}} billing?",
+    "changePeriodDescription": "Your {plan} plan will cost ${price} a {interval, select, year {year} other {month}}. Proration will be applied to your next invoice.",
+    "billingPeriod": "Billing period",
+    "monthly": "Monthly",
+    "annual": "Annual",
+    "savePercent": "Save {percent}%",
+    "popular": "Popular",
+    "regularPrice": "Regular price",
+    "firstMonthOffer": "50% off your first month with code {code}",
+    "buyPlanNow": "Buy {plan} now",
+    "planAdminOnly": "Only admins can buy or change the plan. Ask an admin in your organization.",
+    "seeAllPlanFeatures": "See everything each plan includes",
+    "switchToAnnual": "Switch to annual billing",
+    "switchToMonthly": "Switch to monthly billing",
+    "buyNowTitle": "Buy {plan} now?",
+    "buyNowDescription": "Your free trial ends today and the card you added is charged ${price} for the first {interval, select, year {year} other {month}}. The plan then renews every {interval, select, year {year} other {month}}.",
+    "promoCode": "Promo code",
+    "firstMonthWithCode": "With {code}, your first month is ${price}.",
+    "buyNowConfirm": "Buy now",
+    "planBought": "Your {plan} plan is active. Thank you!",
+    "paymentFailed": "The payment didn't go through.",
+    "paymentFailedHint": "Your free trial carries on. Update your card on Stripe, then try again.",
+    "updateCard": "Update card",
+    "trialEndsOn": "Your free trial ends on {date}",
     "processing": "Processing...",
     "cancelSubscription": "Cancel Subscription",
     "cancelConfirmTitle": "Cancel your subscription?",
@@ -6037,6 +6163,9 @@
     "title": "Brands",
     "description": "Manage all the brands you track across AI platforms.",
     "addBrand": "Add Brand",
+    "showAllBrands": "Show My All Brands",
+    "visitBrandSettings": "Visit Brand Setting",
+    "workspaceSettings": "Workspace Settings",
     "editBrand": "Edit Brand",
     "deleteBrand": "Delete Brand",
     "noBrands": "No brands yet",
@@ -6100,6 +6229,8 @@
       "confirmDelete": "Type the brand name to confirm:",
       "deleteConfirmPlaceholder": "Brand name",
       "deleteButton": "Delete Brand Permanently",
+      "managersOnlyEdit": "Only admins and managers can change these settings.",
+      "adminsOnlyDelete": "Only admins can delete a brand.",
       "shopping": {
         "title": "Shopping mode",
         "description": "Turn this on if this brand is in e-commerce. We’ll add ChatGPT Shopping to every prompt under this brand and show Product Visibility in the menu.",

@@ -277,17 +277,11 @@ export interface OpportunityPage {
   lastmod: string | null;
 }
 
-export type OpportunityAssetType =
-  | 'blog_post'
-  | 'pillar_guide'
-  | 'landing_page'
-  | 'comparison_page'
-  | 'glossary_page'
-  | 'faq_page'
-  | 'product_page'
-  | 'category_page'
-  | 'third_party_article'
-  | 'backlink';
+/**
+ * A page type of the brand's kind of site, an earned asset, or a type from
+ * before opportunities followed the site; lib/content/asset-types.ts reads it.
+ */
+export type OpportunityAssetType = string;
 
 export interface OpportunityAsset {
   key: string;

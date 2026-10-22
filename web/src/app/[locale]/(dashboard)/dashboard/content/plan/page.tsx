@@ -2,12 +2,22 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useFormatter, useTranslations } from 'next-intl';
+import { toast } from 'sonner';
 import { Loader2, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { NewContentDialog, type DialogPreset } from '@/components/content/new-content-dialog';
-import { getContentPlan, getContentPlanInsights } from '@/lib/actions/content-plan';
-import type { PageType } from '@/lib/content/drafts';
+import {
+  getContentPlan,
+  getContentPlanInsights,
+  hidePlanRow,
+  setPlanRowPriority,
+  showPlanRow,
+} from '@/lib/actions/content-plan';
+import { listMembers, type TeamMember } from '@/lib/actions/team';
+import { useUserRole } from '@/hooks/use-user-role';
+import { useRouter } from '@/i18n/navigation';
+import { contentEditorPath, type PageType } from '@/lib/content/drafts';
 import { pageTypeMix } from '@/lib/content/plan-mix';
 import { siteTypeOf } from '@/lib/content/page-types';
 import {
@@ -16,14 +26,16 @@ import {
   buildPlan,
   earlierPeriod,
   rowsFor,
+  type PlanAction,
   type PlanCard,
   type PlanPeriod,
   type PlanRow,
 } from '@/lib/content/plan';
 import { formatNumber } from '@/lib/format';
-import { readUrlChoice, writeUrlParams } from '@/lib/url-state';
+import { readUrlChoice, readUrlParam, writeUrlParams } from '@/lib/url-state';
 import { cn } from '@/lib/utils';
 import { useBrandStore } from '@/stores/use-brand-store';
+import { AssignDialog } from './_assign-dialog';
 import { AiResultsStrip, PageTypeMix } from './_plan-insights';
 import { PlanTable } from './_plan-table';
 
@@ -41,20 +53,40 @@ type InsightsRead = {
   data: Awaited<ReturnType<typeof getContentPlanInsights>>;
 };
 
-/** Each card's color, as its action's tag: Create blue, Optimize amber, Protect green. */
+/**
+ * Each card's color, as its action's tag: Create blue, Optimize amber,
+ * Protect green; Priority, the rows marked, in ink as its outline badge.
+ */
 const CARD_DOT: Record<PlanCard, string> = {
   create: 'bg-blue-600 dark:bg-blue-400',
   optimize: 'bg-amber-600 dark:bg-amber-400',
   protect: 'bg-green-600 dark:bg-green-400',
+  priority: 'bg-foreground',
 };
+
+/** What New content opens on for a row: its opportunity in Start, or its page to optimize. */
+function presetFor(row: PlanRow): DialogPreset {
+  return row.opportunityId
+    ? {
+        kind: 'opportunity',
+        id: row.opportunityId,
+        // An opportunity for an existing page starts on that page.
+        page: row.page ? { url: row.page, title: row.title } : null,
+      }
+    : { kind: 'page', url: row.page! };
+}
 
 /**
  * The Content plan (Content Editor CE-014, spec v2 §4): what to create,
- * optimize or protect next, for the last 7, 30 or 90 days. Three cards count
- * the work and filter the list, as a row of the page-type mix does; the list
- * ranks it, and each row starts it in New content (Start for an opportunity,
- * an existing page read to optimize) or opens the draft already being
- * written. The period lives in the URL (?days=7).
+ * optimize or protect next, for the last 7, 30 or 90 days. The cards count
+ * the work and the priorities and filter the list, as a row of the
+ * page-type mix does; the list ranks it, priorities first, and each row
+ * starts it in New content (Start for an opportunity, an existing page read
+ * to optimize) or opens the draft already being written. A row's menu
+ * assigns it to a teammate, and lets admins and managers mark it as a
+ * priority or hide it; hidden rows can be shown again below the list. The
+ * period lives in the URL (?days=7). Getting started's content steps open
+ * the Plan on its top Create or Optimize row (?start=create, 00234).
  */
 export default function ContentPlanPage() {
   const t = useTranslations('contentEditor.plan');
@@ -71,6 +103,10 @@ export default function ContentPlanPage() {
   const [attempt, setAttempt] = useState(0);
   const [starting, setStarting] = useState(false);
   const [preset, setPreset] = useState<DialogPreset | null>(null);
+  const { canManage } = useUserRole();
+  const [members, setMembers] = useState<TeamMember[]>([]);
+  const [assigning, setAssigning] = useState<PlanRow | null>(null);
+  const [showHidden, setShowHidden] = useState(false);
   // Another brand starts unfiltered: its cards and types are its own.
   const [filtersFor, setFiltersFor] = useState(activeBrandId);
   if (filtersFor !== activeBrandId) {
@@ -79,9 +115,21 @@ export default function ContentPlanPage() {
     setMixType(null);
   }
 
+  // Getting started's create or optimize step: start the top row of that action once the plan is in.
+  const [startFrom, setStartFrom] = useState<Extract<PlanAction, 'create' | 'optimize'> | null>(
+    null,
+  );
+  const router = useRouter();
+
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- one read of the URL after mount
     setDays(Number(readUrlChoice('days', ['7', '30', '90'], '30')) as PlanPeriod);
+    const start = readUrlParam('start');
+    if (start === 'create' || start === 'optimize') {
+      setStartFrom(start);
+      // Once: a reload or a shared link opens the plan as it is.
+      writeUrlParams({ start: null });
+    }
   }, []);
 
   useEffect(() => {
@@ -145,17 +193,84 @@ export default function ContentPlanPage() {
   };
 
   const startRow = (row: PlanRow) => {
-    setPreset(
-      row.opportunityId
-        ? {
-            kind: 'opportunity',
-            id: row.opportunityId,
-            // An opportunity for an existing page starts on that page.
-            page: row.page ? { url: row.page, title: row.title } : null,
-          }
-        : { kind: 'page', url: row.page! },
-    );
+    setPreset(presetFor(row));
     setStarting(true);
+  };
+
+  // The team, for assigning: read once, when first needed.
+  const loadMembers = () => {
+    if (members.length > 0) return;
+    listMembers()
+      .then(setMembers)
+      .catch((err) => console.error('Failed to load the team:', err));
+  };
+
+  // A row with a draft assigns its task; one without starts in Start, as Team.
+  const assignRow = (row: PlanRow) => {
+    loadMembers();
+    if (row.draft) {
+      setAssigning(row);
+      return;
+    }
+    setPreset({ ...presetFor(row), who: 'team' });
+    setStarting(true);
+  };
+
+  // The step's row: the top one of its action not being written yet, or the
+  // draft already being written for the top one. With none, the card shows
+  // that there is none.
+  useEffect(() => {
+    if (!startFrom || !plan) return;
+    const ofAction = plan.rows.filter((r) => r.action === startFrom);
+    const row = ofAction.find((r) => !r.draft) ?? ofAction[0];
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- one start per visit from Getting started
+    setStartFrom(null);
+    setCard(startFrom);
+    if (!row) return;
+    if (row.draft) {
+      router.push(contentEditorPath(row.draft.id));
+      return;
+    }
+    setPreset(presetFor(row));
+    setStarting(true);
+  }, [startFrom, plan, router]);
+
+  const reload = () => setAttempt((n) => n + 1);
+
+  const markRow = async (row: PlanRow, priority: boolean) => {
+    if (!activeBrandId) return;
+    try {
+      await setPlanRowPriority(activeBrandId, row.key, priority);
+      reload();
+    } catch (err) {
+      console.error('Failed to mark the Plan row:', err);
+      toast.error(t('rowMenu.failed'));
+    }
+  };
+
+  const showRow = async (row: PlanRow) => {
+    if (!activeBrandId) return;
+    try {
+      await showPlanRow(activeBrandId, row.key);
+      reload();
+    } catch (err) {
+      console.error('Failed to show the Plan row:', err);
+      toast.error(t('rowMenu.failed'));
+    }
+  };
+
+  const hideRow = async (row: PlanRow) => {
+    if (!activeBrandId) return;
+    try {
+      await hidePlanRow(activeBrandId, row.key);
+      reload();
+      toast(t('rowMenu.hidden', { title: row.title }), {
+        action: { label: t('rowMenu.undo'), onClick: () => void showRow(row) },
+      });
+    } catch (err) {
+      console.error('Failed to hide the Plan row:', err);
+      toast.error(t('rowMenu.failed'));
+    }
   };
 
   if (!activeBrandId) {
@@ -223,7 +338,7 @@ export default function ContentPlanPage() {
         onSent={() => setAttempt((n) => n + 1)}
       />
 
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {PLAN_CARDS.map((value) => (
           <button
             key={value}
@@ -310,13 +425,62 @@ export default function ContentPlanPage() {
                     {filtered ? t('emptyFiltered') : t('empty')}
                   </p>
                 ) : (
-                  <PlanTable rows={rows} days={current?.days ?? 30} onStart={startRow} />
+                  <PlanTable
+                    rows={rows}
+                    days={current?.days ?? 30}
+                    canManage={canManage}
+                    onStart={startRow}
+                    onAssign={assignRow}
+                    onPriority={(row, priority) => void markRow(row, priority)}
+                    onHide={(row) => void hideRow(row)}
+                  />
                 )}
               </CardContent>
             </Card>
+            {plan && plan.hidden.length > 0 && (
+              <div className="space-y-2">
+                <button
+                  type="button"
+                  aria-expanded={showHidden}
+                  onClick={() => setShowHidden((v) => !v)}
+                  className="text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+                >
+                  {t('hidden.toggle', { count: plan.hidden.length, open: String(showHidden) })}
+                </button>
+                {showHidden && (
+                  <ul className="divide-y rounded-xl border">
+                    {plan.hidden.map((row) => (
+                      <li
+                        key={row.key}
+                        className="flex items-center justify-between gap-3 px-4 py-2 text-sm"
+                      >
+                        <span className="min-w-0 truncate text-muted-foreground" title={row.title}>
+                          {row.title}
+                        </span>
+                        {canManage && (
+                          <Button size="sm" variant="outline" onClick={() => void showRow(row)}>
+                            {t('hidden.show')}
+                          </Button>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            )}
           </div>
         </>
       )}
+      <AssignDialog
+        brandId={activeBrandId}
+        row={assigning}
+        members={members}
+        onClose={() => setAssigning(null)}
+        onAssigned={() => {
+          setAssigning(null);
+          reload();
+        }}
+      />
     </div>
   );
 }

@@ -6,8 +6,10 @@ import type { PlanId } from '@/config/plans';
 import {
   POSITION_PLATFORMS,
   brandCitationPosition,
+  brandCitedPage,
   platformAccess,
   summarizePositions,
+  type CitedPage,
   type PlatformPositions,
   type PositionAnswer,
   type PositionsSummary,
@@ -24,6 +26,8 @@ export interface PromptPositionsData {
   platforms: PlatformPositions[];
   /** An Improve action sent for this prompt that is still tracked (PROMPT-008). */
   improving: ImprovingAction | null;
+  /** The brand's page AI engines cite most for this prompt in the window: the one to optimize. */
+  citedPage: CitedPage | null;
 }
 
 /** 90 days × 8 engines × a few locations, with room to spare. */
@@ -173,5 +177,10 @@ export async function getPromptPositions(
     summary,
     platforms: rowsByPlatform,
     improving: pickImprovingAction(improveRows ?? []),
+    // Newest answer first, so a tie goes to the page cited most recently.
+    citedPage: brandCitedPage(
+      citedIds.map((id) => sourcesById.get(id)),
+      brandDomains,
+    ),
   };
 }
