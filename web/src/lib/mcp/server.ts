@@ -64,6 +64,16 @@ import {
   sourceRefError,
   suggestionsShape,
 } from './content-schemas';
+import {
+  getMentionCompetitorsFor,
+  getMentionFor,
+  getMentionsPerceptionFor,
+  getMentionsSummaryFor,
+  listMentionsFor,
+  overrideMentionSentimentFor,
+  type MentionsFilterParams,
+} from './mentions';
+import { MENTION_SENTIMENTS, MENTION_SORTS } from '@/lib/mentions-list';
 
 /**
  * Build a fresh MCP server bound to a single authenticated request.
@@ -78,6 +88,52 @@ const relaxedUuid = z
     /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/,
     'Invalid UUID format',
   );
+
+/** The Mentions & Sentiment page's filters, the same on every mentions tool. */
+const mentionFilters = {
+  brand_id: relaxedUuid.describe('Brand UUID, from list_brands.'),
+  date_from: z
+    .string()
+    .optional()
+    .describe('ISO timestamp (inclusive) lower bound. Defaults to 30 days ago, as the page.'),
+  date_to: z
+    .string()
+    .optional()
+    .describe('ISO timestamp (inclusive) upper bound; a YYYY-MM-DD covers that whole day.'),
+  platform: z
+    .string()
+    .optional()
+    .describe('One platform id, e.g. "chatgpt-web", "gemini-web", "perplexity-web".'),
+  region: z.string().optional().describe('Optional country code filter (e.g. "US", "TR").'),
+  topic_id: relaxedUuid.optional().describe('Topic UUID, from list_topics.'),
+  search: z.string().optional().describe("Matched against the prompts' text."),
+};
+
+function mentionParams(args: {
+  brand_id: string;
+  date_from?: string;
+  date_to?: string;
+  platform?: string;
+  region?: string;
+  topic_id?: string;
+  search?: string;
+}): MentionsFilterParams {
+  return {
+    brandId: args.brand_id,
+    dateFrom: args.date_from,
+    dateTo: args.date_to,
+    platform: args.platform,
+    region: args.region,
+    topicId: args.topic_id,
+    search: args.search,
+  };
+}
+
+const MENTIONS_BASIS =
+  'Built from the stored answers with no LLM call; the window before is the same length. ' +
+  'Net sentiment is positive minus negative share of the responses naming the brand, ' +
+  '−100…+100; under 20 mentions it is a low sample (lowSample: true): quote it as such and ' +
+  'read no change into it. Sentiment is measured for the brand only, not competitors.';
 
 export function createMcpServer(auth: McpAuthContext): McpServer {
   const server = new McpServer({
@@ -1342,6 +1398,156 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
       return {
         content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
       };
+    },
+  );
+
+  server.registerTool(
+    'get_mentions_summary',
+    {
+      description:
+        "The Mentions & Sentiment page's Overview for a brand: times named (`timesNamed`, the " +
+        "page's Total mentions), responses naming it, mention rate, prompts with mentions, " +
+        'average position and sentiment (counts, shares, net), now and in the window before, ' +
+        "with `changes` taken as the page's cards take them: on the prompts both windows " +
+        'answered (`changes.basis`), mentionsPct on times named; the platform that moved net sentiment ' +
+        'most and the competitors AI names beside the brand (`headline`); each platform; and ' +
+        'each day. Use it for "how is AI talking about us" / "why did sentiment drop on ' +
+        'Gemini?". ' +
+        MENTIONS_BASIS,
+      inputSchema: mentionFilters,
+    },
+    async (args) => {
+      const summary = await getMentionsSummaryFor(auth, mentionParams(args));
+      if (!summary) {
+        return { content: [{ type: 'text', text: 'Brand not found' }], isError: true };
+      }
+      return { content: [{ type: 'text', text: JSON.stringify(summary, null, 2) }] };
+    },
+  );
+
+  server.registerTool(
+    'list_mentions',
+    {
+      description:
+        "The responses naming the brand, as the Mentions tab's table: prompt, platform, model, " +
+        'country, sentiment, times named, position among the brands named, competitors in the ' +
+        'same response and an excerpt around the first mention. 100 a page; `total` counts ' +
+        'every match. Pass a row id to get_mention for the full response. ' +
+        MENTIONS_BASIS,
+      inputSchema: {
+        ...mentionFilters,
+        sentiment: z.enum(MENTION_SENTIMENTS).optional().describe('Only this sentiment.'),
+        competitor_id: z
+          .string()
+          .optional()
+          .describe(
+            'Only responses that also name this competitor (UUID, from ' +
+              'get_mention_competitors), or "none" for responses naming no competitor.',
+          ),
+        sort: z
+          .enum(MENTION_SORTS)
+          .optional()
+          .describe('newest (default), oldest, co_mentions (most competitors first) or negative.'),
+        page: z.number().int().min(1).optional().describe('1-based page, 100 rows each.'),
+      },
+    },
+    async (args) => {
+      const list = await listMentionsFor(auth, {
+        ...mentionParams(args),
+        sentiment: args.sentiment,
+        competitorId: args.competitor_id,
+        sort: args.sort,
+        page: args.page,
+      });
+      if (!list) {
+        return { content: [{ type: 'text', text: 'Brand not found' }], isError: true };
+      }
+      return { content: [{ type: 'text', text: JSON.stringify(list, null, 2) }] };
+    },
+  );
+
+  server.registerTool(
+    'get_mention',
+    {
+      description:
+        "One response in full, as the page's response drawer: the stored text, its citations, " +
+        'the competitors it names, its sentiment and the latest "Sentiment is wrong" correction ' +
+        '(sentimentOverride), if any.',
+      inputSchema: {
+        id: relaxedUuid.describe('The response id, from list_mentions.'),
+      },
+    },
+    async (args) => {
+      const mention = await getMentionFor(auth, args.id);
+      if (!mention) {
+        return { content: [{ type: 'text', text: 'Answer not found' }], isError: true };
+      }
+      return { content: [{ type: 'text', text: JSON.stringify(mention, null, 2) }] };
+    },
+  );
+
+  server.registerTool(
+    'get_mention_competitors',
+    {
+      description:
+        'Competitor framing from the Mentions page: how often AI names each competitor in the ' +
+        "brand's tracked responses (count and share of responses, change against the window " +
+        'before) and how often in the same response as the brand. ' +
+        MENTIONS_BASIS,
+      inputSchema: mentionFilters,
+    },
+    async (args) => {
+      const competitors = await getMentionCompetitorsFor(auth, mentionParams(args));
+      if (!competitors) {
+        return { content: [{ type: 'text', text: 'Brand not found' }], isError: true };
+      }
+      return { content: [{ type: 'text', text: JSON.stringify(competitors, null, 2) }] };
+    },
+  );
+
+  server.registerTool(
+    'get_mentions_perception',
+    {
+      description:
+        'What AI associates with the brand (the Perception tab): the terms in the sentences ' +
+        'naming it, with responses and share of the responses naming it, now and before; the ' +
+        "attributes that tell the brand and its top competitors apart, as each one's share of " +
+        'the responses naming it; competitors named in the same responses; and the biggest ' +
+        'gap, an attribute a competitor leads by 20+ points (null when none does, or when ' +
+        'the brand or that competitor has fewer than 20 mentions). Terms are found by rule, ' +
+        'no LLM: a sentence naming two brands lends its words to both.',
+      inputSchema: mentionFilters,
+    },
+    async (args) => {
+      const perception = await getMentionsPerceptionFor(auth, mentionParams(args));
+      if (!perception) {
+        return { content: [{ type: 'text', text: 'Brand not found' }], isError: true };
+      }
+      return { content: [{ type: 'text', text: JSON.stringify(perception, null, 2) }] };
+    },
+  );
+
+  server.registerTool(
+    'override_mention_sentiment',
+    {
+      description:
+        '"Sentiment is wrong": set one response\'s sentiment toward the brand, with an optional ' +
+        'note. Every figure that reads it follows (Mentions, Insights) and the change is logged ' +
+        "under the API key's user, who must be an admin or manager of the brand's organization. " +
+        'It is a write — only fire on explicit user intent for a specific response, never as ' +
+        'part of an exploratory query.',
+      inputSchema: {
+        id: relaxedUuid.describe('The response id, from list_mentions.'),
+        sentiment: z.enum(MENTION_SENTIMENTS).describe('The correct sentiment.'),
+        note: z.string().max(500).optional().describe('Why, for the correction history.'),
+      },
+    },
+    async (args) => {
+      const result = await overrideMentionSentimentFor(auth, args.id, args.sentiment, args.note);
+      if ('error' in result) {
+        return { content: [{ type: 'text', text: result.message }], isError: true };
+      }
+      return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
     },
   );
 

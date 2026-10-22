@@ -5,6 +5,7 @@ import { Layers, MessageCircle, Percent, Smile } from 'lucide-react';
 import { numberFormat } from '@/lib/number-format';
 import { wholeNet } from '@/lib/mentions-headline';
 import {
+  changeBasis,
   isLowSample,
   LOW_SAMPLE_MENTIONS,
   mentionRate,
@@ -31,8 +32,9 @@ function ShareBar({ value, label }: { value: number; label: string }) {
 }
 
 /**
- * The Overview's KPI cards (MS-06), as in the mockup: Total mentions, Mention
- * rate, Prompts with mentions and Net sentiment with its split and n. Each
+ * The Overview's KPI cards (MS-06), as in the mockup: Total mentions (every
+ * time a response names the brand, as on Insights), Mention rate, Prompts with
+ * mentions and Net sentiment with its split and n. Each
  * change is against the window of the same length before; a rate taken over
  * fewer than 20 responses is a "Low sample" and shows no change.
  */
@@ -40,15 +42,26 @@ export function OverviewKpis({ overview, brand }: { overview: MentionsOverview; 
   const t = useTranslations('mentions.overview.kpi');
   const locale = useLocale();
   const f = numberFormat(locale);
-  const { current: cur, previous: prev } = overview;
+  const { current: cur } = overview;
+  // Every change is taken on the prompts both windows answered, as Insights
+  // takes its changes (changeBasis); the values are the whole window's.
+  const { current: base, previous: prev } = changeBasis(overview);
   const trend = mentionTrend(overview);
   const round = (n: number | null, digits = 0) =>
     n === null ? null : Math.round(n * 10 ** digits) / 10 ** digits;
 
   const rate = mentionRate(cur);
+  const baseRate = mentionRate(base);
   const prevRate = mentionRate(prev);
   const lowAnswers = cur.answers < LOW_SAMPLE_MENTIONS;
+  // A change also needs both shared windows to clear the floor, as the
+  // summary line's does (mentions-headline.ts), each over its own sample:
+  // the rate's is the responses, the net's the responses naming the brand.
+  const rateChangeLow =
+    lowAnswers || base.answers < LOW_SAMPLE_MENTIONS || prev.answers < LOW_SAMPLE_MENTIONS;
+  const netChangeLow = isLowSample(cur) || isLowSample(base) || isLowSample(prev);
   const net = wholeNet(cur);
+  const baseNet = wholeNet(base);
   const prevNet = wholeNet(prev);
   const split = sentimentSplit(cur);
   const promptShare = cur.prompts > 0 ? (cur.promptsWithMentions * 100) / cur.prompts : 0;
@@ -59,13 +72,14 @@ export function OverviewKpis({ overview, brand }: { overview: MentionsOverview; 
         label={t('totalMentions')}
         tooltip={t('totalMentionsTip', { brand })}
         icon={MessageCircle}
-        value={f.number(cur.mentions)}
-        delta={upIsGood(round(relativeChange(cur.mentions, prev.mentions)), {
+        // Every time a response names the brand, as Insights counts mentions.
+        value={f.number(cur.occurrences)}
+        delta={upIsGood(round(relativeChange(base.occurrences, prev.occurrences)), {
           percent: true,
           locale,
         })}
         sub={t('totalMentionsSub', { brand })}
-        spark={trend.map((d) => d.mentions)}
+        spark={trend.map((d) => d.occurrences)}
       />
       <MetricCard
         label={t('mentionRate')}
@@ -73,9 +87,9 @@ export function OverviewKpis({ overview, brand }: { overview: MentionsOverview; 
         icon={Percent}
         value={rate === null ? '—' : f.percent(rate, 1)}
         delta={
-          lowAnswers || rate === null || prevRate === null
+          rateChangeLow || rate === null || baseRate === null || prevRate === null
             ? null
-            : upIsGood(round(rate - prevRate, 1), { locale })
+            : upIsGood(round(baseRate - prevRate, 1), { locale })
         }
         sub={
           rate !== null && lowAnswers
@@ -89,7 +103,7 @@ export function OverviewKpis({ overview, brand }: { overview: MentionsOverview; 
         tooltip={t('promptsWithMentionsTip', { brand })}
         icon={Layers}
         value={f.number(cur.promptsWithMentions)}
-        delta={upIsGood(round(relativeChange(cur.promptsWithMentions, prev.promptsWithMentions)), {
+        delta={upIsGood(round(relativeChange(base.promptsWithMentions, prev.promptsWithMentions)), {
           percent: true,
           locale,
         })}
@@ -112,9 +126,9 @@ export function OverviewKpis({ overview, brand }: { overview: MentionsOverview; 
         icon={Smile}
         value={net === null ? '—' : signedValue(net, locale)}
         delta={
-          isLowSample(cur) || net === null || prevNet === null
+          netChangeLow || net === null || baseNet === null || prevNet === null
             ? null
-            : upIsGood(net - prevNet, { locale })
+            : upIsGood(baseNet - prevNet, { locale })
         }
         sub={
           split === null ? null : isLowSample(cur) ? (

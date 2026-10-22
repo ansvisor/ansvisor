@@ -243,28 +243,63 @@ const OPEN_OPPORTUNITY_STATUSES = ['new', 'reviewed', 'sent', 'in_progress'];
 
 /** How many of each New content lists to pick from. */
 const START_LIMIT = 500;
+/** A prompt the brand was named in or cited for over these days is seen. */
+const SEEN_DAYS = 30;
+
+const startPromptsSchema = z.object({
+  prompts: z.array(z.object({ id: z.string(), text: z.string(), seen: z.boolean() })),
+  seen: z.number(),
+});
+
+/**
+ * The brand's active prompts, each marked seen when an answer of the last
+ * 30 days named the brand or cited its pages (content_start_prompts, 00230),
+ * those not seen first. Before that migration, every prompt, none seen.
+ */
+async function readStartPrompts(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  brandId: string,
+): Promise<{ prompts: DraftStartOptions['prompts']; seen: number }> {
+  const read = await supabase.rpc('content_start_prompts', {
+    p_brand_id: brandId,
+    p_days: SEEN_DAYS,
+    p_limit: START_LIMIT,
+  });
+  if (read.error?.code !== 'PGRST202') {
+    if (read.error) throw new Error(read.error.message);
+    // Null: not the member's brand. Any other shape is drift between the
+    // function and this schema, which throws (New content says it couldn't
+    // load) rather than empty the picker.
+    if (read.data === null) return { prompts: [], seen: 0 };
+    return startPromptsSchema.parse(read.data);
+  }
+  const { data, error } = await supabase
+    .from('prompts')
+    .select('id, text, prompt_sets!inner(brand_id)')
+    .eq('prompt_sets.brand_id', brandId)
+    .eq('is_active', true)
+    .order('text')
+    .limit(START_LIMIT);
+  if (error) throw new Error(error.message);
+  return { prompts: (data ?? []).map((p) => ({ id: p.id, text: p.text, seen: false })), seen: 0 };
+}
 
 /**
  * What New content (CE-003) offers to start a new page from: the brand's
- * open Content Opportunities, its active tracked prompts and its topics.
+ * open Content Opportunities, its active tracked prompts (each marked seen
+ * when the brand already shows in its answers) and its topics.
  */
 export async function getContentStartOptions(brandId: string): Promise<DraftStartOptions> {
   const supabase = await createClient();
   const [opportunities, prompts, topics] = await Promise.all([
     supabase
       .from('content_opportunities')
-      .select('id, title, decision, brief')
+      .select('id, title, decision, brief, assetType:source_data->assets->0->>type')
       .eq('brand_id', brandId)
       .in('status', OPEN_OPPORTUNITY_STATUSES)
       .order('opportunity_score', { ascending: false, nullsFirst: false })
       .limit(START_LIMIT),
-    supabase
-      .from('prompts')
-      .select('id, text, prompt_sets!inner(brand_id)')
-      .eq('prompt_sets.brand_id', brandId)
-      .eq('is_active', true)
-      .order('text')
-      .limit(START_LIMIT),
+    readStartPrompts(supabase, brandId),
     // Each topic's active prompts counted in the database: the prompt list
     // above stops at START_LIMIT, and would undercount a big brand's topics.
     supabase
@@ -275,7 +310,7 @@ export async function getContentStartOptions(brandId: string): Promise<DraftStar
       .eq('prompts.is_active', true)
       .order('name'),
   ]);
-  const failed = opportunities.error ?? prompts.error ?? topics.error;
+  const failed = opportunities.error ?? topics.error;
   if (failed) throw new Error(failed.message);
 
   return {
@@ -286,9 +321,11 @@ export async function getContentStartOptions(brandId: string): Promise<DraftStar
         title: o.title,
         decision: o.decision,
         pageTitle: typeof suggested === 'string' && suggested.trim() ? suggested.trim() : null,
+        assetType: typeof o.assetType === 'string' ? o.assetType : null,
       };
     }),
-    prompts: (prompts.data ?? []).map((p) => ({ id: p.id, text: p.text })),
+    prompts: prompts.prompts,
+    promptsSeen: prompts.seen,
     // A topic with no active prompt has nothing for a page to answer.
     topics: (topics.data ?? [])
       .map((topic) => ({
@@ -300,6 +337,62 @@ export async function getContentStartOptions(brandId: string): Promise<DraftStar
       }))
       .filter((topic) => topic.promptCount > 0),
   };
+}
+
+/**
+ * The draft being written for a tracked prompt (Tracked Prompts' Create
+ * content): the latest one not yet published whose prompts include it, from
+ * the prompt itself, its topic or an opportunity. Opened instead of starting
+ * a second page. Null when there is none, or the member can't read it.
+ */
+export async function getDraftForPrompt(brandId: string, promptId: string): Promise<string | null> {
+  if (!draftId.safeParse(brandId).success || !draftId.safeParse(promptId).success) return null;
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from('content_drafts')
+    .select('id')
+    .eq('brand_id', brandId)
+    .contains('prompt_ids', [promptId])
+    .in('status', ['draft', 'in_review', 'ready'])
+    .order('updated_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  return data?.id ?? null;
+}
+
+/** How many opportunities one Open draft lookup covers: a page of the list. */
+const MAX_DRAFT_LOOKUPS = 200;
+
+/**
+ * The draft being written for each opportunity (Generate Content's Open
+ * draft): the latest one not yet published started from it, by opportunity
+ * id. Opportunities with none, or that the member can't read, are left out.
+ */
+export async function getOpportunityDrafts(
+  brandId: string,
+  opportunityIds: string[],
+): Promise<Record<string, string>> {
+  const ids = [...new Set(opportunityIds)]
+    .filter((id) => draftId.safeParse(id).success)
+    .slice(0, MAX_DRAFT_LOOKUPS);
+  if (!draftId.safeParse(brandId).success || !ids.length) return {};
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from('content_drafts')
+    .select('id, opportunity_id')
+    .eq('brand_id', brandId)
+    .in('opportunity_id', ids)
+    .in('status', ['draft', 'in_review', 'ready'])
+    .order('updated_at', { ascending: false });
+  if (error) throw new Error(error.message);
+  const drafts: Record<string, string> = {};
+  for (const row of data ?? []) {
+    if (row.opportunity_id && !(row.opportunity_id in drafts)) {
+      drafts[row.opportunity_id] = row.id;
+    }
+  }
+  return drafts;
 }
 
 const startInput = z.object({

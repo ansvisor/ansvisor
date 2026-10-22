@@ -1,7 +1,7 @@
 import { createCipheriv, createDecipheriv, randomBytes } from 'node:crypto';
 
 /**
- * App-level encryption for Anthropic API keys stored on `organizations`.
+ * App-level encryption for the AI provider keys in `organization_ai_keys`.
  *
  * Tradeoff vs. Supabase Vault / pgsodium: doing this at the app layer keeps
  * the only thing that can decrypt the key out of the database entirely —
@@ -96,8 +96,8 @@ export function decryptApiKey(envelopeJson: string | null | undefined): string |
 
 /**
  * Last 4 chars of the plaintext, returned to the UI for "sk-…abcd" display.
- * Mirrored into `organizations.anthropic_api_key_last4` so reading it back
- * doesn't require decrypt.
+ * Mirrored into `organization_ai_keys.key_last4` so reading it back doesn't
+ * require decrypt.
  */
 export function last4(plaintext: string): string {
   return plaintext.slice(-4);

@@ -22,11 +22,14 @@ export const WARN_AT_S = 4;
 
 /**
  * Reads timed against the probe brand: the page default, then a long window.
- * Topics goes first: it reads raw results, and timed after the long Citations
- * windows it measured their cache eviction rather than its own cost.
+ * Topics goes first: its 24 hours read raw results, and timed after the long
+ * Citations windows it measured their cache eviction rather than its own cost.
+ * Topics is timed as the tab reads it (topics_overview_window, 00236): the
+ * fixed topics_overview_aggregates it timed before is no read of the page's.
  */
 export const PROBES = [
-  { probe: 'topics_overview_aggregates', days: null },
+  { probe: 'topics_overview_window', days: 1 },
+  { probe: 'topics_overview_window', days: 90 },
   { probe: 'citations_domains_daily', days: 1 },
   { probe: 'citations_urls_daily', days: 1 },
   { probe: 'citations_domains_daily', days: 30 },

@@ -205,9 +205,22 @@ export interface DraftStartOptions {
   /**
    * pageTitle: the page title its brief suggests, once one is generated;
    * the opportunity's own title says what to do, not what to call the page.
+   * assetType: its primary asset's type as stored (lib/content/asset-types.ts).
    */
-  opportunities: { id: string; title: string; decision: string | null; pageTitle: string | null }[];
-  prompts: { id: string; text: string }[];
+  opportunities: {
+    id: string;
+    title: string;
+    decision: string | null;
+    pageTitle: string | null;
+    assetType: string | null;
+  }[];
+  /**
+   * seen: the brand was named in or cited for it lately, so it needs no new
+   * page (New content leaves it out; Add source keeps it). Not seen first.
+   */
+  prompts: { id: string; text: string; seen: boolean }[];
+  /** How many active prompts are seen, past the listed ones too. */
+  promptsSeen: number;
   topics: { id: string; name: string; promptCount: number }[];
 }
 

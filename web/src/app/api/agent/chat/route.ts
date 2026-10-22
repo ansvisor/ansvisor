@@ -4,8 +4,8 @@ import { supabaseAdmin } from '@/lib/supabase/admin';
 import { resolveAgentAuth } from '@/lib/agent/auth';
 import { buildAgentTools } from '@/lib/agent/tools';
 import { buildAgentSystemPrompt } from '@/lib/agent/system-prompt';
-import { buildAgentModel } from '@/lib/agent/model';
-import { resolveAnthropicKey } from '@/lib/agent/key';
+import { AGENT_PROVIDER_OPTIONS, buildAgentModel } from '@/lib/agent/model';
+import { resolveAgentModelConfig } from '@/lib/agent/key';
 import { recordAgentTokenUsage } from '@/lib/agent/token-quota';
 import { getPlan, hasFeature, type PlanId } from '@/config/plans';
 
@@ -80,7 +80,7 @@ export async function POST(req: Request) {
 
   // Plan gate. On cloud the gate is intentionally loose — `ai_agent` is in
   // every paid plan's feature list; the *real* gate is whether the org has
-  // pasted an Anthropic key in Settings → Agent (BYOK). Self-host bypasses
+  // pasted a provider key in Settings › AI Providers (BYOK). Self-host bypasses
   // both checks because the operator's env supplies everything.
   const { data: org } = await supabaseAdmin
     .from('organizations')
@@ -92,23 +92,24 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'ai_agent is not enabled for this plan' }, { status: 403 });
   }
 
-  // BYOK gate. Cloud customers paste their Anthropic key in
-  // Settings → Agent and the agent uses *that* key — Ansvisor never pays
-  // for the customer's tokens. Missing key = 403 with a code the UI can
-  // intercept to render the "add your key" CTA instead of a generic error.
-  const anthropicKey = await resolveAnthropicKey(organizationId);
-  if (!anthropicKey) {
+  // BYOK gate. Cloud customers paste a provider key in Settings › AI
+  // Providers and the agent uses *that* key, with the provider they picked —
+  // Ansvisor never pays for the customer's tokens. Missing key = 403 with a
+  // code the UI can intercept to render the "add your key" CTA instead of a
+  // generic error.
+  const modelConfig = await resolveAgentModelConfig(organizationId);
+  if (!modelConfig) {
     return NextResponse.json(
       {
-        error: 'Anthropic API key required',
-        code: 'missing_anthropic_key',
+        error: 'AI provider key required',
+        code: 'missing_ai_key',
       },
       { status: 403 },
     );
   }
 
   const result = streamText({
-    model: buildAgentModel(anthropicKey),
+    model: buildAgentModel(modelConfig),
     maxOutputTokens: 16000,
     system: buildAgentSystemPrompt(new Date(), defaultBrand),
     messages: await convertToModelMessages(messages),
@@ -122,11 +123,13 @@ export async function POST(req: Request) {
     // get_visibility_summary → answer" chain without burning tokens
     // forever on a pathological loop.
     stopWhen: stepCountIs(20),
-    onFinish: async ({ usage }) => {
-      // Bill the turn. inputTokens / outputTokens are the counts from the
-      // provider; default to 0 if a step finished without billable usage.
-      const promptTokens = usage?.inputTokens ?? 0;
-      const completionTokens = usage?.outputTokens ?? 0;
+    providerOptions: AGENT_PROVIDER_OPTIONS,
+    onFinish: async ({ totalUsage }) => {
+      // Bill the turn: every step's tokens (totalUsage), not only the last
+      // step's (usage), which leaves out a turn's tool calls. Default to 0 if
+      // nothing was billable.
+      const promptTokens = totalUsage?.inputTokens ?? 0;
+      const completionTokens = totalUsage?.outputTokens ?? 0;
       try {
         await recordAgentTokenUsage(auth.userId, organizationId, promptTokens, completionTokens);
       } catch (err) {

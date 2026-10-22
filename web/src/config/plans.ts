@@ -97,6 +97,11 @@ export interface PlanLimits {
 
 export interface PlanPricing {
   monthly: number;
+  /**
+   * A year paid up front, in dollars: twelve months less 20%, rounded to the
+   * dollar. Must match the plan's annual Stripe price (STRIPE_*_ANNUAL_PRICE_ID).
+   */
+  annual?: number;
 }
 
 export interface Plan {
@@ -154,7 +159,7 @@ export const PLANS: Record<PlanId, Plan> = {
     id: 'starter',
     name: 'Starter',
     tagline: 'Track your brand across AI platforms',
-    pricing: { monthly: 49 },
+    pricing: { monthly: 49, annual: 470 },
     limits: {
       maxBrands: 1,
       maxPrompts: 50,
@@ -192,7 +197,7 @@ export const PLANS: Record<PlanId, Plan> = {
         'custom_reports',
         'api_access',
         // Cloud is BYOK across the board: the customer pastes their own
-        // Anthropic key in Settings → Agent and we just use it. Plan no
+        // provider key in Settings › AI Providers and we just use it. Plan no
         // longer gates the feature — only "did you paste a key?" does.
         // Self-host gets the feature unconditionally via env.
         'ai_agent',
@@ -205,7 +210,7 @@ export const PLANS: Record<PlanId, Plan> = {
     id: 'growth',
     name: 'Growth',
     tagline: 'For brands that need deep insights',
-    pricing: { monthly: 249 },
+    pricing: { monthly: 249, annual: 2390 },
     highlighted: true,
     limits: {
       maxBrands: 4,
@@ -308,6 +313,9 @@ export const SUBSCRIBABLE_PLANS: PlanId[] = ['starter', 'growth'];
 
 /** Where a plan the app can't sell by itself (Enterprise, add-ons) is asked for. */
 export const CONTACT_SALES_URL = 'https://www.ansvisor.com/contact-us';
+
+/** The pricing page: every plan's features side by side. */
+export const PRICING_URL = 'https://www.ansvisor.com/pricing';
 
 /**
  * Self-hosted instances bypass all limits.

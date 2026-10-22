@@ -3,10 +3,11 @@
 import { useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
-import { Check, ArrowUp, ArrowDown, Mail, ExternalLink } from 'lucide-react';
+import { Check, ArrowUp, ArrowDown, Mail, ExternalLink, Repeat, ShoppingCart } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
 import {
   Dialog,
   DialogContent,
@@ -16,7 +17,22 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
-import { CONTACT_SALES_URL, PLANS, SUBSCRIBABLE_PLANS, type PlanId } from '@/config/plans';
+import {
+  CONTACT_SALES_URL,
+  PLANS,
+  PRICING_URL,
+  SUBSCRIBABLE_PLANS,
+  type PlanId,
+} from '@/config/plans';
+import {
+  FIRST_MONTH_CODE,
+  annualSaving,
+  periodPrice,
+  type BillingInterval,
+} from '@/lib/billing/plan-purchase';
+import { useUserRole } from '@/hooks/use-user-role';
+import { formatNumber } from '@/lib/format';
+import { cn } from '@/lib/utils';
 
 interface SubscriptionData {
   planId: string;
@@ -35,32 +51,58 @@ interface PlanSwitcherProps {
 export function PlanSwitcher({ subscription, onUpdate }: PlanSwitcherProps) {
   const t = useTranslations('settings');
   const tCards = useTranslations('settings.planCards');
+  // Buying or changing the plan charges the organization's card: admins only,
+  // as the subscription route checks.
+  const { canAdmin } = useUserRole();
   const [loading, setLoading] = useState(false);
   const [cancelLoading, setCancelLoading] = useState(false);
   const [portalLoading, setPortalLoading] = useState(false);
-  const [changePlanOpen, setChangePlanOpen] = useState(false);
   const [cancelOpen, setCancelOpen] = useState(false);
-  const [selectedPlan, setSelectedPlan] = useState<PlanId | null>(null);
+  // The plan a card's button asked for: bought now during a trial, or changed to.
+  const [pending, setPending] = useState<{ planId: PlanId; buy: boolean } | null>(null);
+  const [promoCode, setPromoCode] = useState(FIRST_MONTH_CODE);
 
   const currentPlanId = subscription.planId as PlanId;
+  const currentInterval: BillingInterval = subscription.interval === 'year' ? 'year' : 'month';
+  const [period, setPeriod] = useState<BillingInterval>(currentInterval);
+  // A trial is bought outright: any plan, either period, paid today.
+  const trialing = subscription.status === 'trialing';
+  const saving = Math.max(0, ...SUBSCRIBABLE_PLANS.map((id) => annualSaving(id) ?? 0));
 
-  async function handleChangePlan() {
-    if (!selectedPlan) return;
+  async function handleConfirm() {
+    if (!pending) return;
     setLoading(true);
     try {
       const res = await fetch('/api/stripe/subscription', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ newPlanId: selectedPlan }),
+        body: JSON.stringify({
+          newPlanId: pending.planId,
+          interval: period,
+          ...(pending.buy
+            ? { buyNow: true, ...(period === 'month' ? { promoCode: promoCode.trim() } : {}) }
+            : {}),
+        }),
       });
       if (!res.ok) {
         const err = await res.json();
+        // A declined card, or one its bank wants confirmed: the trial carries
+        // on, and Stripe's billing page is where the card is changed.
+        if (err.code === 'payment_failed') {
+          toast.error(err.error || t('paymentFailed'), {
+            description: t('paymentFailedHint'),
+            action: { label: t('updateCard'), onClick: handleOpenPortal },
+          });
+          return;
+        }
         throw new Error(err.error || 'Failed to change plan');
       }
       const data = await res.json();
       onUpdate(data);
-      toast.success(t('planChanged'));
-      setChangePlanOpen(false);
+      toast.success(
+        pending.buy ? t('planBought', { plan: PLANS[pending.planId].name }) : t('planChanged'),
+      );
+      setPending(null);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to change plan');
     } finally {
@@ -175,18 +217,70 @@ export function PlanSwitcher({ subscription, onUpdate }: PlanSwitcherProps) {
 
   return (
     <div className="space-y-4">
+      {!canAdmin && <p className="text-sm text-muted-foreground">{t('planAdminOnly')}</p>}
+      {/* Billing period: a year up front saves 20% */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div
+          role="group"
+          aria-label={t('billingPeriod')}
+          className="inline-flex rounded-lg border bg-muted/40 p-0.5"
+        >
+          {(['month', 'year'] as const).map((value) => (
+            <button
+              key={value}
+              type="button"
+              aria-pressed={period === value}
+              onClick={() => setPeriod(value)}
+              className={cn(
+                'inline-flex items-center gap-1.5 rounded-md px-3 py-1 text-sm font-medium transition-colors',
+                period === value
+                  ? 'bg-background text-foreground shadow-sm'
+                  : 'text-muted-foreground hover:text-foreground',
+              )}
+            >
+              {value === 'month' ? t('monthly') : t('annual')}
+              {value === 'year' && saving > 0 && (
+                <span className="rounded-full bg-emerald-100 px-1.5 text-xs font-medium text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-400">
+                  {t('savePercent', { percent: saving })}
+                </span>
+              )}
+            </button>
+          ))}
+        </div>
+        {trialing && period === 'month' && (
+          <p className="text-xs text-muted-foreground">
+            {t('firstMonthOffer', { code: FIRST_MONTH_CODE })}
+          </p>
+        )}
+      </div>
+
       {/* Plan cards */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         {SUBSCRIBABLE_PLANS.map((planId) => {
           const plan = PLANS[planId];
           const isCurrent = planId === currentPlanId;
           const upgrade = isUpgrade(planId);
+          const price = periodPrice(planId, period);
+          const fullYear = plan.pricing ? plan.pricing.monthly * 12 : null;
+          const planSaving = annualSaving(planId);
+          // What its button does: buy it now during a trial; otherwise switch
+          // the period of the current plan, or change to this one.
+          const action = trialing
+            ? 'buy'
+            : isCurrent
+              ? period === currentInterval
+                ? null
+                : 'period'
+              : 'change';
 
           return (
             <Card key={planId} className={isCurrent ? 'border-primary' : undefined}>
               <CardHeader className="pb-3">
-                <div className="flex items-center justify-between">
-                  <CardTitle className="text-base">{plan.name}</CardTitle>
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <CardTitle className="text-base">{plan.name}</CardTitle>
+                    {plan.highlighted && <Badge variant="secondary">{t('popular')}</Badge>}
+                  </div>
                   {isCurrent && (
                     <Badge variant="default">
                       <Check className="mr-1 h-3 w-3" />
@@ -197,9 +291,28 @@ export function PlanSwitcher({ subscription, onUpdate }: PlanSwitcherProps) {
                 <p className="text-sm text-muted-foreground">{tCards(`${planId}.tagline`)}</p>
               </CardHeader>
               <CardContent>
-                <div className="mb-4">
-                  <span className="text-2xl font-bold">${plan.pricing?.monthly}</span>
-                  <span className="text-sm text-muted-foreground">/{t('month')}</span>
+                <div className="mb-4 flex flex-wrap items-baseline gap-x-2 gap-y-1">
+                  {period === 'year' && fullYear != null && price != null && (
+                    <span className="text-base text-muted-foreground line-through">
+                      <span className="sr-only">{t('regularPrice')} </span>${formatNumber(fullYear)}
+                    </span>
+                  )}
+                  <span>
+                    <span className="text-2xl font-bold">
+                      {price != null ? `$${formatNumber(price)}` : '—'}
+                    </span>
+                    <span className="text-sm text-muted-foreground">
+                      /{period === 'year' ? t('year') : t('month')}
+                    </span>
+                  </span>
+                  {period === 'year' && planSaving != null && (
+                    <Badge
+                      variant="outline"
+                      className="border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/50 dark:bg-emerald-950/30 dark:text-emerald-400"
+                    >
+                      {t('savePercent', { percent: planSaving })}
+                    </Badge>
+                  )}
                 </div>
 
                 <ul className="mb-4 space-y-1.5 text-sm">
@@ -220,56 +333,146 @@ export function PlanSwitcher({ subscription, onUpdate }: PlanSwitcherProps) {
                   ))}
                 </ul>
 
-                {!isCurrent && (
-                  <Dialog
-                    open={changePlanOpen && selectedPlan === planId}
-                    onOpenChange={(open) => {
-                      setChangePlanOpen(open);
-                      if (open) setSelectedPlan(planId);
+                {action && canAdmin && (
+                  <Button
+                    className="w-full"
+                    variant={
+                      action === 'buy'
+                        ? isCurrent
+                          ? 'default'
+                          : 'outline'
+                        : upgrade
+                          ? 'default'
+                          : 'outline'
+                    }
+                    disabled={price == null}
+                    onClick={() => {
+                      setPromoCode(FIRST_MONTH_CODE);
+                      setPending({ planId, buy: action === 'buy' });
                     }}
                   >
-                    <DialogTrigger
-                      render={
-                        <Button className="w-full" variant={upgrade ? 'default' : 'outline'} />
-                      }
-                    >
-                      {upgrade ? (
-                        <>
-                          <ArrowUp className="mr-1 h-4 w-4" />
-                          {t('upgradeTo', { plan: plan.name })}
-                        </>
-                      ) : (
-                        <>
-                          <ArrowDown className="mr-1 h-4 w-4" />
-                          {t('downgradeTo', { plan: plan.name })}
-                        </>
-                      )}
-                    </DialogTrigger>
-                    <DialogContent className="max-w-md">
-                      <DialogHeader>
-                        <DialogTitle>
-                          {t('changePlanConfirmTitle', { plan: plan.name })}
-                        </DialogTitle>
-                        <DialogDescription>
-                          {t('changePlanConfirmDescription', {
-                            plan: plan.name,
-                            price: String(plan.pricing?.monthly),
-                          })}
-                        </DialogDescription>
-                      </DialogHeader>
-                      <DialogFooter>
-                        <Button onClick={handleChangePlan} disabled={loading}>
-                          {loading ? t('processing') : t('changePlanConfirm')}
-                        </Button>
-                      </DialogFooter>
-                    </DialogContent>
-                  </Dialog>
+                    {action === 'buy' ? (
+                      <>
+                        <ShoppingCart className="mr-1 h-4 w-4" />
+                        {t('buyPlanNow', { plan: plan.name })}
+                      </>
+                    ) : action === 'period' ? (
+                      <>
+                        <Repeat className="mr-1 h-4 w-4" />
+                        {period === 'year' ? t('switchToAnnual') : t('switchToMonthly')}
+                      </>
+                    ) : upgrade ? (
+                      <>
+                        <ArrowUp className="mr-1 h-4 w-4" />
+                        {t('upgradeTo', { plan: plan.name })}
+                      </>
+                    ) : (
+                      <>
+                        <ArrowDown className="mr-1 h-4 w-4" />
+                        {t('downgradeTo', { plan: plan.name })}
+                      </>
+                    )}
+                  </Button>
                 )}
               </CardContent>
             </Card>
           );
         })}
       </div>
+
+      {/* The cards list the highlights; the pricing page has every feature */}
+      <div className="flex justify-center">
+        <a
+          href={PRICING_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-1.5 text-sm text-muted-foreground underline-offset-4 transition-colors hover:text-foreground hover:underline"
+        >
+          {t('seeAllPlanFeatures')}
+          <ExternalLink className="h-3.5 w-3.5" />
+        </a>
+      </div>
+
+      {/* Buy now / change confirmation */}
+      <Dialog open={pending != null} onOpenChange={(open) => !open && setPending(null)}>
+        {pending && (
+          <DialogContent className="max-w-md">
+            {(() => {
+              const plan = PLANS[pending.planId];
+              const price = periodPrice(pending.planId, period) ?? 0;
+              const halfPrice = price / 2;
+              const offer =
+                pending.buy &&
+                period === 'month' &&
+                promoCode.trim().toUpperCase() === FIRST_MONTH_CODE;
+              return (
+                <>
+                  <DialogHeader>
+                    <DialogTitle>
+                      {pending.buy
+                        ? t('buyNowTitle', { plan: plan.name })
+                        : pending.planId === currentPlanId
+                          ? t('changePeriodTitle', { interval: period })
+                          : t('changePlanConfirmTitle', { plan: plan.name })}
+                    </DialogTitle>
+                    <DialogDescription>
+                      {pending.buy
+                        ? t('buyNowDescription', {
+                            price: formatNumber(price),
+                            interval: period,
+                          })
+                        : pending.planId === currentPlanId
+                          ? t('changePeriodDescription', {
+                              plan: plan.name,
+                              price: formatNumber(price),
+                              interval: period,
+                            })
+                          : t('changePlanConfirmDescription', {
+                              plan: plan.name,
+                              price: formatNumber(price),
+                              interval: period,
+                            })}
+                    </DialogDescription>
+                  </DialogHeader>
+                  {pending.buy && period === 'month' && (
+                    <div className="space-y-1.5">
+                      <label htmlFor="promo-code" className="text-sm font-medium">
+                        {t('promoCode')}
+                      </label>
+                      <Input
+                        id="promo-code"
+                        value={promoCode}
+                        onChange={(e) => setPromoCode(e.target.value)}
+                        autoComplete="off"
+                        className="uppercase"
+                      />
+                      {offer && (
+                        <p className="text-xs text-emerald-700 dark:text-emerald-400">
+                          {t('firstMonthWithCode', {
+                            code: FIRST_MONTH_CODE,
+                            price: Number.isInteger(halfPrice)
+                              ? formatNumber(halfPrice)
+                              : halfPrice.toFixed(2),
+                          })}
+                        </p>
+                      )}
+                    </div>
+                  )}
+                  <DialogFooter>
+                    <Button onClick={handleConfirm} disabled={loading}>
+                      {loading
+                        ? t('processing')
+                        : pending.buy
+                          ? t('buyNowConfirm')
+                          : t('changePlanConfirm')}
+                    </Button>
+                  </DialogFooter>
+                </>
+              );
+            })()}
+          </DialogContent>
+        )}
+      </Dialog>
 
       {/* Custom plan: what it adds, from the pricing page */}
       <div className="space-y-3 rounded-lg border bg-muted/30 p-5">
@@ -314,13 +517,16 @@ export function PlanSwitcher({ subscription, onUpdate }: PlanSwitcherProps) {
               })}
             </p>
           </div>
-          <Button variant="outline" size="sm" onClick={handleReactivate} disabled={loading}>
-            {t('reactivate')}
-          </Button>
+          {canAdmin && (
+            <Button variant="outline" size="sm" onClick={handleReactivate} disabled={loading}>
+              {t('reactivate')}
+            </Button>
+          )}
         </div>
       )}
       <div className="flex items-center justify-between gap-4">
-        {subscription.cancelAtPeriodEnd ? (
+        {/* Cancelling is the admins', as changing the plan is. */}
+        {subscription.cancelAtPeriodEnd || !canAdmin ? (
           <span />
         ) : (
           <Dialog open={cancelOpen} onOpenChange={setCancelOpen}>
