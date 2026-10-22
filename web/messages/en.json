@@ -6068,6 +6068,8 @@
       "confirmDelete": "Type the brand name to confirm:",
       "deleteConfirmPlaceholder": "Brand name",
       "deleteButton": "Delete Brand Permanently",
+      "managersOnlyEdit": "Only admins and managers can change these settings.",
+      "adminsOnlyDelete": "Only admins can delete a brand.",
       "shopping": {
         "title": "Shopping mode",
         "description": "Turn this on if this brand is in e-commerce. We’ll add ChatGPT Shopping to every prompt under this brand and show Product Visibility in the menu.",
