@@ -15,6 +15,7 @@ import { opportunityPageType } from './asset-types';
 import { detectPageType, type SiteType } from './page-types';
 import type { DraftMethod, PageType } from './drafts';
 import { pageKey } from './sources';
+import type { PriorityLevel } from '@/lib/action-center/priority';
 
 /** The Plan's periods: a week, a month, a quarter. */
 export const PLAN_PERIODS = [7, 30, 90] as const;
@@ -132,6 +133,25 @@ export const MAX_ROWS = 50;
  * to write, isn't pushed down for what nobody can know yet.
  */
 export const SCORE_WEIGHTS = { severity: 40, opportunity: 30, pageValue: 20, citations: 10 };
+
+/**
+ * The Plan badge's level from its score: its own cut-offs, not the Action
+ * Center's 90/75/50. Under SCORE_WEIGHTS a new page tops out at 60, an
+ * existing page with no drop at 74 and a top page with no opportunity at 50,
+ * so on those nearly every row read Low. Here a new page reads High from an
+ * opportunity score of about 82, an existing page can too, a top page with
+ * no opportunity tops out at Medium (a defend opportunity can reach High),
+ * and only a page losing citations can be Critical.
+ */
+export const PLAN_LEVEL_CUTOFFS = { critical: 75, high: 55, medium: 40 } as const;
+
+export function planPriorityLevel(score: number): PriorityLevel {
+  if (score >= PLAN_LEVEL_CUTOFFS.critical) return 'critical';
+  if (score >= PLAN_LEVEL_CUTOFFS.high) return 'high';
+  if (score >= PLAN_LEVEL_CUTOFFS.medium) return 'medium';
+  return 'low';
+}
+
 /** How bad the signal is, by what the row is (a drop is reckoned, 0.6–1). */
 const SEVERITY = { create: 0.5, opportunity: 0.35, protect: 0.2 } as const;
 /** A page row with no opportunity behind it: neither good nor bad. */

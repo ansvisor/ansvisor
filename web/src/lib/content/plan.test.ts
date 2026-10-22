@@ -3,6 +3,7 @@ import {
   MAX_ROWS,
   buildPlan,
   dropSeverity,
+  planPriorityLevel,
   rowsFor,
   type PlanAnswers,
   type PlanDraft,
@@ -415,5 +416,27 @@ describe("a row's score breakdown", () => {
     expect(rows[0].scoreParts[0]).toEqual(
       expect.objectContaining({ pct: 100, lost: 90, value: 1, points: 40 }),
     );
+  });
+});
+
+describe("the Plan badge's level", () => {
+  it("uses the Plan's own cut-offs, so each kind of row can read above Low", () => {
+    // An existing page with no drop tops out at 74, a top page with no opportunity at 50.
+    expect(planPriorityLevel(74)).toBe('high');
+    expect(planPriorityLevel(50)).toBe('medium');
+    expect(planPriorityLevel(39.9)).toBe('low');
+    // Only a page losing citations reaches Critical.
+    expect(planPriorityLevel(75)).toBe('critical');
+  });
+
+  it('reads a strong new page High, a middling one Medium', () => {
+    const levelOf = (score: number) => {
+      const [row] = plan([], [opportunity('o1', { score })]).rows;
+      return planPriorityLevel(Math.round(row.score));
+    };
+    // 20 a new page + 25.5 the opportunity's 85 + 10 page value (neutral): 55.5.
+    expect(levelOf(85)).toBe('high');
+    // The fixture's 70: 20 + 21 + 10 = 51.
+    expect(levelOf(70)).toBe('medium');
   });
 });

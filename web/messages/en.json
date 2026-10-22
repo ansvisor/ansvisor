@@ -3191,7 +3191,8 @@
         "citations": "{citations, plural, =0 {Not cited} one {# citation} other {# citations}} this period",
         "points": "{text}: {points} of {max}",
         "total": "Together: {score} of 100",
-        "marked": "Marked as a priority, so it's listed first."
+        "marked": "Marked as a priority, so it's listed first.",
+        "planOnly": "This score ranks the Plan. The Action Center scores its tasks on its own."
       },
       "rowMenu": {
         "label": "Actions for {title}",

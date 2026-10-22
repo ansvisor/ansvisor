@@ -211,7 +211,8 @@ describe('the Content plan', () => {
     const scores = [...container.querySelectorAll('tbody tr')].map((tr) => tr.children[1]);
     // 40 severity, 30 opportunity, 20 page value, 10 citations: the new page
     // (74) 52.2; the page losing ground, with no AI visits, 48.2; the top page 34.9.
-    expect(scores.map((td) => td.textContent)).toEqual(['52Medium', '48Low', '35Low']);
+    // The Plan's own levels: Medium from 40, High from 60.
+    expect(scores.map((td) => td.textContent)).toEqual(['52Medium', '48Medium', '35Low']);
     expect(container.querySelector('thead')!.textContent).toContain('Priority Score');
 
     const trigger = scores[1].querySelector('button')!;
@@ -224,7 +225,8 @@ describe('the Content plan', () => {
         'No content opportunity behind it (neutral): 12 of 30' +
         '0 AI visits this period: 0 of 20' +
         '3 citations this period: 1 of 10' +
-        'Together: 48 of 100',
+        'Together: 48 of 100' +
+        'This score ranks the Plan. The Action Center scores its tasks on its own.',
     );
   });
 
