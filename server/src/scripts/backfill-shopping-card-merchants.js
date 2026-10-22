@@ -8,9 +8,8 @@
  *   node src/scripts/backfill-shopping-card-merchants.js --all
  *
  * By default, only unclassified rows are selected, so an interrupted run can be
- * safely resumed by running the command again. Pages across the normalized
- * card table and uses the same pure classifier as
- * the live result handler. Cards without a merchant URL remain unclassified.
+ * safely resumed by running the command again. It pages across the normalized
+ * card table and uses the same pure classifier as the live result handler. Cards without a merchant URL remain unclassified.
  */
 import 'dotenv/config';
 import supabaseAdmin from '../config/supabase.js';
