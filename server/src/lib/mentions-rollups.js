@@ -78,6 +78,40 @@ export async function refreshMentionTermsDaily(brandId, dayFrom, dayTo) {
   return true;
 }
 
+/** The first or last UTC day of a brand's answers' terms (00161), or null with none. */
+async function termsDayBound(brandId, ascending) {
+  const { data, error } = await supabaseAdmin
+    .from('mentions_answer_terms')
+    .select('created_at')
+    .eq('brand_id', brandId)
+    .order('created_at', { ascending })
+    .limit(1);
+  if (error) throw new Error(error.message);
+  const at = data?.[0]?.created_at;
+  return at ? new Date(at).toISOString().slice(0, 10) : null;
+}
+
+/**
+ * Rebuild a brand's Perception rollups (00231) over its whole terms history,
+ * a week per call, from the terms already written: the backfill that runs
+ * after 00231 and the server deploy, before 00237 moves the read onto the
+ * rollups. Resolves to the number of calls; throws when one fails, so the
+ * backfill can be run again.
+ */
+export async function refreshMentionTermsHistory(brandId, { pauseMs = 0 } = {}) {
+  const firstDay = await termsDayBound(brandId, true);
+  if (!firstDay) return 0;
+  const lastDay = await termsDayBound(brandId, false);
+
+  const chunks = dayChunks(firstDay, lastDay, MENTION_TERMS_ROLLUP_CHUNK_DAYS);
+  for (const [from, to] of chunks) {
+    const ok = await refreshMentionTermsDaily(brandId, from, to);
+    if (!ok) throw new Error(`mention terms rollup refresh failed for ${brandId} ${from}..${to}`);
+    if (pauseMs > 0) await new Promise((resolve) => setTimeout(resolve, pauseMs));
+  }
+  return chunks.length;
+}
+
 /** Days per terms rollup call: a week of the largest brand's terms, counted. */
 export const MENTION_TERMS_ROLLUP_CHUNK_DAYS = 7;
 

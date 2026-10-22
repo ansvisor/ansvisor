@@ -2886,6 +2886,82 @@ export type Database = {
           },
         ]
       }
+      mentions_entities_daily: {
+        Row: {
+          answers: number
+          brand_id: string
+          day: string
+          entity: string
+          platform: string
+          region: string | null
+          with_brand: number
+        }
+        Insert: {
+          answers: number
+          brand_id: string
+          day: string
+          entity: string
+          platform: string
+          region?: string | null
+          with_brand: number
+        }
+        Update: {
+          answers?: number
+          brand_id?: string
+          day?: string
+          entity?: string
+          platform?: string
+          region?: string | null
+          with_brand?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "mentions_entities_daily_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brands"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      mentions_terms_daily: {
+        Row: {
+          answers: number
+          brand_id: string
+          day: string
+          entity: string
+          platform: string
+          region: string | null
+          term: string
+        }
+        Insert: {
+          answers: number
+          brand_id: string
+          day: string
+          entity: string
+          platform: string
+          region?: string | null
+          term: string
+        }
+        Update: {
+          answers?: number
+          brand_id?: string
+          day?: string
+          entity?: string
+          platform?: string
+          region?: string | null
+          term?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "mentions_terms_daily_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brands"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       sentiment_overrides: {
         Row: {
           brand_id: string
