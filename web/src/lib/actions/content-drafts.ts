@@ -356,6 +356,8 @@ export async function getDraftForPrompt(brandId: string, promptId: string): Prom
     .eq('brand_id', brandId)
     .contains('prompt_ids', [promptId])
     .in('status', ['draft', 'in_review', 'ready'])
+    // An archived draft isn't the one to open (00233).
+    .is('archived_at', null)
     .order('updated_at', { ascending: false })
     .limit(1)
     .maybeSingle();

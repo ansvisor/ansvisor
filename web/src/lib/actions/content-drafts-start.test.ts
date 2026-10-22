@@ -270,6 +270,7 @@ describe('getDraftForPrompt', () => {
           ['eq', 'brand_id', BRAND],
           ['contains', 'prompt_ids', [PROMPT]],
           ['in', 'status', ['draft', 'in_review', 'ready']],
+          ['is', 'archived_at', null],
         ],
       },
     ]);
