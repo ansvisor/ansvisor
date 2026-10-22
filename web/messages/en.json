@@ -6003,6 +6003,8 @@
     "title": "Brands",
     "description": "Manage all the brands you track across AI platforms.",
     "addBrand": "Add Brand",
+    "showAllBrands": "Show My All Brands",
+    "visitBrandSettings": "Visit Brand Setting",
     "editBrand": "Edit Brand",
     "deleteBrand": "Delete Brand",
     "noBrands": "No brands yet",
