@@ -142,6 +142,11 @@ describe('the Library row menu (00233)', () => {
     await expect(archiveContentDraft(DRAFT, true)).rejects.toThrow('forbidden');
   });
 
+  it('names a restore refused by the one-draft-per-work key', async () => {
+    writeResult = { data: null, error: { code: '23505', message: 'duplicate key' } };
+    await expect(archiveContentDraft(DRAFT, false)).rejects.toThrow('newer_draft');
+  });
+
   it('deletes, and calls a delete that removed nothing forbidden', async () => {
     writeResult = { data: [{ id: DRAFT }], error: null };
     await deleteContentDraft(DRAFT);

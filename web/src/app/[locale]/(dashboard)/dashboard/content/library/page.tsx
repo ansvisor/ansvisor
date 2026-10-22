@@ -107,7 +107,9 @@ export default function ContentLibraryPage() {
       t(
         err instanceof Error && err.message === 'forbidden'
           ? 'rowMenu.forbidden'
-          : 'rowMenu.failed',
+          : err instanceof Error && err.message === 'newer_draft'
+            ? 'rowMenu.newerDraft'
+            : 'rowMenu.failed',
       ),
     );
   };

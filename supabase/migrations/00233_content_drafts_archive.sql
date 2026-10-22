@@ -14,6 +14,11 @@
 --     member's new draft is never archived: an insert with either column set
 --     is refused (42501), as guard_content_draft_server_columns refuses its
 --     columns.
+--   * content_drafts_action_work_key (00218), one draft per action, method
+--     and page, now counts only drafts not archived. A task's Start skips an
+--     archived draft (readActionDrafts), so it writes a new one rather than
+--     fail on the old key; restoring the archived one while a newer one does
+--     the same work is refused (23505), and the Library says so.
 --   * "content_drafts: manager delete": content_drafts had no delete policy,
 --     so no member could delete a draft. Its versions, sources and
 --     suggestions go with it (on delete cascade); the Action Center task it
@@ -74,6 +79,14 @@ $$;
 create or replace trigger content_drafts_guard_archive
   before insert or update on public.content_drafts
   for each row execute function public.guard_content_draft_archive();
+
+drop index if exists public.content_drafts_action_work_key;
+create unique index if not exists content_drafts_action_work_key
+  on public.content_drafts (action_id, method, md5(coalesce(source_url, '')))
+  where action_id is not null and archived_at is null;
+
+comment on index public.content_drafts_action_work_key is
+  'Content Editor (CE-022, 00233): one draft not archived per action, method and page.';
 
 create policy "content_drafts: manager delete"
   on public.content_drafts

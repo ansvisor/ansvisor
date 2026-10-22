@@ -3244,7 +3244,8 @@
         "deleted": "Deleted: {title}",
         "undo": "Undo",
         "failed": "Couldn't save that. Try again.",
-        "forbidden": "Only admins and managers can archive or delete content."
+        "forbidden": "Only admins and managers can archive or delete content.",
+        "newerDraft": "A newer draft does this task's work. Archive or delete it first, then restore this one."
       },
       "deleteDialog": {
         "title": "Delete “{title}”?",

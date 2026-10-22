@@ -364,6 +364,8 @@ export async function getOpportunityDrafts(
     .eq('brand_id', brandId)
     .in('opportunity_id', ids)
     .in('status', ['draft', 'in_review', 'ready'])
+    // Archived is set aside (00233): the row offers Send to Editor again.
+    .is('archived_at', null)
     .order('updated_at', { ascending: false });
   if (error) throw new Error(error.message);
   const drafts: Record<string, string> = {};
@@ -1068,7 +1070,12 @@ export async function archiveContentDraft(id: string, archived: boolean): Promis
     .eq('id', id)
     .select('id')
     .maybeSingle();
-  if (error) throw new Error(error.code === '42501' ? 'forbidden' : error.message);
+  if (error) {
+    // Restoring one while a newer draft does the same task's work (the
+    // one-per-work key, 00233): that one goes to the archive first.
+    if (error.code === '23505') throw new Error('newer_draft');
+    throw new Error(error.code === '42501' ? 'forbidden' : error.message);
+  }
   if (!data) throw new Error('not_found');
 }
 

@@ -389,6 +389,17 @@ describe('a Library row’s menu (00233)', () => {
     expect(getContentDrafts).toHaveBeenCalledTimes(2);
   });
 
+  it('says what to do when a newer draft does the same work as the one restored', async () => {
+    archiveContentDraft.mockRejectedValue(new Error('newer_draft'));
+    getContentDrafts.mockResolvedValue([row({ archivedAt: '2026-10-21T10:00:00Z' })]);
+    window.history.replaceState(null, '', '/dashboard/content/library?tab=archived');
+    await renderPage();
+    await pick('Pipeline forecasting', 'Restore');
+    expect(toast.error).toHaveBeenCalledWith(
+      "A newer draft does this task's work. Archive or delete it first, then restore this one.",
+    );
+  });
+
   it('says so when the server refuses the archive', async () => {
     archiveContentDraft.mockRejectedValue(new Error('forbidden'));
     getContentDrafts.mockResolvedValue([row({})]);
