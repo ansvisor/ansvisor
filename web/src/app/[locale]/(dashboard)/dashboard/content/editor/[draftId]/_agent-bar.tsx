@@ -10,8 +10,8 @@ import { suggestionCounts, type DraftSuggestion } from '@/lib/content/suggestion
  * The agent bar over the page (CE-018): while an agent's suggestions are
  * open, who left how many and from which action, with Reject all and Accept
  * all (open ones only); once all are decided, how many were accepted and
- * rejected and how many rules are still open, with Fix open rules with
- * agent for a new batch. Undo all brings every decided one back to review.
+ * rejected and how many rules are still open, with Apply rules with
+ * Agent for a new batch. Undo all brings every decided one back to review.
  */
 export function AgentBar({
   suggestions,
@@ -31,7 +31,7 @@ export function AgentBar({
   onRejectAll: () => void;
   onUndoAll: () => void;
   onClose: () => void;
-  /** Fix open rules with agent: new suggestions, again for review. */
+  /** Apply rules with Agent: new suggestions, again for review. */
   onFixRules: () => void;
   fixing: boolean;
 }) {

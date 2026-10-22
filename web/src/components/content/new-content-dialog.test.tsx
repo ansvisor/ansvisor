@@ -882,14 +882,21 @@ describe('New content', () => {
         ...document.querySelectorAll<HTMLElement>('[aria-labelledby="start-who"] [role="radio"]'),
       ].find((r) => r.textContent?.startsWith(name))!;
 
-    it('opens the editor for me by default', async () => {
+    it('offers the agent first, and opens the editor for me by default', async () => {
       await startNewPage();
+      expect(
+        [
+          ...document.querySelectorAll<HTMLElement>(
+            '[aria-labelledby="start-who"] [role="radio"] .font-medium',
+          ),
+        ].map((el) => el.textContent),
+      ).toEqual(['Agent', 'Me', 'Team']);
       expect(whoOption('Me').getAttribute('aria-checked')).toBe('true');
       expect(whoOption('Agent').textContent).toBe('AgentDrafts, I review');
       expect(button('Open editor')).toBeDefined();
     });
 
-    it('hands the draft to the Content Agent, which drafts it for review in the Library', async () => {
+    it('hands the draft to the Content Agent, and opens the editor to watch it work', async () => {
       startAgentWriting.mockResolvedValue({ started: true });
       await startNewPage();
       await click(whoOption('Agent'));
@@ -905,13 +912,10 @@ describe('New content', () => {
         describeRule,
       );
       expect(startAgentWriting).toHaveBeenCalledWith('d9', 'b1', { sources: 'kept', rules: [] });
-      expect(push).not.toHaveBeenCalled();
       expect(onSent).toHaveBeenCalled();
-      const [message, options] = toast.success.mock.calls[0];
-      expect(message).toBe('Content Agent is drafting');
-      expect(options.description).toBe("You'll review it in Library › In review.");
-      options.action.onClick();
+      // At once, no toast to click: the editor shows the agent at work.
       expect(push).toHaveBeenCalledWith('/dashboard/content/editor/d9');
+      expect(toast.success).not.toHaveBeenCalled();
     });
 
     it('keeps the draft for me when the agent can’t start', async () => {
@@ -923,6 +927,8 @@ describe('New content', () => {
         "This month's AI usage is spent, so the agent didn't start. The draft is in the Library for you to write.",
       );
       expect(onSent).toHaveBeenCalled();
+      // Nothing to watch: the editor isn't opened, the toast offers the draft.
+      expect(push).not.toHaveBeenCalled();
     });
 
     it('says the draft is the person’s to write when the agent is busy with another', async () => {

@@ -3386,8 +3386,6 @@
         "sendFailed": "The draft is in the Library, but it couldn't be sent to the Action Center.",
         "openDraft": "Open draft",
         "startAgent": "Start the agent",
-        "agentStarted": "Content Agent is drafting",
-        "agentStartedDescription": "You'll review it in Library › In review.",
         "agentErrors": {
           "ai_budget": "This month's AI usage is spent, so the agent didn't start. The draft is in the Library for you to write.",
           "no_subscription": "The agent needs an active subscription, so it didn't start. The draft is in the Library for you to write.",
@@ -3530,8 +3528,24 @@
       "markedReady": "Marked ready. Publish it on your site when you're ready.",
       "markedReadyAction": "Marked ready, and {count, plural, one {its task} other {its # tasks}} in Action AC-{no} {count, plural, one {is} other {are}} done. Publish it on your site when you're ready.",
       "agentWriting": {
-        "title": "Content Agent is writing this page",
-        "body": "It opens here for your review when it's done, usually within a minute or two. You can leave this page meanwhile; it waits in Library › In review."
+        "title": "Content Agent is working on this page",
+        "usual": "Usually a minute or two.",
+        "slow": "Taking longer than usual. If it can't finish within a few minutes, this page says so and you can try again.",
+        "leave": "You can leave this page meanwhile: the draft waits in Library › In review.",
+        "steps": {
+          "create": {
+            "read": "Read the sources and the brief",
+            "rules": "Set out the page type's rules",
+            "write": "Writing the page",
+            "review": "Opens here for you to review"
+          },
+          "optimize": {
+            "read": "Read the live page and its sources",
+            "rules": "Set aside the passages AI answers quote",
+            "write": "Suggesting changes",
+            "review": "Opens here with the suggestions to review"
+          }
+        }
       },
       "agentFailed": {
         "text": "The Content Agent couldn't finish this page. Write it yourself, or try again.",
@@ -3574,7 +3588,7 @@
         "notApplied": "{count, plural, one {# suggestion couldn't be applied} other {# suggestions couldn't be applied}}: the page changed there, or AI quotes the passage.",
         "saveFailed": "Couldn't keep the decision. Try again.",
         "htmlBlocked": "Accept or reject the {count, plural, one {# agent suggestion} other {# agent suggestions}} first, then edit as HTML.",
-        "fixRules": "Fix open rules with agent",
+        "fixRules": "Apply rules with Agent",
         "fixing": "Content Agent is working…",
         "fixed": "{count, plural, one {Content Agent suggested # change} other {Content Agent suggested # changes}} · review them in the page",
         "nothingToFix": "Content Agent found nothing it could change without new facts.",
@@ -3707,15 +3721,16 @@
         "hide": "Hide side panel",
         "openTab": "Open {tab} in the side panel",
         "tabs": {
-          "impact": "Impact",
+          "impact": "Live page",
           "brief": "Brief",
           "sources": "Sources",
           "rules": "Rules"
         }
       },
       "impact": {
-        "newPage": "This draft is a new page, not live yet, so there's nothing to measure. Impact shows when a draft optimizes a live page.",
-        "thisPage": "This page",
+        "newPage": "This draft is a new page, not live yet, so there's nothing to measure. This tab shows the live page's numbers when a draft optimizes one.",
+        "thisPage": "The live page today",
+        "notForecast": "How the live page does now, not a forecast of what this draft will get.",
         "periodLabel": "Period",
         "periods": {
           "7": "7d",
@@ -3723,7 +3738,7 @@
           "90": "90d",
           "365": "1y"
         },
-        "loadError": "Couldn't load the page's impact.",
+        "loadError": "Couldn't load the live page's numbers.",
         "retry": "Retry",
         "metrics": {
           "citations": "Citations",
@@ -4026,7 +4041,7 @@
         },
         "mineName": "My rules · {type}",
         "setPicked": "Rule set changed for this draft",
-        "agentFix": "Fix open rules with agent",
+        "agentFix": "Apply rules with Agent",
         "agentFixing": "Content Agent is working…",
         "agentFixHint": "Content Agent suggests changes for the rules not met yet, for you to review in the page",
         "fixTrace": "Fix",

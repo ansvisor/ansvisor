@@ -88,7 +88,11 @@ export function ImpactTab({
   return (
     <div className="space-y-5 text-sm">
       <div className="flex items-center gap-2">
-        <h3 className="font-medium">{t('thisPage')}</h3>
+        <div className="min-w-0">
+          <h3 className="font-medium">{t('thisPage')}</h3>
+          {/* gkhngyk read the numbers as what the draft would get: they are the live page's. */}
+          <p className="text-xs text-muted-foreground">{t('notForecast')}</p>
+        </div>
         <div
           role="group"
           aria-label={t('periodLabel')}

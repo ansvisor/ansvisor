@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { stripe } from '@/lib/stripe';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { alignPromptsToPlanForOrg } from '@/lib/plan-engines';
+import { periodEndIso } from '@/lib/billing/period-end';
 import { API_BASE_URL } from '@/config/api';
 import { DASHBOARD_HOME } from '@/config/home';
 
@@ -37,6 +38,8 @@ export async function GET(req: NextRequest) {
       const planId = (subscription as { metadata?: { plan_id?: string } })?.metadata?.plan_id;
 
       if (orgId && customerId && subscriptionId) {
+        // As the webhook's checkout.session.completed writes it.
+        const endsAt = periodEndIso(subscription);
         // Update org subscription (resolves webhook race condition)
         const { error: updateError } = await supabaseAdmin
           .from('organizations')
@@ -47,6 +50,7 @@ export async function GET(req: NextRequest) {
             plan: planId || 'starter',
             stripe_customer_id: customerId,
             stripe_subscription_id: subscriptionId,
+            ...(endsAt ? { subscription_ends_at: endsAt } : {}),
           })
           .eq('id', orgId);
 
