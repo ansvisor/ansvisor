@@ -3,15 +3,28 @@
 import { useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
-import { Loader2, Pencil, Plus, RefreshCw, Trash2 } from 'lucide-react';
+import { Bot, Loader2, Pencil, Plus, RefreshCw, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { saveDraftBrief } from '@/lib/actions/content-drafts';
 import { MAX_BRIEF_SECTIONS, builtFromCount, type DraftBrief } from '@/lib/content/brief';
+import type { DraftMethod } from '@/lib/content/drafts';
 import { platformNames } from '@/lib/content/impact';
 import { pagePath } from '@/lib/content/overlap';
 import { formatDateTime, formatNumber } from '@/lib/format';
+
+/**
+ * Rewrite from brief: the Content Agent writes the page again from the brief
+ * (a new page), or suggests changes from it (a live page), as Start's agent
+ * does (content-writer.js).
+ */
+export interface AgentRewrite {
+  run: () => void;
+  running: boolean;
+  /** Why it can't run now (open suggestions to decide first), or null. */
+  blocked: string | null;
+}
 
 /** The brief as the panel holds it: read once the tab opens. */
 export type BriefState =
@@ -24,7 +37,8 @@ export type BriefState =
  * address at the top, then the goal, audience and length, and the outline
  * with each H2's fan-out and platform. Rebuild outline writes it from the
  * sources kept; Edit brief changes it by hand. Until the draft has a brief,
- * the opportunity's brief it started from is shown.
+ * the opportunity's brief it started from is shown. Rewrite from brief hands
+ * the page to the Content Agent with it.
  */
 export function BriefTab({
   draftId,
@@ -32,10 +46,12 @@ export function BriefTab({
   pageType,
   length,
   sourceUrl,
+  method,
   rebuilding,
   onRebuild,
   onRetry,
   onSaved,
+  rewrite,
 }: {
   draftId: string;
   state: BriefState;
@@ -43,16 +59,21 @@ export function BriefTab({
   /** The length the rules ask for (CE-009). */
   length: number;
   sourceUrl: string | null;
+  method: DraftMethod;
   rebuilding: boolean;
   onRebuild: () => void;
   onRetry: () => void;
   onSaved: (brief: DraftBrief) => void;
+  /** Absent once the page is ready or published. */
+  rewrite?: AgentRewrite;
 }) {
   const t = useTranslations('contentEditor.editor.brief');
   const tTypes = useTranslations('contentEditor.pageTypes');
   const [editing, setEditing] = useState(false);
   // A brief edited by hand is rebuilt only once the person says so.
   const [confirming, setConfirming] = useState(false);
+  // The agent writes over the page (or suggests changes) only once the person says so.
+  const [confirmingRewrite, setConfirmingRewrite] = useState(false);
 
   if (state.status === 'loading') {
     return (
@@ -173,6 +194,44 @@ export function BriefTab({
                 })}
         </p>
       )}
+
+      {rewrite &&
+        brief &&
+        brief.outline.length > 0 &&
+        (confirmingRewrite ? (
+          <div role="alert" className="space-y-2 rounded-md border px-3 py-2 text-xs">
+            <p>{t(`rewrite.confirm.${method}`)}</p>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                size="sm"
+                onClick={() => {
+                  setConfirmingRewrite(false);
+                  rewrite.run();
+                }}
+              >
+                {t('rewrite.start')}
+              </Button>
+              <Button size="sm" variant="ghost" onClick={() => setConfirmingRewrite(false)}>
+                {t('rewrite.cancel')}
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <Button
+            size="sm"
+            className="w-full"
+            disabled={rewrite.running || rewrite.blocked !== null || rebuilding}
+            title={rewrite.blocked ?? undefined}
+            onClick={() => setConfirmingRewrite(true)}
+          >
+            {rewrite.running ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Bot className="h-3.5 w-3.5" />
+            )}
+            {t(`rewrite.button.${method}`)}
+          </Button>
+        ))}
 
       {confirming && (
         <div role="alert" className="space-y-2 rounded-md border px-3 py-2 text-xs">

@@ -48,7 +48,16 @@ import {
   ScoreBreakdown,
   TargetPagesCard,
 } from '@/components/content/opportunity-basket';
-import { opportunityToMarkdown } from '@/lib/content/opportunity-markdown';
+import { opportunityDocument, opportunityToMarkdown } from '@/lib/content/opportunity-markdown';
+import {
+  opportunityCsv,
+  opportunityDocx,
+  opportunityExportFileName,
+  opportunityWorkbook,
+  type OpportunityExportFormat,
+} from '@/lib/content/opportunity-export';
+import { BYTE_ORDER_MARK } from '@/lib/action-center/export';
+import { saveBlob } from '@/lib/download';
 import { canWriteOpportunity, opportunityStart } from '@/lib/content/opportunity-start';
 import { contentEditorPath } from '@/lib/content/drafts';
 import { siteTypeOf } from '@/lib/content/page-types';
@@ -421,6 +430,28 @@ export function OpportunityDetail({
   const actionId = sd.actions?.all ?? Object.values(sd.actions ?? {})[0];
   const canSendToWorkflow = !['dismissed', 'archived'].includes(opportunity.status);
 
+  // Export (the user's spec): what Copy All Data copies, as a file.
+  const handleExport = async (format: OpportunityExportFormat) => {
+    const doc = opportunityDocument(opportunity, brief, fanoutQueries, assetTypeLabel);
+    const fileName = opportunityExportFileName(doc, format);
+    try {
+      if (format === 'csv') {
+        saveBlob(
+          new Blob([BYTE_ORDER_MARK, opportunityCsv(doc)], { type: 'text/csv;charset=utf-8;' }),
+          fileName,
+        );
+      } else if (format === 'xlsx') {
+        const { default: writeXlsxFile } = await import('write-excel-file/browser');
+        await writeXlsxFile(opportunityWorkbook(doc)).toFile(fileName);
+      } else {
+        saveBlob(await opportunityDocx(doc), fileName);
+      }
+    } catch (err) {
+      console.error('Export failed:', err);
+      toast.error(t('exportOne.failed'));
+    }
+  };
+
   const handleCopy = async () => {
     try {
       await navigator.clipboard.writeText(
@@ -554,6 +585,7 @@ export function OpportunityDetail({
               : null
           }
           onCopy={() => void handleCopy()}
+          onExport={(format) => void handleExport(format)}
           onReviewed={opportunity.status === 'new' ? () => void handleReviewed() : undefined}
           onRestore={opportunity.status === 'archived' ? () => void handleRestore() : undefined}
           onDismiss={opportunity.status === 'new' ? () => setDismissOpen(true) : undefined}

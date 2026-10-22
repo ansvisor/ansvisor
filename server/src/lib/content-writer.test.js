@@ -202,8 +202,8 @@ describe('startDraftWriting', () => {
     );
     const finish = writes.filter((w) => w.table === 'content_drafts')[1];
     expect(finish.filters).toContainEqual(['agent_state', 'writing']);
-    // Only while it is still a draft: one marked ready meanwhile keeps its page.
-    expect(finish.filters).toContainEqual(['status', 'draft']);
+    // Only while it is still open to it: one marked ready meanwhile keeps its page.
+    expect(finish.filters).toContainEqual(['status', ['draft', 'in_review']]);
     // A new page holds only its H1: nothing of the person's to keep first.
     expect(rpcCalls).toEqual([]);
     expect(writes.some((w) => w.table === 'prompt_improve_usage')).toBe(true);
@@ -214,12 +214,34 @@ describe('startDraftWriting', () => {
     expect(prompt).toContain('Page type: How-to guide: numbered steps to get one thing done');
   });
 
-  it('refuses another brand’s draft, one past Draft, or one the agent is on — before charging', async () => {
+  // Rewrite from brief: a draft the agent wrote is in review, and is written again.
+  it('writes a draft in review again, keeping its page in History first', async () => {
+    rows.content_drafts = draftRow({
+      status: 'in_review',
+      author: 'agent',
+      body_html: '<h1>How to brew pour-over coffee</h1><p>The first run.</p>',
+    });
+    await expect(
+      startDraftWriting({ draftId: DRAFT, brandId: BRAND, input: input() }),
+    ).resolves.toEqual({ started: true });
+    const claim = writes.find((w) => w.table === 'content_drafts');
+    expect(claim.filters).toContainEqual(['status', ['draft', 'in_review']]);
+
+    await vi.waitFor(() => expect(draftUpdates()).toHaveLength(2));
+    expect(rpcCalls).toEqual([
+      ['content_draft_snapshot', { p_draft_id: DRAFT, p_origin: 'agent_before' }],
+    ]);
+    expect(draftUpdates()[1]).toMatchObject({ status: 'in_review', agent_state: null });
+  });
+
+  it('refuses another brand’s draft, one marked ready or published, or one the agent is on — before charging', async () => {
     const start = () => startDraftWriting({ draftId: DRAFT, brandId: BRAND, input: input() });
     rows.content_drafts = draftRow({ brand_id: 'other' });
     await expect(start()).rejects.toMatchObject({ status: 404 });
-    rows.content_drafts = draftRow({ status: 'in_review' });
-    await expect(start()).rejects.toMatchObject({ status: 409, code: 'not_draft' });
+    for (const status of ['ready', 'published']) {
+      rows.content_drafts = draftRow({ status });
+      await expect(start()).rejects.toMatchObject({ status: 409, code: 'not_draft' });
+    }
     rows.content_drafts = draftRow({
       agent_state: 'writing',
       agent_state_at: new Date().toISOString(),

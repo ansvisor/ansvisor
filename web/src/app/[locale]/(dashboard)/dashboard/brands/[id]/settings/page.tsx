@@ -154,6 +154,7 @@ function GeneralTab({
   onUpdate: (updates: Partial<Brand>) => void;
 }) {
   const t = useTranslations('brands');
+  const { canManage } = useUserRole();
   const [name, setName] = useState(brand.name);
   const [logoUrl, setLogoUrl] = useState(brand.logoUrl ?? '');
   const [industry, setIndustry] = useState(brand.industry ?? '');
@@ -213,140 +214,146 @@ function GeneralTab({
         <CardDescription>Update your brand&apos;s basic information.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="space-y-2">
-          <Label htmlFor="name">{t('brandName')} *</Label>
-          <Input
-            id="name"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder={t('brandNamePlaceholder')}
-          />
-        </div>
-
-        <div className="space-y-2">
-          <Label htmlFor="logo-url">{t('logoUrl')}</Label>
-          <Input
-            id="logo-url"
-            type="text"
-            value={logoUrl}
-            onChange={(e) => setLogoUrl(e.target.value)}
-            placeholder="https://example.com/logo.png"
-          />
-          {logoUrl.trim() && !logoUrl.trim().match(/^https?:\/\/.+/) && (
-            <p className="text-xs text-destructive">URL must start with https:// or http://</p>
-          )}
-          <p className="text-xs text-muted-foreground">{t('logoUrlHint')}</p>
-        </div>
-
-        <div className="space-y-2">
-          <Label htmlFor="industry">{t('industry')}</Label>
-          <Select
-            items={INDUSTRY_ITEMS}
-            value={industry}
-            onValueChange={(v) => setIndustry(v ?? '')}
-          >
-            <SelectTrigger id="industry">
-              <SelectValue placeholder={t('industryPlaceholder')} />
-            </SelectTrigger>
-            <SelectContent>
-              {INDUSTRIES.map((ind) => (
-                <SelectItem key={ind} value={ind}>
-                  {ind}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-
-        <div className="space-y-2">
-          <Label htmlFor="site-type">{t('siteType')}</Label>
-          <Select
-            items={siteTypeItems}
-            value={siteType ?? guessedSiteType}
-            onValueChange={(v) => {
-              if (isSiteType(v)) setSiteType(v);
-            }}
-          >
-            <SelectTrigger id="site-type">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {siteTypeItems.map((item) => (
-                <SelectItem key={item.value} value={item.value}>
-                  {item.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <p className="text-xs text-muted-foreground">
-            {t('settings.siteTypeHint')}
-            {siteType === null && ` ${t('settings.siteTypeGuessed')}`}
-          </p>
-        </div>
-
-        <div className="space-y-2">
-          <Label htmlFor="description">{t('description_field')}</Label>
-          <Textarea
-            id="description"
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            placeholder={t('descriptionPlaceholder')}
-            rows={3}
-          />
-        </div>
-
-        <div className="space-y-2">
-          <Label>{t('settings.region')}</Label>
-          <Select
-            items={REGION_ITEMS}
-            value={region}
-            onValueChange={(v) => {
-              if (!v) return;
-              setRegion(v);
-              if (v !== 'US') setUsState('');
-            }}
-          >
-            <SelectTrigger>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {REGIONS.map((r) => (
-                <SelectItem key={r.code} value={r.code}>
-                  {r.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-
-        {region === 'US' && (
+        {/* Admins and managers write the brand (RLS); others read it. */}
+        <fieldset disabled={!canManage} className="min-w-0 space-y-4">
           <div className="space-y-2">
-            <Label>{t('settings.stateOptional')}</Label>
+            <Label htmlFor="name">{t('brandName')} *</Label>
+            <Input
+              id="name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder={t('brandNamePlaceholder')}
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="logo-url">{t('logoUrl')}</Label>
+            <Input
+              id="logo-url"
+              type="text"
+              value={logoUrl}
+              onChange={(e) => setLogoUrl(e.target.value)}
+              placeholder="https://example.com/logo.png"
+            />
+            {logoUrl.trim() && !logoUrl.trim().match(/^https?:\/\/.+/) && (
+              <p className="text-xs text-destructive">URL must start with https:// or http://</p>
+            )}
+            <p className="text-xs text-muted-foreground">{t('logoUrlHint')}</p>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="industry">{t('industry')}</Label>
             <Select
-              items={stateItems}
-              value={usState || 'nationwide'}
-              onValueChange={(v) => setUsState(!v || v === 'nationwide' ? '' : v)}
+              items={INDUSTRY_ITEMS}
+              value={industry}
+              onValueChange={(v) => setIndustry(v ?? '')}
+            >
+              <SelectTrigger id="industry">
+                <SelectValue placeholder={t('industryPlaceholder')} />
+              </SelectTrigger>
+              <SelectContent>
+                {INDUSTRIES.map((ind) => (
+                  <SelectItem key={ind} value={ind}>
+                    {ind}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="site-type">{t('siteType')}</Label>
+            <Select
+              items={siteTypeItems}
+              value={siteType ?? guessedSiteType}
+              onValueChange={(v) => {
+                if (isSiteType(v)) setSiteType(v);
+              }}
+            >
+              <SelectTrigger id="site-type">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {siteTypeItems.map((item) => (
+                  <SelectItem key={item.value} value={item.value}>
+                    {item.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              {t('settings.siteTypeHint')}
+              {siteType === null && ` ${t('settings.siteTypeGuessed')}`}
+            </p>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="description">{t('description_field')}</Label>
+            <Textarea
+              id="description"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder={t('descriptionPlaceholder')}
+              rows={3}
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label>{t('settings.region')}</Label>
+            <Select
+              items={REGION_ITEMS}
+              value={region}
+              onValueChange={(v) => {
+                if (!v) return;
+                setRegion(v);
+                if (v !== 'US') setUsState('');
+              }}
             >
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="nationwide">{t('settings.nationwide')}</SelectItem>
-                {US_STATES.map((s) => (
-                  <SelectItem key={s.code} value={s.code}>
-                    {s.label}
+                {REGIONS.map((r) => (
+                  <SelectItem key={r.code} value={r.code}>
+                    {r.label}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
-            <p className="text-xs text-muted-foreground">{t('settings.stateHint')}</p>
           </div>
-        )}
 
-        <Button onClick={handleSave} disabled={isSaving || !name.trim()} className="gap-2">
-          {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-          {t('settings.saveChanges')}
-        </Button>
+          {region === 'US' && (
+            <div className="space-y-2">
+              <Label>{t('settings.stateOptional')}</Label>
+              <Select
+                items={stateItems}
+                value={usState || 'nationwide'}
+                onValueChange={(v) => setUsState(!v || v === 'nationwide' ? '' : v)}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="nationwide">{t('settings.nationwide')}</SelectItem>
+                  {US_STATES.map((s) => (
+                    <SelectItem key={s.code} value={s.code}>
+                      {s.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">{t('settings.stateHint')}</p>
+            </div>
+          )}
+
+          <Button onClick={handleSave} disabled={isSaving || !name.trim()} className="gap-2">
+            {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+            {t('settings.saveChanges')}
+          </Button>
+        </fieldset>
+        {!canManage && (
+          <p className="text-xs text-muted-foreground">{t('settings.managersOnlyEdit')}</p>
+        )}
       </CardContent>
     </Card>
   );
@@ -524,6 +531,7 @@ function DomainsTab({
   onUpdate: (updates: Partial<Brand>) => void;
 }) {
   const t = useTranslations('brands');
+  const { canManage } = useUserRole();
   const [domains, setDomains] = useState<BrandDomain[]>(brand.domains);
   const [isSaving, setIsSaving] = useState(false);
   const [newDomain, setNewDomain] = useState('');
@@ -594,79 +602,89 @@ function DomainsTab({
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="space-y-2">
-          {domains.map((d) => (
-            <div key={d.id} className="flex items-center gap-3 rounded-lg border px-3 py-2.5">
-              <Globe className="h-4 w-4 shrink-0 text-muted-foreground" />
-              <div className="flex-1 overflow-hidden">
-                <p className="truncate text-sm font-medium">{d.domain}</p>
-                {d.country && <p className="text-xs text-muted-foreground">{d.country}</p>}
+        {/* Admins and managers write the brand (RLS); others read it. */}
+        <fieldset disabled={!canManage} className="min-w-0 space-y-4">
+          <div className="space-y-2">
+            {domains.map((d) => (
+              <div key={d.id} className="flex items-center gap-3 rounded-lg border px-3 py-2.5">
+                <Globe className="h-4 w-4 shrink-0 text-muted-foreground" />
+                <div className="flex-1 overflow-hidden">
+                  <p className="truncate text-sm font-medium">{d.domain}</p>
+                  {d.country && <p className="text-xs text-muted-foreground">{d.country}</p>}
+                </div>
+                {d.isPrimary && (
+                  <Badge variant="secondary" className="text-xs shrink-0">
+                    {t('primaryDomain')}
+                  </Badge>
+                )}
+                {!d.isPrimary && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 text-xs shrink-0"
+                    onClick={() => setPrimary(d.id)}
+                  >
+                    {t('setPrimary')}
+                  </Button>
+                )}
+                {domains.length > 1 && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7 shrink-0 text-destructive hover:text-destructive"
+                    onClick={() => removeDomainLocal(d.id)}
+                    aria-label="Remove domain"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
+                )}
               </div>
-              {d.isPrimary && (
-                <Badge variant="secondary" className="text-xs shrink-0">
-                  {t('primaryDomain')}
-                </Badge>
-              )}
-              {!d.isPrimary && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-7 text-xs shrink-0"
-                  onClick={() => setPrimary(d.id)}
-                >
-                  {t('setPrimary')}
-                </Button>
-              )}
-              {domains.length > 1 && (
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-7 w-7 shrink-0 text-destructive hover:text-destructive"
-                  onClick={() => removeDomainLocal(d.id)}
-                  aria-label="Remove domain"
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                </Button>
-              )}
-            </div>
-          ))}
-        </div>
-
-        <Separator />
-
-        <div className="space-y-2">
-          <Label className="text-sm font-medium">{t('addDomain')}</Label>
-          <div className="flex gap-2">
-            <Input
-              placeholder={t('domainPlaceholder')}
-              value={newDomain}
-              onChange={(e) => setNewDomain(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && addDomain()}
-              className="flex-1"
-            />
-            <Input
-              placeholder={t('countryPlaceholder')}
-              value={newCountry}
-              onChange={(e) => setNewCountry(e.target.value)}
-              className="w-28"
-            />
-            <Button
-              type="button"
-              variant="outline"
-              size="icon"
-              onClick={addDomain}
-              disabled={!newDomain.trim()}
-              aria-label="Add domain"
-            >
-              <Plus className="h-4 w-4" />
-            </Button>
+            ))}
           </div>
-        </div>
 
-        <Button onClick={handleSave} disabled={isSaving || domains.length === 0} className="gap-2">
-          {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-          {t('settings.saveChanges')}
-        </Button>
+          <Separator />
+
+          <div className="space-y-2">
+            <Label className="text-sm font-medium">{t('addDomain')}</Label>
+            <div className="flex gap-2">
+              <Input
+                placeholder={t('domainPlaceholder')}
+                value={newDomain}
+                onChange={(e) => setNewDomain(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && addDomain()}
+                className="flex-1"
+              />
+              <Input
+                placeholder={t('countryPlaceholder')}
+                value={newCountry}
+                onChange={(e) => setNewCountry(e.target.value)}
+                className="w-28"
+              />
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                onClick={addDomain}
+                disabled={!newDomain.trim()}
+                aria-label="Add domain"
+              >
+                <Plus className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+
+          <Button
+            onClick={handleSave}
+            disabled={isSaving || domains.length === 0}
+            className="gap-2"
+          >
+            {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+            {t('settings.saveChanges')}
+          </Button>
+        </fieldset>
+        {!canManage && (
+          <p className="text-xs text-muted-foreground">{t('settings.managersOnlyEdit')}</p>
+        )}
       </CardContent>
     </Card>
   );
@@ -675,6 +693,8 @@ function DomainsTab({
 // ─── Competitors Tab ──────────────────────────────────────────────────────────
 
 function CompetitorsTab({ brandId }: { brandId: string }) {
+  const t = useTranslations('brands');
+  const { canManage } = useUserRole();
   const [competitors, setCompetitors] = useState<Competitor[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isAdding, setIsAdding] = useState(false);
@@ -747,111 +767,120 @@ function CompetitorsTab({ brandId }: { brandId: string }) {
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
-        {isLoading ? (
-          <div className="flex items-center justify-center py-8">
-            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-          </div>
-        ) : (
-          <>
-            {competitors.length > 0 && (
-              <div className="space-y-2">
-                {competitors.map((c) => (
-                  <div key={c.id} className="flex items-center gap-3 rounded-lg border px-3 py-2.5">
-                    {c.domain ? (
-                      /* eslint-disable-next-line @next/next/no-img-element */
-                      <img
-                        src={getFaviconUrl(c.domain, 64)}
-                        alt={c.name}
-                        className="h-8 w-8 shrink-0 rounded-full bg-white object-contain"
-                      />
-                    ) : (
-                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white text-xs font-bold">
-                        {c.name.charAt(0).toUpperCase()}
-                      </div>
-                    )}
-                    <div className="flex-1 overflow-hidden">
-                      <p className="truncate text-sm font-medium">{c.name}</p>
-                      {c.domain && <p className="text-xs text-muted-foreground">{c.domain}</p>}
-                    </div>
-                    <Dialog
-                      open={deletingId === c.id}
-                      onOpenChange={(open) => !open && setDeletingId(null)}
-                    >
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-7 w-7 shrink-0 text-destructive hover:text-destructive"
-                        onClick={() => setDeletingId(c.id)}
-                        aria-label="Delete competitor"
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </Button>
-                      <DialogContent>
-                        <DialogHeader>
-                          <DialogTitle>Remove {c.name}?</DialogTitle>
-                          <DialogDescription>
-                            This will remove the competitor and its comparison data. This action
-                            cannot be undone.
-                          </DialogDescription>
-                        </DialogHeader>
-                        <DialogFooter>
-                          <Button variant="outline" onClick={() => setDeletingId(null)}>
-                            Cancel
-                          </Button>
-                          <Button variant="destructive" onClick={() => handleDelete(c.id)}>
-                            Remove
-                          </Button>
-                        </DialogFooter>
-                      </DialogContent>
-                    </Dialog>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {competitors.length === 0 && (
-              <div className="rounded-lg border border-dashed py-8 text-center">
-                <p className="text-sm text-muted-foreground">
-                  No competitors added yet. Add your competitors below.
-                </p>
-              </div>
-            )}
-
-            <Separator />
-
-            <div className="space-y-2">
-              <Label className="text-sm font-medium">Add Competitor</Label>
-              <div className="flex gap-2">
-                <Input
-                  placeholder="Competitor name"
-                  value={newName}
-                  onChange={(e) => setNewName(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && newName.trim() && handleAdd()}
-                  className="flex-1"
-                />
-                <Input
-                  placeholder="domain.com"
-                  value={newDomain}
-                  onChange={(e) => setNewDomain(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && newName.trim() && handleAdd()}
-                  className="w-40"
-                />
-                <Button
-                  variant="outline"
-                  onClick={handleAdd}
-                  disabled={isAdding || !newName.trim()}
-                  className="gap-1.5 shrink-0"
-                >
-                  {isAdding ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <Plus className="h-4 w-4" />
-                  )}
-                  Add
-                </Button>
-              </div>
+        {/* Admins and managers write the brand (RLS); others read it. */}
+        <fieldset disabled={!canManage} className="min-w-0 space-y-4">
+          {isLoading ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
             </div>
-          </>
+          ) : (
+            <>
+              {competitors.length > 0 && (
+                <div className="space-y-2">
+                  {competitors.map((c) => (
+                    <div
+                      key={c.id}
+                      className="flex items-center gap-3 rounded-lg border px-3 py-2.5"
+                    >
+                      {c.domain ? (
+                        /* eslint-disable-next-line @next/next/no-img-element */
+                        <img
+                          src={getFaviconUrl(c.domain, 64)}
+                          alt={c.name}
+                          className="h-8 w-8 shrink-0 rounded-full bg-white object-contain"
+                        />
+                      ) : (
+                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white text-xs font-bold">
+                          {c.name.charAt(0).toUpperCase()}
+                        </div>
+                      )}
+                      <div className="flex-1 overflow-hidden">
+                        <p className="truncate text-sm font-medium">{c.name}</p>
+                        {c.domain && <p className="text-xs text-muted-foreground">{c.domain}</p>}
+                      </div>
+                      <Dialog
+                        open={deletingId === c.id}
+                        onOpenChange={(open) => !open && setDeletingId(null)}
+                      >
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 shrink-0 text-destructive hover:text-destructive"
+                          onClick={() => setDeletingId(c.id)}
+                          aria-label="Delete competitor"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                        <DialogContent>
+                          <DialogHeader>
+                            <DialogTitle>Remove {c.name}?</DialogTitle>
+                            <DialogDescription>
+                              This will remove the competitor and its comparison data. This action
+                              cannot be undone.
+                            </DialogDescription>
+                          </DialogHeader>
+                          <DialogFooter>
+                            <Button variant="outline" onClick={() => setDeletingId(null)}>
+                              Cancel
+                            </Button>
+                            <Button variant="destructive" onClick={() => handleDelete(c.id)}>
+                              Remove
+                            </Button>
+                          </DialogFooter>
+                        </DialogContent>
+                      </Dialog>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {competitors.length === 0 && (
+                <div className="rounded-lg border border-dashed py-8 text-center">
+                  <p className="text-sm text-muted-foreground">
+                    No competitors added yet. Add your competitors below.
+                  </p>
+                </div>
+              )}
+
+              <Separator />
+
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">Add Competitor</Label>
+                <div className="flex gap-2">
+                  <Input
+                    placeholder="Competitor name"
+                    value={newName}
+                    onChange={(e) => setNewName(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && newName.trim() && handleAdd()}
+                    className="flex-1"
+                  />
+                  <Input
+                    placeholder="domain.com"
+                    value={newDomain}
+                    onChange={(e) => setNewDomain(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && newName.trim() && handleAdd()}
+                    className="w-40"
+                  />
+                  <Button
+                    variant="outline"
+                    onClick={handleAdd}
+                    disabled={isAdding || !newName.trim()}
+                    className="gap-1.5 shrink-0"
+                  >
+                    {isAdding ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Plus className="h-4 w-4" />
+                    )}
+                    Add
+                  </Button>
+                </div>
+              </div>
+            </>
+          )}
+        </fieldset>
+        {!canManage && (
+          <p className="text-xs text-muted-foreground">{t('settings.managersOnlyEdit')}</p>
         )}
       </CardContent>
     </Card>
@@ -998,6 +1027,7 @@ function DangerTab({
   onDelete: (pending: boolean) => Promise<void>;
 }) {
   const t = useTranslations('brands');
+  const { canAdmin } = useUserRole();
   const [confirmValue, setConfirmValue] = useState('');
   const [isDeleting, setIsDeleting] = useState(false);
 
@@ -1027,29 +1057,35 @@ function DangerTab({
         <CardDescription>{t('settings.deleteWarning')}</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="space-y-2">
-          <Label className="text-sm">
-            {t('settings.confirmDelete')} <span className="font-semibold">{brand.name}</span>
-          </Label>
-          <Input
-            placeholder={t('settings.deleteConfirmPlaceholder')}
-            value={confirmValue}
-            onChange={(e) => setConfirmValue(e.target.value)}
-          />
-        </div>
-        <Button
-          variant="destructive"
-          disabled={!canDelete || isDeleting}
-          onClick={handleDelete}
-          className="gap-2"
-        >
-          {isDeleting ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : (
-            <Trash2 className="h-4 w-4" />
-          )}
-          {t('settings.deleteButton')}
-        </Button>
+        {/* Only an admin deletes a brand (the server's rule). */}
+        <fieldset disabled={!canAdmin} className="min-w-0 space-y-4">
+          <div className="space-y-2">
+            <Label className="text-sm">
+              {t('settings.confirmDelete')} <span className="font-semibold">{brand.name}</span>
+            </Label>
+            <Input
+              placeholder={t('settings.deleteConfirmPlaceholder')}
+              value={confirmValue}
+              onChange={(e) => setConfirmValue(e.target.value)}
+            />
+          </div>
+          <Button
+            variant="destructive"
+            disabled={!canDelete || isDeleting}
+            onClick={handleDelete}
+            className="gap-2"
+          >
+            {isDeleting ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Trash2 className="h-4 w-4" />
+            )}
+            {t('settings.deleteButton')}
+          </Button>
+        </fieldset>
+        {!canAdmin && (
+          <p className="text-xs text-muted-foreground">{t('settings.adminsOnlyDelete')}</p>
+        )}
       </CardContent>
     </Card>
   );

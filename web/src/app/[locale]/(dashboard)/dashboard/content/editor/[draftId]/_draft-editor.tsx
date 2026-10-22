@@ -36,12 +36,18 @@ import {
 } from '@/lib/actions/content-drafts';
 import { agentWriteRequest, useRuleDescriber } from '@/lib/content/agent-write';
 import {
+  AGENT_POLL_MS,
   CONTENT_LIBRARY_PATH,
   isPageType,
   type ContentDraft,
   type PageType,
 } from '@/lib/content/drafts';
 import { CITED_DAYS, MAX_PASSAGES, type CitedPassage } from '@/lib/content/cited-passages';
+import {
+  draftExportBlob,
+  draftExportFileName,
+  type DraftExportFormat,
+} from '@/lib/content/draft-export';
 import type { DraftVersion } from '@/lib/content/history';
 import type { DraftSuggestion, SuggestionStatus } from '@/lib/content/suggestions';
 import {
@@ -54,6 +60,7 @@ import { PAGE_READ_DELAY_MS, draftTitleFromDoc, safeLinkHref } from '@/lib/conte
 import { JsonLd } from '@/lib/content/json-ld-node';
 import { detectPageType } from '@/lib/content/page-types';
 import { aiTracesFound } from '@/lib/content/rules';
+import { saveBlob } from '@/lib/download';
 import { cn } from '@/lib/utils';
 import { AgentBar } from './_agent-bar';
 import { DropOverlay, useAttachments } from './_attach';
@@ -65,12 +72,14 @@ import {
   lockedPassageCount,
   type HeldEdit,
 } from './_cited-passages';
+import { ExportMenu } from './_export-menu';
 import { HistoryMenu } from './_history-menu';
 import { HtmlBlock, copyToClipboard } from './_html-block';
 import { OwnCopies, ownCopyHtml } from './_own-copies';
 import { PageTypeMenu } from './_page-type-menu';
+import type { AgentRewrite } from './_brief-tab';
 import { ruleStatusText, type AgentFix } from './_rules-tab';
-import { EditorSidePanel, useSidePanelOpen } from './_side-panel';
+import { EditorPanelRail, EditorSidePanel, useSidePanelOpen, type PanelTab } from './_side-panel';
 import {
   AgentSuggestions,
   acceptInto,
@@ -106,6 +115,27 @@ const DOCUMENT_CLASS = cn(
   '[&_.agent-accepted-text]:underline [&_.agent-accepted-text]:decoration-emerald-300 [&_.agent-accepted-text]:decoration-2 [&_.agent-accepted-text]:underline-offset-4 dark:[&_.agent-accepted-text]:decoration-emerald-700',
   '[&_.is-editor-empty:first-child]:before:pointer-events-none [&_.is-editor-empty:first-child]:before:float-left [&_.is-editor-empty:first-child]:before:h-0 [&_.is-editor-empty:first-child]:before:text-muted-foreground [&_.is-editor-empty:first-child]:before:content-[attr(data-placeholder)]',
 );
+
+/**
+ * How long Fix open rules waits for the agent's batch when its answer didn't
+ * come back: past the API's model call (content-agent.js, 60 s) and the
+ * batch's save.
+ */
+const FIX_WAIT_MS = 90_000;
+
+/**
+ * The draft's suggestions once a new open batch lands, read every few
+ * seconds until the deadline; null if none did. Fix open rules only runs
+ * with none open, so any open one is the agent's.
+ */
+async function agentBatch(draftId: string, until: number): Promise<DraftSuggestion[] | null> {
+  while (Date.now() < until) {
+    await new Promise((resolve) => setTimeout(resolve, AGENT_POLL_MS));
+    const read = await getDraftSuggestions(draftId).catch(() => null);
+    if (read?.some((s) => s.status === 'open')) return read;
+  }
+  return null;
+}
 
 /**
  * The content editor (Content Editor, CE-004, spec §6): a header with the
@@ -149,7 +179,7 @@ export function DraftEditor({
   const [marking, setMarking] = useState(false);
   // The Content Agent couldn't finish the page Start gave it (CE-015).
   const [agentFailed, setAgentFailed] = useState(draft.agentState === 'failed');
-  const [retrying, setRetrying] = useState(false);
+  const [starting, setStarting] = useState(false);
   const describeRule = useRuleDescriber();
   const [restoring, setRestoring] = useState(false);
   const format = useFormatter();
@@ -192,8 +222,13 @@ export function DraftEditor({
   const [dragging, setDragging] = useState(false);
   const dragDepth = useRef(0);
   const [panelOpen, togglePanel] = useSidePanelOpen();
-  // The header's rules chip opens the panel on Rules.
-  const [tabRequest, setTabRequest] = useState<{ tab: 'rules'; n: number } | null>(null);
+  // The header's rules chip opens the panel on Rules, and the closed panel's
+  // strip on the tab picked there.
+  const [tabRequest, setTabRequest] = useState<{ tab: PanelTab; n: number } | null>(null);
+  const openPanelTab = (tab: PanelTab) => {
+    if (!panelOpen) togglePanel();
+    setTabRequest((prev) => ({ tab, n: (prev?.n ?? 0) + 1 }));
+  };
 
   const editor = useEditor({
     extensions: [
@@ -559,10 +594,30 @@ export function DraftEditor({
       })(),
     };
     setFixing(true);
+    const asked = Date.now();
     try {
       // The agent reads the page as saved.
       await autosave.settle();
-      const result = await fixDraftRules(draft.id, draft.brandId, request);
+      const result = await fixDraftRules(draft.id, draft.brandId, request).catch((err) => {
+        // The call itself gave up (a timeout on the way): the agent may still finish.
+        console.error('Failed to hear back from the Content Agent:', err);
+        return { error: 'unconfirmed' as const };
+      });
+      if ('error' in result && result.error === 'unconfirmed') {
+        // No answer is not a failure: its batch shows if it lands in time.
+        const landed = await agentBatch(draft.id, asked + FIX_WAIT_MS);
+        if (!landed) {
+          toast.error(t('suggestions.fixErrors.failed'));
+          return;
+        }
+        setSuggestions(landed);
+        setBarClosed(false);
+        agentBeforeKept.current = false;
+        toast.success(
+          t('suggestions.fixed', { count: landed.filter((s) => s.status === 'open').length }),
+        );
+        return;
+      }
       if ('error' in result) {
         toast.error(t(`suggestions.fixErrors.${result.error}`));
         // Another tab (or the API) left them: show them here to decide.
@@ -677,13 +732,29 @@ export function DraftEditor({
     );
   };
 
-  /**
-   * Try again: the agent takes the page as saved now, with the rules in
-   * effect here, and the page waits for it.
-   */
-  const retryAgent = async () => {
+  /** Export: the page as Copy HTML gives it, as a Word, HTML or Markdown file. */
+  const exportPage = async (format: DraftExportFormat) => {
     if (!editor) return;
-    setRetrying(true);
+    const html = publishableHtml(
+      htmlSource !== null ? htmlFromSource(htmlSource) : editor.getHTML(),
+    );
+    const name = title.trim() || t('untitled');
+    try {
+      saveBlob(await draftExportBlob(format, name, html), draftExportFileName(name, format));
+    } catch (err) {
+      console.error('Failed to export the page:', err);
+      toast.error(t('export.failed'));
+    }
+  };
+
+  /**
+   * The agent on this draft again (Try again, Rewrite from brief): it takes
+   * the page as saved now, with the brief, the sources and the rules in effect
+   * here, and the page waits for it.
+   */
+  const startAgent = async () => {
+    if (!editor) return;
+    setStarting(true);
     try {
       await autosave.settle();
       const request = await agentWriteRequest(
@@ -713,11 +784,20 @@ export function DraftEditor({
       console.error('Failed to start the Content Agent again:', err);
       toast.error(t('agentFailed.errors.failed'));
     } finally {
-      setRetrying(false);
+      setStarting(false);
     }
   };
 
   const canMarkReady = status === 'draft' || status === 'in_review';
+  // Rewrite from brief, while the page is still open to the agent (not ready
+  // or published), as the API allows.
+  const agentRewrite: AgentRewrite | undefined = canMarkReady
+    ? {
+        run: () => void startAgent(),
+        running: starting,
+        blocked: openSuggestions > 0 ? t('suggestions.decideFirst') : null,
+      }
+    : undefined;
   const markReady = async () => {
     setMarking(true);
     try {
@@ -793,21 +873,79 @@ export function DraftEditor({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      {/* One line at any width: the title shortens, the tags give way on a
-          narrow window, and the save state and Mark ready never move. */}
-      <header className="flex items-center gap-2.5 border-b px-4 py-2.5">
-        <Link
-          href={CONTENT_LIBRARY_PATH}
-          aria-label={t('back')}
-          title={t('back')}
-          className={buttonVariants({ variant: 'ghost', size: 'icon-sm' })}
-        >
-          <ArrowLeft className="h-4 w-4" />
-        </Link>
-        <h1 className="min-w-0 truncate text-sm font-medium" title={title.trim() || undefined}>
-          {title.trim() || t('untitled')}
-        </h1>
-        <div className="hidden shrink-0 items-center gap-2 lg:flex">
+      {/* Two lines: the title and what you do with the page on top, which
+          stays light (the title shortens, the save state and Mark ready never
+          move), and the page's tags under the title, all of them at any width. */}
+      <header className="border-b px-4 pt-2.5 pb-2">
+        <div className="flex items-center gap-2.5">
+          <Link
+            href={CONTENT_LIBRARY_PATH}
+            aria-label={t('back')}
+            title={t('back')}
+            className={buttonVariants({ variant: 'ghost', size: 'icon-sm' })}
+          >
+            <ArrowLeft className="h-4 w-4" />
+          </Link>
+          <h1 className="min-w-0 truncate text-sm font-medium" title={title.trim() || undefined}>
+            {title.trim() || t('untitled')}
+          </h1>
+          <div className="ml-auto flex shrink-0 items-center gap-1.5 sm:gap-3">
+            <SaveIndicator state={autosave.state} onRetry={() => void autosave.retry()} />
+            <HistoryMenu
+              draftId={draft.id}
+              disabled={
+                htmlSource !== null
+                  ? t('history.htmlOpen')
+                  : restoring
+                    ? t('history.restoring')
+                    : null
+              }
+              onRestore={(version, label) => void restoreVersion(version, label)}
+            />
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={copyPageHtml}
+              title={t('copyHtmlHint')}
+              aria-label={t('copyHtml')}
+            >
+              <Copy className="h-3.5 w-3.5" />
+              <span className="hidden xl:inline">{t('copyHtml')}</span>
+            </Button>
+            <ExportMenu disabled={!editor} onExport={(format) => void exportPage(format)} />
+            <Button
+              size="sm"
+              // A page that can't be saved can't be marked ready; the save state says why.
+              disabled={
+                !canMarkReady ||
+                marking ||
+                autosave.state === 'conflict' ||
+                autosave.state === 'too_large'
+              }
+              onClick={markReady}
+            >
+              {marking ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                !canMarkReady && <Check className="h-3.5 w-3.5" />
+              )}
+              {t('markReady')}
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              aria-pressed={panelOpen}
+              aria-label={panelOpen ? t('panel.hide') : t('panel.show')}
+              title={panelOpen ? t('panel.hide') : t('panel.show')}
+              onClick={togglePanel}
+              className={cn(panelOpen && 'bg-muted')}
+            >
+              <PanelRight className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+        {/* Lined up under the title (the back button's 28px and the 10px gap). */}
+        <div className="mt-1.5 flex flex-wrap items-center gap-2 pl-[38px]">
           <PageTypeMenu
             brandId={draft.brandId}
             siteType={draft.siteType}
@@ -818,103 +956,37 @@ export function DraftEditor({
             onPick={(type) => void pickPageType(type)}
           />
           <DraftMethodBadge method={draft.method} />
-        </div>
-        <span className="shrink-0">
           <DraftStatusBadge status={status} />
-        </span>
-        <button
-          type="button"
-          onClick={() => {
-            if (!panelOpen) togglePanel();
-            setTabRequest((prev) => ({ tab: 'rules', n: (prev?.n ?? 0) + 1 }));
-          }}
-          title={t('rulesChipHint')}
-          aria-label={t('rulesChip', { met: rules.met, total: rules.total })}
-          className={cn(
-            'inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2 py-0.5 text-xs font-medium',
-            rules.total > 0 && rules.met === rules.total
-              ? 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950 dark:text-emerald-300'
-              : 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-300',
-          )}
-        >
-          <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-current" />
-          {/* Short on a narrow window, so the header stays one line. */}
-          <span aria-hidden className="hidden xl:inline">
-            {t('rulesChip', { met: rules.met, total: rules.total })}
-          </span>
-          <span aria-hidden className="xl:hidden">
-            {t('rulesChipShort', { met: rules.met, total: rules.total })}
-          </span>
-        </button>
-        {/* Wide windows only: the page's green lines show them anyway, and
-            the header stays one line at 1024px. */}
-        {citedCount > 0 && (
-          <span
-            title={t('cited.chipHint')}
-            className="hidden shrink-0 items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700 xl:inline-flex dark:border-emerald-900 dark:bg-emerald-950 dark:text-emerald-300"
+          <button
+            type="button"
+            onClick={() => openPanelTab('rules')}
+            title={t('rulesChipHint')}
+            aria-label={t('rulesChip', { met: rules.met, total: rules.total })}
+            className={cn(
+              'inline-flex h-5 shrink-0 items-center gap-1.5 rounded-full border px-2 text-xs font-medium',
+              rules.total > 0 && rules.met === rules.total
+                ? 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950 dark:text-emerald-300'
+                : 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-300',
+            )}
           >
             <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-current" />
-            {t('cited.chip', { count: citedCount })}
-          </span>
-        )}
-        <div className="ml-auto flex shrink-0 items-center gap-3">
-          <SaveIndicator state={autosave.state} onRetry={() => void autosave.retry()} />
-          <HistoryMenu
-            draftId={draft.id}
-            disabled={
-              htmlSource !== null
-                ? t('history.htmlOpen')
-                : restoring
-                  ? t('history.restoring')
-                  : null
-            }
-            onRestore={(version, label) => void restoreVersion(version, label)}
-          />
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={copyPageHtml}
-            title={t('copyHtmlHint')}
-            aria-label={t('copyHtml')}
-          >
-            <Copy className="h-3.5 w-3.5" />
-            <span className="hidden xl:inline">{t('copyHtml')}</span>
-          </Button>
-          <Button
-            size="sm"
-            // A page that can't be saved can't be marked ready; the save state says why.
-            disabled={
-              !canMarkReady ||
-              marking ||
-              autosave.state === 'conflict' ||
-              autosave.state === 'too_large'
-            }
-            onClick={markReady}
-          >
-            {marking ? (
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-            ) : (
-              !canMarkReady && <Check className="h-3.5 w-3.5" />
-            )}
-            {t('markReady')}
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            aria-pressed={panelOpen}
-            aria-label={panelOpen ? t('panel.hide') : t('panel.show')}
-            title={panelOpen ? t('panel.hide') : t('panel.show')}
-            onClick={togglePanel}
-            className={cn(panelOpen && 'bg-muted')}
-          >
-            <PanelRight className="h-4 w-4" />
-          </Button>
+            {t('rulesChip', { met: rules.met, total: rules.total })}
+          </button>
+          {citedCount > 0 && (
+            <span
+              title={t('cited.chipHint')}
+              className="inline-flex h-5 shrink-0 items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-2 text-xs font-medium text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950 dark:text-emerald-300"
+            >
+              <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-current" />
+              {t('cited.chip', { count: citedCount })}
+            </span>
+          )}
         </div>
       </header>
 
       <div className="flex min-h-0 flex-1">
         <div className="flex min-w-0 flex-1 flex-col">
-          {agentFailed && status === 'draft' && (
+          {agentFailed && canMarkReady && (
             <div
               role="alert"
               className="flex flex-wrap items-center gap-x-3 gap-y-1.5 border-b border-amber-200 bg-amber-50 px-4 py-1.5 text-[13px] text-amber-800 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-300"
@@ -926,10 +998,10 @@ export function DraftEditor({
                   variant="outline"
                   size="sm"
                   className="h-7"
-                  disabled={retrying || !editor}
-                  onClick={() => void retryAgent()}
+                  disabled={starting || !editor}
+                  onClick={() => void startAgent()}
                 >
-                  {retrying && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                  {starting && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
                   {t('agentFailed.retry')}
                 </Button>
                 <Button
@@ -1041,7 +1113,7 @@ export function DraftEditor({
           </div>
           {attachments.ui}
         </div>
-        {panelOpen && (
+        {panelOpen ? (
           <EditorSidePanel
             draft={draft}
             title={title}
@@ -1051,7 +1123,10 @@ export function DraftEditor({
             reads={reads}
             tabRequest={tabRequest}
             agentFix={agentFix}
+            agentRewrite={agentRewrite}
           />
+        ) : (
+          <EditorPanelRail onOpen={openPanelTab} />
         )}
       </div>
 

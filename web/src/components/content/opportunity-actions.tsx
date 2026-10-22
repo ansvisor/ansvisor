@@ -4,6 +4,11 @@ import { useTranslations } from 'next-intl';
 import {
   Check,
   CheckCheck,
+  ChevronDown,
+  Download,
+  FileDown,
+  FileSpreadsheet,
+  FileType,
   Copy,
   ExternalLink,
   FilePen,
@@ -21,6 +26,7 @@ import {
 } from 'lucide-react';
 import { Link } from '@/i18n/navigation';
 import { Button } from '@/components/ui/button';
+import type { OpportunityExportFormat } from '@/lib/content/opportunity-export';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -44,6 +50,7 @@ export function OpportunityActions({
   alternative,
   workflow,
   onCopy,
+  onExport,
   onReviewed,
   onRestore,
   onDismiss,
@@ -81,6 +88,8 @@ export function OpportunityActions({
   /** The CMS webhook; null when it isn't offered. */
   workflow: { sending: boolean; sentBefore: boolean; onSend: () => void } | null;
   onCopy: () => void;
+  /** Export (the user's spec): the write-up as CSV, Excel or Word. */
+  onExport: (format: OpportunityExportFormat) => void;
   onReviewed?: () => void;
   onRestore?: () => void;
   onDismiss?: () => void;
@@ -167,7 +176,30 @@ export function OpportunityActions({
 
       <DropdownMenu>
         <DropdownMenuTrigger
-          className="ml-auto inline-flex h-8 w-8 items-center justify-center rounded-md border text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+          render={<Button variant="outline" size="sm" className="ml-auto gap-2" />}
+        >
+          <Download className="h-4 w-4" />
+          {t('exportOne.button')}
+          <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-44">
+          <DropdownMenuItem className="gap-2" onClick={() => onExport('csv')}>
+            <FileDown className="h-3.5 w-3.5" />
+            {t('exportOne.csv')}
+          </DropdownMenuItem>
+          <DropdownMenuItem className="gap-2" onClick={() => onExport('xlsx')}>
+            <FileSpreadsheet className="h-3.5 w-3.5" />
+            {t('exportOne.excel')}
+          </DropdownMenuItem>
+          <DropdownMenuItem className="gap-2" onClick={() => onExport('docx')}>
+            <FileType className="h-3.5 w-3.5" />
+            {t('exportOne.word')}
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+      <DropdownMenu>
+        <DropdownMenuTrigger
+          className="inline-flex h-8 w-8 items-center justify-center rounded-md border text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
           aria-label={t('moreActions')}
         >
           <MoreHorizontal className="h-4 w-4" />

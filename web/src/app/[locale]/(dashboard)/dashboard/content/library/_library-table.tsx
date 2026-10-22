@@ -138,7 +138,7 @@ export function LibraryTable({
               <TableCell>
                 {/* The agent works on drafts only: its state says more than "Draft".
                     One marked ready by hand since reads Ready. */}
-                {draft.agentState && draft.status === 'draft' ? (
+                {draft.agentState && (draft.status === 'draft' || draft.status === 'in_review') ? (
                   <AgentStateBadge state={draft.agentState} />
                 ) : (
                   <DraftStatusBadge status={draft.status} />

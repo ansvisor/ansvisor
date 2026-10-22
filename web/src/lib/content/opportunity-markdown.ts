@@ -6,12 +6,178 @@ function humanize(slug: string): string {
   return words.charAt(0).toUpperCase() + words.slice(1);
 }
 
-function section(title: string, lines: (string | null | undefined | false)[]): string | null {
-  const body = lines.filter((l): l is string => typeof l === 'string' && l.length > 0);
-  return body.length ? `## ${title}\n\n${body.join('\n')}` : null;
+const fmt = (n: number) => Math.round(n).toLocaleString('en-US');
+
+/** One line of an opportunity's write-up. */
+export type OpportunityLine =
+  | { kind: 'field'; label: string; value: string }
+  | { kind: 'item'; text: string }
+  | { kind: 'step'; n: number; text: string; points: string[] }
+  | { kind: 'text'; text: string };
+
+/** A part of the write-up; the opening facts have no heading. */
+export interface OpportunitySection {
+  title: string | null;
+  lines: OpportunityLine[];
 }
 
-const fmt = (n: number) => Math.round(n).toLocaleString('en-US');
+/**
+ * Everything the opportunity detail shows, in page order: what Copy All Data
+ * writes as Markdown and Export writes as CSV, Excel or Word. Empty sections
+ * are left out.
+ */
+export interface OpportunityDocument {
+  title: string;
+  description: string | null;
+  sections: OpportunitySection[];
+}
+
+type Maybe<T> = T | null | undefined | false | '' | 0;
+
+const field = (label: string, value: Maybe<string | number>): OpportunityLine | null =>
+  value || value === 0 ? { kind: 'field', label, value: String(value) } : null;
+const item = (text: string): OpportunityLine => ({ kind: 'item', text });
+
+function section(title: string | null, lines: Maybe<OpportunityLine>[]): OpportunitySection {
+  return { title, lines: lines.filter((l): l is OpportunityLine => !!l) };
+}
+
+export function opportunityDocument(
+  opportunity: ContentOpportunity,
+  brief: ContentBrief | null,
+  fanoutQueries: { query: string }[] = [],
+  /** An asset's type as the page names it (useAssetTypeLabel); else its key, humanized. */
+  assetTypeLabel: (type: string) => string | null = () => null,
+): OpportunityDocument {
+  const sd = opportunity.sourceData;
+  const sections: OpportunitySection[] = [];
+
+  sections.push(
+    section(null, [
+      field('Type', humanize(opportunity.type)),
+      field('Impact', humanize(opportunity.impact)),
+      field('Status', humanize(opportunity.status)),
+      field('Score', String(Math.round(opportunity.opportunityScore))),
+      field('Created', opportunity.createdAt.slice(0, 10)),
+      opportunity.decision && field('Decision', humanize(opportunity.decision)),
+    ]),
+  );
+
+  // Sent from an Action Center task (AC-004): what the task says to do.
+  const task = sd.fromAction?.task;
+  sections.push(
+    section(
+      sd.fromAction?.actionNo != null
+        ? `From a task in AC-${sd.fromAction.actionNo}`
+        : 'From an Action Center task',
+      [
+        task?.where && field('Where', task.where),
+        task?.why && field('Why', task.why),
+        ...(task?.how ?? []).map(
+          (step, i): OpportunityLine => ({ kind: 'step', n: i + 1, text: step, points: [] }),
+        ),
+        task?.doneWhen && field('Done when', task.doneWhen),
+        (task?.effort || task?.role) &&
+          field('Effort', [task?.effort, task?.role].filter(Boolean).join(' · ')),
+      ],
+    ),
+  );
+
+  sections.push(
+    section(
+      'Target pages',
+      (sd.targetPages ?? []).map((p) => item(`${p.title ? `${p.title}: ` : ''}${p.url}`)),
+    ),
+  );
+
+  sections.push(
+    section(
+      'Recommended assets',
+      (sd.assets ?? []).map((a) =>
+        item(
+          `${a.title} (${assetTypeLabel(a.type) ?? humanize(a.type)}, ${humanize(a.channel)}, ${humanize(a.decision)})`,
+        ),
+      ),
+    ),
+  );
+
+  const sc = sd.scoreComponents;
+  sections.push(
+    section('Score breakdown', [
+      sc && field('Demand', String(Math.round(sc.demand))),
+      sc && field('Visibility gap', String(Math.round(sc.visibilityGap))),
+      sc && field('Competitor gap', String(Math.round(sc.competitorGap))),
+      sc && field('Intent', String(Math.round(sc.intent))),
+    ]),
+  );
+
+  const queries = sd.queries?.top.map((q) => q.query) ?? fanoutQueries.map((q) => q.query);
+  sections.push(
+    section('Source data', [
+      field('Related prompt', sd.promptText),
+      field('Cluster', sd.clusterLabel),
+      field('Topic', sd.topicName),
+      sd.estAiVolume != null && field('Est. AI volume', fmt(sd.estAiVolume)),
+      sd.visibilityScore != null && field('Visibility', `${Math.round(sd.visibilityScore)}%`),
+      sd.competitorGap != null && field('Competitor gap', `${Math.round(sd.competitorGap)}%`),
+      field('Intent', sd.intent),
+      !!sd.keywords?.length && field('Keywords', sd.keywords.join(', ')),
+      !!sd.competitorsCited?.length && field('Competitors cited', sd.competitorsCited.join(', ')),
+    ]),
+  );
+
+  sections.push(section('Prompts', (sd.prompts ?? []).map(item)));
+  sections.push(section('Fan-out queries', queries.map(item)));
+
+  if (brief) {
+    sections.push(
+      section('Content brief', [
+        field('Suggested title', brief.suggestedTitle),
+        field('Content type', brief.contentType),
+        field('Target word count', fmt(brief.targetWordCount)),
+        brief.targetKeywords.length > 0 && field('Keywords', brief.targetKeywords.join(', ')),
+        field('CTA', brief.callToAction),
+      ]),
+    );
+    sections.push(
+      section(
+        'Brief outline',
+        brief.outline.map(
+          (s, i): OpportunityLine => ({
+            kind: 'step',
+            n: i + 1,
+            text: s.heading,
+            points: s.keyPoints,
+          }),
+        ),
+      ),
+    );
+    sections.push(
+      section('Competitor insights', [
+        brief.competitorInsights && { kind: 'text', text: brief.competitorInsights },
+      ]),
+    );
+  }
+
+  return {
+    title: opportunity.title,
+    description: opportunity.description || null,
+    sections: sections.filter((s) => s.lines.length > 0),
+  };
+}
+
+function markdownLine(line: OpportunityLine): string {
+  switch (line.kind) {
+    case 'field':
+      return `- ${line.label}: ${line.value}`;
+    case 'item':
+      return `- ${line.text}`;
+    case 'step':
+      return `${line.n}. ${line.text}${line.points.map((p) => `\n   - ${p}`).join('')}`;
+    case 'text':
+      return line.text;
+  }
+}
 
 /**
  * Everything the opportunity detail shows, as Markdown in page order, for the
@@ -24,120 +190,13 @@ export function opportunityToMarkdown(
   /** An asset's type as the page names it (useAssetTypeLabel); else its key, humanized. */
   assetTypeLabel: (type: string) => string | null = () => null,
 ): string {
-  const sd = opportunity.sourceData;
-  const parts: (string | null)[] = [];
-
-  parts.push([`# ${opportunity.title}`, opportunity.description].filter(Boolean).join('\n\n'));
-
-  parts.push(
-    [
-      `- Type: ${humanize(opportunity.type)}`,
-      `- Impact: ${humanize(opportunity.impact)}`,
-      `- Status: ${humanize(opportunity.status)}`,
-      `- Score: ${Math.round(opportunity.opportunityScore)}`,
-      `- Created: ${opportunity.createdAt.slice(0, 10)}`,
-      opportunity.decision && `- Decision: ${humanize(opportunity.decision)}`,
-    ]
-      .filter(Boolean)
-      .join('\n'),
-  );
-
-  // Sent from an Action Center task (AC-004): what the task says to do.
-  const task = sd.fromAction?.task;
-  parts.push(
-    section(
-      sd.fromAction?.actionNo != null
-        ? `From a task in AC-${sd.fromAction.actionNo}`
-        : 'From an Action Center task',
-      [
-        task?.where && `- Where: ${task.where}`,
-        task?.why && `- Why: ${task.why}`,
-        ...(task?.how ?? []).map((step, i) => `${i + 1}. ${step}`),
-        task?.doneWhen && `- Done when: ${task.doneWhen}`,
-        (task?.effort || task?.role) &&
-          `- Effort: ${[task?.effort, task?.role].filter(Boolean).join(' · ')}`,
-      ],
-    ),
-  );
-
-  parts.push(
-    section(
-      'Target pages',
-      (sd.targetPages ?? []).map((p) => `- ${p.title ? `${p.title}: ` : ''}${p.url}`),
-    ),
-  );
-
-  parts.push(
-    section(
-      'Recommended assets',
-      (sd.assets ?? []).map(
-        (a) =>
-          `- ${a.title} (${assetTypeLabel(a.type) ?? humanize(a.type)}, ${humanize(a.channel)}, ${humanize(a.decision)})`,
-      ),
-    ),
-  );
-
-  const sc = sd.scoreComponents;
-  parts.push(
-    section('Score breakdown', [
-      sc && `- Demand: ${Math.round(sc.demand)}`,
-      sc && `- Visibility gap: ${Math.round(sc.visibilityGap)}`,
-      sc && `- Competitor gap: ${Math.round(sc.competitorGap)}`,
-      sc && `- Intent: ${Math.round(sc.intent)}`,
-    ]),
-  );
-
-  const queries = sd.queries?.top.map((q) => q.query) ?? fanoutQueries.map((q) => q.query);
-  parts.push(
-    section('Source data', [
-      sd.promptText && `- Related prompt: ${sd.promptText}`,
-      sd.clusterLabel && `- Cluster: ${sd.clusterLabel}`,
-      sd.topicName && `- Topic: ${sd.topicName}`,
-      sd.estAiVolume != null && `- Est. AI volume: ${fmt(sd.estAiVolume)}`,
-      sd.visibilityScore != null && `- Visibility: ${Math.round(sd.visibilityScore)}%`,
-      sd.competitorGap != null && `- Competitor gap: ${Math.round(sd.competitorGap)}%`,
-      sd.intent && `- Intent: ${sd.intent}`,
-      !!sd.keywords?.length && `- Keywords: ${sd.keywords.join(', ')}`,
-      !!sd.competitorsCited?.length && `- Competitors cited: ${sd.competitorsCited.join(', ')}`,
-    ]),
-  );
-
-  parts.push(
-    section(
-      'Prompts',
-      (sd.prompts ?? []).map((p) => `- ${p}`),
-    ),
-  );
-  parts.push(
-    section(
-      'Fan-out queries',
-      queries.map((q) => `- ${q}`),
-    ),
-  );
-
-  if (brief) {
-    parts.push(
-      section('Content brief', [
-        `- Suggested title: ${brief.suggestedTitle}`,
-        `- Content type: ${brief.contentType}`,
-        `- Target word count: ${fmt(brief.targetWordCount)}`,
-        brief.targetKeywords.length > 0 && `- Keywords: ${brief.targetKeywords.join(', ')}`,
-        brief.callToAction && `- CTA: ${brief.callToAction}`,
-      ]),
-    );
-    parts.push(
-      brief.outline.length
-        ? `## Brief outline\n\n${brief.outline
-            .map(
-              (s, i) => `${i + 1}. ${s.heading}${s.keyPoints.map((k) => `\n   - ${k}`).join('')}`,
-            )
-            .join('\n')}`
-        : null,
-    );
-    parts.push(
-      brief.competitorInsights ? `## Competitor insights\n\n${brief.competitorInsights}` : null,
-    );
-  }
-
-  return parts.filter((p): p is string => !!p).join('\n\n') + '\n';
+  const doc = opportunityDocument(opportunity, brief, fanoutQueries, assetTypeLabel);
+  const parts = [
+    [`# ${doc.title}`, doc.description].filter(Boolean).join('\n\n'),
+    ...doc.sections.map((s) => {
+      const body = s.lines.map(markdownLine).join('\n');
+      return s.title ? `## ${s.title}\n\n${body}` : body;
+    }),
+  ];
+  return parts.join('\n\n') + '\n';
 }

@@ -1,7 +1,7 @@
 import { Suspense } from 'react';
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Brand } from '@/types';
 
 (
@@ -79,10 +79,11 @@ vi.mock('@/lib/actions/brand-domain', () => ({
   syncDomains: vi.fn(),
 }));
 
+const getCompetitors = vi.hoisted(() => vi.fn());
 vi.mock('@/lib/actions/competitor', () => ({
   addCompetitor: vi.fn(),
   deleteCompetitor: vi.fn(),
-  getCompetitors: vi.fn().mockResolvedValue([]),
+  getCompetitors: (...args: unknown[]) => getCompetitors(...args),
 }));
 
 vi.mock('@/config/api', () => ({
@@ -256,6 +257,79 @@ describe('brand settings Shopping mode', () => {
     expect(container.textContent).toContain('settings.shopping.managersOnly');
     await act(async () => checkbox.click());
     expect(setBrandShoppingMode).not.toHaveBeenCalled();
+
+    await act(async () => root.unmount());
+  });
+});
+
+// The brand's writes follow its RLS: brands and brand_domains update and
+// competitors writes for admins and managers, and a brand's delete for admins
+// (the server's rule). The others read the settings, with a note.
+describe('brand settings role gates', () => {
+  // afterEach's restoreAllMocks clears the read the Competitors tab makes.
+  beforeEach(() => getCompetitors.mockResolvedValue([]));
+
+  async function render() {
+    const container = document.createElement('div');
+    document.body.append(container);
+    const root = createRoot(container);
+    await act(async () => {
+      root.render(
+        <Suspense>
+          <BrandSettingsPage params={Promise.resolve({ id: brand.id })} />
+        </Suspense>,
+      );
+    });
+    const openTab = async (name: string) => {
+      const tab = [...container.querySelectorAll<HTMLElement>('[role="tab"]')].find(
+        (el) => el.textContent?.trim() === name,
+      )!;
+      await act(async () => {
+        tab.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
+        tab.click();
+      });
+    };
+    // The shown panel's fieldset: the hidden ones may stay mounted.
+    const fieldset = () =>
+      container.querySelector<HTMLFieldSetElement>('[role="tabpanel"]:not([hidden]) fieldset')!;
+    return { container, root, openTab, fieldset };
+  }
+
+  it('lets an analyst read the brand, not change or delete it', async () => {
+    Object.assign(role, { canAdmin: false, canManage: false });
+    const { container, root, openTab, fieldset } = await render();
+
+    expect(fieldset().disabled).toBe(true);
+    expect(container.textContent).toContain('settings.managersOnlyEdit');
+    for (const tab of ['settings.domainsTab', 'Competitors']) {
+      await openTab(tab);
+      expect(fieldset().disabled).toBe(true);
+    }
+    await openTab('settings.dangerTab');
+    expect(fieldset().disabled).toBe(true);
+    expect(container.textContent).toContain('settings.adminsOnlyDelete');
+
+    await act(async () => root.unmount());
+  });
+
+  it('lets a manager change the brand, but leaves its delete to admins', async () => {
+    Object.assign(role, { canAdmin: false, canManage: true });
+    const { container, root, openTab, fieldset } = await render();
+
+    expect(fieldset().disabled).toBe(false);
+    expect(container.textContent).not.toContain('settings.managersOnlyEdit');
+    await openTab('settings.dangerTab');
+    expect(fieldset().disabled).toBe(true);
+    expect(container.textContent).toContain('settings.adminsOnlyDelete');
+
+    await act(async () => root.unmount());
+  });
+
+  it('lets an admin delete the brand', async () => {
+    const { container, root, openTab, fieldset } = await render();
+    await openTab('settings.dangerTab');
+    expect(fieldset().disabled).toBe(false);
+    expect(container.textContent).not.toContain('settings.adminsOnlyDelete');
 
     await act(async () => root.unmount());
   });
