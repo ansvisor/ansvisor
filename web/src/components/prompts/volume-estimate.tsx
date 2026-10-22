@@ -1,0 +1,182 @@
+'use client';
+
+import { useTranslations } from 'next-intl';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { formatDate } from '@/lib/format';
+import { cn } from '@/lib/utils';
+import {
+  formatEstimateRange,
+  type EstimateTotal,
+  type VolumeEstimate,
+} from '@/lib/volume-estimate';
+
+/** One prompt's estimate, a sum of prompts', or their average per prompt. */
+export type EstimateKind = 'prompt' | 'total' | 'average';
+
+type Estimate = VolumeEstimate | EstimateTotal;
+
+const isTotal = (estimate: Estimate): estimate is EstimateTotal => 'count' in estimate;
+
+/** "Oct 2026": the month the Google volumes are from. */
+function monthOf(iso: string): string {
+  return new Date(iso).toLocaleDateString('en-US', {
+    month: 'short',
+    year: 'numeric',
+    timeZone: 'UTC',
+  });
+}
+
+/** How the estimate is built, from what, how sure it is and since when (PROMPT-013). */
+function EstimateNote({ estimate, kind }: { estimate: Estimate; kind: EstimateKind }) {
+  const t = useTranslations('volumeEstimate');
+  const rate = Math.round(estimate.rate * 100);
+  const level = t(`level.${estimate.confidence}`);
+  return (
+    <>
+      <p className="font-medium">{t('title')}</p>
+      {kind === 'prompt' || !isTotal(estimate) ? (
+        <>
+          <p>{t('method', { rate })}</p>
+          <p>
+            {estimate.measured === 0
+              ? t('noKeywords')
+              : t('keywords', { measured: estimate.measured, keywords: estimate.keywords })}{' '}
+            {estimate.measured >= 2 ? t('rangeSpread') : estimate.measured === 1 && t('rangeOne')}
+          </p>
+        </>
+      ) : (
+        <>
+          <p>
+            {t(kind === 'average' ? 'methodAverage' : 'methodTotal', {
+              count: estimate.count,
+              rate,
+            })}
+          </p>
+          <p>
+            {t('mix', {
+              high: estimate.byConfidence.high,
+              medium: estimate.byConfidence.medium,
+              low: estimate.byConfidence.low,
+            })}
+          </p>
+        </>
+      )}
+      <p>
+        {estimate.asOf
+          ? t('sources', { month: monthOf(estimate.asOf), rate })
+          : t('sourcesUndated', { rate })}
+      </p>
+      <p>
+        {estimate.asOf
+          ? t('confidence', { level, date: formatDate(estimate.asOf) })
+          : t('confidenceUndated', { level })}
+      </p>
+      {estimate.stale && <p>{t('stale')}</p>}
+      {estimate.confidence === 'low' && <p>{t('lowNote')}</p>}
+      <p className="opacity-80">{t('measuredNote')}</p>
+    </>
+  );
+}
+
+/** The trigger every estimate shares: hover or focus shows the method note. */
+function WithNote({
+  estimate,
+  kind,
+  label,
+  className,
+  children,
+}: {
+  estimate: Estimate;
+  kind: EstimateKind;
+  label: string;
+  className?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <Tooltip>
+      <TooltipTrigger
+        delay={300}
+        closeDelay={0}
+        render={
+          <button
+            type="button"
+            aria-label={label}
+            className={cn(
+              'cursor-help rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50',
+              className,
+            )}
+          />
+        }
+      >
+        {children}
+      </TooltipTrigger>
+      <TooltipContent className="max-w-80 space-y-1 text-left">
+        <EstimateNote estimate={estimate} kind={kind} />
+      </TooltipContent>
+    </Tooltip>
+  );
+}
+
+/**
+ * An estimated AI volume as its range, "400–2k": grey when its confidence is
+ * low, with the method note on hover or focus.
+ */
+export function EstimateRange({
+  estimate,
+  kind = 'prompt',
+  perMonth = false,
+  className,
+}: {
+  estimate: Estimate;
+  kind?: EstimateKind;
+  /** Adds "/ mo" after the range. */
+  perMonth?: boolean;
+  className?: string;
+}) {
+  const t = useTranslations('volumeEstimate');
+  const range = formatEstimateRange(estimate);
+  return (
+    <WithNote
+      estimate={estimate}
+      kind={kind}
+      label={t('label', { range, level: t(`level.${estimate.confidence}`) })}
+      className={cn(
+        'whitespace-nowrap tabular-nums',
+        estimate.confidence === 'low' && 'text-muted-foreground',
+        className,
+      )}
+    >
+      {range}
+      {perMonth && (
+        <span className="ml-1 text-[0.5em] font-normal text-muted-foreground">{t('perMonth')}</span>
+      )}
+    </WithNote>
+  );
+}
+
+/** The dashed "Estimate" badge, "Estimate · low confidence" when it is; the same note on hover. */
+export function EstimateBadge({
+  estimate,
+  kind = 'prompt',
+  className,
+}: {
+  estimate: Estimate;
+  kind?: EstimateKind;
+  className?: string;
+}) {
+  const t = useTranslations('volumeEstimate');
+  const text = estimate.confidence === 'low' ? t('badgeLow') : t('badge');
+  return (
+    <WithNote
+      estimate={estimate}
+      kind={kind}
+      label={t('badgeLabel', { level: t(`level.${estimate.confidence}`) })}
+      className={cn(
+        'inline-flex items-center rounded-md border border-dashed border-muted-foreground/40 px-1.5 text-[11px] font-medium leading-5 text-muted-foreground',
+        className,
+      )}
+    >
+      {text}
+    </WithNote>
+  );
+}

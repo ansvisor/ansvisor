@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
-import { compareNullsLast, isAllPromptsSortKey, promptSortValue } from './prompt-sort';
+import {
+  compareNullsLast,
+  comparePromptSortRows,
+  isAllPromptsSortKey,
+  promptSortValue,
+  type PromptSortRow,
+} from './prompt-sort';
 
 describe('compareNullsLast', () => {
   it('sorts non-null values ascending', () => {
@@ -70,5 +76,40 @@ describe('promptSortValue', () => {
     expect(isAllPromptsSortKey('lastRun')).toBe(true);
     expect(isAllPromptsSortKey('created')).toBe(false);
     expect(isAllPromptsSortKey(null)).toBe(false);
+  });
+});
+
+describe('comparePromptSortRows', () => {
+  const row = (
+    estAiVolume: number | null,
+    confidence?: 'high' | 'medium' | 'low',
+  ): PromptSortRow => ({
+    createdAt: '2026-10-01T00:00:00Z',
+    volume: estAiVolume === null ? undefined : { estAiVolume, confidence },
+  });
+
+  it('puts low-confidence volumes after the confident ones, before rows with none', () => {
+    const rows = [
+      row(9000, 'low'),
+      row(null),
+      row(500, 'high'),
+      row(2000, 'medium'),
+      row(100, 'low'),
+    ];
+    const order = (dir: 'asc' | 'desc') =>
+      [...rows]
+        .sort((a, b) => comparePromptSortRows('volume', a, b, dir))
+        .map((r) => r.volume?.estAiVolume ?? null);
+    expect(order('desc')).toEqual([2000, 500, 9000, 100, null]);
+    expect(order('asc')).toEqual([500, 2000, 100, 9000, null]);
+  });
+
+  it('sorts other columns as before', () => {
+    const a = {
+      createdAt: '2026-10-02T00:00:00Z',
+      volume: { estAiVolume: 1, confidence: 'low' as const },
+    };
+    const b = { createdAt: '2026-10-01T00:00:00Z' };
+    expect(comparePromptSortRows('added', a, b, 'desc')).toBeLessThan(0);
   });
 });

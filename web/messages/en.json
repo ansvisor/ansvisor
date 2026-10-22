@@ -5125,6 +5125,19 @@
     },
     "title": "Prompt Volumes",
     "description": "Discover query volumes and trends across AI platforms.",
+    "volumeInsights": {
+      "totalTitle": "Total Est. AI Volume",
+      "totalSub": "from {google} Google searches",
+      "averageTitle": "Avg. AI Volume",
+      "averageSub": "per prompt",
+      "googleColumn": "Google Vol.",
+      "googleTip": "The prompt's monthly Google searches: the median of its related keywords that have search data.",
+      "aiColumn": "Est. AI Vol.",
+      "aiTip": "Estimated monthly AI searches, as a range: the related keywords' Google searches × the AI adoption rate. Grey when the confidence is low.",
+      "footnote": "* Est. AI Volume is an estimate, shown as a range: the median Google searches of the prompt's related keywords × the AI adoption rate. Hover a range for its sources, confidence and date. For planning, not a measured count.",
+      "opportunityVolumeTip": "Estimated monthly AI searches, highest first. Low-confidence estimates aren't listed on their own.",
+      "opportunityLevelTip": "Opportunity level from the estimated AI volume: High = {high}+/mo, Medium = {min}–{high}/mo. A low-confidence estimate gets no level by itself."
+    },
     "totalVolume": "Total Volume",
     "trending": "Trending",
     "presenceRate": "Presence Rate",
@@ -5250,7 +5263,7 @@
         "mentions": "How often AI answers named your brand over the {range}.",
         "citations": "How often AI answers cited your pages over the {range}.",
         "positions": "Where AI answers name your brand, on average, over the {range}. Lower is better.",
-        "volume": "Estimated monthly AI searches for this prompt.",
+        "volume": "Estimated monthly AI searches for this prompt, as a range. Grey when the confidence is low; those sort after the rest.",
         "competition": "Google Ads competition for its keywords: Low, Medium or High.",
         "runs": "AI answers collected over the {range}. One run is one AI platform answering this prompt once.",
         "added": "When this prompt was added.",
@@ -5290,6 +5303,34 @@
         "upgrade": "Upgrade for more"
       }
     }
+  },
+  "volumeEstimate": {
+    "title": "How we estimate AI search volume",
+    "method": "The median monthly Google searches for this prompt's related keywords × the share of searches that now happen in AI assistants ({rate}%).",
+    "methodTotal": "The sum of {count, plural, one {# prompt's estimate} other {# prompts' estimates}}. Each is the median monthly Google searches for its related keywords × the share of searches that now happen in AI assistants ({rate}%).",
+    "methodAverage": "The average of {count, plural, one {# prompt's estimate} other {# prompts' estimates}}. Each is the median monthly Google searches for its related keywords × the share of searches that now happen in AI assistants ({rate}%).",
+    "keywords": "{measured} of {keywords} related keywords have Google search data.",
+    "noKeywords": "None of its related keywords has Google search data yet.",
+    "rangeSpread": "The range runs from the AI share of the smallest to the largest, within half to twice the estimate.",
+    "rangeOne": "With one to go by, the range is half to twice the estimate.",
+    "mix": "Confidence by prompt: {high} high, {medium} medium, {low} low.",
+    "sources": "Sources: Google search volume from DataForSEO ({month}) and an AI adoption rate of {rate}%.",
+    "sourcesUndated": "Sources: Google search volume from DataForSEO and an AI adoption rate of {rate}%.",
+    "confidence": "Confidence: {level} · updated {date}",
+    "confidenceUndated": "Confidence: {level}",
+    "stale": "Fetched over six months ago, so one level less sure. Refresh volumes for a newer estimate.",
+    "lowNote": "Low confidence: shown in grey, and not used to rank on its own.",
+    "measuredNote": "Measured numbers, such as your visibility or Search Console clicks, never carry this badge.",
+    "level": {
+      "high": "High",
+      "medium": "Medium",
+      "low": "Low"
+    },
+    "badge": "Estimate",
+    "badgeLow": "Estimate · low confidence",
+    "badgeLabel": "Estimate, {level} confidence: how it's built",
+    "label": "{range} a month, estimated, {level} confidence",
+    "perMonth": "/ mo"
   },
   "mentions": {
     "title": "Mentions & Sentiment",
