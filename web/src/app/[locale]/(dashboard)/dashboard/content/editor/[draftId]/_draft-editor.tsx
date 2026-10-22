@@ -435,6 +435,7 @@ export function DraftEditor({
       locked: t('suggestions.locked'),
       stale: t('suggestions.stale'),
       heading: t('suggestions.heading'),
+      links: t('suggestions.links'),
     }),
     [t],
   );

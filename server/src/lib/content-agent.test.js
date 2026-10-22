@@ -37,7 +37,12 @@ vi.mock('./plan-guard.js', async (importOriginal) => ({
   ...(await importOriginal()),
   enforceImproveQuota: (...args) => enforceImproveQuota(...args),
 }));
-vi.mock('./logger.js', () => ({ logger: { error: vi.fn() } }));
+vi.mock('./logger.js', () => ({ logger: { error: vi.fn(), warn: vi.fn() } }));
+const readLinkTargets = vi.fn();
+vi.mock('./content-links.js', async (importOriginal) => ({
+  ...(await importOriginal()),
+  readLinkTargets: (...args) => readLinkTargets(...args),
+}));
 
 const {
   buildFixPrompt,
@@ -47,11 +52,13 @@ const {
   keepSuggestions,
   growsPastLimit,
   HEADING_LIMITS,
+  inlineText,
   MAX_PROMPT_PASSAGE_CHARS,
   passageKey,
   promptPassages,
   splitReplace,
 } = await import('./content-agent.js');
+const { linkKey, NO_LINK_TARGETS } = await import('./content-links.js');
 const { PlanLimitError } = await import('./plan-guard.js');
 
 const BODY =
@@ -94,6 +101,7 @@ beforeEach(() => {
   };
   generateObject.mockReset();
   enforceImproveQuota.mockReset().mockResolvedValue(undefined);
+  readLinkTargets.mockReset().mockResolvedValue(NO_LINK_TARGETS);
 });
 
 describe('the page as the agent reads it', () => {
@@ -318,7 +326,7 @@ describe('a replace on a heading', () => {
   });
 
   it('keeps a heading with a second clause, and a paragraph replace as it was', () => {
-    expect(splitReplace('AEO or SEO? Which matters more in 2026', 'h2')).toEqual({
+    expect(splitReplace('AEO or SEO? Which matters more in 2026', 'h2')).toMatchObject({
       words: 'AEO or SEO? Which matters more in 2026',
       blocks: '',
     });
@@ -330,22 +338,164 @@ describe('a replace on a heading', () => {
         'AEO とは？ AEO は AI アシスタントの回答に引用されるための最適化の方法です。説明します。',
         'h2',
       ),
-    ).toEqual({
+    ).toMatchObject({
       words: 'AEO とは？',
       blocks: '<p>AEO は AI アシスタントの回答に引用されるための最適化の方法です。説明します。</p>',
     });
     // A non-breaking space stays one, as the passage keeps it.
     expect(splitReplace('Pour\u00a0slowly', 'p').words).toBe('Pour\u00a0slowly');
-    expect(splitReplace('Use 15 g of coffee. Then pour.', 'p')).toEqual({
+    expect(splitReplace('Use 15 g of coffee. Then pour.', 'p')).toMatchObject({
       words: 'Use 15 g of coffee. Then pour.',
       blocks: '',
     });
   });
 
   it('moves blocks sent with a paragraph replace after it', () => {
-    expect(splitReplace('<p>Use 15 g.</p><ul><li>a scale</li></ul>', 'p')).toEqual({
+    expect(splitReplace('<p>Use 15 g.</p><ul><li>a scale</li></ul>', 'p')).toMatchObject({
       words: 'Use 15 g.',
       blocks: '<ul><li>a scale</li></ul>',
+    });
+  });
+});
+
+/**
+ * Content Agent rule gaps, A: links only to the brand's pages and the draft's
+ * sources it was given, a replace's beside its words, an insert's in its HTML.
+ */
+describe('links to the pages and sources given', () => {
+  const page = draftPassages(
+    '<h2>Pricing</h2><p>See our plans for teams.</p><p>Studies show it works.</p>',
+  );
+  const links = new Map(
+    ['https://acme.example/pricing', 'https://research.example/study'].map((url) => [
+      linkKey(url),
+      url,
+    ]),
+  );
+  const keep = (over, ruleKeys = ['internalLinks']) =>
+    keepSuggestions(
+      [suggestion({ passage: 2, before: 'See our plans for teams.', rules: ruleKeys, ...over })],
+      page,
+      new Set(),
+      new Set(ruleKeys),
+      links,
+    );
+
+  it('keeps a replace’s link to a listed page, by its words, with the page’s URL', () => {
+    const [kept] = keep({
+      after:
+        'See <a href="https://www.acme.example/pricing/?utm_source=x">our plans</a> for teams.',
+    });
+    expect(kept).toMatchObject({
+      kind: 'replace',
+      after_text: 'See our plans for teams.',
+      after_links: [{ start: 4, end: 13, href: 'https://acme.example/pricing' }],
+      rule_keys: ['internalLinks'],
+    });
+  });
+
+  it('unwraps a link to anything not listed, and drops what then changes nothing', () => {
+    expect(
+      keep({ after: 'See <a href="https://made-up.example/x">our plans</a> for teams.' }),
+    ).toEqual([]);
+    const [kept] = keep({ after: 'See <a href="https://made-up.example/x">our team plans</a>.' });
+    expect(kept.after_text).toBe('See our team plans.');
+    expect(kept).not.toHaveProperty('after_links');
+  });
+
+  it('keeps an insert’s link to a listed source, never one in a heading', () => {
+    const [kept] = keepSuggestions(
+      [
+        suggestion({
+          kind: 'insert',
+          passage: 3,
+          before: '',
+          after:
+            '<h3><a href="https://research.example/study">Study</a></h3><p>A <a href="https://research.example/study" target="_blank" onclick="x()">2025 study</a> found it.</p>',
+          rules: ['citeInline'],
+        }),
+      ],
+      page,
+      new Set(),
+      new Set(['citeInline']),
+      links,
+    );
+    expect(kept.after_text).toBe(
+      '<h3>Study</h3><p>A <a href="https://research.example/study">2025 study</a> found it.</p>',
+    );
+  });
+
+  it('keeps at most 20 links on a replace, as the table allows', () => {
+    const many = Array.from(
+      { length: 22 },
+      (_, i) => `<a href="https://acme.example/pricing">plan ${i}</a>`,
+    ).join(' ');
+    const [kept] = keep({ after: `See ${many} for teams.` });
+    expect(kept.after_links).toHaveLength(20);
+  });
+
+  it('keeps no link without targets, as before', () => {
+    const [kept] = keepSuggestions(
+      [
+        suggestion({
+          kind: 'insert',
+          passage: 3,
+          before: '',
+          after: '<p>A <a href="https://research.example/study">study</a>.</p>',
+        }),
+      ],
+      page,
+      new Set(),
+      new Set(),
+    );
+    expect(kept.after_text).toBe('<p>A study.</p>');
+  });
+
+  it('reads inline words and their links, spaces collapsed', () => {
+    expect(inlineText('Read <a href="u"> the  guide </a><br>now')).toEqual({
+      text: 'Read the guide now',
+      links: [{ start: 5, end: 14, href: 'u' }],
+    });
+  });
+
+  it('gives the model the targets for the link rules asked, and keeps the links', async () => {
+    readLinkTargets.mockResolvedValue({
+      own: [{ url: 'https://acme.example/brew-guide', title: 'Brew guide' }],
+      sources: [{ url: 'https://research.example/study', title: 'Coffee study' }],
+    });
+    generateObject.mockResolvedValue({
+      object: {
+        suggestions: [
+          suggestion({
+            after:
+              'Use good coffee (see <a href="https://acme.example/brew-guide">our brew guide</a>).',
+            rules: ['internalLinks'],
+          }),
+        ],
+      },
+      usage: {},
+    });
+    const result = await fixDraftRules({
+      draftId: DRAFT,
+      brandId: BRAND,
+      input: input({ rules: [{ key: 'internalLinks', name: 'Internal links', detail: '0 of 3' }] }),
+    });
+
+    expect(readLinkTargets).toHaveBeenCalledWith(
+      expect.objectContaining({ brandId: BRAND, draftId: DRAFT }),
+    );
+    const { prompt, system } = generateObject.mock.calls[0][0];
+    expect(prompt).toContain(
+      "Pages on the brand's site you may link to (internal links):\n- Brew guide — https://acme.example/brew-guide",
+    );
+    // Only the rule asked for: no outbound list.
+    expect(prompt).not.toContain('Sources you may link to');
+    expect(system).toContain('Never invent a URL');
+    expect(result.count).toBe(1);
+    const batch = writes.find((w) => w.table === 'content_draft_suggestions');
+    expect(batch.value[0]).toMatchObject({
+      after_text: 'Use good coffee (see our brew guide).',
+      after_links: [{ start: 21, end: 35, href: 'https://acme.example/brew-guide' }],
     });
   });
 });

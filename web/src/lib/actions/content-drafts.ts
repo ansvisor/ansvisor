@@ -60,6 +60,7 @@ import {
 import {
   MAX_DECIDE,
   SUGGESTION_STATUSES,
+  suggestionLinks,
   type DraftSuggestion,
   type SuggestionStatus,
 } from '@/lib/content/suggestions';
@@ -1326,7 +1327,7 @@ export async function getDraftSuggestions(id: string): Promise<DraftSuggestion[]
   const { data, error } = await supabase
     .from('content_draft_suggestions')
     .select(
-      'id, batch_id, action_id, kind, block_text, before_text, after_text, reason, rule_keys, position, status, created_at, actions(action_no)',
+      'id, batch_id, action_id, kind, block_text, before_text, after_text, after_links, reason, rule_keys, position, status, created_at, actions(action_no)',
     )
     .eq('draft_id', id)
     .order('created_at', { ascending: false })
@@ -1351,6 +1352,7 @@ export async function getDraftSuggestions(id: string): Promise<DraftSuggestion[]
         blockText: row.block_text,
         beforeText: row.before_text,
         afterText: row.after_text,
+        afterLinks: row.kind === 'insert' ? null : suggestionLinks(row.after_links, row.after_text),
         reason: row.reason,
         ruleKeys: row.rule_keys ?? [],
         status: row.status as SuggestionStatus,

@@ -5,6 +5,7 @@ import { z } from 'zod';
 import supabaseAdmin from '../config/supabase.js';
 import { resolveModel } from './ai-provider.js';
 import { contentBriefModelId, recordUsage } from './content-brief.js';
+import { linkAllowList, linkKey, linkTargetsPrompt, readLinkTargets } from './content-links.js';
 import { pageTypeFormat } from './content-page-types.js';
 import { getLanguageName } from './languages.js';
 import { enforceImproveQuota } from './plan-guard.js';
@@ -25,6 +26,9 @@ export const MAX_AGENT_SUGGESTIONS = 8;
 /** How long the model may take: the editor waits for it. */
 const CALL_TIMEOUT_MS = 60_000;
 
+/** The most links one replace keeps (after_links, 00240). */
+const MAX_LINKS = 20;
+
 /** The longest passage the agent may change: keepSuggestions skips longer ones. */
 const MAX_PASSAGE_CHARS = 5_000;
 
@@ -40,7 +44,11 @@ export const HEADING_LIMITS = { h1: 70, other: 90 };
 export const headingLimit = (tag) => (tag === 'h1' ? HEADING_LIMITS.h1 : HEADING_LIMITS.other);
 
 /** The headings rule both agent prompts give the model (fix rules, Start Agent). */
+
 export const HEADING_RULE = `- A heading stays a heading: one short line, an H1 up to ${HEADING_LIMITS.h1} characters and other headings up to ${HEADING_LIMITS.other}. Never write an answer, a sentence or a FAQ into a heading's replace; to answer under a heading, insert a paragraph after it.`;
+
+/** The links rule both agent prompts give the model: only the URLs listed, never invented. */
+export const LINK_RULE = `- Links: link only to a URL listed under the pages or sources you may link to, copied exactly, as <a href="URL">the words it explains</a>, in a replace's "after" or in an insert. Cite a source by linking the words it supports. Never invent a URL, never link a heading, and when no listed page fits, add no link.`;
 
 /** The shortest answer a heading's replace may carry for it to go under the heading. */
 const MIN_ANSWER_CHARS = 40;
@@ -90,7 +98,7 @@ export const suggestionsSchema = z.object({
         after: z
           .string()
           .describe(
-            `replace: the new words, as plain text (a heading stays one line: an H1 up to ${HEADING_LIMITS.h1} characters, others up to ${HEADING_LIMITS.other}); insert: the blocks to add, as simple HTML (h2, h3, p, ul, ol, li, strong, em).`,
+            `replace: the new words, as plain text with links only as <a href> to the URLs listed (a heading stays one line: an H1 up to ${HEADING_LIMITS.h1} characters, others up to ${HEADING_LIMITS.other}); insert: the blocks to add, as simple HTML (h2, h3, p, ul, ol, li, strong, em, a).`,
           ),
         reason: z.string().describe('What the change does, in a few words.'),
         rules: z.array(z.string()).describe('The keys of the rules it fixes.'),
@@ -103,9 +111,10 @@ const SYSTEM_PROMPT = `You are the Content Agent for Answer Engine Optimization 
 
 Rules for your suggestions:
 - Fix only the rules listed. Each suggestion fixes one or more of them; put their keys in "rules".
-- A replace changes words inside one passage: copy "before" exactly as that passage has it (a phrase or a sentence), and write "after" as plain text that fits in its place.
-- An insert adds new blocks after a passage, as simple HTML (h2, h3, p, ul, ol, li, strong, em).
+- A replace changes words inside one passage: copy "before" exactly as that passage has it (a phrase or a sentence), and write "after" as plain text that fits in its place, with links only as the links rule below says.
+- An insert adds new blocks after a passage, as simple HTML (h2, h3, p, ul, ol, li, strong, em, and a for links).
 ${HEADING_RULE}
+${LINK_RULE}
 - Never change a passage marked LOCKED: AI assistants quote its wording today. You may insert after it.
 - Use only facts from the page and the brand. Never invent numbers, prices, dates, names, sources or quotes. When a rule needs a fact you don't have, write a placeholder in square brackets, e.g. [figure, source, year].
 - Keep the page's voice and change as little as each rule needs. At most ${MAX_AGENT_SUGGESTIONS} suggestions.
@@ -154,10 +163,12 @@ const INSERT_TAGS = new Set([
 
 /**
  * An insert's HTML kept to the blocks the editor takes from an agent, with
- * no attributes; anything else is unwrapped to its text. The editor checks
- * it again where it is inserted, and every save checks the page.
+ * no attributes; anything else is unwrapped to its text. A link stays only
+ * to a URL in `links` (linkAllowList), with that URL, and never in a heading.
+ * The editor checks it again where it is inserted, and every save checks the
+ * page.
  */
-export function cleanInsertHtml(html) {
+export function cleanInsertHtml(html, links = null) {
   const $ = cheerio.load(html || '', null, false);
   $('script, style, iframe, object, embed, noscript, template, head, title').remove();
   // The page has its H1, its title: an agent's heading is an H2 at most.
@@ -165,13 +176,57 @@ export function cleanInsertHtml(html) {
     el.name = 'h2';
   });
   for (const el of $('*').get().reverse()) {
-    if (!INSERT_TAGS.has(el.tagName?.toLowerCase())) {
+    const tag = el.tagName?.toLowerCase();
+    const href = tag === 'a' && links ? links.get(linkKey(el.attribs?.href)) : undefined;
+    const inHeading = $(el).parents('h1, h2, h3, h4, h5, h6').length > 0;
+    if (href && !inHeading && $(el).text().trim()) {
+      for (const name of Object.keys(el.attribs ?? {})) $(el).removeAttr(name);
+      $(el).attr('href', href);
+      continue;
+    }
+    if (!INSERT_TAGS.has(tag)) {
       $(el).replaceWith($(el).contents());
       continue;
     }
     for (const name of Object.keys(el.attribs ?? {})) $(el).removeAttr(name);
   }
   return $.html().trim();
+}
+
+/**
+ * Inline HTML's words and the links on them, { text, links: [{ start, end,
+ * href }] } with offsets into the text: runs of spaces and line breaks
+ * collapsed to one space (a non-breaking space stays), trimmed.
+ */
+export function inlineText(html) {
+  const $ = cheerio.load(html || '', null, false);
+  let text = '';
+  const links = [];
+  const add = (data) => {
+    const piece = data.replace(/[ \t\r\n\f]+/g, ' ');
+    text += text === '' || text.endsWith(' ') ? piece.replace(/^ /, '') : piece;
+  };
+  const walk = (nodes) => {
+    for (const node of nodes) {
+      if (node.type === 'text') add(node.data);
+      if (node.type !== 'tag') continue;
+      if (node.name === 'br') {
+        add(' ');
+        continue;
+      }
+      const start = text.length;
+      walk(node.children ?? []);
+      if (node.name !== 'a' || !node.attribs?.href) continue;
+      let from = start;
+      let to = text.length;
+      while (from < to && text[from] === ' ') from++;
+      while (to > from && text[to - 1] === ' ') to--;
+      if (to > from) links.push({ start: from, end: to, href: node.attribs.href });
+    }
+  };
+  walk($.root().contents().get());
+  const trimmed = text.replace(/ +$/, '');
+  return { text: trimmed, links: links.filter((link) => link.end <= trimmed.length) };
 }
 
 const textOf = (html) =>
@@ -208,10 +263,11 @@ function paragraph(text) {
  * block when that is of the passage's kind; the rest is an insert. On a
  * heading, plain text that answers its question ("What is X? X is …", the
  * answer MIN_ANSWER_CHARS or more) keeps the question, and the answer becomes
- * a paragraph.
+ * a paragraph. The words' links (to a URL in `links`) come with their offsets;
+ * a heading's words keep none.
  */
-export function splitReplace(after, tag) {
-  const html = cleanInsertHtml(after);
+export function splitReplace(after, tag, links = null) {
+  const html = cleanInsertHtml(after, links);
   const start = html.search(BLOCK_START);
   let words = start === -1 ? html : html.slice(0, start);
   let blocks = start === -1 ? '' : html.slice(start);
@@ -225,9 +281,9 @@ export function splitReplace(after, tag) {
     }
   }
   // Line breaks and runs of spaces, not a non-breaking space the passage may keep.
-  words = textOf(words)
-    .replace(/[ \t\r\n\f]+/g, ' ')
-    .trim();
+  const read = inlineText(words);
+  words = read.text;
+  const wordLinks = isHeading(tag) ? [] : read.links;
   if (isHeading(tag) && !blocks) {
     const answered = words.match(/^(.+?[?？])\s+(\S.*)$/);
     if (answered && (answered[2].length >= MIN_ANSWER_CHARS || words.length > headingLimit(tag))) {
@@ -235,7 +291,7 @@ export function splitReplace(after, tag) {
       blocks = paragraph(answered[2]);
     }
   }
-  return { words, blocks: blocks.trim() };
+  return { words, links: wordLinks, blocks: blocks.trim() };
 }
 
 /**
@@ -245,9 +301,11 @@ export function splitReplace(after, tag) {
  * each change once. A replace that carries blocks, or an answer on a
  * heading, is split into a replace and an insert after it (splitReplace);
  * one that would still grow a heading past its headingLimit is dropped (a
- * long heading may still be shortened).
+ * long heading may still be shortened). Links stay only to the URLs in
+ * `links` (linkAllowList): a replace's go in after_links, by offset into its
+ * words, an insert's in its HTML.
  */
-export function keepSuggestions(raw, passages, lockedKeys, ruleKeys) {
+export function keepSuggestions(raw, passages, lockedKeys, ruleKeys, links = null) {
   const kept = [];
   const seen = new Set();
   for (const s of raw) {
@@ -274,13 +332,17 @@ export function keepSuggestions(raw, passages, lockedKeys, ruleKeys) {
     // replace never leaves a question without its answer.
     let changes;
     if (s.kind !== 'replace') {
-      changes = [insertOf(cleanInsertHtml(s.after))];
+      changes = [insertOf(cleanInsertHtml(s.after, links))];
     } else {
       if (lockedKeys.has(passageKey(passage.text))) continue;
       const before = s.before.trim();
       if (!before || !passage.text.includes(before)) continue;
-      const { words, blocks } = splitReplace(s.after, passage.tag);
-      const changed = words && words !== before;
+      const split = splitReplace(s.after, passage.tag, links);
+      const { words, blocks } = split;
+      // As many as a suggestion may keep (00240).
+      const wordLinks = split.links.slice(0, MAX_LINKS);
+      // Linking words the passage already has is a change too.
+      const changed = words && (words !== before || wordLinks.length > 0);
       if (changed && (words.length > 2000 || growsPastLimit(passage, before, words))) continue;
       changes = [
         changed && {
@@ -290,6 +352,7 @@ export function keepSuggestions(raw, passages, lockedKeys, ruleKeys) {
             block_text: passage.text,
             before_text: before,
             after_text: words,
+            ...(wordLinks.length ? { after_links: wordLinks } : {}),
             reason,
             rule_keys: rules,
           },
@@ -328,7 +391,15 @@ export function promptPassages(passages) {
 }
 
 /** What the model is told: the brand, the page's passages, and the rules to fix. */
-export function buildFixPrompt({ brand, draft, passages, more = false, lockedKeys, input }) {
+export function buildFixPrompt({
+  brand,
+  draft,
+  passages,
+  more = false,
+  lockedKeys,
+  input,
+  linkTargets = '',
+}) {
   const lines = passages.map((p, i) => {
     const locked = lockedKeys.has(passageKey(p.text)) ? ', LOCKED' : '';
     return `[${i + 1}] (${p.tag}${locked}) ${p.text}`;
@@ -345,7 +416,7 @@ Page type: ${pageTypeFormat(draft.page_type)}
 
 Rules the page doesn't meet yet (key: rule — what it asks and how the page reads now):
 ${rules.join('\n')}
-${own.length ? `\nThe writer's own rules, to follow in every change:\n${own.join('\n')}\n` : ''}
+${own.length ? `\nThe writer's own rules, to follow in every change:\n${own.join('\n')}\n` : ''}${linkTargets ? `\n${linkTargets}\n` : ''}
 The page, passage by passage:
 ${lines.join('\n')}
 
@@ -380,7 +451,7 @@ export async function hasOpenSuggestions(draftId) {
 export async function fixDraftRules({ draftId, brandId, input }) {
   const { data: draft, error: draftError } = await supabaseAdmin
     .from('content_drafts')
-    .select('id, brand_id, title, body_html, page_type, action_id, status')
+    .select('id, brand_id, title, body_html, page_type, action_id, status, source_url')
     .eq('id', draftId)
     .maybeSingle();
   if (draftError) throw draftError;
@@ -412,11 +483,27 @@ export async function fixDraftRules({ draftId, brandId, input }) {
   await enforceImproveQuota(brand.organization_id, modelId);
 
   const lockedKeys = new Set(input.locked.map(passageKey));
+  const ruleKeys = new Set(input.rules.map((r) => r.key));
+  // Where it may link: the brand's pages and the draft's sources (A).
+  const targets = await readLinkTargets({
+    brandId,
+    draftId,
+    sourceUrl: draft.source_url,
+    ruleKeys,
+  });
   const { object, usage } = await generateObject({
     model: resolveModel(modelId),
     schema: suggestionsSchema,
     system: SYSTEM_PROMPT,
-    prompt: buildFixPrompt({ brand, draft, passages, more, lockedKeys, input }),
+    prompt: buildFixPrompt({
+      brand,
+      draft,
+      passages,
+      more,
+      lockedKeys,
+      input,
+      linkTargets: linkTargetsPrompt(targets, ruleKeys),
+    }),
     abortSignal: AbortSignal.timeout(CALL_TIMEOUT_MS),
   });
   await recordUsage({ organizationId: brand.organization_id, draftId, modelId, usage });
@@ -425,7 +512,8 @@ export async function fixDraftRules({ draftId, brandId, input }) {
     object.suggestions,
     passages,
     lockedKeys,
-    new Set(input.rules.map((r) => r.key)),
+    ruleKeys,
+    linkAllowList(targets),
   );
   if (!rows.length) return { count: 0, batchId: null };
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { growsPastLimit, headingLimit } from './suggestions';
+import { growsPastLimit, headingLimit, suggestionLinks } from './suggestions';
 
 /**
  * How long an agent's change may make a heading: an H1 up to 70 characters,
@@ -19,5 +19,32 @@ describe('growsPastLimit', () => {
     expect(growsPastLimit(2, 120, 110)).toBe(false);
     expect(growsPastLimit(2, 120, 120)).toBe(false);
     expect(growsPastLimit(2, 120, 121)).toBe(true);
+  });
+});
+
+/** A replace's links (00240), as the editor may put them on. */
+describe('suggestionLinks', () => {
+  it('keeps safe links inside the words, in order, not overlapping', () => {
+    expect(
+      suggestionLinks(
+        [
+          { start: 4, end: 13, href: 'https://acme.example/pricing' },
+          { start: 10, end: 20, href: 'https://acme.example/overlap' },
+          { start: 14, end: 18, href: '/guides/brew' },
+          { start: 19, end: 99, href: 'https://past.example' },
+          { start: 20, end: 21, href: 'javascript:alert(1)' },
+        ],
+        'See our plans for teams.',
+      ),
+    ).toEqual([
+      { start: 4, end: 13, href: 'https://acme.example/pricing' },
+      { start: 14, end: 18, href: '/guides/brew' },
+    ]);
+  });
+
+  it('is null without any', () => {
+    expect(suggestionLinks(null, 'x')).toBeNull();
+    expect(suggestionLinks([], 'x')).toBeNull();
+    expect(suggestionLinks([{ start: 0, end: 1 }], 'x')).toBeNull();
   });
 });

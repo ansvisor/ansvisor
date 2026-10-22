@@ -63,7 +63,12 @@ vi.mock('./plan-guard.js', async (importOriginal) => ({
   ...(await importOriginal()),
   enforceImproveQuota: (...args) => enforceImproveQuota(...args),
 }));
-vi.mock('./logger.js', () => ({ logger: { error: vi.fn(), info: vi.fn() } }));
+vi.mock('./logger.js', () => ({ logger: { error: vi.fn(), info: vi.fn(), warn: vi.fn() } }));
+const readLinkTargets = vi.hoisted(() => vi.fn());
+vi.mock('./content-links.js', async (importOriginal) => ({
+  ...(await importOriginal()),
+  readLinkTargets: (...args) => readLinkTargets(...args),
+}));
 const hasOpenSuggestions = vi.hoisted(() => vi.fn());
 vi.mock('./content-agent.js', async (importOriginal) => ({
   ...(await importOriginal()),
@@ -126,6 +131,7 @@ const page = {
 };
 
 beforeEach(() => {
+  readLinkTargets.mockReset().mockResolvedValue({ own: [], sources: [] });
   writes = [];
   rpcCalls = [];
   reads = [];
@@ -394,6 +400,11 @@ describe('runDraftWriting on an existing page', () => {
     // An answer goes after a heading, never into it.
     expect(generateObject.mock.calls[0][0].system).toContain(
       'Never write an answer, a sentence or a FAQ into a heading',
+    );
+    // Links only to the pages and sources listed (A); none asked for here.
+    expect(generateObject.mock.calls[0][0].system).toContain('Never invent a URL');
+    expect(readLinkTargets).toHaveBeenCalledWith(
+      expect.objectContaining({ draftId: DRAFT, ruleKeys: new Set(['faq']) }),
     );
     expect(draftUpdates()).toEqual([
       { status: 'in_review', agent_state: null, agent_state_at: expect.any(String) },

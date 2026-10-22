@@ -5,6 +5,7 @@ import supabaseAdmin from '../config/supabase.js';
 import { resolveModel } from './ai-provider.js';
 import {
   HEADING_RULE,
+  LINK_RULE,
   MAX_AGENT_SUGGESTIONS,
   draftPassages,
   hasOpenSuggestions,
@@ -14,6 +15,7 @@ import {
   suggestionsSchema,
 } from './content-agent.js';
 import { contentBriefModelId, rebuildSources, recordUsage } from './content-brief.js';
+import { linkAllowList, linkTargetsPrompt, readLinkTargets } from './content-links.js';
 import { pageTypeFormat } from './content-page-types.js';
 import { getLanguageName } from './languages.js';
 import { logger } from './logger.js';
@@ -103,9 +105,10 @@ const SUGGEST_SYSTEM_PROMPT = `You are the Content Agent for Answer Engine Optim
 
 Rules for your suggestions:
 - Make the page answer the questions and AI searches listed, follow the brief when there is one, and meet the rules listed.
-- A replace changes words inside one passage: copy "before" exactly as that passage has it (a phrase or a sentence), and write "after" as plain text that fits in its place.
-- An insert adds new blocks after a passage, as simple HTML (h2, h3, p, ul, ol, li, strong, em): a missing section, a direct answer, an FAQ.
+- A replace changes words inside one passage: copy "before" exactly as that passage has it (a phrase or a sentence), and write "after" as plain text that fits in its place, with links only as the links rule below says.
+- An insert adds new blocks after a passage, as simple HTML (h2, h3, p, ul, ol, li, strong, em, and a for links): a missing section, a direct answer, an FAQ.
 ${HEADING_RULE}
+${LINK_RULE}
 - Never change a passage marked LOCKED: AI assistants quote its wording today. You may insert after it.
 - Put the keys of the rules a change meets in "rules" (none when it meets none).
 - Use only facts from the page and the brand. Never invent numbers, prices, dates, names, sources or quotes; write a placeholder in square brackets instead, e.g. [figure, source, year].
@@ -181,6 +184,7 @@ export function buildWritePrompt({
   passages,
   more = false,
   lockedKeys,
+  linkTargets = '',
 }) {
   const { sources } = input;
   const rules = input.rules.map((r) => `${r.key}: ${r.name}${r.detail ? ` — ${r.detail}` : ''}`);
@@ -219,7 +223,7 @@ ${list(sources.pages.map((p) => p.url))}
 
 Rules (key: rule — what it asks):
 ${list(rules)}
-${own.length ? `\nThe writer's own rules:\n${own.join('\n')}\n` : ''}
+${own.length ? `\nThe writer's own rules:\n${own.join('\n')}\n` : ''}${linkTargets ? `\n${linkTargets}\n` : ''}
 ${page}
 
 Write in ${getLanguageName(brand?.language)}.`;
@@ -423,11 +427,29 @@ export async function runDraftWriting({ draft, brand, model, modelId, input }) {
     const { passages, more } = promptPassages(draftPassages(draft.body_html));
     if (!passages.length) throw new Error('The page has no text to improve');
     const lockedKeys = new Set(input.locked.map(passageKey));
+    const ruleKeys = new Set(input.rules.map((r) => r.key));
+    // Where it may link: the brand's pages and the draft's sources (A).
+    const targets = await readLinkTargets({
+      brandId: draft.brand_id,
+      draftId: draft.id,
+      sourceUrl: draft.source_url,
+      ruleKeys,
+    });
     const { object, usage } = await generateObject({
       model,
       schema: suggestionsSchema,
       system: SUGGEST_SYSTEM_PROMPT,
-      prompt: buildWritePrompt({ brand, draft, prompts, brief, input, passages, more, lockedKeys }),
+      prompt: buildWritePrompt({
+        brand,
+        draft,
+        prompts,
+        brief,
+        input,
+        passages,
+        more,
+        lockedKeys,
+        linkTargets: linkTargetsPrompt(targets, ruleKeys),
+      }),
       abortSignal: AbortSignal.timeout(CALL_TIMEOUT_MS),
     });
     await recordUsage({ organizationId: brand.organization_id, draftId: draft.id, modelId, usage });
@@ -435,7 +457,8 @@ export async function runDraftWriting({ draft, brand, model, modelId, input }) {
       object.suggestions,
       passages,
       lockedKeys,
-      new Set(input.rules.map((r) => r.key)),
+      ruleKeys,
+      linkAllowList(targets),
     );
     if (!rows.length) throw new Error('The agent left no suggestion it could place');
     // A batch that landed during the run (Fix open rules, the API) stays the

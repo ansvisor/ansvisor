@@ -958,6 +958,32 @@ describe('the content editor', () => {
       expect(keepAgentBeforeVersion).toHaveBeenCalledTimes(1);
     });
 
+    it('puts a replace’s links on its words, shows where they go, and takes them off on undo', async () => {
+      getContentDraft.mockResolvedValue(page);
+      getDraftSuggestions.mockResolvedValue([
+        suggestion({
+          afterText: 'Accuracy is shown per team, as our pricing page explains.',
+          afterLinks: [{ start: 35, end: 47, href: 'https://acme.example/pricing' }],
+        }),
+      ]);
+      await renderPage();
+
+      expect(cardOf('s1')!.textContent).toContain('Links: https://acme.example/pricing');
+      expect(cardOf('s1')!.querySelector('span[title]')!.textContent).toBe('pricing page');
+      await press('s1', 'Accept');
+      const html = () =>
+        (
+          container.querySelector('.ProseMirror') as HTMLElement & { editor: Editor }
+        ).editor.getHTML();
+      expect(html()).toMatch(
+        /<a [^>]*href="https:\/\/acme\.example\/pricing"[^>]*>pricing page<\/a>/,
+      );
+
+      await press('s1', 'Undo');
+      expect(pageText()).toContain(VAGUE);
+      expect(html()).not.toContain('<a ');
+    });
+
     it('makes an accept again on the page when it changed while the decision was saved', async () => {
       getContentDraft.mockResolvedValue(page);
       getDraftSuggestions.mockResolvedValue(batch);

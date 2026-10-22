@@ -8,6 +8,8 @@
  * text, as the agent read it.
  */
 
+import { safeLinkHref } from './editor';
+
 export const SUGGESTION_STATUSES = ['open', 'accepted', 'rejected'] as const;
 export type SuggestionStatus = (typeof SUGGESTION_STATUSES)[number];
 
@@ -24,6 +26,8 @@ export interface DraftSuggestion {
   beforeText: string;
   /** replace: the new words; insert: the blocks added, as HTML. */
   afterText: string;
+  /** replace: the links on the new words (00240); an insert's are in its HTML. */
+  afterLinks?: SuggestionLink[] | null;
   /** Why, as the agent says it: "add a dated data point (rule)". */
   reason: string;
   /** The rules it is meant to fix. */
@@ -51,6 +55,31 @@ export function headingLimit(level: number): number {
  */
 export function growsPastLimit(level: number, now: number, then: number): boolean {
   return then > headingLimit(level) && then > now;
+}
+
+/** A link on a replace's new words: afterText from start to end, linked to href. */
+export interface SuggestionLink {
+  start: number;
+  end: number;
+  href: string;
+}
+
+/**
+ * A replace's stored links (after_links, 00240) as the editor may put them
+ * on: in order, inside the words, not overlapping, each a safe link. Null
+ * when there are none.
+ */
+export function suggestionLinks(raw: unknown, afterText: string): SuggestionLink[] | null {
+  if (!Array.isArray(raw)) return null;
+  const links: SuggestionLink[] = [];
+  for (const item of raw as Partial<SuggestionLink>[]) {
+    const { start, end } = item ?? {};
+    const href = typeof item?.href === 'string' ? safeLinkHref(item.href) : null;
+    if (!href || !Number.isInteger(start) || !Number.isInteger(end)) continue;
+    if (start! < (links.at(-1)?.end ?? 0) || end! <= start! || end! > afterText.length) continue;
+    links.push({ start: start!, end: end!, href });
+  }
+  return links.length ? links : null;
 }
 
 /** The most suggestions decided at once (00217). */
