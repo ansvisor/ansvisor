@@ -31,12 +31,14 @@ import {
   Search,
   Calendar,
   Globe,
+  AlertTriangle,
 } from 'lucide-react';
 import { useBrandStore } from '@/stores/use-brand-store';
 import { useFeatureGate } from '@/hooks/use-feature-gate';
 import {
   getShoppingFilterOptions,
   getShoppingOverview,
+  getShoppingAmazonShareDropAlert,
   getOwnProducts,
   getCompetitorProducts,
   getCompetitorSummary,
@@ -88,6 +90,7 @@ import {
 import { toCsv } from '@/lib/csv';
 import { PLATFORM_LABELS } from '@/config/platform-labels';
 import { formatRegionDisplay } from '@/lib/region';
+import type { AmazonShareDropAlert } from '@/lib/shopping-amazon-share-alert';
 
 const DATE_PRESETS: ShoppingDatePreset[] = ['7d', '30d', '90d', 'all'];
 
@@ -120,6 +123,9 @@ export default function ShoppingPage() {
   const [kpis, setKpis] = useState<ShoppingKpis | null>(null);
   const [charts, setCharts] = useState<ShoppingChartData | null>(null);
   const [loading, setLoading] = useState(false);
+  const [amazonShareDropAlert, setAmazonShareDropAlert] = useState<AmazonShareDropAlert | null>(
+    null,
+  );
 
   const [ownProducts, setOwnProducts] = useState<ShoppingProduct[]>([]);
   const [competitorProducts, setCompetitorProducts] = useState<ShoppingProduct[]>([]);
@@ -205,6 +211,27 @@ export default function ShoppingPage() {
     void loadData();
   }, [loadData]);
 
+  // This alert always evaluates five consecutive rolling seven-day windows
+  // ending at query time, independently of display/platform/region filters.
+  useEffect(() => {
+    if (!activeBrandId) {
+      setAmazonShareDropAlert(null);
+      return;
+    }
+    let cancelled = false;
+    getShoppingAmazonShareDropAlert(activeBrandId)
+      .then((alert) => {
+        if (!cancelled) setAmazonShareDropAlert(alert);
+      })
+      .catch(() => {
+        // The alert is supplemental; a query failure must not break Shopping.
+        if (!cancelled) setAmazonShareDropAlert(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [activeBrandId]);
+
   if (!activeBrandId) {
     return (
       <div className="space-y-6">
@@ -224,6 +251,24 @@ export default function ShoppingPage() {
   return (
     <div className="space-y-6">
       <PageHeader t={t} />
+
+      {amazonShareDropAlert && (
+        <div
+          role="alert"
+          className="flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 dark:border-amber-900/50 dark:bg-amber-950/30"
+        >
+          <AlertTriangle
+            className="mt-0.5 h-5 w-5 shrink-0 text-amber-600 dark:text-amber-500"
+            aria-hidden="true"
+          />
+          <p className="text-sm text-amber-900 dark:text-amber-200">
+            {t('amazonShareDropAlert', {
+              from: Math.round(amazonShareDropAlert.fromShare * 100),
+              to: Math.round(amazonShareDropAlert.toShare * 100),
+            })}
+          </p>
+        </div>
+      )}
 
       <FilterBar
         t={t}
