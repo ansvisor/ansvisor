@@ -145,6 +145,7 @@ describe('OpportunityActions', () => {
       'Send to Actions',
       'Generate Brief',
       "Couldn't check for a draft · Retry",
+      'Export',
     ]);
     await act(async () => button("Couldn't check for a draft · Retry").click());
     expect(handlers.retry).toHaveBeenCalled();
