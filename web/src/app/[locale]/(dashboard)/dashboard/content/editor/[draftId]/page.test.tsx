@@ -81,6 +81,8 @@ vi.mock('mammoth', () => ({
   },
 }));
 vi.mock('sonner', () => ({ toast }));
+const saveBlob = vi.hoisted(() => vi.fn());
+vi.mock('@/lib/download', () => ({ saveBlob }));
 
 (
   globalThis as typeof globalThis & {
@@ -170,12 +172,24 @@ const button = (name: string) =>
     (b) => b.getAttribute('aria-label') === name || b.textContent === name,
   );
 
+/** Picks one of the side panel's tabs. */
+async function pickTab(name: string) {
+  const tab = [...container.querySelectorAll<HTMLElement>('aside [role="tab"]')].find(
+    (el) => el.textContent === name,
+  )!;
+  await act(async () => {
+    tab.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
+    tab.click();
+  });
+}
+
 beforeEach(() => {
   container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);
   getContentDraft.mockReset();
   markContentDraftReady.mockReset();
+  saveBlob.mockReset();
   setContentDraftPageType.mockReset().mockResolvedValue(undefined);
   saveContentDraft
     .mockReset()
@@ -218,10 +232,14 @@ describe('the content editor', () => {
     expect(getContentDraft).toHaveBeenCalledWith('d1');
     const header = container.querySelector('header')!;
     expect(header.querySelector('h1')!.textContent).toBe('Pipeline forecasting');
-    expect(header.textContent).toContain('Feature page');
-    expect(header.textContent).toContain('Optimize');
-    expect(header.textContent).toContain('In review');
     expect(header.textContent).toContain('Saved');
+    // The page's tags on a line of their own, under the title.
+    const [top, tags] = header.children;
+    expect(top.textContent).not.toContain('In review');
+    expect(tags.textContent).toContain('Feature page');
+    expect(tags.textContent).toContain('Optimize');
+    expect(tags.textContent).toContain('In review');
+    expect(tags.textContent).toMatch(/Rules \d+\/\d+/);
     expect(container.querySelector('a[href="/dashboard/content/library"]')).not.toBeNull();
 
     // The page's text, against a feature page's 3,000-character target.
@@ -1200,6 +1218,38 @@ describe('the content editor', () => {
     expect(toast.success).toHaveBeenLastCalledWith('HTML copied');
   });
 
+  it('exports the page from the header, as Markdown here', async () => {
+    getContentDraft.mockResolvedValue(
+      draft({ bodyHtml: '<h1>Pipeline forecasting</h1><p>Teams <strong>trust</strong> it.</p>' }),
+    );
+    await renderPage();
+    const trigger = [...container.querySelectorAll<HTMLButtonElement>('header button')].find(
+      (b) => b.textContent === 'Export',
+    )!;
+    await act(async () => {
+      trigger.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
+      trigger.click();
+    });
+    const items = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')];
+    expect(items.map((i) => i.textContent)).toEqual([
+      'Export Word',
+      'Export HTML',
+      'Export Markdown',
+    ]);
+    await act(async () => items[2].click());
+    await act(async () => {});
+
+    expect(saveBlob).toHaveBeenCalledTimes(1);
+    const [blob, name] = saveBlob.mock.calls[0] as [Blob, string];
+    expect(name).toBe('ansvisor_content_pipeline-forecasting.md');
+    const text = await new Promise<string>((resolve) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.readAsText(blob);
+    });
+    expect(text).toBe('# Pipeline forecasting\n\nTeams **trust** it.\n');
+  });
+
   it('shows the link the cursor is in, to open in a new tab', async () => {
     getContentDraft.mockResolvedValue(
       draft({ bodyHtml: '<p><a href="https://gartner.com/x">Gartner</a> says so.</p>' }),
@@ -1365,14 +1415,40 @@ describe('the side panel', () => {
 
     await act(async () => button('Show side panel')!.click());
     expect(panel()!.getAttribute('aria-label')).toBe('Side panel');
-    expect(panel()!.textContent).toContain('Impact');
+    // Rules first, what to act on; Impact reads only once it is picked.
+    expect(panel()!.querySelector('[role="tab"][aria-selected="true"]')?.textContent).toBe('Rules');
+    expect(getContentImpact).not.toHaveBeenCalled();
+    await pickTab('Impact');
     // The page the draft optimizes, over 30 days.
     expect(getContentImpact).toHaveBeenCalledWith('b1', 'https://acme.example.com/pricing', 30);
     expect(getContentResults).toHaveBeenCalledWith('b1', 'https://acme.example.com/pricing', 30);
     expect(button('Hide side panel')!.getAttribute('aria-pressed')).toBe('true');
   });
 
-  it('opens Sources only when its tab is picked, and keeps Impact as it was', async () => {
+  it('keeps its tabs down the right edge while closed, and opens on the one picked', async () => {
+    getContentDraft.mockResolvedValue(draft());
+    window.innerWidth = 1024;
+    await renderPage();
+    expect(panel()).toBeNull();
+    const rail = () => container.querySelector('nav[aria-label="Side panel"]');
+    const tabs = [...rail()!.querySelectorAll('button')];
+    expect(tabs.map((b) => b.textContent)).toEqual(['Rules', 'Brief', 'Sources', 'Impact']);
+    expect(tabs[2].getAttribute('title')).toBe('Open Sources in the side panel');
+
+    await act(async () => tabs[2].click());
+    expect(panel()!.querySelector('[role="tab"][aria-selected="true"]')?.textContent).toBe(
+      'Sources',
+    );
+    expect(rail()).toBeNull();
+    expect(localStorage.getItem('aeo:content-editor-panel')).toBe('1');
+
+    // Closed again from the header, the strip is back.
+    await act(async () => button('Hide side panel')!.click());
+    expect(panel()).toBeNull();
+    expect(rail()).not.toBeNull();
+  });
+
+  it('opens Sources only when its tab is picked, and reads Impact only when it is', async () => {
     getDraftSources.mockResolvedValue({
       data: {
         prompts: [],
@@ -1403,7 +1479,7 @@ describe('the side panel', () => {
     // The draft's H1 carries the fan-out's words.
     expect(panel()!.textContent).toContain('pipeline forecasting');
     expect(panel()!.textContent).toContain('H1');
-    expect(getContentImpact).toHaveBeenCalledTimes(1);
+    expect(getContentImpact).not.toHaveBeenCalled();
   });
 
   it('rebuilds the brief from Sources and opens it', async () => {
@@ -1440,22 +1516,13 @@ describe('the side panel', () => {
     window.innerWidth = 1440;
     await renderPage();
 
-    const pick = async (name: string) => {
-      const tab = [...panel()!.querySelectorAll<HTMLElement>('[role="tab"]')].find(
-        (el) => el.textContent === name,
-      )!;
-      await act(async () => {
-        tab.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
-        tab.click();
-      });
-    };
     expect([...panel()!.querySelectorAll('[role="tab"]')].map((el) => el.textContent)).toEqual([
-      'Impact',
+      'Rules',
       'Brief',
       'Sources',
-      'Rules',
+      'Impact',
     ]);
-    await pick('Sources');
+    await pickTab('Sources');
     await act(async () => button('Rebuild with selection')!.click());
 
     expect(rebuildDraftBrief).toHaveBeenCalledWith('d1', 'b1', {
@@ -1473,7 +1540,7 @@ describe('the side panel', () => {
     expect(panel()!.textContent).toContain('Win forecasting searches');
 
     // The rules check against the brief just rebuilt, without a reload.
-    await pick('Rules');
+    await pickTab('Rules');
     expect(
       [...panel()!.querySelectorAll<HTMLInputElement>('input')].map((input) => input.value),
     ).toContain('forecast accuracy, pipeline');
@@ -1775,6 +1842,7 @@ describe('the side panel', () => {
     getContentDraft.mockResolvedValue(draft({ method: 'create' }));
     window.innerWidth = 1440;
     await renderPage();
+    await pickTab('Impact');
     // A new page: nothing to measure yet.
     expect(panel()!.textContent).toContain('This draft is a new page, not live yet');
     expect(getContentImpact).not.toHaveBeenCalled();
