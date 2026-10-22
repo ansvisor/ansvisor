@@ -1,5 +1,6 @@
 'use client';
 
+import { useMemo } from 'react';
 import { useTranslations } from 'next-intl';
 import { ArrowUpRight, BarChart3 } from 'lucide-react';
 import { Link } from '@/i18n/navigation';
@@ -23,7 +24,11 @@ import {
 } from '@/lib/action-center/affected';
 import { getPlatformName } from '@/lib/traffic-platforms';
 import type { VolumeEstimate } from '@/lib/volume-estimate';
-import { EstimateRange } from '@/components/prompts/volume-estimate';
+import {
+  EstimateNoteTooltip,
+  EstimateRange,
+  createEstimateNoteHandle,
+} from '@/components/prompts/volume-estimate';
 import { SignalWhereLine } from './signal-table';
 
 /**
@@ -72,6 +77,8 @@ function PromptsTable({
   volumes: Map<string, VolumeEstimate> | null;
 }) {
   const t = useTranslations('actionCenter.actionsPage.drawer.affected');
+  // One method note for the column's ranges, as the Prompts tables do.
+  const volumeNote = useMemo(() => createEstimateNoteHandle(), []);
   const volumeOf = (row: AffectedPrompt) => (row.id ? (volumes?.get(row.id) ?? null) : null);
   const show = {
     volume: rows.some((row) => volumeOf(row) !== null),
@@ -138,7 +145,11 @@ function PromptsTable({
                   </TableCell>
                   {show.volume && (
                     <TableCell className="text-right align-top text-xs tabular-nums">
-                      {volume !== null ? <EstimateRange estimate={volume} /> : '—'}
+                      {volume !== null ? (
+                        <EstimateRange estimate={volume} handle={volumeNote} />
+                      ) : (
+                        '—'
+                      )}
                     </TableCell>
                   )}
                   {show.platforms && (
@@ -178,6 +189,7 @@ function PromptsTable({
             })}
           </TableBody>
         </Table>
+        <EstimateNoteTooltip handle={volumeNote} />
       </div>
     </section>
   );
