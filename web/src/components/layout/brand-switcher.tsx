@@ -1,7 +1,9 @@
 'use client';
 
 import { useTranslations } from 'next-intl';
-import { Link, useRouter } from '@/i18n/navigation';
+import { Link, usePathname, useRouter } from '@/i18n/navigation';
+import { brandPagePath } from '@/lib/brand-path';
+import type { Brand } from '@/types';
 import { useBrandStore } from '@/stores/use-brand-store';
 import {
   DropdownMenu,
@@ -33,6 +35,7 @@ interface BrandSwitcherProps {
 export function BrandSwitcher({ collapsed = false, onOpenChange, onNavigate }: BrandSwitcherProps) {
   const t = useTranslations('brands');
   const router = useRouter();
+  const pathname = usePathname();
   const { brands, activeBrandId, setActiveBrand } = useBrandStore();
 
   const activeBrand = brands.find((b) => b.id === activeBrandId) ?? null;
@@ -40,6 +43,13 @@ export function BrandSwitcher({ collapsed = false, onOpenChange, onNavigate }: B
   const go = (href: string) => {
     onNavigate?.();
     router.push(href);
+  };
+  // On a brand's own page (its settings, prompts or topics), the same page
+  // of the brand picked; elsewhere the page stays.
+  const select = (brandId: string) => {
+    setActiveBrand(brandId);
+    const next = brandPagePath(pathname, brandId);
+    if (next) go(next);
   };
 
   if (brands.length === 0) {
@@ -99,40 +109,7 @@ export function BrandSwitcher({ collapsed = false, onOpenChange, onNavigate }: B
           </DropdownMenuGroup>
           <DropdownMenuSeparator />
 
-          {brands.map((brand) => {
-            const isActive = brand.id === activeBrandId;
-            const primaryDomain = brand.domains.find((d) => d.isPrimary);
-
-            return (
-              <DropdownMenuItem
-                key={brand.id}
-                onClick={() => setActiveBrand(brand.id)}
-                className="flex items-center gap-2"
-              >
-                <BrandAvatar
-                  logoUrl={brand.logoUrl}
-                  name={brand.name}
-                  domains={brand.domains}
-                  className="h-5 w-5 shrink-0 rounded-md bg-zinc-50 dark:bg-zinc-100"
-                  fallbackClassName="rounded-md bg-primary/10 text-primary text-xs font-semibold"
-                />
-                <div className="flex-1 overflow-hidden">
-                  <p className="flex items-center gap-1.5 truncate text-sm font-medium">
-                    <span className="truncate">{brand.name}</span>
-                    {!brand.isActive && (
-                      <span className="shrink-0 rounded bg-amber-500/15 px-1 py-px text-[9px] font-medium uppercase tracking-wide text-amber-700 dark:text-amber-400">
-                        Paused
-                      </span>
-                    )}
-                  </p>
-                  {primaryDomain && (
-                    <p className="truncate text-xs text-muted-foreground">{primaryDomain.domain}</p>
-                  )}
-                </div>
-                {isActive && <Check className="h-3.5 w-3.5 shrink-0 text-primary" />}
-              </DropdownMenuItem>
-            );
-          })}
+          <BrandSwitchItems brands={brands} currentId={activeBrandId} onSelect={select} />
 
           <DropdownMenuSeparator />
 
@@ -176,4 +153,50 @@ export function BrandSwitcher({ collapsed = false, onOpenChange, onNavigate }: B
       )}
     </div>
   );
+}
+
+/** The brands to switch to, the current one checked. */
+export function BrandSwitchItems({
+  brands,
+  currentId,
+  onSelect,
+}: {
+  brands: Brand[];
+  currentId: string | null;
+  onSelect: (brandId: string) => void;
+}) {
+  return brands.map((brand) => {
+    const isActive = brand.id === currentId;
+    const primaryDomain = brand.domains.find((d) => d.isPrimary);
+
+    return (
+      <DropdownMenuItem
+        key={brand.id}
+        onClick={() => onSelect(brand.id)}
+        className="flex items-center gap-2"
+      >
+        <BrandAvatar
+          logoUrl={brand.logoUrl}
+          name={brand.name}
+          domains={brand.domains}
+          className="h-5 w-5 shrink-0 rounded-md bg-zinc-50 dark:bg-zinc-100"
+          fallbackClassName="rounded-md bg-primary/10 text-primary text-xs font-semibold"
+        />
+        <div className="flex-1 overflow-hidden">
+          <p className="flex items-center gap-1.5 truncate text-sm font-medium">
+            <span className="truncate">{brand.name}</span>
+            {!brand.isActive && (
+              <span className="shrink-0 rounded bg-amber-500/15 px-1 py-px text-[9px] font-medium uppercase tracking-wide text-amber-700 dark:text-amber-400">
+                Paused
+              </span>
+            )}
+          </p>
+          {primaryDomain && (
+            <p className="truncate text-xs text-muted-foreground">{primaryDomain.domain}</p>
+          )}
+        </div>
+        {isActive && <Check className="h-3.5 w-3.5 shrink-0 text-primary" />}
+      </DropdownMenuItem>
+    );
+  });
 }

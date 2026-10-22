@@ -6,8 +6,10 @@ import messages from '../../../messages/en.json';
 import { BrandSwitcher } from './brand-switcher';
 
 const push = vi.fn();
+const nav = vi.hoisted(() => ({ pathname: '/dashboard/content' }));
 vi.mock('@/i18n/navigation', () => ({
   useRouter: () => ({ push }),
+  usePathname: () => nav.pathname,
   Link: ({ href, children, ...rest }: { href: string; children?: React.ReactNode }) => (
     <a href={href} {...rest}>
       {children}
@@ -65,6 +67,8 @@ beforeEach(() => {
   store.activeBrandId = 'b1';
   push.mockReset();
   onNavigate.mockReset();
+  store.setActiveBrand.mockReset();
+  nav.pathname = '/dashboard/content';
 });
 
 afterEach(() => {
@@ -99,6 +103,23 @@ describe('BrandSwitcher', () => {
     await act(async () => items[2].click());
     expect(push).toHaveBeenCalledWith('/dashboard/brands');
     expect(onNavigate).toHaveBeenCalled();
+  });
+
+  it("switches brands in place, or to the same page of a brand's own pages", async () => {
+    await render();
+    let items = await openMenu();
+    await act(async () => items[1].click());
+    expect(store.setActiveBrand).toHaveBeenCalledWith('b2');
+    expect(push).not.toHaveBeenCalled();
+
+    act(() => root.unmount());
+    document.body.replaceChildren(container);
+    root = createRoot(container);
+    nav.pathname = '/dashboard/brands/b1/settings';
+    await render();
+    items = await openMenu();
+    await act(async () => items[1].click());
+    expect(push).toHaveBeenCalledWith('/dashboard/brands/b2/settings');
   });
 
   it('adds a brand on its own page', async () => {
