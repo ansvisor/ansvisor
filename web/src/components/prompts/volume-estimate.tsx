@@ -1,7 +1,12 @@
 'use client';
 
 import { useTranslations } from 'next-intl';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+  createTooltipHandle,
+} from '@/components/ui/tooltip';
 import { formatDate } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import {
@@ -87,39 +92,77 @@ function EstimateNote({ estimate, kind }: { estimate: Estimate; kind: EstimateKi
   );
 }
 
+type NotePayload = { estimate: Estimate; kind: EstimateKind };
+
+/**
+ * One method note shared by every estimate in a long table, so it mounts one
+ * tooltip rather than one per row (as ClampedText does): pass it to each
+ * EstimateRange and render EstimateNoteTooltip once beside them.
+ */
+export type EstimateNoteHandle = ReturnType<typeof createTooltipHandle<NotePayload>>;
+
+export function createEstimateNoteHandle(): EstimateNoteHandle {
+  return createTooltipHandle<NotePayload>();
+}
+
+const NOTE_CLASS = 'max-w-80 space-y-1 text-left';
+
+/** The shared method note for a table's estimates (see createEstimateNoteHandle). */
+export function EstimateNoteTooltip({ handle }: { handle: EstimateNoteHandle }) {
+  return (
+    <Tooltip handle={handle}>
+      {({ payload }) =>
+        payload ? (
+          <TooltipContent className={NOTE_CLASS}>
+            <EstimateNote estimate={payload.estimate} kind={payload.kind} />
+          </TooltipContent>
+        ) : null
+      }
+    </Tooltip>
+  );
+}
+
 /** The trigger every estimate shares: hover or focus shows the method note. */
 function WithNote({
   estimate,
   kind,
   label,
+  handle,
   className,
   children,
 }: {
   estimate: Estimate;
   kind: EstimateKind;
   label: string;
+  handle?: EstimateNoteHandle;
   className?: string;
   children: React.ReactNode;
 }) {
+  const trigger = (
+    <TooltipTrigger
+      handle={handle}
+      payload={handle ? { estimate, kind } : undefined}
+      delay={300}
+      closeDelay={0}
+      render={
+        <button
+          type="button"
+          aria-label={label}
+          className={cn(
+            'cursor-help rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50',
+            className,
+          )}
+        />
+      }
+    >
+      {children}
+    </TooltipTrigger>
+  );
+  if (handle) return trigger;
   return (
     <Tooltip>
-      <TooltipTrigger
-        delay={300}
-        closeDelay={0}
-        render={
-          <button
-            type="button"
-            aria-label={label}
-            className={cn(
-              'cursor-help rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50',
-              className,
-            )}
-          />
-        }
-      >
-        {children}
-      </TooltipTrigger>
-      <TooltipContent className="max-w-80 space-y-1 text-left">
+      {trigger}
+      <TooltipContent className={NOTE_CLASS}>
         <EstimateNote estimate={estimate} kind={kind} />
       </TooltipContent>
     </Tooltip>
@@ -133,12 +176,15 @@ function WithNote({
 export function EstimateRange({
   estimate,
   kind = 'prompt',
+  handle,
   perMonth = false,
   className,
 }: {
   estimate: Estimate;
   kind?: EstimateKind;
-  /** Adds "/ mo" after the range. */
+  /** A table's shared note; without one, the range carries its own. */
+  handle?: EstimateNoteHandle;
+  /** Adds "/mo" after the range, where nothing else says it is monthly. */
   perMonth?: boolean;
   className?: string;
 }) {
@@ -149,6 +195,7 @@ export function EstimateRange({
       estimate={estimate}
       kind={kind}
       label={t('label', { range, level: t(`level.${estimate.confidence}`) })}
+      handle={handle}
       className={cn(
         'whitespace-nowrap tabular-nums',
         estimate.confidence === 'low' && 'text-muted-foreground',
