@@ -11,6 +11,7 @@ import {
   checkRule,
   draftRulesFit,
   effectiveRules,
+  lengthConflict,
   overridesForImport,
   readPage,
   ruleLength,
@@ -46,6 +47,8 @@ export interface DraftRulesState {
   total: number;
   /** The page length the rules ask for. */
   length: number;
+  /** The sections and questions the rules ask for take more than Length allows. */
+  lengthConflict: { need: number; max: number } | null;
   /** Turns a rule on or off, or gives it a value, for this draft. */
   change: (key: string, change: { on?: boolean; value?: string }) => void;
   /** Loads a set into the draft: a type's Ansvisor default, or the workspace's My rules for it. */
@@ -165,6 +168,10 @@ export function useDraftRules({
     [rules, page, ctx],
   );
   const { met, total } = rulesMet(checked);
+  const conflict = useMemo(
+    () => lengthConflict(checked, ctx.fanouts.length),
+    [checked, ctx.fanouts.length],
+  );
 
   /**
    * Saves the latest change: one save at a time, so two quick changes can't
@@ -221,6 +228,7 @@ export function useDraftRules({
     met,
     total,
     length: ruleLength(rules, setType),
+    lengthConflict: conflict,
     change: (key, change) =>
       edited({
         overrides: { ...effective.overrides, [key]: { ...effective.overrides[key], ...change } },

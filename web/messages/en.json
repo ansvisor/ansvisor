@@ -3584,6 +3584,7 @@
         "fromAction": "from Action AC-{no}",
         "decided": "{accepted} accepted · {rejected} rejected",
         "rulesOpen": "{count, plural, one {# rule still open} other {# rules still open}}",
+        "runMax": "a run makes at most {max} changes: run it again for the rest",
         "acceptAll": "Accept all",
         "rejectAll": "Reject all",
         "undoAll": "Undo all",
@@ -3607,6 +3608,7 @@
         "fixRules": "Apply rules with Agent",
         "fixing": "Content Agent is working…",
         "fixed": "{count, plural, one {Content Agent suggested # change} other {Content Agent suggested # changes}} · review them in the page",
+        "fixedMax": "Content Agent suggested {count} changes, the most one run makes · review them, then run it again for the rules still open",
         "nothingToFix": "Content Agent found nothing it could change without new facts.",
         "notForAgent": "Content Agent doesn't change heading levels: make the extra H1s H2s in the toolbar.",
         "decideFirst": "Accept or reject the open suggestions first.",
@@ -4071,6 +4073,7 @@
         "agentFix": "Apply rules with Agent",
         "agentFixing": "Content Agent is working…",
         "agentFixHint": "Content Agent suggests changes for the rules not met yet, for you to review in the page",
+        "lengthConflict": "The fan-out H2s, FAQ questions and summary these rules still ask for take about {need, number} characters, more than Length allows (up to {max, number}). Raise Length, or ask for fewer.",
         "fixTrace": "Fix",
         "fixTraceHint": "Content Agent rewrites only these phrases, for you to review",
         "agent": {

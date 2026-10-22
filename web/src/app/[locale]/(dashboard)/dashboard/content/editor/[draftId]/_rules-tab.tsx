@@ -181,6 +181,11 @@ export function RulesTab({
                   onChange={(change) => state.change(rule.key, change)}
                   agentFix={rule.key === 'aiTraces' ? agentFix : undefined}
                   onOpenSources={onOpenSources}
+                  note={
+                    rule.key === 'length' && state.lengthConflict
+                      ? t('lengthConflict', state.lengthConflict)
+                      : undefined
+                  }
                 />
               ))}
             </ul>
@@ -359,6 +364,7 @@ function RuleRow({
   onChange,
   agentFix,
   onOpenSources,
+  note,
 }: {
   rule: ActiveRule;
   status: RuleStatus;
@@ -366,6 +372,8 @@ function RuleRow({
   /** "Remove AI traces" offers Fix: the agent rewrites only those phrases. */
   agentFix?: AgentFix;
   onOpenSources?: () => void;
+  /** A warning under the rule: Length, when the other rules can't fit in it. */
+  note?: string;
 }) {
   const t = useTranslations('contentEditor.editor.rules');
   const name = t(`names.${rule.key}`);
@@ -405,6 +413,9 @@ function RuleRow({
         <div className="mt-1 flex items-center gap-1 pl-9">
           <RuleValue rule={rule} name={name} onCommit={(value) => onChange({ value })} />
         </div>
+      )}
+      {note && rule.on && (
+        <p className="mt-1 pl-9 text-[11px] text-amber-700 dark:text-amber-400">{note}</p>
       )}
     </li>
   );

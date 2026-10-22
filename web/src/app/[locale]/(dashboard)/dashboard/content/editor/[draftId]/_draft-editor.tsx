@@ -49,7 +49,11 @@ import {
   type DraftExportFormat,
 } from '@/lib/content/draft-export';
 import type { DraftVersion } from '@/lib/content/history';
-import type { DraftSuggestion, SuggestionStatus } from '@/lib/content/suggestions';
+import {
+  AGENT_RUN_MAX,
+  type DraftSuggestion,
+  type SuggestionStatus,
+} from '@/lib/content/suggestions';
 import {
   cleanHtml,
   formatHtmlSource,
@@ -558,6 +562,11 @@ export function DraftEditor({
   };
   const openSuggestions = suggestions.filter((s) => s.status === 'open').length;
 
+  // A full batch: the run stopped at its most, so it says to run it again.
+  const fixedMessage = (count: number) =>
+    count >= AGENT_RUN_MAX
+      ? t('suggestions.fixedMax', { count })
+      : t('suggestions.fixed', { count });
   /**
    * Fix open rules with agent: the page as it is now is saved, then the
    * Content Agent reads it with the rules still open (or only the ones
@@ -619,9 +628,7 @@ export function DraftEditor({
         setSuggestions(landed);
         setBarClosed(false);
         agentBeforeKept.current = false;
-        toast.success(
-          t('suggestions.fixed', { count: landed.filter((s) => s.status === 'open').length }),
-        );
+        toast.success(fixedMessage(landed.filter((s) => s.status === 'open').length));
         return;
       }
       if ('error' in result) {
@@ -641,7 +648,7 @@ export function DraftEditor({
       setBarClosed(false);
       // A new batch: History keeps the page again before its first change.
       agentBeforeKept.current = false;
-      toast.success(t('suggestions.fixed', { count: result.count }));
+      toast.success(fixedMessage(result.count));
     } catch (err) {
       console.error('Failed to run the Content Agent:', err);
       toast.error(t('suggestions.fixErrors.failed'));

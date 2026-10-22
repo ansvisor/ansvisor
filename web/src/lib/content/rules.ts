@@ -924,6 +924,50 @@ export function lengthWarns(statuses: { rule: ActiveRule; status: RuleStatus }[]
   );
 }
 
+/**
+ * The least text, in characters, a part the rules ask for takes: a heading
+ * with a two-sentence answer under it, a question with a one-sentence
+ * answer, a summary of a sentence or two. Kept low on purpose, so a page
+ * told they don't fit really can't hold them.
+ */
+const LEAST_SECTION = 200;
+const LEAST_QUESTION = 150;
+const LEAST_SUMMARY = 100;
+
+/**
+ * Rules that can't both be met (Content Agent rule gaps, C): the fan-out
+ * sections, FAQ questions and summary the rules in effect still ask for, at
+ * their least, against the most text Length allows. Null when they fit,
+ * when the page already meets them all, or when Length is off. Rules the
+ * page can't check yet (no fan-outs) ask for nothing, and a fan-out rule
+ * asks for no more fan-outs than there are.
+ */
+export function lengthConflict(
+  statuses: { rule: ActiveRule; status: RuleStatus }[],
+  fanouts: number,
+): { need: number; max: number } | null {
+  const counted: RuleStatus[] = [];
+  const asked = (key: string) => {
+    const found = statuses.find((s) => s.rule.key === key);
+    if (!found?.rule.on || found.status.state === 'info') return 0;
+    const n = Number(found.rule.current);
+    if (!Number.isFinite(n) || n <= 0) return 0;
+    counted.push(found.status);
+    return n;
+  };
+  const length = statuses.find((s) => s.rule.key === 'length')?.rule;
+  const target = length?.on ? Number(length.current) : NaN;
+  if (!Number.isFinite(target) || target <= 0) return null;
+  const need =
+    Math.min(asked('fanoutH2'), fanouts) * LEAST_SECTION +
+    Math.max(asked('faq'), asked('buyingFaq'), fanouts ? asked('fanoutFaq') : 0) * LEAST_QUESTION +
+    (asked('summary') ? LEAST_SUMMARY : 0);
+  // The page holds them all already: it shows they fit.
+  if (counted.every((status) => status.state === 'ok')) return null;
+  const { max } = lengthBand(target);
+  return need > max ? { need, max } : null;
+}
+
 /** How many of the rules in effect are met: off rules and ones the page can't say don't count. */
 export function rulesMet(statuses: { rule: ActiveRule; status: RuleStatus }[]): {
   met: number;

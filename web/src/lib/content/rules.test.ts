@@ -12,6 +12,7 @@ import {
   readPage,
   ruleLength,
   lengthWarns,
+  lengthConflict,
   ruleSet,
   rulesMet,
   type ActiveRule,
@@ -535,6 +536,48 @@ describe('lengthWarns', () => {
 
   it('stays quiet with the Length rule off, even on an empty page', () => {
     expect(lengthWarns(statuses('', 0, false))).toBe(false);
+  });
+});
+
+describe('lengthConflict', () => {
+  const statuses = (
+    overrides: Record<string, { on?: boolean; value?: string }>,
+    fanouts = ctx.fanouts,
+  ) =>
+    activeRules(ruleSet('blog_post'), { overrides }).map((r) => ({
+      rule: r,
+      status: checkRule(r, page('<h1>T</h1>', 100), { ...ctx, fanouts }),
+    }));
+
+  it('says when the sections, questions and summary asked for can’t fit in Length (C)', () => {
+    // 3 fan-out H2s (of 4 asked, 3 there are) × 200 + 5 FAQ questions × 150 + a summary, 100.
+    expect(lengthConflict(statuses({ length: { value: '1000' } }), 3)).toEqual({
+      need: 1_450,
+      max: 1_200,
+    });
+    expect(lengthConflict(statuses({ length: { value: '1500' } }), 3)).toBeNull();
+    expect(lengthConflict(statuses({}), 3)).toBeNull();
+  });
+
+  it('counts only the rules on and still open, and asks nothing of fan-outs there aren’t', () => {
+    // FAQ off: the 3 fan-out questions still need a FAQ.
+    expect(
+      lengthConflict(statuses({ length: { value: '800' }, faq: { on: false } }), 3)?.need,
+    ).toBe(600 + 450 + 100);
+    // No fan-outs: no fan-out H2s or fan-out questions to fit.
+    expect(lengthConflict(statuses({ length: { value: '600' } }, []), 0)?.need).toBe(750 + 100);
+    expect(
+      lengthConflict(statuses({ length: { value: '50' }, faq: { on: false } }, []), 0)?.need,
+    ).toBe(100);
+    // Length off asks for no length.
+    expect(lengthConflict(statuses({ length: { on: false, value: '500' } }), 3)).toBeNull();
+    // A page that meets them all shows they fit.
+    const met = statuses({ length: { value: '1000' } }).map((s) =>
+      ['fanoutH2', 'faq', 'fanoutFaq', 'summary'].includes(s.rule.key)
+        ? { ...s, status: { state: 'ok' as const } }
+        : s,
+    );
+    expect(lengthConflict(met, 3)).toBeNull();
   });
 });
 

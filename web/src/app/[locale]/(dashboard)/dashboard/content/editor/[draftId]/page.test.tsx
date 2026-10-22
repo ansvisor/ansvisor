@@ -1084,6 +1084,8 @@ describe('the content editor', () => {
         'Accuracy is shown per team, each week, against closed revenue.Teams trust it.FAQDoes it work with custom stages? Yes, any stage.',
       );
       expect(bar()!.textContent).toMatch(/^2 accepted · 0 rejected · \d+ rules? still open/);
+      // Not a full run's batch: nothing about running it again.
+      expect(bar()!.textContent).not.toContain('a run makes at most');
 
       await act(async () => barButton('Undo all').click());
       await act(async () => {});
@@ -1936,6 +1938,31 @@ describe('the side panel', () => {
       ).toContain('Content Agent suggested 1 change');
       expect(toast.success).toHaveBeenCalledWith(
         'Content Agent suggested 1 change · review them in the page',
+      );
+    });
+
+    it('says a full batch is the most one run makes, to run it again (C)', async () => {
+      getContentDraft.mockResolvedValue(traced);
+      const full = Array.from({ length: 8 }, (_, i) => ({
+        ...agentSuggestion,
+        id: `n${i}`,
+        status: 'rejected' as const,
+      }));
+      getDraftSuggestions.mockResolvedValueOnce([]).mockResolvedValueOnce(full);
+      fixDraftRules.mockResolvedValue({ count: 8 });
+      await openRules();
+
+      await act(async () => panelButton('Apply rules with Agent').click());
+      await act(async () => {});
+
+      expect(toast.success).toHaveBeenCalledWith(
+        'Content Agent suggested 8 changes, the most one run makes · review them, then run it again for the rules still open',
+      );
+      // Decided, with rules still open: the bar says to run it again.
+      expect(
+        container.querySelector('[role="region"][aria-label="Agent suggestions"]')!.textContent,
+      ).toMatch(
+        /^0 accepted · 8 rejected · \d+ rules? still open · a run makes at most 8 changes: run it again for the rest/,
       );
     });
 
