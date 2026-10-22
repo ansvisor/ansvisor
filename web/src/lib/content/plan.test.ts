@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
   MAX_ROWS,
-  OVERLAP_SCORE,
   buildPlan,
   citationsDownScore,
   protectScore,
@@ -24,7 +23,6 @@ const page = (path: string, over: Partial<PlanPage> = {}): PlanPage => ({
   citations: { cur: 2, prev: 2 },
   platformsDown: [],
   aiVisits: 0,
-  overlaps: 0,
   ...over,
 });
 const opportunity = (id: string, over: Partial<PlanOpportunity> = {}): PlanOpportunity => ({
@@ -74,7 +72,7 @@ describe('buildPlan', () => {
         draft: null,
       }),
     ]);
-    expect(counts).toEqual({ create: 1, optimize: 0, protect: 0, overlaps: 0 });
+    expect(counts).toEqual({ create: 1, optimize: 0, protect: 0 });
   });
 
   it('optimizes a page losing citations, by how much it lost, with the platforms citing it less', () => {
@@ -127,7 +125,7 @@ describe('buildPlan', () => {
 
   it('keeps one row for a page an opportunity targets, with the period’s signal when it is losing', () => {
     const { rows } = plan(
-      [page('/guides/espresso/', { citations: { cur: 2, prev: 8 }, overlaps: 2 })],
+      [page('/guides/espresso/', { citations: { cur: 2, prev: 8 } })],
       [
         opportunity('o1', {
           title: 'Expand the espresso guide',
@@ -145,7 +143,6 @@ describe('buildPlan', () => {
       opportunityId: 'o1',
       source: 'citations',
       why: { kind: 'citationsDown', pct: 75 },
-      overlaps: 2,
       score: citationsDownScore(75, 6),
     });
   });
@@ -177,17 +174,13 @@ describe('buildPlan', () => {
     expect(rows[0]).toMatchObject({ action: 'protect', page: 'https://acme.example/pricing' });
   });
 
-  it('lists a top page past the five protected when it competes with another', () => {
+  it('leaves a top page past the five protected off the list', () => {
     const pages = [5, 6, 7, 8, 9, 30].map((cur, i) =>
-      page(`/p${i}`, { citations: { cur, prev: cur }, overlaps: i === 0 ? 2 : 0 }),
+      page(`/p${i}`, { citations: { cur, prev: cur } }),
     );
     const { rows, counts } = plan(pages);
     expect(counts.protect).toBe(5);
-    expect(rows.find((r) => r.title === 'p0')).toMatchObject({
-      action: 'optimize',
-      why: { kind: 'overlap', pages: 2 },
-      score: OVERLAP_SCORE,
-    });
+    expect(rows.find((r) => r.title === 'p0')).toBeUndefined();
   });
 
   it('counts every row, and each card lists its own first rows', () => {
@@ -196,30 +189,24 @@ describe('buildPlan', () => {
     );
     const pages = [
       page('/top', { citations: { cur: 30, prev: 30 } }),
-      page('/blog/a', { overlaps: 1 }),
+      page('/guides/losing', { citations: { cur: 2, prev: 8 } }),
     ];
     const { rows, counts } = plan(pages, opportunities);
-    expect(counts).toEqual({ create: 60, optimize: 1, protect: 1, overlaps: 1 });
+    expect(counts).toEqual({ create: 60, optimize: 1, protect: 1 });
     expect(rowsFor(rows, null)).toHaveLength(MAX_ROWS);
     // Below the 50 opportunities on score, and still shown on their cards.
     expect(rowsFor(rows, 'protect').map((r) => r.title)).toEqual(['top']);
-    expect(rowsFor(rows, 'overlaps').map((r) => r.title)).toEqual(['blog/a']);
+    expect(rowsFor(rows, 'optimize').map((r) => r.title)).toEqual(['guides/losing']);
   });
 
-  it('lists a page that only competes with others, and counts every page competing', () => {
+  it('lists no page only because other pages of the brand are cited for its prompts', () => {
+    // A steady page under the top-page bar: nothing to do, whatever else is cited.
     const { rows, counts } = plan([
-      page('/blog/espresso-basics', { overlaps: 1 }),
-      page('/guides/espresso', { citations: { cur: 12, prev: 10 }, overlaps: 1 }),
+      page('/blog/espresso-basics'),
+      page('/guides/espresso', { citations: { cur: 12, prev: 10 } }),
     ]);
-    // The work comes before protecting.
-    expect(rows.map((r) => [r.action, r.why.kind])).toEqual([
-      ['optimize', 'overlap'],
-      ['protect', 'top'],
-    ]);
-    expect(counts.overlaps).toBe(2);
-    expect(rowsFor(rows, 'overlaps')).toHaveLength(2);
-    expect(rowsFor(rows, 'protect')).toHaveLength(1);
-    expect(rowsFor(rows, null)).toHaveLength(2);
+    expect(rows.map((r) => [r.action, r.why.kind])).toEqual([['protect', 'top']]);
+    expect(counts).toEqual({ create: 0, optimize: 0, protect: 1 });
   });
 
   it('finds the draft being written for an opportunity or a page', () => {
