@@ -244,6 +244,8 @@ describe('getOpportunityDrafts', () => {
           ['eq', 'brand_id', BRAND],
           ['in', 'opportunity_id', [OPPORTUNITY]],
           ['in', 'status', ['draft', 'in_review', 'ready']],
+          // An archived draft is set aside (00233): Send to Editor again.
+          ['is', 'archived_at', null],
         ],
       },
     ]);
@@ -268,6 +270,7 @@ describe('getDraftForPrompt', () => {
           ['eq', 'brand_id', BRAND],
           ['contains', 'prompt_ids', [PROMPT]],
           ['in', 'status', ['draft', 'in_review', 'ready']],
+          ['is', 'archived_at', null],
         ],
       },
     ]);
@@ -665,6 +668,12 @@ describe('startDraftFromAction', () => {
       'deleted_at',
       null,
     ]);
+    // An archived draft is set aside: Start writes a new one rather than reopen it.
+    expect(calls.find((call) => call.table === 'content_drafts')!.filters).toContainEqual([
+      'is',
+      'archived_at',
+      null,
+    ]);
     expect(admin.inserts).toEqual([
       {
         table: 'content_drafts',
@@ -786,6 +795,31 @@ describe('startDraftFromAction', () => {
       startDraftFromAction(BRAND, 'nope', TASK, { page: null, title: '' }),
     ).resolves.toEqual({ error: 'invalid' });
     expect(admin.inserts).toEqual([]);
+  });
+
+  // The work's draft was archived: the read skips it (as the DB's filter
+  // does) and the one-per-work key counts only drafts not archived (00233),
+  // so Start writes a new one rather than fail on the archived one's key.
+  it('writes a new draft for work whose draft was archived', async () => {
+    reads = {
+      actions: action({ pages: [] }),
+      action_tasks: { id: TASK, task_key: 'create_content_draft', status: 'todo' },
+      content_drafts: [],
+      brands: null,
+      prompts: [],
+      content_opportunities: null,
+    };
+    await expect(start(null)).resolves.toEqual({
+      draftId: 'action-draft',
+      created: true,
+      importFailed: false,
+    });
+    expect(calls.find((call) => call.table === 'content_drafts')!.filters).toContainEqual([
+      'is',
+      'archived_at',
+      null,
+    ]);
+    expect(admin.inserts).toHaveLength(1);
   });
 
   it('opens the draft another start wrote at the same time', async () => {

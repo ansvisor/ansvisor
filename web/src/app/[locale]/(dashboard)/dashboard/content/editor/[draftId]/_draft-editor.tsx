@@ -78,7 +78,7 @@ import { HtmlBlock, copyToClipboard } from './_html-block';
 import { OwnCopies, ownCopyHtml } from './_own-copies';
 import { PageTypeMenu } from './_page-type-menu';
 import type { AgentRewrite } from './_brief-tab';
-import { ruleStatusText, type AgentFix } from './_rules-tab';
+import { ruleStatusDetail, type AgentFix } from './_rules-tab';
 import { EditorPanelRail, EditorSidePanel, useSidePanelOpen, type PanelTab } from './_side-panel';
 import {
   AgentSuggestions,
@@ -579,7 +579,7 @@ export function DraftEditor({
           rule.current
             ? `${tRules('agent.aim')}: ${rule.current}${rule.unit ? ` ${tRules(`units.${rule.unit}`)}` : ''}`
             : null,
-          `${tRules('agent.now')}: ${ruleStatusText(tStatus, status)}`,
+          `${tRules('agent.now')}: ${ruleStatusDetail(tStatus, status)}`,
           rule.key === 'aiTraces'
             ? `${tRules('agent.phrases')}: ${aiTracesFound(pageText).join(', ')}`
             : null,

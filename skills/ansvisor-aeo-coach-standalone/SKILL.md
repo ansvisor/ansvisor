@@ -6,10 +6,10 @@ description: |
   server (e.g. claude.ai web without a Connector configured). Fetches
   live data from the Ansvisor REST API directly with the user's API
   key via code execution — visibility, competitors, citations, prompts,
-  content gaps, page audits and the Action Center. For clients that
-  support MCP (Claude Desktop, Claude Code, Cursor, Zed), prefer the
-  `ansvisor-aeo-coach` skill — it's a cleaner UX because tool calls are
-  first-class instead of inline Python.
+  content gaps, page audits, the Action Center, and mentions and
+  sentiment. For clients that support MCP (Claude Desktop, Claude Code,
+  Cursor, Zed), prefer the `ansvisor-aeo-coach` skill — it's a cleaner
+  UX because tool calls are first-class instead of inline Python.
 ---
 
 # Ansvisor AEO Coach — Standalone
@@ -32,6 +32,8 @@ Activate this skill when the user asks anything in the shape of:
 - _"Did anything change recently?" / "Why did visibility drop?"_
 - _"Who are my competitors right now?" / "How do we compare?"_
 - _"Which sites does AI cite for us?"_
+- _"How is AI talking about us?" / "Why did sentiment drop on Gemini?"_
+- _"What does AI associate us with?"_
 - _"What should we work on next?" / "Did last month's work pay off?"_
 - _"Give me a daily / weekly standup on `<brand name>`."_
 
@@ -72,6 +74,32 @@ Hold it in execution memory for the session.
 - `totals.avgVisibility` and each competitor's `avgVisibility` are
   **deprecated** legacy averages. Don't quote them.
 
+**Mentions & sentiment** (from the Mentions tools below):
+
+- **Mentions**, as the page's _Total mentions_ counts them, are every
+  time AI names the brand (`timesNamed`), twice in one response
+  included: quote this one for "how many mentions". `mentions` is the
+  responses naming the brand at least once: the base of the **mention
+  rate** (their share of the tracked responses, `%`), net sentiment and
+  `lowSample`.
+- **Net sentiment** is the positive share minus the negative share of
+  the responses naming the brand, from −100 to +100. Quote it as a
+  signed number **without a % sign** ("net +21"). Neutral counts in the
+  total.
+- `changes` are taken as the page's cards take them: on the prompts
+  both windows answered (`changes.basis.sharedPrompts`), so adding or
+  removing prompts doesn't read as a rise or a fall. The `current` and
+  `previous` figures are the whole windows', so quote `changes` rather
+  than working a change out from them, and say how many prompts were
+  new or dropped (`newPrompts`, `droppedPrompts`) when there were some.
+  `changes.mentionsPct` is the change in times named.
+- `lowSample: true` means fewer than 20 responses naming the brand.
+  Say so, and don't read a change into it: `changes.netSentimentPoints`
+  is already `null` there, as is the mention rate's change when either
+  window has under 20 tracked responses.
+- Sentiment is measured for the **brand only**. Competitors have
+  mentions and co-mentions, not a tone.
+
 ## Endpoints available
 
 All paths below are under `{base_url}/api/mcp` and need the header
@@ -89,6 +117,22 @@ mirrors the MCP tool of the same purpose and returns the same data.
 | `GET /competitor-comparison` | `brand_id`, dates, `model`, `region`, `topic_id` | per-entry `visibility_rate_pct`, mentions, citations, share of voice, split per model and platform |
 | `GET /citations` | `brand_id`, dates, `model`, `region`, `topic_id`, `limit`, `source_filter` (`all`/`owned`/`competitor`/`external`) | source-type breakdown, top domains and URLs |
 | `GET /ai-traffic` | `brand_id`, dates | AI-referred visits per platform, landing pages, countries |
+
+**Mentions & sentiment**
+
+These take the Mentions page's filters: `brand_id`, `date_from` /
+`date_to` (the last 30 days when left out), `platform` (e.g.
+`gemini-web`), `region`, `topic_id` and `search` over the prompts'
+text. They read the stored answers; no LLM is called.
+
+| Endpoint | Query / body | Returns |
+| --- | --- | --- |
+| `GET /mentions/summary` | the filters | the Overview: `current` and `previous` (times named, mentions, mention rate, prompts with mentions, average position, `sentiment` with `net` and `lowSample`), `changes` with their `basis`, `headline` (the platform that moved net sentiment most, competitors named beside the brand), `platforms[]`, `daily[]` |
+| `GET /mentions` | the filters, `sentiment`, `competitor_id` (`none` = no competitor), `sort` (`newest`/`oldest`/`co_mentions`/`negative`), `page` | `{ total, prompts, page, pageSize, mentions: [...] }`: 100 a page, each with sentiment, position, competitors in the same response and an `excerpt` |
+| `GET /mentions/{id}` | — | one response in full: text, citations, competitors named, sentiment, latest correction |
+| `GET /mentions/competitors` | the filters | each competitor's mentions, share of responses, change, and `sameResponseAsYou` |
+| `GET /mentions/perception` | the filters | `brandTerms`, `attributes` (each entity's share, in `entities` order), `coMentions`, `biggestGap` |
+| `POST /mentions/{id}/sentiment-override` *(write)* | `{ sentiment, note }`: `positive`, `neutral` or `negative` | the correction; needs an admin or manager key |
 
 **Prompts & topics**
 
@@ -415,6 +459,50 @@ work:
 3. Summarise: how many improved, how many didn't move, and what the
    improved ones had in common.
 
+### 10. Mentions & sentiment ("how is AI talking about us?")
+
+When the user asks how AI describes the brand, why sentiment moved
+(_"why did sentiment drop on Gemini?"_), or what AI associates with it:
+
+1. Call `GET /mentions/summary` for the window (30 days when `date_from`
+   is left out). Lead with `current.sentiment.net` and
+   `changes.netSentimentPoints`, then times named and mention rate.
+2. Find **where**: `headline.mover` names the platform that moved net
+   sentiment most (with its `change`); `platforms[]` has each one's
+   `netSentiment` and `netSentimentChange`. Skip platforms marked
+   `lowSample`.
+3. Find **why**: call `GET /mentions` with that `platform` and
+   `sentiment: "negative"` (or `sort: "negative"`) and quote one or two
+   `excerpt`s, so the user sees what AI actually said. Call
+   `GET /mentions/{id}` for the full response and its citations when an
+   excerpt isn't enough.
+4. For **who AI names beside the brand**, use
+   `GET /mentions/competitors` (`sameResponseAsYou`,
+   `mentionsChangePct`); for **what AI associates with it**,
+   `GET /mentions/perception`: `brandTerms` with their `sharePct`, and
+   `biggestGap`, an attribute a competitor owns and the brand doesn't
+   (null when none leads by 20+ points, or when the brand or the leading
+   competitor has fewer than 20 mentions).
+5. Report it like this:
+
+   > **`<brand_name>` — how AI talks about you, last 30 days**
+   >
+   > Net sentiment **`<+n>`** (Δ `<±n>`), named in **`<rate>%`** of
+   > **`<n>`** tracked responses
+   > Most of the move is on **`<platform>`** (`<±n>`): _"`<excerpt>`"_
+   >
+   > **What it means:** `<one sentence>`
+   > **Next:** `<one suggestion>`
+
+6. If the user says a response's sentiment is wrong, offer
+   `POST /mentions/{id}/sentiment-override` with the right sentiment and
+   a short note, and call it only after they confirm. It needs an admin
+   or manager key, and every figure follows the corrected tone
+   *(write)*.
+7. See
+   [`references/sentiment-interpretation.md`](references/sentiment-interpretation.md)
+   for when a sentiment move matters and when it's noise.
+
 ## Formatting principles
 
 - **Lead with the number, then the meaning.** Don't bury the score in a
@@ -452,6 +540,8 @@ work:
 
 - `401 Invalid API key` → ask the user to regenerate from Settings →
   API Keys.
+- `403` on a sentiment correction → the key's user isn't an admin or
+  manager of the brand's organization. Say so; don't retry.
 - `404 ... not found` → the id doesn't belong to the authenticated
   user's organization. Re-run `GET /brands` (or the matching list
   endpoint) to get the right id.

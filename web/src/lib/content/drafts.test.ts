@@ -4,9 +4,9 @@ import {
   DRAFT_STATUSES,
   PAGE_TYPES,
   WRITING_STALE_MS,
-  aeoScoreText,
   agentStateOf,
   contentEditorPath,
+  draftsCreatedIn,
   draftsInTab,
   isPageType,
   libraryTabCounts,
@@ -23,10 +23,10 @@ const draft = (id: string, status: DraftStatus): ContentDraftListItem => ({
   author: 'user',
   createdBy: null,
   isMine: true,
-  scoreBefore: null,
-  scoreAfter: null,
   agentState: null,
+  createdAt: '2026-10-18T09:00:00Z',
   updatedAt: '2026-10-20T10:00:00Z',
+  archivedAt: null,
 });
 
 const drafts = [
@@ -36,6 +36,26 @@ const drafts = [
   draft('d', 'published'),
 ];
 
+describe('the Library’s Created filter', () => {
+  const at = (id: string, createdAt: string) => ({ ...draft(id, 'draft'), createdAt });
+  const now = Date.parse('2026-10-22T12:00:00Z');
+  const list = [
+    at('today', '2026-10-22T08:00:00Z'),
+    at('week', '2026-10-16T12:00:00Z'),
+    at('month', '2026-09-25T12:00:00Z'),
+    at('old', '2026-06-01T12:00:00Z'),
+  ];
+  const ids = (range: Parameters<typeof draftsCreatedIn>[1]) =>
+    draftsCreatedIn(list, range, now).map((d) => d.id);
+
+  it('keeps the drafts created in the range, counted back from now', () => {
+    expect(ids('all')).toEqual(['today', 'week', 'month', 'old']);
+    expect(ids('7d')).toEqual(['today', 'week']);
+    expect(ids('30d')).toEqual(['today', 'week', 'month']);
+    expect(ids('90d')).toEqual(['today', 'week', 'month']);
+  });
+});
+
 describe('the Library tabs', () => {
   it('counts every draft under All and each under its status', () => {
     expect(libraryTabCounts(drafts)).toEqual({
@@ -44,26 +64,23 @@ describe('the Library tabs', () => {
       in_review: 2,
       ready: 0,
       published: 1,
+      archived: 0,
     });
   });
 
   it('lists a tab’s drafts in their order, and every draft under All', () => {
     expect(draftsInTab(drafts, 'in_review').map((d) => d.id)).toEqual(['b', 'c']);
     expect(draftsInTab(drafts, 'ready')).toEqual([]);
-    expect(draftsInTab(drafts, 'all')).toBe(drafts);
-  });
-});
-
-describe('aeoScoreText', () => {
-  it('shows before → after once the changes are scored', () => {
-    expect(aeoScoreText(62, 78)).toBe('62 → 78');
+    expect(draftsInTab(drafts, 'all')).toEqual(drafts);
   });
 
-  it('shows the one score there is, or nothing', () => {
-    expect(aeoScoreText(54, null)).toBe('54');
-    expect(aeoScoreText(null, 81)).toBe('81');
-    expect(aeoScoreText(70, 70)).toBe('70');
-    expect(aeoScoreText(null, null)).toBeNull();
+  it('keeps archived drafts under Archived only, with their status kept for Restore', () => {
+    const shelved = { ...draft('e', 'published'), archivedAt: '2026-10-21T08:00:00Z' };
+    const all = [...drafts, shelved];
+    expect(libraryTabCounts(all)).toMatchObject({ all: 4, published: 1, archived: 1 });
+    expect(draftsInTab(all, 'all').map((d) => d.id)).toEqual(['a', 'b', 'c', 'd']);
+    expect(draftsInTab(all, 'published').map((d) => d.id)).toEqual(['d']);
+    expect(draftsInTab(all, 'archived')).toEqual([shelved]);
   });
 });
 

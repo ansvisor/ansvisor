@@ -153,9 +153,13 @@ export type DialogPreset = (
   who?: 'team';
 };
 
-/** Who does the page (Start, CE-015): the person, the Content Agent, or the team. */
+/**
+ * Who does the page (Start, CE-015): the Content Agent, the person, or the
+ * team. The agent is offered first; the person stays the default, as the
+ * agent's run is metered from the AI usage.
+ */
 type Who = 'me' | 'agent' | 'team';
-const WHO: Who[] = ['me', 'agent', 'team'];
+const WHO: Who[] = ['agent', 'me', 'team'];
 
 /** The Overview's read for one source: null while it runs. */
 interface OverlapRead {
@@ -525,8 +529,9 @@ export function NewContentDialog({
 
   /**
    * Agent: the Content Agent does the page in the background — a new page
-   * written, an existing one's suggestions left — and the draft waits in
-   * Library › In review. It stays in the Library as a draft if it can't start.
+   * written, an existing one's suggestions left — and the editor opens at
+   * once, showing the agent at work until the page is there to review. It
+   * stays in the Library as a draft if it can't start.
    */
   const sendToAgent = async (id: string, bodyHtml: string | undefined) => {
     const openDraft = {
@@ -560,11 +565,7 @@ export function NewContentDialog({
       toast.error(t(`start.agentErrors.${started.error}`), { action: openDraft });
       return;
     }
-    toast.success(t('start.agentStarted'), {
-      description: t('start.agentStartedDescription'),
-      duration: 10_000,
-      action: openDraft,
-    });
+    router.push(contentEditorPath(id));
   };
 
   /**

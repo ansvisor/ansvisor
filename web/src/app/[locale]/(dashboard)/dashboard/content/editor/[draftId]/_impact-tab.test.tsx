@@ -119,11 +119,16 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-describe('the Impact tab', () => {
+describe('the Live page tab', () => {
   it('shows what the page earns over the last 30 days against the 30 before', async () => {
     getContentImpact.mockResolvedValue(impact());
     await render();
 
+    // The live page's numbers, not a forecast for the draft (gkhngyk's reading).
+    expect(container.textContent).toContain('The live page today');
+    expect(container.textContent).toContain(
+      'How the live page does now, not a forecast of what this draft will get.',
+    );
     expect(getContentImpact).toHaveBeenCalledWith('b1', PAGE, 30);
     expect(getContentResults).toHaveBeenCalledWith('b1', PAGE, 30);
     expect(periodButton('30d').getAttribute('aria-pressed')).toBe('true');
@@ -226,7 +231,7 @@ describe('the Impact tab', () => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
     getContentImpact.mockRejectedValueOnce(new Error('boom')).mockResolvedValue(impact());
     await render();
-    expect(container.textContent).toContain("Couldn't load the page's impact.");
+    expect(container.textContent).toContain("Couldn't load the live page's numbers.");
 
     await act(async () => periodButton('Retry').click());
     expect(getContentImpact).toHaveBeenCalledTimes(2);
@@ -315,7 +320,7 @@ describe('the Impact tab', () => {
       getContentImpact.mockResolvedValue(impact());
       getContentResults.mockRejectedValueOnce(new Error('boom'));
       await render();
-      expect(container.textContent).toContain("Couldn't load the page's impact.");
+      expect(container.textContent).toContain("Couldn't load the live page's numbers.");
     });
   });
 

@@ -478,6 +478,8 @@ export type RuleStatus =
   | { state: 'bad'; code: 'over' | 'found'; count: number }
   | { state: 'bad'; code: 'partOf'; count: number; of: number }
   | { state: 'bad'; code: 'current'; count: number }
+  /** Out of the Length rule's band, as it reads (lengthBand). */
+  | { state: 'bad'; code: 'short' | 'long'; count: number; min: number; max: number }
   | { state: 'bad'; code: 'words'; count: number }
   | { state: 'bad'; code: 'missing' | 'noH2' | 'needsFaq' | 'notSet' }
   | {
@@ -589,6 +591,19 @@ function definesAtOnce(text: string): boolean {
   return verb > 0 && !PRONOUNS.test(words[verb - 1]);
 }
 
+/**
+ * The Length rule is a target, not a floor: a page within 20% of it meets it,
+ * shorter or longer doesn't, so a 15,921-character page under a 3,000 rule is
+ * open, and Apply rules with Agent asks for it to be shortened.
+ */
+export const LENGTH_TOLERANCE = 0.2;
+export function lengthBand(target: number): { min: number; max: number } {
+  return {
+    min: Math.round(target * (1 - LENGTH_TOLERANCE)),
+    max: Math.round(target * (1 + LENGTH_TOLERANCE)),
+  };
+}
+
 const atLeast = (have: number, want: number): RuleStatus =>
   have >= want ? { state: 'ok' } : { state: 'bad', code: 'partOf', count: have, of: want };
 
@@ -623,10 +638,16 @@ export function checkRule(rule: ActiveRule, page: PageRead, ctx: RuleContext): R
         .filter((s) => s.length > n).length;
       return over ? { state: 'bad', code: 'over', count: over } : { state: 'ok' };
     }
-    case 'length':
-      return page.characters >= n
-        ? { state: 'ok' }
-        : { state: 'bad', code: 'current', count: page.characters };
+    case 'length': {
+      const { min, max } = lengthBand(n);
+      if (page.characters < min) {
+        return { state: 'bad', code: 'short', count: page.characters, min, max };
+      }
+      if (page.characters > max) {
+        return { state: 'bad', code: 'long', count: page.characters, min, max };
+      }
+      return { state: 'ok' };
+    }
     case 'summary':
       if (!summary || !summary.words) return { state: 'bad', code: 'missing' };
       return summary.words <= n

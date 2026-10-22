@@ -118,7 +118,9 @@ async function countLibraryTabs(
         .from('content_drafts')
         .select('id', { count: 'exact', head: true })
         .eq('brand_id', brandId);
-      if (tab !== 'all') query = query.eq('status', tab);
+      if (tab === 'archived') query = query.not('archived_at', 'is', null);
+      else query = query.is('archived_at', null);
+      if (tab !== 'all' && tab !== 'archived') query = query.eq('status', tab);
       const { count, error } = await query;
       if (error) throw new Error(error.message);
       return [tab, count ?? 0] as const;
@@ -138,7 +140,7 @@ export async function getContentDrafts(brandId: string): Promise<ContentLibrary>
     supabase
       .from('content_drafts')
       .select(
-        'id, title, page_type, method, status, author, created_by, score_before, score_after, agent_state, agent_state_at, updated_at',
+        'id, title, page_type, method, status, author, created_by, agent_state, agent_state_at, created_at, updated_at, archived_at',
       )
       .eq('brand_id', brandId)
       .order('updated_at', { ascending: false })
@@ -166,10 +168,10 @@ export async function getContentDrafts(brandId: string): Promise<ContentLibrary>
       author: row.author === 'agent' ? 'agent' : 'user',
       createdBy: row.created_by ? (people.get(row.created_by) ?? null) : null,
       isMine: me !== null && row.created_by === me,
-      scoreBefore: row.score_before,
-      scoreAfter: row.score_after,
       agentState: agentStateOf(row.agent_state, row.agent_state_at),
+      createdAt: row.created_at,
       updatedAt: row.updated_at,
+      archivedAt: row.archived_at,
     }),
   );
   // Under the cap the rows are every draft; at it, each tab is counted on its own.
@@ -234,8 +236,57 @@ export async function getContentDraft(id: string): Promise<ContentDraft | null> 
         ? { id: data.action_id, number: data.actions.action_no }
         : null,
     agentState: agentStateOf(data.agent_state, data.agent_state_at),
+    agentSince: data.agent_state_at,
     updatedAt: data.updated_at,
   };
+}
+
+/** A draft's page, for the Library's Export. */
+export interface DraftPage {
+  id: string;
+  title: string;
+  bodyHtml: string;
+  sourceUrl: string | null;
+}
+
+/** Ids read at a time: the list goes in the request's address. */
+const PAGES_PER_READ = 100;
+
+/**
+ * The Library's Export (CE-002): the stored page of each draft given, of the
+ * brand, in the order given; at most the Library's own count. A draft gone
+ * meanwhile is left out.
+ */
+export async function getContentDraftPages(brandId: string, ids: string[]): Promise<DraftPage[]> {
+  const parsed = z.array(z.guid()).max(LIBRARY_LIMIT).safeParse(ids);
+  if (!draftId.safeParse(brandId).success || !parsed.success) throw new Error('invalid');
+  const supabase = await createClient();
+  const chunks = [];
+  for (let i = 0; i < parsed.data.length; i += PAGES_PER_READ) {
+    chunks.push(parsed.data.slice(i, i + PAGES_PER_READ));
+  }
+  const reads = await Promise.all(
+    chunks.map((chunk) =>
+      supabase
+        .from('content_drafts')
+        .select('id, title, body_html, source_url')
+        .eq('brand_id', brandId)
+        .in('id', chunk),
+    ),
+  );
+  const byId = new Map<string, DraftPage>();
+  for (const { data, error } of reads) {
+    if (error) throw new Error(error.message);
+    for (const row of data ?? []) {
+      byId.set(row.id, {
+        id: row.id,
+        title: row.title,
+        bodyHtml: row.body_html,
+        sourceUrl: row.source_url,
+      });
+    }
+  }
+  return parsed.data.flatMap((id) => byId.get(id) ?? []);
 }
 
 /** Opportunities still open to write for, the highest scored first. */
@@ -354,6 +405,8 @@ export async function getDraftForPrompt(brandId: string, promptId: string): Prom
     .eq('brand_id', brandId)
     .contains('prompt_ids', [promptId])
     .in('status', ['draft', 'in_review', 'ready'])
+    // An archived draft isn't the one to open (00233).
+    .is('archived_at', null)
     .order('updated_at', { ascending: false })
     .limit(1)
     .maybeSingle();
@@ -384,6 +437,8 @@ export async function getOpportunityDrafts(
     .eq('brand_id', brandId)
     .in('opportunity_id', ids)
     .in('status', ['draft', 'in_review', 'ready'])
+    // Archived is set aside (00233): the row offers Send to Editor again.
+    .is('archived_at', null)
     .order('updated_at', { ascending: false });
   if (error) throw new Error(error.message);
   const drafts: Record<string, string> = {};
@@ -573,6 +628,9 @@ async function readActionDrafts(
     .select('id, method, source_url, status')
     .eq('brand_id', brandId)
     .eq('action_id', actionId)
+    // Archived is set aside, as on the Plan and in MCP: the drawer doesn't
+    // list it, and a task's Start writes a new draft rather than reopen it.
+    .is('archived_at', null)
     .order('created_at', { ascending: true });
   if (error) throw new Error(error.message);
   return (data ?? []).map((row) => ({
@@ -1044,6 +1102,67 @@ export async function setContentDraftPageType(id: string, pageType: PageType): P
     .maybeSingle();
   if (error) throw new Error(error.message);
   if (!data) throw new Error('not_found');
+}
+
+/** The statuses the Library's row menu sets directly; Ready goes through markContentDraftReady. */
+const ROW_STATUSES = ['draft', 'in_review', 'published'] as const;
+
+/**
+ * Set a draft's status from the Library's row menu (any member, as the
+ * editor's own status changes). Ready keeps a History version and completes
+ * the draft's task, so it goes through markContentDraftReady instead.
+ */
+export async function setContentDraftStatus(
+  id: string,
+  status: (typeof ROW_STATUSES)[number],
+): Promise<void> {
+  if (!draftId.safeParse(id).success || !(ROW_STATUSES as readonly string[]).includes(status)) {
+    throw new Error('invalid');
+  }
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from('content_drafts')
+    .update({ status })
+    .eq('id', id)
+    .select('id')
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  if (!data) throw new Error('not_found');
+}
+
+/**
+ * Send a draft to the Library's archive, or restore it (admins and
+ * managers; 00233's trigger refuses anyone else). It keeps its status.
+ */
+export async function archiveContentDraft(id: string, archived: boolean): Promise<void> {
+  if (!draftId.safeParse(id).success) throw new Error('invalid');
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from('content_drafts')
+    .update({ archived_at: archived ? new Date().toISOString() : null })
+    .eq('id', id)
+    .select('id')
+    .maybeSingle();
+  if (error) {
+    // Restoring one while a newer draft does the same task's work (the
+    // one-per-work key, 00233): that one goes to the archive first.
+    if (error.code === '23505') throw new Error('newer_draft');
+    throw new Error(error.code === '42501' ? 'forbidden' : error.message);
+  }
+  if (!data) throw new Error('not_found');
+}
+
+/**
+ * Delete a draft for good (admins and managers; content_drafts' delete
+ * policy, 00233). Its versions, sources and suggestions go with it.
+ */
+export async function deleteContentDraft(id: string): Promise<void> {
+  if (!draftId.safeParse(id).success) throw new Error('invalid');
+  const supabase = await createClient();
+  const { data, error } = await supabase.from('content_drafts').delete().eq('id', id).select('id');
+  if (error) throw new Error(error.message);
+  // No row: not the member's to delete, or gone already.
+  if (!data?.length) throw new Error('forbidden');
 }
 
 /**

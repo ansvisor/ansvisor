@@ -3,13 +3,14 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
-import { ArrowLeft, Bot, Loader2 } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import { Link } from '@/i18n/navigation';
 import { Button } from '@/components/ui/button';
 import { buttonVariants } from '@/components/ui/button-variants';
 import { getContentDraft } from '@/lib/actions/content-drafts';
 import { AGENT_POLL_MS, CONTENT_LIBRARY_PATH, type ContentDraft } from '@/lib/content/drafts';
 import { useBrandStore } from '@/stores/use-brand-store';
+import { AgentWriting } from './_agent-writing';
 import { DraftEditor } from './_draft-editor';
 
 type DraftRead = { id: string; draft: ContentDraft } | { id: string; draft: null; failed: boolean };
@@ -86,14 +87,27 @@ export default function ContentEditorPage() {
           <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
         </div>
       ) : current.draft && writing ? (
-        <AgentWriting title={current.draft.title} />
+        <AgentWriting
+          title={current.draft.title}
+          method={current.draft.method}
+          since={current.draft.agentSince}
+        />
       ) : current.draft ? (
         <DraftEditor
           key={current.draft.id}
           draft={current.draft}
           onAgentStarted={() =>
             setRead((prev) =>
-              prev?.draft ? { id: prev.id, draft: { ...prev.draft, agentState: 'writing' } } : prev,
+              prev?.draft
+                ? {
+                    id: prev.id,
+                    draft: {
+                      ...prev.draft,
+                      agentState: 'writing',
+                      agentSince: new Date().toISOString(),
+                    },
+                  }
+                : prev,
             )
           }
         />
@@ -125,39 +139,5 @@ export default function ContentEditorPage() {
         </div>
       )}
     </div>
-  );
-}
-
-/** The draft while the Content Agent writes it: nothing to edit yet. */
-function AgentWriting({ title }: { title: string }) {
-  const t = useTranslations('contentEditor.editor');
-  return (
-    <>
-      <header className="flex items-center gap-2.5 border-b px-4 py-2.5">
-        <Link
-          href={CONTENT_LIBRARY_PATH}
-          aria-label={t('back')}
-          title={t('back')}
-          className={buttonVariants({ variant: 'ghost', size: 'icon-sm' })}
-        >
-          <ArrowLeft className="h-4 w-4" />
-        </Link>
-        <h1 className="min-w-0 truncate text-sm font-medium">{title.trim() || t('untitled')}</h1>
-      </header>
-      <div
-        role="status"
-        className="flex flex-1 flex-col items-center justify-center gap-3 px-6 text-center"
-      >
-        <span className="relative">
-          <Bot aria-hidden className="h-6 w-6 text-muted-foreground" />
-          <Loader2
-            aria-hidden
-            className="absolute -right-2 -bottom-2 h-3.5 w-3.5 animate-spin text-muted-foreground"
-          />
-        </span>
-        <p className="text-sm font-medium">{t('agentWriting.title')}</p>
-        <p className="max-w-sm text-sm text-muted-foreground">{t('agentWriting.body')}</p>
-      </div>
-    </>
   );
 }
