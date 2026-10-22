@@ -10,7 +10,10 @@
 --     the Agent API, MCP and the editor read the four statuses unchanged.
 --   * guard_content_draft_archive: only an admin or a manager of the brand's
 --     organization (or the server) sets or clears archived_at; archived_by is
---     the person who archived, set here rather than trusted from the app.
+--     the person who archived, set here rather than trusted from the app. A
+--     member's new draft is never archived: an insert with either column set
+--     is refused (42501), as guard_content_draft_server_columns refuses its
+--     columns.
 --   * "content_drafts: manager delete": content_drafts had no delete policy,
 --     so no member could delete a draft. Its versions, sources and
 --     suggestions go with it (on delete cascade); the Action Center task it
@@ -31,6 +34,17 @@ language plpgsql
 set search_path = ''
 as $$
 begin
+  if tg_op = 'INSERT' then
+    -- A role that bypasses RLS is server-side (service role, migrations).
+    if (new.archived_at is not null or new.archived_by is not null)
+       and not (select rolbypassrls from pg_catalog.pg_roles where rolname = current_user)
+    then
+      raise exception 'a new content draft is not archived'
+        using errcode = '42501';
+    end if;
+    return new;
+  end if;
+
   if new.archived_at is not distinct from old.archived_at then
     -- archived_by follows archived_at only.
     new.archived_by := old.archived_by;
@@ -58,7 +72,7 @@ end;
 $$;
 
 create or replace trigger content_drafts_guard_archive
-  before update on public.content_drafts
+  before insert or update on public.content_drafts
   for each row execute function public.guard_content_draft_archive();
 
 create policy "content_drafts: manager delete"

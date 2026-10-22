@@ -61,8 +61,6 @@ const row = (over: Partial<ContentDraftListItem>): ContentDraftListItem => ({
   author: 'user',
   createdBy: { id: 'u1', fullName: 'Ada Lovelace', avatarUrl: null },
   isMine: true,
-  scoreBefore: 62,
-  scoreAfter: 78,
   agentState: null,
   createdAt: '2026-10-18T09:00:00Z',
   updatedAt: '2026-10-20T10:00:00Z',
@@ -130,8 +128,6 @@ describe('the Content Library', () => {
         author: 'agent',
         createdBy: null,
         isMine: false,
-        scoreBefore: null,
-        scoreAfter: null,
       }),
       row({
         id: 'd3',
@@ -139,8 +135,6 @@ describe('the Content Library', () => {
         status: 'published',
         isMine: false,
         createdBy: { id: 'u2', fullName: null, avatarUrl: null, email: 'grace@acme.com' },
-        scoreBefore: 81,
-        scoreAfter: null,
         createdAt: '2025-12-30T10:00:00Z',
       }),
     ]);

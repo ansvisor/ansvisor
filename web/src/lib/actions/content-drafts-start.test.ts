@@ -542,6 +542,12 @@ describe('startDraftFromAction', () => {
       'deleted_at',
       null,
     ]);
+    // An archived draft is set aside: Start writes a new one rather than reopen it.
+    expect(calls.find((call) => call.table === 'content_drafts')!.filters).toContainEqual([
+      'is',
+      'archived_at',
+      null,
+    ]);
     expect(admin.inserts).toEqual([
       {
         table: 'content_drafts',

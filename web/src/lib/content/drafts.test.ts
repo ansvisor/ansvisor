@@ -4,7 +4,6 @@ import {
   DRAFT_STATUSES,
   PAGE_TYPES,
   WRITING_STALE_MS,
-  aeoScoreText,
   agentStateOf,
   contentEditorPath,
   draftsInTab,
@@ -23,8 +22,6 @@ const draft = (id: string, status: DraftStatus): ContentDraftListItem => ({
   author: 'user',
   createdBy: null,
   isMine: true,
-  scoreBefore: null,
-  scoreAfter: null,
   agentState: null,
   createdAt: '2026-10-18T09:00:00Z',
   updatedAt: '2026-10-20T10:00:00Z',
@@ -63,19 +60,6 @@ describe('the Library tabs', () => {
     expect(draftsInTab(all, 'all').map((d) => d.id)).toEqual(['a', 'b', 'c', 'd']);
     expect(draftsInTab(all, 'published').map((d) => d.id)).toEqual(['d']);
     expect(draftsInTab(all, 'archived')).toEqual([shelved]);
-  });
-});
-
-describe('aeoScoreText', () => {
-  it('shows before → after once the changes are scored', () => {
-    expect(aeoScoreText(62, 78)).toBe('62 → 78');
-  });
-
-  it('shows the one score there is, or nothing', () => {
-    expect(aeoScoreText(54, null)).toBe('54');
-    expect(aeoScoreText(null, 81)).toBe('81');
-    expect(aeoScoreText(70, 70)).toBe('70');
-    expect(aeoScoreText(null, null)).toBeNull();
   });
 });
 

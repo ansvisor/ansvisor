@@ -105,8 +105,6 @@ export interface ContentDraftListItem {
   createdBy: DraftAuthor | null;
   /** Whether the signed-in member started it ("You"). */
   isMine: boolean;
-  scoreBefore: number | null;
-  scoreAfter: number | null;
   /** Where the Content Agent is on it (CE-015). */
   agentState: AgentState;
   createdAt: string;
@@ -237,11 +235,4 @@ export function libraryTabCounts(drafts: ContentDraftListItem[]): Record<Library
     }
   }
   return counts;
-}
-
-/** "62 → 78" once the changes are scored, "54" before, null with no score yet. */
-export function aeoScoreText(before: number | null, after: number | null): string | null {
-  if (before !== null && after !== null && after !== before) return `${before} → ${after}`;
-  const score = after ?? before;
-  return score === null ? null : String(score);
 }

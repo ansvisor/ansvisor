@@ -140,7 +140,7 @@ export async function getContentDrafts(brandId: string): Promise<ContentLibrary>
     supabase
       .from('content_drafts')
       .select(
-        'id, title, page_type, method, status, author, created_by, score_before, score_after, agent_state, agent_state_at, created_at, updated_at, archived_at',
+        'id, title, page_type, method, status, author, created_by, agent_state, agent_state_at, created_at, updated_at, archived_at',
       )
       .eq('brand_id', brandId)
       .order('updated_at', { ascending: false })
@@ -168,8 +168,6 @@ export async function getContentDrafts(brandId: string): Promise<ContentLibrary>
       author: row.author === 'agent' ? 'agent' : 'user',
       createdBy: row.created_by ? (people.get(row.created_by) ?? null) : null,
       isMine: me !== null && row.created_by === me,
-      scoreBefore: row.score_before,
-      scoreAfter: row.score_after,
       agentState: agentStateOf(row.agent_state, row.agent_state_at),
       createdAt: row.created_at,
       updatedAt: row.updated_at,
@@ -484,6 +482,9 @@ async function readActionDrafts(
     .select('id, method, source_url, status')
     .eq('brand_id', brandId)
     .eq('action_id', actionId)
+    // Archived is set aside, as on the Plan and in MCP: the drawer doesn't
+    // list it, and a task's Start writes a new draft rather than reopen it.
+    .is('archived_at', null)
     .order('created_at', { ascending: true });
   if (error) throw new Error(error.message);
   return (data ?? []).map((row) => ({
