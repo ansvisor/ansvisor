@@ -37,6 +37,8 @@ import {
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { formatNumber } from '@/lib/format';
+import { guessedVolumeEstimate } from '@/lib/volume-estimate';
+import { EstimateRange } from '@/components/prompts/volume-estimate';
 import { readUrlChoice } from '@/lib/url-state';
 import {
   getPromptSuggestions,
@@ -753,7 +755,12 @@ export function SuggestionsCard({
                                 variant="outline"
                                 className="gap-1 text-xs font-normal tabular-nums"
                               >
-                                <TrendingUp className="h-3 w-3" />~{formatNumber(s.estVolume)}/mo
+                                <TrendingUp className="h-3 w-3" />
+                                {/* An AI's guess: a range, always low confidence (PROMPT-013). */}
+                                <EstimateRange
+                                  estimate={guessedVolumeEstimate(s.estVolume, s.generatedAt)}
+                                  perMonth
+                                />
                               </Badge>
                             )
                           )}

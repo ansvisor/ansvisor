@@ -3,7 +3,13 @@ import { createRoot, type Root } from 'react-dom/client';
 import { NextIntlClientProvider } from 'next-intl';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import messages from '../../../messages/en.json';
-import { promptVolumeEstimate, sumEstimates, type VolumeEstimate } from '@/lib/volume-estimate';
+import {
+  guessedVolumeEstimate,
+  keywordVolumeEstimate,
+  promptVolumeEstimate,
+  sumEstimates,
+  type VolumeEstimate,
+} from '@/lib/volume-estimate';
 import { EstimateBadge, EstimateRange } from './volume-estimate';
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT =
@@ -72,7 +78,7 @@ describe('EstimateRange', () => {
   it('greys a low-confidence estimate and says it is not ranked on its own', async () => {
     render(<EstimateRange estimate={low} perMonth />);
     const trigger = container.querySelector('button')!;
-    expect(trigger.textContent).toBe('450–1.8k/ mo');
+    expect(trigger.textContent).toBe('450–1.8k/mo');
     expect(trigger.className).toContain('text-muted-foreground');
     const note = await noteOf(trigger);
     expect(note).toContain('With one to go by, the range is half to twice the estimate.');
@@ -85,6 +91,27 @@ describe('EstimateRange', () => {
     const note = await noteOf(container.querySelector('button')!);
     expect(note).toContain("The sum of 2 prompts' estimates.");
     expect(note).toContain('Confidence by prompt: 0 high, 1 medium, 1 low.');
+  });
+});
+
+describe('the note for other kinds of estimate', () => {
+  it("says a keyword's volume is measured and only the AI share assumed", async () => {
+    render(
+      <EstimateRange estimate={keywordVolumeEstimate(22_200, 0.45, '2026-10-10T19:28:41Z', NOW)} />,
+    );
+    const note = await noteOf(container.querySelector('button')!);
+    expect(note).toContain("This keyword's monthly Google searches × the share of searches");
+    expect(note).toContain('the range is ±25%');
+    expect(note).toContain('Confidence: Medium · updated Oct 10, 2026');
+  });
+
+  it("says a suggestion's volume is an AI's guess, dated by the suggestion", async () => {
+    render(<EstimateRange estimate={guessedVolumeEstimate(1200, '2026-10-22T08:00:00Z')} />);
+    const note = await noteOf(container.querySelector('button')!);
+    expect(note).toContain("An AI's estimate for a prompt you don't track yet");
+    expect(note).toContain("Source: Ansvisor's AI, from your tracked prompts' estimates.");
+    expect(note).toContain('Confidence: Low · suggested Oct 22, 2026');
+    expect(note).not.toContain('DataForSEO');
   });
 });
 

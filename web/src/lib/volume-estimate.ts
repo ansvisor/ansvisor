@@ -15,7 +15,15 @@ import type { PromptVolume } from '@/types';
 
 export type EstimateConfidence = 'high' | 'medium' | 'low';
 
+/**
+ * What the estimate rests on: a prompt's related keywords, one keyword's
+ * own Google volume (Similar Topics), or an AI's guess for a prompt not
+ * tracked yet (Prompt Suggestions).
+ */
+export type EstimateBasis = 'keywords' | 'keyword' | 'guess';
+
 export interface VolumeEstimate {
+  basis: EstimateBasis;
   /** The stored point estimate: what sorting and totals add up. */
   value: number;
   low: number;
@@ -61,6 +69,12 @@ function bounds(value: number, low: number, high: number): { low: number; high: 
   return { low: roundTo2(lo, 'down'), high: roundTo2(hi, 'up') };
 }
 
+/** Fetched long enough ago to count one level less. */
+const isStale = (asOf: string | null, now: Date) => {
+  const fetched = asOf ? Date.parse(asOf) : NaN;
+  return Number.isFinite(fetched) && now.getTime() - fetched > STALE_DAYS * 24 * 60 * 60 * 1000;
+};
+
 type VolumeRow = Pick<
   PromptVolume,
   'estAiVolume' | 'googleVolumes' | 'aiVolumeMultiplier' | 'keywords' | 'fetchedAt'
@@ -81,9 +95,7 @@ export function promptVolumeEstimate(row: VolumeRow, now: Date = new Date()): Vo
       : measured >= 2 && spread <= AGREE_MEDIUM
         ? 1
         : 0;
-  const fetched = row.fetchedAt ? Date.parse(row.fetchedAt) : NaN;
-  const stale =
-    Number.isFinite(fetched) && now.getTime() - fetched > STALE_DAYS * 24 * 60 * 60 * 1000;
+  const stale = isStale(row.fetchedAt ?? null, now);
   if (stale) level = Math.max(0, level - 1);
   if (value === 0) level = 0;
 
@@ -93,6 +105,7 @@ export function promptVolumeEstimate(row: VolumeRow, now: Date = new Date()): Vo
       : bounds(value, value / MAX_STRETCH, value * MAX_STRETCH);
 
   return {
+    basis: 'keywords',
     value,
     ...range,
     confidence: LEVELS[level],
@@ -101,6 +114,51 @@ export function promptVolumeEstimate(row: VolumeRow, now: Date = new Date()): Vo
     rate: row.aiVolumeMultiplier,
     asOf: row.fetchedAt ?? null,
     stale,
+  };
+}
+
+/**
+ * One keyword's AI share, as Similar Topics lists it: its Google volume is
+ * measured, so only the adoption rate is assumed. Medium, ±25%; low when
+ * the keyword has no volume or it is over six months old.
+ */
+export function keywordVolumeEstimate(
+  googleVolume: number,
+  rate: number,
+  asOf: string | null,
+  now: Date = new Date(),
+): VolumeEstimate {
+  const value = Math.round(Math.max(0, googleVolume) * rate);
+  const stale = isStale(asOf, now);
+  return {
+    basis: 'keyword',
+    value,
+    ...bounds(value, value, value),
+    confidence: value > 0 && !stale ? 'medium' : 'low',
+    measured: googleVolume > 0 ? 1 : 0,
+    keywords: 1,
+    rate,
+    asOf,
+    stale,
+  };
+}
+
+/**
+ * An AI's guess at a suggested prompt's volume (Prompt Suggestions): no
+ * keyword behind it is measured yet, so it is always low, ×½ to ×2.
+ */
+export function guessedVolumeEstimate(value: number, asOf: string | null): VolumeEstimate {
+  const v = Math.max(0, Math.round(value));
+  return {
+    basis: 'guess',
+    value: v,
+    ...bounds(v, v / MAX_STRETCH, v * MAX_STRETCH),
+    confidence: 'low',
+    measured: 0,
+    keywords: 0,
+    rate: 0,
+    asOf,
+    stale: false,
   };
 }
 
@@ -139,6 +197,7 @@ export function sumEstimates(estimates: VolumeEstimate[]): EstimateTotal {
           ? 'low'
           : 'medium';
   return {
+    basis: 'keywords',
     value,
     low,
     high,

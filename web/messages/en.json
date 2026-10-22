@@ -5125,8 +5125,13 @@
     },
     "title": "Prompt Volumes",
     "description": "Discover query volumes and trends across AI platforms.",
+    "similarTopics": {
+      "aiTitle": "Est. AI Volume",
+      "aiSub": "monthly AI searches, across prompts"
+    },
     "volumeInsights": {
       "totalTitle": "Total Est. AI Volume",
+      "detailTitle": "AI searches a month",
       "totalSub": "from {google} Google searches",
       "averageTitle": "Avg. AI Volume",
       "averageSub": "per prompt",
@@ -5308,6 +5313,8 @@
     "title": "How we estimate AI search volume",
     "method": "The median monthly Google searches for this prompt's related keywords × the share of searches that now happen in AI assistants ({rate}%).",
     "methodTotal": "The sum of {count, plural, one {# prompt's estimate} other {# prompts' estimates}}. Each is the median monthly Google searches for its related keywords × the share of searches that now happen in AI assistants ({rate}%).",
+    "methodKeyword": "This keyword's monthly Google searches × the share of searches that now happen in AI assistants ({rate}%). Its Google volume is measured; the AI share is an estimate, so the range is ±25%.",
+    "methodGuess": "An AI's estimate for a prompt you don't track yet, scaled to your tracked prompts' estimates. Track the prompt to get one from its keywords' Google searches.",
     "methodAverage": "The average of {count, plural, one {# prompt's estimate} other {# prompts' estimates}}. Each is the median monthly Google searches for its related keywords × the share of searches that now happen in AI assistants ({rate}%).",
     "keywords": "{measured} of {keywords} related keywords have Google search data.",
     "noKeywords": "None of its related keywords has Google search data yet.",
@@ -5315,8 +5322,10 @@
     "rangeOne": "With one to go by, the range is half to twice the estimate.",
     "mix": "Confidence by prompt: {high} high, {medium} medium, {low} low.",
     "sources": "Sources: Google search volume from DataForSEO ({month}) and an AI adoption rate of {rate}%.",
+    "sourcesGuess": "Source: Ansvisor's AI, from your tracked prompts' estimates.",
     "sourcesUndated": "Sources: Google search volume from DataForSEO and an AI adoption rate of {rate}%.",
     "confidence": "Confidence: {level} · updated {date}",
+    "confidenceSuggested": "Confidence: {level} · suggested {date}",
     "confidenceUndated": "Confidence: {level}",
     "stale": "Fetched over six months ago, so one level less sure. Refresh volumes for a newer estimate.",
     "lowNote": "Low confidence: shown in grey, and not used to rank on its own.",
@@ -5330,7 +5339,7 @@
     "badgeLow": "Estimate · low confidence",
     "badgeLabel": "Estimate, {level} confidence: how it's built",
     "label": "{range} a month, estimated, {level} confidence",
-    "perMonth": "/ mo"
+    "perMonth": "/mo"
   },
   "mentions": {
     "title": "Mentions & Sentiment",

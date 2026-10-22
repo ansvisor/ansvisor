@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import {
   averageEstimate,
   formatEstimateRange,
+  guessedVolumeEstimate,
+  keywordVolumeEstimate,
   promptVolumeEstimate,
   rankable,
   sumEstimates,
@@ -106,5 +108,29 @@ describe('rankable', () => {
     expect(rankable({ confidence: 'high' })).toBe(true);
     expect(rankable({ confidence: 'medium' })).toBe(true);
     expect(rankable({ confidence: 'low' })).toBe(false);
+  });
+});
+
+describe('keywordVolumeEstimate', () => {
+  it("is medium, ±25%, from one keyword's measured volume", () => {
+    const e = keywordVolumeEstimate(22_200, 0.45, '2026-10-10T19:28:41Z', NOW);
+    expect(e).toMatchObject({ basis: 'keyword', value: 9990, confidence: 'medium', measured: 1 });
+    expect(formatEstimateRange(e)).toBe('7.4–13k');
+  });
+
+  it('is low with no volume, or over six months old', () => {
+    expect(keywordVolumeEstimate(0, 0.45, '2026-10-10T19:28:41Z', NOW).confidence).toBe('low');
+    expect(keywordVolumeEstimate(22_200, 0.45, '2026-03-01T00:00:00Z', NOW)).toMatchObject({
+      confidence: 'low',
+      stale: true,
+    });
+  });
+});
+
+describe('guessedVolumeEstimate', () => {
+  it("is always low, half to twice an AI's guess", () => {
+    const e = guessedVolumeEstimate(1200, '2026-10-22T08:00:00Z');
+    expect(e).toMatchObject({ basis: 'guess', confidence: 'low', low: 600, high: 2400 });
+    expect(formatEstimateRange(e)).toBe('600–2.4k');
   });
 });
