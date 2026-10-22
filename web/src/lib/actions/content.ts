@@ -9,13 +9,25 @@ import type { ContentUsage } from '@/lib/content-usage';
 const AEO_SERVER_URL = API_BASE_URL;
 
 async function getSession() {
+  const session = await sessionOrNull();
+  if (!session) throw new Error('Not authenticated');
+  return session;
+}
+
+async function sessionOrNull() {
   const supabase = await createClient();
   const {
     data: { session },
   } = await supabase.auth.getSession();
-  if (!session) throw new Error('Not authenticated');
   return session;
 }
+
+/**
+ * No session, for the calls whose errors come back as values: the toast then
+ * offers Sign in (BUG-001). Thrown, the reason wouldn't reach the browser, as
+ * Next.js hides a server action's error message in production.
+ */
+const NO_SESSION = { ok: false as const, error: 'Not authenticated', failure: 'session' as const };
 
 /** What a "+ New" request asks for (CONTENT-003). */
 export interface OnDemandRequest {
@@ -45,7 +57,8 @@ export type OnDemandResult =
 export async function generateOpportunitiesOnDemand(
   request: OnDemandRequest,
 ): Promise<OnDemandResult> {
-  const session = await getSession();
+  const session = await sessionOrNull();
+  if (!session) return NO_SESSION;
 
   const res = await fetch(`${AEO_SERVER_URL}/api/content/opportunities/generate`, {
     method: 'POST',
@@ -648,7 +661,8 @@ export async function suggestAlternative(
   id: string,
   { direction, idempotencyKey }: { direction?: string | null; idempotencyKey: string },
 ): Promise<AlternativeResult> {
-  const session = await getSession();
+  const session = await sessionOrNull();
+  if (!session) return NO_SESSION;
 
   const res = await fetch(`${AEO_SERVER_URL}/api/content/${id}/alternative`, {
     method: 'POST',
@@ -686,7 +700,8 @@ export async function suggestContentForPrompt(
   promptId: string,
   idempotencyKey: string,
 ): Promise<PromptSuggestionResult> {
-  const session = await getSession();
+  const session = await sessionOrNull();
+  if (!session) return NO_SESSION;
 
   const res = await fetch(`${AEO_SERVER_URL}/api/content/prompts/${promptId}/suggest`, {
     method: 'POST',

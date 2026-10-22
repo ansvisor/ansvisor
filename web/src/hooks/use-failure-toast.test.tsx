@@ -51,6 +51,12 @@ describe('useFailureToast (BUG-001)', () => {
     expect(options).toMatchObject({ id: 't1', action: { label: 'Upgrade' } });
   });
 
+  it('asks to wait a minute for a rate limit, with nothing to click', () => {
+    const [message, options] = show('busy');
+    expect(message).toBe('Too many requests. Wait a minute and try again.');
+    expect(options.action).toBeUndefined();
+  });
+
   it('offers nothing to click for a plain failure', () => {
     const [message, options] = show('failed');
     expect(message).toBe('Something went wrong. Try again.');

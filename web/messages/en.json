@@ -5,6 +5,7 @@
     "not_found": "This no longer exists. Reload the page and start again.",
     "plan": "Your plan doesn't include this. Upgrade to use it.",
     "limit": "You've used this month's allowance. Upgrade, or wait until it resets.",
+    "busy": "Too many requests. Wait a minute and try again.",
     "failed": "Something went wrong. Try again.",
     "signIn": "Sign in",
     "yourBrands": "Your brands",

@@ -29,6 +29,7 @@ export function useFailureToast() {
               label: t('upgrade'),
               onClick: () => router.push('/dashboard/settings/billing'),
             };
+          case 'busy':
           case 'failed':
             return undefined;
         }
