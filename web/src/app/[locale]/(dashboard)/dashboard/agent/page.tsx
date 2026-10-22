@@ -80,8 +80,8 @@ export default function AgentPage() {
     return <PlanGate requiredPlan={requiredPlanFor('ai_agent')} />;
   }
 
-  // BYOK gate — on cloud the real gate is "has the org saved an Anthropic
-  // key?". We probe the same endpoint Settings → Agent uses; if it's not
+  // BYOK gate — on cloud the real gate is "has the org saved a provider key
+  // for Chat?". We probe the same endpoint Settings › AI Providers uses; if it's not
   // configured, send the user to Settings instead of letting them type a
   // message that would 403 on submit. Self-host bypasses (key is in env).
   if (isCloud) {
@@ -727,7 +727,7 @@ function EmptyState() {
 }
 
 /**
- * Cloud wrapper: probes /api/settings/anthropic-key once on mount and
+ * Cloud wrapper: probes /api/settings/ai-providers once on mount and
  * either renders the chat (key configured) or a Settings CTA (no key).
  * Self-host renders AgentChat directly — its key check is environmental.
  */
@@ -738,7 +738,7 @@ function KeyGatedAgentChat(props: React.ComponentProps<typeof AgentChat>) {
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch('/api/settings/anthropic-key');
+        const res = await fetch('/api/settings/ai-providers');
         if (!res.ok) {
           if (!cancelled) setStatus('missing');
           return;

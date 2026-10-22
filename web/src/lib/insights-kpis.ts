@@ -11,8 +11,12 @@ const round1 = (n: number) => Math.round(n * 10) / 10;
 export interface KpiComponents {
   answers: number;
   citationAnswers: number;
-  /** Answers naming or citing the brand: the sentiment denominator (#508). */
-  mentioning: number;
+  /**
+   * Answers naming the brand: the sentiment denominator, as on the Mentions
+   * page (00191). Answers that only cite it are always neutral, so counting
+   * them (#508) pulled Net sentiment toward zero.
+   */
+  named: number;
   positive: number;
   negative: number;
   /** Sum of the brand's position over answers naming it; null without positions. */
@@ -33,13 +37,16 @@ export interface KpiRates {
 }
 
 export function kpiRates(c: KpiComponents): KpiRates {
-  const positivePct = c.mentioning > 0 ? Math.round((c.positive / c.mentioning) * 100) : null;
-  const negativePct = c.mentioning > 0 ? Math.round((c.negative / c.mentioning) * 100) : null;
+  // As the Mentions page does it (sentimentSplit and wholeNet in
+  // mentions-overview.ts / mentions-headline.ts): the shares multiplied
+  // first, and the net rounded once, so the two pages show the same number.
+  const share = (count: number) => (count * 100) / c.named;
+  const named = c.named > 0;
   return {
     citationRate: c.answers > 0 ? round1((c.citationAnswers / c.answers) * 100) : null,
-    positivePct,
-    negativePct,
-    netSentiment: positivePct !== null && negativePct !== null ? positivePct - negativePct : null,
+    positivePct: named ? Math.round(share(c.positive)) : null,
+    negativePct: named ? Math.round(share(c.negative)) : null,
+    netSentiment: named ? Math.round(share(c.positive) - share(c.negative)) : null,
     avgPosition:
       c.positionCount > 0 && c.sumPosition !== null
         ? round1(c.sumPosition / c.positionCount)
@@ -89,7 +96,8 @@ export function parseKpiSeries(raw: unknown): KpiSeriesDay[] | null {
     const rates = kpiRates({
       answers: num(d.answers),
       citationAnswers: num(d.citation_answers),
-      mentioning: num(d.mentioning_answers),
+      // Before 00191 the series has no mention_answers: the old base.
+      named: num(d.mention_answers ?? d.mentioning_answers),
       positive: num(d.positive_count),
       negative: num(d.negative_count),
       sumPosition:

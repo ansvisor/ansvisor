@@ -21,6 +21,8 @@ export function opportunityToMarkdown(
   opportunity: ContentOpportunity,
   brief: ContentBrief | null,
   fanoutQueries: { query: string }[] = [],
+  /** An asset's type as the page names it (useAssetTypeLabel); else its key, humanized. */
+  assetTypeLabel: (type: string) => string | null = () => null,
 ): string {
   const sd = opportunity.sourceData;
   const parts: (string | null)[] = [];
@@ -70,7 +72,7 @@ export function opportunityToMarkdown(
       'Recommended assets',
       (sd.assets ?? []).map(
         (a) =>
-          `- ${a.title} (${humanize(a.type)}, ${humanize(a.channel)}, ${humanize(a.decision)})`,
+          `- ${a.title} (${assetTypeLabel(a.type) ?? humanize(a.type)}, ${humanize(a.channel)}, ${humanize(a.decision)})`,
       ),
     ),
   );

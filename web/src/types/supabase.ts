@@ -872,6 +872,36 @@ export type Database = {
           },
         ]
       }
+      content_plan_marks: {
+        Row: {
+          brand_id: string
+          hidden_at: string | null
+          priority: boolean
+          restore_status: string | null
+          row_key: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          brand_id: string
+          hidden_at?: string | null
+          priority?: boolean
+          restore_status?: string | null
+          row_key: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          brand_id?: string
+          hidden_at?: string | null
+          priority?: boolean
+          restore_status?: string | null
+          row_key?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
       content_rule_sets: {
         Row: {
           organization_id: string
@@ -2012,6 +2042,54 @@ export type Database = {
           },
         ]
       }
+      organization_ai_keys: {
+        Row: {
+          active: boolean
+          key_encrypted: string
+          key_last4: string
+          organization_id: string
+          provider: string
+          set_at: string
+          set_by: string | null
+          settings: Json
+        }
+        Insert: {
+          active?: boolean
+          key_encrypted: string
+          key_last4: string
+          organization_id: string
+          provider: string
+          set_at?: string
+          set_by?: string | null
+          settings?: Json
+        }
+        Update: {
+          active?: boolean
+          key_encrypted?: string
+          key_last4?: string
+          organization_id?: string
+          provider?: string
+          set_at?: string
+          set_by?: string | null
+          settings?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "organization_ai_keys_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "organization_ai_keys_set_by_fkey"
+            columns: ["set_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       organizations: {
         Row: {
           anthropic_api_key_encrypted: string | null
@@ -2315,9 +2393,12 @@ export type Database = {
           created_at: string
           id: string
           image_url: string | null
+          listing_id: string | null
+          marketplace: string | null
           matched_brand_id: string | null
           matched_brand_role: string
           merchant_domain: string | null
+          merchant_kind: string | null
           merchant_url: string | null
           platform: string
           position: number
@@ -2336,9 +2417,12 @@ export type Database = {
           created_at?: string
           id?: string
           image_url?: string | null
+          listing_id?: string | null
+          marketplace?: string | null
           matched_brand_id?: string | null
           matched_brand_role?: string
           merchant_domain?: string | null
+          merchant_kind?: string | null
           merchant_url?: string | null
           platform: string
           position: number
@@ -2357,9 +2441,12 @@ export type Database = {
           created_at?: string
           id?: string
           image_url?: string | null
+          listing_id?: string | null
+          marketplace?: string | null
           matched_brand_id?: string | null
           matched_brand_role?: string
           merchant_domain?: string | null
+          merchant_kind?: string | null
           merchant_url?: string | null
           platform?: string
           position?: number
@@ -2920,6 +3007,82 @@ export type Database = {
             columns: ["result_id"]
             isOneToOne: false
             referencedRelation: "prompt_results"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      mentions_entities_daily: {
+        Row: {
+          answers: number
+          brand_id: string
+          day: string
+          entity: string
+          platform: string
+          region: string | null
+          with_brand: number
+        }
+        Insert: {
+          answers: number
+          brand_id: string
+          day: string
+          entity: string
+          platform: string
+          region?: string | null
+          with_brand: number
+        }
+        Update: {
+          answers?: number
+          brand_id?: string
+          day?: string
+          entity?: string
+          platform?: string
+          region?: string | null
+          with_brand?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "mentions_entities_daily_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brands"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      mentions_terms_daily: {
+        Row: {
+          answers: number
+          brand_id: string
+          day: string
+          entity: string
+          platform: string
+          region: string | null
+          term: string
+        }
+        Insert: {
+          answers: number
+          brand_id: string
+          day: string
+          entity: string
+          platform: string
+          region?: string | null
+          term: string
+        }
+        Update: {
+          answers?: number
+          brand_id?: string
+          day?: string
+          entity?: string
+          platform?: string
+          region?: string | null
+          term?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "mentions_terms_daily_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brands"
             referencedColumns: ["id"]
           },
         ]
@@ -3776,6 +3939,10 @@ export type Database = {
         Args: { p_brand_id: string; p_days?: number }
         Returns: Json
       }
+      content_start_prompts: {
+        Args: { p_brand_id: string; p_days?: number; p_limit?: number }
+        Returns: Json
+      }
       content_page_overlap: {
         Args: { p_brand_id: string; p_prompt_ids: string[]; p_since?: string }
         Returns: {
@@ -4232,6 +4399,10 @@ export type Database = {
         Args: { p_brand_id: string; p_day_from: string; p_day_to: string }
         Returns: undefined
       }
+      remove_ai_provider_key: {
+        Args: { p_organization_id: string; p_provider: string }
+        Returns: string
+      }
       report_citation_evidence: {
         Args: {
           p_brand_id: string
@@ -4313,6 +4484,14 @@ export type Database = {
         Args: { p_brand_id: string; p_kpis: Json }
         Returns: boolean
       }
+      set_active_ai_provider: {
+        Args: {
+          p_only_if_none?: boolean
+          p_organization_id: string
+          p_provider: string
+        }
+        Returns: boolean
+      }
       share_of_voice_aggregates: {
         Args: {
           p_brand_id: string
@@ -4337,6 +4516,14 @@ export type Database = {
           p_topic_id?: string
         }
         Returns: Json
+      }
+      shopping_amazon_share_weekly: {
+        Args: { p_as_of?: string; p_brand_id: string }
+        Returns: {
+          amazon_cards: number
+          classified_cards: number
+          week_start: string
+        }[]
       }
       shopping_filter_options: {
         Args: { p_brand_id: string }

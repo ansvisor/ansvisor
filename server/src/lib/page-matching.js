@@ -9,6 +9,8 @@
  * ignores.
  */
 
+import { SITE_PAGE_TYPES } from './content-page-types.js';
+
 /** Candidate pages shown to the model per cluster. */
 export const CANDIDATES_PER_CLUSTER = 8;
 
@@ -99,19 +101,16 @@ export function resolveDecision(decision, pageIndexes, candidates) {
   return { decision: valid, pages };
 }
 
-/** What an asset is. Owned types are pages on the brand's site; earned ones live elsewhere. */
-export const ASSET_TYPES = [
-  'blog_post',
-  'pillar_guide',
-  'landing_page',
-  'comparison_page',
-  'glossary_page',
-  'faq_page',
-  'product_page',
-  'category_page',
-  'third_party_article',
-  'backlink',
-];
+/** Assets that live on other sites, whatever the brand's kind of site. */
+export const EARNED_ASSET_TYPES = ['third_party_article', 'backlink'];
+
+/**
+ * What an asset can be on this kind of site: a page type the Content Editor
+ * offers it (content-page-types.js), or an earned asset.
+ */
+export function assetTypes(siteType) {
+  return [...SITE_PAGE_TYPES[siteType], ...EARNED_ASSET_TYPES];
+}
 
 /** Supporting assets an opportunity may add to its primary one. */
 export const MAX_SUPPORTING_ASSETS = 3;
@@ -128,24 +127,26 @@ const toPage = (p) => ({
  * An opportunity's assets, primary first, each with a stable key, its type,
  * channel, decision, title and the existing pages it works on. Earned assets
  * live off the brand's site, so they are always new and carry no page. A
- * supporting asset of an unknown type, or one repeating the primary's type
- * and decision, is dropped; so is anything past MAX_SUPPORTING_ASSETS.
+ * supporting asset of a type outside `types`, or one repeating the primary's
+ * type and decision, is dropped; so is anything past MAX_SUPPORTING_ASSETS.
+ * A primary of such a type is a blog post, which every kind of site writes.
  *
  * @param {{type: string, channel: string, decision: string, title: string, pageIndexes: number[]}} primary
  * @param {typeof primary[]} supporting
  * @param {object[]} candidates - the cluster's candidate pages
+ * @param {string[]} types - what an asset can be on the brand's site (assetTypes)
  */
-export function buildAssets(primary, supporting, candidates) {
+export function buildAssets(primary, supporting, candidates, types) {
   const assets = [];
   const seen = new Set();
   for (const a of [primary, ...(supporting || []).slice(0, MAX_SUPPORTING_ASSETS)]) {
-    if (!a || (assets.length && !ASSET_TYPES.includes(a.type))) continue;
+    if (!a || (assets.length && !types.includes(a.type))) continue;
     const channel = a.channel === 'earned' ? 'earned' : 'owned';
     const { decision, pages } =
       channel === 'earned'
         ? { decision: 'create', pages: [] }
         : resolveDecision(a.decision, a.pageIndexes, candidates);
-    const type = ASSET_TYPES.includes(a.type) ? a.type : 'blog_post';
+    const type = types.includes(a.type) ? a.type : 'blog_post';
     const id = `${type}:${decision}:${pages.map((p) => p.url).join(',')}`;
     if (seen.has(id)) continue;
     seen.add(id);
