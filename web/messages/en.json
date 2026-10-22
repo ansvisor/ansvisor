@@ -3853,6 +3853,14 @@
           "failed": "Couldn't save the brief. Try again."
         }
       },
+      "export": {
+        "button": "Export",
+        "hint": "Download the page as it is now",
+        "docx": "Export Word",
+        "html": "Export HTML",
+        "md": "Export Markdown",
+        "failed": "Couldn't export the page. Try again."
+      },
       "rulesChip": "Rules {met}/{total}",
       "rulesChipHint": "Rules this page meets now. Open the Rules tab.",
       "rules": {

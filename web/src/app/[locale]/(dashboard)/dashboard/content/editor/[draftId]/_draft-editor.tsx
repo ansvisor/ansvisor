@@ -42,6 +42,11 @@ import {
   type PageType,
 } from '@/lib/content/drafts';
 import { CITED_DAYS, MAX_PASSAGES, type CitedPassage } from '@/lib/content/cited-passages';
+import {
+  draftExportBlob,
+  draftExportFileName,
+  type DraftExportFormat,
+} from '@/lib/content/draft-export';
 import type { DraftVersion } from '@/lib/content/history';
 import type { DraftSuggestion, SuggestionStatus } from '@/lib/content/suggestions';
 import {
@@ -54,6 +59,7 @@ import { PAGE_READ_DELAY_MS, draftTitleFromDoc, safeLinkHref } from '@/lib/conte
 import { JsonLd } from '@/lib/content/json-ld-node';
 import { detectPageType } from '@/lib/content/page-types';
 import { aiTracesFound } from '@/lib/content/rules';
+import { saveBlob } from '@/lib/download';
 import { cn } from '@/lib/utils';
 import { AgentBar } from './_agent-bar';
 import { DropOverlay, useAttachments } from './_attach';
@@ -65,6 +71,7 @@ import {
   lockedPassageCount,
   type HeldEdit,
 } from './_cited-passages';
+import { ExportMenu } from './_export-menu';
 import { HistoryMenu } from './_history-menu';
 import { HtmlBlock, copyToClipboard } from './_html-block';
 import { OwnCopies, ownCopyHtml } from './_own-copies';
@@ -682,6 +689,21 @@ export function DraftEditor({
     );
   };
 
+  /** Export: the page as Copy HTML gives it, as a Word, HTML or Markdown file. */
+  const exportPage = async (format: DraftExportFormat) => {
+    if (!editor) return;
+    const html = publishableHtml(
+      htmlSource !== null ? htmlFromSource(htmlSource) : editor.getHTML(),
+    );
+    const name = title.trim() || t('untitled');
+    try {
+      saveBlob(await draftExportBlob(format, name, html), draftExportFileName(name, format));
+    } catch (err) {
+      console.error('Failed to export the page:', err);
+      toast.error(t('export.failed'));
+    }
+  };
+
   /**
    * Try again: the agent takes the page as saved now, with the rules in
    * effect here, and the page waits for it.
@@ -814,7 +836,7 @@ export function DraftEditor({
           <h1 className="min-w-0 truncate text-sm font-medium" title={title.trim() || undefined}>
             {title.trim() || t('untitled')}
           </h1>
-          <div className="ml-auto flex shrink-0 items-center gap-3">
+          <div className="ml-auto flex shrink-0 items-center gap-1.5 sm:gap-3">
             <SaveIndicator state={autosave.state} onRetry={() => void autosave.retry()} />
             <HistoryMenu
               draftId={draft.id}
@@ -837,6 +859,7 @@ export function DraftEditor({
               <Copy className="h-3.5 w-3.5" />
               <span className="hidden xl:inline">{t('copyHtml')}</span>
             </Button>
+            <ExportMenu disabled={!editor} onExport={(format) => void exportPage(format)} />
             <Button
               size="sm"
               // A page that can't be saved can't be marked ready; the save state says why.

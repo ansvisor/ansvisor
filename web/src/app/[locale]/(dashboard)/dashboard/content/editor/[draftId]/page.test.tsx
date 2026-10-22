@@ -81,6 +81,8 @@ vi.mock('mammoth', () => ({
   },
 }));
 vi.mock('sonner', () => ({ toast }));
+const saveBlob = vi.hoisted(() => vi.fn());
+vi.mock('@/lib/download', () => ({ saveBlob }));
 
 (
   globalThis as typeof globalThis & {
@@ -187,6 +189,7 @@ beforeEach(() => {
   root = createRoot(container);
   getContentDraft.mockReset();
   markContentDraftReady.mockReset();
+  saveBlob.mockReset();
   setContentDraftPageType.mockReset().mockResolvedValue(undefined);
   saveContentDraft
     .mockReset()
@@ -1213,6 +1216,38 @@ describe('the content editor', () => {
     // The block went in where the cursor was: the start, as nothing was clicked.
     expect(writeText).toHaveBeenLastCalledWith(`${code}\n<h1>Trail Runner X</h1>`);
     expect(toast.success).toHaveBeenLastCalledWith('HTML copied');
+  });
+
+  it('exports the page from the header, as Markdown here', async () => {
+    getContentDraft.mockResolvedValue(
+      draft({ bodyHtml: '<h1>Pipeline forecasting</h1><p>Teams <strong>trust</strong> it.</p>' }),
+    );
+    await renderPage();
+    const trigger = [...container.querySelectorAll<HTMLButtonElement>('header button')].find(
+      (b) => b.textContent === 'Export',
+    )!;
+    await act(async () => {
+      trigger.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
+      trigger.click();
+    });
+    const items = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')];
+    expect(items.map((i) => i.textContent)).toEqual([
+      'Export Word',
+      'Export HTML',
+      'Export Markdown',
+    ]);
+    await act(async () => items[2].click());
+    await act(async () => {});
+
+    expect(saveBlob).toHaveBeenCalledTimes(1);
+    const [blob, name] = saveBlob.mock.calls[0] as [Blob, string];
+    expect(name).toBe('ansvisor_content_pipeline-forecasting.md');
+    const text = await new Promise<string>((resolve) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.readAsText(blob);
+    });
+    expect(text).toBe('# Pipeline forecasting\n\nTeams **trust** it.\n');
   });
 
   it('shows the link the cursor is in, to open in a new tab', async () => {
