@@ -231,7 +231,7 @@ export function actionStory(
   const affected = affectedOf(mine);
   const subject = subjectOf(affected, family, mine);
 
-  // The subject: "7 prompts in AI Rank Tracker (~41k AI searches a month)".
+  // The subject: "7 prompts in AI Rank Tracker (28–42k AI searches a month, estimated)".
   // The goal names the same items without their demand.
   let named = '';
   let demand = '';

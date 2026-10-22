@@ -40,7 +40,7 @@ function EstimateNote({ estimate, kind }: { estimate: Estimate; kind: EstimateKi
     <>
       <p className="font-medium">{t('title')}</p>
       {estimate.basis === 'guess' ? (
-        <p>{t('methodGuess')}</p>
+        <p>{t(kind === 'total' ? 'methodGuessTotal' : 'methodGuess')}</p>
       ) : estimate.basis === 'keyword' ? (
         <p>{t('methodKeyword', { rate })}</p>
       ) : kind === 'prompt' || !isTotal(estimate) ? (
@@ -86,7 +86,10 @@ function EstimateNote({ estimate, kind }: { estimate: Estimate; kind: EstimateKi
           : t('confidenceUndated', { level })}
       </p>
       {estimate.stale && <p>{t('stale')}</p>}
-      {estimate.confidence === 'low' && <p>{t('lowNote')}</p>}
+      {estimate.confidence === 'low' && (
+        // An AI's guess can still rank (Opportunities, a topic action's impact).
+        <p>{t(estimate.basis === 'guess' ? 'lowNoteGuess' : 'lowNote')}</p>
+      )}
       <p className="opacity-80">{t('measuredNote')}</p>
     </>
   );

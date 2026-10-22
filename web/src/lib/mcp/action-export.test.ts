@@ -172,7 +172,8 @@ beforeEach(() => {
         google_volumes: { a: 10_000, b: 12_200, c: 14_000 },
         ai_volume_multiplier: '0.450',
         keywords: ['a', 'b', 'c'],
-        fetched_at: '2026-10-10T00:00:00Z',
+        // Recent, so the confidence doesn't drop for its age whenever this runs.
+        fetched_at: new Date(Date.now() - 12 * 86_400_000).toISOString(),
       },
     ],
   };
@@ -196,7 +197,7 @@ describe('exportActionFor', () => {
     expect(md).toContain('## Affected (1)');
     expect(md).toContain('Best coffee subscription?');
     // An estimate: its range and how sure (PROMPT-013).
-    expect(md).toContain('4.1–6.9k (estimate, high confidence)');
+    expect(md).toContain('4.1–6.9k (estimate, High confidence)');
     expect(md).toContain('## Tasks (1)\n1. Add a 2026 table to /pricing (To Do)');
     expect(md).toContain('## Signals (1)');
     // The Why in the action's own terms, from its signal, with the day in UTC.

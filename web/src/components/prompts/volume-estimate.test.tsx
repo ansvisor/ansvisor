@@ -124,6 +124,16 @@ describe('the note for other kinds of estimate', () => {
   });
 });
 
+describe("the note for a sum of an AI's guesses", () => {
+  it('says it adds up guesses, and that low here only means grey', async () => {
+    render(<EstimateRange estimate={guessedVolumeEstimate(1200, null)} kind="total" perMonth />);
+    const note = await noteOf(container.querySelector('button')!);
+    expect(note).toContain("The sum of an AI's estimates for suggested prompts");
+    expect(note).toContain("Low confidence: an AI's guess, shown in grey.");
+    expect(note).not.toContain('not used to rank');
+  });
+});
+
 describe('a shared note for a long table', () => {
   it('mounts one note, telling the estimate whose range has focus', async () => {
     const handle = createEstimateNoteHandle();

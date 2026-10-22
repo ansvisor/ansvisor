@@ -65,8 +65,10 @@ export interface ExportAffected {
   volume: string;
   /** 'estimate' beside a volume (PROMPT-013), else empty. */
   volumeType: string;
-  /** high, medium or low beside a volume, else empty. */
+  /** high, medium or low beside a volume, else empty: the CSV's code. */
   volumeConfidence: string;
+  /** The same, worded for people ("Medium"): Markdown and Excel. */
+  volumeConfidenceLabel: string;
   /** Display names. */
   platforms: string[];
   /** The brand's pages that lost a citation, and those cited instead. */
@@ -258,7 +260,7 @@ function affectedLine(item: ExportAffected, label: Labels): string {
   return [
     item.label,
     item.volume
-      ? label('estimatedVolume', { volume: item.volume, confidence: item.volumeConfidence })
+      ? label('estimatedVolume', { volume: item.volume, confidence: item.volumeConfidenceLabel })
       : '',
     item.platforms.join(', '),
     item.lostPages.length ? `${label('lostPage')}: ${item.lostPages.join(', ')}` : '',
@@ -546,7 +548,7 @@ export function actionWorkbook(a: ActionExport, label: Labels): Sheet<Blob>[] {
                 item.label,
                 item.volume,
                 item.volumeType,
-                item.volumeConfidence,
+                item.volumeConfidenceLabel,
                 item.platforms.join(', '),
                 item.lostPages.join(', '),
                 item.citedInstead.join(', '),

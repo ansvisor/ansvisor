@@ -76,6 +76,7 @@ export function ActionExportButtons({
     signalCategories: useTranslations(EXPORT_NAMESPACES.signalCategories),
     priority: useTranslations(EXPORT_NAMESPACES.priority),
     affected: useTranslations(EXPORT_NAMESPACES.affected),
+    estimate: useTranslations(EXPORT_NAMESPACES.estimate),
   };
   const [isBusy, setIsBusy] = useState(false);
   // The Markdown Copy Data shows, and what to say once it is copied.

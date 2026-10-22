@@ -115,6 +115,7 @@ const texts: ExportTexts = {
       volume: '18–32k',
       volumeType: 'estimate',
       volumeConfidence: 'medium',
+      volumeConfidenceLabel: 'Medium',
       platforms: ['ChatGPT', 'Gemini'],
       lostPages: ['https://acme.example/blog/best-tools'],
       citedInstead: ['https://profound.com/features'],
@@ -200,7 +201,7 @@ describe('actionMarkdown', () => {
         'link: https://app.example/dashboard/action-center/actions?action=a1',
         '',
         '## affectedHeading(1)',
-        '- Which tools track AI search? · estimatedVolume(18–32k,medium) · ChatGPT, Gemini · lostPage: https://acme.example/blog/best-tools · citedInstead: https://profound.com/features',
+        '- Which tools track AI search? · estimatedVolume(18–32k,Medium) · ChatGPT, Gemini · lostPage: https://acme.example/blog/best-tools · citedInstead: https://profound.com/features',
         '',
         '## tasksHeading(2)',
         '1. Add a 2026 comparison table to /blog/best-tools (Completed)',
@@ -337,7 +338,7 @@ describe('actionWorkbook', () => {
       'Which tools track AI search?',
       '18–32k',
       'estimate',
-      'medium',
+      'Medium',
       'ChatGPT, Gemini',
     ]);
     expect(sheets[2].data[0][1]).toEqual({ value: 'task', fontWeight: 'bold' });

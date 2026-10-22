@@ -1374,7 +1374,7 @@
           "planNew": "Write new content: none of your prompts tracked this topic when it was sent",
           "planExpand": "Grow what covers it: your prompts tracked this topic when it was sent",
           "demand": "Suggested prompts when sent",
-          "demandValue": "{count, plural, one {# prompt} other {# prompts}}"
+          "demandValue": "{count, plural, one {# prompt} other {# prompts}} · <range></range>"
         },
         "contentDraft": {
           "source": "Source",
@@ -5316,6 +5316,7 @@
     "methodTotal": "The sum of {count, plural, one {# prompt's estimate} other {# prompts' estimates}}. Each is the median monthly Google searches for its related keywords × the share of Google searches that now get an AI answer ({rate}%).",
     "methodKeyword": "This keyword's monthly Google searches × the share of Google searches that now get an AI answer ({rate}%). Its Google volume is measured; the AI share is an estimate, so the range is ±25%.",
     "methodGuess": "An AI's estimate for a prompt you don't track yet, scaled to your tracked prompts' estimates. Track the prompt to get one from its keywords' Google searches.",
+    "methodGuessTotal": "The sum of an AI's estimates for suggested prompts you don't track yet, each scaled to your tracked prompts' estimates. Track them to get estimates from their keywords' Google searches.",
     "methodAverage": "The average of {count, plural, one {# prompt's estimate} other {# prompts' estimates}}. Each is the median monthly Google searches for its related keywords × the share of Google searches that now get an AI answer ({rate}%).",
     "keywords": "{measured} of {keywords} related keywords have Google search data.",
     "noKeywords": "None of its related keywords has Google search data yet.",
@@ -5330,6 +5331,7 @@
     "confidenceUndated": "Confidence: {level}",
     "stale": "Fetched over six months ago, so one level less sure. Refresh volumes for a newer estimate.",
     "lowNote": "Low confidence: shown in grey, and not used to rank on its own.",
+    "lowNoteGuess": "Low confidence: an AI's guess, shown in grey.",
     "measuredNote": "Measured numbers, such as your visibility or Search Console clicks, never carry this badge.",
     "level": {
       "high": "High",

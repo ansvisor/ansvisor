@@ -70,7 +70,7 @@ describe('Opportunities — estimated volume (PROMPT-013)', () => {
     // The topic's 1,200 and the lone prompt's 350, each half to twice, low.
     expect(ranges.map((r) => r.textContent)).toEqual(['600–2.4k/mo', '170–700/mo']);
     expect(ranges.every((r) => r.className.includes('text-muted-foreground'))).toBe(true);
-    expect(container.textContent).toContain('2 prompts · 600–2.4k/mo');
+    expect(container.textContent).toContain('2 prompts\u00a0·\u00a0600–2.4k/mo');
     expect(container.textContent).not.toContain('~');
   });
 });

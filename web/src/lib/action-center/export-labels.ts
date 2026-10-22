@@ -52,6 +52,7 @@ export const EXPORT_NAMESPACES = {
   signalCategories: 'actionCenter.signalCategories',
   priority: 'actionCenter.actionsPage.priority',
   affected: 'actionCenter.actionsPage.drawer.affected',
+  estimate: 'volumeEstimate',
 } as const;
 
 export type ExportTranslators = Record<keyof typeof EXPORT_NAMESPACES, Translator>;
@@ -177,6 +178,7 @@ export function exportAffectedRows(
     volume: '',
     volumeType: '',
     volumeConfidence: '',
+    volumeConfidenceLabel: '',
     platforms: [],
     lostPages: [],
     citedInstead: [],
@@ -195,6 +197,7 @@ export function exportAffectedRows(
         volume: volume ? formatEstimateRange(volume) : '',
         volumeType: volume ? 'estimate' : '',
         volumeConfidence: volume?.confidence ?? '',
+        volumeConfidenceLabel: volume ? t.estimate(`level.${volume.confidence}`) : '',
         platforms: prompt.platforms.map(platformName),
         lostPages: prompt.lostPages,
         citedInstead: prompt.citedInstead,

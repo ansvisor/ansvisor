@@ -261,13 +261,18 @@ export function Opportunities({
 
   /** The parts of a row's line under its title, between dots. */
   const dotted = (parts: React.ReactNode[]) =>
-    parts.filter(Boolean).flatMap((part, i) => (i === 0 ? [part] : [' · ', part]));
+    parts.filter(Boolean).flatMap((part, i) => (i === 0 ? [part] : ['\u00a0·\u00a0', part]));
 
   const meta = (item: Opportunity): React.ReactNode[] => {
     // The suggestions' volume is an AI's guess: a grey range with its note (PROMPT-013).
     const volume =
       item.volume === null ? null : (
-        <EstimateRange key="volume" estimate={guessedVolumeEstimate(item.volume, null)} perMonth />
+        <EstimateRange
+          key="volume"
+          estimate={guessedVolumeEstimate(item.volume, null)}
+          kind={item.kind === 'topic' ? 'total' : 'prompt'}
+          perMonth
+        />
       );
     if (item.kind === 'prompt') return dotted([volume, t('notTracked')]);
     const s = item.standing;
@@ -320,8 +325,19 @@ export function Opportunities({
                     <span className="block truncate text-[13px] font-medium" title={item.title}>
                       {item.title}
                     </span>
-                    <span className="block truncate text-xs text-muted-foreground">
-                      {meta(item)}
+                    {/* Text truncates, the range doesn't: its focus ring and button stay whole. */}
+                    <span className="flex min-w-0 items-baseline text-xs text-muted-foreground">
+                      {meta(item).map((part, i) =>
+                        typeof part === 'string' ? (
+                          <span key={i} className="truncate">
+                            {part}
+                          </span>
+                        ) : (
+                          <span key={i} className="shrink-0">
+                            {part}
+                          </span>
+                        ),
+                      )}
                     </span>
                   </span>
                   <span className="flex shrink-0 items-center gap-1.5">

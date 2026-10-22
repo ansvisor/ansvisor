@@ -41,7 +41,8 @@ vi.mock('@/lib/supabase/admin', () => ({
               google_volumes: { a: 2400, b: 2700, c: 3000 },
               ai_volume_multiplier: '0.450',
               keywords: ['a', 'b', 'c'],
-              fetched_at: '2026-10-10T19:28:41Z',
+              // Recent, so the estimate isn't a level down for its age whenever this runs.
+              fetched_at: new Date(Date.now() - 12 * 86_400_000).toISOString(),
             })),
             error: null,
           }),

@@ -86,7 +86,7 @@ describe('AffectedTab', () => {
                 googleVolumes: { a: 40_000, b: 55_800, c: 70_000 },
                 aiVolumeMultiplier: 0.45,
                 keywords: ['a', 'b', 'c'],
-                fetchedAt: '2026-10-10T00:00:00Z',
+                fetchedAt: new Date(Date.now() - 12 * 86_400_000).toISOString(),
               }),
             ],
           ])
