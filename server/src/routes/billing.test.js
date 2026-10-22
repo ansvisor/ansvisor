@@ -135,6 +135,23 @@ describe('POST /api/billing/cancel-feedback', () => {
     expect(updated).toEqual([{ email_status: 'skipped' }]);
   });
 
+  it('says a wait the team was never told about was not sent, and keeps it', async () => {
+    // No addresses set, then Resend refusing it.
+    for (const status of ['skipped', 'refused']) {
+      inserted.length = 0;
+      updated.length = 0;
+      deliverEmail.mockResolvedValue(status);
+      const res = await send({ reasons: ['too_expensive'], choice: 'wait' });
+      expect(res.status).toBe(503);
+      expect((await res.json()).code).toBe('not_sent');
+      expect(inserted).toHaveLength(1);
+      expect(updated).toEqual([{ email_status: status }]);
+    }
+    // A send Resend may have made still counts.
+    deliverEmail.mockResolvedValue('unknown');
+    expect((await send({ reasons: ['too_expensive'], choice: 'wait' })).status).toBe(201);
+  });
+
   it('takes a few answers a day per organization', async () => {
     sentToday = 5;
     const res = await send({ choice: 'cancel' });
@@ -176,6 +193,15 @@ describe('POST /api/billing/cancel-feedback', () => {
     // Cancelling then is still fine.
     expect((await send({ choice: 'cancel' })).status).toBe(201);
     expect(inserted).toHaveLength(1);
+  });
+
+  it('lets a wait through when the DB has no period end, or a past one', async () => {
+    // A new trial has none until Stripe's first update; a stale one lags it.
+    for (const endsAt of [null, new Date(Date.now() - 2 * 86_400_000).toISOString()]) {
+      org = { ...org, subscription_ends_at: endsAt };
+      expect((await send({ reasons: ['no_results'], choice: 'wait' })).status).toBe(201);
+    }
+    expect(inserted).toHaveLength(2);
   });
 
   it('refuses a malformed answer, or a user with no organization', async () => {

@@ -5960,6 +5960,8 @@
     "cancelWaitClose": "Close",
     "cancelFeedbackTooMany": "You've sent several messages today. Please write to our support team instead.",
     "cancelFeedbackFailed": "Couldn't send your message. Please try again.",
+    "cancelFeedbackTooLate": "Your plan renews before we could get back to you. You can still cancel it here.",
+    "cancelFeedbackNotSent": "Your message didn't reach our team. Please write to our support team, or cancel the plan here.",
     "reactivate": "Reactivate Subscription",
     "subscriptionReactivated": "Subscription reactivated.",
     "manageBilling": "Manage Billing",

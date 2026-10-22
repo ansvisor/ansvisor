@@ -50,7 +50,11 @@ router.post('/cancel-feedback', async (req, res) => {
     if (!org?.stripe_subscription_id || !SUBSCRIBED_STATUSES.includes(org.subscription_status)) {
       return res.status(400).json({ error: 'No subscription to cancel', code: 'no_subscription' });
     }
-    if (feedback.choice === 'wait' && !canWait(org.subscription_ends_at)) {
+    // Only a period end the DB knows, still ahead and too close, refuses
+    // waiting. A missing or past one means the DB is behind Stripe (only a
+    // subscription update writes it), and the dialog checked Stripe's date.
+    const endsAt = org.subscription_ends_at ? new Date(org.subscription_ends_at) : null;
+    if (feedback.choice === 'wait' && endsAt && endsAt > new Date() && !canWait(endsAt)) {
       return res
         .status(400)
         .json({ error: 'The plan renews before we could answer', code: 'too_late' });
@@ -101,6 +105,14 @@ router.post('/cancel-feedback', async (req, res) => {
       .from('cancellation_feedback')
       .update({ email_status: emailStatus })
       .eq('id', row.id);
+    // A wait is a promise to answer: when the team surely wasn't told, say so
+    // rather than "we're on it". A cancel is done anyway; 'unknown' may have
+    // gone out.
+    if (feedback.choice === 'wait' && (emailStatus === 'skipped' || emailStatus === 'refused')) {
+      return res
+        .status(503)
+        .json({ error: "Your message didn't reach the team", code: 'not_sent' });
+    }
 
     return res.status(201).json({ ok: true });
   } catch (error) {

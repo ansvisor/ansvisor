@@ -51,9 +51,12 @@ export function CancelSubscriptionDialog({
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState<'cancel' | 'wait' | null>(null);
   const [answerBy, setAnswerBy] = useState<Date | null>(null);
+  // The server said waiting can't work (renews too soon, or the team can't
+  // be told): only cancelling is left.
+  const [waitRefused, setWaitRefused] = useState(false);
 
   const said = reasons.length > 0 || message.trim().length > 0;
-  const offerWait = canWait(currentPeriodEnd);
+  const offerWait = canWait(currentPeriodEnd) && !waitRefused;
 
   function reset() {
     setReasons([]);
@@ -87,6 +90,11 @@ export function CancelSubscriptionDialog({
       const result = await sendCancelFeedback({ reasons, message, choice: 'wait' });
       if ('ok' in result) {
         setAnswerBy(waitUntil());
+      } else if (result.error === 'too_late' || result.error === 'not_sent') {
+        setWaitRefused(true);
+        toast.error(
+          result.error === 'too_late' ? t('cancelFeedbackTooLate') : t('cancelFeedbackNotSent'),
+        );
       } else {
         toast.error(
           result.error === 'too_many' ? t('cancelFeedbackTooMany') : t('cancelFeedbackFailed'),

@@ -149,4 +149,29 @@ describe('giving the team three days', () => {
     );
     expect(document.body.textContent).toContain('Before you go, what went wrong?');
   });
+
+  it('leaves only cancelling when the server says waiting can’t work', async () => {
+    for (const [error, said] of [
+      [
+        'too_late',
+        'Your plan renews before we could get back to you. You can still cancel it here.',
+      ],
+      [
+        'not_sent',
+        "Your message didn't reach our team. Please write to our support team, or cancel the plan here.",
+      ],
+    ] as const) {
+      vi.mocked(sendCancelFeedback).mockResolvedValue({ error });
+      await render();
+      write('Please call me.');
+      await click('Send and give us 3 days');
+      expect(toast.error).toHaveBeenLastCalledWith(said);
+      expect(document.body.textContent).not.toContain("Thanks, we're on it");
+      expect(button('Send and give us 3 days')).toBeUndefined();
+      expect(button('Send and cancel')).toBeDefined();
+      // A fresh dialog for the next refusal.
+      act(() => root.unmount());
+      root = createRoot(container);
+    }
+  });
 });

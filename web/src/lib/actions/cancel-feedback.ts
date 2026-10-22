@@ -6,7 +6,11 @@ import type { CancelChoice, CancelReason } from '@/lib/billing/cancel-feedback';
 
 export type CancelFeedbackResult =
   | { ok: true }
-  | { error: 'too_many' | 'server' | 'unreachable' | 'unauthenticated' };
+  | { error: CancelFeedbackRefusal | 'server' | 'unreachable' | 'unauthenticated' };
+
+/** The server's refusals the dialog words on their own; anything else is `server`. */
+const REFUSALS = ['too_many', 'too_late', 'not_sent'] as const;
+type CancelFeedbackRefusal = (typeof REFUSALS)[number];
 
 /**
  * Send the team why the customer cancels, or their request for three days
@@ -38,7 +42,9 @@ export async function sendCancelFeedback(input: {
     });
     if (res.ok) return { ok: true };
     const data = await res.json().catch(() => ({}));
-    return { error: data.code === 'too_many' ? 'too_many' : 'server' };
+    return {
+      error: REFUSALS.includes(data.code) ? (data.code as CancelFeedbackRefusal) : 'server',
+    };
   } catch {
     return { error: 'unreachable' };
   }
