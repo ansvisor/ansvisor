@@ -97,8 +97,8 @@ const writeBody = writeDraftInput.extend({ brandId: z.guid() });
  * POST /api/content-drafts/:draftId/write
  * Body: { brandId, sources, rules, textRules, locked }
  * Answers 202 { started: true } at once: the agent runs in the background
- * and the draft shows where it is (agent_state). 409 when the draft isn't a
- * draft any more (code not_draft), the agent is on it (code writing) or on
+ * and the draft shows where it is (agent_state). 409 when the draft is marked
+ * ready or published (code not_draft), the agent is on it (code writing) or on
  * another of the organization's drafts (code org_writing), or an existing
  * page's suggestions are still open (code open_suggestions).
  */

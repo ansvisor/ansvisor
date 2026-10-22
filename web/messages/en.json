@@ -3823,6 +3823,18 @@
         "edited": "Edited by you.",
         "builtFrom": "{count, plural, one {Built from # source} other {Built from # sources}} · {date}",
         "rebuild": "Rebuild outline",
+        "rewrite": {
+          "button": {
+            "create": "Rewrite from brief",
+            "optimize": "Suggest changes from brief"
+          },
+          "confirm": {
+            "create": "Content Agent writes the page again from this brief, the sources you keep and the rules. The page you have now stays in History. It uses this month's AI usage.",
+            "optimize": "Content Agent suggests changes to the page from this brief, the sources you keep and the rules, for you to accept or reject. Passages AI answers quote stay as they are. It uses this month's AI usage."
+          },
+          "start": "Start the agent",
+          "cancel": "Cancel"
+        },
         "rebuildEdited": "Rebuild outline writes a new brief over the one you edited.",
         "rebuildAnyway": "Rebuild anyway",
         "keepEdited": "Keep my brief",

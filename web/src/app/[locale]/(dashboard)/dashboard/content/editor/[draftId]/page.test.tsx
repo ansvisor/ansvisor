@@ -1406,6 +1406,50 @@ describe('the side panel', () => {
     expect(getContentImpact).toHaveBeenCalledTimes(1);
   });
 
+  // Item 12 of the editor round: the brief built, the agent works from it.
+  it('hands a page in review to the agent from its brief, and waits for it', async () => {
+    getDraftBrief.mockResolvedValue({
+      brief: {
+        goal: 'Win forecasting searches',
+        audience: 'Sales leaders',
+        outline: [
+          {
+            heading: 'How pipeline forecasting works',
+            keyPoints: [],
+            fanout: null,
+            platform: null,
+          },
+        ],
+        keywords: [],
+        origin: 'rebuild',
+        builtAt: '2026-10-21T10:00:00Z',
+        builtFrom: { prompts: 0, fanouts: 1, pages: 0, queries: 0 },
+      },
+    });
+    getContentDraft.mockResolvedValue(draft({ status: 'in_review' }));
+    window.innerWidth = 1440;
+    await renderPage();
+    const tab = [...panel()!.querySelectorAll<HTMLElement>('[role="tab"]')].find(
+      (el) => el.textContent === 'Brief',
+    )!;
+    await act(async () => {
+      tab.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
+      tab.click();
+    });
+
+    await act(async () => button('Suggest changes from brief')!.click());
+    await act(async () => button('Start the agent')!.click());
+    await act(async () => {});
+    expect(startAgentWriting).toHaveBeenCalledWith(
+      'd1',
+      'b1',
+      expect.objectContaining({ textRules: [], locked: [] }),
+    );
+    expect(container.querySelector('[role="status"]')!.textContent).toContain(
+      'Content Agent is writing this page',
+    );
+  });
+
   it('rebuilds the brief from Sources and opens it', async () => {
     getDraftSources.mockResolvedValue({
       data: {

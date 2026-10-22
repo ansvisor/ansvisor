@@ -40,6 +40,13 @@ const CALL_TIMEOUT_MS = 180_000;
 /** A 'writing' this old was left by a server that stopped: it can start again. */
 export const WRITING_STALE_MS = 10 * 60_000;
 
+/**
+ * The drafts the agent writes in: still being worked on, a draft or one in
+ * review (Rewrite from brief, after its first run), never one marked ready
+ * or published.
+ */
+const OPEN_STATUSES = ['draft', 'in_review'];
+
 /** What the person's dashboard sends: the sources kept, the page's rules, its locked passages. */
 export const writeDraftInput = z.object({
   sources: rebuildSources,
@@ -234,7 +241,7 @@ async function organizationWriting(organizationId, draftId, staleBefore) {
 }
 
 /**
- * Starts the agent on a draft: checks it is the brand's and still a draft,
+ * Starts the agent on a draft: checks it is the brand's and still open to it,
  * that the agent isn't already on it or on another of the organization's
  * drafts, the AI usage budget and the model; marks it 'writing' and runs the
  * model in the background. Throws with `.status` 404 for a draft outside the
@@ -254,8 +261,8 @@ export async function startDraftWriting({ draftId, brandId, input }) {
   if (!draft || draft.brand_id !== brandId) {
     throw Object.assign(new Error('Draft not found'), { status: 404 });
   }
-  if (draft.status !== 'draft') {
-    throw Object.assign(new Error('Only a draft can be written'), {
+  if (!OPEN_STATUSES.includes(draft.status)) {
+    throw Object.assign(new Error('Only a draft or one in review can be written'), {
       status: 409,
       code: 'not_draft',
     });
@@ -301,7 +308,7 @@ export async function startDraftWriting({ draftId, brandId, input }) {
     .from('content_drafts')
     .update({ agent_state: 'writing', agent_state_at: new Date().toISOString() })
     .eq('id', draftId)
-    .eq('status', 'draft')
+    .in('status', OPEN_STATUSES)
     .or(`agent_state.is.null,agent_state.eq.failed,agent_state_at.lt."${staleBefore}"`)
     .select('id')
     .maybeSingle();
@@ -321,25 +328,25 @@ export async function startDraftWriting({ draftId, brandId, input }) {
 
 /**
  * The agent's state as it ends, only while it is still the run's to end;
- * with `draftOnly`, only while the draft is still a draft (not marked ready
+ * with `openOnly`, only while the draft is still open to it (not marked ready
  * meanwhile). Answers whether it ended it.
  */
-async function finish(draftId, values, { draftOnly = false } = {}) {
+async function finish(draftId, values, { openOnly = false } = {}) {
   let query = supabaseAdmin
     .from('content_drafts')
     .update({ ...values, agent_state_at: new Date().toISOString() })
     .eq('id', draftId)
     .eq('agent_state', 'writing');
-  if (draftOnly) query = query.eq('status', 'draft');
+  if (openOnly) query = query.in('status', OPEN_STATUSES);
   const { data, error } = await query.select('id').maybeSingle();
   if (error) throw error;
   return !!data;
 }
 
-/** A draft that left Draft during the run keeps its page; the agent lets go of it. */
+/** A draft marked ready or published during the run keeps its page; the agent lets go of it. */
 async function letGo(draftId) {
   await finish(draftId, { agent_state: null });
-  logger.info({ draftId }, '[content-writer] the draft left Draft during the run');
+  logger.info({ draftId }, '[content-writer] the draft was closed during the run');
   return { skipped: true };
 }
 
@@ -405,7 +412,7 @@ export async function runDraftWriting({ draft, brand, model, modelId, input }) {
           author: 'agent',
           agent_state: null,
         },
-        { draftOnly: true },
+        { openOnly: true },
       );
       // Awaited here, so a failure to let go is caught below.
       return written ? { written: true } : await letGo(draft.id);
@@ -449,9 +456,7 @@ export async function runDraftWriting({ draft, brand, model, modelId, input }) {
       })),
     );
     if (insertError) throw insertError;
-    if (
-      !(await finish(draft.id, { status: 'in_review', agent_state: null }, { draftOnly: true }))
-    ) {
+    if (!(await finish(draft.id, { status: 'in_review', agent_state: null }, { openOnly: true }))) {
       // Nobody reviews suggestions on a page already marked ready.
       const { error: dropError } = await supabaseAdmin
         .from('content_draft_suggestions')

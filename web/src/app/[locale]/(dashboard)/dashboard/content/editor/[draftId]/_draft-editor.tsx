@@ -69,6 +69,7 @@ import { HistoryMenu } from './_history-menu';
 import { HtmlBlock, copyToClipboard } from './_html-block';
 import { OwnCopies, ownCopyHtml } from './_own-copies';
 import { PageTypeMenu } from './_page-type-menu';
+import type { AgentRewrite } from './_brief-tab';
 import { ruleStatusText, type AgentFix } from './_rules-tab';
 import { EditorSidePanel, useSidePanelOpen } from './_side-panel';
 import {
@@ -149,7 +150,7 @@ export function DraftEditor({
   const [marking, setMarking] = useState(false);
   // The Content Agent couldn't finish the page Start gave it (CE-015).
   const [agentFailed, setAgentFailed] = useState(draft.agentState === 'failed');
-  const [retrying, setRetrying] = useState(false);
+  const [starting, setStarting] = useState(false);
   const describeRule = useRuleDescriber();
   const [restoring, setRestoring] = useState(false);
   const format = useFormatter();
@@ -678,12 +679,13 @@ export function DraftEditor({
   };
 
   /**
-   * Try again: the agent takes the page as saved now, with the rules in
-   * effect here, and the page waits for it.
+   * The agent on this draft again (Try again, Rewrite from brief): it takes
+   * the page as saved now, with the brief, the sources and the rules in effect
+   * here, and the page waits for it.
    */
-  const retryAgent = async () => {
+  const startAgent = async () => {
     if (!editor) return;
-    setRetrying(true);
+    setStarting(true);
     try {
       await autosave.settle();
       const request = await agentWriteRequest(
@@ -713,11 +715,20 @@ export function DraftEditor({
       console.error('Failed to start the Content Agent again:', err);
       toast.error(t('agentFailed.errors.failed'));
     } finally {
-      setRetrying(false);
+      setStarting(false);
     }
   };
 
   const canMarkReady = status === 'draft' || status === 'in_review';
+  // Rewrite from brief, while the page is still open to the agent (not ready
+  // or published), as the API allows.
+  const agentRewrite: AgentRewrite | undefined = canMarkReady
+    ? {
+        run: () => void startAgent(),
+        running: starting,
+        blocked: openSuggestions > 0 ? t('suggestions.decideFirst') : null,
+      }
+    : undefined;
   const markReady = async () => {
     setMarking(true);
     try {
@@ -914,7 +925,7 @@ export function DraftEditor({
 
       <div className="flex min-h-0 flex-1">
         <div className="flex min-w-0 flex-1 flex-col">
-          {agentFailed && status === 'draft' && (
+          {agentFailed && canMarkReady && (
             <div
               role="alert"
               className="flex flex-wrap items-center gap-x-3 gap-y-1.5 border-b border-amber-200 bg-amber-50 px-4 py-1.5 text-[13px] text-amber-800 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-300"
@@ -926,10 +937,10 @@ export function DraftEditor({
                   variant="outline"
                   size="sm"
                   className="h-7"
-                  disabled={retrying || !editor}
-                  onClick={() => void retryAgent()}
+                  disabled={starting || !editor}
+                  onClick={() => void startAgent()}
                 >
-                  {retrying && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                  {starting && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
                   {t('agentFailed.retry')}
                 </Button>
                 <Button
@@ -1051,6 +1062,7 @@ export function DraftEditor({
             reads={reads}
             tabRequest={tabRequest}
             agentFix={agentFix}
+            agentRewrite={agentRewrite}
           />
         )}
       </div>
