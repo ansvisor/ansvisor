@@ -1020,6 +1020,8 @@ export interface PromptsPageData {
   quota: VolumeQuota | null;
   /** True when the volumes upstream failed/timed out — the table still renders. */
   volumesDegraded: boolean;
+  /** True when the visibility summaries failed/timed out — their columns read —. */
+  visibilityDegraded: boolean;
 }
 
 /**
@@ -1052,12 +1054,21 @@ export async function getPromptsPageData(
   // GET /api/prompts/usage, which reads counters instead of counting prompts.
   const [promptSets, visibility, positionRows, volumesResult] = await Promise.all([
     getPromptSets(brandId),
+    // The visibility columns scan the window's answers too: a timeout shows —
+    // in them, with a note, rather than blanking the table as if the brand
+    // had no prompts.
     getPromptVisibilitySummaries(brandId, {
       days,
       from: opts?.from,
       to: opts?.to,
       region: opts?.region,
-    }),
+    }).then(
+      (summaries) => ({ summaries, degraded: false }),
+      (err) => {
+        console.error('[prompts] visibility summaries fetch failed, rendering without them:', err);
+        return { summaries: {} as Record<string, PromptVisibilitySummary>, degraded: true };
+      },
+    ),
     // The Positions column scans every answer in the window and the one
     // before it. A timeout shows — in that column instead of failing the
     // table; the web deploying before 00153 falls back to 00123's rows.
@@ -1092,11 +1103,12 @@ export async function getPromptsPageData(
 
   return {
     promptSets,
-    visibility,
+    visibility: visibility.summaries,
     positions,
     volumes: volumesResult.volumes,
     quota: volumesResult.quota,
     volumesDegraded: volumesResult.degraded,
+    visibilityDegraded: visibility.degraded,
   };
 }
 

@@ -3102,8 +3102,7 @@
       "cards": {
         "create": { "title": "Create", "hint": "New pages AI needs" },
         "optimize": { "title": "Optimize", "hint": "Pages losing ground" },
-        "protect": { "title": "Protect", "hint": "Top pages · edit with care" },
-        "overlaps": { "title": "Overlaps", "hint": "Pages competing for the same prompts" }
+        "protect": { "title": "Protect", "hint": "Top pages · edit with care" }
       },
       "results": {
         "label": "From AI visits · {days} full days to yesterday (UTC):",
@@ -3115,6 +3114,9 @@
       },
       "mix": {
         "title": "What AI cites in your topics",
+        "collapsed": "{types, plural, one {# page type} other {# page types}} · {gaps, plural, =0 {no gap} one {# gap} other {# gaps}}",
+        "show": "Show",
+        "hide": "Hide",
         "aiShare": "Share of AI citations",
         "yourShare": "Your pages' mix",
         "shares": "{ai}% · {yours}%",
@@ -3128,7 +3130,7 @@
         "none": "No page reads as losing ground yet: tracking began {since}, so the {days} days before aren't tracked to compare with.",
         "partial": "The {days} days before are tracked only since {since}: pages are compared per tracked answer."
       },
-      "ranked": "Ranked by impact · overlaps checked",
+      "ranked": "Ranked by impact",
       "filtered": "Filtered · click it again to clear",
       "columns": {
         "page": "Page",
@@ -3138,14 +3140,11 @@
         "start": "Start"
       },
       "newPage": "New page",
-      "overlap": "⚠ Overlap",
-      "overlapHint": "{count, plural, one {# other page of yours is} other {# other pages of yours are}} cited for the same prompts",
       "actions": { "create": "Create", "optimize": "Optimize", "protect": "Protect" },
       "sources": {
         "opportunity": "Opportunity",
         "citations": "Citations",
-        "protect": "Protect",
-        "overlap": "Overlap"
+        "protect": "Protect"
       },
       "why": {
         "competitors": "{names} cited · you aren't",
@@ -3153,8 +3152,7 @@
         "opportunity": "{count, plural, =0 {A page AI needs} one {Answers # prompt AI asks} other {Answers # prompts AI asks}}",
         "citationsDown": "Citation rate −{pct}%",
         "on": "on {platforms}",
-        "top": "Top page · {citations, plural, one {{citationsText} citation} other {{citationsText} citations}} · {visits, plural, one {{visitsText} AI visit} other {{visitsText} AI visits}}",
-        "overlap": "Competes with {count, plural, one {# of your pages} other {# of your pages}} for the same prompts"
+        "top": "Top page · {citations, plural, one {{citationsText} citation} other {{citationsText} citations}} · {visits, plural, one {{visitsText} AI visit} other {{visitsText} AI visits}}"
       },
       "who": { "you": "You", "agent": "Agent", "team": "Teammate" },
       "start": { "create": "Create", "optimize": "Optimize", "protect": "View" },
@@ -3237,7 +3235,7 @@
       "methods": {
         "create": {
           "title": "Create from scratch",
-          "hint": "From an opportunity, a prompt or a topic"
+          "hint": "From a content opportunity, a prompt or a topic"
         },
         "optimize": {
           "title": "Optimize content",
@@ -3247,10 +3245,10 @@
       "startFrom": "Start from",
       "sources": {
         "opportunity": {
-          "tab": "Opportunity",
-          "placeholder": "Pick an opportunity",
-          "search": "Search opportunities",
-          "empty": "No open opportunities."
+          "tab": "Content Opportunity",
+          "placeholder": "Pick a content opportunity",
+          "search": "Search content opportunities",
+          "empty": "No open content opportunities."
         },
         "prompt": {
           "tab": "Prompt",
@@ -3352,15 +3350,13 @@
         }
       },
       "overlap": {
-        "label": "Overlap check",
-        "checking": "Checking your pages that answer the same prompts…",
-        "failed": "Couldn't check for overlapping pages.",
+        "label": "Overview",
+        "checking": "Reading your pages AI cites for these prompts…",
+        "failed": "Couldn't read your pages cited for these prompts.",
         "retry": "Try again",
-        "none": "No existing page answers these prompts",
+        "none": "None of your pages is cited for these prompts yet",
         "noPrompts": "No tracked prompts to check this against yet",
-        "safe": "Safe to create",
-        "covered": "An existing page already answers these prompts",
-        "partial": "{count, plural, one {# existing page answers} other {# existing pages answer}} some of these prompts",
+        "cited": "{count, plural, one {# of your pages is} other {# of your pages are}} cited for these prompts",
         "columns": {
           "page": "Page",
           "prompts": "Same prompts",
@@ -3368,7 +3364,6 @@
           "google": "Google pos."
         },
         "promptsValue": "{count} of {total}",
-        "recommended": "Recommended",
         "options": {
           "optimizeGiven": {
             "title": "Optimize {page}",
@@ -3380,21 +3375,8 @@
             "reasonRanked": "It already answers {count} of {total} prompts, is cited {citations}× and ranks #{position} on Google"
           },
           "createNew": {
-            "title": "Create a new page instead",
-            "reason": "Write a new page for these prompts"
-          },
-          "createAnyway": {
-            "title": "Create a new page anyway",
-            "reason": "Risk: two pages compete for the same prompts"
-          },
-          "createLinked": {
-            "title": "Create a new page, link {page} to it",
-            "titleMany": "Create a new page, link these pages to it",
-            "reason": "One clear page for these prompts"
-          },
-          "addSection": {
-            "title": "Add a section to {page}",
-            "reason": "A smaller change than a new page"
+            "title": "Create a new page",
+            "reason": "Another page of yours for AI to cite"
           }
         }
       }
@@ -4084,12 +4066,10 @@
     "kpi": {
       "total": "Total Opportunities",
       "highImpact": "High Impact",
-      "sentToWorkflow": "Sent to Workflow",
       "avgScore": "Avg. Score",
       "shown": "{count} shown",
       "opportunities": "opportunities",
       "outOf100": "out of 100",
-      "sentOrInProgress": "sent or in progress",
       "fromSignals": "from {count, plural, one {# signal} other {# signals}} analyzed"
     },
     "filters": {
@@ -5061,6 +5041,8 @@
     }
   },
   "prompts": {
+    "loadError": "Couldn't load your prompts.",
+    "visibilityDegraded": "Visibility figures are temporarily unavailable — showing prompts without them.",
     "positions": {
       "answers": "{count, plural, one {# answer} other {# answers}}",
       "answersInPeriod": "{count, plural, one {# answer} other {# answers}} in this period",
@@ -5467,7 +5449,7 @@
     },
     "perception": {
       "sectionLabel": "Perception",
-      "loadError": "Couldn't load the perception figures. Try again in a moment.",
+      "loadError": "Couldn't load the perception figures.",
       "unavailable": "Perception isn't available yet. It appears once the mentions data has been prepared.",
       "pickDates": "Choose a start or end date to see the perception figures.",
       "noMentions": "AI didn't name {brand} in the tracked responses of this period.",
@@ -5613,6 +5595,7 @@
     "kpiTopMerchantSub": "Most frequent merchant domain",
     "platformBreakdownTitle": "Card rate by platform",
     "trendTitle": "Your shopping presence — last 30 days",
+    "amazonShareDropAlert": "Amazon's share fell from {from}% to {to}% over the last seven days. AI may be leaving Amazon out; your own store link matters more.",
     "filterRegion": "Region",
     "filterPlatform": "Platform",
     "filterDateRange": "Date range",

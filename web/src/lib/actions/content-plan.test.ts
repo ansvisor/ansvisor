@@ -62,6 +62,7 @@ describe('getContentPlan', () => {
           citations: { cur: 4, prev: 9 },
           platformsDown: ['chatgpt-web'],
           aiVisits: 12,
+          // Still in the RPC (00220); the plan no longer reads it.
           overlaps: 1,
         },
       ],
@@ -103,7 +104,6 @@ describe('getContentPlan', () => {
           citations: { cur: 4, prev: 9 },
           platformsDown: ['chatgpt-web'],
           aiVisits: 12,
-          overlaps: 1,
         },
       ],
       answers: { cur: 120, prev: 140 },

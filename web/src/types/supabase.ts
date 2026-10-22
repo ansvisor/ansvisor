@@ -2274,9 +2274,12 @@ export type Database = {
           created_at: string
           id: string
           image_url: string | null
+          listing_id: string | null
+          marketplace: string | null
           matched_brand_id: string | null
           matched_brand_role: string
           merchant_domain: string | null
+          merchant_kind: string | null
           merchant_url: string | null
           platform: string
           position: number
@@ -2295,9 +2298,12 @@ export type Database = {
           created_at?: string
           id?: string
           image_url?: string | null
+          listing_id?: string | null
+          marketplace?: string | null
           matched_brand_id?: string | null
           matched_brand_role?: string
           merchant_domain?: string | null
+          merchant_kind?: string | null
           merchant_url?: string | null
           platform: string
           position: number
@@ -2316,9 +2322,12 @@ export type Database = {
           created_at?: string
           id?: string
           image_url?: string | null
+          listing_id?: string | null
+          marketplace?: string | null
           matched_brand_id?: string | null
           matched_brand_role?: string
           merchant_domain?: string | null
+          merchant_kind?: string | null
           merchant_url?: string | null
           platform?: string
           position?: number
@@ -4296,6 +4305,14 @@ export type Database = {
           p_topic_id?: string
         }
         Returns: Json
+      }
+      shopping_amazon_share_weekly: {
+        Args: { p_as_of?: string; p_brand_id: string }
+        Returns: {
+          amazon_cards: number
+          classified_cards: number
+          week_start: string
+        }[]
       }
       shopping_filter_options: {
         Args: { p_brand_id: string }
