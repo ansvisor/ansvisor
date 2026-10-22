@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 
 /**
- * Module-level cache so we only hit /api/settings/anthropic-key once per
+ * Module-level cache so we only hit /api/settings/ai-providers once per
  * page-load session — not on every navigation. The sidebar and mobile nav
  * both consume this hook; sharing the cache means a single inflight request
  * even when both components mount simultaneously (e.g. on a resize boundary).
@@ -19,7 +19,7 @@ export function fetchKeyStatus(): Promise<void> {
   if (fetchPromise) return fetchPromise;
   fetchPromise = (async () => {
     try {
-      const res = await fetch('/api/settings/anthropic-key');
+      const res = await fetch('/api/settings/ai-providers');
       if (!res.ok) {
         cachedStatus = 'missing';
         return;
@@ -39,7 +39,7 @@ export function getCachedStatus() {
 }
 
 /**
- * Returns whether the org has saved an Anthropic API key.
+ * Returns whether the org has a provider key for Chat to use.
  *
  * On self-host (`isCloud === false`) this is a no-op — the key lives in the
  * server env and no network call is made. Only cloud instances probe the

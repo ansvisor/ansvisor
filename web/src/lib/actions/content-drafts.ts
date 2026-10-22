@@ -243,10 +243,51 @@ const OPEN_OPPORTUNITY_STATUSES = ['new', 'reviewed', 'sent', 'in_progress'];
 
 /** How many of each New content lists to pick from. */
 const START_LIMIT = 500;
+/** A prompt the brand was named in or cited for over these days is seen. */
+const SEEN_DAYS = 30;
+
+const startPromptsSchema = z.object({
+  prompts: z.array(z.object({ id: z.string(), text: z.string(), seen: z.boolean() })),
+  seen: z.number(),
+});
+
+/**
+ * The brand's active prompts, each marked seen when an answer of the last
+ * 30 days named the brand or cited its pages (content_start_prompts, 00230),
+ * those not seen first. Before that migration, every prompt, none seen.
+ */
+async function readStartPrompts(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  brandId: string,
+): Promise<{ prompts: DraftStartOptions['prompts']; seen: number }> {
+  const read = await supabase.rpc('content_start_prompts', {
+    p_brand_id: brandId,
+    p_days: SEEN_DAYS,
+    p_limit: START_LIMIT,
+  });
+  if (read.error?.code !== 'PGRST202') {
+    if (read.error) throw new Error(read.error.message);
+    // Null: not the member's brand. Any other shape is drift between the
+    // function and this schema, which throws (New content says it couldn't
+    // load) rather than empty the picker.
+    if (read.data === null) return { prompts: [], seen: 0 };
+    return startPromptsSchema.parse(read.data);
+  }
+  const { data, error } = await supabase
+    .from('prompts')
+    .select('id, text, prompt_sets!inner(brand_id)')
+    .eq('prompt_sets.brand_id', brandId)
+    .eq('is_active', true)
+    .order('text')
+    .limit(START_LIMIT);
+  if (error) throw new Error(error.message);
+  return { prompts: (data ?? []).map((p) => ({ id: p.id, text: p.text, seen: false })), seen: 0 };
+}
 
 /**
  * What New content (CE-003) offers to start a new page from: the brand's
- * open Content Opportunities, its active tracked prompts and its topics.
+ * open Content Opportunities, its active tracked prompts (each marked seen
+ * when the brand already shows in its answers) and its topics.
  */
 export async function getContentStartOptions(brandId: string): Promise<DraftStartOptions> {
   const supabase = await createClient();
@@ -258,13 +299,7 @@ export async function getContentStartOptions(brandId: string): Promise<DraftStar
       .in('status', OPEN_OPPORTUNITY_STATUSES)
       .order('opportunity_score', { ascending: false, nullsFirst: false })
       .limit(START_LIMIT),
-    supabase
-      .from('prompts')
-      .select('id, text, prompt_sets!inner(brand_id)')
-      .eq('prompt_sets.brand_id', brandId)
-      .eq('is_active', true)
-      .order('text')
-      .limit(START_LIMIT),
+    readStartPrompts(supabase, brandId),
     // Each topic's active prompts counted in the database: the prompt list
     // above stops at START_LIMIT, and would undercount a big brand's topics.
     supabase
@@ -275,7 +310,7 @@ export async function getContentStartOptions(brandId: string): Promise<DraftStar
       .eq('prompts.is_active', true)
       .order('name'),
   ]);
-  const failed = opportunities.error ?? prompts.error ?? topics.error;
+  const failed = opportunities.error ?? topics.error;
   if (failed) throw new Error(failed.message);
 
   return {
@@ -288,7 +323,8 @@ export async function getContentStartOptions(brandId: string): Promise<DraftStar
         pageTitle: typeof suggested === 'string' && suggested.trim() ? suggested.trim() : null,
       };
     }),
-    prompts: (prompts.data ?? []).map((p) => ({ id: p.id, text: p.text })),
+    prompts: prompts.prompts,
+    promptsSeen: prompts.seen,
     // A topic with no active prompt has nothing for a page to answer.
     topics: (topics.data ?? [])
       .map((topic) => ({

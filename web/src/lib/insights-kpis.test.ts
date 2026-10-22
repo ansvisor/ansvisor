@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { coverage, kpiRates, parseKpiSeries, rateChange, shareOfVoice } from './insights-kpis';
+import { wholeNet } from './mentions-headline';
 
 describe('kpiRates', () => {
   it('works out every card rate from the components', () => {
@@ -7,7 +8,7 @@ describe('kpiRates', () => {
       kpiRates({
         answers: 200,
         citationAnswers: 76,
-        mentioning: 100,
+        named: 100,
         positive: 48,
         negative: 14,
         sumPosition: 240,
@@ -22,12 +23,43 @@ describe('kpiRates', () => {
     });
   });
 
+  it('gives the same Net sentiment as the Mentions page, rounded once', () => {
+    for (let named = 1; named <= 40; named++) {
+      for (let positive = 0; positive <= named; positive++) {
+        for (let negative = 0; positive + negative <= named; negative += 3) {
+          const rates = kpiRates({
+            answers: named,
+            citationAnswers: 0,
+            named,
+            positive,
+            negative,
+            sumPosition: null,
+            positionCount: 0,
+          });
+          expect(rates.netSentiment).toBe(wholeNet({ mentions: named, positive, negative }));
+        }
+      }
+    }
+    // Rounded separately, 7/15 − 2/15 read 47 − 13 = 34; once, 33.
+    expect(
+      kpiRates({
+        answers: 15,
+        citationAnswers: 0,
+        named: 15,
+        positive: 7,
+        negative: 2,
+        sumPosition: null,
+        positionCount: 0,
+      }).netSentiment,
+    ).toBe(33);
+  });
+
   it('has no rate without the answers it needs', () => {
     expect(
       kpiRates({
         answers: 0,
         citationAnswers: 0,
-        mentioning: 0,
+        named: 0,
         positive: 0,
         negative: 0,
         sumPosition: null,
@@ -92,6 +124,20 @@ describe('parseKpiSeries', () => {
         citationRate: 40,
       },
     ]);
+  });
+
+  it("takes each day's net sentiment over the answers naming the brand (00191)", () => {
+    const day = {
+      day: '2026-10-13',
+      answers: 10,
+      citation_answers: 4,
+      positive_count: 3,
+      negative_count: 1,
+      // Two answers only cite the brand: they don't dilute the net.
+      mentioning_answers: 6,
+      mention_answers: 4,
+    };
+    expect(parseKpiSeries({ complete: true, days: [day] })?.[0].netSentiment).toBe(50);
   });
 
   it('draws nothing before the rollups are backfilled', () => {

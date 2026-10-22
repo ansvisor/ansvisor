@@ -268,30 +268,16 @@ export function PromptUsageCards({
 
   return (
     <section className="overflow-hidden rounded-xl border bg-card">
+      {/* The whole bar opens it, as the Content plan's "What AI cites": "Show"
+          and a chevron on the right say so. Plan & usage keeps its own page. */}
       <div
+        onClick={() => setOpen((o) => !o)}
         className={cn(
-          'flex flex-wrap items-center gap-x-2.5 gap-y-1 px-4 py-3',
+          'group flex cursor-pointer flex-wrap items-center gap-x-2.5 gap-y-1 px-4 py-3 transition-colors hover:bg-muted/50',
           open && 'border-b',
         )}
       >
-        <h2 className="text-[15px] font-semibold">
-          <button
-            type="button"
-            aria-expanded={open}
-            aria-controls={bodyId}
-            onClick={() => setOpen((o) => !o)}
-            className="-ml-1 flex items-center gap-1.5 rounded-md px-1 py-0.5 hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
-          >
-            <ChevronDown
-              aria-hidden
-              className={cn(
-                'h-4 w-4 shrink-0 text-muted-foreground transition-transform',
-                !open && '-rotate-90',
-              )}
-            />
-            {t('title')}
-          </button>
-        </h2>
+        <h2 className="text-[15px] font-semibold">{t('title')}</h2>
         <span className="text-xs text-muted-foreground">
           {readOnly ? t('subtitleReadOnly') : t('subtitle')}
         </span>
@@ -310,6 +296,7 @@ export function PromptUsageCards({
         {planHref && (
           <Link
             href={planHref}
+            onClick={(e) => e.stopPropagation()}
             className={cn(
               buttonVariants({ variant: 'outline', size: 'sm' }),
               'ml-auto h-7 text-xs',
@@ -318,6 +305,26 @@ export function PromptUsageCards({
             {t('planAndUsage')}
           </Link>
         )}
+        <button
+          type="button"
+          aria-expanded={open}
+          aria-controls={bodyId}
+          onClick={(e) => {
+            e.stopPropagation();
+            setOpen((o) => !o);
+          }}
+          className={cn(
+            'flex items-center gap-1 rounded text-xs font-medium text-foreground group-hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50',
+            !planHref && 'ml-auto',
+          )}
+        >
+          <span className="sr-only">{t('title')}: </span>
+          {open ? t('hide') : t('show')}
+          <ChevronDown
+            aria-hidden
+            className={cn('h-4 w-4 shrink-0 transition-transform', open && 'rotate-180')}
+          />
+        </button>
       </div>
 
       {/* Kept mounted while closed, so opening shows the counts at once. */}
