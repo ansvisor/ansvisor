@@ -3131,6 +3131,7 @@
       "ranked": "Ranked by impact",
       "filtered": "Filtered · click it again to clear",
       "columns": {
+        "score": "Priority Score",
         "page": "Page",
         "action": "Action",
         "why": "Why · last {days} days",
@@ -3161,6 +3162,15 @@
       "loadError": "Couldn't load the content plan.",
       "retry": "Try again",
       "priority": "Priority",
+      "score": {
+        "label": "Priority Score {score}: how it is worked out",
+        "title": "How this score is worked out",
+        "opportunity": "The content opportunity's own score: {score}",
+        "citationsDown": "{base} + {pctPoints} for {pct}% fewer citations + {lostPoints} for {lost, plural, one {# citation} other {# citations}} lost = {score}{capped, select, true { (at most {max})} other {}}",
+        "protect": "{base} + {citations, plural, one {# citation} other {# citations}} = {score}{capped, select, true { (at most {max})} other {}}",
+        "higher": "The higher of the two counts.",
+        "marked": "Marked as a priority, so it's listed first."
+      },
       "rowMenu": {
         "label": "Actions for {title}",
         "assign": "Assign to…",

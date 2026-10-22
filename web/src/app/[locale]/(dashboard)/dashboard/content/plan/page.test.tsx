@@ -141,9 +141,12 @@ const button = (name: string) =>
   [...container.querySelectorAll<HTMLButtonElement>('button')].find((b) =>
     b.textContent?.startsWith(name),
   )!;
+/** A row's Start button: past the Priority Score, which is a button too. */
+const START = 'td:nth-child(n+3) button';
+// The page, the action and why: after the rank and the Priority Score.
 const rowTexts = () =>
   [...container.querySelectorAll('tbody tr')].map((tr) =>
-    [...tr.querySelectorAll('td')].slice(1, 4).map((td) => td.textContent),
+    [...tr.querySelectorAll('td')].slice(2, 5).map((td) => td.textContent),
   );
 
 beforeEach(() => {
@@ -200,6 +203,23 @@ describe('the Content plan', () => {
     expect(container.querySelector('thead')!.textContent).toContain('Why · last 30 days');
   });
 
+  it("shows each row's Priority Score, and on focus how it is worked out", async () => {
+    await renderPage();
+    const scores = [...container.querySelectorAll('tbody tr')].map((tr) => tr.children[1]);
+    // The opportunity's 74; 40 + 14 for −70% + 7 citations lost; 20 + 12 citations.
+    expect(scores.map((td) => td.textContent)).toEqual(['74Medium', '61Medium', '32Low']);
+    expect(container.querySelector('thead')!.textContent).toContain('Priority Score');
+
+    const trigger = scores[1].querySelector('button')!;
+    expect(trigger.getAttribute('aria-label')).toBe('Priority Score 61: how it is worked out');
+    act(() => trigger.focus());
+    await act(() => new Promise((resolve) => setTimeout(resolve, 400)));
+    expect(document.querySelector('[data-slot="tooltip-content"]')?.textContent).toBe(
+      'How this score is worked out' +
+        '40 + 14 for 70% fewer citations + 7 for 7 citations lost = 61',
+    );
+  });
+
   it('filters the list by a card, and clears it on a second click', async () => {
     await renderPage();
     await act(async () => button('Protect').click());
@@ -245,7 +265,7 @@ describe('the Content plan', () => {
       ],
     });
     await renderPage();
-    await act(async () => container.querySelector<HTMLButtonElement>('tbody tr button')!.click());
+    await act(async () => container.querySelector<HTMLButtonElement>(`tbody tr ${START}`)!.click());
     expect(dialog.props).toMatchObject({
       preset: {
         kind: 'opportunity',
@@ -272,7 +292,7 @@ describe('the Content plan', () => {
     await renderPage();
     const rows = container.querySelectorAll('tbody tr');
 
-    await act(async () => rows[1].querySelector('button')!.click());
+    await act(async () => rows[1].querySelector<HTMLButtonElement>(START)!.click());
     expect(dialog.props).toMatchObject({
       open: true,
       preset: { kind: 'page', url: 'https://acme.example/guides/coffee-subscriptions' },
@@ -280,7 +300,7 @@ describe('the Content plan', () => {
     await act(async () => (dialog.props!.onOpenChange as (open: boolean) => void)(false));
     expect(dialog.props).toMatchObject({ open: false, preset: null });
 
-    await act(async () => rows[0].querySelector('button')!.click());
+    await act(async () => rows[0].querySelector<HTMLButtonElement>(START)!.click());
     expect(dialog.props).toMatchObject({ preset: { kind: 'opportunity', id: 'o1', page: null } });
 
     expect(rows[2].textContent).toContain('Agent');

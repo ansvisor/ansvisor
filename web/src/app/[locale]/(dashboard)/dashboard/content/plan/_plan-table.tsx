@@ -21,11 +21,14 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { PriorityBadge } from '@/components/action-center/action-table';
 import { DRAFT_METHOD_BADGE, DRAFT_STATUS_BADGE } from '@/components/content/draft-badges';
 import { contentEditorPath, isPageType } from '@/lib/content/drafts';
 import { platformNames } from '@/lib/content/impact';
 import { pagePath } from '@/lib/content/overlap';
-import type { PlanAction, PlanPeriod, PlanRow, PlanWhy } from '@/lib/content/plan';
+import type { PlanAction, PlanPeriod, PlanRow, PlanScorePart, PlanWhy } from '@/lib/content/plan';
+import { priorityLevelOf } from '@/lib/action-center/priority';
 import { formatNumber } from '@/lib/format';
 import { cn } from '@/lib/utils';
 
@@ -37,8 +40,9 @@ export const PLAN_ACTION_BADGE: Record<PlanAction, string> = {
 };
 
 /**
- * The Plan's priority list (CE-014): rank, the page (a new one, or the
- * brand's own), the action, why for the period with where it comes from,
+ * The Plan's priority list (CE-014): rank, the Priority Score (what the
+ * list is ranked by, with how it was worked out), the page (a new one, or
+ * the brand's own), the action, why for the period with where it comes from,
  * who is on it, the button that starts it — or opens its draft — and a row
  * menu: assign it to a teammate, and for admins and managers, mark it as a
  * priority or hide it.
@@ -68,6 +72,10 @@ export function PlanTable({
       <TableHeader>
         <TableRow>
           <TableHead className="w-10 pl-6">#</TableHead>
+          {/* Narrow windows: two lines, and the score without its level's name. */}
+          <TableHead className="w-16 whitespace-normal leading-tight xl:w-auto xl:whitespace-nowrap">
+            {t('columns.score')}
+          </TableHead>
           <TableHead>{t('columns.page')}</TableHead>
           <TableHead>{t('columns.action')}</TableHead>
           <TableHead>{t('columns.why', { days })}</TableHead>
@@ -85,7 +93,11 @@ export function PlanTable({
         {rows.map((row, i) => (
           <TableRow key={row.key}>
             <TableCell className="pl-6 tabular-nums text-muted-foreground">{i + 1}</TableCell>
-            <TableCell className="max-w-[250px]">
+            <TableCell>
+              <ScoreBadge row={row} />
+            </TableCell>
+            {/* Narrower below xl, to leave room for the Priority Score at 1024 px. */}
+            <TableCell className="max-w-[200px] xl:max-w-[250px]">
               <p className="flex min-w-0 items-center gap-1.5 font-medium">
                 <span className="truncate" title={row.title}>
                   {row.title}
@@ -219,6 +231,73 @@ function RowMenu({
       </DropdownMenuContent>
     </DropdownMenu>
   );
+}
+
+/**
+ * The row's Priority Score, coloured by its level as the Action Center's
+ * are, and on hover or focus what it is made of.
+ */
+function ScoreBadge({ row }: { row: PlanRow }) {
+  const t = useTranslations('contentEditor.plan.score');
+  const score = Math.round(row.score);
+  return (
+    <Tooltip>
+      <TooltipTrigger
+        delay={300}
+        closeDelay={0}
+        render={
+          <button
+            type="button"
+            className="rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+            aria-label={t('label', { score })}
+          />
+        }
+      >
+        <PriorityBadge
+          score={score}
+          level={priorityLevelOf(score)}
+          levelClassName="hidden xl:inline"
+        />
+      </TooltipTrigger>
+      <TooltipContent className="max-w-72 space-y-1">
+        <p className="font-medium">{t('title')}</p>
+        {row.scoreParts.map((part) => (
+          <p key={part.kind}>
+            <ScorePartText part={part} />
+          </p>
+        ))}
+        {row.scoreParts.length > 1 && <p className="opacity-80">{t('higher')}</p>}
+        {row.priority && <p className="opacity-80">{t('marked')}</p>}
+      </TooltipContent>
+    </Tooltip>
+  );
+}
+
+function ScorePartText({ part }: { part: PlanScorePart }) {
+  const t = useTranslations('contentEditor.plan.score');
+  switch (part.kind) {
+    case 'opportunity':
+      return t('opportunity', { score: part.score });
+    case 'citationsDown':
+      return t('citationsDown', {
+        base: part.base,
+        pct: part.pct,
+        pctPoints: part.pctPoints,
+        lost: part.lost,
+        lostPoints: part.lostPoints,
+        score: part.score,
+        capped: String(part.base + part.pctPoints + part.lostPoints > part.max),
+        max: part.max,
+      });
+    case 'protect':
+      return t('protect', {
+        base: part.base,
+        citations: part.citations,
+        score: part.score,
+        capped: String(part.base + part.citations > part.max),
+        max: part.max,
+      });
+  }
 }
 
 function WhyText({ why }: { why: PlanWhy }) {

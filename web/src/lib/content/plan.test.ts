@@ -317,3 +317,66 @@ describe('buildPlan', () => {
     expect(counts).toEqual({ create: 1, optimize: 0, protect: 0, priority: 0 });
   });
 });
+
+// The Priority Score column shows each row's score and what it is made of.
+describe("a row's score breakdown", () => {
+  it("is the opportunity's own score, rounded as the row's", () => {
+    const { rows } = plan([], [opportunity('o1', { score: 81.4 })]);
+    expect(rows[0].score).toBe(81);
+    expect(rows[0].scoreParts).toEqual([{ kind: 'opportunity', score: 81 }]);
+  });
+
+  it("adds up a drop's points to the row's score", () => {
+    const { rows } = plan([page('/features/forecasting', { citations: { cur: 6, prev: 10 } })]);
+    // Down 40% (+8), 4 citations lost (+4), on a base of 40.
+    expect(rows[0].scoreParts).toEqual([
+      {
+        kind: 'citationsDown',
+        base: 40,
+        pct: 40,
+        pctPoints: 8,
+        lost: 4,
+        lostPoints: 4,
+        max: 100,
+        score: 52,
+      },
+    ]);
+    expect(rows[0].score).toBe(52);
+  });
+
+  it('gives an opportunity on a page losing ground both parts, the higher counting', () => {
+    const { rows } = plan(
+      [page('/guides/espresso', { citations: { cur: 2, prev: 8 } })],
+      [
+        opportunity('o1', {
+          decision: 'optimize',
+          targetPage: 'https://acme.example/guides/espresso',
+          score: 50,
+        }),
+      ],
+    );
+    expect(rows[0].scoreParts.map((p) => [p.kind, p.score])).toEqual([
+      ['opportunity', 50],
+      ['citationsDown', citationsDownScore(75, 6)],
+    ]);
+    expect(rows[0].score).toBe(Math.max(...rows[0].scoreParts.map((p) => p.score)));
+  });
+
+  it("counts a top page's citations on a base of 20, up to 60", () => {
+    const { rows } = plan([
+      page('/a', { citations: { cur: 18, prev: 18 } }),
+      page('/b', { citations: { cur: 55, prev: 55 } }),
+    ]);
+    expect(rows.map((r) => r.scoreParts)).toEqual([
+      [{ kind: 'protect', base: 20, citations: 55, max: 60, score: 60 }],
+      [{ kind: 'protect', base: 20, citations: 18, max: 60, score: 38 }],
+    ]);
+  });
+
+  it('caps a drop at 100 and its citations lost at 40 points', () => {
+    const { rows } = plan([page('/x', { citations: { cur: 0, prev: 90 } })]);
+    expect(rows[0].scoreParts).toEqual([
+      expect.objectContaining({ pctPoints: 20, lost: 90, lostPoints: 40, score: 100 }),
+    ]);
+  });
+});

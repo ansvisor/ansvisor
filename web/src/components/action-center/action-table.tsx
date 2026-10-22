@@ -135,9 +135,12 @@ export const PRIORITY_BADGE: Record<PriorityLevel, string> = {
 export function PriorityBadge({
   score,
   level,
+  levelClassName,
 }: {
   score: number | null;
   level: PriorityLevel | null;
+  /** For the level's name: the Content Plan hides it where its table is narrow. */
+  levelClassName?: string;
 }) {
   const t = useTranslations('actionCenter.actionsPage.priority');
   if (score === null || level === null) {
@@ -152,7 +155,7 @@ export function PriorityBadge({
       <Badge variant="outline" className={cn('font-semibold tabular-nums', PRIORITY_BADGE[level])}>
         {score}
       </Badge>
-      <span className="text-xs">{t(`levels.${level}`)}</span>
+      <span className={cn('text-xs', levelClassName)}>{t(`levels.${level}`)}</span>
     </span>
   );
 }
