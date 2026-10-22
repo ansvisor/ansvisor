@@ -4062,12 +4062,10 @@
     "kpi": {
       "total": "Total Opportunities",
       "highImpact": "High Impact",
-      "sentToWorkflow": "Sent to Workflow",
       "avgScore": "Avg. Score",
       "shown": "{count} shown",
       "opportunities": "opportunities",
       "outOf100": "out of 100",
-      "sentOrInProgress": "sent or in progress",
       "fromSignals": "from {count, plural, one {# signal} other {# signals}} analyzed"
     },
     "filters": {
