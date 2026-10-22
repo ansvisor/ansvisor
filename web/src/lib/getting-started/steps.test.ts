@@ -35,6 +35,8 @@ const facts = (over: Partial<GettingStartedFacts> = {}): GettingStartedFacts => 
   contentCreated: 0,
   contentRecent: 0,
   audits: 0,
+  draftsCreated: 0,
+  draftsOptimized: 0,
   ...over,
 });
 
@@ -199,6 +201,19 @@ describe('buildGettingStarted', () => {
     expect(step(facts({ audits: 1 }), 'optimize_page').state).toBe('done');
   });
 
+  it('opens the Content Plan’s top rows, and counts a draft made ready there (00234)', () => {
+    const href = (key: string) => GETTING_STARTED_STEPS.find((s) => s.key === key)!.href;
+    expect(href('create_content')).toBe('/dashboard/content/plan?start=create');
+    expect(href('optimize_page')).toBe('/dashboard/content/plan?start=optimize');
+
+    const suggested = facts({ contentSuggestions: 4 });
+    expect(step({ ...suggested, draftsCreated: 1 }, 'create_content').state).toBe('done');
+    expect(step({ ...suggested, draftsOptimized: 1 }, 'optimize_page').state).toBe('done');
+    // A draft of the other method completes neither.
+    expect(step({ ...suggested, draftsOptimized: 1 }, 'create_content').state).toBe('new');
+    expect(step({ ...suggested, draftsCreated: 1 }, 'optimize_page').state).toBe('new');
+  });
+
   it('is ready once every other step is done or skipped', () => {
     const all = facts({
       records: {
@@ -298,6 +313,8 @@ describe('parseGettingStartedFacts', () => {
         content_created: 0,
         content_recent: 2,
         audits: 1,
+        drafts_created: 1,
+        drafts_optimized: 3,
       }),
     ).toEqual({
       startedAt: '2026-10-20T10:00:00+00:00',
@@ -319,6 +336,8 @@ describe('parseGettingStartedFacts', () => {
       contentCreated: 0,
       contentRecent: 2,
       audits: 1,
+      draftsCreated: 1,
+      draftsOptimized: 3,
     });
   });
 

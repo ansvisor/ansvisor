@@ -158,7 +158,7 @@ describe('MentionsListTab', () => {
       { sentiment: 'negative', competitor: 'c1', sort: 'newest', group: '' },
       0,
     ]);
-    expect(container.textContent).toContain('2 mentions · 1 prompt');
+    expect(container.textContent).toContain('2 responses · 1 prompt');
 
     const rows = container.querySelectorAll('tbody tr[tabindex]');
     expect(rows).toHaveLength(2);

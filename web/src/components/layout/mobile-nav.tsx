@@ -105,7 +105,7 @@ export function MobileNav() {
                 const label = getDashboardNavLabel(item.title, t, tBrands);
 
                 // Dynamic badge override: show "Set up" on the Agent item
-                // when the org has no Anthropic key saved (cloud only).
+                // when the org has no provider key for Chat (cloud only).
                 const effectiveBadge =
                   item.href === '/dashboard/agent' && agentKeyMissing ? 'Set up' : item.badge;
 
