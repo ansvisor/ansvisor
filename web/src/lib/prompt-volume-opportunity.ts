@@ -1,4 +1,4 @@
-import type { EstimateConfidence } from '@/lib/volume-estimate';
+import { rankable, type EstimateConfidence } from '@/lib/volume-estimate';
 
 /**
  * Insights' High Opportunity Prompts: a prompt makes the list from
@@ -19,7 +19,7 @@ export function opportunityLevel(
   confidence?: EstimateConfidence,
 ): 'high' | 'medium' | null {
   // A low-confidence estimate isn't ranked on its own (PROMPT-013).
-  if (confidence === 'low') return null;
+  if (confidence && !rankable({ confidence })) return null;
   if (estAiVolume >= OPPORTUNITY_HIGH_VOLUME) return 'high';
   if (estAiVolume >= OPPORTUNITY_MIN_VOLUME) return 'medium';
   return null;

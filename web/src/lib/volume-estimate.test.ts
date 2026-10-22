@@ -25,23 +25,33 @@ const row = (
 });
 
 describe('promptVolumeEstimate', () => {
-  it('is high when three or more keywords have data and agree within 3×', () => {
+  it('is high when three or more keywords have data and their middle half agrees within 4×', () => {
     const e = promptVolumeEstimate(row({ office: 3600, business: 1600, monthly: 1900 }, 855), NOW);
     expect(e).toMatchObject({ confidence: 'high', measured: 3, keywords: 3, value: 855 });
-    // 1,600–3,600 × 45%, widened to at least ±25% and rounded outwards.
-    expect([e.low, e.high]).toEqual([640, 1700]);
-    expect(formatEstimateRange(e)).toBe('640–1.7k');
+    // The quartiles 1,750–2,750 × 45%, widened to at least ±25% and rounded outwards.
+    expect([e.low, e.high]).toEqual([640, 1300]);
+    expect(formatEstimateRange(e)).toBe('640–1.3k');
   });
 
-  it('is medium when their volumes differ by more, and spans them', () => {
-    const e = promptVolumeEstimate(
-      row({ specialty: 4400, international: 2400, worldwide: 880 }, 1080),
-      NOW,
-    );
+  it('is medium when their middle half differs by more, and spans it', () => {
+    const e = promptVolumeEstimate(row({ a: 400, b: 2000, c: 10_000 }, 900), NOW);
+    // Quartiles 1,200 and 6,000: 5× apart.
     expect(e.confidence).toBe('medium');
-    // 880–4,400 × 45% = 396–1,980, kept within ½× to 2× of 1,080.
-    expect([e.low, e.high]).toEqual([540, 2000]);
-    expect(formatEstimateRange(e)).toBe('540–2k');
+    // 540–2,700 × 45%, kept within ½× to 2× of 900.
+    expect([e.low, e.high]).toEqual([540, 1800]);
+    expect(formatEstimateRange(e)).toBe('540–1.8k');
+  });
+
+  it('reads past one broad head term, which the median already ignores', () => {
+    // Five keywords with data, one of them far broader: still medium.
+    const five = promptVolumeEstimate(row({ a: 10, b: 170, c: 210, d: 900, e: 27_100 }, 95), NOW);
+    expect(five.confidence).toBe('medium');
+    expect(formatEstimateRange(five)).toBe('71–190');
+    // A prod row: two keywords without data, three left 170, 210 and 27,100.
+    // With three, the broad one is half the upper quartile: low.
+    const three = promptVolumeEstimate(row({ a: 0, b: 0, c: 170, d: 210, e: 27_100 }, 95), NOW);
+    expect(three).toMatchObject({ confidence: 'low', measured: 3, keywords: 5 });
+    expect(formatEstimateRange(three)).toBe('71–190');
   });
 
   it('is low with one keyword to go by, or volumes 10× apart', () => {
@@ -53,7 +63,7 @@ describe('promptVolumeEstimate', () => {
     const apart = promptVolumeEstimate(row({ a: 100, b: 2000, c: 50_000 }, 900), NOW);
     expect(apart.confidence).toBe('low');
     // Never more than 2× from the estimate either way.
-    expect([apart.low, apart.high]).toEqual([450, 1800]);
+    expect([apart.low, apart.high]).toEqual([470, 1800]);
   });
 
   it('counts volumes over six months old one level less', () => {
@@ -73,24 +83,24 @@ describe('promptVolumeEstimate', () => {
 
 describe('sumEstimates', () => {
   const high = promptVolumeEstimate(row({ a: 3600, b: 1600, c: 1900 }, 855), NOW);
-  const medium = promptVolumeEstimate(row({ a: 4400, b: 2400, c: 880 }, 1080), NOW);
+  const medium = promptVolumeEstimate(row({ a: 400, b: 2000, c: 10_000 }, 900), NOW);
   const low = promptVolumeEstimate(row({ a: 2000 }, 900), NOW);
 
   it('adds the lows and the highs, and dates it by the latest fetch', () => {
     const total = sumEstimates([high, medium]);
     expect(total).toMatchObject({
-      value: 1935,
+      value: 1755,
       low: 1180,
-      high: 3700,
+      high: 3100,
       count: 2,
       byConfidence: { high: 1, medium: 1, low: 0 },
     });
-    expect(formatEstimateRange(total)).toBe('1.2–3.7k');
+    expect(formatEstimateRange(total)).toBe('1.2–3.1k');
   });
 
   it('is as confident as most of its volume', () => {
     expect(sumEstimates([high]).confidence).toBe('high');
-    // 44% of the volume is high, none low: medium.
+    // 49% of the volume is high, none low: medium.
     expect(sumEstimates([high, medium]).confidence).toBe('medium');
     // 900 of 1,755 is low: more than half.
     expect(sumEstimates([high, low]).confidence).toBe('low');
@@ -99,7 +109,7 @@ describe('sumEstimates', () => {
 
   it('averages per prompt', () => {
     const avg = averageEstimate(sumEstimates([high, medium]));
-    expect(avg).toMatchObject({ value: 968, low: 590, high: 1900 });
+    expect(avg).toMatchObject({ value: 878, low: 590, high: 1600 });
   });
 });
 

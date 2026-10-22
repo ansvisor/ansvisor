@@ -2,7 +2,8 @@
 
 import { useRef, useState, useEffect } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Cell } from 'recharts';
-import { formatCompactNumber, formatNumber } from '@/lib/format';
+import { formatCompactNumber } from '@/lib/format';
+import { formatEstimateRange, scaleEstimate } from '@/lib/volume-estimate';
 
 // ─── Auto-sizing wrapper ─────────────────────────────────────────────────────
 
@@ -75,7 +76,14 @@ export const AI_PLATFORM_SHARES: {
   { name: 'Grok', share: 0.005, color: '#18181b' },
 ];
 
-export function PlatformVolumeChart({ totalVolume }: { totalVolume: number }) {
+export function PlatformVolumeChart({
+  totalVolume,
+  totalRange,
+}: {
+  totalVolume: number;
+  /** The total's estimated range (PROMPT-013): each platform shows its share of it. */
+  totalRange: { low: number; high: number };
+}) {
   if (totalVolume <= 0) {
     return (
       <div className="flex items-center justify-center h-[220px] text-xs text-muted-foreground">
@@ -129,7 +137,9 @@ export function PlatformVolumeChart({ totalVolume }: { totalVolume: number }) {
                   <p className="font-medium text-foreground mb-0.5">{row.name}</p>
                   <p className="text-muted-foreground">
                     Est. queries:{' '}
-                    <span className="font-medium text-foreground">{formatNumber(row.volume)}</span>
+                    <span className="font-medium text-foreground">
+                      {formatEstimateRange(scaleEstimate(totalRange, row.share))}
+                    </span>
                   </p>
                   <p className="text-muted-foreground">
                     Share:{' '}
