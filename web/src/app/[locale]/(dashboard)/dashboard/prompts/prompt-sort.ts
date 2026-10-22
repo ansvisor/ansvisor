@@ -1,4 +1,4 @@
-import type { EstimateConfidence } from '@/lib/volume-estimate';
+import { rankable, type EstimateConfidence } from '@/lib/volume-estimate';
 
 export type SortDir = 'asc' | 'desc';
 
@@ -96,8 +96,8 @@ export function comparePromptSortRows(
   const av = promptSortValue(key, a);
   const bv = promptSortValue(key, b);
   if (key === 'volume' && av !== null && bv !== null) {
-    const aLow = a.volume?.confidence === 'low';
-    const bLow = b.volume?.confidence === 'low';
+    const aLow = !rankable({ confidence: a.volume?.confidence ?? 'medium' });
+    const bLow = !rankable({ confidence: b.volume?.confidence ?? 'medium' });
     if (aLow !== bLow) return aLow ? 1 : -1;
   }
   return compareNullsLast(av, bv, dir);

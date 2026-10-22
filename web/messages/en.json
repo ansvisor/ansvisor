@@ -5306,16 +5306,16 @@
   },
   "volumeEstimate": {
     "title": "How we estimate AI search volume",
-    "method": "The median monthly Google searches for this prompt's related keywords × the share of searches that now happen in AI assistants ({rate}%).",
-    "methodTotal": "The sum of {count, plural, one {# prompt's estimate} other {# prompts' estimates}}. Each is the median monthly Google searches for its related keywords × the share of searches that now happen in AI assistants ({rate}%).",
-    "methodAverage": "The average of {count, plural, one {# prompt's estimate} other {# prompts' estimates}}. Each is the median monthly Google searches for its related keywords × the share of searches that now happen in AI assistants ({rate}%).",
+    "method": "The median monthly Google searches for this prompt's related keywords × the share of Google searches that now get an AI answer ({rate}%).",
+    "methodTotal": "The sum of {count, plural, one {# prompt's estimate} other {# prompts' estimates}}. Each is the median monthly Google searches for its related keywords × the share of Google searches that now get an AI answer ({rate}%).",
+    "methodAverage": "The average of {count, plural, one {# prompt's estimate} other {# prompts' estimates}}. Each is the median monthly Google searches for its related keywords × the share of Google searches that now get an AI answer ({rate}%).",
     "keywords": "{measured} of {keywords} related keywords have Google search data.",
     "noKeywords": "None of its related keywords has Google search data yet.",
-    "rangeSpread": "The range runs from the AI share of the smallest to the largest, within half to twice the estimate.",
+    "rangeSpread": "The range is the AI share of the middle half of them, within half to twice the estimate.",
     "rangeOne": "With one to go by, the range is half to twice the estimate.",
     "mix": "Confidence by prompt: {high} high, {medium} medium, {low} low.",
-    "sources": "Sources: Google search volume from DataForSEO ({month}) and an AI adoption rate of {rate}%.",
-    "sourcesUndated": "Sources: Google search volume from DataForSEO and an AI adoption rate of {rate}%.",
+    "sources": "Sources: Google search volume from DataForSEO ({month}) and an AI answer share of {rate}%.",
+    "sourcesUndated": "Sources: Google search volume from DataForSEO and an AI answer share of {rate}%.",
     "confidence": "Confidence: {level} · updated {date}",
     "confidenceUndated": "Confidence: {level}",
     "stale": "Fetched over six months ago, so one level less sure. Refresh volumes for a newer estimate.",
@@ -5329,8 +5329,7 @@
     "badge": "Estimate",
     "badgeLow": "Estimate · low confidence",
     "badgeLabel": "Estimate, {level} confidence: how it's built",
-    "label": "{range} a month, estimated, {level} confidence",
-    "perMonth": "/ mo"
+    "label": "{range} a month, estimated, {level} confidence"
   },
   "mentions": {
     "title": "Mentions & Sentiment",

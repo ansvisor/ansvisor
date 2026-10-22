@@ -203,7 +203,12 @@ import {
   sumEstimates,
   type VolumeEstimate,
 } from '@/lib/volume-estimate';
-import { EstimateBadge, EstimateRange } from '@/components/prompts/volume-estimate';
+import {
+  EstimateBadge,
+  EstimateNoteTooltip,
+  EstimateRange,
+  createEstimateNoteHandle,
+} from '@/components/prompts/volume-estimate';
 import { usePagination, TablePager } from '@/components/table-pager';
 import { PromptPositionsSheet } from '@/components/prompts/prompt-positions-sheet';
 import {
@@ -1303,6 +1308,9 @@ export default function PromptsPage() {
   const tNav = useTranslations('nav');
   const tPrompts = useTranslations('prompts');
   const tVolumes = useTranslations('prompts.volumeInsights');
+  // One method note per table: these tables list every analyzed prompt.
+  const volumeTableNote = useMemo(() => createEstimateNoteHandle(), []);
+  const opportunityTableNote = useMemo(() => createEstimateNoteHandle(), []);
   const activeBrand = useBrandStore(
     (s) => s.brands.find((brand) => brand.id === s.activeBrandId) ?? null,
   );
@@ -2310,7 +2318,7 @@ export default function PromptsPage() {
                     </p>
                   </CardHeader>
                   <CardContent>
-                    <PlatformVolumeChart totalVolume={totalAiVol} />
+                    <PlatformVolumeChart totalVolume={totalAiVol} totalRange={totalEstimate} />
                   </CardContent>
                 </Card>
 
@@ -2386,6 +2394,7 @@ export default function PromptsPage() {
                           <TableCell className="text-right">
                             <EstimateRange
                               estimate={estimateOf(row)}
+                              handle={volumeTableNote}
                               className="text-sm font-semibold"
                             />
                           </TableCell>
@@ -2404,6 +2413,7 @@ export default function PromptsPage() {
                       ))}
                     </TableBody>
                   </Table>
+                  <EstimateNoteTooltip handle={volumeTableNote} />
                   {filtered.length === 0 && (
                     <div className="py-10 text-center text-sm text-muted-foreground">
                       No prompts match your search.
@@ -2463,6 +2473,7 @@ export default function PromptsPage() {
                             <TableCell className="text-right">
                               <EstimateRange
                                 estimate={estimateOf(row)}
+                                handle={opportunityTableNote}
                                 className="text-sm font-semibold"
                               />
                             </TableCell>
@@ -2495,6 +2506,7 @@ export default function PromptsPage() {
                         ))}
                       </TableBody>
                     </Table>
+                    <EstimateNoteTooltip handle={opportunityTableNote} />
                   </CardContent>
                 </Card>
               )}
@@ -2816,6 +2828,7 @@ function AllPromptsTab({
   const tPrompts = useTranslations('prompts');
   // One tooltip for every prompt and topic the table cuts short.
   const fullText = useMemo(() => createClampedTextHandle(), []);
+  const volumeNote = useMemo(() => createEstimateNoteHandle(), []);
   const tUsage = useTranslations('prompts.usage');
   const format = useFormatter();
   const tDelete = useTranslations('prompts.bulkDelete');
@@ -3893,6 +3906,7 @@ function AllPromptsTab({
                     {vol ? (
                       <EstimateRange
                         estimate={estimateByPromptId.get(p.id)!}
+                        handle={volumeNote}
                         className="text-sm font-semibold"
                       />
                     ) : (
@@ -3959,6 +3973,7 @@ function AllPromptsTab({
           </TableBody>
         </Table>
         <ClampedTextTooltip handle={fullText} />
+        <EstimateNoteTooltip handle={volumeNote} />
         <TablePager
           page={promptsPager.page}
           totalPages={promptsPager.totalPages}

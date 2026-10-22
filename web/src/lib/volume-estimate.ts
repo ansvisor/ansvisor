@@ -6,11 +6,13 @@ import type { PromptVolume } from '@/types';
  * confidence, never as a bare number that reads as measured.
  *
  * A prompt's estimate is the median Google volume of its related keywords ×
- * the AI adoption rate (00154, 00155). How far it can be trusted follows from
- * those keywords: how many have Google search data, and how closely their
- * volumes agree. The range is the AI share of the lowest and highest of them,
- * kept within ½× to 2× of the estimate; with one keyword to go by, it is
- * exactly that.
+ * the AI answer rate (00154, 00155: the share of Google searches that get an
+ * AI answer). The keywords are head terms that spread widely by design, which
+ * is why the median is taken; so how far the estimate can be trusted is read
+ * around the median too: how many keywords have Google search data, and how
+ * closely the middle half of them agree (their upper over lower quartile).
+ * The range is the AI share of that middle half, kept within ½× to 2× of the
+ * estimate; with one keyword to go by, it is exactly that.
  */
 
 export type EstimateConfidence = 'high' | 'medium' | 'low';
@@ -32,11 +34,16 @@ export interface VolumeEstimate {
   stale: boolean;
 }
 
-/** High: at least this many keywords with data, the largest at most AGREE_HIGH × the smallest. */
+/**
+ * High: at least this many keywords with data, their upper quartile at most
+ * AGREE_HIGH × their lower one. Medium: at least two, within AGREE_MEDIUM ×.
+ * On prod's 3,025 prompts (2026-10-22) the quartiles at these thresholds
+ * split about 38% high, 40% medium and 23% low; the extremes, a median 58×
+ * apart, had read 86% low.
+ */
 const HIGH_MIN_MEASURED = 3;
-const AGREE_HIGH = 3;
-/** Medium: at least two, the largest at most AGREE_MEDIUM × the smallest. */
-const AGREE_MEDIUM = 10;
+const AGREE_HIGH = 4;
+const AGREE_MEDIUM = 15;
 /** Volumes this old count one level less. */
 export const STALE_DAYS = 183;
 /** The range never strays further than this factor from the estimate (the whole range with one keyword)… */
@@ -45,6 +52,17 @@ const MAX_STRETCH = 2;
 const MIN_BAND = 0.25;
 
 const LEVELS: EstimateConfidence[] = ['low', 'medium', 'high'];
+
+/**
+ * The q-quantile of sorted values, interpolated between the two nearest as
+ * Postgres's percentile_cont does: of five, 0.25 is the 2nd and 0.75 the 4th.
+ */
+function quantile(sorted: number[], q: number): number {
+  const at = (sorted.length - 1) * q;
+  const below = Math.floor(at);
+  const above = Math.ceil(at);
+  return sorted[below] + (sorted[above] - sorted[below]) * (at - below);
+}
 
 /** Rounds to two significant figures, down or up: 396 → 390, 1,980 → 2,000. */
 function roundTo2(value: number, direction: 'down' | 'up'): number {
@@ -69,11 +87,15 @@ type VolumeRow = Pick<
 /** One prompt's estimate, from its keywords' Google volumes. */
 export function promptVolumeEstimate(row: VolumeRow, now: Date = new Date()): VolumeEstimate {
   const value = Math.max(0, row.estAiVolume);
-  const volumes = Object.values(row.googleVolumes ?? {}).filter((v) => v > 0);
+  const volumes = Object.values(row.googleVolumes ?? {})
+    .filter((v) => v > 0)
+    .sort((a, b) => a - b);
   const measured = volumes.length;
-  const smallest = Math.min(...volumes);
-  const largest = Math.max(...volumes);
-  const spread = measured > 0 ? largest / smallest : Infinity;
+  // The middle half of the measured volumes: one broad head term, which the
+  // median already ignores, doesn't make the estimate read unsure.
+  const lowerQuartile = measured > 0 ? quantile(volumes, 0.25) : 0;
+  const upperQuartile = measured > 0 ? quantile(volumes, 0.75) : 0;
+  const spread = measured > 0 ? upperQuartile / lowerQuartile : Infinity;
 
   let level =
     measured >= HIGH_MIN_MEASURED && spread <= AGREE_HIGH
@@ -89,7 +111,11 @@ export function promptVolumeEstimate(row: VolumeRow, now: Date = new Date()): Vo
 
   const range =
     measured >= 2
-      ? bounds(value, smallest * row.aiVolumeMultiplier, largest * row.aiVolumeMultiplier)
+      ? bounds(
+          value,
+          lowerQuartile * row.aiVolumeMultiplier,
+          upperQuartile * row.aiVolumeMultiplier,
+        )
       : bounds(value, value / MAX_STRETCH, value * MAX_STRETCH);
 
   return {
@@ -161,6 +187,17 @@ export function averageEstimate(total: EstimateTotal): EstimateTotal {
     value: Math.round(total.value / n),
     low: roundTo2(total.low / n, 'down'),
     high: roundTo2(total.high / n, 'up'),
+  };
+}
+
+/** An estimate's range scaled by a share, e.g. one platform's part of a total. */
+export function scaleEstimate(
+  estimate: Pick<VolumeEstimate, 'low' | 'high'>,
+  share: number,
+): { low: number; high: number } {
+  return {
+    low: roundTo2(estimate.low * share, 'down'),
+    high: roundTo2(estimate.high * share, 'up'),
   };
 }
 

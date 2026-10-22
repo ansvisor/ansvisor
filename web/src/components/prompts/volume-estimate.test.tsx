@@ -4,7 +4,12 @@ import { NextIntlClientProvider } from 'next-intl';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import messages from '../../../messages/en.json';
 import { promptVolumeEstimate, sumEstimates, type VolumeEstimate } from '@/lib/volume-estimate';
-import { EstimateBadge, EstimateRange } from './volume-estimate';
+import {
+  EstimateBadge,
+  EstimateNoteTooltip,
+  EstimateRange,
+  createEstimateNoteHandle,
+} from './volume-estimate';
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT =
   true;
@@ -17,7 +22,7 @@ const row = (googleVolumes: Record<string, number>, estAiVolume: number) => ({
   keywords: [...Object.keys(googleVolumes), 'unmeasured'],
   fetchedAt: '2026-10-10T19:28:41Z',
 });
-const medium = promptVolumeEstimate(row({ a: 4400, b: 2400, c: 880 }, 1080), NOW);
+const medium = promptVolumeEstimate(row({ a: 400, b: 2000, c: 10_000 }, 900), NOW);
 const low = promptVolumeEstimate(row({ a: 2000 }, 900), NOW);
 
 let container: HTMLDivElement;
@@ -55,13 +60,15 @@ describe('EstimateRange', () => {
   it('shows the range, not a bare number, and says how it was built on focus', async () => {
     render(<EstimateRange estimate={medium} />);
     const trigger = container.querySelector('button')!;
-    expect(trigger.textContent).toBe('540–2k');
-    expect(trigger.getAttribute('aria-label')).toBe('540–2k a month, estimated, Medium confidence');
+    expect(trigger.textContent).toBe('540–1.8k');
+    expect(trigger.getAttribute('aria-label')).toBe(
+      '540–1.8k a month, estimated, Medium confidence',
+    );
     expect(trigger.className).not.toContain('text-muted-foreground');
 
     const note = await noteOf(trigger);
     expect(note).toContain('How we estimate AI search volume');
-    expect(note).toContain('× the share of searches that now happen in AI assistants (45%)');
+    expect(note).toContain('× the share of Google searches that now get an AI answer (45%)');
     expect(note).toContain('3 of 4 related keywords have Google search data.');
     expect(note).toContain('Sources: Google search volume from DataForSEO (Oct 2026)');
     expect(note).toContain('Confidence: Medium · updated Oct 10, 2026');
@@ -70,9 +77,9 @@ describe('EstimateRange', () => {
   });
 
   it('greys a low-confidence estimate and says it is not ranked on its own', async () => {
-    render(<EstimateRange estimate={low} perMonth />);
+    render(<EstimateRange estimate={low} />);
     const trigger = container.querySelector('button')!;
-    expect(trigger.textContent).toBe('450–1.8k/ mo');
+    expect(trigger.textContent).toBe('450–1.8k');
     expect(trigger.className).toContain('text-muted-foreground');
     const note = await noteOf(trigger);
     expect(note).toContain('With one to go by, the range is half to twice the estimate.');
@@ -85,6 +92,24 @@ describe('EstimateRange', () => {
     const note = await noteOf(container.querySelector('button')!);
     expect(note).toContain("The sum of 2 prompts' estimates.");
     expect(note).toContain('Confidence by prompt: 0 high, 1 medium, 1 low.');
+  });
+});
+
+describe('a shared note for a long table', () => {
+  it('mounts one note, telling the estimate whose range has focus', async () => {
+    const handle = createEstimateNoteHandle();
+    render(
+      <>
+        <EstimateRange estimate={medium} handle={handle} />
+        <EstimateRange estimate={low} handle={handle} />
+        <EstimateNoteTooltip handle={handle} />
+      </>,
+    );
+    const [first, second] = container.querySelectorAll('button');
+    expect(await noteOf(second as HTMLElement)).toContain('Confidence: Low');
+    expect(document.querySelectorAll('[data-slot="tooltip-content"]')).toHaveLength(1);
+    act(() => (second as HTMLElement).blur());
+    expect(await noteOf(first as HTMLElement)).toContain('Confidence: Medium');
   });
 });
 
