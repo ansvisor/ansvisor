@@ -226,6 +226,8 @@ const started = (over: Partial<GettingStartedFacts> = {}): GettingStartedStatus 
     contentCreated: 0,
     contentRecent: 0,
     audits: 0,
+    draftsCreated: 0,
+    draftsOptimized: 0,
     ...over,
   });
 

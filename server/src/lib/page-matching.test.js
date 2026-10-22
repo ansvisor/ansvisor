@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { buildAssets, candidatePages, resolveDecision, tokens } from './page-matching.js';
+import {
+  assetTypes,
+  buildAssets,
+  candidatePages,
+  resolveDecision,
+  tokens,
+} from './page-matching.js';
 
 describe('tokens', () => {
   it('keeps meaningful words, folds plain plurals and handles any script', () => {
@@ -69,7 +75,18 @@ describe('resolveDecision', () => {
   });
 });
 
+describe('assetTypes', () => {
+  it("offers the site's page types, then the earned ones", () => {
+    expect(assetTypes('ecommerce')).toContain('product_page');
+    expect(assetTypes('ecommerce')).not.toContain('feature_page');
+    expect(assetTypes('b2b')).toContain('feature_page');
+    expect(assetTypes('b2b')).not.toContain('product_page');
+    expect(assetTypes('b2c').slice(-2)).toEqual(['third_party_article', 'backlink']);
+  });
+});
+
 describe('buildAssets', () => {
+  const types = assetTypes('b2b');
   const candidates = [
     { url: 'https://example.com/list', title: 'Tool list', ai_citations: 3, ga_sessions: 9 },
     { url: 'https://example.com/vs', title: 'A vs B', ai_citations: 0, ga_sessions: 1 },
@@ -80,7 +97,7 @@ describe('buildAssets', () => {
       { type: 'blog_post', channel: 'owned', decision: 'expand', pageIndexes: [0], title: 'Main' },
       [
         {
-          type: 'comparison_page',
+          type: 'comparison',
           channel: 'owned',
           decision: 'optimize',
           pageIndexes: [1],
@@ -89,12 +106,13 @@ describe('buildAssets', () => {
         { type: 'backlink', channel: 'earned', decision: 'optimize', pageIndexes: [0], title: 'L' },
       ],
       candidates,
+      types,
     );
     expect(
       assets.map((a) => [a.key, a.type, a.channel, a.decision, a.pages.map((p) => p.url)]),
     ).toEqual([
       ['a1', 'blog_post', 'owned', 'expand', ['https://example.com/list']],
-      ['a2', 'comparison_page', 'owned', 'optimize', ['https://example.com/vs']],
+      ['a2', 'comparison', 'owned', 'optimize', ['https://example.com/vs']],
       // Earned work lives on other sites: always new, no page of ours.
       ['a3', 'backlink', 'earned', 'create', []],
     ]);
@@ -107,7 +125,7 @@ describe('buildAssets', () => {
     });
   });
 
-  it('drops unknown types, repeats of the same work and anything past the cap', () => {
+  it("drops types the site doesn't write, repeats of the same work and anything past the cap", () => {
     const extra = (type) => ({
       type,
       channel: 'owned',
@@ -116,10 +134,22 @@ describe('buildAssets', () => {
       title: type,
     });
     const assets = buildAssets(
-      { type: 'faq_page', channel: 'owned', decision: 'create', pageIndexes: [], title: 'FAQ' },
-      [extra('podcast'), extra('faq_page'), extra('glossary_page'), extra('landing_page')],
+      { type: 'docs_faq', channel: 'owned', decision: 'create', pageIndexes: [], title: 'FAQ' },
+      [extra('product_page'), extra('docs_faq'), extra('definition'), extra('pricing')],
       candidates,
+      types,
     );
-    expect(assets.map((a) => a.type)).toEqual(['faq_page', 'glossary_page']);
+    // A shop's product page isn't a B2B page type, and pricing is past the cap.
+    expect(assets.map((a) => a.type)).toEqual(['docs_faq', 'definition']);
+  });
+
+  it("makes a primary of a type the site doesn't write a blog post", () => {
+    const [primary] = buildAssets(
+      { type: 'feature_page', channel: 'owned', decision: 'create', pageIndexes: [], title: 'X' },
+      [],
+      candidates,
+      assetTypes('ecommerce'),
+    );
+    expect(primary.type).toBe('blog_post');
   });
 });

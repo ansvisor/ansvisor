@@ -32,6 +32,7 @@ import {
   exportMentions,
   getMentionResponse,
   getMentionsOverview,
+  getMentionsPerception,
   listMentions,
   overrideMentionSentiment,
   sendMentionsToActionCenter,
@@ -409,5 +410,42 @@ describe('sendMentionsToActionCenter', () => {
     await expect(sendMentionsToActionCenter('b1', [{ id: 'r1', excerpt: '' }])).resolves.toEqual({
       error: 'Not authenticated',
     });
+  });
+});
+
+describe('getMentionsPerception', () => {
+  it('reads the window and filters in one call', async () => {
+    result = {
+      data: {
+        window: { from: 'f', to: 't', days: 30 },
+        entities: [{ entity: 'brand', name: 'Acme', is_brand: true, mentions: 10 }],
+        brand_terms: [],
+        attributes: [],
+        co_mentions: [],
+      },
+      error: null,
+    };
+    const perception = await getMentionsPerception('b1', {
+      from: '2026-10-10T00:00:00.000Z',
+      region: 'DE',
+      search: 'beans',
+    });
+    expect(rpc).toHaveBeenCalledWith('mentions_perception', {
+      p_brand_id: 'b1',
+      p_date_from: '2026-10-10T00:00:00.000Z',
+      p_date_to: undefined,
+      p_platform: undefined,
+      p_region: 'DE',
+      p_topic_id: undefined,
+      p_search: 'beans',
+    });
+    expect(perception?.entities[0]).toMatchObject({ name: 'Acme', isBrand: true, mentions: 10 });
+  });
+
+  it('is null before the migration has run, and throws on other errors', async () => {
+    result = { data: null, error: { code: 'PGRST202', message: 'not found' } };
+    await expect(getMentionsPerception('b1', { from: 'f' })).resolves.toBeNull();
+    result = { data: null, error: { code: '57014', message: 'statement timeout' } };
+    await expect(getMentionsPerception('b1', { from: 'f' })).rejects.toThrow('statement timeout');
   });
 });

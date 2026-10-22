@@ -290,6 +290,27 @@ describe('validateAction', () => {
     expect(patch.validation.scope).toEqual({ kind: 'basket', prompts: 0, pages: 2 });
   });
 
+  it('measures a draft sent from the Content Editor on its prompts and page (CE-015)', async () => {
+    const writes = mockWrites();
+    rpc.mockResolvedValue({ data: {}, error: null });
+
+    await validateAction(
+      action({
+        kind: 'content_draft',
+        kpi_keys: ['ai_visibility', 'citations', 'mentions'],
+        payload: {
+          promptIds: ['p1', 'p2', 'p3'],
+          pages: ['https://acme.example/pricing'],
+        },
+      }),
+      { now: NOW },
+    );
+
+    expect(rpc).toHaveBeenCalledWith('opportunity_basket_metrics', expect.anything());
+    const patch = writes.updated.find((w) => w.table === 'actions').patch;
+    expect(patch.validation.scope).toEqual({ kind: 'basket', prompts: 3, pages: 1 });
+  });
+
   it('records the verdict on the action trail', async () => {
     const writes = mockWrites();
     rpc.mockResolvedValue({ data: { total_citations: 10 }, error: null });

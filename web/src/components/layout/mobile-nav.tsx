@@ -4,7 +4,11 @@ import { useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { usePathname, Link } from '@/i18n/navigation';
 import { dashboardNav } from '@/config/dashboard';
-import { getDashboardNavLabel, shouldShowDashboardNavItem } from '@/lib/dashboard-navigation';
+import {
+  activeChildHref,
+  getDashboardNavLabel,
+  shouldShowDashboardNavItem,
+} from '@/lib/dashboard-navigation';
 import { useFeatureGate } from '@/hooks/use-feature-gate';
 import { useAgentKeyStatus } from '@/hooks/use-agent-key-status';
 import { siteConfig } from '@/config/site';
@@ -101,7 +105,7 @@ export function MobileNav() {
                 const label = getDashboardNavLabel(item.title, t, tBrands);
 
                 // Dynamic badge override: show "Set up" on the Agent item
-                // when the org has no Anthropic key saved (cloud only).
+                // when the org has no provider key for Chat (cloud only).
                 const effectiveBadge =
                   item.href === '/dashboard/agent' && agentKeyMissing ? 'Set up' : item.badge;
 
@@ -151,7 +155,8 @@ export function MobileNav() {
                   </Link>
                 );
                 if (!item.children?.length) return link;
-                // The Prompts submenu (PROMPT-001), always shown on mobile.
+                // A submenu (Prompts, Content), always shown on mobile.
+                const currentChild = activeChildHref(item.children, pathname);
                 return (
                   <div key={item.href}>
                     {link}
@@ -160,13 +165,21 @@ export function MobileNav() {
                         <Link key={child.href} href={child.href} onClick={() => setOpen(false)}>
                           <span
                             className={cn(
-                              'block rounded-md px-3 py-1.5 text-sm transition-colors',
-                              pathname === child.href || pathname.startsWith(`${child.href}/`)
+                              'flex items-center gap-2 rounded-md px-3 py-1.5 text-sm transition-colors',
+                              child.href === currentChild
                                 ? 'font-medium text-primary'
                                 : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground',
                             )}
                           >
                             {getDashboardNavLabel(child.title, t, tBrands)}
+                            {child.badge && (
+                              <Badge
+                                variant="secondary"
+                                className="h-4 px-1.5 text-[10px] font-normal"
+                              >
+                                {child.badge}
+                              </Badge>
+                            )}
                           </span>
                         </Link>
                       ))}

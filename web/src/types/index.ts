@@ -25,6 +25,8 @@ export interface Brand {
   language?: string;
   trackingCode?: string;
   shoppingModeEnabled: boolean;
+  /** b2b, ecommerce or b2c (Content Editor page types); unset = guessed (siteTypeOf). */
+  siteType?: string;
   isActive: boolean;
   domains: BrandDomain[];
   createdAt: string;
@@ -275,17 +277,11 @@ export interface OpportunityPage {
   lastmod: string | null;
 }
 
-export type OpportunityAssetType =
-  | 'blog_post'
-  | 'pillar_guide'
-  | 'landing_page'
-  | 'comparison_page'
-  | 'glossary_page'
-  | 'faq_page'
-  | 'product_page'
-  | 'category_page'
-  | 'third_party_article'
-  | 'backlink';
+/**
+ * A page type of the brand's kind of site, an earned asset, or a type from
+ * before opportunities followed the site; lib/content/asset-types.ts reads it.
+ */
+export type OpportunityAssetType = string;
 
 export interface OpportunityAsset {
   key: string;

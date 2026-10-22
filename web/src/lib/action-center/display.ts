@@ -71,6 +71,18 @@ export function actionTexts(
   if (action.kind === 'content_opportunity' && typeof p.title === 'string' && p.title) {
     return { title: p.title, description: t(`${action.kind}.description`) };
   }
+  // A draft sent from the Content Editor (CE-015) is named after its page.
+  if (action.kind === 'content_draft' && typeof p.title === 'string' && p.title) {
+    return {
+      title: t(
+        p.method === 'optimize' ? 'content_draft.optimizeTitle' : 'content_draft.createTitle',
+        {
+          title: p.title,
+        },
+      ),
+      description: t('content_draft.description'),
+    };
+  }
   // An Improve action carries its own title and "why", written from the
   // prompt's platform states when it was sent (PROMPT-004).
   if (action.kind === 'prompt_improve' && typeof p.title === 'string' && p.title) {
@@ -225,6 +237,7 @@ const PERSON_SENT_KINDS: string[] = [
   'topic_opportunity',
   'mention_review',
   'traffic_pages',
+  'content_draft',
 ];
 
 /** Compact evidence chips under the title: signal count plus the kind's own
