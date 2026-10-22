@@ -1506,6 +1506,8 @@ const AGENT_FIX_ERRORS = [
   'open_suggestions',
   'published',
   'failed',
+  /** No answer from the API (a timeout on the way): the agent may still finish. */
+  'unconfirmed',
 ] as const;
 export type AgentFixError = (typeof AGENT_FIX_ERRORS)[number];
 
@@ -1557,13 +1559,15 @@ export async function fixDraftRules(
     });
     const body = (await res.json().catch(() => ({}))) as Record<string, unknown>;
     if (!res.ok) {
+      // The API says why; a gateway's page (a timeout) says nothing of the run.
+      if (typeof body.code !== 'string') return { error: 'unconfirmed' };
       const code = body.code as AgentFixError;
       return { error: (AGENT_FIX_ERRORS as readonly string[]).includes(code) ? code : 'failed' };
     }
     return { count: Number(body.count) || 0 };
   } catch (err) {
     console.error('Failed to run the Content Agent:', err);
-    return { error: 'failed' };
+    return { error: 'unconfirmed' };
   }
 }
 

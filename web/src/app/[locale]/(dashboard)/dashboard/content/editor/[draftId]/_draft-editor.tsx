@@ -36,6 +36,7 @@ import {
 } from '@/lib/actions/content-drafts';
 import { agentWriteRequest, useRuleDescriber } from '@/lib/content/agent-write';
 import {
+  AGENT_POLL_MS,
   CONTENT_LIBRARY_PATH,
   isPageType,
   type ContentDraft,
@@ -106,6 +107,27 @@ const DOCUMENT_CLASS = cn(
   '[&_.agent-accepted-text]:underline [&_.agent-accepted-text]:decoration-emerald-300 [&_.agent-accepted-text]:decoration-2 [&_.agent-accepted-text]:underline-offset-4 dark:[&_.agent-accepted-text]:decoration-emerald-700',
   '[&_.is-editor-empty:first-child]:before:pointer-events-none [&_.is-editor-empty:first-child]:before:float-left [&_.is-editor-empty:first-child]:before:h-0 [&_.is-editor-empty:first-child]:before:text-muted-foreground [&_.is-editor-empty:first-child]:before:content-[attr(data-placeholder)]',
 );
+
+/**
+ * How long Fix open rules waits for the agent's batch when its answer didn't
+ * come back: past the API's model call (content-agent.js, 60 s) and the
+ * batch's save.
+ */
+const FIX_WAIT_MS = 90_000;
+
+/**
+ * The draft's suggestions once a new open batch lands, read every few
+ * seconds until the deadline; null if none did. Fix open rules only runs
+ * with none open, so any open one is the agent's.
+ */
+async function agentBatch(draftId: string, until: number): Promise<DraftSuggestion[] | null> {
+  while (Date.now() < until) {
+    await new Promise((resolve) => setTimeout(resolve, AGENT_POLL_MS));
+    const read = await getDraftSuggestions(draftId).catch(() => null);
+    if (read?.some((s) => s.status === 'open')) return read;
+  }
+  return null;
+}
 
 /**
  * The content editor (Content Editor, CE-004, spec §6): a header with the
@@ -559,10 +581,30 @@ export function DraftEditor({
       })(),
     };
     setFixing(true);
+    const asked = Date.now();
     try {
       // The agent reads the page as saved.
       await autosave.settle();
-      const result = await fixDraftRules(draft.id, draft.brandId, request);
+      const result = await fixDraftRules(draft.id, draft.brandId, request).catch((err) => {
+        // The call itself gave up (a timeout on the way): the agent may still finish.
+        console.error('Failed to hear back from the Content Agent:', err);
+        return { error: 'unconfirmed' as const };
+      });
+      if ('error' in result && result.error === 'unconfirmed') {
+        // No answer is not a failure: its batch shows if it lands in time.
+        const landed = await agentBatch(draft.id, asked + FIX_WAIT_MS);
+        if (!landed) {
+          toast.error(t('suggestions.fixErrors.failed'));
+          return;
+        }
+        setSuggestions(landed);
+        setBarClosed(false);
+        agentBeforeKept.current = false;
+        toast.success(
+          t('suggestions.fixed', { count: landed.filter((s) => s.status === 'open').length }),
+        );
+        return;
+      }
       if ('error' in result) {
         toast.error(t(`suggestions.fixErrors.${result.error}`));
         // Another tab (or the API) left them: show them here to decide.

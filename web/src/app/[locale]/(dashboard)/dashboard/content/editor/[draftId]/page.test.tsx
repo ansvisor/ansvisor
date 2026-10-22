@@ -1655,6 +1655,56 @@ describe('the side panel', () => {
       );
     });
 
+    // A timeout on the way back is not the agent failing: it may still finish.
+    it('shows the agent’s batch when it lands after the answer didn’t come back', async () => {
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
+      try {
+        getContentDraft.mockResolvedValue(traced);
+        getDraftSuggestions
+          .mockResolvedValueOnce([])
+          .mockResolvedValueOnce([])
+          .mockResolvedValueOnce([agentSuggestion]);
+        fixDraftRules.mockRejectedValue(new Error('An unexpected response was received'));
+        await openRules();
+
+        await act(async () => panelButton('Fix open rules with agent').click());
+        await act(async () => void (await vi.advanceTimersByTimeAsync(5_000)));
+        expect(toast.error).not.toHaveBeenCalled();
+        await act(async () => void (await vi.advanceTimersByTimeAsync(5_000)));
+        await act(async () => {});
+
+        expect(getDraftSuggestions).toHaveBeenCalledTimes(3);
+        expect(
+          container.querySelector('[role="region"][aria-label="Agent suggestions"]')!.textContent,
+        ).toContain('Content Agent suggested 1 change');
+        expect(toast.success).toHaveBeenCalledWith(
+          'Content Agent suggested 1 change · review them in the page',
+        );
+        expect(toast.error).not.toHaveBeenCalled();
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('says the agent couldn’t run when no batch lands in time', async () => {
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
+      try {
+        getContentDraft.mockResolvedValue(traced);
+        getDraftSuggestions.mockResolvedValue([]);
+        fixDraftRules.mockResolvedValue({ error: 'unconfirmed' });
+        await openRules();
+
+        await act(async () => panelButton('Fix open rules with agent').click());
+        await act(async () => void (await vi.advanceTimersByTimeAsync(85_000)));
+        expect(toast.error).not.toHaveBeenCalled();
+        await act(async () => void (await vi.advanceTimersByTimeAsync(10_000)));
+        await act(async () => {});
+        expect(toast.error).toHaveBeenCalledWith("Content Agent couldn't run. Try again.");
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
     it('fixes only the AI traces from their rule', async () => {
       getContentDraft.mockResolvedValue(traced);
       await openRules();
