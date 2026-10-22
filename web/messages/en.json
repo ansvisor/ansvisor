@@ -3655,6 +3655,7 @@
         "label": "Side panel",
         "show": "Show side panel",
         "hide": "Hide side panel",
+        "openTab": "Open {tab} in the side panel",
         "tabs": {
           "impact": "Impact",
           "brief": "Brief",
@@ -3853,7 +3854,6 @@
         }
       },
       "rulesChip": "Rules {met}/{total}",
-      "rulesChipShort": "{met}/{total}",
       "rulesChipHint": "Rules this page meets now. Open the Rules tab.",
       "rules": {
         "set": "Rule set",
