@@ -200,4 +200,41 @@ describe('extractPageContent', () => {
       expect(html).not.toContain(gone);
     }
   });
+
+  it('keeps a collapsed FAQ answer in the text, and hides what is hidden around it', () => {
+    const { html } = extractPageContent(
+      `<body><div hidden class="mobile-menu"><p>Shop all our coffee subscriptions and gifts today.</p></div>
+        <main><h1>Coffee subscription FAQ</h1>
+        <div class="faq">
+          <p>Answers to what customers ask most about deliveries, plans and pausing.</p>
+          <h3>Can I pause my plan?</h3>
+          <div hidden><p>Yes, pause or skip any delivery from your account, up to two days before it ships.</p></div>
+          <h3>Do you ship abroad?</h3>
+          <div hidden="until-found"><p>We ship to the EU and the UK, with tracked delivery in three to five days.</p></div>
+          <h3>Is grinding free?</h3>
+          <div style="display: none"><p>Grinding is free: pick whole bean, espresso, filter or French press.</p></div>
+        </div>
+      </main></body>`,
+      'https://acme-coffee.example/faq',
+    );
+    for (const kept of ['pause or skip', 'We ship to the EU', 'Grinding is free']) {
+      expect(html).toContain(kept);
+    }
+    expect(html).toContain('hidden="until-found"');
+    expect(html).not.toContain('Shop all our coffee');
+  });
+
+  it('judges images in the text as the text’s when the text area is the root', () => {
+    const { html } = extractPageContent(
+      `<body><article>
+        <p>Our guide to brewing a better cup at home, with the gear you already own.</p>
+        <p>Start with fresh beans, a scale and water just off the boil, then time it.</p>
+        <img class="size-thumbnail" src="/pour-over.jpg" alt="Pour-over">
+        <img class="avatar" src="/ada.jpg" alt="Ada">
+      </article></body>`,
+      'https://acme-coffee.example/guides/brew',
+    );
+    expect(html).toContain('src="https://acme-coffee.example/pour-over.jpg"');
+    expect(html).not.toContain('ada.jpg');
+  });
 });

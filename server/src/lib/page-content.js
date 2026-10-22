@@ -26,9 +26,17 @@ const MAX_JSON_LD_LENGTH = 50_000;
 /** Where a page's own content usually is, the most telling first. */
 const MAIN_SELECTORS = ['main', 'article', '[role="main"]', '#content', '#main'];
 
-/** The site's frame, what can't be content, and what the page hides. */
+/** The site's frame, and what can't be content. */
 const FRAME =
-  'script, style, noscript, template, iframe, object, embed, form, button, input, select, textarea, svg, canvas, nav, header, footer, aside, [role="navigation"], [role="banner"], [role="contentinfo"], [aria-hidden="true"], [hidden], [style*="display:none"], [style*="display: none"], .w-condition-invisible';
+  'script, style, noscript, template, iframe, object, embed, form, button, input, select, textarea, svg, canvas, nav, header, footer, aside, [role="navigation"], [role="banner"], [role="contentinfo"], [aria-hidden="true"], .w-condition-invisible';
+
+/**
+ * What the page hides, taken out around the text only: a collapsed FAQ
+ * answer ships hidden, and it is just the text an AEO page needs. A block
+ * hidden until found (the browser's search opens it) is never taken out.
+ */
+const HIDDEN =
+  '[hidden]:not([hidden="until-found"]), [style*="display:none"], [style*="display: none"]';
 
 /**
  * Words in a block's class or id that name furniture: anywhere, even in the
@@ -181,13 +189,16 @@ function textOf($, el) {
 function findTextArea($, body) {
   const scores = new Map();
   let total = 0;
-  // An author's bio or a comment is no sign of where the text is.
+  // An author's bio or a comment is no sign of where the text is, nor is
+  // what the page hides: the text is where its visible paragraphs are, and
+  // a hidden answer inside it stays (HIDDEN).
   const paragraphs = body
     .find('p, pre, blockquote, li')
     .toArray()
     .filter(
       (el) =>
         clean($(el).text()).length >= MIN_PARAGRAPH &&
+        $(el).closest(HIDDEN).length === 0 &&
         !$(el)
           .parents()
           .toArray()
@@ -262,6 +273,13 @@ export function extractPageContent(html, pageUrl) {
   // The root: the page's main block when it holds the text; else the part
   // of the page holding the text and its H1; else the text area alone.
   const textArea = findTextArea($, body);
+  body
+    .find(HIDDEN)
+    .filter(
+      (_, el) =>
+        !textArea || ($(el).closest(textArea).length === 0 && !$(el).find(textArea).length),
+    )
+    .remove();
   const heading = body.find('h1').first()[0] ?? null;
   const main = MAIN_SELECTORS.map((selector) => $(selector).toArray())
     .flat()
@@ -347,8 +365,11 @@ export function extractPageContent(html, pageUrl) {
       return Number.isFinite(size) && size > 0 && size <= MAX_ICON_SIZE;
     });
     const above = $el.parentsUntil(root).toArray();
+    // In the text when the root is the text area itself, as strip has it.
     const words =
-      textArea && above.includes(textArea) ? IMAGE_FURNITURE_WORDS : PAGE_IMAGE_FURNITURE_WORDS;
+      textArea && (root[0] === textArea || above.includes(textArea))
+        ? IMAGE_FURNITURE_WORDS
+        : PAGE_IMAGE_FURNITURE_WORDS;
     // Its own name or its block's, not the text's or the H1's wrappers.
     const marked =
       !above.some((node) => lists.has(node)) &&
