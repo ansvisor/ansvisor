@@ -402,6 +402,28 @@ describe('createContentDraft', () => {
     });
   });
 
+  it('starts a page brought in with the prompts its title and headings speak to', async () => {
+    reads = {
+      prompts: [
+        { id: 'p1', text: 'Pricing plans for small teams?' },
+        { id: 'p2', text: 'Best espresso grinder' },
+        { id: 'p3', text: 'Pricing of espresso machines' },
+      ],
+    };
+    await createContentDraft(
+      BRAND,
+      start({
+        method: 'optimize',
+        title: 'Pricing',
+        pageType: 'pricing',
+        source: { kind: 'content' },
+        bodyHtml: '<h1>Pricing</h1><h2>Plans for small teams</h2><p>From 12 a month.</p>',
+      }),
+    );
+    // p3 shares one word only.
+    expect(inserted()).toMatchObject({ prompt_ids: ['p1'] });
+  });
+
   it('writes nothing for a source the member can’t read, or a start that isn’t valid', async () => {
     await expect(createContentDraft(BRAND, start())).rejects.toThrow('not_found');
     await expect(

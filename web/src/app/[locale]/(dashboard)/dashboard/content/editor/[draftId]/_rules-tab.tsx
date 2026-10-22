@@ -73,11 +73,17 @@ export function RulesTab({
   siteType,
   draftPageType,
   agentFix,
+  onOpenSources,
 }: {
   state: DraftRulesState;
   siteType: SiteType;
   draftPageType: PageType | null;
   agentFix?: AgentFix;
+  /**
+   * Opens the Sources tab, where a draft with no prompts (so no fan-outs)
+   * gets them; none while the sources are read, or when the draft has prompts.
+   */
+  onOpenSources?: () => void;
 }) {
   const t = useTranslations('contentEditor.editor.rules');
   const tTypes = useTranslations('contentEditor.pageTypes');
@@ -174,6 +180,7 @@ export function RulesTab({
                   status={status}
                   onChange={(change) => state.change(rule.key, change)}
                   agentFix={rule.key === 'aiTraces' ? agentFix : undefined}
+                  onOpenSources={onOpenSources}
                 />
               ))}
             </ul>
@@ -351,12 +358,14 @@ function RuleRow({
   status,
   onChange,
   agentFix,
+  onOpenSources,
 }: {
   rule: ActiveRule;
   status: RuleStatus;
   onChange: (change: { on?: boolean; value?: string }) => void;
   /** "Remove AI traces" offers Fix: the agent rewrites only those phrases. */
   agentFix?: AgentFix;
+  onOpenSources?: () => void;
 }) {
   const t = useTranslations('contentEditor.editor.rules');
   const name = t(`names.${rule.key}`);
@@ -379,7 +388,7 @@ function RuleRow({
         >
           {name}
         </span>
-        <StatusBadge on={rule.on} status={status} />
+        <StatusBadge on={rule.on} status={status} onOpenSources={onOpenSources} />
         {agentFix && rule.on && status.state === 'bad' && (
           <button
             type="button"
@@ -487,8 +496,29 @@ export function ruleStatusDetail(
   return ruleStatusText(t, status);
 }
 
-function StatusBadge({ on, status }: { on: boolean; status: RuleStatus }) {
+function StatusBadge({
+  on,
+  status,
+  onOpenSources,
+}: {
+  on: boolean;
+  status: RuleStatus;
+  onOpenSources?: () => void;
+}) {
   const t = useTranslations('contentEditor.editor.rules.status');
+  if (on && onOpenSources && status.state === 'info' && status.code === 'noFanouts') {
+    // No fan-outs means no prompts yet: where to add them.
+    return (
+      <button
+        type="button"
+        title={t('noFanoutsHint')}
+        onClick={onOpenSources}
+        className="w-20 shrink-0 truncate text-right text-[11px] font-medium text-primary underline underline-offset-2 hover:no-underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+      >
+        {t('addPrompts')}
+      </button>
+    );
+  }
   if (!on) {
     return (
       <span className="w-20 shrink-0 text-right text-[11px] text-muted-foreground">{t('off')}</span>

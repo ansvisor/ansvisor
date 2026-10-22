@@ -4059,6 +4059,8 @@
           "aiCheck": "AI check",
           "needsFeed": "Needs feed",
           "noFanouts": "No fan-outs",
+          "addPrompts": "Add prompts",
+          "noFanoutsHint": "No fan-outs yet: they come from the page's prompts. Add its prompts in Sources.",
           "addKeywords": "Add keywords",
           "notHowTo": "Not a how-to",
           "englishOnly": "English only",

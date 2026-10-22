@@ -35,6 +35,7 @@ import {
 } from '@/lib/content/editor';
 import { detectPageType, siteTypeOf, type SiteType } from '@/lib/content/page-types';
 import { sanitizeDraftHtml } from '@/lib/content/sanitize-draft-html';
+import { matchPagePrompts } from '@/lib/content/page-prompts';
 import {
   NO_DRAFT_RULES,
   draftRulesFit,
@@ -487,17 +488,40 @@ const startInput = z.object({
 /** The most prompt ids a draft keeps (00206). */
 const MAX_DRAFT_PROMPTS = 500;
 
+/** The brand's active prompts read to match a page brought in (matchPagePrompts). */
+const PAGE_PROMPTS_READ = 1_000;
+
 /**
  * The tracked prompts a page started from this source should answer: an
- * opportunity's (its clusters', or its one prompt), the prompt picked, or a
- * topic's active prompts. Throws 'not_found' for one the member can't read.
+ * opportunity's (its clusters', or its one prompt), the prompt picked, a
+ * topic's active prompts, or, for a page brought in (pasted, read from its
+ * URL or a file), the active prompts its title and headings speak to.
+ * Throws 'not_found' for one the member can't read.
  */
 async function promptsFor(
   supabase: Awaited<ReturnType<typeof createClient>>,
   brandId: string,
   source: DraftStart['source'],
+  /** The page brought in; none for the overlap check, which has no page yet. */
+  page: { title: string; html: string } = { title: '', html: '' },
 ): Promise<{ promptIds: string[]; opportunityId: string | null }> {
-  if (source.kind === 'content') return { promptIds: [], opportunityId: null };
+  if (source.kind === 'content') {
+    if (!page.html) return { promptIds: [], opportunityId: null };
+    const { data, error } = await supabase
+      .from('prompts')
+      .select('id, text, prompt_sets!inner(brand_id)')
+      .eq('prompt_sets.brand_id', brandId)
+      .eq('is_active', true)
+      // The newest first, for a brand with more than are read.
+      .order('created_at', { ascending: false })
+      .limit(PAGE_PROMPTS_READ);
+    // Without them the page still starts, with its prompts to add in Sources.
+    if (error) {
+      console.error('Failed to read the prompts to match an imported page:', error);
+      return { promptIds: [], opportunityId: null };
+    }
+    return { promptIds: matchPagePrompts(page.title, page.html, data ?? []), opportunityId: null };
+  }
 
   if (source.kind === 'opportunity') {
     const { data, error } = await supabase
@@ -903,7 +927,7 @@ const overlapSource = startInput.shape.source;
  * Start's overlap check (CE-015): the brand's own pages AI cites for the
  * prompts a page started from this source would answer (00207), with prompts
  * in common, citations and Google position. Nothing to check for content
- * brought to optimize: it has no prompts yet.
+ * brought to optimize: it is the page itself.
  */
 export async function getContentOverlap(
   brandId: string,
@@ -951,7 +975,16 @@ export async function createContentDraft(brandId: string, start: DraftStart): Pr
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) throw new Error('unauthorized');
-  const { promptIds, opportunityId } = await promptsFor(supabase, brandId, source);
+  const bodyHtmlKept =
+    bodyHtml !== undefined
+      ? sanitizeDraftHtml(bodyHtml)
+      : title
+        ? `<h1>${escapeHtml(title)}</h1>`
+        : '';
+  const { promptIds, opportunityId } = await promptsFor(supabase, brandId, source, {
+    title,
+    html: bodyHtml !== undefined ? bodyHtmlKept : '',
+  });
 
   const { data, error } = await supabase
     .from('content_drafts')
@@ -962,12 +995,7 @@ export async function createContentDraft(brandId: string, start: DraftStart): Pr
       title,
       page_type: pageType,
       page_type_source: typePicked ? 'user' : 'detected',
-      body_html:
-        bodyHtml !== undefined
-          ? sanitizeDraftHtml(bodyHtml)
-          : title
-            ? `<h1>${escapeHtml(title)}</h1>`
-            : '',
+      body_html: bodyHtmlKept,
       opportunity_id: opportunityId,
       source_url: sourceUrl ?? null,
       prompt_ids: [...new Set(promptIds)].slice(0, MAX_DRAFT_PROMPTS),
