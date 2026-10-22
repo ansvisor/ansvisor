@@ -3,6 +3,7 @@
 import { createClient } from '@/lib/supabase/server';
 import type { ContentBrief, ContentOpportunity, OpportunityBasket, WebhookConfig } from '@/types';
 import { API_BASE_URL } from '@/config/api';
+import { apiFailure, type ApiFailure } from '@/lib/api-failure';
 import type { ContentUsage } from '@/lib/content-usage';
 
 const AEO_SERVER_URL = API_BASE_URL;
@@ -31,7 +32,14 @@ export interface OnDemandRequest {
 
 export type OnDemandResult =
   | { ok: true; jobId: string; count: number }
-  | { ok: false; error: string; quotaExhausted?: boolean; periodEnd?: string | null };
+  | {
+      ok: false;
+      error: string;
+      /** Why, for the toast to say in plain words (BUG-001). */
+      failure: ApiFailure;
+      quotaExhausted?: boolean;
+      periodEnd?: string | null;
+    };
 
 /** Starts generating opportunities now ("+ New"); errors come back as values. */
 export async function generateOpportunitiesOnDemand(
@@ -53,6 +61,7 @@ export async function generateOpportunitiesOnDemand(
     return {
       ok: false,
       error: body.message || body.error || `Server error: ${res.status}`,
+      failure: apiFailure(res.status, body),
       quotaExhausted: body.error === 'quota_exhausted',
       periodEnd: body.periodEnd ?? null,
     };
@@ -623,7 +632,13 @@ export async function saveWebhookConfig(
 
 export type AlternativeResult =
   | { ok: true; jobId: string }
-  | { ok: false; error: string; quotaExhausted?: boolean; noCluster?: boolean };
+  | {
+      ok: false;
+      error: string;
+      failure: ApiFailure;
+      quotaExhausted?: boolean;
+      noCluster?: boolean;
+    };
 
 /**
  * "Another angle" (CONTENT-006): starts generating one more opportunity for
@@ -649,6 +664,7 @@ export async function suggestAlternative(
     return {
       ok: false,
       error: body.message || body.error || `Server error: ${res.status}`,
+      failure: apiFailure(res.status, body),
       quotaExhausted: body.error === 'quota_exhausted',
       noCluster: body.error === 'no_cluster',
     };
@@ -659,7 +675,7 @@ export async function suggestAlternative(
 export type PromptSuggestionResult =
   | { ok: true; jobId: string }
   | { ok: true; existingId: string }
-  | { ok: false; error: string; quotaExhausted?: boolean };
+  | { ok: false; error: string; failure: ApiFailure; quotaExhausted?: boolean };
 
 /**
  * "Suggest content" from the prompts table (PROMPT-006): one content
@@ -686,6 +702,7 @@ export async function suggestContentForPrompt(
     return {
       ok: false,
       error: body.message || body.error || `Server error: ${res.status}`,
+      failure: apiFailure(res.status, body),
       quotaExhausted: body.error === 'quota_exhausted',
     };
   }

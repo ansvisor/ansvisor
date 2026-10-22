@@ -21,6 +21,7 @@ import {
   assertOpportunitiesAccess,
   assertOpportunityAccess,
   assertPromptAccess,
+  NOT_IN_WORKSPACE,
 } from '../lib/access.js';
 import { loadClusters } from '../lib/prompt-clusters.js';
 import { sendToActionCenter } from '../lib/action-center/from-opportunity.js';
@@ -134,7 +135,7 @@ router.post('/generate', requireFeature('content_optimization'), async (req, res
       .single();
 
     if (!profile || profile.organization_id !== brand.organization_id) {
-      return res.status(403).json({ error: 'Unauthorized' });
+      return res.status(403).json({ error: NOT_IN_WORKSPACE, code: 'not_in_workspace' });
     }
 
     const job = await createJob({
@@ -231,7 +232,9 @@ router.post('/opportunities/generate', requireFeature('content_optimization'), a
         message: error.message,
       });
     }
-    if (error.status) return res.status(error.status).json({ error: error.message });
+    if (error.status) {
+      return res.status(error.status).json({ error: error.message, code: error.code });
+    }
     req.log.error({ err: error }, 'on-demand opportunity generation error');
     return res.status(500).json({ error: 'Failed to start generation' });
   }
@@ -315,7 +318,9 @@ router.post('/:id/alternative', requireFeature('content_optimization'), async (r
         message: error.message,
       });
     }
-    if (error.status) return res.status(error.status).json({ error: error.message });
+    if (error.status) {
+      return res.status(error.status).json({ error: error.message, code: error.code });
+    }
     req.log.error({ err: error }, 'alternative opportunity error');
     return res.status(500).json({ error: 'Failed to start generation' });
   }
@@ -337,7 +342,9 @@ router.get(
       const existingId = await openOpportunityForPrompt(prompt.prompt_sets.brand_id, promptId);
       return res.json({ existingId });
     } catch (error) {
-      if (error.status) return res.status(error.status).json({ error: error.message });
+      if (error.status) {
+        return res.status(error.status).json({ error: error.message, code: error.code });
+      }
       req.log.error({ err: error }, 'prompt content suggestion lookup error');
       return res.status(500).json({ error: 'Failed to look up the suggestion' });
     }
@@ -404,7 +411,9 @@ router.post(
           message: error.message,
         });
       }
-      if (error.status) return res.status(error.status).json({ error: error.message });
+      if (error.status) {
+        return res.status(error.status).json({ error: error.message, code: error.code });
+      }
       req.log.error({ err: error }, 'prompt content suggestion error');
       return res.status(500).json({ error: 'Failed to start generation' });
     }
@@ -1530,7 +1539,7 @@ router.post('/:id/brief', async (req, res) => {
 
     const userOrgId = await getOrgIdForUser(req.user.id);
     if (!brand || !userOrgId || userOrgId !== brand.organization_id) {
-      return res.status(403).json({ error: 'Unauthorized' });
+      return res.status(403).json({ error: NOT_IN_WORKSPACE, code: 'not_in_workspace' });
     }
 
     const result = await generateBriefForOpportunity(id, { model });
