@@ -9,7 +9,7 @@ import { Plugin, PluginKey, type EditorState, type Transaction } from '@tiptap/p
 import { Decoration, DecorationSet } from '@tiptap/pm/view';
 import { cleanHtml } from '@/lib/content/clean-html';
 import { passageKey } from '@/lib/content/cited-passages';
-import type { DraftSuggestion } from '@/lib/content/suggestions';
+import { growsPastLimit, type DraftSuggestion } from '@/lib/content/suggestions';
 import { blockKey, citedLocks, citedPassagesKey, type CitedLocks } from './_cited-passages';
 
 /**
@@ -34,6 +34,7 @@ export interface SuggestionLabels {
   restore: string;
   locked: string;
   stale: string;
+  heading: string;
 }
 
 interface SuggestionView {
@@ -212,10 +213,16 @@ export function blockedReason(
   all: DraftSuggestion[],
   doc: PmNode = state.doc,
   locks: CitedLocks = citedLocks(state),
-): 'stale' | 'locked' | null {
+): 'stale' | 'locked' | 'heading' | null {
   const placed = placeSuggestion(state, { ...s, status: 'open' }, all, doc);
   if (!placed) return 'stale';
   if (placed.at === 'words' && lockedBlock(placed.block, locks)) return 'locked';
+  if (placed.at === 'words' && placed.block.node.type.name === 'heading') {
+    // A heading that would grow past its limit has taken in an answer.
+    const now = placed.block.node.textContent.length;
+    const then = now - s.beforeText.length + s.afterText.length;
+    if (growsPastLimit(placed.block.node.attrs.level, now, then)) return 'heading';
+  }
   return null;
 }
 
@@ -350,7 +357,7 @@ function badge(text: string, tone: 'ok' | 'no'): HTMLElement {
 function card(
   s: DraftSuggestion,
   labels: SuggestionLabels,
-  blocked: 'stale' | 'locked' | null,
+  blocked: 'stale' | 'locked' | 'heading' | null,
   decide: (id: string, decision: SuggestionDecision) => void,
 ): HTMLElement {
   if (s.status === 'rejected') {

@@ -432,6 +432,7 @@ export function DraftEditor({
       restore: t('suggestions.restore'),
       locked: t('suggestions.locked'),
       stale: t('suggestions.stale'),
+      heading: t('suggestions.heading'),
     }),
     [t],
   );

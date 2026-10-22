@@ -4,6 +4,7 @@ import { z } from 'zod';
 import supabaseAdmin from '../config/supabase.js';
 import { resolveModel } from './ai-provider.js';
 import {
+  HEADING_RULE,
   MAX_AGENT_SUGGESTIONS,
   draftPassages,
   hasOpenSuggestions,
@@ -104,6 +105,7 @@ Rules for your suggestions:
 - Make the page answer the questions and AI searches listed, follow the brief when there is one, and meet the rules listed.
 - A replace changes words inside one passage: copy "before" exactly as that passage has it (a phrase or a sentence), and write "after" as plain text that fits in its place.
 - An insert adds new blocks after a passage, as simple HTML (h2, h3, p, ul, ol, li, strong, em): a missing section, a direct answer, an FAQ.
+${HEADING_RULE}
 - Never change a passage marked LOCKED: AI assistants quote its wording today. You may insert after it.
 - Put the keys of the rules a change meets in "rules" (none when it meets none).
 - Use only facts from the page and the brand. Never invent numbers, prices, dates, names, sources or quotes; write a placeholder in square brackets instead, e.g. [figure, source, year].

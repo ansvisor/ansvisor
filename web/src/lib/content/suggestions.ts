@@ -31,6 +31,28 @@ export interface DraftSuggestion {
   status: SuggestionStatus;
 }
 
+/**
+ * How long an agent's change may make a heading, by level: an H1 around 50–60
+ * characters, an H2 8–15 words, as 2026's SEO/AEO guides advise. Longer, it
+ * has taken in an answer (the agent glued "What is X? X is …" into H2s). The
+ * same as HEADING_LIMITS in server/src/lib/content-agent.js; a person's own
+ * headings are never held.
+ */
+export const HEADING_LIMITS = { h1: 70, other: 90 } as const;
+
+/** The longest an agent may make a heading of this level (1–6). */
+export function headingLimit(level: number): number {
+  return level === 1 ? HEADING_LIMITS.h1 : HEADING_LIMITS.other;
+}
+
+/**
+ * Whether changing a heading from `now` to `then` characters grows it past
+ * its limit: one already longer may still be shortened.
+ */
+export function growsPastLimit(level: number, now: number, then: number): boolean {
+  return then > headingLimit(level) && then > now;
+}
+
 /** The most suggestions decided at once (00217). */
 export const MAX_DECIDE = 200;
 

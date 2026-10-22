@@ -1078,8 +1078,37 @@ describe('the content editor', () => {
       expect(pageText()).toContain(VAGUE);
       expect(decideDraftSuggestions).not.toHaveBeenCalled();
       expect(toast).toHaveBeenCalledWith(
-        "2 suggestions couldn't be applied: the page changed there, or AI quotes the passage.",
+        "2 suggestions couldn't be applied: the page changed there, AI quotes the passage, or a heading would get too long.",
       );
+    });
+
+    it('never glues an answer into a heading, and takes a short change to one', async () => {
+      const ANSWER =
+        'Pipeline forecasting? It predicts which deals close this quarter from the activity on each one, team by team, against the revenue that closed.';
+      getContentDraft.mockResolvedValue(page);
+      getDraftSuggestions.mockResolvedValue([
+        suggestion({
+          blockText: 'Pipeline forecasting',
+          beforeText: 'Pipeline forecasting',
+          afterText: ANSWER,
+        }),
+        suggestion({
+          id: 's4',
+          blockText: 'Pipeline forecasting',
+          beforeText: 'forecasting',
+          afterText: 'forecasting, explained',
+        }),
+      ]);
+      await renderPage();
+
+      const glued = cardOf('s1')!;
+      expect(glued.textContent).toContain('This would put more than a heading into the heading.');
+      expect(
+        [...glued.querySelectorAll('button')].find((b) => b.textContent === 'Accept')!.disabled,
+      ).toBe(true);
+      await press('s4', 'Accept');
+      expect(pageText()).toContain('Pipeline forecasting, explained');
+      expect(pageText()).not.toContain('It predicts which deals');
     });
 
     it('leaves the page and the card as they were when the decision can’t be saved', async () => {

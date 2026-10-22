@@ -1,5 +1,6 @@
 import sanitizeHtml from 'sanitize-html';
 import { passageKey } from './cited-passages';
+import { growsPastLimit, headingLimit } from './suggestions';
 
 /**
  * An agent's suggestions through the editor API (CE-022): the same contract
@@ -67,6 +68,62 @@ export function cleanInsertHtml(html: string): string {
 const textOf = (html: string) =>
   decodeEntities(sanitizeHtml(html ?? '', { allowedTags: [], allowedAttributes: {} }));
 
+const isHeading = (tag: string) => /^h[1-6]$/.test(tag);
+
+/** A heading tag's level: h2 → 2. */
+const levelOf = (tag: string) => Number(tag.slice(1));
+
+/** The shortest answer a heading's replace may carry for it to go under the heading. */
+const MIN_ANSWER_CHARS = 40;
+
+/** Where the first block of a cleaned HTML starts. */
+const BLOCK_START = /<(?:h[2-4]|p|ul|ol|li)>/;
+
+const escapeHtml = (text: string) =>
+  text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+/**
+ * A replace's "after" split into the words that go in its passage and the
+ * blocks that go after it, as the Content Agent splits it on the server
+ * (splitReplace in server/src/lib/content-agent.js). Agents asked to answer
+ * under a heading write the heading and its answer (or a whole FAQ) as the
+ * replace, which would glue them onto the heading's line. The words are its
+ * leading text, or its first block when that is of the passage's kind; the
+ * rest is an insert. On a heading, plain text that answers its question
+ * ("What is X? X is …", the answer MIN_ANSWER_CHARS or more) keeps the
+ * question, and the answer becomes a paragraph.
+ */
+export function splitReplace(after: string, tag: string): { words: string; blocks: string } {
+  const html = cleanInsertHtml(after);
+  const start = html.search(BLOCK_START);
+  let words = start === -1 ? html : html.slice(0, start);
+  let blocks = start === -1 ? '' : html.slice(start);
+  if (!textOf(words).trim()) {
+    const own = blocks.match(
+      isHeading(tag) ? /^<(h[2-4])>([\s\S]*?)<\/\1>/ : /^<(p)>([\s\S]*?)<\/p>/,
+    );
+    if (own) {
+      words = own[2];
+      blocks = blocks.slice(own[0].length);
+    }
+  }
+  // Line breaks and runs of spaces, not a non-breaking space the passage may keep.
+  words = textOf(words)
+    .replace(/[ \t\r\n\f]+/g, ' ')
+    .trim();
+  if (isHeading(tag) && !blocks) {
+    const answered = words.match(/^(.+?[?？])\s+(\S.*)$/);
+    if (
+      answered &&
+      (answered[2].length >= MIN_ANSWER_CHARS || words.length > headingLimit(levelOf(tag)))
+    ) {
+      words = answered[1];
+      blocks = `<p>${escapeHtml(answered[2])}</p>`;
+    }
+  }
+  return { words, blocks: blocks.trim() };
+}
+
 /** What an agent sends: passage numbers are 1-based, as get_content_draft lists them. */
 export interface AgentSuggestionInput {
   kind: 'replace' | 'insert';
@@ -94,12 +151,16 @@ export type DroppedReason =
   | 'no_change'
   | 'empty'
   | 'duplicate'
-  | 'too_many';
+  | 'too_many'
+  | 'heading_too_long';
 
 /**
  * The suggestions the editor can apply: a passage that exists; a replace's
  * words found in it as written, changed, and never on a locked passage; an
- * insert's HTML cleaned and not empty; each change once.
+ * insert's HTML cleaned and not empty; each change once. A replace that
+ * carries blocks, or an answer on a heading, is split into a replace and an
+ * insert after it (splitReplace); one that would still leave a heading over
+ * grow a heading past its limit (growsPastLimit) is dropped.
  */
 export function keepAgentSuggestions(
   raw: AgentSuggestionInput[],
@@ -117,39 +178,70 @@ export function keepAgentSuggestions(
     const reason = s.reason.trim().slice(0, 300);
     if (!reason) return drop('empty');
     const rules = [...new Set((s.rules ?? []).map((r) => r.trim()).filter(Boolean))].slice(0, 20);
-    if (s.kind === 'replace') {
+    const insertOf = (html: string): { id: string; row: KeptSuggestion } | null =>
+      textOf(html).trim() && html.length <= 20_000
+        ? {
+            id: `insert:${passage.text}:${html}`,
+            row: {
+              kind: 'insert',
+              block_text: passage.text,
+              before_text: '',
+              after_text: html,
+              reason,
+              rule_keys: rules,
+            },
+          }
+        : null;
+    // One suggestion's changes are kept together, or not at all: a split
+    // replace never leaves a question without its answer.
+    const changes: { id: string; row: KeptSuggestion }[] = [];
+    if (s.kind !== 'replace') {
+      const insert = insertOf(cleanInsertHtml(s.after));
+      if (!insert) return drop('empty');
+      changes.push(insert);
+    } else {
       if (lockedKeys.has(passageKey(passage.text))) return drop('locked');
       const before = (s.before ?? '').trim();
-      const after = textOf(s.after).trim();
-      if (!before || !after) return drop('empty');
-      if (before === after || after.length > 2000) return drop('no_change');
+      const { words, blocks } = splitReplace(s.after, passage.tag);
+      if (!before || (!words && !blocks)) return drop('empty');
+      const changed = !!words && words !== before;
+      if (!changed && !blocks) return drop('no_change');
+      if (changed && words.length > 2000) return drop('no_change');
       if (!passage.text.includes(before)) return drop('not_in_passage');
-      const id = `replace:${passage.text}:${before}`;
-      if (seen.has(id)) return drop('duplicate');
-      seen.add(id);
-      kept.push({
-        kind: 'replace',
-        block_text: passage.text,
-        before_text: before,
-        after_text: after,
-        reason,
-        rule_keys: rules,
-      });
-      return;
+      if (
+        changed &&
+        isHeading(passage.tag) &&
+        growsPastLimit(
+          levelOf(passage.tag),
+          passage.text.trim().length,
+          passage.text.replace(before, () => words).trim().length,
+        )
+      ) {
+        return drop('heading_too_long');
+      }
+      if (changed) {
+        changes.push({
+          id: `replace:${passage.text}:${before}`,
+          row: {
+            kind: 'replace',
+            block_text: passage.text,
+            before_text: before,
+            after_text: words,
+            reason,
+            rule_keys: rules,
+          },
+        });
+      }
+      const insert = blocks ? insertOf(blocks) : null;
+      if (insert) changes.push(insert);
+      if (!changes.length) return drop('empty');
     }
-    const html = cleanInsertHtml(s.after);
-    if (!textOf(html).trim() || html.length > 20_000) return drop('empty');
-    const id = `insert:${passage.text}:${html}`;
-    if (seen.has(id)) return drop('duplicate');
-    seen.add(id);
-    kept.push({
-      kind: 'insert',
-      block_text: passage.text,
-      before_text: '',
-      after_text: html,
-      reason,
-      rule_keys: rules,
-    });
+    if (changes.some((c) => seen.has(c.id))) return drop('duplicate');
+    if (kept.length + changes.length > MAX_API_SUGGESTIONS) return drop('too_many');
+    for (const c of changes) {
+      seen.add(c.id);
+      kept.push(c.row);
+    }
   });
   return { kept, dropped };
 }

@@ -56,6 +56,7 @@ import {
   suggestContentChangesFor,
 } from './content';
 import { MAX_API_SUGGESTIONS } from '@/lib/content/agent-suggestions';
+import { HEADING_LIMITS } from '@/lib/content/suggestions';
 import {
   addSourceShape,
   createDraftShape,
@@ -1687,7 +1688,7 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
   server.registerTool(
     'suggest_content_changes',
     {
-      description: `Leave changes on a draft for a person to accept or reject in the editor — never applied by the agent. Read the draft with get_content_draft first: each suggestion names a passage by its number. A replace changes words in that passage ("before" copied exactly as the passage has it, "after" as plain text); an insert adds blocks after it ("after" as simple HTML: h2, h3, p, ul, ol, li, strong, em). Never change a locked passage. While a person still has the draft's open suggestions to decide, no new ones are taken: wait until get_content_draft lists none. At most ${MAX_API_SUGGESTIONS}; ones the editor can't apply come back in "dropped" with the reason (no_passage, locked, not_in_passage, no_change, empty, duplicate, too_many).`,
+      description: `Leave changes on a draft for a person to accept or reject in the editor — never applied by the agent. Read the draft with get_content_draft first: each suggestion names a passage by its number. A replace changes words in that passage ("before" copied exactly as the passage has it, "after" as plain text); an insert adds blocks after it ("after" as simple HTML: h2, h3, p, ul, ol, li, strong, em). A heading stays one line (an H1 up to ${HEADING_LIMITS.h1} characters, others up to ${HEADING_LIMITS.other}): to answer under it, insert a paragraph after it (an answer or blocks sent in a heading's replace are moved into an insert after it). Never change a locked passage. While a person still has the draft's open suggestions to decide, no new ones are taken: wait until get_content_draft lists none. At most ${MAX_API_SUGGESTIONS}; ones the editor can't apply come back in "dropped" with the reason (no_passage, locked, not_in_passage, no_change, empty, duplicate, too_many, heading_too_long).`,
       inputSchema: {
         draft_id: relaxedUuid.describe('Draft UUID.'),
         ...suggestionsShape,

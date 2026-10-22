@@ -391,6 +391,10 @@ describe('runDraftWriting on an existing page', () => {
       }),
     ]);
     expect(generateObject.mock.calls[0][0].prompt).toContain(`[2] (p, LOCKED) ${QUOTED}`);
+    // An answer goes after a heading, never into it.
+    expect(generateObject.mock.calls[0][0].system).toContain(
+      'Never write an answer, a sentence or a FAQ into a heading',
+    );
     expect(draftUpdates()).toEqual([
       { status: 'in_review', agent_state: null, agent_state_at: expect.any(String) },
     ]);

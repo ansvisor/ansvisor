@@ -81,7 +81,11 @@ export const suggestionsShape = {
         kind: z.enum(['replace', 'insert']),
         passage: z.number().int().min(1).describe('The passage number, from get_content_draft.'),
         before: z.string().max(5000).optional().describe('replace: the exact words to change.'),
-        after: z.string().min(1).max(20_000).describe('replace: the new words; insert: the HTML.'),
+        after: z
+          .string()
+          .min(1)
+          .max(20_000)
+          .describe('replace: the new words (a heading stays one short line); insert: the HTML.'),
         reason: z
           .string()
           .min(1)

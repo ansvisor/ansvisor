@@ -45,9 +45,12 @@ const {
   draftPassages,
   fixDraftRules,
   keepSuggestions,
+  growsPastLimit,
+  HEADING_LIMITS,
   MAX_PROMPT_PASSAGE_CHARS,
   passageKey,
   promptPassages,
+  splitReplace,
 } = await import('./content-agent.js');
 const { PlanLimitError } = await import('./plan-guard.js');
 
@@ -215,6 +218,138 @@ describe('keepSuggestions', () => {
   });
 });
 
+/**
+ * An answer written into a heading's replace was glued onto the heading's
+ * line ("What is LLM SEO? LLM SEO optimizes…", "Frequently Asked
+ * QuestionsWhat is an AEO tracker?…"): it now goes after the heading.
+ */
+describe('a replace on a heading', () => {
+  const page = draftPassages(
+    '<h2>What is LLM SEO</h2><p>It is new.</p><h2>FAQ</h2><p>Ask us.</p><p>Use good coffee.</p>',
+  );
+  const keep = (over) =>
+    keepSuggestions(
+      [suggestion({ passage: 1, before: 'What is LLM SEO', rules: ['faq'], ...over })],
+      page,
+      new Set(),
+      new Set(['faq']),
+    );
+
+  it('keeps the question in the heading and inserts its answer after it', () => {
+    expect(
+      keep({ after: 'What is LLM SEO? LLM SEO optimizes pages for large language models.' }),
+    ).toEqual([
+      expect.objectContaining({
+        kind: 'replace',
+        block_text: 'What is LLM SEO',
+        before_text: 'What is LLM SEO',
+        after_text: 'What is LLM SEO?',
+      }),
+      expect.objectContaining({
+        kind: 'insert',
+        block_text: 'What is LLM SEO',
+        after_text: '<p>LLM SEO optimizes pages for large language models.</p>',
+        rule_keys: ['faq'],
+      }),
+    ]);
+  });
+
+  it('turns a heading sent with its blocks into the heading and an insert', () => {
+    const kept = keepSuggestions(
+      [
+        suggestion({
+          passage: 3,
+          before: 'FAQ',
+          after:
+            '<h2>Frequently Asked Questions</h2><h3>What is an AEO tracker?</h3><p>An AEO tracker monitors AI answers.</p>',
+        }),
+      ],
+      page,
+      new Set(),
+      new Set(),
+    );
+    expect(kept.map((k) => [k.kind, k.after_text])).toEqual([
+      ['replace', 'Frequently Asked Questions'],
+      ['insert', '<h3>What is an AEO tracker?</h3><p>An AEO tracker monitors AI answers.</p>'],
+    ]);
+  });
+
+  it('leaves only the insert when the heading keeps its words', () => {
+    expect(
+      keep({ after: '<h2>What is LLM SEO</h2><p>LLM SEO optimizes pages.</p>' }).map((k) => k.kind),
+    ).toEqual(['insert']);
+  });
+
+  it('keeps a split suggestion whole, or not at all, at the cap', () => {
+    const many = Array.from({ length: 7 }, (_, i) =>
+      suggestion({ kind: 'insert', passage: 2, before: '', after: `<p>Note ${i}.</p>` }),
+    );
+    const answer = suggestion({
+      after: 'What is LLM SEO? LLM SEO optimizes pages for large language models.',
+    });
+    const kept = keepSuggestions(
+      [...many, { ...answer, passage: 1, before: 'What is LLM SEO' }],
+      page,
+      new Set(),
+      new Set(),
+    );
+    expect(kept).toHaveLength(7);
+    expect(kept.every((k) => k.kind === 'insert')).toBe(true);
+  });
+
+  it('drops one that would still make the heading over its length', () => {
+    expect(keep({ after: 'What is LLM SEO '.repeat(10) })).toEqual([]);
+  });
+
+  it('holds an H1 to 70 characters and other headings to 90, unless they get shorter', () => {
+    expect(HEADING_LIMITS).toEqual({ h1: 70, other: 90 });
+    const h1 = { tag: 'h1', text: 'Guide' };
+    const h2 = { tag: 'h2', text: 'Guide' };
+    expect(growsPastLimit(h1, 'Guide', 'x'.repeat(70))).toBe(false);
+    expect(growsPastLimit(h1, 'Guide', 'x'.repeat(71))).toBe(true);
+    expect(growsPastLimit(h2, 'Guide', 'x'.repeat(90))).toBe(false);
+    expect(growsPastLimit(h2, 'Guide', 'x'.repeat(91))).toBe(true);
+    // An imported heading already over its limit may still be shortened.
+    const long = { tag: 'h2', text: 'y'.repeat(120) };
+    expect(growsPastLimit(long, 'y'.repeat(20), 'z'.repeat(10))).toBe(false);
+    expect(growsPastLimit(long, 'y'.repeat(20), 'z'.repeat(30))).toBe(true);
+    // A paragraph has no limit here.
+    expect(growsPastLimit({ tag: 'p', text: 'a' }, 'a', 'b'.repeat(500))).toBe(false);
+  });
+
+  it('keeps a heading with a second clause, and a paragraph replace as it was', () => {
+    expect(splitReplace('AEO or SEO? Which matters more in 2026', 'h2')).toEqual({
+      words: 'AEO or SEO? Which matters more in 2026',
+      blocks: '',
+    });
+    // A short second part is the heading's, not an answer.
+    expect(splitReplace("Is AEO worth it? Here's what the data says.", 'h2').blocks).toBe('');
+    expect(splitReplace('What is AEO? The complete guide.', 'h1').blocks).toBe('');
+    expect(
+      splitReplace(
+        'AEO とは？ AEO は AI アシスタントの回答に引用されるための最適化の方法です。説明します。',
+        'h2',
+      ),
+    ).toEqual({
+      words: 'AEO とは？',
+      blocks: '<p>AEO は AI アシスタントの回答に引用されるための最適化の方法です。説明します。</p>',
+    });
+    // A non-breaking space stays one, as the passage keeps it.
+    expect(splitReplace('Pour\u00a0slowly', 'p').words).toBe('Pour\u00a0slowly');
+    expect(splitReplace('Use 15 g of coffee. Then pour.', 'p')).toEqual({
+      words: 'Use 15 g of coffee. Then pour.',
+      blocks: '',
+    });
+  });
+
+  it('moves blocks sent with a paragraph replace after it', () => {
+    expect(splitReplace('<p>Use 15 g.</p><ul><li>a scale</li></ul>', 'p')).toEqual({
+      words: 'Use 15 g.',
+      blocks: '<ul><li>a scale</li></ul>',
+    });
+  });
+});
+
 describe('cleanInsertHtml', () => {
   it('keeps simple blocks without attributes and unwraps the rest', () => {
     expect(
@@ -239,7 +374,13 @@ describe('fixDraftRules', () => {
 
     expect(enforceImproveQuota).toHaveBeenCalledWith('org-1', expect.any(String));
     expect(generateObject).toHaveBeenCalledWith(
-      expect.objectContaining({ model: expect.stringMatching(/^model:/) }),
+      expect.objectContaining({
+        model: expect.stringMatching(/^model:/),
+        // An answer goes after a heading, never into it.
+        system: expect.stringContaining(
+          'Never write an answer, a sentence or a FAQ into a heading',
+        ),
+      }),
     );
     expect(result).toEqual({ count: 1, batchId: expect.any(String) });
     const usage = writes.find((w) => w.table === 'prompt_improve_usage');
