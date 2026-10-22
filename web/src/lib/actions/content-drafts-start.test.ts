@@ -68,6 +68,7 @@ vi.mock('@/lib/supabase/server', () => ({
         eq: (col: string, v: unknown) => (call.filters.push(['eq', col, v]), chain),
         in: (col: string, v: unknown) => (call.filters.push(['in', col, v]), chain),
         is: (col: string, v: unknown) => (call.filters.push(['is', col, v]), chain),
+        contains: (col: string, v: unknown) => (call.filters.push(['contains', col, v]), chain),
         order: () => chain,
         limit: () => chain,
         insert: (value: unknown) => ((call.op = 'insert'), (call.value = value), chain),
@@ -82,6 +83,7 @@ vi.mock('@/lib/supabase/server', () => ({
 }));
 
 const {
+  getOpportunityDrafts,
   createContentDraft,
   getContentOverlap,
   getContentStartOptions,
@@ -169,6 +171,41 @@ describe('getContentStartOptions', () => {
       ['eq', 'is_active', true],
       ['eq', 'prompts.is_active', true],
     ]);
+  });
+});
+
+describe('getOpportunityDrafts', () => {
+  it('maps each opportunity to the latest draft not yet published started from it', async () => {
+    reads = {
+      content_drafts: [
+        { id: 'd9', opportunity_id: OPPORTUNITY },
+        { id: 'd3', opportunity_id: OPPORTUNITY },
+        { id: 'd4', opportunity_id: 'o2' },
+      ],
+    };
+    await expect(
+      getOpportunityDrafts(BRAND, [OPPORTUNITY, OPPORTUNITY, 'not-an-id']),
+    ).resolves.toEqual({
+      [OPPORTUNITY]: 'd9',
+      o2: 'd4',
+    });
+    expect(calls).toEqual([
+      {
+        table: 'content_drafts',
+        op: 'select',
+        filters: [
+          ['eq', 'brand_id', BRAND],
+          ['in', 'opportunity_id', [OPPORTUNITY]],
+          ['in', 'status', ['draft', 'in_review', 'ready']],
+        ],
+      },
+    ]);
+  });
+
+  it('reads nothing without an opportunity to look up', async () => {
+    await expect(getOpportunityDrafts(BRAND, [])).resolves.toEqual({});
+    await expect(getOpportunityDrafts('x', [OPPORTUNITY])).resolves.toEqual({});
+    expect(calls).toEqual([]);
   });
 });
 

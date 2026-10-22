@@ -51,7 +51,6 @@ import {
   BarChart3,
   Search,
   Loader2,
-  ExternalLink,
   X,
   Settings2,
   Trash2,
@@ -79,7 +78,15 @@ import {
 } from '@/lib/actions/content';
 import type { ContentOpportunity, ContentOpportunityStatus } from '@/types';
 import { toast } from 'sonner';
-import { Link } from '@/i18n/navigation';
+import { useRouter } from '@/i18n/navigation';
+import { NewContentDialog, type DialogPreset } from '@/components/content/new-content-dialog';
+import { getOpportunityDrafts } from '@/lib/actions/content-drafts';
+import { getPlanPriorities, setPlanRowPriority } from '@/lib/actions/content-plan';
+import { OpportunityRowMenu } from '@/components/content/opportunity-row-menu';
+import { useUserRole } from '@/hooks/use-user-role';
+import { contentEditorPath } from '@/lib/content/drafts';
+import { canWriteOpportunity, opportunityStart } from '@/lib/content/opportunity-start';
+import { siteTypeOf } from '@/lib/content/page-types';
 import { WebhookSettingsDialog } from './_webhook-settings';
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet';
 import {
@@ -488,6 +495,59 @@ export default function ContentPage() {
   // Action Center's drawers: a refresh or a shared link reopens it, and
   // opening one never navigates away from the filtered list.
   const [openOpportunityId, setOpenOpportunityId] = useState<string | null>(null);
+  // Send to Editor from a row: Start for its opportunity.
+  const router = useRouter();
+  const activeBrand = useBrandStore((s) => s.brands.find((b) => b.id === s.activeBrandId));
+  const [contentPreset, setContentPreset] = useState<DialogPreset | null>(null);
+  // The drafts being written for the rows on screen, which open instead.
+  const shownIds = opportunities.map((o) => o.id).join(',');
+  const [drafts, setDrafts] = useState<{ key: string; byOpportunity: Record<string, string> }>({
+    key: '',
+    byOpportunity: {},
+  });
+  useEffect(() => {
+    if (!activeBrandId || !shownIds) return;
+    let cancelled = false;
+    getOpportunityDrafts(activeBrandId, shownIds.split(',')).then(
+      (byOpportunity) => !cancelled && setDrafts({ key: shownIds, byOpportunity }),
+      () => !cancelled && setDrafts({ key: shownIds, byOpportunity: {} }),
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [activeBrandId, shownIds]);
+  // Null until the rows' drafts are known: their button waits.
+  const draftsShown = drafts.key === shownIds ? drafts.byOpportunity : null;
+  // Send to Plan: which rows are a priority in the Content plan already.
+  const { canManage } = useUserRole();
+  const [priorities, setPriorities] = useState<{ key: string; ids: string[] }>({
+    key: '',
+    ids: [],
+  });
+  useEffect(() => {
+    if (!activeBrandId || !shownIds || !canManage) return;
+    let cancelled = false;
+    getPlanPriorities(activeBrandId, shownIds.split(',')).then(
+      (ids) => !cancelled && setPriorities({ key: shownIds, ids }),
+      () => !cancelled && setPriorities({ key: shownIds, ids: [] }),
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [activeBrandId, shownIds, canManage]);
+  const prioritiesShown = priorities.key === shownIds ? priorities.ids : null;
+  const handleSendToPlan = async (id: string) => {
+    if (!activeBrandId) return;
+    try {
+      await setPlanRowPriority(activeBrandId, `opportunity:${id}`, true);
+      setPriorities((p) => ({ ...p, ids: [...p.ids, id] }));
+      toast.success(t('sentToPlan'), {
+        action: { label: t('openPlan'), onClick: () => router.push('/dashboard/content/plan') },
+      });
+    } catch {
+      toast.error(t('sendToPlanError'));
+    }
+  };
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -1458,9 +1518,7 @@ export default function ContentPage() {
                     <TableHead className="w-[88px] text-center">{t('table.impact')}</TableHead>
                     <TableHead className="w-[72px] text-center">{t('table.score')}</TableHead>
                     <TableHead className="w-[136px] text-center">{t('table.status')}</TableHead>
-                    <TableHead className="w-[176px] text-right pr-6">
-                      {t('table.actions')}
-                    </TableHead>
+                    <TableHead className="w-[96px] text-right pr-6">{t('table.actions')}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -1606,51 +1664,40 @@ export default function ContentPage() {
                         </Badge>
                       </TableCell>
                       <TableCell className="text-right pr-6">
-                        <div className="flex items-center justify-end gap-1">
-                          {opp.status === 'new' && (
-                            <>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="h-7 px-2 text-xs gap-1"
-                                onClick={() => handleSendWebhook(opp.id)}
-                                disabled={sendingId === opp.id}
-                              >
-                                {sendingId === opp.id ? (
-                                  <Loader2 className="h-3 w-3 animate-spin" />
-                                ) : (
-                                  <Send className="h-3 w-3" />
-                                )}
-                                {t('send')}
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="h-7 px-2 text-xs text-muted-foreground"
-                                onClick={() => handleDismiss(opp.id)}
-                                aria-label={t('dismiss')}
-                              >
-                                <X className="h-3 w-3" />
-                              </Button>
-                            </>
-                          )}
-                          {/* The full page, in a new tab so the list stays put. */}
-                          <Link
-                            href={`/dashboard/content/${opp.id}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                          >
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-7 px-2 text-xs"
-                              aria-label={t('openInNewTab')}
-                              title={t('openInNewTab')}
-                            >
-                              <ExternalLink className="h-3 w-3" />
-                            </Button>
-                          </Link>
-                        </div>
+                        <OpportunityRowMenu
+                          title={opp.title}
+                          editor={{
+                            draftId: draftsShown ? (draftsShown[opp.id] ?? null) : undefined,
+                            canStart: canWriteOpportunity(opp),
+                            onStart: () => setContentPreset(opportunityStart(opp)),
+                            onOpenDraft: (draftId) => router.push(contentEditorPath(draftId)),
+                          }}
+                          // The Plan lists owned work still open; its marks are
+                          // for admins and managers.
+                          plan={
+                            canManage && canWriteOpportunity(opp)
+                              ? {
+                                  prioritized: prioritiesShown
+                                    ? prioritiesShown.includes(opp.id)
+                                    : undefined,
+                                  onSend: () => void handleSendToPlan(opp.id),
+                                  onOpen: () => router.push('/dashboard/content/plan'),
+                                }
+                              : null
+                          }
+                          workflow={
+                            opp.status === 'new'
+                              ? {
+                                  sending: sendingId === opp.id,
+                                  onSend: () => void handleSendWebhook(opp.id),
+                                }
+                              : null
+                          }
+                          pageHref={`/dashboard/content/${opp.id}`}
+                          onDismiss={
+                            opp.status === 'new' ? () => void handleDismiss(opp.id) : undefined
+                          }
+                        />
                       </TableCell>
                     </TableRow>
                   ))}
@@ -1680,6 +1727,15 @@ export default function ContentPage() {
         </>
       )}
 
+      {activeBrandId && (
+        <NewContentDialog
+          open={contentPreset !== null}
+          onOpenChange={(open) => !open && setContentPreset(null)}
+          brandId={activeBrandId}
+          siteType={siteTypeOf(activeBrand ?? {})}
+          preset={contentPreset}
+        />
+      )}
       <Sheet
         open={openOpportunityId !== null}
         onOpenChange={(open) => {

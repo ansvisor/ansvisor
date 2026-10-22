@@ -230,6 +230,34 @@ export async function setPlanRowPriority(
   if (error) throw new Error(error.message);
 }
 
+/** How many opportunities one priority lookup covers: a page of the list. */
+const MAX_PRIORITY_LOOKUPS = 200;
+
+/**
+ * Which of these opportunities' Plan rows are marked as a priority, for the
+ * Opportunities list's Send to Plan: their ids. Ids that aren't ids are left
+ * out; an empty list when the member can't read the brand's marks.
+ */
+export async function getPlanPriorities(
+  brandId: string,
+  opportunityIds: string[],
+): Promise<string[]> {
+  const keys = [...new Set(opportunityIds)]
+    .filter((id) => z.guid().safeParse(id).success)
+    .slice(0, MAX_PRIORITY_LOOKUPS)
+    .map((id) => `${OPPORTUNITY_KEY}${id}`);
+  if (!z.guid().safeParse(brandId).success || !keys.length) return [];
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from('content_plan_marks')
+    .select('row_key')
+    .eq('brand_id', brandId)
+    .eq('priority', true)
+    .in('row_key', keys);
+  if (error) throw new Error(error.message);
+  return (data ?? []).map((m) => m.row_key.slice(OPPORTUNITY_KEY.length));
+}
+
 /**
  * Hide a Plan row until someone shows it again (admins and managers). An
  * opportunity's row dismisses the opportunity too, so the Opportunities page

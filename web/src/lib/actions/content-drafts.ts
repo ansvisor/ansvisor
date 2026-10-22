@@ -303,6 +303,40 @@ export async function getContentStartOptions(brandId: string): Promise<DraftStar
   };
 }
 
+/** How many opportunities one Open draft lookup covers: a page of the list. */
+const MAX_DRAFT_LOOKUPS = 200;
+
+/**
+ * The draft being written for each opportunity (Generate Content's Open
+ * draft): the latest one not yet published started from it, by opportunity
+ * id. Opportunities with none, or that the member can't read, are left out.
+ */
+export async function getOpportunityDrafts(
+  brandId: string,
+  opportunityIds: string[],
+): Promise<Record<string, string>> {
+  const ids = [...new Set(opportunityIds)]
+    .filter((id) => draftId.safeParse(id).success)
+    .slice(0, MAX_DRAFT_LOOKUPS);
+  if (!draftId.safeParse(brandId).success || !ids.length) return {};
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from('content_drafts')
+    .select('id, opportunity_id')
+    .eq('brand_id', brandId)
+    .in('opportunity_id', ids)
+    .in('status', ['draft', 'in_review', 'ready'])
+    .order('updated_at', { ascending: false });
+  if (error) throw new Error(error.message);
+  const drafts: Record<string, string> = {};
+  for (const row of data ?? []) {
+    if (row.opportunity_id && !(row.opportunity_id in drafts)) {
+      drafts[row.opportunity_id] = row.id;
+    }
+  }
+  return drafts;
+}
+
 const startInput = z.object({
   method: z.enum(['create', 'optimize']),
   // A prompt's text can run longer than a title: cut to fit, not refused.
