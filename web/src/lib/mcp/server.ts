@@ -1579,7 +1579,7 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
     'get_content_draft',
     {
       description:
-        'Read one Content Editor draft: its HTML, and the page passage by passage (numbered, as suggest_content_changes refers to them). Passages marked locked are quoted by AI answers today: never suggest changing them. Also the action it belongs to and the agent suggestions still waiting for review.',
+        'Read one Content Editor draft: its HTML, and the page passage by passage (numbered, as suggest_content_changes refers to them). Passages marked locked are quoted by AI answers today: never suggest changing them. Also the action it belongs to, the agent suggestions still waiting for review, and link_targets: the only URLs suggest_content_changes may link to (own_pages for internal links, sources for outbound links and inline citations).',
       inputSchema: {
         draft_id: relaxedUuid.describe('Draft UUID, from list_content_drafts.'),
       },
@@ -1688,7 +1688,7 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
   server.registerTool(
     'suggest_content_changes',
     {
-      description: `Leave changes on a draft for a person to accept or reject in the editor — never applied by the agent. Read the draft with get_content_draft first: each suggestion names a passage by its number. A replace changes words in that passage ("before" copied exactly as the passage has it, "after" as plain text); an insert adds blocks after it ("after" as simple HTML: h2, h3, p, ul, ol, li, strong, em). A heading stays one line (an H1 up to ${HEADING_LIMITS.h1} characters, others up to ${HEADING_LIMITS.other}): to answer under it, insert a paragraph after it (an answer or blocks sent in a heading's replace are moved into an insert after it). Never change a locked passage. While a person still has the draft's open suggestions to decide, no new ones are taken: wait until get_content_draft lists none. At most ${MAX_API_SUGGESTIONS}; ones the editor can't apply come back in "dropped" with the reason (no_passage, locked, not_in_passage, no_change, empty, duplicate, too_many, heading_too_long).`,
+      description: `Leave changes on a draft for a person to accept or reject in the editor — never applied by the agent. Read the draft with get_content_draft first: each suggestion names a passage by its number. A replace changes words in that passage ("before" copied exactly as the passage has it, "after" as plain text); an insert adds blocks after it ("after" as simple HTML: h2, h3, p, ul, ol, li, strong, em). Either may link words as <a href="URL">words</a>, but only to a URL in get_content_draft's link_targets: any other link is unwrapped to its words, and a heading never keeps a link. A heading stays one line (an H1 up to ${HEADING_LIMITS.h1} characters, others up to ${HEADING_LIMITS.other}): to answer under it, insert a paragraph after it (an answer or blocks sent in a heading's replace are moved into an insert after it). Never change a locked passage. While a person still has the draft's open suggestions to decide, no new ones are taken: wait until get_content_draft lists none. At most ${MAX_API_SUGGESTIONS}; ones the editor can't apply come back in "dropped" with the reason (no_passage, locked, not_in_passage, no_change, empty, duplicate, too_many, heading_too_long).`,
       inputSchema: {
         draft_id: relaxedUuid.describe('Draft UUID.'),
         ...suggestionsShape,

@@ -3,9 +3,11 @@ import { passageKey } from './cited-passages';
 import {
   cleanInsertHtml,
   draftPassages,
+  inlineText,
   keepAgentSuggestions,
   splitReplace,
 } from './agent-suggestions';
+import { linkKey } from './link-targets';
 
 const HTML =
   '<h1>How to brew pour-over</h1><p>Use good coffee &amp; hot water.</p>' +
@@ -216,7 +218,7 @@ describe('a replace on a heading', () => {
         'What is LLM SEO? LLM SEO optimizes pages for large language models.<ul><li>a</li></ul>',
         'h2',
       ),
-    ).toEqual({
+    ).toMatchObject({
       words: 'What is LLM SEO?',
       blocks: '<p>LLM SEO optimizes pages for large language models.</p><ul><li>a</li></ul>',
     });
@@ -230,7 +232,7 @@ describe('a replace on a heading', () => {
 
   it('keeps a subtitle that fits, and splits after a full-width ？ with no space', () => {
     const subtitle = 'What is AEO? The Complete Guide to Answer Engine Optimization';
-    expect(splitReplace(subtitle, 'h1')).toEqual({ words: subtitle, blocks: '' });
+    expect(splitReplace(subtitle, 'h1')).toMatchObject({ words: subtitle, blocks: '' });
     expect(
       splitReplace(
         'AEOとは？AEOはAIアシスタントの回答に引用されるための最適化の方法です。詳しく順番に説明します。',
@@ -253,13 +255,104 @@ describe('a replace on a heading', () => {
         'h2',
       ).words,
     ).toBe('AEO とは？');
-    expect(splitReplace('AEO or SEO? Which matters more in 2026', 'h2')).toEqual({
+    expect(splitReplace('AEO or SEO? Which matters more in 2026', 'h2')).toMatchObject({
       words: 'AEO or SEO? Which matters more in 2026',
       blocks: '',
     });
-    expect(splitReplace('<p>Use 15 g.</p><ul><li>a scale</li></ul>', 'p')).toEqual({
+    expect(splitReplace('<p>Use 15 g.</p><ul><li>a scale</li></ul>', 'p')).toMatchObject({
       words: 'Use 15 g.',
       blocks: '<ul><li>a scale</li></ul>',
+    });
+  });
+});
+
+/**
+ * Content Agent rule gaps, A, over the API: links only to get_content_draft's
+ * link_targets, a replace's beside its words, an insert's in its HTML.
+ */
+describe('links to the targets listed', () => {
+  const page = draftPassages(
+    '<h2>Pricing</h2><p>See our plans for teams.</p><p>Studies show it works.</p>',
+  );
+  const links = new Map(
+    ['https://acme.example/pricing', 'https://research.example/study'].map((url) => [
+      linkKey(url)!,
+      url,
+    ]),
+  );
+  const replace = (after: string) => ({
+    kind: 'replace' as const,
+    passage: 2,
+    before: 'See our plans for teams.',
+    after,
+    reason: 'link the pricing page',
+  });
+
+  it('keeps a replace’s link to a listed page, by its words, with the page’s URL', () => {
+    const { kept, dropped } = keepAgentSuggestions(
+      [
+        replace(
+          'See <a href="https://www.acme.example/pricing/?utm_source=x">our plans</a> for teams.',
+        ),
+      ],
+      page,
+      new Set(),
+      links,
+    );
+    expect(dropped).toEqual([]);
+    expect(kept[0]).toMatchObject({
+      after_text: 'See our plans for teams.',
+      after_links: [{ start: 4, end: 13, href: 'https://acme.example/pricing' }],
+    });
+  });
+
+  it('unwraps a link to anything not listed, and says when nothing then changes', () => {
+    const { kept, dropped } = keepAgentSuggestions(
+      [
+        replace('See <a href="https://made-up.example/x">our plans</a> for teams.'),
+        replace('See <a href="https://made-up.example/x">our team plans</a>.'),
+      ],
+      page,
+      new Set(),
+      links,
+    );
+    expect(dropped).toEqual([{ index: 0, reason: 'no_change' }]);
+    expect(kept[0].after_text).toBe('See our team plans.');
+    expect(kept[0]).not.toHaveProperty('after_links');
+  });
+
+  it('keeps an insert’s link to a listed source, never one in a heading', () => {
+    const { kept } = keepAgentSuggestions(
+      [
+        {
+          kind: 'insert',
+          passage: 3,
+          after:
+            '<h3><a href="https://research.example/study">Study</a></h3><p>A <a href="https://research.example/study" target="_blank" onclick="x()">2025 study</a> found it.</p>',
+          reason: 'cite a source',
+        },
+      ],
+      page,
+      new Set(),
+      links,
+    );
+    expect(kept[0].after_text).toBe(
+      '<h3>Study</h3><p>A <a href="https://research.example/study">2025 study</a> found it.</p>',
+    );
+    // A link with no words links nothing.
+    expect(
+      cleanInsertHtml('<p>A <a href="https://research.example/study"> </a>study.</p>', links),
+    ).toBe('<p>A study.</p>');
+    // Without targets, as before: no link at all.
+    expect(cleanInsertHtml('<p>A <a href="https://research.example/study">study</a>.</p>')).toBe(
+      '<p>A study.</p>',
+    );
+  });
+
+  it('reads inline words and their links, spaces collapsed', () => {
+    expect(inlineText('Read <a href="u"> the  guide </a><br />now &amp; then')).toEqual({
+      text: 'Read the guide now & then',
+      links: [{ start: 5, end: 14, href: 'u' }],
     });
   });
 });

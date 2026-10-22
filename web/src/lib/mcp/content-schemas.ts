@@ -85,7 +85,9 @@ export const suggestionsShape = {
           .string()
           .min(1)
           .max(20_000)
-          .describe('replace: the new words (a heading stays one short line); insert: the HTML.'),
+          .describe(
+            'replace: the new words (a heading stays one short line); insert: the HTML. Links only to link_targets URLs.',
+          ),
         reason: z
           .string()
           .min(1)
