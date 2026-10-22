@@ -14,9 +14,9 @@ brand:
   +100. Quote it signed, without a % sign: "net +21". +20 with 40%
   positive and 20% negative reads very differently from +20 with 20%
   positive and 0% negative, so give the split when it matters.
-- **Low sample:** under 20 mentions, a figure carries `lowSample:
-  true` and its change is `null`. Say "low sample, n = 12" and don't
-  compare it with another window.
+- **Low sample:** under 20 responses naming the brand, a figure
+  carries `lowSample: true` and its change is `null`. Say "low sample,
+  n = 12" and don't compare it with another window.
 - **Per platform:** each platform has its own net. A platform with a
   much lower net than the rest is where to look first. Two platforms
   40+ points apart usually describe the brand differently, which is
@@ -53,9 +53,10 @@ brand:
 
 ## When sentiment is noise
 
-- **Small samples.** Under 20 mentions (`lowSample`), or a
-  `resultCount` under 10 elsewhere, a single negative response moves
-  the figure disproportionately. Caveat the answer.
+- **Small samples.** Under 20 responses naming the brand
+  (`lowSample`), or a `resultCount` under 10 elsewhere, a single
+  negative response moves the figure disproportionately. Caveat the
+  answer.
 - **Brand-comparison prompts.** "Should I use X or Y?" answers often
   read as neutral-negative for both brands because the AI is being
   even-handed. Don't treat that as a reputation problem.

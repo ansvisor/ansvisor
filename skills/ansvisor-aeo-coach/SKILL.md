@@ -73,10 +73,12 @@ API directly from this skill (that's a different skill).
 
 **Mentions & sentiment** (from the Mentions tools below):
 
-- **Mentions** are responses that name the brand at least once;
-  **mention rate** is their share of the tracked responses (`%`).
-  **Times named** (`timesNamed`) counts every time AI names the brand,
-  twice in one response included: the page's _Total mentions_.
+- **Mentions**, as the page's _Total mentions_ counts them, are every
+  time AI names the brand (`timesNamed`), twice in one response
+  included: quote this one for "how many mentions". `mentions` is the
+  responses naming the brand at least once: the base of the **mention
+  rate** (their share of the tracked responses, `%`), net sentiment and
+  `lowSample`.
 - **Net sentiment** is the positive share minus the negative share of
   the responses naming the brand, from −100 to +100. Quote it as a
   signed number **without a % sign** ("net +21"). Neutral counts in the
@@ -88,10 +90,10 @@ API directly from this skill (that's a different skill).
   than working a change out from them, and say how many prompts were
   new or dropped (`newPrompts`, `droppedPrompts`) when there were some.
   `changes.mentionsPct` is the change in times named.
-- `lowSample: true` means fewer than 20 mentions. Say so, and don't
-  read a change into it: `changes.netSentimentPoints` is already `null`
-  there, as is the mention rate's change when either window has under
-  20 tracked responses.
+- `lowSample: true` means fewer than 20 responses naming the brand.
+  Say so, and don't read a change into it: `changes.netSentimentPoints`
+  is already `null` there, as is the mention rate's change when either
+  window has under 20 tracked responses.
 - Sentiment is measured for the **brand only**. Competitors have
   mentions and co-mentions, not a tone.
 
