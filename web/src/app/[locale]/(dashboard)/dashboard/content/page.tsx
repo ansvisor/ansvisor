@@ -501,25 +501,33 @@ export default function ContentPage() {
   const router = useRouter();
   const activeBrand = useBrandStore((s) => s.brands.find((b) => b.id === s.activeBrandId));
   const [contentPreset, setContentPreset] = useState<DialogPreset | null>(null);
-  // The drafts being written for the rows on screen, which open instead.
+  // The drafts being written for the rows on screen, which open instead. A
+  // failed read is not "no draft": the rows offer to check again, so Start
+  // never writes a second draft for the same opportunity.
   const shownIds = opportunities.map((o) => o.id).join(',');
-  const [drafts, setDrafts] = useState<{ key: string; byOpportunity: Record<string, string> }>({
-    key: '',
-    byOpportunity: {},
-  });
+  const [drafts, setDrafts] = useState<{
+    key: string;
+    byOpportunity: Record<string, string>;
+    failed: boolean;
+  }>({ key: '', byOpportunity: {}, failed: false });
+  const [draftsAttempt, setDraftsAttempt] = useState(0);
   useEffect(() => {
     if (!activeBrandId || !shownIds) return;
     let cancelled = false;
     getOpportunityDrafts(activeBrandId, shownIds.split(',')).then(
-      (byOpportunity) => !cancelled && setDrafts({ key: shownIds, byOpportunity }),
-      () => !cancelled && setDrafts({ key: shownIds, byOpportunity: {} }),
+      (byOpportunity) => !cancelled && setDrafts({ key: shownIds, byOpportunity, failed: false }),
+      () => !cancelled && setDrafts({ key: shownIds, byOpportunity: {}, failed: true }),
     );
     return () => {
       cancelled = true;
     };
-  }, [activeBrandId, shownIds]);
+  }, [activeBrandId, shownIds, draftsAttempt]);
   // Null until the rows' drafts are known: their button waits.
-  const draftsShown = drafts.key === shownIds ? drafts.byOpportunity : null;
+  const draftsShown = drafts.key === shownIds ? drafts : null;
+  const retryDrafts = () => {
+    setDrafts((d) => ({ ...d, key: '' }));
+    setDraftsAttempt((n) => n + 1);
+  };
   // Send to Plan: which rows are a priority in the Content plan already.
   const { canManage } = useUserRole();
   const [priorities, setPriorities] = useState<{ key: string; ids: string[] }>({
@@ -538,11 +546,14 @@ export default function ContentPage() {
     };
   }, [activeBrandId, shownIds, canManage]);
   const prioritiesShown = priorities.key === shownIds ? priorities.ids : null;
+  // A row marked here or from the panel: its menu says Open in Plan then.
+  const markPrioritized = (id: string) =>
+    setPriorities((p) => (p.ids.includes(id) ? p : { ...p, ids: [...p.ids, id] }));
   const handleSendToPlan = async (id: string) => {
     if (!activeBrandId) return;
     try {
       await setPlanRowPriority(activeBrandId, `opportunity:${id}`, true);
-      setPriorities((p) => ({ ...p, ids: [...p.ids, id] }));
+      markPrioritized(id);
       toast.success(t('sentToPlan'), {
         action: { label: t('openPlan'), onClick: () => router.push('/dashboard/content/plan') },
       });
@@ -1665,7 +1676,12 @@ export default function ContentPage() {
                         <OpportunityRowMenu
                           title={opp.title}
                           editor={{
-                            draftId: draftsShown ? (draftsShown[opp.id] ?? null) : undefined,
+                            draftId:
+                              draftsShown && !draftsShown.failed
+                                ? (draftsShown.byOpportunity[opp.id] ?? null)
+                                : undefined,
+                            lookupFailed: draftsShown?.failed ?? false,
+                            onRetry: retryDrafts,
                             canStart: canWriteOpportunity(opp),
                             onStart: () => setContentPreset(opportunityStart(opp)),
                             onOpenDraft: (draftId) => router.push(contentEditorPath(draftId)),
@@ -1749,6 +1765,7 @@ export default function ContentPage() {
                 id={openOpportunityId}
                 inDrawer
                 onChanged={() => loadData(true)}
+                onPrioritized={markPrioritized}
               />
             )}
           </div>
