@@ -51,9 +51,10 @@ describe('opportunityRows', () => {
 });
 
 describe('opportunityCsv', () => {
-  it('writes the rows under section, field and value, quoting what needs it', () => {
+  it('writes the rows under Section, Field and Value, quoting what needs it', () => {
     const lines = opportunityCsv(doc).split('\n');
-    expect(lines[0]).toBe('section,field,value');
+    // The sheet's header, in the same case.
+    expect(lines[0]).toBe('Section,Field,Value');
     expect(lines[2]).toBe('Overview,Description,"Rivals rank first for ""office coffee""."');
   });
 });
@@ -69,6 +70,11 @@ describe('opportunityWorkbook', () => {
     ]);
     expect(sheet.data).toHaveLength(8);
     expect(sheet.data[3]).toEqual(['Overview', 'Type', 'Owned']);
+    // An outline step and its points wrap, so Excel shows them on their lines.
+    expect(sheet.data.find((row) => row[0] === 'Brief outline')![2]).toEqual({
+      value: 'Why teams switch\n- Cost\n- Choice',
+      wrap: true,
+    });
   });
 });
 

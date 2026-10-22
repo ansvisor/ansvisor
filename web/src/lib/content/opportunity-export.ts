@@ -12,7 +12,8 @@ import type { OpportunityDocument, OpportunityLine } from './opportunity-markdow
 
 export type OpportunityExportFormat = 'csv' | 'xlsx' | 'docx';
 
-export const OPPORTUNITY_EXPORT_HEADERS = ['section', 'field', 'value'];
+/** The CSV's and the sheet's header, in the same case. */
+export const OPPORTUNITY_EXPORT_HEADERS = ['Section', 'Field', 'Value'];
 
 /** The opening facts' section, which the write-up leaves unheaded. */
 const OVERVIEW = 'Overview';
@@ -52,22 +53,33 @@ export function opportunityRows(doc: OpportunityDocument): OpportunityExportRow[
 /** Export CSV; the caller adds the byte order mark Excel reads UTF-8 by. */
 export function opportunityCsv(doc: OpportunityDocument): string {
   return toCsv(
-    opportunityRows(doc).map((row) => ({ ...row })),
+    opportunityRows(doc).map((row) => ({
+      Section: row.section,
+      Field: row.field,
+      Value: row.value,
+    })),
     OPPORTUNITY_EXPORT_HEADERS,
   );
 }
 
 const bold = (value: string) => ({ value, fontWeight: 'bold' as const });
 
-/** Export Excel: one sheet, the CSV's rows under a bold header. */
+/**
+ * Export Excel: one sheet, the CSV's rows under a bold header. A value on
+ * several lines (an outline step and its points) wraps, so Excel shows them.
+ */
 export function opportunityWorkbook(doc: OpportunityDocument): Sheet<Blob>[] {
   return [
     {
       sheet: 'Opportunity',
       columns: [{ width: 22 }, { width: 22 }, { width: 100 }],
       data: [
-        [bold('Section'), bold('Field'), bold('Value')],
-        ...opportunityRows(doc).map((row) => [row.section, row.field, row.value]),
+        OPPORTUNITY_EXPORT_HEADERS.map(bold),
+        ...opportunityRows(doc).map((row) => [
+          row.section,
+          row.field,
+          row.value.includes('\n') ? { value: row.value, wrap: true } : row.value,
+        ]),
       ],
     },
   ];
