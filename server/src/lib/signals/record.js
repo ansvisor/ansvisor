@@ -283,7 +283,8 @@ export async function uncitedMentionCandidates(brandId, now) {
       kind: 'uncited_mentions',
       dedupKey: 'uncited_mentions',
       source: ['ai_results'],
-      payload: { promptIds: uncited.map((row) => row.prompt_id).slice(0, 50) },
+      // Every uncited prompt, so the action counts and keeps them all (AC-009).
+      payload: { promptIds: uncited.map((row) => row.prompt_id).slice(0, 1000) },
       previousValue: null,
       currentValue: uncited.length,
       changeValue: null,
@@ -331,7 +332,8 @@ async function auditCandidates(brandId, now) {
       kind: 'audit_low_score',
       dedupKey: 'audit_low_score',
       source: ['site_audit'],
-      payload: { urls: low.slice(0, 10) },
+      // The ten lowest to show; every low page's address for the action's count (AC-009).
+      payload: { urls: low.slice(0, 10), targetIds: low.slice(0, 1000).map((audit) => audit.url) },
       previousValue: null,
       currentValue: low.length,
       changeValue: null,

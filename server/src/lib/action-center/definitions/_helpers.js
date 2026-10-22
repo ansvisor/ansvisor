@@ -20,20 +20,41 @@ function legacyTargets(signal) {
   if (p.competitorName)
     return [{ id: p.competitorId ?? p.competitorName, label: p.competitorName }];
   if (p.landingPage) return [{ id: p.landingPage, label: p.landingPage }];
-  if (Array.isArray(p.urls)) return p.urls.map((url) => ({ id: url, label: url }));
+  // Site Audit's low scores carry { url, score }; older signals plain addresses.
+  if (Array.isArray(p.urls)) {
+    return p.urls
+      .map((entry) => (typeof entry === 'string' ? entry : entry?.url))
+      .filter(Boolean)
+      .map((url) => ({ id: url, label: url }));
+  }
   if (p.platform) return [{ id: p.platform, label: p.platform }];
   return [];
 }
 
-/** Every target across the matched signals, once each. */
+/** A target's key: its id, or its label where it has none. */
+export function targetKey(target) {
+  return String(target.id ?? target.label ?? '');
+}
+
+/**
+ * Every target across the matched signals, once each: the ones the signals
+ * name first, with their labels, then those a bigger group lists only by id
+ * (`targetIds`, AC-009), so the count is the whole group's.
+ */
 export function collectTargets(byKind) {
   const seen = new Map();
-  for (const signals of byKind.values()) {
-    for (const signal of signals) {
-      for (const target of legacyTargets(signal)) {
-        const key = String(target.id ?? target.label ?? '');
-        if (key && !seen.has(key)) seen.set(key, target);
-      }
+  const signals = [...byKind.values()].flat();
+  for (const signal of signals) {
+    for (const target of legacyTargets(signal)) {
+      const key = targetKey(target);
+      if (key && !seen.has(key)) seen.set(key, target);
+    }
+  }
+  for (const signal of signals) {
+    const ids = signal.payload?.targetIds;
+    for (const id of Array.isArray(ids) ? ids : []) {
+      const key = String(id ?? '');
+      if (key && !seen.has(key)) seen.set(key, { id: key });
     }
   }
   return [...seen.values()];
@@ -51,14 +72,23 @@ export function collectTargets(byKind) {
 export function targetPayload(byKind, entity, extra = {}) {
   const targets = collectTargets(byKind);
   const mapped = targets.filter((t) => typeof t.mapped === 'boolean');
+  // The ones a signal named, to show; every target's key once there are more
+  // (AC-009: the action keeps the whole list it counts, in action_entities).
+  const named = targets.filter((t) => t.label !== undefined || Object.keys(t).length > 1);
   return {
     targetEntity: entity,
     targetCount: targets.length,
-    targets: targets.slice(0, 50),
+    targets: named.slice(0, 50),
+    ...(targets.length > named.slice(0, 50).length
+      ? { targetIds: targets.slice(0, MAX_TARGET_IDS).map(targetKey) }
+      : {}),
     ...(mapped.length > 0 ? { contentExists: mapped.some((t) => t.mapped) } : {}),
     ...extra,
   };
 }
+
+/** The most target keys an action keeps beyond the 50 it names (AC-009). */
+export const MAX_TARGET_IDS = 1000;
 
 /** The first matched signal, for payload fields that describe the whole
  *  condition rather than one target. */
