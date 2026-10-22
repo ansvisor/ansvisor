@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { OverlapPage } from './drafts';
-import { adviseOverlap, overlapOptions, pagePath, samePage } from './overlap';
+import { overlapOptions, pagePath, samePage } from './overlap';
 
 const page = (over: Partial<OverlapPage> = {}): OverlapPage => ({
   url: 'https://acme.example/guides/espresso',
@@ -11,65 +11,45 @@ const page = (over: Partial<OverlapPage> = {}): OverlapPage => ({
   ...over,
 });
 
-describe('adviseOverlap', () => {
-  it('finds nothing to weigh with no page, or no prompts to check', () => {
-    expect(adviseOverlap({ totalPrompts: 4, pages: [] })).toEqual({ verdict: 'none', options: [] });
-    expect(adviseOverlap({ totalPrompts: 0, pages: [page()] }).verdict).toBe('none');
-  });
-
-  it('recommends optimizing a page that already answers half the prompts or more', () => {
-    const top = page({ promptsInCommon: 2 });
-    expect(
-      adviseOverlap({ totalPrompts: 4, pages: [top, page({ url: 'https://acme.example/b' })] }),
-    ).toEqual({
-      verdict: 'covered',
-      options: [
-        { key: 'optimizeInstead', choice: { kind: 'optimize', page: top }, recommended: true },
-        { key: 'createAnyway', choice: { kind: 'create' }, recommended: false },
-      ],
-    });
-  });
-
-  it('recommends a new page when the pages answer fewer, with a section as the smaller change', () => {
-    const top = page({ promptsInCommon: 1 });
-    expect(adviseOverlap({ totalPrompts: 3, pages: [top] })).toEqual({
-      verdict: 'partial',
-      options: [
-        { key: 'createLinked', choice: { kind: 'create' }, recommended: true },
-        { key: 'addSection', choice: { kind: 'optimize', page: top }, recommended: false },
-      ],
-    });
-  });
-});
-
 describe('overlapOptions', () => {
   const top = page({ promptsInCommon: 1 });
-  const advice = adviseOverlap({ totalPrompts: 3, pages: [top] });
+  const given = page({ url: 'https://acme.example/pricing', promptsInCommon: 0 });
 
-  it('offers the advice alone without a page from the plan, or when it offers that page', () => {
-    expect(overlapOptions(advice, null)).toBe(advice.options);
-    expect(overlapOptions(advice, page({ url: 'https://www.acme.example/Guides/espresso/' }))).toBe(
-      advice.options,
-    );
+  it('offers no choice when a new page is the only one', () => {
+    expect(overlapOptions({ totalPrompts: 4, pages: [] }, null)).toEqual([]);
+    // Pages, but no prompts to read them against.
+    expect(overlapOptions({ totalPrompts: 0, pages: [top] }, null)).toEqual([]);
   });
 
-  it('offers the plan’s page and a new page when nothing overlaps', () => {
-    const given = page({ url: 'https://acme.example/pricing', promptsInCommon: 0 });
-    const none = adviseOverlap({ totalPrompts: 2, pages: [] });
-    expect(overlapOptions(none, given)).toEqual([
-      { key: 'optimizeGiven', choice: { kind: 'optimize', page: given }, recommended: false },
-      { key: 'createNew', choice: { kind: 'create' }, recommended: false },
-    ]);
-    // With no page from the plan, nothing to choose.
-    expect(overlapOptions(none, null)).toEqual([]);
+  it('offers a new page and the page cited for most of the prompts, recommending neither', () => {
+    // However many of the prompts the page answers: more pages cited is no loss.
+    for (const promptsInCommon of [1, 3]) {
+      const cited = page({ promptsInCommon });
+      expect(overlapOptions({ totalPrompts: 3, pages: [cited] }, null)).toEqual([
+        { key: 'createNew', choice: { kind: 'create' } },
+        { key: 'optimizeInstead', choice: { kind: 'optimize', page: cited } },
+      ]);
+    }
   });
 
-  it('offers the page the plan named first when the advice offers another', () => {
-    const given = page({ url: 'https://acme.example/pricing', promptsInCommon: 0 });
-    expect(overlapOptions(advice, given)).toEqual([
-      { key: 'optimizeGiven', choice: { kind: 'optimize', page: given }, recommended: false },
-      ...advice.options,
+  it('offers the plan’s page first, then a new page, then the page cited most when it is another', () => {
+    expect(overlapOptions({ totalPrompts: 3, pages: [top] }, given)).toEqual([
+      { key: 'optimizeGiven', choice: { kind: 'optimize', page: given } },
+      { key: 'createNew', choice: { kind: 'create' } },
+      { key: 'optimizeInstead', choice: { kind: 'optimize', page: top } },
     ]);
+    // Nothing cited: the plan's page and a new page.
+    expect(overlapOptions({ totalPrompts: 2, pages: [] }, given)).toEqual([
+      { key: 'optimizeGiven', choice: { kind: 'optimize', page: given } },
+      { key: 'createNew', choice: { kind: 'create' } },
+    ]);
+    // The plan's page is the one cited most (by address): offered once.
+    expect(
+      overlapOptions(
+        { totalPrompts: 3, pages: [top] },
+        page({ url: 'https://www.acme.example/Guides/espresso/' }),
+      ).map((o) => o.key),
+    ).toEqual(['optimizeGiven', 'createNew']);
   });
 });
 
