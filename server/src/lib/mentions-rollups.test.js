@@ -9,10 +9,12 @@ vi.mock('../config/supabase.js', () => ({
 }));
 
 import {
+  PERCEPTION_SNAPSHOT_DAYS,
   refreshMentionHistory,
   refreshMentionTermsDaily,
   refreshMentionTermsHistory,
   refreshMentionsDaily,
+  refreshPerceptionSnapshots,
 } from './mentions-rollups.js';
 
 /** A day-bound query on `expected`: first call ascending (first day), then descending. */
@@ -83,6 +85,32 @@ describe('refreshMentionTermsDaily (00231)', () => {
     await expect(refreshMentionTermsDaily('brand-1', '2026-10-01', '2026-10-16')).resolves.toBe(
       false,
     );
+    expect(rpc).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('refreshPerceptionSnapshots (00241)', () => {
+  it('computes the 7, 30 and 90 days, a window per call', async () => {
+    rpc.mockResolvedValue({ error: null });
+    expect(await refreshPerceptionSnapshots('b1')).toBe(true);
+    expect(PERCEPTION_SNAPSHOT_DAYS).toEqual([7, 30, 90]);
+    expect(rpc.mock.calls).toEqual(
+      [7, 30, 90].map((days) => [
+        'refresh_mentions_perception_snapshot',
+        { p_brand_id: 'b1', p_days: days },
+      ]),
+    );
+  });
+
+  it('stops at the first failure without throwing', async () => {
+    rpc.mockResolvedValueOnce({ error: null }).mockResolvedValueOnce({ error: { message: 'x' } });
+    expect(await refreshPerceptionSnapshots('b1')).toBe(false);
+    expect(rpc).toHaveBeenCalledTimes(2);
+  });
+
+  it('is quietly false before 00241 is applied', async () => {
+    rpc.mockResolvedValue({ error: { code: 'PGRST202', message: 'not found' } });
+    expect(await refreshPerceptionSnapshots('b1')).toBe(false);
     expect(rpc).toHaveBeenCalledTimes(1);
   });
 });

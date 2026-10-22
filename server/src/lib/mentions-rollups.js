@@ -53,6 +53,34 @@ export async function refreshMentionsDaily(brandId, dayFrom, dayTo) {
   return true;
 }
 
+/** The Perception windows precomputed for the tab's default view (00241). */
+export const PERCEPTION_SNAPSHOT_DAYS = [7, 30, 90];
+
+/**
+ * Recompute a brand's precomputed Perception views (00241) from its
+ * rollups: the last 7, 30 and 90 days on every platform and region, the view
+ * everyone opens, which the tab then reads in one lookup. One window per
+ * call, so the largest brand's 90 days stay well inside the service role's
+ * statement timeout. Called once the brand's Mentions rollups are fresh.
+ * Resolves to true when every window is written, false at the first that
+ * fails (the tab reads the rollups live meanwhile); never throws. Before
+ * 00241 is applied there is no function to call: quietly false.
+ */
+export async function refreshPerceptionSnapshots(brandId) {
+  for (const days of PERCEPTION_SNAPSHOT_DAYS) {
+    const { error } = await supabaseAdmin.rpc('refresh_mentions_perception_snapshot', {
+      p_brand_id: brandId,
+      p_days: days,
+    });
+    if (error?.code === 'PGRST202') return false;
+    if (error) {
+      logger.error({ err: error, brandId, days }, '[mentions-rollups] Perception snapshot failed');
+      return false;
+    }
+  }
+  return true;
+}
+
 /**
  * Rebuild the Perception tab's daily rollups (00231) from the answers' terms
  * already written, a week per call: for the days a deleted prompt leaves,

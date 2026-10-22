@@ -80,11 +80,14 @@ describe('collectHealthReport', () => {
   });
 
   it("times the Mentions & Sentiment tabs' reads last, at 30 and 90 days", () => {
-    expect(PROBES.slice(-4)).toEqual([
+    expect(PROBES.slice(-6)).toEqual([
       { probe: 'mentions_list', days: 30 },
       { probe: 'mentions_list', days: 90 },
       { probe: 'mentions_perception', days: 30 },
       { probe: 'mentions_perception', days: 90 },
+      // Perception's live read too (00241): what a filtered view still costs.
+      { probe: 'mentions_perception_live', days: 30 },
+      { probe: 'mentions_perception_live', days: 90 },
     ]);
   });
 

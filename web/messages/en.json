@@ -5660,6 +5660,7 @@
     "perception": {
       "sectionLabel": "Perception",
       "loadError": "Couldn't load the perception figures.",
+      "slow": "Still reading this period's figures. It can take a few seconds.",
       "unavailable": "Perception isn't available yet. It appears once the mentions data has been prepared.",
       "pickDates": "Choose a start or end date to see the perception figures.",
       "noMentions": "AI didn't name {brand} in the tracked responses of this period.",
