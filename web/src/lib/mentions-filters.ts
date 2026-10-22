@@ -86,6 +86,36 @@ export function mentionsStateParams(
   };
 }
 
+/**
+ * The Mentions page's address for a range and filters another page holds
+ * (Insights' Mentions and Net sentiment cards link here), so the numbers it
+ * opens on are taken over the same days. A range Mentions doesn't offer (All
+ * time) opens its default.
+ */
+export function mentionsHref(f: {
+  range: string;
+  from?: string;
+  to?: string;
+  region?: string;
+  topic?: string;
+}): string {
+  const range = (PROMPT_RANGE_PRESETS as readonly string[]).includes(f.range)
+    ? (f.range as PromptRangePreset)
+    : DEFAULT_MENTIONS_FILTERS.range;
+  const params = mentionsStateParams(DEFAULT_MENTIONS_TAB, {
+    ...DEFAULT_MENTIONS_FILTERS,
+    range,
+    from: f.from ?? '',
+    to: f.to ?? '',
+    region: f.region ?? '',
+    topic: f.topic ?? '',
+  });
+  const search = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) if (value !== null) search.set(key, value);
+  const query = search.toString();
+  return query ? `/dashboard/mentions?${query}` : '/dashboard/mentions';
+}
+
 /** What the page's reads take: the window's bounds and the filters. */
 export interface MentionsQuery {
   from: string;
@@ -97,13 +127,15 @@ export interface MentionsQuery {
 }
 
 /**
- * The filters as a read: the range resolved to bounds in the viewer's time
- * zone, as on the Prompts page, and empty filters left out. Null for a custom
- * range with no dates yet, which is not a window to read.
+ * The filters as a read, empty filters left out. A custom range's days are
+ * UTC days: mentions_overview reads whole UTC days, as Insights does, so in
+ * the viewer's zone a viewer west of UTC who picked Oct 1–7 read Oct 2–8,
+ * and Insights' card link opened another window (gkhngyk on #1226). Null for
+ * a custom range with no dates yet, which is not a window to read.
  */
-export function mentionsQuery(filters: MentionsFilters, timeZone?: string): MentionsQuery | null {
+export function mentionsQuery(filters: MentionsFilters): MentionsQuery | null {
   if (filters.range === 'custom' && !filters.from && !filters.to) return null;
-  const range = resolvePromptRange(filters.range, { from: filters.from, to: filters.to }, timeZone);
+  const range = resolvePromptRange(filters.range, { from: filters.from, to: filters.to }, 'UTC');
   const query: MentionsQuery = { from: range.from };
   if (range.to) query.to = range.to;
   if (filters.platform) query.platform = filters.platform;

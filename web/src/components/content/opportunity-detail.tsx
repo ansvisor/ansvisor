@@ -7,7 +7,6 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
   ArrowLeft,
-  Send,
   Loader2,
   TrendingUp,
   Eye,
@@ -15,22 +14,15 @@ import {
   Search,
   Tag,
   Clock,
-  X,
   Sparkles,
   FileText,
   Target,
   ListOrdered,
   Crown,
-  RotateCcw,
-  CheckCheck,
-  Check,
-  Copy,
-  ExternalLink,
   Info,
-  RefreshCw,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { Link } from '@/i18n/navigation';
+import { Link, useRouter } from '@/i18n/navigation';
 import {
   getOpportunity,
   updateOpportunityStatus,
@@ -57,6 +49,16 @@ import {
   TargetPagesCard,
 } from '@/components/content/opportunity-basket';
 import { opportunityToMarkdown } from '@/lib/content/opportunity-markdown';
+import { canWriteOpportunity, opportunityStart } from '@/lib/content/opportunity-start';
+import { contentEditorPath } from '@/lib/content/drafts';
+import { siteTypeOf } from '@/lib/content/page-types';
+import { getOpportunityDrafts } from '@/lib/actions/content-drafts';
+import { getPlanPriorities, setPlanRowPriority } from '@/lib/actions/content-plan';
+import { useUserRole } from '@/hooks/use-user-role';
+import { useBrandStore } from '@/stores/use-brand-store';
+import { OpportunityActions } from '@/components/content/opportunity-actions';
+import { NewContentDialog, type DialogPreset } from '@/components/content/new-content-dialog';
+import { useAssetTypeLabel } from '@/hooks/use-asset-type-label';
 import { toast } from 'sonner';
 import { suggestedDate } from '@/lib/suggested-date';
 
@@ -121,14 +123,21 @@ export function OpportunityDetail({
   id,
   inDrawer = false,
   onChanged,
+  onPrioritized,
 }: {
   id: string;
   /** In the list's drawer: no back link, and the layout follows the drawer's width. */
   inDrawer?: boolean;
   /** Called after any change to the opportunity, so the list can refresh. */
   onChanged?: () => void;
+  /**
+   * Called once Send to Plan marked it as a priority: the list keeps its
+   * rows' marks (they aren't read again on a refresh), so its menu agrees.
+   */
+  onPrioritized?: (id: string) => void;
 }) {
   const t = useTranslations('content');
+  const assetTypeLabel = useAssetTypeLabel();
   const locale = useLocale();
 
   const [opportunity, setOpportunity] = useState<ContentOpportunity | null>(null);
@@ -138,6 +147,67 @@ export function OpportunityDetail({
   const [brief, setBrief] = useState<ContentBrief | null>(null);
   const [quota, setQuota] = useState<BriefQuota | null>(null);
   const [fanoutQueries, setFanoutQueries] = useState<FanoutSubQuery[]>([]);
+  const router = useRouter();
+  // Start's page types are the opportunity's brand's, which may not be the
+  // active one (/dashboard/content/[id] opens any of the org's brands).
+  const opportunityBrand = useBrandStore((s) =>
+    s.brands.find((b) => b.id === (opportunity?.brandId ?? s.activeBrandId)),
+  );
+  // Send to Editor: Start for this opportunity, over the panel.
+  const [contentPreset, setContentPreset] = useState<DialogPreset | null>(null);
+  // The draft being written for it, opened instead of starting another. A
+  // failed read is not "no draft": it offers to check again.
+  const [draft, setDraft] = useState<{
+    opportunityId: string;
+    id: string | null;
+    failed: boolean;
+  } | null>(null);
+  const [draftAttempt, setDraftAttempt] = useState(0);
+  const brandId = opportunity?.brandId;
+  useEffect(() => {
+    if (!brandId) return;
+    let cancelled = false;
+    getOpportunityDrafts(brandId, [id]).then(
+      (drafts) =>
+        !cancelled && setDraft({ opportunityId: id, id: drafts[id] ?? null, failed: false }),
+      () => !cancelled && setDraft({ opportunityId: id, id: null, failed: true }),
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [brandId, id, draftAttempt]);
+  const retryDraft = () => {
+    setDraft(null);
+    setDraftAttempt((n) => n + 1);
+  };
+  // Send to Plan: whether its Plan row is a priority already (admins and
+  // managers mark Plan rows).
+  const { canManage } = useUserRole();
+  const [priority, setPriority] = useState<{ opportunityId: string; on: boolean } | null>(null);
+  useEffect(() => {
+    if (!brandId || !canManage) return;
+    let cancelled = false;
+    getPlanPriorities(brandId, [id]).then(
+      (ids) => !cancelled && setPriority({ opportunityId: id, on: ids.includes(id) }),
+      () => !cancelled && setPriority({ opportunityId: id, on: false }),
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [brandId, id, canManage]);
+  const handleSendToPlan = async () => {
+    if (!brandId) return;
+    try {
+      await setPlanRowPriority(brandId, `opportunity:${id}`, true);
+      setPriority({ opportunityId: id, on: true });
+      onPrioritized?.(id);
+      toast.success(t('sentToPlan'), {
+        action: { label: t('openPlan'), onClick: () => router.push('/dashboard/content/plan') },
+      });
+    } catch {
+      toast.error(t('sendToPlanError'));
+    }
+  };
 
   useEffect(() => {
     setLoading(true);
@@ -343,6 +413,8 @@ export function OpportunityDetail({
   }
 
   const sd = opportunity.sourceData;
+  // What the opportunity makes: its primary asset's type.
+  const primaryType = assetTypeLabel(sd.assets?.[0]?.type);
   const canSendToActionCenter = !['dismissed', 'archived', 'done'].includes(opportunity.status);
   const quotaLimited = quota !== null && quota.limit !== -1;
   const quotaExhausted = quotaLimited && quota.remaining <= 0;
@@ -351,7 +423,9 @@ export function OpportunityDetail({
 
   const handleCopy = async () => {
     try {
-      await navigator.clipboard.writeText(opportunityToMarkdown(opportunity, brief, fanoutQueries));
+      await navigator.clipboard.writeText(
+        opportunityToMarkdown(opportunity, brief, fanoutQueries, assetTypeLabel),
+      );
       toast.success(t('copiedToast'));
     } catch {
       toast.error(t('copyError'));
@@ -401,6 +475,11 @@ export function OpportunityDetail({
           >
             {t(`type.${opportunity.type}` as 'type.owned' | 'type.earned')}
           </Badge>
+          {primaryType && (
+            <Badge variant="outline" className="text-xs">
+              {primaryType}
+            </Badge>
+          )}
           <Badge variant="outline" className={cn('text-xs', IMPACT_COLORS[opportunity.impact])}>
             {t(`impact.${opportunity.impact}` as 'impact.high' | 'impact.medium' | 'impact.low')}
           </Badge>
@@ -410,32 +489,9 @@ export function OpportunityDetail({
           <Badge variant="outline" className="text-xs tabular-nums">
             Score: {Math.round(opportunity.opportunityScore)}
           </Badge>
-          {/* Another angle is written from a cluster or a prompt; a task sent
-              from the Action Center (AC-004) has neither. */}
-          {opportunity.source !== 'action' && (
-            <Button
-              type="button"
-              variant="ghost"
-              size="xs"
-              className="ml-auto gap-1 text-xs text-muted-foreground"
-              onClick={() => setAlternativeOpen(true)}
-              disabled={alternativeRunning}
-              title={t('alternative.hint')}
-            >
-              {alternativeRunning ? (
-                <Loader2 className="h-3 w-3 animate-spin" />
-              ) : (
-                <RefreshCw className="h-3 w-3" />
-              )}
-              {alternativeRunning ? t('alternative.running') : t('alternative.button')}
-            </Button>
-          )}
           {/* The UI's language, not the browser's: an English page showed "25 Eyl". */}
           <span
-            className={cn(
-              'text-xs text-muted-foreground flex items-center gap-1.5',
-              opportunity.source === 'action' && 'ml-auto',
-            )}
+            className="ml-auto flex items-center gap-1.5 text-xs text-muted-foreground"
             title={suggestedDate(opportunity.createdAt, locale).full}
           >
             <Clock className="h-3.5 w-3.5" />
@@ -446,103 +502,62 @@ export function OpportunityDetail({
             })}
           </span>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          {brief ? (
-            <Button variant="outline" size="sm" disabled className="gap-2 disabled:opacity-100">
-              <Check className="h-4 w-4" />
-              {t('briefGenerated')}
-            </Button>
-          ) : (
-            <Button
-              size="sm"
-              onClick={handleGenerateBrief}
-              disabled={generatingBrief || quotaExhausted}
-              title={quotaExhausted ? t('briefLimitReached') : undefined}
-              className="gap-2"
-            >
-              {generatingBrief ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Sparkles className="h-4 w-4" />
-              )}
-              {generatingBrief ? t('generatingBrief') : t('generateBrief')}
-            </Button>
-          )}
-          {/* Every opportunity can go to the Action Center, cluster or single prompt. */}
-          {actionId ? (
-            <Link href={`/dashboard/action-center/actions?action=${actionId}`}>
-              <Button variant="outline" size="sm" className="gap-2">
-                <ExternalLink className="h-4 w-4" />
-                {t('openInActions')}
-              </Button>
-            </Link>
-          ) : (
-            canSendToActionCenter && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => handleSendToActionCenter()}
-                disabled={sendingAction !== null}
-                className="gap-2"
-              >
-                {sendingAction === 'all' ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Target className="h-4 w-4" />
-                )}
-                {t('sendToActions')}
-              </Button>
-            )
-          )}
-          {canSendToWorkflow && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleSend}
-              disabled={sending}
-              className="gap-2"
-            >
-              {sending ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Send className="h-4 w-4" />
-              )}
-              {sending
-                ? t('sending')
-                : opportunity.webhookSentAt
-                  ? t('sendAgain')
-                  : t('sendToWorkflow')}
-            </Button>
-          )}
-          <Button variant="outline" size="sm" onClick={handleCopy} className="gap-2">
-            <Copy className="h-4 w-4" />
-            {t('copyAllData')}
-          </Button>
-          {/* Status actions sit beside the others: the row has room for them. */}
-          {opportunity.status === 'new' && (
-            <Button variant="outline" size="sm" onClick={handleReviewed} className="gap-2">
-              <CheckCheck className="h-4 w-4" />
-              {t('markReviewed')}
-            </Button>
-          )}
-          {opportunity.status === 'archived' && (
-            <Button variant="outline" size="sm" onClick={handleRestore} className="gap-2">
-              <RotateCcw className="h-4 w-4" />
-              {t('restore')}
-            </Button>
-          )}
-          {opportunity.status === 'new' && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setDismissOpen(true)}
-              className="gap-2 text-muted-foreground hover:text-destructive"
-            >
-              <X className="h-4 w-4" />
-              {t('dismiss')}
-            </Button>
-          )}
-        </div>
+        <OpportunityActions
+          actionId={actionId ?? null}
+          sendToActions={
+            canSendToActionCenter
+              ? {
+                  sending: sendingAction === 'all',
+                  disabled: sendingAction !== null,
+                  onSend: () => void handleSendToActionCenter(),
+                }
+              : null
+          }
+          brief={{
+            generated: !!brief,
+            generating: generatingBrief,
+            blockedReason: quotaExhausted ? t('briefLimitReached') : null,
+            onGenerate: () => void handleGenerateBrief(),
+          }}
+          content={{
+            draftId:
+              draft?.opportunityId === opportunity.id && !draft.failed ? draft.id : undefined,
+            lookupFailed: draft?.opportunityId === opportunity.id && draft.failed,
+            onRetry: retryDraft,
+            canStart: canWriteOpportunity(opportunity),
+            onStart: () => setContentPreset(opportunityStart(opportunity)),
+            onOpenDraft: (draftId) => router.push(contentEditorPath(draftId)),
+          }}
+          plan={
+            canManage && canWriteOpportunity(opportunity)
+              ? {
+                  prioritized: priority?.opportunityId === opportunity.id ? priority.on : undefined,
+                  onSend: () => void handleSendToPlan(),
+                  onOpen: () => router.push('/dashboard/content/plan'),
+                }
+              : null
+          }
+          // Another angle is written from a cluster or a prompt; a task sent
+          // from the Action Center (AC-004) has neither.
+          alternative={
+            opportunity.source !== 'action'
+              ? { running: alternativeRunning, onOpen: () => setAlternativeOpen(true) }
+              : null
+          }
+          workflow={
+            canSendToWorkflow
+              ? {
+                  sending,
+                  sentBefore: !!opportunity.webhookSentAt,
+                  onSend: () => void handleSend(),
+                }
+              : null
+          }
+          onCopy={() => void handleCopy()}
+          onReviewed={opportunity.status === 'new' ? () => void handleReviewed() : undefined}
+          onRestore={opportunity.status === 'archived' ? () => void handleRestore() : undefined}
+          onDismiss={opportunity.status === 'new' ? () => setDismissOpen(true) : undefined}
+        />
       </div>
 
       {sd.reopened && ['new', 'reviewed'].includes(opportunity.status) && (
@@ -850,6 +865,13 @@ export function OpportunityDetail({
         open={dismissOpen}
         onOpenChange={setDismissOpen}
         onChoose={(reason) => void handleDismiss(reason)}
+      />
+      <NewContentDialog
+        open={contentPreset !== null}
+        onOpenChange={(open) => !open && setContentPreset(null)}
+        brandId={opportunity.brandId}
+        siteType={siteTypeOf(opportunityBrand ?? {})}
+        preset={contentPreset}
       />
     </div>
   );

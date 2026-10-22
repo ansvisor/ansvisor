@@ -19,8 +19,10 @@ vi.mock('./citations-rollups.js', () => ({
 
 // The Mentions rollups ride on them too (mentions-rollups.test.js).
 const refreshMentionsDaily = vi.fn();
+const refreshMentionTermsDaily = vi.fn();
 vi.mock('./mentions-rollups.js', () => ({
   refreshMentionsDaily: (...a) => refreshMentionsDaily(...a),
+  refreshMentionTermsDaily: (...a) => refreshMentionTermsDaily(...a),
 }));
 
 import {
@@ -72,6 +74,7 @@ beforeEach(() => {
   tables();
   refreshCitationsDaily.mockReset().mockResolvedValue(true);
   refreshMentionsDaily.mockReset().mockResolvedValue(true);
+  refreshMentionTermsDaily.mockReset().mockResolvedValue(true);
   rebuildQueuedCitationRollups.mockReset().mockResolvedValue({ rebuilt: 0, failed: 0 });
   vi.useFakeTimers();
   vi.setSystemTime(new Date('2026-08-21T05:30:00Z'));
@@ -236,6 +239,8 @@ describe('rebuildQueuedInsightsRollups (00192)', () => {
       ['2026-07-02', '2026-08-01'],
       ['2026-08-02', '2026-08-10'],
     ]);
+    // The Perception rollups (00231) lose the deleted prompt's terms too.
+    expect(refreshMentionTermsDaily).toHaveBeenCalledWith('b1', '2026-06-01', '2026-08-10');
     // Only if nothing re-queued the brand meanwhile.
     expect(queueDeletes).toEqual([
       [
@@ -255,6 +260,15 @@ describe('rebuildQueuedInsightsRollups (00192)', () => {
     expect(rpc.mock.calls.slice(1).every(([, args]) => args.p_brand_id === 'b2')).toBe(true);
     expect(queueDeletes).toHaveLength(1);
     expect(queueDeletes[0][0]).toEqual(['eq', 'brand_id', 'b2']);
+  });
+
+  it('keeps the entry when the Perception rollups fail to rebuild', async () => {
+    queueRows = [entry];
+    rpc.mockResolvedValue({ error: null });
+    refreshMentionTermsDaily.mockResolvedValue(false);
+
+    expect(await rebuildQueuedInsightsRollups()).toEqual({ rebuilt: 0, failed: 1 });
+    expect(queueDeletes).toHaveLength(0);
   });
 
   it('never runs twice at once', async () => {

@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import { useAssetTypeLabel } from '@/hooks/use-asset-type-label';
 import {
   getOpportunityActions,
   getOpportunityBasket,
@@ -248,6 +249,7 @@ export function AssetsCard({
   sendingKey?: string | null;
 }) {
   const t = useTranslations('content');
+  const assetTypeLabel = useAssetTypeLabel();
   const assets = sourceData.assets ?? [];
   const actions = sourceData.actions ?? {};
   if (assets.length < 2) return null;
@@ -269,9 +271,11 @@ export function AssetsCard({
                   {t('detail.primaryAsset')}
                 </Badge>
               )}
-              <Badge variant="outline" className="text-[10px]">
-                {t(`assetType.${a.type}`)}
-              </Badge>
+              {assetTypeLabel(a.type) && (
+                <Badge variant="outline" className="text-[10px]">
+                  {assetTypeLabel(a.type)}
+                </Badge>
+              )}
               <Badge variant="outline" className="text-[10px]">
                 {t(`type.${a.channel}`)}
               </Badge>

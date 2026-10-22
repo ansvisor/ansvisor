@@ -273,6 +273,8 @@ interface InsightsAggregates {
   total_citations: number;
   positive_count: number;
   mentioning_results: number;
+  /** 00191: answers naming the brand, Net sentiment's base. */
+  mention_results?: number;
   last_checked_at: string | null;
   by_model: Array<{
     model_used: string;
@@ -1911,14 +1913,11 @@ export async function getInsightsSummary(
   const avgVisibilityScore = roundTo1(cur.sum_visibility / totalResults);
   const totalMentions = cur.total_mentions;
   const totalCitations = cur.total_citations;
-  // Denominator is answers that mention/cite the brand, not all results —
-  // sentiment analysis is skipped entirely for brand-absent answers, so
-  // dividing by totalResults dilutes the score with rows that can never
-  // be positive (#508).
-  const positiveSentimentPct =
-    cur.mentioning_results > 0
-      ? Math.round((cur.positive_count / cur.mentioning_results) * 100)
-      : 0;
+  // Denominator is answers that name the brand, not all results — sentiment
+  // is only read where the brand is named, so dividing by totalResults (or by
+  // answers that only cite it, #508) dilutes it with rows that can never be
+  // positive. The same base as the Mentions page (00191).
+  const positiveSentimentPct = positivePctOf(cur);
   const lastCheckedAt = cur.last_checked_at;
 
   const platformBreakdown = cur.by_model.map((m) => ({
@@ -1996,18 +1995,12 @@ export async function getInsightsSummary(
       const curAvgVis = roundTo1(curWin.sum_visibility / curWin.total_results);
       const curMentions = curWin.total_mentions;
       const curCitations = curWin.total_citations;
-      const curSentimentPct =
-        curWin.mentioning_results > 0
-          ? Math.round((curWin.positive_count / curWin.mentioning_results) * 100)
-          : 0;
+      const curSentimentPct = positivePctOf(curWin);
 
       const prevAvgVis = roundTo1(prevWin.sum_visibility / prevWin.total_results);
       prevMentions = prevWin.total_mentions;
       prevCitations = prevWin.total_citations;
-      const prevSentimentPct =
-        prevWin.mentioning_results > 0
-          ? Math.round((prevWin.positive_count / prevWin.mentioning_results) * 100)
-          : 0;
+      const prevSentimentPct = positivePctOf(prevWin);
 
       visibilityChange = roundTo1(curAvgVis - prevAvgVis);
       mentionsChange = percentageChange(curMentions, prevMentions);
@@ -2043,9 +2036,23 @@ export async function getInsightsSummary(
     netSentimentChange,
     avgPosition: curRates.avgPosition,
     avgPositionChange,
-    mentioningResults: Number(cur.mentioning_results ?? 0),
+    mentioningResults: namedAnswers(cur),
     positionedResults: Number(cur.position_count ?? 0),
   };
+}
+
+/**
+ * Answers naming the brand in a window: Net sentiment's base (00191). Before
+ * that migration the aggregates have only answers naming or citing it.
+ */
+function namedAnswers(a: InsightsAggregates): number {
+  return Number(a.mention_results ?? a.mentioning_results ?? 0);
+}
+
+/** Positive answers as a whole % of those naming the brand; 0 without any. */
+function positivePctOf(a: InsightsAggregates): number {
+  const named = namedAnswers(a);
+  return named > 0 ? Math.round((a.positive_count * 100) / named) : 0;
 }
 
 /**
@@ -2059,7 +2066,7 @@ function aggregateRates(a: InsightsAggregates): KpiRates {
   const rates = kpiRates({
     answers: Number(a.total_results ?? 0),
     citationAnswers: Number(a.citation_answers ?? 0),
-    mentioning: Number(a.mentioning_results ?? 0),
+    named: namedAnswers(a),
     positive: Number(a.positive_count ?? 0),
     negative: Number(a.negative_count ?? 0),
     sumPosition:
