@@ -54,6 +54,68 @@ export async function refreshMentionsDaily(brandId, dayFrom, dayTo) {
 }
 
 /**
+ * Rebuild the Perception tab's daily rollups (00231) from the answers' terms
+ * already written, a week per call: for the days a deleted prompt leaves,
+ * whose terms went with its answers (the terms refresh above rebuilds them
+ * itself). No answer text is read. Resolves to true when every call
+ * succeeds, false at the first that fails; never throws.
+ */
+export async function refreshMentionTermsDaily(brandId, dayFrom, dayTo) {
+  for (const [from, to] of dayChunks(dayFrom, dayTo, MENTION_TERMS_ROLLUP_CHUNK_DAYS)) {
+    const { error } = await supabaseAdmin.rpc('refresh_mention_terms_daily', {
+      p_brand_id: brandId,
+      p_day_from: from,
+      p_day_to: to,
+    });
+    if (error) {
+      logger.error(
+        { err: error, brandId, dayFrom: from, dayTo: to },
+        '[mentions-rollups] terms rollup refresh failed',
+      );
+      return false;
+    }
+  }
+  return true;
+}
+
+/** The first or last UTC day of a brand's answers' terms (00161), or null with none. */
+async function termsDayBound(brandId, ascending) {
+  const { data, error } = await supabaseAdmin
+    .from('mentions_answer_terms')
+    .select('created_at')
+    .eq('brand_id', brandId)
+    .order('created_at', { ascending })
+    .limit(1);
+  if (error) throw new Error(error.message);
+  const at = data?.[0]?.created_at;
+  return at ? new Date(at).toISOString().slice(0, 10) : null;
+}
+
+/**
+ * Rebuild a brand's Perception rollups (00231) over its whole terms history,
+ * a week per call, from the terms already written: the backfill that runs
+ * after 00231 and the server deploy, before 00237 moves the read onto the
+ * rollups. Resolves to the number of calls; throws when one fails, so the
+ * backfill can be run again.
+ */
+export async function refreshMentionTermsHistory(brandId, { pauseMs = 0 } = {}) {
+  const firstDay = await termsDayBound(brandId, true);
+  if (!firstDay) return 0;
+  const lastDay = await termsDayBound(brandId, false);
+
+  const chunks = dayChunks(firstDay, lastDay, MENTION_TERMS_ROLLUP_CHUNK_DAYS);
+  for (const [from, to] of chunks) {
+    const ok = await refreshMentionTermsDaily(brandId, from, to);
+    if (!ok) throw new Error(`mention terms rollup refresh failed for ${brandId} ${from}..${to}`);
+    if (pauseMs > 0) await new Promise((resolve) => setTimeout(resolve, pauseMs));
+  }
+  return chunks.length;
+}
+
+/** Days per terms rollup call: a week of the largest brand's terms, counted. */
+export const MENTION_TERMS_ROLLUP_CHUNK_DAYS = 7;
+
+/**
  * Days per history refresh call. Shorter than the citation rollups' two
  * weeks: the terms (00161) read each answer's text, a few milliseconds per
  * answer and entity named. The largest brand's busiest days take tens of

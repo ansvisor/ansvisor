@@ -138,7 +138,7 @@ export function Sidebar() {
   const t = useTranslations('nav');
   const tBrands = useTranslations('brands');
   const { canUse, requiredPlanFor, isCloud } = useFeatureGate();
-  // Probe once per session whether the org has saved an Anthropic key.
+  // Probe once per session whether the org has a provider key for Chat.
   // Returns 'configured' immediately on self-host (no network call).
   const agentKeyStatus = useAgentKeyStatus(isCloud);
   const agentKeyMissing = isCloud && agentKeyStatus === 'missing';
@@ -358,7 +358,7 @@ export function Sidebar() {
                   const label = getDashboardNavLabel(item.title, t, tBrands);
 
                   // Dynamic badge override: show "Set up" on the Agent item
-                  // when the org has no Anthropic key saved (cloud only).
+                  // when the org has no provider key for Chat (cloud only).
                   const effectiveBadge =
                     item.href === '/dashboard/agent' && agentKeyMissing ? 'Set up' : item.badge;
 

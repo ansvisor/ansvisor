@@ -89,6 +89,7 @@ beforeEach(() => {
   getContentStartOptions.mockReset().mockResolvedValue({
     opportunities: [],
     prompts: [],
+    promptsSeen: 0,
     topics: [],
   });
   push.mockReset();
