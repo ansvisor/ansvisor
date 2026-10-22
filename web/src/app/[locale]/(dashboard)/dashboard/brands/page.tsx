@@ -10,9 +10,12 @@ import { Button } from '@/components/ui/button';
 import { Crown, Plus } from 'lucide-react';
 
 function BrandsHeader({
+  canManage,
   canAddBrand,
   needsUpgrade,
 }: {
+  /** Admins and managers add brands (brands: admin/manager insert). */
+  canManage: boolean;
   canAddBrand: boolean;
   needsUpgrade: boolean;
 }) {
@@ -25,7 +28,7 @@ function BrandsHeader({
       </div>
       <div className="flex items-center gap-2">
         <WorkspaceSettingsMenu />
-        {canAddBrand ? (
+        {!canManage ? null : canAddBrand ? (
           <Link href="/dashboard/brands/new">
             <Button className="gap-2">
               <Plus className="h-4 w-4" />
@@ -48,9 +51,13 @@ function BrandsHeader({
 export default async function BrandsPage() {
   const supabase = await createClient();
 
-  const { data: profile } = await supabase.from('profiles').select('organization_id').single();
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('organization_id, role')
+    .single();
 
   const orgId = profile?.organization_id;
+  const canManage = profile?.role === 'admin' || profile?.role === 'manager';
 
   // getOrgPlan, not getPlan(org.plan): the limit shown here must be the one
   // createBrand enforces, Enterprise plan_overrides included. Reading the bare
@@ -66,7 +73,7 @@ export default async function BrandsPage() {
 
   return (
     <div className="space-y-6">
-      <BrandsHeader canAddBrand={canAddBrand} needsUpgrade={needsUpgrade} />
+      <BrandsHeader canManage={canManage} canAddBrand={canAddBrand} needsUpgrade={needsUpgrade} />
       <BrandsClient brands={brands} />
     </div>
   );
