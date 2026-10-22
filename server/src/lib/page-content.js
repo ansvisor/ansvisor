@@ -395,6 +395,26 @@ export function extractPageContent(html, pageUrl) {
     }
   });
 
+  // One H1 per page, its title: the one nearest the text (inside it, else
+  // the last before it), not a logo's or a site name's. An H1 without words
+  // (a logo) is no heading; the others become H2s.
+  const h1s = root.find('h1').toArray();
+  const worded = h1s.filter((el) => clean($(el).text()));
+  const order = new Map(
+    $('*')
+      .toArray()
+      .map((el, i) => [el, i]),
+  );
+  const titleH1 = textArea
+    ? (worded.find((el) => $(el).closest(textArea).length > 0) ??
+      worded.filter((el) => order.get(el) < order.get(textArea)).at(-1) ??
+      worded[0])
+    : worded[0];
+  for (const el of h1s) {
+    if (el === titleH1) continue;
+    if (!clean($(el).text())) $(el).replaceWith($(el).contents());
+    else el.name = 'h2';
+  }
   let content = (root.html() ?? '').trim();
   // A title above the content (a hero outside <main>) heads it, as the
   // draft's title is its first heading.

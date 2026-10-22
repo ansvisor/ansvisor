@@ -3592,6 +3592,7 @@
         "fixing": "Content Agent is working…",
         "fixed": "{count, plural, one {Content Agent suggested # change} other {Content Agent suggested # changes}} · review them in the page",
         "nothingToFix": "Content Agent found nothing it could change without new facts.",
+        "notForAgent": "Content Agent doesn't change heading levels: make the extra H1s H2s in the toolbar.",
         "decideFirst": "Accept or reject the open suggestions first.",
         "citedLoading": "Reading which passages AI quotes, so the agent leaves them as they are…",
         "fixErrors": {
@@ -3666,6 +3667,7 @@
       "toolbar": {
         "label": "Formatting",
         "h1": "Heading 1",
+        "h1Taken": "A page has one H1, its title: use Heading 2 here",
         "h2": "Heading 2",
         "h3": "Heading 3",
         "bold": "Bold",
@@ -3956,6 +3958,7 @@
         "names": {
           "sentence": "Max sentence length",
           "length": "Length",
+          "oneH1": "One H1 per page",
           "summary": "AI Overview summary at the top",
           "h2Answer": "Direct answer under each H2",
           "fanoutH2": "Use top fan-outs as H2s",
@@ -3993,6 +3996,7 @@
         },
         "hints": {
           "length": "A target, not a minimum: within 20% of it meets the rule. A page well over it is open, and Apply rules with Agent shortens it a few passages at a time.",
+          "oneH1": "A page has one H1, its title. Make any other H1 an H2 in the toolbar: Content Agent doesn't change heading levels.",
           "summary": "A short summary under the H1 that answer engines can quote.",
           "fanoutH2": "Takes the top fan-outs you keep in Sources, the most searched first, not every one.",
           "internalLinks": "Links with descriptive anchor text to your own pages.",

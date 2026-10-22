@@ -216,6 +216,12 @@ describe('keepSuggestions', () => {
 });
 
 describe('cleanInsertHtml', () => {
+  it('makes an agent’s H1 an H2: the page has its title', () => {
+    expect(cleanInsertHtml('<h1 class="x">New title</h1><p>Text</p>')).toBe(
+      '<h2>New title</h2><p>Text</p>',
+    );
+  });
+
   it('keeps simple blocks without attributes and unwraps the rest', () => {
     expect(
       cleanInsertHtml('<div><h3 style="x">Q</h3><ol><li><em>a</em></li></ol><img src=x></div>'),
