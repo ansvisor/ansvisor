@@ -7,9 +7,11 @@ import type { ContentAuthor } from '@/lib/content/authors';
 import { BAND_CLASSES, qualityBand } from '@/lib/content/quality';
 import {
   authorProfile,
+  FRESH_MONTHS,
   scoreGain,
   type EeatCheckId,
   type Score,
+  type TrustRead,
 } from '@/lib/content/quality-checks';
 import {
   readabilityGain,
@@ -26,8 +28,8 @@ export interface QualityRead {
   readability: Readability | null;
   /** E-E-A-T from the author, or null before the authors are read. */
   eeat: Score<EeatCheckId> | null;
-  /** Trust, or null while none of its checks is live for the page. */
-  trust: Score | null;
+  /** Trust from the page's figures and links, its score null while none can be read. */
+  trust: TrustRead | null;
   /** The page's author, or null for the organization byline. */
   author: ContentAuthor | null;
   /** Whether the workspace has an author to pick (Settings › Authors). */
@@ -78,6 +80,7 @@ export function QualityTab({
   const suggestions = [
     ...readabilitySuggestions(t, readability),
     ...eeatSuggestions(t, quality, tAuthor('organization', { brand: quality.brandName })),
+    ...trustSuggestions(t, trust),
   ]
     .filter((s) => s.gain > 0)
     .sort((a, b) => b.gain - a.gain);
@@ -131,7 +134,9 @@ export function QualityTab({
                 </span>
                 <div className="min-w-0 flex-1">
                   <p className="font-medium [overflow-wrap:anywhere]">{s.line}</p>
-                  <p className="text-xs text-muted-foreground">{s.detail}</p>
+                  <p className="text-xs text-muted-foreground [overflow-wrap:anywhere]">
+                    {s.detail}
+                  </p>
                 </div>
                 <SuggestionAction action={s.action} onShow={onShow} onPickAuthor={onPickAuthor} />
               </li>
@@ -234,6 +239,50 @@ function eeatSuggestions(t: T, quality: QualityRead, teamByline: string): Sugges
       action: { kind: 'manageAuthors', label: 'editAuthor' },
     },
   ];
+}
+
+/**
+ * Trust's: figures without a source, sources past FRESH_MONTHS, links that
+ * don't answer, each with Show on the first one in the page.
+ */
+function trustSuggestions(t: T, trust: TrustRead | null): Suggestion[] {
+  if (!trust || trust.score === null) return [];
+  const out: Suggestion[] = [];
+  if (trust.unsourced.length) {
+    out.push({
+      key: 'trust:claimsSourced',
+      score: 'trust',
+      gain: scoreGain(trust, ['claimsSourced']),
+      line: t('checks.claimsSourced.line', { count: trust.unsourced.length }),
+      detail: t('checks.claimsSourced.detail'),
+      action: { kind: 'show', text: trust.unsourced[0] },
+    });
+  }
+  if (trust.stale.length) {
+    out.push({
+      key: 'trust:freshSources',
+      score: 'trust',
+      gain: scoreGain(trust, ['freshSources']),
+      line: t('checks.freshSources.line', {
+        count: trust.stale.length,
+        total: trust.dated,
+        months: FRESH_MONTHS,
+      }),
+      detail: t('checks.freshSources.detail'),
+      action: { kind: 'show', text: trust.stale[0].text },
+    });
+  }
+  if (trust.broken.length) {
+    out.push({
+      key: 'trust:noBrokenLinks',
+      score: 'trust',
+      gain: scoreGain(trust, ['noBrokenLinks']),
+      line: t('checks.noBrokenLinks.line', { count: trust.broken.length }),
+      detail: t('checks.noBrokenLinks.detail', { url: trust.broken[0].url }),
+      action: { kind: 'show', text: trust.broken[0].text },
+    });
+  }
+  return out;
 }
 
 /** A Readability check's one line: what the draft does now. */

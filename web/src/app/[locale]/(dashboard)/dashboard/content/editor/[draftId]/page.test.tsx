@@ -16,6 +16,7 @@ const markContentDraftReady = vi.fn();
 const saveContentDraft = vi.fn();
 const setContentDraftPageType = vi.fn();
 const setContentDraftAuthor = vi.fn();
+const checkDraftLinks = vi.fn();
 const getContentAuthors = vi.fn();
 vi.mock('@/lib/actions/content-authors', () => ({
   getContentAuthors: (...args: unknown[]) => getContentAuthors(...args),
@@ -68,6 +69,7 @@ vi.mock('@/lib/actions/content-drafts', () => ({
   saveContentDraft: (...args: unknown[]) => saveContentDraft(...args),
   setContentDraftPageType: (...args: unknown[]) => setContentDraftPageType(...args),
   setContentDraftAuthor: (...args: unknown[]) => setContentDraftAuthor(...args),
+  checkDraftLinks: (...args: unknown[]) => checkDraftLinks(...args),
 }));
 vi.mock('next/navigation', () => ({ useParams: () => ({ draftId: 'd1' }) }));
 vi.mock('@/i18n/navigation', () => ({
@@ -230,6 +232,7 @@ beforeEach(() => {
   saveBlob.mockReset();
   setContentDraftPageType.mockReset().mockResolvedValue(undefined);
   setContentDraftAuthor.mockReset().mockResolvedValue(undefined);
+  checkDraftLinks.mockReset().mockResolvedValue({ links: [] });
   getContentAuthors.mockReset().mockResolvedValue(null);
   saveContentDraft
     .mockReset()

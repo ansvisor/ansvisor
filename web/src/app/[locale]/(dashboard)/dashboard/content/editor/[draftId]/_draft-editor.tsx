@@ -74,9 +74,15 @@ import { PAGE_READ_DELAY_MS, draftTitleFromDoc, safeLinkHref } from '@/lib/conte
 import { JsonLd } from '@/lib/content/json-ld-node';
 import { detectPageType } from '@/lib/content/page-types';
 import { BAND_CLASSES, qualityAverage, qualityBand, qualityPhase } from '@/lib/content/quality';
-import { eeat } from '@/lib/content/quality-checks';
+import { eeat, linksToCheck, trust } from '@/lib/content/quality-checks';
 import { readability } from '@/lib/content/readability';
-import { aiTracesFound, fanoutsToUse, lengthWarns, openRulesForAgent } from '@/lib/content/rules';
+import {
+  aiTracesFound,
+  fanoutsToUse,
+  lengthWarns,
+  openRulesForAgent,
+  readPage,
+} from '@/lib/content/rules';
 import { saveBlob } from '@/lib/download';
 import { cn } from '@/lib/utils';
 import { useBrandStore } from '@/stores/use-brand-store';
@@ -85,6 +91,7 @@ import { AgentDrafting, draftingKey } from './_agent-drafting';
 import { AuthorMenu } from './_author-menu';
 import { FlashBlock, findBlock, flashKey } from './_flash-block';
 import { useAgentRun } from './_use-agent-run';
+import { useLinkChecks } from './_use-link-checks';
 import { WorkingDots } from './_working-dots';
 import { DropOverlay, useAttachments } from './_attach';
 import {
@@ -433,18 +440,41 @@ export function DraftEditor({
   const brandName =
     authorsRead?.brands.find((b) => b.id === draft.brandId)?.name ?? storeBrandName ?? '';
   const pageAuthor = authorsRead?.authors.find((a) => a.id === authorId) ?? null;
-  // E-E-A-T from the author (CE-039): with Readability, the scores and the
-  // header chip's average. Trust waits for a check that can read the page.
+  // E-E-A-T from the author, Trust from the page's figures and links (their
+  // reads from the API): with Readability, the scores and the header chip's
+  // average (CE-039).
   const eeatScore = useMemo(
     () => (qualityOn && authorsRead ? eeat({ author: pageAuthor }) : null),
     [qualityOn, authorsRead, pageAuthor],
   );
-  const qualityScore = qualityAverage([eeatScore?.score ?? null, readable?.score ?? null]);
+  const pageBlocks = useMemo(
+    () => (qualityOn ? readPage(pageHtml, 0).blocks : []),
+    [qualityOn, pageHtml],
+  );
+  const linkChecks = useLinkChecks(draft.id, autosave.savedAt, linksToCheck(pageBlocks), qualityOn);
+  const brandDomains = reads.sources?.data?.brandDomains;
+  const trustScore = useMemo(
+    () =>
+      qualityOn
+        ? trust({
+            blocks: pageBlocks,
+            links: linkChecks,
+            brandDomains: brandDomains ?? [],
+            now: Date.now(),
+          })
+        : null,
+    [qualityOn, pageBlocks, linkChecks, brandDomains],
+  );
+  const qualityScore = qualityAverage([
+    eeatScore?.score ?? null,
+    trustScore?.score ?? null,
+    readable?.score ?? null,
+  ]);
   const quality: QualityRead | null = qualityOn
     ? {
         readability: readable,
         eeat: eeatScore,
-        trust: null,
+        trust: trustScore,
         author: pageAuthor,
         hasAuthors: (authorsRead?.authors.length ?? 0) > 0,
         brandName,

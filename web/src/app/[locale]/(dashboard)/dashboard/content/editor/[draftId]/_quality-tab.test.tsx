@@ -3,7 +3,8 @@ import { createRoot, type Root } from 'react-dom/client';
 import { NextIntlClientProvider } from 'next-intl';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import messages from '../../../../../../../../messages/en.json';
-import { eeat } from '@/lib/content/quality-checks';
+import { eeat, trust, type LinkCheck } from '@/lib/content/quality-checks';
+import { readPage } from '@/lib/content/rules';
 import type { ContentAuthor } from '@/lib/content/authors';
 import type { Readability } from '@/lib/content/readability';
 
@@ -176,5 +177,49 @@ describe('QualityTab', () => {
     await render(read({ score: null, checks: [], words: 12 }));
     expect(container.textContent).toContain('Write a few paragraphs');
     expect(container.textContent).not.toContain('Nothing to raise');
+  });
+
+  it('asks to source figures, swap stale sources and fix links, each with Show', async () => {
+    const html =
+      '<p>Win rates rose 42% last year.</p>' +
+      '<p>See <a href="https://old.example/">this study</a> and <a href="https://gone.example/">that one</a>.</p>';
+    const links = new Map<string, LinkCheck>([
+      [
+        'https://old.example/',
+        {
+          href: 'https://old.example/',
+          status: 'ok',
+          httpStatus: 200,
+          date: '2020-01-01T00:00:00.000Z',
+        },
+      ],
+      [
+        'https://gone.example/',
+        { href: 'https://gone.example/', status: 'broken', httpStatus: 404, date: null },
+      ],
+    ]);
+    const result = trust({
+      blocks: readPage(html, 0).blocks,
+      links,
+      brandDomains: ['acme.com'],
+      now: Date.parse('2026-10-23T12:00:00Z'),
+    });
+    await render({ ...read(null), trust: result });
+    const scores = container.querySelector('[aria-label="Quality scores"]')!;
+    // Figures 0 of 30, fresh 0 of 7, links 1.5 of 3: 4 of 100.
+    expect(scores.textContent).toContain('Trust4Needs work');
+    const rows = [...container.querySelectorAll('li')].map((li) => li.textContent);
+    expect(rows).toContainEqual(expect.stringContaining('1 figure has no source'));
+    expect(rows).toContainEqual(
+      expect.stringContaining('1 of 1 dated sources is over 24 months old'),
+    );
+    expect(rows).toContainEqual(
+      expect.stringContaining("1 link doesn't workFix or remove it: https://gone.example/Show"),
+    );
+    const figure = [...container.querySelectorAll('li')].find((li) =>
+      li.textContent?.includes('figure'),
+    )!;
+    await act(async () => figure.querySelector('button')!.click());
+    expect(onShow).toHaveBeenCalledWith('Win rates rose 42% last year.');
   });
 });

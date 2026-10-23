@@ -37,6 +37,7 @@ import {
 import { detectPageType, siteTypeOf, type SiteType } from '@/lib/content/page-types';
 import { sanitizeDraftHtml } from '@/lib/content/sanitize-draft-html';
 import { matchPagePrompts } from '@/lib/content/page-prompts';
+import type { LinkCheck } from '@/lib/content/quality-checks';
 import {
   NO_DRAFT_RULES,
   draftRulesFit,
@@ -616,6 +617,39 @@ export async function importContentPage(
     };
   } catch (err) {
     console.error('Failed to import a page:', err);
+    return { error: 'failed' };
+  }
+}
+
+/**
+ * The saved draft's links, read by the API for Trust (Quality spec §2.2):
+ * whether each answers and how old its page is, each read at most once a
+ * day. The API reads the links from the draft as saved, never from here. The
+ * reason comes back, not a throw: production hides a server action's errors.
+ */
+export async function checkDraftLinks(
+  id: string,
+): Promise<{ links: LinkCheck[] } | { error: 'invalid' | 'failed' }> {
+  if (!draftId.safeParse(id).success) return { error: 'invalid' };
+  const supabase = await createClient();
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  if (!session) return { error: 'failed' };
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/content-pages/links`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${session.access_token}`,
+      },
+      body: JSON.stringify({ draftId: id }),
+    });
+    if (!res.ok) return { error: 'failed' };
+    const body = (await res.json()) as { links?: LinkCheck[] };
+    return { links: body.links ?? [] };
+  } catch (err) {
+    console.error('Failed to check the draft links:', err);
     return { error: 'failed' };
   }
 }

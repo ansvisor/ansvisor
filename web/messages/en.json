@@ -4130,6 +4130,18 @@
           "fernandezHuerta": "Fernández-Huerta"
         },
         "checks": {
+          "claimsSourced": {
+            "line": "{count, plural, one {# figure has} other {# figures have}} no source",
+            "detail": "Link its source in the same paragraph, or take the figure out. Content Agent won't make one up."
+          },
+          "freshSources": {
+            "line": "{count} of {total} dated sources {count, plural, one {is} other {are}} over {months} months old",
+            "detail": "Swap them for a newer source, or check whether the page has an update."
+          },
+          "noBrokenLinks": {
+            "line": "{count, plural, one {# link doesn't} other {# links don't}} work",
+            "detail": "Fix or remove it: {url}"
+          },
           "byline": {
             "line": "The page is by {byline}, not a person",
             "detail": "Pick the person who wrote it: a named author with a short bio and profile links shows who stands behind the page."
