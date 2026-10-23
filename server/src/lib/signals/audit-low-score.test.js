@@ -30,14 +30,30 @@ function serve(rows) {
   supabaseAdmin.from.mockReturnValue(query);
 }
 
-const audit = (i, score) => ({
+/** A stored audit: Site Audit keeps its score from 0 to 1, the threshold is out of 100. */
+const audit = (i, points) => ({
   url: `https://acme.example/p${i}`,
-  total_score: score,
+  total_score: points / 100,
   completed_at: now.toISOString(),
 });
 
 /** Site Audit's low pages (AC-009): the ten lowest to show, every address past them. */
 describe('auditCandidates', () => {
+  it('counts a page low only below the threshold out of 100', async () => {
+    serve([audit(0, 63), audit(1, auditLowScore), audit(2, auditLowScore - 1), audit(3, 10)]);
+    const [signal] = await auditCandidates('b1', now);
+    expect(signal.currentValue).toBe(2);
+    expect(signal.payload.urls).toEqual([
+      { url: 'https://acme.example/p3', score: 0.1 },
+      { url: 'https://acme.example/p2', score: (auditLowScore - 1) / 100 },
+    ]);
+  });
+
+  it('raises nothing when every page scores at or above the threshold', async () => {
+    serve([audit(0, 63), audit(1, 88)]);
+    expect(await auditCandidates('b1', now)).toEqual([]);
+  });
+
   it('lists no addresses beside the ten it shows', async () => {
     serve(Array.from({ length: 10 }, (_, i) => audit(i, auditLowScore - 1 - i)));
     const [signal] = await auditCandidates('b1', now);

@@ -284,6 +284,39 @@ describe('extractPageContent', () => {
     expect(html).not.toContain('Shop all our coffee');
   });
 
+  it('keeps a collapsed FAQ’s answers after the post body, and drops other hidden blocks beside it', () => {
+    const { html } = extractPageContent(
+      `<body><div hidden class="cookie-banner"><h2>Cookies</h2><p>We use cookies to improve your visit to our coffee shop.</p></div>
+        <main><h1>How to brew pour-over coffee</h1>
+        <div class="post-body">
+          <p>Pour-over coffee tastes cleaner than a French press, with brighter notes.</p>
+          <p>Start with a medium-fine grind and water just off the boil, around 94 °C.</p>
+          <p>Pour in slow circles, and aim for a total brew time of about three minutes.</p>
+        </div>
+        <section class="faq">
+          <h2>Frequently asked questions</h2>
+          <h3>Do I need a gooseneck kettle?</h3>
+          <div hidden><p>It helps you pour slowly, but any kettle works with a little practice.</p></div>
+          <h3>Which filter should I use?</h3>
+          <div style="display:none"><p>Paper filters give the cleanest cup; metal ones let more oils through.</p></div>
+          <div hidden class="newsletter"><p>Sign up for our newsletter to get brewing tips every week.</p></div>
+        </section>
+      </main></body>`,
+      'https://acme-coffee.example/pour-over',
+    );
+    for (const kept of [
+      'Do I need a gooseneck kettle?',
+      'any kettle works',
+      'Which filter should I use?',
+      'Paper filters give the cleanest cup',
+    ]) {
+      expect(html).toContain(kept);
+    }
+    for (const gone of ['We use cookies', 'Sign up for our newsletter']) {
+      expect(html).not.toContain(gone);
+    }
+  });
+
   it('judges images in the text as the text’s when the text area is the root', () => {
     const { html } = extractPageContent(
       `<body><article>
