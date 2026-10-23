@@ -572,7 +572,8 @@ export function readPage(html: string, characters: number): PageRead {
   };
 }
 
-function countWords(text: string): number {
+/** Words as the rules count them: letters or digits, with inner apostrophes and hyphens. */
+export function countWords(text: string): number {
   return text.match(/[\p{L}\p{N}][\p{L}\p{N}'’-]*/gu)?.length ?? 0;
 }
 

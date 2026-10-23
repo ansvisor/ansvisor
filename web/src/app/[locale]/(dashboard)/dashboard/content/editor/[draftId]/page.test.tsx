@@ -2172,6 +2172,46 @@ describe('the side panel', () => {
     }
   });
 
+  describe('Quality (CE-036/039)', () => {
+    const readable = draft({
+      bodyHtml:
+        '<h1>How do small teams forecast pipeline?</h1>' +
+        '<p>Small teams forecast pipeline by looking at the deals they can close this month. They count each deal once and check it every week.</p>' +
+        '<h2>Start with the deals you trust</h2>' +
+        '<p>Pick the deals with a clear next step. Leave out the ones that went quiet. Write down the date you expect each one to close.</p>' +
+        '<h2>Check the numbers every week</h2>' +
+        '<p>Look at the list on the same day each week. Move a deal out when it slips. Add new deals only when the buyer has agreed to a date.</p>',
+    });
+    afterEach(() => {
+      delete process.env.NEXT_PUBLIC_CONTENT_QUALITY_PHASE;
+    });
+
+    it('shows nothing of Quality until its first phase is live', async () => {
+      getContentDraft.mockResolvedValue(readable);
+      window.innerWidth = 1440;
+      await renderPage();
+      expect(container.querySelector('header')!.textContent).not.toContain('Quality');
+      expect(
+        [...panel()!.querySelectorAll('[role="radio"]')].map((el) => el.textContent),
+      ).not.toContainEqual(expect.stringContaining('Quality'));
+    });
+
+    it('scores the page as written, in the header and Instructions › Quality', async () => {
+      process.env.NEXT_PUBLIC_CONTENT_QUALITY_PHASE = '1';
+      getContentDraft.mockResolvedValue(readable);
+      window.innerWidth = 1440;
+      await renderPage();
+      const chip = [...container.querySelectorAll<HTMLButtonElement>('header button')].find((b) =>
+        b.textContent?.startsWith('Quality'),
+      )!;
+      expect(chip.textContent).toMatch(/^Quality \d+$/);
+      await act(async () => chip.click());
+      expect(selectedSegment()).toMatch(/^Quality\d+$/);
+      expect(panel()!.textContent).toContain('Readability');
+      expect(panel()!.textContent).toContain('Not a Google score.');
+    });
+  });
+
   describe('Run Agent: fix open rules', () => {
     const traced = draft({
       pageType: 'blog_post',

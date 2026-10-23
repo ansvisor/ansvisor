@@ -3846,9 +3846,11 @@
           "impact": "Live page"
         },
         "segmentsLabel": "Brief or rules",
+        "segmentsLabelQuality": "Brief, rules or quality",
         "segments": {
           "brief": "Brief",
           "rules": "Rules",
+          "quality": "Quality",
           "open": "{count, number} open"
         }
       },
@@ -4079,6 +4081,64 @@
       },
       "rulesChip": "Rules {met}/{total}",
       "rulesChipHint": "Rules this page meets now. Open the Rules tab.",
+      "qualityChip": "Quality {score}",
+      "qualityChipHint": "An Ansvisor estimate of this page's quality. Open Quality.",
+      "quality": {
+        "scores": "Quality scores",
+        "names": {
+          "readability": "Readability"
+        },
+        "bands": {
+          "strong": "Strong",
+          "improve": "Can improve",
+          "needsWork": "Needs work"
+        },
+        "estimate": "Ansvisor estimates based on Google's published quality signals. Not a Google score.",
+        "tooShort": "Write a few paragraphs: Readability is read from the page as you write.",
+        "suggestionsLabel": "What would raise it",
+        "nothingToRaise": "Nothing to raise here: the page reads well.",
+        "gain": "+{gain} {score}",
+        "show": "Show",
+        "formulas": {
+          "flesch": "Flesch Reading Ease",
+          "atesman": "Ateşman",
+          "amstad": "Amstad",
+          "kandelMoles": "Kandel–Moles",
+          "fernandezHuerta": "Fernández-Huerta"
+        },
+        "checks": {
+          "avgSentence": {
+            "line": "Sentences average {words} words",
+            "detail": "Aim for 15–20 words: shorter sentences read faster, and AI answers quote them whole."
+          },
+          "longSentences": {
+            "line": "{count, plural, one {# sentence} other {# sentences}} over 35 words",
+            "detail": "Split each into two. Show goes to the first."
+          },
+          "readingLevel": {
+            "line": "Reading level {score} ({formula})",
+            "detail": "Aim for {target} or more: shorter words and sentences.",
+            "lineLength": "Long words and sentences",
+            "detailLength": "No reading-level formula for this language yet: read by sentence and word length."
+          },
+          "answerFirst": {
+            "line": "The first paragraph doesn't answer the H1",
+            "detail": "Open with a short paragraph, 60 words or fewer, that answers the H1."
+          },
+          "shortParagraphs": {
+            "line": "{count, plural, one {# paragraph} other {# paragraphs}} over 4 sentences",
+            "detail": "Break them up: short paragraphs are easier to read and to quote."
+          },
+          "headingSpacing": {
+            "line": "{count, plural, one {# section} other {# sections}} over {words} words without a heading",
+            "detail": "Add an H2 or H3 every 200–300 words."
+          },
+          "passiveJargon": {
+            "line": "{passive, plural, one {# passive sentence} other {# passive sentences}} · {jargon, plural, one {# jargon word} other {# jargon words}}",
+            "detail": "Say who does what, in plain words."
+          }
+        }
+      },
       "rules": {
         "set": "Rule set",
         "setName": "{type} · Ansvisor default",

@@ -70,9 +70,12 @@ import {
 import { PAGE_READ_DELAY_MS, draftTitleFromDoc, safeLinkHref } from '@/lib/content/editor';
 import { JsonLd } from '@/lib/content/json-ld-node';
 import { detectPageType } from '@/lib/content/page-types';
+import { BAND_CLASSES, qualityAverage, qualityBand, qualityPhase } from '@/lib/content/quality';
+import { readability } from '@/lib/content/readability';
 import { aiTracesFound, fanoutsToUse, lengthWarns, openRulesForAgent } from '@/lib/content/rules';
 import { saveBlob } from '@/lib/download';
 import { cn } from '@/lib/utils';
+import { useBrandStore } from '@/stores/use-brand-store';
 import { AgentCard } from './_agent-card';
 import { AgentDrafting, draftingKey } from './_agent-drafting';
 import { useAgentRun } from './_use-agent-run';
@@ -388,6 +391,15 @@ export function DraftEditor({
     pageType,
     reads,
   });
+  // How well the page reads as written (Quality spec, CE-036/039): read in the
+  // browser, no AI cost; off until Quality's first phase is live.
+  const language = useBrandStore((s) => s.brands.find((b) => b.id === draft.brandId)?.language);
+  const qualityOn = qualityPhase() >= 1;
+  const readable = useMemo(
+    () => (qualityOn ? readability(pageHtml, 0, language) : null),
+    [qualityOn, pageHtml, language],
+  );
+  const qualityScore = qualityAverage([readable?.score ?? null]);
   useEffect(() => {
     attachRef.current = (files) => void attachments.attach(files);
     onDecide.current = (id, decision) => void decide([id], decision);
@@ -710,6 +722,20 @@ export function DraftEditor({
     const mark = ['ring-2', 'ring-amber-300', 'dark:ring-amber-700'];
     card.classList.add(...mark);
     setTimeout(() => card.classList.remove(...mark), 1200);
+  };
+
+  /** Quality's Show: the passage, scrolled to and marked for a moment. */
+  const showInPage = (text: string) => {
+    if (!editor) return;
+    const probe = text.replace(/\s+/g, ' ').trim().slice(0, 80);
+    const block = [
+      ...editor.view.dom.querySelectorAll<HTMLElement>('p, li, h1, h2, h3, blockquote'),
+    ].find((node) => (node.textContent ?? '').replace(/\s+/g, ' ').includes(probe));
+    if (!block) return;
+    block.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    const mark = ['ring-2', 'ring-amber-300', 'dark:ring-amber-700', 'rounded-sm'];
+    block.classList.add(...mark);
+    setTimeout(() => block.classList.remove(...mark), 1200);
   };
 
   /**
@@ -1341,6 +1367,20 @@ export function DraftEditor({
             <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-current" />
             {t('rulesChip', { met: rules.met, total: rules.total })}
           </button>
+          {qualityScore !== null && (
+            <button
+              type="button"
+              onClick={() => openPanelTab('quality')}
+              title={t('qualityChipHint')}
+              className={cn(
+                'inline-flex h-5 shrink-0 items-center gap-1.5 rounded-full border px-2 text-xs font-medium tabular-nums',
+                BAND_CLASSES[qualityBand(qualityScore)],
+              )}
+            >
+              <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-current" />
+              {t('qualityChip', { score: qualityScore })}
+            </button>
+          )}
           {citedCount > 0 && (
             <span
               title={t('cited.chipHint')}
@@ -1515,6 +1555,8 @@ export function DraftEditor({
             }
             onBriefRebuilding={onBriefRebuilding}
             briefBlocked={agentBusy && !briefRebuilding ? t('suggestions.agentBusy') : null}
+            readability={readable}
+            onShowInPage={showInPage}
           />
         ) : (
           <EditorPanelRail onOpen={openPanelTab} />

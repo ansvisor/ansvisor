@@ -6,10 +6,13 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { isPageType, type ContentDraft } from '@/lib/content/drafts';
 import { buildSourceGroups, includedCounts, type DraftSourceKind } from '@/lib/content/sources';
 import { formatNumber } from '@/lib/format';
+import { BAND_CLASSES, qualityBand, qualityPhase } from '@/lib/content/quality';
+import type { Readability } from '@/lib/content/readability';
 import { cn } from '@/lib/utils';
 import { BriefTab, type AgentRewrite } from './_brief-tab';
 import { DataNote, UsesYourData } from './_data-note';
 import { ImpactTab } from './_impact-tab';
+import { QualityTab } from './_quality-tab';
 import { RulesTab, type AgentFix, type PageRewrite } from './_rules-tab';
 import { SourcesTab } from './_sources-tab';
 import { useBriefRebuild, type PageNow } from './_use-brief-rebuild';
@@ -52,8 +55,11 @@ export function useSidePanelOpen(): [boolean, () => void] {
 // the agent follows, in one tab, which the panel opens on (on Rules).
 const PANEL_TABS = ['instructions', 'sources', 'impact'] as const;
 export type PanelTab = (typeof PANEL_TABS)[number];
-/** Instructions' two segments: what to write (Brief), then how to write it (Rules). */
-const SEGMENTS = ['brief', 'rules'] as const;
+/**
+ * Instructions' segments: what to write (Brief), how to write it (Rules), and
+ * how well it reads (Quality, Quality spec §3, once its first phase is live).
+ */
+const SEGMENTS = ['brief', 'rules', 'quality'] as const;
 export type InstructionSegment = (typeof SEGMENTS)[number];
 /** What the panel can be asked to open: a tab, or one of Instructions' segments. */
 export type PanelTarget = PanelTab | InstructionSegment;
@@ -113,6 +119,8 @@ export function EditorSidePanel({
   onSourceShown,
   onBriefRebuilding,
   briefBlocked = null,
+  readability = null,
+  onShowInPage,
 }: {
   draft: ContentDraft;
   /** The draft's title, page and type as written now: Sources and Brief read them. */
@@ -146,6 +154,10 @@ export function EditorSidePanel({
   onBriefRebuilding?: (rebuilding: boolean) => void;
   /** Why the brief's Run Agent waits (another agent run from this page), or null. */
   briefBlocked?: string | null;
+  /** The draft's Readability as written, for Quality (CE-036/039). */
+  readability?: Readability | null;
+  /** Scrolls the draft to a passage and marks it: Quality's Show. */
+  onShowInPage?: (text: string) => void;
 }) {
   const t = useTranslations('contentEditor.editor.panel');
   const [tab, setTab] = useState<PanelTab>('instructions');
@@ -167,6 +179,9 @@ export function EditorSidePanel({
     );
   };
   const rulesOpen = Math.max(0, rules.total - rules.met);
+  // Quality shows once its first phase is live (NEXT_PUBLIC_CONTENT_QUALITY_PHASE).
+  const segments = SEGMENTS.filter((value) => value !== 'quality' || qualityPhase() >= 1);
+  const qualityScore = readability?.score ?? null;
 
   // The sources the agent writes from, as the Sources tab keeps them (v1.1
   // CE-032/034): counted under each Run Agent and on the tab, so turning one
@@ -270,18 +285,20 @@ export function EditorSidePanel({
           <DataNote />
           <div
             role="radiogroup"
-            aria-label={t('segmentsLabel')}
+            aria-label={t(segments.length > 2 ? 'segmentsLabelQuality' : 'segmentsLabel')}
             className="flex rounded-[10px] border bg-muted p-[3px]"
             // Arrow keys move between the two, as in any radio group.
             onKeyDown={(e) => {
               if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(e.key)) return;
               e.preventDefault();
-              const next = SEGMENTS[(SEGMENTS.indexOf(segment) + 1) % SEGMENTS.length];
+              const step = e.key === 'ArrowLeft' || e.key === 'ArrowUp' ? -1 : 1;
+              const next =
+                segments[(segments.indexOf(segment) + step + segments.length) % segments.length];
               open(next);
               e.currentTarget.querySelector<HTMLElement>(`[data-segment="${next}"]`)?.focus();
             }}
           >
-            {SEGMENTS.map((value) => (
+            {segments.map((value) => (
               <button
                 key={value}
                 type="button"
@@ -299,6 +316,16 @@ export function EditorSidePanel({
                 {value === 'rules' && rulesOpen > 0 && (
                   <span className="rounded-md bg-red-50 px-1.5 text-[10.5px] font-medium text-red-700 dark:bg-red-950 dark:text-red-400">
                     {t('segments.open', { count: rulesOpen })}
+                  </span>
+                )}
+                {value === 'quality' && qualityScore !== null && (
+                  <span
+                    className={cn(
+                      'rounded-md border px-1.5 text-[10.5px] font-medium tabular-nums',
+                      BAND_CLASSES[qualityBand(qualityScore)],
+                    )}
+                  >
+                    {qualityScore}
                   </span>
                 )}
               </button>
@@ -321,6 +348,11 @@ export function EditorSidePanel({
                 dataLine={dataLine}
                 blocked={briefBlocked}
               />
+            </div>
+          )}
+          {opened.has('quality') && (
+            <div hidden={segment !== 'quality'}>
+              <QualityTab readability={readability} onShow={(text) => onShowInPage?.(text)} />
             </div>
           )}
           {opened.has('rules') && (
