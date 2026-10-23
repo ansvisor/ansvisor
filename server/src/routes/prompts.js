@@ -3,7 +3,8 @@ import { NoObjectGeneratedError, generateObject } from 'ai';
 import { z } from 'zod';
 import supabaseAdmin from '../config/supabase.js';
 import { resolveModel } from '../lib/ai-provider.js';
-import { classifyPromptIntent } from '../lib/intent-extraction.js';
+import { decide, isDeciderConfigured } from '../lib/decider.js';
+import { classifyQueryIntents } from '../lib/intent-extraction.js';
 import { getLanguageName } from '../lib/languages.js';
 import {
   PlanLimitError,
@@ -857,7 +858,6 @@ Return the exact topic names as provided above.`,
 // globally per normalized query string in `fanout_query_intents`; only
 // cache-misses hit the LLM. Body: { queries: string[] }.
 const FANOUT_INTENT_MAX_QUERIES = 200;
-const FANOUT_INTENT_CONCURRENCY = 6;
 // Cache-lookup batch size — keeps each `.in('query', ...)` URL well under
 // PostgREST / proxy length limits even with long sub-queries.
 const FANOUT_INTENT_LOOKUP_CHUNK = 40;
@@ -892,28 +892,20 @@ router.post('/fanout-intents', async (req, res) => {
       for (const row of cached ?? []) intents[row.query] = row.intent;
     }
 
-    // 2. Classify the misses (bounded concurrency), then persist them.
+    // 2. Classify the misses (a decision model in batches, or the chat model
+    // a query at a time; #988), then persist them.
     const misses = queries.filter((q) => !(q in intents));
-    if (misses.length > 0) {
-      const aiModel = resolveModel();
-      const fresh = [];
-      for (let i = 0; i < misses.length; i += FANOUT_INTENT_CONCURRENCY) {
-        const chunk = misses.slice(i, i + FANOUT_INTENT_CONCURRENCY);
-        const settled = await Promise.allSettled(
-          chunk.map((q) => classifyPromptIntent(q, aiModel).then((intent) => ({ q, intent }))),
-        );
-        for (const s of settled) {
-          if (s.status === 'fulfilled') {
-            intents[s.value.q] = s.value.intent;
-            fresh.push({ query: s.value.q, intent: s.value.intent });
-          }
-        }
-      }
-      if (fresh.length > 0) {
-        await supabaseAdmin
-          .from('fanout_query_intents')
-          .upsert(fresh, { onConflict: 'query', ignoreDuplicates: true });
-      }
+    const classified = await classifyQueryIntents(misses, {
+      chatModel: () => resolveModel(),
+      decideFn: decide,
+      deciderConfigured: isDeciderConfigured,
+    });
+    const fresh = Object.entries(classified).map(([query, intent]) => ({ query, intent }));
+    if (fresh.length > 0) {
+      Object.assign(intents, classified);
+      await supabaseAdmin
+        .from('fanout_query_intents')
+        .upsert(fresh, { onConflict: 'query', ignoreDuplicates: true });
     }
 
     return res.json({ intents });

@@ -3,10 +3,11 @@
  *
  * The snippet sends a beacon on every AI-referred page load, so a reload or a
  * second link from the same answer arrives as another row. A visit is a
- * session, as Google Analytics counts one: the same visitor (IP address and
- * user agent) from the same AI platform, with less than VISIT_GAP_MINUTES
- * between pageviews. A different platform starts a new visit, as a new
- * traffic source starts a new session in GA4.
+ * session, as Google Analytics counts one: the same visitor (their
+ * anonymous key from visitor-key.js, and user agent) from the same AI
+ * platform, with less than VISIT_GAP_MINUTES between pageviews. A different
+ * platform starts a new visit, as a new traffic source starts a new session
+ * in GA4.
  *
  * The answer is stored on the row as `visit_of` (migration 00172, which
  * grouped the rows stored before it with the same rule): null when the
@@ -22,17 +23,17 @@ export const VISIT_GAP_MINUTES = 30;
  *
  * The gap is measured from the visitor's latest pageview, not the visit's
  * first, so a visit stays open while its pageviews keep coming. A pageview
- * with no IP address or user agent can't be matched to anyone's, so it
+ * with no visitor key or user agent can't be matched to anyone's, so it
  * starts a visit of its own.
  */
 export async function findVisitOf({
   brandId,
   sourcePlatform,
-  ipAddress,
+  visitorKey,
   userAgent,
   now = Date.now(),
 }) {
-  if (!ipAddress || !userAgent) return null;
+  if (!visitorKey || !userAgent) return null;
 
   const since = new Date(now - VISIT_GAP_MINUTES * 60_000).toISOString();
   const { data, error } = await supabaseAdmin
@@ -40,7 +41,7 @@ export async function findVisitOf({
     .select('id, visit_of')
     .eq('brand_id', brandId)
     .eq('source_platform', sourcePlatform)
-    .eq('ip_address', ipAddress)
+    .eq('visitor_key', visitorKey)
     .eq('user_agent', userAgent)
     .gt('created_at', since)
     .order('created_at', { ascending: false })
