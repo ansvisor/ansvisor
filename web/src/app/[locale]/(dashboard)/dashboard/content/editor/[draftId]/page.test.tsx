@@ -255,6 +255,23 @@ describe('the content editor', () => {
     expect(container.querySelector('.ProseMirror h1')!.textContent).toBe('Pipeline forecasting');
   });
 
+  it('keeps one H1: Heading 1 is off outside the title', async () => {
+    getContentDraft.mockResolvedValue(draft());
+    await renderPage();
+    const editor = (container.querySelector('.ProseMirror') as HTMLElement & { editor: Editor })
+      .editor;
+
+    await act(async () => void editor.commands.setTextSelection(editor.state.doc.content.size - 2));
+    // Off, yet still says why on hover.
+    const off = button('A page has one H1, its title: use Heading 2 here')!;
+    expect(off.getAttribute('aria-disabled')).toBe('true');
+    expect(off.title).toBe('A page has one H1, its title: use Heading 2 here');
+    await act(async () => off.click());
+    expect(editor.getHTML()).not.toContain('<h1>Teams trust it.</h1>');
+    await act(async () => void editor.commands.setTextSelection(2));
+    expect(button('Heading 1')!.getAttribute('aria-disabled')).toBeNull();
+  });
+
   it('tags a new page as one', async () => {
     getContentDraft.mockResolvedValue(
       draft({
@@ -941,6 +958,32 @@ describe('the content editor', () => {
       expect(keepAgentBeforeVersion).toHaveBeenCalledTimes(1);
     });
 
+    it('puts a replace’s links on its words, shows where they go, and takes them off on undo', async () => {
+      getContentDraft.mockResolvedValue(page);
+      getDraftSuggestions.mockResolvedValue([
+        suggestion({
+          afterText: 'Accuracy is shown per team, as our pricing page explains.',
+          afterLinks: [{ start: 35, end: 47, href: 'https://acme.example/pricing' }],
+        }),
+      ]);
+      await renderPage();
+
+      expect(cardOf('s1')!.textContent).toContain('Links: https://acme.example/pricing');
+      expect(cardOf('s1')!.querySelector('span[title]')!.textContent).toBe('pricing page');
+      await press('s1', 'Accept');
+      const html = () =>
+        (
+          container.querySelector('.ProseMirror') as HTMLElement & { editor: Editor }
+        ).editor.getHTML();
+      expect(html()).toMatch(
+        /<a [^>]*href="https:\/\/acme\.example\/pricing"[^>]*>pricing page<\/a>/,
+      );
+
+      await press('s1', 'Undo');
+      expect(pageText()).toContain(VAGUE);
+      expect(html()).not.toContain('<a ');
+    });
+
     it('makes an accept again on the page when it changed while the decision was saved', async () => {
       getContentDraft.mockResolvedValue(page);
       getDraftSuggestions.mockResolvedValue(batch);
@@ -1041,6 +1084,8 @@ describe('the content editor', () => {
         'Accuracy is shown per team, each week, against closed revenue.Teams trust it.FAQDoes it work with custom stages? Yes, any stage.',
       );
       expect(bar()!.textContent).toMatch(/^2 accepted · 0 rejected · \d+ rules? still open/);
+      // Not a full run's batch: nothing about running it again.
+      expect(bar()!.textContent).not.toContain('a run makes at most');
 
       await act(async () => barButton('Undo all').click());
       await act(async () => {});
@@ -1078,8 +1123,37 @@ describe('the content editor', () => {
       expect(pageText()).toContain(VAGUE);
       expect(decideDraftSuggestions).not.toHaveBeenCalled();
       expect(toast).toHaveBeenCalledWith(
-        "2 suggestions couldn't be applied: the page changed there, or AI quotes the passage.",
+        "2 suggestions couldn't be applied: the page changed there, AI quotes the passage, or a heading would get too long.",
       );
+    });
+
+    it('never glues an answer into a heading, and takes a short change to one', async () => {
+      const ANSWER =
+        'Pipeline forecasting? It predicts which deals close this quarter from the activity on each one, team by team, against the revenue that closed.';
+      getContentDraft.mockResolvedValue(page);
+      getDraftSuggestions.mockResolvedValue([
+        suggestion({
+          blockText: 'Pipeline forecasting',
+          beforeText: 'Pipeline forecasting',
+          afterText: ANSWER,
+        }),
+        suggestion({
+          id: 's4',
+          blockText: 'Pipeline forecasting',
+          beforeText: 'forecasting',
+          afterText: 'forecasting, explained',
+        }),
+      ]);
+      await renderPage();
+
+      const glued = cardOf('s1')!;
+      expect(glued.textContent).toContain('This would put more than a heading into the heading.');
+      expect(
+        [...glued.querySelectorAll('button')].find((b) => b.textContent === 'Accept')!.disabled,
+      ).toBe(true);
+      await press('s4', 'Accept');
+      expect(pageText()).toContain('Pipeline forecasting, explained');
+      expect(pageText()).not.toContain('It predicts which deals');
     });
 
     it('leaves the page and the card as they were when the decision can’t be saved', async () => {
@@ -1482,6 +1556,66 @@ describe('the side panel', () => {
     expect(rail()).not.toBeNull();
   });
 
+  it('points a page without fan-outs to Sources, where its prompts are added', async () => {
+    getDraftSources.mockResolvedValue({
+      data: {
+        prompts: [],
+        fanouts: [],
+        citedPages: [],
+        gscQueries: [],
+        brandDomains: [],
+        competitorDomains: [],
+      },
+      choices: [],
+    });
+    getContentDraft.mockResolvedValue(draft({ sourceUrl: 'https://acme.example.com/pricing' }));
+    window.innerWidth = 1440;
+    await renderPage();
+
+    const add = [...panel()!.querySelectorAll<HTMLButtonElement>('button')].find(
+      (b) => b.textContent === 'Add prompts',
+    )!;
+    expect(add.title).toBe(
+      "No fan-outs yet: they come from the page's prompts. Add its prompts in Sources.",
+    );
+    await act(async () => add.click());
+    const selected = [...panel()!.querySelectorAll<HTMLElement>('[role="tab"]')].find(
+      (el) => el.getAttribute('aria-selected') === 'true',
+    );
+    expect(selected!.textContent).toBe('Sources');
+  });
+
+  it('keeps "No fan-outs" for a draft with prompts whose answers ran no searches', async () => {
+    getDraftSources.mockResolvedValue({
+      data: {
+        prompts: [
+          {
+            id: 'p1',
+            text: 'Best CRM?',
+            inDraft: true,
+            citesPage: false,
+            answers: 2,
+            mentioned: 0,
+          },
+        ],
+        fanouts: [],
+        citedPages: [],
+        gscQueries: [],
+        brandDomains: [],
+        competitorDomains: [],
+      },
+      choices: [],
+    });
+    getContentDraft.mockResolvedValue(draft({ sourceUrl: 'https://acme.example.com/pricing' }));
+    window.innerWidth = 1440;
+    await renderPage();
+
+    expect(
+      [...panel()!.querySelectorAll('button')].some((b) => b.textContent === 'Add prompts'),
+    ).toBe(false);
+    expect(panel()!.textContent).toContain('No fan-outs');
+  });
+
   it('opens Sources only when its tab is picked, and reads Impact only when it is', async () => {
     getDraftSources.mockResolvedValue({
       data: {
@@ -1807,6 +1941,31 @@ describe('the side panel', () => {
       );
     });
 
+    it('says a full batch is the most one run makes, to run it again (C)', async () => {
+      getContentDraft.mockResolvedValue(traced);
+      const full = Array.from({ length: 8 }, (_, i) => ({
+        ...agentSuggestion,
+        id: `n${i}`,
+        status: 'rejected' as const,
+      }));
+      getDraftSuggestions.mockResolvedValueOnce([]).mockResolvedValueOnce(full);
+      fixDraftRules.mockResolvedValue({ count: 8 });
+      await openRules();
+
+      await act(async () => panelButton('Apply rules with Agent').click());
+      await act(async () => {});
+
+      expect(toast.success).toHaveBeenCalledWith(
+        'Content Agent suggested 8 changes, the most one run makes · review them, then run it again for the rules still open',
+      );
+      // Decided, with rules still open: the bar says to run it again.
+      expect(
+        container.querySelector('[role="region"][aria-label="Agent suggestions"]')!.textContent,
+      ).toMatch(
+        /^0 accepted · 8 rejected · \d+ rules? still open · a run makes at most 8 changes: run it again for the rest/,
+      );
+    });
+
     // A timeout on the way back is not the agent failing: it may still finish.
     it('shows the agent’s batch when it lands after the answer didn’t come back', async () => {
       vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
@@ -1855,6 +2014,23 @@ describe('the side panel', () => {
       } finally {
         vi.useRealTimers();
       }
+    });
+
+    it('leaves a second H1 out of what the agent is asked, saying how to fix it', async () => {
+      getContentDraft.mockResolvedValue(
+        draft({ bodyHtml: '<h1>Pipeline forecasting</h1><p>Teams trust it.</p><h1>Again</h1>' }),
+      );
+      await openRules();
+      expect(panel()!.textContent).toContain('One H1 per page');
+      // Always on: the editor keeps it, so it has no switch.
+      expect(panel()!.querySelector('[aria-label="One H1 per page: on or off"]')).toBeNull();
+      expect(panel()!.querySelector('[aria-label="Length: on or off"]')).not.toBeNull();
+
+      await act(async () => panelButton('Apply rules with Agent').click());
+      await act(async () => {});
+      const asked = fixDraftRules.mock.calls[0][2].rules.map((r: { key: string }) => r.key);
+      expect(asked).not.toContain('oneH1');
+      expect(asked.length).toBeGreaterThan(0);
     });
 
     it('fixes only the AI traces from their rule', async () => {

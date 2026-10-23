@@ -40,6 +40,7 @@ import { formatNumber } from '@/lib/format';
 import { safeImageSrc, safeLinkHref } from '@/lib/content/editor';
 import { cn } from '@/lib/utils';
 import { HtmlBlockDialog } from './_html-block';
+import { h1Positions } from './_one-h1';
 
 /**
  * Where the insert menu shows: the cursor on an empty paragraph between the
@@ -88,6 +89,8 @@ export function EditorToolbar({
     editor,
     selector: ({ editor: e }) => ({
       h1: e.isActive('heading', { level: 1 }),
+      // A page has one H1: another can't be made while it has one.
+      h1Taken: !e.isActive('heading', { level: 1 }) && h1Positions(e.state.doc).length > 0,
       h2: e.isActive('heading', { level: 2 }),
       h3: e.isActive('heading', { level: 3 }),
       bold: e.isActive('bold'),
@@ -105,6 +108,10 @@ export function EditorToolbar({
   });
 
   const chain = () => editor.chain().focus();
+  /** Why a tool can't be used now, by its key. */
+  const off: Record<string, string | undefined> = {
+    h1: state.h1Taken ? t('h1Taken') : undefined,
+  };
   const insertTable = () => chain().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run();
   const tools: { key: string; icon: LucideIcon; on: boolean; run: () => void; text?: string }[][] =
     [
@@ -190,9 +197,10 @@ export function EditorToolbar({
           {group.map((tool) => (
             <ToolButton
               key={tool.key}
-              label={t(tool.key)}
+              label={off[tool.key] ?? t(tool.key)}
               pressed={!htmlView && tool.on}
               disabled={htmlView}
+              blocked={!!off[tool.key]}
               onClick={tool.run}
             >
               <tool.icon className="h-4 w-4" />
@@ -307,12 +315,15 @@ function ToolButton({
   label,
   pressed,
   disabled,
+  blocked,
   onClick,
   children,
 }: {
   label: string;
   pressed?: boolean;
   disabled?: boolean;
+  /** Can't be used here, but still says why on hover (a disabled button can't). */
+  blocked?: boolean;
   onClick: () => void;
   children: React.ReactNode;
 }) {
@@ -322,13 +333,15 @@ function ToolButton({
       title={label}
       aria-label={label}
       aria-pressed={pressed}
+      aria-disabled={blocked || undefined}
       disabled={disabled}
       // Keep the editor's selection: a click on the toolbar mustn't move focus first.
       onMouseDown={(e) => e.preventDefault()}
-      onClick={onClick}
+      onClick={blocked ? undefined : onClick}
       className={cn(
         'flex h-7 min-w-7 items-center justify-center rounded-md px-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-40',
         pressed && 'bg-muted text-foreground',
+        blocked && 'cursor-not-allowed opacity-40 hover:bg-transparent hover:text-muted-foreground',
       )}
     >
       {children}
