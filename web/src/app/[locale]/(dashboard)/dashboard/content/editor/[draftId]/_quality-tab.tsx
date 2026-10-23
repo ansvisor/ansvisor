@@ -230,7 +230,7 @@ function eeatSuggestions(t: T, quality: QualityRead, teamByline: string): Sugges
       score: 'eeat',
       gain: scoreGain(eeat, ['authorBio']),
       line: t(`checks.authorProfile.line.${missing}`, { name: author.name }),
-      detail: t('checks.authorProfile.detail'),
+      detail: t(`checks.authorProfile.detail.${missing}`),
       action: { kind: 'manageAuthors', label: 'editAuthor' },
     },
   ];

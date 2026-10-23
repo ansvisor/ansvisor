@@ -4140,7 +4140,11 @@
               "bio": "{name} has no short bio",
               "links": "{name} has no profile links"
             },
-            "detail": "Add them in Settings › Authors: two sentences on what they know, and a LinkedIn or other profile link."
+            "detail": {
+              "both": "Add them in Settings › Authors: two sentences on what they know, and a LinkedIn or other profile link.",
+              "bio": "Add a short bio in Settings › Authors: two sentences on what they know.",
+              "links": "Add a LinkedIn or other profile link in Settings › Authors."
+            }
           },
           "avgSentence": {
             "line": "Sentences average {words, number} words",
