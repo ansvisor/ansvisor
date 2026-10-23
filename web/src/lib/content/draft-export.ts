@@ -193,10 +193,10 @@ export function draftBlocks(
 const escapeHtml = (value: string) =>
   value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
-/** Export HTML: Copy HTML's page as a document of its own, titled. */
 /** A value for an attribute in double quotes: its quotes escaped too. */
 const escapeAttribute = (value: string) => escapeHtml(value).replace(/"/g, '&quot;');
 
+/** Export HTML: Copy HTML's page as a document of its own, titled. */
 export function draftHtmlDocument(title: string, html: string, fields?: ExportFields): string {
   const head = fields?.head;
   return [

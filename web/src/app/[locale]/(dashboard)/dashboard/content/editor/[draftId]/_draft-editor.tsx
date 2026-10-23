@@ -75,8 +75,9 @@ import {
 import { PAGE_READ_DELAY_MS, draftTitleFromDoc, safeLinkHref } from '@/lib/content/editor';
 import { JsonLd } from '@/lib/content/json-ld-node';
 import { firstImage } from '@/lib/content/page-schema';
-import { PLACEHOLDER, pagePlaceholders } from '@/lib/content/placeholders';
+import { PLACEHOLDER, pagePlaceholders, placeholderIn } from '@/lib/content/placeholders';
 import {
+  blankCode,
   exportPlaceholders,
   pasteChecks,
   titlePlaceholders,
@@ -936,11 +937,11 @@ export function DraftEditor({
    */
   /**
    * The page's first placeholder (CE-044), selected to type over: in order,
-   * across the marks in its line, its block flashed as Show's are.
+   * across the marks in its line, its block flashed as Show's are. A
+   * heading's are the agent's own forms only (AGENT_PLACEHOLDER).
    */
   const showFirstPlaceholder = (): boolean => {
     if (!editor) return false;
-    const one = new RegExp(PLACEHOLDER.source, 'iu');
     let found: { from: number; to: number; block: { from: number; to: number } } | null = null;
     editor.state.doc.descendants((block, pos) => {
       if (found) return false;
@@ -953,7 +954,7 @@ export function DraftEditor({
         pieces.push({ at: text.length, pos: pos + 1 + offset });
         text += child.text;
       });
-      const m = one.exec(text);
+      const m = new RegExp(placeholderIn(block.type.name === 'heading').source, 'iu').exec(text);
       if (!m) return false;
       const posOf = (i: number) => {
         const piece = pieces.findLast((p) => p.at <= i)!;
@@ -983,13 +984,14 @@ export function DraftEditor({
 
   /**
    * Fill now (Export, CE-057): the first placeholder, in the HTML view's
-   * text while it is open, else in the page; one only an HTML block holds is
+   * text while it is open (where exportPlaceholders reads: not in tags,
+   * styles or scripts), else in the page; one only an HTML block holds is
    * said to be there.
    */
   const htmlSourceRef = useRef<HTMLTextAreaElement>(null);
   const fillFirstPlaceholder = () => {
     if (htmlSource !== null) {
-      const m = new RegExp(PLACEHOLDER.source, 'iu').exec(htmlSource);
+      const m = new RegExp(PLACEHOLDER.source, 'iu').exec(blankCode(htmlSource, { words: true }));
       const area = htmlSourceRef.current;
       if (m && area) {
         area.focus();
@@ -1517,7 +1519,10 @@ export function DraftEditor({
     setPublishOpen({ mode, html: pageToPublish() });
     if (mode === 'markReady') nudgeAt('markReady');
   };
-  const readyToPaste = (html: string): ReadyToPaste => {
+  // Read once per change (a link read landing, the title), not on every render.
+  const readyToPaste = useMemo((): ReadyToPaste | null => {
+    if (!publishOpen) return null;
+    const { html } = publishOpen;
     const { links, images } = pasteChecks(html, linkChecks);
     return {
       placeholders: exportPlaceholders(html) + titlePlaceholders(title, html),
@@ -1525,7 +1530,7 @@ export function DraftEditor({
       linksBroken: links.broken,
       linksUnread: links.count - links.read,
     };
-  };
+  }, [publishOpen, linkChecks, title]);
   /** Marks it ready; past Before you publish's warning, logged with its facts. */
   const markReady = async (anyway?: ReadyAnyway) => {
     setMarking(true);
@@ -1946,6 +1951,7 @@ export function DraftEditor({
           onClose={() => setExportOpen(null)}
           title={title}
           html={exportOpen.html}
+          isNew={draft.method === 'create'}
           sourceUrl={draft.sourceUrl}
           author={pageAuthor}
           // Until the authors are read, who it is by isn't known.
@@ -1961,10 +1967,10 @@ export function DraftEditor({
         />
       )}
 
-      {quality && publishOpen && (
+      {quality && publishOpen && readyToPaste && (
         <BeforePublish
           mode={publishOpen.mode}
-          paste={readyToPaste(publishOpen.html)}
+          paste={readyToPaste}
           onFillNow={() => {
             setPublishOpen(null);
             fillFirstPlaceholder();

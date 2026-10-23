@@ -61,6 +61,7 @@ async function render(over: Partial<Parameters<typeof ExportDialog>[0]> = {}) {
           onClose={() => {}}
           title="Pour-over"
           html={HTML}
+          isNew
           sourceUrl={null}
           author={ada}
           teamByline="Acme Team"
@@ -159,10 +160,19 @@ describe('ExportDialog', () => {
     // A new dialog: one with the placeholder in its title.
     act(() => root.unmount());
     root = createRoot(container);
-    await render({ title: 'Pour-over for [audience]', html: '<p>Done.</p>' });
+    await render({ title: 'Pour-over by [name of a real person]', html: '<p>Done.</p>' });
     expect(dialog().querySelector('[role="alert"]')!.textContent).toContain(
       '1 placeholder is still open',
     );
+  });
+
+  it("exports a title's and a heading's own brackets as written", async () => {
+    const html = '<h1>Best CRM tools [2026 Update]</h1><h2>The checklist [PDF]</h2><p>Done.</p>';
+    await render({ title: 'Best CRM tools [2026 Update]', html, initialDestination: 'html' });
+    expect(dialog().querySelector('[role="alert"]')).toBeNull();
+    expect(button('Copy HTML')!.disabled).toBe(false);
+    await act(async () => button('Copy HTML')!.click());
+    expect(writeText).toHaveBeenCalledWith(html);
   });
 
   it('copies as HTML, and says so, where rich text is refused', async () => {
@@ -258,6 +268,26 @@ describe('ExportDialog', () => {
     );
     expect(saveBlob).toHaveBeenCalledWith(expect.any(Blob), 'ansvisor_content_pour-over.docx');
     expect(localStorage.getItem('aeo:content-export-destination')).toBe('docx');
+    // A new page's front matter dates it today.
+    await act(async () => destination('Markdown').click());
+    await act(async () => button('Download Markdown')!.click());
+    const [, , , fields] = draftExportBlob.mock.calls.at(-1)!;
+    expect(fields.front).toHaveProperty('date', expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/));
+    expect(fields.front).not.toHaveProperty('lastmod');
+  });
+
+  it("dates a live page's Markdown as updated today, keeping its published date", async () => {
+    await render({
+      html: '<p>Done.</p>',
+      isNew: false,
+      sourceUrl: 'https://acme.com/blog/pour-over/',
+      initialDestination: 'md',
+    });
+    await act(async () => button('Download Markdown')!.click());
+    const [format, , , fields] = draftExportBlob.mock.calls.at(-1)!;
+    expect(format).toBe('md');
+    expect(fields.front).not.toHaveProperty('date');
+    expect(fields.front).toHaveProperty('lastmod', expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/));
   });
 
   it("puts the brand's byline line under the H1, not in the page fields", async () => {

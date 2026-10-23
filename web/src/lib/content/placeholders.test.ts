@@ -26,4 +26,13 @@ describe('pagePlaceholders', () => {
     ).toEqual({ count: 0 });
     expect(pagePlaceholders('')).toEqual({ count: 0 });
   });
+
+  it("reads a heading's brackets only in the agent's own forms", () => {
+    expect(
+      pagePlaceholders(
+        '<h1>Best CRM tools [2026 Update]</h1><h2>How to brew [Step-by-Step Guide]</h2>' +
+          '<h3>The checklist [PDF]</h3><h3>Brew [figure, source, 2025] grams</h3><p>[PDF]</p>',
+      ),
+    ).toEqual({ count: 2 });
+  });
 });

@@ -13,6 +13,20 @@
  */
 export const PLACEHOLDER = /\[(?!sic\])(?=[^[\]\n]*\p{L})[^[\]\n]{2,}\](?!\()/giu;
 
+/**
+ * The forms the server's guards write in a page (the number guard's
+ * "[figure, source]", content-people.js's name and quote): in a title or a
+ * heading, only these are placeholders. Brackets a person writes there
+ * ("Best CRM tools [2026 Update]", "[PDF]") are part of the title. The
+ * writer's prompts let the model write others too ("[price]"); in a heading
+ * they read as written.
+ */
+export const AGENT_PLACEHOLDER =
+  /\[(?:figure, source[^[\]\n]*|name of a real person|quote from a real person[^[\]\n]*)\](?!\()/giu;
+
+/** The placeholders a line is read for: a heading's (and a title's) are the agent's forms only. */
+export const placeholderIn = (heading: boolean) => (heading ? AGENT_PLACEHOLDER : PLACEHOLDER);
+
 export interface PagePlaceholders {
   count: number;
 }
@@ -26,7 +40,7 @@ export function pagePlaceholders(html: string): PagePlaceholders {
   const doc = new DOMParser().parseFromString(html, 'text/html');
   let count = 0;
   for (const el of doc.body.querySelectorAll('p, h1, h2, h3, h4, h5, h6')) {
-    count += (el.textContent ?? '').match(PLACEHOLDER)?.length ?? 0;
+    count += (el.textContent ?? '').match(placeholderIn(el.tagName !== 'P'))?.length ?? 0;
   }
   return { count };
 }

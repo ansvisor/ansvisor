@@ -322,6 +322,24 @@ describe('BeforePublish', () => {
     );
   });
 
+  it('tells a link still being read from one no read is coming for', async () => {
+    // One read still coming; the other link's site refused its read.
+    await render(quality({ trust: null }), {
+      paste: { ...clean, linksUnread: 2 },
+      linksPending: 1,
+    });
+    expect(rows().at(-1)).toBe(
+      "Ready to paste · check itNo placeholders, all images have alt text; 1 link is still being read, 1 wasn't read: check it.",
+    );
+    await render(quality({ trust: null }), {
+      paste: { ...clean, placeholders: 1, linksUnread: 3 },
+      linksPending: 1,
+    });
+    expect(rows().at(-1)).toBe(
+      "Not ready to paste yet · missing1 placeholder still open · 1 link is still being read, 2 weren't read: check them",
+    );
+  });
+
   it('goes on to Export from Export, the warning saying so, with no log', async () => {
     await render(quality(), { mode: 'export' });
     expect(alert()!.textContent).toContain('You can export it, but fixing them first');
