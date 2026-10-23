@@ -111,6 +111,7 @@ beforeEach(async () => {
   readSiteTrust.mockReset().mockResolvedValue({
     checks: { about: { ok: true, url: 'https://acme.com/about' } },
     score: 1,
+    complete: false,
     checkedAt: '2026-10-23T12:00:00.000Z',
   });
   quota = {
@@ -291,10 +292,12 @@ describe('GET /api/audits/site-trust', () => {
   it("answers with the brand's site trust, and reads it again when asked", async () => {
     let res = await fetch(`${baseUrl}/site-trust?brandId=${brandId}`);
     expect(res.status).toBe(200);
+    // complete: whether the site answered all of it; false, the card says it checks again soon.
     await expect(res.json()).resolves.toEqual({
       success: true,
       checks: { about: { ok: true, url: 'https://acme.com/about' } },
       score: 1,
+      complete: false,
       checkedAt: '2026-10-23T12:00:00.000Z',
     });
     expect(readSiteTrust).toHaveBeenLastCalledWith(brandId, { refresh: false });

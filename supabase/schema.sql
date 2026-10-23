@@ -37916,16 +37916,22 @@ comment on table public.content_link_checks is
 -- The server reads them from the brand's page list (site_pages), its home
 -- page and its authors, at most once a day or when someone asks again; this
 -- is the last read. complete is false when the site didn't answer all of it
--- (slow, unreachable, a server error): such a read is read again after a few
--- minutes. Members read it; only the server writes it.
+-- (slow, unreachable, a server error, a bot wall): such a read is read again
+-- after a few minutes. scraped_at is when the home page last went through
+-- Scrape.do, past a bot wall: at most once a day per brand, one credit.
+-- Members read it; only the server writes it.
 
 create table if not exists public.site_trust (
   brand_id uuid primary key references public.brands(id) on delete cascade,
   checks jsonb not null,
   score smallint not null check (score between 0 and 5),
   complete boolean not null default true,
-  checked_at timestamptz not null default now()
+  checked_at timestamptz not null default now(),
+  scraped_at timestamptz
 );
+
+-- For a database that ran this file before scraped_at was added to it.
+alter table public.site_trust add column if not exists scraped_at timestamptz;
 
 alter table public.site_trust enable row level security;
 revoke all on table public.site_trust from anon, authenticated;
