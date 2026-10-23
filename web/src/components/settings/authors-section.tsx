@@ -18,6 +18,13 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { LoadingDots } from '@/components/ui/loading-dots';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import {
   deleteContentAuthor,
@@ -26,21 +33,25 @@ import {
   setDefaultAuthor,
 } from '@/lib/actions/content-authors';
 import {
+  MAX_LINK_LENGTH,
   MAX_PROFILES,
   type AuthorInput,
   type AuthorsRead,
   type ContentAuthor,
 } from '@/lib/content/authors';
+import { cn } from '@/lib/utils';
 
 /** The organization byline in a brand's default select: no author. */
-const ORGANIZATION = '';
+const ORGANIZATION = 'organization';
+
+const isHttps = (value: string) => /^https:\/\/\S+$/.test(value);
 
 /**
  * Settings › Authors (Content Editor Quality spec §9, CE-037): the real
- * people the workspace's pages are by. Anyone adds one; the author themself
- * or an admin edits or deletes it; admins and managers pick each brand's
- * default. "Real people only. Content Agent can't add, edit or invent
- * authors."
+ * people the workspace's pages are by. Anyone adds one; whoever added it,
+ * the author themself or an admin edits or deletes it; admins and managers
+ * pick each brand's default. "Real people only. Content Agent can't add,
+ * edit or invent authors."
  */
 export function AuthorsSection() {
   const t = useTranslations('settings.authors');
@@ -49,7 +60,10 @@ export function AuthorsSection() {
   const [failed, setFailed] = useState(false);
   const [editing, setEditing] = useState<ContentAuthor | 'new' | null>(null);
   const [removing, setRemoving] = useState<ContentAuthor | null>(null);
+  const [removeOpen, setRemoveOpen] = useState(false);
   const [busy, setBusy] = useState(false);
+  /** A brand's default being saved: shown at once, the select held until it lands. */
+  const [picking, setPicking] = useState<Record<string, string>>({});
 
   const load = useCallback(async () => {
     try {
@@ -64,31 +78,41 @@ export function AuthorsSection() {
     void load();
   }, [load]);
 
+  const me = read?.me.id;
   const canEdit = (author: ContentAuthor) =>
-    !!read && (author.userId === read.me.id || read.me.role === 'admin');
+    !!read && (author.userId === me || author.createdBy === me || read.me.role === 'admin');
   const canSetDefaults = read?.me.role === 'admin' || read?.me.role === 'manager';
   const defaultOf = (brandId: string) =>
-    read?.authors.find((a) => a.defaultFor.includes(brandId))?.id ?? ORGANIZATION;
+    picking[brandId] ??
+    read?.authors.find((a) => a.defaultFor.includes(brandId))?.id ??
+    ORGANIZATION;
 
   const remove = async (author: ContentAuthor) => {
     setBusy(true);
     try {
       await deleteContentAuthor(author.id);
-      toast.success(t('deleted', { name: author.name }));
-      setRemoving(null);
+      toast.success(t('removed', { name: author.name }));
+      setRemoveOpen(false);
       await load();
     } catch {
-      toast.error(t('deleteFailed'));
+      toast.error(t('removeFailed'));
     } finally {
       setBusy(false);
     }
   };
-  const pickDefault = async (brandId: string, authorId: string) => {
+  const pickDefault = async (brandId: string, value: string) => {
+    setPicking((prev) => ({ ...prev, [brandId]: value }));
     try {
-      await setDefaultAuthor(brandId, authorId || null);
+      await setDefaultAuthor(brandId, value === ORGANIZATION ? null : value);
       await load();
     } catch {
       toast.error(t('defaultFailed'));
+    } finally {
+      setPicking((prev) => {
+        const next = { ...prev };
+        delete next[brandId];
+        return next;
+      });
     }
   };
 
@@ -105,7 +129,8 @@ export function AuthorsSection() {
 
         {!read && !failed && (
           <p className="text-sm text-muted-foreground" aria-busy="true">
-            <LoadingDots className="text-muted-foreground" />
+            <LoadingDots />
+            <span className="sr-only">{t('loading')}</span>
           </p>
         )}
         {failed && (
@@ -129,16 +154,18 @@ export function AuthorsSection() {
                     <div className="min-w-0 flex-1">
                       <p className="text-sm font-medium [overflow-wrap:anywhere]">
                         {author.name}
-                        {author.userId === read.me.id && (
+                        {author.userId === me && (
                           <span className="ml-1.5 text-xs font-normal text-muted-foreground">
                             {t('you')}
                           </span>
                         )}
                       </p>
                       {author.title && (
-                        <p className="text-xs text-muted-foreground">{author.title}</p>
+                        <p className="text-xs text-muted-foreground [overflow-wrap:anywhere]">
+                          {author.title}
+                        </p>
                       )}
-                      <p className="mt-0.5 text-xs text-muted-foreground">
+                      <p className="mt-0.5 text-xs text-muted-foreground [overflow-wrap:anywhere]">
                         {t('profiles', { count: author.sameAs.length })}
                         {author.defaultFor.length > 0 && (
                           <>
@@ -162,9 +189,12 @@ export function AuthorsSection() {
                           variant="ghost"
                           size="sm"
                           className="text-destructive hover:text-destructive"
-                          onClick={() => setRemoving(author)}
+                          onClick={() => {
+                            setRemoving(author);
+                            setRemoveOpen(true);
+                          }}
                         >
-                          {t('delete')}
+                          {t('remove')}
                         </Button>
                       </span>
                     )}
@@ -181,29 +211,51 @@ export function AuthorsSection() {
                 <h3 className="text-sm font-medium">{t('defaultsTitle')}</h3>
                 <p className="text-xs text-muted-foreground">{t('defaultsHint')}</p>
                 <ul className="space-y-2">
-                  {read.brands.map((brand) => (
-                    <li key={brand.id} className="flex flex-wrap items-center gap-2">
-                      <Label htmlFor={`default-${brand.id}`} className="min-w-32 text-sm">
-                        {brand.name}
-                      </Label>
-                      <select
-                        id={`default-${brand.id}`}
-                        className="h-8 rounded-md border bg-background px-2 text-sm disabled:opacity-60"
-                        value={defaultOf(brand.id)}
-                        disabled={!canSetDefaults}
-                        onChange={(e) => void pickDefault(brand.id, e.target.value)}
-                      >
-                        <option value={ORGANIZATION}>
-                          {t('organizationByline', { brand: brand.name })}
-                        </option>
-                        {read.authors.map((author) => (
-                          <option key={author.id} value={author.id}>
-                            {author.name}
-                          </option>
-                        ))}
-                      </select>
-                    </li>
-                  ))}
+                  {read.brands.map((brand) => {
+                    const items = [
+                      {
+                        value: ORGANIZATION,
+                        label: t('organizationByline', { brand: brand.name }),
+                      },
+                      ...read.authors.map((a) => ({ value: a.id, label: a.name })),
+                    ];
+                    return (
+                      <li key={brand.id} className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                        <span
+                          id={`default-${brand.id}`}
+                          className="min-w-32 text-sm [overflow-wrap:anywhere]"
+                        >
+                          {brand.name}
+                        </span>
+                        <Select
+                          items={items}
+                          value={defaultOf(brand.id)}
+                          disabled={!canSetDefaults || brand.id in picking}
+                          onValueChange={(value) => {
+                            if (value && value !== defaultOf(brand.id)) {
+                              void pickDefault(brand.id, value);
+                            }
+                          }}
+                        >
+                          <SelectTrigger
+                            size="sm"
+                            className="w-60 max-w-full"
+                            aria-labelledby={`default-${brand.id}`}
+                          >
+                            <SelectValue className="truncate" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {items.map((item) => (
+                              <SelectItem key={item.value} value={item.value}>
+                                {item.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        {brand.id in picking && <LoadingDots className="text-muted-foreground" />}
+                      </li>
+                    );
+                  })}
                 </ul>
                 {!canSetDefaults && (
                   <p className="text-xs text-muted-foreground">{t('defaultsManagers')}</p>
@@ -214,11 +266,11 @@ export function AuthorsSection() {
         )}
       </CardContent>
 
-      <Dialog open={removing !== null} onOpenChange={(next) => !next && !busy && setRemoving(null)}>
+      <Dialog open={removeOpen} onOpenChange={(next) => !next && !busy && setRemoveOpen(false)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>{t('deleteTitle', { name: removing?.name ?? '' })}</DialogTitle>
-            <DialogDescription>{t('deleteDescription')}</DialogDescription>
+            <DialogTitle>{t('removeTitle', { name: removing?.name ?? '' })}</DialogTitle>
+            <DialogDescription>{t('removeDescription')}</DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <DialogClose render={<Button variant="outline" disabled={busy} />}>
@@ -230,7 +282,7 @@ export function AuthorsSection() {
               onClick={() => removing && void remove(removing)}
             >
               {busy && <LoadingDots className="mr-1.5" />}
-              {t('delete')}
+              {t('remove')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -239,7 +291,12 @@ export function AuthorsSection() {
       <AuthorDialog
         author={editing === 'new' ? null : editing}
         open={editing !== null}
-        isMine={editing !== null && editing !== 'new' && editing.userId === read?.me.id}
+        me={me ?? null}
+        meTaken={
+          !!read?.authors.some(
+            (a) => a.userId === me && (editing === 'new' || a.id !== editing?.id),
+          )
+        }
         onClose={() => setEditing(null)}
         onSaved={async () => {
           setEditing(null);
@@ -279,13 +336,16 @@ function AuthorPhoto({ author }: { author: ContentAuthor }) {
 function AuthorDialog({
   author,
   open,
-  isMine,
+  me,
+  meTaken,
   onClose,
   onSaved,
 }: {
   author: ContentAuthor | null;
   open: boolean;
-  isMine: boolean;
+  me: string | null;
+  /** The member is another author already: they can't be this one too. */
+  meTaken: boolean;
   onClose: () => void;
   onSaved: () => Promise<void>;
 }) {
@@ -308,18 +368,21 @@ function AuthorDialog({
       bio: author?.bio ?? '',
       photoUrl: author?.photoUrl ?? '',
       links: author?.sameAs.join('\n') ?? '',
-      isMe: isMine,
+      isMe: !!author && author.userId === me,
     });
-  }, [open, author, isMine]);
+  }, [open, author, me]);
 
+  // Another member's author stays theirs; only they unlink it.
+  const someoneElse = !!author?.userId && author.userId !== me;
   const links = form.links
     .split('\n')
     .map((l) => l.trim())
     .filter(Boolean);
-  const badLink = links.find((l) => !/^https:\/\/\S+$/.test(l));
-  const badPhoto = form.photoUrl.trim() !== '' && !/^https:\/\/\S+$/.test(form.photoUrl.trim());
-  const invalid =
-    !form.name.trim() || links.length > MAX_PROFILES || !!badLink || badPhoto || saving;
+  const badLink = links.find((l) => !isHttps(l) || l.length > MAX_LINK_LENGTH);
+  const linksInvalid = !!badLink || links.length > MAX_PROFILES;
+  const photo = form.photoUrl.trim();
+  const badPhoto = photo !== '' && !isHttps(photo);
+  const invalid = !form.name.trim() || linksInvalid || badPhoto || saving;
 
   const save = async () => {
     setSaving(true);
@@ -333,7 +396,11 @@ function AuthorDialog({
         sameAs: links,
         isMe: form.isMe,
       };
-      await saveContentAuthor(input);
+      const saved = await saveContentAuthor(input);
+      if ('error' in saved) {
+        toast.error(t('alreadyAuthor'));
+        return;
+      }
       toast.success(t('saved', { name: form.name.trim() }));
       await onSaved();
     } catch {
@@ -344,7 +411,7 @@ function AuthorDialog({
   };
 
   return (
-    <Dialog open={open} onOpenChange={(next) => !next && onClose()}>
+    <Dialog open={open} onOpenChange={(next) => !next && !saving && onClose()}>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>{author ? t('editTitle') : t('addTitle')}</DialogTitle>
@@ -388,12 +455,19 @@ function AuthorDialog({
               value={form.links}
               rows={3}
               placeholder="https://www.linkedin.com/in/…"
+              aria-invalid={linksInvalid}
               aria-describedby="author-links-hint"
               onChange={(e) => setForm({ ...form, links: e.target.value })}
             />
-            <p id="author-links-hint" className="text-xs text-muted-foreground">
+            <p
+              id="author-links-hint"
+              className={cn(
+                'text-xs [overflow-wrap:anywhere]',
+                linksInvalid ? 'text-destructive' : 'text-muted-foreground',
+              )}
+            >
               {badLink
-                ? t('fields.linkInvalid', { link: badLink })
+                ? t('fields.linkInvalid', { link: badLink, max: MAX_LINK_LENGTH })
                 : t('fields.linksHint', { max: MAX_PROFILES })}
             </p>
           </div>
@@ -407,13 +481,21 @@ function AuthorDialog({
               onChange={(e) => setForm({ ...form, photoUrl: e.target.value })}
             />
           </div>
-          <label className="flex items-center gap-2 text-sm">
-            <Checkbox
-              checked={form.isMe}
-              onCheckedChange={(checked) => setForm({ ...form, isMe: checked === true })}
-            />
-            {t('fields.isMe')}
-          </label>
+          <div className="space-y-1">
+            <label className="flex items-center gap-2 text-sm">
+              <Checkbox
+                checked={form.isMe}
+                disabled={someoneElse || (meTaken && !form.isMe)}
+                onCheckedChange={(checked) => setForm({ ...form, isMe: checked === true })}
+              />
+              {t('fields.isMe')}
+            </label>
+            {(someoneElse || meTaken) && (
+              <p className="pl-6 text-xs text-muted-foreground">
+                {someoneElse ? t('fields.isSomeoneElse') : t('fields.isMeTaken')}
+              </p>
+            )}
+          </div>
         </div>
         <DialogFooter>
           <DialogClose render={<Button variant="outline" disabled={saving} />}>

@@ -6,9 +6,9 @@ import messages from '../../../messages/en.json';
 import type { AuthorsRead } from '@/lib/content/authors';
 
 /**
- * Settings › Authors (CE-037): the workspace's real authors; the author
- * themself or an admin edits one; admins and managers pick each brand's
- * default, or the "{Brand} Team" byline.
+ * Settings › Authors (CE-037): the workspace's real authors; whoever added
+ * one, the author themself or an admin edits it; admins and managers pick
+ * each brand's default, or the "{Brand} Team" byline.
  */
 
 const actions = vi.hoisted(() => ({
@@ -18,7 +18,8 @@ const actions = vi.hoisted(() => ({
   setDefaultAuthor: vi.fn(),
 }));
 vi.mock('@/lib/actions/content-authors', () => actions);
-vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
+const toast = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn() }));
+vi.mock('sonner', () => ({ toast }));
 
 const { AuthorsSection } = await import('./authors-section');
 
@@ -26,8 +27,10 @@ const { AuthorsSection } = await import('./authors-section');
   true;
 
 const ME = '11111111-1111-4111-8111-111111111111';
+const OTHER = '22222222-2222-4222-8222-222222222222';
 const ADA = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 const BOB = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+const CAL = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd';
 const ACME = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
 
 function workspace(role: string): AuthorsRead {
@@ -41,6 +44,7 @@ function workspace(role: string): AuthorsRead {
         photoUrl: null,
         sameAs: ['https://www.linkedin.com/in/ada'],
         userId: ME,
+        createdBy: OTHER,
         defaultFor: [ACME],
       },
       {
@@ -50,7 +54,19 @@ function workspace(role: string): AuthorsRead {
         bio: null,
         photoUrl: null,
         sameAs: [],
+        userId: OTHER,
+        createdBy: OTHER,
+        defaultFor: [],
+      },
+      {
+        id: CAL,
+        name: 'Cal Freelance',
+        title: null,
+        bio: null,
+        photoUrl: null,
+        sameAs: [],
         userId: null,
+        createdBy: ME,
         defaultFor: [],
       },
     ],
@@ -63,7 +79,7 @@ let container: HTMLDivElement;
 let root: Root;
 
 beforeEach(() => {
-  for (const fn of Object.values(actions)) fn.mockReset();
+  for (const fn of [...Object.values(actions), toast.success, toast.error]) fn.mockReset();
   actions.getContentAuthors.mockResolvedValue(workspace('analyst'));
   actions.saveContentAuthor.mockResolvedValue({ id: BOB });
   actions.deleteContentAuthor.mockResolvedValue(undefined);
@@ -76,6 +92,7 @@ beforeEach(() => {
 afterEach(() => {
   act(() => root.unmount());
   container.remove();
+  document.body.replaceChildren();
 });
 
 async function render() {
@@ -92,7 +109,17 @@ const buttons = (name: string) =>
   [...document.body.querySelectorAll('button')].filter((b) => b.textContent === name);
 const row = (name: string) =>
   [...container.querySelectorAll('li')].find((li) => li.textContent?.includes(name))!;
-const select = () => container.querySelector<HTMLSelectElement>(`#default-${ACME}`)!;
+const trigger = () => container.querySelector<HTMLElement>(`[aria-labelledby="default-${ACME}"]`)!;
+const isMe = () =>
+  [...document.querySelectorAll<HTMLElement>('[role="checkbox"]')].find((c) =>
+    c.closest('label')?.textContent?.includes('This author is me'),
+  )!;
+
+async function click(el: Element | undefined) {
+  await act(async () => {
+    (el as HTMLElement).click();
+  });
+}
 
 function type(input: HTMLInputElement | HTMLTextAreaElement, value: string) {
   const proto = Object.getPrototypeOf(input) as object;
@@ -109,43 +136,47 @@ describe('AuthorsSection', () => {
     expect(row('Ada Lovelace').textContent).toContain('(you)');
     expect(row('Ada Lovelace').textContent).toContain('1 profile link · Default for Acme');
     expect(row('Bob Stone').textContent).toContain('No profile links');
+    expect(trigger().querySelector('[data-slot="select-value"]')!.textContent).toBe('Ada Lovelace');
   });
 
-  it("lets a member edit only their own author, and not the brands' defaults", async () => {
+  it('lets a member edit the author they are and the ones they added, not the defaults', async () => {
     await render();
     expect(row('Ada Lovelace').querySelectorAll('button')).toHaveLength(2);
+    expect(row('Cal Freelance').querySelectorAll('button')).toHaveLength(2);
     expect(row('Bob Stone').querySelectorAll('button')).toHaveLength(0);
-    expect(select().disabled).toBe(true);
+    expect(trigger().hasAttribute('data-disabled')).toBe(true);
     expect(container.textContent).toContain('Admins and managers set the defaults.');
   });
 
-  it("lets an admin pick a brand's default author, or its team byline", async () => {
-    actions.getContentAuthors.mockResolvedValue(workspace('admin'));
+  it("lets a manager pick a brand's default author, or its team byline", async () => {
+    actions.getContentAuthors.mockResolvedValue(workspace('manager'));
     await render();
-    expect(row('Bob Stone').querySelectorAll('button')).toHaveLength(2);
-    expect(select().disabled).toBe(false);
-    expect(select().value).toBe(ADA);
-    expect([...select().options].map((o) => o.text)).toEqual([
+    expect(trigger().hasAttribute('data-disabled')).toBe(false);
+
+    await click(trigger());
+    const options = [...document.querySelectorAll<HTMLElement>('[role="option"]')];
+    expect(options.map((o) => o.textContent)).toEqual([
       'Acme Team',
       'Ada Lovelace',
       'Bob Stone',
+      'Cal Freelance',
     ]);
-
+    // Base UI picks the highlighted option: the pointer moves onto it first.
+    const team = options.find((o) => o.textContent === 'Acme Team')!;
     await act(async () => {
-      select().value = BOB;
-      select().dispatchEvent(new Event('change', { bubbles: true }));
+      team.dispatchEvent(new MouseEvent('mousemove', { bubbles: true }));
     });
-    expect(actions.setDefaultAuthor).toHaveBeenCalledWith(ACME, BOB);
-    await act(async () => {
-      select().value = '';
-      select().dispatchEvent(new Event('change', { bubbles: true }));
-    });
-    expect(actions.setDefaultAuthor).toHaveBeenLastCalledWith(ACME, null);
+    await click(team);
+    expect(actions.setDefaultAuthor).toHaveBeenCalledWith(ACME, null);
   });
 
   it('adds an author, one profile link per line, and holds a link that is not https', async () => {
+    actions.getContentAuthors.mockResolvedValue({
+      ...workspace('analyst'),
+      authors: workspace('analyst').authors.filter((a) => a.id !== ADA),
+    });
     await render();
-    await act(async () => buttons('Add author')[0].click());
+    await click(buttons('Add author')[0]);
     const name = document.querySelector<HTMLInputElement>('#author-name')!;
     const links = document.querySelector<HTMLTextAreaElement>('#author-links')!;
     const save = () => buttons('Save author')[0];
@@ -154,41 +185,82 @@ describe('AuthorsSection', () => {
     await act(async () => type(name, 'Grace Hopper'));
     await act(async () => type(links, 'https://github.com/grace\nhttp://example.com'));
     expect(save().disabled).toBe(true);
-    expect(document.body.textContent).toContain("http://example.com isn't an https link.");
+    expect(links.getAttribute('aria-invalid')).toBe('true');
+    expect(document.body.textContent).toContain(
+      "http://example.com isn't an https link of up to 300 characters.",
+    );
 
     await act(async () => type(links, 'https://github.com/grace\n\n https://x.com/grace '));
     expect(save().disabled).toBe(false);
-    await act(async () => save().click());
+    await click(isMe());
+    await click(save());
     expect(actions.saveContentAuthor).toHaveBeenCalledWith({
       name: 'Grace Hopper',
       title: '',
       bio: '',
       photoUrl: '',
       sameAs: ['https://github.com/grace', 'https://x.com/grace'],
-      isMe: false,
+      isMe: true,
     });
     expect(actions.getContentAuthors).toHaveBeenCalledTimes(2);
   });
 
+  it("can't make the member a second author", async () => {
+    await render();
+    await click(buttons('Add author')[0]);
+    expect(isMe().hasAttribute('data-disabled')).toBe(true);
+    expect(document.body.textContent).toContain("You're another author already.");
+  });
+
+  it('says so when the server finds the member is another author already', async () => {
+    actions.saveContentAuthor.mockResolvedValue({ error: 'already_author' });
+    await render();
+    await click(row('Cal Freelance').querySelector('button')!);
+    await click(buttons('Save author')[0]);
+    expect(toast.error).toHaveBeenCalledWith(
+      'You\'re another author already. Untick "This author is me" or edit your own author.',
+    );
+    expect(actions.getContentAuthors).toHaveBeenCalledTimes(1);
+  });
+
   it('edits an author with its id, and keeps it as the member', async () => {
     await render();
-    await act(async () => row('Ada Lovelace').querySelector('button')!.click());
+    await click(row('Ada Lovelace').querySelector('button')!);
     expect(document.querySelector<HTMLInputElement>('#author-name')!.value).toBe('Ada Lovelace');
-    await act(async () => buttons('Save author')[0].click());
+    await click(buttons('Save author')[0]);
     expect(actions.saveContentAuthor).toHaveBeenCalledWith(
       expect.objectContaining({ id: ADA, name: 'Ada Lovelace', isMe: true }),
     );
   });
 
+  it("lets an admin edit a colleague's author without taking it over", async () => {
+    actions.getContentAuthors.mockResolvedValue(workspace('admin'));
+    await render();
+    await click(row('Bob Stone').querySelector('button')!);
+    expect(isMe().hasAttribute('data-disabled')).toBe(true);
+    expect(document.body.textContent).toContain('Another member is this author.');
+    await click(buttons('Save author')[0]);
+    expect(actions.saveContentAuthor).toHaveBeenCalledWith(
+      expect.objectContaining({ id: BOB, isMe: false }),
+    );
+  });
+
+  it('says so when a save fails', async () => {
+    actions.saveContentAuthor.mockRejectedValue(new Error('forbidden'));
+    await render();
+    await click(row('Cal Freelance').querySelector('button')!);
+    await click(buttons('Save author')[0]);
+    expect(toast.error).toHaveBeenCalledWith("Couldn't save the author.");
+  });
+
   it('asks before removing an author', async () => {
     await render();
-    await act(async () => row('Ada Lovelace').querySelectorAll('button')[1].click());
-    expect(document.body.textContent).toContain('Remove Ada Lovelace?');
+    await click(row('Cal Freelance').querySelectorAll('button')[1]);
+    expect(document.body.textContent).toContain('Remove Cal Freelance?');
     expect(actions.deleteContentAuthor).not.toHaveBeenCalled();
 
-    const confirm = buttons('Delete').find((b) => !container.contains(b))!;
-    await act(async () => confirm.click());
-    expect(actions.deleteContentAuthor).toHaveBeenCalledWith(ADA);
+    await click(buttons('Remove').find((b) => !container.contains(b)));
+    expect(actions.deleteContentAuthor).toHaveBeenCalledWith(CAL);
   });
 
   it("says so when the authors can't be read", async () => {

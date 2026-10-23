@@ -6,13 +6,16 @@ import { createClient } from '@/lib/supabase/server';
 
 /**
  * Settings › Authors (Content Editor Quality spec §9, CE-037): the real
- * people a page is by, in the workspace (content_authors, 00250). Anyone
- * adds one; the author themself or an admin edits or deletes one (RLS);
- * admins and managers set each brand's default. The Content Agent never
- * writes them.
+ * people a page is by, in the workspace (content_authors, 00251). Anyone
+ * adds one; whoever added it, the author themself or an admin edits or
+ * deletes it (RLS); only a member links or unlinks themself; admins and
+ * managers set each brand's default. The Content Agent never writes them.
  */
 
-const AUTHOR_COLUMNS = 'id, name, title, bio, photo_url, same_as, user_id';
+/** The member is another author already (content_authors_member, a unique violation). */
+const ALREADY_AUTHOR = '23505';
+
+const AUTHOR_COLUMNS = 'id, name, title, bio, photo_url, same_as, user_id, created_by';
 
 /** The workspace's authors, its brands and the member reading; null when signed out. */
 export async function getContentAuthors(): Promise<AuthorsRead | null> {
@@ -53,15 +56,22 @@ export async function getContentAuthors(): Promise<AuthorsRead | null> {
       photoUrl: row.photo_url,
       sameAs: row.same_as ?? [],
       userId: row.user_id,
+      createdBy: row.created_by,
       defaultFor: defaults.filter((d) => d.author_id === row.id).map((d) => d.brand_id),
     })),
     brands: (brandsRes.data ?? []).map((b) => ({ id: b.id, name: b.name })),
-    me: { id: auth.user.id, role: profile.role ?? 'member' },
+    me: { id: auth.user.id, role: profile.role ?? 'analyst' },
   };
 }
 
-/** Adds an author, or saves one the member may edit; its id. */
-export async function saveContentAuthor(input: AuthorInput): Promise<{ id: string }> {
+/**
+ * Adds an author, or saves one the member may edit; its id. `isMe` links the
+ * author to the member, and unticked unlinks it when it was them; another
+ * member's link stays.
+ */
+export async function saveContentAuthor(
+  input: AuthorInput,
+): Promise<{ id: string } | { error: 'already_author' }> {
   const parsed = authorInput.safeParse(input);
   if (!parsed.success) throw new Error('invalid');
   const { id, name, title, bio, photoUrl, sameAs, isMe } = parsed.data;
@@ -74,27 +84,30 @@ export async function saveContentAuthor(input: AuthorInput): Promise<{ id: strin
     bio: bio || null,
     photo_url: photoUrl || null,
     same_as: [...new Set(sameAs)],
-    ...(isMe ? { user_id: auth.user.id } : {}),
   };
   if (id) {
-    // RLS lets the author themself or an admin through; no row back is a refusal.
+    const { data: current, error: readError } = await supabase
+      .from('content_authors')
+      .select('user_id')
+      .eq('id', id)
+      .maybeSingle();
+    if (readError) throw new Error(readError.message);
+    if (!current) throw new Error('not_found');
+    const link = isMe
+      ? { user_id: auth.user.id }
+      : current.user_id === auth.user.id
+        ? { user_id: null }
+        : {};
+    // RLS lets whoever added it, the author or an admin through; no row back is a refusal.
     const { data, error } = await supabase
       .from('content_authors')
-      .update(values)
+      .update({ ...values, ...link })
       .eq('id', id)
       .select('id')
       .maybeSingle();
+    if (error?.code === ALREADY_AUTHOR) return { error: 'already_author' };
     if (error) throw new Error(error.message);
     if (!data) throw new Error('forbidden');
-    if (!isMe) {
-      // Unticked "This author is me": the member's own author is no longer them.
-      const { error: unlinkError } = await supabase
-        .from('content_authors')
-        .update({ user_id: null })
-        .eq('id', id)
-        .eq('user_id', auth.user.id);
-      if (unlinkError) throw new Error(unlinkError.message);
-    }
     return { id: data.id };
   }
   const { data: profile, error: profileError } = await supabase
@@ -106,14 +119,20 @@ export async function saveContentAuthor(input: AuthorInput): Promise<{ id: strin
   if (!profile?.organization_id) throw new Error('not_found');
   const { data, error } = await supabase
     .from('content_authors')
-    .insert({ ...values, organization_id: profile.organization_id, created_by: auth.user.id })
+    .insert({
+      ...values,
+      ...(isMe ? { user_id: auth.user.id } : {}),
+      organization_id: profile.organization_id,
+      created_by: auth.user.id,
+    })
     .select('id')
     .single();
+  if (error?.code === ALREADY_AUTHOR) return { error: 'already_author' };
   if (error) throw new Error(error.message);
   return { id: data.id };
 }
 
-/** Deletes an author the member may delete (themself, or any as an admin). */
+/** Deletes an author the member may delete: one they added or are, or any as an admin. */
 export async function deleteContentAuthor(id: string): Promise<void> {
   if (!z.guid().safeParse(id).success) throw new Error('invalid');
   const supabase = await createClient();

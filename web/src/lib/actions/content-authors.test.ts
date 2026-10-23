@@ -9,6 +9,7 @@ const ME = '11111111-1111-4111-8111-111111111111';
 const ORG = '22222222-2222-4222-8222-222222222222';
 const ADA = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 const ACME = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
+const OTHER = '33333333-3333-4333-8333-333333333333';
 
 interface Call {
   table: string;
@@ -18,7 +19,8 @@ interface Call {
 }
 let calls: Call[] = [];
 /** What a write or read of each table answers. */
-let answers: Record<string, { data: unknown; error: null | { message: string } }> = {};
+let answers: Record<string, { data: unknown; error: null | { message: string; code?: string } }> =
+  {};
 
 function builder(table: string) {
   const call: Call = { table, op: 'select', filters: [] };
@@ -76,6 +78,7 @@ describe('getContentAuthors', () => {
           photo_url: null,
           same_as: null,
           user_id: ME,
+          created_by: OTHER,
         },
       ],
       error: null,
@@ -96,12 +99,18 @@ describe('getContentAuthors', () => {
           photoUrl: null,
           sameAs: [],
           userId: ME,
+          createdBy: OTHER,
           defaultFor: [ACME],
         },
       ],
       brands: [{ id: ACME, name: 'Acme' }],
       me: { id: ME, role: 'analyst' },
     });
+  });
+
+  it('reads nothing for a member without an organization', async () => {
+    answers['profiles.select'] = { data: { organization_id: null, role: 'admin' }, error: null };
+    expect(await getContentAuthors()).toBeNull();
   });
 });
 
@@ -132,6 +141,21 @@ describe('saveContentAuthor', () => {
     ]);
   });
 
+  it('adds someone who is no member without a link', async () => {
+    await saveContentAuthor({ name: 'Grace' });
+    expect(writes()[0].row).not.toHaveProperty('user_id');
+  });
+
+  it('says so when the member is another author already', async () => {
+    answers['content_authors.insert'] = {
+      data: null,
+      error: { message: 'duplicate key', code: '23505' },
+    };
+    expect(await saveContentAuthor({ name: 'Ada', isMe: true })).toEqual({
+      error: 'already_author',
+    });
+  });
+
   it('refuses a link that is not https, writing nothing', async () => {
     await expect(saveContentAuthor({ name: 'Ada', sameAs: ['http://x.com/ada'] })).rejects.toThrow(
       'invalid',
@@ -142,26 +166,32 @@ describe('saveContentAuthor', () => {
     expect(writes()).toEqual([]);
   });
 
-  it("saves an author, and unlinks the member's own when they untick it", async () => {
+  it("unlinks the member's own author in the same save when they untick it", async () => {
+    answers['content_authors.select'] = { data: { user_id: ME }, error: null };
     await saveContentAuthor({ id: ADA, name: 'Ada', isMe: false });
     expect(writes()).toEqual([
-      expect.objectContaining({ op: 'update', filters: [['id', ADA]] }),
       {
         table: 'content_authors',
         op: 'update',
-        row: { user_id: null },
-        filters: [
-          ['id', ADA],
-          ['user_id', ME],
-        ],
+        row: { name: 'Ada', title: null, bio: null, photo_url: null, same_as: [], user_id: null },
+        filters: [['id', ADA]],
       },
     ]);
-    expect((writes()[0].row as Record<string, unknown>).user_id).toBeUndefined();
+  });
+
+  it("keeps another member's link when an admin saves their author", async () => {
+    answers['content_authors.select'] = { data: { user_id: OTHER }, error: null };
+    await saveContentAuthor({ id: ADA, name: 'Ada', isMe: false });
+    expect(writes()).toHaveLength(1);
+    expect(writes()[0].row).not.toHaveProperty('user_id');
   });
 
   it('fails when RLS lets no row through', async () => {
+    answers['content_authors.select'] = { data: { user_id: null }, error: null };
     answers['content_authors.update'] = { data: null, error: null };
     await expect(saveContentAuthor({ id: ADA, name: 'Ada' })).rejects.toThrow('forbidden');
+    answers['content_authors.select'] = { data: null, error: null };
+    await expect(saveContentAuthor({ id: ADA, name: 'Ada' })).rejects.toThrow('not_found');
   });
 });
 
@@ -189,5 +219,16 @@ describe('setDefaultAuthor', () => {
       op: 'delete',
       filters: [['brand_id', ACME]],
     });
+  });
+
+  it('refuses an id that is not one, and passes a refusal on', async () => {
+    await expect(setDefaultAuthor('acme', ADA)).rejects.toThrow('invalid');
+    await expect(setDefaultAuthor(ACME, 'ada')).rejects.toThrow('invalid');
+    expect(writes()).toEqual([]);
+    answers['content_author_defaults.upsert'] = {
+      data: null,
+      error: { message: 'new row violates row-level security policy' },
+    };
+    await expect(setDefaultAuthor(ACME, ADA)).rejects.toThrow(/row-level security/);
   });
 });

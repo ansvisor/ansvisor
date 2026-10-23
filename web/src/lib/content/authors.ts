@@ -2,7 +2,7 @@ import { z } from 'zod';
 
 /**
  * The workspace's authors (Content Editor Quality spec §9, CE-037,
- * content_authors 00250): what Settings › Authors reads and saves.
+ * content_authors 00251): what Settings › Authors reads and saves.
  */
 
 export interface ContentAuthor {
@@ -15,6 +15,8 @@ export interface ContentAuthor {
   sameAs: string[];
   /** The member the author is, when they are one. */
   userId: string | null;
+  /** The member who added it: they may edit it, as the author and admins may. */
+  createdBy: string | null;
   /** The brands whose pages it is by when nobody picks another. */
   defaultFor: string[];
 }
@@ -26,13 +28,15 @@ export interface AuthorsRead {
   me: { id: string; role: string };
 }
 
-/** The most profile links an author keeps (00250). */
+/** The most profile links an author keeps (00251). */
 export const MAX_PROFILES = 10;
+/** The longest profile link. */
+export const MAX_LINK_LENGTH = 300;
 
 const profileLink = z
   .string()
   .trim()
-  .max(300)
+  .max(MAX_LINK_LENGTH)
   .refine((value) => /^https:\/\/[^\s]+$/.test(value), 'https');
 
 export const authorInput = z.object({
