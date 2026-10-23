@@ -3603,7 +3603,8 @@
         "gain": "Rules {met, number} → {after, number} of {total, number}",
         "review": "Review",
         "reviewed": "All suggestions reviewed",
-        "reviewedLine": "{accepted, number} accepted · Rules {met, number} of {total, number} · {open, number} still open",
+        "reviewedLine": "{accepted, number} accepted · Rules {met, number} of {total, number}{open, plural, =0 {} other { · # still open}}",
+        "more": "+{count, number} more",
         "run": "Run Agent",
         "working": "Content Agent is working"
       },
@@ -3621,7 +3622,6 @@
         "accept": "Accept",
         "reject": "Reject",
         "undo": "Undo",
-        "close": "Close",
         "changed": "The page changed after the agent read it. Reject this rewrite and run it again on the page as it is now.",
         "changedAfter": "The page changed after the rewrite was put in. To go back, open History.",
         "acceptedToast": "Rewrite put in place. History keeps your page as it was.",
