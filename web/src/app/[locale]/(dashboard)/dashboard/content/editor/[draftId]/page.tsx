@@ -11,7 +11,6 @@ import { getContentDraft } from '@/lib/actions/content-drafts';
 import { AGENT_POLL_MS, CONTENT_LIBRARY_PATH, type ContentDraft } from '@/lib/content/drafts';
 import { useBrandStore } from '@/stores/use-brand-store';
 import { AgentWriting } from './_agent-writing';
-import { wasRewrite } from './_page-rewrite';
 import { DraftEditor } from './_draft-editor';
 
 type DraftRead = { id: string; draft: ContentDraft } | { id: string; draft: null; failed: boolean };
@@ -92,13 +91,13 @@ export default function ContentEditorPage() {
           title={current.draft.title}
           method={current.draft.method}
           since={current.draft.agentSince}
-          rewrite={wasRewrite(current.draft.id)}
+          rewrite={current.draft.agentRun === 'rewrite'}
         />
       ) : current.draft ? (
         <DraftEditor
           key={current.draft.id}
           draft={current.draft}
-          onAgentStarted={() =>
+          onAgentStarted={(run) =>
             setRead((prev) =>
               prev?.draft
                 ? {
@@ -107,6 +106,7 @@ export default function ContentEditorPage() {
                       ...prev.draft,
                       agentState: 'writing',
                       agentSince: new Date().toISOString(),
+                      agentRun: run,
                     },
                   }
                 : prev,

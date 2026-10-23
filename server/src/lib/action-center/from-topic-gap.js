@@ -11,6 +11,7 @@
 
 import supabaseAdmin from '../../config/supabase.js';
 import { computeAiVisibilityScore } from '../../config/visibility-score.js';
+import { targetKeys } from '../target-ids.js';
 import { resolveBrandSources } from './sources.js';
 import { planTasks } from './tasks/plan.js';
 
@@ -153,7 +154,8 @@ export async function sendTopicGapToActionCenter(
     window: { dayFrom: dayFrom ?? null, dayTo: dayTo ?? null },
     promptIds: (prompts || []).map((p) => p.id),
     targetEntity: 'prompts',
-    targetCount: (prompts || []).length,
+    // As many as the action keeps of them (AC-009).
+    targetCount: targetKeys((prompts || []).map((p) => p.id)).length,
     targets: (prompts || []).slice(0, 50).map((p) => p.text),
   };
 

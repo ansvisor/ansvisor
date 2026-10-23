@@ -10,6 +10,7 @@
  * measured like any other action's.
  */
 
+import { targetKeys } from '../target-ids.js';
 import supabaseAdmin from '../../config/supabase.js';
 import { resolveBrandSources } from './sources.js';
 import { planTasks } from './tasks/plan.js';
@@ -98,6 +99,22 @@ export function actionPromptScope(opportunity, memberPromptIds) {
 }
 
 /**
+ * The count and keys an opportunity's action keeps (AC-009): the prompts it
+ * is scoped to when it has them, else the ones the opportunity names (by
+ * id, or by text), each once (targetKeys). The first 50 named are shown as
+ * before.
+ */
+export function actionTargets(promptIds, prompts) {
+  const keyOf = (p) => (typeof p === 'string' ? p : String(p?.id ?? p?.text ?? p?.label ?? ''));
+  const keys = targetKeys(promptIds.length ? promptIds : prompts.map(keyOf));
+  return {
+    targetCount: keys.length,
+    targets: prompts.slice(0, 50),
+    ...(keys.length ? { targetIds: keys } : {}),
+  };
+}
+
+/**
  * A task's status when the action opens. The brief task starts completed when
  * the opportunity already has a brief: the work is done, and the brief is
  * shown on the action. Every row states its status: a bulk insert sends the
@@ -178,8 +195,9 @@ export async function sendToActionCenter(
     pages: [...new Set(chosen.flatMap((a) => (a.pages || []).map((p) => p.url)))],
     promptIds,
     targetEntity: 'prompts',
-    targetCount: prompts.length,
-    targets: prompts.slice(0, 50),
+    // What the action counts is the list it keeps (AC-009): its prompts when
+    // it has them, else the prompts the opportunity names.
+    ...actionTargets(promptIds, prompts),
     contentExists: chosen.some((a) => a.decision !== 'create'),
   };
 

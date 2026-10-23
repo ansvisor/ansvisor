@@ -213,7 +213,9 @@ export function promptIdsOf(payloads) {
   for (const p of payloads) {
     if (!p) continue;
     if (typeof p.promptId === 'string') ids.add(p.promptId);
-    for (const id of Array.isArray(p.promptIds) ? p.promptIds : []) {
+    // The first 50, as signals named them before they listed every prompt
+    // (AC-009): demand is read for the prompts an action leads with.
+    for (const id of Array.isArray(p.promptIds) ? p.promptIds.slice(0, 50) : []) {
       if (typeof id === 'string') ids.add(id);
     }
     const entity = p.entity ?? p.targetEntity;

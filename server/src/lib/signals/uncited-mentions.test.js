@@ -78,7 +78,8 @@ describe('uncitedMentionCandidates', () => {
     const [signal] = await uncitedMentionCandidates('brand-1', now);
 
     expect(signal).toMatchObject({ kind: 'uncited_mentions', currentValue: 1500 });
-    expect(signal.payload.promptIds).toEqual(Array.from({ length: 50 }, (_, i) => uuid(i)));
+    // Every uncited prompt the action will count, up to 1000 (AC-009).
+    expect(signal.payload.promptIds).toEqual(Array.from({ length: 1000 }, (_, i) => uuid(i)));
     expect(calls.map((c) => c.range)).toEqual([
       [0, 999],
       [1000, 1999],
