@@ -54,7 +54,7 @@ function Harness({ todos, author }: { todos: QualityTodo[]; author: ContentAutho
       ))}
       <NextNudge
         shown={nudge.shown}
-        quality={{ author, brandName: 'Acme' }}
+        quality={{ author, brandName: 'Acme', canEdit: true }}
         onPickAuthor={onPickAuthor}
         onLater={nudge.later}
         onAct={nudge.close}

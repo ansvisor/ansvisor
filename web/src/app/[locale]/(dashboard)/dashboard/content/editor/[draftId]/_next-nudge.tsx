@@ -92,7 +92,7 @@ export function NextNudge({
   onAct,
 }: {
   shown: { todo: QualityTodo; count: number } | null;
-  quality: Pick<QualityRead, 'author' | 'brandName'>;
+  quality: Pick<QualityRead, 'author' | 'brandName' | 'canEdit'>;
   onPickAuthor: () => void;
   onLater: () => void;
   /** It was acted on: it goes. */
