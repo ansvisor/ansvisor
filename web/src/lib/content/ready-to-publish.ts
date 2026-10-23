@@ -60,8 +60,16 @@ function otherText(root: HTMLElement): { get: () => string; set: (value: string)
 
 const count = (text: string) => text.match(PLACEHOLDER)?.length ?? 0;
 
-/** The placeholders in a text (the title). */
-export const textPlaceholders = count;
+/**
+ * The title's placeholders, when the page doesn't hold them already: a
+ * title that is the page's H1 is counted with the page.
+ */
+export function titlePlaceholders(title: string, html: string): number {
+  const h1 = fragment(html).querySelector('h1');
+  const same =
+    h1 && (h1.textContent ?? '').replace(/\s+/g, ' ').trim() === title.replace(/\s+/g, ' ').trim();
+  return same ? 0 : count(title);
+}
 
 /**
  * The placeholders in the HTML an export gives: in its words (an HTML
@@ -250,7 +258,11 @@ export function withoutLeadingH1(html: string): string {
  * HTML block keeps of its own (classes, styles, scripts) goes out as written.
  */
 export interface PasteChecks {
-  /** The page's links, how many were read (Trust's link reads), and how many of those don't answer. */
+  /**
+   * The page's links, how many were read (Trust's link reads: one that
+   * answered, or didn't; a read the site refused or timed out is none), and
+   * how many of those don't answer.
+   */
   links: { count: number; read: number; broken: number };
   images: { count: number; withoutAlt: number };
   /** Elements that carry a class, a style or a script (JSON-LD aside). */
@@ -270,7 +282,10 @@ export function pasteChecks(html: string, linkChecks: ReadonlyMap<string, LinkCh
   return {
     links: {
       count: hrefs.length,
-      read: hrefs.filter((h) => linkChecks.has(h)).length,
+      read: hrefs.filter((h) => {
+        const status = linkChecks.get(h)?.status;
+        return status === 'ok' || status === 'broken';
+      }).length,
       broken: hrefs.filter((h) => linkChecks.get(h)?.status === 'broken').length,
     },
     images: {

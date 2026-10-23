@@ -25,7 +25,7 @@ import { localDate } from '@/lib/content/page-schema';
 import {
   exportPlaceholders,
   pageFields,
-  textPlaceholders,
+  titlePlaceholders,
   withoutLeadingH1,
   withoutPlaceholders,
   type PasteChecks,
@@ -140,7 +140,7 @@ export function ExportDialog({
   const [skipPlaceholders, setSkipPlaceholders] = useState(false);
   const radios = useRef<(HTMLButtonElement | null)[]>([]);
   const placeholders = useMemo(
-    () => exportPlaceholders(html) + textPlaceholders(title),
+    () => exportPlaceholders(html) + titlePlaceholders(title, html),
     [html, title],
   );
   const content = useMemo(
@@ -149,7 +149,10 @@ export function ExportDialog({
   );
   // What is still open once left out: the title's and the headings'.
   const left = useMemo(
-    () => (skipPlaceholders ? exportPlaceholders(content) + textPlaceholders(title) : placeholders),
+    () =>
+      skipPlaceholders
+        ? exportPlaceholders(content) + titlePlaceholders(title, content)
+        : placeholders,
     [skipPlaceholders, content, title, placeholders],
   );
   const ready = left === 0;

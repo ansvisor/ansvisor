@@ -5,6 +5,7 @@ import {
   exportPlaceholders,
   pageFields,
   pasteChecks,
+  titlePlaceholders,
   withoutLeadingH1,
   withoutPlaceholders,
 } from './ready-to-publish';
@@ -23,6 +24,14 @@ describe('exportPlaceholders', () => {
           '<img src="https://cdn.acme.com/a.jpg" alt="[photo of the founder]">',
       ),
     ).toBe(5);
+  });
+});
+
+describe('titlePlaceholders', () => {
+  it("counts the title's only when the page's H1 isn't it", () => {
+    expect(titlePlaceholders('Best [brand] grinders', '<h1>Best [brand] grinders</h1>')).toBe(0);
+    expect(titlePlaceholders('Best [brand] grinders', '<h1>Best grinders</h1>')).toBe(1);
+    expect(titlePlaceholders('Best [brand] grinders', '<p>No H1.</p>')).toBe(1);
   });
 });
 
@@ -157,16 +166,21 @@ describe('pasteChecks', () => {
         'https://gone.example/',
         { href: 'https://gone.example/', status: 'broken', httpStatus: 404, date: null },
       ],
+      // A site that refused the read (a bot wall): no word on it.
+      [
+        'https://walled.example/',
+        { href: 'https://walled.example/', status: 'unknown', httpStatus: 403, date: null },
+      ],
     ]);
     expect(
       pasteChecks(
-        '<p><a href="https://ok.example/">a</a> <a href="https://gone.example/">b</a> <a href="https://gone.example/">c</a> <a href="https://new.example/">n</a> <a href="/local">d</a></p>' +
+        '<p><a href="https://ok.example/">a</a> <a href="https://gone.example/">b</a> <a href="https://gone.example/">c</a> <a href="https://new.example/">n</a> <a href="https://walled.example/">w</a> <a href="/local">d</a></p>' +
           '<img src="https://cdn.acme.com/a.jpg" alt="A"><img src="https://cdn.acme.com/b.jpg" alt=" ">' +
           '<div class="cta" style="color:red">x</div><script type="application/ld+json">{}</script>',
         checks,
       ),
     ).toEqual({
-      links: { count: 3, read: 2, broken: 1 },
+      links: { count: 4, read: 2, broken: 1 },
       images: { count: 2, withoutAlt: 1 },
       ownCode: 1,
     });
