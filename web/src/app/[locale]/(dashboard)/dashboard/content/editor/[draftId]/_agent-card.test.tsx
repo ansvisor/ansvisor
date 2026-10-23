@@ -62,7 +62,11 @@ afterEach(() => {
   container.remove();
 });
 
-async function render(suggestions: DraftSuggestion[], working = false) {
+async function render(
+  suggestions: DraftSuggestion[],
+  working = false,
+  extra: Partial<Parameters<typeof AgentCard>[0]> = {},
+) {
   await act(async () => {
     root.render(
       <NextIntlClientProvider locale="en" messages={messages}>
@@ -72,6 +76,7 @@ async function render(suggestions: DraftSuggestion[], working = false) {
           busy={false}
           working={working}
           {...handlers}
+          {...extra}
         />
       </NextIntlClientProvider>,
     );
@@ -130,6 +135,41 @@ describe('AgentCard', () => {
     expect(container.querySelector('button[aria-label="Close"]')).not.toBeNull();
     await click('Run Agent');
     expect(handlers.onRun).toHaveBeenCalled();
+  });
+
+  it("offers the Next step basket's step in Run Agent's place, with All steps", async () => {
+    const onNext = vi.fn();
+    const onAllSteps = vi.fn();
+    const reviewed = [
+      suggestion({ status: 'accepted' }),
+      suggestion({ id: 's2', status: 'rejected' }),
+    ];
+    await render(reviewed, false, {
+      next: { label: 'Rewrite page', onRun: onNext, blocked: null },
+      onAllSteps,
+    });
+    expect(buttons().slice(0, 3)).toEqual(['Undo all', 'All steps', 'Next: Rewrite page']);
+    await click('Next: Rewrite page');
+    expect(onNext).toHaveBeenCalled();
+    expect(handlers.onRun).not.toHaveBeenCalled();
+    await click('All steps');
+    expect(onAllSteps).toHaveBeenCalled();
+    // With every rule met it still says what's next, and why it waits when it can't run.
+    await render(reviewed, false, {
+      rules: { ...rules, met: 14 },
+      next: { label: 'Before you publish', onRun: onNext, blocked: 'Saving first.' },
+      onAllSteps,
+    });
+    const nextButton = [...container.querySelectorAll('button')].find(
+      (b) => b.textContent === 'Next: Before you publish',
+    )!;
+    expect(nextButton.disabled).toBe(true);
+    expect(container.textContent).toContain('Saving first.');
+    // Suggestions still to decide come first.
+    await render([suggestion()], false, {
+      next: { label: 'Rewrite page', onRun: onNext, blocked: null },
+    });
+    expect(buttons()).not.toContain('Next: Rewrite page');
   });
 
   it('says it is working, with nothing to press', async () => {

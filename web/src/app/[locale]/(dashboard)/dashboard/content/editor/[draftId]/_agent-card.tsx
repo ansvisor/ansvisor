@@ -198,6 +198,8 @@ export function AgentCard({
   run = null,
   onStop,
   stopping = false,
+  next = null,
+  onAllSteps,
 }: {
   suggestions: DraftSuggestion[];
   rules: CardRules;
@@ -227,6 +229,13 @@ export function AgentCard({
   onStop?: () => void;
   /** Stop was pressed: it waits for the run to end. */
   stopping?: boolean;
+  /**
+   * The Next step basket's step (Next step spec §3), offered in Run Agent's
+   * place once nothing is left to decide: its button, and why it can't run.
+   */
+  next?: { label: string; onRun: () => void; blocked: string | null } | null;
+  /** Opens the basket with every step. */
+  onAllSteps?: () => void;
 }) {
   const t = useTranslations('contentEditor.editor.agentCard');
   const locale = useLocale();
@@ -243,7 +252,37 @@ export function AgentCard({
   // written in the card, never only on hover (as the Rules card does, CE-028).
   const runShown = !working && stillOpen > 0 && (page ? page.status !== 'open' : open === 0);
   const reasonId = useId();
-  const reason = runShown ? runBlocked : null;
+  const nextShown = !!next && !working && (page ? page.status !== 'open' : open === 0);
+  const reason = next ? (nextShown ? next.blocked : null) : runShown ? runBlocked : null;
+  // What follows the review: the basket's next step, or Run Agent for the rules still open.
+  const afterReview = next ? (
+    <>
+      {onAllSteps && (
+        <Button variant="ghost" size="sm" className={GHOST} onClick={onAllSteps}>
+          {t('allSteps')}
+        </Button>
+      )}
+      <Button
+        size="sm"
+        disabled={busy || next.blocked !== null}
+        aria-describedby={reason ? reasonId : undefined}
+        onClick={next.onRun}
+      >
+        {t('next', { action: next.label })}
+      </Button>
+    </>
+  ) : (
+    stillOpen > 0 && (
+      <Button
+        size="sm"
+        disabled={busy || runBlocked !== null}
+        aria-describedby={reason ? reasonId : undefined}
+        onClick={onRun}
+      >
+        {t('run')}
+      </Button>
+    )
+  );
   const tone = working ? 'working' : open > 0 ? 'waiting' : 'done';
   // "built from 3 of your sources · See sources" (v1.1 §3b).
   const builtFrom = sourceCount > 0 && (
@@ -417,16 +456,7 @@ export function AgentCard({
                   >
                     {tRewrite('undo')}
                   </Button>
-                  {stillOpen > 0 && (
-                    <Button
-                      size="sm"
-                      disabled={busy || runBlocked !== null}
-                      aria-describedby={reason ? reasonId : undefined}
-                      onClick={onRun}
-                    >
-                      {t('run')}
-                    </Button>
-                  )}
+                  {afterReview}
                 </>
               )}
             </>
@@ -453,16 +483,7 @@ export function AgentCard({
               >
                 {tSuggestions('undoAll')}
               </Button>
-              {stillOpen > 0 && (
-                <Button
-                  size="sm"
-                  disabled={busy || runBlocked !== null}
-                  aria-describedby={reason ? reasonId : undefined}
-                  onClick={onRun}
-                >
-                  {t('run')}
-                </Button>
-              )}
+              {afterReview}
             </>
           )}
           {open === 0 && (

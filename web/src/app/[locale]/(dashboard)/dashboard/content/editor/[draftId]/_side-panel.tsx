@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
+import { toast } from 'sonner';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { isPageType, type ContentDraft } from '@/lib/content/drafts';
 import { buildSourceGroups, includedCounts, type DraftSourceKind } from '@/lib/content/sources';
@@ -116,6 +117,7 @@ export function EditorSidePanel({
   agentRewrite,
   lastSuggestionAt,
   onSourceShown,
+  onBuildStarted,
   onBriefRebuilding,
   briefBlocked = null,
   quality = null,
@@ -141,6 +143,8 @@ export function EditorSidePanel({
     tab: PanelTarget;
     n: number;
     source?: { kind: DraftSourceKind; ref: string };
+    /** The brief to build (the Next step basket's Build brief). */
+    build?: boolean;
   } | null;
   /** Run Agent's Fix open rules, for Rules (CE-018, v1.1 CE-029). */
   agentFix?: AgentFix;
@@ -152,6 +156,8 @@ export function EditorSidePanel({
   lastSuggestionAt: string | null;
   /** The source asked for was shown (or isn't listed): it isn't shown again. */
   onSourceShown?: () => void;
+  /** The brief asked for is being built: the request is spent. */
+  onBuildStarted?: () => void;
   /** Whether the agent is writing the brief: the agent card shows it working (CE-027). */
   onBriefRebuilding?: (rebuilding: boolean) => void;
   /** Why the brief's Run Agent waits (another agent run from this page), or null. */
@@ -240,6 +246,20 @@ export function EditorSidePanel({
       open('brief');
     },
   });
+
+  // Build brief from the Next step basket: once per request (an effect run
+  // twice, as in development, builds once), never on a panel opened again
+  // later; one that can't run says why.
+  const buildHandled = useRef<number | null>(null);
+  useEffect(() => {
+    if (!tabRequest?.build || buildHandled.current === tabRequest.n) return;
+    buildHandled.current = tabRequest.n;
+    onBuildStarted?.();
+    if (briefBlocked) toast(briefBlocked);
+    else if (!rebuilding) void rebuild();
+    // Only a new request builds.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [requested]);
 
   // The agent card shows the brief's run too, with its steps and Stop; a
   // panel closed meanwhile says it no longer waits on it.

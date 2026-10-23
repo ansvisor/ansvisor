@@ -76,12 +76,14 @@ vi.mock('@/lib/actions/content-drafts', () => ({
   checkDraftLinks: (...args: unknown[]) => checkDraftLinks(...args),
 }));
 vi.mock('next/navigation', () => ({ useParams: () => ({ draftId: 'd1' }) }));
+const routerPush = vi.hoisted(() => vi.fn());
 vi.mock('@/i18n/navigation', () => ({
   Link: ({ href, children, ...props }: { href: string; children: React.ReactNode }) => (
     <a href={href} {...props}>
       {children}
     </a>
   ),
+  useRouter: () => ({ push: routerPush }),
 }));
 const brandState = vi.hoisted(() => ({
   activeBrandId: 'b1' as string | null,
@@ -2923,6 +2925,124 @@ describe('the side panel', () => {
       await renderPage();
       await act(async () => button('Export')!.click());
       expect(dialog()).toBeNull();
+    });
+  });
+
+  describe('Next step basket', () => {
+    beforeEach(() => {
+      process.env.NEXT_PUBLIC_CONTENT_QUALITY_PHASE = '1';
+      getContentAuthors.mockResolvedValue({
+        authors: [],
+        brands: [{ id: 'b1', name: 'Acme' }],
+        me: { id: 'u1', role: 'analyst' },
+      });
+    });
+    afterEach(() => {
+      delete process.env.NEXT_PUBLIC_CONTENT_QUALITY_PHASE;
+    });
+    const basket = () => document.querySelector('[data-slot="popover-content"]');
+    const inBasket = (name: string) =>
+      [...(basket()?.querySelectorAll('button') ?? [])].find((b) => b.textContent === name);
+    const nextButton = () =>
+      [...container.querySelectorAll<HTMLButtonElement>('header button')].find((b) =>
+        b.getAttribute('aria-label')?.startsWith('Next · '),
+      );
+
+    it('opens by itself on a new page without taking focus, plans it, and folds after', async () => {
+      getContentDraft.mockResolvedValue(
+        draft({ method: 'create', bodyHtml: '<h1>Pipeline forecasting</h1><p></p>' }),
+      );
+      getDraftSources.mockResolvedValue({
+        data: {
+          prompts: [],
+          fanouts: [],
+          citedPages: [],
+          gscQueries: [],
+          brandDomains: [],
+          competitorDomains: [],
+        },
+        choices: [],
+      });
+      rebuildDraftBrief.mockResolvedValue({
+        brief: {
+          goal: 'Win forecasting searches',
+          audience: 'Sales leaders',
+          outline: [],
+          keywords: [],
+          origin: 'rebuild',
+          builtAt: '2026-10-21T10:00:00Z',
+          builtFrom: { prompts: 0, fanouts: 0, pages: 0, queries: 0 },
+        },
+      });
+      window.innerWidth = 1440;
+      await renderPage();
+      expect(nextButton()!.getAttribute('aria-label')).toBe('Next · Plan the page');
+      expect(basket()!.textContent).toContain(
+        'No brief yet. I build one from your prompts, fan-outs and cited pages.',
+      );
+      expect(basket()!.contains(document.activeElement)).toBe(false);
+
+      await act(async () => inBasket('Build brief')!.click());
+      await act(async () => {});
+      expect(rebuildDraftBrief).toHaveBeenCalledTimes(1);
+      expect(selectedSegment()).toBe('Brief');
+      // Planned: the first draft is next, and the basket has folded.
+      expect(nextButton()!.getAttribute('aria-label')).toBe('Next · Write the first draft');
+      expect(basket()).toBeNull();
+    });
+
+    it('skips a step on this draft until its state changes, and stays shut on a page with words', async () => {
+      getContentDraft.mockResolvedValue(draft({ method: 'create' }));
+      await renderPage();
+      expect(basket()).toBeNull();
+      expect(nextButton()!.getAttribute('aria-label')).toBe('Next · Plan the page');
+      await act(async () => nextButton()!.click());
+      await act(async () => inBasket('Skip')!.click());
+      expect(nextButton()!.getAttribute('aria-label')).not.toBe('Next · Plan the page');
+      expect(JSON.parse(localStorage.getItem('aeo:next-step-skips:d1')!)).toEqual({
+        plan: 'false',
+      });
+
+      // Opened again, the skip holds.
+      await act(async () => root.unmount());
+      root = createRoot(container);
+      await renderPage();
+      expect(nextButton()!.getAttribute('aria-label')).not.toBe('Next · Plan the page');
+    });
+
+    it("stays open on Skip, and leaves an empty page to the person once they'll write it", async () => {
+      getContentDraft.mockResolvedValue(
+        draft({ method: 'create', bodyHtml: '<h1>Pipeline forecasting</h1><p></p>' }),
+      );
+      await renderPage();
+      expect(basket()).not.toBeNull();
+      await act(async () => inBasket('Skip')!.click());
+      expect(basket()).not.toBeNull();
+      expect(nextButton()!.getAttribute('aria-label')).toBe('Next · Write the first draft');
+
+      await act(async () => inBasket("I'll write it")!.click());
+      expect(basket()).toBeNull();
+      // The caret goes to the end of the page, to write there.
+      const editor = (container.querySelector('.ProseMirror') as HTMLElement & { editor: Editor })
+        .editor;
+      expect(editor.state.selection.from).toBe(editor.state.doc.content.size - 1);
+      // No agent work on an empty page the person writes: only their own step.
+      await act(async () => nextButton()!.click());
+      expect(basket()!.textContent).toContain(
+        'The page is empty: write it, and the next step follows from what you write.',
+      );
+      expect(inBasket('Write with Agent')).toBeUndefined();
+      expect(inBasket('Skip')).toBeUndefined();
+    });
+
+    it('stays out of the header while Quality is off', async () => {
+      delete process.env.NEXT_PUBLIC_CONTENT_QUALITY_PHASE;
+      getContentDraft.mockResolvedValue(
+        draft({ bodyHtml: '<h1>Pipeline forecasting</h1><p></p>' }),
+      );
+      await renderPage();
+      expect(nextButton()).toBeUndefined();
+      expect(basket()).toBeNull();
     });
   });
 

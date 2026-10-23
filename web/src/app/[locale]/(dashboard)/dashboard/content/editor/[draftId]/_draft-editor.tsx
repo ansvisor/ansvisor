@@ -10,7 +10,7 @@ import { TableKit } from '@tiptap/extension-table';
 import Image from '@tiptap/extension-image';
 import { CharacterCount, Placeholder } from '@tiptap/extensions';
 import { ArrowLeft, Bot, Check, Copy, Download, PanelRight, Target, X } from 'lucide-react';
-import { Link } from '@/i18n/navigation';
+import { Link, useRouter } from '@/i18n/navigation';
 import { Button } from '@/components/ui/button';
 import { buttonVariants } from '@/components/ui/button-variants';
 import {
@@ -87,14 +87,29 @@ import { BAND_CLASSES, qualityAverage, qualityBand, qualityPhase } from '@/lib/c
 import { eeat, linksToCheck, trust, trustBlocks } from '@/lib/content/quality-checks';
 import { qualityTodos } from '@/lib/content/quality-todos';
 import { readability } from '@/lib/content/readability';
-import { aiTracesFound, fanoutsToUse, lengthWarns, openRulesForAgent } from '@/lib/content/rules';
+import {
+  liveSkips,
+  nextStep,
+  rulesForNext,
+  stepState,
+  type NextAction,
+  type NextStepId,
+  type NextStepState,
+} from '@/lib/content/next-step';
+import {
+  aiTracesFound,
+  fanoutsToUse,
+  lengthWarns,
+  openRulesForAgent,
+  rewriteAdvice,
+} from '@/lib/content/rules';
 import { saveBlob } from '@/lib/download';
 import { cn } from '@/lib/utils';
 import { useBrandStore } from '@/stores/use-brand-store';
 import { AgentCard } from './_agent-card';
 import { AgentDrafting, draftingKey } from './_agent-drafting';
-import { AuthorMenu } from './_author-menu';
-import { BeforePublish, type ReadyAnyway, type ReadyToPaste } from './_before-publish';
+import { AuthorMenu, MANAGE_AUTHORS_PATH } from './_author-menu';
+import { BeforePublish, TRUST_GATE, type ReadyAnyway, type ReadyToPaste } from './_before-publish';
 import { FlashBlock, findBlock, flashKey } from './_flash-block';
 import { useAgentRun } from './_use-agent-run';
 import { useLinkChecks } from './_use-link-checks';
@@ -116,7 +131,8 @@ import { HtmlBlock, copyToClipboard } from './_html-block';
 import { OwnCopies, ownCopyHtml } from './_own-copies';
 import { NextNudge, useNextNudge } from './_next-nudge';
 import { PageInfoStrip, pageInfoKey } from './_page-info';
-import type { QualityRead } from './_quality-tab';
+import { NextStepButton, readSkips, wordsUnderTitle, writeSkips } from './_next-step';
+import { useTodoCopy, type QualityRead } from './_quality-tab';
 import { PageTypeMenu } from './_page-type-menu';
 import type { AgentRewrite } from './_brief-tab';
 import { ruleStatusDetail, type AgentFix, type PageRewrite } from './_rules-tab';
@@ -299,6 +315,8 @@ export function DraftEditor({
     n: number;
     /** A source to show in Sources: a "Based on" chip or mark clicked (CE-033). */
     source?: Pick<SuggestionSource, 'kind' | 'ref'>;
+    /** The brief to build, from the Next step basket's Build brief. */
+    build?: boolean;
   } | null>(null);
   const openPanelTab = (tab: PanelTarget, source?: SuggestionSource) => {
     if (!panelOpen) togglePanel();
@@ -1556,6 +1574,130 @@ export function DraftEditor({
     }
   };
 
+  // The Next step basket (Next step spec): the one step to take now, chosen
+  // from the draft's state by rules (no AI call), in the header and on the
+  // agent card. With Quality's first phase: it reads Trust and the to-dos.
+  const router = useRouter();
+  const todoCopy = useTodoCopy();
+  const [nextOpen, setNextOpen] = useState(false);
+  // A click moves focus in; the basket opening by itself on a new page doesn't.
+  const [nextFocus, setNextFocus] = useState(true);
+  const [skipped, setSkipped] = useState(() => readSkips(draft.id));
+  const pageHasWords = useMemo(
+    () => !qualityOn || wordsUnderTitle(pageHtml),
+    [qualityOn, pageHtml],
+  );
+  const trustNow = quality?.trust?.score ?? null;
+  const nextState: NextStepState = {
+    method: draft.method,
+    open: canMarkReady,
+    published: status === 'published',
+    hasBrief: reads.brief.status === 'ready' ? reads.brief.brief !== null : null,
+    empty: !pageHasWords,
+    rewrite: rewriteAdvice(rules.rules),
+    openRules: rulesForNext(rules.rules),
+    quality: quality
+      ? { trust: trustNow, trustLow: trustNow !== null && trustNow < TRUST_GATE, todos }
+      : null,
+    skipped,
+  };
+  const next = nextStep(nextState);
+  const firstTodo = todos.find((todo) => !todo.done);
+  const todoLine = firstTodo && quality ? todoCopy(firstTodo, quality).next : null;
+  const skipStep = (id: NextStepId) => {
+    const skips = { ...liveSkips(nextState), [id]: stepState(id, nextState) };
+    setSkipped(skips);
+    writeSkips(draft.id, skips);
+  };
+  // A skip whose step's state has changed is dropped, so it can't come back
+  // to life; only once what the steps read is in (the brief, the rules, the
+  // to-dos), not while a reopened page is still loading.
+  const nextRead = reads.brief.status !== 'loading' && rules.ready && (!qualityOn || todosRead);
+  const staleSkips =
+    nextRead && Object.keys(liveSkips(nextState)).length !== Object.keys(skipped).length;
+  useEffect(() => {
+    if (!staleSkips) return;
+    setSkipped((prev) => {
+      const live = liveSkips({ ...nextState, skipped: prev });
+      writeSkips(draft.id, live);
+      return live;
+    });
+    // nextState is read as it is when a skip goes stale.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [staleSkips, draft.id]);
+  // It starts open on a new page, and folds once its first step (the brief)
+  // is done; Skip or another step doesn't fold it.
+  const nextShownOnce = useRef<'no' | 'open' | 'done'>('no');
+  const startsNew = next.step.id === 'plan' && nextState.empty;
+  const planned = nextState.hasBrief === true;
+  useEffect(() => {
+    if (!qualityOn) return;
+    if (nextShownOnce.current === 'no' && startsNew) {
+      nextShownOnce.current = 'open';
+      setNextFocus(false);
+      setNextOpen(true);
+    } else if (nextShownOnce.current === 'open' && planned) {
+      nextShownOnce.current = 'done';
+      setNextOpen(false);
+    }
+  }, [qualityOn, startsNew, planned]);
+  /** Why a step's button can't run now, as the buttons it stands for say. */
+  const nextBlocked = (action: NextAction): string | null => {
+    switch (action) {
+      case 'buildBrief':
+        return agentBusy ? t('suggestions.agentBusy') : null;
+      case 'writeWithAgent':
+        return agentRewrite?.blocked ?? null;
+      case 'rewritePage':
+        return pageRewrite?.blocked ?? null;
+      case 'fixRules':
+        return agentFix.blocked;
+      default:
+        return null;
+    }
+  };
+  /** A step's button: the one the editor already has for it. */
+  const runNext = (action: NextAction) => {
+    setNextOpen(false);
+    switch (action) {
+      case 'buildBrief':
+        if (!panelOpen) togglePanel();
+        setTabRequest((prev) => ({ tab: 'brief', n: (prev?.n ?? 0) + 1, build: true }));
+        return;
+      case 'writeWithAgent':
+        agentRewrite?.run();
+        return;
+      case 'writeMyself':
+        skipStep(next.step.id);
+        editor?.commands.focus('end');
+        return;
+      case 'rewritePage':
+        pageRewrite?.run();
+        return;
+      case 'fixRules':
+        agentFix.run();
+        return;
+      case 'pickAuthor':
+        setAuthorMenuOpen(true);
+        return;
+      case 'addAuthor':
+        router.push(MANAGE_AUTHORS_PATH);
+        return;
+      case 'showTodos':
+        openPanelTab('quality');
+        return;
+      case 'beforePublish':
+        openBeforePublish('markReady');
+        return;
+      case 'markReady':
+        void markReady();
+        return;
+      case 'export':
+        openBeforePublish('export');
+        return;
+    }
+  };
+
   // A version from History replaces the page: what's waiting is saved first,
   // as the server keeps the page it replaces, and the page can't change
   // while the restore runs.
@@ -1623,6 +1765,31 @@ export function DraftEditor({
             {title.trim() || t('untitled')}
           </h1>
           <div className="ml-auto flex shrink-0 items-center gap-1.5 sm:gap-3">
+            {qualityOn && (
+              <NextStepButton
+                next={next}
+                state={nextState}
+                todoLine={todoLine}
+                open={nextOpen}
+                onOpenChange={(open) => {
+                  setNextFocus(true);
+                  setNextOpen(open);
+                }}
+                focusOnOpen={nextFocus}
+                onAction={runNext}
+                onSkip={skipStep}
+                blocked={nextBlocked}
+                working={
+                  agentWorking
+                    ? {
+                        run: agentRun,
+                        onStop: () => void stopAgent(),
+                        stopping: stoppingRun !== null && stoppingRun === agentRun?.id,
+                      }
+                    : null
+                }
+              />
+            )}
             <SaveIndicator state={autosave.state} onRetry={() => void autosave.retry()} />
             <HistoryMenu
               draftId={draft.id}
@@ -1848,6 +2015,20 @@ export function DraftEditor({
                 if (pageSuggestion) void decidePage(pageSuggestion, to);
               }}
               runBlocked={cardRunBlocked}
+              // Once nothing is left to decide, the basket's step (Next step spec §3).
+              next={
+                qualityOn
+                  ? {
+                      label: t(`nextStep.actions.${next.step.primary}`),
+                      onRun: () => runNext(next.step.primary),
+                      blocked: nextBlocked(next.step.primary),
+                    }
+                  : null
+              }
+              onAllSteps={() => {
+                setNextFocus(true);
+                setNextOpen(true);
+              }}
             />
           )}
           {editor && (
@@ -1927,6 +2108,9 @@ export function DraftEditor({
             lastSuggestionAt={suggestions[0]?.createdAt ?? null}
             onSourceShown={() =>
               setTabRequest((prev) => (prev?.source ? { tab: prev.tab, n: prev.n } : prev))
+            }
+            onBuildStarted={() =>
+              setTabRequest((prev) => (prev?.build ? { tab: prev.tab, n: prev.n } : prev))
             }
             onBriefRebuilding={onBriefRebuilding}
             briefBlocked={agentBusy && !briefRebuilding ? t('suggestions.agentBusy') : null}
