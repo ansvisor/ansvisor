@@ -33,6 +33,7 @@ import { KpiTable } from '@/components/action-center/kpi-table';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
+import { HeaderWithAiUsage } from '@/components/ai-usage/ai-usage-meter';
 
 type KpiDatePreset = '7d' | '30d' | '90d';
 const KPI_DATE_PRESETS: readonly KpiDatePreset[] = ['7d', '30d', '90d'];
@@ -50,10 +51,12 @@ export default function ActionCenterKpisPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">{t('title')}</h1>
-        <p className="mt-1 text-sm text-muted-foreground">{t('subtitle')}</p>
-      </div>
+      <HeaderWithAiUsage>
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">{t('title')}</h1>
+          <p className="mt-1 text-sm text-muted-foreground">{t('subtitle')}</p>
+        </div>
+      </HeaderWithAiUsage>
       <ActionCenterTabs />
       {brand ? (
         <KpisContent key={brand.id} brand={brand} />

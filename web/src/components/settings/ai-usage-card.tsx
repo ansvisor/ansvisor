@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -28,6 +28,7 @@ export function AiUsageCard() {
   // Undefined while it is read; null when there is no allowance to meter.
   const [usage, setUsage] = useState<AiUsage | null | undefined>(undefined);
   const [failed, setFailed] = useState(false);
+  const card = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -44,6 +45,14 @@ export function AiUsageCard() {
     };
   }, []);
 
+  // The header meter's "See details" (#ai-usage) lands here: the card shows
+  // only once Billing has read the plan, after the browser looked for it.
+  useEffect(() => {
+    if (usage && window.location.hash === '#ai-usage') {
+      card.current?.scrollIntoView({ block: 'start' });
+    }
+  }, [usage]);
+
   if (usage === null || usage?.unlimited) return null;
 
   const tone = usage ? aiUsageTone(usage) : 'normal';
@@ -58,7 +67,7 @@ export function AiUsageCard() {
   const used = t('used', { percent: percentLabel(usage?.percentUsed ?? 0) });
 
   return (
-    <Card>
+    <Card id="ai-usage" ref={card} className="scroll-mt-6">
       <CardHeader>
         <CardTitle>{t('title')}</CardTitle>
         <CardDescription>{t('description')}</CardDescription>

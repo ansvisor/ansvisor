@@ -8,6 +8,7 @@ import { BrandsClient } from './_brands-client';
 import { WorkspaceSettingsMenu } from '@/components/layout/workspace-settings-menu';
 import { Button } from '@/components/ui/button';
 import { Crown, Plus } from 'lucide-react';
+import { HeaderWithAiUsage } from '@/components/ai-usage/ai-usage-meter';
 
 function BrandsHeader({
   canManage,
@@ -21,30 +22,32 @@ function BrandsHeader({
 }) {
   const t = useTranslations('brands');
   return (
-    <div className="flex flex-wrap items-center justify-between gap-4">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">{t('title')}</h1>
-        <p className="text-muted-foreground text-sm">{t('description')}</p>
+    <HeaderWithAiUsage>
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">{t('title')}</h1>
+          <p className="text-muted-foreground text-sm">{t('description')}</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <WorkspaceSettingsMenu />
+          {!canManage ? null : canAddBrand ? (
+            <Link href="/dashboard/brands/new">
+              <Button className="gap-2">
+                <Plus className="h-4 w-4" />
+                {t('addBrand')}
+              </Button>
+            </Link>
+          ) : needsUpgrade ? (
+            <Link href="/dashboard/settings?tab=billing">
+              <Button variant="outline" className="gap-2">
+                <Crown className="h-4 w-4" />
+                {t('addBrand')}
+              </Button>
+            </Link>
+          ) : null}
+        </div>
       </div>
-      <div className="flex items-center gap-2">
-        <WorkspaceSettingsMenu />
-        {!canManage ? null : canAddBrand ? (
-          <Link href="/dashboard/brands/new">
-            <Button className="gap-2">
-              <Plus className="h-4 w-4" />
-              {t('addBrand')}
-            </Button>
-          </Link>
-        ) : needsUpgrade ? (
-          <Link href="/dashboard/settings?tab=billing">
-            <Button variant="outline" className="gap-2">
-              <Crown className="h-4 w-4" />
-              {t('addBrand')}
-            </Button>
-          </Link>
-        ) : null}
-      </div>
-    </div>
+    </HeaderWithAiUsage>
   );
 }
 

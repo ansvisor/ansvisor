@@ -95,6 +95,9 @@ vi.mock('@/hooks/use-user-role', () => ({ useUserRole: () => role }));
 vi.mock('@/lib/actions/team', () => ({ listMembers: vi.fn(async () => []) }));
 vi.mock('@/lib/download', () => ({ saveBlob }));
 vi.mock('sonner', () => ({ toast }));
+vi.mock('@/components/ai-usage/ai-usage-meter', () => ({
+  HeaderWithAiUsage: ({ children }: { children: React.ReactNode }) => children,
+}));
 vi.mock('@/components/action-center/action-center-tabs', () => ({ ActionCenterTabs: () => null }));
 vi.mock('@/components/action-center/action-table', () => ({ ActionTable: () => null }));
 vi.mock('@/components/action-center/action-drawer', () => ({ ActionDrawer: () => null }));

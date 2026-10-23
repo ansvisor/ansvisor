@@ -25,6 +25,21 @@ export interface AiUsage {
   features: { feature: AiUsageFeature; percent: number }[];
 }
 
+/** A count against its plan's limit this period. */
+export interface UsageCount {
+  used: number;
+  limit: number;
+}
+
+/**
+ * The limits that aren't AI, beside the header meter (AI usage spec §2):
+ * each null when the plan has no cap or it couldn't be read.
+ */
+export interface UsageLimits {
+  auditPages: UsageCount | null;
+  promptLocations: UsageCount | null;
+}
+
 /**
  * A share as it reads: a sliver as "<1%", else whole percents, rounded down
  * so nothing reads as all of it before it is (the server sends 100 only

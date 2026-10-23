@@ -118,6 +118,7 @@ import { LoadingDots } from '@/components/ui/loading-dots';
 import { PAGE_SIZE, TablePager, usePagination } from '@/components/table-pager';
 import { toCsv } from '@/lib/csv';
 import { readUrlChoice, writeUrlParams } from '@/lib/url-state';
+import { HeaderWithAiUsage } from '@/components/ai-usage/ai-usage-meter';
 
 const GENERATION_STORAGE_KEY = 'aeo:content-generation';
 
@@ -1049,34 +1050,36 @@ export default function ContentPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between gap-4 flex-wrap">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">{t('title')}</h1>
-          <p className="text-muted-foreground text-sm">{t('description')}</p>
+      <HeaderWithAiUsage>
+        <div className="flex items-center justify-between gap-4 flex-wrap">
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight">{t('title')}</h1>
+            <p className="text-muted-foreground text-sm">{t('description')}</p>
+          </div>
+          <div className="flex items-center gap-2">
+            {newButton}
+            <Button
+              onClick={handleExportCsv}
+              disabled={exporting || loading || total === 0}
+              variant="outline"
+              size="sm"
+              className="gap-2"
+            >
+              {exporting ? <LoadingDots /> : <Download className="h-4 w-4" />}
+              {tCommon('exportCsv')}
+            </Button>
+            <Button
+              onClick={() => setWebhookOpen(true)}
+              variant="outline"
+              size="sm"
+              className="gap-2"
+            >
+              <Settings2 className="h-4 w-4" />
+              {t('webhook.title')}
+            </Button>
+          </div>
         </div>
-        <div className="flex items-center gap-2">
-          {newButton}
-          <Button
-            onClick={handleExportCsv}
-            disabled={exporting || loading || total === 0}
-            variant="outline"
-            size="sm"
-            className="gap-2"
-          >
-            {exporting ? <LoadingDots /> : <Download className="h-4 w-4" />}
-            {tCommon('exportCsv')}
-          </Button>
-          <Button
-            onClick={() => setWebhookOpen(true)}
-            variant="outline"
-            size="sm"
-            className="gap-2"
-          >
-            <Settings2 className="h-4 w-4" />
-            {t('webhook.title')}
-          </Button>
-        </div>
-      </div>
+      </HeaderWithAiUsage>
 
       {loading && opportunities.length === 0 ? (
         <div className="flex items-center justify-center min-h-[300px]">

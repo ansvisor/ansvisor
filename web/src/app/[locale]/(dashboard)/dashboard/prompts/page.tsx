@@ -224,6 +224,7 @@ import {
   type PositionsRange,
 } from '@/lib/positions-range';
 import { viewerTimeZone } from '@/lib/time-zone';
+import { HeaderWithAiUsage } from '@/components/ai-usage/ai-usage-meter';
 
 // ─── Info Tooltip ─────────────────────────────────────────────────────────────
 
@@ -1887,14 +1888,16 @@ export default function PromptsPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between gap-4 flex-wrap">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Prompts</h1>
-          <p className="text-muted-foreground text-sm">
-            Manage every tracked prompt and review estimated AI demand
-          </p>
+      <HeaderWithAiUsage>
+        <div className="flex items-center justify-between gap-4 flex-wrap">
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight">Prompts</h1>
+            <p className="text-muted-foreground text-sm">
+              Manage every tracked prompt and review estimated AI demand
+            </p>
+          </div>
         </div>
-      </div>
+      </HeaderWithAiUsage>
 
       <Tabs value={tab} onValueChange={(v) => showSection(v as TabId, view)}>
         <div className="flex items-center justify-between gap-4 flex-wrap">

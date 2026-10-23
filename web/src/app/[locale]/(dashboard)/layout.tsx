@@ -5,6 +5,7 @@ import { SidebarErrorBoundary } from '@/components/layout/sidebar-error-boundary
 import { MobileNav } from '@/components/layout/mobile-nav';
 import { AuthProvider } from '@/components/providers/auth-provider';
 import { PlanProvider } from '@/components/providers/plan-provider';
+import { AiUsageProvider } from '@/components/providers/ai-usage-provider';
 import { RoleProvider, type TeamRole } from '@/components/providers/role-provider';
 import { BrandLoader } from '@/components/providers/brand-loader';
 import { BrandGuard } from '@/components/providers/brand-guard';
@@ -88,25 +89,27 @@ export default async function DashboardLayout({ children }: { children: React.Re
       <GettingStartedPageOpened />
       <PlanProvider planId={planId} allowedModelIds={allowedModelIds}>
         <RoleProvider role={role}>
-          <div className="flex h-screen overflow-hidden">
-            {/* Desktop sidebar */}
-            <div className="relative hidden md:flex md:flex-shrink-0">
-              <SidebarErrorBoundary>
-                <Sidebar />
-              </SidebarErrorBoundary>
-            </div>
-
-            {/* Main area */}
-            <div className="flex flex-1 flex-col overflow-hidden">
-              <div className="flex h-16 items-center border-b bg-card px-4 gap-3 md:hidden">
-                <MobileNav />
+          <AiUsageProvider>
+            <div className="flex h-screen overflow-hidden">
+              {/* Desktop sidebar */}
+              <div className="relative hidden md:flex md:flex-shrink-0">
+                <SidebarErrorBoundary>
+                  <Sidebar />
+                </SidebarErrorBoundary>
               </div>
-              <main className="flex-1 overflow-y-auto bg-background p-6">
-                <BrandGuard>{children}</BrandGuard>
-              </main>
-              <TrackingJobHandoff />
+
+              {/* Main area */}
+              <div className="flex flex-1 flex-col overflow-hidden">
+                <div className="flex h-16 items-center border-b bg-card px-4 gap-3 md:hidden">
+                  <MobileNav />
+                </div>
+                <main className="flex-1 overflow-y-auto bg-background p-6">
+                  <BrandGuard>{children}</BrandGuard>
+                </main>
+                <TrackingJobHandoff />
+              </div>
             </div>
-          </div>
+          </AiUsageProvider>
         </RoleProvider>
       </PlanProvider>
     </>

@@ -12,6 +12,32 @@
     "reload": "Reload",
     "upgrade": "Upgrade"
   },
+  "aiUsage": {
+    "meter": {
+      "ai": "AI",
+      "label": "AI {percent} used this month",
+      "labelWarning": "AI {percent} used this month, close to the limit",
+      "labelExhausted": "AI {percent} used this month, the limit is reached"
+    },
+    "popover": {
+      "title": "AI usage this month · {plan} plan",
+      "titleNoPlan": "AI usage this month",
+      "shared": "Shared by every seat · resets {date}",
+      "sharedNoDate": "Shared by every seat",
+      "exhausted": "Used up. AI features stop until {date}; Agent Chat on your own AI key keeps working.",
+      "exhaustedNoDate": "Used up. AI features stop until it resets; Agent Chat on your own AI key keeps working.",
+      "ownKey": "Agent Chat, on your own AI key",
+      "notCounted": "Not counted",
+      "otherLimits": "Other limits this month",
+      "auditPages": "Site Audit pages",
+      "promptLocations": "Prompt locations",
+      "ofLimit": "{used} of {limit}",
+      "askAdmin": "To get more AI usage or use your own key, ask an admin of your workspace.",
+      "getMore": "Get more AI usage",
+      "useOwnKey": "Use your own key",
+      "details": "See details"
+    }
+  },
   "common": {
     "loading": "Loading...",
     "error": "Something went wrong.",

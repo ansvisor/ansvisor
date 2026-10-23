@@ -85,6 +85,7 @@ import {
 } from '@/components/ui/table';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
+import { HeaderWithAiUsage } from '@/components/ai-usage/ai-usage-meter';
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
@@ -1180,34 +1181,36 @@ export default function CitationsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold">{t('title')}</h1>
-          <p className="mt-1 text-sm text-muted-foreground">{t('description')}</p>
-        </div>
-        <span
-          title={
-            sourceTab === 'types'
-              ? 'Source Types is a chart breakdown, not exportable — switch to Domains, URLs, or Competitor Gaps to export.'
-              : undefined
-          }
-        >
-          <Button
-            variant="outline"
-            className="gap-2"
-            onClick={handleExportCsv}
-            disabled={exportDisabled}
+      <HeaderWithAiUsage>
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-bold">{t('title')}</h1>
+            <p className="mt-1 text-sm text-muted-foreground">{t('description')}</p>
+          </div>
+          <span
+            title={
+              sourceTab === 'types'
+                ? 'Source Types is a chart breakdown, not exportable — switch to Domains, URLs, or Competitor Gaps to export.'
+                : undefined
+            }
           >
-            {isExporting ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <Download className="h-4 w-4" />
-            )}
+            <Button
+              variant="outline"
+              className="gap-2"
+              onClick={handleExportCsv}
+              disabled={exportDisabled}
+            >
+              {isExporting ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Download className="h-4 w-4" />
+              )}
 
-            {isExporting ? tCommon('exporting') : tCommon('exportCsv')}
-          </Button>
-        </span>
-      </div>
+              {isExporting ? tCommon('exporting') : tCommon('exportCsv')}
+            </Button>
+          </span>
+        </div>
+      </HeaderWithAiUsage>
 
       <CitationsFilterBar
         filters={filters}
