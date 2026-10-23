@@ -214,7 +214,9 @@ Google Analytics also counts its own **AI Assistant** channel, so an assistant t
 
 ## Privacy
 
-The snippet sends nothing unless the visitor arrived from an AI assistant on the list above. For an AI-referred visit it sends the page address, the referrer, the AI source, the browser's user agent, language and screen size, and the page's HTTP status as the browser saw it. Ansvisor adds the visitor's IP address, which groups a visit's pageviews into one visit, and the country the request came from. **The snippet sets no cookies and stores nothing in the visitor's browser.**
+The snippet sends nothing unless the visitor arrived from an AI assistant on the list above. For an AI-referred visit it sends the page address, the referrer, the AI source, the browser's user agent, language and screen size, and the page's HTTP status as the browser saw it. Ansvisor adds the country the request came from. **The snippet sets no cookies and stores nothing in the visitor's browser.**
+
+**The visitor's IP address is never stored.** To group a visit's pageviews into one visit, Ansvisor keeps a one-way key made from the IP address, your brand and a random salt that changes every day. Each day's salt is deleted after two days. From then on, nothing links a key to an address, and one visitor's days can't be joined. A visit that runs past midnight (UTC) counts as two.
 
 AI-bot requests from Cloudflare or Vercel are stored without IP addresses.
 
