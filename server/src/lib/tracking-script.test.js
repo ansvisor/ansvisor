@@ -1,6 +1,12 @@
 import { runInNewContext } from 'vm';
 import { describe, expect, it } from 'vitest';
-import { AI_SOURCES, AI_SOURCES_VERSION, classifyAiSource } from './ai-sources.js';
+import {
+  AI_SOURCES,
+  AI_SOURCES_VERSION,
+  classifyAiSource,
+  classifyAiSurface,
+  landingMedium,
+} from './ai-sources.js';
 import { buildTrackingScript } from './tracking-script.js';
 
 /**
@@ -116,6 +122,25 @@ describe('the tracking snippet', () => {
     expect(visit({ search: '?utm_source=Perplexity' }).s).toBe('perplexity.ai');
     // A name inside another tag isn't an engine.
     expect(visit({ search: '?utm_source=newsletter-chatgpt-tips' })).toBeNull();
+  });
+
+  // #1283: a ChatGPT Shopping product card opens the product's feed link.
+  it('counts a ChatGPT Shopping product card as ChatGPT, sending the URL that says so', () => {
+    const search = '?utm_source=chatgpt.com&utm_medium=feed';
+    for (const referrer of ['', 'https://chatgpt.com/']) {
+      const beacon = visit({ referrer, search });
+      expect(beacon, referrer).toMatchObject({
+        s: 'chatgpt.com',
+        v: AI_SOURCES_VERSION,
+        u: `https://acme.example/menu${search}`,
+      });
+      // The server reads the surface from that URL.
+      expect(classifyAiSurface(beacon.s, landingMedium(beacon.u))).toBe('shopping');
+    }
+    // A ChatGPT answer's link: plain ChatGPT.
+    const answer = visit({ search: '?utm_source=chatgpt.com' });
+    expect(answer.s).toBe('chatgpt.com');
+    expect(classifyAiSurface(answer.s, landingMedium(answer.u))).toBeNull();
   });
 
   it('counts Bing only from a Copilot answer link', () => {

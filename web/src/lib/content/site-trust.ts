@@ -1,6 +1,6 @@
 /**
  * A brand's site trust (Content Editor Quality spec §8, CE-043), as the API
- * reads it (site-trust.js, site_trust 00254): five site-level checks, shown
+ * reads it (site-trust.js, site_trust 00255): five site-level checks, shown
  * in Site Audit as "Site trust {n}/5" and worth 5 Trust points on every page.
  */
 

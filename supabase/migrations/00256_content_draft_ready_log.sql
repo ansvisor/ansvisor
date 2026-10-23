@@ -1,5 +1,5 @@
 -- ============================================================================
--- 00255: Mark ready anyway, logged (Content Editor Quality, CE-041)
+-- 00256: Mark ready anyway, logged (Content Editor Quality, CE-041)
 -- ============================================================================
 -- Before you publish (Quality spec §7) warns when a page's Trust is under 60
 -- and still lets the person mark it ready: "Mark ready anyway (logged)".

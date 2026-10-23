@@ -1,8 +1,8 @@
 -- ============================================================================
--- 00252: a page's author (Content Editor Quality, CE-038)
+-- 00253: a page's author (Content Editor Quality, CE-038)
 -- ============================================================================
 -- content_drafts.author_id: the real person the page is by (content_authors,
--- 00251). It is page metadata: the editor shows it in its Page info strip,
+-- 00252). It is page metadata: the editor shows it in its Page info strip,
 -- outside the page, and Ansvisor sends it to the CMS author field; it is
 -- never in the page's text. (The draft's `author` column, 'user' or 'agent',
 -- says who wrote the text: another thing.)
