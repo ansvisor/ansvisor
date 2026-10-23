@@ -30,6 +30,16 @@ export interface AuthorsRead {
   me: { id: string; role: string };
 }
 
+/** "Ada Lovelace" → "AL": an author's face without a photo. */
+export function authorInitials(name: string): string {
+  return name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part.charAt(0).toUpperCase())
+    .join('');
+}
+
 /** The most profile links an author keeps (00251). */
 export const MAX_PROFILES = 10;
 /** The longest profile link. */

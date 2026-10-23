@@ -40,7 +40,7 @@ import {
 import { getContentAuthors } from '@/lib/actions/content-authors';
 import { stopAgentRun } from '@/lib/content/agent-runs-client';
 import { agentWriteRequest, useRuleDescriber } from '@/lib/content/agent-write';
-import type { AuthorsRead } from '@/lib/content/authors';
+import { authorInitials, type AuthorsRead } from '@/lib/content/authors';
 import {
   AGENT_POLL_MS,
   CONTENT_LIBRARY_PATH,
@@ -437,7 +437,7 @@ export function DraftEditor({
         t('author.by', {
           name: pageAuthor?.name ?? t('author.organization', { brand: brandName }),
         }),
-        pageAuthor?.title,
+        pageAuthor?.title && t('author.titleAt', { title: pageAuthor.title, brand: brandName }),
         t('author.updated', {
           date: format.dateTime(
             Math.max(
@@ -454,9 +454,19 @@ export function DraftEditor({
   useEffect(() => {
     if (!editor || editor.isDestroyed) return;
     editor.view.dispatch(
-      editor.state.tr.setMeta(pageInfoKey, byline ? { label: t('author.pageInfo'), byline } : null),
+      editor.state.tr.setMeta(
+        pageInfoKey,
+        byline
+          ? {
+              label: t('author.pageInfo'),
+              byline,
+              initials: authorInitials(pageAuthor?.name ?? brandName),
+              photoUrl: pageAuthor?.photoUrl ?? null,
+            }
+          : null,
+      ),
     );
-  }, [editor, byline, t]);
+  }, [editor, byline, pageAuthor?.name, pageAuthor?.photoUrl, brandName, t]);
   const pickAuthor = async (next: string | null) => {
     if (next === authorId) return;
     const pick = ++authorPick.current;

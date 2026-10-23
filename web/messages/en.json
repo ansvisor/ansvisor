@@ -4093,6 +4093,7 @@
         "manage": "Manage authors",
         "failed": "Couldn't change the author.",
         "pageInfo": "Page info · shown by your CMS, not part of the content",
+        "titleAt": "{title}, {brand}",
         "updated": "Updated {date}"
       },
       "qualityChip": "Quality {score}",

@@ -33,6 +33,7 @@ import {
   setDefaultAuthor,
 } from '@/lib/actions/content-authors';
 import {
+  authorInitials,
   MAX_LINK_LENGTH,
   MAX_PROFILES,
   type AuthorInput,
@@ -315,11 +316,7 @@ export function AuthorsSection() {
 
 /** The author's photo, or their initials. */
 function AuthorPhoto({ author }: { author: ContentAuthor }) {
-  const initials = author.name
-    .split(/\s+/)
-    .slice(0, 2)
-    .map((part) => part[0]?.toUpperCase() ?? '')
-    .join('');
+  const initials = authorInitials(author.name);
   return author.photoUrl ? (
     // eslint-disable-next-line @next/next/no-img-element -- any https host the person names
     <img

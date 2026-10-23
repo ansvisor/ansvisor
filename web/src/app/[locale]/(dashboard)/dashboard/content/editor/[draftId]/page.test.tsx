@@ -2264,8 +2264,8 @@ describe('the side panel', () => {
       getContentDraft.mockResolvedValue(draft({ authorId: 'a1' }));
       await renderPage();
       expect(byButton()!.textContent).toBe('By Ada Lovelace');
-      expect(strip()!.textContent).toMatch(
-        /^Page info · shown by your CMS, not part of the contentBy Ada Lovelace · Head of Content · Updated Oct 20, 2026$/,
+      expect(strip()!.textContent).toBe(
+        'ALBy Ada Lovelace · Head of Content, Acme · Updated Oct 20, 2026Page info · shown by your CMS, not part of the content',
       );
       expect(strip()!.previousElementSibling?.tagName).toBe('H1');
 

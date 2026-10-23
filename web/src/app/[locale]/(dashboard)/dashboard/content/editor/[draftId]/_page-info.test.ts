@@ -18,7 +18,9 @@ const open = (content: string) => {
 
 const INFO = {
   label: 'Page info · shown by your CMS, not part of the content',
-  byline: 'By Ada Lovelace · Head of Content · Updated Oct 23, 2026',
+  byline: 'By Ada Lovelace · Head of Content, Acme · Updated Oct 23, 2026',
+  initials: 'AL',
+  photoUrl: null as string | null,
 };
 
 const show = (e: Editor, info: typeof INFO | null) =>
@@ -31,7 +33,8 @@ describe('PageInfoStrip', () => {
     show(e, INFO);
 
     const strip = e.view.dom.querySelector<HTMLElement>('[data-page-info]')!;
-    expect(strip.textContent).toBe(INFO.label + INFO.byline);
+    // One line, as the mockup: the author's initials, the byline, the label.
+    expect(strip.textContent).toBe(INFO.initials + INFO.byline + INFO.label);
     expect(strip.contentEditable).toBe('false');
     expect(strip.previousElementSibling?.tagName).toBe('H1');
     // No save, export, Copy HTML or HTML view has it: they read the page.
@@ -87,6 +90,17 @@ describe('PageInfoStrip', () => {
           : el.tagName,
     );
     expect(order).toEqual(['H1', 'strip', 'card', 'P']);
+  });
+
+  it("shows the author's photo instead of initials when they have one", () => {
+    const e = open('<h1>Title</h1><p>Text</p>');
+    show(e, { ...INFO, photoUrl: 'https://example.com/ada.jpg' });
+    const img = e.view.dom.querySelector<HTMLImageElement>('[data-page-info] img')!;
+    expect(img.src).toBe('https://example.com/ada.jpg');
+    expect(img.alt).toBe('');
+    expect(e.view.dom.querySelector('[data-page-info]')!.textContent).toBe(
+      INFO.byline + INFO.label,
+    );
   });
 
   it('goes at the top of a page that has no H1 first', () => {
