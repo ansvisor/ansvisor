@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { getPlatformFilterItems } from './_charts';
-import { getPlatformName } from '@/lib/traffic-platforms';
+import { getPlatformName, platformTableRows } from '@/lib/traffic-platforms';
 import dynamic from 'next/dynamic';
 import { Skeleton } from '@/components/ui/skeleton';
 const ReferralTrendChart = dynamic(() => import('./_charts').then((m) => m.ReferralTrendChart), {
@@ -856,14 +856,36 @@ function TrafficPageContent({ brand }: { brand: Brand }) {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {(summary?.platformBreakdown ?? []).map((row) => (
-                          <TableRow key={row.platform} className="hover:bg-muted/50">
-                            <TableCell className="pl-6">
-                              <span className="font-medium text-sm">
-                                {getPlatformName(row.platform)}
-                              </span>
+                        {platformTableRows(summary?.platformBreakdown ?? []).map((row) => (
+                          <TableRow
+                            key={`${row.platform}|${row.surface ?? ''}`}
+                            className="hover:bg-muted/50"
+                          >
+                            <TableCell className={row.surface ? 'pl-10' : 'pl-6'}>
+                              {row.surface ? (
+                                // Part of its platform's row above (#1283).
+                                <span
+                                  className="text-sm text-muted-foreground"
+                                  title={t(`platforms.surfaceTips.${row.surface}`, {
+                                    platform: getPlatformName(row.platform),
+                                  })}
+                                >
+                                  {t(`platforms.surfaceNames.${row.surface}`, {
+                                    platform: getPlatformName(row.platform),
+                                  })}
+                                </span>
+                              ) : (
+                                <span className="font-medium text-sm">
+                                  {getPlatformName(row.platform)}
+                                </span>
+                              )}
                             </TableCell>
-                            <TableCell className="text-right font-semibold tabular-nums">
+                            <TableCell
+                              className={cn(
+                                'text-right tabular-nums',
+                                row.surface ? 'text-muted-foreground' : 'font-semibold',
+                              )}
+                            >
                               {formatNumber(row.visits)}
                             </TableCell>
                             <TableCell className="text-right">

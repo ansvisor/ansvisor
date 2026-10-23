@@ -22,7 +22,7 @@ import type {
   TrafficTrendPoint,
 } from '@/lib/actions/traffic';
 import { csvLine } from '@/lib/csv';
-import { getPlatformName } from '@/lib/traffic-platforms';
+import { getPlatformName, platformTableRows } from '@/lib/traffic-platforms';
 import { pageStatuses } from '@/lib/traffic-pages';
 import { conversionRate } from '@/lib/traffic-conversions';
 import { ctrPct, impressionsRise } from '@/lib/traffic-google-pages';
@@ -198,18 +198,26 @@ function platforms(data: TrafficExportData, label: ExportLabel): ExportTable {
       label('columns.keyEvents'),
       label('columns.note'),
     ],
-    rows: (s?.platformBreakdown ?? []).map((row) => {
+    // A surface's row (ChatGPT Shopping, #1283) under its platform's, as the
+    // table shows it, says it's part of that platform's visits: summing the
+    // column would count them twice.
+    rows: platformTableRows(s?.platformBreakdown ?? []).map((row) => {
       const delta = change(row.visits, row.visitsPrev, s!.hasPreviousPeriod, label);
       const ga = row.analytics;
+      const platform = getPlatformName(row.platform);
+      const notes = [
+        row.surface ? label('notes.partOfPlatform', { platform }) : '',
+        delta.note,
+      ].filter(Boolean);
       return [
-        getPlatformName(row.platform),
+        row.surface ? label(`surfaceNames.${row.surface}`, { platform }) : platform,
         row.visits,
         s!.hasPreviousPeriod ? row.visitsPrev : null,
         delta.pct,
         total > 0 ? Math.round((row.visits / total) * 1000) / 10 : null,
         ga && ga.sessions > 0 ? Math.round((ga.engagedSessions / ga.sessions) * 1000) / 10 : null,
         ga ? ga.keyEvents : null,
-        delta.note || null,
+        notes.join('; ') || null,
       ];
     }),
   };

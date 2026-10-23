@@ -2,8 +2,9 @@
 
 import { useRef, useState, useEffect } from 'react';
 import { useTranslations } from 'next-intl';
-import { getPlatformName } from '@/lib/traffic-platforms';
+import { getPlatformName, type PlatformSurface } from '@/lib/traffic-platforms';
 import { formatNumber } from '@/lib/format';
+import { cn } from '@/lib/utils';
 import {
   AreaChart,
   Area,
@@ -192,13 +193,23 @@ function PieTooltip({
 
 // ─── Bar List ─────────────────────────────────────────────────────────────────
 
-function BarList({ data }: { data: { name: string; value: number; color: string }[] }) {
+function BarList({
+  data,
+}: {
+  /** `sub`: a surface's bar, under its platform's (ChatGPT Shopping, #1283). */
+  data: { key: string; name: string; value: number; color: string; sub?: boolean; tip?: string }[];
+}) {
   const max = Math.max(...data.map((d) => d.value), 1);
   return (
     <div className="w-full space-y-2">
       {data.map((item) => (
-        <div key={item.name} className="flex items-center gap-2 text-xs">
-          <span className="w-20 shrink-0 text-muted-foreground truncate">{item.name}</span>
+        <div key={item.key} className="flex items-center gap-2 text-xs">
+          <span
+            className={cn('w-20 shrink-0 text-muted-foreground truncate', item.sub && 'pl-3')}
+            title={item.tip}
+          >
+            {item.name}
+          </span>
           <div className="flex-1 h-1.5 rounded-full bg-muted overflow-hidden">
             <div
               className="h-full rounded-full transition-all"
@@ -439,17 +450,46 @@ export function GoogleTrendChart({
   );
 }
 
-export function PlatformBreakdownChart({ data }: { data: { platform: string; visits: number }[] }) {
+export function PlatformBreakdownChart({
+  data,
+}: {
+  data: {
+    platform: string;
+    visits: number;
+    surfaces?: { surface: PlatformSurface; visits: number }[];
+  }[];
+}) {
+  const t = useTranslations('traffic.platforms');
   const [hovered, setHovered] = useState<string | null>(null);
 
   const total = data.reduce((s, d) => s + d.visits, 0) || 1;
+  const share = (visits: number) => Math.round((visits / total) * 100);
   const pieData = data
     .filter((d) => d.visits > 0)
     .map((d) => ({
       name: getPlatformName(d.platform),
-      value: Math.round((d.visits / total) * 100),
+      value: share(d.visits),
       color: getColor(d.platform),
     }));
+  // The bars add each platform's surfaces under it. They're part of its
+  // slice, so the pie leaves them out.
+  const bars = data
+    .filter((d) => d.visits > 0)
+    .flatMap((d) => {
+      const name = getPlatformName(d.platform);
+      const color = getColor(d.platform);
+      return [
+        { key: d.platform, name, value: share(d.visits), color },
+        ...(d.surfaces ?? []).map((s) => ({
+          key: `${d.platform}|${s.surface}`,
+          name: t(`surfaces.${s.surface}`),
+          value: share(s.visits),
+          color,
+          sub: true,
+          tip: t(`surfaceTips.${s.surface}`, { platform: name }),
+        })),
+      ];
+    });
 
   if (!pieData.length) return null;
 
@@ -484,7 +524,7 @@ export function PlatformBreakdownChart({ data }: { data: { platform: string; vis
           );
         }}
       </ChartContainer>
-      <BarList data={pieData} />
+      <BarList data={bars} />
     </div>
   );
 }

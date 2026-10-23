@@ -6,7 +6,7 @@ import { createClient } from '@/lib/supabase/server';
 
 /**
  * Settings › Authors (Content Editor Quality spec §9, CE-037): the real
- * people a page is by, in the workspace (content_authors, 00251). Anyone
+ * people a page is by, in the workspace (content_authors, 00252). Anyone
  * adds one; whoever added it, the author themself or an admin edits or
  * deletes it (RLS); only a member links or unlinks themself; admins and
  * managers set each brand's default. The Content Agent never writes them.

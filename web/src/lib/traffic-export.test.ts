@@ -54,9 +54,10 @@ const data = (over: Partial<TrafficExportData> = {}): TrafficExportData => ({
         visits: 40,
         visitsPrev: 33,
         analytics: { sessions: 44, engagedSessions: 33, keyEvents: 6, keyEventSessions: 5 },
+        surfaces: [],
       },
-      { platform: 'gemini.google.com', visits: 12, visitsPrev: 5, analytics: null },
-      { platform: 'claude.ai', visits: 3, visitsPrev: 0, analytics: null },
+      { platform: 'gemini.google.com', visits: 12, visitsPrev: 5, analytics: null, surfaces: [] },
+      { platform: 'claude.ai', visits: 3, visitsPrev: 0, analytics: null, surfaces: [] },
     ],
     topPages: [{ url: '/pricing', visits: 35, visitsPrev: 30, citations: 4 }],
     hasAnyData: true,
@@ -149,6 +150,44 @@ describe('trafficTable', () => {
       ['Gemini', 12, 5, null, 21.8, null, null, expect.stringContaining('Low sample')],
       ['Claude', 3, 0, null, 5.5, null, null, expect.stringContaining('New')],
     ]);
+  });
+
+  // #1283
+  it('lists ChatGPT Shopping under ChatGPT, saying its visits are part of ChatGPT’s', () => {
+    const base = data().summary!;
+    const [chatgpt, ...rest] = base.platformBreakdown;
+    const summary = {
+      ...base,
+      platformBreakdown: [
+        {
+          ...chatgpt,
+          surfaces: [
+            {
+              surface: 'shopping' as const,
+              visits: 11,
+              visitsPrev: 4,
+              analytics: { sessions: 10, engagedSessions: 8, keyEvents: 3, keyEventSessions: 2 },
+            },
+          ],
+        },
+        ...rest,
+      ],
+    };
+    const table = trafficTable('platforms', data({ summary }), label);
+    expect(table.rows.slice(0, 2)).toEqual([
+      ['ChatGPT', 40, 33, 21, 72.7, 75, 6, null],
+      [
+        'ChatGPT Shopping',
+        11,
+        4,
+        null,
+        20,
+        80,
+        3,
+        "Part of ChatGPT's visits, not added to them; Low sample: fewer than 30 visits in this period or the one before",
+      ],
+    ]);
+    expect(table.rows).toHaveLength(4);
   });
 
   it("adds Google Analytics' engaged share and key events per platform, as the table does (AT-005)", () => {

@@ -1,3 +1,5 @@
+import type { TrafficEngagement, TrafficSummary } from '@/lib/actions/traffic';
+
 /**
  * AI referrers by the name their platform goes by. Keys are the AI source
  * list's (`server/src/lib/ai-sources.json`), which the tracking snippet and
@@ -36,4 +38,42 @@ export function getPlatformName(platform: string): string {
  */
 export function isNamedPlatform(platform: string): boolean {
   return platform !== 'unknown' && Object.hasOwn(PLATFORM_NAMES, platform);
+}
+
+/**
+ * The surfaces a platform's visits can come through, from the AI source
+ * list's `surfaces`: ChatGPT Shopping's product cards (#1283). A surface's
+ * visits are part of its platform's, never added to them. Each has a name
+ * in en.json's traffic.platforms.surfaces.
+ */
+export const PLATFORM_SURFACES = ['shopping'] as const;
+
+export type PlatformSurface = (typeof PLATFORM_SURFACES)[number];
+
+export function isPlatformSurface(value: string): value is PlatformSurface {
+  return (PLATFORM_SURFACES as readonly string[]).includes(value);
+}
+
+/** A Referrals by Platform row: a platform, or one of its surfaces. */
+export interface PlatformTableRow {
+  platform: string;
+  /** Set on a surface's row, whose visits are part of its platform's. */
+  surface: PlatformSurface | null;
+  visits: number;
+  visitsPrev: number;
+  analytics: TrafficEngagement | null;
+}
+
+/**
+ * The platforms as the table and its export list them: each platform, then
+ * its surfaces right under it (ChatGPT, then ChatGPT Shopping), so a surface
+ * reads as part of its platform rather than as one more.
+ */
+export function platformTableRows(
+  breakdown: TrafficSummary['platformBreakdown'],
+): PlatformTableRow[] {
+  return breakdown.flatMap(({ surfaces, ...row }) => [
+    { ...row, surface: null },
+    ...surfaces.map((s) => ({ ...s, platform: row.platform })),
+  ]);
 }
