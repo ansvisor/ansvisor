@@ -78,6 +78,8 @@ export async function agentWriteRequest(
   },
   describe: RuleDescriber,
   inEffect?: { rules: ActiveRule[]; textRules: string[] },
+  /** The locked passages' keys, as the editor holds them; read from the server otherwise. */
+  locked?: string[],
 ): Promise<AgentWriteRequest> {
   const setType = draft.rules.set ?? (isPageType(draft.pageType) ? draft.pageType : null);
   const [read, mine, cited] = await Promise.all([
@@ -86,7 +88,7 @@ export async function agentWriteRequest(
     inEffect
       ? null
       : getMyRuleSets(draft.brandId).catch((): Awaited<ReturnType<typeof getMyRuleSets>> => ({})),
-    draft.method === 'optimize' && draft.sourceUrl
+    !locked && draft.method === 'optimize' && draft.sourceUrl
       ? getCitedPassages(draft.id, pagePassages(draft.bodyHtml))
       : Promise.resolve(null),
   ]);
@@ -114,6 +116,6 @@ export async function agentWriteRequest(
       : { promptIds: [], fanouts: [], pages: [], queries: [], headings: [], length },
     rules: rules.slice(0, MAX_AGENT_RULES).map((rule) => ({ key: rule.key, ...describe(rule) })),
     textRules,
-    locked: (cited ?? []).map((passage) => passage.key),
+    locked: locked ?? (cited ?? []).map((passage) => passage.key),
   };
 }

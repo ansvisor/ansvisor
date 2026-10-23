@@ -3559,6 +3559,7 @@
         "usual": "Usually a minute or two.",
         "slow": "Taking longer than usual. If it can't finish within a few minutes, this page says so and you can try again.",
         "leave": "You can leave this page meanwhile: the draft waits in Library › In review.",
+        "leaveRewrite": "You can leave this page meanwhile: the rewrite waits here for you to compare.",
         "steps": {
           "create": {
             "read": "Read the sources and the brief",
@@ -3656,6 +3657,7 @@
         "notForAgent": "Content Agent doesn't change heading levels: make the extra H1s H2s in the toolbar.",
         "decideFirst": "Accept or reject the open suggestions first.",
         "citedLoading": "Reading which passages AI quotes, so the agent leaves them as they are…",
+        "agentBusy": "Content Agent is already working on this page. Wait for it to finish.",
         "fixErrors": {
           "ai_budget": "This month's AI usage is spent. Upgrade for more, or try again next month.",
           "no_subscription": "Content Agent needs an active subscription. Choose a plan in Settings › Billing.",
@@ -4119,10 +4121,10 @@
         "rewrite": "Rewrite the page to these rules",
         "rewriting": "Content Agent is rewriting…",
         "rewriteHint": "Content Agent rewrites the whole page in one go and shows it beside yours to accept or reject. Passages AI quotes, tables and images stay as they are.",
-        "agentsHint": "Apply rules makes small edits, up to 8 a run. Rewrite does the whole page as one change to compare.",
+        "agentsHint": "Apply rules makes small edits, up to {max} a run. Rewrite does the whole page as one change to compare.",
         "rewriteAdvice": {
-          "length": "Recommended: the page is {count, number} characters for a Length of {target, number} ({percent}% off). A rewrite gets there in one go.",
-          "open": "Recommended: {count} rules are open. A rewrite meets them together."
+          "length": "Recommended: the page is {count, number} characters for a Length of {target, number} ({percent, number}% off). A rewrite gets there in one go.",
+          "open": "Recommended: {count, number} rules are open. A rewrite meets them together."
         },
         "lengthConflict": "The fan-out H2s, FAQ questions and summary these rules still ask for take about {need, number} characters, more than Length allows (up to {max, number}). Raise Length, or ask for fewer.",
         "fixTrace": "Fix",

@@ -32,6 +32,7 @@ import {
   type TextRule,
 } from '@/lib/content/rules';
 import { formatNumber } from '@/lib/format';
+import { AGENT_RUN_MAX } from '@/lib/content/suggestions';
 import { cn } from '@/lib/utils';
 import { useUserRole } from '@/hooks/use-user-role';
 import type { DraftRulesState } from './_use-draft-rules';
@@ -186,7 +187,9 @@ export function RulesTab({
                 </span>
               </p>
             ) : (
-              <p className="text-xs text-muted-foreground">{t('agentsHint')}</p>
+              <p className="text-xs text-muted-foreground">
+                {t('agentsHint', { max: AGENT_RUN_MAX })}
+              </p>
             ))}
         </div>
       )}

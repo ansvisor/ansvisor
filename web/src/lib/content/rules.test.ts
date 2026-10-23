@@ -627,6 +627,9 @@ describe('rewriteAdvice', () => {
     });
     // 30% off, no more, is for small edits.
     expect(rewriteAdvice(statuses(10_400))).toBeNull();
+    // An empty page has nothing to rewrite; one past 60,000 can't be sent whole.
+    expect(rewriteAdvice(statuses(0, ['faq', 'summary', 'h2Answer', 'keywords']))).toBeNull();
+    expect(rewriteAdvice(statuses(60_001))).toBeNull();
   });
 
   it('recommends it for 4 rules or more the agent can fix', () => {

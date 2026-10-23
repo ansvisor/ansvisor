@@ -182,7 +182,7 @@ export function DraftEditor({
    * The Content Agent took the draft again (Try again, Rewrite from brief, or
    * Rewrite the page to these rules): the page waits for it.
    */
-  onAgentStarted?: (mode?: 'rewrite') => void;
+  onAgentStarted?: () => void;
 }) {
   const t = useTranslations('contentEditor.editor');
   const autosave = useDraftAutosave(draft.id, draft);
@@ -591,33 +591,37 @@ export function DraftEditor({
   const decidePage = async (s: DraftSuggestion, to: SuggestionStatus) => {
     if (!editor || deciding) return;
     const undo = to === 'open' && s.status === 'accepted';
-    if (to === 'accepted' && pageChangedSince(editor.getHTML(), s.beforeHtml ?? '')) {
-      toast(t('rewrite.changed'));
-      return;
-    }
-    if (undo && pageChangedSince(editor.getHTML(), s.afterText)) {
-      toast(t('rewrite.changedAfter'));
+    // What the page must still read as for the change to go in.
+    const expected = to === 'accepted' ? (s.beforeHtml ?? '') : undo ? s.afterText : null;
+    const changed = () => expected !== null && pageChangedSince(editor.getHTML(), expected);
+    const refuse = () =>
+      toast(to === 'accepted' ? t('rewrite.changed') : t('rewrite.changedAfter'));
+    if (changed()) {
+      refuse();
       return;
     }
     setDeciding(true);
+    // Held still from here: nothing typed while History and the decision are
+    // saved can be written over.
+    const editable = editor.isEditable;
+    editor.setEditable(false, false);
     try {
       if (to === 'accepted' && !agentBeforeKept.current) {
         await autosave.settle();
         await keepAgentBeforeVersion(draft.id);
         agentBeforeKept.current = true;
       }
-      // The decision is saved first, with the page held still, as decide's is.
-      const editable = editor.isEditable;
-      editor.setEditable(false, false);
-      try {
-        await decideDraftSuggestions([s.id], to);
-      } finally {
-        if (editable) editor.setEditable(true, false);
+      if (changed()) {
+        refuse();
+        return;
       }
-      if (to === 'accepted' || undo) {
+      await decideDraftSuggestions([s.id], to);
+      if (expected !== null) {
         editor
           .chain()
           .setMeta(CITED_EDIT_ALLOWED, true)
+          // The page as it was, two H1s and all, on Undo.
+          .setMeta(ONE_H1_AS_IS, true)
           .setContent(to === 'accepted' ? s.afterText : (s.beforeHtml ?? ''))
           .run();
       }
@@ -629,6 +633,7 @@ export function DraftEditor({
       console.error('Failed to decide the rewritten page:', err);
       toast.error(t('suggestions.saveFailed'));
     } finally {
+      if (editable) editor.setEditable(true, false);
       setDeciding(false);
     }
   };
@@ -727,6 +732,8 @@ export function DraftEditor({
       setFixing(false);
     }
   };
+  // One agent run at a time from this page: the others wait for it.
+  const agentBusy = fixing || starting || rewriting;
   const agentFix: AgentFix = {
     run: (only) => void fixRules(only),
     running: fixing,
@@ -735,7 +742,9 @@ export function DraftEditor({
         ? t('suggestions.decideFirst')
         : !citedRead
           ? t('suggestions.citedLoading')
-          : null,
+          : agentBusy && !fixing
+            ? t('suggestions.agentBusy')
+            : null,
   };
 
   // A drag with files over the page shows where they go; one dropped beside
@@ -881,7 +890,12 @@ export function DraftEditor({
     ? {
         run: () => void startAgent(),
         running: starting,
-        blocked: openSuggestions > 0 ? t('suggestions.decideFirst') : null,
+        blocked:
+          openSuggestions > 0
+            ? t('suggestions.decideFirst')
+            : agentBusy && !starting
+              ? t('suggestions.agentBusy')
+              : null,
       }
     : undefined;
 
@@ -893,11 +907,13 @@ export function DraftEditor({
    * opens with the rewrite to compare.
    */
   const rewritePage = async () => {
-    if (!editor || rewriting) return;
+    // Never before the locked passages are read: the rewrite would be told none are.
+    if (!editor || agentBusy || !citedRead) return;
     setRewriting(true);
     try {
       await autosave.settle();
       const inEffect = rules.rules.filter(({ rule }) => rule.on);
+      const locks = citedLocks(editor.state);
       const request = await agentWriteRequest(
         {
           id: draft.id,
@@ -914,6 +930,8 @@ export function DraftEditor({
           rules: inEffect.map(({ rule }) => rule),
           textRules: rules.textRules.filter(({ rule }) => rule.on).map(({ rule }) => rule.text),
         },
+        // The passages still locked here, the ones the person didn't unlock.
+        [...locks.labels.keys()].filter((key) => !locks.unlocked.has(key)),
       );
       // Each rule says how the page reads now, as Apply rules with Agent's do.
       const statusOf = new Map(inEffect.map(({ rule, status }) => [rule.key, status]));
@@ -923,15 +941,13 @@ export function DraftEditor({
         const now = `${tRules('agent.now')}: ${ruleStatusDetail(tStatus, status)}`;
         return { ...rule, detail: [rule.detail, now].filter(Boolean).join(' · ').slice(0, 500) };
       });
-      const locks = citedLocks(editor.state);
-      request.locked = [...locks.labels.keys()].filter((key) => !locks.unlocked.has(key));
       const result = await startPageRewrite(draft.id, draft.brandId, request);
       if ('error' in result) {
         toast.error(t(`agentFailed.errors.${result.error}`));
         return;
       }
       rememberRewrite(draft.id);
-      onAgentStarted?.('rewrite');
+      onAgentStarted?.();
     } catch (err) {
       console.error('Failed to start the page rewrite:', err);
       toast.error(t('agentFailed.errors.failed'));
@@ -948,7 +964,9 @@ export function DraftEditor({
             ? t('suggestions.decideFirst')
             : !citedRead
               ? t('suggestions.citedLoading')
-              : null,
+              : agentBusy && !rewriting
+                ? t('suggestions.agentBusy')
+                : null,
       }
     : undefined;
   const markReady = async () => {
@@ -1155,7 +1173,7 @@ export function DraftEditor({
                   variant="outline"
                   size="sm"
                   className="h-7"
-                  disabled={starting || rewriting || !editor}
+                  disabled={agentBusy || !editor || (failedRewrite && !citedRead)}
                   onClick={() => void (failedRewrite ? rewritePage() : startAgent())}
                 >
                   {(starting || rewriting) && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
@@ -1200,7 +1218,8 @@ export function DraftEditor({
             <PageRewriteBar
               suggestion={pageSuggestion}
               rulesOpen={Math.max(0, rules.total - rules.met)}
-              busy={deciding}
+              // Not while the HTML view holds the page: it would write over it.
+              busy={deciding || htmlSource !== null}
               onDecide={(to) => void decidePage(pageSuggestion, to)}
               onClose={() => setBarClosed(true)}
             />

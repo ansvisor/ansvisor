@@ -214,7 +214,6 @@ beforeEach(() => {
   fixDraftRules.mockReset().mockResolvedValue({ count: 0 });
   startAgentWriting.mockReset().mockResolvedValue({ started: true });
   startPageRewrite.mockReset().mockResolvedValue({ started: true });
-  sessionStorage.clear();
   localStorage.clear();
   brandState.activeBrandId = 'b1';
   brandState.setActiveBrand.mockReset();
@@ -2192,6 +2191,63 @@ describe('the side panel', () => {
       await act(async () => {});
       expect(decideDraftSuggestions).toHaveBeenLastCalledWith(['p1'], 'open');
       expect(page()).toContain('We delve into how teams forecast.');
+    });
+
+    it('reads the page by its words: stored line breaks and lists are no change', async () => {
+      getContentDraft.mockResolvedValue(long);
+      getDraftSuggestions.mockResolvedValue([
+        {
+          ...rewritten,
+          beforeHtml: '<h1>Pipeline forecasting</h1>\n<p>We delve into how teams forecast.</p>\n',
+          afterText:
+            '<h1>Pipeline forecasting</h1>\n<ul>\n<li>Teams forecast</li>\n<li>from their pipeline</li>\n</ul>',
+        },
+      ]);
+      await renderPage();
+      await act(async () => {});
+
+      await act(async () => button(bar()!, 'Accept').click());
+      await act(async () => {});
+      expect(decideDraftSuggestions).toHaveBeenCalledWith(['p1'], 'accepted');
+      await act(async () => button(bar()!, 'Undo').click());
+      await act(async () => {});
+      expect(decideDraftSuggestions).toHaveBeenLastCalledWith(['p1'], 'open');
+      expect(page()).toContain('We delve into how teams forecast.');
+    });
+
+    it('doesn’t undo a rewrite edited since it went in', async () => {
+      getContentDraft.mockResolvedValue(long);
+      getDraftSuggestions.mockResolvedValue([{ ...rewritten, status: 'accepted' as const }]);
+      await renderPage();
+      await act(async () => {});
+      // The page as accepted, then a word of the person's own.
+      const editor = (container.querySelector('.ProseMirror') as HTMLElement & { editor: Editor })
+        .editor;
+      await act(async () => {
+        editor.commands.setContent(rewritten.afterText);
+        editor.commands.insertContentAt(editor.state.doc.content.size - 1, ' Mine.');
+      });
+
+      await act(async () => button(bar()!, 'Undo').click());
+      expect(toast).toHaveBeenCalledWith(
+        'The page changed after the rewrite was put in. To go back, open History.',
+      );
+      expect(decideDraftSuggestions).not.toHaveBeenCalled();
+    });
+
+    it('rewrites again from Try again after a rewrite failed', async () => {
+      localStorage.setItem('aeo:page-rewrite:d1', '1');
+      getContentDraft.mockResolvedValue({ ...long, agentState: 'failed' });
+      await renderPage();
+      await act(async () => {});
+
+      expect(container.textContent).toContain(
+        "The Content Agent couldn't rewrite this page. Edit it yourself, or try again.",
+      );
+      await act(async () => button(container, 'Try again').click());
+      await act(async () => {});
+      expect(startPageRewrite).toHaveBeenCalled();
+      expect(startAgentWriting).not.toHaveBeenCalled();
     });
 
     it('doesn’t put a rewrite over a page that changed since the agent read it', async () => {

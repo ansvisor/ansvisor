@@ -731,6 +731,8 @@ export function openRulesForAgent<T extends { rule: ActiveRule; status: RuleStat
 export const REWRITE_LENGTH_OFF = 0.3;
 /** How many rules the agent can fix may be open before it is. */
 export const REWRITE_OPEN_RULES = 4;
+/** The most text a page sent whole may hold (content-rewrite.js MAX_REWRITE_CHARS). */
+export const REWRITE_MAX_CHARS = 60_000;
 
 /** Why the Rules tab recommends rewriting the page whole. */
 export type RewriteAdvice =
@@ -748,6 +750,10 @@ export function rewriteAdvice<T extends { rule: ActiveRule; status: RuleStatus }
   const length = rules.find(({ rule }) => rule.key === 'length' && rule.on);
   const target = Number(length?.rule.current);
   const status = length?.status;
+  // An empty page has nothing to rewrite, and one too long can't be sent whole.
+  if (status && 'count' in status && (status.count === 0 || status.count > REWRITE_MAX_CHARS)) {
+    return null;
+  }
   if (
     status?.state === 'bad' &&
     (status.code === 'short' || status.code === 'long') &&

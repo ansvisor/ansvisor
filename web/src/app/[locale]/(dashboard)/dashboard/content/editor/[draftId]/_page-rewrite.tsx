@@ -25,9 +25,18 @@ import { cn } from '@/lib/utils';
  * in place (History keeps the page first); Undo puts the page back.
  */
 
-/** The page's words, one space apart: formatting and markup don't count. */
+/** Blocks whose words a line break or a missing space must not run together. */
+const BLOCKS = 'p, h1, h2, h3, h4, h5, h6, li, td, th, blockquote, div, br';
+
+/**
+ * The page's words, one space apart: formatting, markup and the space
+ * between blocks don't count, so the editor's HTML (no space between
+ * blocks) and stored HTML (line breaks between them) read the same.
+ */
 function wordsOf(html: string): string {
   const doc = new DOMParser().parseFromString(html, 'text/html');
+  doc.querySelectorAll('script, style').forEach((el) => el.remove());
+  doc.querySelectorAll(BLOCKS).forEach((el) => el.append(' '));
   return passageKey(doc.body.textContent ?? '');
 }
 
@@ -39,12 +48,13 @@ export function pageChangedSince(currentHtml: string, readHtml: string): boolean
 const REWRITE_KEY = (draftId: string) => `aeo:page-rewrite:${draftId}`;
 
 /**
- * This tab started a rewrite of the draft: its waiting view and a failed run
- * say so, and Try again rewrites again. Per viewer, for this tab only.
+ * This browser started a rewrite of the draft: its waiting view and a failed
+ * run say so, and Try again rewrites again, after a reload or a closed tab
+ * too. Per viewer: on another device the agent's usual copy shows.
  */
 export function rememberRewrite(draftId: string) {
   try {
-    sessionStorage.setItem(REWRITE_KEY(draftId), '1');
+    localStorage.setItem(REWRITE_KEY(draftId), '1');
   } catch {
     // No storage (a private window): the plain agent copy shows instead.
   }
@@ -52,7 +62,7 @@ export function rememberRewrite(draftId: string) {
 
 export function wasRewrite(draftId: string): boolean {
   try {
-    return sessionStorage.getItem(REWRITE_KEY(draftId)) === '1';
+    return localStorage.getItem(REWRITE_KEY(draftId)) === '1';
   } catch {
     return false;
   }
@@ -60,7 +70,7 @@ export function wasRewrite(draftId: string): boolean {
 
 export function forgetRewrite(draftId: string) {
   try {
-    sessionStorage.removeItem(REWRITE_KEY(draftId));
+    localStorage.removeItem(REWRITE_KEY(draftId));
   } catch {
     // Nothing to forget.
   }
@@ -72,6 +82,8 @@ const PAGE_CLASS = cn(
   'prose-a:font-normal prose-a:text-blue-600 prose-a:underline dark:prose-a:text-blue-400',
   '[&_table]:w-full [&_td]:border [&_td]:px-2 [&_td]:py-1 [&_th]:border [&_th]:px-2 [&_th]:py-1',
   '[&_td>p]:my-0 [&_th>p]:my-0 [&_li>p]:my-0',
+  // A page to read side by side: its links don't leave the editor.
+  '[&_a]:pointer-events-none',
 );
 
 function PageColumn({ label, html }: { label: string; html: string }) {
@@ -119,7 +131,8 @@ export function PageRewriteBar({
       className="flex flex-wrap items-center gap-x-3 gap-y-1.5 border-b bg-muted/40 px-4 py-1.5 text-[13px]"
     >
       <FileText aria-hidden className="h-4 w-4 shrink-0 text-muted-foreground" />
-      <span className="min-w-0 flex-1">
+      {/* Room for a line of text first: on a narrow page the buttons go under it. */}
+      <span className="min-w-0 flex-1 basis-64">
         {open ? (
           <>
             <span className="font-medium">{t('ready')}</span>

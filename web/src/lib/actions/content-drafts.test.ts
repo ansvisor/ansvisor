@@ -573,11 +573,31 @@ describe('agent suggestions', () => {
       beforeText: 'very accurate',
       afterText: 'shown per team',
       afterLinks: null,
+      beforeHtml: null,
       reason: 'answer a fan-out',
       ruleKeys: ['dated'],
       status: 'open',
     });
     expect(calls[0].filters).toContainEqual(['eq', 'draft_id', DRAFT]);
+  });
+
+  it('reads a whole page rewritten, with the page the agent read (00247)', async () => {
+    list = [
+      row({
+        kind: 'page',
+        before_text: '',
+        before_html: '<h1>Old</h1><p>Old page.</p>',
+        after_text: '<h1>New</h1><p>New page.</p>',
+        after_links: [{ start: 0, end: 3, href: 'https://acme.example' }],
+      }),
+    ];
+    const [read] = await getDraftSuggestions(DRAFT);
+    expect(read).toMatchObject({
+      kind: 'page',
+      beforeHtml: '<h1>Old</h1><p>Old page.</p>',
+      afterText: '<h1>New</h1><p>New page.</p>',
+      afterLinks: null,
+    });
   });
 
   it('reads a replace’s links, keeping only safe ones inside its words (00240)', async () => {

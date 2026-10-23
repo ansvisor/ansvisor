@@ -117,7 +117,7 @@ export function AgentWriting({
             ) : (
               t('agentWriting.usual')
             )}{' '}
-            {t('agentWriting.leave')}
+            {rewrite ? t('agentWriting.leaveRewrite') : t('agentWriting.leave')}
           </p>
         </div>
       </div>

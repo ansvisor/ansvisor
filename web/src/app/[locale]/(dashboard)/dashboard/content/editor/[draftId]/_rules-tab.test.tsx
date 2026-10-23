@@ -117,16 +117,20 @@ describe('the Rules tab', () => {
       'Apply rules with Agent',
       'Rewrite the page to these rules',
     ]);
+    const rewriteButton = () =>
+      [...container.querySelectorAll('button')].find(
+        (b) => b.textContent === 'Rewrite the page to these rules',
+      )!;
     // 15,921 characters for a 3,000 Length.
     expect(container.querySelector('[role="note"]')!.textContent).toBe(
       'Recommended: the page is 15,921 characters for a Length of 3,000 (431% off). A rewrite gets there in one go.',
     );
-    await act(async () => container.querySelectorAll('button')[1].click());
+    await act(async () => rewriteButton().click());
     expect(rewrite.run).toHaveBeenCalled();
 
     // Suggestions still open: it says why it can't run.
     await show({ agentFix: fix, pageRewrite: { ...rewrite, blocked: 'Decide first' } });
-    const blocked = container.querySelectorAll('button')[1];
+    const blocked = rewriteButton();
     expect(blocked.disabled).toBe(true);
     expect(blocked.title).toBe('Decide first');
   });
