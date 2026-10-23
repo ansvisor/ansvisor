@@ -322,9 +322,10 @@ export async function auditCandidates(brandId, now) {
     if (!latestByUrl.has(audit.url)) latestByUrl.set(audit.url, audit);
   }
 
+  // Site Audit stores a score from 0 to 1; the threshold is out of 100.
   const low = [...latestByUrl.values()]
     .map((audit) => ({ url: audit.url, score: Number(audit.total_score) }))
-    .filter((audit) => audit.score < detection.auditLowScore)
+    .filter((audit) => audit.score * 100 < detection.auditLowScore)
     .sort((a, b) => a.score - b.score);
   if (low.length === 0) return [];
 
