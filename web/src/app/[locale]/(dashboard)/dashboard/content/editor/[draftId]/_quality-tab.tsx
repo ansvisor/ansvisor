@@ -1,6 +1,6 @@
 'use client';
 
-import { useTranslations } from 'next-intl';
+import { useFormatter, useTranslations } from 'next-intl';
 import { Link } from '@/i18n/navigation';
 import { Button, buttonVariants } from '@/components/ui/button';
 import type { ContentAuthor } from '@/lib/content/authors';
@@ -75,6 +75,7 @@ export function QualityTab({
   const t = useTranslations('contentEditor.editor.quality');
   const tAuthor = useTranslations('contentEditor.editor.author');
   const tSite = useTranslations('audit.siteTrust.checks');
+  const format = useFormatter();
   const { readability, eeat, trust, siteTrust } = quality;
   const siteMissing = siteTrust ? siteTrustMissing(siteTrust) : [];
   const scores: { name: ScoreName; score: number | null; empty: string }[] = [
@@ -158,8 +159,9 @@ export function QualityTab({
           <span className="font-medium">{t('site.score', { score: siteTrust.score })}</span>
           {siteMissing.length > 0 && (
             <span className="min-w-0 text-muted-foreground [overflow-wrap:anywhere]">
+              <span aria-hidden>· </span>
               {t('site.missing', {
-                checks: siteMissing.map((check) => tSite(`${check}.name`)).join(', '),
+                checks: format.list(siteMissing.map((check) => tSite(`${check}.name`))),
               })}
             </span>
           )}

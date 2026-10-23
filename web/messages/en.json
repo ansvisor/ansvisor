@@ -2704,6 +2704,8 @@
       "passes": "passes",
       "missingLabel": "missing",
       "open": "Open",
+      "openLabel": "Open the {name} (new tab)",
+      "refreshFailed": "Couldn't check again. The read above still stands.",
       "checks": {
         "about": {
           "name": "About page",
@@ -4158,7 +4160,7 @@
         "site": {
           "label": "Site trust",
           "score": "Site trust {score}/5",
-          "missing": "· Missing: {checks}",
+          "missing": "Missing: {checks}",
           "fix": "Fix in Site Audit"
         },
         "pickAuthor": "Pick author",

@@ -719,7 +719,9 @@ export default function SiteAuditPage() {
       )}
 
       {/* Site trust (Content Editor Quality, CE-043): with Quality's first phase */}
-      {activeBrandId && qualityPhase() >= 1 && <SiteTrustCard brandId={activeBrandId} />}
+      {activeBrandId && qualityPhase() >= 1 && (
+        <SiteTrustCard key={activeBrandId} brandId={activeBrandId} />
+      )}
 
       {loading ? (
         <Card>

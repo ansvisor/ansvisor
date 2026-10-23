@@ -201,7 +201,8 @@ export interface TrustRead extends Score<TrustCheckId> {
  * to another site in the same block), sources from the last FRESH_MONTHS,
  * links that answer, and the site's trust (its five checks in Site Audit).
  * A check with nothing to read (no figure, no dated source, no link read
- * yet, no site trust read) is left out.
+ * yet, no site trust read) is left out, and site trust counts only beside a
+ * check of the page's own.
  */
 export function trust({
   blocks,
@@ -269,7 +270,9 @@ export function trust({
     });
   }
 
-  if (siteTrust) {
+  // The site's 5 points weigh with what the page itself shows: alone, they'd
+  // be the page's whole Trust.
+  if (siteTrust && checks.length) {
     checks.push({
       id: 'siteTrust',
       points: (TRUST_WEIGHTS.siteTrust * siteTrust.score) / 5,

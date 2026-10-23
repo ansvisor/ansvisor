@@ -270,6 +270,7 @@ export async function getSiteTrust(brandId: string, refresh = false): Promise<Si
     throw new Error(body.message || `Server error: ${res.status}`);
   }
   const data = await res.json();
+  if (!Number.isFinite(data.score) || !data.checks) throw new Error('Unexpected site trust');
   return { checks: data.checks, score: data.score, checkedAt: data.checkedAt };
 }
 

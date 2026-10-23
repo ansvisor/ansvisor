@@ -96,4 +96,31 @@ describe('SiteTrustCard', () => {
     await render();
     expect(container.textContent).toContain("Couldn't read your site trust.");
   });
+
+  it('says so when checking again fails, keeping the read', async () => {
+    await render();
+    getSiteTrust.mockRejectedValue(new Error('boom'));
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const again = [...container.querySelectorAll('button')].find(
+      (b) => b.textContent === 'Check again',
+    )!;
+    await act(async () => again.click());
+    expect(container.textContent).toContain("Couldn't check again. The read above still stands.");
+    expect(container.textContent).toContain('Site trust 3/5');
+  });
+
+  it('scrolls into view when the address asks for it', async () => {
+    const scroll = vi.fn();
+    Element.prototype.scrollIntoView = scroll;
+    vi.spyOn(window, 'requestAnimationFrame').mockImplementation((cb) => {
+      cb(0);
+      return 0;
+    });
+    window.history.replaceState(null, '', '#site-trust');
+    document.body.appendChild(container);
+    await render();
+    expect(scroll).toHaveBeenCalledTimes(1);
+    window.history.replaceState(null, '', '#');
+    container.remove();
+  });
 });

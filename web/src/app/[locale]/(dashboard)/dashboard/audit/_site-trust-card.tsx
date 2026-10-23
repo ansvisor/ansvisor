@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useFormatter, useTranslations } from 'next-intl';
 import { Check, ExternalLink, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -39,12 +39,20 @@ export function SiteTrustCard({ brandId }: { brandId: string }) {
     [brandId],
   );
   useEffect(() => {
-    setTrust(null);
     void load(false);
   }, [load]);
 
+  // Quality's "Fix in Site Audit" lands here (#site-trust): once the card has
+  // its read, and the cards above have theirs, it scrolls into view once.
+  const scrolled = useRef(false);
+  useEffect(() => {
+    if (!trust || scrolled.current || window.location.hash !== '#site-trust') return;
+    scrolled.current = true;
+    requestAnimationFrame(() => document.getElementById('site-trust')?.scrollIntoView());
+  }, [trust]);
+
   return (
-    <Card id="site-trust" className="scroll-mt-20">
+    <Card id="site-trust" className="scroll-mt-24">
       <CardHeader className="flex flex-row items-start justify-between gap-3 space-y-0">
         <div className="min-w-0">
           <CardTitle className="text-base">
@@ -65,13 +73,13 @@ export function SiteTrustCard({ brandId }: { brandId: string }) {
       </CardHeader>
       <CardContent className="pt-0">
         {!trust && !failed && (
-          <p className="text-sm text-muted-foreground" aria-busy="true">
+          <p className="text-sm text-muted-foreground" role="status" aria-busy="true">
             <LoadingDots />
             <span className="sr-only">{t('loading')}</span>
           </p>
         )}
         {failed && !trust && (
-          <p className="text-sm text-destructive">
+          <p className="text-sm text-destructive" role="alert">
             {t('loadFailed')}{' '}
             <button type="button" className="underline" onClick={() => void load(false)}>
               {t('retry')}
@@ -85,6 +93,11 @@ export function SiteTrustCard({ brandId }: { brandId: string }) {
                 <CheckRow key={check} check={check} trust={trust} />
               ))}
             </ul>
+            {failed && (
+              <p className="mt-2 text-xs text-destructive" role="alert">
+                {t('refreshFailed')}
+              </p>
+            )}
             <p className="mt-2 text-xs text-muted-foreground">
               {t('checkedAt', {
                 date: format.dateTime(new Date(trust.checkedAt), {
@@ -102,6 +115,7 @@ export function SiteTrustCard({ brandId }: { brandId: string }) {
 
 function CheckRow({ check, trust }: { check: SiteTrustCheck; trust: SiteTrust }) {
   const t = useTranslations('audit.siteTrust');
+  const format = useFormatter();
   const result = trust.checks[check];
   const ok = !!result?.ok;
   const url = check === 'authorPages' ? null : (trust.checks[check].url ?? null);
@@ -114,7 +128,7 @@ function CheckRow({ check, trust }: { check: SiteTrustCheck; trust: SiteTrust })
       ? t('checks.authorPages.noAuthors')
       : ok
         ? t('checks.authorPages.ok', { count: authors.length })
-        : t('checks.authorPages.missing', { names: withoutPage.join(', ') });
+        : t('checks.authorPages.missing', { names: format.list(withoutPage) });
   } else {
     detail = ok ? t(`checks.${check}.ok`) : t(`checks.${check}.missing`);
   }
@@ -147,6 +161,7 @@ function CheckRow({ check, trust }: { check: SiteTrustCheck; trust: SiteTrust })
           href={url}
           target="_blank"
           rel="noopener noreferrer"
+          aria-label={t('openLabel', { name: t(`checks.${check}.name`) })}
           className="flex shrink-0 items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
         >
           {t('open')}

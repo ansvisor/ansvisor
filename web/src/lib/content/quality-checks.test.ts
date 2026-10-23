@@ -163,15 +163,22 @@ describe('trust (Phase 1: figures and links)', () => {
     expect(result.figures).toBe(1);
   });
 
-  it("counts the site's trust checks, 5 points for all five", () => {
-    const result = trust({
-      blocks: blocks('<p>No figures here.</p>'),
-      links: new Map(),
-      brandDomains: ['acme.com'],
-      siteTrust: { score: 3 },
-      now: NOW,
-    });
-    expect(result.checks).toEqual([{ id: 'siteTrust', points: 3, max: TRUST_WEIGHTS.siteTrust }]);
-    expect(result.score).toBe(60);
+  it("counts the site's trust checks beside the page's own, 5 points for all five", () => {
+    const run = (html: string) =>
+      trust({
+        blocks: blocks(html),
+        links: new Map(),
+        brandDomains: ['acme.com'],
+        siteTrust: { score: 3 },
+        now: NOW,
+      });
+    const result = run('<p>Up 40% (<a href="https://src.example/">source</a>).</p>');
+    expect(result.checks).toEqual([
+      { id: 'claimsSourced', points: 30, max: 30 },
+      { id: 'siteTrust', points: 3, max: TRUST_WEIGHTS.siteTrust },
+    ]);
+    expect(result.score).toBe(94);
+    // Alone, the site's 5 points would be the whole of the page's Trust.
+    expect(run('<p>No figures here.</p>').score).toBeNull();
   });
 });

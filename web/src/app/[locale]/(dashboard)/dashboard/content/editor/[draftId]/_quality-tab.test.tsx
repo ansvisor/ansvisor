@@ -238,7 +238,7 @@ describe('QualityTab', () => {
     await render({ ...read(result), siteTrust });
     const site = container.querySelector('[aria-label="Site trust"]')!;
     expect(site.textContent).toBe(
-      'Site trust 3/5· Missing: Editorial policy, Author pagesFix in Site Audit',
+      'Site trust 3/5· Missing: Editorial policy and Author pagesFix in Site Audit',
     );
     expect(site.querySelector('a')!.getAttribute('href')).toBe('/dashboard/audit#site-trust');
 
