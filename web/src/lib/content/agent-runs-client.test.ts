@@ -40,7 +40,7 @@ describe('readAgentRun', () => {
     row.data = {
       id: 'r1',
       kind: 'fix',
-      steps: [{ key: 'read_pages', count: 4 }],
+      steps: [{ key: 'read_rules', count: 4 }],
       step: 0,
       started_at: '2026-10-23T10:00:00Z',
       finished_at: null,
@@ -50,7 +50,7 @@ describe('readAgentRun', () => {
     expect(await readAgentRun('d1')).toMatchObject({
       id: 'r1',
       kind: 'fix',
-      steps: [{ key: 'read_pages', count: 4 }],
+      steps: [{ key: 'read_rules', count: 4 }],
       startedAt: '2026-10-23T10:00:00Z',
     });
     expect(query).toEqual({ draft: 'd1', order: 'started_at', limit: 1 });
@@ -72,6 +72,9 @@ describe('stopAgentRun', () => {
     expect(init.method).toBe('POST');
     expect(init.headers.Authorization).toBe('Bearer token-1');
     expect(JSON.parse(init.body)).toEqual({ brandId: 'b1' });
+    // The run the editor shows, when it names it: another tab's goes on.
+    await stopAgentRun('d1', 'b1', 'r9');
+    expect(JSON.parse(fetchMock.mock.calls[1][1].body)).toEqual({ brandId: 'b1', runId: 'r9' });
   });
 
   it('says when no run was under way', async () => {

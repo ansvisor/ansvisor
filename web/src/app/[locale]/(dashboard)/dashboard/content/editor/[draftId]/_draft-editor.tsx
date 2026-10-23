@@ -901,9 +901,11 @@ export function DraftEditor({
   const stopAgent = async () => {
     if (!agentRun) return;
     setStoppingRun(agentRun.id);
-    const request = stopAgentRun(draft.id, draft.brandId).catch((): { error: 'failed' } => ({
-      error: 'failed',
-    }));
+    const request = stopAgentRun(draft.id, draft.brandId, agentRun.id).catch(
+      (): { error: 'failed' } => ({
+        error: 'failed',
+      }),
+    );
     const sent = request.then((result) => !('error' in result) && result.stopped);
     stopSent.current = sent;
     const result = await request;

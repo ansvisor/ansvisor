@@ -6,16 +6,14 @@
  */
 
 export const RUN_STEP_KEYS = [
-  'read_pages',
-  'match_fanouts',
-  'check_queries',
+  'read_rules',
+  'gather_sources',
   'write_changes',
-  'read_sources',
   'rewrite_page',
-  'check_rules',
-  'pick_fanouts',
-  'write_outline',
   'write_page',
+  'write_outline',
+  'match_fanouts',
+  'check_sources',
 ] as const;
 export type RunStepKey = (typeof RUN_STEP_KEYS)[number];
 

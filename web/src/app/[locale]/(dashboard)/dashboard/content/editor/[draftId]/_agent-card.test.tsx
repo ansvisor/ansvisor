@@ -199,9 +199,10 @@ describe('AgentCard', () => {
       id: 'r1',
       kind: 'rewrite',
       steps: [
-        { key: 'read_sources', count: 52 },
-        { key: 'rewrite_page', count: 14 },
-        { key: 'check_rules', count: null },
+        { key: 'read_rules', count: 14 },
+        { key: 'gather_sources', count: 52 },
+        { key: 'rewrite_page', count: null },
+        { key: 'check_sources', count: null },
       ],
       step: 1,
       startedAt: new Date().toISOString(),
@@ -229,9 +230,10 @@ describe('AgentCard', () => {
     await show(false);
     const steps = [...container.querySelectorAll('li')];
     expect(steps.map((li) => li.textContent)).toEqual([
-      'Reading 52 sources',
-      'Rewriting the page to 14 rules',
-      'Checking rules',
+      'Reading 14 rules',
+      'Gathering 52 sources',
+      'Rewriting the page',
+      'Checking sources',
     ]);
     expect(steps[0].querySelector('svg')).not.toBeNull();
     expect(steps[1].querySelector('[aria-current="step"]')).not.toBeNull();
