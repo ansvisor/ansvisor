@@ -4083,7 +4083,7 @@
       "rulesChipHint": "Rules this page meets now. Open the Rules tab.",
       "author": {
         "by": "By {name}",
-        "change": "Author: {name}. Change who the page is by",
+        "change": "By {name}: change who the page is by",
         "hint": "Who the page is by: page metadata your CMS shows, not part of the content.",
         "title": "Author · page metadata",
         "organization": "{brand} Team",

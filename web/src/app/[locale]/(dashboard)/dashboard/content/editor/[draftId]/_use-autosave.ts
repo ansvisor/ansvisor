@@ -41,6 +41,8 @@ interface DraftContent {
  */
 export function useDraftAutosave(draftId: string, loaded: { updatedAt: string; bodyHtml: string }) {
   const [state, setState] = useState<SaveState>('saved');
+  // When the page was last saved, from here or as loaded: the Page info strip's date.
+  const [savedAt, setSavedAt] = useState(loaded.updatedAt);
   const pending = useRef<DraftContent | null>(null);
   const saving = useRef(false);
   const failed = useRef(false);
@@ -95,6 +97,7 @@ export function useDraftAutosave(draftId: string, loaded: { updatedAt: string; b
         return;
       }
       base.current = { updatedAt: result.updatedAt, bodyHash: result.bodyHash };
+      setSavedAt(result.updatedAt);
       unconfirmed.current = null;
       failed.current = false;
       if (pending.current) {
@@ -158,6 +161,7 @@ export function useDraftAutosave(draftId: string, loaded: { updatedAt: string; b
     stopped.current = false;
     unconfirmed.current = null;
     base.current = { updatedAt: version.updatedAt, bodyHash: null };
+    setSavedAt(version.updatedAt);
     loadedBody.current = version.bodyHtml;
     if (!saving.current) setState('saved');
   }, []);
@@ -190,5 +194,5 @@ export function useDraftAutosave(draftId: string, loaded: { updatedAt: string; b
     [draftId, baseVersion],
   );
 
-  return { state, schedule, retry: flush, settle, discard };
+  return { state, savedAt, schedule, retry: flush, settle, discard };
 }

@@ -1,4 +1,6 @@
-import { Editor } from '@tiptap/core';
+import { Editor, Extension } from '@tiptap/core';
+import { Plugin } from '@tiptap/pm/state';
+import { Decoration, DecorationSet } from '@tiptap/pm/view';
 import StarterKit from '@tiptap/starter-kit';
 import { afterEach, describe, expect, it } from 'vitest';
 import { PageInfoStrip, pageInfoAt, pageInfoKey } from './_page-info';
@@ -51,6 +53,40 @@ describe('PageInfoStrip', () => {
 
     show(e, null);
     expect(e.view.dom.querySelector('[data-page-info]')).toBeNull();
+  });
+
+  it("stays under the H1, above a suggestion's card for the next block", () => {
+    // A card the way _suggestions.ts draws one: before its block (side -1).
+    const Card = Extension.create({
+      name: 'card',
+      addProseMirrorPlugins: () => [
+        new Plugin({
+          props: {
+            decorations: (state) =>
+              DecorationSet.create(state.doc, [
+                Decoration.widget(
+                  state.doc.firstChild!.nodeSize,
+                  () => Object.assign(document.createElement('div'), { className: 'card' }),
+                  { side: -1 },
+                ),
+              ]),
+          },
+        }),
+      ],
+    });
+    editor = new Editor({
+      extensions: [StarterKit, PageInfoStrip, Card],
+      content: '<h1>Title</h1><p>Text</p>',
+    });
+    show(editor, INFO);
+    const order = [...editor.view.dom.children].map((el) =>
+      el instanceof HTMLElement && 'pageInfo' in el.dataset
+        ? 'strip'
+        : el.classList.contains('card')
+          ? 'card'
+          : el.tagName,
+    );
+    expect(order).toEqual(['H1', 'strip', 'card', 'P']);
   });
 
   it('goes at the top of a page that has no H1 first', () => {

@@ -31,10 +31,14 @@ function strip({ label, byline }: PageInfo): HTMLElement {
   box.className =
     'not-prose my-3 rounded-lg border border-dashed bg-muted/40 px-3 py-2 select-none';
   box.contentEditable = 'false';
+  // The header's author menu says the same; a screen reader reading the page
+  // shouldn't take it for the page's text.
+  box.setAttribute('aria-hidden', 'true');
   box.dataset.pageInfo = '';
+  // Divs, not paragraphs: nothing that looks for the page's paragraphs finds it.
   box.append(
-    el('p', 'text-[11px] font-medium text-muted-foreground', label),
-    el('p', 'mt-0.5 text-[13px] text-foreground [overflow-wrap:anywhere]', byline),
+    el('div', 'text-[11px] font-medium text-muted-foreground', label),
+    el('div', 'mt-0.5 text-[13px] text-foreground [overflow-wrap:anywhere]', byline),
   );
   return box;
 }
@@ -64,10 +68,11 @@ export const PageInfoStrip = Extension.create({
             const info = pageInfoKey.getState(state);
             if (!info) return null;
             return DecorationSet.create(state.doc, [
-              // Before the agent's drafting card (side 1) at the same place.
+              // Right under the H1: before a suggestion's card for the next
+              // block (side -1) and the agent's drafting card (side 1).
               Decoration.widget(pageInfoAt(state.doc), () => strip(info), {
                 key: `page-info:${info.label}:${info.byline}`,
-                side: 0,
+                side: -2,
                 ignoreSelection: true,
                 stopEvent: () => true,
               }),

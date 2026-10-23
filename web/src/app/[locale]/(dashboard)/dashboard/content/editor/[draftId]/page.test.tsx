@@ -2268,6 +2268,17 @@ describe('the side panel', () => {
         /^Page info · shown by your CMS, not part of the contentBy Ada Lovelace · Head of Content · Updated Oct 20, 2026$/,
       );
       expect(strip()!.previousElementSibling?.tagName).toBe('H1');
+
+      // Copy HTML (as export, save and the HTML view) reads the page: no strip.
+      const writeText = vi.fn().mockResolvedValue(undefined);
+      Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+      const copyPage = [...container.querySelectorAll<HTMLButtonElement>('header button')].find(
+        (b) => b.textContent === 'Copy HTML',
+      )!;
+      await act(async () => copyPage.click());
+      expect(writeText).toHaveBeenLastCalledWith(
+        '<h1>Pipeline forecasting</h1>\n<p>Teams trust it.</p>',
+      );
     });
 
     it('sets the organization byline, and goes back when that fails', async () => {
@@ -2280,6 +2291,8 @@ describe('the side panel', () => {
       )!;
       await act(async () => team.click());
       expect(setContentDraftAuthor).toHaveBeenCalledWith('d1', null);
+      // Page metadata: the page itself isn't saved for it.
+      expect(saveContentDraft).not.toHaveBeenCalled();
       expect(byButton()!.textContent).toBe('By Acme Team');
       expect(strip()!.textContent).toContain('By Acme Team · Updated');
 

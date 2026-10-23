@@ -38,6 +38,10 @@ function builder(table: string) {
       call.filters.push([column, value]);
       return chain;
     },
+    is: (column: string, value: unknown) => {
+      call.filters.push([`is ${column}`, value]);
+      return chain;
+    },
     order: () => chain,
     single: async () => answer(),
     maybeSingle: async () => answer(),
@@ -91,7 +95,7 @@ describe('getContentAuthors', () => {
       data: [{ brand_id: ACME, author_id: ADA }],
       error: null,
     };
-    const read = await getContentAuthors();
+    const read = await getContentAuthors({ pages: true });
     expect(read).toEqual({
       authors: [
         {
@@ -110,6 +114,22 @@ describe('getContentAuthors', () => {
       brands: [{ id: ACME, name: 'Acme' }],
       me: { id: ME, role: 'analyst' },
     });
+  });
+
+  it("counts each author's Library pages only when asked", async () => {
+    answers['content_authors.select'] = {
+      data: [{ id: ADA, name: 'Ada', same_as: [], user_id: null, created_by: null }],
+      error: null,
+    };
+    expect((await getContentAuthors())!.authors[0].pages).toBeNull();
+    expect(calls.some((c) => c.table === 'content_drafts')).toBe(false);
+
+    answers['content_drafts.select'] = { data: null, count: 4, error: null };
+    expect((await getContentAuthors({ pages: true }))!.authors[0].pages).toBe(4);
+    expect(calls.find((c) => c.table === 'content_drafts')!.filters).toEqual([
+      ['author_id', ADA],
+      ['is archived_at', null],
+    ]);
   });
 
   it('reads nothing for a member without an organization', async () => {

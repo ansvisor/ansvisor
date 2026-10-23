@@ -142,6 +142,7 @@ describe('AuthorsSection', () => {
     );
     expect(row('Bob Stone').textContent).toContain('No profile links · no pages yet');
     expect(trigger().querySelector('[data-slot="select-value"]')!.textContent).toBe('Ada Lovelace');
+    expect(actions.getContentAuthors).toHaveBeenCalledWith({ pages: true });
   });
 
   it('lets a member edit the author they are and the ones they added, not the defaults', async () => {

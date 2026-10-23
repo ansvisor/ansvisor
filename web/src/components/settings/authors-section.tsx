@@ -67,7 +67,7 @@ export function AuthorsSection() {
 
   const load = useCallback(async () => {
     try {
-      const next = await getContentAuthors();
+      const next = await getContentAuthors({ pages: true });
       setRead(next);
       setFailed(!next);
     } catch {
@@ -167,8 +167,12 @@ export function AuthorsSection() {
                       )}
                       <p className="mt-0.5 text-xs text-muted-foreground [overflow-wrap:anywhere]">
                         {t('profiles', { count: author.sameAs.length })}
-                        {' · '}
-                        {t('pages', { count: author.pages })}
+                        {author.pages !== null && (
+                          <>
+                            {' · '}
+                            {t('pages', { count: author.pages })}
+                          </>
+                        )}
                         {author.defaultFor.length > 0 && (
                           <>
                             {' · '}

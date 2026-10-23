@@ -413,6 +413,11 @@ export function DraftEditor({
   // Page info strip outside the page; with Quality's first phase.
   const [authorsRead, setAuthorsRead] = useState<AuthorsRead | null>(null);
   const [authorId, setAuthorId] = useState(draft.authorId);
+  // The author the database holds, and the latest pick: a slower pick that
+  // fails after a later one landed doesn't roll the menu back.
+  const savedAuthor = useRef(draft.authorId);
+  const authorPick = useRef(0);
+  const [authorChangedAt, setAuthorChangedAt] = useState<string | null>(null);
   useEffect(() => {
     if (!qualityOn) return;
     let live = true;
@@ -434,7 +439,13 @@ export function DraftEditor({
         }),
         pageAuthor?.title,
         t('author.updated', {
-          date: format.dateTime(new Date(draft.updatedAt), { dateStyle: 'medium' }),
+          date: format.dateTime(
+            Math.max(
+              new Date(autosave.savedAt).getTime(),
+              authorChangedAt ? new Date(authorChangedAt).getTime() : 0,
+            ),
+            { dateStyle: 'medium' },
+          ),
         }),
       ]
         .filter(Boolean)
@@ -448,13 +459,15 @@ export function DraftEditor({
   }, [editor, byline, t]);
   const pickAuthor = async (next: string | null) => {
     if (next === authorId) return;
-    const before = authorId;
+    const pick = ++authorPick.current;
     setAuthorId(next);
     try {
       await setContentDraftAuthor(draft.id, next);
+      savedAuthor.current = next;
+      setAuthorChangedAt(new Date().toISOString());
     } catch (err) {
       console.error('Failed to set the author:', err);
-      setAuthorId(before);
+      if (pick === authorPick.current) setAuthorId(savedAuthor.current);
       toast.error(t('author.failed'));
     }
   };
