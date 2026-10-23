@@ -503,7 +503,7 @@ export function withByline(html: string, byline: string): string {
     if (next?.matches('p') && words(next) === words(line)) return html;
     // The lead's own end tag: an empty H1 above it, or one in a comment or
     // a script, isn't it.
-    const at = h1End(html, Array.from(root.querySelectorAll('h1')).indexOf(lead));
+    const at = h1End(html, Array.from(root.querySelectorAll<Element>('h1')).indexOf(lead));
     if (at !== null) return html.slice(0, at) + gap + line.outerHTML + html.slice(at);
   }
   if (lead.matches('p') && words(lead) === words(line)) return html;
