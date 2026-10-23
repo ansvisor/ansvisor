@@ -30,6 +30,8 @@ export interface QualityRead {
   trust: Score | null;
   /** The page's author, or null for the organization byline. */
   author: ContentAuthor | null;
+  /** Whether the member reading may edit that author in Settings › Authors. */
+  canEdit: boolean;
   /** Whether the workspace has an author to pick (Settings › Authors). */
   hasAuthors: boolean;
   brandName: string;
@@ -110,7 +112,7 @@ export function QualityTab({
         <p className="text-xs text-muted-foreground">{t('estimate')}</p>
         {readability?.score === null && (
           <p className="rounded-xl border border-dashed px-3 py-2.5 text-xs text-muted-foreground">
-            {t('tooShort')}
+            {t(readability?.unscored === 'language' ? 'notThisLanguage' : 'tooShort')}
           </p>
         )}
       </section>
@@ -205,10 +207,12 @@ function readabilitySuggestions(t: T, readability: Readability | null): Suggesti
 /**
  * E-E-A-T's: with no person on the page, picking one is the fix (its gain is
  * the byline's: what the author's profile adds depends on them), or adding
- * one when the workspace has none; with one, completing their profile.
+ * one when the workspace has none; with one, completing their profile. Only
+ * whoever added the author, the author themself or an admin can, so anyone
+ * else is told who to ask instead of being sent where they can't edit.
  */
 function eeatSuggestions(t: T, quality: QualityRead, teamByline: string): Suggestion[] {
-  const { eeat, author, hasAuthors } = quality;
+  const { eeat, author, canEdit, hasAuthors } = quality;
   if (!eeat || eeat.score === null) return [];
   if (!author) {
     return [
@@ -230,8 +234,13 @@ function eeatSuggestions(t: T, quality: QualityRead, teamByline: string): Sugges
       score: 'eeat',
       gain: scoreGain(eeat, ['authorBio']),
       line: t(`checks.authorProfile.line.${missing}`, { name: author.name }),
-      detail: t(`checks.authorProfile.detail.${missing}`),
-      action: { kind: 'manageAuthors', label: 'editAuthor' },
+      detail: canEdit
+        ? t(`checks.authorProfile.detail.${missing}`)
+        : t(`checks.authorProfile.askOthers.${missing}`, {
+            name: author.name,
+            member: author.userId ? 'yes' : 'no',
+          }),
+      action: canEdit ? { kind: 'manageAuthors', label: 'editAuthor' } : { kind: 'none' },
     },
   ];
 }

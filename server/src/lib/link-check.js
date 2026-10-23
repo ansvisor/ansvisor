@@ -11,7 +11,7 @@ import { PageFetchError, fetchPage } from './safe-fetch.js';
  * points to ("Fresh sources"). Each link is read through the guarded fetch
  * (safe-fetch.js: public addresses only, redirects checked, time and size
  * capped) at most once a day, whoever's draft has it (content_link_checks,
- * 00254); a few reads at a time across the server, and the same link once
+ * 00258); a few reads at a time across the server, and the same link once
  * while it is being read.
  */
 

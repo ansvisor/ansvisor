@@ -61,12 +61,14 @@ function read(
   readability: Readability | null,
   author: ContentAuthor | null = ada,
   hasAuthors = true,
+  canEdit = true,
 ): QualityRead {
   return {
     readability,
     eeat: eeat({ author }),
     trust: null,
     author,
+    canEdit,
     hasAuthors,
     brandName: 'Acme',
   };
@@ -133,7 +135,7 @@ describe('QualityTab', () => {
   });
 
   it('says when the page is too short to read, or reads well', async () => {
-    await render({ score: null, checks: [], words: 12 });
+    await render({ score: null, unscored: 'tooShort', checks: [], words: 12 });
     expect(container.textContent).toContain('Write a few paragraphs');
     expect(container.querySelector('li')).toBeNull();
     await render({
@@ -165,6 +167,30 @@ describe('QualityTab', () => {
     expect(row.querySelector('a')!.getAttribute('href')).toBe('/dashboard/settings/authors');
   });
 
+  it("says who can complete the profile when the reader can't edit the author", async () => {
+    await render(read(result, { ...ada, bio: null }, true, false));
+    const row = [...container.querySelectorAll('li')].find((li) =>
+      li.textContent?.includes('Ada Lovelace'),
+    )!;
+    expect(row.textContent).toContain('Ada Lovelace has no short bio');
+    expect(row.textContent).toContain(
+      'Whoever added Ada Lovelace or an admin can add a short bio in Settings › Authors.',
+    );
+    expect(row.querySelector('a')).toBeNull();
+    expect(row.querySelector('button')).toBeNull();
+  });
+
+  it('names the author among who can when they are a member', async () => {
+    await render(read(result, { ...ada, sameAs: [], userId: 'u2' }, true, false));
+    const row = [...container.querySelectorAll('li')].find((li) =>
+      li.textContent?.includes('Ada Lovelace'),
+    )!;
+    expect(row.textContent).toContain(
+      'Ada Lovelace, whoever added them or an admin can add a profile link in Settings › Authors.',
+    );
+    expect(row.querySelector('a')).toBeNull();
+  });
+
   it('sends to Settings › Authors when the workspace has no author yet', async () => {
     await render(read(result, null, false));
     const row = container.querySelector('li')!;
@@ -176,5 +202,12 @@ describe('QualityTab', () => {
     await render(read({ score: null, checks: [], words: 12 }));
     expect(container.textContent).toContain('Write a few paragraphs');
     expect(container.textContent).not.toContain('Nothing to raise');
+  });
+
+  it('says when the page’s language isn’t read yet, not that it is too short', async () => {
+    await render({ score: null, unscored: 'language', checks: [], words: 240 });
+    expect(container.textContent).toContain("Readability isn't read for this language yet.");
+    expect(container.textContent).not.toContain('Write a few paragraphs');
+    expect(container.querySelector('li')).toBeNull();
   });
 });

@@ -37234,6 +37234,10 @@ comment on column public.content_draft_suggestions.source_marks is
 -- outcome is what happened: a Stop that lands after the run's last check
 -- may leave stopped_at set on a run that ended 'done'. A run a stopped server
 -- left unfinished is closed 'failed' when the next starts on the draft.
+-- claimed_at: a Start or Rewrite run's claim on the draft (the
+-- content_drafts.agent_state_at it wrote); null for Fix and the brief, which
+-- hold no draft. A Stop lets go only of the claim the stopped run holds, so a
+-- Stop on a Fix leaves a Start on the same draft its claim.
 create table if not exists public.content_agent_runs (
   id uuid primary key default gen_random_uuid(),
   draft_id uuid not null references public.content_drafts (id) on delete cascade,
@@ -37245,8 +37249,12 @@ create table if not exists public.content_agent_runs (
   started_at timestamptz not null default now(),
   finished_at timestamptz,
   stopped_at timestamptz,
-  outcome text check (outcome in ('done', 'stopped', 'failed'))
+  outcome text check (outcome in ('done', 'stopped', 'failed')),
+  claimed_at timestamptz
 );
+
+-- For a database that ran this file before claimed_at was added to it.
+alter table public.content_agent_runs add column if not exists claimed_at timestamptz;
 
 create index if not exists content_agent_runs_draft_started
   on public.content_agent_runs (draft_id, started_at desc);
@@ -37605,10 +37613,10 @@ comment on function public.ga_platform_value(uuid, date, date) is
 notify pgrst, 'reload schema';
 
 -- ─────────────────────────────────────────────────────────────────────────
--- migrations/00252_content_authors.sql
+-- migrations/00256_content_authors.sql
 -- ─────────────────────────────────────────────────────────────────────────
 -- ============================================================================
--- 00252: the workspace's authors (Content Editor Quality, CE-037)
+-- 00256: the workspace's authors (Content Editor Quality, CE-037)
 -- ============================================================================
 -- Settings › Authors (Quality spec §9): the real people a page is by. A
 -- page's author is its metadata, never its content: the editor shows it as
@@ -37628,6 +37636,19 @@ notify pgrst, 'reload schema';
 --     workspace's other settings. With none, a page is by the organization
 --     ("{Brand} Team").
 
+-- Profile links feed Person schema's sameAs and Site trust, and members
+-- write the table from their own sessions, so the table holds the rule the
+-- action checks: each link https, at most 300 characters.
+create or replace function public.content_author_links_ok(links text[])
+returns boolean
+language sql
+immutable
+set search_path = ''
+as $$
+  select coalesce(bool_and(l ~ '^https://\S+$' and char_length(l) <= 300), true)
+  from unnest(links) as l
+$$;
+
 create table if not exists public.content_authors (
   id uuid primary key default gen_random_uuid(),
   organization_id uuid not null references public.organizations(id) on delete cascade,
@@ -37638,7 +37659,9 @@ create table if not exists public.content_authors (
   photo_url text check (
     photo_url is null or (photo_url ~ '^https://' and char_length(photo_url) <= 2048)
   ),
-  same_as text[] not null default '{}' check (cardinality(same_as) <= 10),
+  same_as text[] not null default '{}' check (
+    cardinality(same_as) <= 10 and public.content_author_links_ok(same_as)
+  ),
   created_by uuid references public.profiles(id) on delete set null,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
@@ -37736,6 +37759,8 @@ create policy "content_authors: owner or admin delete"
     )
   );
 
+-- Every policy needs auth.uid(); revoking anon keeps it so if one is loosened.
+revoke all on table public.content_authors from anon;
 grant select, insert, update, delete on public.content_authors to authenticated;
 
 comment on table public.content_authors is
@@ -37789,19 +37814,20 @@ create policy "content_author_defaults: manager write"
     and updated_by = auth.uid()
   );
 
+revoke all on table public.content_author_defaults from anon;
 grant select, insert, update, delete on public.content_author_defaults to authenticated;
 
 comment on table public.content_author_defaults is
   'Content Editor Quality (CE-037): the author every new page of a brand gets; none means the organization byline. Admins and managers set it.';
 
 -- ─────────────────────────────────────────────────────────────────────────
--- migrations/00253_content_draft_author.sql
+-- migrations/00257_content_draft_author.sql
 -- ─────────────────────────────────────────────────────────────────────────
 -- ============================================================================
--- 00253: a page's author (Content Editor Quality, CE-038)
+-- 00257: a page's author (Content Editor Quality, CE-038)
 -- ============================================================================
 -- content_drafts.author_id: the real person the page is by (content_authors,
--- 00252). It is page metadata: the editor shows it in its Page info strip,
+-- 00256). It is page metadata: the editor shows it in its Page info strip,
 -- outside the page, and Ansvisor sends it to the CMS author field; it is
 -- never in the page's text. (The draft's `author` column, 'user' or 'agent',
 -- says who wrote the text: another thing.)
@@ -37857,10 +37883,10 @@ create trigger content_drafts_author
   for each row execute function public.content_draft_author();
 
 -- ─────────────────────────────────────────────────────────────────────────
--- migrations/00254_content_link_checks.sql
+-- migrations/00258_content_link_checks.sql
 -- ─────────────────────────────────────────────────────────────────────────
 -- ============================================================================
--- 00254: the pages a Content Editor draft links to, read once a day
+-- 00258: the pages a Content Editor draft links to, read once a day
 -- (Content Editor Quality, Trust)
 -- ============================================================================
 -- Trust's "No broken links" and "Fresh sources (≤ 24 months)" (Quality spec
