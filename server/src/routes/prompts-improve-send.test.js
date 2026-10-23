@@ -49,7 +49,7 @@ vi.mock('../config/supabase.js', () => ({ default: { from: (table) => builder(ta
 vi.mock('../lib/plan-guard.js', () => ({
   PlanLimitError,
   enforceFeature,
-  enforceImproveQuota: vi.fn(),
+  reserveAiBudget: vi.fn(),
   getImproveQuotaStatus: vi.fn(),
   requireFeature: () => (req, res, next) => next(),
 }));

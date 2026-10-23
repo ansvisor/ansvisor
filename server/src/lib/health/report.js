@@ -234,11 +234,23 @@ async function section(name, fn) {
   }
 }
 
+/**
+ * Open actions whose saved count and kept list disagree (AC-009,
+ * action_count_drift, 00245): a list missing, a list of another size, or a
+ * task naming another count. Each should be 0.
+ */
+async function checkActionCounts() {
+  const { data, error } = await supabaseAdmin.rpc('action_count_drift', { p_examples: 5 });
+  if (error) throw new Error(error.message);
+  return data ?? {};
+}
+
 export async function collectHealthReport(now = Date.now()) {
   const probes = await section('probes', runProbes);
   const nightly = await section('nightly', () => checkNightlyRuns(now));
   const cloro = await section('cloro', () => checkCloro(now));
   const fanout = await section('fanout', () => checkFanout(now));
+  const actionCounts = await section('actionCounts', checkActionCounts);
   return {
     generatedAt: new Date(now).toISOString(),
     serverUptimeHours: Math.round((process.uptime() / 3600) * 10) / 10,
@@ -246,8 +258,24 @@ export async function collectHealthReport(now = Date.now()) {
     nightly,
     cloro,
     fanout,
+    actionCounts,
   };
 }
+
+/** What each kind of count drift reads as in the report (AC-009). */
+const COUNT_DRIFT = {
+  missing: 'kept no list of what they are about',
+  mismatch: 'kept a list of a different size from their count',
+  tasks: "have a task that names a different count from the action's",
+};
+
+/** "(AC-40, AC-12)", or "(e.g. AC-40, AC-12)" when there are more: the newest that drifted. */
+const actionNumbers = (examples, count) => {
+  const list = examples ?? [];
+  if (list.length === 0) return '';
+  const names = list.map((no) => `AC-${no}`).join(', ');
+  return count > list.length ? ` (e.g. ${names})` : ` (${names})`;
+};
 
 /** Problems worth a person's attention, as short lines. Empty means all clear. */
 export function findIssues(report) {
@@ -289,6 +317,18 @@ export function findIssues(report) {
             `(${percent(p.baselineRate)} the days before) — check what Cloro returns`,
     );
   }
+
+  // Reports from before the action count check have none.
+  const counts = report.actionCounts ?? {};
+  if (counts.error) issues.push(`Action counts could not be checked: ${counts.error}`);
+  for (const [kind, words] of Object.entries(COUNT_DRIFT)) {
+    const found = counts[kind];
+    if (found?.count > 0) {
+      issues.push(
+        `${found.count} open action(s) ${words}${actionNumbers(found.examples, found.count)}`,
+      );
+    }
+  }
   return issues;
 }
 
@@ -316,6 +356,18 @@ function fanoutTable(fanout) {
   return rows
     ? `<table cellpadding="4" style="border-collapse:collapse;"><tr><th align="left">Platform</th><th align="left">Last 24h</th><th align="left">${BASELINE_DAYS} days before</th></tr>${rows}</table>`
     : '<p>No answers.</p>';
+}
+
+function actionCountsBlock(counts) {
+  if (!counts) return '<p>Not checked.</p>';
+  if (counts.error) return `<p>Could not check: ${escapeHtml(counts.error)}</p>`;
+  const lines = Object.entries(COUNT_DRIFT).map(
+    ([kind, words]) =>
+      `<li>${counts[kind]?.count ?? 0} ${escapeHtml(words)}${escapeHtml(
+        actionNumbers(counts[kind]?.examples, counts[kind]?.count ?? 0),
+      )}</li>`,
+  );
+  return `<p>${counts.checked ?? 0} open actions checked.</p><ul>${lines.join('')}</ul>`;
 }
 
 export function renderHealthEmail(report) {
@@ -359,6 +411,8 @@ export function renderHealthEmail(report) {
   <p>Runs failed by a server restart: ${n.restartKills ?? 0}</p>
   <h3>Query fan-out (answers with observed sub-queries)</h3>
   ${fanoutTable(report.fanout)}
+  <h3>Action counts (one count per action)</h3>
+  ${actionCountsBlock(report.actionCounts)}
   <h3>Server</h3>
   <p>Uptime: ${report.serverUptimeHours}h. Cloro tasks pending over an hour: ${
     report.cloro.pendingOverAnHour ?? 'unknown'

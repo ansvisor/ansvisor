@@ -63,7 +63,7 @@ import {
 import { PAGE_READ_DELAY_MS, draftTitleFromDoc, safeLinkHref } from '@/lib/content/editor';
 import { JsonLd } from '@/lib/content/json-ld-node';
 import { detectPageType } from '@/lib/content/page-types';
-import { aiTracesFound, lengthWarns, openRulesForAgent } from '@/lib/content/rules';
+import { aiTracesFound, fanoutsToUse, lengthWarns, openRulesForAgent } from '@/lib/content/rules';
 import { saveBlob } from '@/lib/download';
 import { cn } from '@/lib/utils';
 import { AgentBar } from './_agent-bar';
@@ -587,21 +587,26 @@ export function DraftEditor({
     }
     const pageText = editor.getText({ blockSeparator: '\n' });
     const request = {
-      rules: open.map(({ rule, status }) => ({
-        key: rule.key,
-        name: tRules(`names.${rule.key}`),
-        detail: [
-          rule.current
-            ? `${tRules('agent.aim')}: ${rule.current}${rule.unit ? ` ${tRules(`units.${rule.unit}`)}` : ''}`
-            : null,
-          `${tRules('agent.now')}: ${ruleStatusDetail(tStatus, status)}`,
-          rule.key === 'aiTraces'
-            ? `${tRules('agent.phrases')}: ${aiTracesFound(pageText).join(', ')}`
-            : null,
-        ]
-          .filter(Boolean)
-          .join(' · '),
-      })),
+      rules: open.map(({ rule, status }) => {
+        const fanouts = fanoutsToUse(status);
+        return {
+          key: rule.key,
+          name: tRules(`names.${rule.key}`),
+          detail: [
+            rule.current
+              ? `${tRules('agent.aim')}: ${rule.current}${rule.unit ? ` ${tRules(`units.${rule.unit}`)}` : ''}`
+              : null,
+            `${tRules('agent.now')}: ${ruleStatusDetail(tStatus, status)}`,
+            rule.key === 'aiTraces'
+              ? `${tRules('agent.phrases')}: ${aiTracesFound(pageText).join(', ')}`
+              : null,
+            // Which fan-outs, so it writes those rather than questions of its own.
+            fanouts ? `${tRules('agent.fanouts')}: ${fanouts}` : null,
+          ]
+            .filter(Boolean)
+            .join(' · '),
+        };
+      }),
       textRules: rules.textRules.filter(({ rule }) => rule.on).map(({ rule }) => rule.text),
       locked: (() => {
         const locks = citedLocks(editor.state);

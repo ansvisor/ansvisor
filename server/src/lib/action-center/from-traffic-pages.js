@@ -209,6 +209,8 @@ export async function sendTrafficPagesToActionCenter(brandId, { pages, reason, f
     pages: host ? found.map((p) => `https://${host}${p.page === '/' ? '' : p.page}`) : [],
     targetEntity: 'pages',
     targetCount: found.length,
+    // The pages it counts, by path (AC-009): `pages` is empty without a domain.
+    targetIds: found.map((p) => p.page),
     targets: found.map((p) => ({
       id: p.page,
       label: p.page,

@@ -7,11 +7,15 @@ import { isPageType, type DraftMethod } from './drafts';
 import {
   NOT_FOR_AGENT,
   activeRules,
+  checkRule,
   effectiveRules,
+  fanoutsToUse,
+  readPage,
   ruleLength,
   ruleSet,
   type ActiveRule,
   type DraftRules,
+  type RuleStatus,
 } from './rules';
 
 /**
@@ -32,22 +36,39 @@ export interface AgentWriteRequest {
 /** The server's limit on rules (content-writer.js writeDraftInput). */
 const MAX_AGENT_RULES = 60;
 
-/** A rule as the agent reads it: its name, and what it asks. */
-export type RuleDescriber = (rule: ActiveRule) => { name: string; detail: string };
+/**
+ * A rule as the agent reads it: its name, and what it asks; with its status
+ * on the page, the fan-outs a fan-out rule still needs.
+ */
+export type RuleDescriber = (
+  rule: ActiveRule,
+  status?: RuleStatus,
+) => { name: string; detail: string };
 
 /** Rules in the reader's words, as Fix open rules sends them. */
 export function useRuleDescriber(): RuleDescriber {
   const t = useTranslations('contentEditor.editor.rules');
   return useCallback(
-    (rule: ActiveRule) => ({
-      name: t(`names.${rule.key}`),
-      detail: rule.current
-        ? `${t('agent.aim')}: ${rule.current}${rule.unit ? ` ${t(`units.${rule.unit}`)}` : ''}`
-        : '',
-    }),
+    (rule: ActiveRule, status?: RuleStatus) => {
+      const fanouts = status ? fanoutsToUse(status) : null;
+      return {
+        name: t(`names.${rule.key}`),
+        detail: [
+          rule.current
+            ? `${t('agent.aim')}: ${rule.current}${rule.unit ? ` ${t(`units.${rule.unit}`)}` : ''}`
+            : null,
+          fanouts ? `${t('agent.fanouts')}: ${fanouts}` : null,
+        ]
+          .filter(Boolean)
+          .join(' · '),
+      };
+    },
     [t],
   );
 }
+
+/** The rules whose status names the fan-outs to use. */
+const FANOUT_RULES = new Set(['fanoutH2', 'fanoutFaq']);
 
 /** The page's headings and paragraphs, as the editor's passages. */
 function pagePassages(html: string): string[] {
@@ -103,16 +124,28 @@ export async function agentWriteRequest(
   const textRules =
     inEffect?.textRules ?? effective.textRules.filter((rule) => rule.on).map((rule) => rule.text);
   const length = ruleLength(rules, setType);
+  const sources = read
+    ? rebuildSources(read.data, read.choices, {
+        title: draft.title,
+        sourceUrl: draft.sourceUrl,
+        html: draft.bodyHtml,
+        length,
+      })
+    : { promptIds: [], fanouts: [], pages: [], queries: [], headings: [], length };
+  // The fan-out rules name the fan-outs the page doesn't use yet: an existing
+  // page's own; a page the agent writes anew starts from none of them.
+  const page = readPage(draft.method === 'optimize' ? (draft.bodyHtml ?? '') : '', 0);
+  const ctx = {
+    brandDomains: [],
+    competitorDomains: [],
+    fanouts: sources.fanouts.map((f) => f.query),
+  };
   return {
-    sources: read
-      ? rebuildSources(read.data, read.choices, {
-          title: draft.title,
-          sourceUrl: draft.sourceUrl,
-          html: draft.bodyHtml,
-          length,
-        })
-      : { promptIds: [], fanouts: [], pages: [], queries: [], headings: [], length },
-    rules: rules.slice(0, MAX_AGENT_RULES).map((rule) => ({ key: rule.key, ...describe(rule) })),
+    sources,
+    rules: rules.slice(0, MAX_AGENT_RULES).map((rule) => ({
+      key: rule.key,
+      ...describe(rule, FANOUT_RULES.has(rule.key) ? checkRule(rule, page, ctx) : undefined),
+    })),
     textRules,
     locked: (cited ?? []).map((passage) => passage.key),
   };
