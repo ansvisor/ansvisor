@@ -89,7 +89,7 @@ describe('the data note', () => {
     useAuthStore.setState({ user: person({ full_name: 'Demo' }) });
     await render(<DataNote />);
     expect(container.textContent).toBe(
-      'Content Agent writes from your dataYour prompts, fan-outs, cited pages and Search Console queries.',
+      'Content Agent writes from your dataYour prompts, fan-outs, cited pages and Search Console queries. Every change shows the sources it used.',
     );
 
     await act(async () =>

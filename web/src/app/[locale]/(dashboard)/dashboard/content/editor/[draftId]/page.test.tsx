@@ -2099,6 +2099,174 @@ describe('the side panel', () => {
       );
     });
 
+    it('sends the sources the Sources tab keeps, numbered by the server (CE-033)', async () => {
+      getDraftSources.mockResolvedValue({
+        data: {
+          prompts: [],
+          fanouts: [{ query: 'pipeline forecasting', platforms: ['copilot-web'], searched: 2 }],
+          citedPages: [],
+          gscQueries: [],
+          brandDomains: [],
+          competitorDomains: [],
+        },
+        choices: [],
+      });
+      getContentDraft.mockResolvedValue(traced);
+      getDraftSuggestions.mockResolvedValue([]);
+      fixDraftRules.mockResolvedValue({ count: 0 });
+      await openRules();
+      await act(async () => panelButton('Run Agent').click());
+      await act(async () => {});
+      expect(fixDraftRules.mock.calls[0][2].sources).toMatchObject({
+        promptIds: [],
+        fanouts: [{ query: 'pipeline forecasting', platforms: ['copilot-web'] }],
+        pages: [],
+        queries: [],
+      });
+    });
+
+    it('shows what a suggestion was written from, and opens it in Sources', async () => {
+      getDraftSources.mockResolvedValue({
+        data: {
+          prompts: [],
+          fanouts: [{ query: 'pipeline forecasting', platforms: ['copilot-web'], searched: 2 }],
+          citedPages: [],
+          gscQueries: [],
+          brandDomains: [],
+          competitorDomains: [],
+        },
+        choices: [],
+      });
+      getContentDraft.mockResolvedValue(traced);
+      getDraftSuggestions.mockResolvedValue([
+        {
+          ...agentSuggestion,
+          afterText: 'look at pipeline forecasting',
+          sources: [{ kind: 'fanout', ref: 'pipeline forecasting', label: 'pipeline forecasting' }],
+          sourceMarks: [{ start: 8, end: 28, source: 0 }],
+        },
+      ]);
+      await openRules();
+
+      const card = container.querySelector<HTMLElement>('[data-suggestion="n1"]')!;
+      // Its words, the source's number after the ones it supports, then "Based on".
+      expect(card.querySelector('ins')!.textContent).toBe('look at pipeline forecasting1');
+      const mark = card.querySelector<HTMLButtonElement>('ins sup button')!;
+      expect(mark.getAttribute('aria-label')).toBe('Source 1: pipeline forecasting');
+      expect(card.textContent).toContain('Based on1Fan-out ·pipeline forecasting');
+      const chip = [...card.querySelectorAll<HTMLButtonElement>('button')].find((b) =>
+        b.textContent?.includes('Fan-out'),
+      )!;
+      // The Sources tab's details, on hover.
+      expect(chip.title).toBe('pipeline forecasting · Microsoft Copilot · searched 2×');
+      // The card says how many of the person's sources it was built from.
+      expect(
+        container.querySelector('[role="region"][aria-label="Agent suggestions"]')!.textContent,
+      ).toContain('built from 1 of your sources · See sources');
+
+      const scrolled = vi.fn();
+      const original = Element.prototype.scrollIntoView;
+      Element.prototype.scrollIntoView = scrolled;
+      try {
+        await act(async () => chip.click());
+        expect(selectedTab()).toBe('Sources');
+        const row = panel()!.querySelector<HTMLElement>(
+          '[data-source="fanout:pipeline forecasting"]',
+        )!;
+        // Scrolled to, and marked for a moment.
+        expect(scrolled).toHaveBeenCalled();
+        expect(row.className).toContain('ring-2');
+      } finally {
+        Element.prototype.scrollIntoView = original;
+      }
+    });
+
+    it('marks an insert’s words by its text, found again in the card as drawn', async () => {
+      getContentDraft.mockResolvedValue(traced);
+      getDraftSuggestions.mockResolvedValue([
+        {
+          ...agentSuggestion,
+          kind: 'insert' as const,
+          beforeText: '',
+          afterText: '<h3>FAQ</h3>\n<p>Use pipeline forecasting weekly.</p>',
+          // Offsets into "FAQ\nUse pipeline forecasting weekly." (the server's text).
+          sources: [{ kind: 'fanout', ref: 'pipeline forecasting', label: 'pipeline forecasting' }],
+          sourceMarks: [{ start: 8, end: 28, source: 0 }],
+        },
+      ]);
+      await openRules();
+      const card = container.querySelector<HTMLElement>('[data-suggestion="n1"]')!;
+      expect(card.querySelector('p')!.textContent).toBe('Use pipeline forecasting1 weekly.');
+    });
+
+    it('scrolls to a source in a Sources tab opened before, now hidden behind Rules', async () => {
+      getDraftSources.mockResolvedValue({
+        data: {
+          prompts: [],
+          fanouts: [{ query: 'pipeline forecasting', platforms: ['copilot-web'], searched: 2 }],
+          citedPages: [],
+          gscQueries: [],
+          brandDomains: [],
+          competitorDomains: [],
+        },
+        choices: [],
+      });
+      getContentDraft.mockResolvedValue(traced);
+      getDraftSuggestions.mockResolvedValue([
+        {
+          ...agentSuggestion,
+          afterText: 'look at pipeline forecasting',
+          sources: [{ kind: 'fanout', ref: 'pipeline forecasting', label: 'pipeline forecasting' }],
+          // Its mark ends inside the link on its words: both stay.
+          afterLinks: [{ start: 8, end: 28, href: 'https://acme.example/forecasting' }],
+          sourceMarks: [{ start: 8, end: 16, source: 0 }],
+        },
+      ]);
+      await openRules();
+      const ins = container.querySelector<HTMLElement>('[data-suggestion="n1"] ins')!;
+      expect(ins.textContent).toBe('look at pipeline1 forecasting');
+      expect(
+        [...ins.querySelectorAll<HTMLElement>('span[title]')].map((span) => span.textContent),
+      ).toEqual(['pipeline', ' forecasting']);
+
+      await pickTab('Sources');
+      await pickTab('Rules');
+      const scrolled = vi.fn();
+      const original = Element.prototype.scrollIntoView;
+      Element.prototype.scrollIntoView = scrolled;
+      try {
+        const mark = container.querySelector<HTMLButtonElement>(
+          '[data-suggestion="n1"] sup button',
+        )!;
+        await act(async () => mark.click());
+        expect(selectedTab()).toBe('Sources');
+        expect(scrolled).toHaveBeenCalledTimes(1);
+        // Asked once: switching tabs again doesn't scroll again.
+        await pickTab('Rules');
+        await pickTab('Sources');
+        expect(scrolled).toHaveBeenCalledTimes(1);
+      } finally {
+        Element.prototype.scrollIntoView = original;
+      }
+    });
+
+    it('puts an insert’s number after the words it marks, not the same words before them', async () => {
+      getContentDraft.mockResolvedValue(traced);
+      getDraftSuggestions.mockResolvedValue([
+        {
+          ...agentSuggestion,
+          kind: 'insert' as const,
+          beforeText: '',
+          afterText: '<p>In 2026 teams plan; by 2026, most do.</p>',
+          sources: [{ kind: 'fanout', ref: 'plans 2026', label: 'plans 2026' }],
+          sourceMarks: [{ start: 23, end: 27, source: 0 }],
+        },
+      ]);
+      await openRules();
+      const card = container.querySelector<HTMLElement>('[data-suggestion="n1"]')!;
+      expect(card.querySelector('p')!.textContent).toBe('In 2026 teams plan; by 20261, most do.');
+    });
+
     it('says a full batch is the most one run makes, to run it again (C)', async () => {
       getContentDraft.mockResolvedValue(traced);
       const full = Array.from({ length: 8 }, (_, i) => ({

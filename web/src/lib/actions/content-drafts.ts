@@ -64,6 +64,7 @@ import {
   MAX_DECIDE,
   SUGGESTION_STATUSES,
   suggestionLinks,
+  suggestionSources,
   type DraftSuggestion,
   type SuggestionStatus,
 } from '@/lib/content/suggestions';
@@ -1377,7 +1378,7 @@ export async function getDraftSuggestions(id: string): Promise<DraftSuggestion[]
   const { data, error } = await supabase
     .from('content_draft_suggestions')
     .select(
-      'id, batch_id, action_id, kind, block_text, before_text, before_html, after_text, after_links, reason, rule_keys, position, status, created_at, actions(action_no)',
+      'id, batch_id, action_id, kind, block_text, before_text, before_html, after_text, after_links, reason, rule_keys, position, status, created_at, sources, source_marks, actions(action_no)',
     )
     .eq('draft_id', id)
     .order('created_at', { ascending: false })
@@ -1393,6 +1394,13 @@ export async function getDraftSuggestions(id: string): Promise<DraftSuggestion[]
       const action = (Array.isArray(row.actions) ? row.actions[0] : row.actions) as {
         action_no: number;
       } | null;
+      // What it was written from (00248); an insert's marks are by its text,
+      // within its HTML's length. A page names its sources, with no marks.
+      const { sources, marks } = suggestionSources(
+        row.sources,
+        row.kind === 'page' ? null : row.source_marks,
+        row.after_text,
+      );
       return {
         id: row.id,
         batchId: row.batch_id,
@@ -1409,6 +1417,8 @@ export async function getDraftSuggestions(id: string): Promise<DraftSuggestion[]
         ruleKeys: row.rule_keys ?? [],
         status: row.status as SuggestionStatus,
         createdAt: row.created_at,
+        sources,
+        sourceMarks: marks,
       };
     });
 }
@@ -1714,6 +1724,8 @@ export interface AgentFixRequest {
   textRules: string[];
   /** The locked passages, by passageKey. */
   locked: string[];
+  /** The sources the Sources tab keeps, which the agent writes from (v1.1 CE-033). */
+  sources?: RebuildSources;
 }
 
 /**
@@ -1751,6 +1763,8 @@ export async function fixDraftRules(
         })),
         textRules: request.textRules.slice(0, 50).map((text) => text.slice(0, 300)),
         locked: request.locked.slice(0, 500).map((key) => key.slice(0, 5000)),
+        // Already within the server's limits (rebuildSources).
+        ...(request.sources ? { sources: request.sources } : {}),
       }),
     });
     const body = (await res.json().catch(() => ({}))) as Record<string, unknown>;

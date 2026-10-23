@@ -154,6 +154,44 @@ describe('AgentCard', () => {
     expect(handlers.onDecidePage).toHaveBeenCalledWith('accepted');
   });
 
+  it('says how many of the person’s sources a batch or a rewrite was built from (CE-034)', async () => {
+    const onSeeSources = vi.fn();
+    const show = async (list: DraftSuggestion[]) =>
+      act(async () => {
+        root.render(
+          <NextIntlClientProvider locale="en" messages={messages}>
+            <AgentCard
+              suggestions={list}
+              rules={rules}
+              busy={false}
+              working={false}
+              sourceCount={3}
+              onSeeSources={onSeeSources}
+              {...handlers}
+            />
+          </NextIntlClientProvider>,
+        );
+      });
+    await show([suggestion({})]);
+    expect(container.textContent).toContain('built from 3 of your sources · See sources');
+    await click('See sources');
+    expect(onSeeSources).toHaveBeenCalledTimes(1);
+    await show([
+      suggestion({
+        kind: 'page',
+        beforeHtml: '<h1>Old</h1><p>Longer than this.</p>',
+        afterText: '<h1>New</h1><p>Short.</p>',
+        reason: 'cut to the Length',
+      }),
+    ]);
+    expect(container.textContent).toContain(
+      'cut to the Length · built from 3 of your sources · See sources',
+    );
+    // None named: nothing said.
+    await render([suggestion({})]);
+    expect(container.textContent).not.toContain('built from');
+  });
+
   it('stops all of its motion with reduced motion, in every state', async () => {
     for (const [list, working] of [
       [[suggestion()], false],

@@ -1,6 +1,14 @@
 'use client';
 
-import { useDeferredValue, useMemo, useState, type Dispatch, type SetStateAction } from 'react';
+import {
+  useDeferredValue,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type Dispatch,
+  type SetStateAction,
+} from 'react';
 import { useFormatter, useNow, useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 import { Loader2, Plus, RefreshCw } from 'lucide-react';
@@ -14,6 +22,7 @@ import {
   readDraftDoc,
   usedIn,
   type DraftSourceChoice,
+  type DraftSourceKind,
   type DraftSourceRow,
   type DraftSourcesData,
   type UsedIn,
@@ -44,6 +53,8 @@ export function SourcesTab({
   rebuilding,
   onRebuild,
   agentUsedAt,
+  highlight = null,
+  onHighlighted,
 }: {
   /** The sources as the editor read them; null while reading. */
   read: SourcesRead | null;
@@ -60,6 +71,10 @@ export function SourcesTab({
   onRebuild: (sources: { data: DraftSourcesData; choices: DraftSourceChoice[] }) => void;
   /** When the Content Agent last wrote from them (a run's suggestions, a brief), or null. */
   agentUsedAt: string | null;
+  /** A source to show: scrolled to and marked for a moment ("Based on", CE-033); n tells asks apart. */
+  highlight?: { kind: DraftSourceKind; ref: string; n: number } | null;
+  /** The source asked for was shown, or isn't listed now. */
+  onHighlighted?: () => void;
 }) {
   const t = useTranslations('contentEditor.editor.sources');
   const format = useFormatter();
@@ -73,6 +88,28 @@ export function SourcesTab({
     () => (read?.data ? buildSourceGroups(read.data, read.choices, { title, sourceUrl }) : []),
     [read, title, sourceUrl],
   );
+
+  // A source asked for from a suggestion: scrolled to and marked for a
+  // moment, once its row is listed (the sources may still be read).
+  const list = useRef<HTMLDivElement>(null);
+  const shown = useRef(0);
+  useEffect(() => {
+    if (!highlight || highlight.n === shown.current || !list.current) return;
+    const key = `${highlight.kind}:${highlight.ref}`;
+    const row = [...list.current.querySelectorAll<HTMLElement>('[data-source]')].find(
+      (node) => node.dataset.source === key,
+    );
+    shown.current = highlight.n;
+    // Asked once: shown now, or not listed (left out of the related queries,
+    // a prompt deleted), never later when a row turns up.
+    onHighlighted?.();
+    if (!row) return;
+    row.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    const mark = ['ring-2', 'ring-sky-300', 'dark:ring-sky-700'];
+    row.classList.add(...mark);
+    // Not cleared with the effect: a later render mustn't leave the mark on.
+    setTimeout(() => row.classList.remove(...mark), 1200);
+  }, [highlight, groups, onHighlighted]);
 
   if (!read) {
     return (
@@ -121,7 +158,7 @@ export function SourcesTab({
   };
 
   return (
-    <div className="space-y-4 text-sm">
+    <div ref={list} className="space-y-4 text-sm">
       <div className="space-y-1 rounded-lg bg-muted/50 px-3 py-2">
         <p className="font-medium">{t('summary', { count: total })}</p>
         <p className="text-xs text-muted-foreground">
@@ -209,7 +246,10 @@ function SourceRow({
 }) {
   const t = useTranslations('contentEditor.editor.sources');
   return (
-    <li className={cn('flex items-start gap-2.5 px-3 py-2', !row.included && 'opacity-60')}>
+    <li
+      data-source={`${row.kind}:${row.ref}`}
+      className={cn('flex items-start gap-2.5 px-3 py-2', !row.included && 'opacity-60')}
+    >
       <Checkbox
         className="mt-0.5"
         checked={row.included}
@@ -245,6 +285,17 @@ function SourceRow({
 
 function SourceDetail({ row }: { row: DraftSourceRow }) {
   const t = useTranslations('contentEditor.editor.sources.detail');
+  return <>{sourceDetail(row, t)}</>;
+}
+
+/**
+ * What a source's row says of it ("825 answers · you're named in 28"): the
+ * Sources tab's detail line, and a "Based on" chip's hover (CE-033).
+ */
+export function sourceDetail(
+  row: DraftSourceRow,
+  t: ReturnType<typeof useTranslations<'contentEditor.editor.sources.detail'>>,
+): string {
   const parts: string[] = [];
   switch (row.kind) {
     case 'prompt':
@@ -268,7 +319,7 @@ function SourceDetail({ row }: { row: DraftSourceRow }) {
       break;
   }
   if (row.added) parts.push(t('added'));
-  return <>{parts.filter(Boolean).join(' · ')}</>;
+  return parts.filter(Boolean).join(' · ');
 }
 
 function UsedInLabel({ used }: { used: UsedIn | null }) {

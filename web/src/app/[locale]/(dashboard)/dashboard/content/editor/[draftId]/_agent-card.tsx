@@ -168,6 +168,8 @@ export function AgentCard({
   onClose,
   onDecidePage,
   runBlocked = null,
+  sourceCount = 0,
+  onSeeSources,
 }: {
   suggestions: DraftSuggestion[];
   rules: CardRules;
@@ -187,6 +189,10 @@ export function AgentCard({
   onDecidePage: (status: SuggestionStatus) => void;
   /** Why Run Agent can't run now (another agent run, locked passages loading), or null. */
   runBlocked?: string | null;
+  /** How many of the person's sources the batch was written from (CE-033/034). */
+  sourceCount?: number;
+  /** Opens the Sources tab. */
+  onSeeSources?: () => void;
 }) {
   const t = useTranslations('contentEditor.editor.agentCard');
   const locale = useLocale();
@@ -200,6 +206,25 @@ export function AgentCard({
   const after = rulesAfter(suggestions, rules);
   const stillOpen = Math.max(0, rules.total - rules.met);
   const tone = working ? 'working' : open > 0 ? 'waiting' : 'done';
+  // "built from 3 of your sources · See sources" (v1.1 §3b).
+  const builtFrom = sourceCount > 0 && (
+    <>
+      {' · '}
+      {t('builtFrom', { count: sourceCount })}
+      {onSeeSources && (
+        <>
+          {' · '}
+          <button
+            type="button"
+            onClick={onSeeSources}
+            className="font-medium text-foreground underline-offset-2 hover:underline focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none"
+          >
+            {t('seeSources')}
+          </button>
+        </>
+      )}
+    </>
+  );
 
   let title: React.ReactNode;
   let line: React.ReactNode;
@@ -231,6 +256,7 @@ export function AgentCard({
       page.status === 'open' ? (
         <>
           {tRewrite('characters', { before, after: afterChars })} · {page.reason}
+          {builtFrom}
         </>
       ) : page.status === 'accepted' && stillOpen > 0 ? (
         tRewrite('rulesOpen', { count: stillOpen })
@@ -249,6 +275,7 @@ export function AgentCard({
             </span>
           </>
         )}
+        {builtFrom}
         {action && (
           <>
             {' · '}

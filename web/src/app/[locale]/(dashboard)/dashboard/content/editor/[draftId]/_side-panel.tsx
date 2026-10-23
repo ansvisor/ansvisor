@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { isPageType, type ContentDraft } from '@/lib/content/drafts';
-import { buildSourceGroups, includedCounts } from '@/lib/content/sources';
+import { buildSourceGroups, includedCounts, type DraftSourceKind } from '@/lib/content/sources';
 import { formatNumber } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { BriefTab, type AgentRewrite } from './_brief-tab';
@@ -110,6 +110,7 @@ export function EditorSidePanel({
   pageRewrite,
   agentRewrite,
   lastSuggestionAt,
+  onSourceShown,
 }: {
   draft: ContentDraft;
   /** The draft's title, page and type as written now: Sources and Brief read them. */
@@ -120,8 +121,15 @@ export function EditorSidePanel({
   rules: DraftRulesState;
   /** The draft's brief and sources, read once for the editor. */
   reads: DraftReads;
-  /** A tab to open, from outside the panel (the header's rules chip). */
-  tabRequest: { tab: PanelTarget; n: number } | null;
+  /**
+   * A tab to open, from outside the panel (the header's rules chip), and a
+   * source to show in Sources (a "Based on" chip or mark, CE-033).
+   */
+  tabRequest: {
+    tab: PanelTarget;
+    n: number;
+    source?: { kind: DraftSourceKind; ref: string };
+  } | null;
   /** Run Agent's Fix open rules, for Rules (CE-018, v1.1 CE-029). */
   agentFix?: AgentFix;
   /** Run Agent ▾'s Rewrite the whole page, for Rules; absent once the page is ready or published. */
@@ -130,6 +138,8 @@ export function EditorSidePanel({
   agentRewrite?: AgentRewrite;
   /** When the agent's latest suggestions came, or null: the last time it wrote from the sources. */
   lastSuggestionAt: string | null;
+  /** The source asked for was shown (or isn't listed): it isn't shown again. */
+  onSourceShown?: () => void;
 }) {
   const t = useTranslations('contentEditor.editor.panel');
   const [tab, setTab] = useState<PanelTab>('instructions');
@@ -332,6 +342,13 @@ export function EditorSidePanel({
               rebuilding={rebuilding}
               onRebuild={(sources) => void rebuild({ sources })}
               agentUsedAt={agentUsedAt}
+              // Only while Sources shows: a hidden row can't be scrolled to.
+              highlight={
+                tab === 'sources' && tabRequest?.source
+                  ? { ...tabRequest.source, n: tabRequest.n }
+                  : null
+              }
+              onHighlighted={onSourceShown}
             />
           </div>
         )}

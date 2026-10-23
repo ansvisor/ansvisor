@@ -52,9 +52,13 @@ import {
 import type { DraftVersion } from '@/lib/content/history';
 import {
   AGENT_RUN_MAX,
+  batchSources,
   type DraftSuggestion,
+  type SuggestionSource,
   type SuggestionStatus,
 } from '@/lib/content/suggestions';
+import { rebuildSources } from '@/lib/content/brief';
+import { buildSourceGroups } from '@/lib/content/sources';
 import {
   cleanHtml,
   formatHtmlSource,
@@ -78,6 +82,7 @@ import {
   type HeldEdit,
 } from './_cited-passages';
 import { ExportMenu } from './_export-menu';
+import { sourceDetail } from './_sources-tab';
 import { HistoryMenu } from './_history-menu';
 import { HtmlBlock, copyToClipboard } from './_html-block';
 import { OwnCopies, ownCopyHtml } from './_own-copies';
@@ -245,11 +250,21 @@ export function DraftEditor({
   const [panelOpen, togglePanel] = useSidePanelOpen();
   // The header's rules chip opens the panel on Rules, and the closed panel's
   // strip on the tab picked there.
-  const [tabRequest, setTabRequest] = useState<{ tab: PanelTarget; n: number } | null>(null);
-  const openPanelTab = (tab: PanelTarget) => {
+  const [tabRequest, setTabRequest] = useState<{
+    tab: PanelTarget;
+    n: number;
+    /** A source to show in Sources: a "Based on" chip or mark clicked (CE-033). */
+    source?: Pick<SuggestionSource, 'kind' | 'ref'>;
+  } | null>(null);
+  const openPanelTab = (tab: PanelTarget, source?: SuggestionSource) => {
     if (!panelOpen) togglePanel();
-    setTabRequest((prev) => ({ tab, n: (prev?.n ?? 0) + 1 }));
+    setTabRequest((prev) => ({
+      tab,
+      n: (prev?.n ?? 0) + 1,
+      ...(source ? { source: { kind: source.kind, ref: source.ref } } : {}),
+    }));
   };
+  const onSource = useRef<(source: SuggestionSource) => void>(() => {});
 
   const editor = useEditor({
     extensions: [
@@ -280,7 +295,10 @@ export function DraftEditor({
         // person can't type while the question is open.
         onHeld: (edit) => setHeld((current) => current ?? edit),
       }),
-      AgentSuggestions.configure({ onDecide: (id, decision) => onDecide.current(id, decision) }),
+      AgentSuggestions.configure({
+        onDecide: (id, decision) => onDecide.current(id, decision),
+        onSource: (source) => onSource.current(source),
+      }),
       OneH1,
     ],
     content: draft.bodyHtml,
@@ -357,6 +375,7 @@ export function DraftEditor({
   useEffect(() => {
     attachRef.current = (files) => void attachments.attach(files);
     onDecide.current = (id, decision) => void decide([id], decision);
+    onSource.current = (source) => openPanelTab('sources', source);
   });
 
   /** "ChatGPT 14× and Perplexity 6×": the platforms quoting a passage, the most first. */
@@ -443,6 +462,17 @@ export function DraftEditor({
     editor.commands.focus();
   };
 
+  // The rows of the Sources tab by kind and ref, for a "Based on" chip's hover (CE-033).
+  const tDetail = useTranslations('contentEditor.editor.sources.detail');
+  const sourceRows = useMemo(() => {
+    const read = reads.sources;
+    if (!read?.data) return null;
+    const groups = buildSourceGroups(read.data, read.choices, {
+      title: draft.title,
+      sourceUrl: draft.sourceUrl,
+    });
+    return new Map(groups.flatMap((g) => g.rows.map((row) => [`${row.kind}:${row.ref}`, row])));
+  }, [reads.sources, draft.title, draft.sourceUrl]);
   const suggestionLabels = useMemo<SuggestionLabels>(
     () => ({
       agent: t('suggestions.agent'),
@@ -456,8 +486,24 @@ export function DraftEditor({
       stale: t('suggestions.stale'),
       heading: t('suggestions.heading'),
       links: t('suggestions.links'),
+      basedOn: t('suggestions.basedOn'),
+      sourceKinds: {
+        prompt: t('suggestions.sourceKinds.prompt'),
+        fanout: t('suggestions.sourceKinds.fanout'),
+        cited_page: t('suggestions.sourceKinds.cited_page'),
+        gsc_query: t('suggestions.sourceKinds.gsc_query'),
+      },
+      sourceMark: (n, label) => t('suggestions.sourceMark', { n, label }),
+      sourceTip: sourceRows
+        ? (source) => {
+            const row = sourceRows.get(`${source.kind}:${source.ref}`);
+            if (!row) return null;
+            const detail = sourceDetail(row, tDetail);
+            return detail ? `${row.name} · ${detail}` : row.name;
+          }
+        : undefined,
     }),
-    [t],
+    [t, tDetail, sourceRows],
   );
 
   // The latest batch, read when the editor opens.
@@ -716,6 +762,17 @@ export function DraftEditor({
         const locks = citedLocks(editor.state);
         return [...locks.labels.keys()].filter((key) => !locks.unlocked.has(key));
       })(),
+      // The data it writes from: the sources the Sources tab keeps (CE-033).
+      ...(reads.sources?.data
+        ? {
+            sources: rebuildSources(reads.sources.data, reads.sources.choices, {
+              title,
+              sourceUrl: draft.sourceUrl,
+              html: editor.getHTML(),
+              length: rules.length,
+            }),
+          }
+        : {}),
     };
     setFixing(true);
     const asked = Date.now();
@@ -1251,6 +1308,8 @@ export function DraftEditor({
             <AgentCard
               suggestions={suggestions}
               rules={cardRules}
+              sourceCount={batchSources(suggestions).length}
+              onSeeSources={() => openPanelTab('sources')}
               // Not while the HTML view holds the page: it would write over it.
               busy={deciding || htmlSource !== null}
               working={fixing}
@@ -1345,6 +1404,9 @@ export function DraftEditor({
             agentRewrite={agentRewrite}
             // One batch, one run: its first suggestion's time is the run's.
             lastSuggestionAt={suggestions[0]?.createdAt ?? null}
+            onSourceShown={() =>
+              setTabRequest((prev) => (prev?.source ? { tab: prev.tab, n: prev.n } : prev))
+            }
           />
         ) : (
           <EditorPanelRail onOpen={openPanelTab} />

@@ -3606,7 +3606,7 @@
         "none": "No sources kept yet · <edit>Edit sources</edit>",
         "note": {
           "title": "Content Agent writes from your data",
-          "body": "Your prompts, fan-outs, cited pages and Search Console queries.",
+          "body": "Your prompts, fan-outs, cited pages and Search Console queries. Every change shows the sources it used.",
           "close": "Close"
         }
       },
@@ -3618,7 +3618,9 @@
         "reviewedLine": "{accepted, number} accepted · Rules {met, number} of {total, number}{open, plural, =0 {} other { · # still open}}",
         "more": "+{count, number} more",
         "run": "Run Agent",
-        "working": "Content Agent is working"
+        "working": "Content Agent is working",
+        "builtFrom": "built from {count, number} of your sources",
+        "seeSources": "See sources"
       },
       "rewrite": {
         "bar": "Rewritten page",
@@ -3661,6 +3663,14 @@
         "stale": "The page changed here since the agent read it.",
         "heading": "This would put more than a heading into the heading. Reject it, and add the text below the heading yourself.",
         "links": "Links",
+        "basedOn": "Based on",
+        "sourceKinds": {
+          "prompt": "Prompt",
+          "fanout": "Fan-out",
+          "cited_page": "Cited page",
+          "gsc_query": "Search Console"
+        },
+        "sourceMark": "Source {n}: {label}",
         "acceptedToast": "{count, plural, one {Accepted} other {# changes accepted}} · undo any time",
         "rejectedToast": "{count, plural, one {Rejected} other {# changes rejected}} · restore any time",
         "undoneToast": "{count, plural, one {Undone · back to the suggestion} other {# undone · the suggestions are back}}",
