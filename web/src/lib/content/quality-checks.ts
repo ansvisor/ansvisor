@@ -36,9 +36,9 @@ export const EEAT_WEIGHTS = {
 export type EeatCheckId = keyof typeof EEAT_WEIGHTS;
 
 /**
- * Trust's checks and points; Phase 1 reads the page's links and figures:
- * sourced figures, fresh sources, working links. Site trust joins with Site
- * Audit (CE-043); the rest are Phase 2.
+ * Trust's checks and points; Phase 1 reads the page's links and figures
+ * (sourced figures, fresh sources, working links) and the site's trust
+ * (Site Audit, CE-043); the rest are Phase 2.
  */
 export const TRUST_WEIGHTS = {
   claimsSourced: 30,
@@ -199,13 +199,15 @@ export interface TrustRead extends Score<TrustCheckId> {
 /**
  * Trust from the page as written (Phase 1): figures with a source (a link
  * to another site in the same block), sources from the last FRESH_MONTHS,
- * and links that answer. A check with nothing to read on the page (no
- * figure, no dated source, no link read yet) is left out.
+ * links that answer, and the site's trust (its five checks in Site Audit).
+ * A check with nothing to read (no figure, no dated source, no link read
+ * yet, no site trust read) is left out.
  */
 export function trust({
   blocks,
   links,
   brandDomains,
+  siteTrust = null,
   now,
 }: {
   /** The page's blocks (trustBlocks). */
@@ -213,6 +215,8 @@ export function trust({
   /** Each link's read, by the link as the page has it; one not read yet isn't counted. */
   links: Map<string, LinkCheck>;
   brandDomains: string[];
+  /** How many of the site's five trust checks pass (CE-043), when read. */
+  siteTrust?: { score: number } | null;
   now: number;
 }): TrustRead {
   const all = pageLinks(blocks, brandDomains);
@@ -262,6 +266,14 @@ export function trust({
       id: 'noBrokenLinks',
       points: (TRUST_WEIGHTS.noBrokenLinks * (read.length - broken.length)) / read.length,
       max: TRUST_WEIGHTS.noBrokenLinks,
+    });
+  }
+
+  if (siteTrust) {
+    checks.push({
+      id: 'siteTrust',
+      points: (TRUST_WEIGHTS.siteTrust * siteTrust.score) / 5,
+      max: TRUST_WEIGHTS.siteTrust,
     });
   }
 

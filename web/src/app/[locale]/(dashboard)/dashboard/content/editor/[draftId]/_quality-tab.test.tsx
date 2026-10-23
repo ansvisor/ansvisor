@@ -69,6 +69,7 @@ function read(
     author,
     hasAuthors,
     brandName: 'Acme',
+    siteTrust: null,
   };
 }
 
@@ -220,5 +221,33 @@ describe('QualityTab', () => {
     )!;
     await act(async () => figure.querySelector('button')!.click());
     expect(onShow).toHaveBeenCalledWith('Win rates rose 42% last year.');
+  });
+
+  it("shows the site's trust, what is missing and the way to Site Audit", async () => {
+    const siteTrust = {
+      checks: {
+        about: { ok: true, url: 'https://acme.com/about' },
+        contact: { ok: true, url: 'https://acme.com/contact' },
+        editorial: { ok: false, url: null },
+        organizationSchema: { ok: true, url: 'https://acme.com/' },
+        authorPages: { ok: false, authors: [{ name: 'Ada', url: null }] },
+      },
+      score: 3,
+      checkedAt: '2026-10-23T12:00:00.000Z',
+    };
+    await render({ ...read(result), siteTrust });
+    const site = container.querySelector('[aria-label="Site trust"]')!;
+    expect(site.textContent).toBe(
+      'Site trust 3/5· Missing: Editorial policy, Author pagesFix in Site Audit',
+    );
+    expect(site.querySelector('a')!.getAttribute('href')).toBe('/dashboard/audit#site-trust');
+
+    const all = Object.fromEntries(
+      Object.entries(siteTrust.checks).map(([k, v]) => [k, { ...v, ok: true }]),
+    ) as typeof siteTrust.checks;
+    await render({ ...read(result), siteTrust: { ...siteTrust, checks: all, score: 5 } });
+    expect(container.querySelector('[aria-label="Site trust"]')!.textContent).toBe(
+      'Site trust 5/5',
+    );
   });
 });

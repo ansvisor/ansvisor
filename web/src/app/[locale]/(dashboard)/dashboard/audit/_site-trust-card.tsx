@@ -1,0 +1,158 @@
+'use client';
+
+import { useCallback, useEffect, useState } from 'react';
+import { useFormatter, useTranslations } from 'next-intl';
+import { Check, ExternalLink, X } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { LoadingDots } from '@/components/ui/loading-dots';
+import { getSiteTrust } from '@/lib/actions/audits';
+import { SITE_TRUST_CHECKS, type SiteTrust, type SiteTrustCheck } from '@/lib/content/site-trust';
+import { cn } from '@/lib/utils';
+
+/**
+ * Site trust (Content Editor Quality spec §8, CE-043): the brand's five
+ * site-level checks, "Site trust {n}/5", each with the page that passes it
+ * or what to add. Quality's "Fix in Site Audit" lands here (#site-trust),
+ * and the score is worth 5 Trust points on every page.
+ */
+export function SiteTrustCard({ brandId }: { brandId: string }) {
+  const t = useTranslations('audit.siteTrust');
+  const format = useFormatter();
+  const [trust, setTrust] = useState<SiteTrust | null>(null);
+  const [failed, setFailed] = useState(false);
+  const [checking, setChecking] = useState(false);
+
+  const load = useCallback(
+    async (refresh: boolean) => {
+      setChecking(refresh);
+      try {
+        setTrust(await getSiteTrust(brandId, refresh));
+        setFailed(false);
+      } catch (err) {
+        console.error('Failed to read the site trust:', err);
+        setFailed(true);
+      } finally {
+        setChecking(false);
+      }
+    },
+    [brandId],
+  );
+  useEffect(() => {
+    setTrust(null);
+    void load(false);
+  }, [load]);
+
+  return (
+    <Card id="site-trust" className="scroll-mt-20">
+      <CardHeader className="flex flex-row items-start justify-between gap-3 space-y-0">
+        <div className="min-w-0">
+          <CardTitle className="text-base">
+            {trust ? t('title', { score: trust.score }) : t('titleLoading')}
+          </CardTitle>
+          <p className="mt-0.5 text-xs text-muted-foreground">{t('description')}</p>
+        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          className="shrink-0"
+          disabled={checking || !trust}
+          onClick={() => void load(true)}
+        >
+          {checking && <LoadingDots className="mr-1.5" />}
+          {t('checkAgain')}
+        </Button>
+      </CardHeader>
+      <CardContent className="pt-0">
+        {!trust && !failed && (
+          <p className="text-sm text-muted-foreground" aria-busy="true">
+            <LoadingDots />
+            <span className="sr-only">{t('loading')}</span>
+          </p>
+        )}
+        {failed && !trust && (
+          <p className="text-sm text-destructive">
+            {t('loadFailed')}{' '}
+            <button type="button" className="underline" onClick={() => void load(false)}>
+              {t('retry')}
+            </button>
+          </p>
+        )}
+        {trust && (
+          <>
+            <ul className="divide-y rounded-xl border">
+              {SITE_TRUST_CHECKS.map((check) => (
+                <CheckRow key={check} check={check} trust={trust} />
+              ))}
+            </ul>
+            <p className="mt-2 text-xs text-muted-foreground">
+              {t('checkedAt', {
+                date: format.dateTime(new Date(trust.checkedAt), {
+                  dateStyle: 'medium',
+                  timeStyle: 'short',
+                }),
+              })}
+            </p>
+          </>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function CheckRow({ check, trust }: { check: SiteTrustCheck; trust: SiteTrust }) {
+  const t = useTranslations('audit.siteTrust');
+  const result = trust.checks[check];
+  const ok = !!result?.ok;
+  const url = check === 'authorPages' ? null : (trust.checks[check].url ?? null);
+  const authors = check === 'authorPages' ? trust.checks.authorPages.authors : [];
+  const withoutPage = authors.filter((a) => !a.url).map((a) => a.name);
+
+  let detail: string;
+  if (check === 'authorPages') {
+    detail = !authors.length
+      ? t('checks.authorPages.noAuthors')
+      : ok
+        ? t('checks.authorPages.ok', { count: authors.length })
+        : t('checks.authorPages.missing', { names: withoutPage.join(', ') });
+  } else {
+    detail = ok ? t(`checks.${check}.ok`) : t(`checks.${check}.missing`);
+  }
+
+  return (
+    <li className="flex items-start gap-2.5 px-3 py-2.5">
+      <span
+        aria-hidden
+        className={cn(
+          'mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full',
+          ok
+            ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300'
+            : 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300',
+        )}
+      >
+        {ok ? <Check className="h-3 w-3" /> : <X className="h-3 w-3" />}
+      </span>
+      <div className="min-w-0 flex-1">
+        <p className="text-sm font-medium">
+          {t(`checks.${check}.name`)}
+          <span className="sr-only">
+            {' · '}
+            {ok ? t('passes') : t('missingLabel')}
+          </span>
+        </p>
+        <p className="text-xs text-muted-foreground [overflow-wrap:anywhere]">{detail}</p>
+      </div>
+      {url && ok && (
+        <a
+          href={url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex shrink-0 items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+        >
+          {t('open')}
+          <ExternalLink className="h-3 w-3" />
+        </a>
+      )}
+    </li>
+  );
+}

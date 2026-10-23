@@ -23,6 +23,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { qualityPhase } from '@/lib/content/quality';
 import { useBrandStore } from '@/stores/use-brand-store';
 import { useUserRole } from '@/hooks/use-user-role';
 import {
@@ -46,6 +47,7 @@ import {
 } from '@/lib/actions/audits';
 import { pct, scoreColor, CATEGORY_META } from '@/components/audit/audit-report';
 import { formatMonthDay, formatNumber } from '@/lib/format';
+import { SiteTrustCard } from './_site-trust-card';
 import { ScoreTrendChart } from './_charts';
 import { AuditPagesTable } from './_pages-table';
 import { AuditBulkBar, ExportMenu } from './_bulk-bar';
@@ -715,6 +717,9 @@ export default function SiteAuditPage() {
           </CardContent>
         </Card>
       )}
+
+      {/* Site trust (Content Editor Quality, CE-043): with Quality's first phase */}
+      {activeBrandId && qualityPhase() >= 1 && <SiteTrustCard brandId={activeBrandId} />}
 
       {loading ? (
         <Card>

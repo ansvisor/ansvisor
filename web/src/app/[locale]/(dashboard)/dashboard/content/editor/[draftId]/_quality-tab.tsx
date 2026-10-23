@@ -19,6 +19,7 @@ import {
   type Readability,
   type ReadabilityCheck,
 } from '@/lib/content/readability';
+import { SITE_TRUST_PATH, siteTrustMissing, type SiteTrust } from '@/lib/content/site-trust';
 import { cn } from '@/lib/utils';
 import { MANAGE_AUTHORS_PATH } from './_author-menu';
 
@@ -35,6 +36,8 @@ export interface QualityRead {
   /** Whether the workspace has an author to pick (Settings › Authors). */
   hasAuthors: boolean;
   brandName: string;
+  /** The site's trust in Site Audit (CE-043), or null while not read. */
+  siteTrust: SiteTrust | null;
 }
 
 type ScoreName = 'eeat' | 'trust' | 'readability';
@@ -71,7 +74,9 @@ export function QualityTab({
 }) {
   const t = useTranslations('contentEditor.editor.quality');
   const tAuthor = useTranslations('contentEditor.editor.author');
-  const { readability, eeat, trust } = quality;
+  const tSite = useTranslations('audit.siteTrust.checks');
+  const { readability, eeat, trust, siteTrust } = quality;
+  const siteMissing = siteTrust ? siteTrustMissing(siteTrust) : [];
   const scores: { name: ScoreName; score: number | null; empty: string }[] = [
     { name: 'eeat', score: eeat?.score ?? null, empty: t('notScored') },
     { name: 'trust', score: trust?.score ?? null, empty: t('notScored') },
@@ -144,6 +149,30 @@ export function QualityTab({
           </ul>
         )}
       </section>
+
+      {siteTrust && (
+        <section
+          aria-label={t('site.label')}
+          className="flex flex-wrap items-center gap-x-2 gap-y-1 border-t pt-3 text-xs"
+        >
+          <span className="font-medium">{t('site.score', { score: siteTrust.score })}</span>
+          {siteMissing.length > 0 && (
+            <span className="min-w-0 text-muted-foreground [overflow-wrap:anywhere]">
+              {t('site.missing', {
+                checks: siteMissing.map((check) => tSite(`${check}.name`)).join(', '),
+              })}
+            </span>
+          )}
+          {siteMissing.length > 0 && (
+            <Link
+              href={SITE_TRUST_PATH}
+              className="ml-auto font-medium text-foreground underline-offset-2 hover:underline"
+            >
+              {t('site.fix')}
+            </Link>
+          )}
+        </section>
+      )}
     </div>
   );
 }

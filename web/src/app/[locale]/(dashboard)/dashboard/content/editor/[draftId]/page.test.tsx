@@ -17,6 +17,10 @@ const saveContentDraft = vi.fn();
 const setContentDraftPageType = vi.fn();
 const setContentDraftAuthor = vi.fn();
 const checkDraftLinks = vi.fn();
+const getSiteTrust = vi.fn();
+vi.mock('@/lib/actions/audits', () => ({
+  getSiteTrust: (...args: unknown[]) => getSiteTrust(...args),
+}));
 const getContentAuthors = vi.fn();
 vi.mock('@/lib/actions/content-authors', () => ({
   getContentAuthors: (...args: unknown[]) => getContentAuthors(...args),
@@ -232,7 +236,8 @@ beforeEach(() => {
   saveBlob.mockReset();
   setContentDraftPageType.mockReset().mockResolvedValue(undefined);
   setContentDraftAuthor.mockReset().mockResolvedValue(undefined);
-  checkDraftLinks.mockReset().mockResolvedValue({ links: [] });
+  checkDraftLinks.mockReset().mockResolvedValue({ links: [], skipped: [] });
+  getSiteTrust.mockReset().mockRejectedValue(new Error('not in this test'));
   getContentAuthors.mockReset().mockResolvedValue(null);
   saveContentDraft
     .mockReset()

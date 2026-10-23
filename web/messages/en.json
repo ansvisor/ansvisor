@@ -2692,6 +2692,47 @@
     "deleteConfirm": "This permanently deletes this audit and its results. This can't be undone.",
     "cancel": "Cancel",
     "auditsLeft": "audits left this month",
+    "siteTrust": {
+      "title": "Site trust {score}/5",
+      "titleLoading": "Site trust",
+      "description": "Read from your site's pages. Worth 5 Trust points on every page in Content.",
+      "checkAgain": "Check again",
+      "loading": "Reading your site",
+      "loadFailed": "Couldn't read your site trust.",
+      "retry": "Try again",
+      "checkedAt": "Checked {date}",
+      "passes": "passes",
+      "missingLabel": "missing",
+      "open": "Open",
+      "checks": {
+        "about": {
+          "name": "About page",
+          "ok": "Found on your site.",
+          "missing": "Add a page that says who you are and what you do, at /about."
+        },
+        "contact": {
+          "name": "Contact page",
+          "ok": "Found on your site.",
+          "missing": "Add a page with how to reach you, at /contact."
+        },
+        "editorial": {
+          "name": "Editorial policy",
+          "ok": "Found on your site.",
+          "missing": "Add a page on how you write and check content, at /editorial-policy or /how-we-review."
+        },
+        "organizationSchema": {
+          "name": "Organization schema on the home page",
+          "ok": "Your home page names your organization in its JSON-LD.",
+          "missing": "Add Organization JSON-LD to your home page: name, logo, URL and profiles."
+        },
+        "authorPages": {
+          "name": "Author pages",
+          "ok": "{count, plural, one {Your author has a page.} other {All # authors have a page.}}",
+          "missing": "No page found for: {names}. Add one for each, such as /authors/their-name.",
+          "noAuthors": "Add your authors in Settings › Authors, then a page for each on your site."
+        }
+      }
+    },
     "scoreOverTime": "Score over time",
     "categoryBreakdown": "Category breakdown",
     "inRange": "in range",
@@ -4114,6 +4155,12 @@
         "tooShort": "Write a few paragraphs: Readability is read from the page as you write.",
         "tooShortShort": "Too short yet",
         "notScored": "Not scored yet",
+        "site": {
+          "label": "Site trust",
+          "score": "Site trust {score}/5",
+          "missing": "· Missing: {checks}",
+          "fix": "Fix in Site Audit"
+        },
         "pickAuthor": "Pick author",
         "addAuthor": "Add author",
         "editAuthor": "Edit author",

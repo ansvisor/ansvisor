@@ -162,4 +162,16 @@ describe('trust (Phase 1: figures and links)', () => {
     expect(result.broken).toHaveLength(1);
     expect(result.figures).toBe(1);
   });
+
+  it("counts the site's trust checks, 5 points for all five", () => {
+    const result = trust({
+      blocks: blocks('<p>No figures here.</p>'),
+      links: new Map(),
+      brandDomains: ['acme.com'],
+      siteTrust: { score: 3 },
+      now: NOW,
+    });
+    expect(result.checks).toEqual([{ id: 'siteTrust', points: 3, max: TRUST_WEIGHTS.siteTrust }]);
+    expect(result.score).toBe(60);
+  });
 });

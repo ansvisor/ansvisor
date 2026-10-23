@@ -37,10 +37,12 @@ import {
   startAgentWriting,
   startPageRewrite,
 } from '@/lib/actions/content-drafts';
+import { getSiteTrust } from '@/lib/actions/audits';
 import { getContentAuthors } from '@/lib/actions/content-authors';
 import { stopAgentRun } from '@/lib/content/agent-runs-client';
 import { agentWriteRequest, useRuleDescriber } from '@/lib/content/agent-write';
 import { authorInitials, type AuthorsRead } from '@/lib/content/authors';
+import type { SiteTrust } from '@/lib/content/site-trust';
 import {
   AGENT_POLL_MS,
   CONTENT_LIBRARY_PATH,
@@ -444,6 +446,18 @@ export function DraftEditor({
   const pageBlocks = useMemo(() => (qualityOn ? trustBlocks(pageHtml) : []), [qualityOn, pageHtml]);
   const linkChecks = useLinkChecks(draft.id, autosave.savedAt, linksToCheck(pageBlocks), qualityOn);
   const brandDomains = reads.sources?.data?.brandDomains;
+  // The site's trust (Site Audit, CE-043), read once: Trust's last 5 points.
+  const [siteTrust, setSiteTrust] = useState<SiteTrust | null>(null);
+  useEffect(() => {
+    if (!qualityOn) return;
+    let live = true;
+    getSiteTrust(draft.brandId)
+      .then((read) => live && setSiteTrust(read))
+      .catch((err) => console.error('Failed to read the site trust:', err));
+    return () => {
+      live = false;
+    };
+  }, [qualityOn, draft.brandId]);
   // The brand's own links aren't sources: Trust waits for its domains.
   const trustScore = useMemo(
     () =>
@@ -452,10 +466,11 @@ export function DraftEditor({
             blocks: pageBlocks,
             links: linkChecks,
             brandDomains,
+            siteTrust,
             now: Date.now(),
           })
         : null,
-    [qualityOn, pageBlocks, linkChecks, brandDomains],
+    [qualityOn, pageBlocks, linkChecks, brandDomains, siteTrust],
   );
   const qualityScore = qualityAverage([
     eeatScore?.score ?? null,
@@ -470,6 +485,7 @@ export function DraftEditor({
         author: pageAuthor,
         hasAuthors: (authorsRead?.authors.length ?? 0) > 0,
         brandName,
+        siteTrust,
       }
     : null;
   // Quality's Pick author opens the header's menu.

@@ -2,6 +2,7 @@
 
 import { createClient } from '@/lib/supabase/server';
 import { API_BASE_URL } from '@/config/api';
+import type { SiteTrust } from '@/lib/content/site-trust';
 
 const AEO_SERVER_URL = API_BASE_URL;
 
@@ -252,6 +253,24 @@ export async function getAuditQuota(): Promise<AuditQuota> {
 
   const data = await res.json();
   return data.quota;
+}
+
+/**
+ * The brand's site trust (CE-043): the day's read, or a new one when
+ * `refresh` (the API reads again at most every few minutes).
+ */
+export async function getSiteTrust(brandId: string, refresh = false): Promise<SiteTrust> {
+  const session = await getSession();
+  const res = await fetch(
+    `${AEO_SERVER_URL}/api/audits/site-trust?brandId=${encodeURIComponent(brandId)}${refresh ? '&refresh=1' : ''}`,
+    { headers: { Authorization: `Bearer ${session.access_token}` } },
+  );
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.message || `Server error: ${res.status}`);
+  }
+  const data = await res.json();
+  return { checks: data.checks, score: data.score, checkedAt: data.checkedAt };
 }
 
 /** Score + category-score time series for the brand's primary domain. */
