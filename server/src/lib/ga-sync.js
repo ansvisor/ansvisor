@@ -19,7 +19,7 @@
 
 import supabaseAdmin from '../config/supabase.js';
 import { isComposioConfigured, runGaReport } from './composio.js';
-import { AI_SOURCES_VERSION } from './ai-sources.js';
+import { AI_SOURCES_VERSION, classifyAiSurface } from './ai-sources.js';
 import {
   GA_AI_ASSISTANT_CHANNEL,
   GA_AI_SOURCE_PATTERN,
@@ -164,8 +164,12 @@ const SUMMED_COLUMNS = [
  * The report is split by channel too, to know which sessions GA4 itself
  * calls AI (AT-004), so one source can come back twice for a page and day —
  * as a referral and as an AI Assistant session. Storage keeps one row per
- * (date, source, entry URL), so those are summed into it: the same visits
- * GA4 would report without the channel, never counted twice.
+ * (date, source, medium, entry URL), so those are summed into it: the same
+ * visits GA4 would report without the channel, never counted twice.
+ *
+ * The session medium is kept apart (00251): ChatGPT's sessions with medium
+ * feed came through a ChatGPT Shopping product card (#1283), so the row
+ * carries that surface too. It stays a ChatGPT row.
  */
 export function mapAiTrafficRows(brandId, report) {
   const byKey = new Map();
@@ -173,9 +177,10 @@ export function mapAiTrafficRows(brandId, report) {
     const date = gaDateToIso(row.date);
     if (!date) continue;
     const source = row.sessionSource ?? '';
+    const medium = row.sessionMedium ?? '';
     const landingPageQuery = row.landingPagePlusQueryString ?? '';
     const metrics = trafficMetricColumns(row);
-    const key = `${date}|${source}|${landingPageQuery}`;
+    const key = `${date}|${source}|${medium}|${landingPageQuery}`;
     const seen = byKey.get(key);
     if (seen) {
       for (const column of SUMMED_COLUMNS) seen[column] += metrics[column];
@@ -188,6 +193,7 @@ export function mapAiTrafficRows(brandId, report) {
       date,
       source,
       platform: gaAiPlatform(source, row.sessionDefaultChannelGroup),
+      medium,
       // Path for joining the page totals, full URL for attribution.
       landing_page: row.landingPage ?? '',
       landing_page_query: landingPageQuery,
@@ -196,7 +202,30 @@ export function mapAiTrafficRows(brandId, report) {
       source_list_version: AI_SOURCES_VERSION,
     });
   }
-  return [...byKey.values()];
+  // Once each row's platform is settled: a surface belongs to a platform.
+  return [...byKey.values()].map((row) => ({
+    ...row,
+    surface: classifyAiSurface(row.platform, row.medium),
+  }));
+}
+
+/**
+ * Rows synced before the sync read the session medium (00251) have none, and
+ * the medium is part of a row's key, so a re-read stores its rows beside
+ * them rather than over them. Once the AI report has re-read the days from
+ * `from` to `to`, their rows without a medium go: the report's replace them.
+ * The daily run re-reads the last few days; the history backfill
+ * (backfill-ga-ai-history.js) the rest.
+ */
+export async function deleteRowsWithoutMedium(brandId, { from, to }) {
+  const { error } = await supabaseAdmin
+    .from('ga_ai_traffic_stats')
+    .delete()
+    .eq('brand_id', brandId)
+    .is('medium', null)
+    .gte('date', from)
+    .lte('date', to);
+  if (error) throw new Error(`Delete from ga_ai_traffic_stats failed: ${error.message}`);
 }
 
 /** Landing-page totals → ga_page_stats. */
@@ -414,6 +443,8 @@ async function syncBrand(brand, { aiHistory = false } = {}) {
     dimensions: [
       { name: 'date' },
       { name: 'sessionSource' },
+      // ChatGPT Shopping's sessions have medium feed (#1283).
+      { name: 'sessionMedium' },
       { name: 'sessionDefaultChannelGroup' },
       { name: 'landingPage' },
       { name: 'landingPagePlusQueryString' },
@@ -427,7 +458,14 @@ async function syncBrand(brand, { aiHistory = false } = {}) {
   });
   const aiMapped = mapAiTrafficRows(brand.id, aiReport);
   if (aiMapped.length) {
-    await upsertAll('ga_ai_traffic_stats', aiMapped, 'brand_id,date,source,landing_page_query');
+    await upsertAll(
+      'ga_ai_traffic_stats',
+      aiMapped,
+      'brand_id,date,source,medium,landing_page_query',
+    );
+    // Not after an empty report: that may be GA4 answering with nothing,
+    // and the older rows are all those days have.
+    await deleteRowsWithoutMedium(brand.id, { from: aiDays[aiDays.length - 1], to: aiDays[0] });
   }
   const aiRows = aiMapped.length;
 

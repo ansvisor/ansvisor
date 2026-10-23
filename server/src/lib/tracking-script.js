@@ -8,7 +8,9 @@
  *
  * It sends the source's key, not the host it saw, so chat.openai.com and
  * chatgpt.com are stored as one engine, and the list's version, stored with
- * the visit.
+ * the visit. The landing URL goes whole: the server reads a surface from its
+ * utm_medium (ChatGPT Shopping's feed links, #1283), so the snippet needn't
+ * know the surfaces, and a cached older copy of it counts them too.
  *
  * It also sends the landing page's HTTP status as the browser saw it, for
  * Broken AI links (AT-012): st, from the navigation entry, or 0 where the
