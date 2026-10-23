@@ -88,9 +88,11 @@ export function runSteps(kind, counts = {}) {
  * Starts a run on a draft: written, with its Stop signal (callSignal adds a
  * call's timeout). Runs a stopped server left on the draft are closed first,
  * so the latest is this one. A run that can't be written still runs, with no
- * steps shown and Stop by its signal only.
+ * steps shown and Stop by its signal only. `claimedAt` is the claim a Start
+ * or Rewrite holds on the draft (its agent_state_at): a Stop lets go of that
+ * claim only, never another run's.
  */
-export async function startRun({ draftId, kind, counts }) {
+export async function startRun({ draftId, kind, counts, claimedAt = null }) {
   const steps = runSteps(kind, counts);
   const controller = new AbortController();
   // Runs a stopped server left on the draft are closed: only those older
@@ -107,7 +109,7 @@ export async function startRun({ draftId, kind, counts }) {
   const data = await shown('run', null, () =>
     supabaseAdmin
       .from('content_agent_runs')
-      .insert({ draft_id: draftId, kind, steps })
+      .insert({ draft_id: draftId, kind, steps, claimed_at: claimedAt })
       .select('id')
       .single(),
   );
@@ -199,8 +201,9 @@ export async function finishRun(run, outcome, counts = {}) {
 
 /**
  * Stops a draft's run under way (with `runId`, that run only): marks it
- * stopped and aborts its model call when it runs here. Answers whether one
- * was under way.
+ * stopped and aborts its model call when it runs here. Answers the runs it
+ * stopped, each with the claim it holds on the draft (claimed_at; null for
+ * Fix and the brief, which hold none): none when none was under way.
  */
 export async function stopDraftRun(draftId, runId = null) {
   let query = supabaseAdmin
@@ -212,10 +215,10 @@ export async function stopDraftRun(draftId, runId = null) {
     .gt('started_at', new Date(Date.now() - RUN_STALE_MS).toISOString());
   // The run the editor shows: another tab's on the same draft goes on.
   if (runId) query = query.eq('id', runId);
-  const { data, error } = await query.select('id');
+  const { data, error } = await query.select('id, claimed_at');
   if (error) throw error;
   for (const { id } of data ?? []) live.get(id)?.abort();
-  return (data ?? []).length > 0;
+  return data ?? [];
 }
 
 /**

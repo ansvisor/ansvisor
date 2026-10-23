@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import type { ContentAuthor } from './authors';
-import { articleJsonLd, firstImage, isArticlePage, jsonLdScript, localDate } from './page-schema';
+import {
+  articleJsonLd,
+  firstImage,
+  isArticlePage,
+  jsonLdScript,
+  localDate,
+  titleHasPlaceholder,
+} from './page-schema';
 
 /** Before you publish's JSON-LD (Quality spec §7, CE-041): from the page's facts, nothing made up. */
 
@@ -74,6 +81,17 @@ describe('articleJsonLd', () => {
 
   it("leaves the author out while the authors aren't read", () => {
     expect(articleJsonLd({ ...base, author: undefined })).not.toHaveProperty('author');
+  });
+
+  it('leaves the headline out while the title has a placeholder', () => {
+    const result = articleJsonLd({ ...base, title: 'Forecasting with [figure, source] accuracy' });
+    expect(result).not.toHaveProperty('headline');
+    expect(result.author).toMatchObject({ name: 'Ada Lovelace' });
+    // A footnote, a checkbox or "[sic]" is no placeholder.
+    expect(titleHasPlaceholder('Pipeline [1] and [x] [sic]')).toBe(false);
+    expect(titleHasPlaceholder('Interview with [name of a real person]')).toBe(true);
+    // The match keeps no state between titles.
+    expect(titleHasPlaceholder('Interview with [name of a real person]')).toBe(true);
   });
 
   it('keeps the published date a live page has: only the updated date', () => {

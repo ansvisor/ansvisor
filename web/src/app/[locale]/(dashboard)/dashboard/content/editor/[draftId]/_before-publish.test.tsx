@@ -91,6 +91,7 @@ async function render(
     pageType = 'blog_post' as string | null,
     image = 'https://cdn.acme.com/pour-over.jpg' as string | null,
     linksPending = 0,
+    title = 'How small teams forecast',
   } = {},
 ) {
   await act(async () => {
@@ -99,7 +100,7 @@ async function render(
         <BeforePublish
           onClose={() => {}}
           quality={q}
-          title="How small teams forecast"
+          title={title}
           isNew={isNew}
           pageType={pageType}
           image={image}
@@ -255,6 +256,15 @@ describe('BeforePublish', () => {
     await act(async () => button('Copy JSON-LD')!.click());
     expect(writeText).toHaveBeenCalledWith(dialog().querySelector('pre')!.textContent);
     expect(toast.success).toHaveBeenCalledWith('JSON-LD copied');
+  });
+
+  it('leaves the headline out while the title has a placeholder, and says why', async () => {
+    await render(quality(), { title: 'How [number] small teams forecast' });
+    expect(jsonLd()).not.toHaveProperty('headline');
+    expect(dialog().textContent).toContain(
+      'The title still has a placeholder in square brackets, so the code leaves the headline out.',
+    );
+    expect(button('Copy JSON-LD')).toBeDefined();
   });
 
   it("leaves the author out while the authors aren't read", async () => {

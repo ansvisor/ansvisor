@@ -271,7 +271,12 @@ export async function getSiteTrust(brandId: string, refresh = false): Promise<Si
   }
   const data = await res.json();
   if (!Number.isFinite(data.score) || !data.checks) throw new Error('Unexpected site trust');
-  return { checks: data.checks, score: data.score, checkedAt: data.checkedAt };
+  return {
+    checks: data.checks,
+    score: data.score,
+    checkedAt: data.checkedAt,
+    ...(typeof data.complete === 'boolean' && { complete: data.complete }),
+  };
 }
 
 /** Score + category-score time series for the brand's primary domain. */

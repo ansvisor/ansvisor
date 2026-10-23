@@ -18,8 +18,8 @@ const author = (over: Partial<ContentAuthor> = {}): ContentAuthor => ({
   pages: null,
   ...over,
 });
-const todos = (a: ContentAuthor | null, hasAuthors = true) =>
-  qualityTodos({ eeat: eeat({ author: a }), author: a, hasAuthors });
+const todos = (a: ContentAuthor | null, hasAuthors = true, canEdit = true) =>
+  qualityTodos({ eeat: eeat({ author: a }), author: a, hasAuthors, canEdit });
 
 describe('qualityTodos', () => {
   it("asks to pick the page's author, with the byline's gain, and lists the profile after it", () => {
@@ -56,6 +56,13 @@ describe('qualityTodos', () => {
       ['byline', true, 0],
       ['authorProfile', true, 0],
     ]);
+  });
+
+  it('offers Edit author only to who can edit the author', () => {
+    expect(todos(author({ bio: null }), true, false)[1]).toMatchObject({
+      id: 'authorProfile',
+      action: null,
+    });
   });
 
   it('has none before E-E-A-T is read', () => {

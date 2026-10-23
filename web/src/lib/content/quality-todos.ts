@@ -32,10 +32,17 @@ export function qualityTodos({
   eeat,
   author,
   hasAuthors,
+  canEdit = false,
 }: {
   eeat: Score<EeatCheckId> | null;
   author: ContentAuthor | null;
   hasAuthors: boolean;
+  /**
+   * Whether the member may edit the page's author (whoever added them, the
+   * author themself or an admin): only they get Edit author; anyone else is
+   * told who can.
+   */
+  canEdit?: boolean;
 }): QualityTodo[] {
   if (!eeat || eeat.score === null) return [];
   const byline: QualityTodo = {
@@ -51,7 +58,7 @@ export function qualityTodos({
       id: 'authorProfile',
       done: !!author && bio && links,
       gain: scoreGain(eeat, ['authorBio']),
-      action: author ? 'editAuthor' : null,
+      action: author && canEdit ? 'editAuthor' : null,
     },
   ];
 }
