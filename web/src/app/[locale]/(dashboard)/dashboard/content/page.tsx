@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
+import { useFailureToast } from '@/hooks/use-failure-toast';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -340,6 +341,7 @@ interface PromptFilterItem {
 
 export default function ContentPage() {
   const t = useTranslations('content');
+  const failureToast = useFailureToast();
   const assetTypeLabel = useAssetTypeLabel();
   const tCommon = useTranslations('common');
   const locale = useLocale();
@@ -824,11 +826,14 @@ export default function ContentPage() {
     }).catch((err: unknown) => ({
       ok: false as const,
       error: err instanceof Error ? err.message : t('generateError'),
+      failure: 'failed' as const,
       quotaExhausted: false,
       periodEnd: null,
     }));
     if (!result.ok) {
-      toast.error(result.quotaExhausted ? t('newLimitReached') : result.error);
+      // The reason in plain words, never the server's bare string (BUG-001).
+      if (result.quotaExhausted) toast.error(t('newLimitReached'));
+      else failureToast(result.failure);
       setUsageVersion((v) => v + 1);
       return false;
     }
