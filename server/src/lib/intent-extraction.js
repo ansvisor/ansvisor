@@ -1,5 +1,6 @@
 import { generateObject } from 'ai';
 import { z } from 'zod';
+import { logger } from './logger.js';
 
 /**
  * The share of a prompt's Google volume estimated to get an AI answer: the
@@ -86,16 +87,26 @@ export const intentOnlySchema = z.object({
   intent: intentKeywordSchema.shape.intent,
 });
 
+/**
+ * What each intent label means: the chat model's list and a decision model's
+ * criteria (#988), so the two classify by the same words.
+ */
+export const INTENT_CRITERIA = {
+  comparison: 'weighing multiple options against each other',
+  'how-to': 'accomplishing a task or process',
+  'what-is': 'a definition or understanding a concept',
+  'best-top': 'finding the best / top options in a category',
+  'vs-review': 'a head-to-head or a review of a specific thing',
+  recommendation: 'asking for a suggestion or what to pick',
+  'problem-solving': 'fixing an issue or troubleshooting',
+  other: 'none of the above fits',
+};
+
 export const INTENT_ONLY_SYSTEM_PROMPT = `You classify the primary search intent behind a short query into exactly one of these labels:
 
-- comparison: weighing multiple options against each other
-- how-to: accomplishing a task or process
-- what-is: a definition or understanding a concept
-- best-top: finding the best / top options in a category
-- vs-review: a head-to-head or a review of a specific thing
-- recommendation: asking for a suggestion or what to pick
-- problem-solving: fixing an issue or troubleshooting
-- other: none of the above fits
+${Object.entries(INTENT_CRITERIA)
+  .map(([label, meaning]) => `- ${label}: ${meaning}`)
+  .join('\n')}
 
 Return only the single best-fitting label.`;
 
@@ -116,4 +127,91 @@ export async function classifyPromptIntent(text, aiModel) {
     prompt: `Classify the search intent of this query:\n\n"${text}"`,
   });
   return object.intent;
+}
+
+/** The most questions a decision model answers in one request. */
+export const DECIDER_BATCH_SIZE = 128;
+
+/** Chat-model calls in flight at once, as the route has always made them. */
+const CHAT_CONCURRENCY = 6;
+
+/**
+ * Classifies queries' intents with a decision model (#988): one `choice`
+ * question per query, up to DECIDER_BATCH_SIZE per request, where the chat
+ * model takes a call per query. A batch that fails, or an answer outside the
+ * labels, leaves those queries out: nothing is guessed, so nothing wrong is
+ * cached.
+ *
+ * @param {string[]} queries - normalized queries, each once
+ * @param {(params: { state: object, questions: object }) => Promise<Record<string, object>>} decideFn - decider.js's decide
+ * @returns {Promise<Record<string, string>>} the intent of each query answered
+ */
+export async function classifyIntentsByDecider(queries, decideFn) {
+  const batches = [];
+  for (let i = 0; i < queries.length; i += DECIDER_BATCH_SIZE) {
+    batches.push(queries.slice(i, i + DECIDER_BATCH_SIZE));
+  }
+  const intents = {};
+  const settled = await Promise.allSettled(
+    batches.map(async (batch) => {
+      const named = Object.fromEntries(batch.map((query, i) => [`q${i}`, query]));
+      const answers = await decideFn({
+        state: { task: 'Search intent of each query', queries: named },
+        questions: Object.fromEntries(
+          Object.entries(named).map(([name, query]) => [
+            name,
+            {
+              type: 'choice',
+              instructions: `The primary search intent behind query ${name}: "${query}".`,
+              criteria: INTENT_CRITERIA,
+            },
+          ]),
+        ),
+      });
+      for (const [name, query] of Object.entries(named)) {
+        const choice = answers?.[name]?.choice;
+        if (Object.hasOwn(INTENT_CRITERIA, choice)) intents[query] = choice;
+      }
+    }),
+  );
+  const failed = settled.filter((s) => s.status === 'rejected');
+  if (failed.length > 0) {
+    logger.warn(
+      { err: failed[0].reason, batches: failed.length },
+      '[fanout-intents] decision model batches failed; those queries stay unclassified',
+    );
+  }
+  return intents;
+}
+
+/**
+ * Classifies the queries the cache doesn't hold yet. With
+ * FANOUT_INTENTS_DECIDER set and OpenRouter configured, a decision model
+ * answers them in batches; otherwise the chat model takes each, six at a time,
+ * as before. A query that fails stays out, and is asked again next time.
+ *
+ * @param {string[]} queries - normalized queries, each once
+ * @param {object} deps
+ * @param {() => import('ai').LanguageModel} deps.chatModel - resolves the chat model, only when it's used
+ * @param {(params: object) => Promise<Record<string, object>>} deps.decideFn
+ * @param {() => boolean} deps.deciderConfigured
+ * @returns {Promise<Record<string, string>>} the intent of each query classified
+ */
+export async function classifyQueryIntents(queries, { chatModel, decideFn, deciderConfigured }) {
+  if (queries.length === 0) return {};
+  if (process.env.FANOUT_INTENTS_DECIDER && deciderConfigured()) {
+    return classifyIntentsByDecider(queries, decideFn);
+  }
+  const aiModel = chatModel();
+  const intents = {};
+  for (let i = 0; i < queries.length; i += CHAT_CONCURRENCY) {
+    const chunk = queries.slice(i, i + CHAT_CONCURRENCY);
+    const settled = await Promise.allSettled(
+      chunk.map((query) => classifyPromptIntent(query, aiModel)),
+    );
+    settled.forEach((s, j) => {
+      if (s.status === 'fulfilled') intents[chunk[j]] = s.value;
+    });
+  }
+  return intents;
 }
