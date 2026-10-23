@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
+import type { KeptEntity } from './affected';
 
 /**
  * AC-009: one count for an action, everywhere.
@@ -178,4 +179,49 @@ export async function readEntityCounts(
     }
   }
   return byAction;
+}
+
+/**
+ * What an action kept when it was created, removed ones marked
+ * (action_entities, 00244, members may read it): the rows of its Affected
+ * list (affectedOf). Null when it can't be read, so the list is built from
+ * the signals as before.
+ */
+export async function readKeptEntities(
+  client: SupabaseClient,
+  actionId: string,
+): Promise<KeptEntity[] | null> {
+  try {
+    const { data, error } = await client
+      .from('action_entities')
+      .select('entity_type, entity_key, label, removed_at')
+      .eq('action_id', actionId)
+      // A steady order: the rows don't move between opens.
+      .order('label')
+      .order('entity_key')
+      .limit(1000);
+    if (error) {
+      // A database without 00244 has no list: the rows come from the signals, quietly.
+      if (error.code !== 'PGRST205' && error.code !== '42P01') {
+        console.error('Failed to read an action’s list:', error.message);
+      }
+      return null;
+    }
+    return (
+      (data ?? []) as {
+        entity_type: string;
+        entity_key: string;
+        label: string | null;
+        removed_at: string | null;
+      }[]
+    ).map((row) => ({
+      type: row.entity_type,
+      key: row.entity_key,
+      label: row.label,
+      removed: row.removed_at !== null,
+    }));
+  } catch (err) {
+    console.error('Failed to read an action’s list:', err);
+    return null;
+  }
 }

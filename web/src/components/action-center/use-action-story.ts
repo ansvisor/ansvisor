@@ -4,7 +4,12 @@ import { useEffect, useMemo, useState } from 'react';
 import { useFormatter, useTranslations } from 'next-intl';
 import { getPromptDemand } from '@/lib/actions/action-center';
 import type { Signal } from '@/lib/signals/map';
-import { affectedOf, affectedSignals, type Affected } from '@/lib/action-center/affected';
+import {
+  affectedOf,
+  affectedSignals,
+  type Affected,
+  type KeptEntity,
+} from '@/lib/action-center/affected';
 import { actionStory, type ActionStory } from '@/lib/action-center/story';
 import type { VolumeEstimate } from '@/lib/volume-estimate';
 
@@ -28,6 +33,8 @@ export function useActionStory(
   brandId: string,
   action: StoryAction | null,
   signals: Signal[] | null,
+  /** What the action kept when it was created (00244): its Affected rows, when read. */
+  kept: KeptEntity[] | null = null,
 ): {
   affected: Affected | null;
   volumes: Map<string, VolumeEstimate> | null;
@@ -42,8 +49,8 @@ export function useActionStory(
     [action, signals],
   );
   const affected = useMemo(
-    () => (action && evidence ? affectedOf(evidence, action.payload ?? {}) : null),
-    [action, evidence],
+    () => (action && evidence ? affectedOf(evidence, action.payload ?? {}, kept) : null),
+    [action, evidence, kept],
   );
 
   // Each affected prompt's demand. Best effort: without it the column is left

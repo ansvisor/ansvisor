@@ -12,6 +12,7 @@ import { affectedOf, affectedSignals } from '@/lib/action-center/affected';
 import {
   currentTaskParams,
   readEntityCounts,
+  readKeptEntities,
   withEntityCounts,
 } from '@/lib/action-center/entity-counts';
 import { actionStory } from '@/lib/action-center/story';
@@ -207,6 +208,7 @@ export async function exportActionFor(
     openRes,
     sentFrom,
     entityCounts,
+    kept,
   ] = await Promise.all([
     supabaseAdmin
       .from('action_tasks')
@@ -246,8 +248,9 @@ export async function exportActionFor(
       .eq('action_id', actionId)
       .in('status', OPEN_SIGNAL_STATUSES as SignalStatus[]),
     opportunityId ? sentFromOpportunity(brandId, opportunityId) : Promise.resolve(null),
-    // Its list (AC-009): the count it shows, as on the page.
+    // Its list (AC-009): the count it shows, as on the page, and its rows.
     readEntityCounts(supabaseAdmin, [actionId]),
+    readKeptEntities(supabaseAdmin, actionId),
   ]);
   for (const res of [tasksRes, signalsRes, eventsRes, kpisRes, assigneeRes, openRes]) {
     if (res.error) throw new Error(res.error.message);
@@ -280,6 +283,7 @@ export async function exportActionFor(
   const detail: ActionDetail = {
     tasks,
     signals: mapSignalRows((signalsRes.data ?? []) as unknown as SignalRow[], places),
+    entities: kept,
     events: (eventsRes.data ?? []).map(eventFromRow),
     kpis: (kpisRes.data ?? []).map(kpiFromRow),
     // Not part of the export.
@@ -289,7 +293,7 @@ export async function exportActionFor(
   // What the drawer works out from them: the Affected list, its prompts'
   // demand, and the Why and Goal in the action's own terms (AC-003).
   const evidence = affectedSignals(detail.signals, action.id);
-  const affected = affectedOf(evidence, action.payload ?? {});
+  const affected = affectedOf(evidence, action.payload ?? {}, kept);
   const promptIds = affected.prompts.map((p) => p.id).filter((id): id is string => !!id);
   // Best effort, as in the drawer: without it the Volume column is left out.
   const volumes = promptIds.length
