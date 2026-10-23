@@ -1,8 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import type { ContentAuthor } from './authors';
 import type { LinkCheck } from './quality-checks';
+import { PLACEHOLDER } from './placeholders';
 import {
+  blankCode,
+  bylineText,
   exportPlaceholders,
+  fragment,
   pageFields,
   pasteChecks,
   titlePlaceholders,
@@ -15,6 +19,24 @@ import {
 
 const ada = { id: 'a1', name: 'Ada Lovelace' } as ContentAuthor;
 
+/** A FAQPage's JSON-LD, one line as a draft stores it, with a placeholder in an answer. */
+const FAQ =
+  '{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[' +
+  '{"@type":"Question","name":"How long does it take?","acceptedAnswer":{"@type":"Answer","text":"About four minutes. It costs [price]."}},' +
+  '{"@type":"Question","name":"Which grind?","acceptedAnswer":{"@type":"Answer","text":"Medium-fine."}}]}';
+const jsonLdOf = (html: string) =>
+  JSON.parse(fragment(html).querySelector('script[type="application/ld+json"]')!.textContent!);
+
+describe('fragment', () => {
+  it('parses into a document of its own, and keeps a leading script where it is', () => {
+    const root = fragment(
+      '<script type="application/ld+json">{}</script><p><img src="https://cdn.acme.com/a.jpg" alt="A"></p>',
+    );
+    expect(root.ownerDocument).not.toBe(document);
+    expect(root.firstElementChild?.tagName).toBe('SCRIPT');
+  });
+});
+
 describe('exportPlaceholders', () => {
   it('counts every placeholder an export would carry: words, alt text, JSON-LD', () => {
     expect(
@@ -26,13 +48,101 @@ describe('exportPlaceholders', () => {
       ),
     ).toBe(5);
   });
+
+  it("reads JSON-LD by its strings: an array is no placeholder, one that doesn't parse is read for none", () => {
+    expect(
+      exportPlaceholders(
+        '<script type="application/ld+json">{"@type":["Article","NewsArticle"],"author":{"@type":"Person","name":"Ada","sameAs":["https://x.example/ada","https://acme.com/ada"]}}</script><p>Brew.</p>',
+      ),
+    ).toBe(0);
+    expect(exportPlaceholders(`<script type="application/ld+json">${FAQ}</script>`)).toBe(1);
+    expect(
+      exportPlaceholders(
+        '<script type="application/ld+json">{"sameAs":["https://x.example/"],"name":"[brand]"</script>',
+      ),
+    ).toBe(0);
+  });
+
+  it("holds a title's or a heading's brackets only in the agent's own forms", () => {
+    expect(
+      exportPlaceholders(
+        '<h1>Best CRM tools [2026 Update]</h1><h2>How to brew [Step-by-Step Guide]</h2>' +
+          '<h3>The checklist [PDF]</h3><p>Brew it slowly.</p>',
+      ),
+    ).toBe(0);
+    expect(
+      exportPlaceholders(
+        '<h2>What [name of a real person] uses</h2><h2>[quote from a real person, with its source]</h2>' +
+          '<h3>Brew [figure, source, 2025] grams</h3><p>Costs [price].</p>',
+      ),
+    ).toBe(4);
+  });
 });
 
 describe('titlePlaceholders', () => {
   it("counts the title's only when the page's H1 isn't it", () => {
-    expect(titlePlaceholders('Best [brand] grinders', '<h1>Best [brand] grinders</h1>')).toBe(0);
-    expect(titlePlaceholders('Best [brand] grinders', '<h1>Best grinders</h1>')).toBe(1);
-    expect(titlePlaceholders('Best [brand] grinders', '<p>No H1.</p>')).toBe(1);
+    const title = 'Best [figure, source] grinders';
+    expect(titlePlaceholders(title, '<h1>Best [figure, source] grinders</h1>')).toBe(0);
+    expect(titlePlaceholders(title, '<h1>Best grinders</h1>')).toBe(1);
+    expect(titlePlaceholders(title, '<p>No H1.</p>')).toBe(1);
+  });
+
+  it('counts it with the page when a heading or the first line reads as it, H1 or not', () => {
+    const title = 'How [name of a real person] forecasts';
+    // An H2 with no H1 above it: the title is that heading.
+    expect(titlePlaceholders(title, '<h2>How [name of a real person] forecasts</h2>')).toBe(0);
+    expect(titlePlaceholders(title, '<p>Teams trust it.</p><h2>Other</h2>')).toBe(1);
+    // No heading: the title is the first line's start, cut with an ellipsis.
+    const line =
+      'Ask [name of a real person] how pipeline forecasting works when the quarter closes and the numbers shift.';
+    expect(
+      titlePlaceholders(
+        'Ask [name of a real person] how pipeline forecasting works when the quarter…',
+        `<p>${line}</p>`,
+      ),
+    ).toBe(0);
+  });
+
+  it("reads a person's brackets in the title as part of it", () => {
+    expect(titlePlaceholders('Best CRM tools [2026 Update]', '<p>No H1.</p>')).toBe(0);
+    expect(titlePlaceholders('The checklist [PDF]', '<h1>The checklist</h1>')).toBe(0);
+  });
+});
+
+describe('blankCode', () => {
+  const matches = (text: string) => [...text.matchAll(PLACEHOLDER)];
+
+  it('leaves only where exportPlaceholders reads, each position as in the HTML', () => {
+    const html =
+      '<style>a[href] { color: red }</style><script>var a = ["x y"];</script>\n' +
+      '<script type="application/ld+json">{"@type":"FAQPage","sameAs":["https://x.example/"],"text":"Costs [price]."}</script>\n' +
+      '<!-- [old note] -->\n<h1>Best CRM tools [2026 Update]</h1>\n' +
+      '<p class="[cta]">Ask <img src="https://cdn.acme.com/a.jpg" alt="[photo of the founder]"> [name of a real person].</p>';
+    const blanked = blankCode(html, { words: true });
+    expect(blanked).toHaveLength(html.length);
+    const found = matches(blanked).map((m) => html.slice(m.index, m.index + m[0].length));
+    expect(found).toEqual(['[price]', '[photo of the founder]', '[name of a real person]']);
+    expect(found).toHaveLength(exportPlaceholders(html));
+    // A heading's own forms stay; a JSON-LD that doesn't parse is read for none.
+    expect(
+      matches(
+        blankCode(
+          '<h2>What [name of a real person] uses</h2><script type="application/ld+json">{"a":"[x y]",</script>',
+          { words: true },
+        ),
+      ).map((m) => m[0]),
+    ).toEqual(['[name of a real person]']);
+  });
+
+  it('blanks comments and what scripts, styles and templates hold, keeping the tags', () => {
+    const html =
+      '<!-- <h1>Old</h1> -->\n<script>document.write("</h1>")</script><template><h1>T</h1></template>\n<h1>Pour-over</h1>';
+    const blanked = blankCode(html);
+    expect(blanked).toHaveLength(html.length);
+    expect(blanked.indexOf('<h1>')).toBe(html.lastIndexOf('<h1>'));
+    expect(blanked.indexOf('</h1>')).toBe(html.lastIndexOf('</h1>'));
+    expect(blanked).toContain('<script>');
+    expect(blanked).toContain('</template>');
   });
 });
 
@@ -79,6 +189,27 @@ describe('withoutPlaceholders', () => {
         '<div class="cta"><span>Call today</span></div>' +
         '<img src="https://cdn.acme.com/a.jpg" alt="">',
     );
+  });
+
+  it("clears a JSON-LD's placeholders in its strings, and keeps it JSON", () => {
+    const out = withoutPlaceholders(
+      `<script type="application/ld+json">${FAQ}</script>` +
+        '<script type="application/ld+json">{"@type":"Person","name":"Ada","sameAs":["https://x.example/ada"]}</script>',
+    );
+    const faq = jsonLdOf(out);
+    expect(faq.mainEntity).toHaveLength(2);
+    expect(faq.mainEntity[0].acceptedAnswer.text).toBe('About four minutes. It costs .');
+    expect(out).toContain(
+      '<script type="application/ld+json">{"@type":"Person","name":"Ada","sameAs":["https://x.example/ada"]}</script>',
+    );
+    // One that doesn't parse is left as written.
+    const broken = '<script type="application/ld+json">{"name":"[brand]",</script>';
+    expect(withoutPlaceholders(broken)).toBe(broken);
+  });
+
+  it("keeps a heading's own brackets as written", () => {
+    const html = '<h1>Best CRM tools [2026 Update]</h1><p>Brew it slowly.</p>';
+    expect(withoutPlaceholders(html)).toBe(html);
   });
 });
 
@@ -173,6 +304,43 @@ describe('withByline', () => {
     );
     expect(withByline('', 'By Ada')).toBe('');
     expect(withByline('<p></p>', 'By Ada')).toBe('<p></p>');
+  });
+
+  it("puts it under the lead's own H1: not an empty one above, nor one in a comment", () => {
+    expect(withByline('<h1></h1>\n<h1>Pour-over</h1>\n<p>Brew.</p>', 'By Ada')).toBe(
+      '<h1></h1>\n<h1>Pour-over</h1>\n<p>By Ada</p>\n<p>Brew.</p>',
+    );
+    expect(withByline('<!-- <h1>Old</h1> -->\n<h1>Pour-over</h1>\n<p>Brew.</p>', 'By Ada')).toBe(
+      '<!-- <h1>Old</h1> -->\n<h1>Pour-over</h1>\n<p>By Ada</p>\n<p>Brew.</p>',
+    );
+    expect(
+      withByline(
+        '<script>document.write("<h1>x</h1>")</script>\n<H1 class="t">Pour-over</H1>\n<p>Brew.</p>',
+        'By Ada',
+      ),
+    ).toBe(
+      '<script>document.write("<h1>x</h1>")</script>\n<H1 class="t">Pour-over</H1>\n<p>By Ada</p>\n<p>Brew.</p>',
+    );
+  });
+});
+
+describe('bylineText', () => {
+  it("writes the line in the brand's language, by the author or the brand's team", () => {
+    expect(bylineText(null, 'Ada Lovelace', 'Acme')).toBe('By Ada Lovelace');
+    expect(bylineText('en-US', null, 'Acme')).toBe('By Acme Team');
+    expect(bylineText('tr', 'Ayşe Yılmaz', 'Acme')).toBe('Yazar: Ayşe Yılmaz');
+    expect(bylineText('tr', null, 'Acme')).toBe('Yazar: Acme Ekibi');
+    expect(bylineText('pt-BR', 'Ana Silva', 'Acme')).toBe('Por Ana Silva');
+    expect(bylineText('pt', null, 'Acme')).toBe('Pela equipe Acme');
+    expect(bylineText('de', null, 'Acme')).toBe('Vom Acme-Team');
+    expect(bylineText('fr', null, 'Acme')).toBe("Par l'équipe Acme");
+    // A "$" in a name is written as it is.
+    expect(bylineText('es', 'Ana $& Co', 'Acme')).toBe('Por Ana $& Co');
+  });
+
+  it('puts the name alone, or the brand alone, for a language not in the table', () => {
+    expect(bylineText('ja', '山田太郎', 'Acme')).toBe('山田太郎');
+    expect(bylineText('ar', null, 'Acme')).toBe('Acme');
   });
 });
 

@@ -2230,6 +2230,83 @@ describe('the side panel', () => {
       expect(panel()!.textContent).toContain('Readability');
       expect(panel()!.textContent).toContain('Not a Google score.');
     });
+
+    /** The draft above, its Language rule changed for this draft. */
+    const inLanguage = (language: { on?: boolean; value?: string }) => ({
+      ...readable,
+      rules: { set: null, source: 'default' as const, overrides: { language }, textRules: [] },
+    });
+    const qualityChip = () =>
+      [...container.querySelectorAll<HTMLButtonElement>('header button')].find((b) =>
+        b.textContent?.startsWith('Quality'),
+      );
+
+    it('reads the page in its Language rule’s language, not the brand’s', async () => {
+      process.env.NEXT_PUBLIC_CONTENT_QUALITY_PHASE = '1';
+      // The brand writes in Japanese; this draft is in English, and is scored.
+      brandState.brands = [{ id: 'b1', language: 'ja' } as never, { id: 'b2' }];
+      try {
+        getContentDraft.mockResolvedValue(inLanguage({ value: 'English (US)' }));
+        window.innerWidth = 1440;
+        await renderPage();
+        expect(qualityChip()?.textContent).toMatch(/^Quality \d+/);
+      } finally {
+        brandState.brands = [{ id: 'b1' }, { id: 'b2' }];
+      }
+    });
+
+    it('reads the brand’s language with the rule off, and says when it can’t read it yet', async () => {
+      process.env.NEXT_PUBLIC_CONTENT_QUALITY_PHASE = '1';
+      brandState.brands = [{ id: 'b1', language: 'ja' } as never, { id: 'b2' }];
+      try {
+        getContentDraft.mockResolvedValue(inLanguage({ on: false, value: 'English (US)' }));
+        window.innerWidth = 1440;
+        await renderPage();
+        // Japanese has no spaces between words: no score, and no chip.
+        expect(qualityChip()).toBeUndefined();
+        const segment = [...panel()!.querySelectorAll<HTMLElement>('[role="radio"]')].find((el) =>
+          el.textContent?.startsWith('Quality'),
+        )!;
+        await act(async () => segment.click());
+        expect(panel()!.textContent).toContain("Readability isn't read for this language yet.");
+      } finally {
+        brandState.brands = [{ id: 'b1' }, { id: 'b2' }];
+      }
+    });
+
+    it('marks the passage Show goes to for a moment, a second Show starting it again', async () => {
+      process.env.NEXT_PUBLIC_CONTENT_QUALITY_PHASE = '1';
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+      const original = Element.prototype.scrollIntoView;
+      Element.prototype.scrollIntoView = vi.fn();
+      try {
+        const long = `Teams ${Array.from({ length: 39 }, () => 'plan').join(' ')}.`;
+        getContentDraft.mockResolvedValue({
+          ...readable,
+          bodyHtml: `${readable.bodyHtml}<p>${long}</p>`,
+        });
+        window.innerWidth = 1440;
+        await renderPage();
+        await act(async () => qualityChip()!.click());
+        const show = [...panel()!.querySelectorAll<HTMLButtonElement>('li button')].find(
+          (b) => b.textContent === 'Show',
+        )!;
+        const marked = () => container.querySelector('.ProseMirror .ring-amber-300');
+
+        await act(async () => show.click());
+        expect(marked()!.textContent).toBe(long);
+        await act(async () => vi.advanceTimersByTime(1000));
+        await act(async () => show.click());
+        // The first Show's timer doesn't take the second's mark away early.
+        await act(async () => vi.advanceTimersByTime(500));
+        expect(marked()).not.toBeNull();
+        await act(async () => vi.advanceTimersByTime(700));
+        expect(marked()).toBeNull();
+      } finally {
+        Element.prototype.scrollIntoView = original;
+        vi.useRealTimers();
+      }
+    });
   });
 
   describe('Author (CE-038)', () => {
@@ -2831,8 +2908,8 @@ describe('the side panel', () => {
     it("counts a title that is the page's H1 once, and Fill now goes to it", async () => {
       getContentDraft.mockResolvedValue(
         draft({
-          title: 'How [company name] forecasts',
-          bodyHtml: '<h1>How [company name] forecasts</h1><p>Teams trust it.</p>',
+          title: 'How [name of a real person] forecasts',
+          bodyHtml: '<h1>How [name of a real person] forecasts</h1><p>Teams trust it.</p>',
         }),
       );
       await renderPage();
@@ -2845,7 +2922,63 @@ describe('the side panel', () => {
       const editor = (container.querySelector('.ProseMirror') as HTMLElement & { editor: Editor })
         .editor;
       const { from, to } = editor.state.selection;
-      expect(editor.state.doc.textBetween(from, to)).toBe('[company name]');
+      expect(editor.state.doc.textBetween(from, to)).toBe('[name of a real person]');
+    });
+
+    it("reads a FAQPage's JSON-LD by its strings: Ready to paste is done", async () => {
+      const faq = {
+        '@context': 'https://schema.org',
+        '@type': 'FAQPage',
+        mainEntity: [
+          {
+            '@type': 'Question',
+            name: 'How long does it take?',
+            acceptedAnswer: { '@type': 'Answer', text: 'About a week.' },
+          },
+        ],
+        sameAs: ['https://x.example/acme'],
+      };
+      getContentDraft.mockResolvedValue(
+        draft({
+          bodyHtml: `<h1>Pipeline forecasting</h1><p>Teams trust it.</p><script type="application/ld+json">${JSON.stringify(faq)}</script>`,
+        }),
+      );
+      await renderPage();
+      const ready =
+        'Ready to paste · doneNo placeholders, all images have alt text, all links work.';
+      await act(async () => button('Export')!.click());
+      expect(dialog()!.textContent).toContain(ready);
+      await act(async () => inDialog('Continue to export').click());
+      expect(dialog()!.querySelector('[role="alert"]')).toBeNull();
+      expect(inDialog('Copy for Webflow').disabled).toBe(false);
+      await act(async () => inDialog('Cancel').click());
+      await act(async () => button('Mark ready')!.click());
+      expect(dialog()!.textContent).toContain(ready);
+    });
+
+    it('fills in the HTML view where the count reads, past code and markup', async () => {
+      getContentDraft.mockResolvedValue(draft());
+      await renderPage();
+      await act(async () => button('Edit as HTML')!.click());
+      const source = container.querySelector('textarea')!;
+      const html =
+        '<!-- html-block -->\n<style>.cta a[href] { color: red }</style>\n<!-- /html-block -->\n' +
+        '<h1 title="Pipeline">Pipeline forecasting [2026 Update]</h1>\n<p>Ask [name of a real person] how.</p>';
+      const setValue = Object.getOwnPropertyDescriptor(
+        HTMLTextAreaElement.prototype,
+        'value',
+      )!.set!;
+      await act(async () => {
+        setValue.call(source, html);
+        source.dispatchEvent(new Event('input', { bubbles: true }));
+      });
+      await act(async () => button('Export')!.click());
+      expect(dialog()!.textContent).toContain('1 placeholder still open');
+      await act(async () => inDialog('Fill now').click());
+      expect(dialog()).toBeNull();
+      expect(source.value.slice(source.selectionStart, source.selectionEnd)).toBe(
+        '[name of a real person]',
+      );
     });
 
     it('sends Copy HTML to Export while a placeholder is open, and Fill now goes to it', async () => {
@@ -2908,6 +3041,27 @@ describe('the side panel', () => {
       expect(writeText).toHaveBeenCalledWith(
         '<h1>Pipeline forecasting</h1>\n<p>By Acme Team</p>\n<p>Teams trust it.</p>',
       );
+    });
+
+    it("writes the byline in the brand's language", async () => {
+      brandState.brands = [{ id: 'b1', language: 'tr' } as never, { id: 'b2' }];
+      try {
+        const writeText = vi.fn().mockResolvedValue(undefined);
+        Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+        getContentAuthors.mockResolvedValue({
+          authors: [],
+          brands: [{ id: 'b1', name: 'Acme', bylineInContent: true }],
+          me: { id: 'u1', role: 'analyst' },
+        });
+        getContentDraft.mockResolvedValue(draft());
+        await renderPage();
+        await act(async () => button('Copy HTML')!.click());
+        expect(writeText).toHaveBeenCalledWith(
+          '<h1>Pipeline forecasting</h1>\n<p>Yazar: Acme Ekibi</p>\n<p>Teams trust it.</p>',
+        );
+      } finally {
+        brandState.brands = [{ id: 'b1' }, { id: 'b2' }];
+      }
     });
 
     it('copies at once with no placeholder, and keeps the menu while Quality is off', async () => {

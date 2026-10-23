@@ -41,7 +41,7 @@ import { getSiteTrust } from '@/lib/actions/audits';
 import { getContentAuthors } from '@/lib/actions/content-authors';
 import { stopAgentRun } from '@/lib/content/agent-runs-client';
 import { agentWriteRequest, useRuleDescriber } from '@/lib/content/agent-write';
-import { authorInitials, type AuthorsRead } from '@/lib/content/authors';
+import { authorInitials, canEditAuthor, type AuthorsRead } from '@/lib/content/authors';
 import type { SiteTrust } from '@/lib/content/site-trust';
 import {
   AGENT_POLL_MS,
@@ -75,8 +75,10 @@ import {
 import { PAGE_READ_DELAY_MS, draftTitleFromDoc, safeLinkHref } from '@/lib/content/editor';
 import { JsonLd } from '@/lib/content/json-ld-node';
 import { firstImage } from '@/lib/content/page-schema';
-import { PLACEHOLDER, pagePlaceholders } from '@/lib/content/placeholders';
+import { PLACEHOLDER, pagePlaceholders, placeholderIn } from '@/lib/content/placeholders';
 import {
+  blankCode,
+  bylineText,
   exportPlaceholders,
   pasteChecks,
   titlePlaceholders,
@@ -248,6 +250,8 @@ export function DraftEditor({
   // The page as written now, for the side panel's Sources.
   const [pageHtml, setPageHtml] = useState(draft.bodyHtml);
   const pageReadTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  // Quality's Show marks a block for a moment: a second Show starts the moment again.
+  const flashTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   useEffect(() => () => clearTimeout(pageReadTimer.current), []);
   const [status, setStatus] = useState(draft.status);
   const [marking, setMarking] = useState(false);
@@ -438,8 +442,15 @@ export function DraftEditor({
     reads,
   });
   // How well the page reads as written (Quality spec, CE-036/039): read in the
-  // browser, no AI cost; off until Quality's first phase is live.
-  const language = useBrandStore((s) => s.brands.find((b) => b.id === draft.brandId)?.language);
+  // browser, no AI cost; off until Quality's first phase is live. Read in the
+  // language the page is written in: its Language rule when that is on (the
+  // agent writes in it, and it can differ per draft), else the brand's.
+  const brandLanguage = useBrandStore(
+    (s) => s.brands.find((b) => b.id === draft.brandId)?.language,
+  );
+  const languageRule = rules.rules.find(({ rule }) => rule.key === 'language')?.rule;
+  const language =
+    languageRule?.on && languageRule.current.trim() ? languageRule.current : brandLanguage;
   const qualityOn = qualityPhase() >= 1;
   const readable = useMemo(
     () => (qualityOn ? readability(pageHtml, language) : null),
@@ -530,11 +541,15 @@ export function DraftEditor({
   );
   const [hadPlaceholders, setHadPlaceholders] = useState(false);
   if (placeholderCount > 0 && !hadPlaceholders) setHadPlaceholders(true);
+  // Who may edit the page's author: only they get Edit author (CE-037's rule).
+  const canEditPageAuthor =
+    !!pageAuthor && !!authorsRead && canEditAuthor(pageAuthor, authorsRead.me);
   const todos = qualityOn
     ? qualityTodos({
         eeat: eeatScore,
         author: pageAuthor,
         hasAuthors,
+        canEdit: canEditPageAuthor,
         placeholders: { count: placeholderCount, had: hadPlaceholders },
       })
     : [];
@@ -544,6 +559,7 @@ export function DraftEditor({
         eeat: eeatScore,
         trust: trustScore,
         author: pageAuthor,
+        canEdit: canEditPageAuthor,
         hasAuthors,
         brandName,
         siteTrust,
@@ -949,16 +965,12 @@ export function DraftEditor({
   };
 
   /**
-   * Quality's Show: the block of the page holding the passage (never a
-   * suggestion's card), scrolled to and marked for a moment.
-   */
-  /**
    * The page's first placeholder (CE-044), selected to type over: in order,
-   * across the marks in its line, its block flashed as Show's are.
+   * across the marks in its line, its block flashed as Show's are. A
+   * heading's are the agent's own forms only (AGENT_PLACEHOLDER).
    */
   const showFirstPlaceholder = (): boolean => {
     if (!editor) return false;
-    const one = new RegExp(PLACEHOLDER.source, 'iu');
     let found: { from: number; to: number; block: { from: number; to: number } } | null = null;
     editor.state.doc.descendants((block, pos) => {
       if (found) return false;
@@ -971,7 +983,7 @@ export function DraftEditor({
         pieces.push({ at: text.length, pos: pos + 1 + offset });
         text += child.text;
       });
-      const m = one.exec(text);
+      const m = new RegExp(placeholderIn(block.type.name === 'heading').source, 'iu').exec(text);
       if (!m) return false;
       const posOf = (i: number) => {
         const piece = pieces.findLast((p) => p.at <= i)!;
@@ -1001,13 +1013,14 @@ export function DraftEditor({
 
   /**
    * Fill now (Export, CE-057): the first placeholder, in the HTML view's
-   * text while it is open, else in the page; one only an HTML block holds is
+   * text while it is open (where exportPlaceholders reads: not in tags,
+   * styles or scripts), else in the page; one only an HTML block holds is
    * said to be there.
    */
   const htmlSourceRef = useRef<HTMLTextAreaElement>(null);
   const fillFirstPlaceholder = () => {
     if (htmlSource !== null) {
-      const m = new RegExp(PLACEHOLDER.source, 'iu').exec(htmlSource);
+      const m = new RegExp(PLACEHOLDER.source, 'iu').exec(blankCode(htmlSource, { words: true }));
       const area = htmlSourceRef.current;
       if (m && area) {
         area.focus();
@@ -1018,6 +1031,10 @@ export function DraftEditor({
     if (!showFirstPlaceholder()) toast(t('exportDialog.inHtmlBlock', { html: '</>' }));
   };
 
+  /**
+   * Quality's Show: the block of the page holding the passage (never a
+   * suggestion's card), scrolled to and marked for a moment.
+   */
   const showInPage = (text: string, { focus = false } = {}) => {
     if (!editor) return;
     const at = findBlock(editor.state.doc, text);
@@ -1033,8 +1050,9 @@ export function DraftEditor({
       block: 'center',
       behavior: 'smooth',
     });
+    clearTimeout(flashTimer.current);
     editor.view.dispatch(editor.state.tr.setMeta(flashKey, at));
-    setTimeout(() => {
+    flashTimer.current = setTimeout(() => {
       if (!editor.isDestroyed) editor.view.dispatch(editor.state.tr.setMeta(flashKey, null));
     }, 1200);
   };
@@ -1354,10 +1372,12 @@ export function DraftEditor({
     publishableHtml(
       htmlSource !== null ? htmlFromSource(htmlSource) : (editor?.getHTML() ?? draft.bodyHtml),
     );
-  // The byline line a brand with Add byline to content puts under the H1.
+  // The byline line a brand with Add byline to content puts under the H1,
+  // in the page's language (its Language rule, else the brand's), as
+  // Readability reads it: the language the writer writes the page in.
   const contentByline =
     bylineInContent && authorsRead
-      ? t('author.by', { name: pageAuthor?.name ?? t('author.organization', { brand: brandName }) })
+      ? bylineText(language, pageAuthor?.name ?? null, brandName)
       : null;
   // Export (CE-057), once Quality is live: where it goes, its checks and fields.
   // The page as it was when Export opened: what it shows stays still while open.
@@ -1535,7 +1555,10 @@ export function DraftEditor({
     setPublishOpen({ mode, html: pageToPublish() });
     if (mode === 'markReady') nudgeAt('markReady');
   };
-  const readyToPaste = (html: string): ReadyToPaste => {
+  // Read once per change (a link read landing, the title), not on every render.
+  const readyToPaste = useMemo((): ReadyToPaste | null => {
+    if (!publishOpen) return null;
+    const { html } = publishOpen;
     const { links, images } = pasteChecks(html, linkChecks);
     return {
       placeholders: exportPlaceholders(html) + titlePlaceholders(title, html),
@@ -1543,7 +1566,7 @@ export function DraftEditor({
       linksBroken: links.broken,
       linksUnread: links.count - links.read,
     };
-  };
+  }, [publishOpen, linkChecks, title]);
   /** Marks it ready; past Before you publish's warning, logged with its facts. */
   const markReady = async (anyway?: ReadyAnyway) => {
     setMarking(true);
@@ -2130,6 +2153,7 @@ export function DraftEditor({
           onClose={() => setExportOpen(null)}
           title={title}
           html={exportOpen.html}
+          isNew={draft.method === 'create'}
           sourceUrl={draft.sourceUrl}
           author={pageAuthor}
           // Until the authors are read, who it is by isn't known.
@@ -2145,15 +2169,15 @@ export function DraftEditor({
         />
       )}
 
-      {quality && publishOpen && (
+      {quality && publishOpen && readyToPaste && (
         <BeforePublish
           mode={publishOpen.mode}
-          paste={readyToPaste(publishOpen.html)}
+          paste={readyToPaste}
           onFillNow={() => {
             setPublishOpen(null);
             fillFirstPlaceholder();
           }}
-          bylineInContent={bylineInContent}
+          contentByline={contentByline}
           onContinue={() => {
             setPublishOpen(null);
             openExport();

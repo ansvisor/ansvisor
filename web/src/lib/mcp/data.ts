@@ -22,6 +22,13 @@ import {
 import { mapSignalRows, type SignalRow } from '@/lib/signals/map';
 import { readPromptPlaces } from '@/lib/signals/prompt-places';
 import { currentActionFirst, signalDetailForApi, type SignalActionRef } from '@/lib/signals/detail';
+import {
+  currentPriorityReason,
+  currentTaskParams,
+  readEntityCounts,
+  withEntityCounts,
+  withoutTargetIds,
+} from '@/lib/action-center/entity-counts';
 import { parseTaskDetails } from '@/lib/action-center/task-details';
 import { locationCode, isValidLocation } from '@/lib/region';
 import { promptVolumeEstimate, type EstimateConfidence } from '@/lib/volume-estimate';
@@ -2872,7 +2879,7 @@ export async function listActionsFor(
   let query = supabaseAdmin
     .from('actions')
     .select(
-      'id, action_no, category, kind, impact, status, outcome, assignee_id, due_date, created_at, updated_at, priority_score, priority_level, priority_reason',
+      'id, action_no, category, kind, impact, status, outcome, assignee_id, due_date, created_at, updated_at, priority_score, priority_level, priority_reason, target_entity:payload->>targetEntity, target_count:payload->targetCount',
     )
     .eq('brand_id', params.brandId)
     // A deleted action (00168) is gone for everyone but the nightly generator.
@@ -2909,7 +2916,14 @@ export async function listActionsFor(
     if (task.status === 'completed') acc.completed += 1;
     progress.set(task.action_id, acc);
   }
-  const names = await assigneeNames(rows.map((r) => r.assignee_id));
+  const [names, entityCounts] = await Promise.all([
+    assigneeNames(rows.map((r) => r.assignee_id)),
+    // Each action's list (AC-009): its reason names the count left, as get_action's does.
+    readEntityCounts(
+      supabaseAdmin,
+      rows.map((r) => r.id),
+    ),
+  ]);
 
   return rows.map((r) => ({
     id: r.id,
@@ -2924,7 +2938,16 @@ export async function listActionsFor(
       : null,
     due_date: r.due_date ?? null,
     task_progress: progress.get(r.id) ?? { completed: 0, total: 0 },
-    priority: priorityFor(r),
+    priority: priorityFor({
+      ...r,
+      priority_reason: currentPriorityReason(
+        r.priority_reason,
+        withEntityCounts(
+          { targetEntity: r.target_entity, targetCount: r.target_count },
+          entityCounts.get(r.id),
+        ),
+      ),
+    }),
     created_at: r.created_at,
     updated_at: r.updated_at,
   }));
@@ -3006,7 +3029,7 @@ export async function getActionFor(
   if (error) throw new Error(error.message);
   if (!action) return null;
 
-  const [tasksRes, signalsRes, eventsRes, names] = await Promise.all([
+  const [tasksRes, signalsRes, eventsRes, names, entityCounts] = await Promise.all([
     supabaseAdmin
       .from('action_tasks')
       .select(
@@ -3028,10 +3051,16 @@ export async function getActionFor(
       .eq('action_id', actionId)
       .order('created_at'),
     assigneeNames([action.assignee_id]),
+    // Its list (AC-009): the count left, and what was removed since.
+    readEntityCounts(supabaseAdmin, [actionId]),
   ]);
   if (tasksRes.error) throw new Error(tasksRes.error.message);
   if (signalsRes.error) throw new Error(signalsRes.error.message);
   if (eventsRes.error) throw new Error(eventsRes.error.message);
+  const payload = withEntityCounts(
+    (action.payload ?? {}) as Record<string, unknown>,
+    entityCounts.get(actionId),
+  );
 
   return {
     id: action.id,
@@ -3042,13 +3071,16 @@ export async function getActionFor(
     impact: action.impact,
     status: action.status,
     outcome: action.outcome ?? null,
-    payload: (action.payload ?? {}) as Record<string, unknown>,
+    payload,
     kpi_keys: action.kpi_keys ?? [],
     assignee: action.assignee_id
       ? { id: action.assignee_id, full_name: names.get(action.assignee_id) ?? null }
       : null,
     due_date: action.due_date ?? null,
-    priority: priorityFor(action),
+    priority: priorityFor({
+      ...action,
+      priority_reason: currentPriorityReason(action.priority_reason, payload),
+    }),
     created_at: action.created_at,
     updated_at: action.updated_at,
     completed_at: action.completed_at ?? null,
@@ -3057,7 +3089,10 @@ export async function getActionFor(
       position: t.position,
       task_key: t.task_key ?? null,
       title: t.title ?? null,
-      title_params: (t.title_params ?? {}) as Record<string, unknown>,
+      title_params: (currentTaskParams(
+        (t.title_params ?? {}) as Record<string, string | number>,
+        payload,
+      ) ?? {}) as Record<string, unknown>,
       status: t.status,
       skip_reason: t.skip_reason ?? null,
       mode: t.mode ?? null,
@@ -3068,7 +3103,9 @@ export async function getActionFor(
     })),
     // The join that found them is not part of a signal.
     signals: ((signalsRes.data ?? []) as Record<string, unknown>[]).map((row) =>
-      Object.fromEntries(Object.entries(row).filter(([key]) => key !== 'action_signals')),
+      withoutTargetIds(
+        Object.fromEntries(Object.entries(row).filter(([key]) => key !== 'action_signals')),
+      ),
     ),
     events: (eventsRes.data ?? []).map((e) => ({
       event: e.event,
@@ -3176,10 +3213,11 @@ export async function listSignalsFor(
   return rows.map((row) => {
     const used = currentActionFirst(actions.get(row.id) ?? [], row.action_id);
     const signal = known.get(row.id);
+    const lean = withoutTargetIds(row as unknown as Record<string, unknown>);
     // A kind this build has no detail for still comes back, as it always did.
     return signal
-      ? { ...row, ...signalDetailForApi(signal, used) }
-      : { ...row, used_by_actions: used };
+      ? { ...lean, ...signalDetailForApi(signal, used) }
+      : { ...lean, used_by_actions: used };
   });
 }
 

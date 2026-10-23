@@ -70,10 +70,11 @@ function quality(over: Partial<QualityRead> = {}): QualityRead {
     eeat: score,
     trust: lowTrust,
     author,
+    canEdit: true,
     hasAuthors: true,
     brandName: 'Acme',
     siteTrust,
-    todos: qualityTodos({ eeat: score, author, hasAuthors: true }),
+    todos: qualityTodos({ eeat: score, author, hasAuthors: true, canEdit: true }),
     ...over,
   };
 }
@@ -97,7 +98,8 @@ async function render(
     linksPending = 0,
     paste = clean,
     mode = 'markReady' as 'markReady' | 'export',
-    bylineInContent = false,
+    contentByline = null as string | null,
+    title = 'How small teams forecast',
   } = {},
 ) {
   await act(async () => {
@@ -107,11 +109,11 @@ async function render(
           mode={mode}
           paste={paste}
           onFillNow={onFillNow}
-          bylineInContent={bylineInContent}
+          contentByline={contentByline}
           onContinue={onContinue}
           onClose={() => {}}
           quality={q}
-          title="How small teams forecast"
+          title={title}
           isNew={isNew}
           pageType={pageType}
           image={image}
@@ -196,7 +198,7 @@ describe('BeforePublish', () => {
         }),
       }),
     );
-    expect(alert()!.textContent).toContain('1 of 1 dated sources is over 24 months old');
+    expect(alert()!.textContent).toContain('1 of 1 dated source is over 24 months old');
     await act(async () => button('Fix first')!.click());
     expect(onFixFirst).toHaveBeenCalledWith('An old study.');
   });
@@ -272,6 +274,15 @@ describe('BeforePublish', () => {
     expect(toast.success).toHaveBeenCalledWith('JSON-LD copied');
   });
 
+  it('leaves the headline out while the title has a placeholder, and says why', async () => {
+    await render(quality(), { title: 'How [number] small teams forecast' });
+    expect(jsonLd()).not.toHaveProperty('headline');
+    expect(dialog().textContent).toContain(
+      'The title still has a placeholder in square brackets, so the code leaves the headline out.',
+    );
+    expect(button('Copy JSON-LD')).toBeDefined();
+  });
+
   it("leaves the author out while the authors aren't read", async () => {
     await render(quality({ eeat: null, author: null }));
     expect(rows()[0]).toContain("The authors couldn't be read here");
@@ -322,12 +333,31 @@ describe('BeforePublish', () => {
     );
   });
 
+  it('tells a link still being read from one no read is coming for', async () => {
+    // One read still coming; the other link's site refused its read.
+    await render(quality({ trust: null }), {
+      paste: { ...clean, linksUnread: 2 },
+      linksPending: 1,
+    });
+    expect(rows().at(-1)).toBe(
+      "Ready to paste · check itNo placeholders, all images have alt text; 1 link is still being read, 1 wasn't read: check it.",
+    );
+    await render(quality({ trust: null }), {
+      paste: { ...clean, placeholders: 1, linksUnread: 3 },
+      linksPending: 1,
+    });
+    expect(rows().at(-1)).toBe(
+      "Not ready to paste yet · missing1 placeholder still open · 1 link is still being read, 2 weren't read: check them",
+    );
+  });
+
   it('goes on to Export from Export, the warning saying so, with no log', async () => {
     await render(quality(), { mode: 'export' });
     expect(alert()!.textContent).toContain('You can export it, but fixing them first');
     expect(alert()!.textContent).not.toContain('logged');
     expect(button('Mark ready anyway')).toBeUndefined();
-    expect(document.activeElement).toBe(button('Continue to export'));
+    // The dialog moves focus in after it opens.
+    await vi.waitFor(() => expect(document.activeElement).toBe(button('Continue to export')));
     await act(async () => button('Continue to export')!.click());
     expect(onContinue).toHaveBeenCalled();
     expect(onMarkReady).not.toHaveBeenCalled();
@@ -341,10 +371,13 @@ describe('BeforePublish', () => {
   });
 
   it('says the exports put the byline under the H1 for a brand that adds it to content', async () => {
-    await render(quality(), { bylineInContent: true });
+    await render(quality(), { contentByline: 'By Ada Lovelace' });
     expect(rows()[0]).toBe(
       'Byline in the content · check itExports put "By Ada Lovelace" under the H1: this brand adds the byline to content, for a CMS with no author field.',
     );
+    // The line as it goes out, in the brand's language.
+    await render(quality(), { contentByline: 'Yazar: Ada Lovelace' });
+    expect(rows()[0]).toContain('Exports put "Yazar: Ada Lovelace" under the H1');
   });
 
   it("gives no Article for a page that isn't one", async () => {

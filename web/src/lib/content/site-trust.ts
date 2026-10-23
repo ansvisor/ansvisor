@@ -1,6 +1,6 @@
 /**
  * A brand's site trust (Content Editor Quality spec §8, CE-043), as the API
- * reads it (site-trust.js, site_trust 00255): five site-level checks, shown
+ * reads it (site-trust.js, site_trust 00259): five site-level checks, shown
  * in Site Audit as "Site trust {n}/5" and worth 5 Trust points on every page.
  */
 
@@ -20,7 +20,18 @@ export interface SiteTrust {
   /** How many of the five pass. */
   score: number;
   checkedAt: string;
+  /**
+   * False when the site didn't answer all of it (a timeout, a bot wall): a
+   * check that fails may only not have been read. An older API leaves it out.
+   */
+  complete?: boolean;
 }
+
+/**
+ * How long the API keeps a read when asked to check again, and before it
+ * reads a partial one again (site-trust.js RECHECK_MS).
+ */
+export const SITE_TRUST_RECHECK_MS = 10 * 60 * 1000;
 
 /** Where Quality's "Fix in Site Audit" goes: the card in Site Audit. */
 export const SITE_TRUST_PATH = '/dashboard/audit#site-trust';

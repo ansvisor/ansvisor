@@ -11,7 +11,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { articleJsonLd, isArticlePage, jsonLdScript, localDate } from '@/lib/content/page-schema';
+import {
+  articleJsonLd,
+  isArticlePage,
+  jsonLdScript,
+  localDate,
+  titleHasPlaceholder,
+} from '@/lib/content/page-schema';
 import { cn } from '@/lib/utils';
 import { copyToClipboard } from './_html-block';
 import { trustSuggestions, type QualityRead } from './_quality-tab';
@@ -59,7 +65,7 @@ export function BeforePublish({
   mode = 'markReady',
   paste,
   onFillNow,
-  bylineInContent = false,
+  contentByline = null,
   onContinue,
   onClose,
   quality,
@@ -76,8 +82,8 @@ export function BeforePublish({
   paste: ReadyToPaste;
   /** Goes to the first placeholder, to fill it (Ready to paste's Fill now). */
   onFillNow: () => void;
-  /** The brand puts the byline in the content (Add byline to content). */
-  bylineInContent?: boolean;
+  /** The byline line the brand puts in the content (Add byline to content), or null. */
+  contentByline?: string | null;
   /** Export's: goes on to it. */
   onContinue?: () => void;
   onClose: () => void;
@@ -136,9 +142,9 @@ export function BeforePublish({
       : author
         ? {
             state: 'check',
-            title: bylineInContent ? t('author.inContentTitle') : t('author.ok'),
-            detail: bylineInContent
-              ? t('author.inContent', { name: author.name })
+            title: contentByline ? t('author.inContentTitle') : t('author.ok'),
+            detail: contentByline
+              ? t('author.inContent', { line: contentByline })
               : t('author.okDetail', { name: author.name }),
           }
         : {
@@ -258,6 +264,9 @@ export function BeforePublish({
             >
               {jsonLd}
             </pre>
+            {titleHasPlaceholder(title) && (
+              <p className="text-xs text-amber-700 dark:text-amber-300">{t('headlineLeftOut')}</p>
+            )}
             <p className="text-xs text-muted-foreground">{t('datesNote')}</p>
           </div>
         )}
@@ -314,11 +323,18 @@ type T = ReturnType<typeof useTranslations<'contentEditor.editor.beforePublish'>
  * link working; what is still open, named, or the links not all read yet.
  */
 function readyRow(t: T, paste: ReadyToPaste, linksPending: number): Row {
-  const unread = paste.linksUnread
-    ? linksPending
-      ? t('paste.reading', { count: paste.linksUnread })
-      : t('paste.unreadShort', { count: paste.linksUnread })
-    : null;
+  // The reads still coming are for some of the unread links at most: one the
+  // site refused, one past the reads' limit or one in an HTML block gets none.
+  const reading = Math.min(linksPending, paste.linksUnread);
+  const notRead = paste.linksUnread - reading;
+  const unread =
+    reading && notRead
+      ? t('paste.readingAndUnread', { reading, unread: notRead })
+      : reading
+        ? t('paste.reading', { count: reading })
+        : notRead
+          ? t('paste.unreadShort', { count: notRead })
+          : null;
   const open = [
     paste.placeholders && t('paste.placeholders', { count: paste.placeholders }),
     paste.imagesWithoutAlt && t('paste.alt', { count: paste.imagesWithoutAlt }),

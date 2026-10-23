@@ -7,6 +7,7 @@ import type { McpAuthContext } from '@/lib/mcp-auth';
  */
 
 let orders: [string, Record<string, unknown> | undefined][] = [];
+let entityCounts: unknown[] = [];
 
 const ACTIONS = [
   {
@@ -43,6 +44,8 @@ const ACTIONS = [
   },
 ];
 
+let actionRows: Record<string, unknown>[] = ACTIONS;
+
 function builder(table: string) {
   const chain = {
     select: () => chain,
@@ -62,13 +65,17 @@ function builder(table: string) {
       error: null,
     }),
     then: (resolve: (v: { data: unknown; error: null }) => void) =>
-      resolve({ data: table === 'actions' ? ACTIONS : [], error: null }),
+      resolve({ data: table === 'actions' ? actionRows : [], error: null }),
   };
   return chain;
 }
 
 vi.mock('@/lib/supabase/admin', () => ({
-  supabaseAdmin: { from: (table: string) => builder(table) },
+  supabaseAdmin: {
+    from: (table: string) => builder(table),
+    // The actions' list counts (AC-009): nothing removed unless a test says so.
+    rpc: async () => ({ data: entityCounts, error: null }),
+  },
 }));
 
 const { getActionFor, listActionsFor } = await import('./data');
@@ -83,6 +90,8 @@ const auth: McpAuthContext = {
 describe('listActionsFor', () => {
   beforeEach(() => {
     orders = [];
+    entityCounts = [];
+    actionRows = ACTIONS;
   });
 
   it('gives each action its priority, or null before it is scored', async () => {
@@ -96,6 +105,25 @@ describe('listActionsFor', () => {
       ['priority_score', { ascending: false, nullsFirst: false }],
       ['updated_at', { ascending: false }],
     ]);
+  });
+
+  it('names the count left in a reason that named the action’s, as get_action does (AC-009)', async () => {
+    actionRows = [
+      {
+        ...ACTIONS[0],
+        priority_reason: { subject: { entity: 'prompts', count: 13 }, days: 2 },
+        target_entity: 'prompts',
+        target_count: 13,
+      },
+    ];
+    entityCounts = [
+      { action_id: 'a1', entity_type: 'prompts', total: 13, removed: 1, removed_labels: ['x'] },
+    ];
+    const rows = await listActionsFor(auth, { brandId: 'brand-1' });
+    expect(rows?.[0].priority?.reason).toEqual({
+      subject: { entity: 'prompts', count: 12 },
+      days: 2,
+    });
   });
 
   it('lists the most recently updated first when asked', async () => {

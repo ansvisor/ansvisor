@@ -42,11 +42,18 @@ export function qualityTodos({
   author,
   hasAuthors,
   placeholders = { count: 0, had: false },
+  canEdit = false,
 }: {
   eeat: Score<EeatCheckId> | null;
   author: ContentAuthor | null;
   hasAuthors: boolean;
   placeholders?: { count: number; had: boolean };
+  /**
+   * Whether the member may edit the page's author (whoever added them, the
+   * author themself or an admin): only they get Edit author; anyone else is
+   * told who can.
+   */
+  canEdit?: boolean;
 }): QualityTodo[] {
   const fill: QualityTodo[] =
     placeholders.count || placeholders.had
@@ -75,7 +82,7 @@ export function qualityTodos({
       id: 'authorProfile',
       done: !!author && bio && links,
       gain: scoreGain(eeat, ['authorBio']),
-      action: author ? 'editAuthor' : null,
+      action: author && canEdit ? 'editAuthor' : null,
     },
   ];
 }
