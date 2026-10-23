@@ -89,6 +89,7 @@ import {
   getTrafficTrend,
 } from '@/lib/traffic-reads';
 import { RangeReadyProvider, rangeKeyOf, useRangeGate } from './_range-ready';
+import { HeaderWithAiUsage } from '@/components/ai-usage/ai-usage-meter';
 
 const PAGE_SIZE = 10;
 
@@ -693,29 +694,31 @@ function TrafficPageContent({ brand }: { brand: Brand }) {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">AI Traffic Analytics</h1>
-          <p className="text-muted-foreground text-sm">
-            {primaryDomain ? `${primaryDomain} · ` : ''}AI-referred visits to your website
-          </p>
+      <HeaderWithAiUsage>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight">AI Traffic Analytics</h1>
+            <p className="text-muted-foreground text-sm">
+              {primaryDomain ? `${primaryDomain} · ` : ''}AI-referred visits to your website
+            </p>
+          </div>
+          {/* items-end, not items-center: the range control is two rows tall
+              (its label sits above the buttons), so centring left the Export
+              button floating above the segmented control's baseline. */}
+          <div className="flex flex-wrap items-end gap-3">
+            <DateRangeFilter
+              value={datePreset}
+              presets={DATE_PRESETS}
+              onChange={handleDatePresetChange}
+              from={customFrom}
+              to={customTo}
+              onFromChange={handleCustomFromChange}
+              onToChange={handleCustomToChange}
+            />
+            <ExportMenu exporter={exporter} />
+          </div>
         </div>
-        {/* items-end, not items-center: the range control is two rows tall
-            (its label sits above the buttons), so centring left the Export
-            button floating above the segmented control's baseline. */}
-        <div className="flex flex-wrap items-end gap-3">
-          <DateRangeFilter
-            value={datePreset}
-            presets={DATE_PRESETS}
-            onChange={handleDatePresetChange}
-            from={customFrom}
-            to={customTo}
-            onFromChange={handleCustomFromChange}
-            onToChange={handleCustomToChange}
-          />
-          <ExportMenu exporter={exporter} />
-        </div>
-      </div>
+      </HeaderWithAiUsage>
 
       {!rangeGate.settled && rangeSpinner}
       <RangeReadyProvider value={rangeGate.value}>

@@ -38,6 +38,7 @@ import { ActionCenterTabs } from '@/components/action-center/action-center-tabs'
 import { HistoryTable } from '@/components/action-center/history-table';
 import { HistoryDrawer } from '@/components/action-center/history-drawer';
 import { cn } from '@/lib/utils';
+import { HeaderWithAiUsage } from '@/components/ai-usage/ai-usage-meter';
 
 const RANGE_DAYS = { '7d': 7, '30d': 30, '90d': 90, all: null } as const;
 type RangePreset = keyof typeof RANGE_DAYS;
@@ -181,10 +182,12 @@ export default function ActionCenterHistoryPage() {
   };
 
   const header = (
-    <div>
-      <h1 className="text-2xl font-bold tracking-tight">{t('title')}</h1>
-      <p className="mt-1 text-sm text-muted-foreground">{t('subtitle')}</p>
-    </div>
+    <HeaderWithAiUsage>
+      <div>
+        <h1 className="text-2xl font-bold tracking-tight">{t('title')}</h1>
+        <p className="mt-1 text-sm text-muted-foreground">{t('subtitle')}</p>
+      </div>
+    </HeaderWithAiUsage>
   );
 
   if (!brandId) {

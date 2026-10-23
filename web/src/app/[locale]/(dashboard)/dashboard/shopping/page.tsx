@@ -91,6 +91,7 @@ import { toCsv } from '@/lib/csv';
 import { PLATFORM_LABELS } from '@/config/platform-labels';
 import { formatRegionDisplay } from '@/lib/region';
 import type { AmazonShareDropAlert } from '@/lib/shopping-amazon-share-alert';
+import { HeaderWithAiUsage } from '@/components/ai-usage/ai-usage-meter';
 
 const DATE_PRESETS: ShoppingDatePreset[] = ['7d', '30d', '90d', 'all'];
 
@@ -785,13 +786,15 @@ function PromptsTabContent({
 
 function PageHeader({ t }: { t: ReturnType<typeof useTranslations<'shopping'>> }) {
   return (
-    <div>
-      <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight">
-        <ShoppingBag className="h-6 w-6 text-primary" />
-        {t('title')}
-      </h1>
-      <p className="mt-1 text-sm text-muted-foreground">{t('description')}</p>
-    </div>
+    <HeaderWithAiUsage>
+      <div>
+        <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight">
+          <ShoppingBag className="h-6 w-6 text-primary" />
+          {t('title')}
+        </h1>
+        <p className="mt-1 text-sm text-muted-foreground">{t('description')}</p>
+      </div>
+    </HeaderWithAiUsage>
   );
 }
 

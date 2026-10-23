@@ -25,6 +25,21 @@ export interface AiUsage {
   features: { feature: AiUsageFeature; percent: number }[];
 }
 
+/** A count against its plan's limit this period. */
+export interface UsageCount {
+  used: number;
+  limit: number;
+}
+
+/**
+ * The limits that aren't AI, beside the header meter (AI usage spec §2):
+ * each null when the plan has no cap or it couldn't be read.
+ */
+export interface UsageLimits {
+  auditPages: UsageCount | null;
+  promptLocations: UsageCount | null;
+}
+
 /**
  * A share as it reads: a sliver as "<1%", else whole percents, rounded down
  * so nothing reads as all of it before it is (the server sends 100 only
@@ -40,4 +55,20 @@ export function aiUsageTone(usage: AiUsage): UsageTone {
   if (usage.unlimited || usage.percentUsed === null) return 'unlimited';
   if (usage.percentUsed >= 100) return 'exhausted';
   return usage.percentUsed >= USAGE_WARNING_RATIO * 100 ? 'warning' : 'normal';
+}
+
+/** Where a browser keeps the last AI usage toast it showed: "{periodStart}:{plan}". */
+export const AI_USAGE_TOAST_KEY = 'aeo:ai-usage-toast';
+
+/** The mark a toast leaves: the period and the plan it warned about. */
+export const aiUsageToastMark = (usage: AiUsage) => `${usage.periodStart}:${usage.plan}`;
+
+/**
+ * Whether a read calls for the toast (AI usage spec §4), given the mark of the
+ * last one this browser showed: once a period on reaching 80%. A new period,
+ * or a plan changed within it, starts over; a used-up allowance has its red
+ * banner instead.
+ */
+export function aiUsageToastDue(usage: AiUsage, shown: string | null): boolean {
+  return aiUsageTone(usage) === 'warning' && shown !== aiUsageToastMark(usage);
 }
