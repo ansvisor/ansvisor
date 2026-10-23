@@ -374,7 +374,8 @@ export function keepSuggestions(raw, passages, lockedKeys, ruleKeys, links = nul
     // Source numbers belong in "sources", never in the words.
     const s = { ...answer, after: stripSourceIds(answer.after) };
     const passage = passages[s.passage - 1];
-    const reason = s.reason.trim().slice(0, 300);
+    // The card shows it: a source number the model wrote in ("(S2)") goes.
+    const reason = stripSourceIds(s.reason).trim().slice(0, 300);
     if (!passage || !reason || passage.text.length > MAX_PASSAGE_CHARS) continue;
     const rules = [...new Set(s.rules.filter((key) => ruleKeys.has(key)))];
     const insertOf = (html) =>
@@ -626,6 +627,8 @@ export async function fixDraftRules({ draftId, brandId, input }) {
   const known = knownNumbers(
     htmlText(draft.body_html),
     draft.title,
+    brand.name,
+    brand.industry,
     brand.description,
     ...input.rules.flatMap((r) => [r.name, r.detail]),
     ...input.textRules,

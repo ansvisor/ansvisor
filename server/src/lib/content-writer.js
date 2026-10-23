@@ -28,6 +28,7 @@ import {
   placeholderNumbers,
   placeholderNumbersInHtml,
   sourceSuggestion,
+  sourceWords,
   stripSourceIds,
   todayText,
 } from './content-sources.js';
@@ -548,7 +549,7 @@ async function rewritePage({ draft, brand, model, input, budget, numbered, known
     before_text: '',
     before_html: draft.body_html,
     after_text: html,
-    reason: clean(object.reason).slice(0, 300) || 'Rewrote the page to the rules',
+    reason: clean(stripSourceIds(object.reason)).slice(0, 300) || 'Rewrote the page to the rules',
     rule_keys: [...ruleKeys],
     ...(sources.length ? { sources } : {}),
   });
@@ -598,16 +599,15 @@ export async function runDraftWriting({ draft, brand, model, input, budget, rewr
     const known = knownNumbers(
       htmlText(draft.body_html),
       draft.title,
+      brand.name,
+      brand.industry,
       brand.description,
       brief,
       ...input.rules.flatMap((r) => [r.name, r.detail]),
       ...input.textRules,
       todayText(),
     );
-    const knownInPage = new Set([
-      ...known,
-      ...knownNumbers(...numbered.map((s) => `${s.label} ${s.detail ?? ''}`)),
-    ]);
+    const knownInPage = new Set([...known, ...knownNumbers(...numbered.map(sourceWords))]);
 
     if (rewrite) {
       return await rewritePage({

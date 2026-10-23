@@ -193,7 +193,9 @@ describe('keepSuggestions', () => {
   const ruleKeys = new Set(['dated', 'faq']);
 
   it('keeps a replace whose words are in its passage, with the rules sent and its sources', () => {
-    expect(keepSuggestions([suggestion()], passages, locked, ruleKeys, null, sourcing)).toEqual([
+    // A source number the model wrote into its reason ("(S2)") isn't shown on the card.
+    const cited = suggestion({ reason: 'add a dated data point (rule) (S2)' });
+    expect(keepSuggestions([cited], passages, locked, ruleKeys, null, sourcing)).toEqual([
       {
         kind: 'replace',
         block_text: 'Use good coffee and hot water.',
