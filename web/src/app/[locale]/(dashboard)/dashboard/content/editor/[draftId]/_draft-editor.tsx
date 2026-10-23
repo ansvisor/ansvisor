@@ -494,14 +494,19 @@ export function DraftEditor({
   const hasAuthors = (authorsRead?.authors.length ?? 0) > 0;
   // What only the person can do (CE-040), and the nudge to the first of it
   // when the agent's run ends, after Accept all and on Mark ready.
-  const todos = qualityOn ? qualityTodos({ eeat: eeatScore, author: pageAuthor, hasAuthors }) : [];
+  // Who may edit the page's author: only they get Edit author (CE-037's rule).
+  const canEditPageAuthor =
+    !!pageAuthor && !!authorsRead && canEditAuthor(pageAuthor, authorsRead.me);
+  const todos = qualityOn
+    ? qualityTodos({ eeat: eeatScore, author: pageAuthor, hasAuthors, canEdit: canEditPageAuthor })
+    : [];
   const quality: QualityRead | null = qualityOn
     ? {
         readability: readable,
         eeat: eeatScore,
         trust: trustScore,
         author: pageAuthor,
-        canEdit: !!pageAuthor && !!authorsRead && canEditAuthor(pageAuthor, authorsRead.me),
+        canEdit: canEditPageAuthor,
         hasAuthors,
         brandName,
         siteTrust,

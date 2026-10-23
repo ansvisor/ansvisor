@@ -77,7 +77,7 @@ function read(
     hasAuthors,
     brandName: 'Acme',
     siteTrust: null,
-    todos: qualityTodos({ eeat: score, author, hasAuthors }),
+    todos: qualityTodos({ eeat: score, author, hasAuthors, canEdit }),
   };
 }
 
@@ -197,11 +197,10 @@ describe('QualityTab', () => {
   it("says who can complete the profile when the reader can't edit the author", async () => {
     await render(read(result, { ...ada, bio: null }, true, false));
     const row = [...container.querySelectorAll('li')].find((li) =>
-      li.textContent?.includes('Ada Lovelace'),
+      li.textContent?.includes("Complete Ada Lovelace's profile"),
     )!;
-    expect(row.textContent).toContain('Ada Lovelace has no short bio');
     expect(row.textContent).toContain(
-      'Whoever added Ada Lovelace or an admin can add a short bio in Settings › Authors.',
+      'Whoever added Ada Lovelace or an admin can add a short bio in Settings › Authors',
     );
     expect(row.querySelector('a')).toBeNull();
     expect(row.querySelector('button')).toBeNull();
@@ -210,10 +209,10 @@ describe('QualityTab', () => {
   it('names the author among who can when they are a member', async () => {
     await render(read(result, { ...ada, sameAs: [], userId: 'u2' }, true, false));
     const row = [...container.querySelectorAll('li')].find((li) =>
-      li.textContent?.includes('Ada Lovelace'),
+      li.textContent?.includes("Complete Ada Lovelace's profile"),
     )!;
     expect(row.textContent).toContain(
-      'Ada Lovelace, whoever added them or an admin can add a profile link in Settings › Authors.',
+      'Ada Lovelace, whoever added them or an admin can add a profile link in Settings › Authors',
     );
     expect(row.querySelector('a')).toBeNull();
   });
@@ -377,6 +376,6 @@ describe('QualityTab', () => {
     await render({ score: null, unscored: 'language', checks: [], words: 240 });
     expect(container.textContent).toContain("Readability isn't read for this language yet.");
     expect(container.textContent).not.toContain('Write a few paragraphs');
-    expect(container.querySelector('li')).toBeNull();
+    expect(container.querySelector('[aria-label="What would raise it"]')).toBeNull();
   });
 });

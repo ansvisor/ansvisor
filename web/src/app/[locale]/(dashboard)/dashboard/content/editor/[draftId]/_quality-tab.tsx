@@ -9,7 +9,6 @@ import { BAND_CLASSES, qualityBand } from '@/lib/content/quality';
 import {
   authorProfile,
   FRESH_MONTHS,
-  scoreGain,
   trustGain,
   type EeatCheckId,
   type Score,
@@ -211,7 +210,10 @@ export function QualityTab({
 export function useTodoCopy() {
   const t = useTranslations('contentEditor.editor.quality.todos');
   const tAuthor = useTranslations('contentEditor.editor.author');
-  return (todo: QualityTodo, { author, brandName }: Pick<QualityRead, 'author' | 'brandName'>) => {
+  return (
+    todo: QualityTodo,
+    { author, brandName, canEdit }: Pick<QualityRead, 'author' | 'brandName' | 'canEdit'>,
+  ) => {
     if (todo.id === 'byline') {
       const action = todo.action === 'addAuthor' ? 'addAuthor' : 'pickAuthor';
       return {
@@ -239,7 +241,15 @@ export function useTodoCopy() {
     return {
       title: t('authorProfile.title', { name: author.name }),
       next: t('authorProfile.next', { name: author.name }),
-      detail: todo.done ? t('authorProfile.done') : t(`authorProfile.detail.${missing}`),
+      // Only whoever can edit the author is sent to; anyone else is told who can.
+      detail: todo.done
+        ? t('authorProfile.done')
+        : canEdit
+          ? t(`authorProfile.detail.${missing}`)
+          : t(`authorProfile.askOthers.${missing}`, {
+              name: author.name,
+              member: author.userId ? 'yes' : 'no',
+            }),
     };
   };
 }
