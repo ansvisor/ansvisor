@@ -183,7 +183,7 @@ describe('BeforePublish', () => {
         }),
       }),
     );
-    expect(alert()!.textContent).toContain('1 of 1 dated sources is over 24 months old');
+    expect(alert()!.textContent).toContain('1 of 1 dated source is over 24 months old');
     await act(async () => button('Fix first')!.click());
     expect(onFixFirst).toHaveBeenCalledWith('An old study.');
   });
