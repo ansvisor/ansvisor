@@ -4,6 +4,7 @@
  * Following a content job until it completes, fails or we stop waiting.
  */
 
+import type { ApiFailure } from './api-failure';
 import { describe, expect, test } from 'vitest';
 import type { GenerationJobStatus, OnDemandRequest } from '@/lib/actions/content';
 import { suggestForPage, suggestForPrompt, waitForContentJob } from './content-job';
@@ -104,7 +105,12 @@ describe('suggestForPrompt', () => {
 
   test('tells a used-up quota from nothing to write yet', async () => {
     expect(
-      await run(async () => ({ ok: false, error: 'Monthly limit', quotaExhausted: true })),
+      await run(async () => ({
+        ok: false,
+        error: 'Monthly limit',
+        failure: 'limit',
+        quotaExhausted: true,
+      })),
     ).toEqual({ kind: 'limited' });
     expect(
       await run(
@@ -121,9 +127,13 @@ describe('suggestForPrompt', () => {
   });
 
   test('turns a refusal, a failed job or a throw into failed', async () => {
-    expect(await run(async () => ({ ok: false, error: 'Prompt not found' }))).toEqual({
+    // With the reason the API gave, for the toast to say in plain words (BUG-001).
+    expect(
+      await run(async () => ({ ok: false, error: 'Prompt not found', failure: 'not_found' })),
+    ).toEqual({
       kind: 'failed',
       message: 'Prompt not found',
+      failure: 'not_found',
     });
     expect(
       await run(
@@ -145,7 +155,7 @@ describe('suggestForPage (AT-006 part B3)', () => {
       r: OnDemandRequest,
     ) => Promise<
       | { ok: true; jobId: string; count: number }
-      | { ok: false; error: string; quotaExhausted?: boolean }
+      | { ok: false; error: string; failure: ApiFailure; quotaExhausted?: boolean }
     >,
     result: GenerationJobStatus['result'],
   ) =>
@@ -183,12 +193,19 @@ describe('suggestForPage (AT-006 part B3)', () => {
 
   test("says when the month's suggestions are used up, before or during the run", async () => {
     expect(
-      await run(async () => ({ ok: false, error: 'used up', quotaExhausted: true }), null),
+      await run(
+        async () => ({ ok: false, error: 'used up', failure: 'limit', quotaExhausted: true }),
+        null,
+      ),
     ).toEqual({ kind: 'limited' });
     expect(await run(started, { generated: 0, limited: true })).toEqual({ kind: 'limited' });
-    expect(await run(async () => ({ ok: false, error: 'nope' }), null)).toEqual({
+    // Another workspace's brand: the reason travels for a plain toast (BUG-001).
+    expect(
+      await run(async () => ({ ok: false, error: 'nope', failure: 'workspace' }), null),
+    ).toEqual({
       kind: 'failed',
       message: 'nope',
+      failure: 'workspace',
     });
   });
 });

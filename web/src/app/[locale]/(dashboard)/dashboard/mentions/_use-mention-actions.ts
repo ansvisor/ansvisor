@@ -3,6 +3,7 @@
 import { useCallback, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
+import { useFailureToast } from '@/hooks/use-failure-toast';
 import { useRouter } from '@/i18n/navigation';
 import { getGenerationJobStatus, suggestContentForPrompt } from '@/lib/actions/content';
 import { sendMentionsToActionCenter } from '@/lib/actions/mentions';
@@ -21,6 +22,7 @@ const SUGGEST_CALLS = { start: suggestContentForPrompt, getStatus: getGeneration
 export function useMentionActions(brandId: string) {
   const t = useTranslations('mentions.actions');
   const router = useRouter();
+  const failureToast = useFailureToast();
   const [sending, setSending] = useState(false);
   const [suggesting, setSuggesting] = useState<string | null>(null);
 
@@ -103,6 +105,11 @@ export function useMentionActions(brandId: string) {
           });
           break;
         case 'failed':
+          // A reason the API gave, in plain words (BUG-001); else what went wrong.
+          if (outcome.failure && outcome.failure !== 'failed') {
+            failureToast(outcome.failure, { id: toastId, description: row.promptText });
+            break;
+          }
           toast.error(t('suggestFailed'), {
             id: toastId,
             description: outcome.message ?? undefined,
@@ -116,7 +123,7 @@ export function useMentionActions(brandId: string) {
           break;
       }
     },
-    [router, t],
+    [failureToast, router, t],
   );
 
   return { send, sending, suggest, suggesting };

@@ -8,6 +8,7 @@ import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
 import { PlanSwitcher } from '@/components/settings/plan-switcher';
 import { InvoiceList } from '@/components/settings/invoice-list';
+import { AiUsageCard } from '@/components/settings/ai-usage-card';
 import { usePlanContext } from '@/components/providers/plan-provider';
 import { createClient } from '@/lib/supabase/client';
 import { PLANS, type PlanId } from '@/config/plans';
@@ -190,6 +191,8 @@ export function BillingSection() {
           )}
         </CardContent>
       </Card>
+
+      <AiUsageCard />
 
       {/* Plan Switcher */}
       <Card>

@@ -11,11 +11,14 @@ import {
   checkRule,
   draftRulesFit,
   effectiveRules,
+  lengthConflict,
+  overridesForImport,
   readPage,
   ruleLength,
   ruleSet,
   ruleSetFits,
   rulesMet,
+  setToSave,
   textRuleCheck,
   type ActiveRule,
   type DraftRules,
@@ -44,6 +47,8 @@ export interface DraftRulesState {
   total: number;
   /** The page length the rules ask for. */
   length: number;
+  /** The sections and questions the rules ask for take more than Length allows. */
+  lengthConflict: { need: number; max: number } | null;
   /** Turns a rule on or off, or gives it a value, for this draft. */
   change: (key: string, change: { on?: boolean; value?: string }) => void;
   /** Loads a set into the draft: a type's Ansvisor default, or the workspace's My rules for it. */
@@ -144,7 +149,11 @@ export function useDraftRules({
     [choices, setType, mine],
   );
   const rules = useMemo(
-    () => activeRules(ruleSet(setType, { keywords, language }), effective),
+    () =>
+      activeRules(
+        ruleSet(setType, { keywords, language, length: effective.importLength }),
+        effective,
+      ),
     [setType, keywords, language, effective],
   );
   // The checks follow the page a beat behind typing.
@@ -159,6 +168,10 @@ export function useDraftRules({
     [rules, page, ctx],
   );
   const { met, total } = rulesMet(checked);
+  const conflict = useMemo(
+    () => lengthConflict(checked, ctx.fanouts.length),
+    [checked, ctx.fanouts.length],
+  );
 
   /**
    * Saves the latest change: one save at a time, so two quick changes can't
@@ -215,6 +228,7 @@ export function useDraftRules({
     met,
     total,
     length: ruleLength(rules, setType),
+    lengthConflict: conflict,
     change: (key, change) =>
       edited({
         overrides: { ...effective.overrides, [key]: { ...effective.overrides[key], ...change } },
@@ -225,8 +239,10 @@ export function useDraftRules({
         {
           set: type === draftType ? null : type,
           source,
-          overrides: set?.overrides ?? {},
+          // The page's own length stays the Length rule's starting point.
+          overrides: overridesForImport(set?.overrides ?? {}, effective.importLength),
           textRules: set?.textRules ?? [],
+          ...(effective.importLength ? { importLength: effective.importLength } : {}),
         },
         t('setPicked'),
       );
@@ -264,7 +280,7 @@ export function useDraftRules({
     },
     saveAsMine: () => {
       if (!setType) return;
-      const set: SavedRuleSet = { overrides: effective.overrides, textRules: effective.textRules };
+      const set = setToSave(effective, mine[setType]);
       if (!ruleSetFits(set)) {
         toast.error(t('tooLongMine'));
         return;
@@ -280,6 +296,16 @@ export function useDraftRules({
         });
     },
     reset: () =>
-      save({ set: choices.set, source: 'default', overrides: {}, textRules: [] }, t('resetDone')),
+      save(
+        {
+          set: choices.set,
+          source: 'default',
+          overrides: {},
+          textRules: [],
+          // The page's own length isn't a choice: Reset keeps it.
+          ...(effective.importLength ? { importLength: effective.importLength } : {}),
+        },
+        t('resetDone'),
+      ),
   };
 }

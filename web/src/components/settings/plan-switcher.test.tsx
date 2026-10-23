@@ -123,7 +123,9 @@ describe('the plan cards', () => {
     const ai = [...container.querySelectorAll('li span')].find(
       (el) => el.textContent === '5x AI usage',
     );
-    expect(ai?.getAttribute('title')).toContain('Improve suggestions and the Content Editor');
+    expect(ai?.getAttribute('title')).toContain(
+      "Improve suggestions, the Content Editor's AI and the Action Center",
+    );
     expect(container.textContent).toContain(
       'For small teams getting started with AI visibility monitoring and optimization.',
     );

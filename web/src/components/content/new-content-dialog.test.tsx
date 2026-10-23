@@ -356,6 +356,29 @@ describe('New content', () => {
     expect(getContentOverlap).not.toHaveBeenCalled();
   });
 
+  it('keeps one H1 in a pasted page, its first, the others H2s', async () => {
+    await render();
+    await click(radio('Optimize content'));
+    await click(tab('Paste text'));
+    const box = document.querySelector('textarea')!;
+    const paste = new Event('paste', { bubbles: true, cancelable: true });
+    Object.defineProperty(paste, 'clipboardData', {
+      value: {
+        getData: (type: string) =>
+          type === 'text/html'
+            ? '<h1>Returns policy</h1><p>30 days.</p><h1>Key points</h1><p>Free.</p>'
+            : '',
+      },
+    });
+    await act(async () => box.dispatchEvent(paste));
+    await click(button('Continue'));
+    await click(button('Open editor'));
+
+    expect(createContentDraft.mock.calls[0][1].bodyHtml).toBe(
+      '<h1>Returns policy</h1><p>30 days.</p><h2>Key points</h2><p>Free.</p>',
+    );
+  });
+
   it('takes typed plain text as paragraphs, and a blog post when nothing tells the type', async () => {
     await render();
     await click(radio('Optimize content'));
@@ -916,6 +939,36 @@ describe('New content', () => {
       // At once, no toast to click: the editor shows the agent at work.
       expect(push).toHaveBeenCalledWith('/dashboard/content/editor/d9');
       expect(toast.success).not.toHaveBeenCalled();
+    });
+
+    it('aims the agent at a pasted page’s own length (F)', async () => {
+      startAgentWriting.mockResolvedValue({ started: true });
+      await render('ecommerce');
+      await click(radio('Optimize content'));
+      await click(tab('Paste text'));
+      const box = document.querySelector('textarea')!;
+      const paste = new Event('paste', { bubbles: true, cancelable: true });
+      Object.defineProperty(paste, 'clipboardData', {
+        value: {
+          getData: (type: string) =>
+            type === 'text/html'
+              ? `<h2>Returns policy</h2><p>${'30 days to return. '.repeat(10)}</p>`
+              : '',
+        },
+      });
+      await act(async () => box.dispatchEvent(paste));
+      await click(button('Continue'));
+      await click(whoOption('Agent'));
+      await click(button('Start the agent'));
+
+      // "Returns policy 30 days to return. …": as the draft started, not a new page's 3,000.
+      expect(agentWriteRequest).toHaveBeenCalledWith(
+        expect.objectContaining({
+          method: 'optimize',
+          rules: { set: null, source: null, overrides: {}, textRules: [], importLength: 204 },
+        }),
+        describeRule,
+      );
     });
 
     it('keeps the draft for me when the agent can’t start', async () => {

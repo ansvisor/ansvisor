@@ -100,6 +100,7 @@ async function recordUsage({ organizationId, actionId, modelId, usage }) {
   const { error } = await supabaseAdmin.from('prompt_improve_usage').insert({
     organization_id: organizationId,
     action_id: actionId,
+    feature: 'action_center',
     model: modelId,
     input_tokens: usage?.inputTokens ?? null,
     output_tokens: usage?.outputTokens ?? null,

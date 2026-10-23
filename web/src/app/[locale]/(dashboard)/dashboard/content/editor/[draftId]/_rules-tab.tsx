@@ -38,6 +38,7 @@ import type { DraftRulesState } from './_use-draft-rules';
 /** Rules with an explanation on hover (spec §10). */
 const HINTED = new Set([
   'length',
+  'oneH1',
   'summary',
   'fanoutH2',
   'internalLinks',
@@ -72,11 +73,17 @@ export function RulesTab({
   siteType,
   draftPageType,
   agentFix,
+  onOpenSources,
 }: {
   state: DraftRulesState;
   siteType: SiteType;
   draftPageType: PageType | null;
   agentFix?: AgentFix;
+  /**
+   * Opens the Sources tab, where a draft with no prompts (so no fan-outs)
+   * gets them; none while the sources are read, or when the draft has prompts.
+   */
+  onOpenSources?: () => void;
 }) {
   const t = useTranslations('contentEditor.editor.rules');
   const tTypes = useTranslations('contentEditor.pageTypes');
@@ -173,6 +180,12 @@ export function RulesTab({
                   status={status}
                   onChange={(change) => state.change(rule.key, change)}
                   agentFix={rule.key === 'aiTraces' ? agentFix : undefined}
+                  onOpenSources={onOpenSources}
+                  note={
+                    rule.key === 'length' && state.lengthConflict
+                      ? t('lengthConflict', state.lengthConflict)
+                      : undefined
+                  }
                 />
               ))}
             </ul>
@@ -350,30 +363,40 @@ function RuleRow({
   status,
   onChange,
   agentFix,
+  onOpenSources,
+  note,
 }: {
   rule: ActiveRule;
   status: RuleStatus;
   onChange: (change: { on?: boolean; value?: string }) => void;
   /** "Remove AI traces" offers Fix: the agent rewrites only those phrases. */
   agentFix?: AgentFix;
+  onOpenSources?: () => void;
+  /** A warning under the rule: Length, when the other rules can't fit in it. */
+  note?: string;
 }) {
   const t = useTranslations('contentEditor.editor.rules');
   const name = t(`names.${rule.key}`);
   return (
     <li className={cn('px-3 py-2', !rule.on && 'opacity-60')}>
       <div className="flex items-center gap-2">
-        <Switch
-          on={rule.on}
-          label={t('toggle', { name })}
-          onToggle={() => onChange({ on: !rule.on })}
-        />
+        {rule.fixed ? (
+          // Always on: the editor keeps it, so it has no switch.
+          <span aria-hidden="true" className="w-7 shrink-0" />
+        ) : (
+          <Switch
+            on={rule.on}
+            label={t('toggle', { name })}
+            onToggle={() => onChange({ on: !rule.on })}
+          />
+        )}
         <span
           className="min-w-0 flex-1 text-xs"
           title={HINTED.has(rule.key) ? t(`hints.${rule.key}`) : undefined}
         >
           {name}
         </span>
-        <StatusBadge on={rule.on} status={status} />
+        <StatusBadge on={rule.on} status={status} onOpenSources={onOpenSources} />
         {agentFix && rule.on && status.state === 'bad' && (
           <button
             type="button"
@@ -390,6 +413,9 @@ function RuleRow({
         <div className="mt-1 flex items-center gap-1 pl-9">
           <RuleValue rule={rule} name={name} onCommit={(value) => onChange({ value })} />
         </div>
+      )}
+      {note && rule.on && (
+        <p className="mt-1 pl-9 text-[11px] text-amber-700 dark:text-amber-400">{note}</p>
       )}
     </li>
   );
@@ -481,8 +507,29 @@ export function ruleStatusDetail(
   return ruleStatusText(t, status);
 }
 
-function StatusBadge({ on, status }: { on: boolean; status: RuleStatus }) {
+function StatusBadge({
+  on,
+  status,
+  onOpenSources,
+}: {
+  on: boolean;
+  status: RuleStatus;
+  onOpenSources?: () => void;
+}) {
   const t = useTranslations('contentEditor.editor.rules.status');
+  if (on && onOpenSources && status.state === 'info' && status.code === 'noFanouts') {
+    // No fan-outs means no prompts yet: where to add them.
+    return (
+      <button
+        type="button"
+        title={t('noFanoutsHint')}
+        onClick={onOpenSources}
+        className="w-20 shrink-0 truncate text-right text-[11px] font-medium text-primary underline underline-offset-2 hover:no-underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+      >
+        {t('addPrompts')}
+      </button>
+    );
+  }
   if (!on) {
     return (
       <span className="w-20 shrink-0 text-right text-[11px] text-muted-foreground">{t('off')}</span>
