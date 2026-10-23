@@ -16,7 +16,7 @@ const p = (text: string) => `<p>${text}</p>`;
 const sentence = (n: number) =>
   `${Array.from({ length: n }, (_, i) => (i === 0 ? 'Teams' : 'plan')).join(' ')}.`;
 const check = (html: string, id: string, language = 'en') =>
-  readability(html, html.length, language).checks.find((c) => c.id === id);
+  readability(html, language).checks.find((c) => c.id === id);
 
 const EASY =
   '<h1>How do small teams forecast pipeline?</h1>' +
@@ -34,7 +34,7 @@ const EASY =
 
 describe('readability', () => {
   it('scores a plain page high, over its seven checks', () => {
-    const result = readability(EASY, EASY.length, 'en');
+    const result = readability(EASY, 'en');
     expect(result.checks.map((c) => c.id)).toEqual([
       'avgSentence',
       'longSentences',
@@ -62,7 +62,7 @@ describe('readability', () => {
 
   it('gives no score to a page too short to read', () => {
     const html = p('Pipeline forecasting for small teams, in short.');
-    expect(readability(html, html.length, 'en')).toMatchObject({ score: null, checks: [] });
+    expect(readability(html, 'en')).toMatchObject({ score: null, checks: [] });
     expect(MIN_WORDS).toBe(50);
   });
 
@@ -79,7 +79,7 @@ describe('readability', () => {
       p(
         'Tahmini ekiple paylaşın ve farkları birlikte konuşun. Böylece herkes aynı rakama bakar ve ay sonunda sürpriz yaşanmaz.',
       );
-    const result = readability(tr, tr.length, 'tr');
+    const result = readability(tr, 'tr');
     expect(result.checks.find((c) => c.id === 'readingLevel')!.formula).toBe('atesman');
     // Passive voice and jargon read English only: left out, the score rescaled.
     expect(result.checks.map((c) => c.id)).not.toContain('passiveJargon');
@@ -123,9 +123,89 @@ describe('readability', () => {
 
   it('says how much a check would add, rescaled as the score is', () => {
     const html = `<h1>Pipeline</h1>${p(`${sentence(40)} ${sentence(38)} ${Array.from({ length: 4 }, () => sentence(14)).join(' ')}`)}`;
-    const result = readability(html, html.length, 'en');
+    const result = readability(html, 'en');
     expect(readabilityGain(result, 'longSentences')).toBe(6);
     expect(readabilityGain(result, 'passiveJargon')).toBe(0);
+  });
+});
+
+describe('reading the page as written', () => {
+  it('reads a quote’s and a list item’s paragraphs apart, and a nested list once', () => {
+    const quote = `<h1>Pipeline</h1><blockquote><p>${sentence(20)}</p><p>${sentence(20)}</p></blockquote>${p(Array.from({ length: 3 }, () => sentence(15)).join(' '))}`;
+    expect(check(quote, 'longSentences')!.count).toBe(0);
+    const nested =
+      '<h1>Pipeline</h1><ul><li><p>Plan deals weekly.</p><ul><li><p>Check each one.</p></li></ul></li></ul>' +
+      p(Array.from({ length: 4 }, () => sentence(15)).join(' '));
+    expect(readability(nested, 'en').words).toBe(3 + 3 + 60);
+  });
+
+  it('measures sentence length on running text, not a list’s points', () => {
+    const html =
+      '<h1>How small teams forecast</h1>' +
+      p(`Small teams forecast pipeline every week. ${sentence(17)} ${sentence(17)}`) +
+      `<ul>${Array.from({ length: 12 }, () => '<li><p>Check deals weekly</p></li>').join('')}</ul>`;
+    const avg = check(html, 'avgSentence')!;
+    expect(avg.value).toBeGreaterThan(12);
+    expect(avg.count).toBeLessThanOrEqual(0);
+  });
+
+  it('reads Spanish, German and French higher for shorter sentences', () => {
+    const page = (n: number, word: string) =>
+      `<h1>${word}</h1>${p(Array.from({ length: Math.ceil(120 / n) }, () => `${Array.from({ length: n }, () => word).join(' ')}.`).join(' '))}`;
+    for (const [lang, word] of [
+      ['es', 'casa'],
+      ['de', 'Haus'],
+      ['fr', 'maison'],
+    ]) {
+      const short = check(page(10, word), 'readingLevel', lang)!.value;
+      const long = check(page(30, word), 'readingLevel', lang)!.value;
+      expect(short).toBeGreaterThan(long);
+    }
+  });
+
+  it('wants a short first paragraph under an H1 that names its subject', () => {
+    const body = p(Array.from({ length: 4 }, () => sentence(15)).join(' '));
+    // An empty line after the H1 is no block.
+    const empty = `<h1>Pipeline forecasting for small teams</h1><p></p>${p('Pipeline forecasting is how a small team guesses what will close.')}${body}`;
+    expect(check(empty, 'answerFirst')!.points).toBe(15);
+    // Too long, or about something else.
+    const long = `<h1>Pipeline forecasting</h1>${p(`Pipeline ${sentence(70)}`)}${body}`;
+    expect(check(long, 'answerFirst')!.points).toBe(0);
+    const other = `<h1>Pipeline forecasting</h1>${p('Teams like a calm Monday.')}${body}`;
+    expect(check(other, 'answerFirst')!.points).toBe(0);
+    // No H1: nothing to answer.
+    expect(check(body, 'answerFirst')!.points).toBe(0);
+    // A short H1 is read by all its words.
+    const short = `<h1>What is AI?</h1>${p('AI is software that answers questions.')}${body}`;
+    expect(check(short, 'answerFirst')!.points).toBe(15);
+  });
+
+  it('keeps an abbreviation inside its sentence, and reads passive voice and jargon closely', () => {
+    expect(sentencesOf('Use a ratio, e.g. 1:16. Then brew.')).toEqual([
+      'Use a ratio, e.g. 1:16.',
+      'Then brew.',
+    ]);
+    const html =
+      '<h1>Pipeline</h1>' +
+      p(Array.from({ length: 4 }, () => sentence(15)).join(' ')) +
+      p(
+        'It is indeed simple. We are leveraging tools and utilized synergies with empowering, streamlined plans.',
+      );
+    const style = check(html, 'passiveJargon')!;
+    expect(style.count).toBe(0);
+    expect(style.value).toBe(5);
+    // Only the jargon falls short: Show goes there.
+    expect(style.at).toContain('leveraging');
+  });
+
+  it('reads a passive sentence that says not or never', () => {
+    const html =
+      '<h1>Pipeline</h1>' +
+      p(Array.from({ length: 5 }, () => sentence(15)).join(' ')) +
+      p("Stages are not defined. Deals weren't closed. Notes were never checked.");
+    const style = check(html, 'passiveJargon')!;
+    expect(style.count).toBe(3);
+    expect(style.at).toBe('Stages are not defined.');
   });
 });
 
@@ -145,6 +225,9 @@ describe('the parts', () => {
     expect(syllablesOf('readable', 'en')).toBe(3);
     expect(syllablesOf('quickly', 'en')).toBe(2);
     expect(syllablesOf('kitaplık', 'tr')).toBe(3);
+    expect(syllablesOf('wanted', 'en')).toBe(2);
+    expect(syllablesOf('moment', 'fr')).toBe(2);
+    expect(syllablesOf('kâr', 'tr')).toBe(1);
     expect(syllablesOf('Haus', 'de')).toBe(1);
   });
 

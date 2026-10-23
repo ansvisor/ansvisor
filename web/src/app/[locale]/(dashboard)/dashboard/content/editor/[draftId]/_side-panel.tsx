@@ -160,6 +160,7 @@ export function EditorSidePanel({
   onShowInPage?: (text: string) => void;
 }) {
   const t = useTranslations('contentEditor.editor.panel');
+  const tEditor = useTranslations('contentEditor.editor');
   const [tab, setTab] = useState<PanelTab>('instructions');
   const [segment, setSegment] = useState<InstructionSegment>('rules');
   const [opened, setOpened] = useState<Set<PanelTarget>>(() => new Set(['instructions', 'rules']));
@@ -287,7 +288,7 @@ export function EditorSidePanel({
             role="radiogroup"
             aria-label={t(segments.length > 2 ? 'segmentsLabelQuality' : 'segmentsLabel')}
             className="flex rounded-[10px] border bg-muted p-[3px]"
-            // Arrow keys move between the two, as in any radio group.
+            // Arrow keys move between them, as in any radio group.
             onKeyDown={(e) => {
               if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(e.key)) return;
               e.preventDefault();
@@ -326,6 +327,10 @@ export function EditorSidePanel({
                     )}
                   >
                     {qualityScore}
+                    <span className="sr-only">
+                      {' · '}
+                      {tEditor(`quality.bands.${qualityBand(qualityScore)}`)}
+                    </span>
                   </span>
                 )}
               </button>

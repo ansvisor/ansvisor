@@ -78,6 +78,7 @@ import { cn } from '@/lib/utils';
 import { useBrandStore } from '@/stores/use-brand-store';
 import { AgentCard } from './_agent-card';
 import { AgentDrafting, draftingKey } from './_agent-drafting';
+import { FlashBlock, findBlock, flashKey } from './_flash-block';
 import { useAgentRun } from './_use-agent-run';
 import { WorkingDots } from './_working-dots';
 import { DropOverlay, useAttachments } from './_attach';
@@ -319,6 +320,7 @@ export function DraftEditor({
       }),
       OneH1,
       AgentDrafting,
+      FlashBlock,
     ],
     content: draft.bodyHtml,
     // Rendered on the client only, so the server's HTML can't disagree with it.
@@ -396,7 +398,7 @@ export function DraftEditor({
   const language = useBrandStore((s) => s.brands.find((b) => b.id === draft.brandId)?.language);
   const qualityOn = qualityPhase() >= 1;
   const readable = useMemo(
-    () => (qualityOn ? readability(pageHtml, 0, language) : null),
+    () => (qualityOn ? readability(pageHtml, language) : null),
     [qualityOn, pageHtml, language],
   );
   const qualityScore = qualityAverage([readable?.score ?? null]);
@@ -724,18 +726,22 @@ export function DraftEditor({
     setTimeout(() => card.classList.remove(...mark), 1200);
   };
 
-  /** Quality's Show: the passage, scrolled to and marked for a moment. */
+  /**
+   * Quality's Show: the block of the page holding the passage (never a
+   * suggestion's card), scrolled to and marked for a moment.
+   */
   const showInPage = (text: string) => {
     if (!editor) return;
-    const probe = text.replace(/\s+/g, ' ').trim().slice(0, 80);
-    const block = [
-      ...editor.view.dom.querySelectorAll<HTMLElement>('p, li, h1, h2, h3, blockquote'),
-    ].find((node) => (node.textContent ?? '').replace(/\s+/g, ' ').includes(probe));
-    if (!block) return;
-    block.scrollIntoView({ block: 'center', behavior: 'smooth' });
-    const mark = ['ring-2', 'ring-amber-300', 'dark:ring-amber-700', 'rounded-sm'];
-    block.classList.add(...mark);
-    setTimeout(() => block.classList.remove(...mark), 1200);
+    const at = findBlock(editor.state.doc, text);
+    if (!at) return;
+    (editor.view.nodeDOM(at.from) as HTMLElement | null)?.scrollIntoView({
+      block: 'center',
+      behavior: 'smooth',
+    });
+    editor.view.dispatch(editor.state.tr.setMeta(flashKey, at));
+    setTimeout(() => {
+      if (!editor.isDestroyed) editor.view.dispatch(editor.state.tr.setMeta(flashKey, null));
+    }, 1200);
   };
 
   /**
@@ -1379,6 +1385,10 @@ export function DraftEditor({
             >
               <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-current" />
               {t('qualityChip', { score: qualityScore })}
+              <span className="sr-only">
+                {' · '}
+                {t(`quality.bands.${qualityBand(qualityScore)}`)}
+              </span>
             </button>
           )}
           {citedCount > 0 && (
