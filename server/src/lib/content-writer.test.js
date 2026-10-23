@@ -325,6 +325,10 @@ describe('runDraftWriting on a new page', () => {
       body_html: '<h1>How to brew pour-over coffee</h1><p>My own notes.</p>',
     });
     await expect(run(tried)).resolves.toEqual({ written: true });
+    // The fan-outs a rule names, in their words, on a new page too (B).
+    expect(generateObject.mock.calls[0][0].system).toContain(
+      'For each fan-out a rule names, use its words, not questions of your own: a section heading for fanoutH2, an FAQ question ending in "?" for fanoutFaq.',
+    );
     expect(rpcCalls).toEqual([
       ['content_draft_snapshot', { p_draft_id: DRAFT, p_origin: 'agent_before' }],
     ]);

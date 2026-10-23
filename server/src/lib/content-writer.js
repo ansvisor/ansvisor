@@ -98,6 +98,7 @@ How to write:
 - Follow the outline when there is one; each H2 answers one of the questions or AI searches given.
 - Short paragraphs and plain sentences. Lists where a reader compares or follows steps.
 - Follow every rule listed, and the writer's own rules.
+- For each fan-out a rule names, use its words, not questions of your own: a section heading for fanoutH2, an FAQ question ending in "?" for fanoutFaq.
 - Use only facts from the brand and the brief. Never invent numbers, prices, dates, names, customers, sources or quotes. When the page needs a fact you don't have, write a placeholder in square brackets, e.g. [price], [figure, source, year].
 - Plain text in every field: no HTML, no Markdown.
 - Write in the language asked for.`;

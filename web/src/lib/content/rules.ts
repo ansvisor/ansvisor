@@ -842,13 +842,14 @@ export function checkRule(rule: ActiveRule, page: PageRead, ctx: RuleContext): R
           : { state: 'bad', code: 'needsFaq' };
       }
       if (!ctx.fanouts.length) return { state: 'info', code: 'noFanouts' };
-      const used = questions.filter((q) => ctx.fanouts.some((f) => carries(f, q))).length;
-      if (used >= n) return { state: 'ok' };
+      // Different fan-outs the questions use, as fanoutH2 counts its H2s: no
+      // more than there are, and each one still needed is named.
+      const unused = ctx.fanouts.filter((f) => !questions.some((q) => carries(f, q)));
+      const used = ctx.fanouts.length - unused.length;
+      const of = Math.min(n, ctx.fanouts.length);
+      if (used >= of) return { state: 'ok' };
       // The most searched ones no question uses yet, as many as are still needed.
-      const missing = ctx.fanouts
-        .filter((f) => !questions.some((q) => carries(f, q)))
-        .slice(0, n - used);
-      return { state: 'bad', code: 'partOf', count: used, of: n, missing };
+      return { state: 'bad', code: 'partOf', count: used, of, missing: unused.slice(0, of - used) };
     }
     case 'keywords': {
       const wanted = list(rule.current);
@@ -1009,7 +1010,12 @@ export function lengthConflict(
   if (!Number.isFinite(target) || target <= 0) return null;
   const need =
     Math.min(asked('fanoutH2'), fanouts) * LEAST_SECTION +
-    Math.max(asked('faq'), asked('buyingFaq'), fanouts ? asked('fanoutFaq') : 0) * LEAST_QUESTION +
+    Math.max(
+      asked('faq'),
+      asked('buyingFaq'),
+      fanouts ? Math.min(asked('fanoutFaq'), fanouts) : 0,
+    ) *
+      LEAST_QUESTION +
     (asked('summary') ? LEAST_SUMMARY : 0);
   // The page holds them all already: it shows they fit.
   if (counted.every((status) => status.state === 'ok')) return null;
