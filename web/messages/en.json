@@ -4266,7 +4266,7 @@
           "ok": "Author for your CMS",
           "okDetail": "Set {name} as the page's author in your CMS. Its template shows the byline; nothing is added to the content.",
           "inContentTitle": "Byline in the content",
-          "inContent": "Exports put \"By {name}\" under the H1: this brand adds the byline to content, for a CMS with no author field.",
+          "inContent": "Exports put \"{line}\" under the H1: this brand adds the byline to content, for a CMS with no author field.",
           "unknown": "The authors couldn't be read here, so the code below leaves the author out. Set the page's author in your CMS.",
           "none": "No author yet",
           "noneDetail": "The page goes out as {byline}, with the brand's Organization schema. A real author raises E-E-A-T."

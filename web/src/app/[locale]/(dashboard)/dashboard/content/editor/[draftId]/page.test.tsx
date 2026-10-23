@@ -2964,6 +2964,27 @@ describe('the side panel', () => {
       );
     });
 
+    it("writes the byline in the brand's language", async () => {
+      brandState.brands = [{ id: 'b1', language: 'tr' } as never, { id: 'b2' }];
+      try {
+        const writeText = vi.fn().mockResolvedValue(undefined);
+        Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+        getContentAuthors.mockResolvedValue({
+          authors: [],
+          brands: [{ id: 'b1', name: 'Acme', bylineInContent: true }],
+          me: { id: 'u1', role: 'analyst' },
+        });
+        getContentDraft.mockResolvedValue(draft());
+        await renderPage();
+        await act(async () => button('Copy HTML')!.click());
+        expect(writeText).toHaveBeenCalledWith(
+          '<h1>Pipeline forecasting</h1>\n<p>Yazar: Acme Ekibi</p>\n<p>Teams trust it.</p>',
+        );
+      } finally {
+        brandState.brands = [{ id: 'b1' }, { id: 'b2' }];
+      }
+    });
+
     it('copies at once with no placeholder, and keeps the menu while Quality is off', async () => {
       const writeText = vi.fn().mockResolvedValue(undefined);
       Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });

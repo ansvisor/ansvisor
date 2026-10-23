@@ -4,6 +4,7 @@ import { cleanHref, jsonLdText } from './html-allowlist';
 import { firstImage } from './page-schema';
 import { AGENT_PLACEHOLDER, PLACEHOLDER, placeholderIn } from './placeholders';
 import type { LinkCheck } from './quality-checks';
+import { languageCode } from './readability';
 
 /**
  * Ready to publish (Content Editor Quality spec §7b, CE-057): what an export
@@ -430,6 +431,56 @@ export function pageFields({
 }
 
 /**
+ * The byline line in the page's language (Add byline to content): the
+ * prefix with the author's name, or the team's line. It goes into the page,
+ * so it is written in the page's language, not the app's. A language not
+ * here gets the name alone, or the brand's.
+ */
+const BYLINES: Record<string, { by: string; team: string }> = {
+  en: { by: 'By {name}', team: 'By {brand} Team' },
+  tr: { by: 'Yazar: {name}', team: 'Yazar: {brand} Ekibi' },
+  de: { by: 'Von {name}', team: 'Vom {brand}-Team' },
+  fr: { by: 'Par {name}', team: "Par l'équipe {brand}" },
+  es: { by: 'Por {name}', team: 'Por el equipo de {brand}' },
+  pt: { by: 'Por {name}', team: 'Pela equipe {brand}' },
+  it: { by: 'Di {name}', team: 'A cura del team {brand}' },
+  nl: { by: 'Door {name}', team: 'Door het {brand}-team' },
+  sv: { by: 'Av {name}', team: 'Av {brand}-teamet' },
+};
+
+/**
+ * The byline line for a page in `language` (brands.language: "tr", "pt-BR",
+ * English when unset): by its author, else by the brand's team.
+ */
+export function bylineText(
+  language: string | null | undefined,
+  author: string | null,
+  brand: string,
+): string {
+  const forms = BYLINES[languageCode(language) ?? ''];
+  // A function, so a "$" in a name is written as it is.
+  if (author) return forms ? forms.by.replace('{name}', () => author) : author;
+  return forms ? forms.team.replace('{brand}', () => brand) : brand;
+}
+
+/**
+ * Where the end tag of the HTML's k-th H1 ends, counted from 0, or null.
+ * Comments and code are blanked first (blankCode): an H1 there is no element.
+ */
+function h1End(html: string, k: number): number | null {
+  const lower = blankCode(html).replace(/[A-Z]+/g, (s) => s.toLowerCase());
+  let opened = -1;
+  for (const m of lower.matchAll(/<(\/?)h1(?=[\s/>])/g)) {
+    if (!m[1]) opened++;
+    else if (opened === k) {
+      const end = lower.indexOf('>', m.index);
+      return end === -1 ? null : end + 1;
+    }
+  }
+  return null;
+}
+
+/**
  * The byline in the content (Add byline to content, a brand's opt-in for a
  * CMS with no author field): one line under the page's H1, or at its top
  * when it opens with no H1. The rest of the HTML goes out as written; a
@@ -443,18 +494,17 @@ export function withByline(html: string, byline: string): string {
   );
   if (!lead) return html;
   const words = (el: Element | null) => (el?.textContent ?? '').replace(/\s+/g, ' ').trim();
-  const line = document.createElement('p');
+  const line = root.ownerDocument.createElement('p');
   line.textContent = byline;
   // A page written one block a line (publishableHtml) keeps that.
   const gap = html.includes('\n') ? '\n' : '';
   if (lead.matches('h1')) {
     const next = lead.nextElementSibling;
     if (next?.matches('p') && words(next) === words(line)) return html;
-    const end = /<\/h1\s*>/i.exec(html);
-    if (end) {
-      const at = end.index + end[0].length;
-      return html.slice(0, at) + gap + line.outerHTML + html.slice(at);
-    }
+    // The lead's own end tag: an empty H1 above it, or one in a comment or
+    // a script, isn't it.
+    const at = h1End(html, Array.from(root.querySelectorAll('h1')).indexOf(lead));
+    if (at !== null) return html.slice(0, at) + gap + line.outerHTML + html.slice(at);
   }
   if (lead.matches('p') && words(lead) === words(line)) return html;
   return line.outerHTML + gap + html;

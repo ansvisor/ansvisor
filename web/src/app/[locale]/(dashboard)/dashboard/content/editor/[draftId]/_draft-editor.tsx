@@ -78,6 +78,7 @@ import { firstImage } from '@/lib/content/page-schema';
 import { PLACEHOLDER, pagePlaceholders, placeholderIn } from '@/lib/content/placeholders';
 import {
   blankCode,
+  bylineText,
   exportPlaceholders,
   pasteChecks,
   titlePlaceholders,
@@ -1338,10 +1339,11 @@ export function DraftEditor({
     publishableHtml(
       htmlSource !== null ? htmlFromSource(htmlSource) : (editor?.getHTML() ?? draft.bodyHtml),
     );
-  // The byline line a brand with Add byline to content puts under the H1.
+  // The byline line a brand with Add byline to content puts under the H1,
+  // in the brand's language: the language the writer writes the page in.
   const contentByline =
     bylineInContent && authorsRead
-      ? t('author.by', { name: pageAuthor?.name ?? t('author.organization', { brand: brandName }) })
+      ? bylineText(language, pageAuthor?.name ?? null, brandName)
       : null;
   // Export (CE-057), once Quality is live: where it goes, its checks and fields.
   // The page as it was when Export opened: what it shows stays still while open.
@@ -1975,7 +1977,7 @@ export function DraftEditor({
             setPublishOpen(null);
             fillFirstPlaceholder();
           }}
-          bylineInContent={bylineInContent}
+          contentByline={contentByline}
           onContinue={() => {
             setPublishOpen(null);
             openExport();
