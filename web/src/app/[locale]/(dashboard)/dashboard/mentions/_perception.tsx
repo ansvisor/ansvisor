@@ -83,6 +83,8 @@ export function MentionsPerceptionTab({
       cancelled = true;
       clearTimeout(timer);
       clearTimeout(slowTimer);
+      // Back on these filters later, the read starts over: not slow yet.
+      setSlow((s) => (s === `${key}#${attempt}` ? null : s));
     };
   }, [brandId, key, query, attempt]);
 

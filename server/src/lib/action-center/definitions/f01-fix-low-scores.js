@@ -7,7 +7,7 @@
  * payload names its targets.
  */
 
-import { first, targetPayload } from './_helpers.js';
+import { targetPayload } from './_helpers.js';
 
 export default {
   id: 'fix_low_scores',
@@ -28,8 +28,8 @@ export default {
   ],
 
   payload(byKind) {
-    const audit = first(byKind, 'audit_low_score');
-    const pageCount = Number(audit?.current_value ?? 0);
-    return { ...targetPayload(byKind, 'pages'), targetCount: pageCount, pageCount };
+    // The count is the list the action keeps (AC-009), as g01's.
+    const base = targetPayload(byKind, 'pages');
+    return { ...base, pageCount: base.targetCount };
   },
 };

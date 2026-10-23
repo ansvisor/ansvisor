@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
 import { X } from 'lucide-react';
 import { Link } from '@/i18n/navigation';
@@ -199,6 +199,11 @@ export function AgentCard({
   const action = suggestions.find((s) => s.actionId && s.actionNo !== null);
   const after = rulesAfter(suggestions, rules);
   const stillOpen = Math.max(0, rules.total - rules.met);
+  // Run Agent shows once nothing is left to decide; why it can't run is
+  // written in the card, never only on hover (as the Rules card does, CE-028).
+  const runShown = !working && stillOpen > 0 && (page ? page.status !== 'open' : open === 0);
+  const reasonId = useId();
+  const reason = runShown ? runBlocked : null;
   const tone = working ? 'working' : open > 0 ? 'waiting' : 'done';
 
   let title: React.ReactNode;
@@ -294,6 +299,14 @@ export function AgentCard({
             {line}
           </span>
         )}
+        {reason && (
+          <span
+            id={reasonId}
+            className="block text-[12.5px] text-amber-700 [overflow-wrap:anywhere] dark:text-amber-400"
+          >
+            {reason}
+          </span>
+        )}
       </span>
       {!working && (
         <span className="ml-auto flex max-w-full flex-wrap items-center justify-end gap-1.5">
@@ -337,7 +350,7 @@ export function AgentCard({
                     <Button
                       size="sm"
                       disabled={busy || runBlocked !== null}
-                      title={runBlocked ?? undefined}
+                      aria-describedby={reason ? reasonId : undefined}
                       onClick={onRun}
                     >
                       {t('run')}
@@ -373,7 +386,7 @@ export function AgentCard({
                 <Button
                   size="sm"
                   disabled={busy || runBlocked !== null}
-                  title={runBlocked ?? undefined}
+                  aria-describedby={reason ? reasonId : undefined}
                   onClick={onRun}
                 >
                   {t('run')}
