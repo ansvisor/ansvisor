@@ -78,7 +78,7 @@ export interface ReadBlock {
  * break (the editor's HTML has none between tags), a list item's own words
  * without the list nested in it.
  */
-function ownText(el: Element): string {
+export function ownText(el: Element): string {
   let out = '';
   for (const node of el.childNodes) {
     if (node.nodeType === 3) out += node.textContent ?? '';

@@ -74,15 +74,9 @@ import { PAGE_READ_DELAY_MS, draftTitleFromDoc, safeLinkHref } from '@/lib/conte
 import { JsonLd } from '@/lib/content/json-ld-node';
 import { detectPageType } from '@/lib/content/page-types';
 import { BAND_CLASSES, qualityAverage, qualityBand, qualityPhase } from '@/lib/content/quality';
-import { eeat, linksToCheck, trust } from '@/lib/content/quality-checks';
+import { eeat, linksToCheck, trust, trustBlocks } from '@/lib/content/quality-checks';
 import { readability } from '@/lib/content/readability';
-import {
-  aiTracesFound,
-  fanoutsToUse,
-  lengthWarns,
-  openRulesForAgent,
-  readPage,
-} from '@/lib/content/rules';
+import { aiTracesFound, fanoutsToUse, lengthWarns, openRulesForAgent } from '@/lib/content/rules';
 import { saveBlob } from '@/lib/download';
 import { cn } from '@/lib/utils';
 import { useBrandStore } from '@/stores/use-brand-store';
@@ -447,19 +441,17 @@ export function DraftEditor({
     () => (qualityOn && authorsRead ? eeat({ author: pageAuthor }) : null),
     [qualityOn, authorsRead, pageAuthor],
   );
-  const pageBlocks = useMemo(
-    () => (qualityOn ? readPage(pageHtml, 0).blocks : []),
-    [qualityOn, pageHtml],
-  );
+  const pageBlocks = useMemo(() => (qualityOn ? trustBlocks(pageHtml) : []), [qualityOn, pageHtml]);
   const linkChecks = useLinkChecks(draft.id, autosave.savedAt, linksToCheck(pageBlocks), qualityOn);
   const brandDomains = reads.sources?.data?.brandDomains;
+  // The brand's own links aren't sources: Trust waits for its domains.
   const trustScore = useMemo(
     () =>
-      qualityOn
+      qualityOn && brandDomains
         ? trust({
             blocks: pageBlocks,
             links: linkChecks,
-            brandDomains: brandDomains ?? [],
+            brandDomains,
             now: Date.now(),
           })
         : null,

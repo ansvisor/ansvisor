@@ -624,12 +624,13 @@ export async function importContentPage(
 /**
  * The saved draft's links, read by the API for Trust (Quality spec §2.2):
  * whether each answers and how old its page is, each read at most once a
- * day. The API reads the links from the draft as saved, never from here. The
+ * day; `skipped` are the links it never reads (one-time or account links).
+ * The API reads the links from the draft as saved, never from here. The
  * reason comes back, not a throw: production hides a server action's errors.
  */
 export async function checkDraftLinks(
   id: string,
-): Promise<{ links: LinkCheck[] } | { error: 'invalid' | 'failed' }> {
+): Promise<{ links: LinkCheck[]; skipped: string[] } | { error: 'invalid' | 'failed' }> {
   if (!draftId.safeParse(id).success) return { error: 'invalid' };
   const supabase = await createClient();
   const {
@@ -646,8 +647,8 @@ export async function checkDraftLinks(
       body: JSON.stringify({ draftId: id }),
     });
     if (!res.ok) return { error: 'failed' };
-    const body = (await res.json()) as { links?: LinkCheck[] };
-    return { links: body.links ?? [] };
+    const body = (await res.json()) as { links?: LinkCheck[]; skipped?: string[] };
+    return { links: body.links ?? [], skipped: body.skipped ?? [] };
   } catch (err) {
     console.error('Failed to check the draft links:', err);
     return { error: 'failed' };

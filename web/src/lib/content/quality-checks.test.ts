@@ -9,9 +9,9 @@ import {
   linksToCheck,
   scoreGain,
   trust,
+  trustBlocks,
   type LinkCheck,
 } from './quality-checks';
-import { readPage } from './rules';
 
 const author = (over: Partial<ContentAuthor> = {}): ContentAuthor => ({
   id: 'a1',
@@ -56,7 +56,7 @@ describe('eeat (Phase 1: the author)', () => {
 
 describe('trust (Phase 1: figures and links)', () => {
   const NOW = Date.parse('2026-10-23T12:00:00Z');
-  const blocks = (html: string) => readPage(html, 0).blocks;
+  const blocks = (html: string) => trustBlocks(html);
   const read = (rows: Partial<LinkCheck>[]) =>
     new Map(
       rows.map((r) => [r.href!, { status: 'ok', httpStatus: 200, date: null, ...r } as LinkCheck]),
@@ -128,5 +128,38 @@ describe('trust (Phase 1: figures and links)', () => {
     const urls = linksToCheck(blocks(html));
     expect(urls[0]).toBe('https://a.example/');
     expect(urls).toHaveLength(MAX_LINK_CHECKS);
+  });
+
+  it('reads only figures as claims: not prices, sizes, years or ranks', () => {
+    const claims = [
+      'Teams grew 10k accounts.',
+      'Revenue hit 2M last year.',
+      'It loads 3 times faster.',
+      'Rates rose 12 percent.',
+      'Costs fell by €4.5 million.',
+    ];
+    const plain = [
+      'Plans start at $29/month.',
+      'A 10 x 20 cm box.',
+      'Room 3X is upstairs.',
+      'Support is open 24/7.',
+      'We ranked #1 in 2026.',
+    ];
+    const result = run(`<p>${[...claims, ...plain].join(' ')}</p>`);
+    expect(result.unsourced).toEqual(claims);
+  });
+
+  it('counts a link and a sentence once, as the draft saves the link', () => {
+    const html =
+      '<p>Read <a href="https://WWW.Gone.example?utm_source=mail">this</a>.</p>' +
+      '<p>And <a href="https://www.gone.example/">this again</a>.</p>' +
+      '<ul><li>Up 40% now.<ul><li>Up 40% now.</li></ul></li></ul>';
+    expect(linksToCheck(blocks(html))).toEqual(['https://www.gone.example/']);
+    const result = run(
+      html,
+      read([{ href: 'https://www.gone.example/', status: 'broken', httpStatus: 404 }]),
+    );
+    expect(result.broken).toHaveLength(1);
+    expect(result.figures).toBe(1);
   });
 });

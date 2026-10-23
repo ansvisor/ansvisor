@@ -23,6 +23,8 @@ let container: HTMLDivElement;
 let root: Root;
 /** The links the API reads from the saved draft. */
 let saved: string[];
+/** The links the API never reads. */
+let skipped: string[];
 
 function Probe({
   hrefs,
@@ -51,7 +53,8 @@ const ok = (href: string): LinkCheck => ({ href, status: 'ok', httpStatus: 200, 
 beforeEach(() => {
   vi.useFakeTimers();
   saved = [];
-  checkDraftLinks.mockReset().mockImplementation(async () => ({ links: saved.map(ok) }));
+  skipped = [];
+  checkDraftLinks.mockReset().mockImplementation(async () => ({ links: saved.map(ok), skipped }));
   container = document.createElement('div');
   root = createRoot(container);
 });
@@ -104,6 +107,15 @@ describe('useLinkChecks', () => {
     expect(seen().size).toBe(0);
 
     await render(['https://d.example/'], 's1', false);
+    await wait();
+    expect(checkDraftLinks).toHaveBeenCalledTimes(1);
+  });
+
+  it("doesn't ask again about a link the API never reads", async () => {
+    skipped = ['https://a.example/unsubscribe'];
+    await render(['https://a.example/unsubscribe']);
+    await wait();
+    await render(['https://a.example/unsubscribe'], 's2');
     await wait();
     expect(checkDraftLinks).toHaveBeenCalledTimes(1);
   });

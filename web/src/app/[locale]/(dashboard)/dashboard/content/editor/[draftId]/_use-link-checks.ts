@@ -14,7 +14,8 @@ export const LINK_CHECK_DELAY_MS = 3_000;
  * API keeps each a day. A link without a read (not saved yet, an account
  * link the API leaves out, one over its budget, a failed ask) is asked about
  * again only after the next save: until then the checks it would feed leave
- * it out.
+ * it out. One the API never reads (an account link) isn't asked about again.
+ * The links are compared as the draft saves them (cleanHref).
  *
  * @param hrefs the page's http(s) links now, as it has them
  * @param savedAt when the page was last saved
@@ -53,7 +54,10 @@ export function useLinkChecks(
           return;
         }
         if (!open.current) return;
-        for (const link of result.links) read.current.add(link.href);
+        // A link the API never reads is as good as read: it isn't asked about again.
+        for (const href of [...result.links.map((l) => l.href), ...result.skipped]) {
+          read.current.add(href);
+        }
         setChecks((prev) => {
           const next = new Map(prev);
           for (const link of result.links) next.set(link.href, link);

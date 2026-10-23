@@ -1,7 +1,7 @@
 import { classifyDomain, normalizeDomain } from '@/lib/citations/classify';
 import type { ContentAuthor } from './authors';
-import { sentencesOf } from './readability';
-import type { PageBlock } from './rules';
+import { cleanHref } from './html-allowlist';
+import { ownText, sentencesOf } from './readability';
 
 /**
  * E-E-A-T and Trust (Content Editor Quality spec §2.1, §2.2): checks read
@@ -111,32 +111,77 @@ export function eeat({ author }: { author: ContentAuthor | null }): Score<EeatCh
 
 /**
  * A figure, the kind of claim that wants a source: a percentage, an amount
- * of money, or a number with a magnitude or a multiplier ("3x", "2 million").
- * A bare number ("5 steps", "2026") isn't one.
+ * with a magnitude ("$2.5 million", "€10M"), a number with a magnitude or a
+ * multiplier ("2 million", "10k", "3x", "3 times faster"). A bare number
+ * ("5 steps", "2026", "24/7"), a price ("$29/month") or a size ("10 x 20 cm")
+ * isn't one.
  */
-const FIGURE =
-  /(?:%\s?\d|[$€£¥₺]\s?\d|\d[\d.,]*\s?(?:%|×|x\b|percent\b|per cent\b|prozent\b|thousand\b|million(?:s|en)?\b|millones\b|milliard(?:s|en)?\b|billion\b|trillion\b|milyon\b|milyar\b))/i;
+const FIGURE_WORDS =
+  /%\s?\d|\d[\d.,]*\s?(?:%|percent\b|per cent\b|prozent\b)|[$€£¥₺]\s?\d[\d.,]*\s?(?:[km]\b|bn\b|thousand|million|billion|trillion)|\d[\d.,]*\s?(?:thousand|million|billion|trillion|millones|milyon|milyar|milliard|millionen|milliarden)s?\b|\d+(?:[.,]\d+)?\s?times\s(?:more|less|faster|slower|higher|lower|as|bigger|smaller|better|cheaper)\b/i;
+const FIGURE_SHORT = /\b\d+(?:[.,]\d+)?(?:x|k|K|M|bn|B)\b/;
+const hasFigure = (sentence: string) => FIGURE_WORDS.test(sentence) || FIGURE_SHORT.test(sentence);
 
-/** The page's links: http(s) only, whether each is on the brand's own site. */
-function pageLinks(blocks: PageBlock[], brandDomains: string[]) {
-  const own = brandDomains.map(normalizeDomain).filter(Boolean);
-  const out: { url: string; text: string; external: boolean }[] = [];
-  for (const block of blocks) {
-    // A list's items are their own blocks too.
-    if (/^(ol|ul):/.test(block.tag)) continue;
-    for (const href of block.links) {
-      if (!/^https?:\/\//i.test(href)) continue;
-      const host = normalizeDomain(href);
-      const external =
-        !!host && classifyDomain(host, { brandDomains: own, competitorDomains: [] }) !== 'you';
-      out.push({ url: href, text: block.text, external });
-    }
+/** A block of the page's text, with the links in it, as Trust reads them. */
+export interface TrustBlock {
+  tag: string;
+  text: string;
+  links: string[];
+}
+
+/**
+ * The page's paragraphs, list items, quotes and table cells, each with its
+ * own words and links: a list item without the list nested in it (as
+ * Readability reads it), a paragraph in an item or a cell with it.
+ */
+export function trustBlocks(html: string): TrustBlock[] {
+  const doc = new DOMParser().parseFromString(html, 'text/html');
+  const out: TrustBlock[] = [];
+  for (const el of doc.body.querySelectorAll('p, li, blockquote, td, th')) {
+    const tag = el.tagName.toLowerCase();
+    if (tag === 'p' && el.closest('li, blockquote, td, th')) continue;
+    if (tag !== 'td' && tag !== 'th' && el.parentElement?.closest('td, th')) continue;
+    // An inline link's edges leave no space before the punctuation after it.
+    const text = ownText(el)
+      .replace(/\s+/g, ' ')
+      .replace(/ ([.,;:!?…)])/g, '$1')
+      .trim();
+    if (!text) continue;
+    const links = [...el.querySelectorAll('a[href]')]
+      // A list item's links, not its nested list's.
+      .filter((a) => tag !== 'li' || a.closest('li') === el)
+      .map((a) => a.getAttribute('href') ?? '');
+    out.push({ tag, text, links });
   }
   return out;
 }
 
+/**
+ * The page's links, as the draft saves them (cleanHref): http(s) only, each
+ * with its block's place and whether it is on the brand's own site.
+ */
+function pageLinks(blocks: TrustBlock[], brandDomains: string[]) {
+  const own = brandDomains.map(normalizeDomain).filter(Boolean);
+  const out: { url: string; block: number; text: string; external: boolean }[] = [];
+  blocks.forEach((block, index) => {
+    for (const raw of block.links) {
+      const href = cleanHref(raw);
+      if (!href || !/^https?:\/\//i.test(href)) continue;
+      const host = normalizeDomain(href);
+      const external =
+        !!host && classifyDomain(host, { brandDomains: own, competitorDomains: [] }) !== 'you';
+      out.push({ url: href, block: index, text: block.text, external });
+    }
+  });
+  return out;
+}
+
+/** Each link once, by its address. */
+const byUrl = <T extends { url: string }>(links: T[]) => [
+  ...new Map(links.map((l) => [l.url, l])).values(),
+];
+
 /** The page's links to read, each once, MAX_LINK_CHECKS at most: Trust's link checks. */
-export function linksToCheck(blocks: PageBlock[]): string[] {
+export function linksToCheck(blocks: TrustBlock[]): string[] {
   return [...new Set(pageLinks(blocks, []).map((l) => l.url))].slice(0, MAX_LINK_CHECKS);
 }
 
@@ -163,8 +208,8 @@ export function trust({
   brandDomains,
   now,
 }: {
-  /** The page's blocks, as the rules read them (readPage). */
-  blocks: PageBlock[];
+  /** The page's blocks (trustBlocks). */
+  blocks: TrustBlock[];
   /** Each link's read, by the link as the page has it; one not read yet isn't counted. */
   links: Map<string, LinkCheck>;
   brandDomains: string[];
@@ -173,14 +218,15 @@ export function trust({
   const all = pageLinks(blocks, brandDomains);
   const checks: ScoreCheck<TrustCheckId>[] = [];
 
-  const figureSentences = blocks
-    .filter((b) => ['p', 'li', 'blockquote', 'table'].includes(b.tag))
-    .flatMap((b) => {
-      const sourced = all.some((l) => l.external && l.text === b.text);
-      return sentencesOf(b.text)
-        .filter((sentence) => FIGURE.test(sentence))
-        .map((sentence) => ({ sentence, sourced }));
-    });
+  // Each sentence once: a nested list item's text is its parent's too.
+  const figures = new Map<string, boolean>();
+  blocks.forEach((b, index) => {
+    const sourced = all.some((l) => l.external && l.block === index);
+    for (const sentence of sentencesOf(b.text)) {
+      if (hasFigure(sentence)) figures.set(sentence, (figures.get(sentence) ?? false) || sourced);
+    }
+  });
+  const figureSentences = [...figures].map(([sentence, sourced]) => ({ sentence, sourced }));
   const unsourced = figureSentences.filter((f) => !f.sourced).map((f) => f.sentence);
   if (figureSentences.length) {
     checks.push({
@@ -194,7 +240,7 @@ export function trust({
 
   const cutoff = new Date(now);
   cutoff.setUTCMonth(cutoff.getUTCMonth() - FRESH_MONTHS);
-  const sources = all.filter((l) => l.external && links.get(l.url)?.date);
+  const sources = byUrl(all.filter((l) => l.external && links.get(l.url)?.date));
   const stale = sources.filter((l) => new Date(links.get(l.url)!.date!) < cutoff);
   if (sources.length) {
     checks.push({
@@ -204,10 +250,12 @@ export function trust({
     });
   }
 
-  const read = all.filter((l) => {
-    const status = links.get(l.url)?.status;
-    return status === 'ok' || status === 'broken';
-  });
+  const read = byUrl(
+    all.filter((l) => {
+      const status = links.get(l.url)?.status;
+      return status === 'ok' || status === 'broken';
+    }),
+  );
   const broken = read.filter((l) => links.get(l.url)!.status === 'broken');
   if (read.length) {
     checks.push({

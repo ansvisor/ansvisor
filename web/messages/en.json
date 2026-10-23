@@ -4131,7 +4131,7 @@
         },
         "checks": {
           "claimsSourced": {
-            "line": "{count, plural, one {# figure has} other {# figures have}} no source",
+            "line": "{count, plural, one {# sentence with a figure has} other {# sentences with figures have}} no source",
             "detail": "Link its source in the same paragraph, or take the figure out. Content Agent won't make one up."
           },
           "freshSources": {
@@ -4140,7 +4140,7 @@
           },
           "noBrokenLinks": {
             "line": "{count, plural, one {# link doesn't} other {# links don't}} work",
-            "detail": "Fix or remove it: {url}"
+            "detail": "{count, plural, one {Fix or remove it: {url}} other {Fix or remove them, starting with {url}}}"
           },
           "byline": {
             "line": "The page is by {byline}, not a person",

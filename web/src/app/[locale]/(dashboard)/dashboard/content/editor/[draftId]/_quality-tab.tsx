@@ -278,7 +278,10 @@ function trustSuggestions(t: T, trust: TrustRead | null): Suggestion[] {
       score: 'trust',
       gain: scoreGain(trust, ['noBrokenLinks']),
       line: t('checks.noBrokenLinks.line', { count: trust.broken.length }),
-      detail: t('checks.noBrokenLinks.detail', { url: trust.broken[0].url }),
+      detail: t('checks.noBrokenLinks.detail', {
+        count: trust.broken.length,
+        url: trust.broken[0].url,
+      }),
       action: { kind: 'show', text: trust.broken[0].text },
     });
   }

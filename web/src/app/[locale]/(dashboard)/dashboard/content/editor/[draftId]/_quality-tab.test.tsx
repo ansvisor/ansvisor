@@ -3,8 +3,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { NextIntlClientProvider } from 'next-intl';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import messages from '../../../../../../../../messages/en.json';
-import { eeat, trust, type LinkCheck } from '@/lib/content/quality-checks';
-import { readPage } from '@/lib/content/rules';
+import { eeat, trust, trustBlocks, type LinkCheck } from '@/lib/content/quality-checks';
 import type { ContentAuthor } from '@/lib/content/authors';
 import type { Readability } from '@/lib/content/readability';
 
@@ -199,7 +198,7 @@ describe('QualityTab', () => {
       ],
     ]);
     const result = trust({
-      blocks: readPage(html, 0).blocks,
+      blocks: trustBlocks(html),
       links,
       brandDomains: ['acme.com'],
       now: Date.parse('2026-10-23T12:00:00Z'),
@@ -209,7 +208,7 @@ describe('QualityTab', () => {
     // Figures 0 of 30, fresh 0 of 7, links 1.5 of 3: 4 of 100.
     expect(scores.textContent).toContain('Trust4Needs work');
     const rows = [...container.querySelectorAll('li')].map((li) => li.textContent);
-    expect(rows).toContainEqual(expect.stringContaining('1 figure has no source'));
+    expect(rows).toContainEqual(expect.stringContaining('1 sentence with a figure has no source'));
     expect(rows).toContainEqual(
       expect.stringContaining('1 of 1 dated sources is over 24 months old'),
     );
