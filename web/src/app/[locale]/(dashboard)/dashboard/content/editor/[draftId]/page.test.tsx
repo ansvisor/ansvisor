@@ -1689,6 +1689,7 @@ describe('the side panel', () => {
     const tab = [...panel()!.querySelectorAll<HTMLElement>('[role="tab"]')].find(
       (el) => tabName(el) === 'Sources',
     )!;
+    expect(tab.querySelector('[aria-hidden]')!.textContent).toBe('1');
     expect(tab.querySelector('.sr-only')!.textContent).toBe('1 source in use');
     await pickTab('Sources');
     // The tab shows the editor's one read: nothing is read again.
@@ -1845,6 +1846,50 @@ describe('the side panel', () => {
     });
     await pickTab('Rules');
     expect(line()!.textContent).toContain('· 1 fan-out ·');
+    // Brief says the same under its card.
+    await pickTab('Brief');
+    expect(
+      [...panel()!.querySelectorAll('p')].filter((p) =>
+        p.textContent?.startsWith('Uses your data'),
+      ),
+    ).toHaveLength(2);
+  });
+
+  it('says nothing of the data while the sources can’t be read', async () => {
+    // The default read fails (null): no line, no count on the tab.
+    getContentDraft.mockResolvedValue(draft());
+    window.innerWidth = 1440;
+    await renderPage();
+    expect(panel()!.textContent).not.toContain('Uses your data');
+    expect(panel()!.textContent).not.toContain('No sources kept yet');
+    expect(panel()!.querySelector('[role="tab"] [title]')).toBeNull();
+  });
+
+  it('says when the agent last wrote from the sources: a page it wrote, not a run that failed', async () => {
+    getDraftSources.mockResolvedValue({
+      data: {
+        prompts: [],
+        fanouts: [],
+        citedPages: [],
+        gscQueries: [],
+        brandDomains: [],
+        competitorDomains: [],
+      },
+      choices: [],
+    });
+    const wrote = new Date(Date.now() - 2 * 60_000).toISOString();
+    getContentDraft.mockResolvedValue(draft({ agentState: null, agentSince: wrote }));
+    window.innerWidth = 1440;
+    await renderPage();
+    await pickTab('Sources');
+    expect(panel()!.textContent).toContain('Last used by Content Agent · 2 minutes ago');
+
+    act(() => root.unmount());
+    root = createRoot(container);
+    getContentDraft.mockResolvedValue(draft({ agentState: 'failed', agentSince: wrote }));
+    await renderPage();
+    await pickTab('Sources');
+    expect(panel()!.textContent).toContain('Not used by Content Agent yet');
   });
 
   it('shows how many rules the page meets, and opens them from the header', async () => {

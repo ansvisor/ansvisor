@@ -1343,13 +1343,8 @@ export function DraftEditor({
             agentFix={agentFix}
             pageRewrite={pageRewrite}
             agentRewrite={agentRewrite}
-            lastSuggestionAt={
-              suggestions
-                .map((s) => s.createdAt)
-                .filter((at): at is string => !!at)
-                .sort((a, b) => Date.parse(a) - Date.parse(b))
-                .at(-1) ?? null
-            }
+            // One batch, one run: its first suggestion's time is the run's.
+            lastSuggestionAt={suggestions[0]?.createdAt ?? null}
           />
         ) : (
           <EditorPanelRail onOpen={openPanelTab} />

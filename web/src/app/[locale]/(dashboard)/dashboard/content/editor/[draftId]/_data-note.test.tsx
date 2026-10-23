@@ -111,5 +111,10 @@ describe('the data note', () => {
     expect(container.textContent).toBe('');
     expect(error).toHaveBeenCalled();
     error.mockRestore();
+    // Nothing was kept: the next visit shows it again.
+    act(() => root.unmount());
+    root = createRoot(container);
+    await render(<DataNote />);
+    expect(container.textContent).toContain('Content Agent writes from your data');
   });
 });

@@ -30,7 +30,7 @@ export function RunCard({
   data?: React.ReactNode;
   /** Why the agent can't run now, or null. */
   blocked?: string | null;
-  /** Under the card: the advice line, the data it uses. */
+  /** Last, under the reason: the advice line, the usage, a question the button asked. */
   children?: React.ReactNode;
 }) {
   const t = useTranslations('contentEditor.editor.run');

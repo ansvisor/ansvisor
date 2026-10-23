@@ -171,11 +171,14 @@ export function EditorSidePanel({
   const dataLine = sourceCounts && (
     <UsesYourData counts={sourceCounts} onEdit={() => open('sources')} />
   );
-  // The last time the agent wrote from them: its latest run's suggestions, or the brief it built.
+  // The last time the agent wrote from them: its latest run's suggestions,
+  // the brief it built, or its writing the page (Start, Rewrite from brief),
+  // unless that run failed.
   const builtAt = reads.brief.status === 'ready' ? (reads.brief.brief?.builtAt ?? null) : null;
+  const wroteAt = draft.agentState === 'failed' ? null : draft.agentSince;
   const agentUsedAt =
-    [lastSuggestionAt, builtAt]
-      .filter((at): at is string => !!at)
+    [lastSuggestionAt, builtAt, wroteAt]
+      .filter((at): at is string => !!at && Number.isFinite(Date.parse(at)))
       .sort((a, b) => Date.parse(a) - Date.parse(b))
       .at(-1) ?? null;
 

@@ -142,7 +142,7 @@ export function BriefTab({
         data={dataLine}
       >
         <p className="text-[11px] text-muted-foreground">{t('usage')}</p>
-        {/* Right under the button that asked, not past the outline. */}
+        {/* Under the card that asked, not past the outline. */}
         {confirming && (
           <div role="alert" className="space-y-2 rounded-md border px-3 py-2 text-xs">
             <p>{t('rebuildEdited')}</p>
