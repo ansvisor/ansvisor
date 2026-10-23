@@ -51,6 +51,7 @@ function state(
     ready: true,
     ...rulesMet(checked),
     length: 3000,
+    lengthConflict: null,
     change,
     pickSet,
     addTextRules,
@@ -236,6 +237,23 @@ describe('the Rules tab', () => {
     expect(container.querySelector('fieldset')!.disabled).toBe(true);
     await render(state());
     expect(container.querySelector('fieldset')!.disabled).toBe(false);
+  });
+
+  it('says under Length when the other rules can’t fit in it (C)', async () => {
+    await render(state());
+    expect(row('Length').querySelector('.text-amber-700')).toBeNull();
+    await render(state(undefined, { lengthConflict: { need: 2350, max: 1200 } }));
+    expect(row('Length').textContent).toContain(
+      'The fan-out H2s, FAQ questions and summary these rules still ask for take about 2,350 characters, more than Length allows (up to 1,200). Raise Length, or ask for fewer.',
+    );
+    // Off, Length asks for nothing.
+    await render(
+      state(
+        { overrides: { length: { on: false } } },
+        { lengthConflict: { need: 2350, max: 1200 } },
+      ),
+    );
+    expect(row('Length').textContent).not.toContain('Raise Length');
   });
 
   it('shows Ansvisor’s set when a draft on My rules has none for its type', async () => {

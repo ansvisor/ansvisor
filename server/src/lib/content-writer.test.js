@@ -212,7 +212,9 @@ describe('startDraftWriting', () => {
     expect(finish.filters).toContainEqual(['status', ['draft', 'in_review']]);
     // A new page holds only its H1: nothing of the person's to keep first.
     expect(rpcCalls).toEqual([]);
-    expect(writes.some((w) => w.table === 'prompt_improve_usage')).toBe(true);
+    expect(writes.find((w) => w.table === 'prompt_improve_usage')).toMatchObject({
+      value: expect.objectContaining({ feature: 'content' }),
+    });
     const { prompt } = generateObject.mock.calls[0][0];
     expect(prompt).toContain('- ratio?');
     expect(prompt).toContain('- "pour over ratio"');

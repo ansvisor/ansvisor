@@ -941,6 +941,36 @@ describe('New content', () => {
       expect(toast.success).not.toHaveBeenCalled();
     });
 
+    it('aims the agent at a pasted page’s own length (F)', async () => {
+      startAgentWriting.mockResolvedValue({ started: true });
+      await render('ecommerce');
+      await click(radio('Optimize content'));
+      await click(tab('Paste text'));
+      const box = document.querySelector('textarea')!;
+      const paste = new Event('paste', { bubbles: true, cancelable: true });
+      Object.defineProperty(paste, 'clipboardData', {
+        value: {
+          getData: (type: string) =>
+            type === 'text/html'
+              ? `<h2>Returns policy</h2><p>${'30 days to return. '.repeat(10)}</p>`
+              : '',
+        },
+      });
+      await act(async () => box.dispatchEvent(paste));
+      await click(button('Continue'));
+      await click(whoOption('Agent'));
+      await click(button('Start the agent'));
+
+      // "Returns policy 30 days to return. …": as the draft started, not a new page's 3,000.
+      expect(agentWriteRequest).toHaveBeenCalledWith(
+        expect.objectContaining({
+          method: 'optimize',
+          rules: { set: null, source: null, overrides: {}, textRules: [], importLength: 204 },
+        }),
+        describeRule,
+      );
+    });
+
     it('keeps the draft for me when the agent can’t start', async () => {
       startAgentWriting.mockResolvedValue({ error: 'ai_budget' });
       await startNewPage();

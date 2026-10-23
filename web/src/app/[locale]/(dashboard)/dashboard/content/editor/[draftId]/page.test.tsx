@@ -1084,6 +1084,8 @@ describe('the content editor', () => {
         'Accuracy is shown per team, each week, against closed revenue.Teams trust it.FAQDoes it work with custom stages? Yes, any stage.',
       );
       expect(bar()!.textContent).toMatch(/^2 accepted · 0 rejected · \d+ rules? still open/);
+      // Not a full run's batch: nothing about running it again.
+      expect(bar()!.textContent).not.toContain('a run makes at most');
 
       await act(async () => barButton('Undo all').click());
       await act(async () => {});
@@ -1554,6 +1556,66 @@ describe('the side panel', () => {
     expect(rail()).not.toBeNull();
   });
 
+  it('points a page without fan-outs to Sources, where its prompts are added', async () => {
+    getDraftSources.mockResolvedValue({
+      data: {
+        prompts: [],
+        fanouts: [],
+        citedPages: [],
+        gscQueries: [],
+        brandDomains: [],
+        competitorDomains: [],
+      },
+      choices: [],
+    });
+    getContentDraft.mockResolvedValue(draft({ sourceUrl: 'https://acme.example.com/pricing' }));
+    window.innerWidth = 1440;
+    await renderPage();
+
+    const add = [...panel()!.querySelectorAll<HTMLButtonElement>('button')].find(
+      (b) => b.textContent === 'Add prompts',
+    )!;
+    expect(add.title).toBe(
+      "No fan-outs yet: they come from the page's prompts. Add its prompts in Sources.",
+    );
+    await act(async () => add.click());
+    const selected = [...panel()!.querySelectorAll<HTMLElement>('[role="tab"]')].find(
+      (el) => el.getAttribute('aria-selected') === 'true',
+    );
+    expect(selected!.textContent).toBe('Sources');
+  });
+
+  it('keeps "No fan-outs" for a draft with prompts whose answers ran no searches', async () => {
+    getDraftSources.mockResolvedValue({
+      data: {
+        prompts: [
+          {
+            id: 'p1',
+            text: 'Best CRM?',
+            inDraft: true,
+            citesPage: false,
+            answers: 2,
+            mentioned: 0,
+          },
+        ],
+        fanouts: [],
+        citedPages: [],
+        gscQueries: [],
+        brandDomains: [],
+        competitorDomains: [],
+      },
+      choices: [],
+    });
+    getContentDraft.mockResolvedValue(draft({ sourceUrl: 'https://acme.example.com/pricing' }));
+    window.innerWidth = 1440;
+    await renderPage();
+
+    expect(
+      [...panel()!.querySelectorAll('button')].some((b) => b.textContent === 'Add prompts'),
+    ).toBe(false);
+    expect(panel()!.textContent).toContain('No fan-outs');
+  });
+
   it('opens Sources only when its tab is picked, and reads Impact only when it is', async () => {
     getDraftSources.mockResolvedValue({
       data: {
@@ -1905,6 +1967,31 @@ describe('the side panel', () => {
             'fan-outs to use, in their words: "pipeline forecasting"',
           ),
         }),
+      );
+    });
+
+    it('says a full batch is the most one run makes, to run it again (C)', async () => {
+      getContentDraft.mockResolvedValue(traced);
+      const full = Array.from({ length: 8 }, (_, i) => ({
+        ...agentSuggestion,
+        id: `n${i}`,
+        status: 'rejected' as const,
+      }));
+      getDraftSuggestions.mockResolvedValueOnce([]).mockResolvedValueOnce(full);
+      fixDraftRules.mockResolvedValue({ count: 8 });
+      await openRules();
+
+      await act(async () => panelButton('Apply rules with Agent').click());
+      await act(async () => {});
+
+      expect(toast.success).toHaveBeenCalledWith(
+        'Content Agent suggested 8 changes, the most one run makes · review them, then run it again for the rules still open',
+      );
+      // Decided, with rules still open: the bar says to run it again.
+      expect(
+        container.querySelector('[role="region"][aria-label="Agent suggestions"]')!.textContent,
+      ).toMatch(
+        /^0 accepted · 8 rejected · \d+ rules? still open · a run makes at most 8 changes: run it again for the rest/,
       );
     });
 

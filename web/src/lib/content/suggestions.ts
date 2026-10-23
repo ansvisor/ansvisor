@@ -85,6 +85,13 @@ export function suggestionLinks(raw: unknown, afterText: string): SuggestionLink
 /** The most suggestions decided at once (00217). */
 export const MAX_DECIDE = 200;
 
+/**
+ * The most changes one agent run leaves, as the API caps them
+ * (content-agent.js MAX_AGENT_SUGGESTIONS): a batch this size may have
+ * stopped short, so the editor says to run it again for the rest.
+ */
+export const AGENT_RUN_MAX = 8;
+
 /** How many are still open, accepted and rejected. */
 export function suggestionCounts(suggestions: DraftSuggestion[]) {
   const counts = { open: 0, accepted: 0, rejected: 0 };

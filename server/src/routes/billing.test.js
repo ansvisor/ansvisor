@@ -51,8 +51,21 @@ function table(name) {
 }
 
 const deliverEmail = vi.fn();
+const getAiUsage = vi.fn();
+const getOrgIdForUser = vi.fn();
 vi.mock('../config/supabase.js', () => ({ default: { from: (name) => table(name) } }));
 vi.mock('../lib/email.js', () => ({ deliverEmail: (...args) => deliverEmail(...args) }));
+class PlanLimitError extends Error {
+  constructor(message, statusCode = 403) {
+    super(message);
+    this.statusCode = statusCode;
+  }
+}
+vi.mock('../lib/plan-guard.js', () => ({
+  PlanLimitError,
+  getAiUsage: (...args) => getAiUsage(...args),
+  getOrgIdForUser: (...args) => getOrgIdForUser(...args),
+}));
 
 const { default: router } = await import('./billing.js');
 
@@ -209,5 +222,42 @@ describe('POST /api/billing/cancel-feedback', () => {
     profile = { organization_id: null, role: 'admin', full_name: null };
     expect((await send({ choice: 'cancel' })).status).toBe(403);
     expect(inserted).toHaveLength(0);
+  });
+});
+
+describe('GET /ai-usage', () => {
+  it('reads this period’s AI usage for the member’s organization', async () => {
+    const usage = { plan: 'starter', unlimited: false, percentUsed: 42.5, features: [] };
+    getOrgIdForUser.mockResolvedValue('o1');
+    getAiUsage.mockResolvedValue(usage);
+    const res = await fetch(`${baseUrl}/ai-usage`);
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual(usage);
+    expect(getOrgIdForUser).toHaveBeenCalledWith('u1');
+    expect(getAiUsage).toHaveBeenCalledWith('o1');
+  });
+
+  it('has no budget to show without an organization (self-hosted)', async () => {
+    getOrgIdForUser.mockResolvedValue(null);
+    getAiUsage.mockReset();
+    const res = await fetch(`${baseUrl}/ai-usage`);
+    expect(await res.json()).toMatchObject({ unlimited: true, percentUsed: null, features: [] });
+    expect(getAiUsage).not.toHaveBeenCalled();
+  });
+
+  it('has no meter for a workspace without an active plan', async () => {
+    getOrgIdForUser.mockResolvedValue('o1');
+    getAiUsage.mockRejectedValue(new PlanLimitError('Choose a plan', 402));
+    const res = await fetch(`${baseUrl}/ai-usage`);
+    expect(res.status).toBe(402);
+    expect(await res.json()).toMatchObject({ error: 'plan_limit' });
+  });
+
+  it('says it failed when the usage can’t be read', async () => {
+    getOrgIdForUser.mockResolvedValue('o1');
+    getAiUsage.mockRejectedValue(new Error('db down'));
+    const res = await fetch(`${baseUrl}/ai-usage`);
+    expect(res.status).toBe(500);
+    expect(await res.json()).toEqual({ error: 'Failed to read AI usage' });
   });
 });

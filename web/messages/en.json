@@ -1,4 +1,17 @@
 {
+  "apiFailure": {
+    "session": "Your session expired. Sign in again.",
+    "workspace": "This brand isn't in your workspace. Switch to one of your brands.",
+    "not_found": "This no longer exists. Reload the page and start again.",
+    "plan": "Your plan doesn't include this. Upgrade to use it.",
+    "limit": "You've used this month's allowance. Upgrade, or wait until it resets.",
+    "busy": "Too many requests. Wait a minute and try again.",
+    "failed": "Something went wrong. Try again.",
+    "signIn": "Sign in",
+    "yourBrands": "Your brands",
+    "reload": "Reload",
+    "upgrade": "Upgrade"
+  },
   "common": {
     "loading": "Loading...",
     "error": "Something went wrong.",
@@ -3584,6 +3597,7 @@
         "fromAction": "from Action AC-{no}",
         "decided": "{accepted} accepted · {rejected} rejected",
         "rulesOpen": "{count, plural, one {# rule still open} other {# rules still open}}",
+        "runMax": "a run makes at most {max} changes: run it again for the rest",
         "acceptAll": "Accept all",
         "rejectAll": "Reject all",
         "undoAll": "Undo all",
@@ -3607,6 +3621,7 @@
         "fixRules": "Apply rules with Agent",
         "fixing": "Content Agent is working…",
         "fixed": "{count, plural, one {Content Agent suggested # change} other {Content Agent suggested # changes}} · review them in the page",
+        "fixedMax": "Content Agent suggested {count} changes, the most one run makes · review them, then run it again for the rules still open",
         "nothingToFix": "Content Agent found nothing it could change without new facts.",
         "notForAgent": "Content Agent doesn't change heading levels: make the extra H1s H2s in the toolbar.",
         "decideFirst": "Accept or reject the open suggestions first.",
@@ -4011,7 +4026,7 @@
           "measureSteps": "How to measure, as numbered steps"
         },
         "hints": {
-          "length": "A target, not a minimum: within 20% of it meets the rule. A page well over it is open, and Apply rules with Agent shortens it a few passages at a time.",
+          "length": "A target, not a minimum: within 20% of it meets the rule. A page brought in to optimize starts at its own length. A page well over it is open, and Apply rules with Agent shortens it a few passages at a time.",
           "oneH1": "A page has one H1, its title. Make any other H1 an H2 in the toolbar: Content Agent doesn't change heading levels.",
           "summary": "A short summary under the H1 that answer engines can quote.",
           "fanoutH2": "Takes the top fan-outs you keep in Sources, the most searched first, not every one.",
@@ -4059,6 +4074,8 @@
           "aiCheck": "AI check",
           "needsFeed": "Needs feed",
           "noFanouts": "No fan-outs",
+          "addPrompts": "Add prompts",
+          "noFanoutsHint": "No fan-outs yet: they come from the page's prompts. Add its prompts in Sources.",
           "addKeywords": "Add keywords",
           "notHowTo": "Not a how-to",
           "englishOnly": "English only",
@@ -4069,6 +4086,7 @@
         "agentFix": "Apply rules with Agent",
         "agentFixing": "Content Agent is working…",
         "agentFixHint": "Content Agent suggests changes for the rules not met yet, for you to review in the page",
+        "lengthConflict": "The fan-out H2s, FAQ questions and summary these rules still ask for take about {need, number} characters, more than Length allows (up to {max, number}). Raise Length, or ask for fewer.",
         "fixTrace": "Fix",
         "fixTraceHint": "Content Agent rewrites only these phrases, for you to review",
         "agent": {
@@ -4344,7 +4362,7 @@
       "dismissAllConfirm": "{count, plural, one {This will dismiss # opportunity.} other {This will dismiss # opportunities.}} This can't be undone.",
       "deleteAll": "Delete",
       "deleteAllTitle": "Delete opportunities?",
-      "deleteAllConfirm": "{count, plural, one {This permanently deletes # opportunity.} other {This permanently deletes # opportunities.}} Dismissing instead keeps them out of your way without removing them.",
+      "deleteAllConfirm": "{count, plural, one {This permanently deletes # opportunity.} other {This permanently deletes # opportunities.}} It doesn't give back this month's opportunity allowance. Dismissing instead keeps them out of your way without removing them.",
       "deleteAllBriefWarning": "{count, plural, one {# of them has a generated brief, which is deleted too and does not return your monthly brief allowance.} other {# of them have generated briefs, which are deleted too and do not return your monthly brief allowance.}}",
       "deletedToast": "{count, plural, one {Deleted # opportunity} other {Deleted # opportunities}}"
     },
@@ -5667,6 +5685,7 @@
     "perception": {
       "sectionLabel": "Perception",
       "loadError": "Couldn't load the perception figures.",
+      "slow": "Still reading this period's figures. It can take a few seconds.",
       "unavailable": "Perception isn't available yet. It appears once the mentions data has been prepared.",
       "pickDates": "Choose a start or end date to see the perception figures.",
       "noMentions": "AI didn't name {brand} in the tracked responses of this period.",
@@ -6039,6 +6058,23 @@
     "month": "mo",
     "year": "yr",
     "renewsOn": "Renews on {date}",
+    "aiUsageMeter": {
+      "title": "This period's AI usage",
+      "description": "Improve suggestions, the Content Editor's AI and the Action Center's task writing share your plan's monthly AI allowance.",
+      "used": "{percent} used",
+      "resets": "Resets on {date}",
+      "exhausted": "This period's AI usage is used up. AI features resume on {date}.",
+      "exhaustedNoDate": "This period's AI usage is used up. AI features resume when it resets.",
+      "morePlans": "A bigger plan below comes with more.",
+      "features": {
+        "improve": "Improve suggestions",
+        "content": "Content Editor (briefs, Content Agent)",
+        "action_center": "Action Center task writing",
+        "other": "Other"
+      },
+      "chat": "Agent Chat runs on your own AI key, so it doesn't use this allowance.",
+      "failed": "Couldn't read this period's AI usage. Try again later."
+    },
     "cancelsOn": "Subscription ends on {date}",
     "changePlan": "Change Plan",
     "upgradeTo": "Upgrade to {plan}",
@@ -6140,7 +6176,7 @@
       "briefs": "{count, number} content briefs a month",
       "audits": "{count, number} site audits a month",
       "aiUsage": "{count}x AI usage",
-      "aiUsageHint": "A monthly allowance for Ansvisor's AI features: Improve suggestions and the Content Editor's AI. Agent Chat runs on your own AI key."
+      "aiUsageHint": "A monthly allowance for Ansvisor's AI features: Improve suggestions, the Content Editor's AI and the Action Center's task writing. Agent Chat runs on your own AI key."
     },
     "contactUs": "Contact Us",
     "integrations": "Integrations",

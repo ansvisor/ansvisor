@@ -583,7 +583,11 @@ describe('fixDraftRules', () => {
     );
     expect(result).toEqual({ count: 1, batchId: expect.any(String) });
     const usage = writes.find((w) => w.table === 'prompt_improve_usage');
-    expect(usage.value).toMatchObject({ organization_id: 'org-1', content_draft_id: DRAFT });
+    expect(usage.value).toMatchObject({
+      organization_id: 'org-1',
+      content_draft_id: DRAFT,
+      feature: 'content',
+    });
     const batch = writes.find((w) => w.table === 'content_draft_suggestions');
     expect(batch.value).toEqual([
       expect.objectContaining({
