@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest';
+import { LANGUAGES } from '@/config/prompt-options';
+import { languageRuleValue } from './rules';
 import {
   MIN_WORDS,
   READABILITY_WEIGHTS,
@@ -62,8 +64,44 @@ describe('readability', () => {
 
   it('gives no score to a page too short to read', () => {
     const html = p('Pipeline forecasting for small teams, in short.');
-    expect(readability(html, 'en')).toMatchObject({ score: null, checks: [] });
+    expect(readability(html, 'en')).toMatchObject({
+      score: null,
+      unscored: 'tooShort',
+      checks: [],
+    });
     expect(MIN_WORDS).toBe(50);
+  });
+
+  it('gives no score in a language written without spaces between words', () => {
+    // Each Japanese clause reads as one word: six paragraphs once scored 66.
+    const ja =
+      '<h1>小さなチームの売上予測</h1>' +
+      Array.from({ length: 6 }, () =>
+        p(
+          '小さなチームは、今月、成約できる商談を見て、売上を予測します。毎週、同じ曜日に、リストを確認します。止まった商談は、すぐに、外します。',
+        ),
+      ).join('');
+    // Read as a spaced language, it would get a made-up score.
+    expect(readability(ja, 'en').score).not.toBeNull();
+    for (const language of ['ja', 'Japanese', 'zh-CN', 'Chinese', 'Thai']) {
+      expect(readability(ja, language)).toMatchObject({
+        score: null,
+        unscored: 'language',
+        checks: [],
+      });
+    }
+  });
+
+  it('scores Hindi by its own sentences and words', () => {
+    // Ten words, each with its vowel signs, ending in a danda.
+    const line = 'छोटी टीमें हर हफ्ते अपनी बिक्री की सूची देखती हैं।';
+    const html = `<h1>बिक्री का अनुमान</h1>${p(Array.from({ length: 6 }, () => line).join(' '))}`;
+    const result = readability(html, 'Hindi');
+    expect(result.words).toBe(60);
+    expect(result.score).not.toBeNull();
+    expect(result.checks.find((c) => c.id === 'avgSentence')!.value).toBe(10);
+    expect(result.checks.find((c) => c.id === 'longSentences')!.count).toBe(0);
+    expect(result.checks.find((c) => c.id === 'readingLevel')!.formula).toBeNull();
   });
 
   it('reads Turkish with Ateşman’s formula, and leaves out what it can’t read there', () => {
@@ -152,10 +190,11 @@ describe('reading the page as written', () => {
   it('reads Spanish, German and French higher for shorter sentences', () => {
     const page = (n: number, word: string) =>
       `<h1>${word}</h1>${p(Array.from({ length: Math.ceil(120 / n) }, () => `${Array.from({ length: n }, () => word).join(' ')}.`).join(' '))}`;
+    // Each sentence opens in upper case: after a dot, a lower-case word carries the sentence on.
     for (const [lang, word] of [
-      ['es', 'casa'],
+      ['es', 'Casa'],
       ['de', 'Haus'],
-      ['fr', 'maison'],
+      ['fr', 'Maison'],
     ]) {
       const short = check(page(10, word), 'readingLevel', lang)!.value;
       const long = check(page(30, word), 'readingLevel', lang)!.value;
@@ -198,6 +237,21 @@ describe('reading the page as written', () => {
     expect(style.at).toContain('leveraging');
   });
 
+  it('reads irregular participles as passive', () => {
+    const participles = [
+      ...['sent', 'found', 'held', 'kept', 'paid', 'put', 'set', 'left', 'lost', 'sold', 'said'],
+      ...['heard', 'brought', 'bought', 'caught', 'taught', 'spent', 'meant', 'led', 'won'],
+      ...['broken', 'spoken', 'hidden'],
+    ];
+    const html =
+      '<h1>Pipeline</h1>' +
+      p(Array.from({ length: 4 }, () => sentence(15)).join(' ')) +
+      p(participles.map((w) => `The deal was ${w} today.`).join(' '));
+    const style = check(html, 'passiveJargon')!;
+    expect(style.count).toBe(participles.length);
+    expect(style.at).toBe('The deal was sent today.');
+  });
+
   it('reads a passive sentence that says not or never', () => {
     const html =
       '<h1>Pipeline</h1>' +
@@ -211,12 +265,82 @@ describe('reading the page as written', () => {
 
 describe('the parts', () => {
   it('splits sentences after . ! ? and …', () => {
-    expect(sentencesOf('One. Two! Three? Four… five')).toEqual([
+    expect(sentencesOf('One. Two! Three? Four… Five')).toEqual([
       'One.',
       'Two!',
       'Three?',
       'Four…',
-      'five',
+      'Five',
+    ]);
+  });
+
+  it('splits after 。！？ with no space, and after । and ؟', () => {
+    expect(sentencesOf('一つです。二つです！三つですか？', 'ja')).toEqual([
+      '一つです。',
+      '二つです！',
+      '三つですか？',
+    ]);
+    expect(sentencesOf('यह पहला वाक्य है। यह दूसरा है।', 'hi')).toEqual([
+      'यह पहला वाक्य है।',
+      'यह दूसरा है।',
+    ]);
+    expect(sentencesOf('ما هذا؟ هذا كتاب.', 'ar')).toEqual(['ما هذا؟', 'هذا كتاب.']);
+  });
+
+  it('keeps a sentence whole when the next word starts in lower case', () => {
+    expect(sentencesOf('Prices rose 3 pct. in May. Then they fell… and rose.')).toEqual([
+      'Prices rose 3 pct. in May.',
+      'Then they fell… and rose.',
+    ]);
+  });
+
+  it('reads a number and a dot before a word as an ordinal in German and Turkish', () => {
+    expect(sentencesOf('Wir starten am 3. Oktober mit der Liste. Dann prüfen wir.', 'de')).toEqual([
+      'Wir starten am 3. Oktober mit der Liste.',
+      'Dann prüfen wir.',
+    ]);
+    expect(sentencesOf('Toplantı 2. Kat salonunda. Herkes gelir.', 'tr')).toEqual([
+      'Toplantı 2. Kat salonunda.',
+      'Herkes gelir.',
+    ]);
+    // Not in English, where it ends a sentence.
+    expect(sentencesOf('Read chapter 3. Then stop.', 'en')).toEqual([
+      'Read chapter 3.',
+      'Then stop.',
+    ]);
+  });
+
+  it('keeps each language’s common abbreviations inside their sentence', () => {
+    expect(sentencesOf('Nutzen Sie z. B. Listen. Vgl. Kapitel Zwei. Dann weiter.', 'de')).toEqual([
+      'Nutzen Sie z. B. Listen.',
+      'Vgl. Kapitel Zwei.',
+      'Dann weiter.',
+    ]);
+    expect(sentencesOf('Örn. Ankara gibi bir şehir seçin. Dr. Ayşe onaylar.', 'tr')).toEqual([
+      'Örn. Ankara gibi bir şehir seçin.',
+      'Dr. Ayşe onaylar.',
+    ]);
+    expect(sentencesOf('Une ville, p. ex. Paris. Appelez M. Dupont. Puis partez.', 'fr')).toEqual([
+      'Une ville, p. ex. Paris.',
+      'Appelez M. Dupont.',
+      'Puis partez.',
+    ]);
+    expect(
+      sentencesOf('Una ciudad, p. ej. Madrid. Llame a la Sra. García. Luego vaya.', 'es'),
+    ).toEqual(['Una ciudad, p. ej. Madrid.', 'Llame a la Sra. García.', 'Luego vaya.']);
+    // One before a number counts only there: "no." still ends a sentence.
+    expect(sentencesOf('Say no. Then see No. 5 below.')).toEqual([
+      'Say no.',
+      'Then see No. 5 below.',
+    ]);
+  });
+
+  it('ends a sentence after a closing quote or bracket', () => {
+    expect(sentencesOf('He said "stop." Then he left. (It was late.) Nobody spoke.')).toEqual([
+      'He said "stop."',
+      'Then he left.',
+      '(It was late.)',
+      'Nobody spoke.',
     ]);
   });
 
@@ -231,12 +355,15 @@ describe('the parts', () => {
     expect(syllablesOf('Haus', 'de')).toBe(1);
   });
 
-  it('reads the brand’s language as a code', () => {
+  it('reads the brand’s language or the Language rule as a code', () => {
     expect(languageCode(null)).toBe('en');
     expect(languageCode('English (US)')).toBe('en');
     expect(languageCode('tr-TR')).toBe('tr');
     expect(languageCode('Deutsch')).toBe('de');
     expect(languageCode('ja')).toBe('ja');
+    expect(languageCode('Brazilian Portuguese')).toBe('pt');
     expect(languageCode('Klingon')).toBeNull();
+    // Each brand language, as its Language rule says it.
+    for (const { code } of LANGUAGES) expect(languageCode(languageRuleValue(code))).toBe(code);
   });
 });

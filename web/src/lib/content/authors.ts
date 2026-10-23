@@ -2,7 +2,7 @@ import { z } from 'zod';
 
 /**
  * The workspace's authors (Content Editor Quality spec §9, CE-037,
- * content_authors 00252): what Settings › Authors reads and saves.
+ * content_authors 00256): what Settings › Authors reads and saves.
  */
 
 export interface ContentAuthor {
@@ -40,9 +40,17 @@ export function authorInitials(name: string): string {
     .join('');
 }
 
-/** The most profile links an author keeps (00252). */
+/**
+ * Whether the member reading may edit an author: whoever added it, the
+ * author themself or an admin, as the table's update policy says.
+ */
+export function canEditAuthor(author: ContentAuthor, me: AuthorsRead['me']): boolean {
+  return author.userId === me.id || author.createdBy === me.id || me.role === 'admin';
+}
+
+/** The most profile links an author keeps (00256). */
 export const MAX_PROFILES = 10;
-/** The longest profile link. */
+/** The longest profile link; the table checks it too, with https (content_author_links_ok). */
 export const MAX_LINK_LENGTH = 300;
 
 const profileLink = z

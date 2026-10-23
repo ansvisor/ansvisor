@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   NAME_PLACEHOLDER as NAME,
   QUOTE_PLACEHOLDER as QUOTE,
@@ -30,10 +30,10 @@ describe('guardPeople', () => {
       `${NAME}, our senior product manager, agrees.`,
     );
     expect(guard('Marco Rossi said the beans matter.')).toBe(`${NAME} said the beans matter.`);
-    expect(guard('The beans matter, according to Marco Rossi.')).toBe(
-      `The beans matter, according to ${NAME}.`,
+    expect(guard('The beans matter, according to CEO Marco Rossi.')).toBe(
+      `The beans matter, according to CEO ${NAME}.`,
     );
-    expect(guard('Çağrı Işık says hello.')).toBe(`${NAME} says hello.`);
+    expect(guard('Çağrı Işık said hello.')).toBe(`${NAME} said hello.`);
   });
 
   it('keeps a person it was given, and names that are no person', () => {
@@ -88,16 +88,17 @@ describe('guardPeople: what the review found', () => {
     expect(fix('Marco Rossi, Senior Product Manager at Acme, explains why.')).toBe(
       `${NAME}, Senior Product Manager at Acme, explains why.`,
     );
-    expect(fix('Marco Rossi emphasizes speed.')).toBe(`${NAME} emphasizes speed.`);
+    expect(fix('Dr. Marco Rossi emphasizes speed.')).toBe(`${NAME} emphasizes speed.`);
     expect(fix('Sarah, our head of growth, says yes.')).toBe(
       `${NAME}, our head of growth, says yes.`,
     );
     expect(fix('This was said by Ursula von der Leyen.')).toBe(`This was said by ${NAME}.`);
     expect(fix('As J. K. Rowling said, write daily.')).toBe(`As ${NAME} said, write daily.`);
     expect(fix("Ayşe Yılmaz'a göre bu doğru.")).toBe(`${NAME}'a göre bu doğru.`);
-    expect(fix('Geschäftsführerin Anna Schmidt sagt, es funktioniert.')).toBe(
-      `Geschäftsführerin ${NAME} sagt, es funktioniert.`,
+    expect(fix('Geschäftsführerin Anna Schmidt sagte, es funktioniert.')).toBe(
+      `Geschäftsführerin ${NAME} sagte, es funktioniert.`,
     );
+    expect(fix('Ayşe Yılmaz söyledi.')).toBe(`${NAME} söyledi.`);
     expect(fix("Mary O'Hara said so.")).toBe(`${NAME} said so.`);
   });
 
@@ -132,6 +133,56 @@ describe('guardPeople: what the review found', () => {
     expect(fix('Our 27" monitor is the best of the "pro" line.')).toBe(
       'Our 27" monitor is the best of the "pro" line.',
     );
+  });
+
+  it('knows a name only as whole words of what it was given, not inside another word', () => {
+    const page = knownPeople(
+      'Our kitchen opens at six. Sleep well.',
+      'Our fleet does next-day delivery.',
+      'See the annual report.',
+    );
+    const check = (text) => guardPeople(text, page).text;
+    expect(check('Dr. Sarah Chen runs the clinic.')).toBe(`${NAME} runs the clinic.`);
+    expect(check('Mr. Lee runs the shop.')).toBe(`${NAME} runs the shop.`);
+    expect(check('Dr. Mark Lee runs the shop.')).toBe(`${NAME} runs the shop.`);
+    expect(check('Mr. Doe agreed.')).toBe(`${NAME} agreed.`);
+    expect(check('Ann, our head of growth, set it.')).toBe(`${NAME}, our head of growth, set it.`);
+    // A name it was given stays, whatever the punctuation around it.
+    const given = knownPeople('Interview: Dr. Chen (Sarah Chen), and Mr. Lee.');
+    expect(guardPeople('Dr. Sarah Chen runs the clinic.', given).text).toBe(
+      'Dr. Sarah Chen runs the clinic.',
+    );
+    expect(guardPeople('Mr. Lee runs the shop.', given).text).toBe('Mr. Lee runs the shop.');
+  });
+
+  it('reads a name with a bare verb only when the verb is said of people', () => {
+    // Products and companies recommend, add and describe too.
+    for (const line of [
+      'Google Ads recommends a daily budget for new campaigns.',
+      'Microsoft Teams adds a tab for each channel.',
+      'Product Hunt describes it as a launch site.',
+      'Clicks doubled, according to Google Analytics.',
+      'Marco Rossi emphasizes speed.',
+    ]) {
+      expect(fix(line)).toBe(line);
+    }
+    // With an honorific or a role, any of them reads the name.
+    expect(fix('Dr. Sarah Chen recommends a daily budget.')).toBe(
+      `${NAME} recommends a daily budget.`,
+    );
+    expect(fix('CEO Marco Rossi adds a tab.')).toBe(`CEO ${NAME} adds a tab.`);
+    for (const verb of [
+      'said',
+      'told',
+      'explained',
+      'recalled',
+      'admitted',
+      'insisted',
+      'argued',
+    ]) {
+      expect(fix(`Marco Rossi ${verb} it twice.`)).toBe(`${NAME} ${verb} it twice.`);
+    }
+    expect(fix('It was explained by Marco Rossi.')).toBe(`It was explained by ${NAME}.`);
   });
 
   it('reads long text quickly, whatever its words', () => {
@@ -184,11 +235,11 @@ describe('guardPeopleInHtml', () => {
   it('reads a quote across the bold and the links in it, and drops what it emptied', () => {
     expect(
       guardPeopleInHtml(
-        '<p>“We <strong>doubled</strong> our pipeline in a month,” says Marco Rossi.</p>' +
+        '<p>“We <strong>doubled</strong> our pipeline in a month,” said Marco Rossi.</p>' +
           '<p>“Our <a href="https://x.example/">AEO tracker</a> doubled our pipeline,” she said.</p>',
         known,
       ).html,
-    ).toBe(`<p>${QUOTE} says ${NAME}.</p><p>${QUOTE} she said.</p>`);
+    ).toBe(`<p>${QUOTE} said ${NAME}.</p><p>${QUOTE} she said.</p>`);
   });
 
   it('reads a heading for quotes and speech only', () => {
@@ -230,5 +281,29 @@ describe('authorWords', () => {
       'Roasts coffee.',
     ]);
     expect(calls).toEqual([['content_authors', 'name, title, bio', 'organization_id', 'o1']]);
+  });
+
+  it('reads none, and fails no run, when the authors can’t be read', async () => {
+    const log = { warn: vi.fn() };
+    // content_authors not there yet (before its migration), or a failed read.
+    const missing = {
+      from: () => ({
+        select: () => ({
+          eq: async () => ({
+            data: null,
+            error: { code: '42P01', message: 'relation "public.content_authors" does not exist' },
+          }),
+        }),
+      }),
+    };
+    await expect(authorWords(missing, 'o1', log)).resolves.toEqual([]);
+    const down = {
+      from: () => {
+        throw new Error('fetch failed');
+      },
+    };
+    await expect(authorWords(down, 'o1', log)).resolves.toEqual([]);
+    expect(log.warn).toHaveBeenCalledTimes(2);
+    expect(log.warn.mock.calls[0][0]).toMatchObject({ organizationId: 'o1' });
   });
 });
