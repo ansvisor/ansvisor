@@ -1408,6 +1408,7 @@ export async function getDraftSuggestions(id: string): Promise<DraftSuggestion[]
         reason: row.reason,
         ruleKeys: row.rule_keys ?? [],
         status: row.status as SuggestionStatus,
+        createdAt: row.created_at,
       };
     });
 }

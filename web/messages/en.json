@@ -3601,6 +3601,15 @@
       "run": {
         "about": "What Run Agent does"
       },
+      "data": {
+        "uses": "Uses your data: {parts} · <edit>Edit sources</edit>",
+        "none": "No sources kept yet · <edit>Edit sources</edit>",
+        "note": {
+          "title": "Content Agent writes from your data",
+          "body": "Your prompts, fan-outs, cited pages and Search Console queries.",
+          "close": "Close"
+        }
+      },
       "agentCard": {
         "waiting": "{count, plural, one {Content Agent has # suggestion for you} other {Content Agent has # suggestions for you}}",
         "gain": "Rules {met, number} → {after, number} of {total, number}",
@@ -3793,6 +3802,7 @@
         "hide": "Hide side panel",
         "openTab": "Open {tab} in the side panel",
         "openRules": "{count, plural, one {# rule open} other {# rules open}}",
+        "sourcesInUse": "{count, plural, one {# source in use} other {# sources in use}}",
         "tabs": {
           "instructions": "Instructions",
           "sources": "Sources",
@@ -3874,7 +3884,12 @@
       "sources": {
         "loadError": "Couldn't load the sources.",
         "retry": "Retry",
-        "summary": "{count, plural, one {Built from # source} other {Built from # sources}}",
+        "summary": "{count, plural, one {# source in use} other {# sources in use}}",
+        "lastUsed": {
+          "when": "Last used by Content Agent · {when}",
+          "justNow": "Last used by Content Agent · just now",
+          "never": "Not used by Content Agent yet"
+        },
         "summaryParts": "{prompts, plural, one {# prompt} other {# prompts}} · {fanouts, plural, one {# fan-out} other {# fan-outs}} · {pages, plural, one {# cited page} other {# cited pages}} · {queries, plural, one {# Search Console query} other {# Search Console queries}}",
         "hint": "Each source shows where the draft uses it. Uncheck one to leave it out, then rebuild the brief.",
         "empty": "No sources yet. Add a prompt, a page or a Search Console query.",

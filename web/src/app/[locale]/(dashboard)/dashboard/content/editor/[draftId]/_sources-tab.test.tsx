@@ -66,15 +66,16 @@ let root: Root;
 async function render(
   bodyHtml = '<h1>The home espresso guide</h1>',
   choices: DraftSourceChoice[] = [],
+  agentUsedAt: string | null = null,
 ) {
   getDraftSources.mockResolvedValue({ data: data(), choices });
   await act(async () => {
-    root.render(<Tab bodyHtml={bodyHtml} />);
+    root.render(<Tab bodyHtml={bodyHtml} agentUsedAt={agentUsedAt} />);
   });
 }
 
 /** The tab as the editor gives it its sources: one read, shared (useDraftReads). */
-function Tab({ bodyHtml }: { bodyHtml: string }) {
+function Tab({ bodyHtml, agentUsedAt = null }: { bodyHtml: string; agentUsedAt?: string | null }) {
   const reads = useDraftReads('d1');
   return (
     <NextIntlClientProvider locale="en" messages={messages}>
@@ -89,6 +90,7 @@ function Tab({ bodyHtml }: { bodyHtml: string }) {
         bodyHtml={bodyHtml}
         rebuilding={false}
         onRebuild={onRebuild}
+        agentUsedAt={agentUsedAt}
       />
     </NextIntlClientProvider>
   );
@@ -124,6 +126,21 @@ afterEach(() => {
 });
 
 describe('the Sources tab', () => {
+  it('says when the Content Agent last wrote from them (v1.1 CE-034)', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-10-23T10:00:00Z'));
+    try {
+      await render(undefined, [], null);
+      expect(container.textContent).toContain('Not used by Content Agent yet');
+      await render(undefined, [], '2026-10-23T09:58:00Z');
+      expect(container.textContent).toContain('Last used by Content Agent · 2 minutes ago');
+      await render(undefined, [], '2026-10-23T09:59:40Z');
+      expect(container.textContent).toContain('Last used by Content Agent · just now');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('names every source with its numbers and where the draft uses it', async () => {
     await render(
       '<h1>The home espresso guide</h1><h2>Best espresso machines under $500</h2>' +
@@ -131,7 +148,7 @@ describe('the Sources tab', () => {
     );
 
     expect(getDraftSources).toHaveBeenCalledWith('d1');
-    expect(container.textContent).toContain('Built from 4 sources');
+    expect(container.textContent).toContain('4 sources in use');
     expect(container.textContent).toContain(
       '1 prompt · 1 fan-out · 1 cited page · 1 Search Console query',
     );
@@ -170,7 +187,7 @@ describe('the Sources tab', () => {
       included: false,
     });
     expect(rows()[1].checked).toBe('false');
-    expect(container.textContent).toContain('Built from 3 sources');
+    expect(container.textContent).toContain('3 sources in use');
 
     vi.spyOn(console, 'error').mockImplementation(() => {});
     setDraftSourceIncluded.mockRejectedValueOnce(new Error('boom'));
@@ -216,7 +233,7 @@ describe('the Sources tab', () => {
   it('lists a source left out unchecked', async () => {
     await render(undefined, [{ kind: 'prompt', ref: 'p1', included: false, added: false }]);
     expect(rows()[0].checked).toBe('false');
-    expect(container.textContent).toContain('Built from 3 sources');
+    expect(container.textContent).toContain('3 sources in use');
   });
 
   it('adds a page by its address and reads the sources again', async () => {
@@ -260,7 +277,7 @@ describe('the Sources tab', () => {
     getDraftSources.mockResolvedValue({ data: data(), choices: [] });
     const retry = [...container.querySelectorAll('button')].find((b) => b.textContent === 'Retry')!;
     await act(async () => retry.click());
-    expect(container.textContent).toContain('Built from 4 sources');
+    expect(container.textContent).toContain('4 sources in use');
   });
 
   it('says when there is nothing to list', async () => {

@@ -1,11 +1,14 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { isPageType, type ContentDraft } from '@/lib/content/drafts';
+import { buildSourceGroups, includedCounts } from '@/lib/content/sources';
+import { formatNumber } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { BriefTab, type AgentRewrite } from './_brief-tab';
+import { DataNote, UsesYourData } from './_data-note';
 import { ImpactTab } from './_impact-tab';
 import { RulesTab, type AgentFix, type PageRewrite } from './_rules-tab';
 import { SourcesTab } from './_sources-tab';
@@ -106,6 +109,7 @@ export function EditorSidePanel({
   agentFix,
   pageRewrite,
   agentRewrite,
+  lastSuggestionAt,
 }: {
   draft: ContentDraft;
   /** The draft's title, page and type as written now: Sources and Brief read them. */
@@ -124,6 +128,8 @@ export function EditorSidePanel({
   pageRewrite?: PageRewrite;
   /** Rewrite from brief, for Brief; absent once the page is ready or published. */
   agentRewrite?: AgentRewrite;
+  /** When the agent's latest suggestions came, or null: the last time it wrote from the sources. */
+  lastSuggestionAt: string | null;
 }) {
   const t = useTranslations('contentEditor.editor.panel');
   const [tab, setTab] = useState<PanelTab>('instructions');
@@ -145,6 +151,33 @@ export function EditorSidePanel({
     );
   };
   const rulesOpen = Math.max(0, rules.total - rules.met);
+
+  // The sources the agent writes from, as the Sources tab keeps them (v1.1
+  // CE-032/034): counted under each Run Agent and on the tab, so turning one
+  // off there lowers both at once.
+  const sourceCounts = useMemo(
+    () =>
+      reads.sources?.data
+        ? includedCounts(
+            buildSourceGroups(reads.sources.data, reads.sources.choices, {
+              title,
+              sourceUrl: draft.sourceUrl,
+            }),
+          )
+        : null,
+    [reads.sources, title, draft.sourceUrl],
+  );
+  const sourcesInUse = sourceCounts ? Object.values(sourceCounts).reduce((a, b) => a + b, 0) : null;
+  const dataLine = sourceCounts && (
+    <UsesYourData counts={sourceCounts} onEdit={() => open('sources')} />
+  );
+  // The last time the agent wrote from them: its latest run's suggestions, or the brief it built.
+  const builtAt = reads.brief.status === 'ready' ? (reads.brief.brief?.builtAt ?? null) : null;
+  const agentUsedAt =
+    [lastSuggestionAt, builtAt]
+      .filter((at): at is string => !!at)
+      .sort((a, b) => Date.parse(a) - Date.parse(b))
+      .at(-1) ?? null;
 
   const requested = tabRequest?.n;
   useEffect(() => {
@@ -189,12 +222,26 @@ export function EditorSidePanel({
                   <span className="sr-only">{t('openRules', { count: rulesOpen })}</span>
                 </>
               )}
+              {/* The sources in use (CE-034), the number in full on hover. */}
+              {value === 'sources' && !!sourcesInUse && (
+                <>
+                  <span
+                    aria-hidden
+                    title={t('sourcesInUse', { count: sourcesInUse })}
+                    className="rounded-md bg-muted px-1.5 text-[10.5px] font-medium text-muted-foreground"
+                  >
+                    {formatNumber(sourcesInUse)}
+                  </span>
+                  <span className="sr-only">{t('sourcesInUse', { count: sourcesInUse })}</span>
+                </>
+              )}
             </TabsTrigger>
           ))}
         </TabsList>
       </Tabs>
       <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
         <div hidden={tab !== 'instructions'} className="space-y-4">
+          <DataNote />
           <div
             role="radiogroup"
             aria-label={t('segmentsLabel')}
@@ -245,6 +292,7 @@ export function EditorSidePanel({
                 onRetry={reads.reloadBrief}
                 onSaved={(saved) => reads.setBrief(saved)}
                 rewrite={agentRewrite}
+                dataLine={dataLine}
               />
             </div>
           )}
@@ -253,6 +301,7 @@ export function EditorSidePanel({
               <RulesTab
                 agentFix={agentFix}
                 pageRewrite={pageRewrite}
+                dataLine={dataLine}
                 // Only a draft with no prompts gets no fan-outs for want of them.
                 onOpenSources={
                   reads.sources && !reads.sources.failed && reads.sources.data.prompts.length === 0
@@ -279,6 +328,7 @@ export function EditorSidePanel({
               bodyHtml={bodyHtml}
               rebuilding={rebuilding}
               onRebuild={(sources) => void rebuild({ sources })}
+              agentUsedAt={agentUsedAt}
             />
           </div>
         )}

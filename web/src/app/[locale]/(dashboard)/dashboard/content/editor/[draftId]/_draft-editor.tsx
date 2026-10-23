@@ -1343,6 +1343,13 @@ export function DraftEditor({
             agentFix={agentFix}
             pageRewrite={pageRewrite}
             agentRewrite={agentRewrite}
+            lastSuggestionAt={
+              suggestions
+                .map((s) => s.createdAt)
+                .filter((at): at is string => !!at)
+                .sort((a, b) => Date.parse(a) - Date.parse(b))
+                .at(-1) ?? null
+            }
           />
         ) : (
           <EditorPanelRail onOpen={openPanelTab} />

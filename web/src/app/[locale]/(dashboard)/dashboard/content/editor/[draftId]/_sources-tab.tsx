@@ -1,7 +1,7 @@
 'use client';
 
 import { useDeferredValue, useMemo, useState, type Dispatch, type SetStateAction } from 'react';
-import { useTranslations } from 'next-intl';
+import { useFormatter, useNow, useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 import { Loader2, Plus, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -43,6 +43,7 @@ export function SourcesTab({
   bodyHtml,
   rebuilding,
   onRebuild,
+  agentUsedAt,
 }: {
   /** The sources as the editor read them; null while reading. */
   read: SourcesRead | null;
@@ -57,8 +58,12 @@ export function SourcesTab({
   /** Rebuild with selection: the brief from the sources as checked here. */
   rebuilding: boolean;
   onRebuild: (sources: { data: DraftSourcesData; choices: DraftSourceChoice[] }) => void;
+  /** When the Content Agent last wrote from them (a run's suggestions, a brief), or null. */
+  agentUsedAt: string | null;
 }) {
   const t = useTranslations('contentEditor.editor.sources');
+  const format = useFormatter();
+  const now = useNow({ updateInterval: 60_000 });
   const [adding, setAdding] = useState(false);
 
   // Where each source is used follows the page as it is written, a beat behind typing.
@@ -126,6 +131,13 @@ export function SourcesTab({
             pages: counts.cited_page,
             queries: counts.gsc_query,
           })}
+        </p>
+        <p className="text-xs text-muted-foreground">
+          {agentUsedAt === null
+            ? t('lastUsed.never')
+            : now.getTime() - new Date(agentUsedAt).getTime() < 60_000
+              ? t('lastUsed.justNow')
+              : t('lastUsed.when', { when: format.relativeTime(new Date(agentUsedAt), now) })}
         </p>
         <p className="text-xs text-muted-foreground">{t('hint')}</p>
       </div>

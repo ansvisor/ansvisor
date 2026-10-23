@@ -205,6 +205,7 @@ export function RulesTab({
   draftPageType,
   agentFix,
   pageRewrite,
+  dataLine,
   onOpenSources,
 }: {
   state: DraftRulesState;
@@ -212,6 +213,8 @@ export function RulesTab({
   draftPageType: PageType | null;
   agentFix?: AgentFix;
   pageRewrite?: PageRewrite;
+  /** "Uses your data", under Run Agent's card (v1.1 CE-032). */
+  dataLine?: React.ReactNode;
   /**
    * Opens the Sources tab, where a draft with no prompts (so no fan-outs)
    * gets them; none while the sources are read, or when the draft has prompts.
@@ -305,6 +308,7 @@ export function RulesTab({
           info={t.rich(pageRewrite ? 'run.info' : 'run.infoFix', {
             b: (chunks) => <b>{chunks}</b>,
           })}
+          data={dataLine}
           blocked={open.length > 0 ? blocked : null}
         >
           {advice && (

@@ -37,6 +37,8 @@ export interface DraftSuggestion {
   /** The rules it is meant to fix. */
   ruleKeys: string[];
   status: SuggestionStatus;
+  /** When the agent left it: the run's time, for "Last used by Content Agent". */
+  createdAt?: string;
 }
 
 /**
