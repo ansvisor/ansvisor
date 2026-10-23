@@ -10,6 +10,7 @@ import {
   LIBRARY_TABS,
   PAGE_TYPES,
   WRITING_STALE_MS,
+  agentRunOf,
   agentStateOf,
   libraryTabCounts,
   type ContentDraft,
@@ -217,7 +218,7 @@ export async function getContentDraft(id: string): Promise<ContentDraft | null> 
   const { data, error } = await supabase
     .from('content_drafts')
     .select(
-      `id, brand_id, title, page_type, page_type_source, method, status, body_html, author, source_url, rules, action_id, agent_state, agent_state_at, updated_at, ${BRAND_SITE}, actions(action_no)`,
+      `id, brand_id, title, page_type, page_type_source, method, status, body_html, author, source_url, rules, action_id, agent_state, agent_state_at, agent_run, updated_at, ${BRAND_SITE}, actions(action_no)`,
     )
     .eq('id', id)
     .maybeSingle();
@@ -242,6 +243,7 @@ export async function getContentDraft(id: string): Promise<ContentDraft | null> 
         : null,
     agentState: agentStateOf(data.agent_state, data.agent_state_at),
     agentSince: data.agent_state_at,
+    agentRun: agentRunOf(data.agent_run),
     updatedAt: data.updated_at,
   };
 }
@@ -1375,20 +1377,29 @@ export async function keepAgentBeforeVersion(id: string): Promise<void> {
 export async function getDraftSuggestions(id: string): Promise<DraftSuggestion[]> {
   if (!draftId.safeParse(id).success) throw new Error('invalid');
   const supabase = await createClient();
+  // The latest batch first, one row and no text: a past rewrite's two whole
+  // pages are never read again (this runs on every open, and while Fix waits).
+  const { data: latest, error: latestError } = await supabase
+    .from('content_draft_suggestions')
+    .select('batch_id')
+    .eq('draft_id', id)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (latestError) throw new Error(latestError.message);
+  if (!latest) return [];
   const { data, error } = await supabase
     .from('content_draft_suggestions')
     .select(
       'id, batch_id, action_id, kind, block_text, before_text, before_html, after_text, after_links, reason, rule_keys, position, status, created_at, sources, source_marks, actions(action_no)',
     )
     .eq('draft_id', id)
-    .order('created_at', { ascending: false })
+    .eq('batch_id', latest.batch_id)
     .limit(MAX_DECIDE);
   if (error) throw new Error(error.message);
-  const rows = data ?? [];
-  const batch = rows[0]?.batch_id;
   const statuses: readonly string[] = SUGGESTION_STATUSES;
-  return rows
-    .filter((row) => row.batch_id === batch && statuses.includes(row.status))
+  return (data ?? [])
+    .filter((row) => statuses.includes(row.status))
     .sort((a, b) => a.position - b.position)
     .map((row) => {
       const action = (Array.isArray(row.actions) ? row.actions[0] : row.actions) as {
@@ -1711,6 +1722,8 @@ const AGENT_FIX_ERRORS = [
   'empty',
   'open_suggestions',
   'published',
+  /** Start or a rewrite holds the draft (another tab, another member). */
+  'writing',
   'failed',
   /** No answer from the API (a timeout on the way): the agent may still finish. */
   'unconfirmed',

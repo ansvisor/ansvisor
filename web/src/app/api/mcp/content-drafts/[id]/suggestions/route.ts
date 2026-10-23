@@ -33,6 +33,12 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         { status: 409 },
       );
     }
+    if (result === 'writing') {
+      return NextResponse.json(
+        { error: 'The Content Agent is writing this draft; suggest again once it has finished' },
+        { status: 409 },
+      );
+    }
     if (!result) return NextResponse.json({ error: 'Draft not found' }, { status: 404 });
     return NextResponse.json(result, { status: result.kept ? 201 : 200 });
   } catch (err) {

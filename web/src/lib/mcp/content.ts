@@ -10,7 +10,7 @@ import {
 import { classifyDomain, extractHostname, normalizeDomain } from '@/lib/citations/classify';
 import { completeDraftTasks } from '@/lib/content/action-drafts';
 import { CITED_DAYS, passageKey, quotedPassages } from '@/lib/content/cited-passages';
-import { contentEditorPath, isPageType, type PageType } from '@/lib/content/drafts';
+import { agentStateOf, contentEditorPath, isPageType, type PageType } from '@/lib/content/drafts';
 import { IMPACT_PERIODS } from '@/lib/content/impact';
 import { detectPageType, siteTypeOf } from '@/lib/content/page-types';
 import { sanitizeDraftHtml } from '@/lib/content/sanitize-draft-html';
@@ -38,7 +38,7 @@ import {
 const LIST_LIMIT = 100;
 
 const DRAFT_COLUMNS =
-  'id, brand_id, title, status, method, page_type, author, source_url, body_html, action_id, prompt_ids, updated_at, brands!inner(organization_id, site_type, industry, shopping_mode_enabled), actions(action_no)';
+  'id, brand_id, title, status, method, page_type, author, source_url, body_html, action_id, prompt_ids, updated_at, agent_state, agent_state_at, brands!inner(organization_id, site_type, industry, shopping_mode_enabled), actions(action_no)';
 
 interface DraftRow {
   id: string;
@@ -53,6 +53,8 @@ interface DraftRow {
   action_id: string | null;
   prompt_ids: string[] | null;
   updated_at: string;
+  agent_state: string | null;
+  agent_state_at: string | null;
   actions: { action_no: number } | { action_no: number }[] | null;
 }
 
@@ -463,7 +465,9 @@ export async function addContentSourceFor(
  * are numbered as get_content_draft lists them; what the editor can't apply
  * is dropped with the reason. Null outside the organization; 'published' for
  * a draft that is live already; 'open_suggestions' while a person still has
- * the latest batch's suggestions to decide.
+ * the latest batch's suggestions to decide; 'writing' while Start or a
+ * rewrite holds it (its answer, already charged, would be dropped over this
+ * batch).
  */
 export async function suggestContentChangesFor(
   auth: McpAuthContext,
@@ -473,12 +477,14 @@ export async function suggestContentChangesFor(
   | { kept: number; batch_id: string | null; dropped: { index: number; reason: DroppedReason }[] }
   | 'published'
   | 'open_suggestions'
+  | 'writing'
   | null
 > {
   const draft = await draftFor(auth, draftId);
   if (!draft) return null;
   if (draft.status === 'published') return 'published';
   if ((await openSuggestionsOf(draft.id)).length) return 'open_suggestions';
+  if (agentStateOf(draft.agent_state, draft.agent_state_at) === 'writing') return 'writing';
   const passages = draftPassages(draft.body_html);
   // The targets only when a suggestion links: the sources read is the heavy one.
   const linking = suggestions.some((s) => /<a\b/i.test(s.after));
