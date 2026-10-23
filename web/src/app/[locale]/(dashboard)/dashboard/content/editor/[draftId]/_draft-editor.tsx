@@ -77,6 +77,7 @@ import { JsonLd } from '@/lib/content/json-ld-node';
 import { detectPageType } from '@/lib/content/page-types';
 import { BAND_CLASSES, qualityAverage, qualityBand, qualityPhase } from '@/lib/content/quality';
 import { eeat, linksToCheck, trust, trustBlocks } from '@/lib/content/quality-checks';
+import { qualityTodos } from '@/lib/content/quality-todos';
 import { readability } from '@/lib/content/readability';
 import { aiTracesFound, fanoutsToUse, lengthWarns, openRulesForAgent } from '@/lib/content/rules';
 import { saveBlob } from '@/lib/download';
@@ -103,6 +104,7 @@ import { sourceDetail } from './_sources-tab';
 import { HistoryMenu } from './_history-menu';
 import { HtmlBlock, copyToClipboard } from './_html-block';
 import { OwnCopies, ownCopyHtml } from './_own-copies';
+import { NextNudge, useNextNudge } from './_next-nudge';
 import { PageInfoStrip, pageInfoKey } from './_page-info';
 import type { QualityRead } from './_quality-tab';
 import { PageTypeMenu } from './_page-type-menu';
@@ -203,6 +205,7 @@ async function agentBatch(draftId: string, until: number): Promise<DraftSuggesti
 export function DraftEditor({
   draft,
   onAgentStarted,
+  agentFinished = false,
 }: {
   draft: ContentDraft;
   /**
@@ -210,6 +213,8 @@ export function DraftEditor({
    * Rewrite the whole page): the page waits for it.
    */
   onAgentStarted?: (run: 'write' | 'rewrite') => void;
+  /** The editor opens on what the agent just wrote here: the next-step nudge's moment. */
+  agentFinished?: boolean;
 }) {
   const t = useTranslations('contentEditor.editor');
   const autosave = useDraftAutosave(draft.id, draft);
@@ -477,19 +482,33 @@ export function DraftEditor({
     trustScore?.score ?? null,
     readable?.score ?? null,
   ]);
+  const hasAuthors = (authorsRead?.authors.length ?? 0) > 0;
+  // What only the person can do (CE-040), and the nudge to the first of it
+  // when the agent's run ends, after Accept all and on Mark ready.
+  const todos = qualityOn ? qualityTodos({ eeat: eeatScore, author: pageAuthor, hasAuthors }) : [];
   const quality: QualityRead | null = qualityOn
     ? {
         readability: readable,
         eeat: eeatScore,
         trust: trustScore,
         author: pageAuthor,
-        hasAuthors: (authorsRead?.authors.length ?? 0) > 0,
+        hasAuthors,
         brandName,
         siteTrust,
+        todos,
       }
     : null;
   // Quality's Pick author opens the header's menu.
   const [authorMenuOpen, setAuthorMenuOpen] = useState(false);
+  const nudge = useNextNudge(draft.id, todos);
+  const { at: nudgeAt } = nudge;
+  const todosRead = todos.length > 0;
+  const agentNudged = useRef(false);
+  useEffect(() => {
+    if (!agentFinished || !todosRead || agentNudged.current) return;
+    agentNudged.current = true;
+    nudgeAt('agent');
+  }, [agentFinished, todosRead, nudgeAt]);
   const byline = authorsRead
     ? [
         t('author.by', {
@@ -815,6 +834,8 @@ export function DraftEditor({
         }
       }
       setSuggestions(next);
+      // The last open one accepted (Accept all, or one by one): the nudge's moment.
+      if (decision === 'accept' && !next.some((s) => s.status === 'open')) nudgeAt('acceptAll');
       if (decision === 'accept')
         toast.success(t('suggestions.acceptedToast', { count: changed.length }));
       else if (decision === 'reject')
@@ -925,8 +946,11 @@ export function DraftEditor({
           .run();
       }
       setSuggestions((prev) => prev.map((x) => (x.id === s.id ? { ...x, status: to } : x)));
-      if (to === 'accepted') toast.success(t('rewrite.acceptedToast'));
-      else if (to === 'rejected') toast(t('rewrite.rejectedToast'));
+      if (to === 'accepted') {
+        toast.success(t('rewrite.acceptedToast'));
+        // The rewrite is the whole batch: as Accept all.
+        nudgeAt('acceptAll');
+      } else if (to === 'rejected') toast(t('rewrite.rejectedToast'));
       else toast(t('rewrite.undoneToast'));
     } catch (err) {
       console.error('Failed to decide the rewritten page:', err);
@@ -1029,6 +1053,7 @@ export function DraftEditor({
         setBarClosed(false);
         agentBeforeKept.current = false;
         toast.success(fixedMessage(landed.filter((s) => s.status === 'open').length));
+        nudgeAt('agent');
         return;
       }
       if ('error' in result && result.error === 'stopped') {
@@ -1054,6 +1079,7 @@ export function DraftEditor({
       // A new batch: History keeps the page again before its first change.
       agentBeforeKept.current = false;
       toast.success(fixedMessage(result.count));
+      nudgeAt('agent');
     } catch (err) {
       console.error('Failed to run the Content Agent:', err);
       toast.error(t('suggestions.fixErrors.failed'));
@@ -1339,6 +1365,8 @@ export function DraftEditor({
       }
     : undefined;
   const markReady = async () => {
+    // Opened with to-dos open: the nudge names the first; marking goes on.
+    nudgeAt('markReady');
     setMarking(true);
     try {
       // What's waiting goes out first, so the ready draft (and the version
@@ -1691,6 +1719,15 @@ export function DraftEditor({
               </div>
             </div>
             {dragging && <DropOverlay />}
+            {quality && (
+              <NextNudge
+                shown={nudge.shown}
+                quality={quality}
+                onPickAuthor={() => setAuthorMenuOpen(true)}
+                onLater={nudge.later}
+                onAct={nudge.close}
+              />
+            )}
           </div>
           {attachments.ui}
         </div>

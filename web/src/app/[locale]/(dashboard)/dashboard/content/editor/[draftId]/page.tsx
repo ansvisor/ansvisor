@@ -79,14 +79,35 @@ export default function ContentEditorPage() {
       clearTimeout(timer);
     };
   }, [draftId, writing, read]);
+  // The run ended with the page written (not failed, nor stopped from here):
+  // the editor that opens on it nudges the person's next step (Quality spec
+  // §4, CE-040).
+  const [agentFinishedFor, setAgentFinishedFor] = useState<string | null>(null);
+  const [stoppedFor, setStoppedFor] = useState<string | null>(null);
+  const [wasWriting, setWasWriting] = useState(writing);
+  if (writing !== wasWriting) {
+    setWasWriting(writing);
+    if (writing) setStoppedFor(null);
+    else if (current?.draft) {
+      const { id, agentState } = current.draft;
+      setAgentFinishedFor(agentState === 'failed' || stoppedFor === id ? null : id);
+    }
+  }
   // The agent's run ended, or was stopped: read the draft now, not on the next look.
-  const rereadDraft = useCallback(() => {
-    getContentDraft(draftId).then(
-      (draft) => draft && setRead({ id: draftId, draft }),
-      // The next look tries again.
-      () => {},
-    );
-  }, [draftId]);
+  const rereadDraft = useCallback(
+    (stopped?: boolean) => {
+      if (stopped) {
+        setStoppedFor(draftId);
+        setAgentFinishedFor(null);
+      }
+      getContentDraft(draftId).then(
+        (draft) => draft && setRead({ id: draftId, draft }),
+        // The next look tries again.
+        () => {},
+      );
+    },
+    [draftId],
+  );
 
   return (
     <div className="-m-6 flex h-[calc(100vh-4rem)] flex-col md:h-screen">
@@ -108,6 +129,7 @@ export default function ContentEditorPage() {
         <DraftEditor
           key={current.draft.id}
           draft={current.draft}
+          agentFinished={agentFinishedFor === current.draft.id}
           onAgentStarted={(run) =>
             setRead((prev) =>
               prev?.draft

@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import messages from '../../../../../../../../messages/en.json';
 import { eeat, trust, trustBlocks, type LinkCheck } from '@/lib/content/quality-checks';
 import type { ContentAuthor } from '@/lib/content/authors';
+import { qualityTodos } from '@/lib/content/quality-todos';
 import type { Readability } from '@/lib/content/readability';
 
 vi.mock('@/i18n/navigation', () => ({
@@ -16,7 +17,10 @@ vi.mock('@/i18n/navigation', () => ({
 const { QualityTab } = await import('./_quality-tab');
 type QualityRead = import('./_quality-tab').QualityRead;
 
-/** Instructions › Quality (Quality spec §3, CE-039): the scores, their label, what would raise them. */
+/**
+ * Instructions › Quality (Quality spec §3, CE-039): the scores, their label,
+ * the person's to-dos (CE-040) and what would raise them.
+ */
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT =
   true;
@@ -62,14 +66,16 @@ function read(
   author: ContentAuthor | null = ada,
   hasAuthors = true,
 ): QualityRead {
+  const score = eeat({ author });
   return {
     readability,
-    eeat: eeat({ author }),
+    eeat: score,
     trust: null,
     author,
     hasAuthors,
     brandName: 'Acme',
     siteTrust: null,
+    todos: qualityTodos({ eeat: score, author, hasAuthors }),
   };
 }
 
@@ -112,13 +118,14 @@ describe('QualityTab', () => {
 
   it('lists what would raise it, the biggest gain first, each with what to do', async () => {
     await render(result);
-    const rows = [...container.querySelectorAll('li')].map((li) => li.textContent);
+    const suggestions = container.querySelector('[aria-label="What would raise it"]')!;
+    const rows = [...suggestions.querySelectorAll('li')].map((li) => li.textContent);
     expect(rows).toEqual([
       '+9 Readability3 sentences over 35 wordsSplit each into two. Show goes to the first.Show',
       '+5 ReadabilitySentences average 22.4 wordsAim for 15–20 words: shorter sentences read faster, and AI answers quote them whole.',
       '+5 ReadabilityReading level 52 (Flesch Reading Ease)Aim for 60 or more: shorter words and sentences.',
     ]);
-    await act(async () => container.querySelector<HTMLButtonElement>('li button')!.click());
+    await act(async () => suggestions.querySelector<HTMLButtonElement>('li button')!.click());
     expect(onShow).toHaveBeenCalledWith('A very long sentence.');
   });
 
@@ -136,7 +143,7 @@ describe('QualityTab', () => {
   it('says when the page is too short to read, or reads well', async () => {
     await render({ score: null, checks: [], words: 12 });
     expect(container.textContent).toContain('Write a few paragraphs');
-    expect(container.querySelector('li')).toBeNull();
+    expect(container.querySelector('[aria-label="What would raise it"]')).toBeNull();
     await render({
       ...result,
       score: 100,
@@ -145,32 +152,79 @@ describe('QualityTab', () => {
     expect(container.textContent).toContain('Nothing to raise here for now');
   });
 
-  it('asks for a real author when the page is by the team, and opens the menu', async () => {
+  it("lists picking the page's author as a to-do, and opens the menu", async () => {
     await render(read(result, null));
     const scores = container.querySelector('[aria-label="Quality scores"]')!;
     expect(scores.textContent).toContain('E-E-A-T0Needs work');
-    const first = container.querySelector('li')!;
-    expect(first.textContent).toBe(
-      '+60 E-E-A-TThe page is by Acme Team, not a personPick the person who wrote it: a named author with a short bio and profile links shows who stands behind the page.Pick author',
+    const todos = container.querySelector('[aria-label="Your to-dos"]')!;
+    expect(todos.querySelector('h4')!.textContent).toBe(
+      'Your to-dos 2 left · only you can do these',
     );
-    await act(async () => first.querySelector('button')!.click());
+    const [row, profile] = [...todos.querySelectorAll('li')];
+    expect(row.textContent).toBe(
+      "Pick the page's author · To doIt's by Acme Team now: a named person shows who stands behind the page · +60 E-E-A-TPick author",
+    );
+    // The profile waits on the author: listed, with no button yet.
+    expect(profile.textContent).toBe(
+      "Complete the author's profile · To doOnce the page has an author: two sentences on what they know, and a profile link · +40 E-E-A-T",
+    );
+    expect(profile.querySelector('button, a')).toBeNull();
+    await act(async () => row.querySelector('button')!.click());
     expect(onPickAuthor).toHaveBeenCalled();
+    // Not a suggestion: the agent can't pick an author.
+    expect(
+      container.querySelector('[aria-label="What would raise it"]')!.textContent,
+    ).not.toContain('author');
   });
 
-  it("asks to complete the author's profile in Settings › Authors", async () => {
+  it('checks the author off, then asks to complete their profile in Settings › Authors', async () => {
     await render(read(result, { ...ada, bio: null, sameAs: [] }));
-    const row = [...container.querySelectorAll('li')].find((li) =>
-      li.textContent?.includes('Ada Lovelace'),
-    )!;
-    expect(row.textContent).toContain('+40 E-E-A-TAda Lovelace has no short bio or profile links');
-    expect(row.querySelector('a')!.getAttribute('href')).toBe('/dashboard/settings/authors');
+    const todos = container.querySelector('[aria-label="Your to-dos"]')!;
+    expect(todos.querySelector('h4')!.textContent).toContain('1 left');
+    const [byline, profile] = [...todos.querySelectorAll('li')];
+    expect(byline.textContent).toBe("Pick the page's author · DoneBy Ada Lovelace");
+    expect(byline.querySelector('.line-through')).not.toBeNull();
+    expect(byline.querySelector('button, a')).toBeNull();
+    expect(profile.textContent).toContain(
+      "Complete Ada Lovelace's profile · To doAdd them in Settings › Authors: two sentences on what they know, and a LinkedIn or other profile link · +40 E-E-A-T",
+    );
+    expect(profile.querySelector('a')!.textContent).toBe('Edit author');
+    expect(profile.querySelector('a')!.getAttribute('href')).toBe('/dashboard/settings/authors');
   });
 
   it('sends to Settings › Authors when the workspace has no author yet', async () => {
     await render(read(result, null, false));
-    const row = container.querySelector('li')!;
+    const row = container.querySelector('[aria-label="Your to-dos"] li')!;
+    expect(row.textContent).toContain('Add an author for the page');
     expect(row.querySelector('a')!.textContent).toBe('Add author');
     expect(row.querySelector('a')!.getAttribute('href')).toBe('/dashboard/settings/authors');
+  });
+
+  it('says all done when every to-do is, and nothing is left to raise', async () => {
+    await render({
+      ...read(result),
+      readability: {
+        ...result,
+        score: 100,
+        checks: result.checks.map((c) => ({ ...c, points: c.max })),
+      },
+    });
+    const todos = container.querySelector('[aria-label="Your to-dos"]')!;
+    expect(todos.querySelector('h4')!.textContent).toBe('Your to-dos All done');
+    expect(container.textContent).toContain('Nothing to raise here for now');
+  });
+
+  it('says nothing is left to raise only once the to-dos are done', async () => {
+    await render({
+      ...read(result, null),
+      readability: {
+        ...result,
+        score: 100,
+        checks: result.checks.map((c) => ({ ...c, points: c.max })),
+      },
+    });
+    expect(container.textContent).not.toContain('Nothing to raise');
+    expect(container.querySelector('[aria-label="What would raise it"]')).toBeNull();
   });
 
   it('says only that a short page is too short, with nothing else to raise', async () => {
@@ -208,7 +262,8 @@ describe('QualityTab', () => {
     const scores = container.querySelector('[aria-label="Quality scores"]')!;
     // Figures 0 of 30, fresh 0 of 7, links 1.5 of 3: 4 of 100.
     expect(scores.textContent).toContain('Trust4Needs work');
-    const rows = [...container.querySelectorAll('li')].map((li) => li.textContent);
+    const suggestions = container.querySelector('[aria-label="What would raise it"]')!;
+    const rows = [...suggestions.querySelectorAll('li')].map((li) => li.textContent);
     expect(rows).toContainEqual(expect.stringContaining('1 sentence with a figure has no source'));
     expect(rows).toContainEqual(
       expect.stringContaining('1 of 1 dated sources is over 24 months old'),
@@ -216,7 +271,7 @@ describe('QualityTab', () => {
     expect(rows).toContainEqual(
       expect.stringContaining("1 link doesn't workFix or remove it: https://gone.example/Show"),
     );
-    const figure = [...container.querySelectorAll('li')].find((li) =>
+    const figure = [...suggestions.querySelectorAll('li')].find((li) =>
       li.textContent?.includes('figure'),
     )!;
     await act(async () => figure.querySelector('button')!.click());

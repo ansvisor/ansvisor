@@ -73,7 +73,7 @@ export function AgentWriting({
   /** Rewrite the page to these rules, as this tab started it. */
   rewrite?: boolean;
   /** The run ended (stopped, done or failed): the page reads the draft again. */
-  onRunEnded?: () => void;
+  onRunEnded?: (stopped?: boolean) => void;
 }) {
   const t = useTranslations('contentEditor.editor');
   const seconds = elapsedSeconds(since, useNow({ updateInterval: 1000 }));
@@ -103,7 +103,7 @@ export function AgentWriting({
     } else if (result.stopped) {
       // The page opens again as it was: the server let go of the draft.
       toast(t('agentCard.stopped'));
-      onRunEnded?.();
+      onRunEnded?.(true);
     } else {
       setStopping(false);
     }

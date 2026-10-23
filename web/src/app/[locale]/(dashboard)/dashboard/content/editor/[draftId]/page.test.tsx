@@ -2335,6 +2335,242 @@ describe('the side panel', () => {
     });
   });
 
+  describe('Your to-dos: the next-step nudge (CE-040)', () => {
+    const ada = {
+      id: 'a1',
+      name: 'Ada Lovelace',
+      title: null,
+      bio: null,
+      photoUrl: null,
+      sameAs: [],
+      userId: null,
+      createdBy: null,
+      defaultFor: [],
+      pages: null,
+    };
+    beforeEach(() => {
+      sessionStorage.clear();
+      process.env.NEXT_PUBLIC_CONTENT_QUALITY_PHASE = '1';
+      getContentAuthors.mockResolvedValue({
+        authors: [ada],
+        brands: [{ id: 'b1', name: 'Acme' }],
+        me: { id: 'u1', role: 'analyst' },
+      });
+    });
+    afterEach(() => {
+      delete process.env.NEXT_PUBLIC_CONTENT_QUALITY_PHASE;
+    });
+    const nudge = () => container.querySelector('[aria-label="Your next step"]');
+
+    it('names the first to-do once the agent has written the page, and opens the author menu', async () => {
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+      try {
+        getContentDraft.mockResolvedValue(
+          draft({ status: 'draft', agentState: 'writing', agentSince: new Date().toISOString() }),
+        );
+        await renderPage();
+        expect(nudge()).toBeNull();
+        getContentDraft.mockResolvedValue(
+          draft({ status: 'in_review', author: 'agent', authorId: null }),
+        );
+        await act(async () => void (await vi.advanceTimersByTimeAsync(5_000)));
+        await act(async () => {});
+      } finally {
+        vi.useRealTimers();
+      }
+      expect(nudge()!.textContent).toBe(
+        "Next for you: pick the page's author · 1 of 2Pick nowLater",
+      );
+      await act(async () => button('Pick now')!.click());
+      expect(nudge()).toBeNull();
+      expect(document.querySelectorAll('[role="menuitemradio"]').length).toBe(2);
+    });
+
+    it('stays away when the agent was stopped from the wait screen', async () => {
+      getContentDraft.mockResolvedValue(
+        draft({ status: 'draft', agentState: 'writing', agentSince: new Date().toISOString() }),
+      );
+      readAgentRun.mockResolvedValue({
+        id: 'r1',
+        kind: 'write',
+        steps: [{ key: 'write_page', count: null }],
+        step: 0,
+        startedAt: new Date().toISOString(),
+        finishedAt: null,
+        stoppedAt: null,
+        outcome: null,
+      });
+      await renderPage();
+      await act(async () => {});
+      getContentDraft.mockResolvedValue(draft({ authorId: null }));
+      await act(async () => button('Stop')!.click());
+      await act(async () => {});
+      expect(container.querySelector('.ProseMirror')).not.toBeNull();
+      expect(nudge()).toBeNull();
+    });
+
+    it('names it when Run Agent leaves its batch', async () => {
+      getContentDraft.mockResolvedValue(
+        draft({
+          authorId: null,
+          pageType: 'blog_post',
+          bodyHtml: '<h1>Pipeline forecasting</h1><p>We delve into how teams forecast.</p>',
+        }),
+      );
+      getDraftSuggestions.mockResolvedValueOnce([]).mockResolvedValueOnce([
+        {
+          id: 'n1',
+          batchId: 'b2',
+          actionId: null,
+          actionNo: null,
+          kind: 'replace',
+          blockText: 'We delve into how teams forecast.',
+          beforeText: 'delve into',
+          afterText: 'look at',
+          reason: 'remove an AI trace (rule)',
+          ruleKeys: ['aiTraces'],
+          status: 'open',
+        },
+      ]);
+      fixDraftRules.mockResolvedValue({ count: 1 });
+      window.innerWidth = 1024;
+      await renderPage();
+      await act(async () =>
+        container.querySelector<HTMLButtonElement>('header button[aria-label^="Rules "]')!.click(),
+      );
+      await act(async () =>
+        [...panel()!.querySelectorAll<HTMLButtonElement>('button')]
+          .find((b) => b.textContent === 'Run Agent')!
+          .click(),
+      );
+      await act(async () => {});
+      expect(fixDraftRules).toHaveBeenCalled();
+      expect(nudge()!.textContent).toContain("Next for you: pick the page's author · 1 of 2");
+    });
+
+    it("doesn't show when Accept all can't be saved", async () => {
+      getContentDraft.mockResolvedValue(
+        draft({
+          authorId: null,
+          bodyHtml: '<h1>Pipeline forecasting</h1><p>We delve into how teams forecast.</p>',
+        }),
+      );
+      getDraftSuggestions.mockResolvedValue([
+        {
+          id: 'n1',
+          batchId: 'b2',
+          actionId: null,
+          actionNo: null,
+          kind: 'replace',
+          blockText: 'We delve into how teams forecast.',
+          beforeText: 'delve into',
+          afterText: 'look at',
+          reason: 'remove an AI trace (rule)',
+          ruleKeys: ['aiTraces'],
+          status: 'open',
+        },
+      ]);
+      decideDraftSuggestions.mockRejectedValue(new Error('offline'));
+      await renderPage();
+      await act(async () =>
+        [...container.querySelectorAll<HTMLButtonElement>('button')]
+          .find((b) => b.textContent === 'Accept all')!
+          .click(),
+      );
+      await act(async () => {});
+      expect(toast.error).toHaveBeenCalled();
+      expect(nudge()).toBeNull();
+    });
+
+    it("doesn't show on opening a draft, nor after Accept all with nothing left to do", async () => {
+      getContentDraft.mockResolvedValue(
+        draft({
+          authorId: 'a1',
+          bodyHtml: '<h1>Pipeline forecasting</h1><p>We delve into how teams forecast.</p>',
+        }),
+      );
+      getContentAuthors.mockResolvedValue({
+        authors: [{ ...ada, bio: 'Writes about forecasting.', sameAs: ['https://x.com/ada'] }],
+        brands: [{ id: 'b1', name: 'Acme' }],
+        me: { id: 'u1', role: 'analyst' },
+      });
+      getDraftSuggestions.mockResolvedValue([
+        {
+          id: 'n1',
+          batchId: 'b2',
+          actionId: null,
+          actionNo: null,
+          kind: 'replace',
+          blockText: 'We delve into how teams forecast.',
+          beforeText: 'delve into',
+          afterText: 'look at',
+          reason: 'remove an AI trace (rule)',
+          ruleKeys: ['aiTraces'],
+          status: 'open',
+        },
+      ]);
+      await renderPage();
+      expect(nudge()).toBeNull();
+      const accept = [...container.querySelectorAll<HTMLButtonElement>('button')].find(
+        (b) => b.textContent === 'Accept all',
+      )!;
+      await act(async () => accept.click());
+      await act(async () => {});
+      expect(decideDraftSuggestions).toHaveBeenCalledWith(['n1'], 'accepted');
+      expect(nudge()).toBeNull();
+    });
+
+    it('names it after Accept all, and on Mark ready while marking goes on; Later hides it', async () => {
+      getContentDraft.mockResolvedValue(
+        draft({
+          authorId: 'a1',
+          bodyHtml: '<h1>Pipeline forecasting</h1><p>We delve into how teams forecast.</p>',
+        }),
+      );
+      getDraftSuggestions.mockResolvedValue([
+        {
+          id: 'n1',
+          batchId: 'b2',
+          actionId: null,
+          actionNo: null,
+          kind: 'replace',
+          blockText: 'We delve into how teams forecast.',
+          beforeText: 'delve into',
+          afterText: 'look at',
+          reason: 'remove an AI trace (rule)',
+          ruleKeys: ['aiTraces'],
+          status: 'open',
+        },
+      ]);
+      markContentDraftReady.mockResolvedValue({ status: 'ready', tasksDone: 0 });
+      await renderPage();
+      const accept = [...container.querySelectorAll<HTMLButtonElement>('button')].find(
+        (b) => b.textContent === 'Accept all',
+      )!;
+      await act(async () => accept.click());
+      await act(async () => {});
+      expect(nudge()!.textContent).toContain(
+        "Next for you: complete Ada Lovelace's profile · 1 of 1",
+      );
+      await act(async () => button('Later')!.click());
+      expect(nudge()).toBeNull();
+
+      // Later holds for the session: Mark ready marks, with no nudge.
+      await act(async () => button('Mark ready')!.click());
+      expect(markContentDraftReady).toHaveBeenCalledWith('d1');
+      expect(nudge()).toBeNull();
+    });
+
+    it('names it on Mark ready with a to-do open', async () => {
+      getContentDraft.mockResolvedValue(draft({ authorId: null }));
+      markContentDraftReady.mockResolvedValue({ status: 'ready', tasksDone: 0 });
+      await renderPage();
+      await act(async () => button('Mark ready')!.click());
+      expect(markContentDraftReady).toHaveBeenCalledWith('d1');
+      expect(nudge()!.textContent).toContain("Next for you: pick the page's author");
+    });
+  });
+
   describe('Run Agent: fix open rules', () => {
     const traced = draft({
       pageType: 'blog_post',

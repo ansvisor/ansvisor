@@ -4166,6 +4166,50 @@
         "pickAuthor": "Pick author",
         "addAuthor": "Add author",
         "editAuthor": "Edit author",
+        "todos": {
+          "title": "Your to-dos",
+          "left": "{count, plural, =0 {All done} other {# left · only you can do these}}",
+          "done": "Done",
+          "open": "To do",
+          "byline": {
+            "title": {
+              "pickAuthor": "Pick the page's author",
+              "addAuthor": "Add an author for the page"
+            },
+            "next": {
+              "pickAuthor": "pick the page's author",
+              "addAuthor": "add an author for the page"
+            },
+            "detail": {
+              "pickAuthor": "It's by {byline} now: a named person shows who stands behind the page",
+              "addAuthor": "Add the people who write for you in Settings › Authors. Real people only: the agent can't add them"
+            },
+            "done": "By {name}"
+          },
+          "authorProfile": {
+            "title": "Complete {name}'s profile",
+            "titleNoAuthor": "Complete the author's profile",
+            "next": "complete {name}'s profile",
+            "nextNoAuthor": "complete the author's profile",
+            "detail": {
+              "noAuthor": "Once the page has an author: two sentences on what they know, and a profile link",
+              "both": "Add them in Settings › Authors: two sentences on what they know, and a LinkedIn or other profile link",
+              "bio": "Add a short bio in Settings › Authors: two sentences on what they know",
+              "links": "Add a LinkedIn or other profile link in Settings › Authors"
+            },
+            "done": "Short bio and profile links are in"
+          }
+        },
+        "nudge": {
+          "label": "Your next step",
+          "text": "Next for you: <b>{todo}</b> · {position} of {count}",
+          "act": {
+            "pickAuthor": "Pick now",
+            "addAuthor": "Add now",
+            "editAuthor": "Edit now"
+          },
+          "later": "Later"
+        },
         "suggestionsLabel": "What would raise it",
         "nothingToRaise": "Nothing to raise here for now: every live check has its points.",
         "gain": "+{gain, number} {score}",
@@ -4190,22 +4234,6 @@
           "noBrokenLinks": {
             "line": "{count, plural, one {# link doesn't} other {# links don't}} work",
             "detail": "{count, plural, one {Fix or remove it: {url}} other {Fix or remove them, starting with {url}}}"
-          },
-          "byline": {
-            "line": "The page is by {byline}, not a person",
-            "detail": "Pick the person who wrote it: a named author with a short bio and profile links shows who stands behind the page."
-          },
-          "authorProfile": {
-            "line": {
-              "both": "{name} has no short bio or profile links",
-              "bio": "{name} has no short bio",
-              "links": "{name} has no profile links"
-            },
-            "detail": {
-              "both": "Add them in Settings › Authors: two sentences on what they know, and a LinkedIn or other profile link.",
-              "bio": "Add a short bio in Settings › Authors: two sentences on what they know.",
-              "links": "Add a LinkedIn or other profile link in Settings › Authors."
-            }
           },
           "avgSentence": {
             "line": "Sentences average {words, number} words",
