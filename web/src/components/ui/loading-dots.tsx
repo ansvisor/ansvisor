@@ -26,7 +26,8 @@ export function LoadingDots({
         <span
           key={i}
           className={cn(
-            'animate-agent-dot rounded-full bg-current opacity-25 motion-reduce:animate-none',
+            // Still with reduced motion, at an opacity that stays visible on muted text.
+            'animate-agent-dot rounded-full bg-current opacity-25 motion-reduce:animate-none motion-reduce:opacity-60',
             size === 'md' ? 'h-1.5 w-1.5' : 'h-1 w-1',
           )}
           style={{ animationDelay: `${i * 0.2}s` }}

@@ -437,9 +437,10 @@ export async function startDraftWriting({ draftId, brandId, input, rewrite = fal
       });
     }
 
-    // Written before the answer, so the editor reads its steps, and Stop finds it, at once.
-    const run = await startWritingRun(draft, input, rewrite);
+    // Written before the answer, so the editor reads its steps, and Stop finds
+    // it, at once; with its claim, the one a Stop on it lets go of.
     const held = { ...draft, agent_state: 'writing', agent_state_at: claimedAt };
+    const run = await startWritingRun(held, input, rewrite);
     runDraftWriting({ draft: held, brand, model, input, budget, rewrite, run }).catch((err) =>
       logger.error({ err, draftId }, '[content-writer] run failed'),
     );
@@ -631,11 +632,17 @@ export async function runDraftWriting({
   }
 }
 
-/** A writing run's steps by what it does: a rewrite, a new page, or suggestions on a live one. */
+/**
+ * A writing run's steps by what it does: a rewrite, a new page, or
+ * suggestions on a live one, with the claim it holds on the draft: a Start
+ * on a live page runs as 'fix', so its kind alone can't tell a Stop that it
+ * holds one.
+ */
 function startWritingRun(draft, input, rewrite) {
   const { promptIds, fanouts, pages, queries } = input.sources;
   return startRun({
     draftId: draft.id,
+    claimedAt: draft.agent_state === 'writing' ? (draft.agent_state_at ?? null) : null,
     kind: rewrite ? 'rewrite' : draft.method === 'create' ? 'write' : 'fix',
     counts: {
       rules: input.rules.length,

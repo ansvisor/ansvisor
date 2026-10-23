@@ -112,7 +112,7 @@ export function QualityTab({
         <p className="text-xs text-muted-foreground">{t('estimate')}</p>
         {readability?.score === null && (
           <p className="rounded-xl border border-dashed px-3 py-2.5 text-xs text-muted-foreground">
-            {t('tooShort')}
+            {t(readability?.unscored === 'language' ? 'notThisLanguage' : 'tooShort')}
           </p>
         )}
       </section>
