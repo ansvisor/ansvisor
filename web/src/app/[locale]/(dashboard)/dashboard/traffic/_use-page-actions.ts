@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
+import { useFailureToast } from '@/hooks/use-failure-toast';
 import { toast } from 'sonner';
 import { useRouter } from '@/i18n/navigation';
 import { getAuditQuota, runAuditsBulk, type AuditQuota } from '@/lib/actions/audits';
@@ -28,6 +29,7 @@ const SUGGEST_CALLS = { start: generateOpportunitiesOnDemand, getStatus: getGene
  */
 export function usePageActions(brandId: string, dateWindow: TrafficDateWindow) {
   const t = useTranslations('traffic.pageList.actions');
+  const failureToast = useFailureToast();
   const router = useRouter();
   const [sending, setSending] = useState(false);
   const [auditing, setAuditing] = useState(false);
@@ -168,6 +170,11 @@ export function usePageActions(brandId: string, dateWindow: TrafficDateWindow) {
             });
             break;
           default:
+            // A reason the API gave, in plain words (BUG-001); else what went wrong.
+            if (outcome.failure && outcome.failure !== 'failed') {
+              failureToast(outcome.failure, { id: toastId });
+              break;
+            }
             toast.error(t('suggestFailed'), {
               id: toastId,
               description: outcome.message ?? undefined,
@@ -177,7 +184,7 @@ export function usePageActions(brandId: string, dateWindow: TrafficDateWindow) {
         setSuggesting(null);
       }
     },
-    [brandId, router, t],
+    [brandId, failureToast, router, t],
   );
 
   return { send, sending, auditMany, auditing, quota, suggestContent, suggesting };

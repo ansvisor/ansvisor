@@ -20,11 +20,19 @@
 import supabaseAdmin from '../config/supabase.js';
 import { getOrgIdForUser } from './plan-guard.js';
 
-function accessError(message, status) {
+function accessError(message, status, code) {
   const err = new Error(message);
   err.status = status;
+  if (code) err.code = code;
   return err;
 }
+
+/**
+ * A resource of another organization: said in plain words, as a toast or an
+ * MCP client shows it. 403, never 401, which means a bad or expired session.
+ */
+export const NOT_IN_WORKSPACE = "This brand isn't in your workspace";
+const notInWorkspace = () => accessError(NOT_IN_WORKSPACE, 403, 'not_in_workspace');
 
 /**
  * Assert that `brandId` belongs to the caller's organization.
@@ -43,7 +51,7 @@ export async function assertBrandAccess(brandId, userId) {
 
   const orgId = await getOrgIdForUser(userId);
   if (orgId !== brand.organization_id) {
-    throw accessError('Unauthorized', 403);
+    throw notInWorkspace();
   }
 
   return { brand, orgId };
@@ -76,7 +84,7 @@ export async function assertOpportunitiesAccess(ids, userId) {
   const orgByBrand = new Map((brands || []).map((b) => [b.id, b.organization_id]));
   const allOwned = opps.every((o) => orgByBrand.get(o.brand_id) === userOrg);
   if (!allOwned) {
-    throw accessError('Unauthorized', 403);
+    throw notInWorkspace();
   }
 
   return opps;
@@ -122,7 +130,7 @@ export async function assertPromptAccess(promptIds, userId) {
 
   const allOwned = rows.every((r) => r.prompt_sets?.brands?.organization_id === userOrg);
   if (!allOwned) {
-    throw accessError('Unauthorized', 403);
+    throw notInWorkspace();
   }
 
   return rows;

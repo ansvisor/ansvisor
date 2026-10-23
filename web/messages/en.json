@@ -1,4 +1,17 @@
 {
+  "apiFailure": {
+    "session": "Your session expired. Sign in again.",
+    "workspace": "This brand isn't in your workspace. Switch to one of your brands.",
+    "not_found": "This no longer exists. Reload the page and start again.",
+    "plan": "Your plan doesn't include this. Upgrade to use it.",
+    "limit": "You've used this month's allowance. Upgrade, or wait until it resets.",
+    "busy": "Too many requests. Wait a minute and try again.",
+    "failed": "Something went wrong. Try again.",
+    "signIn": "Sign in",
+    "yourBrands": "Your brands",
+    "reload": "Reload",
+    "upgrade": "Upgrade"
+  },
   "common": {
     "loading": "Loading...",
     "error": "Something went wrong.",
@@ -4343,7 +4356,7 @@
       "dismissAllConfirm": "{count, plural, one {This will dismiss # opportunity.} other {This will dismiss # opportunities.}} This can't be undone.",
       "deleteAll": "Delete",
       "deleteAllTitle": "Delete opportunities?",
-      "deleteAllConfirm": "{count, plural, one {This permanently deletes # opportunity.} other {This permanently deletes # opportunities.}} Dismissing instead keeps them out of your way without removing them.",
+      "deleteAllConfirm": "{count, plural, one {This permanently deletes # opportunity.} other {This permanently deletes # opportunities.}} It doesn't give back this month's opportunity allowance. Dismissing instead keeps them out of your way without removing them.",
       "deleteAllBriefWarning": "{count, plural, one {# of them has a generated brief, which is deleted too and does not return your monthly brief allowance.} other {# of them have generated briefs, which are deleted too and do not return your monthly brief allowance.}}",
       "deletedToast": "{count, plural, one {Deleted # opportunity} other {Deleted # opportunities}}"
     },

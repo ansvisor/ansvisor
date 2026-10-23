@@ -3,18 +3,31 @@
 import { createClient } from '@/lib/supabase/server';
 import type { ContentBrief, ContentOpportunity, OpportunityBasket, WebhookConfig } from '@/types';
 import { API_BASE_URL } from '@/config/api';
+import { apiFailure, type ApiFailure } from '@/lib/api-failure';
 import type { ContentUsage } from '@/lib/content-usage';
 
 const AEO_SERVER_URL = API_BASE_URL;
 
 async function getSession() {
+  const session = await sessionOrNull();
+  if (!session) throw new Error('Not authenticated');
+  return session;
+}
+
+async function sessionOrNull() {
   const supabase = await createClient();
   const {
     data: { session },
   } = await supabase.auth.getSession();
-  if (!session) throw new Error('Not authenticated');
   return session;
 }
+
+/**
+ * No session, for the calls whose errors come back as values: the toast then
+ * offers Sign in (BUG-001). Thrown, the reason wouldn't reach the browser, as
+ * Next.js hides a server action's error message in production.
+ */
+const NO_SESSION = { ok: false as const, error: 'Not authenticated', failure: 'session' as const };
 
 /** What a "+ New" request asks for (CONTENT-003). */
 export interface OnDemandRequest {
@@ -31,13 +44,21 @@ export interface OnDemandRequest {
 
 export type OnDemandResult =
   | { ok: true; jobId: string; count: number }
-  | { ok: false; error: string; quotaExhausted?: boolean; periodEnd?: string | null };
+  | {
+      ok: false;
+      error: string;
+      /** Why, for the toast to say in plain words (BUG-001). */
+      failure: ApiFailure;
+      quotaExhausted?: boolean;
+      periodEnd?: string | null;
+    };
 
 /** Starts generating opportunities now ("+ New"); errors come back as values. */
 export async function generateOpportunitiesOnDemand(
   request: OnDemandRequest,
 ): Promise<OnDemandResult> {
-  const session = await getSession();
+  const session = await sessionOrNull();
+  if (!session) return NO_SESSION;
 
   const res = await fetch(`${AEO_SERVER_URL}/api/content/opportunities/generate`, {
     method: 'POST',
@@ -53,6 +74,7 @@ export async function generateOpportunitiesOnDemand(
     return {
       ok: false,
       error: body.message || body.error || `Server error: ${res.status}`,
+      failure: apiFailure(res.status, body),
       quotaExhausted: body.error === 'quota_exhausted',
       periodEnd: body.periodEnd ?? null,
     };
@@ -623,7 +645,13 @@ export async function saveWebhookConfig(
 
 export type AlternativeResult =
   | { ok: true; jobId: string }
-  | { ok: false; error: string; quotaExhausted?: boolean; noCluster?: boolean };
+  | {
+      ok: false;
+      error: string;
+      failure: ApiFailure;
+      quotaExhausted?: boolean;
+      noCluster?: boolean;
+    };
 
 /**
  * "Another angle" (CONTENT-006): starts generating one more opportunity for
@@ -633,7 +661,8 @@ export async function suggestAlternative(
   id: string,
   { direction, idempotencyKey }: { direction?: string | null; idempotencyKey: string },
 ): Promise<AlternativeResult> {
-  const session = await getSession();
+  const session = await sessionOrNull();
+  if (!session) return NO_SESSION;
 
   const res = await fetch(`${AEO_SERVER_URL}/api/content/${id}/alternative`, {
     method: 'POST',
@@ -649,6 +678,7 @@ export async function suggestAlternative(
     return {
       ok: false,
       error: body.message || body.error || `Server error: ${res.status}`,
+      failure: apiFailure(res.status, body),
       quotaExhausted: body.error === 'quota_exhausted',
       noCluster: body.error === 'no_cluster',
     };
@@ -659,7 +689,7 @@ export async function suggestAlternative(
 export type PromptSuggestionResult =
   | { ok: true; jobId: string }
   | { ok: true; existingId: string }
-  | { ok: false; error: string; quotaExhausted?: boolean };
+  | { ok: false; error: string; failure: ApiFailure; quotaExhausted?: boolean };
 
 /**
  * "Suggest content" from the prompts table (PROMPT-006): one content
@@ -670,7 +700,8 @@ export async function suggestContentForPrompt(
   promptId: string,
   idempotencyKey: string,
 ): Promise<PromptSuggestionResult> {
-  const session = await getSession();
+  const session = await sessionOrNull();
+  if (!session) return NO_SESSION;
 
   const res = await fetch(`${AEO_SERVER_URL}/api/content/prompts/${promptId}/suggest`, {
     method: 'POST',
@@ -686,6 +717,7 @@ export async function suggestContentForPrompt(
     return {
       ok: false,
       error: body.message || body.error || `Server error: ${res.status}`,
+      failure: apiFailure(res.status, body),
       quotaExhausted: body.error === 'quota_exhausted',
     };
   }
