@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import messages from '../../../messages/en.json';
 import { RoleProvider, type TeamRole } from '@/components/providers/role-provider';
 import type { AiUsage, UsageLimits } from '@/lib/billing/ai-usage';
-import { readAiUsage, readUsageLimits } from '@/lib/billing/ai-usage-client';
+import { readAiUsage, readDraftAiUsage, readUsageLimits } from '@/lib/billing/ai-usage-client';
 
 /**
  * The header meter (AI usage spec §3.1, §4): the share of the month's AI
@@ -63,6 +63,7 @@ vi.mock('sonner', () => ({ toast }));
 vi.mock('@/lib/billing/ai-usage-client', () => ({
   readAiUsage: vi.fn(),
   readUsageLimits: vi.fn(),
+  readDraftAiUsage: vi.fn(),
 }));
 
 const { AiUsageProvider, AI_USAGE_STALE_MS } =
@@ -285,6 +286,48 @@ describe('AiUsageMeter', () => {
     await act(async () => reads[2]({ ...limits, auditPages: { used: 44, limit: 500 } }));
     await act(async () => reads[1]({ ...limits, auditPages: { used: 43, limit: 500 } }));
     expect(popup()!.textContent).toContain('44 of 500');
+  });
+});
+
+describe('AiUsageMeter in the Content Editor', () => {
+  const page = () =>
+    [...popup()!.querySelectorAll('p')].find((p) => p.textContent?.startsWith('This page'));
+
+  it('is the header’s button height, the percent alone narrower than 1280px, named on hover', async () => {
+    await render('admin', <AiUsageMeter compact draftId="d1" />);
+    expect(trigger()!.className).toContain('h-7');
+    const [label, bar] = trigger()!.querySelectorAll('span');
+    expect(label.className).toContain('hidden xl:inline');
+    expect(bar.className).toContain('hidden xl:block');
+    expect(trigger()!.title).toBe('AI 21% used this month');
+  });
+
+  it('adds the page’s share of the month, read on each opening', async () => {
+    let answer: (value: number | null) => void = () => {};
+    vi.mocked(readDraftAiUsage).mockReturnValue(new Promise((resolve) => (answer = resolve)));
+    await render('admin', <AiUsageMeter compact draftId="d1" />);
+    await open();
+    expect(readDraftAiUsage).toHaveBeenCalledWith('d1');
+    expect(page()!.textContent).toBe('This page this monthLoading...');
+    await act(async () => answer(3.7));
+    expect(page()!.textContent).toBe('This page this month3%');
+
+    // A sliver reads as under 1%; one it can't read is left out.
+    await act(async () => trigger()!.click());
+    vi.mocked(readDraftAiUsage).mockResolvedValue(0.1);
+    await open();
+    expect(page()!.textContent).toBe('This page this month<1%');
+    await act(async () => trigger()!.click());
+    vi.mocked(readDraftAiUsage).mockResolvedValue(null);
+    await open();
+    expect(page()).toBeUndefined();
+  });
+
+  it('has no page line outside the editor', async () => {
+    await render();
+    await open();
+    expect(page()).toBeUndefined();
+    expect(readDraftAiUsage).not.toHaveBeenCalled();
   });
 });
 

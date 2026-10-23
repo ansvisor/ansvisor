@@ -27,6 +27,7 @@
     "popover": {
       "title": "AI usage this month · {plan} plan",
       "titleNoPlan": "AI usage this month",
+      "page": "This page this month",
       "shared": "Shared by every seat · resets {date}",
       "sharedNoDate": "Shared by every seat",
       "exhausted": "Used up. AI features stop until {date}; Agent Chat on your own AI key keeps working.",
@@ -3809,6 +3810,8 @@
         "decideFirst": "{count, plural, one {Review the open suggestion first, then run the agent.} other {Review the open suggestions first, then run the agent.}}",
         "citedLoading": "Reading which passages AI quotes, so the agent leaves them as they are…",
         "agentBusy": "Content Agent is already working on this page. Wait for it to finish.",
+        "aiUsedUp": "This month's AI usage is used up. It resets on {date}.",
+        "aiUsedUpNoDate": "This month's AI usage is used up until it resets.",
         "fixErrors": {
           "ai_budget": "This month's AI usage is spent. Upgrade for more, or try again next month.",
           "no_subscription": "Content Agent needs an active subscription. Choose a plan in Settings › Billing.",

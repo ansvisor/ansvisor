@@ -23,6 +23,9 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { LoadingDots } from '@/components/ui/loading-dots';
+import { AiUsageBanner } from '@/components/ai-usage/ai-usage-banner';
+import { AiUsageMeter } from '@/components/ai-usage/ai-usage-meter';
+import { useAiUsage } from '@/components/providers/ai-usage-provider';
 import { PLATFORM_LABELS } from '@/config/platform-labels';
 import { DraftMethodBadge, DraftStatusBadge } from '@/components/content/draft-badges';
 import {
@@ -107,7 +110,9 @@ import {
   openRulesForAgent,
   rewriteAdvice,
 } from '@/lib/content/rules';
+import { aiUsageTone } from '@/lib/billing/ai-usage';
 import { saveBlob } from '@/lib/download';
+import { formatMonthDay } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { useBrandStore } from '@/stores/use-brand-store';
 import { AgentCard } from './_agent-card';
@@ -1286,17 +1291,34 @@ export function DraftEditor({
   }, []);
   // One agent run at a time from this page: the others wait for it.
   const agentBusy = fixing || starting || rewriting || briefRebuilding;
+  // The month's AI usage used up: each agent button says so before anything
+  // else, and runs nothing (AI usage spec §4). A run ending reads the usage
+  // again, so the header meter shows what it used.
+  const { usage: aiUsage, refresh: refreshAiUsage } = useAiUsage();
+  const aiUsedUp =
+    aiUsage && aiUsageTone(aiUsage) === 'exhausted'
+      ? aiUsage.periodEnd
+        ? t('suggestions.aiUsedUp', { date: formatMonthDay(aiUsage.periodEnd) })
+        : t('suggestions.aiUsedUpNoDate')
+      : null;
+  const wasBusy = useRef(false);
+  useEffect(() => {
+    if (wasBusy.current && !agentBusy) refreshAiUsage();
+    wasBusy.current = agentBusy;
+  }, [agentBusy, refreshAiUsage]);
   const agentFix: AgentFix = {
     run: (only) => void fixRules(only),
     running: fixing,
     blocked:
-      openSuggestions > 0
-        ? t('suggestions.decideFirst', { count: openSuggestions })
-        : !citedRead
-          ? t('suggestions.citedLoading')
-          : agentBusy && !fixing
-            ? t('suggestions.agentBusy')
-            : null,
+      aiUsedUp && !fixing
+        ? aiUsedUp
+        : openSuggestions > 0
+          ? t('suggestions.decideFirst', { count: openSuggestions })
+          : !citedRead
+            ? t('suggestions.citedLoading')
+            : agentBusy && !fixing
+              ? t('suggestions.agentBusy')
+              : null,
   };
   // The card's Run Agent says why it won't run, as the Rules card does: also
   // when the only rules left open are ones the agent doesn't fix (one H1).
@@ -1473,11 +1495,13 @@ export function DraftEditor({
         run: () => void startAgent(),
         running: starting,
         blocked:
-          openSuggestions > 0
-            ? t('suggestions.decideFirst', { count: openSuggestions })
-            : agentBusy && !starting
-              ? t('suggestions.agentBusy')
-              : null,
+          aiUsedUp && !starting
+            ? aiUsedUp
+            : openSuggestions > 0
+              ? t('suggestions.decideFirst', { count: openSuggestions })
+              : agentBusy && !starting
+                ? t('suggestions.agentBusy')
+                : null,
       }
     : undefined;
 
@@ -1541,13 +1565,15 @@ export function DraftEditor({
         run: () => void rewritePage(),
         running: rewriting,
         blocked:
-          openSuggestions > 0
-            ? t('suggestions.decideFirst', { count: openSuggestions })
-            : !citedRead
-              ? t('suggestions.citedLoading')
-              : agentBusy && !rewriting
-                ? t('suggestions.agentBusy')
-                : null,
+          aiUsedUp && !rewriting
+            ? aiUsedUp
+            : openSuggestions > 0
+              ? t('suggestions.decideFirst', { count: openSuggestions })
+              : !citedRead
+                ? t('suggestions.citedLoading')
+                : agentBusy && !rewriting
+                  ? t('suggestions.agentBusy')
+                  : null,
       }
     : undefined;
   // Before you publish (CE-041) opens on Mark ready once Quality is live,
@@ -1681,7 +1707,7 @@ export function DraftEditor({
   const nextBlocked = (action: NextAction): string | null => {
     switch (action) {
       case 'buildBrief':
-        return agentBusy ? t('suggestions.agentBusy') : null;
+        return aiUsedUp ?? (agentBusy ? t('suggestions.agentBusy') : null);
       case 'writeWithAgent':
         return agentRewrite?.blocked ?? null;
       case 'rewritePage':
@@ -1937,6 +1963,8 @@ export function DraftEditor({
                 </button>
               </HeaderTip>
             )}
+            {/* The month's AI usage, with this page's share (AI usage spec §3.1). */}
+            <AiUsageMeter compact draftId={draft.id} />
             <HeaderTip label={t('history.button')} hint={historyWaits ?? t('history.hint')}>
               <HistoryMenu
                 draftId={draft.id}
@@ -2093,6 +2121,9 @@ export function DraftEditor({
 
       <div className="flex min-h-0 flex-1">
         <div className="flex min-w-0 flex-1 flex-col">
+          {/* From 80% of the month's AI usage, as on the other pages, as a strip
+              like the agent's own notices. */}
+          <AiUsageBanner className="rounded-none border-x-0 border-t-0 px-4 py-1.5 text-[13px]" />
           {agentFailed && canMarkReady && (
             <div
               role="alert"
@@ -2107,7 +2138,9 @@ export function DraftEditor({
                   variant="outline"
                   size="sm"
                   className="h-7"
-                  disabled={agentBusy || !editor || (failedRewrite && !citedRead)}
+                  // Used up, as the red strip above says: it would only fail again.
+                  disabled={!!aiUsedUp || agentBusy || !editor || (failedRewrite && !citedRead)}
+                  title={aiUsedUp ?? undefined}
                   onClick={() => void (failedRewrite ? rewritePage() : startAgent())}
                 >
                   {(starting || rewriting) && <WorkingDots className="ml-0" />}
@@ -2280,7 +2313,9 @@ export function DraftEditor({
               setTabRequest((prev) => (prev?.build ? { tab: prev.tab, n: prev.n } : prev))
             }
             onBriefRebuilding={onBriefRebuilding}
-            briefBlocked={agentBusy && !briefRebuilding ? t('suggestions.agentBusy') : null}
+            briefBlocked={
+              briefRebuilding ? null : (aiUsedUp ?? (agentBusy ? t('suggestions.agentBusy') : null))
+            }
             quality={quality}
             qualityScore={qualityScore}
             onShowInPage={showInPage}

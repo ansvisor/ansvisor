@@ -78,6 +78,26 @@ vi.mock('@/lib/actions/content-drafts', () => ({
   checkDraftLinks: (...args: unknown[]) => checkDraftLinks(...args),
 }));
 vi.mock('next/navigation', () => ({ useParams: () => ({ draftId: 'd1' }) }));
+// The month's AI usage (AI usage spec): none to meter unless a test sets it.
+const aiUsage = vi.hoisted(() => ({
+  usage: null as import('@/lib/billing/ai-usage').AiUsage | null,
+  refresh: vi.fn(),
+}));
+vi.mock('@/components/providers/ai-usage-provider', () => ({ useAiUsage: () => aiUsage }));
+const readDraftAiUsage = vi.hoisted(() => vi.fn());
+vi.mock('@/lib/billing/ai-usage-client', () => ({
+  readDraftAiUsage: (...args: unknown[]) => readDraftAiUsage(...args),
+  readUsageLimits: async () => ({ auditPages: null, promptLocations: null }),
+}));
+const usageAt = (percentUsed: number): import('@/lib/billing/ai-usage').AiUsage => ({
+  plan: 'growth',
+  planName: 'Growth',
+  periodStart: '2026-10-20T09:00:00.000Z',
+  periodEnd: '2026-11-20T09:00:00.000Z',
+  unlimited: false,
+  percentUsed,
+  features: [],
+});
 const routerPush = vi.hoisted(() => vi.fn());
 vi.mock('@/i18n/navigation', () => ({
   Link: ({ href, children, ...props }: { href: string; children: React.ReactNode }) => (
@@ -235,6 +255,9 @@ beforeEach(() => {
   container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);
+  aiUsage.usage = null;
+  aiUsage.refresh.mockReset();
+  readDraftAiUsage.mockReset().mockResolvedValue(3.7);
   getContentDraft.mockReset();
   markContentDraftReady.mockReset();
   unmarkContentDraftReady.mockReset().mockResolvedValue('in_review');
@@ -281,6 +304,27 @@ afterEach(() => {
 });
 
 describe('the content editor', () => {
+  it('shows the month’s AI usage before History, with this page’s share, and its banner from 80%', async () => {
+    aiUsage.usage = usageAt(84);
+    getContentDraft.mockResolvedValue(draft());
+    await renderPage();
+    const meter = button('AI 84% used this month, close to the limit')!;
+    expect(meter.closest('header')).not.toBeNull();
+    expect(
+      meter.compareDocumentPosition(button('History')!) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    // Narrower than 1280px, the percent alone, as Next's label goes (Next step spec §3b).
+    expect(meter.querySelector('span')!.className).toContain('hidden xl:inline');
+    expect(container.textContent).toContain("You've used 84% of this month's AI limit.");
+
+    await act(async () => meter.click());
+    await act(async () => {});
+    expect(readDraftAiUsage).toHaveBeenCalledWith('d1');
+    expect(document.querySelector('[data-slot="popover-content"]')!.textContent).toContain(
+      'This page this month3%',
+    );
+  });
+
   it('opens the draft with its title, type, method, status and length', async () => {
     getContentDraft.mockResolvedValue(draft());
     await renderPage();
@@ -493,6 +537,35 @@ describe('the content editor', () => {
   });
 
   describe('the Content Agent writing it (CE-015)', () => {
+    it('reads the month’s AI usage again once the agent has written the page', async () => {
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+      try {
+        getContentDraft.mockResolvedValue(
+          draft({
+            status: 'draft',
+            agentState: 'writing',
+            agentSince: new Date().toISOString(),
+            bodyHtml: '<h1>Pipeline forecasting</h1>',
+          }),
+        );
+        await renderPage();
+        expect(aiUsage.refresh).not.toHaveBeenCalled();
+
+        getContentDraft.mockResolvedValue(
+          draft({
+            status: 'in_review',
+            author: 'agent',
+            bodyHtml: '<h1>Pipeline</h1><p>Written.</p>',
+          }),
+        );
+        await act(async () => void (await vi.advanceTimersByTimeAsync(5_000)));
+        await act(async () => {});
+        expect(aiUsage.refresh).toHaveBeenCalledTimes(1);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
     it('waits while the agent writes, then opens on what it wrote', async () => {
       vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
       try {
@@ -3425,6 +3498,33 @@ describe('the side panel', () => {
       [...panel()!.querySelectorAll<HTMLButtonElement>('button')].find(
         (b) => b.textContent === label,
       )!;
+
+    it('says the month’s AI usage is used up before anything else, and runs nothing', async () => {
+      aiUsage.usage = usageAt(100);
+      getContentDraft.mockResolvedValue(traced);
+      // An open suggestion would hold Run Agent too: the used-up month comes first.
+      getDraftSuggestions.mockResolvedValue([agentSuggestion]);
+      await openRules();
+      expect(panel()!.textContent).toContain(
+        "This month's AI usage is used up. It resets on Nov 20.",
+      );
+      await act(async () => panelButton('Run Agent').click());
+      expect(fixDraftRules).not.toHaveBeenCalled();
+    });
+
+    it('reads the AI usage again once a run ends, for the header meter', async () => {
+      getContentDraft.mockResolvedValue(traced);
+      getDraftSuggestions.mockResolvedValue([]);
+      let answer: (value: { count: number }) => void = () => {};
+      fixDraftRules.mockReturnValue(new Promise((resolve) => (answer = resolve)));
+      await openRules();
+      await act(async () => panelButton('Run Agent').click());
+      await act(async () => {});
+      expect(aiUsage.refresh).not.toHaveBeenCalled();
+      await act(async () => answer({ count: 0 }));
+      await act(async () => {});
+      expect(aiUsage.refresh).toHaveBeenCalledTimes(1);
+    });
 
     it('shows the agent card working while the agent runs, then its batch', async () => {
       getContentDraft.mockResolvedValue(traced);

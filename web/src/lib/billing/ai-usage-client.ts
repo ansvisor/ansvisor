@@ -14,10 +14,14 @@ import type { AiUsage, UsageLimits } from './ai-usage';
 const READ_TIMEOUT_MS = 15_000;
 
 async function accessToken(): Promise<string | null> {
-  const {
-    data: { session },
-  } = await createClient().auth.getSession();
-  return session?.access_token ?? null;
+  try {
+    const {
+      data: { session },
+    } = await createClient().auth.getSession();
+    return session?.access_token ?? null;
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -85,4 +89,19 @@ export async function readUsageLimits(brandId: string | null): Promise<UsageLimi
         ? { used: prompts.account.locationsUsed, limit: locationLimit }
         : null,
   };
+}
+
+/**
+ * A Content Editor page's share of this period's AI usage, in percent to a
+ * tenth (GET /api/billing/ai-usage/draft/:id), for the editor meter's popover.
+ * Null when it can't be read, or on a plan without an allowance.
+ */
+export async function readDraftAiUsage(draftId: string): Promise<number | null> {
+  const token = await accessToken();
+  if (!token) return null;
+  const read = await readJson<{ unlimited: boolean; percent: number | null }>(
+    `${BROWSER_API_BASE_URL}/api/billing/ai-usage/draft/${encodeURIComponent(draftId)}`,
+    { headers: { Authorization: `Bearer ${token}` } },
+  );
+  return read && !read.unlimited ? read.percent : null;
 }

@@ -16,7 +16,7 @@ import {
   type UsageCount,
   type UsageLimits,
 } from '@/lib/billing/ai-usage';
-import { readUsageLimits } from '@/lib/billing/ai-usage-client';
+import { readDraftAiUsage, readUsageLimits } from '@/lib/billing/ai-usage-client';
 import type { UsageTone } from '@/lib/content-usage';
 import { formatMonthDay, formatNumber } from '@/lib/format';
 import { cn } from '@/lib/utils';
@@ -71,9 +71,20 @@ export function HeaderWithAiUsage({ children }: { children: ReactNode }) {
  * and where to get more: getting more and an own key are an admin's to
  * change, so other members are told to ask one. Nothing on a plan without an
  * allowance; while the first read runs, an empty box of its size keeps the
- * header row from shifting.
+ * header row from shifting. In the Content Editor's header (Next step spec
+ * §3b) it is `compact`, the header's button height, and the percent alone
+ * narrower than 1280px, as the Next button's label goes; with the page's
+ * `draftId` the popover adds the page's own share of the month.
  */
-export function AiUsageMeter({ className }: { className?: string }) {
+export function AiUsageMeter({
+  className,
+  compact = false,
+  draftId,
+}: {
+  className?: string;
+  compact?: boolean;
+  draftId?: string;
+}) {
   const t = useTranslations('aiUsage');
   const tFeature = useTranslations('settings.aiUsageMeter.features');
   const tCommon = useTranslations('common');
@@ -86,12 +97,20 @@ export function AiUsageMeter({ className }: { className?: string }) {
   const [limits, setLimits] = useState<UsageLimits | null | undefined>(undefined);
   // The latest read, so an earlier one landing late can't replace it.
   const limitsRead = useRef(0);
+  // The page's share, as the limits read on each opening: 'none' when it
+  // can't be read.
+  const [page, setPage] = useState<number | 'loading' | 'none' | undefined>(undefined);
+  const pageRead = useRef(0);
 
   if (usage === undefined) {
     return (
       <span
         aria-hidden
-        className={cn('hidden h-8 w-[5.75rem] shrink-0 sm:inline-block', className)}
+        className={cn(
+          'hidden shrink-0 sm:inline-block',
+          compact ? 'h-7 w-12 xl:w-[7.5rem]' : 'h-8 w-[7.75rem]',
+          className,
+        )}
       />
     );
   }
@@ -114,6 +133,13 @@ export function AiUsageMeter({ className }: { className?: string }) {
     void readUsageLimits(brandId).then((read) => {
       if (id === limitsRead.current) setLimits(read);
     });
+    if (draftId) {
+      setPage((shown) => (typeof shown === 'number' ? shown : 'loading'));
+      const pageId = ++pageRead.current;
+      void readDraftAiUsage(draftId).then((read) => {
+        if (pageId === pageRead.current) setPage(read ?? 'none');
+      });
+    }
   };
   const close = () => setOpen(false);
 
@@ -124,14 +150,25 @@ export function AiUsageMeter({ className }: { className?: string }) {
     <Popover open={open} onOpenChange={onOpenChange}>
       <PopoverTrigger
         aria-label={t(LABEL_KEY[tone], { percent: used })}
+        // The percent alone says little: its name on hover, as the header's title has.
+        title={compact ? t(LABEL_KEY[tone], { percent: used }) : undefined}
         className={cn(
-          'inline-flex h-8 shrink-0 items-center gap-2 rounded-full border bg-background px-3 text-xs font-medium transition-colors outline-none hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50 aria-expanded:bg-muted',
+          'inline-flex shrink-0 items-center gap-2 rounded-full border bg-background text-xs font-medium transition-colors outline-none hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50 aria-expanded:bg-muted',
+          compact ? 'h-7 px-2.5' : 'h-8 px-3',
           METER_CLASS[tone],
           className,
         )}
       >
-        <span aria-hidden>{t('meter.ai')}</span>
-        <span aria-hidden className="block h-1.5 w-11 overflow-hidden rounded-full bg-muted">
+        <span aria-hidden className={cn(compact && 'hidden xl:inline')}>
+          {t('meter.ai')}
+        </span>
+        <span
+          aria-hidden
+          className={cn(
+            'block h-1.5 w-11 overflow-hidden rounded-full bg-muted',
+            compact && 'hidden xl:block',
+          )}
+        >
           <span className={cn('block h-full rounded-full', FILL_CLASS[tone])} style={{ width }} />
         </span>
         <span aria-hidden className="tabular-nums">
@@ -157,6 +194,20 @@ export function AiUsageMeter({ className }: { className?: string }) {
         <p className="mt-1.5 text-xs text-muted-foreground">
           {resets ? t('popover.shared', { date: resets }) : t('popover.sharedNoDate')}
         </p>
+        {/* The page's own share: left out when it can't be read. */}
+        {draftId && page !== undefined && page !== 'none' && (
+          <p className="mt-2 flex items-center justify-between gap-3 rounded-md bg-muted px-2.5 py-1.5 text-[13px]">
+            <span>{t('popover.page')}</span>
+            {page === 'loading' ? (
+              <span className="text-muted-foreground">
+                <LoadingDots />
+                <span className="sr-only">{tCommon('loading')}</span>
+              </span>
+            ) : (
+              <span className="font-medium tabular-nums">{percentLabel(page)}</span>
+            )}
+          </p>
+        )}
         {tone === 'exhausted' && (
           <p className="mt-2 text-xs text-red-700 dark:text-red-400">
             {resets ? t('popover.exhausted', { date: resets }) : t('popover.exhaustedNoDate')}
