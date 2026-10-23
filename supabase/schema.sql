@@ -35832,6 +35832,10 @@ create table if not exists public.action_entities (
   removed_reason text
     constraint action_entities_removed_reason_check
       check (removed_reason is null or removed_reason in ('deleted', 'paused')),
+  -- When the list was written: as the action was created, or by this
+  -- migration's backfill for one made before (the nightly check, AC-009
+  -- part 3, judges only lists kept at creation).
+  kept_at        timestamptz not null default now(),
   primary key (action_id, entity_type, entity_key)
 );
 
