@@ -37234,6 +37234,10 @@ comment on column public.content_draft_suggestions.source_marks is
 -- outcome is what happened: a Stop that lands after the run's last check
 -- may leave stopped_at set on a run that ended 'done'. A run a stopped server
 -- left unfinished is closed 'failed' when the next starts on the draft.
+-- claimed_at: a Start or Rewrite run's claim on the draft (the
+-- content_drafts.agent_state_at it wrote); null for Fix and the brief, which
+-- hold no draft. A Stop lets go only of the claim the stopped run holds, so a
+-- Stop on a Fix leaves a Start on the same draft its claim.
 create table if not exists public.content_agent_runs (
   id uuid primary key default gen_random_uuid(),
   draft_id uuid not null references public.content_drafts (id) on delete cascade,
@@ -37245,8 +37249,12 @@ create table if not exists public.content_agent_runs (
   started_at timestamptz not null default now(),
   finished_at timestamptz,
   stopped_at timestamptz,
-  outcome text check (outcome in ('done', 'stopped', 'failed'))
+  outcome text check (outcome in ('done', 'stopped', 'failed')),
+  claimed_at timestamptz
 );
+
+-- For a database that ran this file before claimed_at was added to it.
+alter table public.content_agent_runs add column if not exists claimed_at timestamptz;
 
 create index if not exists content_agent_runs_draft_started
   on public.content_agent_runs (draft_id, started_at desc);
@@ -37605,10 +37613,10 @@ comment on function public.ga_platform_value(uuid, date, date) is
 notify pgrst, 'reload schema';
 
 -- ─────────────────────────────────────────────────────────────────────────
--- migrations/00252_content_authors.sql
+-- migrations/00256_content_authors.sql
 -- ─────────────────────────────────────────────────────────────────────────
 -- ============================================================================
--- 00252: the workspace's authors (Content Editor Quality, CE-037)
+-- 00256: the workspace's authors (Content Editor Quality, CE-037)
 -- ============================================================================
 -- Settings › Authors (Quality spec §9): the real people a page is by. A
 -- page's author is its metadata, never its content: the editor shows it as

@@ -88,7 +88,7 @@ describe('QualityTab', () => {
   });
 
   it('says when the page is too short to read, or reads well', async () => {
-    await render({ score: null, checks: [], words: 12 });
+    await render({ score: null, unscored: 'tooShort', checks: [], words: 12 });
     expect(container.textContent).toContain('Write a few paragraphs');
     expect(container.querySelector('li')).toBeNull();
     await render({
@@ -97,5 +97,12 @@ describe('QualityTab', () => {
       checks: result.checks.map((c) => ({ ...c, points: c.max })),
     });
     expect(container.textContent).toContain('Nothing to raise here: the page reads well.');
+  });
+
+  it('says when the page’s language isn’t read yet, not that it is too short', async () => {
+    await render({ score: null, unscored: 'language', checks: [], words: 240 });
+    expect(container.textContent).toContain("Readability isn't read for this language yet.");
+    expect(container.textContent).not.toContain('Write a few paragraphs');
+    expect(container.querySelector('li')).toBeNull();
   });
 });

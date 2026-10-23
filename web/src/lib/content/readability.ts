@@ -1,4 +1,4 @@
-import { countWords } from './rules';
+import { LANGUAGES } from '@/config/prompt-options';
 
 /**
  * Readability, one of the Quality scores (Content Editor Quality spec §2.3,
@@ -60,8 +60,14 @@ export interface ReadabilityCheck {
 }
 
 export interface Readability {
-  /** 0–100 over the checks that could be read; null for a page too short to score. */
+  /** 0–100 over the checks that could be read; null for a page it can't score. */
   score: number | null;
+  /**
+   * Why there is no score: a page too short to read, or a language written
+   * without spaces between words (Japanese, Chinese, Thai), whose words and
+   * sentences aren't counted yet.
+   */
+  unscored?: 'tooShort' | 'language';
   checks: ReadabilityCheck[];
   words: number;
 }
@@ -72,6 +78,14 @@ export interface ReadBlock {
   text: string;
   words: number;
 }
+
+/**
+ * Words as the rules count them (rules.ts countWords), a vowel sign or other
+ * mark kept inside its word: Hindi's are marks, not letters, and would break
+ * each word in two or three.
+ */
+const WORD = /[\p{L}\p{N}][\p{L}\p{M}\p{N}'’-]*/gu;
+const countWords = (text: string) => text.match(WORD)?.length ?? 0;
 
 /**
  * Text joined as a reader sees it: a space between paragraphs and at a line
@@ -113,15 +127,98 @@ const isProse = (b: ReadBlock) => !isHeading(b);
 /** Running text: a list item is a point, not a sentence to measure. */
 const isRunning = (b: ReadBlock) => b.tag === 'p' || b.tag === 'blockquote';
 
-/** Abbreviations whose dot ends no sentence. */
-const ABBREVIATIONS =
-  /\b(?:e\.g|i\.e|etc|vs|approx|Dr|Mr|Mrs|Ms|Prof|St|Inc|Ltd|Co|U\.S|U\.K|No)\.(?=\s)/gi;
+/**
+ * Abbreviations whose dot ends no sentence, by language; English's are read
+ * in all. A dot inside one may take a space ("z. B."), and one starting in
+ * lower case may open a sentence in upper case ("Vgl.").
+ */
+const ABBREVIATIONS: Record<string, string[]> = {
+  en: [
+    ...['e.g', 'i.e', 'etc', 'vs', 'approx', 'cf', 'et al', 'Dr', 'Mr', 'Mrs', 'Ms', 'Prof'],
+    ...['Jr', 'Sr', 'St', 'Inc', 'Ltd', 'Co', 'Corp', 'U.S', 'U.K'],
+  ],
+  de: [
+    ...['z.B', 'd.h', 'u.a', 'u.U', 'z.T', 'o.Ä', 'i.d.R', 'bzw', 'ca', 'usw', 'ggf', 'evtl'],
+    ...['inkl', 'vgl', 'bspw', 'sog', 'Hr', 'Fr', 'Str', 'Mio', 'Mrd'],
+  ],
+  tr: ['vb', 'örn', 'bkz', 'yy', 'Doç', 'Yrd', 'Av', 'Sn', 'T.C', 'Mah', 'Cad', 'Sok', 'Apt'],
+  fr: ['p.ex', 'c.-à-d', 'M', 'Mme', 'Mlle', 'MM', 'env', 'av.J.-C', 'apr.J.-C', 'Ste'],
+  es: [
+    ...['p.ej', 'Sr', 'Sra', 'Srta', 'Dra', 'Ud', 'Uds', 'aprox', 'EE.UU', 'a.C', 'd.C'],
+    ...['Avda', 'Lic', 'Ing'],
+  ],
+  pt: ['p.ex', 'Sr', 'Sra', 'Dra', 'aprox', 'Av'],
+  it: ['ad es', 'ecc', 'Sig', 'Sig.ra', 'Dott', 'Dott.ssa'],
+  nl: ['bijv', 'bv', 'o.a', 'd.w.z', 'enz', 'm.b.t', 'i.p.v', 'Dhr', 'Mevr'],
+  sv: ['t.ex', 'bl.a', 'm.m', 'osv', 'dvs', 'ca', 's.k'],
+};
+/** These end no sentence before a number only ("No. 5", "S. 12"), so "Say no." still does. */
+const BEFORE_NUMBER: Record<string, string[]> = {
+  en: ['No', 'p', 'pp', 'Fig', 'Vol', 'Ch'],
+  de: ['Nr', 'S', 'Abb', 'Kap', 'Bd'],
+  tr: ['s', 'Md'],
+  fr: ['p', 'n', 'fig', 'chap', 'vol'],
+  es: ['pág', 'núm', 'art', 'cap', 'fig'],
+  pt: ['pág', 'n', 'art', 'cap'],
+  it: ['pag', 'n', 'art', 'cap'],
+  nl: ['nr', 'blz', 'art'],
+  sv: ['nr', 's'],
+};
+/** Languages whose ordinals are a number and a dot ("am 3. Oktober", "3. Kat"). */
+const DOT_ORDINALS = new Set(['de', 'tr']);
 
-/** A block's sentences: split after . ! ? or …, an abbreviation's dot aside. */
-export function sentencesOf(text: string): string[] {
+const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+/** A list as one alternation, each with its upper-case opening and a space allowed after an inner dot. */
+function alternation(list: string[], lang: string): string {
+  return list
+    .flatMap((a) => {
+      const upper = a[0].toLocaleUpperCase(lang) + a.slice(1);
+      return upper !== a && a.replace(/\P{L}/gu, '').length > 1 ? [a, upper] : [a];
+    })
+    .map((a) => escapeRe(a).replace(/\\\./g, '\\.\\s?').replace(/ /g, '\\s'))
+    .join('|');
+}
+
+const abbreviationsRe = new Map<string, RegExp>();
+/** The dots that end no sentence in a language: its abbreviations', and its ordinals'. */
+function protectedDots(lang: string): RegExp {
+  let re = abbreviationsRe.get(lang);
+  if (!re) {
+    const own = (table: Record<string, string[]>) =>
+      alternation([...table.en, ...(lang === 'en' ? [] : (table[lang] ?? []))], lang);
+    const parts = [
+      `(?:${own(ABBREVIATIONS)})\\.(?=\\s)`,
+      `(?:${own(BEFORE_NUMBER)})\\.(?=\\s*\\p{N})`,
+      ...(DOT_ORDINALS.has(lang) ? ['\\p{N}+\\.(?=\\s+\\p{L})'] : []),
+    ];
+    re = new RegExp(`(?<![\\p{L}\\p{N}])(?:${parts.join('|')})`, 'gu');
+    abbreviationsRe.set(lang, re);
+  }
+  return re;
+}
+
+/** What may close a sentence after its mark: a quote or a bracket. */
+const CLOSE = `["'”’»)\\]」』]`;
+/**
+ * A sentence ends after . ! ? or … and a space, unless the next word starts
+ * in lower case, and right after 。！？ (Japanese, Chinese), । (Hindi) or ؟
+ * (Arabic), which need no space; a closing quote or bracket may come between.
+ */
+const SENTENCE_END = new RegExp(
+  `(?<=[.!?…]${CLOSE}?)\\s+(?![\\s(\\["'“‘«¿¡]*\\p{Ll})|(?<=[。！？।؟]${CLOSE}?)(?!${CLOSE})\\s*`,
+  'u',
+);
+
+/**
+ * A block's sentences: split after . ! ? … 。！？ । or ؟, an abbreviation's
+ * or an ordinal's dot aside. `language` is a two-letter code; null reads
+ * English's abbreviations only.
+ */
+export function sentencesOf(text: string, language: string | null = 'en'): string[] {
   return text
-    .replace(ABBREVIATIONS, (m) => m.replace(/\./g, '\u2024'))
-    .split(/(?<=[.!?…])\s+/)
+    .replace(protectedDots(language ?? 'en'), (m) => m.replace(/\./g, '\u2024'))
+    .split(SENTENCE_END)
     .map((s) => s.replace(/\u2024/g, '.').trim())
     .filter((s) => countWords(s) > 0);
 }
@@ -161,25 +258,51 @@ const FORMULAS: Record<string, { formula: ReadingFormula; target: number }> = {
   es: { formula: 'fernandezHuerta', target: 60 },
 };
 
-/** The language as a two-letter code ("en-US" and "English (US)" read as en); null when unknown. */
+/**
+ * Language names as a Language rule or a brand says them: each brand
+ * language's (LANGUAGES), in English and in its own, and Chinese and Thai,
+ * written without spaces between words as Japanese is.
+ */
+const LANGUAGE_NAMES = new Map<string, string>([
+  ...LANGUAGES.map((l) => [l.label.replace(/\s*\(.*$/, '').toLowerCase(), l.code] as const),
+  ...Object.entries({
+    deutsch: 'de',
+    français: 'fr',
+    español: 'es',
+    türkçe: 'tr',
+    日本語: 'ja',
+    português: 'pt',
+    हिन्दी: 'hi',
+    हिंदी: 'hi',
+    한국어: 'ko',
+    italiano: 'it',
+    nederlands: 'nl',
+    svenska: 'sv',
+    العربية: 'ar',
+    chinese: 'zh',
+    mandarin: 'zh',
+    中文: 'zh',
+    thai: 'th',
+    ไทย: 'th',
+  }),
+]);
+
+/**
+ * The language as a two-letter code: a name anywhere in it ("English (US)",
+ * "Brazilian Portuguese"), else a code first ("en-US", "pt_BR"); English
+ * when unset, null when unknown.
+ */
 export function languageCode(language: string | null | undefined): string | null {
   const value = (language ?? '').trim().toLowerCase();
   if (!value) return 'en';
-  const byName: Record<string, string> = {
-    english: 'en',
-    turkish: 'tr',
-    türkçe: 'tr',
-    german: 'de',
-    deutsch: 'de',
-    french: 'fr',
-    français: 'fr',
-    spanish: 'es',
-    español: 'es',
-  };
-  const word = value.split(/[\s(_-]/)[0];
-  if (byName[word]) return byName[word];
-  return /^[a-z]{2}$/.test(word) ? word : null;
+  const words = value.split(/[^\p{L}\p{M}]+/u).filter(Boolean);
+  const named = words.find((w) => LANGUAGE_NAMES.has(w));
+  if (named) return LANGUAGE_NAMES.get(named)!;
+  return /^[a-z]{2}$/.test(words[0] ?? '') ? words[0] : null;
 }
+
+/** Languages written without spaces between words: their words and sentences can't be counted yet. */
+const UNSPACED = new Set(['ja', 'zh', 'th']);
 
 /** A formula's score from the average sentence length and syllables per word. */
 function formulaScore(formula: ReadingFormula, asl: number, asw: number): number {
@@ -205,7 +328,7 @@ const toward = (value: number, full: number, span: number, max: number) =>
   Math.max(0, Math.min(1, 1 - (full - value) / span)) * max;
 
 const PASSIVE =
-  /\b(?:am|is|are|was|were|be|been|being)(?:n['’]t)?\s+(?:(?:not|never)\s+)?(?:\w+ly\s+)?(?:(?!(?:indeed|need|speed|seed|feed|bleed|breed|proceed|exceed|succeed)\b)\w+ed|been|born|built|chosen|done|drawn|driven|given|grown|known|made|seen|shown|taken|thought|told|written)\b/i;
+  /\b(?:am|is|are|was|were|be|been|being)(?:n['’]t)?\s+(?:(?:not|never)\s+)?(?:\w+ly\s+)?(?:(?!(?:indeed|need|speed|seed|feed|bleed|breed|proceed|exceed|succeed)\b)\w+ed|been|born|bought|brought|broken|built|caught|chosen|done|drawn|driven|found|given|grown|heard|held|hidden|kept|known|led|left|lost|made|meant|paid|put|said|seen|sent|set|shown|sold|spent|spoken|taken|taught|thought|told|won|written)\b/i;
 /** Words that say little in English business writing, in each of their forms. */
 const JARGON =
   /\b(?:leverag\w*|synerg\w*|utili[sz]\w*|paradigm\w*|best-in-class|cutting-edge|world-class|next-generation|game-chang\w*|seamless\w*|holistic\w*|robust\w*|streamlin\w*|empower\w*|disruptive\w*)\b/gi;
@@ -222,16 +345,21 @@ const COMMON = new Set([
 
 /**
  * The draft's Readability: its checks and the score over the ones that could
- * be read. `language` is the brand's (brands.language), English when unset.
+ * be read. `language` is the one the draft is written in (its Language rule,
+ * else the brand's), English when unset.
  */
 export function readability(html: string, language: string | null | undefined): Readability {
   const blocks = readBlocks(html);
   const lang = languageCode(language);
   const prose = blocks.filter(isProse);
-  const sentences = prose.flatMap((b) => sentencesOf(b.text).map((s) => ({ s, block: b })));
+  const sentences = prose.flatMap((b) => sentencesOf(b.text, lang).map((s) => ({ s, block: b })));
   const sentenceWords = sentences.map(({ s }) => countWords(s));
   const words = sentenceWords.reduce((a, b) => a + b, 0);
-  if (words < MIN_WORDS || sentences.length === 0) return { score: null, checks: [], words };
+  // A Japanese clause reads as one word: no score rather than a made-up one.
+  if (lang && UNSPACED.has(lang)) return { score: null, unscored: 'language', checks: [], words };
+  if (words < MIN_WORDS || sentences.length === 0) {
+    return { score: null, unscored: 'tooShort', checks: [], words };
+  }
 
   const checks: ReadabilityCheck[] = [];
   const check = (c: Omit<ReadabilityCheck, 'max'>) =>
@@ -268,7 +396,7 @@ export function readability(html: string, language: string | null | undefined): 
   const known = lang ? FORMULAS[lang] : undefined;
   if (known && lang) {
     const syllables = sentences
-      .flatMap(({ s }) => s.match(/[\p{L}\p{N}][\p{L}\p{N}'’-]*/gu) ?? [])
+      .flatMap(({ s }) => s.match(WORD) ?? [])
       .reduce((sum, w) => sum + syllablesOf(w, lang), 0);
     const score = formulaScore(known.formula, allAsl, syllables / words);
     check({
@@ -281,7 +409,7 @@ export function readability(html: string, language: string | null | undefined): 
     });
   } else {
     const letters = sentences
-      .flatMap(({ s }) => s.match(/\p{L}+/gu) ?? [])
+      .flatMap(({ s }) => s.match(/[\p{L}\p{M}]+/gu) ?? [])
       .reduce((sum, w) => sum + w.length, 0);
     const awl = letters / words;
     const short = (allAsl <= SENTENCE_WORDS.max ? 0.5 : 0) + (awl <= 6.5 ? 0.5 : 0);
@@ -323,7 +451,7 @@ export function readability(html: string, language: string | null | undefined): 
   const paragraphs = blocks.filter((b) => b.tag === 'p');
   if (paragraphs.length > 0) {
     const longParagraphs = paragraphs.filter(
-      (b) => sentencesOf(b.text).length > PARAGRAPH_SENTENCES,
+      (b) => sentencesOf(b.text, lang).length > PARAGRAPH_SENTENCES,
     );
     check({
       id: 'shortParagraphs',

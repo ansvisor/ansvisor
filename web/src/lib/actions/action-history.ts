@@ -20,6 +20,7 @@ import type { ActionOutcome, ActionStatus, TaskStatus } from '@/lib/action-cente
 import { SIGNAL_SOURCES, type SignalSource } from '@/lib/signals/registry';
 import { parseImproveOutcome } from '@/lib/improve-outcome';
 import { storedPriorityLevel } from '@/lib/action-center/priority';
+import { readEntityCounts, withEntityCounts } from '@/lib/action-center/entity-counts';
 import {
   HISTORY_STATUSES,
   daysBetween,
@@ -179,7 +180,7 @@ export async function getActionHistory(
   const actionIds = rows.map((row) => row.id);
   const assigneeIds = [...new Set(rows.map((row) => row.assignee_id).filter(Boolean))] as string[];
 
-  const [tasksRes, signalsRes, profilesRes] = await Promise.all([
+  const [tasksRes, signalsRes, profilesRes, entityCounts] = await Promise.all([
     supabase
       .from('action_tasks')
       .select('id, action_id, position, task_key, title, status')
@@ -194,6 +195,8 @@ export async function getActionHistory(
     assigneeIds.length > 0
       ? supabase.from('profiles').select('id, full_name, avatar_url').in('id', assigneeIds)
       : Promise.resolve({ data: [], error: null }),
+    // The count each action shows on Actions too (AC-009).
+    readEntityCounts(supabase, actionIds),
   ]);
   if (tasksRes.error) throw new Error(tasksRes.error.message);
   if (signalsRes.error) throw new Error(signalsRes.error.message);
@@ -253,7 +256,7 @@ export async function getActionHistory(
       status: row.status as ActionStatus,
       outcome: row.outcome as ActionOutcome,
       positionOutcome: parseImproveOutcome(row.position_outcome ?? null),
-      payload: row.payload ?? {},
+      payload: withEntityCounts(row.payload ?? {}, entityCounts.get(row.id)),
       kpiKeys: row.kpi_keys ?? [],
       sources: [...(sourcesByAction.get(row.id) ?? [])],
       triggerSignals,

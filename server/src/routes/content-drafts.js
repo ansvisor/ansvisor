@@ -201,17 +201,21 @@ router.post('/:draftId/stop', async (req, res) => {
       return res.status(404).json({ error: 'Draft not found', code: 'not_found' });
     }
     const stopped = await stopDraftRun(draftId.data, runId ?? null);
-    if (stopped) {
-      // A run in the background lets go of the draft once it sees the stop;
-      // one no server holds any more never would. The editor opens at once.
+    // A run in the background lets go of the draft once it sees the stop;
+    // one no server holds any more never would. The editor opens at once.
+    // Only the claim a stopped run holds: a Stop on a Fix or the brief (which
+    // hold none) leaves a Start or Rewrite on the same draft its claim.
+    for (const { claimed_at: claimedAt } of stopped) {
+      if (!claimedAt) continue;
       const { error: letGoError } = await supabaseAdmin
         .from('content_drafts')
         .update({ agent_state: null, agent_state_at: new Date().toISOString() })
         .eq('id', draftId.data)
-        .eq('agent_state', 'writing');
+        .eq('agent_state', 'writing')
+        .eq('agent_state_at', claimedAt);
       if (letGoError) throw letGoError;
     }
-    return res.json({ stopped });
+    return res.json({ stopped: stopped.length > 0 });
   } catch (err) {
     if (ERROR_CODES[err?.status]) {
       return res

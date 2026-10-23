@@ -1,5 +1,5 @@
 -- ============================================================================
--- 00252: the workspace's authors (Content Editor Quality, CE-037)
+-- 00256: the workspace's authors (Content Editor Quality, CE-037)
 -- ============================================================================
 -- Settings › Authors (Quality spec §9): the real people a page is by. A
 -- page's author is its metadata, never its content: the editor shows it as
