@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  asksMoreThanOne,
   batchSources,
   growsPastLimit,
   headingLimit,
@@ -26,6 +27,19 @@ describe('growsPastLimit', () => {
     expect(growsPastLimit(2, 120, 110)).toBe(false);
     expect(growsPastLimit(2, 120, 120)).toBe(false);
     expect(growsPastLimit(2, 120, 121)).toBe(true);
+  });
+});
+
+/** One question per heading: a new question goes in as its own heading. */
+describe('asksMoreThanOne', () => {
+  it('holds a heading to one question, unless it already asked more', () => {
+    expect(asksMoreThanOne('What is AEO?', 'What is AEO? What is an AEO tracker?')).toBe(true);
+    expect(asksMoreThanOne('What is AEO?', 'What is AEO？ What is an AEO tracker？')).toBe(true);
+    expect(asksMoreThanOne('What is AEO?', 'What is an AEO tracker?')).toBe(false);
+    // A subtitle, or "?" inside a word, is no second question.
+    expect(asksMoreThanOne('AEO', 'AEO or SEO? Which matters more in 2026')).toBe(false);
+    expect(asksMoreThanOne('Guide', 'What?No guide?')).toBe(false);
+    expect(asksMoreThanOne('Why AEO? Why now?', 'Why AEO? Why today?')).toBe(false);
   });
 });
 

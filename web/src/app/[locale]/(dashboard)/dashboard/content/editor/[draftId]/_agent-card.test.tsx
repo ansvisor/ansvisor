@@ -221,7 +221,7 @@ describe('AgentCard', () => {
     expect(handlers.onDecidePage).toHaveBeenCalledWith('open');
   });
 
-  it('says why Run Agent waits', async () => {
+  it('says why Run Agent waits, in the card, never only on hover', async () => {
     await act(async () => {
       root.render(
         <NextIntlClientProvider locale="en" messages={messages}>
@@ -240,6 +240,9 @@ describe('AgentCard', () => {
       (b) => b.textContent === 'Run Agent',
     )!;
     expect(run.disabled).toBe(true);
-    expect(run.title).toBe('Content Agent is already working on this page.');
+    expect(run.title).toBe('');
+    const reason = container.querySelector(`[id="${run.getAttribute('aria-describedby')}"]`)!;
+    expect(reason.textContent).toBe('Content Agent is already working on this page.');
+    expect(reason.className).toContain('text-amber-700');
   });
 });

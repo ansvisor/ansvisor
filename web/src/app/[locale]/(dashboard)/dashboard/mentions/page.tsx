@@ -128,6 +128,9 @@ export default function MentionsPage() {
             onChange={(patch) => setFilters((prev) => ({ ...prev, ...patch }))}
             regions={regions}
             topics={topics}
+            searchPlaceholder={
+              tab === 'perception' ? t('filters.searchPlaceholderPerception') : undefined
+            }
           />
         </div>
 

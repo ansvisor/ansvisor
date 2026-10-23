@@ -7,6 +7,7 @@
  * payload names its targets.
  */
 
+import { targetKeys } from '../../target-ids.js';
 import { first, targetPayload } from './_helpers.js';
 
 export default {
@@ -32,6 +33,19 @@ export default {
   payload(byKind) {
     const mentions = first(byKind, 'uncited_mentions');
     const promptCount = Number(mentions?.current_value ?? 0);
+    // The uncited prompts themselves are the targets (AC-009): the count is
+    // their list's, which the action keeps.
+    const ids = targetKeys(
+      Array.isArray(mentions?.payload?.promptIds) ? mentions.payload.promptIds : [],
+    );
+    if (ids.length > 0) {
+      return {
+        ...targetPayload(byKind, 'prompts'),
+        targetIds: ids,
+        targetCount: ids.length,
+        promptCount,
+      };
+    }
     return { ...targetPayload(byKind, 'prompts'), targetCount: promptCount, promptCount };
   },
 };

@@ -275,6 +275,8 @@ describe('rebuildQueuedInsightsRollups (00192)', () => {
     expect(rpc.mock.calls.slice(1).every(([, args]) => args.p_brand_id === 'b2')).toBe(true);
     expect(queueDeletes).toHaveLength(1);
     expect(queueDeletes[0][0]).toEqual(['eq', 'brand_id', 'b2']);
+    // Nothing of b1's was rebuilt: its precomputed views aren't recomputed.
+    expect(refreshPerceptionSnapshots.mock.calls).toEqual([['b2']]);
   });
 
   it('keeps the entry when the Perception rollups fail to rebuild', async () => {

@@ -14,6 +14,7 @@
 
 import supabaseAdmin from '../../config/supabase.js';
 import { RELEVANCE_THRESHOLD } from '../suggestion-relevance.js';
+import { targetKeys } from '../target-ids.js';
 import expandTopicVisibility from './definitions/g05-expand-topic-visibility.js';
 import createContentForTopics from './definitions/g16-create-content-for-topics.js';
 import { resolveBrandSources } from './sources.js';
@@ -103,6 +104,11 @@ export async function sendTopicOpportunityToActionCenter(topic, { suggestionIds,
   if (promptsErr) throw new Error(promptsErr.message);
   const tracked = prompts || [];
   const definition = topicOpportunityPlan(tracked.length);
+  // What it counts is the suggestions, kept by their text, each once
+  // (AC-009): not the topic's tracked prompts, which it measures.
+  const keys = targetKeys(suggestions.map((s) => s.suggested_text));
+  // None with words: its list would fall back to the tracked prompts.
+  if (!keys.length) throw httpError('No open suggestions for this topic', 409);
 
   const payload = {
     source: TOPIC_OPPORTUNITY_ACTION_KIND,
@@ -118,8 +124,9 @@ export async function sendTopicOpportunityToActionCenter(topic, { suggestionIds,
     trackedPrompts: tracked.length,
     promptIds: tracked.map((p) => p.id),
     targetEntity: 'prompts',
-    targetCount: suggestions.length,
+    targetCount: keys.length,
     targets: suggestions.slice(0, 50).map((s) => s.suggested_text),
+    targetIds: keys,
   };
 
   const { data: action, error } = await supabaseAdmin

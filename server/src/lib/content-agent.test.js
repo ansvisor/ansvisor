@@ -55,6 +55,7 @@ vi.mock('./content-links.js', async (importOriginal) => ({
 }));
 
 const {
+  asksMoreThanOne,
   buildFixPrompt,
   cleanInsertHtml,
   draftPassages,
@@ -192,7 +193,9 @@ describe('keepSuggestions', () => {
   const ruleKeys = new Set(['dated', 'faq']);
 
   it('keeps a replace whose words are in its passage, with the rules sent and its sources', () => {
-    expect(keepSuggestions([suggestion()], passages, locked, ruleKeys, null, sourcing)).toEqual([
+    // A source number the model wrote into its reason ("(S2)") isn't shown on the card.
+    const cited = suggestion({ reason: 'add a dated data point (rule) (S2)' });
+    expect(keepSuggestions([cited], passages, locked, ruleKeys, null, sourcing)).toEqual([
       {
         kind: 'replace',
         block_text: 'Use good coffee and hot water.',
@@ -405,6 +408,36 @@ describe('a replace on a heading', () => {
     expect(keep({ after: 'What is LLM SEO '.repeat(10) })).toEqual([]);
   });
 
+  it('drops one that adds a second question to a heading, and keeps a question reworded', () => {
+    const faq = draftPassages(
+      '<h2>FAQ</h2><h3>What is AEO?</h3><p>Answer engine optimization.</p>',
+    );
+    const run = (after) =>
+      keepSuggestions(
+        [suggestion({ passage: 2, before: 'What is AEO?', after, rules: ['fanoutFaq'] })],
+        faq,
+        new Set(),
+        new Set(['fanoutFaq']),
+      );
+    // A fan-out's question added to the one there, short, past the limit or answered.
+    expect(run('What is AEO? What is an AEO tracker?')).toEqual([]);
+    expect(
+      run(
+        'What is AEO? What is an AEO tracker? An AEO tracker is a tool that reads many AI engines for you.',
+      ),
+    ).toEqual([]);
+    expect(
+      run(`What is AEO? How does ${'an AEO tracker read many engines and '.repeat(3)}work?`),
+    ).toEqual([]);
+    // The question reworded into the fan-out's words.
+    expect(run('What is an AEO tracker?')).toEqual([
+      expect.objectContaining({ kind: 'replace', after_text: 'What is an AEO tracker?' }),
+    ]);
+    // A heading that already asks two may still change.
+    expect(asksMoreThanOne({ tag: 'h3', text: 'Why AEO? Why now?' }, 'now', 'today')).toBe(false);
+    expect(asksMoreThanOne({ tag: 'p', text: 'Why?' }, 'Why?', 'Why? How?')).toBe(false);
+  });
+
   it('holds an H1 to 70 characters and other headings to 90, unless they get shorter', () => {
     expect(HEADING_LIMITS).toEqual({ h1: 70, other: 90 });
     const h1 = { tag: 'h1', text: 'Guide' };
@@ -485,6 +518,16 @@ describe('a replace on a heading', () => {
     // Past the heading's limit the rest goes under it, a full stop or not.
     const long = `What is LLM SEO? ${'LLM SEO optimizes pages for large language models '.repeat(2)}`;
     expect(splitReplace(long, 'h2').words).toBe('What is LLM SEO?');
+    // A second question is no answer, with its own answer or not: it stays,
+    // for keepSuggestions to drop.
+    const two = `What is LLM SEO? How does ${'LLM SEO read many engines and '.repeat(3)}work?`;
+    expect(splitReplace(two, 'h2')).toMatchObject({ words: two, blocks: '' });
+    const answered =
+      'What is AEO? What is an AEO tracker? An AEO tracker is a tool that reads many AI engines for you.';
+    expect(splitReplace(answered, 'h3')).toMatchObject({ words: answered, blocks: '' });
+    // An answer that ends on a question still goes under the heading.
+    const why = `What is LLM SEO? ${'LLM SEO optimizes pages for large language models. '.repeat(2)}Why care?`;
+    expect(splitReplace(why, 'h2').words).toBe('What is LLM SEO?');
   });
 
   it('moves blocks sent with a paragraph replace after it', () => {
@@ -633,6 +676,9 @@ describe('links to the pages and sources given', () => {
     // Only the rule asked for: no outbound list.
     expect(prompt).not.toContain('Sources you may link to');
     expect(system).toContain('Never invent a URL');
+    // The fan-outs a rule names, in their words (B).
+    expect(system).toContain('fanoutH2 wants an H2, fanoutFaq a question');
+    expect(system).toContain('One question per heading: never add a question to a heading.');
     expect(result.count).toBe(1);
     const batch = writes.find((w) => w.table === 'content_draft_suggestions');
     expect(batch.value[0]).toMatchObject({
@@ -756,6 +802,26 @@ describe('fixDraftRules', () => {
     ).rejects.toMatchObject({ status: 422, code: 'empty' });
     expect(reserveAiBudget).not.toHaveBeenCalled();
     expect(generateObject).not.toHaveBeenCalled();
+  });
+
+  it('waits while Start or a rewrite holds the draft, which a stopped server no longer does', async () => {
+    rows.content_drafts.agent_state = 'writing';
+    rows.content_drafts.agent_state_at = new Date().toISOString();
+    await expect(
+      fixDraftRules({ draftId: DRAFT, brandId: BRAND, input: input() }),
+    ).rejects.toMatchObject({ status: 409, code: 'writing' });
+    expect(reserveAiBudget).not.toHaveBeenCalled();
+    expect(generateObject).not.toHaveBeenCalled();
+
+    // Left 'writing' long ago: no run holds it.
+    rows.content_drafts.agent_state_at = new Date(Date.now() - 11 * 60_000).toISOString();
+    generateObject.mockResolvedValue({
+      object: { suggestions: [] },
+      usage: { inputTokens: 10, outputTokens: 5 },
+    });
+    await expect(
+      fixDraftRules({ draftId: DRAFT, brandId: BRAND, input: input() }),
+    ).resolves.toEqual({ count: 0, batchId: null });
   });
 
   it('refuses a published draft, or one whose latest batch is still open, before charging', async () => {
