@@ -22,15 +22,18 @@
     "askAdmin": "To get more AI usage or use your own key, ask an admin of your workspace.",
     "getMore": {
       "plan": "Get more AI usage",
-      "ownKey": "Use your own key"
+      "ownKey": "Use your own key",
+      "startPlan": "Start your plan"
     },
     "popover": {
       "title": "AI usage this month · {plan} plan",
+      "titleTrial": "AI usage this month · {plan} free trial",
       "titleNoPlan": "AI usage this month",
       "shared": "Shared by every seat · resets {date}",
       "sharedNoDate": "Shared by every seat",
       "exhausted": "Used up. AI features stop until {date}; Agent Chat on your own AI key keeps working.",
       "exhaustedNoDate": "Used up. AI features stop until it resets; Agent Chat on your own AI key keeps working.",
+      "exhaustedTrial": "The free trial's AI usage is used up. Starting the plan gives its full monthly allowance; Agent Chat on your own AI key keeps working.",
       "ownKey": "Agent Chat, on your own AI key",
       "notCounted": "Not counted",
       "otherLimits": "Other limits this month",
@@ -41,9 +44,11 @@
     },
     "banner": {
       "warning": "You've used {percent} of this month's AI limit.",
+      "warningTrial": "You've used {percent} of the free trial's AI usage. Starting the plan gives its full monthly allowance.",
       "seeUsage": "See usage",
       "exhausted": "You've used this month's AI limit. AI features stop until {date}; Agent Chat on your own AI key keeps working.",
-      "exhaustedNoDate": "You've used this month's AI limit. AI features stop until it resets; Agent Chat on your own AI key keeps working."
+      "exhaustedNoDate": "You've used this month's AI limit. AI features stop until it resets; Agent Chat on your own AI key keeps working.",
+      "exhaustedTrial": "You've used the free trial's AI usage. Starting the plan gives its full monthly allowance; Agent Chat on your own AI key keeps working."
     }
   },
   "common": {
