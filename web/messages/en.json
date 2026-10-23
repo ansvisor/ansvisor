@@ -3571,11 +3571,18 @@
             "rules": "Set aside the passages AI answers quote",
             "write": "Suggesting changes",
             "review": "Opens here with the suggestions to review"
+          },
+          "rewrite": {
+            "read": "Read the page and its rules",
+            "rules": "Set aside the passages AI answers quote, tables and images",
+            "write": "Rewriting the page",
+            "review": "Opens here beside your page to compare"
           }
         }
       },
       "agentFailed": {
         "text": "The Content Agent couldn't finish this page. Write it yourself, or try again.",
+        "rewriteText": "The Content Agent couldn't rewrite this page. Edit it yourself, or try again.",
         "retry": "Try again",
         "dismiss": "Close",
         "errors": {
@@ -3585,8 +3592,31 @@
           "org_writing": "The agent is writing another of your team's drafts. Try again in a minute or two.",
           "open_suggestions": "Accept or reject the open suggestions first, then try again.",
           "not_draft": "This draft is no longer a draft, so the agent didn't start.",
+          "empty": "The page has no text to rewrite yet.",
+          "too_long": "The page is too long to rewrite whole. Use Apply rules with Agent, or shorten it first.",
           "failed": "The agent couldn't start. Try again in a moment."
         }
+      },
+      "rewrite": {
+        "bar": "Rewritten page",
+        "ready": "Content Agent rewrote the page to its rules",
+        "characters": "{before, number} → {after, number} characters",
+        "accepted": "Rewrite accepted",
+        "rejected": "Rewrite rejected",
+        "rulesOpen": "{count, plural, one {# rule still open} other {# rules still open}}",
+        "compare": "Compare",
+        "compareTitle": "Your page and the rewrite",
+        "before": "Your page · {count, number} characters",
+        "after": "Rewrite · {count, number} characters",
+        "accept": "Accept",
+        "reject": "Reject",
+        "undo": "Undo",
+        "close": "Close",
+        "changed": "The page changed after the agent read it. Reject this rewrite and run it again on the page as it is now.",
+        "changedAfter": "The page changed after the rewrite was put in. To go back, open History.",
+        "acceptedToast": "Rewrite put in place. History keeps your page as it was.",
+        "rejectedToast": "Rewrite rejected. Your page stays as it is.",
+        "undoneToast": "Your page is back, and the rewrite is open to decide again."
       },
       "actionBar": "This draft is the work of <link>Action AC-{no}</link>. Mark ready completes its task there.",
       "actionBarDone": "This draft is the work of <link>Action AC-{no}</link>.",
@@ -4086,6 +4116,14 @@
         "agentFix": "Apply rules with Agent",
         "agentFixing": "Content Agent is working…",
         "agentFixHint": "Content Agent suggests changes for the rules not met yet, for you to review in the page",
+        "rewrite": "Rewrite the page to these rules",
+        "rewriting": "Content Agent is rewriting…",
+        "rewriteHint": "Content Agent rewrites the whole page in one go and shows it beside yours to accept or reject. Passages AI quotes, tables and images stay as they are.",
+        "agentsHint": "Apply rules makes small edits, up to 8 a run. Rewrite does the whole page as one change to compare.",
+        "rewriteAdvice": {
+          "length": "Recommended: the page is {count, number} characters for a Length of {target, number} ({percent}% off). A rewrite gets there in one go.",
+          "open": "Recommended: {count} rules are open. A rewrite meets them together."
+        },
         "lengthConflict": "The fan-out H2s, FAQ questions and summary these rules still ask for take about {need, number} characters, more than Length allows (up to {max, number}). Raise Length, or ask for fewer.",
         "fixTrace": "Fix",
         "fixTraceHint": "Content Agent rewrites only these phrases, for you to review",

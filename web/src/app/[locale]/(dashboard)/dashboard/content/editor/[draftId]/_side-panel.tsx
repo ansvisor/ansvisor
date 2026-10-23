@@ -6,7 +6,7 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { isPageType, type ContentDraft } from '@/lib/content/drafts';
 import { BriefTab, type AgentRewrite } from './_brief-tab';
 import { ImpactTab } from './_impact-tab';
-import { RulesTab, type AgentFix } from './_rules-tab';
+import { RulesTab, type AgentFix, type PageRewrite } from './_rules-tab';
 import { SourcesTab } from './_sources-tab';
 import { useBriefRebuild, type PageNow } from './_use-brief-rebuild';
 import type { DraftReads } from './_use-draft-reads';
@@ -95,6 +95,7 @@ export function EditorSidePanel({
   reads,
   tabRequest,
   agentFix,
+  pageRewrite,
   agentRewrite,
 }: {
   draft: ContentDraft;
@@ -110,6 +111,8 @@ export function EditorSidePanel({
   tabRequest: { tab: PanelTab; n: number } | null;
   /** Fix open rules with agent, for the Rules tab (CE-018). */
   agentFix?: AgentFix;
+  /** Rewrite the page to these rules, for the Rules tab; absent once the page is ready or published. */
+  pageRewrite?: PageRewrite;
   /** Rewrite from brief, for the Brief tab; absent once the page is ready or published. */
   agentRewrite?: AgentRewrite;
 }) {
@@ -201,6 +204,7 @@ export function EditorSidePanel({
           <div hidden={tab !== 'rules'}>
             <RulesTab
               agentFix={agentFix}
+              pageRewrite={pageRewrite}
               // Only a draft with no prompts gets no fan-outs for want of them.
               onOpenSources={
                 reads.sources && !reads.sources.failed && reads.sources.data.prompts.length === 0

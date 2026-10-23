@@ -26,6 +26,9 @@ import {
   startingRules,
   RULE_LENGTH_MIN,
   RULE_LENGTH_MAX,
+  lengthBand,
+  rewriteAdvice,
+  type RuleStatus,
 } from './rules';
 
 const ctx: RuleContext = {
@@ -578,6 +581,62 @@ describe('lengthConflict', () => {
         : s,
     );
     expect(lengthConflict(met, 3)).toBeNull();
+  });
+});
+
+describe('rewriteAdvice', () => {
+  const statuses = (
+    length: number | null,
+    open: string[] = [],
+    lengthValue = '8000',
+  ): { rule: ActiveRule; status: RuleStatus }[] =>
+    activeRules(ruleSet('blog_post'), { overrides: { length: { value: lengthValue } } }).map(
+      (rule) => {
+        if (rule.key === 'length' && length !== null) {
+          const band = lengthBand(Number(rule.current));
+          const ok = length >= band.min && length <= band.max;
+          return {
+            rule,
+            status: ok
+              ? { state: 'ok' as const }
+              : {
+                  state: 'bad' as const,
+                  code: length > band.max ? ('long' as const) : ('short' as const),
+                  count: length,
+                  min: band.min,
+                  max: band.max,
+                },
+          };
+        }
+        return {
+          rule,
+          status: open.includes(rule.key)
+            ? { state: 'bad' as const, code: 'missing' as const }
+            : { state: 'ok' as const },
+        };
+      },
+    );
+
+  it('recommends a rewrite for a page more than 30% off its Length', () => {
+    // The user's page: 19,203 characters for 8,000.
+    expect(rewriteAdvice(statuses(19_203))).toEqual({
+      reason: 'length',
+      count: 19_203,
+      target: 8_000,
+      percent: 140,
+    });
+    // 30% off, no more, is for small edits.
+    expect(rewriteAdvice(statuses(10_400))).toBeNull();
+  });
+
+  it('recommends it for 4 rules or more the agent can fix', () => {
+    expect(rewriteAdvice(statuses(null, ['faq', 'summary', 'h2Answer']))).toBeNull();
+    expect(rewriteAdvice(statuses(null, ['faq', 'summary', 'h2Answer', 'keywords']))).toEqual({
+      reason: 'open',
+      count: 4,
+    });
+    // A rule it can't fix doesn't count.
+    expect(rewriteAdvice(statuses(null, ['faq', 'summary', 'h2Answer', 'oneH1']))).toBeNull();
   });
 });
 

@@ -1377,7 +1377,7 @@ export async function getDraftSuggestions(id: string): Promise<DraftSuggestion[]
   const { data, error } = await supabase
     .from('content_draft_suggestions')
     .select(
-      'id, batch_id, action_id, kind, block_text, before_text, after_text, after_links, reason, rule_keys, position, status, created_at, actions(action_no)',
+      'id, batch_id, action_id, kind, block_text, before_text, before_html, after_text, after_links, reason, rule_keys, position, status, created_at, actions(action_no)',
     )
     .eq('draft_id', id)
     .order('created_at', { ascending: false })
@@ -1398,11 +1398,13 @@ export async function getDraftSuggestions(id: string): Promise<DraftSuggestion[]
         batchId: row.batch_id,
         actionId: row.action_id,
         actionNo: action?.action_no ?? null,
-        kind: row.kind === 'insert' ? 'insert' : 'replace',
+        kind: row.kind === 'insert' || row.kind === 'page' ? row.kind : 'replace',
         blockText: row.block_text,
         beforeText: row.before_text,
         afterText: row.after_text,
-        afterLinks: row.kind === 'insert' ? null : suggestionLinks(row.after_links, row.after_text),
+        afterLinks:
+          row.kind === 'replace' ? suggestionLinks(row.after_links, row.after_text) : null,
+        beforeHtml: row.kind === 'page' ? row.before_html : null,
         reason: row.reason,
         ruleKeys: row.rule_keys ?? [],
         status: row.status as SuggestionStatus,
@@ -1771,6 +1773,9 @@ const AGENT_WRITE_ERRORS = [
   'org_writing',
   'open_suggestions',
   'not_draft',
+  // Rewrite the page to these rules: a page with no text, or one too long to send whole.
+  'empty',
+  'too_long',
   'failed',
 ] as const;
 export type AgentWriteError = (typeof AGENT_WRITE_ERRORS)[number];
@@ -1787,6 +1792,29 @@ export async function startAgentWriting(
   brandId: string,
   request: AgentWriteRequest,
 ): Promise<{ started: true } | { error: AgentWriteError }> {
+  return startAgentRun('write', id, brandId, request);
+}
+
+/**
+ * Rewrite the page to these rules: the API's Content Agent rewrites the whole
+ * page in the background (content-writer.js, rewrite) and leaves it as ONE
+ * suggestion to compare and accept or reject. Returns once it has started;
+ * 'empty' for a page with no text, 'too_long' for one too long to send whole.
+ */
+export async function startPageRewrite(
+  id: string,
+  brandId: string,
+  request: AgentWriteRequest,
+): Promise<{ started: true } | { error: AgentWriteError }> {
+  return startAgentRun('rewrite', id, brandId, request);
+}
+
+async function startAgentRun(
+  path: 'write' | 'rewrite',
+  id: string,
+  brandId: string,
+  request: AgentWriteRequest,
+): Promise<{ started: true } | { error: AgentWriteError }> {
   if (!draftId.safeParse(id).success || !draftId.safeParse(brandId).success) {
     return { error: 'failed' };
   }
@@ -1796,7 +1824,7 @@ export async function startAgentWriting(
   } = await supabase.auth.getSession();
   if (!session) return { error: 'failed' };
   try {
-    const res = await fetch(`${API_BASE_URL}/api/content-drafts/${id}/write`, {
+    const res = await fetch(`${API_BASE_URL}/api/content-drafts/${id}/${path}`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -1809,7 +1837,7 @@ export async function startAgentWriting(
     const code = body.code as AgentWriteError;
     return { error: AGENT_WRITE_ERRORS.includes(code) ? code : 'failed' };
   } catch (err) {
-    console.error('Failed to start the Content Agent:', err);
+    console.error(`Failed to start the Content Agent (${path}):`, err);
     return { error: 'failed' };
   }
 }

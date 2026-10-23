@@ -727,6 +727,42 @@ export function openRulesForAgent<T extends { rule: ActiveRule; status: RuleStat
   };
 }
 
+/** How far off its Length a page may be before Rewrite the page to these rules is recommended. */
+export const REWRITE_LENGTH_OFF = 0.3;
+/** How many rules the agent can fix may be open before it is. */
+export const REWRITE_OPEN_RULES = 4;
+
+/** Why the Rules tab recommends rewriting the page whole. */
+export type RewriteAdvice =
+  | { reason: 'length'; count: number; target: number; percent: number }
+  | { reason: 'open'; count: number };
+
+/**
+ * Whether the Rules tab recommends Rewrite the page to these rules over
+ * Apply rules with Agent's few edits a run: the page more than 30% off its
+ * Length, or 4 rules or more open that the agent can fix. Null otherwise.
+ */
+export function rewriteAdvice<T extends { rule: ActiveRule; status: RuleStatus }>(
+  rules: T[],
+): RewriteAdvice | null {
+  const length = rules.find(({ rule }) => rule.key === 'length' && rule.on);
+  const target = Number(length?.rule.current);
+  const status = length?.status;
+  if (
+    status?.state === 'bad' &&
+    (status.code === 'short' || status.code === 'long') &&
+    Number.isFinite(target) &&
+    target > 0
+  ) {
+    const off = Math.abs(status.count - target) / target;
+    if (off > REWRITE_LENGTH_OFF) {
+      return { reason: 'length', count: status.count, target, percent: Math.round(off * 100) };
+    }
+  }
+  const open = openRulesForAgent(rules).forAgent.length;
+  return open >= REWRITE_OPEN_RULES ? { reason: 'open', count: open } : null;
+}
+
 /** Checks one rule against the page as written. */
 export function checkRule(rule: ActiveRule, page: PageRead, ctx: RuleContext): RuleStatus {
   if (rule.check === 'feed') return { state: 'info', code: 'needsFeed' };

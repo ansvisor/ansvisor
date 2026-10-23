@@ -5,7 +5,9 @@
  *
  * A replace changes words in a passage (before → after, plain text); an
  * insert adds blocks (HTML) after a passage. Both find their passage by its
- * text, as the agent read it.
+ * text, as the agent read it. A page suggestion (00247, Rewrite the page to
+ * these rules) is the whole page rewritten, alone in its batch: accepting it
+ * puts its page in place of the one the agent read.
  */
 
 import { safeLinkHref } from './editor';
@@ -19,13 +21,15 @@ export interface DraftSuggestion {
   /** The Action Center action the run came from, with its number ("AC-214"). */
   actionId: string | null;
   actionNo: number | null;
-  kind: 'replace' | 'insert';
+  kind: 'replace' | 'insert' | 'page';
   /** The passage's text when the agent read it. */
   blockText: string;
   /** replace: the words replaced; insert: empty. */
   beforeText: string;
-  /** replace: the new words; insert: the blocks added, as HTML. */
+  /** replace: the new words; insert: the blocks added, as HTML; page: the whole page. */
   afterText: string;
+  /** page: the page as the agent read it, put back on Undo. */
+  beforeHtml?: string | null;
   /** replace: the links on the new words (00240); an insert's are in its HTML. */
   afterLinks?: SuggestionLink[] | null;
   /** Why, as the agent says it: "add a dated data point (rule)". */

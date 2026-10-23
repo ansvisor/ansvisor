@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useTranslations } from 'next-intl';
-import { Bot, Loader2 } from 'lucide-react';
+import { Bot, FileText, Loader2, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -25,6 +25,7 @@ import { SITE_PAGE_TYPES, type SiteType } from '@/lib/content/page-types';
 import {
   MAX_TEXT_RULE_LENGTH,
   RULE_GROUPS,
+  rewriteAdvice,
   splitRules,
   type ActiveRule,
   type RuleStatus,
@@ -68,17 +69,27 @@ export interface AgentFix {
   blocked: string | null;
 }
 
+/** Rewrite the page to these rules, as the editor runs it: the whole page, one suggestion. */
+export interface PageRewrite {
+  run: () => void;
+  running: boolean;
+  /** Why it can't run now (suggestions still open), or null. */
+  blocked: string | null;
+}
+
 export function RulesTab({
   state,
   siteType,
   draftPageType,
   agentFix,
+  pageRewrite,
   onOpenSources,
 }: {
   state: DraftRulesState;
   siteType: SiteType;
   draftPageType: PageType | null;
   agentFix?: AgentFix;
+  pageRewrite?: PageRewrite;
   /**
    * Opens the Sources tab, where a draft with no prompts (so no fan-outs)
    * gets them; none while the sources are read, or when the draft has prompts.
@@ -104,6 +115,10 @@ export function RulesTab({
     })),
   ];
 
+  // Rewrite the page whole when small edits can't get there.
+  const advice = pageRewrite ? rewriteAdvice(state.rules) : null;
+  const agents = (agentFix || pageRewrite) && state.met < state.total;
+
   // A draft on My rules for a type the workspace has none for (its type
   // changed, or My rules couldn't be read) shows Ansvisor's set for it.
   const source =
@@ -118,6 +133,64 @@ export function RulesTab({
       aria-busy={!state.ready}
       className="m-0 min-w-0 space-y-4 border-0 p-0 text-sm"
     >
+      {/* The agent's two ways to meet the rules, first: a few edits a run,
+          or the whole page rewritten as one change to compare. */}
+      {agents && (
+        <div className="space-y-1.5">
+          {agentFix && (
+            <Button
+              size="sm"
+              variant="outline"
+              className="w-full"
+              disabled={agentFix.running || agentFix.blocked !== null}
+              title={agentFix.blocked ?? t('agentFixHint')}
+              onClick={() => agentFix.run()}
+            >
+              {agentFix.running ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Bot className="h-3.5 w-3.5" />
+              )}
+              {agentFix.running ? t('agentFixing') : t('agentFix')}
+            </Button>
+          )}
+          {pageRewrite && (
+            <Button
+              size="sm"
+              variant={advice ? 'default' : 'outline'}
+              className="w-full"
+              disabled={pageRewrite.running || pageRewrite.blocked !== null}
+              title={pageRewrite.blocked ?? t('rewriteHint')}
+              onClick={() => pageRewrite.run()}
+            >
+              {pageRewrite.running ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <FileText className="h-3.5 w-3.5" />
+              )}
+              {pageRewrite.running ? t('rewriting') : t('rewrite')}
+            </Button>
+          )}
+          {pageRewrite &&
+            (advice ? (
+              <p className="flex gap-1.5 text-xs" role="note">
+                <Sparkles aria-hidden className="mt-0.5 h-3 w-3 shrink-0 text-muted-foreground" />
+                <span>
+                  {advice.reason === 'length'
+                    ? t('rewriteAdvice.length', {
+                        count: advice.count,
+                        target: advice.target,
+                        percent: advice.percent,
+                      })
+                    : t('rewriteAdvice.open', { count: advice.count })}
+                </span>
+              </p>
+            ) : (
+              <p className="text-xs text-muted-foreground">{t('agentsHint')}</p>
+            ))}
+        </div>
+      )}
+
       <div className="space-y-1.5">
         <span className="text-xs text-muted-foreground">{t('set')}</span>
         <Select
@@ -143,23 +216,6 @@ export function RulesTab({
         <p className="text-xs text-muted-foreground" role="status">
           {t('met', { met: state.met, total: state.total })}
         </p>
-        {agentFix && state.met < state.total && (
-          <Button
-            size="sm"
-            variant="outline"
-            className="w-full"
-            disabled={agentFix.running || agentFix.blocked !== null}
-            title={agentFix.blocked ?? t('agentFixHint')}
-            onClick={() => agentFix.run()}
-          >
-            {agentFix.running ? (
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-            ) : (
-              <Bot className="h-3.5 w-3.5" />
-            )}
-            {agentFix.running ? t('agentFixing') : t('agentFix')}
-          </Button>
-        )}
       </div>
 
       {RULE_GROUPS.map((group) => {

@@ -98,6 +98,39 @@ afterEach(() => {
 });
 
 describe('the Rules tab', () => {
+  it('puts the agent’s two ways first, and recommends a rewrite far from Length', async () => {
+    const fix = { run: vi.fn(), running: false, blocked: null };
+    const rewrite = { run: vi.fn(), running: false, blocked: null };
+    const show = async (props: Partial<Parameters<typeof RulesTab>[0]>) =>
+      act(async () => {
+        root.render(
+          <NextIntlClientProvider locale="en" messages={messages}>
+            <RoleProvider role="admin">
+              <RulesTab state={state()} siteType="b2b" draftPageType="feature_page" {...props} />
+            </RoleProvider>
+          </NextIntlClientProvider>,
+        );
+      });
+    await show({ agentFix: fix, pageRewrite: rewrite });
+    const labels = [...container.querySelectorAll('button')].map((b) => b.textContent);
+    expect(labels.slice(0, 2)).toEqual([
+      'Apply rules with Agent',
+      'Rewrite the page to these rules',
+    ]);
+    // 15,921 characters for a 3,000 Length.
+    expect(container.querySelector('[role="note"]')!.textContent).toBe(
+      'Recommended: the page is 15,921 characters for a Length of 3,000 (431% off). A rewrite gets there in one go.',
+    );
+    await act(async () => container.querySelectorAll('button')[1].click());
+    expect(rewrite.run).toHaveBeenCalled();
+
+    // Suggestions still open: it says why it can't run.
+    await show({ agentFix: fix, pageRewrite: { ...rewrite, blocked: 'Decide first' } });
+    const blocked = container.querySelectorAll('button')[1];
+    expect(blocked.disabled).toBe(true);
+    expect(blocked.title).toBe('Decide first');
+  });
+
   it('lists the page type’s rules, then the shared groups, each with its status', async () => {
     const s = state();
     await render(s);
