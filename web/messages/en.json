@@ -4101,6 +4101,8 @@
       "quality": {
         "scores": "Quality scores",
         "names": {
+          "eeat": "E-E-A-T",
+          "trust": "Trust",
           "readability": "Readability"
         },
         "bands": {
@@ -4110,6 +4112,10 @@
         },
         "estimate": "Ansvisor estimates based on Google's published quality signals. Not a Google score.",
         "tooShort": "Write a few paragraphs: Readability is read from the page as you write.",
+        "tooShortShort": "Too short yet",
+        "notScored": "Not scored yet",
+        "pickAuthor": "Pick author",
+        "editAuthor": "Edit author",
         "suggestionsLabel": "What would raise it",
         "nothingToRaise": "Nothing to raise here: the page reads well.",
         "gain": "+{gain, number} {score}",
@@ -4123,6 +4129,18 @@
           "fernandezHuerta": "Fernández-Huerta"
         },
         "checks": {
+          "byline": {
+            "line": "The page is by {brand} Team, not a person",
+            "detail": "Pick the person who wrote it: a named author with a short bio and profile links shows who stands behind the page."
+          },
+          "authorProfile": {
+            "line": {
+              "both": "{name} has no short bio or profile links",
+              "bio": "{name} has no short bio",
+              "links": "{name} has no profile links"
+            },
+            "detail": "Add them in Settings › Authors: two sentences on what they know, and a LinkedIn or other profile, which Person schema names."
+          },
           "avgSentence": {
             "line": "Sentences average {words, number} words",
             "detail": "Aim for 15–20 words: shorter sentences read faster, and AI answers quote them whole.",

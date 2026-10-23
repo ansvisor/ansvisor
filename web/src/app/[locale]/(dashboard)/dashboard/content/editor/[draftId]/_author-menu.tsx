@@ -37,19 +37,24 @@ export function AuthorMenu({
   authors,
   authorId,
   onPick,
+  open,
+  onOpenChange,
 }: {
   brandId: string;
   brandName: string;
   authors: ContentAuthor[];
   authorId: string | null;
   onPick: (authorId: string | null) => void;
+  /** Open from outside too: Quality's Pick author. */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }) {
   const t = useTranslations('contentEditor.editor.author');
   const author = authors.find((a) => a.id === authorId) ?? null;
   const name = author?.name ?? t('organization', { brand: brandName });
 
   return (
-    <DropdownMenu>
+    <DropdownMenu open={open} onOpenChange={(next) => onOpenChange?.(next)}>
       <DropdownMenuTrigger
         aria-label={t('change', { name })}
         title={t('hint')}

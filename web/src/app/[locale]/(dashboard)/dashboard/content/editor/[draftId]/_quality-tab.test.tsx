@@ -3,10 +3,20 @@ import { createRoot, type Root } from 'react-dom/client';
 import { NextIntlClientProvider } from 'next-intl';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import messages from '../../../../../../../../messages/en.json';
+import { eeat, trust } from '@/lib/content/quality-checks';
+import type { ContentAuthor } from '@/lib/content/authors';
 import type { Readability } from '@/lib/content/readability';
-import { QualityTab } from './_quality-tab';
 
-/** Instructions › Quality (Quality spec §3, CE-039): the score, its label, what would raise it. */
+vi.mock('@/i18n/navigation', () => ({
+  Link: ({ href, ...props }: { href: string } & Record<string, unknown>) => (
+    <a href={href} {...props} />
+  ),
+}));
+
+const { QualityTab } = await import('./_quality-tab');
+type QualityRead = import('./_quality-tab').QualityRead;
+
+/** Instructions › Quality (Quality spec §3, CE-039): the scores, their label, what would raise them. */
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT =
   true;
@@ -33,15 +43,42 @@ const result: Readability = {
   ],
 };
 
+const ada: ContentAuthor = {
+  id: 'a1',
+  name: 'Ada Lovelace',
+  title: null,
+  bio: 'Writes about forecasting.',
+  photoUrl: null,
+  sameAs: ['https://www.linkedin.com/in/ada'],
+  userId: null,
+  createdBy: null,
+  defaultFor: [],
+  pages: null,
+};
+
+/** The page's quality with this author (or the team byline) and Readability. */
+function read(readability: Readability | null, author: ContentAuthor | null = ada): QualityRead {
+  return {
+    readability,
+    eeat: eeat({ author }),
+    trust: trust({ suggestions: [] }),
+    authorName: author?.name ?? null,
+    authorHas: { bio: !!author?.bio, links: (author?.sameAs.length ?? 0) > 0 },
+    brandName: 'Acme',
+  };
+}
+
 let container: HTMLDivElement;
 let root: Root;
 const onShow = vi.fn();
+const onPickAuthor = vi.fn();
 
-async function render(readability: Readability | null) {
+async function render(quality: QualityRead | Readability | null) {
+  const q = quality && 'eeat' in quality ? quality : read(quality as Readability | null);
   await act(async () => {
     root.render(
       <NextIntlClientProvider locale="en" messages={messages}>
-        <QualityTab readability={readability} onShow={onShow} />
+        <QualityTab quality={q} onShow={onShow} onPickAuthor={onPickAuthor} />
       </NextIntlClientProvider>,
     );
   });
@@ -49,15 +86,19 @@ async function render(readability: Readability | null) {
 
 beforeEach(() => {
   onShow.mockReset();
+  onPickAuthor.mockReset();
   container = document.createElement('div');
   root = createRoot(container);
 });
 afterEach(() => act(() => root.unmount()));
 
 describe('QualityTab', () => {
-  it('shows the score with its band, labelled an Ansvisor estimate', async () => {
+  it('shows the three scores with their bands, labelled an Ansvisor estimate', async () => {
     await render(result);
     const scores = container.querySelector('[aria-label="Quality scores"]')!;
+    expect(scores.textContent).toContain('E-E-A-T100Strong');
+    // No Trust check is live for a page without agent claims: no fake points.
+    expect(scores.textContent).toContain('TrustNot scored yet');
     expect(scores.textContent).toContain('Readability71Can improve');
     expect(scores.textContent).toContain(
       "Ansvisor estimates based on Google's published quality signals. Not a Google score.",
@@ -97,5 +138,26 @@ describe('QualityTab', () => {
       checks: result.checks.map((c) => ({ ...c, points: c.max })),
     });
     expect(container.textContent).toContain('Nothing to raise here: the page reads well.');
+  });
+
+  it('asks for a real author when the page is by the team, and opens the menu', async () => {
+    await render(read(result, null));
+    const scores = container.querySelector('[aria-label="Quality scores"]')!;
+    expect(scores.textContent).toContain('E-E-A-T0Needs work');
+    const first = container.querySelector('li')!;
+    expect(first.textContent).toBe(
+      '+100 E-E-A-TThe page is by Acme Team, not a personPick the person who wrote it: a named author with a short bio and profile links shows who stands behind the page.Pick author',
+    );
+    await act(async () => first.querySelector('button')!.click());
+    expect(onPickAuthor).toHaveBeenCalled();
+  });
+
+  it("asks to complete the author's profile in Settings › Authors", async () => {
+    await render(read(result, { ...ada, bio: null, sameAs: [] }));
+    const row = [...container.querySelectorAll('li')].find((li) =>
+      li.textContent?.includes('Ada Lovelace'),
+    )!;
+    expect(row.textContent).toContain('+43 E-E-A-TAda Lovelace has no short bio or profile links');
+    expect(row.querySelector('a')!.getAttribute('href')).toBe('/dashboard/settings/authors');
   });
 });

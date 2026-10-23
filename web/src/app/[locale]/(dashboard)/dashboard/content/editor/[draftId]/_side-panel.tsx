@@ -7,12 +7,11 @@ import { isPageType, type ContentDraft } from '@/lib/content/drafts';
 import { buildSourceGroups, includedCounts, type DraftSourceKind } from '@/lib/content/sources';
 import { formatNumber } from '@/lib/format';
 import { BAND_CLASSES, qualityBand, qualityPhase } from '@/lib/content/quality';
-import type { Readability } from '@/lib/content/readability';
 import { cn } from '@/lib/utils';
 import { BriefTab, type AgentRewrite } from './_brief-tab';
 import { DataNote, UsesYourData } from './_data-note';
 import { ImpactTab } from './_impact-tab';
-import { QualityTab } from './_quality-tab';
+import { QualityTab, type QualityRead } from './_quality-tab';
 import { RulesTab, type AgentFix, type PageRewrite } from './_rules-tab';
 import { SourcesTab } from './_sources-tab';
 import { useBriefRebuild, type PageNow } from './_use-brief-rebuild';
@@ -119,8 +118,10 @@ export function EditorSidePanel({
   onSourceShown,
   onBriefRebuilding,
   briefBlocked = null,
-  readability = null,
+  quality = null,
+  qualityScore = null,
   onShowInPage,
+  onPickAuthor,
 }: {
   draft: ContentDraft;
   /** The draft's title, page and type as written now: Sources and Brief read them. */
@@ -154,10 +155,14 @@ export function EditorSidePanel({
   onBriefRebuilding?: (rebuilding: boolean) => void;
   /** Why the brief's Run Agent waits (another agent run from this page), or null. */
   briefBlocked?: string | null;
-  /** The draft's Readability as written, for Quality (CE-036/039). */
-  readability?: Readability | null;
+  /** What Quality reads from the draft and its author (CE-036/039), with Quality on. */
+  quality?: QualityRead | null;
+  /** The scores' average, as the header's chip shows it. */
+  qualityScore?: number | null;
   /** Scrolls the draft to a passage and marks it: Quality's Show. */
   onShowInPage?: (text: string) => void;
+  /** Opens the header's author menu: Quality's Pick author. */
+  onPickAuthor?: () => void;
 }) {
   const t = useTranslations('contentEditor.editor.panel');
   const tEditor = useTranslations('contentEditor.editor');
@@ -182,7 +187,6 @@ export function EditorSidePanel({
   const rulesOpen = Math.max(0, rules.total - rules.met);
   // Quality shows once its first phase is live (NEXT_PUBLIC_CONTENT_QUALITY_PHASE).
   const segments = SEGMENTS.filter((value) => value !== 'quality' || qualityPhase() >= 1);
-  const qualityScore = readability?.score ?? null;
 
   // The sources the agent writes from, as the Sources tab keeps them (v1.1
   // CE-032/034): counted under each Run Agent and on the tab, so turning one
@@ -355,9 +359,13 @@ export function EditorSidePanel({
               />
             </div>
           )}
-          {opened.has('quality') && (
+          {opened.has('quality') && quality && (
             <div hidden={segment !== 'quality'}>
-              <QualityTab readability={readability} onShow={(text) => onShowInPage?.(text)} />
+              <QualityTab
+                quality={quality}
+                onShow={(text) => onShowInPage?.(text)}
+                onPickAuthor={() => onPickAuthor?.()}
+              />
             </div>
           )}
           {opened.has('rules') && (

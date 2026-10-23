@@ -2281,6 +2281,27 @@ describe('the side panel', () => {
       );
     });
 
+    it("scores E-E-A-T from the author, and Quality's Pick author opens the menu", async () => {
+      process.env.NEXT_PUBLIC_CONTENT_QUALITY_PHASE = '1';
+      getContentDraft.mockResolvedValue(draft({ authorId: null }));
+      window.innerWidth = 1440;
+      await renderPage();
+      await act(async () =>
+        [...container.querySelectorAll<HTMLButtonElement>('header button')]
+          .find((b) => b.textContent?.startsWith('Quality'))!
+          .click(),
+      );
+      const scores = panel()!.querySelector('[aria-label="Quality scores"]')!;
+      expect(scores.textContent).toContain('E-E-A-T0Needs work');
+      expect(scores.textContent).toContain('TrustNot scored yet');
+
+      const pick = [...panel()!.querySelectorAll<HTMLButtonElement>('button')].find(
+        (b) => b.textContent === 'Pick author',
+      )!;
+      await act(async () => pick.click());
+      expect(document.querySelectorAll('[role="menuitemradio"]').length).toBe(2);
+    });
+
     it('sets the organization byline, and goes back when that fails', async () => {
       process.env.NEXT_PUBLIC_CONTENT_QUALITY_PHASE = '1';
       getContentDraft.mockResolvedValue(draft({ authorId: 'a1' }));
