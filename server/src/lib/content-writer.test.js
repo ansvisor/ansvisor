@@ -706,13 +706,13 @@ describe('Rewrite the page to these rules', () => {
     rows.content_authors = [{ name: 'Ada Lovelace', title: null, bio: null }];
     answer(
       '<h1>Pour-over coffee</h1><p>[[KEEP 1]]</p><p>[[KEEP 2]]</p>' +
-        '<p>“Pour slowly and you taste every note,” says Marco Rossi.</p>' +
-        '<p>Ada Lovelace says the bloom matters.</p>',
+        '<p>“Pour slowly and you taste every note,” said Marco Rossi.</p>' +
+        '<p>Ada Lovelace said the bloom matters.</p>',
     );
     await expect(run()).resolves.toEqual({ rewritten: true });
     const row = writes.find((w) => w.table === 'content_draft_suggestions').value;
-    expect(row.after_text).toContain(`<p>${QUOTE_PLACEHOLDER} says ${NAME_PLACEHOLDER}.</p>`);
-    expect(row.after_text).toContain('<p>Ada Lovelace says the bloom matters.</p>');
+    expect(row.after_text).toContain(`<p>${QUOTE_PLACEHOLDER} said ${NAME_PLACEHOLDER}.</p>`);
+    expect(row.after_text).toContain('<p>Ada Lovelace said the bloom matters.</p>');
     // What it kept is the page's own, as it was.
     expect(row.after_text).toContain(`<p>${QUOTED}</p>`);
     expect(row.after_text).toContain(

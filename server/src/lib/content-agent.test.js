@@ -360,7 +360,7 @@ describe('no invented people or quotes (CE-044)', () => {
           passage: 3,
           before: '',
           after:
-            '<p>“We doubled our sales in a single quarter with it,” says Marco Rossi.</p>' +
+            '<p>“We doubled our sales in a single quarter with it,” said Marco Rossi.</p>' +
             '<p>“Brew it slow and taste it twice,” Ada Lovelace says.</p>',
           sources: [],
           marks: [],
@@ -374,7 +374,7 @@ describe('no invented people or quotes (CE-044)', () => {
     );
     expect(kept.map((row) => row.after_text)).toEqual([
       'good coffee and hot water, as Ada Lovelace says',
-      `<p>${QUOTE_PLACEHOLDER} says ${NAME_PLACEHOLDER}.</p>` +
+      `<p>${QUOTE_PLACEHOLDER} said ${NAME_PLACEHOLDER}.</p>` +
         '<p>“Brew it slow and taste it twice,” Ada Lovelace says.</p>',
     ]);
   });
@@ -649,9 +649,9 @@ describe('links to the pages and sources given', () => {
   it('puts a name it was not given as a placeholder, its link moved with the words (CE-044)', () => {
     const [kept] = keep({
       after:
-        'Marco Rossi says <a href="https://www.acme.example/pricing/">our plans</a> fit teams.',
+        'Marco Rossi said <a href="https://www.acme.example/pricing/">our plans</a> fit teams.',
     });
-    const words = `${NAME_PLACEHOLDER} says our plans fit teams.`;
+    const words = `${NAME_PLACEHOLDER} said our plans fit teams.`;
     expect(kept.after_text).toBe(words);
     const start = words.indexOf('our plans');
     expect(kept.after_links).toEqual([
