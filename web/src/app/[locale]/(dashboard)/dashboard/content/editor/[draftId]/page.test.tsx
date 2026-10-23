@@ -13,6 +13,7 @@ import ContentEditorPage from './page';
 
 const getContentDraft = vi.fn();
 const markContentDraftReady = vi.fn();
+const unmarkContentDraftReady = vi.fn();
 const saveContentDraft = vi.fn();
 const setContentDraftPageType = vi.fn();
 const setContentDraftAuthor = vi.fn();
@@ -70,6 +71,7 @@ vi.mock('@/lib/actions/content-drafts', () => ({
   getContentResults: (...args: unknown[]) => getContentResults(...args),
   getContentDraft: (...args: unknown[]) => getContentDraft(...args),
   markContentDraftReady: (...args: unknown[]) => markContentDraftReady(...args),
+  unmarkContentDraftReady: (...args: unknown[]) => unmarkContentDraftReady(...args),
   saveContentDraft: (...args: unknown[]) => saveContentDraft(...args),
   setContentDraftPageType: (...args: unknown[]) => setContentDraftPageType(...args),
   setContentDraftAuthor: (...args: unknown[]) => setContentDraftAuthor(...args),
@@ -235,6 +237,7 @@ beforeEach(() => {
   root = createRoot(container);
   getContentDraft.mockReset();
   markContentDraftReady.mockReset();
+  unmarkContentDraftReady.mockReset().mockResolvedValue('in_review');
   saveBlob.mockReset();
   setContentDraftPageType.mockReset().mockResolvedValue(undefined);
   setContentDraftAuthor.mockReset().mockResolvedValue(undefined);
@@ -695,8 +698,72 @@ describe('the content editor', () => {
     expect(toast.success).toHaveBeenCalledWith(
       "Marked ready. Publish it on your site when you're ready.",
     );
-    expect(container.querySelector('header')!.textContent).toContain('Ready');
-    expect(button('Mark ready')!.disabled).toBe(true);
+    // Marked: Ready, in green, where Mark ready was; a click moves it back to review.
+    expect(button('Mark ready')).toBeUndefined();
+    const ready = button('Ready: click to move it back to review')!;
+    expect(ready.textContent).toBe('Ready');
+    await act(async () => ready.click());
+    expect(unmarkContentDraftReady).toHaveBeenCalledWith('d1');
+    expect(toast).toHaveBeenCalledWith('Back in review.');
+    expect(button('Mark ready')!.disabled).toBe(false);
+  });
+
+  it('keeps Ready when moving it back fails, and a page published meanwhile published', async () => {
+    getContentDraft.mockResolvedValue(draft({ status: 'ready' }));
+    unmarkContentDraftReady.mockRejectedValueOnce(new Error('network'));
+    await renderPage();
+    await act(async () => button('Ready: click to move it back to review')!.click());
+    expect(toast.error).toHaveBeenCalledWith("Couldn't move it back to review.");
+    expect(button('Ready: click to move it back to review')).toBeDefined();
+
+    unmarkContentDraftReady.mockResolvedValueOnce('published');
+    await act(async () => button('Ready: click to move it back to review')!.click());
+    expect(toast).toHaveBeenCalledWith('Its status is now Published, so it stays.');
+    expect(button('Published')!.getAttribute('aria-disabled')).toBe('true');
+  });
+
+  it('says Published, not to be undone here, on a published page', async () => {
+    getContentDraft.mockResolvedValue(draft({ status: 'published' }));
+    await renderPage();
+    expect(button('Mark ready')).toBeUndefined();
+    // Disabled but focusable, so its tip says where to change it.
+    expect(button('Published')!.getAttribute('aria-disabled')).toBe('true');
+  });
+
+  it("puts the caret at the end of the page's H1 when the title is clicked", async () => {
+    getContentDraft.mockResolvedValue(draft());
+    await renderPage();
+    const title = container.querySelector<HTMLButtonElement>('header h1 button')!;
+    expect(title.textContent).toBe('Pipeline forecasting');
+    await act(async () => title.click());
+    const editor = (container.querySelector('.ProseMirror') as HTMLElement & { editor: Editor })
+      .editor;
+    // The H1 is the page's first block: its end is its text's length past its start.
+    expect(editor.state.selection.from).toBe(1 + 'Pipeline forecasting'.length);
+  });
+
+  it('puts the caret where the title comes from with no H1, and asks for the page while HTML shows', async () => {
+    getContentDraft.mockResolvedValue(
+      draft({ bodyHtml: '<p></p><h2>Pipeline forecasting</h2><p>Teams trust it.</p>' }),
+    );
+    await renderPage();
+    const title = container.querySelector<HTMLButtonElement>('header h1 button')!;
+    await act(async () => title.click());
+    const editor = (container.querySelector('.ProseMirror') as HTMLElement & { editor: Editor })
+      .editor;
+    // The empty line (2 positions), then the H2's text.
+    expect(editor.state.selection.from).toBe(2 + 1 + 'Pipeline forecasting'.length);
+
+    await act(async () => button('Edit as HTML')!.click());
+    await act(async () => title.click());
+    expect(toast).toHaveBeenCalledWith(
+      "Rename it in the HTML view's text, or close the view to rename it in the page.",
+    );
+    // History waits while the HTML view holds the page, and says why.
+    const history = button('History')!;
+    expect(document.getElementById(history.getAttribute('aria-describedby')!)!.textContent).toBe(
+      'Go back to the page to use History',
+    );
   });
 
   it('links the action the draft is the work of, and says Ready completed its task', async () => {
@@ -1490,7 +1557,7 @@ describe('the content editor', () => {
     expect(writeText).toHaveBeenLastCalledWith(code);
 
     const copyPage = [...container.querySelectorAll<HTMLButtonElement>('header button')].find(
-      (b) => b.textContent === 'Copy HTML',
+      (b) => b.getAttribute('aria-label') === 'Copy HTML',
     )!;
     await act(async () => copyPage.click());
     // The block went in where the cursor was: the start, as nothing was clicked.
@@ -2360,7 +2427,7 @@ describe('the side panel', () => {
       const writeText = vi.fn().mockResolvedValue(undefined);
       Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
       const copyPage = [...container.querySelectorAll<HTMLButtonElement>('header button')].find(
-        (b) => b.textContent === 'Copy HTML',
+        (b) => b.getAttribute('aria-label') === 'Copy HTML',
       )!;
       await act(async () => copyPage.click());
       expect(writeText).toHaveBeenLastCalledWith(
@@ -3268,6 +3335,52 @@ describe('the side panel', () => {
       await act(async () => answer(sources));
       expect(skips().fixRules).toBe(skippedAt);
       expect(nextButton()!.getAttribute('aria-label')).not.toBe('Next · Fix open rules');
+    });
+
+    it('says "1 running" while Fix open rules works, and opens the basket on it', async () => {
+      getDraftSources.mockResolvedValue({
+        data: {
+          prompts: [],
+          fanouts: [{ query: 'pipeline forecasting', platforms: ['copilot-web'], searched: 2 }],
+          citedPages: [],
+          gscQueries: [],
+          brandDomains: [],
+          competitorDomains: [],
+        },
+        choices: [],
+      });
+      getDraftBrief.mockResolvedValue({
+        brief: {
+          goal: 'Win forecasting searches',
+          audience: 'Sales leaders',
+          outline: [],
+          keywords: [],
+          origin: 'rebuild',
+          builtAt: '2026-10-21T10:00:00Z',
+          builtFrom: { prompts: 0, fanouts: 1, pages: 0, queries: 0 },
+        },
+      });
+      getContentDraft.mockResolvedValue(
+        draft({
+          method: 'create',
+          pageType: 'blog_post',
+          rules: {
+            set: null,
+            source: 'default',
+            overrides: { length: { on: false } },
+            textRules: [],
+          },
+        }),
+      );
+      fixDraftRules.mockReturnValue(new Promise(() => {}));
+      await renderPage();
+      expect(button('1 running')).toBeUndefined();
+      await act(async () => nextButton()!.click());
+      await act(async () => inBasket('Fix open rules')!.click());
+      await act(async () => {});
+      expect(basket()).toBeNull();
+      await act(async () => button('1 running')!.click());
+      expect(basket()!.textContent).toContain('Content Agent is working');
     });
 
     it('stays out of the header while Quality is off', async () => {

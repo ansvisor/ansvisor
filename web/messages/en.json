@@ -3555,6 +3555,18 @@
         "applied": "HTML applied · formatting cleaned",
         "appliedUnsafe": "HTML applied · {count, plural, one {# unsafe tag} other {# unsafe tags}} removed"
       },
+      "header": {
+        "rename": "{title} · click to rename it in the page",
+        "running": "{count, plural, one {# running} other {# running}}",
+        "runningHint": "The Content Agent is working on this page. Click to follow its steps or stop it.",
+        "readyLabel": "Ready: click to move it back to review",
+        "readyHint": "Marked ready. Click to move it back to review.",
+        "publishedHint": "Published. Change its status in the Library.",
+        "backInReview": "Back in review.",
+        "backInReviewFailed": "Couldn't move it back to review.",
+        "notReady": "Its status is now {status}, so it stays.",
+        "renameInHtml": "Rename it in the HTML view's text, or close the view to rename it in the page."
+      },
       "markReady": "Mark ready",
       "copyHtml": "Copy HTML",
       "copyHtmlHint": "Copy the page as HTML to publish, HTML blocks and schema included",

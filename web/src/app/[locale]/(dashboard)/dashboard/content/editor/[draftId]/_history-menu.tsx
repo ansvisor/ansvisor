@@ -26,8 +26,11 @@ export function HistoryMenu({
   draftId,
   disabled,
   onRestore,
+  'aria-describedby': describedBy,
 }: {
   draftId: string;
+  /** The header's hint for it (HeaderTip). */
+  'aria-describedby'?: string;
   /** Why it can't open now (the HTML view is open), or null. */
   disabled: string | null;
   onRestore: (version: DraftVersion, label: string) => void;
@@ -64,13 +67,14 @@ export function HistoryMenu({
   return (
     <DropdownMenu onOpenChange={(open) => open && load()}>
       <DropdownMenuTrigger
-        render={<Button variant="outline" size="sm" />}
+        render={<Button variant="outline" size="icon-sm" />}
         disabled={disabled !== null}
-        title={disabled ?? t('hint')}
+        // The header shows its label and hint on hover and focus; why it waits, here.
+        title={disabled ?? undefined}
         aria-label={t('button')}
+        aria-describedby={describedBy}
       >
         <History className="h-3.5 w-3.5" />
-        <span className="hidden xl:inline">{t('button')}</span>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-80">
         <DropdownMenuGroup>

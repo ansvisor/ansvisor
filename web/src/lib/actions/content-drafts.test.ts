@@ -90,6 +90,7 @@ const {
   saveContentDraft,
   setContentDraftAuthor,
   setContentDraftPageType,
+  unmarkContentDraftReady,
 } = await import('./content-drafts');
 const { bodyHash } = await import('@/lib/content/editor');
 
@@ -340,6 +341,38 @@ describe('setContentDraftAuthor', () => {
     await expect(setContentDraftAuthor('d1', AUTHOR)).rejects.toThrow('invalid');
     expect(calls).toEqual([]);
     await expect(setContentDraftAuthor(DRAFT, AUTHOR)).rejects.toThrow('not_found');
+  });
+});
+
+describe('unmarkContentDraftReady', () => {
+  it('moves a ready draft back to review, and only a ready one', async () => {
+    updated = { status: 'in_review' };
+    await expect(unmarkContentDraftReady(DRAFT)).resolves.toBe('in_review');
+    expect(calls[0]).toMatchObject({
+      op: 'update',
+      value: { status: 'in_review' },
+      filters: [
+        ['eq', 'id', DRAFT],
+        ['eq', 'status', 'ready'],
+      ],
+    });
+  });
+
+  it('leaves a draft published meanwhile published, and says so', async () => {
+    updated = null;
+    row = {
+      id: DRAFT,
+      brand_id: 'b1',
+      title: '',
+      page_type: null,
+      method: 'create',
+      status: 'published',
+      body_html: '',
+      author: 'user',
+      updated_at: '2026-10-20T15:00:00Z',
+    };
+    await expect(unmarkContentDraftReady(DRAFT)).resolves.toBe('published');
+    await expect(unmarkContentDraftReady('d1')).rejects.toThrow('invalid');
   });
 });
 
