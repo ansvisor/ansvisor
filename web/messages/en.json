@@ -6696,7 +6696,7 @@
       "resets": "Resets on {date}",
       "exhausted": "This period's AI usage is used up. AI features resume on {date}.",
       "exhaustedNoDate": "This period's AI usage is used up. AI features resume when it resets.",
-      "exhaustedTrial": "The free trial's AI usage is used up. Start your plan above for its full monthly allowance.",
+      "exhaustedTrial": "The free trial's AI usage is used up. Starting the plan below gives its full monthly allowance.",
       "morePlans": "A bigger plan below comes with more.",
       "features": {
         "improve": "Improve suggestions",

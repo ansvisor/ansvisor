@@ -409,7 +409,7 @@ export async function reserveAiBudget(
     if (!data) {
       throw new PlanLimitError(
         plan.trial
-          ? "The free trial's AI usage is used up. Start your plan for its full monthly allowance."
+          ? "The free trial's AI usage is used up. Starting the plan gives its full monthly allowance."
           : `This month's suggestion budget on the ${plan.name} plan is used up. It resets when your subscription renews.`,
         429,
       );

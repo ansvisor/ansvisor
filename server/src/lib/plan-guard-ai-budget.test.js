@@ -170,7 +170,7 @@ describe('reserveAiBudget', () => {
     ).rejects.toMatchObject({
       statusCode: 429,
       message:
-        "The free trial's AI usage is used up. Start your plan for its full monthly allowance.",
+        "The free trial's AI usage is used up. Starting the plan gives its full monthly allowance.",
     });
   });
 
