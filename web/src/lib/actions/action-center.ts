@@ -22,13 +22,20 @@ import {
 import { SIGNAL_ROW_COLUMNS, mapSignalRows, type Signal, type SignalRow } from '@/lib/signals/map';
 import { OPEN_SIGNAL_STATUSES, type SignalStatus } from '@/lib/signals/registry';
 import { readPromptPlaces } from '@/lib/signals/prompt-places';
-import { affectedOf, affectedSignals, affectedSummary } from '@/lib/action-center/affected';
+import {
+  affectedOf,
+  affectedSignals,
+  affectedSummary,
+  type KeptEntity,
+} from '@/lib/action-center/affected';
 import { readPromptDemand } from '@/lib/action-center/prompt-demand';
 import type { VolumeEstimate } from '@/lib/volume-estimate';
 import { readAssignees } from '@/lib/action-center/assignees';
 import {
   currentTaskParams,
   readEntityCounts,
+  readKeptEntities,
+  readKeptEntityLists,
   withEntityCounts,
   withoutTargetIds,
 } from '@/lib/action-center/entity-counts';
@@ -184,6 +191,8 @@ export interface ActionKpiRef {
 export interface ActionDetail {
   tasks: ActionTask[];
   signals: Signal[];
+  /** What it kept when it was created and still has (00244): its Affected rows; null unread. */
+  entities?: KeptEntity[] | null;
   events: ActionEvent[];
   kpis: ActionKpiRef[];
   /** Improve actions only: positions now next to the baseline (PROMPT-008). */
@@ -232,27 +241,33 @@ export async function getActionSignals(brandId: string, actionId: string): Promi
  *  action's kpi_keys — evidence of which goals this work serves. */
 export async function getActionDetail(brandId: string, actionId: string): Promise<ActionDetail> {
   const supabase = await createClient();
-  const [tasksRes, signals, eventsRes, kpisRes, outcomeRes, entityCounts] = await Promise.all([
-    supabase.from('action_tasks').select(TASK_COLUMNS).eq('action_id', actionId).order('position'),
-    readActionSignals(supabase, brandId, actionId),
-    supabase
-      .from('action_events')
-      .select(EVENT_COLUMNS)
-      .eq('action_id', actionId)
-      .order('created_at'),
-    supabase
-      .from('kpi_definitions')
-      .select('kpi_key, target, timeframe')
-      .eq('brand_id', brandId)
-      .eq('is_active', true),
-    supabase
-      .from('actions')
-      .select('position_outcome, payload')
-      .eq('brand_id', brandId)
-      .eq('id', actionId)
-      .maybeSingle(),
-    readEntityCounts(supabase, [actionId]),
-  ]);
+  const [tasksRes, signals, eventsRes, kpisRes, outcomeRes, entityCounts, entities] =
+    await Promise.all([
+      supabase
+        .from('action_tasks')
+        .select(TASK_COLUMNS)
+        .eq('action_id', actionId)
+        .order('position'),
+      readActionSignals(supabase, brandId, actionId),
+      supabase
+        .from('action_events')
+        .select(EVENT_COLUMNS)
+        .eq('action_id', actionId)
+        .order('created_at'),
+      supabase
+        .from('kpi_definitions')
+        .select('kpi_key, target, timeframe')
+        .eq('brand_id', brandId)
+        .eq('is_active', true),
+      supabase
+        .from('actions')
+        .select('position_outcome, payload')
+        .eq('brand_id', brandId)
+        .eq('id', actionId)
+        .maybeSingle(),
+      readEntityCounts(supabase, [actionId]),
+      readKeptEntities(supabase, actionId),
+    ]);
   if (tasksRes.error) throw new Error(tasksRes.error.message);
   if (eventsRes.error) throw new Error(eventsRes.error.message);
   if (kpisRes.error) throw new Error(kpisRes.error.message);
@@ -268,6 +283,7 @@ export async function getActionDetail(brandId: string, actionId: string): Promis
       titleParams: currentTaskParams(task.titleParams, payload) ?? task.titleParams,
     })),
     signals,
+    entities,
     events: (eventsRes.data ?? []).map(eventFromRow),
     kpis: (kpisRes.data ?? []).map(kpiFromRow),
     positionOutcome: parseImproveOutcome(outcomeRes.data?.position_outcome ?? null),
@@ -553,9 +569,10 @@ const AFFECTED_PAGE_SIZE = 1000;
 
 /**
  * Each action's affected items, for the actions list's Export CSV (AC-005):
- * the count and names the drawer's Affected tab shows, from the signals the
- * action rests on — or, for one a person sent, from what it was sent about.
- * Read page by page, so a brand with many signals is read whole.
+ * the count and names the drawer's Affected tab shows, from what the action
+ * kept (00244) and the signals it rests on — or, for one a person sent, from
+ * what it was sent about. Read page by page, so a brand with many signals is
+ * read whole.
  */
 export async function getActionsAffected(
   brandId: string,
@@ -597,9 +614,12 @@ export async function getActionsAffected(
     return (data ?? []) as { id: string; payload: Record<string, unknown> | null }[];
   };
 
-  const [signalChunks, payloadChunks, places, entityCounts] = await Promise.all([
+  const [signalChunks, payloadChunks, keptChunks, places, entityCounts] = await Promise.all([
     Promise.all(chunks.map(readSignals)),
     Promise.all(chunks.map(readPayloads)),
+    // What each kept (00244): its rows, as in the drawer. Without them (a
+    // database before 00244), the signals'.
+    Promise.all(chunks.map((chunk) => readKeptEntityLists(supabase, chunk))),
     readPromptPlaces(supabase, brandId),
     // The count each action shows (AC-009), so the CSV's agrees with its title.
     readEntityCounts(supabase, ids),
@@ -613,6 +633,10 @@ export async function getActionsAffected(
       rowsByAction.set(link.action_id, list);
     }
   }
+  const keptByAction = new Map<string, KeptEntity[]>();
+  for (const lists of keptChunks) {
+    for (const [actionId, kept] of lists ?? []) keptByAction.set(actionId, kept);
+  }
   const summaries: Record<string, { count: number; items: string[] }> = {};
   for (const action of payloadChunks.flat()) {
     const signals = mapSignalRows(rowsByAction.get(action.id) ?? [], places);
@@ -620,6 +644,7 @@ export async function getActionsAffected(
       affectedOf(
         affectedSignals(signals, action.id),
         withEntityCounts(action.payload ?? {}, entityCounts.get(action.id)),
+        keptByAction.get(action.id) ?? null,
       ),
     );
   }

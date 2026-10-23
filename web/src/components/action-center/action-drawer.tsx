@@ -224,6 +224,7 @@ export function ActionDrawer({
     brandId,
     action,
     detail?.signals ?? null,
+    detail?.entities ?? null,
   );
 
   if (!action) return null;

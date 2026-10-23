@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
+import type { KeptEntity } from './affected';
 
 /**
  * AC-009: one count for an action, everywhere.
@@ -178,4 +179,101 @@ export async function readEntityCounts(
     }
   }
   return byAction;
+}
+
+/** A row of action_entities as a list reads it. */
+interface KeptRow {
+  entity_type: string;
+  entity_key: string;
+  label: string | null;
+  removed_at: string | null;
+}
+
+const keptOf = (row: KeptRow): KeptEntity => ({
+  type: row.entity_type,
+  key: row.entity_key,
+  label: row.label,
+  removed: row.removed_at !== null,
+});
+
+/** A failed read of the lists: quiet on a database without 00244, logged otherwise. */
+function keptReadFailed(error: { code?: string; message: string }) {
+  // A database without 00244 has no list: the rows come from the signals, quietly.
+  if (error.code !== 'PGRST205' && error.code !== '42P01') {
+    console.error('Failed to read an action’s list:', error.message);
+  }
+}
+
+/**
+ * What an action kept when it was created, removed ones marked
+ * (action_entities, 00244, members may read it): the rows of its Affected
+ * list (affectedOf). Null when it can't be read, so the list is built from
+ * the signals as before.
+ */
+export async function readKeptEntities(
+  client: SupabaseClient,
+  actionId: string,
+): Promise<KeptEntity[] | null> {
+  try {
+    const { data, error } = await client
+      .from('action_entities')
+      .select('entity_type, entity_key, label, removed_at')
+      .eq('action_id', actionId)
+      // A steady order: the rows don't move between opens.
+      .order('label')
+      .order('entity_key')
+      .limit(1000);
+    if (error) {
+      keptReadFailed(error);
+      return null;
+    }
+    return ((data ?? []) as KeptRow[]).map(keptOf);
+  } catch (err) {
+    console.error('Failed to read an action’s list:', err);
+    return null;
+  }
+}
+
+/** Kept rows per page when many actions' lists are read at once. */
+const KEPT_PAGE_SIZE = 1000;
+
+/**
+ * Many actions' lists (readKeptEntities) in one read, by action, for the
+ * actions list's Export CSV: page by page, as their rows together can be
+ * more than one response returns. An action with none is left out. Null
+ * when they can't be read, so their rows come from the signals as before.
+ */
+export async function readKeptEntityLists(
+  client: SupabaseClient,
+  actionIds: string[],
+): Promise<Map<string, KeptEntity[]> | null> {
+  const byAction = new Map<string, KeptEntity[]>();
+  try {
+    for (let from = 0; ; from += KEPT_PAGE_SIZE) {
+      const { data, error } = await client
+        .from('action_entities')
+        .select('action_id, entity_type, entity_key, label, removed_at')
+        .in('action_id', actionIds)
+        // Each action's rows in the drawer's order, made whole so pages don't shuffle.
+        .order('action_id')
+        .order('label')
+        .order('entity_key')
+        .order('entity_type')
+        .range(from, from + KEPT_PAGE_SIZE - 1);
+      if (error) {
+        keptReadFailed(error);
+        return null;
+      }
+      const batch = (data ?? []) as (KeptRow & { action_id: string })[];
+      for (const row of batch) {
+        const list = byAction.get(row.action_id) ?? [];
+        list.push(keptOf(row));
+        byAction.set(row.action_id, list);
+      }
+      if (batch.length < KEPT_PAGE_SIZE) return byAction;
+    }
+  } catch (err) {
+    console.error('Failed to read an action’s list:', err);
+    return null;
+  }
 }

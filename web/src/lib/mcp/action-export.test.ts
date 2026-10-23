@@ -45,6 +45,7 @@ function table(name: string) {
       return chain;
     },
     order: () => chain,
+    limit: () => chain,
     is: () => chain,
     range: (from: number, to: number) => {
       range = [from, to];
@@ -208,6 +209,40 @@ describe('exportActionFor', () => {
     expect(md).toContain('## Signals (1)');
     // The Why in the action's own terms, from its signal, with the day in UTC.
     expect(md).toMatch(/Why: .*Oct 9/);
+  });
+
+  it("gives the Why the demand of a signal's prompt the action didn't keep", async () => {
+    rows.actions = [actionRow({ payload: { targetEntity: 'prompts', targetCount: 1 } })];
+    // What the action kept (00244): p1 alone.
+    rows.action_entities = [
+      {
+        action_id: 'a1',
+        entity_type: 'prompts',
+        entity_key: 'p1',
+        label: 'Best coffee subscription?',
+        removed_at: null,
+      },
+    ];
+    // A signal about a prompt the action never kept: not listed, but the Why names it.
+    const [first] = rows.signals;
+    rows.signals.push({
+      ...first,
+      id: 's2',
+      payload: {
+        promptId: 'p2',
+        promptText: 'Coffee delivery near me',
+        lostUrls: [{ url: 'https://acme.example/delivery', position: 3 }],
+      },
+    });
+    rows.prompts.push({ ...rows.prompts[0], id: 'p2', text: 'Coffee delivery near me' });
+    rows.prompt_volumes.push({ ...rows.prompt_volumes[0], prompt_id: 'p2' });
+
+    const md = (await exportActionFor(auth, 'a1', 'markdown'))!.body;
+    // The list is what it kept…
+    expect(md).toContain('## Affected (1)\n- Best coffee subscription? · 4.1–6.9k');
+    expect(md).not.toMatch(/^- Coffee delivery near me/m);
+    // …and the Why, told from both signals, sums both prompts' demand.
+    expect(md).toMatch(/^Why: 2 prompts \(8\.2–13\.8k AI searches a month, estimated\)/m);
   });
 
   it("still writes the action when its prompts' demand can't be read, without it", async () => {

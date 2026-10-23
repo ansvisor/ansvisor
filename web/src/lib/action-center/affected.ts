@@ -80,15 +80,49 @@ const urlsOf = (value: WhereValue | null): string[] =>
       ? [...value.items]
       : [];
 
+/** One of the things an action kept when it was created (action_entities, 00244). */
+export interface KeptEntity {
+  type: string;
+  /** A prompt's id (or its text, for an action that kept texts), a page's address, a competitor's id… */
+  key: string;
+  label: string | null;
+  /** Deleted or paused since: counted out, never listed. */
+  removed: boolean;
+}
+
+/** A key that is a row's id: a prompt kept by its text has none. */
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const idOf = (key: string) => (UUID_RE.test(key) ? key : null);
+
 /**
  * The action's affected items, from the signals that support it. With none
  * (an action a person sent), from what it was sent about. Its prompts or
  * pages count as the action counts them (AC-009): the list it kept when it
  * was created, less what was removed since, not the signals the nightly
  * pass rewrites; the rows still show what the signals say about each.
+ *
+ * With `kept` (that list, read from action_entities), the rows are its
+ * items still there: each with what the signals say of it, one the signals
+ * no longer name as a plain row, and none the action never had (or had and
+ * lost since). The heading and the rows then agree.
  */
-export function affectedOf(signals: Signal[], payload: Record<string, unknown> = {}): Affected {
+export function affectedOf(
+  signals: Signal[],
+  payload: Record<string, unknown> = {},
+  kept: KeptEntity[] | null = null,
+): Affected {
   const out = signals.length === 0 ? affectedFromPayload(payload) : affectedOfSignals(signals);
+  const entity = typeof payload.targetEntity === 'string' ? payload.targetEntity : null;
+  const keptOnes = entity ? (kept ?? []).filter((e) => e.type === entity) : [];
+  // Any kept of its kind, removed ones too: an action that lost all of them lists none.
+  if (keptOnes.length > 0) {
+    return keptRows(
+      out,
+      entity!,
+      keptOnes.filter((e) => !e.removed),
+      payload,
+    );
+  }
   // What was removed since (withEntityCounts) isn't listed: by its key (a
   // prompt's id, or its text where it has none), a competitor by its name.
   const strings = (value: unknown) =>
@@ -118,6 +152,92 @@ export function affectedOf(signals: Signal[], payload: Record<string, unknown> =
   if (payload.targetEntity === 'competitors') {
     const names = strings(payload.removedLabels);
     if (names.size > 0) out.competitors = out.competitors.filter((name) => !names.has(name));
+  }
+  return out;
+}
+
+/**
+ * The prompts whose demand a drawer reads: its Affected rows' (the kept
+ * list's), and those its signals name. The Why is told from the signals
+ * (actionStory), and they can name prompts the action didn't keep: read for
+ * the rows alone, its range would leave those out.
+ */
+export function demandPromptIds(
+  affected: Affected,
+  signals: Signal[],
+  payload: Record<string, unknown> = {},
+): string[] {
+  const ids = [...affected.prompts, ...affectedOf(signals, payload).prompts].map((row) => row.id);
+  return [...new Set(ids.filter((id): id is string => !!id))];
+}
+
+/** The rows as the action's kept list has them (affectedOf). */
+function keptRows(
+  out: Affected,
+  entity: string,
+  kept: KeptEntity[],
+  payload: Record<string, unknown>,
+): Affected {
+  const count = typeof payload.targetCount === 'number' ? payload.targetCount : 0;
+  if (entity === 'prompts') {
+    const byKey = new Map(kept.map((e) => [e.key, e]));
+    // A prompt listed by its text alone matches the label kept for it; one
+    // with an id only its own (copies of a text live in other topics).
+    const byLabel = new Map(kept.flatMap((e) => (e.label ? [[e.label, e] as const] : [])));
+    const merged = new Map<string, AffectedPrompt>();
+    const rows: AffectedPrompt[] = [];
+    for (const row of out.prompts) {
+      const match = row.id ? byKey.get(row.id) : (byKey.get(row.text) ?? byLabel.get(row.text));
+      if (!match) continue;
+      const first = merged.get(match.key);
+      if (first) {
+        // The same prompt by its id and by its text: one row, with all it says.
+        add(first.platforms, ...row.platforms);
+        add(first.lostPages, ...row.lostPages);
+        add(first.citedInstead, ...row.citedInstead);
+        add(first.topics, ...row.topics);
+        first.leaders.push(...row.leaders);
+        continue;
+      }
+      // A key is an id only when it is one: an action that kept texts has none.
+      if (!row.id) row.id = idOf(match.key);
+      merged.set(match.key, row);
+      rows.push(row);
+    }
+    for (const e of kept) {
+      if (merged.has(e.key)) continue;
+      rows.push({
+        id: idOf(e.key),
+        text: e.label ?? e.key,
+        platforms: [],
+        lostPages: [],
+        citedInstead: [],
+        leaders: [],
+        topics: [],
+      });
+    }
+    out.prompts = rows;
+    // An action made before 00244 kept its first 50: the count says the rest.
+    out.promptTotal = Math.max(count, rows.length);
+  } else if (entity === 'pages') {
+    // An address as compared: its trailing slash aside.
+    const pageKey = (url: string) => bareUrl(url).replace(/\/+$/, '');
+    const keys = new Set(kept.map((e) => pageKey(e.key)));
+    const listed = new Set<string>();
+    const rows = out.pages.filter((row) => {
+      const key = pageKey(row.url);
+      if (!keys.has(key) || listed.has(key)) return false;
+      listed.add(key);
+      return true;
+    });
+    for (const e of kept) {
+      if (listed.has(pageKey(e.key))) continue;
+      rows.push({ url: e.key, sessions: null, before: null, platforms: [], issues: [] });
+    }
+    out.pages = rows;
+    out.pageTotal = Math.max(count, rows.length);
+  } else if (entity === 'competitors') {
+    out.competitors = kept.map((e) => e.label ?? e.key);
   }
   return out;
 }

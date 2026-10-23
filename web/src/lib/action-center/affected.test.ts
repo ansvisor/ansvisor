@@ -6,6 +6,7 @@ import {
   affectedOf,
   affectedSummary,
   affectedTotal,
+  demandPromptIds,
   leaderText,
   type Affected,
 } from './affected';
@@ -200,6 +201,159 @@ describe('affectedOf', () => {
     });
     expect(left.prompts.map((p) => p.text)).toEqual(['Cheapest beans online?']);
     expect(left.promptTotal).toBe(1);
+  });
+
+  const P1 = '11111111-1111-4111-8111-111111111111';
+  const P2 = '22222222-2222-4222-8222-222222222222';
+  const P9 = '99999999-9999-4999-8999-999999999999';
+  const keptPrompt = (key: string, label: string, removed = false) => ({
+    type: 'prompts',
+    key,
+    label,
+    removed,
+  });
+
+  it('lists what the action kept, with what the signals say of each, as its count says', () => {
+    const signals = [
+      signal({
+        payload: { promptId: P1, promptText: 'Which tools track AI search?' },
+        where: { platforms: ['chatgpt-web'], regions: [], topics: [] },
+      }),
+      // A signal the nightly pass added later, about a prompt the action never had.
+      signal({
+        id: 's2',
+        payload: { promptId: P9, promptText: 'Cheapest AI rank tracker?' },
+        where: { platforms: ['gemini-web'], regions: [], topics: [] },
+      }),
+    ];
+    const kept = [
+      keptPrompt(P1, 'Which tools track AI search?'),
+      // Kept, but no signal names it now: a plain row.
+      keptPrompt(P2, 'Best AI rank tracker?'),
+    ];
+    const affected = affectedOf(signals, { targetEntity: 'prompts', targetCount: 2 }, kept);
+    expect(affected.prompts.map((p) => [p.id, p.text, p.platforms])).toEqual([
+      [P1, 'Which tools track AI search?', ['chatgpt-web']],
+      [P2, 'Best AI rank tracker?', []],
+    ]);
+    // The heading and the rows agree.
+    expect(affected.promptTotal).toBe(2);
+
+    // An action made before 00244 kept its first ones: the count says the rest.
+    expect(
+      affectedOf(signals, { targetEntity: 'prompts', targetCount: 60 }, kept).promptTotal,
+    ).toBe(60);
+  });
+
+  it('lists none the action lost since, even when it lost them all', () => {
+    const signals = [signal({ payload: { promptId: P9, promptText: 'Not the action’s?' } })];
+    const affected = affectedOf(signals, { targetEntity: 'prompts', targetCount: 0 }, [
+      keptPrompt(P1, 'Paused one?', true),
+    ]);
+    expect(affected.prompts).toEqual([]);
+    expect(affected.promptTotal).toBe(0);
+  });
+
+  it('keeps a prompt kept by its text without an id, and matches a text only to a row without one', () => {
+    // A topic opportunity keeps its prompts' texts: no id, no link, no volume read.
+    const byText = affectedOf(
+      [],
+      { targetEntity: 'prompts', targetCount: 2, targets: ['Best beans?'] },
+      [keptPrompt('Best beans?', 'Best beans?'), keptPrompt('Best grinder?', 'Best grinder?')],
+    );
+    expect(byText.prompts.map((p) => [p.id, p.text])).toEqual([
+      [null, 'Best beans?'],
+      [null, 'Best grinder?'],
+    ]);
+
+    // A copy of a kept prompt's text in another topic is another prompt.
+    const copies = affectedOf(
+      [signal({ payload: { promptId: P9, promptText: 'Best beans?' } })],
+      { targetEntity: 'prompts', targetCount: 1 },
+      [keptPrompt(P1, 'Best beans?')],
+    );
+    expect(copies.prompts.map((p) => p.id)).toEqual([P1]);
+  });
+
+  it('merges a prompt named by its id and by its text into one row', () => {
+    const affected = affectedOf(
+      [
+        signal({
+          payload: { promptId: P1, promptText: 'Best beans?' },
+          where: { platforms: ['chatgpt-web'], regions: [], topics: [] },
+        }),
+        signal({
+          id: 's2',
+          payload: { promptText: 'Best beans?' },
+          where: { platforms: ['gemini-web'], regions: [], topics: [] },
+        }),
+      ],
+      { targetEntity: 'prompts', targetCount: 1 },
+      [keptPrompt(P1, 'Best beans?')],
+    );
+    expect(affected.prompts.map((p) => [p.id, p.platforms])).toEqual([
+      [P1, ['chatgpt-web', 'gemini-web']],
+    ]);
+  });
+
+  it('matches pages by address and keeps competitors by name', () => {
+    const pages = affectedOf(
+      [],
+      {
+        targetEntity: 'pages',
+        targetCount: 2,
+        targets: [{ label: 'https://acme.example/a/' }, { label: 'https://acme.example/old' }],
+      },
+      [
+        { type: 'pages', key: 'https://acme.example/a', label: null, removed: false },
+        { type: 'pages', key: 'https://acme.example/b', label: null, removed: false },
+        { type: 'pages', key: 'https://acme.example/old', label: null, removed: true },
+      ],
+    );
+    expect(pages.pages.map((p) => p.url)).toEqual([
+      'https://acme.example/a/',
+      'https://acme.example/b',
+    ]);
+    expect(pages.pageTotal).toBe(2);
+
+    const competitors = affectedOf(
+      [],
+      { targetEntity: 'competitors', targets: ['Profound', 'Gone Inc'] },
+      [
+        { type: 'competitors', key: 'c1', label: 'Profound', removed: false },
+        { type: 'competitors', key: 'c2', label: 'Gone Inc', removed: true },
+      ],
+    );
+    expect(competitors.competitors).toEqual(['Profound']);
+  });
+
+  it('builds from the signals when there is no kept list of its kind, or none can be read', () => {
+    const signals = [signal({ payload: { promptId: P1, promptText: 'Which tools?' } })];
+    const payload = { targetEntity: 'prompts', targetCount: 1 };
+    expect(affectedOf(signals, payload, null).prompts).toHaveLength(1);
+    expect(affectedOf(signals, payload, []).prompts).toHaveLength(1);
+    expect(
+      affectedOf(signals, payload, [
+        { type: 'competitors', key: 'c1', label: 'Profound', removed: false },
+      ]).prompts,
+    ).toHaveLength(1);
+  });
+
+  it("reads demand for the rows' prompts and those the signals name outside the kept list", () => {
+    const signals = [
+      signal({ payload: { promptId: P1, promptText: 'Which tools track AI search?' } }),
+      // Named by the signals (and so by the Why), never kept by the action.
+      signal({ id: 's2', payload: { promptId: P9, promptText: 'Cheapest AI rank tracker?' } }),
+      // Removed since: in neither.
+      signal({ id: 's3', payload: { promptId: P2, promptText: 'Best AI rank tracker?' } }),
+    ];
+    const payload = { targetEntity: 'prompts', targetCount: 1, removedKeys: [P2] };
+    const affected = affectedOf(signals, payload, [
+      keptPrompt(P1, 'Which tools track AI search?'),
+      keptPrompt(P2, 'Best AI rank tracker?', true),
+    ]);
+    expect(affected.prompts.map((p) => p.id)).toEqual([P1]);
+    expect(demandPromptIds(affected, signals, payload)).toEqual([P1, P9]);
   });
 
   it('is empty for an action with nothing to list', () => {
