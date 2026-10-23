@@ -4132,10 +4132,10 @@
         "checks": {
           "claimsSourced": {
             "line": "{count, plural, one {# sentence with a figure has} other {# sentences with figures have}} no source",
-            "detail": "Link its source in the same paragraph, or take the figure out. Content Agent won't make one up."
+            "detail": "Link each figure's source in the same paragraph, or take the figure out. Content Agent won't make one up."
           },
           "freshSources": {
-            "line": "{count} of {total} dated sources {count, plural, one {is} other {are}} over {months} months old",
+            "line": "{count} of {total} dated {total, plural, one {source} other {sources}} {count, plural, one {is} other {are}} over {months} months old",
             "detail": "Swap them for a newer source, or check whether the page has an update."
           },
           "noBrokenLinks": {

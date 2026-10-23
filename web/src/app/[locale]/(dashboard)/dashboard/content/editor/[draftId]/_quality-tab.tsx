@@ -9,6 +9,7 @@ import {
   authorProfile,
   FRESH_MONTHS,
   scoreGain,
+  trustGain,
   type EeatCheckId,
   type Score,
   type TrustRead,
@@ -28,7 +29,7 @@ export interface QualityRead {
   readability: Readability | null;
   /** E-E-A-T from the author, or null before the authors are read. */
   eeat: Score<EeatCheckId> | null;
-  /** Trust from the page's figures and links, its score null while none can be read. */
+  /** Trust from the page's figures and links, its score null until a figure or a dated source is read. */
   trust: TrustRead | null;
   /** The page's author, or null for the organization byline. */
   author: ContentAuthor | null;
@@ -243,16 +244,17 @@ function eeatSuggestions(t: T, quality: QualityRead, teamByline: string): Sugges
 
 /**
  * Trust's: figures without a source, sources past FRESH_MONTHS, links that
- * don't answer, each with Show on the first one in the page.
+ * don't answer, each with Show on the first one in the page. A broken link
+ * is listed before Trust is scored too, its gain out of the Phase 1 points.
  */
 function trustSuggestions(t: T, trust: TrustRead | null): Suggestion[] {
-  if (!trust || trust.score === null) return [];
+  if (!trust) return [];
   const out: Suggestion[] = [];
   if (trust.unsourced.length) {
     out.push({
       key: 'trust:claimsSourced',
       score: 'trust',
-      gain: scoreGain(trust, ['claimsSourced']),
+      gain: trustGain(trust, ['claimsSourced']),
       line: t('checks.claimsSourced.line', { count: trust.unsourced.length }),
       detail: t('checks.claimsSourced.detail'),
       action: { kind: 'show', text: trust.unsourced[0] },
@@ -262,7 +264,7 @@ function trustSuggestions(t: T, trust: TrustRead | null): Suggestion[] {
     out.push({
       key: 'trust:freshSources',
       score: 'trust',
-      gain: scoreGain(trust, ['freshSources']),
+      gain: trustGain(trust, ['freshSources']),
       line: t('checks.freshSources.line', {
         count: trust.stale.length,
         total: trust.dated,
@@ -276,7 +278,7 @@ function trustSuggestions(t: T, trust: TrustRead | null): Suggestion[] {
     out.push({
       key: 'trust:noBrokenLinks',
       score: 'trust',
-      gain: scoreGain(trust, ['noBrokenLinks']),
+      gain: trustGain(trust, ['noBrokenLinks']),
       line: t('checks.noBrokenLinks.line', { count: trust.broken.length }),
       detail: t('checks.noBrokenLinks.detail', {
         count: trust.broken.length,

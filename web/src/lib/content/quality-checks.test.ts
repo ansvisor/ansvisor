@@ -3,6 +3,7 @@ import type { ContentAuthor } from './authors';
 import {
   EEAT_WEIGHTS,
   MAX_LINK_CHECKS,
+  TRUST_PHASE1_POINTS,
   TRUST_WEIGHTS,
   authorProfile,
   eeat,
@@ -10,6 +11,7 @@ import {
   scoreGain,
   trust,
   trustBlocks,
+  trustGain,
   type LinkCheck,
 } from './quality-checks';
 
@@ -119,7 +121,32 @@ describe('trust (Phase 1: figures and links)', () => {
     );
     expect(result.broken.map((l) => l.url)).toEqual(['https://gone.example/']);
     expect(result.checks).toEqual([{ id: 'noBrokenLinks', points: 1.5, max: 3 }]);
-    expect(scoreGain(result, ['noBrokenLinks'])).toBe(50);
+    // Links alone don't score Trust; the dead one is worth 1.5 of the 40 Phase 1 points.
+    expect(result.score).toBeNull();
+    expect(TRUST_PHASE1_POINTS).toBe(40);
+    expect(trustGain(result, ['noBrokenLinks'])).toBe(4);
+  });
+
+  it('scores Trust only once a figure or a dated source is there', () => {
+    const dead = read([{ href: 'https://gone.example/', status: 'broken', httpStatus: 404 }]);
+    const working = read([{ href: 'https://gone.example/' }]);
+    const linkOnly = '<p>See <a href="https://gone.example/">this</a>.</p>';
+    // One link would otherwise set the whole score: 0 dead, 100 working.
+    expect(run(linkOnly, dead).score).toBeNull();
+    expect(run(linkOnly, working).score).toBeNull();
+    expect(trustGain(run(linkOnly, dead), ['noBrokenLinks'])).toBe(8);
+    expect(trustGain(run(linkOnly, working), ['noBrokenLinks'])).toBe(0);
+
+    // With a figure the links count among Trust's live checks: 30 + 0 of 33.
+    const withFigure = run(
+      '<p>Win rates rose 42% (<a href="https://gone.example/">this</a>).</p>',
+      dead,
+    );
+    expect(withFigure.score).toBe(91);
+    expect(trustGain(withFigure, ['noBrokenLinks'])).toBe(scoreGain(withFigure, ['noBrokenLinks']));
+    // A dated source alone is enough too.
+    const dated = read([{ href: 'https://gone.example/', date: '2026-01-01T00:00:00.000Z' }]);
+    expect(run(linkOnly, dated).score).toBe(100);
   });
 
   it(`asks for each http(s) link once, ${MAX_LINK_CHECKS} at most`, () => {
@@ -137,6 +164,8 @@ describe('trust (Phase 1: figures and links)', () => {
       'It loads 3 times faster.',
       'Rates rose 12 percent.',
       'Costs fell by €4.5 million.',
+      '100% of our customers renewed.',
+      'Get 50% off and 20% more reach.',
     ];
     const plain = [
       'Plans start at $29/month.',
@@ -144,6 +173,14 @@ describe('trust (Phase 1: figures and links)', () => {
       'Room 3X is upstairs.',
       'Support is open 24/7.',
       'We ranked #1 in 2026.',
+      'Save 20% on your first order.',
+      'Get 50% off all shoes.',
+      'A 0% APR loan.',
+      'Made from 100% organic cotton.',
+      'Our 100% money-back guarantee covers every plan.',
+      'Watch it in 4K on any TV.',
+      'Roll it into your 401k.',
+      'Plans from $1.2k/month.',
     ];
     const result = run(`<p>${[...claims, ...plain].join(' ')}</p>`);
     expect(result.unsourced).toEqual(claims);
