@@ -19,10 +19,16 @@ export const useBrandStore = create<BrandStore>()(
       brands: [],
       activeBrandId: null,
 
+      // The brand kept from the last visit only while it is still one of the
+      // member's: a brand deleted, or another workspace's (an account
+      // switched in this browser), sent with every call answers 404 or 403
+      // (BUG-001).
       setBrands: (brands) =>
         set({
           brands,
-          activeBrandId: brands.length > 0 ? (get().activeBrandId ?? brands[0].id) : null,
+          activeBrandId: brands.some((b) => b.id === get().activeBrandId)
+            ? get().activeBrandId
+            : (brands[0]?.id ?? null),
         }),
 
       addBrand: (brand) =>
