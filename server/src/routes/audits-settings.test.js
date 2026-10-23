@@ -10,6 +10,7 @@ import express from 'express';
 let tables;
 let writes;
 let quota;
+const readSiteTrust = vi.fn();
 let server;
 let baseUrl;
 
@@ -81,6 +82,7 @@ async function startApp() {
     brandFactsFor: vi.fn(),
     generateRecommendations: vi.fn(),
   }));
+  vi.doMock('../lib/site-trust.js', () => ({ readSiteTrust }));
   vi.doMock('../lib/logger.js', () => {
     const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
     return { default: logger, logger };
@@ -106,6 +108,11 @@ const otherBrand = '44444444-4444-4444-4444-444444444444';
 
 beforeEach(async () => {
   writes = [];
+  readSiteTrust.mockReset().mockResolvedValue({
+    checks: { about: { ok: true, url: 'https://acme.com/about' } },
+    score: 1,
+    checkedAt: '2026-10-23T12:00:00.000Z',
+  });
   quota = {
     used: 10,
     running: 0,
@@ -277,5 +284,27 @@ describe('GET /api/audits/auto-runs/latest', () => {
   it('is null when no recent run audited the brand', async () => {
     const res = await fetch(`${baseUrl}/auto-runs/latest?brandId=${brandId}`);
     expect((await res.json()).run).toBeNull();
+  });
+});
+
+describe('GET /api/audits/site-trust', () => {
+  it("answers with the brand's site trust, and reads it again when asked", async () => {
+    let res = await fetch(`${baseUrl}/site-trust?brandId=${brandId}`);
+    expect(res.status).toBe(200);
+    await expect(res.json()).resolves.toEqual({
+      success: true,
+      checks: { about: { ok: true, url: 'https://acme.com/about' } },
+      score: 1,
+      checkedAt: '2026-10-23T12:00:00.000Z',
+    });
+    expect(readSiteTrust).toHaveBeenLastCalledWith(brandId, { refresh: false });
+    res = await fetch(`${baseUrl}/site-trust?brandId=${brandId}&refresh=1`);
+    expect(readSiteTrust).toHaveBeenLastCalledWith(brandId, { refresh: true });
+  });
+
+  it('wants a brand id', async () => {
+    const res = await fetch(`${baseUrl}/site-trust?brandId=nope`);
+    expect(res.status).toBe(400);
+    expect(readSiteTrust).not.toHaveBeenCalled();
   });
 });

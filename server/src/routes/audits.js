@@ -46,6 +46,7 @@ import {
 } from '../lib/audit/opportunities.js';
 import { AUTO_AUDIT } from '../lib/audit/auto-audit.js';
 import { rankOpportunities } from '../lib/audit/priority.js';
+import { readSiteTrust } from '../lib/site-trust.js';
 import { buildTemplates, templateOf, templateOpportunities } from '../lib/audit/templates.js';
 import { ENGINE_THRESHOLDS } from '../config/action-engine.js';
 import { runSignals } from '../lib/audit/engine.js';
@@ -1159,6 +1160,23 @@ router.get('/auto-runs/latest', async (req, res) => {
     });
   } catch (err) {
     return sendAuditError(req, res, err, 'auto-audit run read failed');
+  }
+});
+
+// GET /api/audits/site-trust?brandId=…&refresh=1 — the brand's five site
+// trust checks (Content Editor Quality, CE-043): the day's read, or a new
+// one when asked again (site-trust.js). Registered before /:id.
+router.get('/site-trust', async (req, res) => {
+  const parsed = z.guid().safeParse(req.query.brandId);
+  if (!parsed.success) {
+    return res.status(400).json({ success: false, message: 'brandId is required' });
+  }
+  try {
+    await assertBrandAccess(parsed.data, req.user?.id);
+    const trust = await readSiteTrust(parsed.data, { refresh: req.query.refresh === '1' });
+    return res.json({ success: true, ...trust });
+  } catch (err) {
+    return sendAuditError(req, res, err, 'site trust read failed');
   }
 });
 
