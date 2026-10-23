@@ -20,6 +20,7 @@ import {
 } from '@/components/ui/dialog';
 import { getAudit, runAudit, deleteAudit, type AuditResult } from '@/lib/actions/audits';
 import { AuditReport } from '@/components/audit/audit-report';
+import { HeaderWithAiUsage } from '@/components/ai-usage/ai-usage-meter';
 
 export default function AuditDetailPage() {
   const params = useParams();
@@ -137,58 +138,60 @@ export default function AuditDetailPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <Link
-          href="/dashboard/audit"
-          className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
-        >
-          <ArrowLeft className="h-4 w-4" /> {t('title')}
-        </Link>
-        {audit && (audit.status !== 'running' || timedOut) && (
-          <div className="flex items-center gap-1">
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8 text-muted-foreground hover:text-foreground"
-              disabled={rerunning}
-              onClick={handleRefresh}
-              aria-label={t('reaudit')}
-            >
-              {rerunning ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              ) : (
-                <RefreshCw className="h-3.5 w-3.5" />
-              )}
-            </Button>
-            <Dialog>
-              <DialogTrigger
-                render={
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8 text-muted-foreground hover:text-destructive"
-                    aria-label={t('deleteAudit')}
-                  />
-                }
+      <HeaderWithAiUsage>
+        <div className="flex items-center justify-between">
+          <Link
+            href="/dashboard/audit"
+            className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
+          >
+            <ArrowLeft className="h-4 w-4" /> {t('title')}
+          </Link>
+          {audit && (audit.status !== 'running' || timedOut) && (
+            <div className="flex items-center gap-1">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                disabled={rerunning}
+                onClick={handleRefresh}
+                aria-label={t('reaudit')}
               >
-                <Trash2 className="h-3.5 w-3.5" />
-              </DialogTrigger>
-              <DialogContent className="sm:max-w-sm">
-                <DialogHeader>
-                  <DialogTitle>{t('deleteAudit')}</DialogTitle>
-                  <DialogDescription>{t('deleteConfirm')}</DialogDescription>
-                </DialogHeader>
-                <DialogFooter>
-                  <DialogClose render={<Button variant="outline" />}>{t('cancel')}</DialogClose>
-                  <DialogClose render={<Button variant="destructive" onClick={handleDelete} />}>
-                    {t('deleteAudit')}
-                  </DialogClose>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
-          </div>
-        )}
-      </div>
+                {rerunning ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <RefreshCw className="h-3.5 w-3.5" />
+                )}
+              </Button>
+              <Dialog>
+                <DialogTrigger
+                  render={
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                      aria-label={t('deleteAudit')}
+                    />
+                  }
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </DialogTrigger>
+                <DialogContent className="sm:max-w-sm">
+                  <DialogHeader>
+                    <DialogTitle>{t('deleteAudit')}</DialogTitle>
+                    <DialogDescription>{t('deleteConfirm')}</DialogDescription>
+                  </DialogHeader>
+                  <DialogFooter>
+                    <DialogClose render={<Button variant="outline" />}>{t('cancel')}</DialogClose>
+                    <DialogClose render={<Button variant="destructive" onClick={handleDelete} />}>
+                      {t('deleteAudit')}
+                    </DialogClose>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
+            </div>
+          )}
+        </div>
+      </HeaderWithAiUsage>
 
       {loading ? (
         <Card>

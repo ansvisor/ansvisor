@@ -74,6 +74,7 @@ import { TablePager, usePagination } from '@/components/table-pager';
 import { MODEL_PROVIDER_LABELS, PLATFORM_LABELS } from '@/config/platform-labels';
 import { groupByPlatform, type PlatformGroup } from './grouping';
 import { dayRangeBounds, viewerTimeZone } from '@/lib/time-zone';
+import { HeaderWithAiUsage } from '@/components/ai-usage/ai-usage-meter';
 
 // ─── Date range (kept in sync with the insights page filter bar) ─────────────
 
@@ -868,47 +869,51 @@ export default function PromptDetailPage() {
 
   return (
     <div className="mx-auto max-w-5xl space-y-6 p-2 sm:p-6">
-      <Button
-        variant="ghost"
-        size="sm"
-        className="-ml-2 gap-2 text-muted-foreground hover:text-foreground"
-        onClick={() => router.back()}
-      >
-        <ArrowLeft className="h-4 w-4" />
-        Back
-      </Button>
-
-      <div className="space-y-3">
-        <h1 className="text-xl font-semibold leading-snug">{data.prompt.text}</h1>
-        <div className="flex flex-wrap items-center gap-2">
-          {data.prompt.topicName && (
-            <Badge variant="secondary" className="text-xs">
-              {data.prompt.topicName}
-            </Badge>
-          )}
-          <Badge
-            variant="outline"
-            className={cn(
-              'text-xs',
-              data.prompt.isActive
-                ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
-                : 'border-muted-foreground/20 text-muted-foreground',
-            )}
+      <HeaderWithAiUsage>
+        <div className="space-y-6">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="-ml-2 gap-2 text-muted-foreground hover:text-foreground"
+            onClick={() => router.back()}
           >
-            {data.prompt.isActive ? 'Active' : 'Paused'}
-          </Badge>
-          {data.summary.lastCheckedAt && (
-            <Badge variant="outline" className="gap-1 text-xs">
-              <Clock className="h-3 w-3" />
-              Last run: {formatTimestamp(data.summary.lastCheckedAt)}
-            </Badge>
-          )}
-          <WorkStatusBadge
-            status={workStatus}
-            onChange={canManage ? handleStatusChange : undefined}
-          />
+            <ArrowLeft className="h-4 w-4" />
+            Back
+          </Button>
+
+          <div className="space-y-3">
+            <h1 className="text-xl font-semibold leading-snug">{data.prompt.text}</h1>
+            <div className="flex flex-wrap items-center gap-2">
+              {data.prompt.topicName && (
+                <Badge variant="secondary" className="text-xs">
+                  {data.prompt.topicName}
+                </Badge>
+              )}
+              <Badge
+                variant="outline"
+                className={cn(
+                  'text-xs',
+                  data.prompt.isActive
+                    ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+                    : 'border-muted-foreground/20 text-muted-foreground',
+                )}
+              >
+                {data.prompt.isActive ? 'Active' : 'Paused'}
+              </Badge>
+              {data.summary.lastCheckedAt && (
+                <Badge variant="outline" className="gap-1 text-xs">
+                  <Clock className="h-3 w-3" />
+                  Last run: {formatTimestamp(data.summary.lastCheckedAt)}
+                </Badge>
+              )}
+              <WorkStatusBadge
+                status={workStatus}
+                onChange={canManage ? handleStatusChange : undefined}
+              />
+            </div>
+          </div>
         </div>
-      </div>
+      </HeaderWithAiUsage>
 
       <DateRangeBar
         preset={datePreset}

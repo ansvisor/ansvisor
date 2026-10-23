@@ -303,6 +303,18 @@ describe('HeaderWithAiUsage', () => {
     expect(row.className).toContain('sm:flex-row');
   });
 
+  it('leaves the banner to the page with banner={false}', async () => {
+    vi.mocked(readAiUsage).mockResolvedValue(usage({ percentUsed: 84 }));
+    await render(
+      'admin',
+      <HeaderWithAiUsage banner={false}>
+        <h1>Opportunity</h1>
+      </HeaderWithAiUsage>,
+    );
+    expect(container.children).toHaveLength(1);
+    expect(container.textContent).not.toContain('of this month');
+  });
+
   it('follows the row with the banner from 80%', async () => {
     vi.mocked(readAiUsage).mockResolvedValue(usage({ percentUsed: 84 }));
     await render(

@@ -32,6 +32,7 @@ import {
 import { ShareOfVoicePlatformChart } from '../../../insights/_charts';
 import { cn } from '@/lib/utils';
 import dynamic from 'next/dynamic';
+import { HeaderWithAiUsage } from '@/components/ai-usage/ai-usage-meter';
 const DynamicVisibilityTrendChart = dynamic(
   () => import('./topic_charts').then((m) => m.VisibilityTrendChartView),
   {
@@ -249,26 +250,28 @@ export default function TopicDetailPage({ params }: { params: Promise<{ id: stri
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div>
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => router.push('/dashboard/prompts/topics')}
-          className="mb-2 -ml-2 text-muted-foreground"
-        >
-          <ArrowLeft className="h-4 w-4 mr-1" />
-          Topics
-        </Button>
-        {loading && !topic ? (
-          <Skeleton className="h-8 w-64" />
-        ) : topic ? (
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight">{topic.name}</h1>
-          </div>
-        ) : (
-          <h1 className="text-2xl font-bold">Topic not found</h1>
-        )}
-      </div>
+      <HeaderWithAiUsage>
+        <div>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => router.push('/dashboard/prompts/topics')}
+            className="mb-2 -ml-2 text-muted-foreground"
+          >
+            <ArrowLeft className="h-4 w-4 mr-1" />
+            Topics
+          </Button>
+          {loading && !topic ? (
+            <Skeleton className="h-8 w-64" />
+          ) : topic ? (
+            <div>
+              <h1 className="text-2xl font-bold tracking-tight">{topic.name}</h1>
+            </div>
+          ) : (
+            <h1 className="text-2xl font-bold">Topic not found</h1>
+          )}
+        </div>
+      </HeaderWithAiUsage>
 
       {/* KPI strip */}
       {loading ? (
