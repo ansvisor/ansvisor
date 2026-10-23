@@ -1171,6 +1171,7 @@ export type Database = {
       }
       content_agent_runs: {
         Row: {
+          claimed_at: string | null
           draft_id: string
           finished_at: string | null
           id: string
@@ -1182,6 +1183,7 @@ export type Database = {
           stopped_at: string | null
         }
         Insert: {
+          claimed_at?: string | null
           draft_id: string
           finished_at?: string | null
           id?: string
@@ -1193,6 +1195,7 @@ export type Database = {
           stopped_at?: string | null
         }
         Update: {
+          claimed_at?: string | null
           draft_id?: string
           finished_at?: string | null
           id?: string
