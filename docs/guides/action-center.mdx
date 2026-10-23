@@ -1,0 +1,208 @@
+---
+title: "Action Center"
+description: "Turn what changed in AI search into a ranked list of work: actions, their tasks and the Priority Score."
+---
+
+## What this module does
+
+The **Action Center** (`/dashboard/action-center`) is where Ansvisor turns signals into prioritized work. It is the first page you see after you sign in, and it has four tabs:
+
+- **Actions** (`/dashboard/action-center/actions`) — what to do now, ranked by Priority Score
+- **Signals** (`/dashboard/action-center/signals`) — what changed across your AI visibility data
+- **KPIs** (`/dashboard/action-center/kpis`) — the goals you track for the brand
+- **History** (`/dashboard/action-center/history`) — what was done, and what it moved
+
+Everything is per brand: switch brands to see another brand's actions. While a new brand's first analysis runs, a **First analysis running** note sits under the tabs; actions, signals and KPIs fill in once it finishes.
+
+## Getting started
+
+A new brand starts with **Getting started**: a fixed list of 17 steps on the Actions tab. While it runs, the **Getting started** category opens first and lists the steps in a table with their **Stage**, **Status** and **Ready** time, and a **Getting started** card shows how many are done. Click **All** or another category to see your actions.
+
+The steps unlock when their data is ready, not on a schedule:
+
+| Stage | Steps | Ready |
+|---|---|---|
+| **Set up** | Set your KPIs · Add at least 3 competitors · Add at least 3 topics · Add 3 prompts per topic · Connect Google Search Console · Connect Google Analytics · Add the AI Traffic snippet | Now |
+| **Explore** | See where you stand in Visibility · Read your first AI answers · Track high-value prompt suggestions · Check what AI says about you · See who AI quotes · See visits from AI | When the first AI answers are in (about 3 hours). The high-value prompts step waits about 24 hours after you connect Search Console or Analytics. |
+| **Act** | Pick content from suggestions · Create your first content · Optimize a page | When the first content suggestions are in (about 24 hours) |
+| **Ready** | You're ready | After every step above is done or skipped |
+
+Click a step to open its card: why it matters, how to do it, and when it counts as done. The card's button opens the step's page in a new tab. Most steps are checked automatically from your data (three competitors saved, a first AI visit detected, a draft marked ready), so the step updates when you come back to the Action Center tab. A step still waiting for its data says when it opens.
+
+**Connect Google Search Console** and **Connect Google Analytics** are optional. Admins and managers can **Skip** them; a skipped step counts as complete, and you can still connect later from Settings. Without either one, prompt and content suggestions are less accurate.
+
+### Start and skip
+
+Admins and managers see **Get Started** or **Skip Get Started** at the top right of the Actions tab:
+
+- **Skip Get Started** puts the actions list back to normal. Steps you finished stay done, and you can start again any time from the same button.
+- **Get Started** appears after a skip, and for an existing brand whose setup looks incomplete: fewer than 3 competitors or topics, no Search Console, or no content in the last 30 days.
+- A brand added to an organization that already has one asks first: **Run Getting started for [brand]?** Choose **Run Getting started** or **Skip**.
+
+Getting started's steps are not actions: they have no Priority Score and never go through the signal engine.
+
+## Actions
+
+An **action** is one piece of work with an outcome, built from the evidence behind it. Ansvisor consolidates many signals into one action: six valuable pages with no AI traffic become one "Capture AI traffic" action with six linked signals, not six rows. Actions are generated after the daily tracking run, at most five new ones per brand per day, so the list stays short enough to act on.
+
+Each action belongs to a category:
+
+| Category | What it is for |
+|---|---|
+| **Growth** | Ground you could win: demand, topics, platforms or pages where you could appear more |
+| **Protect** | Ground you hold that is starting to slip |
+| **Recover** | Ground you held and lost: visibility, citations, mentions or traffic |
+| **Fix** | Issues on your own site, such as low audit scores, blocked crawlers or broken links AI sends people to |
+| **Compete** | Places where competitors lead you |
+
+### The Actions tab
+
+The cards at the top count and filter the list. Click one to narrow the table to exactly what it counts, and click it again to clear it:
+
+- **Top Actions** — the five highest-priority open actions
+- **At Risk** — open Recover and Fix actions
+- **Opportunities** — open Growth actions
+- **In Progress** — actions someone is working on
+- **Highest Priority** — the highest level among open actions
+
+Below them, filter by category, **Priority**, **Status** and **Assignee**, or search. **Sort** by Priority (the default), Newest, Due date or Recently updated. Filters live in the URL, so a filtered view can be shared.
+
+An action's status is **New**, **In Progress**, **On Hold**, **Completed** or **Dismissed**. The row menu sets In Progress, Completed or Dismiss without opening the action. **Delete** (admins and managers only) removes it for everyone, and it won't come back on its own the next day.
+
+### Inside an action
+
+Click a row to open the action. Under its title you set **Status**, **Assignee** and **Due date**. The tabs are:
+
+- **Overview** — *Why this priority?*, *Why this action?* with the signals that support it, the **Goal** (what done looks like, with a date), and the **KPIs** it is linked to. An action sent from another page also shows where it came from.
+- **Affected** — the prompts, pages, topics, competitors or platforms it is about, with each prompt's demand.
+- **Tasks** — the work, step by step (see below).
+- **Signals** — the evidence behind it. Click one to open it on the Signals tab.
+- **History** — every change: created, new signals linked, status and assignee changes, tasks updated or sent.
+
+### Tasks
+
+Each action comes with tasks: concrete steps such as "Refresh content for these prompts" or "Add structured data to these pages". Open a task to see its details: **What**, **Where**, **Why**, **How** (one step per line), **Done when**, **Type** (Content, On-page, Technical, Outreach, PR or Product), **Effort** and **Role**. Click **Edit** to change any of them.
+
+A task's status is **To Do**, **In Progress**, **Completed** or **Skipped** (with a reason). Skipped tasks leave the count, so they don't hold an action short of done. Use **Add task** for work of your own, and delete tasks you don't need.
+
+From a task you can also:
+
+- **Create content** or **Optimize page** — open a draft in the [Content Editor](/guides/content-editor) for this task. **Open draft** returns to it, and marking the draft ready completes the task.
+- **Send to Content** — send a content task to Content as an opportunity, where a brief can be written for it.
+- **Send to webhook** — post the task to the brand's webhook, for a workflow outside Ansvisor. The webhook is set up under **Content → Webhook Settings**, with the **Action Center task sent** event selected.
+
+Where AI task writing is on for your workspace, **Regenerate tasks** writes the action's tasks again from its evidence. Done, under-way and hand-added tasks stay. It uses your plan's monthly AI allowance.
+
+Some tasks that only read data, such as checking a page's traffic in your connected Analytics, can be carried out by Ansvisor itself overnight. The action's History says so. Nothing that would change something outside Ansvisor runs without your approval: such a task waits as **Waiting Approval**.
+
+### Assigning work
+
+An action with no one on it belongs to **Everyone** in the workspace until someone takes it. Pick a teammate in the action's **Assignee** field, and set a **Due date** if it has one. The **Assignee** filter on the Actions tab shows one person's actions, or **Everyone** for the unassigned ones.
+
+### Export
+
+- **Export CSV** on the Actions tab downloads the actions in the current view, as filtered, with their priority, status, assignee, due date, task progress and affected items.
+- Inside an action, **Copy Data** opens the whole action as Markdown to paste into a doc or ticket, and **Export** downloads it as **Export CSV** or **Export Excel**. The Excel file has one sheet each for the action, its affected items, tasks, signals and history.
+
+## The Priority Score
+
+Every action has a **Priority Score** from 0 to 100: how soon to work on it beside the others. Impact says how much an action could matter; priority weighs impact together with the evidence behind it. The score sets the default order of the Actions tab and the Top Actions card.
+
+| Level | Score |
+|---|---|
+| **Critical** | 90 and above |
+| **High** | 75–89 |
+| **Medium** | 50–74 |
+| **Low** | Below 50 |
+
+### What goes into it
+
+The score weighs seven things:
+
+- **Impact** — the action's impact grade: high, medium or low.
+- **Demand** — how much the prompts, search queries or pages it is about are searched or visited. Only the most demanded few count, so a long list of low-demand prompts doesn't outrank a handful that people actually search for.
+- **Severity** — what kind of change it is. A loss ranks above a sharp drop, a drop above a slip, and a slip above a gap or a site issue. Room to grow and gains rank lowest.
+- **Business value** — how commercial the searches are, or what a page is worth to the business (revenue, transactions or key events, from Google Analytics).
+- **Confidence** — how many independent kinds of finding and data sources agree. Ten signals repeating one finding count as one.
+- **Recoverability** — ground you held and lost is nearer at hand than ground you never held. Fixes on your own site count as within reach too.
+- **Recency** — newer evidence counts more. Its weight halves roughly every ten days.
+
+Demand or business value that nothing measures counts as neutral: it neither raises nor lowers the score.
+
+An action sent from another page has no detection signals, so it is scored from what it carries: the prompt's platforms for an Improve action, the prompts of a content opportunity or draft, the pages sent from AI Traffic.
+
+### When it changes
+
+An action is scored when it is created, and again every night from that night's evidence: its open signals, how recent they are, and the demand behind them. When you resolve or dismiss a signal, the actions it supports are scored again right away. An action not scored yet shows a dash and sorts after the scored ones.
+
+### Why this priority?
+
+The action's **Overview** tab starts with **Why this priority?**: one sentence written from the facts the score rests on. It says what changed, on what, how recently, and what makes it matter, for example:
+
+> Lost ground on 7 high-demand prompts 2 days ago — commercial intent, previously visible, confirmed by 2 sources.
+
+<Note>
+The Content Plan has its own Priority Score, which ranks the Plan's pages. The two are worked out separately. See [Content Editor](/guides/content-editor).
+</Note>
+
+## Signals
+
+The **Signals** tab lists what changed: a visibility drop, a lost citation, a competitor gaining, a page with no AI traffic, a site issue. Signals are detected after your daily tracking runs, and they are the evidence actions are built from.
+
+- **Cards** — Total, Important (high impact), New and Resolved signals, and the average signal impact, for the selected range (7, 30 or 90 days) against the range before.
+- **Filters** — by category (Visibility, Citation, Mention, Traffic, Technical, Competitor), **Impact**, **Status**, **Source** (AI Results, Google Analytics, Google Search Console, Site Audit) and **Platform**, plus search.
+- **Status** — **New**, **Acknowledged**, **Resolved** or **Dismissed**. The row menu sets them, and **Reopen** brings one back.
+
+Click a signal to see **Where** it was found, **What changed** (before and after, with the periods compared), **Evidence and links**, **Related KPIs**, and **Used by actions**. Copies of one finding (the same prompt text tracked as several prompts) are grouped into one row and counted once.
+
+Many of the same changes also appear in the [Daily Pulse](/guides/daily-pulse) email.
+
+## KPIs
+
+The **KPIs** tab tracks the goals you set for the brand. Each KPI shows its **Value**, **Change**, **Trend (7D)**, **Goal**, progress **vs Goal**, and a **Status**:
+
+| Status | When |
+|---|---|
+| **Goal Reached** | 100% of the goal or more |
+| **On Track** | 70% or more, and not moving the wrong way |
+| **At Risk** | 40–69%, or moving the wrong way before the goal is reached |
+| **Off Track** | Under 40% |
+
+The KPIs you can track are AI Visibility, Citations, Mentions, Share of Voice, AI Referral Traffic, Positive Sentiment and Lead over top competitor. A brand that never had KPIs starts with a suggested set, each aiming 20% above its last 30 days. It is saved the first time an admin or manager opens the tab.
+
+**Edit KPIs** (or **Configure KPIs**) opens the framework: pick a template (**AI Search Visibility**, **Brand Monitoring** or **Custom Framework**), a time period (Weekly, Monthly or Quarterly), and a target for each KPI, then **Save & Apply**. Only admins and managers can change KPIs. An action's Overview lists the KPIs it is linked to.
+
+## History
+
+The **History** tab lists actions once they are In Progress, On Hold, Completed or Dismissed, with what they were meant to do and what has been measured since. Filter by range (7d, 30d, 90d, All), **Status**, **Type**, **Priority** and **Source**, and sort by Newest, Oldest or Priority. The cards count total, completed, in-progress, no-improvement and dismissed actions in the window.
+
+Click an action to see **What was the goal?**, **What happened?** (the signals it was built from), its affected items and tasks, and the **Result**:
+
+- When a completed action's week after closing is over, Ansvisor compares its metrics over the 7 days before it was raised with the 7 days after it closed. The result reads **Improved**, **No meaningful change** or **Declined**. It is measured after the action, not proven to be caused by it.
+- A dismissed action is **Not measurable**, and so is one with no metric to read.
+- An action sent from a prompt's Improve tab reports on how many platforms its position improved. It is read again daily while the action is open and for 30 days after it is completed.
+
+When an action is closed, its condition can open a new action after a two-week rest if it is still firing. The old one stays in History as the record of that round of work.
+
+## Where actions come from
+
+Most actions are generated from signals each night. You can also send work to the Action Center from other pages. A sent action has no detection signals; its evidence is what you sent, shown on its Overview tab.
+
+| From | How |
+|---|---|
+| **Mentions** | Select answers on the Mentions tab, or open one, and click **Send to Action Center**. |
+| **Content** | **Send to Actions** on a content opportunity; **Assign to…** on a Content Plan row; or **Who does it → Team** when you start new content. See [Content Editor](/guides/content-editor). |
+| **Site Audit** | Audit results become signals with the Site Audit source, such as low AEO scores or missing structured data, and turn into Fix actions overnight. |
+| **AI Traffic** | On the [AI Traffic Analytics](/guides/ai-traffic-analytics) pages list, select pages under *Cited, not clicked* or *No AI traffic* and click **Send to Action Center**. Traffic drops and strong or weak landing pages also arrive as signals. |
+| **Insights** | **Send action** on a topic in Insights' Opportunities opens a Growth action for it. |
+| **Prompts** | **Send Actions** on a prompt's Improve tab sends the selected suggestions as one action. |
+
+Sending the same thing twice doesn't create a second action: the page says it is already in the Action Center, with its action number (for example `AC-42`).
+
+<Tip>
+Work from the **Top Actions** card each week. Assign each action, set a due date, and close it as **Completed** when its tasks are done, so History can measure the result.
+</Tip>
+
+<Card title="Continue: Answer Engine Insights" icon="arrow-right" href="/guides/answer-engine-insights">
+  See where your brand stands across AI engines.
+</Card>

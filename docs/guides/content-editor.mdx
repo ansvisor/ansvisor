@@ -1,0 +1,183 @@
+---
+title: "Content Editor"
+description: "Plan what to write next, start a page yourself or with the Content Agent, write it to AEO rules, and keep it in the Library."
+---
+
+## The Content section
+
+**Content** in the sidebar has three pages:
+
+- **Plan** (`/dashboard/content/plan`): what to create, optimize or protect next, ranked.
+- **Opportunities** (`/dashboard/content`): the content opportunities Ansvisor finds in your visibility gaps. See [Content Optimization](/guides/content-optimization).
+- **Library** (`/dashboard/content/library`): every page you and the Content Agent wrote or changed in Ansvisor.
+
+Pages are written in the **editor** (`/dashboard/content/editor/<id>`). It opens from the Library, from the Plan, or when you start a page in **New content**.
+
+## Plan
+
+The **Content plan** lists the work for the last 7, 30 or 90 days. Pick the period at the top right.
+
+### Cards
+
+| Card | What it counts |
+|---|---|
+| **Create** | New pages AI needs: open opportunities with no page on your site yet. |
+| **Optimize** | Pages losing ground, and opportunities to improve a page you already have. |
+| **Protect** | Your top pages (cited at least 5 times in the period and not losing ground, up to 5), and opportunities to defend a page. |
+| **Priority** | Rows your team marked as a priority. |
+
+Click a card to filter the list to it; click it again to clear the filter.
+
+A page is **losing ground** when it is cited at least 20% less per tracked answer than in the period before, from at least 3 citations. Because the comparison is per tracked answer, a week with fewer runs, or prompts added or removed, doesn't move a page. If tracking began during the earlier period, a note above the list says so.
+
+### Priority list
+
+Each row shows:
+
+- the **Priority Score**;
+- the **Page**: its title, its page type, and its path, or **New page**;
+- the **Action**: Create, Optimize or Protect;
+- **Why** for the period, for example "Acme cited · you aren't", "Citation rate −35% on ChatGPT" or "Top page · 12 citations · 40 AI visits", tagged with where it comes from (**Opportunity**, **Citations** or **Protect**);
+- **Who** is on it: You, Agent, a teammate, or the person it is assigned to;
+- a button: **Create**, **Optimize** or **View** opens [New content](#new-content) on that row, and **Open draft** opens the draft already being written.
+
+Rows marked as a priority come first; the rest are ranked by score. The list shows up to 50 rows, for the whole plan or for a card.
+
+### Priority Score
+
+The score runs from 0 to 100 and is built from four factors:
+
+- **Severity**: how urgent the row is. A page losing citations counts most, more so the bigger the drop or the more citations it lost. Then come a new page AI needs, an existing page to improve, and a page to protect.
+- **Opportunity**: the score of the content opportunity behind the row. A row without one counts as neutral.
+- **Page value**: the page's AI visits in the period. A new page, or a brand with no AI traffic data, counts as neutral rather than zero.
+- **Citations**: how often AI answers cited the page in the period. A new page has none yet.
+
+Hover over the score, or focus it, to see **How this score is worked out**: each factor with the points it gave, and the total. The badge's level (critical, high, medium or low) uses the Plan's own cut-offs, and only a page losing citations can reach critical.
+
+<Note>
+This score ranks the Plan only. The Action Center scores its tasks on its own: see [Action Center](/guides/action-center).
+</Note>
+
+### Row menu
+
+- **Assign to…**: for a row with a draft, pick a teammate and the draft goes to the Action Center as a task for them. For a row without a draft, New content opens with **Team** chosen, so you pick the page type and the assignee there.
+- **Mark as priority** / **Remove priority** (admins and managers): the row moves to the top of the list, tagged **Priority**, and counts under the Priority card. **Send to Plan** on an opportunity does the same.
+- **Hide from the plan** (admins and managers): the row leaves the list and the counts. Undo it from the message that appears, or later from **hidden rows · Show** under the list, then **Show again**.
+
+### What AI cites in your topics
+
+Above the list, a line shows what visitors from AI assistants did on your site in the period: visits, and, with [Google Analytics](/guides/ai-traffic-analytics) connected, key events, orders and revenue.
+
+The **What AI cites in your topics** section opens with **Show**. For each page type it compares two shares: how much of the AI citations in your tracked answers go to that type of page, and how much of your own cited pages' citations it holds. A type AI cites 10 points or more beyond your own mix is marked as a **Gap**. Click a row to filter the priority list to that page type; click it again, or **Clear**, to remove the filter.
+
+The shares cover only the cited addresses whose type can be read. Forums, encyclopedias, news and the long tail of less cited pages are left out, and a line under the section says what share of the period's citations is covered.
+
+<Tip>
+The page types follow your brand's **Site type** (B2B SaaS, E-commerce or B2C) in the brand settings: feature and comparison pages for B2B SaaS, product and category pages for e-commerce, destination and help pages for B2C.
+</Tip>
+
+## New content
+
+**New content** opens from the Plan and the Library, from a Plan row's button, from **Send to Editor** on an opportunity, and from **Create content** in a prompt's menu on [Tracked Prompts](/guides/prompts).
+
+<Steps>
+  <Step title="Pick how to start">
+    **Create from scratch** writes a new page from:
+    - a **Content Opportunity**;
+    - a **Prompt**: prompts where AI already names or cites you in the last 30 days aren't listed, as they need no new page;
+    - a **Topic** that has tracked prompts.
+
+    **Optimize content** works on a page you already have:
+    - **Page URL**: a page on your brand's site (its domains are in the brand settings). **Import** brings in its main text, headings, links and schema; menus and footers stay out.
+    - **Paste text** from Word, Google Docs or a web page. Headings, lists, links and tables are kept.
+    - **Upload file**: Word, Markdown, HTML or text, up to 10 MB.
+  </Step>
+  <Step title="Pick the page type">
+    Click **Continue**. Ansvisor picks a **Page type** from the title, the content, the page or the opportunity, and says which. Pick another if it's wrong; you can also change it later in the editor.
+
+    For a new page, **Overview** lists your pages AI already cites for the same prompts, with how many of those prompts each one answers, its AI citations and its Google position. You can choose **Optimize *page* instead**, or **Create a new page**.
+  </Step>
+  <Step title="Choose who does it">
+    | Who does it | What happens |
+    |---|---|
+    | **Me** (default) | **Open editor** opens the draft for you to write. |
+    | **Agent** | **Start the agent**: the Content Agent writes a new page, or suggests changes to an existing one, in the background. The editor opens showing it at work; you can leave, and the draft waits in **Library › In review**. It uses this month's AI usage. |
+    | **Team** | **Send to Action Center**: the draft is saved in the Library and sent to the Action Center as an action. Pick a teammate in **Assign to**, or leave it unassigned. |
+  </Step>
+</Steps>
+
+If the agent can't start, for example because this month's AI usage is spent or the agent is already writing another of your team's drafts, the draft stays in the Library for you to write.
+
+## The editor
+
+The header shows the title, the page type, a **Rules** chip with how many rules the page meets now, and whether your changes are saved. The page saves as you write. Its buttons are **History**, **Copy HTML**, **Export** and **Mark ready**, and a button to show or hide the side panel.
+
+The page starts with its H1, which is also its title. A page has one H1: the toolbar won't add a second one. A paste is cleaned on the way in: headings, lists, links and tables stay; fonts, colors and styles go. Press ⌘/Ctrl + Shift + V to paste plain text. **Attach a file** inserts Excel, CSV, Word, Markdown, HTML or text, up to 10 MB each; a sheet comes in as a table.
+
+### Side panel
+
+The panel opens on **Rules**. Its tabs are **Rules · Brief · Sources · Live page**.
+
+- **Rules**: the rules the page is written to, for its page type. They come in five groups: page type rules, length and structure, fan-outs and keywords, links and sources, and style. Most rules can be turned on or off, and many have a value you can change; its status is read from the page as you write. Rules marked **AI check** are judged by the Content Agent and aren't counted yet. Changes apply to this draft only: **Save as my rules** keeps them for your workspace's next drafts of this type, and **Reset** goes back to the default set. Under **Your text rules**, write a rule in your own words, or **Paste many** from a style guide.
+- **Brief**: the page type, target URL, goal, audience, length, outline and keywords. **Edit brief** to change it. **Rebuild outline** writes a new outline from the sources you keep, each H2 answering a search AI ran for your prompts (a fan-out). **Rewrite from brief** (a new page) or **Suggest changes from brief** (an existing page) hands the page to the Content Agent; the page you have now stays in History.
+- **Sources**: what the draft is built from: **Prompts**, **Fan-outs**, **Cited pages** (what AI quotes today) and **Search Console** queries. Each source shows where the draft uses it. Uncheck one to leave it out, or **Add source** (a prompt, a page URL or a Search Console query), then **Rebuild with selection**.
+- **Live page**: for a draft that optimizes a live page, how that page does now: **Citations**, **AI visits**, **Google clicks** and **Prompts cited**, over 7 days to a year, against the period before. It is not a forecast of what the draft will get. Prompts that stopped citing the page are marked **Lost**, and **Use the lost prompts in this draft** adds them to the sources and rebuilds the brief. A new page has nothing to measure yet.
+
+Rebuilding the outline and running the Content Agent use your workspace's monthly AI usage.
+
+### Apply rules with Agent
+
+**Apply rules with Agent**, in the Rules tab, asks the Content Agent to suggest changes for the rules the page doesn't meet yet. Its suggestions appear in the page, each with **Accept** and **Reject**, under a bar with **Accept all** and **Reject all**.
+
+- A decided suggestion can be taken back with **Undo** or **Restore**; **Undo all** brings every one back to review.
+- One run makes at most 8 changes. Run it again for the rules still open.
+- Accept or reject the open suggestions before you run the agent again or edit the page as HTML.
+- The agent doesn't change heading levels: turn extra H1s into H2s in the toolbar yourself.
+- The agent only changes drafts, not published pages.
+
+### Passages AI cites are locked
+
+When a draft optimizes a live page, brought in by its URL, the passages AI answers quoted in the last 30 days are marked in green, for example "✓ Cited by ChatGPT 3× and Perplexity 1× in 30 days · keep wording". A chip in the header counts them.
+
+The Content Agent never changes these passages. If you edit one, the editor asks first: **Keep wording**, or **Edit anyway**. Changing a quoted passage may cost the page those citations.
+
+### History, HTML, Export and Mark ready
+
+- **History** keeps earlier versions for 90 days: the live page as imported, the page before agent changes, each Mark ready and publish, and the page before a restore. **Restore** makes a new version, so nothing is lost.
+- **Copy HTML** copies the whole page as HTML, HTML blocks and schema included, to paste into your CMS.
+- **Export** downloads the page as **Word**, **HTML** or **Markdown**. Only the HTML file carries the schema (JSON-LD).
+- **Add HTML** in the toolbar adds an HTML block: an embed, a widget or a form, kept exactly as written. Ansvisor never runs it. **Edit as HTML** shows the page's source; scripts, iframes and inline styles are removed when you switch back.
+- **Mark ready** saves the page, sets it to **Ready** and keeps a version in History. If the draft was sent to the Action Center, it also completes its task there. Ansvisor doesn't publish the page: copy or export it to your site.
+
+## Library
+
+The **Library** lists the drafts by status, each tab with its count:
+
+| Tab | What's in it |
+|---|---|
+| **All** | Every draft that isn't archived. |
+| **In progress** | Drafts being written. |
+| **In review** | Drafts the Content Agent wrote, waiting for a person. |
+| **Ready** | Drafts marked ready. |
+| **Published** | Drafts you marked as published. |
+| **Archived** | Drafts sent to the archive. They keep their status for when they're restored. |
+
+The columns are Content, Type, Method (Create or Optimize), By (you, the Content Agent or a teammate), Status, Created and Updated. Click a row to open the draft in the editor. The **Created** filter narrows the list to the last 7, 30 or 90 days.
+
+### Row menu
+
+- **Status**: set the draft to In progress, In review, Ready or Published. Ready works like the editor's Mark ready.
+- **Export Word**, **Export HTML** or **Export Markdown** for that draft.
+- **Send to Archive** or **Restore** (admins and managers).
+- **Delete** (admins and managers): the draft leaves the Library for good, with its versions and suggestions. An Action Center task it was sent as stays.
+
+### Export
+
+**Export** in the header downloads the drafts listed, that is the current tab within the **Created** range, with their pages:
+
+- **Export CSV** and **Export Excel**: one row per draft, with its title, status, method, page type, author, dates, page URL, length and text.
+- **Export Word**: one document, each draft starting on a page of its own.
+
+<Card title="Continue: Site Audit" icon="arrow-right" href="/guides/site-audit">
+  Score a page for AI search readiness and get fixes you can paste.
+</Card>
