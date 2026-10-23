@@ -55,7 +55,17 @@ vi.mock('@/lib/supabase/server', () => ({
         gte: (col: string, v: unknown) => (call.filters.push(['gte', col, v]), chain),
         or: (v: string) => (call.filters.push(['or', v, null]), chain),
         order: () => chain,
-        limit: async () => ({ data: list, error: null }),
+        // The list, by its batch when one is asked for; the first row alone
+        // when the read is for one (the latest batch).
+        limit: () => {
+          const batch = call.filters.find(([op, col]) => op === 'eq' && col === 'batch_id');
+          const rows = batch
+            ? list.filter((r) => (r as { batch_id?: unknown }).batch_id === batch[2])
+            : list;
+          return Object.assign(Promise.resolve({ data: rows, error: null }), {
+            maybeSingle: async () => ({ data: rows[0] ?? null, error: null }),
+          });
+        },
         update: (value: unknown) => ((call.op = 'update'), (call.value = value), chain),
         insert: (value: unknown) => ((call.op = 'insert'), (call.value = value), chain),
         maybeSingle: async () => result(),
@@ -579,6 +589,14 @@ describe('agent suggestions', () => {
       status: 'open',
     });
     expect(calls[0].filters).toContainEqual(['eq', 'draft_id', DRAFT]);
+    // The latest batch is found first; only its rows are read whole.
+    expect(calls[1].filters).toContainEqual(['eq', 'batch_id', 'new']);
+  });
+
+  it('reads none for a draft the agent never suggested on', async () => {
+    list = [];
+    await expect(getDraftSuggestions(DRAFT)).resolves.toEqual([]);
+    expect(calls).toHaveLength(1);
   });
 
   it('reads a whole page rewritten, with the page the agent read (00247)', async () => {

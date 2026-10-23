@@ -4,6 +4,7 @@ import { z } from 'zod';
 import supabaseAdmin from '../config/supabase.js';
 import { resolveModel } from './ai-provider.js';
 import {
+  FANOUT_RULE,
   HEADING_RULE,
   LINK_RULE,
   MAX_AGENT_SUGGESTIONS,
@@ -13,6 +14,7 @@ import {
   passageKey,
   promptPassages,
   suggestionsSchema,
+  WRITING_STALE_MS,
 } from './content-agent.js';
 import { contentBriefModelId, rebuildSources } from './content-brief.js';
 import { linkAllowList, linkTargetsPrompt, readLinkTargets } from './content-links.js';
@@ -53,8 +55,9 @@ import { reserveAiBudget } from './plan-guard.js';
 /** How long the model may take: nobody waits on the request. */
 const CALL_TIMEOUT_MS = 180_000;
 
-/** A 'writing' this old was left by a server that stopped: it can start again. */
-export const WRITING_STALE_MS = 10 * 60_000;
+// A 'writing' older than WRITING_STALE_MS (content-agent.js, which Fix open
+// rules checks too) was left by a server that stopped: it can start again.
+export { WRITING_STALE_MS };
 
 /**
  * The drafts the agent writes in: still being worked on, a draft or one in
@@ -110,6 +113,7 @@ How to write:
 - Follow the outline when there is one; each H2 answers one of the questions or AI searches given.
 - Short paragraphs and plain sentences. Lists where a reader compares or follows steps.
 - Follow every rule listed, and the writer's own rules.
+- For each fan-out a rule names, use its words, not questions of your own: a section heading for fanoutH2, an FAQ question ending in "?" for fanoutFaq.
 - Use only facts from the brand and the brief. Never invent numbers, prices, dates, names, customers, sources or quotes. When the page needs a fact you don't have, write a placeholder in square brackets, e.g. [price], [figure, source, year].
 - Plain text in every field: no HTML, no Markdown.
 - Write in the language asked for.`;
@@ -122,6 +126,7 @@ Rules for your suggestions:
 - An insert adds new blocks after a passage, as simple HTML (h2, h3, p, ul, ol, li, strong, em, and a for links): a missing section, a direct answer, an FAQ.
 ${HEADING_RULE}
 ${LINK_RULE}
+${FANOUT_RULE}
 - Never change a passage marked LOCKED: AI assistants quote its wording today. You may insert after it.
 - Put the keys of the rules a change meets in "rules" (none when it meets none).
 - Use only facts from the page and the brand. Never invent numbers, prices, dates, names, sources or quotes; write a placeholder in square brackets instead, e.g. [figure, source, year].
@@ -374,7 +379,12 @@ export async function startDraftWriting({ draftId, brandId, input, rewrite = fal
     // Claimed once: a second start meanwhile finds it writing.
     const { data: claimed, error: claimError } = await supabaseAdmin
       .from('content_drafts')
-      .update({ agent_state: 'writing', agent_state_at: new Date().toISOString() })
+      .update({
+        agent_state: 'writing',
+        agent_state_at: new Date().toISOString(),
+        // Which run, for every device: a failed rewrite is tried again as one.
+        agent_run: rewrite ? 'rewrite' : 'write',
+      })
       .eq('id', draftId)
       .in('status', OPEN_STATUSES)
       .or(`agent_state.is.null,agent_state.eq.failed,agent_state_at.lt."${staleBefore}"`)

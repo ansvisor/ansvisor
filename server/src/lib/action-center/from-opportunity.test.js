@@ -2,8 +2,14 @@ import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('../../config/supabase.js', () => ({ default: {} }));
 
-const { actionPromptScope, assetTasks, combinedTasks, initialTaskStatus, opportunityAssets } =
-  await import('./from-opportunity.js');
+const {
+  actionPromptScope,
+  actionTargets,
+  assetTasks,
+  combinedTasks,
+  initialTaskStatus,
+  opportunityAssets,
+} = await import('./from-opportunity.js');
 const { getTask } = await import('./tasks/registry.js');
 
 const owned = (decision) => ({ type: 'blog_post', channel: 'owned', decision });
@@ -145,5 +151,32 @@ describe('an opportunity a task was sent as (AC-004)', () => {
         { userId: 'u1' },
       ),
     ).toEqual({ actionId: 'a1', created: false });
+  });
+});
+
+describe('actionTargets (AC-009)', () => {
+  it('counts and keeps the prompts the action is scoped to', () => {
+    expect(actionTargets(['p1', 'p2', 'p3'], ['A', 'B'])).toEqual({
+      targetCount: 3,
+      targets: ['A', 'B'],
+      targetIds: ['p1', 'p2', 'p3'],
+    });
+  });
+
+  it('keeps the ones the opportunity names when it has no prompts', () => {
+    expect(actionTargets([], ['A', { id: 'p9', text: 'B' }])).toEqual({
+      targetCount: 2,
+      targets: ['A', { id: 'p9', text: 'B' }],
+      targetIds: ['A', 'p9'],
+    });
+    expect(actionTargets([], [])).toEqual({ targetCount: 0, targets: [] });
+  });
+
+  it('counts a prompt named twice once, as the action keeps it', () => {
+    expect(actionTargets([], ['A', 'B', 'A ', ''])).toEqual({
+      targetCount: 2,
+      targets: ['A', 'B', 'A ', ''],
+      targetIds: ['A', 'B'],
+    });
   });
 });

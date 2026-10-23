@@ -1,17 +1,5 @@
-import { afterEach, describe, expect, it } from 'vitest';
-import { forgetRewrite, pageChangedSince, rememberRewrite, wasRewrite } from './_page-rewrite';
-
-// An in-memory localStorage: the test environment has none.
-const store = new Map<string, string>();
-Object.defineProperty(window, 'localStorage', {
-  configurable: true,
-  value: {
-    getItem: (key: string) => store.get(key) ?? null,
-    setItem: (key: string, value: string) => void store.set(key, value),
-    removeItem: (key: string) => void store.delete(key),
-    clear: () => store.clear(),
-  },
-});
+import { describe, expect, it } from 'vitest';
+import { pageChangedSince } from './_page-rewrite';
 
 /** Rewrite the page to these rules: whether the page still reads as the agent read it. */
 describe('pageChangedSince', () => {
@@ -30,18 +18,5 @@ describe('pageChangedSince', () => {
   it('says a page with other words changed', () => {
     expect(pageChangedSince('<p>Plans start at $49.</p>', '<p>Plans start at $59.</p>')).toBe(true);
     expect(pageChangedSince('<p>AB</p>', '<p>A</p><p>B</p>')).toBe(true);
-  });
-});
-
-describe('the rewrite mark', () => {
-  afterEach(() => localStorage.clear());
-
-  it('remembers a rewrite this browser started, until it is forgotten', () => {
-    expect(wasRewrite('d1')).toBe(false);
-    rememberRewrite('d1');
-    expect(wasRewrite('d1')).toBe(true);
-    expect(wasRewrite('d2')).toBe(false);
-    forgetRewrite('d1');
-    expect(wasRewrite('d1')).toBe(false);
   });
 });

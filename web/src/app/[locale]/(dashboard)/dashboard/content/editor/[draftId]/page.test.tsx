@@ -149,6 +149,7 @@ const draft = (over: Partial<ContentDraft> = {}): ContentDraft => ({
   action: null,
   agentState: null,
   agentSince: null,
+  agentRun: null,
   updatedAt: '2026-10-20T10:00:00Z',
   ...over,
 });
@@ -1989,6 +1990,35 @@ describe('the side panel', () => {
       );
     });
 
+    it('names the fan-outs the page doesn’t use yet, so the agent writes those', async () => {
+      getContentDraft.mockResolvedValue(traced);
+      getDraftSources.mockResolvedValue({
+        data: {
+          prompts: [],
+          fanouts: [{ query: 'pipeline forecasting', platforms: ['copilot-web'], searched: 2 }],
+          citedPages: [],
+          gscQueries: [],
+          brandDomains: [],
+          competitorDomains: [],
+        },
+        choices: [],
+      });
+      fixDraftRules.mockResolvedValue({ count: 0 });
+      await openRules();
+
+      await act(async () => panelButton('Apply rules with Agent').click());
+      await act(async () => {});
+
+      expect(fixDraftRules.mock.calls[0][2].rules).toContainEqual(
+        expect.objectContaining({
+          key: 'fanoutH2',
+          detail: expect.stringContaining(
+            'fan-outs to use, in their words: "pipeline forecasting"',
+          ),
+        }),
+      );
+    });
+
     it('says a full batch is the most one run makes, to run it again (C)', async () => {
       getContentDraft.mockResolvedValue(traced);
       const full = Array.from({ length: 8 }, (_, i) => ({
@@ -2280,9 +2310,9 @@ describe('the side panel', () => {
       expect(decideDraftSuggestions).not.toHaveBeenCalled();
     });
 
-    it('rewrites again from Try again after a rewrite failed', async () => {
-      localStorage.setItem('aeo:page-rewrite:d1', '1');
-      getContentDraft.mockResolvedValue({ ...long, agentState: 'failed' });
+    it('rewrites again from Try again after a rewrite failed, on any device', async () => {
+      // The draft says which run failed (agent_run), not this browser's storage.
+      getContentDraft.mockResolvedValue({ ...long, agentState: 'failed', agentRun: 'rewrite' });
       await renderPage();
       await act(async () => {});
 
