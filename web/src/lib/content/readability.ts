@@ -205,7 +205,7 @@ const toward = (value: number, full: number, span: number, max: number) =>
   Math.max(0, Math.min(1, 1 - (full - value) / span)) * max;
 
 const PASSIVE =
-  /\b(?:am|is|are|was|were|be|been|being)\s+(?:\w+ly\s+)?(?:(?!(?:indeed|need|speed|seed|feed|bleed|breed|proceed|exceed|succeed)\b)\w+ed|been|born|built|chosen|done|drawn|driven|given|grown|known|made|seen|shown|taken|thought|told|written)\b/i;
+  /\b(?:am|is|are|was|were|be|been|being)(?:n['’]t)?\s+(?:(?:not|never)\s+)?(?:\w+ly\s+)?(?:(?!(?:indeed|need|speed|seed|feed|bleed|breed|proceed|exceed|succeed)\b)\w+ed|been|born|built|chosen|done|drawn|driven|given|grown|known|made|seen|shown|taken|thought|told|written)\b/i;
 /** Words that say little in English business writing, in each of their forms. */
 const JARGON =
   /\b(?:leverag\w*|synerg\w*|utili[sz]\w*|paradigm\w*|best-in-class|cutting-edge|world-class|next-generation|game-chang\w*|seamless\w*|holistic\w*|robust\w*|streamlin\w*|empower\w*|disruptive\w*)\b/gi;

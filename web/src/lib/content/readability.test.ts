@@ -197,6 +197,16 @@ describe('reading the page as written', () => {
     // Only the jargon falls short: Show goes there.
     expect(style.at).toContain('leveraging');
   });
+
+  it('reads a passive sentence that says not or never', () => {
+    const html =
+      '<h1>Pipeline</h1>' +
+      p(Array.from({ length: 5 }, () => sentence(15)).join(' ')) +
+      p("Stages are not defined. Deals weren't closed. Notes were never checked.");
+    const style = check(html, 'passiveJargon')!;
+    expect(style.count).toBe(3);
+    expect(style.at).toBe('Stages are not defined.');
+  });
 });
 
 describe('the parts', () => {
