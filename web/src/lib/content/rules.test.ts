@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   NO_DRAFT_RULES,
   NOT_FOR_AGENT,
+  fanoutsToUse,
   openRulesForAgent,
   activeRules,
   effectiveRules,
@@ -248,11 +249,13 @@ describe('fan-outs and keywords', () => {
         '2',
       ),
     ).toEqual({ state: 'ok' });
+    // It names the ones still to use, so the agent writes those.
     expect(check('fanoutH2', '<h2>Best espresso machines under $500</h2>')).toEqual({
       state: 'bad',
       code: 'partOf',
       count: 1,
       of: 3,
+      missing: ['home espresso grinder', 'espresso machine reviews 2026'],
     });
     expect(checkRule(rule('fanoutH2'), page('<h2>x</h2>'), { ...ctx, fanouts: [] })).toEqual({
       state: 'info',
@@ -267,8 +270,65 @@ describe('fan-outs and keywords', () => {
     expect(check('faq', faq)).toEqual({ state: 'bad', code: 'partOf', count: 2, of: 5 });
     expect(check('faq', faq, '2')).toEqual({ state: 'ok' });
     expect(check('faq', '<h2>Questions</h2>')).toEqual({ state: 'bad', code: 'missing' });
-    expect(check('fanoutFaq', faq)).toEqual({ state: 'bad', code: 'partOf', count: 1, of: 3 });
-    expect(check('fanoutFaq', '<p>x</p>')).toEqual({ state: 'bad', code: 'needsFaq' });
+    expect(check('fanoutFaq', faq)).toEqual({
+      state: 'bad',
+      code: 'partOf',
+      count: 1,
+      of: 3,
+      missing: ['best espresso machine under 500', 'espresso machine reviews 2026'],
+    });
+    // Fewer fan-outs than questions asked: using each one meets it, and the
+    // one still needed is named.
+    const two = { ...ctx, fanouts: ['home espresso grinder', 'espresso machine reviews 2026'] };
+    expect(checkRule(rule('fanoutFaq'), page(faq), two)).toEqual({
+      state: 'bad',
+      code: 'partOf',
+      count: 1,
+      of: 2,
+      missing: ['espresso machine reviews 2026'],
+    });
+    const both =
+      '<h2>FAQ</h2><h3>Which home espresso grinder should I buy?</h3><p>The Baratza.</p>' +
+      '<h3>Where are the espresso machine reviews of 2026?</h3><p>Here.</p>';
+    expect(checkRule(rule('fanoutFaq'), page(both), two)).toEqual({ state: 'ok' });
+    // Different fan-outs count, not questions: two asking the same one are one.
+    const same =
+      '<h2>FAQ</h2><h3>Which home espresso grinder should I buy?</h3><p>The Baratza.</p>' +
+      '<h3>Is a home espresso grinder worth it?</h3><p>Yes.</p>';
+    expect(checkRule(rule('fanoutFaq'), page(same), two)).toEqual({
+      state: 'bad',
+      code: 'partOf',
+      count: 1,
+      of: 2,
+      missing: ['espresso machine reviews 2026'],
+    });
+    // One question that uses two of them counts both.
+    const one =
+      '<h2>FAQ</h2><h3>Which home espresso grinder do the espresso machine reviews 2026 pick?</h3><p>The Baratza.</p>';
+    expect(checkRule(rule('fanoutFaq'), page(one), two)).toEqual({ state: 'ok' });
+    // No FAQ yet: still the fan-outs its questions should use.
+    expect(check('fanoutFaq', '<p>x</p>')).toEqual({
+      state: 'bad',
+      code: 'needsFaq',
+      missing: [
+        'best espresso machine under 500',
+        'home espresso grinder',
+        'espresso machine reviews 2026',
+      ],
+    });
+  });
+
+  it('quotes the fan-outs still to use for the agent, as many as fit', () => {
+    const status = check('fanoutH2', '<h2>x</h2>');
+    expect(fanoutsToUse(status)).toBe(
+      '"best espresso machine under 500"; "home espresso grinder"; "espresso machine reviews 2026"',
+    );
+    expect(fanoutsToUse(status, 40)).toBe('"best espresso machine under 500"');
+    // One that doesn't fit doesn't stop a shorter one after it.
+    expect(fanoutsToUse(status, 60)).toBe(
+      '"best espresso machine under 500"; "home espresso grinder"',
+    );
+    expect(fanoutsToUse({ state: 'ok' })).toBeNull();
   });
 
   it('counts the keywords on the page', () => {
@@ -564,6 +624,13 @@ describe('lengthConflict', () => {
     expect(
       lengthConflict(statuses({ length: { value: '800' }, faq: { on: false } }), 3)?.need,
     ).toBe(600 + 450 + 100);
+    // Two fan-outs: two fan-out H2s and two fan-out questions at most.
+    expect(
+      lengthConflict(
+        statuses({ length: { value: '500' }, faq: { on: false } }, ctx.fanouts.slice(0, 2)),
+        2,
+      )?.need,
+    ).toBe(400 + 300 + 100);
     // No fan-outs: no fan-out H2s or fan-out questions to fit.
     expect(lengthConflict(statuses({ length: { value: '600' } }, []), 0)?.need).toBe(750 + 100);
     expect(

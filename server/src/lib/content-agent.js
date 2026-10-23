@@ -44,8 +44,10 @@ export const HEADING_LIMITS = { h1: 70, other: 90 };
 export const headingLimit = (tag) => (tag === 'h1' ? HEADING_LIMITS.h1 : HEADING_LIMITS.other);
 
 /** The headings rule both agent prompts give the model (fix rules, Start Agent). */
-
 export const HEADING_RULE = `- A heading stays a heading: one short line, an H1 up to ${HEADING_LIMITS.h1} characters and other headings up to ${HEADING_LIMITS.other}. Never write an answer, a sentence or a FAQ into a heading's replace; to answer under a heading, insert a paragraph after it.`;
+
+/** The fan-outs rule both agent prompts give the model: the ones named, in their words. */
+export const FANOUT_RULE = `- Fan-outs are the searches AI engines run for the page's questions. For each fan-out a rule names, in its words ("aeo tracker" → "What is an AEO tracker?"), not questions of your own: fanoutH2 wants an H2, fanoutFaq a question ending in "?" under the FAQ heading. Add it as its own question: after the paragraph that ends an existing answer, insert a heading at the level of the FAQ's other questions (an H3 under an H2 FAQ) and a paragraph that answers it. Reword an existing question into a fan-out's words only when its answer still answers it, replacing that question alone. One question per heading: never add a question to a heading. Call a change a fan-out answer only when it uses a fan-out listed.`;
 
 /** The links rule both agent prompts give the model: only the URLs listed, never invented. */
 export const LINK_RULE = `- Links: link only to a URL listed under the pages or sources you may link to, copied exactly, as <a href="URL">the words it explains</a>, in a replace's "after" or in an insert. Cite a source by linking the words it supports. Never invent a URL, never link a heading, and when no listed page fits, add no link.`;
@@ -115,6 +117,7 @@ Rules for your suggestions:
 - An insert adds new blocks after a passage, as simple HTML (h2, h3, p, ul, ol, li, strong, em, and a for links).
 ${HEADING_RULE}
 ${LINK_RULE}
+${FANOUT_RULE}
 - Never change a passage marked LOCKED: AI assistants quote its wording today. You may insert after it.
 - Use only facts from the page and the brand. Never invent numbers, prices, dates, names, sources or quotes. When a rule needs a fact you don't have, write a placeholder in square brackets, e.g. [figure, source, year].
 - Keep the page's voice and change as little as each rule needs. At most ${MAX_AGENT_SUGGESTIONS} suggestions.
@@ -241,6 +244,11 @@ const isHeading = (tag) => /^h[1-6]$/.test(tag);
 const QUESTION_AND_ANSWER = /^([\s\S]+?(?:\?(?=\s)|？))\s*(\S[\s\S]*)$/;
 /** How an answer ends: a sentence. */
 const ANSWER_END = /[.!。！]$/;
+/** What follows a heading's question may open with another question, not an answer. */
+const OPENS_WITH_QUESTION = /^[^.!?。！？]*(?:\?(?=\s|$)|？)/;
+/** Each question's end: "?" before a space or at the end, or a full-width "？". */
+const QUESTION_MARKS = /\?(?=\s|$)|？/g;
+const questionsIn = (text) => (text.match(QUESTION_MARKS) ?? []).length;
 
 /** Where the first block of a cleaned HTML starts. */
 const BLOCK_START = /<(?:h[2-4]|p|ul|ol|li)>/;
@@ -251,6 +259,17 @@ export function growsPastLimit(passage, before, words) {
   const now = passage.text.trim().length;
   const then = passage.text.replace(before, () => words).trim().length;
   return then > headingLimit(passage.tag) && then > now;
+}
+
+/**
+ * Whether a replace makes a heading ask more than one question: an FAQ
+ * question with a fan-out's question added to it ("What is X? What is an
+ * AEO tracker?"). A new question goes in as its own heading and answer.
+ */
+export function asksMoreThanOne(passage, before, words) {
+  if (!isHeading(passage.tag)) return false;
+  const then = questionsIn(passage.text.replace(before, () => words));
+  return then > 1 && then > questionsIn(passage.text);
 }
 
 /** A paragraph holding `text`, escaped. */
@@ -293,10 +312,13 @@ export function splitReplace(after, tag, links = null) {
     // A question and its answer ("What is X? X is …"): the answer goes under
     // the heading first, before any blocks that came with it. A subtitle that
     // fits ("What is AEO? The Complete Guide") isn't one: an answer ends a
-    // sentence. Past the heading's limit, the rest is never the heading's.
+    // sentence. Past the heading's limit, the rest is never the heading's,
+    // unless it opens with a second question: that one isn't an answer, and
+    // the heading asking both is dropped (asksMoreThanOne).
     const answered = words.match(QUESTION_AND_ANSWER);
     if (
       answered &&
+      !OPENS_WITH_QUESTION.test(answered[2]) &&
       (words.length > headingLimit(tag) ||
         (ANSWER_END.test(answered[2]) && answered[2].length >= MIN_ANSWER_CHARS))
     ) {
@@ -313,10 +335,10 @@ export function splitReplace(after, tag, links = null) {
  * HTML cleaned and not empty; the rules named kept to the ones sent, and
  * each change once. A replace that carries blocks, or an answer on a
  * heading, is split into a replace and an insert after it (splitReplace);
- * one that would still grow a heading past its headingLimit is dropped (a
- * long heading may still be shortened). Links stay only to the URLs in
- * `links` (linkAllowList): a replace's go in after_links, by offset into its
- * words, an insert's in its HTML.
+ * one that would still grow a heading past its headingLimit (a long heading
+ * may still be shortened), or make it ask a second question, is dropped.
+ * Links stay only to the URLs in `links` (linkAllowList): a replace's go in
+ * after_links, by offset into its words, an insert's in its HTML.
  */
 export function keepSuggestions(raw, passages, lockedKeys, ruleKeys, links = null) {
   const kept = [];
@@ -356,7 +378,13 @@ export function keepSuggestions(raw, passages, lockedKeys, ruleKeys, links = nul
       const wordLinks = split.links.slice(0, MAX_LINKS);
       // Linking words the passage already has is a change too.
       const changed = words && (words !== before || wordLinks.length > 0);
-      if (changed && (words.length > 2000 || growsPastLimit(passage, before, words))) continue;
+      if (
+        changed &&
+        (words.length > 2000 ||
+          growsPastLimit(passage, before, words) ||
+          asksMoreThanOne(passage, before, words))
+      )
+        continue;
       changes = [
         changed && {
           id: `replace:${passage.text}:${before}`,

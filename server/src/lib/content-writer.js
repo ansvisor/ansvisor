@@ -4,6 +4,7 @@ import { z } from 'zod';
 import supabaseAdmin from '../config/supabase.js';
 import { resolveModel } from './ai-provider.js';
 import {
+  FANOUT_RULE,
   HEADING_RULE,
   LINK_RULE,
   MAX_AGENT_SUGGESTIONS,
@@ -110,6 +111,7 @@ How to write:
 - Follow the outline when there is one; each H2 answers one of the questions or AI searches given.
 - Short paragraphs and plain sentences. Lists where a reader compares or follows steps.
 - Follow every rule listed, and the writer's own rules.
+- For each fan-out a rule names, use its words, not questions of your own: a section heading for fanoutH2, an FAQ question ending in "?" for fanoutFaq.
 - Use only facts from the brand and the brief. Never invent numbers, prices, dates, names, customers, sources or quotes. When the page needs a fact you don't have, write a placeholder in square brackets, e.g. [price], [figure, source, year].
 - Plain text in every field: no HTML, no Markdown.
 - Write in the language asked for.`;
@@ -122,6 +124,7 @@ Rules for your suggestions:
 - An insert adds new blocks after a passage, as simple HTML (h2, h3, p, ul, ol, li, strong, em, and a for links): a missing section, a direct answer, an FAQ.
 ${HEADING_RULE}
 ${LINK_RULE}
+${FANOUT_RULE}
 - Never change a passage marked LOCKED: AI assistants quote its wording today. You may insert after it.
 - Put the keys of the rules a change meets in "rules" (none when it meets none).
 - Use only facts from the page and the brand. Never invent numbers, prices, dates, names, sources or quotes; write a placeholder in square brackets instead, e.g. [figure, source, year].
