@@ -12,7 +12,9 @@
  * synced before have 90 days, counted with the old source list; this run
  * reads the rest and re-counts every row with the current list (version
  * stamped on each row). Idempotent: rows are upserted on (brand, date,
- * source, entry URL), so it can be run again. It also refreshes the usual
+ * source, medium, entry URL), so it can be run again. Rows synced before the
+ * session medium was read (00251) are replaced, so ChatGPT Shopping's
+ * sessions (#1283) show in the history too. It also refreshes the usual
  * last few days of page totals and products, as the daily sync does.
  */
 
