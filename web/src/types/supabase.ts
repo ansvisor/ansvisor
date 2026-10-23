@@ -14,6 +14,44 @@ export type Database = {
   }
   public: {
     Tables: {
+      action_entities: {
+        Row: {
+          action_id: string
+          entity_key: string
+          entity_type: string
+          kept_at: string
+          label: string | null
+          removed_at: string | null
+          removed_reason: string | null
+        }
+        Insert: {
+          action_id: string
+          entity_key: string
+          entity_type: string
+          kept_at?: string
+          label?: string | null
+          removed_at?: string | null
+          removed_reason?: string | null
+        }
+        Update: {
+          action_id?: string
+          entity_key?: string
+          entity_type?: string
+          kept_at?: string
+          label?: string | null
+          removed_at?: string | null
+          removed_reason?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "action_entities_action_id_fkey"
+            columns: ["action_id"]
+            isOneToOne: false
+            referencedRelation: "actions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       action_events: {
         Row: {
           action_id: string
@@ -3541,6 +3579,17 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      action_entity_counts: {
+        Args: { p_action_ids: string[] }
+        Returns: {
+          action_id: string
+          entity_type: string
+          removed: number
+          removed_keys: string[]
+          removed_labels: string[]
+          total: number
+        }[]
+      }
       ai_traffic_merged: {
         Args: {
           p_analytics?: boolean
