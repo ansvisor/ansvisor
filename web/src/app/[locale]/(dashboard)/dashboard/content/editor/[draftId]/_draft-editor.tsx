@@ -776,6 +776,14 @@ export function DraftEditor({
             ? t('suggestions.agentBusy')
             : null,
   };
+  // The card's Run Agent says why it won't run, as the Rules card does: also
+  // when the only rules left open are ones the agent doesn't fix (one H1).
+  const agentRules = openRulesForAgent(rules.rules);
+  const cardRunBlocked =
+    agentFix.blocked ??
+    (agentRules.forAgent.length === 0 && agentRules.notForAgent.length > 0
+      ? t('suggestions.notForAgent')
+      : null);
 
   // A drag with files over the page shows where they go; one dropped beside
   // the page (not on its text) goes in at the cursor.
@@ -1269,7 +1277,7 @@ export function DraftEditor({
               onDecidePage={(to) => {
                 if (pageSuggestion) void decidePage(pageSuggestion, to);
               }}
-              runBlocked={agentFix.blocked}
+              runBlocked={cardRunBlocked}
             />
           )}
           {editor && (
