@@ -193,4 +193,15 @@ describe('fetchPage against a local site', () => {
     await expect(get('/big', { maxBytes: 1_000 })).rejects.toMatchObject({ code: 'too_large' });
     await expect(get('/slow', { timeoutMs: 50 })).rejects.toMatchObject({ code: 'timeout' });
   });
+
+  it('reads the start of a page over the cap when asked to, instead of refusing it', async () => {
+    await expect(get('/big', { maxBytes: 1_000, truncate: true })).resolves.toMatchObject({
+      status: 200,
+      html: 'x'.repeat(1_000),
+    });
+    // Under the cap, the whole page, as without it.
+    await expect(get('/page', { truncate: true })).resolves.toMatchObject({
+      html: '<h1>Pricing</h1><p>Plans ünd prices</p>',
+    });
+  });
 });

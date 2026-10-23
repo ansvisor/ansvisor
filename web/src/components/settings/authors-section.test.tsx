@@ -263,10 +263,22 @@ describe('AuthorsSection', () => {
     await render();
     await click(row('Cal Freelance').querySelectorAll('button')[1]);
     expect(document.body.textContent).toContain('Remove Cal Freelance?');
+    expect(document.body.textContent).toContain(
+      "They leave the authors list and any brand's default. No page in the Library is by them.",
+    );
     expect(actions.deleteContentAuthor).not.toHaveBeenCalled();
 
     await click(buttons('Remove').find((b) => !container.contains(b)));
     expect(actions.deleteContentAuthor).toHaveBeenCalledWith(CAL);
+  });
+
+  it("says the author's pages go back to the team byline", async () => {
+    await render();
+    await click(row('Ada Lovelace').querySelectorAll('button')[1]);
+    expect(document.body.textContent).toContain('Remove Ada Lovelace?');
+    expect(document.body.textContent).toContain(
+      "Their 3 pages go back to your brand's team byline.",
+    );
   });
 
   it("says so when the authors can't be read", async () => {

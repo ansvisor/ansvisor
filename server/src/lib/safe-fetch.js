@@ -153,8 +153,11 @@ function decode(buffer, contentType) {
   }
 }
 
-/** One request, no redirects followed: the response, or where it redirects to. */
-function requestOnce(url, { signal, lookup, maxBytes }) {
+/**
+ * One request, no redirects followed: the response, or where it redirects to.
+ * A body over `maxBytes` is refused, or with `truncate` cut off there.
+ */
+function requestOnce(url, { signal, lookup, maxBytes, truncate }) {
   return new Promise((resolve, reject) => {
     const client = url.protocol === 'https:' ? https : http;
     const req = client.request(
@@ -197,10 +200,19 @@ function requestOnce(url, { signal, lookup, maxBytes }) {
 
         const chunks = [];
         let size = 0;
+        let full = false;
         body.on('data', (chunk) => {
+          if (full) return;
           size += chunk.length;
           if (size > maxBytes) {
+            full = true;
             req.destroy();
+            if (truncate) {
+              // The start of the page, up to the cap: the rest is never read.
+              chunks.push(chunk.subarray(0, chunk.length - (size - maxBytes)));
+              resolve({ status, contentType, body: decode(Buffer.concat(chunks), contentType) });
+              return;
+            }
             reject(new PageFetchError('too_large', 'The page is too large to read'));
             return;
           }
@@ -221,8 +233,10 @@ function requestOnce(url, { signal, lookup, maxBytes }) {
  * A web page's HTML, fetched safely (see above).
  *
  * @param {string} address
- * @param {{ timeoutMs?: number, maxBytes?: number, maxRedirects?: number, lookup?: Function, ports?: string[], signal?: AbortSignal }} [opts]
+ * @param {{ timeoutMs?: number, maxBytes?: number, truncate?: boolean, maxRedirects?: number, lookup?: Function, ports?: string[], signal?: AbortSignal }} [opts]
  *   `signal` ends the read early too (a run's Stop), as its timeout does.
+ *   `truncate` reads a page over `maxBytes` up to it, instead of refusing it
+ *   ('too_large'), for a caller that needs only its start.
  *   `lookup` and `ports` replace the public-only lookup and the web ports;
  *   tests use them to reach a local server.
  * @returns {Promise<{ url: string, status: number, html: string }>} url is the address after redirects
@@ -231,6 +245,7 @@ export async function fetchPage(address, opts = {}) {
   const {
     timeoutMs = FETCH_TIMEOUT_MS,
     maxBytes = MAX_PAGE_BYTES,
+    truncate = false,
     maxRedirects = MAX_REDIRECTS,
     lookup = publicOnlyLookup,
     ports = WEB_PORTS,
@@ -243,7 +258,7 @@ export async function fetchPage(address, opts = {}) {
   for (let hops = 0; ; hops += 1) {
     let res;
     try {
-      res = await requestOnce(url, { signal, lookup, maxBytes });
+      res = await requestOnce(url, { signal, lookup, maxBytes, truncate });
     } catch (err) {
       if (err instanceof PageFetchError) throw err;
       if (signal.aborted) throw new PageFetchError('timeout', 'The page took too long to answer');

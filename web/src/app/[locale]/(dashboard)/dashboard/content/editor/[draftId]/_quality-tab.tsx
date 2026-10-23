@@ -9,7 +9,7 @@ import { BAND_CLASSES, qualityBand } from '@/lib/content/quality';
 import {
   authorProfile,
   FRESH_MONTHS,
-  scoreGain,
+  trustGain,
   type EeatCheckId,
   type Score,
   type TrustCheckId,
@@ -32,10 +32,12 @@ export interface QualityRead {
   readability: Readability | null;
   /** E-E-A-T from the author, or null before the authors are read. */
   eeat: Score<EeatCheckId> | null;
-  /** Trust from the page's figures and links, its score null while none can be read. */
+  /** Trust from the page's figures and links, its score null until a figure or a dated source is read. */
   trust: TrustRead | null;
   /** The page's author, or null for the organization byline. */
   author: ContentAuthor | null;
+  /** Whether the member reading may edit that author in Settings › Authors. */
+  canEdit: boolean;
   /** Whether the workspace has an author to pick (Settings › Authors). */
   hasAuthors: boolean;
   brandName: string;
@@ -123,7 +125,7 @@ export function QualityTab({
         <p className="text-xs text-muted-foreground">{t('estimate')}</p>
         {readability?.score === null && (
           <p className="rounded-xl border border-dashed px-3 py-2.5 text-xs text-muted-foreground">
-            {t('tooShort')}
+            {t(readability?.unscored === 'language' ? 'notThisLanguage' : 'tooShort')}
           </p>
         )}
       </section>
@@ -209,7 +211,10 @@ export function QualityTab({
 export function useTodoCopy() {
   const t = useTranslations('contentEditor.editor.quality.todos');
   const tAuthor = useTranslations('contentEditor.editor.author');
-  return (todo: QualityTodo, { author, brandName }: Pick<QualityRead, 'author' | 'brandName'>) => {
+  return (
+    todo: QualityTodo,
+    { author, brandName, canEdit }: Pick<QualityRead, 'author' | 'brandName' | 'canEdit'>,
+  ) => {
     if (todo.id === 'byline') {
       const action = todo.action === 'addAuthor' ? 'addAuthor' : 'pickAuthor';
       return {
@@ -237,7 +242,15 @@ export function useTodoCopy() {
     return {
       title: t('authorProfile.title', { name: author.name }),
       next: t('authorProfile.next', { name: author.name }),
-      detail: todo.done ? t('authorProfile.done') : t(`authorProfile.detail.${missing}`),
+      // Only whoever can edit the author is sent to; anyone else is told who can.
+      detail: todo.done
+        ? t('authorProfile.done')
+        : canEdit
+          ? t(`authorProfile.detail.${missing}`)
+          : t(`authorProfile.askOthers.${missing}`, {
+              name: author.name,
+              member: author.userId ? 'yes' : 'no',
+            }),
     };
   };
 }
@@ -344,17 +357,18 @@ export type TrustSuggestion = Suggestion & { check: TrustCheckId; count: number 
 
 /**
  * Trust's: figures without a source, sources past FRESH_MONTHS, links that
- * don't answer, each with Show on the first one in the page.
+ * don't answer, each with Show on the first one in the page. A broken link
+ * is listed before Trust is scored too, its gain out of the Phase 1 points.
  */
 export function trustSuggestions(t: T, trust: TrustRead | null): TrustSuggestion[] {
-  if (!trust || trust.score === null) return [];
+  if (!trust) return [];
   const out: TrustSuggestion[] = [];
   if (trust.unsourced.length) {
     out.push({
       key: 'trust:claimsSourced',
       check: 'claimsSourced',
       score: 'trust',
-      gain: scoreGain(trust, ['claimsSourced']),
+      gain: trustGain(trust, ['claimsSourced']),
       line: t('checks.claimsSourced.line', { count: trust.unsourced.length }),
       count: trust.unsourced.length,
       detail: t('checks.claimsSourced.detail'),
@@ -366,7 +380,7 @@ export function trustSuggestions(t: T, trust: TrustRead | null): TrustSuggestion
       key: 'trust:freshSources',
       check: 'freshSources',
       score: 'trust',
-      gain: scoreGain(trust, ['freshSources']),
+      gain: trustGain(trust, ['freshSources']),
       count: trust.stale.length,
       line: t('checks.freshSources.line', {
         count: trust.stale.length,
@@ -382,7 +396,7 @@ export function trustSuggestions(t: T, trust: TrustRead | null): TrustSuggestion
       key: 'trust:noBrokenLinks',
       check: 'noBrokenLinks',
       score: 'trust',
-      gain: scoreGain(trust, ['noBrokenLinks']),
+      gain: trustGain(trust, ['noBrokenLinks']),
       line: t('checks.noBrokenLinks.line', { count: trust.broken.length }),
       count: trust.broken.length,
       detail: t('checks.noBrokenLinks.detail', {
