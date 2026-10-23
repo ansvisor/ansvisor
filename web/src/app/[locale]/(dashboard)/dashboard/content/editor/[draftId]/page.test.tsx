@@ -3175,6 +3175,8 @@ describe('the side panel', () => {
       expect(nextButton()!.getAttribute('aria-label')).toBe('Next · Write the first draft');
 
       await act(async () => inBasket("I'll write it")!.click());
+      // The basket finishes closing (and the editor takes the caret) on the next frame.
+      await act(async () => new Promise((resolve) => setTimeout(resolve, 100)));
       expect(basket()).toBeNull();
       // The caret goes to the end of the page, to write there.
       const editor = (container.querySelector('.ProseMirror') as HTMLElement & { editor: Editor })
@@ -3187,6 +3189,85 @@ describe('the side panel', () => {
       );
       expect(inBasket('Write with Agent')).toBeUndefined();
       expect(inBasket('Skip')).toBeUndefined();
+    });
+
+    it('leaves focus where a click outside the basket put it', async () => {
+      getContentDraft.mockResolvedValue(draft({ method: 'create' }));
+      await renderPage();
+      await act(async () => nextButton()!.click());
+      expect(basket()).not.toBeNull();
+      const elsewhere = document.createElement('button');
+      document.body.append(elsewhere);
+      try {
+        await act(async () => {
+          elsewhere.focus();
+          for (const type of ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click']) {
+            elsewhere.dispatchEvent(new MouseEvent(type, { bubbles: true }));
+          }
+        });
+        await act(async () => new Promise((resolve) => setTimeout(resolve, 150)));
+        expect(basket()).toBeNull();
+        expect(document.activeElement).toBe(elsewhere);
+      } finally {
+        elsewhere.remove();
+      }
+    });
+
+    it('keeps a skip while the sources load again, as the fan-out rules read them', async () => {
+      const sources = {
+        data: {
+          prompts: [],
+          fanouts: [{ query: 'pipeline forecasting', platforms: ['copilot-web'], searched: 2 }],
+          citedPages: [],
+          gscQueries: [],
+          brandDomains: [],
+          competitorDomains: [],
+        },
+        choices: [],
+      };
+      getDraftSources.mockResolvedValue(sources);
+      getDraftBrief.mockResolvedValue({
+        brief: {
+          goal: 'Win forecasting searches',
+          audience: 'Sales leaders',
+          outline: [],
+          keywords: [],
+          origin: 'rebuild',
+          builtAt: '2026-10-21T10:00:00Z',
+          builtFrom: { prompts: 0, fanouts: 1, pages: 0, queries: 0 },
+        },
+      });
+      getContentDraft.mockResolvedValue(
+        draft({
+          method: 'create',
+          pageType: 'blog_post',
+          rules: {
+            set: null,
+            source: 'default',
+            overrides: { length: { on: false } },
+            textRules: [],
+          },
+        }),
+      );
+      await renderPage();
+      expect(nextButton()!.getAttribute('aria-label')).toBe('Next · Fix open rules');
+      await act(async () => nextButton()!.click());
+      await act(async () => inBasket('Skip')!.click());
+      const skips = () => JSON.parse(localStorage.getItem('aeo:next-step-skips:d1')!);
+      const skippedAt = skips().fixRules;
+      expect(skippedAt).toContain('fanoutH2');
+
+      // Opened again, the sources come last: until then the fan-out rule reads
+      // as "no fan-outs", and the skip mustn't be dropped for it.
+      let answer: (value: unknown) => void = () => {};
+      getDraftSources.mockReturnValue(new Promise((resolve) => (answer = resolve)));
+      await act(async () => root.unmount());
+      root = createRoot(container);
+      await renderPage();
+      expect(skips().fixRules).toBe(skippedAt);
+      await act(async () => answer(sources));
+      expect(skips().fixRules).toBe(skippedAt);
+      expect(nextButton()!.getAttribute('aria-label')).not.toBe('Next · Fix open rules');
     });
 
     it('stays out of the header while Quality is off', async () => {

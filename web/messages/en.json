@@ -4165,6 +4165,7 @@
         "skipped": "· skipped",
         "working": "Content Agent is working",
         "stop": "Stop",
+        "marking": "Marking it ready…",
         "tipsTitle": "If you see…",
         "tipLine": "{state} →",
         "states": {
@@ -4215,7 +4216,7 @@
         "tips": {
           "longPage": "Page far longer than Length",
           "shortPage": "Page far shorter than Length",
-          "someRules": "1 to 4 rules open",
+          "someRules": "1 to {max} rules open",
           "noBrief": "Brief is empty",
           "lowTrust": "Trust under {gate}"
         }

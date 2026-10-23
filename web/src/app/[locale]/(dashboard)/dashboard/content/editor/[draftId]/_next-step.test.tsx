@@ -126,7 +126,11 @@ describe('NextStepButton', () => {
     ]);
     // If you see…: each line with its button, none repeating the step's own.
     expect(popup()!.textContent).not.toContain('Page far longer than Length');
-    expect(popup()!.textContent).toContain('1 to 4 rules open → Fix open rules');
+    expect(popup()!.textContent).not.toContain('rules open →');
+    // Fix open rules passed: the line names how few are open (the Rules tab's rewrite count less one).
+    const few = state({ openRules: ['faq', 'summary'], skipped: { fixRules: 'faq,summary' } });
+    await render(few);
+    expect(popup()!.textContent).toContain('1 to 3 rules open → Fix open rules');
   });
 
   it('names the to-do only the person can do while Trust is low', async () => {
@@ -166,6 +170,19 @@ describe('NextStepButton', () => {
     expect(button('Export')).toBeDefined();
   });
 
+  it("moves focus to the next step's button after Skip, and reads the step out", async () => {
+    const s = state({ openRules: ['faq'] });
+    await render(s);
+    await act(async () => button('Skip')!.click());
+    expect(onSkip).toHaveBeenCalledWith('fixRules');
+    // The editor passes the skip on: the step after it shows.
+    await render({ ...s, skipped: { fixRules: 'faq' } });
+    expect(document.activeElement).toBe(button('Before you publish'));
+    expect(popup()!.querySelector('[aria-live="polite"]')!.textContent).toContain(
+      'Check and mark ready',
+    );
+  });
+
   it('shows the run under way with Stop instead of a step', async () => {
     const onStop = vi.fn();
     await render(state({ openRules: ['rule0', 'rule1'] }), {
@@ -195,10 +212,18 @@ describe('NextStepButton', () => {
 });
 
 describe('wordsUnderTitle', () => {
-  it('reads the words under the H1 only', () => {
+  it('reads the words besides the block the title comes from', () => {
     expect(wordsUnderTitle('<h1>Pour-over</h1><p></p>')).toBe(false);
     expect(wordsUnderTitle('<h1>Pour-over</h1><p>Brew.</p>')).toBe(true);
-    expect(wordsUnderTitle('<p>Brew.</p>')).toBe(true);
+    // An empty line or an image above the title changes nothing.
+    expect(wordsUnderTitle('<p></p><h1>Pour-over</h1><p></p>')).toBe(false);
+    expect(wordsUnderTitle('<p><img src="https://cdn.acme.com/a.jpg"></p><h1>Pour-over</h1>')).toBe(
+      false,
+    );
+    // No H1: the first heading, else the first line, is the title.
+    expect(wordsUnderTitle('<h2>Pour-over</h2><p>Brew.</p>')).toBe(true);
+    expect(wordsUnderTitle('<p>Pour-over</p>')).toBe(false);
+    expect(wordsUnderTitle('<p>Pour-over</p><p>Brew.</p>')).toBe(true);
     expect(wordsUnderTitle('')).toBe(false);
   });
 });

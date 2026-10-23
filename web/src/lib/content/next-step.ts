@@ -1,5 +1,11 @@
 import type { QualityTodo } from './quality-todos';
-import { openRulesForAgent, type ActiveRule, type RewriteAdvice, type RuleStatus } from './rules';
+import {
+  REWRITE_OPEN_RULES,
+  openRulesForAgent,
+  type ActiveRule,
+  type RewriteAdvice,
+  type RuleStatus,
+} from './rules';
 
 /**
  * The Content Editor's Next step basket (Next step spec §4): the one step to
@@ -33,8 +39,12 @@ export type NextAction =
   | 'markReady'
   | 'export';
 
-/** From how many open rules Rewrite page is offered beside Fix open rules (spec §4). */
-export const NEXT_REWRITE_RULES = 5;
+/**
+ * The most open rules "If you see…" names for Fix open rules alone: from
+ * REWRITE_OPEN_RULES, the Rules tab recommends rewriting the page whole, and
+ * the basket offers Rewrite page beside it.
+ */
+export const FEW_OPEN_RULES = REWRITE_OPEN_RULES - 1;
 
 /**
  * The open rules a run of Fix open rules can close: the ones the agent is
@@ -183,11 +193,9 @@ function steps(s: NextStepState): NextStep[] {
           {
             id: 'fixRules' as const,
             primary: 'fixRules' as const,
-            // Only where a rewrite can run (rewriteAdvice: not empty, not too long).
-            alternative:
-              s.openRules.length >= NEXT_REWRITE_RULES && s.rewrite !== null
-                ? ('rewritePage' as const)
-                : null,
+            // Where the Rules tab recommends rewriting it whole (rewriteAdvice):
+            // the two say the same, and never for a page too long to send.
+            alternative: s.rewrite !== null ? ('rewritePage' as const) : null,
             skippable: true,
           },
         ]
@@ -269,7 +277,7 @@ export function nextStep(s: NextStepState): NextPath {
                 },
               ]
             : []),
-          ...(s.openRules.length > 0 && s.openRules.length < NEXT_REWRITE_RULES
+          ...(s.openRules.length > 0 && s.rewrite === null
             ? [{ id: 'someRules' as const, action: 'fixRules' as const }]
             : []),
           ...(s.method === 'create' && s.hasBrief === false

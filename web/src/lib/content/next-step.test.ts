@@ -99,19 +99,26 @@ describe('nextStep', () => {
       'proof:ahead',
       'check:ahead',
     ]);
-    // Rewrite page is the step's own button: only the other line shows.
-    expect(nextStep(s).tips).toEqual([{ id: 'someRules', action: 'fixRules' }]);
+    // Rewrite page is the step's own button, and Fix open rules its other one: no line repeats them.
+    expect(nextStep(s).tips).toEqual([]);
   });
 
-  it('fixes open rules, offering Rewrite page from five open where a rewrite can run', () => {
-    expect(nextStep(state({ openRules: rules(4) })).step).toMatchObject({
+  it('offers Rewrite page beside Fix open rules where the Rules tab recommends it', () => {
+    expect(nextStep(state({ openRules: rules(3) })).step).toMatchObject({
       id: 'fixRules',
       alternative: null,
     });
-    const five = state({ openRules: rules(5), rewrite: { reason: 'open', count: 5 } });
-    expect(nextStep(five).step).toMatchObject({ id: 'fixRules', alternative: 'rewritePage' });
+    const many = state({ openRules: rules(4), rewrite: { reason: 'open', count: 4 } });
+    expect(nextStep(many).step).toMatchObject({ id: 'fixRules', alternative: 'rewritePage' });
     // A page too long to send whole gets no rewrite advice, and no Rewrite page.
-    expect(nextStep({ ...five, rewrite: null }).step.alternative).toBeNull();
+    expect(nextStep({ ...many, rewrite: null }).step.alternative).toBeNull();
+  });
+
+  it('names a few open rules once Fix open rules is passed', () => {
+    const s = state({ openRules: ['faq', 'summary'] });
+    expect(nextStep({ ...s, skipped: { fixRules: stepState('fixRules', s) } }).tips).toEqual([
+      { id: 'someRules', action: 'fixRules' },
+    ]);
   });
 
   it('asks for proof and the author while Trust is low or a to-do is open (mockup: Almost ready)', () => {

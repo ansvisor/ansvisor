@@ -497,12 +497,15 @@ export function DraftEditor({
   const brandDomains = reads.sources?.data?.brandDomains;
   // The site's trust (Site Audit, CE-043), read once: Trust's last 5 points.
   const [siteTrust, setSiteTrust] = useState<SiteTrust | null>(null);
+  // Read, or failed to: null alone can't tell "loading" from "none".
+  const [siteTrustRead, setSiteTrustRead] = useState(false);
   useEffect(() => {
     if (!qualityOn) return;
     let live = true;
     getSiteTrust(draft.brandId)
       .then((read) => live && setSiteTrust(read))
-      .catch((err) => console.error('Failed to read the site trust:', err));
+      .catch((err) => console.error('Failed to read the site trust:', err))
+      .finally(() => live && setSiteTrustRead(true));
     return () => {
       live = false;
     };
@@ -1635,7 +1638,13 @@ export function DraftEditor({
   // A skip whose step's state has changed is dropped, so it can't come back
   // to life; only once what the steps read is in (the brief, the rules, the
   // to-dos), not while a reopened page is still loading.
-  const nextRead = reads.brief.status !== 'loading' && rules.ready && (!qualityOn || todosRead);
+  // The sources (the fan-out rules read them), and with Quality the site's
+  // trust and the link reads (Trust moves as they land).
+  const nextRead =
+    reads.brief.status !== 'loading' &&
+    reads.sources !== null &&
+    rules.ready &&
+    (!qualityOn || (todosRead && siteTrustRead && linksPending === 0));
   const staleSkips =
     nextRead && Object.keys(liveSkips(nextState)).length !== Object.keys(skipped).length;
   useEffect(() => {
@@ -1675,6 +1684,16 @@ export function DraftEditor({
         return pageRewrite?.blocked ?? null;
       case 'fixRules':
         return agentFix.blocked;
+      // As the header's Mark ready is held.
+      case 'beforePublish':
+      case 'markReady':
+        return marking
+          ? t('nextStep.marking')
+          : autosave.state === 'conflict'
+            ? t('save.conflict')
+            : autosave.state === 'too_large'
+              ? t('save.tooLarge')
+              : null;
       default:
         return null;
     }

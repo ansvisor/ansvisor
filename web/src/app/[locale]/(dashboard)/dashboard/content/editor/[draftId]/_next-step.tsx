@@ -1,18 +1,19 @@
 'use client';
 
-import { useId, useRef } from 'react';
+import { useEffect, useId, useRef } from 'react';
 import { useTranslations } from 'next-intl';
 import { Check } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTitle, PopoverTrigger } from '@/components/ui/popover';
 import type { AgentRun } from '@/lib/content/agent-runs';
-import type {
-  NextAction,
-  NextPath,
-  NextStep,
-  NextStepId,
-  NextStepState,
-  PathState,
+import {
+  FEW_OPEN_RULES,
+  type NextAction,
+  type NextPath,
+  type NextStep,
+  type NextStepId,
+  type NextStepState,
+  type PathState,
 } from '@/lib/content/next-step';
 import { cn } from '@/lib/utils';
 import { RunSteps } from './_agent-card';
@@ -50,12 +51,22 @@ export function writeSkips(draftId: string, skips: Partial<Record<NextStepId, st
   }
 }
 
-/** Words under the page's title: a page with none is empty (Write the first draft). */
+/**
+ * Words besides the page's title: a page with none is empty (Write the first
+ * draft). The title is read from the block draftTitleFromDoc picks: the
+ * first H1 with words, else the first heading, else the first block with
+ * words; an empty line or an image above it changes nothing.
+ */
 export function wordsUnderTitle(html: string): boolean {
   const template = document.createElement('template');
   template.innerHTML = html;
-  const first = template.content.firstElementChild;
-  if (first?.matches('h1')) first.remove();
+  const blocks = Array.from(template.content.children);
+  const words = (el: Element) => /\S/.test(el.textContent ?? '');
+  const title =
+    blocks.find((el) => el.matches('h1') && words(el)) ??
+    blocks.find((el) => el.matches('h1, h2, h3, h4, h5, h6') && words(el)) ??
+    blocks.find(words);
+  title?.remove();
   return /\S/.test(template.content.textContent ?? '');
 }
 
@@ -164,13 +175,14 @@ export function NextStepButton({
   const now = path.findIndex((p) => p.state === 'now');
   const why = blocked(step.primary);
   const whyId = useId();
-  // A button moves on to the page (a menu, a tab, the to-dos): focus goes
-  // there. Closed otherwise (Esc, a click outside), it goes back to the button.
-  const acted = useRef(false);
-  const act = (action: NextAction) => {
-    acted.current = true;
-    onAction(action);
-  };
+  // After Skip, the new step's button takes focus (Skip itself may be gone).
+  const primaryRef = useRef<HTMLButtonElement>(null);
+  const skipped = useRef(false);
+  useEffect(() => {
+    if (!skipped.current) return;
+    skipped.current = false;
+    primaryRef.current?.focus();
+  }, [step.id]);
 
   return (
     <Popover open={open} onOpenChange={onOpenChange}>
@@ -190,11 +202,9 @@ export function NextStepButton({
         align="end"
         className="w-[340px] space-y-3"
         initialFocus={focusOnOpen}
-        finalFocus={() => {
-          const back = !acted.current;
-          acted.current = false;
-          return back;
-        }}
+        // Closing leaves focus where it went (a click into the page, a dialog,
+        // a menu or a tab a step opened), else back on the button: Base UI's
+        // own rule, which a finalFocus function would turn off.
       >
         <div className="flex items-center gap-2">
           <span className="text-[11px] font-medium tracking-wide text-muted-foreground uppercase">
@@ -225,17 +235,19 @@ export function NextStepButton({
             )}
           </div>
         ) : (
-          <div className="space-y-2">
+          // A step that changes (Skip, a run's end) is read out.
+          <div className="space-y-2" aria-live="polite">
             <PopoverTitle>{name}</PopoverTitle>
             <p className="text-[13px] text-muted-foreground [overflow-wrap:anywhere]">
               {stepReason(t, step, state, todoLine)}
             </p>
             <div className="flex flex-wrap items-center gap-1.5">
               <Button
+                ref={primaryRef}
                 size="sm"
                 disabled={why !== null}
                 aria-describedby={why ? whyId : undefined}
-                onClick={() => act(step.primary)}
+                onClick={() => onAction(step.primary)}
               >
                 {t(`actions.${step.primary}`)}
               </Button>
@@ -244,13 +256,20 @@ export function NextStepButton({
                   variant="outline"
                   size="sm"
                   disabled={blocked(step.alternative) !== null}
-                  onClick={() => act(step.alternative!)}
+                  onClick={() => onAction(step.alternative!)}
                 >
                   {t(`actions.${step.alternative}`)}
                 </Button>
               )}
               {step.skippable && (
-                <Button variant="ghost" size="sm" onClick={() => onSkip(step.id)}>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    skipped.current = true;
+                    onSkip(step.id);
+                  }}
+                >
                   {t('skip')}
                 </Button>
               )}
@@ -308,11 +327,13 @@ export function NextStepButton({
             </p>
             {tips.map((tip) => (
               <p key={tip.id} className="text-[13px] text-muted-foreground">
-                {t('tipLine', { state: t(`tips.${tip.id}`, { gate: TRUST_GATE }) })}{' '}
+                {t('tipLine', {
+                  state: t(`tips.${tip.id}`, { gate: TRUST_GATE, max: FEW_OPEN_RULES }),
+                })}{' '}
                 <button
                   type="button"
                   disabled={blocked(tip.action) !== null}
-                  onClick={() => act(tip.action)}
+                  onClick={() => onAction(tip.action)}
                   className="font-medium text-foreground underline-offset-2 hover:underline focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none disabled:opacity-50"
                 >
                   {t(`actions.${tip.action}`)}
