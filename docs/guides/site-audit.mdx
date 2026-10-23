@@ -1,11 +1,11 @@
 ---
 title: "Site Audit"
-description: "Score any page for AI search readiness across 47 signals, and get page-specific fixes you can paste."
+description: "Score any page for AI search readiness across 48 signals, and get page-specific fixes you can paste."
 ---
 
 ## What it does
 
-The **Site Audit** page (`/dashboard/audit`) checks how ready a page is to be cited by AI answer engines. It fetches the page, runs **47 signals** in five categories, scores the page out of 100, and writes fixes for what failed: an improved H1, a meta description, an opening paragraph that leads with the answer, FAQ markup and more.
+The **Site Audit** page (`/dashboard/audit`) checks how ready a page is to be cited by AI answer engines. It fetches the page, runs **48 signals** in five categories, scores the page out of 100, and writes fixes for what failed: an improved H1, a meta description, an opening paragraph that leads with the answer, FAQ markup and more.
 
 You find it in the sidebar under **Execution**, after **Content**. It is available on plans that include Content Optimization.
 
@@ -18,7 +18,7 @@ You can audit any URL: your own pages, or a competitor's page to see what it doe
     The field at the top is filled in with your brand's primary domain. Replace it with the page you want to check and click **Run Audit**.
   </Step>
   <Step title="Wait for the report">
-    The report page opens right away and follows the audit through its stages: **Fetching the page…**, **Analyzing 47 signals…** and **Generating AI recommendations…**. An audit usually takes about 30 seconds. If it is still running after two minutes, the page says **This audit is taking longer than expected.** Click **Check again** to look again.
+    The report page opens right away and follows the audit through its stages: **Fetching the page…**, **Analyzing 48 signals…** and **Generating AI recommendations…**. An audit usually takes about 30 seconds. If it is still running after two minutes, the page says **This audit is taking longer than expected.** Click **Check again** to look again.
   </Step>
   <Step title="Read the report and fix">
     Start with the **AI Recommendations**, then open the failing signals. When you've made changes, click the re-run icon at the top of the report to audit the page again.
@@ -91,7 +91,7 @@ Each audit has its own report at `/dashboard/audit/[id]`. The icons at the top r
 
 ### Total score
 
-The gauge shows the page's score out of 100 and a grade: **Good** (70 and above), **Needs work** (40–69) or **Poor** (below 40). Beside it are the number of signals that **passed**, raised **warnings** or **failed**, and how many of the 47 signals were evaluated.
+The gauge shows the page's score out of 100 and a grade: **Good** (70 and above), **Needs work** (40–69) or **Poor** (below 40). Beside it are the number of signals that **passed**, raised **warnings** or **failed**, and how many of the 48 signals were evaluated.
 
 ### Categories
 
@@ -106,6 +106,8 @@ The gauge shows the page's score out of 100 and a grade: **Good** (70 and above)
 | **Trust** | 10% | Crawl-time and share-time basics | AI bot access in robots.txt, llms.txt, HTTPS, canonical URL, meta description |
 
 A category's score is the average of its signals; the total is the weighted average of the categories. A signal that couldn't be evaluated (**n/a**) is left out, so it never lowers the score.
+
+On a product page (one with Product structured data), **Product description opening** checks that the description's first 40 words, or 250 characters, name the product type and at least two key attributes: a measure such as 268 g, a material, a fit or a use. ChatGPT appears to read only about that much of a description when it matches products to a shopping question. The finding shows where the opening ends. Other pages show this signal as n/a.
 
 Most signals are read straight from the page, its robots.txt and its llms.txt. Thirteen, such as **Direct answer to query** and **Case study evidence**, are judged by an AI model that first works out what the page itself is about, so a page is never judged against a topic it isn't trying to cover. **Brand entity in Wikidata** looks your brand up in Wikidata.
 

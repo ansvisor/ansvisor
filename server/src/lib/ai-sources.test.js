@@ -6,6 +6,8 @@ import {
   AI_SOURCE_CHANGES,
   aiSourcePattern,
   classifyAiSource,
+  classifyAiSurface,
+  landingMedium,
 } from './ai-sources.js';
 
 /**
@@ -78,6 +80,40 @@ describe('aiSourcePattern', () => {
   });
 });
 
+// #1283: a product in a merchant's feed links to its page tagged
+// utm_source=chatgpt.com&utm_medium=feed.
+describe('classifyAiSurface', () => {
+  it("marks ChatGPT's medium feed as ChatGPT Shopping, in any case", () => {
+    expect(classifyAiSurface('chatgpt.com', 'feed')).toBe('shopping');
+    expect(classifyAiSurface('chatgpt.com', 'Feed')).toBe('shopping');
+  });
+
+  it("leaves ChatGPT's other mediums, and other sources' feeds, plain", () => {
+    expect(classifyAiSurface('chatgpt.com', 'referral')).toBeNull();
+    expect(classifyAiSurface('chatgpt.com', 'rss-feed')).toBeNull();
+    expect(classifyAiSurface('chatgpt.com', '')).toBeNull();
+    expect(classifyAiSurface('chatgpt.com', undefined)).toBeNull();
+    expect(classifyAiSurface('perplexity.ai', 'feed')).toBeNull();
+    expect(classifyAiSurface(null, 'feed')).toBeNull();
+  });
+});
+
+describe('landingMedium', () => {
+  it("reads a landing URL's first utm_medium, its name in any case", () => {
+    expect(landingMedium('https://acme.example/p?utm_source=chatgpt.com&utm_medium=feed')).toBe(
+      'feed',
+    );
+    expect(landingMedium('https://acme.example/p?UTM_Medium=Feed&utm_medium=cpc')).toBe('Feed');
+  });
+
+  it('reads nothing without one, from a fragment, or from what is not a URL', () => {
+    expect(landingMedium('https://acme.example/p?utm_source=chatgpt.com')).toBe('');
+    expect(landingMedium('https://acme.example/p#utm_medium=feed')).toBe('');
+    expect(landingMedium('/p?utm_medium=feed')).toBe('');
+    expect(landingMedium(undefined)).toBe('');
+  });
+});
+
 describe('the list', () => {
   it('has one entry per key, each naming itself', () => {
     const keys = AI_SOURCES.map((s) => s.key);
@@ -100,5 +136,23 @@ describe('the list', () => {
     const pairs = [...migration.matchAll(/\('([^']+)', '([^']+)'\)/g)];
     expect(pairs.length).toBeGreaterThan(10);
     for (const [, raw, key] of pairs) expect(classifyAiSource(raw), raw).toBe(key);
+  });
+
+  it('names the surfaces 00251 allows and marked, by a lowercase medium (#1283)', () => {
+    const surfaces = AI_SOURCES.flatMap((s) =>
+      (s.surfaces ?? []).map((surface) => ({ source: s.key, ...surface })),
+    );
+    // 00251's backfill marks ChatGPT's feed links as shopping.
+    expect(surfaces).toEqual([{ source: 'chatgpt.com', key: 'shopping', medium: 'feed' }]);
+    const migration = readFileSync(
+      new URL('../../../supabase/migrations/00251_chatgpt_shopping_visits.sql', import.meta.url),
+      'utf8',
+    );
+    // Both tables' checks allow exactly the list's surfaces.
+    const checks = [...migration.matchAll(/surface in \(([^)]*)\)/g)].map((m) => m[1]);
+    expect(checks).toHaveLength(2);
+    for (const check of checks) {
+      expect(check).toBe(surfaces.map((surface) => `'${surface.key}'`).join(', '));
+    }
   });
 });
