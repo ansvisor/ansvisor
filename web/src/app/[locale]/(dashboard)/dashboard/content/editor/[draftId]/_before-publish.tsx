@@ -11,7 +11,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { articleJsonLd, isArticlePage, jsonLdScript, localDate } from '@/lib/content/page-schema';
+import {
+  articleJsonLd,
+  isArticlePage,
+  jsonLdScript,
+  localDate,
+  titleHasPlaceholder,
+} from '@/lib/content/page-schema';
 import { cn } from '@/lib/utils';
 import { copyToClipboard } from './_html-block';
 import { trustSuggestions, type QualityRead } from './_quality-tab';
@@ -253,6 +259,9 @@ export function BeforePublish({
             >
               {jsonLd}
             </pre>
+            {titleHasPlaceholder(title) && (
+              <p className="text-xs text-amber-700 dark:text-amber-300">{t('headlineLeftOut')}</p>
+            )}
             <p className="text-xs text-muted-foreground">{t('datesNote')}</p>
           </div>
         )}

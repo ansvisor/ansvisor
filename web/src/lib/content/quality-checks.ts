@@ -54,6 +54,13 @@ export const TRUST_WEIGHTS = {
 } as const;
 export type TrustCheckId = keyof typeof TRUST_WEIGHTS;
 
+/**
+ * Trust's Phase 1 points (sourced figures, fresh sources, working links):
+ * what a broken link's gain is out of while Trust isn't scored (trustGain).
+ */
+export const TRUST_PHASE1_POINTS =
+  TRUST_WEIGHTS.claimsSourced + TRUST_WEIGHTS.freshSources + TRUST_WEIGHTS.noBrokenLinks;
+
 /** The most links the API reads for one draft at a time (link-check.js). */
 export const MAX_LINK_CHECKS = 20;
 /** A source older than this many months isn't fresh. */
@@ -83,6 +90,19 @@ export function scoreGain<Id extends string>(result: Score<Id>, ids: Id[]): numb
   if (result.score === null) return 0;
   const raised = result.checks.map((c) => (ids.includes(c.id) ? { ...c, points: c.max } : c));
   return (scoreOf(raised).score ?? 0) - result.score;
+}
+
+/**
+ * A Trust suggestion's gain. While Trust isn't scored (no figure and no
+ * dated source yet), the checks' missing points count out of the Phase 1
+ * points, so a broken link still says what fixing it is worth.
+ */
+export function trustGain(result: Score<TrustCheckId>, ids: TrustCheckId[]): number {
+  if (result.score !== null) return scoreGain(result, ids);
+  const missing = result.checks
+    .filter((c) => ids.includes(c.id))
+    .reduce((sum, c) => sum + c.max - c.points, 0);
+  return Math.round((missing / TRUST_PHASE1_POINTS) * 100);
 }
 
 /** What an author's profile has: a short bio, and profile links (Person schema's sameAs). */
@@ -119,7 +139,31 @@ export function eeat({ author }: { author: ContentAuthor | null }): Score<EeatCh
 const FIGURE_WORDS =
   /%\s?\d|\d[\d.,]*\s?(?:%|percent\b|per cent\b|prozent\b)|[$€£¥₺]\s?\d[\d.,]*\s?(?:[km]\b|bn\b|thousand|million|billion|trillion)|\d[\d.,]*\s?(?:thousand|million|billion|trillion|millones|milyon|milyar|milliard|millionen|milliarden)s?\b|\d+(?:[.,]\d+)?\s?times\s(?:more|less|faster|slower|higher|lower|as|bigger|smaller|better|cheaper)\b/i;
 const FIGURE_SHORT = /\b\d+(?:[.,]\d+)?(?:x|k|K|M|bn|B)\b/;
-const hasFigure = (sentence: string) => FIGURE_WORDS.test(sentence) || FIGURE_SHORT.test(sentence);
+/** A percentage, either way round ("20%", "20 percent", "%20"). */
+const PERCENT = String.raw`(?:\d[\d.,]*\s?(?:%|percent\b|per cent\b)|%\s?\d[\d.,]*)`;
+/**
+ * Numbers that read as figures but claim nothing, taken out before the
+ * figures are looked for. Product and category pages have them in almost
+ * every block:
+ *   - a discount or a rate: "Save 20%", "50% off", "a 0% APR loan";
+ *   - a material or a guarantee: "100% cotton", "100% money-back" ("100% of
+ *     our customers" stays a figure);
+ *   - short forms that aren't amounts: "4K", "8K", "401k";
+ *   - a price with a magnitude: "$1.2k/month", "$2 million per year".
+ */
+const NOT_FIGURES = [
+  new RegExp(String.raw`\bsave\s+(?:up\s+to\s+)?${PERCENT}`, 'gi'),
+  new RegExp(String.raw`${PERCENT}\s*(?:off|discount|apr|apy)\b`, 'gi'),
+  /(?:\b100\s?(?:%|percent\b|per cent\b)|%\s?100\b)(?!\s*of\b)/gi,
+  // Screens say "4K" in capitals; "4k" stays four thousand.
+  /\b[48]K\b/g,
+  /\b401\s?\(?k\b\)?/gi,
+  /[$€£¥₺]\s?\d[\d.,]*\s?(?:[km]|bn|thousand|million|billion|trillion)\s*(?:\/|per\b)/gi,
+];
+const hasFigure = (sentence: string) => {
+  const text = NOT_FIGURES.reduce((rest, re) => rest.replace(re, ' '), sentence);
+  return FIGURE_WORDS.test(text) || FIGURE_SHORT.test(text);
+};
 
 /** A block of the page's text, with the links in it, as Trust reads them. */
 export interface TrustBlock {
@@ -202,7 +246,10 @@ export interface TrustRead extends Score<TrustCheckId> {
  * links that answer, and the site's trust (its five checks in Site Audit).
  * A check with nothing to read (no figure, no dated source, no link read
  * yet, no site trust read) is left out, and site trust counts only beside a
- * check of the page's own.
+ * check of the page's own. Trust is scored only once a figure or a dated
+ * source is there: working links alone are 3 points, and one link would set
+ * the whole score (one dead link 0, one working link 100), as Readability
+ * waits for MIN_WORDS.
  */
 export function trust({
   blocks,
@@ -280,8 +327,9 @@ export function trust({
     });
   }
 
+  const scored = checks.some((c) => c.id === 'claimsSourced' || c.id === 'freshSources');
   return {
-    ...scoreOf(checks),
+    ...(scored ? scoreOf(checks) : { score: null, checks }),
     broken: broken.map(({ url, text }) => ({ url, text })),
     stale: stale.map(({ url, text }) => ({ url, text })),
     dated: sources.length,

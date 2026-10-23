@@ -238,6 +238,10 @@ describe('startDraftWriting', () => {
     );
     // Which run holds it, for every device (00247).
     expect(draftUpdates()[0]).toMatchObject({ agent_state: 'writing', agent_run: 'write' });
+    // Its run carries the claim, the one a Stop on it lets go of (00249).
+    expect(
+      writes.find((w) => w.table === 'content_agent_runs' && w.kind === 'insert').value,
+    ).toMatchObject({ kind: 'write', claimed_at: draftUpdates()[0].agent_state_at });
 
     await vi.waitFor(() => expect(draftUpdates()).toHaveLength(2));
     // It ends only its own claim: a newer run's, after a Stop let go, is left alone.
@@ -706,13 +710,13 @@ describe('Rewrite the page to these rules', () => {
     rows.content_authors = [{ name: 'Ada Lovelace', title: null, bio: null }];
     answer(
       '<h1>Pour-over coffee</h1><p>[[KEEP 1]]</p><p>[[KEEP 2]]</p>' +
-        '<p>“Pour slowly and you taste every note,” says Marco Rossi.</p>' +
-        '<p>Ada Lovelace says the bloom matters.</p>',
+        '<p>“Pour slowly and you taste every note,” said Marco Rossi.</p>' +
+        '<p>Ada Lovelace said the bloom matters.</p>',
     );
     await expect(run()).resolves.toEqual({ rewritten: true });
     const row = writes.find((w) => w.table === 'content_draft_suggestions').value;
-    expect(row.after_text).toContain(`<p>${QUOTE_PLACEHOLDER} says ${NAME_PLACEHOLDER}.</p>`);
-    expect(row.after_text).toContain('<p>Ada Lovelace says the bloom matters.</p>');
+    expect(row.after_text).toContain(`<p>${QUOTE_PLACEHOLDER} said ${NAME_PLACEHOLDER}.</p>`);
+    expect(row.after_text).toContain('<p>Ada Lovelace said the bloom matters.</p>');
     // What it kept is the page's own, as it was.
     expect(row.after_text).toContain(`<p>${QUOTED}</p>`);
     expect(row.after_text).toContain(

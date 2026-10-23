@@ -355,6 +355,18 @@ export async function removeMember(userId: string) {
     .eq('organization_id', profile.organization_id);
 
   if (error) throw new Error(error.message);
+
+  // The member's author stays, but no longer as them: only they may unlink
+  // themself from a session, so once they're gone only the service client
+  // can, and the author would read "Another member is this author" forever.
+  // A retry finds the profile already out and clears the link then.
+  const { error: authorError } = await supabaseAdmin
+    .from('content_authors')
+    .update({ user_id: null })
+    .eq('organization_id', profile.organization_id)
+    .eq('user_id', userId);
+
+  if (authorError) throw new Error(authorError.message);
   revalidatePath('/dashboard/settings');
 }
 

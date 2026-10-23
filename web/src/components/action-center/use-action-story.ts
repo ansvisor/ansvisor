@@ -92,6 +92,7 @@ export function useActionStory(
               volumes,
               createdAt: action.createdAt,
               dueDate: action.dueDate,
+              payload: action.payload ?? {},
             },
             tStory,
             {

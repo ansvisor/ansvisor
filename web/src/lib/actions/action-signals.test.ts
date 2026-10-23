@@ -28,6 +28,8 @@ vi.mock('@/lib/supabase/server', () => ({
       chain.maybeSingle = async () => ({ data: rows[table]?.[0] ?? null, error: null });
       return chain;
     },
+    // The actions' list counts (AC-009): nothing removed here.
+    rpc: async () => ({ data: [], error: null }),
   })),
 }));
 

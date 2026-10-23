@@ -41,7 +41,7 @@ import { getSiteTrust } from '@/lib/actions/audits';
 import { getContentAuthors } from '@/lib/actions/content-authors';
 import { stopAgentRun } from '@/lib/content/agent-runs-client';
 import { agentWriteRequest, useRuleDescriber } from '@/lib/content/agent-write';
-import { authorInitials, type AuthorsRead } from '@/lib/content/authors';
+import { authorInitials, canEditAuthor, type AuthorsRead } from '@/lib/content/authors';
 import type { SiteTrust } from '@/lib/content/site-trust';
 import {
   AGENT_POLL_MS,
@@ -232,6 +232,8 @@ export function DraftEditor({
   // The page as written now, for the side panel's Sources.
   const [pageHtml, setPageHtml] = useState(draft.bodyHtml);
   const pageReadTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  // Quality's Show marks a block for a moment: a second Show starts the moment again.
+  const flashTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   useEffect(() => () => clearTimeout(pageReadTimer.current), []);
   const [status, setStatus] = useState(draft.status);
   const [marking, setMarking] = useState(false);
@@ -420,8 +422,15 @@ export function DraftEditor({
     reads,
   });
   // How well the page reads as written (Quality spec, CE-036/039): read in the
-  // browser, no AI cost; off until Quality's first phase is live.
-  const language = useBrandStore((s) => s.brands.find((b) => b.id === draft.brandId)?.language);
+  // browser, no AI cost; off until Quality's first phase is live. Read in the
+  // language the page is written in: its Language rule when that is on (the
+  // agent writes in it, and it can differ per draft), else the brand's.
+  const brandLanguage = useBrandStore(
+    (s) => s.brands.find((b) => b.id === draft.brandId)?.language,
+  );
+  const languageRule = rules.rules.find(({ rule }) => rule.key === 'language')?.rule;
+  const language =
+    languageRule?.on && languageRule.current.trim() ? languageRule.current : brandLanguage;
   const qualityOn = qualityPhase() >= 1;
   const readable = useMemo(
     () => (qualityOn ? readability(pageHtml, language) : null),
@@ -508,11 +517,15 @@ export function DraftEditor({
   );
   const [hadPlaceholders, setHadPlaceholders] = useState(false);
   if (placeholderCount > 0 && !hadPlaceholders) setHadPlaceholders(true);
+  // Who may edit the page's author: only they get Edit author (CE-037's rule).
+  const canEditPageAuthor =
+    !!pageAuthor && !!authorsRead && canEditAuthor(pageAuthor, authorsRead.me);
   const todos = qualityOn
     ? qualityTodos({
         eeat: eeatScore,
         author: pageAuthor,
         hasAuthors,
+        canEdit: canEditPageAuthor,
         placeholders: { count: placeholderCount, had: hadPlaceholders },
       })
     : [];
@@ -522,6 +535,7 @@ export function DraftEditor({
         eeat: eeatScore,
         trust: trustScore,
         author: pageAuthor,
+        canEdit: canEditPageAuthor,
         hasAuthors,
         brandName,
         siteTrust,
@@ -927,10 +941,6 @@ export function DraftEditor({
   };
 
   /**
-   * Quality's Show: the block of the page holding the passage (never a
-   * suggestion's card), scrolled to and marked for a moment.
-   */
-  /**
    * The page's first placeholder (CE-044), selected to type over: in order,
    * across the marks in its line, its block flashed as Show's are. A
    * heading's are the agent's own forms only (AGENT_PLACEHOLDER).
@@ -997,6 +1007,10 @@ export function DraftEditor({
     if (!showFirstPlaceholder()) toast(t('exportDialog.inHtmlBlock', { html: '</>' }));
   };
 
+  /**
+   * Quality's Show: the block of the page holding the passage (never a
+   * suggestion's card), scrolled to and marked for a moment.
+   */
   const showInPage = (text: string, { focus = false } = {}) => {
     if (!editor) return;
     const at = findBlock(editor.state.doc, text);
@@ -1012,8 +1026,9 @@ export function DraftEditor({
       block: 'center',
       behavior: 'smooth',
     });
+    clearTimeout(flashTimer.current);
     editor.view.dispatch(editor.state.tr.setMeta(flashKey, at));
-    setTimeout(() => {
+    flashTimer.current = setTimeout(() => {
       if (!editor.isDestroyed) editor.view.dispatch(editor.state.tr.setMeta(flashKey, null));
     }, 1200);
   };
