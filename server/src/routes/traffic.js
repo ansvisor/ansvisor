@@ -3,7 +3,13 @@ import supabaseAdmin from '../config/supabase.js';
 import { trafficLimiter } from '../middleware/rate-limiter.js';
 import logger from '../lib/logger.js';
 import { findVisitOf } from '../lib/traffic-visits.js';
-import { AI_SOURCES_VERSION, classifyAiSource } from '../lib/ai-sources.js';
+import { visitorKey as anonymousVisitorKey } from '../lib/visitor-key.js';
+import {
+  AI_SOURCES_VERSION,
+  classifyAiSource,
+  classifyAiSurface,
+  landingMedium,
+} from '../lib/ai-sources.js';
 import { buildTrackingScript } from '../lib/tracking-script.js';
 
 const router = Router();
@@ -121,6 +127,12 @@ router.post('/track/:trackingCode', trafficLimiter, beaconBody, async (req, res)
     // Stored under the AI source list's key (AT-004): an older cached t.js
     // still sends the host it matched, like chat.openai.com for ChatGPT.
     const sourcePlatform = classifyAiSource(rawPlatform) ?? rawPlatform;
+    const url = (body.u || '').slice(0, 2048);
+    // A visit through one of the source's surfaces, like a ChatGPT Shopping
+    // product card (utm_medium=feed, #1283), read here from the landing URL
+    // as stored, so a cached older snippet's visits are marked too. It stays
+    // the source's visit.
+    const sourceSurface = classifyAiSurface(sourcePlatform, landingMedium(url));
     // The list version that counted the visit; older snippets don't send one.
     const sourceListVersion =
       Number.isInteger(body.v) && body.v >= 1 && body.v <= AI_SOURCES_VERSION ? body.v : null;
@@ -135,20 +147,28 @@ router.post('/track/:trackingCode', trafficLimiter, beaconBody, async (req, res)
       body.nf === 1 && (httpStatus === null || (httpStatus >= 200 && httpStatus < 300));
 
     const userAgent = (body.a || '').slice(0, 512) || null;
-    const ipAddress = ip || null;
+    // The IP address itself is never stored (GDPR): only a key that tells
+    // one visitor's pageviews from another's today (visitor-key.js). If the
+    // key can't be made, the pageview is stored as a visit of its own.
+    let visitorKey = null;
+    try {
+      visitorKey = await anonymousVisitorKey({ brandId: brand.id, ip });
+    } catch (err) {
+      logger.warn({ err }, 'traffic visitor key failed; stored without one');
+    }
 
     // The snippet's second word on a visit it just sent: a single-page app's
     // title read not found only after load (00200). It marks that pageview
-    // (the same address, IP and browser in the last minutes, with no status
-    // or a 2xx) rather than counting another visit.
+    // (the same address, visitor and browser in the last minutes, with no
+    // status or a 2xx) rather than counting another visit.
     if (body.k === 'nf') {
       if (httpStatus !== null && (httpStatus < 200 || httpStatus > 299)) {
         return res.status(204).end();
       }
       await markNotFoundTitle({
         brandId: brand.id,
-        url: (body.u || '').slice(0, 2048),
-        ipAddress,
+        url,
+        visitorKey,
         userAgent,
         httpStatus,
       });
@@ -160,18 +180,19 @@ router.post('/track/:trackingCode', trafficLimiter, beaconBody, async (req, res)
     // pageview is still stored, as a visit of its own.
     let visitOf = null;
     try {
-      visitOf = await findVisitOf({ brandId: brand.id, sourcePlatform, ipAddress, userAgent });
+      visitOf = await findVisitOf({ brandId: brand.id, sourcePlatform, visitorKey, userAgent });
     } catch (err) {
       logger.warn({ err }, 'traffic visit lookup failed; stored as a new visit');
     }
 
     const { error: insertError } = await supabaseAdmin.from('ai_traffic_logs').insert({
       brand_id: brand.id,
-      url: (body.u || '').slice(0, 2048),
+      url,
       referrer: (body.r || '').slice(0, 2048) || null,
       source_platform: sourcePlatform,
+      source_surface: sourceSurface,
       user_agent: userAgent,
-      ip_address: ipAddress,
+      visitor_key: visitorKey,
       country,
       language: (body.l || '').slice(0, 16) || null,
       screen: (body.d || '').slice(0, 16) || null,
@@ -197,11 +218,11 @@ router.post('/track/:trackingCode', trafficLimiter, beaconBody, async (req, res)
 const NOT_FOUND_MARK_WINDOW_MS = 10 * 60 * 1000;
 
 /**
- * Marks the latest pageview of this address, IP and browser in the last
+ * Marks the latest pageview of this address, visitor and browser in the last
  * minutes as a not-found title. Best effort: a failure is logged, the
  * beacon can't be retried.
  */
-async function markNotFoundTitle({ brandId, url, ipAddress, userAgent, httpStatus }) {
+async function markNotFoundTitle({ brandId, url, visitorKey, userAgent, httpStatus }) {
   try {
     const since = new Date(Date.now() - NOT_FOUND_MARK_WINDOW_MS).toISOString();
     let query = supabaseAdmin
@@ -211,7 +232,7 @@ async function markNotFoundTitle({ brandId, url, ipAddress, userAgent, httpStatu
       .eq('url', url)
       .eq('not_found_title', false)
       .gte('created_at', since);
-    query = ipAddress ? query.eq('ip_address', ipAddress) : query.is('ip_address', null);
+    query = visitorKey ? query.eq('visitor_key', visitorKey) : query.is('visitor_key', null);
     query = userAgent ? query.eq('user_agent', userAgent) : query.is('user_agent', null);
     query =
       httpStatus === null ? query.is('http_status', null) : query.eq('http_status', httpStatus);

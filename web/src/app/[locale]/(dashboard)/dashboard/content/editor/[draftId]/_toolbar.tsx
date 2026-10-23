@@ -104,6 +104,7 @@ export function EditorToolbar({
       blockquote: e.isActive('blockquote'),
       inTable: e.isActive('table'),
       characters: e.storage.characterCount.characters() as number,
+      words: e.storage.characterCount.words() as number,
     }),
   });
 
@@ -237,6 +238,7 @@ export function EditorToolbar({
         {t('counter', {
           count: formatNumber(state.characters),
           target: formatNumber(target),
+          words: state.words,
         })}
       </span>
 

@@ -1715,6 +1715,17 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
           isError: true,
         };
       }
+      if (result === 'writing') {
+        return {
+          content: [
+            {
+              type: 'text' as const,
+              text: 'The Content Agent is writing this draft; suggest again once it has finished',
+            },
+          ],
+          isError: true,
+        };
+      }
       return result ? json(result) : notFound('Draft');
     },
   );

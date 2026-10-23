@@ -498,6 +498,19 @@ export function ruleLength(rules: ActiveRule[], pageType: PageType | null): numb
   return Math.min(RULE_LENGTH_MAX, Math.max(RULE_LENGTH_MIN, value));
 }
 
+/**
+ * About how many characters a word takes, its space and punctuation
+ * included: an English average, for showing a length in words too
+ * (Content Editor v1.1 §3.2). Characters stay the unit rules count in.
+ */
+export const CHARACTERS_PER_WORD = 6;
+
+/** A length in characters as about so many words, to the nearest ten from 100 on. */
+export function wordsForLength(characters: number): number {
+  const words = Math.max(1, Math.round(characters / CHARACTERS_PER_WORD));
+  return words >= 100 ? Math.round(words / 10) * 10 : words;
+}
+
 // ─── The page as written ────────────────────────────────────────────────────
 
 export interface PageBlock {
@@ -753,6 +766,48 @@ export function openRulesForAgent<T extends { rule: ActiveRule; status: RuleStat
     forAgent: open.filter(({ rule }) => !NOT_FOR_AGENT.has(rule.key)),
     notForAgent: open.filter(({ rule }) => NOT_FOR_AGENT.has(rule.key)),
   };
+}
+
+/** How far off its Length a page may be before Rewrite the page to these rules is recommended. */
+export const REWRITE_LENGTH_OFF = 0.3;
+/** How many rules the agent can fix may be open before it is. */
+export const REWRITE_OPEN_RULES = 4;
+/** The most text a page sent whole may hold (content-rewrite.js MAX_REWRITE_CHARS). */
+export const REWRITE_MAX_CHARS = 60_000;
+
+/** Why the Rules tab recommends rewriting the page whole. */
+export type RewriteAdvice =
+  | { reason: 'length'; count: number; target: number; percent: number }
+  | { reason: 'open'; count: number };
+
+/**
+ * Whether the Rules tab recommends Rewrite the page to these rules over
+ * Apply rules with Agent's few edits a run: the page more than 30% off its
+ * Length, or 4 rules or more open that the agent can fix. Null otherwise.
+ */
+export function rewriteAdvice<T extends { rule: ActiveRule; status: RuleStatus }>(
+  rules: T[],
+): RewriteAdvice | null {
+  const length = rules.find(({ rule }) => rule.key === 'length' && rule.on);
+  const target = Number(length?.rule.current);
+  const status = length?.status;
+  // An empty page has nothing to rewrite, and one too long can't be sent whole.
+  if (status && 'count' in status && (status.count === 0 || status.count > REWRITE_MAX_CHARS)) {
+    return null;
+  }
+  if (
+    status?.state === 'bad' &&
+    (status.code === 'short' || status.code === 'long') &&
+    Number.isFinite(target) &&
+    target > 0
+  ) {
+    const off = Math.abs(status.count - target) / target;
+    if (off > REWRITE_LENGTH_OFF) {
+      return { reason: 'length', count: status.count, target, percent: Math.round(off * 100) };
+    }
+  }
+  const open = openRulesForAgent(rules).forAgent.length;
+  return open >= REWRITE_OPEN_RULES ? { reason: 'open', count: open } : null;
 }
 
 /** Checks one rule against the page as written. */

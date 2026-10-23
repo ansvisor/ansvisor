@@ -154,3 +154,98 @@
     max-width: 1536px;
   }
 }
+
+/*
+ * The Content Agent card's motion (Content Editor v1.1, CE-026): subtle, and
+ * never a rotating ring. Each element that moves also takes
+ * motion-reduce:animate-none, so all of it stops with reduced motion.
+ */
+@theme {
+  --animate-agent-ring: agent-ring 2.2s ease-out infinite;
+  --animate-agent-ring-slow: agent-ring 3s ease-out infinite;
+  --animate-agent-blink: agent-blink 4s infinite;
+  --animate-agent-spark: agent-spark 1.6s ease-in-out infinite;
+  --animate-agent-breathe: agent-breathe 1.6s ease-in-out infinite;
+  --animate-agent-sweep: agent-sweep 1.6s ease-in-out infinite;
+  --animate-agent-look: agent-look 1.2s ease-in-out infinite;
+  --animate-agent-dot: agent-dot 1.2s infinite;
+  --animate-agent-slide: agent-slide 1.4s ease-in-out infinite;
+
+  @keyframes agent-ring {
+    0% {
+      transform: scale(0.9);
+      opacity: 0.9;
+    }
+    100% {
+      transform: scale(1.25);
+      opacity: 0;
+    }
+  }
+  @keyframes agent-blink {
+    0%,
+    92%,
+    100% {
+      transform: scaleY(1);
+    }
+    95% {
+      transform: scaleY(0.1);
+    }
+  }
+  @keyframes agent-spark {
+    0%,
+    100% {
+      opacity: 0.3;
+      transform: scale(0.7);
+    }
+    50% {
+      opacity: 1;
+      transform: scale(1.1);
+    }
+  }
+  @keyframes agent-breathe {
+    0%,
+    100% {
+      box-shadow: 0 0 0 0 color-mix(in oklab, var(--foreground) 10%, transparent);
+    }
+    50% {
+      box-shadow: 0 0 0 6px color-mix(in oklab, var(--foreground) 6%, transparent);
+    }
+  }
+  @keyframes agent-sweep {
+    0% {
+      background-position: 150% 0;
+    }
+    100% {
+      background-position: -100% 0;
+    }
+  }
+  @keyframes agent-look {
+    0%,
+    100% {
+      transform: translateX(-1px);
+    }
+    50% {
+      transform: translateX(1.5px);
+    }
+  }
+  @keyframes agent-dot {
+    0%,
+    80%,
+    100% {
+      opacity: 0.25;
+      transform: translateY(0);
+    }
+    40% {
+      opacity: 1;
+      transform: translateY(-2px);
+    }
+  }
+  @keyframes agent-slide {
+    0% {
+      transform: translateX(-100%);
+    }
+    100% {
+      transform: translateX(340%);
+    }
+  }
+}

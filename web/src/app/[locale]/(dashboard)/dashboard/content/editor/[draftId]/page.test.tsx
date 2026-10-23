@@ -18,6 +18,7 @@ const setContentDraftPageType = vi.fn();
 const getContentImpact = vi.fn();
 const getContentResults = vi.fn();
 const getDraftSources = vi.fn();
+const setDraftSourceIncluded = vi.fn();
 const getDraftBrief = vi.fn();
 const rebuildDraftBrief = vi.fn();
 const saveDraftRules = vi.fn();
@@ -31,9 +32,11 @@ const decideDraftSuggestions = vi.fn();
 const keepAgentBeforeVersion = vi.fn();
 const fixDraftRules = vi.fn();
 const startAgentWriting = vi.fn();
+const startPageRewrite = vi.fn();
 vi.mock('@/lib/actions/content-drafts', () => ({
   fixDraftRules: (...args: unknown[]) => fixDraftRules(...args),
   startAgentWriting: (...args: unknown[]) => startAgentWriting(...args),
+  startPageRewrite: (...args: unknown[]) => startPageRewrite(...args),
   getDraftSuggestions: (...args: unknown[]) => getDraftSuggestions(...args),
   decideDraftSuggestions: (...args: unknown[]) => decideDraftSuggestions(...args),
   keepAgentBeforeVersion: (...args: unknown[]) => keepAgentBeforeVersion(...args),
@@ -44,6 +47,7 @@ vi.mock('@/lib/actions/content-drafts', () => ({
   saveMyRuleSet: (...args: unknown[]) => saveMyRuleSet(...args),
   saveDraftRules: (...args: unknown[]) => saveDraftRules(...args),
   getDraftSources: (...args: unknown[]) => getDraftSources(...args),
+  setDraftSourceIncluded: (...args: unknown[]) => setDraftSourceIncluded(...args),
   getDraftBrief: (...args: unknown[]) => getDraftBrief(...args),
   rebuildDraftBrief: (...args: unknown[]) => rebuildDraftBrief(...args),
   getContentImpact: (...args: unknown[]) => getContentImpact(...args),
@@ -147,6 +151,7 @@ const draft = (over: Partial<ContentDraft> = {}): ContentDraft => ({
   action: null,
   agentState: null,
   agentSince: null,
+  agentRun: null,
   updatedAt: '2026-10-20T10:00:00Z',
   ...over,
 });
@@ -173,10 +178,29 @@ const button = (name: string) =>
     (b) => b.getAttribute('aria-label') === name || b.textContent === name,
   );
 
-/** Picks one of the side panel's tabs. */
+/** A panel tab's name, without the open-rules count Instructions carries. */
+const tabName = (el: Element | null | undefined) => el?.firstChild?.textContent;
+/** The panel's tab picked now, and Instructions' segment. */
+const selectedTab = () =>
+  tabName(container.querySelector('aside [role="tab"][aria-selected="true"]'));
+const selectedSegment = () =>
+  container
+    .querySelector('aside [role="radio"][aria-checked="true"]')
+    ?.textContent?.replace(/\d+ open$/, '');
+
+/** Picks one of the side panel's tabs, or one of Instructions' segments. */
 async function pickTab(name: string) {
+  // Brief and Rules are Instructions' two segments (Content Editor v1.1, CE-028).
+  if (name === 'Brief' || name === 'Rules') {
+    if (selectedTab() !== 'Instructions') await pickTab('Instructions');
+    const segment = [...container.querySelectorAll<HTMLElement>('aside [role="radio"]')].find(
+      (el) => el.textContent?.startsWith(name),
+    )!;
+    await act(async () => segment.click());
+    return;
+  }
   const tab = [...container.querySelectorAll<HTMLElement>('aside [role="tab"]')].find(
-    (el) => el.textContent === name,
+    (el) => tabName(el) === name,
   )!;
   await act(async () => {
     tab.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
@@ -211,6 +235,7 @@ beforeEach(() => {
   keepAgentBeforeVersion.mockReset().mockResolvedValue(undefined);
   fixDraftRules.mockReset().mockResolvedValue({ count: 0 });
   startAgentWriting.mockReset().mockResolvedValue({ started: true });
+  startPageRewrite.mockReset().mockResolvedValue({ started: true });
   localStorage.clear();
   brandState.activeBrandId = 'b1';
   brandState.setActiveBrand.mockReset();
@@ -245,7 +270,7 @@ describe('the content editor', () => {
 
     // The page's text, against a feature page's 3,000-character target.
     expect(container.querySelector('[role="toolbar"]')!.textContent).toContain(
-      '35 / 3,000 characters',
+      '35 / 3,000 characters · 5 words',
     );
     for (const name of ['Heading 1', 'Bold', 'Link', 'Numbered list', 'Insert a table']) {
       expect(button(name)).toBeDefined();
@@ -287,7 +312,7 @@ describe('the content editor', () => {
     expect(header.textContent).toContain('Product page · New page');
     expect(header.querySelector('h1')!.textContent).toBe('Untitled');
     expect(container.querySelector('[role="toolbar"]')!.textContent).toContain(
-      '0 / 1,200 characters',
+      '0 / 1,200 characters · 0 words',
     );
   });
 
@@ -912,9 +937,8 @@ describe('the content editor', () => {
       await renderPage();
 
       expect(getDraftSuggestions).toHaveBeenCalledWith('d1');
-      expect(bar()!.textContent).toContain(
-        'Content Agent suggested 2 changes · from Action AC-214',
-      );
+      expect(bar()!.textContent).toContain('Content Agent has 2 suggestions for you');
+      expect(bar()!.textContent).toContain('from Action AC-214');
       expect(bar()!.querySelector('a')!.getAttribute('href')).toBe(
         '/dashboard/action-center/actions?action=a1',
       );
@@ -929,6 +953,30 @@ describe('the content editor', () => {
       expect(cardOf('s2')!.textContent).toContain('Does it work with custom stages?');
       // The page itself is unchanged until one is accepted.
       expect(pageText()).not.toContain('Accuracy is shown');
+    });
+
+    it('reviews the first open suggestion: scrolls to it and marks it for a moment', async () => {
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+      const scrolled = vi.fn();
+      const original = Element.prototype.scrollIntoView;
+      Element.prototype.scrollIntoView = scrolled;
+      try {
+        getContentDraft.mockResolvedValue(page);
+        getDraftSuggestions.mockResolvedValue(batch);
+        await renderPage();
+
+        await act(async () => barButton('Review').click());
+        expect(scrolled).toHaveBeenCalledWith({ block: 'center', behavior: 'smooth' });
+        expect(scrolled.mock.contexts[0]).toBe(cardOf('s1'));
+        expect(cardOf('s1')!.classList.contains('ring-2')).toBe(true);
+        // Focused too, so the keyboard lands on it.
+        expect(document.activeElement).toBe(cardOf('s1')!.querySelector('button'));
+        await act(async () => vi.advanceTimersByTime(1200));
+        expect(cardOf('s1')!.classList.contains('ring-2')).toBe(false);
+      } finally {
+        Element.prototype.scrollIntoView = original;
+        vi.useRealTimers();
+      }
     });
 
     it('accepts one into the page, keeping the page before it in History, and undoes it', async () => {
@@ -947,7 +995,7 @@ describe('the content editor', () => {
       expect(container.querySelector('.ProseMirror .agent-accepted-text')!.textContent).toBe(
         'Accuracy is shown per team, each week, against closed revenue.',
       );
-      expect(bar()!.textContent).toContain('suggested 1 change');
+      expect(bar()!.textContent).toContain('Content Agent has 1 suggestion for you');
 
       await press('s1', 'Undo');
       expect(decideDraftSuggestions).toHaveBeenLastCalledWith(['s1'], 'open');
@@ -1083,7 +1131,9 @@ describe('the content editor', () => {
       expect(pageText()).toContain(
         'Accuracy is shown per team, each week, against closed revenue.Teams trust it.FAQDoes it work with custom stages? Yes, any stage.',
       );
-      expect(bar()!.textContent).toMatch(/^2 accepted · 0 rejected · \d+ rules? still open/);
+      expect(bar()!.textContent).toMatch(
+        /^All suggestions reviewed2 accepted · Rules \d+ of \d+ · \d+ still open/,
+      );
       // Not a full run's batch: nothing about running it again.
       expect(bar()!.textContent).not.toContain('a run makes at most');
 
@@ -1091,7 +1141,7 @@ describe('the content editor', () => {
       await act(async () => {});
       expect(decideDraftSuggestions).toHaveBeenLastCalledWith(['s2', 's1'], 'open');
       expect(pageText()).toBe(`Pipeline forecasting${VAGUE}Teams trust it.`);
-      expect(bar()!.textContent).toContain('suggested 2 changes');
+      expect(bar()!.textContent).toContain('Content Agent has 2 suggestions for you');
     });
 
     it('never applies one to a passage AI quotes, or to one the page changed', async () => {
@@ -1523,8 +1573,9 @@ describe('the side panel', () => {
 
     await act(async () => button('Show side panel')!.click());
     expect(panel()!.getAttribute('aria-label')).toBe('Side panel');
-    // Rules first, what to act on; the live page reads only once it is picked.
-    expect(panel()!.querySelector('[role="tab"][aria-selected="true"]')?.textContent).toBe('Rules');
+    // Instructions first, on Rules, what to act on; the live page reads only once it is picked.
+    expect(selectedTab()).toBe('Instructions');
+    expect(selectedSegment()).toBe('Rules');
     expect(getContentImpact).not.toHaveBeenCalled();
     await pickTab('Live page');
     // The page the draft optimizes, over 30 days.
@@ -1540,10 +1591,10 @@ describe('the side panel', () => {
     expect(panel()).toBeNull();
     const rail = () => container.querySelector('nav[aria-label="Side panel"]');
     const tabs = [...rail()!.querySelectorAll('button')];
-    expect(tabs.map((b) => b.textContent)).toEqual(['Rules', 'Brief', 'Sources', 'Live page']);
-    expect(tabs[2].getAttribute('title')).toBe('Open Sources in the side panel');
+    expect(tabs.map((b) => b.textContent)).toEqual(['Instructions', 'Sources', 'Live page']);
+    expect(tabs[1].getAttribute('title')).toBe('Open Sources in the side panel');
 
-    await act(async () => tabs[2].click());
+    await act(async () => tabs[1].click());
     expect(panel()!.querySelector('[role="tab"][aria-selected="true"]')?.textContent).toBe(
       'Sources',
     );
@@ -1635,13 +1686,13 @@ describe('the side panel', () => {
     expect(getDraftSources).toHaveBeenCalledTimes(1);
     expect(panel()!.textContent).not.toContain('pipeline forecasting');
 
+    // The tab counts the sources in use, from the editor's one read.
     const tab = [...panel()!.querySelectorAll<HTMLElement>('[role="tab"]')].find(
-      (el) => el.textContent === 'Sources',
+      (el) => tabName(el) === 'Sources',
     )!;
-    await act(async () => {
-      tab.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
-      tab.click();
-    });
+    expect(tab.querySelector('[aria-hidden]')!.textContent).toBe('1');
+    expect(tab.querySelector('.sr-only')!.textContent).toBe('1 source in use');
+    await pickTab('Sources');
     // The tab shows the editor's one read: nothing is read again.
     expect(getDraftSources).toHaveBeenCalledTimes(1);
     // The draft's H1 carries the fan-out's words.
@@ -1673,13 +1724,7 @@ describe('the side panel', () => {
     getContentDraft.mockResolvedValue(draft({ status: 'in_review' }));
     window.innerWidth = 1440;
     await renderPage();
-    const tab = [...panel()!.querySelectorAll<HTMLElement>('[role="tab"]')].find(
-      (el) => el.textContent === 'Brief',
-    )!;
-    await act(async () => {
-      tab.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
-      tab.click();
-    });
+    await pickTab('Brief');
 
     await act(async () => button('Suggest changes from brief')!.click());
     await act(async () => button('Start the agent')!.click());
@@ -1728,11 +1773,15 @@ describe('the side panel', () => {
     window.innerWidth = 1440;
     await renderPage();
 
-    expect([...panel()!.querySelectorAll('[role="tab"]')].map((el) => el.textContent)).toEqual([
-      'Rules',
-      'Brief',
+    expect([...panel()!.querySelectorAll('[role="tab"]')].map(tabName)).toEqual([
+      'Instructions',
       'Sources',
       'Live page',
+    ]);
+    // Brief first, then Rules: what to write, then how.
+    expect([...panel()!.querySelectorAll('[role="radio"]')].map((el) => el.textContent)).toEqual([
+      'Brief',
+      expect.stringMatching(/^Rules\d+ open$/),
     ]);
     await pickTab('Sources');
     await act(async () => button('Rebuild with selection')!.click());
@@ -1746,8 +1795,8 @@ describe('the side panel', () => {
       length: 3000,
     });
     expect(toast.success).toHaveBeenCalledWith('Brief rebuilt from 1 source');
-    const selected = panel()!.querySelector('[role="tab"][aria-selected="true"]');
-    expect(selected?.textContent).toBe('Brief');
+    expect(selectedTab()).toBe('Instructions');
+    expect(selectedSegment()).toBe('Brief');
     expect(panel()!.textContent).toContain('How pipeline forecasting works');
     expect(panel()!.textContent).toContain('Win forecasting searches');
 
@@ -1756,6 +1805,92 @@ describe('the side panel', () => {
     expect(
       [...panel()!.querySelectorAll<HTMLInputElement>('input')].map((input) => input.value),
     ).toContain('forecast accuracy, pipeline');
+  });
+
+  it('says under Run Agent which sources the agent writes from, live as Sources changes them', async () => {
+    getDraftSources.mockResolvedValue({
+      data: {
+        prompts: [],
+        fanouts: [
+          { query: 'pipeline forecasting', platforms: ['copilot-web'], searched: 2 },
+          { query: 'forecast accuracy tips', platforms: ['chatgpt'], searched: 1 },
+        ],
+        citedPages: [],
+        gscQueries: [],
+        brandDomains: [],
+        competitorDomains: [],
+      },
+      choices: [],
+    });
+    setDraftSourceIncluded.mockResolvedValue(undefined);
+    getContentDraft.mockResolvedValue(draft());
+    window.innerWidth = 1440;
+    await renderPage();
+
+    const line = () =>
+      [...panel()!.querySelectorAll('p')].find((p) => p.textContent?.startsWith('Uses your data'));
+    expect(line()!.textContent).toBe(
+      'Uses your data: 0 prompts · 2 fan-outs · 0 cited pages · 0 Search Console queries · Edit sources',
+    );
+    // Edit sources opens them.
+    await act(async () => button('Edit sources')!.click());
+    expect(selectedTab()).toBe('Sources');
+    // Turning one off lowers the count under Run Agent at once.
+    const box = panel()!.querySelector<HTMLElement>(
+      '[role="checkbox"][aria-label="Use pipeline forecasting"]',
+    )!;
+    await act(async () => box.click());
+    expect(setDraftSourceIncluded).toHaveBeenCalledWith('d1', {
+      kind: 'fanout',
+      ref: 'pipeline forecasting',
+      included: false,
+    });
+    await pickTab('Rules');
+    expect(line()!.textContent).toContain('· 1 fan-out ·');
+    // Brief says the same under its card.
+    await pickTab('Brief');
+    expect(
+      [...panel()!.querySelectorAll('p')].filter((p) =>
+        p.textContent?.startsWith('Uses your data'),
+      ),
+    ).toHaveLength(2);
+  });
+
+  it('says nothing of the data while the sources can’t be read', async () => {
+    // The default read fails (null): no line, no count on the tab.
+    getContentDraft.mockResolvedValue(draft());
+    window.innerWidth = 1440;
+    await renderPage();
+    expect(panel()!.textContent).not.toContain('Uses your data');
+    expect(panel()!.textContent).not.toContain('No sources kept yet');
+    expect(panel()!.querySelector('[role="tab"] [title]')).toBeNull();
+  });
+
+  it('says when the agent last wrote from the sources: a page it wrote, not a run that failed', async () => {
+    getDraftSources.mockResolvedValue({
+      data: {
+        prompts: [],
+        fanouts: [],
+        citedPages: [],
+        gscQueries: [],
+        brandDomains: [],
+        competitorDomains: [],
+      },
+      choices: [],
+    });
+    const wrote = new Date(Date.now() - 2 * 60_000).toISOString();
+    getContentDraft.mockResolvedValue(draft({ agentState: null, agentSince: wrote }));
+    window.innerWidth = 1440;
+    await renderPage();
+    await pickTab('Sources');
+    expect(panel()!.textContent).toContain('Last used by Content Agent · 2 minutes ago');
+
+    act(() => root.unmount());
+    root = createRoot(container);
+    getContentDraft.mockResolvedValue(draft({ agentState: 'failed', agentSince: wrote }));
+    await renderPage();
+    await pickTab('Sources');
+    expect(panel()!.textContent).toContain('Not used by Content Agent yet');
   });
 
   it('shows how many rules the page meets, and opens them from the header', async () => {
@@ -1778,8 +1913,12 @@ describe('the side panel', () => {
     expect(total).toBeGreaterThan(met);
 
     await act(async () => chip.click());
-    const selected = panel()!.querySelector('[role="tab"][aria-selected="true"]');
-    expect(selected?.textContent).toBe('Rules');
+    expect(selectedTab()).toBe('Instructions');
+    expect(selectedSegment()).toBe('Rules');
+    // The open rules, on the tab and on the segment.
+    expect(panel()!.querySelector('[role="tab"] .sr-only')?.textContent).toBe(
+      `${total - met} rules open`,
+    );
     expect(panel()!.textContent).toContain(`${met} of ${total} rules met`);
 
     // Turning a rule off for this draft saves it and takes it out of the count.
@@ -1876,7 +2015,7 @@ describe('the side panel', () => {
     }
   });
 
-  describe('Apply rules with Agent', () => {
+  describe('Run Agent: fix open rules', () => {
     const traced = draft({
       pageType: 'blog_post',
       bodyHtml: '<h1>Pipeline forecasting</h1><p>We delve into how teams forecast.</p>',
@@ -1908,13 +2047,33 @@ describe('the side panel', () => {
         (b) => b.textContent === label,
       )!;
 
+    it('shows the agent card working while the agent runs, then its batch', async () => {
+      getContentDraft.mockResolvedValue(traced);
+      getDraftSuggestions.mockResolvedValueOnce([]).mockResolvedValueOnce([agentSuggestion]);
+      let answer: (value: { count: number }) => void = () => {};
+      fixDraftRules.mockReturnValue(new Promise((resolve) => (answer = resolve)));
+      await openRules();
+
+      await act(async () => panelButton('Run Agent').click());
+      await act(async () => {});
+      const card = () =>
+        container.querySelector('[role="region"][aria-label="Agent suggestions"]')!;
+      expect(card().getAttribute('aria-busy')).toBe('true');
+      expect(card().textContent).toBe('Content Agent is working');
+
+      await act(async () => answer({ count: 1 }));
+      await act(async () => {});
+      expect(card().getAttribute('aria-busy')).toBe('false');
+      expect(card().textContent).toContain('Content Agent has 1 suggestion for you');
+    });
+
     it('sends the open rules and leaves the agent’s batch for review', async () => {
       getContentDraft.mockResolvedValue(traced);
       getDraftSuggestions.mockResolvedValueOnce([]).mockResolvedValueOnce([agentSuggestion]);
       fixDraftRules.mockResolvedValue({ count: 1 });
       await openRules();
 
-      await act(async () => panelButton('Apply rules with Agent').click());
+      await act(async () => panelButton('Run Agent').click());
       await act(async () => {});
 
       const [id, brandId, request] = fixDraftRules.mock.calls[0];
@@ -1935,7 +2094,7 @@ describe('the side panel', () => {
       expect(request).toMatchObject({ textRules: [], locked: [] });
       expect(
         container.querySelector('[role="region"][aria-label="Agent suggestions"]')!.textContent,
-      ).toContain('Content Agent suggested 1 change');
+      ).toContain('Content Agent has 1 suggestion for you');
       expect(toast.success).toHaveBeenCalledWith(
         'Content Agent suggested 1 change · review them in the page',
       );
@@ -1957,7 +2116,7 @@ describe('the side panel', () => {
       fixDraftRules.mockResolvedValue({ count: 0 });
       await openRules();
 
-      await act(async () => panelButton('Apply rules with Agent').click());
+      await act(async () => panelButton('Run Agent').click());
       await act(async () => {});
 
       expect(fixDraftRules.mock.calls[0][2].rules).toContainEqual(
@@ -1968,6 +2127,174 @@ describe('the side panel', () => {
           ),
         }),
       );
+    });
+
+    it('sends the sources the Sources tab keeps, numbered by the server (CE-033)', async () => {
+      getDraftSources.mockResolvedValue({
+        data: {
+          prompts: [],
+          fanouts: [{ query: 'pipeline forecasting', platforms: ['copilot-web'], searched: 2 }],
+          citedPages: [],
+          gscQueries: [],
+          brandDomains: [],
+          competitorDomains: [],
+        },
+        choices: [],
+      });
+      getContentDraft.mockResolvedValue(traced);
+      getDraftSuggestions.mockResolvedValue([]);
+      fixDraftRules.mockResolvedValue({ count: 0 });
+      await openRules();
+      await act(async () => panelButton('Run Agent').click());
+      await act(async () => {});
+      expect(fixDraftRules.mock.calls[0][2].sources).toMatchObject({
+        promptIds: [],
+        fanouts: [{ query: 'pipeline forecasting', platforms: ['copilot-web'] }],
+        pages: [],
+        queries: [],
+      });
+    });
+
+    it('shows what a suggestion was written from, and opens it in Sources', async () => {
+      getDraftSources.mockResolvedValue({
+        data: {
+          prompts: [],
+          fanouts: [{ query: 'pipeline forecasting', platforms: ['copilot-web'], searched: 2 }],
+          citedPages: [],
+          gscQueries: [],
+          brandDomains: [],
+          competitorDomains: [],
+        },
+        choices: [],
+      });
+      getContentDraft.mockResolvedValue(traced);
+      getDraftSuggestions.mockResolvedValue([
+        {
+          ...agentSuggestion,
+          afterText: 'look at pipeline forecasting',
+          sources: [{ kind: 'fanout', ref: 'pipeline forecasting', label: 'pipeline forecasting' }],
+          sourceMarks: [{ start: 8, end: 28, source: 0 }],
+        },
+      ]);
+      await openRules();
+
+      const card = container.querySelector<HTMLElement>('[data-suggestion="n1"]')!;
+      // Its words, the source's number after the ones it supports, then "Based on".
+      expect(card.querySelector('ins')!.textContent).toBe('look at pipeline forecasting1');
+      const mark = card.querySelector<HTMLButtonElement>('ins sup button')!;
+      expect(mark.getAttribute('aria-label')).toBe('Source 1: pipeline forecasting');
+      expect(card.textContent).toContain('Based on1Fan-out ·pipeline forecasting');
+      const chip = [...card.querySelectorAll<HTMLButtonElement>('button')].find((b) =>
+        b.textContent?.includes('Fan-out'),
+      )!;
+      // The Sources tab's details, on hover.
+      expect(chip.title).toBe('pipeline forecasting · Microsoft Copilot · searched 2×');
+      // The card says how many of the person's sources it was built from.
+      expect(
+        container.querySelector('[role="region"][aria-label="Agent suggestions"]')!.textContent,
+      ).toContain('built from 1 of your sources · See sources');
+
+      const scrolled = vi.fn();
+      const original = Element.prototype.scrollIntoView;
+      Element.prototype.scrollIntoView = scrolled;
+      try {
+        await act(async () => chip.click());
+        expect(selectedTab()).toBe('Sources');
+        const row = panel()!.querySelector<HTMLElement>(
+          '[data-source="fanout:pipeline forecasting"]',
+        )!;
+        // Scrolled to, and marked for a moment.
+        expect(scrolled).toHaveBeenCalled();
+        expect(row.className).toContain('ring-2');
+      } finally {
+        Element.prototype.scrollIntoView = original;
+      }
+    });
+
+    it('marks an insert’s words by its text, found again in the card as drawn', async () => {
+      getContentDraft.mockResolvedValue(traced);
+      getDraftSuggestions.mockResolvedValue([
+        {
+          ...agentSuggestion,
+          kind: 'insert' as const,
+          beforeText: '',
+          afterText: '<h3>FAQ</h3>\n<p>Use pipeline forecasting weekly.</p>',
+          // Offsets into "FAQ\nUse pipeline forecasting weekly." (the server's text).
+          sources: [{ kind: 'fanout', ref: 'pipeline forecasting', label: 'pipeline forecasting' }],
+          sourceMarks: [{ start: 8, end: 28, source: 0 }],
+        },
+      ]);
+      await openRules();
+      const card = container.querySelector<HTMLElement>('[data-suggestion="n1"]')!;
+      expect(card.querySelector('p')!.textContent).toBe('Use pipeline forecasting1 weekly.');
+    });
+
+    it('scrolls to a source in a Sources tab opened before, now hidden behind Rules', async () => {
+      getDraftSources.mockResolvedValue({
+        data: {
+          prompts: [],
+          fanouts: [{ query: 'pipeline forecasting', platforms: ['copilot-web'], searched: 2 }],
+          citedPages: [],
+          gscQueries: [],
+          brandDomains: [],
+          competitorDomains: [],
+        },
+        choices: [],
+      });
+      getContentDraft.mockResolvedValue(traced);
+      getDraftSuggestions.mockResolvedValue([
+        {
+          ...agentSuggestion,
+          afterText: 'look at pipeline forecasting',
+          sources: [{ kind: 'fanout', ref: 'pipeline forecasting', label: 'pipeline forecasting' }],
+          // Its mark ends inside the link on its words: both stay.
+          afterLinks: [{ start: 8, end: 28, href: 'https://acme.example/forecasting' }],
+          sourceMarks: [{ start: 8, end: 16, source: 0 }],
+        },
+      ]);
+      await openRules();
+      const ins = container.querySelector<HTMLElement>('[data-suggestion="n1"] ins')!;
+      expect(ins.textContent).toBe('look at pipeline1 forecasting');
+      expect(
+        [...ins.querySelectorAll<HTMLElement>('span[title]')].map((span) => span.textContent),
+      ).toEqual(['pipeline', ' forecasting']);
+
+      await pickTab('Sources');
+      await pickTab('Rules');
+      const scrolled = vi.fn();
+      const original = Element.prototype.scrollIntoView;
+      Element.prototype.scrollIntoView = scrolled;
+      try {
+        const mark = container.querySelector<HTMLButtonElement>(
+          '[data-suggestion="n1"] sup button',
+        )!;
+        await act(async () => mark.click());
+        expect(selectedTab()).toBe('Sources');
+        expect(scrolled).toHaveBeenCalledTimes(1);
+        // Asked once: switching tabs again doesn't scroll again.
+        await pickTab('Rules');
+        await pickTab('Sources');
+        expect(scrolled).toHaveBeenCalledTimes(1);
+      } finally {
+        Element.prototype.scrollIntoView = original;
+      }
+    });
+
+    it('puts an insert’s number after the words it marks, not the same words before them', async () => {
+      getContentDraft.mockResolvedValue(traced);
+      getDraftSuggestions.mockResolvedValue([
+        {
+          ...agentSuggestion,
+          kind: 'insert' as const,
+          beforeText: '',
+          afterText: '<p>In 2026 teams plan; by 2026, most do.</p>',
+          sources: [{ kind: 'fanout', ref: 'plans 2026', label: 'plans 2026' }],
+          sourceMarks: [{ start: 23, end: 27, source: 0 }],
+        },
+      ]);
+      await openRules();
+      const card = container.querySelector<HTMLElement>('[data-suggestion="n1"]')!;
+      expect(card.querySelector('p')!.textContent).toBe('In 2026 teams plan; by 20261, most do.');
     });
 
     it('says a full batch is the most one run makes, to run it again (C)', async () => {
@@ -1981,7 +2308,7 @@ describe('the side panel', () => {
       fixDraftRules.mockResolvedValue({ count: 8 });
       await openRules();
 
-      await act(async () => panelButton('Apply rules with Agent').click());
+      await act(async () => panelButton('Run Agent').click());
       await act(async () => {});
 
       expect(toast.success).toHaveBeenCalledWith(
@@ -1991,7 +2318,7 @@ describe('the side panel', () => {
       expect(
         container.querySelector('[role="region"][aria-label="Agent suggestions"]')!.textContent,
       ).toMatch(
-        /^0 accepted · 8 rejected · \d+ rules? still open · a run makes at most 8 changes: run it again for the rest/,
+        /^All suggestions reviewed0 accepted · Rules \d+ of \d+ · \d+ still open · a run makes at most 8 changes: run it again for the rest/,
       );
     });
 
@@ -2007,7 +2334,7 @@ describe('the side panel', () => {
         fixDraftRules.mockRejectedValue(new Error('An unexpected response was received'));
         await openRules();
 
-        await act(async () => panelButton('Apply rules with Agent').click());
+        await act(async () => panelButton('Run Agent').click());
         await act(async () => void (await vi.advanceTimersByTimeAsync(5_000)));
         expect(toast.error).not.toHaveBeenCalled();
         await act(async () => void (await vi.advanceTimersByTimeAsync(5_000)));
@@ -2016,7 +2343,7 @@ describe('the side panel', () => {
         expect(getDraftSuggestions).toHaveBeenCalledTimes(3);
         expect(
           container.querySelector('[role="region"][aria-label="Agent suggestions"]')!.textContent,
-        ).toContain('Content Agent suggested 1 change');
+        ).toContain('Content Agent has 1 suggestion for you');
         expect(toast.success).toHaveBeenCalledWith(
           'Content Agent suggested 1 change · review them in the page',
         );
@@ -2034,7 +2361,7 @@ describe('the side panel', () => {
         fixDraftRules.mockResolvedValue({ error: 'unconfirmed' });
         await openRules();
 
-        await act(async () => panelButton('Apply rules with Agent').click());
+        await act(async () => panelButton('Run Agent').click());
         await act(async () => void (await vi.advanceTimersByTimeAsync(85_000)));
         expect(toast.error).not.toHaveBeenCalled();
         await act(async () => void (await vi.advanceTimersByTimeAsync(10_000)));
@@ -2055,7 +2382,7 @@ describe('the side panel', () => {
       expect(panel()!.querySelector('[aria-label="One H1 per page: on or off"]')).toBeNull();
       expect(panel()!.querySelector('[aria-label="Length: on or off"]')).not.toBeNull();
 
-      await act(async () => panelButton('Apply rules with Agent').click());
+      await act(async () => panelButton('Run Agent').click());
       await act(async () => {});
       const asked = fixDraftRules.mock.calls[0][2].rules.map((r: { key: string }) => r.key);
       expect(asked).not.toContain('oneH1');
@@ -2082,7 +2409,7 @@ describe('the side panel', () => {
       fixDraftRules.mockResolvedValue({ error: 'ai_budget' });
       await openRules();
 
-      await act(async () => panelButton('Apply rules with Agent').click());
+      await act(async () => panelButton('Run Agent').click());
       await act(async () => {});
       expect(toast.error).toHaveBeenCalledWith(
         "This month's AI usage is spent. Upgrade for more, or try again next month.",
@@ -2094,9 +2421,12 @@ describe('the side panel', () => {
       getDraftSuggestions.mockResolvedValue([agentSuggestion]);
       await openRules();
 
-      const fix = panelButton('Apply rules with Agent');
+      const fix = panelButton('Run Agent');
       expect(fix.disabled).toBe(true);
-      expect(fix.title).toBe('Accept or reject the open suggestions first.');
+      // Why, under the card: never only on hover.
+      expect(panel()!.querySelector('[role="status"]')!.textContent).toBe(
+        'Review the open suggestion first, then run the agent.',
+      );
     });
 
     it('waits until the passages AI quotes are read, so they go to the agent locked', async () => {
@@ -2108,13 +2438,14 @@ describe('the side panel', () => {
       getCitedPassages.mockReturnValue(new Promise((resolve) => (read = resolve)));
       await openRules();
 
-      const fix = () => panelButton('Apply rules with Agent');
+      const fix = () => panelButton('Run Agent');
       expect(fix().disabled).toBe(true);
-      expect(fix().title).toBe(
+      expect(panel()!.querySelector('[role="status"]')!.textContent).toBe(
         'Reading which passages AI quotes, so the agent leaves them as they are…',
       );
       await act(async () => read([]));
       expect(fix().disabled).toBe(false);
+      expect(panel()!.textContent).not.toContain('Reading which passages AI quotes');
     });
 
     it('shows the open suggestions another tab left, when the agent is refused for them', async () => {
@@ -2123,14 +2454,181 @@ describe('the side panel', () => {
       fixDraftRules.mockResolvedValue({ error: 'open_suggestions' });
       await openRules();
 
-      await act(async () => panelButton('Apply rules with Agent').click());
+      await act(async () => panelButton('Run Agent').click());
       await act(async () => {});
       expect(toast.error).toHaveBeenCalledWith(
         "This page has open suggestions, maybe from another tab. They're shown now: accept or reject them first.",
       );
       expect(
         container.querySelector('[role="region"][aria-label="Agent suggestions"]')!.textContent,
-      ).toContain('Content Agent suggested 1 change');
+      ).toContain('Content Agent has 1 suggestion for you');
+    });
+  });
+
+  describe('Run Agent: rewrite the whole page', () => {
+    const long = draft({
+      pageType: 'blog_post',
+      bodyHtml: '<h1>Pipeline forecasting</h1><p>We delve into how teams forecast.</p>',
+    });
+    const rewritten = {
+      id: 'p1',
+      batchId: 'b3',
+      actionId: null,
+      actionNo: null,
+      kind: 'page' as const,
+      blockText: 'Pipeline forecasting',
+      beforeText: '',
+      beforeHtml: '<h1>Pipeline forecasting</h1><p>We delve into how teams forecast.</p>',
+      afterText: '<h1>Pipeline forecasting</h1><p>Teams forecast from their pipeline.</p>',
+      reason: 'cut to the Length and answered the heading first',
+      ruleKeys: ['length', 'aiTraces'],
+      status: 'open' as const,
+    };
+    async function openRules() {
+      window.innerWidth = 1024;
+      await renderPage();
+      const chip = container.querySelector<HTMLButtonElement>(
+        'header button[aria-label^="Rules "]',
+      )!;
+      await act(async () => chip.click());
+    }
+    const button = (scope: ParentNode, label: string) =>
+      [...scope.querySelectorAll<HTMLButtonElement>('button')].find(
+        (b) => b.textContent === label,
+      )!;
+    const bar = () =>
+      container.querySelector('[role="region"][aria-label="Rewritten page"]') as HTMLElement | null;
+    const page = () => container.querySelector('.ProseMirror')!.textContent;
+
+    it('sends the rules in effect, how the page reads against each, and the page waits', async () => {
+      getContentDraft.mockResolvedValue(long);
+      await openRules();
+
+      // ▾ › Rewrite the whole page: the button says so, then runs it.
+      await act(async () =>
+        panel()!.querySelector<HTMLElement>('[aria-label="More ways to run the agent"]')!.click(),
+      );
+      const item = [...document.body.querySelectorAll<HTMLElement>('[role="menuitemradio"]')].find(
+        (el) => el.textContent?.startsWith('Rewrite the whole page'),
+      )!;
+      await act(async () => item.click());
+      await act(async () => button(panel()!, 'Rewrite page').click());
+      await act(async () => {});
+
+      const [id, brandId, request] = startPageRewrite.mock.calls[0];
+      expect([id, brandId]).toEqual(['d1', 'b1']);
+      // An open rule says how the page reads now; locked passages come from the page.
+      expect(request.rules).toContainEqual(
+        expect.objectContaining({
+          key: 'aiTraces',
+          detail: expect.stringContaining('now: 1 found'),
+        }),
+      );
+      expect(request.locked).toEqual([]);
+      expect(fixDraftRules).not.toHaveBeenCalled();
+      // The page waits for it, with the rewrite's own steps.
+      expect(container.textContent).toContain('Rewriting the page');
+      expect(container.querySelector('.ProseMirror')).toBeNull();
+    });
+
+    it('shows the rewrite to compare, puts it in place on Accept, and puts the page back on Undo', async () => {
+      getContentDraft.mockResolvedValue(long);
+      getDraftSuggestions.mockResolvedValue([rewritten]);
+      await renderPage();
+      await act(async () => {});
+
+      expect(bar()!.textContent).toContain('Content Agent rewrote the page to its rules');
+      // A whole page is never a card in the page.
+      expect(container.querySelector('[data-suggestion]')).toBeNull();
+      await act(async () => button(bar()!, 'Compare').click());
+      const dialog = document.querySelector<HTMLElement>('[role="dialog"]')!;
+      expect(dialog.textContent).toContain('Teams forecast from their pipeline.');
+      expect(dialog.textContent).toContain('We delve into how teams forecast.');
+
+      await act(async () => button(dialog, 'Accept').click());
+      await act(async () => {});
+      expect(keepAgentBeforeVersion).toHaveBeenCalledWith('d1');
+      expect(decideDraftSuggestions).toHaveBeenCalledWith(['p1'], 'accepted');
+      expect(page()).toContain('Teams forecast from their pipeline.');
+      expect(bar()!.textContent).toContain('Rewrite accepted');
+
+      await act(async () => button(bar()!, 'Undo').click());
+      await act(async () => {});
+      expect(decideDraftSuggestions).toHaveBeenLastCalledWith(['p1'], 'open');
+      expect(page()).toContain('We delve into how teams forecast.');
+    });
+
+    it('reads the page by its words: stored line breaks and lists are no change', async () => {
+      getContentDraft.mockResolvedValue(long);
+      getDraftSuggestions.mockResolvedValue([
+        {
+          ...rewritten,
+          beforeHtml: '<h1>Pipeline forecasting</h1>\n<p>We delve into how teams forecast.</p>\n',
+          afterText:
+            '<h1>Pipeline forecasting</h1>\n<ul>\n<li>Teams forecast</li>\n<li>from their pipeline</li>\n</ul>',
+        },
+      ]);
+      await renderPage();
+      await act(async () => {});
+
+      await act(async () => button(bar()!, 'Accept').click());
+      await act(async () => {});
+      expect(decideDraftSuggestions).toHaveBeenCalledWith(['p1'], 'accepted');
+      await act(async () => button(bar()!, 'Undo').click());
+      await act(async () => {});
+      expect(decideDraftSuggestions).toHaveBeenLastCalledWith(['p1'], 'open');
+      expect(page()).toContain('We delve into how teams forecast.');
+    });
+
+    it('doesn’t undo a rewrite edited since it went in', async () => {
+      getContentDraft.mockResolvedValue(long);
+      getDraftSuggestions.mockResolvedValue([{ ...rewritten, status: 'accepted' as const }]);
+      await renderPage();
+      await act(async () => {});
+      // The page as accepted, then a word of the person's own.
+      const editor = (container.querySelector('.ProseMirror') as HTMLElement & { editor: Editor })
+        .editor;
+      await act(async () => {
+        editor.commands.setContent(rewritten.afterText);
+        editor.commands.insertContentAt(editor.state.doc.content.size - 1, ' Mine.');
+      });
+
+      await act(async () => button(bar()!, 'Undo').click());
+      expect(toast).toHaveBeenCalledWith(
+        'The page changed after the rewrite was put in. To go back, open History.',
+      );
+      expect(decideDraftSuggestions).not.toHaveBeenCalled();
+    });
+
+    it('rewrites again from Try again after a rewrite failed, on any device', async () => {
+      // The draft says which run failed (agent_run), not this browser's storage.
+      getContentDraft.mockResolvedValue({ ...long, agentState: 'failed', agentRun: 'rewrite' });
+      await renderPage();
+      await act(async () => {});
+
+      expect(container.textContent).toContain(
+        "The Content Agent couldn't rewrite this page. Edit it yourself, or try again.",
+      );
+      await act(async () => button(container, 'Try again').click());
+      await act(async () => {});
+      expect(startPageRewrite).toHaveBeenCalled();
+      expect(startAgentWriting).not.toHaveBeenCalled();
+    });
+
+    it('doesn’t put a rewrite over a page that changed since the agent read it', async () => {
+      getContentDraft.mockResolvedValue(long);
+      getDraftSuggestions.mockResolvedValue([
+        { ...rewritten, beforeHtml: '<h1>Pipeline forecasting</h1><p>An older page.</p>' },
+      ]);
+      await renderPage();
+      await act(async () => {});
+
+      await act(async () => button(bar()!, 'Accept').click());
+      expect(toast).toHaveBeenCalledWith(
+        'The page changed after the agent read it. Reject this rewrite and run it again on the page as it is now.',
+      );
+      expect(decideDraftSuggestions).not.toHaveBeenCalled();
+      expect(page()).toContain('We delve into how teams forecast.');
     });
   });
 
@@ -2145,13 +2643,7 @@ describe('the side panel', () => {
     window.innerWidth = 1440;
     await renderPage();
 
-    const rulesTab = [...panel()!.querySelectorAll<HTMLElement>('[role="tab"]')].find(
-      (el) => el.textContent === 'Rules',
-    )!;
-    await act(async () => {
-      rulesTab.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
-      rulesTab.click();
-    });
+    await pickTab('Rules');
     expect(getMyRuleSets).toHaveBeenCalledWith('b1');
     expect(panel()!.textContent).toContain('My rules · Blog post');
     expect(panel()!.textContent).toContain('Your text rules');

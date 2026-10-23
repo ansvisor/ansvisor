@@ -5,6 +5,7 @@ import express from 'express';
  * POST /api/content-drafts/:draftId/brief (CE-007): Rebuild outline;
  * POST /api/content-drafts/:draftId/suggestions (CE-018): Fix open rules with agent; and
  * POST /api/content-drafts/:draftId/write (CE-015): Start's Agent.
+ * POST /api/content-drafts/:draftId/rewrite: Rewrite the page to these rules.
  */
 
 const BRAND = '33333333-3333-3333-3333-333333333333';
@@ -167,6 +168,35 @@ describe('POST /api/content-drafts/:draftId/write', () => {
     startDraftWriting.mockRejectedValueOnce(new Error('db down'));
     res = await write({ brandId: BRAND, sources });
     expect(res.status).toBe(502);
+  });
+});
+
+describe('POST /api/content-drafts/:draftId/rewrite', () => {
+  const rewrite = (body) =>
+    fetch(`${baseUrl}/${DRAFT}/rewrite`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+
+  it('starts a whole-page rewrite and answers at once', async () => {
+    const res = await rewrite({ brandId: BRAND, sources, locked: ['quoted words'] });
+    expect(res.status).toBe(202);
+    expect(startDraftWriting).toHaveBeenCalledWith({
+      draftId: DRAFT,
+      brandId: BRAND,
+      input: { sources, rules: [], textRules: [], locked: ['quoted words'] },
+      rewrite: true,
+    });
+  });
+
+  it('says why it didn’t start', async () => {
+    startDraftWriting.mockRejectedValueOnce(
+      Object.assign(new Error('too long'), { status: 422, code: 'too_long' }),
+    );
+    const res = await rewrite({ brandId: BRAND, sources });
+    expect(res.status).toBe(422);
+    await expect(res.json()).resolves.toMatchObject({ code: 'too_long' });
   });
 });
 

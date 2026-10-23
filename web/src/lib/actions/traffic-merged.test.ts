@@ -148,10 +148,11 @@ describe('getTrafficSummary', () => {
         visits: 116,
         visitsPrev: 40,
         analytics: { sessions: 120, engagedSessions: 80, keyEvents: 9, keyEventSessions: 7 },
+        surfaces: [],
       },
       // Platforms Analytics never saw have no engagement figures.
-      { platform: 'perplexity.ai', visits: 47, visitsPrev: 0, analytics: null },
-      { platform: 'gemini.google.com', visits: 4, visitsPrev: 0, analytics: null },
+      { platform: 'perplexity.ai', visits: 47, visitsPrev: 0, analytics: null, surfaces: [] },
+      { platform: 'gemini.google.com', visits: 4, visitsPrev: 0, analytics: null, surfaces: [] },
     ]);
     // Over the range's days, as the KPI cards read Analytics.
     expect(rpc).toHaveBeenCalledWith('ga_platform_value', {
@@ -172,6 +173,68 @@ describe('getTrafficSummary', () => {
       p_since: '2026-10-11',
       p_until: '2026-10-18',
     });
+  });
+
+  // #1283: ChatGPT Shopping's product cards, part of ChatGPT's visits (00251).
+  it("gives a platform's surfaces under it, with their own change and Analytics figures", async () => {
+    rpc.mockImplementation(async (fn: string, args: { p_to_inclusive: boolean }) => {
+      if (fn === 'ga_platform_value') {
+        return {
+          data: [
+            {
+              ...PLATFORM_VALUE[0],
+              surfaces: [
+                {
+                  surface: 'shopping',
+                  sessions: 30,
+                  engaged_sessions: 24,
+                  key_events: 5,
+                  key_event_sessions: 4,
+                },
+              ],
+            },
+          ],
+          error: null,
+        };
+      }
+      if (fn !== 'ai_traffic_merged') return { data: OTHER_READS[fn], error: null };
+      return {
+        data: args.p_to_inclusive
+          ? {
+              ...CURRENT,
+              surfaces: [
+                { platform: 'chatgpt.com', surface: 'shopping', visits: 31 },
+                // A surface this page doesn't know yet stays in its platform's row.
+                { platform: 'perplexity.ai', surface: 'travel', visits: 3 },
+              ],
+            }
+          : {
+              ...PREVIOUS,
+              surfaces: [{ platform: 'chatgpt.com', surface: 'shopping', visits: 9 }],
+            },
+        error: null,
+      };
+    });
+
+    const summary = await getTrafficSummary('b1', { dateFrom: '2026-10-11T12:30:00.000Z' });
+
+    const [chatgpt, perplexity] = summary.platformBreakdown;
+    // ChatGPT's own total still includes its Shopping visits.
+    expect(chatgpt).toMatchObject({
+      platform: 'chatgpt.com',
+      visits: 116,
+      analytics: { sessions: 120, engagedSessions: 80, keyEvents: 9, keyEventSessions: 7 },
+    });
+    expect(chatgpt.surfaces).toEqual([
+      {
+        surface: 'shopping',
+        visits: 31,
+        visitsPrev: 9,
+        analytics: { sessions: 30, engagedSessions: 24, keyEvents: 5, keyEventSessions: 4 },
+      },
+    ]);
+    expect(perplexity.surfaces).toEqual([]);
+    expect(summary.totalVisits).toBe(167);
   });
 
   it('keeps the top 10 pages for the page, and all of them for an export', async () => {

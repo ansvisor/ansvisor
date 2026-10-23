@@ -21,7 +21,9 @@ vi.mock('../config/supabase.js', () => ({
       const chain = {
         select: () => chain,
         eq: () => chain,
+        in: () => chain,
         order: () => chain,
+        then: (resolve) => resolve(result()),
         limit: async () => result(),
         insert: async (value) => (writes.push({ table, value }), { error: null }),
         maybeSingle: async () => result(),
@@ -68,6 +70,7 @@ const {
   splitReplace,
 } = await import('./content-agent.js');
 const { linkKey, NO_LINK_TARGETS } = await import('./content-links.js');
+const { knownNumbers, numberSources } = await import('./content-sources.js');
 const { PlanLimitError } = await import('./plan-guard.js');
 // The real hold: self-hosted here, so it reserves nothing and writes each charge.
 const realGuard = await vi.importActual('./plan-guard.js');
@@ -90,11 +93,25 @@ const suggestion = (over = {}) => ({
   kind: 'replace',
   passage: 4,
   before: 'good coffee and hot water',
-  after: '15 g of coffee and 250 g of water at 94 °C ([source, year])',
+  after: 'a 1:16 ratio of freshly ground coffee to hot water ([source, year])',
   reason: 'add a dated data point (rule)',
   rules: ['dated', 'made-up'],
+  // Its words from the cited page, S2; its 1:16 is the fan-out's own (CE-033).
+  sources: ['S2'],
+  marks: [{ words: 'freshly ground coffee', source: 'S2' }],
   ...over,
 });
+
+/** The sources an editor keeps, numbered as the agent reads them: a fan-out (S1), a cited page (S2). */
+const SOURCES = {
+  promptIds: [],
+  fanouts: [{ query: 'Pour over ratio 1:16', platforms: ['chatgpt'] }],
+  pages: [{ url: 'https://sca.example/brew', kind: 'publication' }],
+  queries: [],
+  headings: [],
+  length: 3000,
+};
+const sourcing = { numbered: numberSources(SOURCES) };
 
 beforeEach(() => {
   writes = [];
@@ -175,17 +192,88 @@ describe('keepSuggestions', () => {
   const locked = new Set(input().locked);
   const ruleKeys = new Set(['dated', 'faq']);
 
-  it('keeps a replace whose words are in its passage, with the rules sent', () => {
-    expect(keepSuggestions([suggestion()], passages, locked, ruleKeys)).toEqual([
+  it('keeps a replace whose words are in its passage, with the rules sent and its sources', () => {
+    // A source number the model wrote into its reason ("(S2)") isn't shown on the card.
+    const cited = suggestion({ reason: 'add a dated data point (rule) (S2)' });
+    expect(keepSuggestions([cited], passages, locked, ruleKeys, null, sourcing)).toEqual([
       {
         kind: 'replace',
         block_text: 'Use good coffee and hot water.',
         before_text: 'good coffee and hot water',
-        after_text: '15 g of coffee and 250 g of water at 94 °C ([source, year])',
+        after_text: 'a 1:16 ratio of freshly ground coffee to hot water ([source, year])',
         reason: 'add a dated data point (rule)',
         rule_keys: ['dated'],
+        sources: [
+          {
+            kind: 'cited_page',
+            ref: 'https://sca.example/brew',
+            label: 'https://sca.example/brew',
+          },
+          { kind: 'fanout', ref: 'pour over ratio 1:16', label: 'Pour over ratio 1:16' },
+        ],
+        // 16 is marked to the fan-out whose words have it, unasked.
+        source_marks: [
+          { start: 4, end: 6, source: 1 },
+          { start: 16, end: 37, source: 0 },
+        ],
       },
     ]);
+  });
+
+  it('keeps no number without a source (CE-033)', () => {
+    // A figure in none of the data: not kept, even marked to a source.
+    const invented = { after: '87% of baristas use freshly ground coffee' };
+    expect(
+      keepSuggestions([suggestion(invented)], passages, locked, ruleKeys, null, sourcing),
+    ).toEqual([]);
+    expect(
+      keepSuggestions(
+        [suggestion({ ...invented, marks: [{ words: '87% of baristas', source: 'S2' }] })],
+        passages,
+        locked,
+        ruleKeys,
+        null,
+        sourcing,
+      ),
+    ).toEqual([]);
+    // One the rules ask for (the keywords rule's "2026") needs no source.
+    const [asked] = keepSuggestions(
+      [suggestion({ after: 'the best pour-over gear for 2026', marks: [] })],
+      passages,
+      locked,
+      ruleKeys,
+      null,
+      { ...sourcing, known: knownNumbers('aim: best pour-over gear 2026') },
+    );
+    expect(asked).toMatchObject({ after_text: 'the best pour-over gear for 2026' });
+    // A source number written into the words is taken out.
+    const [plain] = keepSuggestions(
+      [suggestion({ after: 'freshly ground coffee (S2) and hot water', marks: [] })],
+      passages,
+      locked,
+      ruleKeys,
+      null,
+      sourcing,
+    );
+    expect(plain.after_text).toBe('freshly ground coffee and hot water');
+    // A number the page has already, or a count, needs none.
+    const [kept] = keepSuggestions(
+      [
+        suggestion({
+          passage: 2,
+          before: 'tastes better',
+          after: 'tastes better, in 3 ways',
+          sources: [],
+          marks: [],
+        }),
+      ],
+      draftPassages('<h1>Pour-over in 2026</h1><p>Pour-over coffee tastes better.</p>'),
+      new Set(),
+      ruleKeys,
+    );
+    expect(kept).toMatchObject({ after_text: 'tastes better, in 3 ways' });
+    expect(kept).not.toHaveProperty('sources');
+    expect(kept).not.toHaveProperty('source_marks');
   });
 
   it('drops one on a locked passage, words not in the passage, or no passage', () => {
@@ -231,9 +319,9 @@ describe('keepSuggestions', () => {
   });
 
   it('keeps each change once', () => {
-    expect(keepSuggestions([suggestion(), suggestion()], passages, locked, ruleKeys)).toHaveLength(
-      1,
-    );
+    expect(
+      keepSuggestions([suggestion(), suggestion()], passages, locked, ruleKeys, null, sourcing),
+    ).toHaveLength(1);
   });
 });
 
@@ -503,24 +591,29 @@ describe('links to the pages and sources given', () => {
           passage: 3,
           before: '',
           after:
-            '<h3><a href="https://research.example/study">Study</a></h3><p>A <a href="https://research.example/study" target="_blank" onclick="x()">2025 study</a> found it.</p>',
+            '<h3><a href="https://research.example/study">Study</a></h3><p>A <a href="https://research.example/study" target="_blank" onclick="x()">recent study</a> found it.</p>',
           rules: ['citeInline'],
+          sources: ['S1'],
+          marks: [{ words: 'recent study', source: 'S1' }],
         }),
       ],
       page,
       new Set(),
       new Set(['citeInline']),
       links,
+      { numbered: numberSources({ pages: [{ url: 'https://research.example/study' }] }) },
     );
     expect(kept.after_text).toBe(
-      '<h3>Study</h3><p>A <a href="https://research.example/study">2025 study</a> found it.</p>',
+      '<h3>Study</h3><p>A <a href="https://research.example/study">recent study</a> found it.</p>',
     );
+    // Its mark is by the insert's text: "Study" then the paragraph.
+    expect(kept.source_marks).toEqual([{ start: 7, end: 19, source: 0 }]);
   });
 
   it('keeps at most 20 links on a replace, as the table allows', () => {
     const many = Array.from(
       { length: 22 },
-      (_, i) => `<a href="https://acme.example/pricing">plan ${i}</a>`,
+      (_, i) => `<a href="https://acme.example/pricing">plan ${String.fromCharCode(97 + i)}</a>`,
     ).join(' ');
     const [kept] = keep({ after: `See ${many} for teams.` });
     expect(kept.after_links).toHaveLength(20);
@@ -621,7 +714,11 @@ describe('fixDraftRules', () => {
       usage: { inputTokens: 900, outputTokens: 200 },
     });
 
-    const result = await fixDraftRules({ draftId: DRAFT, brandId: BRAND, input: input() });
+    const result = await fixDraftRules({
+      draftId: DRAFT,
+      brandId: BRAND,
+      input: input({ sources: SOURCES }),
+    });
 
     expect(reserveAiBudget).toHaveBeenCalledWith(
       'org-1',
@@ -634,7 +731,14 @@ describe('fixDraftRules', () => {
         system: expect.stringContaining(
           'Never write an answer, a sentence or a FAQ into a heading',
         ),
+        // The data it writes from, numbered (CE-033).
+        prompt: expect.stringContaining(
+          'S1 Fan-out (a search AI ran while answering): "Pour over ratio 1:16" (chatgpt)\nS2 Cited page (AI answers cite it today; answer better, never copy): https://sca.example/brew (publication)',
+        ),
       }),
+    );
+    expect(generateObject.mock.calls[0][0].system).toContain(
+      "you don't see what a cited page says",
     );
     expect(result).toEqual({ count: 1, batchId: expect.any(String) });
     const usage = writes.find((w) => w.table === 'prompt_improve_usage');
@@ -651,8 +755,29 @@ describe('fixDraftRules', () => {
         action_id: 'act-1',
         position: 0,
         kind: 'replace',
+        sources: [
+          expect.objectContaining({ kind: 'cited_page', ref: 'https://sca.example/brew' }),
+          expect.objectContaining({ kind: 'fanout', ref: 'pour over ratio 1:16' }),
+        ],
+        source_marks: [
+          { start: 4, end: 6, source: 1 },
+          { start: 16, end: 37, source: 0 },
+        ],
       }),
     ]);
+  });
+
+  it('numbers the brand’s prompts among those kept, first', async () => {
+    rows.prompts = [{ id: 'p1', text: 'What ratio for pour-over?' }];
+    generateObject.mockResolvedValue({ object: { suggestions: [] }, usage: {} });
+    await fixDraftRules({
+      draftId: DRAFT,
+      brandId: BRAND,
+      input: input({ sources: { ...SOURCES, promptIds: ['p1', 'p-other-brand'] } }),
+    });
+    expect(generateObject.mock.calls[0][0].prompt).toContain(
+      'S1 Prompt (a question tracked in AI answers): "What ratio for pour-over?"\nS2 Fan-out',
+    );
   });
 
   it('keeps nothing when the agent found nothing it could change', async () => {
@@ -677,6 +802,26 @@ describe('fixDraftRules', () => {
     ).rejects.toMatchObject({ status: 422, code: 'empty' });
     expect(reserveAiBudget).not.toHaveBeenCalled();
     expect(generateObject).not.toHaveBeenCalled();
+  });
+
+  it('waits while Start or a rewrite holds the draft, which a stopped server no longer does', async () => {
+    rows.content_drafts.agent_state = 'writing';
+    rows.content_drafts.agent_state_at = new Date().toISOString();
+    await expect(
+      fixDraftRules({ draftId: DRAFT, brandId: BRAND, input: input() }),
+    ).rejects.toMatchObject({ status: 409, code: 'writing' });
+    expect(reserveAiBudget).not.toHaveBeenCalled();
+    expect(generateObject).not.toHaveBeenCalled();
+
+    // Left 'writing' long ago: no run holds it.
+    rows.content_drafts.agent_state_at = new Date(Date.now() - 11 * 60_000).toISOString();
+    generateObject.mockResolvedValue({
+      object: { suggestions: [] },
+      usage: { inputTokens: 10, outputTokens: 5 },
+    });
+    await expect(
+      fixDraftRules({ draftId: DRAFT, brandId: BRAND, input: input() }),
+    ).resolves.toEqual({ count: 0, batchId: null });
   });
 
   it('refuses a published draft, or one whose latest batch is still open, before charging', async () => {

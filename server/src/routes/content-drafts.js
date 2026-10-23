@@ -129,4 +129,45 @@ router.post('/:draftId/write', async (req, res) => {
   }
 });
 
+/**
+ * POST /api/content-drafts/:draftId/rewrite
+ * Body: as /write ({ brandId, sources, rules, textRules, locked }).
+ * Rewrite the page to these rules: the agent rewrites the whole page in the
+ * background and leaves it as ONE suggestion to compare and accept or
+ * reject. Answers 202 { started: true } at once; 409 as /write (not_draft,
+ * writing, org_writing, open_suggestions); 422 when the page has no text
+ * (empty) or is too long to send whole (too_long).
+ */
+router.post('/:draftId/rewrite', async (req, res) => {
+  const draftId = z.guid().safeParse(req.params.draftId);
+  const parsed = writeBody.safeParse(req.body ?? {});
+  if (!draftId.success || !parsed.success) {
+    return res.status(400).json({ error: 'Invalid request', code: 'invalid' });
+  }
+  const { brandId, ...input } = parsed.data;
+  try {
+    await assertBrandAccess(brandId, req.user.id);
+    const result = await startDraftWriting({
+      draftId: draftId.data,
+      brandId,
+      input,
+      rewrite: true,
+    });
+    return res.status(202).json(result);
+  } catch (err) {
+    if (err instanceof PlanLimitError) {
+      // 402: no active subscription, not a spent budget.
+      const code = err.statusCode === 402 ? 'no_subscription' : 'ai_budget';
+      return res.status(err.statusCode).json({ error: err.message, code });
+    }
+    if (ERROR_CODES[err?.status]) {
+      return res
+        .status(err.status)
+        .json({ error: err.message, code: err.code ?? ERROR_CODES[err.status] });
+    }
+    req.log.error({ err }, 'content draft agent rewrite error');
+    return res.status(502).json({ error: 'The agent could not start', code: 'failed' });
+  }
+});
+
 export default router;

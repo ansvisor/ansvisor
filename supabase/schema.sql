@@ -37052,3 +37052,501 @@ revoke execute on function public.refresh_mention_terms_daily(uuid, date, date)
 comment on table public.mentions_perception_snapshots is
   'The Perception tab''s default view (MS-09) per brand and window (7, 30 or 90 days, every platform and region, no topic or search), as mentions_perception returns it. Written by refresh_mentions_perception_snapshot; set aside when the brand''s competitors or name change, or its Perception rollups are rebuilt (00246).';
 
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00247_content_page_suggestions.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00247: a whole-page suggestion (Content Editor, Rewrite the page to these rules)
+-- ============================================================================
+-- Apply rules with Agent leaves at most 8 small edits a run, which can't
+-- bring a 19,000-character page to an 8,000-character Length (about 2% a
+-- run on prod, 2026-10-23). Rewrite the page to these rules has the Content
+-- Agent rewrite the whole page in one call, left as ONE suggestion the
+-- person compares with their page and accepts or rejects:
+--
+--   * kind 'page': after_text is the whole page's HTML, up to 500,000
+--     characters (the editor's body limit), not 20,000;
+--   * before_html: the page as the agent read it, which the editor checks
+--     the page against before applying it and puts back on Undo. A page
+--     suggestion has it; the others don't;
+--   * before_text stays '' for it, as for an insert.
+--
+-- Rows are still written by the server only; the decide RPC (00217) and
+-- RLS are unchanged.
+--
+-- content_drafts.agent_run says which run holds the draft ('write' or
+-- 'rewrite'), so every device knows a failed rewrite from a failed Start;
+-- 00219's guard keeps it server-set.
+
+alter table public.content_draft_suggestions
+  add column if not exists before_html text;
+
+alter table public.content_draft_suggestions
+  drop constraint if exists content_draft_suggestions_kind_check,
+  add constraint content_draft_suggestions_kind_check
+    check (kind in ('replace', 'insert', 'page'));
+
+alter table public.content_draft_suggestions
+  drop constraint if exists content_draft_suggestions_after_text_check,
+  add constraint content_draft_suggestions_after_text_check
+    check (char_length(after_text) between 1 and case when kind = 'page' then 500000 else 20000 end);
+
+alter table public.content_draft_suggestions
+  drop constraint if exists content_draft_suggestions_check,
+  add constraint content_draft_suggestions_check
+    check (kind in ('insert', 'page') or before_text <> '');
+
+alter table public.content_draft_suggestions
+  drop constraint if exists content_draft_suggestions_before_html_check,
+  add constraint content_draft_suggestions_before_html_check
+    check ((kind = 'page') = (before_html is not null)
+           and char_length(coalesce(before_html, '')) <= 500000);
+
+comment on column public.content_draft_suggestions.before_html is
+  'A page suggestion''s page as the agent read it (kind ''page'', 00247): checked against the editor''s page before applying, and put back on Undo. Null for the others.';
+
+-- Which run holds the draft, or last held it (agent_state): Start with Agent
+-- ('write': a new page, or suggestions on a live one) or Rewrite the page to
+-- these rules ('rewrite'). The editor reads it to say which run failed and to
+-- try that one again, on any device: a failed rewrite tried again is a
+-- rewrite to compare, never a new page over the current one. Server-set,
+-- with agent_state.
+alter table public.content_drafts
+  add column if not exists agent_run text;
+
+alter table public.content_drafts
+  drop constraint if exists content_drafts_agent_run_check,
+  add constraint content_drafts_agent_run_check
+    check (agent_run is null or agent_run in ('write', 'rewrite'));
+
+comment on column public.content_drafts.agent_run is
+  'Content Editor: the run that holds the draft or last held it (00247): ''write'' (Start with Agent) or ''rewrite'' (Rewrite the page to these rules). Server-set, with agent_state.';
+
+-- 00219's guard, with agent_run among the columns only the server sets.
+create or replace function public.guard_content_draft_server_columns()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
+begin
+  -- A role that bypasses RLS is server-side (service role, migrations).
+  if (select rolbypassrls from pg_catalog.pg_roles where rolname = current_user) then
+    return new;
+  end if;
+
+  if tg_op = 'INSERT' then
+    if new.score_before is not null or new.score_after is not null then
+      raise exception 'content draft scores are set server-side'
+        using errcode = '42501';
+    end if;
+    if new.action_id is not null then
+      raise exception 'content draft action is set server-side'
+        using errcode = '42501';
+    end if;
+    if new.agent_state is not null or new.agent_state_at is not null
+       or new.agent_run is not null then
+      raise exception 'content draft agent state is set server-side'
+        using errcode = '42501';
+    end if;
+  elsif new.brand_id is distinct from old.brand_id
+     or new.author is distinct from old.author
+     or new.created_by is distinct from old.created_by
+     or new.created_at is distinct from old.created_at
+     or new.score_before is distinct from old.score_before
+     or new.score_after is distinct from old.score_after
+     or new.action_id is distinct from old.action_id
+     or new.agent_state is distinct from old.agent_state
+     or new.agent_state_at is distinct from old.agent_state_at
+     or new.agent_run is distinct from old.agent_run
+  then
+    raise exception 'content draft column is managed server-side'
+      using errcode = '42501';
+  end if;
+  return new;
+end;
+$$;
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00248_content_suggestion_sources.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00248: the sources an agent's suggestion was written from
+-- ============================================================================
+-- Content Editor v1.1, CE-033: the Content Agent writes from the sources the
+-- Sources tab keeps (prompts, fan-outs, cited pages, Search Console queries),
+-- numbered, and says which ones each suggestion used and the words each one
+-- supports. The editor shows them as "Based on" chips under the suggestion
+-- and ¹ ² marks on its words; a chip opens its source in Sources. A number
+-- the agent adds with no source is not kept (content-sources.js).
+--
+-- sources: [{ "kind", "ref", "label" }], kind one of prompt, fanout,
+-- cited_page, gsc_query; ref as the Sources tab keys its row (a prompt's id,
+-- a normalized query, a page's address).
+--
+-- source_marks: [{ "start", "end", "source" }], offsets into the words a
+-- replace puts in (after_text) or an insert's HTML read as text; source is an
+-- index into sources. A page rewritten whole names its sources, with no marks.
+alter table public.content_draft_suggestions
+  add column if not exists sources jsonb
+    check (
+      sources is null
+      or (
+        jsonb_typeof(sources) = 'array'
+        and jsonb_array_length(sources) between 1 and 8
+      )
+    ),
+  add column if not exists source_marks jsonb
+    check (
+      source_marks is null
+      or (
+        kind in ('replace', 'insert')
+        and sources is not null
+        and jsonb_typeof(source_marks) = 'array'
+        and jsonb_array_length(source_marks) between 1 and 12
+      )
+    );
+
+comment on column public.content_draft_suggestions.sources is
+  'The sources an agent suggestion was written from: [{ "kind", "ref", "label" }] (00248).';
+comment on column public.content_draft_suggestions.source_marks is
+  'The words each source supports: [{ "start", "end", "source" }], offsets into after_text (a replace) or an insert''s text, source an index into sources (00248).';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00250_traffic_anonymous_visitors.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00250: the tracking snippet's visitors, without their IP addresses (GDPR)
+-- ============================================================================
+-- ai_traffic_logs kept each AI-referred visitor's IP address. It was only
+-- needed to tell one visitor's pageviews from another's for half an hour
+-- (a visit, 00172) and to find the pageview a not-found title belongs to
+-- (00200).
+--
+-- The server now stores a visitor key instead (server/src/lib/visitor-key.js):
+-- a one-way hash of the IP address, the brand and a salt that changes every
+-- day. Each day's salt is made here on first use and deleted after two days,
+-- so once it is gone nothing links its keys to an address, and a visitor's
+-- days can't be joined. Visits are grouped by the key and the user agent, as
+-- they were by the IP address; a visit across midnight (UTC) counts as two.
+--
+-- The IP addresses already stored are erased. The visits they grouped are
+-- kept: each pageview's visit_of was decided when it was stored.
+
+create table if not exists public.traffic_daily_salts (
+  day  date primary key,
+  salt text not null
+);
+
+comment on table public.traffic_daily_salts is
+  'One random salt per UTC day for the tracking snippet''s visitor keys (00250). Kept two days, then deleted by traffic_salt.';
+
+alter table public.traffic_daily_salts enable row level security;
+revoke all on table public.traffic_daily_salts from anon, authenticated;
+grant all on table public.traffic_daily_salts to service_role;
+
+-- The salt of p_day, made on first use; salts older than the day before
+-- are deleted on the way.
+create or replace function public.traffic_salt(p_day date)
+returns text
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_salt text;
+begin
+  delete from public.traffic_daily_salts where day < p_day - 1;
+
+  insert into public.traffic_daily_salts (day, salt)
+  values (p_day, replace(gen_random_uuid()::text || gen_random_uuid()::text, '-', ''))
+  on conflict (day) do nothing;
+
+  select salt into v_salt from public.traffic_daily_salts where day = p_day;
+  return v_salt;
+end;
+$$;
+
+revoke all on function public.traffic_salt(date) from public, anon, authenticated;
+grant execute on function public.traffic_salt(date) to service_role;
+
+alter table public.ai_traffic_logs
+  add column if not exists visitor_key text;
+
+comment on column public.ai_traffic_logs.visitor_key is
+  'A one-way key for the visitor, from their IP address, the brand and the day''s salt (00250); groups a visit''s pageviews. The IP address itself is not stored.';
+
+comment on column public.ai_traffic_logs.ip_address is
+  'No longer written (00250): the IP address is not stored. Null on every row.';
+
+update public.ai_traffic_logs
+set ip_address = null
+where ip_address is not null;
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00251_chatgpt_shopping_visits.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00251: ChatGPT Shopping visits, from feed links tagged utm_medium=feed (#1283)
+-- ============================================================================
+-- A product URL in a merchant's feed tagged utm_source=chatgpt.com and
+-- utm_medium=feed tells a visit from a ChatGPT Shopping product card apart
+-- from one through a ChatGPT answer. Until now both were ChatGPT and nothing
+-- read the medium. The AI source list (server/src/lib/ai-sources.json,
+-- version 3) gives ChatGPT a shopping surface: utm_medium = feed.
+--
+--   * ai_traffic_logs.source_surface: 'shopping' for a snippet visit from
+--     ChatGPT whose landing URL's utm_medium is feed. The server decides it
+--     from the URL it stores, so a cached older snippet's visits are marked
+--     too. The visit stays source_platform = 'chatgpt.com', so ChatGPT's
+--     totals don't change. The rows stored before are marked below, once,
+--     from their URL.
+--   * ga_ai_traffic_stats.medium and surface: GA4's session medium, which
+--     the sync now reads, and the surface it marks, from the list as for the
+--     snippet. One source can bring sessions of several mediums to one page
+--     on one day, so the medium is part of a row's key. Rows synced before
+--     have none: the sync replaces them as it re-reads their days (the last
+--     few each day; all of them with backfill-ga-ai-history.js).
+--   * ai_traffic_merged (00176) also returns the visits by platform and
+--     surface. Its platforms keep counting every visit, surfaces included.
+--   * ga_platform_value (00177) also returns each platform's figures by
+--     surface. Its platform rows keep counting every session, as before.
+--
+-- Deploy the server right after applying this: the running server's Google
+-- Analytics sync upserts on the old key, which is gone, so its brands fail
+-- to sync until then (the next run re-reads the last few days). The new
+-- server writes source_surface, so it must not run before this.
+
+-- ─── The snippet's visits ───────────────────────────────────────────────────
+
+alter table public.ai_traffic_logs
+  add column if not exists source_surface text
+    constraint ai_traffic_logs_source_surface_check
+      check (source_surface is null or source_surface in ('shopping'));
+
+comment on column public.ai_traffic_logs.source_surface is
+  'The part of the AI source the visit came through, from the AI source list (server/src/lib/ai-sources.json): shopping for a ChatGPT Shopping product card (a ChatGPT visit whose landing URL has utm_medium=feed). Null for the source''s ordinary links. The visit still counts under source_platform (00251).';
+
+-- Visits stored before: a ChatGPT visit whose landing URL's first
+-- utm_medium parameter (its name in any case) is feed, in any case, as the
+-- server reads a new visit's URL (landingMedium in ai-sources.js).
+update public.ai_traffic_logs l
+set source_surface = 'shopping'
+where l.source_platform = 'chatgpt.com'
+  and l.source_surface is null
+  and l.url ilike '%utm_medium%'
+  and (
+    select lower(substring(p.pair from '=(.*)$'))
+    from regexp_split_to_table(substring(l.url from '\?([^#]*)'), '&') with ordinality as p (pair, n)
+    where lower(split_part(p.pair, '=', 1)) = 'utm_medium'
+    order by p.n
+    limit 1
+  ) = 'feed';
+
+-- ─── Google Analytics' sessions ─────────────────────────────────────────────
+
+alter table public.ga_ai_traffic_stats
+  add column if not exists medium text;
+
+alter table public.ga_ai_traffic_stats
+  add column if not exists surface text
+    constraint ga_ai_traffic_stats_surface_check
+      check (surface is null or surface in ('shopping'));
+
+comment on column public.ga_ai_traffic_stats.medium is
+  'GA4''s session medium, as reported (feed, referral, (none), …). Part of the row''s key. Null on rows synced before the sync read it (00251), which a re-read of their day replaces.';
+
+comment on column public.ga_ai_traffic_stats.surface is
+  'The part of the platform the sessions came through, from the AI source list (server/src/lib/ai-sources.json): shopping for ChatGPT Shopping (chatgpt.com with medium feed). Null otherwise. The sessions still count under platform (00251).';
+
+-- The key adds the medium. A null medium is one key, not many, so the rows
+-- from before stay one per (date, source, entry URL) until they're replaced.
+alter table public.ga_ai_traffic_stats
+  drop constraint if exists ga_ai_traffic_stats_brand_id_date_source_landing_page_query_key;
+
+alter table public.ga_ai_traffic_stats
+  drop constraint if exists ga_ai_traffic_stats_brand_date_source_medium_page_key;
+
+alter table public.ga_ai_traffic_stats
+  add constraint ga_ai_traffic_stats_brand_date_source_medium_page_key
+    unique nulls not distinct (brand_id, date, source, medium, landing_page_query);
+
+-- ─── The AI Traffic page's visits, with their surfaces ──────────────────────
+
+create or replace function public.ai_traffic_merged(
+  p_brand_id uuid,
+  p_from timestamptz,
+  p_to timestamptz,
+  p_to_inclusive boolean default true,
+  p_analytics boolean default true
+)
+returns jsonb
+language sql
+stable
+security invoker
+set search_path to 'public'
+as $$
+  with bounds as (
+    select
+      -- The first whole UTC day inside the window.
+      case
+        when p_from is null then null
+        when (p_from at time zone 'utc')::time = time '00:00' then (p_from at time zone 'utc')::date
+        else (p_from at time zone 'utc')::date + 1
+      end as first_day,
+      coalesce((p_to at time zone 'utc')::date, (now() at time zone 'utc')::date) as last_day
+  ),
+  snippet as (
+    select
+      (l.created_at at time zone 'utc')::date as day,
+      coalesce(nullif(l.source_platform, ''), 'unknown') as platform,
+      l.source_surface as surface,
+      public.normalize_page_path(l.url) as page
+    from public.ai_traffic_logs l
+    where l.brand_id = p_brand_id
+      and l.visit_of is null
+      and l.created_at >= coalesce(p_from, '-infinity'::timestamptz)
+      and (p_to is null or l.created_at < p_to or (p_to_inclusive and l.created_at = p_to))
+  ),
+  -- Days the snippet was active, over the whole day, not just the window.
+  snippet_days as (
+    select distinct (l.created_at at time zone 'utc')::date as day
+    from public.ai_traffic_logs l, bounds b
+    where p_analytics
+      and l.brand_id = p_brand_id
+      and l.visit_of is null
+      and l.created_at >= coalesce((b.first_day::timestamp at time zone 'utc'), '-infinity'::timestamptz)
+      and l.created_at < ((b.last_day + 1)::timestamp at time zone 'utc')
+  ),
+  analytics as (
+    select
+      g.date as day,
+      coalesce(g.platform, g.source) as platform,
+      g.surface,
+      public.normalize_page_path(g.landing_page) as page,
+      g.sessions as visits
+    from public.ga_ai_traffic_stats g, bounds b
+    where p_analytics
+      and g.brand_id = p_brand_id
+      and g.sessions > 0
+      and g.date >= coalesce(b.first_day, '-infinity'::date)
+      and g.date <= b.last_day
+      and not exists (select 1 from snippet_days s where s.day = g.date)
+  ),
+  merged as (
+    select day, platform, surface, page, 1::bigint as visits, 'snippet' as origin from snippet
+    union all
+    select day, platform, surface, page, visits::bigint, 'analytics' from analytics
+  )
+  select jsonb_build_object(
+    'visits', (select coalesce(sum(visits), 0) from merged),
+    'pageviews', (
+      select count(*)
+      from public.ai_traffic_logs l
+      where l.brand_id = p_brand_id
+        and l.created_at >= coalesce(p_from, '-infinity'::timestamptz)
+        and (p_to is null or l.created_at < p_to or (p_to_inclusive and l.created_at = p_to))
+    ),
+    'analytics_days', (
+      select coalesce(jsonb_agg(distinct day order by day), '[]'::jsonb) from analytics
+    ),
+    'platforms', (
+      select coalesce(jsonb_agg(jsonb_build_object('platform', platform, 'visits', visits) order by visits desc, platform), '[]'::jsonb)
+      from (select platform, sum(visits) as visits from merged group by platform) t
+    ),
+    -- Part of their platform's visits above, never added to them.
+    'surfaces', (
+      select coalesce(jsonb_agg(jsonb_build_object('platform', platform, 'surface', surface, 'visits', visits) order by visits desc, platform, surface), '[]'::jsonb)
+      from (
+        select platform, surface, sum(visits) as visits
+        from merged
+        where surface is not null
+        group by platform, surface
+      ) t
+    ),
+    'pages', (
+      select coalesce(jsonb_agg(jsonb_build_object('page', page, 'visits', visits) order by visits desc, page), '[]'::jsonb)
+      from (select page, sum(visits) as visits from merged group by page) t
+    ),
+    'days', (
+      select coalesce(jsonb_agg(jsonb_build_object('day', day, 'platform', platform, 'visits', visits) order by day, platform), '[]'::jsonb)
+      from (select day, platform, sum(visits) as visits from merged group by day, platform) t
+    )
+  );
+$$;
+
+revoke all on function public.ai_traffic_merged(uuid, timestamptz, timestamptz, boolean, boolean)
+  from public, anon;
+grant execute on function public.ai_traffic_merged(uuid, timestamptz, timestamptz, boolean, boolean)
+  to authenticated, service_role;
+
+comment on function public.ai_traffic_merged(uuid, timestamptz, timestamptz, boolean, boolean) is
+  'AI Traffic (AT-004, spec §5.2): AI-referred visits for one brand in a window, from the tracking snippet on days it was active and from Google Analytics on other whole days, never summed. Returns visits, the snippet''s pageviews, the days Analytics filled, and visits by platform, by platform and surface (ChatGPT Shopping, 00251; part of the platform''s visits), page and day. Security invoker: RLS decides the brand.';
+
+-- ─── Per AI platform, with its surfaces, for the Referrals by Platform table ─
+
+-- A new column in the result: dropped and made again, with its grants.
+drop function if exists public.ga_platform_value(uuid, date, date);
+
+create function public.ga_platform_value(
+  p_brand_id uuid,
+  p_since date,
+  p_until date
+)
+returns table (
+  platform text,
+  sessions bigint,
+  engaged_sessions bigint,
+  key_events bigint,
+  key_event_sessions bigint,
+  surfaces jsonb
+)
+language sql
+stable
+security invoker
+set search_path to 'public'
+as $$
+  with by_surface as (
+    select
+      coalesce(gat.platform, gat.source) as platform,
+      gat.surface,
+      coalesce(sum(gat.sessions), 0)::bigint as sessions,
+      coalesce(sum(gat.engaged_sessions), 0)::bigint as engaged_sessions,
+      coalesce(sum(gat.key_events), 0)::bigint as key_events,
+      coalesce(sum(gat.key_event_sessions), 0)::bigint as key_event_sessions
+    from public.ga_ai_traffic_stats gat
+    where gat.brand_id = p_brand_id
+      and gat.date >= coalesce(p_since, '-infinity'::date)
+      and gat.date <= p_until
+    group by 1, 2
+  )
+  select
+    s.platform,
+    sum(s.sessions)::bigint,
+    sum(s.engaged_sessions)::bigint,
+    sum(s.key_events)::bigint,
+    sum(s.key_event_sessions)::bigint,
+    coalesce(
+      jsonb_agg(
+        jsonb_build_object(
+          'surface', s.surface,
+          'sessions', s.sessions,
+          'engaged_sessions', s.engaged_sessions,
+          'key_events', s.key_events,
+          'key_event_sessions', s.key_event_sessions
+        )
+        order by s.surface
+      ) filter (where s.surface is not null),
+      '[]'::jsonb
+    )
+  from by_surface s
+  group by s.platform;
+$$;
+
+revoke all on function public.ga_platform_value(uuid, date, date) from public, anon;
+grant execute on function public.ga_platform_value(uuid, date, date) to authenticated, service_role;
+
+comment on function public.ga_platform_value(uuid, date, date) is
+  'AI Traffic (AT-005): Google Analytics'' sessions, engaged sessions, key events and sessions with a key event per AI platform, and the same per surface of the platform (ChatGPT Shopping, 00251; part of the platform''s figures), for one brand between two days (p_since null = from the start). Security invoker: RLS decides the brand.';
+
+notify pgrst, 'reload schema';
+

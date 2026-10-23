@@ -110,12 +110,17 @@ afterEach(() => {
 describe('the Brief tab', () => {
   it('shows the page, the brief and each H2 with the fan-out it answers', async () => {
     await render({ status: 'ready', brief });
+    // The card first: the brief is there, so Rebuild brief, the secondary button.
+    expect(container.textContent).toContain('Brief ready · 2 H2s');
+    expect(button('Rebuild brief').className).not.toContain('bg-primary');
+    expect(button('What Run Agent does')).toBeDefined();
     expect(fields()).toEqual({
       'Page type': 'Buying guide',
       'Target URL': '/guides/espresso',
       Goal: 'Help home baristas pick a machine',
       Audience: 'First-time espresso buyers',
-      Length: '3,000 characters · from the rules',
+      // Characters first, as rules count; about as many words next to them.
+      Length: '3,000 characters · ~500 wordsFrom the rules',
     });
     const sections = [...container.querySelectorAll('ol > li')].map((li) => li.textContent);
     expect(sections).toEqual([
@@ -125,41 +130,103 @@ describe('the Brief tab', () => {
     expect(container.textContent).toContain('espresso machinegrinder');
     expect(container.textContent).toContain('Built from 7 sources');
 
-    await act(async () => button('Rebuild outline').click());
+    await act(async () => button('Rebuild brief').click());
     expect(onRebuild).toHaveBeenCalled();
   });
 
   it('asks before rebuilding a brief the person edited', async () => {
     await render({ status: 'ready', brief: { ...brief, origin: 'edit' } });
-    await act(async () => button('Rebuild outline').click());
+    await act(async () => button('Rebuild brief').click());
     expect(onRebuild).not.toHaveBeenCalled();
     expect(container.querySelector('[role="alert"]')!.textContent).toContain(
-      'Rebuild outline writes a new brief over the one you edited.',
+      'Rebuild brief writes a new brief over the one you edited.',
     );
     await act(async () => button('Keep my brief').click());
     expect(container.querySelector('[role="alert"]')).toBeNull();
     expect(onRebuild).not.toHaveBeenCalled();
 
-    await act(async () => button('Rebuild outline').click());
+    await act(async () => button('Rebuild brief').click());
     await act(async () => button('Rebuild anyway').click());
     expect(onRebuild).toHaveBeenCalledTimes(1);
   });
 
-  it('offers to build a brief for a new page without one', async () => {
+  it('offers Run Agent for a new page without a brief, or H2s added by hand', async () => {
     await render(
       { status: 'ready', brief: null },
       { pageType: 'product_page', sourceUrl: null, length: 1200 },
     );
+    expect(container.textContent).toContain('No brief yetGoal, audience and outline are empty.');
     expect(fields()).toMatchObject({
       'Page type': 'Product page',
       'Target URL': 'A new page',
-      Goal: '—',
-      Length: '1,200 characters · from the rules',
+      Goal: 'Not set yet',
+      Audience: 'Not set yet',
+      Length: '1,200 characters · ~200 wordsFrom the rules',
     });
-    expect(container.textContent).toContain('No outline yet.');
-    expect(button('Edit brief')).toBeUndefined();
-    await act(async () => button('Build brief').click());
+    expect(container.textContent).toContain('Empty. Run Agent to draft one, or add H2s yourself.');
+    // Run Agent is the black primary while there's nothing to rebuild.
+    expect(button('Run Agent').className).toContain('bg-primary');
+    await act(async () => button('Run Agent').click());
     expect(onRebuild).toHaveBeenCalled();
+
+    // Or the person writes the H2s.
+    await act(async () => button('Edit brief').click());
+    expect(container.querySelectorAll('input[aria-label$="heading"]')).toHaveLength(0);
+    expect(button('Add section')).toBeDefined();
+  });
+
+  it('asks right under the card, before rebuilding an edited brief', async () => {
+    await render({ status: 'ready', brief: { ...brief, origin: 'edit' } });
+    await act(async () => button('Rebuild brief').click());
+    // The question sits with the button that asked, before the page type and outline.
+    const alert = container.querySelector('[role="alert"]')!;
+    expect(
+      alert.compareDocumentPosition(container.querySelector('dl')!) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+
+  it('says a brief with a goal but no H2s yet can be rebuilt', async () => {
+    await render({ status: 'ready', brief: { ...brief, outline: [] } });
+    expect(container.textContent).toContain('Brief ready · no H2s yet');
+    expect(container.textContent).toContain(
+      'No H2s yet. Rebuild brief to draft them, or add H2s yourself.',
+    );
+  });
+
+  it('saves H2s added by hand on a draft without a brief', async () => {
+    saveDraftBrief.mockImplementation(async (_id, next: DraftBrief) => ({ ...next }));
+    await render({ status: 'ready', brief: null });
+    await act(async () => button('Edit brief').click());
+    await act(async () => button('Add section').click());
+    const heading = container.querySelector<HTMLInputElement>('input[aria-label$="heading"]')!;
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(
+        heading,
+        'What pipeline forecasting is',
+      );
+      heading.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    await act(async () => button('Save brief').click());
+    expect(saveDraftBrief).toHaveBeenCalledWith(
+      'd1',
+      expect.objectContaining({
+        goal: '',
+        audience: '',
+        outline: [expect.objectContaining({ heading: 'What pipeline forecasting is' })],
+      }),
+    );
+    expect(onSaved).toHaveBeenCalled();
+  });
+
+  it('runs the agent without asking over an edited brief that is still empty', async () => {
+    await render({
+      status: 'ready',
+      brief: { ...brief, goal: '', audience: '', outline: [], origin: 'edit' },
+    });
+    await act(async () => button('Run Agent').click());
+    expect(container.querySelector('[role="alert"]')).toBeNull();
+    expect(onRebuild).toHaveBeenCalledTimes(1);
   });
 
   it('says where an opportunity’s brief comes from', async () => {
@@ -248,7 +315,10 @@ describe('the Brief tab', () => {
     );
     const suggest = button('Suggest changes from brief');
     expect(suggest.disabled).toBe(true);
-    expect(suggest.title).toBe('Accept or reject the open suggestions first.');
+    // Why, written under the button: not only on hover (v1.1 CE-031).
+    expect(suggest.parentElement!.textContent).toContain(
+      'Accept or reject the open suggestions first.',
+    );
 
     await render({ status: 'ready', brief }, { rewrite: { run, running: false, blocked: null } });
     await act(async () => button('Suggest changes from brief').click());

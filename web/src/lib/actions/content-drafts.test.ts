@@ -55,7 +55,17 @@ vi.mock('@/lib/supabase/server', () => ({
         gte: (col: string, v: unknown) => (call.filters.push(['gte', col, v]), chain),
         or: (v: string) => (call.filters.push(['or', v, null]), chain),
         order: () => chain,
-        limit: async () => ({ data: list, error: null }),
+        // The list, by its batch when one is asked for; the first row alone
+        // when the read is for one (the latest batch).
+        limit: () => {
+          const batch = call.filters.find(([op, col]) => op === 'eq' && col === 'batch_id');
+          const rows = batch
+            ? list.filter((r) => (r as { batch_id?: unknown }).batch_id === batch[2])
+            : list;
+          return Object.assign(Promise.resolve({ data: rows, error: null }), {
+            maybeSingle: async () => ({ data: rows[0] ?? null, error: null }),
+          });
+        },
         update: (value: unknown) => ((call.op = 'update'), (call.value = value), chain),
         insert: (value: unknown) => ((call.op = 'insert'), (call.value = value), chain),
         maybeSingle: async () => result(),
@@ -573,11 +583,68 @@ describe('agent suggestions', () => {
       beforeText: 'very accurate',
       afterText: 'shown per team',
       afterLinks: null,
+      beforeHtml: null,
       reason: 'answer a fan-out',
       ruleKeys: ['dated'],
       status: 'open',
+      // When the run left it, for "Last used by Content Agent".
+      createdAt: '2026-10-21T10:00:00Z',
+      sources: null,
+      sourceMarks: null,
     });
     expect(calls[0].filters).toContainEqual(['eq', 'draft_id', DRAFT]);
+    // The latest batch is found first; only its rows are read whole.
+    expect(calls[1].filters).toContainEqual(['eq', 'batch_id', 'new']);
+  });
+
+  it('reads none for a draft the agent never suggested on', async () => {
+    list = [];
+    await expect(getDraftSuggestions(DRAFT)).resolves.toEqual([]);
+    expect(calls).toHaveLength(1);
+  });
+
+  it('reads what a suggestion was written from, and only marks it can show (00248)', async () => {
+    list = [
+      row({
+        after_text: 'shown per team in 2026',
+        sources: [
+          { kind: 'fanout', ref: 'forecast per team', label: 'Forecast per team' },
+          { kind: 'made-up', ref: 'x', label: 'x' },
+          { kind: 'gsc_query', ref: '', label: 'empty' },
+        ],
+        source_marks: [
+          { start: 0, end: 5, source: 0 },
+          { start: 3, end: 8, source: 0 },
+          { start: 18, end: 22, source: 4 },
+          { start: 18, end: 99, source: 0 },
+        ],
+      }),
+    ];
+    const [read] = await getDraftSuggestions(DRAFT);
+    expect(read.sources).toEqual([
+      { kind: 'fanout', ref: 'forecast per team', label: 'Forecast per team' },
+    ]);
+    // Overlapping, out of range or to a source it doesn't have: left out.
+    expect(read.sourceMarks).toEqual([{ start: 0, end: 5, source: 0 }]);
+  });
+
+  it('reads a whole page rewritten, with the page the agent read (00247)', async () => {
+    list = [
+      row({
+        kind: 'page',
+        before_text: '',
+        before_html: '<h1>Old</h1><p>Old page.</p>',
+        after_text: '<h1>New</h1><p>New page.</p>',
+        after_links: [{ start: 0, end: 3, href: 'https://acme.example' }],
+      }),
+    ];
+    const [read] = await getDraftSuggestions(DRAFT);
+    expect(read).toMatchObject({
+      kind: 'page',
+      beforeHtml: '<h1>Old</h1><p>Old page.</p>',
+      afterText: '<h1>New</h1><p>New page.</p>',
+      afterLinks: null,
+    });
   });
 
   it('reads a replace’s links, keeping only safe ones inside its words (00240)', async () => {

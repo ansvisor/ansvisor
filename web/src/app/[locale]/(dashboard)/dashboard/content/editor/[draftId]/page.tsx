@@ -91,12 +91,13 @@ export default function ContentEditorPage() {
           title={current.draft.title}
           method={current.draft.method}
           since={current.draft.agentSince}
+          rewrite={current.draft.agentRun === 'rewrite'}
         />
       ) : current.draft ? (
         <DraftEditor
           key={current.draft.id}
           draft={current.draft}
-          onAgentStarted={() =>
+          onAgentStarted={(run) =>
             setRead((prev) =>
               prev?.draft
                 ? {
@@ -105,6 +106,7 @@ export default function ContentEditorPage() {
                       ...prev.draft,
                       agentState: 'writing',
                       agentSince: new Date().toISOString(),
+                      agentRun: run,
                     },
                   }
                 : prev,

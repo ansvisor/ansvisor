@@ -98,6 +98,155 @@ afterEach(() => {
 });
 
 describe('the Rules tab', () => {
+  describe('Run Agent', () => {
+    const fix = () => ({ run: vi.fn(), running: false, blocked: null as string | null });
+    const show = async (props: Partial<Parameters<typeof RulesTab>[0]>, s = state()) =>
+      act(async () => {
+        root.render(
+          <NextIntlClientProvider locale="en" messages={messages}>
+            <RoleProvider role="admin">
+              <RulesTab state={s} siteType="b2b" draftPageType="feature_page" {...props} />
+            </RoleProvider>
+          </NextIntlClientProvider>,
+        );
+      });
+    const buttons = () => [...container.querySelectorAll('button')];
+    const main = () =>
+      buttons().find((b) => ['Run Agent', 'Rewrite page', 'Working…'].includes(b.textContent!))!;
+    const trigger = () =>
+      container.querySelector<HTMLButtonElement>('[aria-label="More ways to run the agent"]')!;
+    const items = () => [...document.body.querySelectorAll<HTMLElement>('[role="menuitemradio"]')];
+    const reason = () => container.querySelector('[role="status"]')!;
+    const openRules = () =>
+      state().rules.filter(({ rule, status }) => rule.on && status.state === 'bad');
+
+    it('opens with the open rules and one split button, recommending a rewrite far from Length', async () => {
+      const agentFix = fix();
+      const pageRewrite = fix();
+      await show({ agentFix, pageRewrite });
+      // The card first: what's open, the split button, then the ⓘ.
+      expect(
+        buttons()
+          .map((b) => b.getAttribute('aria-label') ?? b.textContent)
+          .slice(0, 3),
+      ).toEqual(['Run Agent', 'More ways to run the agent', 'What Run Agent does']);
+      const open = openRules();
+      expect(container.textContent).toContain(`${open.length} rules are not met`);
+      // The first three by name, then "…".
+      const names = open.slice(0, 3).map(({ rule }) => rule.key);
+      expect(names).toHaveLength(3);
+      expect(container.textContent).toMatch(/rules are not met[^,]+, [^,]+, [^…]+…/);
+      // 15,921 characters for a 3,000 Length.
+      expect(container.querySelector('[role="note"]')!.textContent).toBe(
+        'Recommended: the page is 15,921 characters for a Length of 3,000 (431% off). A rewrite gets there in one go.',
+      );
+      // Nothing in the way: the reason line is there for screen readers, empty.
+      expect(reason().textContent).toBe('');
+
+      // The main part runs the safe default: fix the open rules.
+      await act(async () => main().click());
+      expect(agentFix.run).toHaveBeenCalledTimes(1);
+      expect(pageRewrite.run).not.toHaveBeenCalled();
+
+      // ▾ offers both, Fix checked and the rewrite recommended here.
+      await act(async () => trigger().click());
+      expect(items().map((item) => [item.textContent, item.getAttribute('aria-checked')])).toEqual([
+        [`Fix open rules${open.length} rules · small, reviewable changesLess AI usage`, 'true'],
+        [
+          'Rewrite the whole pageRecommended · Every rule in “Feature page · Ansvisor default” · one new version, cited passages keptMore AI usage',
+          'false',
+        ],
+      ]);
+      // Picking the rewrite renames the button; once it runs, Fix is the default again.
+      await act(async () => items()[1].click());
+      expect(main().textContent).toBe('Rewrite page');
+      await act(async () => main().click());
+      expect(pageRewrite.run).toHaveBeenCalledTimes(1);
+      expect(main().textContent).toBe('Run Agent');
+    });
+
+    it('says why its choice waits under the card, for the choice picked', async () => {
+      const agentFix = {
+        ...fix(),
+        blocked: 'Review the open suggestions first, then run the agent.',
+      };
+      const pageRewrite = fix();
+      await show({ agentFix, pageRewrite });
+      expect(main().disabled).toBe(true);
+      expect(reason().textContent).toBe('Review the open suggestions first, then run the agent.');
+
+      // The rewrite isn't held up: picking it clears the reason.
+      await act(async () => trigger().click());
+      await act(async () => items()[1].click());
+      expect(main().textContent).toBe('Rewrite page');
+      expect(main().disabled).toBe(false);
+      expect(reason().textContent).toBe('');
+    });
+
+    it('shows the agent working, with ▾ closed until it is done', async () => {
+      await show({ agentFix: { ...fix(), running: true }, pageRewrite: fix() });
+      expect(main().textContent).toBe('Working…');
+      expect(main().disabled).toBe(true);
+      expect(trigger().disabled).toBe(true);
+    });
+
+    it('offers only the rewrite when the agent can fix none of the open rules', async () => {
+      // Only One H1 is open: Content Agent doesn't change heading levels.
+      const s = state();
+      const onlyH1 = {
+        ...s,
+        rules: s.rules.map((r) =>
+          r.rule.key === 'oneH1'
+            ? {
+                ...r,
+                rule: { ...r.rule, on: true },
+                status: { state: 'bad' as const, code: 'current' as const, count: 2 },
+              }
+            : r.status.state === 'bad'
+              ? { ...r, status: { state: 'ok' as const } }
+              : r,
+        ),
+      } as DraftRulesState;
+      await show({ agentFix: fix(), pageRewrite: fix() }, onlyH1);
+      expect(container.textContent).toContain('1 rule is not met');
+      expect(main().disabled).toBe(true);
+      expect(reason().textContent).toBe(
+        "Content Agent doesn't change heading levels: make the extra H1s H2s in the toolbar.",
+      );
+      await act(async () => trigger().click());
+      expect(items()[0].getAttribute('aria-disabled')).toBe('true');
+      // Nothing turned off is recommended, and the page is near Length: no rewrite advice.
+      expect(
+        items()
+          .map((item) => item.textContent)
+          .join(' '),
+      ).not.toContain('Recommended');
+    });
+
+    it('says all rules are met, with nothing to run', async () => {
+      const s = state();
+      const met = {
+        ...s,
+        rules: s.rules.map((r) =>
+          r.status.state === 'bad' ? { ...r, status: { state: 'ok' as const } } : r,
+        ),
+      } as DraftRulesState;
+      await show({ agentFix: fix(), pageRewrite: fix() }, met);
+      expect(container.textContent).toContain('All rules are met');
+      expect(main()).toBeUndefined();
+      expect(trigger()).toBeNull();
+    });
+
+    it('keeps Run Agent plain without a rewrite (a page ready or published)', async () => {
+      const agentFix = fix();
+      await show({ agentFix });
+      expect(trigger()).toBeNull();
+      expect(container.querySelector('[role="note"]')).toBeNull();
+      await act(async () => main().click());
+      expect(agentFix.run).toHaveBeenCalled();
+    });
+  });
+
   it('lists the page type’s rules, then the shared groups, each with its status', async () => {
     const s = state();
     await render(s);

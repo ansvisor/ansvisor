@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { asksMoreThanOne, growsPastLimit, headingLimit, suggestionLinks } from './suggestions';
+import {
+  asksMoreThanOne,
+  batchSources,
+  growsPastLimit,
+  headingLimit,
+  suggestionLinks,
+  suggestionSources,
+  type DraftSuggestion,
+} from './suggestions';
 
 /**
  * How long an agent's change may make a heading: an H1 up to 70 characters,
@@ -59,5 +67,48 @@ describe('suggestionLinks', () => {
     expect(suggestionLinks(null, 'x')).toBeNull();
     expect(suggestionLinks([], 'x')).toBeNull();
     expect(suggestionLinks([{ start: 0, end: 1 }], 'x')).toBeNull();
+  });
+});
+
+describe('a suggestion’s sources (00248, CE-033)', () => {
+  const fanout = { kind: 'fanout' as const, ref: 'best tracker', label: 'Best tracker' };
+  const page = {
+    kind: 'cited_page' as const,
+    ref: 'https://a.example/x',
+    label: 'https://a.example/x',
+  };
+
+  it('keeps the sources it can show, and marks within its words, renumbered', () => {
+    const odd = { kind: 'other', ref: 'x', label: 'x' };
+    // The unknown kind before them is left out: marks to 1 and 2 now point to 0 and 1.
+    expect(
+      suggestionSources(
+        [odd, fanout, { ...page, ref: '' }, page],
+        [
+          { start: 0, end: 4, source: 1 },
+          { start: 2, end: 6, source: 1 },
+          { start: 5, end: 12, source: 3 },
+          { start: 6, end: 99, source: 1 },
+          { start: 13, end: 14, source: 2 },
+        ],
+        'Best tracker here',
+      ),
+    ).toEqual({
+      sources: [fanout, page],
+      marks: [
+        { start: 0, end: 4, source: 0 },
+        { start: 5, end: 12, source: 1 },
+      ],
+    });
+    expect(suggestionSources(null, [{ start: 0, end: 1, source: 0 }], 'x')).toEqual({
+      sources: null,
+      marks: null,
+    });
+    expect(suggestionSources([], null, 'x')).toEqual({ sources: null, marks: null });
+  });
+
+  it('counts a batch’s sources once: "built from N of your sources"', () => {
+    const s = (sources: DraftSuggestion['sources']) => ({ sources }) as DraftSuggestion;
+    expect(batchSources([s([fanout, page]), s([fanout]), s(null)])).toEqual([fanout, page]);
   });
 });

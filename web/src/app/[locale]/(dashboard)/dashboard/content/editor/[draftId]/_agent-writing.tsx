@@ -47,11 +47,14 @@ export function AgentWriting({
   title,
   method,
   since,
+  rewrite = false,
 }: {
   title: string;
   method: DraftMethod;
   /** When the agent started (content_drafts.agent_state_at). */
   since: string | null;
+  /** Rewrite the page to these rules, as this tab started it. */
+  rewrite?: boolean;
 }) {
   const t = useTranslations('contentEditor.editor');
   const seconds = elapsedSeconds(since, useNow({ updateInterval: 1000 }));
@@ -96,7 +99,9 @@ export function AgentWriting({
                 ) : (
                   <Circle aria-hidden className="h-4 w-4 shrink-0 text-muted-foreground/60" />
                 )}
-                <span className="min-w-0 flex-1">{t(`agentWriting.steps.${method}.${step}`)}</span>
+                <span className="min-w-0 flex-1">
+                  {t(`agentWriting.steps.${rewrite ? 'rewrite' : method}.${step}`)}
+                </span>
                 {/* Hidden from screen readers: a status that reads out every second. */}
                 {i === WRITING && seconds !== null && (
                   <span aria-hidden className="shrink-0 text-xs text-muted-foreground tabular-nums">
@@ -112,7 +117,7 @@ export function AgentWriting({
             ) : (
               t('agentWriting.usual')
             )}{' '}
-            {t('agentWriting.leave')}
+            {rewrite ? t('agentWriting.leaveRewrite') : t('agentWriting.leave')}
           </p>
         </div>
       </div>

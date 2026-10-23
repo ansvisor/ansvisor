@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
-import { Bot, Loader2, Pencil, Plus, RefreshCw, Trash2 } from 'lucide-react';
+import { Bot, Loader2, Pencil, Plus, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -12,7 +12,10 @@ import { MAX_BRIEF_SECTIONS, builtFromCount, type DraftBrief } from '@/lib/conte
 import type { DraftMethod } from '@/lib/content/drafts';
 import { platformNames } from '@/lib/content/impact';
 import { pagePath } from '@/lib/content/overlap';
+import { wordsForLength } from '@/lib/content/rules';
 import { formatDateTime, formatNumber } from '@/lib/format';
+import { cn } from '@/lib/utils';
+import { RunCard } from './_run-card';
 
 /**
  * Rewrite from brief: the Content Agent writes the page again from the brief
@@ -33,12 +36,14 @@ export type BriefState =
   | { status: 'ready'; brief: DraftBrief | null };
 
 /**
- * The Brief tab (Content Editor CE-007, spec §10): the page type and target
- * address at the top, then the goal, audience and length, and the outline
- * with each H2's fan-out and platform. Rebuild outline writes it from the
- * sources kept; Edit brief changes it by hand. Until the draft has a brief,
- * the opportunity's brief it started from is shown. Rewrite from brief hands
- * the page to the Content Agent with it.
+ * The Brief segment (Content Editor CE-007, spec §10; v1.1 CE-030): a card
+ * saying whether there is a brief, with Run Agent to write it from the
+ * sources kept (Rebuild brief once there is one), then the page type and
+ * target address, the goal, audience and length (in characters, and about
+ * as many words), and the outline with each H2's fan-out and platform. Edit
+ * brief changes it by hand. Until the draft has a brief, the opportunity's
+ * brief it started from is shown. Rewrite from brief hands the page to the
+ * Content Agent with it.
  */
 export function BriefTab({
   draftId,
@@ -52,6 +57,7 @@ export function BriefTab({
   onRetry,
   onSaved,
   rewrite,
+  dataLine,
 }: {
   draftId: string;
   state: BriefState;
@@ -66,6 +72,8 @@ export function BriefTab({
   onSaved: (brief: DraftBrief) => void;
   /** Absent once the page is ready or published. */
   rewrite?: AgentRewrite;
+  /** "Uses your data", under Run Agent's card (v1.1 CE-032). */
+  dataLine?: React.ReactNode;
 }) {
   const t = useTranslations('contentEditor.editor.brief');
   const tTypes = useTranslations('contentEditor.pageTypes');
@@ -94,11 +102,11 @@ export function BriefTab({
   }
 
   const brief = state.brief;
-  if (editing && brief) {
+  if (editing) {
     return (
       <BriefEditor
         draftId={draftId}
-        brief={brief}
+        brief={brief ?? EMPTY_BRIEF}
         onCancel={() => setEditing(false)}
         onSaved={(saved) => {
           setEditing(false);
@@ -109,22 +117,77 @@ export function BriefTab({
   }
 
   const typeLabel = pageType && (tTypes.has(pageType) ? tTypes(pageType) : pageType);
+  // Nothing written yet: Run Agent writes it. Once it is, Rebuild brief.
+  const empty = !brief || (!brief.goal && !brief.audience && brief.outline.length === 0);
+  const rebuild = () => (brief?.origin === 'edit' && !empty ? setConfirming(true) : onRebuild());
 
   return (
     <div className="space-y-4 text-sm">
+      <RunCard
+        title={empty ? t('status.empty') : t('status.ready', { count: brief?.outline.length ?? 0 })}
+        detail={empty ? t('status.emptyDetail') : undefined}
+        action={
+          <Button
+            size="sm"
+            variant={empty ? 'default' : 'outline'}
+            className="shrink-0"
+            disabled={rebuilding || confirming}
+            onClick={rebuild}
+          >
+            {rebuilding && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+            {empty ? t('run') : t('rebuild')}
+          </Button>
+        }
+        info={t('info')}
+        data={dataLine}
+      >
+        <p className="text-[11px] text-muted-foreground">{t('usage')}</p>
+        {/* Under the card that asked, not past the outline. */}
+        {confirming && (
+          <div role="alert" className="space-y-2 rounded-md border px-3 py-2 text-xs">
+            <p>{t('rebuildEdited')}</p>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => {
+                  setConfirming(false);
+                  onRebuild();
+                }}
+              >
+                {t('rebuildAnyway')}
+              </Button>
+              <Button size="sm" variant="ghost" onClick={() => setConfirming(false)}>
+                {t('keepEdited')}
+              </Button>
+            </div>
+          </div>
+        )}
+      </RunCard>
+
       <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5 text-xs">
         <dt className="text-muted-foreground">{t('pageType')}</dt>
-        <dd>{typeLabel || t('notSet')}</dd>
+        <dd className={cn(!typeLabel && 'text-muted-foreground')}>{typeLabel || t('notSet')}</dd>
         <dt className="text-muted-foreground">{t('targetUrl')}</dt>
         <dd className="min-w-0 truncate" title={sourceUrl ?? undefined}>
           {sourceUrl ? pagePath(sourceUrl) : t('newPage')}
         </dd>
         <dt className="text-muted-foreground">{t('goal')}</dt>
-        <dd>{brief?.goal || '—'}</dd>
+        <dd className={cn(!brief?.goal && 'text-muted-foreground')}>
+          {brief?.goal || t('notSet')}
+        </dd>
         <dt className="text-muted-foreground">{t('audience')}</dt>
-        <dd>{brief?.audience || '—'}</dd>
+        <dd className={cn(!brief?.audience && 'text-muted-foreground')}>
+          {brief?.audience || t('notSet')}
+        </dd>
         <dt className="text-muted-foreground">{t('length')}</dt>
-        <dd>{t('lengthValue', { count: formatNumber(length) })}</dd>
+        <dd>
+          {t('lengthValue', {
+            count: formatNumber(length),
+            words: formatNumber(wordsForLength(length)),
+          })}
+          <span className="block text-muted-foreground">{t('lengthFrom')}</span>
+        </dd>
       </dl>
 
       {brief && brief.outline.length > 0 ? (
@@ -165,7 +228,7 @@ export function BriefTab({
         </section>
       ) : (
         <p className="rounded-lg border border-dashed px-3 py-2 text-xs text-muted-foreground">
-          {t('empty')}
+          {empty ? t('empty') : t('emptyOutline')}
         </p>
       )}
 
@@ -182,7 +245,7 @@ export function BriefTab({
         </section>
       )}
 
-      {brief && (
+      {brief && !empty && (
         <p className="text-[11px] text-muted-foreground">
           {brief.origin === 'opportunity'
             ? t('fromOpportunity')
@@ -217,68 +280,47 @@ export function BriefTab({
             </div>
           </div>
         ) : (
-          <Button
-            size="sm"
-            className="w-full"
-            disabled={rewrite.running || rewrite.blocked !== null || rebuilding}
-            title={rewrite.blocked ?? undefined}
-            onClick={() => setConfirmingRewrite(true)}
-          >
-            {rewrite.running ? (
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-            ) : (
-              <Bot className="h-3.5 w-3.5" />
-            )}
-            {t(`rewrite.button.${method}`)}
-          </Button>
-        ))}
-
-      {confirming && (
-        <div role="alert" className="space-y-2 rounded-md border px-3 py-2 text-xs">
-          <p>{t('rebuildEdited')}</p>
-          <div className="flex flex-wrap gap-2">
+          <div className="space-y-1.5">
             <Button
               size="sm"
-              variant="outline"
-              onClick={() => {
-                setConfirming(false);
-                onRebuild();
-              }}
+              className="w-full"
+              disabled={rewrite.running || rewrite.blocked !== null || rebuilding}
+              onClick={() => setConfirmingRewrite(true)}
             >
-              {t('rebuildAnyway')}
+              {rewrite.running ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Bot className="h-3.5 w-3.5" />
+              )}
+              {t(`rewrite.button.${method}`)}
             </Button>
-            <Button size="sm" variant="ghost" onClick={() => setConfirming(false)}>
-              {t('keepEdited')}
-            </Button>
+            {/* Why it waits, written out (v1.1 CE-031), not only on hover. */}
+            {!rewrite.running && rewrite.blocked && (
+              <p className="text-xs text-amber-700 dark:text-amber-400">{rewrite.blocked}</p>
+            )}
           </div>
-        </div>
-      )}
+        ))}
 
       <div className="flex flex-wrap gap-2">
-        <Button
-          size="sm"
-          variant="outline"
-          disabled={rebuilding || confirming}
-          onClick={() => (brief?.origin === 'edit' ? setConfirming(true) : onRebuild())}
-        >
-          {rebuilding ? (
-            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-          ) : (
-            <RefreshCw className="h-3.5 w-3.5" />
-          )}
-          {brief ? t('rebuild') : t('build')}
+        <Button size="sm" variant="ghost" disabled={rebuilding} onClick={() => setEditing(true)}>
+          <Pencil className="h-3.5 w-3.5" />
+          {t('edit')}
         </Button>
-        {brief && (
-          <Button size="sm" variant="ghost" disabled={rebuilding} onClick={() => setEditing(true)}>
-            <Pencil className="h-3.5 w-3.5" />
-            {t('edit')}
-          </Button>
-        )}
       </div>
-      <p className="text-[11px] text-muted-foreground">{t('usage')}</p>
     </div>
   );
 }
+
+/** What Edit brief starts from when the draft has no brief: H2s added by hand. */
+const EMPTY_BRIEF: DraftBrief = {
+  goal: '',
+  audience: '',
+  outline: [],
+  keywords: [],
+  origin: 'edit',
+  builtAt: null,
+  builtFrom: null,
+};
 
 /** Edit brief: goal, audience, the outline's sections and key points, keywords. */
 function BriefEditor({

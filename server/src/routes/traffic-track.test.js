@@ -5,7 +5,8 @@ import { AI_SOURCES_VERSION } from '../lib/ai-sources.js';
 /**
  * POST /track/:trackingCode (AT-003): each pageview is stored with the visit
  * it belongs to, and a failed visit lookup still stores the pageview; with
- * the landing page's status, for Broken AI links (AT-012).
+ * the landing page's status, for Broken AI links (AT-012), and the surface
+ * it came through (ChatGPT Shopping, #1283).
  */
 
 const inserted = [];
@@ -53,6 +54,9 @@ vi.mock('../lib/logger.js', () => {
   return { default: logger, logger };
 });
 vi.mock('../lib/traffic-visits.js', () => ({ findVisitOf: (...args) => findVisitOf(...args) }));
+// The visitor key stands in for the IP address (00250).
+const visitorKey = vi.fn();
+vi.mock('../lib/visitor-key.js', () => ({ visitorKey: (...args) => visitorKey(...args) }));
 
 let server;
 let baseUrl;
@@ -73,6 +77,8 @@ beforeEach(() => {
   inserted.length = 0;
   insertError = null;
   findVisitOf.mockReset();
+  visitorKey.mockReset();
+  visitorKey.mockImplementation(async ({ brandId, ip }) => (ip ? `vk-${brandId}` : null));
   filters.length = 0;
   latestPageview = null;
   updated.length = 0;
@@ -96,19 +102,33 @@ describe('POST /track/:trackingCode', () => {
     findVisitOf.mockResolvedValue('p1');
     const res = await beacon();
     expect(res.status).toBe(204);
+    expect(visitorKey).toHaveBeenCalledWith({ brandId: 'b1', ip: '203.0.113.7' });
     expect(findVisitOf).toHaveBeenCalledWith({
       brandId: 'b1',
       sourcePlatform: 'gemini.google.com',
-      ipAddress: '203.0.113.7',
+      visitorKey: 'vk-b1',
       userAgent: 'Mozilla/5.0',
     });
     expect(inserted[0].table).toBe('ai_traffic_logs');
     expect(inserted[0].row).toMatchObject({
       url: 'https://acme.example/menu',
-      ip_address: '203.0.113.7',
+      visitor_key: 'vk-b1',
       user_agent: 'Mozilla/5.0',
       visit_of: 'p1',
     });
+  });
+
+  it('never stores the IP address, and still stores the pageview when the key fails', async () => {
+    findVisitOf.mockResolvedValue(null);
+    await beacon();
+    expect(inserted[0].row).not.toHaveProperty('ip_address');
+    expect(JSON.stringify(inserted[0].row)).not.toContain('203.0.113.7');
+
+    visitorKey.mockRejectedValue(new Error('traffic_salt returned no salt'));
+    const res = await beacon();
+    expect(res.status).toBe(204);
+    expect(inserted[1].row).toMatchObject({ visitor_key: null, visit_of: null });
+    expect(findVisitOf).toHaveBeenLastCalledWith(expect.objectContaining({ visitorKey: null }));
   });
 
   it('stores a first pageview as a new visit', async () => {
@@ -154,6 +174,44 @@ describe('POST /track/:trackingCode', () => {
     await beacon({ v: AI_SOURCES_VERSION + 1 });
     await beacon({ v: '2' });
     expect(inserted.map((i) => i.row.source_list_version)).toEqual([null, null]);
+  });
+
+  // #1283: ChatGPT Shopping's product cards link to feed URLs tagged utm_medium=feed.
+  it('stores a ChatGPT visit from a feed link as ChatGPT, surface shopping, with the list version', async () => {
+    findVisitOf.mockResolvedValue(null);
+    await beacon({
+      u: 'https://acme.example/p/mug?utm_source=chatgpt.com&utm_medium=feed',
+      r: '',
+      s: 'chatgpt.com',
+      v: AI_SOURCES_VERSION,
+    });
+    expect(inserted[0].row).toMatchObject({
+      url: 'https://acme.example/p/mug?utm_source=chatgpt.com&utm_medium=feed',
+      source_platform: 'chatgpt.com',
+      source_surface: 'shopping',
+      source_list_version: AI_SOURCES_VERSION,
+    });
+    // Still ChatGPT's visit: a reload continues it like any other.
+    expect(findVisitOf).toHaveBeenCalledWith(
+      expect.objectContaining({ sourcePlatform: 'chatgpt.com' }),
+    );
+  });
+
+  it("reads the surface from the landing URL, so an older snippet's feed visits count too", async () => {
+    findVisitOf.mockResolvedValue(null);
+    // A cached older snippet: the host it matched, no list version.
+    await beacon({ u: 'https://acme.example/p?UTM_MEDIUM=Feed', s: 'chat.openai.com' });
+    // A ChatGPT answer's link.
+    await beacon({ u: 'https://acme.example/p?utm_source=chatgpt.com', s: 'chatgpt.com' });
+    // Another medium, or a feed link from another source.
+    await beacon({ u: 'https://acme.example/p?utm_medium=email', s: 'chatgpt.com' });
+    await beacon({ u: 'https://acme.example/p?utm_medium=feed', s: 'perplexity.ai' });
+    expect(inserted.map((i) => [i.row.source_platform, i.row.source_surface])).toEqual([
+      ['chatgpt.com', 'shopping'],
+      ['chatgpt.com', null],
+      ['chatgpt.com', null],
+      ['perplexity.ai', null],
+    ]);
   });
 
   it('keeps a platform the list does not know as it was sent', async () => {
@@ -218,7 +276,7 @@ describe('POST /track/:trackingCode', () => {
     expect(filters).toEqual(
       expect.arrayContaining([
         ['eq', 'url', 'https://acme.example/menu'],
-        ['eq', 'ip_address', '203.0.113.7'],
+        ['eq', 'visitor_key', 'vk-b1'],
         ['eq', 'user_agent', 'Mozilla/5.0'],
         ['eq', 'http_status', 200],
         ['eq', 'not_found_title', false],

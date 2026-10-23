@@ -5,10 +5,13 @@
  *
  * A replace changes words in a passage (before → after, plain text); an
  * insert adds blocks (HTML) after a passage. Both find their passage by its
- * text, as the agent read it.
+ * text, as the agent read it. A page suggestion (00247, Rewrite the page to
+ * these rules) is the whole page rewritten, alone in its batch: accepting it
+ * puts its page in place of the one the agent read.
  */
 
 import { safeLinkHref } from './editor';
+import { DRAFT_SOURCE_KINDS, type DraftSourceKind } from './sources';
 
 export const SUGGESTION_STATUSES = ['open', 'accepted', 'rejected'] as const;
 export type SuggestionStatus = (typeof SUGGESTION_STATUSES)[number];
@@ -19,13 +22,15 @@ export interface DraftSuggestion {
   /** The Action Center action the run came from, with its number ("AC-214"). */
   actionId: string | null;
   actionNo: number | null;
-  kind: 'replace' | 'insert';
+  kind: 'replace' | 'insert' | 'page';
   /** The passage's text when the agent read it. */
   blockText: string;
   /** replace: the words replaced; insert: empty. */
   beforeText: string;
-  /** replace: the new words; insert: the blocks added, as HTML. */
+  /** replace: the new words; insert: the blocks added, as HTML; page: the whole page. */
   afterText: string;
+  /** page: the page as the agent read it, put back on Undo. */
+  beforeHtml?: string | null;
   /** replace: the links on the new words (00240); an insert's are in its HTML. */
   afterLinks?: SuggestionLink[] | null;
   /** Why, as the agent says it: "add a dated data point (rule)". */
@@ -33,6 +38,30 @@ export interface DraftSuggestion {
   /** The rules it is meant to fix. */
   ruleKeys: string[];
   status: SuggestionStatus;
+  /** When the agent left it: the run's time, for "Last used by Content Agent". */
+  createdAt?: string;
+  /** The person's data it was written from (00248, v1.1 CE-033), or null. */
+  sources?: SuggestionSource[] | null;
+  /** The words each of its sources supports, the ¹ ² marks, or null. */
+  sourceMarks?: SourceMark[] | null;
+}
+
+/** A source a suggestion was written from, keyed as the Sources tab keys its row. */
+export interface SuggestionSource {
+  kind: DraftSourceKind;
+  ref: string;
+  label: string;
+}
+
+/**
+ * Where a source supports a suggestion's words: from start to end, offsets
+ * into a replace's afterText or an insert's HTML read as text; source is an
+ * index into its sources.
+ */
+export interface SourceMark {
+  start: number;
+  end: number;
+  source: number;
 }
 
 /**
@@ -95,6 +124,58 @@ export function suggestionLinks(raw: unknown, afterText: string): SuggestionLink
     links.push({ start: start!, end: end!, href });
   }
   return links.length ? links : null;
+}
+
+/**
+ * A suggestion's sources and marks as stored (00248), the ones the editor can
+ * show: sources of a kind it knows, with a ref and a name; marks in order,
+ * within `text`, each to one of those sources — renumbered when a source
+ * before it is left out. Null for either with none.
+ */
+export function suggestionSources(
+  rawSources: unknown,
+  rawMarks: unknown,
+  text: string,
+): { sources: SuggestionSource[] | null; marks: SourceMark[] | null } {
+  if (!Array.isArray(rawSources)) return { sources: null, marks: null };
+  const kinds: readonly string[] = DRAFT_SOURCE_KINDS;
+  const sources: SuggestionSource[] = [];
+  // Where each stored source is now, or -1 when it is left out.
+  const at = (rawSources as Partial<SuggestionSource>[]).map((item) => {
+    if (
+      !kinds.includes(item?.kind as string) ||
+      typeof item?.ref !== 'string' ||
+      typeof item?.label !== 'string' ||
+      !item.ref ||
+      !item.label
+    ) {
+      return -1;
+    }
+    sources.push({ kind: item.kind as DraftSourceKind, ref: item.ref, label: item.label });
+    return sources.length - 1;
+  });
+  const marks: SourceMark[] = [];
+  for (const item of Array.isArray(rawMarks) ? (rawMarks as Partial<SourceMark>[]) : []) {
+    const { start, end, source } = item ?? {};
+    if (!Number.isInteger(start) || !Number.isInteger(end) || !Number.isInteger(source)) continue;
+    if (start! < (marks.at(-1)?.end ?? 0) || end! <= start! || end! > text.length) continue;
+    const kept = at[source!] ?? -1;
+    if (kept === -1) continue;
+    marks.push({ start: start!, end: end!, source: kept });
+  }
+  return {
+    sources: sources.length ? sources : null,
+    marks: sources.length && marks.length ? marks : null,
+  };
+}
+
+/** The sources a batch was written from, each once: "built from N of your sources". */
+export function batchSources(suggestions: DraftSuggestion[]): SuggestionSource[] {
+  const seen = new Map<string, SuggestionSource>();
+  for (const s of suggestions) {
+    for (const source of s.sources ?? []) seen.set(`${source.kind}:${source.ref}`, source);
+  }
+  return [...seen.values()];
 }
 
 /** The most suggestions decided at once (00217). */

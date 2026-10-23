@@ -1,9 +1,16 @@
 'use client';
 
 import { useState } from 'react';
-import { useTranslations } from 'next-intl';
-import { Bot, Loader2 } from 'lucide-react';
+import { useFormatter, useTranslations } from 'next-intl';
+import { ChevronDown, Loader2, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import {
   Dialog,
   DialogContent,
@@ -25,6 +32,8 @@ import { SITE_PAGE_TYPES, type SiteType } from '@/lib/content/page-types';
 import {
   MAX_TEXT_RULE_LENGTH,
   RULE_GROUPS,
+  openRulesForAgent,
+  rewriteAdvice,
   splitRules,
   type ActiveRule,
   type RuleStatus,
@@ -33,6 +42,7 @@ import {
 import { formatNumber } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { useUserRole } from '@/hooks/use-user-role';
+import { RunCard } from './_run-card';
 import type { DraftRulesState } from './_use-draft-rules';
 
 /** Rules with an explanation on hover (spec §10). */
@@ -59,7 +69,7 @@ const HINTED = new Set([
  * ("Your text rules"); Save as my rules keeps the set for the workspace's
  * drafts of the type, and Reset goes back to Ansvisor's default.
  */
-/** Apply rules with Agent (CE-018), as the editor runs it. */
+/** Fix open rules with the agent (CE-018), as the editor runs it. */
 export interface AgentFix {
   /** Runs the agent on the open rules, or only on the ones named. */
   run: (only?: string[]) => void;
@@ -68,17 +78,143 @@ export interface AgentFix {
   blocked: string | null;
 }
 
+/** Rewrite the whole page to these rules, as the editor runs it: one suggestion. */
+export interface PageRewrite {
+  run: () => void;
+  running: boolean;
+  /** Why it can't run now (suggestions still open), or null. */
+  blocked: string | null;
+}
+
+/** Run Agent's two ways: the open rules fixed a few passages at a time, or the whole page. */
+type RunMode = 'fix' | 'rewrite';
+
+/**
+ * Run Agent ▾ (v1.1, CE-029): one control for both rule actions. The main
+ * part runs the choice, Fix open rules unless the person picked Rewrite the
+ * whole page in ▾, which then labels it "Rewrite page"; once a rewrite
+ * starts, it is back on the safe default. Each choice says what it does and
+ * its AI usage, Less or More, until a real estimate exists.
+ */
+function RunAgentButton({
+  mode,
+  onMode,
+  run,
+  running,
+  disabled,
+  split,
+  anyRunning,
+  fixable,
+  setName,
+  recommended,
+}: {
+  /** The choice the main part runs. */
+  mode: RunMode;
+  onMode: (mode: RunMode) => void;
+  run: () => void;
+  running: boolean;
+  disabled: boolean;
+  /** Both ways are offered: a page ready or published has no rewrite. */
+  split: boolean;
+  /** Either way is running: the choice waits for it. */
+  anyRunning: boolean;
+  /** The open rules the agent can fix. */
+  fixable: number;
+  /** The rule set's name, as the menu says what a rewrite follows. */
+  setName: string;
+  /** Rewrite when small edits can't get there (rewriteAdvice), else Fix; none when Fix is off. */
+  recommended: RunMode | null;
+}) {
+  const t = useTranslations('contentEditor.editor.rules.run');
+  const main = (
+    <Button
+      size="sm"
+      className={cn(split && 'rounded-r-none')}
+      disabled={running || disabled}
+      onClick={() => {
+        run();
+        if (mode === 'rewrite') onMode('fix');
+      }}
+    >
+      {running && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+      {running ? t('working') : mode === 'rewrite' ? t('rewriteLabel') : t('label')}
+    </Button>
+  );
+  if (!split) return main;
+  const choices: { value: RunMode; title: string; detail: string; usage: string }[] = [
+    {
+      value: 'fix',
+      title: t('fix.title'),
+      detail: t('fix.detail', { count: fixable }),
+      usage: t('fix.usage'),
+    },
+    {
+      value: 'rewrite',
+      title: t('rewrite.title'),
+      detail: t('rewrite.detail', { set: setName }),
+      usage: t('rewrite.usage'),
+    },
+  ];
+  return (
+    <span className="inline-flex shrink-0">
+      {main}
+      <DropdownMenu>
+        <DropdownMenuTrigger
+          disabled={anyRunning}
+          render={
+            <Button
+              size="sm"
+              aria-label={t('more')}
+              className="rounded-l-none border-l border-primary-foreground/20 px-1.5"
+            />
+          }
+        >
+          <ChevronDown className="h-3.5 w-3.5" />
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-72">
+          <DropdownMenuRadioGroup value={mode} onValueChange={(value) => onMode(value as RunMode)}>
+            {choices.map((choice) => (
+              <DropdownMenuRadioItem
+                key={choice.value}
+                value={choice.value}
+                closeOnClick
+                disabled={choice.value === 'fix' && fixable === 0}
+                className="items-start py-1.5"
+              >
+                <span className="grid min-w-0 gap-0.5">
+                  <span className="text-[13px] font-medium">{choice.title}</span>
+                  <span className="text-xs text-muted-foreground">
+                    {recommended === choice.value
+                      ? t('recommendedDetail', { detail: choice.detail })
+                      : choice.detail}
+                  </span>
+                  <span className="text-[11px] text-muted-foreground/80">{choice.usage}</span>
+                </span>
+              </DropdownMenuRadioItem>
+            ))}
+          </DropdownMenuRadioGroup>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </span>
+  );
+}
+
 export function RulesTab({
   state,
   siteType,
   draftPageType,
   agentFix,
+  pageRewrite,
+  dataLine,
   onOpenSources,
 }: {
   state: DraftRulesState;
   siteType: SiteType;
   draftPageType: PageType | null;
   agentFix?: AgentFix;
+  pageRewrite?: PageRewrite;
+  /** "Uses your data", under Run Agent's card (v1.1 CE-032). */
+  dataLine?: React.ReactNode;
   /**
    * Opens the Sources tab, where a draft with no prompts (so no fan-outs)
    * gets them; none while the sources are read, or when the draft has prompts.
@@ -86,7 +222,9 @@ export function RulesTab({
   onOpenSources?: () => void;
 }) {
   const t = useTranslations('contentEditor.editor.rules');
+  const tSuggestions = useTranslations('contentEditor.editor.suggestions');
   const tTypes = useTranslations('contentEditor.pageTypes');
+  const format = useFormatter();
   // The workspace's sets are saved by admins and managers, as its other settings are.
   const { canManage } = useUserRole();
   const types = [...SITE_PAGE_TYPES[siteType]];
@@ -104,12 +242,27 @@ export function RulesTab({
     })),
   ];
 
+  // Rewrite the page whole when small edits can't get there.
+  const advice = pageRewrite ? rewriteAdvice(state.rules) : null;
+  // The rules the page doesn't meet now, in the tab's order, and those the agent fixes.
+  const open = state.rules.filter(({ rule, status }) => rule.on && status.state === 'bad');
+  const fixable = openRulesForAgent(state.rules).forAgent.length;
+  // Run Agent's choice: the safe default, or the whole page (▾) while it is offered.
+  const [picked, setPicked] = useState<RunMode>('fix');
+  const mode: RunMode = picked === 'rewrite' && pageRewrite ? 'rewrite' : 'fix';
+  const runner = mode === 'rewrite' ? pageRewrite : agentFix;
+  // Why Run Agent can't run its choice now, said under the card.
+  const blocked =
+    runner?.blocked ?? (mode === 'fix' && fixable === 0 ? tSuggestions('notForAgent') : null);
+
   // A draft on My rules for a type the workspace has none for (its type
   // changed, or My rules couldn't be read) shows Ansvisor's set for it.
   const source =
     state.source === 'mine' && state.setType && state.mineTypes.includes(state.setType)
       ? 'mine'
       : 'default';
+  const setName =
+    items.find((item) => item.value === `${source}:${state.setType}`)?.label ?? t('pickSet');
 
   return (
     // Nothing changes before My rules are read: a change would leave them out.
@@ -118,6 +271,64 @@ export function RulesTab({
       aria-busy={!state.ready}
       className="m-0 min-w-0 space-y-4 border-0 p-0 text-sm"
     >
+      {/* What the agent can do about the rules, first (v1.1, CE-028/029): one
+          Run Agent, fixing the open rules a few passages at a time, or (▾)
+          rewriting the whole page as one change to compare. */}
+      {(agentFix || pageRewrite) && (
+        <RunCard
+          title={open.length > 0 ? t('run.notMet', { count: open.length }) : t('run.allMet')}
+          detail={
+            open.length > 0
+              ? t('run.names', {
+                  names: format.list(
+                    open.slice(0, 3).map(({ rule }) => t(`names.${rule.key}`)),
+                    { type: 'unit' },
+                  ),
+                  more: open.length > 3 ? 'yes' : 'no',
+                })
+              : undefined
+          }
+          action={
+            open.length > 0 &&
+            runner && (
+              <RunAgentButton
+                mode={mode}
+                onMode={setPicked}
+                run={() => runner.run()}
+                running={runner.running}
+                disabled={blocked !== null}
+                split={!!agentFix && !!pageRewrite}
+                anyRunning={!!agentFix?.running || !!pageRewrite?.running}
+                fixable={fixable}
+                setName={setName}
+                // Nothing is recommended that is turned off (Fix with only One H1 open).
+                recommended={advice ? 'rewrite' : fixable > 0 ? 'fix' : null}
+              />
+            )
+          }
+          info={t.rich(pageRewrite ? 'run.info' : 'run.infoFix', {
+            b: (chunks) => <b>{chunks}</b>,
+          })}
+          data={dataLine}
+          blocked={open.length > 0 ? blocked : null}
+        >
+          {advice && (
+            <p className="flex gap-1.5 text-xs" role="note">
+              <Sparkles aria-hidden className="mt-0.5 h-3 w-3 shrink-0 text-muted-foreground" />
+              <span>
+                {advice.reason === 'length'
+                  ? t('rewriteAdvice.length', {
+                      count: advice.count,
+                      target: advice.target,
+                      percent: advice.percent,
+                    })
+                  : t('rewriteAdvice.open', { count: advice.count })}
+              </span>
+            </p>
+          )}
+        </RunCard>
+      )}
+
       <div className="space-y-1.5">
         <span className="text-xs text-muted-foreground">{t('set')}</span>
         <Select
@@ -143,23 +354,6 @@ export function RulesTab({
         <p className="text-xs text-muted-foreground" role="status">
           {t('met', { met: state.met, total: state.total })}
         </p>
-        {agentFix && state.met < state.total && (
-          <Button
-            size="sm"
-            variant="outline"
-            className="w-full"
-            disabled={agentFix.running || agentFix.blocked !== null}
-            title={agentFix.blocked ?? t('agentFixHint')}
-            onClick={() => agentFix.run()}
-          >
-            {agentFix.running ? (
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-            ) : (
-              <Bot className="h-3.5 w-3.5" />
-            )}
-            {agentFix.running ? t('agentFixing') : t('agentFix')}
-          </Button>
-        )}
       </div>
 
       {RULE_GROUPS.map((group) => {

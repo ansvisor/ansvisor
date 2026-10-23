@@ -12,6 +12,7 @@ import {
   draftRulesSchema,
   readPage,
   ruleLength,
+  wordsForLength,
   lengthWarns,
   lengthConflict,
   ruleSet,
@@ -27,6 +28,9 @@ import {
   startingRules,
   RULE_LENGTH_MIN,
   RULE_LENGTH_MAX,
+  lengthBand,
+  rewriteAdvice,
+  type RuleStatus,
 } from './rules';
 
 const ctx: RuleContext = {
@@ -137,6 +141,16 @@ describe('rule sets', () => {
       overrides: { length: { value: '600000' } },
     });
     expect(ruleLength(huge, 'category_page')).toBe(50_000);
+  });
+
+  it('says a length in characters as about so many words (v1.1 §3.2)', () => {
+    // To the nearest ten from 100 words on, as the Brief shows it.
+    expect(wordsForLength(4000)).toBe(670);
+    expect(wordsForLength(3000)).toBe(500);
+    expect(wordsForLength(50_000)).toBe(8330);
+    // Below 100 words, as is; never none.
+    expect(wordsForLength(300)).toBe(50);
+    expect(wordsForLength(1)).toBe(1);
   });
 
   it('keeps the draft’s choices to their limits', () => {
@@ -645,6 +659,65 @@ describe('lengthConflict', () => {
         : s,
     );
     expect(lengthConflict(met, 3)).toBeNull();
+  });
+});
+
+describe('rewriteAdvice', () => {
+  const statuses = (
+    length: number | null,
+    open: string[] = [],
+    lengthValue = '8000',
+  ): { rule: ActiveRule; status: RuleStatus }[] =>
+    activeRules(ruleSet('blog_post'), { overrides: { length: { value: lengthValue } } }).map(
+      (rule) => {
+        if (rule.key === 'length' && length !== null) {
+          const band = lengthBand(Number(rule.current));
+          const ok = length >= band.min && length <= band.max;
+          return {
+            rule,
+            status: ok
+              ? { state: 'ok' as const }
+              : {
+                  state: 'bad' as const,
+                  code: length > band.max ? ('long' as const) : ('short' as const),
+                  count: length,
+                  min: band.min,
+                  max: band.max,
+                },
+          };
+        }
+        return {
+          rule,
+          status: open.includes(rule.key)
+            ? { state: 'bad' as const, code: 'missing' as const }
+            : { state: 'ok' as const },
+        };
+      },
+    );
+
+  it('recommends a rewrite for a page more than 30% off its Length', () => {
+    // The user's page: 19,203 characters for 8,000.
+    expect(rewriteAdvice(statuses(19_203))).toEqual({
+      reason: 'length',
+      count: 19_203,
+      target: 8_000,
+      percent: 140,
+    });
+    // 30% off, no more, is for small edits.
+    expect(rewriteAdvice(statuses(10_400))).toBeNull();
+    // An empty page has nothing to rewrite; one past 60,000 can't be sent whole.
+    expect(rewriteAdvice(statuses(0, ['faq', 'summary', 'h2Answer', 'keywords']))).toBeNull();
+    expect(rewriteAdvice(statuses(60_001))).toBeNull();
+  });
+
+  it('recommends it for 4 rules or more the agent can fix', () => {
+    expect(rewriteAdvice(statuses(null, ['faq', 'summary', 'h2Answer']))).toBeNull();
+    expect(rewriteAdvice(statuses(null, ['faq', 'summary', 'h2Answer', 'keywords']))).toEqual({
+      reason: 'open',
+      count: 4,
+    });
+    // A rule it can't fix doesn't count.
+    expect(rewriteAdvice(statuses(null, ['faq', 'summary', 'h2Answer', 'oneH1']))).toBeNull();
   });
 });
 

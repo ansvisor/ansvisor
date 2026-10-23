@@ -85,6 +85,7 @@ vi.mock('./content-agent.js', async (importOriginal) => ({
 
 const { briefText, renderPage, runDraftWriting, startDraftWriting } =
   await import('./content-writer.js');
+const { textLength } = await import('./content-rewrite.js');
 const { passageKey } = await import('./content-agent.js');
 const { PlanLimitError } = await import('./plan-guard.js');
 // The real hold: self-hosted here, so it reserves nothing and writes each charge.
@@ -207,7 +208,8 @@ describe('startDraftWriting', () => {
       'org-1',
       expect.objectContaining({ feature: 'content', modelId: expect.any(String) }),
     );
-    expect(draftUpdates()[0]).toMatchObject({ agent_state: 'writing' });
+    // Which run holds it, for every device (00247).
+    expect(draftUpdates()[0]).toMatchObject({ agent_state: 'writing', agent_run: 'write' });
 
     await vi.waitFor(() => expect(draftUpdates()).toHaveLength(2));
     expect(draftUpdates()[1]).toMatchObject({
@@ -216,8 +218,9 @@ describe('startDraftWriting', () => {
       author: 'agent',
       agent_state: null,
     });
+    // No number without a source (CE-033): none of the data has 15 or 250.
     expect(draftUpdates()[1].body_html).toMatch(
-      /^<h1>How to brew pour-over coffee<\/h1><p>Use 15 g/,
+      /^<h1>How to brew pour-over coffee<\/h1><p>Use \[figure, source\] g of coffee for \[figure, source\] g of water\.<\/p>/,
     );
     const finish = writes.filter((w) => w.table === 'content_drafts')[1];
     expect(finish.filters).toContainEqual(['agent_state', 'writing']);
@@ -229,8 +232,9 @@ describe('startDraftWriting', () => {
       value: expect.objectContaining({ feature: 'content' }),
     });
     const { prompt } = generateObject.mock.calls[0][0];
-    expect(prompt).toContain('- ratio?');
-    expect(prompt).toContain('- "pour over ratio"');
+    // The data, numbered as the agent cites it.
+    expect(prompt).toContain('- S1 ratio?');
+    expect(prompt).toContain('- S2 "pour over ratio"');
     expect(prompt).toContain('- faq: FAQ with 5 questions — aim: 5');
     expect(prompt).toContain('Page type: How-to guide: numbered steps to get one thing done');
   });
@@ -411,9 +415,12 @@ describe('runDraftWriting on an existing page', () => {
             kind: 'replace',
             passage: 3,
             before: 'good coffee',
-            after: '15 g of coffee',
+            after: 'freshly ground coffee',
             reason: 'answer the ratio search',
             rules: ['faq'],
+            // From the fan-out it answers, S2 (CE-033).
+            sources: ['S2'],
+            marks: [{ words: 'freshly ground coffee', source: 'S2' }],
           },
         ],
       },
@@ -428,6 +435,8 @@ describe('runDraftWriting on an existing page', () => {
         block_text: 'Use good coffee.',
         before_text: 'good coffee',
         position: 0,
+        sources: [{ kind: 'fanout', ref: 'pour over ratio', label: 'pour over ratio' }],
+        source_marks: [{ start: 0, end: 21, source: 0 }],
       }),
     ]);
     expect(generateObject.mock.calls[0][0].prompt).toContain(`[2] (p, LOCKED) ${QUOTED}`);
@@ -505,5 +514,185 @@ describe('runDraftWriting on an existing page', () => {
     expect(budget.charge).toHaveBeenCalledWith(billed);
     // The run still ends failed.
     expect(draftUpdates()).toEqual([{ agent_state: 'failed', agent_state_at: expect.any(String) }]);
+  });
+});
+
+describe('Rewrite the page to these rules', () => {
+  const QUOTED = 'Pour-over coffee tastes cleaner than a French press.';
+  const existing = draftRow({
+    method: 'optimize',
+    status: 'in_review',
+    body_html:
+      `<h1>Pour-over</h1><p>${QUOTED}</p><p>Use good coffee. ${'Filler. '.repeat(20)}</p>` +
+      '<table><tbody><tr><td>Ratio</td><td>1:16</td></tr></tbody></table>' +
+      '<p>See <a href="/pricing">pricing</a>.</p>',
+    action_id: 'act-1',
+  });
+  const locked = [passageKey(QUOTED)];
+  const run = (over = {}) =>
+    runDraftWriting({
+      draft: existing,
+      brand,
+      model: 'model:m',
+      input: input({ locked, ...over }),
+      budget,
+      rewrite: true,
+    });
+  const answer = (html, reason = 'cut to about 3,000 characters') =>
+    generateObject.mockResolvedValue({
+      object: { html, reason },
+      usage: { inputTokens: 900, outputTokens: 700 },
+    });
+
+  it('starts only on a page with text, small enough to send whole, and no open batch', async () => {
+    rows.content_drafts = existing;
+    hasOpenSuggestions.mockResolvedValueOnce(true);
+    await expect(
+      startDraftWriting({ draftId: DRAFT, brandId: BRAND, input: input(), rewrite: true }),
+    ).rejects.toMatchObject({ status: 409, code: 'open_suggestions' });
+    rows.content_drafts = { ...existing, method: 'create', body_html: '<p> </p>' };
+    await expect(
+      startDraftWriting({ draftId: DRAFT, brandId: BRAND, input: input(), rewrite: true }),
+    ).rejects.toMatchObject({ status: 422, code: 'empty' });
+    rows.content_drafts = { ...existing, body_html: `<p>${'word '.repeat(13_000)}</p>` };
+    await expect(
+      startDraftWriting({ draftId: DRAFT, brandId: BRAND, input: input(), rewrite: true }),
+    ).rejects.toMatchObject({ status: 422, code: 'too_long' });
+    // Refused before anything was held or claimed.
+    expect(reserveAiBudget).not.toHaveBeenCalled();
+    expect(draftUpdates()).toEqual([]);
+  });
+
+  it('claims the draft as a rewrite, so every device tries a failed one again as one', async () => {
+    rows.content_drafts = existing;
+    answer('<h1>Pour-over</h1><p>[[KEEP 1]]</p><p>[[KEEP 2]]</p><p>Shorter.</p>');
+    await expect(
+      startDraftWriting({
+        draftId: DRAFT,
+        brandId: BRAND,
+        input: input({ locked }),
+        rewrite: true,
+      }),
+    ).resolves.toEqual({ started: true });
+    expect(draftUpdates()[0]).toMatchObject({ agent_state: 'writing', agent_run: 'rewrite' });
+    await vi.waitFor(() => expect(draftUpdates().length).toBeGreaterThan(1));
+  });
+
+  it('leaves the whole page as one suggestion, with what it kept put back as it was', async () => {
+    answer(
+      '<h1>Pour-over coffee</h1><p>[[KEEP 1]]</p><p>Use good coffee, freshly ground.</p>' +
+        '<p>[[KEEP 2]]</p><p>See <a href="/pricing">pricing</a> or <a href="https://evil.example">this</a>.</p>',
+    );
+    await expect(
+      run({
+        rules: [
+          { key: 'length', name: 'Length', detail: 'aim: 3,000 characters' },
+          { key: 'faq', name: 'FAQ with 5 questions', detail: 'aim: 5' },
+        ],
+      }),
+    ).resolves.toEqual({ rewritten: true });
+
+    const { system, prompt } = generateObject.mock.calls[0][0];
+    expect(system).toContain('stands for a block kept word for word');
+    // The quoted passage and the table never reach the model to rewrite:
+    // they are described, and count toward Length.
+    expect(prompt).toContain('Length: about 3000 characters.');
+    expect(prompt).toMatch(
+      /The page now, as HTML: about \d+ characters of text, \d+ of them in its kept blocks/,
+    );
+    expect(prompt).toContain(`- [[KEEP 1]]: a passage AI assistants quote today: "${QUOTED}"`);
+    expect(prompt).toContain('- [[KEEP 2]]: a table, 1 rows: "Ratio1:16"');
+    expect(prompt).not.toContain(`<p>${QUOTED}</p>`);
+    expect(prompt).toContain("Write in the page's own language.");
+    expect(budget.charge).toHaveBeenCalledWith({ inputTokens: 900, outputTokens: 700 });
+
+    const row = writes.find((w) => w.table === 'content_draft_suggestions').value;
+    expect(row).toMatchObject({
+      draft_id: DRAFT,
+      action_id: 'act-1',
+      position: 0,
+      kind: 'page',
+      block_text: 'Pour-over',
+      before_text: '',
+      before_html: existing.body_html,
+      reason: 'cut to about 3,000 characters',
+      rule_keys: ['length', 'faq'],
+    });
+    expect(row.after_text).toBe(
+      `<h1>Pour-over coffee</h1><p>${QUOTED}</p><p>Use good coffee, freshly ground.</p>` +
+        '<table><tbody><tr><td>Ratio</td><td>1:16</td></tr></tbody></table>' +
+        '<p>See <a href="/pricing">pricing</a> or this.</p>',
+    );
+    // The agent lets go; the draft's status stays as it was.
+    expect(draftUpdates().at(-1)).toEqual({
+      agent_state: null,
+      agent_state_at: expect.any(String),
+    });
+  });
+
+  it('keeps the data it wrote from, and no number without a source (CE-033)', async () => {
+    generateObject.mockResolvedValue({
+      object: {
+        html:
+          '<h1>Pour-over coffee</h1><p>[[KEEP 1]]</p><p>[[KEEP 2]]</p>' +
+          '<p>Brew it in 4 minutes; 87% of baristas agree, as "pour over ratio" asks.</p>',
+        reason: 'answered the ratio search',
+        sources: ['S2', 'S7'],
+      },
+      usage: { inputTokens: 900, outputTokens: 700 },
+    });
+    await expect(run()).resolves.toEqual({ rewritten: true });
+    const row = writes.find((w) => w.table === 'content_draft_suggestions').value;
+    // The fan-out it named; S7 isn't on the list.
+    expect(row.sources).toEqual([
+      { kind: 'fanout', ref: 'pour over ratio', label: 'pour over ratio' },
+    ]);
+    // 87% is in none of the data: a placeholder. A lone count stays; the
+    // kept table's 1:16 is the page's own.
+    expect(row.after_text).toContain(
+      '<p>Brew it in 4 minutes; [figure, source] of baristas agree, as "pour over ratio" asks.</p>',
+    );
+    expect(row.after_text).toContain('<td>1:16</td>');
+    expect(generateObject.mock.calls[0][0].system).toContain('Put the numbers (S1, S2…)');
+  });
+
+  it('keeps the page’s length when the Length rule is off', async () => {
+    answer('<h1>Pour-over</h1><p>[[KEEP 1]]</p><p>[[KEEP 2]]</p><p>Shorter.</p>');
+    await run({ rules: [{ key: 'faq', name: 'FAQ', detail: '' }] });
+    const { prompt } = generateObject.mock.calls[0][0];
+    expect(prompt).toContain(`Length: about ${textLength(existing.body_html)} characters.`);
+  });
+
+  it('fails the run on an answer that isn’t a page in HTML', async () => {
+    answer('# Pour-over\n\n[[KEEP 1]]\n\n[[KEEP 2]]');
+    await expect(run()).resolves.toEqual({ failed: true });
+    expect(writes.find((w) => w.table === 'content_draft_suggestions')).toBeUndefined();
+  });
+
+  it('drops the rewrite of a page marked ready during the run', async () => {
+    answer('<h1>Pour-over</h1><p>[[KEEP 1]]</p><p>[[KEEP 2]]</p><p>Shorter.</p>');
+    finished = null;
+    await expect(run()).resolves.toEqual({ skipped: true });
+    const insert = writes.find(
+      (w) => w.table === 'content_draft_suggestions' && w.kind === 'insert',
+    );
+    const drop = writes.find((w) => w.table === 'content_draft_suggestions' && w.kind === 'delete');
+    expect(drop.filters).toContainEqual(['batch_id', insert.value.batch_id]);
+  });
+
+  it('fails the run when the rewrite drops what it had to keep', async () => {
+    answer('<h1>Pour-over</h1><p>[[KEEP 2]]</p><p>A new page without the quoted passage.</p>');
+    await expect(run()).resolves.toEqual({ failed: true });
+    expect(writes.find((w) => w.table === 'content_draft_suggestions')).toBeUndefined();
+    expect(draftUpdates()).toEqual([{ agent_state: 'failed', agent_state_at: expect.any(String) }]);
+    // The answer was still paid for.
+    expect(budget.charge).toHaveBeenCalledTimes(1);
+  });
+
+  it('adds nothing over a batch that came in during the run', async () => {
+    answer('<h1>Pour-over</h1><p>[[KEEP 1]]</p><p>[[KEEP 2]]</p><p>Shorter.</p>');
+    hasOpenSuggestions.mockResolvedValue(true);
+    await expect(run()).resolves.toEqual({ skipped: true });
+    expect(writes.find((w) => w.table === 'content_draft_suggestions')).toBeUndefined();
   });
 });

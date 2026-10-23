@@ -9,7 +9,14 @@ import { Plugin, PluginKey, type EditorState, type Transaction } from '@tiptap/p
 import { Decoration, DecorationSet } from '@tiptap/pm/view';
 import { cleanHtml } from '@/lib/content/clean-html';
 import { passageKey } from '@/lib/content/cited-passages';
-import { growsPastLimit, type DraftSuggestion } from '@/lib/content/suggestions';
+import { normalizeDomain } from '@/lib/citations/classify';
+import type { DraftSourceKind } from '@/lib/content/sources';
+import {
+  growsPastLimit,
+  type DraftSuggestion,
+  type SourceMark,
+  type SuggestionSource,
+} from '@/lib/content/suggestions';
 import { blockKey, citedLocks, citedPassagesKey, type CitedLocks } from './_cited-passages';
 
 /**
@@ -19,6 +26,9 @@ import { blockKey, citedLocks, citedPassagesKey, type CitedLocks } from './_cite
  * Undo; a rejected one a dashed card and Restore. A suggestion finds its
  * passage by the text the agent read, so one the page changed since can only
  * be rejected, and one on a locked passage (AI quotes it) is never applied.
+ * Under its words, "Based on" names the person's data it was written from,
+ * and a small number marks the words each source supports (v1.1 CE-033); a
+ * click on either opens that source in the Sources tab.
  */
 
 export type SuggestionDecision = 'accept' | 'reject' | 'undo' | 'restore';
@@ -37,6 +47,14 @@ export interface SuggestionLabels {
   heading: string;
   /** "Links": before the addresses a suggestion links to. */
   links: string;
+  /** "Based on": before the sources a suggestion was written from. */
+  basedOn: string;
+  /** Each kind of source, as a chip names it: "Fan-out", "Cited page"… */
+  sourceKinds: Record<DraftSourceKind, string>;
+  /** "Source 2: …": a mark's label for a screen reader. */
+  sourceMark: (n: number, label: string) => string;
+  /** What the Sources tab knows of a source, on hover ("Cited 12× in AI answers"), or null. */
+  sourceTip?: (source: SuggestionSource) => string | null;
 }
 
 interface SuggestionView {
@@ -338,22 +356,149 @@ function el<K extends keyof HTMLElementTagNameMap>(
 /** Linked words on a card: underlined, the address on hover. */
 const LINKED = 'underline decoration-dotted underline-offset-2';
 
-/** A replace's new words, its links underlined. */
-function linkedWords(s: DraftSuggestion): HTMLElement {
+/** What opens a source in the Sources tab, from a chip or a mark. */
+type OpenSource = (source: SuggestionSource) => void;
+
+/** A source as a chip names it: a cited page by its site, the others by their words. */
+function sourceName(source: SuggestionSource): string {
+  return source.kind === 'cited_page'
+    ? normalizeDomain(source.label) || source.label
+    : source.label.trim();
+}
+
+/** A source's number after the words it supports: ¹ ². */
+function markButton(
+  n: number,
+  source: SuggestionSource,
+  labels: SuggestionLabels,
+  open: OpenSource,
+): HTMLElement {
+  const sup = el('sup', 'ml-0.5');
+  const mark = button(
+    'rounded-sm px-0.5 text-[10px] font-semibold text-sky-700 hover:bg-sky-50 dark:text-sky-300 dark:hover:bg-sky-950/40',
+    String(n),
+    () => open(source),
+  );
+  mark.setAttribute('aria-label', labels.sourceMark(n, sourceName(source)));
+  mark.title = labels.sourceTip?.(source) ?? source.label;
+  sup.append(mark);
+  return sup;
+}
+
+/** A replace's new words, its links underlined and each source's words marked. */
+function linkedWords(s: DraftSuggestion, labels: SuggestionLabels, open: OpenSource): HTMLElement {
   const ins = el(
     'ins',
     'rounded-sm bg-emerald-50 text-emerald-800 no-underline dark:bg-emerald-950/40 dark:text-emerald-300',
   );
-  let at = 0;
-  for (const { start, end, href } of s.afterLinks ?? []) {
-    ins.append(document.createTextNode(s.afterText.slice(at, start)));
-    const linked = el('span', LINKED, s.afterText.slice(start, end));
-    linked.title = href;
-    ins.append(linked);
-    at = end;
+  const text = s.afterText;
+  const links = s.afterLinks ?? [];
+  const marks = s.sourceMarks ?? [];
+  // Cut where a link starts or ends, and where a mark ends: its number goes there.
+  const cuts = [
+    ...new Set([
+      0,
+      text.length,
+      ...links.flatMap((l) => [l.start, l.end]),
+      ...marks.map((m) => m.end),
+    ]),
+  ].sort((a, b) => a - b);
+  for (let i = 0; i < cuts.length - 1; i++) {
+    const [from, to] = [cuts[i], cuts[i + 1]];
+    const link = links.find((l) => l.start <= from && to <= l.end);
+    const piece = text.slice(from, to);
+    if (link) {
+      const linked = el('span', LINKED, piece);
+      linked.title = link.href;
+      ins.append(linked);
+    } else {
+      ins.append(document.createTextNode(piece));
+    }
+    for (const mark of marks.filter((m) => m.end === to)) {
+      const source = s.sources?.[mark.source];
+      if (source) ins.append(markButton(mark.source + 1, source, labels, open));
+    }
   }
-  ins.append(document.createTextNode(s.afterText.slice(at)));
   return ins;
+}
+
+/**
+ * An insert's numbers after the words each source supports. Its marks are
+ * offsets into its HTML read as text, as the server read it (a fragment's
+ * text nodes, joined): the words are taken from there and found again in the
+ * card as drawn — where they were, or else the first after the last mark
+ * from as far back as the card's cleaning took out.
+ */
+function markInsert(
+  added: HTMLElement,
+  marks: SourceMark[],
+  s: DraftSuggestion,
+  labels: SuggestionLabels,
+  open: OpenSource,
+) {
+  // Read as a fragment, as the server's parser does.
+  const fragment = document.createElement('template');
+  fragment.innerHTML = s.afterText;
+  const raw = fragment.content.textContent ?? '';
+  const walker = document.createTreeWalker(added, NodeFilter.SHOW_TEXT);
+  const nodes: { node: Text; start: number }[] = [];
+  let drawn = '';
+  for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+    nodes.push({ node: node as Text, start: drawn.length });
+    drawn += (node as Text).data;
+  }
+  const places: { at: number; mark: SourceMark }[] = [];
+  let from = 0;
+  // Cleaning only takes characters out: a mark is never further on than it was.
+  const takenOut = Math.max(0, raw.length - drawn.length);
+  for (const mark of marks) {
+    const words = raw.slice(mark.start, mark.end);
+    if (!words) continue;
+    const at =
+      mark.start >= from && drawn.startsWith(words, mark.start)
+        ? mark.start
+        : drawn.indexOf(words, Math.max(from, mark.start - takenOut));
+    if (at === -1) continue;
+    places.push({ at: at + words.length, mark });
+    from = at + words.length;
+  }
+  // From the last place back, so the nodes' offsets still hold.
+  for (const { at, mark } of places.reverse()) {
+    const source = s.sources?.[mark.source];
+    const holder = nodes.findLast(
+      ({ node, start }) => start < at && at <= start + node.data.length,
+    );
+    if (!source || !holder) continue;
+    const sup = markButton(mark.source + 1, source, labels, open);
+    const offset = at - holder.start;
+    if (offset === holder.node.data.length) holder.node.after(sup);
+    else holder.node.splitText(offset).before(sup);
+  }
+}
+
+/** "Based on" and a chip per source, each opening it in the Sources tab. */
+function basedOn(
+  sources: SuggestionSource[],
+  labels: SuggestionLabels,
+  open: OpenSource,
+): HTMLElement {
+  const line = el('div', 'mt-1.5 flex flex-wrap items-center gap-1 text-xs');
+  line.append(el('span', 'mr-0.5 text-muted-foreground', labels.basedOn));
+  sources.forEach((source, i) => {
+    const chip = button(
+      'inline-flex max-w-full min-w-0 items-center gap-1 rounded-md border bg-muted/50 px-1.5 py-0.5 text-[11px] text-foreground hover:bg-muted',
+      '',
+      () => open(source),
+    );
+    chip.append(
+      el('span', 'shrink-0 font-semibold text-sky-700 dark:text-sky-300', String(i + 1)),
+      el('span', 'shrink-0 text-muted-foreground', `${labels.sourceKinds[source.kind]} ·`),
+      el('span', 'min-w-0 truncate', sourceName(source)),
+    );
+    chip.title = labels.sourceTip?.(source) ?? source.label;
+    line.append(chip);
+  });
+  return line;
 }
 
 function button(
@@ -396,6 +541,7 @@ function card(
   labels: SuggestionLabels,
   blocked: 'stale' | 'locked' | 'heading' | null,
   decide: (id: string, decision: SuggestionDecision) => void,
+  open: OpenSource,
 ): HTMLElement {
   if (s.status === 'rejected') {
     const box = el('div', 'not-prose my-3 rounded-xl border border-dashed px-3 py-1.5');
@@ -438,7 +584,7 @@ function card(
         s.beforeText,
       ),
       document.createTextNode(' '),
-      linkedWords(s),
+      linkedWords(s, labels, open),
     );
   } else {
     const added = el(
@@ -452,9 +598,11 @@ function card(
       span.title = a.getAttribute('href') ?? '';
       a.replaceWith(span);
     }
+    if (s.sourceMarks?.length) markInsert(added, s.sourceMarks, s, labels, open);
     change.append(added);
   }
   box.append(change);
+  if (s.sources?.length) box.append(basedOn(s.sources, labels, open));
   const hrefs = [
     ...new Set(
       s.kind === 'replace'
@@ -480,16 +628,19 @@ function card(
 
 export const AgentSuggestions = Extension.create<{
   onDecide: (id: string, decision: SuggestionDecision) => void;
+  /** Opens a source in the Sources tab, from a "Based on" chip or a mark. */
+  onSource: OpenSource;
 }>({
   name: 'agentSuggestions',
 
   addOptions() {
-    return { onDecide: () => {} };
+    return { onDecide: () => {}, onSource: () => {} };
   },
 
   addProseMirrorPlugins() {
     const decide = (id: string, decision: SuggestionDecision) =>
       this.options.onDecide(id, decision);
+    const open: OpenSource = (source) => this.options.onSource(source);
     /** The cards and marks for the suggestions where the page has them now. */
     const placeMarks = (
       state: EditorState,
@@ -506,8 +657,9 @@ export const AgentSuggestions = Extension.create<{
         const blocked =
           s.status === 'open' ? blockedReason(state, s, suggestions, state.doc, locks) : null;
         const widget = (pos: number) =>
-          Decoration.widget(pos, () => card(s, labels, blocked, decide), {
-            key: `${s.id}:${s.status}:${blocked ?? ''}:${s.reason}`,
+          Decoration.widget(pos, () => card(s, labels, blocked, decide, open), {
+            // Drawn again once the sources are read, for their hover details.
+            key: `${s.id}:${s.status}:${blocked ?? ''}:${s.reason}:${labels.sourceTip ? 1 : 0}`,
             side: -1,
             ignoreSelection: true,
             stopEvent: () => true,
@@ -548,8 +700,8 @@ export const AgentSuggestions = Extension.create<{
       for (const s of unplaced) {
         const blocked = s.status === 'open' ? 'stale' : null;
         marks.push(
-          Decoration.widget(0, () => card(s, labels, blocked, decide), {
-            key: `${s.id}:${s.status}:unplaced`,
+          Decoration.widget(0, () => card(s, labels, blocked, decide, open), {
+            key: `${s.id}:${s.status}:unplaced:${labels.sourceTip ? 1 : 0}`,
             side: -1,
             ignoreSelection: true,
             stopEvent: () => true,

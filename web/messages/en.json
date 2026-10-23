@@ -2489,7 +2489,7 @@
   },
   "audit": {
     "title": "Site Audit",
-    "description": "Score any page against the 47-signal AEO/GEO",
+    "description": "Score any page against the 48-signal AEO/GEO",
     "runAudit": "Run Audit",
     "running": "Auditing…",
     "pages": {
@@ -2740,11 +2740,11 @@
     "noIssues": "No issues found — every evaluated signal passed.",
     "stages": {
       "fetch": "Fetching the page…",
-      "analyze": "Analyzing 47 signals…",
+      "analyze": "Analyzing 48 signals…",
       "recommend": "Generating AI recommendations…"
     },
     "emptyTitle": "Audit any page for AI search readiness",
-    "emptyBody": "Enter a URL above to score it against 47 AEO/GEO signals and get AI-written fixes."
+    "emptyBody": "Enter a URL above to score it against 48 AEO/GEO signals and get AI-written fixes."
   },
   "auth": {
     "signIn": "Sign in",
@@ -3564,6 +3564,7 @@
         "usual": "Usually a minute or two.",
         "slow": "Taking longer than usual. If it can't finish within a few minutes, this page says so and you can try again.",
         "leave": "You can leave this page meanwhile: the draft waits in Library › In review.",
+        "leaveRewrite": "You can leave this page meanwhile: the rewrite waits here for you to compare.",
         "steps": {
           "create": {
             "read": "Read the sources and the brief",
@@ -3576,11 +3577,18 @@
             "rules": "Set aside the passages AI answers quote",
             "write": "Suggesting changes",
             "review": "Opens here with the suggestions to review"
+          },
+          "rewrite": {
+            "read": "Read the page and its rules",
+            "rules": "Set aside the passages AI answers quote, tables and images",
+            "write": "Rewriting the page",
+            "review": "Opens here beside your page to compare"
           }
         }
       },
       "agentFailed": {
         "text": "The Content Agent couldn't finish this page. Write it yourself, or try again.",
+        "rewriteText": "The Content Agent couldn't rewrite this page. Edit it yourself, or try again.",
         "retry": "Try again",
         "dismiss": "Close",
         "errors": {
@@ -3590,18 +3598,61 @@
           "org_writing": "The agent is writing another of your team's drafts. Try again in a minute or two.",
           "open_suggestions": "Accept or reject the open suggestions first, then try again.",
           "not_draft": "This draft is no longer a draft, so the agent didn't start.",
+          "empty": "The page has no text to rewrite yet.",
+          "too_long": "The page is too long to rewrite whole. Use Fix open rules, or shorten it first.",
           "failed": "The agent couldn't start. Try again in a moment."
         }
+      },
+      "run": {
+        "about": "What Run Agent does"
+      },
+      "data": {
+        "uses": "Uses your data: {parts} · <edit>Edit sources</edit>",
+        "none": "No sources kept yet · <edit>Edit sources</edit>",
+        "note": {
+          "title": "Content Agent writes from your data",
+          "body": "Your prompts, fan-outs, cited pages and Search Console queries. Every change shows the sources it used.",
+          "close": "Close"
+        }
+      },
+      "agentCard": {
+        "waiting": "{count, plural, one {Content Agent has # suggestion for you} other {Content Agent has # suggestions for you}}",
+        "gain": "Rules {met, number} → {after, number} of {total, number}",
+        "review": "Review",
+        "reviewed": "All suggestions reviewed",
+        "reviewedLine": "{accepted, number} accepted · Rules {met, number} of {total, number}{open, plural, =0 {} other { · # still open}}",
+        "more": "+{count, number} more",
+        "run": "Run Agent",
+        "working": "Content Agent is working",
+        "builtFrom": "built from {count, number} of your sources",
+        "seeSources": "See sources"
+      },
+      "rewrite": {
+        "bar": "Rewritten page",
+        "ready": "Content Agent rewrote the page to its rules",
+        "characters": "{before, number} → {after, number} characters",
+        "accepted": "Rewrite accepted",
+        "rejected": "Rewrite rejected",
+        "rulesOpen": "{count, plural, one {# rule still open} other {# rules still open}}",
+        "compare": "Compare",
+        "compareTitle": "Your page and the rewrite",
+        "before": "Your page · {count, number} characters",
+        "after": "Rewrite · {count, number} characters",
+        "accept": "Accept",
+        "reject": "Reject",
+        "undo": "Undo",
+        "changed": "The page changed after the agent read it. Reject this rewrite and run it again on the page as it is now.",
+        "changedAfter": "The page changed after the rewrite was put in. To go back, open History.",
+        "acceptedToast": "Rewrite put in place. History keeps your page as it was.",
+        "rejectedToast": "Rewrite rejected. Your page stays as it is.",
+        "undoneToast": "Your page is back, and the rewrite is open to decide again."
       },
       "actionBar": "This draft is the work of <link>Action AC-{no}</link>. Mark ready completes its task there.",
       "actionBarDone": "This draft is the work of <link>Action AC-{no}</link>.",
       "suggestions": {
         "bar": "Agent suggestions",
         "agent": "Content Agent",
-        "suggested": "suggested {count, plural, one {# change} other {# changes}}",
         "fromAction": "from Action AC-{no}",
-        "decided": "{accepted} accepted · {rejected} rejected",
-        "rulesOpen": "{count, plural, one {# rule still open} other {# rules still open}}",
         "runMax": "a run makes at most {max} changes: run it again for the rest",
         "acceptAll": "Accept all",
         "rejectAll": "Reject all",
@@ -3617,26 +3668,34 @@
         "stale": "The page changed here since the agent read it.",
         "heading": "This would put more than a heading into the heading. Reject it, and add the text below the heading yourself.",
         "links": "Links",
+        "basedOn": "Based on",
+        "sourceKinds": {
+          "prompt": "Prompt",
+          "fanout": "Fan-out",
+          "cited_page": "Cited page",
+          "gsc_query": "Search Console"
+        },
+        "sourceMark": "Source {n}: {label}",
         "acceptedToast": "{count, plural, one {Accepted} other {# changes accepted}} · undo any time",
         "rejectedToast": "{count, plural, one {Rejected} other {# changes rejected}} · restore any time",
         "undoneToast": "{count, plural, one {Undone · back to the suggestion} other {# undone · the suggestions are back}}",
         "notApplied": "{count, plural, one {# suggestion couldn't be applied} other {# suggestions couldn't be applied}}: the page changed there, AI quotes the passage, or a heading would get too long.",
         "saveFailed": "Couldn't keep the decision. Try again.",
         "htmlBlocked": "Accept or reject the {count, plural, one {# agent suggestion} other {# agent suggestions}} first, then edit as HTML.",
-        "fixRules": "Apply rules with Agent",
-        "fixing": "Content Agent is working…",
         "fixed": "{count, plural, one {Content Agent suggested # change} other {Content Agent suggested # changes}} · review them in the page",
         "fixedMax": "Content Agent suggested {count} changes, the most one run makes · review them, then run it again for the rules still open",
         "nothingToFix": "Content Agent found nothing it could change without new facts.",
         "notForAgent": "Content Agent doesn't change heading levels: make the extra H1s H2s in the toolbar.",
-        "decideFirst": "Accept or reject the open suggestions first.",
+        "decideFirst": "{count, plural, one {Review the open suggestion first, then run the agent.} other {Review the open suggestions first, then run the agent.}}",
         "citedLoading": "Reading which passages AI quotes, so the agent leaves them as they are…",
+        "agentBusy": "Content Agent is already working on this page. Wait for it to finish.",
         "fixErrors": {
           "ai_budget": "This month's AI usage is spent. Upgrade for more, or try again next month.",
           "no_subscription": "Content Agent needs an active subscription. Choose a plan in Settings › Billing.",
           "empty": "Write something first: the agent improves the page you have.",
           "open_suggestions": "This page has open suggestions, maybe from another tab. They're shown now: accept or reject them first.",
           "published": "This page is published. Content Agent suggests changes to drafts only.",
+          "writing": "Content Agent is already writing this page, maybe from another tab. Try again once it has finished.",
           "failed": "Content Agent couldn't run. Try again."
         }
       },
@@ -3732,7 +3791,7 @@
         "html": "Edit as HTML",
         "htmlBack": "Back to visual",
         "openLink": "Open the link in a new tab (or ⌘/Ctrl + click it in the page)",
-        "counter": "{count} / {target} characters"
+        "counter": "{count} / {target} characters · {words, plural, one {# word} other {# words}}"
       },
       "link": {
         "title": "Add a link",
@@ -3758,11 +3817,18 @@
         "show": "Show side panel",
         "hide": "Hide side panel",
         "openTab": "Open {tab} in the side panel",
+        "openRules": "{count, plural, one {# rule open} other {# rules open}}",
+        "sourcesInUse": "{count, plural, one {# source in use} other {# sources in use}}",
         "tabs": {
-          "impact": "Live page",
-          "brief": "Brief",
+          "instructions": "Instructions",
           "sources": "Sources",
-          "rules": "Rules"
+          "impact": "Live page"
+        },
+        "segmentsLabel": "Brief or rules",
+        "segments": {
+          "brief": "Brief",
+          "rules": "Rules",
+          "open": "{count, number} open"
         }
       },
       "impact": {
@@ -3834,7 +3900,12 @@
       "sources": {
         "loadError": "Couldn't load the sources.",
         "retry": "Retry",
-        "summary": "{count, plural, one {Built from # source} other {Built from # sources}}",
+        "summary": "{count, plural, one {# source in use} other {# sources in use}}",
+        "lastUsed": {
+          "when": "Last used by Content Agent · {when}",
+          "justNow": "Last used by Content Agent · just now",
+          "never": "Not used by Content Agent yet"
+        },
         "summaryParts": "{prompts, plural, one {# prompt} other {# prompts}} · {fanouts, plural, one {# fan-out} other {# fan-outs}} · {pages, plural, one {# cited page} other {# cited pages}} · {queries, plural, one {# Search Console query} other {# Search Console queries}}",
         "hint": "Each source shows where the draft uses it. Uncheck one to leave it out, then rebuild the brief.",
         "empty": "No sources yet. Add a prompt, a page or a Search Console query.",
@@ -3914,19 +3985,28 @@
         "pageType": "Page type",
         "targetUrl": "Target URL",
         "newPage": "A new page",
-        "notSet": "Not set",
+        "notSet": "Not set yet",
         "goal": "Goal",
         "audience": "Audience",
         "length": "Length",
-        "lengthValue": "{count} characters · from the rules",
+        "lengthValue": "{count} characters · ~{words} words",
+        "lengthFrom": "From the rules",
         "outline": "Outline",
         "answers": "Answers “{fanout}”",
         "keywords": "Keywords",
-        "empty": "No outline yet. Rebuild outline writes one from the sources you keep, each H2 answering a search AI ran.",
-        "fromOpportunity": "From the opportunity's brief. Rebuild outline maps each H2 to a fan-out.",
+        "empty": "Empty. Run Agent to draft one, or add H2s yourself.",
+        "emptyOutline": "No H2s yet. Rebuild brief to draft them, or add H2s yourself.",
+        "fromOpportunity": "From the opportunity's brief. Rebuild brief maps each H2 to a fan-out.",
         "edited": "Edited by you.",
         "builtFrom": "{count, plural, one {Built from # source} other {Built from # sources}} · {date}",
-        "rebuild": "Rebuild outline",
+        "rebuild": "Rebuild brief",
+        "run": "Run Agent",
+        "info": "Run Agent writes the goal, audience and outline from your sources.",
+        "status": {
+          "empty": "No brief yet",
+          "emptyDetail": "Goal, audience and outline are empty.",
+          "ready": "Brief ready · {count, plural, =0 {no H2s yet} one {# H2} other {# H2s}}"
+        },
         "rewrite": {
           "button": {
             "create": "Rewrite from brief",
@@ -3939,12 +4019,11 @@
           "start": "Start the agent",
           "cancel": "Cancel"
         },
-        "rebuildEdited": "Rebuild outline writes a new brief over the one you edited.",
+        "rebuildEdited": "Rebuild brief writes a new brief over the one you edited.",
         "rebuildAnyway": "Rebuild anyway",
         "keepEdited": "Keep my brief",
-        "build": "Build brief",
         "edit": "Edit brief",
-        "usage": "Rebuilding uses your workspace's AI usage.",
+        "usage": "Writing the brief uses your workspace's AI usage.",
         "rebuilt": "{count, plural, one {Brief rebuilt from # source} other {Brief rebuilt from # sources}}",
         "rebuildErrors": {
           "ai_budget": "This month's AI usage is used up. It resets when your subscription renews.",
@@ -4031,7 +4110,7 @@
           "measureSteps": "How to measure, as numbered steps"
         },
         "hints": {
-          "length": "A target, not a minimum: within 20% of it meets the rule. A page brought in to optimize starts at its own length. A page well over it is open, and Apply rules with Agent shortens it a few passages at a time.",
+          "length": "A target, not a minimum: within 20% of it meets the rule. A page brought in to optimize starts at its own length. A page well over it is open, and Fix open rules shortens it a few passages at a time.",
           "oneH1": "A page has one H1, its title. Make any other H1 an H2 in the toolbar: Content Agent doesn't change heading levels.",
           "summary": "A short summary under the H1 that answer engines can quote.",
           "fanoutH2": "Takes the top fan-outs you keep in Sources, the most searched first, not every one.",
@@ -4088,9 +4167,32 @@
         },
         "mineName": "My rules · {type}",
         "setPicked": "Rule set changed for this draft",
-        "agentFix": "Apply rules with Agent",
-        "agentFixing": "Content Agent is working…",
-        "agentFixHint": "Content Agent suggests changes for the rules not met yet, for you to review in the page",
+        "run": {
+          "notMet": "{count, plural, one {# rule is not met} other {# rules are not met}}",
+          "allMet": "All rules are met",
+          "info": "<b>Run Agent</b> fixes the open rules. You review each change. <b>▾ Rewrite page</b> rewrites the whole page. Uses more AI.",
+          "infoFix": "<b>Run Agent</b> fixes the open rules. You review each change.",
+          "names": "{names}{more, select, yes {…} other {}}",
+          "label": "Run Agent",
+          "rewriteLabel": "Rewrite page",
+          "working": "Working…",
+          "more": "More ways to run the agent",
+          "recommendedDetail": "Recommended · {detail}",
+          "fix": {
+            "title": "Fix open rules",
+            "detail": "{count, plural, one {# rule} other {# rules}} · small, reviewable changes",
+            "usage": "Less AI usage"
+          },
+          "rewrite": {
+            "title": "Rewrite the whole page",
+            "detail": "Every rule in “{set}” · one new version, cited passages kept",
+            "usage": "More AI usage"
+          }
+        },
+        "rewriteAdvice": {
+          "length": "Recommended: the page is {count, number} characters for a Length of {target, number} ({percent, number}% off). A rewrite gets there in one go.",
+          "open": "Recommended: {count, number} rules are open. A rewrite meets them together."
+        },
         "lengthConflict": "The fan-out H2s, FAQ questions and summary these rules still ask for take about {need, number} characters, more than Length allows (up to {max, number}). Raise Length, or ask for fewer.",
         "fixTrace": "Fix",
         "fixTraceHint": "Content Agent rewrites only these phrases, for you to review",
@@ -4654,7 +4756,11 @@
         "readFailed": "Couldn't read this section; export again to include it",
         "noUncrawled": "Every cited page was read by an AI search bot in the last 30 days",
         "uncrawledMore": "{count, plural, one {# more page not listed} other {# more pages not listed}}",
-        "noBrokenLinks": "No AI visitor landed on a missing page in this range"
+        "noBrokenLinks": "No AI visitor landed on a missing page in this range",
+        "partOfPlatform": "Part of {platform}'s visits, not added to them"
+      },
+      "surfaceNames": {
+        "shopping": "{platform} Shopping"
       },
       "botTypes": {
         "training": "Training",
@@ -4751,7 +4857,16 @@
       "engaged": "Engaged",
       "keyEvents": "Key events",
       "lowSample": "Low sample: {sessions, plural, one {# session} other {# sessions}} in Google Analytics",
-      "needsAnalytics": "Engaged and key events need Google Analytics."
+      "needsAnalytics": "Engaged and key events need Google Analytics.",
+      "surfaces": {
+        "shopping": "Shopping"
+      },
+      "surfaceNames": {
+        "shopping": "{platform} Shopping"
+      },
+      "surfaceTips": {
+        "shopping": "Visits from {platform} Shopping product cards: product links in your feed tagged utm_medium=feed. They're part of {platform}'s visits, not added to them."
+      }
     },
     "kpis": {
       "visits": "AI-referred visits",
@@ -4759,6 +4874,7 @@
       "topPlatform": "Top platform",
       "topPlatformTip": "The AI platform that sent the most visits in this range.",
       "topPlatformSub": "{visits, plural, one {# visit} other {# visits}}",
+      "topPlatformSurfaceSub": "{visits, plural, one {# visit} other {# visits}} · {surfaceVisits, number} from {surface}",
       "platforms": "Platforms",
       "platformsTip": "AI platforms that sent at least one visit in this range.",
       "platformsSub": "unique AI sources",
