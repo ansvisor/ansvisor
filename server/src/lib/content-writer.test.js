@@ -218,6 +218,9 @@ describe('startDraftWriting', () => {
     expect(draftUpdates()[0]).toMatchObject({ agent_state: 'writing', agent_run: 'write' });
 
     await vi.waitFor(() => expect(draftUpdates()).toHaveLength(2));
+    // It ends only its own claim: a newer run's, after a Stop let go, is left alone.
+    const updates = writes.filter((w) => w.table === 'content_drafts' && w.kind === 'update');
+    expect(updates[1].filters).toContainEqual(['agent_state_at', updates[0].value.agent_state_at]);
     expect(draftUpdates()[1]).toMatchObject({
       title: 'How to brew pour-over coffee',
       status: 'in_review',

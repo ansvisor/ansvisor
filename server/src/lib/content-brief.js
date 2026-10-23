@@ -7,9 +7,9 @@ import { getLanguageName } from './languages.js';
 import {
   RunStoppedError,
   advanceRun,
-  callSignal,
   finishRun,
   isStop,
+  runCall,
   startRun,
   stopIfStopped,
 } from './content-runs.js';
@@ -209,13 +209,15 @@ async function briefWithRun({ draft, draftId, brand, prompts, sources, run }) {
   let generated;
   try {
     await advanceRun(run, 1);
-    generated = await generateObject({
-      model: resolveModel(modelId),
-      schema: outlineSchema,
-      system: SYSTEM_PROMPT,
-      prompt: buildBriefPrompt({ brand, draft, prompts, sources }),
-      abortSignal: callSignal(run, CALL_TIMEOUT_MS),
-    });
+    generated = await runCall(run, budget, CALL_TIMEOUT_MS, (abortSignal) =>
+      generateObject({
+        model: resolveModel(modelId),
+        schema: outlineSchema,
+        system: SYSTEM_PROMPT,
+        prompt: buildBriefPrompt({ brand, draft, prompts, sources }),
+        abortSignal,
+      }),
+    );
     await budget.charge(generated.usage);
   } catch (err) {
     // An answer that didn't fit the schema was still paid for: charged as

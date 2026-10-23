@@ -428,6 +428,28 @@ export async function reserveAiBudget(
         .eq('id', reservedId);
       if (error) logger.error({ err: error, orgId, feature }, '[ai-budget] release failed');
     },
+    /**
+     * A call sent and then aborted (the run's Stop): the provider finishes
+     * and bills it all the same, so the hold stays as its cost and release()
+     * leaves it. With no hold (an unlimited budget), it is written at what a
+     * hold would be.
+     */
+    async keep() {
+      if (charged) return;
+      charged = true;
+      if (reservedId) return;
+      const since = (await quotaPeriodStart(orgId)).toISOString();
+      const { error } = await supabaseAdmin.from('prompt_improve_usage').insert({
+        organization_id: orgId,
+        feature,
+        prompt_id: promptId,
+        action_id: actionId,
+        content_draft_id: draftId,
+        model: modelId,
+        cost_usd: await holdCostUsd(orgId, modelId, since),
+      });
+      if (error) logger.error({ err: error, orgId, feature }, '[ai-budget] usage write failed');
+    },
   };
 }
 

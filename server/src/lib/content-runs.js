@@ -93,12 +93,16 @@ export function runSteps(kind, counts = {}) {
 export async function startRun({ draftId, kind, counts }) {
   const steps = runSteps(kind, counts);
   const controller = new AbortController();
+  // Runs a stopped server left on the draft are closed: only those older
+  // than any run still going, so a run another tab started goes on, with its
+  // steps and its Stop.
   await shown('earlier runs', null, () =>
     supabaseAdmin
       .from('content_agent_runs')
       .update({ finished_at: new Date().toISOString(), outcome: 'failed' })
       .eq('draft_id', draftId)
-      .is('finished_at', null),
+      .is('finished_at', null)
+      .lt('started_at', new Date(Date.now() - RUN_STALE_MS).toISOString()),
   );
   const data = await shown('run', null, () =>
     supabaseAdmin
@@ -115,6 +119,31 @@ export async function startRun({ draftId, kind, counts }) {
 /** A model call's signal: the run's Stop, or the call's own timeout. */
 export function callSignal(run, timeoutMs) {
   return AbortSignal.any([run.signal, AbortSignal.timeout(timeoutMs)]);
+}
+
+/**
+ * A run's model call: it isn't sent once the run is stopped, and goes with
+ * the run's Stop and its own timeout (callSignal). A call a Stop aborted was
+ * sent already, and the provider bills it all the same, so its hold on the
+ * AI budget stays as its cost (`budget.keep()`), never let go.
+ */
+export async function runCall(run, budget, timeoutMs, call) {
+  await stopIfStopped(run);
+  // Stopped since: never sent, so nothing is billed.
+  if (run.signal?.aborted) throw new RunStoppedError();
+  try {
+    return await call(callSignal(run, timeoutMs));
+  } catch (err) {
+    if (isStop(err, run)) {
+      // Never in the way of the stop it follows: a failed write is logged.
+      await budget
+        .keep()
+        .catch((keepErr) =>
+          logger.warn({ err: keepErr, runId: run.id }, '[content-runs] stopped call not kept'),
+        );
+    }
+    throw err;
+  }
 }
 
 /** Moves a run on to `step`, with counts learned on the way ({ index: count }). */
@@ -169,18 +198,21 @@ export async function finishRun(run, outcome, counts = {}) {
 }
 
 /**
- * Stops a draft's run under way: marks it stopped and aborts its model call
- * when it runs here. Answers whether one was under way.
+ * Stops a draft's run under way (with `runId`, that run only): marks it
+ * stopped and aborts its model call when it runs here. Answers whether one
+ * was under way.
  */
-export async function stopDraftRun(draftId) {
-  const { data, error } = await supabaseAdmin
+export async function stopDraftRun(draftId, runId = null) {
+  let query = supabaseAdmin
     .from('content_agent_runs')
     .update({ stopped_at: new Date().toISOString() })
     .eq('draft_id', draftId)
     .is('finished_at', null)
     .is('stopped_at', null)
-    .gt('started_at', new Date(Date.now() - RUN_STALE_MS).toISOString())
-    .select('id');
+    .gt('started_at', new Date(Date.now() - RUN_STALE_MS).toISOString());
+  // The run the editor shows: another tab's on the same draft goes on.
+  if (runId) query = query.eq('id', runId);
+  const { data, error } = await query.select('id');
   if (error) throw error;
   for (const { id } of data ?? []) live.get(id)?.abort();
   return (data ?? []).length > 0;

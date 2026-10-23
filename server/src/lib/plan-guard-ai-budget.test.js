@@ -151,6 +151,14 @@ describe('reserveAiBudget', () => {
     expect(ops).toEqual([expect.objectContaining({ kind: 'delete', filters: [['id', 'u1']] })]);
   });
 
+  it('keeps the hold as the cost of a call a Stop aborted, which the provider still bills', async () => {
+    const budget = await guard.reserveAiBudget('o1', { feature: 'content', modelId: 'm' });
+    await budget.keep();
+    await budget.release();
+    // Neither changed nor let go: the hold's row is the call's cost.
+    expect(ops).toEqual([]);
+  });
+
   it('refuses once the budget is spent, as the quota did', async () => {
     reserved = null;
     await expect(
@@ -175,6 +183,17 @@ describe('reserveAiBudget', () => {
       expect.objectContaining({
         kind: 'insert',
         value: expect.objectContaining({ feature: 'action_center', action_id: 'a1' }),
+      }),
+    ]);
+
+    // A call a Stop aborted is written at what a hold would be.
+    ops = [];
+    const stopped = await guard.reserveAiBudget('o1', { feature: 'content', modelId: 'm' });
+    await stopped.keep();
+    expect(ops).toEqual([
+      expect.objectContaining({
+        kind: 'insert',
+        value: expect.objectContaining({ feature: 'content', cost_usd: expect.any(Number) }),
       }),
     ]);
   });

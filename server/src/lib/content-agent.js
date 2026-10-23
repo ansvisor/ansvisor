@@ -10,9 +10,9 @@ import { pageTypeFormat } from './content-page-types.js';
 import {
   RunStoppedError,
   advanceRun,
-  callSignal,
   finishRun,
   isStop,
+  runCall,
   startRun,
   stopIfStopped,
 } from './content-runs.js';
@@ -692,22 +692,24 @@ async function fixWithRun({ draft, brand, brandId, draftId, input, passages, mor
   let object;
   try {
     await advanceRun(run, 2);
-    const generated = await generateObject({
-      model: resolveModel(modelId),
-      schema: suggestionsSchema,
-      system: SYSTEM_PROMPT,
-      prompt: buildFixPrompt({
-        brand,
-        draft,
-        passages,
-        more,
-        lockedKeys,
-        input,
-        linkTargets: linkTargetsPrompt(targets, ruleKeys),
-        sources: sourcesPrompt(numbered),
+    const generated = await runCall(run, budget, CALL_TIMEOUT_MS, (abortSignal) =>
+      generateObject({
+        model: resolveModel(modelId),
+        schema: suggestionsSchema,
+        system: SYSTEM_PROMPT,
+        prompt: buildFixPrompt({
+          brand,
+          draft,
+          passages,
+          more,
+          lockedKeys,
+          input,
+          linkTargets: linkTargetsPrompt(targets, ruleKeys),
+          sources: sourcesPrompt(numbered),
+        }),
+        abortSignal,
       }),
-      abortSignal: callSignal(run, CALL_TIMEOUT_MS),
-    });
+    );
     await budget.charge(generated.usage);
     object = generated.object;
   } catch (err) {
