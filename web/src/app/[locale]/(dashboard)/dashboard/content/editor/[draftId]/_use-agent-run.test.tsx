@@ -30,11 +30,12 @@ const run = (): AgentRun => ({
   outcome: null,
 });
 
-let seen: AgentRun | null = null;
+/** The hook as the editor uses it: the run it reads, by id. */
 function Harness() {
-  seen = useAgentRun('d1', true, ['fix']);
-  return null;
+  const run = useAgentRun('d1', true, ['fix']);
+  return <span data-run={run?.id ?? ''} />;
 }
+const seen = () => container.querySelector('[data-run]')!.getAttribute('data-run');
 
 let container: HTMLDivElement;
 let root: Root;
@@ -57,7 +58,7 @@ afterEach(() => {
 
 describe('useAgentRun', () => {
   it('reads the run a second after each read', async () => {
-    expect(seen?.id).toBe('r1');
+    expect(seen()).toBe('r1');
     expect(readAgentRun).toHaveBeenCalledTimes(1);
     await act(async () => void (await vi.advanceTimersByTimeAsync(RUN_POLL_MS)));
     expect(readAgentRun).toHaveBeenCalledTimes(2);
