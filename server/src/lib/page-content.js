@@ -250,6 +250,22 @@ function commonAncestor($, a, b) {
 }
 
 /**
+ * The page's text length as the Rules tab counts it (pageTextLength in
+ * web/src/lib/content/rules.ts): a space between blocks, an entity as one
+ * character, runs of spaces as one.
+ */
+export function textLength(html) {
+  return String(html ?? '')
+    .replace(/<(script|style)\b[\s\S]*?<\/\1>/gi, ' ')
+    .replace(/<\/?(p|h[1-6]|li|td|th|blockquote|br|div)\b[^>]*>/gi, ' ')
+    .replace(/<[^>]*>/g, '')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&[#a-z0-9]+;/gi, 'x')
+    .replace(/\s+/g, ' ')
+    .trim().length;
+}
+
+/**
  * @param {string} html the page as fetched
  * @param {string} pageUrl the page's address after redirects, for its links
  * @returns {{ title: string, html: string }} html: the content, then its JSON-LD scripts

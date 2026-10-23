@@ -4015,6 +4015,7 @@
         "length": "Length",
         "lengthValue": "{count} characters · ~{words} words",
         "lengthFrom": "From the rules",
+        "lengthFromCited": "From the rules · cited pages average {count} characters",
         "outline": "Outline",
         "answers": "Answers “{fanout}”",
         "keywords": "Keywords",

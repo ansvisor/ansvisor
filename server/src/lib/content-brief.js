@@ -13,6 +13,7 @@ import {
   startRun,
   stopIfStopped,
 } from './content-runs.js';
+import { citedPagesLength } from './content-cited-length.js';
 import { reserveAiBudget } from './plan-guard.js';
 
 /**
@@ -206,6 +207,12 @@ async function briefWithRun({ draft, draftId, brand, prompts, sources, run }) {
     modelId,
     draftId,
   });
+  // The cited pages' length, read beside the model call (CE-030); never fails it.
+  const citedLength = citedPagesLength({
+    brandId: draft.brand_id,
+    pages: sources.pages,
+    ownUrl: draft.source_url,
+  });
 
   let generated;
   try {
@@ -246,6 +253,7 @@ async function briefWithRun({ draft, draftId, brand, prompts, sources, run }) {
       pages: sources.pages.length,
       queries: sources.queries.length,
     },
+    citedLength: await citedLength,
   };
   // Stopped meanwhile: the brief stays as it was.
   await stopIfStopped(run);

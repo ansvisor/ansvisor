@@ -52,6 +52,10 @@ vi.mock('./plan-guard.js', async (importOriginal) => ({
   reserveAiBudget: (...args) => reserveAiBudget(...args),
 }));
 vi.mock('./logger.js', () => ({ logger: { error: vi.fn(), warn: vi.fn() } }));
+const citedPagesLength = vi.fn();
+vi.mock('./content-cited-length.js', () => ({
+  citedPagesLength: (...args) => citedPagesLength(...args),
+}));
 const stopIfStopped = vi.fn();
 vi.mock('./content-runs.js', async (importOriginal) => ({
   ...(await importOriginal()),
@@ -95,6 +99,7 @@ const outline = [
 
 beforeEach(() => {
   stopIfStopped.mockReset().mockResolvedValue(undefined);
+  citedPagesLength.mockReset().mockResolvedValue({ characters: 4300, pages: 1 });
   writes = [];
   filters = [];
   rows = {
@@ -152,6 +157,13 @@ describe('rebuildDraftBrief', () => {
       keywords: ['espresso', 'grinder'],
       origin: 'rebuild',
       builtFrom: { prompts: 1, fanouts: 2, pages: 1, queries: 1 },
+      // The cited pages' length (CE-030), read without the draft's own page.
+      citedLength: { characters: 4300, pages: 1 },
+    });
+    expect(citedPagesLength).toHaveBeenCalledWith({
+      brandId: BRAND,
+      pages: [{ url: 'https://www.reddit.com/r/espresso/x', kind: 'forum' }],
+      ownUrl: 'https://acme.example/guides/espresso',
     });
     expect(brief.outline).toEqual([
       {

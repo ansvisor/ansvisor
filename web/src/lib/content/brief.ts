@@ -38,6 +38,12 @@ export interface DraftBrief {
   builtAt: string | null;
   /** The sources it was built from, by group. */
   builtFrom: { prompts: number; fanouts: number; pages: number; queries: number } | null;
+  /**
+   * How long the cited pages are, in characters (the median of those read),
+   * and how many were read when it was rebuilt (CE-030); null or absent when
+   * none could be.
+   */
+  citedLength?: { characters: number; pages: number } | null;
 }
 
 /** Limits a brief keeps to, the server's (content-brief.js) and the column's (00212). */
@@ -68,6 +74,13 @@ export const draftBriefSchema = z.object({
       queries: z.number().int().min(0),
     })
     .nullable(),
+  citedLength: z
+    .object({
+      characters: z.number().int().min(0).max(1_000_000),
+      pages: z.number().int().min(1).max(30),
+    })
+    .nullable()
+    .optional(),
 });
 
 /** The brief of the opportunity a draft started from, until the draft has its own. */

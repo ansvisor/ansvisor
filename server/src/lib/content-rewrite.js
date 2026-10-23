@@ -4,6 +4,9 @@ import { z } from 'zod';
 import { HEADING_LIMITS, passageKey } from './content-agent.js';
 import { linkKey } from './content-links.js';
 import { sourcesField } from './content-sources.js';
+import { textLength } from './page-content.js';
+
+export { textLength };
 
 /**
  * Rewrite the page to these rules (Content Editor): the Content Agent
@@ -67,22 +70,6 @@ How to rewrite:
 - HTML only: h1, h2, h3, p, ul, ol, li, strong, em and a. No Markdown, no code fences, no classes, styles or other tags.
 - "reason" says in one short sentence what you changed, e.g. "cut to about 8,000 characters and answered each heading first".
 - Write in the page's own language.`;
-
-/**
- * The page's text length as the Rules tab counts it (pageTextLength in
- * web/src/lib/content/rules.ts): a space between blocks, an entity as one
- * character, runs of spaces as one.
- */
-export function textLength(html) {
-  return String(html ?? '')
-    .replace(/<(script|style)\b[\s\S]*?<\/\1>/gi, ' ')
-    .replace(/<\/?(p|h[1-6]|li|td|th|blockquote|br|div)\b[^>]*>/gi, ' ')
-    .replace(/<[^>]*>/g, '')
-    .replace(/&nbsp;/g, ' ')
-    .replace(/&[#a-z0-9]+;/gi, 'x')
-    .replace(/\s+/g, ' ')
-    .trim().length;
-}
 
 const clip = (text, max) => {
   const one = String(text ?? '')

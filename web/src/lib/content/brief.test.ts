@@ -105,6 +105,16 @@ describe('the brief', () => {
     expect(draftBriefSchema.safeParse({ ...brief, origin: 'agent' }).success).toBe(false);
   });
 
+  it('keeps the cited pages’ length, and reads a brief saved before it', () => {
+    const cited = { ...brief, citedLength: { characters: 4300, pages: 3 } };
+    expect(draftBriefSchema.parse(cited).citedLength).toEqual({ characters: 4300, pages: 3 });
+    expect(draftBriefSchema.parse(brief).citedLength).toBeUndefined();
+    expect(draftBriefSchema.parse({ ...brief, citedLength: null }).citedLength).toBeNull();
+    expect(
+      draftBriefSchema.safeParse({ ...brief, citedLength: { characters: 4300, pages: 0 } }).success,
+    ).toBe(false);
+  });
+
   it('reads an opportunity’s brief until the draft has its own', () => {
     expect(
       briefFromOpportunity({

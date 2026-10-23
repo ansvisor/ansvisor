@@ -150,6 +150,16 @@ describe('the Brief tab', () => {
     expect(onRebuild).toHaveBeenCalledTimes(1);
   });
 
+  it('says next to Length how long the cited pages are, once read (CE-030)', async () => {
+    await render({
+      status: 'ready',
+      brief: { ...brief, citedLength: { characters: 4300, pages: 3 } },
+    });
+    expect(fields().Length).toBe(
+      '3,000 characters · ~500 wordsFrom the rules · cited pages average 4,300 characters',
+    );
+  });
+
   it('offers Run Agent for a new page without a brief, or H2s added by hand', async () => {
     await render(
       { status: 'ready', brief: null },
