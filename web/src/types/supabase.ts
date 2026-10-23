@@ -1045,6 +1045,92 @@ export type Database = {
           },
         ]
       }
+      content_author_defaults: {
+        Row: {
+          author_id: string
+          brand_id: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          author_id: string
+          brand_id: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          author_id?: string
+          brand_id?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "content_author_defaults_author_id_fkey"
+            columns: ["author_id"]
+            isOneToOne: false
+            referencedRelation: "content_authors"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "content_author_defaults_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: true
+            referencedRelation: "brands"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      content_authors: {
+        Row: {
+          bio: string | null
+          created_at: string
+          created_by: string | null
+          id: string
+          name: string
+          organization_id: string
+          photo_url: string | null
+          same_as: string[]
+          title: string | null
+          updated_at: string
+          user_id: string | null
+        }
+        Insert: {
+          bio?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          name: string
+          organization_id: string
+          photo_url?: string | null
+          same_as?: string[]
+          title?: string | null
+          updated_at?: string
+          user_id?: string | null
+        }
+        Update: {
+          bio?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          name?: string
+          organization_id?: string
+          photo_url?: string | null
+          same_as?: string[]
+          title?: string | null
+          updated_at?: string
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "content_authors_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       content_agent_runs: {
         Row: {
           draft_id: string

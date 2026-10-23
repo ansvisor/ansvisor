@@ -1,3 +1,5 @@
+import { qualityPhase } from '@/lib/content/quality';
+
 /**
  * Settings' sections, each with its own address (/dashboard/settings/<id>),
  * so a page or an e-mail can link straight to one: the Chat page links to AI
@@ -7,6 +9,7 @@ export const SETTINGS_SECTIONS = [
   'account',
   'organization',
   'team',
+  'authors',
   'notifications',
   'integrations',
   'api-keys',
@@ -18,6 +21,9 @@ export type SettingsSection = (typeof SETTINGS_SECTIONS)[number];
 
 /** Sections only Ansvisor Cloud has: self-host sets its AI key in env, and has no billing. */
 const CLOUD_ONLY: readonly SettingsSection[] = ['ai-providers', 'billing'];
+
+/** Content Editor Quality's Authors (CE-037): only while its phase is live. */
+const hasAuthors = () => qualityPhase() >= 1;
 
 /** Older names an address may still carry: ?tab=project, ?tab=agent. */
 const RENAMED: Record<string, SettingsSection> = {
@@ -35,12 +41,13 @@ export function resolveSettingsSection(
 ): SettingsSection {
   const name = value ? (RENAMED[value] ?? value) : null;
   const section = SETTINGS_SECTIONS.find((s) => s === name);
-  if (!section || (!isCloud && CLOUD_ONLY.includes(section))) return 'account';
+  if (!section || !hasSettingsSection(section, { isCloud })) return 'account';
   return section;
 }
 
 /** Whether this install shows the section. */
 export function hasSettingsSection(section: SettingsSection, { isCloud }: { isCloud: boolean }) {
+  if (section === 'authors' && !hasAuthors()) return false;
   return isCloud || !CLOUD_ONLY.includes(section);
 }
 

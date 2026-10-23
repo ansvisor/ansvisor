@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest';
-import { resolveSettingsSection, settingsSectionPath } from './_sections';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { hasSettingsSection, resolveSettingsSection, settingsSectionPath } from './_sections';
 
 const cloud = { isCloud: true };
 const selfHost = { isCloud: false };
@@ -20,6 +20,22 @@ describe('resolveSettingsSection', () => {
     expect(resolveSettingsSection('nope', cloud)).toBe('account');
     expect(resolveSettingsSection('ai-providers', selfHost)).toBe('account');
     expect(resolveSettingsSection('billing', selfHost)).toBe('account');
+  });
+});
+
+describe('Authors (CE-037)', () => {
+  afterEach(() => vi.unstubAllEnvs());
+
+  it("isn't there until Content Editor Quality's first phase is live", () => {
+    vi.stubEnv('NEXT_PUBLIC_CONTENT_QUALITY_PHASE', '');
+    expect(hasSettingsSection('authors', selfHost)).toBe(false);
+    expect(resolveSettingsSection('authors', cloud)).toBe('account');
+  });
+
+  it('opens on its own address once it is', () => {
+    vi.stubEnv('NEXT_PUBLIC_CONTENT_QUALITY_PHASE', '1');
+    expect(hasSettingsSection('authors', selfHost)).toBe(true);
+    expect(resolveSettingsSection('authors', selfHost)).toBe('authors');
   });
 });
 
