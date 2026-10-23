@@ -85,6 +85,7 @@ vi.mock('./content-agent.js', async (importOriginal) => ({
 
 const { briefText, renderPage, runDraftWriting, startDraftWriting } =
   await import('./content-writer.js');
+const { textLength } = await import('./content-rewrite.js');
 const { passageKey } = await import('./content-agent.js');
 const { PlanLimitError } = await import('./plan-guard.js');
 // The real hold: self-hosted here, so it reserves nothing and writes each charge.
@@ -552,14 +553,27 @@ describe('Rewrite the page to these rules', () => {
       '<h1>Pour-over coffee</h1><p>[[KEEP 1]]</p><p>Use good coffee, freshly ground.</p>' +
         '<p>[[KEEP 2]]</p><p>See <a href="/pricing">pricing</a> or <a href="https://evil.example">this</a>.</p>',
     );
-    await expect(run()).resolves.toEqual({ rewritten: true });
+    await expect(
+      run({
+        rules: [
+          { key: 'length', name: 'Length', detail: 'aim: 3,000 characters' },
+          { key: 'faq', name: 'FAQ with 5 questions', detail: 'aim: 5' },
+        ],
+      }),
+    ).resolves.toEqual({ rewritten: true });
 
     const { system, prompt } = generateObject.mock.calls[0][0];
-    expect(system).toContain('Each [[KEEP n]] line is a block kept word for word');
-    // The quoted passage and the table never reach the model as text.
-    expect(prompt).toContain('The page now, as HTML');
-    expect(prompt).not.toContain(QUOTED);
-    expect(prompt).not.toContain('1:16');
+    expect(system).toContain('stands for a block kept word for word');
+    // The quoted passage and the table never reach the model to rewrite:
+    // they are described, and count toward Length.
+    expect(prompt).toContain('Length: about 3000 characters.');
+    expect(prompt).toMatch(
+      /The page now, as HTML: about \d+ characters of text, \d+ of them in its kept blocks/,
+    );
+    expect(prompt).toContain(`- [[KEEP 1]]: a passage AI assistants quote today: "${QUOTED}"`);
+    expect(prompt).toContain('- [[KEEP 2]]: a table, 1 rows: "Ratio1:16"');
+    expect(prompt).not.toContain(`<p>${QUOTED}</p>`);
+    expect(prompt).toContain("Write in the page's own language.");
     expect(budget.charge).toHaveBeenCalledWith({ inputTokens: 900, outputTokens: 700 });
 
     const row = writes.find((w) => w.table === 'content_draft_suggestions').value;
@@ -572,7 +586,7 @@ describe('Rewrite the page to these rules', () => {
       before_text: '',
       before_html: existing.body_html,
       reason: 'cut to about 3,000 characters',
-      rule_keys: ['faq'],
+      rule_keys: ['length', 'faq'],
     });
     expect(row.after_text).toBe(
       `<h1>Pour-over coffee</h1><p>${QUOTED}</p><p>Use good coffee, freshly ground.</p>` +
@@ -584,6 +598,30 @@ describe('Rewrite the page to these rules', () => {
       agent_state: null,
       agent_state_at: expect.any(String),
     });
+  });
+
+  it('keeps the page’s length when the Length rule is off', async () => {
+    answer('<h1>Pour-over</h1><p>[[KEEP 1]]</p><p>[[KEEP 2]]</p><p>Shorter.</p>');
+    await run({ rules: [{ key: 'faq', name: 'FAQ', detail: '' }] });
+    const { prompt } = generateObject.mock.calls[0][0];
+    expect(prompt).toContain(`Length: about ${textLength(existing.body_html)} characters.`);
+  });
+
+  it('fails the run on an answer that isn’t a page in HTML', async () => {
+    answer('# Pour-over\n\n[[KEEP 1]]\n\n[[KEEP 2]]');
+    await expect(run()).resolves.toEqual({ failed: true });
+    expect(writes.find((w) => w.table === 'content_draft_suggestions')).toBeUndefined();
+  });
+
+  it('drops the rewrite of a page marked ready during the run', async () => {
+    answer('<h1>Pour-over</h1><p>[[KEEP 1]]</p><p>[[KEEP 2]]</p><p>Shorter.</p>');
+    finished = null;
+    await expect(run()).resolves.toEqual({ skipped: true });
+    const insert = writes.find(
+      (w) => w.table === 'content_draft_suggestions' && w.kind === 'insert',
+    );
+    const drop = writes.find((w) => w.table === 'content_draft_suggestions' && w.kind === 'delete');
+    expect(drop.filters).toContainEqual(['batch_id', insert.value.batch_id]);
   });
 
   it('fails the run when the rewrite drops what it had to keep', async () => {

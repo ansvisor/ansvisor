@@ -22,7 +22,9 @@ import {
   MAX_REWRITE_CHARS,
   REWRITE_SYSTEM_PROMPT,
   cleanPageHtml,
+  isPageHtml,
   keepBlocks,
+  ownText,
   restoreKept,
   rewriteLinks,
   rewriteSchema,
@@ -205,7 +207,7 @@ export function buildWritePrompt({
   const rules = input.rules.map((r) => `${r.key}: ${r.name}${r.detail ? ` — ${r.detail}` : ''}`);
   const own = input.textRules.map((text) => `- ${text}`);
   const page = current
-    ? `The page now, as HTML (about ${textLength(current.html)} characters of text):\n${current.html}`
+    ? rewritePagePrompt(current)
     : passages
       ? `The page, passage by passage:\n${passages
           .map((p, i) => {
@@ -243,7 +245,20 @@ ${list(rules)}
 ${own.length ? `\nThe writer's own rules:\n${own.join('\n')}\n` : ''}${linkTargets ? `\n${linkTargets}\n` : ''}
 ${page}
 
-Write in ${getLanguageName(brand?.language)}.`;
+Write in ${current ? "the page's own language" : getLanguageName(brand?.language)}.`;
+}
+
+/** The page a rewrite starts from: its HTML with kept lines, and what each holds. */
+function rewritePagePrompt(current) {
+  const total = ownText(current) + current.keptChars;
+  const legend = [...current.legend].map(([n, what]) => `- [[${current.word} ${n}]]: ${what}`);
+  const h1 =
+    current.h1Token !== null
+      ? `The page's H1 is [[${current.word} ${current.h1Token}]]: keep it first, and write no other H1.\n`
+      : '';
+  return `The page now, as HTML: about ${total} characters of text, ${current.keptChars} of them in its kept blocks, which count toward Length.
+${current.html}
+${legend.length ? `\nWhat each kept line holds (kept as it is):\n${legend.join('\n')}\n` : ''}${h1}`;
 }
 
 /**
@@ -318,7 +333,14 @@ export async function startDraftWriting({ draftId, brandId, input, rewrite = fal
       });
     }
     const page = keepBlocks(draft.body_html, new Set(input.locked.map(passageKey)));
-    if (textLength(page.html) > MAX_REWRITE_CHARS) {
+    // Kept blocks aren't rewritten: a page that is only those has nothing to rewrite.
+    if (!ownText(page)) {
+      throw Object.assign(new Error('The page has no text to rewrite'), {
+        status: 422,
+        code: 'empty',
+      });
+    }
+    if (ownText(page) > MAX_REWRITE_CHARS) {
       throw Object.assign(new Error('The page is too long to rewrite whole'), {
         status: 422,
         code: 'too_long',
@@ -411,6 +433,8 @@ async function letGo(draftId) {
 async function rewritePage({ draft, brand, model, input, budget, prompts, brief }) {
   const page = keepBlocks(draft.body_html, new Set(input.locked.map(passageKey)));
   const ruleKeys = new Set(input.rules.map((r) => r.key));
+  // The Length rule's target; with Length off, the page keeps its length.
+  const length = ruleKeys.has('length') ? input.sources.length : textLength(draft.body_html);
   // Where it may link: the brand's pages and the draft's sources (A).
   const targets = await readLinkTargets({
     brandId: draft.brand_id,
@@ -427,7 +451,7 @@ async function rewritePage({ draft, brand, model, input, budget, prompts, brief 
       draft,
       prompts,
       brief,
-      input,
+      input: { ...input, sources: { ...input.sources, length } },
       linkTargets: linkTargetsPrompt(targets, ruleKeys),
       current: page,
     }),
@@ -435,21 +459,21 @@ async function rewritePage({ draft, brand, model, input, budget, prompts, brief 
   });
   await budget.charge(usage);
 
+  if (!isPageHtml(object.html)) throw new Error('The agent answered with no page in HTML');
   const cleaned = cleanPageHtml(
     object.html,
     rewriteLinks(draft.body_html, linkAllowList(targets)),
-    {
-      h1Kept: page.h1Kept,
-      originalH1: page.h1,
-    },
+    { h1Kept: page.h1Token !== null, originalH1: page.h1 },
   );
-  const { html, missing } = restoreKept(cleaned, page.kept);
+  const { html, missing } = restoreKept(cleaned, page.kept, {
+    word: page.word,
+    h1Token: page.h1Token,
+  });
   if (missing.length) {
     throw new Error(`The rewrite left out ${missing.length} kept block(s)`);
   }
-  if (!textLength(html) || html.length > MAX_PAGE_HTML) {
-    throw new Error('The agent left no page to review');
-  }
+  if (!textLength(html)) throw new Error('The agent left no page to review');
+  if (html.length > MAX_PAGE_HTML) throw new Error('The rewritten page is too long to keep');
   // A batch that landed during the run stays the one to decide.
   if (await hasOpenSuggestions(draft.id)) {
     logger.info({ draftId: draft.id }, '[content-writer] open suggestions came in during the run');
