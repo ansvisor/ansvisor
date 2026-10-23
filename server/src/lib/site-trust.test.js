@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 // The real client needs the service key; each test passes its own.
 vi.mock('../config/supabase.js', () => ({ default: {} }));
 
+const { PageFetchError } = await import('./safe-fetch.js');
 const {
   RECHECK_MS,
   SITE_TRUST_TTL_MS,
@@ -21,7 +22,9 @@ const {
  */
 
 const NOW = Date.parse('2026-10-23T12:00:00Z');
-const page = (url, title = null) => ({ url, title });
+const page = (url, title = null, fetch_status = 200) => ({ url, title, fetch_status });
+const html = (title, h1 = '', extra = '') => `<title>${title}</title><h1>${h1}</h1>${extra}`;
+const ORG = '<script type="application/ld+json">{"@type":"Organization"}</script>';
 
 /** The tables computeSiteTrust and readSiteTrust read, and the writes. */
 function fakeDb(tables) {
@@ -31,6 +34,7 @@ function fakeDb(tables) {
       const chain = {
         select: () => chain,
         eq: () => chain,
+        not: () => chain,
         order: () => chain,
         single: async () => ({ data: tables[table], error: null }),
         maybeSingle: async () => ({ data: tables[table] ?? null, error: null }),
@@ -49,62 +53,72 @@ function fakeDb(tables) {
 describe('findPage', () => {
   const pages = [
     page('https://acme.com/blog/about-our-pricing', 'About our pricing changes'),
+    page('https://acme.com/company/news/launch', 'We launched'),
     page('https://acme.com/company/', 'Our company'),
     page('https://acme.com/help', 'Contact us · Acme'),
-    page('https://acme.com/tr/hakkimizda'),
   ];
 
-  it('finds a page by a whole part of its address, or a title that starts so', () => {
+  it("finds a page by its address's last part, or a title that is just that", () => {
     expect(findPage(pages, 'about')).toBe('https://acme.com/company/');
     expect(findPage(pages, 'contact')).toBe('https://acme.com/help');
     expect(findPage([page('https://acme.com/how-we-review')], 'editorial')).toBe(
       'https://acme.com/how-we-review',
     );
+    expect(findPage([page('https://acme.com/p/12', 'Editorial policy | Acme')], 'editorial')).toBe(
+      'https://acme.com/p/12',
+    );
   });
 
-  it('finds none in a blog post that only mentions the word', () => {
-    expect(findPage([pages[0]], 'about')).toBeNull();
-    expect(findPage(pages, 'editorial')).toBeNull();
+  it('finds none in posts that only mention the word', () => {
+    expect(findPage(pages.slice(0, 2), 'about')).toBeNull();
+    expect(
+      findPage([page('https://acme.com/blog/x', 'How to write an editorial policy')], 'editorial'),
+    ).toBeNull();
   });
 });
 
 describe('hasOrganization', () => {
-  it('reads Organization, or a kind of it, from the JSON-LD', () => {
-    expect(
-      hasOrganization(
-        '<script type="application/ld+json">{"@graph":[{"@type":"WebSite"},{"@type":"Organization","name":"Acme"}]}</script>',
-      ),
-    ).toBe(true);
-    expect(
-      hasOrganization('<script type="application/ld+json">{"@type":"LocalBusiness"}</script>'),
-    ).toBe(true);
-    expect(hasOrganization('<script type="application/ld+json">{"@type":"WebSite"}</script>')).toBe(
-      false,
-    );
+  const ld = (type) =>
+    `<script type="application/ld+json">${JSON.stringify({ '@type': type })}</script>`;
+  it('reads Organization, a kind of it, or one with its vocabulary', () => {
+    expect(hasOrganization(ld('Organization'))).toBe(true);
+    expect(hasOrganization(ld('Restaurant'))).toBe(true);
+    expect(hasOrganization(ld('LocalBusiness'))).toBe(true);
+    expect(hasOrganization(ld('https://schema.org/Organization'))).toBe(true);
+    expect(hasOrganization(ld('WebSite'))).toBe(false);
   });
 });
 
 describe('authorPage', () => {
   const onSite = (link) => link.startsWith('https://acme.com/');
-  it("finds an author's page by their name in its address or title, or a profile on the site", () => {
+  const author = (name, same_as = []) => ({ name, same_as });
+
+  it('finds the page in an author folder named for them, or titled just their name', () => {
     const pages = [
       page('https://acme.com/authors/ada-lovelace'),
-      page('https://acme.com/team', 'Bob Stone'),
+      page('https://acme.com/blog/ada-lovelace'),
+      page('https://acme.com/x', 'Bob Stone · Acme'),
     ];
-    expect(authorPage(pages, { name: 'Ada Lovelace', same_as: [] }, onSite)).toBe(
+    expect(authorPage(pages, author('Ada Lovelace'), onSite)).toBe(
       'https://acme.com/authors/ada-lovelace',
     );
-    expect(authorPage(pages, { name: 'Bob Stone', same_as: [] }, onSite)).toBe(
-      'https://acme.com/team',
-    );
+    expect(authorPage(pages, author('Bob Stone'), onSite)).toBe('https://acme.com/x');
+  });
+
+  it("doesn't take a post about them, or a name inside another word", () => {
+    const pages = [
+      page('https://acme.com/blog/ada-lovelace', "Ada Lovelace's legacy"),
+      page('https://acme.com/guides/california', 'California guide'),
+    ];
+    expect(authorPage(pages, author('Ada Lovelace'), onSite)).toBeNull();
+    expect(authorPage(pages, author('Cal'), onSite)).toBeNull();
+  });
+
+  it('takes a profile link of theirs on the brand’s site', () => {
     expect(
-      authorPage(
-        [],
-        { name: 'Cal', same_as: ['https://x.com/cal', 'https://acme.com/cal'] },
-        onSite,
-      ),
+      authorPage([], author('Cal', ['https://x.com/cal', 'https://acme.com/cal']), onSite),
     ).toBe('https://acme.com/cal');
-    expect(authorPage([], { name: 'Dee', same_as: ['https://x.com/dee'] }, onSite)).toBeNull();
+    expect(authorPage([], author('Dee', ['https://x.com/dee']), onSite)).toBeNull();
   });
 
   it('names an author as an address would', () => {
@@ -123,30 +137,33 @@ describe('computeSiteTrust', () => {
     site_pages: [
       page('https://acme.com/about-us', 'About us'),
       page('https://acme.com/authors/ada-lovelace'),
+      page('https://acme.com/contact', 'Contact', 404),
     ],
     content_authors: [
-      { name: 'Ada Lovelace', same_as: [] },
-      { name: 'Bob Stone', same_as: [] },
+      { id: 'a1', name: 'Ada Lovelace', same_as: [] },
+      { id: 'a2', name: 'Bob Stone', same_as: [] },
+      { id: 'a3', name: 'Other Brand Writer', same_as: [] },
     ],
+    content_drafts: [{ author_id: 'a1' }],
+    content_author_defaults: [{ author_id: 'a2' }],
   };
+  const HOME = html('Acme — coffee for teams', 'Coffee for teams', ORG);
 
   it('reads the list, tries the usual addresses, and the home page', async () => {
     const { db } = fakeDb(tables);
     const fetcher = vi.fn(async (url) => {
-      if (url === 'https://acme.com/')
-        return {
-          url,
-          html: '<script type="application/ld+json">{"@type":"Organization"}</script>',
-        };
-      if (url === 'https://acme.com/contact') return { url, html: '<title>Contact · Acme</title>' };
+      if (url === 'https://acme.com/') return { url, html: HOME };
+      if (url === 'https://acme.com/contact') return { url, html: html('Contact – Acme') };
       // A site that answers every address with its home page: no editorial policy there.
-      return { url, html: '<title>Acme — coffee for teams</title>' };
+      return { url, html: HOME };
     });
-    const { checks, score } = await computeSiteTrust('b1', { db, fetcher });
+    const { checks, score, complete } = await computeSiteTrust('b1', { db, fetcher });
     expect(checks.about).toEqual({ ok: true, url: 'https://acme.com/about-us' });
+    // The listed /contact answered 404, so the site was asked.
     expect(checks.contact).toEqual({ ok: true, url: 'https://acme.com/contact' });
     expect(checks.editorial).toEqual({ ok: false, url: null });
     expect(checks.organizationSchema).toEqual({ ok: true, url: 'https://acme.com/' });
+    // The brand's authors: the one its pages are by and its default.
     expect(checks.authorPages).toEqual({
       ok: false,
       authors: [
@@ -155,27 +172,48 @@ describe('computeSiteTrust', () => {
       ],
     });
     expect(score).toBe(3);
-    // Only the brand's own site is read.
+    expect(complete).toBe(true);
     expect(fetcher.mock.calls.every(([url]) => url.startsWith('https://acme.com/'))).toBe(true);
   });
 
-  it("doesn't take a redirect to the home page for the page, nor pass without authors", async () => {
-    const { db } = fakeDb({ ...tables, site_pages: [], content_authors: [] });
-    const fetcher = vi.fn(async () => ({
-      url: 'https://acme.com/',
-      html: '<title>About Acme</title>',
-    }));
+  it('takes neither a redirect off the site nor one to the home page, nor passes without authors', async () => {
+    const { db } = fakeDb({
+      ...tables,
+      site_pages: [],
+      content_authors: [],
+      content_drafts: [],
+      content_author_defaults: [],
+    });
+    const fetcher = vi.fn(async (url) => {
+      if (url === 'https://acme.com/about')
+        return { url: 'https://other.example/about', html: html('About us') };
+      if (url === 'https://acme.com/about-us')
+        return { url: 'https://acme.com/', html: html('About Acme') };
+      return { url, html: html('Acme') };
+    });
     const { checks, score } = await computeSiteTrust('b1', { db, fetcher });
     expect(checks.about.ok).toBe(false);
     expect(checks.authorPages).toEqual({ ok: false, authors: [] });
     expect(score).toBe(0);
   });
+
+  it("marks a read the site didn't answer all of", async () => {
+    const { db } = fakeDb(tables);
+    const fetcher = vi.fn(async (url) => {
+      if (url === 'https://acme.com/') throw new PageFetchError('timeout', 'slow');
+      throw new PageFetchError('http_error', '404', { status: 404 });
+    });
+    const { checks, complete } = await computeSiteTrust('b1', { db, fetcher });
+    expect(checks.organizationSchema.ok).toBe(false);
+    expect(complete).toBe(false);
+  });
 });
 
 describe('readSiteTrust', () => {
-  const kept = (age) => ({
+  const kept = (age, complete = true) => ({
     checks: { about: { ok: true, url: 'https://acme.com/about' } },
     score: 1,
+    complete,
     checked_at: new Date(NOW - age).toISOString(),
   });
   const base = {
@@ -183,6 +221,8 @@ describe('readSiteTrust', () => {
     brand_domains: [],
     site_pages: [],
     content_authors: [],
+    content_drafts: [],
+    content_author_defaults: [],
   };
 
   it('keeps a read for a day, and reads again when asked, but not within minutes', async () => {
@@ -199,6 +239,25 @@ describe('readSiteTrust', () => {
     ({ db, writes } = fakeDb({ ...base, site_trust: kept(SITE_TRUST_TTL_MS + 60_000) }));
     const fresh = await readSiteTrust('b1', { db, fetcher, now: NOW });
     expect(fresh.checkedAt).toBe(new Date(NOW).toISOString());
-    expect(writes[0]).toMatchObject({ table: 'site_trust', row: { brand_id: 'b1', score: 0 } });
+    expect(writes[0]).toMatchObject({
+      table: 'site_trust',
+      row: { brand_id: 'b1', score: 0, complete: true },
+    });
+  });
+
+  it('reads a partial read again after a few minutes', async () => {
+    const { db, writes } = fakeDb({ ...base, site_trust: kept(RECHECK_MS + 60_000, false) });
+    await readSiteTrust('b1', { db, fetcher: vi.fn(), now: NOW });
+    expect(writes).toHaveLength(1);
+  });
+
+  it('reads once for two asks at the same time', async () => {
+    const { db, writes } = fakeDb(base);
+    const [a, b] = await Promise.all([
+      readSiteTrust('b-twice', { db, fetcher: vi.fn(), now: NOW }),
+      readSiteTrust('b-twice', { db, fetcher: vi.fn(), now: NOW }),
+    ]);
+    expect(writes).toHaveLength(1);
+    expect(a).toEqual(b);
   });
 });

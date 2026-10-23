@@ -1,7 +1,7 @@
 import * as cheerio from 'cheerio';
 import supabaseAdmin from '../config/supabase.js';
 import { jsonLd, typesOf } from './audit/signals/helpers.js';
-import { fetchPage } from './safe-fetch.js';
+import { PageFetchError, fetchPage } from './safe-fetch.js';
 
 /**
  * A brand's site trust (Content Editor Quality spec §8, CE-043): five
@@ -9,7 +9,9 @@ import { fetchPage } from './safe-fetch.js';
  * points on every page. Read from the brand's page list (site_pages), its
  * home page and its authors (Settings › Authors), at most once a day or when
  * someone asks again (not more than every few minutes), and kept in
- * site_trust (00254). Only the brand's own site is read.
+ * site_trust (00254). Only the brand's own site is read. A read a site
+ * didn't answer all of (slow, unreachable, a server error) is kept only a
+ * few minutes.
  */
 
 export const SITE_TRUST_CHECKS = [
@@ -19,57 +21,89 @@ export const SITE_TRUST_CHECKS = [
   'organizationSchema',
   'authorPages',
 ];
-/** How long a read holds, and how soon asking again reads again. */
+/** How long a read holds, and how soon asking again (or a partial read) reads again. */
 export const SITE_TRUST_TTL_MS = 24 * 60 * 60 * 1000;
 export const RECHECK_MS = 10 * 60 * 1000;
-const PROBE_TIMEOUT_MS = 8_000;
-const PROBE_MAX_BYTES = 1024 * 1024;
+const FETCH_TIMEOUT_MS = 8_000;
+const FETCH_MAX_BYTES = 1024 * 1024;
+
+/** Between a title's words and the site's name: "About us · Acme". */
+const SEPARATOR = String.raw`(?:\s*[|·•–—:-]|$)`;
 
 /**
- * The pages three checks look for: a whole part of the address, in the
+ * The pages three checks look for: the last part of the address, in the
  * languages the app reads, or a title that is just that ("About us · Acme",
- * not "About our pricing"); and the addresses
- * tried on the site when the page list has none, whose title or H1 must
- * have the word.
+ * not "About our pricing"); the addresses tried on the site when the page
+ * list has none, whose title or H1 must have the word.
  */
 const PAGES = {
   about: {
     part: /^(?:about|about-us|company|who-we-are|our-story|hakkimizda|hakkımızda|uber-uns|ueber-uns|a-propos|sobre-nosotros|quienes-somos)$/i,
-    title:
-      /^(?:about(?:\s+us)?|who we are|hakkımızda|über uns|à propos|sobre nosotros|quiénes somos)(?:\s*[|·•–—:-]|$)/i,
+    title: new RegExp(
+      `^(?:about(?:\\s+us)?|who we are|hakkımızda|über uns|à propos|sobre nosotros|quiénes somos)${SEPARATOR}`,
+      'i',
+    ),
     probe: ['/about', '/about-us'],
     word: /\babout\b|hakkımızda|über uns|à propos|sobre nosotros|quiénes somos/i,
   },
   contact: {
     part: /^(?:contact|contact-us|contacts|iletisim|iletişim|kontakt|contacto|nous-contacter)$/i,
-    title: /^(?:contact(?:\s+us)?|iletişim|kontakt|contacto|nous contacter)(?:\s*[|·•–—:-]|$)/i,
+    title: new RegExp(
+      `^(?:contact(?:\\s+us)?|iletişim|kontakt|contacto|nous contacter)${SEPARATOR}`,
+      'i',
+    ),
     probe: ['/contact', '/contact-us'],
     word: /\bcontact|iletişim|kontakt|contacto/i,
   },
   editorial: {
     part: /^(?:editorial-policy|editorial-guidelines|editorial-standards|editorial-process|how-we-review|how-we-test|review-process|methodology|our-methodology|fact-checking-policy)$/i,
-    title:
-      /editorial (?:policy|guidelines|standards|process)|how we (?:review|test)|our methodology|fact[- ]checking policy/i,
+    title: new RegExp(
+      `^(?:(?:our )?editorial (?:policy|guidelines|standards|process)|how we (?:review|test)|(?:our )?methodology|fact[- ]checking policy)${SEPARATOR}`,
+      'i',
+    ),
     probe: ['/editorial-policy', '/how-we-review'],
     word: /editorial|how we (?:review|test)|methodology|fact[- ]check/i,
   },
 };
 
-/** Organization and its kinds, as JSON-LD names them. */
+/** The folders an author's page sits in: "/authors/ada-lovelace". */
+const AUTHOR_FOLDERS =
+  /^(?:author|authors|team|people|staff|writers|contributors|yazar|yazarlar|autor|autoren|auteur|auteurs)$/i;
+
+/** Organization and its kinds, as JSON-LD names them (the commonest local ones too). */
 const ORGANIZATION_TYPES = new Set([
   'organization',
   'corporation',
-  'localbusiness',
-  'onlinestore',
-  'onlinebusiness',
   'store',
-  'newsmediaorganization',
-  'educationalorganization',
-  'governmentorganization',
-  'medicalorganization',
   'ngo',
   'professionalservice',
+  'restaurant',
+  'cafeorcoffeeshop',
+  'bakery',
+  'dentist',
+  'physician',
+  'hotel',
+  'legalservice',
+  'attorney',
+  'realestateagent',
+  'autodealer',
+  'medicalclinic',
+  'healthclub',
+  'beautysalon',
+  'travelagency',
+  'insuranceagency',
+  'accountingservice',
+  'financialservice',
+  'bankorcreditunion',
+  'collegeoruniversity',
 ]);
+
+/** A JSON-LD type without its vocabulary ("https://schema.org/Organization" → "organization"). */
+const bareType = (type) => type.replace(/^.*[/:]/, '').toLowerCase();
+const isOrganizationType = (type) => {
+  const t = bareType(type);
+  return ORGANIZATION_TYPES.has(t) || t.endsWith('organization') || t.endsWith('business');
+};
 
 const pathParts = (url) => {
   try {
@@ -79,20 +113,21 @@ const pathParts = (url) => {
   }
 };
 
-/** The page of the list a check looks for (its address or its title), or null. */
-export function findPage(pages, kind) {
+/** Whether a page of the list is the one a check looks for: its address's last part, or its title. */
+function isPage(p, kind) {
   const { part, title } = PAGES[kind];
-  const found = pages.find(
-    (p) => pathParts(p.url).some((x) => part.test(x)) || title.test((p.title ?? '').trim()),
-  );
-  return found?.url ?? null;
+  const last = pathParts(p.url).at(-1);
+  return (!!last && part.test(last)) || title.test((p.title ?? '').trim());
+}
+
+/** The page of the list a check looks for, or null. */
+export function findPage(pages, kind) {
+  return pages.find((p) => isPage(p, kind))?.url ?? null;
 }
 
 /** Whether a page's JSON-LD names an Organization (or a kind of one). */
 export function hasOrganization(html) {
-  return jsonLd({ $: cheerio.load(html) }).nodes.some((n) =>
-    typesOf(n).some((t) => ORGANIZATION_TYPES.has(t)),
-  );
+  return jsonLd({ $: cheerio.load(html) }).nodes.some((n) => typesOf(n).some(isOrganizationType));
 }
 
 /** "Ada Lovelace" → "ada-lovelace": how an author's page address names them. */
@@ -106,19 +141,24 @@ export function nameSlug(name) {
     .replace(/^-|-$/g, '');
 }
 
+const escapeRegExp = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
 /**
- * An author's page on the site: one of the list's whose address has the
- * author's name as a whole part ("/authors/ada-lovelace") or whose title
- * starts with it, or a profile link of theirs on the brand's own site.
+ * An author's page on the site: one of the list's in an author folder named
+ * for them ("/authors/ada-lovelace"), or titled just their name ("Ada
+ * Lovelace · Acme"), or a profile link of theirs on the brand's own site.
  */
 export function authorPage(pages, author, onSite) {
   const slug = nameSlug(author.name);
-  const name = author.name.trim().toLowerCase();
-  const found = pages.find(
-    (p) =>
-      (slug && pathParts(p.url).some((x) => x.toLowerCase() === slug)) ||
-      (p.title ?? '').trim().toLowerCase().startsWith(name),
-  );
+  const title = new RegExp(`^${escapeRegExp(author.name.trim())}${SEPARATOR}`, 'i');
+  const found = pages.find((p) => {
+    const parts = pathParts(p.url);
+    const named = parts.findIndex((x) => x.toLowerCase() === slug);
+    return (
+      (!!slug && named > 0 && AUTHOR_FOLDERS.test(parts[named - 1])) ||
+      title.test((p.title ?? '').trim())
+    );
+  });
   if (found) return found.url;
   return (author.same_as ?? []).find((link) => onSite(link)) ?? null;
 }
@@ -132,28 +172,22 @@ function mainDomain(domains) {
   return bareHost(primary.domain.replace(/^https?:\/\//, '').split('/')[0]);
 }
 
-/**
- * Whether an address on the brand's site is the page a check looks for: it
- * reads, doesn't land on another page (a redirect to the home page isn't
- * one), and its title or H1 says what it is (a site that answers every
- * address with its home page doesn't pass).
- */
-async function answers(url, kind, fetcher) {
-  try {
-    const page = await fetcher(url, { timeoutMs: PROBE_TIMEOUT_MS, maxBytes: PROBE_MAX_BYTES });
-    const asked = new URL(url).pathname.replace(/\/+$/, '');
-    if (new URL(page.url).pathname.replace(/\/+$/, '') !== asked) return false;
-    const $ = cheerio.load(page.html);
-    const { word } = PAGES[kind];
-    return word.test($('title').first().text()) || word.test($('h1').first().text());
-  } catch {
-    return false;
-  }
+/** Whether a failed read says nothing yet: slow, unreachable, a server error. */
+const unsure = (err) =>
+  !(err instanceof PageFetchError) ||
+  err.code === 'timeout' ||
+  err.code === 'unreachable' ||
+  (err.code === 'http_error' && (err.status ?? 0) >= 500);
+
+/** A page's title and H1, to tell it from the home page. */
+function heads(html) {
+  const $ = cheerio.load(html);
+  return { title: $('title').first().text().trim(), h1: $('h1').first().text().trim() };
 }
 
 /**
  * Reads the five checks for a brand: each with whether it passes and the page
- * that passes it.
+ * that passes it, and whether the site answered all of it (`complete`).
  */
 export async function computeSiteTrust(brandId, { db = supabaseAdmin, fetcher = fetchPage } = {}) {
   const { data: brand, error: brandError } = await db
@@ -162,20 +196,29 @@ export async function computeSiteTrust(brandId, { db = supabaseAdmin, fetcher = 
     .eq('id', brandId)
     .single();
   if (brandError) throw new Error(brandError.message);
-  const [domainsRes, pagesRes, authorsRes] = await Promise.all([
+  const [domainsRes, pagesRes, authorsRes, draftsRes, defaultRes] = await Promise.all([
     db.from('brand_domains').select('domain, is_primary').eq('brand_id', brandId),
-    db.from('site_pages').select('url, title').eq('brand_id', brandId),
+    db.from('site_pages').select('url, title, fetch_status').eq('brand_id', brandId).order('url'),
     db
       .from('content_authors')
-      .select('name, same_as')
+      .select('id, name, same_as')
       .eq('organization_id', brand.organization_id)
       .order('name'),
+    db
+      .from('content_drafts')
+      .select('author_id')
+      .eq('brand_id', brandId)
+      .not('author_id', 'is', null),
+    db.from('content_author_defaults').select('author_id').eq('brand_id', brandId),
   ]);
-  for (const res of [domainsRes, pagesRes, authorsRes]) {
+  for (const res of [domainsRes, pagesRes, authorsRes, draftsRes, defaultRes]) {
     if (res.error) throw new Error(res.error.message);
   }
   const domain = mainDomain(domainsRes.data ?? []);
-  const pages = pagesRes.data ?? [];
+  // A page that answered with an error isn't one the site has.
+  const pages = (pagesRes.data ?? []).filter(
+    (p) => p.fetch_status == null || (p.fetch_status > 0 && p.fetch_status < 400),
+  );
   const onSite = (link) => {
     try {
       const host = bareHost(new URL(link).hostname);
@@ -184,43 +227,68 @@ export async function computeSiteTrust(brandId, { db = supabaseAdmin, fetcher = 
       return false;
     }
   };
+  let complete = true;
+  const read = async (url) => {
+    try {
+      const page = await fetcher(url, { timeoutMs: FETCH_TIMEOUT_MS, maxBytes: FETCH_MAX_BYTES });
+      // Only the brand's own site: a page that lands elsewhere isn't read.
+      return onSite(page.url) ? page : null;
+    } catch (err) {
+      if (unsure(err)) complete = false;
+      return null;
+    }
+  };
 
-  const checks = {};
-  for (const kind of ['about', 'contact', 'editorial']) {
-    let url = findPage(pages, kind);
-    // Not in the page list: the usual addresses on the site itself.
-    for (const path of domain && !url ? PAGES[kind].probe : []) {
-      if (await answers(`https://${domain}${path}`, kind, fetcher)) {
-        url = `https://${domain}${path}`;
-        break;
+  // The home page first: a site that answers every address with it has none of the others there.
+  const home = domain ? `https://${domain}/` : null;
+  const homePage = home ? await read(home) : null;
+  const homeHeads = homePage ? heads(homePage.html) : null;
+
+  // An address the site answers counts when it isn't the home page again, its
+  // address or title is the page's ("/about" → "/company/about" too), and its
+  // title or H1 says what it is.
+  const probe = async (kind) => {
+    for (const path of domain ? PAGES[kind].probe : []) {
+      const page = await read(`https://${domain}${path}`);
+      if (!page) continue;
+      const { title, h1 } = heads(page.html);
+      if (homeHeads && title === homeHeads.title && h1 === homeHeads.h1) continue;
+      if (isPage({ url: page.url, title }, kind) && PAGES[kind].word.test(`${title} ${h1}`)) {
+        return page.url;
       }
     }
-    checks[kind] = { ok: !!url, url };
-  }
+    return null;
+  };
+  const found = await Promise.all(
+    ['about', 'contact', 'editorial'].map(async (kind) => findPage(pages, kind) ?? probe(kind)),
+  );
+  const checks = {
+    about: { ok: !!found[0], url: found[0] },
+    contact: { ok: !!found[1], url: found[1] },
+    editorial: { ok: !!found[2], url: found[2] },
+    organizationSchema: { ok: !!homePage && hasOrganization(homePage.html), url: home },
+  };
 
-  const home = domain ? `https://${domain}/` : null;
-  let organization = false;
-  if (home) {
-    try {
-      organization = hasOrganization((await fetcher(home, { timeoutMs: PROBE_TIMEOUT_MS })).html);
-    } catch {
-      organization = false;
-    }
-  }
-  checks.organizationSchema = { ok: organization, url: home };
-
-  const authors = (authorsRes.data ?? []).map((a) => ({
-    name: a.name,
-    url: authorPage(pages, a, onSite),
-  }));
+  // The brand's authors: the ones its pages are by and its default; else the workspace's.
+  const used = new Set([
+    ...(draftsRes.data ?? []).map((d) => d.author_id),
+    ...(defaultRes.data ?? []).map((d) => d.author_id),
+  ]);
+  const all = authorsRes.data ?? [];
+  const brandAuthors = all.some((a) => used.has(a.id)) ? all.filter((a) => used.has(a.id)) : all;
+  const authors = brandAuthors.map((a) => ({ name: a.name, url: authorPage(pages, a, onSite) }));
   checks.authorPages = { ok: authors.length > 0 && authors.every((a) => a.url), authors };
 
-  return { checks, score: SITE_TRUST_CHECKS.filter((k) => checks[k].ok).length };
+  return { checks, score: SITE_TRUST_CHECKS.filter((k) => checks[k].ok).length, complete };
 }
 
+/** Reads under way, by brand: two asks at once read once. */
+const reading = new Map();
+
 /**
- * The brand's site trust: the kept read while it holds (a day; when asked
- * again, a few minutes), else a new read, kept.
+ * The brand's site trust: the kept read while it holds (a day; a few minutes
+ * when asked again or when the site didn't answer all of it), else a new
+ * read, kept.
  *
  * @returns {Promise<{ checks: object, score: number, checkedAt: string }>}
  */
@@ -230,24 +298,30 @@ export async function readSiteTrust(
 ) {
   const { data: kept, error } = await db
     .from('site_trust')
-    .select('checks, score, checked_at')
+    .select('checks, score, complete, checked_at')
     .eq('brand_id', brandId)
     .maybeSingle();
   if (error) throw new Error(error.message);
   if (kept) {
     const age = now - Date.parse(kept.checked_at);
-    if (age < (refresh ? RECHECK_MS : SITE_TRUST_TTL_MS)) {
-      return { checks: kept.checks, score: kept.score, checkedAt: kept.checked_at };
-    }
+    const holds = refresh || kept.complete === false ? RECHECK_MS : SITE_TRUST_TTL_MS;
+    if (age < holds) return { checks: kept.checks, score: kept.score, checkedAt: kept.checked_at };
   }
-  const { checks, score } = await computeSiteTrust(brandId, { db, fetcher });
-  const checkedAt = new Date(now).toISOString();
-  const { error: keepError } = await db
-    .from('site_trust')
-    .upsert(
-      { brand_id: brandId, checks, score, checked_at: checkedAt },
-      { onConflict: 'brand_id' },
-    );
-  if (keepError) throw new Error(keepError.message);
-  return { checks, score, checkedAt };
+  let pending = reading.get(brandId);
+  if (!pending) {
+    pending = (async () => {
+      const { checks, score, complete } = await computeSiteTrust(brandId, { db, fetcher });
+      const checkedAt = new Date(now).toISOString();
+      const { error: keepError } = await db
+        .from('site_trust')
+        .upsert(
+          { brand_id: brandId, checks, score, complete, checked_at: checkedAt },
+          { onConflict: 'brand_id' },
+        );
+      if (keepError) throw new Error(keepError.message);
+      return { checks, score, checkedAt };
+    })().finally(() => reading.delete(brandId));
+    reading.set(brandId, pending);
+  }
+  return pending;
 }

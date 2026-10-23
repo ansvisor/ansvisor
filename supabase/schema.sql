@@ -37645,19 +37645,26 @@ comment on table public.content_link_checks is
 --   * organizationSchema: Organization schema on the home page;
 --   * authorPages: a page for each author in Settings › Authors.
 --
--- The server reads them from the brand's page list (site_pages) and its home
--- page, at most once a day or when someone asks again; this is the last
--- read. Members read it; only the server writes it.
+-- The server reads them from the brand's page list (site_pages), its home
+-- page and its authors, at most once a day or when someone asks again; this
+-- is the last read. complete is false when the site didn't answer all of it
+-- (slow, unreachable, a server error): such a read is read again after a few
+-- minutes. Members read it; only the server writes it.
 
 create table if not exists public.site_trust (
   brand_id uuid primary key references public.brands(id) on delete cascade,
   checks jsonb not null,
   score smallint not null check (score between 0 and 5),
+  complete boolean not null default true,
   checked_at timestamptz not null default now()
 );
 
 alter table public.site_trust enable row level security;
+revoke all on table public.site_trust from anon, authenticated;
+grant select on table public.site_trust to authenticated;
+grant all on table public.site_trust to service_role;
 
+drop policy if exists "site_trust: member select" on public.site_trust;
 create policy "site_trust: member select"
   on public.site_trust
   for select
@@ -37668,10 +37675,6 @@ create policy "site_trust: member select"
       where p.id = auth.uid()
     )
   );
-
-revoke all on table public.site_trust from anon;
-grant select on table public.site_trust to authenticated;
-grant all on table public.site_trust to service_role;
 
 comment on table public.site_trust is
   'Content Editor Quality (CE-043): a brand''s five site trust checks (About, Contact, editorial policy, Organization schema on the home page, author pages) and how many pass. Written by the server, read by members.';
