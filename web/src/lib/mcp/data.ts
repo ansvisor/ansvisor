@@ -2879,7 +2879,7 @@ export async function listActionsFor(
   let query = supabaseAdmin
     .from('actions')
     .select(
-      'id, action_no, category, kind, impact, status, outcome, assignee_id, due_date, created_at, updated_at, priority_score, priority_level, priority_reason',
+      'id, action_no, category, kind, impact, status, outcome, assignee_id, due_date, created_at, updated_at, priority_score, priority_level, priority_reason, target_entity:payload->>targetEntity, target_count:payload->targetCount',
     )
     .eq('brand_id', params.brandId)
     // A deleted action (00168) is gone for everyone but the nightly generator.
@@ -2916,7 +2916,14 @@ export async function listActionsFor(
     if (task.status === 'completed') acc.completed += 1;
     progress.set(task.action_id, acc);
   }
-  const names = await assigneeNames(rows.map((r) => r.assignee_id));
+  const [names, entityCounts] = await Promise.all([
+    assigneeNames(rows.map((r) => r.assignee_id)),
+    // Each action's list (AC-009): its reason names the count left, as get_action's does.
+    readEntityCounts(
+      supabaseAdmin,
+      rows.map((r) => r.id),
+    ),
+  ]);
 
   return rows.map((r) => ({
     id: r.id,
@@ -2931,7 +2938,16 @@ export async function listActionsFor(
       : null,
     due_date: r.due_date ?? null,
     task_progress: progress.get(r.id) ?? { completed: 0, total: 0 },
-    priority: priorityFor(r),
+    priority: priorityFor({
+      ...r,
+      priority_reason: currentPriorityReason(
+        r.priority_reason,
+        withEntityCounts(
+          { targetEntity: r.target_entity, targetCount: r.target_count },
+          entityCounts.get(r.id),
+        ),
+      ),
+    }),
     created_at: r.created_at,
     updated_at: r.updated_at,
   }));
