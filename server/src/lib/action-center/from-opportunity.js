@@ -10,7 +10,7 @@
  * measured like any other action's.
  */
 
-import { MAX_TARGET_IDS } from '../target-ids.js';
+import { targetKeys } from '../target-ids.js';
 import supabaseAdmin from '../../config/supabase.js';
 import { resolveBrandSources } from './sources.js';
 import { planTasks } from './tasks/plan.js';
@@ -101,15 +101,16 @@ export function actionPromptScope(opportunity, memberPromptIds) {
 /**
  * The count and keys an opportunity's action keeps (AC-009): the prompts it
  * is scoped to when it has them, else the ones the opportunity names (by
- * id, or by text). The first 50 named are shown as before.
+ * id, or by text), each once (targetKeys). The first 50 named are shown as
+ * before.
  */
 export function actionTargets(promptIds, prompts) {
   const keyOf = (p) => (typeof p === 'string' ? p : String(p?.id ?? p?.text ?? p?.label ?? ''));
-  const keys = (promptIds.length ? promptIds : prompts.map(keyOf)).filter(Boolean);
+  const keys = targetKeys(promptIds.length ? promptIds : prompts.map(keyOf));
   return {
     targetCount: keys.length,
     targets: prompts.slice(0, 50),
-    ...(keys.length ? { targetIds: keys.slice(0, MAX_TARGET_IDS) } : {}),
+    ...(keys.length ? { targetIds: keys } : {}),
   };
 }
 
