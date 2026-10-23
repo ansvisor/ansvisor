@@ -2745,6 +2745,93 @@ describe('the side panel', () => {
     });
   });
 
+  describe('Export (CE-057)', () => {
+    beforeEach(() => {
+      process.env.NEXT_PUBLIC_CONTENT_QUALITY_PHASE = '1';
+      getContentAuthors.mockResolvedValue({
+        authors: [],
+        brands: [{ id: 'b1', name: 'Acme' }],
+        me: { id: 'u1', role: 'analyst' },
+      });
+    });
+    afterEach(() => {
+      delete process.env.NEXT_PUBLIC_CONTENT_QUALITY_PHASE;
+    });
+    const dialog = () => document.querySelector('[role="dialog"]');
+    const inDialog = (name: string) =>
+      [...document.querySelectorAll<HTMLButtonElement>('[role="dialog"] button')].find(
+        (b) => b.textContent === name,
+      )!;
+
+    it('opens Export with the page fields, ready to copy for the destination', async () => {
+      getContentDraft.mockResolvedValue(draft());
+      await renderPage();
+      await act(async () => button('Export')!.click());
+      expect(dialog()!.textContent).toContain('Content · ready to paste');
+      expect(dialog()!.textContent).toContain('Meta titlePipeline forecasting');
+      expect(dialog()!.textContent).toContain('AuthorAcme Team → your CMS author field');
+      expect(inDialog('Copy for Webflow').disabled).toBe(false);
+    });
+
+    it('sends Copy HTML to Export while a placeholder is open, and Fill now goes to it', async () => {
+      const writeText = vi.fn().mockResolvedValue(undefined);
+      Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+      getContentDraft.mockResolvedValue(
+        draft({ bodyHtml: '<h1>Pipeline forecasting</h1><p>Ask [name of a real person] how.</p>' }),
+      );
+      await renderPage();
+      await act(async () => button('Copy HTML')!.click());
+      expect(writeText).not.toHaveBeenCalled();
+      expect(dialog()!.textContent).toContain('1 placeholder is still open');
+      expect(dialog()!.querySelector('[role="radio"][aria-checked="true"]')!.textContent).toBe(
+        'HTML',
+      );
+      expect(inDialog('Copy HTML').disabled).toBe(true);
+
+      await act(async () => inDialog('Fill now').click());
+      expect(dialog()).toBeNull();
+      const editor = (container.querySelector('.ProseMirror') as HTMLElement & { editor: Editor })
+        .editor;
+      const { from, to } = editor.state.selection;
+      expect(editor.state.doc.textBetween(from, to)).toBe('[name of a real person]');
+    });
+
+    it('says where a placeholder only an HTML block holds is', async () => {
+      const { htmlBlockElement } = await import('@/lib/content/html-allowlist');
+      getContentDraft.mockResolvedValue(
+        draft({
+          bodyHtml:
+            '<h1>Pipeline forecasting</h1><p>Teams trust it.</p>' +
+            htmlBlockElement('<div class="cta">Call [phone number]</div>'),
+        }),
+      );
+      await renderPage();
+      await act(async () => button('Export')!.click());
+      expect(dialog()!.textContent).toContain('1 placeholder is still open');
+      await act(async () => inDialog('Fill now').click());
+      expect(toast).toHaveBeenCalledWith(
+        'The placeholders are in an HTML block: open it with </> to fill them.',
+      );
+    });
+
+    it('copies at once with no placeholder, and keeps the menu while Quality is off', async () => {
+      const writeText = vi.fn().mockResolvedValue(undefined);
+      Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+      getContentDraft.mockResolvedValue(draft());
+      await renderPage();
+      await act(async () => button('Copy HTML')!.click());
+      expect(writeText).toHaveBeenCalled();
+      expect(dialog()).toBeNull();
+
+      delete process.env.NEXT_PUBLIC_CONTENT_QUALITY_PHASE;
+      await act(async () => root.unmount());
+      root = createRoot(container);
+      await renderPage();
+      await act(async () => button('Export')!.click());
+      expect(dialog()).toBeNull();
+    });
+  });
+
   describe('Run Agent: fix open rules', () => {
     const traced = draft({
       pageType: 'blog_post',

@@ -14,6 +14,20 @@ import { safeLinkHref } from './editor';
 
 export type DraftExportFormat = 'docx' | 'html' | 'md';
 
+/**
+ * The page fields an export carries next to the content (Quality spec §7b,
+ * CE-057): Word's as a table on page 1, Markdown's as front matter, HTML's
+ * in its head.
+ */
+export interface ExportFields {
+  /** Word's table: each field's label and value, and the line above it. */
+  table: { note: string; rows: [label: string, value: string][] };
+  /** Markdown's front matter, in order. */
+  front: Record<string, string>;
+  /** HTML's head. */
+  head: { title: string; description: string; author: string };
+}
+
 /** A stretch of text with one format; a link carries its address. */
 export interface DraftRun {
   text: string;
@@ -180,13 +194,21 @@ const escapeHtml = (value: string) =>
   value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
 /** Export HTML: Copy HTML's page as a document of its own, titled. */
-export function draftHtmlDocument(title: string, html: string): string {
+/** A value for an attribute in double quotes: its quotes escaped too. */
+const escapeAttribute = (value: string) => escapeHtml(value).replace(/"/g, '&quot;');
+
+export function draftHtmlDocument(title: string, html: string, fields?: ExportFields): string {
+  const head = fields?.head;
   return [
     '<!doctype html>',
     '<html lang="en">',
     '<head>',
     '<meta charset="utf-8">',
-    `<title>${escapeHtml(title.trim())}</title>`,
+    `<title>${escapeHtml((head?.title || title).trim())}</title>`,
+    ...(head?.description
+      ? [`<meta name="description" content="${escapeAttribute(head.description)}">`]
+      : []),
+    ...(head?.author ? [`<meta name="author" content="${escapeAttribute(head.author)}">`] : []),
     '</head>',
     '<body>',
     html.trim(),
@@ -240,10 +262,22 @@ function markdownBlock(block: DraftBlock): string {
   }
 }
 
+/** Front matter as YAML: each value quoted, so a colon or a quote in it reads as written. */
+function frontMatter(front: Record<string, string>): string {
+  const quoted = (value: string) => `"${value.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`;
+  const lines = Object.entries(front)
+    .filter(([, value]) => value)
+    .map(([key, value]) => `${key}: ${quoted(value)}`);
+  return `---\n${lines.join('\n')}\n---\n\n`;
+}
+
 /** Export Markdown: headings, emphasis, links, lists, quotes and tables; an HTML block as HTML. */
-export function draftMarkdown(title: string, html: string): string {
-  const blocks = draftBlocks(title, html);
-  const parts: string[] = [];
+export function draftMarkdown(title: string, html: string, fields?: ExportFields): string {
+  // With front matter, the title is there: not an H1 as well.
+  const blocks = draftBlocks(title, html).filter(
+    (block, i) => !(fields && i === 0 && block.kind === 'heading' && block.level === 1),
+  );
+  const parts: string[] = fields ? [frontMatter(fields.front)] : [];
   blocks.forEach((block, i) => {
     // A list's items one under the other; a blank line between other blocks.
     const prev = blocks[i - 1];
@@ -348,25 +382,48 @@ function docxDocument(m: Docx, title: string, sections: DocxChild[][]) {
   });
 }
 
-/** Export Word: the blocks as a document, the lists numbered and bulleted as on the page. */
-export async function draftDocx(title: string, html: string): Promise<Blob> {
+/**
+ * Export Word: the blocks as a document, the lists numbered and bulleted as
+ * on the page; the page fields, if any, as a table on page 1 to delete or
+ * keep.
+ */
+export async function draftDocx(title: string, html: string, fields?: ExportFields): Promise<Blob> {
   // Loaded on the click: the library is only needed to write the file.
   const m = await import('docx');
   const blocks = draftBlocks(title, html);
   const name = title.trim() || text(blocks.find((b) => b.kind === 'heading')?.runs ?? []);
-  return m.Packer.toBlob(docxDocument(m, name, [docxBlocks(m, blocks)]));
+  const table: DraftBlock[] = fields
+    ? [
+        { kind: 'paragraph', runs: [{ text: fields.table.note, italics: true }] },
+        {
+          kind: 'table',
+          rows: fields.table.rows.map(([label, value]) => ({
+            header: false,
+            cells: [[{ text: label, bold: true }], [{ text: value }]],
+          })),
+        },
+      ]
+    : [];
+  const sections = table.length
+    ? [docxBlocks(m, table), docxBlocks(m, blocks)]
+    : [docxBlocks(m, blocks)];
+  return m.Packer.toBlob(docxDocument(m, name, sections));
 }
 
-/** The file for a format: Word built on the click, HTML and Markdown as UTF-8 text. */
+/**
+ * The file for a format: Word built on the click, HTML and Markdown as UTF-8
+ * text; with the page fields, each carries them its own way.
+ */
 export async function draftExportBlob(
   format: DraftExportFormat,
   title: string,
   html: string,
+  fields?: ExportFields,
 ): Promise<Blob> {
-  if (format === 'docx') return draftDocx(title, html);
+  if (format === 'docx') return draftDocx(title, html, fields);
   return format === 'html'
-    ? new Blob([draftHtmlDocument(title, html)], { type: 'text/html;charset=utf-8' })
-    : new Blob([draftMarkdown(title, html)], { type: 'text/markdown;charset=utf-8' });
+    ? new Blob([draftHtmlDocument(title, html, fields)], { type: 'text/html;charset=utf-8' })
+    : new Blob([draftMarkdown(title, html, fields)], { type: 'text/markdown;charset=utf-8' });
 }
 
 /** "ansvisor_content_pipeline-forecasting.docx". */

@@ -4141,6 +4141,103 @@
       },
       "qualityChip": "Quality {score}",
       "qualityChipHint": "An Ansvisor estimate of this page's quality. Open Quality.",
+      "exportDialog": {
+        "title": "Export",
+        "untitled": "Untitled",
+        "destination": "Where it goes",
+        "destinations": {
+          "webflow": "Webflow",
+          "wordpress": "WordPress",
+          "shopify": "Shopify",
+          "docs": "Google Docs",
+          "docx": "Word",
+          "md": "Markdown",
+          "html": "HTML"
+        },
+        "hints": {
+          "webflow": "Copy, then paste into the post's Rich Text field: headings, links, lists and images keep their format. The H1 is left out: the title goes in the Name field.",
+          "wordpress": "Copy, then paste into the block editor: each heading, paragraph and list becomes its own block. The H1 is left out: the title goes in the title field.",
+          "shopify": "Copy, then paste into the blog post or description editor. The H1 is left out: the title goes in the title field.",
+          "docs": "Copy, then paste into a new Google Doc.",
+          "docx": "A Word file, with the page fields in a table on page 1 to delete or keep.",
+          "md": "A Markdown file, with the page fields as front matter (the title there, not as an H1).",
+          "html": "The page's HTML only, for an HTML field or a code view. The page fields are below."
+        },
+        "placeholders": {
+          "open": "{count, plural, one {# placeholder is} other {# placeholders are}} still open. Exports never contain [ ] text.",
+          "fill": "Fill now",
+          "skip": "Export without them",
+          "left": "{count, plural, one {The sentence with the placeholder is} other {The sentences with a placeholder are}} left out of this export.",
+          "undo": "Put them back",
+          "headings": "{count, plural, one {# placeholder is} other {# placeholders are}} in the title or a heading: fill {count, plural, one {it} other {them}} first."
+        },
+        "checks": {
+          "label": "Content · ready to paste",
+          "ownCode": {
+            "title": "HTML blocks keep their own code",
+            "detail": "{count, plural, one {# element keeps} other {# elements keep}} a class, a style or a script, and goes out as written."
+          },
+          "clean": {
+            "title": "Clean HTML",
+            "detail": "Headings, lists, tables and FAQ. No editor marks, Page info strip or underlines."
+          },
+          "links": {
+            "ok": "{count, plural, one {# link answers} other {All # links answer}}",
+            "okDetail": "Each was read in the last day.",
+            "broken": "{broken} of {count} links don't answer",
+            "brokenDetail": "Fix or remove them first: Quality shows which.",
+            "reading": "{count, plural, one {# link} other {# links}}, still being read",
+            "readingDetail": "Their read comes a few seconds after the page is saved.",
+            "unread": "{unread} of {count} links couldn't be read",
+            "unreadDetail": "Open them yourself before you publish."
+          },
+          "images": {
+            "ok": "{count, plural, one {# image, with alt text} other {All # images have alt text}}",
+            "okDetail": "Screen readers and search engines read what each shows.",
+            "missing": "{missing} of {count} images have no alt text",
+            "missingDetail": "Add it in the HTML view: a few words on what the image shows."
+          }
+        },
+        "states": {
+          "ok": "done",
+          "missing": "missing",
+          "check": "check it"
+        },
+        "fields": {
+          "label": "Page fields",
+          "where": "for your CMS's own fields, not the content",
+          "note": "Page fields: these go in your CMS's own fields, not into the content. Delete this table or keep it.",
+          "metaTitle": "Meta title",
+          "metaDescription": "Meta description",
+          "slug": "Slug",
+          "author": "Author",
+          "authorValue": "{name} → your CMS author field",
+          "featuredImage": "Featured image",
+          "noImage": "None in the page",
+          "noSlug": "None from the title: set it in your CMS",
+          "noAuthor": "Not read yet: set it in your CMS",
+          "copy": "Copy",
+          "copyLabel": "Copy {field}",
+          "copied": "{field} copied"
+        },
+        "actions": {
+          "webflow": "Copy for Webflow",
+          "wordpress": "Copy for WordPress",
+          "shopify": "Copy for Shopify",
+          "docs": "Copy for Google Docs",
+          "docx": "Download Word",
+          "md": "Download Markdown",
+          "html": "Copy HTML",
+          "downloadHtml": "Download HTML"
+        },
+        "copied": "Copied for {destination}: paste it in.",
+        "copiedHtml": "HTML copied.",
+        "copiedAsHtml": "Copied as HTML: paste it into the editor's HTML or code view.",
+        "inHtmlBlock": "The placeholders are in an HTML block: open it with {html} to fill them.",
+        "copyFailed": "Couldn't copy. Open the HTML view and copy it from there.",
+        "failed": "Couldn't export the page. Try again.",
+        "cancel": "Cancel"
+      },
       "beforePublish": {
         "title": "Before you publish",
         "warning": "Trust {trust}, below 60. {reason}. You can mark it ready, but {count, plural, one {fixing it} other {fixing them}} first raises Trust to about {raised}.",

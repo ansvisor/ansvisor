@@ -1,0 +1,284 @@
+import { slugify } from '@/lib/slug';
+import type { ContentAuthor } from './authors';
+import { cleanHref } from './html-allowlist';
+import { firstImage } from './page-schema';
+import { PLACEHOLDER } from './placeholders';
+import type { LinkCheck } from './quality-checks';
+
+/**
+ * Ready to publish (Content Editor Quality spec §7b, CE-057): what an export
+ * gives, and what it checks first. The content is the page's clean HTML
+ * (publishableHtml); what goes next to it are the page fields, read from
+ * the page itself, never written for it. No export carries a placeholder:
+ * the person fills them, or the sentences with one are left out (one in a
+ * heading or the title is filled first: a heading has no sentence to drop).
+ */
+
+/** HTML as a fragment: a script at its start stays where it is (DOMParser's body would move it). */
+function fragment(html: string): HTMLElement {
+  const template = document.createElement('template');
+  template.innerHTML = html;
+  const root = document.createElement('div');
+  root.append(template.content);
+  return root;
+}
+
+/** The text nodes of a page, in order, outside its code (JSON-LD is read apart). */
+function textNodes(root: Node): Text[] {
+  const out: Text[] = [];
+  const walk = (node: Node) => {
+    for (const child of Array.from(node.childNodes)) {
+      if (child.nodeType === Node.TEXT_NODE) out.push(child as Text);
+      else if (child.nodeType === Node.ELEMENT_NODE) {
+        const tag = (child as Element).tagName.toLowerCase();
+        if (tag !== 'script' && tag !== 'style' && tag !== 'template') walk(child);
+      }
+    }
+  };
+  walk(root);
+  return out;
+}
+
+/** Where a placeholder can hide besides the words: alt and title text, and JSON-LD. */
+function otherText(root: HTMLElement): { get: () => string; set: (value: string) => void }[] {
+  const attributes = Array.from(root.querySelectorAll('[alt], [title]')).flatMap((el) =>
+    ['alt', 'title']
+      .filter((name) => el.hasAttribute(name))
+      .map((name) => ({
+        get: () => el.getAttribute(name) ?? '',
+        set: (value: string) => el.setAttribute(name, value),
+      })),
+  );
+  const jsonLd = Array.from(root.querySelectorAll('script[type="application/ld+json"]')).map(
+    (script) => ({
+      get: () => script.textContent ?? '',
+      set: (value: string) => void (script.textContent = value),
+    }),
+  );
+  return [...attributes, ...jsonLd];
+}
+
+const count = (text: string) => text.match(PLACEHOLDER)?.length ?? 0;
+
+/** The placeholders in a text (the title). */
+export const textPlaceholders = count;
+
+/**
+ * The placeholders in the HTML an export gives: in its words (an HTML
+ * block's too), its images' alt and title text, and its JSON-LD.
+ */
+export function exportPlaceholders(html: string): number {
+  const root = fragment(html);
+  return (
+    textNodes(root).reduce((sum, node) => sum + count(node.data), 0) +
+    otherText(root).reduce((sum, field) => sum + count(field.get()), 0)
+  );
+}
+
+/** Headings: a placeholder there is filled first, never left out. */
+const HEADINGS = 'h1, h2, h3, h4, h5, h6';
+/** Lines whose text is read as sentences. */
+const LINES = `p, li, td, th, dd, dt, figcaption, blockquote, caption, summary, ${HEADINGS}`;
+
+/** A text's sentences, as a reader would split them ("1.5", "e.g." and "acme.com" don't end one). */
+function sentences(text: string): { start: number; end: number; text: string }[] {
+  if (typeof Intl === 'undefined' || !('Segmenter' in Intl)) {
+    return [{ start: 0, end: text.length, text }];
+  }
+  const segmenter = new Intl.Segmenter('en', { granularity: 'sentence' });
+  return Array.from(segmenter.segment(text), (s) => ({
+    start: s.index,
+    end: s.index + s.segment.length,
+    text: s.segment,
+  }));
+}
+
+/** A text with its placeholders as letters, so a period inside one ends no sentence. */
+const masked = (text: string) => text.replace(PLACEHOLDER, (m) => 'x'.repeat(m.length));
+
+/** Cuts ranges of a line's text out of its text nodes, from the end. */
+function cut(nodes: Text[], ranges: { start: number; end: number }[]) {
+  for (const range of [...ranges].sort((a, b) => b.start - a.start)) {
+    let at = 0;
+    for (const node of nodes) {
+      const from = at;
+      at += node.data.length;
+      if (at <= range.start || from >= range.end) continue;
+      node.data =
+        node.data.slice(0, Math.max(0, range.start - from)) +
+        node.data.slice(Math.min(node.data.length, range.end - from));
+    }
+  }
+}
+
+/**
+ * The HTML with each placeholder left out (Export without them): the
+ * sentence it is in goes; one anywhere else (an HTML block's own tags, an
+ * alt text, JSON-LD) goes alone. A heading's stays, to be filled first. A
+ * line, an item, a quote or a row left with no words goes too; formatting
+ * in what stays is kept.
+ */
+export function withoutPlaceholders(html: string): string {
+  const root = fragment(html);
+  const one = new RegExp(PLACEHOLDER.source, 'iu');
+  for (const line of Array.from(root.querySelectorAll(LINES)).reverse()) {
+    if (line.matches(HEADINGS)) continue;
+    // The line's own text: a nested line is read on its own.
+    const nodes = textNodes(line).filter((n) => n.parentElement?.closest(LINES) === line);
+    const text = nodes.map((n) => n.data).join('');
+    if (!one.test(text)) continue;
+    cut(
+      nodes,
+      sentences(masked(text)).filter((s) => one.test(text.slice(s.start, s.end))),
+    );
+    for (const node of nodes) node.data = node.data.replace(/\s{2,}/g, ' ');
+  }
+  // What no line holds: the placeholder alone.
+  for (const node of textNodes(root)) {
+    if (node.parentElement?.closest(HEADINGS)) continue;
+    if (one.test(node.data)) node.data = node.data.replace(PLACEHOLDER, '').replace(/\s{2,}/g, ' ');
+  }
+  for (const field of otherText(root)) {
+    const value = field.get();
+    if (one.test(value))
+      field.set(
+        value
+          .replace(PLACEHOLDER, '')
+          .replace(/\s{2,}/g, ' ')
+          .trim(),
+      );
+  }
+  // A link or a bold its words all went with goes, then a line, an item, a
+  // quote or a list left empty (a table keeps its cells; a row of empty ones goes).
+  for (const el of Array.from(root.querySelectorAll('a, strong, em, b, i, u, s, span, mark'))) {
+    if (!el.textContent?.trim() && !el.querySelector('img, br')) el.remove();
+  }
+  for (const box of Array.from(
+    root.querySelectorAll('p, li, ul, ol, blockquote, figure, dl, dd, dt, tr'),
+  ).reverse()) {
+    if (!box.textContent?.trim() && !box.querySelector('img')) box.remove();
+  }
+  return root.innerHTML;
+}
+
+/** The fields an export gives next to the content, for the CMS's own fields. */
+export interface PageFields {
+  metaTitle: string;
+  metaDescription: string;
+  /** The page's address part; empty when the title gives none (in another script). */
+  slug: string;
+  /** The page's author, the team byline, or empty while the authors aren't read. */
+  author: string;
+  featuredImage: string | null;
+}
+
+/** About the longest a search result shows of a description. */
+export const META_DESCRIPTION_CHARS = 160;
+
+/** The page's first paragraph's sentences, as many as fit, or its words cut at one. */
+function description(root: HTMLElement): string {
+  const first = Array.from(root.querySelectorAll('p')).find(
+    (p) => !p.closest('blockquote, li, td, th') && (p.textContent ?? '').trim(),
+  );
+  const text = (first?.textContent ?? '').replace(/\s+/g, ' ').trim();
+  if (text.length <= META_DESCRIPTION_CHARS) return text;
+  let out = '';
+  for (const s of sentences(text)) {
+    if ((out + s.text).trim().length > META_DESCRIPTION_CHARS) break;
+    out += s.text;
+  }
+  if (out.trim()) return out.trim();
+  const short = text.slice(0, META_DESCRIPTION_CHARS - 1);
+  const space = short.lastIndexOf(' ');
+  return `${space > 0 ? short.slice(0, space) : short}…`;
+}
+
+/** A live page's own address part ("/blog/pour-over"), else the title as one. */
+function slugOf(title: string, sourceUrl: string | null): string {
+  if (sourceUrl) {
+    try {
+      const parts = new URL(sourceUrl).pathname
+        .split('/')
+        .filter((part) => part && !/^index\.\w+$/i.test(part));
+      const last = parts.at(-1);
+      if (last) return decodeURIComponent(last);
+    } catch {
+      // Not an address, or not one to read: the title's slug.
+    }
+  }
+  return slugify(title).slice(0, 80).replace(/-+$/, '');
+}
+
+/**
+ * The page fields, from the page as it goes out: its title, its first
+ * paragraph, its live address or its title as a slug, its author and its
+ * first image.
+ */
+export function pageFields({
+  title,
+  html,
+  sourceUrl,
+  author,
+  teamByline,
+}: {
+  title: string;
+  html: string;
+  sourceUrl: string | null;
+  author: ContentAuthor | null;
+  teamByline: string;
+}): PageFields {
+  return {
+    metaTitle: title.trim(),
+    metaDescription: description(fragment(html)),
+    slug: slugOf(title, sourceUrl),
+    author: author?.name ?? teamByline,
+    featuredImage: firstImage(html),
+  };
+}
+
+/** The page's leading H1, for a destination whose title field holds it. */
+export function withoutLeadingH1(html: string): string {
+  const root = fragment(html);
+  const first = Array.from(root.children).find((el) => el.textContent?.trim() || el.matches('img'));
+  if (first?.matches('h1')) first.remove();
+  return root.innerHTML.replace(/^\s+/, '');
+}
+
+/**
+ * What Ready to paste checks besides placeholders: the links answer (as
+ * Trust's link reads found them), the images have alt text, and what an
+ * HTML block keeps of its own (classes, styles, scripts) goes out as written.
+ */
+export interface PasteChecks {
+  /** The page's links, how many were read (Trust's link reads), and how many of those don't answer. */
+  links: { count: number; read: number; broken: number };
+  images: { count: number; withoutAlt: number };
+  /** Elements that carry a class, a style or a script (JSON-LD aside). */
+  ownCode: number;
+}
+
+export function pasteChecks(html: string, linkChecks: ReadonlyMap<string, LinkCheck>): PasteChecks {
+  const root = fragment(html);
+  const hrefs = [
+    ...new Set(
+      Array.from(root.querySelectorAll('a[href]'))
+        .map((a) => cleanHref(a.getAttribute('href') ?? ''))
+        .filter((href): href is string => !!href && /^https?:\/\//i.test(href)),
+    ),
+  ];
+  const images = Array.from(root.querySelectorAll('img'));
+  return {
+    links: {
+      count: hrefs.length,
+      read: hrefs.filter((h) => linkChecks.has(h)).length,
+      broken: hrefs.filter((h) => linkChecks.get(h)?.status === 'broken').length,
+    },
+    images: {
+      count: images.length,
+      withoutAlt: images.filter((img) => !(img.getAttribute('alt') ?? '').trim()).length,
+    },
+    ownCode: root.querySelectorAll(
+      '[class], [style], script:not([type="application/ld+json"]), style, iframe',
+    ).length,
+  };
+}

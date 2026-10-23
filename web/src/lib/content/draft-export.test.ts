@@ -164,6 +164,54 @@ describe('draftDocx', () => {
   });
 });
 
+describe('the page fields an export carries (CE-057)', () => {
+  const fields = {
+    table: {
+      note: 'Page fields: these go in your CMS fields.',
+      rows: [
+        ['Meta title', 'Pipeline forecasting: a guide'],
+        ['Slug', 'pipeline-forecasting'],
+      ] as [string, string][],
+    },
+    front: {
+      title: 'Pipeline: "a guide"',
+      description: 'How teams forecast.',
+      slug: 'pipeline',
+      author: '',
+    },
+    head: {
+      title: 'Pipeline forecasting: a guide',
+      description: 'How "teams" <forecast>.',
+      author: 'Ada Lovelace',
+    },
+  };
+
+  it('gives Markdown front matter, each value quoted, an empty one left out, the title not again', () => {
+    expect(draftMarkdown('Pipeline', '<h1>Pipeline</h1><p>Teams trust it.</p>', fields)).toBe(
+      '---\ntitle: "Pipeline: \\"a guide\\""\ndescription: "How teams forecast."\nslug: "pipeline"\n---\n\nTeams trust it.\n',
+    );
+  });
+
+  it('gives HTML its meta title, description and author', () => {
+    const doc = draftHtmlDocument('Pipeline', '<h1>Pipeline</h1>', fields);
+    expect(doc).toContain('<title>Pipeline forecasting: a guide</title>');
+    expect(doc).toContain(
+      '<meta name="description" content="How &quot;teams&quot; &lt;forecast&gt;.">',
+    );
+    expect(doc).toContain('<meta name="author" content="Ada Lovelace">');
+  });
+
+  it('gives Word a table of them on page 1, the page after it', async () => {
+    const files = unzipSync(await read(await draftDocx('Pipeline forecasting', PAGE, fields)));
+    const xml = strFromU8(files['word/document.xml']);
+    const table = xml.indexOf('Pipeline forecasting: a guide');
+    expect(xml.indexOf('Page fields: these go in your CMS fields.')).toBeLessThan(table);
+    expect(xml).toContain('pipeline-forecasting');
+    // The page starts on a page of its own.
+    expect(xml.indexOf('How it works')).toBeGreaterThan(xml.indexOf('<w:sectPr'));
+  });
+});
+
 describe('draftExportBlob and draftExportFileName', () => {
   it('gives each format its file', async () => {
     const md = await draftExportBlob('md', 'T', '<h1>T</h1>');

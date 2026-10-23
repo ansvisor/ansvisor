@@ -9,7 +9,7 @@ import StarterKit from '@tiptap/starter-kit';
 import { TableKit } from '@tiptap/extension-table';
 import Image from '@tiptap/extension-image';
 import { CharacterCount, Placeholder } from '@tiptap/extensions';
-import { ArrowLeft, Bot, Check, Copy, PanelRight, Target, X } from 'lucide-react';
+import { ArrowLeft, Bot, Check, Copy, Download, PanelRight, Target, X } from 'lucide-react';
 import { Link } from '@/i18n/navigation';
 import { Button } from '@/components/ui/button';
 import { buttonVariants } from '@/components/ui/button-variants';
@@ -76,6 +76,7 @@ import { PAGE_READ_DELAY_MS, draftTitleFromDoc, safeLinkHref } from '@/lib/conte
 import { JsonLd } from '@/lib/content/json-ld-node';
 import { firstImage } from '@/lib/content/page-schema';
 import { PLACEHOLDER, pagePlaceholders } from '@/lib/content/placeholders';
+import { exportPlaceholders, pasteChecks } from '@/lib/content/ready-to-publish';
 import { detectPageType } from '@/lib/content/page-types';
 import { BAND_CLASSES, qualityAverage, qualityBand, qualityPhase } from '@/lib/content/quality';
 import { eeat, linksToCheck, trust, trustBlocks } from '@/lib/content/quality-checks';
@@ -102,6 +103,7 @@ import {
   lockedPassageCount,
   type HeldEdit,
 } from './_cited-passages';
+import { ExportDialog, type ExportDestination } from './_export-dialog';
 import { ExportMenu } from './_export-menu';
 import { sourceDetail } from './_sources-tab';
 import { HistoryMenu } from './_history-menu';
@@ -927,8 +929,8 @@ export function DraftEditor({
    * The page's first placeholder (CE-044), selected to type over: in order,
    * across the marks in its line, its block flashed as Show's are.
    */
-  const showFirstPlaceholder = () => {
-    if (!editor) return;
+  const showFirstPlaceholder = (): boolean => {
+    if (!editor) return false;
     const one = new RegExp(PLACEHOLDER.source, 'iu');
     let found: { from: number; to: number; block: { from: number; to: number } } | null = null;
     editor.state.doc.descendants((block, pos) => {
@@ -955,7 +957,7 @@ export function DraftEditor({
       };
       return false;
     });
-    if (!found) return;
+    if (!found) return false;
     const { from, to, block } = found;
     editor
       .chain()
@@ -967,6 +969,26 @@ export function DraftEditor({
     setTimeout(() => {
       if (!editor.isDestroyed) editor.view.dispatch(editor.state.tr.setMeta(flashKey, null));
     }, 1200);
+    return true;
+  };
+
+  /**
+   * Fill now (Export, CE-057): the first placeholder, in the HTML view's
+   * text while it is open, else in the page; one only an HTML block holds is
+   * said to be there.
+   */
+  const htmlSourceRef = useRef<HTMLTextAreaElement>(null);
+  const fillFirstPlaceholder = () => {
+    if (htmlSource !== null) {
+      const m = new RegExp(PLACEHOLDER.source, 'iu').exec(htmlSource);
+      const area = htmlSourceRef.current;
+      if (m && area) {
+        area.focus();
+        area.setSelectionRange(m.index, m.index + m[0].length);
+      }
+      return;
+    }
+    if (!showFirstPlaceholder()) toast(t('exportDialog.inHtmlBlock', { html: '</>' }));
   };
 
   const showInPage = (text: string, { focus = false } = {}) => {
@@ -1301,14 +1323,27 @@ export function DraftEditor({
   }, [htmlEdited, htmlSource]);
 
   // The page as HTML to publish; in the HTML view, the source on screen.
+  const pageToPublish = () =>
+    publishableHtml(
+      htmlSource !== null ? htmlFromSource(htmlSource) : (editor?.getHTML() ?? draft.bodyHtml),
+    );
+  // Export (CE-057), once Quality is live: where it goes, its checks and fields.
+  // The page as it was when Export opened: what it shows stays still while open.
+  const [exportOpen, setExportOpen] = useState<{
+    html: string;
+    destination?: ExportDestination;
+  } | null>(null);
+  const openExport = (destination?: ExportDestination) =>
+    setExportOpen({ html: pageToPublish(), destination });
   const copyPageHtml = () => {
     if (!editor) return;
-    const html = htmlSource !== null ? htmlFromSource(htmlSource) : editor.getHTML();
-    void copyToClipboard(
-      publishableHtml(html),
-      t('copyHtmlDone'),
-      t('copyHtmlFailed', { html: '</> HTML' }),
-    );
+    const html = pageToPublish();
+    // No copy carries a placeholder: Export says so, and offers to leave them out.
+    if (quality && exportPlaceholders(html) > 0) {
+      setExportOpen({ html, destination: 'html' });
+      return;
+    }
+    void copyToClipboard(html, t('copyHtmlDone'), t('copyHtmlFailed', { html: '</> HTML' }));
   };
 
   /** Export: the page as Copy HTML gives it, as a Word, HTML or Markdown file. */
@@ -1578,7 +1613,21 @@ export function DraftEditor({
               <Copy className="h-3.5 w-3.5" />
               <span className="hidden xl:inline">{t('copyHtml')}</span>
             </Button>
-            <ExportMenu disabled={!editor} onExport={(format) => void exportPage(format)} />
+            {quality ? (
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={!editor}
+                title={t('export.hint')}
+                aria-label={t('export.button')}
+                onClick={() => openExport()}
+              >
+                <Download className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">{t('export.button')}</span>
+              </Button>
+            ) : (
+              <ExportMenu disabled={!editor} onExport={(format) => void exportPage(format)} />
+            )}
             <Button
               size="sm"
               // A page that can't be saved can't be marked ready; the save state says why.
@@ -1795,6 +1844,7 @@ export function DraftEditor({
             <div className="h-full overflow-y-auto">
               {htmlSource !== null && (
                 <textarea
+                  ref={htmlSourceRef}
                   value={htmlSource}
                   onChange={(e) => {
                     setHtmlSource(e.target.value);
@@ -1857,6 +1907,25 @@ export function DraftEditor({
           <EditorPanelRail onOpen={openPanelTab} />
         )}
       </div>
+
+      {quality && exportOpen && (
+        <ExportDialog
+          onClose={() => setExportOpen(null)}
+          title={title}
+          html={exportOpen.html}
+          sourceUrl={draft.sourceUrl}
+          author={pageAuthor}
+          // Until the authors are read, who it is by isn't known.
+          teamByline={authorsRead ? t('author.organization', { brand: brandName }) : ''}
+          checks={pasteChecks(exportOpen.html, linkChecks)}
+          linksPending={linksPending}
+          initialDestination={exportOpen.destination}
+          onFillNow={() => {
+            setExportOpen(null);
+            fillFirstPlaceholder();
+          }}
+        />
+      )}
 
       {quality && publishOpen && (
         <BeforePublish
