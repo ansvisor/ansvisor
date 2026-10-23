@@ -35,6 +35,7 @@ import {
 } from '@/lib/actions/content-authors';
 import {
   authorInitials,
+  canEditAuthor,
   MAX_LINK_LENGTH,
   MAX_PROFILES,
   type AuthorInput,
@@ -83,8 +84,7 @@ export function AuthorsSection() {
   }, [load]);
 
   const me = read?.me.id;
-  const canEdit = (author: ContentAuthor) =>
-    !!read && (author.userId === me || author.createdBy === me || read.me.role === 'admin');
+  const canEdit = (author: ContentAuthor) => !!read && canEditAuthor(author, read.me);
   const canSetDefaults = read?.me.role === 'admin' || read?.me.role === 'manager';
   const defaultOf = (brandId: string) =>
     picking[brandId] ??
@@ -308,7 +308,11 @@ export function AuthorsSection() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>{t('removeTitle', { name: removing?.name ?? '' })}</DialogTitle>
-            <DialogDescription>{t('removeDescription')}</DialogDescription>
+            <DialogDescription>
+              {removing?.pages == null
+                ? t('removeDescriptionUncounted')
+                : t('removeDescription', { count: removing.pages })}
+            </DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <DialogClose render={<Button variant="outline" disabled={busy} />}>

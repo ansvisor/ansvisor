@@ -1,5 +1,5 @@
 -- ============================================================================
--- 00257: Add byline to content, per brand (Content Editor Quality, CE-057)
+-- 00261: Add byline to content, per brand (Content Editor Quality, CE-057)
 -- ============================================================================
 -- The author is page metadata: a CMS's own author field shows the byline,
 -- and nothing of it goes into the content (Quality spec §9). For a CMS with

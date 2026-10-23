@@ -895,6 +895,11 @@
         "regions": "{count, plural, one {# region} other {# regions}}",
         "competitors": "{count, plural, one {# competitor} other {# competitors}}"
       },
+      "removed": {
+        "note": "({items} removed since this action was created)",
+        "hover": "No longer tracked since this action was created: {names}",
+        "hoverMore": "No longer tracked since this action was created: {names} and {more} more"
+      },
       "menu": {
         "label": "Actions for this item"
       },
@@ -2695,14 +2700,17 @@
     "siteTrust": {
       "title": "Site trust {score}/5",
       "titleLoading": "Site trust",
-      "description": "Read from your site's pages. Worth 5 Trust points on every page in Content.",
+      "description": "Read from your site's pages. Counts toward Trust in the Content Editor's Quality, not this audit score.",
       "checkAgain": "Check again",
+      "checkAgainAt": "You can check again at {time}.",
       "loading": "Reading your site",
       "loadFailed": "Couldn't read your site trust.",
       "retry": "Try again",
       "checkedAt": "Checked {date}",
       "passes": "passes",
       "missingLabel": "missing",
+      "notAnswered": "Your site didn't answer; checking again in a few minutes.",
+      "notAnsweredLabel": "not read",
       "open": "Open",
       "openLabel": "Open the {name} (new tab)",
       "refreshFailed": "Couldn't check again. The read above still stands.",
@@ -4285,6 +4293,7 @@
         },
         "linksPending": "Still reading {count, plural, one {# of the page's links} other {# of the page's links}}, so Trust may change.",
         "datesNote": "The dates are today's: change them if the page goes out on another day.",
+        "headlineLeftOut": "The title still has a placeholder in square brackets, so the code leaves the headline out. Fill it in, and the headline comes back here.",
         "states": {
           "ok": "done",
           "check": "check it",
@@ -4360,6 +4369,11 @@
               "bio": "Add a short bio in Settings › Authors: two sentences on what they know",
               "links": "Add a LinkedIn or other profile link in Settings › Authors"
             },
+            "askOthers": {
+              "both": "{member, select, yes {{name}, whoever added them or an admin can add a short bio and a profile link in Settings › Authors} other {Whoever added {name} or an admin can add a short bio and a profile link in Settings › Authors}}",
+              "bio": "{member, select, yes {{name}, whoever added them or an admin can add a short bio in Settings › Authors} other {Whoever added {name} or an admin can add a short bio in Settings › Authors}}",
+              "links": "{member, select, yes {{name}, whoever added them or an admin can add a profile link in Settings › Authors} other {Whoever added {name} or an admin can add a profile link in Settings › Authors}}"
+            },
             "done": "Short bio and profile links are in"
           }
         },
@@ -4374,6 +4388,7 @@
           },
           "later": "Later"
         },
+        "notThisLanguage": "Readability isn't read for this language yet.",
         "suggestionsLabel": "What would raise it",
         "nothingToRaise": "Nothing to raise here for now: every live check has its points.",
         "gain": "+{gain, number} {score}",
@@ -4389,10 +4404,10 @@
         "checks": {
           "claimsSourced": {
             "line": "{count, plural, one {# sentence with a figure has} other {# sentences with figures have}} no source",
-            "detail": "Link its source in the same paragraph, or take the figure out. Content Agent won't make one up."
+            "detail": "Link each figure's source in the same paragraph, or take the figure out. Content Agent won't make one up."
           },
           "freshSources": {
-            "line": "{count} of {total} dated sources {count, plural, one {is} other {are}} over {months} months old",
+            "line": "{count} of {total} dated {total, plural, one {source} other {sources}} {count, plural, one {is} other {are}} over {months} months old",
             "detail": "Swap them for a newer source, or check whether the page has an update."
           },
           "noBrokenLinks": {
@@ -6540,7 +6555,8 @@
       "edit": "Edit",
       "remove": "Remove",
       "removeTitle": "Remove {name}?",
-      "removeDescription": "They leave the authors list and any brand's default. Nothing on the pages themselves changes.",
+      "removeDescription": "They leave the authors list and any brand's default. {count, plural, =0 {No page in the Library is by them.} one {Their # page goes back to your brand's team byline.} other {Their # pages go back to your brand's team byline.}}",
+      "removeDescriptionUncounted": "They leave the authors list and any brand's default, and their pages go back to your brand's team byline.",
       "removed": "{name} removed.",
       "removeFailed": "Couldn't remove the author.",
       "add": "Add author",
