@@ -935,6 +935,7 @@ export type Database = {
       content_drafts: {
         Row: {
           action_id: string | null
+          agent_run: string | null
           agent_state: string | null
           agent_state_at: string | null
           archived_at: string | null
@@ -961,6 +962,7 @@ export type Database = {
         }
         Insert: {
           action_id?: string | null
+          agent_run?: string | null
           agent_state?: string | null
           agent_state_at?: string | null
           archived_at?: string | null
@@ -987,6 +989,7 @@ export type Database = {
         }
         Update: {
           action_id?: string | null
+          agent_run?: string | null
           agent_state?: string | null
           agent_state_at?: string | null
           archived_at?: string | null

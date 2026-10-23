@@ -4,6 +4,7 @@ import {
   DRAFT_STATUSES,
   PAGE_TYPES,
   WRITING_STALE_MS,
+  agentRunOf,
   agentStateOf,
   contentEditorPath,
   draftsCreatedIn,
@@ -117,5 +118,14 @@ describe('agentStateOf', () => {
       'failed',
     );
     expect(agentStateOf('writing', null, now)).toBe('failed');
+  });
+});
+
+describe('agentRunOf', () => {
+  it('reads the run that holds the draft, and nothing else', () => {
+    expect(agentRunOf('write')).toBe('write');
+    expect(agentRunOf('rewrite')).toBe('rewrite');
+    expect(agentRunOf(null)).toBeNull();
+    expect(agentRunOf('brief')).toBeNull();
   });
 });

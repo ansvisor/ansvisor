@@ -186,6 +186,25 @@ describe('sendTopicOpportunityToActionCenter', () => {
     expect(action.payload.demand).toBe(30_000);
   });
 
+  it('counts the suggestions as the action keeps them: each text once, none empty', async () => {
+    db.rows.prompt_suggestions = () => [
+      suggestionRow('s1', 30_000),
+      { ...suggestionRow('s2', 20_000), suggested_text: 'prompt s1' },
+      { ...suggestionRow('s3', 10_000), suggested_text: '' },
+    ];
+
+    await send(['s1', 's2', 's3']);
+
+    const action = db.inserts.find((i) => i.table === 'actions').row;
+    expect(action.payload).toMatchObject({ targetCount: 1, targetIds: ['prompt s1'] });
+  });
+
+  it('refuses suggestions with no words, which it couldn’t keep', async () => {
+    db.rows.prompt_suggestions = () => [{ ...suggestionRow('s1', 30_000), suggested_text: '  ' }];
+    await expect(send(['s1'])).rejects.toMatchObject({ status: 409 });
+    expect(db.inserts.find((i) => i.table === 'actions')).toBeUndefined();
+  });
+
   it('refuses when none of the suggestions is still open in this topic', async () => {
     db.rows.prompt_suggestions = () => [];
     await expect(send()).rejects.toMatchObject({ status: 409 });

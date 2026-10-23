@@ -177,6 +177,38 @@ describe('a replace on a heading', () => {
     expect(dropped).toEqual([{ index: 0, reason: 'heading_too_long' }]);
   });
 
+  it('says when a heading would ask a second question, and keeps a question reworded', () => {
+    const faq = draftPassages(
+      '<h2>FAQ</h2><h3>What is AEO?</h3><p>Answer engine optimization.</p>',
+    );
+    const run = (after: string) =>
+      keepAgentSuggestions(
+        [{ kind: 'replace', passage: 2, before: 'What is AEO?', after, reason: 'fan-out' }],
+        faq,
+        new Set(),
+      );
+    // A fan-out's question added to the one there.
+    expect(run('What is AEO? What is an AEO tracker?')).toEqual({
+      kept: [],
+      dropped: [{ index: 0, reason: 'heading_two_questions' }],
+    });
+    // Past the limit, or with its answer, the second question isn't moved
+    // under the first as if it answered it.
+    expect(
+      run(`What is AEO? How does ${'an AEO tracker read many engines and '.repeat(3)}work?`)
+        .dropped,
+    ).toEqual([{ index: 0, reason: 'heading_two_questions' }]);
+    expect(
+      run(
+        'What is AEO? What is an AEO tracker? An AEO tracker is a tool that reads many AI engines for you.',
+      ).dropped,
+    ).toEqual([{ index: 0, reason: 'heading_two_questions' }]);
+    // The question reworded into the fan-out's words.
+    expect(run('What is an AEO tracker?').kept).toEqual([
+      expect.objectContaining({ kind: 'replace', after_text: 'What is an AEO tracker?' }),
+    ]);
+  });
+
   it('holds an H1 to 70 characters and other headings to 90, unless they get shorter', () => {
     const run = (html: string, before: string, after: string) =>
       keepAgentSuggestions(
