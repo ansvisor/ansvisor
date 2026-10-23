@@ -45,37 +45,6 @@ export function pageChangedSince(currentHtml: string, readHtml: string): boolean
   return wordsOf(currentHtml) !== wordsOf(readHtml);
 }
 
-const REWRITE_KEY = (draftId: string) => `aeo:page-rewrite:${draftId}`;
-
-/**
- * This browser started a rewrite of the draft: its waiting view and a failed
- * run say so, and Try again rewrites again, after a reload or a closed tab
- * too. Per viewer: on another device the agent's usual copy shows.
- */
-export function rememberRewrite(draftId: string) {
-  try {
-    localStorage.setItem(REWRITE_KEY(draftId), '1');
-  } catch {
-    // No storage (a private window): the plain agent copy shows instead.
-  }
-}
-
-export function wasRewrite(draftId: string): boolean {
-  try {
-    return localStorage.getItem(REWRITE_KEY(draftId)) === '1';
-  } catch {
-    return false;
-  }
-}
-
-export function forgetRewrite(draftId: string) {
-  try {
-    localStorage.removeItem(REWRITE_KEY(draftId));
-  } catch {
-    // Nothing to forget.
-  }
-}
-
 /** The page as it reads, for Compare: the editor's prose, smaller. */
 const PAGE_CLASS = cn(
   'prose prose-sm prose-neutral max-w-none dark:prose-invert',
@@ -88,7 +57,15 @@ const PAGE_CLASS = cn(
 
 function PageColumn({ label, html }: { label: string; html: string }) {
   // Cleaned as a paste is: what the page holds, never a script that runs.
-  const clean = useMemo(() => cleanHtml(html, { keepImages: true }).html, [html]);
+  // Its links read as links but go nowhere, by mouse or by keyboard.
+  const clean = useMemo(() => {
+    const doc = new DOMParser().parseFromString(
+      cleanHtml(html, { keepImages: true }).html,
+      'text/html',
+    );
+    for (const link of doc.querySelectorAll('a[href]')) link.removeAttribute('href');
+    return doc.body.innerHTML;
+  }, [html]);
   return (
     <section aria-label={label} className="flex min-h-0 min-w-0 flex-col gap-1.5">
       <h3 className="text-xs font-medium text-muted-foreground">{label}</h3>

@@ -149,6 +149,7 @@ const draft = (over: Partial<ContentDraft> = {}): ContentDraft => ({
   action: null,
   agentState: null,
   agentSince: null,
+  agentRun: null,
   updatedAt: '2026-10-20T10:00:00Z',
   ...over,
 });
@@ -2264,9 +2265,9 @@ describe('the side panel', () => {
       expect(decideDraftSuggestions).not.toHaveBeenCalled();
     });
 
-    it('rewrites again from Try again after a rewrite failed', async () => {
-      localStorage.setItem('aeo:page-rewrite:d1', '1');
-      getContentDraft.mockResolvedValue({ ...long, agentState: 'failed' });
+    it('rewrites again from Try again after a rewrite failed, on any device', async () => {
+      // The draft says which run failed (agent_run), not this browser's storage.
+      getContentDraft.mockResolvedValue({ ...long, agentState: 'failed', agentRun: 'rewrite' });
       await renderPage();
       await act(async () => {});
 

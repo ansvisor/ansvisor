@@ -20,6 +20,17 @@ export type DraftMethod = 'create' | 'optimize';
  */
 export type AgentState = 'writing' | 'failed' | null;
 
+/**
+ * Which run holds the draft, or last held it (content_drafts.agent_run,
+ * 00247): Start with Agent, or Rewrite the page to these rules.
+ */
+export type AgentRun = 'write' | 'rewrite' | null;
+
+/** A stored run, or null for anything else. */
+export function agentRunOf(value: string | null | undefined): AgentRun {
+  return value === 'write' || value === 'rewrite' ? value : null;
+}
+
 /** A 'writing' this old was left by a server that stopped (content-writer.js). */
 export const WRITING_STALE_MS = 10 * 60_000;
 
@@ -149,6 +160,8 @@ export interface ContentDraft {
   agentState: AgentState;
   /** When the agent's state last changed: while it writes, when it started. */
   agentSince: string | null;
+  /** Which run that is, for every device: a failed rewrite is tried again as one. */
+  agentRun: AgentRun;
   updatedAt: string;
 }
 

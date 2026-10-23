@@ -84,13 +84,7 @@ import { OwnCopies, ownCopyHtml } from './_own-copies';
 import { PageTypeMenu } from './_page-type-menu';
 import type { AgentRewrite } from './_brief-tab';
 import { ruleStatusDetail, type AgentFix, type PageRewrite } from './_rules-tab';
-import {
-  PageRewriteBar,
-  forgetRewrite,
-  pageChangedSince,
-  rememberRewrite,
-  wasRewrite,
-} from './_page-rewrite';
+import { PageRewriteBar, pageChangedSince } from './_page-rewrite';
 import { EditorPanelRail, EditorSidePanel, useSidePanelOpen, type PanelTab } from './_side-panel';
 import {
   AgentSuggestions,
@@ -182,7 +176,7 @@ export function DraftEditor({
    * The Content Agent took the draft again (Try again, Rewrite from brief, or
    * Rewrite the page to these rules): the page waits for it.
    */
-  onAgentStarted?: () => void;
+  onAgentStarted?: (run: 'write' | 'rewrite') => void;
 }) {
   const t = useTranslations('contentEditor.editor');
   const autosave = useDraftAutosave(draft.id, draft);
@@ -195,11 +189,8 @@ export function DraftEditor({
   const [marking, setMarking] = useState(false);
   // The Content Agent couldn't finish the page Start gave it (CE-015).
   const [agentFailed, setAgentFailed] = useState(draft.agentState === 'failed');
-  // That run was a rewrite this tab started: Try again rewrites again.
-  const [failedRewrite] = useState(() => draft.agentState === 'failed' && wasRewrite(draft.id));
-  useEffect(() => {
-    if (draft.agentState !== 'failed') forgetRewrite(draft.id);
-  }, [draft.id, draft.agentState]);
+  // That run was a rewrite (agent_run, on every device): Try again rewrites again.
+  const failedRewrite = draft.agentState === 'failed' && draft.agentRun === 'rewrite';
   const [starting, setStarting] = useState(false);
   const [rewriting, setRewriting] = useState(false);
   const describeRule = useRuleDescriber();
@@ -852,8 +843,6 @@ export function DraftEditor({
    */
   const startAgent = async () => {
     if (!editor) return;
-    // Not a rewrite: the page waits with the agent's usual steps.
-    forgetRewrite(draft.id);
     setStarting(true);
     try {
       await autosave.settle();
@@ -879,7 +868,7 @@ export function DraftEditor({
         toast.error(t(`agentFailed.errors.${result.error}`));
         return;
       }
-      onAgentStarted?.();
+      onAgentStarted?.('write');
     } catch (err) {
       console.error('Failed to start the Content Agent again:', err);
       toast.error(t('agentFailed.errors.failed'));
@@ -951,8 +940,7 @@ export function DraftEditor({
         toast.error(t(`agentFailed.errors.${result.error}`));
         return;
       }
-      rememberRewrite(draft.id);
-      onAgentStarted?.();
+      onAgentStarted?.('rewrite');
     } catch (err) {
       console.error('Failed to start the page rewrite:', err);
       toast.error(t('agentFailed.errors.failed'));
@@ -1189,10 +1177,7 @@ export function DraftEditor({
                   size="icon-sm"
                   aria-label={t('agentFailed.dismiss')}
                   title={t('agentFailed.dismiss')}
-                  onClick={() => {
-                    setAgentFailed(false);
-                    forgetRewrite(draft.id);
-                  }}
+                  onClick={() => setAgentFailed(false)}
                 >
                   <X className="h-3.5 w-3.5" />
                 </Button>

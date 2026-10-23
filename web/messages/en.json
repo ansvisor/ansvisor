@@ -3664,6 +3664,7 @@
           "empty": "Write something first: the agent improves the page you have.",
           "open_suggestions": "This page has open suggestions, maybe from another tab. They're shown now: accept or reject them first.",
           "published": "This page is published. Content Agent suggests changes to drafts only.",
+          "writing": "Content Agent is already writing this page, maybe from another tab. Try again once it has finished.",
           "failed": "Content Agent couldn't run. Try again."
         }
       },
