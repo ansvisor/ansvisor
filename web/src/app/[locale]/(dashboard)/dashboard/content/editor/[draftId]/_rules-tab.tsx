@@ -2,8 +2,14 @@
 
 import { useState } from 'react';
 import { useTranslations } from 'next-intl';
-import { Bot, FileText, Loader2, Sparkles } from 'lucide-react';
+import { Check, ChevronDown, Loader2, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import {
   Dialog,
   DialogContent,
@@ -32,9 +38,9 @@ import {
   type TextRule,
 } from '@/lib/content/rules';
 import { formatNumber } from '@/lib/format';
-import { AGENT_RUN_MAX } from '@/lib/content/suggestions';
 import { cn } from '@/lib/utils';
 import { useUserRole } from '@/hooks/use-user-role';
+import { RunCard } from './_run-card';
 import type { DraftRulesState } from './_use-draft-rules';
 
 /** Rules with an explanation on hover (spec §10). */
@@ -78,6 +84,116 @@ export interface PageRewrite {
   blocked: string | null;
 }
 
+/** Run Agent's two ways: the open rules fixed a few passages at a time, or the whole page. */
+type RunMode = 'fix' | 'rewrite';
+
+/**
+ * Run Agent ▾ (v1.1, CE-029): one control for both rule actions. The main
+ * part runs the choice, Fix open rules unless the person picked Rewrite the
+ * whole page in ▾, which then labels it "Rewrite page". Each choice says
+ * what it does and its AI usage, Less or More, until a real estimate exists.
+ */
+function RunAgentButton({
+  mode,
+  onMode,
+  fix,
+  rewrite,
+  openCount,
+  setName,
+  recommended,
+}: {
+  mode: RunMode;
+  onMode: (mode: RunMode) => void;
+  fix?: AgentFix;
+  rewrite?: PageRewrite;
+  openCount: number;
+  /** The rule set's name, as the menu says what a rewrite follows. */
+  setName: string;
+  /** Rewrite when small edits can't get there (rewriteAdvice), else Fix. */
+  recommended: RunMode;
+}) {
+  const t = useTranslations('contentEditor.editor.rules.run');
+  const current = mode === 'rewrite' && rewrite ? rewrite : fix;
+  if (!current) return null;
+  const busy = current.running || current.blocked !== null;
+  const label = current.running
+    ? t('working')
+    : mode === 'rewrite' && rewrite
+      ? t('rewriteLabel')
+      : t('label');
+  const main = (
+    <Button
+      size="sm"
+      className={cn(rewrite && fix && 'rounded-r-none')}
+      disabled={busy}
+      onClick={() => current.run()}
+    >
+      {current.running && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+      {label}
+    </Button>
+  );
+  // A page ready or published has no rewrite: the plain button.
+  if (!rewrite || !fix) return main;
+  const choices: { value: RunMode; title: string; detail: string; usage: string }[] = [
+    {
+      value: 'fix',
+      title: t('fix.title'),
+      detail: t('fix.detail', { count: openCount }),
+      usage: t('fix.usage'),
+    },
+    {
+      value: 'rewrite',
+      title: t('rewrite.title'),
+      detail: t('rewrite.detail', { set: setName }),
+      usage: t('rewrite.usage'),
+    },
+  ];
+  return (
+    <span className="inline-flex shrink-0">
+      {main}
+      <DropdownMenu>
+        <DropdownMenuTrigger
+          disabled={fix.running || rewrite.running}
+          render={
+            <Button
+              size="sm"
+              aria-label={t('more')}
+              className="rounded-l-none border-l border-primary-foreground/20 px-1.5"
+            />
+          }
+        >
+          <ChevronDown className="h-3.5 w-3.5" />
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-72">
+          {choices.map((choice) => (
+            <DropdownMenuItem
+              key={choice.value}
+              onClick={() => onMode(choice.value)}
+              className={cn('items-start gap-2', mode === choice.value && 'bg-muted')}
+            >
+              <Check
+                aria-hidden
+                className={cn(
+                  'mt-0.5 h-3.5 w-3.5 shrink-0',
+                  mode === choice.value ? 'opacity-100' : 'opacity-0',
+                )}
+              />
+              <span className="grid min-w-0 gap-0.5">
+                <span className="text-[13px] font-medium">{choice.title}</span>
+                <span className="text-xs text-muted-foreground">
+                  {recommended === choice.value && `${t('recommended')} · `}
+                  {choice.detail}
+                </span>
+                <span className="text-[11px] text-muted-foreground/80">{choice.usage}</span>
+              </span>
+            </DropdownMenuItem>
+          ))}
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </span>
+  );
+}
+
 export function RulesTab({
   state,
   siteType,
@@ -118,7 +234,11 @@ export function RulesTab({
 
   // Rewrite the page whole when small edits can't get there.
   const advice = pageRewrite ? rewriteAdvice(state.rules) : null;
-  const agents = (agentFix || pageRewrite) && state.met < state.total;
+  // The rules the page doesn't meet now, in the tab's order.
+  const open = state.rules.filter(({ rule, status }) => rule.on && status.state === 'bad');
+  // Run Agent's choice: the safe default, or the whole page (▾).
+  const [mode, setMode] = useState<RunMode>('fix');
+  const running = mode === 'rewrite' && pageRewrite ? pageRewrite : agentFix;
 
   // A draft on My rules for a type the workspace has none for (its type
   // changed, or My rules couldn't be read) shows Ansvisor's set for it.
@@ -126,6 +246,8 @@ export function RulesTab({
     state.source === 'mine' && state.setType && state.mineTypes.includes(state.setType)
       ? 'mine'
       : 'default';
+  const setName =
+    items.find((item) => item.value === `${source}:${state.setType}`)?.label ?? t('pickSet');
 
   return (
     // Nothing changes before My rules are read: a change would leave them out.
@@ -134,64 +256,51 @@ export function RulesTab({
       aria-busy={!state.ready}
       className="m-0 min-w-0 space-y-4 border-0 p-0 text-sm"
     >
-      {/* The agent's two ways to meet the rules, first: a few edits a run,
-          or the whole page rewritten as one change to compare. */}
-      {agents && (
-        <div className="space-y-1.5">
-          {agentFix && (
-            <Button
-              size="sm"
-              variant="outline"
-              className="w-full"
-              disabled={agentFix.running || agentFix.blocked !== null}
-              title={agentFix.blocked ?? t('agentFixHint')}
-              onClick={() => agentFix.run()}
-            >
-              {agentFix.running ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              ) : (
-                <Bot className="h-3.5 w-3.5" />
-              )}
-              {agentFix.running ? t('agentFixing') : t('agentFix')}
-            </Button>
+      {/* What the agent can do about the rules, first (v1.1, CE-028/029): one
+          Run Agent, fixing the open rules a few passages at a time, or (▾)
+          rewriting the whole page as one change to compare. */}
+      {(agentFix || pageRewrite) && (
+        <RunCard
+          title={open.length > 0 ? t('run.notMet', { count: open.length }) : t('run.allMet')}
+          detail={
+            open.length > 0
+              ? `${open
+                  .slice(0, 3)
+                  .map(({ rule }) => t(`names.${rule.key}`))
+                  .join(', ')}${open.length > 3 ? '…' : ''}`
+              : undefined
+          }
+          action={
+            open.length > 0 && (
+              <RunAgentButton
+                mode={mode}
+                onMode={setMode}
+                fix={agentFix}
+                rewrite={pageRewrite}
+                openCount={open.length}
+                setName={setName}
+                recommended={advice ? 'rewrite' : 'fix'}
+              />
+            )
+          }
+          info={t.rich('run.info', { b: (chunks) => <b>{chunks}</b> })}
+          blocked={open.length > 0 ? running?.blocked : null}
+        >
+          {advice && (
+            <p className="flex gap-1.5 text-xs" role="note">
+              <Sparkles aria-hidden className="mt-0.5 h-3 w-3 shrink-0 text-muted-foreground" />
+              <span>
+                {advice.reason === 'length'
+                  ? t('rewriteAdvice.length', {
+                      count: advice.count,
+                      target: advice.target,
+                      percent: advice.percent,
+                    })
+                  : t('rewriteAdvice.open', { count: advice.count })}
+              </span>
+            </p>
           )}
-          {pageRewrite && (
-            <Button
-              size="sm"
-              variant={advice ? 'default' : 'outline'}
-              className="w-full"
-              disabled={pageRewrite.running || pageRewrite.blocked !== null}
-              title={pageRewrite.blocked ?? t('rewriteHint')}
-              onClick={() => pageRewrite.run()}
-            >
-              {pageRewrite.running ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              ) : (
-                <FileText className="h-3.5 w-3.5" />
-              )}
-              {pageRewrite.running ? t('rewriting') : t('rewrite')}
-            </Button>
-          )}
-          {pageRewrite &&
-            (advice ? (
-              <p className="flex gap-1.5 text-xs" role="note">
-                <Sparkles aria-hidden className="mt-0.5 h-3 w-3 shrink-0 text-muted-foreground" />
-                <span>
-                  {advice.reason === 'length'
-                    ? t('rewriteAdvice.length', {
-                        count: advice.count,
-                        target: advice.target,
-                        percent: advice.percent,
-                      })
-                    : t('rewriteAdvice.open', { count: advice.count })}
-                </span>
-              </p>
-            ) : (
-              <p className="text-xs text-muted-foreground">
-                {t('agentsHint', { max: AGENT_RUN_MAX })}
-              </p>
-            ))}
-        </div>
+        </RunCard>
       )}
 
       <div className="space-y-1.5">

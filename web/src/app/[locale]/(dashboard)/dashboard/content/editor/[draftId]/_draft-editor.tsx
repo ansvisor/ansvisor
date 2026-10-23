@@ -85,7 +85,12 @@ import { PageTypeMenu } from './_page-type-menu';
 import type { AgentRewrite } from './_brief-tab';
 import { ruleStatusDetail, type AgentFix, type PageRewrite } from './_rules-tab';
 import { forgetRewrite, pageChangedSince, rememberRewrite, wasRewrite } from './_page-rewrite';
-import { EditorPanelRail, EditorSidePanel, useSidePanelOpen, type PanelTab } from './_side-panel';
+import {
+  EditorPanelRail,
+  EditorSidePanel,
+  useSidePanelOpen,
+  type PanelTarget,
+} from './_side-panel';
 import {
   AgentSuggestions,
   acceptInto,
@@ -240,8 +245,8 @@ export function DraftEditor({
   const [panelOpen, togglePanel] = useSidePanelOpen();
   // The header's rules chip opens the panel on Rules, and the closed panel's
   // strip on the tab picked there.
-  const [tabRequest, setTabRequest] = useState<{ tab: PanelTab; n: number } | null>(null);
-  const openPanelTab = (tab: PanelTab) => {
+  const [tabRequest, setTabRequest] = useState<{ tab: PanelTarget; n: number } | null>(null);
+  const openPanelTab = (tab: PanelTarget) => {
     if (!panelOpen) togglePanel();
     setTabRequest((prev) => ({ tab, n: (prev?.n ?? 0) + 1 }));
   };

@@ -3598,6 +3598,9 @@
           "failed": "The agent couldn't start. Try again in a moment."
         }
       },
+      "run": {
+        "about": "What Run Agent does"
+      },
       "agentCard": {
         "waiting": "{count, plural, one {Content Agent has # suggestion for you} other {Content Agent has # suggestions for you}}",
         "gain": "Rules {met, number} → {after, number} of {total, number}",
@@ -3659,7 +3662,7 @@
         "fixedMax": "Content Agent suggested {count} changes, the most one run makes · review them, then run it again for the rules still open",
         "nothingToFix": "Content Agent found nothing it could change without new facts.",
         "notForAgent": "Content Agent doesn't change heading levels: make the extra H1s H2s in the toolbar.",
-        "decideFirst": "Accept or reject the open suggestions first.",
+        "decideFirst": "Review the open suggestion first, then run the agent.",
         "citedLoading": "Reading which passages AI quotes, so the agent leaves them as they are…",
         "agentBusy": "Content Agent is already working on this page. Wait for it to finish.",
         "fixErrors": {
@@ -3763,7 +3766,7 @@
         "html": "Edit as HTML",
         "htmlBack": "Back to visual",
         "openLink": "Open the link in a new tab (or ⌘/Ctrl + click it in the page)",
-        "counter": "{count} / {target} characters"
+        "counter": "{count} / {target} characters · {words} words"
       },
       "link": {
         "title": "Add a link",
@@ -3789,11 +3792,17 @@
         "show": "Show side panel",
         "hide": "Hide side panel",
         "openTab": "Open {tab} in the side panel",
+        "openRules": "{count, plural, one {# rule open} other {# rules open}}",
         "tabs": {
-          "impact": "Live page",
-          "brief": "Brief",
+          "instructions": "Instructions",
           "sources": "Sources",
-          "rules": "Rules"
+          "impact": "Live page"
+        },
+        "segmentsLabel": "Brief or rules",
+        "segments": {
+          "brief": "Brief",
+          "rules": "Rules",
+          "open": "{count, number} open"
         }
       },
       "impact": {
@@ -3945,19 +3954,27 @@
         "pageType": "Page type",
         "targetUrl": "Target URL",
         "newPage": "A new page",
-        "notSet": "Not set",
+        "notSet": "Not set yet",
         "goal": "Goal",
         "audience": "Audience",
         "length": "Length",
-        "lengthValue": "{count} characters · from the rules",
+        "lengthValue": "{count} characters · ~{words} words",
+        "lengthFrom": "From the rules",
         "outline": "Outline",
         "answers": "Answers “{fanout}”",
         "keywords": "Keywords",
-        "empty": "No outline yet. Rebuild outline writes one from the sources you keep, each H2 answering a search AI ran.",
-        "fromOpportunity": "From the opportunity's brief. Rebuild outline maps each H2 to a fan-out.",
+        "empty": "Empty. Run Agent to draft one, or add H2s yourself.",
+        "fromOpportunity": "From the opportunity's brief. Rebuild brief maps each H2 to a fan-out.",
         "edited": "Edited by you.",
         "builtFrom": "{count, plural, one {Built from # source} other {Built from # sources}} · {date}",
-        "rebuild": "Rebuild outline",
+        "rebuild": "Rebuild brief",
+        "run": "Run Agent",
+        "info": "Run Agent writes the goal, audience and outline from your sources.",
+        "status": {
+          "empty": "No brief yet",
+          "emptyDetail": "Goal, audience and outline are empty.",
+          "ready": "Brief ready · {count, plural, =0 {no H2s yet} one {# H2} other {# H2s}}"
+        },
         "rewrite": {
           "button": {
             "create": "Rewrite from brief",
@@ -3970,12 +3987,11 @@
           "start": "Start the agent",
           "cancel": "Cancel"
         },
-        "rebuildEdited": "Rebuild outline writes a new brief over the one you edited.",
+        "rebuildEdited": "Rebuild brief writes a new brief over the one you edited.",
         "rebuildAnyway": "Rebuild anyway",
         "keepEdited": "Keep my brief",
-        "build": "Build brief",
         "edit": "Edit brief",
-        "usage": "Rebuilding uses your workspace's AI usage.",
+        "usage": "Writing the brief uses your workspace's AI usage.",
         "rebuilt": "{count, plural, one {Brief rebuilt from # source} other {Brief rebuilt from # sources}}",
         "rebuildErrors": {
           "ai_budget": "This month's AI usage is used up. It resets when your subscription renews.",
@@ -4119,13 +4135,26 @@
         },
         "mineName": "My rules · {type}",
         "setPicked": "Rule set changed for this draft",
-        "agentFix": "Apply rules with Agent",
-        "agentFixing": "Content Agent is working…",
-        "agentFixHint": "Content Agent suggests changes for the rules not met yet, for you to review in the page",
-        "rewrite": "Rewrite the page to these rules",
-        "rewriting": "Content Agent is rewriting…",
-        "rewriteHint": "Content Agent rewrites the whole page in one go and shows it beside yours to accept or reject. Passages AI quotes, tables and images stay as they are.",
-        "agentsHint": "Apply rules makes small edits, up to {max} a run. Rewrite does the whole page as one change to compare.",
+        "run": {
+          "notMet": "{count, plural, one {# rule is not met} other {# rules are not met}}",
+          "allMet": "All rules are met",
+          "info": "<b>Run Agent</b> fixes the open rules. You review each change. <b>▾ Rewrite page</b> rewrites the whole page. Uses more AI.",
+          "label": "Run Agent",
+          "rewriteLabel": "Rewrite page",
+          "working": "Working…",
+          "more": "More ways to run the agent",
+          "recommended": "Recommended",
+          "fix": {
+            "title": "Fix open rules",
+            "detail": "{count, plural, one {# rule} other {# rules}} · small, reviewable changes",
+            "usage": "Less AI usage"
+          },
+          "rewrite": {
+            "title": "Rewrite the whole page",
+            "detail": "Every rule in “{set}” · one new version, cited passages kept",
+            "usage": "More AI usage"
+          }
+        },
         "rewriteAdvice": {
           "length": "Recommended: the page is {count, number} characters for a Length of {target, number} ({percent, number}% off). A rewrite gets there in one go.",
           "open": "Recommended: {count, number} rules are open. A rewrite meets them together."

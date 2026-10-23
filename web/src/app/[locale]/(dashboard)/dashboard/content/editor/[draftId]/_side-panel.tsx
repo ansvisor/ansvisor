@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { isPageType, type ContentDraft } from '@/lib/content/drafts';
+import { cn } from '@/lib/utils';
 import { BriefTab, type AgentRewrite } from './_brief-tab';
 import { ImpactTab } from './_impact-tab';
 import { RulesTab, type AgentFix, type PageRewrite } from './_rules-tab';
@@ -44,10 +45,17 @@ export function useSidePanelOpen(): [boolean, () => void] {
   return [open, toggle];
 }
 
-// Rules first: what to act on before anything else (the user's call over the
-// spec's Impact-first order); the panel opens on it.
-const PANEL_TABS = ['rules', 'brief', 'sources', 'impact'] as const;
+// Instructions first (Content Editor v1.1, CE-028): Brief and Rules, what
+// the agent follows, in one tab, which the panel opens on (on Rules).
+const PANEL_TABS = ['instructions', 'sources', 'impact'] as const;
 export type PanelTab = (typeof PANEL_TABS)[number];
+/** Instructions' two segments: what to write (Brief), then how to write it (Rules). */
+const SEGMENTS = ['brief', 'rules'] as const;
+export type InstructionSegment = (typeof SEGMENTS)[number];
+/** What the panel can be asked to open: a tab, or one of Instructions' segments. */
+export type PanelTarget = PanelTab | InstructionSegment;
+const isSegment = (target: PanelTarget): target is InstructionSegment =>
+  (SEGMENTS as readonly string[]).includes(target);
 
 /**
  * The panel's tabs while it is closed, down the editor's right edge, so the
@@ -78,11 +86,12 @@ export function EditorPanelRail({ onOpen }: { onOpen: (tab: PanelTab) => void })
 
 /**
  * The editor's right panel (Content Editor spec v2 §6), 400px beside the page.
- * The spec's tabs are Impact · Chat · Brief · Sources · Rules; each joins the
- * panel with the update that makes it work: Impact (CE-016), Brief (CE-007),
- * Sources (CE-008) and Rules (CE-009). Rules comes first and the panel opens
- * on it; each other tab mounts (and reads) when first opened, and stays
- * mounted, so switching back keeps it as it was. The brief and the sources are the editor's one read
+ * Its tabs are Instructions · Sources · Live page (v1.1, CE-028): Instructions
+ * holds what the agent follows, the Brief (CE-007) and the Rules (CE-009),
+ * under a Brief | Rules control, with the rules still open on both. The panel
+ * opens on Instructions, on Rules; each other tab or segment mounts (and
+ * reads) when first opened, and stays mounted, so switching back keeps it as
+ * it was. The brief and the sources are the editor's one read
  * (useDraftReads), which the rules check against too: Sources' "Rebuild with
  * selection" and Impact's "Use lost prompts" rebuild the brief, and open it.
  */
@@ -108,7 +117,7 @@ export function EditorSidePanel({
   /** The draft's brief and sources, read once for the editor. */
   reads: DraftReads;
   /** A tab to open, from outside the panel (the header's rules chip). */
-  tabRequest: { tab: PanelTab; n: number } | null;
+  tabRequest: { tab: PanelTarget; n: number } | null;
   /** Fix open rules with agent, for the Rules tab (CE-018). */
   agentFix?: AgentFix;
   /** Rewrite the page to these rules, for the Rules tab; absent once the page is ready or published. */
@@ -117,8 +126,9 @@ export function EditorSidePanel({
   agentRewrite?: AgentRewrite;
 }) {
   const t = useTranslations('contentEditor.editor.panel');
-  const [tab, setTab] = useState<PanelTab>('rules');
-  const [opened, setOpened] = useState<Set<PanelTab>>(() => new Set(['rules']));
+  const [tab, setTab] = useState<PanelTab>('instructions');
+  const [segment, setSegment] = useState<InstructionSegment>('rules');
+  const [opened, setOpened] = useState<Set<PanelTarget>>(() => new Set(['instructions', 'rules']));
   const page = useRef<PageNow>({ title, html: bodyHtml, length: rules.length });
   const sourcesNow = useRef(reads.sources);
   useEffect(() => {
@@ -126,10 +136,15 @@ export function EditorSidePanel({
     sourcesNow.current = reads.sources;
   });
 
-  const open = (next: PanelTab) => {
-    setTab(next);
-    setOpened((prev) => (prev.has(next) ? prev : new Set([...prev, next])));
+  const open = (next: PanelTarget) => {
+    const nextTab = isSegment(next) ? 'instructions' : next;
+    if (isSegment(next)) setSegment(next);
+    setTab(nextTab);
+    setOpened((prev) =>
+      prev.has(next) && prev.has(nextTab) ? prev : new Set([...prev, next, nextTab]),
+    );
   };
+  const rulesOpen = Math.max(0, rules.total - rules.met);
 
   const requested = tabRequest?.n;
   useEffect(() => {
@@ -162,28 +177,82 @@ export function EditorSidePanel({
           {PANEL_TABS.map((value) => (
             <TabsTrigger key={value} value={value}>
               {t(`tabs.${value}`)}
+              {/* The rules still open, on the tab that holds them. */}
+              {value === 'instructions' && rulesOpen > 0 && (
+                <span
+                  aria-label={t('openRules', { count: rulesOpen })}
+                  className="rounded-md bg-amber-50 px-1.5 text-[10.5px] font-semibold text-amber-700 dark:bg-amber-950 dark:text-amber-400"
+                >
+                  {rulesOpen}
+                </span>
+              )}
             </TabsTrigger>
           ))}
         </TabsList>
       </Tabs>
       <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
-        {briefOpened && (
-          <div hidden={tab !== 'brief'}>
-            <BriefTab
-              draftId={draft.id}
-              state={reads.brief}
-              pageType={pageType}
-              length={rules.length}
-              sourceUrl={draft.sourceUrl}
-              method={draft.method}
-              rebuilding={rebuilding}
-              onRebuild={() => void rebuild()}
-              onRetry={reads.reloadBrief}
-              onSaved={(saved) => reads.setBrief(saved)}
-              rewrite={agentRewrite}
-            />
+        <div hidden={tab !== 'instructions'} className="space-y-4">
+          <div
+            role="radiogroup"
+            aria-label={t('segmentsLabel')}
+            className="flex rounded-[10px] border bg-muted p-[3px]"
+          >
+            {SEGMENTS.map((value) => (
+              <button
+                key={value}
+                type="button"
+                role="radio"
+                aria-checked={segment === value}
+                onClick={() => open(value)}
+                className={cn(
+                  'flex flex-1 items-center justify-center gap-1.5 rounded-lg py-1 text-[13px] font-medium text-muted-foreground transition-colors focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none',
+                  segment === value && 'bg-background text-foreground shadow-xs',
+                )}
+              >
+                {t(`segments.${value}`)}
+                {value === 'rules' && rulesOpen > 0 && (
+                  <span className="rounded-md bg-red-50 px-1.5 text-[10.5px] font-medium text-red-700 dark:bg-red-950 dark:text-red-400">
+                    {t('segments.open', { count: rulesOpen })}
+                  </span>
+                )}
+              </button>
+            ))}
           </div>
-        )}
+          {briefOpened && (
+            <div hidden={segment !== 'brief'}>
+              <BriefTab
+                draftId={draft.id}
+                state={reads.brief}
+                pageType={pageType}
+                length={rules.length}
+                sourceUrl={draft.sourceUrl}
+                method={draft.method}
+                rebuilding={rebuilding}
+                onRebuild={() => void rebuild()}
+                onRetry={reads.reloadBrief}
+                onSaved={(saved) => reads.setBrief(saved)}
+                rewrite={agentRewrite}
+              />
+            </div>
+          )}
+          {opened.has('rules') && (
+            <div hidden={segment !== 'rules'}>
+              <RulesTab
+                agentFix={agentFix}
+                pageRewrite={pageRewrite}
+                // Only a draft with no prompts gets no fan-outs for want of them.
+                onOpenSources={
+                  reads.sources && !reads.sources.failed && reads.sources.data.prompts.length === 0
+                    ? () => open('sources')
+                    : undefined
+                }
+                state={rules}
+                siteType={draft.siteType}
+                draftPageType={isPageType(pageType) ? pageType : null}
+              />
+            </div>
+          )}
+        </div>
         {opened.has('sources') && (
           <div hidden={tab !== 'sources'}>
             <SourcesTab
@@ -197,23 +266,6 @@ export function EditorSidePanel({
               bodyHtml={bodyHtml}
               rebuilding={rebuilding}
               onRebuild={(sources) => void rebuild({ sources })}
-            />
-          </div>
-        )}
-        {opened.has('rules') && (
-          <div hidden={tab !== 'rules'}>
-            <RulesTab
-              agentFix={agentFix}
-              pageRewrite={pageRewrite}
-              // Only a draft with no prompts gets no fan-outs for want of them.
-              onOpenSources={
-                reads.sources && !reads.sources.failed && reads.sources.data.prompts.length === 0
-                  ? () => open('sources')
-                  : undefined
-              }
-              state={rules}
-              siteType={draft.siteType}
-              draftPageType={isPageType(pageType) ? pageType : null}
             />
           </div>
         )}

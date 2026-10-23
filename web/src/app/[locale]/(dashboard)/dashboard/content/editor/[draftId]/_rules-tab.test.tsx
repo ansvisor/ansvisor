@@ -98,7 +98,7 @@ afterEach(() => {
 });
 
 describe('the Rules tab', () => {
-  it('puts the agent’s two ways first, and recommends a rewrite far from Length', async () => {
+  it('opens with one Run Agent for the open rules, and a rewrite in its menu far from Length', async () => {
     const fix = { run: vi.fn(), running: false, blocked: null };
     const rewrite = { run: vi.fn(), running: false, blocked: null };
     const show = async (props: Partial<Parameters<typeof RulesTab>[0]>) =>
@@ -112,27 +112,71 @@ describe('the Rules tab', () => {
         );
       });
     await show({ agentFix: fix, pageRewrite: rewrite });
-    const labels = [...container.querySelectorAll('button')].map((b) => b.textContent);
-    expect(labels.slice(0, 2)).toEqual([
-      'Apply rules with Agent',
-      'Rewrite the page to these rules',
-    ]);
-    const rewriteButton = () =>
-      [...container.querySelectorAll('button')].find(
-        (b) => b.textContent === 'Rewrite the page to these rules',
-      )!;
+    const buttons = () => [...container.querySelectorAll('button')];
+    const main = () =>
+      buttons().find((b) => b.textContent === 'Run Agent' || b.textContent === 'Rewrite page')!;
+    // The card first: what's open, the split button, then the ⓘ.
+    expect(
+      buttons()
+        .map((b) => b.getAttribute('aria-label') ?? b.textContent)
+        .slice(0, 3),
+    ).toEqual(['Run Agent', 'More ways to run the agent', 'What Run Agent does']);
+    const open = state().rules.filter(({ rule, status }) => rule.on && status.state === 'bad');
+    expect(container.textContent).toContain(`${open.length} rules are not met`);
     // 15,921 characters for a 3,000 Length.
     expect(container.querySelector('[role="note"]')!.textContent).toBe(
       'Recommended: the page is 15,921 characters for a Length of 3,000 (431% off). A rewrite gets there in one go.',
     );
-    await act(async () => rewriteButton().click());
-    expect(rewrite.run).toHaveBeenCalled();
 
-    // Suggestions still open: it says why it can't run.
-    await show({ agentFix: fix, pageRewrite: { ...rewrite, blocked: 'Decide first' } });
-    const blocked = rewriteButton();
-    expect(blocked.disabled).toBe(true);
-    expect(blocked.title).toBe('Decide first');
+    // The main part runs the safe default: fix the open rules.
+    await act(async () => main().click());
+    expect(fix.run).toHaveBeenCalledTimes(1);
+    expect(rewrite.run).not.toHaveBeenCalled();
+
+    // ▾ offers both, the rewrite recommended here; picking it renames the button.
+    const trigger = buttons().find(
+      (b) => b.getAttribute('aria-label') === 'More ways to run the agent',
+    )!;
+    await act(async () => trigger.click());
+    const items = [...document.body.querySelectorAll<HTMLElement>('[role="menuitem"]')];
+    expect(items.map((item) => item.textContent)).toEqual([
+      `Fix open rules${open.length} rules · small, reviewable changesLess AI usage`,
+      'Rewrite the whole pageRecommended · Every rule in “Feature page · Ansvisor default” · one new version, cited passages keptMore AI usage',
+    ]);
+    await act(async () => items[1].click());
+    expect(main().textContent).toBe('Rewrite page');
+    await act(async () => main().click());
+    expect(rewrite.run).toHaveBeenCalledTimes(1);
+
+    // Suggestions still open: disabled, and why under the card, not only on hover.
+    await show({
+      agentFix: { ...fix, blocked: 'Review the open suggestion first, then run the agent.' },
+      pageRewrite: { ...rewrite, blocked: 'Review the open suggestion first, then run the agent.' },
+    });
+    expect(main().disabled).toBe(true);
+    expect(container.querySelector('[role="status"]')!.textContent).toBe(
+      'Review the open suggestion first, then run the agent.',
+    );
+  });
+
+  it('keeps Run Agent plain without a rewrite (a page ready or published)', async () => {
+    const fix = { run: vi.fn(), running: false, blocked: null };
+    await act(async () => {
+      root.render(
+        <NextIntlClientProvider locale="en" messages={messages}>
+          <RoleProvider role="admin">
+            <RulesTab state={state()} siteType="b2b" draftPageType="feature_page" agentFix={fix} />
+          </RoleProvider>
+        </NextIntlClientProvider>,
+      );
+    });
+    expect(container.querySelector('[aria-label="More ways to run the agent"]')).toBeNull();
+    expect(container.querySelector('[role="note"]')).toBeNull();
+    const run = [...container.querySelectorAll('button')].find(
+      (b) => b.textContent === 'Run Agent',
+    )!;
+    await act(async () => run.click());
+    expect(fix.run).toHaveBeenCalled();
   });
 
   it('lists the page type’s rules, then the shared groups, each with its status', async () => {

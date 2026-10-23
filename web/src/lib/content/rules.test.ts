@@ -11,6 +11,7 @@ import {
   draftRulesSchema,
   readPage,
   ruleLength,
+  wordsForLength,
   lengthWarns,
   lengthConflict,
   ruleSet,
@@ -139,6 +140,16 @@ describe('rule sets', () => {
       overrides: { length: { value: '600000' } },
     });
     expect(ruleLength(huge, 'category_page')).toBe(50_000);
+  });
+
+  it('says a length in characters as about so many words (v1.1 §3.2)', () => {
+    // To the nearest ten from 100 words on, as the Brief shows it.
+    expect(wordsForLength(4000)).toBe(670);
+    expect(wordsForLength(3000)).toBe(500);
+    expect(wordsForLength(50_000)).toBe(8330);
+    // Below 100 words, as is; never none.
+    expect(wordsForLength(300)).toBe(50);
+    expect(wordsForLength(1)).toBe(1);
   });
 
   it('keeps the draft’s choices to their limits', () => {

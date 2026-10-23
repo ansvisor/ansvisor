@@ -498,6 +498,19 @@ export function ruleLength(rules: ActiveRule[], pageType: PageType | null): numb
   return Math.min(RULE_LENGTH_MAX, Math.max(RULE_LENGTH_MIN, value));
 }
 
+/**
+ * About how many characters a word takes, its space and punctuation
+ * included: an English average, for showing a length in words too
+ * (Content Editor v1.1 §3.2). Characters stay the unit rules count in.
+ */
+export const CHARACTERS_PER_WORD = 6;
+
+/** A length in characters as about so many words, to the nearest ten from 100 on. */
+export function wordsForLength(characters: number): number {
+  const words = Math.max(1, Math.round(characters / CHARACTERS_PER_WORD));
+  return words >= 100 ? Math.round(words / 10) * 10 : words;
+}
+
 // ─── The page as written ────────────────────────────────────────────────────
 
 export interface PageBlock {
