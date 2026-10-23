@@ -211,6 +211,7 @@ async function briefWithRun({ draft, draftId, brand, prompts, sources, run }) {
     brandId: draft.brand_id,
     pages: sources.pages,
     ownUrl: draft.source_url,
+    signal: run.signal,
   });
 
   let generated;

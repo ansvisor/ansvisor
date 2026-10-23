@@ -6,7 +6,7 @@ import { fetchPage } from './safe-fetch.js';
 
 /**
  * The cited pages' length (Content Editor v1.1, CE-030): the brief's Length
- * says "From the rules · cited pages average 4,300 characters", a benchmark
+ * says "From the rules · a typical cited page has 4,300 characters", a benchmark
  * read when the brief is rebuilt. The first few cited pages kept in Sources
  * are read, their main text counted as the Rules tab counts length.
  *
@@ -23,9 +23,9 @@ export const CITED_MIN_PAGES = 2;
 /** Shorter than this, what was read is a wall (a sign-in, a consent page), not the page. */
 export const CITED_MIN_CHARACTERS = 500;
 
-/** One page's main text length; it throws when the page can't be read. */
-async function readLength(url) {
-  const page = await fetchPage(url, { timeoutMs: READ_TIMEOUT_MS });
+/** One page's main text length; it throws when the page can't be read, or `signal` ends it. */
+async function readLength(url, signal) {
+  const page = await fetchPage(url, { timeoutMs: READ_TIMEOUT_MS, signal });
   const content = extractPageContent(page.html, page.url);
   // Past what a page brought into the editor may be (content-pages.js): no benchmark.
   if (content.html.length > MAX_CONTENT_LENGTH) return null;
@@ -79,14 +79,24 @@ function median(lengths) {
  * number is made up). The page the draft optimizes is left out, however its address
  * was cited (www, tracking parameters): it is no benchmark for itself.
  *
- * @param {{ brandId: string, pages: { url: string }[], ownUrl?: string | null }} input
+ * @param {{ brandId: string, pages: { url: string }[], ownUrl?: string | null, signal?: AbortSignal | null }} input
+ *   `signal`: the run's Stop, which settles it on null at once.
  * @param {{ read?: (url: string) => Promise<number | null> }} [deps] tests replace the read
  * @returns {Promise<{ characters: number, pages: number } | null>}
  */
 export async function citedPagesLength(
-  { brandId, pages, ownUrl = null },
+  { brandId, pages, ownUrl = null, signal = null },
   { read = readLength } = {},
 ) {
+  // The run's Stop ends the reads, and the wait for them, at once.
+  const stopped = new Promise((resolve) => {
+    if (signal?.aborted) resolve(null);
+    signal?.addEventListener('abort', () => resolve(null), { once: true });
+  });
+  return Promise.race([stopped, measure({ brandId, pages, ownUrl, signal }, read)]);
+}
+
+async function measure({ brandId, pages, ownUrl, signal }, read) {
   try {
     const own = ownUrl ? linkKey(ownUrl) : null;
     const urls = [...new Set(pages.map((p) => p.url))].filter(
@@ -94,9 +104,9 @@ export async function citedPagesLength(
     );
     if (!urls.length) return null;
     const picked = await brandCited(brandId, urls);
-    const lengths = (await Promise.all(picked.map((url) => read(url).catch(() => null)))).filter(
-      (n) => Number.isFinite(n) && n >= CITED_MIN_CHARACTERS,
-    );
+    const lengths = (
+      await Promise.all(picked.map((url) => read(url, signal).catch(() => null)))
+    ).filter((n) => Number.isFinite(n) && n >= CITED_MIN_CHARACTERS);
     if (lengths.length < CITED_MIN_PAGES) return null;
     return { characters: Math.round(median(lengths) / 100) * 100, pages: lengths.length };
   } catch (err) {

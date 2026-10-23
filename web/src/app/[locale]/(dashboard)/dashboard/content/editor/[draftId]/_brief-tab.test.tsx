@@ -156,7 +156,7 @@ describe('the Brief tab', () => {
       brief: { ...brief, citedLength: { characters: 4300, pages: 3 } },
     });
     expect(fields().Length).toBe(
-      '3,000 characters · ~500 wordsFrom the rules · cited pages average 4,300 characters',
+      '3,000 characters · ~500 wordsFrom the rules · a typical cited page has 4,300 characters (median of 3)',
     );
   });
 

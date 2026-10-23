@@ -193,7 +193,10 @@ export function BriefTab({
           })}
           <span className="block text-muted-foreground">
             {brief?.citedLength
-              ? t('lengthFromCited', { count: formatNumber(brief.citedLength.characters) })
+              ? t('lengthFromCited', {
+                  count: formatNumber(brief.citedLength.characters),
+                  pages: brief.citedLength.pages,
+                })
               : t('lengthFrom')}
           </span>
         </dd>

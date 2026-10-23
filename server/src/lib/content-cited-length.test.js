@@ -135,7 +135,7 @@ describe('citedPagesLength', () => {
       };
     });
     const result = await citedPagesLength({ brandId: BRAND, pages: [1, 2, 3].map(page) });
-    expect(fetchPage).toHaveBeenCalledWith(url(1), { timeoutMs: 8000 });
+    expect(fetchPage).toHaveBeenCalledWith(url(1), { timeoutMs: 8000, signal: null });
     // Their main text, about 1,000 characters; the page that answered 404 isn't counted.
     expect(result).toEqual({ characters: 1000, pages: 2 });
   });
@@ -156,6 +156,26 @@ describe('citedPagesLength', () => {
     expect(
       await citedPagesLength({ brandId: BRAND, pages: [page(1)] }, { read: broken }),
     ).toBeNull();
+  });
+
+  it('settles on nothing at once when the run is stopped, its reads ended', async () => {
+    const controller = new AbortController();
+    const signals = [];
+    const read = vi.fn(
+      (address, signal) =>
+        new Promise((_, reject) => {
+          signals.push(signal);
+          signal.addEventListener('abort', () => reject(new Error('aborted')));
+        }),
+    );
+    const result = citedPagesLength(
+      { brandId: BRAND, pages: [page(1), page(2)], signal: controller.signal },
+      { read },
+    );
+    await vi.waitFor(() => expect(read).toHaveBeenCalledTimes(2));
+    controller.abort();
+    await expect(result).resolves.toBeNull();
+    expect(signals.every((s) => s.aborted)).toBe(true);
   });
 
   it('never fails the brief: a read of the citations that fails is no benchmark', async () => {

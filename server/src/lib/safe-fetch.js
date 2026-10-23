@@ -218,7 +218,8 @@ function requestOnce(url, { signal, lookup, maxBytes }) {
  * A web page's HTML, fetched safely (see above).
  *
  * @param {string} address
- * @param {{ timeoutMs?: number, maxBytes?: number, maxRedirects?: number, lookup?: Function, ports?: string[] }} [opts]
+ * @param {{ timeoutMs?: number, maxBytes?: number, maxRedirects?: number, lookup?: Function, ports?: string[], signal?: AbortSignal }} [opts]
+ *   `signal` ends the read early too (a run's Stop), as its timeout does.
  *   `lookup` and `ports` replace the public-only lookup and the web ports;
  *   tests use them to reach a local server.
  * @returns {Promise<{ url: string, status: number, html: string }>} url is the address after redirects
@@ -230,8 +231,11 @@ export async function fetchPage(address, opts = {}) {
     maxRedirects = MAX_REDIRECTS,
     lookup = publicOnlyLookup,
     ports = WEB_PORTS,
+    signal: outer = null,
   } = opts;
-  const signal = AbortSignal.timeout(timeoutMs);
+  const signal = outer
+    ? AbortSignal.any([outer, AbortSignal.timeout(timeoutMs)])
+    : AbortSignal.timeout(timeoutMs);
   let url = checkPageUrl(address, ports);
   for (let hops = 0; ; hops += 1) {
     let res;

@@ -164,6 +164,8 @@ describe('rebuildDraftBrief', () => {
       brandId: BRAND,
       pages: [{ url: 'https://www.reddit.com/r/espresso/x', kind: 'forum' }],
       ownUrl: 'https://acme.example/guides/espresso',
+      // The run's Stop ends the reads at once.
+      signal: expect.any(AbortSignal),
     });
     expect(brief.outline).toEqual([
       {

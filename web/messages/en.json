@@ -4012,7 +4012,7 @@
         "length": "Length",
         "lengthValue": "{count} characters · ~{words} words",
         "lengthFrom": "From the rules",
-        "lengthFromCited": "From the rules · cited pages average {count} characters",
+        "lengthFromCited": "From the rules · a typical cited page has {count} characters (median of {pages})",
         "outline": "Outline",
         "answers": "Answers “{fanout}”",
         "keywords": "Keywords",
