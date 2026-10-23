@@ -1,7 +1,7 @@
 {
-  "version": "v1",
-  "description": "47-signal AEO/GEO scoring rubric for measuring whether a page will get cited by AI answer engines.",
-  "totalSignals": 47,
+  "version": "v1.1",
+  "description": "48-signal AEO/GEO scoring rubric for measuring whether a page will get cited by AI answer engines.",
+  "totalSignals": 48,
   "categories": [
     {
       "key": "structure",
@@ -21,8 +21,8 @@
       "key": "content",
       "label": "Content",
       "weight": 0.25,
-      "description": "Whether the page actually answers the buyer query — directly, completely, in the right register. BLUF, query coverage, sub-question coverage, readability.",
-      "signalCount": 11
+      "description": "Whether the page actually answers the buyer query — directly, completely, in the right register. BLUF, query coverage, sub-question coverage, readability, and on product pages the description's opening.",
+      "signalCount": 12
     },
     {
       "key": "trust",
@@ -339,6 +339,16 @@
       "howToFix": "Create or embed a 2–4 minute video on the page topic. Mark up with VideoObject schema.",
       "source": "Ahrefs 2025 study",
       "impactTier": "standard"
+    },
+    {
+      "key": "product-description-opening",
+      "category": "content",
+      "label": "Product description opening",
+      "what": "On a product page, the description's first 40 words (or 250 characters) name the product type and at least two key attributes: a measure, a material, a fit or a use.",
+      "why": "ChatGPT appears to read only about the first 50 tokens of a product description when it matches products to a shopping question. A description that opens with the brand's story may never be matched.",
+      "howToFix": "Put the product type and key attributes in the first 40 words.",
+      "source": "brightonSEO 2026 research on ChatGPT Shopping (to be confirmed by our own tests)",
+      "impactTier": "high"
     },
     {
       "key": "sub-query-coverage",

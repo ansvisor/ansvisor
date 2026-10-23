@@ -133,6 +133,33 @@ describe('ActionTable row menu', () => {
 describe('ActionTable assignee', () => {
   const assigneeCell = () => container.querySelectorAll('tbody tr td')[3];
 
+  it('counts what is left, and says what was removed since (AC-009)', () => {
+    render({
+      actions: [
+        {
+          ...action,
+          // As getActions reads it: 13 prompts when created, one deleted since.
+          payload: {
+            targetEntity: 'prompts',
+            targetCount: 12,
+            createdTargetCount: 13,
+            removedCount: 1,
+            removedLabels: ['best crm for agents'],
+          },
+        },
+      ],
+    });
+    const row = container.querySelector('tbody tr')!;
+    expect(row.textContent).toContain('12 prompts');
+    // A button, so focus shows the names as hover does; a click stays on it.
+    const note = [...row.querySelectorAll<HTMLButtonElement>('button')].find((el) =>
+      el.textContent?.includes('removed since'),
+    )!;
+    expect(note.textContent).toBe('(1 prompt removed since this action was created)');
+    act(() => note.click());
+    expect(onSelect).not.toHaveBeenCalled();
+  });
+
   it('shows an action with no one on it as Everyone', () => {
     render();
     expect(assigneeCell().textContent).toBe('Everyone');
