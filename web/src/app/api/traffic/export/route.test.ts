@@ -67,7 +67,7 @@ beforeEach(() => {
     totalVisitsPrev: 1,
     totalPageviews: 4,
     hasPreviousPeriod: true,
-    platformBreakdown: [{ platform: 'gemini.google.com', visits: 2, visitsPrev: 1 }],
+    platformBreakdown: [{ platform: 'gemini.google.com', visits: 2, visitsPrev: 1, surfaces: [] }],
     topPages: [{ url: '/menu', visits: 2, visitsPrev: 1 }],
     hasAnyData: true,
   });

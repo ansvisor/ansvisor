@@ -123,6 +123,7 @@ export function TrafficKpis({
 }) {
   const t = useTranslations('traffic.kpis');
   const tVisits = useTranslations('traffic.visits');
+  const tPlatforms = useTranslations('traffic.platforms');
   const delta = useChangeDelta();
 
   const sourceReady = (state: TrafficSources['ga'] | undefined) =>
@@ -176,6 +177,8 @@ export function TrafficKpis({
   const topPlatform = summary?.platformBreakdown.find(
     (p) => p.visits > 0 && isNamedPlatform(p.platform),
   );
+  // Its visits through a surface, most first, as the platform table lists them.
+  const topSurface = topPlatform?.surfaces[0];
   const totals = loaded?.key === key ? loaded.totals : null;
   const ga = totals?.ga ?? null;
   const gsc = totals?.gsc ?? null;
@@ -277,7 +280,20 @@ export function TrafficKpis({
           tooltip={t('topPlatformTip')}
           icon={Globe}
           value={topPlatform ? getPlatformName(topPlatform.platform) : '—'}
-          sub={topPlatform ? t('topPlatformSub', { visits: topPlatform.visits }) : t('noData')}
+          sub={
+            !topPlatform
+              ? t('noData')
+              : topSurface
+                ? // Part of the platform's visits: ChatGPT Shopping (#1283).
+                  t('topPlatformSurfaceSub', {
+                    visits: topPlatform.visits,
+                    surfaceVisits: topSurface.visits,
+                    surface: tPlatforms(`surfaceNames.${topSurface.surface}`, {
+                      platform: getPlatformName(topPlatform.platform),
+                    }),
+                  })
+                : t('topPlatformSub', { visits: topPlatform.visits })
+          }
         />
         <MetricCard
           label={t('platforms')}

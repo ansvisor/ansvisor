@@ -19,7 +19,7 @@ export const categories = rubric.categories;
 /** signalKey -> full signal descriptor ({ key, category, label, what, why, howToFix, source, impactTier }). */
 export const signalsByKey = Object.fromEntries(rubric.signals.map((s) => [s.key, s]));
 
-/** Total number of signals in the standard (47), regardless of how many we've implemented. */
+/** Total number of signals in the standard (48), regardless of how many we've implemented. */
 export const TOTAL_SIGNALS = rubric.signals.length;
 
 /**

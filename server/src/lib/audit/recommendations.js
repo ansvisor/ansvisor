@@ -59,6 +59,7 @@ export const RECOMMENDABLE_SIGNALS = new Set([
   'technical-terms',
   'readability',
   'length',
+  'product-description-opening',
   // e-e-a-t
   'first-person',
   'case-study-evidence',
@@ -108,6 +109,7 @@ When the fix is content the user can paste, put the ready-to-use text in "draft"
 - outbound-authority-links / citation-density → specific authoritative sources to cite
 - readability → a simplified rewrite of one representative paragraph (shorter sentences, plainer words)
 - length → which specific sections to expand or trim (draft can be null)
+- product-description-opening → a new opening for the product description, at most 40 words, that starts with the product type and names at least two key attributes from the page (a measure, a material, a fit or a use)
 
 Put markup (JSON-LD, HTML) only in "code", never in "draft". Code has no length limit but uses the same placeholders for unknown values, e.g. "price": "[price]".
 
