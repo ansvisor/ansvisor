@@ -49,7 +49,11 @@ import {
   type DraftExportFormat,
 } from '@/lib/content/draft-export';
 import type { DraftVersion } from '@/lib/content/history';
-import type { DraftSuggestion, SuggestionStatus } from '@/lib/content/suggestions';
+import {
+  AGENT_RUN_MAX,
+  type DraftSuggestion,
+  type SuggestionStatus,
+} from '@/lib/content/suggestions';
 import {
   cleanHtml,
   formatHtmlSource,
@@ -59,7 +63,7 @@ import {
 import { PAGE_READ_DELAY_MS, draftTitleFromDoc, safeLinkHref } from '@/lib/content/editor';
 import { JsonLd } from '@/lib/content/json-ld-node';
 import { detectPageType } from '@/lib/content/page-types';
-import { aiTracesFound, lengthWarns } from '@/lib/content/rules';
+import { aiTracesFound, lengthWarns, openRulesForAgent } from '@/lib/content/rules';
 import { saveBlob } from '@/lib/download';
 import { cn } from '@/lib/utils';
 import { AgentBar } from './_agent-bar';
@@ -89,6 +93,7 @@ import {
   type SuggestionDecision,
   type SuggestionLabels,
 } from './_suggestions';
+import { ONE_H1_AS_IS, OneH1 } from './_one-h1';
 import { useDraftReads } from './_use-draft-reads';
 import { useDraftRules } from './_use-draft-rules';
 import { EditorToolbar } from './_toolbar';
@@ -260,6 +265,7 @@ export function DraftEditor({
         onHeld: (edit) => setHeld((current) => current ?? edit),
       }),
       AgentSuggestions.configure({ onDecide: (id, decision) => onDecide.current(id, decision) }),
+      OneH1,
     ],
     content: draft.bodyHtml,
     // Rendered on the client only, so the server's HTML can't disagree with it.
@@ -432,6 +438,8 @@ export function DraftEditor({
       restore: t('suggestions.restore'),
       locked: t('suggestions.locked'),
       stale: t('suggestions.stale'),
+      heading: t('suggestions.heading'),
+      links: t('suggestions.links'),
     }),
     [t],
   );
@@ -554,6 +562,11 @@ export function DraftEditor({
   };
   const openSuggestions = suggestions.filter((s) => s.status === 'open').length;
 
+  // A full batch: the run stopped at its most, so it says to run it again.
+  const fixedMessage = (count: number) =>
+    count >= AGENT_RUN_MAX
+      ? t('suggestions.fixedMax', { count })
+      : t('suggestions.fixed', { count });
   /**
    * Fix open rules with agent: the page as it is now is saved, then the
    * Content Agent reads it with the rules still open (or only the ones
@@ -566,10 +579,12 @@ export function DraftEditor({
       toast(t('suggestions.decideFirst'));
       return;
     }
-    const open = rules.rules.filter(
-      ({ rule, status }) => rule.on && status.state === 'bad' && (!only || only.includes(rule.key)),
-    );
-    if (open.length === 0) return;
+    const { forAgent: open, notForAgent } = openRulesForAgent(rules.rules, only);
+    if (open.length === 0) {
+      // Only rules it can't fix are open: say what to do instead.
+      if (notForAgent.length) toast(t('suggestions.notForAgent'));
+      return;
+    }
     const pageText = editor.getText({ blockSeparator: '\n' });
     const request = {
       rules: open.map(({ rule, status }) => ({
@@ -613,9 +628,7 @@ export function DraftEditor({
         setSuggestions(landed);
         setBarClosed(false);
         agentBeforeKept.current = false;
-        toast.success(
-          t('suggestions.fixed', { count: landed.filter((s) => s.status === 'open').length }),
-        );
+        toast.success(fixedMessage(landed.filter((s) => s.status === 'open').length));
         return;
       }
       if ('error' in result) {
@@ -635,7 +648,7 @@ export function DraftEditor({
       setBarClosed(false);
       // A new batch: History keeps the page again before its first change.
       agentBeforeKept.current = false;
-      toast.success(t('suggestions.fixed', { count: result.count }));
+      toast.success(fixedMessage(result.count));
     } catch (err) {
       console.error('Failed to run the Content Agent:', err);
       toast.error(t('suggestions.fixErrors.failed'));
@@ -838,6 +851,8 @@ export function DraftEditor({
       editor
         .chain()
         .setMeta(CITED_EDIT_ALLOWED, true)
+        // The version as it was, its H1s too: the page on the server is it.
+        .setMeta(ONE_H1_AS_IS, true)
         .setContent(restored.bodyHtml, { emitUpdate: false })
         .run();
       // The server has this page now: nothing from before it is still to

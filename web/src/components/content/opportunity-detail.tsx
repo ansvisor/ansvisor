@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
+import { useFailureToast } from '@/hooks/use-failure-toast';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -149,6 +150,7 @@ export function OpportunityDetail({
   onPrioritized?: (id: string) => void;
 }) {
   const t = useTranslations('content');
+  const failureToast = useFailureToast();
   const assetTypeLabel = useAssetTypeLabel();
   const locale = useLocale();
 
@@ -318,11 +320,15 @@ export function OpportunityDetail({
     }).catch((err: unknown) => ({
       ok: false as const,
       error: err instanceof Error ? err.message : t('alternative.failed'),
+      failure: 'failed' as const,
       quotaExhausted: false,
       noCluster: false,
     }));
     if (!result.ok) {
-      toast.error(result.quotaExhausted ? t('newLimitReached') : result.error);
+      // No cluster says what to do itself; anything else in plain words (BUG-001).
+      if (result.quotaExhausted) toast.error(t('newLimitReached'));
+      else if (result.noCluster) toast.error(result.error);
+      else failureToast(result.failure);
       return false;
     }
     toast(t('alternative.started'));

@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
   NO_DRAFT_RULES,
+  NOT_FOR_AGENT,
+  openRulesForAgent,
   activeRules,
   effectiveRules,
   splitRules,
@@ -10,6 +12,7 @@ import {
   readPage,
   ruleLength,
   lengthWarns,
+  lengthConflict,
   ruleSet,
   rulesMet,
   type ActiveRule,
@@ -17,6 +20,12 @@ import {
   draftRulesFit,
   ruleSetFits,
   storedBytes,
+  overridesForImport,
+  setToSave,
+  pageTextLength,
+  startingRules,
+  RULE_LENGTH_MIN,
+  RULE_LENGTH_MAX,
 } from './rules';
 
 const ctx: RuleContext = {
@@ -169,6 +178,44 @@ describe('length and structure', () => {
       min: 2400,
       max: 3600,
     });
+  });
+
+  it('wants one H1 per page, and leaves the agent out of it', () => {
+    expect(check('oneH1', '<h1>T</h1><h2>A</h2>')).toEqual({ state: 'ok' });
+    expect(check('oneH1', '<p>No title yet.</p>')).toEqual({ state: 'ok' });
+    expect(check('oneH1', '<h1>T</h1><p>x</p><h1>Again</h1>')).toEqual({
+      state: 'bad',
+      code: 'found',
+      count: 2,
+    });
+    // An empty H1 line is no title; an HTML block's H1 is the page's.
+    expect(check('oneH1', '<h1>T</h1><h1></h1>')).toEqual({ state: 'ok' });
+    expect(
+      check('oneH1', `<h1>T</h1><div data-html-block="${btoa('<h1>Hero</h1>')}"></div>`),
+    ).toEqual({ state: 'bad', code: 'found', count: 2 });
+    // The agent changes words, never a heading's level.
+    expect(NOT_FOR_AGENT.has('oneH1')).toBe(true);
+    expect(ruleSet('blog_post').some((r) => r.key === 'oneH1')).toBe(true);
+    // Always on: a draft's or a saved set's "off" doesn't turn it off.
+    const [oneH1] = activeRules(
+      ruleSet('blog_post').filter((r) => r.key === 'oneH1'),
+      { overrides: { oneH1: { on: false } } },
+    );
+    expect(oneH1.on).toBe(true);
+  });
+
+  it('asks the agent only for what it can fix, and names the rest', () => {
+    const rules = activeRules(ruleSet('blog_post'), NO_DRAFT_RULES);
+    const p = page('<h1>T</h1><p>delve</p><h1>Again</h1>', 30);
+    const statuses = rules.map((r) => ({ rule: r, status: checkRule(r, p, ctx) }));
+    const all = openRulesForAgent(statuses);
+    expect(all.forAgent.some(({ rule }) => rule.key === 'oneH1')).toBe(false);
+    expect(all.notForAgent.map(({ rule }) => rule.key)).toEqual(['oneH1']);
+    // Asked for one rule only, the rest stay out.
+    const one = openRulesForAgent(statuses, ['aiTraces']);
+    expect(one.forAgent.map(({ rule }) => rule.key)).toEqual(['aiTraces']);
+    expect(one.notForAgent).toEqual([]);
+    expect(openRulesForAgent(statuses, ['oneH1']).forAgent).toEqual([]);
   });
 
   it('wants a short summary under the H1, and a short answer under each H2', () => {
@@ -467,8 +514,8 @@ describe('rulesMet', () => {
     const p = page('<h1>T</h1><p>Short summary.</p>', 10);
     const statuses = rules.map((r) => ({ rule: r, status: checkRule(r, p, ctx) }));
     const { met, total } = rulesMet(statuses);
-    // 16 shared rules: sentence off; tone, language and keywords (none set) can't say.
-    expect(total).toBe(12);
+    // 17 shared rules: sentence off; tone, language and keywords (none set) can't say.
+    expect(total).toBe(13);
     expect(met).toBeGreaterThan(0);
     expect(met).toBeLessThan(total);
   });
@@ -492,6 +539,48 @@ describe('lengthWarns', () => {
   });
 });
 
+describe('lengthConflict', () => {
+  const statuses = (
+    overrides: Record<string, { on?: boolean; value?: string }>,
+    fanouts = ctx.fanouts,
+  ) =>
+    activeRules(ruleSet('blog_post'), { overrides }).map((r) => ({
+      rule: r,
+      status: checkRule(r, page('<h1>T</h1>', 100), { ...ctx, fanouts }),
+    }));
+
+  it('says when the sections, questions and summary asked for can’t fit in Length (C)', () => {
+    // 3 fan-out H2s (of 4 asked, 3 there are) × 200 + 5 FAQ questions × 150 + a summary, 100.
+    expect(lengthConflict(statuses({ length: { value: '1000' } }), 3)).toEqual({
+      need: 1_450,
+      max: 1_200,
+    });
+    expect(lengthConflict(statuses({ length: { value: '1500' } }), 3)).toBeNull();
+    expect(lengthConflict(statuses({}), 3)).toBeNull();
+  });
+
+  it('counts only the rules on and still open, and asks nothing of fan-outs there aren’t', () => {
+    // FAQ off: the 3 fan-out questions still need a FAQ.
+    expect(
+      lengthConflict(statuses({ length: { value: '800' }, faq: { on: false } }), 3)?.need,
+    ).toBe(600 + 450 + 100);
+    // No fan-outs: no fan-out H2s or fan-out questions to fit.
+    expect(lengthConflict(statuses({ length: { value: '600' } }, []), 0)?.need).toBe(750 + 100);
+    expect(
+      lengthConflict(statuses({ length: { value: '50' }, faq: { on: false } }, []), 0)?.need,
+    ).toBe(100);
+    // Length off asks for no length.
+    expect(lengthConflict(statuses({ length: { on: false, value: '500' } }), 3)).toBeNull();
+    // A page that meets them all shows they fit.
+    const met = statuses({ length: { value: '1000' } }).map((s) =>
+      ['fanoutH2', 'faq', 'fanoutFaq', 'summary'].includes(s.rule.key)
+        ? { ...s, status: { state: 'ok' as const } }
+        : s,
+    );
+    expect(lengthConflict(met, 3)).toBeNull();
+  });
+});
+
 describe('My rules and text rules', () => {
   const mine = {
     overrides: { sentence: { value: '120' } },
@@ -501,6 +590,69 @@ describe('My rules and text rules', () => {
   it('starts an untouched draft from the workspace’s My rules', () => {
     expect(effectiveRules(NO_DRAFT_RULES, mine)).toEqual({ set: null, source: 'mine', ...mine });
     expect(effectiveRules(NO_DRAFT_RULES, undefined)).toEqual(NO_DRAFT_RULES);
+  });
+
+  it('aims a page brought in to optimize at its own length, over the set’s (F)', () => {
+    const imported = { ...NO_DRAFT_RULES, importLength: 18_000 };
+    const withLength = {
+      ...mine,
+      overrides: { ...mine.overrides, length: { on: true, value: '2000' } },
+    };
+    // My rules apply, but not their length: that's for a new page.
+    expect(effectiveRules(imported, withLength).overrides).toEqual({
+      sentence: { value: '120' },
+      length: { on: true },
+    });
+    const [length] = activeRules(
+      ruleSet('blog_post', { length: imported.importLength }).filter((r) => r.key === 'length'),
+      effectiveRules(imported, withLength),
+    );
+    expect(length.current).toBe('18000');
+    // Kept through a save.
+    expect(draftRulesSchema.parse(imported).importLength).toBe(18_000);
+    // Without one, the type's length, as before.
+    expect(ruleSet('blog_post').find((r) => r.key === 'length')!.value).toBe('3000');
+  });
+
+  it('keeps the page’s own length when My rules are picked or saved (F)', () => {
+    const withLength = { length: { on: true, value: '2000' }, sentence: { value: '120' } };
+    // Picked from the set menu: as the untouched draft showed it.
+    expect(overridesForImport(withLength, 18_000)).toEqual({
+      length: { on: true },
+      sentence: { value: '120' },
+    });
+    expect(overridesForImport(withLength, undefined)).toBe(withLength);
+    // Saved as My rules: the workspace's Length value stays…
+    const imported = {
+      ...NO_DRAFT_RULES,
+      overrides: { length: { on: true }, faq: { on: false } },
+      importLength: 18_000,
+    };
+    expect(setToSave(imported, { overrides: withLength, textRules: [] })).toEqual({
+      overrides: { length: { on: true, value: '2000' }, faq: { on: false } },
+      textRules: [],
+    });
+    // …a value the person gave is theirs, and a set without one gets none.
+    const typed = { ...imported, overrides: { length: { value: '15000' } } };
+    expect(setToSave(typed, { overrides: withLength, textRules: [] }).overrides).toEqual({
+      length: { value: '15000' },
+    });
+    expect(setToSave(imported, undefined).overrides).toEqual(imported.overrides);
+  });
+
+  it('starts only a page brought in to optimize at its own length (F)', () => {
+    expect(pageTextLength('<h1>Pricing</h1><p>Plans &amp; prices</p>')).toBe(22);
+    expect(pageTextLength('<p>a<script>x()</script>  b</p><style>p{}</style>')).toBe(3);
+    const page = `<h1>Pricing</h1><p>${'word '.repeat(40)}</p>`;
+    expect(startingRules('optimize', page)).toEqual({ ...NO_DRAFT_RULES, importLength: 207 });
+    // Within the range the Length rule takes.
+    expect(startingRules('optimize', '<p>Short</p>').importLength).toBe(RULE_LENGTH_MIN);
+    expect(startingRules('optimize', `<p>${'x'.repeat(60_000)}</p>`).importLength).toBe(
+      RULE_LENGTH_MAX,
+    );
+    expect(startingRules('optimize', undefined)).toBe(NO_DRAFT_RULES);
+    expect(startingRules('optimize', '<p> </p>')).toBe(NO_DRAFT_RULES);
+    expect(startingRules('create', page)).toBe(NO_DRAFT_RULES);
   });
 
   it('keeps a draft’s own choices, and a reset draft on the default', () => {

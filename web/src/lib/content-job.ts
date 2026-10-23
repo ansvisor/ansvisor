@@ -5,6 +5,7 @@
  * server.
  */
 
+import type { ApiFailure } from '@/lib/api-failure';
 import type {
   GenerationJobStatus,
   OnDemandRequest,
@@ -58,7 +59,8 @@ export type PromptSuggestionOutcome =
   | { kind: 'limited' }
   /** Nothing to write from yet: the prompt isn't grouped or has no answers. */
   | { kind: 'nothing' }
-  | { kind: 'failed'; message: string | null }
+  /** `failure` says why when the API answered, for the toast (BUG-001). */
+  | { kind: 'failed'; message: string | null; failure?: ApiFailure }
   /** Still being written when we stopped waiting. */
   | { kind: 'timeout' };
 
@@ -88,7 +90,7 @@ export async function suggestForPrompt(
     if (!started.ok) {
       return started.quotaExhausted
         ? { kind: 'limited' }
-        : { kind: 'failed', message: started.error };
+        : { kind: 'failed', message: started.error, failure: started.failure };
     }
     if ('existingId' in started) return { kind: 'existing', opportunityId: started.existingId };
 
@@ -141,7 +143,7 @@ export async function suggestForPage(
     if (!started.ok) {
       return started.quotaExhausted
         ? { kind: 'limited' }
-        : { kind: 'failed', message: started.error };
+        : { kind: 'failed', message: started.error, failure: started.failure };
     }
 
     const outcome = await waitForContentJob(started.jobId, { getStatus, ...waiting });

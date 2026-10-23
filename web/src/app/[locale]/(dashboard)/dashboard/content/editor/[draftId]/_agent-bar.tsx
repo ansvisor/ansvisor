@@ -4,14 +4,15 @@ import { useTranslations } from 'next-intl';
 import { Bot, Loader2, X } from 'lucide-react';
 import { Link } from '@/i18n/navigation';
 import { Button } from '@/components/ui/button';
-import { suggestionCounts, type DraftSuggestion } from '@/lib/content/suggestions';
+import { AGENT_RUN_MAX, suggestionCounts, type DraftSuggestion } from '@/lib/content/suggestions';
 
 /**
  * The agent bar over the page (CE-018): while an agent's suggestions are
  * open, who left how many and from which action, with Reject all and Accept
  * all (open ones only); once all are decided, how many were accepted and
  * rejected and how many rules are still open, with Apply rules with
- * Agent for a new batch. Undo all brings every decided one back to review.
+ * Agent for a new batch (a full batch says a run stops there, so run it
+ * again). Undo all brings every decided one back to review.
  */
 export function AgentBar({
   suggestions,
@@ -68,6 +69,14 @@ export function AgentBar({
             <span className="text-muted-foreground">
               {' · '}
               {t('rulesOpen', { count: rulesOpen })}
+              {/* A full run's batch may have stopped short of the rules still open
+                  (an API batch can hold more, and says nothing of a run). */}
+              {suggestions.length === AGENT_RUN_MAX && (
+                <>
+                  {' · '}
+                  {t('runMax', { max: AGENT_RUN_MAX })}
+                </>
+              )}
             </span>
           )}
         </span>

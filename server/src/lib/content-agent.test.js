@@ -37,7 +37,12 @@ vi.mock('./plan-guard.js', async (importOriginal) => ({
   ...(await importOriginal()),
   reserveAiBudget: (...args) => reserveAiBudget(...args),
 }));
-vi.mock('./logger.js', () => ({ logger: { error: vi.fn() } }));
+vi.mock('./logger.js', () => ({ logger: { error: vi.fn(), warn: vi.fn() } }));
+const readLinkTargets = vi.fn();
+vi.mock('./content-links.js', async (importOriginal) => ({
+  ...(await importOriginal()),
+  readLinkTargets: (...args) => readLinkTargets(...args),
+}));
 
 const {
   buildFixPrompt,
@@ -45,10 +50,15 @@ const {
   draftPassages,
   fixDraftRules,
   keepSuggestions,
+  growsPastLimit,
+  HEADING_LIMITS,
+  inlineText,
   MAX_PROMPT_PASSAGE_CHARS,
   passageKey,
   promptPassages,
+  splitReplace,
 } = await import('./content-agent.js');
+const { linkKey, NO_LINK_TARGETS } = await import('./content-links.js');
 const { PlanLimitError } = await import('./plan-guard.js');
 // The real hold: self-hosted here, so it reserves nothing and writes each charge.
 const realGuard = await vi.importActual('./plan-guard.js');
@@ -93,6 +103,7 @@ beforeEach(() => {
   };
   generateObject.mockReset();
   reserveAiBudget.mockReset().mockImplementation(realGuard.reserveAiBudget);
+  readLinkTargets.mockReset().mockResolvedValue(NO_LINK_TARGETS);
 });
 
 describe('the page as the agent reads it', () => {
@@ -217,7 +228,328 @@ describe('keepSuggestions', () => {
   });
 });
 
+/**
+ * An answer written into a heading's replace was glued onto the heading's
+ * line ("What is LLM SEO? LLM SEO optimizes…", "Frequently Asked
+ * QuestionsWhat is an AEO tracker?…"): it now goes after the heading.
+ */
+describe('a replace on a heading', () => {
+  const page = draftPassages(
+    '<h2>What is LLM SEO</h2><p>It is new.</p><h2>FAQ</h2><p>Ask us.</p><p>Use good coffee.</p>',
+  );
+  const keep = (over) =>
+    keepSuggestions(
+      [suggestion({ passage: 1, before: 'What is LLM SEO', rules: ['faq'], ...over })],
+      page,
+      new Set(),
+      new Set(['faq']),
+    );
+
+  it('keeps the question in the heading and inserts its answer after it', () => {
+    expect(
+      keep({ after: 'What is LLM SEO? LLM SEO optimizes pages for large language models.' }),
+    ).toEqual([
+      expect.objectContaining({
+        kind: 'replace',
+        block_text: 'What is LLM SEO',
+        before_text: 'What is LLM SEO',
+        after_text: 'What is LLM SEO?',
+      }),
+      expect.objectContaining({
+        kind: 'insert',
+        block_text: 'What is LLM SEO',
+        after_text: '<p>LLM SEO optimizes pages for large language models.</p>',
+        rule_keys: ['faq'],
+      }),
+    ]);
+  });
+
+  it('turns a heading sent with its blocks into the heading and an insert', () => {
+    const kept = keepSuggestions(
+      [
+        suggestion({
+          passage: 3,
+          before: 'FAQ',
+          after:
+            '<h2>Frequently Asked Questions</h2><h3>What is an AEO tracker?</h3><p>An AEO tracker monitors AI answers.</p>',
+        }),
+      ],
+      page,
+      new Set(),
+      new Set(),
+    );
+    expect(kept.map((k) => [k.kind, k.after_text])).toEqual([
+      ['replace', 'Frequently Asked Questions'],
+      ['insert', '<h3>What is an AEO tracker?</h3><p>An AEO tracker monitors AI answers.</p>'],
+    ]);
+  });
+
+  it('leaves only the insert when the heading keeps its words', () => {
+    expect(
+      keep({ after: '<h2>What is LLM SEO</h2><p>LLM SEO optimizes pages.</p>' }).map((k) => k.kind),
+    ).toEqual(['insert']);
+  });
+
+  it('keeps a split suggestion whole, or not at all, at the cap', () => {
+    const many = Array.from({ length: 7 }, (_, i) =>
+      suggestion({ kind: 'insert', passage: 2, before: '', after: `<p>Note ${i}.</p>` }),
+    );
+    const answer = suggestion({
+      after: 'What is LLM SEO? LLM SEO optimizes pages for large language models.',
+    });
+    const kept = keepSuggestions(
+      [...many, { ...answer, passage: 1, before: 'What is LLM SEO' }],
+      page,
+      new Set(),
+      new Set(),
+    );
+    expect(kept).toHaveLength(7);
+    expect(kept.every((k) => k.kind === 'insert')).toBe(true);
+  });
+
+  it('drops one that would still make the heading over its length', () => {
+    expect(keep({ after: 'What is LLM SEO '.repeat(10) })).toEqual([]);
+  });
+
+  it('holds an H1 to 70 characters and other headings to 90, unless they get shorter', () => {
+    expect(HEADING_LIMITS).toEqual({ h1: 70, other: 90 });
+    const h1 = { tag: 'h1', text: 'Guide' };
+    const h2 = { tag: 'h2', text: 'Guide' };
+    expect(growsPastLimit(h1, 'Guide', 'x'.repeat(70))).toBe(false);
+    expect(growsPastLimit(h1, 'Guide', 'x'.repeat(71))).toBe(true);
+    expect(growsPastLimit(h2, 'Guide', 'x'.repeat(90))).toBe(false);
+    expect(growsPastLimit(h2, 'Guide', 'x'.repeat(91))).toBe(true);
+    // An imported heading already over its limit may still be shortened.
+    const long = { tag: 'h2', text: 'y'.repeat(120) };
+    expect(growsPastLimit(long, 'y'.repeat(20), 'z'.repeat(10))).toBe(false);
+    expect(growsPastLimit(long, 'y'.repeat(20), 'z'.repeat(30))).toBe(true);
+    // A paragraph has no limit here.
+    expect(growsPastLimit({ tag: 'p', text: 'a' }, 'a', 'b'.repeat(500))).toBe(false);
+  });
+
+  it('keeps a heading with a second clause, and a paragraph replace as it was', () => {
+    expect(splitReplace('AEO or SEO? Which matters more in 2026', 'h2')).toMatchObject({
+      words: 'AEO or SEO? Which matters more in 2026',
+      blocks: '',
+    });
+    // A short second part is the heading's, not an answer.
+    expect(splitReplace("Is AEO worth it? Here's what the data says.", 'h2').blocks).toBe('');
+    expect(splitReplace('What is AEO? The complete guide.', 'h1').blocks).toBe('');
+    expect(
+      splitReplace(
+        'AEO とは？ AEO は AI アシスタントの回答に引用されるための最適化の方法です。説明します。',
+        'h2',
+      ),
+    ).toMatchObject({
+      words: 'AEO とは？',
+      blocks: '<p>AEO は AI アシスタントの回答に引用されるための最適化の方法です。説明します。</p>',
+    });
+    // A non-breaking space stays one, as the passage keeps it.
+    expect(splitReplace('Pour\u00a0slowly', 'p').words).toBe('Pour\u00a0slowly');
+    expect(splitReplace('Use 15 g of coffee. Then pour.', 'p')).toMatchObject({
+      words: 'Use 15 g of coffee. Then pour.',
+      blocks: '',
+    });
+  });
+
+  it('puts the answer first under the heading when blocks come with it', () => {
+    expect(
+      splitReplace(
+        'What is LLM SEO? LLM SEO optimizes pages for large language models.<ul><li>a</li></ul>',
+        'h2',
+      ),
+    ).toMatchObject({
+      words: 'What is LLM SEO?',
+      blocks: '<p>LLM SEO optimizes pages for large language models.</p><ul><li>a</li></ul>',
+    });
+    expect(
+      splitReplace(
+        '<h2>What is LLM SEO? LLM SEO optimizes pages for large language models.</h2><p>More.</p>',
+        'h2',
+      ),
+    ).toMatchObject({
+      words: 'What is LLM SEO?',
+      blocks: '<p>LLM SEO optimizes pages for large language models.</p><p>More.</p>',
+    });
+  });
+
+  it('keeps a subtitle that fits, and splits after a full-width ？ with no space', () => {
+    const subtitle = 'What is AEO? The Complete Guide to Answer Engine Optimization';
+    expect(splitReplace(subtitle, 'h1')).toMatchObject({ words: subtitle, blocks: '' });
+    expect(
+      splitReplace(
+        'AEOとは？AEOはAIアシスタントの回答に引用されるための最適化の方法です。詳しく順番に説明します。',
+        'h2',
+      ),
+    ).toMatchObject({
+      words: 'AEOとは？',
+      blocks:
+        '<p>AEOはAIアシスタントの回答に引用されるための最適化の方法です。詳しく順番に説明します。</p>',
+    });
+    // "?" inside a word is no question's end.
+    expect(splitReplace('What?No. A long enough sentence that ends here.', 'h2').blocks).toBe('');
+    // Past the heading's limit the rest goes under it, a full stop or not.
+    const long = `What is LLM SEO? ${'LLM SEO optimizes pages for large language models '.repeat(2)}`;
+    expect(splitReplace(long, 'h2').words).toBe('What is LLM SEO?');
+  });
+
+  it('moves blocks sent with a paragraph replace after it', () => {
+    expect(splitReplace('<p>Use 15 g.</p><ul><li>a scale</li></ul>', 'p')).toMatchObject({
+      words: 'Use 15 g.',
+      blocks: '<ul><li>a scale</li></ul>',
+    });
+  });
+});
+
+/**
+ * Content Agent rule gaps, A: links only to the brand's pages and the draft's
+ * sources it was given, a replace's beside its words, an insert's in its HTML.
+ */
+describe('links to the pages and sources given', () => {
+  const page = draftPassages(
+    '<h2>Pricing</h2><p>See our plans for teams.</p><p>Studies show it works.</p>',
+  );
+  const links = new Map(
+    ['https://acme.example/pricing', 'https://research.example/study'].map((url) => [
+      linkKey(url),
+      url,
+    ]),
+  );
+  const keep = (over, ruleKeys = ['internalLinks']) =>
+    keepSuggestions(
+      [suggestion({ passage: 2, before: 'See our plans for teams.', rules: ruleKeys, ...over })],
+      page,
+      new Set(),
+      new Set(ruleKeys),
+      links,
+    );
+
+  it('keeps a replace’s link to a listed page, by its words, with the page’s URL', () => {
+    const [kept] = keep({
+      after:
+        'See <a href="https://www.acme.example/pricing/?utm_source=x">our plans</a> for teams.',
+    });
+    expect(kept).toMatchObject({
+      kind: 'replace',
+      after_text: 'See our plans for teams.',
+      after_links: [{ start: 4, end: 13, href: 'https://acme.example/pricing' }],
+      rule_keys: ['internalLinks'],
+    });
+  });
+
+  it('unwraps a link to anything not listed, and drops what then changes nothing', () => {
+    expect(
+      keep({ after: 'See <a href="https://made-up.example/x">our plans</a> for teams.' }),
+    ).toMatchObject([]);
+    const [kept] = keep({ after: 'See <a href="https://made-up.example/x">our team plans</a>.' });
+    expect(kept.after_text).toBe('See our team plans.');
+    expect(kept).not.toHaveProperty('after_links');
+  });
+
+  it('keeps an insert’s link to a listed source, never one in a heading', () => {
+    const [kept] = keepSuggestions(
+      [
+        suggestion({
+          kind: 'insert',
+          passage: 3,
+          before: '',
+          after:
+            '<h3><a href="https://research.example/study">Study</a></h3><p>A <a href="https://research.example/study" target="_blank" onclick="x()">2025 study</a> found it.</p>',
+          rules: ['citeInline'],
+        }),
+      ],
+      page,
+      new Set(),
+      new Set(['citeInline']),
+      links,
+    );
+    expect(kept.after_text).toBe(
+      '<h3>Study</h3><p>A <a href="https://research.example/study">2025 study</a> found it.</p>',
+    );
+  });
+
+  it('keeps at most 20 links on a replace, as the table allows', () => {
+    const many = Array.from(
+      { length: 22 },
+      (_, i) => `<a href="https://acme.example/pricing">plan ${i}</a>`,
+    ).join(' ');
+    const [kept] = keep({ after: `See ${many} for teams.` });
+    expect(kept.after_links).toHaveLength(20);
+  });
+
+  it('keeps no link without targets, as before', () => {
+    const [kept] = keepSuggestions(
+      [
+        suggestion({
+          kind: 'insert',
+          passage: 3,
+          before: '',
+          after: '<p>A <a href="https://research.example/study">study</a>.</p>',
+        }),
+      ],
+      page,
+      new Set(),
+      new Set(),
+    );
+    expect(kept.after_text).toBe('<p>A study.</p>');
+  });
+
+  it('reads inline words and their links, spaces collapsed', () => {
+    expect(inlineText('Read <a href="u"> the  guide </a><br>now')).toEqual({
+      text: 'Read the guide now',
+      links: [{ start: 5, end: 14, href: 'u' }],
+    });
+  });
+
+  it('gives the model the targets for the link rules asked, and keeps the links', async () => {
+    readLinkTargets.mockResolvedValue({
+      own: [{ url: 'https://acme.example/brew-guide', title: 'Brew guide' }],
+      sources: [{ url: 'https://research.example/study', title: 'Coffee study' }],
+    });
+    generateObject.mockResolvedValue({
+      object: {
+        suggestions: [
+          suggestion({
+            after:
+              'Use good coffee (see <a href="https://acme.example/brew-guide">our brew guide</a>).',
+            rules: ['internalLinks'],
+          }),
+        ],
+      },
+      usage: {},
+    });
+    const result = await fixDraftRules({
+      draftId: DRAFT,
+      brandId: BRAND,
+      input: input({ rules: [{ key: 'internalLinks', name: 'Internal links', detail: '0 of 3' }] }),
+    });
+
+    expect(readLinkTargets).toHaveBeenCalledWith(
+      expect.objectContaining({ brandId: BRAND, draftId: DRAFT }),
+    );
+    const { prompt, system } = generateObject.mock.calls[0][0];
+    expect(prompt).toContain(
+      "Pages on the brand's site you may link to (internal links):\n- Brew guide — https://acme.example/brew-guide",
+    );
+    // Only the rule asked for: no outbound list.
+    expect(prompt).not.toContain('Sources you may link to');
+    expect(system).toContain('Never invent a URL');
+    expect(result.count).toBe(1);
+    const batch = writes.find((w) => w.table === 'content_draft_suggestions');
+    expect(batch.value[0]).toMatchObject({
+      after_text: 'Use good coffee (see our brew guide).',
+      after_links: [{ start: 21, end: 35, href: 'https://acme.example/brew-guide' }],
+    });
+  });
+});
+
 describe('cleanInsertHtml', () => {
+  it('makes an agent’s H1 an H2: the page has its title', () => {
+    expect(cleanInsertHtml('<h1 class="x">New title</h1><p>Text</p>')).toBe(
+      '<h2>New title</h2><p>Text</p>',
+    );
+  });
+
   it('keeps simple blocks without attributes and unwraps the rest', () => {
     expect(
       cleanInsertHtml('<div><h3 style="x">Q</h3><ol><li><em>a</em></li></ol><img src=x></div>'),
@@ -244,7 +576,13 @@ describe('fixDraftRules', () => {
       expect.objectContaining({ feature: 'content', modelId: expect.any(String) }),
     );
     expect(generateObject).toHaveBeenCalledWith(
-      expect.objectContaining({ model: expect.stringMatching(/^model:/) }),
+      expect.objectContaining({
+        model: expect.stringMatching(/^model:/),
+        // An answer goes after a heading, never into it.
+        system: expect.stringContaining(
+          'Never write an answer, a sentence or a FAQ into a heading',
+        ),
+      }),
     );
     expect(result).toEqual({ count: 1, batchId: expect.any(String) });
     const usage = writes.find((w) => w.table === 'prompt_improve_usage');

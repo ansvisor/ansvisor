@@ -15,6 +15,12 @@ import { IMPACT_PERIODS } from '@/lib/content/impact';
 import { detectPageType, siteTypeOf } from '@/lib/content/page-types';
 import { sanitizeDraftHtml } from '@/lib/content/sanitize-draft-html';
 import { SOURCES_DAYS } from '@/lib/content/sources';
+import {
+  MAX_OWN_PAGES,
+  linkAllowList,
+  pickLinkTargets,
+  type LinkTargets,
+} from '@/lib/content/link-targets';
 
 /**
  * The Content Editor's API for agents (CE-022, spec §15): what a person does
@@ -186,6 +192,12 @@ export interface McpDraft {
   passages: { n: number; tag: string; text: string; locked: boolean }[];
   /** The latest batch's suggestions still waiting for a person. */
   open_suggestions: { id: string; kind: string; reason: string }[];
+  /**
+   * Where suggest_content_changes may link (Content Agent rule gaps, A): the
+   * brand's own pages for internal links, the draft's sources for outbound
+   * links and inline citations. A link to anything else is unwrapped.
+   */
+  link_targets: { own_pages: LinkTargets['own']; sources: LinkTargets['sources'] };
 }
 
 /** One draft, its passages numbered and the locked ones marked; null outside the organization. */
@@ -196,11 +208,14 @@ export async function getContentDraftFor(
   const draft = await draftFor(auth, draftId);
   if (!draft) return null;
   const passages = draftPassages(draft.body_html);
-  const locked = await lockedKeys(
-    draft,
-    passages.map((p) => p.text),
-  );
-  const openSuggestions = await openSuggestionsOf(draft.id);
+  const [locked, openSuggestions, targets] = await Promise.all([
+    lockedKeys(
+      draft,
+      passages.map((p) => p.text),
+    ),
+    openSuggestionsOf(draft.id),
+    linkTargetsOf(draft),
+  ]);
 
   return {
     id: draft.id,
@@ -221,7 +236,50 @@ export async function getContentDraftFor(
       locked: locked.has(passageKey(p.text)),
     })),
     open_suggestions: openSuggestions,
+    link_targets: { own_pages: targets.own, sources: targets.sources },
   };
+}
+
+/**
+ * The draft's link targets (pickLinkTargets): the brand's pages from
+ * site_pages, and its sources from the content_draft_sources RPC and the
+ * person's choices. A failed read leaves its list empty.
+ */
+async function linkTargetsOf(draft: {
+  id: string;
+  brand_id: string;
+  source_url: string | null;
+}): Promise<LinkTargets> {
+  const [pages, sources, choices] = await Promise.all([
+    supabaseAdmin
+      .from('site_pages')
+      .select('url, title, h1')
+      .eq('brand_id', draft.brand_id)
+      // Not fetched yet, or answered: 0 is a fetch that failed outright (00104).
+      .or('fetch_status.is.null,and(fetch_status.gte.200,fetch_status.lt.400)')
+      .order('ai_citations', { ascending: false })
+      .order('ga_sessions', { ascending: false })
+      .limit(MAX_OWN_PAGES + 1),
+    supabaseAdmin.rpc('content_draft_sources', { p_draft_id: draft.id, p_days: SOURCES_DAYS }),
+    supabaseAdmin
+      .from('content_draft_sources')
+      .select('ref, included, added')
+      .eq('draft_id', draft.id)
+      .eq('kind', 'cited_page'),
+  ]);
+  for (const [what, read] of [
+    ['site pages', pages],
+    ['sources', sources],
+    ['source choices', choices],
+  ] as const) {
+    if (read.error) console.error(`Failed to read the draft's link targets (${what}):`, read.error);
+  }
+  return pickLinkTargets({
+    pages: pages.error ? [] : (pages.data ?? []),
+    sources: sources.error ? null : sources.data,
+    choices: choices.error ? [] : (choices.data ?? []),
+    sourceUrl: draft.source_url,
+  });
 }
 
 export interface CreateDraftInput {
@@ -422,11 +480,21 @@ export async function suggestContentChangesFor(
   if (draft.status === 'published') return 'published';
   if ((await openSuggestionsOf(draft.id)).length) return 'open_suggestions';
   const passages = draftPassages(draft.body_html);
-  const locked = await lockedKeys(
-    draft,
-    passages.map((p) => p.text),
+  // The targets only when a suggestion links: the sources read is the heavy one.
+  const linking = suggestions.some((s) => /<a\b/i.test(s.after));
+  const [locked, targets] = await Promise.all([
+    lockedKeys(
+      draft,
+      passages.map((p) => p.text),
+    ),
+    linking ? linkTargetsOf(draft) : null,
+  ]);
+  const { kept, dropped } = keepAgentSuggestions(
+    suggestions,
+    passages,
+    locked,
+    targets ? linkAllowList(targets) : null,
   );
-  const { kept, dropped } = keepAgentSuggestions(suggestions, passages, locked);
   if (!kept.length) return { kept: 0, batch_id: null, dropped };
 
   const batchId = crypto.randomUUID();

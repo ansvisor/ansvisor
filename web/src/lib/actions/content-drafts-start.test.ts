@@ -402,6 +402,62 @@ describe('createContentDraft', () => {
     });
   });
 
+  it('keeps an optimized page’s own length for its Length rule (F)', async () => {
+    const page = `<h1>Pricing</h1><p>${'Plans &amp; prices. '.repeat(10)}</p>`;
+    await createContentDraft(
+      BRAND,
+      start({
+        method: 'optimize',
+        title: 'Pricing',
+        pageType: 'pricing',
+        source: { kind: 'content' },
+        bodyHtml: page,
+      }),
+    );
+    // "Pricing Plans x prices. …": the words, one space between blocks.
+    expect(inserted()).toMatchObject({ rules: { importLength: 167 } });
+  });
+
+  it('keeps the live page’s length when Start optimizes it, and sets none without it (F)', async () => {
+    const page = `<h1>Pricing</h1><p>${'Plans &amp; prices. '.repeat(10)}</p>`;
+    reads = {
+      content_opportunities: { id: OPPORTUNITY, prompt_id: PROMPT, cluster_id: null },
+      prompts: [{ id: PROMPT }],
+    };
+    await createContentDraft(
+      BRAND,
+      start({ method: 'optimize', bodyHtml: page, sourceUrl: 'https://northwind.example/pricing' }),
+    );
+    expect(inserted()).toMatchObject({ rules: { importLength: 167 } });
+
+    // A page whose live text couldn't be read starts with its title only: no rules.
+    calls.length = 0;
+    await createContentDraft(BRAND, start({ method: 'optimize' }));
+    expect(inserted()).not.toHaveProperty('rules');
+  });
+
+  it('starts a page brought in with the prompts its title and headings speak to', async () => {
+    reads = {
+      prompts: [
+        { id: 'p1', text: 'Pricing plans for small teams?' },
+        { id: 'p2', text: 'Best espresso grinder' },
+        { id: 'p3', text: 'Pricing of espresso machines' },
+      ],
+    };
+    await createContentDraft(
+      BRAND,
+      start({
+        method: 'optimize',
+        title: 'Pricing',
+        pageType: 'pricing',
+        source: { kind: 'content' },
+        bodyHtml: '<h1>Pricing</h1><h2>Plans for small teams</h2><p>From 12 a month.</p>',
+      }),
+    );
+    // p3 shares one word only.
+    expect(inserted()).toMatchObject({ prompt_ids: ['p1'] });
+  });
+
   it('writes nothing for a source the member can’t read, or a start that isn’t valid', async () => {
     await expect(createContentDraft(BRAND, start())).rejects.toThrow('not_found');
     await expect(
@@ -689,6 +745,8 @@ describe('startDraftFromAction', () => {
           opportunity_id: OPPORTUNITY,
           prompt_ids: [PROMPT],
           action_id: ACTION,
+          // The live page's own length, raised to the Length rule's least.
+          rules: expect.objectContaining({ importLength: 100 }),
         }),
       },
     ]);
