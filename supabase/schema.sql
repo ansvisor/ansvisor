@@ -37628,6 +37628,19 @@ notify pgrst, 'reload schema';
 --     workspace's other settings. With none, a page is by the organization
 --     ("{Brand} Team").
 
+-- Profile links feed Person schema's sameAs and Site trust, and members
+-- write the table from their own sessions, so the table holds the rule the
+-- action checks: each link https, at most 300 characters.
+create or replace function public.content_author_links_ok(links text[])
+returns boolean
+language sql
+immutable
+set search_path = ''
+as $$
+  select coalesce(bool_and(l ~ '^https://\S+$' and char_length(l) <= 300), true)
+  from unnest(links) as l
+$$;
+
 create table if not exists public.content_authors (
   id uuid primary key default gen_random_uuid(),
   organization_id uuid not null references public.organizations(id) on delete cascade,
@@ -37638,7 +37651,9 @@ create table if not exists public.content_authors (
   photo_url text check (
     photo_url is null or (photo_url ~ '^https://' and char_length(photo_url) <= 2048)
   ),
-  same_as text[] not null default '{}' check (cardinality(same_as) <= 10),
+  same_as text[] not null default '{}' check (
+    cardinality(same_as) <= 10 and public.content_author_links_ok(same_as)
+  ),
   created_by uuid references public.profiles(id) on delete set null,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
@@ -37736,6 +37751,8 @@ create policy "content_authors: owner or admin delete"
     )
   );
 
+-- Every policy needs auth.uid(); revoking anon keeps it so if one is loosened.
+revoke all on table public.content_authors from anon;
 grant select, insert, update, delete on public.content_authors to authenticated;
 
 comment on table public.content_authors is
@@ -37789,6 +37806,7 @@ create policy "content_author_defaults: manager write"
     and updated_by = auth.uid()
   );
 
+revoke all on table public.content_author_defaults from anon;
 grant select, insert, update, delete on public.content_author_defaults to authenticated;
 
 comment on table public.content_author_defaults is

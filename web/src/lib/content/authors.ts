@@ -30,7 +30,7 @@ export interface AuthorsRead {
 
 /** The most profile links an author keeps (00252). */
 export const MAX_PROFILES = 10;
-/** The longest profile link. */
+/** The longest profile link; the table checks it too, with https (content_author_links_ok). */
 export const MAX_LINK_LENGTH = 300;
 
 const profileLink = z
