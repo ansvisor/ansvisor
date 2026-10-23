@@ -895,6 +895,11 @@
         "regions": "{count, plural, one {# region} other {# regions}}",
         "competitors": "{count, plural, one {# competitor} other {# competitors}}"
       },
+      "removed": {
+        "note": "({items} removed since this action was created)",
+        "hover": "No longer tracked since this action was created: {names}",
+        "hoverMore": "No longer tracked since this action was created: {names} and {more} more"
+      },
       "menu": {
         "label": "Actions for this item"
       },
@@ -4110,6 +4115,7 @@
         },
         "estimate": "Ansvisor estimates based on Google's published quality signals. Not a Google score.",
         "tooShort": "Write a few paragraphs: Readability is read from the page as you write.",
+        "notThisLanguage": "Readability isn't read for this language yet.",
         "suggestionsLabel": "What would raise it",
         "nothingToRaise": "Nothing to raise here: the page reads well.",
         "gain": "+{gain, number} {score}",

@@ -38,7 +38,7 @@ export function QualityTab({
       <section aria-label={t('scores')} className="space-y-2">
         {score === null ? (
           <p className="rounded-xl border border-dashed px-3 py-2.5 text-xs text-muted-foreground">
-            {t('tooShort')}
+            {t(readability?.unscored === 'language' ? 'notThisLanguage' : 'tooShort')}
           </p>
         ) : (
           <div className="flex flex-wrap gap-2">

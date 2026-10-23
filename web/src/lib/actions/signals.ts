@@ -10,6 +10,7 @@
  * client-side: there is no stored text to search.
  */
 
+import { readEntityCounts, withEntityCounts } from '@/lib/action-center/entity-counts';
 import { createClient } from '@/lib/supabase/server';
 import { after } from 'next/server';
 import { API_BASE_URL } from '@/config/api';
@@ -96,12 +97,18 @@ export async function getSignalActions(brandId: string, signalId: string): Promi
     .eq('actions.brand_id', brandId)
     .order('linked_at', { ascending: false });
   if (error) throw new Error(error.message);
-  return (data ?? []).map(({ actions: row }) => ({
+  const rows = (data ?? []).map(({ actions: row }) => row);
+  // Named as on Actions (AC-009): the count left.
+  const counts = await readEntityCounts(
+    supabase,
+    rows.map((row) => row.id),
+  );
+  return rows.map((row) => ({
     id: row.id,
     actionNo: Number(row.action_no),
     kind: row.kind,
     status: row.status as ActionStatus,
-    payload: (row.payload ?? {}) as Record<string, unknown>,
+    payload: withEntityCounts((row.payload ?? {}) as Record<string, unknown>, counts.get(row.id)),
   }));
 }
 
