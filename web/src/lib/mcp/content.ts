@@ -415,7 +415,8 @@ export async function getContentSourcesFor(
 }
 
 export type AddSourceInput =
-  { kind: 'prompt'; promptId: string } | { kind: 'cited_page' | 'gsc_query'; ref: string };
+  | { kind: 'prompt'; promptId: string }
+  | { kind: 'cited_page' | 'gsc_query'; ref: string };
 
 /**
  * Adds a source, as the Sources tab's Add does: a prompt of the brand's
