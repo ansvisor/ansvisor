@@ -64,7 +64,7 @@ vi.mock('../config/supabase.js', () => ({ default: { from: (name) => table(name)
 vi.mock('../lib/plan-guard.js', () => ({
   PlanLimitError: class extends Error {},
   enforceFeature: vi.fn(),
-  enforceImproveQuota: vi.fn(),
+  reserveAiBudget: vi.fn(),
   getImproveQuotaStatus: vi.fn(),
   requireFeature: () => (req, res, next) => next(),
   reserveRelevanceAllowance,

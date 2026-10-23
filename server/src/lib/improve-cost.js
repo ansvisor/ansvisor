@@ -23,7 +23,8 @@ export const IMPROVE_BUDGET_SHARE = 0.01;
 
 /**
  * A typical generation, used to estimate "generations left" before an org
- * has any history: ~7k input and ~2k output tokens on the configured model.
+ * has any history, and the least a call holds on the budget before it runs
+ * (reserveAiBudget): ~7k input and ~2k output tokens on the configured model.
  */
 const TYPICAL_TOKENS = { input: 7000, output: 2000 };
 

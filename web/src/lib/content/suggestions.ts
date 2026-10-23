@@ -57,6 +57,21 @@ export function growsPastLimit(level: number, now: number, then: number): boolea
   return then > headingLimit(level) && then > now;
 }
 
+/** Each question's end: "?" before a space or at the end, or a full-width "？". */
+const QUESTION_MARKS = /\?(?=\s|$)|？/g;
+const questionsIn = (text: string) => (text.match(QUESTION_MARKS) ?? []).length;
+
+/**
+ * Whether changing a heading from `now` to `then` makes it ask more than one
+ * question: an FAQ question with a fan-out's question added to it. A new
+ * question goes in as its own heading and answer. The same as
+ * asksMoreThanOne in server/src/lib/content-agent.js.
+ */
+export function asksMoreThanOne(now: string, then: string): boolean {
+  const questions = questionsIn(then);
+  return questions > 1 && questions > questionsIn(now);
+}
+
 /** A link on a replace's new words: afterText from start to end, linked to href. */
 export interface SuggestionLink {
   start: number;

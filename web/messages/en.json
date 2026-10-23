@@ -4092,7 +4092,8 @@
         "agent": {
           "aim": "aim",
           "now": "now",
-          "phrases": "phrases found"
+          "phrases": "phrases found",
+          "fanouts": "fan-outs to use, in their words"
         },
         "saveMine": "Save as my rules",
         "reset": "Reset",
