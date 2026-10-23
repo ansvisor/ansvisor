@@ -94,10 +94,17 @@ export function affectedOf(signals: Signal[], payload: Record<string, unknown> =
   const strings = (value: unknown) =>
     new Set(Array.isArray(value) ? value.filter((v): v is string => typeof v === 'string') : []);
   const keys = strings(payload.removedKeys);
+  const labels = strings(payload.removedLabels);
   const count = typeof payload.targetCount === 'number' ? payload.targetCount : 0;
   if (payload.targetEntity === 'prompts') {
     const listed = out.prompts.length;
-    if (keys.size > 0) out.prompts = out.prompts.filter((row) => !keys.has(row.id ?? row.text));
+    // A prompt listed by its text alone (a topic's, a mention review's: kept
+    // by their ids, listed as texts) is matched by the text 00244 keeps as its
+    // label. The RPC names only the first 20 removed, so past those such a
+    // row can stay listed.
+    const removed = (row: AffectedPrompt) =>
+      keys.has(row.id ?? row.text) || (row.id === null && labels.has(row.text));
+    if (keys.size > 0 || labels.size > 0) out.prompts = out.prompts.filter((row) => !removed(row));
     out.promptTotal = Math.max(0, out.promptTotal - (listed - out.prompts.length));
     // A count is never shown with nothing behind it.
     if (count > 0 && out.prompts.length > 0) out.promptTotal = count;
@@ -308,6 +315,8 @@ function affectedFromPayload(payload: Record<string, unknown>): Affected {
   }
   const targets: unknown[] = Array.isArray(payload.targets) ? payload.targets : [];
   const entity = str(payload.targetEntity);
+  // A prompt once: a mention review's promptText is its first target too.
+  const listed = new Set(out.prompts.map((row) => row.id ?? row.text));
   for (const raw of targets) {
     // A target is { id, label }, or (topics, mentions) its text alone.
     const target = (typeof raw === 'string' ? { label: raw } : (raw ?? {})) as Record<
@@ -317,6 +326,9 @@ function affectedFromPayload(payload: Record<string, unknown>): Affected {
     const label = str(target.label) || str(target.id);
     if (!label) continue;
     if (entity === 'prompts') {
+      const key = str(target.id) || label;
+      if (listed.has(key)) continue;
+      listed.add(key);
       out.prompts.push({
         id: str(target.id) || null,
         text: label,

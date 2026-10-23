@@ -107,6 +107,24 @@ describe('the affected list’s count', () => {
     expect(affected.promptTotal).toBe(2);
   });
 
+  it('lists none of what was removed where it lists prompts by text, by its label', () => {
+    // A topic gap keeps its prompts by id and lists them as texts: 00244
+    // keeps a removed one's text as its label.
+    const payload = withEntityCounts(
+      {
+        targetEntity: 'prompts',
+        targetCount: 2,
+        promptIds: ['p1', 'p2'],
+        targets: ['best crm for agents', 'crm pricing'],
+      },
+      [row({ total: 2 })],
+    );
+    expect(payload).toMatchObject({ removedKeys: ['p1'], removedLabels: ['best crm for agents'] });
+    const affected = affectedOf([], payload);
+    expect(affected.prompts.map((p) => p.text)).toEqual(['crm pricing']);
+    expect(affected.promptTotal).toBe(1);
+  });
+
   it('lists targets given as text, and shows no count with nothing behind it', () => {
     const named = affectedOf([], {
       targetEntity: 'prompts',

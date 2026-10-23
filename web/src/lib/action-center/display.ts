@@ -131,9 +131,15 @@ export function actionTexts(
     typeof p.promptCount === 'number'
   ) {
     const negative = typeof p.negativeCount === 'number' ? p.negativeCount : 0;
+    // promptText is the first prompt's: once it is removed (AC-009), the one
+    // left is another, so the title counts instead of naming it.
+    const firstRemoved =
+      Array.isArray(p.promptIds) &&
+      Array.isArray(p.removedKeys) &&
+      p.removedKeys.includes(p.promptIds[0]);
     return {
       title:
-        p.promptCount === 1 && typeof p.promptText === 'string' && p.promptText
+        p.promptCount === 1 && typeof p.promptText === 'string' && p.promptText && !firstRemoved
           ? t(`${action.kind}.title`, { prompt: p.promptText })
           : p.promptCount > 0
             ? t(`${action.kind}.titleMany`, { count: p.promptCount })
