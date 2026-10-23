@@ -3,6 +3,7 @@ import { z } from 'zod';
 import supabaseAdmin from '../config/supabase.js';
 import { assertBrandAccess } from '../lib/access.js';
 import { onBrandDomain } from '../lib/audit/host.js';
+import { MAX_LINKS, checkLinks } from '../lib/link-check.js';
 import { MAX_CONTENT_LENGTH, extractPageContent } from '../lib/page-content.js';
 import { PageFetchError, fetchPage } from '../lib/safe-fetch.js';
 
@@ -79,6 +80,37 @@ router.post('/import', async (req, res) => {
     }
     req.log.error({ err }, 'content page import error');
     return res.status(500).json({ error: 'Failed to read the page', code: 'failed' });
+  }
+});
+
+const linksBody = z.object({
+  brandId: z.guid(),
+  urls: z
+    .array(z.string().trim().min(1).max(2048))
+    .min(1)
+    .max(MAX_LINKS * 2),
+});
+
+/**
+ * The links of a draft, for Quality's Trust (Quality spec §2.2): whether
+ * each answers and how old its page is (link-check.js). Any member of the
+ * brand may ask; the addresses are the draft's own links, read through the
+ * same guarded fetch, at most once a day each.
+ */
+router.post('/links', async (req, res) => {
+  const parsed = linksBody.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: 'invalid', code: 'invalid' });
+  const { brandId, urls } = parsed.data;
+  try {
+    await assertBrandAccess(brandId, req.user.id);
+    const links = await checkLinks(urls, { log: req.log });
+    return res.json({ links });
+  } catch (err) {
+    if (err?.status === 403 || err?.status === 404) {
+      return res.status(err.status).json({ error: err.message, code: 'forbidden' });
+    }
+    req.log.error({ err }, 'content link check error');
+    return res.status(500).json({ error: 'Failed to check the links', code: 'failed' });
   }
 });
 

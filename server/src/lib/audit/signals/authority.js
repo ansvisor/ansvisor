@@ -29,8 +29,11 @@ function isAuthorityHost(host) {
   return AUTHORITY_PATTERNS.some((re) => re.test(host));
 }
 
-/** Collect candidate dates (ms) from JSON-LD, <time datetime>, and OG meta. */
-function collectDates(ctx) {
+/**
+ * Collect candidate dates (ms) from JSON-LD, <time datetime>, and OG meta.
+ * The Content Editor's link check reads a linked page's date with it too.
+ */
+export function collectDates(ctx) {
   const out = [];
   const push = (v) => {
     if (!v || typeof v !== 'string') return;

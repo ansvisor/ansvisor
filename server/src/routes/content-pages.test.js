@@ -45,6 +45,12 @@ vi.mock('../lib/safe-fetch.js', async (importOriginal) => {
   };
 });
 
+const checkLinks = vi.fn();
+vi.mock('../lib/link-check.js', async (importOriginal) => ({
+  ...(await importOriginal()),
+  checkLinks: (...args) => checkLinks(...args),
+}));
+
 const { default: router } = await import('./content-pages.js');
 const { PageFetchError } = await import('../lib/safe-fetch.js');
 
@@ -53,6 +59,9 @@ let baseUrl;
 
 beforeEach(async () => {
   org = 'o1';
+  checkLinks
+    .mockReset()
+    .mockResolvedValue([{ url: 'https://a.example/', status: 'ok', httpStatus: 200, date: null }]);
   fetched = [];
   fetchResult = {
     url: 'https://northwind.example/pricing',
@@ -133,5 +142,38 @@ describe('POST /api/content-pages/import', () => {
     expect(res.status).toBe(400);
     await expect(res.json()).resolves.toMatchObject({ code: 'invalid' });
     expect(fetched).toEqual([]);
+  });
+});
+
+const checkPageLinks = (body) =>
+  fetch(`${baseUrl}/links`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+
+describe('POST /api/content-pages/links', () => {
+  it("reads a member's draft links, and answers with each one's status and date", async () => {
+    const res = await checkPageLinks({ brandId: BRAND, urls: ['https://a.example/'] });
+    expect(res.status).toBe(200);
+    await expect(res.json()).resolves.toEqual({
+      links: [{ url: 'https://a.example/', status: 'ok', httpStatus: 200, date: null }],
+    });
+    expect(checkLinks).toHaveBeenCalledWith(['https://a.example/'], expect.any(Object));
+  });
+
+  it('refuses another organization’s brand, no links, and too many', async () => {
+    org = 'o2';
+    let res = await checkPageLinks({ brandId: BRAND, urls: ['https://a.example/'] });
+    expect(res.status).toBe(403);
+    org = 'o1';
+    res = await checkPageLinks({ brandId: BRAND, urls: [] });
+    expect(res.status).toBe(400);
+    res = await checkPageLinks({
+      brandId: BRAND,
+      urls: Array.from({ length: 41 }, (_, i) => `https://s${i}.example/`),
+    });
+    expect(res.status).toBe(400);
+    expect(checkLinks).not.toHaveBeenCalled();
   });
 });
