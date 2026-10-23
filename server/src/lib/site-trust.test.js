@@ -5,6 +5,7 @@ vi.mock('../config/supabase.js', () => ({ default: {} }));
 
 const { PageFetchError } = await import('./safe-fetch.js');
 const {
+  MAX_AUTHOR_PROBES,
   RECHECK_MS,
   SITE_TRUST_TTL_MS,
   authorPage,
@@ -207,6 +208,155 @@ describe('computeSiteTrust', () => {
     expect(checks.organizationSchema.ok).toBe(false);
     expect(complete).toBe(false);
   });
+
+  it("reads a bot wall as not known yet, not as a page the site doesn't have", async () => {
+    const lists = { ...tables, content_authors: [], content_drafts: [] };
+    const wall = (status) => new PageFetchError('http_error', String(status), { status });
+    for (const blocked of [401, 403, 429]) {
+      const { db } = fakeDb(lists);
+      const fetcher = vi.fn(async (url) => {
+        if (url === 'https://acme.com/') return { url, html: HOME };
+        throw wall(blocked);
+      });
+      const { checks, complete } = await computeSiteTrust('b1', { db, fetcher });
+      expect(checks.editorial.ok).toBe(false);
+      expect(complete).toBe(false);
+    }
+    // A challenge page that answers 200 is no home page: no Scrape.do to try here.
+    const { db } = fakeDb(lists);
+    const challenge = { html: html('Just a moment...', '', ORG) };
+    const fetcher = vi.fn(async (url) => {
+      if (url === 'https://acme.com/') return { url, ...challenge };
+      throw wall(404);
+    });
+    const { checks, complete, scraped } = await computeSiteTrust('b1', { db, fetcher });
+    expect(checks.organizationSchema.ok).toBe(false);
+    expect(complete).toBe(false);
+    expect(scraped).toBe(false);
+  });
+
+  it('doesn’t take a page that only loads a captcha script for a wall', async () => {
+    const { db } = fakeDb({ ...tables, content_authors: [], content_drafts: [] });
+    const page = html('Contact – Acme', 'Contact us', '<script src="/recaptcha/api.js"></script>');
+    const fetcher = vi.fn(async (url) => {
+      if (url === 'https://acme.com/') return { url, html: HOME };
+      if (url === 'https://acme.com/contact') return { url, html: page };
+      throw new PageFetchError('http_error', '404', { status: 404 });
+    });
+    const { checks, complete } = await computeSiteTrust('b1', { db, fetcher });
+    expect(checks.contact.ok).toBe(true);
+    expect(complete).toBe(true);
+  });
+
+  it('reads a walled home page once through Scrape.do, unrendered', async () => {
+    const lists = { ...tables, content_authors: [], content_drafts: [] };
+    const fetcher = vi.fn(async (url) => {
+      if (url === 'https://acme.com/')
+        throw new PageFetchError('http_error', '403', { status: 403 });
+      if (url === 'https://acme.com/contact') return { url, html: html('Contact – Acme') };
+      throw new PageFetchError('http_error', '404', { status: 404 });
+    });
+    let { db } = fakeDb(lists);
+    const scraper = vi.fn(async () => ({ ok: true, status: 200, html: HOME }));
+    let result = await computeSiteTrust('b1', { db, fetcher, scraper });
+    expect(scraper).toHaveBeenCalledTimes(1);
+    expect(scraper).toHaveBeenCalledWith('https://acme.com/');
+    expect(result.checks.organizationSchema).toEqual({ ok: true, url: 'https://acme.com/' });
+    expect(result).toMatchObject({ complete: true, scraped: true });
+
+    // Still walled through it: not known yet.
+    ({ db } = fakeDb(lists));
+    const walled = vi.fn(async () => ({ ok: false, status: 403, html: '' }));
+    result = await computeSiteTrust('b1', { db, fetcher, scraper: walled });
+    expect(result.checks.organizationSchema.ok).toBe(false);
+    expect(result).toMatchObject({ complete: false, scraped: true });
+
+    // Without Scrape.do (used today): the pass it read stands, else not known yet.
+    ({ db } = fakeDb(lists));
+    result = await computeSiteTrust('b1', { db, fetcher, keptHome: { ok: true, url: 'x' } });
+    expect(result.checks.organizationSchema).toEqual({ ok: true, url: 'https://acme.com/' });
+    expect(result).toMatchObject({ complete: true, scraped: false });
+    ({ db } = fakeDb(lists));
+    result = await computeSiteTrust('b1', { db, fetcher, keptHome: { ok: false, url: 'x' } });
+    expect(result).toMatchObject({ complete: false, scraped: false });
+
+    // A slow home page isn't a wall: no credit spent on it.
+    ({ db } = fakeDb(lists));
+    const slow = vi.fn(async (url) => {
+      if (url === 'https://acme.com/') throw new PageFetchError('timeout', 'slow');
+      throw new PageFetchError('http_error', '404', { status: 404 });
+    });
+    scraper.mockClear();
+    result = await computeSiteTrust('b1', { db, fetcher: slow, scraper });
+    expect(scraper).not.toHaveBeenCalled();
+    expect(result.complete).toBe(false);
+  });
+
+  it('looks for an author’s page at the usual addresses when the list has none', async () => {
+    const { db } = fakeDb({
+      ...tables,
+      site_pages: [],
+      content_authors: [
+        { id: 'a1', name: 'Ada Lovelace', same_as: [] },
+        { id: 'a2', name: 'Bob Stone', same_as: [] },
+        { id: 'a3', name: 'Cal Dee', same_as: [] },
+      ],
+      content_drafts: [],
+      content_author_defaults: [],
+    });
+    const fetcher = vi.fn(async (url) => {
+      if (url === 'https://acme.com/') return { url, html: HOME };
+      // WordPress's author archive.
+      if (url === 'https://acme.com/author/ada-lovelace')
+        return { url, html: html('Ada Lovelace, Author at Acme', 'Author: Ada Lovelace') };
+      // The home page again, and a page that doesn't name him.
+      if (url === 'https://acme.com/author/bob-stone')
+        return { url: 'https://acme.com/', html: HOME };
+      if (url === 'https://acme.com/authors/bob-stone') return { url, html: html('Our team') };
+      // Off the site.
+      if (url === 'https://acme.com/author/cal-dee')
+        return { url: 'https://other.example/cal-dee', html: html('Cal Dee') };
+      if (url === 'https://acme.com/authors/cal-dee')
+        return { url, html: html('Writers', 'Cal Dee') };
+      throw new PageFetchError('http_error', '404', { status: 404 });
+    });
+    const { checks, complete } = await computeSiteTrust('b1', { db, fetcher });
+    expect(checks.authorPages).toEqual({
+      ok: false,
+      authors: [
+        { name: 'Ada Lovelace', url: 'https://acme.com/author/ada-lovelace' },
+        { name: 'Bob Stone', url: null },
+        { name: 'Cal Dee', url: 'https://acme.com/authors/cal-dee' },
+      ],
+    });
+    expect(complete).toBe(true);
+    // The first address that passes ends the search.
+    expect(fetcher).not.toHaveBeenCalledWith(
+      'https://acme.com/authors/ada-lovelace',
+      expect.anything(),
+    );
+  });
+
+  it(`looks for ${MAX_AUTHOR_PROBES} authors' pages at most, and not inside a longer name`, async () => {
+    const names = ['Al', 'Bea Moss', 'Cy Ode', 'Di Ray', 'Ed Fox'];
+    const { db } = fakeDb({
+      ...tables,
+      site_pages: [],
+      content_authors: names.map((name, i) => ({ id: `a${i}`, name, same_as: [] })),
+      content_drafts: [],
+      content_author_defaults: [],
+    });
+    const fetcher = vi.fn(async (url) => {
+      if (url === 'https://acme.com/') return { url, html: HOME };
+      // "Al" only inside "Also": not his page.
+      if (url === 'https://acme.com/author/al') return { url, html: html('Also by our team') };
+      throw new PageFetchError('http_error', '404', { status: 404 });
+    });
+    const { checks } = await computeSiteTrust('b1', { db, fetcher });
+    expect(checks.authorPages.authors.every((a) => a.url === null)).toBe(true);
+    const authorReads = fetcher.mock.calls.filter(([url]) => /\/authors?\//.test(url));
+    expect(authorReads).toHaveLength(MAX_AUTHOR_PROBES * 2);
+  });
 });
 
 describe('readSiteTrust', () => {
@@ -228,7 +378,12 @@ describe('readSiteTrust', () => {
   it('keeps a read for a day, and reads again when asked, but not within minutes', async () => {
     let { db, writes } = fakeDb({ ...base, site_trust: kept(60_000) });
     const fetcher = vi.fn();
-    expect((await readSiteTrust('b1', { db, fetcher, now: NOW })).score).toBe(1);
+    expect(await readSiteTrust('b1', { db, fetcher, now: NOW })).toEqual({
+      checks: { about: { ok: true, url: 'https://acme.com/about' } },
+      score: 1,
+      complete: true,
+      checkedAt: new Date(NOW - 60_000).toISOString(),
+    });
     expect((await readSiteTrust('b1', { db, fetcher, now: NOW, refresh: true })).score).toBe(1);
     expect(writes).toEqual([]);
 
@@ -245,10 +400,45 @@ describe('readSiteTrust', () => {
     });
   });
 
-  it('reads a partial read again after a few minutes', async () => {
-    const { db, writes } = fakeDb({ ...base, site_trust: kept(RECHECK_MS + 60_000, false) });
+  it('reads a partial read again after a few minutes, and says it is partial', async () => {
+    let { db, writes } = fakeDb({ ...base, site_trust: kept(60_000, false) });
+    expect((await readSiteTrust('b1', { db, fetcher: vi.fn(), now: NOW })).complete).toBe(false);
+    ({ db, writes } = fakeDb({ ...base, site_trust: kept(RECHECK_MS + 60_000, false) }));
     await readSiteTrust('b1', { db, fetcher: vi.fn(), now: NOW });
     expect(writes).toHaveLength(1);
+  });
+
+  it('spends one Scrape.do read a day on a walled home page, however often it is asked', async () => {
+    const tables = {
+      ...base,
+      brand_domains: [{ domain: 'acme.com', is_primary: true }],
+    };
+    const fetcher = vi.fn(async () => {
+      throw new PageFetchError('http_error', '403', { status: 403 });
+    });
+    const scraper = vi.fn(async () => ({ ok: true, status: 200, html: html('Acme', 'Acme', ORG) }));
+    let { db, writes } = fakeDb(tables);
+    let read = await readSiteTrust('b-walled', { db, fetcher, scraper, now: NOW });
+    expect(scraper).toHaveBeenCalledTimes(1);
+    expect(read.checks.organizationSchema.ok).toBe(true);
+    // The probes met the wall too: read again soon.
+    expect(read.complete).toBe(false);
+    expect(writes[0].row.scraped_at).toBe(new Date(NOW).toISOString());
+
+    // Asked again later that day: no second credit, and the pass stands.
+    let later = NOW + RECHECK_MS + 60_000;
+    ({ db, writes } = fakeDb({ ...tables, site_trust: writes[0].row }));
+    read = await readSiteTrust('b-walled', { db, fetcher, scraper, now: later, refresh: true });
+    expect(scraper).toHaveBeenCalledTimes(1);
+    expect(read.checks.organizationSchema.ok).toBe(true);
+    expect(writes[0].row.scraped_at).toBe(new Date(NOW).toISOString());
+
+    // A day on: one more.
+    later = NOW + SITE_TRUST_TTL_MS + 60_000;
+    ({ db, writes } = fakeDb({ ...tables, site_trust: writes[0].row }));
+    await readSiteTrust('b-walled', { db, fetcher, scraper, now: later });
+    expect(scraper).toHaveBeenCalledTimes(2);
+    expect(writes[0].row.scraped_at).toBe(new Date(later).toISOString());
   });
 
   it('reads once for two asks at the same time', async () => {

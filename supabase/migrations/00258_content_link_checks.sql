@@ -1,5 +1,5 @@
 -- ============================================================================
--- 00254: the pages a Content Editor draft links to, read once a day
+-- 00258: the pages a Content Editor draft links to, read once a day
 -- (Content Editor Quality, Trust)
 -- ============================================================================
 -- Trust's "No broken links" and "Fresh sources (≤ 24 months)" (Quality spec
