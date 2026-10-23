@@ -36752,7 +36752,14 @@ revoke execute on function public.action_entity_counts(uuid[]) from public, anon
 grant execute on function public.action_entity_counts(uuid[]) to authenticated, service_role;
 
 -- The actions made before: their list from what their payload still names.
-select public.snapshot_action_entities(a.id, a.brand_id, a.payload, true)
+-- A topic opportunity counts its suggestions (targets), not the tracked
+-- prompts it measures (promptIds). An action that names nothing a list can
+-- hold keeps none; the web then shows its saved count (part 2).
+select public.snapshot_action_entities(
+  a.id,
+  a.brand_id,
+  case when a.kind = 'topic_opportunity' then a.payload - 'promptIds' else a.payload end,
+  true)
 from public.actions a
 where a.deleted_at is null;
 

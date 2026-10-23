@@ -13,7 +13,7 @@
  * predate that, so their targets are read off the fields they do carry.
  */
 
-import { MAX_TARGET_IDS } from '../../target-ids.js';
+import { targetKeys } from '../../target-ids.js';
 
 function legacyTargets(signal) {
   const p = signal.payload ?? {};
@@ -77,13 +77,19 @@ export function targetPayload(byKind, entity, extra = {}) {
   // The ones a signal named, to show; every target's key once there are more
   // (AC-009: the action keeps the whole list it counts, in action_entities).
   const named = targets.filter((t) => t.label !== undefined || Object.keys(t).length > 1);
+  // The count is the list's, as the action keeps it (targetKeys): signals
+  // each capped at MAX_TARGET_IDS can add up past it.
+  const keys = targetKeys(targets.map(targetKey));
+  const shown = named.slice(0, 50);
+  // Listed whenever the names shown aren't exactly those keys: more of them,
+  // or names whose keys the action keeps otherwise (trimmed, once).
+  const shownKeys = shown.map(targetKey);
+  const listed = keys.length !== shownKeys.length || keys.some((k, i) => k !== shownKeys[i]);
   return {
     targetEntity: entity,
-    targetCount: targets.length,
-    targets: named.slice(0, 50),
-    ...(targets.length > named.slice(0, 50).length
-      ? { targetIds: targets.slice(0, MAX_TARGET_IDS).map(targetKey) }
-      : {}),
+    targetCount: keys.length,
+    targets: shown,
+    ...(listed ? { targetIds: keys } : {}),
     ...(mapped.length > 0 ? { contentExists: mapped.some((t) => t.mapped) } : {}),
     ...extra,
   };

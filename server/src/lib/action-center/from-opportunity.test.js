@@ -171,4 +171,12 @@ describe('actionTargets (AC-009)', () => {
     });
     expect(actionTargets([], [])).toEqual({ targetCount: 0, targets: [] });
   });
+
+  it('counts a prompt named twice once, as the action keeps it', () => {
+    expect(actionTargets([], ['A', 'B', 'A ', ''])).toEqual({
+      targetCount: 2,
+      targets: ['A', 'B', 'A ', ''],
+      targetIds: ['A', 'B'],
+    });
+  });
 });

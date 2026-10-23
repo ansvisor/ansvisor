@@ -304,7 +304,7 @@ export async function uncitedMentionCandidates(brandId, now) {
  * drowning every other category. The worst pages ride in the payload for
  * the drawer; the full list lives on the Site Audit page.
  */
-async function auditCandidates(brandId, now) {
+export async function auditCandidates(brandId, now) {
   const since = new Date(now.getTime() - detection.auditMaxAgeDays * DAY_MS).toISOString();
   const { data, error } = await supabaseAdmin
     .from('site_audits')
@@ -333,10 +333,13 @@ async function auditCandidates(brandId, now) {
       kind: 'audit_low_score',
       dedupKey: 'audit_low_score',
       source: ['site_audit'],
-      // The ten lowest to show; every low page's address for the action's count (AC-009).
+      // The ten lowest to show; past them, every low page's address for the
+      // action's count (AC-009), as group signals list theirs past 50.
       payload: {
         urls: low.slice(0, 10),
-        targetIds: low.slice(0, MAX_TARGET_IDS).map((audit) => audit.url),
+        ...(low.length > 10
+          ? { targetIds: low.slice(0, MAX_TARGET_IDS).map((audit) => audit.url) }
+          : {}),
       },
       previousValue: null,
       currentValue: low.length,
