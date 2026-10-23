@@ -5,7 +5,8 @@ import { AI_SOURCES_VERSION } from '../lib/ai-sources.js';
 /**
  * POST /track/:trackingCode (AT-003): each pageview is stored with the visit
  * it belongs to, and a failed visit lookup still stores the pageview; with
- * the landing page's status, for Broken AI links (AT-012).
+ * the landing page's status, for Broken AI links (AT-012), and the surface
+ * it came through (ChatGPT Shopping, #1283).
  */
 
 const inserted = [];
@@ -173,6 +174,44 @@ describe('POST /track/:trackingCode', () => {
     await beacon({ v: AI_SOURCES_VERSION + 1 });
     await beacon({ v: '2' });
     expect(inserted.map((i) => i.row.source_list_version)).toEqual([null, null]);
+  });
+
+  // #1283: ChatGPT Shopping's product cards link to feed URLs tagged utm_medium=feed.
+  it('stores a ChatGPT visit from a feed link as ChatGPT, surface shopping, with the list version', async () => {
+    findVisitOf.mockResolvedValue(null);
+    await beacon({
+      u: 'https://acme.example/p/mug?utm_source=chatgpt.com&utm_medium=feed',
+      r: '',
+      s: 'chatgpt.com',
+      v: AI_SOURCES_VERSION,
+    });
+    expect(inserted[0].row).toMatchObject({
+      url: 'https://acme.example/p/mug?utm_source=chatgpt.com&utm_medium=feed',
+      source_platform: 'chatgpt.com',
+      source_surface: 'shopping',
+      source_list_version: AI_SOURCES_VERSION,
+    });
+    // Still ChatGPT's visit: a reload continues it like any other.
+    expect(findVisitOf).toHaveBeenCalledWith(
+      expect.objectContaining({ sourcePlatform: 'chatgpt.com' }),
+    );
+  });
+
+  it("reads the surface from the landing URL, so an older snippet's feed visits count too", async () => {
+    findVisitOf.mockResolvedValue(null);
+    // A cached older snippet: the host it matched, no list version.
+    await beacon({ u: 'https://acme.example/p?UTM_MEDIUM=Feed', s: 'chat.openai.com' });
+    // A ChatGPT answer's link.
+    await beacon({ u: 'https://acme.example/p?utm_source=chatgpt.com', s: 'chatgpt.com' });
+    // Another medium, or a feed link from another source.
+    await beacon({ u: 'https://acme.example/p?utm_medium=email', s: 'chatgpt.com' });
+    await beacon({ u: 'https://acme.example/p?utm_medium=feed', s: 'perplexity.ai' });
+    expect(inserted.map((i) => [i.row.source_platform, i.row.source_surface])).toEqual([
+      ['chatgpt.com', 'shopping'],
+      ['chatgpt.com', null],
+      ['chatgpt.com', null],
+      ['perplexity.ai', null],
+    ]);
   });
 
   it('keeps a platform the list does not know as it was sent', async () => {

@@ -15,6 +15,12 @@
  * up in a real property; substring matching would have booked it as AI
  * traffic.
  *
+ * A source can have surfaces: a part of the assistant whose links carry
+ * their own utm_medium, like ChatGPT Shopping's product cards, whose feed
+ * links say utm_medium=feed (#1283). A visit through one is still the
+ * source's, so the source's totals don't change; it is also marked with the
+ * surface's key (ai_traffic_logs.source_surface, ga_ai_traffic_stats.surface).
+ *
  * The list is versioned: each change adds an entry to `changes` and bumps
  * `version`, and every stored row records the version that counted it, so a
  * step in the history can be traced to the list rather than to the traffic.
@@ -83,4 +89,33 @@ export function aiSourcePattern({ origin = 'analytics' } = {}) {
   const hosts = sources.flatMap((source) => source.hosts).map(escapeRegex);
   const aliases = sources.flatMap((source) => source.aliases).map(escapeRegex);
   return `^((.+\\.)?(${hosts.join('|')})|(www\\.)?(${aliases.join('|')}))$`;
+}
+
+/**
+ * The surface of source `sourceKey` that a visit or session came through,
+ * from its medium (a landing URL's utm_medium, or GA4's session medium), or
+ * null for the source's ordinary links. The medium matches exactly, in any
+ * case: "feed" is ChatGPT Shopping, "rss-feed" isn't.
+ */
+export function classifyAiSurface(sourceKey, medium) {
+  const value = typeof medium === 'string' ? medium.toLowerCase() : '';
+  if (!value) return null;
+  const source = AI_SOURCES.find((s) => s.key === sourceKey);
+  return source?.surfaces?.find((surface) => surface.medium === value)?.key ?? null;
+}
+
+/**
+ * A landing URL's utm_medium: the first utm_medium parameter, its name in any
+ * case, as 00251 read the URLs stored before. Empty without one, or for a
+ * value that isn't a URL.
+ */
+export function landingMedium(url) {
+  try {
+    for (const [name, value] of new URL(url).searchParams) {
+      if (name.toLowerCase() === 'utm_medium') return value;
+    }
+  } catch {
+    // Not a URL: no medium.
+  }
+  return '';
 }
