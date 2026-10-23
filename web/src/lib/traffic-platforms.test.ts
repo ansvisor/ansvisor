@@ -1,7 +1,8 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { getPlatformName } from './traffic-platforms';
+import messages from '../../messages/en.json';
+import { getPlatformName, isPlatformSurface, platformTableRows } from './traffic-platforms';
 import { getColor } from '@/app/[locale]/(dashboard)/dashboard/traffic/_charts';
 
 /**
@@ -12,7 +13,7 @@ import { getColor } from '@/app/[locale]/(dashboard)/dashboard/traffic/_charts';
 
 const list = JSON.parse(
   readFileSync(join(__dirname, '../../../server/src/lib/ai-sources.json'), 'utf8'),
-) as { sources: { key: string }[] };
+) as { sources: { key: string; surfaces?: { key: string }[] }[] };
 
 describe('the AI source list on the page', () => {
   it('names every engine on the list', () => {
@@ -41,5 +42,44 @@ describe('the AI source list on the page', () => {
     for (const { key } of list.sources) {
       expect(getColor(key), key).not.toBe(fallback);
     }
+  });
+
+  it('names every surface on the list (#1283)', () => {
+    const platforms = messages.traffic.platforms as unknown as Record<
+      'surfaces' | 'surfaceNames' | 'surfaceTips',
+      Record<string, string>
+    >;
+    const exported = messages.traffic.export.surfaceNames as Record<string, string>;
+    const surfaces = list.sources.flatMap((s) => (s.surfaces ?? []).map((surface) => surface.key));
+    expect(surfaces).toContain('shopping');
+    for (const key of surfaces) {
+      expect(isPlatformSurface(key), key).toBe(true);
+      expect(platforms.surfaces[key], key).toBeTruthy();
+      expect(platforms.surfaceNames[key], key).toContain('{platform}');
+      expect(platforms.surfaceTips[key], key).toBeTruthy();
+      expect(exported[key], key).toBe(platforms.surfaceNames[key]);
+    }
+  });
+});
+
+describe('platformTableRows', () => {
+  it("lists each platform's surfaces right under it, as parts of it", () => {
+    const ga = { sessions: 10, engagedSessions: 8, keyEvents: 3, keyEventSessions: 2 };
+    expect(
+      platformTableRows([
+        {
+          platform: 'chatgpt.com',
+          visits: 40,
+          visitsPrev: 33,
+          analytics: null,
+          surfaces: [{ surface: 'shopping', visits: 11, visitsPrev: 4, analytics: ga }],
+        },
+        { platform: 'claude.ai', visits: 3, visitsPrev: 0, analytics: null, surfaces: [] },
+      ]),
+    ).toEqual([
+      { platform: 'chatgpt.com', surface: null, visits: 40, visitsPrev: 33, analytics: null },
+      { platform: 'chatgpt.com', surface: 'shopping', visits: 11, visitsPrev: 4, analytics: ga },
+      { platform: 'claude.ai', surface: null, visits: 3, visitsPrev: 0, analytics: null },
+    ]);
   });
 });

@@ -19,6 +19,7 @@ import {
   Target,
   X,
 } from 'lucide-react';
+import { RemovedNote } from '@/components/action-center/removed-note';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
@@ -338,6 +339,7 @@ export function ActionTable({
                             {tag}
                           </Badge>
                         ))}
+                        <RemovedNote payload={action.payload ?? {}} />
                       </div>
                     </div>
                   </div>
