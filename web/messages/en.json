@@ -4095,6 +4095,7 @@
         },
         "estimate": "Ansvisor estimates based on Google's published quality signals. Not a Google score.",
         "tooShort": "Write a few paragraphs: Readability is read from the page as you write.",
+        "notThisLanguage": "Readability isn't read for this language yet.",
         "suggestionsLabel": "What would raise it",
         "nothingToRaise": "Nothing to raise here: the page reads well.",
         "gain": "+{gain, number} {score}",
