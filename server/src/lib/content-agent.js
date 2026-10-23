@@ -10,9 +10,9 @@ import { pageTypeFormat } from './content-page-types.js';
 import {
   RunStoppedError,
   advanceRun,
-  callSignal,
   finishRun,
   isStop,
+  runCall,
   startRun,
   stopIfStopped,
 } from './content-runs.js';
@@ -68,8 +68,10 @@ export const HEADING_LIMITS = { h1: 70, other: 90 };
 export const headingLimit = (tag) => (tag === 'h1' ? HEADING_LIMITS.h1 : HEADING_LIMITS.other);
 
 /** The headings rule both agent prompts give the model (fix rules, Start Agent). */
-
 export const HEADING_RULE = `- A heading stays a heading: one short line, an H1 up to ${HEADING_LIMITS.h1} characters and other headings up to ${HEADING_LIMITS.other}. Never write an answer, a sentence or a FAQ into a heading's replace; to answer under a heading, insert a paragraph after it.`;
+
+/** The fan-outs rule both agent prompts give the model: the ones named, in their words. */
+export const FANOUT_RULE = `- Fan-outs are the searches AI engines run for the page's questions. For each fan-out a rule names, in its words ("aeo tracker" → "What is an AEO tracker?"), not questions of your own: fanoutH2 wants an H2, fanoutFaq a question ending in "?" under the FAQ heading. Add it as its own question: after the paragraph that ends an existing answer, insert a heading at the level of the FAQ's other questions (an H3 under an H2 FAQ) and a paragraph that answers it. Reword an existing question into a fan-out's words only when its answer still answers it, replacing that question alone. One question per heading: never add a question to a heading. Call a change a fan-out answer only when it uses a fan-out listed.`;
 
 /** The links rule both agent prompts give the model: only the URLs listed, never invented. */
 export const LINK_RULE = `- Links: link only to a URL listed under the pages or sources you may link to, copied exactly, as <a href="URL">the words it explains</a>, in a replace's "after" or in an insert. Cite a source by linking the words it supports. Never invent a URL, never link a heading, and when no listed page fits, add no link.`;
@@ -143,6 +145,7 @@ Rules for your suggestions:
 - An insert adds new blocks after a passage, as simple HTML (h2, h3, p, ul, ol, li, strong, em, and a for links).
 ${HEADING_RULE}
 ${LINK_RULE}
+${FANOUT_RULE}
 - Never change a passage marked LOCKED: AI assistants quote its wording today. You may insert after it.
 - Use only facts from the page, the brand and your data. Never invent numbers, prices, dates, names, sources or quotes. When a rule needs a fact you don't have, write a placeholder in square brackets, e.g. [figure, source, year].
 ${SOURCES_RULE}
@@ -270,6 +273,11 @@ const isHeading = (tag) => /^h[1-6]$/.test(tag);
 const QUESTION_AND_ANSWER = /^([\s\S]+?(?:\?(?=\s)|？))\s*(\S[\s\S]*)$/;
 /** How an answer ends: a sentence. */
 const ANSWER_END = /[.!。！]$/;
+/** What follows a heading's question may open with another question, not an answer. */
+const OPENS_WITH_QUESTION = /^[^.!?。！？]*(?:\?(?=\s|$)|？)/;
+/** Each question's end: "?" before a space or at the end, or a full-width "？". */
+const QUESTION_MARKS = /\?(?=\s|$)|？/g;
+const questionsIn = (text) => (text.match(QUESTION_MARKS) ?? []).length;
 
 /** Where the first block of a cleaned HTML starts. */
 const BLOCK_START = /<(?:h[2-4]|p|ul|ol|li)>/;
@@ -280,6 +288,17 @@ export function growsPastLimit(passage, before, words) {
   const now = passage.text.trim().length;
   const then = passage.text.replace(before, () => words).trim().length;
   return then > headingLimit(passage.tag) && then > now;
+}
+
+/**
+ * Whether a replace makes a heading ask more than one question: an FAQ
+ * question with a fan-out's question added to it ("What is X? What is an
+ * AEO tracker?"). A new question goes in as its own heading and answer.
+ */
+export function asksMoreThanOne(passage, before, words) {
+  if (!isHeading(passage.tag)) return false;
+  const then = questionsIn(passage.text.replace(before, () => words));
+  return then > 1 && then > questionsIn(passage.text);
 }
 
 /** A paragraph holding `text`, escaped. */
@@ -322,10 +341,13 @@ export function splitReplace(after, tag, links = null) {
     // A question and its answer ("What is X? X is …"): the answer goes under
     // the heading first, before any blocks that came with it. A subtitle that
     // fits ("What is AEO? The Complete Guide") isn't one: an answer ends a
-    // sentence. Past the heading's limit, the rest is never the heading's.
+    // sentence. Past the heading's limit, the rest is never the heading's,
+    // unless it opens with a second question: that one isn't an answer, and
+    // the heading asking both is dropped (asksMoreThanOne).
     const answered = words.match(QUESTION_AND_ANSWER);
     if (
       answered &&
+      !OPENS_WITH_QUESTION.test(answered[2]) &&
       (words.length > headingLimit(tag) ||
         (ANSWER_END.test(answered[2]) && answered[2].length >= MIN_ANSWER_CHARS))
     ) {
@@ -342,13 +364,14 @@ export function splitReplace(after, tag, links = null) {
  * HTML cleaned and not empty; the rules named kept to the ones sent, and
  * each change once. A replace that carries blocks, or an answer on a
  * heading, is split into a replace and an insert after it (splitReplace);
- * one that would still grow a heading past its headingLimit is dropped (a
- * long heading may still be shortened). Links stay only to the URLs in
- * `links` (linkAllowList): a replace's go in after_links, by offset into its
- * words, an insert's in its HTML. Each keeps the sources it names and the
- * words each supports (withSources); one that adds a number with no source
- * is not kept. `sourcing` is the numbered sources and the numbers known
- * already (the page's, the brand's): without it, the page's.
+ * one that would still grow a heading past its headingLimit (a long heading
+ * may still be shortened), or make it ask a second question, is dropped.
+ * Links stay only to the URLs in `links` (linkAllowList): a replace's go in
+ * after_links, by offset into its words, an insert's in its HTML. Each keeps
+ * the sources it names and the words each supports (withSources); one that
+ * adds a number with no source is not kept. `sourcing` is the numbered
+ * sources and the numbers known already (the page's, the brand's): without
+ * it, the page's.
  */
 export function keepSuggestions(raw, passages, lockedKeys, ruleKeys, links = null, sourcing = {}) {
   const numbered = sourcing.numbered ?? [];
@@ -360,7 +383,8 @@ export function keepSuggestions(raw, passages, lockedKeys, ruleKeys, links = nul
     // Source numbers belong in "sources", never in the words.
     const s = { ...answer, after: stripSourceIds(answer.after) };
     const passage = passages[s.passage - 1];
-    const reason = s.reason.trim().slice(0, 300);
+    // The card shows it: a source number the model wrote in ("(S2)") goes.
+    const reason = stripSourceIds(s.reason).trim().slice(0, 300);
     if (!passage || !reason || passage.text.length > MAX_PASSAGE_CHARS) continue;
     const rules = [...new Set(s.rules.filter((key) => ruleKeys.has(key)))];
     const insertOf = (html) =>
@@ -392,7 +416,13 @@ export function keepSuggestions(raw, passages, lockedKeys, ruleKeys, links = nul
       const wordLinks = split.links.slice(0, MAX_LINKS);
       // Linking words the passage already has is a change too.
       const changed = words && (words !== before || wordLinks.length > 0);
-      if (changed && (words.length > 2000 || growsPastLimit(passage, before, words))) continue;
+      if (
+        changed &&
+        (words.length > 2000 ||
+          growsPastLimit(passage, before, words) ||
+          asksMoreThanOne(passage, before, words))
+      )
+        continue;
       changes = [
         changed && {
           id: `replace:${passage.text}:${before}`,
@@ -533,6 +563,17 @@ export async function hasOpenSuggestions(draftId) {
   return (data ?? []).some((row) => row.batch_id === latest && row.status === 'open');
 }
 
+/** A 'writing' this old was left by a server that stopped: it can start again. */
+export const WRITING_STALE_MS = 10 * 60_000;
+
+/** Whether Start or a rewrite holds the draft now (agent_state, 00219). */
+export function agentWriting(draft, now = Date.now()) {
+  return (
+    draft.agent_state === 'writing' &&
+    new Date(draft.agent_state_at).getTime() > now - WRITING_STALE_MS
+  );
+}
+
 /**
  * Runs the agent on a draft: reads it and its brand, charges the AI usage
  * budget, asks the model, and keeps the suggestions the editor can apply as
@@ -544,7 +585,9 @@ export async function hasOpenSuggestions(draftId) {
 export async function fixDraftRules({ draftId, brandId, input }) {
   const { data: draft, error: draftError } = await supabaseAdmin
     .from('content_drafts')
-    .select('id, brand_id, title, body_html, page_type, action_id, status, source_url')
+    .select(
+      'id, brand_id, title, body_html, page_type, action_id, status, source_url, agent_state, agent_state_at',
+    )
     .eq('id', draftId)
     .maybeSingle();
   if (draftError) throw draftError;
@@ -564,6 +607,14 @@ export async function fixDraftRules({ draftId, brandId, input }) {
       code: 'open_suggestions',
     });
   }
+  // Start or a rewrite holds the draft: a batch here would drop its answer,
+  // already charged, when it lands (another tab, another member, the API).
+  if (agentWriting(draft)) {
+    throw Object.assign(new Error('The agent is already writing it'), {
+      status: 409,
+      code: 'writing',
+    });
+  }
 
   const { data: brand, error: brandError } = await supabaseAdmin
     .from('brands')
@@ -572,19 +623,24 @@ export async function fixDraftRules({ draftId, brandId, input }) {
     .single();
   if (brandError) throw brandError;
 
-  // Its steps, named by the data it reads (CE-027/035); Stop aborts the call.
+  // Its steps, named by the work it does (CE-027/035); Stop aborts the call.
+  const sources = input.sources;
   const run = await startRun({
     draftId,
     kind: 'fix',
     counts: {
-      pages: input.sources?.pages.length,
-      fanouts: input.sources?.fanouts.length,
-      queries: input.sources?.queries.length,
+      rules: input.rules.length,
+      sources: sources
+        ? sources.promptIds.length +
+          sources.fanouts.length +
+          sources.pages.length +
+          sources.queries.length
+        : 0,
     },
   });
   try {
     const result = await fixWithRun({ draft, brand, brandId, draftId, input, passages, more, run });
-    await finishRun(run, 'done', { 3: result.count });
+    await finishRun(run, 'done', { 2: result.count });
     return result;
   } catch (err) {
     if (isStop(err, run)) {
@@ -602,8 +658,8 @@ async function fixWithRun({ draft, brand, brandId, draftId, input, passages, mor
   const lockedKeys = new Set(input.locked.map(passageKey));
   const ruleKeys = new Set(input.rules.map((r) => r.key));
   // The data it writes from, numbered; the numbers it may write unmarked.
-  const prompts = await readPrompts(brandId, input.sources?.promptIds ?? []);
   await advanceRun(run, 1);
+  const prompts = await readPrompts(brandId, input.sources?.promptIds ?? []);
   const numbered = numberSources({
     prompts,
     fanouts: input.sources?.fanouts,
@@ -613,6 +669,8 @@ async function fixWithRun({ draft, brand, brandId, draftId, input, passages, mor
   const known = knownNumbers(
     htmlText(draft.body_html),
     draft.title,
+    brand.name,
+    brand.industry,
     brand.description,
     ...input.rules.flatMap((r) => [r.name, r.detail]),
     ...input.textRules,
@@ -633,23 +691,25 @@ async function fixWithRun({ draft, brand, brandId, draftId, input, passages, mor
   });
   let object;
   try {
-    await advanceRun(run, 3);
-    const generated = await generateObject({
-      model: resolveModel(modelId),
-      schema: suggestionsSchema,
-      system: SYSTEM_PROMPT,
-      prompt: buildFixPrompt({
-        brand,
-        draft,
-        passages,
-        more,
-        lockedKeys,
-        input,
-        linkTargets: linkTargetsPrompt(targets, ruleKeys),
-        sources: sourcesPrompt(numbered),
+    await advanceRun(run, 2);
+    const generated = await runCall(run, budget, CALL_TIMEOUT_MS, (abortSignal) =>
+      generateObject({
+        model: resolveModel(modelId),
+        schema: suggestionsSchema,
+        system: SYSTEM_PROMPT,
+        prompt: buildFixPrompt({
+          brand,
+          draft,
+          passages,
+          more,
+          lockedKeys,
+          input,
+          linkTargets: linkTargetsPrompt(targets, ruleKeys),
+          sources: sourcesPrompt(numbered),
+        }),
+        abortSignal,
       }),
-      abortSignal: callSignal(run, CALL_TIMEOUT_MS),
-    });
+    );
     await budget.charge(generated.usage);
     object = generated.object;
   } catch (err) {
@@ -662,6 +722,7 @@ async function fixWithRun({ draft, brand, brandId, draftId, input, passages, mor
     await budget.release();
   }
 
+  await advanceRun(run, 3);
   const rows = keepSuggestions(
     object.suggestions,
     passages,

@@ -287,6 +287,19 @@ describe('suggestContentChangesFor', () => {
     expect(db.writes).toEqual([]);
   });
 
+  it('waits while Start or a rewrite holds the draft', async () => {
+    db.rows.content_drafts = draftRow({
+      agent_state: 'writing',
+      agent_state_at: new Date().toISOString(),
+    });
+    await expect(
+      suggestContentChangesFor(auth, 'd1', [
+        { kind: 'insert', passage: 1, after: '<p>x</p>', reason: 'y' },
+      ]),
+    ).resolves.toBe('writing');
+    expect(db.writes).toEqual([]);
+  });
+
   it('leaves a published draft alone', async () => {
     db.rows.content_drafts = draftRow({ status: 'published' });
     await expect(

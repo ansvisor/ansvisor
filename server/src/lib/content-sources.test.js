@@ -149,6 +149,22 @@ describe('sourceSuggestion', () => {
     });
   });
 
+  it('sources a claim only from a number with its unit, and never from a cited page’s address', () => {
+    // "crm for 50 users" has 50 users, not 50%.
+    const fanout = numberSources({ fanouts: [{ query: 'crm for 50 users' }] });
+    const suggest = (text, numbered) =>
+      sourceSuggestion({ named: [], marks: [], pieces: one(text), numbered, known: new Set() });
+    expect(suggest('50% of teams use one.', fanout)).toBeNull();
+    expect(suggest('Plans for 50 users.', fanout)).toMatchObject({
+      marks: [{ start: 10, end: 12, source: 0 }],
+    });
+    // A dated address is no words of the page's.
+    const page = numberSources({
+      pages: [{ url: 'https://blog.example/2024/03/15/post-1234', kind: 'blog' }],
+    });
+    expect(suggest('Over 1234 teams switched in 2024.', page)).toBeNull();
+  });
+
   it('reads an insert node by node: numbers in two items never run together', () => {
     const pieces = textPieces('<ul><li>Option 1</li><li>2 seats</li></ul>');
     expect(pieces).toEqual([
@@ -192,11 +208,32 @@ describe('no number without a source', () => {
     ).toEqual(['40', '2', '9', '5']);
   });
 
-  it('knows today, and takes the source numbers out of the words', () => {
-    expect(todayText(new Date('2026-10-23T12:00:00Z'))).toBe('2026 10 23');
+  it('knows this year, not today’s day or month, and takes the source numbers out of the words', () => {
+    const today = new Date('2026-10-23T12:00:00Z');
+    expect(todayText(today)).toBe('2026');
+    // On Oct 23, "23%" is no fact of the date's.
+    expect(
+      addedNumbers('23% of buyers in 2026, 10x faster', knownNumbers(todayText(today))).map(
+        (n) => n.value,
+      ),
+    ).toEqual(['23', '10']);
     expect(stripSourceIds('Trackers (S2) cover AI [S1, S3]. Amazon S3 stays.')).toBe(
       'Trackers cover AI. Amazon S3 stays.',
     );
+  });
+
+  it('reads no figure in words with digits, and matches a claim to its unit', () => {
+    expect(addedNumbers('B2B software for H2 teams on Web3', new Set())).toEqual([]);
+    expect(placeholderNumbers('B2B software, 2B users', new Set())).toBe(
+      `B2B software, ${NUMBER_PLACEHOLDER} users`,
+    );
+    const units = knownNumbers('Save 40% and $49 a month, 3x faster, 2M users');
+    expect(addedNumbers('40% off, $49, 3× faster, 2 million users', units)).toEqual([]);
+    expect(addedNumbers('$40, 49%, 3 million', units).map((n) => n.value)).toEqual([
+      '40',
+      '49',
+      '3',
+    ]);
   });
 
   it('puts a placeholder where a page written whole adds one, sign and unit with it', () => {

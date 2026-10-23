@@ -184,6 +184,9 @@ describe('collectHealthReport', () => {
     const report = await collectHealthReport(NOW);
     expect(report.probes.results[0]).toMatchObject({ status: 'red', error: 'statement timeout' });
     expect(report.nightly.counts).toEqual({});
+    // The action count check (AC-009) asks for five examples, and says when it can't run.
+    expect(db.rpc).toHaveBeenCalledWith('action_count_drift', { p_examples: 5 });
+    expect(report.actionCounts).toEqual({ error: 'statement timeout' });
   });
 });
 
@@ -307,6 +310,32 @@ describe('renderHealthEmail', () => {
   it('flags a check that could not run', () => {
     expect(findIssues({ ...clean, nightly: { error: 'boom' } })).toEqual([
       'Nightly runs could not be checked: boom',
+    ]);
+  });
+
+  it('raises actions whose count and kept list disagree, naming a few (AC-009)', () => {
+    const actionCounts = {
+      checked: 40,
+      missing: { count: 0, examples: [] },
+      mismatch: { count: 7, examples: [40, 12] },
+      tasks: { count: 1, examples: [7] },
+    };
+    const { issues, html } = renderHealthEmail({ ...clean, actionCounts });
+    expect(issues).toEqual([
+      '7 open action(s) kept a list of a different size from their count (e.g. AC-40, AC-12)',
+      "1 open action(s) have a task that names a different count from the action's (AC-7)",
+    ]);
+    expect(html).toContain('40 open actions checked.');
+    // All zero: nothing to raise.
+    const zero = {
+      checked: 40,
+      missing: { count: 0 },
+      mismatch: { count: 0 },
+      tasks: { count: 0 },
+    };
+    expect(findIssues({ ...clean, actionCounts: zero })).toEqual([]);
+    expect(findIssues({ ...clean, actionCounts: { error: 'missing function' } })).toEqual([
+      'Action counts could not be checked: missing function',
     ]);
   });
 });

@@ -36497,6 +36497,562 @@ grant execute on function public.reserve_ai_usage(uuid, timestamptz, numeric, nu
   to service_role;
 
 -- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00244_action_entities.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- AC-009: one count source for an action's prompts, pages, competitors…
+--
+-- One action showed 13 prompts in its title, 12 in its detail and 13 in a
+-- task: the title and the tasks read the count saved in the payload when the
+-- action was created, the detail, Copy all and the exports re-counted the
+-- signals the nightly pass rewrites, and nothing changed when a prompt was
+-- deleted or paused.
+--
+-- An action now keeps the list of what it is about, once, when it is created:
+-- one action_entities row per prompt, page, competitor… (its payload's
+-- targetEntity), written by a trigger on actions so every way an action is
+-- made (the engine, Send to Action Center from content, prompts, mentions,
+-- topics, traffic) keeps it the same way. A prompt deleted or paused, or a
+-- competitor deleted, marks its rows removed (a prompt resumed is back), so
+-- every place can say "12 prompts (1 removed since this action was
+-- created)" and name the one removed.
+--
+-- Actions made before this keep what their payload still names: the first 50
+-- of a bigger group (their count stays the payload's).
+
+create table if not exists public.action_entities (
+  action_id      uuid not null references public.actions(id) on delete cascade,
+  -- The payload's targetEntity: prompts, pages, competitors, platforms…
+  entity_type    text not null,
+  -- The target's id (a prompt or competitor id, an address, a platform).
+  entity_key     text not null,
+  label          text,
+  removed_at     timestamptz,
+  removed_reason text
+    constraint action_entities_removed_reason_check
+      check (removed_reason is null or removed_reason in ('deleted', 'paused')),
+  -- When the list was written: as the action was created, or by this
+  -- migration's backfill for one made before (the nightly check, AC-009
+  -- part 3, judges only lists kept at creation).
+  kept_at        timestamptz not null default now(),
+  primary key (action_id, entity_type, entity_key)
+);
+
+-- A prompt or competitor going: every action naming it, at once.
+create index if not exists action_entities_entity_idx
+  on public.action_entities (entity_type, entity_key)
+  where entity_type in ('prompts', 'competitors');
+
+comment on table public.action_entities is
+  'AC-009: what an action is about (its payload''s targetEntity: prompts, pages, competitors…), kept once when the action is created; removed_at marks a prompt deleted or paused, or a competitor deleted, since. Every count of the action reads this list.';
+
+alter table public.action_entities enable row level security;
+
+drop policy if exists "action_entities: member select" on public.action_entities;
+create policy "action_entities: member select" on public.action_entities
+  for select using (
+    action_id in (
+      select a.id from public.actions a
+      join public.brands b on b.id = a.brand_id
+      join public.profiles p on p.organization_id = b.organization_id
+      where p.id = auth.uid()
+    )
+  );
+
+revoke all on table public.action_entities from anon, authenticated;
+grant select on table public.action_entities to authenticated;
+grant all on table public.action_entities to service_role;
+
+-- An action's list from its payload: every key it lists (targetIds; a
+-- person-sent action's promptIds or pages), else the targets it names
+-- (`targets`, or the list under its targetEntity, as Improve's `platforms`),
+-- with the names it gives. A prompt is named by its text where the payload
+-- gives none. Empty lists name nothing: the next one down is read.
+create or replace function public.snapshot_action_entities(
+  p_action_id uuid,
+  p_brand_id  uuid,
+  p_payload   jsonb,
+  -- Mark a prompt already deleted or paused, a competitor already deleted, as
+  -- removed: for actions kept before 00244, whose list is written now. A new
+  -- action's list is what it was made from: nothing is removed yet.
+  p_mark_gone boolean default false
+)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_type  text := nullif(btrim(coalesce(p_payload->>'targetEntity', '')), '');
+  v_keys  jsonb;
+  v_named jsonb;
+begin
+  if v_type is null then
+    return;
+  end if;
+  v_named := case
+    when jsonb_typeof(p_payload->'targets') = 'array' then p_payload->'targets'
+    when jsonb_typeof(p_payload->v_type) = 'array' then p_payload->v_type
+    else '[]'::jsonb
+  end;
+  v_keys := case
+    when jsonb_typeof(p_payload->'targetIds') = 'array'
+     and jsonb_array_length(p_payload->'targetIds') > 0 then p_payload->'targetIds'
+    when v_type = 'prompts' and jsonb_typeof(p_payload->'promptIds') = 'array'
+     and jsonb_array_length(p_payload->'promptIds') > 0 then p_payload->'promptIds'
+    when v_type = 'pages' and jsonb_typeof(p_payload->'pages') = 'array'
+     and jsonb_array_length(p_payload->'pages') > 0 then p_payload->'pages'
+  end;
+
+  insert into public.action_entities (
+    action_id, entity_type, entity_key, label, removed_at, removed_reason)
+  select p_action_id, v_type, k.key,
+         coalesce(n.label, pr.text),
+         case when p_mark_gone then
+           case
+             when v_type = 'prompts' and k.uid is not null and pr.id is null then now()
+             when v_type = 'prompts' and pr.id is not null and not coalesce(pr.is_active, true) then now()
+             when v_type = 'competitors' and co.id is null then now()
+           end
+         end,
+         case when p_mark_gone then
+           case
+             when v_type = 'prompts' and k.uid is not null and pr.id is null then 'deleted'
+             when v_type = 'prompts' and pr.id is not null and not coalesce(pr.is_active, true) then 'paused'
+             when v_type = 'competitors' and co.id is null then 'deleted'
+           end
+         end
+  from (
+    -- Listed keys when the payload has them, else the named targets' keys,
+    -- once each, in the payload's order. A uuid key is cast here, never in a
+    -- join: a key that is a prompt's text would fail the cast there.
+    select key, min(ord) as ord,
+           case when key ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' then key::uuid end as uid
+    from (
+      select btrim(x.value) as key, x.ord
+      from jsonb_array_elements_text(coalesce(v_keys, '[]'::jsonb)) with ordinality as x(value, ord)
+      union all
+      select coalesce(t->>'id', t->>'label', case when jsonb_typeof(t) = 'string' then t #>> '{}' end),
+             t_ord + 1000000
+      from jsonb_array_elements(
+             case when v_keys is null then v_named else '[]'::jsonb end
+           ) with ordinality as y(t, t_ord)
+    ) keys
+    -- An object where an id belongs (old signals' { url, score }) is no key.
+    where coalesce(key, '') <> '' and left(key, 1) not in ('{', '[')
+    group by key
+    order by min(ord)
+    limit 1000
+  ) k
+  -- The names the payload gives.
+  left join lateral (
+    select case when jsonb_typeof(t) = 'string' then t #>> '{}' else nullif(t->>'label', '') end as label
+    from jsonb_array_elements(v_named) as z(t)
+    where coalesce(t->>'id', t->>'label', case when jsonb_typeof(t) = 'string' then t #>> '{}' end) = k.key
+    limit 1
+  ) n on true
+  left join public.prompts pr
+    on v_type = 'prompts' and pr.id = k.uid
+  left join public.competitors co
+    on v_type = 'competitors' and co.brand_id = p_brand_id
+   and (co.id::text = k.key or co.name = k.key)
+  on conflict do nothing;
+end;
+$$;
+
+revoke all on function public.snapshot_action_entities(uuid, uuid, jsonb, boolean) from public, anon, authenticated;
+
+create or replace function public.actions_snapshot_entities()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  begin
+    perform public.snapshot_action_entities(new.id, new.brand_id, new.payload);
+    -- The list is kept here now: the payload doesn't carry a thousand keys
+    -- to every read of the action.
+    if new.payload ? 'targetIds' then
+      update public.actions set payload = payload - 'targetIds' where id = new.id;
+    end if;
+  exception when others then
+    -- An action is never refused for its list: the nightly check finds one
+    -- kept without it.
+    raise warning 'action % kept no entities: %', new.id, sqlerrm;
+  end;
+  return null;
+end;
+$$;
+
+revoke all on function public.actions_snapshot_entities() from public, anon, authenticated;
+
+drop trigger if exists actions_snapshot_entities on public.actions;
+create trigger actions_snapshot_entities
+  after insert on public.actions
+  for each row execute function public.actions_snapshot_entities();
+
+-- A prompt deleted: removed from every action that names it.
+create or replace function public.action_entities_prompts_deleted()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  update public.action_entities e
+  set removed_at = now(), removed_reason = 'deleted'
+  from deleted_prompts d
+  where e.entity_type = 'prompts'
+    and e.entity_key = d.id::text
+    and e.removed_reason is distinct from 'deleted';
+  return null;
+end;
+$$;
+
+revoke all on function public.action_entities_prompts_deleted() from public, anon, authenticated;
+
+drop trigger if exists prompts_remove_from_actions on public.prompts;
+create trigger prompts_remove_from_actions
+  after delete on public.prompts
+  referencing old table as deleted_prompts
+  for each statement execute function public.action_entities_prompts_deleted();
+
+-- A prompt paused is removed until it is resumed. (Transition tables can't
+-- name columns, so every prompt update passes here; only an is_active change
+-- touches a row.)
+create or replace function public.action_entities_prompts_paused()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  update public.action_entities e
+  set removed_at = now(), removed_reason = 'paused'
+  from changed_prompts n
+  join earlier_prompts o on o.id = n.id
+  where e.entity_type = 'prompts'
+    and e.entity_key = n.id::text
+    and coalesce(o.is_active, true) and not coalesce(n.is_active, true)
+    and e.removed_at is null;
+
+  update public.action_entities e
+  set removed_at = null, removed_reason = null
+  from changed_prompts n
+  join earlier_prompts o on o.id = n.id
+  where e.entity_type = 'prompts'
+    and e.entity_key = n.id::text
+    and not coalesce(o.is_active, true) and coalesce(n.is_active, true)
+    and e.removed_reason = 'paused';
+  return null;
+end;
+$$;
+
+revoke all on function public.action_entities_prompts_paused() from public, anon, authenticated;
+
+drop trigger if exists prompts_pause_in_actions on public.prompts;
+create trigger prompts_pause_in_actions
+  after update on public.prompts
+  referencing old table as earlier_prompts new table as changed_prompts
+  for each statement execute function public.action_entities_prompts_paused();
+
+-- A competitor deleted: removed from its brand's actions, by id or by name
+-- (older signals name competitors by name).
+create or replace function public.action_entities_competitors_deleted()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  update public.action_entities e
+  set removed_at = now(), removed_reason = 'deleted'
+  from deleted_competitors d
+  join public.actions a on a.brand_id = d.brand_id
+  where e.action_id = a.id
+    and e.entity_type = 'competitors'
+    and (e.entity_key = d.id::text or e.entity_key = d.name)
+    and e.removed_at is null;
+  return null;
+end;
+$$;
+
+revoke all on function public.action_entities_competitors_deleted() from public, anon, authenticated;
+
+drop trigger if exists competitors_remove_from_actions on public.competitors;
+create trigger competitors_remove_from_actions
+  after delete on public.competitors
+  referencing old table as deleted_competitors
+  for each statement execute function public.action_entities_competitors_deleted();
+
+-- Each action's list in one read, for every place that shows a count: per
+-- entity type, how many it was made with, how many are removed since, the names
+-- of the removed (up to 20, for the hover) and their keys (to leave them out
+-- of a list). Read through the member's policy: only their brands' actions
+-- answer.
+create or replace function public.action_entity_counts(p_action_ids uuid[])
+returns table (
+  action_id      uuid,
+  entity_type    text,
+  total          integer,
+  removed        integer,
+  removed_labels text[],
+  removed_keys   text[]
+)
+language sql
+stable
+security invoker
+set search_path = public
+as $$
+  select e.action_id,
+         e.entity_type,
+         count(*)::integer,
+         count(*) filter (where e.removed_at is not null)::integer,
+         (array_agg(coalesce(e.label, e.entity_key) order by e.removed_at, e.entity_key)
+            filter (where e.removed_at is not null))[1:20],
+         array_agg(e.entity_key order by e.removed_at, e.entity_key)
+            filter (where e.removed_at is not null)
+  from public.action_entities e
+  where e.action_id = any (p_action_ids[1:500])
+  group by e.action_id, e.entity_type;
+$$;
+
+revoke execute on function public.action_entity_counts(uuid[]) from public, anon;
+grant execute on function public.action_entity_counts(uuid[]) to authenticated, service_role;
+
+-- The actions made before: their list from what their payload still names.
+-- A topic opportunity counts its suggestions (targets), not the tracked
+-- prompts it measures (promptIds). An action that names nothing a list can
+-- hold keeps none; the web then shows its saved count (part 2).
+select public.snapshot_action_entities(
+  a.id,
+  a.brand_id,
+  case when a.kind = 'topic_opportunity' then a.payload - 'promptIds' else a.payload end,
+  true)
+from public.actions a
+where a.deleted_at is null;
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00245_action_count_drift.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- AC-009, part 3: the nightly check that every action's count and its list agree.
+--
+-- An action keeps its list once, when it is created (action_entities, 00244),
+-- and everything it shows counts from it. The daily health e-mail now says
+-- how many open actions disagree with their own list, and names a few:
+--
+--   * missing:  an action about something (a targetCount) made since lists
+--     are kept that kept none;
+--   * mismatch: one whose list holds another number than the count it saved.
+--     A new action keeps up to 1000 (MAX_TARGET_IDS): a list cut there is
+--     the cap, not a mismatch;
+--   * tasks:    one with a planned task naming another count of the same
+--     thing than the action saved ("across 13 prompts" under 12).
+--
+-- The last two judge only lists kept as their action was created
+-- (action_entities.kept_at): an action from before 00244 got the list its
+-- payload still named, and an older count may never have matched it.
+-- Each should be 0; the server's health report raises any that isn't.
+
+create or replace function public.action_count_drift(p_examples integer default 5)
+returns jsonb
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  with open_actions as (
+    select a.id, a.action_no, a.created_at, a.payload->>'targetEntity' as entity, x.target_count
+    from public.actions a
+    -- A number only: anything else in the payload is no count to check.
+    cross join lateral (
+      select case when jsonb_typeof(a.payload->'targetCount') = 'number'
+                  then (a.payload #>> '{targetCount}')::numeric end as target_count
+    ) x
+    where a.deleted_at is null
+      and a.status not in ('completed', 'dismissed')
+      and x.target_count > 0
+      and coalesce(a.payload->>'targetEntity', '') <> ''
+  ),
+  -- Lists started being kept here: actions before had theirs written by
+  -- 00244's backfill, from what their payload still named, if anything.
+  since as (
+    select coalesce(min(kept_at), '-infinity'::timestamptz) as at from public.action_entities
+  ),
+  kept as (
+    select o.id, o.action_no, o.created_at, o.target_count, l.total, l.at_creation
+    from open_actions o
+    -- Each action's own rows, through the primary key.
+    cross join lateral (
+      select count(*) as total,
+             -- Kept as it was created (the trigger), not by the backfill.
+             coalesce(bool_or(e.kept_at <= o.created_at + interval '1 minute'), false) as at_creation
+      from public.action_entities e
+      where e.action_id = o.id and e.entity_type = o.entity
+    ) l
+  ),
+  missing as (
+    select k.action_no from kept k, since
+    where k.total = 0 and k.created_at >= since.at
+  ),
+  mismatch as (
+    select action_no from kept
+    where at_creation
+      and total > 0
+      and total <> target_count
+      -- The cap a list was cut at, not a mismatch.
+      and not (total = 1000 and target_count > total)
+  ),
+  tasks as (
+    select distinct k.action_no
+    from kept k
+    join open_actions o on o.id = k.id
+    join public.action_tasks t on t.action_id = o.id
+    cross join lateral (
+      select case when jsonb_typeof(t.title_params->'count') = 'number'
+                  then (t.title_params #>> '{count}')::numeric end as task_count
+    ) c
+    where k.at_creation
+      and t.title_params->>'entity' = o.entity
+      and c.task_count <> o.target_count
+  )
+  -- The newest first: a regression shows before the long-open ones.
+  select jsonb_build_object(
+    'checked', (select count(*) from open_actions),
+    'missing', jsonb_build_object(
+      'count', (select count(*) from missing),
+      'examples', coalesce((select jsonb_agg(action_no order by action_no desc)
+                            from (select action_no from missing order by action_no desc limit p_examples) x), '[]'::jsonb)),
+    'mismatch', jsonb_build_object(
+      'count', (select count(*) from mismatch),
+      'examples', coalesce((select jsonb_agg(action_no order by action_no desc)
+                            from (select action_no from mismatch order by action_no desc limit p_examples) x), '[]'::jsonb)),
+    'tasks', jsonb_build_object(
+      'count', (select count(*) from tasks),
+      'examples', coalesce((select jsonb_agg(action_no order by action_no desc)
+                            from (select action_no from tasks order by action_no desc limit p_examples) x), '[]'::jsonb))
+  );
+$$;
+
+comment on function public.action_count_drift(integer) is
+  'AC-009: open actions whose saved count and kept list (action_entities) disagree, by kind (missing list, list ≠ count, a task naming another count), with a few action numbers each; read by the daily health report. Each should be 0.';
+
+revoke all on function public.action_count_drift(integer) from public, anon, authenticated;
+grant execute on function public.action_count_drift(integer) to service_role;
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00246_perception_snapshots_follow_rollups.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00246: the Perception snapshots never older than their rollups (MS-09)
+-- ============================================================================
+-- 00241 serves the Perception tab's default view from a snapshot the server
+-- refreshes after a brand's Mentions rollups are rebuilt. When that refresh
+-- failed, or the rollups were rebuilt another way (a backfill in SQL), the
+-- default view kept the snapshot's older figures until the next refresh,
+-- while a filtered view already read the new rollups.
+--
+-- refresh_mention_terms_daily (00231), which every rebuild of the Perception
+-- rollups goes through, now sets the brand's snapshots aside at its end, in
+-- the rebuild's transaction: once new rollups commit, the tab reads them
+-- live until the snapshots are refreshed. A refresh already under way can't
+-- write over that; only one starting in the instant between the set-aside
+-- and the commit could, and the refresh after the rebuild replaces it. The
+-- function is otherwise 00231's, unchanged.
+
+create or replace function public.refresh_mention_terms_daily(
+  p_brand_id uuid,
+  p_day_from date,
+  p_day_to   date
+) returns void
+language plpgsql
+set search_path to 'public'
+as $$
+declare
+  v_from timestamptz := p_day_from::timestamp at time zone 'utc';
+  v_to   timestamptz := (p_day_to + 1)::timestamp at time zone 'utc';
+begin
+  -- One rebuild per brand at a time: a run's refresh and the deleted-prompt
+  -- rebuild can cover the same days. The lock releases at commit.
+  perform pg_advisory_xact_lock(
+    hashtextextended('refresh_mention_terms_daily:' || p_brand_id::text, 0));
+
+  -- The terms' key leads with the entity, so their rows go by the entities
+  -- those days name (the same rows the entities' come from), before those.
+  delete from public.mentions_terms_daily
+    where brand_id = p_brand_id
+      and entity in (
+        select distinct e.entity
+        from public.mentions_entities_daily e
+        where e.brand_id = p_brand_id and e.day between p_day_from and p_day_to)
+      and day between p_day_from and p_day_to;
+  delete from public.mentions_entities_daily
+    where brand_id = p_brand_id and day between p_day_from and p_day_to;
+
+  insert into public.mentions_entities_daily (
+    brand_id, day, platform, region, entity, answers, with_brand)
+  select p_brand_id, x.day, x.platform, x.region, x.entity,
+         count(*), count(*) filter (where x.with_brand)
+  from (
+    select (t.created_at at time zone 'utc')::date as day, t.platform, t.region, t.entity,
+           bool_or(t.entity = 'brand') over (partition by t.result_id) as with_brand
+    from public.mentions_answer_terms t
+    where t.brand_id = p_brand_id
+      and t.created_at >= v_from
+      and t.created_at < v_to
+  ) x
+  group by x.day, x.platform, x.region, x.entity;
+
+  with c as materialized (
+    select (t.created_at at time zone 'utc')::date as day, t.platform, t.region, t.entity,
+           term, count(*)::integer as answers
+    from public.mentions_answer_terms t
+    cross join lateral unnest(t.terms) as term
+    where t.brand_id = p_brand_id
+      and t.created_at >= v_from
+      and t.created_at < v_to
+    group by 1, 2, 3, 4, 5
+  ),
+  -- The terms among any entity's 200 most frequent of a day, platform and
+  -- region, kept for every entity there. coalesce rather than "is not
+  -- distinct from", so the join below can hash.
+  keep as (
+    select distinct r.day, r.platform, coalesce(r.region, '') as region_key, r.term
+    from (
+      select c.day, c.platform, c.region, c.term,
+             row_number() over (
+               partition by c.day, c.platform, c.region, c.entity
+               order by c.answers desc, c.term) as rn
+      from c
+    ) r
+    where r.rn <= 200
+  )
+  insert into public.mentions_terms_daily (
+    brand_id, day, platform, region, entity, term, answers)
+  select p_brand_id, c.day, c.platform, c.region, c.entity, c.term, c.answers
+  from c
+  join keep k on k.day = c.day and k.platform = c.platform
+             and k.region_key = coalesce(c.region, '') and k.term = c.term;
+
+  -- The brand's precomputed default views (00241) now count from rollups
+  -- older than these: set aside, as forget_mentions_perception_snapshots
+  -- does, so the tab reads the rollups live until the server refreshes
+  -- them, never older figures. Last, in the same transaction: a refresh
+  -- that started before this (and read the old rollups) can't write over
+  -- it, as its computed_at is earlier.
+  update public.mentions_perception_snapshots
+  set day_to = date '1970-01-01', computed_at = clock_timestamp()
+  where brand_id = p_brand_id;
+end;
+$$;
+
+revoke execute on function public.refresh_mention_terms_daily(uuid, date, date)
+  from public, anon, authenticated;
+
+comment on table public.mentions_perception_snapshots is
+  'The Perception tab''s default view (MS-09) per brand and window (7, 30 or 90 days, every platform and region, no topic or search), as mentions_perception returns it. Written by refresh_mentions_perception_snapshot; set aside when the brand''s competitors or name change, or its Perception rollups are rebuilt (00246).';
+
+-- ─────────────────────────────────────────────────────────────────────────
 -- migrations/00247_content_page_suggestions.sql
 -- ─────────────────────────────────────────────────────────────────────────
 -- ============================================================================
@@ -36517,6 +37073,10 @@ grant execute on function public.reserve_ai_usage(uuid, timestamptz, numeric, nu
 --
 -- Rows are still written by the server only; the decide RPC (00217) and
 -- RLS are unchanged.
+--
+-- content_drafts.agent_run says which run holds the draft ('write' or
+-- 'rewrite'), so every device knows a failed rewrite from a failed Start;
+-- 00219's guard keeps it server-set.
 
 alter table public.content_draft_suggestions
   add column if not exists before_html text;
@@ -36544,6 +37104,67 @@ alter table public.content_draft_suggestions
 
 comment on column public.content_draft_suggestions.before_html is
   'A page suggestion''s page as the agent read it (kind ''page'', 00247): checked against the editor''s page before applying, and put back on Undo. Null for the others.';
+
+-- Which run holds the draft, or last held it (agent_state): Start with Agent
+-- ('write': a new page, or suggestions on a live one) or Rewrite the page to
+-- these rules ('rewrite'). The editor reads it to say which run failed and to
+-- try that one again, on any device: a failed rewrite tried again is a
+-- rewrite to compare, never a new page over the current one. Server-set,
+-- with agent_state.
+alter table public.content_drafts
+  add column if not exists agent_run text;
+
+alter table public.content_drafts
+  drop constraint if exists content_drafts_agent_run_check,
+  add constraint content_drafts_agent_run_check
+    check (agent_run is null or agent_run in ('write', 'rewrite'));
+
+comment on column public.content_drafts.agent_run is
+  'Content Editor: the run that holds the draft or last held it (00247): ''write'' (Start with Agent) or ''rewrite'' (Rewrite the page to these rules). Server-set, with agent_state.';
+
+-- 00219's guard, with agent_run among the columns only the server sets.
+create or replace function public.guard_content_draft_server_columns()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
+begin
+  -- A role that bypasses RLS is server-side (service role, migrations).
+  if (select rolbypassrls from pg_catalog.pg_roles where rolname = current_user) then
+    return new;
+  end if;
+
+  if tg_op = 'INSERT' then
+    if new.score_before is not null or new.score_after is not null then
+      raise exception 'content draft scores are set server-side'
+        using errcode = '42501';
+    end if;
+    if new.action_id is not null then
+      raise exception 'content draft action is set server-side'
+        using errcode = '42501';
+    end if;
+    if new.agent_state is not null or new.agent_state_at is not null
+       or new.agent_run is not null then
+      raise exception 'content draft agent state is set server-side'
+        using errcode = '42501';
+    end if;
+  elsif new.brand_id is distinct from old.brand_id
+     or new.author is distinct from old.author
+     or new.created_by is distinct from old.created_by
+     or new.created_at is distinct from old.created_at
+     or new.score_before is distinct from old.score_before
+     or new.score_after is distinct from old.score_after
+     or new.action_id is distinct from old.action_id
+     or new.agent_state is distinct from old.agent_state
+     or new.agent_state_at is distinct from old.agent_state_at
+     or new.agent_run is distinct from old.agent_run
+  then
+    raise exception 'content draft column is managed server-side'
+      using errcode = '42501';
+  end if;
+  return new;
+end;
+$$;
 
 -- ─────────────────────────────────────────────────────────────────────────
 -- migrations/00248_content_suggestion_sources.sql
@@ -36597,18 +37218,18 @@ comment on column public.content_draft_suggestions.source_marks is
 -- 00249: the Content Agent's runs, step by step
 -- ============================================================================
 -- Content Editor v1.1, CE-027 and CE-035: while the agent works, the editor
--- shows its real steps, named by the data they use ("Reading 20 cited pages →
--- Matching 21 fan-outs → Checking 10 Search Console queries → Writing 3
--- changes"), and Stop. The server writes each run here as it goes; the
+-- shows its real steps, short names for the work the server does ("Reading 4
+-- rules → Gathering 52 sources → Writing 3 changes → Checking sources"), and
+-- Stop. The server writes each run here as it goes; the
 -- editor reads the draft's latest. Stop marks it stopped: the server drops
 -- whatever the run had and changes nothing.
 --
 -- A table of its own, not columns on content_drafts: a step written there
 -- would move the draft's updated_at, which the editor's saves check against.
 --
--- steps: [{ "key", "count" }], key one of read_pages, match_fanouts,
--- check_queries, write_changes, read_sources, rewrite_page, check_rules,
--- pick_fanouts, write_outline, write_page; count null where there is none.
+-- steps: [{ "key", "count" }], key one of read_rules, gather_sources,
+-- write_changes, rewrite_page, write_page, write_outline, match_fanouts,
+-- check_sources; count null where there is none.
 -- step: the one under way (steps' index); all done once finished.
 -- outcome is what happened: a Stop that lands after the run's last check
 -- may leave stopped_at set on a run that ended 'done'. A run a stopped server
