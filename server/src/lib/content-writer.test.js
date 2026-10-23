@@ -88,8 +88,9 @@ vi.mock('./content-agent.js', async (importOriginal) => ({
   hasOpenSuggestions: (...args) => hasOpenSuggestions(...args),
 }));
 
-const { briefText, renderPage, runDraftWriting, startDraftWriting } =
+const { briefText, renderPage, runDraftWriting, sourcedPage, startDraftWriting } =
   await import('./content-writer.js');
+const { NAME_PLACEHOLDER, QUOTE_PLACEHOLDER, knownPeople } = await import('./content-people.js');
 const { textLength } = await import('./content-rewrite.js');
 const { passageKey } = await import('./content-agent.js');
 const { PlanLimitError } = await import('./plan-guard.js');
@@ -175,6 +176,27 @@ describe('renderPage', () => {
         '<h2>Step by step</h2><p>Rinse, bloom, pour.</p>' +
         '<h2>FAQ</h2><h3>How long?</h3><p>[time] minutes.</p>',
     );
+  });
+});
+
+describe('sourcedPage', () => {
+  it('puts a person or a quote the agent was not given as a placeholder (CE-044)', () => {
+    const written = sourcedPage(
+      {
+        ...page,
+        intro: ['Dr. Jane Doe brews with Ada Lovelace every morning.'],
+        faq: [
+          {
+            question: 'Who says so?',
+            answer: '“Slow pours taste sweeter and cleaner,” says Ada Lovelace.',
+          },
+        ],
+      },
+      new Set(),
+      knownPeople('Ada Lovelace'),
+    );
+    expect(written.intro).toEqual([`${NAME_PLACEHOLDER} brews with Ada Lovelace every morning.`]);
+    expect(written.faq[0].answer).toBe(`${QUOTE_PLACEHOLDER} says Ada Lovelace.`);
   });
 });
 
@@ -678,6 +700,24 @@ describe('Rewrite the page to these rules', () => {
     );
     expect(row.after_text).toContain('<td>1:16</td>');
     expect(generateObject.mock.calls[0][0].system).toContain('Put the numbers (S1, S2…)');
+  });
+
+  it('puts a person or a quote it was not given as a placeholder, and knows the authors (CE-044)', async () => {
+    rows.content_authors = [{ name: 'Ada Lovelace', title: null, bio: null }];
+    answer(
+      '<h1>Pour-over coffee</h1><p>[[KEEP 1]]</p><p>[[KEEP 2]]</p>' +
+        '<p>“Pour slowly and you taste every note,” says Marco Rossi.</p>' +
+        '<p>Ada Lovelace says the bloom matters.</p>',
+    );
+    await expect(run()).resolves.toEqual({ rewritten: true });
+    const row = writes.find((w) => w.table === 'content_draft_suggestions').value;
+    expect(row.after_text).toContain(`<p>${QUOTE_PLACEHOLDER} says ${NAME_PLACEHOLDER}.</p>`);
+    expect(row.after_text).toContain('<p>Ada Lovelace says the bloom matters.</p>');
+    // What it kept is the page's own, as it was.
+    expect(row.after_text).toContain(`<p>${QUOTED}</p>`);
+    expect(row.after_text).toContain(
+      '<table><tbody><tr><td>Ratio</td><td>1:16</td></tr></tbody></table>',
+    );
   });
 
   it('keeps the page’s length when the Length rule is off', async () => {

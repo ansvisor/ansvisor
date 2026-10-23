@@ -76,6 +76,7 @@ const {
 } = await import('./content-agent.js');
 const { linkKey, NO_LINK_TARGETS } = await import('./content-links.js');
 const { knownNumbers, numberSources } = await import('./content-sources.js');
+const { NAME_PLACEHOLDER, QUOTE_PLACEHOLDER, knownPeople } = await import('./content-people.js');
 const { PlanLimitError } = await import('./plan-guard.js');
 // The real hold: self-hosted here, so it reserves nothing and writes each charge.
 const realGuard = await vi.importActual('./plan-guard.js');
@@ -336,6 +337,71 @@ describe('keepSuggestions', () => {
  * line ("What is LLM SEO? LLM SEO optimizes…", "Frequently Asked
  * QuestionsWhat is an AEO tracker?…"): it now goes after the heading.
  */
+describe('no invented people or quotes (CE-044)', () => {
+  const passages = draftPassages(BODY);
+  const ruleKeys = new Set(['dated', 'faq']);
+  const people = knownPeople(
+    ...passages.map((p) => p.text),
+    'Ada Lovelace',
+    '“Brew it slow and taste it twice,” Ada Lovelace says.',
+  );
+
+  it('keeps a person and a quote it was given, and puts others as placeholders', () => {
+    const kept = keepSuggestions(
+      [
+        suggestion({
+          before: 'good coffee and hot water',
+          after: 'good coffee and hot water, as Ada Lovelace says',
+          sources: [],
+          marks: [],
+        }),
+        suggestion({
+          kind: 'insert',
+          passage: 3,
+          before: '',
+          after:
+            '<p>“We doubled our sales in a single quarter with it,” says Marco Rossi.</p>' +
+            '<p>“Brew it slow and taste it twice,” Ada Lovelace says.</p>',
+          sources: [],
+          marks: [],
+        }),
+      ],
+      passages,
+      new Set(),
+      ruleKeys,
+      null,
+      { ...sourcing, people },
+    );
+    expect(kept.map((row) => row.after_text)).toEqual([
+      'good coffee and hot water, as Ada Lovelace says',
+      `<p>${QUOTE_PLACEHOLDER} says ${NAME_PLACEHOLDER}.</p>` +
+        '<p>“Brew it slow and taste it twice,” Ada Lovelace says.</p>',
+    ]);
+  });
+
+  it('takes an invented testimonial out before its blockquote is cleaned away', () => {
+    const [kept] = keepSuggestions(
+      [
+        suggestion({
+          kind: 'insert',
+          passage: 3,
+          before: '',
+          after:
+            '<blockquote><p>We doubled our pipeline in a month.</p><cite>Jane Doe</cite></blockquote>',
+          sources: [],
+          marks: [],
+        }),
+      ],
+      passages,
+      new Set(),
+      ruleKeys,
+      null,
+      { ...sourcing, people },
+    );
+    expect(kept.after_text).toBe(`<p>${QUOTE_PLACEHOLDER}</p>`);
+  });
+});
+
 describe('a replace on a heading', () => {
   const page = draftPassages(
     '<h2>What is LLM SEO</h2><p>It is new.</p><h2>FAQ</h2><p>Ask us.</p><p>Use good coffee.</p>',
@@ -580,6 +646,19 @@ describe('links to the pages and sources given', () => {
     });
   });
 
+  it('puts a name it was not given as a placeholder, its link moved with the words (CE-044)', () => {
+    const [kept] = keep({
+      after:
+        'Marco Rossi says <a href="https://www.acme.example/pricing/">our plans</a> fit teams.',
+    });
+    const words = `${NAME_PLACEHOLDER} says our plans fit teams.`;
+    expect(kept.after_text).toBe(words);
+    const start = words.indexOf('our plans');
+    expect(kept.after_links).toEqual([
+      { start, end: start + 'our plans'.length, href: 'https://acme.example/pricing' },
+    ]);
+  });
+
   it('unwraps a link to anything not listed, and drops what then changes nothing', () => {
     expect(
       keep({ after: 'See <a href="https://made-up.example/x">our plans</a> for teams.' }),
@@ -770,6 +849,35 @@ describe('fixDraftRules', () => {
           { start: 16, end: 37, source: 0 },
         ],
       }),
+    ]);
+  });
+
+  it("knows the workspace's authors, and puts any other person as a placeholder (CE-044)", async () => {
+    rows.content_authors = [{ name: 'Ada Lovelace', title: 'Head of Content', bio: null }];
+    generateObject.mockResolvedValue({
+      object: {
+        suggestions: [
+          suggestion({
+            after: 'good coffee and hot water, says Ada Lovelace',
+            sources: [],
+            marks: [],
+          }),
+          suggestion({
+            passage: 3,
+            before: 'A dripper and a filter',
+            after: 'A dripper and a filter, as Marco Rossi said',
+            sources: [],
+            marks: [],
+          }),
+        ],
+      },
+      usage: { inputTokens: 900, outputTokens: 200 },
+    });
+    await fixDraftRules({ draftId: DRAFT, brandId: BRAND, input: input({ sources: SOURCES }) });
+    const batch = writes.find((w) => w.table === 'content_draft_suggestions');
+    expect(batch.value.map((row) => row.after_text)).toEqual([
+      'good coffee and hot water, says Ada Lovelace',
+      `A dripper and a filter, as ${NAME_PLACEHOLDER} said`,
     ]);
   });
 

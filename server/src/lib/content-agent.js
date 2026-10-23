@@ -7,6 +7,7 @@ import { resolveModel } from './ai-provider.js';
 import { contentBriefModelId, rebuildSources } from './content-brief.js';
 import { linkAllowList, linkKey, linkTargetsPrompt, readLinkTargets } from './content-links.js';
 import { pageTypeFormat } from './content-page-types.js';
+import { authorWords, guardPeopleInHtml, knownPeople } from './content-people.js';
 import {
   RunStoppedError,
   advanceRun,
@@ -23,6 +24,7 @@ import {
   marksField,
   numberSources,
   sourceSuggestion,
+  sourceWords,
   sourcesField,
   sourcesPrompt,
   stripSourceIds,
@@ -369,19 +371,27 @@ export function splitReplace(after, tag, links = null) {
  * Links stay only to the URLs in `links` (linkAllowList): a replace's go in
  * after_links, by offset into its words, an insert's in its HTML. Each keeps
  * the sources it names and the words each supports (withSources); one that
- * adds a number with no source is not kept. `sourcing` is the numbered
- * sources and the numbers known already (the page's, the brand's): without
- * it, the page's.
+ * adds a number with no source is not kept. A person's name or a quote
+ * that what it was given doesn't have becomes a placeholder, read in its
+ * words as written, blockquotes too, before they are cleaned (CE-044).
+ * `sourcing` is the numbered sources, the numbers known already
+ * (the page's, the brand's) and the words names and quotes are looked up in
+ * (knownPeople): without it, the page's.
  */
 export function keepSuggestions(raw, passages, lockedKeys, ruleKeys, links = null, sourcing = {}) {
   const numbered = sourcing.numbered ?? [];
   const known = sourcing.known ?? knownNumbers(...passages.map((p) => p.text));
+  const people = sourcing.people ?? knownPeople(...passages.map((p) => p.text));
   const kept = [];
   const seen = new Set();
   for (const answer of raw) {
     if (kept.length >= MAX_AGENT_SUGGESTIONS) break;
-    // Source numbers belong in "sources", never in the words.
-    const s = { ...answer, after: stripSourceIds(answer.after) };
+    // Source numbers belong in "sources", never in the words; no invented
+    // person or quote (CE-044).
+    const s = {
+      ...answer,
+      after: guardPeopleInHtml(stripSourceIds(answer.after), people).html,
+    };
     const passage = passages[s.passage - 1];
     // The card shows it: a source number the model wrote in ("(S2)") goes.
     const reason = stripSourceIds(s.reason).trim().slice(0, 300);
@@ -676,6 +686,18 @@ async function fixWithRun({ draft, brand, brandId, draftId, input, passages, mor
     ...input.textRules,
     todayText(),
   );
+  // The people and quotes it may name: the same words, its data's and the authors' (CE-044).
+  const people = knownPeople(
+    htmlText(draft.body_html),
+    draft.title,
+    brand.name,
+    brand.industry,
+    brand.description,
+    ...input.rules.flatMap((r) => [r.name, r.detail]),
+    ...input.textRules,
+    ...numbered.map(sourceWords),
+    ...(await authorWords(supabaseAdmin, brand.organization_id)),
+  );
   // Where it may link: the brand's pages and the draft's sources (A).
   const targets = await readLinkTargets({
     brandId,
@@ -729,7 +751,7 @@ async function fixWithRun({ draft, brand, brandId, draftId, input, passages, mor
     lockedKeys,
     ruleKeys,
     linkAllowList(targets),
-    { numbered, known },
+    { numbered, known, people },
   );
   // Stopped meanwhile: nothing it wrote is kept.
   await stopIfStopped(run);

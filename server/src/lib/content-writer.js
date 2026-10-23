@@ -20,6 +20,7 @@ import {
 import { contentBriefModelId, rebuildSources } from './content-brief.js';
 import { linkAllowList, linkTargetsPrompt, readLinkTargets } from './content-links.js';
 import { pageTypeFormat } from './content-page-types.js';
+import { authorWords, guardPeople, guardPeopleInHtml, knownPeople } from './content-people.js';
 import {
   SOURCES_RULE,
   htmlText,
@@ -181,21 +182,27 @@ export function renderPage(page) {
 
 const list = (items) => (items.length ? items.map((item) => `- ${item}`).join('\n') : '- none');
 
-/** A written page with each number its sources don't have put as a placeholder (CE-033). */
-export function sourcedPage(page, known) {
-  const fix = (text) => placeholderNumbers(stripSourceIds(text), known);
+/**
+ * A written page with each number its sources don't have (CE-033), and each
+ * person's name or quote what it was given doesn't have (CE-044), put as a
+ * placeholder.
+ */
+export function sourcedPage(page, known, people = knownPeople()) {
+  const fix = (text, heading = false) =>
+    guardPeople(placeholderNumbers(stripSourceIds(text), known), people, { heading }).text;
+  const heading = (text) => fix(text, true);
   return {
     ...page,
-    title: fix(page.title),
-    intro: page.intro.map(fix),
+    title: heading(page.title),
+    intro: page.intro.map((text) => fix(text)),
     sections: page.sections.map((section) => ({
       ...section,
-      heading: fix(section.heading),
-      paragraphs: section.paragraphs.map(fix),
-      bullets: section.bullets.map(fix),
+      heading: heading(section.heading),
+      paragraphs: section.paragraphs.map((text) => fix(text)),
+      bullets: section.bullets.map((text) => fix(text)),
     })),
-    faqHeading: fix(page.faqHeading),
-    faq: page.faq.map((item) => ({ question: fix(item.question), answer: fix(item.answer) })),
+    faqHeading: heading(page.faqHeading),
+    faq: page.faq.map((item) => ({ question: heading(item.question), answer: fix(item.answer) })),
   };
 }
 
@@ -485,7 +492,18 @@ async function letGo(draft) {
  * is put back as it was (content-rewrite.js); a rewrite that drops one, or
  * leaves no page, fails the run. The draft's status doesn't change.
  */
-async function rewritePage({ draft, brand, model, input, budget, numbered, known, brief, run }) {
+async function rewritePage({
+  draft,
+  brand,
+  model,
+  input,
+  budget,
+  numbered,
+  known,
+  people,
+  brief,
+  run,
+}) {
   const page = keepBlocks(draft.body_html, new Set(input.locked.map(passageKey)));
   const ruleKeys = new Set(input.rules.map((r) => r.key));
   // The Length rule's target; with Length off, the page keeps its length.
@@ -519,8 +537,11 @@ async function rewritePage({ draft, brand, model, input, budget, numbered, known
   await advanceRun(run, 3);
 
   if (!isPageHtml(object.html)) throw new Error('The agent answered with no page in HTML');
+  // No invented person or quote (CE-044): read in its words as written,
+  // blockquotes too, before what it kept goes back, so the page's own
+  // passages are never touched.
   const cleaned = cleanPageHtml(
-    object.html,
+    guardPeopleInHtml(object.html, people).html,
     rewriteLinks(draft.body_html, linkAllowList(targets)),
     { h1Kept: page.h1Token !== null, originalH1: page.h1 },
   );
@@ -681,6 +702,19 @@ async function writeWithRun({ draft, brand, model, input, budget, rewrite, run }
     todayText(),
   );
   const knownInPage = new Set([...known, ...knownNumbers(...numbered.map(sourceWords))]);
+  // The people and quotes it may name: the same words, its data's and the authors' (CE-044).
+  const people = knownPeople(
+    htmlText(draft.body_html),
+    draft.title,
+    brand.name,
+    brand.industry,
+    brand.description,
+    brief,
+    ...input.rules.flatMap((r) => [r.name, r.detail]),
+    ...input.textRules,
+    ...numbered.map(sourceWords),
+    ...(await authorWords(supabaseAdmin, brand.organization_id)),
+  );
 
   if (rewrite) {
     return await rewritePage({
@@ -691,6 +725,7 @@ async function writeWithRun({ draft, brand, model, input, budget, rewrite, run }
       budget,
       numbered,
       known: knownInPage,
+      people,
       brief,
       run,
     });
@@ -710,7 +745,7 @@ async function writeWithRun({ draft, brand, model, input, budget, rewrite, run }
     await budget.charge(usage);
     await advanceRun(run, 3);
     // No number without a source: a placeholder where one had none.
-    const written = sourcedPage(object, knownInPage);
+    const written = sourcedPage(object, knownInPage, people);
     const title = clean(written.title).slice(0, 300) || draft.title;
     // Stopped meanwhile: the page stays as it was, and History with it.
     await stopIfStopped(run);
@@ -777,7 +812,7 @@ async function writeWithRun({ draft, brand, model, input, budget, rewrite, run }
     lockedKeys,
     ruleKeys,
     linkAllowList(targets),
-    { numbered, known },
+    { numbered, known, people },
   );
   // Stopped meanwhile: nothing it wrote is kept.
   await stopIfStopped(run);
