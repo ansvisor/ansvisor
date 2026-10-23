@@ -1,4 +1,5 @@
 import type { ActionDetail, ActionItem } from '@/lib/actions/action-center';
+import { removedTargets } from '@/lib/action-center/entity-counts';
 import type { ContentOpportunity, OpportunityBasket } from '@/types';
 import {
   actionContextTags,
@@ -273,7 +274,8 @@ export function labelActionExport(input: ActionExportInput, t: ExportTranslators
       goal: input.story?.goal ?? actionGoal(action.kind, t.texts, action.payload),
       category: t.categories(action.category),
       status: t.page(`status.${action.status}`),
-      tags: actionContextTags(action, t.page),
+      // With what was removed since (AC-009), as the page says it.
+      tags: [...actionContextTags(action, t.page), ...removedTag(action.payload ?? {}, t.page)],
       kpis: detail.kpis
         .filter((kpi) => related.includes(kpi.kpiKey) && isKpiKey(kpi.kpiKey))
         .map(
@@ -305,4 +307,16 @@ export function labelActionExport(input: ActionExportInput, t: ExportTranslators
     },
     { origin, timeZone: input.timeZone },
   );
+}
+
+/** "(1 prompt removed since this action was created)", as a tag; none when nothing was. */
+function removedTag(payload: Record<string, unknown>, t: ExportTranslators['page']): string[] {
+  const removed = removedTargets(payload);
+  if (!removed) return [];
+  const entity = typeof payload.targetEntity === 'string' ? payload.targetEntity : null;
+  return [
+    t('removed.note', {
+      items: entity ? t(`tags.${entity}`, { count: removed.count }) : String(removed.count),
+    }),
+  ];
 }

@@ -11,7 +11,7 @@ import { looksBlocked } from './site-pages.js';
  * points on every page. Read from the brand's page list (site_pages), its
  * home page and its authors (Settings › Authors), at most once a day or when
  * someone asks again (not more than every few minutes), and kept in
- * site_trust (00255). Only the brand's own site is read. A read a site
+ * site_trust (00259). Only the brand's own site is read. A read a site
  * didn't answer all of (slow, unreachable, a server error, a bot wall) is
  * kept only a few minutes. A home page behind a bot wall is read through
  * Scrape.do, unrendered, as the page list reads one (site-pages.js): at most

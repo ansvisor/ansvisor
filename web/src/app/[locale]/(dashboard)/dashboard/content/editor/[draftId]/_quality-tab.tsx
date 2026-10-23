@@ -9,6 +9,7 @@ import {
   authorProfile,
   FRESH_MONTHS,
   scoreGain,
+  trustGain,
   type EeatCheckId,
   type Score,
   type TrustRead,
@@ -28,10 +29,12 @@ export interface QualityRead {
   readability: Readability | null;
   /** E-E-A-T from the author, or null before the authors are read. */
   eeat: Score<EeatCheckId> | null;
-  /** Trust from the page's figures and links, its score null while none can be read. */
+  /** Trust from the page's figures and links, its score null until a figure or a dated source is read. */
   trust: TrustRead | null;
   /** The page's author, or null for the organization byline. */
   author: ContentAuthor | null;
+  /** Whether the member reading may edit that author in Settings › Authors. */
+  canEdit: boolean;
   /** Whether the workspace has an author to pick (Settings › Authors). */
   hasAuthors: boolean;
   brandName: string;
@@ -113,7 +116,7 @@ export function QualityTab({
         <p className="text-xs text-muted-foreground">{t('estimate')}</p>
         {readability?.score === null && (
           <p className="rounded-xl border border-dashed px-3 py-2.5 text-xs text-muted-foreground">
-            {t('tooShort')}
+            {t(readability?.unscored === 'language' ? 'notThisLanguage' : 'tooShort')}
           </p>
         )}
       </section>
@@ -210,10 +213,12 @@ function readabilitySuggestions(t: T, readability: Readability | null): Suggesti
 /**
  * E-E-A-T's: with no person on the page, picking one is the fix (its gain is
  * the byline's: what the author's profile adds depends on them), or adding
- * one when the workspace has none; with one, completing their profile.
+ * one when the workspace has none; with one, completing their profile. Only
+ * whoever added the author, the author themself or an admin can, so anyone
+ * else is told who to ask instead of being sent where they can't edit.
  */
 function eeatSuggestions(t: T, quality: QualityRead, teamByline: string): Suggestion[] {
-  const { eeat, author, hasAuthors } = quality;
+  const { eeat, author, canEdit, hasAuthors } = quality;
   if (!eeat || eeat.score === null) return [];
   if (!author) {
     return [
@@ -235,24 +240,30 @@ function eeatSuggestions(t: T, quality: QualityRead, teamByline: string): Sugges
       score: 'eeat',
       gain: scoreGain(eeat, ['authorBio']),
       line: t(`checks.authorProfile.line.${missing}`, { name: author.name }),
-      detail: t(`checks.authorProfile.detail.${missing}`),
-      action: { kind: 'manageAuthors', label: 'editAuthor' },
+      detail: canEdit
+        ? t(`checks.authorProfile.detail.${missing}`)
+        : t(`checks.authorProfile.askOthers.${missing}`, {
+            name: author.name,
+            member: author.userId ? 'yes' : 'no',
+          }),
+      action: canEdit ? { kind: 'manageAuthors', label: 'editAuthor' } : { kind: 'none' },
     },
   ];
 }
 
 /**
  * Trust's: figures without a source, sources past FRESH_MONTHS, links that
- * don't answer, each with Show on the first one in the page.
+ * don't answer, each with Show on the first one in the page. A broken link
+ * is listed before Trust is scored too, its gain out of the Phase 1 points.
  */
 function trustSuggestions(t: T, trust: TrustRead | null): Suggestion[] {
-  if (!trust || trust.score === null) return [];
+  if (!trust) return [];
   const out: Suggestion[] = [];
   if (trust.unsourced.length) {
     out.push({
       key: 'trust:claimsSourced',
       score: 'trust',
-      gain: scoreGain(trust, ['claimsSourced']),
+      gain: trustGain(trust, ['claimsSourced']),
       line: t('checks.claimsSourced.line', { count: trust.unsourced.length }),
       detail: t('checks.claimsSourced.detail'),
       action: { kind: 'show', text: trust.unsourced[0] },
@@ -262,7 +273,7 @@ function trustSuggestions(t: T, trust: TrustRead | null): Suggestion[] {
     out.push({
       key: 'trust:freshSources',
       score: 'trust',
-      gain: scoreGain(trust, ['freshSources']),
+      gain: trustGain(trust, ['freshSources']),
       line: t('checks.freshSources.line', {
         count: trust.stale.length,
         total: trust.dated,
@@ -276,7 +287,7 @@ function trustSuggestions(t: T, trust: TrustRead | null): Suggestion[] {
     out.push({
       key: 'trust:noBrokenLinks',
       score: 'trust',
-      gain: scoreGain(trust, ['noBrokenLinks']),
+      gain: trustGain(trust, ['noBrokenLinks']),
       line: t('checks.noBrokenLinks.line', { count: trust.broken.length }),
       detail: t('checks.noBrokenLinks.detail', {
         count: trust.broken.length,

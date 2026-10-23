@@ -1,5 +1,5 @@
 -- ============================================================================
--- 00255: a brand's site trust (Content Editor Quality, CE-043)
+-- 00259: a brand's site trust (Content Editor Quality, CE-043)
 -- ============================================================================
 -- Site trust (Quality spec §8): five site-level checks Site Audit shows as
 -- "Site trust {n}/5", and Trust gives 5 points on every page from:

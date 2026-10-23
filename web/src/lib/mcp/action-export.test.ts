@@ -63,7 +63,13 @@ function table(name: string) {
   return chain;
 }
 
-vi.mock('@/lib/supabase/admin', () => ({ supabaseAdmin: { from: table } }));
+vi.mock('@/lib/supabase/admin', () => ({
+  supabaseAdmin: {
+    from: table,
+    // The action's list counts (AC-009): nothing removed here.
+    rpc: async () => ({ data: [], error: null }),
+  },
+}));
 
 const { exportActionFor } = await import('./action-export');
 

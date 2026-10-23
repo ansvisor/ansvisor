@@ -61,12 +61,14 @@ function read(
   readability: Readability | null,
   author: ContentAuthor | null = ada,
   hasAuthors = true,
+  canEdit = true,
 ): QualityRead {
   return {
     readability,
     eeat: eeat({ author }),
     trust: null,
     author,
+    canEdit,
     hasAuthors,
     brandName: 'Acme',
   };
@@ -133,7 +135,7 @@ describe('QualityTab', () => {
   });
 
   it('says when the page is too short to read, or reads well', async () => {
-    await render({ score: null, checks: [], words: 12 });
+    await render({ score: null, unscored: 'tooShort', checks: [], words: 12 });
     expect(container.textContent).toContain('Write a few paragraphs');
     expect(container.querySelector('li')).toBeNull();
     await render({
@@ -163,6 +165,30 @@ describe('QualityTab', () => {
     )!;
     expect(row.textContent).toContain('+40 E-E-A-TAda Lovelace has no short bio or profile links');
     expect(row.querySelector('a')!.getAttribute('href')).toBe('/dashboard/settings/authors');
+  });
+
+  it("says who can complete the profile when the reader can't edit the author", async () => {
+    await render(read(result, { ...ada, bio: null }, true, false));
+    const row = [...container.querySelectorAll('li')].find((li) =>
+      li.textContent?.includes('Ada Lovelace'),
+    )!;
+    expect(row.textContent).toContain('Ada Lovelace has no short bio');
+    expect(row.textContent).toContain(
+      'Whoever added Ada Lovelace or an admin can add a short bio in Settings › Authors.',
+    );
+    expect(row.querySelector('a')).toBeNull();
+    expect(row.querySelector('button')).toBeNull();
+  });
+
+  it('names the author among who can when they are a member', async () => {
+    await render(read(result, { ...ada, sameAs: [], userId: 'u2' }, true, false));
+    const row = [...container.querySelectorAll('li')].find((li) =>
+      li.textContent?.includes('Ada Lovelace'),
+    )!;
+    expect(row.textContent).toContain(
+      'Ada Lovelace, whoever added them or an admin can add a profile link in Settings › Authors.',
+    );
+    expect(row.querySelector('a')).toBeNull();
   });
 
   it('sends to Settings › Authors when the workspace has no author yet', async () => {
@@ -210,7 +236,7 @@ describe('QualityTab', () => {
     const rows = [...container.querySelectorAll('li')].map((li) => li.textContent);
     expect(rows).toContainEqual(expect.stringContaining('1 sentence with a figure has no source'));
     expect(rows).toContainEqual(
-      expect.stringContaining('1 of 1 dated sources is over 24 months old'),
+      expect.stringContaining('1 of 1 dated source is over 24 months old'),
     );
     expect(rows).toContainEqual(
       expect.stringContaining("1 link doesn't workFix or remove it: https://gone.example/Show"),
@@ -220,5 +246,53 @@ describe('QualityTab', () => {
     )!;
     await act(async () => figure.querySelector('button')!.click());
     expect(onShow).toHaveBeenCalledWith('Win rates rose 42% last year.');
+  });
+
+  it('lists a broken link before Trust is scored, its gain out of the Phase 1 points', async () => {
+    const result = trust({
+      blocks: trustBlocks('<p>See <a href="https://gone.example/">that one</a>.</p>'),
+      links: new Map<string, LinkCheck>([
+        [
+          'https://gone.example/',
+          { href: 'https://gone.example/', status: 'broken', httpStatus: 404, date: null },
+        ],
+      ]),
+      brandDomains: ['acme.com'],
+      now: Date.parse('2026-10-23T12:00:00Z'),
+    });
+    await render({ ...read(null), trust: result });
+    const scores = container.querySelector('[aria-label="Quality scores"]')!;
+    expect(scores.textContent).toContain('TrustNot scored yet');
+    const rows = [...container.querySelectorAll('li')].map((li) => li.textContent);
+    // 3 of the 40 Phase 1 points.
+    expect(rows).toContainEqual(expect.stringContaining("+8 Trust1 link doesn't work"));
+  });
+
+  it('counts the dated sources and the stale ones each in its own number', async () => {
+    const dated = (date: string) => ({ status: 'ok' as const, httpStatus: 200, date });
+    const result = trust({
+      blocks: trustBlocks(
+        '<p>See <a href="https://a.example/">a</a>, <a href="https://b.example/">b</a> and <a href="https://c.example/">c</a>.</p>',
+      ),
+      links: new Map<string, LinkCheck>([
+        ['https://a.example/', { href: 'https://a.example/', ...dated('2020-01-01T00:00:00Z') }],
+        ['https://b.example/', { href: 'https://b.example/', ...dated('2021-01-01T00:00:00Z') }],
+        ['https://c.example/', { href: 'https://c.example/', ...dated('2026-01-01T00:00:00Z') }],
+      ]),
+      brandDomains: ['acme.com'],
+      now: Date.parse('2026-10-23T12:00:00Z'),
+    });
+    await render({ ...read(null), trust: result });
+    const rows = [...container.querySelectorAll('li')].map((li) => li.textContent);
+    expect(rows).toContainEqual(
+      expect.stringContaining('2 of 3 dated sources are over 24 months old'),
+    );
+  });
+
+  it('says when the page’s language isn’t read yet, not that it is too short', async () => {
+    await render({ score: null, unscored: 'language', checks: [], words: 240 });
+    expect(container.textContent).toContain("Readability isn't read for this language yet.");
+    expect(container.textContent).not.toContain('Write a few paragraphs');
+    expect(container.querySelector('li')).toBeNull();
   });
 });
