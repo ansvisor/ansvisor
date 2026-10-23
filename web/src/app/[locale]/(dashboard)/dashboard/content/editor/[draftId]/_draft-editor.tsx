@@ -920,10 +920,6 @@ export function DraftEditor({
   };
 
   /**
-   * Quality's Show: the block of the page holding the passage (never a
-   * suggestion's card), scrolled to and marked for a moment.
-   */
-  /**
    * The page's first placeholder (CE-044), selected to type over: in order,
    * across the marks in its line, its block flashed as Show's are.
    */
@@ -969,6 +965,10 @@ export function DraftEditor({
     }, 1200);
   };
 
+  /**
+   * Quality's Show: the block of the page holding the passage (never a
+   * suggestion's card), scrolled to and marked for a moment.
+   */
   const showInPage = (text: string, { focus = false } = {}) => {
     if (!editor) return;
     const at = findBlock(editor.state.doc, text);
