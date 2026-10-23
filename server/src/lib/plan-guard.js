@@ -306,6 +306,9 @@ export async function getBriefQuotaStatus(orgId) {
   return { used, limit: max, remaining: Math.max(0, max - used) };
 }
 
+/** How many of the org's latest calls its typical cost is the median of. */
+const RECENT_CALLS = 20;
+
 async function improveSpendThisPeriod(orgId) {
   const periodStart = await quotaPeriodStart(orgId);
   const { data } = await supabaseAdmin
@@ -317,7 +320,7 @@ async function improveSpendThisPeriod(orgId) {
     .limit(5000);
   const costs = (data ?? []).map((r) => Number(r.cost_usd) || 0);
   const spent = costs.reduce((a, b) => a + b, 0);
-  return { spent, typical: medianCost(costs.slice(0, 20)) };
+  return { spent, typical: medianCost(costs.slice(0, RECENT_CALLS)) };
 }
 
 /**
@@ -371,11 +374,12 @@ export async function reserveAiBudget(
   const budget = plan.limits.improveMonthlyBudgetUsd ?? -1;
   let reservedId = null;
   if (budget !== -1) {
+    const since = (await quotaPeriodStart(orgId)).toISOString();
     const { data, error } = await supabaseAdmin.rpc('reserve_ai_usage', {
       p_organization_id: orgId,
-      p_since: (await quotaPeriodStart(orgId)).toISOString(),
+      p_since: since,
       p_budget: budget,
-      p_cost: typicalCostUsd(modelId),
+      p_cost: await holdCostUsd(orgId, modelId, since),
       p_feature: feature,
       p_model: modelId,
       p_prompt_id: promptId,
@@ -425,6 +429,32 @@ export async function reserveAiBudget(
       if (error) logger.error({ err: error, orgId, feature }, '[ai-budget] release failed');
     },
   };
+}
+
+/**
+ * What a call holds before it runs: the org's median cost over its last
+ * RECENT_CALLS calls this period, never less than the model's typical one.
+ * Calls average about twice the typical estimate and reach five times it (a
+ * whole page, a long draft), so holding only the estimate let each call in
+ * flight pass the budget by the difference. Holds in flight count at their
+ * own size, so they don't raise the median. A read that fails holds the
+ * typical cost.
+ */
+async function holdCostUsd(orgId, modelId, since) {
+  const typical = typicalCostUsd(modelId);
+  const { data, error } = await supabaseAdmin
+    .from('prompt_improve_usage')
+    .select('cost_usd')
+    .eq('organization_id', orgId)
+    .gte('used_at', since)
+    .order('used_at', { ascending: false })
+    .limit(RECENT_CALLS);
+  if (error) {
+    logger.error({ err: error, orgId }, '[ai-budget] recent costs read failed');
+    return typical;
+  }
+  const recent = medianCost((data ?? []).map((r) => Number(r.cost_usd) || 0));
+  return Math.max(typical, recent ?? 0);
 }
 
 /** What the workspace's AI budget is spent on, as prompt_improve_usage.feature says (00242). */

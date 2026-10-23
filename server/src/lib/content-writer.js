@@ -1,5 +1,5 @@
 import { randomUUID } from 'crypto';
-import { generateObject } from 'ai';
+import { NoObjectGeneratedError, generateObject } from 'ai';
 import { z } from 'zod';
 import supabaseAdmin from '../config/supabase.js';
 import { resolveModel } from './ai-provider.js';
@@ -500,6 +500,9 @@ export async function runDraftWriting({ draft, brand, model, input, budget }) {
     }
     return { suggestions: rows.length };
   } catch (err) {
+    // An answer the provider billed but that missed the schema is charged,
+    // as Improve's is: else the costliest call, a whole page, would run free.
+    if (NoObjectGeneratedError.isInstance(err) && err.usage) await budget.charge(err.usage);
     logger.error({ err, draftId: draft.id }, '[content-writer] the agent could not finish');
     await finish(draft.id, { agent_state: 'failed' }).catch((finishErr) =>
       logger.error({ err: finishErr, draftId: draft.id }, '[content-writer] state not saved'),

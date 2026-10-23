@@ -56,7 +56,15 @@ vi.mock('../config/supabase.js', () => ({
     },
   },
 }));
-vi.mock('ai', () => ({ generateObject: (...args) => generateObject(...args) }));
+class NoObjectGeneratedError extends Error {
+  static isInstance(err) {
+    return err instanceof NoObjectGeneratedError;
+  }
+}
+vi.mock('ai', () => ({
+  generateObject: (...args) => generateObject(...args),
+  NoObjectGeneratedError,
+}));
 const resolveModel = vi.hoisted(() => vi.fn((id) => `model:${id}`));
 vi.mock('./ai-provider.js', () => ({ resolveModel }));
 vi.mock('./plan-guard.js', async (importOriginal) => ({
@@ -478,5 +486,17 @@ describe('runDraftWriting on an existing page', () => {
     // The first answer was paid for; the second never came, and its hold goes.
     expect(budget.charge).toHaveBeenCalledTimes(1);
     expect(budget.release).toHaveBeenCalledTimes(2);
+  });
+
+  it('charges an answer that missed the schema, as the provider billed it', async () => {
+    const billed = { inputTokens: 5000, outputTokens: 6000 };
+    generateObject.mockRejectedValueOnce(
+      Object.assign(new NoObjectGeneratedError('no object'), { usage: billed }),
+    );
+    await expect(run()).resolves.toEqual({ failed: true });
+    expect(budget.charge).toHaveBeenCalledTimes(1);
+    expect(budget.charge).toHaveBeenCalledWith(billed);
+    // The run still ends failed.
+    expect(draftUpdates()).toEqual([{ agent_state: 'failed', agent_state_at: expect.any(String) }]);
   });
 });

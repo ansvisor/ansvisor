@@ -11,18 +11,28 @@ let org;
 let reserved;
 let rpcCalls;
 let ops;
+// The org's recent calls this period, newest first (what a hold is sized on).
+let recent;
 
 function query(table) {
   const op = { table, kind: 'select', filters: [] };
   const builder = {
     select: () => builder,
     eq: (col, val) => (op.filters.push([col, val]), builder),
+    gte: (col, val) => (op.filters.push([col, val]), builder),
+    order: () => builder,
+    limit: () => builder,
     maybeSingle: () => builder,
     single: () => builder,
     insert: (value) => (Object.assign(op, { kind: 'insert', value }), ops.push(op), builder),
     update: (value) => (Object.assign(op, { kind: 'update', value }), ops.push(op), builder),
     delete: () => (Object.assign(op, { kind: 'delete' }), ops.push(op), builder),
-    then: (resolve) => resolve({ data: table === 'organizations' ? org : null, error: null }),
+    then: (resolve) =>
+      resolve(
+        table === 'prompt_improve_usage' && op.kind === 'select'
+          ? recent
+          : { data: table === 'organizations' ? org : null, error: null },
+      ),
   };
   return builder;
 }
@@ -34,6 +44,7 @@ beforeEach(async () => {
   process.env.IS_CLOUD = 'true';
   org = { plan: 'starter', subscription_status: 'active', subscription_ends_at: null };
   reserved = 'u1';
+  recent = { data: [], error: null };
   rpcCalls = [];
   ops = [];
   vi.doMock('../config/supabase.js', () => ({
@@ -58,6 +69,31 @@ afterEach(() => {
 const usage = { inputTokens: 7000, outputTokens: 2000 };
 
 describe('reserveAiBudget', () => {
+  it('holds the org’s recent median cost when calls run above the model’s estimate', async () => {
+    recent = {
+      data: [0.05, 0.021, 0.02, 0.019, 0.004].map((cost_usd) => ({ cost_usd })),
+      error: null,
+    };
+    await guard.reserveAiBudget('o1', {
+      feature: 'content',
+      modelId: 'google/gemini-3-flash-preview',
+    });
+    expect(rpcCalls[0].args.p_cost).toBe(0.02);
+    // Never less than the model's typical cost, nor when the read fails.
+    rpcCalls = [];
+    recent = { data: [{ cost_usd: 0.001 }], error: null };
+    await guard.reserveAiBudget('o1', {
+      feature: 'content',
+      modelId: 'google/gemini-3-flash-preview',
+    });
+    recent = { data: null, error: { message: 'timeout' } };
+    await guard.reserveAiBudget('o1', {
+      feature: 'content',
+      modelId: 'google/gemini-3-flash-preview',
+    });
+    expect(rpcCalls.map((c) => c.args.p_cost)).toEqual([0.0095, 0.0095]);
+  });
+
   it('holds the estimate on the period’s budget, then turns it into the real cost', async () => {
     const budget = await guard.reserveAiBudget('o1', {
       feature: 'content',

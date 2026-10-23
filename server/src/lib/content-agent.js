@@ -1,5 +1,5 @@
 import { randomUUID } from 'crypto';
-import { generateObject } from 'ai';
+import { NoObjectGeneratedError, generateObject } from 'ai';
 import * as cheerio from 'cheerio';
 import { z } from 'zod';
 import supabaseAdmin from '../config/supabase.js';
@@ -527,6 +527,11 @@ export async function fixDraftRules({ draftId, brandId, input }) {
     });
     await budget.charge(generated.usage);
     object = generated.object;
+  } catch (err) {
+    // An answer the provider billed but that missed the schema is charged,
+    // as Improve's is: else it, and each retry after it, would run free.
+    if (NoObjectGeneratedError.isInstance(err) && err.usage) await budget.charge(err.usage);
+    throw err;
   } finally {
     // Nothing charged (a timeout, a refusal): the hold goes.
     await budget.release();
