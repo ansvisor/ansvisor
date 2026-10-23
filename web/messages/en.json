@@ -4115,9 +4115,10 @@
         "tooShortShort": "Too short yet",
         "notScored": "Not scored yet",
         "pickAuthor": "Pick author",
+        "addAuthor": "Add author",
         "editAuthor": "Edit author",
         "suggestionsLabel": "What would raise it",
-        "nothingToRaise": "Nothing to raise here: the page reads well.",
+        "nothingToRaise": "Nothing to raise here for now: every live check has its points.",
         "gain": "+{gain, number} {score}",
         "band": "{score, number}, {band}",
         "show": "Show",
@@ -4130,7 +4131,7 @@
         },
         "checks": {
           "byline": {
-            "line": "The page is by {brand} Team, not a person",
+            "line": "The page is by {byline}, not a person",
             "detail": "Pick the person who wrote it: a named author with a short bio and profile links shows who stands behind the page."
           },
           "authorProfile": {
@@ -4139,7 +4140,7 @@
               "bio": "{name} has no short bio",
               "links": "{name} has no profile links"
             },
-            "detail": "Add them in Settings › Authors: two sentences on what they know, and a LinkedIn or other profile, which Person schema names."
+            "detail": "Add them in Settings › Authors: two sentences on what they know, and a LinkedIn or other profile link."
           },
           "avgSentence": {
             "line": "Sentences average {words, number} words",

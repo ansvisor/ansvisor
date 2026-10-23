@@ -3,7 +3,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { NextIntlClientProvider } from 'next-intl';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import messages from '../../../../../../../../messages/en.json';
-import { eeat, trust } from '@/lib/content/quality-checks';
+import { eeat } from '@/lib/content/quality-checks';
 import type { ContentAuthor } from '@/lib/content/authors';
 import type { Readability } from '@/lib/content/readability';
 
@@ -57,13 +57,17 @@ const ada: ContentAuthor = {
 };
 
 /** The page's quality with this author (or the team byline) and Readability. */
-function read(readability: Readability | null, author: ContentAuthor | null = ada): QualityRead {
+function read(
+  readability: Readability | null,
+  author: ContentAuthor | null = ada,
+  hasAuthors = true,
+): QualityRead {
   return {
     readability,
     eeat: eeat({ author }),
-    trust: trust({ suggestions: [] }),
-    authorName: author?.name ?? null,
-    authorHas: { bio: !!author?.bio, links: (author?.sameAs.length ?? 0) > 0 },
+    trust: null,
+    author,
+    hasAuthors,
     brandName: 'Acme',
   };
 }
@@ -137,7 +141,7 @@ describe('QualityTab', () => {
       score: 100,
       checks: result.checks.map((c) => ({ ...c, points: c.max })),
     });
-    expect(container.textContent).toContain('Nothing to raise here: the page reads well.');
+    expect(container.textContent).toContain('Nothing to raise here for now');
   });
 
   it('asks for a real author when the page is by the team, and opens the menu', async () => {
@@ -146,7 +150,7 @@ describe('QualityTab', () => {
     expect(scores.textContent).toContain('E-E-A-T0Needs work');
     const first = container.querySelector('li')!;
     expect(first.textContent).toBe(
-      '+100 E-E-A-TThe page is by Acme Team, not a personPick the person who wrote it: a named author with a short bio and profile links shows who stands behind the page.Pick author',
+      '+60 E-E-A-TThe page is by Acme Team, not a personPick the person who wrote it: a named author with a short bio and profile links shows who stands behind the page.Pick author',
     );
     await act(async () => first.querySelector('button')!.click());
     expect(onPickAuthor).toHaveBeenCalled();
@@ -157,7 +161,20 @@ describe('QualityTab', () => {
     const row = [...container.querySelectorAll('li')].find((li) =>
       li.textContent?.includes('Ada Lovelace'),
     )!;
-    expect(row.textContent).toContain('+43 E-E-A-TAda Lovelace has no short bio or profile links');
+    expect(row.textContent).toContain('+40 E-E-A-TAda Lovelace has no short bio or profile links');
     expect(row.querySelector('a')!.getAttribute('href')).toBe('/dashboard/settings/authors');
+  });
+
+  it('sends to Settings › Authors when the workspace has no author yet', async () => {
+    await render(read(result, null, false));
+    const row = container.querySelector('li')!;
+    expect(row.querySelector('a')!.textContent).toBe('Add author');
+    expect(row.querySelector('a')!.getAttribute('href')).toBe('/dashboard/settings/authors');
+  });
+
+  it('says only that a short page is too short, with nothing else to raise', async () => {
+    await render(read({ score: null, checks: [], words: 12 }));
+    expect(container.textContent).toContain('Write a few paragraphs');
+    expect(container.textContent).not.toContain('Nothing to raise');
   });
 });

@@ -1,5 +1,4 @@
 import type { ContentAuthor } from './authors';
-import type { DraftSuggestion } from './suggestions';
 
 /**
  * E-E-A-T and Trust (Content Editor Quality spec §2.1, §2.2): checks read
@@ -20,7 +19,7 @@ export interface Score<Id extends string = string> {
   checks: ScoreCheck<Id>[];
 }
 
-/** E-E-A-T's checks and points (blog defaults); Phase 1 reads the author ones. */
+/** E-E-A-T's checks and points (blog defaults); Phase 1 reads the author's. */
 export const EEAT_WEIGHTS = {
   experience: 20,
   originalData: 15,
@@ -32,21 +31,6 @@ export const EEAT_WEIGHTS = {
   authorSchema: 10,
 } as const;
 export type EeatCheckId = keyof typeof EEAT_WEIGHTS;
-
-/** Trust's checks and points; Phase 1 reads the agent's sourced claims. */
-export const TRUST_WEIGHTS = {
-  claimsSourced: 30,
-  primarySources: 15,
-  noWeakSources: 10,
-  brandFacts: 10,
-  expertQuote: 8,
-  freshSources: 7,
-  balanced: 7,
-  disclosure: 5,
-  noBrokenLinks: 3,
-  siteTrust: 5,
-} as const;
-export type TrustCheckId = keyof typeof TRUST_WEIGHTS;
 
 function scoreOf<Id extends string>(checks: ScoreCheck<Id>[]): Score<Id> {
   const max = checks.reduce((sum, c) => sum + c.max, 0);
@@ -65,16 +49,20 @@ export function scoreGain<Id extends string>(result: Score<Id>, ids: Id[]): numb
   return (scoreOf(raised).score ?? 0) - result.score;
 }
 
+/** What an author's profile has: a short bio, and profile links (Person schema's sameAs). */
+export function authorProfile(author: ContentAuthor | null): { bio: boolean; links: boolean } {
+  return { bio: !!author?.bio?.trim(), links: (author?.sameAs.length ?? 0) > 0 };
+}
+
 /**
  * E-E-A-T from the page's author (CE-038): a real person, with a short bio
- * and profile links, whom Person schema (with sameAs) can name. The
- * organization byline is no person, so none of the three. Dates join when
- * the live page is read (CE-042); experience, data, proof and who/how/why
- * are Phase 2.
+ * and profile links. The organization byline is no person. Author schema
+ * joins when Before you publish writes the page's JSON-LD (CE-041), dates
+ * when the live page is read (CE-042); experience, data, proof and
+ * who/how/why are Phase 2.
  */
 export function eeat({ author }: { author: ContentAuthor | null }): Score<EeatCheckId> {
-  const bio = !!author?.bio?.trim();
-  const links = (author?.sameAs.length ?? 0) > 0;
+  const { bio, links } = authorProfile(author);
   return scoreOf<EeatCheckId>([
     { id: 'byline', points: author ? EEAT_WEIGHTS.byline : 0, max: EEAT_WEIGHTS.byline },
     {
@@ -82,32 +70,5 @@ export function eeat({ author }: { author: ContentAuthor | null }): Score<EeatCh
       points: author ? (EEAT_WEIGHTS.authorBio * ((bio ? 1 : 0) + (links ? 1 : 0))) / 2 : 0,
       max: EEAT_WEIGHTS.authorBio,
     },
-    {
-      id: 'authorSchema',
-      points: author ? (links ? EEAT_WEIGHTS.authorSchema : EEAT_WEIGHTS.authorSchema / 2) : 0,
-      max: EEAT_WEIGHTS.authorSchema,
-    },
   ]);
-}
-
-/**
- * Trust as far as Phase 1 reads it: the claims in the agent's accepted text
- * have a source. Every figure the agent adds carries a source id, or the
- * server drops it (v1.1 §3b), so each source mark on an accepted change is a
- * sourced claim; a page with none has no agent claims to count, and the
- * check waits. The person's own claims are Phase 2 (claim detection).
- */
-export function trust({ suggestions }: { suggestions: DraftSuggestion[] }): Score<TrustCheckId> {
-  const sourced = suggestions
-    .filter((s) => s.status === 'accepted')
-    .reduce((sum, s) => sum + (s.sourceMarks?.length ?? 0), 0);
-  const checks: ScoreCheck<TrustCheckId>[] = [];
-  if (sourced > 0) {
-    checks.push({
-      id: 'claimsSourced',
-      points: TRUST_WEIGHTS.claimsSourced,
-      max: TRUST_WEIGHTS.claimsSourced,
-    });
-  }
-  return scoreOf(checks);
 }

@@ -3,12 +3,13 @@
 import { useTranslations } from 'next-intl';
 import { Link } from '@/i18n/navigation';
 import { Button, buttonVariants } from '@/components/ui/button';
+import type { ContentAuthor } from '@/lib/content/authors';
 import { BAND_CLASSES, qualityBand } from '@/lib/content/quality';
 import {
+  authorProfile,
   scoreGain,
   type EeatCheckId,
   type Score,
-  type TrustCheckId,
 } from '@/lib/content/quality-checks';
 import {
   readabilityGain,
@@ -26,11 +27,11 @@ export interface QualityRead {
   /** E-E-A-T from the author, or null before the authors are read. */
   eeat: Score<EeatCheckId> | null;
   /** Trust, or null while none of its checks is live for the page. */
-  trust: Score<TrustCheckId> | null;
+  trust: Score | null;
   /** The page's author, or null for the organization byline. */
-  authorName: string | null;
-  /** Whether the author has a short bio and profile links. */
-  authorHas: { bio: boolean; links: boolean };
+  author: ContentAuthor | null;
+  /** Whether the workspace has an author to pick (Settings › Authors). */
+  hasAuthors: boolean;
   brandName: string;
 }
 
@@ -45,7 +46,7 @@ interface Suggestion {
   action:
     | { kind: 'show'; text: string }
     | { kind: 'pickAuthor' }
-    | { kind: 'editAuthor' }
+    | { kind: 'manageAuthors'; label: 'addAuthor' | 'editAuthor' }
     | { kind: 'none' };
 }
 
@@ -67,13 +68,17 @@ export function QualityTab({
   onPickAuthor: () => void;
 }) {
   const t = useTranslations('contentEditor.editor.quality');
+  const tAuthor = useTranslations('contentEditor.editor.author');
   const { readability, eeat, trust } = quality;
   const scores: { name: ScoreName; score: number | null; empty: string }[] = [
     { name: 'eeat', score: eeat?.score ?? null, empty: t('notScored') },
     { name: 'trust', score: trust?.score ?? null, empty: t('notScored') },
     { name: 'readability', score: readability?.score ?? null, empty: t('tooShortShort') },
   ];
-  const suggestions = [...readabilitySuggestions(t, readability), ...eeatSuggestions(t, quality)]
+  const suggestions = [
+    ...readabilitySuggestions(t, readability),
+    ...eeatSuggestions(t, quality, tAuthor('organization', { brand: quality.brandName })),
+  ]
     .filter((s) => s.gain > 0)
     .sort((a, b) => b.gain - a.gain);
 
@@ -91,7 +96,7 @@ export function QualityTab({
                   <span className="text-xl font-semibold tabular-nums">{score}</span>
                   <span
                     className={cn(
-                      'rounded-full border px-1.5 text-[10.5px] font-medium whitespace-nowrap',
+                      'rounded-full border px-1.5 text-[10.5px] font-medium',
                       BAND_CLASSES[qualityBand(score)],
                     )}
                   >
@@ -113,7 +118,10 @@ export function QualityTab({
       <section aria-label={t('suggestionsLabel')} className="space-y-2">
         <h4 className="text-xs font-medium text-muted-foreground">{t('suggestionsLabel')}</h4>
         {suggestions.length === 0 ? (
-          <p className="text-xs text-muted-foreground">{t('nothingToRaise')}</p>
+          // A page too short to read says so above.
+          readability?.score !== null && (
+            <p className="text-xs text-muted-foreground">{t('nothingToRaise')}</p>
+          )
         ) : (
           <ul className="space-y-2">
             {suggestions.map((s) => (
@@ -125,37 +133,7 @@ export function QualityTab({
                   <p className="font-medium [overflow-wrap:anywhere]">{s.line}</p>
                   <p className="text-xs text-muted-foreground">{s.detail}</p>
                 </div>
-                {s.action.kind === 'show' && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="h-7 shrink-0"
-                    onClick={() => onShow((s.action as { text: string }).text)}
-                  >
-                    {t('show')}
-                  </Button>
-                )}
-                {s.action.kind === 'pickAuthor' && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="h-7 shrink-0"
-                    onClick={onPickAuthor}
-                  >
-                    {t('pickAuthor')}
-                  </Button>
-                )}
-                {s.action.kind === 'editAuthor' && (
-                  <Link
-                    href={MANAGE_AUTHORS_PATH}
-                    className={cn(
-                      buttonVariants({ variant: 'outline', size: 'sm' }),
-                      'h-7 shrink-0',
-                    )}
-                  >
-                    {t('editAuthor')}
-                  </Link>
-                )}
+                <SuggestionAction action={s.action} onShow={onShow} onPickAuthor={onPickAuthor} />
               </li>
             ))}
           </ul>
@@ -163,6 +141,49 @@ export function QualityTab({
       </section>
     </div>
   );
+}
+
+/** A suggestion's one button. */
+function SuggestionAction({
+  action,
+  onShow,
+  onPickAuthor,
+}: {
+  action: Suggestion['action'];
+  onShow: (text: string) => void;
+  onPickAuthor: () => void;
+}) {
+  const t = useTranslations('contentEditor.editor.quality');
+  switch (action.kind) {
+    case 'show':
+      return (
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-7 shrink-0"
+          onClick={() => onShow(action.text)}
+        >
+          {t('show')}
+        </Button>
+      );
+    case 'pickAuthor':
+      return (
+        <Button variant="outline" size="sm" className="h-7 shrink-0" onClick={onPickAuthor}>
+          {t('pickAuthor')}
+        </Button>
+      );
+    case 'manageAuthors':
+      return (
+        <Link
+          href={MANAGE_AUTHORS_PATH}
+          className={cn(buttonVariants({ variant: 'outline', size: 'sm' }), 'h-7 shrink-0')}
+        >
+          {t(action.label)}
+        </Link>
+      );
+    case 'none':
+      return null;
+  }
 }
 
 type T = ReturnType<typeof useTranslations<'contentEditor.editor.quality'>>;
@@ -182,33 +203,35 @@ function readabilitySuggestions(t: T, readability: Readability | null): Suggesti
 }
 
 /**
- * E-E-A-T's: with no person on the page, picking one is the fix (and raises
- * the bio and schema checks with it); with one, completing their profile.
+ * E-E-A-T's: with no person on the page, picking one is the fix (its gain is
+ * the byline's: what the author's profile adds depends on them), or adding
+ * one when the workspace has none; with one, completing their profile.
  */
-function eeatSuggestions(t: T, quality: QualityRead): Suggestion[] {
-  const { eeat, authorName, authorHas, brandName } = quality;
+function eeatSuggestions(t: T, quality: QualityRead, teamByline: string): Suggestion[] {
+  const { eeat, author, hasAuthors } = quality;
   if (!eeat || eeat.score === null) return [];
-  if (!authorName) {
+  if (!author) {
     return [
       {
         key: 'eeat:byline',
         score: 'eeat',
-        gain: scoreGain(eeat, ['byline', 'authorBio', 'authorSchema']),
-        line: t('checks.byline.line', { brand: brandName }),
+        gain: scoreGain(eeat, ['byline']),
+        line: t('checks.byline.line', { byline: teamByline }),
         detail: t('checks.byline.detail'),
-        action: { kind: 'pickAuthor' },
+        action: hasAuthors ? { kind: 'pickAuthor' } : { kind: 'manageAuthors', label: 'addAuthor' },
       },
     ];
   }
-  const missing = !authorHas.bio && !authorHas.links ? 'both' : !authorHas.bio ? 'bio' : 'links';
+  const { bio, links } = authorProfile(author);
+  const missing = !bio && !links ? 'both' : !bio ? 'bio' : 'links';
   return [
     {
       key: 'eeat:authorProfile',
       score: 'eeat',
-      gain: scoreGain(eeat, ['authorBio', 'authorSchema']),
-      line: t(`checks.authorProfile.line.${missing}`, { name: authorName }),
+      gain: scoreGain(eeat, ['authorBio']),
+      line: t(`checks.authorProfile.line.${missing}`, { name: author.name }),
       detail: t('checks.authorProfile.detail'),
-      action: { kind: 'editAuthor' },
+      action: { kind: 'manageAuthors', label: 'editAuthor' },
     },
   ];
 }

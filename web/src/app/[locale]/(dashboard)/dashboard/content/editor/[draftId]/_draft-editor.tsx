@@ -74,7 +74,7 @@ import { PAGE_READ_DELAY_MS, draftTitleFromDoc, safeLinkHref } from '@/lib/conte
 import { JsonLd } from '@/lib/content/json-ld-node';
 import { detectPageType } from '@/lib/content/page-types';
 import { BAND_CLASSES, qualityAverage, qualityBand, qualityPhase } from '@/lib/content/quality';
-import { eeat, trust } from '@/lib/content/quality-checks';
+import { eeat } from '@/lib/content/quality-checks';
 import { readability } from '@/lib/content/readability';
 import { aiTracesFound, fanoutsToUse, lengthWarns, openRulesForAgent } from '@/lib/content/rules';
 import { saveBlob } from '@/lib/download';
@@ -433,31 +433,20 @@ export function DraftEditor({
   const brandName =
     authorsRead?.brands.find((b) => b.id === draft.brandId)?.name ?? storeBrandName ?? '';
   const pageAuthor = authorsRead?.authors.find((a) => a.id === authorId) ?? null;
-  // E-E-A-T from the author, Trust from the agent's sourced claims (CE-039):
-  // with Readability, the three scores and the header chip's average.
+  // E-E-A-T from the author (CE-039): with Readability, the scores and the
+  // header chip's average. Trust waits for a check that can read the page.
   const eeatScore = useMemo(
     () => (qualityOn && authorsRead ? eeat({ author: pageAuthor }) : null),
     [qualityOn, authorsRead, pageAuthor],
   );
-  const trustScore = useMemo(
-    () => (qualityOn ? trust({ suggestions }) : null),
-    [qualityOn, suggestions],
-  );
-  const qualityScore = qualityAverage([
-    eeatScore?.score ?? null,
-    trustScore?.score ?? null,
-    readable?.score ?? null,
-  ]);
+  const qualityScore = qualityAverage([eeatScore?.score ?? null, readable?.score ?? null]);
   const quality: QualityRead | null = qualityOn
     ? {
         readability: readable,
         eeat: eeatScore,
-        trust: trustScore,
-        authorName: pageAuthor?.name ?? null,
-        authorHas: {
-          bio: !!pageAuthor?.bio?.trim(),
-          links: (pageAuthor?.sameAs.length ?? 0) > 0,
-        },
+        trust: null,
+        author: pageAuthor,
+        hasAuthors: (authorsRead?.authors.length ?? 0) > 0,
         brandName,
       }
     : null;
