@@ -14,6 +14,11 @@ import type {
 import type { KpiTimeframe } from '@/lib/kpis/registry';
 import { parsePriorityReason, storedPriorityLevel } from '@/lib/action-center/priority';
 import { parseTaskDetails } from '@/lib/action-center/task-details';
+import {
+  currentPriorityReason,
+  withEntityCounts,
+  type EntityCountRow,
+} from '@/lib/action-center/entity-counts';
 
 /**
  * Action Center rows → the shapes the dashboard reads, shared by its server
@@ -56,9 +61,12 @@ export function actionItemFromRow(
     taskTotal: number;
     taskCompleted: number;
     signalCount: number;
+    /** Its list's counts (AC-009): the payload then reads the count left. */
+    entityCounts?: EntityCountRow[];
   },
 ): ActionItem {
   const score = row.priority_score === null ? null : Number(row.priority_score);
+  const payload = withEntityCounts(row.payload ?? {}, extra.entityCounts);
   return {
     id: row.id,
     actionNo: Number(row.action_no),
@@ -66,7 +74,7 @@ export function actionItemFromRow(
     kind: row.kind,
     impact: row.impact as ActionImpact,
     status: row.status as ActionStatus,
-    payload: row.payload ?? {},
+    payload,
     kpiKeys: row.kpi_keys ?? [],
     assignee: extra.assignee,
     dueDate: row.due_date,
@@ -77,9 +85,11 @@ export function actionItemFromRow(
     signalCount: extra.signalCount,
     priorityScore: score,
     priorityLevel: storedPriorityLevel(row.priority_level, score),
-    priorityReason: parsePriorityReason(row.priority_reason, {
-      scoredAt: row.priority_updated_at,
-    }),
+    // "Lost ground on 12 prompts", as the title counts them (AC-009).
+    priorityReason: currentPriorityReason(
+      parsePriorityReason(row.priority_reason, { scoredAt: row.priority_updated_at }),
+      payload,
+    ),
   };
 }
 

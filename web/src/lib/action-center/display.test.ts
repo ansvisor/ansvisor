@@ -116,6 +116,27 @@ describe('actionTexts', () => {
       (key: string) => key,
     );
     expect(tags).not.toContain('tags.signals');
+    // Every prompt removed since (AC-009): its plain title, never "0 prompts".
+    const none = { mentionCount: 2, negativeCount: 0, promptCount: 0 };
+    expect(actionTexts(action({ kind: 'mention_review', payload: none }), t).title).toBe(
+      t('mention_review.titleGeneric'),
+    );
+    // Its first prompt removed, the one left isn't the one promptText names.
+    const left = {
+      mentionCount: 3,
+      negativeCount: 0,
+      promptCount: 1,
+      promptText: 'Best beans?',
+      promptIds: ['p1', 'p2'],
+      removedKeys: ['p1'],
+    };
+    expect(actionTexts(action({ kind: 'mention_review', payload: left }), t).title).toBe(
+      t('mention_review.titleMany', { count: 1 }),
+    );
+    const otherRemoved = { ...left, removedKeys: ['p2'] };
+    expect(actionTexts(action({ kind: 'mention_review', payload: otherRemoved }), t).title).toBe(
+      'Improve how AI describes you for "Best beans?"',
+    );
   });
 
   it('names a topic opportunity after its topic and demand (VIS-011)', () => {

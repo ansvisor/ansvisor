@@ -895,6 +895,11 @@
         "regions": "{count, plural, one {# region} other {# regions}}",
         "competitors": "{count, plural, one {# competitor} other {# competitors}}"
       },
+      "removed": {
+        "note": "({items} removed since this action was created)",
+        "hover": "No longer tracked since this action was created: {names}",
+        "hoverMore": "No longer tracked since this action was created: {names} and {more} more"
+      },
       "menu": {
         "label": "Actions for this item"
       },
@@ -2484,7 +2489,7 @@
   },
   "audit": {
     "title": "Site Audit",
-    "description": "Score any page against the 47-signal AEO/GEO",
+    "description": "Score any page against the 48-signal AEO/GEO",
     "runAudit": "Run Audit",
     "running": "Auditing…",
     "pages": {
@@ -2735,11 +2740,11 @@
     "noIssues": "No issues found — every evaluated signal passed.",
     "stages": {
       "fetch": "Fetching the page…",
-      "analyze": "Analyzing 47 signals…",
+      "analyze": "Analyzing 48 signals…",
       "recommend": "Generating AI recommendations…"
     },
     "emptyTitle": "Audit any page for AI search readiness",
-    "emptyBody": "Enter a URL above to score it against 47 AEO/GEO signals and get AI-written fixes."
+    "emptyBody": "Enter a URL above to score it against 48 AEO/GEO signals and get AI-written fixes."
   },
   "auth": {
     "signIn": "Sign in",
@@ -4841,7 +4846,11 @@
         "readFailed": "Couldn't read this section; export again to include it",
         "noUncrawled": "Every cited page was read by an AI search bot in the last 30 days",
         "uncrawledMore": "{count, plural, one {# more page not listed} other {# more pages not listed}}",
-        "noBrokenLinks": "No AI visitor landed on a missing page in this range"
+        "noBrokenLinks": "No AI visitor landed on a missing page in this range",
+        "partOfPlatform": "Part of {platform}'s visits, not added to them"
+      },
+      "surfaceNames": {
+        "shopping": "{platform} Shopping"
       },
       "botTypes": {
         "training": "Training",
@@ -4938,7 +4947,16 @@
       "engaged": "Engaged",
       "keyEvents": "Key events",
       "lowSample": "Low sample: {sessions, plural, one {# session} other {# sessions}} in Google Analytics",
-      "needsAnalytics": "Engaged and key events need Google Analytics."
+      "needsAnalytics": "Engaged and key events need Google Analytics.",
+      "surfaces": {
+        "shopping": "Shopping"
+      },
+      "surfaceNames": {
+        "shopping": "{platform} Shopping"
+      },
+      "surfaceTips": {
+        "shopping": "Visits from {platform} Shopping product cards: product links in your feed tagged utm_medium=feed. They're part of {platform}'s visits, not added to them."
+      }
     },
     "kpis": {
       "visits": "AI-referred visits",
@@ -4946,6 +4964,7 @@
       "topPlatform": "Top platform",
       "topPlatformTip": "The AI platform that sent the most visits in this range.",
       "topPlatformSub": "{visits, plural, one {# visit} other {# visits}}",
+      "topPlatformSurfaceSub": "{visits, plural, one {# visit} other {# visits}} · {surfaceVisits, number} from {surface}",
       "platforms": "Platforms",
       "platformsTip": "AI platforms that sent at least one visit in this range.",
       "platformsSub": "unique AI sources",
