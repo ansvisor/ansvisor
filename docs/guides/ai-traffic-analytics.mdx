@@ -1,52 +1,205 @@
 ---
 title: "AI Traffic Analytics"
-description: "Measure real visits to your site from AI answer engines."
+description: "Measure real visits to your site from AI answer engines, what they're worth, and which AI bots read your pages."
 ---
 
 ## Why this exists
 
-Most analytics platforms (Google Analytics, Plausible, etc.) lump AI traffic into "direct" or "referral" buckets — they can't tell you a visitor arrived from ChatGPT vs. perplexity.ai. Ansvisor's tracking pixel reads the referrer chain, classifies AI sources by domain, and gives you a clean breakdown.
+Most analytics platforms (Google Analytics, Plausible, etc.) lump AI traffic into "direct" or "referral" buckets — they can't tell you a visitor arrived from ChatGPT vs. perplexity.ai. Ansvisor's tracking snippet reads the referrer, classifies AI sources by domain, and gives you a clean breakdown. Connect Google Analytics, Google Search Console and your Cloudflare or Vercel, and the same page shows what those visits are worth, whether AI is changing your Google traffic, and which AI bots read your pages.
+
+## Data sources
+
+The **AI Traffic Analytics** page (`/dashboard/traffic`, **AI Referral Traffic** in the sidebar) reads up to four sources. The **Data sources** strip at the top shows each one's state:
+
+| Source | What it adds |
+|---|---|
+| **Tracking snippet** | AI-referred visits, page by page, as they happen. Reads **Active · last visit …** once it has sent a visit in the last week, otherwise **Not detected**. |
+| **Google Analytics** | AI visits on days the snippet has none, plus engaged visits, key events, revenue and the AI share of all traffic. |
+| **Google Search Console** | Google clicks, the pages where AI may be taking them, and the Google queries you don't track yet. |
+| **AI bots** | Which AI bots read your pages, from your own Cloudflare or Vercel. Growth plan and above. |
+
+A section whose source isn't connected stays on the page with a **Needs …** tag and a **Connect** button, rather than hiding. Only admins and managers can connect a source.
 
 ## Setup
 
 <Steps>
-  <Step title="Get the snippet">
-    On the **AI Traffic Analytics** page (`/dashboard/traffic`), copy the snippet at the top. It looks like:
+  <Step title="Add the tracking snippet">
+    Copy the snippet from the page. It sits at the top until the snippet has sent a visit in the last week; after that, **Code** in the Data sources strip opens it. It looks like:
     ```html
-    <script src="https://api.ansvisor.com/t.js" data-t="YOUR_TRACKING_CODE" defer></script>
+    <script src="https://YOUR_API_URL/t.js" data-t="YOUR_TRACKING_CODE" defer></script>
     ```
+    The page fills in your own address and tracking code, so copy it rather than typing it.
   </Step>
   <Step title="Paste into your site">
-    Add the script before `</head>` on every page you want to track. For Next.js, drop it in your root layout. For Wordpress, use a header injection plugin. For static sites, edit the template.
+    Add the script before `</head>` on every page you want to track, **your 404 page included**, so [Broken AI links](#pages) can see visitors who land on a missing page. For Next.js, drop it in your root layout. For WordPress, use a header injection plugin. For static sites, edit the template.
+  </Step>
+  <Step title="Connect Google Analytics and Search Console (optional)">
+    Click **Connect** on either card in the Data sources strip and sign in to Google; access is read-only. If the card then reads **Connected · choose a property for this brand**, pick the property under **Manage** (Settings → Integrations). Connections are shared across your organization.
+
+    Google Analytics' first numbers arrive in about 15 minutes; up to 14 months of history can take up to 24 hours. Search Console's can take up to 48 hours, because Google reports about two days late. On a self-hosted server, both read **Not set up on this server** until the server has its Google connection keys.
   </Step>
   <Step title="Wait for first visits">
-    Visits start appearing immediately. The dashboard updates in near-realtime (≤1 minute).
+    A visit is stored as soon as an AI-referred visitor lands. Reload the page, or change the range, to see new ones.
   </Step>
 </Steps>
 
+## Date range, changes and export
+
+- **Range** — 24h, 7d, 30d, 90d, All or Custom. The page opens on the last 24 hours, then on the range you last picked in this browser. Every section follows it.
+- **Change** — each figure is compared with the period of the same length just before. Below 30 visits in either period the change reads **Low sample** instead of a percentage, and a platform or page with no visits before reads **new**. All time has no previous period.
+- **Export** — the **Export** button gives the whole page as **Excel (.xlsx)**, one sheet per section, or **CSV (.zip)**, one CSV per section. Each table also has its own Excel and CSV buttons. A range with more than 100,000 visits is too large to export at once.
+
+## How visits are counted
+
+- **One visit per session.** A reload, or a further link from the same answer, continues the visit rather than counting another. The visits card gives the pageviews beside the visits.
+- **Snippet or Google Analytics, never both.** On days the snippet sent any visit, the page counts the snippet's; on the other days, Google Analytics'. The two are never added together, and the visits card says how many days came from Google Analytics.
+- **The visit list is the snippet's.** Google Analytics doesn't report single visits, so the **Recent AI Referral Visits** list shows only what the snippet saw.
+
 ## What you see
 
+The sections run top to bottom in this order.
+
+### Summary line
+
+One or two sentences above the KPI cards, for example: *"Last 7 days: 120 AI-referred visits, 3.2% of all traffic, up 18% on the previous period. ChatGPT sent the most (64), and its visitors convert best (6% of their visits had a key event). 4 pages are cited in AI answers but get no clicks. 12 Google queries with clicks aren't tracked as prompts."*
+
+Each fact appears only when the page can back it: the change needs 30 visits in both periods; the share of traffic and the best-converting platform need Google Analytics (and two platforms with 30 visits and 5 key events each); the untracked queries need Search Console.
+
+### KPI cards
+
+| Card | What it shows | Needs |
+|---|---|---|
+| **AI-referred visits** | Visits from AI assistants, with the change on the previous period | Snippet or Google Analytics |
+| **Top platform** | The AI platform that sent the most visits | — |
+| **Platforms** | How many AI platforms sent at least one visit | — |
+| **AI share of traffic** | AI-referred visits as a share of all the sessions Google Analytics recorded | Google Analytics |
+| **Engaged visits** | The share of AI sessions Google Analytics counts as engaged, beside the same share for Google organic | Google Analytics |
+| **Key events from AI** | Key events (conversions) in AI sessions, their rate against Google organic, and revenue when the property reports purchases | Google Analytics |
+| **Google clicks** | Clicks from Google Search. Google reports about two days late, so 24h and 7d show its latest reported days | Search Console |
+
+### Trend and platforms
+
 <CardGroup cols={2}>
-  <Card title="KPI strip" icon="gauge-high">
-    Total AI-referred visits, top platform, unique platforms — all with 7-day delta.
+  <Card title="AI Referral Trend" icon="chart-line">
+    **By platform**: visits per day, or per hour on the 24-hour range. **vs Google clicks**: AI visits and Google clicks, each indexed to 100 on its first day with data. Dashed amber lines mark the days actions entered the Action Center or prompts were added. The Google line needs Search Console, and a range of 7 days or longer since Google reports clicks by day.
   </Card>
-  <Card title="Trend chart" icon="chart-line">
-    Daily breakdown by AI platform, last 7 days.
+  <Card title="Platform Breakdown" icon="chart-pie">
+    Each AI platform's share of the range's visits.
   </Card>
-  <Card title="Platform table" icon="table-list">
-    Per-platform visit counts with week-over-week change.
+  <Card title="Referrals by Platform" icon="table-list">
+    Visits and change per platform, with **Engaged** and **Key events** from Google Analytics.
   </Card>
-  <Card title="Top landing pages" icon="file">
-    Which URLs on your site receive the most AI-driven traffic.
-  </Card>
-  <Card title="Recent visits log" icon="list">
-    Real-time stream of the last 10–50 AI visits with platform, page, country, and timestamp.
+  <Card title="Top Landing Pages" icon="file">
+    The pages that receive the most AI visits, with their change and how often tracked AI answers cite them (**Cited in answers**).
   </Card>
 </CardGroup>
 
+<Note>
+AI Overviews and AI Mode clicks are part of Google organic clicks, and Google doesn't let them be separated. The Google line counts them all.
+</Note>
+
+### Where AI visitors convert
+
+Two tables from Google Analytics:
+
+- **Top converting pages from AI** — landing pages ranked by key events from AI visits, or by revenue when the property reports it, with the rate (shown from 30 visits) and the best platform.
+- **Which answers bring buyers** — the topics of your tracked prompts whose answers cite those converting pages, by the AI platform the visitors came from. It shows which topics bring buyers, not just visits.
+
+A range with fewer than 30 AI visits uses the last 30 days here, and says so.
+
+### Pages
+
+**Pages** answers which pages get AI visits, which don't, and why. Its tabs:
+
+| Tab | Lists |
+|---|---|
+| **No AI traffic** | Pages with traffic in Google Analytics or in your sitemap that got no AI visit, most valuable first — by revenue, orders, conversions or, without those, engagement. **AI visibility** says why: **Cited**, **Not cited** (prompts target it) or **No prompt**. |
+| **Cited, not clicked** | Pages AI answers cited at least 20 times in the range that got no AI visit. |
+| **Traffic, no prompt** | Pages AI assistants sent visitors to that no tracked prompt's answer cited: the visits come from questions you don't track. |
+| **Broken AI links** | Pages AI visitors landed on that don't exist, each with a suggested **Redirect to**. |
+| **All pages** | Every page with AI visits, citations, traffic or a sitemap entry in the range. |
+
+Rows carry their next step: **Audit page** for a page AI cites or a prompt targets, **Add prompts** for one no prompt points to. On **No AI traffic** and **Cited, not clicked**, each row's **…** menu also has **Send to Action Center**, **Add prompts** and **Suggest content**, and under the list **Audit N cited pages** (or **Audit N pages**) starts Site Audits for the cited pages shown, while **Send to Action Center** sends the pages shown as one action.
+
+**Add prompts** suggests questions people ask AI assistants that the page answers, including ones from its Search Console queries, and lets you add your own. The prompts you track from it point to the page, so their answers show whether AI cites it. Each one uses a prompt slot on your plan.
+
+**Broken AI links** reads what the visitor got:
+
+- **Not found (404)** or **Gone (410)**, from the status the browser reported;
+- **Shows a not-found page (200)** — a single-page app that answers every address with 200 and shows its own not-found page. It is listed once at least two visits saw it;
+- **Page title says not found** — where the browser reports no status (Safari, for one).
+
+The suggested redirect is a working page: a **Similar page**, **The page above it**, or the **Home page**. Addresses with a query string get no suggestion. With the tab open, the Excel and CSV buttons export the redirect list.
+
+### Google Search Console
+
+**Is AI changing your Google traffic?** Two tables, from Search Console's own data:
+
+- **Is AI taking Google clicks?** — pages whose impressions rose 15% or more while their CTR fell 20% or more, among pages with at least 100 impressions in the period before. An AI Overview may be answering in place of the click. **Positions** shows whether you're cited for a tracked prompt about the page; **Add prompts** appears when none is about it yet.
+- **Untracked Google queries** — queries with clicks that no tracked prompt covers, most clicked first. **Track** adds one as a prompt; **Track all** adds the listed ones that your plan's prompt slots allow. Admins and managers can track queries. Up to the 5,000 most clicked queries are checked.
+
+### AI bots reading your site
+
+From your own Cloudflare or Vercel. Only verified bots count: the user agent and the operator's published IP ranges must both match. Today that's OpenAI's GPTBot, OAI-SearchBot and ChatGPT-User, Anthropic's ClaudeBot, Claude-SearchBot and Claude-User, and Perplexity's PerplexityBot and Perplexity-User.
+
+- **By bot type** — hits, pages read and last seen for **Training**, **Search index** and **User fetch**, with the bots under each.
+- **Pages AI bots read** — hits per page, and when each type last read it.
+- **Search-bot alert** — pages AI answers cited in the last 30 days that no AI search bot read in those 30 days. It starts 30 days after the first AI-bot request, and pauses when the bot data doesn't cover the last 30 days or the month's cap was reached.
+
+Bot counts are kept by UTC day, so the 24-hour range reads yesterday and today (UTC), and All time reads the last 90 days. On the Starter plan the section shows sample data with **Upgrade**; without a connection, **Connect** or **Preview with sample data**.
+
+#### Connect AI bots
+
+<Steps>
+  <Step title="Open the dialog">
+    Click **Connect** on the **AI bots** card in the Data sources strip.
+  </Step>
+  <Step title="Choose how your site sends AI-bot requests">
+    - **Cloudflare Worker** (recommended) — a small Worker on your site's route passes every request through and sends only AI-bot requests, in batches.
+    - **Cloudflare Logpush** — Cloudflare sends only the AI bots' log lines, filtered at its edge. Nothing runs on your requests.
+    - **Vercel Drain** — Vercel sends your request logs; Ansvisor keeps the AI bots and drops the rest. Vercel Pro and Enterprise only.
+
+    Each option says what it costs on your own Cloudflare or Vercel bill before you connect. None of them changes your site's speed.
+  </Step>
+  <Step title="Create the connection and copy its settings">
+    Click **Create connection** and follow the numbered steps. **Copy the settings right away: the secret in them isn't shown again.** If you lose it, revoke the connection and create a new one.
+  </Step>
+</Steps>
+
+**Manage** on the card lists your connections with their last request, lets you **Revoke** one, and shows this month's use. Cloud plans store a monthly number of detailed rows; past it, detailed rows pause until the next month and the totals are still counted. Log records from Logpush or a Vercel drain have a monthly cap of their own. Only requests to your brand's own domains, or their subdomains, are kept.
+
+### Recent AI Referral Visits
+
+One row per visit, with time, platform, page and country. Search by URL or path, filter by platform, and page through the range ten at a time.
+
+## Alerts in the Action Center
+
+The nightly signals pass watches AI Traffic and raises these in the Action Center's **Signals**:
+
+| Signal | Raised when | Feeds |
+|---|---|---|
+| **AI visits fell from … to … week over week** | AI visits over the last 7 whole days (UTC) fell 40% or more from the 7 before, which had at least 30 | **Recover AI traffic** |
+| **Broken AI links on …** | AI visitors landed on a page that answered 404 or 410 in the last 7 days | **Fix broken citation targets** |
+| **AI search bots haven't read … that AI answers cite** | A page AI answers cited in the last 30 days wasn't read by any AI search bot in that time (needs 30 days of AI-bot data) | **Fix AI crawler accessibility** (needs Site Audit) |
+| **… started sending visitors** | An AI platform sent visits in the last 7 days for the first time | — |
+
+## Weekly AI Traffic e-mail
+
+Every Monday (UTC), each brand with AI visits gets an e-mail about the week before (Monday to Sunday, UTC):
+
+- three cards: AI visits with the change, the top platform, and the share of traffic (with Google Analytics) or how many pages are cited but not clicked;
+- the [summary line](#summary-line);
+- AI visits by day and by platform;
+- **Top changes** — up to three, broken AI links first, then the platforms and pages whose AI visits moved most;
+- **Open AI Traffic →**, which opens this page.
+
+It goes to the brand's [Daily Pulse](/guides/daily-pulse) recipients. To turn it off for a brand, untick **AI Traffic weekly digest** in **Settings → Notifications**; admins and managers can change it. It's on by default, and it isn't sent while the brand's Daily Pulse is **Off**.
+
+No e-mail goes out for a week with no AI visits in it or the week before, or when the organization's subscription isn't active. A send that fails on Monday is tried again on Tuesday and Wednesday. The e-mail is cloud only.
+
 ## Supported AI sources
 
-The pixel and the Google Analytics sync count the same AI assistants, from one list (`server/src/lib/ai-sources.json`):
+The snippet and the Google Analytics sync count the same AI assistants, from one list (`server/src/lib/ai-sources.json`):
 
 - ChatGPT (chatgpt.com, chat.openai.com)
 - Perplexity (perplexity.ai)
@@ -61,13 +214,19 @@ Google Analytics also counts its own **AI Assistant** channel, so an assistant t
 
 ## Privacy
 
-The pixel collects: referrer, URL, country (via IP geolocation), language, screen size, anonymized IP, user agent. **It does NOT use cookies, fingerprinting, or any cross-site identifiers.** No GDPR consent banner needed in most jurisdictions.
+The snippet sends nothing unless the visitor arrived from an AI assistant on the list above. For an AI-referred visit it sends the page address, the referrer, the AI source, the browser's user agent, language and screen size, and the page's HTTP status as the browser saw it. Ansvisor adds the country the request came from. **The snippet sets no cookies and stores nothing in the visitor's browser.**
+
+**The visitor's IP address is never stored.** To group a visit's pageviews into one visit, Ansvisor keeps a one-way key made from the IP address, your brand and a random salt that changes every day. Each day's salt is deleted after two days. From then on, nothing links a key to an address, and one visitor's days can't be joined. A visit that runs past midnight (UTC) counts as two.
+
+AI-bot requests from Cloudflare or Vercel are stored without IP addresses.
 
 ## Common patterns
 
 - **Spike on a Friday** — usually a viral Reddit/Twitter thread that AI engines indexed and started recommending
 - **Sudden country shift** — Perplexity or Gemini changed regional weighting; not a metric you control
 - **Specific page surge** — one of your articles is being cited as authoritative; lock it in with internal links to defend
+- **Cited, not clicked keeps growing** — answers show your page but give no reason to click; add what the answer can't (tools, data, examples) and audit the page
+- **A new broken AI link** — an AI engine is citing an address you moved or retired; add the suggested redirect before the visits go elsewhere
 
 <Card title="Continue: Competitors" icon="arrow-right" href="/guides/competitors">
   Benchmark your AI presence against named rivals.
