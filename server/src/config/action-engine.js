@@ -113,8 +113,9 @@ export const ENGINE_THRESHOLDS = Object.freeze({
     citationGapMultiple: 2,
     citationGapMinAbsolute: 20,
 
-    /** Site Audit score below this is a problem; an audit older than this is
-     *  not evidence about the page as it stands today. */
+    /** Site Audit score below this (out of 100; audits store 0–1) is a
+     *  problem; an audit older than this is not evidence about the page as
+     *  it stands today. */
     auditLowScore: 50,
     auditMaxAgeDays: 90,
 
