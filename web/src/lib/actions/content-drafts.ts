@@ -1194,13 +1194,13 @@ export async function setContentDraftPageType(id: string, pageType: PageType): P
   if (!data) throw new Error('not_found');
 }
 
-/** 00252's refusal of an author from another organization (a check violation). */
+/** 00253's refusal of an author from another organization (a check violation). */
 const OTHER_ORGANIZATION = '23514';
 
 /**
  * The person a page is by (CE-038), or null for the organization byline:
  * page metadata, never its text. The database takes only an author of the
- * brand's organization (00252). A save over it isn't a conflict: the page
+ * brand's organization (00253). A save over it isn't a conflict: the page
  * is the same.
  */
 export async function setContentDraftAuthor(id: string, authorId: string | null): Promise<void> {

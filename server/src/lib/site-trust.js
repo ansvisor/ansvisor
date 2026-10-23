@@ -9,7 +9,7 @@ import { PageFetchError, fetchPage } from './safe-fetch.js';
  * points on every page. Read from the brand's page list (site_pages), its
  * home page and its authors (Settings › Authors), at most once a day or when
  * someone asks again (not more than every few minutes), and kept in
- * site_trust (00254). Only the brand's own site is read. A read a site
+ * site_trust (00255). Only the brand's own site is read. A read a site
  * didn't answer all of (slow, unreachable, a server error) is kept only a
  * few minutes.
  */
