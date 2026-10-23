@@ -24,7 +24,10 @@ export const UNKNOWN_TTL_MS = 6 * 60 * 60 * 1000;
 const KEEP_MS = 7 * 24 * 60 * 60 * 1000;
 /** A link that hasn't answered by then is unknown, not broken. */
 const LINK_TIMEOUT_MS = 8_000;
-/** A link's page is read up to this much: its head and article come first. */
+/**
+ * A link's page is read up to this much, the rest cut off (fetchPage's
+ * truncate): its head and article come first, so its date is still read.
+ */
 export const LINK_MAX_BYTES = 1024 * 1024;
 const PER_CALL = 4;
 /** Links read at once across every draft. */
@@ -39,10 +42,11 @@ const NOWHERE = new Set(['ENOTFOUND', 'ECONNREFUSED']);
 
 /**
  * How a read reads as a link: 'ok' when it answers (a page, or a file such
- * as a PDF), 'broken' when the page is gone or the site is nowhere, and
- * 'unknown' when it wouldn't tell: too slow, a bot wall (400, 401, 403,
+ * as a PDF), 'broken' when the page is gone, the site is nowhere, or it is
+ * on a private or local address no reader of the published page can open,
+ * and 'unknown' when it wouldn't tell: too slow, a bot wall (400, 401, 403,
  * 429), a server or certificate error that may pass, a redirect loop that
- * wants a cookie, an address the fetch won't read.
+ * wants a cookie, a port the fetch won't read.
  *
  * @param {unknown} err the fetch's error, or null when it read the page
  * @returns {'ok'|'broken'|'unknown'}
@@ -58,6 +62,8 @@ export function linkStatus(err) {
       return GONE.has(err.status) ? 'broken' : 'unknown';
     case 'unreachable':
       return NOWHERE.has(err.errno) ? 'broken' : 'unknown';
+    case 'blocked':
+      return 'broken';
     default:
       return 'unknown';
   }
@@ -139,7 +145,11 @@ async function inSlot(work) {
 
 async function readLink(url, fetcher, now) {
   try {
-    const page = await fetcher(url, { timeoutMs: LINK_TIMEOUT_MS, maxBytes: LINK_MAX_BYTES });
+    const page = await fetcher(url, {
+      timeoutMs: LINK_TIMEOUT_MS,
+      maxBytes: LINK_MAX_BYTES,
+      truncate: true,
+    });
     return { url, status: 'ok', httpStatus: page.status, date: pageDate(page.html, now) };
   } catch (err) {
     return {

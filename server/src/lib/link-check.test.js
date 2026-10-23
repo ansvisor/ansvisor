@@ -1,10 +1,11 @@
 import { createHash } from 'node:crypto';
+import http from 'node:http';
 import { describe, expect, it, vi } from 'vitest';
 
 // The real client needs the service key; each test passes its own.
 vi.mock('../config/supabase.js', () => ({ default: {} }));
 
-const { PageFetchError } = await import('./safe-fetch.js');
+const { PageFetchError, fetchPage, publicOnlyLookup } = await import('./safe-fetch.js');
 const {
   CHECK_TTL_MS,
   HOURLY_READS,
@@ -80,6 +81,8 @@ describe('linkStatus', () => {
     for (const errno of ['ENOTFOUND', 'ECONNREFUSED']) {
       expect(linkStatus(new PageFetchError('unreachable', 'x', { errno }))).toBe('broken');
     }
+    // A private or local address (http://192.168.1.1/): no reader of the page can open it.
+    expect(linkStatus(new PageFetchError('blocked', 'x'))).toBe('broken');
   });
 
   it("doesn't call what may pass, or what wouldn't tell, broken", () => {
@@ -89,7 +92,8 @@ describe('linkStatus', () => {
     for (const errno of ['ECONNRESET', 'EAI_AGAIN', 'UNABLE_TO_VERIFY_LEAF_SIGNATURE', undefined]) {
       expect(linkStatus(new PageFetchError('unreachable', 'x', { errno }))).toBe('unknown');
     }
-    for (const code of ['timeout', 'blocked', 'invalid_url', 'too_many_redirects']) {
+    // invalid_url: a port the fetch won't read, which a reader may still open.
+    for (const code of ['timeout', 'invalid_url', 'too_many_redirects']) {
       expect(linkStatus(new PageFetchError(code, 'x'))).toBe('unknown');
     }
     expect(linkStatus(new Error('boom'))).toBe('unknown');
@@ -185,6 +189,42 @@ describe('checkLinks', () => {
       [hashOf('https://a.example/x'), 'https://a.example/x', 'ok'],
       [hashOf('https://gone.example/'), 'https://gone.example/', 'broken'],
     ]);
+  });
+
+  it('reads the date in the head of a page over the cap, and calls it working', async () => {
+    // A long article page (inline app state and all), its date in <head>.
+    const head =
+      '<html><head><meta property="article:modified_time" content="2026-09-14T08:00:00Z"></head><body>';
+    const server = http.createServer((req, res) => {
+      res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
+      res.end(`${head}<p>${'x'.repeat(LINK_MAX_BYTES)}</p></body></html>`);
+    });
+    await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+    const port = String(server.address().port);
+    // site.test is the local server; any other name goes through the real check.
+    const lookup = (hostname, options, callback) => {
+      const done = typeof options === 'function' ? options : callback;
+      const all = typeof options === 'object' && options.all;
+      if (hostname !== 'site.test') return publicOnlyLookup(hostname, options, callback);
+      return all ? done(null, [{ address: '127.0.0.1', family: 4 }]) : done(null, '127.0.0.1', 4);
+    };
+    try {
+      const url = `http://site.test:${port}/long-read`;
+      const { reads } = await checkLinks([url], {
+        db: fakeDb().db,
+        fetcher: (address, opts) =>
+          fetchPage(address, { ...opts, lookup, ports: ['', '80', '443', port] }),
+        now: NOW,
+        log: silent,
+      });
+      expect(reads.get(url)).toEqual({
+        status: 'ok',
+        httpStatus: 200,
+        date: '2026-09-14T08:00:00.000Z',
+      });
+    } finally {
+      await new Promise((resolve) => server.close(resolve));
+    }
   });
 
   it("uses a read from the last day, and reads an 'unknown' one again after a few hours", async () => {
