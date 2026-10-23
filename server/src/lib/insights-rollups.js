@@ -131,9 +131,14 @@ async function drainRebuildQueue() {
       ok = await refreshInsightsDaily(brandId, from, end < dayTo ? end : dayTo);
     }
     // The Perception rollups (00231) still count the deleted prompt's terms,
-    // and the view precomputed from them (00241) follows them as they now are.
-    if (ok) ok = await refreshMentionTermsDaily(brandId, dayFrom, dayTo);
-    await refreshPerceptionSnapshots(brandId);
+    // and the view precomputed from them (00241) follows them as they now
+    // are. Not when the Insights days failed: the Perception rollups weren't
+    // touched then, and a brand whose rebuild keeps failing would recompute
+    // its views every drain.
+    if (ok) {
+      ok = await refreshMentionTermsDaily(brandId, dayFrom, dayTo);
+      await refreshPerceptionSnapshots(brandId);
+    }
     // A failed refresh logged itself; the entry stays for the next drain.
     if (!ok) {
       failed++;
