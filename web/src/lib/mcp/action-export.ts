@@ -9,6 +9,11 @@ import { readPromptPlaces } from '@/lib/signals/prompt-places';
 import { OPEN_SIGNAL_STATUSES, type SignalStatus } from '@/lib/signals/registry';
 import { UNCOUNTED_TASK_STATUSES } from '@/lib/action-center/registry';
 import { affectedOf, affectedSignals } from '@/lib/action-center/affected';
+import {
+  currentTaskParams,
+  readEntityCounts,
+  withEntityCounts,
+} from '@/lib/action-center/entity-counts';
 import { actionStory } from '@/lib/action-center/story';
 import { readPromptDemand } from '@/lib/action-center/prompt-demand';
 import { actionCsv, actionExportFileName, actionMarkdown } from '@/lib/action-center/export';
@@ -192,47 +197,58 @@ export async function exportActionFor(
     payload: (row.payload ?? {}) as Record<string, unknown>,
   });
 
-  const [tasksRes, signalsRes, eventsRes, kpisRes, places, assigneeRes, openRes, sentFrom] =
-    await Promise.all([
-      supabaseAdmin
-        .from('action_tasks')
-        .select(TASK_COLUMNS)
-        .eq('action_id', actionId)
-        .order('position'),
-      // Every signal the action has taken as evidence (AC-007), as the drawer reads them.
-      supabaseAdmin
-        .from('signals')
-        .select(`${SIGNAL_ROW_COLUMNS}, action_signals!inner(action_id)`)
-        .eq('brand_id', brandId)
-        .eq('action_signals.action_id', actionId)
-        .order('detected_at', { ascending: false }),
-      supabaseAdmin
-        .from('action_events')
-        .select(EVENT_COLUMNS)
-        .eq('action_id', actionId)
-        .order('created_at'),
-      supabaseAdmin
-        .from('kpi_definitions')
-        .select('kpi_key, target, timeframe')
-        .eq('brand_id', brandId)
-        .eq('is_active', true),
-      readPromptPlaces(supabaseAdmin, brandId),
-      row.assignee_id
-        ? supabaseAdmin
-            .from('profiles')
-            .select('id, full_name, avatar_url')
-            .eq('id', row.assignee_id)
-            .maybeSingle()
-        : Promise.resolve({ data: null, error: null }),
-      // The signals that support it now, as the list counts them (AC-007): its "n signals" tag.
-      supabaseAdmin
-        .from('signals')
-        .select('id', { count: 'exact', head: true })
-        .eq('brand_id', brandId)
-        .eq('action_id', actionId)
-        .in('status', OPEN_SIGNAL_STATUSES as SignalStatus[]),
-      opportunityId ? sentFromOpportunity(brandId, opportunityId) : Promise.resolve(null),
-    ]);
+  const [
+    tasksRes,
+    signalsRes,
+    eventsRes,
+    kpisRes,
+    places,
+    assigneeRes,
+    openRes,
+    sentFrom,
+    entityCounts,
+  ] = await Promise.all([
+    supabaseAdmin
+      .from('action_tasks')
+      .select(TASK_COLUMNS)
+      .eq('action_id', actionId)
+      .order('position'),
+    // Every signal the action has taken as evidence (AC-007), as the drawer reads them.
+    supabaseAdmin
+      .from('signals')
+      .select(`${SIGNAL_ROW_COLUMNS}, action_signals!inner(action_id)`)
+      .eq('brand_id', brandId)
+      .eq('action_signals.action_id', actionId)
+      .order('detected_at', { ascending: false }),
+    supabaseAdmin
+      .from('action_events')
+      .select(EVENT_COLUMNS)
+      .eq('action_id', actionId)
+      .order('created_at'),
+    supabaseAdmin
+      .from('kpi_definitions')
+      .select('kpi_key, target, timeframe')
+      .eq('brand_id', brandId)
+      .eq('is_active', true),
+    readPromptPlaces(supabaseAdmin, brandId),
+    row.assignee_id
+      ? supabaseAdmin
+          .from('profiles')
+          .select('id, full_name, avatar_url')
+          .eq('id', row.assignee_id)
+          .maybeSingle()
+      : Promise.resolve({ data: null, error: null }),
+    // The signals that support it now, as the list counts them (AC-007): its "n signals" tag.
+    supabaseAdmin
+      .from('signals')
+      .select('id', { count: 'exact', head: true })
+      .eq('brand_id', brandId)
+      .eq('action_id', actionId)
+      .in('status', OPEN_SIGNAL_STATUSES as SignalStatus[]),
+    opportunityId ? sentFromOpportunity(brandId, opportunityId) : Promise.resolve(null),
+    // Its list (AC-009): the count it shows, as on the page.
+    readEntityCounts(supabaseAdmin, [actionId]),
+  ]);
   for (const res of [tasksRes, signalsRes, eventsRes, kpisRes, assigneeRes, openRes]) {
     if (res.error) throw new Error(res.error.message);
   }
@@ -242,7 +258,12 @@ export async function exportActionFor(
     full_name: string | null;
     avatar_url: string | null;
   } | null;
-  const tasks = (tasksRes.data ?? []).map(taskFromRow);
+  const counts = entityCounts.get(actionId);
+  const current = withEntityCounts((row.payload ?? {}) as Record<string, unknown>, counts);
+  const tasks = (tasksRes.data ?? []).map(taskFromRow).map((task) => ({
+    ...task,
+    titleParams: currentTaskParams(task.titleParams, current) ?? task.titleParams,
+  }));
   // Skipped and failed tasks leave the count, as on the list.
   const counted = tasks.filter(
     (task) => !(UNCOUNTED_TASK_STATUSES as readonly string[]).includes(task.status),
@@ -254,6 +275,7 @@ export async function exportActionFor(
     taskTotal: counted.length,
     taskCompleted: counted.filter((task) => task.status === 'completed').length,
     signalCount: openRes.count ?? 0,
+    entityCounts: counts,
   });
   const detail: ActionDetail = {
     tasks,
@@ -276,7 +298,13 @@ export async function exportActionFor(
   const t = translators();
   const format_ = createFormatter({ locale: 'en', timeZone: 'UTC' });
   const story = actionStory(
-    { signals: evidence, volumes, createdAt: action.createdAt, dueDate: action.dueDate },
+    {
+      signals: evidence,
+      volumes,
+      createdAt: action.createdAt,
+      dueDate: action.dueDate,
+      payload: action.payload ?? {},
+    },
     t.story,
     {
       day: (date) => format_.dateTime(date, { month: 'short', day: 'numeric' }),

@@ -27,6 +27,12 @@ import { readPromptDemand } from '@/lib/action-center/prompt-demand';
 import type { VolumeEstimate } from '@/lib/volume-estimate';
 import { readAssignees } from '@/lib/action-center/assignees';
 import {
+  currentTaskParams,
+  readEntityCounts,
+  withEntityCounts,
+  withoutTargetIds,
+} from '@/lib/action-center/entity-counts';
+import {
   ACTION_COLUMNS,
   EVENT_COLUMNS,
   TASK_COLUMNS,
@@ -95,7 +101,7 @@ export async function getActions(brandId: string): Promise<ActionItem[]> {
   const actionIds = rows.map((row) => row.id);
   const assigneeIds = [...new Set(rows.map((row) => row.assignee_id).filter(Boolean))] as string[];
 
-  const [tasksRes, signalsRes, profiles] = await Promise.all([
+  const [tasksRes, signalsRes, profiles, entityCounts] = await Promise.all([
     supabase.from('action_tasks').select('action_id, status').in('action_id', actionIds),
     // The signals that support each action now (AC-007): its open ones.
     supabase
@@ -106,6 +112,8 @@ export async function getActions(brandId: string): Promise<ActionItem[]> {
       .not('action_id', 'is', null),
     // Other members' profiles are hidden from the user (RLS): read as the team list reads them.
     readAssignees(supabase, brandId, assigneeIds),
+    // Each action's list (AC-009): its count less what was removed since.
+    readEntityCounts(supabase, actionIds),
   ]);
   if (tasksRes.error) throw new Error(tasksRes.error.message);
   if (signalsRes.error) throw new Error(signalsRes.error.message);
@@ -128,6 +136,7 @@ export async function getActions(brandId: string): Promise<ActionItem[]> {
       taskTotal: progress.total,
       taskCompleted: progress.completed,
       signalCount: signalCounts.get(row.id) ?? 0,
+      entityCounts: entityCounts.get(row.id),
     });
   });
 }
@@ -202,7 +211,11 @@ async function readActionSignals(
     readPromptPlaces(supabase, brandId),
   ]);
   if (signalsRes.error) throw new Error(signalsRes.error.message);
-  return mapSignalRows((signalsRes.data ?? []) as SignalRow[], places);
+  // Without a big group's thousand target ids (AC-009): the drawer names 50.
+  return mapSignalRows(
+    ((signalsRes.data ?? []) as SignalRow[]).map((row) => withoutTargetIds(row)),
+    places,
+  );
 }
 
 /**
@@ -219,7 +232,7 @@ export async function getActionSignals(brandId: string, actionId: string): Promi
  *  action's kpi_keys — evidence of which goals this work serves. */
 export async function getActionDetail(brandId: string, actionId: string): Promise<ActionDetail> {
   const supabase = await createClient();
-  const [tasksRes, signals, eventsRes, kpisRes, outcomeRes] = await Promise.all([
+  const [tasksRes, signals, eventsRes, kpisRes, outcomeRes, entityCounts] = await Promise.all([
     supabase.from('action_tasks').select(TASK_COLUMNS).eq('action_id', actionId).order('position'),
     readActionSignals(supabase, brandId, actionId),
     supabase
@@ -234,17 +247,26 @@ export async function getActionDetail(brandId: string, actionId: string): Promis
       .eq('is_active', true),
     supabase
       .from('actions')
-      .select('position_outcome')
+      .select('position_outcome, payload')
       .eq('brand_id', brandId)
       .eq('id', actionId)
       .maybeSingle(),
+    readEntityCounts(supabase, [actionId]),
   ]);
   if (tasksRes.error) throw new Error(tasksRes.error.message);
   if (eventsRes.error) throw new Error(eventsRes.error.message);
   if (kpisRes.error) throw new Error(kpisRes.error.message);
 
+  // A planned task that named the action's count names the count left (AC-009).
+  const payload = withEntityCounts(
+    (outcomeRes.data?.payload ?? {}) as Record<string, unknown>,
+    entityCounts.get(actionId),
+  );
   return {
-    tasks: (tasksRes.data ?? []).map(taskFromRow),
+    tasks: (tasksRes.data ?? []).map(taskFromRow).map((task) => ({
+      ...task,
+      titleParams: currentTaskParams(task.titleParams, payload) ?? task.titleParams,
+    })),
     signals,
     events: (eventsRes.data ?? []).map(eventFromRow),
     kpis: (kpisRes.data ?? []).map(kpiFromRow),
@@ -575,10 +597,12 @@ export async function getActionsAffected(
     return (data ?? []) as { id: string; payload: Record<string, unknown> | null }[];
   };
 
-  const [signalChunks, payloadChunks, places] = await Promise.all([
+  const [signalChunks, payloadChunks, places, entityCounts] = await Promise.all([
     Promise.all(chunks.map(readSignals)),
     Promise.all(chunks.map(readPayloads)),
     readPromptPlaces(supabase, brandId),
+    // The count each action shows (AC-009), so the CSV's agrees with its title.
+    readEntityCounts(supabase, ids),
   ]);
 
   const rowsByAction = new Map<string, SignalRow[]>();
@@ -593,7 +617,10 @@ export async function getActionsAffected(
   for (const action of payloadChunks.flat()) {
     const signals = mapSignalRows(rowsByAction.get(action.id) ?? [], places);
     summaries[action.id] = affectedSummary(
-      affectedOf(affectedSignals(signals, action.id), action.payload ?? {}),
+      affectedOf(
+        affectedSignals(signals, action.id),
+        withEntityCounts(action.payload ?? {}, entityCounts.get(action.id)),
+      ),
     );
   }
   return summaries;
