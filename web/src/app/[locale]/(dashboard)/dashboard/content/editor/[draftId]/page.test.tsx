@@ -2116,7 +2116,7 @@ describe('the side panel', () => {
       fixDraftRules.mockResolvedValue({ count: 0 });
       await openRules();
 
-      await act(async () => panelButton('Apply rules with Agent').click());
+      await act(async () => panelButton('Run Agent').click());
       await act(async () => {});
 
       expect(fixDraftRules.mock.calls[0][2].rules).toContainEqual(
