@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import { useFormatter, useLocale, useTranslations } from 'next-intl';
+import { useFailureToast } from '@/hooks/use-failure-toast';
 import { ArrowRight, Loader2, MessageCircle, Tag } from 'lucide-react';
 import { toast } from 'sonner';
 import { Link, useRouter } from '@/i18n/navigation';
@@ -67,6 +68,7 @@ export function Opportunities({
   className?: string;
 }) {
   const t = useTranslations('insights.opportunities');
+  const failureToast = useFailureToast();
   const format = useFormatter();
   const f = numberFormat(useLocale());
   const router = useRouter();
@@ -156,10 +158,8 @@ export function Opportunities({
           idempotencyKey: crypto.randomUUID(),
         });
         if (!started.ok) {
-          toast.error(started.quotaExhausted ? t('contentLimit') : started.error, {
-            id: toastId,
-            description,
-          });
+          if (started.quotaExhausted) toast.error(t('contentLimit'), { id: toastId, description });
+          else failureToast(started.failure, { id: toastId, description });
           return;
         }
         const outcome = await waitForContentJob(started.jobId, {
