@@ -69,9 +69,9 @@ const summary = (over: Partial<TrafficSummary> = {}): TrafficSummary => ({
   analyticsDays: [],
   hasPreviousPeriod: true,
   platformBreakdown: [
-    { platform: 'gemini.google.com', visits: 2, visitsPrev: 1, analytics: null },
-    { platform: 'chatgpt.com', visits: 1, visitsPrev: 1, analytics: null },
-    { platform: 'perplexity.ai', visits: 1, visitsPrev: 1, analytics: null },
+    { platform: 'gemini.google.com', visits: 2, visitsPrev: 1, analytics: null, surfaces: [] },
+    { platform: 'chatgpt.com', visits: 1, visitsPrev: 1, analytics: null, surfaces: [] },
+    { platform: 'perplexity.ai', visits: 1, visitsPrev: 1, analytics: null, surfaces: [] },
   ],
   topPages: [],
   hasAnyData: true,
@@ -198,14 +198,35 @@ describe('TrafficKpis', () => {
     await render({
       sum: summary({
         platformBreakdown: [
-          { platform: 'made-up.example', visits: 5, visitsPrev: 0, analytics: null },
-          { platform: 'chatgpt.com', visits: 1, visitsPrev: 1, analytics: null },
+          { platform: 'made-up.example', visits: 5, visitsPrev: 0, analytics: null, surfaces: [] },
+          { platform: 'chatgpt.com', visits: 1, visitsPrev: 1, analytics: null, surfaces: [] },
         ],
       }),
     });
     expect(card('Top platform')).toContain('ChatGPT');
     expect(card('Top platform')).toContain('1 visit');
     expect(card('Top platform')).not.toContain('made-up');
+  });
+
+  // #1283: ChatGPT Shopping's visits are part of ChatGPT's.
+  it("gives the top platform's visits through a surface, without counting another platform", async () => {
+    await render({
+      sum: summary({
+        platformBreakdown: [
+          {
+            platform: 'chatgpt.com',
+            visits: 40,
+            visitsPrev: 30,
+            analytics: null,
+            surfaces: [{ surface: 'shopping', visits: 11, visitsPrev: 4, analytics: null }],
+          },
+          { platform: 'perplexity.ai', visits: 2, visitsPrev: 1, analytics: null, surfaces: [] },
+        ],
+      }),
+    });
+    expect(card('Top platform')).toContain('ChatGPT');
+    expect(card('Top platform')).toContain('40 visits · 11 from ChatGPT Shopping');
+    expect(card('Platforms')).toContain('2unique AI sources');
   });
 
   it('says how many days came from Google Analytics instead of a partial pageview count (AT-004)', async () => {

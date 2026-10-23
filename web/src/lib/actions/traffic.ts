@@ -8,6 +8,7 @@ import { expandDateToEndOfDay, utcDay } from '@/lib/dates';
 import { isHourlyWindow, listUtcHours, utcHourKey } from '@/lib/traffic-buckets';
 import { CONVERSIONS_FALLBACK_DAYS, widensToLast30Days } from '@/lib/traffic-conversions';
 import { getSuggestionSourceStates, type SourceState } from '@/lib/actions/integrations';
+import { isPlatformSurface, type PlatformSurface } from '@/lib/traffic-platforms';
 
 export interface TrafficDateWindow {
   dateFrom?: string;
@@ -52,6 +53,12 @@ export interface TrafficSummary {
     visitsPrev: number;
     /** Google Analytics' engagement for the platform over the range's days; null without any (AT-005). */
     analytics: TrafficEngagement | null;
+    /**
+     * The visits that came through a surface of the platform, like ChatGPT
+     * Shopping's product cards (#1283), most first: part of the platform's
+     * visits above, never added to them.
+     */
+    surfaces: TrafficSurfaceVisits[];
   }[];
   topPages: {
     url: string;
@@ -61,6 +68,15 @@ export interface TrafficSummary {
     citations: number;
   }[];
   hasAnyData: boolean;
+}
+
+/** A platform's visits through one of its surfaces, as its row counts them. */
+export interface TrafficSurfaceVisits {
+  surface: PlatformSurface;
+  visits: number;
+  visitsPrev: number;
+  /** Google Analytics' engagement for the surface's sessions; null without any. */
+  analytics: TrafficEngagement | null;
 }
 
 export interface TrafficTrendPoint {
@@ -175,6 +191,8 @@ interface MergedTraffic {
   pageviews: number;
   analyticsDays: string[];
   platforms: { platform: string; visits: number }[];
+  /** Part of their platform's visits (ChatGPT Shopping, #1283; 00251). */
+  surfaces: { platform: string; surface: string; visits: number }[];
   pages: { page: string; visits: number }[];
   days: { day: string; platform: string; visits: number }[];
 }
@@ -200,6 +218,7 @@ async function readMergedTraffic(
     pageviews?: number;
     analytics_days?: string[];
     platforms?: { platform: string; visits: number }[];
+    surfaces?: { platform: string; surface: string; visits: number }[];
     pages?: { page: string; visits: number }[];
     days?: { day: string; platform: string; visits: number }[];
   };
@@ -208,10 +227,32 @@ async function readMergedTraffic(
     pageviews: Number(raw.pageviews) || 0,
     analyticsDays: raw.analytics_days ?? [],
     platforms: (raw.platforms ?? []).map((p) => ({ ...p, visits: Number(p.visits) || 0 })),
+    surfaces: (raw.surfaces ?? []).map((s) => ({ ...s, visits: Number(s.visits) || 0 })),
     pages: (raw.pages ?? []).map((p) => ({ ...p, visits: Number(p.visits) || 0 })),
     days: (raw.days ?? []).map((d) => ({ ...d, visits: Number(d.visits) || 0 })),
   };
 }
+
+/** Google Analytics' figures for one surface of a platform (ga_platform_value, 00251). */
+interface GaSurfaceValue {
+  surface: string;
+  sessions: number;
+  engaged_sessions: number;
+  key_events: number;
+  key_event_sessions: number;
+}
+
+/** A platform's or surface's Analytics figures, as the table shows them (AT-005). */
+function engagementOf(row: Omit<GaSurfaceValue, 'surface'>): TrafficEngagement {
+  return {
+    sessions: Number(row.sessions) || 0,
+    engagedSessions: Number(row.engaged_sessions) || 0,
+    keyEvents: Number(row.key_events) || 0,
+    keyEventSessions: Number(row.key_event_sessions) || 0,
+  };
+}
+
+const surfaceKey = (platform: string, surface: string) => `${platform}|${surface}`;
 
 export async function getTrafficSummary(
   brandId: string,
@@ -264,21 +305,25 @@ export async function getTrafficSummary(
   if (lifetime?.[1].error) throw new Error(lifetime[1].error.message);
   if (value.error) throw new Error(value.error.message);
   const valueByPlatform = new Map(
-    (value.data ?? []).map((row) => [
-      row.platform,
-      {
-        sessions: Number(row.sessions) || 0,
-        engagedSessions: Number(row.engaged_sessions) || 0,
-        keyEvents: Number(row.key_events) || 0,
-        keyEventSessions: Number(row.key_event_sessions) || 0,
-      },
-    ]),
+    (value.data ?? []).map((row) => [row.platform, engagementOf(row)]),
+  );
+  // Each platform's surfaces' figures, within the platform's (00251).
+  const valueBySurface = new Map(
+    (value.data ?? []).flatMap((row) =>
+      ((row.surfaces ?? []) as unknown as GaSurfaceValue[]).map((s) => [
+        surfaceKey(row.platform, s.surface),
+        engagementOf(s),
+      ]),
+    ),
   );
   const hasAnyData = lifetime
     ? lifetime[0] > 0 || (lifetime[1].data ?? []).length > 0
     : current.visits > 0;
 
   const previousByPlatform = new Map(previous?.platforms.map((p) => [p.platform, p.visits]));
+  const previousBySurface = new Map(
+    previous?.surfaces.map((s) => [surfaceKey(s.platform, s.surface), s.visits]),
+  );
   const previousByPage = new Map(previous?.pages.map((p) => [p.page, p.visits]));
 
   return {
@@ -293,6 +338,19 @@ export async function getTrafficSummary(
         ...p,
         visitsPrev: previousByPlatform.get(p.platform) ?? 0,
         analytics: valueByPlatform.get(p.platform) ?? null,
+        surfaces: current.surfaces.flatMap(({ platform, surface, visits }) =>
+          // A surface this page can't name yet stays in its platform's row alone.
+          platform === p.platform && visits > 0 && isPlatformSurface(surface)
+            ? [
+                {
+                  surface,
+                  visits,
+                  visitsPrev: previousBySurface.get(surfaceKey(platform, surface)) ?? 0,
+                  analytics: valueBySurface.get(surfaceKey(platform, surface)) ?? null,
+                },
+              ]
+            : [],
+        ),
       })),
     topPages: current.pages.slice(0, opts?.topPages ?? 10).map((p) => ({
       url: p.page,
