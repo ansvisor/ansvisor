@@ -3984,7 +3984,7 @@ describe('the side panel', () => {
       await act(async () => panelButton('Run Agent').click());
       await act(async () => {});
       expect(toast.error).toHaveBeenCalledWith(
-        "This month's AI usage is spent. Upgrade for more, or try again next month.",
+        "This month's AI usage is spent. Upgrade for more, or try again once it resets.",
       );
     });
 

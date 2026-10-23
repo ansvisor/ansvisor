@@ -78,7 +78,7 @@ describe('the Improve tab’s budget', () => {
     expect(container.querySelector('a[href="/dashboard/settings?tab=billing"]')).toBeNull();
   });
 
-  it('offers Starter the upgrade once its $1 trial is spent', async () => {
+  it('offers Starter the upgrade once its budget is spent', async () => {
     await render(
       { unlimited: false, exhausted: true, generationsLeft: 0, percentLeft: 0 },
       'starter',
@@ -89,6 +89,15 @@ describe('the Improve tab’s budget', () => {
     const upgrade = container.querySelector('a[href="/dashboard/settings?tab=billing"]')!;
     expect(upgrade.textContent).toBe('Upgrade for more');
     expect(generateButton().disabled).toBe(true);
+  });
+
+  it('offers a plan in its free trial starting it, once the trial’s budget is spent', async () => {
+    await render(
+      { unlimited: false, exhausted: true, generationsLeft: 0, percentLeft: 0, trial: true },
+      'growth',
+    );
+    const start = container.querySelector('a[href="/dashboard/settings?tab=billing"]')!;
+    expect(start.textContent).toBe('Start your plan');
   });
 
   it('says when the budget resets on a paid plan, with no upgrade', async () => {

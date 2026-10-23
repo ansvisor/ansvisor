@@ -15,6 +15,8 @@ export type AiUsageFeature = (typeof AI_USAGE_FEATURES)[number];
 export interface AiUsage {
   plan: string;
   planName: string | null;
+  /** The free trial's smaller allowance: more comes with starting the plan. */
+  trial?: boolean;
   periodStart: string | null;
   periodEnd: string | null;
   /** No allowance to meter (self-hosted, or a plan without one). */

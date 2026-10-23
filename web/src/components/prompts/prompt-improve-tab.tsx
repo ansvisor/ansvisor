@@ -446,8 +446,8 @@ function friendlyError(error: string | null, fallback = 'Failed to generate sugg
 
 /**
  * "About 185 generations left this month"; nothing on unlimited plans. A
- * spent budget says when it resets, and offers Starter, on its $1 trial,
- * the upgrade.
+ * spent budget says when it resets, and offers Starter the upgrade, and the
+ * free trial starting its plan.
  */
 function QuotaNote({
   quota,
@@ -472,14 +472,14 @@ function QuotaNote({
       }
     >
       {quota.exhausted ? t('usedUp') : t('left', { count: quota.generationsLeft ?? 0 })}
-      {quota.exhausted && planId === 'starter' && (
+      {quota.exhausted && (quota.trial || planId === 'starter') && (
         <>
           {' '}
           <Link
             href="/dashboard/settings?tab=billing"
             className="font-medium text-foreground underline underline-offset-2"
           >
-            {t('upgrade')}
+            {quota.trial ? t('startPlan') : t('upgrade')}
           </Link>
         </>
       )}
