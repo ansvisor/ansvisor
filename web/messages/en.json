@@ -5461,7 +5461,8 @@
       "topic": "Topic",
       "allTopics": "All topics",
       "search": "Search",
-      "searchPlaceholder": "Search prompts…"
+      "searchPlaceholder": "Search prompts…",
+      "searchPlaceholderPerception": "Search keywords…"
     },
     "overview": {
       "sectionLabel": "Mentions overview",
