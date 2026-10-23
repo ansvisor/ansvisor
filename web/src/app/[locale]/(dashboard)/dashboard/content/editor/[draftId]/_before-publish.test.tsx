@@ -354,7 +354,8 @@ describe('BeforePublish', () => {
     expect(alert()!.textContent).toContain('You can export it, but fixing them first');
     expect(alert()!.textContent).not.toContain('logged');
     expect(button('Mark ready anyway')).toBeUndefined();
-    expect(document.activeElement).toBe(button('Continue to export'));
+    // The dialog moves focus in after it opens.
+    await vi.waitFor(() => expect(document.activeElement).toBe(button('Continue to export')));
     await act(async () => button('Continue to export')!.click());
     expect(onContinue).toHaveBeenCalled();
     expect(onMarkReady).not.toHaveBeenCalled();
