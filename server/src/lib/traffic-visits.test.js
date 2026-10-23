@@ -33,7 +33,7 @@ const NOW = Date.parse('2026-10-18T12:00:00.000Z');
 const pageview = {
   brandId: 'b1',
   sourcePlatform: 'gemini.google.com',
-  ipAddress: '203.0.113.7',
+  visitorKey: 'vk-1',
   userAgent: 'Mozilla/5.0',
   now: NOW,
 };
@@ -56,7 +56,7 @@ describe('findVisitOf', () => {
       ['select', 'id, visit_of'],
       ['eq', 'brand_id', 'b1'],
       ['eq', 'source_platform', 'gemini.google.com'],
-      ['eq', 'ip_address', '203.0.113.7'],
+      ['eq', 'visitor_key', 'vk-1'],
       ['eq', 'user_agent', 'Mozilla/5.0'],
       ['gt', 'created_at', '2026-10-18T11:30:00.000Z'],
       ['order', 'created_at', { ascending: false }],
@@ -76,7 +76,7 @@ describe('findVisitOf', () => {
   });
 
   it("starts a visit when it can't tell who the visitor is", async () => {
-    expect(await findVisitOf({ ...pageview, ipAddress: null })).toBeNull();
+    expect(await findVisitOf({ ...pageview, visitorKey: null })).toBeNull();
     expect(await findVisitOf({ ...pageview, userAgent: null })).toBeNull();
     expect(db.calls).toEqual([]);
   });
