@@ -97,6 +97,7 @@ async function render(
     linksPending = 0,
     paste = clean,
     mode = 'markReady' as 'markReady' | 'export',
+    bylineInContent = false,
   } = {},
 ) {
   await act(async () => {
@@ -106,6 +107,7 @@ async function render(
           mode={mode}
           paste={paste}
           onFillNow={onFillNow}
+          bylineInContent={bylineInContent}
           onContinue={onContinue}
           onClose={() => {}}
           quality={q}
@@ -336,6 +338,13 @@ describe('BeforePublish', () => {
     await act(async () => button('Fix first')!.click());
     expect(onFixFirst).toHaveBeenCalledWith(expect.any(String));
     expect(onContinue).not.toHaveBeenCalled();
+  });
+
+  it('says the exports put the byline under the H1 for a brand that adds it to content', async () => {
+    await render(quality(), { bylineInContent: true });
+    expect(rows()[0]).toBe(
+      'Byline in the content · check itExports put "By Ada Lovelace" under the H1: this brand adds the byline to content, for a CMS with no author field.',
+    );
   });
 
   it("gives no Article for a page that isn't one", async () => {

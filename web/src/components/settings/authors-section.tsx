@@ -30,6 +30,7 @@ import {
   deleteContentAuthor,
   getContentAuthors,
   saveContentAuthor,
+  setBrandByline,
   setDefaultAuthor,
 } from '@/lib/actions/content-authors';
 import {
@@ -65,6 +66,8 @@ export function AuthorsSection() {
   const [busy, setBusy] = useState(false);
   /** A brand's default being saved: shown at once, the select held until it lands. */
   const [picking, setPicking] = useState<Record<string, string>>({});
+  /** A brand's Add byline to content being saved, likewise. */
+  const [bylining, setBylining] = useState<Record<string, boolean>>({});
 
   const load = useCallback(async () => {
     try {
@@ -110,6 +113,22 @@ export function AuthorsSection() {
       toast.error(t('defaultFailed'));
     } finally {
       setPicking((prev) => {
+        const next = { ...prev };
+        delete next[brandId];
+        return next;
+      });
+    }
+  };
+
+  const toggleByline = async (brandId: string, on: boolean) => {
+    setBylining((prev) => ({ ...prev, [brandId]: on }));
+    try {
+      await setBrandByline(brandId, on);
+      await load();
+    } catch {
+      toast.error(t('bylineFailed'));
+    } finally {
+      setBylining((prev) => {
         const next = { ...prev };
         delete next[brandId];
         return next;
@@ -260,10 +279,22 @@ export function AuthorsSection() {
                           </SelectContent>
                         </Select>
                         {brand.id in picking && <LoadingDots className="text-muted-foreground" />}
+                        <label className="flex items-center gap-2 text-sm">
+                          <Checkbox
+                            checked={bylining[brand.id] ?? !!brand.bylineInContent}
+                            aria-describedby={`default-${brand.id}`}
+                            disabled={!canSetDefaults || brand.id in bylining}
+                            onCheckedChange={(checked) =>
+                              void toggleByline(brand.id, checked === true)
+                            }
+                          />
+                          {t('bylineInContent')}
+                        </label>
                       </li>
                     );
                   })}
                 </ul>
+                <p className="text-xs text-muted-foreground">{t('bylineInContentHint')}</p>
                 {!canSetDefaults && (
                   <p className="text-xs text-muted-foreground">{t('defaultsManagers')}</p>
                 )}

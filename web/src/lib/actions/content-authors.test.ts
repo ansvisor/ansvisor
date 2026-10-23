@@ -57,8 +57,13 @@ vi.mock('@/lib/supabase/server', () => ({
   })),
 }));
 
-const { deleteContentAuthor, getContentAuthors, saveContentAuthor, setDefaultAuthor } =
-  await import('./content-authors');
+const {
+  deleteContentAuthor,
+  getContentAuthors,
+  saveContentAuthor,
+  setBrandByline,
+  setDefaultAuthor,
+} = await import('./content-authors');
 
 const writes = () => calls.filter((c) => c.op !== 'select');
 
@@ -89,7 +94,10 @@ describe('getContentAuthors', () => {
       ],
       error: null,
     };
-    answers['brands.select'] = { data: [{ id: ACME, name: 'Acme' }], error: null };
+    answers['brands.select'] = {
+      data: [{ id: ACME, name: 'Acme', content_byline: true }],
+      error: null,
+    };
     answers['content_drafts.select'] = { data: null, count: 2, error: null };
     answers['content_author_defaults.select'] = {
       data: [{ brand_id: ACME, author_id: ADA }],
@@ -111,7 +119,7 @@ describe('getContentAuthors', () => {
           pages: 2,
         },
       ],
-      brands: [{ id: ACME, name: 'Acme' }],
+      brands: [{ id: ACME, name: 'Acme', bylineInContent: true }],
       me: { id: ME, role: 'analyst' },
     });
   });
@@ -254,5 +262,19 @@ describe('setDefaultAuthor', () => {
       error: { message: 'new row violates row-level security policy' },
     };
     await expect(setDefaultAuthor(ACME, ADA)).rejects.toThrow(/row-level security/);
+  });
+});
+
+describe('setBrandByline', () => {
+  it("turns a brand's Add byline to content on or off, and fails when RLS lets no row through", async () => {
+    answers['brands.update'] = { data: [{ id: ACME }], error: null };
+    await setBrandByline(ACME, true);
+    expect(writes()).toEqual([
+      { table: 'brands', op: 'update', row: { content_byline: true }, filters: [['id', ACME]] },
+    ]);
+    answers['brands.update'] = { data: [], error: null };
+    await expect(setBrandByline(ACME, false)).rejects.toThrow('forbidden');
+    await expect(setBrandByline('acme', true)).rejects.toThrow('invalid');
+    expect(writes()).toHaveLength(2);
   });
 });

@@ -4128,6 +4128,7 @@
         "by": "By {name}",
         "change": "By {name}: change who the page is by",
         "hint": "Who the page is by: page metadata your CMS shows, not part of the content.",
+        "hintInContent": "Who the page is by: this brand adds the byline to content, so exports put \"By …\" under the H1.",
         "title": "Author · page metadata",
         "organization": "{brand} Team",
         "organizationHint": "Organization byline",
@@ -4136,6 +4137,7 @@
         "manage": "Manage authors",
         "failed": "Couldn't change the author.",
         "pageInfo": "Page info · shown by your CMS, not part of the content",
+        "pageInfoInContent": "Page info · exports put the \"By …\" line under the H1",
         "titleAt": "{title}, {brand}",
         "updated": "Updated {date}"
       },
@@ -4212,6 +4214,7 @@
           "slug": "Slug",
           "author": "Author",
           "authorValue": "{name} → your CMS author field",
+          "authorInContent": "{name} → in the content, under the H1 (Add byline to content)",
           "featuredImage": "Featured image",
           "noImage": "None in the page",
           "noSlug": "None from the title: set it in your CMS",
@@ -4261,6 +4264,8 @@
         "author": {
           "ok": "Author for your CMS",
           "okDetail": "Set {name} as the page's author in your CMS. Its template shows the byline; nothing is added to the content.",
+          "inContentTitle": "Byline in the content",
+          "inContent": "Exports put \"By {name}\" under the H1: this brand adds the byline to content, for a CMS with no author field.",
           "unknown": "The authors couldn't be read here, so the code below leaves the author out. Set the page's author in your CMS.",
           "none": "No author yet",
           "noneDetail": "The page goes out as {byline}, with the brand's Organization schema. A real author raises E-E-A-T."
@@ -6548,6 +6553,9 @@
       "defaultsHint": "Every new page of the brand gets this author. You can pick another on any page.",
       "defaultsManagers": "Admins and managers set the defaults.",
       "defaultFailed": "Couldn't set the default author.",
+      "bylineInContent": "Add byline to content",
+      "bylineInContentHint": "Add byline to content is only for a CMS with no author field: the brand's exports then put one \"By …\" line under the H1. Off, the byline stays in your CMS's author field.",
+      "bylineFailed": "Couldn't change Add byline to content.",
       "organizationByline": "{brand} Team",
       "fields": {
         "name": "Full name",

@@ -76,7 +76,12 @@ import { PAGE_READ_DELAY_MS, draftTitleFromDoc, safeLinkHref } from '@/lib/conte
 import { JsonLd } from '@/lib/content/json-ld-node';
 import { firstImage } from '@/lib/content/page-schema';
 import { PLACEHOLDER, pagePlaceholders } from '@/lib/content/placeholders';
-import { exportPlaceholders, pasteChecks, titlePlaceholders } from '@/lib/content/ready-to-publish';
+import {
+  exportPlaceholders,
+  pasteChecks,
+  titlePlaceholders,
+  withByline,
+} from '@/lib/content/ready-to-publish';
 import { detectPageType } from '@/lib/content/page-types';
 import { BAND_CLASSES, qualityAverage, qualityBand, qualityPhase } from '@/lib/content/quality';
 import { eeat, linksToCheck, trust, trustBlocks } from '@/lib/content/quality-checks';
@@ -493,6 +498,10 @@ export function DraftEditor({
     readable?.score ?? null,
   ]);
   const hasAuthors = (authorsRead?.authors.length ?? 0) > 0;
+  // Add byline to content (CE-057): the brand's CMS has no author field, so
+  // its exports carry one byline line under the H1.
+  const bylineInContent =
+    authorsRead?.brands.find((b) => b.id === draft.brandId)?.bylineInContent ?? false;
   // What only the person can do (CE-040), and the nudge to the first of it
   // when the agent's run ends, after Accept all and on Mark ready.
   // The placeholders the agent left (CE-044): the person fills them. Once
@@ -572,7 +581,7 @@ export function DraftEditor({
         pageInfoKey,
         byline
           ? {
-              label: t('author.pageInfo'),
+              label: bylineInContent ? t('author.pageInfoInContent') : t('author.pageInfo'),
               byline,
               initials: authorInitials(pageAuthor?.name ?? brandName),
               photoUrl: pageAuthor?.photoUrl ?? null,
@@ -580,7 +589,7 @@ export function DraftEditor({
           : null,
       ),
     );
-  }, [editor, byline, pageAuthor?.name, pageAuthor?.photoUrl, brandName, t]);
+  }, [editor, byline, bylineInContent, pageAuthor?.name, pageAuthor?.photoUrl, brandName, t]);
   const pickAuthor = async (next: string | null) => {
     if (next === authorId) return;
     const pick = ++authorPick.current;
@@ -1327,6 +1336,11 @@ export function DraftEditor({
     publishableHtml(
       htmlSource !== null ? htmlFromSource(htmlSource) : (editor?.getHTML() ?? draft.bodyHtml),
     );
+  // The byline line a brand with Add byline to content puts under the H1.
+  const contentByline =
+    bylineInContent && authorsRead
+      ? t('author.by', { name: pageAuthor?.name ?? t('author.organization', { brand: brandName }) })
+      : null;
   // Export (CE-057), once Quality is live: where it goes, its checks and fields.
   // The page as it was when Export opened: what it shows stays still while open.
   const [exportOpen, setExportOpen] = useState<{
@@ -1343,7 +1357,11 @@ export function DraftEditor({
       setExportOpen({ html, destination: 'html' });
       return;
     }
-    void copyToClipboard(html, t('copyHtmlDone'), t('copyHtmlFailed', { html: '</> HTML' }));
+    void copyToClipboard(
+      contentByline ? withByline(html, contentByline) : html,
+      t('copyHtmlDone'),
+      t('copyHtmlFailed', { html: '</> HTML' }),
+    );
   };
 
   /** Export: the page as Copy HTML gives it, as a Word, HTML or Markdown file. */
@@ -1689,6 +1707,7 @@ export function DraftEditor({
               onPick={(next) => void pickAuthor(next)}
               open={authorMenuOpen}
               onOpenChange={setAuthorMenuOpen}
+              inContent={bylineInContent}
             />
           )}
           <DraftMethodBadge method={draft.method} />
@@ -1931,6 +1950,7 @@ export function DraftEditor({
           author={pageAuthor}
           // Until the authors are read, who it is by isn't known.
           teamByline={authorsRead ? t('author.organization', { brand: brandName }) : ''}
+          byline={contentByline}
           checks={pasteChecks(exportOpen.html, linkChecks)}
           linksPending={linksPending}
           initialDestination={exportOpen.destination}
@@ -1949,6 +1969,7 @@ export function DraftEditor({
             setPublishOpen(null);
             fillFirstPlaceholder();
           }}
+          bylineInContent={bylineInContent}
           onContinue={() => {
             setPublishOpen(null);
             openExport();

@@ -6,6 +6,7 @@ import {
   pageFields,
   pasteChecks,
   titlePlaceholders,
+  withByline,
   withoutLeadingH1,
   withoutPlaceholders,
 } from './ready-to-publish';
@@ -143,6 +144,35 @@ describe('pageFields', () => {
     });
     expect(metaDescription.length).toBeLessThanOrEqual(160);
     expect(metaDescription.endsWith('slowly…')).toBe(true);
+  });
+});
+
+describe('withByline', () => {
+  it('puts one byline line under the H1, or at the top of a page with none, as text', () => {
+    expect(withByline('<h1>Pour-over</h1><p>Brew.</p>', 'By Ada Lovelace')).toBe(
+      '<h1>Pour-over</h1><p>By Ada Lovelace</p><p>Brew.</p>',
+    );
+    expect(withByline('<p>Brew.</p><h1>Late</h1>', 'By <Acme> Team')).toBe(
+      '<p>By &lt;Acme&gt; Team</p><p>Brew.</p><h1>Late</h1>',
+    );
+    expect(withByline('<h1>Pour-over</h1>\n<p>Brew.</p>', 'By Ada')).toBe(
+      '<h1>Pour-over</h1>\n<p>By Ada</p>\n<p>Brew.</p>',
+    );
+  });
+
+  it('keeps the rest as written, under an H1 an image comes before, and adds none twice or alone', () => {
+    // An HTML block's code is not rewritten (a template would close <path/>).
+    expect(withByline('<h1>Pour-over</h1><svg><path d="M0"/></svg>', 'By Ada')).toBe(
+      '<h1>Pour-over</h1><p>By Ada</p><svg><path d="M0"/></svg>',
+    );
+    expect(
+      withByline('<img src="https://cdn.acme.com/a.jpg"><h1>Pour-over</h1><p>Brew.</p>', 'By Ada'),
+    ).toBe('<img src="https://cdn.acme.com/a.jpg"><h1>Pour-over</h1><p>By Ada</p><p>Brew.</p>');
+    expect(withByline('<h1>Pour-over</h1>\n<p>By  Ada</p>\n<p>Brew.</p>', 'By Ada')).toBe(
+      '<h1>Pour-over</h1>\n<p>By  Ada</p>\n<p>Brew.</p>',
+    );
+    expect(withByline('', 'By Ada')).toBe('');
+    expect(withByline('<p></p>', 'By Ada')).toBe('<p></p>');
   });
 });
 

@@ -44,7 +44,7 @@ export async function getContentAuthors(
       .order('name'),
     supabase
       .from('brands')
-      .select('id, name')
+      .select('id, name, content_byline')
       .eq('organization_id', profile.organization_id)
       .order('name'),
     supabase.from('content_author_defaults').select('brand_id, author_id'),
@@ -82,7 +82,11 @@ export async function getContentAuthors(
       defaultFor: defaults.filter((d) => d.author_id === row.id).map((d) => d.brand_id),
       pages: pages?.[i] ?? null,
     })),
-    brands: (brandsRes.data ?? []).map((b) => ({ id: b.id, name: b.name })),
+    brands: (brandsRes.data ?? []).map((b) => ({
+      id: b.id,
+      name: b.name,
+      bylineInContent: !!b.content_byline,
+    })),
     me: { id: auth.user.id, role: profile.role ?? 'analyst' },
   };
 }
@@ -160,6 +164,24 @@ export async function deleteContentAuthor(id: string): Promise<void> {
   if (!z.guid().safeParse(id).success) throw new Error('invalid');
   const supabase = await createClient();
   const { data, error } = await supabase.from('content_authors').delete().eq('id', id).select('id');
+  if (error) throw new Error(error.message);
+  if (!data?.length) throw new Error('forbidden');
+}
+
+/**
+ * Add byline to content (Quality spec §9, CE-057): a brand whose CMS has
+ * no author field puts one byline line under the H1 in its exports. Admins
+ * and managers (brands: admin/manager update); a brand they can't change
+ * is refused.
+ */
+export async function setBrandByline(brandId: string, on: boolean): Promise<void> {
+  if (!z.guid().safeParse(brandId).success || typeof on !== 'boolean') throw new Error('invalid');
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from('brands')
+    .update({ content_byline: on })
+    .eq('id', brandId)
+    .select('id');
   if (error) throw new Error(error.message);
   if (!data?.length) throw new Error('forbidden');
 }

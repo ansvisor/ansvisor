@@ -26,6 +26,7 @@ import {
   exportPlaceholders,
   pageFields,
   titlePlaceholders,
+  withByline,
   withoutLeadingH1,
   withoutPlaceholders,
   type PasteChecks,
@@ -111,6 +112,7 @@ export function ExportDialog({
   sourceUrl,
   author,
   teamByline,
+  byline,
   checks,
   linksPending,
   initialDestination,
@@ -125,6 +127,8 @@ export function ExportDialog({
   author: ContentAuthor | null;
   /** The team byline; empty while the authors aren't read. */
   teamByline: string;
+  /** The byline line the brand puts in the content (Add byline to content), or null. */
+  byline: string | null;
   checks: PasteChecks;
   /** The page's links whose read may still come. */
   linksPending: number;
@@ -160,7 +164,12 @@ export function ExportDialog({
     () => pageFields({ title, html: content, sourceUrl, author, teamByline }),
     [title, content, sourceUrl, author, teamByline],
   );
-  const out = TITLE_FIELD.has(destination) ? withoutLeadingH1(content) : content;
+  // The brand's byline line under the H1 (the fields read the page without it).
+  const withLine = useMemo(
+    () => (byline ? withByline(content, byline) : content),
+    [byline, content],
+  );
+  const out = TITLE_FIELD.has(destination) ? withoutLeadingH1(withLine) : withLine;
 
   const pick = (next: ExportDestination) => {
     setDestination(next);
@@ -212,7 +221,7 @@ export function ExportDialog({
     const name = title.trim() || t('untitled');
     try {
       saveBlob(
-        await draftExportBlob(format, name, content, exportFields),
+        await draftExportBlob(format, name, withLine, exportFields),
         draftExportFileName(name, format),
       );
     } catch (err) {
@@ -300,7 +309,7 @@ export function ExportDialog({
       label: t('fields.author'),
       value: fields.author || null,
       shown: fields.author
-        ? t('fields.authorValue', { name: fields.author })
+        ? t(byline ? 'fields.authorInContent' : 'fields.authorValue', { name: fields.author })
         : t('fields.noAuthor'),
     },
     {

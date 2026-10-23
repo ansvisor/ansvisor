@@ -25,7 +25,8 @@ export interface ContentAuthor {
 
 export interface AuthorsRead {
   authors: ContentAuthor[];
-  brands: { id: string; name: string }[];
+  /** The brands, and whether exports put the byline in the content (00257, CE-057). */
+  brands: { id: string; name: string; bylineInContent?: boolean }[];
   /** The member reading: what they may change. */
   me: { id: string; role: string };
 }

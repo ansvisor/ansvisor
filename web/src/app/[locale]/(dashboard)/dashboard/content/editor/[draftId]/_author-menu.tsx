@@ -39,6 +39,7 @@ export function AuthorMenu({
   onPick,
   open,
   onOpenChange,
+  inContent = false,
 }: {
   brandId: string;
   brandName: string;
@@ -48,6 +49,8 @@ export function AuthorMenu({
   /** Open from outside too: Quality's Pick author. */
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
+  /** The brand adds the byline to content (CE-057): exports carry it. */
+  inContent?: boolean;
 }) {
   const t = useTranslations('contentEditor.editor.author');
   const author = authors.find((a) => a.id === authorId) ?? null;
@@ -57,7 +60,7 @@ export function AuthorMenu({
     <DropdownMenu open={open} onOpenChange={(next) => onOpenChange?.(next)}>
       <DropdownMenuTrigger
         aria-label={t('change', { name })}
-        title={t('hint')}
+        title={inContent ? t('hintInContent') : t('hint')}
         className={cn(
           badgeVariants({ variant: 'outline' }),
           'max-w-56 cursor-pointer gap-1 font-normal hover:bg-muted',

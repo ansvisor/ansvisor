@@ -2889,6 +2889,25 @@ describe('the side panel', () => {
       );
     });
 
+    it('puts the byline under the H1 for a brand that adds it to content, and says so', async () => {
+      const writeText = vi.fn().mockResolvedValue(undefined);
+      Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+      getContentAuthors.mockResolvedValue({
+        authors: [],
+        brands: [{ id: 'b1', name: 'Acme', bylineInContent: true }],
+        me: { id: 'u1', role: 'analyst' },
+      });
+      getContentDraft.mockResolvedValue(draft());
+      await renderPage();
+      expect(container.textContent).toContain(
+        'Page info · exports put the "By …" line under the H1',
+      );
+      await act(async () => button('Copy HTML')!.click());
+      expect(writeText).toHaveBeenCalledWith(
+        '<h1>Pipeline forecasting</h1>\n<p>By Acme Team</p>\n<p>Teams trust it.</p>',
+      );
+    });
+
     it('copies at once with no placeholder, and keeps the menu while Quality is off', async () => {
       const writeText = vi.fn().mockResolvedValue(undefined);
       Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });

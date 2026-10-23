@@ -16,6 +16,7 @@ const actions = vi.hoisted(() => ({
   saveContentAuthor: vi.fn(),
   deleteContentAuthor: vi.fn(),
   setDefaultAuthor: vi.fn(),
+  setBrandByline: vi.fn(),
 }));
 vi.mock('@/lib/actions/content-authors', () => actions);
 const toast = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn() }));
@@ -87,6 +88,7 @@ beforeEach(() => {
   actions.saveContentAuthor.mockResolvedValue({ id: BOB });
   actions.deleteContentAuthor.mockResolvedValue(undefined);
   actions.setDefaultAuthor.mockResolvedValue(undefined);
+  actions.setBrandByline.mockResolvedValue(undefined);
   container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);
@@ -113,6 +115,10 @@ const buttons = (name: string) =>
 const row = (name: string) =>
   [...container.querySelectorAll('li')].find((li) => li.textContent?.includes(name))!;
 const trigger = () => container.querySelector<HTMLElement>(`[aria-labelledby="default-${ACME}"]`)!;
+const byline = () =>
+  [...container.querySelectorAll<HTMLElement>('[role="checkbox"]')].find((c) =>
+    c.closest('label')?.textContent?.includes('Add byline to content'),
+  )!;
 const isMe = () =>
   [...document.querySelectorAll<HTMLElement>('[role="checkbox"]')].find((c) =>
     c.closest('label')?.textContent?.includes('This author is me'),
@@ -174,6 +180,44 @@ describe('AuthorsSection', () => {
     });
     await click(team);
     expect(actions.setDefaultAuthor).toHaveBeenCalledWith(ACME, null);
+  });
+
+  it("lets a manager add the byline to a brand's content, off by default (CE-057)", async () => {
+    await render();
+    expect(byline().getAttribute('aria-checked')).toBe('false');
+    expect(byline().hasAttribute('data-disabled')).toBe(true);
+    expect(container.textContent).toContain('only for a CMS with no author field');
+
+    actions.getContentAuthors.mockResolvedValue(workspace('manager'));
+    await act(async () => root.unmount());
+    root = createRoot(container);
+    await render();
+    await click(byline());
+    expect(actions.setBrandByline).toHaveBeenCalledWith(ACME, true);
+    expect(actions.getContentAuthors).toHaveBeenCalledTimes(3);
+
+    expect(byline().getAttribute('aria-describedby')).toBe(`default-${ACME}`);
+
+    // Held while it saves; switched off, it sends false.
+    actions.getContentAuthors.mockResolvedValue({
+      ...workspace('manager'),
+      brands: [{ id: ACME, name: 'Acme', bylineInContent: true }],
+    });
+    let saved: () => void = () => {};
+    actions.setBrandByline.mockReturnValue(new Promise<void>((resolve) => (saved = resolve)));
+    await act(async () => root.unmount());
+    root = createRoot(container);
+    await render();
+    expect(byline().getAttribute('aria-checked')).toBe('true');
+    await click(byline());
+    expect(actions.setBrandByline).toHaveBeenLastCalledWith(ACME, false);
+    expect(byline().getAttribute('aria-checked')).toBe('false');
+    expect(byline().hasAttribute('data-disabled')).toBe(true);
+    await act(async () => saved());
+
+    actions.setBrandByline.mockRejectedValue(new Error('forbidden'));
+    await click(byline());
+    expect(toast.error).toHaveBeenCalledWith("Couldn't change Add byline to content.");
   });
 
   it('adds an author, one profile link per line, and holds a link that is not https', async () => {

@@ -607,6 +607,7 @@ export type Database = {
       }
       brands: {
         Row: {
+          content_byline: boolean
           created_at: string
           description: string | null
           ga_property_id: string | null
@@ -631,6 +632,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          content_byline?: boolean
           created_at?: string
           description?: string | null
           ga_property_id?: string | null
@@ -655,6 +657,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          content_byline?: boolean
           created_at?: string
           description?: string | null
           ga_property_id?: string | null

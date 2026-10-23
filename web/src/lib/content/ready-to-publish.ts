@@ -244,6 +244,37 @@ export function pageFields({
   };
 }
 
+/**
+ * The byline in the content (Add byline to content, a brand's opt-in for a
+ * CMS with no author field): one line under the page's H1, or at its top
+ * when it opens with no H1. The rest of the HTML goes out as written; a
+ * page that already has the line there, or has no words, gets none.
+ */
+export function withByline(html: string, byline: string): string {
+  const root = fragment(html);
+  // The page's first words: an image or code before them leaves them first.
+  const lead = Array.from(root.children).find(
+    (el) => !el.matches('script, style, template') && el.textContent?.trim(),
+  );
+  if (!lead) return html;
+  const words = (el: Element | null) => (el?.textContent ?? '').replace(/\s+/g, ' ').trim();
+  const line = document.createElement('p');
+  line.textContent = byline;
+  // A page written one block a line (publishableHtml) keeps that.
+  const gap = html.includes('\n') ? '\n' : '';
+  if (lead.matches('h1')) {
+    const next = lead.nextElementSibling;
+    if (next?.matches('p') && words(next) === words(line)) return html;
+    const end = /<\/h1\s*>/i.exec(html);
+    if (end) {
+      const at = end.index + end[0].length;
+      return html.slice(0, at) + gap + line.outerHTML + html.slice(at);
+    }
+  }
+  if (lead.matches('p') && words(lead) === words(line)) return html;
+  return line.outerHTML + gap + html;
+}
+
 /** The page's leading H1, for a destination whose title field holds it. */
 export function withoutLeadingH1(html: string): string {
   const root = fragment(html);
