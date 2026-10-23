@@ -70,7 +70,7 @@ beforeEach(async () => {
   };
   checkLinks.mockReset().mockResolvedValue({
     reads: new Map([['https://a.example/', { status: 'ok', httpStatus: 200, date: null }]]),
-    fetched: 1,
+    skipped: ['/pricing'],
   });
   fetched = [];
   fetchResult = {
@@ -169,10 +169,11 @@ describe('POST /api/content-pages/links', () => {
     expect(res.status).toBe(200);
     await expect(res.json()).resolves.toEqual({
       links: [{ href: 'https://a.example/', status: 'ok', httpStatus: 200, date: null }],
+      skipped: ['/pricing'],
     });
     expect(checkLinks).toHaveBeenCalledWith(
       ['https://a.example/', 'https://a.example/#x', '/pricing'],
-      expect.objectContaining({ budget: expect.any(Number) }),
+      expect.objectContaining({ reserve: expect.any(Function) }),
     );
   });
 

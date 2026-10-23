@@ -14,9 +14,8 @@ const {
   checkLinks,
   linkStatus,
   pageDate,
-  readBudget,
   readableLink,
-  spendReads,
+  reserveReads,
 } = await import('./link-check.js');
 
 /**
@@ -106,6 +105,19 @@ describe('pageDate', () => {
     expect(pageDate(html, NOW)).toBe('2019-03-01T00:00:00.000Z');
   });
 
+  it("takes an article's date before its WebPage's, which may be the site's build", () => {
+    const html = `<script type="application/ld+json">[
+        {"@type":"WebPage","dateModified":"2026-10-01"},
+        {"@type":"Article","datePublished":"2021-04-04"}]</script>`;
+    expect(pageDate(html, NOW)).toBe('2021-04-04T00:00:00.000Z');
+    expect(
+      pageDate(
+        '<script type="application/ld+json">{"@type":"WebPage","dateModified":"2026-10-01"}</script>',
+        NOW,
+      ),
+    ).toBe('2026-10-01T00:00:00.000Z');
+  });
+
   it("falls back to article meta, then to the article's first <time>", () => {
     expect(
       pageDate(
@@ -134,6 +146,9 @@ describe('readableLink', () => {
     expect(readableLink('https://a.example/auth/magic-link/abc')).toBe(false);
     expect(readableLink('https://a.example/x?token=abc')).toBe(false);
     expect(readableLink('https://a.example/confirm-email')).toBe(false);
+    // Words in an article's address aren't account links.
+    expect(readableLink('https://a.example/blog/how-to-verify-a-domain')).toBe(true);
+    expect(readableLink(`https://a.example/${'x'.repeat(2100)}`)).toBe(false);
   });
 });
 
@@ -145,7 +160,7 @@ describe('checkLinks', () => {
       if (url.includes('gone')) throw new PageFetchError('http_error', '404', { status: 404 });
       return page(url, '<article><time datetime="2025-06-01">June</time></article>');
     });
-    const { reads, fetched } = await checkLinks(
+    const { reads, skipped } = await checkLinks(
       [
         'https://a.example/x',
         'https://a.example/x#part',
@@ -153,11 +168,12 @@ describe('checkLinks', () => {
         'https://gone.example/',
         '/pricing',
         'mailto:hi@a.example',
+        'https://a.example/unsubscribe',
       ],
       { db, fetcher, now: NOW, log: silent },
     );
     expect(fetcher).toHaveBeenCalledTimes(2);
-    expect(fetched).toBe(2);
+    expect(skipped).toEqual(['/pricing', 'mailto:hi@a.example', 'https://a.example/unsubscribe']);
     const ok = { status: 'ok', httpStatus: 200, date: '2025-06-01T00:00:00.000Z' };
     expect(Object.fromEntries(reads)).toEqual({
       'https://a.example/x': ok,
@@ -209,18 +225,19 @@ describe('checkLinks', () => {
     expect(log.error).toHaveBeenCalled();
   });
 
-  it(`reads ${MAX_LINKS} links at most, and no more than the budget`, async () => {
+  it(`reads ${MAX_LINKS} links at most, and no more than it may`, async () => {
     const { db } = fakeDb();
     const fetcher = vi.fn(async (url) => page(url));
     const urls = Array.from({ length: MAX_LINKS + 5 }, (_, i) => `https://s${i}.example/`);
     let result = await checkLinks(urls, { db, fetcher, now: NOW, log: silent });
     expect(result.reads.size).toBe(MAX_LINKS);
+    expect(result.skipped).toHaveLength(5);
     fetcher.mockClear();
     result = await checkLinks(['https://t1.example/', 'https://t2.example/'], {
       db,
       fetcher,
       now: NOW,
-      budget: 1,
+      reserve: (wanted) => Math.min(wanted, 1),
       log: silent,
     });
     expect(fetcher).toHaveBeenCalledTimes(1);
@@ -257,11 +274,13 @@ describe('checkLinks', () => {
   });
 });
 
-describe('readBudget', () => {
-  it('gives each member HOURLY_READS an hour', () => {
-    expect(readBudget('u-budget', NOW)).toBe(HOURLY_READS);
-    spendReads('u-budget', 150, NOW);
-    expect(readBudget('u-budget', NOW + 60_000)).toBe(HOURLY_READS - 150);
-    expect(readBudget('u-budget', NOW + 61 * 60 * 1000)).toBe(HOURLY_READS);
+describe('reserveReads', () => {
+  it('gives each member HOURLY_READS an hour, taken at once', () => {
+    expect(reserveReads('u-budget', 150, NOW)).toBe(150);
+    // Asks made together share what is left.
+    expect(reserveReads('u-budget', 40, NOW + 1)).toBe(40);
+    expect(reserveReads('u-budget', 40, NOW + 2)).toBe(HOURLY_READS - 190);
+    expect(reserveReads('u-budget', 5, NOW + 3)).toBe(0);
+    expect(reserveReads('u-budget', 5, NOW + 61 * 60 * 1000)).toBe(5);
   });
 });

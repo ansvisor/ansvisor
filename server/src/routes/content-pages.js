@@ -4,7 +4,7 @@ import { z } from 'zod';
 import supabaseAdmin from '../config/supabase.js';
 import { assertBrandAccess } from '../lib/access.js';
 import { onBrandDomain } from '../lib/audit/host.js';
-import { checkLinks, readBudget, spendReads } from '../lib/link-check.js';
+import { checkLinks, reserveReads } from '../lib/link-check.js';
 import { MAX_CONTENT_LENGTH, extractPageContent } from '../lib/page-content.js';
 import { PageFetchError, fetchPage } from '../lib/safe-fetch.js';
 import { linkCheckLimiter } from '../middleware/rate-limiter.js';
@@ -92,7 +92,8 @@ const linksBody = z.object({ draftId: z.guid() });
  * whether each answers and how old its page is (link-check.js). Any member
  * of the draft's brand may ask; the links are read from the draft as saved,
  * never from the request, through the same guarded fetch, at most once a
- * day each and HOURLY_READS an hour per member.
+ * day each and HOURLY_READS an hour per member (link-check.js). `skipped`
+ * are the links it never reads (relative, one-time or account links).
  */
 router.post('/links', linkCheckLimiter, async (req, res) => {
   const parsed = linksBody.safeParse(req.body);
@@ -111,12 +112,14 @@ router.post('/links', linkCheckLimiter, async (req, res) => {
     const hrefs = $('a[href]')
       .map((_, el) => $(el).attr('href'))
       .get();
-    const { reads, fetched } = await checkLinks(hrefs, {
-      budget: readBudget(req.user.id),
+    const { reads, skipped } = await checkLinks(hrefs, {
+      reserve: (wanted) => reserveReads(req.user.id, wanted),
       log: req.log,
     });
-    spendReads(req.user.id, fetched);
-    return res.json({ links: [...reads].map(([href, read]) => ({ href, ...read })) });
+    return res.json({
+      links: [...reads].map(([href, read]) => ({ href, ...read })),
+      skipped,
+    });
   } catch (err) {
     if (err?.status === 403 || err?.status === 404) {
       return res.status(err.status).json({ error: err.message, code: 'forbidden' });
