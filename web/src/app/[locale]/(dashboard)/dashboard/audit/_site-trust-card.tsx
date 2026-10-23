@@ -1,13 +1,18 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useFormatter, useTranslations } from 'next-intl';
-import { Check, ExternalLink, X } from 'lucide-react';
+import { useFormatter, useNow, useTranslations } from 'next-intl';
+import { Check, Clock, ExternalLink, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { LoadingDots } from '@/components/ui/loading-dots';
 import { getSiteTrust } from '@/lib/actions/audits';
-import { SITE_TRUST_CHECKS, type SiteTrust, type SiteTrustCheck } from '@/lib/content/site-trust';
+import {
+  SITE_TRUST_CHECKS,
+  SITE_TRUST_RECHECK_MS,
+  type SiteTrust,
+  type SiteTrustCheck,
+} from '@/lib/content/site-trust';
 import { cn } from '@/lib/utils';
 
 /**
@@ -42,6 +47,18 @@ export function SiteTrustCard({ brandId }: { brandId: string }) {
     void load(false);
   }, [load]);
 
+  // The API keeps a read for SITE_TRUST_RECHECK_MS when asked again, so Check
+  // again would answer the same read: it waits, and says until when.
+  const now = useNow({ updateInterval: 15_000 });
+  const recheckAt = trust ? Date.parse(trust.checkedAt) + SITE_TRUST_RECHECK_MS : 0;
+  const tooSoon = !!trust && now.getTime() < recheckAt;
+  // A partial read (the site didn't answer all of it) is read again once
+  // that wait is over, as its rows say.
+  const partial = trust?.complete === false;
+  useEffect(() => {
+    if (partial && !tooSoon) void load(false);
+  }, [partial, tooSoon, load]);
+
   // Quality's "Fix in Site Audit" lands here (#site-trust): once the card has
   // its read, and the cards above have theirs, it scrolls into view once.
   const scrolled = useRef(false);
@@ -64,7 +81,8 @@ export function SiteTrustCard({ brandId }: { brandId: string }) {
           variant="outline"
           size="sm"
           className="shrink-0"
-          disabled={checking || !trust}
+          disabled={checking || !trust || tooSoon}
+          aria-describedby={tooSoon ? 'site-trust-recheck' : undefined}
           onClick={() => void load(true)}
         >
           {checking && <LoadingDots className="mr-1.5" />}
@@ -105,6 +123,14 @@ export function SiteTrustCard({ brandId }: { brandId: string }) {
                   timeStyle: 'short',
                 }),
               })}
+              {tooSoon && (
+                <span id="site-trust-recheck">
+                  {' · '}
+                  {t('checkAgainAt', {
+                    time: format.dateTime(new Date(recheckAt), { timeStyle: 'short' }),
+                  })}
+                </span>
+              )}
             </p>
           </>
         )}
@@ -121,9 +147,15 @@ function CheckRow({ check, trust }: { check: SiteTrustCheck; trust: SiteTrust })
   const url = check === 'authorPages' ? null : (trust.checks[check].url ?? null);
   const authors = check === 'authorPages' ? trust.checks.authorPages.authors : [];
   const withoutPage = authors.filter((a) => !a.url).map((a) => a.name);
+  // With a partial read, a check that fails may only not have been read: no
+  // advice to add what the site may already have. No authors at all isn't
+  // the site's answer.
+  const unread = !ok && trust.complete === false && (check !== 'authorPages' || authors.length > 0);
 
   let detail: string;
-  if (check === 'authorPages') {
+  if (unread) {
+    detail = t('notAnswered');
+  } else if (check === 'authorPages') {
     detail = !authors.length
       ? t('checks.authorPages.noAuthors')
       : ok
@@ -141,17 +173,25 @@ function CheckRow({ check, trust }: { check: SiteTrustCheck; trust: SiteTrust })
           'mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full',
           ok
             ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300'
-            : 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300',
+            : unread
+              ? 'bg-muted text-muted-foreground'
+              : 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300',
         )}
       >
-        {ok ? <Check className="h-3 w-3" /> : <X className="h-3 w-3" />}
+        {ok ? (
+          <Check className="h-3 w-3" />
+        ) : unread ? (
+          <Clock className="h-3 w-3" />
+        ) : (
+          <X className="h-3 w-3" />
+        )}
       </span>
       <div className="min-w-0 flex-1">
         <p className="text-sm font-medium">
           {t(`checks.${check}.name`)}
           <span className="sr-only">
             {' · '}
-            {ok ? t('passes') : t('missingLabel')}
+            {ok ? t('passes') : unread ? t('notAnsweredLabel') : t('missingLabel')}
           </span>
         </p>
         <p className="text-xs text-muted-foreground [overflow-wrap:anywhere]">{detail}</p>

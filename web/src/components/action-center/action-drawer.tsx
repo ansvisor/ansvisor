@@ -5,6 +5,7 @@ import { useTranslations } from 'next-intl';
 import { useRouter } from '@/i18n/navigation';
 import { toast } from 'sonner';
 import { ChevronRight, Plus, Trash2 } from 'lucide-react';
+import { RemovedNote } from '@/components/action-center/removed-note';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -416,6 +417,7 @@ export function ActionDrawer({
                     {tag}
                   </Badge>
                 ))}
+            <RemovedNote payload={action.payload ?? {}} />
           </div>
         </SheetHeader>
 

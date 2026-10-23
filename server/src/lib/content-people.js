@@ -1,4 +1,5 @@
 import * as cheerio from 'cheerio';
+import { logger } from './logger.js';
 
 /**
  * No invented people or quotes (Content Editor Quality spec §9, CE-044).
@@ -11,8 +12,11 @@ import * as cheerio from 'cheerio';
  *
  * A name is read where a person is plainly meant: after Dr./Prof./Mr./Ms.,
  * next to a role ("CEO Jane Doe", "Jane Doe, head of sales", "Jane Doe
- * (CEO)"), or with speech ("Jane Doe said", "according to Jane Doe",
- * "Ayşe Yılmaz'a göre"). A quoted sentence is two words or more in
+ * (CEO)"), or with a verb only people do ("Jane Doe said", "told Jane Doe",
+ * "Ayşe Yılmaz'a göre"); a product or a company recommends, adds or
+ * describes too ("Google Ads recommends"). A name or a quote is known when
+ * what the agent was given has it as whole words ("Chen" isn't in
+ * "kitchen"). A quoted sentence is two words or more in
  * quotation marks next to speech, four or more anywhere, or a blockquote or
  * <q>; a term in quotes ("AI visibility") is no quote. Headings are read
  * for quotes and speech only: their capitals aren't names.
@@ -24,24 +28,26 @@ export const QUOTE_PLACEHOLDER = '[quote from a real person, with its source]';
 /** A quote this short is a term in quotes, unless someone is said to say it. */
 const MIN_QUOTE_WORDS = 4;
 
-/** Words as compared: lowercased, quotes and apostrophes one kind, spaces collapsed. */
-function normalize(text) {
-  return String(text ?? '')
+/**
+ * Words as compared, whole: lowercased, with what isn't a letter, a mark or
+ * a digit (quotes, apostrophes, punctuation, spaces) as one space ("O'Neil"
+ * → "o neil", the same on both sides).
+ */
+const wordsOf = (text) =>
+  String(text ?? '')
     .toLowerCase()
-    .replace(/[“”„«»]/g, '"')
-    .replace(/[‘’`]/g, "'")
-    .replace(/\s+/g, ' ')
+    .replace(/[^\p{L}\p{M}\p{N}]+/gu, ' ')
     .trim();
-}
 
 /** What the agent was given, read as one text names and quotes are looked up in. */
 export function knownPeople(...texts) {
-  return { text: normalize(texts.filter(Boolean).join('\n')) };
+  return { words: ` ${wordsOf(texts.filter(Boolean).join('\n'))} ` };
 }
 
+/** Whether what the agent was given has these words, whole: "Chen" isn't in "kitchen". */
 const isKnown = (words, known) => {
-  const needle = normalize(words).replace(/^[\s"'.,;:!?…-]+|[\s"'.,;:!?…-]+$/g, '');
-  return needle.length > 0 && known.text.includes(needle);
+  const needle = wordsOf(words);
+  return needle.length > 0 && known.words.includes(` ${needle} `);
 };
 
 const wordCount = (text) => (String(text).match(/\p{L}[\p{L}\p{N}'’-]*/gu) ?? []).length;
@@ -130,7 +136,15 @@ const ROLE_ANY = `(?:${ROLE_WORDS.map((r) =>
 /** Role words, to tell them from the name after them ("Founder Jane Doe"). */
 const ROLE_SET = new Set(ROLE_WORDS.filter((r) => !r.includes(' ')));
 
+/** Speech, read with a quote: whoever or whatever says it, it is a quote. */
 const SPEECH = String.raw`(?:says|said|told|tells|explains|explained|notes|noted|writes|wrote|recalls|recalled|adds|added|argues|argued|believes|warns|warned|states|stated|puts it|put it|emphasi[sz]es|emphasi[sz]ed|suggests|suggested|recommends|recommended|advises|advised|points out|pointed out|shares|shared|observes|observed|insists|insisted|admits|admitted|comments|commented|agrees|agreed|claims|claimed|predicts|predicted|describes|described|sagt|sagte|meint|erklärt|dit|explique|dice|explica|afirma|söyledi|diyor|belirtti|açıkladı)`;
+/**
+ * Verbs said of people only, read with a name that has no honorific or role
+ * ("Marco Rossi said"): the rest of SPEECH a product or a company does too
+ * ("Google Ads recommends", "Microsoft Teams adds", "Product Hunt
+ * describes"), so those read a name only with an honorific or a role.
+ */
+const PERSON_SPEECH = String.raw`(?:said|told|explained|recalled|admitted|insisted|argued|sagte|söyledi)`;
 
 /**
  * Where a name plainly means a person: the name is the group "name", with
@@ -181,13 +195,14 @@ const NAME_CUES = [
     words: 1,
     role: true,
   },
-  // "Jane Doe said", "Anna Schmidt sagt".
-  { re: new RegExp(String.raw`(?<name>${NAME})\s+${SPEECH}(?!\p{L})`, 'gu'), words: 2 },
-  // "said Jane Doe.", "according to Jane Doe," — a name the sentence stops at,
-  // not "according to Google Search Console data".
+  // "Jane Doe said", "Anna Schmidt sagte".
+  { re: new RegExp(String.raw`(?<name>${NAME})\s+${PERSON_SPEECH}(?!\p{L})`, 'gu'), words: 2 },
+  // "said Jane Doe.", "told by Jane Doe," — a name the sentence stops at.
+  // "According to" isn't read: it goes with a tool as well ("according to
+  // Google Analytics"), and with a role a name is read all the same.
   {
     re: new RegExp(
-      String.raw`(?<!\p{L})(?:[Aa]ccording to|${SPEECH}(?:\s+by)?|quoted)\s+(?<name>${NAME})(?=\s*(?:[.,;:!?)]|$))`,
+      String.raw`(?<!\p{L})${PERSON_SPEECH}(?:\s+by)?\s+(?<name>${NAME})(?=\s*(?:[.,;:!?)]|$))`,
       'gu',
     ),
     words: 2,
@@ -450,13 +465,20 @@ export function guardPeopleInHtml(html, known) {
 
 /**
  * The words of the workspace's authors (Settings › Authors): names, titles
- * and bios a page may name them by.
+ * and bios a page may name them by. One that can't be read (content_authors
+ * not there yet, a failed read) is logged and reads as none: the run goes
+ * on, and an author's name it writes becomes a placeholder like any other.
  */
-export async function authorWords(db, organizationId) {
-  const { data, error } = await db
-    .from('content_authors')
-    .select('name, title, bio')
-    .eq('organization_id', organizationId);
-  if (error) throw error;
-  return (data ?? []).flatMap((a) => [a.name, a.title, a.bio]).filter(Boolean);
+export async function authorWords(db, organizationId, log = logger) {
+  try {
+    const { data, error } = await db
+      .from('content_authors')
+      .select('name, title, bio')
+      .eq('organization_id', organizationId);
+    if (error) throw error;
+    return (data ?? []).flatMap((a) => [a.name, a.title, a.bio]).filter(Boolean);
+  } catch (err) {
+    log.warn({ err, organizationId }, '[content-people] authors not read');
+    return [];
+  }
 }

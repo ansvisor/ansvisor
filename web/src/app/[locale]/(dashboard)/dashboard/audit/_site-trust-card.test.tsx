@@ -45,10 +45,10 @@ beforeEach(() => {
 });
 afterEach(() => act(() => root.unmount()));
 
-async function render() {
+async function render(now?: Date) {
   await act(async () => {
     root.render(
-      <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
+      <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC" now={now}>
         <SiteTrustCard brandId="b1" />
       </NextIntlClientProvider>,
     );
@@ -56,6 +56,8 @@ async function render() {
 }
 
 const rows = () => [...container.querySelectorAll('li')].map((li) => li.textContent);
+const checkAgain = () =>
+  [...container.querySelectorAll('button')].find((b) => b.textContent === 'Check again')!;
 
 describe('SiteTrustCard', () => {
   it('shows the score and each check, with its page or what to add', async () => {
@@ -79,6 +81,55 @@ describe('SiteTrustCard', () => {
     )!;
     await act(async () => again.click());
     expect(getSiteTrust).toHaveBeenLastCalledWith('b1', true);
+  });
+
+  it('holds Check again for 10 minutes after a read, and says until when', async () => {
+    await render(new Date('2026-10-23T12:04:00.000Z'));
+    expect(checkAgain().disabled).toBe(true);
+    expect(container.textContent).toContain('You can check again at 12:10 PM.');
+    expect(checkAgain().getAttribute('aria-describedby')).toBe('site-trust-recheck');
+  });
+
+  it("says the site didn't answer on the rows a partial read leaves failing", async () => {
+    getSiteTrust.mockResolvedValue({ ...TRUST, complete: false });
+    await render(new Date('2026-10-23T12:04:00.000Z'));
+    expect(rows()).toEqual([
+      'About page · passesFound on your site.Open',
+      'Contact page · passesFound on your site.Open',
+      "Editorial policy · not readYour site didn't answer; checking again in a few minutes.",
+      'Organization schema on the home page · passesYour home page names your organization in its JSON-LD.Open',
+      "Author pages · not readYour site didn't answer; checking again in a few minutes.",
+    ]);
+  });
+
+  it('still asks for authors first on a partial read', async () => {
+    getSiteTrust.mockResolvedValue({
+      ...TRUST,
+      checks: { ...TRUST.checks, authorPages: { ok: false, authors: [] } },
+      complete: false,
+    });
+    await render(new Date('2026-10-23T12:04:00.000Z'));
+    expect(rows()[4]).toContain('Add your authors in Settings › Authors');
+  });
+
+  it('reads a partial read again once the 10 minutes are over', async () => {
+    vi.useFakeTimers({ toFake: ['Date', 'setInterval', 'clearInterval'] });
+    try {
+      vi.setSystemTime(new Date('2026-10-23T12:04:00.000Z'));
+      getSiteTrust.mockResolvedValue({ ...TRUST, complete: false });
+      await render();
+      expect(getSiteTrust).toHaveBeenCalledTimes(1);
+
+      await act(async () => vi.advanceTimersByTime(5 * 60 * 1000));
+      expect(getSiteTrust).toHaveBeenCalledTimes(1);
+      getSiteTrust.mockResolvedValue({ ...TRUST, checkedAt: '2026-10-23T12:10:00.000Z' });
+      await act(async () => vi.advanceTimersByTime(60 * 1000));
+      expect(getSiteTrust).toHaveBeenCalledTimes(2);
+      expect(getSiteTrust).toHaveBeenLastCalledWith('b1', false);
+      expect(rows()[2]).toContain('Add a page on how you write and check content');
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('asks for authors first when there are none', async () => {
