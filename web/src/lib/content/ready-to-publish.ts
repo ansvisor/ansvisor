@@ -1,8 +1,8 @@
 import { slugify } from '@/lib/slug';
 import type { ContentAuthor } from './authors';
-import { cleanHref } from './html-allowlist';
+import { cleanHref, jsonLdText } from './html-allowlist';
 import { firstImage } from './page-schema';
-import { PLACEHOLDER } from './placeholders';
+import { PLACEHOLDER, placeholderIn } from './placeholders';
 import type { LinkCheck } from './quality-checks';
 
 /**
@@ -14,14 +14,20 @@ import type { LinkCheck } from './quality-checks';
  * heading or the title is filled first: a heading has no sentence to drop).
  */
 
-/** HTML as a fragment: a script at its start stays where it is (DOMParser's body would move it). */
-function fragment(html: string): HTMLElement {
-  const template = document.createElement('template');
-  template.innerHTML = html;
-  const root = document.createElement('div');
-  root.append(template.content);
+/**
+ * HTML as a fragment, in a document of its own: nothing in it loads or runs
+ * (an image, an HTML block's code), and a script at its start stays where
+ * it is (DOMParser's body would move it).
+ */
+export function fragment(html: string): HTMLElement {
+  const doc = document.implementation.createHTMLDocument('');
+  const root = doc.createElement('div');
+  root.innerHTML = html;
   return root;
 }
+
+/** Headings: a placeholder there is filled first, never left out. */
+const HEADINGS = 'h1, h2, h3, h4, h5, h6';
 
 /** The text nodes of a page, in order, outside its code (JSON-LD is read apart). */
 function textNodes(root: Node): Text[] {
@@ -39,8 +45,29 @@ function textNodes(root: Node): Text[] {
   return out;
 }
 
-/** Where a placeholder can hide besides the words: alt and title text, and JSON-LD. */
-function otherText(root: HTMLElement): { get: () => string; set: (value: string) => void }[] {
+/** A text that can be read and changed in place. */
+interface Field {
+  get: () => string;
+  set: (value: string) => void;
+}
+
+/** A JSON value's strings, each as a field: its arrays and objects are no placeholders. */
+function jsonStrings(value: unknown): Field[] {
+  if (typeof value !== 'object' || value === null) return [];
+  const box = value as Record<string, unknown>;
+  return Object.keys(box).flatMap((key) =>
+    typeof box[key] === 'string'
+      ? [{ get: () => box[key] as string, set: (next: string) => void (box[key] = next) }]
+      : jsonStrings(box[key]),
+  );
+}
+
+/**
+ * Where a placeholder can hide besides the words: alt and title text, and
+ * JSON-LD's strings. A JSON-LD changed is written again as JSON; one that
+ * doesn't parse is left as written, read for none.
+ */
+function otherText(root: HTMLElement): Field[] {
   const attributes = Array.from(root.querySelectorAll('[alt], [title]')).flatMap((el) =>
     ['alt', 'title']
       .filter((name) => el.hasAttribute(name))
@@ -49,16 +76,29 @@ function otherText(root: HTMLElement): { get: () => string; set: (value: string)
         set: (value: string) => el.setAttribute(name, value),
       })),
   );
-  const jsonLd = Array.from(root.querySelectorAll('script[type="application/ld+json"]')).map(
-    (script) => ({
-      get: () => script.textContent ?? '',
-      set: (value: string) => void (script.textContent = value),
-    }),
+  const jsonLd = Array.from(root.querySelectorAll('script[type="application/ld+json"]')).flatMap(
+    (script) => {
+      let value: unknown;
+      try {
+        value = JSON.parse(script.textContent ?? '');
+      } catch {
+        return [];
+      }
+      return jsonStrings(value).map((field) => ({
+        get: field.get,
+        set: (next: string) => {
+          field.set(next);
+          script.textContent = jsonLdText(value);
+        },
+      }));
+    },
   );
   return [...attributes, ...jsonLd];
 }
 
-const count = (text: string) => text.match(PLACEHOLDER)?.length ?? 0;
+/** A text's placeholders; a heading's (and a title's) are the agent's own forms only. */
+const count = (text: string, heading = false) => text.match(placeholderIn(heading))?.length ?? 0;
+const inHeading = (node: Node) => !!node.parentElement?.closest(HEADINGS);
 
 /**
  * The title's placeholders, when the page doesn't hold them already: a
@@ -68,23 +108,21 @@ export function titlePlaceholders(title: string, html: string): number {
   const h1 = fragment(html).querySelector('h1');
   const same =
     h1 && (h1.textContent ?? '').replace(/\s+/g, ' ').trim() === title.replace(/\s+/g, ' ').trim();
-  return same ? 0 : count(title);
+  return same ? 0 : count(title, true);
 }
 
 /**
  * The placeholders in the HTML an export gives: in its words (an HTML
- * block's too), its images' alt and title text, and its JSON-LD.
+ * block's too), its images' alt and title text, and its JSON-LD's strings.
  */
 export function exportPlaceholders(html: string): number {
   const root = fragment(html);
   return (
-    textNodes(root).reduce((sum, node) => sum + count(node.data), 0) +
+    textNodes(root).reduce((sum, node) => sum + count(node.data, inHeading(node)), 0) +
     otherText(root).reduce((sum, field) => sum + count(field.get()), 0)
   );
 }
 
-/** Headings: a placeholder there is filled first, never left out. */
-const HEADINGS = 'h1, h2, h3, h4, h5, h6';
 /** Lines whose text is read as sentences. */
 const LINES = `p, li, td, th, dd, dt, figcaption, blockquote, caption, summary, ${HEADINGS}`;
 
@@ -122,7 +160,7 @@ function cut(nodes: Text[], ranges: { start: number; end: number }[]) {
 /**
  * The HTML with each placeholder left out (Export without them): the
  * sentence it is in goes; one anywhere else (an HTML block's own tags, an
- * alt text, JSON-LD) goes alone. A heading's stays, to be filled first. A
+ * alt text, a JSON-LD string) goes alone. A heading's stays, to be filled first. A
  * line, an item, a quote or a row left with no words goes too; formatting
  * in what stays is kept.
  */
@@ -143,7 +181,7 @@ export function withoutPlaceholders(html: string): string {
   }
   // What no line holds: the placeholder alone.
   for (const node of textNodes(root)) {
-    if (node.parentElement?.closest(HEADINGS)) continue;
+    if (inHeading(node)) continue;
     if (one.test(node.data)) node.data = node.data.replace(PLACEHOLDER, '').replace(/\s{2,}/g, ' ');
   }
   for (const field of otherText(root)) {

@@ -93,6 +93,11 @@ export function normalizeJsonLd(text: string): string | null {
     return null;
   }
   if (typeof value !== 'object' || value === null) return null;
+  return jsonLdText(value);
+}
+
+/** A JSON value as a draft's JSON-LD script holds it: <, > and & escaped. */
+export function jsonLdText(value: unknown): string {
   return JSON.stringify(value)
     .replace(/</g, '\\u003c')
     .replace(/>/g, '\\u003e')

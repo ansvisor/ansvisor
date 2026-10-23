@@ -75,7 +75,7 @@ import {
 import { PAGE_READ_DELAY_MS, draftTitleFromDoc, safeLinkHref } from '@/lib/content/editor';
 import { JsonLd } from '@/lib/content/json-ld-node';
 import { firstImage } from '@/lib/content/page-schema';
-import { PLACEHOLDER, pagePlaceholders } from '@/lib/content/placeholders';
+import { PLACEHOLDER, pagePlaceholders, placeholderIn } from '@/lib/content/placeholders';
 import { exportPlaceholders, pasteChecks, titlePlaceholders } from '@/lib/content/ready-to-publish';
 import { detectPageType } from '@/lib/content/page-types';
 import { BAND_CLASSES, qualityAverage, qualityBand, qualityPhase } from '@/lib/content/quality';
@@ -927,11 +927,11 @@ export function DraftEditor({
    */
   /**
    * The page's first placeholder (CE-044), selected to type over: in order,
-   * across the marks in its line, its block flashed as Show's are.
+   * across the marks in its line, its block flashed as Show's are. A
+   * heading's are the agent's own forms only (AGENT_PLACEHOLDER).
    */
   const showFirstPlaceholder = (): boolean => {
     if (!editor) return false;
-    const one = new RegExp(PLACEHOLDER.source, 'iu');
     let found: { from: number; to: number; block: { from: number; to: number } } | null = null;
     editor.state.doc.descendants((block, pos) => {
       if (found) return false;
@@ -944,7 +944,7 @@ export function DraftEditor({
         pieces.push({ at: text.length, pos: pos + 1 + offset });
         text += child.text;
       });
-      const m = one.exec(text);
+      const m = new RegExp(placeholderIn(block.type.name === 'heading').source, 'iu').exec(text);
       if (!m) return false;
       const posOf = (i: number) => {
         const piece = pieces.findLast((p) => p.at <= i)!;
@@ -1927,6 +1927,7 @@ export function DraftEditor({
           onClose={() => setExportOpen(null)}
           title={title}
           html={exportOpen.html}
+          isNew={draft.method === 'create'}
           sourceUrl={draft.sourceUrl}
           author={pageAuthor}
           // Until the authors are read, who it is by isn't known.

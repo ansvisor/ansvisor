@@ -108,6 +108,7 @@ export function ExportDialog({
   onClose,
   title,
   html,
+  isNew,
   sourceUrl,
   author,
   teamByline,
@@ -120,6 +121,8 @@ export function ExportDialog({
   title: string;
   /** The page as Copy HTML gives it (publishableHtml). */
   html: string;
+  /** A new page; an optimized one is already live, with its published date. */
+  isNew: boolean;
   /** The live page an optimized draft is for: its address is the slug. */
   sourceUrl: string | null;
   author: ContentAuthor | null;
@@ -199,7 +202,9 @@ export function ExportDialog({
       description: fields.metaDescription,
       slug: fields.slug,
       author: fields.author,
-      date: localDate(new Date()),
+      // As Before you publish's JSON-LD: a live page keeps its published
+      // date (a site's "date"), and today is when it was updated.
+      ...(isNew ? { date: localDate(new Date()) } : { lastmod: localDate(new Date()) }),
       ...(fields.featuredImage ? { image: fields.featuredImage } : {}),
     },
     head: {
