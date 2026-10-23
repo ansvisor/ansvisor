@@ -35,6 +35,8 @@ function answer(table: string, calls: Call[]): Row[] {
 }
 
 let entityCounts: unknown[] = [];
+/** Tables whose reads fail, and how. */
+let errors: Record<string, { code: string; message: string }>;
 vi.mock('@/lib/supabase/server', () => ({
   createClient: vi.fn(async () => ({
     from: (table: string) => {
@@ -48,7 +50,11 @@ vi.mock('@/lib/supabase/server', () => ({
         };
       }
       chain.then = (resolve: (value: unknown) => unknown) =>
-        resolve({ data: answer(table, query.calls), error: null });
+        resolve(
+          errors[table]
+            ? { data: null, error: errors[table] }
+            : { data: answer(table, query.calls), error: null },
+        );
       return chain;
     },
     // The actions' list counts (AC-009): nothing removed here.
@@ -78,9 +84,19 @@ const lost = (id: string, promptId: string, promptText: string, actions: string[
   action_signals: actions.map((action_id) => ({ action_id })),
 });
 
+/** A prompt an action kept when it was created (action_entities, 00244). */
+const kept = (actionId: string, key: string, label: string, removed = false): Row => ({
+  action_id: actionId,
+  entity_type: 'prompts',
+  entity_key: key,
+  label,
+  removed_at: removed ? '2026-10-12T00:00:00Z' : null,
+});
+
 beforeEach(() => {
   queries = [];
   entityCounts = [];
+  errors = {};
   rows = {
     actions: [
       { id: 'a1', payload: {} },
@@ -115,6 +131,86 @@ describe('getActionsAffected', () => {
     const result = await getActionsAffected('b1', ['a1']);
     // 13 prompts when it was created, one deleted since: 12, not the 2 the signals name now.
     expect(result.a1.count).toBe(12);
+  });
+
+  it('lists what an action kept, so its count and names agree (00244)', async () => {
+    rows.actions[0].payload = { targetEntity: 'prompts', targetCount: 4 };
+    entityCounts = [
+      {
+        action_id: 'a1',
+        entity_type: 'prompts',
+        total: 4,
+        removed: 1,
+        removed_labels: ['Old coffee prompt'],
+        removed_keys: ['p4'],
+      },
+    ];
+    // A signal the nightly pass added later, about a prompt a1 never kept.
+    rows.signals.push(lost('s4', 'p3', 'Cheapest coffee beans?', ['a1']));
+    rows.action_entities = [
+      kept('a1', 'p1', 'Best coffee subscription?'),
+      kept('a1', 'p2', 'Coffee delivery near me'),
+      // Kept, but no signal names it now: listed by its label.
+      kept('a1', 'p5', 'Coffee grinder reviews'),
+      // Paused since: counted out, not listed.
+      kept('a1', 'p4', 'Old coffee prompt', true),
+    ];
+
+    const result = await getActionsAffected('b1', ['a1', 'a2']);
+    expect(result.a1).toEqual({
+      count: 3,
+      items: ['Best coffee subscription?', 'Coffee delivery near me', 'Coffee grinder reviews'],
+    });
+    expect(result.a1.items).toHaveLength(result.a1.count);
+    // An action with no list reads its signals, as before.
+    expect(result.a2).toEqual({ count: 1, items: ['Coffee delivery near me'] });
+    // One read of the lists for the chunk, not one per action.
+    const reads = queries.filter((q) => q.table === 'action_entities');
+    expect(reads).toHaveLength(1);
+    expect(reads[0].calls).toContainEqual(['in', 'action_id', ['a1', 'a2']]);
+  });
+
+  it("reads the kept lists past one response's rows, a page at a time", async () => {
+    rows.actions[0].payload = { targetEntity: 'prompts', targetCount: 1001 };
+    rows.signals = [];
+    rows.action_entities = Array.from({ length: 1001 }, (_, i) =>
+      kept('a1', `p${i}`, `Prompt ${i}`),
+    );
+    const result = await getActionsAffected('b1', ['a1']);
+
+    expect(result.a1.count).toBe(1001);
+    expect(result.a1.items).toHaveLength(1001);
+    const ranges = queries
+      .filter((q) => q.table === 'action_entities')
+      .map((q) => q.calls.find(([method]) => method === 'range'));
+    expect(ranges).toEqual([
+      ['range', 0, 999],
+      ['range', 1000, 1999],
+    ]);
+  });
+
+  it('reads the signals, quietly, on a database without the kept lists (before 00244)', async () => {
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      rows.actions[0].payload = { targetEntity: 'prompts', targetCount: 2 };
+      // What a read would have listed: one of the two.
+      rows.action_entities = [kept('a1', 'p1', 'Best coffee subscription?')];
+      for (const code of ['PGRST205', '42P01']) {
+        errors.action_entities = { code, message: 'relation "action_entities" does not exist' };
+        expect((await getActionsAffected('b1', ['a1'])).a1).toEqual({
+          count: 2,
+          items: ['Best coffee subscription?', 'Coffee delivery near me'],
+        });
+      }
+      expect(logged).not.toHaveBeenCalled();
+
+      // Any other failure is logged, and the export still reads the signals.
+      errors.action_entities = { code: '57014', message: 'canceling statement' };
+      expect((await getActionsAffected('b1', ['a1'])).a1.count).toBe(2);
+      expect(logged).toHaveBeenCalledTimes(1);
+    } finally {
+      logged.mockRestore();
+    }
   });
 
   it("reads past one response's rows, a page at a time", async () => {

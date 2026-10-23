@@ -8,7 +8,7 @@ import { SIGNAL_ROW_COLUMNS, mapSignalRows, type SignalRow } from '@/lib/signals
 import { readPromptPlaces } from '@/lib/signals/prompt-places';
 import { OPEN_SIGNAL_STATUSES, type SignalStatus } from '@/lib/signals/registry';
 import { UNCOUNTED_TASK_STATUSES } from '@/lib/action-center/registry';
-import { affectedOf, affectedSignals } from '@/lib/action-center/affected';
+import { affectedOf, affectedSignals, demandPromptIds } from '@/lib/action-center/affected';
 import {
   currentTaskParams,
   readEntityCounts,
@@ -294,7 +294,8 @@ export async function exportActionFor(
   // demand, and the Why and Goal in the action's own terms (AC-003).
   const evidence = affectedSignals(detail.signals, action.id);
   const affected = affectedOf(evidence, action.payload ?? {}, kept);
-  const promptIds = affected.prompts.map((p) => p.id).filter((id): id is string => !!id);
+  // The rows' prompts and those the Why names from the signals, as in the drawer.
+  const promptIds = demandPromptIds(affected, evidence, action.payload ?? {});
   // Best effort, as in the drawer: without it the Volume column is left out.
   const volumes = promptIds.length
     ? await readPromptDemand(supabaseAdmin, brandId, promptIds).catch(() => null)

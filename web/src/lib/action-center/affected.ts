@@ -156,6 +156,21 @@ export function affectedOf(
   return out;
 }
 
+/**
+ * The prompts whose demand a drawer reads: its Affected rows' (the kept
+ * list's), and those its signals name. The Why is told from the signals
+ * (actionStory), and they can name prompts the action didn't keep: read for
+ * the rows alone, its range would leave those out.
+ */
+export function demandPromptIds(
+  affected: Affected,
+  signals: Signal[],
+  payload: Record<string, unknown> = {},
+): string[] {
+  const ids = [...affected.prompts, ...affectedOf(signals, payload).prompts].map((row) => row.id);
+  return [...new Set(ids.filter((id): id is string => !!id))];
+}
+
 /** The rows as the action's kept list has them (affectedOf). */
 function keptRows(
   out: Affected,

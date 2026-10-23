@@ -6,6 +6,7 @@ import {
   affectedOf,
   affectedSummary,
   affectedTotal,
+  demandPromptIds,
   leaderText,
   type Affected,
 } from './affected';
@@ -336,6 +337,23 @@ describe('affectedOf', () => {
         { type: 'competitors', key: 'c1', label: 'Profound', removed: false },
       ]).prompts,
     ).toHaveLength(1);
+  });
+
+  it("reads demand for the rows' prompts and those the signals name outside the kept list", () => {
+    const signals = [
+      signal({ payload: { promptId: P1, promptText: 'Which tools track AI search?' } }),
+      // Named by the signals (and so by the Why), never kept by the action.
+      signal({ id: 's2', payload: { promptId: P9, promptText: 'Cheapest AI rank tracker?' } }),
+      // Removed since: in neither.
+      signal({ id: 's3', payload: { promptId: P2, promptText: 'Best AI rank tracker?' } }),
+    ];
+    const payload = { targetEntity: 'prompts', targetCount: 1, removedKeys: [P2] };
+    const affected = affectedOf(signals, payload, [
+      keptPrompt(P1, 'Which tools track AI search?'),
+      keptPrompt(P2, 'Best AI rank tracker?', true),
+    ]);
+    expect(affected.prompts.map((p) => p.id)).toEqual([P1]);
+    expect(demandPromptIds(affected, signals, payload)).toEqual([P1, P9]);
   });
 
   it('is empty for an action with nothing to list', () => {

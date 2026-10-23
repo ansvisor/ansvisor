@@ -7,6 +7,7 @@ import type { Signal } from '@/lib/signals/map';
 import {
   affectedOf,
   affectedSignals,
+  demandPromptIds,
   type Affected,
   type KeptEntity,
 } from '@/lib/action-center/affected';
@@ -53,13 +54,17 @@ export function useActionStory(
     [action, evidence, kept],
   );
 
-  // Each affected prompt's demand. Best effort: without it the column is left
-  // out. Kept with the prompts it was read for, so a read still under way is
-  // told apart from one that failed.
-  const promptIdsKey = (affected?.prompts ?? [])
-    .map((row) => row.id)
-    .filter(Boolean)
-    .join(',');
+  // Each affected prompt's demand, and that of the prompts the Why names from
+  // the signals (some the action didn't keep). Best effort: without it the
+  // column is left out. Kept with the prompts it was read for, so a read
+  // still under way is told apart from one that failed.
+  const promptIdsKey = useMemo(
+    () =>
+      action && evidence && affected
+        ? demandPromptIds(affected, evidence, action.payload ?? {}).join(',')
+        : '',
+    [action, evidence, affected],
+  );
   const demandKey = `${brandId}:${promptIdsKey}`;
   const [demand, setDemand] = useState<{
     key: string;

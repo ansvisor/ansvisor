@@ -35,6 +35,7 @@ import {
   currentTaskParams,
   readEntityCounts,
   readKeptEntities,
+  readKeptEntityLists,
   withEntityCounts,
   withoutTargetIds,
 } from '@/lib/action-center/entity-counts';
@@ -568,9 +569,10 @@ const AFFECTED_PAGE_SIZE = 1000;
 
 /**
  * Each action's affected items, for the actions list's Export CSV (AC-005):
- * the count and names the drawer's Affected tab shows, from the signals the
- * action rests on — or, for one a person sent, from what it was sent about.
- * Read page by page, so a brand with many signals is read whole.
+ * the count and names the drawer's Affected tab shows, from what the action
+ * kept (00244) and the signals it rests on — or, for one a person sent, from
+ * what it was sent about. Read page by page, so a brand with many signals is
+ * read whole.
  */
 export async function getActionsAffected(
   brandId: string,
@@ -612,9 +614,12 @@ export async function getActionsAffected(
     return (data ?? []) as { id: string; payload: Record<string, unknown> | null }[];
   };
 
-  const [signalChunks, payloadChunks, places, entityCounts] = await Promise.all([
+  const [signalChunks, payloadChunks, keptChunks, places, entityCounts] = await Promise.all([
     Promise.all(chunks.map(readSignals)),
     Promise.all(chunks.map(readPayloads)),
+    // What each kept (00244): its rows, as in the drawer. Without them (a
+    // database before 00244), the signals'.
+    Promise.all(chunks.map((chunk) => readKeptEntityLists(supabase, chunk))),
     readPromptPlaces(supabase, brandId),
     // The count each action shows (AC-009), so the CSV's agrees with its title.
     readEntityCounts(supabase, ids),
@@ -628,6 +633,10 @@ export async function getActionsAffected(
       rowsByAction.set(link.action_id, list);
     }
   }
+  const keptByAction = new Map<string, KeptEntity[]>();
+  for (const lists of keptChunks) {
+    for (const [actionId, kept] of lists ?? []) keptByAction.set(actionId, kept);
+  }
   const summaries: Record<string, { count: number; items: string[] }> = {};
   for (const action of payloadChunks.flat()) {
     const signals = mapSignalRows(rowsByAction.get(action.id) ?? [], places);
@@ -635,6 +644,7 @@ export async function getActionsAffected(
       affectedOf(
         affectedSignals(signals, action.id),
         withEntityCounts(action.payload ?? {}, entityCounts.get(action.id)),
+        keptByAction.get(action.id) ?? null,
       ),
     );
   }

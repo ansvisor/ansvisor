@@ -3,6 +3,8 @@ import { createRoot, type Root } from 'react-dom/client';
 import { NextIntlClientProvider } from 'next-intl';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ActionItem } from '@/lib/actions/action-center';
+import type { Signal } from '@/lib/signals/map';
+import { promptVolumeEstimate } from '@/lib/volume-estimate';
 import messages from '../../../messages/en.json';
 
 /**
@@ -16,6 +18,7 @@ const server = vi.hoisted(() => ({
   assignAction: vi.fn(),
   deleteTask: vi.fn(),
   getActionDetail: vi.fn(),
+  getPromptDemand: vi.fn(),
   setActionDueDate: vi.fn(),
   updateActionStatus: vi.fn(),
   updateTaskStatus: vi.fn(),
@@ -123,6 +126,55 @@ describe('ActionDrawer', () => {
     }
     expect(drawer.querySelector<HTMLInputElement>('#action-drawer-due-date')!.value).toBe(
       '2026-11-01',
+    );
+  });
+
+  it("gives the Why the demand of a signal's prompt the action didn't keep", async () => {
+    const lost = (id: string, promptId: string, promptText: string) =>
+      ({
+        id,
+        category: 'citation',
+        kind: 'lost_citations',
+        impact: 'high',
+        status: 'new',
+        source: ['ai_results'],
+        detectedAt: '2026-10-09T00:00:00Z',
+        lastDetectedAt: '2026-10-09T00:00:00Z',
+        resolvedAt: null,
+        previousValue: null,
+        currentValue: null,
+        changeValue: null,
+        payload: { promptId, promptText },
+        kpiKeys: [],
+        actionId: 'a1',
+        where: { platforms: ['chatgpt-web'], regions: [], topics: [] },
+      }) as Signal;
+    const estimate = promptVolumeEstimate({
+      estAiVolume: 5500,
+      googleVolumes: { a: 10_000, b: 12_200, c: 14_000 },
+      aiVolumeMultiplier: 0.45,
+      keywords: ['a', 'b', 'c'],
+      fetchedAt: new Date().toISOString(),
+    });
+    server.getActionDetail.mockResolvedValue({
+      ...emptyDetail,
+      // p2 is named by a signal the nightly pass added, never kept by the action.
+      signals: [
+        lost('s1', 'p1', 'Best coffee subscription?'),
+        lost('s2', 'p2', 'Coffee delivery near me'),
+      ],
+      entities: [
+        { type: 'prompts', key: 'p1', label: 'Best coffee subscription?', removed: false },
+      ],
+    });
+    server.getPromptDemand.mockResolvedValue({ p1: estimate, p2: estimate });
+
+    await renderDrawer({ ...action, payload: { targetEntity: 'prompts', targetCount: 1 } });
+
+    expect(server.getPromptDemand).toHaveBeenCalledWith('b1', ['p1', 'p2']);
+    // Both prompts' demand, not the kept one's alone (4.1–6.9k).
+    expect(document.body.querySelector('[role="dialog"]')!.textContent).toContain(
+      '2 prompts (8.2–13.8k AI searches a month, estimated)',
     );
   });
 
