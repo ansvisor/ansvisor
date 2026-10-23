@@ -17,6 +17,17 @@ import {
 import { contentBriefModelId, rebuildSources } from './content-brief.js';
 import { linkAllowList, linkTargetsPrompt, readLinkTargets } from './content-links.js';
 import { pageTypeFormat } from './content-page-types.js';
+import {
+  MAX_PAGE_HTML,
+  MAX_REWRITE_CHARS,
+  REWRITE_SYSTEM_PROMPT,
+  cleanPageHtml,
+  keepBlocks,
+  restoreKept,
+  rewriteLinks,
+  rewriteSchema,
+  textLength,
+} from './content-rewrite.js';
 import { getLanguageName } from './languages.js';
 import { logger } from './logger.js';
 import { reserveAiBudget } from './plan-guard.js';
@@ -174,7 +185,10 @@ Call to action: ${opportunityBrief.callToAction || '—'}`;
   return 'No brief: plan the sections from the questions and AI searches below.';
 }
 
-/** What the model is told, for a new page or an existing one. */
+/**
+ * What the model is told, for a new page, an existing one (passage by
+ * passage) or one it rewrites whole (`current`: keepBlocks' page).
+ */
 export function buildWritePrompt({
   brand,
   draft,
@@ -185,20 +199,23 @@ export function buildWritePrompt({
   more = false,
   lockedKeys,
   linkTargets = '',
+  current = null,
 }) {
   const { sources } = input;
   const rules = input.rules.map((r) => `${r.key}: ${r.name}${r.detail ? ` — ${r.detail}` : ''}`);
   const own = input.textRules.map((text) => `- ${text}`);
-  const page = passages
-    ? `The page, passage by passage:\n${passages
-        .map((p, i) => {
-          const locked = lockedKeys.has(passageKey(p.text)) ? ', LOCKED' : '';
-          return `[${i + 1}] (${p.tag}${locked}) ${p.text}`;
-        })
-        .join(
-          '\n',
-        )}${more ? '\n(The page goes on; suggest changes only to the passages above.)' : ''}`
-    : `Write a new page titled about: ${draft.title || 'the questions below'}.`;
+  const page = current
+    ? `The page now, as HTML (about ${textLength(current.html)} characters of text):\n${current.html}`
+    : passages
+      ? `The page, passage by passage:\n${passages
+          .map((p, i) => {
+            const locked = lockedKeys.has(passageKey(p.text)) ? ', LOCKED' : '';
+            return `[${i + 1}] (${p.tag}${locked}) ${p.text}`;
+          })
+          .join(
+            '\n',
+          )}${more ? '\n(The page goes on; suggest changes only to the passages above.)' : ''}`
+      : `Write a new page titled about: ${draft.title || 'the questions below'}.`;
   return `Brand: ${brand?.name || 'Unknown'}
 Industry: ${brand?.industry || 'Not specified'}
 Description: ${brand?.description || 'N/A'}
@@ -255,7 +272,7 @@ async function organizationWriting(organizationId, draftId, staleBefore) {
  * once the budget is spent, and the provider's error when the model isn't
  * set up — all before anything runs.
  */
-export async function startDraftWriting({ draftId, brandId, input }) {
+export async function startDraftWriting({ draftId, brandId, input, rewrite = false }) {
   const { data: draft, error: draftError } = await supabaseAdmin
     .from('content_drafts')
     .select(
@@ -283,13 +300,30 @@ export async function startDraftWriting({ draftId, brandId, input }) {
       code: 'writing',
     });
   }
-  // An existing page's run leaves a new batch, which would hide the open
-  // one (the editor shows the latest), as Fix open rules and the API refuse.
-  if (draft.method === 'optimize' && (await hasOpenSuggestions(draftId))) {
+  // An existing page's run, and a rewrite, leave a new batch, which would
+  // hide the open one (the editor shows the latest), as Fix open rules and
+  // the API refuse.
+  if ((rewrite || draft.method === 'optimize') && (await hasOpenSuggestions(draftId))) {
     throw Object.assign(new Error('Decide the open suggestions first'), {
       status: 409,
       code: 'open_suggestions',
     });
+  }
+  if (rewrite) {
+    // A page to rewrite, small enough to send whole.
+    if (!draftPassages(draft.body_html).length) {
+      throw Object.assign(new Error('The page has no text to rewrite'), {
+        status: 422,
+        code: 'empty',
+      });
+    }
+    const page = keepBlocks(draft.body_html, new Set(input.locked.map(passageKey)));
+    if (textLength(page.html) > MAX_REWRITE_CHARS) {
+      throw Object.assign(new Error('The page is too long to rewrite whole'), {
+        status: 422,
+        code: 'too_long',
+      });
+    }
   }
 
   const { data: brand, error: brandError } = await supabaseAdmin
@@ -332,7 +366,7 @@ export async function startDraftWriting({ draftId, brandId, input }) {
       });
     }
 
-    runDraftWriting({ draft, brand, model, input, budget }).catch((err) =>
+    runDraftWriting({ draft, brand, model, input, budget, rewrite }).catch((err) =>
       logger.error({ err, draftId }, '[content-writer] run failed'),
     );
   } catch (err) {
@@ -368,12 +402,95 @@ async function letGo(draftId) {
 }
 
 /**
+ * A whole page rewritten to the rules, left as ONE suggestion (kind 'page',
+ * 00247) beside the page as it was: the person compares them and accepts or
+ * rejects it. What the page keeps word for word goes as [[KEEP n]] lines and
+ * is put back as it was (content-rewrite.js); a rewrite that drops one, or
+ * leaves no page, fails the run. The draft's status doesn't change.
+ */
+async function rewritePage({ draft, brand, model, input, budget, prompts, brief }) {
+  const page = keepBlocks(draft.body_html, new Set(input.locked.map(passageKey)));
+  const ruleKeys = new Set(input.rules.map((r) => r.key));
+  // Where it may link: the brand's pages and the draft's sources (A).
+  const targets = await readLinkTargets({
+    brandId: draft.brand_id,
+    draftId: draft.id,
+    sourceUrl: draft.source_url,
+    ruleKeys,
+  });
+  const { object, usage } = await generateObject({
+    model,
+    schema: rewriteSchema,
+    system: REWRITE_SYSTEM_PROMPT,
+    prompt: buildWritePrompt({
+      brand,
+      draft,
+      prompts,
+      brief,
+      input,
+      linkTargets: linkTargetsPrompt(targets, ruleKeys),
+      current: page,
+    }),
+    abortSignal: AbortSignal.timeout(CALL_TIMEOUT_MS),
+  });
+  await budget.charge(usage);
+
+  const cleaned = cleanPageHtml(
+    object.html,
+    rewriteLinks(draft.body_html, linkAllowList(targets)),
+    {
+      h1Kept: page.h1Kept,
+      originalH1: page.h1,
+    },
+  );
+  const { html, missing } = restoreKept(cleaned, page.kept);
+  if (missing.length) {
+    throw new Error(`The rewrite left out ${missing.length} kept block(s)`);
+  }
+  if (!textLength(html) || html.length > MAX_PAGE_HTML) {
+    throw new Error('The agent left no page to review');
+  }
+  // A batch that landed during the run stays the one to decide.
+  if (await hasOpenSuggestions(draft.id)) {
+    logger.info({ draftId: draft.id }, '[content-writer] open suggestions came in during the run');
+    return await letGo(draft.id);
+  }
+  const batchId = randomUUID();
+  const { error: insertError } = await supabaseAdmin.from('content_draft_suggestions').insert({
+    draft_id: draft.id,
+    batch_id: batchId,
+    action_id: draft.action_id ?? null,
+    position: 0,
+    kind: 'page',
+    // The passage it stands at: the page's first.
+    block_text:
+      clean(draftPassages(draft.body_html)[0]?.text).slice(0, 5000) || clean(draft.title) || 'Page',
+    before_text: '',
+    before_html: draft.body_html,
+    after_text: html,
+    reason: clean(object.reason).slice(0, 300) || 'Rewrote the page to the rules',
+    rule_keys: [...ruleKeys],
+  });
+  if (insertError) throw insertError;
+  if (!(await finish(draft.id, { agent_state: null }, { openOnly: true }))) {
+    // Nobody reviews a rewrite of a page already marked ready.
+    const { error: dropError } = await supabaseAdmin
+      .from('content_draft_suggestions')
+      .delete()
+      .eq('batch_id', batchId);
+    if (dropError) throw dropError;
+    return await letGo(draft.id);
+  }
+  return { rewritten: true };
+}
+
+/**
  * The run itself: the page written, or the suggestions left, and the draft
  * In review; 'failed' when the model fails or leaves nothing to review. The
  * model's answer is charged to the hold Start took on the budget
  * (reserveAiBudget); a run that ends before one lets the hold go.
  */
-export async function runDraftWriting({ draft, brand, model, input, budget }) {
+export async function runDraftWriting({ draft, brand, model, input, budget, rewrite = false }) {
   try {
     const [promptsRes, opportunityRes] = await Promise.all([
       input.sources.promptIds.length
@@ -397,6 +514,10 @@ export async function runDraftWriting({ draft, brand, model, input, budget }) {
     if (opportunityRes.error) throw opportunityRes.error;
     const prompts = (promptsRes.data ?? []).map((p) => p.text);
     const brief = briefText(draft.brief, opportunityRes.data?.brief);
+
+    if (rewrite) {
+      return await rewritePage({ draft, brand, model, input, budget, prompts, brief });
+    }
 
     if (draft.method === 'create') {
       const { object, usage } = await generateObject({

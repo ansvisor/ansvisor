@@ -500,3 +500,105 @@ describe('runDraftWriting on an existing page', () => {
     expect(draftUpdates()).toEqual([{ agent_state: 'failed', agent_state_at: expect.any(String) }]);
   });
 });
+
+describe('Rewrite the page to these rules', () => {
+  const QUOTED = 'Pour-over coffee tastes cleaner than a French press.';
+  const existing = draftRow({
+    method: 'optimize',
+    status: 'in_review',
+    body_html:
+      `<h1>Pour-over</h1><p>${QUOTED}</p><p>Use good coffee. ${'Filler. '.repeat(20)}</p>` +
+      '<table><tbody><tr><td>Ratio</td><td>1:16</td></tr></tbody></table>' +
+      '<p>See <a href="/pricing">pricing</a>.</p>',
+    action_id: 'act-1',
+  });
+  const locked = [passageKey(QUOTED)];
+  const run = (over = {}) =>
+    runDraftWriting({
+      draft: existing,
+      brand,
+      model: 'model:m',
+      input: input({ locked, ...over }),
+      budget,
+      rewrite: true,
+    });
+  const answer = (html, reason = 'cut to about 3,000 characters') =>
+    generateObject.mockResolvedValue({
+      object: { html, reason },
+      usage: { inputTokens: 900, outputTokens: 700 },
+    });
+
+  it('starts only on a page with text, small enough to send whole, and no open batch', async () => {
+    rows.content_drafts = existing;
+    hasOpenSuggestions.mockResolvedValueOnce(true);
+    await expect(
+      startDraftWriting({ draftId: DRAFT, brandId: BRAND, input: input(), rewrite: true }),
+    ).rejects.toMatchObject({ status: 409, code: 'open_suggestions' });
+    rows.content_drafts = { ...existing, method: 'create', body_html: '<p> </p>' };
+    await expect(
+      startDraftWriting({ draftId: DRAFT, brandId: BRAND, input: input(), rewrite: true }),
+    ).rejects.toMatchObject({ status: 422, code: 'empty' });
+    rows.content_drafts = { ...existing, body_html: `<p>${'word '.repeat(13_000)}</p>` };
+    await expect(
+      startDraftWriting({ draftId: DRAFT, brandId: BRAND, input: input(), rewrite: true }),
+    ).rejects.toMatchObject({ status: 422, code: 'too_long' });
+    // Refused before anything was held or claimed.
+    expect(reserveAiBudget).not.toHaveBeenCalled();
+    expect(draftUpdates()).toEqual([]);
+  });
+
+  it('leaves the whole page as one suggestion, with what it kept put back as it was', async () => {
+    answer(
+      '<h1>Pour-over coffee</h1><p>[[KEEP 1]]</p><p>Use good coffee, freshly ground.</p>' +
+        '<p>[[KEEP 2]]</p><p>See <a href="/pricing">pricing</a> or <a href="https://evil.example">this</a>.</p>',
+    );
+    await expect(run()).resolves.toEqual({ rewritten: true });
+
+    const { system, prompt } = generateObject.mock.calls[0][0];
+    expect(system).toContain('Each [[KEEP n]] line is a block kept word for word');
+    // The quoted passage and the table never reach the model as text.
+    expect(prompt).toContain('The page now, as HTML');
+    expect(prompt).not.toContain(QUOTED);
+    expect(prompt).not.toContain('1:16');
+    expect(budget.charge).toHaveBeenCalledWith({ inputTokens: 900, outputTokens: 700 });
+
+    const row = writes.find((w) => w.table === 'content_draft_suggestions').value;
+    expect(row).toMatchObject({
+      draft_id: DRAFT,
+      action_id: 'act-1',
+      position: 0,
+      kind: 'page',
+      block_text: 'Pour-over',
+      before_text: '',
+      before_html: existing.body_html,
+      reason: 'cut to about 3,000 characters',
+      rule_keys: ['faq'],
+    });
+    expect(row.after_text).toBe(
+      `<h1>Pour-over coffee</h1><p>${QUOTED}</p><p>Use good coffee, freshly ground.</p>` +
+        '<table><tbody><tr><td>Ratio</td><td>1:16</td></tr></tbody></table>' +
+        '<p>See <a href="/pricing">pricing</a> or this.</p>',
+    );
+    // The agent lets go; the draft's status stays as it was.
+    expect(draftUpdates().at(-1)).toEqual({
+      agent_state: null,
+      agent_state_at: expect.any(String),
+    });
+  });
+
+  it('fails the run when the rewrite drops what it had to keep', async () => {
+    answer('<h1>Pour-over</h1><p>[[KEEP 2]]</p><p>A new page without the quoted passage.</p>');
+    await expect(run()).resolves.toEqual({ failed: true });
+    expect(writes.find((w) => w.table === 'content_draft_suggestions')).toBeUndefined();
+    expect(draftUpdates()).toEqual([{ agent_state: 'failed', agent_state_at: expect.any(String) }]);
+    // The answer was still paid for.
+    expect(budget.charge).toHaveBeenCalledTimes(1);
+  });
+
+  it('adds nothing over a batch that came in during the run', async () => {
+    answer('<h1>Pour-over</h1><p>[[KEEP 1]]</p><p>[[KEEP 2]]</p><p>Shorter.</p>');
+    hasOpenSuggestions.mockResolvedValue(true);
+    await expect(run()).resolves.toEqual({ skipped: true });
+    expect(writes.find((w) => w.table === 'content_draft_suggestions')).toBeUndefined();
+  });
+});
