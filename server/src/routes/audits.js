@@ -108,7 +108,7 @@ async function primaryDomainOf(brandId) {
   );
 }
 
-// 20 audits × 47 signals stays under PostgREST's 1000-row page.
+// 20 audits × 48 signals stays under PostgREST's 1000-row page.
 const ISSUE_COUNT_CHUNK = 20;
 
 /** Every audit of the brand, newest first, read past PostgREST's 1000-row page. */

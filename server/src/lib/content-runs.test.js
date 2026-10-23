@@ -26,7 +26,7 @@ vi.mock('../config/supabase.js', () => ({
           };
         },
         update: (value) => (writes.push({ table, op: 'update', value, call }), chain),
-        select: () => chain,
+        select: (columns) => ((call.columns = columns), chain),
         eq: (col, v) => (call.filters.push(['eq', col, v]), chain),
         is: (col, v) => (call.filters.push(['is', col, v]), chain),
         gt: (col, v) => (call.filters.push(['gt', col, v]), chain),
@@ -135,10 +135,12 @@ describe('a run', () => {
 
   it('is stopped by a request: marked, its model call aborted, and nothing kept', async () => {
     const run = await startRun({ draftId: 'd1', kind: 'fix', counts: {} });
-    rows.updated = [{ id: 'run-1' }];
-    await expect(stopDraftRun('d1')).resolves.toBe(true);
+    rows.updated = [{ id: 'run-1', claimed_at: null }];
+    // The runs it stopped, each with the claim it holds (none for a Fix).
+    await expect(stopDraftRun('d1')).resolves.toEqual([{ id: 'run-1', claimed_at: null }]);
     const mark = writes.find((w) => w.op === 'update' && 'stopped_at' in w.value);
     expect(mark.value).toEqual({ stopped_at: expect.any(String) });
+    expect(mark.call.columns).toBe('id, claimed_at');
     // Only a run under way: one a stopped server left long ago isn't.
     expect(mark.call.filters).toEqual([
       ['eq', 'draft_id', 'd1'],
@@ -165,7 +167,20 @@ describe('a run', () => {
     expect(isStop(new Error('model down'), run)).toBe(false);
     await finishRun(run, 'failed');
     rows.updated = [];
-    await expect(stopDraftRun('d1')).resolves.toBe(false);
+    await expect(stopDraftRun('d1')).resolves.toEqual([]);
+  });
+
+  it('carries the claim a Start or Rewrite holds on the draft, none for a Fix', async () => {
+    await startRun({
+      draftId: 'd1',
+      kind: 'write',
+      counts: {},
+      claimedAt: '2026-10-23T10:00:00.000Z',
+    });
+    await startRun({ draftId: 'd1', kind: 'fix', counts: {} });
+    const inserts = writes.filter((w) => w.op === 'insert').map((w) => w.value);
+    expect(inserts[0]).toMatchObject({ kind: 'write', claimed_at: '2026-10-23T10:00:00.000Z' });
+    expect(inserts[1]).toMatchObject({ kind: 'fix', claimed_at: null });
   });
 
   it('sends no call once stopped, and keeps the hold of one a Stop aborted', async () => {

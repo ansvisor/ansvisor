@@ -216,6 +216,10 @@ describe('startDraftWriting', () => {
     );
     // Which run holds it, for every device (00247).
     expect(draftUpdates()[0]).toMatchObject({ agent_state: 'writing', agent_run: 'write' });
+    // Its run carries the claim, the one a Stop on it lets go of (00249).
+    expect(
+      writes.find((w) => w.table === 'content_agent_runs' && w.kind === 'insert').value,
+    ).toMatchObject({ kind: 'write', claimed_at: draftUpdates()[0].agent_state_at });
 
     await vi.waitFor(() => expect(draftUpdates()).toHaveLength(2));
     // It ends only its own claim: a newer run's, after a Stop let go, is left alone.
