@@ -36597,18 +36597,18 @@ comment on column public.content_draft_suggestions.source_marks is
 -- 00249: the Content Agent's runs, step by step
 -- ============================================================================
 -- Content Editor v1.1, CE-027 and CE-035: while the agent works, the editor
--- shows its real steps, named by the data they use ("Reading 20 cited pages →
--- Matching 21 fan-outs → Checking 10 Search Console queries → Writing 3
--- changes"), and Stop. The server writes each run here as it goes; the
+-- shows its real steps, short names for the work the server does ("Reading 4
+-- rules → Gathering 52 sources → Writing 3 changes → Checking sources"), and
+-- Stop. The server writes each run here as it goes; the
 -- editor reads the draft's latest. Stop marks it stopped: the server drops
 -- whatever the run had and changes nothing.
 --
 -- A table of its own, not columns on content_drafts: a step written there
 -- would move the draft's updated_at, which the editor's saves check against.
 --
--- steps: [{ "key", "count" }], key one of read_pages, match_fanouts,
--- check_queries, write_changes, read_sources, rewrite_page, check_rules,
--- pick_fanouts, write_outline, write_page; count null where there is none.
+-- steps: [{ "key", "count" }], key one of read_rules, gather_sources,
+-- write_changes, rewrite_page, write_page, write_outline, match_fanouts,
+-- check_sources; count null where there is none.
 -- step: the one under way (steps' index); all done once finished.
 -- outcome is what happened: a Stop that lands after the run's last check
 -- may leave stopped_at set on a run that ended 'done'. A run a stopped server

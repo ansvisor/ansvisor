@@ -487,6 +487,7 @@ async function rewritePage({ draft, brand, model, input, budget, numbered, known
     sourceUrl: draft.source_url,
     ruleKeys,
   });
+  await advanceRun(run, 2);
   const { object, usage } = await generateObject({
     model,
     schema: rewriteSchema,
@@ -503,7 +504,7 @@ async function rewritePage({ draft, brand, model, input, budget, numbered, known
     abortSignal: callSignal(run, CALL_TIMEOUT_MS),
   });
   await budget.charge(usage);
-  await advanceRun(run, 2);
+  await advanceRun(run, 3);
 
   if (!isPageHtml(object.html)) throw new Error('The agent answered with no page in HTML');
   const cleaned = cleanPageHtml(
@@ -591,7 +592,7 @@ export async function runDraftWriting({
     await finishRun(
       run,
       'done',
-      Number.isInteger(result.suggestions) ? { 3: result.suggestions } : {},
+      Number.isInteger(result.suggestions) ? { 2: result.suggestions } : {},
     );
     return result;
   } catch (err) {
@@ -625,17 +626,15 @@ function startWritingRun(draft, input, rewrite) {
     draftId: draft.id,
     kind: rewrite ? 'rewrite' : draft.method === 'create' ? 'write' : 'fix',
     counts: {
-      sources: promptIds.length + fanouts.length + pages.length + queries.length,
       rules: input.rules.length,
-      pages: pages.length,
-      fanouts: fanouts.length,
-      queries: queries.length,
+      sources: promptIds.length + fanouts.length + pages.length + queries.length,
     },
   });
 }
 
 /** The run itself, step by step: nothing is kept once it is stopped. */
 async function writeWithRun({ draft, brand, model, input, budget, rewrite, run }) {
+  await advanceRun(run, 1);
   const [prompts, opportunityRes] = await Promise.all([
     readPrompts(draft.brand_id, input.sources.promptIds),
     draft.opportunity_id && !draft.brief
@@ -673,7 +672,6 @@ async function writeWithRun({ draft, brand, model, input, budget, rewrite, run }
   ]);
 
   if (rewrite) {
-    await advanceRun(run, 1);
     return await rewritePage({
       draft,
       brand,
@@ -688,7 +686,7 @@ async function writeWithRun({ draft, brand, model, input, budget, rewrite, run }
   }
 
   if (draft.method === 'create') {
-    await advanceRun(run, 1);
+    await advanceRun(run, 2);
     const { object, usage } = await generateObject({
       model,
       schema: pageSchema,
@@ -697,7 +695,7 @@ async function writeWithRun({ draft, brand, model, input, budget, rewrite, run }
       abortSignal: callSignal(run, CALL_TIMEOUT_MS),
     });
     await budget.charge(usage);
-    await advanceRun(run, 2);
+    await advanceRun(run, 3);
     // No number without a source: a placeholder where one had none.
     const written = sourcedPage(object, knownInPage);
     const title = clean(written.title).slice(0, 300) || draft.title;
@@ -731,7 +729,6 @@ async function writeWithRun({ draft, brand, model, input, budget, rewrite, run }
   if (!passages.length) throw new Error('The page has no text to improve');
   const lockedKeys = new Set(input.locked.map(passageKey));
   const ruleKeys = new Set(input.rules.map((r) => r.key));
-  await advanceRun(run, 1);
   // Where it may link: the brand's pages and the draft's sources (A).
   const targets = await readLinkTargets({
     brandId: draft.brand_id,
@@ -739,7 +736,7 @@ async function writeWithRun({ draft, brand, model, input, budget, rewrite, run }
     sourceUrl: draft.source_url,
     ruleKeys,
   });
-  await advanceRun(run, 3);
+  await advanceRun(run, 2);
   const { object, usage } = await generateObject({
     model,
     schema: suggestionsSchema,
@@ -758,6 +755,7 @@ async function writeWithRun({ draft, brand, model, input, budget, rewrite, run }
     abortSignal: callSignal(run, CALL_TIMEOUT_MS),
   });
   await budget.charge(usage);
+  await advanceRun(run, 3);
   const rows = keepSuggestions(
     object.suggestions,
     passages,

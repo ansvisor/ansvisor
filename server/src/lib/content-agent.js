@@ -572,19 +572,24 @@ export async function fixDraftRules({ draftId, brandId, input }) {
     .single();
   if (brandError) throw brandError;
 
-  // Its steps, named by the data it reads (CE-027/035); Stop aborts the call.
+  // Its steps, named by the work it does (CE-027/035); Stop aborts the call.
+  const sources = input.sources;
   const run = await startRun({
     draftId,
     kind: 'fix',
     counts: {
-      pages: input.sources?.pages.length,
-      fanouts: input.sources?.fanouts.length,
-      queries: input.sources?.queries.length,
+      rules: input.rules.length,
+      sources: sources
+        ? sources.promptIds.length +
+          sources.fanouts.length +
+          sources.pages.length +
+          sources.queries.length
+        : 0,
     },
   });
   try {
     const result = await fixWithRun({ draft, brand, brandId, draftId, input, passages, more, run });
-    await finishRun(run, 'done', { 3: result.count });
+    await finishRun(run, 'done', { 2: result.count });
     return result;
   } catch (err) {
     if (isStop(err, run)) {
@@ -602,8 +607,8 @@ async function fixWithRun({ draft, brand, brandId, draftId, input, passages, mor
   const lockedKeys = new Set(input.locked.map(passageKey));
   const ruleKeys = new Set(input.rules.map((r) => r.key));
   // The data it writes from, numbered; the numbers it may write unmarked.
-  const prompts = await readPrompts(brandId, input.sources?.promptIds ?? []);
   await advanceRun(run, 1);
+  const prompts = await readPrompts(brandId, input.sources?.promptIds ?? []);
   const numbered = numberSources({
     prompts,
     fanouts: input.sources?.fanouts,
@@ -633,7 +638,7 @@ async function fixWithRun({ draft, brand, brandId, draftId, input, passages, mor
   });
   let object;
   try {
-    await advanceRun(run, 3);
+    await advanceRun(run, 2);
     const generated = await generateObject({
       model: resolveModel(modelId),
       schema: suggestionsSchema,
@@ -662,6 +667,7 @@ async function fixWithRun({ draft, brand, brandId, draftId, input, passages, mor
     await budget.release();
   }
 
+  await advanceRun(run, 3);
   const rows = keepSuggestions(
     object.suggestions,
     passages,

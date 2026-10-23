@@ -59,20 +59,25 @@ beforeEach(() => {
 });
 
 describe('runSteps', () => {
-  it('names each kind’s steps by the data it reads', () => {
-    expect(runSteps('fix', { pages: 20, fanouts: 21, queries: 10 })).toEqual([
-      { key: 'read_pages', count: 20 },
-      { key: 'match_fanouts', count: 21 },
-      { key: 'check_queries', count: 10 },
+  it('names each kind’s steps by the work the server does, with the run’s counts', () => {
+    expect(runSteps('fix', { rules: 4, sources: 52 })).toEqual([
+      { key: 'read_rules', count: 4 },
+      { key: 'gather_sources', count: 52 },
       { key: 'write_changes', count: null },
+      { key: 'check_sources', count: null },
     ]);
     expect(runSteps('rewrite', { sources: 52, rules: 14 }).map((s) => s.key)).toEqual([
-      'read_sources',
+      'read_rules',
+      'gather_sources',
       'rewrite_page',
-      'check_rules',
+      'check_sources',
     ]);
-    expect(runSteps('brief', { sources: 52 })[0]).toEqual({ key: 'read_sources', count: 52 });
-    expect(runSteps('write', {}).map((s) => s.count)).toEqual([null, null, null]);
+    expect(runSteps('brief', { sources: 52 })).toEqual([
+      { key: 'gather_sources', count: 52 },
+      { key: 'write_outline', count: null },
+      { key: 'match_fanouts', count: null },
+    ]);
+    expect(runSteps('write', {}).map((s) => s.count)).toEqual([null, null, null, null]);
   });
 });
 
@@ -81,7 +86,7 @@ describe('a run', () => {
     const run = await startRun({
       draftId: 'd1',
       kind: 'fix',
-      counts: { pages: 2, fanouts: 3, queries: 1 },
+      counts: { rules: 2, sources: 3 },
     });
     expect(run.id).toBe('run-1');
     // Runs a stopped server left on the draft are closed first.
@@ -99,10 +104,10 @@ describe('a run', () => {
       op: 'insert',
       value: { draft_id: 'd1', kind: 'fix' },
     });
-    await advanceRun(run, 3);
-    expect(writes[2].value).toMatchObject({ step: 3 });
+    await advanceRun(run, 2);
+    expect(writes[2].value).toMatchObject({ step: 2 });
     expect(writes[2].call.filters).toContainEqual(['is', 'finished_at', null]);
-    await finishRun(run, 'done', { 3: 4 });
+    await finishRun(run, 'done', { 2: 4 });
     expect(writes[3].value).toMatchObject({
       outcome: 'done',
       step: 4,

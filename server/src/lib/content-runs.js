@@ -44,34 +44,42 @@ async function shown(what, runId, write) {
   }
 }
 
-/** A run's steps by kind, with the counts the data gives (CE-035). */
+/**
+ * A run's steps by kind, each a short name for the work the server does
+ * then, with the counts the run gives (CE-027/035): the rules it writes to,
+ * the sources it gathers (numbered, so a number it adds can be checked), the
+ * model call, and the check of what it wrote (a number needs a source, a
+ * link must be allowed, a locked passage stays as it is).
+ */
 export function runSteps(kind, counts = {}) {
   const n = (value) => (Number.isInteger(value) ? value : null);
   switch (kind) {
     case 'fix':
       return [
-        { key: 'read_pages', count: n(counts.pages) },
-        { key: 'match_fanouts', count: n(counts.fanouts) },
-        { key: 'check_queries', count: n(counts.queries) },
+        { key: 'read_rules', count: n(counts.rules) },
+        { key: 'gather_sources', count: n(counts.sources) },
         { key: 'write_changes', count: null },
+        { key: 'check_sources', count: null },
       ];
     case 'rewrite':
       return [
-        { key: 'read_sources', count: n(counts.sources) },
-        { key: 'rewrite_page', count: n(counts.rules) },
-        { key: 'check_rules', count: null },
+        { key: 'read_rules', count: n(counts.rules) },
+        { key: 'gather_sources', count: n(counts.sources) },
+        { key: 'rewrite_page', count: null },
+        { key: 'check_sources', count: null },
       ];
     case 'brief':
       return [
-        { key: 'read_sources', count: n(counts.sources) },
-        { key: 'pick_fanouts', count: null },
+        { key: 'gather_sources', count: n(counts.sources) },
         { key: 'write_outline', count: null },
+        { key: 'match_fanouts', count: null },
       ];
     default:
       return [
-        { key: 'read_sources', count: n(counts.sources) },
+        { key: 'read_rules', count: n(counts.rules) },
+        { key: 'gather_sources', count: n(counts.sources) },
         { key: 'write_page', count: null },
-        { key: 'check_rules', count: null },
+        { key: 'check_sources', count: null },
       ];
   }
 }
