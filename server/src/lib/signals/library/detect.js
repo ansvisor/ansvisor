@@ -19,6 +19,7 @@
  * nothing — which is right — but only by accident.
  */
 
+import { MAX_TARGET_IDS } from '../../target-ids.js';
 import supabaseAdmin from '../../../config/supabase.js';
 import { logger } from '../../logger.js';
 import { resolve } from '../../../config/action-engine.js';
@@ -99,16 +100,13 @@ async function selectAll(build) {
   }
 }
 
-/** The most target ids a group signal lists beyond the 50 it names (AC-009). */
-export const MAX_TARGET_IDS = 1000;
-
 /**
  * A finding about a group — prompts, pages, queries — as one signal. It
  * names its first 50 targets; a bigger group lists every target's id too
  * (`targetIds`), so the action it starts counts and keeps the whole group
  * (AC-009: one count everywhere).
  */
-function group(kind, entity, rows, toTarget, source, extra = {}) {
+export function group(kind, entity, rows, toTarget, source, extra = {}) {
   const ids =
     rows.length > 50
       ? {

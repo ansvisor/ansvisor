@@ -120,6 +120,9 @@ export async function sendTopicOpportunityToActionCenter(topic, { suggestionIds,
     targetEntity: 'prompts',
     targetCount: suggestions.length,
     targets: suggestions.slice(0, 50).map((s) => s.suggested_text),
+    // What it counts is the suggestions, kept by their text (AC-009): not
+    // the topic's tracked prompts, which it measures.
+    targetIds: suggestions.map((s) => s.suggested_text).filter(Boolean),
   };
 
   const { data: action, error } = await supabaseAdmin

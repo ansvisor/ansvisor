@@ -13,6 +13,8 @@
  * predate that, so their targets are read off the fields they do carry.
  */
 
+import { MAX_TARGET_IDS } from '../../target-ids.js';
+
 function legacyTargets(signal) {
   const p = signal.payload ?? {};
   if (Array.isArray(p.targets)) return p.targets;
@@ -86,9 +88,6 @@ export function targetPayload(byKind, entity, extra = {}) {
     ...extra,
   };
 }
-
-/** The most target keys an action keeps beyond the 50 it names (AC-009). */
-export const MAX_TARGET_IDS = 1000;
 
 /** The first matched signal, for payload fields that describe the whole
  *  condition rather than one target. */

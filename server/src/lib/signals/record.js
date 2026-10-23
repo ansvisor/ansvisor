@@ -26,6 +26,7 @@
  * they never auto-resolve and simply age until triaged.
  */
 
+import { MAX_TARGET_IDS } from '../target-ids.js';
 import supabaseAdmin from '../../config/supabase.js';
 import { computePulseMetrics, LOST_CITATION_WINDOW_DAYS } from '../pulse/metrics.js';
 import { lostCitationEvidence } from './lost-citation-evidence.js';
@@ -284,7 +285,7 @@ export async function uncitedMentionCandidates(brandId, now) {
       dedupKey: 'uncited_mentions',
       source: ['ai_results'],
       // Every uncited prompt, so the action counts and keeps them all (AC-009).
-      payload: { promptIds: uncited.map((row) => row.prompt_id).slice(0, 1000) },
+      payload: { promptIds: uncited.map((row) => row.prompt_id).slice(0, MAX_TARGET_IDS) },
       previousValue: null,
       currentValue: uncited.length,
       changeValue: null,
@@ -333,7 +334,10 @@ async function auditCandidates(brandId, now) {
       dedupKey: 'audit_low_score',
       source: ['site_audit'],
       // The ten lowest to show; every low page's address for the action's count (AC-009).
-      payload: { urls: low.slice(0, 10), targetIds: low.slice(0, 1000).map((audit) => audit.url) },
+      payload: {
+        urls: low.slice(0, 10),
+        targetIds: low.slice(0, MAX_TARGET_IDS).map((audit) => audit.url),
+      },
       previousValue: null,
       currentValue: low.length,
       changeValue: null,
