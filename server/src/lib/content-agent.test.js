@@ -679,6 +679,26 @@ describe('fixDraftRules', () => {
     expect(generateObject).not.toHaveBeenCalled();
   });
 
+  it('waits while Start or a rewrite holds the draft, which a stopped server no longer does', async () => {
+    rows.content_drafts.agent_state = 'writing';
+    rows.content_drafts.agent_state_at = new Date().toISOString();
+    await expect(
+      fixDraftRules({ draftId: DRAFT, brandId: BRAND, input: input() }),
+    ).rejects.toMatchObject({ status: 409, code: 'writing' });
+    expect(reserveAiBudget).not.toHaveBeenCalled();
+    expect(generateObject).not.toHaveBeenCalled();
+
+    // Left 'writing' long ago: no run holds it.
+    rows.content_drafts.agent_state_at = new Date(Date.now() - 11 * 60_000).toISOString();
+    generateObject.mockResolvedValue({
+      object: { suggestions: [] },
+      usage: { inputTokens: 10, outputTokens: 5 },
+    });
+    await expect(
+      fixDraftRules({ draftId: DRAFT, brandId: BRAND, input: input() }),
+    ).resolves.toEqual({ count: 0, batchId: null });
+  });
+
   it('refuses a published draft, or one whose latest batch is still open, before charging', async () => {
     rows.content_drafts.status = 'published';
     await expect(

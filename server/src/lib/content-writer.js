@@ -14,6 +14,7 @@ import {
   passageKey,
   promptPassages,
   suggestionsSchema,
+  WRITING_STALE_MS,
 } from './content-agent.js';
 import { contentBriefModelId, rebuildSources } from './content-brief.js';
 import { linkAllowList, linkTargetsPrompt, readLinkTargets } from './content-links.js';
@@ -54,8 +55,9 @@ import { reserveAiBudget } from './plan-guard.js';
 /** How long the model may take: nobody waits on the request. */
 const CALL_TIMEOUT_MS = 180_000;
 
-/** A 'writing' this old was left by a server that stopped: it can start again. */
-export const WRITING_STALE_MS = 10 * 60_000;
+// A 'writing' older than WRITING_STALE_MS (content-agent.js, which Fix open
+// rules checks too) was left by a server that stopped: it can start again.
+export { WRITING_STALE_MS };
 
 /**
  * The drafts the agent writes in: still being worked on, a draft or one in
@@ -377,7 +379,12 @@ export async function startDraftWriting({ draftId, brandId, input, rewrite = fal
     // Claimed once: a second start meanwhile finds it writing.
     const { data: claimed, error: claimError } = await supabaseAdmin
       .from('content_drafts')
-      .update({ agent_state: 'writing', agent_state_at: new Date().toISOString() })
+      .update({
+        agent_state: 'writing',
+        agent_state_at: new Date().toISOString(),
+        // Which run, for every device: a failed rewrite is tried again as one.
+        agent_run: rewrite ? 'rewrite' : 'write',
+      })
       .eq('id', draftId)
       .in('status', OPEN_STATUSES)
       .or(`agent_state.is.null,agent_state.eq.failed,agent_state_at.lt."${staleBefore}"`)
