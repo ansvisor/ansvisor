@@ -4129,6 +4129,7 @@ export type Database = {
           key_events: number
           platform: string
           sessions: number
+          surfaces: Json
         }[]
       }
       ga_traffic_totals: {
