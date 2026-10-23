@@ -84,6 +84,10 @@ const onMarkReady = vi.fn();
 const onFixFirst = vi.fn();
 const writeText = vi.fn();
 
+const clean = { placeholders: 0, imagesWithoutAlt: 0, linksBroken: 0, linksUnread: 0 };
+const onContinue = vi.fn();
+const onFillNow = vi.fn();
+
 async function render(
   q: QualityRead,
   {
@@ -91,12 +95,18 @@ async function render(
     pageType = 'blog_post' as string | null,
     image = 'https://cdn.acme.com/pour-over.jpg' as string | null,
     linksPending = 0,
+    paste = clean,
+    mode = 'markReady' as 'markReady' | 'export',
   } = {},
 ) {
   await act(async () => {
     root.render(
       <NextIntlClientProvider locale="en" messages={messages}>
         <BeforePublish
+          mode={mode}
+          paste={paste}
+          onFillNow={onFillNow}
+          onContinue={onContinue}
           onClose={() => {}}
           quality={q}
           title="How small teams forecast"
@@ -138,6 +148,8 @@ const trustRead = (over: Partial<TrustRead>): TrustRead => ({
 beforeEach(() => {
   onMarkReady.mockReset();
   onFixFirst.mockReset();
+  onContinue.mockReset();
+  onFillNow.mockReset();
   writeText.mockReset().mockResolvedValue(undefined);
   Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
   container = document.createElement('div');
@@ -233,6 +245,7 @@ describe('BeforePublish', () => {
       "Author for your CMS · check itSet Ada Lovelace as the page's author in your CMS. Its template shows the byline; nothing is added to the content.",
       'Visible published and updated dates · check itMost CMSs (WordPress, Webflow, Shopify) add these for you. Check your page.',
       'Article schema with datePublished and dateModified · check itOften added by your CMS. If not, paste the code below into the page.',
+      'Ready to paste · doneNo placeholders, all images have alt text, all links work.',
     ]);
   });
 
@@ -280,11 +293,57 @@ describe('BeforePublish', () => {
     expect(jsonLd()).not.toHaveProperty('image');
   });
 
+  it('says what keeps it from being ready to paste, with Fill now for a placeholder (CE-057)', async () => {
+    await render(quality({ trust: null }), {
+      paste: { placeholders: 2, imagesWithoutAlt: 1, linksBroken: 1, linksUnread: 1 },
+    });
+    expect(rows().at(-1)).toBe(
+      "Not ready to paste yet · missing2 placeholders still open · 1 image has no alt text · 1 link doesn't answer · 1 link wasn't read: check it",
+    );
+    await act(async () => button('Fill now')!.click());
+    expect(onFillNow).toHaveBeenCalled();
+    await render(quality({ trust: null }), { paste: { ...clean, imagesWithoutAlt: 1 } });
+    expect(button('Fill now')).toBeUndefined();
+  });
+
+  it('says links are still being read, or were not read, to check them', async () => {
+    await render(quality({ trust: null }), {
+      paste: { ...clean, linksUnread: 2 },
+      linksPending: 2,
+    });
+    expect(rows().at(-1)).toBe(
+      'Ready to paste · check itNo placeholders, all images have alt text; 2 links are still being read.',
+    );
+    await render(quality({ trust: null }), { paste: { ...clean, linksUnread: 2 } });
+    expect(rows().at(-1)).toBe(
+      "Ready to paste · check itNo placeholders, all images have alt text; 2 links weren't read: check them.",
+    );
+  });
+
+  it('goes on to Export from Export, the warning saying so, with no log', async () => {
+    await render(quality(), { mode: 'export' });
+    expect(alert()!.textContent).toContain('You can export it, but fixing them first');
+    expect(alert()!.textContent).not.toContain('logged');
+    expect(button('Mark ready anyway')).toBeUndefined();
+    expect(document.activeElement).toBe(button('Continue to export'));
+    await act(async () => button('Continue to export')!.click());
+    expect(onContinue).toHaveBeenCalled();
+    expect(onMarkReady).not.toHaveBeenCalled();
+  });
+
+  it('goes to what would raise Trust from Export too', async () => {
+    await render(quality(), { mode: 'export' });
+    await act(async () => button('Fix first')!.click());
+    expect(onFixFirst).toHaveBeenCalledWith(expect.any(String));
+    expect(onContinue).not.toHaveBeenCalled();
+  });
+
   it("gives no Article for a page that isn't one", async () => {
     await render(quality(), { pageType: 'product_page' });
     expect(rows()).toEqual([
       expect.stringContaining('Author for your CMS'),
       'Schema for this page type · check itCheck what your CMS adds for it (Product, ItemList…). The code Ansvisor gives here is for articles.',
+      expect.stringContaining('Ready to paste'),
     ]);
     expect(dialog().querySelector('pre')).toBeNull();
     expect(button('Copy JSON-LD')).toBeUndefined();

@@ -2,7 +2,7 @@
 
 import { useRef } from 'react';
 import { useTranslations } from 'next-intl';
-import { AlertTriangle } from 'lucide-react';
+import { AlertTriangle, Check } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -27,17 +27,39 @@ export interface ReadyAnyway {
   count: number | null;
 }
 
-type RowState = 'missing' | 'check';
+type RowState = 'ok' | 'missing' | 'check';
+type Row = {
+  state: RowState;
+  title: string;
+  detail: string;
+  /** Ready to paste's Fill now, while a placeholder is open. */
+  fill?: boolean;
+};
+
+/** What Ready to paste reads (Quality spec §7b): placeholders, alt text, links. */
+export interface ReadyToPaste {
+  placeholders: number;
+  imagesWithoutAlt: number;
+  linksBroken: number;
+  /** Links with no read yet, or none to come: no word on whether they work. */
+  linksUnread: number;
+}
 
 /**
  * Before you publish (Content Editor Quality spec §7, CE-041), on Mark
- * ready: a warning only when Trust is under 60 (nothing else blocks), what
- * the CMS does for the page (its author, dates and schema), and for an
- * article the JSON-LD to paste when the CMS doesn't write one, from the
- * page's facts only. Mark ready anyway is logged with the Trust the page
- * had. Rendered only while open.
+ * ready and on Export (§7b, CE-057): a warning only when Trust is under 60
+ * (nothing else blocks), what the CMS does for the page (its author, dates
+ * and schema), Ready to paste (no placeholders, images with alt text, links
+ * that work), and for an article the JSON-LD to paste when the CMS doesn't
+ * write one, from the page's facts only. Mark ready anyway is logged with
+ * the Trust the page had; on Export it goes on to Export. Rendered only
+ * while open.
  */
 export function BeforePublish({
+  mode = 'markReady',
+  paste,
+  onFillNow,
+  onContinue,
   onClose,
   quality,
   title,
@@ -48,6 +70,13 @@ export function BeforePublish({
   onMarkReady,
   onFixFirst,
 }: {
+  /** Opened by Mark ready, or by Export. */
+  mode?: 'markReady' | 'export';
+  paste: ReadyToPaste;
+  /** Goes to the first placeholder, to fill it (Ready to paste's Fill now). */
+  onFillNow: () => void;
+  /** Export's: goes on to it. */
+  onContinue?: () => void;
   onClose: () => void;
   quality: QualityRead;
   title: string;
@@ -67,7 +96,7 @@ export function BeforePublish({
   const tQuality = useTranslations('contentEditor.editor.quality');
   const tAuthor = useTranslations('contentEditor.editor.author');
   const markRef = useRef<HTMLButtonElement>(null);
-  // Fix first moves on to the passage: focus isn't sent back to Mark ready.
+  // Fix first and Fill now move on to the page: focus isn't sent back to the button.
   const fixing = useRef(false);
   const { author, brandName, siteTrust } = quality;
   // E-E-A-T is read with the authors: until then, who the page is by isn't known.
@@ -98,7 +127,7 @@ export function BeforePublish({
         }),
       )
     : null;
-  const rows: { state: RowState; title: string; detail: string }[] = [
+  const rows: Row[] = [
     !authorsRead
       ? { state: 'check', title: t('author.ok'), detail: t('author.unknown') }
       : author
@@ -126,6 +155,7 @@ export function BeforePublish({
               },
         ]
       : [{ state: 'check' as const, title: t('schema.other'), detail: t('schema.otherDetail') }]),
+    { ...readyRow(t, paste, linksPending), fill: paste.placeholders > 0 },
   ];
 
   return (
@@ -147,15 +177,15 @@ export function BeforePublish({
             <div className="min-w-0 space-y-1">
               <p>
                 {fix
-                  ? t('warning', {
+                  ? t(mode === 'export' ? 'warningExport' : 'warning', {
                       trust,
                       reason: fix.line,
                       count: fix.count,
                       raised: trust + fix.gain,
                     })
-                  : t('warningNoReason', { trust })}
+                  : t(mode === 'export' ? 'warningNoReasonExport' : 'warningNoReason', { trust })}
               </p>
-              <p className="text-xs opacity-80">{t('logged')}</p>
+              {mode === 'markReady' && <p className="text-xs opacity-80">{t('logged')}</p>}
             </div>
           </div>
         )}
@@ -171,12 +201,20 @@ export function BeforePublish({
                 aria-hidden
                 className={cn(
                   'mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold',
-                  row.state === 'missing'
-                    ? 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300'
-                    : 'bg-muted text-muted-foreground',
+                  row.state === 'ok'
+                    ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300'
+                    : row.state === 'missing'
+                      ? 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300'
+                      : 'bg-muted text-muted-foreground',
                 )}
               >
-                {row.state === 'missing' ? '!' : '?'}
+                {row.state === 'ok' ? (
+                  <Check className="h-3 w-3" />
+                ) : row.state === 'missing' ? (
+                  '!'
+                ) : (
+                  '?'
+                )}
               </span>
               <div className="min-w-0 flex-1">
                 <p className="font-medium">
@@ -190,6 +228,19 @@ export function BeforePublish({
                   {row.detail}
                 </p>
               </div>
+              {row.fill && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="shrink-0"
+                  onClick={() => {
+                    fixing.current = true;
+                    onFillNow();
+                  }}
+                >
+                  {t('paste.fill')}
+                </Button>
+              )}
             </li>
           ))}
         </ul>
@@ -228,19 +279,59 @@ export function BeforePublish({
                 {t('fixFirst')}
               </Button>
             )}
-            <Button
-              ref={markRef}
-              onClick={() =>
-                onMarkReady(
-                  below ? { trust, reason: fix?.check ?? null, count: fix?.count ?? null } : null,
-                )
-              }
-            >
-              {below ? t('markReadyAnyway') : t('markReady')}
-            </Button>
+            {mode === 'export' ? (
+              <Button ref={markRef} onClick={onContinue}>
+                {t('continueExport')}
+              </Button>
+            ) : (
+              <Button
+                ref={markRef}
+                onClick={() =>
+                  onMarkReady(
+                    below ? { trust, reason: fix?.check ?? null, count: fix?.count ?? null } : null,
+                  )
+                }
+              >
+                {below ? t('markReadyAnyway') : t('markReady')}
+              </Button>
+            )}
           </div>
         </DialogFooter>
       </DialogContent>
     </Dialog>
   );
+}
+
+type T = ReturnType<typeof useTranslations<'contentEditor.editor.beforePublish'>>;
+
+/**
+ * Ready to paste (§7b): no placeholders, every image with alt text, every
+ * link working; what is still open, named, or the links not all read yet.
+ */
+function readyRow(t: T, paste: ReadyToPaste, linksPending: number): Row {
+  const unread = paste.linksUnread
+    ? linksPending
+      ? t('paste.reading', { count: paste.linksUnread })
+      : t('paste.unreadShort', { count: paste.linksUnread })
+    : null;
+  const open = [
+    paste.placeholders && t('paste.placeholders', { count: paste.placeholders }),
+    paste.imagesWithoutAlt && t('paste.alt', { count: paste.imagesWithoutAlt }),
+    paste.linksBroken && t('paste.broken', { count: paste.linksBroken }),
+  ].filter((item): item is string => !!item);
+  if (open.length) {
+    return {
+      state: 'missing',
+      title: t('paste.notYet'),
+      detail: [...open, ...(unread ? [unread] : [])].join(' · '),
+    };
+  }
+  if (unread) {
+    return {
+      state: 'check',
+      title: t('paste.title'),
+      detail: t('paste.unread', { links: unread }),
+    };
+  }
+  return { state: 'ok', title: t('paste.title'), detail: t('paste.ok') };
 }

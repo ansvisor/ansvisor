@@ -4242,6 +4242,21 @@
         "title": "Before you publish",
         "warning": "Trust {trust}, below 60. {reason}. You can mark it ready, but {count, plural, one {fixing it} other {fixing them}} first raises Trust to about {raised}.",
         "warningNoReason": "Trust {trust}, below 60. You can mark it ready, but Quality shows what would raise it.",
+        "warningExport": "Trust {trust}, below 60. {reason}. You can export it, but {count, plural, one {fixing it} other {fixing them}} first raises Trust to about {raised}.",
+        "warningNoReasonExport": "Trust {trust}, below 60. You can export it, but Quality shows what would raise it.",
+        "continueExport": "Continue to export",
+        "paste": {
+          "title": "Ready to paste",
+          "notYet": "Not ready to paste yet",
+          "ok": "No placeholders, all images have alt text, all links work.",
+          "placeholders": "{count, plural, one {# placeholder} other {# placeholders}} still open",
+          "alt": "{count, plural, one {# image has} other {# images have}} no alt text",
+          "broken": "{count, plural, one {# link doesn't} other {# links don't}} answer",
+          "unread": "No placeholders, all images have alt text; {links}.",
+          "reading": "{count, plural, one {# link is} other {# links are}} still being read",
+          "unreadShort": "{count, plural, one {# link wasn't} other {# links weren't}} read: check {count, plural, one {it} other {them}}",
+          "fill": "Fill now"
+        },
         "logged": "Mark ready anyway is logged, with this Trust.",
         "author": {
           "ok": "Author for your CMS",
@@ -4265,6 +4280,7 @@
         "linksPending": "Still reading {count, plural, one {# of the page's links} other {# of the page's links}}, so Trust may change.",
         "datesNote": "The dates are today's: change them if the page goes out on another day.",
         "states": {
+          "ok": "done",
           "check": "check it",
           "missing": "missing"
         },

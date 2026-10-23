@@ -2763,14 +2763,87 @@ describe('the side panel', () => {
         (b) => b.textContent === name,
       )!;
 
-    it('opens Export with the page fields, ready to copy for the destination', async () => {
-      getContentDraft.mockResolvedValue(draft());
+    it('opens Before you publish on Export, then Export with the page fields', async () => {
+      getContentDraft.mockResolvedValue(draft({ pageType: 'blog_post' }));
       await renderPage();
       await act(async () => button('Export')!.click());
+      // Before you publish first (§7): what the CMS does, and Ready to paste.
+      expect(dialog()!.textContent).toContain('Before you publish');
+      expect(dialog()!.textContent).toContain(
+        'Ready to paste · doneNo placeholders, all images have alt text, all links work.',
+      );
+      expect(markContentDraftReady).not.toHaveBeenCalled();
+      await act(async () => inDialog('Continue to export').click());
       expect(dialog()!.textContent).toContain('Content · ready to paste');
       expect(dialog()!.textContent).toContain('Meta titlePipeline forecasting');
       expect(dialog()!.textContent).toContain('AuthorAcme Team → your CMS author field');
       expect(inDialog('Copy for Webflow').disabled).toBe(false);
+    });
+
+    it('reads Ready to paste as the links are read, a refused read as unread', async () => {
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+      try {
+        let answer: (value: unknown) => void = () => {};
+        checkDraftLinks.mockReturnValue(new Promise((resolve) => (answer = resolve)));
+        getContentDraft.mockResolvedValue(
+          draft({
+            bodyHtml:
+              '<h1>Pipeline forecasting</h1><p>See <a href="https://research.example/r">the report</a>.</p>',
+          }),
+        );
+        await renderPage();
+        await act(async () => button('Export')!.click());
+        expect(dialog()!.textContent).toContain(
+          'Ready to paste · check itNo placeholders, all images have alt text; 1 link is still being read.',
+        );
+        await act(async () => void (await vi.advanceTimersByTimeAsync(5_000)));
+        await act(async () =>
+          answer({
+            links: [
+              {
+                href: 'https://research.example/r',
+                status: 'unknown',
+                httpStatus: 403,
+                date: null,
+              },
+            ],
+            skipped: [],
+          }),
+        );
+        expect(dialog()!.textContent).toContain(
+          "Ready to paste · check itNo placeholders, all images have alt text; 1 link wasn't read: check it.",
+        );
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('names no next step on Export, with a to-do open', async () => {
+      getContentDraft.mockResolvedValue(draft({ authorId: null }));
+      await renderPage();
+      await act(async () => button('Export')!.click());
+      expect(dialog()!.textContent).toContain('Before you publish');
+      expect(container.querySelector('[aria-label="Your next step"]')).toBeNull();
+    });
+
+    it("counts a title that is the page's H1 once, and Fill now goes to it", async () => {
+      getContentDraft.mockResolvedValue(
+        draft({
+          title: 'How [company name] forecasts',
+          bodyHtml: '<h1>How [company name] forecasts</h1><p>Teams trust it.</p>',
+        }),
+      );
+      await renderPage();
+      await act(async () => button('Export')!.click());
+      expect(dialog()!.textContent).toContain(
+        'Not ready to paste yet · missing1 placeholder still open',
+      );
+      await act(async () => inDialog('Fill now').click());
+      expect(dialog()).toBeNull();
+      const editor = (container.querySelector('.ProseMirror') as HTMLElement & { editor: Editor })
+        .editor;
+      const { from, to } = editor.state.selection;
+      expect(editor.state.doc.textBetween(from, to)).toBe('[company name]');
     });
 
     it('sends Copy HTML to Export while a placeholder is open, and Fill now goes to it', async () => {
@@ -2807,6 +2880,8 @@ describe('the side panel', () => {
       );
       await renderPage();
       await act(async () => button('Export')!.click());
+      expect(dialog()!.textContent).toContain('1 placeholder still open');
+      await act(async () => inDialog('Continue to export').click());
       expect(dialog()!.textContent).toContain('1 placeholder is still open');
       await act(async () => inDialog('Fill now').click());
       expect(toast).toHaveBeenCalledWith(
