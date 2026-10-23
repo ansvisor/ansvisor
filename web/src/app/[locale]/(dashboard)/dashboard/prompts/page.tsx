@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { useFormatter, useNow, useTranslations } from 'next-intl';
+import { useFailureToast } from '@/hooks/use-failure-toast';
 import { useSearchParams } from 'next/navigation';
 import { Link, usePathname, useRouter } from '@/i18n/navigation';
 import { PROMPTS_BASE, sectionFor, sectionFromPath } from '@/lib/prompts-routes';
@@ -2825,6 +2826,7 @@ function AllPromptsTab({
   onChanged: () => void;
 }) {
   const tCommon = useTranslations('common');
+  const failureToast = useFailureToast();
   const tPrompts = useTranslations('prompts');
   // One tooltip for every prompt and topic the table cuts short.
   const fullText = useMemo(() => createClampedTextHandle(), []);
@@ -3133,6 +3135,11 @@ function AllPromptsTab({
           });
           break;
         case 'failed':
+          // A reason the API gave, in plain words (BUG-001); else what went wrong.
+          if (outcome.failure && outcome.failure !== 'failed') {
+            failureToast(outcome.failure, { id: toastId, description: prompt.text });
+            break;
+          }
           toast.error("Couldn't write a content suggestion", {
             id: toastId,
             description: [outcome.message, quotaUntouched].filter(Boolean).join(' ') || undefined,
@@ -3146,7 +3153,7 @@ function AllPromptsTab({
           break;
       }
     },
-    [hasOpportunityLimit, markSuggesting, openOpportunity],
+    [failureToast, hasOpportunityLimit, markSuggesting, openOpportunity],
   );
 
   // Bulk "Suggest content": one prompt after another (runInTurn), so a
