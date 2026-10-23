@@ -179,7 +179,7 @@ export function DraftEditor({
   draft: ContentDraft;
   /**
    * The Content Agent took the draft again (Try again, Rewrite from brief, or
-   * Rewrite the page to these rules): the page waits for it.
+   * Rewrite the whole page): the page waits for it.
    */
   onAgentStarted?: () => void;
 }) {
@@ -472,7 +472,7 @@ export function DraftEditor({
   useEffect(() => {
     suggestionsNow.current = suggestions;
     if (!editor || editor.isDestroyed) return;
-    // A whole page (Rewrite the page to these rules) has its own bar, not a card.
+    // A whole page (Rewrite the whole page) has its own bar, not a card.
     const cards = suggestions.filter((s) => s.kind !== 'page');
     editor.view.dispatch(
       editor.state.tr.setMeta(suggestionsKey, { suggestions: cards, labels: suggestionLabels }),
@@ -615,7 +615,7 @@ export function DraftEditor({
   };
 
   /**
-   * A whole page rewritten (Rewrite the page to these rules): Accept puts it
+   * A whole page rewritten (Rewrite the whole page): Accept puts it
    * in place of the page the agent read (History keeps that first), Reject
    * leaves the page, and Undo puts the page back. A page changed since
    * isn't written over: the person runs the rewrite again.
@@ -685,7 +685,7 @@ export function DraftEditor({
     // One agent run at a time, and never before the locked passages are read.
     if (!editor || fixing || starting || rewriting || !citedRead) return;
     if (openSuggestions > 0) {
-      toast(t('suggestions.decideFirst'));
+      toast(t('suggestions.decideFirst', { count: openSuggestions }));
       return;
     }
     const { forAgent: open, notForAgent } = openRulesForAgent(rules.rules, only);
@@ -772,7 +772,7 @@ export function DraftEditor({
     running: fixing,
     blocked:
       openSuggestions > 0
-        ? t('suggestions.decideFirst')
+        ? t('suggestions.decideFirst', { count: openSuggestions })
         : !citedRead
           ? t('suggestions.citedLoading')
           : agentBusy && !fixing
@@ -925,7 +925,7 @@ export function DraftEditor({
         running: starting,
         blocked:
           openSuggestions > 0
-            ? t('suggestions.decideFirst')
+            ? t('suggestions.decideFirst', { count: openSuggestions })
             : agentBusy && !starting
               ? t('suggestions.agentBusy')
               : null,
@@ -933,7 +933,7 @@ export function DraftEditor({
     : undefined;
 
   /**
-   * Rewrite the page to these rules: the page as saved now, the rules in
+   * Rewrite the whole page: the page as saved now, the rules in
    * effect here (with how the page reads against each), the person's own
    * rules and the passages still locked go to the Content Agent, which
    * rewrites the whole page in the background; the page waits for it, then
@@ -966,7 +966,7 @@ export function DraftEditor({
         // The passages still locked here, the ones the person didn't unlock.
         [...locks.labels.keys()].filter((key) => !locks.unlocked.has(key)),
       );
-      // Each rule says how the page reads now, as Apply rules with Agent's do.
+      // Each rule says how the page reads now, as Fix open rules' do.
       const statusOf = new Map(inEffect.map(({ rule, status }) => [rule.key, status]));
       request.rules = request.rules.map((rule) => {
         const status = statusOf.get(rule.key);
@@ -994,7 +994,7 @@ export function DraftEditor({
         running: rewriting,
         blocked:
           openSuggestions > 0
-            ? t('suggestions.decideFirst')
+            ? t('suggestions.decideFirst', { count: openSuggestions })
             : !citedRead
               ? t('suggestions.citedLoading')
               : agentBusy && !rewriting

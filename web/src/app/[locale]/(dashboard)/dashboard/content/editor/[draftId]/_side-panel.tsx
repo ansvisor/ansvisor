@@ -118,11 +118,11 @@ export function EditorSidePanel({
   reads: DraftReads;
   /** A tab to open, from outside the panel (the header's rules chip). */
   tabRequest: { tab: PanelTarget; n: number } | null;
-  /** Fix open rules with agent, for the Rules tab (CE-018). */
+  /** Run Agent's Fix open rules, for Rules (CE-018, v1.1 CE-029). */
   agentFix?: AgentFix;
-  /** Rewrite the page to these rules, for the Rules tab; absent once the page is ready or published. */
+  /** Run Agent ▾'s Rewrite the whole page, for Rules; absent once the page is ready or published. */
   pageRewrite?: PageRewrite;
-  /** Rewrite from brief, for the Brief tab; absent once the page is ready or published. */
+  /** Rewrite from brief, for Brief; absent once the page is ready or published. */
   agentRewrite?: AgentRewrite;
 }) {
   const t = useTranslations('contentEditor.editor.panel');
@@ -179,12 +179,15 @@ export function EditorSidePanel({
               {t(`tabs.${value}`)}
               {/* The rules still open, on the tab that holds them. */}
               {value === 'instructions' && rulesOpen > 0 && (
-                <span
-                  aria-label={t('openRules', { count: rulesOpen })}
-                  className="rounded-md bg-amber-50 px-1.5 text-[10.5px] font-semibold text-amber-700 dark:bg-amber-950 dark:text-amber-400"
-                >
-                  {rulesOpen}
-                </span>
+                <>
+                  <span
+                    aria-hidden
+                    className="rounded-md bg-amber-50 px-1.5 text-[10.5px] font-semibold text-amber-700 dark:bg-amber-950 dark:text-amber-400"
+                  >
+                    {rulesOpen}
+                  </span>
+                  <span className="sr-only">{t('openRules', { count: rulesOpen })}</span>
+                </>
               )}
             </TabsTrigger>
           ))}
@@ -196,13 +199,23 @@ export function EditorSidePanel({
             role="radiogroup"
             aria-label={t('segmentsLabel')}
             className="flex rounded-[10px] border bg-muted p-[3px]"
+            // Arrow keys move between the two, as in any radio group.
+            onKeyDown={(e) => {
+              if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(e.key)) return;
+              e.preventDefault();
+              const next = SEGMENTS[(SEGMENTS.indexOf(segment) + 1) % SEGMENTS.length];
+              open(next);
+              e.currentTarget.querySelector<HTMLElement>(`[data-segment="${next}"]`)?.focus();
+            }}
           >
             {SEGMENTS.map((value) => (
               <button
                 key={value}
                 type="button"
                 role="radio"
+                data-segment={value}
                 aria-checked={segment === value}
+                tabIndex={segment === value ? 0 : -1}
                 onClick={() => open(value)}
                 className={cn(
                   'flex flex-1 items-center justify-center gap-1.5 rounded-lg py-1 text-[13px] font-medium text-muted-foreground transition-colors focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none',

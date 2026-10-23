@@ -3662,7 +3662,7 @@
         "fixedMax": "Content Agent suggested {count} changes, the most one run makes · review them, then run it again for the rules still open",
         "nothingToFix": "Content Agent found nothing it could change without new facts.",
         "notForAgent": "Content Agent doesn't change heading levels: make the extra H1s H2s in the toolbar.",
-        "decideFirst": "Review the open suggestion first, then run the agent.",
+        "decideFirst": "{count, plural, one {Review the open suggestion first, then run the agent.} other {Review the open suggestions first, then run the agent.}}",
         "citedLoading": "Reading which passages AI quotes, so the agent leaves them as they are…",
         "agentBusy": "Content Agent is already working on this page. Wait for it to finish.",
         "fixErrors": {
@@ -3766,7 +3766,7 @@
         "html": "Edit as HTML",
         "htmlBack": "Back to visual",
         "openLink": "Open the link in a new tab (or ⌘/Ctrl + click it in the page)",
-        "counter": "{count} / {target} characters · {words} words"
+        "counter": "{count} / {target} characters · {words, plural, one {# word} other {# words}}"
       },
       "link": {
         "title": "Add a link",
@@ -3964,6 +3964,7 @@
         "answers": "Answers “{fanout}”",
         "keywords": "Keywords",
         "empty": "Empty. Run Agent to draft one, or add H2s yourself.",
+        "emptyOutline": "No H2s yet. Rebuild brief to draft them, or add H2s yourself.",
         "fromOpportunity": "From the opportunity's brief. Rebuild brief maps each H2 to a fan-out.",
         "edited": "Edited by you.",
         "builtFrom": "{count, plural, one {Built from # source} other {Built from # sources}} · {date}",
@@ -4139,11 +4140,13 @@
           "notMet": "{count, plural, one {# rule is not met} other {# rules are not met}}",
           "allMet": "All rules are met",
           "info": "<b>Run Agent</b> fixes the open rules. You review each change. <b>▾ Rewrite page</b> rewrites the whole page. Uses more AI.",
+          "infoFix": "<b>Run Agent</b> fixes the open rules. You review each change.",
+          "names": "{names}{more, select, yes {…} other {}}",
           "label": "Run Agent",
           "rewriteLabel": "Rewrite page",
           "working": "Working…",
           "more": "More ways to run the agent",
-          "recommended": "Recommended",
+          "recommendedDetail": "Recommended · {detail}",
           "fix": {
             "title": "Fix open rules",
             "detail": "{count, plural, one {# rule} other {# rules}} · small, reviewable changes",

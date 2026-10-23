@@ -2,6 +2,7 @@
 
 import { useTranslations } from 'next-intl';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { cn } from '@/lib/utils';
 
 /**
  * The card each Instructions segment starts with (Content Editor v1.1,
@@ -58,11 +59,13 @@ export function RunCard({
           </TooltipContent>
         </Tooltip>
       </div>
-      {blocked && (
-        <p role="status" className="text-xs text-amber-700 dark:text-amber-400">
-          {blocked}
-        </p>
-      )}
+      {/* Always there, so a screen reader hears the reason when it comes. */}
+      <p
+        role="status"
+        className={cn('text-xs text-amber-700 dark:text-amber-400', !blocked && 'sr-only')}
+      >
+        {blocked}
+      </p>
       {children}
     </div>
   );

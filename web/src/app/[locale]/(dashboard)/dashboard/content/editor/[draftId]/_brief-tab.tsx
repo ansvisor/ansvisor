@@ -138,6 +138,27 @@ export function BriefTab({
         info={t('info')}
       >
         <p className="text-[11px] text-muted-foreground">{t('usage')}</p>
+        {/* Right under the button that asked, not past the outline. */}
+        {confirming && (
+          <div role="alert" className="space-y-2 rounded-md border px-3 py-2 text-xs">
+            <p>{t('rebuildEdited')}</p>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => {
+                  setConfirming(false);
+                  onRebuild();
+                }}
+              >
+                {t('rebuildAnyway')}
+              </Button>
+              <Button size="sm" variant="ghost" onClick={() => setConfirming(false)}>
+                {t('keepEdited')}
+              </Button>
+            </div>
+          </div>
+        )}
       </RunCard>
 
       <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5 text-xs">
@@ -203,7 +224,7 @@ export function BriefTab({
         </section>
       ) : (
         <p className="rounded-lg border border-dashed px-3 py-2 text-xs text-muted-foreground">
-          {t('empty')}
+          {empty ? t('empty') : t('emptyOutline')}
         </p>
       )}
 
@@ -220,7 +241,7 @@ export function BriefTab({
         </section>
       )}
 
-      {brief && (
+      {brief && !empty && (
         <p className="text-[11px] text-muted-foreground">
           {brief.origin === 'opportunity'
             ? t('fromOpportunity')
@@ -255,42 +276,26 @@ export function BriefTab({
             </div>
           </div>
         ) : (
-          <Button
-            size="sm"
-            className="w-full"
-            disabled={rewrite.running || rewrite.blocked !== null || rebuilding}
-            title={rewrite.blocked ?? undefined}
-            onClick={() => setConfirmingRewrite(true)}
-          >
-            {rewrite.running ? (
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-            ) : (
-              <Bot className="h-3.5 w-3.5" />
-            )}
-            {t(`rewrite.button.${method}`)}
-          </Button>
-        ))}
-
-      {confirming && (
-        <div role="alert" className="space-y-2 rounded-md border px-3 py-2 text-xs">
-          <p>{t('rebuildEdited')}</p>
-          <div className="flex flex-wrap gap-2">
+          <div className="space-y-1.5">
             <Button
               size="sm"
-              variant="outline"
-              onClick={() => {
-                setConfirming(false);
-                onRebuild();
-              }}
+              className="w-full"
+              disabled={rewrite.running || rewrite.blocked !== null || rebuilding}
+              onClick={() => setConfirmingRewrite(true)}
             >
-              {t('rebuildAnyway')}
+              {rewrite.running ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Bot className="h-3.5 w-3.5" />
+              )}
+              {t(`rewrite.button.${method}`)}
             </Button>
-            <Button size="sm" variant="ghost" onClick={() => setConfirming(false)}>
-              {t('keepEdited')}
-            </Button>
+            {/* Why it waits, written out (v1.1 CE-031), not only on hover. */}
+            {!rewrite.running && rewrite.blocked && (
+              <p className="text-xs text-amber-700 dark:text-amber-400">{rewrite.blocked}</p>
+            )}
           </div>
-        </div>
-      )}
+        ))}
 
       <div className="flex flex-wrap gap-2">
         <Button size="sm" variant="ghost" disabled={rebuilding} onClick={() => setEditing(true)}>

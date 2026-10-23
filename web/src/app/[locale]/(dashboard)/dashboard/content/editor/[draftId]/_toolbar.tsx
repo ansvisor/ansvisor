@@ -238,7 +238,7 @@ export function EditorToolbar({
         {t('counter', {
           count: formatNumber(state.characters),
           target: formatNumber(target),
-          words: formatNumber(state.words),
+          words: state.words,
         })}
       </span>
 

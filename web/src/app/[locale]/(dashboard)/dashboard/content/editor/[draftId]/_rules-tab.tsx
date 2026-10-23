@@ -1,13 +1,14 @@
 'use client';
 
 import { useState } from 'react';
-import { useTranslations } from 'next-intl';
-import { Check, ChevronDown, Loader2, Sparkles } from 'lucide-react';
+import { useFormatter, useTranslations } from 'next-intl';
+import { ChevronDown, Loader2, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
   DropdownMenuContent,
-  DropdownMenuItem,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import {
@@ -31,6 +32,7 @@ import { SITE_PAGE_TYPES, type SiteType } from '@/lib/content/page-types';
 import {
   MAX_TEXT_RULE_LENGTH,
   RULE_GROUPS,
+  openRulesForAgent,
   rewriteAdvice,
   splitRules,
   type ActiveRule,
@@ -67,7 +69,7 @@ const HINTED = new Set([
  * ("Your text rules"); Save as my rules keeps the set for the workspace's
  * drafts of the type, and Reset goes back to Ansvisor's default.
  */
-/** Apply rules with Agent (CE-018), as the editor runs it. */
+/** Fix open rules with the agent (CE-018), as the editor runs it. */
 export interface AgentFix {
   /** Runs the agent on the open rules, or only on the ones named. */
   run: (only?: string[]) => void;
@@ -76,7 +78,7 @@ export interface AgentFix {
   blocked: string | null;
 }
 
-/** Rewrite the page to these rules, as the editor runs it: the whole page, one suggestion. */
+/** Rewrite the whole page to these rules, as the editor runs it: one suggestion. */
 export interface PageRewrite {
   run: () => void;
   running: boolean;
@@ -90,55 +92,60 @@ type RunMode = 'fix' | 'rewrite';
 /**
  * Run Agent ▾ (v1.1, CE-029): one control for both rule actions. The main
  * part runs the choice, Fix open rules unless the person picked Rewrite the
- * whole page in ▾, which then labels it "Rewrite page". Each choice says
- * what it does and its AI usage, Less or More, until a real estimate exists.
+ * whole page in ▾, which then labels it "Rewrite page"; once a rewrite
+ * starts, it is back on the safe default. Each choice says what it does and
+ * its AI usage, Less or More, until a real estimate exists.
  */
 function RunAgentButton({
   mode,
   onMode,
-  fix,
-  rewrite,
-  openCount,
+  run,
+  running,
+  disabled,
+  split,
+  anyRunning,
+  fixable,
   setName,
   recommended,
 }: {
+  /** The choice the main part runs. */
   mode: RunMode;
   onMode: (mode: RunMode) => void;
-  fix?: AgentFix;
-  rewrite?: PageRewrite;
-  openCount: number;
+  run: () => void;
+  running: boolean;
+  disabled: boolean;
+  /** Both ways are offered: a page ready or published has no rewrite. */
+  split: boolean;
+  /** Either way is running: the choice waits for it. */
+  anyRunning: boolean;
+  /** The open rules the agent can fix. */
+  fixable: number;
   /** The rule set's name, as the menu says what a rewrite follows. */
   setName: string;
   /** Rewrite when small edits can't get there (rewriteAdvice), else Fix. */
   recommended: RunMode;
 }) {
   const t = useTranslations('contentEditor.editor.rules.run');
-  const current = mode === 'rewrite' && rewrite ? rewrite : fix;
-  if (!current) return null;
-  const busy = current.running || current.blocked !== null;
-  const label = current.running
-    ? t('working')
-    : mode === 'rewrite' && rewrite
-      ? t('rewriteLabel')
-      : t('label');
   const main = (
     <Button
       size="sm"
-      className={cn(rewrite && fix && 'rounded-r-none')}
-      disabled={busy}
-      onClick={() => current.run()}
+      className={cn(split && 'rounded-r-none')}
+      disabled={running || disabled}
+      onClick={() => {
+        run();
+        if (mode === 'rewrite') onMode('fix');
+      }}
     >
-      {current.running && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-      {label}
+      {running && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+      {running ? t('working') : mode === 'rewrite' ? t('rewriteLabel') : t('label')}
     </Button>
   );
-  // A page ready or published has no rewrite: the plain button.
-  if (!rewrite || !fix) return main;
+  if (!split) return main;
   const choices: { value: RunMode; title: string; detail: string; usage: string }[] = [
     {
       value: 'fix',
       title: t('fix.title'),
-      detail: t('fix.detail', { count: openCount }),
+      detail: t('fix.detail', { count: fixable }),
       usage: t('fix.usage'),
     },
     {
@@ -153,7 +160,7 @@ function RunAgentButton({
       {main}
       <DropdownMenu>
         <DropdownMenuTrigger
-          disabled={fix.running || rewrite.running}
+          disabled={anyRunning}
           render={
             <Button
               size="sm"
@@ -165,29 +172,27 @@ function RunAgentButton({
           <ChevronDown className="h-3.5 w-3.5" />
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-72">
-          {choices.map((choice) => (
-            <DropdownMenuItem
-              key={choice.value}
-              onClick={() => onMode(choice.value)}
-              className={cn('items-start gap-2', mode === choice.value && 'bg-muted')}
-            >
-              <Check
-                aria-hidden
-                className={cn(
-                  'mt-0.5 h-3.5 w-3.5 shrink-0',
-                  mode === choice.value ? 'opacity-100' : 'opacity-0',
-                )}
-              />
-              <span className="grid min-w-0 gap-0.5">
-                <span className="text-[13px] font-medium">{choice.title}</span>
-                <span className="text-xs text-muted-foreground">
-                  {recommended === choice.value && `${t('recommended')} · `}
-                  {choice.detail}
+          <DropdownMenuRadioGroup value={mode} onValueChange={(value) => onMode(value as RunMode)}>
+            {choices.map((choice) => (
+              <DropdownMenuRadioItem
+                key={choice.value}
+                value={choice.value}
+                closeOnClick
+                disabled={choice.value === 'fix' && fixable === 0}
+                className="items-start py-1.5"
+              >
+                <span className="grid min-w-0 gap-0.5">
+                  <span className="text-[13px] font-medium">{choice.title}</span>
+                  <span className="text-xs text-muted-foreground">
+                    {recommended === choice.value
+                      ? t('recommendedDetail', { detail: choice.detail })
+                      : choice.detail}
+                  </span>
+                  <span className="text-[11px] text-muted-foreground/80">{choice.usage}</span>
                 </span>
-                <span className="text-[11px] text-muted-foreground/80">{choice.usage}</span>
-              </span>
-            </DropdownMenuItem>
-          ))}
+              </DropdownMenuRadioItem>
+            ))}
+          </DropdownMenuRadioGroup>
         </DropdownMenuContent>
       </DropdownMenu>
     </span>
@@ -214,7 +219,9 @@ export function RulesTab({
   onOpenSources?: () => void;
 }) {
   const t = useTranslations('contentEditor.editor.rules');
+  const tSuggestions = useTranslations('contentEditor.editor.suggestions');
   const tTypes = useTranslations('contentEditor.pageTypes');
+  const format = useFormatter();
   // The workspace's sets are saved by admins and managers, as its other settings are.
   const { canManage } = useUserRole();
   const types = [...SITE_PAGE_TYPES[siteType]];
@@ -234,11 +241,16 @@ export function RulesTab({
 
   // Rewrite the page whole when small edits can't get there.
   const advice = pageRewrite ? rewriteAdvice(state.rules) : null;
-  // The rules the page doesn't meet now, in the tab's order.
+  // The rules the page doesn't meet now, in the tab's order, and those the agent fixes.
   const open = state.rules.filter(({ rule, status }) => rule.on && status.state === 'bad');
-  // Run Agent's choice: the safe default, or the whole page (▾).
-  const [mode, setMode] = useState<RunMode>('fix');
-  const running = mode === 'rewrite' && pageRewrite ? pageRewrite : agentFix;
+  const fixable = openRulesForAgent(state.rules).forAgent.length;
+  // Run Agent's choice: the safe default, or the whole page (▾) while it is offered.
+  const [picked, setPicked] = useState<RunMode>('fix');
+  const mode: RunMode = picked === 'rewrite' && pageRewrite ? 'rewrite' : 'fix';
+  const runner = mode === 'rewrite' ? pageRewrite : agentFix;
+  // Why Run Agent can't run its choice now, said under the card.
+  const blocked =
+    runner?.blocked ?? (mode === 'fix' && fixable === 0 ? tSuggestions('notForAgent') : null);
 
   // A draft on My rules for a type the workspace has none for (its type
   // changed, or My rules couldn't be read) shows Ansvisor's set for it.
@@ -264,27 +276,36 @@ export function RulesTab({
           title={open.length > 0 ? t('run.notMet', { count: open.length }) : t('run.allMet')}
           detail={
             open.length > 0
-              ? `${open
-                  .slice(0, 3)
-                  .map(({ rule }) => t(`names.${rule.key}`))
-                  .join(', ')}${open.length > 3 ? '…' : ''}`
+              ? t('run.names', {
+                  names: format.list(
+                    open.slice(0, 3).map(({ rule }) => t(`names.${rule.key}`)),
+                    { type: 'unit' },
+                  ),
+                  more: open.length > 3 ? 'yes' : 'no',
+                })
               : undefined
           }
           action={
-            open.length > 0 && (
+            open.length > 0 &&
+            runner && (
               <RunAgentButton
                 mode={mode}
-                onMode={setMode}
-                fix={agentFix}
-                rewrite={pageRewrite}
-                openCount={open.length}
+                onMode={setPicked}
+                run={() => runner.run()}
+                running={runner.running}
+                disabled={blocked !== null}
+                split={!!agentFix && !!pageRewrite}
+                anyRunning={!!agentFix?.running || !!pageRewrite?.running}
+                fixable={fixable}
                 setName={setName}
                 recommended={advice ? 'rewrite' : 'fix'}
               />
             )
           }
-          info={t.rich('run.info', { b: (chunks) => <b>{chunks}</b> })}
-          blocked={open.length > 0 ? running?.blocked : null}
+          info={t.rich(pageRewrite ? 'run.info' : 'run.infoFix', {
+            b: (chunks) => <b>{chunks}</b>,
+          })}
+          blocked={open.length > 0 ? blocked : null}
         >
           {advice && (
             <p className="flex gap-1.5 text-xs" role="note">

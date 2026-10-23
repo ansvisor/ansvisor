@@ -175,9 +175,8 @@ const button = (name: string) =>
     (b) => b.getAttribute('aria-label') === name || b.textContent === name,
   );
 
-/** Picks one of the side panel's tabs. */
 /** A panel tab's name, without the open-rules count Instructions carries. */
-const tabName = (el: Element | null | undefined) => el?.textContent?.replace(/\d+$/, '');
+const tabName = (el: Element | null | undefined) => el?.firstChild?.textContent;
 /** The panel's tab picked now, and Instructions' segment. */
 const selectedTab = () =>
   tabName(container.querySelector('aside [role="tab"][aria-selected="true"]'));
@@ -186,6 +185,7 @@ const selectedSegment = () =>
     .querySelector('aside [role="radio"][aria-checked="true"]')
     ?.textContent?.replace(/\d+ open$/, '');
 
+/** Picks one of the side panel's tabs, or one of Instructions' segments. */
 async function pickTab(name: string) {
   // Brief and Rules are Instructions' two segments (Content Editor v1.1, CE-028).
   if (name === 'Brief' || name === 'Rules') {
@@ -267,7 +267,7 @@ describe('the content editor', () => {
 
     // The page's text, against a feature page's 3,000-character target.
     expect(container.querySelector('[role="toolbar"]')!.textContent).toContain(
-      '35 / 3,000 characters',
+      '35 / 3,000 characters · 5 words',
     );
     for (const name of ['Heading 1', 'Bold', 'Link', 'Numbered list', 'Insert a table']) {
       expect(button(name)).toBeDefined();
@@ -309,7 +309,7 @@ describe('the content editor', () => {
     expect(header.textContent).toContain('Product page · New page');
     expect(header.querySelector('h1')!.textContent).toBe('Untitled');
     expect(container.querySelector('[role="toolbar"]')!.textContent).toContain(
-      '0 / 1,200 characters',
+      '0 / 1,200 characters · 0 words',
     );
   });
 
@@ -1827,9 +1827,9 @@ describe('the side panel', () => {
     expect(selectedTab()).toBe('Instructions');
     expect(selectedSegment()).toBe('Rules');
     // The open rules, on the tab and on the segment.
-    expect(
-      panel()!.querySelector('[role="tab"] [aria-label$="open"]')?.getAttribute('aria-label'),
-    ).toBe(`${total - met} rules open`);
+    expect(panel()!.querySelector('[role="tab"] .sr-only')?.textContent).toBe(
+      `${total - met} rules open`,
+    );
     expect(panel()!.textContent).toContain(`${met} of ${total} rules met`);
 
     // Turning a rule off for this draft saves it and takes it out of the count.
@@ -2222,7 +2222,7 @@ describe('the side panel', () => {
       await act(async () =>
         panel()!.querySelector<HTMLElement>('[aria-label="More ways to run the agent"]')!.click(),
       );
-      const item = [...document.body.querySelectorAll<HTMLElement>('[role="menuitem"]')].find(
+      const item = [...document.body.querySelectorAll<HTMLElement>('[role="menuitemradio"]')].find(
         (el) => el.textContent?.startsWith('Rewrite the whole page'),
       )!;
       await act(async () => item.click());
