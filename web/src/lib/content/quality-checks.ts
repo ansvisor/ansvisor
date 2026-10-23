@@ -93,9 +93,9 @@ export function authorProfile(author: ContentAuthor | null): { bio: boolean; lin
 /**
  * E-E-A-T from the page's author (CE-038): a real person, with a short bio
  * and profile links. The organization byline is no person. Author schema
- * joins when Before you publish writes the page's JSON-LD (CE-041), dates
- * when the live page is read (CE-042); experience, data, proof and
- * who/how/why are Phase 2.
+ * and dates join when the live page is read (CE-042): the JSON-LD Before you
+ * publish gives counts only once the page has it. Experience, data, proof
+ * and who/how/why are Phase 2.
  */
 export function eeat({ author }: { author: ContentAuthor | null }): Score<EeatCheckId> {
   const { bio, links } = authorProfile(author);

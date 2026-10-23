@@ -1283,17 +1283,32 @@ export async function deleteContentDraft(id: string): Promise<void> {
   if (!data?.length) throw new Error('forbidden');
 }
 
+const readyAnyway = z.object({
+  trust: z.number().int().min(0).max(100),
+  // The check the warning named (claimsSourced…) and how many it counted.
+  reason: z
+    .string()
+    .regex(/^[A-Za-z]{1,40}$/)
+    .nullable(),
+  count: z.number().int().min(0).nullable(),
+});
+
 /**
  * Mark ready: a draft, or an agent's draft in review, is ready to publish.
  * Ansvisor never publishes it; the person does (CE-013 records the URL).
  * Returns the status the draft has after, so a draft already ready or
  * published keeps its own, and how many of its action's tasks it completed
- * (CE-022; completeDraftTasks).
+ * (CE-022; completeDraftTasks). Marked ready past Before you publish's
+ * warning (CE-041), it is logged with the Trust the page had and the check
+ * the warning named (00255 content_draft_ready_log).
  */
 export async function markContentDraftReady(
   id: string,
+  anyway?: { trust: number; reason: string | null; count: number | null },
 ): Promise<{ status: DraftStatus; tasksDone: number }> {
   if (!draftId.safeParse(id).success) throw new Error('invalid');
+  const logged = anyway === undefined ? null : readyAnyway.safeParse(anyway);
+  if (logged && !logged.success) throw new Error('invalid');
   const supabase = await createClient();
   const { data, error } = await supabase
     .from('content_drafts')
@@ -1305,6 +1320,16 @@ export async function markContentDraftReady(
   if (error) throw new Error(error.message);
   if (data) {
     await keepVersion(supabase, id, 'ready');
+    if (logged) {
+      // The draft is ready either way; a log that didn't go in is reported.
+      const { error: logError } = await supabase.from('content_draft_ready_log').insert({
+        draft_id: id,
+        trust: logged.data.trust,
+        reason: logged.data.reason,
+        reason_count: logged.data.count,
+      });
+      if (logError) console.error('Failed to log Mark ready anyway:', logError.message);
+    }
     let tasksDone = 0;
     if (data.action_id) {
       const {

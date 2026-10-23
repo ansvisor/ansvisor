@@ -1,0 +1,292 @@
+import { act } from 'react';
+import { createRoot, type Root } from 'react-dom/client';
+import { NextIntlClientProvider } from 'next-intl';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import messages from '../../../../../../../../messages/en.json';
+import type { ContentAuthor } from '@/lib/content/authors';
+import { eeat, trust, trustBlocks, type TrustRead } from '@/lib/content/quality-checks';
+import { qualityTodos } from '@/lib/content/quality-todos';
+import type { SiteTrust } from '@/lib/content/site-trust';
+
+const toast = vi.hoisted(() => Object.assign(vi.fn(), { success: vi.fn(), error: vi.fn() }));
+vi.mock('sonner', () => ({ toast }));
+vi.mock('@/i18n/navigation', () => ({
+  Link: ({ href, ...props }: { href: string } & Record<string, unknown>) => (
+    <a href={href} {...props} />
+  ),
+}));
+
+const { BeforePublish } = await import('./_before-publish');
+type QualityRead = import('./_quality-tab').QualityRead;
+
+/**
+ * Before you publish (Quality spec §7, CE-041): the Trust < 60 warning, what
+ * the CMS does, the JSON-LD to paste, and Mark ready (anyway, logged).
+ */
+
+(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT =
+  true;
+
+const ada: ContentAuthor = {
+  id: 'a1',
+  name: 'Ada Lovelace',
+  title: 'Head of Content',
+  bio: 'Writes about forecasting.',
+  photoUrl: null,
+  sameAs: ['https://www.linkedin.com/in/ada'],
+  userId: null,
+  createdBy: null,
+  defaultFor: [],
+  pages: null,
+};
+const siteTrust: SiteTrust = {
+  checks: {
+    about: { ok: true, url: 'https://acme.com/about' },
+    contact: { ok: false, url: null },
+    editorial: { ok: false, url: null },
+    organizationSchema: { ok: true, url: 'https://acme.com/' },
+    authorPages: { ok: true, authors: [{ name: 'Ada Lovelace', url: 'https://acme.com/ada' }] },
+  },
+  score: 3,
+  checkedAt: '2026-10-23T12:00:00.000Z',
+};
+/** Three figures, one with a source: Trust 10 of 30 plus site trust 3 of 5, 37; sourced, 94. */
+const lowTrust: TrustRead = trust({
+  blocks: trustBlocks(
+    '<p>Win rates rose 42% (<a href="https://research.example/r">report</a>).</p>' +
+      '<p>Deals close $2.5 million faster.</p><p>Teams book 3x more demos.</p>',
+  ),
+  links: new Map(),
+  brandDomains: ['acme.com'],
+  siteTrust,
+  now: Date.parse('2026-10-23T12:00:00Z'),
+});
+
+function quality(over: Partial<QualityRead> = {}): QualityRead {
+  const author = over.author === undefined ? ada : over.author;
+  const score = eeat({ author });
+  return {
+    readability: null,
+    eeat: score,
+    trust: lowTrust,
+    author,
+    hasAuthors: true,
+    brandName: 'Acme',
+    siteTrust,
+    todos: qualityTodos({ eeat: score, author, hasAuthors: true }),
+    ...over,
+  };
+}
+
+let container: HTMLDivElement;
+let root: Root;
+const onMarkReady = vi.fn();
+const onFixFirst = vi.fn();
+const writeText = vi.fn();
+
+async function render(
+  q: QualityRead,
+  {
+    isNew = true,
+    pageType = 'blog_post' as string | null,
+    image = 'https://cdn.acme.com/pour-over.jpg' as string | null,
+    linksPending = 0,
+  } = {},
+) {
+  await act(async () => {
+    root.render(
+      <NextIntlClientProvider locale="en" messages={messages}>
+        <BeforePublish
+          onClose={() => {}}
+          quality={q}
+          title="How small teams forecast"
+          isNew={isNew}
+          pageType={pageType}
+          image={image}
+          linksPending={linksPending}
+          onMarkReady={onMarkReady}
+          onFixFirst={onFixFirst}
+        />
+      </NextIntlClientProvider>,
+    );
+  });
+}
+const dialog = () => document.querySelector('[role="dialog"]')!;
+const alert = () => dialog().querySelector('[role="alert"]');
+const button = (name: string) =>
+  [...dialog().querySelectorAll('button')].find((b) => b.textContent === name);
+const rows = () => [...dialog().querySelectorAll('li > div')].map((row) => row.textContent);
+const jsonLd = () =>
+  JSON.parse(
+    dialog()
+      .querySelector('pre')!
+      .textContent!.replace(/^<script[^>]*>/, '')
+      .replace(/<\/script>$/, ''),
+  );
+/** A Trust read as the checks would give it. */
+const trustRead = (over: Partial<TrustRead>): TrustRead => ({
+  score: 50,
+  checks: [],
+  broken: [],
+  stale: [],
+  dated: 0,
+  unsourced: [],
+  figures: 0,
+  ...over,
+});
+
+beforeEach(() => {
+  onMarkReady.mockReset();
+  onFixFirst.mockReset();
+  writeText.mockReset().mockResolvedValue(undefined);
+  Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+  container = document.createElement('div');
+  document.body.appendChild(container);
+  root = createRoot(container);
+});
+afterEach(() => {
+  act(() => root.unmount());
+  container.remove();
+});
+
+describe('BeforePublish', () => {
+  it('warns under Trust 60 with the biggest reason, and logs Mark ready anyway', async () => {
+    expect(lowTrust.score).toBe(37);
+    await render(quality());
+    expect(alert()!.textContent).toBe(
+      'Trust 37, below 60. 2 sentences with figures have no source. You can mark it ready, but fixing them first raises Trust to about 94.' +
+        'Mark ready anyway is logged, with this Trust.',
+    );
+    // The action has the focus, not the code (it moves there after a frame).
+    await act(async () => new Promise((resolve) => setTimeout(resolve, 50)));
+    expect(document.activeElement).toBe(button('Mark ready anyway'));
+    await act(async () => button('Mark ready anyway')!.click());
+    expect(onMarkReady).toHaveBeenCalledWith({ trust: 37, reason: 'claimsSourced', count: 2 });
+    await act(async () => button('Fix first')!.click());
+    expect(onFixFirst).toHaveBeenCalledWith('Deals close $2.5 million faster.');
+  });
+
+  it('names the check that raises Trust most', async () => {
+    await render(
+      quality({
+        trust: trustRead({
+          score: 51,
+          checks: [
+            { id: 'claimsSourced', points: 25, max: 30 },
+            { id: 'freshSources', points: 0, max: 7 },
+          ],
+          unsourced: ['Teams book 3x more demos.'],
+          figures: 6,
+          stale: [{ url: 'https://old.example/', text: 'An old study.' }],
+          dated: 1,
+        }),
+      }),
+    );
+    expect(alert()!.textContent).toContain('1 of 1 dated sources is over 24 months old');
+    await act(async () => button('Fix first')!.click());
+    expect(onFixFirst).toHaveBeenCalledWith('An old study.');
+  });
+
+  it("says Trust is low with no reason when the page's own checks pass", async () => {
+    await render(
+      quality({
+        trust: trustRead({ score: 40, checks: [{ id: 'siteTrust', points: 2, max: 5 }] }),
+      }),
+    );
+    expect(alert()!.textContent).toContain(
+      'Trust 40, below 60. You can mark it ready, but Quality shows what would raise it.',
+    );
+    expect(button('Fix first')).toBeDefined();
+    await act(async () => button('Mark ready anyway')!.click());
+    expect(onMarkReady).toHaveBeenCalledWith({ trust: 40, reason: null, count: null });
+  });
+
+  it('marks it ready with no warning at Trust 60, or while Trust is unread', async () => {
+    await render(
+      quality({
+        trust: trustRead({
+          score: 60,
+          checks: [{ id: 'claimsSourced', points: 18, max: 30 }],
+          unsourced: ['A figure.'],
+          figures: 2,
+        }),
+      }),
+    );
+    expect(alert()).toBeNull();
+    await render(quality({ trust: null }));
+    expect(alert()).toBeNull();
+    expect(button('Fix first')).toBeUndefined();
+    await act(async () => button('Mark ready')!.click());
+    expect(onMarkReady).toHaveBeenCalledWith(null);
+  });
+
+  it('says when links are still being read, as Trust may change', async () => {
+    await render(quality({ trust: null }), { linksPending: 2 });
+    expect(dialog().querySelector('[role="status"]')!.textContent).toBe(
+      "Still reading 2 of the page's links, so Trust may change.",
+    );
+  });
+
+  it('says what the CMS does: the author, the dates and the Article schema', async () => {
+    await render(quality());
+    expect(rows()).toEqual([
+      "Author for your CMS · check itSet Ada Lovelace as the page's author in your CMS. Its template shows the byline; nothing is added to the content.",
+      'Visible published and updated dates · check itMost CMSs (WordPress, Webflow, Shopify) add these for you. Check your page.',
+      'Article schema with datePublished and dateModified · check itOften added by your CMS. If not, paste the code below into the page.',
+    ]);
+  });
+
+  it('gives the JSON-LD from the page, author and site to copy, dated today', async () => {
+    await render(quality());
+    expect(jsonLd()).toMatchObject({
+      '@type': 'Article',
+      headline: 'How small teams forecast',
+      image: 'https://cdn.acme.com/pour-over.jpg',
+      author: {
+        '@type': 'Person',
+        name: 'Ada Lovelace',
+        url: 'https://acme.com/ada',
+        sameAs: ['https://www.linkedin.com/in/ada'],
+      },
+      publisher: { '@type': 'Organization', name: 'Acme', url: 'https://acme.com/' },
+    });
+    expect(jsonLd().datePublished).toBe(jsonLd().dateModified);
+    expect(dialog().textContent).toContain("The dates are today's");
+    await act(async () => button('Copy JSON-LD')!.click());
+    expect(writeText).toHaveBeenCalledWith(dialog().querySelector('pre')!.textContent);
+    expect(toast.success).toHaveBeenCalledWith('JSON-LD copied');
+  });
+
+  it("leaves the author out while the authors aren't read", async () => {
+    await render(quality({ eeat: null, author: null }));
+    expect(rows()[0]).toContain("The authors couldn't be read here");
+    expect(jsonLd()).not.toHaveProperty('author');
+  });
+
+  it('names the team byline as missing, and keeps a live page its published date', async () => {
+    await render(quality({ author: null }), { isNew: false, image: null });
+    const [author, , schema] = rows();
+    expect(author).toBe(
+      "No author yet · missingThe page goes out as Acme Team, with the brand's Organization schema. A real author raises E-E-A-T.",
+    );
+    expect(schema).toContain('Article schema with dateModified');
+    expect(schema).toContain('It gives only the updated date');
+    expect(jsonLd().author).toEqual({
+      '@type': 'Organization',
+      name: 'Acme',
+      url: 'https://acme.com/',
+    });
+    expect(jsonLd()).not.toHaveProperty('datePublished');
+    expect(jsonLd()).not.toHaveProperty('image');
+  });
+
+  it("gives no Article for a page that isn't one", async () => {
+    await render(quality(), { pageType: 'product_page' });
+    expect(rows()).toEqual([
+      expect.stringContaining('Author for your CMS'),
+      'Schema for this page type · check itCheck what your CMS adds for it (Product, ItemList…). The code Ansvisor gives here is for articles.',
+    ]);
+    expect(dialog().querySelector('pre')).toBeNull();
+    expect(button('Copy JSON-LD')).toBeUndefined();
+  });
+});

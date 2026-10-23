@@ -4141,6 +4141,44 @@
       },
       "qualityChip": "Quality {score}",
       "qualityChipHint": "An Ansvisor estimate of this page's quality. Open Quality.",
+      "beforePublish": {
+        "title": "Before you publish",
+        "warning": "Trust {trust}, below 60. {reason}. You can mark it ready, but {count, plural, one {fixing it} other {fixing them}} first raises Trust to about {raised}.",
+        "warningNoReason": "Trust {trust}, below 60. You can mark it ready, but Quality shows what would raise it.",
+        "logged": "Mark ready anyway is logged, with this Trust.",
+        "author": {
+          "ok": "Author for your CMS",
+          "okDetail": "Set {name} as the page's author in your CMS. Its template shows the byline; nothing is added to the content.",
+          "unknown": "The authors couldn't be read here, so the code below leaves the author out. Set the page's author in your CMS.",
+          "none": "No author yet",
+          "noneDetail": "The page goes out as {byline}, with the brand's Organization schema. A real author raises E-E-A-T."
+        },
+        "dates": {
+          "title": "Visible published and updated dates",
+          "detail": "Most CMSs (WordPress, Webflow, Shopify) add these for you. Check your page."
+        },
+        "schema": {
+          "title": "Article schema with datePublished and dateModified",
+          "detail": "Often added by your CMS. If not, paste the code below into the page.",
+          "titleLive": "Article schema with dateModified",
+          "detailLive": "Often added by your CMS. If not, paste the code below into the page. It gives only the updated date: your page keeps the published date it has.",
+          "other": "Schema for this page type",
+          "otherDetail": "Check what your CMS adds for it (Product, ItemList…). The code Ansvisor gives here is for articles."
+        },
+        "linksPending": "Still reading {count, plural, one {# of the page's links} other {# of the page's links}}, so Trust may change.",
+        "datesNote": "The dates are today's: change them if the page goes out on another day.",
+        "states": {
+          "check": "check it",
+          "missing": "missing"
+        },
+        "jsonLd": "JSON-LD for this page",
+        "copy": "Copy JSON-LD",
+        "copied": "JSON-LD copied",
+        "copyFailed": "Couldn't copy the JSON-LD. Select it and copy it yourself.",
+        "fixFirst": "Fix first",
+        "markReady": "Mark ready",
+        "markReadyAnyway": "Mark ready anyway"
+      },
       "quality": {
         "scores": "Quality scores",
         "names": {

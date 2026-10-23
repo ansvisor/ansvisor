@@ -411,6 +411,32 @@ describe('markContentDraftReady', () => {
     expect(rpcCalls).toEqual([]);
   });
 
+  it('logs Mark ready anyway with the Trust the page had and the check it named (CE-041)', async () => {
+    updated = { status: 'ready' };
+    await markContentDraftReady(DRAFT, { trust: 55, reason: 'claimsSourced', count: 3 });
+    expect(calls[1]).toMatchObject({
+      op: 'insert',
+      value: { draft_id: DRAFT, trust: 55, reason: 'claimsSourced', reason_count: 3 },
+    });
+
+    // Not when nothing became ready, nor for a plain Mark ready.
+    calls = [];
+    updated = null;
+    row = { id: DRAFT, brand_id: 'b1', status: 'ready', author: 'user' };
+    await markContentDraftReady(DRAFT, { trust: 55, reason: null, count: null });
+    updated = { status: 'ready' };
+    await markContentDraftReady(DRAFT);
+    expect(calls.filter((c) => c.op === 'insert')).toEqual([]);
+
+    // Only a Trust and a check's id go in.
+    await expect(
+      markContentDraftReady(DRAFT, { trust: 140, reason: null, count: null }),
+    ).rejects.toThrow('invalid');
+    await expect(
+      markContentDraftReady(DRAFT, { trust: 40, reason: '3 sentences', count: 3 }),
+    ).rejects.toThrow('invalid');
+  });
+
   it('is ready even when History couldn’t keep the version', async () => {
     const error = vi.spyOn(console, 'error').mockImplementation(() => {});
     updated = { status: 'ready' };

@@ -35,8 +35,8 @@ function Probe({
   savedAt: string;
   enabled: boolean;
 }) {
-  const checks = useLinkChecks('d1', savedAt, hrefs, enabled);
-  return <pre data-checks={JSON.stringify([...checks])} />;
+  const { checks, pending } = useLinkChecks('d1', savedAt, hrefs, enabled);
+  return <pre data-checks={JSON.stringify([...checks])} data-pending={pending} />;
 }
 
 /** The reads the hook holds, by link. */
@@ -44,6 +44,9 @@ const seen = () =>
   new Map<string, LinkCheck>(
     JSON.parse(container.querySelector('pre')?.getAttribute('data-checks') ?? '[]'),
   );
+
+/** How many links' reads may still come. */
+const pending = () => Number(container.querySelector('pre')?.getAttribute('data-pending'));
 
 const render = (hrefs: string[], savedAt = 's1', enabled = true) =>
   act(async () => root.render(<Probe hrefs={hrefs} savedAt={savedAt} enabled={enabled} />));
@@ -69,10 +72,12 @@ describe('useLinkChecks', () => {
     await render(['https://a.example/']);
     await wait(LINK_CHECK_DELAY_MS - 100);
     await render(['https://a.example/', 'https://b.example/']);
+    expect(pending()).toBe(2);
     await wait();
     expect(checkDraftLinks).toHaveBeenCalledTimes(1);
     expect(checkDraftLinks).toHaveBeenCalledWith('d1');
     expect([...seen().keys()]).toEqual(['https://a.example/', 'https://b.example/']);
+    expect(pending()).toBe(0);
 
     // Nothing new to read: no ask.
     await render(['https://a.example/', 'https://b.example/'], 's2');
@@ -85,6 +90,8 @@ describe('useLinkChecks', () => {
     await render(['https://a.example/', 'https://new.example/']);
     await wait();
     expect(seen().has('https://new.example/')).toBe(false);
+    // Its read comes after the next save.
+    expect(pending()).toBe(1);
 
     // Same save: not asked again.
     await render(['https://a.example/', 'https://new.example/', 'https://a.example/']);
@@ -102,9 +109,12 @@ describe('useLinkChecks', () => {
     checkDraftLinks.mockResolvedValue({ error: 'failed' });
     vi.spyOn(console, 'error').mockImplementation(() => {});
     await render(['https://a.example/']);
+    expect(pending()).toBe(1);
     await wait(LINK_CHECK_DELAY_MS * 3);
     expect(checkDraftLinks).toHaveBeenCalledTimes(1);
     expect(seen().size).toBe(0);
+    // No read is coming in this save.
+    expect(pending()).toBe(0);
 
     await render(['https://d.example/'], 's1', false);
     await wait();
@@ -118,5 +128,6 @@ describe('useLinkChecks', () => {
     await render(['https://a.example/unsubscribe'], 's2');
     await wait();
     expect(checkDraftLinks).toHaveBeenCalledTimes(1);
+    expect(pending()).toBe(0);
   });
 });

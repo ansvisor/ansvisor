@@ -1185,6 +1185,51 @@ export type Database = {
           },
         ]
       }
+      content_draft_ready_log: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          draft_id: string
+          id: string
+          reason: string | null
+          reason_count: number | null
+          trust: number
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          draft_id: string
+          id?: string
+          reason?: string | null
+          reason_count?: number | null
+          trust: number
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          draft_id?: string
+          id?: string
+          reason?: string | null
+          reason_count?: number | null
+          trust?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "content_draft_ready_log_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "content_draft_ready_log_draft_id_fkey"
+            columns: ["draft_id"]
+            isOneToOne: false
+            referencedRelation: "content_drafts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       content_draft_sources: {
         Row: {
           added: boolean

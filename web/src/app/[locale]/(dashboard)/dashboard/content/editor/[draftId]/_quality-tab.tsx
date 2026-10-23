@@ -12,6 +12,7 @@ import {
   scoreGain,
   type EeatCheckId,
   type Score,
+  type TrustCheckId,
   type TrustRead,
 } from '@/lib/content/quality-checks';
 import type { QualityTodo } from '@/lib/content/quality-todos';
@@ -46,7 +47,7 @@ export interface QualityRead {
 
 type ScoreName = 'eeat' | 'trust' | 'readability';
 
-interface Suggestion {
+export interface Suggestion {
   key: string;
   // E-E-A-T's are the person's to-dos.
   score: Exclude<ScoreName, 'eeat'>;
@@ -338,19 +339,24 @@ function readabilitySuggestions(t: T, readability: Readability | null): Suggesti
   );
 }
 
+/** A Trust suggestion: its check, and how many it names (Before you publish's warning). */
+export type TrustSuggestion = Suggestion & { check: TrustCheckId; count: number };
+
 /**
  * Trust's: figures without a source, sources past FRESH_MONTHS, links that
  * don't answer, each with Show on the first one in the page.
  */
-function trustSuggestions(t: T, trust: TrustRead | null): Suggestion[] {
+export function trustSuggestions(t: T, trust: TrustRead | null): TrustSuggestion[] {
   if (!trust || trust.score === null) return [];
-  const out: Suggestion[] = [];
+  const out: TrustSuggestion[] = [];
   if (trust.unsourced.length) {
     out.push({
       key: 'trust:claimsSourced',
+      check: 'claimsSourced',
       score: 'trust',
       gain: scoreGain(trust, ['claimsSourced']),
       line: t('checks.claimsSourced.line', { count: trust.unsourced.length }),
+      count: trust.unsourced.length,
       detail: t('checks.claimsSourced.detail'),
       show: trust.unsourced[0],
     });
@@ -358,8 +364,10 @@ function trustSuggestions(t: T, trust: TrustRead | null): Suggestion[] {
   if (trust.stale.length) {
     out.push({
       key: 'trust:freshSources',
+      check: 'freshSources',
       score: 'trust',
       gain: scoreGain(trust, ['freshSources']),
+      count: trust.stale.length,
       line: t('checks.freshSources.line', {
         count: trust.stale.length,
         total: trust.dated,
@@ -372,9 +380,11 @@ function trustSuggestions(t: T, trust: TrustRead | null): Suggestion[] {
   if (trust.broken.length) {
     out.push({
       key: 'trust:noBrokenLinks',
+      check: 'noBrokenLinks',
       score: 'trust',
       gain: scoreGain(trust, ['noBrokenLinks']),
       line: t('checks.noBrokenLinks.line', { count: trust.broken.length }),
+      count: trust.broken.length,
       detail: t('checks.noBrokenLinks.detail', {
         count: trust.broken.length,
         url: trust.broken[0].url,

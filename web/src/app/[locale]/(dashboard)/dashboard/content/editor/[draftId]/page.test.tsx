@@ -2361,6 +2361,10 @@ describe('the side panel', () => {
       delete process.env.NEXT_PUBLIC_CONTENT_QUALITY_PHASE;
     });
     const nudge = () => container.querySelector('[aria-label="Your next step"]');
+    const inDialog = (name: string) =>
+      [...document.querySelectorAll<HTMLButtonElement>('[role="dialog"] button')].find(
+        (b) => b.textContent === name,
+      )!;
 
     it('names the first to-do once the agent has written the page, and opens the author menu', async () => {
       vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
@@ -2520,7 +2524,7 @@ describe('the side panel', () => {
       expect(nudge()).toBeNull();
     });
 
-    it('names it after Accept all, and on Mark ready while marking goes on; Later hides it', async () => {
+    it('names it after Accept all, and behind Before you publish on Mark ready; Later hides it', async () => {
       getContentDraft.mockResolvedValue(
         draft({
           authorId: 'a1',
@@ -2555,10 +2559,11 @@ describe('the side panel', () => {
       await act(async () => button('Later')!.click());
       expect(nudge()).toBeNull();
 
-      // Later holds for the session: Mark ready marks, with no nudge.
+      // Later holds for the session: Mark ready opens Before you publish, with no nudge.
       await act(async () => button('Mark ready')!.click());
-      expect(markContentDraftReady).toHaveBeenCalledWith('d1');
       expect(nudge()).toBeNull();
+      await act(async () => inDialog('Mark ready').click());
+      expect(markContentDraftReady).toHaveBeenCalledWith('d1');
     });
 
     it('names it on Mark ready with a to-do open', async () => {
@@ -2566,8 +2571,106 @@ describe('the side panel', () => {
       markContentDraftReady.mockResolvedValue({ status: 'ready', tasksDone: 0 });
       await renderPage();
       await act(async () => button('Mark ready')!.click());
-      expect(markContentDraftReady).toHaveBeenCalledWith('d1');
+      expect(document.querySelector('[role="dialog"]')!.textContent).toContain(
+        'Before you publish',
+      );
       expect(nudge()!.textContent).toContain("Next for you: pick the page's author");
+      await act(async () => inDialog('Mark ready').click());
+      expect(markContentDraftReady).toHaveBeenCalledWith('d1');
+    });
+  });
+
+  describe('Before you publish (CE-041)', () => {
+    beforeEach(() => {
+      process.env.NEXT_PUBLIC_CONTENT_QUALITY_PHASE = '1';
+      markContentDraftReady.mockResolvedValue({ status: 'ready', tasksDone: 0 });
+      getContentAuthors.mockResolvedValue({
+        authors: [],
+        brands: [{ id: 'b1', name: 'Acme' }],
+        me: { id: 'u1', role: 'analyst' },
+      });
+      getDraftSources.mockResolvedValue({
+        data: {
+          prompts: [],
+          fanouts: [],
+          citedPages: [],
+          gscQueries: [],
+          brandDomains: ['acme.example.com'],
+          competitorDomains: [],
+        },
+        choices: [],
+      });
+    });
+    afterEach(() => {
+      delete process.env.NEXT_PUBLIC_CONTENT_QUALITY_PHASE;
+    });
+    const dialogText = () => document.querySelector('[role="dialog"]')?.textContent ?? null;
+    const inDialog = (name: string) =>
+      [...document.querySelectorAll<HTMLButtonElement>('[role="dialog"] button')].find(
+        (b) => b.textContent === name,
+      );
+
+    it('opens on Mark ready with what the CMS does and the JSON-LD, then marks it ready', async () => {
+      getContentDraft.mockResolvedValue(draft({ authorId: null, pageType: 'blog_post' }));
+      await renderPage();
+      await act(async () => button('Mark ready')!.click());
+      expect(markContentDraftReady).not.toHaveBeenCalled();
+      expect(dialogText()).toContain('No author yet');
+      expect(dialogText()).toContain('"@type": "Article"');
+      expect(dialogText()).toContain('"headline": "Pipeline forecasting"');
+      // No figure or link to read: Trust isn't scored, so nothing warns.
+      expect(document.querySelector('[role="dialog"] [role="alert"]')).toBeNull();
+      await act(async () => inDialog('Mark ready')!.click());
+      expect(markContentDraftReady).toHaveBeenCalledWith('d1');
+      expect(dialogText()).toBeNull();
+    });
+
+    it('warns under Trust 60, and logs Mark ready anyway with the Trust and the check it named', async () => {
+      getContentDraft.mockResolvedValue(
+        draft({ bodyHtml: '<h1>Pipeline forecasting</h1><p>Deals close $2.5 million faster.</p>' }),
+      );
+      await renderPage();
+      await act(async () => button('Mark ready')!.click());
+      expect(document.querySelector('[role="dialog"] [role="alert"]')!.textContent).toContain(
+        'Trust 0, below 60. 1 sentence with a figure has no source. You can mark it ready, but fixing it first raises Trust to about 100.',
+      );
+      await act(async () => inDialog('Mark ready anyway')!.click());
+      expect(markContentDraftReady).toHaveBeenCalledWith('d1', {
+        trust: 0,
+        reason: 'claimsSourced',
+        count: 1,
+      });
+    });
+
+    it('goes to Quality on Fix first, without marking it ready', async () => {
+      getContentDraft.mockResolvedValue(
+        draft({ bodyHtml: '<h1>Pipeline forecasting</h1><p>Deals close $2.5 million faster.</p>' }),
+      );
+      window.innerWidth = 1440;
+      await renderPage();
+      await act(async () => button('Mark ready')!.click());
+      const scrolled = vi.fn();
+      const original = Element.prototype.scrollIntoView;
+      Element.prototype.scrollIntoView = scrolled;
+      try {
+        await act(async () => inDialog('Fix first')!.click());
+      } finally {
+        Element.prototype.scrollIntoView = original;
+      }
+      expect(dialogText()).toBeNull();
+      expect(markContentDraftReady).not.toHaveBeenCalled();
+      expect(selectedSegment()).toMatch(/^Quality/);
+      // The passage the warning names first.
+      expect(scrolled).toHaveBeenCalled();
+    });
+
+    it('marks it ready at once while Quality is off', async () => {
+      delete process.env.NEXT_PUBLIC_CONTENT_QUALITY_PHASE;
+      getContentDraft.mockResolvedValue(draft());
+      await renderPage();
+      await act(async () => button('Mark ready')!.click());
+      expect(dialogText()).toBeNull();
+      expect(markContentDraftReady).toHaveBeenCalledWith('d1');
     });
   });
 
