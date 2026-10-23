@@ -6,6 +6,7 @@ import express from 'express';
  * POST /api/content-drafts/:draftId/suggestions (CE-018): Fix open rules with agent; and
  * POST /api/content-drafts/:draftId/write (CE-015): Start's Agent.
  * POST /api/content-drafts/:draftId/rewrite: Rewrite the page to these rules.
+ * POST /api/content-drafts/:draftId/stop (v1.1 CE-027): Stop the agent's run.
  */
 
 const BRAND = '33333333-3333-3333-3333-333333333333';
@@ -15,9 +16,27 @@ const rebuildDraftBrief = vi.fn();
 const startDraftWriting = vi.fn();
 const fixDraftRules = vi.fn();
 const assertBrandAccess = vi.fn();
+const stopDraftRun = vi.fn();
+/** The draft Stop reads, to check it is the brand's. */
+let stopDraft;
 
 // The route's modules read the Supabase client; CI has no credentials for it.
-vi.mock('../config/supabase.js', () => ({ default: {} }));
+vi.mock('../config/supabase.js', () => ({
+  default: {
+    from: () => {
+      const chain = {
+        select: () => chain,
+        eq: () => chain,
+        maybeSingle: async () => ({ data: stopDraft, error: null }),
+      };
+      return chain;
+    },
+  },
+}));
+vi.mock('../lib/content-runs.js', async (importOriginal) => ({
+  ...(await importOriginal()),
+  stopDraftRun: (...args) => stopDraftRun(...args),
+}));
 vi.mock('../lib/content-brief.js', async (importOriginal) => ({
   ...(await importOriginal()),
   rebuildDraftBrief: (...args) => rebuildDraftBrief(...args),
@@ -34,6 +53,7 @@ vi.mock('../lib/access.js', () => ({ assertBrandAccess: (...args) => assertBrand
 
 const { default: router } = await import('./content-drafts.js');
 const { PlanLimitError } = await import('../lib/plan-guard.js');
+const { RunStoppedError } = await import('../lib/content-runs.js');
 
 let server;
 let baseUrl;
@@ -43,6 +63,8 @@ beforeEach(async () => {
   startDraftWriting.mockReset().mockResolvedValue({ started: true });
   fixDraftRules.mockReset().mockResolvedValue({ count: 2, batchId: 'b1' });
   assertBrandAccess.mockReset().mockResolvedValue({});
+  stopDraftRun.mockReset().mockResolvedValue(true);
+  stopDraft = { brand_id: BRAND };
   const app = express();
   app.use(express.json());
   app.use((req, _res, next) => {
@@ -238,5 +260,44 @@ describe('POST /api/content-drafts/:draftId/suggestions', () => {
       expect(res.status).toBe(409);
       await expect(res.json()).resolves.toMatchObject({ code });
     }
+  });
+});
+
+describe('POST /api/content-drafts/:draftId/stop', () => {
+  const stop = (body = { brandId: BRAND }, draftId = DRAFT) =>
+    fetch(`${baseUrl}/${draftId}/stop`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+
+  it('stops the draft’s run under way', async () => {
+    const res = await stop();
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ stopped: true });
+    expect(assertBrandAccess).toHaveBeenCalledWith(BRAND, 'u1');
+    expect(stopDraftRun).toHaveBeenCalledWith(DRAFT);
+  });
+
+  it('stops nothing of another brand’s draft, or on a bad request', async () => {
+    stopDraft = { brand_id: '44444444-4444-4444-4444-444444444444' };
+    expect((await stop()).status).toBe(404);
+    expect((await stop({})).status).toBe(400);
+    expect((await stop({ brandId: BRAND }, 'nope')).status).toBe(400);
+    expect(stopDraftRun).not.toHaveBeenCalled();
+  });
+
+  it('says a Fix open rules run was stopped', async () => {
+    fixDraftRules.mockRejectedValue(new RunStoppedError());
+    const res = await fetch(`${baseUrl}/${DRAFT}/suggestions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        brandId: BRAND,
+        rules: [{ key: 'faq', name: 'FAQ', detail: '' }],
+      }),
+    });
+    expect(res.status).toBe(409);
+    expect(await res.json()).toMatchObject({ code: 'stopped' });
   });
 });

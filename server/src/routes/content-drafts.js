@@ -3,14 +3,17 @@ import { z } from 'zod';
 import { assertBrandAccess } from '../lib/access.js';
 import { fixDraftRules, fixRulesInput } from '../lib/content-agent.js';
 import { rebuildDraftBrief, rebuildSources } from '../lib/content-brief.js';
+import { stopDraftRun } from '../lib/content-runs.js';
 import { startDraftWriting, writeDraftInput } from '../lib/content-writer.js';
+import supabaseAdmin from '../config/supabase.js';
 import { PlanLimitError } from '../lib/plan-guard.js';
 
 /**
  * Content Editor drafts: Rebuild outline in the editor's Brief tab writes
  * the draft's brief from the sources the person kept (CE-007); Fix open
  * rules with agent leaves the Content Agent's suggestions for review
- * (CE-018); Start's Agent has the Content Agent do the page (CE-015).
+ * (CE-018); Start's Agent has the Content Agent do the page (CE-015); and
+ * Stop ends the agent's run under way, changing nothing (v1.1 CE-027).
  */
 
 const router = Router();
@@ -167,6 +170,44 @@ router.post('/:draftId/rewrite', async (req, res) => {
     }
     req.log.error({ err }, 'content draft agent rewrite error');
     return res.status(502).json({ error: 'The agent could not start', code: 'failed' });
+  }
+});
+
+const stopBody = z.object({ brandId: z.guid() });
+
+/**
+ * POST /api/content-drafts/:draftId/stop
+ * Body: { brandId }
+ * Stops the Content Agent's run on the draft (CE-027): it keeps nothing of
+ * what it had. Answers { stopped }: false when no run was under way.
+ */
+router.post('/:draftId/stop', async (req, res) => {
+  const draftId = z.guid().safeParse(req.params.draftId);
+  const parsed = stopBody.safeParse(req.body ?? {});
+  if (!draftId.success || !parsed.success) {
+    return res.status(400).json({ error: 'Invalid request', code: 'invalid' });
+  }
+  const { brandId } = parsed.data;
+  try {
+    await assertBrandAccess(brandId, req.user.id);
+    const { data: draft, error } = await supabaseAdmin
+      .from('content_drafts')
+      .select('brand_id')
+      .eq('id', draftId.data)
+      .maybeSingle();
+    if (error) throw error;
+    if (!draft || draft.brand_id !== brandId) {
+      return res.status(404).json({ error: 'Draft not found', code: 'not_found' });
+    }
+    return res.json({ stopped: await stopDraftRun(draftId.data) });
+  } catch (err) {
+    if (ERROR_CODES[err?.status]) {
+      return res
+        .status(err.status)
+        .json({ error: err.message, code: err.code ?? ERROR_CODES[err.status] });
+    }
+    req.log.error({ err }, 'content draft agent stop error');
+    return res.status(502).json({ error: 'The agent could not be stopped', code: 'failed' });
   }
 });
 

@@ -35,6 +35,8 @@ vi.mock('../config/supabase.js', () => ({
     },
   },
 }));
+/** The writes but the run's own steps (content_agent_runs, 00249). */
+const draftWrites = () => writes.filter((w) => w.table !== 'content_agent_runs');
 class NoObjectGeneratedError extends Error {
   static isInstance(err) {
     return err instanceof NoObjectGeneratedError;
@@ -49,7 +51,12 @@ vi.mock('./plan-guard.js', async (importOriginal) => ({
   ...(await importOriginal()),
   reserveAiBudget: (...args) => reserveAiBudget(...args),
 }));
-vi.mock('./logger.js', () => ({ logger: { error: vi.fn() } }));
+vi.mock('./logger.js', () => ({ logger: { error: vi.fn(), warn: vi.fn() } }));
+const stopIfStopped = vi.fn();
+vi.mock('./content-runs.js', async (importOriginal) => ({
+  ...(await importOriginal()),
+  stopIfStopped: (...args) => stopIfStopped(...args),
+}));
 
 const { buildBriefPrompt, mapOutline, rebuildDraftBrief, rebuildSources } =
   await import('./content-brief.js');
@@ -87,6 +94,7 @@ const outline = [
 ];
 
 beforeEach(() => {
+  stopIfStopped.mockReset().mockResolvedValue(undefined);
   writes = [];
   filters = [];
   rows = {
@@ -163,7 +171,7 @@ describe('rebuildDraftBrief', () => {
       { heading: 'Care', keyPoints: [], fanout: null, platform: null },
     ]);
 
-    expect(writes).toEqual([
+    expect(draftWrites()).toEqual([
       {
         table: 'prompt_improve_usage',
         op: 'insert',
@@ -259,6 +267,16 @@ describe('rebuildDraftBrief', () => {
     expect(brief.keywords.every((k) => k.length <= 80)).toBe(true);
   });
 
+  it('saves nothing once stopped, and says so (CE-027)', async () => {
+    const { RunStoppedError } = await import('./content-runs.js');
+    stopIfStopped.mockRejectedValueOnce(new RunStoppedError());
+    await expect(
+      rebuildDraftBrief({ draftId: DRAFT, brandId: BRAND, sources: sources() }),
+    ).rejects.toMatchObject({ status: 409, code: 'stopped' });
+    // The call was made and charged; the brief stays as it was.
+    expect(draftWrites().filter((w) => w.table === 'content_drafts')).toEqual([]);
+  });
+
   it('charges a call whose answer didn’t fit, then fails', async () => {
     generateObject.mockRejectedValue(
       Object.assign(new NoObjectGeneratedError('no object'), {
@@ -268,7 +286,7 @@ describe('rebuildDraftBrief', () => {
     await expect(
       rebuildDraftBrief({ draftId: DRAFT, brandId: BRAND, sources: sources() }),
     ).rejects.toBeInstanceOf(NoObjectGeneratedError);
-    expect(writes).toEqual([
+    expect(draftWrites()).toEqual([
       expect.objectContaining({
         table: 'prompt_improve_usage',
         op: 'insert',
@@ -294,7 +312,7 @@ describe('rebuildDraftBrief', () => {
       rebuildDraftBrief({ draftId: DRAFT, brandId: BRAND, sources: sources() }),
     ).rejects.toBeInstanceOf(PlanLimitError);
     expect(generateObject).not.toHaveBeenCalled();
-    expect(writes).toEqual([]);
+    expect(draftWrites()).toEqual([]);
   });
 });
 

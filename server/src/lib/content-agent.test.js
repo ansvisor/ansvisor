@@ -48,6 +48,11 @@ vi.mock('./plan-guard.js', async (importOriginal) => ({
   reserveAiBudget: (...args) => reserveAiBudget(...args),
 }));
 vi.mock('./logger.js', () => ({ logger: { error: vi.fn(), warn: vi.fn() } }));
+const stopIfStopped = vi.fn();
+vi.mock('./content-runs.js', async (importOriginal) => ({
+  ...(await importOriginal()),
+  stopIfStopped: (...args) => stopIfStopped(...args),
+}));
 const readLinkTargets = vi.fn();
 vi.mock('./content-links.js', async (importOriginal) => ({
   ...(await importOriginal()),
@@ -113,6 +118,7 @@ const SOURCES = {
 const sourcing = { numbered: numberSources(SOURCES) };
 
 beforeEach(() => {
+  stopIfStopped.mockReset().mockResolvedValue(undefined);
   writes = [];
   rows = {
     content_drafts: {
@@ -732,6 +738,21 @@ describe('fixDraftRules', () => {
     expect(generateObject.mock.calls[0][0].prompt).toContain(
       'S1 Prompt (a question tracked in AI answers): "What ratio for pour-over?"\nS2 Fan-out',
     );
+  });
+
+  it('keeps nothing once stopped, and says so (CE-027)', async () => {
+    const { RunStoppedError } = await import('./content-runs.js');
+    stopIfStopped.mockRejectedValueOnce(new RunStoppedError());
+    generateObject.mockResolvedValue({
+      object: { suggestions: [suggestion()] },
+      usage: { inputTokens: 900, outputTokens: 200 },
+    });
+    await expect(
+      fixDraftRules({ draftId: DRAFT, brandId: BRAND, input: input({ sources: SOURCES }) }),
+    ).rejects.toMatchObject({ status: 409, code: 'stopped' });
+    expect(writes.find((w) => w.table === 'content_draft_suggestions')).toBeUndefined();
+    // The call it made is still charged: the provider billed it.
+    expect(writes.find((w) => w.table === 'prompt_improve_usage')).toBeDefined();
   });
 
   it('keeps nothing when the agent found nothing it could change', async () => {

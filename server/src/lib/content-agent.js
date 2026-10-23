@@ -8,6 +8,15 @@ import { contentBriefModelId, rebuildSources } from './content-brief.js';
 import { linkAllowList, linkKey, linkTargetsPrompt, readLinkTargets } from './content-links.js';
 import { pageTypeFormat } from './content-page-types.js';
 import {
+  RunStoppedError,
+  advanceRun,
+  callSignal,
+  finishRun,
+  isStop,
+  startRun,
+  stopIfStopped,
+} from './content-runs.js';
+import {
   SOURCES_RULE,
   htmlText,
   knownNumbers,
@@ -563,12 +572,40 @@ export async function fixDraftRules({ draftId, brandId, input }) {
     .single();
   if (brandError) throw brandError;
 
+  // Its steps, named by the data it reads (CE-027/035); Stop aborts the call.
+  const run = await startRun({
+    draftId,
+    kind: 'fix',
+    counts: {
+      pages: input.sources?.pages.length,
+      fanouts: input.sources?.fanouts.length,
+      queries: input.sources?.queries.length,
+    },
+  });
+  try {
+    const result = await fixWithRun({ draft, brand, brandId, draftId, input, passages, more, run });
+    await finishRun(run, 'done', { 3: result.count });
+    return result;
+  } catch (err) {
+    if (isStop(err, run)) {
+      await finishRun(run, 'stopped');
+      throw new RunStoppedError();
+    }
+    await finishRun(run, 'failed');
+    throw err;
+  }
+}
+
+/** Fix open rules' run itself, step by step: nothing is kept once it is stopped. */
+async function fixWithRun({ draft, brand, brandId, draftId, input, passages, more, run }) {
   const modelId = contentBriefModelId();
   const lockedKeys = new Set(input.locked.map(passageKey));
   const ruleKeys = new Set(input.rules.map((r) => r.key));
   // The data it writes from, numbered; the numbers it may write unmarked.
+  const prompts = await readPrompts(brandId, input.sources?.promptIds ?? []);
+  await advanceRun(run, 1);
   const numbered = numberSources({
-    prompts: await readPrompts(brandId, input.sources?.promptIds ?? []),
+    prompts,
     fanouts: input.sources?.fanouts,
     pages: input.sources?.pages,
     queries: input.sources?.queries,
@@ -596,6 +633,7 @@ export async function fixDraftRules({ draftId, brandId, input }) {
   });
   let object;
   try {
+    await advanceRun(run, 3);
     const generated = await generateObject({
       model: resolveModel(modelId),
       schema: suggestionsSchema,
@@ -610,7 +648,7 @@ export async function fixDraftRules({ draftId, brandId, input }) {
         linkTargets: linkTargetsPrompt(targets, ruleKeys),
         sources: sourcesPrompt(numbered),
       }),
-      abortSignal: AbortSignal.timeout(CALL_TIMEOUT_MS),
+      abortSignal: callSignal(run, CALL_TIMEOUT_MS),
     });
     await budget.charge(generated.usage);
     object = generated.object;
@@ -632,6 +670,8 @@ export async function fixDraftRules({ draftId, brandId, input }) {
     linkAllowList(targets),
     { numbered, known },
   );
+  // Stopped meanwhile: nothing it wrote is kept.
+  await stopIfStopped(run);
   if (!rows.length) return { count: 0, batchId: null };
 
   const batchId = randomUUID();

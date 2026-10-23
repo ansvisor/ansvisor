@@ -4,6 +4,15 @@ import supabaseAdmin from '../config/supabase.js';
 import { resolveModel } from './ai-provider.js';
 import { pageTypeFormat } from './content-page-types.js';
 import { getLanguageName } from './languages.js';
+import {
+  RunStoppedError,
+  advanceRun,
+  callSignal,
+  finishRun,
+  isStop,
+  startRun,
+  stopIfStopped,
+} from './content-runs.js';
 import { reserveAiBudget } from './plan-guard.js';
 
 /**
@@ -164,6 +173,32 @@ export async function rebuildDraftBrief({ draftId, brandId, sources }) {
     });
   }
 
+  // Its steps, named by the data it reads (CE-027/035); Stop aborts the call.
+  const run = await startRun({
+    draftId,
+    kind: 'brief',
+    counts: {
+      sources:
+        prompts.length + sources.fanouts.length + sources.pages.length + sources.queries.length,
+    },
+  });
+  try {
+    const brief = await briefWithRun({ draft, draftId, brand, prompts, sources, run });
+    await finishRun(run, 'done');
+    return brief;
+  } catch (err) {
+    if (isStop(err, run)) {
+      await finishRun(run, 'stopped');
+      throw new RunStoppedError();
+    }
+    await finishRun(run, 'failed');
+    throw err;
+  }
+}
+
+/** The rebuild itself, step by step: nothing is saved once it is stopped. */
+async function briefWithRun({ draft, draftId, brand, prompts, sources, run }) {
+  await advanceRun(run, 1);
   const modelId = contentBriefModelId();
   // Held on the budget before the call, so calls at once can't pass it.
   const budget = await reserveAiBudget(brand.organization_id, {
@@ -174,12 +209,13 @@ export async function rebuildDraftBrief({ draftId, brandId, sources }) {
 
   let generated;
   try {
+    await advanceRun(run, 2);
     generated = await generateObject({
       model: resolveModel(modelId),
       schema: outlineSchema,
       system: SYSTEM_PROMPT,
       prompt: buildBriefPrompt({ brand, draft, prompts, sources }),
-      abortSignal: AbortSignal.timeout(CALL_TIMEOUT_MS),
+      abortSignal: callSignal(run, CALL_TIMEOUT_MS),
     });
     await budget.charge(generated.usage);
   } catch (err) {
@@ -211,6 +247,8 @@ export async function rebuildDraftBrief({ draftId, brandId, sources }) {
       queries: sources.queries.length,
     },
   };
+  // Stopped meanwhile: the brief stays as it was.
+  await stopIfStopped(run);
   const { error: saveError } = await supabaseAdmin
     .from('content_drafts')
     .update({ brief })

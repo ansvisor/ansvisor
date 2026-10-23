@@ -73,6 +73,11 @@ vi.mock('./plan-guard.js', async (importOriginal) => ({
 }));
 vi.mock('./logger.js', () => ({ logger: { error: vi.fn(), info: vi.fn(), warn: vi.fn() } }));
 const readLinkTargets = vi.hoisted(() => vi.fn());
+const stopIfStopped = vi.fn();
+vi.mock('./content-runs.js', async (importOriginal) => ({
+  ...(await importOriginal()),
+  stopIfStopped: (...args) => stopIfStopped(...args),
+}));
 vi.mock('./content-links.js', async (importOriginal) => ({
   ...(await importOriginal()),
   readLinkTargets: (...args) => readLinkTargets(...args),
@@ -155,6 +160,7 @@ beforeEach(() => {
   });
   reserveAiBudget.mockReset().mockImplementation(realGuard.reserveAiBudget);
   hasOpenSuggestions.mockReset().mockResolvedValue(false);
+  stopIfStopped.mockReset().mockResolvedValue(undefined);
 });
 
 const draftUpdates = () =>
@@ -236,6 +242,21 @@ describe('startDraftWriting', () => {
     expect(prompt).toContain('- S2 "pour over ratio"');
     expect(prompt).toContain('- faq: FAQ with 5 questions — aim: 5');
     expect(prompt).toContain('Page type: How-to guide: numbered steps to get one thing done');
+  });
+
+  it('leaves the page as it was once stopped, and lets go of it (CE-027)', async () => {
+    const { RunStoppedError } = await import('./content-runs.js');
+    stopIfStopped.mockRejectedValueOnce(new RunStoppedError());
+    // A page the person wrote in: stopped, History gets no "before the agent".
+    rows.content_drafts = draftRow({
+      body_html: '<h1>How to brew pour-over coffee</h1><p>My notes.</p>',
+    });
+    await startDraftWriting({ draftId: DRAFT, brandId: BRAND, input: input() });
+    await vi.waitFor(() => expect(draftUpdates()).toHaveLength(2));
+    // Claimed, then let go: no page written, no 'failed'.
+    expect(draftUpdates()[1]).toEqual({ agent_state: null, agent_state_at: expect.any(String) });
+    expect(draftUpdates().some((u) => 'body_html' in u)).toBe(false);
+    expect(rpcCalls).toEqual([]);
   });
 
   // Rewrite from brief: a draft the agent wrote is in review, and is written again.
