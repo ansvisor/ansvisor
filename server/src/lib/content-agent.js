@@ -1,14 +1,14 @@
 import { randomUUID } from 'crypto';
-import { generateObject } from 'ai';
+import { NoObjectGeneratedError, generateObject } from 'ai';
 import * as cheerio from 'cheerio';
 import { z } from 'zod';
 import supabaseAdmin from '../config/supabase.js';
 import { resolveModel } from './ai-provider.js';
-import { contentBriefModelId, recordUsage } from './content-brief.js';
+import { contentBriefModelId } from './content-brief.js';
 import { linkAllowList, linkKey, linkTargetsPrompt, readLinkTargets } from './content-links.js';
 import { pageTypeFormat } from './content-page-types.js';
 import { getLanguageName } from './languages.js';
-import { enforceImproveQuota } from './plan-guard.js';
+import { reserveAiBudget } from './plan-guard.js';
 
 /**
  * Fix open rules with agent (Content Editor CE-018, spec §8): the Content
@@ -521,8 +521,6 @@ export async function fixDraftRules({ draftId, brandId, input }) {
   if (brandError) throw brandError;
 
   const modelId = contentBriefModelId();
-  await enforceImproveQuota(brand.organization_id, modelId);
-
   const lockedKeys = new Set(input.locked.map(passageKey));
   const ruleKeys = new Set(input.rules.map((r) => r.key));
   // Where it may link: the brand's pages and the draft's sources (A).
@@ -532,22 +530,40 @@ export async function fixDraftRules({ draftId, brandId, input }) {
     sourceUrl: draft.source_url,
     ruleKeys,
   });
-  const { object, usage } = await generateObject({
-    model: resolveModel(modelId),
-    schema: suggestionsSchema,
-    system: SYSTEM_PROMPT,
-    prompt: buildFixPrompt({
-      brand,
-      draft,
-      passages,
-      more,
-      lockedKeys,
-      input,
-      linkTargets: linkTargetsPrompt(targets, ruleKeys),
-    }),
-    abortSignal: AbortSignal.timeout(CALL_TIMEOUT_MS),
+  // Held on the budget before the call, so calls at once can't pass it.
+  const budget = await reserveAiBudget(brand.organization_id, {
+    feature: 'content',
+    modelId,
+    draftId,
   });
-  await recordUsage({ organizationId: brand.organization_id, draftId, modelId, usage });
+  let object;
+  try {
+    const generated = await generateObject({
+      model: resolveModel(modelId),
+      schema: suggestionsSchema,
+      system: SYSTEM_PROMPT,
+      prompt: buildFixPrompt({
+        brand,
+        draft,
+        passages,
+        more,
+        lockedKeys,
+        input,
+        linkTargets: linkTargetsPrompt(targets, ruleKeys),
+      }),
+      abortSignal: AbortSignal.timeout(CALL_TIMEOUT_MS),
+    });
+    await budget.charge(generated.usage);
+    object = generated.object;
+  } catch (err) {
+    // An answer the provider billed but that missed the schema is charged,
+    // as Improve's is: else it, and each retry after it, would run free.
+    if (NoObjectGeneratedError.isInstance(err) && err.usage) await budget.charge(err.usage);
+    throw err;
+  } finally {
+    // Nothing charged (a timeout, a refusal): the hold goes.
+    await budget.release();
+  }
 
   const rows = keepSuggestions(
     object.suggestions,

@@ -16,7 +16,7 @@ let finished;
 let rpcCalls;
 let reads;
 const generateObject = vi.fn();
-const enforceImproveQuota = vi.fn();
+const reserveAiBudget = vi.fn();
 
 vi.mock('../config/supabase.js', () => ({
   default: {
@@ -56,12 +56,20 @@ vi.mock('../config/supabase.js', () => ({
     },
   },
 }));
-vi.mock('ai', () => ({ generateObject: (...args) => generateObject(...args) }));
+class NoObjectGeneratedError extends Error {
+  static isInstance(err) {
+    return err instanceof NoObjectGeneratedError;
+  }
+}
+vi.mock('ai', () => ({
+  generateObject: (...args) => generateObject(...args),
+  NoObjectGeneratedError,
+}));
 const resolveModel = vi.hoisted(() => vi.fn((id) => `model:${id}`));
 vi.mock('./ai-provider.js', () => ({ resolveModel }));
 vi.mock('./plan-guard.js', async (importOriginal) => ({
   ...(await importOriginal()),
-  enforceImproveQuota: (...args) => enforceImproveQuota(...args),
+  reserveAiBudget: (...args) => reserveAiBudget(...args),
 }));
 vi.mock('./logger.js', () => ({ logger: { error: vi.fn(), info: vi.fn(), warn: vi.fn() } }));
 const readLinkTargets = vi.hoisted(() => vi.fn());
@@ -79,6 +87,8 @@ const { briefText, renderPage, runDraftWriting, startDraftWriting } =
   await import('./content-writer.js');
 const { passageKey } = await import('./content-agent.js');
 const { PlanLimitError } = await import('./plan-guard.js');
+// The real hold: self-hosted here, so it reserves nothing and writes each charge.
+const realGuard = await vi.importActual('./plan-guard.js');
 
 const input = (over = {}) => ({
   sources: {
@@ -142,7 +152,7 @@ beforeEach(() => {
     object: page,
     usage: { inputTokens: 10, outputTokens: 20 },
   });
-  enforceImproveQuota.mockReset().mockResolvedValue(undefined);
+  reserveAiBudget.mockReset().mockImplementation(realGuard.reserveAiBudget);
   hasOpenSuggestions.mockReset().mockResolvedValue(false);
 });
 
@@ -193,7 +203,10 @@ describe('startDraftWriting', () => {
     await expect(
       startDraftWriting({ draftId: DRAFT, brandId: BRAND, input: input() }),
     ).resolves.toEqual({ started: true });
-    expect(enforceImproveQuota).toHaveBeenCalledWith('org-1', expect.any(String));
+    expect(reserveAiBudget).toHaveBeenCalledWith(
+      'org-1',
+      expect.objectContaining({ feature: 'content', modelId: expect.any(String) }),
+    );
     expect(draftUpdates()[0]).toMatchObject({ agent_state: 'writing' });
 
     await vi.waitFor(() => expect(draftUpdates()).toHaveLength(2));
@@ -255,7 +268,7 @@ describe('startDraftWriting', () => {
       agent_state_at: new Date().toISOString(),
     });
     await expect(start()).rejects.toMatchObject({ status: 409, code: 'writing' });
-    expect(enforceImproveQuota).not.toHaveBeenCalled();
+    expect(reserveAiBudget).not.toHaveBeenCalled();
     expect(writes).toEqual([]);
 
     // A 'writing' left long ago can start again; a start that lost the claim can't.
@@ -275,7 +288,7 @@ describe('startDraftWriting', () => {
       startDraftWriting({ draftId: DRAFT, brandId: BRAND, input: input() }),
     ).rejects.toMatchObject({ status: 409, code: 'open_suggestions' });
     expect(hasOpenSuggestions).toHaveBeenCalledWith(DRAFT);
-    expect(enforceImproveQuota).not.toHaveBeenCalled();
+    expect(reserveAiBudget).not.toHaveBeenCalled();
     expect(writes).toEqual([]);
 
     // A new page is written whole: its run adds no batch.
@@ -289,11 +302,16 @@ describe('startDraftWriting', () => {
 
   it('writes one of the organization’s drafts at a time', async () => {
     rows.writingInOrg = [{ id: 'other-draft' }];
+    const held = { charge: vi.fn(), release: vi.fn() };
+    reserveAiBudget.mockResolvedValueOnce(held);
     await expect(
       startDraftWriting({ draftId: DRAFT, brandId: BRAND, input: input() }),
     ).rejects.toMatchObject({ status: 409, code: 'org_writing' });
     expect(writes).toEqual([]);
     expect(generateObject).not.toHaveBeenCalled();
+    // Not started: the hold on the budget goes.
+    expect(held.release).toHaveBeenCalled();
+    expect(held.charge).not.toHaveBeenCalled();
   });
 
   it('fails at once when the model isn’t set up, claiming nothing', async () => {
@@ -307,7 +325,7 @@ describe('startDraftWriting', () => {
   });
 
   it('stops at the budget', async () => {
-    enforceImproveQuota.mockRejectedValue(new PlanLimitError('used up', 429));
+    reserveAiBudget.mockRejectedValue(new PlanLimitError('used up', 429));
     await expect(
       startDraftWriting({ draftId: DRAFT, brandId: BRAND, input: input() }),
     ).rejects.toBeInstanceOf(PlanLimitError);
@@ -315,9 +333,16 @@ describe('startDraftWriting', () => {
   });
 });
 
+// The hold Start took on the AI budget (reserveAiBudget), handed to the run.
+const budget = { charge: vi.fn(), release: vi.fn() };
+beforeEach(() => {
+  budget.charge.mockReset();
+  budget.release.mockReset();
+});
+
 describe('runDraftWriting on a new page', () => {
   const run = (draft) =>
-    runDraftWriting({ draft, brand, model: 'model:m', modelId: 'm', input: input() });
+    runDraftWriting({ draft, brand, model: 'model:m', input: input(), budget });
 
   it('keeps the person’s text in History before writing over it, and reads prompts by their set', async () => {
     const tried = draftRow({
@@ -325,6 +350,9 @@ describe('runDraftWriting on a new page', () => {
       body_html: '<h1>How to brew pour-over coffee</h1><p>My own notes.</p>',
     });
     await expect(run(tried)).resolves.toEqual({ written: true });
+    // The answer is charged to the hold; nothing is left to release after.
+    expect(budget.charge).toHaveBeenCalledTimes(1);
+    expect(budget.release).toHaveBeenCalled();
     // The fan-outs a rule names, in their words, on a new page too (B).
     expect(generateObject.mock.calls[0][0].system).toContain(
       'For each fan-out a rule names, use its words, not questions of your own: a section heading for fanoutH2, an FAQ question ending in "?" for fanoutFaq.',
@@ -363,8 +391,8 @@ describe('runDraftWriting on an existing page', () => {
       draft: existing,
       brand,
       model: 'model:m',
-      modelId: 'm',
       input: input({ locked: [passageKey(QUOTED)], ...over }),
+      budget,
     });
 
   it('leaves its suggestions for review, never on a locked passage', async () => {
@@ -462,5 +490,20 @@ describe('runDraftWriting on an existing page', () => {
       { agent_state: 'failed', agent_state_at: expect.any(String) },
       { agent_state: 'failed', agent_state_at: expect.any(String) },
     ]);
+    // The first answer was paid for; the second never came, and its hold goes.
+    expect(budget.charge).toHaveBeenCalledTimes(1);
+    expect(budget.release).toHaveBeenCalledTimes(2);
+  });
+
+  it('charges an answer that missed the schema, as the provider billed it', async () => {
+    const billed = { inputTokens: 5000, outputTokens: 6000 };
+    generateObject.mockRejectedValueOnce(
+      Object.assign(new NoObjectGeneratedError('no object'), { usage: billed }),
+    );
+    await expect(run()).resolves.toEqual({ failed: true });
+    expect(budget.charge).toHaveBeenCalledTimes(1);
+    expect(budget.charge).toHaveBeenCalledWith(billed);
+    // The run still ends failed.
+    expect(draftUpdates()).toEqual([{ agent_state: 'failed', agent_state_at: expect.any(String) }]);
   });
 });

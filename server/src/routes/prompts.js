@@ -8,9 +8,9 @@ import { getLanguageName } from '../lib/languages.js';
 import {
   PlanLimitError,
   enforceFeature,
-  enforceImproveQuota,
   getImproveQuotaStatus,
   requireFeature,
+  reserveAiBudget,
   reserveRelevanceAllowance,
   settleRelevanceUsage,
 } from '../lib/plan-guard.js';
@@ -31,7 +31,6 @@ import {
   improveSchema,
   sanitizeSuggestions,
 } from '../lib/prompt-improve.js';
-import { generationCostUsd } from '../lib/improve-cost.js';
 import {
   liveImproveSends,
   sendImproveToActionCenter,
@@ -1004,23 +1003,6 @@ async function loadImproveStateRows({ promptId, brandId, range }) {
   return rows.map((r) => ({ ...r, citations: citationsById.get(r.id) ?? [] }));
 }
 
-/**
- * Charges one model attempt to the org's Improve budget. A failed insert is
- * logged, not thrown: the suggestions the user paid for still go out.
- */
-async function recordImproveUsage(log, { organizationId, promptId, modelId, usage }) {
-  const { error } = await supabaseAdmin.from('prompt_improve_usage').insert({
-    organization_id: organizationId,
-    prompt_id: promptId,
-    feature: 'improve',
-    model: modelId,
-    input_tokens: usage?.inputTokens ?? null,
-    output_tokens: usage?.outputTokens ?? null,
-    cost_usd: generationCostUsd(modelId, usage),
-  });
-  if (error) log.error({ err: error, promptId }, 'prompt improve usage insert error');
-}
-
 function improveResultsQuery(columns, { promptId, brandId, range }) {
   let q = supabaseAdmin
     .from('prompt_results')
@@ -1166,41 +1148,45 @@ router.post('/:promptId/improve', requireFeature('prompt_improve'), async (req, 
     const modelId = improveModelId();
     let suggestions = [];
     // Only a model call is metered; a range with nothing to improve is free.
-    if (withEvidence.length > 0) await enforceImproveQuota(brand.organization_id, modelId);
     if (withEvidence.length > 0) {
-      const { system, prompt: userPrompt } = buildImprovePrompt({
-        promptText: prompt.text,
-        brand: { name: brand.name, description: brand.description, domains: brandDomains },
-        platforms: withEvidence,
+      // Held on the budget before the call, so calls at once can't pass it.
+      const budget = await reserveAiBudget(brand.organization_id, {
+        feature: 'improve',
+        modelId,
+        promptId,
       });
-      // Every attempt is charged at its real token cost, so the budget holds
-      // for any model, including attempts withRetry repeats after a schema miss.
-      const charge = (usage) =>
-        recordImproveUsage(req.log, {
-          organizationId: brand.organization_id,
-          promptId,
-          modelId,
-          usage,
+      try {
+        const { system, prompt: userPrompt } = buildImprovePrompt({
+          promptText: prompt.text,
+          brand: { name: brand.name, description: brand.description, domains: brandDomains },
+          platforms: withEvidence,
         });
-      const { object } = await withRetry(
-        async () => {
-          try {
-            const result = await generateObject({
-              model: resolveModel(modelId),
-              schema: improveSchema,
-              system,
-              prompt: userPrompt,
-            });
-            await charge(result.usage);
-            return result;
-          } catch (err) {
-            if (NoObjectGeneratedError.isInstance(err) && err.usage) await charge(err.usage);
-            throw err;
-          }
-        },
-        { attempts: 3, baseDelayMs: 500, label: 'prompt-improve' },
-      );
-      suggestions = sanitizeSuggestions(object.suggestions, withEvidence);
+        // Every attempt is charged at its real token cost, so the budget holds
+        // for any model, including attempts withRetry repeats after a schema miss.
+        const { object } = await withRetry(
+          async () => {
+            try {
+              const result = await generateObject({
+                model: resolveModel(modelId),
+                schema: improveSchema,
+                system,
+                prompt: userPrompt,
+              });
+              await budget.charge(result.usage);
+              return result;
+            } catch (err) {
+              if (NoObjectGeneratedError.isInstance(err) && err.usage) {
+                await budget.charge(err.usage);
+              }
+              throw err;
+            }
+          },
+          { attempts: 3, baseDelayMs: 500, label: 'prompt-improve' },
+        );
+        suggestions = sanitizeSuggestions(object.suggestions, withEvidence);
+      } finally {
+        await budget.release();
+      }
     }
 
     // What each platform's group header shows: why it's there and which

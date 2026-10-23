@@ -13,7 +13,7 @@ let rows;
 let writes;
 let filters;
 const generateObject = vi.fn();
-const enforceImproveQuota = vi.fn();
+const reserveAiBudget = vi.fn();
 
 vi.mock('../config/supabase.js', () => ({
   default: {
@@ -47,13 +47,15 @@ vi.mock('ai', () => ({
 vi.mock('./ai-provider.js', () => ({ resolveModel: vi.fn((id) => `model:${id}`) }));
 vi.mock('./plan-guard.js', async (importOriginal) => ({
   ...(await importOriginal()),
-  enforceImproveQuota: (...args) => enforceImproveQuota(...args),
+  reserveAiBudget: (...args) => reserveAiBudget(...args),
 }));
 vi.mock('./logger.js', () => ({ logger: { error: vi.fn() } }));
 
 const { buildBriefPrompt, mapOutline, rebuildDraftBrief, rebuildSources } =
   await import('./content-brief.js');
 const { PlanLimitError } = await import('./plan-guard.js');
+// The real hold: self-hosted here, so it reserves nothing and writes each charge.
+const realGuard = await vi.importActual('./plan-guard.js');
 
 const sources = (over = {}) => ({
   promptIds: [PROMPT],
@@ -114,14 +116,18 @@ beforeEach(() => {
     },
     usage: { inputTokens: 1000, outputTokens: 500 },
   });
-  enforceImproveQuota.mockReset().mockResolvedValue({ unlimited: true });
+  reserveAiBudget.mockReset().mockImplementation(realGuard.reserveAiBudget);
 });
 
 describe('rebuildDraftBrief', () => {
   it('writes the brief from the kept sources, charges AI usage, and saves it on the draft', async () => {
     const brief = await rebuildDraftBrief({ draftId: DRAFT, brandId: BRAND, sources: sources() });
 
-    expect(enforceImproveQuota).toHaveBeenCalledWith('o1', 'google/gemini-3-flash-preview');
+    expect(reserveAiBudget).toHaveBeenCalledWith('o1', {
+      feature: 'content',
+      modelId: 'google/gemini-3-flash-preview',
+      draftId: DRAFT,
+    });
     const call = generateObject.mock.calls[0][0];
     expect(call.model).toBe('model:google/gemini-3-flash-preview');
     expect(call.prompt).toContain('- Best espresso machines under $500?');
@@ -205,7 +211,7 @@ describe('rebuildDraftBrief', () => {
         sources: sources({ fanouts: [], queries: [] }),
       }),
     ).rejects.toMatchObject({ status: 422, code: 'no_sources' });
-    expect(enforceImproveQuota).not.toHaveBeenCalled();
+    expect(reserveAiBudget).not.toHaveBeenCalled();
     expect(generateObject).not.toHaveBeenCalled();
   });
 
@@ -271,8 +277,19 @@ describe('rebuildDraftBrief', () => {
     ]);
   });
 
+  it('lets the hold on the budget go when the model times out', async () => {
+    const held = { charge: vi.fn(), release: vi.fn() };
+    reserveAiBudget.mockResolvedValueOnce(held);
+    generateObject.mockRejectedValue(new Error('timeout'));
+    await expect(
+      rebuildDraftBrief({ draftId: DRAFT, brandId: BRAND, sources: sources() }),
+    ).rejects.toThrow('timeout');
+    expect(held.charge).not.toHaveBeenCalled();
+    expect(held.release).toHaveBeenCalled();
+  });
+
   it('stops when the AI usage budget is spent', async () => {
-    enforceImproveQuota.mockRejectedValue(new PlanLimitError('used up', 429));
+    reserveAiBudget.mockRejectedValue(new PlanLimitError('used up', 429));
     await expect(
       rebuildDraftBrief({ draftId: DRAFT, brandId: BRAND, sources: sources() }),
     ).rejects.toBeInstanceOf(PlanLimitError);
