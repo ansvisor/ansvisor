@@ -39,6 +39,12 @@ const HIDDEN =
   '[hidden]:not([hidden="until-found"]), [style*="display:none"], [style*="display: none"]';
 
 /**
+ * A question an accordion's hidden answer follows: an FAQ beside the text
+ * (after the post, in the page's main block) keeps its answers too.
+ */
+const QUESTION = 'h2, h3, h4, h5, h6';
+
+/**
  * Words in a block's class or id that name furniture: anywhere, even in the
  * text (an author box or share buttons in the article)…
  */
@@ -280,13 +286,19 @@ export function extractPageContent(html, pageUrl) {
   // The root: the page's main block when it holds the text; else the part
   // of the page holding the text and its H1; else the text area alone.
   const textArea = findTextArea($, body);
+  // What the page hides goes, outside the text. An answer right after its
+  // question waits for the root: in it, it's an FAQ's (QUESTION).
+  const answers = [];
   body
     .find(HIDDEN)
     .filter(
       (_, el) =>
         !textArea || ($(el).closest(textArea).length === 0 && !$(el).find(textArea).length),
     )
-    .remove();
+    .each((_, el) => {
+      if ($(el).prev().is(QUESTION)) answers.push(el);
+      else $(el).remove();
+    });
   // The title's H1, picked once: the last one with words before the text's
   // first paragraph (not a logo's or a site name's above it), else the first.
   // A byline, date or breadcrumb line above the title is no paragraph of it.
@@ -318,6 +330,9 @@ export function extractPageContent(html, pageUrl) {
     : textArea
       ? $(heading ? commonAncestor($, heading, textArea) : textArea)
       : body;
+  for (const el of answers) {
+    if ($(el).closest(root[0]).length === 0) $(el).remove();
+  }
 
   // What stays whatever its name: the text area, the blocks around it and
   // the H1's.
