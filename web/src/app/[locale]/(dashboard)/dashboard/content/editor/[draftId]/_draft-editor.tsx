@@ -1355,7 +1355,8 @@ export function DraftEditor({
       htmlSource !== null ? htmlFromSource(htmlSource) : (editor?.getHTML() ?? draft.bodyHtml),
     );
   // The byline line a brand with Add byline to content puts under the H1,
-  // in the brand's language: the language the writer writes the page in.
+  // in the page's language (its Language rule, else the brand's), as
+  // Readability reads it: the language the writer writes the page in.
   const contentByline =
     bylineInContent && authorsRead
       ? bylineText(language, pageAuthor?.name ?? null, brandName)
