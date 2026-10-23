@@ -882,6 +882,11 @@
         "regions": "{count, plural, one {# region} other {# regions}}",
         "competitors": "{count, plural, one {# competitor} other {# competitors}}"
       },
+      "removed": {
+        "note": "({items} removed since this action was created)",
+        "hover": "No longer tracked since this action was created: {names}",
+        "hoverMore": "No longer tracked since this action was created: {names} and {more} more"
+      },
       "menu": {
         "label": "Actions for this item"
       },

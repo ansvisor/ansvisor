@@ -68,7 +68,11 @@ function builder(table: string) {
 }
 
 vi.mock('@/lib/supabase/admin', () => ({
-  supabaseAdmin: { from: (table: string) => builder(table) },
+  supabaseAdmin: {
+    from: (table: string) => builder(table),
+    // The action's list counts (AC-009): nothing removed here.
+    rpc: async () => ({ data: [], error: null }),
+  },
 }));
 
 const { getActionFor, listActionsFor } = await import('./data');

@@ -82,11 +82,40 @@ const urlsOf = (value: WhereValue | null): string[] =>
 
 /**
  * The action's affected items, from the signals that support it. With none
- * (an action a person sent), from what it was sent about.
+ * (an action a person sent), from what it was sent about. Its prompts or
+ * pages count as the action counts them (AC-009): the list it kept when it
+ * was created, less what was removed since, not the signals the nightly
+ * pass rewrites; the rows still show what the signals say about each.
  */
 export function affectedOf(signals: Signal[], payload: Record<string, unknown> = {}): Affected {
-  if (signals.length === 0) return affectedFromPayload(payload);
+  const out = signals.length === 0 ? affectedFromPayload(payload) : affectedOfSignals(signals);
+  // What was removed since (withEntityCounts) isn't listed: by its key (a
+  // prompt's id, or its text where it has none), a competitor by its name.
+  const strings = (value: unknown) =>
+    new Set(Array.isArray(value) ? value.filter((v): v is string => typeof v === 'string') : []);
+  const keys = strings(payload.removedKeys);
+  const count = typeof payload.targetCount === 'number' ? payload.targetCount : 0;
+  if (payload.targetEntity === 'prompts') {
+    const listed = out.prompts.length;
+    if (keys.size > 0) out.prompts = out.prompts.filter((row) => !keys.has(row.id ?? row.text));
+    out.promptTotal = Math.max(0, out.promptTotal - (listed - out.prompts.length));
+    // A count is never shown with nothing behind it.
+    if (count > 0 && out.prompts.length > 0) out.promptTotal = count;
+  }
+  if (payload.targetEntity === 'pages') {
+    const listed = out.pages.length;
+    if (keys.size > 0) out.pages = out.pages.filter((row) => !keys.has(row.url));
+    out.pageTotal = Math.max(0, out.pageTotal - (listed - out.pages.length));
+    if (count > 0 && out.pages.length > 0) out.pageTotal = count;
+  }
+  if (payload.targetEntity === 'competitors') {
+    const names = strings(payload.removedLabels);
+    if (names.size > 0) out.competitors = out.competitors.filter((name) => !names.has(name));
+  }
+  return out;
+}
 
+function affectedOfSignals(signals: Signal[]): Affected {
   const prompts = new Map<string, AffectedPrompt>();
   const pages = new Map<string, AffectedPage>();
   const out: Affected = empty();
@@ -277,12 +306,14 @@ function affectedFromPayload(payload: Record<string, unknown>): Affected {
       topics: [],
     });
   }
-  const targets = (Array.isArray(payload.targets) ? payload.targets : []) as Record<
-    string,
-    unknown
-  >[];
+  const targets: unknown[] = Array.isArray(payload.targets) ? payload.targets : [];
   const entity = str(payload.targetEntity);
-  for (const target of targets) {
+  for (const raw of targets) {
+    // A target is { id, label }, or (topics, mentions) its text alone.
+    const target = (typeof raw === 'string' ? { label: raw } : (raw ?? {})) as Record<
+      string,
+      unknown
+    >;
     const label = str(target.label) || str(target.id);
     if (!label) continue;
     if (entity === 'prompts') {

@@ -116,6 +116,11 @@ describe('actionTexts', () => {
       (key: string) => key,
     );
     expect(tags).not.toContain('tags.signals');
+    // Every prompt removed since (AC-009): its plain title, never "0 prompts".
+    const none = { mentionCount: 2, negativeCount: 0, promptCount: 0 };
+    expect(actionTexts(action({ kind: 'mention_review', payload: none }), t).title).toBe(
+      t('mention_review.titleGeneric'),
+    );
   });
 
   it('names a topic opportunity after its topic and demand (VIS-011)', () => {

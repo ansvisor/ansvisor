@@ -135,7 +135,10 @@ export function actionTexts(
       title:
         p.promptCount === 1 && typeof p.promptText === 'string' && p.promptText
           ? t(`${action.kind}.title`, { prompt: p.promptText })
-          : t(`${action.kind}.titleMany`, { count: p.promptCount }),
+          : p.promptCount > 0
+            ? t(`${action.kind}.titleMany`, { count: p.promptCount })
+            : // Every prompt removed since (AC-009): no "0 prompts".
+              t(`${action.kind}.titleGeneric`),
       description:
         negative > 0
           ? t(`${action.kind}.descriptionNegative`, { count: p.mentionCount, negative })
