@@ -217,8 +217,9 @@ describe('startDraftWriting', () => {
       author: 'agent',
       agent_state: null,
     });
+    // No number without a source (CE-033): none of the data has 15 or 250.
     expect(draftUpdates()[1].body_html).toMatch(
-      /^<h1>How to brew pour-over coffee<\/h1><p>Use 15 g/,
+      /^<h1>How to brew pour-over coffee<\/h1><p>Use \[figure, source\] g of coffee for \[figure, source\] g of water\.<\/p>/,
     );
     const finish = writes.filter((w) => w.table === 'content_drafts')[1];
     expect(finish.filters).toContainEqual(['agent_state', 'writing']);
@@ -230,8 +231,9 @@ describe('startDraftWriting', () => {
       value: expect.objectContaining({ feature: 'content' }),
     });
     const { prompt } = generateObject.mock.calls[0][0];
-    expect(prompt).toContain('- ratio?');
-    expect(prompt).toContain('- "pour over ratio"');
+    // The data, numbered as the agent cites it.
+    expect(prompt).toContain('- S1 ratio?');
+    expect(prompt).toContain('- S2 "pour over ratio"');
     expect(prompt).toContain('- faq: FAQ with 5 questions — aim: 5');
     expect(prompt).toContain('Page type: How-to guide: numbered steps to get one thing done');
   });
@@ -408,9 +410,12 @@ describe('runDraftWriting on an existing page', () => {
             kind: 'replace',
             passage: 3,
             before: 'good coffee',
-            after: '15 g of coffee',
+            after: 'freshly ground coffee',
             reason: 'answer the ratio search',
             rules: ['faq'],
+            // From the fan-out it answers, S2 (CE-033).
+            sources: ['S2'],
+            marks: [{ words: 'freshly ground coffee', source: 'S2' }],
           },
         ],
       },
@@ -425,6 +430,8 @@ describe('runDraftWriting on an existing page', () => {
         block_text: 'Use good coffee.',
         before_text: 'good coffee',
         position: 0,
+        sources: [{ kind: 'fanout', ref: 'pour over ratio', label: 'pour over ratio' }],
+        source_marks: [{ start: 0, end: 21, source: 0 }],
       }),
     ]);
     expect(generateObject.mock.calls[0][0].prompt).toContain(`[2] (p, LOCKED) ${QUOTED}`);
@@ -598,6 +605,32 @@ describe('Rewrite the page to these rules', () => {
       agent_state: null,
       agent_state_at: expect.any(String),
     });
+  });
+
+  it('keeps the data it wrote from, and no number without a source (CE-033)', async () => {
+    generateObject.mockResolvedValue({
+      object: {
+        html:
+          '<h1>Pour-over coffee</h1><p>[[KEEP 1]]</p><p>[[KEEP 2]]</p>' +
+          '<p>Brew it in 4 minutes; 87% of baristas agree, as "pour over ratio" asks.</p>',
+        reason: 'answered the ratio search',
+        sources: ['S2', 'S7'],
+      },
+      usage: { inputTokens: 900, outputTokens: 700 },
+    });
+    await expect(run()).resolves.toEqual({ rewritten: true });
+    const row = writes.find((w) => w.table === 'content_draft_suggestions').value;
+    // The fan-out it named; S7 isn't on the list.
+    expect(row.sources).toEqual([
+      { kind: 'fanout', ref: 'pour over ratio', label: 'pour over ratio' },
+    ]);
+    // 87% is in none of the data: a placeholder. A lone count stays; the
+    // kept table's 1:16 is the page's own.
+    expect(row.after_text).toContain(
+      '<p>Brew it in 4 minutes; [figure, source] of baristas agree, as "pour over ratio" asks.</p>',
+    );
+    expect(row.after_text).toContain('<td>1:16</td>');
+    expect(generateObject.mock.calls[0][0].system).toContain('Put the numbers (S1, S2…)');
   });
 
   it('keeps the page’s length when the Length rule is off', async () => {

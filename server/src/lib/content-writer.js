@@ -12,11 +12,23 @@ import {
   keepSuggestions,
   passageKey,
   promptPassages,
+  readPrompts,
   suggestionsSchema,
 } from './content-agent.js';
 import { contentBriefModelId, rebuildSources } from './content-brief.js';
 import { linkAllowList, linkTargetsPrompt, readLinkTargets } from './content-links.js';
 import { pageTypeFormat } from './content-page-types.js';
+import {
+  SOURCES_RULE,
+  htmlText,
+  knownNumbers,
+  numberSources,
+  placeholderNumbers,
+  placeholderNumbersInHtml,
+  sourceSuggestion,
+  stripSourceIds,
+  todayText,
+} from './content-sources.js';
 import {
   MAX_PAGE_HTML,
   MAX_REWRITE_CHARS,
@@ -110,7 +122,7 @@ How to write:
 - Follow the outline when there is one; each H2 answers one of the questions or AI searches given.
 - Short paragraphs and plain sentences. Lists where a reader compares or follows steps.
 - Follow every rule listed, and the writer's own rules.
-- Use only facts from the brand and the brief. Never invent numbers, prices, dates, names, customers, sources or quotes. When the page needs a fact you don't have, write a placeholder in square brackets, e.g. [price], [figure, source, year].
+- Use only facts from the brand, the brief and your data. Never invent numbers, prices, dates, names, customers, sources or quotes. When the page needs a fact you don't have, write a placeholder in square brackets, e.g. [price], [figure, source, year]. A number that isn't in them becomes a placeholder.
 - Plain text in every field: no HTML, no Markdown.
 - Write in the language asked for.`;
 
@@ -124,7 +136,8 @@ ${HEADING_RULE}
 ${LINK_RULE}
 - Never change a passage marked LOCKED: AI assistants quote its wording today. You may insert after it.
 - Put the keys of the rules a change meets in "rules" (none when it meets none).
-- Use only facts from the page and the brand. Never invent numbers, prices, dates, names, sources or quotes; write a placeholder in square brackets instead, e.g. [figure, source, year].
+- Use only facts from the page, the brand and your data. Never invent numbers, prices, dates, names, sources or quotes; write a placeholder in square brackets instead, e.g. [figure, source, year].
+${SOURCES_RULE}
 - Keep the page's voice. The most useful changes first, at most ${MAX_AGENT_SUGGESTIONS}.
 - "reason" says in a few words what the change does, e.g. "answer the search 'x' (fan-out)".
 - Write in the language asked for.`;
@@ -161,6 +174,24 @@ export function renderPage(page) {
 
 const list = (items) => (items.length ? items.map((item) => `- ${item}`).join('\n') : '- none');
 
+/** A written page with each number its sources don't have put as a placeholder (CE-033). */
+export function sourcedPage(page, known) {
+  const fix = (text) => placeholderNumbers(stripSourceIds(text), known);
+  return {
+    ...page,
+    title: fix(page.title),
+    intro: page.intro.map(fix),
+    sections: page.sections.map((section) => ({
+      ...section,
+      heading: fix(section.heading),
+      paragraphs: section.paragraphs.map(fix),
+      bullets: section.bullets.map(fix),
+    })),
+    faqHeading: fix(page.faqHeading),
+    faq: page.faq.map((item) => ({ question: fix(item.question), answer: fix(item.answer) })),
+  };
+}
+
 /** The brief as the model reads it: the draft's own, else its opportunity's. */
 export function briefText(draftBrief, opportunityBrief) {
   if (draftBrief?.outline?.length || draftBrief?.goal) {
@@ -194,7 +225,7 @@ Call to action: ${opportunityBrief.callToAction || '—'}`;
 export function buildWritePrompt({
   brand,
   draft,
-  prompts,
+  numbered = [],
   brief,
   input,
   passages,
@@ -204,6 +235,8 @@ export function buildWritePrompt({
   current = null,
 }) {
   const { sources } = input;
+  // The data, numbered (S1, S2…) as the agent cites it (CE-033).
+  const of = (kind) => numbered.filter((s) => s.kind === kind);
   const rules = input.rules.map((r) => `${r.key}: ${r.name}${r.detail ? ` — ${r.detail}` : ''}`);
   const own = input.textRules.map((text) => `- ${text}`);
   const page = current
@@ -228,17 +261,19 @@ Length: about ${sources.length} characters.
 Brief:
 ${brief}
 
+Your data is numbered below (S1, S2…), by its words only. Name the ones you use where asked; never write these numbers in the page's words.
+
 Questions the page must answer (tracked prompts):
-${list(prompts)}
+${list(of('prompt').map((s) => `${s.id} ${s.label}`))}
 
 AI searches (fan-outs) run while answering them, the most searched first:
-${list(sources.fanouts.map((f) => `"${f.query}"`))}
+${list(of('fanout').map((s) => `${s.id} "${s.label}"`))}
 
 Google searches people use (Search Console):
-${list(sources.queries)}
+${list(of('gsc_query').map((s) => `${s.id} "${s.label}"`))}
 
 Pages AI cites for these questions today (answer better than them, never copy them):
-${list(sources.pages.map((p) => p.url))}
+${list(of('cited_page').map((s) => `${s.id} ${s.label}`))}
 
 Rules (key: rule — what it asks):
 ${list(rules)}
@@ -430,7 +465,7 @@ async function letGo(draftId) {
  * is put back as it was (content-rewrite.js); a rewrite that drops one, or
  * leaves no page, fails the run. The draft's status doesn't change.
  */
-async function rewritePage({ draft, brand, model, input, budget, prompts, brief }) {
+async function rewritePage({ draft, brand, model, input, budget, numbered, known, brief }) {
   const page = keepBlocks(draft.body_html, new Set(input.locked.map(passageKey)));
   const ruleKeys = new Set(input.rules.map((r) => r.key));
   // The Length rule's target; with Length off, the page keeps its length.
@@ -449,7 +484,7 @@ async function rewritePage({ draft, brand, model, input, budget, prompts, brief 
     prompt: buildWritePrompt({
       brand,
       draft,
-      prompts,
+      numbered,
       brief,
       input: { ...input, sources: { ...input.sources, length } },
       linkTargets: linkTargetsPrompt(targets, ruleKeys),
@@ -465,13 +500,16 @@ async function rewritePage({ draft, brand, model, input, budget, prompts, brief 
     rewriteLinks(draft.body_html, linkAllowList(targets)),
     { h1Kept: page.h1Token !== null, originalH1: page.h1 },
   );
-  const { html, missing } = restoreKept(cleaned, page.kept, {
+  const { html: restored, missing } = restoreKept(cleaned, page.kept, {
     word: page.word,
     h1Token: page.h1Token,
   });
   if (missing.length) {
     throw new Error(`The rewrite left out ${missing.length} kept block(s)`);
   }
+  // No number without a source: one the page, the brand, the brief or the
+  // data doesn't have becomes a placeholder (CE-033).
+  const html = placeholderNumbersInHtml(restored, known);
   if (!textLength(html)) throw new Error('The agent left no page to review');
   if (html.length > MAX_PAGE_HTML) throw new Error('The rewritten page is too long to keep');
   // A batch that landed during the run stays the one to decide.
@@ -479,6 +517,14 @@ async function rewritePage({ draft, brand, model, input, budget, prompts, brief 
     logger.info({ draftId: draft.id }, '[content-writer] open suggestions came in during the run');
     return await letGo(draft.id);
   }
+  // The data it says it wrote from (CE-033).
+  const { sources } = sourceSuggestion({
+    named: object.sources,
+    marks: [],
+    pieces: [],
+    numbered,
+    known,
+  });
   const batchId = randomUUID();
   const { error: insertError } = await supabaseAdmin.from('content_draft_suggestions').insert({
     draft_id: draft.id,
@@ -494,6 +540,7 @@ async function rewritePage({ draft, brand, model, input, budget, prompts, brief 
     after_text: html,
     reason: clean(object.reason).slice(0, 300) || 'Rewrote the page to the rules',
     rule_keys: [...ruleKeys],
+    ...(sources.length ? { sources } : {}),
   });
   if (insertError) throw insertError;
   if (!(await finish(draft.id, { agent_state: null }, { openOnly: true }))) {
@@ -516,15 +563,8 @@ async function rewritePage({ draft, brand, model, input, budget, prompts, brief 
  */
 export async function runDraftWriting({ draft, brand, model, input, budget, rewrite = false }) {
   try {
-    const [promptsRes, opportunityRes] = await Promise.all([
-      input.sources.promptIds.length
-        ? supabaseAdmin
-            // Through the prompt's set, not its topic: a prompt may have no topic.
-            .from('prompts')
-            .select('id, text, prompt_sets!inner(brand_id)')
-            .in('id', input.sources.promptIds)
-            .eq('prompt_sets.brand_id', draft.brand_id)
-        : Promise.resolve({ data: [], error: null }),
+    const [prompts, opportunityRes] = await Promise.all([
+      readPrompts(draft.brand_id, input.sources.promptIds),
       draft.opportunity_id && !draft.brief
         ? supabaseAdmin
             .from('content_opportunities')
@@ -534,13 +574,42 @@ export async function runDraftWriting({ draft, brand, model, input, budget, rewr
             .maybeSingle()
         : Promise.resolve({ data: null, error: null }),
     ]);
-    if (promptsRes.error) throw promptsRes.error;
     if (opportunityRes.error) throw opportunityRes.error;
-    const prompts = (promptsRes.data ?? []).map((p) => p.text);
     const brief = briefText(draft.brief, opportunityRes.data?.brief);
+    // The data it writes from, numbered (CE-033); the numbers a suggestion
+    // may write unmarked (the page's, the brand's, the brief's, the rules',
+    // today's), and those a page written whole may (the sources' words too).
+    const numbered = numberSources({
+      prompts,
+      fanouts: input.sources.fanouts,
+      pages: input.sources.pages,
+      queries: input.sources.queries,
+    });
+    const known = knownNumbers(
+      htmlText(draft.body_html),
+      draft.title,
+      brand.description,
+      brief,
+      ...input.rules.flatMap((r) => [r.name, r.detail]),
+      ...input.textRules,
+      todayText(),
+    );
+    const knownInPage = new Set([
+      ...known,
+      ...knownNumbers(...numbered.map((s) => `${s.label} ${s.detail ?? ''}`)),
+    ]);
 
     if (rewrite) {
-      return await rewritePage({ draft, brand, model, input, budget, prompts, brief });
+      return await rewritePage({
+        draft,
+        brand,
+        model,
+        input,
+        budget,
+        numbered,
+        known: knownInPage,
+        brief,
+      });
     }
 
     if (draft.method === 'create') {
@@ -548,11 +617,13 @@ export async function runDraftWriting({ draft, brand, model, input, budget, rewr
         model,
         schema: pageSchema,
         system: WRITE_SYSTEM_PROMPT,
-        prompt: buildWritePrompt({ brand, draft, prompts, brief, input }),
+        prompt: buildWritePrompt({ brand, draft, numbered, brief, input }),
         abortSignal: AbortSignal.timeout(CALL_TIMEOUT_MS),
       });
       await budget.charge(usage);
-      const title = clean(object.title).slice(0, 300) || draft.title;
+      // No number without a source: a placeholder where one had none.
+      const written = sourcedPage(object, knownInPage);
+      const title = clean(written.title).slice(0, 300) || draft.title;
       // Try again over a page the person has written in: History keeps it
       // first. Their saves wait while the agent writes (saveContentDraft).
       if (draftPassages(draft.body_html).some((p) => p.tag !== 'h1')) {
@@ -562,11 +633,11 @@ export async function runDraftWriting({ draft, brand, model, input, budget, rewr
         });
         if (keepError) throw keepError;
       }
-      const written = await finish(
+      const saved = await finish(
         draft.id,
         {
           title,
-          body_html: renderPage({ ...object, title }),
+          body_html: renderPage({ ...written, title }),
           status: 'in_review',
           author: 'agent',
           agent_state: null,
@@ -574,7 +645,7 @@ export async function runDraftWriting({ draft, brand, model, input, budget, rewr
         { openOnly: true },
       );
       // Awaited here, so a failure to let go is caught below.
-      return written ? { written: true } : await letGo(draft.id);
+      return saved ? { written: true } : await letGo(draft.id);
     }
 
     const { passages, more } = promptPassages(draftPassages(draft.body_html));
@@ -595,7 +666,7 @@ export async function runDraftWriting({ draft, brand, model, input, budget, rewr
       prompt: buildWritePrompt({
         brand,
         draft,
-        prompts,
+        numbered,
         brief,
         input,
         passages,
@@ -612,6 +683,7 @@ export async function runDraftWriting({ draft, brand, model, input, budget, rewr
       lockedKeys,
       ruleKeys,
       linkAllowList(targets),
+      { numbered, known },
     );
     if (!rows.length) throw new Error('The agent left no suggestion it could place');
     // A batch that landed during the run (Fix open rules, the API) stays the

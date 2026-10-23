@@ -3,6 +3,7 @@ import * as cheerio from 'cheerio';
 import { z } from 'zod';
 import { HEADING_LIMITS, passageKey } from './content-agent.js';
 import { linkKey } from './content-links.js';
+import { sourcesField } from './content-sources.js';
 
 /**
  * Rewrite the page to these rules (Content Editor): the Content Agent
@@ -49,13 +50,15 @@ const INLINE_TAGS = new Set(['strong', 'em', 'b', 'i', 'br', 'a']);
 export const rewriteSchema = z.object({
   html: z.string().describe('The whole page rewritten, as HTML.'),
   reason: z.string().describe('One short sentence on what changed.'),
+  sources: sourcesField,
 });
 
 export const REWRITE_SYSTEM_PROMPT = `You are the Content Agent for Answer Engine Optimization (AEO). You rewrite one existing web page, whole, so it meets the rules listed and AI assistants (ChatGPT, Perplexity, Gemini, Copilot, Google's AI Overviews) understand it, trust it and cite it. A person compares your page with theirs and accepts or rejects it.
 
 How to rewrite:
 - Meet every rule listed, and the writer's own rules. Aim at the Length given: the page's whole text, kept blocks included, within 20% of it. When the page is too long, cut repetition, filler and the least useful parts first, and keep its answers, facts and data.
-- Keep the page's facts and voice. Use only facts from the page, the brand and the brief. Never invent numbers, prices, dates, names, customers, sources or quotes; when the page needs a fact you don't have, write a placeholder in square brackets, e.g. [figure, source, year].
+- Keep the page's facts and voice. Use only facts from the page, the brand, the brief and your data. Never invent numbers, prices, dates, names, customers, sources or quotes; when the page needs a fact you don't have, write a placeholder in square brackets, e.g. [figure, source, year]. A number that isn't in them becomes a placeholder.
+- Put the numbers (S1, S2…) of the data the page uses in "sources".
 - One H1, the page's title, first. Sections are H2s; questions and sub-sections are H3s.
 - Answer first: under each heading, a short paragraph that answers it, then the detail.
 - Headings are one short line: an H1 up to ${HEADING_LIMITS.h1} characters, others up to ${HEADING_LIMITS.other}. Never put a sentence or an answer in a heading.

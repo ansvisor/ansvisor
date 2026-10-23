@@ -4,9 +4,22 @@ import * as cheerio from 'cheerio';
 import { z } from 'zod';
 import supabaseAdmin from '../config/supabase.js';
 import { resolveModel } from './ai-provider.js';
-import { contentBriefModelId } from './content-brief.js';
+import { contentBriefModelId, rebuildSources } from './content-brief.js';
 import { linkAllowList, linkKey, linkTargetsPrompt, readLinkTargets } from './content-links.js';
 import { pageTypeFormat } from './content-page-types.js';
+import {
+  SOURCES_RULE,
+  htmlText,
+  knownNumbers,
+  marksField,
+  numberSources,
+  sourceSuggestion,
+  sourcesField,
+  sourcesPrompt,
+  stripSourceIds,
+  textPieces,
+  todayText,
+} from './content-sources.js';
 import { getLanguageName } from './languages.js';
 import { reserveAiBudget } from './plan-guard.js';
 
@@ -16,8 +29,10 @@ import { reserveAiBudget } from './plan-guard.js';
  * leaves suggestions for a person to review (content_draft_suggestions,
  * 00217) — never changes to the page itself. A suggestion replaces words in
  * one passage, or adds blocks after one, and names the rules it fixes. The
- * passages AI answers quote today (locked, CE-018) are never changed. It is
- * metered from the organization's AI usage, as the brief is.
+ * passages AI answers quote today (locked, CE-018) are never changed. It
+ * writes from the sources the Sources tab keeps and says which each change
+ * used (v1.1 CE-033, content-sources.js). It is metered from the
+ * organization's AI usage, as the brief is.
  */
 
 /** The most suggestions one run leaves. */
@@ -79,6 +94,8 @@ export const fixRulesInput = z.object({
   textRules: z.array(z.string().trim().min(1).max(300)).max(50).default([]),
   /** The locked passages, by passageKey. */
   locked: z.array(z.string().max(5000)).max(500).default([]),
+  /** The sources the Sources tab keeps (v1.1 CE-033); none from an older editor. */
+  sources: rebuildSources.optional(),
 });
 
 export const suggestionsSchema = z.object({
@@ -102,6 +119,8 @@ export const suggestionsSchema = z.object({
           ),
         reason: z.string().describe('What the change does, in a few words.'),
         rules: z.array(z.string()).describe('The keys of the rules it fixes.'),
+        sources: sourcesField,
+        marks: marksField,
       }),
     )
     .max(MAX_AGENT_SUGGESTIONS),
@@ -116,7 +135,8 @@ Rules for your suggestions:
 ${HEADING_RULE}
 ${LINK_RULE}
 - Never change a passage marked LOCKED: AI assistants quote its wording today. You may insert after it.
-- Use only facts from the page and the brand. Never invent numbers, prices, dates, names, sources or quotes. When a rule needs a fact you don't have, write a placeholder in square brackets, e.g. [figure, source, year].
+- Use only facts from the page, the brand and your data. Never invent numbers, prices, dates, names, sources or quotes. When a rule needs a fact you don't have, write a placeholder in square brackets, e.g. [figure, source, year].
+${SOURCES_RULE}
 - Keep the page's voice and change as little as each rule needs. At most ${MAX_AGENT_SUGGESTIONS} suggestions.
 - "reason" says in a few words what the change does and why, e.g. "add a dated data point (rule)".
 - Write in the language asked for.`;
@@ -316,13 +336,20 @@ export function splitReplace(after, tag, links = null) {
  * one that would still grow a heading past its headingLimit is dropped (a
  * long heading may still be shortened). Links stay only to the URLs in
  * `links` (linkAllowList): a replace's go in after_links, by offset into its
- * words, an insert's in its HTML.
+ * words, an insert's in its HTML. Each keeps the sources it names and the
+ * words each supports (withSources); one that adds a number with no source
+ * is not kept. `sourcing` is the numbered sources and the numbers known
+ * already (the page's, the brand's): without it, the page's.
  */
-export function keepSuggestions(raw, passages, lockedKeys, ruleKeys, links = null) {
+export function keepSuggestions(raw, passages, lockedKeys, ruleKeys, links = null, sourcing = {}) {
+  const numbered = sourcing.numbered ?? [];
+  const known = sourcing.known ?? knownNumbers(...passages.map((p) => p.text));
   const kept = [];
   const seen = new Set();
-  for (const s of raw) {
+  for (const answer of raw) {
     if (kept.length >= MAX_AGENT_SUGGESTIONS) break;
+    // Source numbers belong in "sources", never in the words.
+    const s = { ...answer, after: stripSourceIds(answer.after) };
     const passage = passages[s.passage - 1];
     const reason = s.reason.trim().slice(0, 300);
     if (!passage || !reason || passage.text.length > MAX_PASSAGE_CHARS) continue;
@@ -376,12 +403,39 @@ export function keepSuggestions(raw, passages, lockedKeys, ruleKeys, links = nul
     changes = changes.filter(Boolean);
     if (!changes.length || changes.some((c) => seen.has(c.id))) continue;
     if (kept.length + changes.length > MAX_AGENT_SUGGESTIONS) continue;
-    for (const c of changes) {
+    // What it used (v1.1 CE-033), and no number without a source.
+    const rows = changes.map((c) => withSources(c.row, s, numbered, known));
+    if (rows.some((row) => !row)) continue;
+    changes.forEach((c, i) => {
       seen.add(c.id);
-      kept.push(c.row);
-    }
+      kept.push(rows[i]);
+    });
   }
   return kept;
+}
+
+/**
+ * A change row with the sources its suggestion names and the marks on its
+ * words (a replace's after_text, an insert's HTML read as text); null when
+ * it adds a number neither the page nor a source has (sourceSuggestion).
+ */
+function withSources(row, suggestion, numbered, known) {
+  const pieces =
+    row.kind === 'replace' ? [{ text: row.after_text, start: 0 }] : textPieces(row.after_text);
+  const sourced = sourceSuggestion({
+    named: suggestion.sources,
+    marks: suggestion.marks,
+    pieces,
+    numbered,
+    known,
+  });
+  if (!sourced) return null;
+  const { sources, marks } = sourced;
+  return {
+    ...row,
+    ...(sources.length ? { sources } : {}),
+    ...(marks.length ? { source_marks: marks } : {}),
+  };
 }
 
 /**
@@ -412,6 +466,7 @@ export function buildFixPrompt({
   lockedKeys,
   input,
   linkTargets = '',
+  sources = '',
 }) {
   const lines = passages.map((p, i) => {
     const locked = lockedKeys.has(passageKey(p.text)) ? ', LOCKED' : '';
@@ -429,11 +484,27 @@ Page type: ${pageTypeFormat(draft.page_type)}
 
 Rules the page doesn't meet yet (key: rule — what it asks and how the page reads now):
 ${rules.join('\n')}
-${own.length ? `\nThe writer's own rules, to follow in every change:\n${own.join('\n')}\n` : ''}${linkTargets ? `\n${linkTargets}\n` : ''}
+${own.length ? `\nThe writer's own rules, to follow in every change:\n${own.join('\n')}\n` : ''}${sources ? `\n${sources}\n` : ''}${linkTargets ? `\n${linkTargets}\n` : ''}
 The page, passage by passage:
 ${lines.join('\n')}
 
 Write in ${getLanguageName(brand?.language)}.`;
+}
+
+/**
+ * The brand's prompts among `ids`, { id, text }, in the order asked: through
+ * the prompt's set, not its topic (a prompt may have no topic).
+ */
+export async function readPrompts(brandId, ids) {
+  if (!ids.length) return [];
+  const { data, error } = await supabaseAdmin
+    .from('prompts')
+    .select('id, text, prompt_sets!inner(brand_id)')
+    .in('id', ids)
+    .eq('prompt_sets.brand_id', brandId);
+  if (error) throw error;
+  const byId = new Map((data ?? []).map((p) => [p.id, p.text]));
+  return ids.filter((id) => byId.has(id)).map((id) => ({ id, text: byId.get(id) }));
 }
 
 /**
@@ -495,6 +566,21 @@ export async function fixDraftRules({ draftId, brandId, input }) {
   const modelId = contentBriefModelId();
   const lockedKeys = new Set(input.locked.map(passageKey));
   const ruleKeys = new Set(input.rules.map((r) => r.key));
+  // The data it writes from, numbered; the numbers it may write unmarked.
+  const numbered = numberSources({
+    prompts: await readPrompts(brandId, input.sources?.promptIds ?? []),
+    fanouts: input.sources?.fanouts,
+    pages: input.sources?.pages,
+    queries: input.sources?.queries,
+  });
+  const known = knownNumbers(
+    htmlText(draft.body_html),
+    draft.title,
+    brand.description,
+    ...input.rules.flatMap((r) => [r.name, r.detail]),
+    ...input.textRules,
+    todayText(),
+  );
   // Where it may link: the brand's pages and the draft's sources (A).
   const targets = await readLinkTargets({
     brandId,
@@ -522,6 +608,7 @@ export async function fixDraftRules({ draftId, brandId, input }) {
         lockedKeys,
         input,
         linkTargets: linkTargetsPrompt(targets, ruleKeys),
+        sources: sourcesPrompt(numbered),
       }),
       abortSignal: AbortSignal.timeout(CALL_TIMEOUT_MS),
     });
@@ -543,6 +630,7 @@ export async function fixDraftRules({ draftId, brandId, input }) {
     lockedKeys,
     ruleKeys,
     linkAllowList(targets),
+    { numbered, known },
   );
   if (!rows.length) return { count: 0, batchId: null };
 
