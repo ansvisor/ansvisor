@@ -277,7 +277,11 @@ export function AuthorsSection() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>{t('removeTitle', { name: removing?.name ?? '' })}</DialogTitle>
-            <DialogDescription>{t('removeDescription')}</DialogDescription>
+            <DialogDescription>
+              {removing?.pages == null
+                ? t('removeDescriptionUncounted')
+                : t('removeDescription', { count: removing.pages })}
+            </DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <DialogClose render={<Button variant="outline" disabled={busy} />}>
