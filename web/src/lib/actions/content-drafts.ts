@@ -218,7 +218,7 @@ export async function getContentDraft(id: string): Promise<ContentDraft | null> 
   const { data, error } = await supabase
     .from('content_drafts')
     .select(
-      `id, brand_id, title, page_type, page_type_source, method, status, body_html, author, source_url, rules, action_id, agent_state, agent_state_at, agent_run, updated_at, ${BRAND_SITE}, actions(action_no)`,
+      `id, brand_id, title, page_type, page_type_source, method, status, body_html, author, author_id, source_url, rules, action_id, agent_state, agent_state_at, agent_run, updated_at, ${BRAND_SITE}, actions(action_no)`,
     )
     .eq('id', id)
     .maybeSingle();
@@ -236,6 +236,7 @@ export async function getContentDraft(id: string): Promise<ContentDraft | null> 
     status: draftStatus(data.status),
     bodyHtml: data.body_html,
     author: data.author === 'agent' ? 'agent' : 'user',
+    authorId: data.author_id,
     rules: draftRulesSchema.safeParse(data.rules).data ?? NO_DRAFT_RULES,
     action:
       data.action_id && data.actions
@@ -1154,6 +1155,34 @@ export async function setContentDraftPageType(id: string, pageType: PageType): P
     .eq('id', id)
     .select('id')
     .maybeSingle();
+  if (error) throw new Error(error.message);
+  if (!data) throw new Error('not_found');
+}
+
+/** 00252's refusal of an author from another organization (a check violation). */
+const OTHER_ORGANIZATION = '23514';
+
+/**
+ * The person a page is by (CE-038), or null for the organization byline:
+ * page metadata, never its text. The database takes only an author of the
+ * brand's organization (00252). A save over it isn't a conflict: the page
+ * is the same.
+ */
+export async function setContentDraftAuthor(id: string, authorId: string | null): Promise<void> {
+  if (
+    !draftId.safeParse(id).success ||
+    (authorId !== null && !z.guid().safeParse(authorId).success)
+  ) {
+    throw new Error('invalid');
+  }
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from('content_drafts')
+    .update({ author_id: authorId })
+    .eq('id', id)
+    .select('id')
+    .maybeSingle();
+  if (error?.code === OTHER_ORGANIZATION) throw new Error('invalid');
   if (error) throw new Error(error.message);
   if (!data) throw new Error('not_found');
 }

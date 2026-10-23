@@ -941,6 +941,7 @@ export type Database = {
           archived_at: string | null
           archived_by: string | null
           author: string
+          author_id: string | null
           body_html: string
           brief: Json | null
           brand_id: string
@@ -968,6 +969,7 @@ export type Database = {
           archived_at?: string | null
           archived_by?: string | null
           author?: string
+          author_id?: string | null
           body_html?: string
           brief?: Json | null
           brand_id: string
@@ -995,6 +997,7 @@ export type Database = {
           archived_at?: string | null
           archived_by?: string | null
           author?: string
+          author_id?: string | null
           body_html?: string
           brief?: Json | null
           brand_id?: string
@@ -1015,6 +1018,13 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "content_drafts_author_id_fkey"
+            columns: ["author_id"]
+            isOneToOne: false
+            referencedRelation: "content_authors"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "content_drafts_opportunity_id_fkey"
             columns: ["opportunity_id"]

@@ -152,6 +152,12 @@ export interface ContentDraft {
   status: DraftStatus;
   bodyHtml: string;
   author: 'user' | 'agent';
+  /**
+   * The person the page is by (CE-038, content_authors): page metadata the
+   * editor shows outside the page and the CMS author field gets. Null is the
+   * organization byline ("{Brand} Team").
+   */
+  authorId: string | null;
   /** What the person changed on the page's rules for this draft (CE-009). */
   rules: DraftRules;
   /** The Action Center action the draft is the work of (CE-022), shown as "from Action AC-214". */

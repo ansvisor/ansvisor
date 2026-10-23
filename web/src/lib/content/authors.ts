@@ -19,6 +19,8 @@ export interface ContentAuthor {
   createdBy: string | null;
   /** The brands whose pages it is by when nobody picks another. */
   defaultFor: string[];
+  /** The pages it is the author of (content_drafts.author_id, CE-038). */
+  pages: number;
 }
 
 export interface AuthorsRead {

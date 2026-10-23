@@ -32,12 +32,15 @@ import {
   keepAgentBeforeVersion,
   markContentDraftReady,
   restoreDraftVersion,
+  setContentDraftAuthor,
   setContentDraftPageType,
   startAgentWriting,
   startPageRewrite,
 } from '@/lib/actions/content-drafts';
+import { getContentAuthors } from '@/lib/actions/content-authors';
 import { stopAgentRun } from '@/lib/content/agent-runs-client';
 import { agentWriteRequest, useRuleDescriber } from '@/lib/content/agent-write';
+import type { AuthorsRead } from '@/lib/content/authors';
 import {
   AGENT_POLL_MS,
   CONTENT_LIBRARY_PATH,
@@ -78,6 +81,7 @@ import { cn } from '@/lib/utils';
 import { useBrandStore } from '@/stores/use-brand-store';
 import { AgentCard } from './_agent-card';
 import { AgentDrafting, draftingKey } from './_agent-drafting';
+import { AuthorMenu } from './_author-menu';
 import { FlashBlock, findBlock, flashKey } from './_flash-block';
 import { useAgentRun } from './_use-agent-run';
 import { WorkingDots } from './_working-dots';
@@ -95,6 +99,7 @@ import { sourceDetail } from './_sources-tab';
 import { HistoryMenu } from './_history-menu';
 import { HtmlBlock, copyToClipboard } from './_html-block';
 import { OwnCopies, ownCopyHtml } from './_own-copies';
+import { PageInfoStrip, pageInfoKey } from './_page-info';
 import { PageTypeMenu } from './_page-type-menu';
 import type { AgentRewrite } from './_brief-tab';
 import { ruleStatusDetail, type AgentFix, type PageRewrite } from './_rules-tab';
@@ -321,6 +326,7 @@ export function DraftEditor({
       OneH1,
       AgentDrafting,
       FlashBlock,
+      PageInfoStrip,
     ],
     content: draft.bodyHtml,
     // Rendered on the client only, so the server's HTML can't disagree with it.
@@ -402,6 +408,56 @@ export function DraftEditor({
     [qualityOn, pageHtml, language],
   );
   const qualityScore = qualityAverage([readable?.score ?? null]);
+
+  // Who the page is by (CE-038): page metadata, shown in the header and in a
+  // Page info strip outside the page; with Quality's first phase.
+  const [authorsRead, setAuthorsRead] = useState<AuthorsRead | null>(null);
+  const [authorId, setAuthorId] = useState(draft.authorId);
+  useEffect(() => {
+    if (!qualityOn) return;
+    let live = true;
+    getContentAuthors()
+      .then((read) => live && setAuthorsRead(read))
+      .catch((err) => console.error('Failed to load the authors:', err));
+    return () => {
+      live = false;
+    };
+  }, [qualityOn]);
+  const storeBrandName = useBrandStore((s) => s.brands.find((b) => b.id === draft.brandId)?.name);
+  const brandName =
+    authorsRead?.brands.find((b) => b.id === draft.brandId)?.name ?? storeBrandName ?? '';
+  const pageAuthor = authorsRead?.authors.find((a) => a.id === authorId) ?? null;
+  const byline = authorsRead
+    ? [
+        t('author.by', {
+          name: pageAuthor?.name ?? t('author.organization', { brand: brandName }),
+        }),
+        pageAuthor?.title,
+        t('author.updated', {
+          date: format.dateTime(new Date(draft.updatedAt), { dateStyle: 'medium' }),
+        }),
+      ]
+        .filter(Boolean)
+        .join(' · ')
+    : null;
+  useEffect(() => {
+    if (!editor || editor.isDestroyed) return;
+    editor.view.dispatch(
+      editor.state.tr.setMeta(pageInfoKey, byline ? { label: t('author.pageInfo'), byline } : null),
+    );
+  }, [editor, byline, t]);
+  const pickAuthor = async (next: string | null) => {
+    if (next === authorId) return;
+    const before = authorId;
+    setAuthorId(next);
+    try {
+      await setContentDraftAuthor(draft.id, next);
+    } catch (err) {
+      console.error('Failed to set the author:', err);
+      setAuthorId(before);
+      toast.error(t('author.failed'));
+    }
+  };
   useEffect(() => {
     attachRef.current = (files) => void attachments.attach(files);
     onDecide.current = (id, decision) => void decide([id], decision);
@@ -1356,6 +1412,15 @@ export function DraftEditor({
             sourceUrl={draft.sourceUrl}
             onPick={(type) => void pickPageType(type)}
           />
+          {authorsRead && (
+            <AuthorMenu
+              brandId={draft.brandId}
+              brandName={brandName}
+              authors={authorsRead.authors}
+              authorId={authorId}
+              onPick={(next) => void pickAuthor(next)}
+            />
+          )}
           <DraftMethodBadge method={draft.method} />
           <DraftStatusBadge status={status} />
           <button

@@ -167,6 +167,8 @@ export function AuthorsSection() {
                       )}
                       <p className="mt-0.5 text-xs text-muted-foreground [overflow-wrap:anywhere]">
                         {t('profiles', { count: author.sameAs.length })}
+                        {' · '}
+                        {t('pages', { count: author.pages })}
                         {author.defaultFor.length > 0 && (
                           <>
                             {' · '}

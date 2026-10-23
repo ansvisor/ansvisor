@@ -19,8 +19,10 @@ interface Call {
 }
 let calls: Call[] = [];
 /** What a write or read of each table answers. */
-let answers: Record<string, { data: unknown; error: null | { message: string; code?: string } }> =
-  {};
+let answers: Record<
+  string,
+  { data: unknown; count?: number; error: null | { message: string; code?: string } }
+> = {};
 
 function builder(table: string) {
   const call: Call = { table, op: 'select', filters: [] };
@@ -84,6 +86,7 @@ describe('getContentAuthors', () => {
       error: null,
     };
     answers['brands.select'] = { data: [{ id: ACME, name: 'Acme' }], error: null };
+    answers['content_drafts.select'] = { data: null, count: 2, error: null };
     answers['content_author_defaults.select'] = {
       data: [{ brand_id: ACME, author_id: ADA }],
       error: null,
@@ -101,6 +104,7 @@ describe('getContentAuthors', () => {
           userId: ME,
           createdBy: OTHER,
           defaultFor: [ACME],
+          pages: 2,
         },
       ],
       brands: [{ id: ACME, name: 'Acme' }],

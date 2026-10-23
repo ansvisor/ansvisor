@@ -88,6 +88,7 @@ const {
   markContentDraftReady,
   restoreDraftVersion,
   saveContentDraft,
+  setContentDraftAuthor,
   setContentDraftPageType,
 } = await import('./content-drafts');
 const { bodyHash } = await import('@/lib/content/editor');
@@ -316,6 +317,29 @@ describe('setContentDraftPageType', () => {
     ).rejects.toThrow('invalid');
     expect(calls).toEqual([]);
     await expect(setContentDraftPageType(DRAFT, 'guide')).rejects.toThrow('not_found');
+  });
+});
+
+describe('setContentDraftAuthor', () => {
+  const AUTHOR = '7c9e6679-7425-40de-944b-e07fc1f90ae7';
+
+  it('sets the person the page is by, or the organization byline', async () => {
+    updated = { id: DRAFT };
+    await setContentDraftAuthor(DRAFT, AUTHOR);
+    expect(calls[0]).toMatchObject({
+      op: 'update',
+      value: { author_id: AUTHOR },
+      filters: [['eq', 'id', DRAFT]],
+    });
+    await setContentDraftAuthor(DRAFT, null);
+    expect(calls[1]).toMatchObject({ op: 'update', value: { author_id: null } });
+  });
+
+  it('refuses an id that is not one, and says so when the draft isn’t the member’s', async () => {
+    await expect(setContentDraftAuthor(DRAFT, 'ada')).rejects.toThrow('invalid');
+    await expect(setContentDraftAuthor('d1', AUTHOR)).rejects.toThrow('invalid');
+    expect(calls).toEqual([]);
+    await expect(setContentDraftAuthor(DRAFT, AUTHOR)).rejects.toThrow('not_found');
   });
 });
 

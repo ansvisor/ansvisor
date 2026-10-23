@@ -47,8 +47,20 @@ export async function getContentAuthors(): Promise<AuthorsRead | null> {
     if (res.error) throw new Error(res.error.message);
   }
   const defaults = (defaultsRes.data ?? []) as { brand_id: string; author_id: string }[];
+  const rows = authorsRes.data ?? [];
+  // A workspace has a few authors: one count each, on content_drafts_author.
+  const pages = await Promise.all(
+    rows.map(async (row) => {
+      const { count, error } = await supabase
+        .from('content_drafts')
+        .select('id', { count: 'exact', head: true })
+        .eq('author_id', row.id);
+      if (error) throw new Error(error.message);
+      return count ?? 0;
+    }),
+  );
   return {
-    authors: (authorsRes.data ?? []).map((row) => ({
+    authors: rows.map((row, i) => ({
       id: row.id,
       name: row.name,
       title: row.title,
@@ -58,6 +70,7 @@ export async function getContentAuthors(): Promise<AuthorsRead | null> {
       userId: row.user_id,
       createdBy: row.created_by,
       defaultFor: defaults.filter((d) => d.author_id === row.id).map((d) => d.brand_id),
+      pages: pages[i],
     })),
     brands: (brandsRes.data ?? []).map((b) => ({ id: b.id, name: b.name })),
     me: { id: auth.user.id, role: profile.role ?? 'analyst' },

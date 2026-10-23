@@ -4081,6 +4081,20 @@
       },
       "rulesChip": "Rules {met}/{total}",
       "rulesChipHint": "Rules this page meets now. Open the Rules tab.",
+      "author": {
+        "by": "By {name}",
+        "change": "Author: {name}. Change who the page is by",
+        "hint": "Who the page is by: page metadata your CMS shows, not part of the content.",
+        "title": "Author · page metadata",
+        "organization": "{brand} Team",
+        "organizationHint": "Organization byline",
+        "default": "Default for this brand",
+        "realPeople": "Real people only. Content Agent can't add, edit or invent authors.",
+        "manage": "Manage authors",
+        "failed": "Couldn't change the author.",
+        "pageInfo": "Page info · shown by your CMS, not part of the content",
+        "updated": "Updated {date}"
+      },
       "qualityChip": "Quality {score}",
       "qualityChipHint": "An Ansvisor estimate of this page's quality. Open Quality.",
       "quality": {
@@ -6230,6 +6244,7 @@
       "empty": "No authors yet. Until you add one, pages are by your brand's team.",
       "you": "(you)",
       "profiles": "{count, plural, =0 {No profile links} one {# profile link} other {# profile links}}",
+      "pages": "{count, plural, =0 {no pages yet} one {# page} other {# pages}}",
       "defaultFor": "Default for {brands}",
       "edit": "Edit",
       "remove": "Remove",

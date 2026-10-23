@@ -46,6 +46,7 @@ function workspace(role: string): AuthorsRead {
         userId: ME,
         createdBy: OTHER,
         defaultFor: [ACME],
+        pages: 3,
       },
       {
         id: BOB,
@@ -57,6 +58,7 @@ function workspace(role: string): AuthorsRead {
         userId: OTHER,
         createdBy: OTHER,
         defaultFor: [],
+        pages: 0,
       },
       {
         id: CAL,
@@ -68,6 +70,7 @@ function workspace(role: string): AuthorsRead {
         userId: null,
         createdBy: ME,
         defaultFor: [],
+        pages: 0,
       },
     ],
     brands: [{ id: ACME, name: 'Acme' }],
@@ -134,8 +137,10 @@ describe('AuthorsSection', () => {
       "Real people only. Content Agent can't add, edit or invent authors.",
     );
     expect(row('Ada Lovelace').textContent).toContain('(you)');
-    expect(row('Ada Lovelace').textContent).toContain('1 profile link · Default for Acme');
-    expect(row('Bob Stone').textContent).toContain('No profile links');
+    expect(row('Ada Lovelace').textContent).toContain(
+      '1 profile link · 3 pages · Default for Acme',
+    );
+    expect(row('Bob Stone').textContent).toContain('No profile links · no pages yet');
     expect(trigger().querySelector('[data-slot="select-value"]')!.textContent).toBe('Ada Lovelace');
   });
 
