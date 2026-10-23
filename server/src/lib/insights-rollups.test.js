@@ -20,9 +20,11 @@ vi.mock('./citations-rollups.js', () => ({
 // The Mentions rollups ride on them too (mentions-rollups.test.js).
 const refreshMentionsDaily = vi.fn();
 const refreshMentionTermsDaily = vi.fn();
+const refreshPerceptionSnapshots = vi.fn();
 vi.mock('./mentions-rollups.js', () => ({
   refreshMentionsDaily: (...a) => refreshMentionsDaily(...a),
   refreshMentionTermsDaily: (...a) => refreshMentionTermsDaily(...a),
+  refreshPerceptionSnapshots: (...a) => refreshPerceptionSnapshots(...a),
 }));
 
 import {
@@ -74,6 +76,7 @@ beforeEach(() => {
   tables();
   refreshCitationsDaily.mockReset().mockResolvedValue(true);
   refreshMentionsDaily.mockReset().mockResolvedValue(true);
+  refreshPerceptionSnapshots.mockReset().mockResolvedValue(true);
   refreshMentionTermsDaily.mockReset().mockResolvedValue(true);
   rebuildQueuedCitationRollups.mockReset().mockResolvedValue({ rebuilt: 0, failed: 0 });
   vi.useFakeTimers();
@@ -150,6 +153,15 @@ describe('refreshForCompletedRun', () => {
     await refreshForCompletedRun('brand-1', '2026-08-20T23:45:00Z');
     expect(refreshCitationsDaily).toHaveBeenCalledWith('brand-1', '2026-08-20', '2026-08-21');
     expect(refreshMentionsDaily).toHaveBeenCalledWith('brand-1', '2026-08-20', '2026-08-21');
+    // Then the Perception tab's precomputed view (00241), from the fresh rollups.
+    expect(refreshPerceptionSnapshots).toHaveBeenCalledWith('brand-1');
+  });
+
+  it('refreshes the Perception view as the rollups now are, even after a failure', async () => {
+    rpc.mockResolvedValue({ error: null });
+    refreshMentionsDaily.mockResolvedValue(false);
+    await refreshForCompletedRun('brand-1', '2026-08-20T23:45:00Z');
+    expect(refreshPerceptionSnapshots).toHaveBeenCalledWith('brand-1');
   });
 });
 
@@ -176,6 +188,7 @@ describe('sweepInsightsRollups', () => {
     expect(SWEEP_DAYS).toBe(3);
     expect(refreshCitationsDaily).toHaveBeenCalledWith('b', '2026-08-19', '2026-08-21');
     expect(refreshMentionsDaily).toHaveBeenCalledWith('b', '2026-08-19', '2026-08-21');
+    expect(refreshPerceptionSnapshots.mock.calls).toEqual([['a'], ['b']]);
     expect(rebuildQueuedCitationRollups).toHaveBeenCalledTimes(1);
   });
 
@@ -239,8 +252,10 @@ describe('rebuildQueuedInsightsRollups (00192)', () => {
       ['2026-07-02', '2026-08-01'],
       ['2026-08-02', '2026-08-10'],
     ]);
-    // The Perception rollups (00231) lose the deleted prompt's terms too.
+    // The Perception rollups (00231) lose the deleted prompt's terms too,
+    // and so does the view precomputed from them (00241).
     expect(refreshMentionTermsDaily).toHaveBeenCalledWith('b1', '2026-06-01', '2026-08-10');
+    expect(refreshPerceptionSnapshots).toHaveBeenCalledWith('b1');
     // Only if nothing re-queued the brand meanwhile.
     expect(queueDeletes).toEqual([
       [
@@ -269,6 +284,8 @@ describe('rebuildQueuedInsightsRollups (00192)', () => {
 
     expect(await rebuildQueuedInsightsRollups()).toEqual({ rebuilt: 0, failed: 1 });
     expect(queueDeletes).toHaveLength(0);
+    // The precomputed view still follows what was rebuilt.
+    expect(refreshPerceptionSnapshots).toHaveBeenCalledWith('b1');
   });
 
   it('never runs twice at once', async () => {

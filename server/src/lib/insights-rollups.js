@@ -22,7 +22,11 @@
 import supabaseAdmin from '../config/supabase.js';
 import { logger } from './logger.js';
 import { rebuildQueuedCitationRollups, refreshCitationsDaily } from './citations-rollups.js';
-import { refreshMentionTermsDaily, refreshMentionsDaily } from './mentions-rollups.js';
+import {
+  refreshMentionTermsDaily,
+  refreshMentionsDaily,
+  refreshPerceptionSnapshots,
+} from './mentions-rollups.js';
 
 /** How many trailing days the daily sweep recomputes, today included. */
 export const SWEEP_DAYS = 3;
@@ -62,6 +66,10 @@ export async function refreshForCompletedRun(brandId, runStartedAtIso) {
   const ok = await refreshInsightsDaily(brandId, dayFrom, dayTo);
   await refreshCitationsDaily(brandId, dayFrom, dayTo);
   await refreshMentionsDaily(brandId, dayFrom, dayTo);
+  // The Perception tab's default view (00241) follows the rollups as they
+  // now are. Not waited for: it never throws, and the run's stamp shouldn't
+  // wait on three more reads.
+  void refreshPerceptionSnapshots(brandId);
   return ok;
 }
 
@@ -122,8 +130,10 @@ async function drainRebuildQueue() {
       const end = addDays(from, REBUILD_CHUNK_DAYS - 1);
       ok = await refreshInsightsDaily(brandId, from, end < dayTo ? end : dayTo);
     }
-    // The Perception rollups (00231) still count the deleted prompt's terms.
+    // The Perception rollups (00231) still count the deleted prompt's terms,
+    // and the view precomputed from them (00241) follows them as they now are.
     if (ok) ok = await refreshMentionTermsDaily(brandId, dayFrom, dayTo);
+    await refreshPerceptionSnapshots(brandId);
     // A failed refresh logged itself; the entry stays for the next drain.
     if (!ok) {
       failed++;
@@ -176,6 +186,9 @@ export async function sweepInsightsRollups({ days = SWEEP_DAYS } = {}) {
     const ok = await refreshInsightsDaily(brand.id, dayFrom, dayTo);
     const citationsOk = await refreshCitationsDaily(brand.id, dayFrom, dayTo);
     const mentionsOk = await refreshMentionsDaily(brand.id, dayFrom, dayTo);
+    // The precomputed Perception view (00241) follows the rollups as they now
+    // are; one that fails leaves the tab on the live read: logged, not counted.
+    await refreshPerceptionSnapshots(brand.id);
     if (ok && citationsOk && mentionsOk) refreshed++;
     else failed++;
   }

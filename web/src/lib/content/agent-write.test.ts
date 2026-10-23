@@ -70,6 +70,8 @@ describe('agentWriteRequest', () => {
     const keys = request.rules.map((rule) => rule.key);
     expect(keys).not.toContain('faq');
     expect(keys).not.toContain('feedMatch');
+    // Heading levels are the editor's: one H1 isn't the agent's to keep.
+    expect(keys).not.toContain('oneH1');
     expect(keys).toContain('aiTraces');
     expect(request.rules.find((rule) => rule.key === 'length')).toEqual({
       key: 'length',

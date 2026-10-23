@@ -1,8 +1,9 @@
 import { z } from 'zod';
 import { LANGUAGES } from '@/config/prompt-options';
 import { classifyDomain, normalizeDomain } from '@/lib/citations/classify';
-import { PAGE_TYPES, type PageType } from '@/lib/content/drafts';
+import { PAGE_TYPES, type DraftMethod, type PageType } from '@/lib/content/drafts';
 import { lengthTarget } from '@/lib/content/editor';
+import { decodeHtmlBlock } from '@/lib/content/html-allowlist';
 import { wordsOf } from '@/lib/content/sources';
 
 /**
@@ -36,6 +37,8 @@ export interface RuleDef {
   unit?: RuleUnit;
   /** How it is checked: from the page as written, by AI, or against the product feed. */
   check: 'page' | 'ai' | 'feed';
+  /** Always on, without a switch: a rule the editor itself keeps. */
+  fixed?: true;
 }
 
 const SHARED_RULES: RuleDef[] = [
@@ -55,6 +58,8 @@ const SHARED_RULES: RuleDef[] = [
     unit: 'characters',
     check: 'page',
   },
+  // The editor keeps it too: a second H1 becomes an H2 (_one-h1.ts).
+  { key: 'oneH1', group: 'structure', kind: 'switch', value: '', check: 'page', fixed: true },
   {
     key: 'summary',
     group: 'structure',
@@ -250,16 +255,21 @@ export function languageRuleValue(code: string | null | undefined): string {
   return label ? label.replace(/\s*\([^)]*\)$/, '') : 'English (US)';
 }
 
-/** The rules of a set: the type's own, then the shared groups, with the type's length. */
+/**
+ * The rules of a set: the type's own, then the shared groups, with the
+ * type's length, or the page's own when it was brought in to optimize.
+ */
 export function ruleSet(
   pageType: PageType | null,
-  defaults: { keywords?: string[]; language?: string | null } = {},
+  defaults: { keywords?: string[]; language?: string | null; length?: number | null } = {},
 ): RuleDef[] {
   const own = (pageType && TYPE_RULES[pageType]) || [];
   return [
     ...own,
     ...SHARED_RULES.map((rule) => {
-      if (rule.key === 'length') return { ...rule, value: String(lengthTarget(pageType)) };
+      if (rule.key === 'length') {
+        return { ...rule, value: String(defaults.length ?? lengthTarget(pageType)) };
+      }
       if (rule.key === 'language') return { ...rule, value: languageRuleValue(defaults.language) };
       if (rule.key === 'keywords' && defaults.keywords?.length) {
         return { ...rule, value: defaults.keywords.join(', ') };
@@ -299,6 +309,12 @@ export const draftRulesSchema = z.object({
   source: z.enum(['default', 'mine']).nullable().default(null),
   overrides: overridesSchema,
   textRules: z.array(textRuleSchema).max(MAX_TEXT_RULES).default([]),
+  /**
+   * A page brought in to optimize: its length when it came in, in
+   * characters. Its Length rule aims there (±20%), not at the type's length
+   * for a new page; the person can still change it.
+   */
+  importLength: z.number().int().min(1).max(10_000_000).optional(),
 });
 export type DraftRules = z.infer<typeof draftRulesSchema>;
 /** As saved: the source and text rules may be left out (rules from before 00214 have neither). */
@@ -358,9 +374,76 @@ export function effectiveRules(rules: DraftRules, mine: SavedRuleSet | undefined
   const untouched =
     rules.source === null && !Object.keys(rules.overrides).length && !rules.textRules.length;
   if (untouched && mine) {
-    return { ...rules, source: 'mine', overrides: mine.overrides, textRules: mine.textRules };
+    return {
+      ...rules,
+      source: 'mine',
+      overrides: overridesForImport(mine.overrides, rules.importLength),
+      textRules: mine.textRules,
+    };
   }
   return rules;
+}
+
+/**
+ * A set's choices as a page brought in to optimize takes them: the set's
+ * Length value is for a new page, so the page's own length (importLength)
+ * stands in for it; on or off still follows the set.
+ */
+export function overridesForImport(
+  overrides: SavedRuleSet['overrides'],
+  importLength: number | undefined,
+): SavedRuleSet['overrides'] {
+  const length = overrides.length;
+  if (!importLength || length?.value === undefined) return overrides;
+  return { ...overrides, length: { on: length.on } };
+}
+
+/**
+ * The set Save as my rules keeps from a draft. A page brought in shows its
+ * own length, which isn't a choice: the workspace's Length value stays.
+ */
+export function setToSave(rules: DraftRules, mine: SavedRuleSet | undefined): SavedRuleSet {
+  const kept = mine?.overrides.length?.value;
+  const length = rules.overrides.length;
+  if (!rules.importLength || length?.value !== undefined || kept === undefined) {
+    return { overrides: rules.overrides, textRules: rules.textRules };
+  }
+  return {
+    overrides: { ...rules.overrides, length: { ...length, value: kept } },
+    textRules: rules.textRules,
+  };
+}
+
+/**
+ * A page's text length in characters, about as the editor counts it: the
+ * words without tags, runs of spaces as one (a space between blocks, where
+ * the editor counts none, so a little over). Read where there is no editor
+ * to count: on the server, and before a draft opens.
+ */
+export function pageTextLength(html: string): number {
+  return html
+    .replace(/<(script|style)\b[\s\S]*?<\/\1>/gi, ' ')
+    .replace(/<\/?(p|h[1-6]|li|td|th|blockquote|br|div)\b[^>]*>/gi, ' ')
+    .replace(/<[^>]*>/g, '')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&[#a-z0-9]+;/gi, 'x')
+    .replace(/\s+/g, ' ')
+    .trim().length;
+}
+
+/**
+ * The rules a draft starts with. A page brought in to optimize aims its
+ * Length rule at its own length (within the range the rule takes), not a
+ * new page's; anything else starts with none.
+ */
+export function startingRules(method: DraftMethod, bodyHtml: string | undefined): DraftRules {
+  if (method !== 'optimize' || bodyHtml === undefined) return NO_DRAFT_RULES;
+  const length = pageTextLength(bodyHtml);
+  if (!length) return NO_DRAFT_RULES;
+  return {
+    ...NO_DRAFT_RULES,
+    importLength: Math.min(RULE_LENGTH_MAX, Math.max(RULE_LENGTH_MIN, length)),
+  };
 }
 
 /**
@@ -393,7 +476,7 @@ export function activeRules(defs: RuleDef[], rules: Pick<DraftRules, 'overrides'
     const current = override?.value ?? def.value;
     return {
       ...def,
-      on: override?.on ?? true,
+      on: def.fixed ? true : (override?.on ?? true),
       current,
       changed: (override?.on !== undefined && override.on !== true) || current !== def.value,
     };
@@ -430,6 +513,8 @@ export interface PageRead {
   text: string;
   /** The editor's character count, as the toolbar shows it. */
   characters: number;
+  /** H1s with words inside the page's HTML blocks. */
+  htmlBlockH1s?: number;
 }
 
 const BLOCK_TAGS = 'h1, h2, h3, p, li, table, ol, ul, blockquote';
@@ -452,6 +537,17 @@ export function readPage(html: string, characters: number): PageRead {
       links: [...el.querySelectorAll('a[href]')].map((a) => a.getAttribute('href') ?? ''),
     });
   }
+  // An HTML block's H1s are the page's too (One H1 per page): the editor
+  // doesn't rewrite them, so the rule says so.
+  let htmlBlockH1s = 0;
+  for (const el of doc.body.querySelectorAll('[data-html-block]')) {
+    const inner = decodeHtmlBlock(el.getAttribute('data-html-block') ?? '');
+    if (!inner) continue;
+    const block = new DOMParser().parseFromString(inner, 'text/html');
+    htmlBlockH1s += [...block.body.querySelectorAll('h1')].filter((h) =>
+      h.textContent?.trim(),
+    ).length;
+  }
   return {
     blocks,
     text: blocks
@@ -459,6 +555,7 @@ export function readPage(html: string, characters: number): PageRead {
       .map((b) => b.text)
       .join(' '),
     characters,
+    htmlBlockH1s,
   };
 }
 
@@ -607,6 +704,29 @@ export function lengthBand(target: number): { min: number; max: number } {
 const atLeast = (have: number, want: number): RuleStatus =>
   have >= want ? { state: 'ok' } : { state: 'bad', code: 'partOf', count: have, of: want };
 
+/**
+ * Rules the Content Agent can't fix: it changes words and adds blocks, never
+ * a heading's level, so a page's extra H1s are made H2s in the editor.
+ */
+export const NOT_FOR_AGENT = new Set(['oneH1']);
+
+/**
+ * The rules on that the page doesn't meet (of `only`, when given): the ones
+ * the Content Agent is asked to fix, and those it can't.
+ */
+export function openRulesForAgent<T extends { rule: ActiveRule; status: RuleStatus }>(
+  rules: T[],
+  only?: string[],
+): { forAgent: T[]; notForAgent: T[] } {
+  const open = rules.filter(
+    ({ rule, status }) => rule.on && status.state === 'bad' && (!only || only.includes(rule.key)),
+  );
+  return {
+    forAgent: open.filter(({ rule }) => !NOT_FOR_AGENT.has(rule.key)),
+    notForAgent: open.filter(({ rule }) => NOT_FOR_AGENT.has(rule.key)),
+  };
+}
+
 /** Checks one rule against the page as written. */
 export function checkRule(rule: ActiveRule, page: PageRead, ctx: RuleContext): RuleStatus {
   if (rule.check === 'feed') return { state: 'info', code: 'needsFeed' };
@@ -698,6 +818,11 @@ export function checkRule(rule: ActiveRule, page: PageRead, ctx: RuleContext): R
       );
     case 'outboundLinks':
       return atLeast(links.filter(outbound).length, n);
+    case 'oneH1': {
+      // One H1, the page's title: more blur what the page is about.
+      const h1s = blocks.filter((b) => b.tag === 'h1' && b.text).length + (page.htmlBlockH1s ?? 0);
+      return h1s > 1 ? { state: 'bad', code: 'found', count: h1s } : { state: 'ok' };
+    }
     case 'datedPoint': {
       const first100 = page.text.split(/\s+/).slice(0, 100).join(' ');
       return /\b(19|20)\d{2}\b/.test(first100)
@@ -797,6 +922,50 @@ export function lengthWarns(statuses: { rule: ActiveRule; status: RuleStatus }[]
   return statuses.some(
     ({ rule, status }) => rule.key === 'length' && rule.on && status.state === 'bad',
   );
+}
+
+/**
+ * The least text, in characters, a part the rules ask for takes: a heading
+ * with a two-sentence answer under it, a question with a one-sentence
+ * answer, a summary of a sentence or two. Kept low on purpose, so a page
+ * told they don't fit really can't hold them.
+ */
+const LEAST_SECTION = 200;
+const LEAST_QUESTION = 150;
+const LEAST_SUMMARY = 100;
+
+/**
+ * Rules that can't both be met (Content Agent rule gaps, C): the fan-out
+ * sections, FAQ questions and summary the rules in effect still ask for, at
+ * their least, against the most text Length allows. Null when they fit,
+ * when the page already meets them all, or when Length is off. Rules the
+ * page can't check yet (no fan-outs) ask for nothing, and a fan-out rule
+ * asks for no more fan-outs than there are.
+ */
+export function lengthConflict(
+  statuses: { rule: ActiveRule; status: RuleStatus }[],
+  fanouts: number,
+): { need: number; max: number } | null {
+  const counted: RuleStatus[] = [];
+  const asked = (key: string) => {
+    const found = statuses.find((s) => s.rule.key === key);
+    if (!found?.rule.on || found.status.state === 'info') return 0;
+    const n = Number(found.rule.current);
+    if (!Number.isFinite(n) || n <= 0) return 0;
+    counted.push(found.status);
+    return n;
+  };
+  const length = statuses.find((s) => s.rule.key === 'length')?.rule;
+  const target = length?.on ? Number(length.current) : NaN;
+  if (!Number.isFinite(target) || target <= 0) return null;
+  const need =
+    Math.min(asked('fanoutH2'), fanouts) * LEAST_SECTION +
+    Math.max(asked('faq'), asked('buyingFaq'), fanouts ? asked('fanoutFaq') : 0) * LEAST_QUESTION +
+    (asked('summary') ? LEAST_SUMMARY : 0);
+  // The page holds them all already: it shows they fit.
+  if (counted.every((status) => status.state === 'ok')) return null;
+  const { max } = lengthBand(target);
+  return need > max ? { need, max } : null;
 }
 
 /** How many of the rules in effect are met: off rules and ones the page can't say don't count. */

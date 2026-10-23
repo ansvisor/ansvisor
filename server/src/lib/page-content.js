@@ -263,9 +263,16 @@ export function extractPageContent(html, pageUrl) {
     .filter((text) => text && text.length <= MAX_JSON_LD_LENGTH)
     .slice(0, MAX_JSON_LD);
 
-  const h1 = clean($('h1').first().text());
-  const title =
-    h1 || clean($('meta[property="og:title"]').attr('content')) || clean($('title').first().text());
+  // The H1s with words, and the page's order, before the frame goes: an
+  // article's title often sits in its own <header>.
+  const order = new Map(
+    $('*')
+      .toArray()
+      .map((el, i) => [el, i]),
+  );
+  const worded = $('h1')
+    .toArray()
+    .filter((el) => clean($(el).text()));
 
   const body = $('body');
   body.find(FRAME).remove();
@@ -280,7 +287,29 @@ export function extractPageContent(html, pageUrl) {
         !textArea || ($(el).closest(textArea).length === 0 && !$(el).find(textArea).length),
     )
     .remove();
-  const heading = body.find('h1').first()[0] ?? null;
+  // The title's H1, picked once: the last one with words before the text's
+  // first paragraph (not a logo's or a site name's above it), else the first.
+  // A byline, date or breadcrumb line above the title is no paragraph of it.
+  const lead = textArea
+    ? $(textArea)
+        .find('p, li, pre, blockquote')
+        .toArray()
+        .find(
+          (el) =>
+            clean($(el).text()).length >= MIN_PARAGRAPH &&
+            ![el, ...$(el).parentsUntil(textArea).toArray()].some((block) =>
+              named($(block), PAGE_FURNITURE_WORDS),
+            ),
+        )
+    : null;
+  const titleH1 =
+    (lead && worded.filter((el) => order.get(el) < order.get(lead)).at(-1)) || worded[0] || null;
+  const title =
+    clean(titleH1 ? $(titleH1).text() : '') ||
+    clean($('meta[property="og:title"]').attr('content')) ||
+    clean($('title').first().text());
+  // Still on the page (not in a header that went with the frame).
+  const heading = titleH1 && $(titleH1).closest('body').length > 0 ? titleH1 : null;
   const main = MAIN_SELECTORS.map((selector) => $(selector).toArray())
     .flat()
     .find((el) => !textArea || el === textArea || $(el).find(textArea).length > 0);
@@ -395,6 +424,13 @@ export function extractPageContent(html, pageUrl) {
     }
   });
 
+  // One H1 per page, its title: any other becomes an H2, and one without
+  // words (a logo) is no heading.
+  for (const el of root.find('h1').toArray()) {
+    if (el === heading) continue;
+    if (!clean($(el).text())) $(el).replaceWith($(el).contents());
+    else el.name = 'h2';
+  }
   let content = (root.html() ?? '').trim();
   // A title above the content (a hero outside <main>) heads it, as the
   // draft's title is its first heading.

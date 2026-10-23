@@ -21,7 +21,7 @@
 
 import 'dotenv/config';
 import supabaseAdmin from '../config/supabase.js';
-import { refreshMentionTermsHistory } from '../lib/mentions-rollups.js';
+import { refreshMentionTermsHistory, refreshPerceptionSnapshots } from '../lib/mentions-rollups.js';
 
 const PAUSE_MS = Number.parseInt(process.env.MENTION_TERMS_BACKFILL_PAUSE ?? '250', 10);
 const ONLY_BRAND = process.env.MENTION_TERMS_BACKFILL_BRAND ?? null;
@@ -36,6 +36,8 @@ async function main() {
   for (const brand of brands ?? []) {
     try {
       const chunks = await refreshMentionTermsHistory(brand.id, { pauseMs: PAUSE_MS });
+      // The Perception tab's precomputed view (00241) reads the rebuilt rollups.
+      if (chunks > 0) await refreshPerceptionSnapshots(brand.id);
       done++;
       console.log(
         chunks === 0
