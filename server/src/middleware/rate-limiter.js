@@ -56,6 +56,21 @@ export const apiLimiter = rateLimit({
   },
 });
 
+// A draft's link check (Content Editor Trust): the editor asks after its
+// links change, a few times a minute at most. Each ask can read links on
+// other sites, so it has its own bucket besides the API's.
+export const linkCheckLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 60,
+  keyGenerator: apiLimiterKey,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    success: false,
+    message: 'Too many requests, please try again later.',
+  },
+});
+
 // Stricter limit for public/unauthenticated endpoints: 30 requests per 15 minutes
 export const publicLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,

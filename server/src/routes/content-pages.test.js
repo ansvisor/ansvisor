@@ -11,6 +11,7 @@ const BRAND = '33333333-3333-3333-3333-333333333333';
 let org;
 let fetched;
 let fetchResult;
+let draftRow;
 
 vi.mock('../config/supabase.js', () => ({
   default: {
@@ -18,14 +19,17 @@ vi.mock('../config/supabase.js', () => ({
       const result =
         name === 'brands'
           ? { data: { id: BRAND, organization_id: 'o1' }, error: null }
-          : {
-              data: [{ domain: 'https://www.Northwind.example/' }, { domain: 'northwind.shop' }],
-              error: null,
-            };
+          : name === 'content_drafts'
+            ? { data: draftRow, error: null }
+            : {
+                data: [{ domain: 'https://www.Northwind.example/' }, { domain: 'northwind.shop' }],
+                error: null,
+              };
       const chain = {
         select: () => chain,
         eq: () => chain,
         single: async () => result,
+        maybeSingle: async () => result,
         then: (resolve) => resolve(result),
       };
       return chain;
@@ -59,9 +63,15 @@ let baseUrl;
 
 beforeEach(async () => {
   org = 'o1';
-  checkLinks
-    .mockReset()
-    .mockResolvedValue([{ url: 'https://a.example/', status: 'ok', httpStatus: 200, date: null }]);
+  draftRow = {
+    brand_id: BRAND,
+    body_html:
+      '<p><a href="https://a.example/">a</a> <a href="https://a.example/#x">again</a> <a href="/pricing">ours</a></p>',
+  };
+  checkLinks.mockReset().mockResolvedValue({
+    reads: new Map([['https://a.example/', { status: 'ok', httpStatus: 200, date: null }]]),
+    fetched: 1,
+  });
   fetched = [];
   fetchResult = {
     url: 'https://northwind.example/pricing',
@@ -145,7 +155,8 @@ describe('POST /api/content-pages/import', () => {
   });
 });
 
-const checkPageLinks = (body) =>
+const DRAFT = '2f1d1c52-0f7a-4c1e-9b8a-5d6e7f8a9b0c';
+const checkDraftLinks = (body) =>
   fetch(`${baseUrl}/links`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -153,26 +164,27 @@ const checkPageLinks = (body) =>
   });
 
 describe('POST /api/content-pages/links', () => {
-  it("reads a member's draft links, and answers with each one's status and date", async () => {
-    const res = await checkPageLinks({ brandId: BRAND, urls: ['https://a.example/'] });
+  it("reads the saved draft's links, never the request's, and answers with each one's read", async () => {
+    const res = await checkDraftLinks({ draftId: DRAFT, urls: ['https://evil.example/'] });
     expect(res.status).toBe(200);
     await expect(res.json()).resolves.toEqual({
-      links: [{ url: 'https://a.example/', status: 'ok', httpStatus: 200, date: null }],
+      links: [{ href: 'https://a.example/', status: 'ok', httpStatus: 200, date: null }],
     });
-    expect(checkLinks).toHaveBeenCalledWith(['https://a.example/'], expect.any(Object));
+    expect(checkLinks).toHaveBeenCalledWith(
+      ['https://a.example/', 'https://a.example/#x', '/pricing'],
+      expect.objectContaining({ budget: expect.any(Number) }),
+    );
   });
 
-  it('refuses another organization’s brand, no links, and too many', async () => {
+  it('refuses another organization’s draft, one that isn’t there, and an id that isn’t one', async () => {
     org = 'o2';
-    let res = await checkPageLinks({ brandId: BRAND, urls: ['https://a.example/'] });
+    let res = await checkDraftLinks({ draftId: DRAFT });
     expect(res.status).toBe(403);
     org = 'o1';
-    res = await checkPageLinks({ brandId: BRAND, urls: [] });
-    expect(res.status).toBe(400);
-    res = await checkPageLinks({
-      brandId: BRAND,
-      urls: Array.from({ length: 41 }, (_, i) => `https://s${i}.example/`),
-    });
+    draftRow = null;
+    res = await checkDraftLinks({ draftId: DRAFT });
+    expect(res.status).toBe(404);
+    res = await checkDraftLinks({ draftId: 'nope' });
     expect(res.status).toBe(400);
     expect(checkLinks).not.toHaveBeenCalled();
   });

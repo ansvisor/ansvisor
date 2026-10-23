@@ -1,50 +1,71 @@
+import { createHash } from 'node:crypto';
 import { describe, expect, it, vi } from 'vitest';
 
 // The real client needs the service key; each test passes its own.
 vi.mock('../config/supabase.js', () => ({ default: {} }));
 
 const { PageFetchError } = await import('./safe-fetch.js');
-const { CHECK_TTL_MS, MAX_LINKS, checkLinks, linkStatus, pageDate } =
-  await import('./link-check.js');
+const {
+  CHECK_TTL_MS,
+  HOURLY_READS,
+  LINK_MAX_BYTES,
+  MAX_LINKS,
+  UNKNOWN_TTL_MS,
+  checkLinks,
+  linkStatus,
+  pageDate,
+  readBudget,
+  readableLink,
+  spendReads,
+} = await import('./link-check.js');
 
 /**
- * A draft's links for Trust (Quality spec §2.2): each read once a day, as
- * working, broken or unknown, with its page's newest date.
+ * A saved draft's links for Trust (Quality spec §2.2): each read once a day
+ * across the server, as working, broken or unknown, with its page's own date.
  */
 
 const NOW = Date.parse('2026-10-23T12:00:00Z');
+const hashOf = (url) => createHash('sha256').update(url).digest('hex');
 
-/** content_link_checks, as the server reads and writes it. */
-function fakeDb(rows = []) {
+/** content_link_checks, as the server reads, writes and prunes it. */
+function fakeDb(rows = [], { readError = null } = {}) {
   const upserts = [];
-  const reads = [];
+  const deletes = [];
   const db = {
     from: () => {
-      const query = { filters: [] };
+      const query = {};
       const chain = {
         select: () => chain,
         in: (column, values) => {
           query.in = values;
           return chain;
         },
-        gte: (column, value) => {
-          query.since = value;
-          reads.push(query);
-          return Promise.resolve({
-            data: rows.filter((r) => query.in.includes(r.url) && r.checked_at >= value),
-            error: null,
-          });
-        },
+        gte: async (column, value) =>
+          readError
+            ? { data: null, error: readError }
+            : {
+                data: rows.filter((r) => query.in.includes(hashOf(r.url)) && r.checked_at >= value),
+                error: null,
+              },
         upsert: async (values) => {
           upserts.push(...values);
+          return { error: null };
+        },
+        delete: () => chain,
+        lt: async (column, value) => {
+          deletes.push(value);
           return { error: null };
         },
       };
       return chain;
     },
   };
-  return { db, upserts, reads };
+  return { db, upserts, deletes };
 }
+
+const page = (url, html = '') => ({ url, status: 200, html });
+const silent = { error: vi.fn() };
+const ago = (ms) => new Date(NOW - ms).toISOString();
 
 describe('linkStatus', () => {
   it('reads a page or a file as working', () => {
@@ -53,112 +74,194 @@ describe('linkStatus', () => {
     expect(linkStatus(new PageFetchError('too_large', 'big'))).toBe('ok');
   });
 
-  it('reads a gone page or a site that is nowhere as broken', () => {
-    for (const status of [400, 404, 410, 451]) {
+  it('reads a gone page, or a site that is nowhere, as broken', () => {
+    for (const status of [404, 410, 451]) {
       expect(linkStatus(new PageFetchError('http_error', 'x', { status }))).toBe('broken');
     }
-    expect(linkStatus(new PageFetchError('unreachable', 'ENOTFOUND'))).toBe('broken');
-    expect(linkStatus(new PageFetchError('too_many_redirects', 'loop'))).toBe('broken');
+    for (const errno of ['ENOTFOUND', 'ECONNREFUSED']) {
+      expect(linkStatus(new PageFetchError('unreachable', 'x', { errno }))).toBe('broken');
+    }
   });
 
-  it("doesn't call a bot wall, a slow site or a passing error broken", () => {
-    for (const status of [401, 403, 429, 500, 503]) {
+  it("doesn't call what may pass, or what wouldn't tell, broken", () => {
+    for (const status of [400, 401, 403, 405, 429, 500, 503, 999]) {
       expect(linkStatus(new PageFetchError('http_error', 'x', { status }))).toBe('unknown');
     }
-    expect(linkStatus(new PageFetchError('timeout', 'slow'))).toBe('unknown');
-    expect(linkStatus(new PageFetchError('blocked', 'private'))).toBe('unknown');
+    for (const errno of ['ECONNRESET', 'EAI_AGAIN', 'UNABLE_TO_VERIFY_LEAF_SIGNATURE', undefined]) {
+      expect(linkStatus(new PageFetchError('unreachable', 'x', { errno }))).toBe('unknown');
+    }
+    for (const code of ['timeout', 'blocked', 'invalid_url', 'too_many_redirects']) {
+      expect(linkStatus(new PageFetchError(code, 'x'))).toBe('unknown');
+    }
     expect(linkStatus(new Error('boom'))).toBe('unknown');
   });
 });
 
 describe('pageDate', () => {
-  it("takes the page's newest date, from JSON-LD, <time> or article meta", () => {
-    const html = `<script type="application/ld+json">{"@type":"Article","datePublished":"2023-01-05","dateModified":"2024-03-01"}</script>
-      <meta property="article:published_time" content="2022-07-01">
-      <time datetime="2021-02-02">Feb 2021</time>`;
-    expect(pageDate(html)).toBe('2024-03-01T00:00:00.000Z');
+  it("takes the main entity's date, not a sidebar's or a comment's", () => {
+    const html = `<script type="application/ld+json">{"@graph":[
+        {"@type":"BlogPosting","datePublished":"2019-01-05","dateModified":"2019-03-01"},
+        {"@type":"Comment","dateCreated":"2026-01-01","datePublished":"2026-01-01"}]}</script>
+      <aside><time datetime="2026-09-01">Latest post</time></aside>`;
+    expect(pageDate(html, NOW)).toBe('2019-03-01T00:00:00.000Z');
   });
 
-  it('gives none for a page without a date, and ignores one ahead of today', () => {
-    expect(pageDate('<p>No date</p>')).toBeNull();
-    expect(pageDate('<time datetime="2999-01-01">Later</time>')).toBeNull();
+  it("falls back to article meta, then to the article's first <time>", () => {
+    expect(
+      pageDate(
+        '<meta property="article:modified_time" content="2024-02-02"><article><time datetime="2020-01-01">x</time></article>',
+        NOW,
+      ),
+    ).toBe('2024-02-02T00:00:00.000Z');
+    expect(
+      pageDate(
+        '<aside><time datetime="2026-09-01">x</time></aside><main><time datetime="2023-05-05">y</time></main>',
+        NOW,
+      ),
+    ).toBe('2023-05-05T00:00:00.000Z');
+  });
+
+  it('gives none for a page without a date, or with one ahead of now', () => {
+    expect(pageDate('<p>No date</p>', NOW)).toBeNull();
+    expect(pageDate('<article><time datetime="2027-01-01">x</time></article>', NOW)).toBeNull();
+  });
+});
+
+describe('readableLink', () => {
+  it('leaves out one-time and account links', () => {
+    expect(readableLink('https://a.example/blog/post')).toBe(true);
+    expect(readableLink('https://a.example/unsubscribe?u=1')).toBe(false);
+    expect(readableLink('https://a.example/auth/magic-link/abc')).toBe(false);
+    expect(readableLink('https://a.example/x?token=abc')).toBe(false);
+    expect(readableLink('https://a.example/confirm-email')).toBe(false);
   });
 });
 
 describe('checkLinks', () => {
-  it('reads each new link once, in turn, and keeps the reads', async () => {
+  it('reads each link once, a hash or tracking variant with it, and keeps the reads', async () => {
     const { db, upserts } = fakeDb();
-    const fetcher = vi.fn(async (url) => {
+    const fetcher = vi.fn(async (url, opts) => {
+      expect(opts.maxBytes).toBe(LINK_MAX_BYTES);
       if (url.includes('gone')) throw new PageFetchError('http_error', '404', { status: 404 });
-      return { url, status: 200, html: '<time datetime="2025-06-01">June</time>' };
+      return page(url, '<article><time datetime="2025-06-01">June</time></article>');
     });
-    const links = await checkLinks(
-      ['https://a.example/x', 'https://gone.example/', 'https://a.example/x', '/pricing'],
-      { db, fetcher, now: NOW },
+    const { reads, fetched } = await checkLinks(
+      [
+        'https://a.example/x',
+        'https://a.example/x#part',
+        'https://a.example/x?utm_source=mail',
+        'https://gone.example/',
+        '/pricing',
+        'mailto:hi@a.example',
+      ],
+      { db, fetcher, now: NOW, log: silent },
     );
     expect(fetcher).toHaveBeenCalledTimes(2);
-    expect(links).toEqual([
-      {
-        url: 'https://a.example/x',
-        status: 'ok',
-        httpStatus: 200,
-        date: '2025-06-01T00:00:00.000Z',
-      },
-      { url: 'https://gone.example/', status: 'broken', httpStatus: 404, date: null },
-    ]);
-    expect(upserts.map((u) => [u.url, u.status, u.checked_at])).toEqual([
-      ['https://a.example/x', 'ok', '2026-10-23T12:00:00.000Z'],
-      ['https://gone.example/', 'broken', '2026-10-23T12:00:00.000Z'],
+    expect(fetched).toBe(2);
+    const ok = { status: 'ok', httpStatus: 200, date: '2025-06-01T00:00:00.000Z' };
+    expect(Object.fromEntries(reads)).toEqual({
+      'https://a.example/x': ok,
+      'https://a.example/x#part': ok,
+      'https://a.example/x?utm_source=mail': ok,
+      'https://gone.example/': { status: 'broken', httpStatus: 404, date: null },
+    });
+    expect(upserts.map((u) => [u.url_hash, u.url, u.status])).toEqual([
+      [hashOf('https://a.example/x'), 'https://a.example/x', 'ok'],
+      [hashOf('https://gone.example/'), 'https://gone.example/', 'broken'],
     ]);
   });
 
-  it("uses a read from the last day, and reads one that's older again", async () => {
-    const { db, reads } = fakeDb([
-      {
-        url: 'https://fresh.example/',
-        status: 'ok',
-        http_status: 200,
-        page_date: null,
-        checked_at: new Date(NOW - 60_000).toISOString(),
-      },
-      {
-        url: 'https://stale.example/',
-        status: 'broken',
-        http_status: 404,
-        page_date: null,
-        checked_at: new Date(NOW - CHECK_TTL_MS - 60_000).toISOString(),
-      },
+  it("uses a read from the last day, and reads an 'unknown' one again after a few hours", async () => {
+    const row = (url, status, age) => ({
+      url,
+      status,
+      http_status: null,
+      page_date: null,
+      checked_at: ago(age),
+    });
+    const { db } = fakeDb([
+      row('https://fresh.example/', 'ok', 60_000),
+      row('https://walled.example/', 'unknown', UNKNOWN_TTL_MS + 60_000),
+      row('https://old.example/', 'broken', CHECK_TTL_MS + 60_000),
     ]);
-    const fetcher = vi.fn(async (url) => ({ url, status: 200, html: '' }));
-    const links = await checkLinks(['https://fresh.example/', 'https://stale.example/'], {
+    const fetcher = vi.fn(async (url) => page(url));
+    await checkLinks(
+      ['https://fresh.example/', 'https://walled.example/', 'https://old.example/'],
+      {
+        db,
+        fetcher,
+        now: NOW,
+        log: silent,
+      },
+    );
+    expect(fetcher.mock.calls.map(([url]) => url)).toEqual([
+      'https://walled.example/',
+      'https://old.example/',
+    ]);
+  });
+
+  it('reads the links again when the kept reads cannot be read', async () => {
+    const { db } = fakeDb([], { readError: { message: 'URI too long' } });
+    const log = { error: vi.fn() };
+    const fetcher = vi.fn(async (url) => page(url));
+    const { reads } = await checkLinks(['https://a.example/'], { db, fetcher, now: NOW, log });
+    expect(reads.get('https://a.example/').status).toBe('ok');
+    expect(log.error).toHaveBeenCalled();
+  });
+
+  it(`reads ${MAX_LINKS} links at most, and no more than the budget`, async () => {
+    const { db } = fakeDb();
+    const fetcher = vi.fn(async (url) => page(url));
+    const urls = Array.from({ length: MAX_LINKS + 5 }, (_, i) => `https://s${i}.example/`);
+    let result = await checkLinks(urls, { db, fetcher, now: NOW, log: silent });
+    expect(result.reads.size).toBe(MAX_LINKS);
+    fetcher.mockClear();
+    result = await checkLinks(['https://t1.example/', 'https://t2.example/'], {
       db,
       fetcher,
       now: NOW,
+      budget: 1,
+      log: silent,
     });
-    expect(reads[0].since).toBe(new Date(NOW - CHECK_TTL_MS).toISOString());
     expect(fetcher).toHaveBeenCalledTimes(1);
-    expect(fetcher).toHaveBeenCalledWith('https://stale.example/', expect.any(Object));
-    expect(links.map((l) => l.status)).toEqual(['ok', 'ok']);
+    expect(result.reads.size).toBe(1);
   });
 
-  it(`reads ${MAX_LINKS} links at most`, async () => {
+  it('reads a link two drafts ask for at once only once', async () => {
     const { db } = fakeDb();
-    const fetcher = vi.fn(async (url) => ({ url, status: 200, html: '' }));
-    const urls = Array.from({ length: MAX_LINKS + 5 }, (_, i) => `https://s${i}.example/`);
-    expect(await checkLinks(urls, { db, fetcher, now: NOW })).toHaveLength(MAX_LINKS);
-    expect(fetcher).toHaveBeenCalledTimes(MAX_LINKS);
+    let release;
+    const fetcher = vi.fn(
+      (url) =>
+        new Promise((resolve) => {
+          release = () => resolve(page(url));
+        }),
+    );
+    const deps = { db, fetcher, now: NOW, log: silent };
+    const first = checkLinks(['https://shared.example/'], deps);
+    const second = checkLinks(['https://shared.example/#x'], deps);
+    await vi.waitFor(() => expect(fetcher).toHaveBeenCalled());
+    release();
+    const [a, b] = await Promise.all([first, second]);
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    expect(a.reads.get('https://shared.example/').status).toBe('ok');
+    expect(b.reads.get('https://shared.example/#x').status).toBe('ok');
   });
 
-  it('answers even when the reads could not be kept', async () => {
-    const { db } = fakeDb();
-    db.from = ((from) => () => ({
-      ...from(),
-      upsert: async () => ({ error: { message: 'read-only' } }),
-    }))(db.from);
-    const log = { error: vi.fn() };
-    const fetcher = async (url) => ({ url, status: 200, html: '' });
-    const links = await checkLinks(['https://a.example/'], { db, fetcher, now: NOW, log });
-    expect(links[0].status).toBe('ok');
-    expect(log.error).toHaveBeenCalled();
+  it('drops reads older than a week, once an hour', async () => {
+    const { db, deletes } = fakeDb();
+    const fetcher = async (url) => page(url);
+    const later = NOW + 2 * 60 * 60 * 1000;
+    await checkLinks(['https://a.example/'], { db, fetcher, now: later, log: silent });
+    await checkLinks(['https://b.example/'], { db, fetcher, now: later + 60_000, log: silent });
+    expect(deletes).toEqual([new Date(later - 7 * 24 * 60 * 60 * 1000).toISOString()]);
+  });
+});
+
+describe('readBudget', () => {
+  it('gives each member HOURLY_READS an hour', () => {
+    expect(readBudget('u-budget', NOW)).toBe(HOURLY_READS);
+    spendReads('u-budget', 150, NOW);
+    expect(readBudget('u-budget', NOW + 60_000)).toBe(HOURLY_READS - 150);
+    expect(readBudget('u-budget', NOW + 61 * 60 * 1000)).toBe(HOURLY_READS);
   });
 });

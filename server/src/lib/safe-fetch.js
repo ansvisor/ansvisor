@@ -33,12 +33,14 @@ export class PageFetchError extends Error {
   /**
    * @param {'invalid_url'|'blocked'|'unreachable'|'timeout'|'too_large'|'not_html'|'http_error'|'too_many_redirects'} code
    * @param {string} message
-   * @param {{ status?: number }} [extra]
+   * @param {{ status?: number, errno?: string }} [extra] errno: the network error's code
+   *   (ENOTFOUND, ECONNREFUSED, a TLS one…) when the page couldn't be reached
    */
   constructor(code, message, extra = {}) {
     super(message);
     this.code = code;
     this.status = extra.status;
+    this.errno = extra.errno;
   }
 }
 
@@ -170,19 +172,20 @@ function requestOnce(url, { signal, lookup, maxBytes }) {
       },
       (res) => {
         const status = res.statusCode ?? 0;
+        // What isn't read is dropped, not drained: a large file stops here.
         if (status >= 300 && status < 400 && res.headers.location) {
-          res.resume();
+          res.destroy();
           resolve({ redirect: res.headers.location, status });
           return;
         }
         if (status < 200 || status >= 300) {
-          res.resume();
+          res.destroy();
           reject(new PageFetchError('http_error', `The page answered ${status}`, { status }));
           return;
         }
         const contentType = res.headers['content-type'] ?? '';
         if (!/^\s*(text\/html|application\/xhtml\+xml)\b/i.test(contentType)) {
-          res.resume();
+          res.destroy();
           reject(new PageFetchError('not_html', `The address is ${contentType || 'not a page'}`));
           return;
         }
@@ -248,6 +251,7 @@ export async function fetchPage(address, opts = {}) {
       throw new PageFetchError(
         'unreachable',
         `The page could not be reached (${err?.code ?? err?.message})`,
+        { errno: err?.code },
       );
     }
     if (!res.redirect) return { url: url.toString(), status: res.status, html: res.body };
