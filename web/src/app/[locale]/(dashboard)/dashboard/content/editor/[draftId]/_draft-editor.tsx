@@ -67,7 +67,7 @@ import { detectPageType } from '@/lib/content/page-types';
 import { aiTracesFound, lengthWarns, openRulesForAgent } from '@/lib/content/rules';
 import { saveBlob } from '@/lib/download';
 import { cn } from '@/lib/utils';
-import { AgentBar } from './_agent-bar';
+import { AgentCard } from './_agent-card';
 import { DropOverlay, useAttachments } from './_attach';
 import {
   CITED_EDIT_ALLOWED,
@@ -84,13 +84,7 @@ import { OwnCopies, ownCopyHtml } from './_own-copies';
 import { PageTypeMenu } from './_page-type-menu';
 import type { AgentRewrite } from './_brief-tab';
 import { ruleStatusDetail, type AgentFix, type PageRewrite } from './_rules-tab';
-import {
-  PageRewriteBar,
-  forgetRewrite,
-  pageChangedSince,
-  rememberRewrite,
-  wasRewrite,
-} from './_page-rewrite';
+import { forgetRewrite, pageChangedSince, rememberRewrite, wasRewrite } from './_page-rewrite';
 import { EditorPanelRail, EditorSidePanel, useSidePanelOpen, type PanelTab } from './_side-panel';
 import {
   AgentSuggestions,
@@ -581,6 +575,33 @@ export function DraftEditor({
   };
   const openSuggestions = suggestions.filter((s) => s.status === 'open').length;
   const pageSuggestion = suggestions.find((s) => s.kind === 'page') ?? null;
+  // The rules as the agent card counts its gain: met now, and the ones still open.
+  const cardRules = useMemo(
+    () => ({
+      met: rules.met,
+      total: rules.total,
+      open: new Set(
+        rules.rules
+          .filter(({ rule, status }) => rule.on && status.state === 'bad')
+          .map(({ rule }) => rule.key),
+      ),
+    }),
+    [rules.met, rules.total, rules.rules],
+  );
+
+  /** Review: the first open suggestion in the page, scrolled to and marked for a moment. */
+  const reviewFirst = () => {
+    const first = suggestions.find((s) => s.status === 'open' && s.kind !== 'page');
+    if (!editor || !first) return;
+    const card = [...editor.view.dom.querySelectorAll<HTMLElement>('[data-suggestion]')].find(
+      (node) => node.dataset.suggestion === first.id,
+    );
+    if (!card) return;
+    card.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    const mark = ['ring-2', 'ring-amber-300', 'dark:ring-amber-700'];
+    card.classList.add(...mark);
+    setTimeout(() => card.classList.remove(...mark), 1200);
+  };
 
   /**
    * A whole page rewritten (Rewrite the page to these rules): Accept puts it
@@ -1214,21 +1235,13 @@ export function DraftEditor({
               </span>
             </p>
           )}
-          {pageSuggestion && !(barClosed && openSuggestions === 0) && (
-            <PageRewriteBar
-              suggestion={pageSuggestion}
-              rulesOpen={Math.max(0, rules.total - rules.met)}
+          {(fixing || (suggestions.length > 0 && !(barClosed && openSuggestions === 0))) && (
+            <AgentCard
+              suggestions={suggestions}
+              rules={cardRules}
               // Not while the HTML view holds the page: it would write over it.
               busy={deciding || htmlSource !== null}
-              onDecide={(to) => void decidePage(pageSuggestion, to)}
-              onClose={() => setBarClosed(true)}
-            />
-          )}
-          {!pageSuggestion && suggestions.length > 0 && !(barClosed && openSuggestions === 0) && (
-            <AgentBar
-              suggestions={suggestions}
-              rulesOpen={Math.max(0, rules.total - rules.met)}
-              busy={deciding}
+              working={fixing}
               onAcceptAll={() =>
                 void decide(
                   suggestions.filter((s) => s.status === 'open').map((s) => s.id),
@@ -1247,9 +1260,12 @@ export function DraftEditor({
                   'undo_all',
                 )
               }
+              onReview={reviewFirst}
+              onRun={() => void fixRules()}
               onClose={() => setBarClosed(true)}
-              onFixRules={() => void fixRules()}
-              fixing={fixing}
+              onDecidePage={(to) => {
+                if (pageSuggestion) void decidePage(pageSuggestion, to);
+              }}
             />
           )}
           {editor && (

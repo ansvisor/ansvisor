@@ -1,8 +1,7 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { useTranslations } from 'next-intl';
-import { FileText, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -100,136 +99,61 @@ function PageColumn({ label, html }: { label: string; html: string }) {
   );
 }
 
-export function PageRewriteBar({
+/** The characters of a page rewrite's page before and after, as the Rules tab counts them. */
+export function pageCharacters(suggestion: DraftSuggestion): { before: number; after: number } {
+  return {
+    before: pageTextLength(suggestion.beforeHtml ?? ''),
+    after: pageTextLength(suggestion.afterText),
+  };
+}
+
+/**
+ * Compare: the page as the agent read it and the rewrite, side by side, with
+ * Reject and Accept while it is open.
+ */
+export function PageCompareDialog({
   suggestion,
-  rulesOpen,
+  open,
+  onOpenChange,
   busy,
   onDecide,
-  onClose,
 }: {
   suggestion: DraftSuggestion;
-  rulesOpen: number;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
   busy: boolean;
-  /** accepted, rejected, or open again (Undo). */
   onDecide: (status: SuggestionStatus) => void;
-  onClose: () => void;
 }) {
   const t = useTranslations('contentEditor.editor.rewrite');
-  const [comparing, setComparing] = useState(false);
-  const before = pageTextLength(suggestion.beforeHtml ?? '');
-  const after = pageTextLength(suggestion.afterText);
-  const open = suggestion.status === 'open';
+  const { before, after } = pageCharacters(suggestion);
   const decide = (status: SuggestionStatus) => {
-    setComparing(false);
+    onOpenChange(false);
     onDecide(status);
   };
-
   return (
-    <div
-      role="region"
-      aria-label={t('bar')}
-      className="flex flex-wrap items-center gap-x-3 gap-y-1.5 border-b bg-muted/40 px-4 py-1.5 text-[13px]"
-    >
-      <FileText aria-hidden className="h-4 w-4 shrink-0 text-muted-foreground" />
-      {/* Room for a line of text first: on a narrow page the buttons go under it. */}
-      <span className="min-w-0 flex-1 basis-64">
-        {open ? (
-          <>
-            <span className="font-medium">{t('ready')}</span>
-            {' · '}
-            {t('characters', { before, after })}
-            <span className="text-muted-foreground">
-              {' · '}
-              {suggestion.reason}
-            </span>
-          </>
-        ) : (
-          <>
-            <span className="font-medium">
-              {suggestion.status === 'accepted' ? t('accepted') : t('rejected')}
-            </span>
-            {suggestion.status === 'accepted' && rulesOpen > 0 && (
-              <span className="text-muted-foreground">
-                {' · '}
-                {t('rulesOpen', { count: rulesOpen })}
-              </span>
-            )}
-          </>
-        )}
-      </span>
-      <span className="ml-auto flex shrink-0 items-center gap-1.5">
-        <Button
-          variant="ghost"
-          size="sm"
-          className="h-7"
-          disabled={busy}
-          onClick={() => setComparing(true)}
-        >
-          {t('compare')}
-        </Button>
-        {open ? (
-          <>
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-7"
-              disabled={busy}
-              onClick={() => decide('rejected')}
-            >
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="flex max-h-[90vh] flex-col sm:max-w-6xl">
+        <DialogHeader>
+          <DialogTitle>{t('compareTitle')}</DialogTitle>
+          <DialogDescription>
+            {t('characters', { before, after })} · {suggestion.reason}
+          </DialogDescription>
+        </DialogHeader>
+        <div className="grid min-h-0 flex-1 grid-cols-1 gap-3 overflow-y-auto md:grid-cols-2 md:overflow-hidden">
+          <PageColumn label={t('before', { count: before })} html={suggestion.beforeHtml ?? ''} />
+          <PageColumn label={t('after', { count: after })} html={suggestion.afterText} />
+        </div>
+        {suggestion.status === 'open' && (
+          <DialogFooter>
+            <Button variant="outline" disabled={busy} onClick={() => decide('rejected')}>
               {t('reject')}
             </Button>
-            <Button size="sm" className="h-7" disabled={busy} onClick={() => decide('accepted')}>
+            <Button disabled={busy} onClick={() => decide('accepted')}>
               {t('accept')}
             </Button>
-          </>
-        ) : (
-          <>
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-7"
-              disabled={busy}
-              onClick={() => decide('open')}
-            >
-              {t('undo')}
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              aria-label={t('close')}
-              title={t('close')}
-              onClick={onClose}
-            >
-              <X className="h-3.5 w-3.5" />
-            </Button>
-          </>
+          </DialogFooter>
         )}
-      </span>
-
-      <Dialog open={comparing} onOpenChange={setComparing}>
-        <DialogContent className="flex max-h-[90vh] flex-col sm:max-w-6xl">
-          <DialogHeader>
-            <DialogTitle>{t('compareTitle')}</DialogTitle>
-            <DialogDescription>
-              {t('characters', { before, after })} · {suggestion.reason}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="grid min-h-0 flex-1 grid-cols-1 gap-3 overflow-y-auto md:grid-cols-2 md:overflow-hidden">
-            <PageColumn label={t('before', { count: before })} html={suggestion.beforeHtml ?? ''} />
-            <PageColumn label={t('after', { count: after })} html={suggestion.afterText} />
-          </div>
-          {open && (
-            <DialogFooter>
-              <Button variant="outline" disabled={busy} onClick={() => decide('rejected')}>
-                {t('reject')}
-              </Button>
-              <Button disabled={busy} onClick={() => decide('accepted')}>
-                {t('accept')}
-              </Button>
-            </DialogFooter>
-          )}
-        </DialogContent>
-      </Dialog>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }

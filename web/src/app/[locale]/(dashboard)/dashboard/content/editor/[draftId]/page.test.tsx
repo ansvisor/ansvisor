@@ -915,9 +915,7 @@ describe('the content editor', () => {
       await renderPage();
 
       expect(getDraftSuggestions).toHaveBeenCalledWith('d1');
-      expect(bar()!.textContent).toContain(
-        'Content Agent suggested 2 changes · from Action AC-214',
-      );
+      expect(bar()!.textContent).toContain('Content Agent has 2 suggestions for you');
       expect(bar()!.querySelector('a')!.getAttribute('href')).toBe(
         '/dashboard/action-center/actions?action=a1',
       );
@@ -932,6 +930,26 @@ describe('the content editor', () => {
       expect(cardOf('s2')!.textContent).toContain('Does it work with custom stages?');
       // The page itself is unchanged until one is accepted.
       expect(pageText()).not.toContain('Accuracy is shown');
+    });
+
+    it('reviews the first open suggestion: scrolls to it and marks it for a moment', async () => {
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+      const scrolled = vi.fn();
+      Element.prototype.scrollIntoView = scrolled;
+      try {
+        getContentDraft.mockResolvedValue(page);
+        getDraftSuggestions.mockResolvedValue(batch);
+        await renderPage();
+
+        await act(async () => barButton('Review').click());
+        expect(scrolled).toHaveBeenCalledWith({ block: 'center', behavior: 'smooth' });
+        expect(scrolled.mock.contexts[0]).toBe(cardOf('s1'));
+        expect(cardOf('s1')!.classList.contains('ring-2')).toBe(true);
+        await act(async () => vi.advanceTimersByTime(1200));
+        expect(cardOf('s1')!.classList.contains('ring-2')).toBe(false);
+      } finally {
+        vi.useRealTimers();
+      }
     });
 
     it('accepts one into the page, keeping the page before it in History, and undoes it', async () => {
@@ -950,7 +968,7 @@ describe('the content editor', () => {
       expect(container.querySelector('.ProseMirror .agent-accepted-text')!.textContent).toBe(
         'Accuracy is shown per team, each week, against closed revenue.',
       );
-      expect(bar()!.textContent).toContain('suggested 1 change');
+      expect(bar()!.textContent).toContain('Content Agent has 1 suggestion for you');
 
       await press('s1', 'Undo');
       expect(decideDraftSuggestions).toHaveBeenLastCalledWith(['s1'], 'open');
@@ -1086,7 +1104,9 @@ describe('the content editor', () => {
       expect(pageText()).toContain(
         'Accuracy is shown per team, each week, against closed revenue.Teams trust it.FAQDoes it work with custom stages? Yes, any stage.',
       );
-      expect(bar()!.textContent).toMatch(/^2 accepted · 0 rejected · \d+ rules? still open/);
+      expect(bar()!.textContent).toMatch(
+        /^All suggestions reviewed2 accepted · Rules \d+ of \d+ · \d+ still open/,
+      );
       // Not a full run's batch: nothing about running it again.
       expect(bar()!.textContent).not.toContain('a run makes at most');
 
@@ -1094,7 +1114,7 @@ describe('the content editor', () => {
       await act(async () => {});
       expect(decideDraftSuggestions).toHaveBeenLastCalledWith(['s2', 's1'], 'open');
       expect(pageText()).toBe(`Pipeline forecasting${VAGUE}Teams trust it.`);
-      expect(bar()!.textContent).toContain('suggested 2 changes');
+      expect(bar()!.textContent).toContain('Content Agent has 2 suggestions for you');
     });
 
     it('never applies one to a passage AI quotes, or to one the page changed', async () => {
@@ -1911,6 +1931,26 @@ describe('the side panel', () => {
         (b) => b.textContent === label,
       )!;
 
+    it('shows the agent card working while the agent runs, then its batch', async () => {
+      getContentDraft.mockResolvedValue(traced);
+      getDraftSuggestions.mockResolvedValueOnce([]).mockResolvedValueOnce([agentSuggestion]);
+      let answer: (value: { count: number }) => void = () => {};
+      fixDraftRules.mockReturnValue(new Promise((resolve) => (answer = resolve)));
+      await openRules();
+
+      await act(async () => panelButton('Apply rules with Agent').click());
+      await act(async () => {});
+      const card = () =>
+        container.querySelector('[role="region"][aria-label="Agent suggestions"]')!;
+      expect(card().getAttribute('aria-busy')).toBe('true');
+      expect(card().textContent).toBe('Content Agent is working');
+
+      await act(async () => answer({ count: 1 }));
+      await act(async () => {});
+      expect(card().getAttribute('aria-busy')).toBe('false');
+      expect(card().textContent).toContain('Content Agent has 1 suggestion for you');
+    });
+
     it('sends the open rules and leaves the agent’s batch for review', async () => {
       getContentDraft.mockResolvedValue(traced);
       getDraftSuggestions.mockResolvedValueOnce([]).mockResolvedValueOnce([agentSuggestion]);
@@ -1938,7 +1978,7 @@ describe('the side panel', () => {
       expect(request).toMatchObject({ textRules: [], locked: [] });
       expect(
         container.querySelector('[role="region"][aria-label="Agent suggestions"]')!.textContent,
-      ).toContain('Content Agent suggested 1 change');
+      ).toContain('Content Agent has 1 suggestion for you');
       expect(toast.success).toHaveBeenCalledWith(
         'Content Agent suggested 1 change · review them in the page',
       );
@@ -1965,7 +2005,7 @@ describe('the side panel', () => {
       expect(
         container.querySelector('[role="region"][aria-label="Agent suggestions"]')!.textContent,
       ).toMatch(
-        /^0 accepted · 8 rejected · \d+ rules? still open · a run makes at most 8 changes: run it again for the rest/,
+        /^All suggestions reviewed0 accepted · Rules \d+ of \d+ · \d+ still open · a run makes at most 8 changes: run it again for the rest/,
       );
     });
 
@@ -1990,7 +2030,7 @@ describe('the side panel', () => {
         expect(getDraftSuggestions).toHaveBeenCalledTimes(3);
         expect(
           container.querySelector('[role="region"][aria-label="Agent suggestions"]')!.textContent,
-        ).toContain('Content Agent suggested 1 change');
+        ).toContain('Content Agent has 1 suggestion for you');
         expect(toast.success).toHaveBeenCalledWith(
           'Content Agent suggested 1 change · review them in the page',
         );
@@ -2104,7 +2144,7 @@ describe('the side panel', () => {
       );
       expect(
         container.querySelector('[role="region"][aria-label="Agent suggestions"]')!.textContent,
-      ).toContain('Content Agent suggested 1 change');
+      ).toContain('Content Agent has 1 suggestion for you');
     });
   });
 
