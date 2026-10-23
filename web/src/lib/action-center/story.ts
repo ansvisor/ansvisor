@@ -4,6 +4,7 @@ import { SIGNAL_KINDS, isSignalKind } from '@/lib/signals/registry';
 import { platformName } from '@/lib/signals/names';
 import { formatEstimateRange, sumEstimates, type VolumeEstimate } from '@/lib/volume-estimate';
 import { affectedOf, bareUrl, hostOf, type Affected } from './affected';
+import { removedOnly } from './entity-counts';
 
 /**
  * "Why this action?" and "Goal" written from the action's own data (AC-003):
@@ -212,6 +213,7 @@ export function actionStory(
     volumes,
     createdAt,
     dueDate,
+    payload = {},
   }: {
     /** The signals the Affected list was built from. */
     signals: Signal[];
@@ -219,6 +221,8 @@ export function actionStory(
     volumes: Map<string, VolumeEstimate> | null;
     createdAt: string;
     dueDate: string | null;
+    /** The action as it reads now (AC-009): what was removed since isn't told. */
+    payload?: Record<string, unknown>;
   },
   t: Translator,
   format: StoryFormat,
@@ -228,7 +232,7 @@ export function actionStory(
   // Told from the lead family's signals alone, so the counts match the verb:
   // a competitor's prompts are not "lost citations".
   const mine = signals.filter((signal) => storyFamily(signal) === family);
-  const affected = affectedOf(mine);
+  const affected = affectedOf(mine, removedOnly(payload));
   const subject = subjectOf(affected, family, mine);
 
   // The subject: "7 prompts in AI Rank Tracker (28–42k AI searches a month, estimated)".

@@ -41,7 +41,7 @@ import { getSiteTrust } from '@/lib/actions/audits';
 import { getContentAuthors } from '@/lib/actions/content-authors';
 import { stopAgentRun } from '@/lib/content/agent-runs-client';
 import { agentWriteRequest, useRuleDescriber } from '@/lib/content/agent-write';
-import { authorInitials, type AuthorsRead } from '@/lib/content/authors';
+import { authorInitials, canEditAuthor, type AuthorsRead } from '@/lib/content/authors';
 import type { SiteTrust } from '@/lib/content/site-trust';
 import {
   AGENT_POLL_MS,
@@ -222,6 +222,8 @@ export function DraftEditor({
   // The page as written now, for the side panel's Sources.
   const [pageHtml, setPageHtml] = useState(draft.bodyHtml);
   const pageReadTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  // Quality's Show marks a block for a moment: a second Show starts the moment again.
+  const flashTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   useEffect(() => () => clearTimeout(pageReadTimer.current), []);
   const [status, setStatus] = useState(draft.status);
   const [marking, setMarking] = useState(false);
@@ -410,8 +412,15 @@ export function DraftEditor({
     reads,
   });
   // How well the page reads as written (Quality spec, CE-036/039): read in the
-  // browser, no AI cost; off until Quality's first phase is live.
-  const language = useBrandStore((s) => s.brands.find((b) => b.id === draft.brandId)?.language);
+  // browser, no AI cost; off until Quality's first phase is live. Read in the
+  // language the page is written in: its Language rule when that is on (the
+  // agent writes in it, and it can differ per draft), else the brand's.
+  const brandLanguage = useBrandStore(
+    (s) => s.brands.find((b) => b.id === draft.brandId)?.language,
+  );
+  const languageRule = rules.rules.find(({ rule }) => rule.key === 'language')?.rule;
+  const language =
+    languageRule?.on && languageRule.current.trim() ? languageRule.current : brandLanguage;
   const qualityOn = qualityPhase() >= 1;
   const readable = useMemo(
     () => (qualityOn ? readability(pageHtml, language) : null),
@@ -492,6 +501,7 @@ export function DraftEditor({
         eeat: eeatScore,
         trust: trustScore,
         author: pageAuthor,
+        canEdit: !!pageAuthor && !!authorsRead && canEditAuthor(pageAuthor, authorsRead.me),
         hasAuthors,
         brandName,
         siteTrust,
@@ -896,8 +906,9 @@ export function DraftEditor({
       block: 'center',
       behavior: 'smooth',
     });
+    clearTimeout(flashTimer.current);
     editor.view.dispatch(editor.state.tr.setMeta(flashKey, at));
-    setTimeout(() => {
+    flashTimer.current = setTimeout(() => {
       if (!editor.isDestroyed) editor.view.dispatch(editor.state.tr.setMeta(flashKey, null));
     }, 1200);
   };
