@@ -40,7 +40,7 @@ import {
 import { getContentAuthors } from '@/lib/actions/content-authors';
 import { stopAgentRun } from '@/lib/content/agent-runs-client';
 import { agentWriteRequest, useRuleDescriber } from '@/lib/content/agent-write';
-import { authorInitials, type AuthorsRead } from '@/lib/content/authors';
+import { authorInitials, canEditAuthor, type AuthorsRead } from '@/lib/content/authors';
 import {
   AGENT_POLL_MS,
   CONTENT_LIBRARY_PATH,
@@ -446,6 +446,7 @@ export function DraftEditor({
         eeat: eeatScore,
         trust: null,
         author: pageAuthor,
+        canEdit: !!pageAuthor && !!authorsRead && canEditAuthor(pageAuthor, authorsRead.me),
         hasAuthors: (authorsRead?.authors.length ?? 0) > 0,
         brandName,
       }

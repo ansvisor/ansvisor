@@ -61,12 +61,14 @@ function read(
   readability: Readability | null,
   author: ContentAuthor | null = ada,
   hasAuthors = true,
+  canEdit = true,
 ): QualityRead {
   return {
     readability,
     eeat: eeat({ author }),
     trust: null,
     author,
+    canEdit,
     hasAuthors,
     brandName: 'Acme',
   };
@@ -163,6 +165,30 @@ describe('QualityTab', () => {
     )!;
     expect(row.textContent).toContain('+40 E-E-A-TAda Lovelace has no short bio or profile links');
     expect(row.querySelector('a')!.getAttribute('href')).toBe('/dashboard/settings/authors');
+  });
+
+  it("says who can complete the profile when the reader can't edit the author", async () => {
+    await render(read(result, { ...ada, bio: null }, true, false));
+    const row = [...container.querySelectorAll('li')].find((li) =>
+      li.textContent?.includes('Ada Lovelace'),
+    )!;
+    expect(row.textContent).toContain('Ada Lovelace has no short bio');
+    expect(row.textContent).toContain(
+      'Whoever added Ada Lovelace or an admin can add a short bio in Settings › Authors.',
+    );
+    expect(row.querySelector('a')).toBeNull();
+    expect(row.querySelector('button')).toBeNull();
+  });
+
+  it('names the author among who can when they are a member', async () => {
+    await render(read(result, { ...ada, sameAs: [], userId: 'u2' }, true, false));
+    const row = [...container.querySelectorAll('li')].find((li) =>
+      li.textContent?.includes('Ada Lovelace'),
+    )!;
+    expect(row.textContent).toContain(
+      'Ada Lovelace, whoever added them or an admin can add a profile link in Settings › Authors.',
+    );
+    expect(row.querySelector('a')).toBeNull();
   });
 
   it('sends to Settings › Authors when the workspace has no author yet', async () => {

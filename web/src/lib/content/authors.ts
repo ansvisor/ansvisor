@@ -40,6 +40,14 @@ export function authorInitials(name: string): string {
     .join('');
 }
 
+/**
+ * Whether the member reading may edit an author: whoever added it, the
+ * author themself or an admin, as the table's update policy says.
+ */
+export function canEditAuthor(author: ContentAuthor, me: AuthorsRead['me']): boolean {
+  return author.userId === me.id || author.createdBy === me.id || me.role === 'admin';
+}
+
 /** The most profile links an author keeps (00252). */
 export const MAX_PROFILES = 10;
 /** The longest profile link. */

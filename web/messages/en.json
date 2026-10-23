@@ -4144,6 +4144,11 @@
               "both": "Add them in Settings › Authors: two sentences on what they know, and a LinkedIn or other profile link.",
               "bio": "Add a short bio in Settings › Authors: two sentences on what they know.",
               "links": "Add a LinkedIn or other profile link in Settings › Authors."
+            },
+            "askOthers": {
+              "both": "{member, select, yes {{name}, whoever added them or an admin can add a short bio and a profile link in Settings › Authors.} other {Whoever added {name} or an admin can add a short bio and a profile link in Settings › Authors.}}",
+              "bio": "{member, select, yes {{name}, whoever added them or an admin can add a short bio in Settings › Authors.} other {Whoever added {name} or an admin can add a short bio in Settings › Authors.}}",
+              "links": "{member, select, yes {{name}, whoever added them or an admin can add a profile link in Settings › Authors.} other {Whoever added {name} or an admin can add a profile link in Settings › Authors.}}"
             }
           },
           "avgSentence": {
