@@ -76,6 +76,17 @@ describe('QualityTab', () => {
     expect(onShow).toHaveBeenCalledWith('A very long sentence.');
   });
 
+  it('asks to join short sentences when they run under the range', async () => {
+    await render({
+      ...result,
+      checks: result.checks.map((c) =>
+        c.id === 'avgSentence' ? { ...c, value: 8, count: -1 } : c,
+      ),
+    });
+    expect(container.textContent).toContain('Sentences average 8 words');
+    expect(container.textContent).toContain('join some short ones');
+  });
+
   it('says when the page is too short to read, or reads well', async () => {
     await render({ score: null, checks: [], words: 12 });
     expect(container.textContent).toContain('Write a few paragraphs');

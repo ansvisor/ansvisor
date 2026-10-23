@@ -129,6 +129,7 @@ function line(t: T, check: ReadabilityCheck): string {
 
 /** Its detail line: what to do. */
 function detail(t: T, check: ReadabilityCheck): string {
+  if (check.id === 'avgSentence' && check.count < 0) return t('checks.avgSentence.detailShort');
   if (check.id === 'readingLevel') {
     return check.formula
       ? t('checks.readingLevel.detail', { target: check.target ?? 60 })

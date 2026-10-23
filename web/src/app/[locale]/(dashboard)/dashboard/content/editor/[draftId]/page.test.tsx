@@ -2204,9 +2204,10 @@ describe('the side panel', () => {
       const chip = [...container.querySelectorAll<HTMLButtonElement>('header button')].find((b) =>
         b.textContent?.startsWith('Quality'),
       )!;
-      expect(chip.textContent).toMatch(/^Quality \d+$/);
+      // Its band is read out too, not only shown in colour.
+      expect(chip.textContent).toMatch(/^Quality \d+ · (Strong|Can improve|Needs work)$/);
       await act(async () => chip.click());
-      expect(selectedSegment()).toMatch(/^Quality\d+$/);
+      expect(selectedSegment()).toMatch(/^Quality\d+ · (Strong|Can improve|Needs work)$/);
       expect(panel()!.textContent).toContain('Readability');
       expect(panel()!.textContent).toContain('Not a Google score.');
     });

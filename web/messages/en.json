@@ -4097,7 +4097,8 @@
         "tooShort": "Write a few paragraphs: Readability is read from the page as you write.",
         "suggestionsLabel": "What would raise it",
         "nothingToRaise": "Nothing to raise here: the page reads well.",
-        "gain": "+{gain} {score}",
+        "gain": "+{gain, number} {score}",
+        "band": "{score, number}, {band}",
         "show": "Show",
         "formulas": {
           "flesch": "Flesch Reading Ease",
@@ -4108,15 +4109,16 @@
         },
         "checks": {
           "avgSentence": {
-            "line": "Sentences average {words} words",
-            "detail": "Aim for 15–20 words: shorter sentences read faster, and AI answers quote them whole."
+            "line": "Sentences average {words, number} words",
+            "detail": "Aim for 15–20 words: shorter sentences read faster, and AI answers quote them whole.",
+            "detailShort": "Aim for 15–20 words: join some short ones, so each says one whole thing."
           },
           "longSentences": {
             "line": "{count, plural, one {# sentence} other {# sentences}} over 35 words",
             "detail": "Split each into two. Show goes to the first."
           },
           "readingLevel": {
-            "line": "Reading level {score} ({formula})",
+            "line": "Reading level {score, number} ({formula})",
             "detail": "Aim for {target} or more: shorter words and sentences.",
             "lineLength": "Long words and sentences",
             "detailLength": "No reading-level formula for this language yet: read by sentence and word length."
@@ -4130,7 +4132,7 @@
             "detail": "Break them up: short paragraphs are easier to read and to quote."
           },
           "headingSpacing": {
-            "line": "{count, plural, one {# section} other {# sections}} over {words} words without a heading",
+            "line": "{count, plural, one {# section} other {# sections}} over {words, number} words without a heading",
             "detail": "Add an H2 or H3 every 200–300 words."
           },
           "passiveJargon": {
