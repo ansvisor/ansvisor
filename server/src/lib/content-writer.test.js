@@ -208,7 +208,8 @@ describe('startDraftWriting', () => {
       'org-1',
       expect.objectContaining({ feature: 'content', modelId: expect.any(String) }),
     );
-    expect(draftUpdates()[0]).toMatchObject({ agent_state: 'writing' });
+    // Which run holds it, for every device (00247).
+    expect(draftUpdates()[0]).toMatchObject({ agent_state: 'writing', agent_run: 'write' });
 
     await vi.waitFor(() => expect(draftUpdates()).toHaveLength(2));
     expect(draftUpdates()[1]).toMatchObject({
@@ -553,6 +554,21 @@ describe('Rewrite the page to these rules', () => {
     // Refused before anything was held or claimed.
     expect(reserveAiBudget).not.toHaveBeenCalled();
     expect(draftUpdates()).toEqual([]);
+  });
+
+  it('claims the draft as a rewrite, so every device tries a failed one again as one', async () => {
+    rows.content_drafts = existing;
+    answer('<h1>Pour-over</h1><p>[[KEEP 1]]</p><p>[[KEEP 2]]</p><p>Shorter.</p>');
+    await expect(
+      startDraftWriting({
+        draftId: DRAFT,
+        brandId: BRAND,
+        input: input({ locked }),
+        rewrite: true,
+      }),
+    ).resolves.toEqual({ started: true });
+    expect(draftUpdates()[0]).toMatchObject({ agent_state: 'writing', agent_run: 'rewrite' });
+    await vi.waitFor(() => expect(draftUpdates().length).toBeGreaterThan(1));
   });
 
   it('leaves the whole page as one suggestion, with what it kept put back as it was', async () => {

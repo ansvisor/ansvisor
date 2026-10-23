@@ -481,6 +481,17 @@ export async function hasOpenSuggestions(draftId) {
   return (data ?? []).some((row) => row.batch_id === latest && row.status === 'open');
 }
 
+/** A 'writing' this old was left by a server that stopped: it can start again. */
+export const WRITING_STALE_MS = 10 * 60_000;
+
+/** Whether Start or a rewrite holds the draft now (agent_state, 00219). */
+export function agentWriting(draft, now = Date.now()) {
+  return (
+    draft.agent_state === 'writing' &&
+    new Date(draft.agent_state_at).getTime() > now - WRITING_STALE_MS
+  );
+}
+
 /**
  * Runs the agent on a draft: reads it and its brand, charges the AI usage
  * budget, asks the model, and keeps the suggestions the editor can apply as
@@ -492,7 +503,9 @@ export async function hasOpenSuggestions(draftId) {
 export async function fixDraftRules({ draftId, brandId, input }) {
   const { data: draft, error: draftError } = await supabaseAdmin
     .from('content_drafts')
-    .select('id, brand_id, title, body_html, page_type, action_id, status, source_url')
+    .select(
+      'id, brand_id, title, body_html, page_type, action_id, status, source_url, agent_state, agent_state_at',
+    )
     .eq('id', draftId)
     .maybeSingle();
   if (draftError) throw draftError;
@@ -510,6 +523,14 @@ export async function fixDraftRules({ draftId, brandId, input }) {
     throw Object.assign(new Error('Decide the open suggestions first'), {
       status: 409,
       code: 'open_suggestions',
+    });
+  }
+  // Start or a rewrite holds the draft: a batch here would drop its answer,
+  // already charged, when it lands (another tab, another member, the API).
+  if (agentWriting(draft)) {
+    throw Object.assign(new Error('The agent is already writing it'), {
+      status: 409,
+      code: 'writing',
     });
   }
 
