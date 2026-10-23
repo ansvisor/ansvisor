@@ -29,6 +29,17 @@ export const ARTICLE_PAGE_TYPES: readonly PageType[] = [
 export const isArticlePage = (type: string | null) =>
   type === null || (ARTICLE_PAGE_TYPES as readonly string[]).includes(type);
 
+/**
+ * Words in square brackets where a real name, quote or number goes ("[figure,
+ * source]"): a placeholder the Content Agent left for the person to fill, as
+ * the editor's placeholder to-do reads it (CE-044). Not a footnote ("[1]"),
+ * a checkbox ("[x]"), "[sic]" or a Markdown link's text.
+ */
+const PLACEHOLDER = /\[(?!sic\])(?=[^[\]\n]*\p{L})[^[\]\n]{2,}\](?!\()/iu;
+
+/** Whether the title still has a placeholder: it would ship as the headline. */
+export const titleHasPlaceholder = (title: string) => PLACEHOLDER.test(title);
+
 /** The page's first image with a full https address, as JSON-LD's image. */
 export function firstImage(html: string): string | null {
   const doc = new DOMParser().parseFromString(html, 'text/html');
@@ -91,7 +102,8 @@ export function articleJsonLd({
   return {
     '@context': 'https://schema.org',
     '@type': 'Article',
-    ...(title.trim() ? { headline: title.trim() } : {}),
+    // A placeholder isn't the page's headline: it is left out until filled.
+    ...(title.trim() && !titleHasPlaceholder(title) ? { headline: title.trim() } : {}),
     ...(image ? { image } : {}),
     ...(author !== undefined ? { author: person ?? organization } : {}),
     publisher: organization,

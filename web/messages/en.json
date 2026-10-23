@@ -4167,6 +4167,7 @@
         },
         "linksPending": "Still reading {count, plural, one {# of the page's links} other {# of the page's links}}, so Trust may change.",
         "datesNote": "The dates are today's: change them if the page goes out on another day.",
+        "headlineLeftOut": "The title still has a placeholder in square brackets, so the code leaves the headline out. Fill it in, and the headline comes back here.",
         "states": {
           "check": "check it",
           "missing": "missing"
