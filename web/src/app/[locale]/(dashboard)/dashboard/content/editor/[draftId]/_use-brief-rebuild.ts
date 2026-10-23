@@ -40,6 +40,7 @@ export function useBriefRebuild({
   onRebuilt: (brief: DraftBrief) => void;
 }) {
   const t = useTranslations('contentEditor.editor.brief');
+  const tCard = useTranslations('contentEditor.editor.agentCard');
   const [rebuilding, setRebuilding] = useState(false);
 
   const rebuild = async (
@@ -80,7 +81,9 @@ export function useBriefRebuild({
         }),
       );
       if ('error' in result) {
-        toast.error(t(`rebuildErrors.${result.error}`));
+        // Stopped from the agent card (CE-027): no failure, nothing changed.
+        if (result.error === 'stopped') toast(tCard('stopped'));
+        else toast.error(t(`rebuildErrors.${result.error}`));
         return false;
       }
       toast.success(t('rebuilt', { count: builtFromCount(result.brief) }));

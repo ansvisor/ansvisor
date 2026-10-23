@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useFormatter, useTranslations } from 'next-intl';
-import { ChevronDown, Loader2, Sparkles } from 'lucide-react';
+import { ChevronDown, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -43,6 +43,7 @@ import { formatNumber } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { useUserRole } from '@/hooks/use-user-role';
 import { RunCard } from './_run-card';
+import { WorkingDots } from './_working-dots';
 import type { DraftRulesState } from './_use-draft-rules';
 
 /** Rules with an explanation on hover (spec §10). */
@@ -136,7 +137,7 @@ function RunAgentButton({
         if (mode === 'rewrite') onMode('fix');
       }}
     >
-      {running && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+      {running && <WorkingDots className="ml-0" />}
       {running ? t('working') : mode === 'rewrite' ? t('rewriteLabel') : t('label')}
     </Button>
   );

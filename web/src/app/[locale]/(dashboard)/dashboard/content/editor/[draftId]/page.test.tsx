@@ -19,6 +19,12 @@ const getContentImpact = vi.fn();
 const getContentResults = vi.fn();
 const getDraftSources = vi.fn();
 const setDraftSourceIncluded = vi.fn();
+const readAgentRun = vi.fn();
+const stopAgentRun = vi.fn();
+vi.mock('@/lib/content/agent-runs-client', () => ({
+  readAgentRun: (...args: unknown[]) => readAgentRun(...args),
+  stopAgentRun: (...args: unknown[]) => stopAgentRun(...args),
+}));
 const getDraftBrief = vi.fn();
 const rebuildDraftBrief = vi.fn();
 const saveDraftRules = vi.fn();
@@ -221,6 +227,8 @@ beforeEach(() => {
   getContentImpact.mockReset().mockResolvedValue(null);
   getContentResults.mockReset().mockResolvedValue(null);
   getDraftSources.mockReset().mockResolvedValue(null);
+  readAgentRun.mockReset().mockResolvedValue(null);
+  stopAgentRun.mockReset().mockResolvedValue({ stopped: true });
   getDraftBrief.mockReset().mockResolvedValue({ brief: null });
   rebuildDraftBrief.mockReset();
   saveDraftRules.mockReset().mockResolvedValue(undefined);
@@ -524,6 +532,49 @@ describe('the content editor', () => {
       );
       expect(status.textContent).toContain('Taking longer than usual.');
       expect(status.textContent).not.toContain('Usually a minute or two.');
+    });
+
+    it('shows its real steps, and stops it with nothing changed (CE-027/035)', async () => {
+      getContentDraft.mockResolvedValue(
+        draft({
+          status: 'draft',
+          method: 'create',
+          agentState: 'writing',
+          agentSince: new Date().toISOString(),
+        }),
+      );
+      readAgentRun.mockResolvedValue({
+        id: 'r1',
+        kind: 'write',
+        steps: [
+          { key: 'read_sources', count: 52 },
+          { key: 'write_page', count: null },
+          { key: 'check_rules', count: null },
+        ],
+        step: 1,
+        startedAt: new Date().toISOString(),
+        finishedAt: null,
+        stoppedAt: null,
+        outcome: null,
+      });
+      await renderPage();
+      await act(async () => {});
+      const status = container.querySelector('[role="status"]')!;
+      expect([...status.querySelectorAll('li')].map((li) => li.textContent)).toEqual([
+        'Reading 52 sources',
+        'Writing the page',
+        'Checking rules',
+      ]);
+      expect(status.querySelector('[aria-current="step"]')!.textContent).toBe('Writing the page');
+      // No spinning ring anywhere (v1.1 §2.4).
+      expect(status.querySelector('.animate-spin')).toBeNull();
+
+      const reads = getContentDraft.mock.calls.length;
+      await act(async () => button('Stop')!.click());
+      expect(stopAgentRun).toHaveBeenCalledWith('d1', 'b1');
+      expect(toast).toHaveBeenCalledWith('Stopped · nothing was changed');
+      // The page as the server left it, let go of.
+      expect(getContentDraft.mock.calls.length).toBe(reads + 1);
     });
 
     it('says the agent couldn’t finish, and tries again with the page and rules in effect', async () => {
@@ -1806,6 +1857,60 @@ describe('the side panel', () => {
     ).toContain('forecast accuracy, pipeline');
   });
 
+  it('shows the agent working while the brief rebuilds, and a stopped rebuild changes nothing', async () => {
+    getDraftSources.mockResolvedValue({
+      data: {
+        prompts: [],
+        fanouts: [{ query: 'pipeline forecasting', platforms: ['copilot-web'], searched: 2 }],
+        citedPages: [],
+        gscQueries: [],
+        brandDomains: [],
+        competitorDomains: [],
+      },
+      choices: [],
+    });
+    let answer: (value: { error: 'stopped' }) => void = () => {};
+    rebuildDraftBrief.mockReturnValue(new Promise((resolve) => (answer = resolve)));
+    getContentDraft.mockResolvedValue(draft({ sourceUrl: 'https://acme.example.com/pricing' }));
+    window.innerWidth = 1440;
+    await renderPage();
+    await pickTab('Sources');
+    await act(async () => button('Rebuild with selection')!.click());
+    const card = () => container.querySelector('[role="region"][aria-label="Agent suggestions"]');
+    expect(card()!.getAttribute('aria-busy')).toBe('true');
+
+    await act(async () => answer({ error: 'stopped' }));
+    expect(toast).toHaveBeenCalledWith('Stopped · nothing was changed');
+    expect(toast.error).not.toHaveBeenCalled();
+    expect(card()).toBeNull();
+  });
+
+  it('stops showing the agent at work when the panel closes mid-rebuild', async () => {
+    getDraftSources.mockResolvedValue({
+      data: {
+        prompts: [],
+        fanouts: [{ query: 'pipeline forecasting', platforms: ['copilot-web'], searched: 2 }],
+        citedPages: [],
+        gscQueries: [],
+        brandDomains: [],
+        competitorDomains: [],
+      },
+      choices: [],
+    });
+    rebuildDraftBrief.mockReturnValue(new Promise(() => {}));
+    getContentDraft.mockResolvedValue(draft({ sourceUrl: 'https://acme.example.com/pricing' }));
+    window.innerWidth = 1440;
+    await renderPage();
+    await pickTab('Sources');
+    await act(async () => button('Rebuild with selection')!.click());
+    const card = () => container.querySelector('[role="region"][aria-label="Agent suggestions"]');
+    expect(card()).not.toBeNull();
+
+    // The rebuild is the panel's: once it's gone, nothing here waits on it.
+    await act(async () => button('Hide side panel')!.click());
+    expect(card()).toBeNull();
+  });
+
   it('says under Run Agent which sources the agent writes from, live as Sources changes them', async () => {
     getDraftSources.mockResolvedValue({
       data: {
@@ -2058,12 +2163,268 @@ describe('the side panel', () => {
       const card = () =>
         container.querySelector('[role="region"][aria-label="Agent suggestions"]')!;
       expect(card().getAttribute('aria-busy')).toBe('true');
+      // No run read yet: no steps, and nothing for Stop to stop.
       expect(card().textContent).toBe('Content Agent is working');
+      // Where its change will most likely land, a card that it is drafting.
+      const drafting = () => container.querySelector('.ProseMirror [data-agent-drafting]');
+      expect(drafting()!.textContent).toBe(
+        'Content Agent is drafting a change here…Drafting from your rules…',
+      );
 
       await act(async () => answer({ count: 1 }));
       await act(async () => {});
       expect(card().getAttribute('aria-busy')).toBe('false');
       expect(card().textContent).toContain('Content Agent has 1 suggestion for you');
+      expect(drafting()).toBeNull();
+    });
+
+    it('shows the run’s steps while it works, and Stop leaves the page as it was', async () => {
+      getContentDraft.mockResolvedValue(traced);
+      getDraftSuggestions.mockResolvedValue([]);
+      let answer: (value: { error: 'stopped' }) => void = () => {};
+      fixDraftRules.mockReturnValue(new Promise((resolve) => (answer = resolve)));
+      readAgentRun.mockResolvedValue({
+        id: 'r1',
+        kind: 'fix',
+        steps: [
+          { key: 'read_pages', count: 20 },
+          { key: 'match_fanouts', count: 21 },
+          { key: 'check_queries', count: 0 },
+          { key: 'write_changes', count: null },
+        ],
+        step: 3,
+        startedAt: new Date().toISOString(),
+        finishedAt: null,
+        stoppedAt: null,
+        outcome: null,
+      });
+      await openRules();
+      await act(async () => panelButton('Run Agent').click());
+      await act(async () => {});
+      const card = container.querySelector('[role="region"][aria-label="Agent suggestions"]')!;
+      // Its steps, named by the data; none about data it has none of.
+      expect([...card.querySelectorAll('li')].map((li) => li.textContent)).toEqual([
+        'Reading 20 cited pages',
+        'Matching 21 fan-outs',
+        'Writing changes',
+      ]);
+      expect(card.querySelector('[aria-current="step"]')!.textContent).toBe('Writing changes');
+
+      const stop = [...card.querySelectorAll('button')].find((b) => b.textContent === 'Stop')!;
+      await act(async () => stop.click());
+      expect(stopAgentRun).toHaveBeenCalledWith('d1', 'b1');
+      expect(stop.disabled).toBe(true);
+      await act(async () => answer({ error: 'stopped' }));
+      await act(async () => {});
+      expect(toast).toHaveBeenCalledWith('Stopped · nothing was changed');
+      expect(toast.error).not.toHaveBeenCalled();
+      expect(container.querySelector('[role="region"][aria-label="Agent suggestions"]')).toBeNull();
+    });
+
+    const fixRun = {
+      id: 'r1',
+      kind: 'fix' as const,
+      steps: [{ key: 'write_changes' as const, count: null }],
+      step: 0,
+      startedAt: new Date().toISOString(),
+      finishedAt: null,
+      stoppedAt: null,
+      outcome: null,
+    };
+    const agentStop = () =>
+      [
+        ...container
+          .querySelector('[role="region"][aria-label="Agent suggestions"]')!
+          .querySelectorAll('button'),
+      ].find((b) => b.textContent === 'Stop')!;
+
+    it('says stopped when the answer is lost after Stop, and waits for no batch', async () => {
+      getContentDraft.mockResolvedValue(traced);
+      getDraftSuggestions.mockResolvedValue([]);
+      let answer: (value: { error: 'unconfirmed' }) => void = () => {};
+      fixDraftRules.mockReturnValue(new Promise((resolve) => (answer = resolve)));
+      readAgentRun.mockResolvedValue(fixRun);
+      await openRules();
+      await act(async () => panelButton('Run Agent').click());
+      await act(async () => {});
+      const reads = getDraftSuggestions.mock.calls.length;
+      await act(async () => agentStop().click());
+      await act(async () => answer({ error: 'unconfirmed' }));
+      await act(async () => {});
+      expect(toast).toHaveBeenCalledWith('Stopped · nothing was changed');
+      expect(toast.error).not.toHaveBeenCalled();
+      expect(getDraftSuggestions.mock.calls.length).toBe(reads);
+    });
+
+    it('lets Stop be pressed again when the run had already ended', async () => {
+      getContentDraft.mockResolvedValue(traced);
+      getDraftSuggestions.mockResolvedValue([]);
+      let answer: (value: { count: number }) => void = () => {};
+      fixDraftRules.mockReturnValue(new Promise((resolve) => (answer = resolve)));
+      readAgentRun.mockResolvedValue(fixRun);
+      stopAgentRun.mockResolvedValue({ stopped: false });
+      await openRules();
+      await act(async () => panelButton('Run Agent').click());
+      await act(async () => {});
+      await act(async () => agentStop().click());
+      expect(agentStop().disabled).toBe(false);
+      expect(toast).not.toHaveBeenCalled();
+      expect(toast.error).not.toHaveBeenCalled();
+      await act(async () => answer({ count: 0 }));
+    });
+
+    it('shows no steps of another kind’s run, still open when Fix starts', async () => {
+      getContentDraft.mockResolvedValue(traced);
+      getDraftSuggestions.mockResolvedValue([]);
+      let answer: (value: { count: number }) => void = () => {};
+      fixDraftRules.mockReturnValue(new Promise((resolve) => (answer = resolve)));
+      // A rewrite the server hasn't closed yet: not this run.
+      readAgentRun.mockResolvedValue({
+        ...fixRun,
+        kind: 'rewrite',
+        steps: [{ key: 'read_sources', count: 52 }],
+      });
+      await openRules();
+      await act(async () => panelButton('Run Agent').click());
+      await act(async () => {});
+      const card = container.querySelector('[role="region"][aria-label="Agent suggestions"]')!;
+      expect(card.textContent).toBe('Content Agent is working');
+      // The agent's dots on Run Agent too: no spinning ring anywhere.
+      expect(container.querySelector('.animate-spin')).toBeNull();
+      await act(async () => answer({ count: 0 }));
+    });
+
+    it('stops the brief from the card; a later Fix’s lost answer still waits for its batch', async () => {
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
+      try {
+        getDraftSources.mockResolvedValue({
+          data: {
+            prompts: [],
+            fanouts: [{ query: 'pipeline forecasting', platforms: ['copilot-web'], searched: 2 }],
+            citedPages: [],
+            gscQueries: [],
+            brandDomains: [],
+            competitorDomains: [],
+          },
+          choices: [],
+        });
+        getContentDraft.mockResolvedValue(traced);
+        getDraftSuggestions.mockResolvedValue([]);
+        let rebuilt: (value: { error: 'stopped' }) => void = () => {};
+        rebuildDraftBrief.mockReturnValue(new Promise((resolve) => (rebuilt = resolve)));
+        readAgentRun.mockResolvedValue({
+          ...fixRun,
+          kind: 'brief',
+          steps: [
+            { key: 'read_sources', count: 1 },
+            { key: 'pick_fanouts', count: null },
+            { key: 'write_outline', count: null },
+          ],
+          step: 1,
+        });
+        await openRules();
+        await pickTab('Sources');
+        await act(async () => button('Rebuild with selection')!.click());
+        await act(async () => {});
+        const card = () =>
+          container.querySelector('[role="region"][aria-label="Agent suggestions"]')!;
+        expect([...card().querySelectorAll('li')].map((li) => li.textContent)).toEqual([
+          'Reading 1 source',
+          'Picking top fan-outs',
+          'Writing the outline',
+        ]);
+        // The agent's dots on the button, not a spinning ring.
+        expect(container.querySelector('.animate-spin')).toBeNull();
+
+        await act(async () => agentStop().click());
+        expect(stopAgentRun).toHaveBeenCalledWith('d1', 'b1');
+        await act(async () => rebuilt({ error: 'stopped' }));
+        expect(toast).toHaveBeenCalledTimes(1);
+        expect(toast).toHaveBeenCalledWith('Stopped · nothing was changed');
+
+        // Fix next, its answer lost on the way: no Stop was pressed for it.
+        readAgentRun.mockResolvedValue(null);
+        fixDraftRules.mockResolvedValue({ error: 'unconfirmed' });
+        await pickTab('Rules');
+        await act(async () => panelButton('Run Agent').click());
+        await act(async () => {});
+        expect(toast).toHaveBeenCalledTimes(1);
+        getDraftSuggestions.mockResolvedValue([agentSuggestion]);
+        await act(async () => void (await vi.advanceTimersByTimeAsync(5_000)));
+        await act(async () => {});
+        expect(toast.success).toHaveBeenCalledWith(
+          'Content Agent suggested 1 change · review them in the page',
+        );
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('keeps the brief’s buttons from starting it while Fix runs', async () => {
+      getDraftSources.mockResolvedValue({
+        data: {
+          prompts: [],
+          fanouts: [],
+          citedPages: [
+            {
+              url: 'https://a.example/x',
+              title: null,
+              domain: 'a.example',
+              citations: 3,
+              answers: 2,
+            },
+            {
+              url: 'https://b.example/y',
+              title: null,
+              domain: 'b.example',
+              citations: 1,
+              answers: 1,
+            },
+          ],
+          gscQueries: [],
+          brandDomains: [],
+          competitorDomains: [],
+        },
+        choices: [],
+      });
+      getContentDraft.mockResolvedValue(traced);
+      getDraftSuggestions.mockResolvedValue([]);
+      let answer: (value: { count: number }) => void = () => {};
+      fixDraftRules.mockReturnValue(new Promise((resolve) => (answer = resolve)));
+      await openRules();
+      await act(async () => panelButton('Run Agent').click());
+      await act(async () => {});
+      // Only cited pages kept: no "0 fan-outs".
+      expect(container.querySelector('.ProseMirror [data-agent-drafting]')!.textContent).toContain(
+        'Drafting from 2 cited pages…',
+      );
+      await pickTab('Sources');
+      expect(button('Rebuild with selection')!.disabled).toBe(true);
+      expect(panel()!.textContent).toContain(
+        'Content Agent is already working on this page. Wait for it to finish.',
+      );
+      await act(async () => answer({ count: 0 }));
+      expect(button('Rebuild with selection')!.disabled).toBe(false);
+    });
+
+    it('shows no steps of a run that has ended', async () => {
+      getContentDraft.mockResolvedValue(traced);
+      getDraftSuggestions.mockResolvedValue([]);
+      let answer: (value: { count: number }) => void = () => {};
+      fixDraftRules.mockReturnValue(new Promise((resolve) => (answer = resolve)));
+      // The draft's last run, before this one is written.
+      readAgentRun.mockResolvedValue({
+        ...fixRun,
+        finishedAt: new Date().toISOString(),
+        outcome: 'done',
+      });
+      await openRules();
+      await act(async () => panelButton('Run Agent').click());
+      await act(async () => {});
+      const card = container.querySelector('[role="region"][aria-label="Agent suggestions"]')!;
+      expect(card.textContent).toBe('Content Agent is working');
+      expect(card.querySelector('li')).toBeNull();
+      await act(async () => answer({ count: 0 }));
     });
 
     it('sends the open rules and leaves the agent’s batch for review', async () => {
@@ -2265,6 +2626,56 @@ describe('the side panel', () => {
       await openRules();
       const card = container.querySelector<HTMLElement>('[data-suggestion="n1"]')!;
       expect(card.querySelector('p')!.textContent).toBe('In 2026 teams plan; by 20261, most do.');
+    });
+
+    it('says when Stop couldn’t reach the agent, and drafts from the kept data', async () => {
+      getDraftSources.mockResolvedValue({
+        data: {
+          prompts: [],
+          fanouts: [{ query: 'pipeline forecasting', platforms: ['copilot-web'], searched: 2 }],
+          citedPages: [
+            {
+              url: 'https://a.example/x',
+              title: null,
+              domain: 'a.example',
+              citations: 3,
+              answers: 2,
+            },
+          ],
+          gscQueries: [],
+          brandDomains: [],
+          competitorDomains: [],
+        },
+        choices: [],
+      });
+      getContentDraft.mockResolvedValue(traced);
+      getDraftSuggestions.mockResolvedValue([]);
+      let answer: (value: { count: number }) => void = () => {};
+      fixDraftRules.mockReturnValue(new Promise((resolve) => (answer = resolve)));
+      readAgentRun.mockResolvedValue({
+        id: 'r1',
+        kind: 'fix',
+        steps: [{ key: 'write_changes', count: null }],
+        step: 0,
+        startedAt: new Date().toISOString(),
+        finishedAt: null,
+        stoppedAt: null,
+        outcome: null,
+      });
+      stopAgentRun.mockResolvedValue({ error: 'failed' });
+      await openRules();
+      await act(async () => panelButton('Run Agent').click());
+      await act(async () => {});
+      expect(container.querySelector('.ProseMirror [data-agent-drafting]')!.textContent).toContain(
+        'Drafting from 1 cited page and 1 fan-out…',
+      );
+      const card = container.querySelector('[role="region"][aria-label="Agent suggestions"]')!;
+      const stop = [...card.querySelectorAll('button')].find((b) => b.textContent === 'Stop')!;
+      await act(async () => stop.click());
+      expect(toast.error).toHaveBeenCalledWith("Couldn't stop the agent. It may still finish.");
+      // It can be pressed again.
+      expect(stop.disabled).toBe(false);
+      await act(async () => answer({ count: 0 }));
     });
 
     it('says a full batch is the most one run makes, to run it again (C)', async () => {

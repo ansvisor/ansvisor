@@ -1042,6 +1042,50 @@ export type Database = {
           },
         ]
       }
+      content_agent_runs: {
+        Row: {
+          draft_id: string
+          finished_at: string | null
+          id: string
+          kind: string
+          outcome: string | null
+          started_at: string
+          step: number
+          steps: Json
+          stopped_at: string | null
+        }
+        Insert: {
+          draft_id: string
+          finished_at?: string | null
+          id?: string
+          kind: string
+          outcome?: string | null
+          started_at?: string
+          step?: number
+          steps: Json
+          stopped_at?: string | null
+        }
+        Update: {
+          draft_id?: string
+          finished_at?: string | null
+          id?: string
+          kind?: string
+          outcome?: string | null
+          started_at?: string
+          step?: number
+          steps?: Json
+          stopped_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "content_agent_runs_draft_id_fkey"
+            columns: ["draft_id"]
+            isOneToOne: false
+            referencedRelation: "content_drafts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       content_draft_sources: {
         Row: {
           added: boolean

@@ -1661,7 +1661,14 @@ export async function saveDraftBrief(id: string, brief: DraftBrief): Promise<Dra
   return parsed.data;
 }
 
-const BRIEF_REBUILD_ERRORS = ['ai_budget', 'no_subscription', 'no_sources', 'failed'] as const;
+const BRIEF_REBUILD_ERRORS = [
+  'ai_budget',
+  'no_subscription',
+  'no_sources',
+  /** Stopped from the editor (CE-027): the brief stays as it was. */
+  'stopped',
+  'failed',
+] as const;
 export type BriefRebuildError = (typeof BRIEF_REBUILD_ERRORS)[number];
 
 /**
@@ -1711,6 +1718,8 @@ const AGENT_FIX_ERRORS = [
   'empty',
   'open_suggestions',
   'published',
+  /** Stopped from the editor (CE-027): nothing it wrote is kept. */
+  'stopped',
   'failed',
   /** No answer from the API (a timeout on the way): the agent may still finish. */
   'unconfirmed',

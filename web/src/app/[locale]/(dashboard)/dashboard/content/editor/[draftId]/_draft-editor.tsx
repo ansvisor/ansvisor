@@ -35,6 +35,7 @@ import {
   startAgentWriting,
   startPageRewrite,
 } from '@/lib/actions/content-drafts';
+import { stopAgentRun } from '@/lib/content/agent-runs-client';
 import { agentWriteRequest, useRuleDescriber } from '@/lib/content/agent-write';
 import {
   AGENT_POLL_MS,
@@ -57,8 +58,8 @@ import {
   type SuggestionSource,
   type SuggestionStatus,
 } from '@/lib/content/suggestions';
-import { rebuildSources } from '@/lib/content/brief';
-import { buildSourceGroups } from '@/lib/content/sources';
+import { REBUILD_LIMITS, rebuildSources } from '@/lib/content/brief';
+import { buildSourceGroups, includedCounts } from '@/lib/content/sources';
 import {
   cleanHtml,
   formatHtmlSource,
@@ -72,6 +73,9 @@ import { aiTracesFound, lengthWarns, openRulesForAgent } from '@/lib/content/rul
 import { saveBlob } from '@/lib/download';
 import { cn } from '@/lib/utils';
 import { AgentCard } from './_agent-card';
+import { AgentDrafting, draftingKey } from './_agent-drafting';
+import { useAgentRun } from './_use-agent-run';
+import { WorkingDots } from './_working-dots';
 import { DropOverlay, useAttachments } from './_attach';
 import {
   CITED_EDIT_ALLOWED,
@@ -139,6 +143,10 @@ const DOCUMENT_CLASS = cn(
  * batch's save.
  */
 const FIX_WAIT_MS = 90_000;
+
+/** The runs the agent card shows: Fix open rules', or the brief's. */
+const FIX_RUNS = ['fix'] as const;
+const BRIEF_RUNS = ['brief'] as const;
 
 /**
  * The draft's suggestions once a new open batch lands, read every few
@@ -223,6 +231,15 @@ export function DraftEditor({
   const [deciding, setDeciding] = useState(false);
   const [barClosed, setBarClosed] = useState(false);
   const [fixing, setFixing] = useState(false);
+  // The brief the agent writes from the side panel: the card shows it working too.
+  const [briefRebuilding, setBriefRebuilding] = useState(false);
+  // The run Stop was pressed for: the card waits for it to end (CE-027). Another
+  // run under way (one a restarted server left was shown first) can be stopped.
+  const [stoppingRun, setStoppingRun] = useState<string | null>(null);
+  // The Stop sent, and whether it stopped a run: an answer lost after it is no failure.
+  const stopSent = useRef<Promise<boolean> | null>(null);
+  // Whether the side panel's brief is rebuilding, as it last said.
+  const briefNow = useRef(false);
   const tRules = useTranslations('contentEditor.editor.rules');
   const tStatus = useTranslations('contentEditor.editor.rules.status');
   // History keeps the page before the first suggestion accepted here.
@@ -300,6 +317,7 @@ export function DraftEditor({
         onSource: (source) => onSource.current(source),
       }),
       OneH1,
+      AgentDrafting,
     ],
     content: draft.bodyHtml,
     // Rendered on the client only, so the server's HTML can't disagree with it.
@@ -524,6 +542,42 @@ export function DraftEditor({
       editor.state.tr.setMeta(suggestionsKey, { suggestions: cards, labels: suggestionLabels }),
     );
   }, [editor, suggestions, suggestionLabels]);
+
+  // While Fix open rules runs, a dashed card in the page where its change
+  // will most likely land, from which of the kept data (CE-027/035).
+  const keptCounts = useMemo(
+    () =>
+      reads.sources?.data
+        ? includedCounts(
+            buildSourceGroups(reads.sources.data, reads.sources.choices, {
+              title: draft.title,
+              sourceUrl: draft.sourceUrl,
+            }),
+          )
+        : null,
+    [reads.sources, draft.title, draft.sourceUrl],
+  );
+  // As many as the agent gets (rebuildSources).
+  const pages = Math.min(keptCounts?.cited_page ?? 0, REBUILD_LIMITS.pages);
+  const fanouts = Math.min(keptCounts?.fanout ?? 0, REBUILD_LIMITS.fanouts);
+  const draftingText = !fixing
+    ? null
+    : pages && fanouts
+      ? t('agentCard.draftingFrom', { pages, fanouts })
+      : pages
+        ? t('agentCard.draftingFromPages', { pages })
+        : fanouts
+          ? t('agentCard.draftingFromFanouts', { fanouts })
+          : t('agentCard.draftingRules');
+  useEffect(() => {
+    if (!editor || editor.isDestroyed) return;
+    editor.view.dispatch(
+      editor.state.tr.setMeta(draftingKey, {
+        title: t('agentCard.drafting'),
+        text: draftingText,
+      }),
+    );
+  }, [editor, draftingText, t]);
 
   /**
    * Accept, reject, undo (an accepted one) or restore (a rejected one): the
@@ -774,6 +828,8 @@ export function DraftEditor({
           }
         : {}),
     };
+    setStoppingRun(null);
+    stopSent.current = null;
     setFixing(true);
     const asked = Date.now();
     try {
@@ -784,6 +840,12 @@ export function DraftEditor({
         console.error('Failed to hear back from the Content Agent:', err);
         return { error: 'unconfirmed' as const };
       });
+      const stop = stopSent.current;
+      if ('error' in result && result.error === 'unconfirmed' && stop && (await stop)) {
+        // Stopped, and the answer was lost on the way: nothing it had is kept.
+        toast(t('agentCard.stopped'));
+        return;
+      }
       if ('error' in result && result.error === 'unconfirmed') {
         // No answer is not a failure: its batch shows if it lands in time.
         const landed = await agentBatch(draft.id, asked + FIX_WAIT_MS);
@@ -795,6 +857,11 @@ export function DraftEditor({
         setBarClosed(false);
         agentBeforeKept.current = false;
         toast.success(fixedMessage(landed.filter((s) => s.status === 'open').length));
+        return;
+      }
+      if ('error' in result && result.error === 'stopped') {
+        // Stopped from the card: no failure, and nothing changed.
+        toast(t('agentCard.stopped'));
         return;
       }
       if ('error' in result) {
@@ -820,10 +887,43 @@ export function DraftEditor({
       toast.error(t('suggestions.fixErrors.failed'));
     } finally {
       setFixing(false);
+      setStoppingRun(null);
+      stopSent.current = null;
     }
   };
+
+  // The agent at work from this page: Fix open rules, or the brief. Its run,
+  // step by step, and Stop (CE-027/035).
+  const agentWorking = fixing || briefRebuilding;
+  const agentRun = useAgentRun(draft.id, agentWorking, fixing ? FIX_RUNS : BRIEF_RUNS);
+  const stopAgent = async () => {
+    if (!agentRun) return;
+    setStoppingRun(agentRun.id);
+    const request = stopAgentRun(draft.id, draft.brandId).catch((): { error: 'failed' } => ({
+      error: 'failed',
+    }));
+    const sent = request.then((result) => !('error' in result) && result.stopped);
+    stopSent.current = sent;
+    const result = await request;
+    // Nothing to stop, or it couldn't: the run goes on, and says how it ends.
+    if ('error' in result || !result.stopped) {
+      if ('error' in result) toast.error(t('agentCard.stopFailed'));
+      if (stopSent.current === sent) stopSent.current = null;
+      setStoppingRun(null);
+    }
+  };
+  const onBriefRebuilding = useCallback((on: boolean) => {
+    // Only the brief's end clears its Stop: the panel says "not rebuilding" as
+    // it opens and closes, while Fix may be the one stopping.
+    if (briefNow.current && !on) {
+      setStoppingRun(null);
+      stopSent.current = null;
+    }
+    briefNow.current = on;
+    setBriefRebuilding(on);
+  }, []);
   // One agent run at a time from this page: the others wait for it.
-  const agentBusy = fixing || starting || rewriting;
+  const agentBusy = fixing || starting || rewriting || briefRebuilding;
   const agentFix: AgentFix = {
     run: (only) => void fixRules(only),
     running: fixing,
@@ -1266,7 +1366,7 @@ export function DraftEditor({
                   disabled={agentBusy || !editor || (failedRewrite && !citedRead)}
                   onClick={() => void (failedRewrite ? rewritePage() : startAgent())}
                 >
-                  {(starting || rewriting) && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                  {(starting || rewriting) && <WorkingDots className="ml-0" />}
                   {t('agentFailed.retry')}
                 </Button>
                 <Button
@@ -1304,7 +1404,7 @@ export function DraftEditor({
               </span>
             </p>
           )}
-          {(fixing || (suggestions.length > 0 && !(barClosed && openSuggestions === 0))) && (
+          {(agentWorking || (suggestions.length > 0 && !(barClosed && openSuggestions === 0))) && (
             <AgentCard
               suggestions={suggestions}
               rules={cardRules}
@@ -1312,7 +1412,10 @@ export function DraftEditor({
               onSeeSources={() => openPanelTab('sources')}
               // Not while the HTML view holds the page: it would write over it.
               busy={deciding || htmlSource !== null}
-              working={fixing}
+              working={agentWorking}
+              run={agentRun}
+              onStop={() => void stopAgent()}
+              stopping={stoppingRun !== null && stoppingRun === agentRun?.id}
               onAcceptAll={() =>
                 void decide(
                   suggestions.filter((s) => s.status === 'open').map((s) => s.id),
@@ -1407,6 +1510,8 @@ export function DraftEditor({
             onSourceShown={() =>
               setTabRequest((prev) => (prev?.source ? { tab: prev.tab, n: prev.n } : prev))
             }
+            onBriefRebuilding={onBriefRebuilding}
+            briefBlocked={agentBusy && !briefRebuilding ? t('suggestions.agentBusy') : null}
           />
         ) : (
           <EditorPanelRail onOpen={openPanelTab} />

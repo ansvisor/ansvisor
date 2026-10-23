@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import messages from '../../../../../../../../messages/en.json';
 import type { ContentDraft } from '@/lib/content/drafts';
 import type { DraftSourceChoice, DraftSourcesData } from '@/lib/content/sources';
+import { toast } from 'sonner';
 import { useBriefRebuild } from './_use-brief-rebuild';
 import type { SourcesRead } from './_use-draft-reads';
 
@@ -22,7 +23,9 @@ vi.mock('@/lib/actions/content-drafts', () => ({
   getDraftSources: (...args: unknown[]) => getDraftSources(...args),
   rebuildDraftBrief: (...args: unknown[]) => rebuildDraftBrief(...args),
 }));
-vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
+vi.mock('sonner', () => ({
+  toast: Object.assign(vi.fn(), { success: vi.fn(), error: vi.fn() }),
+}));
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT =
   true;
@@ -69,6 +72,8 @@ let root: Root;
 beforeEach(async () => {
   for (const fn of [addDraftPrompts, getDraftSources, rebuildDraftBrief, onSourcesRead, onRebuilt])
     fn.mockReset();
+  vi.mocked(toast).mockClear();
+  vi.mocked(toast.error).mockClear();
   addDraftPrompts.mockResolvedValue(undefined);
   getDraftSources.mockResolvedValue(SOURCES);
   rebuildDraftBrief.mockResolvedValue({ brief: { builtFrom: null } });
@@ -107,5 +112,13 @@ describe('useBriefRebuild', () => {
     await press('lost');
     expect(onSourcesRead).toHaveBeenCalledWith({ data: null, choices: [], failed: true });
     expect(rebuildDraftBrief).not.toHaveBeenCalled();
+  });
+
+  it('says a rebuild stopped from the agent card changed nothing, not that it failed', async () => {
+    rebuildDraftBrief.mockResolvedValue({ error: 'stopped' });
+    await press('rebuild');
+    expect(toast).toHaveBeenCalledWith('Stopped · nothing was changed');
+    expect(toast.error).not.toHaveBeenCalled();
+    expect(onRebuilt).not.toHaveBeenCalled();
   });
 });

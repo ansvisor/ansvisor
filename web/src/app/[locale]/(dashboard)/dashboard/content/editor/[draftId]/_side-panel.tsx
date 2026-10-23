@@ -111,6 +111,8 @@ export function EditorSidePanel({
   agentRewrite,
   lastSuggestionAt,
   onSourceShown,
+  onBriefRebuilding,
+  briefBlocked = null,
 }: {
   draft: ContentDraft;
   /** The draft's title, page and type as written now: Sources and Brief read them. */
@@ -140,6 +142,10 @@ export function EditorSidePanel({
   lastSuggestionAt: string | null;
   /** The source asked for was shown (or isn't listed): it isn't shown again. */
   onSourceShown?: () => void;
+  /** Whether the agent is writing the brief: the agent card shows it working (CE-027). */
+  onBriefRebuilding?: (rebuilding: boolean) => void;
+  /** Why the brief's Run Agent waits (another agent run from this page), or null. */
+  briefBlocked?: string | null;
 }) {
   const t = useTranslations('contentEditor.editor.panel');
   const [tab, setTab] = useState<PanelTab>('instructions');
@@ -211,6 +217,13 @@ export function EditorSidePanel({
       open('brief');
     },
   });
+
+  // The agent card shows the brief's run too, with its steps and Stop; a
+  // panel closed meanwhile says it no longer waits on it.
+  useEffect(() => {
+    onBriefRebuilding?.(rebuilding);
+    return () => onBriefRebuilding?.(false);
+  }, [rebuilding, onBriefRebuilding]);
 
   return (
     <aside aria-label={t('label')} className="flex w-[400px] shrink-0 flex-col border-l bg-card">
@@ -306,6 +319,7 @@ export function EditorSidePanel({
                 onSaved={(saved) => reads.setBrief(saved)}
                 rewrite={agentRewrite}
                 dataLine={dataLine}
+                blocked={briefBlocked}
               />
             </div>
           )}
@@ -340,6 +354,7 @@ export function EditorSidePanel({
               sourceUrl={draft.sourceUrl}
               bodyHtml={bodyHtml}
               rebuilding={rebuilding}
+              blocked={briefBlocked}
               onRebuild={(sources) => void rebuild({ sources })}
               agentUsedAt={agentUsedAt}
               // Only while Sources shows: a hidden row can't be scrolled to.
@@ -358,6 +373,7 @@ export function EditorSidePanel({
               brandId={draft.brandId}
               pageUrl={draft.sourceUrl}
               rebuilding={rebuilding}
+              blocked={briefBlocked}
               onUseLostPrompts={(promptIds) => void rebuild({ addPrompts: promptIds })}
             />
           </div>

@@ -2,6 +2,7 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { NextIntlClientProvider } from 'next-intl';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { AgentRun } from '@/lib/content/agent-runs';
 import messages from '../../../../../../../../messages/en.json';
 import type { DraftSuggestion } from '@/lib/content/suggestions';
 import { AgentCard, rulesAfter, type CardRules } from './_agent-card';
@@ -190,6 +191,55 @@ describe('AgentCard', () => {
     // None named: nothing said.
     await render([suggestion({})]);
     expect(container.textContent).not.toContain('built from');
+  });
+
+  it('shows the run’s steps while working, done ones checked, and only Stop (CE-027/035)', async () => {
+    const onStop = vi.fn();
+    const run: AgentRun = {
+      id: 'r1',
+      kind: 'rewrite',
+      steps: [
+        { key: 'read_sources', count: 52 },
+        { key: 'rewrite_page', count: 14 },
+        { key: 'check_rules', count: null },
+      ],
+      step: 1,
+      startedAt: new Date().toISOString(),
+      finishedAt: null,
+      stoppedAt: null,
+      outcome: null,
+    };
+    const show = (stopping: boolean) =>
+      act(async () => {
+        root.render(
+          <NextIntlClientProvider locale="en" messages={messages}>
+            <AgentCard
+              suggestions={[]}
+              rules={rules}
+              busy={false}
+              working
+              run={run}
+              onStop={onStop}
+              stopping={stopping}
+              {...handlers}
+            />
+          </NextIntlClientProvider>,
+        );
+      });
+    await show(false);
+    const steps = [...container.querySelectorAll('li')];
+    expect(steps.map((li) => li.textContent)).toEqual([
+      'Reading 52 sources',
+      'Rewriting the page to 14 rules',
+      'Checking rules',
+    ]);
+    expect(steps[0].querySelector('svg')).not.toBeNull();
+    expect(steps[1].querySelector('[aria-current="step"]')).not.toBeNull();
+    expect(buttons()).toEqual(['Stop']);
+    await click('Stop');
+    expect(onStop).toHaveBeenCalledTimes(1);
+    await show(true);
+    expect(container.querySelector('button')!.disabled).toBe(true);
   });
 
   it('stops all of its motion with reduced motion, in every state', async () => {

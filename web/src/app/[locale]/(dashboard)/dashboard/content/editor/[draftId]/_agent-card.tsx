@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
-import { X } from 'lucide-react';
+import { Check, ChevronRight, X } from 'lucide-react';
 import { Link } from '@/i18n/navigation';
 import { Button } from '@/components/ui/button';
 import {
@@ -11,8 +11,10 @@ import {
   type DraftSuggestion,
   type SuggestionStatus,
 } from '@/lib/content/suggestions';
+import { shownSteps, stepMessage, type AgentRun } from '@/lib/content/agent-runs';
 import { cn } from '@/lib/utils';
 import { PageCompareDialog, pageCharacters } from './_page-rewrite';
+import { WorkingDots } from './_working-dots';
 
 /**
  * The Content Agent card over the page (Content Editor v1.1, CE-025/026):
@@ -140,18 +142,41 @@ function AgentTile({
   );
 }
 
-/** Three dots that bounce in turn, after "Content Agent is working". */
-function WorkingDots() {
+/**
+ * A run's steps as chips (CE-027/035), named by the data they use: the ones
+ * done in green with a check, the one under way in full, the rest muted.
+ */
+export function RunSteps({ run }: { run: AgentRun }) {
+  const t = useTranslations('contentEditor.editor.agentCard.steps');
+  const shown = shownSteps(run);
   return (
-    <span aria-hidden className="ml-1.5 inline-flex gap-[3px] align-middle">
-      {[0, 1, 2].map((i) => (
-        <span
-          key={i}
-          className="h-1 w-1 animate-agent-dot rounded-full bg-foreground opacity-25 motion-reduce:animate-none"
-          style={{ animationDelay: `${i * 0.2}s` }}
-        />
-      ))}
-    </span>
+    <ol className="mt-1 flex flex-wrap items-center gap-1 text-[12px]">
+      {shown.map(({ step, index }, i) => {
+        const { key, count } = stepMessage(step);
+        const done = index < run.step;
+        const now = index === run.step;
+        return (
+          <li key={step.key} className="flex items-center gap-1">
+            {i > 0 && (
+              <ChevronRight aria-hidden className="h-3 w-3 shrink-0 text-muted-foreground/60" />
+            )}
+            <span
+              aria-current={now ? 'step' : undefined}
+              className={cn(
+                'inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5',
+                done &&
+                  'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300',
+                now && 'bg-background font-medium text-foreground',
+                !done && !now && 'border-dashed text-muted-foreground',
+              )}
+            >
+              {done && <Check aria-hidden className="h-3 w-3 shrink-0" />}
+              {t(key, count === undefined ? {} : { count })}
+            </span>
+          </li>
+        );
+      })}
+    </ol>
   );
 }
 
@@ -170,6 +195,9 @@ export function AgentCard({
   runBlocked = null,
   sourceCount = 0,
   onSeeSources,
+  run = null,
+  onStop,
+  stopping = false,
 }: {
   suggestions: DraftSuggestion[];
   rules: CardRules;
@@ -193,6 +221,12 @@ export function AgentCard({
   sourceCount?: number;
   /** Opens the Sources tab. */
   onSeeSources?: () => void;
+  /** The run under way, step by step (CE-027/035), or null before its first step reads. */
+  run?: AgentRun | null;
+  /** Stops the run under way: nothing it had is kept. */
+  onStop?: () => void;
+  /** Stop was pressed: it waits for the run to end. */
+  stopping?: boolean;
 }) {
   const t = useTranslations('contentEditor.editor.agentCard');
   const locale = useLocale();
@@ -236,13 +270,17 @@ export function AgentCard({
       </>
     );
     line = (
-      <span
-        aria-hidden
-        className="mt-2 block h-[3px] w-full overflow-hidden rounded-full bg-border"
-      >
-        {/* Without motion, a faint full line: never a still bar that reads as progress. */}
-        <span className="block h-full w-[30%] animate-agent-slide rounded-full bg-foreground motion-reduce:w-full motion-reduce:animate-none motion-reduce:opacity-30" />
-      </span>
+      <>
+        {/* Its real steps, as the run says them; none until its first is read. */}
+        {run && <RunSteps run={run} />}
+        <span
+          aria-hidden
+          className="mt-2 block h-[3px] w-full overflow-hidden rounded-full bg-border"
+        >
+          {/* Without motion, a faint full line: never a still bar that reads as progress. */}
+          <span className="block h-full w-[30%] animate-agent-slide rounded-full bg-foreground motion-reduce:w-full motion-reduce:animate-none motion-reduce:opacity-30" />
+        </span>
+      </>
     );
   } else if (page) {
     const { before, after: afterChars } = pageCharacters(page);
@@ -314,14 +352,20 @@ export function AgentCard({
     >
       <AgentTile tone={tone} count={working ? 0 : open} />
       {/* Room for a line of text first: on a narrow page the buttons go under it. */}
-      <span className="min-w-0 flex-1 basis-56">
-        <span className="block text-sm font-semibold [overflow-wrap:anywhere]">{title}</span>
+      <div className="min-w-0 flex-1 basis-56">
+        <div className="text-sm font-semibold [overflow-wrap:anywhere]">{title}</div>
         {line && (
-          <span className="block text-[12.5px] text-muted-foreground [overflow-wrap:anywhere]">
-            {line}
-          </span>
+          <div className="text-[12.5px] text-muted-foreground [overflow-wrap:anywhere]">{line}</div>
         )}
-      </span>
+      </div>
+      {/* Working, only Stop: it drops whatever the run had. */}
+      {working && onStop && run && (
+        <span className="ml-auto flex shrink-0 items-center">
+          <Button variant="outline" size="sm" disabled={stopping} onClick={onStop}>
+            {t('stop')}
+          </Button>
+        </span>
+      )}
       {!working && (
         <span className="ml-auto flex max-w-full flex-wrap items-center justify-end gap-1.5">
           {page ? (

@@ -16,6 +16,7 @@ import { wordsForLength } from '@/lib/content/rules';
 import { formatDateTime, formatNumber } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { RunCard } from './_run-card';
+import { WorkingDots } from './_working-dots';
 
 /**
  * Rewrite from brief: the Content Agent writes the page again from the brief
@@ -58,6 +59,7 @@ export function BriefTab({
   onSaved,
   rewrite,
   dataLine,
+  blocked = null,
 }: {
   draftId: string;
   state: BriefState;
@@ -74,6 +76,8 @@ export function BriefTab({
   rewrite?: AgentRewrite;
   /** "Uses your data", under Run Agent's card (v1.1 CE-032). */
   dataLine?: React.ReactNode;
+  /** Why Run Agent waits (another agent run from the page), or null. */
+  blocked?: string | null;
 }) {
   const t = useTranslations('contentEditor.editor.brief');
   const tTypes = useTranslations('contentEditor.pageTypes');
@@ -131,15 +135,16 @@ export function BriefTab({
             size="sm"
             variant={empty ? 'default' : 'outline'}
             className="shrink-0"
-            disabled={rebuilding || confirming}
+            disabled={rebuilding || confirming || blocked !== null}
             onClick={rebuild}
           >
-            {rebuilding && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+            {rebuilding && <WorkingDots className="ml-0" />}
             {empty ? t('run') : t('rebuild')}
           </Button>
         }
         info={t('info')}
         data={dataLine}
+        blocked={rebuilding ? null : blocked}
       >
         <p className="text-[11px] text-muted-foreground">{t('usage')}</p>
         {/* Under the card that asked, not past the outline. */}
@@ -287,11 +292,7 @@ export function BriefTab({
               disabled={rewrite.running || rewrite.blocked !== null || rebuilding}
               onClick={() => setConfirmingRewrite(true)}
             >
-              {rewrite.running ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              ) : (
-                <Bot className="h-3.5 w-3.5" />
-              )}
+              {rewrite.running ? <WorkingDots className="ml-0" /> : <Bot className="h-3.5 w-3.5" />}
               {t(`rewrite.button.${method}`)}
             </Button>
             {/* Why it waits, written out (v1.1 CE-031), not only on hover. */}

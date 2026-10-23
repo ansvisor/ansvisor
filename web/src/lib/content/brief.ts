@@ -98,6 +98,15 @@ export interface RebuildSources {
   length: number;
 }
 
+/** The most of each the agent takes (content-brief.js rebuildSources). */
+export const REBUILD_LIMITS = {
+  prompts: 100,
+  fanouts: 40,
+  pages: 30,
+  queries: 20,
+  headings: 30,
+} as const;
+
 /**
  * The sources a rebuild uses: the ones checked in the Sources tab, as it
  * lists them; the page's H2s and H3s as written now; and the length the
@@ -115,20 +124,20 @@ export function rebuildSources(
   return {
     promptIds: kept('prompt')
       .map((r) => r.ref)
-      .slice(0, 100),
+      .slice(0, REBUILD_LIMITS.prompts),
     fanouts: kept('fanout')
       .flatMap((r) => (r.kind === 'fanout' ? [{ query: r.name, platforms: r.platforms }] : []))
-      .slice(0, 40),
+      .slice(0, REBUILD_LIMITS.fanouts),
     pages: kept('cited_page')
       .flatMap((r) => (r.kind === 'cited_page' ? [{ url: r.name, kind: r.category }] : []))
-      .slice(0, 30),
+      .slice(0, REBUILD_LIMITS.pages),
     queries: kept('gsc_query')
       .map((r) => r.name)
-      .slice(0, 20),
+      .slice(0, REBUILD_LIMITS.queries),
     headings: readDraftDoc(draft.html)
       .headings.filter((h) => h.level > 1 && h.text)
       .map((h) => h.text)
-      .slice(0, 30),
+      .slice(0, REBUILD_LIMITS.headings),
     length: draft.length,
   };
 }

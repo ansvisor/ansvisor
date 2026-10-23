@@ -30,6 +30,7 @@ import {
 import { formatNumber } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { AddSourceDialog } from './_add-source-dialog';
+import { WorkingDots } from './_working-dots';
 import type { SourcesRead } from './_use-draft-reads';
 
 /**
@@ -51,6 +52,7 @@ export function SourcesTab({
   sourceUrl,
   bodyHtml,
   rebuilding,
+  blocked = null,
   onRebuild,
   agentUsedAt,
   highlight = null,
@@ -68,6 +70,8 @@ export function SourcesTab({
   bodyHtml: string;
   /** Rebuild with selection: the brief from the sources as checked here. */
   rebuilding: boolean;
+  /** Why Rebuild with selection can't run now (the agent is at work on the page), or null. */
+  blocked?: string | null;
   onRebuild: (sources: { data: DraftSourcesData; choices: DraftSourceChoice[] }) => void;
   /** When the Content Agent last wrote from them (a run's suggestions, a brief), or null. */
   agentUsedAt: string | null;
@@ -207,14 +211,10 @@ export function SourcesTab({
       <div className="flex flex-wrap gap-2">
         <Button
           size="sm"
-          disabled={rebuilding || total === 0}
+          disabled={rebuilding || total === 0 || blocked !== null}
           onClick={() => onRebuild({ data: read.data, choices: read.choices })}
         >
-          {rebuilding ? (
-            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-          ) : (
-            <RefreshCw className="h-3.5 w-3.5" />
-          )}
+          {rebuilding ? <WorkingDots className="ml-0" /> : <RefreshCw className="h-3.5 w-3.5" />}
           {t('rebuild')}
         </Button>
         <Button variant="outline" size="sm" onClick={() => setAdding(true)}>
@@ -222,6 +222,9 @@ export function SourcesTab({
           {t('add.button')}
         </Button>
       </div>
+      {!rebuilding && blocked && (
+        <p className="text-xs text-amber-700 dark:text-amber-400">{blocked}</p>
+      )}
       <AddSourceDialog
         open={adding}
         onOpenChange={setAdding}

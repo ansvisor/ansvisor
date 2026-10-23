@@ -24,6 +24,7 @@ import { formatPctChange } from '@/lib/traffic-kpis';
 import type { VisitChange } from '@/lib/traffic-change';
 import { cn } from '@/lib/utils';
 import { ImpactResults } from './_impact-results';
+import { WorkingDots } from './_working-dots';
 
 /** One read of the tab, for one period: null while it runs. */
 interface ImpactRead {
@@ -45,12 +46,15 @@ export function ImpactTab({
   brandId,
   pageUrl,
   rebuilding = false,
+  blocked = null,
   onUseLostPrompts,
 }: {
   brandId: string;
   pageUrl: string | null;
   /** Use lost prompts in this draft: they join its sources and the brief is rebuilt. */
   rebuilding?: boolean;
+  /** Why the brief can't be rebuilt now (the agent is at work on the page), or null. */
+  blocked?: string | null;
   onUseLostPrompts?: (promptIds: string[]) => void;
 }) {
   const t = useTranslations('contentEditor.editor.impact');
@@ -140,6 +144,7 @@ export function ImpactTab({
           period={period}
           pageUrl={pageUrl}
           rebuilding={rebuilding}
+          blocked={blocked}
           onUseLostPrompts={onUseLostPrompts}
         />
       )}
@@ -153,6 +158,7 @@ function ImpactBody({
   period,
   pageUrl,
   rebuilding,
+  blocked,
   onUseLostPrompts,
 }: {
   impact: ContentImpact;
@@ -160,6 +166,7 @@ function ImpactBody({
   period: ImpactPeriod;
   pageUrl: string;
   rebuilding: boolean;
+  blocked: string | null;
   onUseLostPrompts?: (promptIds: string[]) => void;
 }) {
   const t = useTranslations('contentEditor.editor.impact');
@@ -280,14 +287,17 @@ function ImpactBody({
             <Button
               size="sm"
               variant="outline"
-              disabled={rebuilding}
+              disabled={rebuilding || blocked !== null}
               onClick={() => onUseLostPrompts(lostPrompts.map((p) => p.id))}
             >
-              {rebuilding && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+              {rebuilding && <WorkingDots className="ml-0" />}
               {t('prompts.useLost', { count: lostPrompts.length })}
             </Button>
           )}
         </div>
+        {lostPrompts.length > 0 && onUseLostPrompts && !rebuilding && blocked && (
+          <p className="text-xs text-amber-700 dark:text-amber-400">{blocked}</p>
+        )}
       </section>
 
       {results && <ImpactResults results={results} />}

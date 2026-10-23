@@ -89,10 +89,19 @@ export default function ContentEditorPage() {
         </div>
       ) : current.draft && writing ? (
         <AgentWriting
+          draftId={current.draft.id}
+          brandId={current.draft.brandId}
           title={current.draft.title}
           method={current.draft.method}
           since={current.draft.agentSince}
           rewrite={wasRewrite(current.draft.id)}
+          onStopped={() =>
+            getContentDraft(draftId).then(
+              (draft) => draft && setRead({ id: draftId, draft }),
+              // The next look tries again.
+              () => {},
+            )
+          }
         />
       ) : current.draft ? (
         <DraftEditor
