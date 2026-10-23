@@ -4,6 +4,8 @@ import { useRef, useState, type ReactNode } from 'react';
 import { useTranslations } from 'next-intl';
 import { Link } from '@/i18n/navigation';
 import { useAiUsage } from '@/components/providers/ai-usage-provider';
+import { AiUsageBanner } from './ai-usage-banner';
+import { AiUsageGetMore } from './ai-usage-get-more';
 import { buttonVariants } from '@/components/ui/button-variants';
 import { LoadingDots } from '@/components/ui/loading-dots';
 import { Popover, PopoverContent, PopoverTitle, PopoverTrigger } from '@/components/ui/popover';
@@ -46,14 +48,19 @@ const LABEL_KEY = {
  * A page's header row with the AI usage meter at its far right, on the
  * title's line (AI usage spec §3.1): the same place on every page, however
  * the row's own buttons wrap beside it. On a phone it goes under the row, on
- * the right, so the row keeps the whole width for its buttons.
+ * the right, so the row keeps the whole width for its buttons. From 80% of
+ * the month's allowance the banner follows the row (spec §4), spaced as the
+ * page spaces its parts.
  */
 export function HeaderWithAiUsage({ children }: { children: ReactNode }) {
   return (
-    <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:gap-3">
-      <div className="min-w-0 sm:flex-1">{children}</div>
-      <AiUsageMeter className="self-end sm:self-auto" />
-    </div>
+    <>
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:gap-3">
+        <div className="min-w-0 sm:flex-1">{children}</div>
+        <AiUsageMeter className="self-end sm:self-auto" />
+      </div>
+      <AiUsageBanner />
+    </>
   );
 }
 
@@ -204,27 +211,9 @@ export function AiUsageMeter({ className }: { className?: string }) {
             </>
           )}
 
-        {!canAdmin && <p className="mt-3 text-xs text-muted-foreground">{t('popover.askAdmin')}</p>}
+        {!canAdmin && <p className="mt-3 text-xs text-muted-foreground">{t('askAdmin')}</p>}
         <div className="mt-4 flex flex-wrap gap-1.5">
-          {/* Enterprise has no bigger plan to move to. */}
-          {canAdmin && usage.plan !== 'enterprise' && (
-            <Link
-              href="/dashboard/settings/billing"
-              onClick={close}
-              className={buttonVariants({ variant: pressing ? 'default' : 'outline', size: 'sm' })}
-            >
-              {t('popover.getMore')}
-            </Link>
-          )}
-          {canAdmin && (
-            <Link
-              href="/dashboard/settings/ai-providers"
-              onClick={close}
-              className={buttonVariants({ variant: 'outline', size: 'sm' })}
-            >
-              {t('popover.useOwnKey')}
-            </Link>
-          )}
+          <AiUsageGetMore plan={usage.plan} primary={pressing} onFollow={close} />
           <Link
             href="/dashboard/settings/billing#ai-usage"
             onClick={close}

@@ -46,6 +46,20 @@ vi.mock('@/stores/use-brand-store', () => ({
   useBrandStore: (selector: (state: { activeBrandId: string | null }) => unknown) =>
     selector({ activeBrandId: 'b1' }),
 }));
+// An in-memory localStorage: the test environment has none.
+const store = new Map<string, string>();
+Object.defineProperty(window, 'localStorage', {
+  configurable: true,
+  value: {
+    getItem: (key: string) => store.get(key) ?? null,
+    setItem: (key: string, value: string) => void store.set(key, value),
+    removeItem: (key: string) => void store.delete(key),
+    clear: () => store.clear(),
+  },
+});
+
+const toast = vi.hoisted(() => ({ warning: vi.fn(), error: vi.fn() }));
+vi.mock('sonner', () => ({ toast }));
 vi.mock('@/lib/billing/ai-usage-client', () => ({
   readAiUsage: vi.fn(),
   readUsageLimits: vi.fn(),
@@ -115,6 +129,9 @@ beforeEach(() => {
   root = createRoot(container);
   vi.mocked(readAiUsage).mockReset().mockResolvedValue(usage());
   vi.mocked(readUsageLimits).mockReset().mockResolvedValue(limits);
+  toast.warning.mockReset();
+  toast.error.mockReset();
+  localStorage.clear();
 });
 
 afterEach(() => {
@@ -285,9 +302,83 @@ describe('HeaderWithAiUsage', () => {
     expect(trigger()!.className).toContain('self-end');
     expect(row.className).toContain('sm:flex-row');
   });
+
+  it('follows the row with the banner from 80%', async () => {
+    vi.mocked(readAiUsage).mockResolvedValue(usage({ percentUsed: 84 }));
+    await render(
+      'admin',
+      <HeaderWithAiUsage>
+        <h1>Mentions</h1>
+      </HeaderWithAiUsage>,
+    );
+    expect(container.children).toHaveLength(2);
+    expect(container.lastElementChild!.textContent).toContain(
+      "You've used 84% of this month's AI limit.",
+    );
+  });
 });
 
 describe('AiUsageProvider', () => {
+  it('toasts reaching 80% once a period, not again on later reads, in a new tab or once used up', async () => {
+    let now = 1_000_000;
+    vi.spyOn(Date, 'now').mockImplementation(() => now);
+    vi.mocked(readAiUsage).mockImplementation(async () => usage({ percentUsed: 84 }));
+    await render();
+    expect(toast.warning).toHaveBeenCalledExactlyOnceWith(
+      "You've used 84% of this month's AI limit.",
+    );
+    expect(localStorage.getItem('aeo:ai-usage-toast')).toBe('2026-10-20T09:00:00.000Z:growth');
+
+    const reread = async (over: Partial<AiUsage>) => {
+      now += AI_USAGE_STALE_MS;
+      vi.mocked(readAiUsage).mockImplementation(async () => usage(over));
+      await act(async () => window.dispatchEvent(new Event('focus')));
+      await act(async () => {});
+    };
+    await reread({ percentUsed: 90 });
+    await remount();
+    // Used up: the red banner says it, no toast.
+    await reread({ percentUsed: 100 });
+    expect(readAiUsage).toHaveBeenCalledTimes(4);
+    expect(toast.warning).toHaveBeenCalledTimes(1);
+    expect(toast.error).not.toHaveBeenCalled();
+
+    // A plan changed within the period starts over.
+    await reread({ plan: 'enterprise', planName: 'Enterprise', percentUsed: 81 });
+    expect(toast.warning).toHaveBeenCalledTimes(2);
+  });
+
+  it('toasts nothing below 80%, on a plan without an allowance, or self-hosted', async () => {
+    vi.mocked(readAiUsage).mockResolvedValue(usage({ percentUsed: 79.9 }));
+    await render();
+    vi.mocked(readAiUsage).mockResolvedValue(usage({ unlimited: true, percentUsed: null }));
+    await remount();
+    env.cloud = false;
+    await remount();
+    expect(toast.warning).not.toHaveBeenCalled();
+  });
+
+  it('toasts once in a tab when the browser’s storage can’t be used', async () => {
+    let now = 1_000_000;
+    vi.spyOn(Date, 'now').mockImplementation(() => now);
+    vi.spyOn(localStorage, 'getItem').mockImplementation(() => {
+      throw new Error('blocked');
+    });
+    vi.spyOn(localStorage, 'setItem').mockImplementation(() => {
+      throw new Error('blocked');
+    });
+    // Each read a new answer, as the server's: the toast is weighed again on each.
+    vi.mocked(readAiUsage).mockImplementation(async () => usage({ percentUsed: 84 }));
+    await render();
+    for (let read = 0; read < 2; read++) {
+      now += AI_USAGE_STALE_MS;
+      await act(async () => window.dispatchEvent(new Event('focus')));
+      await act(async () => {});
+    }
+    expect(readAiUsage).toHaveBeenCalledTimes(3);
+    expect(toast.warning).toHaveBeenCalledTimes(1);
+  });
+
   it('reads once for every page, again on a page change once a minute old', async () => {
     let now = 1_000_000;
     vi.spyOn(Date, 'now').mockImplementation(() => now);

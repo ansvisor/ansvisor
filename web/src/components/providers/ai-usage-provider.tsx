@@ -11,8 +11,16 @@ import {
   type ReactNode,
 } from 'react';
 import { usePathname } from 'next/navigation';
+import { useTranslations } from 'next-intl';
+import { toast } from 'sonner';
 import { isCloud } from '@/config/plans';
-import type { AiUsage } from '@/lib/billing/ai-usage';
+import {
+  AI_USAGE_TOAST_KEY,
+  aiUsageToastDue,
+  aiUsageToastMark,
+  percentLabel,
+  type AiUsage,
+} from '@/lib/billing/ai-usage';
 import { readAiUsage } from '@/lib/billing/ai-usage-client';
 
 /** A read this old is read again when the member opens another page or comes back to the tab. */
@@ -35,6 +43,8 @@ const AiUsageContext = createContext<AiUsageState>({ usage: null, refresh: () =>
  * meter (AI usage spec §3.1), so moving between pages doesn't blink it. It
  * is read again on a page change or a return to the tab once the last read
  * is a minute old. Only Ansvisor Cloud meters AI: self-hosted reads nothing.
+ * Reaching 80% of the allowance toasts once a period in a browser (spec §4);
+ * the banners under the header rows stay.
  */
 export function AiUsageProvider({ children }: { children: ReactNode }) {
   const metered = isCloud();
@@ -42,6 +52,9 @@ export function AiUsageProvider({ children }: { children: ReactNode }) {
   const [usage, setUsage] = useState<AiUsage | null | undefined>(metered ? undefined : null);
   const readAt = useRef(0);
   const reading = useRef(false);
+  const t = useTranslations('aiUsage.banner');
+  // What this tab toasted, for a browser whose storage can't be used.
+  const toasted = useRef<string | null>(null);
 
   const read = useCallback(async () => {
     if (!metered || reading.current) return;
@@ -75,6 +88,24 @@ export function AiUsageProvider({ children }: { children: ReactNode }) {
       window.removeEventListener('focus', onReturn);
     };
   }, [read]);
+
+  useEffect(() => {
+    if (!usage) return;
+    let shown = toasted.current;
+    try {
+      shown = localStorage.getItem(AI_USAGE_TOAST_KEY) ?? shown;
+    } catch {
+      // Storage blocked: this tab's memory decides.
+    }
+    if (!aiUsageToastDue(usage, shown)) return;
+    toasted.current = aiUsageToastMark(usage);
+    try {
+      localStorage.setItem(AI_USAGE_TOAST_KEY, toasted.current);
+    } catch {
+      // As above.
+    }
+    toast.warning(t('warning', { percent: percentLabel(usage.percentUsed ?? 0) }));
+  }, [usage, t]);
 
   const refresh = useCallback(() => void read(), [read]);
   const value = useMemo(() => ({ usage, refresh }), [usage, refresh]);

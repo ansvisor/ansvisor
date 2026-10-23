@@ -56,3 +56,19 @@ export function aiUsageTone(usage: AiUsage): UsageTone {
   if (usage.percentUsed >= 100) return 'exhausted';
   return usage.percentUsed >= USAGE_WARNING_RATIO * 100 ? 'warning' : 'normal';
 }
+
+/** Where a browser keeps the last AI usage toast it showed: "{periodStart}:{plan}". */
+export const AI_USAGE_TOAST_KEY = 'aeo:ai-usage-toast';
+
+/** The mark a toast leaves: the period and the plan it warned about. */
+export const aiUsageToastMark = (usage: AiUsage) => `${usage.periodStart}:${usage.plan}`;
+
+/**
+ * Whether a read calls for the toast (AI usage spec §4), given the mark of the
+ * last one this browser showed: once a period on reaching 80%. A new period,
+ * or a plan changed within it, starts over; a used-up allowance has its red
+ * banner instead.
+ */
+export function aiUsageToastDue(usage: AiUsage, shown: string | null): boolean {
+  return aiUsageTone(usage) === 'warning' && shown !== aiUsageToastMark(usage);
+}

@@ -19,6 +19,11 @@
       "labelWarning": "AI {percent} used this month, close to the limit",
       "labelExhausted": "AI {percent} used this month, the limit is reached"
     },
+    "askAdmin": "To get more AI usage or use your own key, ask an admin of your workspace.",
+    "getMore": {
+      "plan": "Get more AI usage",
+      "ownKey": "Use your own key"
+    },
     "popover": {
       "title": "AI usage this month · {plan} plan",
       "titleNoPlan": "AI usage this month",
@@ -32,10 +37,13 @@
       "auditPages": "Site Audit pages",
       "promptLocations": "Prompt locations",
       "ofLimit": "{used} of {limit}",
-      "askAdmin": "To get more AI usage or use your own key, ask an admin of your workspace.",
-      "getMore": "Get more AI usage",
-      "useOwnKey": "Use your own key",
       "details": "See details"
+    },
+    "banner": {
+      "warning": "You've used {percent} of this month's AI limit.",
+      "seeUsage": "See usage",
+      "exhausted": "You've used this month's AI limit. AI features stop until {date}; Agent Chat on your own AI key keeps working.",
+      "exhaustedNoDate": "You've used this month's AI limit. AI features stop until it resets; Agent Chat on your own AI key keeps working."
     }
   },
   "common": {
