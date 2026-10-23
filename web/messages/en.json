@@ -2484,7 +2484,7 @@
   },
   "audit": {
     "title": "Site Audit",
-    "description": "Score any page against the 47-signal AEO/GEO",
+    "description": "Score any page against the 48-signal AEO/GEO",
     "runAudit": "Run Audit",
     "running": "Auditing…",
     "pages": {
@@ -2735,11 +2735,11 @@
     "noIssues": "No issues found — every evaluated signal passed.",
     "stages": {
       "fetch": "Fetching the page…",
-      "analyze": "Analyzing 47 signals…",
+      "analyze": "Analyzing 48 signals…",
       "recommend": "Generating AI recommendations…"
     },
     "emptyTitle": "Audit any page for AI search readiness",
-    "emptyBody": "Enter a URL above to score it against 47 AEO/GEO signals and get AI-written fixes."
+    "emptyBody": "Enter a URL above to score it against 48 AEO/GEO signals and get AI-written fixes."
   },
   "auth": {
     "signIn": "Sign in",
