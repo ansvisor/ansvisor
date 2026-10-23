@@ -1,5 +1,6 @@
 import type { ContentAuthor } from './authors';
 import type { PageType } from './drafts';
+import { PLACEHOLDER } from './placeholders';
 
 /**
  * The page's JSON-LD for Before you publish (Content Editor Quality spec §7,
@@ -29,16 +30,11 @@ export const ARTICLE_PAGE_TYPES: readonly PageType[] = [
 export const isArticlePage = (type: string | null) =>
   type === null || (ARTICLE_PAGE_TYPES as readonly string[]).includes(type);
 
-/**
- * Words in square brackets where a real name, quote or number goes ("[figure,
- * source]"): a placeholder the Content Agent left for the person to fill, as
- * the editor's placeholder to-do reads it (CE-044). Not a footnote ("[1]"),
- * a checkbox ("[x]"), "[sic]" or a Markdown link's text.
- */
-const PLACEHOLDER = /\[(?!sic\])(?=[^[\]\n]*\p{L})[^[\]\n]{2,}\](?!\()/iu;
+/** One placeholder (placeholders.ts's, without its global flag: a test keeps no state). */
+const ONE_PLACEHOLDER = new RegExp(PLACEHOLDER.source, 'iu');
 
 /** Whether the title still has a placeholder: it would ship as the headline. */
-export const titleHasPlaceholder = (title: string) => PLACEHOLDER.test(title);
+export const titleHasPlaceholder = (title: string) => ONE_PLACEHOLDER.test(title);
 
 /** The page's first image with a full https address, as JSON-LD's image. */
 export function firstImage(html: string): string | null {
