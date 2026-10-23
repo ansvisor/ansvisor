@@ -53,6 +53,9 @@ vi.mock('../lib/logger.js', () => {
   return { default: logger, logger };
 });
 vi.mock('../lib/traffic-visits.js', () => ({ findVisitOf: (...args) => findVisitOf(...args) }));
+// The visitor key stands in for the IP address (00250).
+const visitorKey = vi.fn();
+vi.mock('../lib/visitor-key.js', () => ({ visitorKey: (...args) => visitorKey(...args) }));
 
 let server;
 let baseUrl;
@@ -73,6 +76,8 @@ beforeEach(() => {
   inserted.length = 0;
   insertError = null;
   findVisitOf.mockReset();
+  visitorKey.mockReset();
+  visitorKey.mockImplementation(async ({ brandId, ip }) => (ip ? `vk-${brandId}` : null));
   filters.length = 0;
   latestPageview = null;
   updated.length = 0;
@@ -96,19 +101,33 @@ describe('POST /track/:trackingCode', () => {
     findVisitOf.mockResolvedValue('p1');
     const res = await beacon();
     expect(res.status).toBe(204);
+    expect(visitorKey).toHaveBeenCalledWith({ brandId: 'b1', ip: '203.0.113.7' });
     expect(findVisitOf).toHaveBeenCalledWith({
       brandId: 'b1',
       sourcePlatform: 'gemini.google.com',
-      ipAddress: '203.0.113.7',
+      visitorKey: 'vk-b1',
       userAgent: 'Mozilla/5.0',
     });
     expect(inserted[0].table).toBe('ai_traffic_logs');
     expect(inserted[0].row).toMatchObject({
       url: 'https://acme.example/menu',
-      ip_address: '203.0.113.7',
+      visitor_key: 'vk-b1',
       user_agent: 'Mozilla/5.0',
       visit_of: 'p1',
     });
+  });
+
+  it('never stores the IP address, and still stores the pageview when the key fails', async () => {
+    findVisitOf.mockResolvedValue(null);
+    await beacon();
+    expect(inserted[0].row).not.toHaveProperty('ip_address');
+    expect(JSON.stringify(inserted[0].row)).not.toContain('203.0.113.7');
+
+    visitorKey.mockRejectedValue(new Error('traffic_salt returned no salt'));
+    const res = await beacon();
+    expect(res.status).toBe(204);
+    expect(inserted[1].row).toMatchObject({ visitor_key: null, visit_of: null });
+    expect(findVisitOf).toHaveBeenLastCalledWith(expect.objectContaining({ visitorKey: null }));
   });
 
   it('stores a first pageview as a new visit', async () => {
@@ -218,7 +237,7 @@ describe('POST /track/:trackingCode', () => {
     expect(filters).toEqual(
       expect.arrayContaining([
         ['eq', 'url', 'https://acme.example/menu'],
-        ['eq', 'ip_address', '203.0.113.7'],
+        ['eq', 'visitor_key', 'vk-b1'],
         ['eq', 'user_agent', 'Mozilla/5.0'],
         ['eq', 'http_status', 200],
         ['eq', 'not_found_title', false],
