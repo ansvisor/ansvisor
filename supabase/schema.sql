@@ -36084,16 +36084,18 @@ create trigger competitors_remove_from_actions
   for each statement execute function public.action_entities_competitors_deleted();
 
 -- Each action's list in one read, for every place that shows a count: per
--- entity type, how many it was made with, how many are removed since, and the names
--- of the removed (up to 20, for the hover). Read through the member's
--- policy: only their brands' actions answer.
+-- entity type, how many it was made with, how many are removed since, the names
+-- of the removed (up to 20, for the hover) and their keys (to leave them out
+-- of a list). Read through the member's policy: only their brands' actions
+-- answer.
 create or replace function public.action_entity_counts(p_action_ids uuid[])
 returns table (
   action_id      uuid,
   entity_type    text,
   total          integer,
   removed        integer,
-  removed_labels text[]
+  removed_labels text[],
+  removed_keys   text[]
 )
 language sql
 stable
@@ -36105,7 +36107,9 @@ as $$
          count(*)::integer,
          count(*) filter (where e.removed_at is not null)::integer,
          (array_agg(coalesce(e.label, e.entity_key) order by e.removed_at, e.entity_key)
-            filter (where e.removed_at is not null))[1:20]
+            filter (where e.removed_at is not null))[1:20],
+         array_agg(e.entity_key order by e.removed_at, e.entity_key)
+            filter (where e.removed_at is not null)
   from public.action_entities e
   where e.action_id = any (p_action_ids[1:500])
   group by e.action_id, e.entity_type;
