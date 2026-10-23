@@ -29,6 +29,8 @@ export const WARN_AT_S = 4;
  * Mentions & Sentiment goes last (00239): the Mentions table's first page and
  * the Perception figures at 30 and 90 days, the windows that ran past the
  * budget, timed after the rest so they read as cold as a user's first visit.
+ * Perception is timed twice (00241): as the tab opens it, from its
+ * precomputed view, and live, as a filtered view reads the rollups.
  */
 export const PROBES = [
   { probe: 'topics_overview_window', days: 1 },
@@ -43,6 +45,8 @@ export const PROBES = [
   { probe: 'mentions_list', days: 90 },
   { probe: 'mentions_perception', days: 30 },
   { probe: 'mentions_perception', days: 90 },
+  { probe: 'mentions_perception_live', days: 30 },
+  { probe: 'mentions_perception_live', days: 90 },
 ];
 
 const DAY_MS = 24 * 60 * 60 * 1000;

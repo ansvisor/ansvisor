@@ -201,6 +201,12 @@ export function EditorSidePanel({
           <div hidden={tab !== 'rules'}>
             <RulesTab
               agentFix={agentFix}
+              // Only a draft with no prompts gets no fan-outs for want of them.
+              onOpenSources={
+                reads.sources && !reads.sources.failed && reads.sources.data.prompts.length === 0
+                  ? () => open('sources')
+                  : undefined
+              }
               state={rules}
               siteType={draft.siteType}
               draftPageType={isPageType(pageType) ? pageType : null}

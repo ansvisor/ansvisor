@@ -9,7 +9,7 @@ import { Plugin, PluginKey, type EditorState, type Transaction } from '@tiptap/p
 import { Decoration, DecorationSet } from '@tiptap/pm/view';
 import { cleanHtml } from '@/lib/content/clean-html';
 import { passageKey } from '@/lib/content/cited-passages';
-import type { DraftSuggestion } from '@/lib/content/suggestions';
+import { growsPastLimit, type DraftSuggestion } from '@/lib/content/suggestions';
 import { blockKey, citedLocks, citedPassagesKey, type CitedLocks } from './_cited-passages';
 
 /**
@@ -34,6 +34,9 @@ export interface SuggestionLabels {
   restore: string;
   locked: string;
   stale: string;
+  heading: string;
+  /** "Links": before the addresses a suggestion links to. */
+  links: string;
 }
 
 interface SuggestionView {
@@ -212,10 +215,16 @@ export function blockedReason(
   all: DraftSuggestion[],
   doc: PmNode = state.doc,
   locks: CitedLocks = citedLocks(state),
-): 'stale' | 'locked' | null {
+): 'stale' | 'locked' | 'heading' | null {
   const placed = placeSuggestion(state, { ...s, status: 'open' }, all, doc);
   if (!placed) return 'stale';
   if (placed.at === 'words' && lockedBlock(placed.block, locks)) return 'locked';
+  if (placed.at === 'words' && placed.block.node.type.name === 'heading') {
+    // A heading that would grow past its limit has taken in an answer.
+    const now = placed.block.node.textContent.length;
+    const then = now - s.beforeText.length + s.afterText.length;
+    if (growsPastLimit(placed.block.node.attrs.level, now, then)) return 'heading';
+  }
   return null;
 }
 
@@ -236,6 +245,15 @@ export function acceptInto(
   if (!placed) return false;
   if (placed.at === 'words') {
     tr.insertText(s.afterText, placed.from, placed.to);
+    // Its links (to the brand's pages and the draft's sources) on their words,
+    // and no other: a link the old words had doesn't spread over the new.
+    const link = state.schema.marks.link;
+    if (link && s.afterLinks?.length) {
+      tr.removeMark(placed.from, placed.from + s.afterText.length, link);
+    }
+    for (const { start, end, href } of link ? (s.afterLinks ?? []) : []) {
+      tr.addMark(placed.from + start, placed.from + end, link.create({ href }));
+    }
     return true;
   }
   if (placed.at === 'gap') {
@@ -256,6 +274,11 @@ export function undoInto(
   if (!placed) return false;
   if (placed.at === 'added') {
     tr.insertText(s.beforeText, placed.from, placed.to);
+    // Its links go with its words: the words back don't keep them.
+    const link = state.schema.marks.link;
+    if (link && s.afterLinks?.length) {
+      tr.removeMark(placed.from, placed.from + s.beforeText.length, link);
+    }
     return true;
   }
   if (placed.at === 'blocks') {
@@ -312,6 +335,27 @@ function el<K extends keyof HTMLElementTagNameMap>(
   return node;
 }
 
+/** Linked words on a card: underlined, the address on hover. */
+const LINKED = 'underline decoration-dotted underline-offset-2';
+
+/** A replace's new words, its links underlined. */
+function linkedWords(s: DraftSuggestion): HTMLElement {
+  const ins = el(
+    'ins',
+    'rounded-sm bg-emerald-50 text-emerald-800 no-underline dark:bg-emerald-950/40 dark:text-emerald-300',
+  );
+  let at = 0;
+  for (const { start, end, href } of s.afterLinks ?? []) {
+    ins.append(document.createTextNode(s.afterText.slice(at, start)));
+    const linked = el('span', LINKED, s.afterText.slice(start, end));
+    linked.title = href;
+    ins.append(linked);
+    at = end;
+  }
+  ins.append(document.createTextNode(s.afterText.slice(at)));
+  return ins;
+}
+
 function button(
   className: string,
   text: string,
@@ -350,7 +394,7 @@ function badge(text: string, tone: 'ok' | 'no'): HTMLElement {
 function card(
   s: DraftSuggestion,
   labels: SuggestionLabels,
-  blocked: 'stale' | 'locked' | null,
+  blocked: 'stale' | 'locked' | 'heading' | null,
   decide: (id: string, decision: SuggestionDecision) => void,
 ): HTMLElement {
   if (s.status === 'rejected') {
@@ -394,11 +438,7 @@ function card(
         s.beforeText,
       ),
       document.createTextNode(' '),
-      el(
-        'ins',
-        'rounded-sm bg-emerald-50 text-emerald-800 no-underline dark:bg-emerald-950/40 dark:text-emerald-300',
-        s.afterText,
-      ),
+      linkedWords(s),
     );
   } else {
     const added = el(
@@ -406,9 +446,32 @@ function card(
       'rounded-md bg-emerald-50 px-2 py-1 text-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-200 [&_li]:ml-4 [&_li]:list-disc [&_p]:my-1',
     );
     added.innerHTML = cleanHtml(s.afterText, { keepImages: false }).html;
+    // Shown, not followed: a click on the card mustn't leave the editor.
+    for (const a of [...added.querySelectorAll('a')]) {
+      const span = el('span', LINKED, a.textContent ?? '');
+      span.title = a.getAttribute('href') ?? '';
+      a.replaceWith(span);
+    }
     change.append(added);
   }
   box.append(change);
+  const hrefs = [
+    ...new Set(
+      s.kind === 'replace'
+        ? (s.afterLinks ?? []).map((l) => l.href)
+        : [...change.querySelectorAll<HTMLElement>('span[title]')].map((span) => span.title),
+    ),
+  ];
+  if (hrefs.length) {
+    // Where its links go, for the person to check before accepting.
+    box.append(
+      el(
+        'p',
+        'mt-1.5 truncate text-xs text-muted-foreground',
+        `${labels.links}: ${hrefs.join(' · ')}`,
+      ),
+    );
+  }
   if (blocked) {
     box.append(el('p', 'mt-1.5 text-xs text-amber-700 dark:text-amber-400', labels[blocked]));
   }

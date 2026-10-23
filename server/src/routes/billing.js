@@ -5,11 +5,14 @@
  * POST /api/billing/cancel-feedback — { reasons, message, choice } → kept and
  *                                     e-mailed to CANCEL_FEEDBACK_EMAILS, with
  *                                     replies going to the customer
+ * GET  /api/billing/ai-usage        — this period's AI usage (getAiUsage), for
+ *                                     the Billing page's meter
  */
 
 import { Router } from 'express';
 import supabaseAdmin from '../config/supabase.js';
 import { deliverEmail } from '../lib/email.js';
+import { PlanLimitError, getAiUsage, getOrgIdForUser } from '../lib/plan-guard.js';
 import {
   DAILY_LIMIT,
   SUBSCRIBED_STATUSES,
@@ -20,6 +23,36 @@ import {
 } from '../lib/cancel-feedback.js';
 
 const router = Router();
+
+router.get('/ai-usage', async (req, res) => {
+  try {
+    const orgId = await getOrgIdForUser(req.user.id);
+    // Self-hosted single-user setups may have no org row: no budget applies.
+    if (!orgId) {
+      return res.json({
+        plan: 'self_hosted',
+        planName: null,
+        periodStart: null,
+        periodEnd: null,
+        unlimited: true,
+        percentUsed: null,
+        features: [],
+      });
+    }
+    return res.json(await getAiUsage(orgId));
+  } catch (error) {
+    // No active plan (a new workspace, past due, canceled): no allowance to meter.
+    if (error instanceof PlanLimitError) {
+      return res.status(error.statusCode).json({
+        success: false,
+        error: 'plan_limit',
+        message: error.message,
+      });
+    }
+    req.log.error({ err: error }, '[billing] AI usage read failed');
+    return res.status(500).json({ error: 'Failed to read AI usage' });
+  }
+});
 
 router.post('/cancel-feedback', async (req, res) => {
   try {

@@ -572,11 +572,26 @@ describe('agent suggestions', () => {
       blockText: 'Our forecasting is very accurate.',
       beforeText: 'very accurate',
       afterText: 'shown per team',
+      afterLinks: null,
       reason: 'answer a fan-out',
       ruleKeys: ['dated'],
       status: 'open',
     });
     expect(calls[0].filters).toContainEqual(['eq', 'draft_id', DRAFT]);
+  });
+
+  it('reads a replace’s links, keeping only safe ones inside its words (00240)', async () => {
+    list = [
+      row({
+        after_links: [
+          { start: 0, end: 5, href: 'https://acme.example/pricing' },
+          { start: 3, end: 9, href: 'https://acme.example/overlap' },
+          { start: 10, end: 14, href: 'javascript:alert(1)' },
+        ],
+      }),
+    ];
+    const [read] = await getDraftSuggestions(DRAFT);
+    expect(read.afterLinks).toEqual([{ start: 0, end: 5, href: 'https://acme.example/pricing' }]);
   });
 
   it('keeps who decided through the database function', async () => {

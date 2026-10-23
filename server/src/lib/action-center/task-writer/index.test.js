@@ -255,7 +255,11 @@ describe('writeTasksForAction', () => {
 
     const usage = ops.filter((op) => op.table === 'prompt_improve_usage');
     expect(usage).toHaveLength(2);
-    expect(usage[0].payload).toMatchObject({ organization_id: 'o1', action_id: 'a1' });
+    expect(usage[0].payload).toMatchObject({
+      organization_id: 'o1',
+      action_id: 'a1',
+      feature: 'action_center',
+    });
     expect(ops.find((op) => op.table === 'action_events').payload).toMatchObject({
       event: 'tasks_generated',
       data: { count: 3, kept: 2, trigger: 'regenerate' },

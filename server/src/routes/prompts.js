@@ -1012,6 +1012,7 @@ async function recordImproveUsage(log, { organizationId, promptId, modelId, usag
   const { error } = await supabaseAdmin.from('prompt_improve_usage').insert({
     organization_id: organizationId,
     prompt_id: promptId,
+    feature: 'improve',
     model: modelId,
     input_tokens: usage?.inputTokens ?? null,
     output_tokens: usage?.outputTokens ?? null,

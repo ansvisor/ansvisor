@@ -5,6 +5,7 @@ import { rebuildSources, type RebuildSources } from './brief';
 import { MAX_PASSAGES } from './cited-passages';
 import { isPageType, type DraftMethod } from './drafts';
 import {
+  NOT_FOR_AGENT,
   activeRules,
   effectiveRules,
   ruleLength,
@@ -92,8 +93,13 @@ export async function agentWriteRequest(
   const effective = effectiveRules(draft.rules, setType ? mine?.[setType] : undefined);
   const rules = (
     inEffect?.rules ??
-    activeRules(ruleSet(setType, { language: draft.language }), effective).filter((rule) => rule.on)
-  ).filter((rule) => rule.check !== 'feed');
+    activeRules(
+      ruleSet(setType, { language: draft.language, length: draft.rules.importLength }),
+      effective,
+    ).filter((rule) => rule.on)
+  )
+    // Heading levels are the editor's (one H1), never the agent's.
+    .filter((rule) => rule.check !== 'feed' && !NOT_FOR_AGENT.has(rule.key));
   const textRules =
     inEffect?.textRules ?? effective.textRules.filter((rule) => rule.on).map((rule) => rule.text);
   const length = ruleLength(rules, setType);

@@ -1083,6 +1083,7 @@ export type Database = {
       content_draft_suggestions: {
         Row: {
           action_id: string | null
+          after_links: Json | null
           after_text: string
           agent: string
           batch_id: string
@@ -1101,6 +1102,7 @@ export type Database = {
         }
         Insert: {
           action_id?: string | null
+          after_links?: Json | null
           after_text: string
           agent?: string
           batch_id: string
@@ -1119,6 +1121,7 @@ export type Database = {
         }
         Update: {
           action_id?: string | null
+          after_links?: Json | null
           after_text?: string
           agent?: string
           batch_id?: string

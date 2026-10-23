@@ -235,7 +235,10 @@ describe('MentionsPerceptionTab', () => {
 
   it('says a read failed, and shows the skeleton again once a newer one is on its way', async () => {
     vi.useFakeTimers();
-    getMentionsPerception.mockRejectedValueOnce(new Error('offline'));
+    // Failed twice: once, and once more on the tab's own retry.
+    getMentionsPerception
+      .mockRejectedValueOnce(new Error('offline'))
+      .mockRejectedValueOnce(new Error('offline'));
     render(
       <MentionsPerceptionTab brandId="b1" brand="Ansvisor" filters={DEFAULT_MENTIONS_FILTERS} />,
     );
@@ -255,9 +258,65 @@ describe('MentionsPerceptionTab', () => {
     expect(container.querySelector('[aria-hidden]')).not.toBeNull();
   });
 
+  it('tries a failed read once more before saying it failed (a cold read past the limit)', async () => {
+    vi.useFakeTimers();
+    getMentionsPerception
+      .mockRejectedValueOnce(new Error('timeout'))
+      .mockResolvedValueOnce(perception);
+    render(
+      <MentionsPerceptionTab brandId="b1" brand="Ansvisor" filters={DEFAULT_MENTIONS_FILTERS} />,
+    );
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(250);
+    });
+    expect(getMentionsPerception).toHaveBeenCalledTimes(2);
+    expect(getMentionsPerception.mock.calls[1]).toEqual(getMentionsPerception.mock.calls[0]);
+    expect(container.textContent).toContain('What AI associates with Ansvisor');
+    expect(container.textContent).not.toContain("Couldn't load");
+  });
+
+  it('says it is still reading when a read takes a while', async () => {
+    vi.useFakeTimers();
+    let answer: (value: typeof perception) => void = () => {};
+    getMentionsPerception.mockReturnValueOnce(new Promise((resolve) => (answer = resolve)));
+    render(
+      <MentionsPerceptionTab brandId="b1" brand="Ansvisor" filters={DEFAULT_MENTIONS_FILTERS} />,
+    );
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(3_000);
+    });
+    // In the page from the start, empty, so a screen reader announces the words.
+    expect(container.querySelector('[role="status"]')!.textContent).toBe('');
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1_000);
+    });
+    expect(container.querySelector('[role="status"]')!.textContent).toBe(
+      "Still reading this period's figures. It can take a few seconds.",
+    );
+    await act(async () => answer(perception));
+    expect(container.querySelector('[role="status"]')!.textContent).toBe('');
+    expect(container.textContent).toContain('What AI associates with Ansvisor');
+
+    // New filters: the last figures stay, dimmed, and a slow read says so.
+    getMentionsPerception.mockReturnValueOnce(new Promise(() => {}));
+    render(
+      <MentionsPerceptionTab
+        brandId="b1"
+        brand="Ansvisor"
+        filters={{ ...DEFAULT_MENTIONS_FILTERS, range: '90d' }}
+      />,
+    );
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(4_000);
+    });
+    expect(container.querySelector('section[aria-busy="true"]')).not.toBeNull();
+    expect(container.querySelector('[role="status"]')!.textContent).toContain('Still reading');
+  });
+
   it('reads the same filters again on Try again, with the skeleton meanwhile', async () => {
     vi.useFakeTimers();
     getMentionsPerception
+      .mockRejectedValueOnce(new Error('timeout'))
       .mockRejectedValueOnce(new Error('timeout'))
       .mockResolvedValueOnce(perception);
     render(
@@ -274,8 +333,8 @@ describe('MentionsPerceptionTab', () => {
     await act(async () => {
       await vi.advanceTimersByTimeAsync(250);
     });
-    expect(getMentionsPerception).toHaveBeenCalledTimes(2);
-    expect(getMentionsPerception.mock.calls[1]).toEqual(getMentionsPerception.mock.calls[0]);
+    expect(getMentionsPerception).toHaveBeenCalledTimes(3);
+    expect(getMentionsPerception.mock.calls[2]).toEqual(getMentionsPerception.mock.calls[0]);
     expect(container.textContent).toContain('What AI associates with Ansvisor');
   });
 

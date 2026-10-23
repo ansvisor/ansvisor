@@ -15,6 +15,8 @@ import { CoMentionsCard, HeatmapCard, TermsCard } from './_perception-cards';
 
 /** Typing in the search box reads once it pauses, not on every key. */
 const READ_DELAY_MS = 250;
+/** A read still on its way after this says it is still reading. */
+const SLOW_MS = 4_000;
 
 type Loaded =
   | { brandId: string; key: string; status: 'ok'; perception: MentionsPerception | null }
@@ -34,7 +36,10 @@ function Message({ children }: { children: React.ReactNode }) {
  * The Perception tab (MS-09), as in the mockup: what AI associates with the
  * brand and the brand's shape against its competitors, then the brand ×
  * attribute heat map and the competitors named beside it. One read per
- * filter change; a newer change wins over a read still on its way.
+ * filter change; a newer change wins over a read still on its way. A read
+ * that fails is tried once more before the tab says so (a cold read past
+ * the database's limit usually answers the second time), and a slow one
+ * says it is still reading.
  */
 export function MentionsPerceptionTab({
   brandId,
@@ -52,12 +57,18 @@ export function MentionsPerceptionTab({
   const [loaded, setLoaded] = useState<Loaded | null>(null);
   // Try again reads the same filters once more.
   const [attempt, setAttempt] = useState(0);
+  // The read (for these filters, this try) still on its way after SLOW_MS.
+  const [slow, setSlow] = useState<string | null>(null);
+  const readKey = key ? `${key}#${attempt}` : null;
 
   useEffect(() => {
     if (!key || !query) return;
     let cancelled = false;
+    const read = () => getMentionsPerception(brandId, query);
     const timer = setTimeout(() => {
-      getMentionsPerception(brandId, query)
+      read()
+        // Once more before saying it failed.
+        .catch((err) => (cancelled ? Promise.reject(err) : read()))
         .then((perception) => {
           if (!cancelled) setLoaded({ brandId, key, status: 'ok', perception });
         })
@@ -65,14 +76,20 @@ export function MentionsPerceptionTab({
           if (!cancelled) setLoaded({ brandId, key, status: 'error' });
         });
     }, READ_DELAY_MS);
+    const slowTimer = setTimeout(() => {
+      if (!cancelled) setSlow(`${key}#${attempt}`);
+    }, SLOW_MS);
     return () => {
       cancelled = true;
       clearTimeout(timer);
+      clearTimeout(slowTimer);
     };
   }, [brandId, key, query, attempt]);
 
+  const isSlow = slow !== null && slow === readKey;
+  const skeleton = <PerceptionSkeleton slow={isSlow} />;
   if (!query) return <Message>{t('pickDates')}</Message>;
-  if (!loaded || loaded.brandId !== brandId) return <PerceptionSkeleton />;
+  if (!loaded || loaded.brandId !== brandId) return skeleton;
   if (loaded.status === 'error') {
     return loaded.key === key ? (
       <Message>
@@ -91,7 +108,7 @@ export function MentionsPerceptionTab({
         </Button>
       </Message>
     ) : (
-      <PerceptionSkeleton />
+      skeleton
     );
   }
   if (!loaded.perception) return <Message>{t('unavailable')}</Message>;
@@ -101,36 +118,56 @@ export function MentionsPerceptionTab({
   const mentions = perception.entities.find((e) => e.isBrand)?.mentions ?? 0;
 
   return (
-    <section
-      aria-label={t('sectionLabel')}
-      aria-busy={stale}
-      className={cn('flex flex-col gap-3 transition-opacity', stale && 'opacity-60')}
-    >
-      {mentions === 0 ? (
-        <Message>{t('noMentions', { brand })}</Message>
-      ) : (
-        <>
-          <div className="grid items-start gap-3 xl:grid-cols-2">
-            <TermsCard perception={perception} brand={brand} />
-            <BrandShapeCard perception={perception} brand={brand} />
-          </div>
-          <div className="grid items-start gap-3 xl:grid-cols-2">
-            <HeatmapCard perception={perception} />
-            <CoMentionsCard perception={perception} />
-          </div>
-          <p className="text-xs text-muted-foreground">{t('method')}</p>
-        </>
-      )}
-    </section>
+    <div className="flex flex-col gap-3">
+      {/* The figures shown are the last filters': a slow read of the new ones says so. */}
+      <SlowNote slow={stale && isSlow} />
+      <section
+        aria-label={t('sectionLabel')}
+        aria-busy={stale}
+        className={cn('flex flex-col gap-3 transition-opacity', stale && 'opacity-60')}
+      >
+        {mentions === 0 ? (
+          <Message>{t('noMentions', { brand })}</Message>
+        ) : (
+          <>
+            <div className="grid items-start gap-3 xl:grid-cols-2">
+              <TermsCard perception={perception} brand={brand} />
+              <BrandShapeCard perception={perception} brand={brand} />
+            </div>
+            <div className="grid items-start gap-3 xl:grid-cols-2">
+              <HeatmapCard perception={perception} />
+              <CoMentionsCard perception={perception} />
+            </div>
+            <p className="text-xs text-muted-foreground">{t('method')}</p>
+          </>
+        )}
+      </section>
+    </div>
   );
 }
 
-function PerceptionSkeleton() {
+/**
+ * Says a read is still on its way. Always in the page, empty until then, so
+ * screen readers announce the words when they come.
+ */
+function SlowNote({ slow }: { slow: boolean }) {
+  const t = useTranslations('mentions.perception');
   return (
-    <div className="grid gap-3 xl:grid-cols-2" aria-hidden>
-      {[0, 1, 2, 3].map((i) => (
-        <Skeleton key={i} className="h-[300px] rounded-xl" />
-      ))}
+    <p role="status" className={cn('text-sm text-muted-foreground', !slow && 'sr-only')}>
+      {slow ? t('slow') : ''}
+    </p>
+  );
+}
+
+function PerceptionSkeleton({ slow }: { slow: boolean }) {
+  return (
+    <div className="flex flex-col gap-3">
+      <SlowNote slow={slow} />
+      <div className="grid gap-3 xl:grid-cols-2" aria-hidden>
+        {[0, 1, 2, 3].map((i) => (
+          <Skeleton key={i} className="h-[300px] rounded-xl" />
+        ))}
+      </div>
     </div>
   );
 }

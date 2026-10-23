@@ -29,6 +29,7 @@ vi.mock('@/lib/supabase/admin', () => ({
         eq: (col: string, v: unknown) => (db.filters.push([table, col, v]), chain),
         in: () => chain,
         is: (col: string, v: unknown) => (db.filters.push([table, col, v]), chain),
+        or: () => chain,
         order: () => chain,
         limit: () => chain,
         insert: (value: unknown) => (db.writes.push({ table, op: 'insert', value }), chain),
@@ -221,6 +222,8 @@ describe('suggestContentChangesFor', () => {
     ]);
 
     expect(result).toMatchObject({ kept: 1, dropped: [{ index: 0, reason: 'locked' }] });
+    // No suggestion links: the sources aren't read.
+    expect(db.rpcCalls.map(([name]) => name)).not.toContain('content_draft_sources');
     const insert = db.writes.find((w) => w.table === 'content_draft_suggestions')!;
     expect(insert.value).toEqual([
       expect.objectContaining({
@@ -230,6 +233,43 @@ describe('suggestContentChangesFor', () => {
         kind: 'replace',
         block_text: 'Our forecasting is very accurate.',
         before_text: 'very accurate',
+      }),
+    ]);
+  });
+
+  it('keeps links only to the link targets get_content_draft lists (A)', async () => {
+    db.rows.content_drafts = draftRow();
+    db.rows.site_pages = [
+      { url: 'https://acme.example/accuracy', title: 'How we measure accuracy', h1: null },
+    ];
+    db.rpc.content_draft_sources = {
+      citedPages: [{ url: 'https://research.example/forecasting', title: 'A forecasting study' }],
+      brandDomains: ['acme.example'],
+      competitorDomains: [],
+    };
+
+    const draft = await getContentDraftFor(auth, 'd1');
+    expect(draft!.link_targets).toEqual({
+      own_pages: [{ url: 'https://acme.example/accuracy', title: 'How we measure accuracy' }],
+      sources: [{ url: 'https://research.example/forecasting', title: 'A forecasting study' }],
+    });
+
+    const result = await suggestContentChangesFor(auth, 'd1', [
+      {
+        kind: 'replace',
+        passage: 3,
+        before: 'very accurate',
+        after:
+          '<a href="https://acme.example/accuracy">shown per team</a>, as <a href="https://made-up.example">this</a> says',
+        reason: 'link how accuracy is measured',
+      },
+    ]);
+    expect(result).toMatchObject({ kept: 1, dropped: [] });
+    const insert = db.writes.find((w) => w.table === 'content_draft_suggestions')!;
+    expect(insert.value).toEqual([
+      expect.objectContaining({
+        after_text: 'shown per team, as this says',
+        after_links: [{ start: 0, end: 14, href: 'https://acme.example/accuracy' }],
       }),
     ]);
   });
