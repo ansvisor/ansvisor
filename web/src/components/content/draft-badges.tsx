@@ -1,8 +1,8 @@
 'use client';
 
 import { useTranslations } from 'next-intl';
-import { Loader2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import { LoadingDots } from '@/components/ui/loading-dots';
 import { cn } from '@/lib/utils';
 import type { AgentState, DraftMethod, DraftStatus } from '@/lib/content/drafts';
 
@@ -61,7 +61,7 @@ export function AgentStateBadge({ state }: { state: Exclude<AgentState, null> })
           : 'border-red-500/30 bg-red-500/10 text-red-600 dark:text-red-400'
       }
     >
-      {state === 'writing' && <Loader2 aria-hidden className="h-3 w-3 animate-spin" />}
+      {state === 'writing' && <LoadingDots />}
       {t(state)}
     </Badge>
   );

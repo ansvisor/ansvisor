@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
-import { Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Combobox,
@@ -26,6 +25,7 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { LoadingDots } from '@/components/ui/loading-dots';
 import {
   addDraftSource,
   getContentStartOptions,
@@ -206,7 +206,7 @@ export function AddSourceDialog({
               >
                 {kind === 'prompt' && !prompts ? (
                   <span className="flex items-center gap-2 text-muted-foreground">
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    <LoadingDots />
                     {t('loading')}
                   </span>
                 ) : (
@@ -244,7 +244,7 @@ export function AddSourceDialog({
             {t('cancel')}
           </Button>
           <Button disabled={!ready || saving} onClick={() => void add()}>
-            {saving && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+            {saving && <LoadingDots />}
             {t('submit')}
           </Button>
         </DialogFooter>

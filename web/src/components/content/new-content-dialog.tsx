@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
-import { ArrowLeft, FileText, Loader2, X } from 'lucide-react';
+import { ArrowLeft, FileText, X } from 'lucide-react';
 import { useRouter } from '@/i18n/navigation';
 import { Button } from '@/components/ui/button';
 import {
@@ -36,6 +36,7 @@ import {
 } from '@/components/ui/select';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
+import { LoadingDots } from '@/components/ui/loading-dots';
 import {
   createContentDraft,
   getContentOverlap,
@@ -748,7 +749,7 @@ export function NewContentDialog({
                 {t('back')}
               </Button>
               <Button onClick={() => void openEditor()} disabled={opening}>
-                {opening && <Loader2 className="h-4 w-4 animate-spin" />}
+                {opening && <LoadingDots />}
                 {t(
                   who === 'team'
                     ? 'start.sendToTeam'
@@ -834,7 +835,7 @@ export function NewContentDialog({
                         </span>
                       ) : (
                         <span className="flex items-center gap-2 text-muted-foreground">
-                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          <LoadingDots />
                           {t('loading')}
                         </span>
                       )}
@@ -945,7 +946,7 @@ export function NewContentDialog({
                         disabled={reading}
                       />
                       <Button type="submit" variant="outline" disabled={reading || !pageUrl.trim()}>
-                        {reading && <Loader2 className="h-4 w-4 animate-spin" />}
+                        {reading && <LoadingDots />}
                         {t(reading ? 'content.importing' : 'content.import')}
                       </Button>
                     </form>
@@ -992,7 +993,7 @@ export function NewContentDialog({
                       className="flex w-full flex-col items-center gap-1 rounded-lg border border-dashed px-3 py-6 text-center text-sm transition-colors hover:bg-muted/50"
                     >
                       {reading ? (
-                        <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                        <LoadingDots className="text-muted-foreground" />
                       ) : (
                         <span className="font-medium">{t('content.choose')}</span>
                       )}
@@ -1165,7 +1166,7 @@ function OverlapCheck({
       <Label>{t('label')}</Label>
       {!read ? (
         <p className="flex items-center gap-2 text-xs text-muted-foreground" aria-busy="true">
-          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          <LoadingDots />
           {t('checking')}
         </p>
       ) : read.failed || !overlap ? (

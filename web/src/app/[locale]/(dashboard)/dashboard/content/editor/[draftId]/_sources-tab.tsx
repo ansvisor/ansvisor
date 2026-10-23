@@ -11,9 +11,10 @@ import {
 } from 'react';
 import { useFormatter, useNow, useTranslations } from 'next-intl';
 import { toast } from 'sonner';
-import { Loader2, Plus, RefreshCw } from 'lucide-react';
+import { Plus, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
+import { LoadingDots } from '@/components/ui/loading-dots';
 import { setDraftSourceIncluded } from '@/lib/actions/content-drafts';
 import { platformNames } from '@/lib/content/impact';
 import {
@@ -118,7 +119,7 @@ export function SourcesTab({
   if (!read) {
     return (
       <div className="flex justify-center py-8" aria-busy="true">
-        <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+        <LoadingDots className="text-muted-foreground" />
       </div>
     );
   }

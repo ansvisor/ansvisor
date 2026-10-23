@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
-import { Loader2, Plus } from 'lucide-react';
+import { Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import {
@@ -22,6 +22,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { LoadingDots } from '@/components/ui/loading-dots';
 import { NewContentDialog } from '@/components/content/new-content-dialog';
 import { useUserRole } from '@/hooks/use-user-role';
 import {
@@ -274,7 +275,7 @@ export default function ContentLibraryPage() {
             </div>
           ) : drafts === null ? (
             <div className="flex items-center justify-center py-12" aria-busy="true">
-              <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+              <LoadingDots size="md" className="text-muted-foreground" />
             </div>
           ) : listed.length === 0 && inTab.length > 0 ? (
             <p className="px-6 py-12 text-center text-sm text-muted-foreground">

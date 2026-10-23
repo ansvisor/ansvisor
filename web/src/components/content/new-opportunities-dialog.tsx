@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
-import { Loader2, Minus, Plus, Sparkles } from 'lucide-react';
+import { Minus, Plus, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -31,6 +31,7 @@ import {
   ComboboxValue,
 } from '@/components/ui/combobox';
 import { Textarea } from '@/components/ui/textarea';
+import { LoadingDots } from '@/components/ui/loading-dots';
 import { cn } from '@/lib/utils';
 import { getTopics } from '@/lib/actions/topic';
 import { getBrandPrompts } from '@/lib/actions/tracking';
@@ -277,11 +278,7 @@ function NewOpportunitiesForm({
           {tCommon('cancel')}
         </Button>
         <Button onClick={submit} disabled={!canSubmit} className="gap-2">
-          {submitting ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : (
-            <Sparkles className="h-4 w-4" />
-          )}
+          {submitting ? <LoadingDots /> : <Sparkles className="h-4 w-4" />}
           {t('generate', { count })}
         </Button>
       </DialogFooter>

@@ -2,12 +2,13 @@
 
 import { useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
-import { Boxes, ExternalLink, FileText, Gauge, Layers, Loader2, Search } from 'lucide-react';
+import { Boxes, ExternalLink, FileText, Gauge, Layers, Search } from 'lucide-react';
 import { Link } from '@/i18n/navigation';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import { LoadingDots } from '@/components/ui/loading-dots';
 import { useAssetTypeLabel } from '@/hooks/use-asset-type-label';
 import { getOpportunityActions, type OpportunityActionResult } from '@/lib/actions/content';
 import type {
@@ -298,11 +299,7 @@ export function AssetsCard({
                     disabled={sendingKey !== null && sendingKey !== undefined}
                     onClick={() => onSend(a.key)}
                   >
-                    {sendingKey === a.key ? (
-                      <Loader2 className="h-3 w-3 animate-spin" />
-                    ) : (
-                      t('sendAsset')
-                    )}
+                    {sendingKey === a.key ? <LoadingDots /> : t('sendAsset')}
                   </Button>
                 )
               )}

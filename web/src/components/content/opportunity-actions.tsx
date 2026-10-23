@@ -15,7 +15,6 @@ import {
   FileText,
   ListChecks,
   ListPlus,
-  Loader2,
   MoreHorizontal,
   RefreshCw,
   RotateCcw,
@@ -34,6 +33,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { LoadingDots } from '@/components/ui/loading-dots';
 
 /**
  * The opportunity panel's actions (the user's spec): three in front, in this
@@ -116,11 +116,7 @@ export function OpportunityActions({
             disabled={sendToActions.disabled}
             className="gap-2"
           >
-            {sendToActions.sending ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <Target className="h-4 w-4" />
-            )}
+            {sendToActions.sending ? <LoadingDots /> : <Target className="h-4 w-4" />}
             {t('sendToActions')}
           </Button>
         )
@@ -139,11 +135,7 @@ export function OpportunityActions({
           title={brief.blockedReason ?? undefined}
           className="gap-2"
         >
-          {brief.generating ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : (
-            <Sparkles className="h-4 w-4" />
-          )}
+          {brief.generating ? <LoadingDots /> : <Sparkles className="h-4 w-4" />}
           {brief.generating ? t('generatingBrief') : t('generateBrief')}
         </Button>
       )}
@@ -165,11 +157,7 @@ export function OpportunityActions({
             onClick={content.onStart}
             disabled={draftId === undefined}
           >
-            {draftId === undefined ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <FilePen className="h-4 w-4" />
-            )}
+            {draftId === undefined ? <LoadingDots /> : <FilePen className="h-4 w-4" />}
             {t('sendToEditor')}
           </Button>
         ))}
@@ -212,7 +200,7 @@ export function OpportunityActions({
               disabled={plan.prioritized === undefined}
             >
               {plan.prioritized === undefined ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                <LoadingDots />
               ) : plan.prioritized ? (
                 <ListChecks className="h-3.5 w-3.5" />
               ) : (
@@ -228,11 +216,7 @@ export function OpportunityActions({
               disabled={alternative.running}
               title={t('alternative.hint')}
             >
-              {alternative.running ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              ) : (
-                <RefreshCw className="h-3.5 w-3.5" />
-              )}
+              {alternative.running ? <LoadingDots /> : <RefreshCw className="h-3.5 w-3.5" />}
               {alternative.running ? t('alternative.running') : t('alternative.button')}
             </DropdownMenuItem>
           )}
@@ -242,11 +226,7 @@ export function OpportunityActions({
               onClick={workflow.onSend}
               disabled={workflow.sending}
             >
-              {workflow.sending ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              ) : (
-                <Send className="h-3.5 w-3.5" />
-              )}
+              {workflow.sending ? <LoadingDots /> : <Send className="h-3.5 w-3.5" />}
               {workflow.sending
                 ? t('sending')
                 : workflow.sentBefore

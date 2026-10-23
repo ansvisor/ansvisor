@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
-import { ChevronDown, Download, FileSpreadsheet, FileText, FileType, Loader2 } from 'lucide-react';
+import { ChevronDown, Download, FileSpreadsheet, FileText, FileType } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -11,6 +11,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { LoadingDots } from '@/components/ui/loading-dots';
 import { BYTE_ORDER_MARK } from '@/lib/action-center/export';
 import { assigneeLabel } from '@/lib/action-center/display';
 import { getContentDraftPages, type DraftPage } from '@/lib/actions/content-drafts';
@@ -152,11 +153,7 @@ export function LibraryExportMenu({
         disabled={disabled || exporting}
         title={t('hint')}
       >
-        {exporting ? (
-          <Loader2 className="h-4 w-4 animate-spin" />
-        ) : (
-          <Download className="h-4 w-4" />
-        )}
+        {exporting ? <LoadingDots /> : <Download className="h-4 w-4" />}
         {t('button')}
         <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
       </DropdownMenuTrigger>

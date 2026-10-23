@@ -9,7 +9,7 @@ import StarterKit from '@tiptap/starter-kit';
 import { TableKit } from '@tiptap/extension-table';
 import Image from '@tiptap/extension-image';
 import { CharacterCount, Placeholder } from '@tiptap/extensions';
-import { ArrowLeft, Bot, Check, Copy, Loader2, PanelRight, Target, X } from 'lucide-react';
+import { ArrowLeft, Bot, Check, Copy, PanelRight, Target, X } from 'lucide-react';
 import { Link } from '@/i18n/navigation';
 import { Button } from '@/components/ui/button';
 import { buttonVariants } from '@/components/ui/button-variants';
@@ -21,6 +21,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { LoadingDots } from '@/components/ui/loading-dots';
 import { PLATFORM_LABELS } from '@/config/platform-labels';
 import { DraftMethodBadge, DraftStatusBadge } from '@/components/content/draft-badges';
 import {
@@ -1296,11 +1297,7 @@ export function DraftEditor({
               }
               onClick={markReady}
             >
-              {marking ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              ) : (
-                !canMarkReady && <Check className="h-3.5 w-3.5" />
-              )}
+              {marking ? <LoadingDots /> : !canMarkReady && <Check className="h-3.5 w-3.5" />}
               {t('markReady')}
             </Button>
             <Button

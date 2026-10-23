@@ -13,7 +13,8 @@ import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Loader2, CheckCircle2, XCircle } from 'lucide-react';
+import { LoadingDots } from '@/components/ui/loading-dots';
+import { CheckCircle2, XCircle } from 'lucide-react';
 import { getWebhookConfig, saveWebhookConfig, testWebhook } from '@/lib/actions/content';
 import { toast } from 'sonner';
 
@@ -129,7 +130,7 @@ export function WebhookSettingsDialog({ open, onOpenChange, brandId }: WebhookSe
 
         {loading ? (
           <div className="flex justify-center py-8">
-            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+            <LoadingDots size="md" className="text-muted-foreground" />
           </div>
         ) : (
           <div className="space-y-4">
@@ -232,7 +233,7 @@ export function WebhookSettingsDialog({ open, onOpenChange, brandId }: WebhookSe
                 disabled={testing || !url.trim()}
                 className="gap-2"
               >
-                {testing && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                {testing && <LoadingDots />}
                 {testing ? t('testing') : t('test')}
               </Button>
               <Button
@@ -241,7 +242,7 @@ export function WebhookSettingsDialog({ open, onOpenChange, brandId }: WebhookSe
                 disabled={saving || !url.trim()}
                 className="gap-2"
               >
-                {saving && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                {saving && <LoadingDots />}
                 {saving ? t('saving') : t('save')}
               </Button>
             </div>

@@ -51,7 +51,6 @@ import {
   Check,
   BarChart3,
   Search,
-  Loader2,
   X,
   Settings2,
   Trash2,
@@ -115,6 +114,7 @@ import {
   type NewOpportunitiesInput,
 } from '@/components/content/new-opportunities-dialog';
 import { Skeleton } from '@/components/ui/skeleton';
+import { LoadingDots } from '@/components/ui/loading-dots';
 import { PAGE_SIZE, TablePager, usePagination } from '@/components/table-pager';
 import { toCsv } from '@/lib/csv';
 import { readUrlChoice, writeUrlParams } from '@/lib/url-state';
@@ -872,7 +872,7 @@ export default function ContentPage() {
       className="gap-2"
       title={limitReached ? t('newLimitTooltip', { date: resetsOn }) : undefined}
     >
-      {generating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+      {generating ? <LoadingDots /> : <Plus className="h-4 w-4" />}
       {generating ? t('generating') : t('new')}
     </Button>
   );
@@ -1063,11 +1063,7 @@ export default function ContentPage() {
             size="sm"
             className="gap-2"
           >
-            {exporting ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <Download className="h-4 w-4" />
-            )}
+            {exporting ? <LoadingDots /> : <Download className="h-4 w-4" />}
             {tCommon('exportCsv')}
           </Button>
           <Button
@@ -1084,7 +1080,7 @@ export default function ContentPage() {
 
       {loading && opportunities.length === 0 ? (
         <div className="flex items-center justify-center min-h-[300px]">
-          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+          <LoadingDots size="md" className="text-muted-foreground" />
         </div>
       ) : opportunities.length === 0 && !hasActiveFilters ? (
         <Card>
@@ -1405,11 +1401,7 @@ export default function ContentPage() {
                     onClick={handleBulkSend}
                     disabled={bulkSending}
                   >
-                    {bulkSending ? (
-                      <Loader2 className="h-3 w-3 animate-spin" />
-                    ) : (
-                      <Send className="h-3 w-3" />
-                    )}
+                    {bulkSending ? <LoadingDots /> : <Send className="h-3 w-3" />}
                     {t('bulk.sendAll')}
                   </Button>
 

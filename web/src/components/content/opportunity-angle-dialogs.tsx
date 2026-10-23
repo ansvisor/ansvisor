@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
-import { Loader2, RefreshCw } from 'lucide-react';
+import { RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -13,6 +13,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
+import { LoadingDots } from '@/components/ui/loading-dots';
 import { cn } from '@/lib/utils';
 import { getContentUsage } from '@/lib/actions/content';
 
@@ -126,11 +127,7 @@ function AlternativeForm({
           {tCommon('cancel')}
         </Button>
         <Button onClick={submit} disabled={submitting || noneLeft} className="gap-2">
-          {submitting ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : (
-            <RefreshCw className="h-4 w-4" />
-          )}
+          {submitting ? <LoadingDots /> : <RefreshCw className="h-4 w-4" />}
           {t('generate')}
         </Button>
       </DialogFooter>

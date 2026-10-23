@@ -3,9 +3,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useFormatter, useTranslations } from 'next-intl';
 import { toast } from 'sonner';
-import { Loader2, Plus } from 'lucide-react';
+import { Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import { LoadingDots } from '@/components/ui/loading-dots';
 import { NewContentDialog, type DialogPreset } from '@/components/content/new-content-dialog';
 import {
   getContentPlan,
@@ -365,7 +366,7 @@ export default function ContentPlanPage() {
 
       {loading ? (
         <div className="flex items-center justify-center py-16" aria-busy="true">
-          <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+          <LoadingDots size="md" className="text-muted-foreground" />
         </div>
       ) : (
         <>
@@ -418,7 +419,7 @@ export default function ContentPlanPage() {
                   </div>
                 ) : !plan ? (
                   <div className="flex items-center justify-center py-12" aria-busy="true">
-                    <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                    <LoadingDots size="md" className="text-muted-foreground" />
                   </div>
                 ) : rows.length === 0 ? (
                   <p className="px-6 py-12 text-center text-sm text-muted-foreground">

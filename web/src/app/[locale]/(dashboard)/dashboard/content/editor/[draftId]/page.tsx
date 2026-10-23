@@ -3,10 +3,10 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
-import { Loader2 } from 'lucide-react';
 import { Link } from '@/i18n/navigation';
 import { Button } from '@/components/ui/button';
 import { buttonVariants } from '@/components/ui/button-variants';
+import { LoadingDots } from '@/components/ui/loading-dots';
 import { getContentDraft } from '@/lib/actions/content-drafts';
 import { AGENT_POLL_MS, CONTENT_LIBRARY_PATH, type ContentDraft } from '@/lib/content/drafts';
 import { useBrandStore } from '@/stores/use-brand-store';
@@ -92,7 +92,7 @@ export default function ContentEditorPage() {
     <div className="-m-6 flex h-[calc(100vh-4rem)] flex-col md:h-screen">
       {!current ? (
         <div className="flex flex-1 items-center justify-center" aria-busy="true">
-          <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+          <LoadingDots size="md" className="text-muted-foreground" />
         </div>
       ) : current.draft && writing ? (
         <AgentWriting

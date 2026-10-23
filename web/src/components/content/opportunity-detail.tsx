@@ -8,7 +8,6 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
   ArrowLeft,
-  Loader2,
   TrendingUp,
   Eye,
   Users,
@@ -37,6 +36,7 @@ import {
 } from '@/lib/actions/content';
 import { EstimateBadge, EstimateRange } from '@/components/prompts/volume-estimate';
 import { Skeleton } from '@/components/ui/skeleton';
+import { LoadingDots } from '@/components/ui/loading-dots';
 import {
   AlternativeDialog,
   DismissReasonDialog,
@@ -418,7 +418,7 @@ export function OpportunityDetail({
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        <LoadingDots size="md" className="text-muted-foreground" />
       </div>
     );
   }
@@ -859,11 +859,7 @@ export function OpportunityDetail({
                     disabled={generatingBrief}
                     className="gap-2"
                   >
-                    {generatingBrief ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <Sparkles className="h-4 w-4" />
-                    )}
+                    {generatingBrief ? <LoadingDots /> : <Sparkles className="h-4 w-4" />}
                     {generatingBrief ? 'Generating...' : 'Generate Content Brief'}
                   </Button>
                   {quotaLimited && (

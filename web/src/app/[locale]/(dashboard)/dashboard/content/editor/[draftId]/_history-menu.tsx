@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useFormatter, useNow, useTranslations } from 'next-intl';
-import { History, Loader2, RotateCcw } from 'lucide-react';
+import { History, RotateCcw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -13,6 +13,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { LoadingDots } from '@/components/ui/loading-dots';
 import { getDraftVersions } from '@/lib/actions/content-drafts';
 import { HISTORY_DAYS, type DraftVersion } from '@/lib/content/history';
 
@@ -85,7 +86,7 @@ export function HistoryMenu({
           </div>
           {versions === 'loading' ? (
             <p className="flex items-center gap-2 px-1.5 py-2 text-xs text-muted-foreground">
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              <LoadingDots />
               {t('loading')}
             </p>
           ) : versions === 'failed' ? (

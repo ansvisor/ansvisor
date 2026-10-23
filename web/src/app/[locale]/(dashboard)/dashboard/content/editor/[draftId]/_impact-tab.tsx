@@ -2,9 +2,10 @@
 
 import { useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
-import { Check, ExternalLink, Loader2 } from 'lucide-react';
+import { Check, ExternalLink } from 'lucide-react';
 import { Link } from '@/i18n/navigation';
 import { Button } from '@/components/ui/button';
+import { LoadingDots } from '@/components/ui/loading-dots';
 import { getContentImpact, getContentResults } from '@/lib/actions/content-drafts';
 import {
   DEFAULT_IMPACT_PERIOD,
@@ -121,7 +122,7 @@ export function ImpactTab({
 
       {!current ? (
         <div className="flex justify-center py-8" aria-busy="true">
-          <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+          <LoadingDots className="text-muted-foreground" />
         </div>
       ) : current.failed || !impact ? (
         <p className="flex items-center gap-2 text-xs text-muted-foreground">

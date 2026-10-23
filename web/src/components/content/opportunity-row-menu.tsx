@@ -7,7 +7,6 @@ import {
   FileText,
   ListChecks,
   ListPlus,
-  Loader2,
   MoreHorizontal,
   RotateCcw,
   Send,
@@ -21,6 +20,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { LoadingDots } from '@/components/ui/loading-dots';
 
 /**
  * An Opportunities list row's actions, in one "…" menu as the panel keeps
@@ -87,11 +87,7 @@ export function OpportunityRowMenu({
               onClick={editor.onStart}
               disabled={draftId === undefined}
             >
-              {draftId === undefined ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              ) : (
-                <FilePen className="h-3.5 w-3.5" />
-              )}
+              {draftId === undefined ? <LoadingDots /> : <FilePen className="h-3.5 w-3.5" />}
               {t('sendToEditor')}
             </DropdownMenuItem>
           )
@@ -103,7 +99,7 @@ export function OpportunityRowMenu({
             disabled={plan.prioritized === undefined}
           >
             {plan.prioritized === undefined ? (
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              <LoadingDots />
             ) : plan.prioritized ? (
               <ListChecks className="h-3.5 w-3.5" />
             ) : (
@@ -114,11 +110,7 @@ export function OpportunityRowMenu({
         )}
         {workflow && (
           <DropdownMenuItem className="gap-2" onClick={workflow.onSend} disabled={workflow.sending}>
-            {workflow.sending ? (
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-            ) : (
-              <Send className="h-3.5 w-3.5" />
-            )}
+            {workflow.sending ? <LoadingDots /> : <Send className="h-3.5 w-3.5" />}
             {t('sendToWorkflow')}
           </DropdownMenuItem>
         )}

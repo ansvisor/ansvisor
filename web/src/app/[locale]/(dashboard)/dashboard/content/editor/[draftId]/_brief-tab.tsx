@@ -3,10 +3,11 @@
 import { useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
-import { Bot, Loader2, Pencil, Plus, Trash2 } from 'lucide-react';
+import { Bot, Pencil, Plus, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
+import { LoadingDots } from '@/components/ui/loading-dots';
 import { saveDraftBrief } from '@/lib/actions/content-drafts';
 import { MAX_BRIEF_SECTIONS, builtFromCount, type DraftBrief } from '@/lib/content/brief';
 import type { DraftMethod } from '@/lib/content/drafts';
@@ -90,7 +91,7 @@ export function BriefTab({
   if (state.status === 'loading') {
     return (
       <div className="flex justify-center py-8" aria-busy="true">
-        <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+        <LoadingDots className="text-muted-foreground" />
       </div>
     );
   }
@@ -455,7 +456,7 @@ function BriefEditor({
       </label>
       <div className="flex gap-2">
         <Button size="sm" disabled={saving} onClick={() => void save()}>
-          {saving && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+          {saving && <LoadingDots />}
           {t('save')}
         </Button>
         <Button size="sm" variant="outline" disabled={saving} onClick={onCancel}>
