@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import type { ContentAuthor } from './authors';
 import type { LinkCheck } from './quality-checks';
+import { PLACEHOLDER } from './placeholders';
 import {
+  blankCode,
   exportPlaceholders,
   fragment,
   pageFields,
@@ -83,9 +85,62 @@ describe('titlePlaceholders', () => {
     expect(titlePlaceholders(title, '<p>No H1.</p>')).toBe(1);
   });
 
+  it('counts it with the page when a heading or the first line reads as it, H1 or not', () => {
+    const title = 'How [name of a real person] forecasts';
+    // An H2 with no H1 above it: the title is that heading.
+    expect(titlePlaceholders(title, '<h2>How [name of a real person] forecasts</h2>')).toBe(0);
+    expect(titlePlaceholders(title, '<p>Teams trust it.</p><h2>Other</h2>')).toBe(1);
+    // No heading: the title is the first line's start, cut with an ellipsis.
+    const line =
+      'Ask [name of a real person] how pipeline forecasting works when the quarter closes and the numbers shift.';
+    expect(
+      titlePlaceholders(
+        'Ask [name of a real person] how pipeline forecasting works when the quarter…',
+        `<p>${line}</p>`,
+      ),
+    ).toBe(0);
+  });
+
   it("reads a person's brackets in the title as part of it", () => {
     expect(titlePlaceholders('Best CRM tools [2026 Update]', '<p>No H1.</p>')).toBe(0);
     expect(titlePlaceholders('The checklist [PDF]', '<h1>The checklist</h1>')).toBe(0);
+  });
+});
+
+describe('blankCode', () => {
+  const matches = (text: string) => [...text.matchAll(PLACEHOLDER)];
+
+  it('leaves only where exportPlaceholders reads, each position as in the HTML', () => {
+    const html =
+      '<style>a[href] { color: red }</style><script>var a = ["x y"];</script>\n' +
+      '<script type="application/ld+json">{"@type":"FAQPage","sameAs":["https://x.example/"],"text":"Costs [price]."}</script>\n' +
+      '<!-- [old note] -->\n<h1>Best CRM tools [2026 Update]</h1>\n' +
+      '<p class="[cta]">Ask <img src="https://cdn.acme.com/a.jpg" alt="[photo of the founder]"> [name of a real person].</p>';
+    const blanked = blankCode(html, { words: true });
+    expect(blanked).toHaveLength(html.length);
+    const found = matches(blanked).map((m) => html.slice(m.index, m.index + m[0].length));
+    expect(found).toEqual(['[price]', '[photo of the founder]', '[name of a real person]']);
+    expect(found).toHaveLength(exportPlaceholders(html));
+    // A heading's own forms stay; a JSON-LD that doesn't parse is read for none.
+    expect(
+      matches(
+        blankCode(
+          '<h2>What [name of a real person] uses</h2><script type="application/ld+json">{"a":"[x y]",</script>',
+          { words: true },
+        ),
+      ).map((m) => m[0]),
+    ).toEqual(['[name of a real person]']);
+  });
+
+  it('blanks comments and what scripts, styles and templates hold, keeping the tags', () => {
+    const html =
+      '<!-- <h1>Old</h1> -->\n<script>document.write("</h1>")</script><template><h1>T</h1></template>\n<h1>Pour-over</h1>';
+    const blanked = blankCode(html);
+    expect(blanked).toHaveLength(html.length);
+    expect(blanked.indexOf('<h1>')).toBe(html.lastIndexOf('<h1>'));
+    expect(blanked.indexOf('</h1>')).toBe(html.lastIndexOf('</h1>'));
+    expect(blanked).toContain('<script>');
+    expect(blanked).toContain('</template>');
   });
 });
 

@@ -4255,6 +4255,7 @@
           "unread": "No placeholders, all images have alt text; {links}.",
           "reading": "{count, plural, one {# link is} other {# links are}} still being read",
           "unreadShort": "{count, plural, one {# link wasn't} other {# links weren't}} read: check {count, plural, one {it} other {them}}",
+          "readingAndUnread": "{reading, plural, one {# link is} other {# links are}} still being read, {unread, plural, one {# wasn't} other {# weren't}} read: check {unread, plural, one {it} other {them}}",
           "fill": "Fill now"
         },
         "logged": "Mark ready anyway is logged, with this Trust.",

@@ -76,7 +76,12 @@ import { PAGE_READ_DELAY_MS, draftTitleFromDoc, safeLinkHref } from '@/lib/conte
 import { JsonLd } from '@/lib/content/json-ld-node';
 import { firstImage } from '@/lib/content/page-schema';
 import { PLACEHOLDER, pagePlaceholders, placeholderIn } from '@/lib/content/placeholders';
-import { exportPlaceholders, pasteChecks, titlePlaceholders } from '@/lib/content/ready-to-publish';
+import {
+  blankCode,
+  exportPlaceholders,
+  pasteChecks,
+  titlePlaceholders,
+} from '@/lib/content/ready-to-publish';
 import { detectPageType } from '@/lib/content/page-types';
 import { BAND_CLASSES, qualityAverage, qualityBand, qualityPhase } from '@/lib/content/quality';
 import { eeat, linksToCheck, trust, trustBlocks } from '@/lib/content/quality-checks';
@@ -974,13 +979,14 @@ export function DraftEditor({
 
   /**
    * Fill now (Export, CE-057): the first placeholder, in the HTML view's
-   * text while it is open, else in the page; one only an HTML block holds is
+   * text while it is open (where exportPlaceholders reads: not in tags,
+   * styles or scripts), else in the page; one only an HTML block holds is
    * said to be there.
    */
   const htmlSourceRef = useRef<HTMLTextAreaElement>(null);
   const fillFirstPlaceholder = () => {
     if (htmlSource !== null) {
-      const m = new RegExp(PLACEHOLDER.source, 'iu').exec(htmlSource);
+      const m = new RegExp(PLACEHOLDER.source, 'iu').exec(blankCode(htmlSource, { words: true }));
       const area = htmlSourceRef.current;
       if (m && area) {
         area.focus();
@@ -1499,7 +1505,10 @@ export function DraftEditor({
     setPublishOpen({ mode, html: pageToPublish() });
     if (mode === 'markReady') nudgeAt('markReady');
   };
-  const readyToPaste = (html: string): ReadyToPaste => {
+  // Read once per change (a link read landing, the title), not on every render.
+  const readyToPaste = useMemo((): ReadyToPaste | null => {
+    if (!publishOpen) return null;
+    const { html } = publishOpen;
     const { links, images } = pasteChecks(html, linkChecks);
     return {
       placeholders: exportPlaceholders(html) + titlePlaceholders(title, html),
@@ -1507,7 +1516,7 @@ export function DraftEditor({
       linksBroken: links.broken,
       linksUnread: links.count - links.read,
     };
-  };
+  }, [publishOpen, linkChecks, title]);
   /** Marks it ready; past Before you publish's warning, logged with its facts. */
   const markReady = async (anyway?: ReadyAnyway) => {
     setMarking(true);
@@ -1942,10 +1951,10 @@ export function DraftEditor({
         />
       )}
 
-      {quality && publishOpen && (
+      {quality && publishOpen && readyToPaste && (
         <BeforePublish
           mode={publishOpen.mode}
-          paste={readyToPaste(publishOpen.html)}
+          paste={readyToPaste}
           onFillNow={() => {
             setPublishOpen(null);
             fillFirstPlaceholder();

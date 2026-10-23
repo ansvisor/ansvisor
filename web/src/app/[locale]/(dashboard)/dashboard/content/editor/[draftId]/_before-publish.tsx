@@ -309,11 +309,18 @@ type T = ReturnType<typeof useTranslations<'contentEditor.editor.beforePublish'>
  * link working; what is still open, named, or the links not all read yet.
  */
 function readyRow(t: T, paste: ReadyToPaste, linksPending: number): Row {
-  const unread = paste.linksUnread
-    ? linksPending
-      ? t('paste.reading', { count: paste.linksUnread })
-      : t('paste.unreadShort', { count: paste.linksUnread })
-    : null;
+  // The reads still coming are for some of the unread links at most: one the
+  // site refused, one past the reads' limit or one in an HTML block gets none.
+  const reading = Math.min(linksPending, paste.linksUnread);
+  const notRead = paste.linksUnread - reading;
+  const unread =
+    reading && notRead
+      ? t('paste.readingAndUnread', { reading, unread: notRead })
+      : reading
+        ? t('paste.reading', { count: reading })
+        : notRead
+          ? t('paste.unreadShort', { count: notRead })
+          : null;
   const open = [
     paste.placeholders && t('paste.placeholders', { count: paste.placeholders }),
     paste.imagesWithoutAlt && t('paste.alt', { count: paste.imagesWithoutAlt }),

@@ -2829,8 +2829,8 @@ describe('the side panel', () => {
     it("counts a title that is the page's H1 once, and Fill now goes to it", async () => {
       getContentDraft.mockResolvedValue(
         draft({
-          title: 'How [company name] forecasts',
-          bodyHtml: '<h1>How [company name] forecasts</h1><p>Teams trust it.</p>',
+          title: 'How [name of a real person] forecasts',
+          bodyHtml: '<h1>How [name of a real person] forecasts</h1><p>Teams trust it.</p>',
         }),
       );
       await renderPage();
@@ -2843,7 +2843,63 @@ describe('the side panel', () => {
       const editor = (container.querySelector('.ProseMirror') as HTMLElement & { editor: Editor })
         .editor;
       const { from, to } = editor.state.selection;
-      expect(editor.state.doc.textBetween(from, to)).toBe('[company name]');
+      expect(editor.state.doc.textBetween(from, to)).toBe('[name of a real person]');
+    });
+
+    it("reads a FAQPage's JSON-LD by its strings: Ready to paste is done", async () => {
+      const faq = {
+        '@context': 'https://schema.org',
+        '@type': 'FAQPage',
+        mainEntity: [
+          {
+            '@type': 'Question',
+            name: 'How long does it take?',
+            acceptedAnswer: { '@type': 'Answer', text: 'About a week.' },
+          },
+        ],
+        sameAs: ['https://x.example/acme'],
+      };
+      getContentDraft.mockResolvedValue(
+        draft({
+          bodyHtml: `<h1>Pipeline forecasting</h1><p>Teams trust it.</p><script type="application/ld+json">${JSON.stringify(faq)}</script>`,
+        }),
+      );
+      await renderPage();
+      const ready =
+        'Ready to paste · doneNo placeholders, all images have alt text, all links work.';
+      await act(async () => button('Export')!.click());
+      expect(dialog()!.textContent).toContain(ready);
+      await act(async () => inDialog('Continue to export').click());
+      expect(dialog()!.querySelector('[role="alert"]')).toBeNull();
+      expect(inDialog('Copy for Webflow').disabled).toBe(false);
+      await act(async () => inDialog('Cancel').click());
+      await act(async () => button('Mark ready')!.click());
+      expect(dialog()!.textContent).toContain(ready);
+    });
+
+    it('fills in the HTML view where the count reads, past code and markup', async () => {
+      getContentDraft.mockResolvedValue(draft());
+      await renderPage();
+      await act(async () => button('Edit as HTML')!.click());
+      const source = container.querySelector('textarea')!;
+      const html =
+        '<!-- html-block -->\n<style>.cta a[href] { color: red }</style>\n<!-- /html-block -->\n' +
+        '<h1 title="Pipeline">Pipeline forecasting [2026 Update]</h1>\n<p>Ask [name of a real person] how.</p>';
+      const setValue = Object.getOwnPropertyDescriptor(
+        HTMLTextAreaElement.prototype,
+        'value',
+      )!.set!;
+      await act(async () => {
+        setValue.call(source, html);
+        source.dispatchEvent(new Event('input', { bubbles: true }));
+      });
+      await act(async () => button('Export')!.click());
+      expect(dialog()!.textContent).toContain('1 placeholder still open');
+      await act(async () => inDialog('Fill now').click());
+      expect(dialog()).toBeNull();
+      expect(source.value.slice(source.selectionStart, source.selectionEnd)).toBe(
+        '[name of a real person]',
+      );
     });
 
     it('sends Copy HTML to Export while a placeholder is open, and Fill now goes to it', async () => {
