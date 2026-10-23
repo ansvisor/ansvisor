@@ -269,11 +269,12 @@ export function PromptUsageCards({
   return (
     <section className="overflow-hidden rounded-xl border bg-card">
       {/* The whole bar opens it, as the Content plan's "What AI cites": "Show"
-          and a chevron on the right say so. Plan & usage keeps its own page. */}
+          and a chevron on the right say so. Plan & usage keeps its own page,
+          so while the pointer is on that link the bar doesn't look clickable. */}
       <div
         onClick={() => setOpen((o) => !o)}
         className={cn(
-          'group flex cursor-pointer flex-wrap items-center gap-x-2.5 gap-y-1 px-4 py-3 transition-colors hover:bg-muted/50',
+          'group flex cursor-pointer flex-wrap items-center gap-x-2.5 gap-y-1 px-4 py-3 transition-colors hover:bg-muted/50 has-[a:hover]:bg-transparent',
           open && 'border-b',
         )}
       >
@@ -314,7 +315,7 @@ export function PromptUsageCards({
             setOpen((o) => !o);
           }}
           className={cn(
-            'flex items-center gap-1 rounded text-xs font-medium text-foreground group-hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50',
+            'flex items-center gap-1 rounded text-xs font-medium text-foreground group-hover:underline group-has-[a:hover]:no-underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50',
             !planHref && 'ml-auto',
           )}
         >
