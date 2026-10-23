@@ -20,7 +20,18 @@ export interface SiteTrust {
   /** How many of the five pass. */
   score: number;
   checkedAt: string;
+  /**
+   * False when the site didn't answer all of it (a timeout, a bot wall): a
+   * check that fails may only not have been read. An older API leaves it out.
+   */
+  complete?: boolean;
 }
+
+/**
+ * How long the API keeps a read when asked to check again, and before it
+ * reads a partial one again (site-trust.js RECHECK_MS).
+ */
+export const SITE_TRUST_RECHECK_MS = 10 * 60 * 1000;
 
 /** Where Quality's "Fix in Site Audit" goes: the card in Site Audit. */
 export const SITE_TRUST_PATH = '/dashboard/audit#site-trust';
