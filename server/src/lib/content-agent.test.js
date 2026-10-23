@@ -12,7 +12,7 @@ const DRAFT = '77777777-7777-7777-7777-777777777777';
 let rows;
 let writes;
 const generateObject = vi.fn();
-const enforceImproveQuota = vi.fn();
+const reserveAiBudget = vi.fn();
 
 vi.mock('../config/supabase.js', () => ({
   default: {
@@ -31,11 +31,19 @@ vi.mock('../config/supabase.js', () => ({
     },
   },
 }));
-vi.mock('ai', () => ({ generateObject: (...args) => generateObject(...args) }));
+class NoObjectGeneratedError extends Error {
+  static isInstance(err) {
+    return err instanceof NoObjectGeneratedError;
+  }
+}
+vi.mock('ai', () => ({
+  generateObject: (...args) => generateObject(...args),
+  NoObjectGeneratedError,
+}));
 vi.mock('./ai-provider.js', () => ({ resolveModel: vi.fn((id) => `model:${id}`) }));
 vi.mock('./plan-guard.js', async (importOriginal) => ({
   ...(await importOriginal()),
-  enforceImproveQuota: (...args) => enforceImproveQuota(...args),
+  reserveAiBudget: (...args) => reserveAiBudget(...args),
 }));
 vi.mock('./logger.js', () => ({ logger: { error: vi.fn(), warn: vi.fn() } }));
 const readLinkTargets = vi.fn();
@@ -45,6 +53,7 @@ vi.mock('./content-links.js', async (importOriginal) => ({
 }));
 
 const {
+  asksMoreThanOne,
   buildFixPrompt,
   cleanInsertHtml,
   draftPassages,
@@ -60,6 +69,8 @@ const {
 } = await import('./content-agent.js');
 const { linkKey, NO_LINK_TARGETS } = await import('./content-links.js');
 const { PlanLimitError } = await import('./plan-guard.js');
+// The real hold: self-hosted here, so it reserves nothing and writes each charge.
+const realGuard = await vi.importActual('./plan-guard.js');
 
 const BODY =
   '<h1>How to brew pour-over coffee</h1><p>Pour-over coffee tastes better than other methods.</p>' +
@@ -100,7 +111,7 @@ beforeEach(() => {
     brands: { name: 'Acme Coffee', organization_id: 'org-1', language: 'en' },
   };
   generateObject.mockReset();
-  enforceImproveQuota.mockReset().mockResolvedValue(undefined);
+  reserveAiBudget.mockReset().mockImplementation(realGuard.reserveAiBudget);
   readLinkTargets.mockReset().mockResolvedValue(NO_LINK_TARGETS);
 });
 
@@ -309,6 +320,36 @@ describe('a replace on a heading', () => {
     expect(keep({ after: 'What is LLM SEO '.repeat(10) })).toEqual([]);
   });
 
+  it('drops one that adds a second question to a heading, and keeps a question reworded', () => {
+    const faq = draftPassages(
+      '<h2>FAQ</h2><h3>What is AEO?</h3><p>Answer engine optimization.</p>',
+    );
+    const run = (after) =>
+      keepSuggestions(
+        [suggestion({ passage: 2, before: 'What is AEO?', after, rules: ['fanoutFaq'] })],
+        faq,
+        new Set(),
+        new Set(['fanoutFaq']),
+      );
+    // A fan-out's question added to the one there, short, past the limit or answered.
+    expect(run('What is AEO? What is an AEO tracker?')).toEqual([]);
+    expect(
+      run(
+        'What is AEO? What is an AEO tracker? An AEO tracker is a tool that reads many AI engines for you.',
+      ),
+    ).toEqual([]);
+    expect(
+      run(`What is AEO? How does ${'an AEO tracker read many engines and '.repeat(3)}work?`),
+    ).toEqual([]);
+    // The question reworded into the fan-out's words.
+    expect(run('What is an AEO tracker?')).toEqual([
+      expect.objectContaining({ kind: 'replace', after_text: 'What is an AEO tracker?' }),
+    ]);
+    // A heading that already asks two may still change.
+    expect(asksMoreThanOne({ tag: 'h3', text: 'Why AEO? Why now?' }, 'now', 'today')).toBe(false);
+    expect(asksMoreThanOne({ tag: 'p', text: 'Why?' }, 'Why?', 'Why? How?')).toBe(false);
+  });
+
   it('holds an H1 to 70 characters and other headings to 90, unless they get shorter', () => {
     expect(HEADING_LIMITS).toEqual({ h1: 70, other: 90 });
     const h1 = { tag: 'h1', text: 'Guide' };
@@ -389,6 +430,16 @@ describe('a replace on a heading', () => {
     // Past the heading's limit the rest goes under it, a full stop or not.
     const long = `What is LLM SEO? ${'LLM SEO optimizes pages for large language models '.repeat(2)}`;
     expect(splitReplace(long, 'h2').words).toBe('What is LLM SEO?');
+    // A second question is no answer, with its own answer or not: it stays,
+    // for keepSuggestions to drop.
+    const two = `What is LLM SEO? How does ${'LLM SEO read many engines and '.repeat(3)}work?`;
+    expect(splitReplace(two, 'h2')).toMatchObject({ words: two, blocks: '' });
+    const answered =
+      'What is AEO? What is an AEO tracker? An AEO tracker is a tool that reads many AI engines for you.';
+    expect(splitReplace(answered, 'h3')).toMatchObject({ words: answered, blocks: '' });
+    // An answer that ends on a question still goes under the heading.
+    const why = `What is LLM SEO? ${'LLM SEO optimizes pages for large language models. '.repeat(2)}Why care?`;
+    expect(splitReplace(why, 'h2').words).toBe('What is LLM SEO?');
   });
 
   it('moves blocks sent with a paragraph replace after it', () => {
@@ -532,6 +583,9 @@ describe('links to the pages and sources given', () => {
     // Only the rule asked for: no outbound list.
     expect(prompt).not.toContain('Sources you may link to');
     expect(system).toContain('Never invent a URL');
+    // The fan-outs a rule names, in their words (B).
+    expect(system).toContain('fanoutH2 wants an H2, fanoutFaq a question');
+    expect(system).toContain('One question per heading: never add a question to a heading.');
     expect(result.count).toBe(1);
     const batch = writes.find((w) => w.table === 'content_draft_suggestions');
     expect(batch.value[0]).toMatchObject({
@@ -569,7 +623,10 @@ describe('fixDraftRules', () => {
 
     const result = await fixDraftRules({ draftId: DRAFT, brandId: BRAND, input: input() });
 
-    expect(enforceImproveQuota).toHaveBeenCalledWith('org-1', expect.any(String));
+    expect(reserveAiBudget).toHaveBeenCalledWith(
+      'org-1',
+      expect.objectContaining({ feature: 'content', modelId: expect.any(String) }),
+    );
     expect(generateObject).toHaveBeenCalledWith(
       expect.objectContaining({
         model: expect.stringMatching(/^model:/),
@@ -618,7 +675,7 @@ describe('fixDraftRules', () => {
     await expect(
       fixDraftRules({ draftId: DRAFT, brandId: BRAND, input: input() }),
     ).rejects.toMatchObject({ status: 422, code: 'empty' });
-    expect(enforceImproveQuota).not.toHaveBeenCalled();
+    expect(reserveAiBudget).not.toHaveBeenCalled();
     expect(generateObject).not.toHaveBeenCalled();
   });
 
@@ -638,7 +695,7 @@ describe('fixDraftRules', () => {
     await expect(
       fixDraftRules({ draftId: DRAFT, brandId: BRAND, input: input() }),
     ).rejects.toMatchObject({ status: 409, code: 'open_suggestions' });
-    expect(enforceImproveQuota).not.toHaveBeenCalled();
+    expect(reserveAiBudget).not.toHaveBeenCalled();
     expect(generateObject).not.toHaveBeenCalled();
 
     // An older batch left open doesn't count: the editor shows the latest.
@@ -653,10 +710,36 @@ describe('fixDraftRules', () => {
   });
 
   it('stops at the budget', async () => {
-    enforceImproveQuota.mockRejectedValue(new PlanLimitError('AI usage is spent', 'starter'));
+    reserveAiBudget.mockRejectedValue(new PlanLimitError('AI usage is spent', 'starter'));
     await expect(
       fixDraftRules({ draftId: DRAFT, brandId: BRAND, input: input() }),
     ).rejects.toBeInstanceOf(PlanLimitError);
     expect(generateObject).not.toHaveBeenCalled();
+  });
+
+  it('lets the hold on the budget go when the model fails', async () => {
+    const held = { charge: vi.fn(), release: vi.fn() };
+    reserveAiBudget.mockResolvedValueOnce(held);
+    generateObject.mockRejectedValueOnce(new Error('timeout'));
+    await expect(fixDraftRules({ draftId: DRAFT, brandId: BRAND, input: input() })).rejects.toThrow(
+      'timeout',
+    );
+    expect(held.charge).not.toHaveBeenCalled();
+    expect(held.release).toHaveBeenCalled();
+  });
+
+  it('charges an answer that missed the schema, as the provider billed it', async () => {
+    const held = { charge: vi.fn(), release: vi.fn() };
+    reserveAiBudget.mockResolvedValueOnce(held);
+    const billed = { inputTokens: 900, outputTokens: 4000 };
+    generateObject.mockRejectedValueOnce(
+      Object.assign(new NoObjectGeneratedError('no object'), { usage: billed }),
+    );
+    await expect(
+      fixDraftRules({ draftId: DRAFT, brandId: BRAND, input: input() }),
+    ).rejects.toBeInstanceOf(NoObjectGeneratedError);
+    expect(held.charge).toHaveBeenCalledTimes(1);
+    expect(held.charge).toHaveBeenCalledWith(billed);
+    expect(held.release).toHaveBeenCalled();
   });
 });

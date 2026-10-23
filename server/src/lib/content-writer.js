@@ -1,9 +1,10 @@
 import { randomUUID } from 'crypto';
-import { generateObject } from 'ai';
+import { NoObjectGeneratedError, generateObject } from 'ai';
 import { z } from 'zod';
 import supabaseAdmin from '../config/supabase.js';
 import { resolveModel } from './ai-provider.js';
 import {
+  FANOUT_RULE,
   HEADING_RULE,
   LINK_RULE,
   MAX_AGENT_SUGGESTIONS,
@@ -14,12 +15,12 @@ import {
   promptPassages,
   suggestionsSchema,
 } from './content-agent.js';
-import { contentBriefModelId, rebuildSources, recordUsage } from './content-brief.js';
+import { contentBriefModelId, rebuildSources } from './content-brief.js';
 import { linkAllowList, linkTargetsPrompt, readLinkTargets } from './content-links.js';
 import { pageTypeFormat } from './content-page-types.js';
 import { getLanguageName } from './languages.js';
 import { logger } from './logger.js';
-import { enforceImproveQuota } from './plan-guard.js';
+import { reserveAiBudget } from './plan-guard.js';
 
 /**
  * "Agent" in the Content Editor's Start (CE-015, spec §5): the Content Agent
@@ -97,6 +98,7 @@ How to write:
 - Follow the outline when there is one; each H2 answers one of the questions or AI searches given.
 - Short paragraphs and plain sentences. Lists where a reader compares or follows steps.
 - Follow every rule listed, and the writer's own rules.
+- For each fan-out a rule names, use its words, not questions of your own: a section heading for fanoutH2, an FAQ question ending in "?" for fanoutFaq.
 - Use only facts from the brand and the brief. Never invent numbers, prices, dates, names, customers, sources or quotes. When the page needs a fact you don't have, write a placeholder in square brackets, e.g. [price], [figure, source, year].
 - Plain text in every field: no HTML, no Markdown.
 - Write in the language asked for.`;
@@ -109,6 +111,7 @@ Rules for your suggestions:
 - An insert adds new blocks after a passage, as simple HTML (h2, h3, p, ul, ol, li, strong, em, and a for links): a missing section, a direct answer, an FAQ.
 ${HEADING_RULE}
 ${LINK_RULE}
+${FANOUT_RULE}
 - Never change a passage marked LOCKED: AI assistants quote its wording today. You may insert after it.
 - Put the keys of the rules a change meets in "rules" (none when it meets none).
 - Use only facts from the page and the brand. Never invent numbers, prices, dates, names, sources or quotes; write a placeholder in square brackets instead, e.g. [figure, source, year].
@@ -299,36 +302,47 @@ export async function startDraftWriting({ draftId, brandId, input }) {
     .single();
   if (brandError) throw brandError;
   const modelId = contentBriefModelId();
-  await enforceImproveQuota(brand.organization_id, modelId);
-  if (await organizationWriting(brand.organization_id, draftId, staleBefore)) {
-    throw Object.assign(new Error('The agent is writing another draft'), {
-      status: 409,
-      code: 'org_writing',
-    });
-  }
-  // A provider that isn't set up fails here, before anything is claimed.
-  const model = resolveModel(modelId);
+  // Held on the budget now, for the run below: starts at once can't pass it.
+  const budget = await reserveAiBudget(brand.organization_id, {
+    feature: 'content',
+    modelId,
+    draftId,
+  });
+  try {
+    if (await organizationWriting(brand.organization_id, draftId, staleBefore)) {
+      throw Object.assign(new Error('The agent is writing another draft'), {
+        status: 409,
+        code: 'org_writing',
+      });
+    }
+    // A provider that isn't set up fails here, before anything is claimed.
+    const model = resolveModel(modelId);
 
-  // Claimed once: a second start meanwhile finds it writing.
-  const { data: claimed, error: claimError } = await supabaseAdmin
-    .from('content_drafts')
-    .update({ agent_state: 'writing', agent_state_at: new Date().toISOString() })
-    .eq('id', draftId)
-    .in('status', OPEN_STATUSES)
-    .or(`agent_state.is.null,agent_state.eq.failed,agent_state_at.lt."${staleBefore}"`)
-    .select('id')
-    .maybeSingle();
-  if (claimError) throw claimError;
-  if (!claimed) {
-    throw Object.assign(new Error('The agent is already writing it'), {
-      status: 409,
-      code: 'writing',
-    });
-  }
+    // Claimed once: a second start meanwhile finds it writing.
+    const { data: claimed, error: claimError } = await supabaseAdmin
+      .from('content_drafts')
+      .update({ agent_state: 'writing', agent_state_at: new Date().toISOString() })
+      .eq('id', draftId)
+      .in('status', OPEN_STATUSES)
+      .or(`agent_state.is.null,agent_state.eq.failed,agent_state_at.lt."${staleBefore}"`)
+      .select('id')
+      .maybeSingle();
+    if (claimError) throw claimError;
+    if (!claimed) {
+      throw Object.assign(new Error('The agent is already writing it'), {
+        status: 409,
+        code: 'writing',
+      });
+    }
 
-  runDraftWriting({ draft, brand, model, modelId, input }).catch((err) =>
-    logger.error({ err, draftId }, '[content-writer] run failed'),
-  );
+    runDraftWriting({ draft, brand, model, input, budget }).catch((err) =>
+      logger.error({ err, draftId }, '[content-writer] run failed'),
+    );
+  } catch (err) {
+    // Not started: the hold goes.
+    await budget.release();
+    throw err;
+  }
   return { started: true };
 }
 
@@ -358,9 +372,11 @@ async function letGo(draftId) {
 
 /**
  * The run itself: the page written, or the suggestions left, and the draft
- * In review; 'failed' when the model fails or leaves nothing to review.
+ * In review; 'failed' when the model fails or leaves nothing to review. The
+ * model's answer is charged to the hold Start took on the budget
+ * (reserveAiBudget); a run that ends before one lets the hold go.
  */
-export async function runDraftWriting({ draft, brand, model, modelId, input }) {
+export async function runDraftWriting({ draft, brand, model, input, budget }) {
   try {
     const [promptsRes, opportunityRes] = await Promise.all([
       input.sources.promptIds.length
@@ -393,12 +409,7 @@ export async function runDraftWriting({ draft, brand, model, modelId, input }) {
         prompt: buildWritePrompt({ brand, draft, prompts, brief, input }),
         abortSignal: AbortSignal.timeout(CALL_TIMEOUT_MS),
       });
-      await recordUsage({
-        organizationId: brand.organization_id,
-        draftId: draft.id,
-        modelId,
-        usage,
-      });
+      await budget.charge(usage);
       const title = clean(object.title).slice(0, 300) || draft.title;
       // Try again over a page the person has written in: History keeps it
       // first. Their saves wait while the agent writes (saveContentDraft).
@@ -452,7 +463,7 @@ export async function runDraftWriting({ draft, brand, model, modelId, input }) {
       }),
       abortSignal: AbortSignal.timeout(CALL_TIMEOUT_MS),
     });
-    await recordUsage({ organizationId: brand.organization_id, draftId: draft.id, modelId, usage });
+    await budget.charge(usage);
     const rows = keepSuggestions(
       object.suggestions,
       passages,
@@ -492,10 +503,16 @@ export async function runDraftWriting({ draft, brand, model, modelId, input }) {
     }
     return { suggestions: rows.length };
   } catch (err) {
+    // An answer the provider billed but that missed the schema is charged,
+    // as Improve's is: else the costliest call, a whole page, would run free.
+    if (NoObjectGeneratedError.isInstance(err) && err.usage) await budget.charge(err.usage);
     logger.error({ err, draftId: draft.id }, '[content-writer] the agent could not finish');
     await finish(draft.id, { agent_state: 'failed' }).catch((finishErr) =>
       logger.error({ err: finishErr, draftId: draft.id }, '[content-writer] state not saved'),
     );
     return { failed: true };
+  } finally {
+    // Nothing charged (it failed before an answer): the hold goes.
+    await budget.release();
   }
 }

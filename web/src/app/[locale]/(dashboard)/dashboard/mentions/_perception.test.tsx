@@ -313,6 +313,49 @@ describe('MentionsPerceptionTab', () => {
     expect(container.querySelector('[role="status"]')!.textContent).toContain('Still reading');
   });
 
+  it('says a read is slow only once it is, back on filters whose last read was', async () => {
+    vi.useFakeTimers();
+    let answer: (value: typeof perception) => void = () => {};
+    getMentionsPerception
+      .mockReturnValueOnce(new Promise((resolve) => (answer = resolve)))
+      .mockResolvedValueOnce(perception)
+      .mockReturnValueOnce(new Promise(() => {}));
+    // Dates in the past read the same window each time (a preset moves with now).
+    const june = {
+      ...DEFAULT_MENTIONS_FILTERS,
+      range: 'custom' as const,
+      from: '2026-06-01',
+      to: '2026-06-30',
+    };
+    const tab = (filters: typeof DEFAULT_MENTIONS_FILTERS) =>
+      render(<MentionsPerceptionTab brandId="b1" brand="Ansvisor" filters={filters} />);
+    const status = () => container.querySelector('[role="status"]')!.textContent;
+
+    tab(june);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(4_000);
+    });
+    expect(status()).toContain('Still reading');
+    await act(async () => answer(perception));
+    tab({ ...DEFAULT_MENTIONS_FILTERS, range: '7d' });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(250);
+    });
+
+    // Back on June: the figures shown are 7 days', dimmed, and not slow yet.
+    tab({ ...june });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(300);
+    });
+    expect(getMentionsPerception.mock.calls[2]).toEqual(getMentionsPerception.mock.calls[0]);
+    expect(container.querySelector('section[aria-busy="true"]')).not.toBeNull();
+    expect(status()).toBe('');
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(4_000);
+    });
+    expect(status()).toContain('Still reading');
+  });
+
   it('reads the same filters again on Try again, with the skeleton meanwhile', async () => {
     vi.useFakeTimers();
     getMentionsPerception
