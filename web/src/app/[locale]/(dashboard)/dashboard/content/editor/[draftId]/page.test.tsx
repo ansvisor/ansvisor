@@ -935,6 +935,7 @@ describe('the content editor', () => {
 
       expect(getDraftSuggestions).toHaveBeenCalledWith('d1');
       expect(bar()!.textContent).toContain('Content Agent has 2 suggestions for you');
+      expect(bar()!.textContent).toContain('from Action AC-214');
       expect(bar()!.querySelector('a')!.getAttribute('href')).toBe(
         '/dashboard/action-center/actions?action=a1',
       );
@@ -954,6 +955,7 @@ describe('the content editor', () => {
     it('reviews the first open suggestion: scrolls to it and marks it for a moment', async () => {
       vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
       const scrolled = vi.fn();
+      const original = Element.prototype.scrollIntoView;
       Element.prototype.scrollIntoView = scrolled;
       try {
         getContentDraft.mockResolvedValue(page);
@@ -964,9 +966,12 @@ describe('the content editor', () => {
         expect(scrolled).toHaveBeenCalledWith({ block: 'center', behavior: 'smooth' });
         expect(scrolled.mock.contexts[0]).toBe(cardOf('s1'));
         expect(cardOf('s1')!.classList.contains('ring-2')).toBe(true);
+        // Focused too, so the keyboard lands on it.
+        expect(document.activeElement).toBe(cardOf('s1')!.querySelector('button'));
         await act(async () => vi.advanceTimersByTime(1200));
         expect(cardOf('s1')!.classList.contains('ring-2')).toBe(false);
       } finally {
+        Element.prototype.scrollIntoView = original;
         vi.useRealTimers();
       }
     });

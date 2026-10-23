@@ -108,7 +108,9 @@ describe('AgentCard', () => {
       suggestion({ id: 's2', reason: 'add a summary', ruleKeys: ['summary'] }),
     ]);
     expect(container.textContent).toContain('Content Agent has 2 suggestions for you');
-    expect(container.textContent).toContain('Remove an AI trace (rule) · +1 · Rules 9 → 11 of 14');
+    expect(container.textContent).toContain(
+      'Remove an AI trace (rule) · +1 more · Rules 9 → 11 of 14',
+    );
     expect(buttons()).toEqual(['Review', 'Reject all', 'Accept all']);
     await click('Review');
     expect(handlers.onReview).toHaveBeenCalled();
@@ -123,7 +125,8 @@ describe('AgentCard', () => {
     ]);
     expect(container.textContent).toContain('All suggestions reviewed');
     expect(container.textContent).toContain('1 accepted · Rules 9 of 14 · 5 still open');
-    expect(buttons()).toEqual(['Undo all', 'Run Agent', '']);
+    expect(buttons().slice(0, 2)).toEqual(['Undo all', 'Run Agent']);
+    expect(container.querySelector('button[aria-label="Close"]')).not.toBeNull();
     await click('Run Agent');
     expect(handlers.onRun).toHaveBeenCalled();
   });
@@ -151,12 +154,54 @@ describe('AgentCard', () => {
     expect(handlers.onDecidePage).toHaveBeenCalledWith('accepted');
   });
 
-  it('stops all of its motion with reduced motion', async () => {
-    await render([suggestion()]);
-    const moving = [...container.querySelectorAll('[class*="animate-agent"]')];
-    expect(moving.length).toBeGreaterThan(0);
-    expect(
-      moving.every((el) => /motion-reduce:(animate-none|hidden)/.test(el.getAttribute('class')!)),
-    ).toBe(true);
+  it('stops all of its motion with reduced motion, in every state', async () => {
+    for (const [list, working] of [
+      [[suggestion()], false],
+      [[suggestion({ status: 'accepted' })], false],
+      [[], true],
+    ] as const) {
+      await render([...list], working);
+      const moving = [...container.querySelectorAll('[class*="animate-agent"]')];
+      expect(moving.length).toBeGreaterThan(0);
+      expect(
+        moving.every((el) => /motion-reduce:(animate-none|hidden)/.test(el.getAttribute('class')!)),
+      ).toBe(true);
+    }
+  });
+
+  it('undoes a page rewrite rejected, and runs the agent on what is still open', async () => {
+    await render([
+      suggestion({
+        kind: 'page',
+        status: 'rejected',
+        beforeHtml: '<p>Old.</p>',
+        afterText: '<p>New.</p>',
+      }),
+    ]);
+    expect(container.textContent).toContain('Rewrite rejected');
+    await click('Undo');
+    expect(handlers.onDecidePage).toHaveBeenCalledWith('open');
+  });
+
+  it('says why Run Agent waits', async () => {
+    await act(async () => {
+      root.render(
+        <NextIntlClientProvider locale="en" messages={messages}>
+          <AgentCard
+            suggestions={[suggestion({ status: 'accepted' })]}
+            rules={rules}
+            busy={false}
+            working={false}
+            runBlocked="Content Agent is already working on this page."
+            {...handlers}
+          />
+        </NextIntlClientProvider>,
+      );
+    });
+    const run = [...container.querySelectorAll('button')].find(
+      (b) => b.textContent === 'Run Agent',
+    )!;
+    expect(run.disabled).toBe(true);
+    expect(run.title).toBe('Content Agent is already working on this page.');
   });
 });

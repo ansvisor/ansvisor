@@ -594,15 +594,21 @@ export function DraftEditor({
     [rules.met, rules.total, rules.rules],
   );
 
-  /** Review: the first open suggestion in the page, scrolled to and marked for a moment. */
+  /**
+   * Review: the first open suggestion in the page's order, scrolled to,
+   * marked for a moment and focused, so the keyboard lands on it too.
+   */
   const reviewFirst = () => {
-    const first = suggestions.find((s) => s.status === 'open' && s.kind !== 'page');
-    if (!editor || !first) return;
+    if (!editor) return;
+    const open = new Set(
+      suggestions.filter((s) => s.status === 'open' && s.kind !== 'page').map((s) => s.id),
+    );
     const card = [...editor.view.dom.querySelectorAll<HTMLElement>('[data-suggestion]')].find(
-      (node) => node.dataset.suggestion === first.id,
+      (node) => open.has(node.dataset.suggestion ?? ''),
     );
     if (!card) return;
     card.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    card.querySelector('button')?.focus({ preventScroll: true });
     const mark = ['ring-2', 'ring-amber-300', 'dark:ring-amber-700'];
     card.classList.add(...mark);
     setTimeout(() => card.classList.remove(...mark), 1200);
@@ -676,7 +682,8 @@ export function DraftEditor({
    * batch of suggestions for review.
    */
   const fixRules = async (only?: string[]) => {
-    if (!editor || fixing || !citedRead) return;
+    // One agent run at a time, and never before the locked passages are read.
+    if (!editor || fixing || starting || rewriting || !citedRead) return;
     if (openSuggestions > 0) {
       toast(t('suggestions.decideFirst'));
       return;
@@ -1271,6 +1278,7 @@ export function DraftEditor({
               onDecidePage={(to) => {
                 if (pageSuggestion) void decidePage(pageSuggestion, to);
               }}
+              runBlocked={agentFix.blocked}
             />
           )}
           {editor && (

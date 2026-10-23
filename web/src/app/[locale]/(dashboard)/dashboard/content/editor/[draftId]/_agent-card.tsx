@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import { X } from 'lucide-react';
 import { Link } from '@/i18n/navigation';
 import { Button } from '@/components/ui/button';
@@ -28,6 +28,9 @@ import { PageCompareDialog, pageCharacters } from './_page-rewrite';
  * motion. The card wraps on a narrow page: its buttons go under the text.
  */
 
+/** A ghost button on the card's grey: its hover shows. */
+const GHOST = 'hover:bg-foreground/5 dark:hover:bg-foreground/10';
+
 /** The rules as the card counts them. */
 export interface CardRules {
   met: number;
@@ -50,15 +53,16 @@ export function rulesAfter(suggestions: DraftSuggestion[], rules: CardRules): nu
   return Math.min(rules.total, rules.met + meets.size);
 }
 
-/** What the open suggestions change, in the agent's words: the first, and how many more. */
-function changeSummary(open: DraftSuggestion[]): string {
-  const first = open[0]?.reason ?? '';
-  const sentence = first.charAt(0).toUpperCase() + first.slice(1);
-  return open.length > 1 ? `${sentence} · +${open.length - 1}` : sentence;
+/** The agent's reason as a sentence: its first letter upper-cased, in the page's locale. */
+function sentence(reason: string, locale: string): string {
+  return reason.charAt(0).toLocaleUpperCase(locale) + reason.slice(1);
 }
 
-/** The agent: a robot whose eyes blink (or look around while it works) and a spark by its antenna. */
-function AgentIcon({ working }: { working: boolean }) {
+/**
+ * The agent: a robot whose eyes blink (or look around while it works) and a
+ * spark by its antenna, slower once all are reviewed.
+ */
+function AgentIcon({ working, slow }: { working: boolean; slow: boolean }) {
   return (
     <svg
       viewBox="0 0 24 24"
@@ -79,7 +83,10 @@ function AgentIcon({ working }: { working: boolean }) {
       <path d="M2 12.5v2M22 12.5v2" />
       <path
         d="M19 2.5l.6 1.6 1.6.6-1.6.6-.6 1.6-.6-1.6-1.6-.6 1.6-.6z"
-        className="animate-agent-spark fill-amber-300 stroke-amber-300 [stroke-width:0.8] [transform-box:fill-box] [transform-origin:center] motion-reduce:animate-none"
+        className={cn(
+          'animate-agent-spark fill-amber-400 stroke-amber-400 [stroke-width:0.8] [transform-box:fill-box] [transform-origin:center] motion-reduce:animate-none dark:fill-amber-500 dark:stroke-amber-500',
+          slow && '[animation-duration:2.4s]',
+        )}
       />
     </svg>
   );
@@ -94,7 +101,9 @@ function AgentTile({
   count: number;
 }) {
   return (
+    // The title says it all: the tile and its count are for the eye.
     <span
+      aria-hidden
       className={cn(
         'relative flex h-10 w-10 shrink-0 items-center justify-center overflow-visible rounded-xl',
         tone === 'done'
@@ -118,12 +127,12 @@ function AgentTile({
       {tone === 'working' && (
         <span
           aria-hidden
-          className="pointer-events-none absolute inset-0 animate-agent-sweep rounded-xl bg-[linear-gradient(115deg,transparent_30%,rgb(255_255_255/0.22)_50%,transparent_70%)] bg-[length:250%_100%] motion-reduce:hidden"
+          className="pointer-events-none absolute inset-0 animate-agent-sweep rounded-xl bg-[linear-gradient(115deg,transparent_30%,color-mix(in_oklab,var(--background)_22%,transparent)_50%,transparent_70%)] bg-[length:250%_100%] motion-reduce:hidden"
         />
       )}
-      <AgentIcon working={tone === 'working'} />
+      <AgentIcon working={tone === 'working'} slow={tone === 'done'} />
       {count > 0 && (
-        <span className="absolute -top-1.5 -right-1.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full border-2 border-muted bg-amber-600 px-1 text-[11px] font-semibold text-white dark:bg-amber-500 dark:text-amber-950">
+        <span className="absolute -top-1.5 -right-1.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full border-2 border-muted bg-amber-700 px-1 text-[11px] font-semibold text-white dark:bg-amber-500 dark:text-amber-950">
           {count}
         </span>
       )}
@@ -158,6 +167,7 @@ export function AgentCard({
   onRun,
   onClose,
   onDecidePage,
+  runBlocked = null,
 }: {
   suggestions: DraftSuggestion[];
   rules: CardRules;
@@ -175,8 +185,11 @@ export function AgentCard({
   onClose: () => void;
   /** A whole page rewritten: accepted, rejected, or open again (Undo). */
   onDecidePage: (status: SuggestionStatus) => void;
+  /** Why Run Agent can't run now (another agent run, locked passages loading), or null. */
+  runBlocked?: string | null;
 }) {
   const t = useTranslations('contentEditor.editor.agentCard');
+  const locale = useLocale();
   const tSuggestions = useTranslations('contentEditor.editor.suggestions');
   const tRewrite = useTranslations('contentEditor.editor.rewrite');
   const [comparing, setComparing] = useState(false);
@@ -198,8 +211,12 @@ export function AgentCard({
       </>
     );
     line = (
-      <span className="mt-2 block h-[3px] w-full overflow-hidden rounded-full bg-border">
-        <span className="block h-full w-[30%] animate-agent-slide rounded-full bg-foreground motion-reduce:animate-none" />
+      <span
+        aria-hidden
+        className="mt-2 block h-[3px] w-full overflow-hidden rounded-full bg-border"
+      >
+        {/* Without motion, a faint full line: never a still bar that reads as progress. */}
+        <span className="block h-full w-[30%] animate-agent-slide rounded-full bg-foreground motion-reduce:w-full motion-reduce:animate-none motion-reduce:opacity-30" />
       </span>
     );
   } else if (page) {
@@ -222,7 +239,8 @@ export function AgentCard({
     title = t('waiting', { count: open });
     line = (
       <>
-        {changeSummary(openOnes)}
+        {sentence(openOnes[0]?.reason ?? '', locale)}
+        {openOnes.length > 1 && ` · ${t('more', { count: openOnes.length - 1 })}`}
         {after > rules.met && (
           <>
             {' · '}
@@ -265,7 +283,7 @@ export function AgentCard({
       role="region"
       aria-label={page ? tRewrite('bar') : tSuggestions('bar')}
       aria-busy={working}
-      className="mx-4 mt-3 flex flex-wrap items-center gap-x-3.5 gap-y-2.5 rounded-2xl border bg-muted px-3.5 py-3 shadow-xs"
+      className="mx-4 mt-3 mb-1 flex flex-wrap items-center gap-x-3.5 gap-y-2.5 rounded-2xl border bg-muted px-3.5 py-3 shadow-xs"
     >
       <AgentTile tone={tone} count={working ? 0 : open} />
       {/* Room for a line of text first: on a narrow page the buttons go under it. */}
@@ -278,10 +296,16 @@ export function AgentCard({
         )}
       </span>
       {!working && (
-        <span className="ml-auto flex shrink-0 flex-wrap items-center justify-end gap-1.5">
+        <span className="ml-auto flex max-w-full flex-wrap items-center justify-end gap-1.5">
           {page ? (
             <>
-              <Button variant="ghost" size="sm" disabled={busy} onClick={() => setComparing(true)}>
+              <Button
+                variant="ghost"
+                size="sm"
+                className={GHOST}
+                disabled={busy}
+                onClick={() => setComparing(true)}
+              >
                 {tRewrite('compare')}
               </Button>
               {page.status === 'open' ? (
@@ -303,13 +327,19 @@ export function AgentCard({
                   <Button
                     variant="ghost"
                     size="sm"
+                    className={GHOST}
                     disabled={busy}
                     onClick={() => onDecidePage('open')}
                   >
                     {tRewrite('undo')}
                   </Button>
                   {stillOpen > 0 && (
-                    <Button size="sm" disabled={busy} onClick={onRun}>
+                    <Button
+                      size="sm"
+                      disabled={busy || runBlocked !== null}
+                      title={runBlocked ?? undefined}
+                      onClick={onRun}
+                    >
                       {t('run')}
                     </Button>
                   )}
@@ -318,7 +348,7 @@ export function AgentCard({
             </>
           ) : open > 0 ? (
             <>
-              <Button variant="ghost" size="sm" onClick={onReview}>
+              <Button variant="ghost" size="sm" className={GHOST} onClick={onReview}>
                 {t('review')}
               </Button>
               <Button variant="outline" size="sm" disabled={busy} onClick={onRejectAll}>
@@ -330,11 +360,22 @@ export function AgentCard({
             </>
           ) : (
             <>
-              <Button variant="ghost" size="sm" disabled={busy} onClick={onUndoAll}>
+              <Button
+                variant="ghost"
+                size="sm"
+                className={GHOST}
+                disabled={busy}
+                onClick={onUndoAll}
+              >
                 {tSuggestions('undoAll')}
               </Button>
               {stillOpen > 0 && (
-                <Button size="sm" disabled={busy} onClick={onRun}>
+                <Button
+                  size="sm"
+                  disabled={busy || runBlocked !== null}
+                  title={runBlocked ?? undefined}
+                  onClick={onRun}
+                >
                   {t('run')}
                 </Button>
               )}
@@ -344,6 +385,7 @@ export function AgentCard({
             <Button
               variant="ghost"
               size="icon-sm"
+              className={GHOST}
               aria-label={tSuggestions('close')}
               title={tSuggestions('close')}
               onClick={onClose}
