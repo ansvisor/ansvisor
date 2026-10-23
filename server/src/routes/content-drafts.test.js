@@ -17,6 +17,8 @@ const startDraftWriting = vi.fn();
 const fixDraftRules = vi.fn();
 const assertBrandAccess = vi.fn();
 const stopDraftRun = vi.fn();
+/** A Start's claim on the draft (its agent_state_at), as its run carries it. */
+const CLAIM = '2026-10-23T10:00:00.000+00:00';
 /** The draft Stop reads, to check it is the brand's. */
 let stopDraft;
 
@@ -68,7 +70,7 @@ beforeEach(async () => {
   startDraftWriting.mockReset().mockResolvedValue({ started: true });
   fixDraftRules.mockReset().mockResolvedValue({ count: 2, batchId: 'b1' });
   assertBrandAccess.mockReset().mockResolvedValue({});
-  stopDraftRun.mockReset().mockResolvedValue(true);
+  stopDraftRun.mockReset().mockResolvedValue([{ id: 'run-1', claimed_at: CLAIM }]);
   stopDraft = { brand_id: BRAND };
   letGo = [];
   const app = express();
@@ -283,16 +285,28 @@ describe('POST /api/content-drafts/:draftId/stop', () => {
     expect(await res.json()).toEqual({ stopped: true });
     expect(assertBrandAccess).toHaveBeenCalledWith(BRAND, 'u1');
     expect(stopDraftRun).toHaveBeenCalledWith(DRAFT, null);
-    // A background run's draft is let go at once, whichever server held it.
+    // A background run's draft is let go at once, whichever server held it:
+    // the claim that run holds, never a newer one.
     expect(letGo).toEqual([
       {
         value: { agent_state: null, agent_state_at: expect.any(String) },
         filters: [
           ['id', DRAFT],
           ['agent_state', 'writing'],
+          ['agent_state_at', CLAIM],
         ],
       },
     ]);
+  });
+
+  it('keeps a Start’s claim when the run it names is a Fix on the same draft', async () => {
+    const RUN = '99999999-9999-4999-8999-999999999999';
+    // A Fix, or the brief, holds no claim: the Start another tab began goes on with its own.
+    stopDraftRun.mockResolvedValue([{ id: RUN, claimed_at: null }]);
+    const res = await stop({ brandId: BRAND, runId: RUN });
+    expect(await res.json()).toEqual({ stopped: true });
+    expect(stopDraftRun).toHaveBeenCalledWith(DRAFT, RUN);
+    expect(letGo).toEqual([]);
   });
 
   it('stops only the run the editor names, when it names one', async () => {
@@ -303,7 +317,7 @@ describe('POST /api/content-drafts/:draftId/stop', () => {
   });
 
   it('lets go of nothing when no run was under way', async () => {
-    stopDraftRun.mockResolvedValue(false);
+    stopDraftRun.mockResolvedValue([]);
     expect(await (await stop()).json()).toEqual({ stopped: false });
     expect(letGo).toEqual([]);
   });

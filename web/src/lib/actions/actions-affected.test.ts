@@ -34,6 +34,7 @@ function answer(table: string, calls: Call[]): Row[] {
   return range ? out.slice(range[1] as number, (range[2] as number) + 1) : out;
 }
 
+let entityCounts: unknown[] = [];
 vi.mock('@/lib/supabase/server', () => ({
   createClient: vi.fn(async () => ({
     from: (table: string) => {
@@ -50,6 +51,8 @@ vi.mock('@/lib/supabase/server', () => ({
         resolve({ data: answer(table, query.calls), error: null });
       return chain;
     },
+    // The actions' list counts (AC-009): nothing removed here.
+    rpc: async () => ({ data: entityCounts, error: null }),
   })),
 }));
 vi.mock('@/lib/supabase/admin', () => ({ supabaseAdmin: {} }));
@@ -77,6 +80,7 @@ const lost = (id: string, promptId: string, promptText: string, actions: string[
 
 beforeEach(() => {
   queries = [];
+  entityCounts = [];
   rows = {
     actions: [
       { id: 'a1', payload: {} },
@@ -101,6 +105,16 @@ describe('getActionsAffected', () => {
       a2: { count: 1, items: ['Coffee delivery near me'] },
       a3: { count: 1, items: ['Is Acme any good?'] },
     });
+  });
+
+  it('counts an action as its title does, with what was removed since (AC-009)', async () => {
+    rows.actions[0].payload = { targetEntity: 'prompts', targetCount: 13 };
+    entityCounts = [
+      { action_id: 'a1', entity_type: 'prompts', total: 13, removed: 1, removed_labels: ['x'] },
+    ];
+    const result = await getActionsAffected('b1', ['a1']);
+    // 13 prompts when it was created, one deleted since: 12, not the 2 the signals name now.
+    expect(result.a1.count).toBe(12);
   });
 
   it("reads past one response's rows, a page at a time", async () => {
