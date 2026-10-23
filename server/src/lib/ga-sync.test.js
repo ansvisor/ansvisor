@@ -1,8 +1,33 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // The module imports the supabase admin client, whose config hard-exits when
-// SUPABASE_* env is absent (as in CI) — stub it before the import chain.
-vi.mock('../config/supabase.js', () => ({ default: {} }));
+// SUPABASE_* env is absent (as in CI) — stub it before the import chain. The
+// stub records deletes and their filters.
+const deletes = [];
+let deleteError = null;
+vi.mock('../config/supabase.js', () => ({
+  default: {
+    from: (table) => {
+      const call = { table, filters: [] };
+      const filter = (op) => (col, val) => {
+        call.filters.push([op, col, val]);
+        return chain;
+      };
+      const chain = {
+        delete: () => {
+          deletes.push(call);
+          return chain;
+        },
+        eq: filter('eq'),
+        is: filter('is'),
+        gte: filter('gte'),
+        lte: filter('lte'),
+        then: (resolve) => resolve({ error: deleteError }),
+      };
+      return chain;
+    },
+  },
+}));
 
 import { AI_SOURCES_VERSION } from './ai-sources.js';
 import { GA_AI_SOURCE_PATTERN, classifyGaSource, gaAiPlatform } from './ga-sources.js';
@@ -10,6 +35,7 @@ import {
   GA_AI_FILTER,
   aiReportDays,
   dayRange,
+  deleteRowsWithoutMedium,
   gaDateToIso,
   mapAiTrafficRows,
   mapChannelRows,
@@ -165,12 +191,13 @@ describe('readReportRows', () => {
 describe('mapAiTrafficRows', () => {
   const AI_DIMS = ['date', 'sessionSource', 'landingPage', 'landingPagePlusQueryString'];
   const raw = report({
-    dims: AI_DIMS,
+    dims: ['date', 'sessionSource', 'sessionMedium', 'landingPage', 'landingPagePlusQueryString'],
     metrics: TRAFFIC_METRICS,
     rows: [
       [
         '20260721',
         'chatgpt.com',
+        'referral',
         '/pricing',
         '/pricing?ref=x',
         '10',
@@ -191,6 +218,9 @@ describe('mapAiTrafficRows', () => {
         date: '2026-07-21',
         source: 'chatgpt.com',
         platform: 'chatgpt.com',
+        medium: 'referral',
+        // A ChatGPT answer's link, not a ChatGPT Shopping card (#1283).
+        surface: null,
         landing_page: '/pricing',
         landing_page_query: '/pricing?ref=x',
         sessions: 10,
@@ -275,6 +305,50 @@ describe('mapAiTrafficRows', () => {
     expect(row.landing_page_query).toBe('/pricing?ref=x');
   });
 
+  // #1283: ChatGPT Shopping's feed links are tagged utm_medium=feed.
+  it("marks ChatGPT's sessions with medium feed as ChatGPT Shopping, in rows of their own", () => {
+    const rows = mapAiTrafficRows(
+      'brand-1',
+      report({
+        dims: [
+          'date',
+          'sessionSource',
+          'sessionMedium',
+          'landingPage',
+          'landingPagePlusQueryString',
+        ],
+        metrics: TRAFFIC_METRICS,
+        rows: [
+          ['20260721', 'chatgpt.com', 'feed', '/mug', '/mug', '4', '3', '1', '4', '1', '20', '50'],
+          [
+            '20260721',
+            'chatgpt.com',
+            'referral',
+            '/mug',
+            '/mug',
+            '6',
+            '2',
+            '0',
+            '6',
+            '0',
+            '0',
+            '40',
+          ],
+          ['20260721', 'chatgpt', 'Feed', '/cup', '/cup', '1', '1', '0', '1', '0', '0', '9'],
+          ['20260721', 'perplexity.ai', 'feed', '/mug', '/mug', '2', '1', '0', '2', '0', '0', '8'],
+        ],
+      }),
+    );
+    expect(rows.map((r) => [r.platform, r.medium, r.surface, r.landing_page, r.sessions])).toEqual([
+      // Still ChatGPT's sessions, apart from its answers' on the same page.
+      ['chatgpt.com', 'feed', 'shopping', '/mug', 4],
+      ['chatgpt.com', 'referral', null, '/mug', 6],
+      // GA4's other name for ChatGPT, and the medium in another case.
+      ['chatgpt.com', 'Feed', 'shopping', '/cup', 1],
+      ['perplexity.ai', 'feed', null, '/mug', 2],
+    ]);
+  });
+
   it('keeps the raw source when it cannot be classified', () => {
     const unknown = report({
       dims: AI_DIMS,
@@ -320,6 +394,35 @@ describe('mapAiTrafficRows', () => {
     expect(row.sessions).toBe(4);
     expect(row.key_events).toBe(0);
     expect(row.purchase_revenue).toBe(0);
+  });
+});
+
+describe('deleteRowsWithoutMedium', () => {
+  beforeEach(() => {
+    deletes.length = 0;
+    deleteError = null;
+  });
+
+  it("deletes the brand's rows from before the medium was read, on the days re-read (00251)", async () => {
+    await deleteRowsWithoutMedium('brand-1', { from: '2026-10-20', to: '2026-10-23' });
+    expect(deletes).toEqual([
+      {
+        table: 'ga_ai_traffic_stats',
+        filters: [
+          ['eq', 'brand_id', 'brand-1'],
+          ['is', 'medium', null],
+          ['gte', 'date', '2026-10-20'],
+          ['lte', 'date', '2026-10-23'],
+        ],
+      },
+    ]);
+  });
+
+  it('fails the sync when the delete fails, rather than counting those days twice', async () => {
+    deleteError = { message: 'permission denied' };
+    await expect(
+      deleteRowsWithoutMedium('brand-1', { from: '2026-10-20', to: '2026-10-23' }),
+    ).rejects.toThrow('permission denied');
   });
 });
 
