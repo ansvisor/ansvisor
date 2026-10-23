@@ -21,13 +21,18 @@ const stopDraftRun = vi.fn();
 let stopDraft;
 
 // The route's modules read the Supabase client; CI has no credentials for it.
+/** The drafts Stop lets go of. */
+let letGo;
 vi.mock('../config/supabase.js', () => ({
   default: {
     from: () => {
+      const filters = [];
       const chain = {
         select: () => chain,
-        eq: () => chain,
+        eq: (col, v) => (filters.push([col, v]), chain),
+        update: (value) => (letGo.push({ value, filters }), chain),
         maybeSingle: async () => ({ data: stopDraft, error: null }),
+        then: (resolve) => resolve({ error: null }),
       };
       return chain;
     },
@@ -65,6 +70,7 @@ beforeEach(async () => {
   assertBrandAccess.mockReset().mockResolvedValue({});
   stopDraftRun.mockReset().mockResolvedValue(true);
   stopDraft = { brand_id: BRAND };
+  letGo = [];
   const app = express();
   app.use(express.json());
   app.use((req, _res, next) => {
@@ -277,6 +283,22 @@ describe('POST /api/content-drafts/:draftId/stop', () => {
     expect(await res.json()).toEqual({ stopped: true });
     expect(assertBrandAccess).toHaveBeenCalledWith(BRAND, 'u1');
     expect(stopDraftRun).toHaveBeenCalledWith(DRAFT);
+    // A background run's draft is let go at once, whichever server held it.
+    expect(letGo).toEqual([
+      {
+        value: { agent_state: null, agent_state_at: expect.any(String) },
+        filters: [
+          ['id', DRAFT],
+          ['agent_state', 'writing'],
+        ],
+      },
+    ]);
+  });
+
+  it('lets go of nothing when no run was under way', async () => {
+    stopDraftRun.mockResolvedValue(false);
+    expect(await (await stop()).json()).toEqual({ stopped: false });
+    expect(letGo).toEqual([]);
   });
 
   it('stops nothing of another brand’s draft, or on a bad request', async () => {

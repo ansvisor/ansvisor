@@ -199,7 +199,18 @@ router.post('/:draftId/stop', async (req, res) => {
     if (!draft || draft.brand_id !== brandId) {
       return res.status(404).json({ error: 'Draft not found', code: 'not_found' });
     }
-    return res.json({ stopped: await stopDraftRun(draftId.data) });
+    const stopped = await stopDraftRun(draftId.data);
+    if (stopped) {
+      // A run in the background lets go of the draft once it sees the stop;
+      // one no server holds any more never would. The editor opens at once.
+      const { error: letGoError } = await supabaseAdmin
+        .from('content_drafts')
+        .update({ agent_state: null, agent_state_at: new Date().toISOString() })
+        .eq('id', draftId.data)
+        .eq('agent_state', 'writing');
+      if (letGoError) throw letGoError;
+    }
+    return res.json({ stopped });
   } catch (err) {
     if (ERROR_CODES[err?.status]) {
       return res
