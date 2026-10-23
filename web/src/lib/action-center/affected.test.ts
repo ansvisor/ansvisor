@@ -177,6 +177,31 @@ describe('affectedOf', () => {
     ]);
   });
 
+  it('lists a mention review’s first prompt once, though it is its first target too', () => {
+    const payload = {
+      promptText: 'Best coffee subscriptions?',
+      promptIds: ['p1', 'p2'],
+      targetEntity: 'prompts',
+      targetCount: 2,
+      targets: ['Best coffee subscriptions?', 'Cheapest beans online?'],
+    };
+    const affected = affectedOf([], payload);
+    expect(affected.prompts.map((p) => p.text)).toEqual([
+      'Best coffee subscriptions?',
+      'Cheapest beans online?',
+    ]);
+    expect(affected.promptTotal).toBe(2);
+    // Removed since (AC-009): gone by its text, the label the action kept for it.
+    const left = affectedOf([], {
+      ...payload,
+      targetCount: 1,
+      removedKeys: ['p1'],
+      removedLabels: ['Best coffee subscriptions?'],
+    });
+    expect(left.prompts.map((p) => p.text)).toEqual(['Cheapest beans online?']);
+    expect(left.promptTotal).toBe(1);
+  });
+
   it('is empty for an action with nothing to list', () => {
     expect(affectedOf([], {})).toMatchObject({ prompts: [], pages: [], promptTotal: 0 });
   });

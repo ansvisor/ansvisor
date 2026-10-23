@@ -44,8 +44,14 @@ const summary = (over: Partial<TrafficSummary> = {}): TrafficSummary => ({
   hasAnyData: true,
   topPages: [],
   platformBreakdown: [
-    { platform: 'chatgpt.com', visits: 38, visitsPrev: 30, analytics: ga(40, 5, 4) },
-    { platform: 'perplexity.ai', visits: 20, visitsPrev: 20, analytics: ga(31, 6, 5) },
+    { platform: 'chatgpt.com', visits: 38, visitsPrev: 30, analytics: ga(40, 5, 4), surfaces: [] },
+    {
+      platform: 'perplexity.ai',
+      visits: 20,
+      visitsPrev: 20,
+      analytics: ga(31, 6, 5),
+      surfaces: [],
+    },
   ],
   ...over,
 });
@@ -122,8 +128,20 @@ describe('SummaryLine', () => {
     await render({
       sum: summary({
         platformBreakdown: [
-          { platform: 'chatgpt.com', visits: 38, visitsPrev: 30, analytics: ga(40, 9, 8) },
-          { platform: 'perplexity.ai', visits: 20, visitsPrev: 20, analytics: ga(31, 6, 5) },
+          {
+            platform: 'chatgpt.com',
+            visits: 38,
+            visitsPrev: 30,
+            analytics: ga(40, 9, 8),
+            surfaces: [],
+          },
+          {
+            platform: 'perplexity.ai',
+            visits: 20,
+            visitsPrev: 20,
+            analytics: ga(31, 6, 5),
+            surfaces: [],
+          },
         ],
       }),
     });
