@@ -157,6 +157,7 @@ const draft = (over: Partial<ContentDraft> = {}): ContentDraft => ({
   action: null,
   agentState: null,
   agentSince: null,
+  agentRun: null,
   updatedAt: '2026-10-20T10:00:00Z',
   ...over,
 });
@@ -547,11 +548,12 @@ describe('the content editor', () => {
         id: 'r1',
         kind: 'write',
         steps: [
-          { key: 'read_sources', count: 52 },
+          { key: 'read_rules', count: 9 },
+          { key: 'gather_sources', count: 52 },
           { key: 'write_page', count: null },
-          { key: 'check_rules', count: null },
+          { key: 'check_sources', count: null },
         ],
-        step: 1,
+        step: 2,
         startedAt: new Date().toISOString(),
         finishedAt: null,
         stoppedAt: null,
@@ -561,9 +563,10 @@ describe('the content editor', () => {
       await act(async () => {});
       const status = container.querySelector('[role="status"]')!;
       expect([...status.querySelectorAll('li')].map((li) => li.textContent)).toEqual([
-        'Reading 52 sources',
+        'Reading 9 rules',
+        'Gathering 52 sources',
         'Writing the page',
-        'Checking rules',
+        'Checking sources',
       ]);
       expect(status.querySelector('[aria-current="step"]')!.textContent).toBe('Writing the page');
       // No spinning ring anywhere (v1.1 §2.4).
@@ -571,10 +574,60 @@ describe('the content editor', () => {
 
       const reads = getContentDraft.mock.calls.length;
       await act(async () => button('Stop')!.click());
-      expect(stopAgentRun).toHaveBeenCalledWith('d1', 'b1');
+      expect(stopAgentRun).toHaveBeenCalledWith('d1', 'b1', 'r1');
       expect(toast).toHaveBeenCalledWith('Stopped · nothing was changed');
       // The page as the server left it, let go of.
       expect(getContentDraft.mock.calls.length).toBe(reads + 1);
+    });
+
+    it('reads the draft at once when its run ends, its steps shown till then', async () => {
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
+      try {
+        getContentDraft.mockResolvedValue(
+          draft({
+            status: 'draft',
+            method: 'create',
+            agentState: 'writing',
+            agentSince: new Date().toISOString(),
+          }),
+        );
+        const writingRun = {
+          id: 'r1',
+          kind: 'write' as const,
+          steps: [
+            { key: 'write_page' as const, count: null },
+            { key: 'check_sources' as const, count: null },
+          ],
+          step: 1,
+          startedAt: new Date().toISOString(),
+          finishedAt: null,
+          stoppedAt: null,
+          outcome: null,
+        };
+        readAgentRun.mockResolvedValue(writingRun);
+        await renderPage();
+        await act(async () => {});
+        const reads = getContentDraft.mock.calls.length;
+
+        readAgentRun.mockResolvedValue({
+          ...writingRun,
+          step: 2,
+          finishedAt: new Date().toISOString(),
+          outcome: 'done',
+        });
+        await act(async () => void (await vi.advanceTimersByTimeAsync(1000)));
+        await act(async () => {});
+        // Not on the page's next look (5 s): now.
+        expect(getContentDraft.mock.calls.length).toBe(reads + 1);
+        // The run's steps stay, never the fixed list for a moment.
+        const status = container.querySelector('[role="status"]')!;
+        expect([...status.querySelectorAll('li')].map((li) => li.textContent)).toEqual([
+          'Writing the page',
+          'Checking sources',
+        ]);
+      } finally {
+        vi.useRealTimers();
+      }
     });
 
     it('says the agent couldn’t finish, and tries again with the page and rules in effect', async () => {
@@ -2187,12 +2240,12 @@ describe('the side panel', () => {
         id: 'r1',
         kind: 'fix',
         steps: [
-          { key: 'read_pages', count: 20 },
-          { key: 'match_fanouts', count: 21 },
-          { key: 'check_queries', count: 0 },
+          { key: 'read_rules', count: 4 },
+          { key: 'gather_sources', count: 0 },
           { key: 'write_changes', count: null },
+          { key: 'check_sources', count: null },
         ],
-        step: 3,
+        step: 2,
         startedAt: new Date().toISOString(),
         finishedAt: null,
         stoppedAt: null,
@@ -2202,17 +2255,17 @@ describe('the side panel', () => {
       await act(async () => panelButton('Run Agent').click());
       await act(async () => {});
       const card = container.querySelector('[role="region"][aria-label="Agent suggestions"]')!;
-      // Its steps, named by the data; none about data it has none of.
+      // Its steps, short names for the work; none about data it has none of.
       expect([...card.querySelectorAll('li')].map((li) => li.textContent)).toEqual([
-        'Reading 20 cited pages',
-        'Matching 21 fan-outs',
+        'Reading 4 rules',
         'Writing changes',
+        'Checking sources',
       ]);
       expect(card.querySelector('[aria-current="step"]')!.textContent).toBe('Writing changes');
 
       const stop = [...card.querySelectorAll('button')].find((b) => b.textContent === 'Stop')!;
       await act(async () => stop.click());
-      expect(stopAgentRun).toHaveBeenCalledWith('d1', 'b1');
+      expect(stopAgentRun).toHaveBeenCalledWith('d1', 'b1', 'r1');
       expect(stop.disabled).toBe(true);
       await act(async () => answer({ error: 'stopped' }));
       await act(async () => {});
@@ -2282,7 +2335,7 @@ describe('the side panel', () => {
       readAgentRun.mockResolvedValue({
         ...fixRun,
         kind: 'rewrite',
-        steps: [{ key: 'read_sources', count: 52 }],
+        steps: [{ key: 'read_rules', count: 14 }],
       });
       await openRules();
       await act(async () => panelButton('Run Agent').click());
@@ -2316,9 +2369,9 @@ describe('the side panel', () => {
           ...fixRun,
           kind: 'brief',
           steps: [
-            { key: 'read_sources', count: 1 },
-            { key: 'pick_fanouts', count: null },
+            { key: 'gather_sources', count: 1 },
             { key: 'write_outline', count: null },
+            { key: 'match_fanouts', count: null },
           ],
           step: 1,
         });
@@ -2329,15 +2382,15 @@ describe('the side panel', () => {
         const card = () =>
           container.querySelector('[role="region"][aria-label="Agent suggestions"]')!;
         expect([...card().querySelectorAll('li')].map((li) => li.textContent)).toEqual([
-          'Reading 1 source',
-          'Picking top fan-outs',
+          'Gathering 1 source',
           'Writing the outline',
+          'Matching fan-outs',
         ]);
         // The agent's dots on the button, not a spinning ring.
         expect(container.querySelector('.animate-spin')).toBeNull();
 
         await act(async () => agentStop().click());
-        expect(stopAgentRun).toHaveBeenCalledWith('d1', 'b1');
+        expect(stopAgentRun).toHaveBeenCalledWith('d1', 'b1', 'r1');
         await act(async () => rebuilt({ error: 'stopped' }));
         expect(toast).toHaveBeenCalledTimes(1);
         expect(toast).toHaveBeenCalledWith('Stopped · nothing was changed');
@@ -2457,6 +2510,35 @@ describe('the side panel', () => {
       ).toContain('Content Agent has 1 suggestion for you');
       expect(toast.success).toHaveBeenCalledWith(
         'Content Agent suggested 1 change · review them in the page',
+      );
+    });
+
+    it('names the fan-outs the page doesn’t use yet, so the agent writes those', async () => {
+      getContentDraft.mockResolvedValue(traced);
+      getDraftSources.mockResolvedValue({
+        data: {
+          prompts: [],
+          fanouts: [{ query: 'pipeline forecasting', platforms: ['copilot-web'], searched: 2 }],
+          citedPages: [],
+          gscQueries: [],
+          brandDomains: [],
+          competitorDomains: [],
+        },
+        choices: [],
+      });
+      fixDraftRules.mockResolvedValue({ count: 0 });
+      await openRules();
+
+      await act(async () => panelButton('Run Agent').click());
+      await act(async () => {});
+
+      expect(fixDraftRules.mock.calls[0][2].rules).toContainEqual(
+        expect.objectContaining({
+          key: 'fanoutH2',
+          detail: expect.stringContaining(
+            'fan-outs to use, in their words: "pipeline forecasting"',
+          ),
+        }),
       );
     });
 
@@ -2981,9 +3063,9 @@ describe('the side panel', () => {
       expect(decideDraftSuggestions).not.toHaveBeenCalled();
     });
 
-    it('rewrites again from Try again after a rewrite failed', async () => {
-      localStorage.setItem('aeo:page-rewrite:d1', '1');
-      getContentDraft.mockResolvedValue({ ...long, agentState: 'failed' });
+    it('rewrites again from Try again after a rewrite failed, on any device', async () => {
+      // The draft says which run failed (agent_run), not this browser's storage.
+      getContentDraft.mockResolvedValue({ ...long, agentState: 'failed', agentRun: 'rewrite' });
       await renderPage();
       await act(async () => {});
 

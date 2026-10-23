@@ -173,13 +173,14 @@ router.post('/:draftId/rewrite', async (req, res) => {
   }
 });
 
-const stopBody = z.object({ brandId: z.guid() });
+const stopBody = z.object({ brandId: z.guid(), runId: z.guid().optional() });
 
 /**
  * POST /api/content-drafts/:draftId/stop
- * Body: { brandId }
- * Stops the Content Agent's run on the draft (CE-027): it keeps nothing of
- * what it had. Answers { stopped }: false when no run was under way.
+ * Body: { brandId, runId? }
+ * Stops the Content Agent's run on the draft (CE-027), the one the editor
+ * shows when it names it: it keeps nothing of what it had. Answers
+ * { stopped }: false when no run was under way.
  */
 router.post('/:draftId/stop', async (req, res) => {
   const draftId = z.guid().safeParse(req.params.draftId);
@@ -187,7 +188,7 @@ router.post('/:draftId/stop', async (req, res) => {
   if (!draftId.success || !parsed.success) {
     return res.status(400).json({ error: 'Invalid request', code: 'invalid' });
   }
-  const { brandId } = parsed.data;
+  const { brandId, runId } = parsed.data;
   try {
     await assertBrandAccess(brandId, req.user.id);
     const { data: draft, error } = await supabaseAdmin
@@ -199,7 +200,7 @@ router.post('/:draftId/stop', async (req, res) => {
     if (!draft || draft.brand_id !== brandId) {
       return res.status(404).json({ error: 'Draft not found', code: 'not_found' });
     }
-    const stopped = await stopDraftRun(draftId.data);
+    const stopped = await stopDraftRun(draftId.data, runId ?? null);
     if (stopped) {
       // A run in the background lets go of the draft once it sees the stop;
       // one no server holds any more never would. The editor opens at once.

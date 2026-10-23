@@ -199,9 +199,10 @@ describe('AgentCard', () => {
       id: 'r1',
       kind: 'rewrite',
       steps: [
-        { key: 'read_sources', count: 52 },
-        { key: 'rewrite_page', count: 14 },
-        { key: 'check_rules', count: null },
+        { key: 'read_rules', count: 14 },
+        { key: 'gather_sources', count: 52 },
+        { key: 'rewrite_page', count: null },
+        { key: 'check_sources', count: null },
       ],
       step: 1,
       startedAt: new Date().toISOString(),
@@ -229,9 +230,10 @@ describe('AgentCard', () => {
     await show(false);
     const steps = [...container.querySelectorAll('li')];
     expect(steps.map((li) => li.textContent)).toEqual([
-      'Reading 52 sources',
-      'Rewriting the page to 14 rules',
-      'Checking rules',
+      'Reading 14 rules',
+      'Gathering 52 sources',
+      'Rewriting the page',
+      'Checking sources',
     ]);
     expect(steps[0].querySelector('svg')).not.toBeNull();
     expect(steps[1].querySelector('[aria-current="step"]')).not.toBeNull();
@@ -271,7 +273,7 @@ describe('AgentCard', () => {
     expect(handlers.onDecidePage).toHaveBeenCalledWith('open');
   });
 
-  it('says why Run Agent waits', async () => {
+  it('says why Run Agent waits, in the card, never only on hover', async () => {
     await act(async () => {
       root.render(
         <NextIntlClientProvider locale="en" messages={messages}>
@@ -290,6 +292,9 @@ describe('AgentCard', () => {
       (b) => b.textContent === 'Run Agent',
     )!;
     expect(run.disabled).toBe(true);
-    expect(run.title).toBe('Content Agent is already working on this page.');
+    expect(run.title).toBe('');
+    const reason = container.querySelector(`[id="${run.getAttribute('aria-describedby')}"]`)!;
+    expect(reason.textContent).toBe('Content Agent is already working on this page.');
+    expect(reason.className).toContain('text-amber-700');
   });
 });

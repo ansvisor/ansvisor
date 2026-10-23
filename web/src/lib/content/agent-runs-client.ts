@@ -26,13 +26,15 @@ export async function readAgentRun(draftId: string): Promise<AgentRun | null> {
 }
 
 /**
- * Stop (CE-027): ends the Content Agent's run on the draft, through the API's
- * same-origin proxy; it keeps nothing of what it had. stopped is false when no
- * run was under way.
+ * Stop (CE-027): ends the Content Agent's run on the draft — the one the
+ * editor shows, so another tab's run goes on — through the API's same-origin
+ * proxy; it keeps nothing of what it had. stopped is false when no run was
+ * under way.
  */
 export async function stopAgentRun(
   draftId: string,
   brandId: string,
+  runId: string | null = null,
 ): Promise<{ stopped: boolean } | { error: 'failed' }> {
   const {
     data: { session },
@@ -47,7 +49,7 @@ export async function stopAgentRun(
           'Content-Type': 'application/json',
           Authorization: `Bearer ${session.access_token}`,
         },
-        body: JSON.stringify({ brandId }),
+        body: JSON.stringify(runId ? { brandId, runId } : { brandId }),
       },
     );
     if (!res.ok) return { error: 'failed' };

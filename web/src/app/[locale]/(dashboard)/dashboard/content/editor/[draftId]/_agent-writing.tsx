@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNow, useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 import { ArrowLeft, Bot, Check, Circle } from 'lucide-react';
@@ -62,7 +62,7 @@ export function AgentWriting({
   method,
   since,
   rewrite = false,
-  onStopped,
+  onRunEnded,
 }: {
   draftId: string;
   brandId: string;
@@ -72,30 +72,38 @@ export function AgentWriting({
   since: string | null;
   /** Rewrite the page to these rules, as this tab started it. */
   rewrite?: boolean;
-  /** Stopped: the page reads the draft again, which the server has let go. */
-  onStopped?: () => void;
+  /** The run ended (stopped, done or failed): the page reads the draft again. */
+  onRunEnded?: () => void;
 }) {
   const t = useTranslations('contentEditor.editor');
   const seconds = elapsedSeconds(since, useNow({ updateInterval: 1000 }));
   const live = useAgentRun(draftId, true, WRITING_RUNS);
   const [stopping, setStopping] = useState(false);
-  // The last run read stays while Stop ends it, until the editor opens; a run
-  // that ended otherwise goes.
+  // The last run read stays until the editor opens: the fixed list never
+  // comes back for a moment at its end.
   const [shown, setShown] = useState(live);
   if (live && live !== shown) setShown(live);
-  const run = live ?? (stopping ? shown : null);
+  const run = live ?? shown;
+  // It ended (done, failed, or gone stale): the draft is read at once, not
+  // on the page's next look.
+  const ended = shown !== null && live === null;
+  useEffect(() => {
+    if (ended) onRunEnded?.();
+  }, [ended, onRunEnded]);
   const stop = async () => {
     setStopping(true);
-    const result = await stopAgentRun(draftId, brandId).catch((): { error: 'failed' } => ({
-      error: 'failed',
-    }));
+    const result = await stopAgentRun(draftId, brandId, run?.id ?? null).catch(
+      (): { error: 'failed' } => ({
+        error: 'failed',
+      }),
+    );
     if ('error' in result) {
       toast.error(t('agentCard.stopFailed'));
       setStopping(false);
     } else if (result.stopped) {
       // The page opens again as it was: the server let go of the draft.
       toast(t('agentCard.stopped'));
-      onStopped?.();
+      onRunEnded?.();
     } else {
       setStopping(false);
     }

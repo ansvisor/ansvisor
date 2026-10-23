@@ -3594,7 +3594,7 @@
           "open_suggestions": "Accept or reject the open suggestions first, then try again.",
           "not_draft": "This draft is no longer a draft, so the agent didn't start.",
           "empty": "The page has no text to rewrite yet.",
-          "too_long": "The page is too long to rewrite whole. Use Apply rules with Agent, or shorten it first.",
+          "too_long": "The page is too long to rewrite whole. Use Fix open rules, or shorten it first.",
           "failed": "The agent couldn't start. Try again in a moment."
         }
       },
@@ -3630,26 +3630,22 @@
         "draftingFromFanouts": "Drafting from {fanouts, plural, one {# fan-out} other {# fan-outs}}…",
         "draftingRules": "Drafting from your rules…",
         "steps": {
-          "readPages": "Reading {count, plural, one {# cited page} other {# cited pages}}",
-          "readPagesAny": "Reading cited pages",
-          "matchFanouts": "Matching {count, plural, one {# fan-out} other {# fan-outs}}",
-          "matchFanoutsAny": "Matching fan-outs",
-          "checkQueries": "Checking {count, plural, one {# Search Console query} other {# Search Console queries}}",
-          "checkQueriesAny": "Checking Search Console queries",
+          "readRules": "Reading {count, plural, one {# rule} other {# rules}}",
+          "readRulesAny": "Reading rules",
+          "gatherSources": "Gathering {count, plural, one {# source} other {# sources}}",
+          "gatherSourcesAny": "Gathering sources",
           "writeChanges": "Writing {count, plural, one {# change} other {# changes}}",
           "writeChangesAny": "Writing changes",
-          "readSources": "Reading {count, plural, one {# source} other {# sources}}",
-          "readSourcesAny": "Reading sources",
-          "rewritePage": "Rewriting the page to {count, plural, one {# rule} other {# rules}}",
+          "rewritePage": "Rewriting the page",
           "rewritePageAny": "Rewriting the page",
-          "checkRules": "Checking rules",
-          "checkRulesAny": "Checking rules",
-          "pickFanouts": "Picking top fan-outs",
-          "pickFanoutsAny": "Picking top fan-outs",
+          "writePage": "Writing the page",
+          "writePageAny": "Writing the page",
           "writeOutline": "Writing the outline",
           "writeOutlineAny": "Writing the outline",
-          "writePage": "Writing the page",
-          "writePageAny": "Writing the page"
+          "matchFanouts": "Matching {count, plural, one {# fan-out} other {# fan-outs}}",
+          "matchFanoutsAny": "Matching fan-outs",
+          "checkSources": "Checking sources",
+          "checkSourcesAny": "Checking sources"
         }
       },
       "rewrite": {
@@ -3720,6 +3716,7 @@
           "empty": "Write something first: the agent improves the page you have.",
           "open_suggestions": "This page has open suggestions, maybe from another tab. They're shown now: accept or reject them first.",
           "published": "This page is published. Content Agent suggests changes to drafts only.",
+          "writing": "Content Agent is already writing this page, maybe from another tab. Try again once it has finished.",
           "failed": "Content Agent couldn't run. Try again."
         }
       },
@@ -4135,7 +4132,7 @@
           "measureSteps": "How to measure, as numbered steps"
         },
         "hints": {
-          "length": "A target, not a minimum: within 20% of it meets the rule. A page brought in to optimize starts at its own length. A page well over it is open, and Apply rules with Agent shortens it a few passages at a time.",
+          "length": "A target, not a minimum: within 20% of it meets the rule. A page brought in to optimize starts at its own length. A page well over it is open, and Fix open rules shortens it a few passages at a time.",
           "oneH1": "A page has one H1, its title. Make any other H1 an H2 in the toolbar: Content Agent doesn't change heading levels.",
           "summary": "A short summary under the H1 that answer engines can quote.",
           "fanoutH2": "Takes the top fan-outs you keep in Sources, the most searched first, not every one.",
@@ -4224,7 +4221,8 @@
         "agent": {
           "aim": "aim",
           "now": "now",
-          "phrases": "phrases found"
+          "phrases": "phrases found",
+          "fanouts": "fan-outs to use, in their words"
         },
         "saveMine": "Save as my rules",
         "reset": "Reset",
@@ -5593,7 +5591,8 @@
       "topic": "Topic",
       "allTopics": "All topics",
       "search": "Search",
-      "searchPlaceholder": "Search prompts…"
+      "searchPlaceholder": "Search prompts…",
+      "searchPlaceholderPerception": "Search keywords…"
     },
     "overview": {
       "sectionLabel": "Mentions overview",

@@ -22,18 +22,23 @@ const ALL = '__all__';
 /**
  * The filter bar every Mentions & Sentiment tab shares (MS-05): the date
  * range, AI platform, country, topic and a search over the prompts' text.
- * The brand is the app's active brand, chosen in the sidebar.
+ * The brand is the app's active brand, chosen in the sidebar. A tab may word
+ * the search its own way (Perception: "Search keywords…"); it still matches
+ * the prompts' text.
  */
 export function MentionsFilterBar({
   filters,
   onChange,
   regions,
   topics,
+  searchPlaceholder,
 }: {
   filters: MentionsFilters;
   onChange: (patch: Partial<MentionsFilters>) => void;
   regions: string[];
   topics: Topic[];
+  /** The search box's hint; "Search prompts…" when not given. */
+  searchPlaceholder?: string;
 }) {
   const t = useTranslations('mentions.filters');
   const platformItems = [
@@ -101,7 +106,7 @@ export function MentionsFilterBar({
             id="mentions-search"
             value={filters.q}
             onChange={(e) => onChange({ q: e.target.value })}
-            placeholder={t('searchPlaceholder')}
+            placeholder={searchPlaceholder ?? t('searchPlaceholder')}
             className="h-8 pl-8 text-xs"
           />
         </div>

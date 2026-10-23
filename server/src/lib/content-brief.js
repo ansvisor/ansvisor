@@ -7,9 +7,9 @@ import { getLanguageName } from './languages.js';
 import {
   RunStoppedError,
   advanceRun,
-  callSignal,
   finishRun,
   isStop,
+  runCall,
   startRun,
   stopIfStopped,
 } from './content-runs.js';
@@ -199,7 +199,6 @@ export async function rebuildDraftBrief({ draftId, brandId, sources }) {
 
 /** The rebuild itself, step by step: nothing is saved once it is stopped. */
 async function briefWithRun({ draft, draftId, brand, prompts, sources, run }) {
-  await advanceRun(run, 1);
   const modelId = contentBriefModelId();
   // Held on the budget before the call, so calls at once can't pass it.
   const budget = await reserveAiBudget(brand.organization_id, {
@@ -216,14 +215,16 @@ async function briefWithRun({ draft, draftId, brand, prompts, sources, run }) {
 
   let generated;
   try {
-    await advanceRun(run, 2);
-    generated = await generateObject({
-      model: resolveModel(modelId),
-      schema: outlineSchema,
-      system: SYSTEM_PROMPT,
-      prompt: buildBriefPrompt({ brand, draft, prompts, sources }),
-      abortSignal: callSignal(run, CALL_TIMEOUT_MS),
-    });
+    await advanceRun(run, 1);
+    generated = await runCall(run, budget, CALL_TIMEOUT_MS, (abortSignal) =>
+      generateObject({
+        model: resolveModel(modelId),
+        schema: outlineSchema,
+        system: SYSTEM_PROMPT,
+        prompt: buildBriefPrompt({ brand, draft, prompts, sources }),
+        abortSignal,
+      }),
+    );
     await budget.charge(generated.usage);
   } catch (err) {
     // An answer that didn't fit the schema was still paid for: charged as
@@ -235,6 +236,8 @@ async function briefWithRun({ draft, draftId, brand, prompts, sources, run }) {
     await budget.release();
   }
   const { object } = generated;
+  // Each H2 matched to the fan-out it answers (mapOutline).
+  await advanceRun(run, 2);
 
   const brief = {
     goal: object.goal.trim().slice(0, BRIEF_LIMITS.goal),

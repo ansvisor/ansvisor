@@ -1,7 +1,7 @@
 import sanitizeHtml from 'sanitize-html';
 import { passageKey } from './cited-passages';
 import { linkKey } from './link-targets';
-import { growsPastLimit, headingLimit, type SuggestionLink } from './suggestions';
+import { asksMoreThanOne, growsPastLimit, headingLimit, type SuggestionLink } from './suggestions';
 
 /**
  * An agent's suggestions through the editor API (CE-022): the same contract
@@ -145,6 +145,8 @@ const MIN_ANSWER_CHARS = 40;
 const QUESTION_AND_ANSWER = /^([\s\S]+?(?:\?(?=\s)|？))\s*(\S[\s\S]*)$/;
 /** How an answer ends: a sentence. */
 const ANSWER_END = /[.!。！]$/;
+/** What follows a heading's question may open with another question, not an answer. */
+const OPENS_WITH_QUESTION = /^[^.!?。！？]*(?:\?(?=\s|$)|？)/;
 
 /** Where the first block of a cleaned HTML starts. */
 const BLOCK_START = /<(?:h[2-4]|p|ul|ol|li)>/;
@@ -190,10 +192,13 @@ export function splitReplace(
     // A question and its answer ("What is X? X is …"): the answer goes under
     // the heading first, before any blocks that came with it. A subtitle that
     // fits ("What is AEO? The Complete Guide") isn't one: an answer ends a
-    // sentence. Past the heading's limit, the rest is never the heading's.
+    // sentence. Past the heading's limit, the rest is never the heading's,
+    // unless it opens with a second question: that one isn't an answer, and
+    // the heading asking both is dropped (asksMoreThanOne).
     const answered = words.match(QUESTION_AND_ANSWER);
     if (
       answered &&
+      !OPENS_WITH_QUESTION.test(answered[2]) &&
       (words.length > headingLimit(levelOf(tag)) ||
         (ANSWER_END.test(answered[2]) && answered[2].length >= MIN_ANSWER_CHARS))
     ) {
@@ -234,7 +239,8 @@ export type DroppedReason =
   | 'empty'
   | 'duplicate'
   | 'too_many'
-  | 'heading_too_long';
+  | 'heading_too_long'
+  | 'heading_two_questions';
 
 /**
  * The suggestions the editor can apply: a passage that exists; a replace's
@@ -242,7 +248,8 @@ export type DroppedReason =
  * insert's HTML cleaned and not empty; each change once. A replace that
  * carries blocks, or an answer on a heading, is split into a replace and an
  * insert after it (splitReplace); one that would still grow a heading past
- * its limit (growsPastLimit) is dropped.
+ * its limit (growsPastLimit), or make it ask a second question
+ * (asksMoreThanOne), is dropped.
  */
 export function keepAgentSuggestions(
   raw: AgentSuggestionInput[],
@@ -296,6 +303,17 @@ export function keepAgentSuggestions(
       if (!changed && !blocks) return drop('no_change');
       if (changed && words.length > 2000) return drop('no_change');
       if (!passage.text.includes(before)) return drop('not_in_passage');
+      // A second question first: shortening it would still leave two.
+      if (
+        changed &&
+        isHeading(passage.tag) &&
+        asksMoreThanOne(
+          passage.text,
+          passage.text.replace(before, () => words),
+        )
+      ) {
+        return drop('heading_two_questions');
+      }
       if (
         changed &&
         isHeading(passage.tag) &&

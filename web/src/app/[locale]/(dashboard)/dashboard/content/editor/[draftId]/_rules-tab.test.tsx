@@ -215,6 +215,12 @@ describe('the Rules tab', () => {
       );
       await act(async () => trigger().click());
       expect(items()[0].getAttribute('aria-disabled')).toBe('true');
+      // Nothing turned off is recommended, and the page is near Length: no rewrite advice.
+      expect(
+        items()
+          .map((item) => item.textContent)
+          .join(' '),
+      ).not.toContain('Recommended');
     });
 
     it('says all rules are met, with nothing to run', async () => {

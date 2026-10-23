@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
 import { Check, ChevronRight, X } from 'lucide-react';
 import { Link } from '@/i18n/navigation';
@@ -239,6 +239,11 @@ export function AgentCard({
   const action = suggestions.find((s) => s.actionId && s.actionNo !== null);
   const after = rulesAfter(suggestions, rules);
   const stillOpen = Math.max(0, rules.total - rules.met);
+  // Run Agent shows once nothing is left to decide; why it can't run is
+  // written in the card, never only on hover (as the Rules card does, CE-028).
+  const runShown = !working && stillOpen > 0 && (page ? page.status !== 'open' : open === 0);
+  const reasonId = useId();
+  const reason = runShown ? runBlocked : null;
   const tone = working ? 'working' : open > 0 ? 'waiting' : 'done';
   // "built from 3 of your sources · See sources" (v1.1 §3b).
   const builtFrom = sourceCount > 0 && (
@@ -357,6 +362,14 @@ export function AgentCard({
         {line && (
           <div className="text-[12.5px] text-muted-foreground [overflow-wrap:anywhere]">{line}</div>
         )}
+        {reason && (
+          <div
+            id={reasonId}
+            className="text-[12.5px] text-amber-700 [overflow-wrap:anywhere] dark:text-amber-400"
+          >
+            {reason}
+          </div>
+        )}
       </div>
       {/* Working, only Stop: it drops whatever the run had. */}
       {working && onStop && run && (
@@ -408,7 +421,7 @@ export function AgentCard({
                     <Button
                       size="sm"
                       disabled={busy || runBlocked !== null}
-                      title={runBlocked ?? undefined}
+                      aria-describedby={reason ? reasonId : undefined}
                       onClick={onRun}
                     >
                       {t('run')}
@@ -444,7 +457,7 @@ export function AgentCard({
                 <Button
                   size="sm"
                   disabled={busy || runBlocked !== null}
-                  title={runBlocked ?? undefined}
+                  aria-describedby={reason ? reasonId : undefined}
                   onClick={onRun}
                 >
                   {t('run')}

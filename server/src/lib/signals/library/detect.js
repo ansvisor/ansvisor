@@ -19,6 +19,7 @@
  * nothing — which is right — but only by accident.
  */
 
+import { MAX_TARGET_IDS } from '../../target-ids.js';
 import supabaseAdmin from '../../../config/supabase.js';
 import { logger } from '../../logger.js';
 import { resolve } from '../../../config/action-engine.js';
@@ -99,13 +100,27 @@ async function selectAll(build) {
   }
 }
 
-/** A finding about a group — prompts, pages, queries — as one signal. */
-function group(kind, entity, rows, toTarget, source, extra = {}) {
+/**
+ * A finding about a group — prompts, pages, queries — as one signal. It
+ * names its first 50 targets; a bigger group lists every target's id too
+ * (`targetIds`), so the action it starts counts and keeps the whole group
+ * (AC-009: one count everywhere).
+ */
+export function group(kind, entity, rows, toTarget, source, extra = {}) {
+  const ids =
+    rows.length > 50
+      ? {
+          targetIds: rows.slice(0, MAX_TARGET_IDS).map((row) => {
+            const target = toTarget(row);
+            return String(target.id ?? target.label ?? '');
+          }),
+        }
+      : {};
   return {
     kind,
     dedupKey: kind,
     source,
-    payload: { entity, targets: rows.slice(0, 50).map(toTarget), ...extra },
+    payload: { entity, targets: rows.slice(0, 50).map(toTarget), ...ids, ...extra },
     previousValue: null,
     currentValue: rows.length,
     changeValue: null,

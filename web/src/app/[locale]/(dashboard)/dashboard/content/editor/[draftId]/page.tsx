@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { Loader2 } from 'lucide-react';
@@ -11,7 +11,6 @@ import { getContentDraft } from '@/lib/actions/content-drafts';
 import { AGENT_POLL_MS, CONTENT_LIBRARY_PATH, type ContentDraft } from '@/lib/content/drafts';
 import { useBrandStore } from '@/stores/use-brand-store';
 import { AgentWriting } from './_agent-writing';
-import { wasRewrite } from './_page-rewrite';
 import { DraftEditor } from './_draft-editor';
 
 type DraftRead = { id: string; draft: ContentDraft } | { id: string; draft: null; failed: boolean };
@@ -80,6 +79,14 @@ export default function ContentEditorPage() {
       clearTimeout(timer);
     };
   }, [draftId, writing, read]);
+  // The agent's run ended, or was stopped: read the draft now, not on the next look.
+  const rereadDraft = useCallback(() => {
+    getContentDraft(draftId).then(
+      (draft) => draft && setRead({ id: draftId, draft }),
+      // The next look tries again.
+      () => {},
+    );
+  }, [draftId]);
 
   return (
     <div className="-m-6 flex h-[calc(100vh-4rem)] flex-col md:h-screen">
@@ -94,20 +101,14 @@ export default function ContentEditorPage() {
           title={current.draft.title}
           method={current.draft.method}
           since={current.draft.agentSince}
-          rewrite={wasRewrite(current.draft.id)}
-          onStopped={() =>
-            getContentDraft(draftId).then(
-              (draft) => draft && setRead({ id: draftId, draft }),
-              // The next look tries again.
-              () => {},
-            )
-          }
+          rewrite={current.draft.agentRun === 'rewrite'}
+          onRunEnded={rereadDraft}
         />
       ) : current.draft ? (
         <DraftEditor
           key={current.draft.id}
           draft={current.draft}
-          onAgentStarted={() =>
+          onAgentStarted={(run) =>
             setRead((prev) =>
               prev?.draft
                 ? {
@@ -116,6 +117,7 @@ export default function ContentEditorPage() {
                       ...prev.draft,
                       agentState: 'writing',
                       agentSince: new Date().toISOString(),
+                      agentRun: run,
                     },
                   }
                 : prev,

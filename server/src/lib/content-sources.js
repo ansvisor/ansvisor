@@ -9,11 +9,14 @@ import { z } from 'zod';
  * words each one supports, so the editor shows "Based on" chips and ¹ ² marks.
  *
  * And no number without a source. The model reads a source by its words
- * (a question, a search, an address), never its content, so a mark alone
- * proves nothing: a number the agent adds must be in the page, the brand's
- * or the brief's words, the rules, today's date, or a source's own words —
- * and then it is marked to that source. A suggestion with any other number
- * is not kept; a page the agent writes whole gets a placeholder in its place.
+ * (a question, a search), never its content, so a mark alone proves
+ * nothing: a number the agent adds must be in the page, the brand's or the
+ * brief's words, the rules, this year, or a source's own words — and then it
+ * is marked to that source. A claim (a %, a ×, a scale, a currency) must be
+ * known with the same unit or sign: "crm for 50 users" never sources "50%".
+ * A cited page's address is no words of its own. A suggestion with any
+ * other number is not kept; a page the agent writes whole gets a
+ * placeholder in its place.
  */
 
 /** The most sources one suggestion names (content_draft_suggestions.sources, 00248). */
@@ -92,35 +95,69 @@ export function stripSourceIds(text) {
   return String(text ?? '').replace(SOURCE_ID, '');
 }
 
-/** A number as the guard reads it: digits with their separators. */
-const NUMBER = /\d+(?:[.,]\d+)*/g;
+/**
+ * A number as the guard reads it: digits with their separators, not stuck to
+ * a letter before them ("B2B", "H2", "Web3" are words).
+ */
+const NUMBER = /(?<!\p{L})\d+(?:[.,]\d+)*/gu;
 const CURRENCY = /[$€£¥₺]/;
 /** What makes a lone digit a claim: a percent, a times, a scale. */
 const UNIT_AFTER =
   /^\s?(?:%|×|[xX]\b|[kKMB]\b|bn\b|mn\b|[Mm]illions?\b|[Bb]illions?\b|[Tt]housands?\b|[Tt]rillions?\b)/;
+
+/** A claim's unit, one name for each way it is written: "40%", "3x", "2M", "$40". */
+function unitOf(text, start, end) {
+  const before = text[start - 1] ?? '';
+  if (CURRENCY.test(before)) return before;
+  const unit = text.slice(end).match(UNIT_AFTER)?.[0].trim().toLowerCase();
+  if (!unit) return '';
+  if (unit === '%') return '%';
+  if (unit === '×' || unit === 'x') return '×';
+  if (unit === 'k' || unit.startsWith('thousand')) return 'thousand';
+  if (unit === 'm' || unit === 'mn' || unit.startsWith('million')) return 'million';
+  if (unit === 'b' || unit === 'bn' || unit.startsWith('billion')) return 'billion';
+  return 'trillion';
+}
 /** A placeholder the agent leaves ("[figure, source, 2025]"): it holds no claim. */
 const BRACKETS = /\[[^\]]*\]/g;
 
 /** A number's value as compared: thousands separators dropped ("1,299" is 1299). */
 const valueOf = (token) => token.replace(/[.,](?=\d{3}(?!\d))/g, '');
 
-/** The numbers a text holds, each with where it is. */
+/** The numbers a text holds, each with where it is and its unit ('' for none). */
 export function numbersIn(text) {
+  const s = String(text ?? '');
   const found = [];
-  for (const m of String(text ?? '').matchAll(NUMBER)) {
-    found.push({ value: valueOf(m[0]), start: m.index, end: m.index + m[0].length });
+  for (const m of s.matchAll(NUMBER)) {
+    const end = m.index + m[0].length;
+    found.push({ value: valueOf(m[0]), unit: unitOf(s, m.index, end), start: m.index, end });
   }
   return found;
 }
 
-/** The values of every number in these texts. */
+/** A number as a known set holds it: its value, and with a unit its value and unit. */
+const unitKey = (n) => `${n.value}|${n.unit}`;
+
+/**
+ * Every number in these texts: each value, so a plain number matches it
+ * written any way, and each value with its unit, which a claim must match.
+ */
 export function knownNumbers(...texts) {
-  return new Set(texts.flatMap((text) => numbersIn(text).map((n) => n.value)));
+  return new Set(
+    texts.flatMap((text) =>
+      numbersIn(text).flatMap((n) => (n.unit ? [n.value, unitKey(n)] : [n.value])),
+    ),
+  );
 }
 
-/** Today as the agent may write it: its year, month and day. */
+/** Today as the agent may write it: its year alone ("23" on the 23rd would let "23%" through). */
 export function todayText(now = new Date()) {
-  return `${now.getUTCFullYear()} ${now.getUTCMonth() + 1} ${now.getUTCDate()}`;
+  return `${now.getUTCFullYear()}`;
+}
+
+/** A source's words its numbers are read from: a cited page's address is none ("/2024/03/15/post-1234"). */
+export function sourceWords(source) {
+  return source.kind === 'cited_page' ? '' : `${source.label} ${source.detail ?? ''}`;
 }
 
 /** Tags whose text is never a page's words. */
@@ -170,9 +207,9 @@ export function textPieces(html) {
 export function addedNumbers(text, known) {
   const s = String(text ?? '').replace(BRACKETS, (m) => ' '.repeat(m.length));
   return numbersIn(s).filter((n) => {
-    if (known.has(n.value)) return false;
-    const claim = UNIT_AFTER.test(s.slice(n.end)) || CURRENCY.test(s[n.start - 1] ?? '');
-    return claim || n.value.length > 1;
+    // A claim is known only with its unit or sign; a plain number as any.
+    if (known.has(n.unit ? unitKey(n) : n.value)) return false;
+    return n.unit !== '' || n.value.length > 1;
   });
 }
 
@@ -229,12 +266,12 @@ export function sourceSuggestion({ named, marks, pieces, numbered, known }) {
   }
 
   // Each number it adds: the page's own, or one of its sources' words'.
-  const own = numbered.map((s) => knownNumbers(s.label, s.detail ?? ''));
+  const own = numbered.map((s) => knownNumbers(sourceWords(s)));
   for (const piece of pieces) {
     for (const n of addedNumbers(piece.text, known)) {
       const start = piece.start + n.start;
       const end = piece.start + n.end;
-      const from = numbered.findIndex((_, i) => own[i].has(n.value));
+      const from = numbered.findIndex((_, i) => own[i].has(n.unit ? unitKey(n) : n.value));
       if (from === -1) return null;
       const source = indexOf(numbered[from]);
       if (source === -1) return null;

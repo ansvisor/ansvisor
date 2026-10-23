@@ -14,8 +14,8 @@ describe('agent runs', () => {
     id: 'r1',
     kind: 'fix',
     steps: [
-      { key: 'read_pages', count: 20 },
-      { key: 'match_fanouts', count: 0 },
+      { key: 'read_rules', count: 4 },
+      { key: 'gather_sources', count: 0 },
       { key: 'made_up', count: 1 },
       { key: 'write_changes', count: null },
     ],
@@ -29,7 +29,7 @@ describe('agent runs', () => {
 
   it('reads a run, keeping the steps it can name and its step within them', () => {
     const run = agentRunFrom(row())!;
-    expect(run.steps.map((s) => s.key)).toEqual(['read_pages', 'match_fanouts', 'write_changes']);
+    expect(run.steps.map((s) => s.key)).toEqual(['read_rules', 'gather_sources', 'write_changes']);
     expect(run.step).toBe(3);
     expect(agentRunFrom(row({ kind: 'other' }))).toBeNull();
     expect(agentRunFrom(row({ steps: [] }))).toBeNull();
@@ -52,7 +52,7 @@ describe('agent runs', () => {
     expect(sameRun(run, agentRunFrom(row()))).toBe(true);
     expect(sameRun(run, agentRunFrom(row({ step: 1 })))).toBe(false);
     expect(sameRun(run, agentRunFrom(row({ stopped_at: '2026-10-23T10:00:30Z' })))).toBe(false);
-    expect(sameRun(run, agentRunFrom(row({ steps: [{ key: 'read_pages', count: 21 }] })))).toBe(
+    expect(sameRun(run, agentRunFrom(row({ steps: [{ key: 'read_rules', count: 5 }] })))).toBe(
       false,
     );
     expect(sameRun(run, null)).toBe(false);
@@ -61,8 +61,8 @@ describe('agent runs', () => {
 
   it('shows no step about data it has none of, and names each with or without its count', () => {
     const run = agentRunFrom(row())!;
-    expect(shownSteps(run).map(({ step }) => step.key)).toEqual(['read_pages', 'write_changes']);
-    expect(stepMessage({ key: 'read_pages', count: 20 })).toEqual({ key: 'readPages', count: 20 });
+    expect(shownSteps(run).map(({ step }) => step.key)).toEqual(['read_rules', 'write_changes']);
+    expect(stepMessage({ key: 'read_rules', count: 4 })).toEqual({ key: 'readRules', count: 4 });
     expect(stepMessage({ key: 'write_changes', count: null })).toEqual({ key: 'writeChangesAny' });
   });
 });

@@ -4,6 +4,7 @@ import { z } from 'zod';
 import supabaseAdmin from '../config/supabase.js';
 import { resolveModel } from './ai-provider.js';
 import {
+  FANOUT_RULE,
   HEADING_RULE,
   LINK_RULE,
   MAX_AGENT_SUGGESTIONS,
@@ -14,6 +15,7 @@ import {
   promptPassages,
   readPrompts,
   suggestionsSchema,
+  WRITING_STALE_MS,
 } from './content-agent.js';
 import { contentBriefModelId, rebuildSources } from './content-brief.js';
 import { linkAllowList, linkTargetsPrompt, readLinkTargets } from './content-links.js';
@@ -26,6 +28,7 @@ import {
   placeholderNumbers,
   placeholderNumbersInHtml,
   sourceSuggestion,
+  sourceWords,
   stripSourceIds,
   todayText,
 } from './content-sources.js';
@@ -42,14 +45,7 @@ import {
   rewriteSchema,
   textLength,
 } from './content-rewrite.js';
-import {
-  advanceRun,
-  callSignal,
-  finishRun,
-  isStop,
-  startRun,
-  stopIfStopped,
-} from './content-runs.js';
+import { advanceRun, finishRun, isStop, runCall, startRun, stopIfStopped } from './content-runs.js';
 import { getLanguageName } from './languages.js';
 import { logger } from './logger.js';
 import { reserveAiBudget } from './plan-guard.js';
@@ -73,8 +69,9 @@ import { reserveAiBudget } from './plan-guard.js';
 /** How long the model may take: nobody waits on the request. */
 const CALL_TIMEOUT_MS = 180_000;
 
-/** A 'writing' this old was left by a server that stopped: it can start again. */
-export const WRITING_STALE_MS = 10 * 60_000;
+// A 'writing' older than WRITING_STALE_MS (content-agent.js, which Fix open
+// rules checks too) was left by a server that stopped: it can start again.
+export { WRITING_STALE_MS };
 
 /**
  * The drafts the agent writes in: still being worked on, a draft or one in
@@ -130,6 +127,7 @@ How to write:
 - Follow the outline when there is one; each H2 answers one of the questions or AI searches given.
 - Short paragraphs and plain sentences. Lists where a reader compares or follows steps.
 - Follow every rule listed, and the writer's own rules.
+- For each fan-out a rule names, use its words, not questions of your own: a section heading for fanoutH2, an FAQ question ending in "?" for fanoutFaq.
 - Use only facts from the brand, the brief and your data. Never invent numbers, prices, dates, names, customers, sources or quotes. When the page needs a fact you don't have, write a placeholder in square brackets, e.g. [price], [figure, source, year]. A number that isn't in them becomes a placeholder.
 - Plain text in every field: no HTML, no Markdown.
 - Write in the language asked for.`;
@@ -142,6 +140,7 @@ Rules for your suggestions:
 - An insert adds new blocks after a passage, as simple HTML (h2, h3, p, ul, ol, li, strong, em, and a for links): a missing section, a direct answer, an FAQ.
 ${HEADING_RULE}
 ${LINK_RULE}
+${FANOUT_RULE}
 - Never change a passage marked LOCKED: AI assistants quote its wording today. You may insert after it.
 - Put the keys of the rules a change meets in "rules" (none when it meets none).
 - Use only facts from the page, the brand and your data. Never invent numbers, prices, dates, names, sources or quotes; write a placeholder in square brackets instead, e.g. [figure, source, year].
@@ -414,10 +413,17 @@ export async function startDraftWriting({ draftId, brandId, input, rewrite = fal
     // A provider that isn't set up fails here, before anything is claimed.
     const model = resolveModel(modelId);
 
-    // Claimed once: a second start meanwhile finds it writing.
+    // Claimed once: a second start meanwhile finds it writing. The claim's
+    // time is the run's own: it ends only a claim it still holds (finish).
+    const claimedAt = new Date().toISOString();
     const { data: claimed, error: claimError } = await supabaseAdmin
       .from('content_drafts')
-      .update({ agent_state: 'writing', agent_state_at: new Date().toISOString() })
+      .update({
+        agent_state: 'writing',
+        agent_state_at: claimedAt,
+        // Which run, for every device: a failed rewrite is tried again as one.
+        agent_run: rewrite ? 'rewrite' : 'write',
+      })
       .eq('id', draftId)
       .in('status', OPEN_STATUSES)
       .or(`agent_state.is.null,agent_state.eq.failed,agent_state_at.lt."${staleBefore}"`)
@@ -433,7 +439,8 @@ export async function startDraftWriting({ draftId, brandId, input, rewrite = fal
 
     // Written before the answer, so the editor reads its steps, and Stop finds it, at once.
     const run = await startWritingRun(draft, input, rewrite);
-    runDraftWriting({ draft, brand, model, input, budget, rewrite, run }).catch((err) =>
+    const held = { ...draft, agent_state: 'writing', agent_state_at: claimedAt };
+    runDraftWriting({ draft: held, brand, model, input, budget, rewrite, run }).catch((err) =>
       logger.error({ err, draftId }, '[content-writer] run failed'),
     );
   } catch (err) {
@@ -445,16 +452,19 @@ export async function startDraftWriting({ draftId, brandId, input, rewrite = fal
 }
 
 /**
- * The agent's state as it ends, only while it is still the run's to end;
- * with `openOnly`, only while the draft is still open to it (not marked ready
- * meanwhile). Answers whether it ended it.
+ * The agent's state as it ends, only while it is still the run's to end: the
+ * draft still held by this run's own claim (its agent_state_at), never a
+ * newer run's after a Stop let the draft go. With `openOnly`, only while the
+ * draft is still open to it (not marked ready meanwhile). Answers whether it
+ * ended it.
  */
-async function finish(draftId, values, { openOnly = false } = {}) {
+async function finish(draft, values, { openOnly = false } = {}) {
   let query = supabaseAdmin
     .from('content_drafts')
     .update({ ...values, agent_state_at: new Date().toISOString() })
-    .eq('id', draftId)
+    .eq('id', draft.id)
     .eq('agent_state', 'writing');
+  if (draft.agent_state_at) query = query.eq('agent_state_at', draft.agent_state_at);
   if (openOnly) query = query.in('status', OPEN_STATUSES);
   const { data, error } = await query.select('id').maybeSingle();
   if (error) throw error;
@@ -462,9 +472,9 @@ async function finish(draftId, values, { openOnly = false } = {}) {
 }
 
 /** A draft marked ready or published during the run keeps its page; the agent lets go of it. */
-async function letGo(draftId) {
-  await finish(draftId, { agent_state: null });
-  logger.info({ draftId }, '[content-writer] the draft was closed during the run');
+async function letGo(draft) {
+  await finish(draft, { agent_state: null });
+  logger.info({ draftId: draft.id }, '[content-writer] the draft was closed during the run');
   return { skipped: true };
 }
 
@@ -487,23 +497,26 @@ async function rewritePage({ draft, brand, model, input, budget, numbered, known
     sourceUrl: draft.source_url,
     ruleKeys,
   });
-  const { object, usage } = await generateObject({
-    model,
-    schema: rewriteSchema,
-    system: REWRITE_SYSTEM_PROMPT,
-    prompt: buildWritePrompt({
-      brand,
-      draft,
-      numbered,
-      brief,
-      input: { ...input, sources: { ...input.sources, length } },
-      linkTargets: linkTargetsPrompt(targets, ruleKeys),
-      current: page,
-    }),
-    abortSignal: callSignal(run, CALL_TIMEOUT_MS),
-  });
-  await budget.charge(usage);
   await advanceRun(run, 2);
+  const { object, usage } = await runCall(run, budget, CALL_TIMEOUT_MS, (abortSignal) =>
+    generateObject({
+      model,
+      schema: rewriteSchema,
+      system: REWRITE_SYSTEM_PROMPT,
+      prompt: buildWritePrompt({
+        brand,
+        draft,
+        numbered,
+        brief,
+        input: { ...input, sources: { ...input.sources, length } },
+        linkTargets: linkTargetsPrompt(targets, ruleKeys),
+        current: page,
+      }),
+      abortSignal,
+    }),
+  );
+  await budget.charge(usage);
+  await advanceRun(run, 3);
 
   if (!isPageHtml(object.html)) throw new Error('The agent answered with no page in HTML');
   const cleaned = cleanPageHtml(
@@ -526,7 +539,7 @@ async function rewritePage({ draft, brand, model, input, budget, numbered, known
   // A batch that landed during the run stays the one to decide.
   if (await hasOpenSuggestions(draft.id)) {
     logger.info({ draftId: draft.id }, '[content-writer] open suggestions came in during the run');
-    return await letGo(draft.id);
+    return await letGo(draft);
   }
   // Stopped meanwhile: nothing it wrote is kept.
   await stopIfStopped(run);
@@ -551,19 +564,19 @@ async function rewritePage({ draft, brand, model, input, budget, numbered, known
     before_text: '',
     before_html: draft.body_html,
     after_text: html,
-    reason: clean(object.reason).slice(0, 300) || 'Rewrote the page to the rules',
+    reason: clean(stripSourceIds(object.reason)).slice(0, 300) || 'Rewrote the page to the rules',
     rule_keys: [...ruleKeys],
     ...(sources.length ? { sources } : {}),
   });
   if (insertError) throw insertError;
-  if (!(await finish(draft.id, { agent_state: null }, { openOnly: true }))) {
+  if (!(await finish(draft, { agent_state: null }, { openOnly: true }))) {
     // Nobody reviews a rewrite of a page already marked ready.
     const { error: dropError } = await supabaseAdmin
       .from('content_draft_suggestions')
       .delete()
       .eq('batch_id', batchId);
     if (dropError) throw dropError;
-    return await letGo(draft.id);
+    return await letGo(draft);
   }
   return { rewritten: true };
 }
@@ -591,7 +604,7 @@ export async function runDraftWriting({
     await finishRun(
       run,
       'done',
-      Number.isInteger(result.suggestions) ? { 3: result.suggestions } : {},
+      Number.isInteger(result.suggestions) ? { 2: result.suggestions } : {},
     );
     return result;
   } catch (err) {
@@ -601,14 +614,14 @@ export async function runDraftWriting({
     if (isStop(err, run)) {
       // Stopped: the page as it was, and the agent lets go of it.
       await finishRun(run, 'stopped');
-      await finish(draft.id, { agent_state: null }).catch((finishErr) =>
+      await finish(draft, { agent_state: null }).catch((finishErr) =>
         logger.error({ err: finishErr, draftId: draft.id }, '[content-writer] state not saved'),
       );
       return { stopped: true };
     }
     await finishRun(run, 'failed');
     logger.error({ err, draftId: draft.id }, '[content-writer] the agent could not finish');
-    await finish(draft.id, { agent_state: 'failed' }).catch((finishErr) =>
+    await finish(draft, { agent_state: 'failed' }).catch((finishErr) =>
       logger.error({ err: finishErr, draftId: draft.id }, '[content-writer] state not saved'),
     );
     return { failed: true };
@@ -625,17 +638,15 @@ function startWritingRun(draft, input, rewrite) {
     draftId: draft.id,
     kind: rewrite ? 'rewrite' : draft.method === 'create' ? 'write' : 'fix',
     counts: {
-      sources: promptIds.length + fanouts.length + pages.length + queries.length,
       rules: input.rules.length,
-      pages: pages.length,
-      fanouts: fanouts.length,
-      queries: queries.length,
+      sources: promptIds.length + fanouts.length + pages.length + queries.length,
     },
   });
 }
 
 /** The run itself, step by step: nothing is kept once it is stopped. */
 async function writeWithRun({ draft, brand, model, input, budget, rewrite, run }) {
+  await advanceRun(run, 1);
   const [prompts, opportunityRes] = await Promise.all([
     readPrompts(draft.brand_id, input.sources.promptIds),
     draft.opportunity_id && !draft.brief
@@ -661,19 +672,17 @@ async function writeWithRun({ draft, brand, model, input, budget, rewrite, run }
   const known = knownNumbers(
     htmlText(draft.body_html),
     draft.title,
+    brand.name,
+    brand.industry,
     brand.description,
     brief,
     ...input.rules.flatMap((r) => [r.name, r.detail]),
     ...input.textRules,
     todayText(),
   );
-  const knownInPage = new Set([
-    ...known,
-    ...knownNumbers(...numbered.map((s) => `${s.label} ${s.detail ?? ''}`)),
-  ]);
+  const knownInPage = new Set([...known, ...knownNumbers(...numbered.map(sourceWords))]);
 
   if (rewrite) {
-    await advanceRun(run, 1);
     return await rewritePage({
       draft,
       brand,
@@ -688,16 +697,18 @@ async function writeWithRun({ draft, brand, model, input, budget, rewrite, run }
   }
 
   if (draft.method === 'create') {
-    await advanceRun(run, 1);
-    const { object, usage } = await generateObject({
-      model,
-      schema: pageSchema,
-      system: WRITE_SYSTEM_PROMPT,
-      prompt: buildWritePrompt({ brand, draft, numbered, brief, input }),
-      abortSignal: callSignal(run, CALL_TIMEOUT_MS),
-    });
-    await budget.charge(usage);
     await advanceRun(run, 2);
+    const { object, usage } = await runCall(run, budget, CALL_TIMEOUT_MS, (abortSignal) =>
+      generateObject({
+        model,
+        schema: pageSchema,
+        system: WRITE_SYSTEM_PROMPT,
+        prompt: buildWritePrompt({ brand, draft, numbered, brief, input }),
+        abortSignal,
+      }),
+    );
+    await budget.charge(usage);
+    await advanceRun(run, 3);
     // No number without a source: a placeholder where one had none.
     const written = sourcedPage(object, knownInPage);
     const title = clean(written.title).slice(0, 300) || draft.title;
@@ -713,7 +724,7 @@ async function writeWithRun({ draft, brand, model, input, budget, rewrite, run }
       if (keepError) throw keepError;
     }
     const saved = await finish(
-      draft.id,
+      draft,
       {
         title,
         body_html: renderPage({ ...written, title }),
@@ -724,14 +735,13 @@ async function writeWithRun({ draft, brand, model, input, budget, rewrite, run }
       { openOnly: true },
     );
     // Awaited here, so a failure to let go is caught below.
-    return saved ? { written: true } : await letGo(draft.id);
+    return saved ? { written: true } : await letGo(draft);
   }
 
   const { passages, more } = promptPassages(draftPassages(draft.body_html));
   if (!passages.length) throw new Error('The page has no text to improve');
   const lockedKeys = new Set(input.locked.map(passageKey));
   const ruleKeys = new Set(input.rules.map((r) => r.key));
-  await advanceRun(run, 1);
   // Where it may link: the brand's pages and the draft's sources (A).
   const targets = await readLinkTargets({
     brandId: draft.brand_id,
@@ -739,25 +749,28 @@ async function writeWithRun({ draft, brand, model, input, budget, rewrite, run }
     sourceUrl: draft.source_url,
     ruleKeys,
   });
-  await advanceRun(run, 3);
-  const { object, usage } = await generateObject({
-    model,
-    schema: suggestionsSchema,
-    system: SUGGEST_SYSTEM_PROMPT,
-    prompt: buildWritePrompt({
-      brand,
-      draft,
-      numbered,
-      brief,
-      input,
-      passages,
-      more,
-      lockedKeys,
-      linkTargets: linkTargetsPrompt(targets, ruleKeys),
+  await advanceRun(run, 2);
+  const { object, usage } = await runCall(run, budget, CALL_TIMEOUT_MS, (abortSignal) =>
+    generateObject({
+      model,
+      schema: suggestionsSchema,
+      system: SUGGEST_SYSTEM_PROMPT,
+      prompt: buildWritePrompt({
+        brand,
+        draft,
+        numbered,
+        brief,
+        input,
+        passages,
+        more,
+        lockedKeys,
+        linkTargets: linkTargetsPrompt(targets, ruleKeys),
+      }),
+      abortSignal,
     }),
-    abortSignal: callSignal(run, CALL_TIMEOUT_MS),
-  });
+  );
   await budget.charge(usage);
+  await advanceRun(run, 3);
   const rows = keepSuggestions(
     object.suggestions,
     passages,
@@ -773,7 +786,7 @@ async function writeWithRun({ draft, brand, model, input, budget, rewrite, run }
   // one to decide: this one isn't added over it.
   if (await hasOpenSuggestions(draft.id)) {
     logger.info({ draftId: draft.id }, '[content-writer] open suggestions came in during the run');
-    return await letGo(draft.id);
+    return await letGo(draft);
   }
   const batchId = randomUUID();
   const { error: insertError } = await supabaseAdmin.from('content_draft_suggestions').insert(
@@ -786,14 +799,14 @@ async function writeWithRun({ draft, brand, model, input, budget, rewrite, run }
     })),
   );
   if (insertError) throw insertError;
-  if (!(await finish(draft.id, { status: 'in_review', agent_state: null }, { openOnly: true }))) {
+  if (!(await finish(draft, { status: 'in_review', agent_state: null }, { openOnly: true }))) {
     // Nobody reviews suggestions on a page already marked ready.
     const { error: dropError } = await supabaseAdmin
       .from('content_draft_suggestions')
       .delete()
       .eq('batch_id', batchId);
     if (dropError) throw dropError;
-    return await letGo(draft.id);
+    return await letGo(draft);
   }
   return { suggestions: rows.length };
 }

@@ -282,7 +282,7 @@ describe('POST /api/content-drafts/:draftId/stop', () => {
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ stopped: true });
     expect(assertBrandAccess).toHaveBeenCalledWith(BRAND, 'u1');
-    expect(stopDraftRun).toHaveBeenCalledWith(DRAFT);
+    expect(stopDraftRun).toHaveBeenCalledWith(DRAFT, null);
     // A background run's draft is let go at once, whichever server held it.
     expect(letGo).toEqual([
       {
@@ -293,6 +293,13 @@ describe('POST /api/content-drafts/:draftId/stop', () => {
         ],
       },
     ]);
+  });
+
+  it('stops only the run the editor names, when it names one', async () => {
+    const RUN = '99999999-9999-4999-8999-999999999999';
+    expect((await stop({ brandId: BRAND, runId: RUN })).status).toBe(200);
+    expect(stopDraftRun).toHaveBeenCalledWith(DRAFT, RUN);
+    expect((await stop({ brandId: BRAND, runId: 'not-a-run' })).status).toBe(400);
   });
 
   it('lets go of nothing when no run was under way', async () => {

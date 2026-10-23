@@ -214,9 +214,13 @@ describe('startDraftWriting', () => {
       'org-1',
       expect.objectContaining({ feature: 'content', modelId: expect.any(String) }),
     );
-    expect(draftUpdates()[0]).toMatchObject({ agent_state: 'writing' });
+    // Which run holds it, for every device (00247).
+    expect(draftUpdates()[0]).toMatchObject({ agent_state: 'writing', agent_run: 'write' });
 
     await vi.waitFor(() => expect(draftUpdates()).toHaveLength(2));
+    // It ends only its own claim: a newer run's, after a Stop let go, is left alone.
+    const updates = writes.filter((w) => w.table === 'content_drafts' && w.kind === 'update');
+    expect(updates[1].filters).toContainEqual(['agent_state_at', updates[0].value.agent_state_at]);
     expect(draftUpdates()[1]).toMatchObject({
       title: 'How to brew pour-over coffee',
       status: 'in_review',
@@ -377,6 +381,10 @@ describe('runDraftWriting on a new page', () => {
     // The answer is charged to the hold; nothing is left to release after.
     expect(budget.charge).toHaveBeenCalledTimes(1);
     expect(budget.release).toHaveBeenCalled();
+    // The fan-outs a rule names, in their words, on a new page too (B).
+    expect(generateObject.mock.calls[0][0].system).toContain(
+      'For each fan-out a rule names, use its words, not questions of your own: a section heading for fanoutH2, an FAQ question ending in "?" for fanoutFaq.',
+    );
     expect(rpcCalls).toEqual([
       ['content_draft_snapshot', { p_draft_id: DRAFT, p_origin: 'agent_before' }],
     ]);
@@ -462,6 +470,9 @@ describe('runDraftWriting on an existing page', () => {
     );
     // Links only to the pages and sources listed (A); none asked for here.
     expect(generateObject.mock.calls[0][0].system).toContain('Never invent a URL');
+    expect(generateObject.mock.calls[0][0].system).toContain(
+      'Call a change a fan-out answer only when it uses a fan-out listed',
+    );
     expect(readLinkTargets).toHaveBeenCalledWith(
       expect.objectContaining({ draftId: DRAFT, ruleKeys: new Set(['faq']) }),
     );
@@ -574,6 +585,21 @@ describe('Rewrite the page to these rules', () => {
     // Refused before anything was held or claimed.
     expect(reserveAiBudget).not.toHaveBeenCalled();
     expect(draftUpdates()).toEqual([]);
+  });
+
+  it('claims the draft as a rewrite, so every device tries a failed one again as one', async () => {
+    rows.content_drafts = existing;
+    answer('<h1>Pour-over</h1><p>[[KEEP 1]]</p><p>[[KEEP 2]]</p><p>Shorter.</p>');
+    await expect(
+      startDraftWriting({
+        draftId: DRAFT,
+        brandId: BRAND,
+        input: input({ locked }),
+        rewrite: true,
+      }),
+    ).resolves.toEqual({ started: true });
+    expect(draftUpdates()[0]).toMatchObject({ agent_state: 'writing', agent_run: 'rewrite' });
+    await vi.waitFor(() => expect(draftUpdates().length).toBeGreaterThan(1));
   });
 
   it('leaves the whole page as one suggestion, with what it kept put back as it was', async () => {

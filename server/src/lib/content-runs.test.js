@@ -30,6 +30,10 @@ vi.mock('../config/supabase.js', () => ({
         eq: (col, v) => (call.filters.push(['eq', col, v]), chain),
         is: (col, v) => (call.filters.push(['is', col, v]), chain),
         gt: (col, v) => (call.filters.push(['gt', col, v]), chain),
+        lt: (col, v) => (call.filters.push(['lt', col, v]), chain),
+        gte: () => chain,
+        order: () => chain,
+        limit: () => chain,
         maybeSingle: async () => ({ data: rows[table] ?? null, error: null }),
         then: (resolve) => resolve({ data: rows.updated ?? [], error: null }),
       };
@@ -45,6 +49,7 @@ const {
   callSignal,
   finishRun,
   isStop,
+  runCall,
   runSteps,
   startRun,
   stopDraftRun,
@@ -59,20 +64,25 @@ beforeEach(() => {
 });
 
 describe('runSteps', () => {
-  it('names each kind’s steps by the data it reads', () => {
-    expect(runSteps('fix', { pages: 20, fanouts: 21, queries: 10 })).toEqual([
-      { key: 'read_pages', count: 20 },
-      { key: 'match_fanouts', count: 21 },
-      { key: 'check_queries', count: 10 },
+  it('names each kind’s steps by the work the server does, with the run’s counts', () => {
+    expect(runSteps('fix', { rules: 4, sources: 52 })).toEqual([
+      { key: 'read_rules', count: 4 },
+      { key: 'gather_sources', count: 52 },
       { key: 'write_changes', count: null },
+      { key: 'check_sources', count: null },
     ]);
     expect(runSteps('rewrite', { sources: 52, rules: 14 }).map((s) => s.key)).toEqual([
-      'read_sources',
+      'read_rules',
+      'gather_sources',
       'rewrite_page',
-      'check_rules',
+      'check_sources',
     ]);
-    expect(runSteps('brief', { sources: 52 })[0]).toEqual({ key: 'read_sources', count: 52 });
-    expect(runSteps('write', {}).map((s) => s.count)).toEqual([null, null, null]);
+    expect(runSteps('brief', { sources: 52 })).toEqual([
+      { key: 'gather_sources', count: 52 },
+      { key: 'write_outline', count: null },
+      { key: 'match_fanouts', count: null },
+    ]);
+    expect(runSteps('write', {}).map((s) => s.count)).toEqual([null, null, null, null]);
   });
 });
 
@@ -81,7 +91,7 @@ describe('a run', () => {
     const run = await startRun({
       draftId: 'd1',
       kind: 'fix',
-      counts: { pages: 2, fanouts: 3, queries: 1 },
+      counts: { rules: 2, sources: 3 },
     });
     expect(run.id).toBe('run-1');
     // Runs a stopped server left on the draft are closed first.
@@ -90,19 +100,21 @@ describe('a run', () => {
       op: 'update',
       value: { outcome: 'failed', finished_at: expect.any(String) },
     });
+    // Only runs older than any still going: another tab's run goes on.
     expect(writes[0].call.filters).toEqual([
       ['eq', 'draft_id', 'd1'],
       ['is', 'finished_at', null],
+      ['lt', 'started_at', expect.any(String)],
     ]);
     expect(writes[1]).toMatchObject({
       table: 'content_agent_runs',
       op: 'insert',
       value: { draft_id: 'd1', kind: 'fix' },
     });
-    await advanceRun(run, 3);
-    expect(writes[2].value).toMatchObject({ step: 3 });
+    await advanceRun(run, 2);
+    expect(writes[2].value).toMatchObject({ step: 2 });
     expect(writes[2].call.filters).toContainEqual(['is', 'finished_at', null]);
-    await finishRun(run, 'done', { 3: 4 });
+    await finishRun(run, 'done', { 2: 4 });
     expect(writes[3].value).toMatchObject({
       outcome: 'done',
       step: 4,
@@ -134,6 +146,11 @@ describe('a run', () => {
       ['is', 'stopped_at', null],
       ['gt', 'started_at', expect.any(String)],
     ]);
+    // The run the editor shows, when it names it.
+    rows.updated = [];
+    await stopDraftRun('d1', 'run-9');
+    const named = writes.filter((w) => w.op === 'update' && 'stopped_at' in w.value).at(-1);
+    expect(named.call.filters).toContainEqual(['eq', 'id', 'run-9']);
     expect(run.signal.aborted).toBe(true);
     expect(isStop(new Error('This operation was aborted'), run)).toBe(true);
     await expect(stopIfStopped(run)).rejects.toBeInstanceOf(RunStoppedError);
@@ -149,6 +166,77 @@ describe('a run', () => {
     await finishRun(run, 'failed');
     rows.updated = [];
     await expect(stopDraftRun('d1')).resolves.toBe(false);
+  });
+
+  it('sends no call once stopped, and keeps the hold of one a Stop aborted', async () => {
+    const budget = { keep: vi.fn(async () => {}) };
+    // Stopped before its call: nothing is sent, and the hold can go.
+    const run = await startRun({ draftId: 'd1', kind: 'fix', counts: {} });
+    rows.content_agent_runs = { stopped_at: '2026-10-23T10:00:00Z' };
+    const call = vi.fn();
+    await expect(runCall(run, budget, 1000, call)).rejects.toBeInstanceOf(RunStoppedError);
+    expect(call).not.toHaveBeenCalled();
+    expect(budget.keep).not.toHaveBeenCalled();
+    await finishRun(run, 'stopped');
+
+    // Stopped while its call is out: the provider bills it, so the hold stays.
+    rows.content_agent_runs = null;
+    const next = await startRun({ draftId: 'd1', kind: 'fix', counts: {} });
+    let sent = () => {};
+    const out = runCall(
+      next,
+      budget,
+      60_000,
+      (signal) =>
+        new Promise((_, reject) => {
+          signal.addEventListener('abort', () => reject(new Error('This operation was aborted')));
+          sent();
+        }),
+    );
+    await new Promise((resolve) => (sent = resolve));
+    rows.updated = [{ id: 'run-1' }];
+    await stopDraftRun('d1');
+    await expect(out).rejects.toThrow('aborted');
+    expect(budget.keep).toHaveBeenCalledTimes(1);
+    await finishRun(next, 'stopped');
+
+    // With the real budget: the stopped call leaves its usage row.
+    const { reserveAiBudget } = await import('./plan-guard.js');
+    const real = await reserveAiBudget('o1', { feature: 'content', modelId: 'm', draftId: 'd1' });
+    const again = await startRun({ draftId: 'd1', kind: 'fix', counts: {} });
+    let sentAgain = () => {};
+    const outAgain = runCall(
+      again,
+      real,
+      60_000,
+      (signal) =>
+        new Promise((_, reject) => {
+          signal.addEventListener('abort', () => reject(new Error('This operation was aborted')));
+          sentAgain();
+        }),
+    );
+    await new Promise((resolve) => (sentAgain = resolve));
+    await stopDraftRun('d1');
+    await expect(outAgain).rejects.toThrow('aborted');
+    await real.release();
+    expect(writes).toContainEqual(
+      expect.objectContaining({
+        table: 'prompt_improve_usage',
+        op: 'insert',
+        value: expect.objectContaining({ feature: 'content', content_draft_id: 'd1' }),
+      }),
+    );
+    await finishRun(again, 'stopped');
+
+    // A call that fails on its own lets the hold go as before.
+    const third = await startRun({ draftId: 'd1', kind: 'fix', counts: {} });
+    await expect(
+      runCall(third, budget, 1000, async () => {
+        throw new Error('model down');
+      }),
+    ).rejects.toThrow('model down');
+    expect(budget.keep).toHaveBeenCalledTimes(1);
+    await finishRun(third, 'failed');
   });
 
   it('tells its own Stop from a call that timed out', async () => {
