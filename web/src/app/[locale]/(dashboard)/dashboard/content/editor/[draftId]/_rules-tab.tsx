@@ -122,8 +122,8 @@ function RunAgentButton({
   fixable: number;
   /** The rule set's name, as the menu says what a rewrite follows. */
   setName: string;
-  /** Rewrite when small edits can't get there (rewriteAdvice), else Fix. */
-  recommended: RunMode;
+  /** Rewrite when small edits can't get there (rewriteAdvice), else Fix; none when Fix is off. */
+  recommended: RunMode | null;
 }) {
   const t = useTranslations('contentEditor.editor.rules.run');
   const main = (
@@ -298,7 +298,8 @@ export function RulesTab({
                 anyRunning={!!agentFix?.running || !!pageRewrite?.running}
                 fixable={fixable}
                 setName={setName}
-                recommended={advice ? 'rewrite' : 'fix'}
+                // Nothing is recommended that is turned off (Fix with only One H1 open).
+                recommended={advice ? 'rewrite' : fixable > 0 ? 'fix' : null}
               />
             )
           }
