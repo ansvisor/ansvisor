@@ -121,6 +121,7 @@ export function EditorSidePanel({
   quality = null,
   qualityScore = null,
   onShowInPage,
+  onShowPlaceholder,
   onPickAuthor,
 }: {
   draft: ContentDraft;
@@ -161,6 +162,8 @@ export function EditorSidePanel({
   qualityScore?: number | null;
   /** Scrolls the draft to a passage and marks it: Quality's Show. */
   onShowInPage?: (text: string) => void;
+  /** Selects the page's first placeholder (Quality's to-do, CE-044). */
+  onShowPlaceholder?: () => void;
   /** Opens the header's author menu: Quality's Pick author. */
   onPickAuthor?: () => void;
 }) {
@@ -364,6 +367,7 @@ export function EditorSidePanel({
               <QualityTab
                 quality={quality}
                 onShow={(text) => onShowInPage?.(text)}
+                onShowPlaceholder={() => onShowPlaceholder?.()}
                 onPickAuthor={() => onPickAuthor?.()}
               />
             </div>

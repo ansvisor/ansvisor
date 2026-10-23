@@ -42,6 +42,7 @@ const profile: QualityTodo = { id: 'authorProfile', done: false, gain: 40, actio
 let container: HTMLDivElement;
 let root: Root;
 const onPickAuthor = vi.fn();
+const onShowPlaceholder = vi.fn();
 const MOMENTS: NudgeMoment[] = ['agent', 'acceptAll', 'markReady'];
 
 /** The editor's part: the hook, a button per moment, and the nudge while it shows. */
@@ -55,6 +56,7 @@ function Harness({ todos, author }: { todos: QualityTodo[]; author: ContentAutho
       <NextNudge
         shown={nudge.shown}
         quality={{ author, brandName: 'Acme' }}
+        onShowPlaceholder={onShowPlaceholder}
         onPickAuthor={onPickAuthor}
         onLater={nudge.later}
         onAct={nudge.close}
@@ -82,6 +84,7 @@ const button = (name: string) =>
 beforeEach(() => {
   sessionStorage.clear();
   onPickAuthor.mockReset();
+  onShowPlaceholder.mockReset();
   container = document.createElement('div');
   root = createRoot(container);
 });
@@ -101,6 +104,22 @@ describe('NextNudge', () => {
     expect(onPickAuthor).toHaveBeenCalled();
     expect(nudge()).toBeNull();
     expect(status()).toBe('');
+  });
+
+  it('shows the first placeholder the agent left (CE-044)', async () => {
+    const fill: QualityTodo = {
+      id: 'placeholders',
+      done: false,
+      gain: 0,
+      action: 'showPlaceholder',
+      count: 2,
+    };
+    await render([fill, pick]);
+    await act(async () => nudgeAt('agent'));
+    expect(nudge()!.textContent).toBe('Next for you: fill 2 placeholders · 1 of 2Show nowLater');
+    await act(async () => button('Show now').click());
+    expect(onShowPlaceholder).toHaveBeenCalled();
+    expect(nudge()).toBeNull();
   });
 
   it('counts the open ones and skips the done', async () => {

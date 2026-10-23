@@ -2390,6 +2390,75 @@ describe('the side panel', () => {
       expect(document.querySelectorAll('[role="menuitemradio"]').length).toBe(2);
     });
 
+    it("lists the agent's placeholders first in Quality, and Show selects the first (CE-044)", async () => {
+      getContentDraft.mockResolvedValue(
+        draft({
+          authorId: 'a1',
+          bodyHtml:
+            '<h1>Pipeline forecasting</h1><p>Ask [name of a real person] how.</p>' +
+            '<p>Then ask [name of a real person] again.</p>',
+        }),
+      );
+      window.innerWidth = 1440;
+      await renderPage();
+      await act(async () =>
+        [...container.querySelectorAll<HTMLButtonElement>('header button')]
+          .find((b) => b.textContent?.startsWith('Quality'))!
+          .click(),
+      );
+      const todos = panel()!.querySelector('[aria-label="Your to-dos"]')!;
+      const first = todos.querySelector('li')!;
+      expect(first.textContent).toContain('Fill 2 placeholders');
+      await act(async () => first.querySelector('button')!.click());
+      const editor = (container.querySelector('.ProseMirror') as HTMLElement & { editor: Editor })
+        .editor;
+      const { from, to } = editor.state.selection;
+      // The first one, selected to type over.
+      expect(editor.state.doc.textBetween(from, to)).toBe('[name of a real person]');
+      expect(editor.state.doc.textBetween(0, from)).toContain('Ask ');
+      expect(editor.state.doc.textBetween(0, from)).not.toContain('Then');
+    });
+
+    it('names the placeholders Accept all brought in, once the page is read again', async () => {
+      getContentDraft.mockResolvedValue(
+        draft({
+          authorId: 'a1',
+          bodyHtml: '<h1>Pipeline forecasting</h1><p>We delve into how teams forecast.</p>',
+        }),
+      );
+      getContentAuthors.mockResolvedValue({
+        authors: [{ ...ada, bio: 'Writes about forecasting.', sameAs: ['https://x.com/ada'] }],
+        brands: [{ id: 'b1', name: 'Acme' }],
+        me: { id: 'u1', role: 'analyst' },
+      });
+      getDraftSuggestions.mockResolvedValue([
+        {
+          id: 'n1',
+          batchId: 'b2',
+          actionId: null,
+          actionNo: null,
+          kind: 'replace',
+          blockText: 'We delve into how teams forecast.',
+          beforeText: 'delve into',
+          afterText: 'asked [name of a real person] about',
+          reason: 'remove an AI trace (rule)',
+          ruleKeys: ['aiTraces'],
+          status: 'open',
+        },
+      ]);
+      await renderPage();
+      await act(async () =>
+        [...container.querySelectorAll<HTMLButtonElement>('button')]
+          .find((b) => b.textContent === 'Accept all')!
+          .click(),
+      );
+      await act(async () => {});
+      // Not before the page is read again.
+      expect(nudge()).toBeNull();
+      await act(async () => new Promise((resolve) => setTimeout(resolve, 600)));
+      expect(nudge()!.textContent).toBe('Next for you: fill 1 placeholder · 1 of 1Show nowLater');
+    });
+
     it('stays away when the agent was stopped from the wait screen', async () => {
       getContentDraft.mockResolvedValue(
         draft({ status: 'draft', agentState: 'writing', agentSince: new Date().toISOString() }),
@@ -2553,6 +2622,8 @@ describe('the side panel', () => {
       )!;
       await act(async () => accept.click());
       await act(async () => {});
+      // Once the page is read again after the accept (CE-044).
+      await act(async () => new Promise((resolve) => setTimeout(resolve, 600)));
       expect(nudge()!.textContent).toContain(
         "Next for you: complete Ada Lovelace's profile · 1 of 1",
       );

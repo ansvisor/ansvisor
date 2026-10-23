@@ -75,6 +75,7 @@ import {
 import { PAGE_READ_DELAY_MS, draftTitleFromDoc, safeLinkHref } from '@/lib/content/editor';
 import { JsonLd } from '@/lib/content/json-ld-node';
 import { firstImage } from '@/lib/content/page-schema';
+import { PLACEHOLDER, pagePlaceholders } from '@/lib/content/placeholders';
 import { detectPageType } from '@/lib/content/page-types';
 import { BAND_CLASSES, qualityAverage, qualityBand, qualityPhase } from '@/lib/content/quality';
 import { eeat, linksToCheck, trust, trustBlocks } from '@/lib/content/quality-checks';
@@ -492,7 +493,22 @@ export function DraftEditor({
   const hasAuthors = (authorsRead?.authors.length ?? 0) > 0;
   // What only the person can do (CE-040), and the nudge to the first of it
   // when the agent's run ends, after Accept all and on Mark ready.
-  const todos = qualityOn ? qualityTodos({ eeat: eeatScore, author: pageAuthor, hasAuthors }) : [];
+  // The placeholders the agent left (CE-044): the person fills them. Once
+  // the page has had some, the to-do stays, checked when they are filled.
+  const placeholderCount = useMemo(
+    () => (qualityOn ? pagePlaceholders(pageHtml).count : 0),
+    [qualityOn, pageHtml],
+  );
+  const [hadPlaceholders, setHadPlaceholders] = useState(false);
+  if (placeholderCount > 0 && !hadPlaceholders) setHadPlaceholders(true);
+  const todos = qualityOn
+    ? qualityTodos({
+        eeat: eeatScore,
+        author: pageAuthor,
+        hasAuthors,
+        placeholders: { count: placeholderCount, had: hadPlaceholders },
+      })
+    : [];
   const quality: QualityRead | null = qualityOn
     ? {
         readability: readable,
@@ -509,13 +525,25 @@ export function DraftEditor({
   const [authorMenuOpen, setAuthorMenuOpen] = useState(false);
   const nudge = useNextNudge(draft.id, todos);
   const { at: nudgeAt } = nudge;
-  const todosRead = todos.length > 0;
+  // The author's to-dos wait for E-E-A-T: the nudge waits for them.
+  const todosRead = eeatScore !== null;
   const agentNudged = useRef(false);
   useEffect(() => {
     if (!agentFinished || !todosRead || agentNudged.current) return;
     agentNudged.current = true;
     nudgeAt('agent');
   }, [agentFinished, todosRead, nudgeAt]);
+  // Accept all's moment waits for the page as read after it: the placeholders
+  // the accepted words brought are to-dos by then.
+  const acceptedAt = useRef<string | null>(null);
+  const nudgeAfterRead = () => {
+    acceptedAt.current = pageHtml;
+  };
+  useEffect(() => {
+    if (acceptedAt.current === null || acceptedAt.current === pageHtml) return;
+    acceptedAt.current = null;
+    nudgeAt('acceptAll');
+  }, [pageHtml, nudgeAt]);
   const byline = authorsRead
     ? [
         t('author.by', {
@@ -842,7 +870,7 @@ export function DraftEditor({
       }
       setSuggestions(next);
       // The last open one accepted (Accept all, or one by one): the nudge's moment.
-      if (decision === 'accept' && !next.some((s) => s.status === 'open')) nudgeAt('acceptAll');
+      if (decision === 'accept' && !next.some((s) => s.status === 'open')) nudgeAfterRead();
       if (decision === 'accept')
         toast.success(t('suggestions.acceptedToast', { count: changed.length }));
       else if (decision === 'reject')
@@ -895,6 +923,52 @@ export function DraftEditor({
    * Quality's Show: the block of the page holding the passage (never a
    * suggestion's card), scrolled to and marked for a moment.
    */
+  /**
+   * The page's first placeholder (CE-044), selected to type over: in order,
+   * across the marks in its line, its block flashed as Show's are.
+   */
+  const showFirstPlaceholder = () => {
+    if (!editor) return;
+    const one = new RegExp(PLACEHOLDER.source, 'iu');
+    let found: { from: number; to: number; block: { from: number; to: number } } | null = null;
+    editor.state.doc.descendants((block, pos) => {
+      if (found) return false;
+      if (!block.isTextblock) return true;
+      // The line's text, with where each piece of it starts in the page.
+      let text = '';
+      const pieces: { at: number; pos: number }[] = [];
+      block.forEach((child, offset) => {
+        if (!child.isText) return;
+        pieces.push({ at: text.length, pos: pos + 1 + offset });
+        text += child.text;
+      });
+      const m = one.exec(text);
+      if (!m) return false;
+      const posOf = (i: number) => {
+        const piece = pieces.findLast((p) => p.at <= i)!;
+        return piece.pos + (i - piece.at);
+      };
+      found = {
+        from: posOf(m.index),
+        to: posOf(m.index + m[0].length - 1) + 1,
+        block: { from: pos, to: pos + block.nodeSize },
+      };
+      return false;
+    });
+    if (!found) return;
+    const { from, to, block } = found;
+    editor
+      .chain()
+      .setTextSelection({ from, to })
+      .scrollIntoView()
+      .focus(undefined, { scrollIntoView: false })
+      .run();
+    editor.view.dispatch(editor.state.tr.setMeta(flashKey, block));
+    setTimeout(() => {
+      if (!editor.isDestroyed) editor.view.dispatch(editor.state.tr.setMeta(flashKey, null));
+    }, 1200);
+  };
+
   const showInPage = (text: string, { focus = false } = {}) => {
     if (!editor) return;
     const at = findBlock(editor.state.doc, text);
@@ -963,7 +1037,7 @@ export function DraftEditor({
       if (to === 'accepted') {
         toast.success(t('rewrite.acceptedToast'));
         // The rewrite is the whole batch: as Accept all.
-        nudgeAt('acceptAll');
+        nudgeAfterRead();
       } else if (to === 'rejected') toast(t('rewrite.rejectedToast'));
       else toast(t('rewrite.undoneToast'));
     } catch (err) {
@@ -1745,6 +1819,7 @@ export function DraftEditor({
               <NextNudge
                 shown={nudge.shown}
                 quality={quality}
+                onShowPlaceholder={showFirstPlaceholder}
                 onPickAuthor={() => setAuthorMenuOpen(true)}
                 onLater={nudge.later}
                 onAct={nudge.close}
@@ -1775,6 +1850,7 @@ export function DraftEditor({
             quality={quality}
             qualityScore={qualityScore}
             onShowInPage={showInPage}
+            onShowPlaceholder={showFirstPlaceholder}
             onPickAuthor={() => setAuthorMenuOpen(true)}
           />
         ) : (

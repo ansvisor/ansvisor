@@ -83,13 +83,19 @@ let container: HTMLDivElement;
 let root: Root;
 const onShow = vi.fn();
 const onPickAuthor = vi.fn();
+const onShowPlaceholder = vi.fn();
 
 async function render(quality: QualityRead | Readability | null) {
   const q = quality && 'eeat' in quality ? quality : read(quality as Readability | null);
   await act(async () => {
     root.render(
       <NextIntlClientProvider locale="en" messages={messages}>
-        <QualityTab quality={q} onShow={onShow} onPickAuthor={onPickAuthor} />
+        <QualityTab
+          quality={q}
+          onShow={onShow}
+          onShowPlaceholder={onShowPlaceholder}
+          onPickAuthor={onPickAuthor}
+        />
       </NextIntlClientProvider>,
     );
   });
@@ -190,6 +196,44 @@ describe('QualityTab', () => {
     );
     expect(profile.querySelector('a')!.textContent).toBe('Edit author');
     expect(profile.querySelector('a')!.getAttribute('href')).toBe('/dashboard/settings/authors');
+  });
+
+  it('lists the placeholders to fill first, with Show (CE-044)', async () => {
+    const author = ada;
+    const score = eeat({ author });
+    await render({
+      ...read(result),
+      todos: qualityTodos({
+        eeat: score,
+        author,
+        hasAuthors: true,
+        placeholders: { count: 1, had: true },
+      }),
+    });
+    const todos = container.querySelector('[aria-label="Your to-dos"]')!;
+    expect(todos.querySelector('h4')!.textContent).toBe(
+      'Your to-dos 1 left · only you can do these',
+    );
+    const row = todos.querySelector('li')!;
+    expect(row.textContent).toBe(
+      'Fill 1 placeholder · To doWords in [brackets] stand where a real name, quote or number goes. Put in the real one, or take the sentence outShow',
+    );
+    await act(async () => row.querySelector('button')!.click());
+    expect(onShowPlaceholder).toHaveBeenCalled();
+
+    // Filled: checked, and it stays.
+    await render({
+      ...read(result),
+      todos: qualityTodos({
+        eeat: score,
+        author,
+        hasAuthors: true,
+        placeholders: { count: 0, had: true },
+      }),
+    });
+    const done = container.querySelector('[aria-label="Your to-dos"] li')!;
+    expect(done.textContent).toBe('Fill the placeholders · DoneAll filled in');
+    expect(done.querySelector('button')).toBeNull();
   });
 
   it('sends to Settings › Authors when the workspace has no author yet', async () => {

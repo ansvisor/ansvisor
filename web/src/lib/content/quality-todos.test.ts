@@ -61,4 +61,52 @@ describe('qualityTodos', () => {
   it('has none before E-E-A-T is read', () => {
     expect(qualityTodos({ eeat: null, author: null, hasAuthors: true })).toEqual([]);
   });
+
+  it('asks to fill the placeholders first, and keeps it checked once filled (CE-044)', () => {
+    const fill = (count: number) => ({
+      id: 'placeholders',
+      done: count === 0,
+      gain: 0,
+      action: 'showPlaceholder',
+      count,
+    });
+    expect(
+      qualityTodos({
+        eeat: eeat({ author: null }),
+        author: null,
+        hasAuthors: true,
+        placeholders: { count: 2, had: true },
+      }),
+    ).toEqual([
+      fill(2),
+      expect.objectContaining({ id: 'byline' }),
+      expect.objectContaining({ id: 'authorProfile' }),
+    ]);
+    // Before the authors are read, the placeholders still are.
+    expect(
+      qualityTodos({
+        eeat: null,
+        author: null,
+        hasAuthors: true,
+        placeholders: { count: 2, had: true },
+      }),
+    ).toEqual([fill(2)]);
+    expect(
+      qualityTodos({
+        eeat: null,
+        author: null,
+        hasAuthors: true,
+        placeholders: { count: 0, had: true },
+      }),
+    ).toEqual([fill(0)]);
+    // A page that never had any: no row.
+    expect(
+      qualityTodos({
+        eeat: null,
+        author: null,
+        hasAuthors: true,
+        placeholders: { count: 0, had: false },
+      }),
+    ).toEqual([]);
+  });
 });

@@ -87,12 +87,15 @@ export function useNextNudge(draftId: string, todos: QualityTodo[]) {
 export function NextNudge({
   shown,
   quality,
+  onShowPlaceholder,
   onPickAuthor,
   onLater,
   onAct,
 }: {
   shown: { todo: QualityTodo; count: number } | null;
   quality: Pick<QualityRead, 'author' | 'brandName'>;
+  /** Selects the page's first placeholder, to type over. */
+  onShowPlaceholder: () => void;
   onPickAuthor: () => void;
   onLater: () => void;
   /** It was acted on: it goes. */
@@ -125,7 +128,18 @@ export function NextNudge({
           <span aria-hidden className="min-w-0 flex-1 [overflow-wrap:anywhere]">
             {text}
           </span>
-          {action === 'pickAuthor' ? (
+          {action === 'showPlaceholder' ? (
+            <button
+              type="button"
+              className={actClass}
+              onClick={() => {
+                onAct();
+                onShowPlaceholder();
+              }}
+            >
+              {t('act.showPlaceholder')}
+            </button>
+          ) : action === 'pickAuthor' ? (
             <button
               type="button"
               className={actClass}

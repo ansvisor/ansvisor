@@ -68,11 +68,14 @@ export interface Suggestion {
 export function QualityTab({
   quality,
   onShow,
+  onShowPlaceholder,
   onPickAuthor,
 }: {
   quality: QualityRead;
   /** Scrolls the draft to a passage and marks it. */
   onShow: (text: string) => void;
+  /** Selects the page's first placeholder, to type over. */
+  onShowPlaceholder: () => void;
   /** Opens the header's author menu. */
   onPickAuthor: () => void;
 }) {
@@ -136,7 +139,13 @@ export function QualityTab({
           </h4>
           <ul className="space-y-2">
             {todos.map((todo) => (
-              <TodoRow key={todo.id} todo={todo} quality={quality} onPickAuthor={onPickAuthor} />
+              <TodoRow
+                key={todo.id}
+                todo={todo}
+                quality={quality}
+                onShowPlaceholder={onShowPlaceholder}
+                onPickAuthor={onPickAuthor}
+              />
             ))}
           </ul>
         </section>
@@ -210,6 +219,14 @@ export function useTodoCopy() {
   const t = useTranslations('contentEditor.editor.quality.todos');
   const tAuthor = useTranslations('contentEditor.editor.author');
   return (todo: QualityTodo, { author, brandName }: Pick<QualityRead, 'author' | 'brandName'>) => {
+    if (todo.id === 'placeholders') {
+      const count = todo.count ?? 0;
+      return {
+        title: t('placeholders.title', { count }),
+        next: t('placeholders.next', { count }),
+        detail: todo.done ? t('placeholders.done') : t('placeholders.detail'),
+      };
+    }
     if (todo.id === 'byline') {
       const action = todo.action === 'addAuthor' ? 'addAuthor' : 'pickAuthor';
       return {
@@ -249,10 +266,12 @@ export function useTodoCopy() {
 function TodoRow({
   todo,
   quality,
+  onShowPlaceholder,
   onPickAuthor,
 }: {
   todo: QualityTodo;
   quality: QualityRead;
+  onShowPlaceholder: () => void;
   onPickAuthor: () => void;
 }) {
   const t = useTranslations('contentEditor.editor.quality');
@@ -307,7 +326,11 @@ function TodoRow({
       </div>
       {!todo.done &&
         todo.action &&
-        (todo.action === 'pickAuthor' ? (
+        (todo.action === 'showPlaceholder' ? (
+          <Button variant="outline" size="sm" className="h-7 shrink-0" onClick={onShowPlaceholder}>
+            {t('show')}
+          </Button>
+        ) : todo.action === 'pickAuthor' ? (
           <Button variant="outline" size="sm" className="h-7 shrink-0" onClick={onPickAuthor}>
             {t('pickAuthor')}
           </Button>

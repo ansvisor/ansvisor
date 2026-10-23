@@ -4209,6 +4209,12 @@
           "left": "{count, plural, =0 {All done} other {# left · only you can do these}}",
           "done": "Done",
           "open": "To do",
+          "placeholders": {
+            "title": "{count, plural, =0 {Fill the placeholders} one {Fill # placeholder} other {Fill # placeholders}}",
+            "next": "{count, plural, =0 {fill the placeholders} one {fill # placeholder} other {fill # placeholders}}",
+            "detail": "Words in [brackets] stand where a real name, quote or number goes. Put in the real one, or take the sentence out",
+            "done": "All filled in"
+          },
           "byline": {
             "title": {
               "pickAuthor": "Pick the page's author",
@@ -4242,6 +4248,7 @@
           "label": "Your next step",
           "text": "Next for you: <b>{todo}</b> · {position} of {count}",
           "act": {
+            "showPlaceholder": "Show now",
             "pickAuthor": "Pick now",
             "addAuthor": "Add now",
             "editAuthor": "Edit now"
