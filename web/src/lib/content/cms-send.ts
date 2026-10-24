@@ -97,8 +97,9 @@ export interface CmsSource {
 /**
  * A Library row's page for Send to CMS, as the editor gives its own: the
  * stored page made publishable, its author and the brand's byline line in
- * the page's language (its own Language rule, else the brand's). `authors`
- * is null while Quality is off, as the editor reads none then.
+ * the page's language (its own Language rule, else the brand's; a
+ * workspace's My rules for the type aren't read here). `authors` is null
+ * while Quality is off, as the editor reads none then.
  */
 export function cmsSource({
   page,

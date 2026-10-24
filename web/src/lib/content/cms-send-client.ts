@@ -164,7 +164,7 @@ export async function readDraftCms(draftId: string): Promise<DraftCms | null> {
       .maybeSingle(),
     supabase
       .from('content_draft_deliveries')
-      .select('status, created_at, sent_at, error')
+      .select('status, created_at, sent_at, published_at, error')
       .eq('draft_id', draftId)
       .order('created_at', { ascending: false })
       .limit(1)
@@ -185,7 +185,7 @@ export async function readDraftCms(draftId: string): Promise<DraftCms | null> {
     last: delivery
       ? {
           status: delivery.status as CmsDelivery['status'],
-          at: delivery.sent_at ?? delivery.created_at,
+          at: delivery.published_at ?? delivery.sent_at ?? delivery.created_at,
           error: delivery.error,
         }
       : null,

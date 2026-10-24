@@ -126,9 +126,9 @@ export default function ContentLibraryPage() {
   // The draft whose Delete waits for a confirmation.
   const [deleting, setDeleting] = useState<ContentDraftListItem | null>(null);
   const [deletePending, setDeletePending] = useState(false);
-  // Send to CMS: the page being read for the dialog, then the dialog's page.
-  const [preparing, setPreparing] = useState<string | null>(null);
-  const [sendSource, setSendSource] = useState<CmsSource | null>(null);
+  // Send to CMS: while the row's page is read, then the dialog's page.
+  const [preparing, setPreparing] = useState(false);
+  const [sending, setSending] = useState<{ brandId: string; source: CmsSource } | null>(null);
   // Each draft's last send, beside its status; read with the list.
   const [cms, setCms] = useState<ReadonlyMap<string, CmsStatus>>(new Map());
 
@@ -209,6 +209,26 @@ export default function ContentLibraryPage() {
     }
   };
 
+  const openSend = async (draft: ContentDraftListItem) => {
+    if (!activeBrandId || preparing) return;
+    // The draft's brand stays the send's, should the brand switch meanwhile.
+    const brandId = activeBrandId;
+    setPreparing(true);
+    const source = await readSendSource({
+      brandId,
+      draftId: draft.id,
+      brandName: activeBrand?.name ?? '',
+      brandLanguage: activeBrand?.language,
+      teamByline: (brand) => tEditor('author.organization', { brand }),
+    }).catch((err) => {
+      console.error('Failed to read the page to send:', err);
+      return null;
+    });
+    setPreparing(false);
+    if (source) setSending({ brandId, source });
+    else toast.error(t('rowMenu.sendFailed'));
+  };
+
   const rowActions: LibraryRowActions = {
     canManage,
     onStatus: (draft: ContentDraftListItem, status: DraftStatus) => {
@@ -223,24 +243,6 @@ export default function ContentLibraryPage() {
     onDelete: setDeleting,
     onExport: (draft, format) => void exportDraft(draft, format),
     onSend: (draft) => void openSend(draft),
-  };
-
-  const openSend = async (draft: ContentDraftListItem) => {
-    if (!activeBrandId || preparing) return;
-    setPreparing(draft.id);
-    const source = await readSendSource({
-      brandId: activeBrandId,
-      draftId: draft.id,
-      brandName: activeBrand?.name ?? '',
-      brandLanguage: activeBrand?.language,
-      teamByline: (brand) => tEditor('author.organization', { brand }),
-    }).catch((err) => {
-      console.error('Failed to read the page to send:', err);
-      return null;
-    });
-    setPreparing(null);
-    if (source) setSendSource(source);
-    else toast.error(t('rowMenu.sendFailed'));
   };
 
   const confirmDelete = async () => {
@@ -372,21 +374,21 @@ export default function ContentLibraryPage() {
           )}
         </CardContent>
       </Card>
-      {sendSource && (
+      {sending && (
         <SendDialog
-          draftId={sendSource.draftId}
-          brandId={activeBrandId}
-          title={sendSource.title}
-          html={sendSource.html}
-          sourceUrl={sendSource.sourceUrl}
-          author={sendSource.author}
-          teamByline={sendSource.teamByline}
-          byline={sendSource.byline}
+          draftId={sending.source.draftId}
+          brandId={sending.brandId}
+          title={sending.source.title}
+          html={sending.source.html}
+          sourceUrl={sending.source.sourceUrl}
+          author={sending.source.author}
+          teamByline={sending.source.teamByline}
+          byline={sending.source.byline}
           // Placeholders are filled in the editor.
-          onFillNow={() => router.push(contentEditorPath(sendSource.draftId))}
+          onFillNow={() => router.push(contentEditorPath(sending.source.draftId))}
           // A send that went or failed is the row's last: its sends are read again.
           onClose={() => {
-            setSendSource(null);
+            setSending(null);
             setCmsAttempt((n) => n + 1);
           }}
         />

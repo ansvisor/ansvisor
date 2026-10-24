@@ -3383,6 +3383,7 @@
         "sent": "Sent to your CMS {when}",
         "failed": "The last send to your CMS failed, {when}",
         "published": "Published {when}",
+        "openLive": "Published {when}: open the live page in a new tab",
         "answered": "The webhook answered {status}."
       },
       "deleteDialog": {

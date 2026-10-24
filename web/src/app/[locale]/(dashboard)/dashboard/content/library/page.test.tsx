@@ -450,6 +450,48 @@ describe('Send to CMS from a Library row (#1331)', () => {
     expect(marks[1].getAttribute('href')).toBe('https://acme.example/churn');
   });
 
+  it('isn’t offered on an archived draft, which the server doesn’t send', async () => {
+    window.history.replaceState(null, '', '/dashboard/content/library?tab=archived');
+    getContentDrafts.mockResolvedValue([row({ archivedAt: '2026-10-21T08:00:00Z' })]);
+    await renderPage();
+    const trigger = container.querySelector<HTMLElement>(
+      '[aria-label="Actions for Pipeline forecasting"]',
+    )!;
+    await act(async () => trigger.click());
+    const items = [...document.body.querySelectorAll<HTMLElement>('[role="menuitem"]')];
+    expect(items.map((el) => el.textContent)).toContain('Restore');
+    expect(items.map((el) => el.textContent)).not.toContain('Send to CMS');
+  });
+
+  it('sends to the draft’s own brand, should the brand switch while its page is read', async () => {
+    getContentDrafts.mockResolvedValue([row({})]);
+    let answer: (read: unknown) => void = () => {};
+    getContentDraftPages.mockReturnValueOnce(new Promise((resolve) => (answer = resolve)));
+    await renderPage();
+    await pick('Pipeline forecasting', 'Send to CMS');
+    brandState.activeBrandId = 'brand-2';
+    await renderPage();
+    await act(async () =>
+      answer({
+        pages: [
+          {
+            id: 'd1',
+            title: 'Pipeline forecasting',
+            bodyHtml: '<h1>Pipeline forecasting</h1><p>Teams trust it.</p>',
+            sourceUrl: null,
+            authorId: null,
+            language: null,
+          },
+        ],
+        rest: [],
+      }),
+    );
+    await act(async () => inDialog('Send').click());
+    expect(sendPagesToCms).toHaveBeenCalledWith('brand-1', [
+      expect.objectContaining({ draftId: 'd1' }),
+    ]);
+  });
+
   it('is for admins and managers only', async () => {
     role.canManage = false;
     getContentDrafts.mockResolvedValue([row({})]);

@@ -126,6 +126,7 @@ export function LibraryTable({
       </TableHeader>
       <TableBody>
         {drafts.map((draft) => {
+          const sent = cms.get(draft.id);
           return (
             <TableRow key={draft.id}>
               <TableCell className="max-w-[180px] pl-6 xl:max-w-[320px]">
@@ -161,7 +162,7 @@ export function LibraryTable({
                   ) : (
                     <DraftStatusBadge status={draft.status} />
                   )}
-                  {cms.get(draft.id) && <CmsStatusMark status={cms.get(draft.id)!} />}
+                  {sent && <CmsStatusMark status={sent} />}
                 </span>
               </TableCell>
               <TableCell className="whitespace-nowrap text-xs text-muted-foreground tabular-nums">
@@ -225,10 +226,13 @@ function RowMenu({ draft, actions }: { draft: ContentDraftListItem; actions: Lib
         ))}
         {actions.canManage && (
           <>
-            <DropdownMenuItem onClick={() => actions.onSend(draft)}>
-              <Send className="h-4 w-4" />
-              {t('sendToCms')}
-            </DropdownMenuItem>
+            {/* An archived draft isn't sent: restored, it is. */}
+            {!draft.archivedAt && (
+              <DropdownMenuItem onClick={() => actions.onSend(draft)}>
+                <Send className="h-4 w-4" />
+                {t('sendToCms')}
+              </DropdownMenuItem>
+            )}
             <DropdownMenuSeparator />
             {draft.archivedAt ? (
               <DropdownMenuItem onClick={() => actions.onArchive(draft, false)}>
@@ -257,6 +261,7 @@ function CmsStatusMark({ status }: { status: CmsStatus }) {
   const t = useTranslations('contentEditor.library.cms');
   const format = useFormatter();
   const when = format.dateTime(new Date(status.at), { dateStyle: 'medium', timeStyle: 'short' });
+  const live = status.status === 'published' ? status.publishedUrl : null;
   const label = t(status.status, { when });
   const icon = {
     queued: <Clock className="h-3.5 w-3.5" />,
@@ -268,7 +273,7 @@ function CmsStatusMark({ status }: { status: CmsStatus }) {
     status.status === 'failed'
       ? 'text-red-600 dark:text-red-400'
       : status.status === 'published'
-        ? 'text-emerald-700 dark:text-emerald-400'
+        ? 'text-blue-600 dark:text-blue-400'
         : 'text-muted-foreground';
   const className = `inline-flex rounded p-0.5 hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 ${tone}`;
   return (
@@ -277,14 +282,14 @@ function CmsStatusMark({ status }: { status: CmsStatus }) {
         delay={300}
         closeDelay={0}
         render={
-          // Published: the live page, a click away.
-          status.status === 'published' && status.publishedUrl ? (
+          // Published: the live page, a click away, in a new tab.
+          live ? (
             <a
-              href={status.publishedUrl}
+              href={live}
               target="_blank"
               rel="noreferrer noopener"
               className={className}
-              aria-label={label}
+              aria-label={t('openLive', { when })}
             />
           ) : (
             <button type="button" className={className} aria-label={label} />
@@ -295,9 +300,7 @@ function CmsStatusMark({ status }: { status: CmsStatus }) {
       </TooltipTrigger>
       <TooltipContent className="max-w-72 space-y-1">
         <p>{label}</p>
-        {status.status === 'published' && status.publishedUrl && (
-          <p className="opacity-80 [overflow-wrap:anywhere]">{status.publishedUrl}</p>
-        )}
+        {live && <p className="opacity-80 [overflow-wrap:anywhere]">{live}</p>}
         {status.status === 'failed' && (status.httpStatus || status.error) && (
           <p className="opacity-80 [overflow-wrap:anywhere]">
             {status.httpStatus ? t('answered', { status: status.httpStatus }) : status.error}
