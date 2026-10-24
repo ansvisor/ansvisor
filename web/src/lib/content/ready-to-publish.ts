@@ -400,7 +400,11 @@ function slugOf(title: string, sourceUrl: string | null): string {
       // Not an address, or not one to read: the title's slug.
     }
   }
-  return slugify(title).slice(0, 80).replace(/-+$/, '');
+  const slug = slugify(title);
+  if (slug.length <= 80) return slug;
+  // Cut at a word, not inside one: it becomes the page's address (Send to CMS).
+  const cut = slug.slice(0, 81).lastIndexOf('-');
+  return slug.slice(0, cut > 0 ? cut : 80).replace(/-+$/, '');
 }
 
 /**

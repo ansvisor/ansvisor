@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { assertBrandAccess } from '../lib/access.js';
 import { fixDraftRules, fixRulesInput } from '../lib/content-agent.js';
 import { rebuildDraftBrief, rebuildSources } from '../lib/content-brief.js';
+import { DeliveryError, sendContentPages, sendInput } from '../lib/content-delivery.js';
 import { stopDraftRun } from '../lib/content-runs.js';
 import { startDraftWriting, writeDraftInput } from '../lib/content-writer.js';
 import supabaseAdmin from '../config/supabase.js';
@@ -12,14 +13,64 @@ import { PlanLimitError } from '../lib/plan-guard.js';
  * Content Editor drafts: Rebuild outline in the editor's Brief tab writes
  * the draft's brief from the sources the person kept (CE-007); Fix open
  * rules with agent leaves the Content Agent's suggestions for review
- * (CE-018); Start's Agent has the Content Agent do the page (CE-015); and
- * Stop ends the agent's run under way, changing nothing (v1.1 CE-027).
+ * (CE-018); Start's Agent has the Content Agent do the page (CE-015);
+ * Stop ends the agent's run under way, changing nothing (v1.1 CE-027); and
+ * Send to CMS sends pages to the brand's webhook (#1331).
  */
 
 const router = Router();
 
 /** The person-facing reason, by status, when the error names none. */
 const ERROR_CODES = { 403: 'forbidden', 404: 'not_found', 409: 'conflict', 422: 'invalid' };
+
+/** Who may send pages to the brand's CMS (#1331): as who may change its webhook. */
+const SEND_ROLES = ['admin', 'manager'];
+
+async function assertSender(userId) {
+  const { data: profile } = await supabaseAdmin
+    .from('profiles')
+    .select('role')
+    .eq('id', userId)
+    .single();
+  if (!SEND_ROLES.includes(profile?.role)) {
+    const err = new Error('Only admins and managers can send pages to the CMS.');
+    err.status = 403;
+    throw err;
+  }
+}
+
+/**
+ * POST /api/content-drafts/send
+ * Body: { brandId, pages: [{ draftId, title, slug, metaTitle, metaDescription, html, author, featuredImage }] }
+ * One page is sent before this answers: { deliveries: [{ id, status, http_status, error }] };
+ * more (up to 25) go on in the background: { batchId, deliveries: queued, skipped }.
+ */
+router.post('/send', async (req, res) => {
+  const parsed = sendInput.safeParse(req.body ?? {});
+  if (!parsed.success) {
+    // Which page and field, so the dialog can say what to fix.
+    const field = parsed.error.issues[0]?.path.join('.') ?? null;
+    return res.status(400).json({ error: 'Invalid request', code: 'invalid', field });
+  }
+  const { brandId, pages } = parsed.data;
+  try {
+    const { orgId } = await assertBrandAccess(brandId, req.user.id);
+    await assertSender(req.user.id);
+    const sent = await sendContentPages({ orgId, brandId, userId: req.user.id, pages });
+    return res.json(sent);
+  } catch (err) {
+    if (err instanceof DeliveryError) {
+      return res.status(err.status).json({ error: err.message, code: err.code });
+    }
+    if (ERROR_CODES[err?.status]) {
+      return res
+        .status(err.status)
+        .json({ error: err.message, code: err.code ?? ERROR_CODES[err.status] });
+    }
+    req.log.error({ err }, 'content draft send error');
+    return res.status(502).json({ error: 'The pages could not be sent', code: 'failed' });
+  }
+});
 
 const rebuildBody = z.object({
   // guid, not uuid: brand ids aren't all RFC 4122 versions (seeded ones).

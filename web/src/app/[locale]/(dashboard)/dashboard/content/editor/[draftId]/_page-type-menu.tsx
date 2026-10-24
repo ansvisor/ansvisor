@@ -17,14 +17,16 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { isPageType, type PageType } from '@/lib/content/drafts';
 import { pagePath } from '@/lib/content/overlap';
-import { SITE_PAGE_TYPES, type SiteType } from '@/lib/content/page-types';
+import { SITE_PAGE_TYPES, SITE_TYPES, isSiteType, type SiteType } from '@/lib/content/page-types';
 import { cn } from '@/lib/utils';
 
 /**
  * The draft's page type in the editor's header (CE-023): detected from the
  * page until the person picks one from the types their kind of site writes.
  * A type from another kind of site, picked before the site type changed,
- * stays on the list so the menu still shows it.
+ * stays on the list so the menu still shows it. With `onPickSite` (Quality
+ * CE-056: admins and managers once phase 2 is live), the brand's business
+ * type is picked here too, for the whole brand as in Brand settings.
  */
 export function PageTypeMenu({
   brandId,
@@ -34,6 +36,9 @@ export function PageTypeMenu({
   isNew,
   sourceUrl,
   onPick,
+  onPickSite,
+  sitePending = false,
+  siteGuessed = false,
 }: {
   brandId: string;
   siteType: SiteType;
@@ -45,6 +50,11 @@ export function PageTypeMenu({
   /** The existing page an optimize draft is for: the tag shows its path. */
   sourceUrl: string | null;
   onPick: (type: PageType) => void;
+  onPickSite?: (site: SiteType) => void;
+  /** A site type pick is being saved: one at a time. */
+  sitePending?: boolean;
+  /** The brand has no site type picked yet: the one shown is guessed, as Brand settings says. */
+  siteGuessed?: boolean;
 }) {
   const t = useTranslations('contentEditor.editor');
   const tTypes = useTranslations('contentEditor.pageTypes');
@@ -71,6 +81,35 @@ export function PageTypeMenu({
         <ChevronDown className="h-3 w-3 opacity-60" />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-60">
+        {onPickSite && (
+          <>
+            <DropdownMenuGroup>
+              <DropdownMenuLabel>{t('pageType.siteTitle')}</DropdownMenuLabel>
+              <DropdownMenuRadioGroup
+                value={siteType}
+                onValueChange={(value) => {
+                  if (isSiteType(value)) onPickSite(value);
+                }}
+              >
+                {SITE_TYPES.map((site) => (
+                  <DropdownMenuRadioItem
+                    key={site}
+                    value={site}
+                    disabled={sitePending}
+                    closeOnClick
+                  >
+                    {tSites(site)}
+                  </DropdownMenuRadioItem>
+                ))}
+              </DropdownMenuRadioGroup>
+              <p className="px-1.5 pb-1 text-xs text-muted-foreground">
+                {t('pageType.siteHint')}
+                {siteGuessed && ` ${t('pageType.siteGuessed')}`}
+              </p>
+            </DropdownMenuGroup>
+            <DropdownMenuSeparator />
+          </>
+        )}
         <DropdownMenuGroup>
           <DropdownMenuLabel>{t('pageType.title', { site: tSites(siteType) })}</DropdownMenuLabel>
           <DropdownMenuRadioGroup
