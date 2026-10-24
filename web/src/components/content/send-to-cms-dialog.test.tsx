@@ -2,7 +2,7 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { NextIntlClientProvider } from 'next-intl';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import messages from '../../../../../../../../messages/en.json';
+import messages from '../../../messages/en.json';
 import type { ContentAuthor } from '@/lib/content/authors';
 import type { DraftCms } from '@/lib/content/cms-send-client';
 
@@ -12,7 +12,7 @@ const readDraftCms = vi.hoisted(() => vi.fn());
 const sendPagesToCms = vi.hoisted(() => vi.fn());
 vi.mock('@/lib/content/cms-send-client', () => ({ readDraftCms, sendPagesToCms }));
 
-const { SendDialog } = await import('./_send-dialog');
+const { SendDialog } = await import('./send-to-cms-dialog');
 
 /**
  * Send to CMS (#1331): the page to the brand's webhook, its slug and meta

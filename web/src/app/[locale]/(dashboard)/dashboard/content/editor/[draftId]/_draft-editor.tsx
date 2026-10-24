@@ -29,6 +29,7 @@ import { useAiUsage } from '@/components/providers/ai-usage-provider';
 import { useUserRole } from '@/hooks/use-user-role';
 import { PLATFORM_LABELS } from '@/config/platform-labels';
 import { DraftMethodBadge, DraftStatusBadge } from '@/components/content/draft-badges';
+import { SendDialog } from '@/components/content/send-to-cms-dialog';
 import {
   decideDraftSuggestions,
   fixDraftRules,
@@ -134,7 +135,6 @@ import {
   type HeldEdit,
 } from './_cited-passages';
 import { ExportDialog, type ExportDestination } from './_export-dialog';
-import { SendDialog } from './_send-dialog';
 import { ExportMenu } from './_export-menu';
 import { sourceDetail } from './_sources-tab';
 import { HistoryMenu } from './_history-menu';

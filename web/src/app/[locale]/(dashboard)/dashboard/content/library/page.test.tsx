@@ -45,6 +45,11 @@ const toast = vi.hoisted(() => Object.assign(vi.fn(), { success: vi.fn(), error:
 vi.mock('sonner', () => ({ toast }));
 const saveBlob = vi.hoisted(() => vi.fn());
 vi.mock('@/lib/download', () => ({ saveBlob }));
+const readCmsStatuses = vi.hoisted(() => vi.fn());
+const readDraftCms = vi.hoisted(() => vi.fn());
+const sendPagesToCms = vi.hoisted(() => vi.fn());
+vi.mock('@/lib/content/cms-send-client', () => ({ readCmsStatuses, readDraftCms, sendPagesToCms }));
+vi.mock('@/lib/actions/content-authors', () => ({ getContentAuthors: vi.fn(async () => null) }));
 
 /** jsdom's Blob has no text(): read it as a browser's FileReader would. */
 const readText = (blob: Blob) =>
@@ -132,6 +137,12 @@ beforeEach(() => {
     rest: [],
   }));
   saveBlob.mockReset();
+  readCmsStatuses.mockReset().mockResolvedValue(new Map());
+  readDraftCms.mockReset().mockResolvedValue({ fields: {}, publishedUrl: null, last: null });
+  sendPagesToCms.mockReset().mockResolvedValue({
+    ok: true,
+    deliveries: [{ id: 'x1', draftId: 'd1', status: 'sent' }],
+  });
   role.canManage = true;
 });
 
@@ -325,6 +336,133 @@ describe('the Content Library', () => {
   });
 });
 
+describe('Send to CMS from a Library row (#1331)', () => {
+  const pick = async (title: string, item: string) => {
+    const trigger = container.querySelector<HTMLElement>(`[aria-label="Actions for ${title}"]`)!;
+    await act(async () => trigger.click());
+    const found = [...document.body.querySelectorAll<HTMLElement>('[role="menuitem"]')].find(
+      (el) => el.textContent === item,
+    )!;
+    await act(async () => found.click());
+  };
+  const dialog = () => document.querySelector('[role="dialog"]');
+  const inDialog = (name: string) =>
+    [...document.querySelectorAll<HTMLButtonElement>('[role="dialog"] button')].find(
+      (b) => b.textContent === name,
+    )!;
+
+  it('opens the Send dialog on the row’s page, and reads the sends again once it went', async () => {
+    getContentDrafts.mockResolvedValue([row({})]);
+    await renderPage();
+    expect(readCmsStatuses).toHaveBeenCalledWith(['d1']);
+    await pick('Pipeline forecasting', 'Send to CMS');
+    expect(getContentDraftPages).toHaveBeenCalledWith('brand-1', ['d1']);
+    expect(dialog()!.textContent).toContain('Send to CMS');
+    // The live page's own address part.
+    expect(document.querySelector<HTMLInputElement>('#cms-slug')!.value).toBe('pricing');
+
+    await act(async () => inDialog('Send').click());
+    expect(sendPagesToCms).toHaveBeenCalledWith('brand-1', [
+      expect.objectContaining({
+        draftId: 'd1',
+        slug: 'pricing',
+        html: '<p>Teams trust it.</p>',
+        // Authors come with Quality (CE-038): while it is off, none goes.
+        author: null,
+      }),
+    ]);
+    expect(dialog()).toBeNull();
+    expect(readCmsStatuses).toHaveBeenCalledTimes(2);
+  });
+
+  it('fills a placeholder in the editor', async () => {
+    getContentDrafts.mockResolvedValue([row({})]);
+    getContentDraftPages.mockResolvedValue({
+      pages: [
+        {
+          id: 'd1',
+          title: 'Pipeline forecasting',
+          bodyHtml: '<h1>Pipeline forecasting</h1><p>Teams save [figure] hours.</p>',
+          sourceUrl: null,
+          authorId: null,
+          language: null,
+        },
+      ],
+      rest: [],
+    });
+    await renderPage();
+    await pick('Pipeline forecasting', 'Send to CMS');
+    expect(inDialog('Send').disabled).toBe(true);
+    await act(async () => inDialog('Fill now').click());
+    expect(push).toHaveBeenCalledWith('/dashboard/content/editor/d1');
+  });
+
+  it('says when the page couldn’t be read', async () => {
+    getContentDrafts.mockResolvedValue([row({})]);
+    getContentDraftPages.mockResolvedValue({ pages: [], rest: [] });
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    await renderPage();
+    await pick('Pipeline forecasting', 'Send to CMS');
+    expect(toast.error).toHaveBeenCalledWith("Couldn't open the page to send. Try again.");
+    expect(dialog()).toBeNull();
+  });
+
+  it('shows each row’s last send beside its status', async () => {
+    getContentDrafts.mockResolvedValue([
+      row({}),
+      row({ id: 'd2', title: 'Churn guide', status: 'published' }),
+      row({ id: 'd3', title: 'Never sent' }),
+    ]);
+    readCmsStatuses.mockResolvedValue(
+      new Map([
+        [
+          'd1',
+          {
+            status: 'failed',
+            at: '2026-10-24T10:00:00Z',
+            httpStatus: 500,
+            error: 'The webhook answered 500',
+            publishedUrl: null,
+          },
+        ],
+        [
+          'd2',
+          {
+            status: 'published',
+            at: '2026-10-24T11:00:00Z',
+            httpStatus: 200,
+            error: null,
+            publishedUrl: 'https://acme.example/churn',
+          },
+        ],
+      ]),
+    );
+    await renderPage();
+    const marks = [
+      ...container.querySelectorAll<HTMLElement>(
+        '[aria-label^="The last send"], [aria-label^="Published"]',
+      ),
+    ];
+    expect(marks.map((el) => [el.tagName, el.getAttribute('aria-label')])).toEqual([
+      ['BUTTON', expect.stringMatching(/^The last send to your CMS failed, Oct 24, 2026/)],
+      ['A', expect.stringMatching(/^Published Oct 24, 2026/)],
+    ]);
+    expect(marks[1].getAttribute('href')).toBe('https://acme.example/churn');
+  });
+
+  it('is for admins and managers only', async () => {
+    role.canManage = false;
+    getContentDrafts.mockResolvedValue([row({})]);
+    await renderPage();
+    const trigger = container.querySelector<HTMLElement>(
+      '[aria-label="Actions for Pipeline forecasting"]',
+    )!;
+    await act(async () => trigger.click());
+    const items = [...document.body.querySelectorAll<HTMLElement>('[role="menuitem"]')];
+    expect(items.map((el) => el.textContent)).not.toContain('Send to CMS');
+  });
+});
+
 describe('a Library row’s menu (00233)', () => {
   const menuItems = async (title: string) => {
     const trigger = container.querySelector<HTMLElement>(`[aria-label="Actions for ${title}"]`)!;
@@ -348,6 +486,7 @@ describe('a Library row’s menu (00233)', () => {
       'Export Word',
       'Export HTML',
       'Export Markdown',
+      'Send to CMS',
       'Send to Archive',
       'Delete',
     ]);

@@ -83,6 +83,65 @@ export async function sendPagesToCms(brandId: string, pages: CmsPage[]): Promise
   }
 }
 
+/** A draft's last send, as the Library shows it beside its status. */
+export interface CmsStatus {
+  status: CmsDelivery['status'];
+  /** When it was published, sent or queued. */
+  at: string;
+  /** What the webhook answered, when it did; else why it wasn't reached. */
+  httpStatus: number | null;
+  error: string | null;
+  publishedUrl: string | null;
+}
+
+/** Ids a read takes, so its address stays short. */
+const STATUS_IDS_PER_READ = 100;
+/** Sends a read takes, newest first: a draft sent many times has more. */
+const STATUS_ROWS_PER_READ = 1000;
+
+/**
+ * Each draft's last send, for the Library's rows. A read that fails (its
+ * table not there yet, 00262) leaves its drafts with none.
+ */
+export async function readCmsStatuses(draftIds: string[]): Promise<Map<string, CmsStatus>> {
+  const supabase = createClient();
+  const chunks: string[][] = [];
+  for (let i = 0; i < draftIds.length; i += STATUS_IDS_PER_READ) {
+    chunks.push(draftIds.slice(i, i + STATUS_IDS_PER_READ));
+  }
+  const reads = await Promise.all(
+    chunks.map((ids) =>
+      supabase
+        .from('content_draft_deliveries')
+        .select(
+          'draft_id, status, created_at, sent_at, published_at, http_status, error, published_url',
+        )
+        .in('draft_id', ids)
+        .order('created_at', { ascending: false })
+        .limit(STATUS_ROWS_PER_READ),
+    ),
+  );
+  const statuses = new Map<string, CmsStatus>();
+  for (const { data, error } of reads) {
+    if (error) {
+      console.error('Failed to read the pages’ sends:', error);
+      continue;
+    }
+    for (const row of data ?? []) {
+      // Newest first: a draft's first row is its last send.
+      if (!row.draft_id || statuses.has(row.draft_id)) continue;
+      statuses.set(row.draft_id, {
+        status: row.status as CmsDelivery['status'],
+        at: row.published_at ?? row.sent_at ?? row.created_at,
+        httpStatus: row.http_status,
+        error: row.error,
+        publishedUrl: row.published_url,
+      });
+    }
+  }
+  return statuses;
+}
+
 /** What a draft keeps of its sends: its slug and meta, where it went live, and its last send. */
 export interface DraftCms {
   fields: Partial<CmsFields>;

@@ -256,6 +256,17 @@ export interface DraftPage {
   title: string;
   bodyHtml: string;
   sourceUrl: string | null;
+  /** Who the page is by (CE-038), for Send to CMS. */
+  authorId: string | null;
+  /** The language the draft's own Language rule names, or null: the brand's. */
+  language: string | null;
+}
+
+/** The language a draft's own Language rule names, when it is on and set. */
+function draftLanguage(rules: unknown): string | null {
+  const language = draftRulesSchema.safeParse(rules).data?.overrides.language;
+  const value = language?.on === false ? '' : (language?.value?.trim() ?? '');
+  return value || null;
 }
 
 /**
@@ -287,14 +298,21 @@ export async function getContentDraftPages(
   const supabase = await createClient();
   const { data, error } = await supabase
     .from('content_drafts')
-    .select('id, title, body_html, source_url')
+    .select('id, title, body_html, source_url, author_id, rules')
     .eq('brand_id', brandId)
     .in('id', parsed.data);
   if (error) throw new Error(error.message);
   const byId = new Map<string, DraftPage>(
     (data ?? []).map((row) => [
       row.id,
-      { id: row.id, title: row.title, bodyHtml: row.body_html, sourceUrl: row.source_url },
+      {
+        id: row.id,
+        title: row.title,
+        bodyHtml: row.body_html,
+        sourceUrl: row.source_url,
+        authorId: row.author_id,
+        language: draftLanguage(row.rules),
+      },
     ]),
   );
   const pages: DraftPage[] = [];

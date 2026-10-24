@@ -1,5 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import { cmsFields, cmsFieldsProblem, cmsPage, cmsPageProblem, type CmsFields } from './cms-send';
+import type { DraftPage } from '@/lib/actions/content-drafts';
+import type { AuthorsRead, ContentAuthor } from './authors';
+import {
+  cmsFields,
+  cmsFieldsProblem,
+  cmsPage,
+  cmsPageProblem,
+  cmsSource,
+  type CmsFields,
+} from './cms-send';
 import type { PageFields } from './ready-to-publish';
 
 /**
@@ -138,5 +147,59 @@ describe('cmsPage', () => {
         byline: null,
       }).featuredImage,
     ).toBeNull();
+  });
+});
+
+describe('cmsSource', () => {
+  const stored: DraftPage = {
+    id: 'd1',
+    title: 'Pour-over',
+    bodyHtml: '<h1>Pour-over</h1><p>Brew it slowly.</p>',
+    sourceUrl: 'https://acme.example/pour-over',
+    authorId: 'a1',
+    language: null,
+  };
+  const ada = { id: 'a1', name: 'Ada Lovelace' } as ContentAuthor;
+  const authors = (bylineInContent: boolean): AuthorsRead => ({
+    authors: [ada],
+    brands: [{ id: 'b1', name: 'Acme', bylineInContent }],
+    me: { id: 'u1', role: 'admin' },
+  });
+  const source = (over: Partial<Parameters<typeof cmsSource>[0]> = {}) =>
+    cmsSource({
+      page: stored,
+      authors: authors(false),
+      brandId: 'b1',
+      brandName: 'Acme',
+      brandLanguage: 'en',
+      teamByline: 'Acme Team',
+      ...over,
+    });
+
+  it('gives the stored page as the editor would: publishable, with its author', () => {
+    expect(source()).toEqual({
+      draftId: 'd1',
+      title: 'Pour-over',
+      html: expect.stringContaining('<p>Brew it slowly.</p>'),
+      sourceUrl: 'https://acme.example/pour-over',
+      author: ada,
+      teamByline: 'Acme Team',
+      byline: null,
+    });
+  });
+
+  it('adds the byline line in the page’s language, else the brand’s', () => {
+    expect(source({ authors: authors(true) }).byline).toBe('By Ada Lovelace');
+    expect(source({ authors: authors(true), brandLanguage: 'tr' }).byline).toBe(
+      'Yazar: Ada Lovelace',
+    );
+    expect(
+      source({ authors: authors(true), page: { ...stored, language: 'German', authorId: null } })
+        .byline,
+    ).toBe('Vom Acme-Team');
+  });
+
+  it('gives no author or team byline while Quality is off', () => {
+    expect(source({ authors: null })).toMatchObject({ author: null, teamByline: '', byline: null });
   });
 });

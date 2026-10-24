@@ -3374,7 +3374,16 @@
         "undo": "Undo",
         "failed": "Couldn't save that. Try again.",
         "forbidden": "Only admins and managers can archive or delete content.",
-        "newerDraft": "A newer draft does this task's work. Archive or delete it first, then restore this one."
+        "newerDraft": "A newer draft does this task's work. Archive or delete it first, then restore this one.",
+        "sendToCms": "Send to CMS",
+        "sendFailed": "Couldn't open the page to send. Try again."
+      },
+      "cms": {
+        "queued": "Sending to your CMS since {when}",
+        "sent": "Sent to your CMS {when}",
+        "failed": "The last send to your CMS failed, {when}",
+        "published": "Published {when}",
+        "answered": "The webhook answered {status}."
       },
       "deleteDialog": {
         "title": "Delete “{title}”?",

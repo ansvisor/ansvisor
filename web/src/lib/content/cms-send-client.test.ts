@@ -10,6 +10,9 @@ import type { CmsPage } from './cms-send';
 let session: { access_token: string } | null;
 let reads: Record<string, { data: unknown; error: unknown }>;
 const filters: [string, string, unknown][] = [];
+/** The sends read by draft ids: each read's answer, in turn. */
+let statusReads: { data: unknown; error: unknown }[];
+const statusIds: string[][] = [];
 
 vi.mock('@/config/api', () => ({ BROWSER_API_BASE_URL: '/api/aeo' }));
 vi.mock('@/lib/supabase/client', () => ({
@@ -19,16 +22,18 @@ vi.mock('@/lib/supabase/client', () => ({
       const chain: Record<string, unknown> = {
         select: () => chain,
         eq: (col: string, v: unknown) => (filters.push([table, col, v]), chain),
+        in: (_col: string, ids: string[]) => (statusIds.push(ids), chain),
         order: () => chain,
         limit: () => chain,
         maybeSingle: async () => reads[table],
+        then: (resolve: (r: unknown) => void) => resolve(statusReads.shift()),
       };
       return chain;
     },
   }),
 }));
 
-const { readDraftCms, sendPagesToCms } = await import('./cms-send-client');
+const { readCmsStatuses, readDraftCms, sendPagesToCms } = await import('./cms-send-client');
 
 const page: CmsPage = {
   draftId: 'd1',
@@ -47,6 +52,8 @@ const answer = (status: number, body: unknown) =>
 beforeEach(() => {
   session = { access_token: 'token-1' };
   filters.length = 0;
+  statusIds.length = 0;
+  statusReads = [];
   fetchMock.mockReset();
   vi.stubGlobal('fetch', fetchMock);
   vi.spyOn(console, 'error').mockImplementation(() => {});
@@ -163,5 +170,74 @@ describe('readDraftCms', () => {
     // Before its columns are there (00262), the dialog fills the fields from the page.
     reads.content_drafts = { data: null, error: { message: 'column "slug" does not exist' } };
     expect(await readDraftCms('d1')).toBeNull();
+  });
+});
+
+describe('readCmsStatuses', () => {
+  const delivery = (draft: string, status: string, at: string, over = {}) => ({
+    draft_id: draft,
+    status,
+    created_at: at,
+    sent_at: null,
+    published_at: null,
+    http_status: null,
+    error: null,
+    published_url: null,
+    ...over,
+  });
+
+  it('gives each draft its last send, a hundred drafts a read', async () => {
+    const ids = Array.from({ length: 150 }, (_, i) => `d${i}`);
+    statusReads = [
+      {
+        data: [
+          delivery('d1', 'published', '2026-10-24T10:00:00Z', {
+            sent_at: '2026-10-24T10:00:02Z',
+            published_at: '2026-10-24T12:00:00Z',
+            http_status: 200,
+            published_url: 'https://example.com/coffee',
+          }),
+          // An older send of the same draft.
+          delivery('d1', 'failed', '2026-10-23T10:00:00Z', { http_status: 500 }),
+          delivery(null as unknown as string, 'sent', '2026-10-22T10:00:00Z'),
+        ],
+        error: null,
+      },
+      {
+        data: [delivery('d120', 'failed', '2026-10-24T09:00:00Z', { error: 'Not reached' })],
+        error: null,
+      },
+    ];
+    const statuses = await readCmsStatuses(ids);
+    expect(statusIds.map((chunk) => chunk.length)).toEqual([100, 50]);
+    expect([...statuses.entries()]).toEqual([
+      [
+        'd1',
+        {
+          status: 'published',
+          at: '2026-10-24T12:00:00Z',
+          httpStatus: 200,
+          error: null,
+          publishedUrl: 'https://example.com/coffee',
+        },
+      ],
+      [
+        'd120',
+        {
+          status: 'failed',
+          at: '2026-10-24T09:00:00Z',
+          httpStatus: null,
+          error: 'Not reached',
+          publishedUrl: null,
+        },
+      ],
+    ]);
+  });
+
+  it('leaves a read that fails with no sends, as before its table is there', async () => {
+    statusReads = [{ data: null, error: { message: 'relation does not exist' } }];
+    expect((await readCmsStatuses(['d1'])).size).toBe(0);
+    expect((await readCmsStatuses([])).size).toBe(0);
+    expect(statusIds).toHaveLength(1);
   });
 });

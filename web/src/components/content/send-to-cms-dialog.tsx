@@ -40,7 +40,8 @@ import { exportPlaceholders, pageFields, titlePlaceholders } from '@/lib/content
  * CMS or automation to publish. Its slug and meta are filled from the page,
  * or what the draft kept, and editable; they stay on the draft. The page
  * goes as Export makes it ready (CE-057): no placeholder goes, so they are
- * filled first. Rendered only while open, on the page as it was then.
+ * filled first. From the editor's header and a Library row; rendered only
+ * while open, on the page as it was then.
  */
 export function SendDialog({
   draftId,

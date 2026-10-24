@@ -24,18 +24,25 @@ import {
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { LoadingDots } from '@/components/ui/loading-dots';
 import { NewContentDialog } from '@/components/content/new-content-dialog';
+import { SendDialog } from '@/components/content/send-to-cms-dialog';
 import { useUserRole } from '@/hooks/use-user-role';
+import { useRouter } from '@/i18n/navigation';
+import { getContentAuthors } from '@/lib/actions/content-authors';
 import {
   archiveContentDraft,
   deleteContentDraft,
+  getContentDraftPages,
   getContentDrafts,
   markContentDraftReady,
   setContentDraftStatus,
 } from '@/lib/actions/content-drafts';
+import { cmsSource, type CmsSource } from '@/lib/content/cms-send';
+import { readCmsStatuses, type CmsStatus } from '@/lib/content/cms-send-client';
 import {
   AGENT_POLL_MS,
   CREATED_RANGES,
   LIBRARY_TABS,
+  contentEditorPath,
   draftsCreatedIn,
   draftsInTab,
   type ContentDraftListItem,
@@ -44,12 +51,48 @@ import {
   type LibraryTab,
 } from '@/lib/content/drafts';
 import { siteTypeOf } from '@/lib/content/page-types';
+import { qualityPhase } from '@/lib/content/quality';
 import { formatNumber } from '@/lib/format';
 import { readUrlChoice, writeUrlParams } from '@/lib/url-state';
 import { useBrandStore } from '@/stores/use-brand-store';
 import { LibraryExportMenu, useLibraryExport } from './_library-export';
 import { LibraryTable, type LibraryRowActions } from './_library-table';
 import { HeaderWithAiUsage } from '@/components/ai-usage/ai-usage-meter';
+
+/**
+ * A row's page for Send to CMS, made ready as the editor makes its own: its
+ * author and the brand's byline line once Quality is live. Null when the
+ * page is gone.
+ */
+async function readSendSource({
+  brandId,
+  draftId,
+  brandName,
+  brandLanguage,
+  teamByline,
+}: {
+  brandId: string;
+  draftId: string;
+  brandName: string;
+  brandLanguage: string | null | undefined;
+  teamByline: (brand: string) => string;
+}): Promise<CmsSource | null> {
+  const [{ pages }, authors] = await Promise.all([
+    getContentDraftPages(brandId, [draftId]),
+    qualityPhase() >= 1 ? getContentAuthors().catch(() => null) : Promise.resolve(null),
+  ]);
+  const page = pages[0];
+  if (!page) return null;
+  const name = authors?.brands.find((b) => b.id === brandId)?.name ?? brandName;
+  return cmsSource({
+    page,
+    authors,
+    brandId,
+    brandName: name,
+    brandLanguage,
+    teamByline: teamByline(name),
+  });
+}
 
 /** A read of the brand's drafts: null until it comes back. */
 interface LibraryRead {
@@ -64,11 +107,13 @@ interface LibraryRead {
  * The Content Library (Content Editor, CE-002): everything a person or the
  * Content Agent wrote or changed in Ansvisor, by status, and what was
  * archived (00233). A row's menu sets its status; admins and managers also
- * archive, restore and delete. The tab lives in the URL (?tab=in_review), so
- * a link can open "Library › In review".
+ * send it to the CMS (#1331), archive, restore and delete. The tab lives in
+ * the URL (?tab=in_review), so a link can open "Library › In review".
  */
 export default function ContentLibraryPage() {
   const t = useTranslations('contentEditor.library');
+  const tEditor = useTranslations('contentEditor.editor');
+  const router = useRouter();
   const activeBrandId = useBrandStore((s) => s.activeBrandId);
   const activeBrand = useBrandStore((s) => s.brands.find((b) => b.id === s.activeBrandId));
   const [tab, setTab] = useState<LibraryTab>('all');
@@ -81,6 +126,11 @@ export default function ContentLibraryPage() {
   // The draft whose Delete waits for a confirmation.
   const [deleting, setDeleting] = useState<ContentDraftListItem | null>(null);
   const [deletePending, setDeletePending] = useState(false);
+  // Send to CMS: the page being read for the dialog, then the dialog's page.
+  const [preparing, setPreparing] = useState<string | null>(null);
+  const [sendSource, setSendSource] = useState<CmsSource | null>(null);
+  // Each draft's last send, beside its status; read with the list.
+  const [cms, setCms] = useState<ReadonlyMap<string, CmsStatus>>(new Map());
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- one read of the URL after mount
@@ -115,6 +165,20 @@ export default function ContentLibraryPage() {
     const timer = setTimeout(() => setAttempt((n) => n + 1), AGENT_POLL_MS);
     return () => clearTimeout(timer);
   }, [agentWriting, read]);
+
+  // The sends of the drafts read, after each read of the list.
+  const readIds = read?.drafts?.map((draft) => draft.id).join(',') ?? '';
+  const [cmsAttempt, setCmsAttempt] = useState(0);
+  useEffect(() => {
+    if (!readIds) return;
+    let cancelled = false;
+    readCmsStatuses(readIds.split(','))
+      .then((statuses) => !cancelled && setCms(statuses))
+      .catch((err) => console.error('Failed to read the pages’ sends:', err));
+    return () => {
+      cancelled = true;
+    };
+  }, [readIds, cmsAttempt]);
 
   const reload = () => setAttempt((n) => n + 1);
   const titleOf = (draft: ContentDraftListItem) => draft.title.trim() || t('untitled');
@@ -158,6 +222,25 @@ export default function ContentLibraryPage() {
     onArchive: (draft, archived) => void archive(draft, archived),
     onDelete: setDeleting,
     onExport: (draft, format) => void exportDraft(draft, format),
+    onSend: (draft) => void openSend(draft),
+  };
+
+  const openSend = async (draft: ContentDraftListItem) => {
+    if (!activeBrandId || preparing) return;
+    setPreparing(draft.id);
+    const source = await readSendSource({
+      brandId: activeBrandId,
+      draftId: draft.id,
+      brandName: activeBrand?.name ?? '',
+      brandLanguage: activeBrand?.language,
+      teamByline: (brand) => tEditor('author.organization', { brand }),
+    }).catch((err) => {
+      console.error('Failed to read the page to send:', err);
+      return null;
+    });
+    setPreparing(null);
+    if (source) setSendSource(source);
+    else toast.error(t('rowMenu.sendFailed'));
   };
 
   const confirmDelete = async () => {
@@ -285,10 +368,29 @@ export default function ContentLibraryPage() {
               {t('created.empty')}
             </p>
           ) : (
-            <LibraryTable drafts={listed} tab={tab} actions={rowActions} />
+            <LibraryTable drafts={listed} tab={tab} actions={rowActions} cms={cms} />
           )}
         </CardContent>
       </Card>
+      {sendSource && (
+        <SendDialog
+          draftId={sendSource.draftId}
+          brandId={activeBrandId}
+          title={sendSource.title}
+          html={sendSource.html}
+          sourceUrl={sendSource.sourceUrl}
+          author={sendSource.author}
+          teamByline={sendSource.teamByline}
+          byline={sendSource.byline}
+          // Placeholders are filled in the editor.
+          onFillNow={() => router.push(contentEditorPath(sendSource.draftId))}
+          // A send that went or failed is the row's last: its sends are read again.
+          onClose={() => {
+            setSendSource(null);
+            setCmsAttempt((n) => n + 1);
+          }}
+        />
+      )}
       <Dialog open={deleting !== null} onOpenChange={(open) => !open && setDeleting(null)}>
         <DialogContent className="grid-cols-[minmax(0,1fr)] sm:max-w-md">
           <DialogHeader>

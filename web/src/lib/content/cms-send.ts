@@ -1,4 +1,8 @@
+import type { DraftPage } from '@/lib/actions/content-drafts';
+import type { AuthorsRead, ContentAuthor } from '@/lib/content/authors';
+import { publishableHtml } from '@/lib/content/clean-html';
 import {
+  bylineText,
   fragment,
   withByline,
   withoutLeadingH1,
@@ -74,6 +78,56 @@ export function cmsPageProblem(
   const body = fragment(withoutLeadingH1(html));
   if (!body.textContent?.trim() && !body.querySelector('img')) return 'empty';
   return null;
+}
+
+/** A stored page as the Send dialog takes it, as the editor would give it. */
+export interface CmsSource {
+  draftId: string;
+  title: string;
+  /** publishableHtml's, as Copy HTML gives it. */
+  html: string;
+  sourceUrl: string | null;
+  author: ContentAuthor | null;
+  /** The team byline; empty while the authors aren't read. */
+  teamByline: string;
+  /** The byline line the brand puts in the content, or null. */
+  byline: string | null;
+}
+
+/**
+ * A Library row's page for Send to CMS, as the editor gives its own: the
+ * stored page made publishable, its author and the brand's byline line in
+ * the page's language (its own Language rule, else the brand's). `authors`
+ * is null while Quality is off, as the editor reads none then.
+ */
+export function cmsSource({
+  page,
+  authors,
+  brandId,
+  brandName,
+  brandLanguage,
+  teamByline,
+}: {
+  page: DraftPage;
+  authors: AuthorsRead | null;
+  brandId: string;
+  brandName: string;
+  brandLanguage: string | null | undefined;
+  teamByline: string;
+}): CmsSource {
+  const author = authors?.authors.find((a) => a.id === page.authorId) ?? null;
+  const inContent = authors?.brands.find((b) => b.id === brandId)?.bylineInContent ?? false;
+  return {
+    draftId: page.id,
+    title: page.title,
+    html: publishableHtml(page.bodyHtml),
+    sourceUrl: page.sourceUrl,
+    author,
+    teamByline: authors ? teamByline : '',
+    byline: inContent
+      ? bylineText(page.language ?? brandLanguage, author?.name ?? null, brandName)
+      : null,
+  };
 }
 
 /** The image's alt text, where the page shows it. */
