@@ -38084,7 +38084,7 @@ create table if not exists public.content_draft_inputs (
       and jsonb_array_length(data) <= 5
       and octet_length(data::text) <= 65536
     ),
-  -- [{ "promptId", "prompt", "answers", "mentioned", "month" }]: Ansvisor data used.
+  -- [{ "promptId", "prompt", "answers", "mentioned", "asOf", "days" }]: Ansvisor data used, with the day it was used and the days it covers.
   ansvisor_data jsonb not null default '[]'::jsonb
     check (
       jsonb_typeof(ansvisor_data) = 'array'
