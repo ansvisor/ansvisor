@@ -62,7 +62,7 @@ export function SendDialog({
   html: string;
   sourceUrl: string | null;
   author: ContentAuthor | null;
-  /** The team byline; empty while the authors aren't read. */
+  /** The brand's team in the page's language (teamName); empty while the authors aren't read. */
   teamByline: string;
   /** The byline line the brand puts in the content, or null. */
   byline: string | null;
