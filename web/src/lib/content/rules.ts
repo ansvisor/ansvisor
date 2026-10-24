@@ -4,6 +4,7 @@ import { classifyDomain, normalizeDomain } from '@/lib/citations/classify';
 import { PAGE_TYPES, type DraftMethod, type PageType } from '@/lib/content/drafts';
 import { lengthTarget } from '@/lib/content/editor';
 import { decodeHtmlBlock } from '@/lib/content/html-allowlist';
+import { countWords } from '@/lib/content/readability';
 import { wordsOf } from '@/lib/content/sources';
 
 /**
@@ -570,11 +571,6 @@ export function readPage(html: string, characters: number): PageRead {
     characters,
     htmlBlockH1s,
   };
-}
-
-/** Words as the rules count them: letters or digits, with inner apostrophes and hyphens. */
-export function countWords(text: string): number {
-  return text.match(/[\p{L}\p{N}][\p{L}\p{N}'’-]*/gu)?.length ?? 0;
 }
 
 const isHeading = (b: PageBlock) => b.tag === 'h1' || b.tag === 'h2' || b.tag === 'h3';

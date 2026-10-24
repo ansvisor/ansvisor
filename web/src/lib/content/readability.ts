@@ -80,12 +80,13 @@ export interface ReadBlock {
 }
 
 /**
- * Words as the rules count them (rules.ts countWords), a vowel sign or other
- * mark kept inside its word: Hindi's are marks, not letters, and would break
- * each word in two or three.
+ * Words as Readability and the rules count them: letters or digits, with
+ * inner apostrophes and hyphens, a vowel sign or other mark kept inside its
+ * word (Hindi's are marks, not letters, and would break each word in two or
+ * three).
  */
 const WORD = /[\p{L}\p{N}][\p{L}\p{M}\p{N}'’-]*/gu;
-const countWords = (text: string) => text.match(WORD)?.length ?? 0;
+export const countWords = (text: string) => text.match(WORD)?.length ?? 0;
 
 /**
  * Text joined as a reader sees it: a space between paragraphs and at a line
