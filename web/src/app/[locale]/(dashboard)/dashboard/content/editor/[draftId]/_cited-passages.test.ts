@@ -6,6 +6,7 @@ import {
   CITED_EDIT_ALLOWED,
   CitedPassages,
   citedPassagesKey,
+  keptCharacters,
   lockedPassageCount,
   type HeldEdit,
 } from './_cited-passages';
@@ -57,6 +58,32 @@ beforeEach(() => {
 });
 
 afterEach(() => editor.destroy());
+
+describe('keptCharacters', () => {
+  it('counts what a page rewrite keeps as it is: quoted passages, quotes, lists holding one', () => {
+    const quote = 'A customer said it saved them a week.';
+    const small = new Editor({
+      extensions: [StarterKit, CitedPassages.configure({ onHeld: () => {} })],
+      content: `<p>${QUOTED}</p><p>Plain words to rewrite.</p><blockquote><p>${quote}</p></blockquote><ul><li><p>${QUOTED}</p></li></ul>`,
+    });
+    try {
+      const lock = (unlocked: string[] = []) =>
+        small.view.dispatch(
+          small.state.tr.setMeta(citedPassagesKey, {
+            labels: new Map([[passageKey(QUOTED), 'Cited by ChatGPT 3×']]),
+            unlocked: new Set(unlocked),
+          }),
+        );
+      lock();
+      expect(keptCharacters(small.state)).toBe(QUOTED.length * 2 + quote.length);
+      // Unlocked by the person: the agent may reword it.
+      lock([passageKey(QUOTED)]);
+      expect(keptCharacters(small.state)).toBe(quote.length);
+    } finally {
+      small.destroy();
+    }
+  });
+});
 
 describe('locked passages', () => {
   it('marks the quoted passage and counts it', () => {

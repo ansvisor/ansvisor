@@ -121,6 +121,7 @@ import {
   fanoutsToUse,
   lengthWarns,
   openRulesForAgent,
+  lengthBand,
   rewriteAdvice,
 } from '@/lib/content/rules';
 import { aiUsageTone } from '@/lib/billing/ai-usage';
@@ -142,6 +143,7 @@ import {
   CitedPassages,
   citedLocks,
   citedPassagesKey,
+  keptCharacters,
   lockedPassageCount,
   type HeldEdit,
 } from './_cited-passages';
@@ -158,7 +160,15 @@ import { ClaimMarksExtension, claimMarksKey, textRanges, writingBlock } from './
 import { useClaims } from './_use-claims';
 import { useSourceClasses } from './_use-source-classes';
 import { HeaderTip } from './_header-tip';
-import { NextStepButton, readSkips, wordsUnderTitle, writeSkips } from './_next-step';
+import {
+  NextStepButton,
+  readSkips,
+  stepActor,
+  stepName,
+  stepReason,
+  wordsUnderTitle,
+  writeSkips,
+} from './_next-step';
 import { useTodoCopy, type QualityRead } from './_quality-tab';
 import { PageTypeMenu } from './_page-type-menu';
 import type { AgentRewrite } from './_brief-tab';
@@ -284,6 +294,7 @@ export function DraftEditor({
   agentFinished?: boolean;
 }) {
   const t = useTranslations('contentEditor.editor');
+  const tNext = useTranslations('contentEditor.editor.nextStep');
   const autosave = useDraftAutosave(draft.id, draft);
   const [title, setTitle] = useState(draft.title);
   // The page as written now, for the side panel's Sources.
@@ -493,6 +504,16 @@ export function DraftEditor({
     pageType,
     reads,
   });
+  // What a page rewrite keeps as it is (the passages AI answers quote, tables,
+  // images…), read as the characters are: a Length under it is out of reach.
+  const keptChars = editor && citedRead ? keptCharacters(editor.state) : 0;
+  // The Length the page is written to, for what the agent's rewrite reached.
+  const lengthRule = rules.rules.find(({ rule }) => rule.key === 'length' && rule.on)?.rule;
+  const lengthTarget = Number(lengthRule?.current);
+  const length =
+    lengthRule && Number.isFinite(lengthTarget) && lengthTarget > 0
+      ? { target: lengthTarget, ...lengthBand(lengthTarget), kept: keptChars }
+      : null;
   // How well the page reads as written (Quality spec, CE-036/039): read in the
   // browser, no AI cost; off until Quality's first phase is live. Read in the
   // language the page is written in: its Language rule when that is on (the
@@ -1797,6 +1818,7 @@ export function DraftEditor({
     ? {
         run: () => void rewritePage(),
         running: rewriting,
+        kept: keptChars,
         blocked:
           aiUsedUp && !rewriting
             ? aiUsedUp
@@ -1920,7 +1942,7 @@ export function DraftEditor({
     published: status === 'published',
     hasBrief: reads.brief.status === 'ready' ? reads.brief.brief !== null : null,
     empty: !pageHasWords,
-    rewrite: rewriteAdvice(rules.rules),
+    rewrite: rewriteAdvice(rules.rules, keptChars),
     openRules: rulesForNext(rules.rules),
     quality: quality
       ? { trust: trustNow, trustLow: trustNow !== null && trustNow < TRUST_GATE, todos }
@@ -2549,9 +2571,14 @@ export function DraftEditor({
                       label: t(`nextStep.actions.${next.step.primary}`),
                       onRun: () => runNext(next.step.primary),
                       blocked: nextBlocked(next.step.primary),
+                      // The card heads with the step and who takes it (Next step spec §3).
+                      title: stepName(tNext, next.step.id, nextState),
+                      reason: stepReason(tNext, next.step, nextState, todoLine),
+                      actor: stepActor(next.step),
                     }
                   : null
               }
+              length={length}
               onAllSteps={() => {
                 setNextFocus(true);
                 setNextOpen(true);

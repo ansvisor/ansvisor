@@ -29,6 +29,7 @@ import {
   RULE_LENGTH_MIN,
   RULE_LENGTH_MAX,
   lengthBand,
+  lengthOutOfReach,
   rewriteAdvice,
   type RuleStatus,
 } from './rules';
@@ -714,6 +715,30 @@ describe('rewriteAdvice', () => {
     // An empty page has nothing to rewrite; one past 60,000 can't be sent whole.
     expect(rewriteAdvice(statuses(0, ['faq', 'summary', 'h2Answer', 'keywords']))).toBeNull();
     expect(rewriteAdvice(statuses(60_001))).toBeNull();
+  });
+
+  it("doesn't recommend shortening a page whose kept blocks are most of its Length", () => {
+    // The user's page: 6,877 characters for 4,000, 3,799 of them quoted passages and tables.
+    const page = statuses(6_877, [], '4000');
+    expect(rewriteAdvice(page, 3_799)).toBeNull();
+    expect(lengthOutOfReach(page, 3_799)).toEqual({
+      count: 6_877,
+      target: 4_000,
+      kept: 3_799,
+      suggested: 6_000,
+    });
+    // Little kept: a rewrite still gets there.
+    expect(rewriteAdvice(page, 1_000)).toMatchObject({ reason: 'length' });
+    expect(lengthOutOfReach(page, 1_000)).toBeNull();
+    // Many rules open: still a rewrite, for them, the Length out of reach not among them.
+    expect(
+      rewriteAdvice(statuses(6_877, ['faq', 'summary', 'h2Answer'], '4000'), 3_799),
+    ).toBeNull();
+    expect(
+      rewriteAdvice(statuses(6_877, ['faq', 'summary', 'h2Answer', 'keywords'], '4000'), 3_799),
+    ).toMatchObject({ reason: 'open' });
+    // Under its Length, what is kept doesn't stop it.
+    expect(lengthOutOfReach(statuses(2_000, [], '4000'), 3_799)).toBeNull();
   });
 
   it('recommends it for 4 rules or more the agent can fix', () => {
