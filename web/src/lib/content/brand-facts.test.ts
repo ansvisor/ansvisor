@@ -183,7 +183,7 @@ describe('factMismatches', () => {
     ).toMatchObject({ mismatches: [] });
     expect(
       check([
-        // The closest plan takes the price, not the first of the brand's facts.
+        // Another plan named beside the price's: which is whose isn't sure.
         'The Starter plan has fewer features, while the Pro plan is $49 a month.',
         'Unlike the Starter plan, the Pro plan costs $49 a month.',
         // More prices than plans named: which is whose isn't sure.
@@ -194,6 +194,11 @@ describe('factMismatches', () => {
         'Ledgerly setup costs $500 once.',
         'Ledgerly customer acquisition costs $45 on average.',
         'The Pro plan setup costs $500.',
+        // Two prices with no plan named, or a plan between: which is whose isn't sure.
+        'Ledgerly costs $29/month, or $24/month billed annually.',
+        'The Pro plan, unlike the Starter plan, costs $49 a month.',
+        // A partner's trial.
+        'Ledgerly integrates with Acme, which offers a 30-day free trial.',
         // Someone else's founding, and quoted speech.
         'The agency that built Ledgerly was founded in 2009.',
         '“We were founded in 2018,” says Acme’s CEO.',
@@ -206,6 +211,9 @@ describe('factMismatches', () => {
     expect(
       check(['The Starter plan is $25 a month, and the Pro plan is $49 a month.']).mismatches,
     ).toMatchObject([{ kind: 'price', page: '$25', fact: '$19' }]);
+    expect(check(["Ledgerly's trial runs for 30 days."]).mismatches).toMatchObject([
+      { kind: 'trial', page: '30-day' },
+    ]);
     expect(
       check(['Setup takes 3 days, and your free trial lasts 30 days.']).mismatches,
     ).toMatchObject([{ kind: 'trial', page: '30-day' }]);

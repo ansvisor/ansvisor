@@ -317,7 +317,10 @@ const trialLengths = (text: string) => [
     [...text.matchAll(new RegExp(re.source, 'giu'))].map((m) => Number(m[1]) * 7),
   ),
 ];
-/** A length said of someone's own, a trial named before it: "…; Ledgerly's runs for 14 days". */
+/**
+ * A length said of someone's own: "…; Ledgerly's runs for 14 days" (a trial
+ * named before it), "Ledgerly's trial runs for 30 days".
+ */
 const OWNED_LENGTH =
   /(?:['’]s|\b(?:its|theirs|ours|yours))\s+(?:[\p{L}-]+\s+)?(?:runs?|lasts?|is|are)\s+(?:for\s+)?(?:(?:just|only)\s+)?(\d{1,3})[\s-]?(days?|weeks?)(?!\p{L})/giu;
 /**
@@ -326,7 +329,7 @@ const OWNED_LENGTH =
  * it, or says "your trial", "every plan".
  */
 const TURN =
-  /[;:–—]|,\s*(?:and|but|while|whereas)\b|\b(?:but|while|whereas|unlike|than|compared\s+(?:to|with))\b/iu;
+  /[;:–—]|,\s*(?:and|but|while|whereas|which|whose|who)\b|\b(?:but|while|whereas|unlike|than|compared\s+(?:to|with))\b/iu;
 /**
  * The brand's own founding year, said right after who, who at the start of
  * its clause: "Ledgerly was founded in 2015", "we were…" ("the agency that
@@ -361,8 +364,8 @@ const QUOTED = /["“”«»„]/u;
  * than none):
  *
  *   * a price is compared with the plan named nearest it in the sentence
- *     (the closest pairs first, no other price between, none read when the
- *     sentence has more prices than plans named), its name as the page
+ *     (the closest pairs first, no other price between, none read unless
+ *     the sentence has as many prices as plans named), its name as the page
  *     writes it, a name that is an everyday word ("Pro", "Team", "Free")
  *     only beside "plan" or "tier" or with the brand named; with no plan
  *     named, only right after the brand's name and what it costs
@@ -436,15 +439,17 @@ export function factMismatches({
           : null;
       const found = pagePrices(sentence).filter((price) => price.amount > 0);
       // Each named plan with the one price nearest it, the closest pairs
-      // first, none other between. More prices than plans named ("Pro is
-      // $49/month or $39/month billed annually", "…, and Business is $199"
-      // with only Pro found): which is whose isn't sure, none is read.
+      // first, none other between. As many prices as plans named (one with
+      // none named), else which is whose isn't sure ("Pro is $49/month or
+      // $39/month billed annually", "…, and Business is $199" with only Pro
+      // found, "Pro, unlike the Starter plan, costs $49"): none is read.
+      const sure = found.length === Math.max(places.length, 1);
       const planOf = new Map<number, (typeof places)[number]>();
       const pairs = places
         .flatMap((place) => found.map((price) => ({ place, price })))
         .sort((a, b) => Math.abs(a.price.at - a.place.at) - Math.abs(b.price.at - b.place.at));
       const paired = new Set<string>();
-      for (const { place, price } of found.length > places.length ? [] : pairs) {
+      for (const { place, price } of pairs) {
         if (planOf.has(price.at) || paired.has(place.plan)) continue;
         const [from, to] = [Math.min(place.at, price.at), Math.max(place.at, price.at)];
         if (found.some((other) => other !== price && other.at > from && other.at < to)) continue;
@@ -452,7 +457,7 @@ export function factMismatches({
         paired.add(place.plan);
       }
       const names = namedAt(sentence, brandName);
-      for (const price of found) {
+      for (const price of sure ? found : []) {
         const nearest = places.length ? (planOf.get(price.at) ?? null) : null;
         if (places.length && !nearest) continue;
         // No plan named: only a price said right after the brand's name.
@@ -489,17 +494,16 @@ export function factMismatches({
     if (trials.length && (brand || OWN_TRIAL.test(sentence))) {
       // Two different trial lengths in the sentence (another brand's beside
       // the brand's, "…; Ledgerly's runs for 14 days") say nothing sure.
-      const lengths = new Set([
-        ...trialLengths(sentence),
-        ...[...sentence.matchAll(OWNED_LENGTH)].map(
-          (m) => Number(m[1]) * (/^week/i.test(m[2]) ? 7 : 1),
-        ),
-      ]);
+      const owned = (text: string, trial: boolean) =>
+        [...text.matchAll(OWNED_LENGTH)]
+          .filter((m) => !trial || /trial/iu.test(m[0]))
+          .map((m) => Number(m[1]) * (/^week/i.test(m[2]) ? 7 : 1));
+      const lengths = new Set([...trialLengths(sentence), ...owned(sentence, false)]);
       const own = new Set(
         sentence
           .split(TURN)
           .filter((part) => named(part, brandName) || OWN_TRIAL.test(part))
-          .flatMap(trialLengths),
+          .flatMap((part) => [...trialLengths(part), ...owned(part, true)]),
       );
       const days = lengths.size === 1 && own.size === 1 ? [...own][0] : null;
       if (days) {
