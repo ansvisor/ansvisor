@@ -170,6 +170,7 @@ export function ExportDialog({
   linksPending,
   initialDestination,
   onFillNow,
+  publish = null,
 }: {
   onClose: () => void;
   title: string;
@@ -191,6 +192,17 @@ export function ExportDialog({
   initialDestination?: ExportDestination;
   /** Goes to the first placeholder, to fill it. */
   onFillNow: () => void;
+  /**
+   * What Before you publish has for this page (CE-041), with Review: Export
+   * opens on its options, and names Trust under 60 or a missing author.
+   */
+  publish?: {
+    trustBelow: number | null;
+    noAuthor: boolean;
+    /** An article: Before you publish has its dates and JSON-LD too. */
+    article: boolean;
+    onReview: () => void;
+  } | null;
 }) {
   const t = useTranslations('contentEditor.editor.exportDialog');
   const [destination, setDestination] = useState<ExportDestination>(
@@ -426,6 +438,7 @@ export function ExportDialog({
         <DialogHeader>
           <DialogTitle>{t('title')}</DialogTitle>
         </DialogHeader>
+        {publish && <PublishLine {...publish} />}
 
         <div className="space-y-2">
           {radioRow(DRAFT_EXPORT_FORMATS, t('formats'))}
@@ -605,5 +618,53 @@ export function ExportDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+/**
+ * Before you publish, one line over Export's options: amber with what it
+ * warns about (Trust under 60, no author), else quiet; Review opens it.
+ */
+function PublishLine({
+  trustBelow,
+  noAuthor,
+  article,
+  onReview,
+}: {
+  trustBelow: number | null;
+  noAuthor: boolean;
+  article: boolean;
+  onReview: () => void;
+}) {
+  const t = useTranslations('contentEditor.editor.exportDialog.publish');
+  const warnings = [
+    ...(trustBelow !== null ? [t('trust', { trust: trustBelow })] : []),
+    ...(noAuthor ? [t('noAuthor')] : []),
+  ];
+  return (
+    <div
+      className={cn(
+        'flex items-center gap-2 rounded-lg border px-3 py-2 text-xs',
+        warnings.length
+          ? 'border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-300'
+          : 'bg-muted/40 text-muted-foreground',
+      )}
+    >
+      {warnings.length > 0 && <AlertTriangle aria-hidden className="h-3.5 w-3.5 shrink-0" />}
+      <p className="min-w-0 flex-1">
+        {warnings.length
+          ? t('warnings', { list: warnings.join(' · ') })
+          : t(article ? 'quiet' : 'quietOther')}
+      </p>
+      <Button
+        variant="outline"
+        size="sm"
+        className="h-6 shrink-0 px-2 text-xs"
+        aria-label={t('reviewLabel')}
+        onClick={onReview}
+      >
+        {t('review')}
+      </Button>
+    </div>
   );
 }

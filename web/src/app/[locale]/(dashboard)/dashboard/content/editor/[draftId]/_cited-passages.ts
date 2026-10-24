@@ -151,6 +151,44 @@ function lockedAtSelection(state: EditorState, locks: CitedLocks): string | null
   return found;
 }
 
+/** The top-level blocks a page rewrite keeps whole (content-rewrite.js KEPT_BLOCKS). */
+const KEPT_NODES = new Set([
+  'table',
+  'image',
+  'blockquote',
+  'codeBlock',
+  'horizontalRule',
+  'htmlBlock',
+  'jsonLd',
+]);
+
+/**
+ * The characters a page rewrite keeps as they are (content-rewrite.js
+ * keepBlocks): each top-level block that holds a passage AI answers quote
+ * (still locked), or is a table, image, quote, code, rule, HTML block or
+ * JSON-LD, or holds an image or a table. Counted by their text, as the
+ * editor counts the page's.
+ */
+export function keptCharacters(state: EditorState): number {
+  const locks = citedLocks(state);
+  let kept = 0;
+  state.doc.forEach((block) => {
+    let keep =
+      KEPT_NODES.has(block.type.name) || (block.isTextblock && isLocked(blockKey(block), locks));
+    if (!keep) {
+      block.descendants((node) => {
+        if (keep) return false;
+        if (node.type.name === 'image' || node.type.name === 'table') keep = true;
+        else if (node.isTextblock && isLocked(blockKey(node), locks)) keep = true;
+        return !keep;
+      });
+    }
+    // As the editor's character count reads text: no separator between blocks.
+    if (keep) kept += block.textBetween(0, block.content.size, undefined, ' ').length;
+  });
+  return kept;
+}
+
 /** How many quoted passages the page has now (the marks the plugin keeps). */
 export function lockedPassageCount(state: EditorState): number {
   return citedPassagesKey.getState(state)?.marks.find().length ?? 0;

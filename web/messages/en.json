@@ -3782,6 +3782,10 @@
         "more": "+{count, number} more",
         "run": "Run Agent",
         "next": "Next: {action}",
+        "nextTitle": "Next · {step}",
+        "lastRun": "Last run: <run></run>",
+        "byAgent": "Content Agent takes this step",
+        "byYou": "only you can take this step",
         "allSteps": "All steps",
         "working": "Content Agent is working",
         "builtFrom": "built from {count, number} of your sources",
@@ -3817,6 +3821,8 @@
         "bar": "Rewritten page",
         "ready": "Content Agent rewrote the page to its rules",
         "characters": "{before, number} → {after, number} characters",
+        "lengthMissed": "Length {target, number} not reached",
+        "lengthKept": "({kept, number} characters are passages AI answers quote, tables and other blocks a rewrite keeps as they are)",
         "accepted": "Rewrite accepted",
         "rejected": "Rewrite rejected",
         "rulesOpen": "{count, plural, one {# rule still open} other {# rules still open}}",
@@ -4422,6 +4428,15 @@
         }
       },
       "exportDialog": {
+        "publish": {
+          "quiet": "Before you publish has the author, dates and schema (JSON-LD) for your CMS.",
+          "quietOther": "Before you publish has the author and what your CMS adds for this page type.",
+          "warnings": "Before you publish: {list}.",
+          "trust": "Trust {trust}, below 60",
+          "noAuthor": "no author yet",
+          "review": "Review",
+          "reviewLabel": "Review Before you publish"
+        },
         "title": "Export",
         "untitled": "Untitled",
         "formats": "Files",
@@ -5030,6 +5045,7 @@
           "length": "Recommended: the page is {count, number} characters for a Length of {target, number} ({percent, number}% off). A rewrite gets there in one go.",
           "open": "Recommended: {count, number} rules are open. A rewrite meets them together."
         },
+        "lengthOutOfReach": "The page is {count, number} characters for a Length of {target, number}, but {kept, number} of them are passages AI answers quote, tables and other blocks a rewrite keeps as they are. Raise the Length to about {suggested, number}, or unlock passages you're fine to have reworded.",
         "lengthConflict": "The fan-out H2s, FAQ questions and summary these rules still ask for take about {need, number} characters, more than Length allows (up to {max, number}). Raise Length, or ask for fewer.",
         "fixTrace": "Fix",
         "fixTraceHint": "Content Agent rewrites only these phrases, for you to review",

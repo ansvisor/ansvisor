@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useFormatter, useTranslations } from 'next-intl';
-import { ChevronDown, Sparkles } from 'lucide-react';
+import { ChevronDown, Info, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -33,6 +33,7 @@ import {
   MAX_TEXT_RULE_LENGTH,
   RULE_GROUPS,
   openRulesForAgent,
+  lengthOutOfReach,
   rewriteAdvice,
   splitRules,
   type ActiveRule,
@@ -85,6 +86,8 @@ export interface PageRewrite {
   running: boolean;
   /** Why it can't run now (suggestions still open), or null. */
   blocked: string | null;
+  /** The characters it keeps as they are (keptCharacters): a Length under them is out of reach. */
+  kept?: number;
 }
 
 /** Run Agent's two ways: the open rules fixed a few passages at a time, or the whole page. */
@@ -244,7 +247,9 @@ export function RulesTab({
   ];
 
   // Rewrite the page whole when small edits can't get there.
-  const advice = pageRewrite ? rewriteAdvice(state.rules) : null;
+  const advice = pageRewrite ? rewriteAdvice(state.rules, pageRewrite.kept ?? 0) : null;
+  // A Length the rewrite can't reach for what it keeps: said, never recommended.
+  const outOfReach = pageRewrite ? lengthOutOfReach(state.rules, pageRewrite.kept ?? 0) : null;
   // The rules the page doesn't meet now, in the tab's order, and those the agent fixes.
   const open = state.rules.filter(({ rule, status }) => rule.on && status.state === 'bad');
   const fixable = openRulesForAgent(state.rules).forAgent.length;
@@ -325,6 +330,12 @@ export function RulesTab({
                     })
                   : t('rewriteAdvice.open', { count: advice.count })}
               </span>
+            </p>
+          )}
+          {outOfReach && (
+            <p className="flex gap-1.5 text-xs" role="note">
+              <Info aria-hidden className="mt-0.5 h-3 w-3 shrink-0 text-muted-foreground" />
+              <span>{t('lengthOutOfReach', { ...outOfReach })}</span>
             </p>
           )}
         </RunCard>
