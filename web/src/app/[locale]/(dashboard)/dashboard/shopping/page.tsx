@@ -92,6 +92,7 @@ import { PLATFORM_LABELS } from '@/config/platform-labels';
 import { formatRegionDisplay } from '@/lib/region';
 import type { AmazonShareDropAlert } from '@/lib/shopping-amazon-share-alert';
 import { HeaderWithAiUsage } from '@/components/ai-usage/ai-usage-meter';
+import { ShoppingMarketSwitch, useShoppingMarket } from './_market-switch';
 
 const DATE_PRESETS: ShoppingDatePreset[] = ['7d', '30d', '90d', 'all'];
 
@@ -116,6 +117,7 @@ export default function ShoppingPage() {
   const [datePreset, setDatePreset] = useState<ShoppingDatePreset>('30d');
   const [platform, setPlatform] = useState<string>('all');
   const [region, setRegion] = useState<string>('all');
+  const shoppingMarket = useShoppingMarket(activeBrandId, region);
 
   const [filterOpts, setFilterOpts] = useState<{ platforms: string[]; regions: string[] }>({
     platforms: [],
@@ -123,7 +125,9 @@ export default function ShoppingPage() {
   });
   const [kpis, setKpis] = useState<ShoppingKpis | null>(null);
   const [charts, setCharts] = useState<ShoppingChartData | null>(null);
-  const [loading, setLoading] = useState(false);
+  // True from the start: the first load waits for the market, and an idle
+  // page with no KPIs yet would read as empty.
+  const [loading, setLoading] = useState(true);
   const [amazonShareDropAlert, setAmazonShareDropAlert] = useState<AmazonShareDropAlert | null>(
     null,
   );
@@ -141,8 +145,9 @@ export default function ShoppingPage() {
       datePreset,
       platforms: platform === 'all' ? undefined : [platform],
       regions: region === 'all' ? undefined : [region],
+      chatgptMarket: shoppingMarket.filter,
     }),
-    [datePreset, platform, region],
+    [datePreset, platform, region, shoppingMarket.filter],
   );
 
   // Load filter options once per brand so the dropdowns only show
@@ -209,8 +214,9 @@ export default function ShoppingPage() {
   }, [activeBrandId, filters, hasFullAccess]);
 
   useEffect(() => {
+    if (!shoppingMarket.ready) return;
     void loadData();
-  }, [loadData]);
+  }, [loadData, shoppingMarket.ready]);
 
   // This alert always evaluates five consecutive rolling seven-day windows
   // ending at query time, independently of display/platform/region filters.
@@ -281,6 +287,14 @@ export default function ShoppingPage() {
         setRegion={setRegion}
         platformOpts={filterOpts.platforms}
         regionOpts={filterOpts.regions}
+      />
+
+      <ShoppingMarketSwitch
+        state={shoppingMarket}
+        onSelect={(market) => {
+          shoppingMarket.select(market);
+          setRegion('all');
+        }}
       />
 
       {isEmpty ? (

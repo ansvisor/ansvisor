@@ -6670,6 +6670,14 @@
     "filterRegion": "Region",
     "filterPlatform": "Platform",
     "filterDateRange": "Date range",
+    "market": {
+      "label": "ChatGPT Shopping market",
+      "us": "US",
+      "europe": "Europe",
+      "sourceLabel": "ChatGPT's product source:",
+      "sourceUs": "OpenAI product index · via Shopify",
+      "sourceEurope": "Google Shopping · via Merchant Center"
+    },
     "noBrandTitle": "No brand selected",
     "noBrandDescription": "Select or create a brand to see shopping card analytics for it.",
     "emptyTitle": "No shopping cards yet",

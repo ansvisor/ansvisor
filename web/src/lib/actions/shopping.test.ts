@@ -11,9 +11,18 @@ interface QueryState {
   eq: Record<string, unknown>;
   range?: [number, number];
   head?: boolean;
+  or?: string;
 }
 
 const PAGE_CAP = 1000;
+
+/** Applies the one `or` filter the actions build: `platform.neq.X,region.in.(A,B)`. */
+function keptByOr(filter: string | undefined, row: Record<string, unknown>): boolean {
+  if (!filter) return true;
+  const match = /^platform\.neq\.([^,]+),region\.in\.\((.*)\)$/.exec(filter);
+  if (!match) throw new Error(`unexpected or filter: ${filter}`);
+  return row.platform !== match[1] || match[2].split(',').includes(String(row.region));
+}
 
 let cards: Array<Record<string, unknown>> = [];
 let overviewRow: Record<string, unknown> = {};
@@ -33,8 +42,9 @@ function resolveQuery(state: QueryState) {
   if (state.table === 'prompt_result_shopping_cards') {
     const rows = cards.filter(
       (c) =>
-        state.eq.matched_brand_role === undefined ||
-        c.matched_brand_role === state.eq.matched_brand_role,
+        (state.eq.matched_brand_role === undefined ||
+          c.matched_brand_role === state.eq.matched_brand_role) &&
+        keptByOr(state.or, c),
     );
     if (state.head) return { data: null, count: rows.length, error: null };
     // Like PostgREST: an unpaged select still stops at the cap.
@@ -58,6 +68,10 @@ function fakeQueryBuilder(table: string) {
     gte: () => builder,
     lte: () => builder,
     in: () => builder,
+    or: (filter: string) => {
+      state.or = filter;
+      return builder;
+    },
     order: () => builder,
     range: (from: number, to: number) => {
       state.range = [from, to];
@@ -166,6 +180,71 @@ describe('getCompetitorSummary', () => {
       ['c-2', 300],
     ]);
     expect(summary[0].sov).toBeCloseTo(1500 / 2000);
+  });
+});
+
+describe('ChatGPT Shopping market (#1278)', () => {
+  const placed = (
+    i: number,
+    role: 'own' | 'competitor' | 'other',
+    platform: string,
+    region: string,
+    matched?: string,
+  ) => ({ ...card(i, role, matched), product_title: `Product ${i}`, platform, region });
+
+  it("keeps ChatGPT Shopping's cards to the market and leaves other platforms alone", async () => {
+    cards = [
+      placed(1, 'own', 'chatgpt-shopping', 'DE'),
+      placed(2, 'own', 'chatgpt-shopping', 'GB'),
+      placed(3, 'own', 'chatgpt-shopping', 'US'),
+      placed(4, 'own', 'chatgpt-shopping', 'TR'),
+      placed(5, 'own', 'copilot-web', 'TR'),
+      placed(6, 'own', 'google-aimode', 'US'),
+    ];
+    const products = await getOwnProducts('brand-1', {
+      datePreset: '30d',
+      chatgptMarket: 'europe',
+    });
+
+    expect(products.map((p) => p.product_title).sort()).toEqual([
+      'Product 1',
+      'Product 2',
+      'Product 5',
+      'Product 6',
+    ]);
+  });
+
+  it('counts US states as the US market', async () => {
+    cards = [
+      placed(1, 'own', 'chatgpt-shopping', 'US-CA'),
+      placed(2, 'own', 'chatgpt-shopping', 'DE'),
+    ];
+    const products = await getOwnProducts('brand-1', { datePreset: '30d', chatgptMarket: 'us' });
+
+    expect(products.map((p) => p.product_title)).toEqual(['Product 1']);
+  });
+
+  it('applies to the share-of-voice total as well as the competitor cards', async () => {
+    cards = [
+      placed(1, 'competitor', 'chatgpt-shopping', 'US', 'c-1'),
+      placed(2, 'competitor', 'chatgpt-shopping', 'FR', 'c-1'),
+      placed(3, 'other', 'chatgpt-shopping', 'FR'),
+      placed(4, 'other', 'copilot-web', 'FR'),
+    ];
+    const summary = await getCompetitorSummary('brand-1', {
+      datePreset: '30d',
+      chatgptMarket: 'us',
+    });
+
+    expect(summary[0]).toMatchObject({ competitor_id: 'c-1', card_count: 1 });
+    expect(summary[0].sov).toBeCloseTo(1 / 2);
+  });
+
+  it('adds no filter without a market', async () => {
+    cards = [placed(1, 'own', 'chatgpt-shopping', 'TR')];
+    await getOwnProducts('brand-1', { datePreset: '30d' });
+
+    expect(cardCalls.every((c) => c.or === undefined)).toBe(true);
   });
 });
 
