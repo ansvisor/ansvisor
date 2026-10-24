@@ -225,22 +225,30 @@ One request per page:
     "metaTitle": "Pour-over coffee: a step-by-step guide",
     "metaDescription": "Pour slowly in circles for an even extraction.",
     "html": "<p>Pour slowly in circles for an even extraction.</p>…",
+    "jsonLd": [{ "@context": "https://schema.org", "@type": "HowTo", "name": "How to brew pour-over coffee" }],
     "author": "Ada Lovelace",
-    "featuredImage": { "src": "https://cdn.example.com/cup.jpg", "alt": "A cup of pour-over coffee" }
+    "featuredImage": { "src": "https://cdn.example.com/cup.jpg", "alt": "A cup of pour-over coffee" },
+    "method": "optimize",
+    "sourceUrl": "https://www.acme.example/blog/pour-over-coffee",
+    "pageType": "guide",
+    "language": "en"
   },
-  "brand": { "name": "Acme", "domain": "acme.example", "industry": "Food & Beverage" },
-  "callback_url": "https://api.example.com/webhooks/content-drafts/<delivery id>/published",
+  "brand": { "id": "uuid", "name": "Acme", "domain": "acme.example", "industry": "Food & Beverage" },
+  "callback_url": "https://api.example.com/webhooks/content-drafts/<delivery id>/status",
   "callback_method": "POST"
 }
 ```
 
 - `schemaVersion` is the package's format, `1` today.
 - `delivery.batchId` is shared by the pages sent in one request of several pages (a bulk send); it is `null` for a page sent on its own.
-- `page.html` is the page ready to publish, as **Export** gives it: placeholders filled, without its H1 (the title field carries it), with the brand's byline line when it adds the byline to its content. Ansvisor cleans it once more before sending: no scripts except JSON-LD, no frames, forms or event handlers, and links only to `http`, `https`, `mailto` and `tel`.
+- `page.html` is the page ready to publish, as **Export** gives it: placeholders filled, without its H1 (the title field carries it), with the brand's byline line when it adds the byline to its content. Ansvisor cleans it once more before sending: no scripts except JSON-LD, no frames, forms or event handlers, and links only to `http`, `https`, `mailto`, `tel` or relative addresses (images may also be `data:image/…`).
+- `page.jsonLd` is the page's JSON-LD, each block parsed, or `[]`. Many CMS rich-text fields drop `<script>` from `page.html`, so add these to the post's head or its schema field.
 - `page.metaTitle` is the title when none was set. `page.author` is the page's author or the brand's team byline, or `null`. `page.featuredImage` is the page's first `https` image, or `null`.
+- `page.method` is `create` for a new page and `optimize` for one made from a live page, whose address is `page.sourceUrl` (otherwise `null`): update that post rather than creating another. `page.pageType` is the page's type in the editor (`blog_post`, `guide`, `comparison`…), or `null`.
+- `page.language` is a two-letter code: the page's **Language** rule when it is on (the workspace's **My rules** for a page whose rules no one has changed), otherwise the brand's language, otherwise `en`.
 - `callback_url` and `callback_method` are `null` when the webhook has no secret key.
 
-#### Report where the page went live
+#### Report how it went
 
 When the page is live, send its address to `callback_url`:
 
@@ -248,13 +256,20 @@ When the page is live, send its address to `callback_url`:
 curl -X POST "<callback_url>" \
   -H "Content-Type: application/json" \
   -H "X-Webhook-Secret: <your secret key>" \
-  -d '{ "url": "https://www.example.com/blog/pour-over-coffee" }'
+  -d '{ "status": "published", "url": "https://www.example.com/blog/pour-over-coffee", "externalId": "812" }'
+```
+
+If your CMS refused the post, say so instead:
+
+```json
+{ "status": "failed", "reason": "The slug is already taken" }
 ```
 
 - The `X-Webhook-Secret` must be the secret of an active webhook of the brand that receives `content_draft.sent`. An unknown delivery, a missing webhook and a wrong secret all answer 401.
-- `url` must be an `http` or `https` address, up to 2,048 characters. Anything else answers 400.
-- The send is marked **published** with that address. When it is the page's latest send, the draft becomes **Published** too and the Library links to the page. A late callback for an older send doesn't move the page's address back.
-- You can call back before answering the webhook, or later. The callback has the same limits as the opportunity callback: 1,200 requests per 15 minutes per secret, and 10 failed attempts per 15 minutes per IP.
+- `status` is `published` or `failed`. `published` needs `url`: an `http` or `https` address without sign-in details, up to 2,048 characters as a browser reads it. `externalId` (optional) is your CMS's id for the post, as text up to 200 characters or a whole number, and `reason` (optional, up to 500 characters) says why it failed. A field sent empty or as `null` counts as left out. Anything else answers 400.
+- `published` marks the send **published** with that address. When it is the page's latest send, the draft becomes **Published** too, the Library links to the page, and the page as published is kept in the editor's **History**. A late callback for an older send doesn't move the page's address back, and the same callback sent again changes nothing.
+- `failed` marks the send **failed** with your reason, and the Library shows it. A send already marked published stays published. A callback that lands before your webhook answers keeps its word: the answer doesn't mark that send **sent** afterwards.
+- You can call back before answering the webhook, or later. The callback shares the opportunity callback's limits: 1,200 requests per 15 minutes per secret for both together, and 10 failed attempts per 15 minutes per IP.
 
 ### `webhook.test`
 
@@ -275,7 +290,7 @@ The test uses the URL and secret currently in the form, so you can check an endp
 - Respond with a 2xx status quickly and do slow work after responding.
 - `content_draft.sent`:
   - A 2xx answer marks the send **sent**. Anything else, or no answer, marks it **failed**, and the Library shows why. Redirects aren't followed, and the first 2,000 characters of the answer are kept.
-  - A single page is sent while the person waits. A bulk send (up to 25 pages) goes on in the background, one page after another.
+  - A single page is sent while the person waits. A bulk send (up to 25 pages) goes on in the background, one page after another, with a 2-second pause between pages.
   - A workspace can send 200 pages in 24 hours.
   - On Ansvisor Cloud the webhook must be a public address. A self-hosted install may also use addresses on its own network.
 

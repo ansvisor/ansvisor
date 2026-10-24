@@ -42,7 +42,7 @@ The page goes as **Export** makes it: the HTML without its H1 (your CMS's title 
 
 In the **Library**, tick the rows to send (up to 25 at once) and click **Send to CMS** in the bar above the table. The dialog lists each page as **Ready**, or says why it can't go. A page that can't go is left out; fix it in the editor. Each page goes with the slug and meta of its last send, or the page's own.
 
-The pages are sent one after another in the background. The dialog follows them and says how many went, and you can close it at any time: the Library keeps following them.
+The pages are sent one after another in the background, with a short pause between them so your CMS isn't flooded. The dialog follows them and says how many went, and you can close it at any time: the Library keeps following them.
 
 A workspace can send **200 pages in 24 hours**.
 
@@ -54,7 +54,7 @@ Beside each row's status, the Library shows its last send:
 |---|---|
 | Clock | On its way. |
 | Paper plane | Your workflow took it (it answered with a 2xx status). |
-| Red warning | It failed. Hover it to see what your workflow answered, or why it couldn't be reached. |
+| Red warning | It failed. Hover it to see what your workflow answered or reported, or why it couldn't be reached. |
 | Blue link | Published. Click it to open the live page. |
 
 ## Build the workflow
@@ -73,9 +73,10 @@ Every workflow has the same three steps:
    | SEO / meta description | `page.metaDescription` |
    | Author | `page.author` |
    | Featured image | `page.featuredImage.src` (alt text in `page.featuredImage.alt`) |
+   | Schema / head code | `page.jsonLd` |
 
-   Create it as a **draft** if someone should review it in the CMS first.
-3. **Report** where it went live: when the post is published, send `POST` to the package's `callback_url` with `{ "url": "https://www.example.com/blog/pour-over" }` and your secret in the `X-Webhook-Secret` header.
+   Create it as a **draft** if someone should review it in the CMS first. When `page.method` is `optimize`, the page was made from the live page at `page.sourceUrl`: update that post instead of creating a new one.
+3. **Report** how it went: when the post is published, send `POST` to the package's `callback_url` with `{ "status": "published", "url": "https://www.example.com/blog/pour-over" }` and your secret in the `X-Webhook-Secret` header. If your CMS refused it, send `{ "status": "failed", "reason": "…" }` instead.
 
    If the post is published later, run this step from your CMS's "post published" trigger. Keep the package's `delivery.id`, or the `callback_url` itself, with the post so the trigger can find it.
 
