@@ -1655,7 +1655,7 @@ export function DraftEditor({
     );
   };
 
-  /** Export: the page as Copy HTML gives it, as a Word, HTML or Markdown file. */
+  /** Export: the page as Copy HTML gives it, as a Word, Excel, CSV, HTML or Markdown file. */
   const exportPage = async (format: DraftExportFormat) => {
     if (!editor) return;
     const html = publishableHtml(
@@ -1663,7 +1663,10 @@ export function DraftEditor({
     );
     const name = title.trim() || t('untitled');
     try {
-      saveBlob(await draftExportBlob(format, name, html), draftExportFileName(name, format));
+      saveBlob(
+        await draftExportBlob(format, name, html, undefined, draft.sourceUrl),
+        draftExportFileName(name, format),
+      );
     } catch (err) {
       console.error('Failed to export the page:', err);
       toast.error(t('export.failed'));
@@ -2683,8 +2686,9 @@ export function DraftEditor({
           html={sendOpen.html}
           sourceUrl={draft.sourceUrl}
           author={pageAuthor}
-          // Until the authors are read, who it is by isn't known.
-          teamByline={authorsRead ? t('author.organization', { brand: brandName }) : ''}
+          // Until the authors are read, who it is by isn't known. It goes to
+          // the CMS's author field, so in the page's language, as Export's.
+          teamByline={authorsRead ? teamName(language, brandName) : ''}
           byline={contentByline}
           onFillNow={() => {
             setSendOpen(null);

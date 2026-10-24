@@ -1758,10 +1758,12 @@ describe('the content editor', () => {
     const items = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')];
     expect(items.map((i) => i.textContent)).toEqual([
       'Export Word',
+      'Export Excel',
+      'Export CSV',
       'Export HTML',
       'Export Markdown',
     ]);
-    await act(async () => items[2].click());
+    await act(async () => items[4].click());
     await act(async () => {});
 
     expect(saveBlob).toHaveBeenCalledTimes(1);
@@ -3479,6 +3481,23 @@ describe('the side panel', () => {
       expect(dialog()).toBeNull();
     });
 
+    it('names the team in the page’s language in the CMS author field, as Export does', async () => {
+      process.env.NEXT_PUBLIC_CONTENT_QUALITY_PHASE = '1';
+      brandState.brands = [{ id: 'b1', language: 'tr' } as never, { id: 'b2' }];
+      try {
+        getContentDraft.mockResolvedValue(draft({ pageType: 'blog_post' }));
+        await renderPage();
+        await act(async () => button('Send to CMS')!.click());
+        await act(async () => inDialog('Continue to send').click());
+        await act(async () => inDialog('Send').click());
+        expect(sendPagesToCms).toHaveBeenCalledWith('b1', [
+          expect.objectContaining({ draftId: 'd1', author: 'Acme Ekibi' }),
+        ]);
+      } finally {
+        brandState.brands = [{ id: 'b1' }, { id: 'b2' }];
+      }
+    });
+
     it('opens Before you publish first while Quality is on', async () => {
       process.env.NEXT_PUBLIC_CONTENT_QUALITY_PHASE = '1';
       getContentDraft.mockResolvedValue(draft({ pageType: 'blog_post' }));
@@ -3622,7 +3641,7 @@ describe('the side panel', () => {
       expect(dialog()!.textContent).toContain('Content · ready to paste');
       expect(dialog()!.textContent).toContain('Meta titlePipeline forecasting');
       expect(dialog()!.textContent).toContain('AuthorAcme Team → your CMS author field');
-      expect(inDialog('Copy for Webflow').disabled).toBe(false);
+      expect(inDialog('Download Word').disabled).toBe(false);
     });
 
     it('names the team in the page’s language in the CMS author field', async () => {
@@ -3729,7 +3748,7 @@ describe('the side panel', () => {
       expect(dialog()!.textContent).toContain(ready);
       await act(async () => inDialog('Continue to export').click());
       expect(dialog()!.querySelector('[role="alert"]')).toBeNull();
-      expect(inDialog('Copy for Webflow').disabled).toBe(false);
+      expect(inDialog('Download Word').disabled).toBe(false);
       await act(async () => inDialog('Cancel').click());
       await act(async () => button('Mark ready')!.click());
       expect(dialog()!.textContent).toContain(ready);

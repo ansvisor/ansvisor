@@ -38529,3 +38529,313 @@ comment on table public.content_quality_claims is
 
 notify pgrst, 'reload schema';
 
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00267_shopping_overview_chatgpt_market.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- Shopping: keep ChatGPT Shopping to one market in the Overview (#1278).
+--
+-- ChatGPT Shopping picks products differently by market (the US from OpenAI's
+-- product index, Europe from Google Shopping), so the Shopping page has a
+-- US / Europe switch that keeps ChatGPT Shopping's cards to the market's
+-- regions. The card reads apply it as a PostgREST filter; the Overview's KPIs
+-- and charts come from this function, whose `p_regions` narrows every
+-- platform. `p_chatgpt_regions` narrows ChatGPT Shopping's results and cards
+-- only and lets every other platform through. Null, the default, changes
+-- nothing: a call without it reads exactly what it did before.
+--
+-- APPLY BEFORE DEPLOYING THE WEB. The new web passes `p_chatgpt_regions`, which
+-- the old function doesn't have; the old web's calls match the new function,
+-- since the parameter has a default.
+--
+-- A new parameter makes a new overload under create or replace, and PostgREST
+-- would then have two candidates for one call. So the 6-argument version is
+-- dropped first, and the new one gets the grants it had. The body is 00115's,
+-- with one condition added to the results, cards and trend.
+
+drop function if exists public.shopping_overview(
+  uuid, timestamptz, timestamptz, text[], text[], timestamptz
+);
+
+create or replace function public.shopping_overview(
+  p_brand_id uuid,
+  p_from timestamptz default null,
+  p_to timestamptz default null,
+  p_platforms text[] default null,
+  p_regions text[] default null,
+  p_trend_from timestamptz default null,
+  p_chatgpt_regions text[] default null
+) returns jsonb
+language plpgsql
+stable
+set search_path to 'public'
+set plan_cache_mode to 'force_custom_plan'
+as $$
+begin
+  return (
+    with results as materialized (
+      select r.id, r.platform
+      from public.prompt_results r
+      where r.brand_id = p_brand_id
+        and (p_from is null or r.created_at >= p_from)
+        and (p_to is null or r.created_at <= p_to)
+        and (p_platforms is null or r.platform = any (p_platforms))
+        and (p_regions is null or r.region = any (p_regions))
+        and (p_chatgpt_regions is null or r.platform <> 'chatgpt-shopping'
+             or r.region = any (p_chatgpt_regions))
+    ),
+    by_platform as (
+      select res.platform,
+             count(*) as total_results,
+             count(*) filter (where exists (
+               select 1 from public.prompt_result_shopping_cards c
+               where c.prompt_result_id = res.id
+             )) as results_with_cards
+      from results res
+      group by res.platform
+    ),
+    cards as materialized (
+      select c.matched_brand_role, c.merchant_domain
+      from public.prompt_result_shopping_cards c
+      where c.brand_id = p_brand_id
+        and (p_from is null or c.created_at >= p_from)
+        and (p_to is null or c.created_at <= p_to)
+        and (p_platforms is null or c.platform = any (p_platforms))
+        and (p_regions is null or c.region = any (p_regions))
+        and (p_chatgpt_regions is null or c.platform <> 'chatgpt-shopping'
+             or c.region = any (p_chatgpt_regions))
+    ),
+    top_merchant as (
+      select merchant_domain, count(*) as card_count
+      from cards
+      where matched_brand_role = 'own' and merchant_domain is not null
+      group by merchant_domain
+      order by count(*) desc, merchant_domain
+      limit 1
+    ),
+    trend as (
+      select (c.created_at at time zone 'UTC')::date as day,
+             count(*) filter (where c.matched_brand_role = 'own') as own_cards,
+             count(*) as total_cards
+      from public.prompt_result_shopping_cards c
+      where c.brand_id = p_brand_id
+        and p_trend_from is not null
+        and c.created_at >= p_trend_from
+        and (p_platforms is null or c.platform = any (p_platforms))
+        and (p_regions is null or c.region = any (p_regions))
+        and (p_chatgpt_regions is null or c.platform <> 'chatgpt-shopping'
+             or c.region = any (p_chatgpt_regions))
+      group by 1
+    )
+    select jsonb_build_object(
+      'total_results',       coalesce((select sum(total_results) from by_platform), 0),
+      'results_with_cards',  coalesce((select sum(results_with_cards) from by_platform), 0),
+      'total_cards',         (select count(*) from cards),
+      'own_cards',           (select count(*) from cards where matched_brand_role = 'own'),
+      'top_merchant',        (select jsonb_build_object('domain', merchant_domain,
+                                                        'card_count', card_count)
+                              from top_merchant),
+      'by_platform', coalesce(
+        (select jsonb_agg(jsonb_build_object(
+                  'platform',           platform,
+                  'total_results',      total_results,
+                  'results_with_cards', results_with_cards)
+                order by platform)
+         from by_platform),
+        '[]'::jsonb),
+      'trend', coalesce(
+        (select jsonb_agg(jsonb_build_object(
+                  'day',         day,
+                  'own_cards',   own_cards,
+                  'total_cards', total_cards)
+                order by day)
+         from trend),
+        '[]'::jsonb)
+    )
+  );
+end;
+$$;
+
+grant execute on function public.shopping_overview(
+  uuid, timestamptz, timestamptz, text[], text[], timestamptz, text[]
+) to public, anon, authenticated, service_role;
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00268_shopping_merchant_split.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- Shopping: where AI sends shoppers, and resellers cheaper than the brand (#1277).
+--
+-- 00225 stores each card's destination (merchant_kind, marketplace,
+-- listing_id). Two reads over the brand's own products (cards with
+-- matched_brand_role = 'own') build on it, in the Overview tab's window and
+-- filters (p_from, p_to, p_platforms, p_regions and ChatGPT Shopping's market,
+-- p_chatgpt_regions, as in shopping_overview since 00267):
+--
+--   1. shopping_merchant_split: the cards per destination (your store,
+--      Amazon, Walmart, eBay, other marketplaces, other resellers). Cards
+--      with no merchant URL (merchant_kind null) are counted apart, never
+--      spread over the segments, so the segments add up to the classified
+--      cards.
+--   2. shopping_own_product_offers: the lowest price per merchant, listing,
+--      title and currency, with the link of the card that showed it. The web
+--      app matches these offers to the brand's store and flags the cheaper
+--      resellers (web/src/lib/shopping-reseller-price-alert.ts).
+--
+-- Both are aggregated here, not read as rows: PostgREST caps rows at 1,000,
+-- and the offers come back as one jsonb value for the same reason. On the
+-- largest brands the own products are a few hundred cards a quarter, read
+-- through the (brand_id, matched_brand_role) indexes.
+--
+-- Security definer behind the same membership check as
+-- shopping_amazon_share_weekly (00225), its sibling over these columns: the
+-- check runs once, a non-member gets no rows (or an empty list), and the
+-- reads below use the indexes without the per-row RLS filter.
+--
+-- Apply after 00267 and before deploying the web: the web passes
+-- p_chatgpt_regions to both, as it does to shopping_overview.
+
+create or replace function public.shopping_merchant_split(
+  p_brand_id uuid,
+  p_from timestamptz default null,
+  p_to timestamptz default null,
+  p_platforms text[] default null,
+  p_regions text[] default null,
+  p_chatgpt_regions text[] default null
+)
+returns table (
+  own_store_cards bigint,
+  amazon_cards bigint,
+  walmart_cards bigint,
+  ebay_cards bigint,
+  other_marketplace_cards bigint,
+  reseller_cards bigint,
+  unclassified_cards bigint
+)
+language plpgsql
+stable
+security definer
+set search_path to 'public'
+set plan_cache_mode to 'force_custom_plan'
+as $$
+begin
+  if auth.role() is distinct from 'service_role' and not exists (
+    select 1
+    from public.brands b
+    join public.profiles pf on pf.organization_id = b.organization_id
+    where b.id = p_brand_id
+      and pf.id = auth.uid()
+  ) then
+    return;
+  end if;
+
+  return query
+  select
+    count(*) filter (where c.merchant_kind = 'own'),
+    count(*) filter (where c.merchant_kind = 'marketplace' and c.marketplace = 'amazon'),
+    count(*) filter (where c.merchant_kind = 'marketplace' and c.marketplace = 'walmart'),
+    count(*) filter (where c.merchant_kind = 'marketplace' and c.marketplace = 'ebay'),
+    count(*) filter (where c.merchant_kind = 'marketplace'
+                       and coalesce(c.marketplace, '') not in ('amazon', 'walmart', 'ebay')),
+    count(*) filter (where c.merchant_kind = 'reseller'),
+    count(*) filter (where c.merchant_kind is null)
+  from public.prompt_result_shopping_cards c
+  where c.brand_id = p_brand_id
+    and c.matched_brand_role = 'own'
+    and (p_from is null or c.created_at >= p_from)
+    and (p_to is null or c.created_at <= p_to)
+    and (p_platforms is null or c.platform = any (p_platforms))
+    and (p_regions is null or c.region = any (p_regions))
+    and (p_chatgpt_regions is null or c.platform <> 'chatgpt-shopping'
+         or c.region = any (p_chatgpt_regions));
+end;
+$$;
+
+revoke all on function public.shopping_merchant_split(uuid, timestamptz, timestamptz, text[], text[], text[]) from public, anon;
+grant execute on function public.shopping_merchant_split(uuid, timestamptz, timestamptz, text[], text[], text[]) to authenticated, service_role;
+
+-- One entry per merchant offer of the brand's own products: the classified
+-- cards with a price, grouped by destination, listing, title (case and outer
+-- spaces aside) and currency. Repeat sightings of the same offer collapse to
+-- its lowest price, all the price rule needs, so the list stays short.
+create or replace function public.shopping_own_product_offers(
+  p_brand_id uuid,
+  p_from timestamptz default null,
+  p_to timestamptz default null,
+  p_platforms text[] default null,
+  p_regions text[] default null,
+  p_chatgpt_regions text[] default null
+)
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path to 'public'
+set plan_cache_mode to 'force_custom_plan'
+as $$
+begin
+  if auth.role() is distinct from 'service_role' and not exists (
+    select 1
+    from public.brands b
+    join public.profiles pf on pf.organization_id = b.organization_id
+    where b.id = p_brand_id
+      and pf.id = auth.uid()
+  ) then
+    return '[]'::jsonb;
+  end if;
+
+  return (
+    with offers as (
+      select
+        c.merchant_kind,
+        c.marketplace,
+        c.merchant_domain,
+        c.listing_id,
+        min(c.product_title) as product_title,
+        upper(btrim(c.price_currency)) as price_currency,
+        min(c.price_amount) as price_amount,
+        (array_agg(c.merchant_url order by c.price_amount, c.created_at desc))[1] as merchant_url
+      from public.prompt_result_shopping_cards c
+      where c.brand_id = p_brand_id
+        and c.matched_brand_role = 'own'
+        and c.merchant_kind is not null
+        and c.merchant_url is not null
+        and c.price_amount > 0
+        and nullif(btrim(c.price_currency), '') is not null
+        and (p_from is null or c.created_at >= p_from)
+        and (p_to is null or c.created_at <= p_to)
+        and (p_platforms is null or c.platform = any (p_platforms))
+        and (p_regions is null or c.region = any (p_regions))
+        and (p_chatgpt_regions is null or c.platform <> 'chatgpt-shopping'
+             or c.region = any (p_chatgpt_regions))
+      group by
+        c.merchant_kind,
+        c.marketplace,
+        c.merchant_domain,
+        c.listing_id,
+        lower(btrim(c.product_title)),
+        upper(btrim(c.price_currency))
+    )
+    -- Without both a store offer and another merchant's there is nothing to
+    -- compare: return an empty list rather than every store offer.
+    select coalesce(
+      jsonb_agg(jsonb_build_object(
+        'merchant_kind',   o.merchant_kind,
+        'marketplace',     o.marketplace,
+        'merchant_domain', o.merchant_domain,
+        'merchant_url',    o.merchant_url,
+        'listing_id',      o.listing_id,
+        'product_title',   o.product_title,
+        'price_amount',    o.price_amount,
+        'price_currency',  o.price_currency)),
+      '[]'::jsonb)
+    from offers o
+    where exists (select 1 from offers x where x.merchant_kind = 'own')
+      and exists (select 1 from offers x where x.merchant_kind <> 'own')
+  );
+end;
+$$;
+
+revoke all on function public.shopping_own_product_offers(uuid, timestamptz, timestamptz, text[], text[], text[]) from public, anon;
+grant execute on function public.shopping_own_product_offers(uuid, timestamptz, timestamptz, text[], text[], text[]) to authenticated, service_role;
+
+notify pgrst, 'reload schema';
+

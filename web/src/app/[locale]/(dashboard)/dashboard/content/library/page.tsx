@@ -76,7 +76,6 @@ interface LibraryRead {
  */
 export default function ContentLibraryPage() {
   const t = useTranslations('contentEditor.library');
-  const tEditor = useTranslations('contentEditor.editor');
   const router = useRouter();
   const activeBrandId = useBrandStore((s) => s.activeBrandId);
   const activeBrand = useBrandStore((s) => s.brands.find((b) => b.id === s.activeBrandId));
@@ -203,7 +202,6 @@ export default function ContentLibraryPage() {
       draftIds: [draft.id],
       brandName: activeBrand?.name ?? '',
       brandLanguage: activeBrand?.language,
-      teamByline: (brand) => tEditor('author.organization', { brand }),
     }).then(
       (sources) => sources.get(draft.id) ?? null,
       (err) => {
