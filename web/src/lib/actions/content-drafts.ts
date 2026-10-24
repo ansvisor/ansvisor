@@ -1359,6 +1359,29 @@ export async function markContentDraftReady(
 }
 
 /**
+ * Ready, clicked in the editor's header (Next step spec §3b): the page goes
+ * back to review, only while it is still ready. One published from the
+ * Library meanwhile keeps its status. Returns the status the draft has after.
+ * The task Mark ready completed stays done.
+ */
+export async function unmarkContentDraftReady(id: string): Promise<DraftStatus> {
+  if (!draftId.safeParse(id).success) throw new Error('invalid');
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from('content_drafts')
+    .update({ status: 'in_review' })
+    .eq('id', id)
+    .eq('status', 'ready')
+    .select('status')
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  if (data) return draftStatus(data.status);
+  const current = await getContentDraft(id);
+  if (!current) throw new Error('not_found');
+  return current.status;
+}
+
+/**
  * Keeps the draft as it is now in its History (CE-018, 00215
  * content_draft_snapshot). A failure is logged, not thrown: the step it
  * records has already happened.
