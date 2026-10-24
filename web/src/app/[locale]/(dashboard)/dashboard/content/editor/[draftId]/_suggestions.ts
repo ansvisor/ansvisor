@@ -10,7 +10,7 @@ import { Decoration, DecorationSet } from '@tiptap/pm/view';
 import { cleanHtml } from '@/lib/content/clean-html';
 import { passageKey } from '@/lib/content/cited-passages';
 import { normalizeDomain } from '@/lib/citations/classify';
-import type { DraftSourceKind } from '@/lib/content/sources';
+import type { SuggestionSourceKind } from '@/lib/content/sources';
 import {
   growsPastLimit,
   type DraftSuggestion,
@@ -50,7 +50,7 @@ export interface SuggestionLabels {
   /** "Based on": before the sources a suggestion was written from. */
   basedOn: string;
   /** Each kind of source, as a chip names it: "Fan-out", "Cited page"… */
-  sourceKinds: Record<DraftSourceKind, string>;
+  sourceKinds: Record<SuggestionSourceKind, string>;
   /** "Source 2: …": a mark's label for a screen reader. */
   sourceMark: (n: number, label: string) => string;
   /** What the Sources tab knows of a source, on hover ("Cited 12× in AI answers"), or null. */
@@ -356,7 +356,7 @@ function el<K extends keyof HTMLElementTagNameMap>(
 /** Linked words on a card: underlined, the address on hover. */
 const LINKED = 'underline decoration-dotted underline-offset-2';
 
-/** What opens a source in the Sources tab, from a chip or a mark. */
+/** What opens a source in the Sources tab (Brief › Your input for the person's own), from a chip or a mark. */
 type OpenSource = (source: SuggestionSource) => void;
 
 /** A source as a chip names it: a cited page by its site, the others by their words. */

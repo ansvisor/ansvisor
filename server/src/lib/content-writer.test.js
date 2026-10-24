@@ -421,6 +421,50 @@ describe('runDraftWriting on a new page', () => {
     ]);
   });
 
+  it("writes from Brief › Your input in Quality's second phase, its numbers and people kept (CE-048)", async () => {
+    rows.content_draft_inputs = {
+      experience: null,
+      data: [{ name: 'Survey', rows: [['Teams'], ['1,250']] }],
+      ansvisor_data: [],
+      quotes: [
+        {
+          name: 'Ada Lovelace',
+          title: 'Head of Research, Acme',
+          text: 'We cut our forecast misses in half.',
+          sourceUrl: 'https://acme.example/talk',
+        },
+      ],
+    };
+    generateObject.mockResolvedValue({
+      object: {
+        ...page,
+        intro: [
+          '1,250 teams brew this way. “We cut our forecast misses in half,” says Ada Lovelace.',
+          'Marco Rossi said 3,400 cups a day.',
+        ],
+      },
+      usage: { inputTokens: 10, outputTokens: 20 },
+    });
+    const before = process.env.CONTENT_QUALITY_PHASE;
+    process.env.CONTENT_QUALITY_PHASE = '2';
+    try {
+      await expect(run(draftRow())).resolves.toEqual({ written: true });
+    } finally {
+      if (before === undefined) delete process.env.CONTENT_QUALITY_PHASE;
+      else process.env.CONTENT_QUALITY_PHASE = before;
+    }
+    expect(generateObject.mock.calls[0][0].prompt).toContain(
+      '"Survey" (Their own data, a table: Teams; 1,250)',
+    );
+    const written = draftUpdates().find((u) => u.body_html)?.body_html;
+    expect(written).toContain(
+      '1,250 teams brew this way. “We cut our forecast misses in half,” says Ada Lovelace.',
+    );
+    // What the person didn't give is still a placeholder.
+    expect(written).not.toContain('Marco Rossi');
+    expect(written).not.toContain('3,400');
+  });
+
   it('leaves a draft marked ready during the run as it is', async () => {
     finished = null;
     await expect(run(draftRow())).resolves.toEqual({ skipped: true });
