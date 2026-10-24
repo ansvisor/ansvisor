@@ -94,14 +94,19 @@ export interface CmsStatus {
   publishedUrl: string | null;
 }
 
-/** Ids a read takes, so its address stays short. */
-const STATUS_IDS_PER_READ = 100;
-/** Sends a read takes, newest first: a draft sent many times has more. */
-const STATUS_ROWS_PER_READ = 1000;
+/** Ids a read takes: content_draft_last_deliveries (00262) reads up to 500. */
+const STATUS_IDS_PER_READ = 500;
+/**
+ * A send still queued after this was left by a server that stopped mid-batch
+ * (00262 closes it at the workspace's next send): it reads as interrupted,
+ * so the Library neither waits on it nor says it is still going.
+ */
+const INTERRUPTED_AFTER_MS = 15 * 60_000;
 
 /**
- * Each draft's last send, for the Library's rows. A read that fails (its
- * table not there yet, 00262) leaves its drafts with none.
+ * Each draft's last send, for the Library's rows: one row a draft, however
+ * often it was sent. A read that fails (its function not there yet, 00262)
+ * leaves its drafts with none.
  */
 export async function readCmsStatuses(draftIds: string[]): Promise<Map<string, CmsStatus>> {
   const supabase = createClient();
@@ -110,31 +115,23 @@ export async function readCmsStatuses(draftIds: string[]): Promise<Map<string, C
     chunks.push(draftIds.slice(i, i + STATUS_IDS_PER_READ));
   }
   const reads = await Promise.all(
-    chunks.map((ids) =>
-      supabase
-        .from('content_draft_deliveries')
-        .select(
-          'draft_id, status, created_at, sent_at, published_at, http_status, error, published_url',
-        )
-        .in('draft_id', ids)
-        .order('created_at', { ascending: false })
-        .limit(STATUS_ROWS_PER_READ),
-    ),
+    chunks.map((ids) => supabase.rpc('content_draft_last_deliveries', { p_draft_ids: ids })),
   );
   const statuses = new Map<string, CmsStatus>();
+  const stale = Date.now() - INTERRUPTED_AFTER_MS;
   for (const { data, error } of reads) {
     if (error) {
       console.error('Failed to read the pages’ sends:', error);
       continue;
     }
     for (const row of data ?? []) {
-      // Newest first: a draft's first row is its last send.
-      if (!row.draft_id || statuses.has(row.draft_id)) continue;
+      if (!row.draft_id) continue;
+      const interrupted = row.status === 'queued' && Date.parse(row.created_at) < stale;
       statuses.set(row.draft_id, {
-        status: row.status as CmsDelivery['status'],
+        status: interrupted ? 'failed' : (row.status as CmsDelivery['status']),
         at: row.published_at ?? row.sent_at ?? row.created_at,
         httpStatus: row.http_status,
-        error: row.error,
+        error: interrupted ? 'Not sent: interrupted' : row.error,
         publishedUrl: row.published_url,
       });
     }
