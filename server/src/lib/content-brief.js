@@ -2,7 +2,7 @@ import { NoObjectGeneratedError, generateObject } from 'ai';
 import { z } from 'zod';
 import supabaseAdmin from '../config/supabase.js';
 import { resolveModel } from './ai-provider.js';
-import { pageTypeFormat } from './content-page-types.js';
+import { siteTypeLine, pageTypeFormat } from './content-page-types.js';
 import { getLanguageName } from './languages.js';
 import {
   RunStoppedError,
@@ -151,7 +151,9 @@ export async function rebuildDraftBrief({ draftId, brandId, sources }) {
   const [brandRes, promptsRes] = await Promise.all([
     supabaseAdmin
       .from('brands')
-      .select('name, industry, description, organization_id, language')
+      .select(
+        'name, industry, description, organization_id, language, site_type, shopping_mode_enabled',
+      )
       .eq('id', brandId)
       .single(),
     sources.promptIds.length
@@ -303,7 +305,7 @@ export function buildBriefPrompt({ brand, draft, prompts, sources }) {
   const list = (items) => (items.length ? items.map((item) => `- ${item}`).join('\n') : '- none');
   return `Brand: ${brand?.name || 'Unknown'}
 Industry: ${brand?.industry || 'Not specified'}
-Description: ${brand?.description || 'N/A'}
+${siteTypeLine(brand)}Description: ${brand?.description || 'N/A'}
 
 Page: ${draft.title || 'Untitled'}
 Page type: ${pageTypeFormat(draft.page_type)}

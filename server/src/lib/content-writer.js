@@ -20,7 +20,7 @@ import {
 import { contentBriefModelId, rebuildSources } from './content-brief.js';
 import { inputSources, readDraftInputs } from './content-inputs.js';
 import { linkAllowList, linkTargetsPrompt, readLinkTargets } from './content-links.js';
-import { pageTypeFormat } from './content-page-types.js';
+import { siteTypeLine, pageTypeFormat } from './content-page-types.js';
 import { authorWords, guardPeople, guardPeopleInHtml, knownPeople } from './content-people.js';
 import {
   INPUT_RULE,
@@ -273,7 +273,7 @@ export function buildWritePrompt({
       : `Write a new page titled about: ${draft.title || 'the questions below'}.`;
   return `Brand: ${brand?.name || 'Unknown'}
 Industry: ${brand?.industry || 'Not specified'}
-Description: ${brand?.description || 'N/A'}
+${siteTypeLine(brand)}Description: ${brand?.description || 'N/A'}
 
 Page type: ${pageTypeFormat(draft.page_type)}
 Length: about ${sources.length} characters.
@@ -405,7 +405,9 @@ export async function startDraftWriting({ draftId, brandId, input, rewrite = fal
 
   const { data: brand, error: brandError } = await supabaseAdmin
     .from('brands')
-    .select('name, industry, description, organization_id, language')
+    .select(
+      'name, industry, description, organization_id, language, site_type, shopping_mode_enabled',
+    )
     .eq('id', brandId)
     .single();
   if (brandError) throw brandError;

@@ -1,0 +1,93 @@
+---
+title: "Send to CMS"
+description: "Send Content Editor pages to your CMS through your workflow tool, and see where they went live."
+---
+
+**Send to CMS** sends a Content Editor page to your brand's webhook as a content package: the page ready to publish, its title, slug, meta title, meta description, author and featured image. Your workflow tool (n8n, Make, Zapier or your own endpoint) turns it into a post or page in your CMS. Ansvisor never publishes on its own: your workflow decides whether the page lands as a draft or goes live.
+
+When your workflow tells Ansvisor where the page went live, the draft becomes **Published** and its address shows in the Library.
+
+## Before you start
+
+1. Open **Content → Opportunities → Webhook Settings**.
+2. Enter your workflow's webhook URL.
+3. Set a **Secret key**. Ansvisor sends it with every request, signs each page with it, and your workflow needs it to report where a page went live.
+4. Tick **Content page sent**. It is off by default, so a workflow built for opportunities doesn't receive pages it doesn't expect.
+5. Save.
+
+Only **admins and managers** can send pages.
+
+## Send one page
+
+- **From the editor:** click the paper-plane icon in the header. If **Before you publish** opens first, check it and click **Continue to send**.
+- **From the Library:** open a row's **…** menu and pick **Send to CMS**.
+
+The dialog fills the fields from the page, and you can change them before sending:
+
+| Field | Filled from |
+|---|---|
+| **Slug** | The live page's address for an optimized page, else the title. Letters, digits, dots, `-` and `_`, up to 200 characters. |
+| **Meta title** | The title. |
+| **Meta description** | The page's first paragraph. |
+
+The slug and meta you send are kept on the draft, so the next send starts from them.
+
+The page goes as **Export** makes it: the HTML without its H1 (your CMS's title field carries it), with the byline line if your brand adds the byline to its content. Ansvisor holds the send while:
+
+- a placeholder such as `[figure, source]` is still open (**Fill now** goes to it);
+- the page has no title, or nothing under its title;
+- the slug can't be used.
+
+## Send several pages
+
+In the **Library**, tick the rows to send (up to 25 at once) and click **Send to CMS** in the bar above the table. The dialog lists each page as **Ready**, or says why it can't go. A page that can't go is left out; fix it in the editor. Each page goes with the slug and meta of its last send, or the page's own.
+
+The pages are sent one after another in the background, with a short pause between them so your CMS isn't flooded. The dialog follows them and says how many went, and you can close it at any time: the Library keeps following them. Very long pages go in more than one request, each once the one before has gone; closing the dialog while one waits stops the rest, and it says how many didn't go.
+
+A workspace can send **200 pages in 24 hours**.
+
+## See how a send went
+
+Beside each row's status, the Library shows its last send:
+
+| Icon | Meaning |
+|---|---|
+| Clock | On its way. |
+| Paper plane | Your workflow took it (it answered with a 2xx status). |
+| Red warning | It failed. Hover it to see what your workflow answered or reported, or why it couldn't be reached. |
+| Blue link | Published. Click it to open the live page. |
+
+## Build the workflow
+
+Every workflow has the same three steps:
+
+1. **Receive** the `content_draft.sent` package with a webhook trigger. Check the `X-Webhook-Secret` header, or the `X-Ansvisor-Signature` header, against your secret.
+2. **Create** the post in your CMS from `page`, for example:
+
+   | CMS field | Package field |
+   |---|---|
+   | Title | `page.title` |
+   | Body / content | `page.html` |
+   | Slug | `page.slug` |
+   | SEO title | `page.metaTitle` |
+   | SEO / meta description | `page.metaDescription` |
+   | Author | `page.author` |
+   | Featured image | `page.featuredImage.src` (alt text in `page.featuredImage.alt`) |
+   | Schema / head code | `page.jsonLd` |
+
+   Create it as a **draft** if someone should review it in the CMS first. When `page.method` is `optimize`, the page was made from the live page at `page.sourceUrl`: update that post instead of creating a new one.
+3. **Report** how it went: when the post is published, send `POST` to the package's `callback_url` with `{ "status": "published", "url": "https://www.example.com/blog/pour-over" }` and your secret in the `X-Webhook-Secret` header. If your CMS refused it, send `{ "status": "failed", "reason": "…" }` instead.
+
+   If the post is published later, run this step from your CMS's "post published" trigger. Keep the package's `delivery.id`, or the `callback_url` itself, with the post so the trigger can find it.
+
+Answer the webhook quickly, within 15 seconds, and do slow work afterwards. Ansvisor sends each page once and doesn't retry, so a failed send is sent again from the Library.
+
+<Tip>
+**n8n:** Webhook node → your CMS node (WordPress, Webflow, Ghost…) or an HTTP Request node → HTTP Request node to `{{$json.body.callback_url}}`.
+
+**Make:** Custom webhook → your CMS module → HTTP "Make a request" module to the callback URL.
+
+**Zapier:** Webhooks by Zapier "Catch Hook" → your CMS action → Webhooks by Zapier "POST" to the callback URL.
+</Tip>
+
+The package's fields, the signature and the callback are described in [Webhooks](/api-reference/webhooks).

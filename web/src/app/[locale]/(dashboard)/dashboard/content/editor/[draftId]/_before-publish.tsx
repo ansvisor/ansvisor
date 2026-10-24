@@ -58,9 +58,17 @@ export interface ReadyToPaste {
  * and schema), Ready to paste (no placeholders, images with alt text, links
  * that work), and for an article the JSON-LD to paste when the CMS doesn't
  * write one, from the page's facts only. Mark ready anyway is logged with
- * the Trust the page had; on Export it goes on to Export. Rendered only
- * while open.
+ * the Trust the page had; on Export it goes on to Export, and on Send to CMS
+ * to the Send dialog (#1331). Rendered only while open.
  */
+/** The below-60 warning, as each way on says what it does. */
+const WARNING = { markReady: 'warning', export: 'warningExport', send: 'warningSend' } as const;
+const WARNING_NO_REASON = {
+  markReady: 'warningNoReason',
+  export: 'warningNoReasonExport',
+  send: 'warningNoReasonSend',
+} as const;
+
 export function BeforePublish({
   mode = 'markReady',
   paste,
@@ -77,14 +85,14 @@ export function BeforePublish({
   onMarkReady,
   onFixFirst,
 }: {
-  /** Opened by Mark ready, or by Export. */
-  mode?: 'markReady' | 'export';
+  /** Opened by Mark ready, by Export, or by Send to CMS. */
+  mode?: 'markReady' | 'export' | 'send';
   paste: ReadyToPaste;
   /** Goes to the first placeholder, to fill it (Ready to paste's Fill now). */
   onFillNow: () => void;
   /** The byline line the brand puts in the content (Add byline to content), or null. */
   contentByline?: string | null;
-  /** Export's: goes on to it. */
+  /** Export's and Send's: goes on to them. */
   onContinue?: () => void;
   onClose: () => void;
   quality: QualityRead;
@@ -185,13 +193,15 @@ export function BeforePublish({
             <div className="min-w-0 space-y-1">
               <p>
                 {fix
-                  ? t(mode === 'export' ? 'warningExport' : 'warning', {
+                  ? t(WARNING[mode], {
                       trust,
                       reason: fix.line,
                       count: fix.count,
                       raised: trust + fix.gain,
                     })
-                  : t(mode === 'export' ? 'warningNoReasonExport' : 'warningNoReason', { trust })}
+                  : t(WARNING_NO_REASON[mode], {
+                      trust,
+                    })}
               </p>
               {mode === 'markReady' && <p className="text-xs opacity-80">{t('logged')}</p>}
             </div>
@@ -290,9 +300,9 @@ export function BeforePublish({
                 {t('fixFirst')}
               </Button>
             )}
-            {mode === 'export' ? (
+            {mode !== 'markReady' ? (
               <Button ref={markRef} onClick={onContinue}>
-                {t('continueExport')}
+                {mode === 'send' ? t('continueSend') : t('continueExport')}
               </Button>
             ) : (
               <Button
