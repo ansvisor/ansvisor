@@ -28,6 +28,7 @@ import {
   EstimateRange,
   createEstimateNoteHandle,
 } from '@/components/prompts/volume-estimate';
+import { HeaderWithAiUsage } from '@/components/ai-usage/ai-usage-meter';
 
 export default function SimilarTopicsPage() {
   const t = useTranslations('prompts.similarTopics');
@@ -87,25 +88,27 @@ export default function SimilarTopicsPage() {
 
   return (
     <div className="mx-auto max-w-6xl space-y-6 p-2 sm:p-6">
-      <div className="space-y-2">
-        <Link
-          href="/dashboard/prompts?tab=insights"
-          className={buttonVariants({
-            variant: 'ghost',
-            size: 'sm',
-            className: 'gap-2 px-0',
-          })}
-        >
-          <ArrowLeft className="h-4 w-4" />
-          Back to Prompt Insights
-        </Link>
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Similar Topics</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Keyword clusters aggregated across analyzed prompts.
-          </p>
+      <HeaderWithAiUsage>
+        <div className="space-y-2">
+          <Link
+            href="/dashboard/prompts?tab=insights"
+            className={buttonVariants({
+              variant: 'ghost',
+              size: 'sm',
+              className: 'gap-2 px-0',
+            })}
+          >
+            <ArrowLeft className="h-4 w-4" />
+            Back to Prompt Insights
+          </Link>
+          <div>
+            <h1 className="text-2xl font-semibold tracking-tight">Similar Topics</h1>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Keyword clusters aggregated across analyzed prompts.
+            </p>
+          </div>
         </div>
-      </div>
+      </HeaderWithAiUsage>
 
       <div className="grid gap-4 sm:grid-cols-3">
         <Card>

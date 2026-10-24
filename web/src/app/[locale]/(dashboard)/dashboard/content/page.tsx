@@ -1083,7 +1083,11 @@ export default function ContentPage() {
 
       {loading && opportunities.length === 0 ? (
         <div className="flex items-center justify-center min-h-[300px]">
-          <LoadingDots size="md" className="text-muted-foreground" />
+          <LoadingDots
+            size="md"
+            label={t('loadingOpportunities')}
+            className="text-muted-foreground"
+          />
         </div>
       ) : opportunities.length === 0 && !hasActiveFilters ? (
         <Card>

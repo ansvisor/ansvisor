@@ -71,6 +71,9 @@ for (const [address, prefix] of [
 for (const [address, prefix] of [
   ['::', 128],
   ['::1', 128],
+  // IPv4-compatible (::a.b.c.d) and IPv4-translated (::ffff:0:a.b.c.d) forms.
+  ['::', 96],
+  ['::ffff:0:0:0', 96],
   ['64:ff9b::', 96],
   ['100::', 64],
   ['2001::', 32],

@@ -1,7 +1,7 @@
 /**
  * The Content Editor and the Action Center, both ways (CE-022, spec §15): an
- * action's writing task opens a draft linked to the action, and marking that
- * draft Ready completes the task.
+ * action's writing task opens a draft linked to the action, marking that
+ * draft Ready completes the task, and taking Ready back opens it again.
  *
  * A draft is linked through content_drafts.action_id (00208). An action can
  * hold a new page's task and an existing page's, and name several pages: it
@@ -9,6 +9,7 @@
  */
 
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { CLOSED_ACTION_STATUSES, type ActionStatus } from '@/lib/action-center/registry';
 import type { DraftMethod, DraftStatus } from './drafts';
 
 /** The library tasks a draft is the work of, by the draft's method. */
@@ -149,4 +150,62 @@ export async function completeDraftTasks(
     actorId,
   );
   return todo.length;
+}
+
+/**
+ * Ready taken back (the editor's header, Next step spec §3b): the tasks for
+ * the draft's work that a draft's Ready completed go back to in progress,
+ * each in the action's History. A task whose latest change was a person's
+ * (in the drawer, or through the API) stays as it is, as do a deleted
+ * action's (00168) and a closed one's (completed or dismissed). Returns how
+ * many tasks it reopened.
+ */
+export async function reopenDraftTasks(
+  db: SupabaseClient,
+  draft: { id: string; brandId: string; actionId: string; method: DraftMethod },
+  actorId: string | null,
+): Promise<number> {
+  const { data: action, error: actionError } = await db
+    .from('actions')
+    .select('status')
+    .eq('id', draft.actionId)
+    .is('deleted_at', null)
+    .maybeSingle();
+  if (actionError) throw new Error(actionError.message);
+  if (!action || CLOSED_ACTION_STATUSES.includes(action.status as ActionStatus)) return 0;
+
+  const { data: tasks, error: tasksError } = await db
+    .from('action_tasks')
+    .select('id, status')
+    .eq('action_id', draft.actionId)
+    .in('task_key', [...DRAFT_TASK_KEYS[draft.method]]);
+  if (tasksError) throw new Error(tasksError.message);
+  const completed = (tasks ?? []).filter((task) => task.status === 'completed');
+  if (!completed.length) return 0;
+
+  const { data: events, error: eventsError } = await db
+    .from('action_events')
+    .select('data')
+    .eq('action_id', draft.actionId)
+    .eq('event', 'task_status')
+    .order('created_at', { ascending: false });
+  if (eventsError) throw new Error(eventsError.message);
+  // Each task's latest change, newest first: a draft's Ready names its draft.
+  const latest = new Map<string, { to?: unknown; draftId?: unknown }>();
+  for (const event of events ?? []) {
+    const data = event.data as { taskId?: unknown; to?: unknown; draftId?: unknown } | null;
+    if (typeof data?.taskId === 'string' && !latest.has(data.taskId)) latest.set(data.taskId, data);
+  }
+  const byReady = completed.filter((task) => {
+    const change = latest.get(task.id);
+    return change?.to === 'completed' && typeof change.draftId === 'string';
+  });
+  await setDraftTasksStatus(
+    db,
+    draft,
+    byReady.map((task) => task.id),
+    'in_progress',
+    actorId,
+  );
+  return byReady.length;
 }
