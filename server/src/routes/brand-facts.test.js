@@ -105,6 +105,13 @@ describe('/api/brand-facts', () => {
     expect((await send(`/${FACT}`, 'PATCH', { status: 'rejected' })).status).toBe(404);
   });
 
+  it('changes no fact of another workspace’s brand', async () => {
+    assertBrandAccess.mockRejectedValueOnce(Object.assign(new Error('Not yours'), { status: 403 }));
+    const res = await send(`/${FACT}`, 'PATCH', { status: 'approved' });
+    expect(res.status).toBe(403);
+    expect(setFactStatus).not.toHaveBeenCalled();
+  });
+
   it('logs a failure without the provider’s request', async () => {
     readBrandFacts.mockRejectedValueOnce(
       Object.assign(new Error('Bad Request'), {
