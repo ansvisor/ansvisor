@@ -104,9 +104,28 @@ const STATUS_IDS_PER_READ = 500;
 /**
  * A send still queued after this was left by a server that stopped mid-batch
  * (00262 closes it at the workspace's next send): it reads as interrupted,
- * so the Library neither waits on it nor says it is still going.
+ * so neither the Library nor the editor waits on it or says it is still
+ * going. Read by the browser's clock: one 15 minutes fast would read a send
+ * under way as interrupted, until its next read.
  */
 const INTERRUPTED_AFTER_MS = 15 * 60_000;
+
+/** A send as the Library and the editor read it: one left queued, as interrupted. */
+function lastSend(row: {
+  status: string;
+  created_at: string;
+  sent_at: string | null;
+  published_at: string | null;
+  error: string | null;
+}): { status: CmsDelivery['status']; at: string; error: string | null } {
+  const interrupted =
+    row.status === 'queued' && Date.parse(row.created_at) < Date.now() - INTERRUPTED_AFTER_MS;
+  return {
+    status: interrupted ? 'failed' : (row.status as CmsDelivery['status']),
+    at: row.published_at ?? row.sent_at ?? row.created_at,
+    error: interrupted ? 'Not sent: interrupted' : row.error,
+  };
+}
 
 /**
  * Each draft's last send, for the Library's rows: one row a draft, however
@@ -123,7 +142,6 @@ export async function readCmsStatuses(draftIds: string[]): Promise<Map<string, C
     chunks.map((ids) => supabase.rpc('content_draft_last_deliveries', { p_draft_ids: ids })),
   );
   const statuses = new Map<string, CmsStatus>();
-  const stale = Date.now() - INTERRUPTED_AFTER_MS;
   for (const { data, error } of reads) {
     if (error) {
       console.error('Failed to read the pages’ sends:', error);
@@ -131,12 +149,9 @@ export async function readCmsStatuses(draftIds: string[]): Promise<Map<string, C
     }
     for (const row of data ?? []) {
       if (!row.draft_id) continue;
-      const interrupted = row.status === 'queued' && Date.parse(row.created_at) < stale;
       statuses.set(row.draft_id, {
-        status: interrupted ? 'failed' : (row.status as CmsDelivery['status']),
-        at: row.published_at ?? row.sent_at ?? row.created_at,
+        ...lastSend(row),
         httpStatus: row.http_status,
-        error: interrupted ? 'Not sent: interrupted' : row.error,
         publishedUrl: row.published_url,
       });
     }
@@ -184,13 +199,7 @@ export async function readDraftCms(draftId: string): Promise<DraftCms | null> {
       metaDescription: draft.data.meta_description ?? undefined,
     },
     publishedUrl: draft.data.published_url,
-    last: delivery
-      ? {
-          status: delivery.status as CmsDelivery['status'],
-          at: delivery.published_at ?? delivery.sent_at ?? delivery.created_at,
-          error: delivery.error,
-        }
-      : null,
+    last: delivery ? lastSend(delivery) : null,
   };
 }
 

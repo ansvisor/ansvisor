@@ -177,6 +177,29 @@ describe('readDraftCms', () => {
     ]);
   });
 
+  it('reads a send left queued for over 15 minutes as interrupted, as the Library does', async () => {
+    reads = {
+      content_drafts: {
+        data: { slug: null, meta_title: null, meta_description: null, published_url: null },
+        error: null,
+      },
+      content_draft_deliveries: {
+        data: {
+          status: 'queued',
+          created_at: new Date(Date.now() - 16 * 60_000).toISOString(),
+          sent_at: null,
+          published_at: null,
+          error: null,
+        },
+        error: null,
+      },
+    };
+    expect((await readDraftCms('d1'))?.last).toMatchObject({
+      status: 'failed',
+      error: 'Not sent: interrupted',
+    });
+  });
+
   it('gives no last send when its read fails, and null when the draft’s does', async () => {
     reads = {
       content_drafts: {
@@ -186,7 +209,7 @@ describe('readDraftCms', () => {
       content_draft_deliveries: { data: null, error: { message: 'no such table' } },
     };
     expect((await readDraftCms('d1'))?.last).toBeNull();
-    // Before its columns are there (00262), the dialog fills the fields from the page.
+    // Before its columns are there (00262): null, and the dialog holds Send.
     reads.content_drafts = { data: null, error: { message: 'column "slug" does not exist' } };
     expect(await readDraftCms('d1')).toBeNull();
   });

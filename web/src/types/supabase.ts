@@ -4278,8 +4278,6 @@ export type Database = {
         Args: { p_ids: string[]; p_status: string }
         Returns: number
       }
-      content_draft_member: { Args: { p_draft_id: string }; Returns: boolean }
-      content_draft_restore: { Args: { p_version_id: string }; Returns: Json }
       content_draft_last_deliveries: {
         Args: { p_draft_ids: string[] }
         Returns: {
@@ -4308,6 +4306,8 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      content_draft_member: { Args: { p_draft_id: string }; Returns: boolean }
+      content_draft_restore: { Args: { p_version_id: string }; Returns: Json }
       content_draft_snapshot: {
         Args: { p_draft_id: string; p_origin: string }
         Returns: string
