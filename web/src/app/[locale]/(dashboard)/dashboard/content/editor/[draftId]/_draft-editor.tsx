@@ -1995,8 +1995,9 @@ export function DraftEditor({
     reads.brief.status !== 'loading' &&
     reads.sources !== null &&
     rules.ready &&
+    // Not the brand's facts: their first read of the site can take a minute,
+    // and their to-do (last, no points) joins when they land.
     (!qualityOn || (todosRead && siteTrustRead && linksPending === 0)) &&
-    factsState.status !== 'loading' &&
     // The proof to-dos (CE-049) come with the page's read, seconds after it opens.
     (!qualityOn || pageRead.settled);
   const staleSkips =
