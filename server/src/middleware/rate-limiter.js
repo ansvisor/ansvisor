@@ -72,8 +72,9 @@ export const linkCheckLimiter = rateLimit({
 });
 
 // The Content Editor's Quality checks read by AI (CE-046 part b on): the
-// editor asks a few seconds after a save. Each ask can cost a model call,
-// so it has its own bucket, smaller than the link check's.
+// editor asks a few seconds after a save. Each ask can cost model calls
+// (a call a site, MAX_SOURCE_SITES at most), so it has its own bucket,
+// smaller than the link check's.
 export const qualityCheckLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 30,

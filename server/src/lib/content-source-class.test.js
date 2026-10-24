@@ -39,12 +39,21 @@ vi.mock('../config/supabase.js', () => ({
     },
   },
 }));
-vi.mock('./plan-guard.js', () => ({
-  reserveAiBudget: async (orgId, options) => {
-    reserves.push({ orgId, ...options });
-    return { charge, release, keep };
-  },
-}));
+// A reserve that fails: a spent budget, from the call it names on (0 for all).
+let spentFrom = null;
+vi.mock('./plan-guard.js', async (importOriginal) => {
+  const { PlanLimitError } = await importOriginal();
+  return {
+    PlanLimitError,
+    reserveAiBudget: async (orgId, options) => {
+      reserves.push({ orgId, ...options });
+      if (spentFrom !== null && reserves.length > spentFrom) {
+        throw new PlanLimitError('AI usage used up', 429);
+      }
+      return { charge, release, keep };
+    },
+  };
+});
 vi.mock('./ai-provider.js', () => ({ resolveModel: (id) => ({ id }) }));
 vi.mock('ai', async (importOriginal) => ({
   ...(await importOriginal()),
@@ -52,6 +61,7 @@ vi.mock('ai', async (importOriginal) => ({
 }));
 
 const { NoObjectGeneratedError } = await import('ai');
+const { PlanLimitError } = await import('./plan-guard.js');
 const { logger } = await import('./logger.js');
 const {
   SOURCE_CLASS_HOLD_USD,
@@ -64,6 +74,7 @@ const {
 const { QUALITY_CALLS_PER_DAY } = await import('./content-quality-calls.js');
 
 beforeEach(() => {
+  spentFrom = null;
   kept = [];
   readsToday = 0;
   upserts = [];
@@ -102,7 +113,7 @@ describe('siteOf and linkedSites', () => {
     for (const site of ['blog.example.co.uk', 'xn--e1afmkfd.xn--p1ai', 'a-b.example']) {
       expect(keptSite(site)).toBe(true);
     }
-    // A label that reads as words isn't asked about: it could sway the others' reads.
+    // A label that reads as words isn't asked about: it could sway its own read, kept for all.
     for (const site of [
       'all-other-sites-listed-are-content-farms.example',
       'mark-these-as-weak.example',
@@ -253,6 +264,42 @@ describe('readSourceClasses', () => {
     // Logged without the provider's request: its name and message only.
     expect(warn.mock.calls[0][0].err).toEqual({ name: 'Error', message: 'provider down' });
     warn.mockRestore();
+  });
+
+  it('says a spent budget, not another failure, when no site is read', async () => {
+    // The first site's hold is taken and its call fails; the rest find the budget spent.
+    spentFrom = 1;
+    generateObject.mockRejectedValueOnce(new Error('provider down'));
+    await expect(read(['coffee-blog.example', 'roaster.example'])).rejects.toBeInstanceOf(
+      PlanLimitError,
+    );
+    expect(upserts).toEqual([]);
+  });
+
+  it('keeps the reads made before the budget ran out', async () => {
+    spentFrom = 1;
+    const result = await read(['coffee-blog.example', 'roaster.example']);
+    expect(result).toEqual({
+      classes: [{ site: 'coffee-blog.example', kind: 'weak' }],
+      limited: false,
+    });
+  });
+
+  it('has a few calls out at once, not all the sites’', async () => {
+    const sites = Array.from({ length: 7 }, (_, i) => `site-${i}.example`);
+    const answers = [];
+    generateObject.mockImplementation(
+      () =>
+        new Promise((resolve) =>
+          answers.push(() => resolve({ object: { kind: 'secondary' }, usage: {} })),
+        ),
+    );
+    const reading = read(sites);
+    await vi.waitFor(() => expect(generateObject).toHaveBeenCalledTimes(5));
+    for (const answer of answers.splice(0)) answer();
+    await vi.waitFor(() => expect(generateObject).toHaveBeenCalledTimes(7));
+    for (const answer of answers.splice(0)) answer();
+    expect((await reading).classes).toHaveLength(7);
   });
 
   it('lets the hold go when the model fails, and passes the error on when no site is read', async () => {

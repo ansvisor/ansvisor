@@ -4,7 +4,7 @@ import supabaseAdmin from '../config/supabase.js';
 import { resolveModel } from './ai-provider.js';
 import { QUALITY_CALLS_PER_DAY, qualityCallsToday } from './content-quality-calls.js';
 import { logger } from './logger.js';
-import { reserveAiBudget } from './plan-guard.js';
+import { PlanLimitError, reserveAiBudget } from './plan-guard.js';
 
 /**
  * The kind of source a site is (Quality CE-046, part b), read by the model
@@ -25,12 +25,17 @@ import { reserveAiBudget } from './plan-guard.js';
 export const SOURCE_KINDS = ['primary', 'secondary', 'weak', 'unknown'];
 /** Sites one ask takes, each read in its own call. */
 export const MAX_SOURCE_SITES = 20;
+/** The calls one ask has out at once: the holds, and their queries, a few at a time. */
+const SITES_AT_ONCE = 5;
 /** How long a site's read is kept. */
 export const SOURCE_CLASS_DAYS = 90;
 /** How long an unknown read is kept: the model is asked again after it. */
 export const UNKNOWN_CLASS_DAYS = 1;
-/** A site's read's hold on the AI budget: one address in (about 200 tokens with the rules), a word out. */
-export const SOURCE_CLASS_HOLD_USD = 0.0005;
+/**
+ * A site's read's hold on the AI budget: one address in (about 200 tokens
+ * with the rules), a word out, and the model's thinking, billed as output.
+ */
+export const SOURCE_CLASS_HOLD_USD = 0.001;
 /**
  * The sites one draft is sure to have the model read in a day, a call
  * each: two asks of MAX_SOURCE_SITES new ones. They share the day's
@@ -154,13 +159,14 @@ async function readSite({ orgId, draftId, site, modelId }) {
 
 /**
  * The kinds of these sites (the ones a draft links), read where kept and by
- * the model for the rest, a call each, all at once, MAX_SOURCE_SITES at
- * most: { classes: [{ site, kind }], limited }. `limited` when the draft's
- * Quality calls left today (QUALITY_CALLS_PER_DAY, with the claims' reads)
- * don't cover them all: the sites not read are left out. A read that fails
- * leaves its site out (asked about again after the next save) and the
- * others' reads kept; when every read fails, the first error is thrown (a
- * spent budget: PlanLimitError, 429).
+ * the model for the rest, a call each, SITES_AT_ONCE at a time,
+ * MAX_SOURCE_SITES at most: { classes: [{ site, kind }], limited }.
+ * `limited` when the draft's Quality calls left today
+ * (QUALITY_CALLS_PER_DAY, with the claims' reads) don't cover them all: the
+ * sites not read are left out. A read that fails leaves its site out (asked
+ * about again after the next save) and the others' reads kept; when every
+ * read fails, its error is thrown, a spent budget's first (PlanLimitError,
+ * 429: the editor pauses the reads).
  *
  * @param {{ orgId: string, draftId: string, sites: string[] }} input
  */
@@ -193,9 +199,16 @@ export async function readSourceClasses({ orgId, draftId, sites }) {
 
   const modelId = sourceClassModelId();
   const reading = missing.slice(0, room);
-  const reads = await Promise.allSettled(
-    reading.map((site) => readSite({ orgId, draftId, site, modelId })),
-  );
+  const reads = [];
+  for (let at = 0; at < reading.length; at += SITES_AT_ONCE) {
+    reads.push(
+      ...(await Promise.allSettled(
+        reading
+          .slice(at, at + SITES_AT_ONCE)
+          .map((site) => readSite({ orgId, draftId, site, modelId })),
+      )),
+    );
+  }
   const rows = [];
   reads.forEach((read, i) => {
     if (read.status !== 'fulfilled') return;
@@ -213,7 +226,7 @@ export async function readSourceClasses({ orgId, draftId, sites }) {
       .upsert(rows, { onConflict: 'host' });
     if (keepError) logger.warn({ err: keepError }, '[source-class] reads not kept');
   } else {
-    throw reads[0].reason;
+    throw (reads.find((read) => read.reason instanceof PlanLimitError) ?? reads[0]).reason;
   }
   const failed = reads.filter((read) => read.status === 'rejected');
   if (failed.length) {
