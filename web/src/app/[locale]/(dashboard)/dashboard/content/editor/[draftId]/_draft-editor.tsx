@@ -1773,17 +1773,19 @@ export function DraftEditor({
   /**
    * Ready, clicked (Next step spec §3b): the page goes back to review, while
    * it is still ready (published meanwhile from the Library, it says so). The
-   * task Mark ready completed stays done.
+   * task Mark ready completed is open again, unless someone changed it since.
    */
   const [unmarking, setUnmarking] = useState(false);
   const unmarkReady = async () => {
     if (unmarking) return;
     setUnmarking(true);
     try {
-      const now = await unmarkContentDraftReady(draft.id);
+      const { status: now, tasksReopened } = await unmarkContentDraftReady(draft.id);
       setStatus(now);
-      if (now === 'in_review') toast(t('header.backInReview'));
-      else toast(t('header.notReady', { status: tDraftStatus(now) }));
+      if (now !== 'in_review') toast(t('header.notReady', { status: tDraftStatus(now) }));
+      else if (tasksReopened > 0 && draft.action) {
+        toast(t('header.backInReviewAction', { no: draft.action.number, count: tasksReopened }));
+      } else toast(t('header.backInReview'));
     } catch (err) {
       console.error('Failed to move the draft back to review:', err);
       toast.error(t('header.backInReviewFailed'));

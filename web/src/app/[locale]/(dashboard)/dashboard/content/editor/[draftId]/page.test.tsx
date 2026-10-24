@@ -260,7 +260,7 @@ beforeEach(() => {
   readDraftAiUsage.mockReset().mockResolvedValue(3.7);
   getContentDraft.mockReset();
   markContentDraftReady.mockReset();
-  unmarkContentDraftReady.mockReset().mockResolvedValue('in_review');
+  unmarkContentDraftReady.mockReset().mockResolvedValue({ status: 'in_review', tasksReopened: 0 });
   saveBlob.mockReset();
   setContentDraftPageType.mockReset().mockResolvedValue(undefined);
   setContentDraftAuthor.mockReset().mockResolvedValue(undefined);
@@ -789,7 +789,7 @@ describe('the content editor', () => {
     expect(toast.error).toHaveBeenCalledWith("Couldn't move it back to review.");
     expect(button('Ready: click to move it back to review')).toBeDefined();
 
-    unmarkContentDraftReady.mockResolvedValueOnce('published');
+    unmarkContentDraftReady.mockResolvedValueOnce({ status: 'published', tasksReopened: 0 });
     await act(async () => button('Ready: click to move it back to review')!.click());
     expect(toast).toHaveBeenCalledWith('Its status is now Published, so it stays.');
     expect(button('Published')!.getAttribute('aria-disabled')).toBe('true');
@@ -859,6 +859,13 @@ describe('the content editor', () => {
       "Marked ready, and its task in Action AC-214 is done. Publish it on your site when you're ready.",
     );
     expect(note.textContent).toBe('This draft is the work of Action AC-214.');
+
+    // Taken back, the task Ready completed is open again.
+    unmarkContentDraftReady.mockResolvedValueOnce({ status: 'in_review', tasksReopened: 1 });
+    await act(async () => button('Ready: click to move it back to review')!.click());
+    expect(toast).toHaveBeenCalledWith(
+      'Back in review, and its task in Action AC-214 is open again.',
+    );
   });
 
   describe('history', () => {

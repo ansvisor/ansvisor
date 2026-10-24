@@ -84,6 +84,7 @@ import {
   completeDraftTasks,
   draftMethodForTask,
   findActionDraft,
+  reopenDraftTasks,
   setDraftTasksStatus,
   type ActionDraft,
 } from '@/lib/content/action-drafts';
@@ -1228,7 +1229,9 @@ const ROW_STATUSES = ['draft', 'in_review', 'published'] as const;
 /**
  * Set a draft's status from the Library's row menu (any member, as the
  * editor's own status changes). Ready keeps a History version and completes
- * the draft's task, so it goes through markContentDraftReady instead.
+ * the draft's task, so it goes through markContentDraftReady instead. A
+ * ready or published draft moved back to Draft or In review opens again the
+ * task Ready completed, as the editor's Ready does when clicked.
  */
 export async function setContentDraftStatus(
   id: string,
@@ -1238,6 +1241,13 @@ export async function setContentDraftStatus(
     throw new Error('invalid');
   }
   const supabase = await createClient();
+  const { data: before, error: readError } = await supabase
+    .from('content_drafts')
+    .select('status, brand_id, method, action_id')
+    .eq('id', id)
+    .maybeSingle();
+  if (readError) throw new Error(readError.message);
+  if (!before) throw new Error('not_found');
   const { data, error } = await supabase
     .from('content_drafts')
     .update({ status })
@@ -1246,6 +1256,8 @@ export async function setContentDraftStatus(
     .maybeSingle();
   if (error) throw new Error(error.message);
   if (!data) throw new Error('not_found');
+  const wasDone = before.status === 'ready' || before.status === 'published';
+  if (wasDone && status !== 'published') await reopenTasksOf(supabase, id, before);
 }
 
 /**
@@ -1361,10 +1373,13 @@ export async function markContentDraftReady(
 /**
  * Ready, clicked in the editor's header (Next step spec §3b): the page goes
  * back to review, only while it is still ready. One published from the
- * Library meanwhile keeps its status. Returns the status the draft has after.
- * The task Mark ready completed stays done.
+ * Library meanwhile keeps its status. Returns the status the draft has after,
+ * and how many of its action's tasks, completed by Ready, it opened again
+ * (reopenDraftTasks).
  */
-export async function unmarkContentDraftReady(id: string): Promise<DraftStatus> {
+export async function unmarkContentDraftReady(
+  id: string,
+): Promise<{ status: DraftStatus; tasksReopened: number }> {
   if (!draftId.safeParse(id).success) throw new Error('invalid');
   const supabase = await createClient();
   const { data, error } = await supabase
@@ -1372,13 +1387,50 @@ export async function unmarkContentDraftReady(id: string): Promise<DraftStatus> 
     .update({ status: 'in_review' })
     .eq('id', id)
     .eq('status', 'ready')
-    .select('status')
+    .select('status, brand_id, method, action_id')
     .maybeSingle();
   if (error) throw new Error(error.message);
-  if (data) return draftStatus(data.status);
+  if (data) {
+    return {
+      status: draftStatus(data.status),
+      tasksReopened: await reopenTasksOf(supabase, id, data),
+    };
+  }
   const current = await getContentDraft(id);
   if (!current) throw new Error('not_found');
-  return current.status;
+  return { status: current.status, tasksReopened: 0 };
+}
+
+/**
+ * The tasks a draft's Ready completed in its action, open again once the
+ * draft isn't ready or published any more (reopenDraftTasks). The draft's
+ * status has changed either way: a failure is logged, and a task left done
+ * can be changed in the drawer.
+ */
+async function reopenTasksOf(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  id: string,
+  draft: { brand_id: string; method: string; action_id: string | null },
+): Promise<number> {
+  if (!draft.action_id) return 0;
+  try {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    return await reopenDraftTasks(
+      supabase,
+      {
+        id,
+        brandId: draft.brand_id,
+        actionId: draft.action_id,
+        method: draft.method === 'create' ? 'create' : 'optimize',
+      },
+      user?.id ?? null,
+    );
+  } catch (err) {
+    console.error("Failed to reopen the action's task:", err);
+    return 0;
+  }
 }
 
 /**
