@@ -574,13 +574,16 @@ export function DraftEditor({
   const [authorConfirmed, setAuthorConfirmed] = useState(draft.authorConfirmed);
   const confirmAuthor = (what: 'real' | 'profile', on: boolean) => {
     // Unticking the author unticks their profile too, as the database does.
+    const both = what === 'real' && !on;
+    const before = authorConfirmed;
     setAuthorConfirmed((prev) =>
-      what === 'real' && !on ? { real: false, profile: false } : { ...prev, [what]: on },
+      both ? { real: false, profile: false } : { ...prev, [what]: on },
     );
     confirmDraftAuthor(draft.id, what, on).catch((err) => {
       console.error('Failed to save the author confirmation:', err);
-      // Only this box goes back: another one saved meanwhile stays.
-      setAuthorConfirmed((prev) => ({ ...prev, [what]: !on }));
+      // The boxes this change moved go back (both, for the author unticked);
+      // another one saved meanwhile stays.
+      setAuthorConfirmed((prev) => (both ? before : { ...prev, [what]: !on }));
       toast.error(t('quality.confirmFailed'));
     });
   };
@@ -1677,6 +1680,11 @@ export function DraftEditor({
     bylineInContent && authorsRead && (pageAuthor || !authorConfirmed.real)
       ? bylineText(language, pageAuthor?.name ?? null, brandName)
       : null;
+  // The team for the CMS's author field (Export, Send to CMS), in the page's
+  // language; until the authors are read, who it is by isn't known. Not for
+  // an author the person confirmed their site names: the CMS keeps its own.
+  const teamByline =
+    authorsRead && (pageAuthor || !authorConfirmed.real) ? teamName(language, brandName) : '';
   // Export (CE-057), once Quality is live: where it goes, its checks and fields.
   // The page as it was when Export opened: what it shows stays still while open.
   const [exportOpen, setExportOpen] = useState<{
@@ -2726,9 +2734,7 @@ export function DraftEditor({
           isNew={draft.method === 'create'}
           sourceUrl={draft.sourceUrl}
           author={pageAuthor}
-          // Until the authors are read, who it is by isn't known. It goes to
-          // the CMS's author field, so in the page's language.
-          teamByline={authorsRead ? teamName(language, brandName) : ''}
+          teamByline={teamByline}
           byline={contentByline}
           checks={exportChecks}
           linksPending={linksPending}
@@ -2762,9 +2768,7 @@ export function DraftEditor({
           html={sendOpen.html}
           sourceUrl={draft.sourceUrl}
           author={pageAuthor}
-          // Until the authors are read, who it is by isn't known. It goes to
-          // the CMS's author field, so in the page's language, as Export's.
-          teamByline={authorsRead ? teamName(language, brandName) : ''}
+          teamByline={teamByline}
           byline={contentByline}
           onFillNow={() => {
             setSendOpen(null);

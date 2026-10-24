@@ -2493,6 +2493,15 @@ describe('the side panel', () => {
         await act(async () => box().click());
         expect(toast.error).toHaveBeenCalledWith("Couldn't save that. Try again.");
         expect(box().getAttribute('aria-checked')).toBe('true');
+
+        // Unticking the author unticks the profile too: a failed save puts both back.
+        const profile = () => panel()!.querySelectorAll<HTMLButtonElement>('[role="checkbox"]')[1]!;
+        await act(async () => profile().click());
+        expect(profile().getAttribute('aria-checked')).toBe('true');
+        confirmDraftAuthor.mockRejectedValueOnce(new Error('offline'));
+        await act(async () => box().click());
+        expect(box().getAttribute('aria-checked')).toBe('true');
+        expect(profile().getAttribute('aria-checked')).toBe('true');
       } finally {
         vi.mocked(console.error).mockRestore();
       }
@@ -3532,6 +3541,26 @@ describe('the side panel', () => {
       } finally {
         brandState.brands = [{ id: 'b1' }, { id: 'b2' }];
       }
+    });
+
+    it('sends no author for one the site names, nor the team’s byline line (00271)', async () => {
+      process.env.NEXT_PUBLIC_CONTENT_QUALITY_PHASE = '1';
+      getContentAuthors.mockResolvedValue({
+        authors: [],
+        brands: [{ id: 'b1', name: 'Acme', bylineInContent: true }],
+        me: { id: 'u1', role: 'admin' },
+      });
+      getContentDraft.mockResolvedValue(
+        draft({ pageType: 'blog_post', authorConfirmed: { real: true, profile: false } }),
+      );
+      await renderPage();
+      await act(async () => button('Send to CMS')!.click());
+      await act(async () => inDialog('Continue to send').click());
+      await act(async () => inDialog('Send').click());
+      // The CMS keeps its own author.
+      expect(sendPagesToCms).toHaveBeenCalledWith('b1', [
+        expect.objectContaining({ draftId: 'd1', author: null, html: '<p>Teams trust it.</p>' }),
+      ]);
     });
 
     it('opens Before you publish first while Quality is on', async () => {

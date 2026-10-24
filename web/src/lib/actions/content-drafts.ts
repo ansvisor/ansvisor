@@ -268,6 +268,11 @@ export interface DraftPage {
   sourceUrl: string | null;
   /** Who the page is by (CE-038), for Send to CMS. */
   authorId: string | null;
+  /**
+   * The person confirmed their site names the page's author (00271): with
+   * none picked, Send to CMS names no team, the CMS keeps its own.
+   */
+  authorConfirmed: boolean;
   /** The language the draft's own Language rule names, or null: the brand's. */
   language: string | null;
 }
@@ -308,7 +313,7 @@ export async function getContentDraftPages(
   const supabase = await createClient();
   const { data, error } = await supabase
     .from('content_drafts')
-    .select('id, title, body_html, source_url, author_id, rules')
+    .select('id, title, body_html, source_url, author_id, author_real_at, rules')
     .eq('brand_id', brandId)
     .in('id', parsed.data);
   if (error) throw new Error(error.message);
@@ -321,6 +326,7 @@ export async function getContentDraftPages(
         bodyHtml: row.body_html,
         sourceUrl: row.source_url,
         authorId: row.author_id,
+        authorConfirmed: row.author_real_at !== null,
         language: draftLanguage(row.rules),
       },
     ]),

@@ -25,8 +25,10 @@ comment on column public.content_drafts.author_profile_at is
   'Quality (00271): when a member confirmed the author''s profile on the site has a bio and links (E-E-A-T profile); null when not confirmed.';
 
 -- Who and when come from the session, not the request: a confirmation is
--- stamped now, by the member making it; a change to who alone is undone.
--- On insert OLD is null: a draft starts with only what the session stamps.
+-- stamped now, by the member making it; a change to who alone is undone,
+-- clearing it too. Only a role that bypasses RLS changes who alone: the
+-- profiles FK's on delete set null, run as the table's owner. On insert
+-- OLD is null: a draft starts with only what the session stamps.
 create or replace function public.content_drafts_author_confirmed()
 returns trigger
 language plpgsql
@@ -43,8 +45,9 @@ begin
     end if;
     new.author_real_at := now();
     new.author_real_by := auth.uid();
-  -- Who alone changed is undone; cleared (the profile deleted) it stays cleared.
-  elsif new.author_real_by is distinct from old.author_real_by and new.author_real_by is not null then
+  elsif new.author_real_by is distinct from old.author_real_by
+    and (tg_op = 'INSERT'
+         or not (select rolbypassrls from pg_catalog.pg_roles where rolname = current_user)) then
     new.author_real_by := old.author_real_by;
   end if;
   if new.author_profile_at is distinct from old.author_profile_at then
@@ -54,7 +57,9 @@ begin
       new.author_profile_at := now();
       new.author_profile_by := auth.uid();
     end if;
-  elsif new.author_profile_by is distinct from old.author_profile_by and new.author_profile_by is not null then
+  elsif new.author_profile_by is distinct from old.author_profile_by
+    and (tg_op = 'INSERT'
+         or not (select rolbypassrls from pg_catalog.pg_roles where rolname = current_user)) then
     new.author_profile_by := old.author_profile_by;
   end if;
   return new;
