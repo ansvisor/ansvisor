@@ -94,7 +94,6 @@ describe('guardPeople: what the review found', () => {
     );
     expect(fix('This was said by Ursula von der Leyen.')).toBe(`This was said by ${NAME}.`);
     expect(fix('As J. K. Rowling said, write daily.')).toBe(`As ${NAME} said, write daily.`);
-    expect(fix("Ayşe Yılmaz'a göre bu doğru.")).toBe(`${NAME}'a göre bu doğru.`);
     expect(fix('Geschäftsführerin Anna Schmidt sagte, es funktioniert.')).toBe(
       `Geschäftsführerin ${NAME} sagte, es funktioniert.`,
     );
@@ -153,6 +152,54 @@ describe('guardPeople: what the review found', () => {
       'Dr. Sarah Chen runs the clinic.',
     );
     expect(guardPeople('Mr. Lee runs the shop.', given).text).toBe('Mr. Lee runs the shop.');
+  });
+
+  it('reads German and Turkish roles as people do write them', () => {
+    // German nouns take a capital; a Turkish role its possessive, and a capital first.
+    expect(fix('Geschäftsführerin Anna Schmidt hat das Team aufgebaut.')).toBe(
+      `Geschäftsführerin ${NAME} hat das Team aufgebaut.`,
+    );
+    expect(fix('Laut Sprecher Max Müller steigt der Umsatz.')).toBe(
+      `Laut Sprecher ${NAME} steigt der Umsatz.`,
+    );
+    expect(fix("Pazarlama müdürü Ayşe Yılmaz'a göre bu doğru.")).toBe(
+      `Pazarlama müdürü ${NAME}'a göre bu doğru.`,
+    );
+    expect(fix('Kurucumuz Ali Kaya bunu yazdı.')).toBe(`Kurucumuz ${NAME} bunu yazdı.`);
+    expect(fix('Bunu SEO uzmanımız Deniz Ak anlattı.')).toBe(`Bunu SEO uzmanımız ${NAME} anlattı.`);
+    expect(fix('Müdürü Ayşe Yılmaz söyledi.')).toBe(`Müdürü ${NAME} söyledi.`);
+    expect(fix('Ayşe Yılmaz, Pazarlama Müdürü, katıldı.')).toBe(
+      `${NAME}, Pazarlama Müdürü, katıldı.`,
+    );
+    // A title's own words aren't the name's.
+    expect(fix('Kurucu Ortak Ali Kaya bunu yazdı.')).toBe(`Kurucu Ortak ${NAME} bunu yazdı.`);
+    expect(fix('Genel Müdür Yardımcısı Ali Kaya katıldı.')).toBe(
+      `Genel Müdür Yardımcısı ${NAME} katıldı.`,
+    );
+    // In a heading only speech is read; the role still isn't the name.
+    expect(fix('Müdürü Ayşe Yılmaz söyledi', { heading: true })).toBe(`Müdürü ${NAME} söyledi`);
+  });
+
+  it('reads no tool or title as a person after a trade or a German "Leiter"', () => {
+    // "-(s)ı" may name a trade, not a person: a name after it is read only where it ends.
+    for (const line of [
+      'Bir pazarlama uzmanı Google Analytics raporlarını inceler.',
+      'Hesap yöneticisi Google Ads kampanyasını açar.',
+      'Danışmanlık Hizmetleri Ali Kaya ile başladı.',
+      'Die Leiter Hailo ProfiStep steht im Keller.',
+    ]) {
+      expect(fix(line)).toBe(line);
+    }
+    expect(fix('Max Müller, Leiter Vertrieb Europa, sagte es.')).toBe(
+      `${NAME}, Leiter Vertrieb Europa, sagte es.`,
+    );
+  });
+
+  it('reads no name from "…\'a göre" alone, as from "according to": a tool goes with it too', () => {
+    expect(fix("Ayşe Yılmaz'a göre bu doğru.")).toBe("Ayşe Yılmaz'a göre bu doğru.");
+    expect(fix("Google Analytics'e göre trafik arttı.")).toBe(
+      "Google Analytics'e göre trafik arttı.",
+    );
   });
 
   it('reads a name with a bare verb only when the verb is said of people', () => {
