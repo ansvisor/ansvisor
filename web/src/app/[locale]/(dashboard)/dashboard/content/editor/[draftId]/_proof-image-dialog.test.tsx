@@ -99,6 +99,11 @@ describe('ProofImageDialog', () => {
     await act(async () => setValue(input('proof-image-src'), 'javascript:alert(1)'));
     await act(async () => button('Add image').click());
     expect(document.body.textContent).toContain("Enter the image's web address");
+    // http: an https page may not show it.
+    await act(async () => setValue(input('proof-image-src'), 'http://cdn.example/rain.jpg'));
+    await act(async () => button('Add image').click());
+    expect(onClose).not.toHaveBeenCalled();
+    expect(input('proof-image-src').maxLength).toBe(2048);
     await act(async () => setValue(input('proof-image-src'), SRC));
     await act(async () => setValue(input('proof-image-alt'), '  '));
     await act(async () => button('Add image').click());
