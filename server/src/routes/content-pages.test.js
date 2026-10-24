@@ -12,22 +12,36 @@ let org;
 let fetched;
 let fetchResult;
 let draftRow;
+// Each table's filters, as asked: [method, ...args].
+let calls;
 
 vi.mock('../config/supabase.js', () => ({
   default: {
     from: (name) => {
       const result =
         name === 'brands'
-          ? { data: { id: BRAND, organization_id: 'o1' }, error: null }
+          ? {
+              data: { id: BRAND, organization_id: 'o1', name: 'Northwind', site_type: 'b2c' },
+              error: null,
+            }
           : name === 'content_drafts'
             ? { data: draftRow, error: null }
-            : {
-                data: [{ domain: 'https://www.Northwind.example/' }, { domain: 'northwind.shop' }],
-                error: null,
-              };
+            : name === 'brand_facts'
+              ? { data: [{ quote: 'Bluesign certified' }], error: null }
+              : {
+                  data: [
+                    { domain: 'https://www.Northwind.example/' },
+                    { domain: 'northwind.shop' },
+                  ],
+                  error: null,
+                };
+      const asked = (calls ??= {})[name] ?? (calls[name] = []);
       const chain = {
         select: () => chain,
-        eq: () => chain,
+        eq: (...args) => (asked.push(['eq', ...args]), chain),
+        is: (...args) => (asked.push(['is', ...args]), chain),
+        order: (...args) => (asked.push(['order', ...args]), chain),
+        limit: (...args) => (asked.push(['limit', ...args]), chain),
         single: async () => result,
         maybeSingle: async () => result,
         then: (resolve) => resolve(result),
@@ -45,6 +59,10 @@ const logError = vi.fn();
 const readDraftClaims = vi.fn();
 vi.mock('../lib/content-quality-claims.js', () => ({
   readDraftClaims: (...args) => readDraftClaims(...args),
+}));
+const readPage = vi.fn();
+vi.mock('../lib/content-quality-page.js', () => ({
+  readPage: (...args) => readPage(...args),
 }));
 vi.mock('../lib/content-source-class.js', async (importOriginal) => ({
   ...(await importOriginal()),
@@ -348,6 +366,84 @@ describe('POST /api/content-pages/claims (Quality CE-045)', () => {
       { err: expect.objectContaining({ name: 'AI_APICallError', message: 'Bad Request' }) },
       'content claims error',
     );
+    expect(JSON.stringify(logError.mock.calls)).not.toContain('own words');
+  });
+});
+
+describe('POST /api/content-pages/page-read (Quality CE-049)', () => {
+  const DRAFT = '5e8cd4c2-2bc4-4fb7-8711-bc0ad1bb4a29';
+  const ask = (body) =>
+    fetch(`${baseUrl}/page-read`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+  beforeEach(() => {
+    vi.stubEnv('CONTENT_QUALITY_PHASE', '2');
+    draftRow = {
+      brand_id: BRAND,
+      body_html: '<p>Our pack is waterproof.</p>',
+      page_type: 'product_page',
+    };
+    readPage.mockReset().mockResolvedValue({
+      spots: [],
+      proofs: [{ claim: 'waterproof', block: 'Our pack is waterproof.', kind: 'certification' }],
+      regulated: null,
+      pending: false,
+      limited: false,
+      paused: false,
+    });
+  });
+  afterEach(() => vi.unstubAllEnvs());
+
+  it('reads the page as saved, with its page type, the business type and the brand’s approved claims', async () => {
+    calls = {};
+    const res = await ask({ draftId: DRAFT });
+    expect(res.status).toBe(200);
+    expect((await res.json()).proofs[0].kind).toBe('certification');
+    expect(readPage).toHaveBeenCalledWith({
+      orgId: 'o1',
+      draftId: DRAFT,
+      html: draftRow.body_html,
+      siteType: 'b2c',
+      pageType: 'product_page',
+      brandName: 'Northwind',
+      facts: ['Bluesign certified'],
+    });
+    // The brand's approved claims still on its site, in one order.
+    expect(calls.brand_facts).toEqual([
+      ['eq', 'brand_id', BRAND],
+      ['eq', 'kind', 'claim'],
+      ['eq', 'status', 'approved'],
+      ['is', 'gone_at', null],
+      ['order', 'first_seen_at'],
+      ['order', 'id'],
+      ['limit', 10],
+    ]);
+  });
+
+  it('is off before phase 2, and refuses a malformed ask or another workspace’s draft', async () => {
+    vi.stubEnv('CONTENT_QUALITY_PHASE', '1');
+    expect((await ask({ draftId: DRAFT })).status).toBe(404);
+    vi.stubEnv('CONTENT_QUALITY_PHASE', '2');
+    expect((await ask({ draftId: 'nope' })).status).toBe(400);
+    org = 'o2';
+    expect((await ask({ draftId: DRAFT })).status).toBe(403);
+    draftRow = null;
+    org = 'o1';
+    expect((await ask({ draftId: DRAFT })).status).toBe(404);
+    expect(readPage).not.toHaveBeenCalled();
+  });
+
+  it('logs a failure without the request the provider sent', async () => {
+    logError.mockClear();
+    readPage.mockRejectedValueOnce(
+      Object.assign(new Error('Bad Request'), {
+        name: 'AI_APICallError',
+        requestBodyValues: { prompt: 'Page: [1] the page’s own words' },
+      }),
+    );
+    expect((await ask({ draftId: DRAFT })).status).toBe(500);
     expect(JSON.stringify(logError.mock.calls)).not.toContain('own words');
   });
 });

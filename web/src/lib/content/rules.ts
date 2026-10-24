@@ -772,6 +772,58 @@ export const REWRITE_OPEN_RULES = 4;
 /** The most text a page sent whole may hold (content-rewrite.js MAX_REWRITE_CHARS). */
 export const REWRITE_MAX_CHARS = 60_000;
 
+/**
+ * A Length out of a rewrite's reach: what a rewrite keeps as it is (the
+ * passages AI answers quote, tables, images, quotes, HTML blocks, the
+ * server's keepBlocks) is this share of it or more.
+ */
+export const KEPT_LENGTH_SHARE = 0.85;
+
+/** A long page whose Length a rewrite can't reach, and a Length it could. */
+export interface LengthOutOfReach {
+  count: number;
+  target: number;
+  /** The characters a rewrite keeps as they are. */
+  kept: number;
+  /** A Length with room for the kept blocks and the words around them, to the 500. */
+  suggested: number;
+}
+
+/**
+ * Whether the page is over its Length by more than a rewrite could take out:
+ * the blocks it keeps are KEPT_LENGTH_SHARE of the Length or more. Null
+ * otherwise, and for a page under its Length.
+ */
+export function lengthOutOfReach<T extends { rule: ActiveRule; status: RuleStatus }>(
+  rules: T[],
+  kept: number,
+): LengthOutOfReach | null {
+  const length = rules.find(({ rule }) => rule.key === 'length' && rule.on);
+  const target = Number(length?.rule.current);
+  const status = length?.status;
+  if (
+    status?.state !== 'bad' ||
+    status.code !== 'long' ||
+    !Number.isFinite(target) ||
+    target <= 0
+  ) {
+    return null;
+  }
+  if (kept < target * KEPT_LENGTH_SHARE) return null;
+  // Room for the kept blocks and the words around them, not past the page
+  // as it is (that would read short) nor the rule's own top.
+  const roundUp = (n: number) => Math.ceil(n / 500) * 500;
+  return {
+    count: status.count,
+    target,
+    kept,
+    suggested: Math.min(
+      RULE_LENGTH_MAX,
+      Math.max(target, Math.min(roundUp(kept * 1.5), roundUp(status.count))),
+    ),
+  };
+}
+
 /** Why the Rules tab recommends rewriting the page whole. */
 export type RewriteAdvice =
   | { reason: 'length'; count: number; target: number; percent: number }
@@ -780,10 +832,12 @@ export type RewriteAdvice =
 /**
  * Whether the Rules tab recommends Rewrite the page to these rules over
  * Apply rules with Agent's few edits a run: the page more than 30% off its
- * Length, or 4 rules or more open that the agent can fix. Null otherwise.
+ * Length (one a rewrite can reach, given the `kept` characters it keeps),
+ * or 4 rules or more open that the agent can fix. Null otherwise.
  */
 export function rewriteAdvice<T extends { rule: ActiveRule; status: RuleStatus }>(
   rules: T[],
+  kept = 0,
 ): RewriteAdvice | null {
   const length = rules.find(({ rule }) => rule.key === 'length' && rule.on);
   const target = Number(length?.rule.current);
@@ -799,11 +853,15 @@ export function rewriteAdvice<T extends { rule: ActiveRule; status: RuleStatus }
     target > 0
   ) {
     const off = Math.abs(status.count - target) / target;
-    if (off > REWRITE_LENGTH_OFF) {
+    if (off > REWRITE_LENGTH_OFF && !lengthOutOfReach(rules, kept)) {
       return { reason: 'length', count: status.count, target, percent: Math.round(off * 100) };
     }
   }
-  const open = openRulesForAgent(rules).forAgent.length;
+  // A Length out of reach is no rule a rewrite meets.
+  const outOfReach = lengthOutOfReach(rules, kept) !== null;
+  const open = openRulesForAgent(rules).forAgent.filter(
+    ({ rule }) => !(outOfReach && rule.key === 'length'),
+  ).length;
   return open >= REWRITE_OPEN_RULES ? { reason: 'open', count: open } : null;
 }
 

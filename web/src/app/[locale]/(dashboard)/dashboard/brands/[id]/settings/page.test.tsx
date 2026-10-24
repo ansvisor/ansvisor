@@ -97,6 +97,11 @@ vi.mock('sonner', () => ({
   },
 }));
 
+// Brand facts are _brand-facts-tab.test.tsx's; here, when the tab is there.
+vi.mock('./_brand-facts-tab', () => ({
+  BrandFactsTab: ({ brandId }: { brandId: string }) => <p data-testid="brand-facts">{brandId}</p>,
+}));
+
 import BrandSettingsPage from './page';
 
 afterEach(() => {
@@ -332,5 +337,51 @@ describe('brand settings role gates', () => {
     expect(container.textContent).not.toContain('settings.adminsOnlyDelete');
 
     await act(async () => root.unmount());
+  });
+});
+
+describe('Brand facts tab (Quality CE-047)', () => {
+  const roots: ReturnType<typeof createRoot>[] = [];
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    for (const root of roots.splice(0)) act(() => root.unmount());
+  });
+  const open = async (tab?: string) => {
+    const container = document.createElement('div');
+    document.body.append(container);
+    const root = createRoot(container);
+    roots.push(root);
+    await act(async () => {
+      root.render(
+        <Suspense>
+          <BrandSettingsPage
+            params={Promise.resolve({ id: brand.id })}
+            searchParams={Promise.resolve({ tab })}
+          />
+        </Suspense>,
+      );
+    });
+    const tabs = [...container.querySelectorAll('[role="tab"]')];
+    return {
+      container,
+      labels: tabs.map((t) => t.textContent),
+      selected: tabs.find((t) => t.getAttribute('aria-selected') === 'true')?.textContent,
+    };
+  };
+
+  it('is there with phase 2, and ?tab=facts opens it', async () => {
+    vi.stubEnv('NEXT_PUBLIC_CONTENT_QUALITY_PHASE', '2');
+    const { container, labels, selected } = await open('facts');
+    expect(labels).toContain('settings.facts.tab');
+    expect(selected).toBe('settings.facts.tab');
+    expect(container.querySelector('[data-testid="brand-facts"]')?.textContent).toBe(brand.id);
+  });
+
+  it('isn’t before phase 2, where ?tab=facts opens General', async () => {
+    vi.stubEnv('NEXT_PUBLIC_CONTENT_QUALITY_PHASE', '1');
+    const { container, labels, selected } = await open('facts');
+    expect(labels).not.toContain('settings.facts.tab');
+    expect(selected).toBe('settings.generalTab');
+    expect(container.querySelector('[data-testid="brand-facts"]')).toBeNull();
   });
 });

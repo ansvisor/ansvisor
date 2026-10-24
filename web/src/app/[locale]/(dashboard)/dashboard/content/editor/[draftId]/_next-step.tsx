@@ -70,10 +70,10 @@ export function wordsUnderTitle(html: string): boolean {
   return /\S/.test(template.content.textContent ?? '');
 }
 
-type T = ReturnType<typeof useTranslations<'contentEditor.editor.nextStep'>>;
+export type T = ReturnType<typeof useTranslations<'contentEditor.editor.nextStep'>>;
 
 /** A step's name: the Length step says which way the page is off. */
-function stepName(t: T, id: NextStepId, state: NextStepState): string {
+export function stepName(t: T, id: NextStepId, state: NextStepState): string {
   if (id === 'length' && state.rewrite?.reason === 'length') {
     return state.rewrite.count > state.rewrite.target
       ? t('steps.lengthLong')
@@ -82,8 +82,24 @@ function stepName(t: T, id: NextStepId, state: NextStepState): string {
   return id === 'length' ? t('steps.lengthLong') : t(`steps.${id}`);
 }
 
+/** Who takes a step: the agent's run, or the person (their to-dos, their checks, their words). */
+const AGENT_ACTIONS: ReadonlySet<NextAction> = new Set([
+  'buildBrief',
+  'writeWithAgent',
+  'rewritePage',
+  'fixRules',
+]);
+export function stepActor(step: NextStep): 'agent' | 'you' {
+  return AGENT_ACTIONS.has(step.primary) ? 'agent' : 'you';
+}
+
 /** Why the step is next, from the page's own numbers. */
-function stepReason(t: T, step: NextStep, state: NextStepState, todoLine: string | null): string {
+export function stepReason(
+  t: T,
+  step: NextStep,
+  state: NextStepState,
+  todoLine: string | null,
+): string {
   const { id } = step;
   switch (id) {
     case 'length':

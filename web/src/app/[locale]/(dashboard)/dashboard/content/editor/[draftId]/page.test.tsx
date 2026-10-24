@@ -3663,12 +3663,15 @@ describe('the side panel', () => {
         (b) => b.textContent === name,
       )!;
 
-    it('opens Before you publish on Export, then Export with the page fields', async () => {
+    it('opens Export on its options, Before you publish a Review away', async () => {
       getContentDraft.mockResolvedValue(draft({ pageType: 'blog_post' }));
       await renderPage();
       await act(async () => button('Export')!.click());
-      // Before you publish first (§7): what the CMS does, and Ready to paste.
-      expect(dialog()!.textContent).toContain('Before you publish');
+      // Export's options at once, with what Before you publish warns about.
+      expect(dialog()!.textContent).toContain('Content · ready to paste');
+      expect(dialog()!.textContent).toContain('Before you publish: no author yet.Review');
+      await act(async () => inDialog('Review').click());
+      // Before you publish (§7): what the CMS does, and Ready to paste; back to Export.
       expect(dialog()!.textContent).toContain(
         'Ready to paste · doneNo placeholders, all images have alt text, all links work.',
       );
@@ -3686,7 +3689,6 @@ describe('the side panel', () => {
         getContentDraft.mockResolvedValue(draft({ pageType: 'blog_post' }));
         await renderPage();
         await act(async () => button('Export')!.click());
-        await act(async () => inDialog('Continue to export').click());
         expect(dialog()!.textContent).toContain('AuthorAcme Ekibi → your CMS author field');
       } finally {
         brandState.brands = [{ id: 'b1' }, { id: 'b2' }];
@@ -3706,6 +3708,7 @@ describe('the side panel', () => {
         );
         await renderPage();
         await act(async () => button('Export')!.click());
+        await act(async () => inDialog('Review').click());
         expect(dialog()!.textContent).toContain(
           'Ready to paste · check itNo placeholders, all images have alt text; 1 link is still being read.',
         );
@@ -3735,7 +3738,7 @@ describe('the side panel', () => {
       getContentDraft.mockResolvedValue(draft({ authorId: null }));
       await renderPage();
       await act(async () => button('Export')!.click());
-      expect(dialog()!.textContent).toContain('Before you publish');
+      expect(dialog()!.textContent).toContain('Content · ready to paste');
       expect(container.querySelector('[aria-label="Your next step"]')).toBeNull();
     });
 
@@ -3748,6 +3751,7 @@ describe('the side panel', () => {
       );
       await renderPage();
       await act(async () => button('Export')!.click());
+      await act(async () => inDialog('Review').click());
       expect(dialog()!.textContent).toContain(
         'Not ready to paste yet · missing1 placeholder still open',
       );
@@ -3781,8 +3785,6 @@ describe('the side panel', () => {
       const ready =
         'Ready to paste · doneNo placeholders, all images have alt text, all links work.';
       await act(async () => button('Export')!.click());
-      expect(dialog()!.textContent).toContain(ready);
-      await act(async () => inDialog('Continue to export').click());
       expect(dialog()!.querySelector('[role="alert"]')).toBeNull();
       expect(inDialog('Download Word').disabled).toBe(false);
       await act(async () => inDialog('Cancel').click());
@@ -3807,6 +3809,7 @@ describe('the side panel', () => {
         source.dispatchEvent(new Event('input', { bubbles: true }));
       });
       await act(async () => button('Export')!.click());
+      await act(async () => inDialog('Review').click());
       expect(dialog()!.textContent).toContain('1 placeholder still open');
       await act(async () => inDialog('Fill now').click());
       expect(dialog()).toBeNull();
@@ -3829,6 +3832,12 @@ describe('the side panel', () => {
         'HTML',
       );
       expect(inDialog('Copy HTML').disabled).toBe(true);
+      // Review and back: still on HTML.
+      await act(async () => inDialog('Review').click());
+      await act(async () => inDialog('Continue to export').click());
+      expect(dialog()!.querySelector('[role="radio"][aria-checked="true"]')!.textContent).toBe(
+        'HTML',
+      );
 
       await act(async () => inDialog('Fill now').click());
       expect(dialog()).toBeNull();
@@ -3849,6 +3858,8 @@ describe('the side panel', () => {
       );
       await renderPage();
       await act(async () => button('Export')!.click());
+      expect(dialog()!.textContent).toContain('1 placeholder is still open');
+      await act(async () => inDialog('Review').click());
       expect(dialog()!.textContent).toContain('1 placeholder still open');
       await act(async () => inDialog('Continue to export').click());
       expect(dialog()!.textContent).toContain('1 placeholder is still open');
