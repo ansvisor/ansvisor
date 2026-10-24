@@ -109,6 +109,20 @@ describe('useLinkChecks', () => {
     expect(seen().get('https://new.example/')?.status).toBe('ok');
   });
 
+  it("doesn't let an older save's late answer hold a newer save's left-out link", async () => {
+    let lateA!: (answer: unknown) => void;
+    checkDraftLinks.mockImplementationOnce(() => new Promise((resolve) => (lateA = resolve)));
+    await render(['https://a.example/']);
+    await wait();
+    // A newer save asks again; its answer leaves the link out (over the hourly reads).
+    await render(['https://a.example/'], 's2');
+    await wait();
+    expect(checkDraftLinks).toHaveBeenCalledTimes(2);
+    expect(pending()).toBe(0);
+    await act(async () => lateA({ links: [], skipped: [] }));
+    expect(pending()).toBe(0);
+  });
+
   it('counts a call that fails on its own as a failed read: no read is coming in this save', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
     checkDraftLinks.mockRejectedValueOnce(new Error('offline'));

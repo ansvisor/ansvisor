@@ -56,8 +56,12 @@ export function useLinkChecks(
     if (!fresh.length) return;
     const timer = setTimeout(() => {
       for (const href of fresh) askedAt.current.set(href, savedAt);
-      const failed = (hrefs: string[]) =>
-        setFailedAt((prev) => new Map([...prev, ...hrefs.map((h) => [h, savedAt] as const)]));
+      // Only the links this ask is still the last one about: an older ask
+      // answering late doesn't undo a newer save's.
+      const failed = (hrefs: string[]) => {
+        const own = hrefs.filter((h) => askedAt.current.get(h) === savedAt);
+        setFailedAt((prev) => new Map([...prev, ...own.map((h) => [h, savedAt] as const)]));
+      };
       void checkDraftLinks(draftId)
         .then((result) => {
           if ('error' in result) {
