@@ -4242,6 +4242,8 @@
         "button": "Export",
         "hint": "Download the page as it is now",
         "docx": "Export Word",
+        "xlsx": "Export Excel",
+        "csv": "Export CSV",
         "html": "Export HTML",
         "md": "Export Markdown",
         "failed": "Couldn't export the page. Try again."
@@ -4388,13 +4390,18 @@
       "exportDialog": {
         "title": "Export",
         "untitled": "Untitled",
-        "destination": "Where it goes",
+        "formats": "Files",
+        "platforms": "Platforms",
+        "show": "Show",
+        "hide": "Hide",
         "destinations": {
           "webflow": "Webflow",
           "wordpress": "WordPress",
           "shopify": "Shopify",
           "docs": "Google Docs",
           "docx": "Word",
+          "xlsx": "Excel",
+          "csv": "CSV",
           "md": "Markdown",
           "html": "HTML"
         },
@@ -4404,6 +4411,8 @@
           "shopify": "Copy, then paste into the blog post or description editor. The H1 is left out: the title goes in the title field.",
           "docs": "Copy, then paste into a new Google Doc.",
           "docx": "A Word file, with the page fields in a table on page 1 to delete or keep.",
+          "xlsx": "An Excel sheet with the page as one row for a CMS import: the title in its own column, the page fields, the text and the HTML without the H1. A cell holds up to 32,767 characters: for a long page, CSV keeps the HTML whole.",
+          "csv": "A CSV file with the page as one row for a CMS import: the title in its own column, the page fields, the text and the HTML without the H1.",
           "md": "A Markdown file, with the page fields as front matter (the title there, not as an H1).",
           "html": "The page's HTML only, for an HTML field or a code view. The page fields are below."
         },
@@ -4472,6 +4481,8 @@
           "shopify": "Copy for Shopify",
           "docs": "Copy for Google Docs",
           "docx": "Download Word",
+          "xlsx": "Download Excel",
+          "csv": "Download CSV",
           "md": "Download Markdown",
           "html": "Copy HTML",
           "downloadHtml": "Download HTML"

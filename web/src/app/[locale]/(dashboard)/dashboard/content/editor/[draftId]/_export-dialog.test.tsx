@@ -122,7 +122,7 @@ afterEach(() => {
 
 describe('ExportDialog', () => {
   it('holds the export while a placeholder is open, and fills it or leaves its sentence out', async () => {
-    await render();
+    await render({ initialDestination: 'webflow' });
     expect(dialog().querySelector('[role="alert"]')!.textContent).toContain(
       '1 placeholder is still open. Exports never contain [ ] text.',
     );
@@ -151,6 +151,7 @@ describe('ExportDialog', () => {
   it('holds a placeholder in the title or a heading until it is filled', async () => {
     await render({
       html: '<h2>What [name of a real person] uses</h2><p>Use [figure, source] g.</p>',
+      initialDestination: 'webflow',
     });
     await act(async () => button('Export without them')!.click());
     expect(dialog().querySelector('[role="status"]')!.textContent).toContain(
@@ -178,7 +179,7 @@ describe('ExportDialog', () => {
   it('copies as HTML, and says so, where rich text is refused', async () => {
     vi.stubGlobal('ClipboardItem', undefined);
     document.execCommand = vi.fn(() => false);
-    await render({ html: '<h1>Pour-over</h1><p>Done.</p>' });
+    await render({ html: '<h1>Pour-over</h1><p>Done.</p>', initialDestination: 'webflow' });
     await act(async () => button('Copy for Webflow')!.click());
     expect(writeText).toHaveBeenCalledWith('<p>Done.</p>');
     expect(toast.success).toHaveBeenCalledWith(
@@ -269,15 +270,15 @@ describe('ExportDialog', () => {
     // The dialog moves focus in after it opens: once it has, it won't take
     // focus back from the arrow keys (it did on a busy machine).
     await vi.waitFor(() => expect(dialog().contains(document.activeElement)).toBe(true));
-    // Arrow keys move along the destinations.
-    destination('Webflow').focus();
+    // Arrow keys move along the files, from Word back round to Markdown.
+    destination('Word').focus();
     await act(async () => {
-      destination('Webflow').dispatchEvent(
+      destination('Word').dispatchEvent(
         new KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true }),
       );
     });
-    expect(destination('HTML').getAttribute('aria-checked')).toBe('true');
-    expect(document.activeElement).toBe(destination('HTML'));
+    expect(destination('Markdown').getAttribute('aria-checked')).toBe('true');
+    expect(document.activeElement).toBe(destination('Markdown'));
     await act(async () => destination('Word').click());
     expect(dialog().textContent).toContain(
       'A Word file, with the page fields in a table on page 1',
@@ -304,6 +305,96 @@ describe('ExportDialog', () => {
     expect(fields.front).not.toHaveProperty('lastmod');
   });
 
+  it('lists the files first, each with its icon, and the platforms folded under them', async () => {
+    await render({ html: '<p>Done.</p>' });
+    const files = dialog().querySelector('[role="radiogroup"][aria-label="Files"]')!;
+    expect([...files.querySelectorAll('[role="radio"]')].map((r) => r.textContent)).toEqual([
+      'Word',
+      'Excel',
+      'CSV',
+      'HTML',
+      'Markdown',
+    ]);
+    expect(files.querySelectorAll('[role="radio"] svg')).toHaveLength(5);
+    // Word to start with, the platforms folded away.
+    expect(destination('Word').getAttribute('aria-checked')).toBe('true');
+    const bar = dialog().querySelector<HTMLButtonElement>('button[aria-expanded]')!;
+    expect(bar.textContent).toBe('PlatformsShow');
+    expect(bar.getAttribute('aria-expanded')).toBe('false');
+    const platforms = dialog().querySelector<HTMLElement>(
+      '[role="radiogroup"][aria-label="Platforms"]',
+    )!;
+    expect(platforms.parentElement!.hidden).toBe(true);
+
+    await act(async () => bar.click());
+    expect(bar.getAttribute('aria-expanded')).toBe('true');
+    expect(bar.textContent).toBe('PlatformsHide');
+    expect(platforms.parentElement!.hidden).toBe(false);
+    expect([...platforms.querySelectorAll('[role="radio"]')].map((r) => r.textContent)).toEqual([
+      'Webflow',
+      'WordPress',
+      'Shopify',
+      'Google Docs',
+    ]);
+    // Each with its logo.
+    expect(platforms.querySelectorAll('img')).toHaveLength(4);
+    await act(async () => destination('WordPress').click());
+    expect(button('Copy for WordPress')).toBeDefined();
+    // Folded again, the platform picked is still named.
+    await act(async () => bar.click());
+    expect(bar.textContent).toBe('PlatformsWordPressShow');
+  });
+
+  it('opens on the platforms when one was picked last, focus on it', async () => {
+    localStorage.setItem('aeo:content-export-destination', 'shopify');
+    await render({ html: '<p>Done.</p>' });
+    const bar = dialog().querySelector<HTMLButtonElement>('button[aria-expanded]')!;
+    expect(bar.getAttribute('aria-expanded')).toBe('true');
+    expect(destination('Shopify').getAttribute('aria-checked')).toBe('true');
+    // Focus starts on it: Enter keeps Shopify, not the first file.
+    await vi.waitFor(() => expect(document.activeElement).toBe(destination('Shopify')));
+    // Each row is its own group: the files' tab stop is their first.
+    expect(destination('Word').tabIndex).toBe(0);
+    expect(destination('Excel').tabIndex).toBe(-1);
+    // Arrow keys go round the platforms, never into the files.
+    await act(async () => {
+      destination('Shopify').dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }),
+      );
+    });
+    expect(destination('Google Docs').getAttribute('aria-checked')).toBe('true');
+    await act(async () => {
+      destination('Google Docs').dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }),
+      );
+    });
+    expect(destination('Webflow').getAttribute('aria-checked')).toBe('true');
+    expect(document.activeElement).toBe(destination('Webflow'));
+  });
+
+  it('downloads Excel and CSV with the page fields', async () => {
+    await render({ html: '<p>Done.</p>' });
+    await act(async () => destination('Excel').click());
+    expect(dialog().textContent).toContain('An Excel sheet with the page as one row');
+    await act(async () => button('Download Excel')!.click());
+    expect(draftExportBlob).toHaveBeenLastCalledWith(
+      'xlsx',
+      'Pour-over',
+      '<p>Done.</p>',
+      expect.objectContaining({ front: expect.objectContaining({ slug: 'pour-over' }) }),
+    );
+    expect(saveBlob).toHaveBeenLastCalledWith(expect.any(Blob), 'ansvisor_content_pour-over.xlsx');
+    await act(async () => destination('CSV').click());
+    await act(async () => button('Download CSV')!.click());
+    expect(draftExportBlob).toHaveBeenLastCalledWith(
+      'csv',
+      'Pour-over',
+      '<p>Done.</p>',
+      expect.anything(),
+    );
+    expect(saveBlob).toHaveBeenLastCalledWith(expect.any(Blob), 'ansvisor_content_pour-over.csv');
+  });
+
   it("dates a live page's Markdown as updated today, keeping its published date", async () => {
     await render({
       html: '<p>Done.</p>',
@@ -321,7 +412,11 @@ describe('ExportDialog', () => {
   it("puts the brand's byline line under the H1, not in the page fields", async () => {
     vi.stubGlobal('ClipboardItem', undefined);
     document.execCommand = vi.fn(() => false);
-    await render({ html: '<h1>Pour-over</h1><p>Done.</p>', byline: 'By Ada Lovelace' });
+    await render({
+      html: '<h1>Pour-over</h1><p>Done.</p>',
+      byline: 'By Ada Lovelace',
+      initialDestination: 'webflow',
+    });
     await act(async () => button('Copy for Webflow')!.click());
     expect(writeText).toHaveBeenCalledWith('<p>By Ada Lovelace</p><p>Done.</p>');
     expect(dialog().textContent).toContain('Meta descriptionDone.');

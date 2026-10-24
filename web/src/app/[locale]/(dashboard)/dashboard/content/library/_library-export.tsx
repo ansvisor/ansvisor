@@ -3,7 +3,8 @@
 import { useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
-import { ChevronDown, Download, FileSpreadsheet, FileText, FileType } from 'lucide-react';
+import { ChevronDown, Download } from 'lucide-react';
+import { ExportFormatIcon } from '@/components/content/export-format-icon';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -36,8 +37,8 @@ import { saveBlob } from '@/lib/download';
 
 /**
  * The Library's Export (CE-002): the drafts listed (the tab, within the
- * Created range) with their pages, as CSV, an Excel sheet or one Word
- * document; and one draft from its row, as the editor's Export does.
+ * Created range) with their pages, as one Word document, an Excel sheet or
+ * a CSV; and one draft from its row, as the editor's Export does.
  */
 export function useLibraryExport(brandId: string | null) {
   const t = useTranslations('contentEditor.library');
@@ -117,7 +118,13 @@ export function useLibraryExport(brandId: string | null) {
       if (!page) throw new Error('not_found');
       const title = titleOf(draft);
       saveBlob(
-        await draftExportBlob(format, title, publishableHtml(page.bodyHtml)),
+        await draftExportBlob(
+          format,
+          title,
+          publishableHtml(page.bodyHtml),
+          undefined,
+          page.sourceUrl,
+        ),
         draftExportFileName(title, format),
       );
     } catch (err) {
@@ -129,13 +136,10 @@ export function useLibraryExport(brandId: string | null) {
   return { exporting, exportList, exportDraft };
 }
 
-const FORMATS = [
-  { format: 'csv', icon: FileText },
-  { format: 'xlsx', icon: FileSpreadsheet },
-  { format: 'docx', icon: FileType },
-] as const satisfies readonly { format: LibraryExportFormat; icon: unknown }[];
+/** The formats, in the order the editor's Export lists them. */
+const FORMATS = ['docx', 'xlsx', 'csv'] as const satisfies readonly LibraryExportFormat[];
 
-/** Export in the Library's header: the drafts listed, as CSV, Excel or Word. */
+/** Export in the Library's header: the drafts listed, as Word, Excel or CSV. */
 export function LibraryExportMenu({
   disabled,
   exporting,
@@ -158,9 +162,9 @@ export function LibraryExportMenu({
         <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-44">
-        {FORMATS.map(({ format, icon: Icon }) => (
+        {FORMATS.map((format) => (
           <DropdownMenuItem key={format} className="gap-2" onClick={() => onExport(format)}>
-            <Icon className="h-3.5 w-3.5" />
+            <ExportFormatIcon format={format} />
             {t(format)}
           </DropdownMenuItem>
         ))}

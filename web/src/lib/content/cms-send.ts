@@ -6,6 +6,7 @@ import {
   exportPlaceholders,
   fragment,
   pageFields,
+  teamName,
   titlePlaceholders,
   withByline,
   withoutLeadingH1,
@@ -119,7 +120,10 @@ export interface CmsSource {
   html: string;
   sourceUrl: string | null;
   author: ContentAuthor | null;
-  /** The team byline; empty while the authors aren't read. */
+  /**
+   * The brand's team in the page's language, for the CMS's author field when
+   * the page has no author (teamName); empty while the authors aren't read.
+   */
   teamByline: string;
   /** The byline line the brand puts in the content, or null. */
   byline: string | null;
@@ -127,10 +131,11 @@ export interface CmsSource {
 
 /**
  * A Library row's page for Send to CMS, as the editor gives its own: the
- * stored page made publishable, its author and the brand's byline line in
- * the page's language (its own Language rule, else the brand's; a
- * workspace's My rules for the type aren't read here). `authors` is null
- * while Quality is off, as the editor reads none then.
+ * stored page made publishable, its author, the team for the CMS's author
+ * field as Export names it, and the brand's byline line, both in the page's
+ * language (its own Language rule, else the brand's; a workspace's My rules
+ * for the type aren't read here). `authors` is null while Quality is off,
+ * as the editor reads none then.
  */
 export function cmsSource({
   page,
@@ -138,15 +143,14 @@ export function cmsSource({
   brandId,
   brandName,
   brandLanguage,
-  teamByline,
 }: {
   page: DraftPage;
   authors: AuthorsRead | null;
   brandId: string;
   brandName: string;
   brandLanguage: string | null | undefined;
-  teamByline: string;
 }): CmsSource {
+  const language = page.language ?? brandLanguage;
   const author = authors?.authors.find((a) => a.id === page.authorId) ?? null;
   const inContent = authors?.brands.find((b) => b.id === brandId)?.bylineInContent ?? false;
   return {
@@ -155,10 +159,8 @@ export function cmsSource({
     html: publishableHtml(page.bodyHtml),
     sourceUrl: page.sourceUrl,
     author,
-    teamByline: authors ? teamByline : '',
-    byline: inContent
-      ? bylineText(page.language ?? brandLanguage, author?.name ?? null, brandName)
-      : null,
+    teamByline: authors ? teamName(language, brandName) : '',
+    byline: inContent ? bylineText(language, author?.name ?? null, brandName) : null,
   };
 }
 

@@ -1,9 +1,10 @@
 'use client';
 
-import { useMemo, useRef, useState, type KeyboardEvent } from 'react';
+import { useId, useMemo, useRef, useState, type KeyboardEvent } from 'react';
+import Image from 'next/image';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
-import { AlertTriangle, Check } from 'lucide-react';
+import { AlertTriangle, Check, ChevronDown, Globe } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -15,6 +16,7 @@ import {
 } from '@/components/ui/dialog';
 import type { ContentAuthor } from '@/lib/content/authors';
 import {
+  DRAFT_EXPORT_FORMATS,
   draftExportBlob,
   draftExportFileName,
   draftText,
@@ -31,14 +33,37 @@ import {
   withoutPlaceholders,
   type PasteChecks,
 } from '@/lib/content/ready-to-publish';
+import { ExportFormatIcon } from '@/components/content/export-format-icon';
 import { saveBlob } from '@/lib/download';
+import { getFaviconUrl } from '@/lib/favicon';
 import { cn } from '@/lib/utils';
 import { copyToClipboard } from './_html-block';
 
-/** Where the page goes (Quality spec §7b), and how: pasted rich, downloaded, or as HTML. */
-const DESTINATIONS = ['webflow', 'wordpress', 'shopify', 'docs', 'docx', 'md', 'html'] as const;
+/**
+ * Where the page goes (Quality spec §7b), and how: a file to save (Word,
+ * Excel, CSV, Markdown; HTML copied, or saved), or pasted rich into a
+ * platform's editor. The platforms fold away under the files: more come as
+ * integrations land.
+ */
+const PLATFORMS = ['webflow', 'wordpress', 'shopify', 'docs'] as const;
+type Platform = (typeof PLATFORMS)[number];
+const DESTINATIONS = [...DRAFT_EXPORT_FORMATS, ...PLATFORMS] as const;
 export type ExportDestination = (typeof DESTINATIONS)[number];
-const FILES: Partial<Record<ExportDestination, DraftExportFormat>> = { docx: 'docx', md: 'md' };
+const FILES: Partial<Record<ExportDestination, DraftExportFormat>> = {
+  docx: 'docx',
+  xlsx: 'xlsx',
+  csv: 'csv',
+  md: 'md',
+};
+/** Each platform's site, for its logo (its favicon, as citations show sites). */
+const PLATFORM_SITES: Record<Platform, string> = {
+  webflow: 'webflow.com',
+  wordpress: 'wordpress.org',
+  shopify: 'shopify.com',
+  docs: 'docs.google.com',
+};
+const isPlatform = (d: ExportDestination): d is Platform =>
+  (PLATFORMS as readonly string[]).includes(d);
 /**
  * Destinations whose title field holds the page's title: its H1 isn't in
  * the content too (Markdown's front matter has it: draftMarkdown leaves it out).
@@ -57,7 +82,34 @@ function storedDestination(): ExportDestination {
   } catch {
     // Storage unavailable: the first one.
   }
-  return 'webflow';
+  return 'docx';
+}
+
+/** A destination's mark: a file's icon in its colour (the pill's own when picked), a platform's logo. */
+function DestinationIcon({
+  destination,
+  picked,
+}: {
+  destination: ExportDestination;
+  picked: boolean;
+}) {
+  const [failed, setFailed] = useState(false);
+  if (isPlatform(destination)) {
+    // Its logo didn't load (blocked, offline): a globe, as a site's favicon falls back to.
+    if (failed) return <Globe aria-hidden className="h-3.5 w-3.5 shrink-0" />;
+    return (
+      <Image
+        src={getFaviconUrl(PLATFORM_SITES[destination], 32)}
+        alt=""
+        width={14}
+        height={14}
+        unoptimized
+        className="h-3.5 w-3.5 rounded-sm bg-white object-contain"
+        onError={() => setFailed(true)}
+      />
+    );
+  }
+  return <ExportFormatIcon format={destination} plain={picked} />;
 }
 
 /**
@@ -145,7 +197,10 @@ export function ExportDialog({
     () => initialDestination ?? storedDestination(),
   );
   const [skipPlaceholders, setSkipPlaceholders] = useState(false);
-  const radios = useRef<(HTMLButtonElement | null)[]>([]);
+  // Open when the page goes to a platform; folded away otherwise.
+  const [platformsOpen, setPlatformsOpen] = useState(() => isPlatform(destination));
+  const platformsId = useId();
+  const radios = useRef<Partial<Record<ExportDestination, HTMLButtonElement | null>>>({});
   const placeholders = useMemo(
     () => exportPlaceholders(html) + titlePlaceholders(title, html),
     [html, title],
@@ -182,17 +237,43 @@ export function ExportDialog({
       // The choice just won't be remembered.
     }
   };
-  // Arrow keys move along the destinations, as in any radio group.
-  const onRadioKey = (event: KeyboardEvent, i: number) => {
+  // Arrow keys move along a row's destinations, as in any radio group.
+  const onRadioKey = (event: KeyboardEvent, row: readonly ExportDestination[], i: number) => {
     const step = ({ ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 } as const)[
       event.key as 'ArrowRight'
     ];
     if (!step) return;
     event.preventDefault();
-    const next = (i + step + DESTINATIONS.length) % DESTINATIONS.length;
-    pick(DESTINATIONS[next]);
+    const next = row[(i + step + row.length) % row.length];
+    pick(next);
     radios.current[next]?.focus();
   };
+  // A row of destinations: one radio group, its picked one (else its first) the tab stop.
+  const radioRow = (row: readonly ExportDestination[], label: string) => (
+    <div role="radiogroup" aria-label={label} className="flex flex-wrap gap-1.5">
+      {row.map((d, i) => (
+        <button
+          key={d}
+          ref={(el) => void (radios.current[d] = el)}
+          type="button"
+          role="radio"
+          aria-checked={d === destination}
+          tabIndex={(row.includes(destination) ? d === destination : i === 0) ? 0 : -1}
+          onClick={() => pick(d)}
+          onKeyDown={(event) => onRadioKey(event, row, i)}
+          className={cn(
+            'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium',
+            d === destination
+              ? 'border-foreground bg-foreground text-background'
+              : 'bg-card text-muted-foreground hover:text-foreground',
+          )}
+        >
+          <DestinationIcon destination={d} picked={d === destination} />
+          {t(`destinations.${d}`)}
+        </button>
+      ))}
+    </div>
+  );
   const exportFields: ExportFields = {
     table: {
       note: t('fields.note'),
@@ -336,34 +417,54 @@ export function ExportDialog({
 
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-xl">
+      <DialogContent
+        className="max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-xl"
+        // Focus starts on the destination picked, as a radio group's does:
+        // Enter or Space then keeps it, not the first file's.
+        initialFocus={() => radios.current[destination] ?? true}
+      >
         <DialogHeader>
           <DialogTitle>{t('title')}</DialogTitle>
         </DialogHeader>
 
-        <div className="space-y-1.5">
-          <div role="radiogroup" aria-label={t('destination')} className="flex flex-wrap gap-1.5">
-            {DESTINATIONS.map((d, i) => (
+        <div className="space-y-2">
+          {radioRow(DRAFT_EXPORT_FORMATS, t('formats'))}
+          <section
+            aria-labelledby={`${platformsId}-title`}
+            className="overflow-hidden rounded-xl border"
+          >
+            {/* The whole bar opens it: "Show" and a chevron pointing down say so. */}
+            <h3 className="text-xs font-medium">
               <button
-                key={d}
-                ref={(el) => void (radios.current[i] = el)}
                 type="button"
-                role="radio"
-                aria-checked={d === destination}
-                tabIndex={d === destination ? 0 : -1}
-                onClick={() => pick(d)}
-                onKeyDown={(event) => onRadioKey(event, i)}
-                className={cn(
-                  'rounded-full border px-2.5 py-1 text-xs font-medium',
-                  d === destination
-                    ? 'border-foreground bg-foreground text-background'
-                    : 'bg-card text-muted-foreground hover:text-foreground',
-                )}
+                aria-expanded={platformsOpen}
+                aria-controls={platformsId}
+                onClick={() => setPlatformsOpen((open) => !open)}
+                className="group flex w-full cursor-pointer items-center gap-2 px-3 py-2 text-left transition-colors hover:bg-muted/50 focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none focus-visible:ring-inset"
               >
-                {t(`destinations.${d}`)}
+                <span id={`${platformsId}-title`}>{t('platforms')}</span>
+                {/* Folded, the platform picked is still named. */}
+                {!platformsOpen && isPlatform(destination) && (
+                  <span className="font-normal text-muted-foreground">
+                    {t(`destinations.${destination}`)}
+                  </span>
+                )}
+                <span className="ml-auto flex items-center gap-1 text-foreground group-hover:underline">
+                  {platformsOpen ? t('hide') : t('show')}
+                  <ChevronDown
+                    aria-hidden
+                    className={cn(
+                      'h-4 w-4 shrink-0 transition-transform',
+                      platformsOpen && 'rotate-180',
+                    )}
+                  />
+                </span>
               </button>
-            ))}
-          </div>
+            </h3>
+            <div id={platformsId} hidden={!platformsOpen} className="px-3 pb-2.5">
+              {radioRow(PLATFORMS, t('platforms'))}
+            </div>
+          </section>
           <DialogDescription className="text-xs">{t(`hints.${destination}`)}</DialogDescription>
         </div>
 

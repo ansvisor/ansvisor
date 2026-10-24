@@ -8,7 +8,6 @@ import {
   Bot,
   Check,
   Clock,
-  Download,
   ExternalLink,
   FileText,
   MoreHorizontal,
@@ -16,6 +15,7 @@ import {
   Trash2,
 } from 'lucide-react';
 import { Link } from '@/i18n/navigation';
+import { ExportFormatIcon } from '@/components/content/export-format-icon';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -52,7 +52,7 @@ import {
   type LibraryTab,
 } from '@/lib/content/drafts';
 import type { CmsStatus } from '@/lib/content/cms-send-client';
-import type { DraftExportFormat } from '@/lib/content/draft-export';
+import { DRAFT_EXPORT_FORMATS, type DraftExportFormat } from '@/lib/content/draft-export';
 import { formatDate, formatMonthDay } from '@/lib/format';
 
 /** A date this year as "Oct 16", an older one with its year, so the table fits at 1024 px. */
@@ -249,9 +249,9 @@ function RowMenu({ draft, actions }: { draft: ContentDraftListItem; actions: Lib
           ))}
         </DropdownMenuGroup>
         <DropdownMenuSeparator />
-        {(['docx', 'html', 'md'] as const).map((format) => (
+        {DRAFT_EXPORT_FORMATS.map((format) => (
           <DropdownMenuItem key={format} onClick={() => actions.onExport(draft, format)}>
-            <Download className="h-4 w-4" />
+            <ExportFormatIcon format={format} className="h-4 w-4" />
             {tExport(format)}
           </DropdownMenuItem>
         ))}

@@ -6,7 +6,8 @@ import { qualityPhase } from '@/lib/content/quality';
 
 /**
  * Library pages for Send to CMS (#1331), made ready as the editor makes its
- * own: their author and the brand's byline line once Quality is live. Read a
+ * own: their author, the team and the brand's byline line in the page's
+ * language once Quality is live. Read a
  * slice at a time, as the Library's Export reads them; a page gone meanwhile
  * is left out.
  */
@@ -15,13 +16,11 @@ export async function readCmsSources({
   draftIds,
   brandName,
   brandLanguage,
-  teamByline,
 }: {
   brandId: string;
   draftIds: string[];
   brandName: string;
   brandLanguage: string | null | undefined;
-  teamByline: (brand: string) => string;
 }): Promise<Map<string, CmsSource>> {
   const readPages = async () => {
     const pages: DraftPage[] = [];
@@ -47,7 +46,6 @@ export async function readCmsSources({
         brandId,
         brandName: name,
         brandLanguage,
-        teamByline: teamByline(name),
       }),
     ]),
   );

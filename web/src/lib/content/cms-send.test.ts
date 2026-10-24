@@ -193,7 +193,6 @@ describe('cmsSource', () => {
       brandId: 'b1',
       brandName: 'Acme',
       brandLanguage: 'en',
-      teamByline: 'Acme Team',
       ...over,
     });
 
@@ -218,6 +217,17 @@ describe('cmsSource', () => {
       source({ authors: authors(true), page: { ...stored, language: 'German', authorId: null } })
         .byline,
     ).toBe('Vom Acme-Team');
+  });
+
+  it('names the team in the page’s language, for the CMS’s author field, as Export does', () => {
+    expect(source({ brandLanguage: 'tr' }).teamByline).toBe('Acme Ekibi');
+    expect(source({ page: { ...stored, language: 'German' } }).teamByline).toBe('Acme-Team');
+    // The page's own language over a brand's that isn't English.
+    expect(
+      source({ brandLanguage: 'tr', page: { ...stored, language: 'German' } }).teamByline,
+    ).toBe('Acme-Team');
+    // No brand name read: no team to name.
+    expect(source({ brandName: '' }).teamByline).toBe('');
   });
 
   it('gives no author or team byline while Quality is off', () => {
