@@ -1,6 +1,6 @@
 import supabaseAdmin from '../config/supabase.js';
 import { isCloud, isSubscriptionActive } from '../config/plans.js';
-import { refreshBrandFacts } from './brand-facts.js';
+import { refreshOnce } from './brand-facts.js';
 import { qualityPhase } from './content-quality.js';
 import { logger } from './logger.js';
 
@@ -10,8 +10,8 @@ import { logger } from './logger.js';
  * ago, the longest waiting first, SWEEP_LIMIT a run. Only brands read
  * before (someone opened their facts): a brand no one uses the Content
  * Editor for costs nothing. A page that hasn't changed isn't read by the
- * model (refreshBrandFacts); a value that has is a new pending fact, the
- * to-do. Approved facts gone from the site for GONE_KEEP_DAYS go.
+ * model (refreshBrandFacts, once at a time with the tab's reads); a value
+ * that has is a new pending fact, the to-do. Approved facts gone from the site for GONE_KEEP_DAYS go.
  */
 
 export const REFRESH_DAYS = 7;
@@ -38,7 +38,7 @@ export async function sweepBrandFacts({
   now = Date.now(),
   limit = SWEEP_LIMIT,
   db = supabaseAdmin,
-  refresh = refreshBrandFacts,
+  refresh = refreshOnce,
 } = {}) {
   if (qualityPhase() < 2) return { skipped: 'off' };
   const nowIso = new Date(now).toISOString();

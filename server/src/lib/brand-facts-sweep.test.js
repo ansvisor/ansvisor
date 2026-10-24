@@ -11,7 +11,7 @@ vi.mock('../config/plans.js', () => ({
   isCloud: () => cloud,
   isSubscriptionActive: (status) => status === 'active' || status === 'trialing',
 }));
-vi.mock('./brand-facts.js', () => ({ refreshBrandFacts: vi.fn() }));
+vi.mock('./brand-facts.js', () => ({ refreshOnce: vi.fn() }));
 
 const { GONE_KEEP_DAYS, REFRESH_DAYS, sweepBrandFacts } = await import('./brand-facts-sweep.js');
 
