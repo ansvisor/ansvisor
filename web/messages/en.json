@@ -4543,6 +4543,7 @@
         },
         "linksPending": "Still reading {count, plural, one {# of the page's links} other {# of the page's links}}, so Trust may change.",
         "claimsReading": "Still reading the claims in your own words, so Trust may change.",
+        "pageReading": "Still reading the page for claims that need your proof, so your to-dos may change.",
         "datesNote": "The dates are today's: change them if the page goes out on another day.",
         "headlineLeftOut": "The title still has a placeholder in square brackets, so the code leaves the headline out. Fill it in, and the headline comes back here.",
         "states": {
@@ -4654,6 +4655,26 @@
             "detail": "Prices, your trial and other facts read from your own site: the page is checked against the ones you approve",
             "done": "Your brand facts are reviewed"
           },
+          "proof": {
+            "title": {
+              "award": "Link the award page for “{claim}”",
+              "certification": "{site, select, b2b {Link the audit report or trust page for “{claim}”} ecommerce {Link the certificate or lab result for “{claim}”} other {Link the licence or certificate for “{claim}”}}",
+              "research": "Link the study behind “{claim}”",
+              "rating": "Link the review source for “{claim}”",
+              "ranking": "Link the ranking or test behind “{claim}”",
+              "number": "Link the source of “{claim}”",
+              "test": "{site, select, ecommerce {Link the test report for “{claim}”} other {Link your test result for “{claim}”}}",
+              "customer_case": "Link the customer case for “{claim}”",
+              "unknown": "What proves “{claim}”?"
+            },
+            "next": "add proof for “{claim}”",
+            "detail": {
+              "default": "Only you have this proof: link it on your site or where it's published",
+              "soften": "Link its proof, or soften the claim",
+              "customerCase": "Link the published case, and only with the customer's permission to name them"
+            },
+            "done": "The proof is linked"
+          },
           "title": "Your to-dos",
           "left": "{count, plural, =0 {All done} other {# left · only you can do these}}",
           "done": "Done",
@@ -4707,7 +4728,8 @@
             "addAuthor": "Add now",
             "editAuthor": "Edit now",
             "addInput": "Add now",
-            "reviewBrandFacts": "Review now"
+            "reviewBrandFacts": "Review now",
+            "addProof": "Add now"
           },
           "later": "Later"
         },
@@ -4723,11 +4745,15 @@
         "aiCheck": "AI check",
         "addSource": "Add source",
         "addSourceTo": "Add a source to “{claim}”",
+        "addProof": "Add proof link",
+        "addProofFor": "Add a proof link to “{claim}”",
         "remove": "Remove",
         "removeClaim": "Remove “{sentence}” from the page",
         "claimNoSource": "No source for this claim. Add a source, or take it out. Content Agent will not make one up.",
         "claimsPaused": "Claims in your own words wait for an AI check: this month's AI usage is used up. They're read again when it renews.",
         "claimsLimited": "Today's AI checks of this page's claims are used up. Paragraphs you change now are checked when you open the page again tomorrow.",
+        "pagePaused": "Claims that need your proof wait for an AI read of the page: this month's AI usage is used up. The page is read again when it renews.",
+        "pageLimited": "Today's AI reads of this page are used up. Changes you make now are read when you open the page again tomorrow.",
         "aiPaused": "Sources the rules can't place wait for an AI check: this month's AI usage is used up. They count again when it renews.",
         "keepFailed": "Couldn't keep the source. Try again.",
         "keepFull": "This page keeps 50 sources already: replace one instead.",

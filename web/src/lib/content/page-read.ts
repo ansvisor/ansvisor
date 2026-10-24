@@ -1,0 +1,84 @@
+import { cleanHref } from './html-allowlist';
+import { sentencesOf } from './readability';
+import type { TrustBlock } from './quality-checks';
+
+/**
+ * A page's read for proof (Content Editor Quality spec §4b, CE-049), as the
+ * API's page read gives it (content-quality-page.js): visual proof spots —
+ * one specific image the business can take itself, for a passage — and
+ * proof asks — the page's own claims whose proof only the business has,
+ * each with the kind of proof it needs. Each names its block by its words
+ * as Trust's blocks have them.
+ */
+
+export const PROOF_KINDS = [
+  'award',
+  'certification',
+  'research',
+  'rating',
+  'ranking',
+  'number',
+  'test',
+  'customer_case',
+  'unknown',
+] as const;
+export type ProofKind = (typeof PROOF_KINDS)[number];
+
+export interface ProofSpot {
+  /** The words the image supports, as the page has them. */
+  passage: string;
+  /** Its block's words (trustBlocks). */
+  block: string;
+  /** What the image shows. */
+  image: string;
+  /** Its alt text, drafted from the passage. */
+  alt: string;
+}
+
+export interface ProofAsk {
+  /** The claim's words, as the page has them. */
+  claim: string;
+  block: string;
+  kind: ProofKind;
+}
+
+export interface PageRead {
+  spots: ProofSpot[];
+  proofs: ProofAsk[];
+  regulated: 'health' | 'finance' | 'legal' | null;
+}
+
+/** The proof to-dos open at once at most: the page's first claims. */
+export const MAX_PROOF_TODOS = 5;
+
+/** A proof ask on the page as it is: its sentence, and whether its block links out. */
+export interface PageProof extends ProofAsk {
+  sentence: string;
+  linked: boolean;
+}
+
+/**
+ * The page's proof asks as the page is now, in its order: each whose block
+ * is still there, with the sentence that holds its claim and whether the
+ * block links out (an http(s) link, as Trust reads it: its proof, on the
+ * brand's site or another).
+ */
+export function proofsOnPage(blocks: TrustBlock[], proofs: readonly ProofAsk[]): PageProof[] {
+  const seen = new Set<string>();
+  return blocks.flatMap((block) =>
+    proofs
+      .filter((proof) => proof.block === block.text && block.text.includes(proof.claim))
+      // A block the page has twice: its claims once.
+      .filter((proof) => {
+        const key = `${proof.claim}\n${proof.block}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      })
+      .map((proof) => ({
+        ...proof,
+        sentence: sentencesOf(block.text).find((s) => s.includes(proof.claim)) ?? proof.claim,
+        linked: block.links.some((href) => /^https?:\/\//i.test(cleanHref(href) ?? '')),
+      })),
+  );
+}

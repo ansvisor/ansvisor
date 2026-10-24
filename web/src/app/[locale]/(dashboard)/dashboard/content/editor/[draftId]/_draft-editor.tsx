@@ -105,9 +105,10 @@ import {
   unplacedSites,
   type ClaimMark,
 } from '@/lib/content/quality-checks';
-import { qualityTodos } from '@/lib/content/quality-todos';
+import { proofKey, qualityTodos } from '@/lib/content/quality-todos';
 import { readability, sentencesOf } from '@/lib/content/readability';
 import { brandFactsPath, factMismatches } from '@/lib/content/brand-facts';
+import { proofsOnPage } from '@/lib/content/page-read';
 import {
   liveSkips,
   nextStep,
@@ -158,6 +159,7 @@ import { WeakSourcesMarks, weakSourcesKey } from './_weak-sources';
 import { ClaimMarksExtension, claimMarksKey, textRanges, writingBlock } from './_claim-marks';
 import { useClaims } from './_use-claims';
 import { useBrandFacts } from './_use-brand-facts';
+import { usePageRead } from './_use-page-read';
 import { useSourceClasses } from './_use-source-classes';
 import { HeaderTip } from './_header-tip';
 import { NextStepButton, readSkips, wordsUnderTitle, writeSkips } from './_next-step';
@@ -629,6 +631,21 @@ export function DraftEditor({
     () => (editor && !editor.isDestroyed && editor.isFocused ? writingBlock(editor) : null),
   );
   const { blocks: claimBlocks, recheck: recheckClaims } = claimsRead;
+  // The page's own claims that need the brand's proof (CE-049), read from
+  // the whole page after a save: proof to-dos while their paragraph has no
+  // link, and its own-site link counts as their source.
+  const pageRead = usePageRead(draft.id, autosave.savedAt, sourcesOn, autosave.state !== 'saved');
+  const proofAsks = useMemo(
+    () => (pageRead.read ? proofsOnPage(pageBlocks, pageRead.read.proofs) : []),
+    [pageRead.read, pageBlocks],
+  );
+  const proofBlocks = useMemo(() => proofAsks.map((ask) => ask.block), [proofAsks]);
+  // A proof to-do asked for this session stays, checked once it has a link.
+  const [hadProofs, setHadProofs] = useState<ReadonlySet<string>>(() => new Set());
+  const newProofs = proofAsks
+    .map(proofKey)
+    .filter((key, i) => !proofAsks[i].linked && !hadProofs.has(key));
+  if (newProofs.length > 0) setHadProofs(new Set([...hadProofs, ...newProofs]));
   // Out of the editor (to Quality, to Before you publish): the block left
   // for later is read too.
   useEffect(() => {
@@ -663,6 +680,7 @@ export function DraftEditor({
             sources: sourceRead,
             claims: claimBlocks,
             brandFacts: factCheck,
+            proofBlocks,
             now: Date.now(),
           })
         : null,
@@ -677,6 +695,7 @@ export function DraftEditor({
       sourceRead,
       claimBlocks,
       factCheck,
+      proofBlocks,
     ],
   );
   // Their links underlined in the draft, Quality's suggestion naming them.
@@ -795,6 +814,7 @@ export function DraftEditor({
         given: inputs ? inputsGiven(inputs) : null,
         trust: trustScore,
         brandFacts: brandFacts ? { pending: pendingFacts, had: hadPendingFacts } : null,
+        proofs: sourcesOn ? { asks: proofAsks, had: hadProofs } : null,
       })
     : [];
   const quality: QualityRead | null = qualityOn
@@ -814,6 +834,10 @@ export function DraftEditor({
         claimsPaused: claimsRead.paused,
         claimsLimited: claimsRead.limited,
         claimsReading: claimsRead.reading,
+        pagePaused: pageRead.paused,
+        pageLimited: pageRead.limited,
+        pageReading: pageRead.reading,
+        siteType,
         brandFactsPath: sourcesOn ? brandFactsPath(draft.brandId) : null,
       }
     : null;
@@ -2640,6 +2664,7 @@ export function DraftEditor({
                 onShowPlaceholder={showFirstPlaceholder}
                 onPickAuthor={() => setAuthorMenuOpen(true)}
                 onAddInput={addInput}
+                onAddSource={sourcesOn ? addSource : undefined}
                 onLater={nudge.later}
                 onAct={nudge.close}
               />

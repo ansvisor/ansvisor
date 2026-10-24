@@ -55,6 +55,7 @@ let container: HTMLDivElement;
 let root: Root;
 const onPickAuthor = vi.fn();
 const onShowPlaceholder = vi.fn();
+const onAddSource = vi.fn();
 const MOMENTS: NudgeMoment[] = ['agent', 'acceptAll', 'markReady'];
 
 /** The editor's part: the hook, a button per moment, and the nudge while it shows. */
@@ -75,6 +76,7 @@ function Harness({ todos, author }: { todos: QualityTodo[]; author: ContentAutho
         }}
         onShowPlaceholder={onShowPlaceholder}
         onPickAuthor={onPickAuthor}
+        onAddSource={onAddSource}
         onLater={nudge.later}
         onAct={nudge.close}
       />
@@ -102,6 +104,7 @@ beforeEach(() => {
   sessionStorage.clear();
   onPickAuthor.mockReset();
   onShowPlaceholder.mockReset();
+  onAddSource.mockReset();
   container = document.createElement('div');
   root = createRoot(container);
 });
@@ -157,6 +160,34 @@ describe('NextNudge', () => {
     expect(button('Review now').getAttribute('href')).toBe(
       '/dashboard/brands/b1/settings?tab=facts',
     );
+  });
+
+  it("selects a proof to-do's claim for its link, each claim once per moment (CE-049)", async () => {
+    const proof = (claim: string): QualityTodo => ({
+      id: 'proof',
+      key: `proof:${claim}\nWe are ${claim}.`,
+      done: false,
+      gain: 4,
+      score: 'trust',
+      action: 'addProof',
+      proof: { claim, block: `We are ${claim}.`, kind: 'award', sentence: `We are ${claim}.` },
+    });
+    await render([proof('award-winning'), proof('SOC 2 certified')]);
+    await act(async () => nudgeAt('agent'));
+    expect(nudge()!.textContent).toBe(
+      'Next for you: add proof for “award-winning” · 1 of 2Add nowLater',
+    );
+    await act(async () => button('Add now').click());
+    expect(onAddSource).toHaveBeenCalledWith({
+      text: 'award-winning',
+      sentence: 'We are award-winning.',
+      block: 'We are award-winning.',
+    });
+    expect(nudge()).toBeNull();
+    // The next claim is another to-do: the same moment shows it.
+    await render([proof('SOC 2 certified')]);
+    await act(async () => nudgeAt('agent'));
+    expect(nudge()!.textContent).toContain('add proof for “SOC 2 certified”');
   });
 
   it('counts the open ones and skips the done', async () => {

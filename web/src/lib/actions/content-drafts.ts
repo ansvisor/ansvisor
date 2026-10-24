@@ -39,6 +39,7 @@ import { sanitizeDraftHtml } from '@/lib/content/sanitize-draft-html';
 import { matchPagePrompts } from '@/lib/content/page-prompts';
 import type { LinkCheck } from '@/lib/content/quality-checks';
 import { CLAIM_KINDS, type ClaimBlock } from '@/lib/content/claims';
+import { PROOF_KINDS, type PageRead } from '@/lib/content/page-read';
 import { MAX_SOURCE_SITES, type AiSourceClass } from '@/lib/content/source-class';
 import {
   NO_DRAFT_RULES,
@@ -2304,4 +2305,66 @@ export async function saveMyRuleSet(
     { onConflict: 'organization_id,site_type,page_type' },
   );
   if (error) throw new Error(error.message);
+}
+
+/**
+ * Quality's page read for proof (CE-049): the draft's visual proof spots
+ * and proof asks, read by the API from the page as saved, with its page
+ * type and the brand's business type; once a minute at most (`pending`:
+ * the kept read stands, ask again), `limited` once the draft's page reads
+ * for the day are made, `paused` when the AI budget is spent. Returned, not
+ * thrown: 'off' before Quality's phase 2 is live on the API.
+ */
+export async function readDraftPage(
+  id: string,
+): Promise<
+  | (PageRead & { pending: boolean; limited: boolean; paused: boolean })
+  | { error: 'invalid' | 'failed' | 'off' }
+> {
+  if (!draftId.safeParse(id).success) return { error: 'invalid' };
+  const supabase = await createClient();
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  if (!session) return { error: 'failed' };
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/content-pages/page-read`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${session.access_token}`,
+      },
+      body: JSON.stringify({ draftId: id }),
+    });
+    if (res.status === 404) {
+      const body = (await res.json().catch(() => ({}))) as { code?: string };
+      return { error: body.code === 'off' ? 'off' : 'failed' };
+    }
+    if (!res.ok) return { error: 'failed' };
+    const body = (await res.json()) as Partial<PageRead> & {
+      pending?: boolean;
+      limited?: boolean;
+      paused?: boolean;
+    };
+    const kinds: readonly string[] = PROOF_KINDS;
+    const text = (value: unknown) => typeof value === 'string' && value.length > 0;
+    return {
+      spots: (body.spots ?? []).filter(
+        (s) => text(s.passage) && text(s.block) && text(s.image) && text(s.alt),
+      ),
+      proofs: (body.proofs ?? []).filter(
+        (p) => text(p.claim) && text(p.block) && kinds.includes(p.kind),
+      ),
+      regulated:
+        body.regulated === 'health' || body.regulated === 'finance' || body.regulated === 'legal'
+          ? body.regulated
+          : null,
+      pending: body.pending ?? false,
+      limited: body.limited ?? false,
+      paused: body.paused ?? false,
+    };
+  } catch (err) {
+    console.error('Failed to read the draft page:', err);
+    return { error: 'failed' };
+  }
 }

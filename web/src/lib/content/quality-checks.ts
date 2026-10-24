@@ -97,6 +97,25 @@ export function scoreGain<Id extends string>(result: Score<Id>, ids: Id[]): numb
 }
 
 /**
+ * What sourcing one sentence would add to Trust: its share of the claims'
+ * points (CE-049's proof to-dos). Zero when Trust isn't scored or the
+ * sentence has its source.
+ */
+export function sentenceGain(
+  trust: (Score<TrustCheckId> & Partial<Pick<TrustRead, 'unsourced' | 'figures'>>) | null,
+  sentence: string,
+): number {
+  if (!trust || trust.score === null || !trust.unsourced?.includes(sentence)) return 0;
+  const figures = trust.figures ?? 0;
+  const raised = trust.checks.map((c) =>
+    c.id === 'claimsSourced' && figures > 0
+      ? { ...c, points: Math.min(c.max, c.points + c.max / figures) }
+      : c,
+  );
+  return (scoreOf(raised).score ?? 0) - trust.score;
+}
+
+/**
  * A Trust suggestion's gain. While Trust isn't scored (no figure and no
  * dated source yet), the checks' missing points count out of the Phase 1
  * points, so a broken link still says what fixing it is worth.
@@ -334,6 +353,10 @@ export interface SourceRead {
  * With `brandFacts` (Phase 2, CE-047), the page's prices, trial and founding
  * year compared with the brand's approved facts count: the share that
  * matched. Like a working link, it doesn't score Trust on its own.
+ *
+ * With `proofBlocks` (Phase 2, CE-049), a block holding the brand's own
+ * claim (an award, a certification, its own test) is sourced by a link to
+ * the brand's own site too: its award or trust page is the proof.
  */
 export function trust({
   blocks,
@@ -344,6 +367,7 @@ export function trust({
   sources: kinds = null,
   claims = null,
   brandFacts = null,
+  proofBlocks = null,
   now,
 }: {
   /** The page's blocks (trustBlocks). */
@@ -364,6 +388,8 @@ export function trust({
   claims?: readonly ClaimBlock[] | null;
   /** Phase 2: the page against the brand's approved facts (factMismatches, CE-047); left out before. */
   brandFacts?: { compared: number; mismatches: FactMismatch[] } | null;
+  /** Phase 2: the blocks holding the brand's own claims (the page read's proofs, CE-049). */
+  proofBlocks?: readonly string[] | null;
   now: number;
 }): TrustRead {
   const all = pageLinks(blocks, brandDomains);
@@ -372,7 +398,9 @@ export function trust({
   // Each sentence once, where the page has it first: a nested list item's
   // text is its parent's too.
   const figures = new Map<string, { sourced: boolean; block: number }>();
-  const sourcedBlock = (index: number) => all.some((l) => l.external && l.block === index);
+  const ownProof = new Set(proofBlocks ?? []);
+  const sourcedBlock = (index: number) =>
+    all.some((l) => (l.external || ownProof.has(blocks[index].text)) && l.block === index);
   const addFigure = (sentence: string, block: number) => {
     const had = figures.get(sentence);
     figures.set(sentence, {

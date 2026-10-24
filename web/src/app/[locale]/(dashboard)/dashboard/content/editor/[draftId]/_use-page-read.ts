@@ -1,0 +1,105 @@
+'use client';
+
+import { useEffect, useRef, useState } from 'react';
+import { readDraftPage } from '@/lib/actions/content-drafts';
+import type { PageRead } from '@/lib/content/page-read';
+
+/** How long after a save the page is asked about, as the claims are. */
+export const PAGE_READ_DELAY_MS = 3_000;
+/** Asks no closer together than this: the API reads a changed page once a minute. */
+export const PAGE_READ_EVERY_MS = 60_000;
+
+export interface PageReadState {
+  /** The page's spots and proof asks, null until the first read. */
+  read: PageRead | null;
+  /** The workspace's AI budget is spent: no more asks this session. */
+  paused: boolean;
+  /** The draft's page reads for the day are made: no more asks this session. */
+  limited: boolean;
+  /** An ask is out, or the page changed within the API's minute. */
+  reading: boolean;
+}
+
+/**
+ * The page's read for proof (Quality CE-049). The API reads the draft as
+ * saved and keeps its read by the page's hash, so the editor asks a few
+ * seconds after a save, PAGE_READ_EVERY_MS apart at most, one ask at a
+ * time, and not while there are changes to save. An answer the API kept
+ * from before the page changed (`pending`) is asked about again a minute
+ * later, without a save. A spent AI budget or the day's reads made stop the
+ * asks for the session; an API with them off stops them silently; a failed
+ * ask waits for the next save.
+ */
+export function usePageRead(
+  draftId: string,
+  savedAt: string,
+  enabled: boolean,
+  unsaved: boolean,
+): PageReadState {
+  const [read, setRead] = useState<PageRead | null>(null);
+  const [paused, setPaused] = useState(false);
+  const [limited, setLimited] = useState(false);
+  const [off, setOff] = useState(false);
+  const [out, setOut] = useState(false);
+  const [pending, setPending] = useState(false);
+  // Bumped when the next ask needn't wait for a save.
+  const [again, setAgain] = useState(0);
+  const asking = useRef(false);
+  const latest = useRef(savedAt);
+  const askedFor = useRef<string | null>(null);
+  const lastAsk = useRef(0);
+  const left = useRef(false);
+  const open = useRef(true);
+  useEffect(() => {
+    latest.current = savedAt;
+  });
+  useEffect(() => {
+    open.current = true;
+    return () => {
+      open.current = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    // Changes not saved yet: their save asks.
+    if (!enabled || paused || limited || off || unsaved) return;
+    if (askedFor.current === savedAt && !left.current) return;
+    const wait = Math.max(PAGE_READ_DELAY_MS, lastAsk.current + PAGE_READ_EVERY_MS - Date.now());
+    const timer = setTimeout(() => {
+      // One at a time: a save while one is out is asked about after it.
+      if (asking.current) return;
+      asking.current = true;
+      askedFor.current = savedAt;
+      lastAsk.current = Date.now();
+      left.current = false;
+      setOut(true);
+      readDraftPage(draftId)
+        .then((result) => {
+          if (!open.current) return;
+          if ('error' in result) {
+            if (result.error === 'off') setOff(true);
+            // Failed: asked about again after the next save, not on a timer.
+            else console.error('Failed to read the page:', result.error);
+            return;
+          }
+          const { pending: kept, limited: full, paused: spent, ...page } = result;
+          setRead(page);
+          setPending(kept);
+          if (spent) setPaused(true);
+          else if (full) setLimited(true);
+          else if (kept) left.current = true;
+        })
+        .catch((err) => console.error('Failed to read the page:', err))
+        .finally(() => {
+          asking.current = false;
+          if (!open.current) return;
+          setOut(false);
+          if (latest.current !== askedFor.current || left.current) setAgain((n) => n + 1);
+        });
+    }, wait);
+    return () => clearTimeout(timer);
+  }, [draftId, savedAt, enabled, paused, limited, off, unsaved, again]);
+
+  const reading = enabled && !paused && !limited && !off && (out || pending);
+  return { read, paused, limited, reading };
+}

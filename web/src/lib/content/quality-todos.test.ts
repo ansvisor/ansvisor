@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import type { ContentAuthor } from './authors';
-import { eeat, trust } from './quality-checks';
-import { qualityTodos } from './quality-todos';
+import type { PageProof } from './page-read';
+import { eeat, trust, trustBlocks } from './quality-checks';
+import { proofKey, qualityTodos } from './quality-todos';
 
 /** Your to-dos (Quality spec §4, CE-040): only what the person can do, read from the checks. */
 
@@ -207,5 +208,102 @@ describe('qualityTodos', () => {
     expect(facts(0, true)).toEqual([expect.objectContaining({ id: 'brandFacts', done: true })]);
     expect(facts(0, false)).toEqual([]);
     expect(qualityTodos({ eeat: null, author: null, hasAuthors: true })).toEqual([]);
+  });
+
+  it("asks for the proof of the page's own claims, at most five open, and keeps one checked once linked (CE-049)", () => {
+    const NOW = Date.parse('2026-10-24');
+    const proof = (claim: string, linked = false): PageProof => ({
+      claim,
+      block: `Ledgerly is ${claim}.`,
+      kind: 'award',
+      sentence: `Ledgerly is ${claim}.`,
+      linked,
+    });
+    const trustScore = trust({
+      blocks: trustBlocks('<p>Ledgerly is 40% faster.</p><p>Sales grew 3x in 2025.</p>'),
+      links: new Map(),
+      brandDomains: [],
+      now: NOW,
+    });
+    const read = (asks: PageProof[], had: string[] = []) =>
+      qualityTodos({
+        eeat: null,
+        author: null,
+        hasAuthors: true,
+        trust: trustScore,
+        proofs: { asks, had: new Set(had) },
+        brandFacts: { pending: 1, had: true },
+      });
+    const [first] = read([proof('40% faster')]);
+    expect(first).toEqual({
+      id: 'proof',
+      key: proofKey(proof('40% faster')),
+      done: false,
+      // Its sentence is one of Trust's two unsourced figures.
+      gain: expect.any(Number),
+      score: 'trust',
+      action: 'addProof',
+      proof: {
+        claim: '40% faster',
+        block: 'Ledgerly is 40% faster.',
+        kind: 'award',
+        sentence: 'Ledgerly is 40% faster.',
+      },
+    });
+    expect(first.gain).toBeGreaterThan(0);
+    // A claim Trust doesn't count: no gain made up. The brand facts stay last.
+    expect(read([proof('award-winning')]).map((t) => [t.id, t.gain])).toEqual([
+      ['proof', 0],
+      ['brandFacts', 0],
+    ]);
+    // Linked before it was asked for: no to-do. Linked after: checked.
+    expect(read([proof('award-winning', true)]).map((t) => t.id)).toEqual(['brandFacts']);
+    expect(
+      read([proof('award-winning', true)], [proofKey(proof('award-winning'))])[0],
+    ).toMatchObject({ id: 'proof', done: true, gain: 0 });
+    // Five open at once, in the page's order; a checked one doesn't count.
+    const many = ['a', 'b', 'c', 'd', 'e', 'f'].map((c) => proof(`claim ${c}`));
+    const open = read([proof('done', true), ...many], [proofKey(proof('done'))]);
+    expect(open.filter((t) => t.id === 'proof').map((t) => t.proof!.claim)).toEqual([
+      'done',
+      'claim a',
+      'claim b',
+      'claim c',
+      'claim d',
+      'claim e',
+    ]);
+  });
+
+  it("lists the proof to-dos after the person's input and before the brand facts", () => {
+    const none = { experience: false, data: false, quote: false };
+    const ids = qualityTodos({
+      eeat: eeat({ author: author(), used: none }),
+      author: author(),
+      hasAuthors: true,
+      used: none,
+      given: null,
+      proofs: {
+        asks: [
+          {
+            claim: 'award-winning',
+            block: 'We are award-winning.',
+            kind: 'award',
+            sentence: 'We are award-winning.',
+            linked: false,
+          },
+        ],
+        had: new Set(),
+      },
+      brandFacts: { pending: 2, had: true },
+    }).map((t) => t.id);
+    expect(ids).toEqual([
+      'byline',
+      'authorProfile',
+      'experience',
+      'originalData',
+      'expertQuote',
+      'proof',
+      'brandFacts',
+    ]);
   });
 });

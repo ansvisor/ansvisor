@@ -9,6 +9,7 @@ import {
   eeat,
   linksToCheck,
   scoreGain,
+  sentenceGain,
   trust,
   trustBlocks,
   trustGain,
@@ -575,5 +576,41 @@ describe('trust: consistent with brand facts (Phase 2, CE-047)', () => {
     const alone = read({ compared: 1, mismatches: [] }, '<p>A page with no figure.</p>');
     expect(alone.score).toBeNull();
     expect(read(null).mismatches).toEqual([]);
+  });
+});
+
+describe('trust: the proof of the brand’s own claims (Phase 2, CE-049)', () => {
+  const NOW = Date.parse('2026-10-24T12:00:00Z');
+  const html =
+    '<p>Ledgerly cut close times by 40% (<a href="https://www.acme.com/awards">award</a>).</p>' +
+    '<p>Teams forecast 3x faster (<a href="https://www.acme.com/blog">blog</a>).</p>';
+  const read = (proofBlocks: string[] | null) =>
+    trust({
+      blocks: trustBlocks(html),
+      links: new Map(),
+      brandDomains: ['acme.com'],
+      proofBlocks,
+      now: NOW,
+    });
+
+  it("counts a link to the brand's own site as the source of its own claim, and nowhere else", () => {
+    expect(read(null).unsourced).toEqual([
+      'Ledgerly cut close times by 40% ( award).',
+      'Teams forecast 3x faster ( blog).',
+    ]);
+    expect(read(['Ledgerly cut close times by 40% ( award).']).unsourced).toEqual([
+      'Teams forecast 3x faster ( blog).',
+    ]);
+  });
+
+  it("gives a sentence's gain only while it is unsourced", () => {
+    const result = read(null);
+    const gain = sentenceGain(result, 'Teams forecast 3x faster ( blog).');
+    expect(gain).toBeGreaterThan(0);
+    expect(gain).toBe(
+      (read(['Teams forecast 3x faster ( blog).']).score ?? 0) - (result.score ?? 0),
+    );
+    expect(sentenceGain(result, 'Not on the page.')).toBe(0);
+    expect(sentenceGain(null, 'Teams forecast 3x faster ( blog).')).toBe(0);
   });
 });

@@ -19,6 +19,7 @@ const setContentDraftPageType = vi.fn();
 const setContentDraftAuthor = vi.fn();
 const keepDraftSource = vi.fn();
 const checkDraftClaims = vi.fn();
+const readDraftPage = vi.fn();
 const getBrandFacts = vi.fn();
 const checkDraftLinks = vi.fn();
 const getSiteTrust = vi.fn();
@@ -89,6 +90,7 @@ vi.mock('@/lib/actions/content-drafts', () => ({
   setContentDraftAuthor: (...args: unknown[]) => setContentDraftAuthor(...args),
   keepDraftSource: (...args: unknown[]) => keepDraftSource(...args),
   checkDraftClaims: (...args: unknown[]) => checkDraftClaims(...args),
+  readDraftPage: (...args: unknown[]) => readDraftPage(...args),
   checkDraftLinks: (...args: unknown[]) => checkDraftLinks(...args),
 }));
 vi.mock('next/navigation', () => ({ useParams: () => ({ draftId: 'd1' }) }));
@@ -287,6 +289,7 @@ beforeEach(() => {
   setContentDraftAuthor.mockReset().mockResolvedValue(undefined);
   keepDraftSource.mockReset();
   checkDraftClaims.mockReset().mockResolvedValue({ blocks: [], pending: 0, limited: false });
+  readDraftPage.mockReset().mockResolvedValue({ error: 'off' });
   getBrandFacts.mockReset().mockResolvedValue({
     facts: [],
     pages: [],
@@ -2741,6 +2744,54 @@ describe('the side panel', () => {
         '.ProseMirror a[href="https://g2.example/forecasting"]',
       );
       expect(link?.textContent).toBe('the fastest forecasting app');
+    });
+
+    it("asks for the proof of the brand's own claim, and Add proof link selects it (CE-049)", async () => {
+      process.env.NEXT_PUBLIC_CONTENT_QUALITY_PHASE = '2';
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+      const block = `${said} It is easy to set up for any team.`;
+      checkDraftClaims.mockResolvedValue({
+        blocks: [
+          { text: block, claims: [{ text: 'the fastest forecasting app', kind: 'superlative' }] },
+        ],
+        pending: 0,
+        limited: false,
+      });
+      readDraftPage.mockResolvedValue({
+        spots: [],
+        proofs: [{ claim: 'the fastest forecasting app', block, kind: 'ranking' }],
+        regulated: null,
+        pending: false,
+        limited: false,
+        paused: false,
+      });
+      getContentDraft.mockResolvedValue(claimed);
+      window.innerWidth = 1440;
+      await renderPage();
+      await act(async () => void (await vi.advanceTimersByTimeAsync(3_000)));
+      expect(readDraftPage).toHaveBeenCalledWith('d1');
+      const chip = [...container.querySelectorAll<HTMLButtonElement>('header button')].find((b) =>
+        b.textContent?.startsWith('Quality'),
+      )!;
+      await act(async () => chip.click());
+      const row = [...panel()!.querySelectorAll('li')].find((li) =>
+        li.textContent?.includes('Link the ranking or test behind “the fastest forecasting app”'),
+      )!;
+      expect(row.textContent).toContain('Link its proof, or soften the claim');
+      // Its sentence is the person's to prove: not the agent's to source as well.
+      expect(panel()!.textContent).not.toContain('claim has no source');
+      await act(async () =>
+        [...row.querySelectorAll('button')]
+          .find((b) => b.textContent === 'Add proof link')!
+          .click(),
+      );
+      expect(document.querySelector('#content-link-href')).not.toBeNull();
+      const { state } = (
+        container.querySelector('.ProseMirror') as HTMLElement & { editor: Editor }
+      ).editor;
+      expect(state.doc.textBetween(state.selection.from, state.selection.to)).toBe(
+        'the fastest forecasting app',
+      );
     });
 
     it('takes the claim’s sentence out on Remove', async () => {
