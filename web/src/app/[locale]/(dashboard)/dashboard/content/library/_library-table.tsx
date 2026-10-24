@@ -303,7 +303,11 @@ function CmsStatusMark({ status }: { status: CmsStatus }) {
         {live && <p className="opacity-80 [overflow-wrap:anywhere]">{live}</p>}
         {status.status === 'failed' && (status.httpStatus || status.error) && (
           <p className="opacity-80 [overflow-wrap:anywhere]">
-            {status.httpStatus ? t('answered', { status: status.httpStatus }) : status.error}
+            {/* What the webhook answered when it refused the page; else the
+                reason (not reached, or the workflow's callback after a 2xx). */}
+            {status.httpStatus && (status.httpStatus < 200 || status.httpStatus > 299)
+              ? t('answered', { status: status.httpStatus })
+              : status.error}
           </p>
         )}
       </TooltipContent>

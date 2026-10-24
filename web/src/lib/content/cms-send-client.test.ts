@@ -163,7 +163,7 @@ describe('readDraftCms', () => {
     ]);
   });
 
-  it('reads a send left queued for over 15 minutes as interrupted, as the Library does', async () => {
+  it('reads a send left queued for over 30 minutes as interrupted, as the Library does', async () => {
     reads = {
       content_drafts: {
         data: { slug: null, meta_title: null, meta_description: null, published_url: null },
@@ -172,7 +172,7 @@ describe('readDraftCms', () => {
       content_draft_deliveries: {
         data: {
           status: 'queued',
-          created_at: new Date(Date.now() - 16 * 60_000).toISOString(),
+          created_at: new Date(Date.now() - 31 * 60_000).toISOString(),
           sent_at: null,
           published_at: null,
           error: null,
@@ -261,11 +261,11 @@ describe('readCmsStatuses', () => {
     ]);
   });
 
-  it('reads a send queued for over 15 minutes as interrupted, a newer one as going', async () => {
+  it('reads a send queued for over 30 minutes as interrupted, a newer one as going', async () => {
     const ago = (minutes: number) => new Date(Date.now() - minutes * 60_000).toISOString();
     statusReads = [
       {
-        data: [delivery('d1', 'queued', ago(16)), delivery('d2', 'queued', ago(2))],
+        data: [delivery('d1', 'queued', ago(31)), delivery('d2', 'queued', ago(2))],
         error: null,
       },
     ];
