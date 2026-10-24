@@ -58,15 +58,27 @@ import {
 } from '@/components/ui/dialog';
 import { getPublicApiBaseUrl } from '@/config/api';
 import { SITE_TYPES, guessSiteType, isSiteType, type SiteType } from '@/lib/content/page-types';
+import { qualityPhase } from '@/lib/content/quality';
+import { BrandFactsTab } from './_brand-facts-tab';
 
 interface PageProps {
   params: Promise<{ id: string }>;
+  /** `?tab=facts` opens Brand facts (the editor's to-do links there). */
+  searchParams?: Promise<{ tab?: string }>;
 }
+
+const TABS = ['general', 'domains', 'tracking', 'competitors', 'facts', 'danger'];
+/** No search params: one promise for every render, as use() needs. */
+const NO_SEARCH: Promise<{ tab?: string }> = Promise.resolve({});
 
 const INDUSTRY_ITEMS = INDUSTRIES.map((industry) => ({ value: industry, label: industry }));
 
-export default function BrandSettingsPage({ params }: PageProps) {
+export default function BrandSettingsPage({ params, searchParams }: PageProps) {
   const { id } = use(params);
+  const { tab } = use(searchParams ?? NO_SEARCH);
+  // Brand facts with Quality's second phase (CE-047).
+  const factsOn = qualityPhase() >= 2;
+  const opened = tab && TABS.includes(tab) && (tab !== 'facts' || factsOn) ? tab : 'general';
   const t = useTranslations('brands');
   const router = useRouter();
   const { brands, updateBrand: updateBrandStore, removeBrand } = useBrandStore();
@@ -87,12 +99,13 @@ export default function BrandSettingsPage({ params }: PageProps) {
 
   return (
     <div className="space-y-6">
-      <Tabs defaultValue="general" className="space-y-4">
+      <Tabs defaultValue={opened} className="space-y-4">
         <TabsList>
           <TabsTrigger value="general">{t('settings.generalTab')}</TabsTrigger>
           <TabsTrigger value="domains">{t('settings.domainsTab')}</TabsTrigger>
           <TabsTrigger value="tracking">Tracking</TabsTrigger>
           <TabsTrigger value="competitors">Competitors</TabsTrigger>
+          {factsOn && <TabsTrigger value="facts">{t('settings.facts.tab')}</TabsTrigger>}
           <TabsTrigger
             value="danger"
             className="text-destructive data-[state=active]:text-destructive"
@@ -124,6 +137,12 @@ export default function BrandSettingsPage({ params }: PageProps) {
         <TabsContent value="competitors">
           <CompetitorsTab brandId={brand.id} />
         </TabsContent>
+
+        {factsOn && (
+          <TabsContent value="facts">
+            <BrandFactsTab brandId={brand.id} />
+          </TabsContent>
+        )}
 
         <TabsContent value="danger">
           <DangerTab

@@ -36,7 +36,7 @@ export const MAX_AUTHOR_PROBES = 3;
 const AUTHOR_PROBES = ['/author/', '/authors/'];
 
 /** Between a title's words and the site's name: "About us · Acme". */
-const SEPARATOR = String.raw`(?:\s*[|·•–—:-]|$)`;
+export const SEPARATOR = String.raw`(?:\s*[|·•–—:-]|$)`;
 
 /**
  * The pages three checks look for: the last part of the address, in the
@@ -44,7 +44,7 @@ const SEPARATOR = String.raw`(?:\s*[|·•–—:-]|$)`;
  * not "About our pricing"); the addresses tried on the site when the page
  * list has none, whose title or H1 must have the word.
  */
-const PAGES = {
+export const PAGES = {
   about: {
     part: /^(?:about|about-us|company|who-we-are|our-story|hakkimizda|hakkımızda|uber-uns|ueber-uns|a-propos|sobre-nosotros|quienes-somos)$/i,
     title: new RegExp(
@@ -113,7 +113,7 @@ const isOrganizationType = (type) => {
   return ORGANIZATION_TYPES.has(t) || t.endsWith('organization') || t.endsWith('business');
 };
 
-const pathParts = (url) => {
+export const pathParts = (url) => {
   try {
     return new URL(url).pathname.split('/').filter(Boolean).map(decodeURIComponent);
   } catch {
@@ -174,7 +174,7 @@ export function authorPage(pages, author, onSite) {
 const bareHost = (host) => host.toLowerCase().replace(/^www\./, '');
 
 /** The brand's main domain, bare ("acme.com"), or null. */
-function mainDomain(domains) {
+export function mainDomain(domains) {
   const primary = domains.find((d) => d.is_primary) ?? domains[0];
   if (!primary) return null;
   return bareHost(primary.domain.replace(/^https?:\/\//, '').split('/')[0]);
@@ -195,7 +195,7 @@ const walledError = (err) =>
   err instanceof PageFetchError && err.code === 'http_error' && looksBlocked(err.status, '');
 
 /** A page's title and H1, to tell it from the home page. */
-function heads(html) {
+export function heads(html) {
   const $ = cheerio.load(html);
   return { title: $('title').first().text().trim(), h1: $('h1').first().text().trim() };
 }
@@ -205,7 +205,7 @@ function heads(html) {
  * "Access denied"), by its title and H1: the rest of a real page may name a
  * captcha (a contact form's script) without being one.
  */
-function walledPage(html) {
+export function walledPage(html) {
   const { title, h1 } = heads(html);
   return looksBlocked(200, `${title} ${h1}`);
 }

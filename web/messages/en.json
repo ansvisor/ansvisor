@@ -7346,6 +7346,59 @@
       "ecommerceDetected": "{brand} looks like an online store, so we turned on Product Visibility: ChatGPT Shopping is tracked for your prompts on plans that include it. You can turn it off in brand settings."
     },
     "settings": {
+      "facts": {
+        "tab": "Brand facts",
+        "title": "Brand facts",
+        "description": "Your prices and plans, your trial, when you were founded and the claims you make, read from your own pricing, About and product pages. Approve the ones that are right: Quality checks your pages against the approved ones that are still on your site.",
+        "loading": "Reading your brand facts",
+        "loadFailed": "Your brand facts couldn't be read. Try again in a moment.",
+        "noDomain": "Add your site's domain under Domains to read your brand facts from it.",
+        "checked": "Read from your site {date}",
+        "pageStatus": {
+          "ok": "read",
+          "blocked": "turned our reader away",
+          "not_found": "not found",
+          "failed": "didn't answer, read again next time",
+          "missed": "read again tomorrow"
+        },
+        "sources": {
+          "pricing": "Pricing page",
+          "about": "About page",
+          "product": "Product page"
+        },
+        "readAgain": "Read again",
+        "readAgainSoon": "Your site was read a few minutes ago. You can read it again shortly.",
+        "readFailed": "Your site couldn't be read again. Try again in a moment.",
+        "aiPaused": "This month's AI usage is used up: pages not read yet are read when it renews.",
+        "empty": "No facts were found on your site yet.",
+        "toApprove": "To approve ({count})",
+        "approved": "Approved",
+        "rejected": "Rejected ({count})",
+        "approve": "Approve",
+        "reject": "Reject",
+        "approveFact": "Approve {fact}",
+        "rejectFact": "Reject {fact}",
+        "reviewFailed": "That fact couldn't be saved. Try again.",
+        "gone": "No longer on your site",
+        "replaces": "Was {value}",
+        "trialDays": "{days, plural, one {# day} other {# days}}",
+        "perSeat": "per seat",
+        "periods": {
+          "month": "/ month",
+          "year": "/ year",
+          "once": "once"
+        },
+        "billed": {
+          "monthly": "billed monthly",
+          "annually": "billed annually"
+        },
+        "kinds": {
+          "price": "Price",
+          "trial": "Trial",
+          "founded": "Founded",
+          "claim": "Claim"
+        }
+      },
       "title": "Brand Settings",
       "generalTab": "General",
       "domainsTab": "Domains",

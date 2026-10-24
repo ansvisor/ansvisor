@@ -134,7 +134,7 @@ export function buildClaimsPrompt(paragraphs) {
  * one character for one, so a match's place is the paragraph's own (an
  * ellipsis isn't: “…” stays as it is).
  */
-const fold = (text) =>
+export const fold = (text) =>
   text
     .replace(/[\u2018\u2019\u201a\u2032]/g, "'")
     .replace(/[\u201c\u201d\u201e\u2033]/g, '"')
