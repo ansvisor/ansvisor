@@ -4882,8 +4882,8 @@
             "detail": "{count, plural, one {Match the page to the fact you approved, or check it in Brand settings} other {# facts differ: match the page to the facts you approved, or check them in Brand settings}}"
           },
           "disclosure": {
-            "line": "The page recommends {brand} without saying {brand} makes it",
-            "detail": "Add a line, under the H1 or beside the recommendation, saying {brand} makes what the page recommends: readers and AI engines trust a page that says so."
+            "line": "The page recommends {brand} without a disclosure",
+            "detail": "Add a line saying the product the page recommends is {brand}'s own: readers and AI engines trust a page that says so."
           },
           "balanced": {
             "line": "Add an honest weakness",
