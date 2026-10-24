@@ -88,6 +88,7 @@ import {
   bylineText,
   exportPlaceholders,
   pasteChecks,
+  teamName,
   titlePlaceholders,
   withByline,
 } from '@/lib/content/ready-to-publish';
@@ -576,6 +577,7 @@ export function DraftEditor({
         canEdit: canEditPageAuthor,
         hasAuthors,
         brandName,
+        team: teamName(language, brandName),
         siteTrust,
         todos,
       }
@@ -1418,6 +1420,11 @@ export function DraftEditor({
   } | null>(null);
   const openExport = (destination?: ExportDestination) =>
     setExportOpen({ html: pageToPublish(), destination });
+  // Its checks, read again only as the link reads land, not on every render.
+  const exportChecks = useMemo(
+    () => (exportOpen ? pasteChecks(exportOpen.html, linkChecks) : null),
+    [exportOpen, linkChecks],
+  );
   const copyPageHtml = () => {
     if (!editor) return;
     const html = pageToPublish();
@@ -1812,17 +1819,19 @@ export function DraftEditor({
   /**
    * Ready, clicked (Next step spec §3b): the page goes back to review, while
    * it is still ready (published meanwhile from the Library, it says so). The
-   * task Mark ready completed stays done.
+   * task Mark ready completed is open again, unless someone changed it since.
    */
   const [unmarking, setUnmarking] = useState(false);
   const unmarkReady = async () => {
     if (unmarking) return;
     setUnmarking(true);
     try {
-      const now = await unmarkContentDraftReady(draft.id);
+      const { status: now, tasksReopened } = await unmarkContentDraftReady(draft.id);
       setStatus(now);
-      if (now === 'in_review') toast(t('header.backInReview'));
-      else toast(t('header.notReady', { status: tDraftStatus(now) }));
+      if (now !== 'in_review') toast(t('header.notReady', { status: tDraftStatus(now) }));
+      else if (tasksReopened > 0 && draft.action) {
+        toast(t('header.backInReviewAction', { no: draft.action.number, count: tasksReopened }));
+      } else toast(t('header.backInReview'));
     } catch (err) {
       console.error('Failed to move the draft back to review:', err);
       toast.error(t('header.backInReviewFailed'));
@@ -2384,7 +2393,7 @@ export function DraftEditor({
         )}
       </div>
 
-      {quality && exportOpen && (
+      {quality && exportOpen && exportChecks && (
         <ExportDialog
           onClose={() => setExportOpen(null)}
           title={title}
@@ -2392,10 +2401,11 @@ export function DraftEditor({
           isNew={draft.method === 'create'}
           sourceUrl={draft.sourceUrl}
           author={pageAuthor}
-          // Until the authors are read, who it is by isn't known.
-          teamByline={authorsRead ? t('author.organization', { brand: brandName }) : ''}
+          // Until the authors are read, who it is by isn't known. It goes to
+          // the CMS's author field, so in the page's language.
+          teamByline={authorsRead ? teamName(language, brandName) : ''}
           byline={contentByline}
-          checks={pasteChecks(exportOpen.html, linkChecks)}
+          checks={exportChecks}
           linksPending={linksPending}
           initialDestination={exportOpen.destination}
           onFillNow={() => {

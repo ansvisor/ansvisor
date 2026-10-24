@@ -263,7 +263,7 @@ beforeEach(() => {
   readDraftAiUsage.mockReset().mockResolvedValue(3.7);
   getContentDraft.mockReset();
   markContentDraftReady.mockReset();
-  unmarkContentDraftReady.mockReset().mockResolvedValue('in_review');
+  unmarkContentDraftReady.mockReset().mockResolvedValue({ status: 'in_review', tasksReopened: 0 });
   saveBlob.mockReset();
   setContentDraftPageType.mockReset().mockResolvedValue(undefined);
   setContentDraftAuthor.mockReset().mockResolvedValue(undefined);
@@ -792,7 +792,7 @@ describe('the content editor', () => {
     expect(toast.error).toHaveBeenCalledWith("Couldn't move it back to review.");
     expect(button('Ready: click to move it back to review')).toBeDefined();
 
-    unmarkContentDraftReady.mockResolvedValueOnce('published');
+    unmarkContentDraftReady.mockResolvedValueOnce({ status: 'published', tasksReopened: 0 });
     await act(async () => button('Ready: click to move it back to review')!.click());
     expect(toast).toHaveBeenCalledWith('Its status is now Published, so it stays.');
     expect(button('Published')!.getAttribute('aria-disabled')).toBe('true');
@@ -862,6 +862,13 @@ describe('the content editor', () => {
       "Marked ready, and its task in Action AC-214 is done. Publish it on your site when you're ready.",
     );
     expect(note.textContent).toBe('This draft is the work of Action AC-214.');
+
+    // Taken back, the task Ready completed is open again.
+    unmarkContentDraftReady.mockResolvedValueOnce({ status: 'in_review', tasksReopened: 1 });
+    await act(async () => button('Ready: click to move it back to review')!.click());
+    expect(toast).toHaveBeenCalledWith(
+      'Back in review, and its task in Action AC-214 is open again.',
+    );
   });
 
   describe('history', () => {
@@ -3155,6 +3162,19 @@ describe('the side panel', () => {
       expect(dialog()!.textContent).toContain('Meta titlePipeline forecasting');
       expect(dialog()!.textContent).toContain('AuthorAcme Team → your CMS author field');
       expect(inDialog('Copy for Webflow').disabled).toBe(false);
+    });
+
+    it('names the team in the page’s language in the CMS author field', async () => {
+      brandState.brands = [{ id: 'b1', language: 'tr' } as never, { id: 'b2' }];
+      try {
+        getContentDraft.mockResolvedValue(draft({ pageType: 'blog_post' }));
+        await renderPage();
+        await act(async () => button('Export')!.click());
+        await act(async () => inDialog('Continue to export').click());
+        expect(dialog()!.textContent).toContain('AuthorAcme Ekibi → your CMS author field');
+      } finally {
+        brandState.brands = [{ id: 'b1' }, { id: 'b2' }];
+      }
     });
 
     it('reads Ready to paste as the links are read, a refused read as unread', async () => {

@@ -50,16 +50,26 @@ const LABEL_KEY = {
  * the row's own buttons wrap beside it. On a phone it goes under the row, on
  * the right, so the row keeps the whole width for its buttons. From 80% of
  * the month's allowance the banner follows the row (spec §4), spaced as the
- * page spaces its parts.
+ * page spaces its parts; `banner={false}` leaves it to the page, for a row
+ * with more of its header under it.
  */
-export function HeaderWithAiUsage({ children }: { children: ReactNode }) {
+export function HeaderWithAiUsage({
+  children,
+  banner = true,
+  className,
+}: {
+  children: ReactNode;
+  banner?: boolean;
+  /** On the header row: room for a drawer's close button, for one. */
+  className?: string;
+}) {
   return (
     <>
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:gap-3">
+      <div className={cn('flex flex-col gap-2 sm:flex-row sm:items-start sm:gap-3', className)}>
         <div className="min-w-0 sm:flex-1">{children}</div>
         <AiUsageMeter className="self-end sm:self-auto" />
       </div>
-      <AiUsageBanner />
+      {banner && <AiUsageBanner />}
     </>
   );
 }

@@ -41,6 +41,8 @@ export interface QualityRead {
   /** Whether the workspace has an author to pick (Settings › Authors). */
   hasAuthors: boolean;
   brandName: string;
+  /** The brand's team as the page goes out without an author, in its language (teamName). */
+  team: string;
   /** The site's trust in Site Audit (CE-043), or null while not read. */
   siteTrust: SiteTrust | null;
   /** What only the person can do (qualityTodos, CE-040). */
@@ -219,10 +221,9 @@ export function QualityTab({
 /** A to-do's words: its title, the nudge's "Next for you" phrase and its detail line. */
 export function useTodoCopy() {
   const t = useTranslations('contentEditor.editor.quality.todos');
-  const tAuthor = useTranslations('contentEditor.editor.author');
   return (
     todo: QualityTodo,
-    { author, brandName, canEdit }: Pick<QualityRead, 'author' | 'brandName' | 'canEdit'>,
+    { author, team, canEdit }: Pick<QualityRead, 'author' | 'team' | 'canEdit'>,
   ) => {
     if (todo.id === 'placeholders') {
       const count = todo.count ?? 0;
@@ -242,9 +243,7 @@ export function useTodoCopy() {
             ? t('byline.done', { name: author.name })
             : action === 'addAuthor'
               ? t('byline.detail.addAuthor')
-              : t('byline.detail.pickAuthor', {
-                  byline: tAuthor('organization', { brand: brandName }),
-                }),
+              : t('byline.detail.pickAuthor', { byline: team }),
       };
     }
     if (!author) {

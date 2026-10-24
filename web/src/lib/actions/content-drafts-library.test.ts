@@ -16,6 +16,11 @@ let writeResult: { data: unknown; error: { code?: string; message: string } | nu
 
 vi.mock('@/lib/action-center/assignees', () => ({ readAssignees: vi.fn(async () => new Map()) }));
 vi.mock('@/lib/supabase/admin', () => ({ supabaseAdmin: {} }));
+const reopenDraftTasks = vi.hoisted(() => vi.fn());
+vi.mock('@/lib/content/action-drafts', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/content/action-drafts')>()),
+  reopenDraftTasks,
+}));
 vi.mock('@/lib/supabase/server', () => ({
   createClient: vi.fn(async () => ({
     auth: { getUser: async () => ({ data: { user: { id: 'u1' } } }) },
@@ -124,6 +129,29 @@ describe('the Library row menu (00233)', () => {
   it('sets a status any member may set', async () => {
     await setContentDraftStatus(DRAFT, 'in_review');
     expect(writes).toEqual([{ op: 'update', value: { status: 'in_review' }, id: DRAFT }]);
+    expect(reopenDraftTasks).not.toHaveBeenCalled();
+  });
+
+  it('opens again the task Ready completed when a ready page goes back, as the editor does', async () => {
+    reopenDraftTasks.mockReset().mockResolvedValue(1);
+    const ready = {
+      id: DRAFT,
+      status: 'ready',
+      brand_id: 'b1',
+      method: 'optimize',
+      action_id: 'a1',
+    };
+    writeResult = { data: ready, error: null };
+    await setContentDraftStatus(DRAFT, 'draft');
+    expect(reopenDraftTasks).toHaveBeenCalledWith(
+      expect.anything(),
+      { id: DRAFT, brandId: 'b1', actionId: 'a1', method: 'optimize' },
+      'u1',
+    );
+    // Published from Ready, the work stays done.
+    reopenDraftTasks.mockClear();
+    await setContentDraftStatus(DRAFT, 'published');
+    expect(reopenDraftTasks).not.toHaveBeenCalled();
   });
 
   it('refuses Ready (it goes through Mark ready) and a malformed id, writing nothing', async () => {
