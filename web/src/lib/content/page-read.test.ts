@@ -58,7 +58,7 @@ describe('proofsOnPage', () => {
       ask('the best-rated tool in Europe', read, 'ranking'),
       ask('ISO 27001-certified', read, 'certification'),
     ]);
-    // In the block's order, each with the block as read (its to-do's key).
+    // In the block's order, each with the block as read.
     expect(proofs.map((p) => [p.claim, p.block, p.linked])).toEqual([
       ['ISO 27001-certified', read, true],
       ['the best-rated tool in Europe', read, true],
