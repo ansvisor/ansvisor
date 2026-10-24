@@ -18,6 +18,11 @@ export interface PageReadState {
   limited: boolean;
   /** An ask is out, or the page changed within the API's minute. */
   reading: boolean;
+  /**
+   * The read's first answer is in (a read, a failure, its limits, or off):
+   * what waits on the proof to-dos (Next step's skips) can read them.
+   */
+  settled: boolean;
 }
 
 /**
@@ -40,6 +45,7 @@ export function usePageRead(
   const [paused, setPaused] = useState(false);
   const [limited, setLimited] = useState(false);
   const [off, setOff] = useState(false);
+  const [failed, setFailed] = useState(false);
   const [out, setOut] = useState(false);
   const [pending, setPending] = useState(false);
   // Bumped when the next ask needn't wait for a save.
@@ -79,7 +85,11 @@ export function usePageRead(
           if ('error' in result) {
             if (result.error === 'off') setOff(true);
             // Failed: asked about again after the next save, not on a timer.
-            else console.error('Failed to read the page:', result.error);
+            else {
+              console.error('Failed to read the page:', result.error);
+              setFailed(true);
+              setPending(false);
+            }
             return;
           }
           const { pending: kept, limited: full, paused: spent, ...page } = result;
@@ -89,7 +99,12 @@ export function usePageRead(
           else if (full) setLimited(true);
           else if (kept) left.current = true;
         })
-        .catch((err) => console.error('Failed to read the page:', err))
+        .catch((err) => {
+          console.error('Failed to read the page:', err);
+          if (!open.current) return;
+          setFailed(true);
+          setPending(false);
+        })
         .finally(() => {
           asking.current = false;
           if (!open.current) return;
@@ -101,5 +116,6 @@ export function usePageRead(
   }, [draftId, savedAt, enabled, paused, limited, off, unsaved, again]);
 
   const reading = enabled && !paused && !limited && !off && (out || pending);
-  return { read, paused, limited, reading };
+  const settled = !enabled || read !== null || failed || off || paused || limited;
+  return { read, paused, limited, reading, settled };
 }

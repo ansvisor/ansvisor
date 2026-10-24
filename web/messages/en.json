@@ -4658,7 +4658,7 @@
           "proof": {
             "title": {
               "award": "Link the award page for “{claim}”",
-              "certification": "{site, select, b2b {Link the audit report or trust page for “{claim}”} ecommerce {Link the certificate or lab result for “{claim}”} other {Link the licence or certificate for “{claim}”}}",
+              "certification": "{site, select, b2b {Link the audit report or trust page for “{claim}”} ecommerce {Link the certificate or lab result for “{claim}”} other {Link the license or certificate for “{claim}”}}",
               "research": "Link the study behind “{claim}”",
               "rating": "Link the review source for “{claim}”",
               "ranking": "Link the ranking or test behind “{claim}”",

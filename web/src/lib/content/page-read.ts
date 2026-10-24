@@ -1,6 +1,6 @@
 import { cleanHref } from './html-allowlist';
 import { sentencesOf } from './readability';
-import type { TrustBlock } from './quality-checks';
+import { squeeze, type TrustBlock } from './quality-checks';
 
 /**
  * A page's read for proof (Content Editor Quality spec §4b, CE-049), as the
@@ -58,27 +58,36 @@ export interface PageProof extends ProofAsk {
 }
 
 /**
- * The page's proof asks as the page is now, in its order: each whose block
- * is still there, with the sentence that holds its claim and whether the
- * block links out (an http(s) link, as Trust reads it: its proof, on the
- * brand's site or another).
+ * The page's proof asks as the page is now, in its order (a block's by
+ * where its claim is): each whose block is still there, with the sentence
+ * that holds its claim and whether the block links out (an http(s) link,
+ * as Trust reads it: its proof, on the brand's site or another). Blocks
+ * and claims are matched by their words without spaces: a link put on a
+ * claim adds one at its edge ("ISO 27001 -certified"). An ask keeps its
+ * block as read, so its to-do keeps its key.
  */
 export function proofsOnPage(blocks: TrustBlock[], proofs: readonly ProofAsk[]): PageProof[] {
   const seen = new Set<string>();
-  return blocks.flatMap((block) =>
-    proofs
-      .filter((proof) => proof.block === block.text && block.text.includes(proof.claim))
-      // A block the page has twice: its claims once.
-      .filter((proof) => {
-        const key = `${proof.claim}\n${proof.block}`;
-        if (seen.has(key)) return false;
-        seen.add(key);
-        return true;
-      })
-      .map((proof) => ({
-        ...proof,
-        sentence: sentencesOf(block.text).find((s) => s.includes(proof.claim)) ?? proof.claim,
-        linked: block.links.some((href) => /^https?:\/\//i.test(cleanHref(href) ?? '')),
-      })),
-  );
+  return blocks.flatMap((block) => {
+    const words = squeeze(block.text);
+    return (
+      proofs
+        .filter((proof) => squeeze(proof.block) === words && words.includes(squeeze(proof.claim)))
+        // A block the page has twice: its claims once.
+        .filter((proof) => {
+          const key = `${proof.claim}\n${proof.block}`;
+          if (seen.has(key)) return false;
+          seen.add(key);
+          return true;
+        })
+        .sort((a, b) => words.indexOf(squeeze(a.claim)) - words.indexOf(squeeze(b.claim)))
+        .map((proof) => ({
+          ...proof,
+          sentence:
+            sentencesOf(block.text).find((s) => squeeze(s).includes(squeeze(proof.claim))) ??
+            proof.claim,
+          linked: block.links.some((href) => /^https?:\/\//i.test(cleanHref(href) ?? '')),
+        }))
+    );
+  });
 }

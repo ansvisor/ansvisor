@@ -6,6 +6,9 @@ import type { FactMismatch } from './brand-facts';
 import type { ClaimBlock } from './claims';
 import { askableSite, sourceClass, type AiSourceClass, type SourceClass } from './source-class';
 
+/** A text's words without their spaces, as compared where an inline tag may add one. */
+export const squeeze = (text: string) => text.replace(/\s+/g, '');
+
 /**
  * E-E-A-T and Trust (Content Editor Quality spec §2.1, §2.2): checks read
  * from the page's facts, each worth its points. Only the checks live in the
@@ -354,9 +357,10 @@ export interface SourceRead {
  * year compared with the brand's approved facts count: the share that
  * matched. Like a working link, it doesn't score Trust on its own.
  *
- * With `proofBlocks` (Phase 2, CE-049), a block holding the brand's own
- * claim (an award, a certification, its own test) is sourced by a link to
- * the brand's own site too: its award or trust page is the proof.
+ * With `proofs` (Phase 2, CE-049), the sentence holding the brand's own
+ * claim (an award, a certification, its own test) is sourced by a link in
+ * its block to the brand's own site too: its award or trust page is the
+ * proof. The block's other sentences aren't.
  */
 export function trust({
   blocks,
@@ -367,7 +371,7 @@ export function trust({
   sources: kinds = null,
   claims = null,
   brandFacts = null,
-  proofBlocks = null,
+  proofs = null,
   now,
 }: {
   /** The page's blocks (trustBlocks). */
@@ -388,8 +392,11 @@ export function trust({
   claims?: readonly ClaimBlock[] | null;
   /** Phase 2: the page against the brand's approved facts (factMismatches, CE-047); left out before. */
   brandFacts?: { compared: number; mismatches: FactMismatch[] } | null;
-  /** Phase 2: the blocks holding the brand's own claims (the page read's proofs, CE-049). */
-  proofBlocks?: readonly string[] | null;
+  /**
+   * Phase 2: the brand's own claims' sentences, each in its block (the page
+   * read's proofs on the page, CE-049).
+   */
+  proofs?: readonly { block: string; sentence: string }[] | null;
   now: number;
 }): TrustRead {
   const all = pageLinks(blocks, brandDomains);
@@ -398,13 +405,19 @@ export function trust({
   // Each sentence once, where the page has it first: a nested list item's
   // text is its parent's too.
   const figures = new Map<string, { sourced: boolean; block: number }>();
-  const ownProof = new Set(proofBlocks ?? []);
-  const sourcedBlock = (index: number) =>
-    all.some((l) => (l.external || ownProof.has(blocks[index].text)) && l.block === index);
+  // A proof's block and sentence by their words without spaces: a link put
+  // on its claim adds one at the link's edge ("ISO 27001 -certified").
+  const proofOf = (block: string, sentence: string) => `${squeeze(block)}\n${squeeze(sentence)}`;
+  const ownProof = new Set((proofs ?? []).map((p) => proofOf(p.block, p.sentence)));
+  const sourcedIn = (index: number, sentence: string) =>
+    all.some(
+      (l) =>
+        l.block === index && (l.external || ownProof.has(proofOf(blocks[index].text, sentence))),
+    );
   const addFigure = (sentence: string, block: number) => {
     const had = figures.get(sentence);
     figures.set(sentence, {
-      sourced: (had?.sourced ?? false) || sourcedBlock(block),
+      sourced: (had?.sourced ?? false) || sourcedIn(block, sentence),
       block: had?.block ?? block,
     });
   };

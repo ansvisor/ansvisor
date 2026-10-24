@@ -108,7 +108,7 @@ import {
 import { proofKey, qualityTodos } from '@/lib/content/quality-todos';
 import { readability, sentencesOf } from '@/lib/content/readability';
 import { brandFactsPath, factMismatches } from '@/lib/content/brand-facts';
-import { proofsOnPage } from '@/lib/content/page-read';
+import { MAX_PROOF_TODOS, proofsOnPage } from '@/lib/content/page-read';
 import {
   liveSkips,
   nextStep,
@@ -639,12 +639,14 @@ export function DraftEditor({
     () => (pageRead.read ? proofsOnPage(pageBlocks, pageRead.read.proofs) : []),
     [pageRead.read, pageBlocks],
   );
-  const proofBlocks = useMemo(() => proofAsks.map((ask) => ask.block), [proofAsks]);
   // A proof to-do asked for this session stays, checked once it has a link.
   const [hadProofs, setHadProofs] = useState<ReadonlySet<string>>(() => new Set());
+  // The ones shown open: the first MAX_PROOF_TODOS with no link, as the to-dos list them.
   const newProofs = proofAsks
+    .filter((ask) => !ask.linked)
+    .slice(0, MAX_PROOF_TODOS)
     .map(proofKey)
-    .filter((key, i) => !proofAsks[i].linked && !hadProofs.has(key));
+    .filter((key) => !hadProofs.has(key));
   if (newProofs.length > 0) setHadProofs(new Set([...hadProofs, ...newProofs]));
   // Out of the editor (to Quality, to Before you publish): the block left
   // for later is read too.
@@ -680,7 +682,7 @@ export function DraftEditor({
             sources: sourceRead,
             claims: claimBlocks,
             brandFacts: factCheck,
-            proofBlocks,
+            proofs: proofAsks,
             now: Date.now(),
           })
         : null,
@@ -695,7 +697,7 @@ export function DraftEditor({
       sourceRead,
       claimBlocks,
       factCheck,
-      proofBlocks,
+      proofAsks,
     ],
   );
   // Their links underlined in the draft, Quality's suggestion naming them.
@@ -1994,7 +1996,9 @@ export function DraftEditor({
     reads.sources !== null &&
     rules.ready &&
     (!qualityOn || (todosRead && siteTrustRead && linksPending === 0)) &&
-    factsState.status !== 'loading';
+    factsState.status !== 'loading' &&
+    // The proof to-dos (CE-049) come with the page's read, seconds after it opens.
+    (!qualityOn || pageRead.settled);
   const staleSkips =
     nextRead && Object.keys(liveSkips(nextState)).length !== Object.keys(skipped).length;
   useEffect(() => {

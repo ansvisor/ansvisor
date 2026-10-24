@@ -534,7 +534,7 @@ describe('QualityTab', () => {
       blocks,
       links: new Map(),
       brandDomains: ['acme.com'],
-      proofBlocks: proofs.map((p) => p.block),
+      proofs,
       now: Date.parse('2026-10-24T12:00:00Z'),
     });
     const quality = (siteType: QualityRead['siteType']): QualityRead => ({

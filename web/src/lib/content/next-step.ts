@@ -133,7 +133,7 @@ export function stepState(id: NextStepId, s: NextStepState): string {
       return s.openRules.join(',');
     case 'proof':
       return `${s.quality?.trustLow ?? false}:${openTodos(s)
-        .map((todo) => todo.id)
+        .map((todo) => todo.key ?? todo.id)
         .join(',')}`;
     default:
       return '';

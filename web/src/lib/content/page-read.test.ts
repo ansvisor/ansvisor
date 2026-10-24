@@ -48,6 +48,26 @@ describe('proofsOnPage', () => {
     ).toEqual(['award-winning']);
   });
 
+  it('finds a claim once a link on it adds a space at its edge, and keeps its block as read', () => {
+    const read = 'We are ISO 27001-certified and the best-rated tool in Europe.';
+    const linked = trustBlocks(
+      '<p>We are <a href="https://ledgerly.example/trust">ISO 27001</a>-certified and the best-rated tool in Europe.</p>',
+    );
+    expect(linked[0].text).toBe('We are ISO 27001 -certified and the best-rated tool in Europe.');
+    const proofs = proofsOnPage(linked, [
+      ask('the best-rated tool in Europe', read, 'ranking'),
+      ask('ISO 27001-certified', read, 'certification'),
+    ]);
+    // In the block's order, each with the block as read (its to-do's key).
+    expect(proofs.map((p) => [p.claim, p.block, p.linked])).toEqual([
+      ['ISO 27001-certified', read, true],
+      ['the best-rated tool in Europe', read, true],
+    ]);
+    expect(proofs[0].sentence).toBe(
+      'We are ISO 27001 -certified and the best-rated tool in Europe.',
+    );
+  });
+
   it("counts only an http(s) link as the block's proof", () => {
     const linkless = trustBlocks(
       '<p>We are ISO 27001 certified (<a href="mailto:trust@ledgerly.example">ask</a>).</p>',

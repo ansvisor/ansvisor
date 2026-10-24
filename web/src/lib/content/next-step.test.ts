@@ -194,6 +194,22 @@ describe('nextStep', () => {
     expect(liveSkips(skipped)).toEqual({ fixRules: 'faq,summary' });
     expect(liveSkips({ ...skipped, openRules: ['faq'] })).toEqual({});
   });
+
+  it('reads each proof to-do by its own key: another claim opening brings a skipped step back (CE-049)', () => {
+    const proof = (key: string) =>
+      todo({ id: 'proof', key, score: 'trust', action: 'addProof', gain: 3 });
+    const s = state({
+      quality: { trust: 54, trustLow: true, todos: [proof('proof:a:1'), proof('proof:b:2')] },
+    });
+    const skipped = { ...s, skipped: { proof: stepState('proof', s) } };
+    expect(liveSkips(skipped)).toEqual({ proof: 'true:proof:a:1,proof:b:2' });
+    expect(
+      liveSkips({
+        ...skipped,
+        quality: { trust: 54, trustLow: true, todos: [proof('proof:a:1'), proof('proof:c:3')] },
+      }),
+    ).toEqual({});
+  });
 });
 
 describe('rulesForNext', () => {

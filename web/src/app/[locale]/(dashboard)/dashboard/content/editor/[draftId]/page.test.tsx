@@ -2792,6 +2792,24 @@ describe('the side panel', () => {
       expect(state.doc.textBetween(state.selection.from, state.selection.to)).toBe(
         'the fastest forecasting app',
       );
+      // Linked to its proof: the row is checked, not gone.
+      const field = document.querySelector<HTMLInputElement>('#content-link-href')!;
+      await act(async () => {
+        Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(
+          field,
+          'https://www.acme.com/benchmarks',
+        );
+        field.dispatchEvent(new Event('input', { bubbles: true }));
+      });
+      await act(async () =>
+        [...document.querySelectorAll('button')].find((b) => b.textContent === 'Apply')!.click(),
+      );
+      // The page is read again once typing pauses.
+      await act(async () => void (await vi.advanceTimersByTimeAsync(3_000)));
+      const done = [...panel()!.querySelectorAll('li')].find((li) =>
+        li.textContent?.includes('the fastest forecasting app'),
+      )!;
+      expect(done.textContent).toContain('The proof is linked');
     });
 
     it('takes the claim’s sentence out on Remove', async () => {

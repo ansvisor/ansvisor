@@ -20,7 +20,7 @@ import {
 } from '@/lib/content/page-schema';
 import { cn } from '@/lib/utils';
 import { copyToClipboard } from './_html-block';
-import { proofSentences, trustSuggestions, type QualityRead } from './_quality-tab';
+import { trustSuggestions, type QualityRead } from './_quality-tab';
 
 /** Trust under this warns before the page is marked ready (Quality spec §7). */
 export const TRUST_GATE = 60;
@@ -119,9 +119,10 @@ export function BeforePublish({
   const authorsRead = quality.eeat !== null;
   const trust = quality.trust?.score ?? null;
   const below = trust !== null && trust < TRUST_GATE;
-  // The biggest of what would raise Trust: the warning's reason.
+  // The biggest of what would raise Trust: the warning's reason. The claims
+  // a proof to-do covers count here too: the warning names them.
   const [fix] = below
-    ? trustSuggestions(tQuality, quality.trust, proofSentences(quality.todos))
+    ? trustSuggestions(tQuality, quality.trust)
         .filter((s) => s.gain > 0)
         .sort((a, b) => b.gain - a.gain)
     : [];

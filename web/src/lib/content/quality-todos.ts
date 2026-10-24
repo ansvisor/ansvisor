@@ -213,6 +213,19 @@ export function qualityTodos({
   ];
 }
 
-/** A proof to-do's key: its claim in its block. */
+/** A text's 32-bit FNV-1a hash, in base 36: a short, stable name for it. */
+function shortHash(text: string): string {
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < text.length; i++) {
+    hash ^= text.charCodeAt(i);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return (hash >>> 0).toString(36);
+}
+
+/**
+ * A proof to-do's key: its claim in its block, the block by a short hash
+ * (the nudge keeps the keys it showed).
+ */
 export const proofKey = (ask: { claim: string; block: string }) =>
-  `proof:${ask.claim}\n${ask.block}`;
+  `proof:${ask.claim}:${shortHash(ask.block)}`;

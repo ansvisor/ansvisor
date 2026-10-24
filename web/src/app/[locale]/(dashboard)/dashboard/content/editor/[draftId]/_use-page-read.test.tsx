@@ -35,6 +35,7 @@ function Probe({ savedAt, unsaved = false }: { savedAt: string; unsaved?: boolea
       data-reading={String(state.reading)}
       data-paused={String(state.paused)}
       data-limited={String(state.limited)}
+      data-settled={String(state.settled)}
     />
   );
 }
@@ -102,6 +103,22 @@ describe('usePageRead', () => {
     await render('s2');
     await wait(PAGE_READ_EVERY_MS * 2);
     expect(readDraftPage).toHaveBeenCalledTimes(1);
+  });
+
+  it('is settled once its first answer is in, and not reading after a kept answer’s ask fails', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    readDraftPage
+      .mockResolvedValueOnce({ ...PAGE, pending: true, limited: false, paused: false })
+      .mockResolvedValueOnce({ error: 'failed' });
+    await render('s1');
+    expect(attr('data-settled')).toBe('false');
+    await wait(PAGE_READ_DELAY_MS);
+    expect(attr('data-settled')).toBe('true');
+    expect(attr('data-reading')).toBe('true');
+    await wait(PAGE_READ_EVERY_MS);
+    expect(readDraftPage).toHaveBeenCalledTimes(2);
+    expect(attr('data-reading')).toBe('false');
+    error.mockRestore();
   });
 
   it('stops silently when the API has it off, and waits for a save after a failure', async () => {
