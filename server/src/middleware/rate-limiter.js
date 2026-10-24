@@ -101,6 +101,20 @@ export const claimsLimiter = rateLimit({
   },
 });
 
+// Quality's page read (CE-049): the editor asks after saves, a minute apart
+// at most, from a bucket of its own.
+export const pageReadLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 20,
+  keyGenerator: apiLimiterKey,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    success: false,
+    message: 'Too many requests, please try again later.',
+  },
+});
+
 // A brand's facts read from its site again when asked (Quality CE-047): a
 // few model calls, so its own bucket.
 export const brandFactsLimiter = rateLimit({

@@ -40,7 +40,7 @@ export const SOURCE_CLASS_HOLD_USD = 0.001;
  * The sites one draft is sure to have the model read in a day, a call
  * each: two asks of MAX_SOURCE_SITES new ones. They share the day's
  * Quality calls (QUALITY_CALLS_PER_DAY) with the claims, which leave them
- * this many (LEFT_FOR_SOURCES). A site read for one workspace is kept for
+ * this many (LEFT_FOR_OTHERS, with the page reads'). A site read for one workspace is kept for
  * all, so most are read once.
  */
 export const SOURCE_READS_PER_DAY = 40;

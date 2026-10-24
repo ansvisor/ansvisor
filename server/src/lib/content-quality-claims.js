@@ -4,7 +4,11 @@ import * as cheerio from 'cheerio';
 import { z } from 'zod';
 import supabaseAdmin from '../config/supabase.js';
 import { resolveModel } from './ai-provider.js';
-import { QUALITY_CALLS_PER_DAY, qualityCallsToday } from './content-quality-calls.js';
+import {
+  PAGE_READS_PER_DAY,
+  QUALITY_CALLS_PER_DAY,
+  qualityCallsToday,
+} from './content-quality-calls.js';
 import { SOURCE_READS_PER_DAY, sourceClassModelId } from './content-source-class.js';
 import { logger } from './logger.js';
 import { reserveAiBudget } from './plan-guard.js';
@@ -26,10 +30,11 @@ export const PARAGRAPHS_PER_CALL = 12;
 const CHARS_PER_CALL = 6000;
 export const CALLS_PER_ASK = 2;
 /**
- * The day's Quality calls a draft's claims leave to its sources' kinds
- * (QUALITY_CALLS_PER_DAY is theirs together): writing on doesn't starve them.
+ * The day's Quality calls a draft's claims leave to its sources' kinds and
+ * its page reads (QUALITY_CALLS_PER_DAY is theirs together): writing on
+ * doesn't starve them.
  */
-export const LEFT_FOR_SOURCES = SOURCE_READS_PER_DAY;
+export const LEFT_FOR_OTHERS = SOURCE_READS_PER_DAY + PAGE_READS_PER_DAY;
 /** How long a paragraph whose answer missed the schema is kept as read: read again after it. */
 export const MISSED_DAYS = 1;
 /** The claims kept of one paragraph, and of one claim's words. */
@@ -44,7 +49,7 @@ export const CLAIMS_HOLD_USD = 0.004;
 const CALL_TIMEOUT_MS = 30_000;
 
 /** A paragraph's words as they are compared and hashed: single spaces, trimmed. */
-const plain = (text) =>
+export const plain = (text) =>
   String(text ?? '')
     .replace(/\s+/g, ' ')
     .trim();
@@ -65,7 +70,7 @@ export const paragraphHash = (text) =>
  * a space at a line break and around each element, a list item's own words
  * without the list nested in it.
  */
-function ownText(node) {
+export function ownText(node) {
   let out = '';
   for (const child of node.children ?? []) {
     if (child.type === 'text') out += child.data ?? '';
@@ -250,7 +255,7 @@ function batchesOf(paragraphs, calls, alone = new Set()) {
  * { paragraphs: [{ text, claims: [{ text, kind }] }], pending, limited },
  * only the paragraphs with claims, by their words as the editor's blocks
  * have them: `pending` paragraphs are left for the next ask; `limited` when
- * the draft's day's Quality calls are made, LEFT_FOR_SOURCES of them left
+ * the draft's day's Quality calls are made, LEFT_FOR_OTHERS of them left
  * to its sources' kinds. Reads draw on the workspace's AI budget as
  * "quality"; a spent budget throws PlanLimitError (429).
  *
@@ -301,7 +306,7 @@ export async function readDraftClaims({ orgId, draftId, html, skip = '' }) {
   let asked = 0;
   if (unread.length) {
     const left =
-      QUALITY_CALLS_PER_DAY - LEFT_FOR_SOURCES - (await qualityCallsToday(orgId, draftId));
+      QUALITY_CALLS_PER_DAY - LEFT_FOR_OTHERS - (await qualityCallsToday(orgId, draftId));
     limited = left <= 0;
     if (left > 0) {
       const modelId = sourceClassModelId();
