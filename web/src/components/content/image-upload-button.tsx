@@ -11,7 +11,8 @@ import { cn } from '@/lib/utils';
 /**
  * Upload from your computer (00272): picks an image, uploads it, and hands
  * back its public address for the field beside it. Says why a file can't
- * go up (its type, its size, or the upload failing).
+ * go up (its type, its size, the plan, the day's uploads made, or the
+ * upload failing).
  */
 export function ImageUploadButton({
   onUploaded,

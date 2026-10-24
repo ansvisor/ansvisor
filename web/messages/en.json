@@ -5016,6 +5016,8 @@
       "errors": {
         "type": "Use a JPG, PNG, WebP or GIF image.",
         "size": "That image is over 5 MB. Use a smaller one.",
+        "plan": "Uploads come with an active plan. Paste the image's address instead.",
+        "limit": "That's today's uploads for your workspace. Paste the image's address, or upload again tomorrow.",
         "failed": "Couldn't upload the image. Try again."
       }
     },
