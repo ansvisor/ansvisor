@@ -61,7 +61,8 @@ export interface QualityTodo {
  * has none), then complete their profile, listed from the start so the
  * count holds. Done ones stay on the list, checked; placeholders are listed
  * once the page has had some (`had`, this session), the brand facts to
- * approve likewise (Phase 2). The author's wait for E-E-A-T to be read.
+ * approve likewise, last (Phase 2: the brand's, worth no points of the
+ * page's). The author's wait for E-E-A-T to be read.
  */
 export function qualityTodos({
   eeat,
@@ -96,8 +97,8 @@ export function qualityTodos({
    */
   brandFacts?: { pending: number; had: boolean } | null;
 }): QualityTodo[] {
-  const fill: QualityTodo[] = [
-    ...(placeholders.count || placeholders.had
+  const fill: QualityTodo[] =
+    placeholders.count || placeholders.had
       ? [
           {
             id: 'placeholders',
@@ -106,10 +107,12 @@ export function qualityTodos({
             score: 'eeat',
             action: 'showPlaceholder',
             count: placeholders.count,
-          } satisfies QualityTodo,
+          },
         ]
-      : []),
-    ...(brandFacts && (brandFacts.pending || brandFacts.had)
+      : [];
+  // The brand's, not the page's, and worth no points itself: last.
+  const facts: QualityTodo[] =
+    brandFacts && (brandFacts.pending || brandFacts.had)
       ? [
           {
             id: 'brandFacts',
@@ -118,11 +121,10 @@ export function qualityTodos({
             score: 'trust',
             action: 'reviewBrandFacts',
             count: brandFacts.pending,
-          } satisfies QualityTodo,
+          },
         ]
-      : []),
-  ];
-  if (!eeat || eeat.score === null) return fill;
+      : [];
+  if (!eeat || eeat.score === null) return [...fill, ...facts];
   const byline: QualityTodo = {
     id: 'byline',
     done: !!author,
@@ -170,5 +172,6 @@ export function qualityTodos({
           },
         ] satisfies QualityTodo[])
       : []),
+    ...facts,
   ];
 }

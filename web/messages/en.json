@@ -4648,10 +4648,10 @@
             "done": "The page quotes an expert word for word"
           },
           "brandFacts": {
-            "title": "Approve {count, plural, one {# brand fact} other {# brand facts}}",
+            "title": "{count, plural, =0 {Review your brand facts} one {Approve # brand fact} other {Approve # brand facts}}",
             "next": "approve {count, plural, one {# brand fact} other {# brand facts}}",
             "detail": "Prices, your trial and other facts read from your own site: the page is checked against the ones you approve",
-            "done": "Your brand facts are approved"
+            "done": "Your brand facts are reviewed"
           },
           "title": "Your to-dos",
           "left": "{count, plural, =0 {All done} other {# left · only you can do these}}",

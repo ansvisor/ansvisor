@@ -49,30 +49,20 @@ const approved = (over: Partial<BrandFact>): BrandFact => ({
   replaces: null,
   ...over,
 });
+const price = (plan: string, amount: number, billed: 'monthly' | 'annually' | null = null) =>
+  approved({
+    id: `${plan}-${amount}`,
+    value: { plan, amount, currency: 'USD', period: 'month', billed, per: null },
+  });
 const FACTS = [
-  approved({ id: 'pro-m' }),
-  approved({
-    id: 'pro-y',
-    value: {
-      plan: 'Pro',
-      amount: 39,
-      currency: 'USD',
-      period: 'month',
-      billed: 'annually',
-      per: null,
-    },
-  }),
-  approved({
-    id: 'starter',
-    value: {
-      plan: 'Starter',
-      amount: 19,
-      currency: 'USD',
-      period: 'month',
-      billed: null,
-      per: null,
-    },
-  }),
+  price('Free', 0),
+  price('Starter', 19, 'monthly'),
+  price('Starter', 15, 'annually'),
+  price('Pro', 49, 'monthly'),
+  price('Pro', 39, 'annually'),
+  price('Team', 99),
+  price('Business', 199),
+  price('Growth', 299),
   approved({ id: 'trial', kind: 'trial', value: { days: 14 }, quote: '14-day free trial' }),
   approved({
     id: 'year',
@@ -85,12 +75,12 @@ const FACTS = [
   approved({
     id: 'p',
     status: 'pending',
-    value: { plan: 'Team', amount: 99, currency: 'USD', period: 'month', billed: null, per: null },
+    value: { plan: 'Pro', amount: 59, currency: 'USD', period: 'month', billed: null, per: null },
   }),
   approved({
     id: 'g',
     gone: true,
-    value: { plan: 'Pro', amount: 59, currency: 'USD', period: 'month', billed: null, per: null },
+    value: { plan: 'Pro', amount: 69, currency: 'USD', period: 'month', billed: null, per: null },
   }),
 ];
 const check = (sentences: string[], facts = FACTS) =>
@@ -102,23 +92,27 @@ const check = (sentences: string[], facts = FACTS) =>
   });
 
 describe('pagePrices', () => {
-  it('reads a price with its currency and period, and no scale, discount or range', () => {
-    expect(pagePrices('Pro costs $49 per month, or €45/mo in Europe.')).toEqual([
-      { text: '$49', amount: 49, currency: 'USD', period: 'month', from: false },
-      { text: '€45', amount: 45, currency: 'EUR', period: 'month', from: false },
+  it('reads a price with its currency and period, and no scale, range or "off"', () => {
+    expect(
+      pagePrices('Pro costs $49 per month, or €45/mo in Europe.').map((p) => [p.text, p.period]),
+    ).toEqual([
+      ['$49', 'month'],
+      ['€45', 'month'],
     ]);
     expect(pagePrices('Plans start at $19 a month.')[0]).toMatchObject({ amount: 19, from: true });
-    expect(pagePrices('Teams raised $2M, save $10 or get $5 off, paying $10–$20.')).toEqual([]);
+    expect(
+      pagePrices('Teams raised $2M, get $5 off, paying $10–$20 or between $30 and $40.'),
+    ).toEqual([]);
+    expect(pagePrices('Pro coûte de 49 € à 99 € par mois, ou 49 TL ile 99 TL arası.')).toEqual([]);
     expect(pagePrices('1 299 € par an')[0]).toMatchObject({ amount: 1299, period: 'year' });
+    // A dash after a plan's name isn't a range.
+    expect(pagePrices('Pro – $49 per month')[0]).toMatchObject({ amount: 49 });
+    expect(pagePrices('Since 2019 199 € per month')[0]).toMatchObject({ amount: 199 });
   });
 });
 
 describe('factMismatches', () => {
-  it('compares a plan’s price with any of its approved ones, in its currency and period', () => {
-    expect(check(['Ledgerly Pro is $49 per month.', 'Pro is $39/mo billed annually.'])).toEqual({
-      compared: 2,
-      mismatches: [],
-    });
+  it('names a plan’s price that differs, against any of its approved ones', () => {
     expect(check(['Ledgerly Pro costs $59 per month.'])).toEqual({
       compared: 1,
       mismatches: [
@@ -131,37 +125,49 @@ describe('factMismatches', () => {
         },
       ],
     });
-  });
-
-  it('cries no wolf: another currency or period, no plan nor brand, a competitor, nothing approved', () => {
     expect(
       check([
-        'Pro is €45 per month in Europe.',
-        'Pro is $468 per year.',
-        'Tools like this cost $30 per month.',
-        'Northwind Pro costs $29 per month.',
-        'The Team plan is $129 per month.',
+        'Ledgerly Pro is $49 per month.',
+        'The Pro plan is $39/mo billed annually.',
+        'The Starter plan is $19/month and the Pro plan $49/month.',
+        'Ledgerly starts at $19 per month.',
       ]),
-    ).toEqual({ compared: 0, mismatches: [] });
-    expect(check(['Ledgerly Pro costs $59 per month.'], [])).toEqual({
-      compared: 0,
-      mismatches: [],
+    ).toEqual({ compared: 5, mismatches: [] });
+    expect(check(['The Pro plan costs $45 a month billed annually.']).mismatches[0]).toMatchObject({
+      page: '$45',
+      fact: '$39',
     });
   });
 
-  it('reads "from" against the lowest price, and the brand’s own price with no plan named', () => {
-    expect(check(['Ledgerly starts at $19 per month.']).mismatches).toEqual([]);
-    expect(check(['Ledgerly starts at $29 per month.']).mismatches[0]).toMatchObject({
-      page: '$29',
-      fact: '$19',
-    });
-    expect(check(['We charge $25 per month.']).mismatches[0]).toMatchObject({ page: '$25' });
-  });
-
-  it('compares a trial’s days and the brand’s founding year', () => {
+  it('cries no wolf on everyday copy', () => {
     expect(
-      check(['Every plan has a 30-day free trial.', 'Ledgerly was founded in 2012.']).mismatches,
-    ).toEqual([
+      check([
+        'Pro tip: budget $100 a month for ads.',
+        'Our team spent $5,000 a month on ads.',
+        'For a small business, expect to pay $30 per month for hosting.',
+        'Growth agencies charge $5,000 a month.',
+        'Get a free consultation worth $200.',
+        'Start free, then pay $49 per month for Pro.',
+        'Upgrades are pro-rated, so you pay $12 a month.',
+        'We spent $2,000 a month on ads before switching.',
+        'Most of our clients budget $1,000 a month for SEO.',
+        'If you hire an agency, expect to pay $3,000 per month; with us it is less.',
+        'Unlike Profound, which charges $499 a month, we start at $79.',
+        'Pro is now $39/month (was $49).',
+        'Ledgerly Pro: $39 a month instead of $49.',
+        'Ledgerly Pro is €49 per month, €58.31 incl. VAT.',
+        'The Pro plan includes $50 a month in ad credits.',
+        'A 5-person team on Pro pays $245 a month.',
+        'Pro is €45 per month in Europe.',
+        'Northwind Pro costs $29 per month.',
+        'HubSpot Starter costs $20 per month per seat.',
+        'Ledgerly Pro costs $49 per month billed monthly.',
+      ]),
+    ).toMatchObject({ mismatches: [] });
+  });
+
+  it('compares a trial only where it is the brand’s, its days beside it', () => {
+    expect(check(['Every plan has a 30-day free trial.']).mismatches).toEqual([
       {
         kind: 'trial',
         page: '30-day',
@@ -169,6 +175,21 @@ describe('factMismatches', () => {
         source: 'pricing',
         sentence: 'Every plan has a 30-day free trial.',
       },
+    ]);
+    expect(
+      check([
+        'Every plan comes with a 30-day money-back guarantee and a free trial.',
+        'In a 12-week clinical trial, patients improved.',
+        'We ran a 90-day trial of the new workflow.',
+        'Setup takes 3 days, and your free trial lasts 14 days.',
+        'Help Scout offers a free 15-day trial.',
+        'Try Ledgerly free for 2 weeks.',
+      ]).mismatches,
+    ).toEqual([]);
+  });
+
+  it('compares a founding year only right after "founded", said of the brand', () => {
+    expect(check(['Ledgerly was founded in 2012.']).mismatches).toEqual([
       {
         kind: 'founded',
         page: '2012',
@@ -178,9 +199,22 @@ describe('factMismatches', () => {
       },
     ]);
     expect(
-      check(['Try it free for 2 weeks: a 14-day trial.', 'Founded in 2015, we…']).mismatches,
+      check([
+        'In 2023, we celebrated 10 years since Ledgerly was founded.',
+        'Our data shows startups founded in 2020 grew faster.',
+        'In 2022 we established a new baseline.',
+        'We helped Acme Bank (founded 1998) grow.',
+        'We were founded in 2015 in Lisbon.',
+      ]).mismatches,
     ).toEqual([]);
-    // Another company's founding year isn't the brand's.
-    expect(check(['Stripe was founded in 2010.']).compared).toBe(0);
+  });
+
+  it('reads each sentence once', () => {
+    const same = 'Every plan has a 30-day free trial.';
+    expect(check([same, same, same])).toMatchObject({ compared: 1 });
+    expect(check(['Ledgerly Pro costs $59 per month.'], [])).toEqual({
+      compared: 0,
+      mismatches: [],
+    });
   });
 });

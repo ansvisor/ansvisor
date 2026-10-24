@@ -293,7 +293,9 @@ describe('QualityTab', () => {
         brandFacts: { pending: 2, had: true },
       }),
     });
-    const row = container.querySelector('[aria-label="Your to-dos"] li')!;
+    // Last: the brand's, worth no points of the page's.
+    const rows = [...container.querySelectorAll('[aria-label="Your to-dos"] li')];
+    const row = rows.at(-1)!;
     expect(row.textContent).toContain('Approve 2 brand facts');
     expect(row.querySelector('a')!.getAttribute('href')).toBe(
       '/dashboard/brands/b1/settings?tab=facts',

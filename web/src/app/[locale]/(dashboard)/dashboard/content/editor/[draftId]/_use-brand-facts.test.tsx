@@ -68,4 +68,12 @@ describe('useBrandFacts', () => {
     expect(status()).toBe('off');
     expect(getBrandFacts).not.toHaveBeenCalled();
   });
+
+  it('fails, not loads for ever, when the action throws', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    getBrandFacts.mockRejectedValueOnce(new Error('deploy skew'));
+    await render();
+    expect(status()).toBe('failed');
+    error.mockRestore();
+  });
 });

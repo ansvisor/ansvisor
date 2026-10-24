@@ -12,10 +12,10 @@ export type BrandFactsState =
 
 /**
  * The brand's facts in the editor (Quality CE-047): read once with Quality's
- * second phase, and again when the person comes back to the tab (from Brand
- * settings › Brand facts, where they approve them; a read of what is kept,
- * not of the site). An API with them off is 'off'; a failed read keeps the
- * one before it.
+ * second phase (the editor opens again after Review, from Brand settings),
+ * and again when its browser tab comes back (Brand settings open in
+ * another). An API with them off is 'off'; a failed read keeps the one
+ * before it, or is 'failed'.
  */
 export function useBrandFacts(brandId: string, enabled: boolean): BrandFactsState {
   const [state, setState] = useState<BrandFactsState>({ status: 'loading' });
@@ -31,12 +31,19 @@ export function useBrandFacts(brandId: string, enabled: boolean): BrandFactsStat
   useEffect(() => {
     if (!enabled) return;
     let live = true;
-    void getBrandFacts(brandId).then((result) => {
-      if (!live) return;
-      if (!('error' in result)) setState({ status: 'ready', read: result });
-      else if (result.error === 'off') setState({ status: 'off' });
-      else setState((prev) => (prev.status === 'ready' ? prev : { status: 'failed' }));
-    });
+    const failed = () =>
+      setState((prev) => (prev.status === 'ready' ? prev : { status: 'failed' }));
+    getBrandFacts(brandId)
+      .then((result) => {
+        if (!live) return;
+        if (!('error' in result)) setState({ status: 'ready', read: result });
+        else if (result.error === 'off') setState({ status: 'off' });
+        else failed();
+      })
+      .catch((err) => {
+        console.error('Failed to read the brand facts:', err);
+        if (live) failed();
+      });
     return () => {
       live = false;
     };
