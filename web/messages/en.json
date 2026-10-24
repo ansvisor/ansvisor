@@ -4391,10 +4391,12 @@
       "exportDialog": {
         "publish": {
           "quiet": "Before you publish has the author, dates and schema (JSON-LD) for your CMS.",
+          "quietOther": "Before you publish has the author and what your CMS adds for this page type.",
           "warnings": "Before you publish: {list}.",
           "trust": "Trust {trust}, below 60",
           "noAuthor": "no author yet",
-          "review": "Review"
+          "review": "Review",
+          "reviewLabel": "Review Before you publish"
         },
         "title": "Export",
         "untitled": "Untitled",

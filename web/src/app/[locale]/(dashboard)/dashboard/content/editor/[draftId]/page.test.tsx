@@ -3796,6 +3796,12 @@ describe('the side panel', () => {
         'HTML',
       );
       expect(inDialog('Copy HTML').disabled).toBe(true);
+      // Review and back: still on HTML.
+      await act(async () => inDialog('Review').click());
+      await act(async () => inDialog('Continue to export').click());
+      expect(dialog()!.querySelector('[role="radio"][aria-checked="true"]')!.textContent).toBe(
+        'HTML',
+      );
 
       await act(async () => inDialog('Fill now').click());
       expect(dialog()).toBeNull();

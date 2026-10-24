@@ -196,7 +196,13 @@ export function ExportDialog({
    * What Before you publish has for this page (CE-041), with Review: Export
    * opens on its options, and names Trust under 60 or a missing author.
    */
-  publish?: { trustBelow: number | null; noAuthor: boolean; onReview: () => void } | null;
+  publish?: {
+    trustBelow: number | null;
+    noAuthor: boolean;
+    /** An article: Before you publish has its dates and JSON-LD too. */
+    article: boolean;
+    onReview: () => void;
+  } | null;
 }) {
   const t = useTranslations('contentEditor.editor.exportDialog');
   const [destination, setDestination] = useState<ExportDestination>(
@@ -622,10 +628,12 @@ export function ExportDialog({
 function PublishLine({
   trustBelow,
   noAuthor,
+  article,
   onReview,
 }: {
   trustBelow: number | null;
   noAuthor: boolean;
+  article: boolean;
   onReview: () => void;
 }) {
   const t = useTranslations('contentEditor.editor.exportDialog.publish');
@@ -644,9 +652,17 @@ function PublishLine({
     >
       {warnings.length > 0 && <AlertTriangle aria-hidden className="h-3.5 w-3.5 shrink-0" />}
       <p className="min-w-0 flex-1">
-        {warnings.length ? t('warnings', { list: warnings.join(' · ') }) : t('quiet')}
+        {warnings.length
+          ? t('warnings', { list: warnings.join(' · ') })
+          : t(article ? 'quiet' : 'quietOther')}
       </p>
-      <Button variant="outline" size="sm" className="h-6 shrink-0 px-2 text-xs" onClick={onReview}>
+      <Button
+        variant="outline"
+        size="sm"
+        className="h-6 shrink-0 px-2 text-xs"
+        aria-label={t('reviewLabel')}
+        onClick={onReview}
+      >
         {t('review')}
       </Button>
     </div>

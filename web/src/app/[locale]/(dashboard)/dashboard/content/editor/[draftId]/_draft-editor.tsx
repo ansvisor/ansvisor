@@ -83,7 +83,7 @@ import {
 } from '@/lib/content/clean-html';
 import { PAGE_READ_DELAY_MS, draftTitleFromDoc, safeLinkHref } from '@/lib/content/editor';
 import { JsonLd } from '@/lib/content/json-ld-node';
-import { firstImage } from '@/lib/content/page-schema';
+import { firstImage, isArticlePage } from '@/lib/content/page-schema';
 import { PLACEHOLDER, pagePlaceholders, placeholderIn } from '@/lib/content/placeholders';
 import {
   blankCode,
@@ -1816,6 +1816,8 @@ export function DraftEditor({
   const [publishOpen, setPublishOpen] = useState<{
     mode: 'markReady' | 'export' | 'send';
     html: string;
+    /** Export's destination when Review opened it: Continue goes back to it. */
+    returnTo?: ExportDestination;
   } | null>(null);
   // Send to CMS (#1331): admins and managers send the page to the brand's
   // webhook, as the page Export makes ready, past Before you publish once
@@ -1854,8 +1856,11 @@ export function DraftEditor({
     if (quality) openBeforePublish('send');
     else void openSend();
   };
-  const openBeforePublish = (mode: 'markReady' | 'export' | 'send') => {
-    setPublishOpen({ mode, html: pageToPublish() });
+  const openBeforePublish = (
+    mode: 'markReady' | 'export' | 'send',
+    returnTo?: ExportDestination,
+  ) => {
+    setPublishOpen({ mode, html: pageToPublish(), returnTo });
     if (mode === 'markReady') nudgeAt('markReady');
   };
   // Read once per change (a link read landing, the title), not on every render.
@@ -2689,9 +2694,10 @@ export function DraftEditor({
                 ? quality.trust.score
                 : null,
             noAuthor: quality.eeat !== null && !quality.author,
+            article: isArticlePage(pageType),
             onReview: () => {
               setExportOpen(null);
-              openBeforePublish('export');
+              openBeforePublish('export', exportOpen.destination);
             },
           }}
         />
@@ -2730,7 +2736,7 @@ export function DraftEditor({
             const next = publishOpen.mode;
             setPublishOpen(null);
             if (next === 'send') void openSend();
-            else openExport();
+            else openExport(publishOpen.returnTo);
           }}
           onClose={() => setPublishOpen(null)}
           quality={quality}
