@@ -12,6 +12,46 @@
     "reload": "Reload",
     "upgrade": "Upgrade"
   },
+  "aiUsage": {
+    "meter": {
+      "ai": "AI",
+      "label": "AI {percent} used this month",
+      "labelWarning": "AI {percent} used this month, close to the limit",
+      "labelExhausted": "AI {percent} used this month, the limit is reached"
+    },
+    "askAdmin": "To get more AI usage or use your own key, ask an admin of your workspace.",
+    "getMore": {
+      "plan": "Get more AI usage",
+      "ownKey": "Use your own key",
+      "startPlan": "Start your plan"
+    },
+    "popover": {
+      "title": "AI usage this month · {plan} plan",
+      "titleTrial": "AI usage this month · {plan} free trial",
+      "titleNoPlan": "AI usage this month",
+      "page": "This page this month",
+      "shared": "Shared by every seat · resets {date}",
+      "sharedNoDate": "Shared by every seat",
+      "exhausted": "Used up. AI features stop until {date}; Agent Chat on your own AI key keeps working.",
+      "exhaustedNoDate": "Used up. AI features stop until it resets; Agent Chat on your own AI key keeps working.",
+      "exhaustedTrial": "The free trial's AI usage is used up. Starting the plan gives its full monthly allowance; Agent Chat on your own AI key keeps working.",
+      "ownKey": "Agent Chat, on your own AI key",
+      "notCounted": "Not counted",
+      "otherLimits": "Other limits this month",
+      "auditPages": "Site Audit pages",
+      "promptLocations": "Prompt locations",
+      "ofLimit": "{used} of {limit}",
+      "details": "See details"
+    },
+    "banner": {
+      "warning": "You've used {percent} of this month's AI limit.",
+      "warningTrial": "You've used {percent} of the free trial's AI usage. Starting the plan gives its full monthly allowance.",
+      "seeUsage": "See usage",
+      "exhausted": "You've used this month's AI limit. AI features stop until {date}; Agent Chat on your own AI key keeps working.",
+      "exhaustedNoDate": "You've used this month's AI limit. AI features stop until it resets; Agent Chat on your own AI key keeps working.",
+      "exhaustedTrial": "You've used the free trial's AI usage. Starting the plan gives its full monthly allowance; Agent Chat on your own AI key keeps working."
+    }
+  },
   "common": {
     "loading": "Loading...",
     "error": "Something went wrong.",
@@ -3555,6 +3595,18 @@
         "applied": "HTML applied · formatting cleaned",
         "appliedUnsafe": "HTML applied · {count, plural, one {# unsafe tag} other {# unsafe tags}} removed"
       },
+      "header": {
+        "rename": "{title} · click to rename it in the page",
+        "running": "{count, plural, one {# running} other {# running}}",
+        "runningHint": "The Content Agent is working on this page. Click to follow its steps or stop it.",
+        "readyLabel": "Ready: click to move it back to review",
+        "readyHint": "Marked ready. Click to move it back to review.",
+        "publishedHint": "Published. Change its status in the Library.",
+        "backInReview": "Back in review.",
+        "backInReviewFailed": "Couldn't move it back to review.",
+        "notReady": "Its status is now {status}, so it stays.",
+        "renameInHtml": "Rename it in the HTML view's text, or close the view to rename it in the page."
+      },
       "markReady": "Mark ready",
       "copyHtml": "Copy HTML",
       "copyHtmlHint": "Copy the page as HTML to publish, HTML blocks and schema included",
@@ -3763,6 +3815,8 @@
         "decideFirst": "{count, plural, one {Review the open suggestion first, then run the agent.} other {Review the open suggestions first, then run the agent.}}",
         "citedLoading": "Reading which passages AI quotes, so the agent leaves them as they are…",
         "agentBusy": "Content Agent is already working on this page. Wait for it to finish.",
+        "aiUsedUp": "This month's AI usage is used up. It resets on {date}.",
+        "aiUsedUpNoDate": "This month's AI usage is used up until it resets.",
         "fixErrors": {
           "ai_budget": "This month's AI usage is spent. Upgrade for more, or try again once it resets.",
           "no_subscription": "Content Agent needs an active subscription. Choose a plan in Settings › Billing.",
@@ -4496,6 +4550,8 @@
           "readingLevel": {
             "line": "Reading level {score, number} ({formula})",
             "detail": "Aim for {target} or more: shorter words and sentences.",
+            "detailBand": "Aim for {min}–{max}: shorter words and sentences.",
+            "detailSimple": "Aim for {min}–{max}: the page reads simpler than most readers of it expect. Keep the detail they look for.",
             "lineLength": "Long words and sentences",
             "detailLength": "No reading-level formula for this language yet: read by sentence and word length."
           },

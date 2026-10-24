@@ -57,6 +57,7 @@ import { toCsv } from '@/lib/csv';
 import { readUrlChoice, readUrlParam, writeUrlParams } from '@/lib/url-state';
 import type { KpiTrendPoint } from '@/lib/actions/kpis';
 import { signalChangeTone, signedPercent, type SignalMetric } from '@/lib/signals/metrics';
+import { HeaderWithAiUsage } from '@/components/ai-usage/ai-usage-meter';
 
 const SIGNAL_EXPORT_HEADERS = [
   'title',
@@ -103,10 +104,12 @@ export default function ActionCenterSignalsPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">{t('title')}</h1>
-        <p className="mt-1 text-sm text-muted-foreground">{t('subtitle')}</p>
-      </div>
+      <HeaderWithAiUsage>
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">{t('title')}</h1>
+          <p className="mt-1 text-sm text-muted-foreground">{t('subtitle')}</p>
+        </div>
+      </HeaderWithAiUsage>
       <ActionCenterTabs />
       {brand ? (
         <SignalsContent key={brand.id} brand={brand} />

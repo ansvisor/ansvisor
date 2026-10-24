@@ -24,6 +24,7 @@ import { MentionsListTab } from './_mentions-tab';
 import { MentionsOverviewTab } from './_overview';
 import { MentionsPerceptionTab } from './_perception';
 import { useMentionsExport } from './_use-mentions-export';
+import { HeaderWithAiUsage } from '@/components/ai-usage/ai-usage-meter';
 
 /**
  * Mentions & Sentiment (MS-05): where AI mentions the brand, how it describes
@@ -105,13 +106,15 @@ export default function MentionsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">{t('title')}</h1>
-          <p className="text-sm text-muted-foreground">{t('description')}</p>
+      <HeaderWithAiUsage>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight">{t('title')}</h1>
+            <p className="text-sm text-muted-foreground">{t('description')}</p>
+          </div>
+          {urlRead && <MentionsHeaderActions tab={tab} exporter={exporter} />}
         </div>
-        {urlRead && <MentionsHeaderActions tab={tab} exporter={exporter} />}
-      </div>
+      </HeaderWithAiUsage>
 
       <Tabs value={tab} onValueChange={(v) => setTab(v as MentionsTab)}>
         <TabsList aria-label={t('tabs.label')}>

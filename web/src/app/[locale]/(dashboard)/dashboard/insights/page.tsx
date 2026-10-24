@@ -491,6 +491,7 @@ function NoDataForPeriod({ datePreset, onReset }: { datePreset: DatePreset; onRe
 import { saveTrackingJob, loadTrackingJob, clearTrackingJob } from '@/lib/tracking-job-store';
 import { toCsv } from '@/lib/csv';
 import { RunLine } from './_run-line';
+import { HeaderWithAiUsage } from '@/components/ai-usage/ai-usage-meter';
 
 function TrackingProgressBanner({
   jobStatus,
@@ -1095,10 +1096,12 @@ export default function InsightsPage() {
   if (trulyEmpty) {
     return (
       <div className="space-y-6">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">{t('title')}</h1>
-          <p className="text-muted-foreground text-sm">{brand.name}</p>
-        </div>
+        <HeaderWithAiUsage>
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight">{t('title')}</h1>
+            <p className="text-muted-foreground text-sm">{brand.name}</p>
+          </div>
+        </HeaderWithAiUsage>
         <TrackingProgressBanner jobStatus={jobStatus} onStop={handleStopTracking} />
         {!localJobActive && <ServerRunBanner run={cronRun} />}
         <EmptyState onRunPrompts={handleRunPrompts} isRunning={isRunning} isCloud={isCloud} />
@@ -1138,63 +1141,69 @@ export default function InsightsPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">{t('title')}</h1>
+      <HeaderWithAiUsage>
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight">{t('title')}</h1>
 
-          {/* The brand's last full run from the ledger; before the ledger has
-              one, the newest answer in view. */}
-          <RunLine
-            brandName={brand.name}
-            lastRunAt={runTimes.lastRunAt ?? summary?.lastCheckedAt ?? null}
-            nextRunAt={runTimes.nextRunAt}
-            hasData={hasAnyData === true}
-          />
-        </div>
+            {/* The brand's last full run from the ledger; before the ledger has
+                one, the newest answer in view. */}
+            <RunLine
+              brandName={brand.name}
+              lastRunAt={runTimes.lastRunAt ?? summary?.lastCheckedAt ?? null}
+              nextRunAt={runTimes.nextRunAt}
+              hasData={hasAnyData === true}
+            />
+          </div>
 
-        <div className="flex items-center gap-2 shrink-0">
-          {/* Always visible */}
-          <FormulaDialog />
+          <div className="flex items-center gap-2 shrink-0">
+            {/* Always visible */}
+            <FormulaDialog />
 
-          <Button
-            variant="outline"
-            className="gap-2"
-            onClick={handleExportCsv}
-            disabled={isExporting}
-          >
-            {isExporting ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <Download className="h-4 w-4" />
+            <Button
+              variant="outline"
+              className="gap-2"
+              onClick={handleExportCsv}
+              disabled={isExporting}
+            >
+              {isExporting ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Download className="h-4 w-4" />
+              )}
+              {isExporting ? tCommon('exporting') : tCommon('exportCsv')}
+            </Button>
+
+            <Link href="/dashboard/reports" className={cn(buttonVariants(), 'gap-2')}>
+              <FileText className="h-4 w-4" />
+              Reports
+            </Link>
+
+            {/* Self-host only */}
+            {!isCloud && (
+              <>
+                <Button
+                  variant="outline"
+                  onClick={() => setShowSinglePrompt(true)}
+                  className="gap-2"
+                >
+                  <FlaskConical className="h-4 w-4" />
+                  Test Single Prompt
+                </Button>
+
+                <Button onClick={handleRunPrompts} disabled={isRunning} className="gap-2">
+                  {isRunning ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Play className="h-4 w-4" />
+                  )}
+                  Run All
+                </Button>
+              </>
             )}
-            {isExporting ? tCommon('exporting') : tCommon('exportCsv')}
-          </Button>
-
-          <Link href="/dashboard/reports" className={cn(buttonVariants(), 'gap-2')}>
-            <FileText className="h-4 w-4" />
-            Reports
-          </Link>
-
-          {/* Self-host only */}
-          {!isCloud && (
-            <>
-              <Button variant="outline" onClick={() => setShowSinglePrompt(true)} className="gap-2">
-                <FlaskConical className="h-4 w-4" />
-                Test Single Prompt
-              </Button>
-
-              <Button onClick={handleRunPrompts} disabled={isRunning} className="gap-2">
-                {isRunning ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Play className="h-4 w-4" />
-                )}
-                Run All
-              </Button>
-            </>
-          )}
+          </div>
         </div>
-      </div>
+      </HeaderWithAiUsage>
 
       {/* Filter Bar */}
       <FilterBar

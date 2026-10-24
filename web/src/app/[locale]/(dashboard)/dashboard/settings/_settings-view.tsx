@@ -28,6 +28,7 @@ import {
   settingsSectionPath,
   type SettingsSection,
 } from './_sections';
+import { HeaderWithAiUsage } from '@/components/ai-usage/ai-usage-meter';
 
 /**
  * Settings, opened on `section`: from its own address (/dashboard/settings/
@@ -95,10 +96,12 @@ export function SettingsView({ section }: { section: SettingsSection }) {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">{t('title')}</h1>
-        <p className="text-muted-foreground">{t('description')}</p>
-      </div>
+      <HeaderWithAiUsage>
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">{t('title')}</h1>
+          <p className="text-muted-foreground">{t('description')}</p>
+        </div>
+      </HeaderWithAiUsage>
 
       <Separator />
 

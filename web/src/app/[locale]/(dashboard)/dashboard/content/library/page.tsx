@@ -49,6 +49,7 @@ import { readUrlChoice, writeUrlParams } from '@/lib/url-state';
 import { useBrandStore } from '@/stores/use-brand-store';
 import { LibraryExportMenu, useLibraryExport } from './_library-export';
 import { LibraryTable, type LibraryRowActions } from './_library-table';
+import { HeaderWithAiUsage } from '@/components/ai-usage/ai-usage-meter';
 
 /** A read of the brand's drafts: null until it comes back. */
 interface LibraryRead {
@@ -199,23 +200,25 @@ export default function ContentLibraryPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">{t('title')}</h1>
-          <p className="text-sm text-muted-foreground">{t('description')}</p>
+      <HeaderWithAiUsage>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight">{t('title')}</h1>
+            <p className="text-sm text-muted-foreground">{t('description')}</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <LibraryExportMenu
+              disabled={listed.length === 0}
+              exporting={exporting}
+              onExport={(format) => void exportList(listed, tab, format)}
+            />
+            <Button className="gap-2" onClick={() => setStarting(true)}>
+              <Plus className="h-4 w-4" />
+              {t('newContent')}
+            </Button>
+          </div>
         </div>
-        <div className="flex items-center gap-2">
-          <LibraryExportMenu
-            disabled={listed.length === 0}
-            exporting={exporting}
-            onExport={(format) => void exportList(listed, tab, format)}
-          />
-          <Button className="gap-2" onClick={() => setStarting(true)}>
-            <Plus className="h-4 w-4" />
-            {t('newContent')}
-          </Button>
-        </div>
-      </div>
+      </HeaderWithAiUsage>
       <NewContentDialog
         open={starting}
         onOpenChange={setStarting}

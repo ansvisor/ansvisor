@@ -33,12 +33,13 @@ const result: Readability = {
     { id: 'longSentences', points: 6, max: 15, value: 41, count: 3, at: 'A very long sentence.' },
     {
       id: 'readingLevel',
-      points: 15,
+      points: 10,
       max: 20,
-      value: 52,
-      count: 0,
+      value: 77,
+      count: 1,
       formula: 'flesch',
-      target: 60,
+      target: 50,
+      band: { min: 50, max: 70 },
     },
     { id: 'answerFirst', points: 15, max: 15, value: 30, count: 0, at: null },
     { id: 'shortParagraphs', points: 10, max: 10, value: 6, count: 0, at: null },
@@ -129,12 +130,25 @@ describe('QualityTab', () => {
     const suggestions = container.querySelector('[aria-label="What would raise it"]')!;
     const rows = [...suggestions.querySelectorAll('li')].map((li) => li.textContent);
     expect(rows).toEqual([
+      '+10 ReadabilityReading level 77 (Flesch Reading Ease)Aim for 50–70: the page reads simpler than most readers of it expect. Keep the detail they look for.',
       '+9 Readability3 sentences over 35 wordsSplit each into two. Show goes to the first.Show',
       '+5 ReadabilitySentences average 22.4 wordsAim for 15–20 words: shorter sentences read faster, and AI answers quote them whole.',
-      '+5 ReadabilityReading level 52 (Flesch Reading Ease)Aim for 60 or more: shorter words and sentences.',
     ]);
     await act(async () => suggestions.querySelector<HTMLButtonElement>('li button')!.click());
     expect(onShow).toHaveBeenCalledWith('A very long sentence.');
+  });
+
+  it('asks for shorter words and sentences under English’s band', async () => {
+    await render({
+      ...result,
+      checks: result.checks.map((c) =>
+        c.id === 'readingLevel' ? { ...c, value: 42, count: -1 } : c,
+      ),
+    });
+    const suggestions = container.querySelector('[aria-label="What would raise it"]')!;
+    expect(suggestions.textContent).toContain(
+      'Reading level 42 (Flesch Reading Ease)Aim for 50–70: shorter words and sentences.',
+    );
   });
 
   it('asks to join short sentences when they run under the range', async () => {

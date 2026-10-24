@@ -461,6 +461,12 @@ function line(t: T, check: ReadabilityCheck): string {
 function detail(t: T, check: ReadabilityCheck): string {
   if (check.id === 'avgSentence' && check.count < 0) return t('checks.avgSentence.detailShort');
   if (check.id === 'readingLevel') {
+    // English reads by its band (as Site Audit does): over it, the page reads too simple.
+    if (check.band) {
+      return check.count > 0
+        ? t('checks.readingLevel.detailSimple', check.band)
+        : t('checks.readingLevel.detailBand', check.band);
+    }
     return check.formula
       ? t('checks.readingLevel.detail', { target: check.target ?? 60 })
       : t('checks.readingLevel.detailLength');
