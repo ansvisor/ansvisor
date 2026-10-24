@@ -3297,6 +3297,23 @@ describe('the side panel', () => {
       expect(dialog()).toBeNull();
     });
 
+    it('names the team in the page’s language in the CMS author field, as Export does', async () => {
+      process.env.NEXT_PUBLIC_CONTENT_QUALITY_PHASE = '1';
+      brandState.brands = [{ id: 'b1', language: 'tr' } as never, { id: 'b2' }];
+      try {
+        getContentDraft.mockResolvedValue(draft({ pageType: 'blog_post' }));
+        await renderPage();
+        await act(async () => button('Send to CMS')!.click());
+        await act(async () => inDialog('Continue to send').click());
+        await act(async () => inDialog('Send').click());
+        expect(sendPagesToCms).toHaveBeenCalledWith('b1', [
+          expect.objectContaining({ draftId: 'd1', author: 'Acme Ekibi' }),
+        ]);
+      } finally {
+        brandState.brands = [{ id: 'b1' }, { id: 'b2' }];
+      }
+    });
+
     it('opens Before you publish first while Quality is on', async () => {
       process.env.NEXT_PUBLIC_CONTENT_QUALITY_PHASE = '1';
       getContentDraft.mockResolvedValue(draft({ pageType: 'blog_post' }));

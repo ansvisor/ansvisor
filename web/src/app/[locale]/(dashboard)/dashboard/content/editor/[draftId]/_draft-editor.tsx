@@ -2544,8 +2544,9 @@ export function DraftEditor({
           html={sendOpen.html}
           sourceUrl={draft.sourceUrl}
           author={pageAuthor}
-          // Until the authors are read, who it is by isn't known.
-          teamByline={authorsRead ? t('author.organization', { brand: brandName }) : ''}
+          // Until the authors are read, who it is by isn't known. It goes to
+          // the CMS's author field, so in the page's language, as Export's.
+          teamByline={authorsRead ? teamName(language, brandName) : ''}
           byline={contentByline}
           onFillNow={() => {
             setSendOpen(null);
