@@ -36,8 +36,20 @@ const ada: ContentAuthor = {
   defaultFor: [],
   pages: null,
 };
-const pick: QualityTodo = { id: 'byline', done: false, gain: 60, action: 'pickAuthor' };
-const profile: QualityTodo = { id: 'authorProfile', done: false, gain: 40, action: 'editAuthor' };
+const pick: QualityTodo = {
+  id: 'byline',
+  done: false,
+  gain: 60,
+  score: 'eeat',
+  action: 'pickAuthor',
+};
+const profile: QualityTodo = {
+  id: 'authorProfile',
+  done: false,
+  gain: 40,
+  score: 'eeat',
+  action: 'editAuthor',
+};
 
 let container: HTMLDivElement;
 let root: Root;
@@ -111,6 +123,7 @@ describe('NextNudge', () => {
       id: 'placeholders',
       done: false,
       gain: 0,
+      score: 'eeat',
       action: 'showPlaceholder',
       count: 2,
     };

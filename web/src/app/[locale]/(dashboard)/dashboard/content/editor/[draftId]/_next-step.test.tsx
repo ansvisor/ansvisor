@@ -139,7 +139,7 @@ describe('NextStepButton', () => {
         quality: {
           trust: 54,
           trustLow: true,
-          todos: [{ id: 'byline', done: false, gain: 15, action: 'pickAuthor' }],
+          todos: [{ id: 'byline', done: false, gain: 15, score: 'eeat', action: 'pickAuthor' }],
         },
       }),
       { todoLine: "pick the page's author" },

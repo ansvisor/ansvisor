@@ -89,6 +89,7 @@ export function NextNudge({
   quality,
   onShowPlaceholder,
   onPickAuthor,
+  onAddInput,
   onLater,
   onAct,
 }: {
@@ -97,6 +98,8 @@ export function NextNudge({
   /** Selects the page's first placeholder, to type over. */
   onShowPlaceholder: () => void;
   onPickAuthor: () => void;
+  /** Opens Brief › Your input (CE-048). */
+  onAddInput?: () => void;
   onLater: () => void;
   /** It was acted on: it goes. */
   onAct: () => void;
@@ -150,6 +153,19 @@ export function NextNudge({
             >
               {t('act.pickAuthor')}
             </button>
+          ) : action === 'addInput' ? (
+            onAddInput && (
+              <button
+                type="button"
+                className={actClass}
+                onClick={() => {
+                  onAct();
+                  onAddInput();
+                }}
+              >
+                {t('act.addInput')}
+              </button>
+            )
           ) : (
             action && (
               <Link href={MANAGE_AUTHORS_PATH} className={actClass} onClick={onAct}>

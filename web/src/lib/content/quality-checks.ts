@@ -117,9 +117,33 @@ export function authorProfile(author: ContentAuthor | null): { bio: boolean; lin
  * publish gives counts only once the page has it. Experience, data, proof
  * and who/how/why are Phase 2.
  */
-export function eeat({ author }: { author: ContentAuthor | null }): Score<EeatCheckId> {
+export function eeat({
+  author,
+  used = null,
+}: {
+  author: ContentAuthor | null;
+  /**
+   * Phase 2 (CE-048): whether the page uses the person's experience and
+   * their data (Brief › Your input, inputsUsed); left out before.
+   */
+  used?: { experience: boolean; data: boolean } | null;
+}): Score<EeatCheckId> {
   const { bio, links } = authorProfile(author);
   return scoreOf<EeatCheckId>([
+    ...(used
+      ? [
+          {
+            id: 'experience' as const,
+            points: used.experience ? EEAT_WEIGHTS.experience : 0,
+            max: EEAT_WEIGHTS.experience,
+          },
+          {
+            id: 'originalData' as const,
+            points: used.data ? EEAT_WEIGHTS.originalData : 0,
+            max: EEAT_WEIGHTS.originalData,
+          },
+        ]
+      : []),
     { id: 'byline', points: author ? EEAT_WEIGHTS.byline : 0, max: EEAT_WEIGHTS.byline },
     {
       id: 'authorBio',
@@ -256,6 +280,7 @@ export function trust({
   links,
   brandDomains,
   siteTrust = null,
+  quote = null,
   now,
 }: {
   /** The page's blocks (trustBlocks). */
@@ -265,6 +290,11 @@ export function trust({
   brandDomains: string[];
   /** How many of the site's five trust checks pass (CE-043), when read. */
   siteTrust?: { score: number } | null;
+  /**
+   * Phase 2 (CE-048): whether the page quotes a real expert from Brief ›
+   * Your input word for word; left out before.
+   */
+  quote?: boolean | null;
   now: number;
 }): TrustRead {
   const all = pageLinks(blocks, brandDomains);
@@ -314,6 +344,14 @@ export function trust({
       id: 'noBrokenLinks',
       points: (TRUST_WEIGHTS.noBrokenLinks * (read.length - broken.length)) / read.length,
       max: TRUST_WEIGHTS.noBrokenLinks,
+    });
+  }
+
+  if (quote !== null) {
+    checks.push({
+      id: 'expertQuote',
+      points: quote ? TRUST_WEIGHTS.expertQuote : 0,
+      max: TRUST_WEIGHTS.expertQuote,
     });
   }
 
