@@ -38196,8 +38196,9 @@ declare
 begin
   perform pg_advisory_xact_lock(hashtext('content_deliveries:' || p_organization_id::text));
 
+  -- sent_at stays empty: it was never sent, and its time stays its own.
   update public.content_draft_deliveries
-  set status = 'failed', error = 'Not sent: interrupted', sent_at = now()
+  set status = 'failed', error = 'Not sent: interrupted'
   where organization_id = p_organization_id
     and status = 'queued'
     and created_at < now() - interval '15 minutes';
