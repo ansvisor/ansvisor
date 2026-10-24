@@ -131,6 +131,19 @@ describe('draftParagraphs', () => {
     );
   });
 
+  it('finds a claim copied with straight quotes or dashes, kept as the paragraph has it', () => {
+    const page = 'Ledgerly is the world’s fastest app — “rated #1” by G2.';
+    expect(
+      keptClaims(page, [
+        { text: "the world's fastest app - ", kind: 'superlative' },
+        { text: '"rated #1" by G2', kind: 'superlative' },
+      ]),
+    ).toEqual([
+      { text: 'the world’s fastest app —', kind: 'superlative' },
+      { text: '“rated #1” by G2', kind: 'superlative' },
+    ]);
+  });
+
   it("keeps a claim only in the paragraph's own words, each once, five at most", () => {
     expect(
       keptClaims(SOC, [
@@ -284,8 +297,25 @@ describe('readDraftClaims', () => {
     const result = await read();
     expect(charge).toHaveBeenCalledWith({ inputTokens: 300, outputTokens: 5 });
     expect(result).toEqual({ paragraphs: [], pending: 0, limited: false });
-    // Kept as read: not sent, and charged, again on the next save.
-    expect(upserts[0].rows.map((r) => r.claims)).toEqual([[], []]);
+    // Kept as missed: not sent, and charged, again on the next save.
+    expect(upserts[0].rows.map((r) => [r.claims, r.missed])).toEqual([
+      [[], true],
+      [[], true],
+    ]);
+  });
+
+  it('reads a missed answer’s paragraphs again after a day, not before', async () => {
+    const hourAgo = new Date(Date.now() - 3_600_000).toISOString();
+    const twoDaysAgo = new Date(Date.now() - 2 * 86_400_000).toISOString();
+    kept = [
+      { paragraph_hash: paragraphHash(FAST), claims: [], missed: true, checked_at: hourAgo },
+      { paragraph_hash: paragraphHash(SOC), claims: [], missed: true, checked_at: twoDaysAgo },
+    ];
+    await read();
+    expect(generateObject.mock.calls[0][0].prompt).toBe(`Paragraphs:\n[1] ${SOC}`);
+    expect(upserts[0].rows.map((r) => [r.paragraph_hash, r.missed])).toEqual([
+      [paragraphHash(SOC), false],
+    ]);
   });
 
   it('sends a call no more than its share of words', async () => {

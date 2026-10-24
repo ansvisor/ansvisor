@@ -238,7 +238,9 @@ router.post('/claims', claimsLimiter, async (req, res) => {
     if (err?.status === 403 || err?.status === 404) {
       return res.status(err.status).json({ error: err.message, code: 'forbidden' });
     }
-    req.log.error({ err }, 'content claims error');
+    // Its name and message only: a provider's error (APICallError, a
+    // RetryError of them) carries the request, the page's paragraphs.
+    req.log.error({ err: { name: err?.name, message: err?.message } }, 'content claims error');
     return res.status(500).json({ error: 'Failed to read the claims', code: 'failed' });
   }
 });

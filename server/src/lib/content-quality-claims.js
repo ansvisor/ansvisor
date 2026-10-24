@@ -5,7 +5,7 @@ import { z } from 'zod';
 import supabaseAdmin from '../config/supabase.js';
 import { resolveModel } from './ai-provider.js';
 import { QUALITY_CALLS_PER_DAY, qualityCallsToday } from './content-quality-calls.js';
-import { sourceClassModelId } from './content-source-class.js';
+import { SOURCE_READS_PER_DAY, sourceClassModelId } from './content-source-class.js';
 import { logger } from './logger.js';
 import { reserveAiBudget } from './plan-guard.js';
 
@@ -29,7 +29,9 @@ export const CALLS_PER_ASK = 2;
  * The day's Quality calls a draft's claims leave to its sources' kinds
  * (QUALITY_CALLS_PER_DAY is theirs together): writing on doesn't starve them.
  */
-export const LEFT_FOR_SOURCES = 10;
+export const LEFT_FOR_SOURCES = SOURCE_READS_PER_DAY;
+/** How long a paragraph whose answer missed the schema is kept as read: read again after it. */
+export const MISSED_DAYS = 1;
 /** The claims kept of one paragraph, and of one claim's words. */
 export const MAX_CLAIMS_PER_PARAGRAPH = 5;
 const MAX_CLAIM_CHARS = 200;
@@ -126,13 +128,31 @@ export function buildClaimsPrompt(paragraphs) {
     .join('\n')}`;
 }
 
-/** A paragraph's claims as kept: its own words only, each once, MAX_CLAIMS_PER_PARAGRAPH at most. */
+/**
+ * A text with its curly quotes and dashes made plain: the model may copy
+ * “world’s fastest” with straight ones. Each is one character for one, so
+ * a match's place is the paragraph's own.
+ */
+const fold = (text) =>
+  text
+    .replace(/[\u2018\u2019]/g, "'")
+    .replace(/[\u201c\u201d]/g, '"')
+    .replace(/[\u2010\u2011\u2013\u2014]/g, '-');
+
+/**
+ * A paragraph's claims as kept: its own words only (curly quotes and
+ * dashes as plain ones, kept as the paragraph has them), each once,
+ * MAX_CLAIMS_PER_PARAGRAPH at most.
+ */
 export function keptClaims(paragraph, claims) {
   const kept = [];
+  const folded = fold(paragraph);
   for (const claim of claims ?? []) {
-    const text = plain(claim?.text);
-    if (text.length < 2 || text.length > MAX_CLAIM_CHARS) continue;
-    if (!CLAIM_KINDS.includes(claim.kind) || !paragraph.includes(text)) continue;
+    const said = plain(claim?.text);
+    if (said.length < 2 || said.length > MAX_CLAIM_CHARS) continue;
+    const at = folded.indexOf(fold(said));
+    if (!CLAIM_KINDS.includes(claim.kind) || at === -1) continue;
+    const text = paragraph.slice(at, at + said.length);
     if (kept.some((k) => k.text === text)) continue;
     kept.push({ text, kind: claim.kind });
     if (kept.length >= MAX_CLAIMS_PER_PARAGRAPH) break;
@@ -140,7 +160,10 @@ export function keptClaims(paragraph, claims) {
   return kept;
 }
 
-/** One call's reads of up to PARAGRAPHS_PER_CALL paragraphs: their claims, by hash. */
+/**
+ * One call's reads of up to PARAGRAPHS_PER_CALL paragraphs: their claims,
+ * by hash, and whether the answer missed the schema.
+ */
 async function readCall({ orgId, draftId, modelId, paragraphs }) {
   const budget = await reserveAiBudget(orgId, {
     feature: 'quality',
@@ -163,13 +186,15 @@ async function readCall({ orgId, draftId, modelId, paragraphs }) {
     await budget.charge(generated.usage);
     object = generated.object;
   } catch (err) {
-    // An answer billed that missed the schema is charged, and its paragraphs
-    // read with none: sent again, they would be charged on every save. One
-    // cut off by the timeout keeps its hold, and is tried again.
+    // An answer billed that missed the schema (cut short, or blocked by the
+    // provider's filter) is charged, and its paragraphs kept as missed, with
+    // none: sent again, they would be charged on every save; they're read
+    // again after MISSED_DAYS. One cut off by the timeout keeps its hold,
+    // and is tried again.
     if (NoObjectGeneratedError.isInstance(err)) {
       if (err.usage) await budget.charge(err.usage);
       logger.warn({ err: { name: err.name } }, '[claims] an answer missed the schema');
-      return read;
+      return { read, missed: true };
     }
     if (err?.name === 'TimeoutError' || err?.name === 'AbortError') await budget.keep();
     throw err;
@@ -186,7 +211,7 @@ async function readCall({ orgId, draftId, modelId, paragraphs }) {
       );
     }
   }
-  return read;
+  return { read, missed: false };
 }
 
 /** Paragraphs in calls: PARAGRAPHS_PER_CALL or CHARS_PER_CALL of words, whichever comes first. */
@@ -227,13 +252,16 @@ export async function readDraftClaims({ orgId, draftId, html, skip = '' }) {
   const paragraphs = draftParagraphs(html);
   const { data: rows, error } = await supabaseAdmin
     .from('content_quality_claims')
-    .select('paragraph_hash, claims')
+    .select('paragraph_hash, claims, missed, checked_at')
     .eq('draft_id', draftId);
   if (error) throw new Error(error.message);
   const current = new Set(paragraphs.map((p) => p.hash));
+  // A missed answer's paragraphs are read again after a day.
+  const missedSince = Date.now() - MISSED_DAYS * 86_400_000;
   const read = new Map(
     (rows ?? [])
       .filter((row) => current.has(row.paragraph_hash))
+      .filter((row) => !row.missed || Date.parse(row.checked_at) >= missedSince)
       .map((row) => [row.paragraph_hash, Array.isArray(row.claims) ? row.claims : []]),
   );
   // Paragraphs no longer on the page: their reads go.
@@ -273,7 +301,7 @@ export async function readDraftClaims({ orgId, draftId, html, skip = '' }) {
         }
       }
       const rowsToKeep = [];
-      for (const batchRead of reads) {
+      for (const { read: batchRead, missed } of reads) {
         for (const [hash, claims] of batchRead) {
           read.set(hash, claims);
           rowsToKeep.push({
@@ -281,6 +309,7 @@ export async function readDraftClaims({ orgId, draftId, html, skip = '' }) {
             paragraph_hash: hash,
             claims,
             model: modelId.slice(0, 100),
+            missed,
             checked_at: new Date().toISOString(),
           });
         }
