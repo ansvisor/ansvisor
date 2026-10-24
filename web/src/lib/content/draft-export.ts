@@ -426,24 +426,27 @@ export async function draftDocx(title: string, html: string, fields?: ExportFiel
 /**
  * The file for a format: Word and Excel built on the click, CSV, HTML and
  * Markdown as UTF-8 text; with the page fields, each carries them its own way.
+ * `sourceUrl` is the live page an optimize draft is for: without Export's
+ * fields, Excel's and CSV's slug is its, as Export's is.
  */
 export async function draftExportBlob(
   format: DraftExportFormat,
   title: string,
   html: string,
   fields?: ExportFields,
+  sourceUrl: string | null = null,
 ): Promise<Blob> {
   if (format === 'docx') return draftDocx(title, html, fields);
   if (format === 'csv') {
     // The mark tells Excel the file is UTF-8, as the Library's CSV does.
-    return new Blob([BYTE_ORDER_MARK, pageCsv(title, html, fields)], {
+    return new Blob([BYTE_ORDER_MARK, pageCsv(title, html, fields, sourceUrl)], {
       type: 'text/csv;charset=utf-8;',
     });
   }
   if (format === 'xlsx') {
     // Loaded on the click: the library is only needed to write the file.
     const { default: writeXlsxFile } = await import('write-excel-file/browser');
-    return writeXlsxFile(pageWorkbook(title, html, fields)).toBlob();
+    return writeXlsxFile(pageWorkbook(title, html, fields, sourceUrl)).toBlob();
   }
   return format === 'html'
     ? new Blob([draftHtmlDocument(title, html, fields)], { type: 'text/html;charset=utf-8' })
@@ -641,27 +644,41 @@ export const PAGE_SHEET_HEADERS = [
   'HTML',
 ];
 
-/**
- * The page as one row: its title, its page fields (Export's, else read from
- * the page as Export reads them, with no author), its text a block a line,
- * and its HTML without the H1 the Title column holds, as a CMS's title
- * field does. A list item's text starts with "•", not "-": a cell starting
- * with "-" would be guarded as a formula (toCsv), its text starting "'-".
- */
-export function pageSheetRow(
+/** Export's page fields as front matter, read from the page where Export gives none. */
+function frontOf(
   title: string,
   html: string,
-  fields?: ExportFields,
-): Record<string, string | number> {
-  const body = withoutLeadingH1(html);
-  const content = draftText('', body).replace(/^(\s*)- /gm, '$1• ');
-  const read = pageFields({ title, html, sourceUrl: null, author: null, teamByline: '' });
-  const front = fields?.front ?? {
+  fields: ExportFields | undefined,
+  sourceUrl: string | null,
+): Record<string, string> {
+  if (fields) return fields.front;
+  // As Export reads them, with no author: an optimize draft's slug is its
+  // live page's, so a CMS import updates that page, not a new one.
+  const read = pageFields({ title, html, sourceUrl, author: null, teamByline: '' });
+  return {
     title: read.metaTitle,
     description: read.metaDescription,
     slug: read.slug,
     image: read.featuredImage ?? '',
   };
+}
+
+/**
+ * The page as one row: its title, its page fields (Export's, else read from
+ * the page as Export reads them: frontOf), its text a block a line, and its
+ * HTML without the H1 the Title column holds, as a CMS's title field does.
+ * A list item's text starts with "•", not "-": a cell starting with "-"
+ * would be guarded as a formula (toCsv), its text starting "'-".
+ */
+export function pageSheetRow(
+  title: string,
+  html: string,
+  fields?: ExportFields,
+  sourceUrl: string | null = null,
+): Record<string, string | number> {
+  const body = withoutLeadingH1(html);
+  const content = draftText('', body).replace(/^(\s*)- /gm, '$1• ');
+  const front = frontOf(title, html, fields, sourceUrl);
   const values: (string | number)[] = [
     title,
     front.title ?? '',
@@ -677,13 +694,23 @@ export function pageSheetRow(
 }
 
 /** Export CSV: the page as one row. */
-export function pageCsv(title: string, html: string, fields?: ExportFields): string {
-  return toCsv([pageSheetRow(title, html, fields)], PAGE_SHEET_HEADERS);
+export function pageCsv(
+  title: string,
+  html: string,
+  fields?: ExportFields,
+  sourceUrl: string | null = null,
+): string {
+  return toCsv([pageSheetRow(title, html, fields, sourceUrl)], PAGE_SHEET_HEADERS);
 }
 
 /** Export Excel: the page as one row; a text past a cell's limit is cut, and says so. */
-export function pageWorkbook(title: string, html: string, fields?: ExportFields): Sheet<Blob>[] {
-  const row = pageSheetRow(title, html, fields);
+export function pageWorkbook(
+  title: string,
+  html: string,
+  fields?: ExportFields,
+  sourceUrl: string | null = null,
+): Sheet<Blob>[] {
+  const row = pageSheetRow(title, html, fields, sourceUrl);
   return [
     {
       sheet: 'Page',

@@ -765,6 +765,19 @@ describe('a Library row’s menu (00233)', () => {
     expect(await readText(blob)).toBe('# Pipeline forecasting\n\nTeams trust it.\n');
   });
 
+  it("gives an optimize draft's CSV the live page's slug, for a CMS import to update it", async () => {
+    getContentDrafts.mockResolvedValue([row({})]);
+    await renderPage();
+    await pick('Pipeline forecasting', 'Export CSV');
+    await act(async () => {});
+    const [blob, name] = saveBlob.mock.calls[0] as [Blob, string];
+    expect(name).toBe('ansvisor_content_pipeline-forecasting.csv');
+    const [header, line] = (await readText(blob)).replace(/^\uFEFF/, '').split('\n');
+    expect(header.split(',')[3]).toBe('Slug');
+    // Title, Meta title, Meta description, then the live page's slug.
+    expect(line).toMatch(/^Pipeline forecasting,Pipeline forecasting,Teams trust it\.,pricing,/);
+  });
+
   it('says so when the server refuses the archive', async () => {
     archiveContentDraft.mockRejectedValue(new Error('forbidden'));
     getContentDrafts.mockResolvedValue([row({})]);

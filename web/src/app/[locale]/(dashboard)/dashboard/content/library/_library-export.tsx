@@ -118,7 +118,13 @@ export function useLibraryExport(brandId: string | null) {
       if (!page) throw new Error('not_found');
       const title = titleOf(draft);
       saveBlob(
-        await draftExportBlob(format, title, publishableHtml(page.bodyHtml)),
+        await draftExportBlob(
+          format,
+          title,
+          publishableHtml(page.bodyHtml),
+          undefined,
+          page.sourceUrl,
+        ),
         draftExportFileName(title, format),
       );
     } catch (err) {

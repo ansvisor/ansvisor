@@ -275,6 +275,11 @@ describe('one page as a spreadsheet row (Excel, CSV)', () => {
       Author: '',
       Characters: 5,
     });
+    // An optimize draft's slug is its live page's: a CMS import updates it.
+    expect(
+      pageSheetRow('Pour-over guide', '<p>Done.</p>', undefined, 'https://acme.com/blog/pour-over/')
+        .Slug,
+    ).toBe('pour-over');
     // A list's items with "•": a cell starting "-" would be read as a formula.
     expect(pageSheetRow('T', '<h1>T</h1><ul><li>HubSpot</li></ul>').Content).toBe('• HubSpot');
     expect(pageCsv('T', '<h1>T</h1><ul><li>HubSpot</li></ul>')).toContain(',• HubSpot,');

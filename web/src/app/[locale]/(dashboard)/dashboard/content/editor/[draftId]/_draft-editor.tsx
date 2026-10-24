@@ -1448,7 +1448,10 @@ export function DraftEditor({
     );
     const name = title.trim() || t('untitled');
     try {
-      saveBlob(await draftExportBlob(format, name, html), draftExportFileName(name, format));
+      saveBlob(
+        await draftExportBlob(format, name, html, undefined, draft.sourceUrl),
+        draftExportFileName(name, format),
+      );
     } catch (err) {
       console.error('Failed to export the page:', err);
       toast.error(t('export.failed'));
