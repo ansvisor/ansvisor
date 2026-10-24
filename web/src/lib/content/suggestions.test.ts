@@ -107,6 +107,14 @@ describe('a suggestion’s sources (00248, CE-033)', () => {
     expect(suggestionSources([], null, 'x')).toEqual({ sources: null, marks: null });
   });
 
+  it("keeps Brief › Your input's sources, the person's own (CE-048)", () => {
+    const table = { kind: 'input' as const, ref: 'data:1', label: 'Survey' };
+    expect(suggestionSources([table], [{ start: 0, end: 5, source: 0 }], '1,250 teams')).toEqual({
+      sources: [table],
+      marks: [{ start: 0, end: 5, source: 0 }],
+    });
+  });
+
   it('counts a batch’s sources once: "built from N of your sources"', () => {
     const s = (sources: DraftSuggestion['sources']) => ({ sources }) as DraftSuggestion;
     expect(batchSources([s([fanout, page]), s([fanout]), s(null)])).toEqual([fanout, page]);

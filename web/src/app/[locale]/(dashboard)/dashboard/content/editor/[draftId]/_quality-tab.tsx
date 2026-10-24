@@ -13,6 +13,7 @@ import {
   trustGain,
   type EeatCheckId,
   type Score,
+  type ClaimMark,
   type TrustCheckId,
   type TrustRead,
 } from '@/lib/content/quality-checks';
@@ -50,6 +51,12 @@ export interface QualityRead {
   todos: QualityTodo[];
   /** The model's reads of sources wait: the workspace's AI budget is spent (CE-046). */
   aiPaused?: boolean;
+  /** The model's reads of the claims wait, for the same reason (CE-045). */
+  claimsPaused?: boolean;
+  /** The draft's claim reads for the day are made (CE-045). */
+  claimsLimited?: boolean;
+  /** Some of the page's claims aren't read yet: Trust may change (CE-045). */
+  claimsReading?: boolean;
 }
 
 type ScoreName = 'eeat' | 'trust' | 'readability';
@@ -65,6 +72,8 @@ export interface Suggestion {
   show: string | null;
   /** The source Keep keeps (CE-046): the person trusts it all the same. */
   keep?: string;
+  /** The claim whose words Add source selects to link, and whose sentence Remove takes out (CE-045). */
+  claim?: ClaimMark;
   /** Read by AI, not by rules alone: it says so (spec §3, "AI check"). */
   ai?: boolean;
 }
@@ -83,6 +92,8 @@ export function QualityTab({
   onPickAuthor,
   onAddInput,
   onKeep,
+  onAddSource,
+  onRemove,
 }: {
   quality: QualityRead;
   /** Scrolls the draft to a passage and marks it. */
@@ -95,6 +106,10 @@ export function QualityTab({
   onAddInput?: () => void;
   /** Keeps a weak source or a competitor's on the page (CE-046). */
   onKeep?: (url: string) => void;
+  /** Selects a claim's words and opens the link dialog on them (CE-045). */
+  onAddSource?: (claim: ClaimMark) => void;
+  /** Takes a claim's sentence out of the page (CE-045). */
+  onRemove?: (claim: ClaimMark) => void;
 }) {
   const t = useTranslations('contentEditor.editor.quality');
   const tSite = useTranslations('audit.siteTrust.checks');
@@ -194,25 +209,53 @@ export function QualityTab({
                       {s.detail}
                     </p>
                   </div>
-                  {s.show !== null && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="h-7 shrink-0"
-                      onClick={() => onShow(s.show!)}
-                    >
-                      {t('show')}
-                    </Button>
-                  )}
-                  {s.keep && onKeep && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-7 shrink-0"
-                      onClick={() => onKeep(s.keep!)}
-                    >
-                      {t('keep')}
-                    </Button>
+                  {(s.show !== null ||
+                    (s.claim && (onAddSource || onRemove)) ||
+                    (s.keep && onKeep)) && (
+                    <div className="flex shrink-0 flex-col items-end gap-1">
+                      {s.show !== null && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-7"
+                          onClick={() => onShow(s.show!)}
+                        >
+                          {t('show')}
+                        </Button>
+                      )}
+                      {s.claim && onAddSource && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-7"
+                          aria-label={t('addSourceTo', { claim: s.claim.text })}
+                          onClick={() => onAddSource(s.claim!)}
+                        >
+                          {t('addSource')}
+                        </Button>
+                      )}
+                      {s.keep && onKeep && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7"
+                          onClick={() => onKeep(s.keep!)}
+                        >
+                          {t('keep')}
+                        </Button>
+                      )}
+                      {s.claim && onRemove && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7"
+                          aria-label={t('removeClaim', { sentence: s.claim.sentence })}
+                          onClick={() => onRemove(s.claim!)}
+                        >
+                          {t('remove')}
+                        </Button>
+                      )}
+                    </div>
                   )}
                 </li>
               ))}
@@ -222,6 +265,10 @@ export function QualityTab({
       )}
 
       {quality.aiPaused && <p className="text-xs text-muted-foreground">{t('aiPaused')}</p>}
+      {quality.claimsPaused && <p className="text-xs text-muted-foreground">{t('claimsPaused')}</p>}
+      {quality.claimsLimited && !quality.claimsPaused && (
+        <p className="text-xs text-muted-foreground">{t('claimsLimited')}</p>
+      )}
 
       {siteTrust && (
         <section
@@ -441,15 +488,23 @@ export function trustSuggestions(t: T, trust: TrustRead | null): TrustSuggestion
   if (!trust) return [];
   const out: TrustSuggestion[] = [];
   if (trust.unsourced.length) {
+    // Phase 2 (CE-045): claims the model read count with the figures, so
+    // the line says claims; Add source and Remove act on the page's first.
+    const claims = trust.aiClaims > 0;
+    const first = trust.unsourced[0];
     out.push({
       key: 'trust:claimsSourced',
       check: 'claimsSourced',
       score: 'trust',
       gain: trustGain(trust, ['claimsSourced']),
-      line: t('checks.claimsSourced.line', { count: trust.unsourced.length }),
+      line: t(claims ? 'checks.claimsSourced.lineClaims' : 'checks.claimsSourced.line', {
+        count: trust.unsourced.length,
+      }),
       count: trust.unsourced.length,
-      detail: t('checks.claimsSourced.detail'),
-      show: trust.unsourced[0],
+      detail: t(claims ? 'checks.claimsSourced.detailClaims' : 'checks.claimsSourced.detail'),
+      show: first,
+      ai: claims,
+      claim: trust.marks.find((mark) => mark.sentence === first),
     });
   }
   if (trust.stale.length) {
