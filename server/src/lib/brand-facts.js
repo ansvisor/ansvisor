@@ -278,7 +278,8 @@ export function factText(html) {
     }
     if (node.type === 'text') {
       parts.push(node.data);
-      size += node.data.length;
+      // Its words, not the page's indents: those don't fill the text.
+      size += node.data.replace(/\s+/g, ' ').length;
       continue;
     }
     if (node.type !== 'tag') continue;
@@ -383,12 +384,16 @@ const ANY_PRICE = new RegExp(
 );
 /** "$2M", "$1.5 billion": a scale, not a plan's price. */
 const MAGNITUDE =
-  /^\s?(?:[kmb](?!\p{L})|bn\b|mn\b|thousand|million|billion|milyon|milyar|mio\b|mrd\b)/iu;
-/** "Save $120", "$10 off", "was $59": not the price a plan has. */
+  /^\s*(?:[kmb](?!\p{L})|bn\b|mn\b|thousand|million|billion|milyon|milyar|mio\b|mrd\b)/iu;
+/** "Save $120", "$10 off", "was $59" in the quote: not the price a plan has. */
 const NOT_A_PRICE =
-  /\b(?:save|saving|savings|off|discount|was|instead\s+of|regularly|indirim|tasarruf|sparen|statt|rabatt|économisez|ahorra)\b/iu;
-/** A dollar named by its code after it: "$49 CAD". */
-const DOLLAR_CODE = /^\s?(USD|CAD|AUD|NZD|SGD|HKD|MXN)\b/;
+  /(?<!\p{L})(?:save|saving|savings|off|discount|was|instead\s+of|regularly|indirim|tasarruf|sparen|statt|rabatt|économisez|de\s+réduction|ahorra)(?!\p{L})/iu;
+/** "$10 off" after the quote: a discount, the words right after it only (the next card says "Save 20%"). */
+const OFF_AFTER = /^\s*(?:off(?!\p{L})|indirim|rabatt|de\s+réduction|de\s+descuento)/iu;
+/** A dollar or a euro named by its code after it: "$49 CAD", "€49 EUR". */
+const CODE_AFTER = /^\s*(USD|CAD|AUD|NZD|SGD|HKD|MXN|EUR)\b/;
+/** How far after a price its period may be named: "$29 per active user per month", not a feature list's "monthly updates". */
+const PERIOD_REACH = 24;
 
 const currencyOf = (mark) => {
   if (mark === 'TL') return 'TRY';
@@ -413,7 +418,7 @@ const YEAR =
 const ONCE = /\bone[-\s]time\b|\blifetime\b|\bonce\b|\btek\s+seferlik\b|\beinmalig\b/iu;
 const BILLED = /\bbilled\s+(monthly|annually|yearly)\b/i;
 const PER_SEAT =
-  /\bper\s+(?:user|seat|member)\b|\/\s?(?:user|seat)\b|\bkullanıcı\s+başı|\bpro\s+(?:nutzer|benutzer)\b/iu;
+  /\bper\s+(?:active\s+)?(?:user|seat|member)\b|\/\s?(?:user|seat)\b|\bkullanıcı\s+başı|\bpro\s+(?:nutzer|benutzer)\b/iu;
 
 /** The first `n` words of a text, up to its first stop or price: what says its period. */
 const firstWords = (text, n) =>
@@ -424,13 +429,17 @@ const firstWords = (text, n) =>
     .slice(0, n)
     .join(' ');
 
-/** The period its first word for one names: "lifetime access, monthly updates" is once. */
+/**
+ * The period named first within PERIOD_REACH of a price's end: "lifetime
+ * access, monthly updates" is once; "Includes all integrations and monthly
+ * updates" names none.
+ */
 function periodIn(words) {
   const found = [
     ['month', words.search(MONTH)],
     ['year', words.search(YEAR)],
     ['once', words.search(ONCE)],
-  ].filter(([, at]) => at !== -1);
+  ].filter(([, at]) => at !== -1 && at <= PERIOD_REACH);
   return found.length ? found.reduce((first, p) => (p[1] < first[1] ? p : first))[0] : null;
 }
 
@@ -446,20 +455,22 @@ export function parsePrice(quote, after = '') {
   if (!m) return null;
   const end = m.index + m[0].length;
   const rest = `${quote.slice(end)} ${after}`;
-  if (MAGNITUDE.test(rest) || NOT_A_PRICE.test(firstWords(after, 2))) return null;
-  const coded = m.groups.cur === '$' ? quote.slice(end).match(DOLLAR_CODE)?.[1] : null;
-  const currency = coded ?? currencyOf(m.groups.cur);
+  if (MAGNITUDE.test(rest) || OFF_AFTER.test(rest)) return null;
+  const code = rest.match(CODE_AFTER)?.[1];
+  const mark = currencyOf(m.groups.cur);
+  // "$49 CAD": a dollar named by its code; "€49 EUR" says it twice.
+  const currency = code && (m.groups.cur === '$' || code === mark) ? code : mark;
   const value = amountOf(m.groups.amount);
   if (!currency || value === null) return null;
   // Its period in the words right after it, not a feature list's further on.
-  const near = firstWords(rest.replace(DOLLAR_CODE, ''), 4);
+  const near = firstWords(rest.replace(CODE_AFTER, ''), 8);
   const billed = firstWords(rest, 8).match(BILLED)?.[1]?.toLowerCase();
   return {
     amount: value,
     currency,
     period: periodIn(near),
     billed: billed ? (billed === 'monthly' ? 'monthly' : 'annually') : null,
-    per: PER_SEAT.test(near) ? 'seat' : null,
+    per: PER_SEAT.test(near.slice(0, PERIOD_REACH + 10)) ? 'seat' : null,
   };
 }
 
@@ -503,7 +514,10 @@ function placesOf(folded, said) {
   for (let at = folded.indexOf(said); at !== -1; at = folded.indexOf(said, at + 1)) {
     const before = folded.slice(Math.max(0, at - 2), at);
     const after = folded.slice(at + said.length, at + said.length + 2);
-    if (/\d$|\d[.,]$/.test(before) && /^\d/.test(said)) continue;
+    // Not inside a number ("$49" in "$499", "299 €" in "1 299 €"), nor a
+    // dollar of another mark ("$49" in "C$49").
+    if (/^\d/.test(said) && /\d$|\d[.,\s]$/.test(before)) continue;
+    if (/^\$/.test(said) && /\p{L}$/u.test(before)) continue;
     if (/\d$/.test(said) && /^\d|^[.,]\d/.test(after)) continue;
     places.push(at);
   }
@@ -519,7 +533,10 @@ function placesOf(folded, said) {
 function planNear(text, folded, at, length, plan) {
   const from = Math.max(0, at - PLAN_WINDOW);
   const window = folded.slice(from, at + length + PLAN_WINDOW);
-  const m = window.match(new RegExp(escape(fold(plan)), 'iu'));
+  // Whole words: "Pro" isn't in "Product".
+  const m = window.match(
+    new RegExp(`(?<![\\p{L}\\p{N}])${escape(fold(plan))}(?![\\p{L}\\p{N}])`, 'iu'),
+  );
   return m ? text.slice(from + m.index, from + m.index + m[0].length) : null;
 }
 
@@ -726,13 +743,16 @@ export async function refreshBrandFacts(
       if (page.status !== 'ok') return { page, row: { status: page.status, ...keep } };
       const text = factText(page.html);
       const hash = factTextHash(text);
+      // A page this short (one its scripts write, a wall not told apart)
+      // says nothing of its facts: they are left as they are.
+      const words = text.length >= MIN_TEXT_CHARS ? text : null;
       const missed = prev?.status === 'missed';
       const unchanged =
         prev?.text_hash === hash && !(missed && extracted < now - MISSED_DAYS * 86_400_000);
       if (unchanged) {
         return {
           page,
-          text,
+          text: words,
           row: {
             status: missed ? 'missed' : 'ok',
             text_hash: hash,
@@ -742,9 +762,9 @@ export async function refreshBrandFacts(
       }
       // Changed again within the hour (a counter, a date): read next time.
       if (extracted > now - MODEL_EVERY_MS && !missed) {
-        return { page, text, row: { status: 'ok', ...keep } };
+        return { page, text: words, row: { status: 'ok', ...keep } };
       }
-      if (text.length < MIN_TEXT_CHARS) {
+      if (!words) {
         return { page, row: { status: 'ok', text_hash: hash, extracted_at: keep.extracted_at } };
       }
       try {
@@ -759,45 +779,31 @@ export async function refreshBrandFacts(
           row: { status: 'ok', text_hash: hash, extracted_at: checkedAt },
         };
       } catch (err) {
-        if (err instanceof PlanLimitError) paused = true;
-        else {
-          logger.warn(
-            { err: { name: err?.name, message: err?.message }, kind: page.kind },
-            '[brand-facts] a page was not read',
-          );
+        if (err instanceof PlanLimitError) {
+          paused = true;
+          return { page, row: { status: 'failed', ...keep } };
         }
-        return { page, row: { status: 'failed', ...keep } };
+        logger.warn(
+          { err: { name: err?.name, message: err?.message }, kind: page.kind },
+          '[brand-facts] a page was not read',
+        );
+        // Tried now: a page whose read keeps failing waits MODEL_EVERY_MS too.
+        return { page, row: { status: 'failed', ...keep, extracted_at: checkedAt } };
       }
     }),
   );
 
-  // What the model found, against the facts kept.
+  // What the model found, against the facts kept: a fact it found again,
+  // or on any page read in its words (the model passed over it, or the page
+  // didn't change), stays; one whose page was read and has it no more goes.
   const byKey = new Map(facts.map((f) => [`${f.slot}\n${f.value_key}`, f]));
-  let count = facts.length;
   const seen = new Set();
-  const inserts = [];
   for (const read of reads) {
     for (const fact of read.kept ?? []) {
       const had = byKey.get(`${fact.slot}\n${fact.value_key}`);
-      if (had) {
-        if (had.id) seen.add(had.id);
-      } else if (count < MAX_FACTS_PER_BRAND) {
-        count += 1;
-        byKey.set(`${fact.slot}\n${fact.value_key}`, { id: null });
-        inserts.push({
-          brand_id: brandId,
-          ...fact,
-          source_url: read.page.url.slice(0, 2048),
-          source_kind: read.page.kind,
-          status: 'pending',
-          first_seen_at: checkedAt,
-          last_seen_at: checkedAt,
-        });
-      }
+      if (had) seen.add(had.id);
     }
   }
-  // Then each fact on any page read (the model passed over it, or the page
-  // didn't change), and the ones whose page was read and has them no more.
   const texts = reads.filter((r) => r.text);
   const readKinds = new Set(texts.map((r) => r.page.kind));
   for (const f of facts) {
@@ -810,6 +816,32 @@ export async function refreshBrandFacts(
     if (f.status === 'approved') {
       if (!f.gone_at) gone.push(f.id);
     } else removed.push(f.id);
+  }
+  // Then the new ones, while the brand has room: a page whose new facts
+  // didn't fit keeps its old hash, to be read again.
+  let count = facts.length - removed.length;
+  const inserts = [];
+  const full = new Set();
+  for (const read of reads) {
+    for (const fact of read.kept ?? []) {
+      const key = `${fact.slot}\n${fact.value_key}`;
+      if (byKey.has(key)) continue;
+      if (count >= MAX_FACTS_PER_BRAND) {
+        full.add(read.page.kind);
+        continue;
+      }
+      count += 1;
+      byKey.set(key, { id: null });
+      inserts.push({
+        brand_id: brandId,
+        ...fact,
+        source_url: read.page.url.slice(0, 2048),
+        source_kind: read.page.kind,
+        status: 'pending',
+        first_seen_at: checkedAt,
+        last_seen_at: checkedAt,
+      });
+    }
   }
 
   const writes = [];
@@ -843,10 +875,19 @@ export async function refreshBrandFacts(
       model: modelId.slice(0, 100),
       checked_at: checkedAt,
       ...row,
+      ...(full.has(page.kind) && { text_hash: before.get(page.kind)?.text_hash ?? null }),
     })),
     { onConflict: 'brand_id,kind' },
   );
   if (pagesError) throw new Error(pagesError.message);
+  // A kind no longer looked for (a shop's product page) isn't kept as read.
+  const kinds = reads.map((r) => r.page.kind);
+  const { error: pruneError } = await db
+    .from('brand_fact_pages')
+    .delete()
+    .eq('brand_id', brandId)
+    .not('kind', 'in', `(${kinds.join(',')})`);
+  if (pruneError) throw new Error(pruneError.message);
   return { noDomain: false, paused };
 }
 
@@ -854,11 +895,25 @@ export async function refreshBrandFacts(
 const reading = new Map();
 
 /**
+ * refreshBrandFacts, once at a time per brand: an ask while one is under
+ * way (the tab, the weekly read) waits for that one.
+ */
+export function refreshOnce(brandId, options) {
+  let pending = reading.get(brandId);
+  if (!pending) {
+    pending = refreshBrandFacts(brandId, options).finally(() => reading.delete(brandId));
+    reading.set(brandId, pending);
+  }
+  return pending;
+}
+
+/**
  * The brand's facts, read from its site when no read is kept yet (the
- * first ask), when asked again, or when a page didn't answer last time
- * (each not more than every RECHECK_MS), else as kept: { facts, pages,
- * checkedAt, recheckAt, paused, noDomain }. Each pending fact with what it
- * would replace: the approved fact in its slot ("Was $49").
+ * first ask) or when asked again (not more than every RECHECK_MS), else as
+ * kept: { facts, pages, checkedAt, recheckAt, paused, noDomain }. A page
+ * that didn't answer last time is read again behind the answer (after
+ * RECHECK_MS): the ask doesn't wait on the site. Each pending fact with what
+ * it would replace: the approved fact in its slot ("Was $49").
  */
 export async function readBrandFacts(
   brandId,
@@ -870,17 +925,17 @@ export async function readBrandFacts(
     .eq('brand_id', brandId);
   if (error) throw new Error(error.message);
   const last = Math.max(0, ...(kept ?? []).map((p) => Date.parse(p.checked_at)));
-  const again = refresh || (kept ?? []).some((p) => p.status === 'failed');
+  const due = now - last >= RECHECK_MS;
   let result = { noDomain: false, paused: false };
-  if (!kept?.length || (again && now - last >= RECHECK_MS)) {
-    let pending = reading.get(brandId);
-    if (!pending) {
-      pending = refreshBrandFacts(brandId, { orgId, now, db, fetcher }).finally(() =>
-        reading.delete(brandId),
-      );
-      reading.set(brandId, pending);
-    }
-    result = await pending;
+  if (!kept?.length || (refresh && due)) {
+    result = await refreshOnce(brandId, { orgId, now, db, fetcher });
+  } else if (due && kept.some((p) => p.status === 'failed')) {
+    refreshOnce(brandId, { orgId, now, db, fetcher }).catch((err) =>
+      logger.warn(
+        { err: { name: err?.name, message: err?.message }, brandId },
+        '[brand-facts] a read again failed',
+      ),
+    );
   }
   const [pagesRes, factsRes] = await Promise.all([
     db.from('brand_fact_pages').select('kind, url, status, checked_at').eq('brand_id', brandId),

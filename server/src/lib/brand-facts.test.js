@@ -183,6 +183,17 @@ describe('reading a fact from its words', () => {
     // Its period is in the words right after it, not further on.
     expect(parsePrice('$299', ' Lifetime access Includes monthly updates').period).toBe('once');
     expect(parsePrice('$299', ' Includes all integrations and monthly updates').period).toBeNull();
+    // What comes right after the quote: a code, a scale, "off".
+    expect(parsePrice('$49', ' CAD per month')).toMatchObject({ currency: 'CAD', period: 'month' });
+    expect(parsePrice('€49 EUR per month')).toMatchObject({ currency: 'EUR', period: 'month' });
+    expect(parsePrice('$2', ' million to build it')).toBeNull();
+    // The next card's "Save 20%" or "Off-the-shelf" isn't this price's.
+    expect(parsePrice('$49 per month', ' Save 20% with yearly')).toMatchObject({ amount: 49 });
+    expect(parsePrice('$19 per month', ' Off-the-shelf templates')).toMatchObject({ amount: 19 });
+    expect(parsePrice('$29 per active user per month')).toMatchObject({
+      period: 'month',
+      per: 'seat',
+    });
   });
 
   it('reads a trial in days or weeks, and a founding year only beside its word', () => {
@@ -213,6 +224,11 @@ describe('factText', () => {
     expect(factTextHash(`${text}!`)).not.toBe(factTextHash(text));
     // A struck-through old price isn't the page's.
     expect(factText('<p>Pro <del>$59</del> $49 per month</p>')).toBe('Pro $49 per month');
+  });
+
+  it('counts a page’s words toward its length, not its indents', () => {
+    const indented = `<body>${`<div>\n${' '.repeat(200)}<span>Feature</span>\n</div>`.repeat(400)}<p>Every plan has a 14-day free trial.</p></body>`;
+    expect(factText(indented)).toContain('14-day free trial');
   });
 
   it('reads a page of many thousand blocks in one walk, fast', () => {
@@ -289,6 +305,24 @@ describe('keptFacts', () => {
       ['İşletme', `price|${'İşletme'.toLowerCase()}|TRY|month||`],
       ['Profesyonel', 'price|profesyonel|TRY|month||'],
     ]);
+  });
+
+  it('reads a plan’s name as whole words, and no dollar of another mark as one', () => {
+    expect(
+      keptFacts('Product\nStarter $19 per month', {
+        facts: [{ kind: 'price', quote: '$19 per month', plan: 'Pro' }],
+      }),
+    ).toEqual([]);
+    expect(
+      keptFacts('Pro\nC$49 per month', {
+        facts: [{ kind: 'price', quote: '$49 per month', plan: 'Pro' }],
+      }),
+    ).toEqual([]);
+    expect(
+      keptFacts('Pro\n1 299 € par mois', {
+        facts: [{ kind: 'price', quote: '299 € par mois', plan: 'Pro' }],
+      }),
+    ).toEqual([]);
   });
 
   it('finds words copied with straight marks, and keeps each fact once', () => {
@@ -693,6 +727,112 @@ describe('refreshBrandFacts', () => {
     expect(writesOf(writes, 'brand_fact_pages', 'upsert')).toEqual([]);
   });
 
+  it('leaves a short page’s facts as they are, read after read', async () => {
+    const SHORT = '<title>Pricing · Ledgerly</title><h1>Pricing</h1><p>Loading…</p>';
+    const hash = factTextHash(factText(SHORT));
+    const { db, writes } = fakeDb(
+      base({
+        brand_fact_pages: [{ kind: 'pricing', text_hash: hash, status: 'ok' }],
+        brand_facts: [
+          {
+            id: 'pro',
+            kind: 'price',
+            slot: 'price|pro|USD|month||',
+            value: { plan: 'Pro' },
+            value_key: '49.00',
+            quote: '$49 per month',
+            status: 'approved',
+            source_kind: 'pricing',
+          },
+          {
+            id: 'trial',
+            kind: 'trial',
+            slot: 'trial',
+            value: { days: 14 },
+            value_key: '14',
+            quote: '14-day free trial',
+            status: 'rejected',
+            source_kind: 'pricing',
+          },
+        ],
+      }),
+    );
+    const short = vi.fn(async (url) => {
+      if (url.endsWith('/pricing')) return { url, html: SHORT };
+      throw new PageFetchError('http_error', '404', { status: 404 });
+    });
+    await refreshBrandFacts('b1', { orgId: 'o1', now: NOW, db, fetcher: short });
+    expect(writes.filter((w) => w.table === 'brand_facts')).toEqual([]);
+  });
+
+  it('keeps no missed answer’s hash past a failed read, and makes a failing page wait the hour', async () => {
+    const hash = factTextHash(factText(PRICING));
+    const walled = vi.fn(async (url) => {
+      if (url.endsWith('/pricing')) throw new PageFetchError('http_error', '403', { status: 403 });
+      throw new PageFetchError('http_error', '404', { status: 404 });
+    });
+    const missed = fakeDb(
+      base({
+        brand_fact_pages: [
+          {
+            kind: 'pricing',
+            text_hash: hash,
+            status: 'missed',
+            extracted_at: new Date(NOW).toISOString(),
+          },
+        ],
+      }),
+    );
+    await refreshBrandFacts('b1', { orgId: 'o1', now: NOW, db: missed.db, fetcher: walled });
+    expect(writesOf(missed.writes, 'brand_fact_pages', 'upsert')[0].payload[0]).toMatchObject({
+      status: 'blocked',
+      text_hash: null,
+    });
+
+    generateObject.mockRejectedValue(new Error('provider down'));
+    const { db, writes } = fakeDb(base());
+    await refresh(db);
+    expect(writesOf(writes, 'brand_fact_pages', 'upsert')[0].payload[0]).toMatchObject({
+      status: 'failed',
+      extracted_at: new Date(NOW).toISOString(),
+    });
+  });
+
+  it('makes room for new facts from the ones going, keeps a full page’s old hash, and lets a kind no longer read go', async () => {
+    const many = Array.from({ length: 60 }, (_, i) => ({
+      id: `c${i}`,
+      kind: 'claim',
+      slot: `claim|${i}`,
+      value_key: 'claim',
+      quote: `An old claim number ${i}`,
+      status: i === 0 ? 'pending' : 'approved',
+      source_kind: 'about',
+    }));
+    const { db, writes } = fakeDb(
+      base({
+        brands: { id: 'b1', site_type: 'ecommerce' },
+        brand_fact_pages: [{ kind: 'pricing', text_hash: 'aaaaaaaaaaaaaaaa', status: 'ok' }],
+        brand_facts: many,
+      }),
+    );
+    await refresh(db);
+    // c0 (pending, gone from the About page) makes room for one: the price.
+    expect(writesOf(writes, 'brand_facts', 'delete')[0].filters).toEqual([['in', 'id', ['c0']]]);
+    expect(writesOf(writes, 'brand_facts', 'upsert')[0].payload.map((f) => f.value_key)).toEqual([
+      '49.00',
+    ]);
+    const [pages] = writesOf(writes, 'brand_fact_pages', 'upsert');
+    // The trial didn't fit: the pricing page keeps its old hash, to be read again.
+    expect(pages.payload.find((p) => p.kind === 'pricing').text_hash).toBe('aaaaaaaaaaaaaaaa');
+    // Nor did the About page's founding year: it had no hash, and has none.
+    expect(pages.payload.find((p) => p.kind === 'about').text_hash).toBeNull();
+    // A shop's product page isn't looked for: its row goes.
+    expect(writesOf(writes, 'brand_fact_pages', 'delete')[0].filters).toEqual([
+      ['eq', 'brand_id', 'b1'],
+      ['not', 'kind', '(pricing,about)'],
+    ]);
+  });
+
   it('reads nothing for a brand with no domain', async () => {
     const { db } = fakeDb(base({ brand_domains: [] }));
     expect(await refresh(db)).toEqual({ noDomain: true, paused: false });
@@ -786,6 +926,30 @@ describe('readBrandFacts', () => {
     const later = fakeDb(failed(11));
     await readBrandFacts('b1', { orgId: 'o1', now: NOW, db: later.db });
     expect(later.reads).toContain('brand_domains');
+  });
+
+  it('answers as kept without waiting on the site while a failed page is read again', async () => {
+    const hanging = fakeDb(
+      tables({
+        brand_domains: [{ domain: 'ledgerly.example', is_primary: true }],
+        brand_fact_pages: [
+          {
+            kind: 'pricing',
+            url: null,
+            status: 'failed',
+            checked_at: new Date(NOW - 20 * 60_000).toISOString(),
+          },
+        ],
+      }),
+    );
+    const never = vi.fn(() => new Promise(() => {}));
+    const read = await readBrandFacts('b1', {
+      orgId: 'o1',
+      now: NOW + 1,
+      db: hanging.db,
+      fetcher: never,
+    });
+    expect(read.facts).toHaveLength(2);
   });
 });
 
