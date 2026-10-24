@@ -188,6 +188,23 @@ describe('nextStep', () => {
     ).toBe('length');
   });
 
+  it("keeps a proof skip when the brand facts' to-do joins later (review, #1465)", () => {
+    const s = state({ quality: { trust: 54, trustLow: true, todos: [todo({})] } });
+    const skipped = { ...s, skipped: { proof: stepState('proof', s) } };
+    const withFacts = {
+      ...skipped,
+      quality: {
+        trust: 54,
+        trustLow: true,
+        todos: [
+          todo({}),
+          todo({ id: 'brandFacts', action: 'reviewBrandFacts', score: 'trust', gain: 0, count: 2 }),
+        ],
+      },
+    };
+    expect(liveSkips(withFacts)).toEqual({ proof: stepState('proof', s) });
+  });
+
   it('drops a skip once its state changed, so it never comes back to life', () => {
     const s = state({ openRules: ['faq', 'summary'] });
     const skipped = { ...s, skipped: { fixRules: stepState('fixRules', s) } };

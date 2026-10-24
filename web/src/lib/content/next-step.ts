@@ -132,7 +132,10 @@ export function stepState(id: NextStepId, s: NextStepState): string {
     case 'fixRules':
       return s.openRules.join(',');
     case 'proof':
+      // Not the brand facts' to-do: it joins when the brand's site is read,
+      // a skip made before then holds.
       return `${s.quality?.trustLow ?? false}:${openTodos(s)
+        .filter((todo) => todo.id !== 'brandFacts')
         .map((todo) => todo.id)
         .join(',')}`;
     default:
