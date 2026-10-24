@@ -9,6 +9,7 @@ import type { SiteType } from '@/lib/content/page-types';
 import { buildSourceGroups, includedCounts, type DraftSourceKind } from '@/lib/content/sources';
 import { formatNumber } from '@/lib/format';
 import { BAND_CLASSES, qualityBand, qualityPhase } from '@/lib/content/quality';
+import type { ClaimMark } from '@/lib/content/quality-checks';
 import { cn } from '@/lib/utils';
 import { BriefTab, type AgentRewrite } from './_brief-tab';
 import { DataNote, UsesYourData } from './_data-note';
@@ -132,6 +133,8 @@ export function EditorSidePanel({
   yourInput = null,
   onAddInput,
   onKeepSource,
+  onAddSource,
+  onRemoveClaim,
 }: {
   draft: ContentDraft;
   /** The brand's business type as the editor holds it (Quality CE-056). */
@@ -189,6 +192,10 @@ export function EditorSidePanel({
   onAddInput?: () => void;
   /** Keeps a weak source or a competitor's on the page (Quality CE-046), once phase 2 is live. */
   onKeepSource?: (url: string) => void;
+  /** Selects a claim's words and opens the link dialog on them: Quality's Add source (CE-045). */
+  onAddSource?: (claim: ClaimMark) => void;
+  /** Takes a claim's sentence out of the page: Quality's Remove (CE-045). */
+  onRemoveClaim?: (claim: ClaimMark) => void;
 }) {
   const t = useTranslations('contentEditor.editor.panel');
   const tEditor = useTranslations('contentEditor.editor');
@@ -435,6 +442,8 @@ export function EditorSidePanel({
                 onPickAuthor={() => onPickAuthor?.()}
                 onAddInput={onAddInput}
                 onKeep={onKeepSource}
+                onAddSource={onAddSource}
+                onRemove={onRemoveClaim}
               />
             </div>
           )}

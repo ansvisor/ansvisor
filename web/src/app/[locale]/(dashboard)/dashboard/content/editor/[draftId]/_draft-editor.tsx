@@ -103,6 +103,7 @@ import {
   trust,
   trustBlocks,
   unplacedSites,
+  type ClaimMark,
 } from '@/lib/content/quality-checks';
 import { qualityTodos } from '@/lib/content/quality-todos';
 import { readability } from '@/lib/content/readability';
@@ -153,6 +154,8 @@ import { OwnCopies, ownCopyHtml } from './_own-copies';
 import { NextNudge, useNextNudge } from './_next-nudge';
 import { PageInfoStrip, pageInfoKey } from './_page-info';
 import { WeakSourcesMarks, weakSourcesKey } from './_weak-sources';
+import { ClaimMarksExtension, claimMarksKey, textRanges, writingBlock } from './_claim-marks';
+import { useClaims } from './_use-claims';
 import { useSourceClasses } from './_use-source-classes';
 import { HeaderTip } from './_header-tip';
 import { NextStepButton, readSkips, wordsUnderTitle, writeSkips } from './_next-step';
@@ -232,6 +235,16 @@ async function agentBatch(draftId: string, until: number): Promise<DraftSuggesti
   return null;
 }
 
+/** What a paragraph Remove empties goes with, when it was all they held (CE-045). */
+const EMPTIED_WITH = new Set([
+  'listItem',
+  'taskItem',
+  'bulletList',
+  'orderedList',
+  'taskList',
+  'blockquote',
+]);
+
 /**
  * The content editor (Content Editor, CE-004, spec §6): a header with the
  * draft's title, page type and method, whether it's saved, and Mark ready;
@@ -255,6 +268,7 @@ async function agentBatch(draftId: string, until: number): Promise<DraftSuggesti
  * reject, with the agent bar over it, and Fix open rules with agent asks the
  * Content Agent for a new batch (CE-018).
  */
+
 export function DraftEditor({
   draft,
   onAgentStarted,
@@ -405,6 +419,7 @@ export function DraftEditor({
       FlashBlock,
       PageInfoStrip,
       WeakSourcesMarks,
+      ClaimMarksExtension,
     ],
     content: draft.bodyHtml,
     // Rendered on the client only, so the server's HTML can't disagree with it.
@@ -583,6 +598,25 @@ export function DraftEditor({
     unplaced,
     sourcesOn,
   );
+  // The claims in the draft's own words, as the model reads them (CE-045):
+  // asked after a save, leaving the block the person is writing in.
+  const claimsRead = useClaims(
+    draft.id,
+    autosave.savedAt,
+    sourcesOn,
+    autosave.state !== 'saved',
+    () => (editor && !editor.isDestroyed && editor.isFocused ? writingBlock(editor) : null),
+  );
+  const { blocks: claimBlocks, recheck: recheckClaims } = claimsRead;
+  // Out of the editor (to Quality, to Before you publish): the block left
+  // for later is read too.
+  useEffect(() => {
+    if (!editor) return;
+    editor.on('blur', recheckClaims);
+    return () => {
+      editor.off('blur', recheckClaims);
+    };
+  }, [editor, recheckClaims]);
   const sourceRead = useMemo(
     () =>
       sourcesOn
@@ -606,10 +640,21 @@ export function DraftEditor({
             siteTrust,
             quote: used ? used.quote : null,
             sources: sourceRead,
+            claims: claimBlocks,
             now: Date.now(),
           })
         : null,
-    [qualityOn, pageBlocks, linkChecks, brandDomains, siteTrust, inputsPending, used, sourceRead],
+    [
+      qualityOn,
+      pageBlocks,
+      linkChecks,
+      brandDomains,
+      siteTrust,
+      inputsPending,
+      used,
+      sourceRead,
+      claimBlocks,
+    ],
   );
   // Their links underlined in the draft, Quality's suggestion naming them.
   const weakKey = (trustScore?.weak ?? []).map((w) => w.url).join('\n');
@@ -623,6 +668,61 @@ export function DraftEditor({
         .setMeta('addToHistory', false),
     );
   }, [editor, weakKey, weakTitle]);
+  // The claims with no source (CE-045): the model's in their words, the
+  // figures' in their sentences, underlined in their blocks with phase 2.
+  const claimKey = sourcesOn ? JSON.stringify(trustScore?.marks ?? []) : '[]';
+  const claimTitle = t('quality.claimNoSource');
+  useEffect(() => {
+    if (!editor || editor.isDestroyed) return;
+    const marks = JSON.parse(claimKey) as ClaimMark[];
+    editor.view.dispatch(
+      editor.state.tr
+        .setMeta(claimMarksKey, { marks, title: claimTitle })
+        .setMeta('addToHistory', false),
+    );
+  }, [editor, claimKey, claimTitle]);
+  // Quality's Add source: the claim's words selected, the link dialog open
+  // on them (its Apply links them and comes back to the page).
+  const [linkRequest, setLinkRequest] = useState(0);
+  const addSource = (mark: ClaimMark) => {
+    if (!editor) return;
+    const [range] = textRanges(editor.state.doc, mark.text, mark.block);
+    if (!range) {
+      showInPage(mark.sentence);
+      return;
+    }
+    editor.chain().setTextSelection(range).scrollIntoView().run();
+    setLinkRequest((n) => n + 1);
+  };
+  // Quality's Remove: the claim's sentence out of the page, the space after
+  // it too, and the paragraph (its list item) if that leaves it empty. Undo
+  // brings it back.
+  const removeClaim = (mark: ClaimMark) => {
+    if (!editor) return;
+    const [range] = textRanges(editor.state.doc, mark.sentence, mark.block);
+    if (!range) {
+      showInPage(mark.sentence);
+      return;
+    }
+    editor
+      .chain()
+      .command(({ tr }) => {
+        const next =
+          range.to < tr.doc.content.size ? tr.doc.textBetween(range.to, range.to + 1) : '';
+        tr.delete(range.from, next === ' ' ? range.to + 1 : range.to);
+        const $at = tr.doc.resolve(range.from);
+        if ($at.parent.content.size > 0) return true;
+        let depth = $at.depth;
+        while (depth > 1 && $at.node(depth - 1).childCount === 1) {
+          if (!EMPTIED_WITH.has($at.node(depth - 1).type.name)) break;
+          depth--;
+        }
+        if ($at.node(depth - 1).childCount > 1) tr.delete($at.before(depth), $at.after(depth));
+        return true;
+      })
+      .focus(undefined, { scrollIntoView: false })
+      .run();
+  };
   const keepSource = async (url: string) => {
     setKeptSources((kept) => (kept.includes(url) ? kept : [...kept, url]));
     try {
@@ -687,6 +787,9 @@ export function DraftEditor({
         todos,
         // Only while a source waits for its read.
         aiPaused: aiPaused && unplaced.some((site) => !aiKinds.has(site)),
+        claimsPaused: claimsRead.paused,
+        claimsLimited: claimsRead.limited,
+        claimsReading: claimsRead.reading,
       }
     : null;
   // Quality's Pick author opens the header's menu.
@@ -2454,6 +2557,7 @@ export function DraftEditor({
               htmlView={htmlSource !== null}
               onToggleHtml={htmlSource === null ? openHtmlView : applyHtmlView}
               onAttach={attachments.open}
+              linkRequest={linkRequest}
             />
           )}
 
@@ -2541,6 +2645,8 @@ export function DraftEditor({
             yourInput={inputsRead.status === 'off' ? null : inputsRead}
             onAddInput={addInput}
             onKeepSource={sourcesOn ? (url) => void keepSource(url) : undefined}
+            onAddSource={sourcesOn ? addSource : undefined}
+            onRemoveClaim={sourcesOn ? removeClaim : undefined}
           />
         ) : (
           <EditorPanelRail onOpen={openPanelTab} />
