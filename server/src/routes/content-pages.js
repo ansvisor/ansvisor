@@ -286,7 +286,9 @@ router.post('/page-read', pageReadLimiter, async (req, res) => {
         .eq('kind', 'claim')
         .eq('status', 'approved')
         .is('gone_at', null)
+        // One order for ties (a run's facts share their time): the page's read is kept by them.
         .order('first_seen_at')
+        .order('id')
         .limit(10),
     ]);
     if (brandRes.error) throw brandRes.error;

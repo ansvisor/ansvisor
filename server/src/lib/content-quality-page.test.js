@@ -52,7 +52,7 @@ vi.mock('ai', async (importOriginal) => ({
 
 const { NoObjectGeneratedError } = await import('ai');
 const { PlanLimitError } = await import('./plan-guard.js');
-const { QUALITY_CALLS_PER_DAY } = await import('./content-quality-calls.js');
+const { PAGE_READS_PER_DAY, QUALITY_CALLS_PER_DAY } = await import('./content-quality-calls.js');
 const { SOURCE_READS_PER_DAY } = await import('./content-source-class.js');
 const { MAX_SPOTS, PAGE_HOLD_USD, buildPagePrompt, keptPageRead, pageHash, pageOutline, readPage } =
   await import('./content-quality-page.js');
@@ -120,7 +120,7 @@ const read = (over = {}) =>
   });
 
 describe('pageOutline', () => {
-  it('reads headings and blocks in order, each block with its H2 section and whether it links out', () => {
+  it('reads headings and blocks in order, each block with its H2 section and its heading', () => {
     const outline = pageOutline(HTML);
     expect(outline.slice(0, 4).map((i) => [i.type, i.level ?? i.tag, i.section ?? null])).toEqual([
       ['heading', 1, null],
@@ -131,9 +131,15 @@ describe('pageOutline', () => {
     const press = outline.find((i) => i.text?.startsWith('Read more on'));
     expect(press).toMatchObject({
       section: 2,
-      linked: true,
+      h2: 'Awards',
       text: 'Read more on our press page, says the team.',
     });
+    // An empty H2 opens a section with no heading: the next one's blocks keep theirs.
+    const empty = pageOutline(`<h2></h2><p>${WEATHER}</p><h2>Rain</h2><p>${SEAMS}</p>`);
+    expect(empty.filter((i) => i.type === 'block').map((b) => [b.section, b.h2])).toEqual([
+      [1, ''],
+      [2, 'Rain'],
+    ]);
     expect(outline.find((i) => i.tag === 'td')).toMatchObject({
       text: 'Volume: 28 litres of space',
     });
@@ -157,6 +163,19 @@ describe('pageHash and buildPagePrompt', () => {
         pageType: 'product_page',
       }),
     ).not.toBe(base);
+    // The brand's facts in any order, a change past what the model reads: the same read.
+    expect(pageHash({ outline, siteType: 'ecommerce', pageType: 'p', facts: ['b', 'a'] })).toBe(
+      pageHash({ outline, siteType: 'ecommerce', pageType: 'p', facts: ['a', 'b'] }),
+    );
+    const long = (tail) =>
+      pageHash({
+        outline: pageOutline(
+          `${HTML}${Array.from({ length: 400 }, (_, i) => `<p>Strap note ${i}: the straps stay comfortable.</p>`).join('')}<p>${tail}</p>`,
+        ),
+        siteType: 'ecommerce',
+        pageType: 'product_page',
+      });
+    expect(long('One ending of the page.')).toBe(long('Another ending of the page.'));
   });
 
   it('shows the model the business, the page type, the brand’s claims and the page, numbered', () => {
@@ -165,14 +184,22 @@ describe('pageHash and buildPagePrompt', () => {
       siteType: 'ecommerce',
       pageType: 'product_page',
       brandName: 'Trailmade',
-      facts: ['Bluesign certified'],
+      facts: ['Bluesign certified', 'See https://trailmade.example/awards'],
     });
+    expect(prompt).not.toContain('https://');
     expect(prompt).toContain('Business: E-commerce (an online shop selling products)');
     expect(prompt).toContain('Page type: Product page');
     expect(prompt).toContain('Brand: Trailmade');
     expect(prompt).toContain('- Bluesign certified');
     expect(prompt).toContain(`# Ridge 28 daypack\n[1] ${WEATHER}`);
     expect(prompt).toContain('## Built for rain');
+    // A heading past MAX_HEADING_CHARS is cut: the page's blocks still fit.
+    const huge = buildPagePrompt({
+      outline: pageOutline(`<h1>${'Ridge '.repeat(4000)}</h1>${HTML}`),
+      siteType: 'ecommerce',
+      pageType: 'product_page',
+    });
+    expect(huge).toContain(`[1] ${WEATHER}`);
   });
 });
 
@@ -234,21 +261,61 @@ describe('keptPageRead', () => {
       'Ein passendes Bild vom Produkt',
       'A photo of the pack at https://example.com/a.png',
       'A photo of a sunset over the city',
+      'A screenshot of our dashboard',
+      'A screenshot of the dashboard showing data',
+      'A photo of your team at work',
+      'An image of your product',
+      'A picture of the product in use',
+      'A photo of a happy customer using the product',
+      'Ürününüzün bir fotoğrafı',
+      'Ekibimizin bir fotoğrafı',
+      'İnfografik: ürünümüzün özellikleri',
+      'İlgili bir görsel',
+      'Ein Screenshot des Dashboards',
+      'Ein Foto Ihres Teams',
+      'Ein Foto des Produkts',
+      'An illustration of the process',
     ]) {
       expect(keptOf(spot(image)).spots, image).toEqual([]);
     }
     expect(
       keptOf(spot('A photo of this backpack on a hike', 'Made for winter climbs')).spots,
     ).toEqual([]);
+    // Too short a passage to show.
+    expect(keptOf(spot('A photo of this backpack on a hike', 'any weather')).spots).toEqual([]);
+    // Specific images that name a logo or an illustration still count.
+    const named = pageOutline(
+      `<h1>Ridge 28</h1><p>Every Ridge 28 has our logo engraved on the bottle clip, a small detail.</p>`,
+    );
+    expect(
+      keptPageRead(
+        named,
+        {
+          spots: [
+            {
+              n: 1,
+              passage: 'our logo engraved on the bottle clip',
+              image: 'A photo of the logo engraved on the bottle clip',
+              alt: 'The engraved logo on the Ridge 28 clip',
+            },
+          ],
+          proofs: [],
+          regulated: null,
+        },
+        'ecommerce',
+      ).spots,
+    ).toHaveLength(1);
   });
 
-  it('keeps a proof in its block’s own words, once, not where the block links out, its kind known', () => {
+  it('keeps a proof in its block’s own words, once and not inside another, its kind known', () => {
     const { proofs } = keptOf({
       spots: [],
       proofs: [
+        { n: 3, claim: 'fully waterproof', kind: 'Certification' },
         { n: 3, claim: 'fully waterproof', kind: 'certification' },
-        { n: 3, claim: 'fully waterproof', kind: 'certification' },
+        { n: 3, claim: 'waterproof', kind: 'certification' },
         { n: 6, claim: 'won the 2025 Outdoor Gear Award', kind: 'trophy' },
+        // A block that links out keeps its proofs: the editor checks them off while it does.
         { n: 7, claim: 'says the team', kind: 'unknown' },
         { n: 2, claim: 'the lightest pack ever made', kind: 'ranking' },
       ],
@@ -257,6 +324,7 @@ describe('keptPageRead', () => {
     expect(proofs.map((p) => [p.claim, p.kind])).toEqual([
       ['fully waterproof', 'certification'],
       ['won the 2025 Outdoor Gear Award', 'unknown'],
+      ['says the team', 'unknown'],
     ]);
   });
 
@@ -272,21 +340,22 @@ describe('keptPageRead', () => {
     expect(keptOf(cases).proofs).toEqual([]);
     expect(keptOf(cases).regulated).toBeNull();
     expect(keptOf(cases, 'b2b').proofs).toHaveLength(2);
-    expect(keptOf(cases, 'b2c').regulated).toBe('health');
+    expect(keptOf({ ...cases, regulated: ' Health ' }, 'b2c').regulated).toBe('health');
     const trusted = pageOutline(
-      `${HTML}<p>Trusted by 400 hiking clubs across Europe and the US.</p>`,
+      `${HTML}<p>Trusted by 400 hiking clubs across Europe and the US.</p>` +
+        '<p>Trusted by Alpine Club Zermatt and their guides since 2019.</p>' +
+        '<p>Müşterilerimiz arasında Doğa Kulübü ve Kaçkar Rehberleri var.</p>',
     );
-    expect(
+    const kinds = (claim, n) =>
       keptPageRead(
         trusted,
-        {
-          spots: [],
-          proofs: [{ n: 9, claim: 'Trusted by 400 hiking clubs', kind: 'customer_case' }],
-          regulated: null,
-        },
-        'ecommerce',
-      ).proofs,
-    ).toHaveLength(1);
+        { spots: [], proofs: [{ n, claim, kind: 'customer case' }] },
+        'b2c',
+      ).proofs.map((p) => p.kind);
+    // A count asks for its source; a named customer is a case on any page.
+    expect(kinds('Trusted by 400 hiking clubs', 9)).toEqual(['number']);
+    expect(kinds('Trusted by Alpine Club Zermatt', 10)).toEqual(['customer_case']);
+    expect(kinds('Müşterilerimiz arasında Doğa Kulübü', 11)).toEqual(['customer_case']);
   });
 });
 
@@ -346,6 +415,99 @@ describe('readPage', () => {
     readsToday = 0;
     reserveError = new PlanLimitError('used up', 429);
     expect(await read()).toMatchObject({ paused: true, spots: [] });
+  });
+
+  it('counts the day’s page reads on the row, PAGE_READS_PER_DAY at most', async () => {
+    await read();
+    expect(upserts[0].row).toMatchObject({
+      day_reads: 1,
+      day_started_at: new Date(NOW).toISOString(),
+    });
+    const old = { ...upserts[0].row, page_hash: '0000000000000000' };
+    const dayStart = new Date(NOW - 3_600_000).toISOString();
+    kept = {
+      ...old,
+      read_at: dayStart,
+      day_reads: PAGE_READS_PER_DAY - 1,
+      day_started_at: dayStart,
+    };
+    await read();
+    expect(upserts[1].row).toMatchObject({
+      day_reads: PAGE_READS_PER_DAY,
+      day_started_at: dayStart,
+    });
+    kept = { ...kept, day_reads: PAGE_READS_PER_DAY };
+    // The page as it was read: the kept items, limited.
+    expect(await read()).toMatchObject({ limited: true, spots: expect.any(Array) });
+    expect(generateObject).toHaveBeenCalledTimes(2);
+    // A new day.
+    kept = { ...kept, day_started_at: new Date(NOW - 25 * 3_600_000).toISOString() };
+    await read();
+    expect(upserts[2].row).toMatchObject({
+      day_reads: 1,
+      day_started_at: new Date(NOW).toISOString(),
+    });
+  });
+
+  it('reads once for two asks at once, each mapped to its own page, the older one pending', async () => {
+    let answerNow;
+    generateObject.mockReturnValueOnce(new Promise((resolve) => (answerNow = resolve)));
+    const first = read();
+    const newer = read({ html: HTML.replace(WEATHER, 'Made for long weekends in the hills.') });
+    await vi.waitFor(() => expect(answerNow).toBeDefined());
+    answerNow(answer());
+    const [a, b] = await Promise.all([first, newer]);
+    expect(generateObject).toHaveBeenCalledTimes(1);
+    expect(a).toMatchObject({ pending: false });
+    expect(a.spots).toHaveLength(2);
+    // The read was of the page before: its changed paragraph's spot gone, asked again.
+    expect(b.pending).toBe(true);
+    expect(b.spots.map((s) => s.passage)).toEqual(['fully waterproof, with welded seams']);
+  });
+
+  it('keeps a missed read for a day, and maps a kept read when the budget is spent', async () => {
+    await read();
+    const row = upserts[0].row;
+    generateObject.mockClear();
+    kept = {
+      ...row,
+      page_hash: row.page_hash,
+      missed: true,
+      read_at: new Date(NOW - 3_600_000).toISOString(),
+    };
+    await read();
+    expect(generateObject).not.toHaveBeenCalled();
+    kept = {
+      ...row,
+      page_hash: '0000000000000000',
+      read_at: new Date(NOW - 3_600_000).toISOString(),
+    };
+    reserveError = new PlanLimitError('used up', 429);
+    const paused = await read();
+    expect(paused.paused).toBe(true);
+    expect(paused.spots).toHaveLength(2);
+    expect(paused.proofs.map((p) => p.kind)).toEqual(['certification', 'award']);
+  });
+
+  it('reads a kept read for the business as it is now', async () => {
+    const block = pageOutline(HTML).find((i) => i.text === SEAMS);
+    kept = {
+      page_hash: '0000000000000000',
+      spots: [],
+      proofs: [
+        { claim: 'fully waterproof', block_hash: block.hash, kind: 'customer_case' },
+        { claim: 'Ridge 28', block_hash: block.hash, kind: 'award' },
+      ],
+      regulated: 'health',
+      missed: false,
+      read_at: new Date(NOW - 30_000).toISOString(),
+    };
+    // Read as B2B, the brand a shop now: no customer case, nothing regulated.
+    const now = await read();
+    expect(now.pending).toBe(true);
+    expect(now.proofs).toEqual([{ claim: 'Ridge 28', block: SEAMS, kind: 'award' }]);
+    expect(now.regulated).toBeNull();
+    expect((await read({ siteType: 'b2c' })).regulated).toBe('health');
   });
 
   it('charges an answer that missed the schema and keeps it as missed, read again after a day; a timeout keeps its hold', async () => {
