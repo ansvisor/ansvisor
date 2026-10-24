@@ -100,14 +100,15 @@ describe('inputSources', () => {
     ]);
     expect(sources[1].detail).toBe('Their own data, a table: Teams | Share; 1,250 | 42%');
     expect(sources[2].detail).toBe(
-      'Ansvisor data: Acme Coffee was named in 28 of 825 AI answers to this prompt (3.4%). Cite it as "Ansvisor data, October 2026"',
+      'Ansvisor data: Acme Coffee was named in 28 of 825 AI answers to this prompt over the last 30 days (3.4%). Cite it as "Ansvisor data, October 2026"',
     );
-    expect(sources[2].note).toBe('over the 30 days to 2026-10-03');
+    expect(sources[2].note).toBe('to 2026-10-03');
     expect(sources[3].detail).toContain('"We cut our forecast misses in half."');
     expect(sources[3].note).toBe('said at https://acme.example/talk');
   });
 
   it('gives no number from where a source was said or when: its address and date are notes', () => {
+    // The days are the data the person chose: a page may say them.
     const [ansvisor, quote] = inputSources(
       {
         ansvisor_data: [
@@ -126,7 +127,8 @@ describe('inputSources', () => {
     );
     expect(knownNumbers(sourceWords(quote)).has('500')).toBe(false);
     expect(knownNumbers(sourceWords(ansvisor)).has('10')).toBe(false);
-    expect(knownNumbers(sourceWords(ansvisor)).has('30')).toBe(false);
+    expect(knownNumbers(sourceWords(ansvisor)).has('03')).toBe(false);
+    expect(knownNumbers(sourceWords(ansvisor)).has('30')).toBe(true);
     expect(knownNumbers(sourceWords(ansvisor)).has('825')).toBe(true);
     // The model still reads them.
     expect(sourcesPrompt(numberSources({ inputs: [quote] }))).toContain(
