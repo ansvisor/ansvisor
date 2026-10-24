@@ -147,6 +147,8 @@ const trustRead = (over: Partial<TrustRead>): TrustRead => ({
   dated: 0,
   unsourced: [],
   figures: 0,
+  marks: [],
+  aiClaims: 0,
   weak: [],
   classified: 0,
   ...over,

@@ -3859,7 +3859,8 @@
           "prompt": "Prompt",
           "fanout": "Fan-out",
           "cited_page": "Cited page",
-          "gsc_query": "Search Console"
+          "gsc_query": "Search Console",
+          "input": "Your input"
         },
         "sourceMark": "Source {n}: {label}",
         "acceptedToast": "{count, plural, one {Accepted} other {# changes accepted}} · undo any time",
@@ -4541,6 +4542,7 @@
           "otherDetail": "Check what your CMS adds for it (Product, ItemList…). The code Ansvisor gives here is for articles."
         },
         "linksPending": "Still reading {count, plural, one {# of the page's links} other {# of the page's links}}, so Trust may change.",
+        "claimsReading": "Still reading the claims in your own words, so Trust may change.",
         "datesNote": "The dates are today's: change them if the page goes out on another day.",
         "headlineLeftOut": "The title still has a placeholder in square brackets, so the code leaves the headline out. Fill it in, and the headline comes back here.",
         "states": {
@@ -4711,6 +4713,13 @@
         "addInput": "Add",
         "keep": "Keep",
         "aiCheck": "AI check",
+        "addSource": "Add source",
+        "addSourceTo": "Add a source to “{claim}”",
+        "remove": "Remove",
+        "removeClaim": "Remove “{sentence}” from the page",
+        "claimNoSource": "No source for this claim. Add a source, or take it out. Content Agent will not make one up.",
+        "claimsPaused": "Claims in your own words wait for an AI check: this month's AI usage is used up. They're read again when it renews.",
+        "claimsLimited": "Today's AI checks of this page's claims are used up. Paragraphs you change now are checked when you open the page again tomorrow.",
         "aiPaused": "Sources the rules can't place wait for an AI check: this month's AI usage is used up. They count again when it renews.",
         "keepFailed": "Couldn't keep the source. Try again.",
         "keepFull": "This page keeps 50 sources already: replace one instead.",
@@ -4725,7 +4734,9 @@
         "checks": {
           "claimsSourced": {
             "line": "{count, plural, one {# sentence with a figure has} other {# sentences with figures have}} no source",
-            "detail": "Link each figure's source in the same paragraph, or take the figure out. Content Agent won't make one up."
+            "detail": "Link each figure's source in the same paragraph, or take the figure out. Content Agent won't make one up.",
+            "lineClaims": "{count, plural, one {# claim has} other {# claims have}} no source",
+            "detailClaims": "Figures, findings, superlatives, awards and product facts: link each one's source in the same paragraph, or take it out. Content Agent won't make one up."
           },
           "freshSources": {
             "line": "{count} of {total} dated {total, plural, one {source} other {sources}} {count, plural, one {is} other {are}} over {months} months old",

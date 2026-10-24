@@ -70,6 +70,24 @@ describe('sourceSuggestion', () => {
   const known = knownNumbers('Trackers compared in 2026.');
   const one = (text) => [{ text, start: 0 }];
 
+  it('gives a number two sources have to the one it used, then the first', () => {
+    const both = numberSources({
+      fanouts: [{ query: 'crm for 50 users', platforms: [] }],
+      inputs: [
+        { kind: 'input', ref: 'data:1', label: 'Seats', detail: 'Their own data, a table: 50' },
+      ],
+    });
+    const text = 'Teams of 50 forecast weekly.';
+    expect(
+      sourceSuggestion({ named: ['S2'], marks: [], pieces: one(text), numbered: both, known })
+        .sources,
+    ).toEqual([{ kind: 'input', ref: 'data:1', label: 'Seats' }]);
+    // Named by none: the first that has it.
+    expect(
+      sourceSuggestion({ named: [], marks: [], pieces: one(text), numbered: both, known }).sources,
+    ).toEqual([{ kind: 'fanout', ref: 'crm for 50 users', label: 'crm for 50 users' }]);
+  });
+
   it('keeps the sources named and each mark where its words are, marked ones first', () => {
     const text = 'Trackers cover AI answers, per Profound, for the llm visibility tool.';
     expect(
@@ -234,6 +252,18 @@ describe('no number without a source', () => {
       '49',
       '3',
     ]);
+  });
+
+  it('reads a decimal comma as a point, once thousands separators are gone', () => {
+    // Ansvisor data's share is written "3.4%"; a Turkish or a German page writes it with a comma.
+    const share = knownNumbers('named in 28 of 825 AI answers over the last 30 days (3.4%)');
+    expect(addedNumbers('825 yanıtın 28 tanesinde anıldı (%3,4).', share)).toEqual([]);
+    expect(addedNumbers('in 28 von 825 Antworten genannt (3,4 %).', share)).toEqual([]);
+    expect(addedNumbers('Son 30 günde 825 yanıtın 28 tanesinde.', share)).toEqual([]);
+    expect(addedNumbers('in 3,5 % der Antworten', share).map((n) => n.value)).toEqual(['3.5']);
+    // Thousands still read as thousands, both ways.
+    const counts = knownNumbers('1,250 teams and 1250.5 hours');
+    expect(addedNumbers('1.250 Teams, 1.250,5 Stunden, 1,250 teams', counts)).toEqual([]);
   });
 
   it('puts a placeholder where a page written whole adds one, sign and unit with it', () => {

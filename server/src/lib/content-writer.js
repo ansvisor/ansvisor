@@ -18,10 +18,12 @@ import {
   WRITING_STALE_MS,
 } from './content-agent.js';
 import { contentBriefModelId, rebuildSources } from './content-brief.js';
+import { inputSources, readDraftInputs } from './content-inputs.js';
 import { linkAllowList, linkTargetsPrompt, readLinkTargets } from './content-links.js';
 import { siteTypeLine, pageTypeFormat } from './content-page-types.js';
 import { authorWords, guardPeople, guardPeopleInHtml, knownPeople } from './content-people.js';
 import {
+  INPUT_RULE,
   SOURCES_RULE,
   htmlText,
   knownNumbers,
@@ -253,6 +255,10 @@ export function buildWritePrompt({
   const of = (kind) => numbered.filter((s) => s.kind === kind);
   const rules = input.rules.map((r) => `${r.key}: ${r.name}${r.detail ? ` — ${r.detail}` : ''}`);
   const own = input.textRules.map((text) => `- ${text}`);
+  // Brief › Your input, the person's own (CE-048): with what to do with it.
+  const given = of('input').map(
+    (s) => `${s.id} "${s.label}" (${s.detail})${s.note ? ` — ${s.note}` : ''}`,
+  );
   const page = current
     ? rewritePagePrompt(current)
     : passages
@@ -288,7 +294,7 @@ ${list(of('gsc_query').map((s) => `${s.id} "${s.label}"`))}
 
 Pages AI cites for these questions today (answer better than them, never copy them):
 ${list(of('cited_page').map((s) => `${s.id} ${s.label}`))}
-
+${given.length ? `\nYour input, the person's own for this page:\n${given.join('\n')}\n${INPUT_RULE}\n` : ''}
 Rules (key: rule — what it asks):
 ${list(rules)}
 ${own.length ? `\nThe writer's own rules:\n${own.join('\n')}\n` : ''}${linkTargets ? `\n${linkTargets}\n` : ''}
@@ -677,8 +683,9 @@ function startWritingRun(draft, input, rewrite) {
 /** The run itself, step by step: nothing is kept once it is stopped. */
 async function writeWithRun({ draft, brand, model, input, budget, rewrite, run }) {
   await advanceRun(run, 1);
-  const [prompts, opportunityRes] = await Promise.all([
+  const [prompts, inputRow, opportunityRes] = await Promise.all([
     readPrompts(draft.brand_id, input.sources.promptIds),
+    readDraftInputs(draft.id),
     draft.opportunity_id && !draft.brief
       ? supabaseAdmin
           .from('content_opportunities')
@@ -690,14 +697,16 @@ async function writeWithRun({ draft, brand, model, input, budget, rewrite, run }
   ]);
   if (opportunityRes.error) throw opportunityRes.error;
   const brief = briefText(draft.brief, opportunityRes.data?.brief);
-  // The data it writes from, numbered (CE-033); the numbers a suggestion
-  // may write unmarked (the page's, the brand's, the brief's, the rules',
-  // today's), and those a page written whole may (the sources' words too).
+  // The data it writes from, numbered (CE-033), Brief › Your input last
+  // (CE-048); the numbers a suggestion may write unmarked (the page's, the
+  // brand's, the brief's, the rules', today's), and those a page written
+  // whole may (the sources' words too).
   const numbered = numberSources({
     prompts,
     fanouts: input.sources.fanouts,
     pages: input.sources.pages,
     queries: input.sources.queries,
+    inputs: inputSources(inputRow, brand.name),
   });
   const known = knownNumbers(
     htmlText(draft.body_html),
