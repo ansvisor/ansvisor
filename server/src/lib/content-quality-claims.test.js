@@ -10,6 +10,7 @@ let kept;
 let readsToday;
 let upserts;
 let deletes;
+let selects;
 let reserves;
 const charge = vi.fn();
 const release = vi.fn();
@@ -21,7 +22,7 @@ vi.mock('../config/supabase.js', () => ({
     from: (table) => {
       const filters = [];
       const chain = {
-        select: () => chain,
+        select: (columns) => (selects.push([table, columns]), chain),
         eq: (col, value) => (filters.push([col, value]), chain),
         in: (col, value) => (filters.push([col, value]), chain),
         gte: () => chain,
@@ -77,6 +78,7 @@ beforeEach(() => {
   readsToday = 0;
   upserts = [];
   deletes = [];
+  selects = [];
   reserves = [];
   charge.mockReset();
   release.mockReset();
@@ -141,6 +143,18 @@ describe('draftParagraphs', () => {
     ).toEqual([
       { text: 'the world’s fastest app —', kind: 'superlative' },
       { text: '“rated #1” by G2', kind: 'superlative' },
+    ]);
+    // The other way round, ‘single’ quotes, an en dash and a minus sign; two
+    // copies that differ only by their quotes are one claim.
+    expect(
+      keptClaims("Rated 'best value' 2024–2026, costs fell −12%.", [
+        { text: '‘best value’ 2024–2026', kind: 'superlative' },
+        { text: "'best value' 2024-2026", kind: 'superlative' },
+        { text: 'costs fell -12%', kind: 'number' },
+      ]),
+    ).toEqual([
+      { text: "'best value' 2024–2026", kind: 'superlative' },
+      { text: 'costs fell −12%', kind: 'number' },
     ]);
   });
 
@@ -312,10 +326,31 @@ describe('readDraftClaims', () => {
       { paragraph_hash: paragraphHash(SOC), claims: [], missed: true, checked_at: twoDaysAgo },
     ];
     await read();
+    expect(selects).toContainEqual([
+      'content_quality_claims',
+      expect.stringMatching(/\bmissed\b.*\bchecked_at\b/),
+    ]);
     expect(generateObject.mock.calls[0][0].prompt).toBe(`Paragraphs:\n[1] ${SOC}`);
     expect(upserts[0].rows.map((r) => [r.paragraph_hash, r.missed])).toEqual([
       [paragraphHash(SOC), false],
     ]);
+  });
+
+  it('reads a missed answer’s paragraphs again each in a call of its own, after the new ones', async () => {
+    const NEW = 'Every invoice is matched automatically within one business day.';
+    const twoDaysAgo = new Date(Date.now() - 2 * 86_400_000).toISOString();
+    kept = [
+      { paragraph_hash: paragraphHash(FAST), claims: [], missed: true, checked_at: twoDaysAgo },
+      { paragraph_hash: paragraphHash(SOC), claims: [], missed: true, checked_at: twoDaysAgo },
+    ];
+    generateObject.mockResolvedValue({ object: { paragraphs: [] }, usage: {} });
+    const result = await read({ html: `${html}<p>${NEW}</p>` });
+    // Two calls an ask: the new paragraph, then one missed one alone.
+    expect(generateObject.mock.calls.map(([call]) => call.prompt)).toEqual([
+      `Paragraphs:\n[1] ${NEW}`,
+      `Paragraphs:\n[1] ${FAST}`,
+    ]);
+    expect(result.pending).toBe(1);
   });
 
   it('sends a call no more than its share of words', async () => {

@@ -129,15 +129,16 @@ export function buildClaimsPrompt(paragraphs) {
 }
 
 /**
- * A text with its curly quotes and dashes made plain: the model may copy
- * “world’s fastest” with straight ones. Each is one character for one, so
- * a match's place is the paragraph's own.
+ * A text with its curly quotes, primes, dashes and minus signs made plain:
+ * the model may copy “world’s fastest” or −12% with straight ones. Each is
+ * one character for one, so a match's place is the paragraph's own (an
+ * ellipsis isn't: “…” stays as it is).
  */
 const fold = (text) =>
   text
-    .replace(/[\u2018\u2019]/g, "'")
-    .replace(/[\u201c\u201d]/g, '"')
-    .replace(/[\u2010\u2011\u2013\u2014]/g, '-');
+    .replace(/[\u2018\u2019\u201a\u2032]/g, "'")
+    .replace(/[\u201c\u201d\u201e\u2033]/g, '"')
+    .replace(/[\u2010\u2011\u2012\u2013\u2014\u2015\u2212]/g, '-');
 
 /**
  * A paragraph's claims as kept: its own words only (curly quotes and
@@ -214,23 +215,30 @@ async function readCall({ orgId, draftId, modelId, paragraphs }) {
   return { read, missed: false };
 }
 
-/** Paragraphs in calls: PARAGRAPHS_PER_CALL or CHARS_PER_CALL of words, whichever comes first. */
-function batchesOf(paragraphs, calls) {
+/**
+ * Paragraphs in calls: PARAGRAPHS_PER_CALL or CHARS_PER_CALL of words,
+ * whichever comes first, a paragraph in `alone` in a call of its own.
+ */
+function batchesOf(paragraphs, calls, alone = new Set()) {
   const batches = [];
   let batch = [];
   let chars = 0;
+  const close = () => {
+    if (batch.length) batches.push(batch);
+    batch = [];
+    chars = 0;
+  };
   for (const p of paragraphs) {
     const size = Math.min(p.text.length, MAX_PARAGRAPH_CHARS);
-    if (batch.length && (batch.length >= PARAGRAPHS_PER_CALL || chars + size > CHARS_PER_CALL)) {
-      batches.push(batch);
-      if (batches.length >= calls) return batches;
-      batch = [];
-      chars = 0;
+    if (alone.has(p.hash) || batch.length >= PARAGRAPHS_PER_CALL || chars + size > CHARS_PER_CALL) {
+      close();
     }
+    if (batches.length >= calls) break;
     batch.push(p);
     chars += size;
+    if (alone.has(p.hash)) close();
   }
-  if (batch.length) batches.push(batch);
+  close();
   return batches.slice(0, calls);
 }
 
@@ -276,7 +284,19 @@ export async function readDraftClaims({ orgId, draftId, html, skip = '' }) {
   }
 
   const skipped = skip ? paragraphHash(skip) : null;
-  const unread = paragraphs.filter((p) => !read.has(p.hash) && p.hash !== skipped);
+  // A missed answer's paragraphs, read again, go after the new ones, each in
+  // a call of its own: one the provider blocks keeps none of the others
+  // from being read.
+  const again = new Set(
+    (rows ?? [])
+      .filter(
+        (row) => row.missed && current.has(row.paragraph_hash) && !read.has(row.paragraph_hash),
+      )
+      .map((row) => row.paragraph_hash),
+  );
+  const unread = paragraphs
+    .filter((p) => !read.has(p.hash) && p.hash !== skipped)
+    .sort((a, b) => Number(again.has(a.hash)) - Number(again.has(b.hash)));
   let limited = false;
   let asked = 0;
   if (unread.length) {
@@ -285,7 +305,7 @@ export async function readDraftClaims({ orgId, draftId, html, skip = '' }) {
     limited = left <= 0;
     if (left > 0) {
       const modelId = sourceClassModelId();
-      const batches = batchesOf(unread, Math.min(CALLS_PER_ASK, left));
+      const batches = batchesOf(unread, Math.min(CALLS_PER_ASK, left), again);
       // One call after the other: one the budget stops keeps the reads before it.
       const reads = [];
       for (const batch of batches) {

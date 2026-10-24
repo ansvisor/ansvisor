@@ -5,7 +5,7 @@ import supabaseAdmin from '../config/supabase.js';
  * all of them together (the kinds of its sources' sites, a call a site,
  * CE-046; the claims in its paragraphs, CE-045): the editor asks after
  * saves. The claims make 50 at most, leaving the sources 40
- * (SOURCE_READS_PER_DAY).
+ * (SOURCE_READS_PER_DAY); the sources may take what the claims haven't.
  */
 export const QUALITY_CALLS_PER_DAY = 90;
 
