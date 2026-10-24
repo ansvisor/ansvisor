@@ -107,7 +107,7 @@ When the fix is content the user can paste, put the ready-to-use text in "draft"
 - faq-schema → 3–5 Q&A pairs in "draft" AND a valid FAQPage JSON-LD block in "code"
 - definitions → the key terms defined inline
 - outbound-authority-links / citation-density → specific authoritative sources to cite
-- readability → a simplified rewrite of one representative paragraph (shorter sentences, plainer words)
+- readability → a rewrite of one representative paragraph toward Flesch 50–70: shorter sentences and plainer words when the page's score is under 50, fuller sentences with the detail readers expect when it is over 70
 - length → which specific sections to expand or trim (draft can be null)
 - product-description-opening → a new opening for the product description, at most 40 words, that starts with the product type and names at least two key attributes from the page (a measure, a material, a fit or a use)
 
@@ -207,7 +207,13 @@ export async function generateRecommendations(ctx, { results, brand = null, audi
   const issues = failing
     .map((r) => {
       const s = signalsByKey[r.key] ?? {};
-      const finding = r.evidence?.reason ? ` | finding: ${r.evidence.reason}` : '';
+      // Readability's score: which way to rewrite depends on its side of 50–70.
+      const flesch = r.evidence?.fleschReadingEase;
+      const finding = r.evidence?.reason
+        ? ` | finding: ${r.evidence.reason}`
+        : typeof flesch === 'number'
+          ? ` | finding: Flesch Reading Ease ${flesch}`
+          : '';
       return `- ${r.key} [${r.status}, impact: ${s.impactTier ?? 'standard'}]: ${s.what ?? ''}${finding}`;
     })
     .join('\n');
