@@ -1440,7 +1440,7 @@ export function DraftEditor({
     );
   };
 
-  /** Export: the page as Copy HTML gives it, as a Word, HTML or Markdown file. */
+  /** Export: the page as Copy HTML gives it, as a Word, Excel, CSV, HTML or Markdown file. */
   const exportPage = async (format: DraftExportFormat) => {
     if (!editor) return;
     const html = publishableHtml(

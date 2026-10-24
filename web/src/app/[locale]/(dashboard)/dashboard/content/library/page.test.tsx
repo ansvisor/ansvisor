@@ -667,6 +667,8 @@ describe('a Library row’s menu (00233)', () => {
       'Ready',
       'Published',
       'Export Word',
+      'Export Excel',
+      'Export CSV',
       'Export HTML',
       'Export Markdown',
       'Send to CMS',
@@ -694,6 +696,8 @@ describe('a Library row’s menu (00233)', () => {
       'Ready',
       'Published',
       'Export Word',
+      'Export Excel',
+      'Export CSV',
       'Export HTML',
       'Export Markdown',
     ]);
@@ -783,6 +787,8 @@ describe('the Library’s Export and Created filter (CE-002)', () => {
     });
     return [...document.body.querySelectorAll<HTMLElement>('[role="menuitem"]')];
   };
+  /** CSV: the quickest of the files to write. */
+  const csvItem = (items: HTMLElement[]) => items.find((el) => el.textContent === 'Export CSV')!;
 
   it('reads a long list’s pages fifty at a time, in order', async () => {
     getContentDrafts.mockResolvedValue(
@@ -790,7 +796,7 @@ describe('the Library’s Export and Created filter (CE-002)', () => {
     );
     await renderPage();
     const items = await openExport();
-    await act(async () => items[0].click());
+    await act(async () => csvItem(items).click());
     await act(async () => {});
 
     const calls = getContentDraftPages.mock.calls as [string, string[]][];
@@ -818,7 +824,7 @@ describe('the Library’s Export and Created filter (CE-002)', () => {
     }));
     await renderPage();
     const items = await openExport();
-    await act(async () => items[0].click());
+    await act(async () => csvItem(items).click());
     await act(async () => {});
 
     const calls = getContentDraftPages.mock.calls as [string, string[]][];
@@ -838,11 +844,11 @@ describe('the Library’s Export and Created filter (CE-002)', () => {
     await renderPage();
     const items = await openExport();
     expect(items.map((el) => el.textContent)).toEqual([
-      'Export CSV',
-      'Export Excel',
       'Export Word',
+      'Export Excel',
+      'Export CSV',
     ]);
-    await act(async () => items[0].click());
+    await act(async () => csvItem(items).click());
     await act(async () => {});
 
     expect(getContentDraftPages).toHaveBeenCalledWith('brand-1', ['d1', 'd2']);
@@ -868,7 +874,7 @@ describe('the Library’s Export and Created filter (CE-002)', () => {
     expect(container.textContent).not.toContain('Old page');
 
     const items = await openExport();
-    await act(async () => items[0].click());
+    await act(async () => csvItem(items).click());
     await act(async () => {});
     expect(getContentDraftPages).toHaveBeenCalledWith('brand-1', ['new']);
   });
