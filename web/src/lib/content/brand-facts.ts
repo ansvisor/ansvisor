@@ -149,7 +149,7 @@ const RANGE_BEFORE = /\d\s?(?:\S{1,3}\s)?(?:[–—-]|to|bis|ile|ila|and|und|et|
  * $245").
  */
 const NOT_A_PRICE =
-  /(?<!\p{L})(?:was|instead\s+of|regularly|originally|save|saving|savings|off|discount|coupon|credits?|incl\.?|including\s+(?:vat|tax)|inkl\.?|kdv\s+dahil|statt|rabatt|indirim|tasarruf|économisez|ahorra|refund|money-back|extra|additional|add-ons?|ek\s+ücret|zusätzlich)(?!\p{L})|\d+[\s-]?(?:person|people|users?|seats?|members?|kişi(?:lik)?|kullanıcı)(?!\p{L})/iu;
+  /(?<!\p{L})(?:was|instead\s+of|regularly|originally|save|saving|savings|off|discount|coupon|credits?|incl\.?|including\s+(?:vat|tax)|inkl\.?|kdv\s+dahil|statt|rabatt|indirim|tasarruf|économisez|ahorra|refund|money-back|extra|additional|add-ons?|ek\s+ücret|zusätzlich|setup|set-up|onboarding|implementation|installation|one-time|kurulum)(?!\p{L})|\d+[\s-]?(?:person|people|users?|seats?|members?|kişi(?:lik)?|kullanıcı)(?!\p{L})/iu;
 const MONTH =
   /^[^\d$€£¥₹₺]{0,20}?(?:\/\s?(?:mo|mth|month|ay|monat|mois|mes)\b|\b(?:per|a|each)\s+month\b|\bmonthly\b|\baylık\b|\bayda\b|\bmonatlich\b|\b(?:pro|im)\s+monat\b|\bpar\s+mois\b|\b(?:al|por)\s+mes\b)/iu;
 const YEAR =
@@ -278,11 +278,12 @@ function planAt(sentence: string, plan: string, brandNamed: boolean): number {
 }
 /**
  * The brand's own price, said of it right after its name ("Ledgerly costs
- * $29 a month", "Ledgerly's pricing starts at $19"): a pricing verb within
- * a few words of the name, then the price, no other amount between.
+ * $29 a month", "Ledgerly's pricing starts at $19"): a pricing verb right
+ * after the name, or after its plan or pricing ("Ledgerly setup costs" is
+ * another bill), then the price, no other amount between.
  */
 const PRICED_AFTER_NAME =
-  /^['’]?s?\s+(?:[\p{L}-]+\s+){0,2}?(?:costs?|charges?|is\s+priced\s+at|priced\s+at|starts?\s+(?:at|from)|starting\s+at|kostet|coûte|cuesta)\s+(?:(?:just|only|from|ab|desde)\s+)?$/iu;
+  /^['’]?s?\s+(?:(?:monthly|annual|yearly|base|basic)\s+)?(?:(?:plans?|pricing|price|subscriptions?|licen[cs]es?|membership)\s+)?(?:(?:now|currently|only|just)\s+)?(?:costs?|charges?|is\s+priced\s+at|priced\s+at|starts?\s+(?:at|from)|starting\s+at|kostet|coûte|cuesta)\s+(?:(?:just|only|from|ab|desde)\s+)?$/iu;
 /** Where a name is in a sentence, as whole words: each start. */
 const namedAt = (sentence: string, name: string) =>
   name.trim().length > 2
@@ -307,28 +308,54 @@ const TRIAL_WEEKS = [
 /** A trial said of the brand's plans: "your free trial", "every plan". */
 const OWN_TRIAL =
   /\b(?:your|our)\s+(?:free\s+)?trial\b|\b(?:every|all|each)\s+plans?\b|\bher\s+plan|\btüm\s+planlar/iu;
-/** The brand's own founding year, said right after who: "Ledgerly was founded in 2015", "we were…". */
-const foundedOf = (brandName: string) => {
-  const who = [
-    ...(brandName.trim().length > 2 ? [escape(brandName.trim())] : []),
-    'we',
-    'our\\s+company',
-  ].join('|');
+/** Every trial length a text gives, in days. */
+const trialLengths = (text: string) => [
+  ...TRIAL_DAYS.flatMap((re) =>
+    [...text.matchAll(new RegExp(re.source, 'giu'))].map((m) => Number(m[1])),
+  ),
+  ...TRIAL_WEEKS.flatMap((re) =>
+    [...text.matchAll(new RegExp(re.source, 'giu'))].map((m) => Number(m[1]) * 7),
+  ),
+];
+/**
+ * A length said of someone's own: "…; Ledgerly's runs for 14 days" (a trial
+ * named before it), "Ledgerly's trial runs for 30 days".
+ */
+const OWNED_LENGTH =
+  /(?:['’]s|\b(?:its|theirs|ours|yours))\s+(?:[\p{L}-]+\s+)?(?:runs?|lasts?|is|are)\s+(?:for\s+)?(?:(?:just|only)\s+)?(\d{1,3})[\s-]?(days?|weeks?)(?!\p{L})/giu;
+/**
+ * Where a sentence turns to another subject ("Acme offers a 15-day trial;
+ * Ledgerly's is longer"): a trial is the brand's only in a part that names
+ * it, or says "your trial", "every plan".
+ */
+const TURN =
+  /[;:–—]|,\s*(?:and|but|while|whereas|which|whose|who)\b|\b(?:but|while|whereas|unlike|than|compared\s+(?:to|with))\b/iu;
+/**
+ * The brand's own founding year, said right after who, who at the start of
+ * its clause: "Ledgerly was founded in 2015", "we were…" ("the agency that
+ * built Ledgerly was founded" is the agency's). "We" only outside quoted
+ * speech, which may be anyone's.
+ */
+const foundedOf = (brandName: string, we: boolean) => {
+  const name = brandName.trim().length > 2 ? escape(brandName.trim()) : null;
+  const who = (...ours: string[]) => [...(name ? [name] : []), ...(we ? ours : [])].join('|');
+  const start = `(?:^|[,;:(–—]\\s*|(?<![\\p{L}\\p{N}])(?:and|since|when|after|as|ve)\\s+)`;
   return [
-    new RegExp(
-      `(?<![\\p{L}\\p{N}])(?:${who})\\s+(?:was|were)\\s+(?:founded|established)\\s+(?:in\\s+)?((?:18|19|20)\\d{2})(?!\\d)`,
-      'iu',
-    ),
-    new RegExp(
-      `(?<![\\p{L}\\p{N}])(?:${who}|biz|şirketimiz)\\s+((?:18|19|20)\\d{2})['’]?(?:de|da|te|ta)?\\s+(?:yılında\\s+)?kurul(?:du|muştur|duk)`,
-      'iu',
-    ),
-    new RegExp(
-      `(?<![\\p{L}\\p{N}])(?:${who}|wir)\\s+(?:wurde|wurden)\\s+(?:im\\s+jahr\\s+)?((?:18|19|20)\\d{2})\\s+gegründet`,
-      'iu',
-    ),
-  ];
+    [
+      who('we', 'our\\s+company'),
+      `\\s+(?:was|were)\\s+(?:founded|established)\\s+(?:in\\s+)?((?:18|19|20)\\d{2})(?!\\d)`,
+    ],
+    [
+      who('biz', 'şirketimiz'),
+      `\\s+((?:18|19|20)\\d{2})['’]?(?:de|da|te|ta)?\\s+(?:yılında\\s+)?kurul(?:du|muştur|duk)`,
+    ],
+    [who('wir'), `\\s+(?:wurde|wurden)\\s+(?:im\\s+jahr\\s+)?((?:18|19|20)\\d{2})\\s+gegründet`],
+  ]
+    .filter(([whom]) => whom)
+    .map(([whom, said]) => new RegExp(`${start}(?:${whom})${said}`, 'iu'));
 };
+/** Quoted speech in a sentence. */
+const QUOTED = /["“”«»„]/u;
 
 /**
  * The page's prices, trial and founding year against the brand's approved
@@ -336,22 +363,26 @@ const foundedOf = (brandName: string) => {
  * read so as never to cry wolf (a wrong warning on a right page is worse
  * than none):
  *
- *   * a price is compared with the plan named nearest it in the sentence,
- *     its name as the page writes it, a name that is an everyday word
- *     ("Pro", "Team", "Free") only beside "plan" or "tier" or with the
- *     brand named; with no plan named, only when the sentence names the
- *     brand and says what it costs ("Ledgerly costs $29 a month");
+ *   * a price is compared with the plan named nearest it in the sentence
+ *     (the closest pairs first, no other price between, none read unless
+ *     the sentence has as many prices as plans named), its name as the page
+ *     writes it, a name that is an everyday word ("Pro", "Team", "Free")
+ *     only beside "plan" or "tier" or with the brand named; with no plan
+ *     named, only right after the brand's name and what it costs
+ *     ("Ledgerly costs $29 a month");
  *   * in its currency only; with a period or a billing ("billed
  *     annually") only against prices of that period or billing; it
  *     matches when it is any of them (a plan's monthly and annual prices
  *     both count), "from $19" too; free ($0) is never compared;
- *   * a sentence with an old price, a saving, a discount, credits, tax or
- *     a team's bill ("was $49", "5 users pay") isn't read for prices, nor
- *     one naming a competitor;
- *   * a trial in days where the sentence says it is the brand's ("your
- *     free trial", "every plan", the brand's name), its days right beside
- *     the trial; a founding year right after "founded" where the brand is
- *     named ("we were founded" too).
+ *   * a sentence with an old price, a saving, a discount, credits, tax,
+ *     an add-on, a setup fee or a team's bill ("was $49", "5 users pay")
+ *     isn't read for prices, nor one naming a competitor;
+ *   * a trial in days in the part of the sentence that says it is the
+ *     brand's ("your free trial", "every plan", the brand's name), its days
+ *     right beside the trial, and none with two trial lengths in the
+ *     sentence; a founding year right after "the brand was founded" ("we
+ *     were founded" too, outside quoted speech), who at the start of its
+ *     clause.
  *
  * Each sentence once. `compared` is how many were compared: the check's
  * points are the share that matched.
@@ -385,7 +416,8 @@ export function factMismatches({
     .flatMap((d) => [d, d.split('.')[0]])
     .filter((d) => d.length >= 3);
   const plans = [...new Set(prices.map((p) => p.value.plan))].filter((p) => p.trim().length > 1);
-  const founded = foundedOf(brandName);
+  const founded = foundedOf(brandName, true);
+  const foundedNamed = foundedOf(brandName, false);
   const same = (a: number, b: number) => Math.abs(a - b) < 0.005;
   const shown = (f: BrandFact) => factValueText(f.kind, f.value, f.quote);
 
@@ -405,25 +437,27 @@ export function factMismatches({
         : BILLED_MONTH.test(sentence)
           ? 'monthly'
           : null;
-      const found = pagePrices(sentence);
-      // Each named plan with the one price nearest it, none other between:
-      // a price no plan takes isn't read ("…, and Business is $199" with
-      // only Pro found).
+      const found = pagePrices(sentence).filter((price) => price.amount > 0);
+      // Each named plan with the one price nearest it, the closest pairs
+      // first, none other between. As many prices as plans named (one with
+      // none named), else which is whose isn't sure ("Pro is $49/month or
+      // $39/month billed annually", "…, and Business is $199" with only Pro
+      // found, "Pro, unlike the Starter plan, costs $49"): none is read.
+      const sure = found.length === Math.max(places.length, 1);
       const planOf = new Map<number, (typeof places)[number]>();
-      for (const place of places) {
-        const nearest = found.reduce<(typeof found)[number] | null>(
-          (a, b) => (!a || Math.abs(b.at - place.at) < Math.abs(a.at - place.at) ? b : a),
-          null,
-        );
-        if (!nearest) continue;
-        const [from, to] = [Math.min(place.at, nearest.at), Math.max(place.at, nearest.at)];
-        if (found.some((other) => other !== nearest && other.at > from && other.at < to)) continue;
-        if (planOf.has(nearest.at)) continue;
-        planOf.set(nearest.at, place);
+      const pairs = places
+        .flatMap((place) => found.map((price) => ({ place, price })))
+        .sort((a, b) => Math.abs(a.price.at - a.place.at) - Math.abs(b.price.at - b.place.at));
+      const paired = new Set<string>();
+      for (const { place, price } of pairs) {
+        if (planOf.has(price.at) || paired.has(place.plan)) continue;
+        const [from, to] = [Math.min(place.at, price.at), Math.max(place.at, price.at)];
+        if (found.some((other) => other !== price && other.at > from && other.at < to)) continue;
+        planOf.set(price.at, place);
+        paired.add(place.plan);
       }
       const names = namedAt(sentence, brandName);
-      for (const price of found) {
-        if (price.amount === 0) continue;
+      for (const price of sure ? found : []) {
         const nearest = places.length ? (planOf.get(price.at) ?? null) : null;
         if (places.length && !nearest) continue;
         // No plan named: only a price said right after the brand's name.
@@ -458,27 +492,20 @@ export function factMismatches({
     }
 
     if (trials.length && (brand || OWN_TRIAL.test(sentence))) {
-      // Every trial length the sentence gives: two different ones (another
-      // brand's beside the brand's) say nothing sure of the brand's.
-      const lengths = new Set([
-        ...TRIAL_DAYS.flatMap((re) =>
-          [...sentence.matchAll(new RegExp(re.source, 'giu'))].map((m) => Number(m[1])),
-        ),
-        ...TRIAL_WEEKS.flatMap((re) =>
-          [...sentence.matchAll(new RegExp(re.source, 'giu'))].map((m) => Number(m[1]) * 7),
-        ),
-      ]);
-      // With a trial found, any other count of days or weeks in the
-      // sentence makes two ("…; Ledgerly's runs for 14 days").
-      const counts = new Set(lengths);
-      if (lengths.size) {
-        for (const m of sentence.matchAll(
-          /(?<!\d)(\d{1,3})[\s-]?(days?|weeks?|gün|tage?)(?!\p{L})/giu,
-        )) {
-          counts.add(Number(m[1]) * (/^week/i.test(m[2]) ? 7 : 1));
-        }
-      }
-      const days = counts.size === 1 ? [...counts][0] : null;
+      // Two different trial lengths in the sentence (another brand's beside
+      // the brand's, "…; Ledgerly's runs for 14 days") say nothing sure.
+      const owned = (text: string, trial: boolean) =>
+        [...text.matchAll(OWNED_LENGTH)]
+          .filter((m) => !trial || /trial/iu.test(m[0]))
+          .map((m) => Number(m[1]) * (/^week/i.test(m[2]) ? 7 : 1));
+      const lengths = new Set([...trialLengths(sentence), ...owned(sentence, false)]);
+      const own = new Set(
+        sentence
+          .split(TURN)
+          .filter((part) => named(part, brandName) || OWN_TRIAL.test(part))
+          .flatMap((part) => [...trialLengths(part), ...owned(part, true)]),
+      );
+      const days = lengths.size === 1 && own.size === 1 ? [...own][0] : null;
       if (days) {
         compared += 1;
         const fact = trials.find((f) => (f.value as { days: number }).days === days);
@@ -496,7 +523,9 @@ export function factMismatches({
 
     if (years.length) {
       // Only the brand's (or "we", "our company") right before "was founded".
-      const m = founded.map((re) => sentence.match(re)).find(Boolean);
+      const m = (QUOTED.test(sentence) ? foundedNamed : founded)
+        .map((re) => sentence.match(re))
+        .find(Boolean);
       const year = m ? m[1] : null;
       if (year) {
         compared += 1;
