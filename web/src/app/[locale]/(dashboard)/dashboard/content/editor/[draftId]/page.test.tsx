@@ -3498,15 +3498,21 @@ describe('the side panel', () => {
       // the document after the basket opened reads as another app's, which a
       // popover doesn't close for.
       const elsewhere = container.querySelector<HTMLElement>('.ProseMirror')!;
-      await act(async () => {
-        elsewhere.focus();
-        for (const type of ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click']) {
-          elsewhere.dispatchEvent(new MouseEvent(type, { bubbles: true }));
-        }
-      });
-      await act(async () => new Promise((resolve) => setTimeout(resolve, 150)));
-      expect(basket()).toBeNull();
-      expect(document.activeElement).toBe(elsewhere);
+      // ProseMirror reads a click's place from the point: jsdom has none.
+      document.elementFromPoint = () => null;
+      try {
+        await act(async () => {
+          elsewhere.focus();
+          for (const type of ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click']) {
+            elsewhere.dispatchEvent(new MouseEvent(type, { bubbles: true }));
+          }
+        });
+        await act(async () => new Promise((resolve) => setTimeout(resolve, 150)));
+        expect(basket()).toBeNull();
+        expect(document.activeElement).toBe(elsewhere);
+      } finally {
+        delete (document as { elementFromPoint?: unknown }).elementFromPoint;
+      }
     });
 
     it('keeps a skip while the sources load again, as the fan-out rules read them', async () => {

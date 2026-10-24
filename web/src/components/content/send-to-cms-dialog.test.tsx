@@ -260,6 +260,14 @@ describe('SendDialog', () => {
     await act(async () => button('Send').click());
     expect(alert()).toBe("The webhook didn't take the page: The webhook could not be reached");
 
+    // The webhook took it (2xx), then the workflow called back failed: its reason.
+    sendPagesToCms.mockResolvedValueOnce({
+      ok: true,
+      deliveries: [{ ...failed, http_status: 200, error: 'Slug already taken' }],
+    });
+    await act(async () => button('Send').click());
+    expect(alert()).toBe("The webhook didn't take the page: Slug already taken");
+
     // Changing a field clears what went wrong.
     await setValue(field('cms-meta-title'), 'Coffee');
     expect(alert()).toBeUndefined();
