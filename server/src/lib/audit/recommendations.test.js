@@ -137,6 +137,18 @@ describe('generateRecommendations', () => {
     expect(prompt).toContain('- Domains: ansvisor.com');
   });
 
+  it('tells the model which side of 50–70 a page reads, to rewrite it that way', async () => {
+    modelReturns([]);
+    await generateRecommendations(ctx, {
+      results: [{ key: 'readability', status: 'fail', evidence: { fleschReadingEase: 86 } }],
+      brand,
+    });
+    const { system, prompt } = generateObject.mock.calls[0][0];
+    expect(prompt).toContain('- readability [fail, impact: standard]');
+    expect(prompt).toContain('| finding: Flesch Reading Ease 86');
+    expect(system).toContain('fuller sentences with the detail readers expect when it is over 70');
+  });
+
   it('sends no brand data for another site, and the brand name there is unknown', async () => {
     modelReturns([
       {

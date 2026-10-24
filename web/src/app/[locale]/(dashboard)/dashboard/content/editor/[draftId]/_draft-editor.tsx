@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useFormatter, useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 import { EditorContent, useEditor } from '@tiptap/react';
+import type { Node as PmNode } from '@tiptap/pm/model';
 import { TextSelection, type Transaction } from '@tiptap/pm/state';
 import StarterKit from '@tiptap/starter-kit';
 import { TableKit } from '@tiptap/extension-table';
@@ -22,6 +23,9 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { LoadingDots } from '@/components/ui/loading-dots';
+import { AiUsageBanner } from '@/components/ai-usage/ai-usage-banner';
+import { AiUsageMeter } from '@/components/ai-usage/ai-usage-meter';
+import { useAiUsage } from '@/components/providers/ai-usage-provider';
 import { PLATFORM_LABELS } from '@/config/platform-labels';
 import { DraftMethodBadge, DraftStatusBadge } from '@/components/content/draft-badges';
 import {
@@ -31,6 +35,7 @@ import {
   getDraftSuggestions,
   keepAgentBeforeVersion,
   markContentDraftReady,
+  unmarkContentDraftReady,
   restoreDraftVersion,
   setContentDraftAuthor,
   setContentDraftPageType,
@@ -105,7 +110,9 @@ import {
   openRulesForAgent,
   rewriteAdvice,
 } from '@/lib/content/rules';
+import { aiUsageTone } from '@/lib/billing/ai-usage';
 import { saveBlob } from '@/lib/download';
+import { formatMonthDay } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { useBrandStore } from '@/stores/use-brand-store';
 import { AgentCard } from './_agent-card';
@@ -133,6 +140,7 @@ import { HtmlBlock, copyToClipboard } from './_html-block';
 import { OwnCopies, ownCopyHtml } from './_own-copies';
 import { NextNudge, useNextNudge } from './_next-nudge';
 import { PageInfoStrip, pageInfoKey } from './_page-info';
+import { HeaderTip } from './_header-tip';
 import { NextStepButton, readSkips, wordsUnderTitle, writeSkips } from './_next-step';
 import { useTodoCopy, type QualityRead } from './_quality-tab';
 import { PageTypeMenu } from './_page-type-menu';
@@ -254,6 +262,7 @@ export function DraftEditor({
   const flashTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   useEffect(() => () => clearTimeout(pageReadTimer.current), []);
   const [status, setStatus] = useState(draft.status);
+  const tDraftStatus = useTranslations('contentEditor.status');
   const [marking, setMarking] = useState(false);
   // The Content Agent couldn't finish the page Start gave it (CE-015).
   const [agentFailed, setAgentFailed] = useState(draft.agentState === 'failed');
@@ -1282,17 +1291,34 @@ export function DraftEditor({
   }, []);
   // One agent run at a time from this page: the others wait for it.
   const agentBusy = fixing || starting || rewriting || briefRebuilding;
+  // The month's AI usage used up: each agent button says so before anything
+  // else, and runs nothing (AI usage spec §4). A run ending reads the usage
+  // again, so the header meter shows what it used.
+  const { usage: aiUsage, refresh: refreshAiUsage } = useAiUsage();
+  const aiUsedUp =
+    aiUsage && aiUsageTone(aiUsage) === 'exhausted'
+      ? aiUsage.periodEnd
+        ? t('suggestions.aiUsedUp', { date: formatMonthDay(aiUsage.periodEnd) })
+        : t('suggestions.aiUsedUpNoDate')
+      : null;
+  const wasBusy = useRef(false);
+  useEffect(() => {
+    if (wasBusy.current && !agentBusy) refreshAiUsage();
+    wasBusy.current = agentBusy;
+  }, [agentBusy, refreshAiUsage]);
   const agentFix: AgentFix = {
     run: (only) => void fixRules(only),
     running: fixing,
     blocked:
-      openSuggestions > 0
-        ? t('suggestions.decideFirst', { count: openSuggestions })
-        : !citedRead
-          ? t('suggestions.citedLoading')
-          : agentBusy && !fixing
-            ? t('suggestions.agentBusy')
-            : null,
+      aiUsedUp && !fixing
+        ? aiUsedUp
+        : openSuggestions > 0
+          ? t('suggestions.decideFirst', { count: openSuggestions })
+          : !citedRead
+            ? t('suggestions.citedLoading')
+            : agentBusy && !fixing
+              ? t('suggestions.agentBusy')
+              : null,
   };
   // The card's Run Agent says why it won't run, as the Rules card does: also
   // when the only rules left open are ones the agent doesn't fix (one H1).
@@ -1469,11 +1495,13 @@ export function DraftEditor({
         run: () => void startAgent(),
         running: starting,
         blocked:
-          openSuggestions > 0
-            ? t('suggestions.decideFirst', { count: openSuggestions })
-            : agentBusy && !starting
-              ? t('suggestions.agentBusy')
-              : null,
+          aiUsedUp && !starting
+            ? aiUsedUp
+            : openSuggestions > 0
+              ? t('suggestions.decideFirst', { count: openSuggestions })
+              : agentBusy && !starting
+                ? t('suggestions.agentBusy')
+                : null,
       }
     : undefined;
 
@@ -1537,13 +1565,15 @@ export function DraftEditor({
         run: () => void rewritePage(),
         running: rewriting,
         blocked:
-          openSuggestions > 0
-            ? t('suggestions.decideFirst', { count: openSuggestions })
-            : !citedRead
-              ? t('suggestions.citedLoading')
-              : agentBusy && !rewriting
-                ? t('suggestions.agentBusy')
-                : null,
+          aiUsedUp && !rewriting
+            ? aiUsedUp
+            : openSuggestions > 0
+              ? t('suggestions.decideFirst', { count: openSuggestions })
+              : !citedRead
+                ? t('suggestions.citedLoading')
+                : agentBusy && !rewriting
+                  ? t('suggestions.agentBusy')
+                  : null,
       }
     : undefined;
   // Before you publish (CE-041) opens on Mark ready once Quality is live,
@@ -1677,7 +1707,7 @@ export function DraftEditor({
   const nextBlocked = (action: NextAction): string | null => {
     switch (action) {
       case 'buildBrief':
-        return agentBusy ? t('suggestions.agentBusy') : null;
+        return aiUsedUp ?? (agentBusy ? t('suggestions.agentBusy') : null);
       case 'writeWithAgent':
         return agentRewrite?.blocked ?? null;
       case 'rewritePage':
@@ -1740,6 +1770,57 @@ export function DraftEditor({
     }
   };
 
+  /**
+   * Ready, clicked (Next step spec §3b): the page goes back to review, while
+   * it is still ready (published meanwhile from the Library, it says so). The
+   * task Mark ready completed stays done.
+   */
+  const [unmarking, setUnmarking] = useState(false);
+  const unmarkReady = async () => {
+    if (unmarking) return;
+    setUnmarking(true);
+    try {
+      const now = await unmarkContentDraftReady(draft.id);
+      setStatus(now);
+      if (now === 'in_review') toast(t('header.backInReview'));
+      else toast(t('header.notReady', { status: tDraftStatus(now) }));
+    } catch (err) {
+      console.error('Failed to move the draft back to review:', err);
+      toast.error(t('header.backInReviewFailed'));
+    } finally {
+      setUnmarking(false);
+    }
+  };
+  /**
+   * The header's title, clicked: the caret at the end of the block the title
+   * is read from (draftTitleFromDoc: the first H1 with words, else the first
+   * heading, else the first block with words), to rename it there.
+   */
+  const renameInPage = () => {
+    if (!editor) return;
+    // The HTML view holds the page: the title is renamed in its text there.
+    if (htmlSource !== null) {
+      toast(t('header.renameInHtml'));
+      return;
+    }
+    const blocks: { node: PmNode; end: number }[] = [];
+    editor.state.doc.forEach((node, offset) => {
+      if (node.isTextblock && node.textContent.trim()) {
+        blocks.push({ node, end: offset + node.nodeSize - 1 });
+      }
+    });
+    const heading = (level?: number) =>
+      blocks.find(
+        ({ node }) =>
+          node.type.name === 'heading' && (level === undefined || node.attrs.level === level),
+      );
+    const pick = heading(1) ?? heading() ?? blocks[0];
+    const { doc } = editor.state;
+    const at = pick ? TextSelection.near(doc.resolve(pick.end), -1) : TextSelection.atStart(doc);
+    editor.view.dispatch(editor.state.tr.setSelection(at).scrollIntoView());
+    editor.commands.focus(undefined, { scrollIntoView: false });
+  };
+
   // A version from History replaces the page: what's waiting is saved first,
   // as the server keeps the page it replaces, and the page can't change
   // while the restore runs.
@@ -1788,6 +1869,10 @@ export function DraftEditor({
     }
   };
 
+  // Why History waits (the HTML view holds the page, a restore runs), or null.
+  const historyWaits =
+    htmlSource !== null ? t('history.htmlOpen') : restoring ? t('history.restoring') : null;
+
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       {/* Two lines: the title and what you do with the page on top, which
@@ -1803,10 +1888,34 @@ export function DraftEditor({
           >
             <ArrowLeft className="h-4 w-4" />
           </Link>
-          <h1 className="min-w-0 truncate text-sm font-medium" title={title.trim() || undefined}>
-            {title.trim() || t('untitled')}
-          </h1>
-          <div className="ml-auto flex shrink-0 items-center gap-1.5 sm:gap-3">
+          {/* The title takes the room left (at least ~140px from 1024px, 96px
+              narrower; less while the save state needs its words), ends in "…",
+              and never pushes, overlaps or wraps the buttons (Next step spec §3b). */}
+          <div className="flex min-w-0 flex-1 items-center gap-2.5">
+            <h1
+              className={cn(
+                'shrink text-sm font-medium',
+                autosave.state === 'conflict' ||
+                  autosave.state === 'too_large' ||
+                  autosave.state === 'failed'
+                  ? 'min-w-16'
+                  : 'min-w-24 lg:min-w-[140px]',
+              )}
+            >
+              <button
+                type="button"
+                onClick={renameInPage}
+                title={t('header.rename', { title: title.trim() || t('untitled') })}
+                className="block max-w-full truncate rounded-sm text-left hover:underline hover:underline-offset-2 focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none"
+              >
+                {title.trim() || t('untitled')}
+              </button>
+            </h1>
+            <span className="shrink-0">
+              <SaveIndicator state={autosave.state} onRetry={() => void autosave.retry()} />
+            </span>
+          </div>
+          <div className="flex shrink-0 items-center gap-1.5 sm:gap-2.5">
             {qualityOn && (
               <NextStepButton
                 next={next}
@@ -1832,57 +1941,101 @@ export function DraftEditor({
                 }
               />
             )}
-            <SaveIndicator state={autosave.state} onRetry={() => void autosave.retry()} />
-            <HistoryMenu
-              draftId={draft.id}
-              disabled={
-                htmlSource !== null
-                  ? t('history.htmlOpen')
-                  : restoring
-                    ? t('history.restoring')
-                    : null
-              }
-              onRestore={(version, label) => void restoreVersion(version, label)}
-            />
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={copyPageHtml}
-              title={t('copyHtmlHint')}
-              aria-label={t('copyHtml')}
-            >
-              <Copy className="h-3.5 w-3.5" />
-              <span className="hidden xl:inline">{t('copyHtml')}</span>
-            </Button>
-            {quality ? (
+            {/* The agent at work on this page: a click opens the basket, with its steps and Stop. */}
+            {/* Fix open rules or the brief at work: the basket shows their steps and Stop. */}
+            {qualityOn && agentWorking && (
+              <HeaderTip label={t('header.running', { count: 1 })} hint={t('header.runningHint')}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setNextFocus(true);
+                    setNextOpen(true);
+                  }}
+                  aria-label={t('header.running', { count: 1 })}
+                  className="inline-flex h-7 shrink-0 items-center gap-1.5 rounded-full border px-2 text-xs font-medium text-muted-foreground hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none"
+                >
+                  <span
+                    aria-hidden
+                    className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-500 motion-reduce:animate-none dark:bg-emerald-400"
+                  />
+                  {/* Narrower than 1024px, the dot alone: the count is on hover. */}
+                  <span className="hidden lg:inline">{t('header.running', { count: 1 })}</span>
+                </button>
+              </HeaderTip>
+            )}
+            {/* The month's AI usage, with this page's share (AI usage spec §3.1). */}
+            <AiUsageMeter compact draftId={draft.id} />
+            <HeaderTip label={t('history.button')} hint={historyWaits ?? t('history.hint')}>
+              <HistoryMenu
+                draftId={draft.id}
+                disabled={historyWaits}
+                onRestore={(version, label) => void restoreVersion(version, label)}
+              />
+            </HeaderTip>
+            <HeaderTip label={t('copyHtml')} hint={t('copyHtmlHint')}>
               <Button
                 variant="outline"
-                size="sm"
-                disabled={!editor}
-                title={t('export.hint')}
-                aria-label={t('export.button')}
-                onClick={() => openBeforePublish('export')}
+                size="icon-sm"
+                onClick={copyPageHtml}
+                aria-label={t('copyHtml')}
               >
-                <Download className="h-3.5 w-3.5" />
-                <span className="hidden sm:inline">{t('export.button')}</span>
+                <Copy className="h-3.5 w-3.5" />
               </Button>
+            </HeaderTip>
+            {quality ? (
+              <HeaderTip label={t('export.button')} hint={t('export.hint')}>
+                <Button
+                  variant="outline"
+                  size="icon-sm"
+                  disabled={!editor}
+                  aria-label={t('export.button')}
+                  onClick={() => openBeforePublish('export')}
+                >
+                  <Download className="h-3.5 w-3.5" />
+                </Button>
+              </HeaderTip>
             ) : (
               <ExportMenu disabled={!editor} onExport={(format) => void exportPage(format)} />
             )}
-            <Button
-              size="sm"
-              // A page that can't be saved can't be marked ready; the save state says why.
-              disabled={
-                !canMarkReady ||
-                marking ||
-                autosave.state === 'conflict' ||
-                autosave.state === 'too_large'
-              }
-              onClick={() => (quality ? openBeforePublish('markReady') : void markReady())}
-            >
-              {marking ? <LoadingDots /> : !canMarkReady && <Check className="h-3.5 w-3.5" />}
-              {t('markReady')}
-            </Button>
+            {/* The one black button. Marked, it reads Ready (a click moves it back
+                to review); published, Published. Narrower than 1024px, ✓ alone. */}
+            {status === 'ready' || status === 'published' ? (
+              <HeaderTip
+                label={tDraftStatus(status)}
+                hint={status === 'ready' ? t('header.readyHint') : t('header.publishedHint')}
+              >
+                <Button
+                  variant="outline"
+                  size="sm"
+                  // Published stays focusable, so its tip says where to change it.
+                  disabled={status === 'published' || unmarking}
+                  focusableWhenDisabled
+                  aria-label={
+                    status === 'ready' ? t('header.readyLabel') : tDraftStatus('published')
+                  }
+                  onClick={() => void unmarkReady()}
+                  className="border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 hover:text-emerald-800 disabled:opacity-100 dark:border-emerald-900 dark:bg-emerald-950 dark:text-emerald-300 dark:hover:bg-emerald-900"
+                >
+                  {unmarking ? <LoadingDots /> : <Check className="h-3.5 w-3.5" />}
+                  <span className="hidden lg:inline">{tDraftStatus(status)}</span>
+                </Button>
+              </HeaderTip>
+            ) : (
+              <HeaderTip label={t('markReady')} narrowOnly>
+                <Button
+                  size="sm"
+                  // A page that can't be saved can't be marked ready; the save state says why.
+                  disabled={
+                    marking || autosave.state === 'conflict' || autosave.state === 'too_large'
+                  }
+                  aria-label={t('markReady')}
+                  onClick={() => (quality ? openBeforePublish('markReady') : void markReady())}
+                >
+                  {marking ? <LoadingDots /> : <Check className="h-3.5 w-3.5 lg:hidden" />}
+                  <span className="hidden lg:inline">{t('markReady')}</span>
+                </Button>
+              </HeaderTip>
+            )}
             <Button
               variant="ghost"
               size="icon-sm"
@@ -1968,6 +2121,9 @@ export function DraftEditor({
 
       <div className="flex min-h-0 flex-1">
         <div className="flex min-w-0 flex-1 flex-col">
+          {/* From 80% of the month's AI usage, as on the other pages, as a strip
+              like the agent's own notices. */}
+          <AiUsageBanner className="rounded-none border-x-0 border-t-0 px-4 py-1.5 text-[13px]" />
           {agentFailed && canMarkReady && (
             <div
               role="alert"
@@ -1982,7 +2138,9 @@ export function DraftEditor({
                   variant="outline"
                   size="sm"
                   className="h-7"
-                  disabled={agentBusy || !editor || (failedRewrite && !citedRead)}
+                  // Used up, as the red strip above says: it would only fail again.
+                  disabled={!!aiUsedUp || agentBusy || !editor || (failedRewrite && !citedRead)}
+                  title={aiUsedUp ?? undefined}
                   onClick={() => void (failedRewrite ? rewritePage() : startAgent())}
                 >
                   {(starting || rewriting) && <WorkingDots className="ml-0" />}
@@ -2155,7 +2313,9 @@ export function DraftEditor({
               setTabRequest((prev) => (prev?.build ? { tab: prev.tab, n: prev.n } : prev))
             }
             onBriefRebuilding={onBriefRebuilding}
-            briefBlocked={agentBusy && !briefRebuilding ? t('suggestions.agentBusy') : null}
+            briefBlocked={
+              briefRebuilding ? null : (aiUsedUp ?? (agentBusy ? t('suggestions.agentBusy') : null))
+            }
             quality={quality}
             qualityScore={qualityScore}
             onShowInPage={showInPage}
@@ -2287,9 +2447,21 @@ function SaveIndicator({ state, onRetry }: { state: SaveState; onRetry: () => vo
       </span>
     );
   }
+  // Narrower than 1024px, a dot: the words stay for screen readers and on hover.
   return (
-    <span className="text-xs text-muted-foreground" role="status">
-      {t(state)}
+    <span
+      className="flex items-center gap-1.5 text-xs text-muted-foreground"
+      role="status"
+      title={t(state)}
+    >
+      <span
+        aria-hidden
+        className={cn(
+          'h-1.5 w-1.5 rounded-full lg:hidden',
+          state === 'saved' ? 'bg-emerald-500 dark:bg-emerald-400' : 'bg-muted-foreground',
+        )}
+      />
+      <span className="sr-only lg:not-sr-only">{t(state)}</span>
     </span>
   );
 }

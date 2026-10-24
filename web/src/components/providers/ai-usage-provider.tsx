@@ -104,7 +104,11 @@ export function AiUsageProvider({ children }: { children: ReactNode }) {
     } catch {
       // As above.
     }
-    toast.warning(t('warning', { percent: percentLabel(usage.percentUsed ?? 0) }));
+    toast.warning(
+      t(usage.trial ? 'warningTrial' : 'warning', {
+        percent: percentLabel(usage.percentUsed ?? 0),
+      }),
+    );
   }, [usage, t]);
 
   const refresh = useCallback(() => void read(), [read]);

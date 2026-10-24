@@ -8,6 +8,7 @@ import { buttonVariants } from '@/components/ui/button-variants';
 import { useUserRole } from '@/hooks/use-user-role';
 import { aiUsageTone, percentLabel } from '@/lib/billing/ai-usage';
 import { formatMonthDay } from '@/lib/format';
+import { cn } from '@/lib/utils';
 import { AiUsageGetMore } from './ai-usage-get-more';
 
 /**
@@ -16,7 +17,7 @@ import { AiUsageGetMore } from './ai-usage-get-more';
  * saying until when AI features stop, with where to get more (other members
  * are told to ask an admin). Nothing below 80%.
  */
-export function AiUsageBanner() {
+export function AiUsageBanner({ className }: { className?: string }) {
   const t = useTranslations('aiUsage');
   const { usage } = useAiUsage();
   const { canAdmin } = useUserRole();
@@ -27,10 +28,17 @@ export function AiUsageBanner() {
 
   if (tone === 'warning') {
     return (
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm dark:border-amber-900/50 dark:bg-amber-950/30">
+      <div
+        className={cn(
+          'flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm dark:border-amber-900/50 dark:bg-amber-950/30',
+          className,
+        )}
+      >
         <AlertTriangle className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-500" />
         <p className="min-w-0 flex-1 text-amber-900 dark:text-amber-200">
-          {t('banner.warning', { percent: percentLabel(usage.percentUsed ?? 0) })}
+          {t(usage.trial ? 'banner.warningTrial' : 'banner.warning', {
+            percent: percentLabel(usage.percentUsed ?? 0),
+          })}
         </p>
         <Link
           href="/dashboard/settings/billing#ai-usage"
@@ -44,15 +52,24 @@ export function AiUsageBanner() {
 
   if (tone !== 'exhausted') return null;
   return (
-    <div className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm dark:border-red-900/50 dark:bg-red-950/30">
+    <div
+      className={cn(
+        'flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm dark:border-red-900/50 dark:bg-red-950/30',
+        className,
+      )}
+    >
       <AlertCircle className="h-4 w-4 shrink-0 text-red-600 dark:text-red-500" />
       <p className="min-w-0 flex-1 text-red-900 dark:text-red-200">
-        {resets ? t('banner.exhausted', { date: resets }) : t('banner.exhaustedNoDate')}
+        {usage.trial
+          ? t('banner.exhaustedTrial')
+          : resets
+            ? t('banner.exhausted', { date: resets })
+            : t('banner.exhaustedNoDate')}
         {!canAdmin && <> {t('askAdmin')}</>}
       </p>
       {canAdmin && (
         <div className="flex flex-wrap gap-1.5">
-          <AiUsageGetMore plan={usage.plan} primary />
+          <AiUsageGetMore plan={usage.plan} trial={usage.trial} primary />
         </div>
       )}
     </div>

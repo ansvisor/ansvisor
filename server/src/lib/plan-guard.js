@@ -535,6 +535,42 @@ export async function getAiUsage(orgId) {
 }
 
 /**
+ * A Content Editor page's AI usage this period, for the editor meter's "This
+ * page so far" (AI usage spec §3.1): what the page's AI calls cost (the rows
+ * its brief, Content Agent and writer charged, prompt_improve_usage.
+ * content_draft_id, holds included), as a share of the workspace's budget,
+ * in percent to a tenth, read over the same period as getAiUsage so the page
+ * is a part of the month's figure: spend past the budget is scaled to fit,
+ * as its features are, and a page that used any reads at least 0.1. Only
+ * the organization's own rows count: another workspace's page reads 0.
+ * Unlimited plans (self-hosted) show none.
+ */
+export async function getDraftAiUsage(orgId, draftId) {
+  const plan = await resolveOrgPlanByOrgId(orgId);
+  const budget = plan.limits.improveMonthlyBudgetUsd ?? -1;
+  if (budget === -1) return { unlimited: true, percent: null };
+
+  const since = (await quotaPeriodStart(orgId)).toISOString();
+  const [page, total] = await Promise.all([
+    supabaseAdmin
+      .from('prompt_improve_usage')
+      .select('cost_usd')
+      .eq('organization_id', orgId)
+      .eq('content_draft_id', draftId)
+      .gte('used_at', since),
+    supabaseAdmin.rpc('ai_usage_by_feature', { p_organization_id: orgId, p_since: since }),
+  ]);
+  if (page.error) throw new Error(page.error.message);
+  if (total.error) throw new Error(total.error.message);
+  const sum = (rows) => (rows ?? []).reduce((usd, r) => usd + (Number(r.cost_usd) || 0), 0);
+  const spent = sum(page.data);
+  if (budget <= 0 || spent <= 0) return { unlimited: false, percent: 0 };
+  const spentAll = sum(total.data);
+  const scale = spentAll > budget ? budget / spentAll : 1;
+  return { unlimited: false, percent: Math.max(0.1, tenths((spent * scale * 100) / budget)) };
+}
+
+/**
  * Suggestion-relevance allowance (VIS-011): a monthly USD budget per
  * organization, 0.1% of the plan price (plan.limits.relevanceMonthlyBudgetUsd),
  * separate from Improve's. Reserves a refresh's worst case (`costUsd`)

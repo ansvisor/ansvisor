@@ -110,6 +110,30 @@ describe('AiUsageBanner', () => {
     ]);
   });
 
+  it('says in the free trial that starting the plan gives more, also when used up', async () => {
+    state.usage = usage({ trial: true });
+    await render();
+    expect(container.textContent).toContain(
+      "You've used 84% of the free trial's AI usage. Starting the plan gives its full monthly allowance.",
+    );
+
+    state.usage = usage({ trial: true, percentUsed: 100 });
+    await render();
+    expect(container.textContent).toContain(
+      "You've used the free trial's AI usage. Starting the plan gives its full monthly allowance;",
+    );
+    expect(links()).toEqual([
+      ['Start your plan', '/dashboard/settings/billing'],
+      ['Use your own key', '/dashboard/settings/ai-providers'],
+    ]);
+    expect(container.textContent).not.toContain('Get more AI usage');
+
+    // A member who isn't an admin can't start it: asked to ask one, no links.
+    await render('analyst');
+    expect(container.textContent).toContain('ask an admin of your workspace');
+    expect(links()).toEqual([]);
+  });
+
   it('leaves Get more out on Enterprise, and tells other members to ask an admin', async () => {
     state.usage = usage({ plan: 'enterprise', planName: 'Enterprise', percentUsed: 100 });
     await render();
