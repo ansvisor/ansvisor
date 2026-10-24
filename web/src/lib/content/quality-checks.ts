@@ -147,8 +147,15 @@ export function eeat({
   author,
   used = null,
   visual = null,
+  how = null,
 }: {
   author: ContentAuthor | null;
+  /**
+   * Phase 2 (CE-050): whether the page says how it was made (tested,
+   * picked, researched, by whom), as the page read finds it; null where it
+   * doesn't apply or isn't read.
+   */
+  how?: { found: boolean } | null;
   /**
    * Phase 2 (CE-049): the page's images, how many of them the person
    * confirmed are their own (not stock), and the visual proof spots still
@@ -185,6 +192,15 @@ export function eeat({
             id: 'visualProof' as const,
             points: visual.own > 0 ? EEAT_WEIGHTS.visualProof : 0,
             max: EEAT_WEIGHTS.visualProof,
+          },
+        ]
+      : []),
+    ...(how
+      ? [
+          {
+            id: 'whoHowWhy' as const,
+            points: how.found ? EEAT_WEIGHTS.whoHowWhy : 0,
+            max: EEAT_WEIGHTS.whoHowWhy,
           },
         ]
       : []),
@@ -379,6 +395,11 @@ export interface SourceRead {
  * claim (an award, a certification, its own test) is sourced by a link in
  * its block to the brand's own site too: its award or trust page is the
  * proof. The block's other sentences aren't.
+ *
+ * With `page` (Phase 2, CE-050), the page read's balance (the brand's own
+ * limits, or where another option wins) and disclosure (where the page puts
+ * the brand forward) count where they apply. Like the brand's facts, they
+ * don't score Trust on their own.
  */
 export function trust({
   blocks,
@@ -390,6 +411,7 @@ export function trust({
   claims = null,
   brandFacts = null,
   proofs = null,
+  page = null,
   now,
 }: {
   /** The page's blocks (trustBlocks). */
@@ -415,6 +437,8 @@ export function trust({
    * read's proofs on the page, CE-049).
    */
   proofs?: readonly { block: string; sentence: string }[] | null;
+  /** Phase 2: the page read's balance and disclosure, each null where it doesn't apply (CE-050). */
+  page?: { balanced: { found: boolean } | null; disclosure: { found: boolean } | null } | null;
   now: number;
 }): TrustRead {
   const all = pageLinks(blocks, brandDomains);
@@ -559,6 +583,12 @@ export function trust({
         brandFacts.compared,
       max: TRUST_WEIGHTS.brandFacts,
     });
+  }
+
+  for (const id of ['balanced', 'disclosure'] as const) {
+    const found = page?.[id];
+    if (found)
+      checks.push({ id, points: found.found ? TRUST_WEIGHTS[id] : 0, max: TRUST_WEIGHTS[id] });
   }
 
   if (quote !== null) {

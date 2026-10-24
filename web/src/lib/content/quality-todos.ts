@@ -29,6 +29,7 @@ export type QualityTodoId =
   | 'experience'
   | 'originalData'
   | 'visualProof'
+  | 'whoHowWhy'
   | 'expertQuote'
   | 'proof'
   | 'reviewer'
@@ -231,6 +232,7 @@ export function qualityTodos({
             action: 'addInput',
           },
           ...visualTodo(eeat, visual),
+          ...howTodo(eeat),
           {
             id: 'expertQuote',
             done: used.quote,
@@ -266,6 +268,26 @@ function shortHash(text: string): string {
  */
 export const proofKey = (ask: { claim: string; block: string }) =>
   `proof:${squeeze(ask.claim)}:${shortHash(squeeze(ask.block))}`;
+
+/**
+ * Who / how / why (CE-050): the page says how it was made (how it was
+ * tested, how the picks were chosen, by whom). Only the person knows: Brief
+ * › Your input. Listed where the check counts (the page read's, on pages a
+ * reader trusts more for it).
+ */
+function howTodo(eeat: Score<EeatCheckId>): QualityTodo[] {
+  const check = eeat.checks.find((c) => c.id === 'whoHowWhy');
+  if (!check) return [];
+  return [
+    {
+      id: 'whoHowWhy',
+      done: check.points >= check.max,
+      gain: scoreGain(eeat, ['whoHowWhy']),
+      score: 'eeat',
+      action: 'addInput',
+    },
+  ];
+}
 
 /**
  * Visual proof (CE-049): an image the person took themself. Images on the

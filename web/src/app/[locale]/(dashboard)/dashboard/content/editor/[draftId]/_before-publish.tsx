@@ -122,7 +122,11 @@ export function BeforePublish({
   // The biggest of what would raise Trust: the warning's reason. The claims
   // a proof to-do covers count here too: the warning names them.
   const [fix] = below
-    ? trustSuggestions(tQuality, quality.trust)
+    ? trustSuggestions(tQuality, quality.trust, undefined, {
+        balanced: quality.aiChecks?.balanced ?? null,
+        disclosure: quality.aiChecks?.disclosure ?? null,
+        brand: quality.brandName,
+      })
         .filter((s) => s.gain > 0)
         .sort((a, b) => b.gain - a.gain)
     : [];

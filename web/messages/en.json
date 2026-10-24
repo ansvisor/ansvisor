@@ -4690,6 +4690,12 @@
             "given": "It's in Your input, but the page uses none of its numbers yet",
             "done": "The page uses your data"
           },
+          "whoHowWhy": {
+            "title": "Say how you made this page",
+            "next": "say how you made this page",
+            "detail": "How you tested, picked or researched, and who did it (\"We hiked 120 km with each pack\"): give it in Your input, the agent writes it in as you say it",
+            "done": "The page says how it was made"
+          },
           "expertQuote": {
             "title": "Add an expert's quote",
             "next": "add an expert's quote",
@@ -4812,6 +4818,7 @@
         "reviewBrandFacts": "Review",
         "keep": "Keep",
         "aiCheck": "AI check",
+        "yourBrand": "your brand",
         "addSource": "Add source",
         "addSourceTo": "Add a source to “{claim}”",
         "addProof": "Add proof link",
@@ -4834,8 +4841,8 @@
         "claimNoSource": "No source for this claim. Add a source, or take it out. Content Agent will not make one up.",
         "claimsPaused": "Claims in your own words wait for an AI check: this month's AI usage is used up. They're read again when it renews.",
         "claimsLimited": "Today's AI checks of this page's claims are used up. Paragraphs you change now are checked when you open the page again tomorrow.",
-        "pagePaused": "Claims that need your proof wait for an AI read of the page: this month's AI usage is used up. The page is read again when it renews.",
-        "pageLimited": "Today's AI reads of this page are used up. Changes you make now are read when you open the page again tomorrow.",
+        "pagePaused": "The page's AI checks, and the claims that need your proof, wait for an AI read of the page: this month's AI usage is used up. The AI checks are left out of the scores until it renews.",
+        "pageLimited": "Today's AI reads of this page are used up: the page's AI checks are left out of the scores. Changes you make now are read when you open the page again tomorrow.",
         "aiPaused": "Sources the rules can't place wait for an AI check: this month's AI usage is used up. They count again when it renews.",
         "keepFailed": "Couldn't keep the source. Try again.",
         "keepFull": "This page keeps 50 sources already: replace one instead.",
@@ -4873,6 +4880,14 @@
           "brandFacts": {
             "line": "{kind, select, price {Price} trial {Trial length} founded {Founding year} other {A fact}} differs from brand facts · Page {page} · {source, select, pricing {pricing page} about {About page} product {product page} other {your site}} {fact}",
             "detail": "{count, plural, one {Match the page to the fact you approved, or check it in Brand settings} other {# facts differ: match the page to the facts you approved, or check them in Brand settings}}"
+          },
+          "disclosure": {
+            "line": "The page recommends {brand} without saying {brand} makes it",
+            "detail": "Add a line, under the H1 or beside the recommendation, saying {brand} makes what the page recommends: readers and AI engines trust a page that says so."
+          },
+          "balanced": {
+            "line": "Add an honest weakness",
+            "detail": "Say where your product falls short, or where another option is the better pick: a page that only praises reads as an ad."
           },
           "avgSentence": {
             "line": "Sentences average {words, number} words",

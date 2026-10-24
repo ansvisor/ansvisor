@@ -376,4 +376,18 @@ describe('qualityTodos', () => {
       }),
     ).toMatchObject([{ id: 'proof', done: true }]);
   });
+
+  it('asks how the page was made where the page read counts it (CE-050)', () => {
+    const how = (found: boolean | null) =>
+      qualityTodos({
+        eeat: eeat({ author: author(), how: found === null ? null : { found } }),
+        author: author(),
+        hasAuthors: true,
+        used: { experience: false, data: false, quote: false },
+      }).find((t) => t.id === 'whoHowWhy');
+    expect(how(false)).toMatchObject({ done: false, action: 'addInput', score: 'eeat' });
+    expect(how(false)!.gain).toBeGreaterThan(0);
+    expect(how(true)).toMatchObject({ done: true, gain: 0 });
+    expect(how(null)).toBeUndefined();
+  });
 });

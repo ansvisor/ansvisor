@@ -18,6 +18,7 @@ import {
   type TrustRead,
 } from '@/lib/content/quality-checks';
 import type { QualityTodo } from '@/lib/content/quality-todos';
+import type { AiCheck } from '@/lib/content/page-read';
 import {
   readabilityGain,
   SECTION_WORDS,
@@ -61,11 +62,16 @@ export interface QualityRead {
   brandFactsPath?: string | null;
   /** The brand's business type: a proof to-do's wording follows it (CE-049). */
   siteType?: 'b2b' | 'ecommerce' | 'b2c';
-  /** The page read for proof waits: the AI budget is spent, or its reads for the day made (CE-049). */
+  /** The page read (proof, CE-049; AI checks, CE-050) waits: the AI budget is spent, or its reads for the day made. */
   pagePaused?: boolean;
   pageLimited?: boolean;
-  /** The page read for proof is under way: its to-dos may change. */
+  /** The page read is under way: its to-dos and AI checks may change. */
   pageReading?: boolean;
+  /** The page read's AI checks, where they apply (aiChecksOnPage, CE-050). */
+  aiChecks?: {
+    balanced: AiCheck | null;
+    disclosure: AiCheck | null;
+  } | null;
 }
 
 type ScoreName = 'eeat' | 'trust' | 'readability';
@@ -143,7 +149,11 @@ export function QualityTab({
   const todosLeft = todos.filter((todo) => !todo.done).length;
   const suggestions = [
     ...readabilitySuggestions(t, readability),
-    ...trustSuggestions(t, trust, proofSentences(todos)),
+    ...trustSuggestions(t, trust, proofSentences(todos), {
+      balanced: quality.aiChecks?.balanced ?? null,
+      disclosure: quality.aiChecks?.disclosure ?? null,
+      brand: quality.brandName,
+    }),
   ]
     .filter((s) => s.gain > 0)
     .sort((a, b) => b.gain - a.gain);
@@ -410,6 +420,14 @@ export function useTodoCopy() {
             : t('visualProof.detail.add'),
       };
     }
+    // How the page was made (CE-050): the page read finds it or not.
+    if (todo.id === 'whoHowWhy') {
+      return {
+        title: t('whoHowWhy.title'),
+        next: t('whoHowWhy.next'),
+        detail: todo.done ? t('whoHowWhy.done') : t('whoHowWhy.detail'),
+      };
+    }
     // What only the person can give (Brief › Your input, CE-048).
     if (todo.id === 'experience' || todo.id === 'originalData' || todo.id === 'expertQuote') {
       return {
@@ -609,6 +627,7 @@ function readabilitySuggestions(t: T, readability: Readability | null): Suggesti
       line: line(t, check),
       detail: detail(t, check),
       show: check.at || null,
+      ...(check.ai ? { ai: true } : {}),
     }),
   );
 }
@@ -629,6 +648,12 @@ export function trustSuggestions(
   t: T,
   trust: TrustRead | null,
   covered: ReadonlySet<string> = new Set(),
+  /**
+   * Phase 2 (CE-050): the page read's balance and disclosure, each with the
+   * passage Show goes to (where the page puts the brand forward), and the
+   * brand's name for their lines.
+   */
+  page: { balanced: AiCheck | null; disclosure: AiCheck | null; brand: string } | null = null,
 ): TrustSuggestion[] {
   if (!trust) return [];
   const out: TrustSuggestion[] = [];
@@ -722,6 +747,23 @@ export function trustSuggestions(
       count: 1,
       detail: t('checks.primarySources.detail'),
       show: null,
+    });
+  }
+  // The page read's (CE-050), once Trust is scored, as the sources' kinds.
+  for (const id of ['disclosure', 'balanced'] as const) {
+    const read = page?.[id];
+    if (!read || read.found || trust.score === null) continue;
+    out.push({
+      key: `trust:${id}`,
+      check: id,
+      score: 'trust',
+      gain: trustGain(trust, [id]),
+      // Before the brand's name is read: "your brand".
+      line: t(`checks.${id}.line`, { brand: page!.brand || t('yourBrand') }),
+      count: 1,
+      detail: t(`checks.${id}.detail`, { brand: page!.brand || t('yourBrand') }),
+      show: read.show,
+      ai: true,
     });
   }
   if (trust.broken.length) {

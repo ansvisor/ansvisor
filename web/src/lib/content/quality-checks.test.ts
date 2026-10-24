@@ -645,3 +645,38 @@ describe('trust: the proof of the brand’s own claims (Phase 2, CE-049)', () =>
     expect(sentenceGain(null, sentence)).toBe(0);
   });
 });
+
+describe('the page read’s AI checks (Phase 2, CE-050)', () => {
+  const NOW = Date.parse('2026-10-25T12:00:00Z');
+  it('counts who / how / why in E-E-A-T where it applies', () => {
+    expect(eeat({ author: null, how: { found: true } }).checks).toContainEqual({
+      id: 'whoHowWhy',
+      points: 10,
+      max: 10,
+    });
+    expect(eeat({ author: null, how: { found: false } }).checks).toContainEqual({
+      id: 'whoHowWhy',
+      points: 0,
+      max: 10,
+    });
+    expect(eeat({ author: null }).checks.map((c) => c.id)).not.toContain('whoHowWhy');
+  });
+
+  it('counts balance and disclosure in Trust where they apply, and scores no Trust from them alone', () => {
+    const read = (
+      page: Parameters<typeof trust>[0]['page'],
+      html = '<p>Pro saves 40% of the time (<a href="https://research.example/study">study</a>).</p>',
+    ) => trust({ blocks: trustBlocks(html), links: new Map(), brandDomains: [], page, now: NOW });
+    const both = read({ balanced: { found: false }, disclosure: { found: true } });
+    expect(both.checks.filter((c) => c.id === 'balanced' || c.id === 'disclosure')).toEqual([
+      { id: 'balanced', points: 0, max: 7 },
+      { id: 'disclosure', points: 5, max: 5 },
+    ]);
+    expect(read({ balanced: null, disclosure: null }).checks.map((c) => c.id)).toEqual([
+      'claimsSourced',
+    ]);
+    expect(
+      read({ balanced: { found: true }, disclosure: null }, '<p>No figure here.</p>').score,
+    ).toBeNull();
+  });
+});

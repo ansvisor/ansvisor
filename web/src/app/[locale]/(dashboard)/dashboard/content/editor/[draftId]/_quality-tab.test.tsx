@@ -525,6 +525,54 @@ describe('QualityTab', () => {
     );
   });
 
+  it('asks a page that puts the brand forward to disclose it and add an honest weakness, AI checks, Show on the pick (CE-050)', async () => {
+    const PICK = 'Our top pick is the Acme Ridge 28.';
+    const result = trust({
+      blocks: trustBlocks(
+        `<p>${PICK}</p><p>Pro saves 40% of the time (<a href="https://research.example/s">study</a>).</p>`,
+      ),
+      links: new Map(),
+      brandDomains: ['acme.com'],
+      page: { balanced: { found: false }, disclosure: { found: false } },
+      now: Date.parse('2026-10-25T12:00:00Z'),
+    });
+    const pick = { found: false, show: 'Our top pick is the Acme Ridge 28' };
+    await render({
+      ...read(null),
+      brandName: 'Acme',
+      trust: result,
+      aiChecks: { balanced: pick, disclosure: pick },
+    });
+    const rows = [...container.querySelectorAll('li')];
+    const disclosure = rows.find((li) => li.textContent?.includes('without saying Acme makes it'))!;
+    expect(disclosure.textContent).toContain(
+      'The page recommends Acme without saying Acme makes it',
+    );
+    expect(disclosure.textContent).toContain('AI check');
+    await act(async () => disclosure.querySelector('button')!.click());
+    expect(onShow).toHaveBeenCalledWith('Our top pick is the Acme Ridge 28');
+    const balance = rows.find((li) => li.textContent?.includes('Add an honest weakness'))!;
+    expect(balance.textContent).toContain('AI check');
+    // Found: nothing to raise.
+    await render({
+      ...read(null),
+      brandName: 'Acme',
+      trust: result,
+      aiChecks: { balanced: { found: true, show: null }, disclosure: { found: true, show: null } },
+    });
+    expect(container.textContent).not.toContain('Add an honest weakness');
+    // The brand's name not read yet: "your brand".
+    await render({
+      ...read(null),
+      brandName: '',
+      trust: result,
+      aiChecks: { balanced: null, disclosure: pick },
+    });
+    expect(container.textContent).toContain(
+      'The page recommends your brand without saying your brand makes it',
+    );
+  });
+
   it("asks for the proof of the page's own claims by kind and business, with Add proof link (CE-049)", async () => {
     const html =
       '<p>Ledgerly is 40% faster than spreadsheets.</p>' +
@@ -568,7 +616,9 @@ describe('QualityTab', () => {
     // The page's other figure is still the agent's to source: one sentence, its share of the gain.
     const suggestions = container.querySelector('[aria-label="What would raise it"]')!;
     expect(suggestions.textContent).toContain('1 sentence with a figure has no source');
-    expect(container.textContent).toContain("Today's AI reads of this page are used up.");
+    expect(container.textContent).toContain(
+      "Today's AI reads of this page are used up: the page's AI checks are left out of the scores.",
+    );
     await act(async () =>
       container
         .querySelector<HTMLButtonElement>('[aria-label="Add a proof link to “40% faster”"]')!

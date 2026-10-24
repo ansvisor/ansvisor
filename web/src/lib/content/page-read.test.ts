@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { pageImages, proofsOnPage, type ProofAsk } from './page-read';
+import {
+  aiChecksOnPage,
+  pageImages,
+  proofsOnPage,
+  type PageChecks,
+  type ProofAsk,
+} from './page-read';
 import { trustBlocks } from './quality-checks';
 
 /** The page read's proof asks on the page as it is now (Quality spec §4b, CE-049). */
@@ -92,5 +98,67 @@ describe('pageImages', () => {
       { src: 'https://cdn.example/a.png', alt: 'A run' },
       { src: 'https://cdn.example/b.jpg', alt: '' },
     ]);
+  });
+});
+
+describe('aiChecksOnPage (CE-050)', () => {
+  const PICK = 'Our top pick is the Trailmade Ridge 28, ahead of the Osprey Talon.';
+  const HOW = 'We hiked 120 km in the rain with each pack.';
+  const FIRST = 'The best daypack for wet hikes is the Trailmade Ridge 28.';
+  const blocks = trustBlocks(`<h1>Best daypacks</h1><p>${FIRST}</p><p>${PICK}</p><p>${HOW}</p>`);
+  const checks = (over: Partial<PageChecks> = {}): PageChecks => ({
+    answerFirst: { answers: true, block: FIRST },
+    recommends: { quote: 'Our top pick is the Trailmade Ridge 28', block: PICK },
+    disclosure: null,
+    balance: null,
+    how: { quote: 'We hiked 120 km', block: HOW },
+    cut: false,
+    pageType: 'best_of',
+    ...over,
+  });
+
+  it('asks a page that puts the brand forward for its disclosure and its balance, Show on the pick', () => {
+    expect(aiChecksOnPage(blocks, checks(), 'best_of')).toEqual({
+      how: { found: true, show: 'We hiked 120 km' },
+      balanced: { found: false, show: 'Our top pick is the Trailmade Ridge 28' },
+      disclosure: { found: false, show: 'Our top pick is the Trailmade Ridge 28' },
+      answerFirst: { answers: true, block: FIRST },
+    });
+  });
+
+  it('counts each check only where it applies', () => {
+    // A feature page puts nothing forward and says nothing of how it was made.
+    expect(aiChecksOnPage(blocks, checks({ recommends: null }), 'feature_page')).toMatchObject({
+      how: null,
+      balanced: null,
+      disclosure: null,
+    });
+    // A comparison weighs options: its balance counts without the brand put forward.
+    expect(aiChecksOnPage(blocks, checks({ recommends: null }), 'comparison')).toMatchObject({
+      balanced: { found: false, show: null },
+      disclosure: null,
+    });
+  });
+
+  it('counts a find whose block is gone as not found, and leaves one out on a page read in part', () => {
+    const edited = trustBlocks(`<h1>Best daypacks</h1><p>${PICK}</p><p>We tested them.</p>`);
+    expect(aiChecksOnPage(edited, checks(), 'best_of')).toMatchObject({
+      how: { found: false },
+      answerFirst: null,
+    });
+    // Cut: one not found may be in the rest; one found still counts.
+    expect(aiChecksOnPage(edited, checks({ cut: true }), 'best_of')).toMatchObject({
+      how: null,
+      disclosure: null,
+    });
+    expect(aiChecksOnPage(blocks, checks({ cut: true }), 'best_of').how).toEqual({
+      found: true,
+      show: 'We hiked 120 km',
+    });
+    // While the page as it is now is read, a find whose block was edited still counts.
+    expect(aiChecksOnPage(edited, checks(), 'best_of', true).how).toEqual({
+      found: true,
+      show: null,
+    });
   });
 });

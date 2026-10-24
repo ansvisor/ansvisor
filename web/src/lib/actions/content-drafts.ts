@@ -39,7 +39,12 @@ import { sanitizeDraftHtml } from '@/lib/content/sanitize-draft-html';
 import { matchPagePrompts } from '@/lib/content/page-prompts';
 import type { LinkCheck } from '@/lib/content/quality-checks';
 import { CLAIM_KINDS, type ClaimBlock } from '@/lib/content/claims';
-import { PROOF_KINDS, type PageRead } from '@/lib/content/page-read';
+import {
+  PROOF_KINDS,
+  type PageChecks,
+  type PageQuote,
+  type PageRead,
+} from '@/lib/content/page-read';
 import { MAX_SOURCE_SITES, type AiSourceClass } from '@/lib/content/source-class';
 import {
   NO_DRAFT_RULES,
@@ -2335,6 +2340,32 @@ export async function saveMyRuleSet(
   if (error) throw new Error(error.message);
 }
 
+/** The page read's checks as the API gives them (CE-050), each found one with its words; else null. */
+function pageChecksOf(value: unknown): PageChecks | null {
+  if (!value || typeof value !== 'object') return null;
+  const checks = value as Record<string, unknown>;
+  const text = (v: unknown): v is string => typeof v === 'string' && v.length > 0;
+  const quote = (v: unknown): PageQuote | null => {
+    const find = v as Partial<PageQuote> | null;
+    return find && text(find.quote) && text(find.block)
+      ? { quote: find.quote, block: find.block }
+      : null;
+  };
+  const first = checks.answerFirst as { answers?: unknown; block?: unknown } | null;
+  return {
+    answerFirst:
+      first && typeof first.answers === 'boolean' && text(first.block)
+        ? { answers: first.answers, block: first.block }
+        : null,
+    recommends: quote(checks.recommends),
+    disclosure: quote(checks.disclosure),
+    balance: quote(checks.balance),
+    how: quote(checks.how),
+    cut: checks.cut === true,
+    pageType: typeof checks.pageType === 'string' ? checks.pageType : null,
+  };
+}
+
 /**
  * Quality's page read for proof (CE-049): the draft's visual proof spots
  * and proof asks, read by the API from the page as saved, with its page
@@ -2369,7 +2400,8 @@ export async function readDraftPage(
       return { error: body.code === 'off' ? 'off' : 'failed' };
     }
     if (!res.ok) return { error: 'failed' };
-    const body = (await res.json()) as Partial<PageRead> & {
+    const body = (await res.json()) as Partial<Omit<PageRead, 'checks'>> & {
+      checks?: unknown;
       pending?: boolean;
       limited?: boolean;
       paused?: boolean;
@@ -2387,6 +2419,7 @@ export async function readDraftPage(
         body.regulated === 'health' || body.regulated === 'finance' || body.regulated === 'legal'
           ? body.regulated
           : null,
+      checks: pageChecksOf(body.checks),
       pending: body.pending ?? false,
       limited: body.limited ?? false,
       paused: body.paused ?? false,
