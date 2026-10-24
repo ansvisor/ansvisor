@@ -1996,9 +1996,12 @@ export function DraftEditor({
     reads.brief.status !== 'loading' &&
     reads.sources !== null &&
     rules.ready &&
-    // Not the brand's facts: their first read of the site can take a minute,
-    // and their to-do (last, no points) joins when they land.
-    (!qualityOn || (todosRead && siteTrustRead && linksPending === 0));
+    (!qualityOn || (todosRead && siteTrustRead && linksPending === 0)) &&
+    // In phase 2 the brand's facts too (their first read of the site can take
+    // a minute): they move Trust, which a proof skip was made at. Only the
+    // dropping waits; the Next step shows meanwhile, each skip held against
+    // its step's state as it is.
+    factsState.status !== 'loading';
   const staleSkips =
     nextRead && Object.keys(liveSkips(nextState)).length !== Object.keys(skipped).length;
   useEffect(() => {

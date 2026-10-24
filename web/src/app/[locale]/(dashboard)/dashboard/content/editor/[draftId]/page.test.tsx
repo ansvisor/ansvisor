@@ -4065,6 +4065,46 @@ describe('the side panel', () => {
       expect(nextButton()!.getAttribute('aria-label')).not.toBe('Next · Plan the page');
     });
 
+    it('drops a stale skip once the reads are in, in phase 2 the brand facts too', async () => {
+      const skips = () => JSON.parse(localStorage.getItem('aeo:next-step-skips:d1')!);
+      getContentAuthors.mockResolvedValue({
+        authors: [],
+        brands: [{ id: 'b1', name: 'Acme' }],
+        me: { id: 'u1', role: 'admin' },
+      });
+      getContentDraft.mockResolvedValue(draft({ method: 'create' }));
+      try {
+        // Phase 1 reads no brand facts: nothing to wait for.
+        process.env.NEXT_PUBLIC_CONTENT_QUALITY_PHASE = '1';
+        localStorage.setItem('aeo:next-step-skips:d1', JSON.stringify({ plan: 'true' }));
+        await renderPage();
+        expect(skips()).toEqual({});
+
+        // Phase 2: they move Trust, which a proof skip was made at.
+        process.env.NEXT_PUBLIC_CONTENT_QUALITY_PHASE = '2';
+        localStorage.setItem('aeo:next-step-skips:d1', JSON.stringify({ plan: 'true' }));
+        let factsIn!: (read: unknown) => void;
+        getBrandFacts.mockReturnValue(new Promise((resolve) => (factsIn = resolve)));
+        await act(async () => root.unmount());
+        root = createRoot(container);
+        await renderPage();
+        expect(skips()).toEqual({ plan: 'true' });
+        await act(async () =>
+          factsIn({
+            facts: [],
+            pages: [],
+            checkedAt: null,
+            recheckAt: null,
+            paused: false,
+            noDomain: false,
+          }),
+        );
+        expect(skips()).toEqual({});
+      } finally {
+        delete process.env.NEXT_PUBLIC_CONTENT_QUALITY_PHASE;
+      }
+    });
+
     it("stays open on Skip, and leaves an empty page to the person once they'll write it", async () => {
       getContentDraft.mockResolvedValue(
         draft({ method: 'create', bodyHtml: '<h1>Pipeline forecasting</h1><p></p>' }),
