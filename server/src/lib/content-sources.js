@@ -53,9 +53,16 @@ export function normalizeQuery(query) {
 /**
  * The sources numbered: [{ id: 'S1', kind, ref, label, detail }], refs as the
  * Sources tab keys its rows (a prompt's id, a normalized query, a page's
- * address), so the editor finds each one there.
+ * address), so the editor finds each one there. Brief › Your input comes
+ * last, as inputSources (content-inputs.js) lists it (CE-048).
  */
-export function numberSources({ prompts = [], fanouts = [], pages = [], queries = [] }) {
+export function numberSources({
+  prompts = [],
+  fanouts = [],
+  pages = [],
+  queries = [],
+  inputs = [],
+}) {
   const list = [
     ...prompts.map((p) => ({ kind: 'prompt', ref: p.id, label: p.text })),
     ...fanouts.map((f) => ({
@@ -66,6 +73,7 @@ export function numberSources({ prompts = [], fanouts = [], pages = [], queries 
     })),
     ...pages.map((p) => ({ kind: 'cited_page', ref: p.url, label: p.url, detail: p.kind })),
     ...queries.map((q) => ({ kind: 'gsc_query', ref: normalizeQuery(q), label: q })),
+    ...inputs,
   ].filter((s) => s.ref && s.label);
   return list.map((s, i) => ({ id: `S${i + 1}`, ...s }));
 }
@@ -75,16 +83,21 @@ const KIND_NAMES = {
   fanout: 'Fan-out (a search AI ran while answering)',
   cited_page: 'Cited page (AI answers cite it today; answer better, never copy)',
   gsc_query: 'Search Console query (a Google search people use)',
+  input: "Your input (the person's own, given for this page)",
 };
+
+/** What the agent does with Brief › Your input, when the list has any (CE-048). */
+export const INPUT_RULE = `- Your input is the person's own: write their experience as first-hand ("we tested…") and add nothing to it; quote an expert word for word, with their name and title; cite Ansvisor data as its line says. Never invent people, quotes, customer stories, test results or numbers beyond what you were given: where one is missing, write a placeholder in square brackets.`;
 
 /** The numbered list as the model reads it, or '' with none. */
 export function sourcesPrompt(numbered) {
   if (!numbered.length) return '';
   const lines = numbered.map(
     (s) =>
-      `${s.id} ${KIND_NAMES[s.kind]}: ${s.kind === 'cited_page' ? s.label : `"${s.label}"`}${s.detail ? ` (${s.detail})` : ''}`,
+      `${s.id} ${KIND_NAMES[s.kind]}: ${s.kind === 'cited_page' ? s.label : `"${s.label}"`}${s.detail ? ` (${s.detail})` : ''}${s.note ? ` — ${s.note}` : ''}`,
   );
-  return `Your data, numbered (cite by number):\n${lines.join('\n')}`;
+  const rule = numbered.some((s) => s.kind === 'input') ? `\n${INPUT_RULE}` : '';
+  return `Your data, numbered (cite by number):\n${lines.join('\n')}${rule}`;
 }
 
 /** A source number written into the words in brackets ("(S2)", "[S1, S3]"): never the page's. */
@@ -121,8 +134,12 @@ function unitOf(text, start, end) {
 /** A placeholder the agent leaves ("[figure, source, 2025]"): it holds no claim. */
 const BRACKETS = /\[[^\]]*\]/g;
 
-/** A number's value as compared: thousands separators dropped ("1,299" is 1299). */
-const valueOf = (token) => token.replace(/[.,](?=\d{3}(?!\d))/g, '');
+/**
+ * A number's value as compared: thousands separators dropped ("1,299" and
+ * "1.299" are 1299), then a decimal comma read as a point ("3,4" is 3.4,
+ * "1.250,5" is 1250.5), as Turkish, German, French and others write it.
+ */
+const valueOf = (token) => token.replace(/[.,](?=\d{3}(?!\d))/g, '').replace(',', '.');
 
 /** The numbers a text holds, each with where it is and its unit ('' for none). */
 export function numbersIn(text) {
@@ -155,7 +172,11 @@ export function todayText(now = new Date()) {
   return `${now.getUTCFullYear()}`;
 }
 
-/** A source's words its numbers are read from: a cited page's address is none ("/2024/03/15/post-1234"). */
+/**
+ * A source's words its numbers are read from: a cited page's address is
+ * none ("/2024/03/15/post-1234"), nor what only places a source, its note
+ * (a quote's address, the days Ansvisor data covers: content-inputs.js).
+ */
 export function sourceWords(source) {
   return source.kind === 'cited_page' ? '' : `${source.label} ${source.detail ?? ''}`;
 }
@@ -265,13 +286,23 @@ export function sourceSuggestion({ named, marks, pieces, numbered, known }) {
     if (at !== -1) kept.push({ start: at, end: at + words.length, source });
   }
 
-  // Each number it adds: the page's own, or one of its sources' words'.
+  // Each number it adds: the page's own, or one of its sources' words' —
+  // the ones it named or marked first, so a number two sources have goes
+  // to the one it used, then the rest in their order.
   const own = numbered.map((s) => knownNumbers(sourceWords(s)));
+  const used = new Set(sources.map((s) => `${s.kind}:${s.ref}`));
+  const order = numbered
+    .map((_, i) => i)
+    .sort(
+      (a, b) =>
+        Number(!used.has(`${numbered[a].kind}:${numbered[a].ref}`)) -
+        Number(!used.has(`${numbered[b].kind}:${numbered[b].ref}`)),
+    );
   for (const piece of pieces) {
     for (const n of addedNumbers(piece.text, known)) {
       const start = piece.start + n.start;
       const end = piece.start + n.end;
-      const from = numbered.findIndex((_, i) => own[i].has(n.unit ? unitKey(n) : n.value));
+      const from = order.find((i) => own[i].has(n.unit ? unitKey(n) : n.value)) ?? -1;
       if (from === -1) return null;
       const source = indexOf(numbered[from]);
       if (source === -1) return null;

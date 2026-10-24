@@ -3859,7 +3859,8 @@
           "prompt": "Prompt",
           "fanout": "Fan-out",
           "cited_page": "Cited page",
-          "gsc_query": "Search Console"
+          "gsc_query": "Search Console",
+          "input": "Your input"
         },
         "sourceMark": "Source {n}: {label}",
         "acceptedToast": "{count, plural, one {Accepted} other {# changes accepted}} · undo any time",
