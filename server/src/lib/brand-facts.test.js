@@ -57,8 +57,10 @@ const NOW = Date.parse('2026-10-24T12:00:00Z');
 /** The tables read, as rows; each write, as it was asked. */
 function fakeDb(tables) {
   const writes = [];
+  const reads = [];
   const db = {
     from: (table) => {
+      reads.push(table);
       const q = { op: 'select', filters: [], payload: null, options: null };
       const done = () => {
         if (q.op === 'select') return { data: tables[table] ?? [], error: null };
@@ -93,13 +95,22 @@ function fakeDb(tables) {
           }
           return { data: tables[table], error: null };
         },
-        maybeSingle: async () => ({ data: tables[table] ?? null, error: null }),
+        maybeSingle: async () => {
+          if (q.op === 'update') {
+            done();
+            return {
+              data: tables[table] === null ? null : { id: 'f1', ...q.payload },
+              error: null,
+            };
+          }
+          return { data: tables[table] ?? null, error: null };
+        },
         then: (resolve, reject) => Promise.resolve(done()).then(resolve, reject),
       };
       return chain;
     },
   };
-  return { db, writes };
+  return { db, writes, reads };
 }
 
 const PRICING = `<html><head><title>Pricing · Ledgerly</title></head><body>
@@ -157,7 +168,21 @@ describe('reading a fact from its words', () => {
     expect(parsePrice('$0', ' Pro $49/month').period).toBeNull();
     // A scale, or no price.
     expect(parsePrice('$5M ARR')).toBeNull();
+    expect(parsePrice('$2 Million')).toBeNull();
     expect(parsePrice('49 teams')).toBeNull();
+  });
+
+  it('stores no wrong value: two prices, a saving, a discount, a dollar named by its code, a feature list', () => {
+    expect(parsePrice('$490/yr ($49/mo)')).toBeNull();
+    expect(parsePrice('$59 $49 /month')).toBeNull();
+    expect(parsePrice('Save $120 a year')).toBeNull();
+    expect(parsePrice('$10', ' off per month')).toBeNull();
+    expect(parsePrice('was $59')).toBeNull();
+    expect(parsePrice('$49 CAD per month')).toMatchObject({ currency: 'CAD', period: 'month' });
+    expect(parsePrice('$29 AUD/mo')).toMatchObject({ currency: 'AUD', period: 'month' });
+    // Its period is in the words right after it, not further on.
+    expect(parsePrice('$299', ' Lifetime access Includes monthly updates').period).toBe('once');
+    expect(parsePrice('$299', ' Includes all integrations and monthly updates').period).toBeNull();
   });
 
   it('reads a trial in days or weeks, and a founding year only beside its word', () => {
@@ -165,6 +190,10 @@ describe('reading a fact from its words', () => {
     expect(parseTrial('Try it free for 2 weeks')).toBe(14);
     expect(parseTrial('30 gün ücretsiz deneme')).toBe(30);
     expect(parseTrial('free forever')).toBeNull();
+    // A trial word, and days that start a number.
+    expect(parseTrial('30-day money-back guarantee')).toBeNull();
+    expect(parseTrial('a free trial over 2014 days')).toBeNull();
+    expect(parseFounded('Get started in 2026')).toBeNull();
     expect(parseFounded('Founded in 2015')).toBe(2015);
     expect(parseFounded('2015 yılında kuruldu')).toBe(2015);
     expect(parseFounded('In 2015 we shipped')).toBeNull();
@@ -182,6 +211,16 @@ describe('factText', () => {
     expect(factTextHash(text)).toMatch(/^[0-9a-f]{16}$/);
     expect(factTextHash(text)).toBe(factTextHash(factText(PRICING)));
     expect(factTextHash(`${text}!`)).not.toBe(factTextHash(text));
+    // A struck-through old price isn't the page's.
+    expect(factText('<p>Pro <del>$59</del> $49 per month</p>')).toBe('Pro $49 per month');
+  });
+
+  it('reads a page of many thousand blocks in one walk, fast', () => {
+    const html = `<body>${'<div>Plan</div>'.repeat(100_000)}</body>`;
+    const started = Date.now();
+    const text = factText(html);
+    expect(Date.now() - started).toBeLessThan(3_000);
+    expect(text.length).toBeLessThanOrEqual(24_000);
   });
 });
 
@@ -224,6 +263,32 @@ describe('keptFacts', () => {
     expect(
       keptFacts(text, { facts: [{ kind: 'price', quote: '$19', plan: 'STARTER' }] })[0].value.plan,
     ).toBe('Starter');
+  });
+
+  it('reads a quote where it doesn’t run into a number, near its plan, and a Turkish plan as written', () => {
+    const page = 'Basic\n$499 per year\nPro\n$49 per month\nEnterprise\n$1,299 per month';
+    expect(
+      keptFacts(page, { facts: [{ kind: 'price', quote: '$49 per month', plan: 'Pro' }] })[0],
+    ).toMatchObject({
+      slot: 'price|pro|USD|month||',
+      value_key: '49.00',
+    });
+    // "$1,2" isn't a price the page gives.
+    expect(
+      keptFacts(page, { facts: [{ kind: 'price', quote: '$1,2', plan: 'Enterprise' }] }),
+    ).toEqual([]);
+    const tr = 'İletişim\nİşletme ₺499/ay\nProfesyonel ₺999/ay';
+    expect(
+      keptFacts(tr, {
+        facts: [
+          { kind: 'price', quote: '₺499/ay', plan: 'İşletme' },
+          { kind: 'price', quote: '₺999/ay', plan: 'Profesyonel' },
+        ],
+      }).map((f) => [f.value.plan, f.slot]),
+    ).toEqual([
+      ['İşletme', `price|${'İşletme'.toLowerCase()}|TRY|month||`],
+      ['Profesyonel', 'price|profesyonel|TRY|month||'],
+    ]);
   });
 
   it('finds words copied with straight marks, and keeps each fact once', () => {
@@ -274,6 +339,35 @@ describe('findFactPages', () => {
       // /product lands on the home page: not a product page.
       ['product', 'ok', 'https://ledgerly.example/features'],
     ]);
+  });
+
+  it('falls back to the usual addresses when a listed page is gone, and never reads the home page as one', async () => {
+    const { db } = fakeDb({
+      site_pages: [
+        {
+          url: 'https://ledgerly.example/old-pricing',
+          title: 'Pricing · Ledgerly',
+          fetch_status: 200,
+        },
+      ],
+      site_trust: null,
+    });
+    const HOME = '<title>Ledgerly — plan your cash</title><h1>Plan your cash</h1>';
+    const fetcher = vi.fn(async (url) => {
+      if (url.endsWith('/old-pricing'))
+        throw new PageFetchError('http_error', '404', { status: 404 });
+      if (url.endsWith('/plans')) return { url, html: PRICING };
+      // A site that answers every other address with its home page.
+      return { url, html: HOME };
+    });
+    const pages = await findFactPages(brand, { db, fetcher });
+    expect(pages.map((p) => [p.kind, p.status, p.url])).toEqual([
+      ['pricing', 'ok', 'https://ledgerly.example/plans'],
+      ['about', 'not_found', null],
+      ['product', 'not_found', null],
+    ]);
+    // /pricing answered with the home page: not read as the pricing page.
+    expect(fetcher.mock.calls.map(([url]) => url)).toContain('https://ledgerly.example/pricing');
   });
 
   it('reads nothing off the brand’s site, says a bot wall, and skips a shop’s product page', async () => {
@@ -491,6 +585,114 @@ describe('refreshBrandFacts', () => {
     expect(generateObject).toHaveBeenCalledTimes(2);
   });
 
+  it('keeps a fact the model passed over while a page has it, across a card’s lines or on another page', async () => {
+    const product =
+      '<title>Product · Ledgerly</title><h1>Product</h1><p>Start with a 14-day free trial.</p>' +
+      `<p>${'Forecast every account in one place, every week of the year. '.repeat(4)}</p>`;
+    const { db, writes } = fakeDb(
+      base({
+        site_pages: [
+          {
+            url: 'https://ledgerly.example/pricing',
+            title: 'Pricing · Ledgerly',
+            fetch_status: 200,
+          },
+          {
+            url: 'https://ledgerly.example/product',
+            title: 'Product · Ledgerly',
+            fetch_status: 200,
+          },
+        ],
+        brand_facts: [
+          // "$19" and "per month" are a card's two lines.
+          {
+            id: 'starter',
+            kind: 'price',
+            slot: 'price|starter|USD|month||',
+            value: { plan: 'Starter' },
+            value_key: '19.00',
+            quote: '$19 per month',
+            status: 'approved',
+            source_kind: 'pricing',
+          },
+          // Read from the pricing page, which says it no more; the product page does.
+          {
+            id: 'trial',
+            kind: 'trial',
+            slot: 'trial',
+            value: { days: 14 },
+            value_key: '14',
+            quote: 'Start with a 14-day free trial',
+            status: 'approved',
+            source_kind: 'pricing',
+          },
+        ],
+      }),
+    );
+    const fetch2 = vi.fn(async (url) => {
+      if (url.endsWith('/pricing')) return { url, html: PRICING };
+      if (url.endsWith('/product')) return { url, html: product };
+      throw new PageFetchError('http_error', '404', { status: 404 });
+    });
+    generateObject.mockResolvedValue(answerFor([]));
+    await refreshBrandFacts('b1', { orgId: 'o1', now: NOW, db, fetcher: fetch2 });
+    const updates = writes.filter((w) => w.table === 'brand_facts' && w.op === 'update');
+    expect(updates).toEqual([
+      expect.objectContaining({
+        payload: { last_seen_at: expect.any(String), gone_at: null },
+        filters: [['in', 'id', ['starter', 'trial']]],
+      }),
+    ]);
+  });
+
+  it('says a page read again after a wall is read, and reads it then', async () => {
+    const hash = factTextHash(factText(PRICING));
+    const { db, writes } = fakeDb(
+      base({
+        brand_fact_pages: [
+          { kind: 'pricing', text_hash: hash, status: 'blocked', extracted_at: null },
+        ],
+      }),
+    );
+    await refresh(db);
+    const [pages] = writesOf(writes, 'brand_fact_pages', 'upsert');
+    expect(pages.payload[0]).toMatchObject({ kind: 'pricing', status: 'ok' });
+  });
+
+  it('reads a changed page by the model once an hour at most', async () => {
+    const recent = new Date(NOW - 10 * 60_000).toISOString();
+    const { db, writes } = fakeDb(
+      base({
+        brand_fact_pages: [
+          { kind: 'pricing', text_hash: 'aaaaaaaaaaaaaaaa', status: 'ok', extracted_at: recent },
+        ],
+      }),
+    );
+    await refresh(db);
+    expect(generateObject.mock.calls.map(([c]) => c.prompt.slice(0, 13))).toEqual([
+      'Page: about p',
+    ]);
+    // Its old hash kept: read after the hour.
+    const [pages] = writesOf(writes, 'brand_fact_pages', 'upsert');
+    expect(pages.payload[0]).toMatchObject({ kind: 'pricing', text_hash: 'aaaaaaaaaaaaaaaa' });
+  });
+
+  it('writes no page’s hash when its facts couldn’t be written', async () => {
+    const { db, writes } = fakeDb(base());
+    const failing = {
+      from: (table) => {
+        const chain = db.from(table);
+        if (table !== 'brand_facts') return chain;
+        return {
+          ...chain,
+          upsert: () => ({ then: (resolve) => resolve({ error: { message: 'too long' } }) }),
+        };
+      },
+    };
+    await expect(refresh(failing)).rejects.toThrow('too long');
+    expect(writesOf(writes, 'brand_fact_pages', 'upsert')).toEqual([]);
+  });
+
   it('reads nothing for a brand with no domain', async () => {
     const { db } = fakeDb(base({ brand_domains: [] }));
     expect(await refresh(db)).toEqual({ noDomain: true, paused: false });
@@ -555,13 +757,35 @@ describe('readBrandFacts', () => {
   });
 
   it('reads the site on the first ask, two asks at once once', async () => {
-    const { db } = fakeDb(tables({ brand_fact_pages: [], brand_domains: [] }));
+    const { db, reads } = fakeDb(tables({ brand_fact_pages: [], brand_domains: [] }));
     const [one, two] = await Promise.all([
       readBrandFacts('b1', { orgId: 'o1', now: NOW, db }),
       readBrandFacts('b1', { orgId: 'o1', now: NOW, db }),
     ]);
     expect(one.noDomain).toBe(true);
     expect(two.noDomain).toBe(true);
+    expect(reads.filter((t) => t === 'brand_domains')).toHaveLength(1);
+  });
+
+  it('reads a page that didn’t answer again at the next ask, after a few minutes', async () => {
+    const failed = (minutes) =>
+      tables({
+        brand_domains: [],
+        brand_fact_pages: [
+          {
+            kind: 'pricing',
+            url: null,
+            status: 'failed',
+            checked_at: new Date(NOW - minutes * 60_000).toISOString(),
+          },
+        ],
+      });
+    const soon = fakeDb(failed(2));
+    await readBrandFacts('b1', { orgId: 'o1', now: NOW, db: soon.db });
+    expect(soon.reads).not.toContain('brand_domains');
+    const later = fakeDb(failed(11));
+    await readBrandFacts('b1', { orgId: 'o1', now: NOW, db: later.db });
+    expect(later.reads).toContain('brand_domains');
   });
 });
 
@@ -585,6 +809,13 @@ describe('setFactStatus', () => {
         ['neq', 'id', 'f1'],
         ['not', 'gone_at', null],
       ]),
+    });
+    // A fact a read removed meanwhile.
+    const { db: gone } = fakeDb({ brand_facts: null });
+    await expect(
+      setFactStatus(fact, 'approved', 'u1', { db: gone, now: NOW }),
+    ).rejects.toMatchObject({
+      status: 404,
     });
     // A rejection drops nothing.
     const { db: db2, writes: w2 } = fakeDb({});

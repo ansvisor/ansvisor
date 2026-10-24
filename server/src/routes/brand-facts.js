@@ -20,15 +20,18 @@ const off = (res) => res.status(404).json({ error: 'Not available', code: 'off' 
 /** An error's name and message only: a provider's error carries the page's text. */
 function failed(req, res, err, what) {
   if (err?.status === 403 || err?.status === 404) {
-    return res.status(err.status).json({ error: err.message, code: 'forbidden' });
+    return res
+      .status(err.status)
+      .json({ error: err.message, code: err.status === 404 ? 'not_found' : 'forbidden' });
   }
   req.log.error({ err: { name: err?.name, message: err?.message, stack: err?.stack } }, what);
   return res.status(500).json({ error: 'Failed to read the brand facts', code: 'failed' });
 }
 
 // GET /api/brand-facts?brandId=… — the facts, read from the site on the
-// first ask, else as kept.
-router.get('/', brandFactsLimiter, async (req, res) => {
+// first ask (once, however many ask), else as kept: the editor reads it
+// each time its tab comes back, so it has no bucket of its own.
+router.get('/', async (req, res) => {
   if (qualityPhase() < 2) return off(res);
   const parsed = z.guid().safeParse(req.query.brandId);
   if (!parsed.success) return res.status(400).json({ error: 'invalid', code: 'invalid' });
