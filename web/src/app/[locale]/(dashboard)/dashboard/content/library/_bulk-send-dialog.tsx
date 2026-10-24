@@ -197,6 +197,12 @@ export function BulkSendDialog({
     let waitedOut = 0;
     const groups = cmsSendGroups(ready.flatMap((item) => (item.page ? [item.page] : [])));
     for (const [i, group] of groups.entries()) {
+      // Closed since the last request (a page sent at once, or a read in
+      // flight): the rest don't go.
+      if (i > 0 && closed.current) {
+        toast(t('closedUnsent', { count: groups.slice(i).flat().length }));
+        return;
+      }
       // Once a send was refused (the day's sends used up), the rest wait too.
       if (stopped || capped) {
         notSent += group.length;

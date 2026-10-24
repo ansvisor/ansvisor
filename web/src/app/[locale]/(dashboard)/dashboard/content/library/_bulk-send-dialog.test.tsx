@@ -276,7 +276,25 @@ describe('BulkSendDialog', () => {
     await act(async () => void (await vi.advanceTimersByTimeAsync(10_000)));
     expect(sendPagesToCms).toHaveBeenCalledTimes(1);
     expect(toast).toHaveBeenCalledWith(
-      "1 page wasn't sent: the dialog closed while the pages before it went. Send it again from the Library.",
+      "1 page wasn't sent: the dialog closed while the pages before it were still going. Send it again from the Library.",
+    );
+    root = createRoot(container);
+  });
+
+  it('posts no more once closed while a one-page request is out', async () => {
+    oneByOne.on = true;
+    let answer: (value: unknown) => void = () => {};
+    sendPagesToCms.mockReturnValueOnce(new Promise((resolve) => (answer = resolve)));
+    await render();
+    await act(async () => void button('Send 2 pages').click());
+    act(() => root.unmount());
+    // A single page goes at once: it comes back sent, not queued.
+    await act(async () =>
+      answer({ ok: true, deliveries: [{ id: 'x1', draftId: 'd1', status: 'sent' }], skipped: 0 }),
+    );
+    expect(sendPagesToCms).toHaveBeenCalledTimes(1);
+    expect(toast).toHaveBeenCalledWith(
+      "1 page wasn't sent: the dialog closed while the pages before it were still going. Send it again from the Library.",
     );
     root = createRoot(container);
   });
