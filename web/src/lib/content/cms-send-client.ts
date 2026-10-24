@@ -148,8 +148,8 @@ export interface DraftCms {
 
 /**
  * The draft's kept fields and last send, read when the Send dialog opens.
- * Null when they can't be read: the dialog then fills the fields from the
- * page, as for a page never sent.
+ * Null when they can't be read: the dialog then holds Send, with Try again
+ * (a page sent before under another slug could otherwise land twice).
  */
 export async function readDraftCms(draftId: string): Promise<DraftCms | null> {
   const supabase = createClient();

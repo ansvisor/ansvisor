@@ -85,9 +85,12 @@ export function SendDialog({
   // Undefined while the draft's kept fields are read; null when they couldn't be.
   const [kept, setKept] = useState<DraftCms | null | undefined>(undefined);
   const [attempt, setAttempt] = useState(0);
+  const [retrying, setRetrying] = useState(false);
   const [fields, setFields] = useState<CmsFields>(() => cmsFields(page, null));
-  // A ref, so the read that comes in after a change sees it.
-  const touched = useRef(false);
+  // The fields the person changed: a ref, so the read that comes in after a
+  // change sees it. The rest take what the draft kept (its slug above all,
+  // or the CMS could get the page twice).
+  const touched = useRef(new Set<keyof CmsFields>());
   const [sending, setSending] = useState(false);
   const [problem, setProblem] = useState<
     { code: CmsSendError; field: string | null } | { status: number } | { failed: string } | null
@@ -99,10 +102,23 @@ export function SendDialog({
       .then((read) => {
         if (cancelled) return;
         setKept(read);
-        // What the draft kept, unless the person has started to change them.
-        if (read && !touched.current) setFields(cmsFields(page, read.fields));
+        setRetrying(false);
+        // What the draft kept, in each field the person hasn't changed.
+        if (!read) return;
+        const fromKept = cmsFields(page, read.fields);
+        setFields((prev) => ({
+          slug: touched.current.has('slug') ? prev.slug : fromKept.slug,
+          metaTitle: touched.current.has('metaTitle') ? prev.metaTitle : fromKept.metaTitle,
+          metaDescription: touched.current.has('metaDescription')
+            ? prev.metaDescription
+            : fromKept.metaDescription,
+        }));
       })
-      .catch(() => !cancelled && setKept(null));
+      .catch(() => {
+        if (cancelled) return;
+        setKept(null);
+        setRetrying(false);
+      });
     return () => {
       cancelled = true;
     };
@@ -111,7 +127,7 @@ export function SendDialog({
   }, [draftId, attempt]);
 
   const change = (key: keyof CmsFields, value: string) => {
-    touched.current = true;
+    touched.current.add(key);
     setProblem(null);
     setFields((prev) => ({ ...prev, [key]: value }));
   };
@@ -273,15 +289,18 @@ export function SendDialog({
             className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-sm text-red-700 dark:text-red-400"
           >
             <span className="min-w-0 flex-1">{t('readFailed')}</span>
+            {/* Kept in place while it reads again, so focus stays on it. */}
             <Button
               size="sm"
               variant="outline"
+              disabled={retrying}
+              aria-label={t('retry')}
               onClick={() => {
-                setKept(undefined);
+                setRetrying(true);
                 setAttempt((n) => n + 1);
               }}
             >
-              {t('retry')}
+              {retrying ? <LoadingDots /> : t('retry')}
             </Button>
           </div>
         )}
