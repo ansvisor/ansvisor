@@ -1,7 +1,8 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
+import { toast } from 'sonner';
 import { AlertTriangle, Check } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -33,24 +34,30 @@ const POLL_FOR_MS = 3 * 60_000;
  * How long the next request waits for the last one's pages: as long as the
  * server lets a send stay queued (00262), past which it reads as interrupted.
  */
-const GROUP_WAIT_MS = 15 * 60_000;
+const GROUP_WAIT_MS = 30 * 60_000;
 
 /**
  * Waits until these sends aren't queued any more, reading them every
  * POLL_MS (a read that fails is read again), for up to GROUP_WAIT_MS: one
  * page at a time (#1331), so the next request goes once the last one's
- * pages have gone. Each read goes to `onRead`; false when the wait ran out.
+ * pages have gone. Each read goes to `onRead`. 'out' when the wait ran out,
+ * 'closed' once `closed()` says the dialog was.
  */
-async function gone(ids: string[], onRead: (read: CmsDelivery[]) => void): Promise<boolean> {
+async function gone(
+  ids: string[],
+  onRead: (read: CmsDelivery[]) => void,
+  closed: () => boolean,
+): Promise<'gone' | 'out' | 'closed'> {
   const until = Date.now() + GROUP_WAIT_MS;
   while (Date.now() < until) {
     await new Promise((resolve) => setTimeout(resolve, POLL_MS));
+    if (closed()) return 'closed';
     const read = await readDeliveries(ids).catch(() => null);
     if (!read) continue;
     onRead(read);
-    if (!read.some((delivery) => delivery.status === 'queued')) return true;
+    if (!read.some((delivery) => delivery.status === 'queued')) return 'gone';
   }
-  return false;
+  return 'out';
 }
 
 interface Refusal {
@@ -169,6 +176,15 @@ export function BulkSendDialog({
 
   const ready = items.filter((item) => item.page !== null);
 
+  // Closed (or left) while a request waits: the requests after it don't go.
+  const closed = useRef(false);
+  useEffect(() => {
+    closed.current = false;
+    return () => {
+      closed.current = true;
+    };
+  }, []);
+
   const send = async () => {
     setPhase({ kind: 'sending' });
     setFailure(null);
@@ -205,7 +221,8 @@ export function BulkSendDialog({
       const rest = groups.slice(i + 1);
       if (!queued.length || !rest.length || capped) continue;
       // Pages too long for one request: the next waits for this one's to go,
-      // what went shown meanwhile. Closing the dialog leaves the rest going.
+      // what went shown meanwhile. Closing the dialog stops the rest: else
+      // they'd go up to half an hour later with nothing showing it.
       setSent(new Map(made));
       setSkipped(notSent);
       setPhase({
@@ -213,17 +230,26 @@ export function BulkSendDialog({
         since: Date.now(),
         waiting: rest.flat().map((page) => page.draftId),
       });
-      const went = await gone(queued, (read) => {
-        const byId = new Map(read.map((delivery) => [delivery.id, delivery]));
-        for (const [draftId, delivery] of made) {
-          const now = byId.get(delivery.id);
-          if (now) made.set(draftId, { ...now, draftId });
-        }
-        setSent(new Map(made));
-      });
+      const went = await gone(
+        queued,
+        (read) => {
+          const byId = new Map(read.map((delivery) => [delivery.id, delivery]));
+          for (const [draftId, delivery] of made) {
+            const now = byId.get(delivery.id);
+            if (now) made.set(draftId, { ...now, draftId });
+          }
+          setSent(new Map(made));
+        },
+        () => closed.current,
+      );
+      const unposted = rest.reduce((count, later) => count + later.length, 0);
+      if (went === 'closed') {
+        toast(t('closedUnsent', { count: unposted }));
+        return;
+      }
       // Still going past the server's own limit: the rest aren't posted beside them.
-      if (!went) {
-        waitedOut = rest.reduce((count, later) => count + later.length, 0);
+      if (went === 'out') {
+        waitedOut = unposted;
         break;
       }
     }
@@ -410,7 +436,11 @@ function ItemState({
         className="shrink-0 text-right text-xs text-red-700 dark:text-red-400"
         title={delivery.error ?? undefined}
       >
-        {delivery.http_status ? t('answered', { status: delivery.http_status }) : t('failed')}
+        {/* What the webhook answered when it refused the page; a workflow's
+            failure after a 2xx is Failed, its reason on hover. */}
+        {delivery.http_status && (delivery.http_status < 200 || delivery.http_status > 299)
+          ? t('answered', { status: delivery.http_status })
+          : t('failed')}
       </span>
     );
   }

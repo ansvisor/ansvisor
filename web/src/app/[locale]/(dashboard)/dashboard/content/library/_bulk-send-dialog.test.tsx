@@ -8,6 +8,8 @@ import type { ContentDraftListItem } from '@/lib/content/drafts';
 
 const readCmsSources = vi.hoisted(() => vi.fn());
 vi.mock('./_cms-sources', () => ({ readCmsSources }));
+const toast = vi.hoisted(() => vi.fn());
+vi.mock('sonner', () => ({ toast }));
 const readKeptFields = vi.hoisted(() => vi.fn());
 const readDeliveries = vi.hoisted(() => vi.fn());
 const sendPagesToCms = vi.hoisted(() => vi.fn());
@@ -97,6 +99,7 @@ beforeEach(() => {
   );
   readKeptFields.mockReset().mockResolvedValue(new Map([['d3', { slug: 'espresso-guide' }]]));
   readDeliveries.mockReset();
+  toast.mockReset();
   sendPagesToCms.mockReset();
   container = document.createElement('div');
   document.body.appendChild(container);
@@ -234,7 +237,7 @@ describe('BulkSendDialog', () => {
     expect(dialog().querySelector('[role="status"]')!.textContent).toBe('2 pages sent.');
   });
 
-  it('posts no more once the pages before are still going after 15 minutes', async () => {
+  it('posts no more once the pages before are still going after 30 minutes', async () => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
     oneByOne.on = true;
     sendPagesToCms.mockResolvedValueOnce({
@@ -245,7 +248,7 @@ describe('BulkSendDialog', () => {
     readDeliveries.mockResolvedValue([{ id: 'x1', draftId: 'd1', status: 'queued' }]);
     await render();
     await act(async () => void button('Send 2 pages').click());
-    await act(async () => void (await vi.advanceTimersByTimeAsync(15 * 60_000 + 2_000)));
+    await act(async () => void (await vi.advanceTimersByTimeAsync(30 * 60_000 + 2_000)));
     expect(sendPagesToCms).toHaveBeenCalledTimes(1);
     expect(lines()).toEqual([
       'Pour-overSending…',
@@ -253,8 +256,42 @@ describe('BulkSendDialog', () => {
       'EspressoNot sent',
     ]);
     expect(dialog().textContent).toContain(
-      "The pages before it were still going after 15 minutes, so 1 page wasn't sent.",
+      "The pages before it were still going after 30 minutes, so 1 page wasn't sent.",
     );
+  });
+
+  it('posts no more once closed while a request waits, and says how many didn’t go', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
+    oneByOne.on = true;
+    sendPagesToCms.mockResolvedValueOnce({
+      ok: true,
+      deliveries: [{ id: 'x1', draftId: 'd1', status: 'queued' }],
+      skipped: 0,
+    });
+    readDeliveries.mockResolvedValue([{ id: 'x1', draftId: 'd1', status: 'queued' }]);
+    await render();
+    await act(async () => void button('Send 2 pages').click());
+    act(() => root.unmount());
+    readDeliveries.mockResolvedValue([{ id: 'x1', draftId: 'd1', status: 'sent' }]);
+    await act(async () => void (await vi.advanceTimersByTimeAsync(10_000)));
+    expect(sendPagesToCms).toHaveBeenCalledTimes(1);
+    expect(toast).toHaveBeenCalledWith(
+      "1 page wasn't sent: the dialog closed while the pages before it went. Send it again from the Library.",
+    );
+    root = createRoot(container);
+  });
+
+  it('says Failed, not the 200 the webhook answered, when the workflow then failed', async () => {
+    sendPagesToCms.mockResolvedValue({
+      ok: true,
+      deliveries: [
+        { id: 'x1', draftId: 'd1', status: 'failed', http_status: 200, error: 'Slug taken' },
+      ],
+      skipped: 0,
+    });
+    await render();
+    await act(async () => button('Send 2 pages').click());
+    expect(lines()[0]).toBe('Pour-overFailed');
   });
 
   it('posts no more requests once the day’s sends are used up', async () => {
