@@ -450,6 +450,33 @@ describe('Send to CMS from a Library row (#1331)', () => {
     expect(marks[1].getAttribute('href')).toBe('https://acme.example/churn');
   });
 
+  it('says the workflow’s reason for a page its webhook took that then failed', async () => {
+    getContentDrafts.mockResolvedValue([row({})]);
+    readCmsStatuses.mockResolvedValue(
+      new Map([
+        [
+          'd1',
+          {
+            status: 'failed',
+            at: '2026-10-24T10:00:00Z',
+            httpStatus: 200,
+            error: 'Slug already taken',
+            publishedUrl: null,
+          },
+        ],
+      ]),
+    );
+    await renderPage();
+    const mark = container.querySelector<HTMLElement>('[aria-label^="The last send"]')!;
+    await act(async () => {
+      mark.focus();
+      mark.dispatchEvent(new FocusEvent('focusin', { bubbles: true }));
+    });
+    await act(async () => new Promise((resolve) => setTimeout(resolve, 50)));
+    expect(document.body.textContent).toContain('Slug already taken');
+    expect(document.body.textContent).not.toContain('The webhook answered 200');
+  });
+
   it('isn’t offered on an archived draft, which the server doesn’t send', async () => {
     window.history.replaceState(null, '', '/dashboard/content/library?tab=archived');
     getContentDrafts.mockResolvedValue([row({ archivedAt: '2026-10-21T08:00:00Z' })]);
