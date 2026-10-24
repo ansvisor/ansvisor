@@ -167,6 +167,21 @@ describe('guardPeople: what the review found', () => {
     );
     expect(fix('Kurucumuz Ali Kaya bunu yazdı.')).toBe(`Kurucumuz ${NAME} bunu yazdı.`);
     expect(fix('Bunu SEO uzmanımız Deniz Ak anlattı.')).toBe(`Bunu SEO uzmanımız ${NAME} anlattı.`);
+    // A trade's "-(s)ı" before a verb said of people.
+    expect(fix('Bunu SEO uzmanı Deniz Ak anlattı.')).toBe(`Bunu SEO uzmanı ${NAME} anlattı.`);
+    expect(fix('Pazarlama müdürü Ayşe Yılmaz dedi ki işe yarıyor.')).toBe(
+      `Pazarlama müdürü ${NAME} dedi ki işe yarıyor.`,
+    );
+    // "'a göre" in each of its forms, the curly apostrophe too, and "'ın söylediğine göre".
+    expect(fix("SEO uzmanı Ali Kaya'ya göre işe yarıyor.")).toBe(
+      `SEO uzmanı ${NAME}'ya göre işe yarıyor.`,
+    );
+    expect(fix('Pazarlama müdürü Ayşe Yılmaz’e göre doğru.')).toBe(
+      `Pazarlama müdürü ${NAME}’e göre doğru.`,
+    );
+    expect(fix("Pazarlama müdürü Ayşe Yılmaz'ın söylediğine göre doğru.")).toBe(
+      `Pazarlama müdürü ${NAME}'ın söylediğine göre doğru.`,
+    );
     expect(fix('Müdürü Ayşe Yılmaz söyledi.')).toBe(`Müdürü ${NAME} söyledi.`);
     expect(fix('Ayşe Yılmaz, Pazarlama Müdürü, katıldı.')).toBe(
       `${NAME}, Pazarlama Müdürü, katıldı.`,
@@ -185,6 +200,24 @@ describe('guardPeople: what the review found', () => {
     for (const line of [
       'Bir pazarlama uzmanı Google Analytics raporlarını inceler.',
       'Hesap yöneticisi Google Ads kampanyasını açar.',
+      // A tool takes case suffixes and sits in lists as a person does.
+      "Bir pazarlama uzmanı Google Analytics'i her gün açar.",
+      "Hesap yöneticisi Google Ads'te kampanyayı açar.",
+      "Proje yöneticisi Microsoft Teams'te toplantı açar.",
+      "Bir SEO uzmanı Screaming Frog'u kullanır.",
+      'Bir SEO uzmanı Google Analytics, Search Console ve Ahrefs kullanır.',
+      // A department or a feature after a capitalised role is no name.
+      'Uzman Destek Ekibi ile çalışın.',
+      'Yönetici Paneli Girişi için tıklayın.',
+      'Danışman Hizmetleri Paketi ile başlayın.',
+      'Als Direktor Vertrieb Europa verantwortet sie das Team.',
+      'Geschäftsführer Technik Produkt ist ein neuer Posten.',
+      // However many words the title goes on for.
+      'Yönetici Paneli Giriş Sayfası açılır.',
+      'Danışman Hizmetleri Fiyat Listesi burada.',
+      'Als Direktor Vertrieb Europa Nord verantwortet sie das Team.',
+      // Given up with the tools: a name before a comma after "-(s)ı".
+      'Pazarlama müdürü Ayşe Yılmaz, kampanyayı yönetti.',
       'Danışmanlık Hizmetleri Ali Kaya ile başladı.',
       'Die Leiter Hailo ProfiStep steht im Keller.',
     ]) {
