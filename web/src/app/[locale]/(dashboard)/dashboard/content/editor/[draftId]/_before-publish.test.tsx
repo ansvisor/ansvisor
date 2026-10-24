@@ -97,7 +97,7 @@ async function render(
     image = 'https://cdn.acme.com/pour-over.jpg' as string | null,
     linksPending = 0,
     paste = clean,
-    mode = 'markReady' as 'markReady' | 'export',
+    mode = 'markReady' as 'markReady' | 'export' | 'send',
     contentByline = null as string | null,
     title = 'How small teams forecast',
   } = {},
@@ -359,6 +359,15 @@ describe('BeforePublish', () => {
     // The dialog moves focus in after it opens.
     await vi.waitFor(() => expect(document.activeElement).toBe(button('Continue to export')));
     await act(async () => button('Continue to export')!.click());
+    expect(onContinue).toHaveBeenCalled();
+    expect(onMarkReady).not.toHaveBeenCalled();
+  });
+
+  it('goes on to the Send dialog from Send to CMS, the warning saying so', async () => {
+    await render(quality(), { mode: 'send' });
+    expect(alert()!.textContent).toContain('You can send it to your CMS, but fixing them first');
+    expect(alert()!.textContent).not.toContain('logged');
+    await act(async () => button('Continue to send')!.click());
     expect(onContinue).toHaveBeenCalled();
     expect(onMarkReady).not.toHaveBeenCalled();
   });

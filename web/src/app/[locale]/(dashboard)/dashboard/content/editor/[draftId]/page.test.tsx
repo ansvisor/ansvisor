@@ -4,7 +4,7 @@ import { NextIntlClientProvider } from 'next-intl';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import messages from '../../../../../../../../messages/en.json';
 import type { Editor } from '@tiptap/core';
-import { RoleProvider } from '@/components/providers/role-provider';
+import { RoleProvider, type TeamRole } from '@/components/providers/role-provider';
 import type { ContentDraft } from '@/lib/content/drafts';
 import type { DraftSuggestion } from '@/lib/content/suggestions';
 import { passageKey, type CitedPassage } from '@/lib/content/cited-passages';
@@ -129,6 +129,9 @@ vi.mock('mammoth', () => ({
 vi.mock('sonner', () => ({ toast }));
 const saveBlob = vi.hoisted(() => vi.fn());
 vi.mock('@/lib/download', () => ({ saveBlob }));
+const readDraftCms = vi.hoisted(() => vi.fn());
+const sendPagesToCms = vi.hoisted(() => vi.fn());
+vi.mock('@/lib/content/cms-send-client', () => ({ readDraftCms, sendPagesToCms }));
 
 (
   globalThis as typeof globalThis & {
@@ -202,11 +205,11 @@ const draft = (over: Partial<ContentDraft> = {}): ContentDraft => ({
 let container: HTMLDivElement;
 let root: Root;
 
-async function renderPage() {
+async function renderPage(role: TeamRole = 'admin') {
   await act(async () => {
     root.render(
       <NextIntlClientProvider locale="en" messages={messages}>
-        <RoleProvider role="admin">
+        <RoleProvider role={role}>
           <ContentEditorPage />
         </RoleProvider>
       </NextIntlClientProvider>,
@@ -2961,6 +2964,73 @@ describe('the side panel', () => {
       await act(async () => button('Mark ready')!.click());
       expect(dialogText()).toBeNull();
       expect(markContentDraftReady).toHaveBeenCalledWith('d1');
+    });
+  });
+
+  describe('Send to CMS (#1331)', () => {
+    beforeEach(() => {
+      readDraftCms.mockReset().mockResolvedValue({ fields: {}, publishedUrl: null, last: null });
+      sendPagesToCms.mockReset().mockResolvedValue({
+        ok: true,
+        deliveries: [{ id: 'x1', draftId: 'd1', status: 'sent' }],
+      });
+      getContentAuthors.mockResolvedValue({
+        authors: [],
+        brands: [{ id: 'b1', name: 'Acme' }],
+        me: { id: 'u1', role: 'admin' },
+      });
+    });
+    afterEach(() => {
+      delete process.env.NEXT_PUBLIC_CONTENT_QUALITY_PHASE;
+    });
+    const dialog = () => document.querySelector('[role="dialog"]');
+    const inDialog = (name: string) =>
+      [...document.querySelectorAll<HTMLButtonElement>('[role="dialog"] button')].find(
+        (b) => b.textContent === name,
+      )!;
+
+    it('sends the page to the brand’s webhook from the header', async () => {
+      getContentDraft.mockResolvedValue(draft());
+      await renderPage();
+      await act(async () => button('Send to CMS')!.click());
+      expect(dialog()!.textContent).toContain('Send to CMS');
+      expect(document.querySelector<HTMLInputElement>('#cms-slug')!.value).toBe(
+        'pipeline-forecasting',
+      );
+      await act(async () => inDialog('Send').click());
+      expect(sendPagesToCms).toHaveBeenCalledWith('b1', [
+        expect.objectContaining({
+          draftId: 'd1',
+          title: 'Pipeline forecasting',
+          slug: 'pipeline-forecasting',
+          html: '<p>Teams trust it.</p>',
+          // Authors come with Quality (CE-038): while it is off, none goes.
+          author: null,
+        }),
+      ]);
+      expect(dialog()).toBeNull();
+    });
+
+    it('opens Before you publish first while Quality is on', async () => {
+      process.env.NEXT_PUBLIC_CONTENT_QUALITY_PHASE = '1';
+      getContentDraft.mockResolvedValue(draft({ pageType: 'blog_post' }));
+      await renderPage();
+      await act(async () => button('Send to CMS')!.click());
+      expect(dialog()!.textContent).toContain('Before you publish');
+      expect(readDraftCms).not.toHaveBeenCalled();
+      await act(async () => inDialog('Continue to send').click());
+      expect(dialog()!.textContent).toContain('Meta description');
+      expect(readDraftCms).toHaveBeenCalledWith('d1');
+    });
+
+    it('is for admins and managers only', async () => {
+      getContentDraft.mockResolvedValue(draft());
+      await renderPage('analyst');
+      expect(button('Send to CMS')).toBeUndefined();
+      await act(async () => root.unmount());
+      root = createRoot(container);
+      await renderPage('manager');
+      expect(button('Send to CMS')).toBeDefined();
     });
   });
 

@@ -1,0 +1,118 @@
+import {
+  fragment,
+  withByline,
+  withoutLeadingH1,
+  type PageFields,
+} from '@/lib/content/ready-to-publish';
+
+/**
+ * Send to CMS (#1331): a Content Editor page as the server takes it
+ * (POST /api/content-drafts/send) and sends to the brand's webhook. The HTML
+ * is the page ready to paste (CE-057: publishableHtml, placeholders filled),
+ * with the brand's byline line and without its H1, which the CMS's own title
+ * field carries; slug and meta are filled from the page and what the person
+ * changed wins.
+ */
+
+export interface CmsPage {
+  draftId: string;
+  title: string;
+  slug: string;
+  metaTitle: string;
+  metaDescription: string;
+  html: string;
+  author: string | null;
+  featuredImage: { src: string; alt: string } | null;
+}
+
+/** The fields a send fills in, editable in the Send dialog and kept on the draft. */
+export interface CmsFields {
+  slug: string;
+  metaTitle: string;
+  metaDescription: string;
+}
+
+/** As the server's: letters, digits, '-', '_' and single dots. */
+const SLUG_PATTERN = /^(?!.*\.\.)[\p{L}\p{N}._-]+$/u;
+export const META_TITLE_MAX = 300;
+export const META_DESCRIPTION_MAX = 500;
+// The server's other limits, which the page itself fills.
+const TITLE_MAX = 300;
+const AUTHOR_MAX = 200;
+const ALT_MAX = 500;
+const IMAGE_SRC_MAX = 2048;
+
+/** What a send starts with: what the draft keeps, else what the page gives. */
+export function cmsFields(fields: PageFields, kept: Partial<CmsFields> | null): CmsFields {
+  return {
+    slug: kept?.slug || fields.slug,
+    metaTitle: kept?.metaTitle || fields.metaTitle,
+    metaDescription: kept?.metaDescription || fields.metaDescription,
+  };
+}
+
+/** Why the fields can't go as they are, or null. */
+export function cmsFieldsProblem(
+  fields: CmsFields,
+): 'slug' | 'metaTitle' | 'metaDescription' | null {
+  if (!SLUG_PATTERN.test(fields.slug.trim()) || fields.slug.trim().length > 200) return 'slug';
+  if (fields.metaTitle.trim().length > META_TITLE_MAX) return 'metaTitle';
+  if (fields.metaDescription.trim().length > META_DESCRIPTION_MAX) return 'metaDescription';
+  return null;
+}
+
+/**
+ * Why the page can't go yet, or null: the CMS needs a title, and a page
+ * with no words or image under its H1 has nothing to publish.
+ */
+export function cmsPageProblem(
+  title: string,
+  html: string,
+): 'noTitle' | 'longTitle' | 'empty' | null {
+  if (!title.trim()) return 'noTitle';
+  if (title.trim().length > TITLE_MAX) return 'longTitle';
+  const body = fragment(withoutLeadingH1(html));
+  if (!body.textContent?.trim() && !body.querySelector('img')) return 'empty';
+  return null;
+}
+
+/** The image's alt text, where the page shows it. */
+function altOf(html: string, src: string): string {
+  const image = [...fragment(html).querySelectorAll('img')].find(
+    (img) => img.getAttribute('src') === src,
+  );
+  return image?.getAttribute('alt') ?? '';
+}
+
+/** The page as it goes to the CMS. `html` is publishableHtml's, its placeholders filled. */
+export function cmsPage({
+  draftId,
+  title,
+  html,
+  fields,
+  page,
+  byline,
+}: {
+  draftId: string;
+  title: string;
+  html: string;
+  fields: CmsFields;
+  /** pageFields' read of the page: its author and featured image. */
+  page: PageFields;
+  /** The byline line the brand puts in the content, or null. */
+  byline: string | null;
+}): CmsPage {
+  const withLine = byline ? withByline(html, byline) : html;
+  const src = page.featuredImage;
+  const image = src?.startsWith('https://') && src.length <= IMAGE_SRC_MAX ? src : null;
+  return {
+    draftId,
+    title: title.trim(),
+    slug: fields.slug.trim(),
+    metaTitle: fields.metaTitle.trim(),
+    metaDescription: fields.metaDescription.trim(),
+    html: withoutLeadingH1(withLine),
+    author: page.author.trim().slice(0, AUTHOR_MAX) || null,
+    featuredImage: image ? { src: image, alt: altOf(html, image).slice(0, ALT_MAX) } : null,
+  };
+}

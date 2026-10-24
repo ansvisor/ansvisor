@@ -22,9 +22,14 @@ const WEBHOOK_EVENTS = [
   { value: 'opportunity.sent', label: 'eventOpportunitySent' },
   { value: 'daily_pulse.created', label: 'eventDailyPulseCreated' },
   { value: 'action_task.sent', label: 'eventActionTaskSent' },
+  { value: 'content_draft.sent', label: 'eventContentDraftSent' },
 ] as const;
 
-const DEFAULT_WEBHOOK_EVENTS = WEBHOOK_EVENTS.map(({ value }) => value);
+// Pages sent to the CMS (#1331) are opt-in, as in the column's default: a
+// workflow set up for opportunities doesn't expect them.
+const DEFAULT_WEBHOOK_EVENTS = WEBHOOK_EVENTS.map(({ value }) => value).filter(
+  (value) => value !== 'content_draft.sent',
+);
 
 interface WebhookSettingsDialogProps {
   open: boolean;

@@ -4181,6 +4181,50 @@
         "md": "Export Markdown",
         "failed": "Couldn't export the page. Try again."
       },
+      "send": {
+        "button": "Send to CMS",
+        "hint": "Send the page to your CMS through the brand's webhook",
+        "title": "Send to CMS",
+        "description": "The page goes to the brand's webhook, for your workflow tool (Zapier, Make, n8n) to publish it in your CMS.",
+        "placeholders": "{count, plural, one {# placeholder is} other {# placeholders are}} still open. Fill {count, plural, one {it} other {them}} first: none goes to your CMS.",
+        "fillNow": "Fill now",
+        "empty": "The page has nothing under its title yet. Write it first, then send it.",
+        "noTitle": "Give the page a title first: your CMS needs one.",
+        "longTitle": "Shorten the title to 300 characters first: your CMS takes no more.",
+        "fields": {
+          "title": "Title",
+          "slug": "Slug",
+          "slugHint": "The page's address on your site, after the domain.",
+          "slugInvalid": "Use letters, digits, dots, - and _ only, up to 200 characters.",
+          "slugEmpty": "Add a slug: the page's address on your site, after the domain.",
+          "metaTitle": "Meta title",
+          "metaDescription": "Meta description",
+          "characters": "{count, plural, one {# character} other {# characters}}"
+        },
+        "live": "Live at",
+        "last": {
+          "queued": "Last sent {when}, still on its way.",
+          "sent": "Last sent {when}.",
+          "failed": "The last send failed, {when}.",
+          "published": "Published {when}."
+        },
+        "errors": {
+          "no_webhook": "This brand has no webhook yet. Set one up in Webhook Settings on Content Opportunities.",
+          "webhook_not_subscribed": "The brand's webhook doesn't receive \"Content page sent\". Turn it on in Webhook Settings on Content Opportunities.",
+          "daily_limit": "This workspace has sent 200 pages in the last 24 hours. Try again later.",
+          "forbidden": "Only admins and managers can send pages to the CMS.",
+          "not_found": "This page isn't in the brand anymore.",
+          "invalid": "The page couldn't go as it is. Check it and send again.",
+          "invalidField": "Check the {field, select, slug {slug} metaTitle {meta title} metaDescription {meta description} title {title} other {page}} and send again.",
+          "failed": "Couldn't send the page. Try again.",
+          "webhookStatus": "The webhook answered {status} and didn't take the page. Check your workflow, then send again.",
+          "webhookFailed": "The webhook didn't take the page: {reason}"
+        },
+        "cancel": "Cancel",
+        "send": "Send",
+        "sending": "Sending",
+        "sent": "Sent to your CMS"
+      },
       "rulesChip": "Rules {met}/{total}",
       "rulesChipHint": "Rules this page meets now. Open the Rules tab.",
       "author": {
@@ -4374,7 +4418,10 @@
         "warningNoReason": "Trust {trust}, below 60. You can mark it ready, but Quality shows what would raise it.",
         "warningExport": "Trust {trust}, below 60. {reason}. You can export it, but {count, plural, one {fixing it} other {fixing them}} first raises Trust to about {raised}.",
         "warningNoReasonExport": "Trust {trust}, below 60. You can export it, but Quality shows what would raise it.",
+        "warningSend": "Trust {trust}, below 60. {reason}. You can send it to your CMS, but {count, plural, one {fixing it} other {fixing them}} first raises Trust to about {raised}.",
+        "warningNoReasonSend": "Trust {trust}, below 60. You can send it to your CMS, but Quality shows what would raise it.",
         "continueExport": "Continue to export",
+        "continueSend": "Continue to send",
         "paste": {
           "title": "Ready to paste",
           "notYet": "Not ready to paste yet",
@@ -5046,6 +5093,7 @@
       "eventOpportunitySent": "Opportunity sent",
       "eventDailyPulseCreated": "Daily Pulse created",
       "eventActionTaskSent": "Action Center task sent",
+      "eventContentDraftSent": "Content page sent",
       "url": "Webhook URL",
       "urlPlaceholder": "https://your-n8n-instance.com/webhook/...",
       "secret": "Secret Key (optional)",
