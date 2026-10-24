@@ -1,18 +1,31 @@
 import type { Sheet } from 'write-excel-file/browser';
+import { BYTE_ORDER_MARK } from '@/lib/action-center/export';
 import { toCsv } from '@/lib/csv';
 import { slugify } from '@/lib/slug';
 import { safeLinkHref } from './editor';
+import { pageFields, withoutLeadingH1 } from './ready-to-publish';
 
 /**
- * Export in the Content Editor: the page as Word, HTML or Markdown, from the
- * HTML Copy HTML gives (publishableHtml). HTML is that page as a document of
- * its own. Word and Markdown read it as blocks first: headings, paragraphs,
- * quotes, lists, tables, and anything else an HTML block holds. Markdown keeps
- * that last as HTML, Word keeps its text. The schema JSON-LD is the page's
- * markup, not its text, so only the HTML file carries it.
+ * Export in the Content Editor: the page as Word, Excel, CSV, HTML or
+ * Markdown, from the HTML Copy HTML gives (publishableHtml). HTML is that
+ * page as a document of its own. Word and Markdown read it as blocks first:
+ * headings, paragraphs, quotes, lists, tables, and anything else an HTML
+ * block holds. Markdown keeps that last as HTML, Word keeps its text. Excel
+ * and CSV hold the page as one row, for a CMS's import (pageSheetRow). The
+ * schema JSON-LD is the page's markup, not its text, so only the HTML file
+ * carries it.
  */
 
-export type DraftExportFormat = 'docx' | 'html' | 'md';
+export type DraftExportFormat = 'docx' | 'xlsx' | 'csv' | 'html' | 'md';
+
+/** The formats, in the order Export lists them. */
+export const DRAFT_EXPORT_FORMATS = [
+  'docx',
+  'xlsx',
+  'csv',
+  'html',
+  'md',
+] as const satisfies readonly DraftExportFormat[];
 
 /**
  * The page fields an export carries next to the content (Quality spec §7b,
@@ -411,16 +424,30 @@ export async function draftDocx(title: string, html: string, fields?: ExportFiel
 }
 
 /**
- * The file for a format: Word built on the click, HTML and Markdown as UTF-8
- * text; with the page fields, each carries them its own way.
+ * The file for a format: Word and Excel built on the click, CSV, HTML and
+ * Markdown as UTF-8 text; with the page fields, each carries them its own way.
+ * `sourceUrl` is the live page an optimize draft is for: without Export's
+ * fields, Excel's and CSV's slug is its, as Export's is.
  */
 export async function draftExportBlob(
   format: DraftExportFormat,
   title: string,
   html: string,
   fields?: ExportFields,
+  sourceUrl: string | null = null,
 ): Promise<Blob> {
   if (format === 'docx') return draftDocx(title, html, fields);
+  if (format === 'csv') {
+    // The mark tells Excel the file is UTF-8, as the Library's CSV does.
+    return new Blob([BYTE_ORDER_MARK, pageCsv(title, html, fields, sourceUrl)], {
+      type: 'text/csv;charset=utf-8;',
+    });
+  }
+  if (format === 'xlsx') {
+    // Loaded on the click: the library is only needed to write the file.
+    const { default: writeXlsxFile } = await import('write-excel-file/browser');
+    return writeXlsxFile(pageWorkbook(title, html, fields, sourceUrl)).toBlob();
+  }
   return format === 'html'
     ? new Blob([draftHtmlDocument(title, html, fields)], { type: 'text/html;charset=utf-8' })
     : new Blob([draftMarkdown(title, html, fields)], { type: 'text/markdown;charset=utf-8' });
@@ -467,6 +494,14 @@ export const LIBRARY_EXPORT_HEADERS = [
 
 /** A spreadsheet cell holds at most this many characters (Excel's limit). */
 const CELL_LIMIT = 32_767;
+
+/** A sheet's cell: a text past Excel's limit cut, and says so; one with lines wrapped. */
+function sheetCell(value: string | number) {
+  if (typeof value !== 'string') return value;
+  const cell = value.length > CELL_LIMIT ? `${value.slice(0, CELL_LIMIT - 1)}…` : value;
+  // A page is a block a line: wrapped, so Excel doesn't run them together.
+  return cell.includes('\n') ? { value: cell, wrap: true } : cell;
+}
 
 /** "2026-10-22": a date that sorts as text. */
 const day = (iso: string) => iso.slice(0, 10);
@@ -551,13 +586,7 @@ export function libraryWorkbook(items: LibraryExportItem[]): Sheet<Blob>[] {
       data: [
         LIBRARY_EXPORT_HEADERS.map(bold),
         ...libraryRows(items).map((row) =>
-          LIBRARY_EXPORT_HEADERS.map((header) => {
-            const value = row[header];
-            if (typeof value !== 'string') return value;
-            const cell = value.length > CELL_LIMIT ? `${value.slice(0, CELL_LIMIT - 1)}…` : value;
-            // A page is a block a line: wrapped, so Excel doesn't run them together.
-            return cell.includes('\n') ? { value: cell, wrap: true } : cell;
-          }),
+          LIBRARY_EXPORT_HEADERS.map((header) => sheetCell(row[header])),
         ),
       ],
     },
@@ -598,4 +627,108 @@ export async function libraryDocx(items: LibraryExportItem[]): Promise<Blob> {
 /** "ansvisor_content_library_in-review_2026-10-22.xlsx". */
 export function libraryExportFileName(tab: string, format: LibraryExportFormat, now: Date): string {
   return `ansvisor_content_library_${tab.replace(/_/g, '-')}_${now.toISOString().slice(0, 10)}.${format}`;
+}
+
+// ─── One page as a spreadsheet row ──────────────────────────────────────────
+
+/** The page's CSV and sheet header: a CMS's CSV import maps each to a field. */
+export const PAGE_SHEET_HEADERS = [
+  'Title',
+  'Meta title',
+  'Meta description',
+  'Slug',
+  'Author',
+  'Featured image',
+  'Characters',
+  'Content',
+  'HTML',
+];
+
+/** Export's page fields as front matter, read from the page where Export gives none. */
+function frontOf(
+  title: string,
+  html: string,
+  fields: ExportFields | undefined,
+  sourceUrl: string | null,
+): Record<string, string> {
+  if (fields) return fields.front;
+  // As Export reads them, with no author: an optimize draft's slug is its
+  // live page's, so a CMS import updates that page, not a new one.
+  const read = pageFields({ title, html, sourceUrl, author: null, teamByline: '' });
+  return {
+    title: read.metaTitle,
+    description: read.metaDescription,
+    slug: read.slug,
+    image: read.featuredImage ?? '',
+  };
+}
+
+/**
+ * The page as one row: its title, its page fields (Export's, else read from
+ * the page as Export reads them: frontOf), its text a block a line, and its
+ * HTML without the H1 the Title column holds, as a CMS's title field does.
+ * A list item's text starts with "•", not "-": a cell starting with "-"
+ * would be guarded as a formula (toCsv), its text starting "'-".
+ */
+export function pageSheetRow(
+  title: string,
+  html: string,
+  fields?: ExportFields,
+  sourceUrl: string | null = null,
+): Record<string, string | number> {
+  const body = withoutLeadingH1(html);
+  const content = draftText('', body).replace(/^(\s*)- /gm, '$1• ');
+  const front = frontOf(title, html, fields, sourceUrl);
+  const values: (string | number)[] = [
+    title,
+    front.title ?? '',
+    front.description ?? '',
+    front.slug ?? '',
+    front.author ?? '',
+    front.image ?? '',
+    content.replace(/\n/g, '').length,
+    content,
+    body,
+  ];
+  return Object.fromEntries(PAGE_SHEET_HEADERS.map((header, i) => [header, values[i]]));
+}
+
+/** Export CSV: the page as one row. */
+export function pageCsv(
+  title: string,
+  html: string,
+  fields?: ExportFields,
+  sourceUrl: string | null = null,
+): string {
+  return toCsv([pageSheetRow(title, html, fields, sourceUrl)], PAGE_SHEET_HEADERS);
+}
+
+/** Export Excel: the page as one row; a text past a cell's limit is cut, and says so. */
+export function pageWorkbook(
+  title: string,
+  html: string,
+  fields?: ExportFields,
+  sourceUrl: string | null = null,
+): Sheet<Blob>[] {
+  const row = pageSheetRow(title, html, fields, sourceUrl);
+  return [
+    {
+      sheet: 'Page',
+      columns: [
+        { width: 40 },
+        { width: 40 },
+        { width: 60 },
+        { width: 30 },
+        { width: 20 },
+        { width: 40 },
+        { width: 11 },
+        { width: 80 },
+        { width: 80 },
+      ],
+      data: [
+        PAGE_SHEET_HEADERS.map((value) => ({ value, fontWeight: 'bold' as const })),
+        PAGE_SHEET_HEADERS.map((header) => sheetCell(row[header])),
+      ],
+    },
+  ];
 }
