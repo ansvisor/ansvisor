@@ -549,8 +549,18 @@ function onPage(outline, row, siteType, pageType) {
       return kind ? [{ claim: p.claim, block: byHash.get(p.block_hash), kind }] : [];
     }),
     regulated: regulatedFor(row?.regulated, siteType),
-    checks: row?.missed ? null : checksOnPage(outline, row?.checks, pageType),
+    checks: checksRead(outline, row, pageType),
   };
+}
+
+/**
+ * A row's checks on the page, with the page type they were read for: until
+ * a read for the type as it is now lands, the editor counts them as unknown
+ * (a check that applies to the new type only wasn't read).
+ */
+function checksRead(outline, row, pageType) {
+  const checks = row?.missed ? null : checksOnPage(outline, row?.checks, pageType);
+  return checks && { ...checks, pageType: row.page_type ?? null };
 }
 
 /**

@@ -748,6 +748,7 @@ describe('page checks (CE-050)', () => {
       balance: { quote: 'the Osprey Talon is the better pick for long runs', block: LIMIT },
       how: { quote: 'We hiked 120 km in the rain with each pack', block: HOW },
       cut: false,
+      pageType: 'best_of',
     });
 
     // Within the minute the kept read stands: a paragraph put before the first one,
@@ -776,7 +777,13 @@ describe('page checks (CE-050)', () => {
     // A product page within the minute: nothing put forward, no disclosure asked.
     const asProduct = await read({ html: PAGE, pageType: 'product_page', now: NOW + 1000 });
     expect(asProduct.pending).toBe(true);
-    expect(asProduct.checks).toMatchObject({ recommends: null, disclosure: null, balance: null });
+    expect(asProduct.checks).toMatchObject({
+      recommends: null,
+      disclosure: null,
+      balance: null,
+      // Read for a best-of list: the editor waits for a read as a product page.
+      pageType: 'best_of',
+    });
     expect(
       pageHash({ outline, siteType: 'ecommerce', pageType: 'best_of', brandName: 'Trailmade' }),
     ).not.toBe(
