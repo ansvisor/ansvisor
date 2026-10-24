@@ -77,6 +77,7 @@ function read(
     canEdit,
     hasAuthors,
     brandName: 'Acme',
+    team: 'Acme Team',
     siteTrust: null,
     todos: qualityTodos({ eeat: score, author, hasAuthors, canEdit }),
   };

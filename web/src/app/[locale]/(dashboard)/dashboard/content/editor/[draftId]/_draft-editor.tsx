@@ -10,7 +10,7 @@ import StarterKit from '@tiptap/starter-kit';
 import { TableKit } from '@tiptap/extension-table';
 import Image from '@tiptap/extension-image';
 import { CharacterCount, Placeholder } from '@tiptap/extensions';
-import { ArrowLeft, Bot, Check, Copy, Download, PanelRight, Target, X } from 'lucide-react';
+import { ArrowLeft, Bot, Check, Copy, Download, PanelRight, Send, Target, X } from 'lucide-react';
 import { Link, useRouter } from '@/i18n/navigation';
 import { Button } from '@/components/ui/button';
 import { buttonVariants } from '@/components/ui/button-variants';
@@ -26,8 +26,10 @@ import { LoadingDots } from '@/components/ui/loading-dots';
 import { AiUsageBanner } from '@/components/ai-usage/ai-usage-banner';
 import { AiUsageMeter } from '@/components/ai-usage/ai-usage-meter';
 import { useAiUsage } from '@/components/providers/ai-usage-provider';
+import { useUserRole } from '@/hooks/use-user-role';
 import { PLATFORM_LABELS } from '@/config/platform-labels';
 import { DraftMethodBadge, DraftStatusBadge } from '@/components/content/draft-badges';
+import { SendDialog } from '@/components/content/send-to-cms-dialog';
 import { updateBrand } from '@/lib/actions/brand';
 import {
   decideDraftSuggestions,
@@ -87,6 +89,7 @@ import {
   bylineText,
   exportPlaceholders,
   pasteChecks,
+  teamName,
   titlePlaceholders,
   withByline,
 } from '@/lib/content/ready-to-publish';
@@ -116,7 +119,6 @@ import { saveBlob } from '@/lib/download';
 import { formatMonthDay } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { useBrandStore } from '@/stores/use-brand-store';
-import { useUserRole } from '@/hooks/use-user-role';
 import { AgentCard } from './_agent-card';
 import { AgentDrafting, draftingKey } from './_agent-drafting';
 import { AuthorMenu, MANAGE_AUTHORS_PATH } from './_author-menu';
@@ -584,6 +586,7 @@ export function DraftEditor({
         canEdit: canEditPageAuthor,
         hasAuthors,
         brandName,
+        team: teamName(language, brandName),
         siteTrust,
         todos,
       }
@@ -1426,6 +1429,11 @@ export function DraftEditor({
   } | null>(null);
   const openExport = (destination?: ExportDestination) =>
     setExportOpen({ html: pageToPublish(), destination });
+  // Its checks, read again only as the link reads land, not on every render.
+  const exportChecks = useMemo(
+    () => (exportOpen ? pasteChecks(exportOpen.html, linkChecks) : null),
+    [exportOpen, linkChecks],
+  );
   const copyPageHtml = () => {
     if (!editor) return;
     const html = pageToPublish();
@@ -1591,10 +1599,47 @@ export function DraftEditor({
   // with Ready to paste read from the page as it is then (its links as they
   // are read).
   const [publishOpen, setPublishOpen] = useState<{
-    mode: 'markReady' | 'export';
+    mode: 'markReady' | 'export' | 'send';
     html: string;
   } | null>(null);
-  const openBeforePublish = (mode: 'markReady' | 'export') => {
+  // Send to CMS (#1331): admins and managers send the page to the brand's
+  // webhook, as the page Export makes ready, past Before you publish once
+  // Quality is live.
+  const { canManage } = useUserRole();
+  const [sendOpen, setSendOpen] = useState<{ html: string } | null>(null);
+  const [preparing, setPreparing] = useState(false);
+  // HTML edited in the HTML view and not applied isn't in the page to save.
+  const htmlUnapplied = htmlSource !== null && htmlEdited;
+  // What's waiting goes out first, as for Mark ready: the CMS gets the page
+  // Ansvisor holds, the one its callback later marks Published. A page that
+  // can't be saved (a teammate or the agent changed it meanwhile) isn't sent.
+  const openSend = async () => {
+    if (preparing) return;
+    if (htmlUnapplied) {
+      toast.error(t('send.applyHtml'));
+      return;
+    }
+    setPreparing(true);
+    const saved = await autosave.settle().then(
+      () => true,
+      () => false,
+    );
+    setPreparing(false);
+    if (!saved) {
+      toast.error(t('send.unsaved'));
+      return;
+    }
+    setSendOpen({ html: pageToPublish() });
+  };
+  const startSend = () => {
+    if (htmlUnapplied) {
+      toast.error(t('send.applyHtml'));
+      return;
+    }
+    if (quality) openBeforePublish('send');
+    else void openSend();
+  };
+  const openBeforePublish = (mode: 'markReady' | 'export' | 'send') => {
     setPublishOpen({ mode, html: pageToPublish() });
     if (mode === 'markReady') nudgeAt('markReady');
   };
@@ -1783,17 +1828,19 @@ export function DraftEditor({
   /**
    * Ready, clicked (Next step spec §3b): the page goes back to review, while
    * it is still ready (published meanwhile from the Library, it says so). The
-   * task Mark ready completed stays done.
+   * task Mark ready completed is open again, unless someone changed it since.
    */
   const [unmarking, setUnmarking] = useState(false);
   const unmarkReady = async () => {
     if (unmarking) return;
     setUnmarking(true);
     try {
-      const now = await unmarkContentDraftReady(draft.id);
+      const { status: now, tasksReopened } = await unmarkContentDraftReady(draft.id);
       setStatus(now);
-      if (now === 'in_review') toast(t('header.backInReview'));
-      else toast(t('header.notReady', { status: tDraftStatus(now) }));
+      if (now !== 'in_review') toast(t('header.notReady', { status: tDraftStatus(now) }));
+      else if (tasksReopened > 0 && draft.action) {
+        toast(t('header.backInReviewAction', { no: draft.action.number, count: tasksReopened }));
+      } else toast(t('header.backInReview'));
     } catch (err) {
       console.error('Failed to move the draft back to review:', err);
       toast.error(t('header.backInReviewFailed'));
@@ -1882,7 +1929,6 @@ export function DraftEditor({
   // The site type, for the whole brand as in Brand settings: admins and
   // managers (as the brands table lets them), once Quality's phase 2 is live.
   // The page types offered, My rules and the agent follow it.
-  const { canManage } = useUserRole();
   const updateBrandStore = useBrandStore((s) => s.updateBrand);
   const storedSite = useBrandStore((s) => s.brands.find((b) => b.id === draft.brandId)?.siteType);
   const siteGuessed = !isSiteType(storedSite);
@@ -2039,6 +2085,24 @@ export function DraftEditor({
               </HeaderTip>
             ) : (
               <ExportMenu disabled={!editor} onExport={(format) => void exportPage(format)} />
+            )}
+            {canManage && (
+              <HeaderTip label={t('send.button')} hint={t('send.hint')}>
+                <Button
+                  variant="outline"
+                  size="icon-sm"
+                  disabled={
+                    !editor ||
+                    preparing ||
+                    autosave.state === 'conflict' ||
+                    autosave.state === 'too_large'
+                  }
+                  aria-label={t('send.button')}
+                  onClick={startSend}
+                >
+                  {preparing ? <LoadingDots /> : <Send className="h-3.5 w-3.5" />}
+                </Button>
+              </HeaderTip>
             )}
             {/* The one black button. Marked, it reads Ready (a click moves it back
                 to review); published, Published. Narrower than 1024px, ✓ alone. */}
@@ -2376,7 +2440,7 @@ export function DraftEditor({
         )}
       </div>
 
-      {quality && exportOpen && (
+      {quality && exportOpen && exportChecks && (
         <ExportDialog
           onClose={() => setExportOpen(null)}
           title={title}
@@ -2384,16 +2448,36 @@ export function DraftEditor({
           isNew={draft.method === 'create'}
           sourceUrl={draft.sourceUrl}
           author={pageAuthor}
-          // Until the authors are read, who it is by isn't known.
-          teamByline={authorsRead ? t('author.organization', { brand: brandName }) : ''}
+          // Until the authors are read, who it is by isn't known. It goes to
+          // the CMS's author field, so in the page's language.
+          teamByline={authorsRead ? teamName(language, brandName) : ''}
           byline={contentByline}
-          checks={pasteChecks(exportOpen.html, linkChecks)}
+          checks={exportChecks}
           linksPending={linksPending}
           initialDestination={exportOpen.destination}
           onFillNow={() => {
             setExportOpen(null);
             fillFirstPlaceholder();
           }}
+        />
+      )}
+
+      {sendOpen && (
+        <SendDialog
+          draftId={draft.id}
+          brandId={draft.brandId}
+          title={title}
+          html={sendOpen.html}
+          sourceUrl={draft.sourceUrl}
+          author={pageAuthor}
+          // Until the authors are read, who it is by isn't known.
+          teamByline={authorsRead ? t('author.organization', { brand: brandName }) : ''}
+          byline={contentByline}
+          onFillNow={() => {
+            setSendOpen(null);
+            fillFirstPlaceholder();
+          }}
+          onClose={() => setSendOpen(null)}
         />
       )}
 
@@ -2407,8 +2491,10 @@ export function DraftEditor({
           }}
           contentByline={contentByline}
           onContinue={() => {
+            const next = publishOpen.mode;
             setPublishOpen(null);
-            openExport();
+            if (next === 'send') void openSend();
+            else openExport();
           }}
           onClose={() => setPublishOpen(null)}
           quality={quality}

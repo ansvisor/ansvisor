@@ -132,6 +132,9 @@ vi.mock('mammoth', () => ({
 vi.mock('sonner', () => ({ toast }));
 const saveBlob = vi.hoisted(() => vi.fn());
 vi.mock('@/lib/download', () => ({ saveBlob }));
+const readDraftCms = vi.hoisted(() => vi.fn());
+const sendPagesToCms = vi.hoisted(() => vi.fn());
+vi.mock('@/lib/content/cms-send-client', () => ({ readDraftCms, sendPagesToCms }));
 
 (
   globalThis as typeof globalThis & {
@@ -263,7 +266,7 @@ beforeEach(() => {
   readDraftAiUsage.mockReset().mockResolvedValue(3.7);
   getContentDraft.mockReset();
   markContentDraftReady.mockReset();
-  unmarkContentDraftReady.mockReset().mockResolvedValue('in_review');
+  unmarkContentDraftReady.mockReset().mockResolvedValue({ status: 'in_review', tasksReopened: 0 });
   saveBlob.mockReset();
   setContentDraftPageType.mockReset().mockResolvedValue(undefined);
   setContentDraftAuthor.mockReset().mockResolvedValue(undefined);
@@ -867,7 +870,7 @@ describe('the content editor', () => {
     expect(toast.error).toHaveBeenCalledWith("Couldn't move it back to review.");
     expect(button('Ready: click to move it back to review')).toBeDefined();
 
-    unmarkContentDraftReady.mockResolvedValueOnce('published');
+    unmarkContentDraftReady.mockResolvedValueOnce({ status: 'published', tasksReopened: 0 });
     await act(async () => button('Ready: click to move it back to review')!.click());
     expect(toast).toHaveBeenCalledWith('Its status is now Published, so it stays.');
     expect(button('Published')!.getAttribute('aria-disabled')).toBe('true');
@@ -937,6 +940,13 @@ describe('the content editor', () => {
       "Marked ready, and its task in Action AC-214 is done. Publish it on your site when you're ready.",
     );
     expect(note.textContent).toBe('This draft is the work of Action AC-214.');
+
+    // Taken back, the task Ready completed is open again.
+    unmarkContentDraftReady.mockResolvedValueOnce({ status: 'in_review', tasksReopened: 1 });
+    await act(async () => button('Ready: click to move it back to review')!.click());
+    expect(toast).toHaveBeenCalledWith(
+      'Back in review, and its task in Action AC-214 is open again.',
+    );
   });
 
   describe('history', () => {
@@ -3042,6 +3052,161 @@ describe('the side panel', () => {
     });
   });
 
+  describe('Send to CMS (#1331)', () => {
+    beforeEach(() => {
+      readDraftCms.mockReset().mockResolvedValue({ fields: {}, publishedUrl: null, last: null });
+      sendPagesToCms.mockReset().mockResolvedValue({
+        ok: true,
+        deliveries: [{ id: 'x1', draftId: 'd1', status: 'sent' }],
+      });
+      getContentAuthors.mockResolvedValue({
+        authors: [],
+        brands: [{ id: 'b1', name: 'Acme' }],
+        me: { id: 'u1', role: 'admin' },
+      });
+    });
+    afterEach(() => {
+      delete process.env.NEXT_PUBLIC_CONTENT_QUALITY_PHASE;
+    });
+    const dialog = () => document.querySelector('[role="dialog"]');
+    const inDialog = (name: string) =>
+      [...document.querySelectorAll<HTMLButtonElement>('[role="dialog"] button')].find(
+        (b) => b.textContent === name,
+      )!;
+
+    it('sends the page to the brand’s webhook from the header', async () => {
+      getContentDraft.mockResolvedValue(draft());
+      await renderPage();
+      await act(async () => button('Send to CMS')!.click());
+      expect(dialog()!.textContent).toContain('Send to CMS');
+      expect(document.querySelector<HTMLInputElement>('#cms-slug')!.value).toBe(
+        'pipeline-forecasting',
+      );
+      await act(async () => inDialog('Send').click());
+      expect(sendPagesToCms).toHaveBeenCalledWith('b1', [
+        expect.objectContaining({
+          draftId: 'd1',
+          title: 'Pipeline forecasting',
+          slug: 'pipeline-forecasting',
+          html: '<p>Teams trust it.</p>',
+          // Authors come with Quality (CE-038): while it is off, none goes.
+          author: null,
+        }),
+      ]);
+      expect(dialog()).toBeNull();
+    });
+
+    it('opens Before you publish first while Quality is on', async () => {
+      process.env.NEXT_PUBLIC_CONTENT_QUALITY_PHASE = '1';
+      getContentDraft.mockResolvedValue(draft({ pageType: 'blog_post' }));
+      await renderPage();
+      await act(async () => button('Send to CMS')!.click());
+      expect(dialog()!.textContent).toContain('Before you publish');
+      expect(readDraftCms).not.toHaveBeenCalled();
+      await act(async () => inDialog('Continue to send').click());
+      expect(dialog()!.textContent).toContain('Meta description');
+      expect(readDraftCms).toHaveBeenCalledWith('d1');
+      // Closed, so no open dialog is left for the tests after.
+      await act(async () => inDialog('Cancel').click());
+      expect(dialog()).toBeNull();
+    });
+
+    const editAsHtml = async (html: string) => {
+      await act(async () => button('Edit as HTML')!.click());
+      const source = container.querySelector('textarea')!;
+      await act(async () => {
+        Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!.call(
+          source,
+          html,
+        );
+        source.dispatchEvent(new Event('input', { bubbles: true }));
+      });
+      await act(async () => button('Back to visual')!.click());
+    };
+
+    it('saves what is waiting before it sends, as Mark ready does', async () => {
+      getContentDraft.mockResolvedValue(draft());
+      await renderPage();
+      await editAsHtml('<h1>Pipeline forecasting</h1><p>Edited.</p>');
+      expect(saveContentDraft).not.toHaveBeenCalled();
+      await act(async () => button('Send to CMS')!.click());
+      await act(async () => {});
+      expect(saveContentDraft).toHaveBeenCalledWith(
+        'd1',
+        expect.objectContaining({ bodyHtml: '<h1>Pipeline forecasting</h1><p>Edited.</p>' }),
+      );
+      expect(saveContentDraft.mock.invocationCallOrder[0]).toBeLessThan(
+        readDraftCms.mock.invocationCallOrder[0],
+      );
+      expect(document.querySelector<HTMLTextAreaElement>('#cms-meta-description')!.value).toBe(
+        'Edited.',
+      );
+      await act(async () => inDialog('Cancel').click());
+      expect(dialog()).toBeNull();
+    });
+
+    it('sends no page it can’t save', async () => {
+      // A teammate or the agent changed the page meanwhile: this tab's version can't go.
+      saveContentDraft.mockResolvedValue({ ok: false, reason: 'conflict' });
+      getContentDraft.mockResolvedValue(draft());
+      await renderPage();
+      await editAsHtml('<h1>Pipeline forecasting</h1><p>Edited.</p>');
+      await act(async () => button('Send to CMS')!.click());
+      await act(async () => {});
+      expect(toast.error).toHaveBeenCalledWith(
+        "The page has changes that aren't saved, so it wasn't sent.",
+      );
+      expect(dialog()).toBeNull();
+      expect(readDraftCms).not.toHaveBeenCalled();
+    });
+
+    it('waits for HTML edited in the HTML view to be applied', async () => {
+      getContentDraft.mockResolvedValue(draft());
+      await renderPage();
+      await act(async () => button('Edit as HTML')!.click());
+      const source = container.querySelector('textarea')!;
+      await act(async () => {
+        Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!.call(
+          source,
+          '<h1>Pipeline forecasting</h1><p>Not applied.</p>',
+        );
+        source.dispatchEvent(new Event('input', { bubbles: true }));
+      });
+      await act(async () => button('Send to CMS')!.click());
+      expect(toast.error).toHaveBeenCalledWith(
+        "Apply or discard your HTML changes first: they aren't in the page yet.",
+      );
+      expect(dialog()).toBeNull();
+      expect(saveContentDraft).not.toHaveBeenCalled();
+    });
+
+    it('takes one click while it saves', async () => {
+      let saved: (value: unknown) => void = () => {};
+      saveContentDraft.mockReturnValue(new Promise((resolve) => (saved = resolve)));
+      getContentDraft.mockResolvedValue(draft());
+      await renderPage();
+      await editAsHtml('<h1>Pipeline forecasting</h1><p>Edited.</p>');
+      await act(async () => button('Send to CMS')!.click());
+      expect(button('Send to CMS')!.disabled).toBe(true);
+      await act(async () => button('Send to CMS')!.click());
+      expect(saveContentDraft).toHaveBeenCalledTimes(1);
+      await act(async () => saved({ ok: true, updatedAt: '2026-10-20T10:01:00Z', bodyHash: 'h1' }));
+      await act(async () => {});
+      expect(dialog()!.textContent).toContain('Send to CMS');
+      await act(async () => inDialog('Cancel').click());
+    });
+
+    it('is for admins and managers only', async () => {
+      getContentDraft.mockResolvedValue(draft());
+      await renderPage('analyst');
+      expect(button('Send to CMS')).toBeUndefined();
+      await act(async () => root.unmount());
+      root = createRoot(container);
+      await renderPage('manager');
+      expect(button('Send to CMS')).toBeDefined();
+    });
+  });
+
   describe('Export (CE-057)', () => {
     beforeEach(() => {
       process.env.NEXT_PUBLIC_CONTENT_QUALITY_PHASE = '1';
@@ -3075,6 +3240,19 @@ describe('the side panel', () => {
       expect(dialog()!.textContent).toContain('Meta titlePipeline forecasting');
       expect(dialog()!.textContent).toContain('AuthorAcme Team → your CMS author field');
       expect(inDialog('Copy for Webflow').disabled).toBe(false);
+    });
+
+    it('names the team in the page’s language in the CMS author field', async () => {
+      brandState.brands = [{ id: 'b1', language: 'tr' } as never, { id: 'b2' }];
+      try {
+        getContentDraft.mockResolvedValue(draft({ pageType: 'blog_post' }));
+        await renderPage();
+        await act(async () => button('Export')!.click());
+        await act(async () => inDialog('Continue to export').click());
+        expect(dialog()!.textContent).toContain('AuthorAcme Ekibi → your CMS author field');
+      } finally {
+        brandState.brands = [{ id: 'b1' }, { id: 'b2' }];
+      }
     });
 
     it('reads Ready to paste as the links are read, a refused read as unread', async () => {
@@ -3414,8 +3592,12 @@ describe('the side panel', () => {
       await renderPage();
       await act(async () => nextButton()!.click());
       expect(basket()).not.toBeNull();
-      const elsewhere = document.createElement('button');
-      document.body.append(elsewhere);
+      // The page's own text, as a reader clicks back into it: a button put in
+      // the document after the basket opened reads as another app's, which a
+      // popover doesn't close for.
+      const elsewhere = container.querySelector<HTMLElement>('.ProseMirror')!;
+      // ProseMirror reads a click's place from the point: jsdom has none.
+      document.elementFromPoint = () => null;
       try {
         await act(async () => {
           elsewhere.focus();
@@ -3427,7 +3609,7 @@ describe('the side panel', () => {
         expect(basket()).toBeNull();
         expect(document.activeElement).toBe(elsewhere);
       } finally {
-        elsewhere.remove();
+        delete (document as { elementFromPoint?: unknown }).elementFromPoint;
       }
     });
 

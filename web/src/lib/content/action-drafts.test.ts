@@ -5,12 +5,14 @@ import {
   completeDraftTasks,
   draftMethodForTask,
   findActionDraft,
+  reopenDraftTasks,
   type ActionDraft,
 } from './action-drafts';
 
 /**
  * An action's writing tasks and their drafts (CE-022): which draft a task is
- * written in, and Ready completing the task once the work's drafts are done.
+ * written in, Ready completing the task once the work's drafts are done, and
+ * Ready taken back opening it again.
  */
 
 interface Op {
@@ -32,6 +34,7 @@ const db = {
       in: (col: string, v: unknown) => (op.filters.push(['in', col, v]), chain),
       is: (col: string, v: unknown) => (op.filters.push(['is', col, v]), chain),
       limit: () => chain,
+      order: () => chain,
       update: (value: unknown) => ((op.op = 'update'), (op.value = value), chain),
       insert: (value: unknown) => ((op.op = 'insert'), (op.value = value), chain),
       maybeSingle: async () => ({ data: rows[table]?.[0] ?? null, error: null }),
@@ -174,5 +177,75 @@ describe('completeDraftTasks', () => {
     rows.action_tasks = [{ id: 't-draft', status: 'todo' }];
     await expect(completeDraftTasks(db, { ...draft, method: 'create' }, 'u1')).resolves.toBe(0);
     expect(ops.map((op) => op.table)).toEqual(['actions']);
+  });
+});
+
+describe('reopenDraftTasks', () => {
+  it('opens again the work’s tasks a draft’s Ready completed, each in the action’s History', async () => {
+    rows.actions = [{ status: 'in_progress' }];
+    rows.action_tasks = [
+      { id: 't-optimize', status: 'completed' },
+      { id: 't-refresh', status: 'completed' },
+      { id: 't-other', status: 'skipped' },
+    ];
+    // Newest first: t-refresh was completed by a person after Ready.
+    rows.action_events = [
+      { data: { taskId: 't-refresh', to: 'completed' } },
+      { data: { taskId: 't-optimize', to: 'completed', draftId: 'd2' } },
+      { data: { taskId: 't-refresh', to: 'completed', draftId: 'd2' } },
+    ];
+    await expect(reopenDraftTasks(db, draft, 'u1')).resolves.toBe(1);
+    expect(ops[1].filters).toContainEqual([
+      'in',
+      'task_key',
+      ['optimize_content', 'refresh_content'],
+    ]);
+    expect(ops[2]).toMatchObject({
+      table: 'action_events',
+      filters: [
+        ['eq', 'action_id', 'act-1'],
+        ['eq', 'event', 'task_status'],
+      ],
+    });
+    expect(ops.slice(3, 5)).toEqual([
+      {
+        table: 'action_tasks',
+        op: 'update',
+        value: expect.objectContaining({ status: 'in_progress', skip_reason: null }),
+        filters: [
+          ['eq', 'action_id', 'act-1'],
+          ['eq', 'id', 't-optimize'],
+        ],
+      },
+      {
+        table: 'action_events',
+        op: 'insert',
+        value: {
+          action_id: 'act-1',
+          event: 'task_status',
+          data: { taskId: 't-optimize', to: 'in_progress', draftId: 'd1' },
+          actor_id: 'u1',
+        },
+        filters: [],
+      },
+    ]);
+  });
+
+  it('leaves a closed action’s tasks as they are', async () => {
+    rows.actions = [{ status: 'completed' }];
+    rows.action_tasks = [{ id: 't-optimize', status: 'completed' }];
+    await expect(reopenDraftTasks(db, draft, 'u1')).resolves.toBe(0);
+    expect(ops).toHaveLength(1);
+  });
+
+  it('leaves a deleted action’s tasks, and reads no History when none is done', async () => {
+    await expect(reopenDraftTasks(db, draft, 'u1')).resolves.toBe(0);
+    expect(ops).toHaveLength(1);
+
+    ops = [];
+    rows.actions = [{ status: 'in_progress' }];
+    rows.action_tasks = [{ id: 't-optimize', status: 'in_progress' }];
+    await expect(reopenDraftTasks(db, draft, 'u1')).resolves.toBe(0);
+    expect(ops.some((op) => op.table === 'action_events')).toBe(false);
   });
 });

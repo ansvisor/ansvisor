@@ -55,6 +55,7 @@ import {
 } from 'lucide-react';
 import { formatDate } from '@/lib/format';
 import { cn } from '@/lib/utils';
+import { HeaderWithAiUsage } from '@/components/ai-usage/ai-usage-meter';
 
 const CITED_IN_PAGE_SIZE = 10;
 const DATE_PRESET_VALUES: CitationsDatePreset[] = ['24h', '7d', '30d', '90d', 'all', 'custom'];
@@ -203,54 +204,56 @@ export default function CitationUrlDetailPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <BackLink />
-        {/* Header */}
-        <div className="mt-2 flex flex-wrap items-start justify-between gap-3">
-          <div className="flex items-start gap-3 min-w-0">
-            <div className="pt-1">
-              <DomainFavicon domain={data?.domain || extractDisplayHost(targetUrl)} />
-            </div>
-            <div className="min-w-0">
-              <h1 className="text-xl font-bold tracking-tight leading-tight break-all">
-                {data?.title || targetUrl}
-              </h1>
-              <div className="mt-1 flex flex-wrap items-center gap-2">
-                <a
-                  href={targetUrl}
-                  target="_blank"
-                  rel="noreferrer noopener"
-                  className="inline-flex max-w-[560px] items-center gap-1 text-xs text-muted-foreground hover:text-foreground hover:underline"
-                >
-                  <span className="truncate">{targetUrl}</span>
-                  <ExternalLink className="h-3 w-3 shrink-0" />
-                </a>
-                {data && <CategoryBadge category={data.category} />}
-                {data?.articleType && (
-                  <Badge variant="outline" className="text-[10px] font-medium">
-                    {data.articleType}
-                  </Badge>
-                )}
+      <HeaderWithAiUsage>
+        <div>
+          <BackLink />
+          {/* Header */}
+          <div className="mt-2 flex flex-wrap items-start justify-between gap-3">
+            <div className="flex items-start gap-3 min-w-0">
+              <div className="pt-1">
+                <DomainFavicon domain={data?.domain || extractDisplayHost(targetUrl)} />
+              </div>
+              <div className="min-w-0">
+                <h1 className="text-xl font-bold tracking-tight leading-tight break-all">
+                  {data?.title || targetUrl}
+                </h1>
+                <div className="mt-1 flex flex-wrap items-center gap-2">
+                  <a
+                    href={targetUrl}
+                    target="_blank"
+                    rel="noreferrer noopener"
+                    className="inline-flex max-w-[560px] items-center gap-1 text-xs text-muted-foreground hover:text-foreground hover:underline"
+                  >
+                    <span className="truncate">{targetUrl}</span>
+                    <ExternalLink className="h-3 w-3 shrink-0" />
+                  </a>
+                  {data && <CategoryBadge category={data.category} />}
+                  {data?.articleType && (
+                    <Badge variant="outline" className="text-[10px] font-medium">
+                      {data.articleType}
+                    </Badge>
+                  )}
+                </div>
               </div>
             </div>
-          </div>
-          <div className="shrink-0">
-            {data &&
-              (data.category === 'you' ? (
-                <Badge className="border border-primary/30 bg-primary/10 text-foreground">
-                  Owned
-                </Badge>
-              ) : (
-                <AddCompetitorButton
-                  brandId={brand.id}
-                  domain={data.domain}
-                  onAdded={loadData}
-                  appearance="button"
-                />
-              ))}
+            <div className="shrink-0">
+              {data &&
+                (data.category === 'you' ? (
+                  <Badge className="border border-primary/30 bg-primary/10 text-foreground">
+                    Owned
+                  </Badge>
+                ) : (
+                  <AddCompetitorButton
+                    brandId={brand.id}
+                    domain={data.domain}
+                    onAdded={loadData}
+                    appearance="button"
+                  />
+                ))}
+            </div>
           </div>
         </div>
-      </div>
+      </HeaderWithAiUsage>
 
       {/* Filters */}
       <CitationsFilterBar

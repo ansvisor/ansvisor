@@ -605,7 +605,12 @@ export async function saveWebhookConfig(
   },
 ): Promise<WebhookConfig> {
   const supabase = await createClient();
-  const allowedEvents = ['opportunity.sent', 'daily_pulse.created', 'action_task.sent'];
+  const allowedEvents = [
+    'opportunity.sent',
+    'daily_pulse.created',
+    'action_task.sent',
+    'content_draft.sent',
+  ];
   const events = Array.from(new Set(config.events)).filter((event) =>
     allowedEvents.includes(event),
   );

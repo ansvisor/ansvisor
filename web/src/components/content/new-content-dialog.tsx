@@ -993,7 +993,10 @@ export function NewContentDialog({
                       className="flex w-full flex-col items-center gap-1 rounded-lg border border-dashed px-3 py-6 text-center text-sm transition-colors hover:bg-muted/50"
                     >
                       {reading ? (
-                        <LoadingDots className="text-muted-foreground" />
+                        <LoadingDots
+                          label={t('content.reading')}
+                          className="text-muted-foreground"
+                        />
                       ) : (
                         <span className="font-medium">{t('content.choose')}</span>
                       )}
