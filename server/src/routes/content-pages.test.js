@@ -12,6 +12,8 @@ let org;
 let fetched;
 let fetchResult;
 let draftRow;
+// Each table's filters, as asked: [method, ...args].
+let calls;
 
 vi.mock('../config/supabase.js', () => ({
   default: {
@@ -33,12 +35,13 @@ vi.mock('../config/supabase.js', () => ({
                   ],
                   error: null,
                 };
+      const asked = (calls ??= {})[name] ?? (calls[name] = []);
       const chain = {
         select: () => chain,
-        eq: () => chain,
-        is: () => chain,
-        order: () => chain,
-        limit: () => chain,
+        eq: (...args) => (asked.push(['eq', ...args]), chain),
+        is: (...args) => (asked.push(['is', ...args]), chain),
+        order: (...args) => (asked.push(['order', ...args]), chain),
+        limit: (...args) => (asked.push(['limit', ...args]), chain),
         single: async () => result,
         maybeSingle: async () => result,
         then: (resolve) => resolve(result),
@@ -394,6 +397,7 @@ describe('POST /api/content-pages/page-read (Quality CE-049)', () => {
   afterEach(() => vi.unstubAllEnvs());
 
   it('reads the page as saved, with its page type, the business type and the brand’s approved claims', async () => {
+    calls = {};
     const res = await ask({ draftId: DRAFT });
     expect(res.status).toBe(200);
     expect((await res.json()).proofs[0].kind).toBe('certification');
@@ -406,6 +410,16 @@ describe('POST /api/content-pages/page-read (Quality CE-049)', () => {
       brandName: 'Northwind',
       facts: ['Bluesign certified'],
     });
+    // The brand's approved claims still on its site, in one order.
+    expect(calls.brand_facts).toEqual([
+      ['eq', 'brand_id', BRAND],
+      ['eq', 'kind', 'claim'],
+      ['eq', 'status', 'approved'],
+      ['is', 'gone_at', null],
+      ['order', 'first_seen_at'],
+      ['order', 'id'],
+      ['limit', 10],
+    ]);
   });
 
   it('is off before phase 2, and refuses a malformed ask or another workspace’s draft', async () => {

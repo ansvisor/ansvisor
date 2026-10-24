@@ -18,7 +18,9 @@
 -- headings, paragraphs and types: an unchanged page isn't read again. Each
 -- item names its paragraph by the hash the claims read keeps it by (00266),
 -- so an item whose paragraph changed drops out. `missed` marks a read whose
--- answer missed the schema: read again after a day. Server-only.
+-- answer missed the schema: read again after a day. `day_reads` counts the
+-- reads since `day_started_at` (a draft's page reads a day are capped).
+-- Server-only.
 --
 -- content_draft_own_images: the images a member confirmed are their own,
 -- not stock (E-E-A-T's visual proof): only the person can tell, so it is
@@ -35,19 +37,21 @@ create table if not exists public.content_quality_pages (
     check (
       jsonb_typeof(spots) = 'array'
       and jsonb_array_length(spots) <= 3
-      and octet_length(spots::text) <= 4096
+      and octet_length(spots::text) <= 8192
     ),
   -- [{ "claim", "block_hash", "kind" }]
   proofs jsonb not null default '[]'::jsonb
     check (
       jsonb_typeof(proofs) = 'array'
       and jsonb_array_length(proofs) <= 8
-      and octet_length(proofs::text) <= 4096
+      and octet_length(proofs::text) <= 8192
     ),
   regulated text check (regulated is null or regulated in ('health', 'finance', 'legal')),
   model text check (model is null or char_length(model) <= 100),
   missed boolean not null default false,
-  read_at timestamptz not null default now()
+  read_at timestamptz not null default now(),
+  day_reads smallint not null default 0 check (day_reads >= 0),
+  day_started_at timestamptz
 );
 
 alter table public.content_quality_pages enable row level security;
@@ -93,6 +97,14 @@ language plpgsql
 set search_path = ''
 as $$
 begin
+  -- One confirm at a time a draft, so the count holds.
+  perform pg_advisory_xact_lock(hashtext('content_draft_own_images'), hashtext(new.draft_id::text));
+  -- Confirmed already: the insert's ON CONFLICT leaves it as it is.
+  if exists (
+    select 1 from public.content_draft_own_images where draft_id = new.draft_id and src = new.src
+  ) then
+    return new;
+  end if;
   if (select count(*) from public.content_draft_own_images where draft_id = new.draft_id) >= 50 then
     raise exception 'A draft keeps 50 confirmed images at most' using errcode = '23514';
   end if;
