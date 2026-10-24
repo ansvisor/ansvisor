@@ -575,6 +575,33 @@ describe('refreshBrandFacts', () => {
     expect(writesOf(writes, 'brand_facts', 'upsert')).toEqual([]);
   });
 
+  it('reads a missed page whose text changes by the model once an hour at most too', async () => {
+    const recent = new Date(NOW - 10 * 60_000).toISOString();
+    const { db, writes } = fakeDb(
+      base({
+        brand_fact_pages: [
+          {
+            kind: 'pricing',
+            text_hash: 'aaaaaaaaaaaaaaaa',
+            status: 'missed',
+            extracted_at: recent,
+          },
+        ],
+      }),
+    );
+    await refresh(db);
+    expect(generateObject.mock.calls.map(([c]) => c.prompt.slice(0, 13))).toEqual([
+      'Page: about p',
+    ]);
+    const [pages] = writesOf(writes, 'brand_fact_pages', 'upsert');
+    expect(pages.payload[0]).toMatchObject({
+      kind: 'pricing',
+      status: 'missed',
+      text_hash: 'aaaaaaaaaaaaaaaa',
+      extracted_at: recent,
+    });
+  });
+
   it('charges an answer that missed the schema and reads that page again after a day; a timeout keeps its hold', async () => {
     generateObject.mockImplementation(async ({ prompt }) => {
       if (prompt.startsWith('Page: pricing')) {
