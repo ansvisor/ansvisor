@@ -240,6 +240,19 @@ describe('ChatGPT Shopping market (#1278)', () => {
     expect(summary[0].sov).toBeCloseTo(1 / 2);
   });
 
+  it("passes the market's regions to the Overview RPC only when a market applies", async () => {
+    await getShoppingOverview('brand-1', { datePreset: '30d', chatgptMarket: 'europe' });
+    await getShoppingOverview('brand-1', { datePreset: '30d' });
+
+    expect(rpcCalls.map((c) => c.fn)).toEqual(['shopping_overview', 'shopping_overview']);
+    expect(rpcCalls[0].args.p_chatgpt_regions).toEqual(
+      expect.arrayContaining(['DE', 'FR', 'GB', 'CH']),
+    );
+    expect(rpcCalls[0].args.p_chatgpt_regions).not.toContain('US');
+    expect(rpcCalls[0].args.p_regions).toBeUndefined();
+    expect(rpcCalls[1].args.p_chatgpt_regions).toBeUndefined();
+  });
+
   it('adds no filter without a market', async () => {
     cards = [placed(1, 'own', 'chatgpt-shopping', 'TR')];
     await getOwnProducts('brand-1', { datePreset: '30d' });

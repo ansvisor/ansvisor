@@ -4979,6 +4979,7 @@ export type Database = {
       shopping_overview: {
         Args: {
           p_brand_id: string
+          p_chatgpt_regions?: string[]
           p_from?: string
           p_platforms?: string[]
           p_regions?: string[]

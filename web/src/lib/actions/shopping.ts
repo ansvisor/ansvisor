@@ -31,9 +31,9 @@ export interface ShoppingFilters {
   /** Region codes. */
   regions?: string[];
   /**
-   * ChatGPT Shopping's market (#1278): its cards are kept to the market's
-   * regions, other platforms' cards are unaffected. Applies to the card
-   * reads; the Overview RPC doesn't take it.
+   * ChatGPT Shopping's market (#1278): its results and cards are kept to the
+   * market's regions, other platforms' are unaffected. Applies to the card
+   * reads and to the Overview (`p_chatgpt_regions`, 00267).
    */
   chatgptMarket?: ShoppingMarket;
 }
@@ -113,6 +113,7 @@ async function loadShoppingOverview(
     p_platforms: filters.platforms?.length ? filters.platforms : undefined,
     p_regions: filters.regions?.length ? filters.regions : undefined,
     p_trend_from: trendFrom,
+    p_chatgpt_regions: filters.chatgptMarket ? marketRegionCodes(filters.chatgptMarket) : undefined,
   });
   if (error) throw new Error(error.message);
   return data as unknown as ShoppingOverviewRow;
