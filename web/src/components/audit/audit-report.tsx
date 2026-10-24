@@ -16,6 +16,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import type { AuditResult, AuditSignal, AuditRecommendation } from '@/lib/actions/audits';
+import { formatMonthDay } from '@/lib/format';
 import { cn } from '@/lib/utils';
 
 // Display order + labels for the five rubric categories (keys come from the
@@ -276,6 +277,14 @@ export function AuditReport({ audit }: { audit: AuditResult }) {
   );
   const hasIssues = counts.fail + counts.warn > 0;
   const grade = gradeKey(audit.totalScore);
+  const scoreDelta =
+    audit.totalScore !== null && audit.previousScore != null
+      ? Math.round(audit.totalScore * 100) - Math.round(audit.previousScore * 100)
+      : null;
+  const previousDate =
+    audit.previousCreatedAt && Number.isFinite(Date.parse(audit.previousCreatedAt))
+      ? formatMonthDay(audit.previousCreatedAt, 'UTC')
+      : null;
 
   const visibleSignals = (cat: string) =>
     audit.signals.filter(
@@ -291,8 +300,27 @@ export function AuditReport({ audit }: { audit: AuditResult }) {
           <div className="flex-1 space-y-2 text-center sm:text-left">
             <div className="text-sm font-medium break-all">{audit.finalUrl || audit.url}</div>
             {grade && (
-              <div className={cn('text-lg font-semibold', scoreColor(audit.totalScore))}>
-                {t(`grade.${grade}`)}
+              <div className="flex flex-wrap items-center justify-center gap-2 sm:justify-start">
+                <div className={cn('text-lg font-semibold', scoreColor(audit.totalScore))}>
+                  {t(`grade.${grade}`)}
+                </div>
+                {scoreDelta !== null && previousDate && (
+                  <Badge
+                    variant="outline"
+                    className={cn(
+                      'text-xs font-medium tabular-nums',
+                      scoreDelta > 0 &&
+                        'border-green-600/30 bg-green-600/10 text-green-700 dark:text-green-400',
+                      scoreDelta < 0 && 'border-destructive/30 bg-destructive/10 text-destructive',
+                      scoreDelta === 0 && 'text-muted-foreground',
+                    )}
+                  >
+                    {t('scoreChange', {
+                      change: scoreDelta > 0 ? `+${scoreDelta}` : String(scoreDelta),
+                      date: previousDate,
+                    })}
+                  </Badge>
+                )}
               </div>
             )}
             <div className="flex flex-wrap justify-center gap-2 sm:justify-start">
