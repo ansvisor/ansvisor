@@ -265,6 +265,19 @@ describe('pageFields', () => {
     ).toBe('');
   });
 
+  it('cuts a long title’s slug at a word, up to 80 characters', () => {
+    const slug = (title: string) =>
+      pageFields({ title, html: '', sourceUrl: null, author: null, teamByline: '' }).slug;
+    expect(
+      slug(
+        'Defend the coffee subscription comparison with up-to-date pricing and shipping details',
+      ),
+    ).toBe('defend-the-coffee-subscription-comparison-with-up-to-date-pricing-and-shipping');
+    // A word that ends at 80 stays whole; one word longer than 80 is cut.
+    expect(slug(`${'a'.repeat(80)} b`)).toBe('a'.repeat(80));
+    expect(slug('b'.repeat(90))).toBe('b'.repeat(80));
+  });
+
   it('cuts a first sentence too long to fit at a word', () => {
     const long = `${'Pour slowly '.repeat(20)}now.`;
     const { metaDescription } = pageFields({

@@ -5,6 +5,7 @@ import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 import { getMyRuleSets, saveDraftRules, saveMyRuleSet } from '@/lib/actions/content-drafts';
 import { isPageType, type ContentDraft, type PageType } from '@/lib/content/drafts';
+import type { SiteType } from '@/lib/content/page-types';
 import {
   MAX_TEXT_RULES,
   activeRules,
@@ -68,6 +69,10 @@ const newId = () =>
     ? crypto.randomUUID()
     : `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
 
+type RuleSets = Partial<Record<PageType, SavedRuleSet>>;
+/** No sets while My rules are unread: one object, so what reads them doesn't change. */
+const NO_RULE_SETS: RuleSets = {};
+
 /**
  * The draft's rules (CE-009) as the editor reads them: the set for its page
  * type with the person's changes, each checked against the page as written —
@@ -80,12 +85,15 @@ const newId = () =>
  */
 export function useDraftRules({
   draft,
+  siteType,
   html,
   characters,
   pageType,
   reads,
 }: {
   draft: ContentDraft;
+  /** The brand's business type as the editor holds it: My rules are kept per type (00227). */
+  siteType: SiteType;
   html: string;
   characters: number;
   pageType: string | null;
@@ -94,28 +102,32 @@ export function useDraftRules({
   const t = useTranslations('contentEditor.editor.rules');
   const tTypes = useTranslations('contentEditor.pageTypes');
   const [choices, setChoices] = useState<DraftRules>(draft.rules);
-  const [mine, setMine] = useState<Partial<Record<PageType, SavedRuleSet>>>({});
-  const [mineRead, setMineRead] = useState(false);
+  // My rules as read, and for which site type: they are kept per type
+  // (00227), so after a switch they count as unread until read again.
+  const [mineState, setMineState] = useState<{ site: SiteType; sets: RuleSets } | null>(null);
+  const mineRead = mineState?.site === siteType;
+  const mine = mineRead ? mineState.sets : NO_RULE_SETS;
   const language = useBrandStore((s) => s.brands.find((b) => b.id === draft.brandId)?.language);
   // One save at a time, the latest waiting; what the database holds, to go back to.
   const saving = useRef(false);
   const waiting = useRef<{ rules: DraftRules; message: string } | null>(null);
   const saved = useRef<DraftRules>(draft.rules);
 
+  // Read again once the brand's site type is saved (the editor passes it then).
   useEffect(() => {
     let cancelled = false;
     getMyRuleSets(draft.brandId)
       .then((sets) => {
-        if (!cancelled) setMine(sets);
+        if (!cancelled) setMineState({ site: siteType, sets });
       })
-      .catch((err) => console.error('Failed to read My rules:', err))
-      .finally(() => {
-        if (!cancelled) setMineRead(true);
+      .catch((err) => {
+        console.error('Failed to read My rules:', err);
+        if (!cancelled) setMineState({ site: siteType, sets: {} });
       });
     return () => {
       cancelled = true;
     };
-  }, [draft.brandId]);
+  }, [draft.brandId, siteType]);
 
   const sources = reads.sources;
   const ctx = useMemo<RuleContext>(() => {
@@ -287,7 +299,7 @@ export function useDraftRules({
       }
       saveMyRuleSet(draft.brandId, setType, set)
         .then(() => {
-          setMine((prev) => ({ ...prev, [setType]: set }));
+          setMineState((prev) => prev && { ...prev, sets: { ...prev.sets, [setType]: set } });
           save({ ...effective, source: 'mine' }, t('savedMine', { type: typeName(setType) }));
         })
         .catch((err) => {

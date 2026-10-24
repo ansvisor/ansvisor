@@ -6,7 +6,7 @@ import supabaseAdmin from '../config/supabase.js';
 import { resolveModel } from './ai-provider.js';
 import { contentBriefModelId, rebuildSources } from './content-brief.js';
 import { linkAllowList, linkKey, linkTargetsPrompt, readLinkTargets } from './content-links.js';
-import { pageTypeFormat } from './content-page-types.js';
+import { siteTypeLine, pageTypeFormat } from './content-page-types.js';
 import { authorWords, guardPeopleInHtml, knownPeople } from './content-people.js';
 import {
   RunStoppedError,
@@ -526,7 +526,7 @@ export function buildFixPrompt({
   const own = input.textRules.map((text) => `- ${text}`);
   return `Brand: ${brand?.name || 'Unknown'}
 Industry: ${brand?.industry || 'Not specified'}
-Description: ${brand?.description || 'N/A'}
+${siteTypeLine(brand)}Description: ${brand?.description || 'N/A'}
 
 Page: ${draft.title || 'Untitled'}
 Page type: ${pageTypeFormat(draft.page_type)}
@@ -628,7 +628,9 @@ export async function fixDraftRules({ draftId, brandId, input }) {
 
   const { data: brand, error: brandError } = await supabaseAdmin
     .from('brands')
-    .select('name, industry, description, organization_id, language')
+    .select(
+      'name, industry, description, organization_id, language, site_type, shopping_mode_enabled',
+    )
     .eq('id', brandId)
     .single();
   if (brandError) throw brandError;

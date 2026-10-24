@@ -1,9 +1,10 @@
 import { readFileSync } from 'node:fs';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   PAGE_TYPE_FORMATS,
   SITE_PAGE_TYPES,
   SITE_TYPES,
+  siteTypeLine,
   pageTypeFormat,
   sitePageTypeLines,
   siteTypeOf,
@@ -77,6 +78,30 @@ describe('sitePageTypeLines', () => {
     expect(lines).toHaveLength(SITE_PAGE_TYPES.b2c.length);
     expect(lines[0]).toBe(
       '- destination_page: Destination page: a place, what to do there and when to go',
+    );
+  });
+});
+
+describe('siteTypeLine (Quality CE-056)', () => {
+  afterEach(() => vi.unstubAllEnvs());
+
+  it('says nothing until Quality’s phase 2 is live', () => {
+    vi.stubEnv('CONTENT_QUALITY_PHASE', '1');
+    expect(siteTypeLine({ site_type: 'ecommerce' })).toBe('');
+    vi.stubEnv('CONTENT_QUALITY_PHASE', '');
+    expect(siteTypeLine({ site_type: 'ecommerce' })).toBe('');
+  });
+
+  it('names the kind of site picked, else the guess, on a line of its own', () => {
+    vi.stubEnv('CONTENT_QUALITY_PHASE', '2');
+    expect(siteTypeLine({ site_type: 'ecommerce' })).toBe(
+      'Site type: E-commerce (an online shop selling products)\n',
+    );
+    expect(siteTypeLine({ industry: 'Travel & Hospitality' })).toBe(
+      'Site type: B2C (a service for consumers)\n',
+    );
+    expect(siteTypeLine(null)).toBe(
+      'Site type: B2B SaaS (software or services sold to businesses)\n',
     );
   });
 });

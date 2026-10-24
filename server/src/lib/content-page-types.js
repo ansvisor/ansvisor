@@ -1,3 +1,5 @@
+import { qualityPhase } from './content-quality.js';
+
 /**
  * The Content Editor's page types (web/src/lib/content/drafts.ts, PAGE_TYPES)
  * as the person picks them (web/messages/en.json, contentEditor.pageTypes),
@@ -5,6 +7,7 @@
  * Agent write the page the person chose rather than read a key such as
  * "solution_page".
  */
+
 export const PAGE_TYPE_FORMATS = {
   feature_page: 'Feature page: one capability, what it does and who it is for',
   solution_page: 'Use case page: how the product serves one use case, industry or team',
@@ -104,6 +107,30 @@ export function siteTypeOf({ siteType, industry, shoppingModeEnabled } = {}) {
   if (SITE_TYPES.includes(siteType)) return siteType;
   if (shoppingModeEnabled) return 'ecommerce';
   return Object.hasOwn(INDUSTRY_SITE_TYPES, industry ?? '') ? INDUSTRY_SITE_TYPES[industry] : 'b2b';
+}
+
+/** What each kind of site is, for a model prompt: the proof a page asks for follows it. */
+const SITE_TYPE_MEANINGS = {
+  b2b: 'software or services sold to businesses',
+  ecommerce: 'an online shop selling products',
+  b2c: 'a service for consumers',
+};
+
+/**
+ * The brand's kind of site as a prompt's line (Quality CE-056, the spec's
+ * business type), with a line break, once Quality's phase 2 is live; else
+ * nothing.
+ *
+ * @param {{ site_type?: string|null, industry?: string|null, shopping_mode_enabled?: boolean|null }|null} brand
+ */
+export function siteTypeLine(brand) {
+  if (qualityPhase() < 2) return '';
+  const type = siteTypeOf({
+    siteType: brand?.site_type,
+    industry: brand?.industry,
+    shoppingModeEnabled: brand?.shopping_mode_enabled,
+  });
+  return `Site type: ${SITE_TYPE_NAMES[type]} (${SITE_TYPE_MEANINGS[type]})\n`;
 }
 
 /** The page types this kind of site writes, one a line with its format, for a model prompt. */
