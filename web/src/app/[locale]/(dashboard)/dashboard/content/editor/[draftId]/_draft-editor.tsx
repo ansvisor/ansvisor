@@ -2035,7 +2035,7 @@ export function DraftEditor({
         void markReady();
         return;
       case 'export':
-        openBeforePublish('export');
+        openExport();
         return;
     }
   };
@@ -2293,7 +2293,7 @@ export function DraftEditor({
                   size="icon-sm"
                   disabled={!editor}
                   aria-label={t('export.button')}
-                  onClick={() => openBeforePublish('export')}
+                  onClick={() => openExport()}
                 >
                   <Download className="h-3.5 w-3.5" />
                 </Button>
@@ -2680,6 +2680,19 @@ export function DraftEditor({
           onFillNow={() => {
             setExportOpen(null);
             fillFirstPlaceholder();
+          }}
+          // Export opens on its options (CE-057); Before you publish is a
+          // Review away, and comes back to Export.
+          publish={{
+            trustBelow:
+              quality.trust?.score != null && quality.trust.score < TRUST_GATE
+                ? quality.trust.score
+                : null,
+            noAuthor: quality.eeat !== null && !quality.author,
+            onReview: () => {
+              setExportOpen(null);
+              openBeforePublish('export');
+            },
           }}
         />
       )}

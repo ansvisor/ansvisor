@@ -4389,6 +4389,13 @@
         }
       },
       "exportDialog": {
+        "publish": {
+          "quiet": "Before you publish has the author, dates and schema (JSON-LD) for your CMS.",
+          "warnings": "Before you publish: {list}.",
+          "trust": "Trust {trust}, below 60",
+          "noAuthor": "no author yet",
+          "review": "Review"
+        },
         "title": "Export",
         "untitled": "Untitled",
         "formats": "Files",

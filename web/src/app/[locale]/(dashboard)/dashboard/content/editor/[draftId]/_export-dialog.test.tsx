@@ -121,6 +121,21 @@ afterEach(() => {
 });
 
 describe('ExportDialog', () => {
+  it('names what Before you publish warns about over its options, with Review', async () => {
+    const onReview = vi.fn();
+    await render({ publish: { trustBelow: 45, noAuthor: true, onReview } });
+    expect(dialog().textContent).toContain(
+      'Before you publish: Trust 45, below 60 · no author yet.Review',
+    );
+    await act(async () => button('Review')!.click());
+    expect(onReview).toHaveBeenCalled();
+    // Nothing to warn about: a quiet line where the author, dates and schema are.
+    await render({ publish: { trustBelow: null, noAuthor: false, onReview } });
+    expect(dialog().textContent).toContain(
+      'Before you publish has the author, dates and schema (JSON-LD) for your CMS.Review',
+    );
+  });
+
   it('holds the export while a placeholder is open, and fills it or leaves its sentence out', async () => {
     await render({ initialDestination: 'webflow' });
     expect(dialog().querySelector('[role="alert"]')!.textContent).toContain(
