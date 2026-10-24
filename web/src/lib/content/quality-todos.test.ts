@@ -332,8 +332,9 @@ describe('qualityTodos', () => {
   it("keeps a linked proof checked when the next read carries its block with the link's space (review, #1468)", () => {
     const read = 'We are ISO 27001-certified for every plan.';
     const linked = 'We are ISO 27001 -certified for every plan.';
+    // The API cuts the claim from the block as it has it: the space too.
     const ask = (block: string, isLinked: boolean): PageProof => ({
-      claim: 'ISO 27001',
+      claim: isLinked ? 'ISO 27001 -certified' : 'ISO 27001-certified',
       block,
       kind: 'certification',
       sentence: block,

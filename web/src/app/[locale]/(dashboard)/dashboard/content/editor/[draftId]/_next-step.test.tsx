@@ -12,7 +12,7 @@ vi.mock('@/i18n/navigation', () => ({
   ),
 }));
 
-const { NextStepButton, wordsUnderTitle } = await import('./_next-step');
+const { NextStepButton, wordsUnderTitle, stepActor } = await import('./_next-step');
 
 /**
  * The Next step basket (Next step spec §2–3): the header's button names
@@ -208,6 +208,29 @@ describe('NextStepButton', () => {
     expect(button('Fix open rules')).toBeUndefined();
     await act(async () => button('Stop')!.click());
     expect(onStop).toHaveBeenCalled();
+  });
+});
+
+describe('stepActor', () => {
+  it('gives the agent its runs and the person the rest', () => {
+    const actor = (primary: Parameters<typeof stepActor>[0]['primary']) =>
+      stepActor({ id: 'fixRules', primary, alternative: null, skippable: true });
+    expect(
+      (['buildBrief', 'writeWithAgent', 'rewritePage', 'fixRules'] as const).map(actor),
+    ).toEqual(['agent', 'agent', 'agent', 'agent']);
+    expect(
+      (
+        [
+          'writeMyself',
+          'pickAuthor',
+          'addAuthor',
+          'showTodos',
+          'beforePublish',
+          'markReady',
+          'export',
+        ] as const
+      ).map(actor),
+    ).toEqual(['you', 'you', 'you', 'you', 'you', 'you', 'you']);
   });
 });
 
