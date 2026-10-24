@@ -2,14 +2,17 @@
  * Record the Content Agent's own answers on the no-fabrication test set
  * (src/lib/__fixtures__/no-fabrication/cases.js, Quality spec §9), for
  * no-fabrication.test.js to read: every figure that survives the guards
- * must be in what the agent was given.
+ * must be in what the agent was given, and every name or quote it wasn't
+ * given that they let through must be one a person has looked over. The
+ * script prints those (toReview: read without the guards' cues); copy the
+ * ones checked into recorded.json's `reviewed`, by draft.
  *
  * Run from server/, with .env holding the content model's provider key (the
  * model is IMPROVE_SUGGESTION_MODEL, else DEFAULT_SUGGESTION_MODEL, else
  * google/gemini-3-flash-preview) and the Supabase keys the agent's modules
  * load with (nothing is read or written there):
  *   node src/scripts/eval-no-fabrication.js [count]
- *   count defaults to every draft (54): two calls each, the suggestions Fix
+ *   count defaults to every draft: two calls each, the suggestions Fix
  *   open rules asks for and a page written whole, as Start asks for it.
  *
  * Writes src/lib/__fixtures__/no-fabrication/recorded.json, only when at
@@ -22,6 +25,7 @@ import 'dotenv/config';
 import { writeFileSync } from 'fs';
 import { generateObject } from 'ai';
 import { CASES } from '../lib/__fixtures__/no-fabrication/cases.js';
+import { guardedFix, guardedPage, toReview } from '../lib/__fixtures__/no-fabrication/guarded.js';
 import { resolveModel } from '../lib/ai-provider.js';
 import {
   SYSTEM_PROMPT,
@@ -110,10 +114,26 @@ if (!Object.keys(recorded).length) {
   console.error('No draft was answered: recorded.json is left as it was.');
   process.exit(1);
 }
+// What the guards let through that the agent wasn't given: for a person
+// to look over, the answers being new.
+const review = {};
+for (const c of CASES) {
+  const answer = recorded[c.id];
+  if (!answer) continue;
+  const texts = [
+    ...guardedFix(c, answer.fix, new Set(RULES.map((r) => r.key))),
+    guardedPage(c, answer.page),
+  ];
+  const spans = [...new Set(texts.flatMap((text) => toReview(c, text)))];
+  if (spans.length) review[c.id] = spans;
+}
 writeFileSync(
   new URL('../lib/__fixtures__/no-fabrication/recorded.json', import.meta.url),
-  `${JSON.stringify({ model: modelId, recordedAt: new Date().toISOString(), ...recorded }, null, 2)}\n`,
+  `${JSON.stringify({ model: modelId, recordedAt: new Date().toISOString(), reviewed: {}, ...recorded }, null, 2)}\n`,
 );
+for (const [id, spans] of Object.entries(review)) {
+  console.log(`To review, ${id}:\n${spans.map((span) => `  ${span}`).join('\n')}`);
+}
 console.log(
   `Recorded ${Object.keys(recorded).length} of ${count} drafts with ${modelId} in ${((Date.now() - started) / 1000).toFixed(0)} s.`,
 );

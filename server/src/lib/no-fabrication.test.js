@@ -1,87 +1,33 @@
 import { existsSync, readFileSync } from 'fs';
-import * as cheerio from 'cheerio';
 import { describe, expect, it, vi } from 'vitest';
 import { CASES } from './__fixtures__/no-fabrication/cases.js';
 
 /**
  * No invented people, quotes or numbers (Content Editor Quality spec §9):
- * the Content Agent's answers on 54 drafts (cases.js) go through the guards
+ * the Content Agent's answers on every draft in cases.js go through the guards
  * as its runs put them (keepSuggestions for its suggestions, sourcedPage
  * for a page it writes whole), with what it was given: the page, the
  * brand, the authors, the Sources tab's data and Brief › Your input. None
  * of what it made up may survive, and none of what it was given may be
  * taken out. Answers recorded from the model (eval-no-fabrication.js) are
  * read the same way: the guards must find nothing left to take out of what
- * they let through.
+ * they let through (they are stable), and what they let through that the
+ * agent wasn't given must be what a person has looked over (toReview, kept
+ * in recorded.json as `reviewed`): the guards' cues can't vouch for
+ * themselves.
  */
 
 vi.mock('../config/supabase.js', () => ({ default: {} }));
 
 const { draftPassages, keepSuggestions } = await import('./content-agent.js');
-const { inputSources } = await import('./content-inputs.js');
-const { knownPeople, peopleEdits } = await import('./content-people.js');
-const { addedNumbers, htmlText, knownNumbers, numberSources, sourceWords, todayText } =
-  await import('./content-sources.js');
-const { renderPage, sourcedPage } = await import('./content-writer.js');
-
-/** What a run gives the guards, as fixWithRun and writeWithRun build it. */
-function sourcing(c) {
-  const numbered = numberSources({
-    prompts: c.prompts,
-    fanouts: c.fanouts,
-    inputs: inputSources(c.inputs, c.brand.name),
-  });
-  const given = [htmlText(c.html), c.title, c.brand.name, c.brand.industry, c.brand.description];
-  const known = knownNumbers(...given, todayText());
-  const people = knownPeople(
-    ...given,
-    ...numbered.map(sourceWords),
-    // As authorWords reads Settings › Authors.
-    ...c.authors.flatMap((a) => [a.name, a.title]),
-  );
-  const knownInPage = new Set([...known, ...knownNumbers(...numbered.map(sourceWords))]);
-  return { numbered, known, people, knownInPage };
-}
-
-/** A suggestion's sources as the agent names them: the person's data by its number. */
-const resolve = (numbered) => (s) => ({
-  ...s,
-  sources: s.sources.map((ref) =>
-    ref.startsWith('@') ? (numbered.find((n) => n.ref === ref.slice(1))?.id ?? ref) : ref,
-  ),
-});
-
-/** Text as compared: lower case, one kind of quote mark, single spaces. */
-const plain = (text) =>
-  String(text)
-    .toLowerCase()
-    .replace(/[“”„«»"]/g, '"')
-    .replace(/\s+/g, ' ')
-    .trim();
+const { peopleEdits } = await import('./content-people.js');
+const { addedNumbers } = await import('./content-sources.js');
+const { guardedFix, guardedPage, plain, resolve, sourcing, toReview } =
+  await import('./__fixtures__/no-fabrication/guarded.js');
 
 /** What the agent's suggestions leave on the page, and what a page it writes says. */
 function outputs(c) {
-  const { numbered, known, people, knownInPage } = sourcing(c);
-  const rows = keepSuggestions(
-    c.fix.map(resolve(numbered)),
-    draftPassages(c.html),
-    new Set(),
-    new Set(['dated']),
-    null,
-    { numbered, known, people },
-  );
-  const fix = rows
-    .map((row) =>
-      row.kind === 'replace'
-        ? row.after_text
-        : cheerio.load(row.after_text, null, false).root().text(),
-    )
-    .join('\n');
-  const page = cheerio
-    .load(renderPage(sourcedPage(c.page, knownInPage, people)), null, false)
-    .root()
-    .text();
-  return { fix, page };
+  return { fix: guardedFix(c, c.fix).join('\n'), page: guardedPage(c, c.page) };
 }
 
 describe('the no-fabrication test set', () => {
@@ -137,7 +83,7 @@ describe('the no-fabrication test set', () => {
   // The model's own answers, once recorded (not in CI: it needs a model's key).
   const recordedPath = new URL('./__fixtures__/no-fabrication/recorded.json', import.meta.url);
   it.skipIf(!existsSync(recordedPath))(
-    "leaves no figure, name or quote in the model's own answers it wasn't given",
+    "leaves in the model's own answers no figure, and no name or quote it wasn't given that a person hasn't looked over",
     () => {
       const recorded = JSON.parse(readFileSync(recordedPath, 'utf8'));
       const survivors = [];
@@ -146,34 +92,23 @@ describe('the no-fabrication test set', () => {
         const answer = recorded[c.id];
         if (!answer) continue;
         read += 1;
-        const { numbered, known, people, knownInPage } = sourcing(c);
-        const rows = keepSuggestions(
-          answer.fix ?? [],
-          draftPassages(c.html),
-          new Set(),
-          new Set(['dated', 'expert', 'example']),
-          null,
-          { numbered, known, people },
-        );
-        const fix = rows.map((row) =>
-          row.kind === 'replace'
-            ? row.after_text
-            : cheerio.load(row.after_text, null, false).root().text(),
-        );
-        const page = answer.page
-          ? cheerio
-              .load(renderPage(sourcedPage(answer.page, knownInPage, people)), null, false)
-              .root()
-              .text()
-          : '';
-        // What the guards would still take out of what they let through:
-        // nothing, or something got past them.
+        const { people, knownInPage } = sourcing(c);
+        const fix = guardedFix(c, answer.fix ?? [], new Set(['dated', 'expert', 'example']));
+        const page = answer.page ? guardedPage(c, answer.page) : '';
+        const reviewed = new Set(recorded.reviewed?.[c.id] ?? []);
         for (const text of [...fix, page]) {
+          // What the guards would still take out of what they let through:
+          // nothing, or they aren't stable.
           for (const n of addedNumbers(text, knownInPage)) {
             survivors.push(`${c.id}: figure ${text.slice(n.start, n.end)}`);
           }
           for (const e of peopleEdits(text, people)) {
             survivors.push(`${c.id}: ${text.slice(e.start, e.end)}`);
+          }
+          // Names and quotes it wasn't given, read without the guards' cues:
+          // each one a person has looked over.
+          for (const span of toReview(c, text)) {
+            if (!reviewed.has(span)) survivors.push(`${c.id}: not reviewed: ${span}`);
           }
         }
       }

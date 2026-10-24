@@ -552,7 +552,7 @@ const ANSWERS = {
       ],
       page: {
         intro: [
-          `${d.brand.name}, bu soruya verilen ${d.ansvisor.answers} yapay zekâ yanıtının ${d.ansvisor.mentioned} tanesinde anıldı (Ansvisor verisi, Ekim 2026).`,
+          `${d.brand.name}, son 30 günde bu soruya verilen ${d.ansvisor.answers} yapay zekâ yanıtının ${d.ansvisor.mentioned} tanesinde anıldı (%${commaShare(d)}; Ansvisor verisi, Ekim 2026).`,
           `${d.author.title} ${d.author.name} her adımı anlatıyor. “${d.quote.text}” diyor ${d.quote.name}.`,
         ],
       },
@@ -563,6 +563,9 @@ const ANSWERS = {
           d.quote.name,
           d.author.name,
           `${d.ansvisor.answers} yapay zekâ yanıtının ${d.ansvisor.mentioned}`,
+          // The share with a decimal comma, and the days the data covers.
+          `%${commaShare(d)}`,
+          'son 30 günde',
         ],
       },
     }),
@@ -673,7 +676,7 @@ const ANSWERS = {
       ],
       page: {
         intro: [
-          `${d.brand.name} wurde in ${d.ansvisor.mentioned} von ${d.ansvisor.answers} KI-Antworten auf diese Frage genannt (Ansvisor-Daten, Oktober 2026).`,
+          `${d.brand.name} wurde in ${d.ansvisor.mentioned} von ${d.ansvisor.answers} KI-Antworten auf diese Frage genannt (${commaShare(d)} %; Ansvisor-Daten, Oktober 2026).`,
           `${d.author.name}, ${d.author.title}, erklärt jeden Schritt. „${d.quote.text}“ sagt ${d.quote.name}.`,
         ],
       },
@@ -684,6 +687,7 @@ const ANSWERS = {
           d.quote.name,
           d.author.name,
           `${d.ansvisor.mentioned} von ${d.ansvisor.answers}`,
+          `${commaShare(d)} %`,
         ],
       },
     }),
@@ -744,6 +748,14 @@ function insert(passage, after, sources = []) {
     sources,
     marks: [],
   };
+}
+
+/** Ansvisor data's share as Turkish and German write it: "3,4" for the source's "3.4%". */
+function commaShare(d) {
+  return String(Math.round((d.ansvisor.mentioned / d.ansvisor.answers) * 1000) / 10).replace(
+    '.',
+    ',',
+  );
 }
 
 /**

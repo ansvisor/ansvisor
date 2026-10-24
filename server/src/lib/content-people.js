@@ -61,6 +61,7 @@ const wordCount = (text) => (String(text).match(/\p{L}[\p{L}\p{N}'’-]*/gu) ?? 
 // Rowling"), and particles between the words ("Ursula von der Leyen").
 const WORD = String.raw`\p{Lu}(?=[\p{L}'’]*\p{Ll})(?:\p{L}|['’](?=\p{Lu}))+(?:-\p{L}+)?`;
 const PARTICLE = String.raw`(?:von|van|der|den|de|del|della|di|da|du|la|le|al|bin|ibn|ten|ter)`;
+const STARTS_PARTICLE = new RegExp(`^${PARTICLE}$`);
 const NAME = String.raw`(?<!\p{L})(?:(?:\p{Lu}\.\s?){1,3}\s?${WORD}|${WORD}(?:\s+(?:${PARTICLE}\s+){0,3}(?:\p{Lu}\.\s+)?${WORD}){1,2})(?!\p{L})`;
 
 const ROLE_WORDS = [
@@ -262,6 +263,13 @@ const QUOTE_END = String.raw`[”“"»«’‘]`;
  * … açıklıyor"), nor with "de dahil" ("Google Analytics de dahil").
  */
 const TR_SAYS = String.raw`(?:söyledi|söylüyor|dedi|diyor|anlattı|anlatıyor|belirtti|belirtiyor|açıkladı|açıklıyor|ekledi|ekliyor|vurguladı|vurguluyor|aktardı|paylaştı|kaydetti|ifade\s+etti)`;
+/**
+ * Reported speech before such a verb ("…yaradığını söyledi", "…olduğunu
+ * ekliyor", "…geleceğini belirtti"): "ekledi", "kaydetti", "aktardı" and
+ * "paylaştı" also mean added, saved, transferred and shared, said of a
+ * tool as well ("Shopify Plus da kullanarak ürünleri ekledi").
+ */
+const TR_REPORTED = String.raw`(?:[dt][ıiuü]ğ[ıiuü]n[ıiuü]|[ae]c[ae]ğ[ıiuü]n[ıiuü])`;
 
 /**
  * Where a name plainly means a person: the name is the group "name", with
@@ -295,7 +303,7 @@ const NAME_CUES = [
   // Analytics'i açar"); a name before a comma is given up with them.
   {
     re: new RegExp(
-      String.raw`(?<!\p{L})${ROLE_TR_ITS}\s+${NOT_TITLE_NEXT}(?<name>${NAME})(?=\s*[.!?)]|['’](?:a|e|ya|ye|na|ne|n?[ıiuü]n\s+(?:söylediğine|dediğine|belirttiğine|anlattığına))\s+göre(?!\p{L})|\s+${PERSON_SPEECH}(?!\p{L})|(?:,(?!\s*${WORD}(?:\s+${WORD}){0,2}\s*(?:,|\s+(?:ve|veya|ile)(?!\p{L})))|\s+d[ae](?!\s+dahil)(?!\p{L}))[^.!?]{0,160}?(?<!\p{L})${TR_SAYS}\s*[.!?])`,
+      String.raw`(?<!\p{L})${ROLE_TR_ITS}\s+${NOT_TITLE_NEXT}(?<name>${NAME})(?=\s*[.!?)]|['’](?:a|e|ya|ye|na|ne|n?[ıiuü]n\s+(?:söylediğine|dediğine|belirttiğine|anlattığına))\s+göre(?!\p{L})|\s+${PERSON_SPEECH}(?!\p{L})|(?:,(?!\s*${WORD}(?:\s+${WORD}){0,2}\s*(?:,|\s+(?:ve|veya|ile)(?!\p{L})))|\s+d[ae](?!\s+dahil)(?!\p{L}))[^.!?]{0,160}?${TR_REPORTED}\s+${TR_SAYS}\s*[.!?])`,
       'gu',
     ),
     words: 2,
@@ -342,7 +350,9 @@ const NAME_CUES = [
     words: 2,
   },
   // "This works for every team, says Tom Becker." — after a comma, with the
-  // sentence stopping at the name.
+  // sentence stopping at the name. A product "says" too ("…, says Google
+  // Ads."), and gets the placeholder: a trade made for the person's case,
+  // which is the likelier one.
   {
     re: new RegExp(
       String.raw`,\s*(?:says|sagt|diyor)\s+(?<name>${NAME})(?=\s*(?:[.,;:!?)]|$))`,
@@ -420,12 +430,15 @@ function personIn(name, minWords, known) {
   if (words.length < minWords) return null;
   if (NOT_PEOPLE.has(words.at(-1).toLowerCase())) return null;
   // The person's own name may be all or the end of it ("Recently Jane Doe"),
-  // or its start, a company after it ("Ada Lovelace von Northwind").
+  // or its start before a particle, a company after it ("Ada Lovelace von
+  // Northwind"): two words at least, so a known first name ("Dr. Grace
+  // Kim" beside Grace Hopper) or a common word ("Dr. Mark Wilson") lets no
+  // invented name through.
   for (let i = 0; words.length - i >= minWords; i++) {
     if (isKnown(words.slice(i).join(' '), known)) return null;
   }
-  for (let j = words.length - 1; j >= minWords; j--) {
-    if (isKnown(words.slice(0, j).join(' '), known)) return null;
+  for (let j = words.length - 1; j >= Math.max(2, minWords); j--) {
+    if (STARTS_PARTICLE.test(words[j]) && isKnown(words.slice(0, j).join(' '), known)) return null;
   }
   return { start, name: name.slice(start) };
 }
@@ -454,6 +467,12 @@ const SPOKEN_BEFORE = new RegExp(String.raw`${SPEECH}[,:]?\s*$`, 'u');
 /** A placeholder the agent left, or one put in: never read again. */
 const BRACKETS = /\[[^\]]*\]/g;
 
+/** The first guillemet of the line a place is on, « or ». */
+function firstGuillemet(text, at) {
+  const start = text.lastIndexOf('\n', at) + 1;
+  return text.slice(start).match(/[«»]/)?.[0];
+}
+
 /**
  * The names and quoted sentences in a text that what the agent was given
  * doesn't have, as edits { start, end, text } (the placeholder), in order
@@ -469,6 +488,11 @@ export function peopleEdits(text, known, { heading = false } = {}) {
   for (const pattern of QUOTES) {
     for (const m of read.matchAll(pattern)) {
       const end = m.index + m[0].length;
+      // Guillemets open the way a line's first one does: «A» … «B», or
+      // German »A« … »B«; never the words between two quotes.
+      if ((m[0][0] === '«' || m[0][0] === '»') && firstGuillemet(read, m.index) !== m[0][0]) {
+        continue;
+      }
       // The words as written, a placeholder in them too.
       const inner = s.slice(m.index + 1, end - 1);
       const words = wordCount(inner);

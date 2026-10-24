@@ -306,6 +306,28 @@ describe('guardPeople: what the no-fabrication test set found', () => {
     }
   });
 
+  it('lets no invented name through on a known first word: only a known start before a particle', () => {
+    for (const [given, line] of [
+      [
+        '“Grace Hopper wrote the first compiler,” the book says.',
+        'Dr. Grace Kim recommends a medium grind.',
+      ],
+      ['Selin Kaya, Head of Finance', 'Dr. Selin Arslan recommends weekly forecasts.'],
+      ['Sarah Chen (CEO)', 'Dr. Sarah Kim runs the clinic.'],
+      ['Mark the date: it will rain in May or June.', 'Dr. Mark Wilson agrees.'],
+      ['Mark the date: it will rain in May or June.', 'Prof. Will Carter agrees.'],
+      ['Mark the date: it will rain in May or June.', 'Dr. May Chen agrees.'],
+      ['Mark the date: it will rain in May or June.', 'Dr. June Park agrees.'],
+    ]) {
+      expect(guardPeople(line, knownPeople(given)).text).toContain(NAME);
+    }
+    expect(guard('CEO Ada Lovelace Brown agrees.')).toBe(`CEO ${NAME} agrees.`);
+    // A known name, a company after its particle: still known.
+    expect(guard('CEO Ada Lovelace von Northwind agrees.')).toBe(
+      'CEO Ada Lovelace von Northwind agrees.',
+    );
+  });
+
   it('reads a Turkish role’s name before a comma or "da" when the sentence ends saying so', () => {
     expect(
       fix('Fintrail genel müdürü Ayşe Demir, bunun her ekip için işe yaradığını söyledi.'),
@@ -324,9 +346,34 @@ describe('guardPeople: what the no-fabrication test set found', () => {
       'Bir SEO uzmanı Google Analytics, Ahrefs ve Semrush verilerini birlikte okuduğunu söylüyor.',
       'Pazarlama müdürü Google Analytics de dahil birçok aracı kullandığını söyledi.',
       'Pazarlama müdürü Ayşe Yılmaz, kampanyayı yönetti.',
+      // "ekledi", "kaydetti", "aktardı" mean added, saved, transferred too:
+      // read only after reported speech ("…olduğunu ekliyor").
+      'Bir e-ticaret uzmanı Shopify Plus da kullanarak ürünleri mağazaya ekledi.',
+      'Bir veri uzmanı Google Sheets da kullanıp tabloyu kaydetti.',
+      'Proje yöneticisi Microsoft Teams da açık tutuyor ve dosyaları ekibe aktardı.',
+      'Hesap yöneticisi Google Ads da yeni kampanyayı ekledi.',
     ]) {
       expect(fix(line)).toBe(line);
     }
+  });
+
+  it('reads guillemets the way a line’s first one opens them, never the words between two quotes', () => {
+    for (const line of [
+      '«Hızlı» ve «güvenilir» kelimeleri her yerde kullanılıyor ama müşteriler hep «sade» diyor.',
+      'Die Wörter »schnell« und »sicher« stehen überall, aber Kunden sagen »einfach«.',
+    ]) {
+      expect(fix(line)).toBe(line);
+    }
+    // A quote they do hold is still read.
+    expect(fix('«Haftalık tahmin her şeyi değiştirdi», diyor Priya Shah.')).toBe(
+      `${QUOTE}, diyor ${NAME}.`,
+    );
+  });
+
+  it('takes a product that "says" for a person: the trade made for "…, says Tom Becker."', () => {
+    expect(fix('Broad match finds new queries, says Google Ads.')).toBe(
+      `Broad match finds new queries, says ${NAME}.`,
+    );
   });
 
   it("reads a customer's story as a person's, and no customer in a product's name", () => {
