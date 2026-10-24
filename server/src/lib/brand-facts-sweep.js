@@ -23,12 +23,16 @@ export const GONE_KEEP_DAYS = 30;
 const DAY_MS = 86_400_000;
 
 /**
- * Reads the brands due again, one at a time. A paused brand (its
- * workspace not subscribed, on cloud; no domain left) is marked read so it
- * doesn't stand first in line every night; a workspace whose AI budget a
- * read spent is left for the next run.
+ * Reads the brands due again, one at a time, `limit` of them. A brand
+ * whose workspace isn't subscribed (cloud) or that has no domain left is
+ * marked read so it doesn't stand first in line every night; one whose
+ * read failed is marked failed (read again when someone opens its facts).
+ * A read the AI budget stopped is `paused`: its pages are marked read (by
+ * the read itself) and failed, read again when someone opens its facts or
+ * next week; the workspace's other brands wait for the next run, and
+ * don't count toward `limit`.
  *
- * @returns {Promise<{ read: number, skipped: number, failed: number } | { skipped: 'off' }>}
+ * @returns {Promise<{ read: number, paused: number, skipped: number, failed: number } | { skipped: 'off' }>}
  */
 export async function sweepBrandFacts({
   now = Date.now(),
@@ -44,12 +48,11 @@ export async function sweepBrandFacts({
     .lt('checked_at', new Date(now - REFRESH_DAYS * DAY_MS).toISOString())
     .eq('brands.is_active', true)
     .order('checked_at', { ascending: true })
-    .limit(limit * 3);
+    .limit(limit * 6);
   if (error) throw new Error(error.message);
 
   const brands = [];
   for (const row of rows ?? []) {
-    if (brands.length >= limit) break;
     if (!brands.some((b) => b.id === row.brand_id)) {
       brands.push({ id: row.brand_id, orgId: row.brands.organization_id });
     }
@@ -67,19 +70,20 @@ export async function sweepBrandFacts({
     active = (orgId) => subscribed.has(orgId);
   }
 
-  const outcome = { read: 0, skipped: 0, failed: 0 };
+  const outcome = { read: 0, paused: 0, skipped: 0, failed: 0 };
   const spent = new Set();
   const markRead = [];
+  const markFailed = [];
+  let tried = 0;
   for (const brand of brands) {
+    if (tried >= limit) break;
     if (!active(brand.orgId)) {
       outcome.skipped += 1;
       markRead.push(brand.id);
       continue;
     }
-    if (spent.has(brand.orgId)) {
-      outcome.skipped += 1;
-      continue;
-    }
+    if (spent.has(brand.orgId)) continue;
+    tried += 1;
     try {
       const result = await refresh(brand.id, { orgId: brand.orgId, now });
       if (result.noDomain) {
@@ -87,12 +91,14 @@ export async function sweepBrandFacts({
         markRead.push(brand.id);
         continue;
       }
-      if (result.paused) spent.add(brand.orgId);
-      outcome.read += 1;
+      if (result.paused) {
+        spent.add(brand.orgId);
+        outcome.paused += 1;
+      } else outcome.read += 1;
     } catch (err) {
       // One brand's failure isn't the run's, nor first in line tomorrow.
       outcome.failed += 1;
-      markRead.push(brand.id);
+      markFailed.push(brand.id);
       logger.warn(
         { err: { name: err?.name, message: err?.message }, brandId: brand.id },
         '[brand-facts] a brand was not read',
@@ -110,6 +116,14 @@ export async function sweepBrandFacts({
   if (markRead.length) {
     writes.push(
       db.from('brand_fact_pages').update({ checked_at: nowIso }).in('brand_id', markRead),
+    );
+  }
+  if (markFailed.length) {
+    writes.push(
+      db
+        .from('brand_fact_pages')
+        .update({ checked_at: nowIso, status: 'failed' })
+        .in('brand_id', markFailed),
     );
   }
   for (const res of await Promise.all(writes)) {

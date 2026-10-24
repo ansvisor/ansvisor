@@ -78,6 +78,7 @@ describe('sweepBrandFacts', () => {
     const refresh = vi.fn().mockResolvedValue({ noDomain: false, paused: false });
     expect(await sweepBrandFacts({ now: NOW, limit: 2, db, refresh })).toEqual({
       read: 2,
+      paused: 0,
       skipped: 0,
       failed: 0,
     });
@@ -89,7 +90,7 @@ describe('sweepBrandFacts', () => {
       expect.arrayContaining([
         ['lt', 'checked_at', new Date(NOW - REFRESH_DAYS * DAY).toISOString()],
         ['eq', 'brands.is_active', true],
-        ['limit', 6],
+        ['limit', 12],
       ]),
     );
   });
@@ -117,17 +118,41 @@ describe('sweepBrandFacts', () => {
       return { noDomain: false, paused: false };
     });
     expect(await sweepBrandFacts({ now: NOW, db, refresh })).toEqual({
-      read: 1,
-      skipped: 3,
+      read: 0,
+      paused: 1,
+      skipped: 2,
       failed: 1,
     });
     // b4 shares b3's spent budget: left for the next run, not marked read.
     expect(refresh.mock.calls.map(([id]) => id)).toEqual(['b2', 'b3', 'b5']);
-    expect(writes.find((w) => w.table === 'brand_fact_pages')).toMatchObject({
-      op: 'update',
-      payload: { checked_at: new Date(NOW).toISOString() },
-      filters: [['in', 'brand_id', ['b1', 'b2', 'b5']]],
+    expect(writes.filter((w) => w.table === 'brand_fact_pages')).toEqual([
+      expect.objectContaining({
+        payload: { checked_at: new Date(NOW).toISOString() },
+        filters: [['in', 'brand_id', ['b1', 'b2']]],
+      }),
+      expect.objectContaining({
+        payload: { checked_at: new Date(NOW).toISOString(), status: 'failed' },
+        filters: [['in', 'brand_id', ['b5']]],
+      }),
+    ]);
+  });
+
+  it('counts toward its limit only the brands it tried: a spent workspace’s don’t take the others’ turn', async () => {
+    const { db } = fakeDb({
+      brand_fact_pages: [
+        row('a1', 'o1', 9),
+        row('a2', 'o1', 9),
+        row('a3', 'o1', 9),
+        row('b1', 'o2', 8),
+      ],
+      organizations: [
+        { id: 'o1', subscription_status: 'active' },
+        { id: 'o2', subscription_status: 'active' },
+      ],
     });
+    const refresh = vi.fn(async (brandId) => ({ noDomain: false, paused: brandId === 'a1' }));
+    await sweepBrandFacts({ now: NOW, limit: 2, db, refresh });
+    expect(refresh.mock.calls.map(([id]) => id)).toEqual(['a1', 'b1']);
   });
 
   it('drops approved facts gone from the site for a month', async () => {
