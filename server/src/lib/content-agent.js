@@ -140,7 +140,7 @@ export const suggestionsSchema = z.object({
     .max(MAX_AGENT_SUGGESTIONS),
 });
 
-const SYSTEM_PROMPT = `You are the Content Agent for Answer Engine Optimization (AEO). You improve one web page so it meets its writing rules, by suggesting small changes that a person reviews.
+export const SYSTEM_PROMPT = `You are the Content Agent for Answer Engine Optimization (AEO). You improve one web page so it meets its writing rules, by suggesting small changes that a person reviews.
 
 Rules for your suggestions:
 - Fix only the rules listed. Each suggestion fixes one or more of them; put their keys in "rules".

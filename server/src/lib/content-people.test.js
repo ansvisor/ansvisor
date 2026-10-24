@@ -274,6 +274,227 @@ describe('guardPeople: what the review found', () => {
   });
 });
 
+describe('guardPeople: what the no-fabrication test set found', () => {
+  const fix = (text) => guardPeople(text, known).text;
+
+  it('reads whoever says a quote, right next to it, with a verb only people use', () => {
+    for (const [line, out] of [
+      [
+        '“Forecasting weekly turned our cash flow around,” says Priya Shah.',
+        `${QUOTE} says ${NAME}.`,
+      ],
+      [
+        '“Forecasting weekly turned our cash flow around,” Priya Shah says.',
+        `${QUOTE} ${NAME} says.`,
+      ],
+      ['„Wöchentlich planen hat alles verändert“, sagt Priya Shah.', `${QUOTE}, sagt ${NAME}.`],
+      ['»Wöchentlich planen hat alles verändert«, sagt Priya Shah.', `${QUOTE}, sagt ${NAME}.`],
+      ['‚Wöchentlich planen hat alles verändert‘, sagt Priya Shah.', `${QUOTE}, sagt ${NAME}.`],
+      ['“Haftalık tahmin her şeyi değiştirdi,” diyor Priya Shah.', `${QUOTE} diyor ${NAME}.`],
+      ['This works for every team, says Tom Becker.', `This works for every team, says ${NAME}.`],
+    ]) {
+      expect(fix(line)).toBe(out);
+    }
+    // A known quote by a known person stays, a company after the name too.
+    for (const line of [
+      '“Forecasts are only as good as the deals in them,” says Ada Lovelace.',
+      '„Forecasts are only as good as the deals in them“, sagt Ada Lovelace von Northwind.',
+      // A company recommends too: its name isn't a person's.
+      '“Forecasts are only as good as the deals in them,” recommends Northwind Finance.',
+    ]) {
+      expect(fix(line)).toBe(line);
+    }
+  });
+
+  it('lets no invented name through on a known first word: only a known start before a particle', () => {
+    for (const [given, line] of [
+      [
+        '“Grace Hopper wrote the first compiler,” the book says.',
+        'Dr. Grace Kim recommends a medium grind.',
+      ],
+      ['Selin Kaya, Head of Finance', 'Dr. Selin Arslan recommends weekly forecasts.'],
+      ['Sarah Chen (CEO)', 'Dr. Sarah Kim runs the clinic.'],
+      ['Mark the date: it will rain in May or June.', 'Dr. Mark Wilson agrees.'],
+      ['Mark the date: it will rain in May or June.', 'Prof. Will Carter agrees.'],
+      ['Mark the date: it will rain in May or June.', 'Dr. May Chen agrees.'],
+      ['Mark the date: it will rain in May or June.', 'Dr. June Park agrees.'],
+      // A known last name alone, or a common word as one.
+      ['Grace Hopper', 'Dr. Jane Hopper recommends it.'],
+      ['Green tea', 'Dr. Sarah Green recommends it.'],
+      ['Selin Kaya', 'Dr. Ayşe Kaya recommends it.'],
+    ]) {
+      expect(guardPeople(line, knownPeople(given)).text).toContain(NAME);
+    }
+    expect(guardPeople('Dr. Hopper recommends it.', knownPeople('Grace Hopper')).text).toBe(
+      'Dr. Hopper recommends it.',
+    );
+    // A German noun after a known name, a word the page has: still the known name.
+    const german = 'Wir rösten selbst, weil Gründerin Anna Schmidt Kaffee liebt.';
+    expect(guardPeople(german, knownPeople('Anna Schmidt, Gründerin. Kaffee')).text).toBe(german);
+    expect(guard('CEO Ada Lovelace Brown agrees.')).toBe(`CEO ${NAME} agrees.`);
+    // A known name, a company after its particle: still known.
+    expect(guard('CEO Ada Lovelace von Northwind agrees.')).toBe(
+      'CEO Ada Lovelace von Northwind agrees.',
+    );
+  });
+
+  it('reads a Turkish role’s name before a comma or "da" when the sentence ends saying so', () => {
+    expect(
+      fix('Fintrail genel müdürü Ayşe Demir, bunun her ekip için işe yaradığını söyledi.'),
+    ).toBe(`Fintrail genel müdürü ${NAME}, bunun her ekip için işe yaradığını söyledi.`);
+    expect(fix('Fintrail genel müdürü Ayşe Demir, bunun önemli olduğunu ifade etti.')).toBe(
+      `Fintrail genel müdürü ${NAME}, bunun önemli olduğunu ifade etti.`,
+    );
+    expect(
+      fix('Fintrail genel müdürü Tom Becker da alıcıların çoğunun aynı fikirde olduğunu ekliyor.'),
+    ).toBe(`Fintrail genel müdürü ${NAME} da alıcıların çoğunun aynı fikirde olduğunu ekliyor.`);
+    // A verb said only of people needs no reported speech; one that also
+    // means added needs it, plural and with "da" or "sözlerine" too.
+    for (const [line, out] of [
+      [
+        'Fintrail genel müdürü Ayşe Demir, “Bu her ekip için işe yarıyor” dedi.',
+        `Fintrail genel müdürü ${NAME}, ${QUOTE} dedi.`,
+      ],
+      [
+        'Fintrail genel müdürü Ayşe Demir, ürünün çok hızlı olduğunu da ekledi.',
+        `Fintrail genel müdürü ${NAME}, ürünün çok hızlı olduğunu da ekledi.`,
+      ],
+      [
+        'Fintrail genel müdürü Ayşe Demir, ekiplerin çok memnun olduklarını söyledi.',
+        `Fintrail genel müdürü ${NAME}, ekiplerin çok memnun olduklarını söyledi.`,
+      ],
+      [
+        'Fintrail genel müdürü Ayşe Demir, bunun doğru olduğunu sözlerine ekledi.',
+        `Fintrail genel müdürü ${NAME}, bunun doğru olduğunu sözlerine ekledi.`,
+      ],
+      [
+        'Kurucusu Ayşe Demir de bu yöntemi her ekibe anlatıyor.',
+        `Kurucusu ${NAME} de bu yöntemi her ekibe anlatıyor.`,
+      ],
+    ]) {
+      expect(fix(line)).toBe(out);
+    }
+    // A list of tools after a trade isn't a person, nor one "de dahil", nor
+    // a name the sentence says nothing of.
+    for (const line of [
+      'Bir SEO uzmanı Google Analytics, Search Console ve Ahrefs kullanır.',
+      'Bir e-ticaret uzmanı Shopify Plus, WooCommerce ve Magento arasındaki farkları açıklıyor.',
+      'Bir SEO uzmanı Google Analytics, Ahrefs ve Semrush verilerini birlikte okuduğunu söylüyor.',
+      'Pazarlama müdürü Google Analytics de dahil birçok aracı kullandığını söyledi.',
+      'Pazarlama müdürü Ayşe Yılmaz, kampanyayı yönetti.',
+      // "ekledi", "kaydetti", "aktardı" mean added, saved, transferred too:
+      // read only after reported speech ("…olduğunu ekliyor").
+      'Bir e-ticaret uzmanı Shopify Plus da kullanarak ürünleri mağazaya ekledi.',
+      'Bir veri uzmanı Google Sheets da kullanıp tabloyu kaydetti.',
+      'Proje yöneticisi Microsoft Teams da açık tutuyor ve dosyaları ekibe aktardı.',
+      'Hesap yöneticisi Google Ads da yeni kampanyayı ekledi.',
+    ]) {
+      expect(fix(line)).toBe(line);
+    }
+  });
+
+  it('reads guillemets around a quote, never the words between two quotes, French spaced ones too', () => {
+    for (const line of [
+      '«Hızlı» ve «güvenilir» kelimeleri her yerde kullanılıyor ama müşteriler hep «sade» diyor.',
+      'Die Wörter »schnell« und »sicher« stehen überall, aber Kunden sagen »einfach«.',
+    ]) {
+      expect(fix(line)).toBe(line);
+    }
+    // French spaces its « … », with a normal, no-break or narrow no-break space.
+    for (const line of [
+      'Les clients disent « rapide » mais ils veulent surtout un service « fiable » au quotidien.',
+      'On parle de « recherche générative » depuis deux ans, et le terme « AEO » se répand vite.',
+      'Le format « question-réponse » aide beaucoup les moteurs, surtout avec un bloc « FAQ » clair.',
+      'Les clients disent «\u00a0rapide\u00a0» mais ils veulent surtout un service «\u00a0fiable\u00a0» au quotidien.',
+      'Les clients disent «\u202frapide\u202f» mais ils veulent surtout un service «\u202ffiable\u202f» au quotidien.',
+    ]) {
+      expect(fix(line)).toBe(line);
+    }
+    expect(fix('Sie sagte: »Wir haben die Kosten in einem Jahr halbiert.«')).toBe(
+      `Sie sagte: ${QUOTE}`,
+    );
+    // A quote they do hold is still read, a guillemet before it on the line too.
+    expect(fix('«Haftalık tahmin her şeyi değiştirdi», diyor Priya Shah.')).toBe(
+      `${QUOTE}, diyor ${NAME}.`,
+    );
+    expect(fix('Ürünler » Analiz: «Haftalık tahmin her şeyi değiştirdi», diyor Priya Shah.')).toBe(
+      `Ürünler » Analiz: ${QUOTE}, diyor ${NAME}.`,
+    );
+    expect(
+      fix('«Schnell» und »Das hat unseren Umsatz wirklich verdoppelt«, sagt Anna Weber.'),
+    ).toBe(`«Schnell» und ${QUOTE}, sagt ${NAME}.`);
+  });
+
+  it('takes a product that "says" for a person: the trade made for "…, says Tom Becker."', () => {
+    expect(fix('Broad match finds new queries, says Google Ads.')).toBe(
+      `Broad match finds new queries, says ${NAME}.`,
+    );
+  });
+
+  it("reads a customer's story as a person's, and no customer in a product's name", () => {
+    for (const [line, out] of [
+      [
+        'Last spring our customer Jana Novak finished in a week.',
+        `Last spring our customer ${NAME} finished in a week.`,
+      ],
+      ['One client Jana Novak called it simple.', `One client ${NAME} called it simple.`],
+      ['Müşterimiz Jana Novak işi erken bitirdi.', `Müşterimiz ${NAME} işi erken bitirdi.`],
+      ['Unsere Kundin Jana Novak war früher fertig.', `Unsere Kundin ${NAME} war früher fertig.`],
+      ['Ein Kunde Jonas Weber war früher fertig.', `Ein Kunde ${NAME} war früher fertig.`],
+    ]) {
+      expect(fix(line)).toBe(out);
+    }
+    for (const line of [
+      'A Customer Data Platform joins the data.',
+      'HubSpot, a customer relationship management platform, tracks deals.',
+      'Microsoft Outlook, an email client, syncs mail.',
+      'The email client Microsoft Outlook syncs mail.',
+      'Track customer Lifetime Value monthly.',
+      'Salesforce Service Cloud, müşteri desteği için bir platformdur.',
+      'Müşteri Deneyimi Yönetimi önemlidir.',
+    ]) {
+      expect(fix(line)).toBe(line);
+    }
+  });
+
+  it('reads German compound posts and "erzählte", and no ladder, conductor, product or newspaper', () => {
+    for (const [line, out] of [
+      [
+        'Marco Rossi, Finanzchef bei Fintrail, sagte, dass es funktioniert.',
+        `${NAME}, Finanzchef bei Fintrail, sagte, dass es funktioniert.`,
+      ],
+      [
+        'Laut Vertriebsleiterin Anna Schmidt läuft es gut.',
+        `Laut Vertriebsleiterin ${NAME} läuft es gut.`,
+      ],
+      ['Anna Schmidt erzählte uns davon.', `${NAME} erzählte uns davon.`],
+    ]) {
+      expect(fix(line)).toBe(out);
+    }
+    for (const line of [
+      'Die Leiter Hailo ProfiStep steht im Keller.',
+      'Die Teleskopleiter Hailo ProfiStep steht im Keller.',
+      'Der Halbleiter Infineon Technologies liefert Chips.',
+      'Der Schutzleiter Phoenix Contact ist grün-gelb.',
+      'Bosch Rexroth, ein Hersteller für Halbleiter, wächst.',
+      'Use Chef Infra Server to manage your fleet.',
+      'Wie Der Spiegel berichtete, wächst der Markt.',
+      'Die Süddeutsche Zeitung berichtete über das Tool.',
+      'Microsoft Deutschland erklärte, dass Copilot kommt.',
+    ]) {
+      expect(fix(line)).toBe(line);
+    }
+  });
+
+  it('reads the new cues quickly on long text', () => {
+    const long =
+      `Fintrail genel müdürü Ayşe Demir, ${'çok uzun bir açıklama yapıyor '.repeat(8)}`.repeat(400);
+    const started = Date.now();
+    guardPeople(`${long} “${'word '.repeat(50)}” says ${'Aa Bb, '.repeat(200)}`, known);
+    expect(Date.now() - started).toBeLessThan(2000);
+  });
+});
+
 describe('guardPeopleInHtml', () => {
   it('reads the words only, and makes an unknown blockquote one placeholder', () => {
     const { html, count } = guardPeopleInHtml(

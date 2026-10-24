@@ -118,10 +118,14 @@ const CURRENCY = /[$€£¥₺]/;
 const UNIT_AFTER =
   /^\s?(?:%|×|[xX]\b|[kKMB]\b|bn\b|mn\b|[Mm]illions?\b|[Bb]illions?\b|[Tt]housands?\b|[Tt]rillions?\b)/;
 
-/** A claim's unit, one name for each way it is written: "40%", "3x", "2M", "$40". */
+/** A percent written before its number, as Turkish does: "%40", "yüzde 40". */
+const PERCENT_BEFORE = /(?:%\s?|(?<!\p{L})yüzde\s)$/iu;
+
+/** A claim's unit, one name for each way it is written: "40%", "%40", "3x", "2M", "$40". */
 function unitOf(text, start, end) {
   const before = text[start - 1] ?? '';
   if (CURRENCY.test(before)) return before;
+  if (PERCENT_BEFORE.test(text.slice(Math.max(0, start - 6), start))) return '%';
   const unit = text.slice(end).match(UNIT_AFTER)?.[0].trim().toLowerCase();
   if (!unit) return '';
   if (unit === '%') return '%';
@@ -323,10 +327,12 @@ export function placeholderNumbers(text, known) {
   const added = addedNumbers(text, known);
   let out = String(text ?? '');
   for (const n of added.reverse()) {
-    // The sign and unit go with it: "$40" and "40%" become the placeholder.
+    // The sign and unit go with it: "$40", "40%" and "%40" become the placeholder.
     let start = n.start;
     let end = n.end;
     if (CURRENCY.test(out[start - 1] ?? '')) start -= 1;
+    const percent = out.slice(Math.max(0, start - 2), start).match(/%\s?$/);
+    if (percent) start -= percent[0].length;
     const unit = out.slice(end).match(UNIT_AFTER);
     if (unit) end += unit[0].length;
     out = `${out.slice(0, start)}${NUMBER_PLACEHOLDER}${out.slice(end)}`;

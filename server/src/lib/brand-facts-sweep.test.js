@@ -13,7 +13,8 @@ vi.mock('../config/plans.js', () => ({
 }));
 vi.mock('./brand-facts.js', () => ({ refreshOnce: vi.fn() }));
 
-const { GONE_KEEP_DAYS, REFRESH_DAYS, sweepBrandFacts } = await import('./brand-facts-sweep.js');
+const { GONE_KEEP_DAYS, REFRESH_DAYS, SWEEP_DEADLINE_MS, sweepBrandFacts } =
+  await import('./brand-facts-sweep.js');
 
 const NOW = Date.parse('2026-10-24T03:00:00Z');
 const DAY = 86_400_000;
@@ -28,6 +29,7 @@ function fakeDb(tables) {
       const chain = {
         select: (columns) => (reads.push({ table, columns }), chain),
         eq: (col, value) => (q.filters.push(['eq', col, value]), chain),
+        neq: (col, value) => (q.filters.push(['neq', col, value]), chain),
         in: (col, value) => (q.filters.push(['in', col, value]), chain),
         lt: (col, value) => (q.filters.push(['lt', col, value]), chain),
         order: () => chain,
@@ -130,9 +132,20 @@ describe('sweepBrandFacts', () => {
         payload: { checked_at: new Date(NOW).toISOString() },
         filters: [['in', 'brand_id', ['b1', 'b2']]],
       }),
+      // A missed page stays missed, its retry after a day kept.
       expect.objectContaining({
         payload: { checked_at: new Date(NOW).toISOString(), status: 'failed' },
-        filters: [['in', 'brand_id', ['b5']]],
+        filters: [
+          ['in', 'brand_id', ['b5']],
+          ['neq', 'status', 'missed'],
+        ],
+      }),
+      expect.objectContaining({
+        payload: { checked_at: new Date(NOW).toISOString() },
+        filters: [
+          ['in', 'brand_id', ['b5']],
+          ['eq', 'status', 'missed'],
+        ],
       }),
     ]);
   });
@@ -181,5 +194,22 @@ describe('sweepBrandFacts', () => {
     refresh.mockClear();
     expect(await sweepBrandFacts({ now: NOW, db, refresh })).toEqual({ skipped: 'off' });
     expect(refresh).not.toHaveBeenCalled();
+  });
+
+  it('stops reading at its deadline, the brands left first in line next run', async () => {
+    const { db } = fakeDb({
+      brand_fact_pages: [row('b1', 'o1', 9), row('b2', 'o1', 9)],
+      organizations: [{ id: 'o1', subscription_status: 'active' }],
+    });
+    const clock = vi.spyOn(Date, 'now');
+    let t = NOW;
+    clock.mockImplementation(() => t);
+    const refresh = vi.fn(async () => {
+      t += SWEEP_DEADLINE_MS + 1;
+      return { noDomain: false, paused: false };
+    });
+    await sweepBrandFacts({ now: NOW, db, refresh });
+    expect(refresh.mock.calls.map(([id]) => id)).toEqual(['b1']);
+    clock.mockRestore();
   });
 });

@@ -59,7 +59,7 @@ vi.mock('ai', async (importOriginal) => ({
 const { NoObjectGeneratedError } = await import('ai');
 const {
   CLAIMS_HOLD_USD,
-  LEFT_FOR_SOURCES,
+  LEFT_FOR_OTHERS,
   PARAGRAPHS_PER_CALL,
   buildClaimsPrompt,
   draftParagraphs,
@@ -262,7 +262,7 @@ describe('readDraftClaims', () => {
   });
 
   it("calls no model once the draft's day's Quality calls are made, some left to its sources", async () => {
-    readsToday = QUALITY_CALLS_PER_DAY - LEFT_FOR_SOURCES;
+    readsToday = QUALITY_CALLS_PER_DAY - LEFT_FOR_OTHERS;
     const result = await read();
     expect(generateObject).not.toHaveBeenCalled();
     expect(result).toEqual({ paragraphs: [], pending: 2, limited: true });

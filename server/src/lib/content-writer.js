@@ -123,7 +123,7 @@ export const pageSchema = z.object({
   faq: z.array(z.object({ question: z.string(), answer: z.string() })).max(8),
 });
 
-const WRITE_SYSTEM_PROMPT = `You are the Content Agent for Answer Engine Optimization (AEO). You write one web page so AI assistants (ChatGPT, Perplexity, Gemini, Copilot, Google's AI Overviews) understand it, trust it and cite it. A person reviews it before it is published.
+export const WRITE_SYSTEM_PROMPT = `You are the Content Agent for Answer Engine Optimization (AEO). You write one web page so AI assistants (ChatGPT, Perplexity, Gemini, Copilot, Google's AI Overviews) understand it, trust it and cite it. A person reviews it before it is published.
 
 How to write:
 - Answer first: the opening paragraphs answer the page's main question directly.

@@ -172,6 +172,84 @@ describe('AgentCard', () => {
     expect(buttons()).not.toContain('Next: Rewrite page');
   });
 
+  it('heads with the Next step and who takes it, what the agent left as its last run', async () => {
+    const reviewed = [suggestion({ status: 'accepted' })];
+    const step = {
+      label: 'Rewrite page',
+      onRun: vi.fn(),
+      blocked: null,
+      title: 'Shorten to your Length',
+      reason: '6,773 characters against a Length of 4,000.',
+      actor: 'agent' as const,
+    };
+    await render(reviewed, false, { next: step });
+    const card = container.querySelector('[role="region"]')!;
+    expect(card.textContent).toContain('Next · Shorten to your Length');
+    expect(card.textContent).toContain('Content Agent takes this step');
+    expect(card.textContent).toContain('6,773 characters against a Length of 4,000.');
+    expect(card.textContent).toContain('Last run: All suggestions reviewed · 1 accepted');
+    // The agent's step: its robot.
+    expect(card.querySelector('svg rect')).not.toBeNull();
+    // The step changes, and so does the card: the person's step, the person's tile.
+    await render(reviewed, false, {
+      next: {
+        ...step,
+        label: 'Pick author',
+        title: 'Add proof and author',
+        reason: "Only you can do this: pick the page's author.",
+        actor: 'you',
+      },
+    });
+    expect(card.textContent).toContain('Next · Add proof and author');
+    expect(card.textContent).toContain("Only you can do this: pick the page's author.");
+    expect(card.textContent).toContain('only you can take this step');
+    expect(card.querySelector('svg rect')).toBeNull();
+    // The agent's suggestions still to decide keep its tile and their count in sight.
+    await render([suggestion()], false, { next: { ...step, actor: 'you' } });
+    expect(card.querySelector('svg rect')).not.toBeNull();
+    // Working: the run, not the step.
+    await render([], true, { next: step });
+    expect(card.textContent).toBe('Content Agent is working');
+    // A rewrite to decide: still under the step, with its own buttons.
+    await render(
+      [
+        suggestion({
+          kind: 'page',
+          beforeHtml: '<h1>Old</h1><p>A much longer page than this one.</p>',
+          afterText: '<h1>New</h1><p>Shorter.</p>',
+          reason: 'cut to the Length',
+        }),
+      ],
+      false,
+      { next: step },
+    );
+    expect(card.textContent).toContain('Next · Shorten to your Length');
+    expect(card.textContent).toContain(
+      'Last run: Content Agent rewrote the page to its rules · 37 → 12 characters · cut to the Length',
+    );
+    expect(buttons()).toEqual(['Compare', 'Reject', 'Accept']);
+  });
+
+  it('reads a rewrite against the Length, not the agent’s say, and says what it kept', async () => {
+    const page = suggestion({
+      kind: 'page',
+      beforeHtml: '<h1>Old</h1><p>A much longer page than this one.</p>',
+      afterText: '<h1>New</h1><p>Shorter.</p>',
+      reason: 'shortened the content to about 4 characters',
+    });
+    // 12 characters for a Length of 4 (3–5): missed, most of it kept.
+    await render([page], false, { length: { target: 4, min: 3, max: 5, kept: 4 } });
+    expect(container.textContent).toContain(
+      '37 → 12 characters · Length 4 not reached (4 characters are passages AI answers quote, tables and other blocks a rewrite keeps as they are)',
+    );
+    expect(container.textContent).not.toContain('shortened the content');
+    // Within the Length: the agent's own words.
+    await render([page], false, { length: { target: 12, min: 10, max: 14, kept: 0 } });
+    expect(container.textContent).toContain(
+      '37 → 12 characters · shortened the content to about 4 characters',
+    );
+  });
+
   it('says it is working, with nothing to press', async () => {
     await render([], true);
     const card = container.querySelector('[role="region"]')!;
