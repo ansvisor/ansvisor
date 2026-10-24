@@ -18,6 +18,7 @@ const saveContentDraft = vi.fn();
 const setContentDraftPageType = vi.fn();
 const setContentDraftAuthor = vi.fn();
 const keepDraftSource = vi.fn();
+const checkDraftClaims = vi.fn();
 const checkDraftLinks = vi.fn();
 const getSiteTrust = vi.fn();
 vi.mock('@/lib/actions/audits', () => ({
@@ -83,6 +84,7 @@ vi.mock('@/lib/actions/content-drafts', () => ({
   setContentDraftPageType: (...args: unknown[]) => setContentDraftPageType(...args),
   setContentDraftAuthor: (...args: unknown[]) => setContentDraftAuthor(...args),
   keepDraftSource: (...args: unknown[]) => keepDraftSource(...args),
+  checkDraftClaims: (...args: unknown[]) => checkDraftClaims(...args),
   checkDraftLinks: (...args: unknown[]) => checkDraftLinks(...args),
 }));
 vi.mock('next/navigation', () => ({ useParams: () => ({ draftId: 'd1' }) }));
@@ -280,6 +282,7 @@ beforeEach(() => {
   setContentDraftPageType.mockReset().mockResolvedValue(undefined);
   setContentDraftAuthor.mockReset().mockResolvedValue(undefined);
   keepDraftSource.mockReset();
+  checkDraftClaims.mockReset().mockResolvedValue({ blocks: [], pending: 0, limited: false });
   checkDraftLinks.mockReset().mockResolvedValue({ links: [], skipped: [] });
   getSiteTrust.mockReset().mockRejectedValue(new Error('not in this test'));
   getContentAuthors.mockReset().mockResolvedValue(null);
@@ -1755,10 +1758,12 @@ describe('the content editor', () => {
     const items = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')];
     expect(items.map((i) => i.textContent)).toEqual([
       'Export Word',
+      'Export Excel',
+      'Export CSV',
       'Export HTML',
       'Export Markdown',
     ]);
-    await act(async () => items[2].click());
+    await act(async () => items[4].click());
     await act(async () => {});
 
     expect(saveBlob).toHaveBeenCalledTimes(1);
@@ -2637,6 +2642,185 @@ describe('the side panel', () => {
     });
   });
 
+  describe('Claims with no source (Quality CE-045)', () => {
+    afterEach(() => {
+      delete process.env.NEXT_PUBLIC_CONTENT_QUALITY_PHASE;
+      vi.useRealTimers();
+    });
+    const said = 'Ledgerly is the fastest forecasting app.';
+    const claimed = draft({
+      bodyHtml: `<h1>Pipeline forecasting</h1><p>${said} It is easy to set up for any team.</p>`,
+    });
+    const redMarks = () => container.querySelectorAll('.ProseMirror .decoration-red-500');
+    // Trust reads the page once the brand's domains are read, with the sources.
+    beforeEach(() => {
+      getDraftSources.mockResolvedValue({
+        data: {
+          prompts: [],
+          fanouts: [],
+          citedPages: [],
+          gscQueries: [],
+          brandDomains: ['acme.com'],
+          competitorDomains: [],
+        },
+        choices: [],
+      });
+    });
+    const openQuality = async () => {
+      const chip = [...container.querySelectorAll<HTMLButtonElement>('header button')].find((b) =>
+        b.textContent?.startsWith('Quality'),
+      )!;
+      await act(async () => chip.click());
+      return [...panel()!.querySelectorAll('li')].find((li) =>
+        li.textContent?.includes('claim has no source'),
+      )!;
+    };
+
+    it('underlines a claim the model read, and Quality offers Add source and Remove', async () => {
+      process.env.NEXT_PUBLIC_CONTENT_QUALITY_PHASE = '2';
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+      checkDraftClaims.mockResolvedValue({
+        blocks: [
+          {
+            text: `${said} It is easy to set up for any team.`,
+            claims: [{ text: 'the fastest forecasting app', kind: 'superlative' }],
+          },
+        ],
+        pending: 0,
+        limited: false,
+      });
+      getContentDraft.mockResolvedValue(claimed);
+      window.innerWidth = 1440;
+      await renderPage();
+      await act(async () => void (await vi.advanceTimersByTimeAsync(3_000)));
+      // Not writing in the page: no block left for later.
+      expect(checkDraftClaims).toHaveBeenCalledWith('d1', null);
+      expect(redMarks()).toHaveLength(1);
+      expect(redMarks()[0].textContent).toBe('the fastest forecasting app');
+      expect(redMarks()[0].getAttribute('title')).toContain('No source for this claim');
+
+      const row = await openQuality();
+      expect(row.textContent).toContain('1 claim has no source');
+      expect(row.textContent).toContain('AI check');
+      // Add source: the claim selected, the link dialog open on it; Apply links those words.
+      const add = [...row.querySelectorAll('button')].find((b) => b.textContent === 'Add source')!;
+      expect(add.getAttribute('aria-label')).toBe('Add a source to “the fastest forecasting app”');
+      await act(async () => add.click());
+      const field = document.querySelector<HTMLInputElement>('#content-link-href')!;
+      expect(field).not.toBeNull();
+      const { state } = (
+        container.querySelector('.ProseMirror') as HTMLElement & { editor: Editor }
+      ).editor;
+      expect(state.doc.textBetween(state.selection.from, state.selection.to)).toBe(
+        'the fastest forecasting app',
+      );
+      await act(async () => {
+        Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(
+          field,
+          'https://g2.example/forecasting',
+        );
+        field.dispatchEvent(new Event('input', { bubbles: true }));
+      });
+      const apply = [...document.querySelectorAll('button')].find(
+        (b) => b.textContent === 'Apply',
+      )!;
+      await act(async () => apply.click());
+      const link = container.querySelector<HTMLAnchorElement>(
+        '.ProseMirror a[href="https://g2.example/forecasting"]',
+      );
+      expect(link?.textContent).toBe('the fastest forecasting app');
+    });
+
+    it('takes the claim’s sentence out on Remove', async () => {
+      process.env.NEXT_PUBLIC_CONTENT_QUALITY_PHASE = '2';
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+      checkDraftClaims.mockResolvedValue({
+        blocks: [
+          {
+            text: `${said} It is easy to set up for any team.`,
+            claims: [{ text: 'the fastest forecasting app', kind: 'superlative' }],
+          },
+        ],
+        pending: 0,
+        limited: false,
+      });
+      getContentDraft.mockResolvedValue(claimed);
+      window.innerWidth = 1440;
+      await renderPage();
+      await act(async () => void (await vi.advanceTimersByTimeAsync(3_000)));
+      const row = await openQuality();
+      const remove = [...row.querySelectorAll('button')].find((b) => b.textContent === 'Remove')!;
+      await act(async () => remove.click());
+      const page = container.querySelector('.ProseMirror')!.textContent!;
+      expect(page).not.toContain(said);
+      expect(page).toContain('It is easy to set up for any team.');
+    });
+
+    it('takes a list item Remove empties out with its sentence', async () => {
+      process.env.NEXT_PUBLIC_CONTENT_QUALITY_PHASE = '2';
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+      checkDraftClaims.mockResolvedValue({
+        blocks: [
+          { text: said, claims: [{ text: 'the fastest forecasting app', kind: 'superlative' }] },
+        ],
+        pending: 0,
+        limited: false,
+      });
+      getContentDraft.mockResolvedValue(
+        draft({
+          bodyHtml:
+            `<h1>Pipeline forecasting</h1><ul><li><p>${said}</p></li><li><p>Easy to set up.</p></li></ul>` +
+            '<p>Try it free.</p>',
+        }),
+      );
+      window.innerWidth = 1440;
+      await renderPage();
+      await act(async () => void (await vi.advanceTimersByTimeAsync(3_000)));
+      const row = await openQuality();
+      const remove = [...row.querySelectorAll('button')].find((b) => b.textContent === 'Remove')!;
+      await act(async () => remove.click());
+      const items = [...container.querySelectorAll('.ProseMirror li')].map((li) => li.textContent);
+      expect(items).toEqual(['Easy to set up.']);
+    });
+
+    // A figure the rules read, with no source.
+    const figured = draft({
+      bodyHtml: '<h1>Pipeline forecasting</h1><p>Teams cut 40% of their busywork with it.</p>',
+    });
+
+    it('underlines a figure with no source with phase 2, the model having read no claim', async () => {
+      process.env.NEXT_PUBLIC_CONTENT_QUALITY_PHASE = '2';
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+      getContentDraft.mockResolvedValue(figured);
+      window.innerWidth = 1440;
+      await renderPage();
+      await act(async () => void (await vi.advanceTimersByTimeAsync(3_000)));
+      expect(redMarks()).toHaveLength(1);
+      expect(redMarks()[0].textContent).toBe('Teams cut 40% of their busywork with it.');
+    });
+
+    it("asks nothing, underlines nothing and offers no Add source before Quality's second phase", async () => {
+      process.env.NEXT_PUBLIC_CONTENT_QUALITY_PHASE = '1';
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+      getContentDraft.mockResolvedValue(figured);
+      window.innerWidth = 1440;
+      await renderPage();
+      await act(async () => void (await vi.advanceTimersByTimeAsync(40_000)));
+      expect(checkDraftClaims).not.toHaveBeenCalled();
+      expect(redMarks()).toHaveLength(0);
+      const chip = [...container.querySelectorAll<HTMLButtonElement>('header button')].find((b) =>
+        b.textContent?.startsWith('Quality'),
+      )!;
+      await act(async () => chip.click());
+      const row = [...panel()!.querySelectorAll('li')].find((li) =>
+        li.textContent?.includes('figure has no source'),
+      )!;
+      expect(row).toBeDefined();
+      const labels = [...row.querySelectorAll('button')].map((b) => b.textContent);
+      expect(labels).toEqual(['Show']);
+    });
+  });
+
   describe('Sources by kind (Quality CE-046)', () => {
     afterEach(() => {
       delete process.env.NEXT_PUBLIC_CONTENT_QUALITY_PHASE;
@@ -3297,6 +3481,23 @@ describe('the side panel', () => {
       expect(dialog()).toBeNull();
     });
 
+    it('names the team in the page’s language in the CMS author field, as Export does', async () => {
+      process.env.NEXT_PUBLIC_CONTENT_QUALITY_PHASE = '1';
+      brandState.brands = [{ id: 'b1', language: 'tr' } as never, { id: 'b2' }];
+      try {
+        getContentDraft.mockResolvedValue(draft({ pageType: 'blog_post' }));
+        await renderPage();
+        await act(async () => button('Send to CMS')!.click());
+        await act(async () => inDialog('Continue to send').click());
+        await act(async () => inDialog('Send').click());
+        expect(sendPagesToCms).toHaveBeenCalledWith('b1', [
+          expect.objectContaining({ draftId: 'd1', author: 'Acme Ekibi' }),
+        ]);
+      } finally {
+        brandState.brands = [{ id: 'b1' }, { id: 'b2' }];
+      }
+    });
+
     it('opens Before you publish first while Quality is on', async () => {
       process.env.NEXT_PUBLIC_CONTENT_QUALITY_PHASE = '1';
       getContentDraft.mockResolvedValue(draft({ pageType: 'blog_post' }));
@@ -3440,7 +3641,7 @@ describe('the side panel', () => {
       expect(dialog()!.textContent).toContain('Content · ready to paste');
       expect(dialog()!.textContent).toContain('Meta titlePipeline forecasting');
       expect(dialog()!.textContent).toContain('AuthorAcme Team → your CMS author field');
-      expect(inDialog('Copy for Webflow').disabled).toBe(false);
+      expect(inDialog('Download Word').disabled).toBe(false);
     });
 
     it('names the team in the page’s language in the CMS author field', async () => {
@@ -3547,7 +3748,7 @@ describe('the side panel', () => {
       expect(dialog()!.textContent).toContain(ready);
       await act(async () => inDialog('Continue to export').click());
       expect(dialog()!.querySelector('[role="alert"]')).toBeNull();
-      expect(inDialog('Copy for Webflow').disabled).toBe(false);
+      expect(inDialog('Download Word').disabled).toBe(false);
       await act(async () => inDialog('Cancel').click());
       await act(async () => button('Mark ready')!.click());
       expect(dialog()!.textContent).toContain(ready);

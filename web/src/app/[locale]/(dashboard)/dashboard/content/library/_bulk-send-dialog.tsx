@@ -119,7 +119,6 @@ export function BulkSendDialog({
         draftIds: ids,
         brandName,
         brandLanguage,
-        teamByline: (brand) => tEditor('author.organization', { brand }),
       }),
       readKeptFields(ids),
     ])

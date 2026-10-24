@@ -4243,6 +4243,8 @@
         "button": "Export",
         "hint": "Download the page as it is now",
         "docx": "Export Word",
+        "xlsx": "Export Excel",
+        "csv": "Export CSV",
         "html": "Export HTML",
         "md": "Export Markdown",
         "failed": "Couldn't export the page. Try again."
@@ -4389,13 +4391,18 @@
       "exportDialog": {
         "title": "Export",
         "untitled": "Untitled",
-        "destination": "Where it goes",
+        "formats": "Files",
+        "platforms": "Platforms",
+        "show": "Show",
+        "hide": "Hide",
         "destinations": {
           "webflow": "Webflow",
           "wordpress": "WordPress",
           "shopify": "Shopify",
           "docs": "Google Docs",
           "docx": "Word",
+          "xlsx": "Excel",
+          "csv": "CSV",
           "md": "Markdown",
           "html": "HTML"
         },
@@ -4405,6 +4412,8 @@
           "shopify": "Copy, then paste into the blog post or description editor. The H1 is left out: the title goes in the title field.",
           "docs": "Copy, then paste into a new Google Doc.",
           "docx": "A Word file, with the page fields in a table on page 1 to delete or keep.",
+          "xlsx": "An Excel sheet with the page as one row for a CMS import: the title in its own column, the page fields, the text and the HTML without the H1. A cell holds up to 32,767 characters: for a long page, CSV keeps the HTML whole.",
+          "csv": "A CSV file with the page as one row for a CMS import: the title in its own column, the page fields, the text and the HTML without the H1.",
           "md": "A Markdown file, with the page fields as front matter (the title there, not as an H1).",
           "html": "The page's HTML only, for an HTML field or a code view. The page fields are below."
         },
@@ -4473,6 +4482,8 @@
           "shopify": "Copy for Shopify",
           "docs": "Copy for Google Docs",
           "docx": "Download Word",
+          "xlsx": "Download Excel",
+          "csv": "Download CSV",
           "md": "Download Markdown",
           "html": "Copy HTML",
           "downloadHtml": "Download HTML"
@@ -4531,6 +4542,7 @@
           "otherDetail": "Check what your CMS adds for it (Product, ItemList…). The code Ansvisor gives here is for articles."
         },
         "linksPending": "Still reading {count, plural, one {# of the page's links} other {# of the page's links}}, so Trust may change.",
+        "claimsReading": "Still reading the claims in your own words, so Trust may change.",
         "datesNote": "The dates are today's: change them if the page goes out on another day.",
         "headlineLeftOut": "The title still has a placeholder in square brackets, so the code leaves the headline out. Fill it in, and the headline comes back here.",
         "states": {
@@ -4700,6 +4712,15 @@
         "show": "Show",
         "addInput": "Add",
         "keep": "Keep",
+        "aiCheck": "AI check",
+        "addSource": "Add source",
+        "addSourceTo": "Add a source to “{claim}”",
+        "remove": "Remove",
+        "removeClaim": "Remove “{sentence}” from the page",
+        "claimNoSource": "No source for this claim. Add a source, or take it out. Content Agent will not make one up.",
+        "claimsPaused": "Claims in your own words wait for an AI check: this month's AI usage is used up. They're read again when it renews.",
+        "claimsLimited": "Today's AI checks of this page's claims are used up. Paragraphs you change now are checked when you open the page again tomorrow.",
+        "aiPaused": "Sources the rules can't place wait for an AI check: this month's AI usage is used up. They count again when it renews.",
         "keepFailed": "Couldn't keep the source. Try again.",
         "keepFull": "This page keeps 50 sources already: replace one instead.",
         "weakSource": "A weak source: a forum, a social post or a competitor's page. See Quality to replace or keep it.",
@@ -4713,7 +4734,9 @@
         "checks": {
           "claimsSourced": {
             "line": "{count, plural, one {# sentence with a figure has} other {# sentences with figures have}} no source",
-            "detail": "Link each figure's source in the same paragraph, or take the figure out. Content Agent won't make one up."
+            "detail": "Link each figure's source in the same paragraph, or take the figure out. Content Agent won't make one up.",
+            "lineClaims": "{count, plural, one {# claim has} other {# claims have}} no source",
+            "detailClaims": "Figures, findings, superlatives, awards and product facts: link each one's source in the same paragraph, or take it out. Content Agent won't make one up."
           },
           "freshSources": {
             "line": "{count} of {total} dated {total, plural, one {source} other {sources}} {count, plural, one {is} other {are}} over {months} months old",
@@ -6671,6 +6694,14 @@
     "filterRegion": "Region",
     "filterPlatform": "Platform",
     "filterDateRange": "Date range",
+    "market": {
+      "label": "ChatGPT Shopping market",
+      "us": "US",
+      "europe": "Europe",
+      "sourceLabel": "ChatGPT's product source:",
+      "sourceUs": "OpenAI product index · via Shopify",
+      "sourceEurope": "Google Shopping · via Merchant Center"
+    },
     "noBrandTitle": "No brand selected",
     "noBrandDescription": "Select or create a brand to see shopping card analytics for it.",
     "emptyTitle": "No shopping cards yet",
@@ -6716,7 +6747,33 @@
     "drawerTimestamp": "Timestamp",
     "drawerPlatform": "Platform",
     "drawerRegion": "Region",
-    "drawerCardsTitle": "Cards returned"
+    "drawerCardsTitle": "Cards returned",
+    "merchantSplit": {
+      "title": "Where AI sends shoppers",
+      "description": "Where the cards for your products link, in the selected window.",
+      "own_store": "Your store",
+      "amazon": "Amazon",
+      "walmart": "Walmart",
+      "ebay": "eBay",
+      "other_marketplace": "Other marketplaces",
+      "reseller": "Other resellers",
+      "cards": "{count, plural, one {# card} other {# cards}}",
+      "underOnePercent": "<1%",
+      "partLabel": "{destination}: {cards}, {percent}",
+      "unclassified": "{count, plural, one {# card has no merchant link and is} other {# cards have no merchant link and are}} not in the split.",
+      "empty": "No cards for your products link to a merchant in this window."
+    },
+    "resellerPrices": {
+      "title": "Resellers cheaper than you",
+      "description": "Your products sold elsewhere for at least {percent} less than the lowest price on your store, in the same currency, in the selected window.",
+      "empty": "No reseller undercuts your store in this window.",
+      "yourStore": "Your store",
+      "reseller": "Reseller",
+      "lowerBy": "{percent} lower",
+      "untitled": "Untitled product",
+      "unknownMerchant": "Unknown merchant",
+      "openLink": "Open {merchant} in a new tab"
+    }
   },
   "reports": {
     "title": "Reports",
@@ -6955,6 +7012,7 @@
         "improve": "Improve suggestions",
         "content": "Content Editor (briefs, Content Agent)",
         "action_center": "Action Center task writing",
+        "quality": "Content Editor quality checks",
         "other": "Other"
       },
       "chat": "Agent Chat runs on your own AI key, so it doesn't use this allowance.",

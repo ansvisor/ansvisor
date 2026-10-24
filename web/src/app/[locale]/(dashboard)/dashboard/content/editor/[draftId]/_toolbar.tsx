@@ -72,6 +72,7 @@ export function EditorToolbar({
   htmlView,
   onToggleHtml,
   onAttach,
+  linkRequest = 0,
 }: {
   editor: Editor;
   target: number;
@@ -80,9 +81,20 @@ export function EditorToolbar({
   htmlView: boolean;
   onToggleHtml: () => void;
   onAttach: () => void;
+  /**
+   * A new number opens the link dialog on the selection: Quality's Add
+   * source, its claim selected (CE-045).
+   */
+  linkRequest?: number;
 }) {
   const t = useTranslations('contentEditor.editor.toolbar');
   const [dialog, setDialog] = useState<'link' | 'image' | 'htmlBlock' | null>(null);
+  // Only a new request opens it: not the toolbar showing again.
+  const [linkAsked, setLinkAsked] = useState(linkRequest);
+  if (linkRequest !== linkAsked) {
+    setLinkAsked(linkRequest);
+    if (linkRequest > 0) setDialog('link');
+  }
 
   // Re-read only what the toolbar shows, not on every keystroke's render.
   const state = useEditorState({

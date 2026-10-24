@@ -13,6 +13,9 @@ import {
   libraryExportFileName,
   libraryRows,
   libraryWorkbook,
+  pageCsv,
+  pageSheetRow,
+  pageWorkbook,
   type LibraryExportItem,
 } from './draft-export';
 
@@ -222,6 +225,78 @@ describe('draftExportBlob and draftExportFileName', () => {
       'ansvisor_content_pipeline-forecasting-a-guide.docx',
     );
     expect(draftExportFileName('—', 'md')).toBe('ansvisor_content_page.md');
+  });
+
+  it('gives CSV marked as UTF-8 for Excel, and Excel as a workbook', async () => {
+    const csv = await draftExportBlob('csv', 'T', '<h1>T</h1><p>Ünlü.</p>');
+    expect(csv.type).toBe('text/csv;charset=utf-8;');
+    const bytes = await read(csv);
+    expect([...bytes.slice(0, 3)]).toEqual([0xef, 0xbb, 0xbf]);
+    expect(strFromU8(bytes.slice(3))).toContain('Ünlü.');
+    const xlsx = await draftExportBlob('xlsx', 'T', '<h1>T</h1><p>Done.</p>');
+    const files = unzipSync(await read(xlsx));
+    expect(Object.keys(files)).toContain('xl/workbook.xml');
+    expect(draftExportFileName('T', 'xlsx')).toBe('ansvisor_content_t.xlsx');
+  });
+});
+
+describe('one page as a spreadsheet row (Excel, CSV)', () => {
+  const fields = {
+    table: { note: '', rows: [] as [string, string][] },
+    front: {
+      title: 'Pipeline forecasting: a guide',
+      description: 'How teams forecast.',
+      slug: 'pipeline-forecasting',
+      author: 'Ada Lovelace',
+      image: 'https://acme.example/cover.png',
+    },
+    head: { title: '', description: '', author: '' },
+  };
+
+  it('holds the title, the page fields, its words and its HTML without the H1', () => {
+    expect(pageSheetRow('Pipeline forecasting', PAGE, fields)).toMatchObject({
+      Title: 'Pipeline forecasting',
+      'Meta title': 'Pipeline forecasting: a guide',
+      'Meta description': 'How teams forecast.',
+      Slug: 'pipeline-forecasting',
+      Author: 'Ada Lovelace',
+      'Featured image': 'https://acme.example/cover.png',
+      Content: expect.stringMatching(
+        /^Teams trust it, every week\. See our pricing\.\nHow it works\n/,
+      ),
+      HTML: expect.stringMatching(/^<p>Teams <strong>trust<\/strong>/),
+    });
+    // Without Export's fields (the Library's row, the header's menu): read
+    // from the page as Export reads them, with no author.
+    expect(pageSheetRow('Pour-over guide', '<p>Done.</p>')).toMatchObject({
+      'Meta title': 'Pour-over guide',
+      'Meta description': 'Done.',
+      Slug: 'pour-over-guide',
+      Author: '',
+      Characters: 5,
+    });
+    // An optimize draft's slug is its live page's: a CMS import updates it.
+    expect(
+      pageSheetRow('Pour-over guide', '<p>Done.</p>', undefined, 'https://acme.com/blog/pour-over/')
+        .Slug,
+    ).toBe('pour-over');
+    // A list's items with "•": a cell starting "-" would be read as a formula.
+    expect(pageSheetRow('T', '<h1>T</h1><ul><li>HubSpot</li></ul>').Content).toBe('• HubSpot');
+    expect(pageCsv('T', '<h1>T</h1><ul><li>HubSpot</li></ul>')).toContain(',• HubSpot,');
+  });
+
+  it('writes CSV with its header, and Excel with a cell cut at its limit', () => {
+    const csv = pageCsv('T', '<p>Done.</p>', fields);
+    expect(csv.split('\n')[0]).toBe(
+      'Title,Meta title,Meta description,Slug,Author,Featured image,Characters,Content,HTML',
+    );
+    expect(csv).toContain('<p>Done.</p>');
+    const long = `<p>${'x'.repeat(40_000)}</p>`;
+    const [{ data }] = pageWorkbook('T', long, fields);
+    expect(data[0][0]).toEqual({ value: 'Title', fontWeight: 'bold' });
+    const content = data[1][7] as string;
+    expect(content).toHaveLength(32_767);
+    expect(content.endsWith('…')).toBe(true);
   });
 });
 

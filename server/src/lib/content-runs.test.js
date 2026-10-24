@@ -32,6 +32,7 @@ vi.mock('../config/supabase.js', () => ({
         gt: (col, v) => (call.filters.push(['gt', col, v]), chain),
         lt: (col, v) => (call.filters.push(['lt', col, v]), chain),
         gte: () => chain,
+        or: () => chain,
         order: () => chain,
         limit: () => chain,
         maybeSingle: async () => ({ data: rows[table] ?? null, error: null }),

@@ -3,13 +3,20 @@ import { USAGE_WARNING_RATIO, type UsageTone } from '@/lib/content-usage';
 /**
  * The Billing page's "This period's AI usage" meter: how much of the
  * workspace's monthly AI allowance (the plan's AI usage, one budget that
- * Improve suggestions, the Content Editor's AI and the Action Center's task
- * writer all draw on) is used, by feature, and when it renews. The figures
+ * Improve suggestions, the Content Editor's AI, the Action Center's task
+ * writer and the Content Editor's Quality checks all draw on) is used, by
+ * feature, and when it renews. The figures
  * come from GET /api/billing/ai-usage, as shares of the allowance; this
  * only decides how they read.
  */
 
-export const AI_USAGE_FEATURES = ['improve', 'content', 'action_center', 'other'] as const;
+export const AI_USAGE_FEATURES = [
+  'improve',
+  'content',
+  'action_center',
+  'quality',
+  'other',
+] as const;
 export type AiUsageFeature = (typeof AI_USAGE_FEATURES)[number];
 
 export interface AiUsage {

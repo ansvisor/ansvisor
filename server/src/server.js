@@ -27,6 +27,7 @@ import { rebuildQueuedInsightsRollups, sweepInsightsRollups } from './lib/insigh
 import { rebuildQueuedCitationRollups, REBUILD_QUEUE_SCHEDULE } from './lib/citations-rollups.js';
 import { sweepActionValidation } from './lib/action-center/validate.js';
 import { sweepImproveOutcomes } from './lib/action-center/improve-outcome.js';
+import { sweepBrandFacts } from './lib/brand-facts-sweep.js';
 import { parseScraperResponse } from './lib/cloro-scraper.js';
 import { handleScraperResult } from './lib/cloro-result-handler.js';
 import { verifyCloroWebhook } from './lib/cloro-webhook-verify.js';
@@ -197,6 +198,14 @@ async function runDailyTracking() {
   // (PROMPT-008): the Outcome card, the Positions panel and History read them.
   sweepImproveOutcomes().catch((err) => {
     logger.error({ err }, '[improve-outcome] daily sweep crashed');
+  });
+
+  // A brand's facts read again each week (CE-047): the brands whose site was
+  // read over a week ago, a bounded number a night; a no-op before Quality's
+  // phase 2. Fire-and-forget: an unread week is a stale fact the person can
+  // read again by hand, not a reason to hold up tracking.
+  sweepBrandFacts().catch((err) => {
+    logger.error({ err }, '[brand-facts] weekly sweep crashed');
   });
 
   // Skip paused brands (is_active = false): the user has explicitly suspended

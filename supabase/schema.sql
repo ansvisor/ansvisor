@@ -38349,6 +38349,59 @@ grant execute on function public.content_draft_keep_source(uuid, text) to authen
 notify pgrst, 'reload schema';
 
 -- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00264_content_source_classes.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00264: Quality phase 2, CE-046 (part b) — AI reads of sources' kinds
+-- ============================================================================
+-- Trust reads what kind of source each of a page's links is by rules first
+-- (00263's part a). A site the rules can't place is read by the model once,
+-- as primary, secondary or weak (unknown when it doesn't know the site,
+-- kept a day), and kept for every workspace for 90 days:
+-- what kind of site a public website is isn't any workspace's own data, and
+-- one read serves them all. Only the site's address goes to the model.
+--
+-- The reads draw on the workspace's AI budget as their own feature,
+-- "quality", so the Billing meter shows them apart and their small holds
+-- don't set the hold of the Content Agent's larger calls (holdCostUsd).
+
+alter table public.prompt_improve_usage
+  drop constraint if exists prompt_improve_usage_feature_check;
+alter table public.prompt_improve_usage
+  add constraint prompt_improve_usage_feature_check
+    check (feature is null or feature in ('improve', 'content', 'action_center', 'quality'));
+
+comment on column public.prompt_improve_usage.feature is
+  'What the AI call was for: improve (the Improve tab), content (the Content Editor''s AI), action_center (the task writer) or quality (the Content Editor''s Quality checks, 00264). Null on rows from before 00242 whose prompt, draft or action was deleted.';
+
+create table if not exists public.content_source_classes (
+  -- A site as the citations name it: lower case, without "www.", and a
+  -- public DNS name only (letters, digits and hyphens in each label, a dot
+  -- at least, a letter top-level domain): no IP address, no single-label
+  -- name, as the API and the editor take them (SITE_NAME).
+  host text primary key
+    check (
+      char_length(host) between 1 and 253
+      and host ~ '^([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z][a-z0-9-]{0,61}[a-z0-9]$'
+      and host !~ '^www\.'
+    ),
+  -- unknown: the model doesn't know the site; Trust leaves it out, and the
+  -- read is asked again after a day.
+  kind text not null check (kind in ('primary', 'secondary', 'weak', 'unknown')),
+  model text check (model is null or char_length(model) <= 100),
+  classified_at timestamptz not null default now()
+);
+
+alter table public.content_source_classes enable row level security;
+revoke all on table public.content_source_classes from anon, authenticated;
+grant all on table public.content_source_classes to service_role;
+
+comment on table public.content_source_classes is
+  'Quality CE-046 (00264): the kind of source a site is (primary, secondary or weak; unknown when the model doesn''t know it), as the model read it for a site the rules can''t place. Kept 90 days (unknown, a day), shared by every workspace; server-only.';
+
+notify pgrst, 'reload schema';
+
+-- ─────────────────────────────────────────────────────────────────────────
 -- migrations/00265_content_draft_inputs.sql
 -- ─────────────────────────────────────────────────────────────────────────
 -- ============================================================================
@@ -38427,6 +38480,506 @@ create policy "content_draft_inputs: member delete"
 
 comment on table public.content_draft_inputs is
   'Quality CE-048 (00265): Brief › Your input — a draft''s first-hand experience, data and expert quotes, as the person gave them. The Content Agent writes from them and adds nothing beyond them.';
+
+notify pgrst, 'reload schema';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00266_content_quality_claims.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00266: Quality phase 2, CE-045 — the claims in a draft's own words
+-- ============================================================================
+-- Trust wants a source for every claim on a page. Phase 1 reads figures by
+-- rule; phase 2 has the model read the person's own paragraphs for the
+-- claims a rule can't see: research ("studies show"), superlatives ("the
+-- fastest"), awards and certifications ("SOC 2"), product facts
+-- ("waterproof"). The editor underlines one with no source in its block.
+--
+-- What the model read is kept per draft and paragraph, by a hash of the
+-- paragraph's words: a paragraph not changed since isn't read again, and the
+-- rows of paragraphs no longer on the page go at the next read. Each claim
+-- is { "text", "kind" }: its words as the paragraph has them, and number,
+-- stat, superlative or fact. `missed` marks a paragraph whose answer missed
+-- the schema (cut short, or blocked by the provider's filter): kept as read
+-- with no claims, so it isn't charged on every save, and read again after a
+-- day. Server-only: the API reads and writes it, after its own check that
+-- the caller is a member of the draft's workspace.
+
+create table if not exists public.content_quality_claims (
+  draft_id uuid not null references public.content_drafts(id) on delete cascade,
+  paragraph_hash text not null check (paragraph_hash ~ '^[0-9a-f]{16}$'),
+  claims jsonb not null default '[]'::jsonb
+    check (
+      jsonb_typeof(claims) = 'array'
+      and jsonb_array_length(claims) <= 5
+      and octet_length(claims::text) <= 4096
+    ),
+  model text check (model is null or char_length(model) <= 100),
+  missed boolean not null default false,
+  checked_at timestamptz not null default now(),
+  primary key (draft_id, paragraph_hash)
+);
+
+alter table public.content_quality_claims enable row level security;
+revoke all on table public.content_quality_claims from anon, authenticated;
+grant all on table public.content_quality_claims to service_role;
+
+comment on table public.content_quality_claims is
+  'Quality CE-045 (00266): the claims the model read in a draft''s paragraph (number, stat, superlative or fact), by the paragraph''s hash; a changed paragraph is read again, a removed one''s row goes. Server-only.';
+
+notify pgrst, 'reload schema';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00267_shopping_overview_chatgpt_market.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- Shopping: keep ChatGPT Shopping to one market in the Overview (#1278).
+--
+-- ChatGPT Shopping picks products differently by market (the US from OpenAI's
+-- product index, Europe from Google Shopping), so the Shopping page has a
+-- US / Europe switch that keeps ChatGPT Shopping's cards to the market's
+-- regions. The card reads apply it as a PostgREST filter; the Overview's KPIs
+-- and charts come from this function, whose `p_regions` narrows every
+-- platform. `p_chatgpt_regions` narrows ChatGPT Shopping's results and cards
+-- only and lets every other platform through. Null, the default, changes
+-- nothing: a call without it reads exactly what it did before.
+--
+-- APPLY BEFORE DEPLOYING THE WEB. The new web passes `p_chatgpt_regions`, which
+-- the old function doesn't have; the old web's calls match the new function,
+-- since the parameter has a default.
+--
+-- A new parameter makes a new overload under create or replace, and PostgREST
+-- would then have two candidates for one call. So the 6-argument version is
+-- dropped first, and the new one gets the grants it had. The body is 00115's,
+-- with one condition added to the results, cards and trend.
+
+drop function if exists public.shopping_overview(
+  uuid, timestamptz, timestamptz, text[], text[], timestamptz
+);
+
+create or replace function public.shopping_overview(
+  p_brand_id uuid,
+  p_from timestamptz default null,
+  p_to timestamptz default null,
+  p_platforms text[] default null,
+  p_regions text[] default null,
+  p_trend_from timestamptz default null,
+  p_chatgpt_regions text[] default null
+) returns jsonb
+language plpgsql
+stable
+set search_path to 'public'
+set plan_cache_mode to 'force_custom_plan'
+as $$
+begin
+  return (
+    with results as materialized (
+      select r.id, r.platform
+      from public.prompt_results r
+      where r.brand_id = p_brand_id
+        and (p_from is null or r.created_at >= p_from)
+        and (p_to is null or r.created_at <= p_to)
+        and (p_platforms is null or r.platform = any (p_platforms))
+        and (p_regions is null or r.region = any (p_regions))
+        and (p_chatgpt_regions is null or r.platform <> 'chatgpt-shopping'
+             or r.region = any (p_chatgpt_regions))
+    ),
+    by_platform as (
+      select res.platform,
+             count(*) as total_results,
+             count(*) filter (where exists (
+               select 1 from public.prompt_result_shopping_cards c
+               where c.prompt_result_id = res.id
+             )) as results_with_cards
+      from results res
+      group by res.platform
+    ),
+    cards as materialized (
+      select c.matched_brand_role, c.merchant_domain
+      from public.prompt_result_shopping_cards c
+      where c.brand_id = p_brand_id
+        and (p_from is null or c.created_at >= p_from)
+        and (p_to is null or c.created_at <= p_to)
+        and (p_platforms is null or c.platform = any (p_platforms))
+        and (p_regions is null or c.region = any (p_regions))
+        and (p_chatgpt_regions is null or c.platform <> 'chatgpt-shopping'
+             or c.region = any (p_chatgpt_regions))
+    ),
+    top_merchant as (
+      select merchant_domain, count(*) as card_count
+      from cards
+      where matched_brand_role = 'own' and merchant_domain is not null
+      group by merchant_domain
+      order by count(*) desc, merchant_domain
+      limit 1
+    ),
+    trend as (
+      select (c.created_at at time zone 'UTC')::date as day,
+             count(*) filter (where c.matched_brand_role = 'own') as own_cards,
+             count(*) as total_cards
+      from public.prompt_result_shopping_cards c
+      where c.brand_id = p_brand_id
+        and p_trend_from is not null
+        and c.created_at >= p_trend_from
+        and (p_platforms is null or c.platform = any (p_platforms))
+        and (p_regions is null or c.region = any (p_regions))
+        and (p_chatgpt_regions is null or c.platform <> 'chatgpt-shopping'
+             or c.region = any (p_chatgpt_regions))
+      group by 1
+    )
+    select jsonb_build_object(
+      'total_results',       coalesce((select sum(total_results) from by_platform), 0),
+      'results_with_cards',  coalesce((select sum(results_with_cards) from by_platform), 0),
+      'total_cards',         (select count(*) from cards),
+      'own_cards',           (select count(*) from cards where matched_brand_role = 'own'),
+      'top_merchant',        (select jsonb_build_object('domain', merchant_domain,
+                                                        'card_count', card_count)
+                              from top_merchant),
+      'by_platform', coalesce(
+        (select jsonb_agg(jsonb_build_object(
+                  'platform',           platform,
+                  'total_results',      total_results,
+                  'results_with_cards', results_with_cards)
+                order by platform)
+         from by_platform),
+        '[]'::jsonb),
+      'trend', coalesce(
+        (select jsonb_agg(jsonb_build_object(
+                  'day',         day,
+                  'own_cards',   own_cards,
+                  'total_cards', total_cards)
+                order by day)
+         from trend),
+        '[]'::jsonb)
+    )
+  );
+end;
+$$;
+
+grant execute on function public.shopping_overview(
+  uuid, timestamptz, timestamptz, text[], text[], timestamptz, text[]
+) to public, anon, authenticated, service_role;
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00268_shopping_merchant_split.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- Shopping: where AI sends shoppers, and resellers cheaper than the brand (#1277).
+--
+-- 00225 stores each card's destination (merchant_kind, marketplace,
+-- listing_id). Two reads over the brand's own products (cards with
+-- matched_brand_role = 'own') build on it, in the Overview tab's window and
+-- filters (p_from, p_to, p_platforms, p_regions and ChatGPT Shopping's market,
+-- p_chatgpt_regions, as in shopping_overview since 00267):
+--
+--   1. shopping_merchant_split: the cards per destination (your store,
+--      Amazon, Walmart, eBay, other marketplaces, other resellers). Cards
+--      with no merchant URL (merchant_kind null) are counted apart, never
+--      spread over the segments, so the segments add up to the classified
+--      cards.
+--   2. shopping_own_product_offers: the lowest price per merchant, listing,
+--      title and currency, with the link of the card that showed it. The web
+--      app matches these offers to the brand's store and flags the cheaper
+--      resellers (web/src/lib/shopping-reseller-price-alert.ts).
+--
+-- Both are aggregated here, not read as rows: PostgREST caps rows at 1,000,
+-- and the offers come back as one jsonb value for the same reason. On the
+-- largest brands the own products are a few hundred cards a quarter, read
+-- through the (brand_id, matched_brand_role) indexes.
+--
+-- Security definer behind the same membership check as
+-- shopping_amazon_share_weekly (00225), its sibling over these columns: the
+-- check runs once, a non-member gets no rows (or an empty list), and the
+-- reads below use the indexes without the per-row RLS filter.
+--
+-- Apply after 00267 and before deploying the web: the web passes
+-- p_chatgpt_regions to both, as it does to shopping_overview.
+
+create or replace function public.shopping_merchant_split(
+  p_brand_id uuid,
+  p_from timestamptz default null,
+  p_to timestamptz default null,
+  p_platforms text[] default null,
+  p_regions text[] default null,
+  p_chatgpt_regions text[] default null
+)
+returns table (
+  own_store_cards bigint,
+  amazon_cards bigint,
+  walmart_cards bigint,
+  ebay_cards bigint,
+  other_marketplace_cards bigint,
+  reseller_cards bigint,
+  unclassified_cards bigint
+)
+language plpgsql
+stable
+security definer
+set search_path to 'public'
+set plan_cache_mode to 'force_custom_plan'
+as $$
+begin
+  if auth.role() is distinct from 'service_role' and not exists (
+    select 1
+    from public.brands b
+    join public.profiles pf on pf.organization_id = b.organization_id
+    where b.id = p_brand_id
+      and pf.id = auth.uid()
+  ) then
+    return;
+  end if;
+
+  return query
+  select
+    count(*) filter (where c.merchant_kind = 'own'),
+    count(*) filter (where c.merchant_kind = 'marketplace' and c.marketplace = 'amazon'),
+    count(*) filter (where c.merchant_kind = 'marketplace' and c.marketplace = 'walmart'),
+    count(*) filter (where c.merchant_kind = 'marketplace' and c.marketplace = 'ebay'),
+    count(*) filter (where c.merchant_kind = 'marketplace'
+                       and coalesce(c.marketplace, '') not in ('amazon', 'walmart', 'ebay')),
+    count(*) filter (where c.merchant_kind = 'reseller'),
+    count(*) filter (where c.merchant_kind is null)
+  from public.prompt_result_shopping_cards c
+  where c.brand_id = p_brand_id
+    and c.matched_brand_role = 'own'
+    and (p_from is null or c.created_at >= p_from)
+    and (p_to is null or c.created_at <= p_to)
+    and (p_platforms is null or c.platform = any (p_platforms))
+    and (p_regions is null or c.region = any (p_regions))
+    and (p_chatgpt_regions is null or c.platform <> 'chatgpt-shopping'
+         or c.region = any (p_chatgpt_regions));
+end;
+$$;
+
+revoke all on function public.shopping_merchant_split(uuid, timestamptz, timestamptz, text[], text[], text[]) from public, anon;
+grant execute on function public.shopping_merchant_split(uuid, timestamptz, timestamptz, text[], text[], text[]) to authenticated, service_role;
+
+-- One entry per merchant offer of the brand's own products: the classified
+-- cards with a price, grouped by destination, listing, title (case and outer
+-- spaces aside) and currency. Repeat sightings of the same offer collapse to
+-- its lowest price, all the price rule needs, so the list stays short.
+create or replace function public.shopping_own_product_offers(
+  p_brand_id uuid,
+  p_from timestamptz default null,
+  p_to timestamptz default null,
+  p_platforms text[] default null,
+  p_regions text[] default null,
+  p_chatgpt_regions text[] default null
+)
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path to 'public'
+set plan_cache_mode to 'force_custom_plan'
+as $$
+begin
+  if auth.role() is distinct from 'service_role' and not exists (
+    select 1
+    from public.brands b
+    join public.profiles pf on pf.organization_id = b.organization_id
+    where b.id = p_brand_id
+      and pf.id = auth.uid()
+  ) then
+    return '[]'::jsonb;
+  end if;
+
+  return (
+    with offers as (
+      select
+        c.merchant_kind,
+        c.marketplace,
+        c.merchant_domain,
+        c.listing_id,
+        min(c.product_title) as product_title,
+        upper(btrim(c.price_currency)) as price_currency,
+        min(c.price_amount) as price_amount,
+        (array_agg(c.merchant_url order by c.price_amount, c.created_at desc))[1] as merchant_url
+      from public.prompt_result_shopping_cards c
+      where c.brand_id = p_brand_id
+        and c.matched_brand_role = 'own'
+        and c.merchant_kind is not null
+        and c.merchant_url is not null
+        and c.price_amount > 0
+        and nullif(btrim(c.price_currency), '') is not null
+        and (p_from is null or c.created_at >= p_from)
+        and (p_to is null or c.created_at <= p_to)
+        and (p_platforms is null or c.platform = any (p_platforms))
+        and (p_regions is null or c.region = any (p_regions))
+        and (p_chatgpt_regions is null or c.platform <> 'chatgpt-shopping'
+             or c.region = any (p_chatgpt_regions))
+      group by
+        c.merchant_kind,
+        c.marketplace,
+        c.merchant_domain,
+        c.listing_id,
+        lower(btrim(c.product_title)),
+        upper(btrim(c.price_currency))
+    )
+    -- Without both a store offer and another merchant's there is nothing to
+    -- compare: return an empty list rather than every store offer.
+    select coalesce(
+      jsonb_agg(jsonb_build_object(
+        'merchant_kind',   o.merchant_kind,
+        'marketplace',     o.marketplace,
+        'merchant_domain', o.merchant_domain,
+        'merchant_url',    o.merchant_url,
+        'listing_id',      o.listing_id,
+        'product_title',   o.product_title,
+        'price_amount',    o.price_amount,
+        'price_currency',  o.price_currency)),
+      '[]'::jsonb)
+    from offers o
+    where exists (select 1 from offers x where x.merchant_kind = 'own')
+      and exists (select 1 from offers x where x.merchant_kind <> 'own')
+  );
+end;
+$$;
+
+revoke all on function public.shopping_own_product_offers(uuid, timestamptz, timestamptz, text[], text[], text[]) from public, anon;
+grant execute on function public.shopping_own_product_offers(uuid, timestamptz, timestamptz, text[], text[], text[]) to authenticated, service_role;
+
+notify pgrst, 'reload schema';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00269_brand_facts.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00269: Quality phase 2, CE-047 — a brand's facts, read from its own site
+-- ============================================================================
+-- Trust gives 10 points for a page consistent with the brand's facts (Quality
+-- spec §10): its prices and plans, its trial, when it was founded, and the
+-- claims it makes of itself (awards, certifications), read from the brand's
+-- own pricing, About and product pages. The server reads them when someone
+-- first asks and again each week; a person approves each one, and only the
+-- approved ones are compared with a page.
+--
+--   * brand_facts: one row per fact, by what it is about (`slot`: "price of
+--     the Pro plan, in USD, a month") and its value (`value_key`: "49.00").
+--     `quote` is the page's own words, which hold the value: the server
+--     keeps a fact only when its quote is on the page word for word, and
+--     reads the value from it by rule. A new value in a slot is a new
+--     pending fact: the person approves the change. An approved fact no
+--     longer on the page is marked gone (`gone_at`) and left out of the
+--     check; the server removes it after 30 days.
+--   * brand_fact_pages: the pages read, one per kind, with a hash of their
+--     text: an unchanged page isn't sent to the model again. No page text is
+--     kept.
+--
+-- Members read the facts and change only their status (approve or reject),
+-- as themselves; everything else is the server's. brand_fact_pages is
+-- server-only.
+
+create table if not exists public.brand_facts (
+  id uuid primary key default gen_random_uuid(),
+  brand_id uuid not null references public.brands(id) on delete cascade,
+  kind text not null check (kind in ('price', 'trial', 'founded', 'claim')),
+  slot text not null check (char_length(slot) between 1 and 300),
+  value jsonb not null default '{}'::jsonb
+    check (jsonb_typeof(value) = 'object' and octet_length(value::text) <= 1024),
+  value_key text not null check (char_length(value_key) between 1 and 300),
+  quote text not null check (char_length(quote) between 1 and 300),
+  source_url text not null
+    check (char_length(source_url) <= 2048 and source_url ~ '^https?://'),
+  source_kind text not null check (source_kind in ('pricing', 'about', 'product')),
+  status text not null default 'pending'
+    check (status in ('pending', 'approved', 'rejected')),
+  reviewed_by uuid references public.profiles(id) on delete set null,
+  reviewed_at timestamptz,
+  first_seen_at timestamptz not null default now(),
+  last_seen_at timestamptz not null default now(),
+  gone_at timestamptz,
+  unique (brand_id, slot, value_key),
+  -- Each kind's value, as the server reads it from the fact's words.
+  -- A key left out is a violation (a NULL check would pass), and a number
+  -- out of range too, never a cast error.
+  constraint brand_facts_kind_value_check check (
+    coalesce(
+      case kind
+        when 'price' then
+          jsonb_typeof(value -> 'amount') = 'number'
+          and (value ->> 'amount')::numeric >= 0
+          and coalesce(value ->> 'currency', '') ~ '^[A-Z]{3}$'
+          and jsonb_typeof(value -> 'plan') = 'string'
+        when 'trial' then
+          jsonb_typeof(value -> 'days') = 'number'
+          and (value ->> 'days')::numeric between 1 and 365
+        when 'founded' then
+          jsonb_typeof(value -> 'year') = 'number'
+          and (value ->> 'year')::numeric between 1800 and 2100
+        else true
+      end,
+      false
+    )
+  )
+);
+
+create index if not exists brand_facts_brand_status_idx
+  on public.brand_facts (brand_id, status);
+
+alter table public.brand_facts enable row level security;
+revoke all on table public.brand_facts from anon, authenticated;
+grant select on table public.brand_facts to authenticated;
+-- A member changes a fact's status only: its value and words are the site's.
+grant update (status, reviewed_by, reviewed_at) on table public.brand_facts to authenticated;
+grant all on table public.brand_facts to service_role;
+
+drop policy if exists "brand_facts: member select" on public.brand_facts;
+create policy "brand_facts: member select"
+  on public.brand_facts
+  for select
+  using (
+    brand_id in (
+      select b.id from public.brands b
+      join public.profiles p on p.organization_id = b.organization_id
+      where p.id = auth.uid()
+    )
+  );
+
+drop policy if exists "brand_facts: member update" on public.brand_facts;
+create policy "brand_facts: member update"
+  on public.brand_facts
+  for update
+  using (
+    brand_id in (
+      select b.id from public.brands b
+      join public.profiles p on p.organization_id = b.organization_id
+      where p.id = auth.uid()
+    )
+  )
+  with check (
+    brand_id in (
+      select b.id from public.brands b
+      join public.profiles p on p.organization_id = b.organization_id
+      where p.id = auth.uid()
+    )
+    and reviewed_by = auth.uid()
+    and status in ('approved', 'rejected')
+    and reviewed_at between now() - interval '1 minute' and now() + interval '1 minute'
+  );
+
+comment on table public.brand_facts is
+  'Quality CE-047 (00269): a brand''s facts (prices, trial, founding year, claims) read from its own pricing, About and product pages, each kept with its words on the page; members approve or reject them, and only approved ones not gone from the site are compared with a page.';
+
+create table if not exists public.brand_fact_pages (
+  brand_id uuid not null references public.brands(id) on delete cascade,
+  kind text not null check (kind in ('pricing', 'about', 'product')),
+  url text check (url is null or char_length(url) <= 2048),
+  status text not null check (status in ('ok', 'blocked', 'not_found', 'failed', 'missed')),
+  text_hash text check (text_hash is null or text_hash ~ '^[0-9a-f]{16}$'),
+  model text check (model is null or char_length(model) <= 100),
+  checked_at timestamptz not null default now(),
+  extracted_at timestamptz,
+  primary key (brand_id, kind)
+);
+
+create index if not exists brand_fact_pages_checked_idx
+  on public.brand_fact_pages (checked_at);
+
+alter table public.brand_fact_pages enable row level security;
+revoke all on table public.brand_fact_pages from anon, authenticated;
+grant all on table public.brand_fact_pages to service_role;
+
+comment on table public.brand_fact_pages is
+  'Quality CE-047 (00269): the brand pages its facts were read from, one per kind, with a hash of their text (an unchanged page isn''t read by the model again) and when they were read. No page text is kept. Server-only.';
 
 notify pgrst, 'reload schema';
 

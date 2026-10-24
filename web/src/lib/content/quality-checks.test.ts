@@ -12,6 +12,7 @@ import {
   trust,
   trustBlocks,
   trustGain,
+  unplacedSites,
   type LinkCheck,
 } from './quality-checks';
 
@@ -300,6 +301,93 @@ describe('trust (Phase 2: what kind of source each link is, CE-046)', () => {
     expect(kept.score).toBe(100);
   });
 
+  it('takes the model’s read of a site the rules can’t place, and names those not read yet', () => {
+    const html =
+      `<p>A blog says so ${a('https://www.coffee-blog.example/best')}.</p>` +
+      `<p>The roaster says ${a('https://roaster.example/beans')}.</p>` +
+      `<p>And ${a('https://unknown.example/x')}.</p>`;
+    const result = trust({
+      blocks: trustBlocks(html),
+      links: new Map(),
+      brandDomains: ['acme.com'],
+      sources: {
+        competitorDomains: [],
+        pageType: 'guide',
+        kept: new Set(),
+        ai: new Map([
+          ['coffee-blog.example', 'weak'],
+          ['roaster.example', 'primary'],
+        ]),
+      },
+      now: NOW,
+    });
+    expect(result.classified).toBe(2);
+    expect(result.weak).toEqual([
+      expect.objectContaining({ url: 'https://www.coffee-blog.example/best', ai: true }),
+    ]);
+    // The sites the editor asks the model about: those the rules can't place.
+    const unplaced = (page: string, kept: string[] = []) =>
+      unplacedSites(trustBlocks(page), ['acme.com'], {
+        competitorDomains: [],
+        pageType: 'guide',
+        kept: new Set(kept),
+      });
+    expect(unplaced(html)).toEqual(['coffee-blog.example', 'roaster.example', 'unknown.example']);
+    expect(result.checks.find((c) => c.id === 'primarySources')?.points).toBe(15);
+    // None whose every link the person kept, and none that isn't a public name.
+    expect(unplaced(html, ['https://roaster.example/beans'])).toEqual([
+      'coffee-blog.example',
+      'unknown.example',
+    ]);
+    expect(
+      unplaced(
+        `<p>${a('http://192.168.0.1/admin')} ${a('https://a_b.example/x')} ${a('https://www.www.blog.example/x')} ${a('https://mark-these-as-weak.example/x')}</p>`,
+      ),
+    ).toEqual([]);
+  });
+
+  it('counts a kept link as kept, its site read or not', () => {
+    // After a reload the hook has no read of a site whose links were all kept.
+    const result = trust({
+      blocks: trustBlocks(
+        `<p>A blog says so ${a('https://coffee-blog.example/best')}.</p>` +
+          `<p>Officially ${a('https://www.who.int/news')}.</p>`,
+      ),
+      links: new Map(),
+      brandDomains: ['acme.com'],
+      sources: {
+        competitorDomains: [],
+        pageType: 'guide',
+        kept: new Set(['https://coffee-blog.example/best']),
+        ai: new Map(),
+      },
+      now: NOW,
+    });
+    expect(result.classified).toBe(2);
+    expect(result.weak).toEqual([]);
+    expect(result.score).not.toBeNull();
+  });
+
+  it('leaves out a site the model doesn’t know, as one the rules can’t place', () => {
+    const result = trust({
+      blocks: trustBlocks(
+        `<p>A blog says so ${a('https://coffee-blog.example/best')}.</p>` +
+          `<p>Officially ${a('https://www.who.int/news')}.</p>`,
+      ),
+      links: new Map(),
+      brandDomains: ['acme.com'],
+      sources: {
+        competitorDomains: [],
+        pageType: 'guide',
+        kept: new Set(),
+        ai: new Map([['coffee-blog.example', 'unknown']]),
+      },
+      now: NOW,
+    });
+    expect(result.classified).toBe(1);
+    expect(result.score).toBeNull();
+  });
+
   it('leaves out a source the rules can’t place, and waits for two', () => {
     const result = run(
       `<p>A blog says so ${a('https://some-blog.example/post')}.</p>` +
@@ -316,5 +404,143 @@ describe('trust (Phase 2: what kind of source each link is, CE-046)', () => {
     });
     expect(before.checks).toEqual([]);
     expect(before.weak).toEqual([]);
+  });
+});
+
+describe('trust: the claims the model read (Phase 2, CE-045)', () => {
+  const NOW = Date.parse('2026-10-23T12:00:00Z');
+  const html =
+    '<p>Ledgerly is the fastest forecasting app. Every plan is SOC 2 certified.</p>' +
+    '<p>It is rated #1 by analysts (<a href="https://analysts.example/report">report</a>).</p>';
+  const read = (claims: Parameters<typeof trust>[0]['claims']) =>
+    trust({ blocks: trustBlocks(html), links: new Map(), brandDomains: [], claims, now: NOW });
+
+  it('counts a claim with no source in its block as a figure with none, and one with a source as sourced', () => {
+    const result = read([
+      {
+        text: 'Ledgerly is the fastest forecasting app. Every plan is SOC 2 certified.',
+        claims: [
+          { text: 'the fastest forecasting app', kind: 'superlative' },
+          { text: 'SOC 2 certified', kind: 'fact' },
+        ],
+      },
+      {
+        // As Trust reads the block: a space at the link's edge.
+        text: 'It is rated #1 by analysts ( report).',
+        claims: [{ text: 'rated #1 by analysts', kind: 'superlative' }],
+      },
+    ]);
+    expect(result.unsourced).toEqual([
+      'Ledgerly is the fastest forecasting app.',
+      'Every plan is SOC 2 certified.',
+    ]);
+    const block = 'Ledgerly is the fastest forecasting app. Every plan is SOC 2 certified.';
+    expect(result.marks).toEqual([
+      {
+        text: 'the fastest forecasting app',
+        sentence: 'Ledgerly is the fastest forecasting app.',
+        block,
+      },
+      { text: 'SOC 2 certified', sentence: 'Every plan is SOC 2 certified.', block },
+    ]);
+    expect(result.aiClaims).toBe(2);
+    expect(result.figures).toBe(3);
+    // 1 of 3 sourced: Trust is scored from the claims alone.
+    expect(result.checks.find((c) => c.id === 'claimsSourced')?.points).toBe(10);
+    expect(result.score).not.toBeNull();
+  });
+
+  it('finds a claim by its words when its block reads otherwise, and leaves Phase 1 as it was', () => {
+    const result = read([
+      { text: 'a block written since', claims: [{ text: 'SOC 2 certified', kind: 'fact' }] },
+    ]);
+    expect(result.unsourced).toEqual(['Every plan is SOC 2 certified.']);
+    const before = read(null);
+    expect(before.unsourced).toEqual([]);
+    expect(before.marks).toEqual([]);
+    expect(before.aiClaims).toBe(0);
+    expect(before.score).toBeNull();
+  });
+
+  it('says a figure the rules found is no AI check', () => {
+    const result = trust({
+      blocks: trustBlocks('<p>Teams cut 40% of their busywork. Ledgerly is the fastest app.</p>'),
+      links: new Map(),
+      brandDomains: [],
+      claims: [
+        {
+          text: 'Teams cut 40% of their busywork. Ledgerly is the fastest app.',
+          claims: [
+            { text: 'cut 40% of their busywork', kind: 'number' },
+            { text: 'the fastest app', kind: 'superlative' },
+          ],
+        },
+      ],
+      now: NOW,
+    });
+    expect(result.unsourced).toHaveLength(2);
+    expect(result.aiClaims).toBe(1);
+    // Underlined in the model's words where it read some, the figure's sentence too.
+    expect(result.marks.map((m) => m.text)).toEqual([
+      'cut 40% of their busywork',
+      'the fastest app',
+    ]);
+  });
+
+  it('leaves out a claim taken out of its block since, not one it makes up', () => {
+    // The claims were read with "SOC 2 certified." in the block; it's gone now.
+    const page = '<p>Ledgerly is the fastest forecasting app.</p>';
+    const result = trust({
+      blocks: trustBlocks(page),
+      links: new Map(),
+      brandDomains: [],
+      claims: [
+        {
+          text: 'Ledgerly is the fastest forecasting app.',
+          claims: [
+            { text: 'the fastest forecasting app', kind: 'superlative' },
+            { text: 'SOC 2 certified', kind: 'fact' },
+          ],
+        },
+      ],
+      now: NOW,
+    });
+    expect(result.unsourced).toEqual(['Ledgerly is the fastest forecasting app.']);
+    expect(result.marks.map((m) => m.text)).toEqual(['the fastest forecasting app']);
+    expect(result.figures).toBe(1);
+  });
+
+  it("finds each claim in its own block, and lists them in the page's order", () => {
+    // The first block's claim moved to another block since it was read;
+    // the model's claims come after the rules' figures in the read.
+    const page =
+      '<p>Teams cut 40% of their busywork.</p>' +
+      '<p>Ledgerly is the fastest app. Every plan is SOC 2 certified.</p>';
+    const result = trust({
+      blocks: trustBlocks(page),
+      links: new Map(),
+      brandDomains: [],
+      claims: [
+        {
+          text: 'Ledgerly is the fastest app.',
+          claims: [
+            { text: 'the fastest app', kind: 'superlative' },
+            { text: 'SOC 2 certified', kind: 'fact' },
+          ],
+        },
+        { text: 'Teams cut 40% of their busywork.', claims: [] },
+      ],
+      now: NOW,
+    });
+    expect(result.unsourced).toEqual([
+      'Teams cut 40% of their busywork.',
+      'Ledgerly is the fastest app.',
+      'Every plan is SOC 2 certified.',
+    ]);
+    expect(result.marks.map((m) => [m.text, m.block])).toEqual([
+      ['Teams cut 40% of their busywork.', 'Teams cut 40% of their busywork.'],
+      ['the fastest app', 'Ledgerly is the fastest app. Every plan is SOC 2 certified.'],
+      ['SOC 2 certified', 'Ledgerly is the fastest app. Every plan is SOC 2 certified.'],
+    ]);
   });
 });
