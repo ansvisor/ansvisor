@@ -760,9 +760,18 @@ export async function refreshBrandFacts(
           },
         };
       }
-      // Changed again within the hour (a counter, a date): read next time.
-      if (extracted > now - MODEL_EVERY_MS && !missed) {
-        return { page, text: words, row: { status: 'ok', ...keep } };
+      // Changed again within the hour (a counter, a date): read next time,
+      // a page whose answer missed the schema too (it stays missed).
+      if (extracted > now - MODEL_EVERY_MS) {
+        return {
+          page,
+          text: words,
+          row: {
+            status: missed ? 'missed' : 'ok',
+            text_hash: prev?.text_hash ?? null,
+            extracted_at: keep.extracted_at,
+          },
+        };
       }
       if (!words) {
         return { page, row: { status: 'ok', text_hash: hash, extracted_at: keep.extracted_at } };

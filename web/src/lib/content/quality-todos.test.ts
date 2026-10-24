@@ -328,4 +328,28 @@ describe('qualityTodos', () => {
     expect(visualTodo(2, 1, 0)).toMatchObject({ done: true, action: null, gain: 0 });
     expect(visualTodo(0, 0, 0)).toBeUndefined();
   });
+
+  it("keeps a linked proof checked when the next read carries its block with the link's space (review, #1468)", () => {
+    const read = 'We are ISO 27001-certified for every plan.';
+    const linked = 'We are ISO 27001 -certified for every plan.';
+    const ask = (block: string, isLinked: boolean): PageProof => ({
+      claim: 'ISO 27001',
+      block,
+      kind: 'certification',
+      sentence: block,
+      linked: isLinked,
+    });
+    expect(proofKey(ask(linked, true))).toBe(proofKey(ask(read, false)));
+    // Asked while open on the first read; linked, the API's next answer
+    // names the block as the page has it now.
+    const had = new Set([proofKey(ask(read, false))]);
+    expect(
+      qualityTodos({
+        eeat: null,
+        author: null,
+        hasAuthors: true,
+        proofs: { asks: [ask(linked, true)], had },
+      }),
+    ).toMatchObject([{ id: 'proof', done: true }]);
+  });
 });

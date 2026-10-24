@@ -166,6 +166,30 @@ describe('factMismatches', () => {
     ).toMatchObject({ mismatches: [] });
   });
 
+  it('ties a figure to the brand, not only to a sentence that names it (review, #1465)', () => {
+    expect(
+      check([
+        // A price with no plan named: only right after the brand's name and a pricing verb.
+        'If you hire an agency, expect to pay $3,000 per month; with Ledgerly it is less.',
+        // A year the brand's data is about, not when it was founded.
+        "Ledgerly's data shows startups founded in 2020 grew faster.",
+        // Two trial lengths: another brand's beside the brand's.
+        "Acme offers a free 15-day trial; Ledgerly's runs for 14 days.",
+        // Each plan's own price: Business isn't found, its price isn't read.
+        'The Pro plan is $49 a month, and Business is $199 a month.',
+        // An add-on beside the plan's price.
+        'The Pro plan is $49 per month, plus $10 per month for each extra seat.',
+      ]),
+    ).toMatchObject({ mismatches: [] });
+    // Said of the brand, they're still read.
+    expect(check(["Ledgerly's pricing starts at $25 per month."]).mismatches).toMatchObject([
+      { kind: 'price', page: '$25' },
+    ]);
+    expect(check(['Ledgerly was founded in 2016.']).mismatches).toMatchObject([
+      { kind: 'founded', page: '2016' },
+    ]);
+  });
+
   it('compares a trial only where it is the brand’s, its days beside it', () => {
     expect(check(['Every plan has a 30-day free trial.']).mismatches).toEqual([
       {

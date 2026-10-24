@@ -8,6 +8,7 @@ import {
   type Score,
   type TrustCheckId,
   type TrustRead,
+  squeeze,
 } from './quality-checks';
 
 /**
@@ -234,11 +235,13 @@ function shortHash(text: string): string {
 }
 
 /**
- * A proof to-do's key: its claim in its block, the block by a short hash
- * (the nudge keeps the keys it showed).
+ * A proof to-do's key: its claim in its block, the block by a short hash of
+ * its words without spaces (the nudge keeps the keys it showed). A link put
+ * on the claim adds a space at its edge, and the API's next answer carries
+ * the block as the page has it then: the key stays.
  */
 export const proofKey = (ask: { claim: string; block: string }) =>
-  `proof:${ask.claim}:${shortHash(ask.block)}`;
+  `proof:${ask.claim}:${shortHash(squeeze(ask.block))}`;
 
 /**
  * Visual proof (CE-049): an image the person took themself. Images on the
