@@ -9,6 +9,7 @@ import {
   fragment,
   pageFields,
   pasteChecks,
+  teamName,
   titlePlaceholders,
   withByline,
   withoutLeadingH1,
@@ -321,6 +322,19 @@ describe('withByline', () => {
     ).toBe(
       '<script>document.write("<h1>x</h1>")</script>\n<H1 class="t">Pour-over</H1>\n<p>By Ada</p>\n<p>Brew.</p>',
     );
+  });
+});
+
+describe('teamName', () => {
+  it('names the team in the page’s language, the brand alone in another', () => {
+    expect(teamName(null, 'Acme')).toBe('Acme Team');
+    expect(teamName('tr', 'Acme')).toBe('Acme Ekibi');
+    expect(teamName('German', 'Acme')).toBe('Acme-Team');
+    expect(teamName('pt-BR', 'Acme')).toBe('Equipe Acme');
+    expect(teamName('ja', 'Acme')).toBe('Acme');
+    // A "$" in the name is written as it is; no brand read yet, no team.
+    expect(teamName('en', 'Cash $1')).toBe('Cash $1 Team');
+    expect(teamName('de', ' ')).toBe('');
   });
 });
 

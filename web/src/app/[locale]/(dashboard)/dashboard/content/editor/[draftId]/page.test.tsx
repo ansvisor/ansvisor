@@ -2859,6 +2859,19 @@ describe('the side panel', () => {
       expect(inDialog('Copy for Webflow').disabled).toBe(false);
     });
 
+    it('names the team in the page’s language in the CMS author field', async () => {
+      brandState.brands = [{ id: 'b1', language: 'tr' } as never, { id: 'b2' }];
+      try {
+        getContentDraft.mockResolvedValue(draft({ pageType: 'blog_post' }));
+        await renderPage();
+        await act(async () => button('Export')!.click());
+        await act(async () => inDialog('Continue to export').click());
+        expect(dialog()!.textContent).toContain('AuthorAcme Ekibi → your CMS author field');
+      } finally {
+        brandState.brands = [{ id: 'b1' }, { id: 'b2' }];
+      }
+    });
+
     it('reads Ready to paste as the links are read, a refused read as unread', async () => {
       vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
       try {

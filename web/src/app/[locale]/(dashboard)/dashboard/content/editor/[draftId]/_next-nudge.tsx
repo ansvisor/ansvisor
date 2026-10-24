@@ -93,7 +93,7 @@ export function NextNudge({
   onAct,
 }: {
   shown: { todo: QualityTodo; count: number } | null;
-  quality: Pick<QualityRead, 'author' | 'brandName' | 'canEdit'>;
+  quality: Pick<QualityRead, 'author' | 'team' | 'canEdit'>;
   /** Selects the page's first placeholder, to type over. */
   onShowPlaceholder: () => void;
   onPickAuthor: () => void;

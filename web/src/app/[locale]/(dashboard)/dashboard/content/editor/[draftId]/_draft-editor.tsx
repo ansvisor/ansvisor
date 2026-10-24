@@ -81,6 +81,7 @@ import {
   bylineText,
   exportPlaceholders,
   pasteChecks,
+  teamName,
   titlePlaceholders,
   withByline,
 } from '@/lib/content/ready-to-publish';
@@ -565,6 +566,7 @@ export function DraftEditor({
         canEdit: canEditPageAuthor,
         hasAuthors,
         brandName,
+        team: teamName(language, brandName),
         siteTrust,
         todos,
       }
@@ -1390,6 +1392,11 @@ export function DraftEditor({
   } | null>(null);
   const openExport = (destination?: ExportDestination) =>
     setExportOpen({ html: pageToPublish(), destination });
+  // Its checks, read again only as the link reads land, not on every render.
+  const exportChecks = useMemo(
+    () => (exportOpen ? pasteChecks(exportOpen.html, linkChecks) : null),
+    [exportOpen, linkChecks],
+  );
   const copyPageHtml = () => {
     if (!editor) return;
     const html = pageToPublish();
@@ -2167,7 +2174,7 @@ export function DraftEditor({
         )}
       </div>
 
-      {quality && exportOpen && (
+      {quality && exportOpen && exportChecks && (
         <ExportDialog
           onClose={() => setExportOpen(null)}
           title={title}
@@ -2175,10 +2182,11 @@ export function DraftEditor({
           isNew={draft.method === 'create'}
           sourceUrl={draft.sourceUrl}
           author={pageAuthor}
-          // Until the authors are read, who it is by isn't known.
-          teamByline={authorsRead ? t('author.organization', { brand: brandName }) : ''}
+          // Until the authors are read, who it is by isn't known. It goes to
+          // the CMS's author field, so in the page's language.
+          teamByline={authorsRead ? teamName(language, brandName) : ''}
           byline={contentByline}
-          checks={pasteChecks(exportOpen.html, linkChecks)}
+          checks={exportChecks}
           linksPending={linksPending}
           initialDestination={exportOpen.destination}
           onFillNow={() => {

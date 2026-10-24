@@ -103,7 +103,6 @@ export function BeforePublish({
 }) {
   const t = useTranslations('contentEditor.editor.beforePublish');
   const tQuality = useTranslations('contentEditor.editor.quality');
-  const tAuthor = useTranslations('contentEditor.editor.author');
   const markRef = useRef<HTMLButtonElement>(null);
   // Fix first and Fill now move on to the page: focus isn't sent back to the button.
   const fixing = useRef(false);
@@ -150,9 +149,7 @@ export function BeforePublish({
         : {
             state: 'missing',
             title: t('author.none'),
-            detail: t('author.noneDetail', {
-              byline: tAuthor('organization', { brand: brandName }),
-            }),
+            detail: t('author.noneDetail', { byline: quality.team }),
           },
     ...(article
       ? [

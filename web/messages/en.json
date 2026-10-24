@@ -4266,8 +4266,9 @@
             "okDetail": "Each was read in the last day.",
             "broken": "{broken} of {count} links don't answer",
             "brokenDetail": "Fix or remove them first: Quality shows which.",
-            "reading": "{count, plural, one {# link} other {# links}}, still being read",
+            "reading": "{reading} of {count} links still being read",
             "readingDetail": "Their read comes a few seconds after the page is saved.",
+            "readingAndUnread": "{reading} of {count} links still being read, {unread} couldn't be read",
             "unread": "{unread} of {count} links couldn't be read",
             "unreadDetail": "Open them yourself before you publish."
           },

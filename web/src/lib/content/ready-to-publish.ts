@@ -432,20 +432,21 @@ export function pageFields({
 
 /**
  * The byline line in the page's language (Add byline to content): the
- * prefix with the author's name, or the team's line. It goes into the page,
- * so it is written in the page's language, not the app's. A language not
- * here gets the name alone, or the brand's.
+ * prefix with the author's name, or the team's line; and the team's name
+ * alone, for a CMS's author field. They go out with the page, so they are
+ * written in the page's language, not the app's. A language not here gets
+ * the name alone, or the brand's.
  */
-const BYLINES: Record<string, { by: string; team: string }> = {
-  en: { by: 'By {name}', team: 'By {brand} Team' },
-  tr: { by: 'Yazar: {name}', team: 'Yazar: {brand} Ekibi' },
-  de: { by: 'Von {name}', team: 'Vom {brand}-Team' },
-  fr: { by: 'Par {name}', team: "Par l'équipe {brand}" },
-  es: { by: 'Por {name}', team: 'Por el equipo de {brand}' },
-  pt: { by: 'Por {name}', team: 'Pela equipe {brand}' },
-  it: { by: 'Di {name}', team: 'A cura del team {brand}' },
-  nl: { by: 'Door {name}', team: 'Door het {brand}-team' },
-  sv: { by: 'Av {name}', team: 'Av {brand}-teamet' },
+const BYLINES: Record<string, { by: string; team: string; teamName: string }> = {
+  en: { by: 'By {name}', team: 'By {brand} Team', teamName: '{brand} Team' },
+  tr: { by: 'Yazar: {name}', team: 'Yazar: {brand} Ekibi', teamName: '{brand} Ekibi' },
+  de: { by: 'Von {name}', team: 'Vom {brand}-Team', teamName: '{brand}-Team' },
+  fr: { by: 'Par {name}', team: "Par l'équipe {brand}", teamName: 'Équipe {brand}' },
+  es: { by: 'Por {name}', team: 'Por el equipo de {brand}', teamName: 'Equipo de {brand}' },
+  pt: { by: 'Por {name}', team: 'Pela equipe {brand}', teamName: 'Equipe {brand}' },
+  it: { by: 'Di {name}', team: 'A cura del team {brand}', teamName: 'Team {brand}' },
+  nl: { by: 'Door {name}', team: 'Door het {brand}-team', teamName: '{brand}-team' },
+  sv: { by: 'Av {name}', team: 'Av {brand}-teamet', teamName: '{brand}-teamet' },
 };
 
 /**
@@ -461,6 +462,18 @@ export function bylineText(
   // A function, so a "$" in a name is written as it is.
   if (author) return forms ? forms.by.replace('{name}', () => author) : author;
   return forms ? forms.team.replace('{brand}', () => brand) : brand;
+}
+
+/**
+ * The brand's team as a page in `language` names it, for a CMS's author
+ * field when the page has no author ("Acme Team", "Acme Ekibi"); the brand
+ * alone in a language not here.
+ */
+export function teamName(language: string | null | undefined, brand: string): string {
+  // No brand read yet: no team to name.
+  if (!brand.trim()) return '';
+  const forms = BYLINES[languageCode(language) ?? ''];
+  return forms ? forms.teamName.replace('{brand}', () => brand) : brand;
 }
 
 /**
