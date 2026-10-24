@@ -234,8 +234,8 @@ export function bulkCmsItems(
 /**
  * The pages in sends a request each can carry, in order, by their bytes as
  * sent: a long page goes alone, never split. Each request is a send of its
- * own on the server, so the groups' pages go side by side; a group's, one
- * after another.
+ * own on the server, its pages one after another; the bulk dialog posts the
+ * next once the last one's pages have gone, so groups don't go side by side.
  */
 export function cmsSendGroups(pages: CmsPage[], budget = SEND_BODY_BUDGET): CmsPage[][] {
   const groups: CmsPage[][] = [];

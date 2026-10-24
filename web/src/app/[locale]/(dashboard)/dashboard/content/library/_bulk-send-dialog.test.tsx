@@ -195,6 +195,35 @@ describe('BulkSendDialog', () => {
     );
   });
 
+  it('posts the next request once the last one’s pages have gone, one page at a time', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
+    oneByOne.on = true;
+    sendPagesToCms
+      .mockResolvedValueOnce({
+        ok: true,
+        deliveries: [{ id: 'x1', draftId: 'd1', status: 'queued' }],
+        skipped: 0,
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        deliveries: [{ id: 'x3', draftId: 'd3', status: 'sent' }],
+        skipped: 0,
+      });
+    readDeliveries
+      .mockResolvedValueOnce([{ id: 'x1', draftId: 'd1', status: 'queued' }])
+      .mockResolvedValue([{ id: 'x1', draftId: 'd1', status: 'sent' }]);
+    await render();
+    await act(async () => void button('Send 2 pages').click());
+    expect(sendPagesToCms).toHaveBeenCalledTimes(1);
+    // Still going after the first read: the second waits.
+    await act(async () => void (await vi.advanceTimersByTimeAsync(2_000)));
+    expect(readDeliveries).toHaveBeenCalledWith(['x1']);
+    expect(sendPagesToCms).toHaveBeenCalledTimes(1);
+    await act(async () => void (await vi.advanceTimersByTimeAsync(2_000)));
+    expect(sendPagesToCms).toHaveBeenCalledTimes(2);
+    expect(dialog().querySelector('[role="status"]')!.textContent).toBe('2 pages sent.');
+  });
+
   it('says how many pages the day’s sends left out', async () => {
     sendPagesToCms.mockResolvedValue({
       ok: true,

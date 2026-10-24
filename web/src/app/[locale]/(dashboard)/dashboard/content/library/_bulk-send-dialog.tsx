@@ -29,6 +29,23 @@ const POLL_MS = 2_000;
 /** After this long, the Library takes over showing them. */
 const POLL_FOR_MS = 3 * 60_000;
 
+/**
+ * Waits until these sends aren't queued any more, read as the dialog reads
+ * them, or for as long as it reads them: one page at a time (#1331), so the
+ * next request goes once the last one's pages have gone. Gives the last read.
+ */
+async function gone(ids: string[]) {
+  const until = Date.now() + POLL_FOR_MS;
+  let last: CmsDelivery[] = [];
+  while (Date.now() < until) {
+    await new Promise((resolve) => setTimeout(resolve, POLL_MS));
+    const read = await readDeliveries(ids).catch(() => null);
+    if (read) last = read;
+    if (read && !read.some((delivery) => delivery.status === 'queued')) break;
+  }
+  return last;
+}
+
 interface Refusal {
   code: CmsSendError;
   field: string | null;
@@ -147,7 +164,8 @@ export function BulkSendDialog({
     const made = new Map<string, CmsDelivery>();
     let notSent = 0;
     let stopped: Refusal | null = null;
-    for (const group of cmsSendGroups(ready.flatMap((item) => (item.page ? [item.page] : [])))) {
+    const groups = cmsSendGroups(ready.flatMap((item) => (item.page ? [item.page] : [])));
+    for (const [i, group] of groups.entries()) {
       // Once a send was refused (the day's sends used up), the rest wait too.
       if (stopped) {
         notSent += group.length;
@@ -167,6 +185,15 @@ export function BulkSendDialog({
       }
       for (const delivery of result.deliveries) made.set(delivery.draftId, delivery);
       notSent += result.skipped;
+      // Pages too long for one request: the next waits for this one's to go.
+      const queued = result.deliveries.filter((d) => d.status === 'queued').map((d) => d.id);
+      if (queued.length && i < groups.length - 1) {
+        const byId = new Map((await gone(queued)).map((delivery) => [delivery.id, delivery]));
+        for (const [draftId, delivery] of made) {
+          const now = byId.get(delivery.id);
+          if (now) made.set(draftId, { ...now, draftId });
+        }
+      }
     }
     setSent(made);
     setSkipped(notSent);
