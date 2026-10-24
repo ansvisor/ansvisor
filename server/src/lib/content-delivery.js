@@ -4,6 +4,7 @@ import { z } from 'zod';
 import supabaseAdmin from '../config/supabase.js';
 import { logger } from './logger.js';
 import { PageFetchError } from './safe-fetch.js';
+import { languageCodeOf } from './languages.js';
 import { postJson } from './safe-post.js';
 
 /**
@@ -28,6 +29,8 @@ export const PACKAGE_VERSION = 1;
 export const DAILY_DELIVERIES = 200;
 /** Pages one send may take. */
 export const PAGES_PER_SEND = 25;
+/** Between a batch's pages: a CMS's per-minute cap (#1331, "with a short pause"). */
+export const PAUSE_MS = 2_000;
 const MAX_HTML_CHARS = 1_000_000;
 const EXCERPT_CHARS = 2000;
 
@@ -104,10 +107,14 @@ function safeUrl(value, { image }) {
  * document-level tags or SVG animation (which can set a link), no event
  * handlers, and links only to the schemes a page needs (safeUrl).
  */
+/** A script that holds JSON-LD, its type written however the page wrote it. */
+const isJsonLd = ($, el) =>
+  ($(el).attr('type') ?? '').trim().toLowerCase() === 'application/ld+json';
+
 export function cleanPublishHtml(html) {
   const $ = cheerio.load(html, null, false);
   $('script').each((_, el) => {
-    if (($(el).attr('type') ?? '').trim().toLowerCase() !== 'application/ld+json') $(el).remove();
+    if (!isJsonLd($, el)) $(el).remove();
   });
   $(
     'iframe, frame, frameset, object, embed, applet, form, base, meta, link, style, animate, set, animateMotion, animateTransform',
@@ -135,11 +142,28 @@ function serverUrl() {
   return process.env.PUBLIC_SERVER_URL || `http://localhost:${process.env.PORT || 3001}`;
 }
 
+/** The JSON-LD in a page's cleaned HTML: a CMS's rich-text field drops <script>. */
+function jsonLdOf(html) {
+  const $ = cheerio.load(html, null, false);
+  return $('script')
+    .toArray()
+    .filter((el) => isJsonLd($, el))
+    .flatMap((el) => {
+      try {
+        return [JSON.parse($(el).text())];
+      } catch {
+        return [];
+      }
+    });
+}
+
 /**
  * The package a page goes as (schemaVersion 1). The callback is offered only
- * to a webhook with a secret: the secret is what authenticates it.
+ * to a webhook with a secret: the secret is what authenticates it. What the
+ * draft is (method, live address, page type, language) comes from its row,
+ * not the browser: an optimized page's workflow updates its post.
  */
-export function contentPackage({ delivery, page, brand, html, callback = true }) {
+export function contentPackage({ delivery, page, brand, html, jsonLd, callback = true }) {
   return {
     event: DELIVERY_EVENT,
     schemaVersion: PACKAGE_VERSION,
@@ -155,13 +179,16 @@ export function contentPackage({ delivery, page, brand, html, callback = true })
       metaTitle: page.metaTitle || page.title,
       metaDescription: page.metaDescription,
       html,
+      jsonLd: jsonLd ?? jsonLdOf(html),
       author: page.author,
       featuredImage: page.featuredImage,
+      method: page.method ?? null,
+      sourceUrl: page.sourceUrl ?? null,
+      pageType: page.pageType ?? null,
+      language: page.language ?? null,
     },
-    brand,
-    callback_url: callback
-      ? `${serverUrl()}/webhooks/content-drafts/${delivery.id}/published`
-      : null,
+    brand: { id: brand.id, name: brand.name, domain: brand.domain, industry: brand.industry },
+    callback_url: callback ? `${serverUrl()}/webhooks/content-drafts/${delivery.id}/status` : null,
     callback_method: callback ? 'POST' : null,
   };
 }
@@ -190,7 +217,7 @@ async function webhooksFor(brandId) {
 
 async function brandFor(brandId) {
   const [{ data: brand }, { data: domains }] = await Promise.all([
-    supabaseAdmin.from('brands').select('name, industry').eq('id', brandId).single(),
+    supabaseAdmin.from('brands').select('id, name, industry, language').eq('id', brandId).single(),
     supabaseAdmin
       .from('brand_domains')
       .select('domain')
@@ -199,9 +226,11 @@ async function brandFor(brandId) {
       .limit(1),
   ]);
   return {
+    id: brand?.id ?? brandId,
     name: brand?.name ?? '',
     domain: domains?.[0]?.domain ?? '',
     industry: brand?.industry ?? '',
+    language: brand?.language ?? null,
   };
 }
 
@@ -209,16 +238,20 @@ async function brandFor(brandId) {
  * Sends one queued delivery to the brand's webhooks and writes how it went:
  * sent once any of them takes it (with that one's answer), else failed with
  * the last reason. A callback can land before the webhook answers (an
- * automation that publishes first): a delivery already published stays so.
+ * automation that publishes, or fails, first): then the delivery keeps what
+ * the callback said, and that is what comes back.
  */
 async function deliver({ delivery, page, brand, configs }) {
   const html = cleanPublishHtml(page.html);
+  const jsonLd = jsonLdOf(html);
   let taken = null;
   let last = null;
   let failure = null;
   for (const config of configs) {
     const signed = Boolean(config.webhook_secret);
-    const body = JSON.stringify(contentPackage({ delivery, page, brand, html, callback: signed }));
+    const body = JSON.stringify(
+      contentPackage({ delivery, page, brand, html, jsonLd, callback: signed }),
+    );
     const headers = {};
     if (signed) {
       // The secret as the other webhooks send it, and the body signed with it.
@@ -246,13 +279,22 @@ async function deliver({ delivery, page, brand, configs }) {
     error: taken ? null : (failure ?? 'Not sent').slice(0, 500),
     sent_at: new Date().toISOString(),
   };
-  const { error } = await supabaseAdmin
+  const { data: written, error } = await supabaseAdmin
     .from('content_draft_deliveries')
     .update(update)
     .eq('id', delivery.id)
-    .neq('status', 'published');
+    .eq('status', 'queued')
+    .select('id');
   if (error) {
     logger.error({ err: error, deliveryId: delivery.id }, '[content-delivery] write failed');
+  } else if (written && !written.length) {
+    // A callback had its word first.
+    const { data: told } = await supabaseAdmin
+      .from('content_draft_deliveries')
+      .select('status, error, published_url')
+      .eq('id', delivery.id)
+      .maybeSingle();
+    if (told) return { id: delivery.id, draftId: page.draftId, ...update, ...told };
   }
   return { id: delivery.id, draftId: page.draftId, ...update };
 }
@@ -271,7 +313,9 @@ async function closeQueued(delivery, reason) {
 
 /** The batch's pages, one after another; one deleted or archived before its turn doesn't go. */
 async function deliverBatch(going, { brand, configs, batchId }) {
-  for (const item of going) {
+  for (const [i, item] of going.entries()) {
+    // A short pause between pages, none before the first.
+    if (i > 0) await new Promise((resolve) => setTimeout(resolve, PAUSE_MS));
     try {
       const { data: still } = await supabaseAdmin
         .from('content_drafts')
@@ -294,6 +338,29 @@ async function deliverBatch(going, { brand, configs, batchId }) {
   }
 }
 
+/** A draft no one has set rules on: the workspace's My rules apply (rules.ts effectiveRules). */
+function untouched(rules) {
+  return (
+    !rules ||
+    (rules.source == null &&
+      !Object.keys(rules.overrides ?? {}).length &&
+      !(rules.textRules ?? []).length)
+  );
+}
+
+/** The workspace's My rules (00214) for these drafts' types, by type; none when unread. */
+async function myRuleSets(orgId, drafts) {
+  const types = [...new Set(drafts.map((d) => d.rules?.set ?? d.page_type).filter(Boolean))];
+  if (!types.length) return new Map();
+  const { data, error } = await supabaseAdmin
+    .from('content_rule_sets')
+    .select('page_type, overrides')
+    .eq('organization_id', orgId)
+    .in('page_type', types);
+  if (error) logger.warn({ err: error }, '[content-delivery] My rules not read');
+  return new Map((data ?? []).map((set) => [set.page_type, set]));
+}
+
 /**
  * Sends pages of one brand: checks they are the brand's (not archived), that
  * a webhook takes the event, reserves them against the day's cap (those past
@@ -312,7 +379,7 @@ export async function sendContentPages({ orgId, brandId, userId, pages: asked })
   const ids = [...byId.keys()];
   const { data: drafts, error } = await supabaseAdmin
     .from('content_drafts')
-    .select('id')
+    .select('id, method, source_url, page_type, rules')
     .eq('brand_id', brandId)
     .is('archived_at', null)
     .in('id', ids);
@@ -366,7 +433,35 @@ export async function sendContentPages({ orgId, brandId, userId, pages: asked })
       logger.warn({ err: result.error }, '[content-delivery] slug and meta not kept');
   }
 
-  const brand = await brandFor(brandId);
+  // What each draft is, from its row: method, live address, page type, and
+  // the language its Language rule names (its own, or the workspace's My
+  // rules for a draft no one has set rules on, as the editor reads them),
+  // else the brand's.
+  const rowOf = new Map((drafts ?? []).map((d) => [d.id, d]));
+  const [brand, mine] = await Promise.all([
+    brandFor(brandId),
+    myRuleSets(
+      orgId,
+      going.map((item) => rowOf.get(item.page.draftId)).filter((d) => d && untouched(d.rules)),
+    ),
+  ]);
+  for (const item of going) {
+    const draft = rowOf.get(item.page.draftId) ?? {};
+    const rules = untouched(draft.rules)
+      ? mine.get(draft.rules?.set ?? draft.page_type)
+      : draft.rules;
+    const rule = rules?.overrides?.language;
+    item.page = {
+      ...item.page,
+      method: draft.method ?? null,
+      sourceUrl: draft.source_url ?? null,
+      pageType: draft.page_type ?? null,
+      language:
+        (rule?.on !== false && languageCodeOf(rule?.value)) ||
+        languageCodeOf(brand.language) ||
+        'en',
+    };
+  }
   if (pages.length === 1) {
     const sent = await deliver({ ...going[0], brand, configs });
     return { batchId, deliveries: [sent], skipped: 0 };

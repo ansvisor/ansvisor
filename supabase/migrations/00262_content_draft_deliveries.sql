@@ -4,7 +4,8 @@
 -- An admin or manager sends a Content Editor page to the brand's webhook as a
 -- content package (its publishable HTML, title, slug, meta and page fields);
 -- the workspace's own automation (Zapier, Make, n8n, its CMS) takes it from
--- there and may call back with the address it published at.
+-- there and may call back with how it went: the address it published at (and
+-- the CMS's id for the post), or that it failed.
 --
 -- content_drafts gets the page's slug and meta, filled from the page and
 -- editable in the Send dialog, and where it went live. A send is a row of
@@ -12,6 +13,7 @@
 -- published once the callback names the live address. A table of its own,
 -- not columns on content_drafts: a page is sent many times, and each send's
 -- answer is kept (the draft gets only its slug, meta and live address).
+-- A callback that says it failed marks the delivery failed.
 
 alter table public.content_drafts
   add column if not exists slug text
@@ -53,6 +55,8 @@ create table if not exists public.content_draft_deliveries (
     published_url is null
     or (char_length(published_url) <= 2048 and published_url ~* '^https?://')
   ),
+  -- The CMS's own id for the post, when the callback names it.
+  external_id text check (external_id is null or char_length(external_id) between 1 and 200),
   created_at timestamptz not null default now(),
   sent_at timestamptz,
   published_at timestamptz
@@ -64,6 +68,9 @@ create index if not exists content_draft_deliveries_draft_created
   on public.content_draft_deliveries (draft_id, created_at desc);
 create index if not exists content_draft_deliveries_batch
   on public.content_draft_deliveries (batch_id) where batch_id is not null;
+-- The next send closes a workspace's sends left queued (below): only those rows.
+create index if not exists content_draft_deliveries_queued
+  on public.content_draft_deliveries (organization_id) where status = 'queued';
 
 alter table public.content_draft_deliveries enable row level security;
 revoke all on table public.content_draft_deliveries from anon, authenticated;
@@ -79,6 +86,26 @@ create policy "content_draft_deliveries: member select"
 
 comment on table public.content_draft_deliveries is
   'Send to CMS (#1331, 00262): each page sent to the brand''s webhook, as queued, sent, failed or published. Written by the server; read by the editor and the Library.';
+
+-- Each page's last send, one row a page, for the Library's marks: a read of
+-- the table itself stops at PostgREST's 1,000 rows, which a workspace that
+-- re-sends often passes. Read through the member's policy: only their
+-- workspace's sends answer.
+create or replace function public.content_draft_last_deliveries(p_draft_ids uuid[])
+returns setof public.content_draft_deliveries
+language sql
+stable
+security invoker
+set search_path = public
+as $$
+  select distinct on (d.draft_id) d.*
+  from public.content_draft_deliveries d
+  where d.draft_id = any (p_draft_ids[1:500])
+  order by d.draft_id, d.created_at desc;
+$$;
+
+revoke execute on function public.content_draft_last_deliveries(uuid[]) from public, anon;
+grant execute on function public.content_draft_last_deliveries(uuid[]) to authenticated, service_role;
 
 -- ----------------------------------------------------------------------------
 -- The day's cap: reserve_content_deliveries queues as many of the pages as the

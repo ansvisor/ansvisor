@@ -1,5 +1,5 @@
 import crypto from 'node:crypto';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 /**
  * Send to CMS (#1331): pages go to the brand's webhook as content packages,
@@ -7,7 +7,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
  */
 
 const db = {
+  brand: {},
   drafts: [],
+  ruleSets: [],
+  // What a callback that landed first left on the delivery.
+  told: null,
   configs: [],
   queued: [],
   updates: [],
@@ -19,15 +23,23 @@ function from(table) {
   const result = () => {
     if (q.update) {
       db.updates.push({ table, update: q.update, filters: q.filters });
+      // A callback first: the queued row isn't there to write.
+      if (table === 'content_draft_deliveries' && db.told) return { data: [], error: null };
       return { data: null, error: null };
+    }
+    if (table === 'content_draft_deliveries') {
+      return { data: db.told ? [{ id: 'd-1', ...db.told }] : null, error: null };
+    }
+    if (table === 'content_rule_sets') {
+      const types = q.filters.find(([op]) => op === 'in')?.[2] ?? [];
+      return { data: db.ruleSets.filter((r) => types.includes(r.page_type)), error: null };
     }
     if (table === 'content_drafts') {
       const ids = q.filters.find(([op]) => op === 'in')?.[2];
       return { data: db.drafts.filter((d) => !ids || ids.includes(d.id)), error: null };
     }
     if (table === 'webhook_configs') return { data: db.configs, error: null };
-    if (table === 'brands')
-      return { data: { name: 'Acme Coffee', industry: 'Coffee' }, error: null };
+    if (table === 'brands') return { data: db.brand, error: null };
     if (table === 'brand_domains') return { data: [{ domain: 'acme.example' }], error: null };
     return { data: null, error: null };
   };
@@ -62,7 +74,7 @@ vi.mock('../config/supabase.js', () => ({
 const postJson = vi.fn();
 vi.mock('./safe-post.js', () => ({ postJson: (...args) => postJson(...args) }));
 
-const { DAILY_DELIVERIES, DeliveryError, cleanPublishHtml, sendContentPages, signBody } =
+const { DAILY_DELIVERIES, DeliveryError, PAUSE_MS, cleanPublishHtml, sendContentPages, signBody } =
   await import('./content-delivery.js');
 
 const page = (over = {}) => ({
@@ -84,8 +96,20 @@ const row = (draftId, over = {}) => ({
   ...over,
 });
 
+const draft = (id, over = {}) => ({
+  id,
+  method: 'create',
+  source_url: null,
+  page_type: 'blog_post',
+  rules: null,
+  ...over,
+});
+
 beforeEach(() => {
-  db.drafts = [{ id: page().draftId }];
+  db.brand = { id: 'b1', name: 'Acme Coffee', industry: 'Coffee', language: null };
+  db.drafts = [draft(page().draftId)];
+  db.ruleSets = [];
+  db.told = null;
   db.configs = [
     {
       id: 'w1',
@@ -98,6 +122,10 @@ beforeEach(() => {
   db.updates = [];
   db.rpc = [];
   postJson.mockReset().mockResolvedValue({ status: 200, answer: '{"ok":true}' });
+});
+
+afterEach(() => {
+  vi.useRealTimers();
 });
 
 const send = (pages = [page()]) =>
@@ -174,10 +202,15 @@ describe('sendContentPages', () => {
         slug: 'best-aeo-tools',
         metaTitle: 'Best AEO tools',
         html: '<h2>Why</h2><p>Because.</p>',
+        jsonLd: [],
         author: 'Ada Lovelace',
+        method: 'create',
+        sourceUrl: null,
+        pageType: 'blog_post',
+        language: 'en',
       },
-      brand: { name: 'Acme Coffee', domain: 'acme.example', industry: 'Coffee' },
-      callback_url: expect.stringMatching(/\/webhooks\/content-drafts\/d-1\/published$/),
+      brand: { id: 'b1', name: 'Acme Coffee', domain: 'acme.example', industry: 'Coffee' },
+      callback_url: expect.stringMatching(/\/webhooks\/content-drafts\/d-1\/status$/),
       callback_method: 'POST',
     });
     expect(db.updates).toEqual([
@@ -193,10 +226,10 @@ describe('sendContentPages', () => {
       {
         table: 'content_draft_deliveries',
         update: expect.objectContaining({ status: 'sent', http_status: 200, error: null }),
-        // A callback that landed first keeps it published.
+        // A callback that landed first keeps what it said.
         filters: [
           ['eq', 'id', 'd-1'],
-          ['neq', 'status', 'published'],
+          ['eq', 'status', 'queued'],
         ],
       },
     ]);
@@ -229,12 +262,71 @@ describe('sendContentPages', () => {
     const [unsigned, signed] = postJson.mock.calls;
     expect(JSON.parse(unsigned[1])).toMatchObject({ callback_url: null, callback_method: null });
     expect(unsigned[2].headers).toEqual({});
-    expect(JSON.parse(signed[1]).callback_url).toMatch(/\/published$/);
+    expect(JSON.parse(signed[1]).callback_url).toMatch(/\/status$/);
     expect(sent.deliveries[0]).toMatchObject({
       status: 'sent',
       http_status: 200,
       response_excerpt: 'taken',
     });
+  });
+
+  it('tells what the page is from its row: method, live address, page type, language and JSON-LD', async () => {
+    const ld = { '@context': 'https://schema.org', '@type': 'FAQPage' };
+    db.drafts = [
+      draft(page().draftId, {
+        method: 'optimize',
+        source_url: 'https://acme.example/blog/aeo',
+        page_type: 'guide',
+        rules: { overrides: { language: { on: true, value: 'German' } } },
+      }),
+    ];
+    db.brand.language = 'tr';
+    // The browser's own claims about the page don't count.
+    await send([
+      page({
+        method: 'create',
+        html: `<p>Hi</p><script type="application/ld+json">${JSON.stringify(ld)}</script>`,
+      }),
+    ]);
+    let sent = JSON.parse(postJson.mock.calls[0][1]).page;
+    expect(sent).toMatchObject({
+      method: 'optimize',
+      sourceUrl: 'https://acme.example/blog/aeo',
+      pageType: 'guide',
+      language: 'de',
+      jsonLd: [ld],
+    });
+
+    // The rule turned off: the brand's language.
+    db.drafts[0].rules.overrides.language.on = false;
+    await send();
+    sent = JSON.parse(postJson.mock.calls[1][1]).page;
+    expect(sent.language).toBe('tr');
+  });
+
+  it('reads the language from My rules for a draft no one has set rules on, as the editor does', async () => {
+    db.ruleSets = [{ page_type: 'blog_post', overrides: { language: { value: 'French' } } }];
+    await send();
+    expect(JSON.parse(postJson.mock.calls[0][1]).page.language).toBe('fr');
+
+    // The draft's own choices win once it has any.
+    db.drafts[0].rules = { source: 'default', overrides: {}, textRules: [] };
+    await send();
+    expect(JSON.parse(postJson.mock.calls[1][1]).page.language).toBe('en');
+  });
+
+  it('takes JSON-LD however its script type is written, as the clean keeps it', async () => {
+    const ld = { '@type': 'Article' };
+    await send([
+      page({ html: `<script type=" Application/LD+JSON ">${JSON.stringify(ld)}</script><p>x</p>` }),
+    ]);
+    expect(JSON.parse(postJson.mock.calls[0][1]).page.jsonLd).toEqual([ld]);
+  });
+
+  it('keeps what a callback said before the webhook answered, and answers with it', async () => {
+    db.told = { status: 'failed', error: 'Slug already taken', published_url: null };
+    const sent = await send();
+    expect(sent.deliveries[0]).toMatchObject({ status: 'failed', error: 'Slug already taken' });
   });
 
   it('writes a delivery failed when the webhook answers an error or can’t be reached', async () => {
@@ -255,9 +347,10 @@ describe('sendContentPages', () => {
     });
   });
 
-  it('sends more pages in the background, one after another, under one batch', async () => {
+  it('sends more pages in the background, one after another with a short pause, under one batch', async () => {
+    vi.useFakeTimers();
     const second = page({ draftId: 'c0ffee00-0000-4000-8000-000000000002', slug: 'second' });
-    db.drafts = [{ id: page().draftId }, { id: second.draftId }];
+    db.drafts = [draft(page().draftId), draft(second.draftId)];
     // The reserved rows may come back in any order: they go in the pages' order.
     db.queued = [row(second.draftId, { batch_id: 'x' }), row(page().draftId, { batch_id: 'x' })];
     let release;
@@ -272,26 +365,31 @@ describe('sendContentPages', () => {
       deliveries: [{ status: 'queued' }, { status: 'queued' }],
     });
 
-    // The first is still sending: the second waits for it.
-    await new Promise((r) => setTimeout(r, 0));
+    // The first is still sending: the second waits for it, then for the pause.
+    await vi.advanceTimersByTimeAsync(0);
     expect(postJson).toHaveBeenCalledTimes(1);
     expect(JSON.parse(postJson.mock.calls[0][1]).page.draftId).toBe(page().draftId);
     release({ status: 200, answer: '' });
+    await vi.advanceTimersByTimeAsync(PAUSE_MS - 1);
+    expect(postJson).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(1);
     await vi.waitFor(() => expect(postJson).toHaveBeenCalledTimes(2));
     expect(JSON.parse(postJson.mock.calls[1][1]).page.draftId).toBe(second.draftId);
   });
 
   it('closes a page deleted before its turn in a batch, and sends the rest', async () => {
+    vi.useFakeTimers();
     const second = page({ draftId: 'c0ffee00-0000-4000-8000-000000000002', slug: 'second' });
-    db.drafts = [{ id: page().draftId }, { id: second.draftId }];
+    db.drafts = [draft(page().draftId), draft(second.draftId)];
     db.queued = [row(page().draftId), row(second.draftId)];
     let release;
     postJson.mockImplementationOnce(() => new Promise((resolve) => (release = resolve)));
     await send([page(), second]);
     await vi.waitFor(() => expect(postJson).toHaveBeenCalledTimes(1));
     // The second is deleted while the first is sending: it doesn't go.
-    db.drafts = [{ id: page().draftId }];
+    db.drafts = [draft(page().draftId)];
     release({ status: 200, answer: '' });
+    await vi.advanceTimersByTimeAsync(PAUSE_MS);
     await vi.waitFor(() =>
       expect(db.updates).toContainEqual({
         table: 'content_draft_deliveries',
@@ -310,7 +408,7 @@ describe('sendContentPages', () => {
 
   it('counts the pages past the day’s cap as skipped, and refuses once nothing is left', async () => {
     const second = page({ draftId: 'c0ffee00-0000-4000-8000-000000000002', slug: 'second' });
-    db.drafts = [{ id: page().draftId }, { id: second.draftId }];
+    db.drafts = [draft(page().draftId), draft(second.draftId)];
     db.queued = [row(page().draftId)];
     expect((await send([page(), second])).skipped).toBe(1);
 
@@ -323,7 +421,7 @@ describe('sendContentPages', () => {
     await expect(send()).rejects.toBeInstanceOf(DeliveryError);
     await expect(send()).rejects.toMatchObject({ code: 'not_found', status: 404 });
 
-    db.drafts = [{ id: page().draftId }];
+    db.drafts = [draft(page().draftId)];
     db.configs = [];
     await expect(send()).rejects.toMatchObject({ code: 'no_webhook', status: 409 });
 
