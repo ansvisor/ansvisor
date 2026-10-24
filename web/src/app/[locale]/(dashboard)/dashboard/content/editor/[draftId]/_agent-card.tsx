@@ -2,7 +2,7 @@
 
 import { useId, useState } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
-import { Check, ChevronRight, X } from 'lucide-react';
+import { Check, ChevronRight, User, X } from 'lucide-react';
 import { Link } from '@/i18n/navigation';
 import { Button } from '@/components/ui/button';
 import {
@@ -12,6 +12,7 @@ import {
   type SuggestionStatus,
 } from '@/lib/content/suggestions';
 import { shownSteps, stepMessage, type AgentRun } from '@/lib/content/agent-runs';
+import { KEPT_LENGTH_SHARE } from '@/lib/content/rules';
 import { cn } from '@/lib/utils';
 import { PageCompareDialog, pageCharacters } from './_page-rewrite';
 import { WorkingDots } from './_working-dots';
@@ -142,6 +143,18 @@ function AgentTile({
   );
 }
 
+/** The person's tile: a step only they can take (their to-dos, their checks). */
+function PersonTile() {
+  return (
+    <span
+      aria-hidden
+      className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border bg-background text-foreground"
+    >
+      <User className="h-[18px] w-[18px]" />
+    </span>
+  );
+}
+
 /**
  * A run's steps as chips (CE-027/035), named by the data they use: the ones
  * done in green with a check, the one under way in full, the rest muted.
@@ -200,6 +213,7 @@ export function AgentCard({
   stopping = false,
   next = null,
   onAllSteps,
+  length = null,
 }: {
   suggestions: DraftSuggestion[];
   rules: CardRules;
@@ -233,9 +247,24 @@ export function AgentCard({
    * The Next step basket's step (Next step spec §3), offered in Run Agent's
    * place once nothing is left to decide: its button, and why it can't run.
    */
-  next?: { label: string; onRun: () => void; blocked: string | null } | null;
+  next?: {
+    label: string;
+    onRun: () => void;
+    blocked: string | null;
+    /** The step's name: the card heads with it, "Next · {title}" (Next step spec §3). */
+    title?: string;
+    /** Why it is next, from the page's numbers. */
+    reason?: string;
+    /** Who takes it: the agent's run, or the person. */
+    actor?: 'agent' | 'you';
+  } | null;
   /** Opens the basket with every step. */
   onAllSteps?: () => void;
+  /**
+   * The page's Length rule (its target and band) and what a rewrite keeps
+   * as it is: a rewrite's result is read against it, never the agent's say.
+   */
+  length?: { target: number; min: number; max: number; kept: number } | null;
 }) {
   const t = useTranslations('contentEditor.editor.agentCard');
   const locale = useLocale();
@@ -334,10 +363,24 @@ export function AgentCard({
         : page.status === 'accepted'
           ? tRewrite('accepted')
           : tRewrite('rejected');
+    // Read against the Length, not the agent's say: a rewrite that missed it
+    // says so, and why when what it keeps is most of the Length.
+    const missed = length && (afterChars > length.max || afterChars < length.min) ? length : null;
     line =
       page.status === 'open' ? (
         <>
-          {tRewrite('characters', { before, after: afterChars })} · {page.reason}
+          {tRewrite('characters', { before, after: afterChars })}
+          {' · '}
+          {missed ? (
+            <span className="text-amber-700 dark:text-amber-400">
+              {tRewrite('lengthMissed', { target: missed.target })}
+              {afterChars > missed.max &&
+                missed.kept >= missed.target * KEPT_LENGTH_SHARE &&
+                ` ${tRewrite('lengthKept', { kept: missed.kept })}`}
+            </span>
+          ) : (
+            page.reason
+          )}
           {builtFrom}
         </>
       ) : page.status === 'accepted' && stillOpen > 0 ? (
@@ -387,6 +430,33 @@ export function AgentCard({
     );
   }
 
+  // With the basket (Next step spec §3), the card heads with the step and
+  // who takes it; what the agent left is its last run, under it.
+  const stepHead = !working && next?.title ? next : null;
+  let lastRun: React.ReactNode = null;
+  if (stepHead) {
+    const run = title;
+    const runLine = line;
+    lastRun = t.rich('lastRun', {
+      run: () => (
+        <>
+          {run}
+          {runLine && <> · {runLine}</>}
+        </>
+      ),
+    });
+    title = (
+      <>
+        {t('nextTitle', { step: stepHead.title! })}
+        <span className="sr-only">
+          {' · '}
+          {t(stepHead.actor === 'you' ? 'byYou' : 'byAgent')}
+        </span>
+      </>
+    );
+    line = stepHead.reason ?? null;
+  }
+
   return (
     <div
       role="region"
@@ -394,7 +464,12 @@ export function AgentCard({
       aria-busy={working}
       className="mx-4 mt-3 mb-1 flex flex-wrap items-center gap-x-3.5 gap-y-2.5 rounded-2xl border bg-muted px-3.5 py-3 shadow-xs"
     >
-      <AgentTile tone={tone} count={working ? 0 : open} />
+      {/* The person's tile only with nothing of the agent's to decide: its count stays in sight. */}
+      {stepHead?.actor === 'you' && open === 0 && page?.status !== 'open' ? (
+        <PersonTile />
+      ) : (
+        <AgentTile tone={tone} count={working ? 0 : open} />
+      )}
       {/* Room for a line of text first: on a narrow page the buttons go under it. */}
       <div className="min-w-0 flex-1 basis-56">
         <div className="text-sm font-semibold [overflow-wrap:anywhere]">{title}</div>
@@ -407,6 +482,11 @@ export function AgentCard({
             className="text-[12.5px] text-amber-700 [overflow-wrap:anywhere] dark:text-amber-400"
           >
             {reason}
+          </div>
+        )}
+        {lastRun && (
+          <div className="text-[12px] text-muted-foreground/90 [overflow-wrap:anywhere]">
+            {lastRun}
           </div>
         )}
       </div>

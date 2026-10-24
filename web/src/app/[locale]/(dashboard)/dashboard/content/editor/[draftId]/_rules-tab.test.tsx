@@ -165,6 +165,16 @@ describe('the Rules tab', () => {
       expect(main().textContent).toBe('Run Agent');
     });
 
+    it('says when the Length is out of a rewrite’s reach for what it keeps, recommending none for it', async () => {
+      // 15,921 characters for 3,000, 2,900 of them passages AI answers quote and tables.
+      await show({ agentFix: fix(), pageRewrite: { ...fix(), kept: 2_900 } });
+      const notes = [...container.querySelectorAll('[role="note"]')].map((n) => n.textContent);
+      expect(notes.some((n) => n?.startsWith('Recommended: the page is'))).toBe(false);
+      expect(notes).toContainEqual(
+        "The page is 15,921 characters for a Length of 3,000, but 2,900 of them are passages AI answers quote, tables and other blocks a rewrite keeps as they are. Raise the Length to about 4,500, or unlock passages you're fine to have reworded.",
+      );
+    });
+
     it('says why its choice waits under the card, for the choice picked', async () => {
       const agentFix = {
         ...fix(),
