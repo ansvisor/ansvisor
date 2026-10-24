@@ -355,14 +355,16 @@ describe('teamName', () => {
 describe('disclosureText', () => {
   it('writes the line in the page’s language, none in another or with no brand (CE-050)', () => {
     expect(disclosureText(null, 'Acme')).toBe(
-      'Disclosure: Acme makes the product this page recommends.',
+      'Disclosure: the product this page recommends is offered by Acme.',
     );
-    expect(disclosureText('tr', 'Acme')).toBe('Açıklama: Bu sayfada önerilen ürünü Acme üretiyor.');
+    expect(disclosureText('tr', 'Acme')).toBe(
+      'Açıklama: Bu sayfada önerilen ürün Acme tarafından sunuluyor.',
+    );
     expect(disclosureText('ja', 'Acme')).toBeNull();
     expect(disclosureText('en', ' ')).toBeNull();
     // A "$" in a name stays as it is.
     expect(disclosureText('en', 'A$1')).toBe(
-      'Disclosure: A$1 makes the product this page recommends.',
+      'Disclosure: the product this page recommends is offered by A$1.',
     );
   });
 });

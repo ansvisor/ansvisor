@@ -104,13 +104,14 @@ import { inputsGiven, inputsUsed } from '@/lib/content/draft-inputs';
 import {
   eeat,
   linksToCheck,
+  squeeze,
   trust,
   trustBlocks,
   unplacedSites,
   type ClaimMark,
 } from '@/lib/content/quality-checks';
 import { proofKey, qualityTodos } from '@/lib/content/quality-todos';
-import { readability, sentencesOf } from '@/lib/content/readability';
+import { isByline, readability, sentencesOf } from '@/lib/content/readability';
 import { brandFactsPath, factMismatches } from '@/lib/content/brand-facts';
 import {
   MAX_PROOF_TODOS,
@@ -1468,12 +1469,37 @@ export function DraftEditor({
    * said to be there.
    */
   const htmlSourceRef = useRef<HTMLTextAreaElement>(null);
-  // The disclosure line under the H1 (CE-050), or at the top of a page
-  // with none; one undo takes it out.
+  // The disclosure line Before you publish offers (CE-050), and whether the
+  // page has it already (added, and not read again yet).
+  const disclosureLine = aiChecks?.disclosure ? disclosureText(language, brandName) : null;
+  const disclosureOnPage =
+    !!disclosureLine &&
+    squeeze(pageBlocks.map((b) => b.text).join('')).includes(squeeze(disclosureLine));
+  // The disclosure line (CE-050) under the page's opening paragraph (the
+  // answer Answer first reads, past a byline or a date), else under the
+  // page's H1, else at the top; never twice. One undo takes it out.
   const addDisclosure = (line: string) => {
     if (!editor || editor.isDestroyed) return;
-    const first = editor.state.doc.firstChild;
-    const at = first?.type.name === 'heading' && first.attrs.level === 1 ? first.nodeSize : 0;
+    const { doc } = editor.state;
+    if (squeeze(doc.textContent).includes(squeeze(line))) return;
+    let at = 0;
+    let index = -1;
+    doc.forEach((node, offset, i) => {
+      const h1 = node.type.name === 'heading' && node.attrs.level === 1;
+      if (index === -1 && h1 && node.textContent.trim()) {
+        index = i + 1;
+        at = offset + node.nodeSize;
+      }
+    });
+    if (index !== -1) {
+      const para = (i: number) =>
+        i < doc.childCount && doc.child(i).type.name === 'paragraph' ? doc.child(i) : null;
+      let next = index;
+      while (para(next) && isByline(para(next)!.textContent)) next += 1;
+      if (para(next)?.textContent.trim()) {
+        for (let i = index; i <= next; i++) at += doc.child(i).nodeSize;
+      }
+    }
     editor
       .chain()
       .insertContentAt(at, { type: 'paragraph', content: [{ type: 'text', text: line }] })
@@ -3047,7 +3073,9 @@ export function DraftEditor({
           pageType={pageType}
           image={firstImage(pageHtml)}
           linksPending={linksPending}
-          disclosureLine={aiChecks?.disclosure ? disclosureText(language, brandName) : null}
+          // Not while the HTML view holds the page: its source is what goes out.
+          disclosureLine={htmlSource === null ? disclosureLine : null}
+          disclosureAdded={disclosureOnPage}
           onAddDisclosure={addDisclosure}
           onMarkReady={(anyway) => {
             setPublishOpen(null);

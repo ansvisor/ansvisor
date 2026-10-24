@@ -2861,20 +2861,32 @@ describe('the side panel', () => {
       await renderPage();
       await act(async () => void (await vi.advanceTimersByTimeAsync(3_000)));
       await act(async () => button('Mark ready')!.click());
-      const line = 'Disclosure: Ledgerly makes the product this page recommends.';
+      const line = 'Disclosure: the product this page recommends is offered by Ledgerly.';
       const dialog = document.querySelector('[role="dialog"]')!;
-      expect(dialog.textContent).toContain(
-        'The page recommends Ledgerly without saying Ledgerly makes it',
-      );
+      expect(dialog.textContent).toContain('The page recommends Ledgerly without a disclosure');
       await act(async () =>
         [...dialog.querySelectorAll('button')].find((b) => b.textContent === 'Add line')!.click(),
       );
       const { state } = (
         container.querySelector('.ProseMirror') as HTMLElement & { editor: Editor }
       ).editor;
+      // Under the opening paragraph: the answer the H1 gets first stays first.
       expect(state.doc.child(0).textContent).toBe('Pipeline forecasting');
-      expect(state.doc.child(1).textContent).toBe(line);
+      expect(state.doc.child(1).textContent).toBe(block);
+      expect(state.doc.child(2).textContent).toBe(line);
       expect(dialog.textContent).toContain('Disclosure added');
+      // Opened again before the page is read (it reads the page a moment after
+      // an edit): added, not offered twice.
+      await act(async () => void (await vi.advanceTimersByTimeAsync(500)));
+      await act(async () =>
+        [...dialog.querySelectorAll('button')].find((b) => b.textContent === 'Close')?.click(),
+      );
+      await act(async () => button('Mark ready')!.click());
+      const again = document.querySelector('[role="dialog"]')!;
+      expect(again.textContent).toContain('Disclosure added');
+      expect([...again.querySelectorAll('button')].some((b) => b.textContent === 'Add line')).toBe(
+        false,
+      );
     });
 
     it('shows a visual proof spot beside its passage, and Add image puts the image after it (CE-049)', async () => {

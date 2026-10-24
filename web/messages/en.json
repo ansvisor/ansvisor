@@ -4594,12 +4594,12 @@
           "ok": "Disclosure",
           "okDetail": "The page says so: \"{line}\"",
           "okReading": "The page says so: it is read again with your latest changes.",
-          "none": "The page recommends {brand} without saying {brand} makes it",
-          "noneDetail": "Add a line under the H1: \"{line}\" Readers and AI engines trust a page that says so.",
-          "noneWrite": "Add a line saying {brand} makes what the page recommends: readers and AI engines trust a page that says so.",
+          "none": "The page recommends {brand} without a disclosure",
+          "noneDetail": "Add a line under the opening paragraph: \"{line}\" Readers and AI engines trust a page that says so.",
+          "noneWrite": "Add a line saying the product the page recommends is {brand}'s own: readers and AI engines trust a page that says so.",
           "add": "Add line",
           "added": "Disclosure added",
-          "addedDetail": "It is under the H1 now, and counts once the page is read again. Undo takes it out."
+          "addedDetail": "It is under the opening paragraph now, and counts once the page is read again. Undo takes it out."
         },
         "linksPending": "Still reading {count, plural, one {# of the page's links} other {# of the page's links}}, so Trust may change.",
         "claimsReading": "Still reading the claims in your own words, so Trust may change.",

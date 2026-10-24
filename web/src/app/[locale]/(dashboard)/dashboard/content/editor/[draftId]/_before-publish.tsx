@@ -87,6 +87,7 @@ export function BeforePublish({
   onMarkReady,
   onFixFirst,
   disclosureLine = null,
+  disclosureAdded = false,
   onAddDisclosure,
 }: {
   /** Opened by Mark ready, by Export, or by Send to CMS. */
@@ -117,7 +118,9 @@ export function BeforePublish({
    * (disclosureText), or null where there's none to offer.
    */
   disclosureLine?: string | null;
-  /** Puts the disclosure line under the page's H1 (undoable, as any edit). */
+  /** The page has that line already: added, and not read again yet. */
+  disclosureAdded?: boolean;
+  /** Puts the disclosure line under the page's opening paragraph (undoable, as any edit). */
   onAddDisclosure?: (line: string) => void;
 }) {
   const t = useTranslations('contentEditor.editor.beforePublish');
@@ -160,7 +163,7 @@ export function BeforePublish({
       )
     : null;
   // Added here: it counts once the page is read again.
-  const [disclosureAdded, setDisclosureAdded] = useState(false);
+  const [added, setAdded] = useState(false);
   const disclosure = quality.aiChecks?.disclosure ?? null;
   const brand = quality.brandName || tQuality('yourBrand');
   const rows: Row[] = [
@@ -202,7 +205,7 @@ export function BeforePublish({
                   ? t('disclosure.okDetail', { line: disclosure.show })
                   : t('disclosure.okReading'),
               }
-            : disclosureAdded
+            : added || disclosureAdded
               ? {
                   state: 'check' as const,
                   title: t('disclosure.added'),
@@ -323,7 +326,7 @@ export function BeforePublish({
                   className="shrink-0"
                   onClick={() => {
                     onAddDisclosure?.(row.add!);
-                    setDisclosureAdded(true);
+                    setAdded(true);
                   }}
                 >
                   {t('disclosure.add')}

@@ -103,6 +103,7 @@ async function render(
     contentByline = null as string | null,
     title = 'How small teams forecast',
     disclosureLine = null as string | null,
+    disclosureAdded = false,
   } = {},
 ) {
   await act(async () => {
@@ -124,6 +125,7 @@ async function render(
           onMarkReady={onMarkReady}
           onFixFirst={onFixFirst}
           disclosureLine={disclosureLine}
+          disclosureAdded={disclosureAdded}
           onAddDisclosure={onAddDisclosure}
         />
       </NextIntlClientProvider>,
@@ -411,17 +413,26 @@ describe('BeforePublish', () => {
   });
 
   it('asks a page that puts the brand forward for its disclosure, with Add line (CE-050)', async () => {
-    const line = 'Disclosure: Acme makes the product this page recommends.';
+    const line = 'Disclosure: the product this page recommends is offered by Acme.';
     const pick = { found: false, show: 'Our top pick is the Acme Ridge 28' };
     onAddDisclosure.mockReset();
     await render(quality({ aiChecks: { balanced: null, disclosure: pick } }), {
       disclosureLine: line,
     });
     expect(rows()).toContainEqual(
-      expect.stringContaining('The page recommends Acme without saying Acme makes it'),
+      expect.stringContaining('The page recommends Acme without a disclosure'),
     );
     await act(async () => button('Add line')!.click());
     expect(onAddDisclosure).toHaveBeenCalledWith(line);
+    expect(rows()).toContainEqual(expect.stringContaining('Disclosure added'));
+    expect(button('Add line')).toBeUndefined();
+    // Opened again before the page is read: the page has the line, so it's added.
+    act(() => root.unmount());
+    root = createRoot(container);
+    await render(quality({ aiChecks: { balanced: null, disclosure: pick } }), {
+      disclosureLine: line,
+      disclosureAdded: true,
+    });
     expect(rows()).toContainEqual(expect.stringContaining('Disclosure added'));
     expect(button('Add line')).toBeUndefined();
 
@@ -438,7 +449,7 @@ describe('BeforePublish', () => {
     root = createRoot(container);
     await render(quality({ aiChecks: { balanced: null, disclosure: pick } }));
     expect(rows()).toContainEqual(
-      expect.stringContaining('Add a line saying Acme makes what the page recommends'),
+      expect.stringContaining("Add a line saying the product the page recommends is Acme's own"),
     );
     expect(button('Add line')).toBeUndefined();
     // Where it doesn't apply: no row.
