@@ -101,8 +101,8 @@ export const claimsLimiter = rateLimit({
   },
 });
 
-// A brand's facts (Quality CE-047): read from its site when first asked or
-// asked again (a few model calls), so its own bucket.
+// A brand's facts read from its site again when asked (Quality CE-047): a
+// few model calls, so its own bucket.
 export const brandFactsLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 30,

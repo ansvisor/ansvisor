@@ -33,7 +33,8 @@ create table if not exists public.brand_facts (
     check (jsonb_typeof(value) = 'object' and octet_length(value::text) <= 1024),
   value_key text not null check (char_length(value_key) between 1 and 300),
   quote text not null check (char_length(quote) between 1 and 300),
-  source_url text not null check (char_length(source_url) <= 2048),
+  source_url text not null
+    check (char_length(source_url) <= 2048 and source_url ~ '^https?://'),
   source_kind text not null check (source_kind in ('pricing', 'about', 'product')),
   status text not null default 'pending'
     check (status in ('pending', 'approved', 'rejected')),
@@ -42,7 +43,22 @@ create table if not exists public.brand_facts (
   first_seen_at timestamptz not null default now(),
   last_seen_at timestamptz not null default now(),
   gone_at timestamptz,
-  unique (brand_id, slot, value_key)
+  unique (brand_id, slot, value_key),
+  -- Each kind's value, as the server reads it from the fact's words.
+  constraint brand_facts_kind_value_check check (
+    case kind
+      when 'price' then
+        jsonb_typeof(value -> 'amount') = 'number'
+        and (value ->> 'amount')::numeric >= 0
+        and coalesce(value ->> 'currency', '') ~ '^[A-Z]{3}$'
+        and jsonb_typeof(value -> 'plan') = 'string'
+      when 'trial' then
+        jsonb_typeof(value -> 'days') = 'number' and (value ->> 'days')::int between 1 and 365
+      when 'founded' then
+        jsonb_typeof(value -> 'year') = 'number' and (value ->> 'year')::int between 1800 and 2100
+      else true
+    end
+  )
 );
 
 create index if not exists brand_facts_brand_status_idx
@@ -86,6 +102,7 @@ create policy "brand_facts: member update"
     )
     and reviewed_by = auth.uid()
     and status in ('approved', 'rejected')
+    and reviewed_at between now() - interval '1 minute' and now() + interval '1 minute'
   );
 
 comment on table public.brand_facts is
