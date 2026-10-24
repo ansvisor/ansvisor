@@ -1214,10 +1214,7 @@ router.get('/:id', async (req, res) => {
     ]);
 
     if (historyResult?.error) {
-      req.log.warn(
-        { err: historyResult.error, auditId: id },
-        'audit previous score lookup failed',
-      );
+      req.log.warn({ err: historyResult.error, auditId: id }, 'audit previous score lookup failed');
     }
     const previous =
       historyResult && !historyResult.error
