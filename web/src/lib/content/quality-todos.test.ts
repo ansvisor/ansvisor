@@ -185,4 +185,27 @@ describe('qualityTodos', () => {
   it('has no input to-dos before Your input is read', () => {
     expect(todos(author()).map((t) => t.id)).toEqual(['byline', 'authorProfile']);
   });
+
+  it('asks to approve the brand facts read from its site, and keeps it checked once done (CE-047)', () => {
+    const facts = (pending: number, had: boolean) =>
+      qualityTodos({
+        eeat: null,
+        author: null,
+        hasAuthors: true,
+        brandFacts: { pending, had },
+      });
+    expect(facts(3, true)).toEqual([
+      {
+        id: 'brandFacts',
+        done: false,
+        gain: 0,
+        score: 'trust',
+        action: 'reviewBrandFacts',
+        count: 3,
+      },
+    ]);
+    expect(facts(0, true)).toEqual([expect.objectContaining({ id: 'brandFacts', done: true })]);
+    expect(facts(0, false)).toEqual([]);
+    expect(qualityTodos({ eeat: null, author: null, hasAuthors: true })).toEqual([]);
+  });
 });

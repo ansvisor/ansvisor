@@ -67,7 +67,12 @@ function Harness({ todos, author }: { todos: QualityTodo[]; author: ContentAutho
       ))}
       <NextNudge
         shown={nudge.shown}
-        quality={{ author, team: 'Acme Team', canEdit: true }}
+        quality={{
+          author,
+          team: 'Acme Team',
+          canEdit: true,
+          brandFactsPath: '/dashboard/brands/b1/settings?tab=facts',
+        }}
         onShowPlaceholder={onShowPlaceholder}
         onPickAuthor={onPickAuthor}
         onLater={nudge.later}
@@ -133,6 +138,25 @@ describe('NextNudge', () => {
     await act(async () => button('Show now').click());
     expect(onShowPlaceholder).toHaveBeenCalled();
     expect(nudge()).toBeNull();
+  });
+
+  it('sends the brand facts to approve to Brand settings (CE-047)', async () => {
+    const facts: QualityTodo = {
+      id: 'brandFacts',
+      done: false,
+      gain: 0,
+      score: 'trust',
+      action: 'reviewBrandFacts',
+      count: 2,
+    };
+    await render([facts]);
+    await act(async () => nudgeAt('agent'));
+    expect(nudge()!.textContent).toBe(
+      'Next for you: approve 2 brand facts · 1 of 1Review nowLater',
+    );
+    expect(button('Review now').getAttribute('href')).toBe(
+      '/dashboard/brands/b1/settings?tab=facts',
+    );
   });
 
   it('counts the open ones and skips the done', async () => {

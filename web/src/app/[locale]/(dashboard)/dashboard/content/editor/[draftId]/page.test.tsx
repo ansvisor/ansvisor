@@ -19,6 +19,7 @@ const setContentDraftPageType = vi.fn();
 const setContentDraftAuthor = vi.fn();
 const keepDraftSource = vi.fn();
 const checkDraftClaims = vi.fn();
+const getBrandFacts = vi.fn();
 const checkDraftLinks = vi.fn();
 const getSiteTrust = vi.fn();
 vi.mock('@/lib/actions/audits', () => ({
@@ -58,6 +59,9 @@ const keepAgentBeforeVersion = vi.fn();
 const fixDraftRules = vi.fn();
 const startAgentWriting = vi.fn();
 const startPageRewrite = vi.fn();
+vi.mock('@/lib/actions/brand-facts', () => ({
+  getBrandFacts: (...args: unknown[]) => getBrandFacts(...args),
+}));
 vi.mock('@/lib/actions/content-drafts', () => ({
   fixDraftRules: (...args: unknown[]) => fixDraftRules(...args),
   startAgentWriting: (...args: unknown[]) => startAgentWriting(...args),
@@ -283,6 +287,14 @@ beforeEach(() => {
   setContentDraftAuthor.mockReset().mockResolvedValue(undefined);
   keepDraftSource.mockReset();
   checkDraftClaims.mockReset().mockResolvedValue({ blocks: [], pending: 0, limited: false });
+  getBrandFacts.mockReset().mockResolvedValue({
+    facts: [],
+    pages: [],
+    checkedAt: null,
+    recheckAt: null,
+    paused: false,
+    noDomain: false,
+  });
   checkDraftLinks.mockReset().mockResolvedValue({ links: [], skipped: [] });
   getSiteTrust.mockReset().mockRejectedValue(new Error('not in this test'));
   getContentAuthors.mockReset().mockResolvedValue(null);
@@ -2818,6 +2830,86 @@ describe('the side panel', () => {
       expect(row).toBeDefined();
       const labels = [...row.querySelectorAll('button')].map((b) => b.textContent);
       expect(labels).toEqual(['Show']);
+    });
+  });
+
+  describe('Brand facts (Quality CE-047)', () => {
+    afterEach(() => {
+      delete process.env.NEXT_PUBLIC_CONTENT_QUALITY_PHASE;
+    });
+    beforeEach(() => {
+      getDraftSources.mockResolvedValue({
+        data: {
+          prompts: [],
+          fanouts: [],
+          citedPages: [],
+          gscQueries: [],
+          brandDomains: ['acme.com'],
+          competitorDomains: [],
+        },
+        choices: [],
+      });
+    });
+    const fact = (over: Record<string, unknown>) => ({
+      id: 'f1',
+      kind: 'price',
+      value: { plan: 'Pro', amount: 49, currency: 'USD', period: 'month', billed: null, per: null },
+      quote: '$49 per month',
+      sourceUrl: 'https://acme.com/pricing',
+      sourceKind: 'pricing',
+      status: 'approved',
+      reviewedAt: null,
+      firstSeenAt: '2026-10-24T00:00:00Z',
+      gone: false,
+      replaces: null,
+      ...over,
+    });
+
+    it('names a price the page gives that differs, and asks to approve the facts read', async () => {
+      process.env.NEXT_PUBLIC_CONTENT_QUALITY_PHASE = '2';
+      getBrandFacts.mockResolvedValue({
+        facts: [
+          fact({}),
+          fact({ id: 'f2', kind: 'trial', value: { days: 14 }, status: 'pending' }),
+        ],
+        pages: [],
+        checkedAt: null,
+        recheckAt: null,
+        paused: false,
+        noDomain: false,
+      });
+      getContentDraft.mockResolvedValue(
+        draft({
+          bodyHtml:
+            '<h1>Pricing</h1><p>The Pro plan costs $59 per month.</p>' +
+            // A sourced figure: Trust is scored, so Quality's chip is there.
+            '<p>Teams cut 40% of their busywork (<a href="https://research.example/r">report</a>).</p>',
+        }),
+      );
+      window.innerWidth = 1440;
+      await renderPage();
+      expect(getBrandFacts).toHaveBeenCalledWith(draft().brandId);
+      const chip = [...container.querySelectorAll<HTMLButtonElement>('header button')].find((b) =>
+        b.textContent?.startsWith('Quality'),
+      )!;
+      await act(async () => chip.click());
+      expect(panel()!.textContent).toContain(
+        'Price differs from brand facts · Page $59 · pricing page $49',
+      );
+      const todo = [...panel()!.querySelectorAll('li')].find((li) =>
+        li.textContent?.includes('Approve 1 brand fact'),
+      )!;
+      expect(todo.querySelector('a')!.getAttribute('href')).toBe(
+        `/dashboard/brands/${draft().brandId}/settings?tab=facts`,
+      );
+    });
+
+    it('reads no brand facts before Quality’s second phase', async () => {
+      process.env.NEXT_PUBLIC_CONTENT_QUALITY_PHASE = '1';
+      getContentDraft.mockResolvedValue(draft({}));
+      window.innerWidth = 1440;
+      await renderPage();
+      expect(getBrandFacts).not.toHaveBeenCalled();
     });
   });
 

@@ -94,7 +94,7 @@ export function NextNudge({
   onAct,
 }: {
   shown: { todo: QualityTodo; count: number } | null;
-  quality: Pick<QualityRead, 'author' | 'team' | 'canEdit'>;
+  quality: Pick<QualityRead, 'author' | 'team' | 'canEdit' | 'brandFactsPath'>;
   /** Selects the page's first placeholder, to type over. */
   onShowPlaceholder: () => void;
   onPickAuthor: () => void;
@@ -165,6 +165,12 @@ export function NextNudge({
               >
                 {t('act.addInput')}
               </button>
+            )
+          ) : action === 'reviewBrandFacts' ? (
+            quality.brandFactsPath && (
+              <Link href={quality.brandFactsPath} className={actClass} onClick={onAct}>
+                {t('act.reviewBrandFacts')}
+              </Link>
             )
           ) : (
             action && (

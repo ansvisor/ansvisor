@@ -57,6 +57,8 @@ export interface QualityRead {
   claimsLimited?: boolean;
   /** Some of the page's claims aren't read yet: Trust may change (CE-045). */
   claimsReading?: boolean;
+  /** Where the brand's facts are approved: Brand settings › Brand facts (CE-047). */
+  brandFactsPath?: string | null;
 }
 
 type ScoreName = 'eeat' | 'trust' | 'readability';
@@ -326,6 +328,15 @@ export function useTodoCopy() {
               : t('byline.detail.pickAuthor', { byline: team }),
       };
     }
+    // The brand's facts read from its site, to approve (CE-047).
+    if (todo.id === 'brandFacts') {
+      const count = todo.count ?? 0;
+      return {
+        title: t('brandFacts.title', { count }),
+        next: t('brandFacts.next', { count }),
+        detail: todo.done ? t('brandFacts.done') : t('brandFacts.detail'),
+      };
+    }
     // What only the person can give (Brief › Your input, CE-048).
     if (todo.id === 'experience' || todo.id === 'originalData' || todo.id === 'expertQuote') {
       return {
@@ -446,6 +457,15 @@ function TodoRow({
           <Button variant="outline" size="sm" className="h-7 shrink-0" onClick={onPickAuthor}>
             {t('pickAuthor')}
           </Button>
+        ) : todo.action === 'reviewBrandFacts' ? (
+          quality.brandFactsPath && (
+            <Link
+              href={quality.brandFactsPath}
+              className={cn(buttonVariants({ variant: 'outline', size: 'sm' }), 'h-7 shrink-0')}
+            >
+              {t('reviewBrandFacts')}
+            </Link>
+          )
         ) : (
           <Link
             href={MANAGE_AUTHORS_PATH}
@@ -482,7 +502,9 @@ export type TrustSuggestion = Suggestion & { check: TrustCheckId; count: number 
  * don't answer, each with Show on the first one in the page. A broken link
  * is listed before Trust is scored too, its gain out of the Phase 1 points.
  * Phase 2 (CE-046): weak or competitors' sources, Show and Keep on the first,
- * and no primary source among them.
+ * and no primary source among them. Phase 2 (CE-047): a price, trial or
+ * founding year that differs from the brand's approved facts, listed before
+ * Trust is scored too, as a broken link is.
  */
 export function trustSuggestions(t: T, trust: TrustRead | null): TrustSuggestion[] {
   if (!trust) return [];
@@ -505,6 +527,24 @@ export function trustSuggestions(t: T, trust: TrustRead | null): TrustSuggestion
       show: first,
       ai: claims,
       claim: trust.marks.find((mark) => mark.sentence === first),
+    });
+  }
+  if (trust.mismatches.length) {
+    const [first] = trust.mismatches;
+    out.push({
+      key: 'trust:brandFacts',
+      check: 'brandFacts',
+      score: 'trust',
+      gain: trustGain(trust, ['brandFacts']),
+      line: t('checks.brandFacts.line', {
+        kind: first.kind,
+        page: first.page,
+        source: first.source,
+        fact: first.fact,
+      }),
+      count: trust.mismatches.length,
+      detail: t('checks.brandFacts.detail', { count: trust.mismatches.length }),
+      show: first.sentence,
     });
   }
   if (trust.stale.length) {

@@ -258,6 +258,58 @@ describe('QualityTab', () => {
     expect(done.querySelector('button')).toBeNull();
   });
 
+  it('links the brand facts to approve to Brand settings, and names a price that differs (CE-047)', async () => {
+    const author = ada;
+    const score = eeat({ author });
+    const blocks = trustBlocks(
+      '<p>Pro costs $59 per month.</p><p>Up 40% (<a href="https://a.example">report</a>).</p>',
+    );
+    const trustRead = trust({
+      blocks,
+      links: new Map(),
+      brandDomains: [],
+      brandFacts: {
+        compared: 1,
+        mismatches: [
+          {
+            kind: 'price',
+            page: '$59',
+            fact: '$49',
+            source: 'pricing',
+            sentence: 'Pro costs $59 per month.',
+          },
+        ],
+      },
+      now: Date.parse('2026-10-24T12:00:00Z'),
+    });
+    await render({
+      ...read(result),
+      trust: trustRead,
+      brandFactsPath: '/dashboard/brands/b1/settings?tab=facts',
+      todos: qualityTodos({
+        eeat: score,
+        author,
+        hasAuthors: true,
+        brandFacts: { pending: 2, had: true },
+      }),
+    });
+    const row = container.querySelector('[aria-label="Your to-dos"] li')!;
+    expect(row.textContent).toContain('Approve 2 brand facts');
+    expect(row.querySelector('a')!.getAttribute('href')).toBe(
+      '/dashboard/brands/b1/settings?tab=facts',
+    );
+    const suggestion = [...container.querySelectorAll('li')].find((li) =>
+      li.textContent?.includes('differs from brand facts'),
+    )!;
+    expect(suggestion.textContent).toContain(
+      'Price differs from brand facts · Page $59 · pricing page $49',
+    );
+    await act(async () =>
+      [...suggestion.querySelectorAll('button')].find((b) => b.textContent === 'Show')!.click(),
+    );
+    expect(onShow).toHaveBeenCalledWith('Pro costs $59 per month.');
+  });
+
   it('asks for what only the person can give, each with Add, and its gain (CE-048)', async () => {
     const none = { experience: false, data: false, quote: false };
     const score = eeat({ author: ada, used: none });

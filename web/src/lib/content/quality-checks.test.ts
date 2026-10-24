@@ -544,3 +544,36 @@ describe('trust: the claims the model read (Phase 2, CE-045)', () => {
     ]);
   });
 });
+
+describe('trust: consistent with brand facts (Phase 2, CE-047)', () => {
+  const NOW = Date.parse('2026-10-24T12:00:00Z');
+  const mismatch = {
+    kind: 'price' as const,
+    page: '$59',
+    fact: '$49',
+    source: 'pricing' as const,
+    sentence: 'Pro costs $59 per month.',
+  };
+  const read = (
+    brandFacts: Parameters<typeof trust>[0]['brandFacts'],
+    html = '<p>Pro costs $59 per month.</p>',
+  ) =>
+    trust({ blocks: trustBlocks(html), links: new Map(), brandDomains: [], brandFacts, now: NOW });
+
+  it('gives the share of the compared facts that match, and names the ones that don’t', () => {
+    const result = read({ compared: 2, mismatches: [mismatch] });
+    expect(result.checks.find((c) => c.id === 'brandFacts')).toEqual({
+      id: 'brandFacts',
+      points: 5,
+      max: 10,
+    });
+    expect(result.mismatches).toEqual([mismatch]);
+  });
+
+  it('leaves the check out with nothing compared, and scores no Trust from it alone', () => {
+    expect(read({ compared: 0, mismatches: [] }).checks.map((c) => c.id)).toEqual([]);
+    const alone = read({ compared: 1, mismatches: [] }, '<p>A page with no figure.</p>');
+    expect(alone.score).toBeNull();
+    expect(read(null).mismatches).toEqual([]);
+  });
+});

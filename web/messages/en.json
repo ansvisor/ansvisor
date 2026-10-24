@@ -4647,6 +4647,12 @@
             "given": "It's in Your input, but the page doesn't quote it word for word yet",
             "done": "The page quotes an expert word for word"
           },
+          "brandFacts": {
+            "title": "Approve {count, plural, one {# brand fact} other {# brand facts}}",
+            "next": "approve {count, plural, one {# brand fact} other {# brand facts}}",
+            "detail": "Prices, your trial and other facts read from your own site: the page is checked against the ones you approve",
+            "done": "Your brand facts are approved"
+          },
           "title": "Your to-dos",
           "left": "{count, plural, =0 {All done} other {# left · only you can do these}}",
           "done": "Done",
@@ -4699,7 +4705,8 @@
             "pickAuthor": "Pick now",
             "addAuthor": "Add now",
             "editAuthor": "Edit now",
-            "addInput": "Add now"
+            "addInput": "Add now",
+            "reviewBrandFacts": "Review now"
           },
           "later": "Later"
         },
@@ -4710,6 +4717,7 @@
         "band": "{score, number}, {band}",
         "show": "Show",
         "addInput": "Add",
+        "reviewBrandFacts": "Review",
         "keep": "Keep",
         "aiCheck": "AI check",
         "addSource": "Add source",
@@ -4752,6 +4760,10 @@
           "noBrokenLinks": {
             "line": "{count, plural, one {# link doesn't} other {# links don't}} work",
             "detail": "{count, plural, one {Fix or remove it: {url}} other {Fix or remove them, starting with {url}}}"
+          },
+          "brandFacts": {
+            "line": "{kind, select, price {Price} trial {Trial length} founded {Founding year} other {A fact}} differs from brand facts · Page {page} · {source, select, pricing {pricing page} about {About page} product {product page} other {your site}} {fact}",
+            "detail": "{count, plural, one {Match the page to the fact you approved, or check it in Brand settings} other {# facts differ: match the page to the facts you approved, or check them in Brand settings}}"
           },
           "avgSentence": {
             "line": "Sentences average {words, number} words",

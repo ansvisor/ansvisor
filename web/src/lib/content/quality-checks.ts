@@ -2,6 +2,7 @@ import { classifyDomain, normalizeDomain } from '@/lib/citations/classify';
 import type { ContentAuthor } from './authors';
 import { cleanHref } from './html-allowlist';
 import { ownText, sentencesOf } from './readability';
+import type { FactMismatch } from './brand-facts';
 import type { ClaimBlock } from './claims';
 import { askableSite, sourceClass, type AiSourceClass, type SourceClass } from './source-class';
 
@@ -285,6 +286,8 @@ export interface TrustRead extends Score<TrustCheckId> {
    */
   weak: { url: string; text: string; kind: 'weak' | 'competitor'; ai: boolean }[];
   classified: number;
+  /** Phase 2 (CE-047): the page's facts that differ from the brand's approved ones. */
+  mismatches: FactMismatch[];
 }
 
 /**
@@ -327,6 +330,10 @@ export interface SourceRead {
  *
  * With `claims` (Phase 2, CE-045), the claims the model read count as the
  * figures do, each sentence once: Trust is scored from them alone too.
+ *
+ * With `brandFacts` (Phase 2, CE-047), the page's prices, trial and founding
+ * year compared with the brand's approved facts count: the share that
+ * matched. Like a working link, it doesn't score Trust on its own.
  */
 export function trust({
   blocks,
@@ -336,6 +343,7 @@ export function trust({
   quote = null,
   sources: kinds = null,
   claims = null,
+  brandFacts = null,
   now,
 }: {
   /** The page's blocks (trustBlocks). */
@@ -354,6 +362,8 @@ export function trust({
   sources?: SourceRead | null;
   /** Phase 2: the claims the model read in the page's own words (CE-045); left out before. */
   claims?: readonly ClaimBlock[] | null;
+  /** Phase 2: the page against the brand's approved facts (factMismatches, CE-047); left out before. */
+  brandFacts?: { compared: number; mismatches: FactMismatch[] } | null;
   now: number;
 }): TrustRead {
   const all = pageLinks(blocks, brandDomains);
@@ -482,6 +492,16 @@ export function trust({
     });
   }
 
+  if (brandFacts && brandFacts.compared > 0) {
+    checks.push({
+      id: 'brandFacts',
+      points:
+        (TRUST_WEIGHTS.brandFacts * (brandFacts.compared - brandFacts.mismatches.length)) /
+        brandFacts.compared,
+      max: TRUST_WEIGHTS.brandFacts,
+    });
+  }
+
   if (quote !== null) {
     checks.push({
       id: 'expertQuote',
@@ -514,6 +534,7 @@ export function trust({
     aiClaims,
     weak,
     classified: classified.length,
+    mismatches: brandFacts?.mismatches ?? [],
   };
 }
 
