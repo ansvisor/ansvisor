@@ -283,7 +283,7 @@ export function AuditReport({ audit }: { audit: AuditResult }) {
       : null;
   const previousDate =
     audit.previousCreatedAt && Number.isFinite(Date.parse(audit.previousCreatedAt))
-      ? formatMonthDay(audit.previousCreatedAt, 'UTC')
+      ? formatMonthDay(audit.previousCreatedAt)
       : null;
 
   const visibleSignals = (cat: string) =>
