@@ -28,6 +28,11 @@ vi.mock('../config/supabase.js', () => ({
         return found;
       };
       const run = (single) => {
+        // A draft write that fails once (state.failDraft).
+        if (q.update && name === 'content_drafts' && state.failDraft) {
+          state.failDraft = false;
+          return { data: null, error: { message: 'down' } };
+        }
         const found = matched();
         if (q.update) for (const row of found) Object.assign(row, q.update);
         return { data: single ? (found[0] ?? null) : found, error: null };
@@ -249,6 +254,24 @@ describe('POST /webhooks/content-drafts/:deliveryId/status', () => {
       expect(res.status).toBe(200);
       expect(state.deliveries[0].status).toBe('published');
     }
+  });
+
+  it('does it all again on the retry of a callback whose page write failed', async () => {
+    state.failDraft = true;
+    expect((await published('https://acme.example/live')).status).toBe(500);
+    expect(state.deliveries[0].status).toBe('sent');
+    expect((await published('https://acme.example/live')).status).toBe(200);
+    expect(state.drafts[0]).toMatchObject({ status: 'published' });
+    expect(state.deliveries[0]).toMatchObject({ status: 'published' });
+    expect(state.rpcs).toHaveLength(1);
+  });
+
+  it('keeps a CMS id a retry adds, and nothing else', async () => {
+    await published('https://acme.example/live');
+    const at = state.deliveries[0].published_at;
+    await published('https://acme.example/live', { externalId: '812' });
+    expect(state.deliveries[0]).toMatchObject({ external_id: '812', published_at: at });
+    expect(state.rpcs).toHaveLength(1);
   });
 
   it('moves the page’s address only for its latest delivery', async () => {
