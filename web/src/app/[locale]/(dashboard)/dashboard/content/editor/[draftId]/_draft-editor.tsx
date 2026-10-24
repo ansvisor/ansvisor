@@ -74,7 +74,7 @@ import {
   type SuggestionStatus,
 } from '@/lib/content/suggestions';
 import { REBUILD_LIMITS, rebuildSources } from '@/lib/content/brief';
-import { buildSourceGroups, includedCounts } from '@/lib/content/sources';
+import { buildSourceGroups, includedCounts, type DraftSourceKind } from '@/lib/content/sources';
 import {
   cleanHtml,
   formatHtmlSource,
@@ -365,13 +365,13 @@ export function DraftEditor({
     tab: PanelTarget;
     n: number;
     /** A source to show in Sources: a "Based on" chip or mark clicked (CE-033). */
-    source?: Pick<SuggestionSource, 'kind' | 'ref'>;
+    source?: { kind: DraftSourceKind; ref: string };
     /** The brief to build, from the Next step basket's Build brief. */
     build?: boolean;
     /** Brief › Your input to show: Quality's Add (CE-048). */
     input?: boolean;
   } | null>(null);
-  const openPanelTab = (tab: PanelTarget, source?: SuggestionSource) => {
+  const openPanelTab = (tab: PanelTarget, source?: { kind: DraftSourceKind; ref: string }) => {
     if (!panelOpen) togglePanel();
     setTabRequest((prev) => ({
       tab,
@@ -872,7 +872,12 @@ export function DraftEditor({
   useEffect(() => {
     attachRef.current = (files) => void attachments.attach(files);
     onDecide.current = (id, decision) => void decide([id], decision);
-    onSource.current = (source) => openPanelTab('sources', source);
+    // The person's own input opens where they gave it (CE-048): Brief ›
+    // Your input, there only with Quality's second phase.
+    onSource.current = (source) => {
+      if (source.kind !== 'input') openPanelTab('sources', { kind: source.kind, ref: source.ref });
+      else if (qualityPhase() >= 2) addInput();
+    };
   });
 
   /** "ChatGPT 14× and Perplexity 6×": the platforms quoting a passage, the most first. */
@@ -989,6 +994,7 @@ export function DraftEditor({
         fanout: t('suggestions.sourceKinds.fanout'),
         cited_page: t('suggestions.sourceKinds.cited_page'),
         gsc_query: t('suggestions.sourceKinds.gsc_query'),
+        input: t('suggestions.sourceKinds.input'),
       },
       sourceMark: (n, label) => t('suggestions.sourceMark', { n, label }),
       sourceTip: sourceRows

@@ -5,6 +5,7 @@ import { z } from 'zod';
 import supabaseAdmin from '../config/supabase.js';
 import { resolveModel } from './ai-provider.js';
 import { contentBriefModelId, rebuildSources } from './content-brief.js';
+import { inputSources, readDraftInputs } from './content-inputs.js';
 import { linkAllowList, linkKey, linkTargetsPrompt, readLinkTargets } from './content-links.js';
 import { siteTypeLine, pageTypeFormat } from './content-page-types.js';
 import { authorWords, guardPeopleInHtml, knownPeople } from './content-people.js';
@@ -669,14 +670,19 @@ async function fixWithRun({ draft, brand, brandId, draftId, input, passages, mor
   const modelId = contentBriefModelId();
   const lockedKeys = new Set(input.locked.map(passageKey));
   const ruleKeys = new Set(input.rules.map((r) => r.key));
-  // The data it writes from, numbered; the numbers it may write unmarked.
+  // The data it writes from, numbered, Brief › Your input last (CE-048);
+  // the numbers it may write unmarked.
   await advanceRun(run, 1);
-  const prompts = await readPrompts(brandId, input.sources?.promptIds ?? []);
+  const [prompts, inputRow] = await Promise.all([
+    readPrompts(brandId, input.sources?.promptIds ?? []),
+    readDraftInputs(draftId),
+  ]);
   const numbered = numberSources({
     prompts,
     fanouts: input.sources?.fanouts,
     pages: input.sources?.pages,
     queries: input.sources?.queries,
+    inputs: inputSources(inputRow, brand.name),
   });
   const known = knownNumbers(
     htmlText(draft.body_html),

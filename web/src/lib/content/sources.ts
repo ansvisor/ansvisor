@@ -10,6 +10,13 @@ import { classifyDomain, normalizeDomain, type SourceCategory } from '@/lib/cita
 export const DRAFT_SOURCE_KINDS = ['prompt', 'fanout', 'cited_page', 'gsc_query'] as const;
 export type DraftSourceKind = (typeof DRAFT_SOURCE_KINDS)[number];
 
+/**
+ * What an agent's suggestion can be written from: the Sources tab's kinds,
+ * and Brief › Your input (Quality spec §6, CE-048), the person's own.
+ */
+export const SUGGESTION_SOURCE_KINDS = [...DRAFT_SOURCE_KINDS, 'input'] as const;
+export type SuggestionSourceKind = (typeof SUGGESTION_SOURCE_KINDS)[number];
+
 /** The sources of the last 30 days, as content_draft_sources reads them. */
 export const SOURCES_DAYS = 30;
 /** Search Console queries shown beside the draft, the most clicked first. */
