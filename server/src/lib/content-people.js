@@ -137,10 +137,42 @@ const ROLE_WORDS_DE = [
   'sprecherin',
 ];
 /**
+ * German compound roles, one word: any "-chef" ("Finanzchef",
+ * "Küchenchefin"), and the "-leiter" ones that are posts ("Vertriebsleiter",
+ * "Werkstattleiterin"). Other "-leiter" words are ladders and conductors
+ * ("Teleskopleiter", "Halbleiter", "Schutzleiter"), and a bare "Chef" is a
+ * product too ("Chef Infra Server").
+ */
+const LEITER_POSTS = [
+  'vertriebs',
+  'abteilungs',
+  'projekt',
+  'team',
+  'filial',
+  'werkstatt',
+  'bereichs',
+  'marketing',
+  'produkt',
+  'personal',
+  'presse',
+  'gruppen',
+  'niederlassungs',
+  'labor',
+  'studien',
+  'einkaufs',
+  'entwicklungs',
+  'kommunikations',
+  'redaktions',
+  'betriebs',
+];
+/**
  * Not read before a name: "Leiter" is a ladder too, and a title follows it
  * ("Leiter Vertrieb Europa"). After a name, and with a verb, it still is.
  */
 const NOT_BEFORE_NAME = new Set(['leiter', 'leiterin']);
+/** A German compound role, as LEITER_POSTS says (eitherCase below). */
+const roleCompoundsDe = () =>
+  String.raw`(?:\p{Lu}\p{Ll}+chef(?:in)?|(?:${LEITER_POSTS.map(eitherCase).join('|')})leiter(?:in)?)`;
 /** Turkish roles ("pazarlama müdürü", "kurucumuz"), with a capital at a sentence's start. */
 const ROLE_WORDS_TR = ['kurucu', 'uzman', 'müdür', 'direktör', 'yönetici', 'danışman'];
 /** Words of a Turkish title around a role, not of the name ("Kurucu Ortak", "Müdür Yardımcısı"). */
@@ -182,6 +214,7 @@ const ROLE_LOWER = `(?:${[
   ...ROLE_WORDS.map((r) => (ABBREVIATIONS.has(r) ? r.toUpperCase() : spaced(r))),
   ...ROLE_WORDS_DE.filter((r) => !NOT_BEFORE_NAME.has(r)).map(eitherCase),
   ...ROLE_WORDS_TR.map((r) => eitherCase(r) + TR_OURS),
+  roleCompoundsDe(),
 ].join('|')})`;
 /**
  * A Turkish role with "-(s)ı" ("müdürü"): a name after it is read only
@@ -193,6 +226,7 @@ const ROLE_ANY = `(?:${[
   ...ROLE_WORDS.map((r) => (ABBREVIATIONS.has(r) ? r.toUpperCase() : eitherCase(r))),
   ...ROLE_WORDS_DE.map(eitherCase),
   ...ROLE_WORDS_TR.map((r) => eitherCase(r) + TR_ANY),
+  roleCompoundsDe(),
 ].join('|')})`;
 /** Role and title words, to tell them from the name after them ("Founder Jane Doe", "Müdürü Ayşe"). */
 const ROLE_SET = new Set([...ROLE_WORDS, ...ROLE_WORDS_DE].filter((r) => !r.includes(' ')));
@@ -212,7 +246,22 @@ const SPEECH = String.raw`(?:says|said|told|tells|explains|explained|notes|noted
  * ("Google Ads recommends", "Microsoft Teams adds", "Product Hunt
  * describes"), so those read a name only with an honorific or a role.
  */
-const PERSON_SPEECH = String.raw`(?:said|told|explained|recalled|admitted|insisted|argued|sagte|söyledi|dedi|anlattı)`;
+const PERSON_SPEECH = String.raw`(?:said|told|explained|recalled|admitted|insisted|argued|sagte|erzählte|söyledi|dedi|anlattı)`;
+/**
+ * Saying a quote, as only a person does, right next to it ("“…,” says Jane
+ * Doe", "“…,” Jane Doe says"): a company or a product recommends, adds and
+ * notes too ("“…,” recommends Northwind Finance").
+ */
+const QUOTE_SAYS = String.raw`(?:says|said|told|sagt|sagte|meint|erzählte|diyor|dedi|söyledi|söylüyor|anlattı)`;
+/** A quote's closing mark: curly, straight, angle, German and single. */
+const QUOTE_END = String.raw`[”“"»«’‘]`;
+/**
+ * Turkish verbs said of people, at a sentence's end after a role's name and
+ * a comma or "da/de" ("genel müdürü Ayşe Demir, … söyledi"): not when the
+ * name is the first of a list ("uzmanı Shopify Plus, WooCommerce ve Magento
+ * … açıklıyor"), nor with "de dahil" ("Google Analytics de dahil").
+ */
+const TR_SAYS = String.raw`(?:söyledi|söylüyor|dedi|diyor|anlattı|anlatıyor|belirtti|belirtiyor|açıkladı|açıklıyor|ekledi|ekliyor|vurguladı|vurguluyor|aktardı|paylaştı|kaydetti|ifade\s+etti)`;
 
 /**
  * Where a name plainly means a person: the name is the group "name", with
@@ -246,7 +295,7 @@ const NAME_CUES = [
   // Analytics'i açar"); a name before a comma is given up with them.
   {
     re: new RegExp(
-      String.raw`(?<!\p{L})${ROLE_TR_ITS}\s+${NOT_TITLE_NEXT}(?<name>${NAME})(?=\s*[.!?)]|['’](?:a|e|ya|ye|na|ne|n?[ıiuü]n\s+(?:söylediğine|dediğine|belirttiğine|anlattığına))\s+göre(?!\p{L})|\s+${PERSON_SPEECH}(?!\p{L}))`,
+      String.raw`(?<!\p{L})${ROLE_TR_ITS}\s+${NOT_TITLE_NEXT}(?<name>${NAME})(?=\s*[.!?)]|['’](?:a|e|ya|ye|na|ne|n?[ıiuü]n\s+(?:söylediğine|dediğine|belirttiğine|anlattığına))\s+göre(?!\p{L})|\s+${PERSON_SPEECH}(?!\p{L})|(?:,(?!\s*${WORD}(?:\s+${WORD}){0,2}\s*(?:,|\s+(?:ve|veya|ile)(?!\p{L})))|\s+d[ae](?!\s+dahil)(?!\p{L}))[^.!?]{0,160}?(?<!\p{L})${TR_SAYS}\s*[.!?])`,
       'gu',
     ),
     words: 2,
@@ -276,6 +325,43 @@ const NAME_CUES = [
     words: 1,
     role: true,
   },
+  // Whoever says a quote, right next to it: "“…,” says Jane Doe", "„…“,
+  // sagt Anna Schmidt", "“…” diyor Ayşe Demir", "“…,” Jane Doe says".
+  {
+    re: new RegExp(
+      String.raw`${QUOTE_END}\s*[,.!?]?\s*${QUOTE_SAYS}(?!\p{L})\s+(?<name>${NAME})`,
+      'gu',
+    ),
+    words: 2,
+  },
+  {
+    re: new RegExp(
+      String.raw`${QUOTE_END}\s*[,.!?]?\s*(?<name>${NAME})\s+${QUOTE_SAYS}(?!\p{L})`,
+      'gu',
+    ),
+    words: 2,
+  },
+  // "This works for every team, says Tom Becker." — after a comma, with the
+  // sentence stopping at the name.
+  {
+    re: new RegExp(
+      String.raw`,\s*(?:says|sagt|diyor)\s+(?<name>${NAME})(?=\s*(?:[.,;:!?)]|$))`,
+      'gu',
+    ),
+    words: 2,
+  },
+  // A customer's story is a person's (or a business's, made up all the
+  // same): "our customer Jana Novak", "müşterimiz Jana Novak", "unsere
+  // Kundin Jana Novak". Not a bare "client" ("the email client Microsoft
+  // Outlook") nor "customer" in a name ("Customer Data Platform").
+  {
+    re: new RegExp(
+      String.raw`(?<!\p{L})(?:(?:[Oo]ur|[Aa]|[Oo]ne|[Tt]heir)\s+(?:customer|client)|[Mm]üşteri(?:miz|lerimizden(?:\s+biri)?)|(?:[Uu]nser(?:e|er)?|[Ee]ine?r?)\s+(?:Kundin|Kunde))\s+(?<name>${NAME})`,
+      'gu',
+    ),
+    words: 2,
+    role: true,
+  },
   // "Jane Doe said", "Anna Schmidt sagte".
   { re: new RegExp(String.raw`(?<name>${NAME})\s+${PERSON_SPEECH}(?!\p{L})`, 'gu'), words: 2 },
   // "said Jane Doe.", "told by Jane Doe," — a name the sentence stops at.
@@ -297,7 +383,9 @@ const NOT_NAMES = new Set(
   (
     'the this that these those our your their his her its a an every each some most many one we they it ' +
     'as when if but and so then while because after before like unlike for in on at by with from to of ' +
-    'also yet still now here there what why how who where which'
+    'also yet still now here there what why how who where which ' +
+    // German articles and the words a sentence starts with before a name.
+    'der die das dem den des ein eine einer wie laut'
   ).split(' '),
 );
 /** A name after these is a place ("In Silicon Valley, the founder…"). */
@@ -309,7 +397,8 @@ const NOT_PEOPLE = new Set(
   (
     'research review journal land institute university times post news magazine report group inc ' +
     'labs media press daily weekly today central console insights foundation association council ' +
-    'agency bureau center centre school academy college team blog'
+    'agency bureau center centre school academy college team blog ' +
+    'zeitung online allgemeine corp gmbh ltd llc ag'
   ).split(' '),
 );
 
@@ -330,9 +419,13 @@ function personIn(name, minWords, known) {
   }
   if (words.length < minWords) return null;
   if (NOT_PEOPLE.has(words.at(-1).toLowerCase())) return null;
-  // The person's own name may be all or the end of it ("Recently Jane Doe").
+  // The person's own name may be all or the end of it ("Recently Jane Doe"),
+  // or its start, a company after it ("Ada Lovelace von Northwind").
   for (let i = 0; words.length - i >= minWords; i++) {
     if (isKnown(words.slice(i).join(' '), known)) return null;
+  }
+  for (let j = words.length - 1; j >= minWords; j--) {
+    if (isKnown(words.slice(0, j).join(' '), known)) return null;
   }
   return { start, name: name.slice(start) };
 }
@@ -343,6 +436,8 @@ function personIn(name, minWords, known) {
  * ones around words (not an apostrophe's).
  */
 const QUOTES = [
+  /»([^»«]{1,800})«/g,
+  /‚([^‚‘’]{1,800})[‘’]/g,
   /“([^“”]{1,800})”/g,
   /„([^„“”]{1,800})[“”]/g,
   /«([^«»]{1,800})»/g,

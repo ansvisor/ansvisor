@@ -274,6 +274,125 @@ describe('guardPeople: what the review found', () => {
   });
 });
 
+describe('guardPeople: what the no-fabrication test set found', () => {
+  const fix = (text) => guardPeople(text, known).text;
+
+  it('reads whoever says a quote, right next to it, with a verb only people use', () => {
+    for (const [line, out] of [
+      [
+        '“Forecasting weekly turned our cash flow around,” says Priya Shah.',
+        `${QUOTE} says ${NAME}.`,
+      ],
+      [
+        '“Forecasting weekly turned our cash flow around,” Priya Shah says.',
+        `${QUOTE} ${NAME} says.`,
+      ],
+      ['„Wöchentlich planen hat alles verändert“, sagt Priya Shah.', `${QUOTE}, sagt ${NAME}.`],
+      ['»Wöchentlich planen hat alles verändert«, sagt Priya Shah.', `${QUOTE}, sagt ${NAME}.`],
+      ['‚Wöchentlich planen hat alles verändert‘, sagt Priya Shah.', `${QUOTE}, sagt ${NAME}.`],
+      ['“Haftalık tahmin her şeyi değiştirdi,” diyor Priya Shah.', `${QUOTE} diyor ${NAME}.`],
+      ['This works for every team, says Tom Becker.', `This works for every team, says ${NAME}.`],
+    ]) {
+      expect(fix(line)).toBe(out);
+    }
+    // A known quote by a known person stays, a company after the name too.
+    for (const line of [
+      '“Forecasts are only as good as the deals in them,” says Ada Lovelace.',
+      '„Forecasts are only as good as the deals in them“, sagt Ada Lovelace von Northwind.',
+      // A company recommends too: its name isn't a person's.
+      '“Forecasts are only as good as the deals in them,” recommends Northwind Finance.',
+    ]) {
+      expect(fix(line)).toBe(line);
+    }
+  });
+
+  it('reads a Turkish role’s name before a comma or "da" when the sentence ends saying so', () => {
+    expect(
+      fix('Fintrail genel müdürü Ayşe Demir, bunun her ekip için işe yaradığını söyledi.'),
+    ).toBe(`Fintrail genel müdürü ${NAME}, bunun her ekip için işe yaradığını söyledi.`);
+    expect(fix('Fintrail genel müdürü Ayşe Demir, bunun önemli olduğunu ifade etti.')).toBe(
+      `Fintrail genel müdürü ${NAME}, bunun önemli olduğunu ifade etti.`,
+    );
+    expect(
+      fix('Fintrail genel müdürü Tom Becker da alıcıların çoğunun aynı fikirde olduğunu ekliyor.'),
+    ).toBe(`Fintrail genel müdürü ${NAME} da alıcıların çoğunun aynı fikirde olduğunu ekliyor.`);
+    // A list of tools after a trade isn't a person, nor one "de dahil", nor
+    // a name the sentence says nothing of.
+    for (const line of [
+      'Bir SEO uzmanı Google Analytics, Search Console ve Ahrefs kullanır.',
+      'Bir e-ticaret uzmanı Shopify Plus, WooCommerce ve Magento arasındaki farkları açıklıyor.',
+      'Bir SEO uzmanı Google Analytics, Ahrefs ve Semrush verilerini birlikte okuduğunu söylüyor.',
+      'Pazarlama müdürü Google Analytics de dahil birçok aracı kullandığını söyledi.',
+      'Pazarlama müdürü Ayşe Yılmaz, kampanyayı yönetti.',
+    ]) {
+      expect(fix(line)).toBe(line);
+    }
+  });
+
+  it("reads a customer's story as a person's, and no customer in a product's name", () => {
+    for (const [line, out] of [
+      [
+        'Last spring our customer Jana Novak finished in a week.',
+        `Last spring our customer ${NAME} finished in a week.`,
+      ],
+      ['One client Jana Novak called it simple.', `One client ${NAME} called it simple.`],
+      ['Müşterimiz Jana Novak işi erken bitirdi.', `Müşterimiz ${NAME} işi erken bitirdi.`],
+      ['Unsere Kundin Jana Novak war früher fertig.', `Unsere Kundin ${NAME} war früher fertig.`],
+      ['Ein Kunde Jonas Weber war früher fertig.', `Ein Kunde ${NAME} war früher fertig.`],
+    ]) {
+      expect(fix(line)).toBe(out);
+    }
+    for (const line of [
+      'A Customer Data Platform joins the data.',
+      'HubSpot, a customer relationship management platform, tracks deals.',
+      'Microsoft Outlook, an email client, syncs mail.',
+      'The email client Microsoft Outlook syncs mail.',
+      'Track customer Lifetime Value monthly.',
+      'Salesforce Service Cloud, müşteri desteği için bir platformdur.',
+      'Müşteri Deneyimi Yönetimi önemlidir.',
+    ]) {
+      expect(fix(line)).toBe(line);
+    }
+  });
+
+  it('reads German compound posts and "erzählte", and no ladder, conductor, product or newspaper', () => {
+    for (const [line, out] of [
+      [
+        'Marco Rossi, Finanzchef bei Fintrail, sagte, dass es funktioniert.',
+        `${NAME}, Finanzchef bei Fintrail, sagte, dass es funktioniert.`,
+      ],
+      [
+        'Laut Vertriebsleiterin Anna Schmidt läuft es gut.',
+        `Laut Vertriebsleiterin ${NAME} läuft es gut.`,
+      ],
+      ['Anna Schmidt erzählte uns davon.', `${NAME} erzählte uns davon.`],
+    ]) {
+      expect(fix(line)).toBe(out);
+    }
+    for (const line of [
+      'Die Leiter Hailo ProfiStep steht im Keller.',
+      'Die Teleskopleiter Hailo ProfiStep steht im Keller.',
+      'Der Halbleiter Infineon Technologies liefert Chips.',
+      'Der Schutzleiter Phoenix Contact ist grün-gelb.',
+      'Bosch Rexroth, ein Hersteller für Halbleiter, wächst.',
+      'Use Chef Infra Server to manage your fleet.',
+      'Wie Der Spiegel berichtete, wächst der Markt.',
+      'Die Süddeutsche Zeitung berichtete über das Tool.',
+      'Microsoft Deutschland erklärte, dass Copilot kommt.',
+    ]) {
+      expect(fix(line)).toBe(line);
+    }
+  });
+
+  it('reads the new cues quickly on long text', () => {
+    const long =
+      `Fintrail genel müdürü Ayşe Demir, ${'çok uzun bir açıklama yapıyor '.repeat(8)}`.repeat(400);
+    const started = Date.now();
+    guardPeople(`${long} “${'word '.repeat(50)}” says ${'Aa Bb, '.repeat(200)}`, known);
+    expect(Date.now() - started).toBeLessThan(2000);
+  });
+});
+
 describe('guardPeopleInHtml', () => {
   it('reads the words only, and makes an unknown blockquote one placeholder', () => {
     const { html, count } = guardPeopleInHtml(
