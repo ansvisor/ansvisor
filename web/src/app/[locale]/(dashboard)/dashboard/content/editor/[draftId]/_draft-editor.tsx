@@ -108,7 +108,7 @@ import {
 import { proofKey, qualityTodos } from '@/lib/content/quality-todos';
 import { readability, sentencesOf } from '@/lib/content/readability';
 import { brandFactsPath, factMismatches } from '@/lib/content/brand-facts';
-import { MAX_PROOF_TODOS, proofsOnPage } from '@/lib/content/page-read';
+import { MAX_PROOF_TODOS, proofsOnPage, type ProofSpot } from '@/lib/content/page-read';
 import {
   liveSkips,
   nextStep,
@@ -157,6 +157,8 @@ import { NextNudge, useNextNudge } from './_next-nudge';
 import { PageInfoStrip, pageInfoKey } from './_page-info';
 import { WeakSourcesMarks, weakSourcesKey } from './_weak-sources';
 import { ClaimMarksExtension, claimMarksKey, textRanges, writingBlock } from './_claim-marks';
+import { ProofImageDialog } from './_proof-image-dialog';
+import { ProofSpotsExtension, proofSpotsKey } from './_proof-spots';
 import { useClaims } from './_use-claims';
 import { useBrandFacts } from './_use-brand-facts';
 import { usePageRead } from './_use-page-read';
@@ -196,7 +198,8 @@ import { useDraftAutosave, type SaveState } from './_use-autosave';
  * and the selected table cells and images marked.
  */
 const DOCUMENT_CLASS = cn(
-  'prose prose-neutral max-w-none dark:prose-invert min-h-[50vh] focus:outline-none',
+  // Relative: the visual proof spots sit beside their paragraphs, in its margin (CE-049).
+  'relative prose prose-neutral max-w-none dark:prose-invert min-h-[50vh] focus:outline-none',
   'prose-a:font-normal prose-a:text-blue-600 prose-a:underline prose-a:underline-offset-2 dark:prose-a:text-blue-400',
   // A weak source's amber wavy line takes the place of its link's (CE-046).
   'prose-a:has-[.quality-weak-source]:no-underline!',
@@ -424,6 +427,7 @@ export function DraftEditor({
       PageInfoStrip,
       WeakSourcesMarks,
       ClaimMarksExtension,
+      ProofSpotsExtension,
     ],
     content: draft.bodyHtml,
     // Rendered on the client only, so the server's HTML can't disagree with it.
@@ -1582,6 +1586,31 @@ export function DraftEditor({
     if (wasBusy.current && !agentBusy) refreshAiUsage();
     wasBusy.current = agentBusy;
   }, [agentBusy, refreshAiUsage]);
+  // The page read's visual proof spots (CE-049), in the draft's margin: not
+  // while the agent changes the page. Add image opens their dialog.
+  const [spotFor, setSpotFor] = useState<ProofSpot | null>(null);
+  const spotList = sourcesOn && !agentBusy ? (pageRead.read?.spots ?? null) : null;
+  useEffect(() => {
+    if (!editor || editor.isDestroyed) return;
+    editor.view.dispatch(
+      editor.state.tr
+        .setMeta(
+          proofSpotsKey,
+          spotList?.length
+            ? {
+                spots: spotList,
+                title: t('proofSpots.title'),
+                add: t('proofSpots.add'),
+                forPassage: (passage: string) => t('proofSpots.for', { passage }),
+                addFor: (passage: string) => t('proofSpots.addFor', { passage }),
+                marker: (image: string) => t('proofSpots.marker', { image }),
+                onAdd: setSpotFor,
+              }
+            : null,
+        )
+        .setMeta('addToHistory', false),
+    );
+  }, [editor, spotList, t]);
   const agentFix: AgentFix = {
     run: (only) => void fixRules(only),
     running: fixing,
@@ -2637,7 +2666,8 @@ export function DraftEditor({
           )}
 
           <div className="relative min-h-0 flex-1" {...dropHandlers}>
-            <div className="h-full overflow-y-auto">
+            {/* A container: the visual proof spots are cards from 1120 px, markers below. */}
+            <div className="@container h-full overflow-y-auto">
               {htmlSource !== null && (
                 <textarea
                   ref={htmlSourceRef}
@@ -2717,6 +2747,9 @@ export function DraftEditor({
         )}
       </div>
 
+      {editor && spotFor && (
+        <ProofImageDialog editor={editor} spot={spotFor} onClose={() => setSpotFor(null)} />
+      )}
       {quality && exportOpen && exportChecks && (
         <ExportDialog
           onClose={() => setExportOpen(null)}

@@ -2812,6 +2812,63 @@ describe('the side panel', () => {
       expect(done.textContent).toContain('The proof is linked');
     });
 
+    it('shows a visual proof spot beside its passage, and Add image puts the image after it (CE-049)', async () => {
+      process.env.NEXT_PUBLIC_CONTENT_QUALITY_PHASE = '2';
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+      const block = `${said} It is easy to set up for any team.`;
+      readDraftPage.mockResolvedValue({
+        spots: [
+          {
+            passage: 'the fastest forecasting app',
+            block,
+            image: 'A screenshot of a real forecast run, timed',
+            alt: 'A forecast run finishing in 4 seconds',
+          },
+        ],
+        proofs: [],
+        regulated: null,
+        pending: false,
+        limited: false,
+        paused: false,
+      });
+      getContentDraft.mockResolvedValue(claimed);
+      window.innerWidth = 1440;
+      await renderPage();
+      await act(async () => void (await vi.advanceTimersByTimeAsync(3_000)));
+      const spot = container.querySelector<HTMLElement>('.ProseMirror [data-proof-spot]')!;
+      expect(spot.textContent).toContain('A screenshot of a real forecast run, timed');
+      expect(spot.textContent).toContain('For: “the fastest forecasting app”');
+      await act(async () =>
+        spot.querySelector<HTMLButtonElement>('button[aria-label^="Add image for"]')!.click(),
+      );
+      const src = document.querySelector<HTMLInputElement>('#proof-image-src')!;
+      await act(async () => {
+        Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(
+          src,
+          'https://cdn.acme.com/forecast-run.png',
+        );
+        src.dispatchEvent(new Event('input', { bubbles: true }));
+      });
+      await act(async () =>
+        [...document.querySelectorAll('button')]
+          .find((b) => b.textContent === 'Add image' && !b.closest('[data-proof-spot]'))!
+          .click(),
+      );
+      const image = container.querySelector<HTMLImageElement>(
+        '.ProseMirror img[src="https://cdn.acme.com/forecast-run.png"]',
+      )!;
+      expect(image.alt).toBe('A forecast run finishing in 4 seconds');
+      expect(image.previousElementSibling?.textContent).toContain(said);
+      // Filled: the spot goes; Undo takes the image out and brings it back.
+      expect(container.querySelector('.ProseMirror [data-proof-spot]')).toBeNull();
+      const { editor: pm } = container.querySelector('.ProseMirror') as HTMLElement & {
+        editor: Editor;
+      };
+      await act(async () => void pm.commands.undo());
+      expect(container.querySelector('.ProseMirror img')).toBeNull();
+      expect(container.querySelector('.ProseMirror [data-proof-spot]')).not.toBeNull();
+    });
+
     it('takes the claim’s sentence out on Remove', async () => {
       process.env.NEXT_PUBLIC_CONTENT_QUALITY_PHASE = '2';
       vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });

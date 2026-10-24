@@ -3992,6 +3992,26 @@
         "cancel": "Cancel",
         "apply": "Apply"
       },
+      "proofSpots": {
+        "title": "Visual proof",
+        "add": "Add image",
+        "for": "For: “{passage}”",
+        "addFor": "Add image for “{passage}”",
+        "marker": "Visual proof: {image}",
+        "dialog": {
+          "title": "Add visual proof",
+          "srcLabel": "Image address",
+          "srcHint": "An image you host: your own screenshot or photo, not a stock one.",
+          "invalid": "Enter the image's web address (https://…).",
+          "altLabel": "Alt text",
+          "altHint": "What the image shows, for readers who can't see it. Drafted from the passage: edit it to match your image.",
+          "altRequired": "Add alt text: what the image shows.",
+          "captionLabel": "Caption (optional)",
+          "cancel": "Cancel",
+          "insert": "Add image",
+          "gone": "That passage isn't on the page any more, so the image wasn't added."
+        }
+      },
       "image": {
         "title": "Insert an image",
         "srcLabel": "Image address",
