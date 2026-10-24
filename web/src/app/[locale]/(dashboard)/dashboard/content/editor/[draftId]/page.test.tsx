@@ -17,6 +17,7 @@ const unmarkContentDraftReady = vi.fn();
 const saveContentDraft = vi.fn();
 const setContentDraftPageType = vi.fn();
 const setContentDraftAuthor = vi.fn();
+const setContentDraftReviewer = vi.fn();
 const keepDraftSource = vi.fn();
 const checkDraftClaims = vi.fn();
 const readDraftPage = vi.fn();
@@ -90,6 +91,7 @@ vi.mock('@/lib/actions/content-drafts', () => ({
   saveContentDraft: (...args: unknown[]) => saveContentDraft(...args),
   setContentDraftPageType: (...args: unknown[]) => setContentDraftPageType(...args),
   setContentDraftAuthor: (...args: unknown[]) => setContentDraftAuthor(...args),
+  setContentDraftReviewer: (...args: unknown[]) => setContentDraftReviewer(...args),
   keepDraftSource: (...args: unknown[]) => keepDraftSource(...args),
   checkDraftClaims: (...args: unknown[]) => checkDraftClaims(...args),
   readDraftPage: (...args: unknown[]) => readDraftPage(...args),
@@ -216,6 +218,7 @@ const draft = (over: Partial<ContentDraft> = {}): ContentDraft => ({
   bodyHtml: '<h1>Pipeline forecasting</h1><p>Teams trust it.</p>',
   author: 'agent',
   authorId: null,
+  reviewerId: null,
   rules: { set: null, source: null, overrides: {}, textRules: [] },
   keptSources: [],
   action: null,
@@ -291,6 +294,7 @@ beforeEach(() => {
   saveBlob.mockReset();
   setContentDraftPageType.mockReset().mockResolvedValue(undefined);
   setContentDraftAuthor.mockReset().mockResolvedValue(undefined);
+  setContentDraftReviewer.mockReset().mockResolvedValue(undefined);
   keepDraftSource.mockReset();
   checkDraftClaims.mockReset().mockResolvedValue({ blocks: [], pending: 0, limited: false });
   readDraftPage.mockReset().mockResolvedValue({ error: 'off' });
@@ -2950,6 +2954,71 @@ describe('the side panel', () => {
       await act(async () => box.click());
       expect(toast.error).toHaveBeenCalledWith('This page keeps 50 confirmed images already.');
       expect(box.getAttribute('aria-checked')).toBe('false');
+    });
+
+    it('asks a page that advises on health for a qualified reviewer, and names them (CE-049, part e)', async () => {
+      process.env.NEXT_PUBLIC_CONTENT_QUALITY_PHASE = '2';
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+      getContentAuthors.mockResolvedValue({
+        authors: [
+          {
+            id: 'a1',
+            name: 'Dr. Ada Lovelace',
+            title: 'MD, Cardiologist',
+            bio: null,
+            photoUrl: null,
+            sameAs: [],
+            userId: null,
+            createdBy: null,
+            defaultFor: [],
+            pages: null,
+          },
+        ],
+        brands: [{ id: 'b1', name: 'Acme' }],
+        me: { id: 'u1', role: 'admin' },
+      });
+      readDraftPage.mockResolvedValue({
+        spots: [],
+        proofs: [],
+        regulated: 'health',
+        pending: false,
+        limited: false,
+        paused: false,
+      });
+      getContentDraft.mockResolvedValue(claimed);
+      window.innerWidth = 1440;
+      await renderPage();
+      await act(async () => void (await vi.advanceTimersByTimeAsync(3_000)));
+      const reviewerButton = () =>
+        [...container.querySelectorAll<HTMLButtonElement>('header button')].find((b) =>
+          /^(Add reviewer|Reviewed by)/.test(b.textContent ?? ''),
+        )!;
+      expect(reviewerButton().textContent).toBe('Add reviewer');
+      await act(async () => reviewerButton().click());
+      const item = [...document.querySelectorAll<HTMLElement>('[role="menuitemradio"]')].find((i) =>
+        i.textContent?.startsWith('Dr. Ada Lovelace'),
+      )!;
+      await act(async () => item.click());
+      expect(setContentDraftReviewer).toHaveBeenCalledWith('d1', 'a1');
+      expect(reviewerButton().textContent).toBe('Reviewed by Dr. Ada Lovelace');
+      // In the Page info strip, outside the page.
+      expect(container.querySelector('[data-page-info]')!.textContent).toContain(
+        'Reviewed by Dr. Ada Lovelace, MD, Cardiologist',
+      );
+      // A save that fails puts back the reviewer saved, and says so.
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+      try {
+        setContentDraftReviewer.mockRejectedValueOnce(new Error('offline'));
+        await act(async () => reviewerButton().click());
+        const none = [...document.querySelectorAll<HTMLElement>('[role="menuitemradio"]')].find(
+          (i) => i.textContent === 'No reviewer',
+        )!;
+        await act(async () => none.click());
+        expect(toast.error).toHaveBeenCalledWith("Couldn't set the reviewer. Try again.");
+        expect(reviewerButton().textContent).toBe('Reviewed by Dr. Ada Lovelace');
+      } finally {
+        vi.mocked(console.error).mockRestore();
+      }
     });
 
     it('takes the claim’s sentence out on Remove', async () => {

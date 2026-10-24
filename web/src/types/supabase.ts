@@ -999,6 +999,7 @@ export type Database = {
           prompt_ids: string[]
           published_at: string | null
           published_url: string | null
+          reviewer_id: string | null
           rules: Json | null
           source_url: string | null
           score_after: number | null
@@ -1033,6 +1034,7 @@ export type Database = {
           prompt_ids?: string[]
           published_at?: string | null
           published_url?: string | null
+          reviewer_id?: string | null
           rules?: Json | null
           source_url?: string | null
           score_after?: number | null
@@ -1067,6 +1069,7 @@ export type Database = {
           prompt_ids?: string[]
           published_at?: string | null
           published_url?: string | null
+          reviewer_id?: string | null
           rules?: Json | null
           source_url?: string | null
           score_after?: number | null
@@ -1080,6 +1083,13 @@ export type Database = {
           {
             foreignKeyName: "content_drafts_author_id_fkey"
             columns: ["author_id"]
+            isOneToOne: false
+            referencedRelation: "content_authors"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "content_drafts_reviewer_id_fkey"
+            columns: ["reviewer_id"]
             isOneToOne: false
             referencedRelation: "content_authors"
             referencedColumns: ["id"]

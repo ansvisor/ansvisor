@@ -94,6 +94,7 @@ export function NextNudge({
   onAddSource,
   onConfirmImages,
   onAddImage,
+  onPickReviewer,
   onLater,
   onAct,
 }: {
@@ -110,6 +111,8 @@ export function NextNudge({
   /** Visual proof's: Confirm, or the first open spot's Add image (CE-049). */
   onConfirmImages?: () => void;
   onAddImage?: () => void;
+  /** A regulated page's: the header's reviewer menu (CE-049). */
+  onPickReviewer?: () => void;
   onLater: () => void;
   /** It was acted on: it goes. */
   onAct: () => void;
@@ -202,6 +205,19 @@ export function NextNudge({
                 }}
               >
                 {t(`act.${action}`)}
+              </button>
+            )
+          ) : action === 'pickReviewer' ? (
+            onPickReviewer && (
+              <button
+                type="button"
+                className={actClass}
+                onClick={() => {
+                  onAct();
+                  onPickReviewer();
+                }}
+              >
+                {t('act.pickReviewer')}
               </button>
             )
           ) : action === 'reviewBrandFacts' ? (

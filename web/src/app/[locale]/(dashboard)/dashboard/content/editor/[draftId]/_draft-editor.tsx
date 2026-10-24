@@ -41,6 +41,7 @@ import {
   unmarkContentDraftReady,
   restoreDraftVersion,
   setContentDraftAuthor,
+  setContentDraftReviewer,
   keepDraftSource,
   confirmOwnImage,
   getOwnImages,
@@ -135,6 +136,7 @@ import { useBrandStore } from '@/stores/use-brand-store';
 import { AgentCard } from './_agent-card';
 import { AgentDrafting, draftingKey } from './_agent-drafting';
 import { AuthorMenu, MANAGE_AUTHORS_PATH } from './_author-menu';
+import { ReviewerMenu } from './_reviewer-menu';
 import { BeforePublish, TRUST_GATE, type ReadyAnyway, type ReadyToPaste } from './_before-publish';
 import { FlashBlock, findBlock, flashKey } from './_flash-block';
 import { useAgentRun } from './_use-agent-run';
@@ -524,6 +526,8 @@ export function DraftEditor({
   // Page info strip outside the page; with Quality's first phase.
   const [authorsRead, setAuthorsRead] = useState<AuthorsRead | null>(null);
   const [authorId, setAuthorId] = useState(draft.authorId);
+  // The qualified reviewer of a page that advises on health, finance or law (CE-049).
+  const [reviewerId, setReviewerId] = useState(draft.reviewerId);
   // The author the database holds, and the latest pick: a slower pick that
   // fails after a later one landed doesn't roll the menu back.
   const savedAuthor = useRef(draft.authorId);
@@ -686,6 +690,10 @@ export function DraftEditor({
         : null,
     [qualityOn, authorsRead, inputsPending, sourcesOn, visualRead, pageAuthor, used, visual],
   );
+  // A page that advises consumers on health, finance or law (the page's read)
+  // asks for a qualified reviewer, one of Authors.
+  const regulated = sourcesOn ? (pageRead.read?.regulated ?? null) : null;
+  const pageReviewer = authorsRead?.authors.find((a) => a.id === reviewerId) ?? null;
   // Confirm: only the person can tell their own image from stock.
   const [confirmingImages, setConfirmingImages] = useState(false);
   const confirmImage = async (src: string) => {
@@ -876,6 +884,8 @@ export function DraftEditor({
         brandFacts: brandFacts ? { pending: pendingFacts, had: hadPendingFacts } : null,
         proofs: sourcesOn ? { asks: proofAsks, had: hadProofs } : null,
         visual,
+        // Once the authors are read: who the reviewer is, and whether any can be.
+        reviewer: regulated && authorsRead ? { topic: regulated, picked: !!pageReviewer } : null,
       })
     : [];
   const quality: QualityRead | null = qualityOn
@@ -904,6 +914,24 @@ export function DraftEditor({
     : null;
   // Quality's Pick author opens the header's menu.
   const [authorMenuOpen, setAuthorMenuOpen] = useState(false);
+  // Quality's Pick reviewer opens its menu beside the author's (CE-049).
+  const [reviewerMenuOpen, setReviewerMenuOpen] = useState(false);
+  // As the author's: a slower pick that fails after a later one landed doesn't roll it back.
+  const savedReviewer = useRef(draft.reviewerId);
+  const reviewerPick = useRef(0);
+  const pickReviewer = async (next: string | null) => {
+    if (next === reviewerId) return;
+    const pick = ++reviewerPick.current;
+    setReviewerId(next);
+    try {
+      await setContentDraftReviewer(draft.id, next);
+      savedReviewer.current = next;
+    } catch (err) {
+      console.error('Failed to set the reviewer:', err);
+      if (pick === reviewerPick.current) setReviewerId(savedReviewer.current);
+      toast.error(t('reviewer.failed'));
+    }
+  };
   // Quality's Add opens Brief › Your input.
   const addInput = () => {
     if (!panelOpen) togglePanel();
@@ -936,6 +964,10 @@ export function DraftEditor({
           name: pageAuthor?.name ?? t('author.organization', { brand: brandName }),
         }),
         pageAuthor?.title && t('author.titleAt', { title: pageAuthor.title, brand: brandName }),
+        pageReviewer &&
+          (pageReviewer.title
+            ? t('reviewer.byTitle', { name: pageReviewer.name, title: pageReviewer.title })
+            : t('reviewer.by', { name: pageReviewer.name })),
         t('author.updated', {
           date: format.dateTime(
             Math.max(
@@ -2543,6 +2575,15 @@ export function DraftEditor({
               inContent={bylineInContent}
             />
           )}
+          {authorsRead && (regulated || pageReviewer) && (
+            <ReviewerMenu
+              authors={authorsRead.authors}
+              reviewerId={pageReviewer?.id ?? null}
+              onPick={(next) => void pickReviewer(next)}
+              open={reviewerMenuOpen}
+              onOpenChange={setReviewerMenuOpen}
+            />
+          )}
           <DraftMethodBadge method={draft.method} />
           <DraftStatusBadge status={status} />
           <button
@@ -2758,6 +2799,7 @@ export function DraftEditor({
                 quality={quality}
                 onShowPlaceholder={showFirstPlaceholder}
                 onPickAuthor={() => setAuthorMenuOpen(true)}
+                onPickReviewer={() => setReviewerMenuOpen(true)}
                 onAddInput={addInput}
                 onAddSource={sourcesOn ? addSource : undefined}
                 onConfirmImages={() => setConfirmingImages(true)}
@@ -2799,6 +2841,7 @@ export function DraftEditor({
             onShowInPage={showInPage}
             onShowPlaceholder={showFirstPlaceholder}
             onPickAuthor={() => setAuthorMenuOpen(true)}
+            onPickReviewer={() => setReviewerMenuOpen(true)}
             yourInput={inputsRead.status === 'off' ? null : inputsRead}
             onAddInput={addInput}
             onKeepSource={sourcesOn ? (url) => void keepSource(url) : undefined}

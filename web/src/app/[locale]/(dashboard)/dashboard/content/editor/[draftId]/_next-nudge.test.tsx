@@ -57,6 +57,7 @@ const onPickAuthor = vi.fn();
 const onShowPlaceholder = vi.fn();
 const onAddSource = vi.fn();
 const onConfirmImages = vi.fn();
+const onPickReviewer = vi.fn();
 const MOMENTS: NudgeMoment[] = ['agent', 'acceptAll', 'markReady'];
 
 /** The editor's part: the hook, a button per moment, and the nudge while it shows. */
@@ -79,6 +80,7 @@ function Harness({ todos, author }: { todos: QualityTodo[]; author: ContentAutho
         onPickAuthor={onPickAuthor}
         onAddSource={onAddSource}
         onConfirmImages={onConfirmImages}
+        onPickReviewer={onPickReviewer}
         onLater={nudge.later}
         onAct={nudge.close}
       />
@@ -201,6 +203,26 @@ describe('NextNudge', () => {
     expect(nudge()!.textContent).toBe('Next for you: show your own image · 1 of 1Confirm nowLater');
     await act(async () => button('Confirm now').click());
     expect(onConfirmImages).toHaveBeenCalled();
+  });
+
+  it('opens the reviewer menu for a regulated page (CE-049, part e)', async () => {
+    onPickReviewer.mockReset();
+    await render([
+      {
+        id: 'reviewer',
+        done: false,
+        gain: 0,
+        score: 'eeat',
+        action: 'pickReviewer',
+        topic: 'legal',
+      },
+    ]);
+    await act(async () => nudgeAt('agent'));
+    expect(nudge()!.textContent).toBe(
+      'Next for you: add a qualified reviewer · 1 of 1Pick nowLater',
+    );
+    await act(async () => button('Pick now').click());
+    expect(onPickReviewer).toHaveBeenCalled();
   });
 
   it('counts the open ones and skips the done', async () => {

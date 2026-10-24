@@ -228,7 +228,7 @@ export async function getContentDraft(id: string): Promise<ContentDraft | null> 
   const { data, error } = await supabase
     .from('content_drafts')
     .select(
-      `id, brand_id, title, page_type, page_type_source, method, status, body_html, author, author_id, source_url, rules, kept_sources, action_id, agent_state, agent_state_at, agent_run, updated_at, ${BRAND_SITE}, actions(action_no)`,
+      `id, brand_id, title, page_type, page_type_source, method, status, body_html, author, author_id, reviewer_id, source_url, rules, kept_sources, action_id, agent_state, agent_state_at, agent_run, updated_at, ${BRAND_SITE}, actions(action_no)`,
     )
     .eq('id', id)
     .maybeSingle();
@@ -247,6 +247,7 @@ export async function getContentDraft(id: string): Promise<ContentDraft | null> 
     bodyHtml: data.body_html,
     author: data.author === 'agent' ? 'agent' : 'user',
     authorId: data.author_id,
+    reviewerId: data.reviewer_id,
     rules: draftRulesSchema.safeParse(data.rules).data ?? NO_DRAFT_RULES,
     keptSources: data.kept_sources ?? [],
     action:
@@ -1356,6 +1357,33 @@ export async function setContentDraftAuthor(id: string, authorId: string | null)
   const { data, error } = await supabase
     .from('content_drafts')
     .update({ author_id: authorId })
+    .eq('id', id)
+    .select('id')
+    .maybeSingle();
+  if (error?.code === OTHER_ORGANIZATION) throw new Error('invalid');
+  if (error) throw new Error(error.message);
+  if (!data) throw new Error('not_found');
+}
+
+/**
+ * Sets the qualified person who reviewed a regulated page (Quality CE-049,
+ * 00273), one of Authors, or none. The database checks they are the brand's
+ * organization's.
+ */
+export async function setContentDraftReviewer(
+  id: string,
+  reviewerId: string | null,
+): Promise<void> {
+  if (
+    !draftId.safeParse(id).success ||
+    (reviewerId !== null && !z.guid().safeParse(reviewerId).success)
+  ) {
+    throw new Error('invalid');
+  }
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from('content_drafts')
+    .update({ reviewer_id: reviewerId })
     .eq('id', id)
     .select('id')
     .maybeSingle();

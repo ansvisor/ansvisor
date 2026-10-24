@@ -30,6 +30,7 @@ export type QualityTodoId =
   | 'visualProof'
   | 'expertQuote'
   | 'proof'
+  | 'reviewer'
   | 'brandFacts';
 
 /**
@@ -46,6 +47,7 @@ export type QualityTodoAction =
   | 'addProof'
   | 'confirmImage'
   | 'addImage'
+  | 'pickReviewer'
   | 'reviewBrandFacts';
 
 export interface QualityTodo {
@@ -65,6 +67,8 @@ export interface QualityTodo {
   proof?: { claim: string; block: string; kind: ProofKind; sentence: string };
   /** How many it is about (placeholders, brand facts to approve). */
   count?: number;
+  /** What a regulated page advises on: its reviewer's field (CE-049). */
+  topic?: 'health' | 'finance' | 'legal';
 }
 
 /**
@@ -89,6 +93,7 @@ export function qualityTodos({
   brandFacts = null,
   proofs = null,
   visual = null,
+  reviewer = null,
 }: {
   eeat: Score<EeatCheckId> | null;
   author: ContentAuthor | null;
@@ -122,6 +127,12 @@ export function qualityTodos({
    * person's own, and the visual proof spots open (as eeat takes them).
    */
   visual?: { images: number; own: number; openSpots: number } | null;
+  /**
+   * Phase 2 (CE-049): a page that advises consumers on health, finance or
+   * law (the page read's `regulated`) asks for a qualified reviewer, from
+   * Authors; null otherwise.
+   */
+  reviewer?: { topic: 'health' | 'finance' | 'legal'; picked: boolean } | null;
 }): QualityTodo[] {
   const fill: QualityTodo[] =
     placeholders.count || placeholders.had
@@ -169,7 +180,19 @@ export function qualityTodos({
       } satisfies QualityTodo,
     ];
   });
-  if (!eeat || eeat.score === null) return [...fill, ...proofTodos, ...facts];
+  const review: QualityTodo[] = reviewer
+    ? [
+        {
+          id: 'reviewer',
+          done: reviewer.picked,
+          gain: 0,
+          score: 'eeat',
+          action: reviewer.picked ? null : hasAuthors ? 'pickReviewer' : 'addAuthor',
+          topic: reviewer.topic,
+        },
+      ]
+    : [];
+  if (!eeat || eeat.score === null) return [...fill, ...proofTodos, ...review, ...facts];
   const byline: QualityTodo = {
     id: 'byline',
     done: !!author,
@@ -219,6 +242,7 @@ export function qualityTodos({
         ] satisfies QualityTodo[])
       : []),
     ...proofTodos,
+    ...review,
     ...facts,
   ];
 }

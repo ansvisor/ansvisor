@@ -107,6 +107,7 @@ const {
   unmarkContentDraftReady,
   confirmOwnImage,
   getOwnImages,
+  setContentDraftReviewer,
 } = await import('./content-drafts');
 const { bodyHash } = await import('@/lib/content/editor');
 
@@ -359,6 +360,23 @@ describe('setContentDraftAuthor', () => {
     await expect(setContentDraftAuthor('d1', AUTHOR)).rejects.toThrow('invalid');
     expect(calls).toEqual([]);
     await expect(setContentDraftAuthor(DRAFT, AUTHOR)).rejects.toThrow('not_found');
+  });
+});
+
+describe('setContentDraftReviewer (Quality CE-049, 00273)', () => {
+  const REVIEWER = '7c9e6679-7425-40de-944b-e07fc1f90ae7';
+
+  it('sets the qualified reviewer, or none; refuses an id that is not one', async () => {
+    updated = { id: DRAFT };
+    await setContentDraftReviewer(DRAFT, REVIEWER);
+    expect(calls[0]).toMatchObject({
+      op: 'update',
+      value: { reviewer_id: REVIEWER },
+      filters: [['eq', 'id', DRAFT]],
+    });
+    await setContentDraftReviewer(DRAFT, null);
+    expect(calls[1]).toMatchObject({ op: 'update', value: { reviewer_id: null } });
+    await expect(setContentDraftReviewer(DRAFT, 'dr-who')).rejects.toThrow('invalid');
   });
 });
 

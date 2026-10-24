@@ -94,6 +94,7 @@ const onKeep = vi.fn();
 const onAddSource = vi.fn();
 const onConfirmImages = vi.fn();
 const onAddImage = vi.fn();
+const onPickReviewer = vi.fn();
 
 async function render(quality: QualityRead | Readability | null) {
   const q = quality && 'eeat' in quality ? quality : read(quality as Readability | null);
@@ -110,6 +111,7 @@ async function render(quality: QualityRead | Readability | null) {
           onAddSource={onAddSource}
           onConfirmImages={onConfirmImages}
           onAddImage={onAddImage}
+          onPickReviewer={onPickReviewer}
         />
       </NextIntlClientProvider>,
     );
@@ -619,6 +621,29 @@ describe('QualityTab', () => {
     );
     await act(async () => row().querySelector('button')!.click());
     expect(onAddImage).toHaveBeenCalled();
+  });
+
+  it('asks for a qualified reviewer, and opens their menu (CE-049, part e)', async () => {
+    onPickReviewer.mockReset();
+    const score = eeat({ author: ada });
+    await render({
+      ...read(null),
+      eeat: score,
+      todos: qualityTodos({
+        eeat: score,
+        author: ada,
+        hasAuthors: true,
+        reviewer: { topic: 'finance', picked: false },
+      }),
+    });
+    const row = [...container.querySelectorAll('[aria-label="Your to-dos"] li')].find((li) =>
+      li.textContent?.startsWith('Add a qualified reviewer'),
+    )!;
+    expect(row.textContent).toContain(
+      'The page advises readers on their money: name the qualified person who reviewed it',
+    );
+    await act(async () => row.querySelector('button')!.click());
+    expect(onPickReviewer).toHaveBeenCalled();
   });
 
   it("shows the site's trust, what is missing and the way to Site Audit", async () => {

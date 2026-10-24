@@ -105,6 +105,7 @@ export function QualityTab({
   onRemove,
   onConfirmImages,
   onAddImage,
+  onPickReviewer,
 }: {
   quality: QualityRead;
   /** Scrolls the draft to a passage and marks it. */
@@ -125,6 +126,8 @@ export function QualityTab({
   onConfirmImages?: () => void;
   /** Opens the first open visual proof spot's Add image (CE-049). */
   onAddImage?: () => void;
+  /** Opens the header's reviewer menu (CE-049). */
+  onPickReviewer?: () => void;
 }) {
   const t = useTranslations('contentEditor.editor.quality');
   const tSite = useTranslations('audit.siteTrust.checks');
@@ -199,6 +202,7 @@ export function QualityTab({
                 onAddSource={onAddSource}
                 onConfirmImages={onConfirmImages}
                 onAddImage={onAddImage}
+                onPickReviewer={onPickReviewer}
               />
             ))}
           </ul>
@@ -380,6 +384,19 @@ export function useTodoCopy() {
         detail: todo.done ? t('brandFacts.done') : t('brandFacts.detail'),
       };
     }
+    // A qualified reviewer for a page that advises on health, finance or law (CE-049).
+    if (todo.id === 'reviewer') {
+      const topic = todo.topic ?? 'health';
+      return {
+        title: t('reviewer.title'),
+        next: t('reviewer.next'),
+        detail: todo.done
+          ? t('reviewer.done')
+          : todo.action === 'addAuthor'
+            ? t('reviewer.detail.addAuthor', { topic })
+            : t('reviewer.detail.pick', { topic }),
+      };
+    }
     // An image the person took themself (CE-049).
     if (todo.id === 'visualProof') {
       const count = todo.count ?? 0;
@@ -443,6 +460,7 @@ function TodoRow({
   onAddSource,
   onConfirmImages,
   onAddImage,
+  onPickReviewer,
 }: {
   todo: QualityTodo;
   quality: QualityRead;
@@ -453,6 +471,7 @@ function TodoRow({
   onAddSource?: (claim: ClaimMark) => void;
   onConfirmImages?: () => void;
   onAddImage?: () => void;
+  onPickReviewer?: () => void;
 }) {
   const t = useTranslations('contentEditor.editor.quality');
   const { title, detail } = useTodoCopy()(todo, quality);
@@ -549,6 +568,12 @@ function TodoRow({
           onAddImage && (
             <Button variant="outline" size="sm" className="h-7 shrink-0" onClick={onAddImage}>
               {t('addImage')}
+            </Button>
+          )
+        ) : todo.action === 'pickReviewer' ? (
+          onPickReviewer && (
+            <Button variant="outline" size="sm" className="h-7 shrink-0" onClick={onPickReviewer}>
+              {t('pickReviewer')}
             </Button>
           )
         ) : todo.action === 'reviewBrandFacts' ? (

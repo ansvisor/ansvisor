@@ -137,6 +137,7 @@ export function EditorSidePanel({
   onRemoveClaim,
   onConfirmImages,
   onAddImage,
+  onPickReviewer,
 }: {
   draft: ContentDraft;
   /** The brand's business type as the editor holds it (Quality CE-056). */
@@ -201,6 +202,8 @@ export function EditorSidePanel({
   /** Quality's visual proof (CE-049): Confirm the page's images, or Add image at a spot. */
   onConfirmImages?: () => void;
   onAddImage?: () => void;
+  /** Quality's Pick reviewer: the header's reviewer menu (CE-049). */
+  onPickReviewer?: () => void;
 }) {
   const t = useTranslations('contentEditor.editor.panel');
   const tEditor = useTranslations('contentEditor.editor');
@@ -451,6 +454,7 @@ export function EditorSidePanel({
                 onRemove={onRemoveClaim}
                 onConfirmImages={onConfirmImages}
                 onAddImage={onAddImage}
+                onPickReviewer={onPickReviewer}
               />
             </div>
           )}
