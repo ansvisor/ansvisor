@@ -91,6 +91,7 @@ import { PLACEHOLDER, pagePlaceholders, placeholderIn } from '@/lib/content/plac
 import {
   blankCode,
   bylineText,
+  disclosureText,
   exportPlaceholders,
   pasteChecks,
   teamName,
@@ -1467,6 +1468,17 @@ export function DraftEditor({
    * said to be there.
    */
   const htmlSourceRef = useRef<HTMLTextAreaElement>(null);
+  // The disclosure line under the H1 (CE-050), or at the top of a page
+  // with none; one undo takes it out.
+  const addDisclosure = (line: string) => {
+    if (!editor || editor.isDestroyed) return;
+    const first = editor.state.doc.firstChild;
+    const at = first?.type.name === 'heading' && first.attrs.level === 1 ? first.nodeSize : 0;
+    editor
+      .chain()
+      .insertContentAt(at, { type: 'paragraph', content: [{ type: 'text', text: line }] })
+      .run();
+  };
   const fillFirstPlaceholder = () => {
     if (htmlSource !== null) {
       const m = new RegExp(PLACEHOLDER.source, 'iu').exec(blankCode(htmlSource, { words: true }));
@@ -2983,6 +2995,7 @@ export function DraftEditor({
                 ? quality.trust.score
                 : null,
             noAuthor: quality.eeat !== null && !quality.author,
+            noDisclosure: aiChecks?.disclosure?.found === false,
             article: isArticlePage(pageType),
             onReview: () => {
               setExportOpen(null);
@@ -3034,6 +3047,8 @@ export function DraftEditor({
           pageType={pageType}
           image={firstImage(pageHtml)}
           linksPending={linksPending}
+          disclosureLine={aiChecks?.disclosure ? disclosureText(language, brandName) : null}
+          onAddDisclosure={addDisclosure}
           onMarkReady={(anyway) => {
             setPublishOpen(null);
             void markReady(anyway ?? undefined);

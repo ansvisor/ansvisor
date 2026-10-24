@@ -5,6 +5,7 @@ import { PLACEHOLDER } from './placeholders';
 import {
   blankCode,
   bylineText,
+  disclosureText,
   exportPlaceholders,
   fragment,
   pageFields,
@@ -348,6 +349,21 @@ describe('teamName', () => {
     // A "$" in the name is written as it is; no brand read yet, no team.
     expect(teamName('en', 'Cash $1')).toBe('Cash $1 Team');
     expect(teamName('de', ' ')).toBe('');
+  });
+});
+
+describe('disclosureText', () => {
+  it('writes the line in the page’s language, none in another or with no brand (CE-050)', () => {
+    expect(disclosureText(null, 'Acme')).toBe(
+      'Disclosure: Acme makes the product this page recommends.',
+    );
+    expect(disclosureText('tr', 'Acme')).toBe('Açıklama: Bu sayfada önerilen ürünü Acme üretiyor.');
+    expect(disclosureText('ja', 'Acme')).toBeNull();
+    expect(disclosureText('en', ' ')).toBeNull();
+    // A "$" in a name stays as it is.
+    expect(disclosureText('en', 'A$1')).toBe(
+      'Disclosure: A$1 makes the product this page recommends.',
+    );
   });
 });
 

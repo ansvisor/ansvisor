@@ -89,6 +89,7 @@ const writeText = vi.fn();
 const clean = { placeholders: 0, imagesWithoutAlt: 0, linksBroken: 0, linksUnread: 0 };
 const onContinue = vi.fn();
 const onFillNow = vi.fn();
+const onAddDisclosure = vi.fn();
 
 async function render(
   q: QualityRead,
@@ -101,6 +102,7 @@ async function render(
     mode = 'markReady' as 'markReady' | 'export' | 'send',
     contentByline = null as string | null,
     title = 'How small teams forecast',
+    disclosureLine = null as string | null,
   } = {},
 ) {
   await act(async () => {
@@ -121,6 +123,8 @@ async function render(
           linksPending={linksPending}
           onMarkReady={onMarkReady}
           onFixFirst={onFixFirst}
+          disclosureLine={disclosureLine}
+          onAddDisclosure={onAddDisclosure}
         />
       </NextIntlClientProvider>,
     );
@@ -404,5 +408,41 @@ describe('BeforePublish', () => {
     ]);
     expect(dialog().querySelector('pre')).toBeNull();
     expect(button('Copy JSON-LD')).toBeUndefined();
+  });
+
+  it('asks a page that puts the brand forward for its disclosure, with Add line (CE-050)', async () => {
+    const line = 'Disclosure: Acme makes the product this page recommends.';
+    const pick = { found: false, show: 'Our top pick is the Acme Ridge 28' };
+    onAddDisclosure.mockReset();
+    await render(quality({ aiChecks: { balanced: null, disclosure: pick } }), {
+      disclosureLine: line,
+    });
+    expect(rows()).toContainEqual(
+      expect.stringContaining('The page recommends Acme without saying Acme makes it'),
+    );
+    await act(async () => button('Add line')!.click());
+    expect(onAddDisclosure).toHaveBeenCalledWith(line);
+    expect(rows()).toContainEqual(expect.stringContaining('Disclosure added'));
+    expect(button('Add line')).toBeUndefined();
+
+    // Said: its words. No line in the page's language: the person writes it.
+    await render(
+      quality({
+        aiChecks: { balanced: null, disclosure: { found: true, show: 'Acme makes the Ridge 28' } },
+      }),
+    );
+    expect(rows()).toContainEqual(
+      expect.stringContaining('The page says so: "Acme makes the Ridge 28"'),
+    );
+    act(() => root.unmount());
+    root = createRoot(container);
+    await render(quality({ aiChecks: { balanced: null, disclosure: pick } }));
+    expect(rows()).toContainEqual(
+      expect.stringContaining('Add a line saying Acme makes what the page recommends'),
+    );
+    expect(button('Add line')).toBeUndefined();
+    // Where it doesn't apply: no row.
+    await render(quality({ aiChecks: { balanced: null, disclosure: null } }));
+    expect(rows().join(' ')).not.toContain('recommends');
   });
 });

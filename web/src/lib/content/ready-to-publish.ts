@@ -481,6 +481,31 @@ export function teamName(language: string | null | undefined, brand: string): st
 }
 
 /**
+ * The disclosure line (CE-050) in the page's language, for a page that puts
+ * the brand forward among options: the brand makes what it recommends. It
+ * goes out with the page, so in the page's language; a language not here
+ * gets none (the person writes it).
+ */
+const DISCLOSURES: Record<string, string> = {
+  en: 'Disclosure: {brand} makes the product this page recommends.',
+  tr: 'Açıklama: Bu sayfada önerilen ürünü {brand} üretiyor.',
+  de: 'Hinweis: {brand} stellt das auf dieser Seite empfohlene Produkt her.',
+  fr: 'Transparence : {brand} fabrique le produit recommandé sur cette page.',
+  es: 'Aviso: {brand} fabrica el producto que recomienda esta página.',
+  pt: 'Aviso: a {brand} fabrica o produto recomendado nesta página.',
+  it: 'Trasparenza: {brand} produce il prodotto consigliato in questa pagina.',
+  nl: 'Openheid: {brand} maakt het product dat deze pagina aanbeveelt.',
+  sv: 'Upplysning: {brand} tillverkar produkten som den här sidan rekommenderar.',
+};
+
+/** The disclosure line for a page in `language`, or null (no brand read, or a language not here). */
+export function disclosureText(language: string | null | undefined, brand: string): string | null {
+  const line = DISCLOSURES[languageCode(language) ?? ''];
+  // A function, so a "$" in a name is written as it is.
+  return line && brand.trim() ? line.replace('{brand}', () => brand.trim()) : null;
+}
+
+/**
  * Where the end tag of the HTML's k-th H1 ends, counted from 0, or null.
  * Comments and code are blanked first (blankCode): an H1 there is no element.
  */
