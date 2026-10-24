@@ -11,8 +11,11 @@
 -- paragraph's words: a paragraph not changed since isn't read again, and the
 -- rows of paragraphs no longer on the page go at the next read. Each claim
 -- is { "text", "kind" }: its words as the paragraph has them, and number,
--- stat, superlative or fact. Server-only: the API reads and writes it, after
--- its own check that the caller is a member of the draft's workspace.
+-- stat, superlative or fact. `missed` marks a paragraph whose answer missed
+-- the schema (cut short, or blocked by the provider's filter): kept as read
+-- with no claims, so it isn't charged on every save, and read again after a
+-- day. Server-only: the API reads and writes it, after its own check that
+-- the caller is a member of the draft's workspace.
 
 create table if not exists public.content_quality_claims (
   draft_id uuid not null references public.content_drafts(id) on delete cascade,
@@ -24,6 +27,7 @@ create table if not exists public.content_quality_claims (
       and octet_length(claims::text) <= 4096
     ),
   model text check (model is null or char_length(model) <= 100),
+  missed boolean not null default false,
   checked_at timestamptz not null default now(),
   primary key (draft_id, paragraph_hash)
 );

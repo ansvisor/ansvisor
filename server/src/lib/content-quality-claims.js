@@ -5,7 +5,7 @@ import { z } from 'zod';
 import supabaseAdmin from '../config/supabase.js';
 import { resolveModel } from './ai-provider.js';
 import { QUALITY_CALLS_PER_DAY, qualityCallsToday } from './content-quality-calls.js';
-import { sourceClassModelId } from './content-source-class.js';
+import { SOURCE_READS_PER_DAY, sourceClassModelId } from './content-source-class.js';
 import { logger } from './logger.js';
 import { reserveAiBudget } from './plan-guard.js';
 
@@ -29,7 +29,9 @@ export const CALLS_PER_ASK = 2;
  * The day's Quality calls a draft's claims leave to its sources' kinds
  * (QUALITY_CALLS_PER_DAY is theirs together): writing on doesn't starve them.
  */
-export const LEFT_FOR_SOURCES = 10;
+export const LEFT_FOR_SOURCES = SOURCE_READS_PER_DAY;
+/** How long a paragraph whose answer missed the schema is kept as read: read again after it. */
+export const MISSED_DAYS = 1;
 /** The claims kept of one paragraph, and of one claim's words. */
 export const MAX_CLAIMS_PER_PARAGRAPH = 5;
 const MAX_CLAIM_CHARS = 200;
@@ -126,13 +128,32 @@ export function buildClaimsPrompt(paragraphs) {
     .join('\n')}`;
 }
 
-/** A paragraph's claims as kept: its own words only, each once, MAX_CLAIMS_PER_PARAGRAPH at most. */
+/**
+ * A text with its curly quotes, primes, dashes and minus signs made plain:
+ * the model may copy “world’s fastest” or −12% with straight ones. Each is
+ * one character for one, so a match's place is the paragraph's own (an
+ * ellipsis isn't: “…” stays as it is).
+ */
+const fold = (text) =>
+  text
+    .replace(/[\u2018\u2019\u201a\u2032]/g, "'")
+    .replace(/[\u201c\u201d\u201e\u2033]/g, '"')
+    .replace(/[\u2010\u2011\u2012\u2013\u2014\u2015\u2212]/g, '-');
+
+/**
+ * A paragraph's claims as kept: its own words only (curly quotes and
+ * dashes as plain ones, kept as the paragraph has them), each once,
+ * MAX_CLAIMS_PER_PARAGRAPH at most.
+ */
 export function keptClaims(paragraph, claims) {
   const kept = [];
+  const folded = fold(paragraph);
   for (const claim of claims ?? []) {
-    const text = plain(claim?.text);
-    if (text.length < 2 || text.length > MAX_CLAIM_CHARS) continue;
-    if (!CLAIM_KINDS.includes(claim.kind) || !paragraph.includes(text)) continue;
+    const said = plain(claim?.text);
+    if (said.length < 2 || said.length > MAX_CLAIM_CHARS) continue;
+    const at = folded.indexOf(fold(said));
+    if (!CLAIM_KINDS.includes(claim.kind) || at === -1) continue;
+    const text = paragraph.slice(at, at + said.length);
     if (kept.some((k) => k.text === text)) continue;
     kept.push({ text, kind: claim.kind });
     if (kept.length >= MAX_CLAIMS_PER_PARAGRAPH) break;
@@ -140,7 +161,10 @@ export function keptClaims(paragraph, claims) {
   return kept;
 }
 
-/** One call's reads of up to PARAGRAPHS_PER_CALL paragraphs: their claims, by hash. */
+/**
+ * One call's reads of up to PARAGRAPHS_PER_CALL paragraphs: their claims,
+ * by hash, and whether the answer missed the schema.
+ */
 async function readCall({ orgId, draftId, modelId, paragraphs }) {
   const budget = await reserveAiBudget(orgId, {
     feature: 'quality',
@@ -163,13 +187,15 @@ async function readCall({ orgId, draftId, modelId, paragraphs }) {
     await budget.charge(generated.usage);
     object = generated.object;
   } catch (err) {
-    // An answer billed that missed the schema is charged, and its paragraphs
-    // read with none: sent again, they would be charged on every save. One
-    // cut off by the timeout keeps its hold, and is tried again.
+    // An answer billed that missed the schema (cut short, or blocked by the
+    // provider's filter) is charged, and its paragraphs kept as missed, with
+    // none: sent again, they would be charged on every save; they're read
+    // again after MISSED_DAYS. One cut off by the timeout keeps its hold,
+    // and is tried again.
     if (NoObjectGeneratedError.isInstance(err)) {
       if (err.usage) await budget.charge(err.usage);
       logger.warn({ err: { name: err.name } }, '[claims] an answer missed the schema');
-      return read;
+      return { read, missed: true };
     }
     if (err?.name === 'TimeoutError' || err?.name === 'AbortError') await budget.keep();
     throw err;
@@ -186,26 +212,33 @@ async function readCall({ orgId, draftId, modelId, paragraphs }) {
       );
     }
   }
-  return read;
+  return { read, missed: false };
 }
 
-/** Paragraphs in calls: PARAGRAPHS_PER_CALL or CHARS_PER_CALL of words, whichever comes first. */
-function batchesOf(paragraphs, calls) {
+/**
+ * Paragraphs in calls: PARAGRAPHS_PER_CALL or CHARS_PER_CALL of words,
+ * whichever comes first, a paragraph in `alone` in a call of its own.
+ */
+function batchesOf(paragraphs, calls, alone = new Set()) {
   const batches = [];
   let batch = [];
   let chars = 0;
+  const close = () => {
+    if (batch.length) batches.push(batch);
+    batch = [];
+    chars = 0;
+  };
   for (const p of paragraphs) {
     const size = Math.min(p.text.length, MAX_PARAGRAPH_CHARS);
-    if (batch.length && (batch.length >= PARAGRAPHS_PER_CALL || chars + size > CHARS_PER_CALL)) {
-      batches.push(batch);
-      if (batches.length >= calls) return batches;
-      batch = [];
-      chars = 0;
+    if (alone.has(p.hash) || batch.length >= PARAGRAPHS_PER_CALL || chars + size > CHARS_PER_CALL) {
+      close();
     }
+    if (batches.length >= calls) break;
     batch.push(p);
     chars += size;
+    if (alone.has(p.hash)) close();
   }
-  if (batch.length) batches.push(batch);
+  close();
   return batches.slice(0, calls);
 }
 
@@ -227,13 +260,16 @@ export async function readDraftClaims({ orgId, draftId, html, skip = '' }) {
   const paragraphs = draftParagraphs(html);
   const { data: rows, error } = await supabaseAdmin
     .from('content_quality_claims')
-    .select('paragraph_hash, claims')
+    .select('paragraph_hash, claims, missed, checked_at')
     .eq('draft_id', draftId);
   if (error) throw new Error(error.message);
   const current = new Set(paragraphs.map((p) => p.hash));
+  // A missed answer's paragraphs are read again after a day.
+  const missedSince = Date.now() - MISSED_DAYS * 86_400_000;
   const read = new Map(
     (rows ?? [])
       .filter((row) => current.has(row.paragraph_hash))
+      .filter((row) => !row.missed || Date.parse(row.checked_at) >= missedSince)
       .map((row) => [row.paragraph_hash, Array.isArray(row.claims) ? row.claims : []]),
   );
   // Paragraphs no longer on the page: their reads go.
@@ -248,7 +284,19 @@ export async function readDraftClaims({ orgId, draftId, html, skip = '' }) {
   }
 
   const skipped = skip ? paragraphHash(skip) : null;
-  const unread = paragraphs.filter((p) => !read.has(p.hash) && p.hash !== skipped);
+  // A missed answer's paragraphs, read again, go after the new ones, each in
+  // a call of its own: one the provider blocks keeps none of the others
+  // from being read.
+  const again = new Set(
+    (rows ?? [])
+      .filter(
+        (row) => row.missed && current.has(row.paragraph_hash) && !read.has(row.paragraph_hash),
+      )
+      .map((row) => row.paragraph_hash),
+  );
+  const unread = paragraphs
+    .filter((p) => !read.has(p.hash) && p.hash !== skipped)
+    .sort((a, b) => Number(again.has(a.hash)) - Number(again.has(b.hash)));
   let limited = false;
   let asked = 0;
   if (unread.length) {
@@ -257,7 +305,7 @@ export async function readDraftClaims({ orgId, draftId, html, skip = '' }) {
     limited = left <= 0;
     if (left > 0) {
       const modelId = sourceClassModelId();
-      const batches = batchesOf(unread, Math.min(CALLS_PER_ASK, left));
+      const batches = batchesOf(unread, Math.min(CALLS_PER_ASK, left), again);
       // One call after the other: one the budget stops keeps the reads before it.
       const reads = [];
       for (const batch of batches) {
@@ -273,7 +321,7 @@ export async function readDraftClaims({ orgId, draftId, html, skip = '' }) {
         }
       }
       const rowsToKeep = [];
-      for (const batchRead of reads) {
+      for (const { read: batchRead, missed } of reads) {
         for (const [hash, claims] of batchRead) {
           read.set(hash, claims);
           rowsToKeep.push({
@@ -281,6 +329,7 @@ export async function readDraftClaims({ orgId, draftId, html, skip = '' }) {
             paragraph_hash: hash,
             claims,
             model: modelId.slice(0, 100),
+            missed,
             checked_at: new Date().toISOString(),
           });
         }

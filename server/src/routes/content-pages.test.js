@@ -41,6 +41,7 @@ vi.mock('../lib/plan-guard.js', async (importOriginal) => ({
   getOrgIdForUser: async () => org,
 }));
 const readSourceClasses = vi.fn();
+const logError = vi.fn();
 const readDraftClaims = vi.fn();
 vi.mock('../lib/content-quality-claims.js', () => ({
   readDraftClaims: (...args) => readDraftClaims(...args),
@@ -95,7 +96,7 @@ beforeEach(async () => {
   app.use(express.json());
   app.use((req, _res, next) => {
     req.user = { id: 'u1' };
-    req.log = { error: vi.fn() };
+    req.log = { error: logError };
     next();
   });
   app.use('/api/content-pages', router);
@@ -332,5 +333,21 @@ describe('POST /api/content-pages/claims (Quality CE-045)', () => {
     expect((await ask({ draftId: 'nope' })).status).toBe(400);
     expect((await ask({ draftId: DRAFT, skip: 'x'.repeat(20001) })).status).toBe(400);
     expect(readDraftClaims).not.toHaveBeenCalled();
+  });
+
+  it('logs a failure without the request the provider sent: the page’s paragraphs', async () => {
+    logError.mockClear();
+    readDraftClaims.mockRejectedValueOnce(
+      Object.assign(new Error('Bad Request'), {
+        name: 'AI_APICallError',
+        requestBodyValues: { prompt: 'Paragraphs:\n[1] the page’s own words' },
+      }),
+    );
+    expect((await ask({ draftId: DRAFT })).status).toBe(500);
+    expect(logError).toHaveBeenCalledWith(
+      { err: expect.objectContaining({ name: 'AI_APICallError', message: 'Bad Request' }) },
+      'content claims error',
+    );
+    expect(JSON.stringify(logError.mock.calls)).not.toContain('own words');
   });
 });

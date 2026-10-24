@@ -188,7 +188,11 @@ router.post('/source-classes', qualityCheckLimiter, async (req, res) => {
     if (err?.status === 403 || err?.status === 404) {
       return res.status(err.status).json({ error: err.message, code: 'forbidden' });
     }
-    req.log.error({ err }, 'content source class error');
+    // Not the whole error: a provider's carries the request.
+    req.log.error(
+      { err: { name: err?.name, message: err?.message, stack: err?.stack } },
+      'content source class error',
+    );
     return res.status(500).json({ error: 'Failed to read the sources', code: 'failed' });
   }
 });
@@ -234,7 +238,12 @@ router.post('/claims', claimsLimiter, async (req, res) => {
     if (err?.status === 403 || err?.status === 404) {
       return res.status(err.status).json({ error: err.message, code: 'forbidden' });
     }
-    req.log.error({ err }, 'content claims error');
+    // Not the whole error: a provider's (APICallError, a RetryError of them)
+    // carries the request, the page's paragraphs.
+    req.log.error(
+      { err: { name: err?.name, message: err?.message, stack: err?.stack } },
+      'content claims error',
+    );
     return res.status(500).json({ error: 'Failed to read the claims', code: 'failed' });
   }
 });
