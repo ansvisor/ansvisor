@@ -19,6 +19,8 @@ export const REFRESH_DAYS = 7;
 export const SWEEP_LIMIT = 25;
 /** How long an approved fact gone from the site is kept, shown as gone. */
 export const GONE_KEEP_DAYS = 30;
+/** How long one run reads: 25 slow sites in a row could keep it busy half an hour. */
+export const SWEEP_DEADLINE_MS = 10 * 60_000;
 
 const DAY_MS = 86_400_000;
 
@@ -75,8 +77,10 @@ export async function sweepBrandFacts({
   const markRead = [];
   const markFailed = [];
   let tried = 0;
+  const started = Date.now();
   for (const brand of brands) {
-    if (tried >= limit) break;
+    // The brands left stay first in line for the next run.
+    if (tried >= limit || Date.now() - started > SWEEP_DEADLINE_MS) break;
     if (!active(brand.orgId)) {
       outcome.skipped += 1;
       markRead.push(brand.id);
@@ -119,11 +123,19 @@ export async function sweepBrandFacts({
     );
   }
   if (markFailed.length) {
+    // A page whose answer missed the schema stays missed: failed, it would
+    // keep its hash and be taken as read, its facts never read.
     writes.push(
       db
         .from('brand_fact_pages')
         .update({ checked_at: nowIso, status: 'failed' })
-        .in('brand_id', markFailed),
+        .in('brand_id', markFailed)
+        .neq('status', 'missed'),
+      db
+        .from('brand_fact_pages')
+        .update({ checked_at: nowIso })
+        .in('brand_id', markFailed)
+        .eq('status', 'missed'),
     );
   }
   for (const res of await Promise.all(writes)) {
