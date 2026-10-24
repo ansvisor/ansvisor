@@ -600,14 +600,13 @@ export function DraftEditor({
     paused: aiPaused,
     reading: sourcesReading,
   } = useSourceClasses(draft.id, autosave.savedAt, unplaced, sourcesOn);
+  // A save waiting or under way: the page's reads follow it. Not a failed
+  // save (or a conflict, a page too large): no new save is coming till it's fixed.
+  const saving = autosave.state === 'unsaved' || autosave.state === 'saving';
   // The claims in the draft's own words, as the model reads them (CE-045):
   // asked after a save, leaving the block the person is writing in.
-  const claimsRead = useClaims(
-    draft.id,
-    autosave.savedAt,
-    sourcesOn,
-    autosave.state !== 'saved',
-    () => (editor && !editor.isDestroyed && editor.isFocused ? writingBlock(editor) : null),
+  const claimsRead = useClaims(draft.id, autosave.savedAt, sourcesOn, saving, () =>
+    editor && !editor.isDestroyed && editor.isFocused ? writingBlock(editor) : null,
   );
   const { blocks: claimBlocks, recheck: recheckClaims } = claimsRead;
   // Out of the editor (to Quality, to Before you publish): the block left
@@ -820,7 +819,9 @@ export function DraftEditor({
     reads.sources !== null &&
     linksPending === 0 &&
     !claimsRead.reading &&
-    !sourcesReading;
+    !sourcesReading &&
+    // Phase 2 reads the page as saved: an edit's score waits for its save.
+    !(sourcesOn && saving);
   const [shownQuality, setShownQuality] = useState<{ score: number | null } | null>(null);
   if (qualitySettled && shownQuality?.score !== qualityScore) {
     setShownQuality({ score: qualityScore });

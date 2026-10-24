@@ -30,8 +30,8 @@ export interface ClaimsRead {
  * The claims in the draft's own words (Quality CE-045). The API reads the
  * draft as saved and keeps each block's read, so the editor asks a few
  * seconds after a save, CLAIMS_EVERY_MS apart at most, one ask at a time,
- * and not while there are changes to save (the API would read the page
- * before them). It leaves the block the person is writing in (`writingIn`,
+ * and not while a save is waiting or under way (the API would read the page
+ * before it; a failed save isn't one, the page as last saved is read). It leaves the block the person is writing in (`writingIn`,
  * read when it asks; null when they aren't), and asks again for one left,
  * or for blocks an ask had no calls left for, without waiting for a save.
  * A spent AI budget or the day's reads made stop the asks for the session;

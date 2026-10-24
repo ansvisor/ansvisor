@@ -91,7 +91,9 @@ export function useSourceClasses(
         });
     }, SOURCE_CLASS_DELAY_MS);
     return () => clearTimeout(timer);
-  }, [draftId, savedAt, key, enabled, paused, off, kinds]);
+    // Each answer (a failed one too) lets the sites past the batch, or held
+    // while their ask was out, be asked at this save.
+  }, [draftId, savedAt, key, enabled, paused, off, kinds, answered]);
 
   // A site with no read and none answered at this save is still to be read.
   const reading =

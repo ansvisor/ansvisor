@@ -8,6 +8,7 @@ vi.mock('@/lib/actions/content-drafts', () => ({
 }));
 
 const { SOURCE_CLASS_DELAY_MS, useSourceClasses } = await import('./_use-source-classes');
+const { MAX_SOURCE_SITES } = await import('@/lib/content/source-class');
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT =
   true;
@@ -132,6 +133,22 @@ describe('useSourceClasses', () => {
     await wait();
     expect(classifyDraftSources).toHaveBeenCalledTimes(2);
     expect(kinds()).toEqual(new Map([['blog.example', 'weak']]));
+    error.mockRestore();
+  });
+
+  it('asks about the sites past a failed batch at the same save', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    classifyDraftSources.mockRejectedValueOnce(new Error('network'));
+    const sites = Array.from({ length: MAX_SOURCE_SITES + 1 }, (_, i) => `site${i}.example`);
+    await render(sites);
+    await wait();
+    expect(classifyDraftSources).toHaveBeenCalledTimes(1);
+    // The one past the batch is still to be read: asked without a save.
+    expect(reading()).toBe(true);
+    await wait();
+    expect(classifyDraftSources).toHaveBeenCalledTimes(2);
+    expect(classifyDraftSources).toHaveBeenLastCalledWith('d1', [sites[MAX_SOURCE_SITES]]);
+    expect(reading()).toBe(false);
     error.mockRestore();
   });
 
