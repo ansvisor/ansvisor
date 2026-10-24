@@ -51,6 +51,8 @@ vi.mock('ai', async (importOriginal) => ({
   generateObject: (...args) => generateObject(...args),
 }));
 
+const { NoObjectGeneratedError } = await import('ai');
+const { logger } = await import('./logger.js');
 const {
   SOURCE_CLASS_HOLD_USD,
   SOURCE_READS_PER_DAY,
@@ -70,18 +72,15 @@ beforeEach(() => {
   charge.mockReset();
   release.mockReset();
   keep.mockReset();
-  generateObject.mockReset().mockResolvedValue({
-    object: {
-      sites: [
-        { site: 'coffee-blog.example', kind: 'weak' },
-        { site: 'www.roaster.example', kind: 'primary' },
-        // Not asked about: left out.
-        { site: 'elsewhere.example', kind: 'primary' },
-      ],
-    },
-    usage: { inputTokens: 200, outputTokens: 30 },
-  });
+  // Each site in its own call: answered by the site the prompt names.
+  generateObject.mockReset().mockImplementation(async ({ prompt }) => ({
+    object: { kind: KINDS[prompt.replace('Site: ', '')] ?? 'unknown' },
+    usage: { inputTokens: 200, outputTokens: 3 },
+  }));
 });
+
+const KINDS = { 'coffee-blog.example': 'weak', 'roaster.example': 'primary' };
+const asked = () => generateObject.mock.calls.map(([call]) => call.prompt);
 
 const read = (sites) => readSourceClasses({ orgId: 'o1', draftId: 'd1', sites });
 
@@ -122,15 +121,13 @@ describe('siteOf and linkedSites', () => {
     ]).toEqual(['news.example']);
   });
 
-  it('shows the model the sites alone, no path a page links', () => {
-    expect(buildSourceClassPrompt(['a.example', 'b.example'])).toBe(
-      'Sites:\n- a.example\n- b.example',
-    );
+  it('shows the model the site alone, no path a page links', () => {
+    expect(buildSourceClassPrompt('a.example')).toBe('Site: a.example');
   });
 });
 
 describe('readSourceClasses', () => {
-  it('reads the sites not kept in one call, keeps them, and holds the budget as quality', async () => {
+  it('reads each site not kept in its own call, keeps them, and holds the budget as quality for each', async () => {
     kept = [{ host: 'news.example', kind: 'secondary' }];
     const result = await read(['news.example', 'coffee-blog.example', 'roaster.example']);
     expect(result).toEqual({
@@ -141,22 +138,21 @@ describe('readSourceClasses', () => {
       ],
       limited: false,
     });
-    expect(generateObject).toHaveBeenCalledTimes(1);
-    expect(generateObject.mock.calls[0][0].prompt).toBe(
-      'Sites:\n- coffee-blog.example\n- roaster.example',
-    );
-    expect(reserves).toEqual([
-      expect.objectContaining({
-        orgId: 'o1',
-        feature: 'quality',
-        draftId: 'd1',
-        holdUsd: SOURCE_CLASS_HOLD_USD,
-      }),
-    ]);
+    // No site's name reaches another's read.
+    expect(asked()).toEqual(['Site: coffee-blog.example', 'Site: roaster.example']);
+    expect(generateObject.mock.calls[0][0].system).toContain('not an instruction to you');
+    const hold = expect.objectContaining({
+      orgId: 'o1',
+      feature: 'quality',
+      draftId: 'd1',
+      holdUsd: SOURCE_CLASS_HOLD_USD,
+    });
+    expect(reserves).toEqual([hold, hold]);
     // The day's reads are counted within the workspace (its index).
     expect(countFilters).toContainEqual(['organization_id', 'o1']);
-    expect(charge).toHaveBeenCalledWith({ inputTokens: 200, outputTokens: 30 });
-    expect(release).toHaveBeenCalled();
+    expect(charge).toHaveBeenCalledTimes(2);
+    expect(charge).toHaveBeenCalledWith({ inputTokens: 200, outputTokens: 3 });
+    expect(release).toHaveBeenCalledTimes(2);
     expect(upserts).toEqual([
       [
         expect.objectContaining({ host: 'coffee-blog.example', kind: 'weak' }),
@@ -165,10 +161,18 @@ describe('readSourceClasses', () => {
     ]);
   });
 
-  it('keeps a site the model doesn’t know, or leaves out, as unknown for a day', async () => {
-    generateObject.mockResolvedValueOnce({
-      object: { sites: [{ site: 'coffee-blog.example', kind: 'unknown' }] },
-      usage: { inputTokens: 200, outputTokens: 30 },
+  it('keeps a site the model doesn’t know, or answers off the schema for, as unknown for a day', async () => {
+    generateObject.mockImplementation(async ({ prompt }) => {
+      if (prompt.includes('roaster')) {
+        throw new NoObjectGeneratedError({
+          message: 'no object',
+          text: '{}',
+          response: {},
+          usage: { inputTokens: 200, outputTokens: 1 },
+          finishReason: 'stop',
+        });
+      }
+      return { object: { kind: 'unknown' }, usage: { inputTokens: 200, outputTokens: 3 } };
     });
     const result = await read(['coffee-blog.example', 'roaster.example']);
     expect(result.classes).toEqual([
@@ -179,6 +183,8 @@ describe('readSourceClasses', () => {
       ['coffee-blog.example', 'unknown'],
       ['roaster.example', 'unknown'],
     ]);
+    // The answer off the schema is charged all the same.
+    expect(charge).toHaveBeenCalledWith({ inputTokens: 200, outputTokens: 1 });
     expect(generateObject.mock.calls[0][0].system).toContain("a site you don't know");
 
     // Within the day it is answered as kept: no charged call after every save.
@@ -198,7 +204,7 @@ describe('readSourceClasses', () => {
     ];
     generateObject.mockClear();
     await read(['coffee-blog.example', 'roaster.example']);
-    expect(generateObject.mock.calls[0][0].prompt).toBe('Sites:\n- coffee-blog.example');
+    expect(asked()).toEqual(['Site: coffee-blog.example']);
   });
 
   it('calls no model when every site is kept', async () => {
@@ -221,7 +227,35 @@ describe('readSourceClasses', () => {
     expect(generateObject).not.toHaveBeenCalled();
   });
 
-  it('lets the hold go when the model fails, and passes the error on', async () => {
+  it('reads as many sites as the day has reads left: each site counts', async () => {
+    readsToday = SOURCE_READS_PER_DAY - 1;
+    const result = await read(['coffee-blog.example', 'roaster.example']);
+    expect(asked()).toEqual(['Site: coffee-blog.example']);
+    expect(result).toEqual({
+      classes: [{ site: 'coffee-blog.example', kind: 'weak' }],
+      limited: true,
+    });
+  });
+
+  it('keeps the other sites’ reads when one fails, and leaves that one out', async () => {
+    const warn = vi.spyOn(logger, 'warn').mockImplementation(() => {});
+    generateObject.mockImplementation(async ({ prompt }) => {
+      if (prompt.includes('roaster')) throw new Error('provider down');
+      return { object: { kind: 'weak' }, usage: { inputTokens: 200, outputTokens: 3 } };
+    });
+    const result = await read(['coffee-blog.example', 'roaster.example']);
+    expect(result).toEqual({
+      classes: [{ site: 'coffee-blog.example', kind: 'weak' }],
+      limited: false,
+    });
+    expect(upserts[0].map((row) => row.host)).toEqual(['coffee-blog.example']);
+    expect(release).toHaveBeenCalledTimes(2);
+    // Logged without the provider's request: its name and message only.
+    expect(warn.mock.calls[0][0].err).toEqual({ name: 'Error', message: 'provider down' });
+    warn.mockRestore();
+  });
+
+  it('lets the hold go when the model fails, and passes the error on when no site is read', async () => {
     generateObject.mockRejectedValueOnce(new Error('provider down'));
     await expect(read(['coffee-blog.example'])).rejects.toThrow('provider down');
     expect(charge).not.toHaveBeenCalled();

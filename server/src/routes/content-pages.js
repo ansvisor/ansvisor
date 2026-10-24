@@ -183,7 +183,11 @@ router.post('/source-classes', qualityCheckLimiter, async (req, res) => {
     if (err?.status === 403 || err?.status === 404) {
       return res.status(err.status).json({ error: err.message, code: 'forbidden' });
     }
-    req.log.error({ err }, 'content source class error');
+    // Its name and message only: a provider's error carries the request.
+    req.log.error(
+      { err: { name: err?.name, message: err?.message } },
+      'content source class error',
+    );
     return res.status(500).json({ error: 'Failed to read the sources', code: 'failed' });
   }
 });
