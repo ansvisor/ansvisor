@@ -4154,9 +4154,12 @@ describe('the side panel', () => {
         localStorage.setItem('aeo:next-step-skips:d1', JSON.stringify({ plan: 'true' }));
         let factsIn!: (read: unknown) => void;
         getBrandFacts.mockReturnValue(new Promise((resolve) => (factsIn = resolve)));
+        vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
         await act(async () => root.unmount());
         root = createRoot(container);
         await renderPage();
+        // The page's read for proof is in, a few seconds after it opens.
+        await act(async () => void (await vi.advanceTimersByTimeAsync(3_000)));
         expect(skips()).toEqual({ plan: 'true' });
         await act(async () =>
           factsIn({
@@ -4170,6 +4173,7 @@ describe('the side panel', () => {
         );
         expect(skips()).toEqual({});
       } finally {
+        vi.useRealTimers();
         delete process.env.NEXT_PUBLIC_CONTENT_QUALITY_PHASE;
       }
     });
