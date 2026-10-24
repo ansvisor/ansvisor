@@ -656,6 +656,18 @@ describe('page checks (CE-050)', () => {
         brandName: 'Trailmade',
       }),
     ).toContain('First paragraph after the H1: [2]');
+    // A short answer is a sentence: it's the first paragraph.
+    const short = pageOutline(
+      `<h1>What is a daypack?</h1><p>A small pack for one day.</p>${filler('pack')}`,
+    );
+    expect(
+      buildPagePrompt({
+        outline: short,
+        siteType: 'ecommerce',
+        pageType: 'guide',
+        brandName: 'Trailmade',
+      }),
+    ).toContain('First paragraph after the H1: [1]');
     const long = pageOutline(
       `${PAGE}${Array.from({ length: 60 }, (_, i) => filler(`shell ${i}`)).join('')}`,
     );

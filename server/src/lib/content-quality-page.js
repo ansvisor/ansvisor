@@ -149,19 +149,26 @@ export function pageOutline(html) {
 const squeeze = (text) => text.replace(/\s+/g, '');
 const blocksOf = (outline) => outline.filter((item) => item.type === 'block');
 const wordCount = (text) => (text.match(/\p{L}[\p{L}\p{N}'’-]*/gu) ?? []).length;
-/** A paragraph this short under the H1 is a byline, a date or a note, not the page's first answer. */
-const MIN_ANSWER_WORDS = 8;
 /**
- * The page's first paragraph under the H1, past a byline, a date or a note
- * (shorter than MIN_ANSWER_WORDS), when the page's first thing there is one
- * (not a heading, a list or a table): what "answer first" reads.
+ * A paragraph under the H1 this short and not a sentence (no full stop at
+ * its end) is a byline, a date or a note, not the page's first answer ("By
+ * Jane Doe · October 2026"); "AI is software that answers questions." is
+ * one. As the editor's Readability reads it (isByline).
+ */
+const MIN_ANSWER_WORDS = 8;
+const SENTENCE_END = /[.!?…。！？]["”’')\]]*$/u;
+/**
+ * The page's first paragraph under the H1, past a byline, a date or a
+ * note, when the page's first thing there is one (not a heading, a list or
+ * a table): what "answer first" reads.
  */
 function firstParagraph(outline) {
   const h1 = outline.findIndex((item) => item.type === 'heading' && item.level === 1);
   if (h1 === -1) return null;
   for (const item of outline.slice(h1 + 1)) {
     if (item.type !== 'block' || item.tag !== 'p') return null;
-    if (wordCount(item.text) >= MIN_ANSWER_WORDS) return item;
+    if (wordCount(item.text) >= MIN_ANSWER_WORDS || SENTENCE_END.test(item.text.trim()))
+      return item;
   }
   return null;
 }
