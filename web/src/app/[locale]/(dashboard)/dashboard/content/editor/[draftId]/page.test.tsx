@@ -2478,6 +2478,34 @@ describe('the side panel', () => {
       expect(panel()!.textContent).toContain('Not a Google score.');
     });
 
+    it('says it is reading until the page’s reads are in, then shows one score, not the partial ones', async () => {
+      process.env.NEXT_PUBLIC_CONTENT_QUALITY_PHASE = '1';
+      let authorsIn!: (read: unknown) => void;
+      getContentAuthors.mockReturnValue(new Promise((resolve) => (authorsIn = resolve)));
+      getContentDraft.mockResolvedValue(readable);
+      window.innerWidth = 1440;
+      await renderPage();
+      const chip = () =>
+        [...container.querySelectorAll<HTMLButtonElement>('header button')].find((b) =>
+          b.textContent?.startsWith('Quality'),
+        );
+      // Readability alone would say more than the page is worth: no number yet.
+      expect(chip()?.textContent).toBe('Quality · reading…');
+      expect(chip()?.getAttribute('aria-busy')).toBe('true');
+      await act(async () =>
+        authorsIn({
+          authors: [],
+          brands: [{ id: 'b1', name: 'Acme' }],
+          me: { id: 'u1', role: 'admin' },
+        }),
+      );
+      expect(chip()?.textContent).toMatch(/^Quality \d+ · (Strong|Can improve|Needs work)$/);
+      expect(chip()?.getAttribute('aria-busy')).toBe('false');
+      const score = chip()!.textContent!.match(/\d+/)![0];
+      await act(async () => chip()!.click());
+      expect(selectedSegment()).toContain(`Quality${score}`);
+    });
+
     it("asks for Your input in its second phase, and Add opens it at Brief's top (CE-048)", async () => {
       process.env.NEXT_PUBLIC_CONTENT_QUALITY_PHASE = '2';
       getContentAuthors.mockResolvedValue({
@@ -2540,6 +2568,7 @@ describe('the side panel', () => {
     it('scores without Your input when it can’t be read, and Brief offers to read it again', async () => {
       process.env.NEXT_PUBLIC_CONTENT_QUALITY_PHASE = '2';
       vi.spyOn(console, 'error').mockImplementation(() => {});
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
       try {
         getContentAuthors.mockResolvedValue({
           authors: [],
@@ -2550,6 +2579,9 @@ describe('the side panel', () => {
         getContentDraft.mockResolvedValue(readable);
         window.innerWidth = 1440;
         await renderPage();
+        // The claims are read after a save's pause: no score until they are.
+        expect(qualityChip()?.textContent).toBe('Quality · reading…');
+        await act(async () => void (await vi.advanceTimersByTimeAsync(3_000)));
         expect(qualityChip()?.textContent).toMatch(/^Quality \d+/);
         await pickTab('Brief');
         const retry = [...panel()!.querySelectorAll('button')].find(
@@ -2561,6 +2593,7 @@ describe('the side panel', () => {
         expect(panel()!.querySelector('#your-experience')).not.toBeNull();
       } finally {
         vi.mocked(console.error).mockRestore();
+        vi.useRealTimers();
       }
     });
 
