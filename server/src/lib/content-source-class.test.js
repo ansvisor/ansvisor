@@ -53,13 +53,13 @@ vi.mock('ai', async (importOriginal) => ({
 
 const {
   SOURCE_CLASS_HOLD_USD,
-  SOURCE_READS_PER_DAY,
   buildSourceClassPrompt,
   keptSite,
   linkedSites,
   readSourceClasses,
   siteOf,
 } = await import('./content-source-class.js');
+const { QUALITY_CALLS_PER_DAY } = await import('./content-quality-calls.js');
 
 beforeEach(() => {
   kept = [];
@@ -212,7 +212,7 @@ describe('readSourceClasses', () => {
   });
 
   it('reads no more for a draft past its reads today, giving what is kept', async () => {
-    readsToday = SOURCE_READS_PER_DAY;
+    readsToday = QUALITY_CALLS_PER_DAY;
     kept = [{ host: 'news.example', kind: 'secondary' }];
     expect(await read(['news.example', 'coffee-blog.example'])).toEqual({
       classes: [{ site: 'news.example', kind: 'secondary' }],

@@ -2,6 +2,7 @@ import { NoObjectGeneratedError, generateObject } from 'ai';
 import { z } from 'zod';
 import supabaseAdmin from '../config/supabase.js';
 import { resolveModel } from './ai-provider.js';
+import { QUALITY_CALLS_PER_DAY, qualityCallsToday } from './content-quality-calls.js';
 import { logger } from './logger.js';
 import { reserveAiBudget } from './plan-guard.js';
 
@@ -29,8 +30,6 @@ export const SOURCE_CLASS_DAYS = 90;
 export const UNKNOWN_CLASS_DAYS = 1;
 /** A read's hold on the AI budget: up to 20 addresses in, a word each out. */
 export const SOURCE_CLASS_HOLD_USD = 0.002;
-/** The model reads one draft may cause in a day: the editor asks after saves. */
-export const SOURCE_READS_PER_DAY = 30;
 const CALL_TIMEOUT_MS = 30_000;
 
 export function sourceClassModelId() {
@@ -112,8 +111,9 @@ export function buildSourceClassPrompt(sites) {
 /**
  * The kinds of these sites (the ones a draft links), read where kept and by
  * the model for the rest, MAX_SOURCE_SITES at most: { classes: [{ site, kind
- * }], limited }. `limited` when the draft has made SOURCE_READS_PER_DAY reads
- * today: the sites not kept are left out. A read draws on the workspace's AI
+ * }], limited }. `limited` when the draft has made its day's Quality calls
+ * (QUALITY_CALLS_PER_DAY, with the claims' reads): the sites not kept are
+ * left out. A read draws on the workspace's AI
  * budget as "quality"; a spent budget throws PlanLimitError (429).
  *
  * @param {{ orgId: string, draftId: string, sites: string[] }} input
@@ -142,16 +142,7 @@ export async function readSourceClasses({ orgId, draftId, sites }) {
   const missing = asked.filter((site) => !kinds.has(site));
   if (!missing.length) return answer(false);
 
-  const dayAgo = new Date(Date.now() - 86_400_000).toISOString();
-  const { count, error: countError } = await supabaseAdmin
-    .from('prompt_improve_usage')
-    .select('id', { count: 'exact', head: true })
-    .eq('organization_id', orgId)
-    .eq('content_draft_id', draftId)
-    .eq('feature', 'quality')
-    .gte('used_at', dayAgo);
-  if (countError) throw new Error(countError.message);
-  if ((count ?? 0) >= SOURCE_READS_PER_DAY) return answer(true);
+  if ((await qualityCallsToday(orgId, draftId)) >= QUALITY_CALLS_PER_DAY) return answer(true);
 
   const modelId = sourceClassModelId();
   const budget = await reserveAiBudget(orgId, {
