@@ -2502,6 +2502,16 @@ describe('the side panel', () => {
         await act(async () => box().click());
         expect(box().getAttribute('aria-checked')).toBe('true');
         expect(profile().getAttribute('aria-checked')).toBe('true');
+
+        // One save at a time: the boxes wait for it.
+        let saved!: () => void;
+        confirmDraftAuthor.mockReturnValueOnce(new Promise<void>((resolve) => (saved = resolve)));
+        await act(async () => profile().click());
+        expect(profile().getAttribute('aria-checked')).toBe('false');
+        expect(box().disabled).toBe(true);
+        expect(profile().disabled).toBe(true);
+        await act(async () => saved());
+        expect(profile().disabled).toBe(false);
       } finally {
         vi.mocked(console.error).mockRestore();
       }
@@ -3710,6 +3720,17 @@ describe('the side panel', () => {
       expect(dialog()!.textContent).toContain('Meta titlePipeline forecasting');
       expect(dialog()!.textContent).toContain('AuthorAcme Team → your CMS author field');
       expect(inDialog('Download Word').disabled).toBe(false);
+    });
+
+    it('leaves the author to the CMS for one the site names, with no warning (00271)', async () => {
+      getContentDraft.mockResolvedValue(
+        draft({ pageType: 'blog_post', authorConfirmed: { real: true, profile: false } }),
+      );
+      await renderPage();
+      await act(async () => button('Export')!.click());
+      expect(dialog()!.textContent).toContain('Content · ready to paste');
+      expect(dialog()!.textContent).not.toContain('no author yet');
+      expect(dialog()!.textContent).toContain("AuthorYour site's own: your CMS keeps it");
     });
 
     it('names the team in the page’s language in the CMS author field', async () => {

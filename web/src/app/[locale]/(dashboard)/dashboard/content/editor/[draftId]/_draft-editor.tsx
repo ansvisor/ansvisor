@@ -572,20 +572,23 @@ export function DraftEditor({
   // With no author picked, the person's own word for the one their site
   // names (00271): ticked here, saved behind, put back if the save fails.
   const [authorConfirmed, setAuthorConfirmed] = useState(draft.authorConfirmed);
+  // One save at a time (the boxes wait): a failed one puts back the pair as saved.
+  const [confirming, setConfirming] = useState(false);
   const confirmAuthor = (what: 'real' | 'profile', on: boolean) => {
-    // Unticking the author unticks their profile too, as the database does.
-    const both = what === 'real' && !on;
+    if (confirming) return;
     const before = authorConfirmed;
-    setAuthorConfirmed((prev) =>
-      both ? { real: false, profile: false } : { ...prev, [what]: on },
+    // Unticking the author unticks their profile too, as the database does.
+    setAuthorConfirmed(
+      what === 'real' && !on ? { real: false, profile: false } : { ...before, [what]: on },
     );
-    confirmDraftAuthor(draft.id, what, on).catch((err) => {
-      console.error('Failed to save the author confirmation:', err);
-      // The boxes this change moved go back (both, for the author unticked);
-      // another one saved meanwhile stays.
-      setAuthorConfirmed((prev) => (both ? before : { ...prev, [what]: !on }));
-      toast.error(t('quality.confirmFailed'));
-    });
+    setConfirming(true);
+    confirmDraftAuthor(draft.id, what, on)
+      .catch((err) => {
+        console.error('Failed to save the author confirmation:', err);
+        setAuthorConfirmed(before);
+        toast.error(t('quality.confirmFailed'));
+      })
+      .finally(() => setConfirming(false));
   };
   const eeatScore = useMemo(
     () =>
@@ -835,6 +838,7 @@ export function DraftEditor({
         claimsLimited: claimsRead.limited,
         claimsReading: claimsRead.reading,
         authorConfirmed,
+        authorConfirming: confirming,
       }
     : null;
   // Quality's Pick author opens the header's menu.
@@ -2735,6 +2739,7 @@ export function DraftEditor({
           sourceUrl={draft.sourceUrl}
           author={pageAuthor}
           teamByline={teamByline}
+          siteAuthor={!pageAuthor && authorConfirmed.real}
           byline={contentByline}
           checks={exportChecks}
           linksPending={linksPending}
@@ -2750,7 +2755,7 @@ export function DraftEditor({
               quality.trust?.score != null && quality.trust.score < TRUST_GATE
                 ? quality.trust.score
                 : null,
-            noAuthor: quality.eeat !== null && !quality.author,
+            noAuthor: quality.eeat !== null && !quality.author && !authorConfirmed.real,
             article: isArticlePage(pageType),
             onReview: () => {
               setExportOpen(null);

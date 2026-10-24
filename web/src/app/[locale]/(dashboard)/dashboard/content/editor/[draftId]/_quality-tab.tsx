@@ -64,6 +64,8 @@ export interface QualityRead {
    * site names (00271): a real person, and their profile there.
    */
   authorConfirmed?: { real: boolean; profile: boolean };
+  /** A confirmation being saved: the boxes wait for it. */
+  authorConfirming?: boolean;
 }
 
 type ScoreName = 'eeat' | 'trust' | 'readability';
@@ -458,6 +460,7 @@ function TodoRow({
               id={confirmId}
               className="mt-px"
               checked={confirm.on}
+              disabled={quality.authorConfirming}
               onCheckedChange={(on) => onConfirm(confirm.what, on === true)}
             />
             <label htmlFor={confirmId} className="text-xs leading-snug text-foreground">

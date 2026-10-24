@@ -165,6 +165,7 @@ export function ExportDialog({
   sourceUrl,
   author,
   teamByline,
+  siteAuthor = false,
   byline,
   checks,
   linksPending,
@@ -181,8 +182,10 @@ export function ExportDialog({
   /** The live page an optimized draft is for: its address is the slug. */
   sourceUrl: string | null;
   author: ContentAuthor | null;
-  /** The team byline; empty while the authors aren't read. */
+  /** The team byline; empty while the authors aren't read, or for the site's own author. */
   teamByline: string;
+  /** No author picked, the one the site names confirmed (00271): the CMS keeps its own. */
+  siteAuthor?: boolean;
   /** The byline line the brand puts in the content (Add byline to content), or null. */
   byline: string | null;
   checks: PasteChecks;
@@ -418,7 +421,7 @@ export function ExportDialog({
       value: fields.author || null,
       shown: fields.author
         ? t(byline ? 'fields.authorInContent' : 'fields.authorValue', { name: fields.author })
-        : t('fields.noAuthor'),
+        : t(siteAuthor ? 'fields.siteAuthor' : 'fields.noAuthor'),
     },
     {
       label: t('fields.featuredImage'),

@@ -4487,6 +4487,7 @@
           "noImage": "None in the page",
           "noSlug": "None from the title: set it in your CMS",
           "noAuthor": "Not read yet: set it in your CMS",
+          "siteAuthor": "Your site's own: your CMS keeps it",
           "copy": "Copy",
           "copyLabel": "Copy {field}",
           "copied": "{field} copied"
