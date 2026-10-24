@@ -78,7 +78,9 @@ const DAY_MS = 86_400_000;
  * blocks (paragraphs, list items, quotes and cells, read as the claims read
  * and the editor's Trust read them), each block with its hash, its H2
  * section (0 before the first) and that section's heading. A heading is cut
- * to MAX_HEADING_CHARS.
+ * to MAX_HEADING_CHARS. A block is hashed by its words without spaces: a
+ * link put on a claim adds one at its edge ("ISO 27001 -certified"), and
+ * the block is the same.
  *
  * @returns {({ type: 'heading', level: number, text: string } | { type: 'block', tag: string, text: string, hash: string, section: number, h2: string })[]}
  */
@@ -104,7 +106,7 @@ export function pageOutline(html) {
     // An inline link's edges leave no space before the punctuation after it.
     const text = plain(ownText(el)).replace(/ ([.,;:!?…)])/g, '$1');
     if (text.length < MIN_BLOCK_CHARS || !/\p{L}/u.test(text)) return;
-    const hash = paragraphHash(text);
+    const hash = paragraphHash(squeeze(text));
     if (seen.has(hash)) return;
     seen.add(hash);
     outline.push({ type: 'block', tag, text, hash, section, h2 });
@@ -112,6 +114,8 @@ export function pageOutline(html) {
   return outline;
 }
 
+/** A text's words without their spaces. */
+const squeeze = (text) => text.replace(/\s+/g, '');
 const blocksOf = (outline) => outline.filter((item) => item.type === 'block');
 const wordCount = (text) => (text.match(/\p{L}[\p{L}\p{N}'’-]*/gu) ?? []).length;
 
@@ -160,7 +164,8 @@ export function pageHash({ outline, siteType, pageType, facts = [] }) {
         // In any order the brand's facts come.
         ...factLines(facts).sort(),
         '',
-        ...pageLines(outline),
+        // Spaces don't count, as in each block's hash.
+        ...pageLines(outline).map(squeeze),
       ].join('\n'),
     )
     .digest('hex')
