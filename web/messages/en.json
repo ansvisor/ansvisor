@@ -3418,6 +3418,7 @@
           "metaDescription": "Meta description over 500 characters"
         },
         "notSent": "Not sent",
+        "waiting": "Waiting",
         "queued": "Sending…",
         "failed": "Failed",
         "answered": "Webhook answered {status}",
@@ -3425,6 +3426,7 @@
         "progress": "Sending: {done} of {total} done.",
         "summary": "{sent, plural, one {# page sent} other {# pages sent}}{failed, plural, =0 {.} one {, # failed.} other {, # failed.}}",
         "stillGoing": "The rest are still going: the Library shows each page's send as it lands.",
+        "waitedOut": "The pages before {count, plural, one {it} other {them}} were still going after 15 minutes, so {count, plural, one {# page wasn't} other {# pages weren't}} sent. Send {count, plural, one {it} other {them}} again once they have gone.",
         "skipped": "{count, plural, one {# page wasn't sent} other {# pages weren't sent}}: the workspace has sent 200 pages in the last 24 hours. Try again later.",
         "close": "Close",
         "cancel": "Cancel",

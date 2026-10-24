@@ -211,17 +211,56 @@ describe('BulkSendDialog', () => {
       });
     readDeliveries
       .mockResolvedValueOnce([{ id: 'x1', draftId: 'd1', status: 'queued' }])
+      // A read that fails is read again.
+      .mockResolvedValueOnce(null)
       .mockResolvedValue([{ id: 'x1', draftId: 'd1', status: 'sent' }]);
     await render();
     await act(async () => void button('Send 2 pages').click());
     expect(sendPagesToCms).toHaveBeenCalledTimes(1);
-    // Still going after the first read: the second waits.
+    // What went shows while the next waits, and the dialog can be closed.
+    expect(lines()).toEqual(['Pour-overSending…', 'Cold brewPlaceholders to fill', 'EspressoWaiting']);
+    expect(dialog().querySelector('[role="status"]')!.textContent).toBe('Sending: 0 of 2 done.');
+    expect(button('Close')).toBeDefined();
     await act(async () => void (await vi.advanceTimersByTimeAsync(2_000)));
     expect(readDeliveries).toHaveBeenCalledWith(['x1']);
+    await act(async () => void (await vi.advanceTimersByTimeAsync(2_000)));
     expect(sendPagesToCms).toHaveBeenCalledTimes(1);
     await act(async () => void (await vi.advanceTimersByTimeAsync(2_000)));
     expect(sendPagesToCms).toHaveBeenCalledTimes(2);
     expect(dialog().querySelector('[role="status"]')!.textContent).toBe('2 pages sent.');
+  });
+
+  it('posts no more once the pages before are still going after 15 minutes', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
+    oneByOne.on = true;
+    sendPagesToCms.mockResolvedValueOnce({
+      ok: true,
+      deliveries: [{ id: 'x1', draftId: 'd1', status: 'queued' }],
+      skipped: 0,
+    });
+    readDeliveries.mockResolvedValue([{ id: 'x1', draftId: 'd1', status: 'queued' }]);
+    await render();
+    await act(async () => void button('Send 2 pages').click());
+    await act(async () => void (await vi.advanceTimersByTimeAsync(15 * 60_000 + 2_000)));
+    expect(sendPagesToCms).toHaveBeenCalledTimes(1);
+    expect(lines()).toEqual(['Pour-overSending…', 'Cold brewPlaceholders to fill', 'EspressoNot sent']);
+    expect(dialog().textContent).toContain(
+      "The pages before it were still going after 15 minutes, so 1 page wasn't sent.",
+    );
+  });
+
+  it('posts no more requests once the day’s sends are used up', async () => {
+    oneByOne.on = true;
+    sendPagesToCms.mockResolvedValueOnce({
+      ok: true,
+      deliveries: [{ id: 'x1', draftId: 'd1', status: 'queued' }],
+      skipped: 1,
+    });
+    await render();
+    await act(async () => void button('Send 2 pages').click());
+    expect(sendPagesToCms).toHaveBeenCalledTimes(1);
+    expect(readDeliveries).not.toHaveBeenCalled();
+    expect(dialog().textContent).toContain("2 pages weren't sent");
   });
 
   it('says how many pages the day’s sends left out', async () => {

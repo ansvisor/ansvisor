@@ -30,20 +30,27 @@ const POLL_MS = 2_000;
 const POLL_FOR_MS = 3 * 60_000;
 
 /**
- * Waits until these sends aren't queued any more, read as the dialog reads
- * them, or for as long as it reads them: one page at a time (#1331), so the
- * next request goes once the last one's pages have gone. Gives the last read.
+ * How long the next request waits for the last one's pages: as long as the
+ * server lets a send stay queued (00262), past which it reads as interrupted.
  */
-async function gone(ids: string[]) {
-  const until = Date.now() + POLL_FOR_MS;
-  let last: CmsDelivery[] = [];
+const GROUP_WAIT_MS = 15 * 60_000;
+
+/**
+ * Waits until these sends aren't queued any more, reading them every
+ * POLL_MS (a read that fails is read again), for up to GROUP_WAIT_MS: one
+ * page at a time (#1331), so the next request goes once the last one's
+ * pages have gone. Each read goes to `onRead`; false when the wait ran out.
+ */
+async function gone(ids: string[], onRead: (read: CmsDelivery[]) => void): Promise<boolean> {
+  const until = Date.now() + GROUP_WAIT_MS;
   while (Date.now() < until) {
     await new Promise((resolve) => setTimeout(resolve, POLL_MS));
     const read = await readDeliveries(ids).catch(() => null);
-    if (read) last = read;
-    if (read && !read.some((delivery) => delivery.status === 'queued')) break;
+    if (!read) continue;
+    onRead(read);
+    if (!read.some((delivery) => delivery.status === 'queued')) return true;
   }
-  return last;
+  return false;
 }
 
 interface Refusal {
@@ -57,8 +64,9 @@ type Phase =
   | { kind: 'readFailed' }
   | { kind: 'ready' }
   | { kind: 'sending' }
-  | { kind: 'going'; since: number }
-  | { kind: 'done'; stillGoing: boolean };
+  /** `waiting`: the pages of requests still to post, as their draft ids. */
+  | { kind: 'going'; since: number; waiting: string[] }
+  | { kind: 'done'; stillGoing: boolean; waitedOut: number };
 
 /**
  * Send to CMS for the Library's selected rows (#1331): each page as the Send
@@ -132,7 +140,8 @@ export function BulkSendDialog({
   // While the server sends them, they are read now and then.
   const going = phase.kind === 'going' ? phase : null;
   useEffect(() => {
-    if (!going) return;
+    // While a request waits for the last one's pages, send() reads them.
+    if (!going || going.waiting.length) return;
     let cancelled = false;
     const timer = setTimeout(async () => {
       const read = await readDeliveries([...sent.values()].map((d) => d.id)).catch(() => null);
@@ -147,8 +156,10 @@ export function BulkSendDialog({
       );
       setSent(next);
       const left = [...next.values()].some((d) => d.status === 'queued');
-      if (!left) setPhase({ kind: 'done', stillGoing: false });
-      else if (Date.now() - going.since > POLL_FOR_MS) setPhase({ kind: 'done', stillGoing: true });
+      if (!left) setPhase({ kind: 'done', stillGoing: false, waitedOut: 0 });
+      else if (Date.now() - going.since > POLL_FOR_MS) {
+        setPhase({ kind: 'done', stillGoing: true, waitedOut: 0 });
+      }
     }, POLL_MS);
     return () => {
       cancelled = true;
@@ -164,10 +175,14 @@ export function BulkSendDialog({
     const made = new Map<string, CmsDelivery>();
     let notSent = 0;
     let stopped: Refusal | null = null;
+    // The day's sends used up: the requests after it would get none either.
+    let capped = false;
+    // Pages left unposted because the ones before them were still going.
+    let waitedOut = 0;
     const groups = cmsSendGroups(ready.flatMap((item) => (item.page ? [item.page] : [])));
     for (const [i, group] of groups.entries()) {
       // Once a send was refused (the day's sends used up), the rest wait too.
-      if (stopped) {
+      if (stopped || capped) {
         notSent += group.length;
         continue;
       }
@@ -185,14 +200,31 @@ export function BulkSendDialog({
       }
       for (const delivery of result.deliveries) made.set(delivery.draftId, delivery);
       notSent += result.skipped;
-      // Pages too long for one request: the next waits for this one's to go.
+      if (result.skipped > 0) capped = true;
       const queued = result.deliveries.filter((d) => d.status === 'queued').map((d) => d.id);
-      if (queued.length && i < groups.length - 1) {
-        const byId = new Map((await gone(queued)).map((delivery) => [delivery.id, delivery]));
+      const rest = groups.slice(i + 1);
+      if (!queued.length || !rest.length || capped) continue;
+      // Pages too long for one request: the next waits for this one's to go,
+      // what went shown meanwhile. Closing the dialog leaves the rest going.
+      setSent(new Map(made));
+      setSkipped(notSent);
+      setPhase({
+        kind: 'going',
+        since: Date.now(),
+        waiting: rest.flat().map((page) => page.draftId),
+      });
+      const went = await gone(queued, (read) => {
+        const byId = new Map(read.map((delivery) => [delivery.id, delivery]));
         for (const [draftId, delivery] of made) {
           const now = byId.get(delivery.id);
           if (now) made.set(draftId, { ...now, draftId });
         }
+        setSent(new Map(made));
+      });
+      // Still going past the server's own limit: the rest aren't posted beside them.
+      if (!went) {
+        waitedOut = rest.reduce((count, later) => count + later.length, 0);
+        break;
       }
     }
     setSent(made);
@@ -204,7 +236,11 @@ export function BulkSendDialog({
       return;
     }
     const left = [...made.values()].some((d) => d.status === 'queued');
-    setPhase(left ? { kind: 'going', since: Date.now() } : { kind: 'done', stillGoing: false });
+    setPhase(
+      left && !waitedOut
+        ? { kind: 'going', since: Date.now(), waiting: [] }
+        : { kind: 'done', stillGoing: left, waitedOut },
+    );
   };
 
   const failureText = ({ code, field, title }: Refusal) => {
@@ -259,6 +295,7 @@ export function BulkSendDialog({
                   delivery={sent.get(item.draftId)}
                   after={after}
                   sending={phase.kind === 'sending'}
+                  waiting={going?.waiting.includes(item.draftId) ?? false}
                 />
               </li>
             ))}
@@ -270,12 +307,20 @@ export function BulkSendDialog({
         )}
         {after && (
           <p role="status" className="text-sm">
-            {phase.kind === 'going'
-              ? t('progress', { done: counts.sent + counts.failed, total: sent.size })
+            {going
+              ? t('progress', {
+                  done: counts.sent + counts.failed,
+                  total: sent.size + going.waiting.length,
+                })
               : t('summary', { sent: counts.sent, failed: counts.failed })}
             {phase.kind === 'done' && phase.stillGoing && (
               <span className="text-muted-foreground"> {t('stillGoing')}</span>
             )}
+          </p>
+        )}
+        {phase.kind === 'done' && phase.waitedOut > 0 && (
+          <p className="text-sm text-amber-800 dark:text-amber-300">
+            {t('waitedOut', { count: phase.waitedOut })}
           </p>
         )}
         {skipped > 0 && !failure && (
@@ -329,11 +374,14 @@ function ItemState({
   delivery,
   after,
   sending,
+  waiting,
 }: {
   item: BulkItem;
   delivery: CmsDelivery | undefined;
   after: boolean;
   sending: boolean;
+  /** Its request waits for the last one's pages to go. */
+  waiting: boolean;
 }) {
   const t = useTranslations('contentEditor.library.bulk');
   const muted = 'shrink-0 text-xs text-muted-foreground';
@@ -354,7 +402,7 @@ function ItemState({
       </span>
     );
   }
-  if (!delivery) return <span className={muted}>{t('notSent')}</span>;
+  if (!delivery) return <span className={muted}>{t(waiting ? 'waiting' : 'notSent')}</span>;
   if (delivery.status === 'queued') return <span className={muted}>{t('queued')}</span>;
   if (delivery.status === 'failed') {
     return (
