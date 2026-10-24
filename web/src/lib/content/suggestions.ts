@@ -11,7 +11,7 @@
  */
 
 import { safeLinkHref } from './editor';
-import { DRAFT_SOURCE_KINDS, type DraftSourceKind } from './sources';
+import { SUGGESTION_SOURCE_KINDS, type SuggestionSourceKind } from './sources';
 
 export const SUGGESTION_STATUSES = ['open', 'accepted', 'rejected'] as const;
 export type SuggestionStatus = (typeof SUGGESTION_STATUSES)[number];
@@ -46,9 +46,12 @@ export interface DraftSuggestion {
   sourceMarks?: SourceMark[] | null;
 }
 
-/** A source a suggestion was written from, keyed as the Sources tab keys its row. */
+/**
+ * A source a suggestion was written from, keyed as the Sources tab keys its
+ * row; Brief › Your input's as content-inputs.js keys them.
+ */
 export interface SuggestionSource {
-  kind: DraftSourceKind;
+  kind: SuggestionSourceKind;
   ref: string;
   label: string;
 }
@@ -138,7 +141,7 @@ export function suggestionSources(
   text: string,
 ): { sources: SuggestionSource[] | null; marks: SourceMark[] | null } {
   if (!Array.isArray(rawSources)) return { sources: null, marks: null };
-  const kinds: readonly string[] = DRAFT_SOURCE_KINDS;
+  const kinds: readonly string[] = SUGGESTION_SOURCE_KINDS;
   const sources: SuggestionSource[] = [];
   // Where each stored source is now, or -1 when it is left out.
   const at = (rawSources as Partial<SuggestionSource>[]).map((item) => {
@@ -151,7 +154,7 @@ export function suggestionSources(
     ) {
       return -1;
     }
-    sources.push({ kind: item.kind as DraftSourceKind, ref: item.ref, label: item.label });
+    sources.push({ kind: item.kind as SuggestionSourceKind, ref: item.ref, label: item.label });
     return sources.length - 1;
   });
   const marks: SourceMark[] = [];

@@ -2,6 +2,7 @@ import { classifyDomain, normalizeDomain } from '@/lib/citations/classify';
 import type { ContentAuthor } from './authors';
 import { cleanHref } from './html-allowlist';
 import { ownText, sentencesOf } from './readability';
+import type { ClaimBlock } from './claims';
 import { askableSite, sourceClass, type AiSourceClass, type SourceClass } from './source-class';
 
 /**
@@ -263,9 +264,20 @@ export interface TrustRead extends Score<TrustCheckId> {
   /** Sources older than FRESH_MONTHS, and how many give a date at all. */
   stale: { url: string; text: string }[];
   dated: number;
-  /** Sentences with a figure and no source in their block, and how many have a figure. */
+  /**
+   * Sentences with a figure or a claim and no source in their block, and
+   * how many have one.
+   */
   unsourced: string[];
   figures: number;
+  /**
+   * Phase 2 (CE-045): what the draft underlines, in the page's order: the
+   * model's claims with no source in their own words, the other figures in
+   * their sentences; and how many unsourced sentences only the model found
+   * ("AI check").
+   */
+  marks: ClaimMark[];
+  aiClaims: number;
   /**
    * Phase 2 (CE-046): weak or competitors' sources the person hasn't kept,
    * the page's first first (`ai` when the model read its site), and how
@@ -273,6 +285,17 @@ export interface TrustRead extends Score<TrustCheckId> {
    */
   weak: { url: string; text: string; kind: 'weak' | 'competitor'; ai: boolean }[];
   classified: number;
+}
+
+/**
+ * A claim with no source, as the draft underlines it (CE-045): its words
+ * (the whole sentence for a figure read by rule), the sentence Remove takes
+ * out, and its block's text, the only place its words are looked for.
+ */
+export interface ClaimMark {
+  text: string;
+  sentence: string;
+  block: string;
 }
 
 /** What Trust needs to tell a link's kind (Phase 2, CE-046). */
@@ -301,6 +324,9 @@ export interface SourceRead {
  * social posts) or a competitor's, unless the person kept it. A source the
  * rules can't place is left out of both; two placed sources score Trust on
  * their own.
+ *
+ * With `claims` (Phase 2, CE-045), the claims the model read count as the
+ * figures do, each sentence once: Trust is scored from them alone too.
  */
 export function trust({
   blocks,
@@ -309,6 +335,7 @@ export function trust({
   siteTrust = null,
   quote = null,
   sources: kinds = null,
+  claims = null,
   now,
 }: {
   /** The page's blocks (trustBlocks). */
@@ -325,21 +352,64 @@ export function trust({
   quote?: boolean | null;
   /** Phase 2: what each source is (CE-046); left out before. */
   sources?: SourceRead | null;
+  /** Phase 2: the claims the model read in the page's own words (CE-045); left out before. */
+  claims?: readonly ClaimBlock[] | null;
   now: number;
 }): TrustRead {
   const all = pageLinks(blocks, brandDomains);
   const checks: ScoreCheck<TrustCheckId>[] = [];
 
-  // Each sentence once: a nested list item's text is its parent's too.
-  const figures = new Map<string, boolean>();
+  // Each sentence once, where the page has it first: a nested list item's
+  // text is its parent's too.
+  const figures = new Map<string, { sourced: boolean; block: number }>();
+  const sourcedBlock = (index: number) => all.some((l) => l.external && l.block === index);
+  const addFigure = (sentence: string, block: number) => {
+    const had = figures.get(sentence);
+    figures.set(sentence, {
+      sourced: (had?.sourced ?? false) || sourcedBlock(block),
+      block: had?.block ?? block,
+    });
+  };
   blocks.forEach((b, index) => {
-    const sourced = all.some((l) => l.external && l.block === index);
-    for (const sentence of sentencesOf(b.text)) {
-      if (hasFigure(sentence)) figures.set(sentence, (figures.get(sentence) ?? false) || sourced);
-    }
+    for (const sentence of sentencesOf(b.text)) if (hasFigure(sentence)) addFigure(sentence, index);
   });
-  const figureSentences = [...figures].map(([sentence, sourced]) => ({ sentence, sourced }));
+  // The model's claims (CE-045): each in its block, found by the block's
+  // words, else by its own; its sentence counts as a figure's does. A claim
+  // no block has any more (written over since it was read) is left out.
+  const byRule = new Set(figures.keys());
+  const claimed: { text: string; sentence: string; block: number }[] = [];
+  for (const block of claims ?? []) {
+    const own = blocks.findIndex((b) => b.text === block.text);
+    for (const claim of block.claims) {
+      const index =
+        own !== -1 && blocks[own].text.includes(claim.text)
+          ? own
+          : blocks.findIndex((b) => b.text.includes(claim.text));
+      if (index === -1) continue;
+      const sentence =
+        sentencesOf(blocks[index].text).find((s) => s.includes(claim.text)) ?? claim.text;
+      addFigure(sentence, index);
+      claimed.push({ text: claim.text, sentence, block: index });
+    }
+  }
+  // In the page's order: Show, Add source and Remove act on the first.
+  const figureSentences = [...figures]
+    .map(([sentence, f]) => ({ sentence, ...f }))
+    .sort((a, b) => a.block - b.block);
   const unsourced = figureSentences.filter((f) => !f.sourced).map((f) => f.sentence);
+  const unsourcedSet = new Set(unsourced);
+  const claimedUnsourced = claimed.filter((c) => unsourcedSet.has(c.sentence));
+  const claimSentences = new Set(claimedUnsourced.map((c) => c.sentence));
+  const marks = [
+    ...claimedUnsourced,
+    ...figureSentences
+      .filter((f) => !f.sourced && !claimSentences.has(f.sentence))
+      .map((f) => ({ text: f.sentence, sentence: f.sentence, block: f.block })),
+  ]
+    .sort((a, b) => a.block - b.block)
+    .filter((m, i, list) => list.findIndex((o) => o.text === m.text && o.block === m.block) === i)
+    .map(({ text, sentence, block }) => ({ text, sentence, block: blocks[block].text }));
+  const aiClaims = unsourced.filter((sentence) => !byRule.has(sentence)).length;
   if (figureSentences.length) {
     checks.push({
       id: 'claimsSourced',
@@ -440,6 +510,8 @@ export function trust({
     dated: sources.length,
     unsourced,
     figures: figureSentences.length,
+    marks,
+    aiClaims,
     weak,
     classified: classified.length,
   };

@@ -912,6 +912,83 @@ describe('fixDraftRules', () => {
     );
   });
 
+  it("writes from Brief › Your input in Quality's second phase, numbered last (CE-048)", async () => {
+    rows.content_draft_inputs = {
+      experience: null,
+      data: [
+        {
+          name: 'Survey',
+          rows: [
+            ['Teams', 'Share'],
+            ['1,250', '42%'],
+          ],
+        },
+      ],
+      ansvisor_data: [],
+      quotes: [
+        {
+          name: 'Ada Lovelace',
+          title: 'Head of Research, Acme',
+          text: 'We cut our forecast misses in half.',
+          sourceUrl: 'https://acme.example/talk',
+        },
+      ],
+    };
+    generateObject.mockResolvedValue({
+      object: {
+        suggestions: [
+          suggestion({
+            after: 'good coffee and hot water: 1,250 teams brew this way',
+            sources: ['S3'],
+            marks: [],
+          }),
+          suggestion({
+            passage: 3,
+            before: 'A dripper and a filter',
+            after:
+              'A dripper and a filter. “We cut our forecast misses in half,” says Ada Lovelace',
+            sources: ['S4'],
+            marks: [],
+          }),
+        ],
+      },
+      usage: { inputTokens: 900, outputTokens: 200 },
+    });
+    const before = process.env.CONTENT_QUALITY_PHASE;
+    process.env.CONTENT_QUALITY_PHASE = '2';
+    try {
+      await fixDraftRules({ draftId: DRAFT, brandId: BRAND, input: input({ sources: SOURCES }) });
+    } finally {
+      if (before === undefined) delete process.env.CONTENT_QUALITY_PHASE;
+      else process.env.CONTENT_QUALITY_PHASE = before;
+    }
+    const prompt = generateObject.mock.calls[0][0].prompt;
+    expect(prompt).toContain(
+      `S3 Your input (the person's own, given for this page): "Survey" (Their own data, a table: Teams | Share; 1,250 | 42%)`,
+    );
+    expect(prompt).toContain('S4 Your input');
+    expect(prompt).toContain('quote an expert word for word');
+    // Its number and its expert are the person's own: kept, each with its source.
+    const batch = writes.find((w) => w.table === 'content_draft_suggestions');
+    expect(batch.value.map((row) => [row.after_text, row.sources])).toEqual([
+      [
+        'good coffee and hot water: 1,250 teams brew this way',
+        [{ kind: 'input', ref: 'data:1', label: 'Survey' }],
+      ],
+      [
+        'A dripper and a filter. “We cut our forecast misses in half,” says Ada Lovelace',
+        [{ kind: 'input', ref: 'quote:1', label: 'Ada Lovelace, Head of Research, Acme' }],
+      ],
+    ]);
+  });
+
+  it("reads no input before Quality's second phase", async () => {
+    rows.content_draft_inputs = { experience: 'We tested it for six weeks.' };
+    generateObject.mockResolvedValue({ object: { suggestions: [] }, usage: {} });
+    await fixDraftRules({ draftId: DRAFT, brandId: BRAND, input: input({ sources: SOURCES }) });
+    expect(generateObject.mock.calls[0][0].prompt).not.toContain('Your input');
+  });
+
   it('keeps nothing once stopped, and says so (CE-027)', async () => {
     const { RunStoppedError } = await import('./content-runs.js');
     stopIfStopped.mockRejectedValueOnce(new RunStoppedError());

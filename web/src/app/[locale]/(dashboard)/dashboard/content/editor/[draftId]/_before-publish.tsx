@@ -212,6 +212,11 @@ export function BeforePublish({
             {t('linksPending', { count: linksPending })}
           </p>
         )}
+        {quality.claimsReading && (
+          <p role="status" className="text-xs text-muted-foreground">
+            {t('claimsReading')}
+          </p>
+        )}
         <ul className="divide-y rounded-xl border text-sm">
           {rows.map((row) => (
             <li key={row.title} className="flex items-start gap-2.5 px-3 py-2.5">

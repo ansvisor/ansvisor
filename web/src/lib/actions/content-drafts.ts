@@ -38,6 +38,7 @@ import { detectPageType, siteTypeOf, type SiteType } from '@/lib/content/page-ty
 import { sanitizeDraftHtml } from '@/lib/content/sanitize-draft-html';
 import { matchPagePrompts } from '@/lib/content/page-prompts';
 import type { LinkCheck } from '@/lib/content/quality-checks';
+import { CLAIM_KINDS, type ClaimBlock } from '@/lib/content/claims';
 import { MAX_SOURCE_SITES, type AiSourceClass } from '@/lib/content/source-class';
 import {
   NO_DRAFT_RULES,
@@ -728,6 +729,69 @@ export async function classifyDraftSources(
     return { classes: body.classes ?? [], limited: body.limited ?? false };
   } catch (err) {
     console.error('Failed to read the draft sources:', err);
+    return { error: 'failed' };
+  }
+}
+
+/**
+ * Quality's claims in the draft's own words (CE-045): the API reads the
+ * draft as saved, each block the model hasn't read yet, and leaves the one
+ * the person is writing in (`writingIn`, its text as Trust reads it; null
+ * when they aren't). Returned, not thrown: 'ai_budget'
+ * when the workspace's AI budget is spent; 'off' before Quality's phase 2
+ * is live on the API.
+ */
+export async function checkDraftClaims(
+  id: string,
+  writingIn: string | null,
+): Promise<
+  | { blocks: ClaimBlock[]; pending: number; limited: boolean }
+  | { error: 'invalid' | 'failed' | 'ai_budget' | 'off' }
+> {
+  if (!draftId.safeParse(id).success) return { error: 'invalid' };
+  const supabase = await createClient();
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  if (!session) return { error: 'failed' };
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/content-pages/claims`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${session.access_token}`,
+      },
+      // A block too long to send as one is read all the same.
+      body: JSON.stringify({
+        draftId: id,
+        skip: (typeof writingIn === 'string' ? writingIn.slice(0, 20000) : '') || undefined,
+      }),
+    });
+    if (res.status === 429) {
+      const body = (await res.json().catch(() => ({}))) as { code?: string };
+      return { error: body.code === 'ai_budget' ? 'ai_budget' : 'failed' };
+    }
+    if (res.status === 404) {
+      const body = (await res.json().catch(() => ({}))) as { code?: string };
+      return { error: body.code === 'off' ? 'off' : 'failed' };
+    }
+    if (!res.ok) return { error: 'failed' };
+    const body = (await res.json()) as {
+      paragraphs?: ClaimBlock[];
+      pending?: number;
+      limited?: boolean;
+    };
+    const kinds: readonly string[] = CLAIM_KINDS;
+    return {
+      blocks: (body.paragraphs ?? []).map((block) => ({
+        text: block.text,
+        claims: block.claims.filter((claim) => kinds.includes(claim.kind)),
+      })),
+      pending: body.pending ?? 0,
+      limited: body.limited ?? false,
+    };
+  } catch (err) {
+    console.error('Failed to read the draft claims:', err);
     return { error: 'failed' };
   }
 }
