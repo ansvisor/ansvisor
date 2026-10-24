@@ -38889,19 +38889,26 @@ create table if not exists public.brand_facts (
   gone_at timestamptz,
   unique (brand_id, slot, value_key),
   -- Each kind's value, as the server reads it from the fact's words.
+  -- A key left out is a violation (a NULL check would pass), and a number
+  -- out of range too, never a cast error.
   constraint brand_facts_kind_value_check check (
-    case kind
-      when 'price' then
-        jsonb_typeof(value -> 'amount') = 'number'
-        and (value ->> 'amount')::numeric >= 0
-        and coalesce(value ->> 'currency', '') ~ '^[A-Z]{3}$'
-        and jsonb_typeof(value -> 'plan') = 'string'
-      when 'trial' then
-        jsonb_typeof(value -> 'days') = 'number' and (value ->> 'days')::int between 1 and 365
-      when 'founded' then
-        jsonb_typeof(value -> 'year') = 'number' and (value ->> 'year')::int between 1800 and 2100
-      else true
-    end
+    coalesce(
+      case kind
+        when 'price' then
+          jsonb_typeof(value -> 'amount') = 'number'
+          and (value ->> 'amount')::numeric >= 0
+          and coalesce(value ->> 'currency', '') ~ '^[A-Z]{3}$'
+          and jsonb_typeof(value -> 'plan') = 'string'
+        when 'trial' then
+          jsonb_typeof(value -> 'days') = 'number'
+          and (value ->> 'days')::numeric between 1 and 365
+        when 'founded' then
+          jsonb_typeof(value -> 'year') = 'number'
+          and (value ->> 'year')::numeric between 1800 and 2100
+        else true
+      end,
+      false
+    )
   )
 );
 

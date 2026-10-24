@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useId, useState } from 'react';
 import { useFormatter, useNow, useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
@@ -13,8 +13,9 @@ import {
   isPrice,
   type BrandFact,
   type BrandFactsRead,
-  type FactValue,
+  type FactStatus,
 } from '@/lib/content/brand-facts';
+import { cn } from '@/lib/utils';
 
 /**
  * Brand settings › Brand facts (Quality spec §10, CE-047): the facts the API
@@ -22,7 +23,7 @@ import {
  * words on the page and where; a member approves or rejects each one (no
  * "approve all": the spec has each approved). Only approved facts still on
  * the site are compared with a page. "Read again" reads the site again, not
- * more than the API allows.
+ * more than the API allows; nothing else here reads the site.
  */
 export function BrandFactsTab({ brandId }: { brandId: string }) {
   const t = useTranslations('brands.settings.facts');
@@ -30,17 +31,20 @@ export function BrandFactsTab({ brandId }: { brandId: string }) {
   // Read again turns on when the API allows it, without a reload.
   const now = useNow({ updateInterval: 30_000 });
   const [read, setRead] = useState<BrandFactsRead | null>(null);
-  const [failed, setFailed] = useState(false);
+  const [failed, setFailed] = useState<'off' | 'failed' | null>(null);
   const [reading, setReading] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
+  const ids = useId();
 
   useEffect(() => {
     let cancelled = false;
-    void getBrandFacts(brandId).then((result) => {
-      if (cancelled) return;
-      if ('error' in result) setFailed(true);
-      else setRead(result);
-    });
+    getBrandFacts(brandId)
+      .then((result) => {
+        if (cancelled) return;
+        if ('error' in result) setFailed(result.error === 'off' ? 'off' : 'failed');
+        else setRead(result);
+      })
+      .catch(() => !cancelled && setFailed('failed'));
     return () => {
       cancelled = true;
     };
@@ -48,27 +52,43 @@ export function BrandFactsTab({ brandId }: { brandId: string }) {
 
   const readAgain = async () => {
     setReading(true);
-    const result = await readBrandFactsAgain(brandId);
-    setReading(false);
-    if ('error' in result) {
+    try {
+      const result = await readBrandFactsAgain(brandId);
+      if ('error' in result) toast.error(t('readFailed'));
+      else setRead(result);
+    } catch {
       toast.error(t('readFailed'));
-      return;
+    } finally {
+      setReading(false);
     }
-    setRead(result);
   };
+
+  /** The facts as kept after a review: its status, and the gone fact an approval replaces dropped. */
+  const reviewed = (fact: BrandFact, status: FactStatus) => (prev: BrandFactsRead | null) =>
+    prev && {
+      ...prev,
+      facts: prev.facts
+        .filter((f) => !(status === 'approved' && f.id === fact.replaces?.id && f.gone))
+        .map((f) => (f.id === fact.id ? { ...f, status, replaces: null } : f)),
+    };
 
   const review = async (fact: BrandFact, status: 'approved' | 'rejected') => {
     setBusy(fact.id);
-    const result = await setBrandFactStatus(fact.id, status);
-    if ('error' in result) {
-      setBusy(null);
+    try {
+      const result = await setBrandFactStatus(fact.id, status);
+      if (!('error' in result)) {
+        setRead(reviewed(fact, result.status));
+        return;
+      }
       toast.error(t('reviewFailed'));
-      return;
+      // A read may have removed it meanwhile: the list as kept now.
+      const again = await getBrandFacts(brandId);
+      if (!('error' in again)) setRead(again);
+    } catch {
+      toast.error(t('reviewFailed'));
+    } finally {
+      setBusy(null);
     }
-    // Read as kept: an approval drops the approved facts it replaces.
-    const again = await getBrandFacts(brandId);
-    setBusy(null);
-    if (!('error' in again)) setRead(again);
   };
 
   const valueOf = (fact: Pick<BrandFact, 'kind' | 'value' | 'quote'>) => {
@@ -91,7 +111,7 @@ export function BrandFactsTab({ brandId }: { brandId: string }) {
       <Card>
         <CardHeader>
           <CardTitle>{t('title')}</CardTitle>
-          <CardDescription>{t('loadFailed')}</CardDescription>
+          <CardDescription>{failed === 'off' ? t('off') : t('loadFailed')}</CardDescription>
         </CardHeader>
       </Card>
     );
@@ -100,17 +120,25 @@ export function BrandFactsTab({ brandId }: { brandId: string }) {
   const pending = read?.facts.filter((f) => f.status === 'pending') ?? [];
   const approved = read?.facts.filter((f) => f.status === 'approved') ?? [];
   const rejected = read?.facts.filter((f) => f.status === 'rejected') ?? [];
+  // One thing at a time: a read of the site and a review would overwrite each other.
   const canReadAgain =
-    !!read && !reading && (!read.recheckAt || Date.parse(read.recheckAt) <= now.getTime());
+    !!read &&
+    !reading &&
+    busy === null &&
+    (!read.recheckAt || Date.parse(read.recheckAt) <= now.getTime());
 
   const row = (fact: BrandFact) => (
-    <li key={fact.id} className="flex items-start gap-3 px-3 py-2.5 text-sm">
+    <li
+      key={fact.id}
+      aria-busy={busy === fact.id}
+      className={cn('flex items-start gap-3 px-3 py-2.5 text-sm', busy === fact.id && 'opacity-60')}
+    >
       <div className="min-w-0 flex-1 space-y-0.5">
         <p className="font-medium [overflow-wrap:anywhere]">
           <span className="mr-1.5 text-xs font-normal text-muted-foreground">
             {t(`kinds.${fact.kind}`)}
           </span>
-          {fact.kind === 'claim' ? `“${fact.quote}”` : valueOf(fact)}
+          {fact.kind === 'claim' ? t('quoted', { quote: fact.quote }) : valueOf(fact)}
           {fact.gone && (
             <Badge variant="outline" className="ml-2 align-middle text-[11px] font-normal">
               {t('gone')}
@@ -118,7 +146,9 @@ export function BrandFactsTab({ brandId }: { brandId: string }) {
           )}
         </p>
         {fact.kind !== 'claim' && (
-          <p className="text-xs text-muted-foreground [overflow-wrap:anywhere]">“{fact.quote}”</p>
+          <p className="text-xs text-muted-foreground [overflow-wrap:anywhere]">
+            {t('quoted', { quote: fact.quote })}
+          </p>
         )}
         <p className="text-xs text-muted-foreground">
           <a
@@ -133,11 +163,7 @@ export function BrandFactsTab({ brandId }: { brandId: string }) {
             <>
               {' · '}
               {t('replaces', {
-                value: valueOf({
-                  kind: fact.kind,
-                  value: fact.replaces.value as FactValue,
-                  quote: '',
-                }),
+                value: valueOf({ kind: fact.kind, value: fact.replaces.value, quote: '' }),
               })}
             </>
           )}
@@ -149,7 +175,7 @@ export function BrandFactsTab({ brandId }: { brandId: string }) {
             size="sm"
             variant="outline"
             className="h-7"
-            disabled={busy !== null}
+            disabled={busy !== null || reading}
             aria-label={t('approveFact', { fact: valueOf(fact) })}
             onClick={() => void review(fact, 'approved')}
           >
@@ -161,7 +187,7 @@ export function BrandFactsTab({ brandId }: { brandId: string }) {
             size="sm"
             variant="ghost"
             className="h-7"
-            disabled={busy !== null}
+            disabled={busy !== null || reading}
             aria-label={t('rejectFact', { fact: valueOf(fact) })}
             onClick={() => void review(fact, 'rejected')}
           >
@@ -200,24 +226,26 @@ export function BrandFactsTab({ brandId }: { brandId: string }) {
                   </p>
                 )}
                 <ul className="space-y-0.5">
-                  {read.pages.map((page) => (
-                    <li key={page.kind}>
-                      {t(`sources.${page.kind}`)}
-                      {': '}
-                      {page.url && page.status !== 'not_found' ? (
-                        <a
-                          href={page.url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="underline-offset-2 hover:underline"
-                        >
-                          {t(`pageStatus.${page.status}`)}
-                        </a>
-                      ) : (
-                        t(`pageStatus.${page.status}`)
-                      )}
-                    </li>
-                  ))}
+                  {read.pages.map((page) => {
+                    const name = t(`sources.${page.kind}`);
+                    return (
+                      <li key={page.kind}>
+                        {page.url && page.status !== 'not_found' ? (
+                          <a
+                            href={page.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="underline-offset-2 hover:underline"
+                          >
+                            {name}
+                          </a>
+                        ) : (
+                          name
+                        )}
+                        {t('pageStatusAfter', { status: t(`pageStatus.${page.status}`) })}
+                      </li>
+                    );
+                  })}
                 </ul>
               </div>
               <Button
@@ -243,19 +271,21 @@ export function BrandFactsTab({ brandId }: { brandId: string }) {
             ) : (
               <>
                 {pending.length > 0 && (
-                  <section
-                    aria-label={t('toApprove', { count: pending.length })}
-                    className="space-y-2"
-                  >
-                    <h4 className="text-xs font-medium text-muted-foreground">
+                  <section aria-labelledby={`${ids}-pending`} className="space-y-2">
+                    <h4 id={`${ids}-pending`} className="text-xs font-medium text-muted-foreground">
                       {t('toApprove', { count: pending.length })}
                     </h4>
                     <ul className="divide-y rounded-xl border">{pending.map(row)}</ul>
                   </section>
                 )}
                 {approved.length > 0 && (
-                  <section aria-label={t('approved')} className="space-y-2">
-                    <h4 className="text-xs font-medium text-muted-foreground">{t('approved')}</h4>
+                  <section aria-labelledby={`${ids}-approved`} className="space-y-2">
+                    <h4
+                      id={`${ids}-approved`}
+                      className="text-xs font-medium text-muted-foreground"
+                    >
+                      {t('approved')}
+                    </h4>
                     <ul className="divide-y rounded-xl border">{approved.map(row)}</ul>
                   </section>
                 )}

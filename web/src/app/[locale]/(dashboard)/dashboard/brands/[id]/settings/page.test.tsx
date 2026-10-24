@@ -341,11 +341,16 @@ describe('brand settings role gates', () => {
 });
 
 describe('Brand facts tab (Quality CE-047)', () => {
-  afterEach(() => vi.unstubAllEnvs());
+  const roots: ReturnType<typeof createRoot>[] = [];
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    for (const root of roots.splice(0)) act(() => root.unmount());
+  });
   const open = async (tab?: string) => {
     const container = document.createElement('div');
     document.body.append(container);
     const root = createRoot(container);
+    roots.push(root);
     await act(async () => {
       root.render(
         <Suspense>

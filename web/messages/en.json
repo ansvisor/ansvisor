@@ -7364,6 +7364,9 @@
         "description": "Your prices and plans, your trial, when you were founded and the claims you make, read from your own pricing, About and product pages. Approve the ones that are right: Quality checks your pages against the approved ones that are still on your site.",
         "loading": "Reading your brand facts",
         "loadFailed": "Your brand facts couldn't be read. Try again in a moment.",
+        "off": "Brand facts aren't available yet.",
+        "quoted": "“{quote}”",
+        "pageStatusAfter": ": {status}",
         "noDomain": "Add your site's domain under Domains to read your brand facts from it.",
         "checked": "Read from your site {date}",
         "pageStatus": {
@@ -7371,7 +7374,7 @@
           "blocked": "turned our reader away",
           "not_found": "not found",
           "failed": "didn't answer, read again next time",
-          "missed": "read again tomorrow"
+          "missed": "couldn't be read, tried again a day later"
         },
         "sources": {
           "pricing": "Pricing page",
@@ -7381,7 +7384,7 @@
         "readAgain": "Read again",
         "readAgainSoon": "Your site was read a few minutes ago. You can read it again shortly.",
         "readFailed": "Your site couldn't be read again. Try again in a moment.",
-        "aiPaused": "This month's AI usage is used up: pages not read yet are read when it renews.",
+        "aiPaused": "This month's AI usage is used up: pages not read yet are read at the first read after it renews.",
         "empty": "No facts were found on your site yet.",
         "toApprove": "To approve ({count})",
         "approved": "Approved",
