@@ -143,6 +143,61 @@ grant execute on function public.reserve_content_deliveries(uuid, uuid, uuid, uu
   to service_role;
 
 -- ----------------------------------------------------------------------------
+-- Where the page went live is the server's: the callback writes it, with the
+-- service role. guard_content_draft_server_columns (00247) refuses a member's
+-- write of it, as of the other columns the server keeps; slug and meta stay
+-- the members' to edit.
+-- ----------------------------------------------------------------------------
+create or replace function public.guard_content_draft_server_columns()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
+begin
+  -- A role that bypasses RLS is server-side (service role, migrations).
+  if (select rolbypassrls from pg_catalog.pg_roles where rolname = current_user) then
+    return new;
+  end if;
+
+  if tg_op = 'INSERT' then
+    if new.score_before is not null or new.score_after is not null then
+      raise exception 'content draft scores are set server-side'
+        using errcode = '42501';
+    end if;
+    if new.action_id is not null then
+      raise exception 'content draft action is set server-side'
+        using errcode = '42501';
+    end if;
+    if new.agent_state is not null or new.agent_state_at is not null
+       or new.agent_run is not null then
+      raise exception 'content draft agent state is set server-side'
+        using errcode = '42501';
+    end if;
+    if new.published_url is not null or new.published_at is not null then
+      raise exception 'content draft live address is set server-side'
+        using errcode = '42501';
+    end if;
+  elsif new.brand_id is distinct from old.brand_id
+     or new.author is distinct from old.author
+     or new.created_by is distinct from old.created_by
+     or new.created_at is distinct from old.created_at
+     or new.score_before is distinct from old.score_before
+     or new.score_after is distinct from old.score_after
+     or new.action_id is distinct from old.action_id
+     or new.agent_state is distinct from old.agent_state
+     or new.agent_state_at is distinct from old.agent_state_at
+     or new.agent_run is distinct from old.agent_run
+     or new.published_url is distinct from old.published_url
+     or new.published_at is distinct from old.published_at
+  then
+    raise exception 'content draft column is managed server-side'
+      using errcode = '42501';
+  end if;
+  return new;
+end;
+$$;
+
+-- ----------------------------------------------------------------------------
 -- Webhooks: a page sent is an event a webhook subscribes to (00198's list).
 -- ----------------------------------------------------------------------------
 alter table public.webhook_configs
