@@ -13,6 +13,8 @@ let rpcCalls;
 let ops;
 // The org's recent calls this period, newest first (what a hold is sized on).
 let recent;
+// The `or` filters its reads ask for.
+let ors;
 
 function query(table) {
   const op = { table, kind: 'select', filters: [] };
@@ -20,6 +22,7 @@ function query(table) {
     select: () => builder,
     eq: (col, val) => (op.filters.push([col, val]), builder),
     gte: (col, val) => (op.filters.push([col, val]), builder),
+    or: (val) => (ors.push(val), builder),
     order: () => builder,
     limit: () => builder,
     maybeSingle: () => builder,
@@ -47,6 +50,7 @@ beforeEach(async () => {
   recent = { data: [], error: null };
   rpcCalls = [];
   ops = [];
+  ors = [];
   vi.doMock('../config/supabase.js', () => ({
     default: {
       from: (t) => query(t),
@@ -92,6 +96,22 @@ describe('reserveAiBudget', () => {
       modelId: 'google/gemini-3-flash-preview',
     });
     expect(rpcCalls.map((c) => c.args.p_cost)).toEqual([0.0095, 0.0095]);
+  });
+
+  it('holds what a small call asks, and sizes no other hold on small calls', async () => {
+    await guard.reserveAiBudget('o1', {
+      feature: 'quality',
+      modelId: 'google/gemini-3-flash-preview',
+      holdUsd: 0.002,
+    });
+    expect(rpcCalls[0].args).toMatchObject({ p_cost: 0.002, p_feature: 'quality' });
+    expect(ors).toEqual([]);
+    // The median a larger call holds leaves Quality's small checks out.
+    await guard.reserveAiBudget('o1', {
+      feature: 'content',
+      modelId: 'google/gemini-3-flash-preview',
+    });
+    expect(ors).toEqual(['feature.is.null,feature.neq.quality']);
   });
 
   it('holds the estimate on the period’s budget, then turns it into the real cost', async () => {
@@ -211,5 +231,21 @@ describe('reserveAiBudget', () => {
         value: expect.objectContaining({ feature: 'content', cost_usd: expect.any(Number) }),
       }),
     ]);
+  });
+});
+
+describe('getImproveQuotaStatus', () => {
+  it('counts Quality’s small checks as spent, but sizes a call on the others', async () => {
+    recent = {
+      data: [
+        ...Array.from({ length: 10 }, () => ({ cost_usd: 0.0005, feature: 'quality' })),
+        ...Array.from({ length: 5 }, () => ({ cost_usd: 0.02, feature: 'improve' })),
+      ],
+      error: null,
+    };
+    const status = await guard.getImproveQuotaStatus('o1', 'google/gemini-3-flash-preview');
+    expect(status.spentUsd).toBeCloseTo(0.105);
+    // Starter's $5 (#1435): $4.895 left at $0.02 a call; the checks' $0.0005 would make it 9,790.
+    expect(status.generationsLeft).toBe(244);
   });
 });

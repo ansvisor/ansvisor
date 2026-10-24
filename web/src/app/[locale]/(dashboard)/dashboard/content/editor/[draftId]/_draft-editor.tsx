@@ -97,7 +97,13 @@ import {
 import { detectPageType, isSiteType, type SiteType } from '@/lib/content/page-types';
 import { BAND_CLASSES, qualityAverage, qualityBand, qualityPhase } from '@/lib/content/quality';
 import { inputsGiven, inputsUsed } from '@/lib/content/draft-inputs';
-import { eeat, linksToCheck, trust, trustBlocks } from '@/lib/content/quality-checks';
+import {
+  eeat,
+  linksToCheck,
+  trust,
+  trustBlocks,
+  unplacedSites,
+} from '@/lib/content/quality-checks';
 import { qualityTodos } from '@/lib/content/quality-todos';
 import { readability } from '@/lib/content/readability';
 import {
@@ -147,6 +153,7 @@ import { OwnCopies, ownCopyHtml } from './_own-copies';
 import { NextNudge, useNextNudge } from './_next-nudge';
 import { PageInfoStrip, pageInfoKey } from './_page-info';
 import { WeakSourcesMarks, weakSourcesKey } from './_weak-sources';
+import { useSourceClasses } from './_use-source-classes';
 import { HeaderTip } from './_header-tip';
 import { NextStepButton, readSkips, wordsUnderTitle, writeSkips } from './_next-step';
 import { useTodoCopy, type QualityRead } from './_quality-tab';
@@ -557,12 +564,36 @@ export function DraftEditor({
   const sourcesOn = qualityPhase() >= 2;
   const competitorDomains = reads.sources?.data?.competitorDomains;
   const [keptSources, setKeptSources] = useState(draft.keptSources);
+  // A site the rules can't place, as the model reads it (part b): asked
+  // after a save, as the links are.
+  const unplaced = useMemo(
+    () =>
+      sourcesOn && brandDomains
+        ? unplacedSites(pageBlocks, brandDomains, {
+            competitorDomains: competitorDomains ?? [],
+            pageType,
+            kept: new Set(keptSources),
+          })
+        : [],
+    [sourcesOn, brandDomains, pageBlocks, competitorDomains, pageType, keptSources],
+  );
+  const { kinds: aiKinds, paused: aiPaused } = useSourceClasses(
+    draft.id,
+    autosave.savedAt,
+    unplaced,
+    sourcesOn,
+  );
   const sourceRead = useMemo(
     () =>
       sourcesOn
-        ? { competitorDomains: competitorDomains ?? [], pageType, kept: new Set(keptSources) }
+        ? {
+            competitorDomains: competitorDomains ?? [],
+            pageType,
+            kept: new Set(keptSources),
+            ai: aiKinds,
+          }
         : null,
-    [sourcesOn, competitorDomains, pageType, keptSources],
+    [sourcesOn, competitorDomains, pageType, keptSources, aiKinds],
   );
   // The brand's own links aren't sources: Trust waits for its domains.
   const trustScore = useMemo(
@@ -654,6 +685,8 @@ export function DraftEditor({
         team: teamName(language, brandName),
         siteTrust,
         todos,
+        // Only while a source waits for its read.
+        aiPaused: aiPaused && unplaced.some((site) => !aiKinds.has(site)),
       }
     : null;
   // Quality's Pick author opens the header's menu.

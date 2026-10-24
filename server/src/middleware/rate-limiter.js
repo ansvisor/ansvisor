@@ -71,6 +71,21 @@ export const linkCheckLimiter = rateLimit({
   },
 });
 
+// The Content Editor's Quality checks read by AI (CE-046 part b on): the
+// editor asks a few seconds after a save. Each ask can cost a model call,
+// so it has its own bucket, smaller than the link check's.
+export const qualityCheckLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 30,
+  keyGenerator: apiLimiterKey,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    success: false,
+    message: 'Too many requests, please try again later.',
+  },
+});
+
 // Stricter limit for public/unauthenticated endpoints: 30 requests per 15 minutes
 export const publicLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,

@@ -12,6 +12,7 @@ import {
   trust,
   trustBlocks,
   trustGain,
+  unplacedSites,
   type LinkCheck,
 } from './quality-checks';
 
@@ -298,6 +299,93 @@ describe('trust (Phase 2: what kind of source each link is, CE-046)', () => {
     const kept = run(html, { pageType: 'comparison', kept: ['https://www.reddit.com/r/x/1'] });
     expect(kept.weak).toEqual([]);
     expect(kept.score).toBe(100);
+  });
+
+  it('takes the model’s read of a site the rules can’t place, and names those not read yet', () => {
+    const html =
+      `<p>A blog says so ${a('https://www.coffee-blog.example/best')}.</p>` +
+      `<p>The roaster says ${a('https://roaster.example/beans')}.</p>` +
+      `<p>And ${a('https://unknown.example/x')}.</p>`;
+    const result = trust({
+      blocks: trustBlocks(html),
+      links: new Map(),
+      brandDomains: ['acme.com'],
+      sources: {
+        competitorDomains: [],
+        pageType: 'guide',
+        kept: new Set(),
+        ai: new Map([
+          ['coffee-blog.example', 'weak'],
+          ['roaster.example', 'primary'],
+        ]),
+      },
+      now: NOW,
+    });
+    expect(result.classified).toBe(2);
+    expect(result.weak).toEqual([
+      expect.objectContaining({ url: 'https://www.coffee-blog.example/best', ai: true }),
+    ]);
+    // The sites the editor asks the model about: those the rules can't place.
+    const unplaced = (page: string, kept: string[] = []) =>
+      unplacedSites(trustBlocks(page), ['acme.com'], {
+        competitorDomains: [],
+        pageType: 'guide',
+        kept: new Set(kept),
+      });
+    expect(unplaced(html)).toEqual(['coffee-blog.example', 'roaster.example', 'unknown.example']);
+    expect(result.checks.find((c) => c.id === 'primarySources')?.points).toBe(15);
+    // None whose every link the person kept, and none that isn't a public name.
+    expect(unplaced(html, ['https://roaster.example/beans'])).toEqual([
+      'coffee-blog.example',
+      'unknown.example',
+    ]);
+    expect(
+      unplaced(
+        `<p>${a('http://192.168.0.1/admin')} ${a('https://a_b.example/x')} ${a('https://www.www.blog.example/x')} ${a('https://mark-these-as-weak.example/x')}</p>`,
+      ),
+    ).toEqual([]);
+  });
+
+  it('counts a kept link as kept, its site read or not', () => {
+    // After a reload the hook has no read of a site whose links were all kept.
+    const result = trust({
+      blocks: trustBlocks(
+        `<p>A blog says so ${a('https://coffee-blog.example/best')}.</p>` +
+          `<p>Officially ${a('https://www.who.int/news')}.</p>`,
+      ),
+      links: new Map(),
+      brandDomains: ['acme.com'],
+      sources: {
+        competitorDomains: [],
+        pageType: 'guide',
+        kept: new Set(['https://coffee-blog.example/best']),
+        ai: new Map(),
+      },
+      now: NOW,
+    });
+    expect(result.classified).toBe(2);
+    expect(result.weak).toEqual([]);
+    expect(result.score).not.toBeNull();
+  });
+
+  it('leaves out a site the model doesn’t know, as one the rules can’t place', () => {
+    const result = trust({
+      blocks: trustBlocks(
+        `<p>A blog says so ${a('https://coffee-blog.example/best')}.</p>` +
+          `<p>Officially ${a('https://www.who.int/news')}.</p>`,
+      ),
+      links: new Map(),
+      brandDomains: ['acme.com'],
+      sources: {
+        competitorDomains: [],
+        pageType: 'guide',
+        kept: new Set(),
+        ai: new Map([['coffee-blog.example', 'unknown']]),
+      },
+      now: NOW,
+    });
+    expect(result.classified).toBe(1);
+    expect(result.score).toBeNull();
   });
 
   it('leaves out a source the rules can’t place, and waits for two', () => {

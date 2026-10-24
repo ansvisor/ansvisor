@@ -435,6 +435,32 @@ describe('QualityTab', () => {
     );
   });
 
+  it('tags a source read by AI, and says when AI reads wait for the budget (CE-046)', async () => {
+    const html =
+      '<p>A blog says so on <a href="https://coffee-blog.example/best">a list</a>.</p>' +
+      '<p>As <a href="https://www.reuters.com/x">Reuters</a> reported.</p>';
+    const result = trust({
+      blocks: trustBlocks(html),
+      links: new Map(),
+      brandDomains: ['acme.com'],
+      sources: {
+        competitorDomains: [],
+        pageType: 'guide',
+        kept: new Set(),
+        ai: new Map([['coffee-blog.example', 'weak']]),
+      },
+      now: Date.parse('2026-10-23T12:00:00Z'),
+    });
+    await render({ ...read(null), trust: result, aiPaused: true });
+    const weak = [...container.querySelectorAll('li')].find((li) =>
+      li.textContent?.includes('weak:'),
+    )!;
+    expect(weak.textContent).toContain('AI check');
+    expect(container.textContent).toContain(
+      "Sources the rules can't place wait for an AI check: this month's AI usage is used up.",
+    );
+  });
+
   it("shows the site's trust, what is missing and the way to Site Audit", async () => {
     const siteTrust = {
       checks: {

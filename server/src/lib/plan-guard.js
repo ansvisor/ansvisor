@@ -331,14 +331,16 @@ async function improveSpendThisPeriod(orgId) {
   const periodStart = await quotaPeriodStart(orgId);
   const { data } = await supabaseAdmin
     .from('prompt_improve_usage')
-    .select('cost_usd')
+    .select('cost_usd, feature')
     .eq('organization_id', orgId)
     .gte('used_at', periodStart.toISOString())
     .order('used_at', { ascending: false })
     .limit(5000);
-  const costs = (data ?? []).map((r) => Number(r.cost_usd) || 0);
-  const spent = costs.reduce((a, b) => a + b, 0);
-  return { spent, typical: medianCost(costs.slice(0, RECENT_CALLS)) };
+  const rows = data ?? [];
+  const spent = rows.reduce((sum, r) => sum + (Number(r.cost_usd) || 0), 0);
+  // Quality's small checks count in what's spent, not in what a call costs.
+  const calls = rows.filter((r) => r.feature !== 'quality').slice(0, RECENT_CALLS);
+  return { spent, typical: medianCost(calls.map((r) => Number(r.cost_usd) || 0)) };
 }
 
 /**
@@ -383,11 +385,13 @@ export async function getImproveQuotaStatus(orgId, modelId) {
  *     answer), the reservation goes. Safe to call more than once; call it
  *     in a finally.
  * An unlimited budget (self-hosted) reserves nothing; charge() still writes
- * the rows, as before.
+ * the rows, as before. `holdUsd` sets the hold for a call much smaller than
+ * the model's typical one (Quality's checks): else the typical cost or the
+ * recent calls' median is held.
  */
 export async function reserveAiBudget(
   orgId,
-  { feature, modelId, promptId = null, actionId = null, draftId = null },
+  { feature, modelId, promptId = null, actionId = null, draftId = null, holdUsd = null },
 ) {
   const plan = await resolveOrgPlanByOrgId(orgId);
   const budget = plan.limits.improveMonthlyBudgetUsd ?? -1;
@@ -398,7 +402,7 @@ export async function reserveAiBudget(
       p_organization_id: orgId,
       p_since: since,
       p_budget: budget,
-      p_cost: await holdCostUsd(orgId, modelId, since),
+      p_cost: holdUsd ?? (await holdCostUsd(orgId, modelId, since)),
       p_feature: feature,
       p_model: modelId,
       p_prompt_id: promptId,
@@ -467,7 +471,7 @@ export async function reserveAiBudget(
         action_id: actionId,
         content_draft_id: draftId,
         model: modelId,
-        cost_usd: await holdCostUsd(orgId, modelId, since),
+        cost_usd: holdUsd ?? (await holdCostUsd(orgId, modelId, since)),
       });
       if (error) logger.error({ err: error, orgId, feature }, '[ai-budget] usage write failed');
     },
@@ -485,10 +489,13 @@ export async function reserveAiBudget(
  */
 async function holdCostUsd(orgId, modelId, since) {
   const typical = typicalCostUsd(modelId);
+  // Quality's small checks hold their own (holdUsd): left out, they don't
+  // pull the median under what the larger calls cost.
   const { data, error } = await supabaseAdmin
     .from('prompt_improve_usage')
     .select('cost_usd')
     .eq('organization_id', orgId)
+    .or('feature.is.null,feature.neq.quality')
     .gte('used_at', since)
     .order('used_at', { ascending: false })
     .limit(RECENT_CALLS);
@@ -501,7 +508,7 @@ async function holdCostUsd(orgId, modelId, since) {
 }
 
 /** What the workspace's AI budget is spent on, as prompt_improve_usage.feature says (00242). */
-export const AI_USAGE_FEATURES = ['improve', 'content', 'action_center'];
+export const AI_USAGE_FEATURES = ['improve', 'content', 'action_center', 'quality'];
 
 const tenths = (n) => Math.round(n * 10) / 10;
 

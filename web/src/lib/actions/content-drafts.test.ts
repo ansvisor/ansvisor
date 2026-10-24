@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 /**
  * The editor's writes (CE-004): a save or Mark ready that RLS turns away
@@ -87,6 +87,7 @@ const {
   getCitedPassages,
   getContentDraft,
   getDraftVersions,
+  classifyDraftSources,
   keepDraftSource,
   markContentDraftReady,
   restoreDraftVersion,
@@ -345,6 +346,41 @@ describe('setContentDraftAuthor', () => {
     await expect(setContentDraftAuthor('d1', AUTHOR)).rejects.toThrow('invalid');
     expect(calls).toEqual([]);
     await expect(setContentDraftAuthor(DRAFT, AUTHOR)).rejects.toThrow('not_found');
+  });
+});
+
+describe('classifyDraftSources (Quality CE-046, part b)', () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('asks the API about the sites, and names a spent budget and an API that has it off', async () => {
+    const answer = (status: number, body: unknown) => ({
+      ok: status < 400,
+      status,
+      json: async () => body,
+    });
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        answer(200, { classes: [{ site: 'a.example', kind: 'weak' }], limited: false }),
+      )
+      .mockResolvedValueOnce(answer(429, { code: 'ai_budget' }))
+      .mockResolvedValueOnce(answer(404, { code: 'off' }));
+    vi.stubGlobal('fetch', fetchMock);
+    await expect(classifyDraftSources(DRAFT, ['a.example'])).resolves.toEqual({
+      classes: [{ site: 'a.example', kind: 'weak' }],
+      limited: false,
+    });
+    expect(fetchMock.mock.calls[0][0]).toMatch(/\/api\/content-pages\/source-classes$/);
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({
+      draftId: DRAFT,
+      sites: ['a.example'],
+    });
+    await expect(classifyDraftSources(DRAFT, ['a.example'])).resolves.toEqual({
+      error: 'ai_budget',
+    });
+    await expect(classifyDraftSources(DRAFT, ['a.example'])).resolves.toEqual({ error: 'off' });
+    await expect(classifyDraftSources(DRAFT, [])).resolves.toEqual({ error: 'invalid' });
+    expect(fetchMock).toHaveBeenCalledTimes(3);
   });
 });
 

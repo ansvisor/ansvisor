@@ -48,6 +48,8 @@ export interface QualityRead {
   siteTrust: SiteTrust | null;
   /** What only the person can do (qualityTodos, CE-040). */
   todos: QualityTodo[];
+  /** The model's reads of sources wait: the workspace's AI budget is spent (CE-046). */
+  aiPaused?: boolean;
 }
 
 type ScoreName = 'eeat' | 'trust' | 'readability';
@@ -63,6 +65,8 @@ export interface Suggestion {
   show: string | null;
   /** The source Keep keeps (CE-046): the person trusts it all the same. */
   keep?: string;
+  /** Read by AI, not by rules alone: it says so (spec §3, "AI check"). */
+  ai?: boolean;
 }
 
 /**
@@ -178,7 +182,14 @@ export function QualityTab({
                     {t('gain', { gain: s.gain, score: t(`names.${s.score}`) })}
                   </span>
                   <div className="min-w-0 flex-1">
-                    <p className="font-medium [overflow-wrap:anywhere]">{s.line}</p>
+                    <p className="font-medium [overflow-wrap:anywhere]">
+                      {s.line}
+                      {s.ai && (
+                        <span className="ml-1.5 inline-block rounded border px-1 align-middle text-[10.5px] font-normal text-muted-foreground">
+                          {t('aiCheck')}
+                        </span>
+                      )}
+                    </p>
                     <p className="text-xs text-muted-foreground [overflow-wrap:anywhere]">
                       {s.detail}
                     </p>
@@ -209,6 +220,8 @@ export function QualityTab({
           )}
         </section>
       )}
+
+      {quality.aiPaused && <p className="text-xs text-muted-foreground">{t('aiPaused')}</p>}
 
       {siteTrust && (
         <section
@@ -471,6 +484,7 @@ export function trustSuggestions(t: T, trust: TrustRead | null): TrustSuggestion
       }),
       show: first.text,
       keep: first.url,
+      ai: trust.weak.some((w) => w.ai),
     });
   }
   const primary = trust.checks.find((c) => c.id === 'primarySources');

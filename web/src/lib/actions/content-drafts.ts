@@ -38,6 +38,7 @@ import { detectPageType, siteTypeOf, type SiteType } from '@/lib/content/page-ty
 import { sanitizeDraftHtml } from '@/lib/content/sanitize-draft-html';
 import { matchPagePrompts } from '@/lib/content/page-prompts';
 import type { LinkCheck } from '@/lib/content/quality-checks';
+import { MAX_SOURCE_SITES, type AiSourceClass } from '@/lib/content/source-class';
 import {
   NO_DRAFT_RULES,
   draftRulesFit,
@@ -676,6 +677,57 @@ export async function checkDraftLinks(
     return { links: body.links ?? [], skipped: body.skipped ?? [] };
   } catch (err) {
     console.error('Failed to check the draft links:', err);
+    return { error: 'failed' };
+  }
+}
+
+/**
+ * The kinds of sites the editor's rules can't place (Quality CE-046, part
+ * b), as the API's model reads them (POST /api/content-pages/source-
+ * classes): only sites the draft links as saved, 20 at a time, each read
+ * kept for every workspace. 'ai_budget' when the workspace's AI budget is
+ * spent; 'off' before Quality's phase 2 is live on the API.
+ */
+export async function classifyDraftSources(
+  id: string,
+  sites: string[],
+): Promise<
+  | { classes: { site: string; kind: AiSourceClass }[]; limited: boolean }
+  | { error: 'invalid' | 'failed' | 'ai_budget' | 'off' }
+> {
+  if (!draftId.safeParse(id).success || !sites.length || sites.length > MAX_SOURCE_SITES) {
+    return { error: 'invalid' };
+  }
+  const supabase = await createClient();
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  if (!session) return { error: 'failed' };
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/content-pages/source-classes`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${session.access_token}`,
+      },
+      body: JSON.stringify({ draftId: id, sites }),
+    });
+    if (res.status === 429) {
+      const body = (await res.json().catch(() => ({}))) as { code?: string };
+      return { error: body.code === 'ai_budget' ? 'ai_budget' : 'failed' };
+    }
+    if (res.status === 404) {
+      const body = (await res.json().catch(() => ({}))) as { code?: string };
+      return { error: body.code === 'off' ? 'off' : 'failed' };
+    }
+    if (!res.ok) return { error: 'failed' };
+    const body = (await res.json()) as {
+      classes?: { site: string; kind: AiSourceClass }[];
+      limited?: boolean;
+    };
+    return { classes: body.classes ?? [], limited: body.limited ?? false };
+  } catch (err) {
+    console.error('Failed to read the draft sources:', err);
     return { error: 'failed' };
   }
 }

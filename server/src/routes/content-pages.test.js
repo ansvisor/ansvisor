@@ -36,7 +36,15 @@ vi.mock('../config/supabase.js', () => ({
     },
   },
 }));
-vi.mock('../lib/plan-guard.js', () => ({ getOrgIdForUser: async () => org }));
+vi.mock('../lib/plan-guard.js', async (importOriginal) => ({
+  PlanLimitError: (await importOriginal()).PlanLimitError,
+  getOrgIdForUser: async () => org,
+}));
+const readSourceClasses = vi.fn();
+vi.mock('../lib/content-source-class.js', async (importOriginal) => ({
+  ...(await importOriginal()),
+  readSourceClasses: (...args) => readSourceClasses(...args),
+}));
 vi.mock('../lib/safe-fetch.js', async (importOriginal) => {
   const actual = await importOriginal();
   return {
@@ -57,6 +65,7 @@ vi.mock('../lib/link-check.js', async (importOriginal) => ({
 
 const { default: router } = await import('./content-pages.js');
 const { PageFetchError } = await import('../lib/safe-fetch.js');
+const { PlanLimitError } = await import('../lib/plan-guard.js');
 
 let server;
 let baseUrl;
@@ -188,5 +197,76 @@ describe('POST /api/content-pages/links', () => {
     res = await checkDraftLinks({ draftId: 'nope' });
     expect(res.status).toBe(400);
     expect(checkLinks).not.toHaveBeenCalled();
+  });
+});
+
+describe('POST /api/content-pages/source-classes (Quality CE-046)', () => {
+  const DRAFT = '5e8cd4c2-2bc4-4fb7-8711-bc0ad1bb4a29';
+  const ask = (body) =>
+    fetch(`${baseUrl}/source-classes`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+  beforeEach(() => {
+    vi.stubEnv('CONTENT_QUALITY_PHASE', '2');
+    draftRow = {
+      brand_id: BRAND,
+      body_html:
+        '<p><a href="https://www.coffee-blog.example/best">a</a> ' +
+        '<a href="https://coffee-blog.example/about">b</a> <a href="/ours">c</a></p>',
+    };
+    readSourceClasses.mockReset().mockResolvedValue({
+      classes: [{ site: 'coffee-blog.example', kind: 'weak' }],
+      limited: false,
+    });
+  });
+  afterEach(() => vi.unstubAllEnvs());
+
+  it('reads only sites the draft links, by their address alone', async () => {
+    const res = await ask({ draftId: DRAFT, sites: ['Coffee-Blog.example', 'elsewhere.example'] });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({
+      classes: [{ site: 'coffee-blog.example', kind: 'weak' }],
+      limited: false,
+    });
+    expect(readSourceClasses).toHaveBeenCalledWith({
+      orgId: 'o1',
+      draftId: DRAFT,
+      sites: ['coffee-blog.example'],
+    });
+  });
+
+  it('asks about no site whose every link the person kept', async () => {
+    draftRow = {
+      ...draftRow,
+      kept_sources: ['https://www.coffee-blog.example/best', 'https://coffee-blog.example/about'],
+    };
+    await ask({ draftId: DRAFT, sites: ['coffee-blog.example'] });
+    expect(readSourceClasses).toHaveBeenCalledWith(expect.objectContaining({ sites: [] }));
+    // One link still not kept: asked about.
+    draftRow = { ...draftRow, kept_sources: ['https://www.coffee-blog.example/best'] };
+    await ask({ draftId: DRAFT, sites: ['coffee-blog.example'] });
+    expect(readSourceClasses).toHaveBeenLastCalledWith(
+      expect.objectContaining({ sites: ['coffee-blog.example'] }),
+    );
+  });
+
+  it('is off before Quality’s phase 2, and says when the AI budget is spent', async () => {
+    vi.stubEnv('CONTENT_QUALITY_PHASE', '1');
+    expect((await ask({ draftId: DRAFT, sites: ['coffee-blog.example'] })).status).toBe(404);
+    vi.stubEnv('CONTENT_QUALITY_PHASE', '2');
+    readSourceClasses.mockRejectedValueOnce(new PlanLimitError('used up', 429));
+    const res = await ask({ draftId: DRAFT, sites: ['coffee-blog.example'] });
+    expect(res.status).toBe(429);
+    expect((await res.json()).code).toBe('ai_budget');
+  });
+
+  it('refuses another workspace’s draft and a malformed ask', async () => {
+    org = 'o2';
+    expect((await ask({ draftId: DRAFT, sites: ['coffee-blog.example'] })).status).toBe(403);
+    expect((await ask({ draftId: 'nope', sites: ['a.example'] })).status).toBe(400);
+    expect((await ask({ draftId: DRAFT, sites: [] })).status).toBe(400);
+    expect(readSourceClasses).not.toHaveBeenCalled();
   });
 });

@@ -92,6 +92,7 @@ describe('getAiUsage', () => {
         { feature: 'improve', percent: 12.5 },
         { feature: 'content', percent: 30 },
         { feature: 'action_center', percent: 0 },
+        { feature: 'quality', percent: 0 },
       ],
     });
     // The period follows the subscription: it renews on the 20th.
@@ -110,6 +111,7 @@ describe('getAiUsage', () => {
       { feature: 'improve', percent: 0 },
       { feature: 'content', percent: 75 },
       { feature: 'action_center', percent: 25 },
+      { feature: 'quality', percent: 0 },
     ]);
   });
 
@@ -122,7 +124,12 @@ describe('getAiUsage', () => {
     spend = [];
     const empty = await guard.getAiUsage('o1');
     expect(empty.percentUsed).toBe(0);
-    expect(empty.features.map((f) => f.feature)).toEqual(['improve', 'content', 'action_center']);
+    expect(empty.features.map((f) => f.feature)).toEqual([
+      'improve',
+      'content',
+      'action_center',
+      'quality',
+    ]);
   });
 
   it('reads just under the budget as just under, and all of it only once spent', async () => {
