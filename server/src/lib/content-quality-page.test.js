@@ -489,6 +489,29 @@ describe('readPage', () => {
     expect(paused.proofs.map((p) => p.kind)).toEqual(['certification', 'award']);
   });
 
+  it('reads nothing new when a link put on a claim only adds a space at its edge', async () => {
+    await read();
+    const row = upserts[0].row;
+    generateObject.mockClear();
+    kept = { ...row, read_at: new Date(NOW - 30_000).toISOString() };
+    const linked = HTML.replace(
+      'and a roll-top.',
+      'and a <a href="https://trailmade.example/tests">roll</a>-top.',
+    );
+    expect(pageOutline(linked).find((b) => b.text?.startsWith('Every Ridge'))?.text).toBe(
+      'Every Ridge 28 is fully waterproof, with welded seams and a roll -top.',
+    );
+    const result = await read({ html: linked });
+    expect(generateObject).not.toHaveBeenCalled();
+    expect(result.pending).toBe(false);
+    // The kept proof, on the block as the page has it now.
+    expect(result.proofs[0]).toEqual({
+      claim: 'fully waterproof',
+      block: 'Every Ridge 28 is fully waterproof, with welded seams and a roll -top.',
+      kind: 'certification',
+    });
+  });
+
   it('reads a kept read for the business as it is now', async () => {
     const block = pageOutline(HTML).find((i) => i.text === SEAMS);
     kept = {
