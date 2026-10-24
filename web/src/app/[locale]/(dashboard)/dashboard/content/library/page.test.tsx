@@ -337,6 +337,15 @@ describe('the Content Library', () => {
     expect(push).not.toHaveBeenCalled();
   });
 
+  it('opens New content once when the URL asks (Content › Editor with no draft)', async () => {
+    window.history.replaceState(null, '', '/dashboard/content/library?new=1');
+    getContentDrafts.mockResolvedValue([]);
+    await renderPage();
+    expect(document.body.textContent).toContain('Pick how you want to start.');
+    // Closed, it doesn't open again on a reload.
+    expect(window.location.search).toBe('');
+  });
+
   it('asks for a brand when none is selected', async () => {
     brandState.activeBrandId = null;
     await renderPage();

@@ -227,7 +227,7 @@ export async function getContentDraft(id: string): Promise<ContentDraft | null> 
   const { data, error } = await supabase
     .from('content_drafts')
     .select(
-      `id, brand_id, title, page_type, page_type_source, method, status, body_html, author, author_id, source_url, rules, kept_sources, action_id, agent_state, agent_state_at, agent_run, updated_at, ${BRAND_SITE}, actions(action_no)`,
+      `id, brand_id, title, page_type, page_type_source, method, status, body_html, author, author_id, source_url, rules, kept_sources, action_id, agent_state, agent_state_at, agent_run, updated_at, archived_at, ${BRAND_SITE}, actions(action_no)`,
     )
     .eq('id', id)
     .maybeSingle();
@@ -256,6 +256,7 @@ export async function getContentDraft(id: string): Promise<ContentDraft | null> 
     agentSince: data.agent_state_at,
     agentRun: agentRunOf(data.agent_run),
     updatedAt: data.updated_at,
+    archivedAt: data.archived_at,
   };
 }
 

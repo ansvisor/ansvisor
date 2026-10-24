@@ -213,6 +213,7 @@ const draft = (over: Partial<ContentDraft> = {}): ContentDraft => ({
   agentSince: null,
   agentRun: null,
   updatedAt: '2026-10-20T10:00:00Z',
+  archivedAt: null,
   ...over,
 });
 
@@ -377,6 +378,18 @@ describe('the content editor', () => {
     // The HTML block is named, not only an icon.
     expect(button('Add an HTML block')!.textContent).toBe('Add HTML');
     expect(container.querySelector('.ProseMirror h1')!.textContent).toBe('Pipeline forecasting');
+  });
+
+  it('remembers the draft for Content › Editor, per brand', async () => {
+    getContentDraft.mockResolvedValue(draft());
+    await renderPage();
+    expect(localStorage.getItem('aeo:content-last-draft:b1')).toBe('d1');
+  });
+
+  it('remembers nothing for a draft that isn’t there', async () => {
+    getContentDraft.mockResolvedValue(null);
+    await renderPage();
+    expect(localStorage.getItem('aeo:content-last-draft:b1')).toBeNull();
   });
 
   it('keeps one H1: Heading 1 is off outside the title', async () => {

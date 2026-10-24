@@ -85,9 +85,15 @@ export function isPageType(value: string | null): value is PageType {
 /** The Library (CE-001 route). */
 export const CONTENT_LIBRARY_PATH = '/dashboard/content/library';
 
+/** The Library with New content open: a new page's start. */
+export const CONTENT_NEW_PATH = `${CONTENT_LIBRARY_PATH}?new=1`;
+
+/** Content › Editor: the draft last opened here, else a new page's start. */
+export const CONTENT_EDITOR_PATH = '/dashboard/content/editor';
+
 /** Where a draft opens: the editor (CE-004). */
 export function contentEditorPath(draftId: string) {
-  return `/dashboard/content/editor/${draftId}`;
+  return `${CONTENT_EDITOR_PATH}/${draftId}`;
 }
 
 /**
@@ -171,6 +177,8 @@ export interface ContentDraft {
   /** Which run that is, for every device: a failed rewrite is tried again as one. */
   agentRun: AgentRun;
   updatedAt: string;
+  /** When an admin or manager archived it (00233): Content › Editor doesn't go back to it. */
+  archivedAt: string | null;
 }
 
 /**
