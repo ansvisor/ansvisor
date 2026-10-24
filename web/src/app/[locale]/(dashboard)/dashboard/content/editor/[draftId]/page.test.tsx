@@ -4,7 +4,7 @@ import { NextIntlClientProvider } from 'next-intl';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import messages from '../../../../../../../../messages/en.json';
 import type { Editor } from '@tiptap/core';
-import { RoleProvider } from '@/components/providers/role-provider';
+import { RoleProvider, type TeamRole } from '@/components/providers/role-provider';
 import type { ContentDraft } from '@/lib/content/drafts';
 import type { DraftSuggestion } from '@/lib/content/suggestions';
 import { passageKey, type CitedPassage } from '@/lib/content/cited-passages';
@@ -17,6 +17,7 @@ const unmarkContentDraftReady = vi.fn();
 const saveContentDraft = vi.fn();
 const setContentDraftPageType = vi.fn();
 const setContentDraftAuthor = vi.fn();
+const keepDraftSource = vi.fn();
 const checkDraftLinks = vi.fn();
 const getSiteTrust = vi.fn();
 vi.mock('@/lib/actions/audits', () => ({
@@ -75,6 +76,7 @@ vi.mock('@/lib/actions/content-drafts', () => ({
   saveContentDraft: (...args: unknown[]) => saveContentDraft(...args),
   setContentDraftPageType: (...args: unknown[]) => setContentDraftPageType(...args),
   setContentDraftAuthor: (...args: unknown[]) => setContentDraftAuthor(...args),
+  keepDraftSource: (...args: unknown[]) => keepDraftSource(...args),
   checkDraftLinks: (...args: unknown[]) => checkDraftLinks(...args),
 }));
 vi.mock('next/navigation', () => ({ useParams: () => ({ draftId: 'd1' }) }));
@@ -111,7 +113,10 @@ const brandState = vi.hoisted(() => ({
   activeBrandId: 'b1' as string | null,
   brands: [{ id: 'b1' }, { id: 'b2' }],
   setActiveBrand: vi.fn(),
+  updateBrand: vi.fn(),
 }));
+const updateBrand = vi.hoisted(() => vi.fn());
+vi.mock('@/lib/actions/brand', () => ({ updateBrand }));
 vi.mock('@/stores/use-brand-store', () => ({
   useBrandStore: (selector: (state: typeof brandState) => unknown) => selector(brandState),
 }));
@@ -129,6 +134,9 @@ vi.mock('mammoth', () => ({
 vi.mock('sonner', () => ({ toast }));
 const saveBlob = vi.hoisted(() => vi.fn());
 vi.mock('@/lib/download', () => ({ saveBlob }));
+const readDraftCms = vi.hoisted(() => vi.fn());
+const sendPagesToCms = vi.hoisted(() => vi.fn());
+vi.mock('@/lib/content/cms-send-client', () => ({ readDraftCms, sendPagesToCms }));
 
 (
   globalThis as typeof globalThis & {
@@ -191,6 +199,7 @@ const draft = (over: Partial<ContentDraft> = {}): ContentDraft => ({
   author: 'agent',
   authorId: null,
   rules: { set: null, source: null, overrides: {}, textRules: [] },
+  keptSources: [],
   action: null,
   agentState: null,
   agentSince: null,
@@ -202,11 +211,11 @@ const draft = (over: Partial<ContentDraft> = {}): ContentDraft => ({
 let container: HTMLDivElement;
 let root: Root;
 
-async function renderPage() {
+async function renderPage(role: TeamRole = 'admin') {
   await act(async () => {
     root.render(
       <NextIntlClientProvider locale="en" messages={messages}>
-        <RoleProvider role="admin">
+        <RoleProvider role={role}>
           <ContentEditorPage />
         </RoleProvider>
       </NextIntlClientProvider>,
@@ -260,10 +269,11 @@ beforeEach(() => {
   readDraftAiUsage.mockReset().mockResolvedValue(3.7);
   getContentDraft.mockReset();
   markContentDraftReady.mockReset();
-  unmarkContentDraftReady.mockReset().mockResolvedValue('in_review');
+  unmarkContentDraftReady.mockReset().mockResolvedValue({ status: 'in_review', tasksReopened: 0 });
   saveBlob.mockReset();
   setContentDraftPageType.mockReset().mockResolvedValue(undefined);
   setContentDraftAuthor.mockReset().mockResolvedValue(undefined);
+  keepDraftSource.mockReset();
   checkDraftLinks.mockReset().mockResolvedValue({ links: [], skipped: [] });
   getSiteTrust.mockReset().mockRejectedValue(new Error('not in this test'));
   getContentAuthors.mockReset().mockResolvedValue(null);
@@ -292,6 +302,8 @@ beforeEach(() => {
   localStorage.clear();
   brandState.activeBrandId = 'b1';
   brandState.setActiveBrand.mockReset();
+  brandState.updateBrand.mockReset();
+  updateBrand.mockReset();
   toast.mockReset();
   toast.success.mockReset();
   toast.error.mockReset();
@@ -484,6 +496,79 @@ describe('the content editor', () => {
         'Blog post',
         'Feature page',
       ]);
+    });
+
+    describe('its site type (Quality CE-056)', () => {
+      afterEach(() => {
+        delete process.env.NEXT_PUBLIC_CONTENT_QUALITY_PHASE;
+      });
+
+      it('is set for the whole brand from the menu once phase 2 is live', async () => {
+        process.env.NEXT_PUBLIC_CONTENT_QUALITY_PHASE = '2';
+        updateBrand.mockResolvedValue({ id: 'b1', siteType: 'ecommerce' });
+        getContentDraft.mockResolvedValue(
+          draft({ siteType: 'b2b', pageType: 'feature_page', pageTypeSource: 'user' }),
+        );
+        await renderPage();
+        expect(getMyRuleSets).toHaveBeenCalledTimes(1);
+        const items = await openTypes();
+        expect(items.slice(0, 4).map((item) => item.textContent)).toEqual([
+          'B2B SaaS',
+          'E-commerce',
+          'B2C',
+          'Feature page',
+        ]);
+        // No site type picked yet: the one shown is guessed.
+        expect(document.body.textContent).toContain('Guessed until someone picks one.');
+        await act(async () => items[1].click());
+        expect(updateBrand).toHaveBeenCalledWith('b1', { siteType: 'ecommerce' });
+        expect(brandState.updateBrand).toHaveBeenCalledWith('b1', {
+          id: 'b1',
+          siteType: 'ecommerce',
+        });
+        expect(toast).toHaveBeenCalledWith('Site type set to E-commerce for the whole brand.');
+        // My rules are kept per site type: read again once it is saved.
+        expect(getMyRuleSets).toHaveBeenCalledTimes(2);
+        // A shop's page types now, the type picked kept on the list.
+        const types = (await openTypes()).map((item) => item.textContent);
+        expect(types.slice(3, 5)).toEqual(['Product page', 'Category page']);
+        expect(types.at(-1)).toBe('Feature page');
+
+        // Kept as it was when it can't be saved.
+        vi.spyOn(console, 'error').mockImplementation(() => {});
+        updateBrand.mockRejectedValueOnce(new Error('rls'));
+        await act(async () =>
+          document.querySelectorAll<HTMLElement>('[role="menuitemradio"]')[2].click(),
+        );
+        expect(toast.error).toHaveBeenCalledWith("Couldn't change the site type. Try again.");
+        expect((await openTypes())[3].textContent).toBe('Product page');
+      });
+
+      it('saves a detected page type again for the new site type', async () => {
+        process.env.NEXT_PUBLIC_CONTENT_QUALITY_PHASE = '2';
+        updateBrand.mockResolvedValue({ id: 'b1', siteType: 'ecommerce' });
+        getContentDraft.mockResolvedValue(draft({ siteType: 'b2b', pageTypeSource: 'detected' }));
+        await renderPage();
+        await act(async () => (await openTypes())[1].click());
+        // The server reads the type again on a save (after the autosave's pause).
+        await vi.waitFor(() => expect(saveContentDraft).toHaveBeenCalledTimes(1), {
+          timeout: 3_000,
+        });
+      });
+
+      it('stays in Brand settings for members, and before phase 2', async () => {
+        process.env.NEXT_PUBLIC_CONTENT_QUALITY_PHASE = '2';
+        getContentDraft.mockResolvedValue(draft({ siteType: 'b2b', pageType: 'feature_page' }));
+        await renderPage('analyst');
+        expect((await openTypes())[0].textContent).toBe('Feature page');
+        await act(async () => root.unmount());
+        root = createRoot(container);
+
+        process.env.NEXT_PUBLIC_CONTENT_QUALITY_PHASE = '1';
+        await renderPage();
+        expect((await openTypes())[0].textContent).toBe('Feature page');
+        expect(updateBrand).not.toHaveBeenCalled();
+      });
     });
 
     it('puts the type back when picking it fails', async () => {
@@ -789,7 +874,7 @@ describe('the content editor', () => {
     expect(toast.error).toHaveBeenCalledWith("Couldn't move it back to review.");
     expect(button('Ready: click to move it back to review')).toBeDefined();
 
-    unmarkContentDraftReady.mockResolvedValueOnce('published');
+    unmarkContentDraftReady.mockResolvedValueOnce({ status: 'published', tasksReopened: 0 });
     await act(async () => button('Ready: click to move it back to review')!.click());
     expect(toast).toHaveBeenCalledWith('Its status is now Published, so it stays.');
     expect(button('Published')!.getAttribute('aria-disabled')).toBe('true');
@@ -859,6 +944,13 @@ describe('the content editor', () => {
       "Marked ready, and its task in Action AC-214 is done. Publish it on your site when you're ready.",
     );
     expect(note.textContent).toBe('This draft is the work of Action AC-214.');
+
+    // Taken back, the task Ready completed is open again.
+    unmarkContentDraftReady.mockResolvedValueOnce({ status: 'in_review', tasksReopened: 1 });
+    await act(async () => button('Ready: click to move it back to review')!.click());
+    expect(toast).toHaveBeenCalledWith(
+      'Back in review, and its task in Action AC-214 is open again.',
+    );
   });
 
   describe('history', () => {
@@ -2449,6 +2541,107 @@ describe('the side panel', () => {
     });
   });
 
+  describe('Sources by kind (Quality CE-046)', () => {
+    afterEach(() => {
+      delete process.env.NEXT_PUBLIC_CONTENT_QUALITY_PHASE;
+    });
+    const reddit = 'https://www.reddit.com/r/coffee/1';
+    const sourced = draft({
+      bodyHtml:
+        '<h1>Pour-over coffee</h1>' +
+        `<p>People swear by it on <a href="${reddit}">a thread</a>.</p>` +
+        '<p>Brew at 94 °C, as <a href="https://www.reuters.com/x">Reuters</a> reported.</p>',
+    });
+    const weakMarks = () => container.querySelectorAll('.ProseMirror .decoration-wavy');
+
+    it('underlines a weak source in the draft, and keeps it on Keep', async () => {
+      process.env.NEXT_PUBLIC_CONTENT_QUALITY_PHASE = '2';
+      getDraftSources.mockResolvedValue({
+        data: {
+          prompts: [],
+          fanouts: [],
+          citedPages: [],
+          gscQueries: [],
+          brandDomains: ['acme.com'],
+          competitorDomains: [],
+        },
+        choices: [],
+      });
+      keepDraftSource.mockResolvedValue([reddit]);
+      getContentDraft.mockResolvedValue(sourced);
+      window.innerWidth = 1440;
+      await renderPage();
+      expect(weakMarks()).toHaveLength(1);
+      expect(weakMarks()[0].textContent).toBe('a thread');
+      expect(weakMarks()[0].getAttribute('title')).toContain('A weak source');
+
+      const chip = [...container.querySelectorAll<HTMLButtonElement>('header button')].find((b) =>
+        b.textContent?.startsWith('Quality'),
+      )!;
+      await act(async () => chip.click());
+      const row = [...panel()!.querySelectorAll('li')].find((li) =>
+        li.textContent?.includes('weak:'),
+      )!;
+      const keep = [...row.querySelectorAll('button')].find((b) => b.textContent === 'Keep')!;
+      await act(async () => keep.click());
+      expect(keepDraftSource).toHaveBeenCalledWith('d1', reddit);
+      expect(weakMarks()).toHaveLength(0);
+      expect(panel()!.textContent).not.toContain('weak:');
+    });
+
+    it('marks every link to it as the page changes', async () => {
+      process.env.NEXT_PUBLIC_CONTENT_QUALITY_PHASE = '2';
+      getDraftSources.mockResolvedValue({
+        data: {
+          prompts: [],
+          fanouts: [],
+          citedPages: [],
+          gscQueries: [],
+          brandDomains: ['acme.com'],
+          competitorDomains: [],
+        },
+        choices: [],
+      });
+      getContentDraft.mockResolvedValue(sourced);
+      await renderPage();
+      expect(weakMarks()).toHaveLength(1);
+      // The page replaced (as a restore or the HTML view does): both links to it are marked.
+      await act(async () => button('Edit as HTML')!.click());
+      const source = container.querySelector('textarea')!;
+      await act(async () => {
+        Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!.call(
+          source,
+          `<h1>Pour-over coffee</h1><p>One <a href="${reddit}">thread</a>.</p>` +
+            `<p>And <a href="${reddit}">the same thread</a>.</p>`,
+        );
+        source.dispatchEvent(new Event('input', { bubbles: true }));
+      });
+      await act(async () => button('Back to visual')!.click());
+      expect([...weakMarks()].map((mark) => mark.textContent)).toEqual([
+        'thread',
+        'the same thread',
+      ]);
+    });
+
+    it('reads no source’s kind before phase 2', async () => {
+      process.env.NEXT_PUBLIC_CONTENT_QUALITY_PHASE = '1';
+      getDraftSources.mockResolvedValue({
+        data: {
+          prompts: [],
+          fanouts: [],
+          citedPages: [],
+          gscQueries: [],
+          brandDomains: ['acme.com'],
+          competitorDomains: [],
+        },
+        choices: [],
+      });
+      getContentDraft.mockResolvedValue(sourced);
+      await renderPage();
+      expect(weakMarks()).toHaveLength(0);
+    });
+  });
+
   describe('Author (CE-038)', () => {
     const ada = {
       id: 'a1',
@@ -2964,6 +3157,161 @@ describe('the side panel', () => {
     });
   });
 
+  describe('Send to CMS (#1331)', () => {
+    beforeEach(() => {
+      readDraftCms.mockReset().mockResolvedValue({ fields: {}, publishedUrl: null, last: null });
+      sendPagesToCms.mockReset().mockResolvedValue({
+        ok: true,
+        deliveries: [{ id: 'x1', draftId: 'd1', status: 'sent' }],
+      });
+      getContentAuthors.mockResolvedValue({
+        authors: [],
+        brands: [{ id: 'b1', name: 'Acme' }],
+        me: { id: 'u1', role: 'admin' },
+      });
+    });
+    afterEach(() => {
+      delete process.env.NEXT_PUBLIC_CONTENT_QUALITY_PHASE;
+    });
+    const dialog = () => document.querySelector('[role="dialog"]');
+    const inDialog = (name: string) =>
+      [...document.querySelectorAll<HTMLButtonElement>('[role="dialog"] button')].find(
+        (b) => b.textContent === name,
+      )!;
+
+    it('sends the page to the brand’s webhook from the header', async () => {
+      getContentDraft.mockResolvedValue(draft());
+      await renderPage();
+      await act(async () => button('Send to CMS')!.click());
+      expect(dialog()!.textContent).toContain('Send to CMS');
+      expect(document.querySelector<HTMLInputElement>('#cms-slug')!.value).toBe(
+        'pipeline-forecasting',
+      );
+      await act(async () => inDialog('Send').click());
+      expect(sendPagesToCms).toHaveBeenCalledWith('b1', [
+        expect.objectContaining({
+          draftId: 'd1',
+          title: 'Pipeline forecasting',
+          slug: 'pipeline-forecasting',
+          html: '<p>Teams trust it.</p>',
+          // Authors come with Quality (CE-038): while it is off, none goes.
+          author: null,
+        }),
+      ]);
+      expect(dialog()).toBeNull();
+    });
+
+    it('opens Before you publish first while Quality is on', async () => {
+      process.env.NEXT_PUBLIC_CONTENT_QUALITY_PHASE = '1';
+      getContentDraft.mockResolvedValue(draft({ pageType: 'blog_post' }));
+      await renderPage();
+      await act(async () => button('Send to CMS')!.click());
+      expect(dialog()!.textContent).toContain('Before you publish');
+      expect(readDraftCms).not.toHaveBeenCalled();
+      await act(async () => inDialog('Continue to send').click());
+      expect(dialog()!.textContent).toContain('Meta description');
+      expect(readDraftCms).toHaveBeenCalledWith('d1');
+      // Closed, so no open dialog is left for the tests after.
+      await act(async () => inDialog('Cancel').click());
+      expect(dialog()).toBeNull();
+    });
+
+    const editAsHtml = async (html: string) => {
+      await act(async () => button('Edit as HTML')!.click());
+      const source = container.querySelector('textarea')!;
+      await act(async () => {
+        Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!.call(
+          source,
+          html,
+        );
+        source.dispatchEvent(new Event('input', { bubbles: true }));
+      });
+      await act(async () => button('Back to visual')!.click());
+    };
+
+    it('saves what is waiting before it sends, as Mark ready does', async () => {
+      getContentDraft.mockResolvedValue(draft());
+      await renderPage();
+      await editAsHtml('<h1>Pipeline forecasting</h1><p>Edited.</p>');
+      expect(saveContentDraft).not.toHaveBeenCalled();
+      await act(async () => button('Send to CMS')!.click());
+      await act(async () => {});
+      expect(saveContentDraft).toHaveBeenCalledWith(
+        'd1',
+        expect.objectContaining({ bodyHtml: '<h1>Pipeline forecasting</h1><p>Edited.</p>' }),
+      );
+      expect(saveContentDraft.mock.invocationCallOrder[0]).toBeLessThan(
+        readDraftCms.mock.invocationCallOrder[0],
+      );
+      expect(document.querySelector<HTMLTextAreaElement>('#cms-meta-description')!.value).toBe(
+        'Edited.',
+      );
+      await act(async () => inDialog('Cancel').click());
+      expect(dialog()).toBeNull();
+    });
+
+    it('sends no page it can’t save', async () => {
+      // A teammate or the agent changed the page meanwhile: this tab's version can't go.
+      saveContentDraft.mockResolvedValue({ ok: false, reason: 'conflict' });
+      getContentDraft.mockResolvedValue(draft());
+      await renderPage();
+      await editAsHtml('<h1>Pipeline forecasting</h1><p>Edited.</p>');
+      await act(async () => button('Send to CMS')!.click());
+      await act(async () => {});
+      expect(toast.error).toHaveBeenCalledWith(
+        "The page has changes that aren't saved, so it wasn't sent.",
+      );
+      expect(dialog()).toBeNull();
+      expect(readDraftCms).not.toHaveBeenCalled();
+    });
+
+    it('waits for HTML edited in the HTML view to be applied', async () => {
+      getContentDraft.mockResolvedValue(draft());
+      await renderPage();
+      await act(async () => button('Edit as HTML')!.click());
+      const source = container.querySelector('textarea')!;
+      await act(async () => {
+        Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!.call(
+          source,
+          '<h1>Pipeline forecasting</h1><p>Not applied.</p>',
+        );
+        source.dispatchEvent(new Event('input', { bubbles: true }));
+      });
+      await act(async () => button('Send to CMS')!.click());
+      expect(toast.error).toHaveBeenCalledWith(
+        "Apply or discard your HTML changes first: they aren't in the page yet.",
+      );
+      expect(dialog()).toBeNull();
+      expect(saveContentDraft).not.toHaveBeenCalled();
+    });
+
+    it('takes one click while it saves', async () => {
+      let saved: (value: unknown) => void = () => {};
+      saveContentDraft.mockReturnValue(new Promise((resolve) => (saved = resolve)));
+      getContentDraft.mockResolvedValue(draft());
+      await renderPage();
+      await editAsHtml('<h1>Pipeline forecasting</h1><p>Edited.</p>');
+      await act(async () => button('Send to CMS')!.click());
+      expect(button('Send to CMS')!.disabled).toBe(true);
+      await act(async () => button('Send to CMS')!.click());
+      expect(saveContentDraft).toHaveBeenCalledTimes(1);
+      await act(async () => saved({ ok: true, updatedAt: '2026-10-20T10:01:00Z', bodyHash: 'h1' }));
+      await act(async () => {});
+      expect(dialog()!.textContent).toContain('Send to CMS');
+      await act(async () => inDialog('Cancel').click());
+    });
+
+    it('is for admins and managers only', async () => {
+      getContentDraft.mockResolvedValue(draft());
+      await renderPage('analyst');
+      expect(button('Send to CMS')).toBeUndefined();
+      await act(async () => root.unmount());
+      root = createRoot(container);
+      await renderPage('manager');
+      expect(button('Send to CMS')).toBeDefined();
+    });
+  });
+
   describe('Export (CE-057)', () => {
     beforeEach(() => {
       process.env.NEXT_PUBLIC_CONTENT_QUALITY_PHASE = '1';
@@ -2997,6 +3345,19 @@ describe('the side panel', () => {
       expect(dialog()!.textContent).toContain('Meta titlePipeline forecasting');
       expect(dialog()!.textContent).toContain('AuthorAcme Team → your CMS author field');
       expect(inDialog('Copy for Webflow').disabled).toBe(false);
+    });
+
+    it('names the team in the page’s language in the CMS author field', async () => {
+      brandState.brands = [{ id: 'b1', language: 'tr' } as never, { id: 'b2' }];
+      try {
+        getContentDraft.mockResolvedValue(draft({ pageType: 'blog_post' }));
+        await renderPage();
+        await act(async () => button('Export')!.click());
+        await act(async () => inDialog('Continue to export').click());
+        expect(dialog()!.textContent).toContain('AuthorAcme Ekibi → your CMS author field');
+      } finally {
+        brandState.brands = [{ id: 'b1' }, { id: 'b2' }];
+      }
     });
 
     it('reads Ready to paste as the links are read, a refused read as unread', async () => {
@@ -3336,8 +3697,12 @@ describe('the side panel', () => {
       await renderPage();
       await act(async () => nextButton()!.click());
       expect(basket()).not.toBeNull();
-      const elsewhere = document.createElement('button');
-      document.body.append(elsewhere);
+      // The page's own text, as a reader clicks back into it: a button put in
+      // the document after the basket opened reads as another app's, which a
+      // popover doesn't close for.
+      const elsewhere = container.querySelector<HTMLElement>('.ProseMirror')!;
+      // ProseMirror reads a click's place from the point: jsdom has none.
+      document.elementFromPoint = () => null;
       try {
         await act(async () => {
           elsewhere.focus();
@@ -3349,7 +3714,7 @@ describe('the side panel', () => {
         expect(basket()).toBeNull();
         expect(document.activeElement).toBe(elsewhere);
       } finally {
-        elsewhere.remove();
+        delete (document as { elementFromPoint?: unknown }).elementFromPoint;
       }
     });
 

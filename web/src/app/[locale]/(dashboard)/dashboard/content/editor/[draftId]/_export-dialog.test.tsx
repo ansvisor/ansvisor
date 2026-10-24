@@ -205,7 +205,8 @@ describe('ExportDialog', () => {
       },
       linksPending: 2,
     });
-    expect(dialog().textContent).toContain('3 links, still being read');
+    // Two of the three unread, both of them still coming.
+    expect(dialog().textContent).toContain('2 of 3 links still being read');
     expect(dialog().textContent).not.toContain('alt text');
     expect(dialog().textContent).toContain(
       'HTML blocks keep their own code · check it2 elements keep a class, a style or a script',
@@ -221,6 +222,30 @@ describe('ExportDialog', () => {
     });
     expect(dialog().textContent).toContain("1 of 1 links couldn't be read");
     expect(dialog().textContent).not.toContain('answers');
+    // One read still coming for two unread: the other couldn't be read.
+    await render({
+      html: '<p>Done.</p>',
+      checks: {
+        links: { count: 3, read: 1, broken: 0 },
+        images: { count: 0, withoutAlt: 0 },
+        ownCode: 0,
+      },
+      linksPending: 1,
+    });
+    expect(dialog().textContent).toContain(
+      "1 of 3 links still being read, 1 couldn't be read · check itOpen them yourself before you publish.",
+    );
+    // More reads coming than links unread (another page's): only the unread are.
+    await render({
+      html: '<p>Done.</p>',
+      checks: {
+        links: { count: 3, read: 2, broken: 0 },
+        images: { count: 0, withoutAlt: 0 },
+        ownCode: 0,
+      },
+      linksPending: 4,
+    });
+    expect(dialog().textContent).toContain('1 of 3 links still being read · check it');
   });
 
   it('gives the page fields, each with Copy', async () => {
@@ -241,6 +266,9 @@ describe('ExportDialog', () => {
 
   it('downloads Word and Markdown with the page fields, and remembers the destination', async () => {
     await render({ html: '<p>Done.</p>' });
+    // The dialog moves focus in after it opens: once it has, it won't take
+    // focus back from the arrow keys (it did on a busy machine).
+    await vi.waitFor(() => expect(dialog().contains(document.activeElement)).toBe(true));
     // Arrow keys move along the destinations.
     destination('Webflow').focus();
     await act(async () => {

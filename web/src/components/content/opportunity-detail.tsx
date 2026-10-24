@@ -22,6 +22,8 @@ import {
   Info,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { HeaderWithAiUsage } from '@/components/ai-usage/ai-usage-meter';
+import { AiUsageBanner } from '@/components/ai-usage/ai-usage-banner';
 import { Link, useRouter } from '@/i18n/navigation';
 import {
   getOpportunity,
@@ -418,7 +420,7 @@ export function OpportunityDetail({
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
-        <LoadingDots size="md" className="text-muted-foreground" />
+        <LoadingDots size="md" label={t('loadingOpportunity')} className="text-muted-foreground" />
       </div>
     );
   }
@@ -478,35 +480,41 @@ export function OpportunityDetail({
     // full width or the drawer's — rather than the viewport.
     <div className="@container space-y-6">
       <div className="space-y-3">
-        <div className="flex items-start gap-3">
-          {!inDrawer && (
-            <Link href="/dashboard/content">
-              <Button variant="ghost" size="icon" aria-label="Go back to content list">
-                <ArrowLeft className="h-4 w-4" />
-              </Button>
-            </Link>
-          )}
-          <div className="min-w-0 flex-1">
-            <h1 className="text-xl font-bold tracking-tight">{opportunity.title}</h1>
-            {sd.alternativeOf && (
-              <p className="mt-1 text-xs text-muted-foreground">
-                <Badge variant="outline" className="mr-1.5 text-[10px] font-normal">
-                  {t('alternative.badge')}
-                </Badge>
-                {t('alternative.of')}{' '}
-                <Link
-                  href={`/dashboard/content?opportunity=${sd.alternativeOf.id}`}
-                  className="text-primary hover:underline"
-                >
-                  {sd.alternativeOf.title}
-                </Link>
-              </p>
+        {/* The month's AI usage at the row's right, as on every page, also in
+            the drawer, which covers the Content page's header; there it
+            leaves room for the drawer's close button (top-3 right-3, 28 px).
+            The banner follows the whole header block. */}
+        <HeaderWithAiUsage banner={false} className={inDrawer ? 'pr-8' : undefined}>
+          <div className="flex items-start gap-3">
+            {!inDrawer && (
+              <Link href="/dashboard/content">
+                <Button variant="ghost" size="icon" aria-label="Go back to content list">
+                  <ArrowLeft className="h-4 w-4" />
+                </Button>
+              </Link>
             )}
-            {opportunity.description && (
-              <p className="text-sm text-muted-foreground mt-1">{opportunity.description}</p>
-            )}
+            <div className="min-w-0 flex-1">
+              <h1 className="text-xl font-bold tracking-tight">{opportunity.title}</h1>
+              {sd.alternativeOf && (
+                <p className="mt-1 text-xs text-muted-foreground">
+                  <Badge variant="outline" className="mr-1.5 text-[10px] font-normal">
+                    {t('alternative.badge')}
+                  </Badge>
+                  {t('alternative.of')}{' '}
+                  <Link
+                    href={`/dashboard/content?opportunity=${sd.alternativeOf.id}`}
+                    className="text-primary hover:underline"
+                  >
+                    {sd.alternativeOf.title}
+                  </Link>
+                </p>
+              )}
+              {opportunity.description && (
+                <p className="text-sm text-muted-foreground mt-1">{opportunity.description}</p>
+              )}
+            </div>
           </div>
-        </div>
+        </HeaderWithAiUsage>
 
         <div className="flex flex-wrap items-center gap-2">
           <Badge
@@ -601,6 +609,7 @@ export function OpportunityDetail({
           onDismiss={opportunity.status === 'new' ? () => setDismissOpen(true) : undefined}
         />
       </div>
+      <AiUsageBanner />
 
       {sd.reopened && ['new', 'reviewed'].includes(opportunity.status) && (
         <div className="rounded-md border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm">

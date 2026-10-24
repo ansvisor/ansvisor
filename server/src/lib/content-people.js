@@ -12,9 +12,11 @@ import { logger } from './logger.js';
  *
  * A name is read where a person is plainly meant: after Dr./Prof./Mr./Ms.,
  * next to a role ("CEO Jane Doe", "Jane Doe, head of sales", "Jane Doe
- * (CEO)"), or with a verb only people do ("Jane Doe said", "told Jane Doe",
- * "Ayşe Yılmaz'a göre"); a product or a company recommends, adds or
- * describes too ("Google Ads recommends"). A name or a quote is known when
+ * (CEO)", "Geschäftsführerin Anna Schmidt", "pazarlama müdürü Ayşe
+ * Yılmaz"), or with a verb only people do ("Jane Doe said", "told Jane
+ * Doe"); a product or a company recommends, adds or describes too ("Google
+ * Ads recommends"), and "according to" / "…'a göre" go with a tool as well
+ * ("Google Analytics'e göre"). A name or a quote is known when
  * what the agent was given has it as whole words ("Chen" isn't in
  * "kitchen"). A quoted sentence is two words or more in
  * quotation marks next to speech, four or more anywhere, or a blockquote or
@@ -116,35 +118,101 @@ const ROLE_WORDS = [
   'trainer',
   'chef',
   'barista',
+];
+/** German roles: nouns, so written with a capital ("Geschäftsführerin Anna Schmidt"). */
+const ROLE_WORDS_DE = [
   'gründer',
   'gründerin',
   'geschäftsführer',
   'geschäftsführerin',
-  'kurucu',
-  'uzman',
-  'müdür',
-  'direktör',
+  'leiter',
+  'leiterin',
+  'experte',
+  'expertin',
+  'inhaber',
+  'inhaberin',
+  'direktor',
+  'direktorin',
+  'sprecher',
+  'sprecherin',
 ];
+/**
+ * Not read before a name: "Leiter" is a ladder too, and a title follows it
+ * ("Leiter Vertrieb Europa"). After a name, and with a verb, it still is.
+ */
+const NOT_BEFORE_NAME = new Set(['leiter', 'leiterin']);
+/** Turkish roles ("pazarlama müdürü", "kurucumuz"), with a capital at a sentence's start. */
+const ROLE_WORDS_TR = ['kurucu', 'uzman', 'müdür', 'direktör', 'yönetici', 'danışman'];
+/** Words of a Turkish title around a role, not of the name ("Kurucu Ortak", "Müdür Yardımcısı"). */
+const TITLE_WORDS_TR = ['ortak', 'ortağ', 'yardımcı'];
+/**
+ * Departments and features that follow a role in a title or a product name,
+ * not a person's name ("Uzman Destek Ekibi", "Direktor Vertrieb Europa"):
+ * no name is read right after a role when one comes next, and one is
+ * skipped as a role is. A business right after a role ("Inhaberin Café
+ * Sonnenschein") still reads as a person: German puts "des" or "vom"
+ * between them, so it is rare.
+ */
+const TITLE_NOUNS = new Set(
+  (
+    'destek ekip ekibi panel paneli hizmet hizmeti hizmetleri satış pazarlama finans teknik ürün müşteri ' +
+    'vertrieb marketing technik finanzen produkt personal einkauf entwicklung forschung kommunikation'
+  ).split(' '),
+);
+/**
+ * A Turkish role's possessive. "-(ı)mız" is the speaker's own ("kurucumuz
+ * Ali Kaya"): a person. Bare "-(s)ı" may name a trade ("bir pazarlama
+ * uzmanı Google Analytics'i açar"), so a name after it is read only before
+ * "'a göre", a verb said of people or a sentence's end.
+ */
+const TR_OURS = String.raw`(?:[ıiuü]?m[ıiuü]z)?`;
+const TR_ITS = String.raw`(?:[ıiuü]|s[ıiuü])`;
+const TR_ANY = String.raw`(?:${TR_ITS}|[ıiuü]?m[ıiuü]z)?`;
 const ABBREVIATIONS = new Set(['ceo', 'cto', 'cfo', 'coo', 'cmo', 'vp']);
 const spaced = (role) => role.replace(/ /g, String.raw`\s+`);
-/** A role as written in a sentence: lowercase, or an abbreviation ("CEO"). */
-const ROLE_LOWER = `(?:${ROLE_WORDS.map((r) => (ABBREVIATIONS.has(r) ? r.toUpperCase() : spaced(r))).join('|')})`;
-/** A role in either case ("Head of Sales", "head of sales"). */
-const ROLE_ANY = `(?:${ROLE_WORDS.map((r) =>
-  ABBREVIATIONS.has(r) ? r.toUpperCase() : `[${r[0].toUpperCase()}${r[0]}]${spaced(r.slice(1))}`,
-).join('|')})`;
-/** Role words, to tell them from the name after them ("Founder Jane Doe"). */
-const ROLE_SET = new Set(ROLE_WORDS.filter((r) => !r.includes(' ')));
+/** A role with its first letter in either case. */
+const eitherCase = (role) =>
+  `[${role[0].toLocaleUpperCase('tr')}${role[0].toUpperCase()}${role[0]}]${spaced(role.slice(1))}`;
+/**
+ * A role as written before a name: English lowercase, or an abbreviation
+ * ("CEO"), so a product called "Director Pro" isn't one; German and Turkish
+ * in either case, a Turkish one bare or with "-(ı)mız".
+ */
+const ROLE_LOWER = `(?:${[
+  ...ROLE_WORDS.map((r) => (ABBREVIATIONS.has(r) ? r.toUpperCase() : spaced(r))),
+  ...ROLE_WORDS_DE.filter((r) => !NOT_BEFORE_NAME.has(r)).map(eitherCase),
+  ...ROLE_WORDS_TR.map((r) => eitherCase(r) + TR_OURS),
+].join('|')})`;
+/**
+ * A Turkish role with "-(s)ı" ("müdürü"): a name after it is read only
+ * before "'a göre", a verb said of people or a sentence's end.
+ */
+const ROLE_TR_ITS = `(?:${ROLE_WORDS_TR.map((r) => eitherCase(r) + TR_ITS).join('|')})`;
+/** A role in either case, after a name ("Head of Sales", "pazarlama müdürü"). */
+const ROLE_ANY = `(?:${[
+  ...ROLE_WORDS.map((r) => (ABBREVIATIONS.has(r) ? r.toUpperCase() : eitherCase(r))),
+  ...ROLE_WORDS_DE.map(eitherCase),
+  ...ROLE_WORDS_TR.map((r) => eitherCase(r) + TR_ANY),
+].join('|')})`;
+/** Role and title words, to tell them from the name after them ("Founder Jane Doe", "Müdürü Ayşe"). */
+const ROLE_SET = new Set([...ROLE_WORDS, ...ROLE_WORDS_DE].filter((r) => !r.includes(' ')));
+const ROLE_TR = new RegExp(
+  `^(?:${[...ROLE_WORDS_TR, ...TITLE_WORDS_TR].join('|')})${TR_ANY}$`,
+  'u',
+);
+const isRole = (lower) => ROLE_SET.has(lower) || ROLE_TR.test(lower) || TITLE_NOUNS.has(lower);
+/** No title word next, as the first word after a role ("Yönetici Paneli Giriş Sayfası"). */
+const NOT_TITLE_NEXT = `(?!(?:${[...TITLE_NOUNS].map(eitherCase).join('|')})(?!\\p{L}))`;
 
 /** Speech, read with a quote: whoever or whatever says it, it is a quote. */
-const SPEECH = String.raw`(?:says|said|told|tells|explains|explained|notes|noted|writes|wrote|recalls|recalled|adds|added|argues|argued|believes|warns|warned|states|stated|puts it|put it|emphasi[sz]es|emphasi[sz]ed|suggests|suggested|recommends|recommended|advises|advised|points out|pointed out|shares|shared|observes|observed|insists|insisted|admits|admitted|comments|commented|agrees|agreed|claims|claimed|predicts|predicted|describes|described|sagt|sagte|meint|erklärt|dit|explique|dice|explica|afirma|söyledi|diyor|belirtti|açıkladı)`;
+const SPEECH = String.raw`(?:says|said|told|tells|explains|explained|notes|noted|writes|wrote|recalls|recalled|adds|added|argues|argued|believes|warns|warned|states|stated|puts it|put it|emphasi[sz]es|emphasi[sz]ed|suggests|suggested|recommends|recommended|advises|advised|points out|pointed out|shares|shared|observes|observed|insists|insisted|admits|admitted|comments|commented|agrees|agreed|claims|claimed|predicts|predicted|describes|described|sagt|sagte|meint|erklärt|dit|explique|dice|explica|afirma|söyledi|diyor|belirtti|açıkladı|dedi|anlattı)`;
 /**
  * Verbs said of people only, read with a name that has no honorific or role
  * ("Marco Rossi said"): the rest of SPEECH a product or a company does too
  * ("Google Ads recommends", "Microsoft Teams adds", "Product Hunt
  * describes"), so those read a name only with an honorific or a role.
  */
-const PERSON_SPEECH = String.raw`(?:said|told|explained|recalled|admitted|insisted|argued|sagte|söyledi)`;
+const PERSON_SPEECH = String.raw`(?:said|told|explained|recalled|admitted|insisted|argued|sagte|söyledi|dedi|anlattı)`;
 
 /**
  * Where a name plainly means a person: the name is the group "name", with
@@ -167,7 +235,20 @@ const NAME_CUES = [
   },
   // "CEO Jane Doe", "SEO expert Sarah Chen".
   {
-    re: new RegExp(String.raw`(?<!\p{L})${ROLE_LOWER}\s+(?<name>${NAME})`, 'gu'),
+    re: new RegExp(String.raw`(?<!\p{L})${ROLE_LOWER}\s+${NOT_TITLE_NEXT}(?<name>${NAME})`, 'gu'),
+    words: 2,
+    role: true,
+  },
+  // "pazarlama müdürü Ayşe Yılmaz'a göre", "uzmanı Deniz Ak anlattı.": a
+  // trade's "-(s)ı" names a person only before "'a göre" ("'ın söylediğine
+  // göre"), a verb said of people or a sentence's end. A tool takes the
+  // other case suffixes and sits in lists as a person does ("uzmanı Google
+  // Analytics'i açar"); a name before a comma is given up with them.
+  {
+    re: new RegExp(
+      String.raw`(?<!\p{L})${ROLE_TR_ITS}\s+${NOT_TITLE_NEXT}(?<name>${NAME})(?=\s*[.!?)]|['’](?:a|e|ya|ye|na|ne|n?[ıiuü]n\s+(?:söylediğine|dediğine|belirttiğine|anlattığına))\s+göre(?!\p{L})|\s+${PERSON_SPEECH}(?!\p{L}))`,
+      'gu',
+    ),
     words: 2,
     role: true,
   },
@@ -207,11 +288,8 @@ const NAME_CUES = [
     ),
     words: 2,
   },
-  // "Ayşe Yılmaz'a göre".
-  {
-    re: new RegExp(String.raw`(?<name>${NAME})['’](?:a|e|ya|ye)\s+göre(?!\p{L})`, 'gu'),
-    words: 2,
-  },
+  // "…'a göre" isn't read, as "according to" isn't: a tool goes with it too
+  // ("Google Analytics'e göre"), and with a role a name is read all the same.
 ];
 
 /** Capitalised words that start a sentence, not a name ("The team said", "As Ada says"). */
@@ -246,7 +324,7 @@ function personIn(name, minWords, known) {
   while (words.length) {
     const lower = words[0].toLowerCase();
     if (PLACE_BEFORE.has(lower)) return null;
-    if (!NOT_NAMES.has(lower) && !ROLE_SET.has(lower) && !/^\p{L}+ly$/u.test(lower)) break;
+    if (!NOT_NAMES.has(lower) && !isRole(lower) && !/^\p{L}+ly$/u.test(lower)) break;
     start = name.indexOf(words[1] ?? '', start + words[0].length);
     words.shift();
   }

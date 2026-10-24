@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
-import { Plus } from 'lucide-react';
+import { Plus, Send } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import {
@@ -24,7 +24,9 @@ import {
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { LoadingDots } from '@/components/ui/loading-dots';
 import { NewContentDialog } from '@/components/content/new-content-dialog';
+import { SendDialog } from '@/components/content/send-to-cms-dialog';
 import { useUserRole } from '@/hooks/use-user-role';
+import { useRouter } from '@/i18n/navigation';
 import {
   archiveContentDraft,
   deleteContentDraft,
@@ -32,10 +34,13 @@ import {
   markContentDraftReady,
   setContentDraftStatus,
 } from '@/lib/actions/content-drafts';
+import { CMS_PAGES_PER_SEND, type CmsSource } from '@/lib/content/cms-send';
+import { readCmsStatuses, type CmsStatus } from '@/lib/content/cms-send-client';
 import {
   AGENT_POLL_MS,
   CREATED_RANGES,
   LIBRARY_TABS,
+  contentEditorPath,
   draftsCreatedIn,
   draftsInTab,
   type ContentDraftListItem,
@@ -47,8 +52,10 @@ import { siteTypeOf } from '@/lib/content/page-types';
 import { formatNumber } from '@/lib/format';
 import { readUrlChoice, writeUrlParams } from '@/lib/url-state';
 import { useBrandStore } from '@/stores/use-brand-store';
+import { BulkSendDialog } from './_bulk-send-dialog';
+import { readCmsSources } from './_cms-sources';
 import { LibraryExportMenu, useLibraryExport } from './_library-export';
-import { LibraryTable, type LibraryRowActions } from './_library-table';
+import { LibraryTable, type LibraryRowActions, type LibrarySelection } from './_library-table';
 import { HeaderWithAiUsage } from '@/components/ai-usage/ai-usage-meter';
 
 /** A read of the brand's drafts: null until it comes back. */
@@ -64,11 +71,13 @@ interface LibraryRead {
  * The Content Library (Content Editor, CE-002): everything a person or the
  * Content Agent wrote or changed in Ansvisor, by status, and what was
  * archived (00233). A row's menu sets its status; admins and managers also
- * archive, restore and delete. The tab lives in the URL (?tab=in_review), so
- * a link can open "Library › In review".
+ * send it to the CMS (#1331), archive, restore and delete. The tab lives in
+ * the URL (?tab=in_review), so a link can open "Library › In review".
  */
 export default function ContentLibraryPage() {
   const t = useTranslations('contentEditor.library');
+  const tEditor = useTranslations('contentEditor.editor');
+  const router = useRouter();
   const activeBrandId = useBrandStore((s) => s.activeBrandId);
   const activeBrand = useBrandStore((s) => s.brands.find((b) => b.id === s.activeBrandId));
   const [tab, setTab] = useState<LibraryTab>('all');
@@ -81,6 +90,23 @@ export default function ContentLibraryPage() {
   // The draft whose Delete waits for a confirmation.
   const [deleting, setDeleting] = useState<ContentDraftListItem | null>(null);
   const [deletePending, setDeletePending] = useState(false);
+  // Send to CMS: while the row's page is read, then the dialog's page.
+  const [preparing, setPreparing] = useState(false);
+  const [sending, setSending] = useState<{ brandId: string; source: CmsSource } | null>(null);
+  // Each draft's last send, beside its status; read with the list.
+  const [cms, setCms] = useState<ReadonlyMap<string, CmsStatus>>(new Map());
+  // The rows picked to send together, for the brand they were picked in.
+  const [picked, setPicked] = useState<{ brandId: string | null; ids: ReadonlySet<string> }>({
+    brandId: null,
+    ids: new Set(),
+  });
+  // The bulk Send dialog's rows, as they were picked when it opened, and their brand.
+  const [bulk, setBulk] = useState<{
+    brandId: string;
+    brandName: string;
+    brandLanguage: string | null | undefined;
+    drafts: ContentDraftListItem[];
+  } | null>(null);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- one read of the URL after mount
@@ -116,6 +142,28 @@ export default function ContentLibraryPage() {
     return () => clearTimeout(timer);
   }, [agentWriting, read]);
 
+  // The sends of the drafts read, after each read of the list.
+  const readIds = read?.drafts?.map((draft) => draft.id).join(',') ?? '';
+  const [cmsAttempt, setCmsAttempt] = useState(0);
+  useEffect(() => {
+    if (!readIds) return;
+    let cancelled = false;
+    readCmsStatuses(readIds.split(','))
+      .then((statuses) => !cancelled && setCms(statuses))
+      .catch((err) => console.error('Failed to read the pages’ sends:', err));
+    return () => {
+      cancelled = true;
+    };
+  }, [readIds, cmsAttempt]);
+  // While a page is on its way to the CMS (a bulk send going on), its row's
+  // send is read again now and then, as the list is while the agent writes.
+  const cmsGoing = [...cms.values()].some((status) => status.status === 'queued');
+  useEffect(() => {
+    if (!cmsGoing) return;
+    const timer = setTimeout(() => setCmsAttempt((n) => n + 1), AGENT_POLL_MS);
+    return () => clearTimeout(timer);
+  }, [cmsGoing, cms]);
+
   const reload = () => setAttempt((n) => n + 1);
   const titleOf = (draft: ContentDraftListItem) => draft.title.trim() || t('untitled');
   const failed = (err: unknown) => {
@@ -145,6 +193,29 @@ export default function ContentLibraryPage() {
     }
   };
 
+  const openSend = async (draft: ContentDraftListItem) => {
+    if (!activeBrandId || preparing) return;
+    // The draft's brand stays the send's, should the brand switch meanwhile.
+    const brandId = activeBrandId;
+    setPreparing(true);
+    const source = await readCmsSources({
+      brandId,
+      draftIds: [draft.id],
+      brandName: activeBrand?.name ?? '',
+      brandLanguage: activeBrand?.language,
+      teamByline: (brand) => tEditor('author.organization', { brand }),
+    }).then(
+      (sources) => sources.get(draft.id) ?? null,
+      (err) => {
+        console.error('Failed to read the page to send:', err);
+        return null;
+      },
+    );
+    setPreparing(false);
+    if (source) setSending({ brandId, source });
+    else toast.error(t('rowMenu.sendFailed'));
+  };
+
   const rowActions: LibraryRowActions = {
     canManage,
     onStatus: (draft: ContentDraftListItem, status: DraftStatus) => {
@@ -158,6 +229,7 @@ export default function ContentLibraryPage() {
     onArchive: (draft, archived) => void archive(draft, archived),
     onDelete: setDeleting,
     onExport: (draft, format) => void exportDraft(draft, format),
+    onSend: (draft) => void openSend(draft),
   };
 
   const confirmDelete = async () => {
@@ -174,12 +246,15 @@ export default function ContentLibraryPage() {
     setDeletePending(false);
   };
 
+  const clearPicked = () => setPicked({ brandId: null, ids: new Set() });
   const changeTab = (next: LibraryTab) => {
     setTab(next);
+    clearPicked();
     writeUrlParams({ tab: next }, { tab: 'all' });
   };
   const changeCreated = (next: CreatedRange) => {
     setCreated(next);
+    clearPicked();
     writeUrlParams({ created: next }, { created: 'all' });
   };
 
@@ -197,6 +272,24 @@ export default function ContentLibraryPage() {
   const counts = current?.counts ?? null;
   const inTab = drafts ? draftsInTab(drafts, tab) : [];
   const listed = draftsCreatedIn(inTab, created);
+  // Picked rows still listed (a read may have moved some), never archived ones.
+  const pickedIds = picked.brandId === activeBrandId ? picked.ids : new Set<string>();
+  const pickedDrafts = listed.filter((draft) => pickedIds.has(draft.id) && !draft.archivedAt);
+  const selection: LibrarySelection | undefined =
+    canManage && tab !== 'archived'
+      ? {
+          selected: pickedIds,
+          onToggle: (ids, on) => {
+            const next = new Set(pickedIds);
+            for (const id of ids) {
+              if (on) next.add(id);
+              else next.delete(id);
+            }
+            setPicked({ brandId: activeBrandId, ids: next });
+          },
+        }
+      : undefined;
+  const tooMany = pickedDrafts.length > CMS_PAGES_PER_SEND;
 
   return (
     <div className="space-y-6">
@@ -261,6 +354,40 @@ export default function ContentLibraryPage() {
       </div>
 
       <Card className="py-0">
+        {selection && pickedDrafts.length > 0 && (
+          <div className="flex flex-wrap items-center gap-2 border-b bg-muted/50 px-4 py-2">
+            <span className="text-xs text-muted-foreground">
+              {t('bulk.selected', { count: pickedDrafts.length })}
+            </span>
+            {tooMany && (
+              <span className="text-xs text-amber-800 dark:text-amber-300">
+                {t('bulk.tooMany', { max: CMS_PAGES_PER_SEND })}
+              </span>
+            )}
+            <div className="ml-auto flex items-center gap-1">
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-7 gap-1.5 text-xs"
+                disabled={tooMany}
+                onClick={() =>
+                  setBulk({
+                    brandId: activeBrandId,
+                    brandName: activeBrand?.name ?? '',
+                    brandLanguage: activeBrand?.language,
+                    drafts: pickedDrafts,
+                  })
+                }
+              >
+                <Send className="h-3 w-3" />
+                {t('bulk.sendSelected')}
+              </Button>
+              <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={clearPicked}>
+                {t('bulk.clear')}
+              </Button>
+            </div>
+          </div>
+        )}
         <CardContent className="px-0">
           {current?.failed ? (
             <div className="flex flex-col items-center gap-3 px-6 py-12 text-center">
@@ -285,10 +412,49 @@ export default function ContentLibraryPage() {
               {t('created.empty')}
             </p>
           ) : (
-            <LibraryTable drafts={listed} tab={tab} actions={rowActions} />
+            <LibraryTable
+              drafts={listed}
+              tab={tab}
+              actions={rowActions}
+              cms={cms}
+              selection={selection}
+            />
           )}
         </CardContent>
       </Card>
+      {bulk && (
+        <BulkSendDialog
+          brandId={bulk.brandId}
+          drafts={bulk.drafts}
+          brandName={bulk.brandName}
+          brandLanguage={bulk.brandLanguage}
+          // The sends going on show in the rows as they land.
+          onClose={() => {
+            setBulk(null);
+            clearPicked();
+            setCmsAttempt((n) => n + 1);
+          }}
+        />
+      )}
+      {sending && (
+        <SendDialog
+          draftId={sending.source.draftId}
+          brandId={sending.brandId}
+          title={sending.source.title}
+          html={sending.source.html}
+          sourceUrl={sending.source.sourceUrl}
+          author={sending.source.author}
+          teamByline={sending.source.teamByline}
+          byline={sending.source.byline}
+          // Placeholders are filled in the editor.
+          onFillNow={() => router.push(contentEditorPath(sending.source.draftId))}
+          // A send that went or failed is the row's last: its sends are read again.
+          onClose={() => {
+            setSending(null);
+            setCmsAttempt((n) => n + 1);
+          }}
+        />
+      )}
       <Dialog open={deleting !== null} onOpenChange={(open) => !open && setDeleting(null)}>
         <DialogContent className="grid-cols-[minmax(0,1fr)] sm:max-w-md">
           <DialogHeader>

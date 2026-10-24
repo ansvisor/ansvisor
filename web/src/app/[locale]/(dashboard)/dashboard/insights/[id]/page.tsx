@@ -23,6 +23,7 @@ import { cn } from '@/lib/utils';
 import { PLATFORM_LABELS } from '@/config/platform-labels';
 import { ResponseDetail } from '@/components/results/response-detail';
 import { formatRegionDisplay } from '@/lib/region';
+import { HeaderWithAiUsage } from '@/components/ai-usage/ai-usage-meter';
 
 function SentimentBadge({ sentiment }: { sentiment: 'positive' | 'neutral' | 'negative' }) {
   const t = useTranslations('insights');
@@ -136,37 +137,41 @@ export default function ResultDetailPage() {
 
   return (
     <div className="space-y-6 p-2 sm:p-6 max-w-5xl mx-auto">
-      {/* Back button */}
-      <Button
-        variant="ghost"
-        size="sm"
-        className="gap-2 -ml-2 text-muted-foreground hover:text-foreground"
-        onClick={goBack}
-      >
-        <ArrowLeft className="h-4 w-4" />
-        {common('back')}
-      </Button>
+      <HeaderWithAiUsage>
+        <div className="space-y-6">
+          {/* Back button */}
+          <Button
+            variant="ghost"
+            size="sm"
+            className="gap-2 -ml-2 text-muted-foreground hover:text-foreground"
+            onClick={goBack}
+          >
+            <ArrowLeft className="h-4 w-4" />
+            {common('back')}
+          </Button>
 
-      {/* Header */}
-      <div className="space-y-3">
-        <h1 className="text-xl font-semibold leading-snug">{result.promptText}</h1>
+          {/* Header */}
+          <div className="space-y-3">
+            <h1 className="text-xl font-semibold leading-snug">{result.promptText}</h1>
 
-        <div className="flex flex-wrap items-center gap-2">
-          <Badge variant="secondary" className="text-xs">
-            {PLATFORM_LABELS[result.platform] ?? result.platform}
-          </Badge>
-          <SentimentBadge sentiment={result.sentiment} />
-          <Badge variant="outline" className="text-xs gap-1">
-            <Eye className="h-3 w-3" />
-            {result.visibilityScore}/100
-          </Badge>
-          {result.region && (
-            <Badge variant="outline" className="text-xs">
-              {formatRegionDisplay(result.region)}
-            </Badge>
-          )}
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge variant="secondary" className="text-xs">
+                {PLATFORM_LABELS[result.platform] ?? result.platform}
+              </Badge>
+              <SentimentBadge sentiment={result.sentiment} />
+              <Badge variant="outline" className="text-xs gap-1">
+                <Eye className="h-3 w-3" />
+                {result.visibilityScore}/100
+              </Badge>
+              {result.region && (
+                <Badge variant="outline" className="text-xs">
+                  {formatRegionDisplay(result.region)}
+                </Badge>
+              )}
+            </div>
+          </div>
         </div>
-      </div>
+      </HeaderWithAiUsage>
 
       {/* Stats */}
       <div className="grid grid-cols-3 gap-4">

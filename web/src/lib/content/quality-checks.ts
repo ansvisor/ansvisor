@@ -2,6 +2,7 @@ import { classifyDomain, normalizeDomain } from '@/lib/citations/classify';
 import type { ContentAuthor } from './authors';
 import { cleanHref } from './html-allowlist';
 import { ownText, sentencesOf } from './readability';
+import { sourceClass, type SourceClass } from './source-class';
 
 /**
  * E-E-A-T and Trust (Content Editor Quality spec §2.1, §2.2): checks read
@@ -38,7 +39,8 @@ export type EeatCheckId = keyof typeof EEAT_WEIGHTS;
 /**
  * Trust's checks and points; Phase 1 reads the page's links and figures
  * (sourced figures, fresh sources, working links) and the site's trust
- * (Site Audit, CE-043); the rest are Phase 2.
+ * (Site Audit, CE-043); the rest are Phase 2, starting with what kind of
+ * source each link is (CE-046).
  */
 export const TRUST_WEIGHTS = {
   claimsSourced: 30,
@@ -219,10 +221,12 @@ function pageLinks(blocks: TrustBlock[], brandDomains: string[]) {
   return out;
 }
 
-/** Each link once, by its address. */
-const byUrl = <T extends { url: string }>(links: T[]) => [
-  ...new Map(links.map((l) => [l.url, l])).values(),
-];
+/** Each link once, by its address: where the page has it first (Show goes there). */
+const byUrl = <T extends { url: string }>(links: T[]) => {
+  const first = new Map<string, T>();
+  for (const l of links) if (!first.has(l.url)) first.set(l.url, l);
+  return [...first.values()];
+};
 
 /** The page's links to read, each once, MAX_LINK_CHECKS at most: Trust's link checks. */
 export function linksToCheck(blocks: TrustBlock[]): string[] {
@@ -238,6 +242,20 @@ export interface TrustRead extends Score<TrustCheckId> {
   /** Sentences with a figure and no source in their block, and how many have a figure. */
   unsourced: string[];
   figures: number;
+  /**
+   * Phase 2 (CE-046): weak or competitors' sources the person hasn't kept,
+   * the page's first first, and how many sources the rules could place.
+   */
+  weak: { url: string; text: string; kind: 'weak' | 'competitor' }[];
+  classified: number;
+}
+
+/** What Trust needs to tell a link's kind (Phase 2, CE-046). */
+export interface SourceRead {
+  competitorDomains: string[];
+  pageType: string | null;
+  /** Weak or competitors' sources the person chose to keep, by their address. */
+  kept: ReadonlySet<string>;
 }
 
 /**
@@ -250,12 +268,19 @@ export interface TrustRead extends Score<TrustCheckId> {
  * source is there: working links alone are 3 points, and one link would set
  * the whole score (one dead link 0, one working link 100), as Readability
  * waits for MIN_WORDS.
+ *
+ * With `sources` (Phase 2, CE-046), each source's kind counts too: a primary
+ * one among them (official, research, standards), and none weak (forums,
+ * social posts) or a competitor's, unless the person kept it. A source the
+ * rules can't place is left out of both; two placed sources score Trust on
+ * their own.
  */
 export function trust({
   blocks,
   links,
   brandDomains,
   siteTrust = null,
+  sources: kinds = null,
   now,
 }: {
   /** The page's blocks (trustBlocks). */
@@ -265,6 +290,8 @@ export function trust({
   brandDomains: string[];
   /** How many of the site's five trust checks pass (CE-043), when read. */
   siteTrust?: { score: number } | null;
+  /** Phase 2: what each source is (CE-046); left out before. */
+  sources?: SourceRead | null;
   now: number;
 }): TrustRead {
   const all = pageLinks(blocks, brandDomains);
@@ -302,6 +329,30 @@ export function trust({
     });
   }
 
+  const classified = kinds
+    ? byUrl(all.filter((l) => l.external)).flatMap((l) => {
+        const kind = sourceClass(l.url, { brandDomains, ...kinds });
+        return kind && kind !== 'own' ? [{ ...l, kind }] : [];
+      })
+    : [];
+  const isWeak = (kind: SourceClass): kind is 'weak' | 'competitor' =>
+    kind === 'weak' || kind === 'competitor';
+  const weak = classified.flatMap(({ url, text, kind }) =>
+    isWeak(kind) && !kinds?.kept.has(url) ? [{ url, text, kind }] : [],
+  );
+  if (classified.length) {
+    checks.push({
+      id: 'primarySources',
+      points: classified.some((l) => l.kind === 'primary') ? TRUST_WEIGHTS.primarySources : 0,
+      max: TRUST_WEIGHTS.primarySources,
+    });
+    checks.push({
+      id: 'noWeakSources',
+      points: (TRUST_WEIGHTS.noWeakSources * (classified.length - weak.length)) / classified.length,
+      max: TRUST_WEIGHTS.noWeakSources,
+    });
+  }
+
   const read = byUrl(
     all.filter((l) => {
       const status = links.get(l.url)?.status;
@@ -327,7 +378,9 @@ export function trust({
     });
   }
 
-  const scored = checks.some((c) => c.id === 'claimsSourced' || c.id === 'freshSources');
+  const scored =
+    checks.some((c) => c.id === 'claimsSourced' || c.id === 'freshSources') ||
+    classified.length >= 2;
   return {
     ...(scored ? scoreOf(checks) : { score: null, checks }),
     broken: broken.map(({ url, text }) => ({ url, text })),
@@ -335,5 +388,7 @@ export function trust({
     dated: sources.length,
     unsourced,
     figures: figureSentences.length,
+    weak,
+    classified: classified.length,
   };
 }

@@ -28,9 +28,11 @@ let rpcResult: { data: unknown; error: { message: string } | null };
 vi.mock('@/lib/action-center/assignees', () => ({ readAssignees: vi.fn(async () => new Map()) }));
 vi.mock('@/lib/supabase/admin', () => ({ supabaseAdmin: {} }));
 const completeDraftTasks = vi.hoisted(() => vi.fn());
+const reopenDraftTasks = vi.hoisted(() => vi.fn());
 vi.mock('@/lib/content/action-drafts', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/content/action-drafts')>()),
   completeDraftTasks,
+  reopenDraftTasks,
 }));
 vi.mock('@/lib/supabase/server', () => ({
   createClient: vi.fn(async () => ({
@@ -85,6 +87,7 @@ const {
   getCitedPassages,
   getContentDraft,
   getDraftVersions,
+  keepDraftSource,
   markContentDraftReady,
   restoreDraftVersion,
   saveContentDraft,
@@ -103,6 +106,7 @@ beforeEach(() => {
   rpcCalls = [];
   rpcResult = { data: 'v-new', error: null };
   completeDraftTasks.mockReset().mockResolvedValue(0);
+  reopenDraftTasks.mockReset().mockResolvedValue(0);
 });
 
 describe('saveContentDraft', () => {
@@ -344,10 +348,31 @@ describe('setContentDraftAuthor', () => {
   });
 });
 
+describe('keepDraftSource (Quality CE-046)', () => {
+  it('keeps a source through the draft’s function, an http(s) address only', async () => {
+    const url = 'https://www.reddit.com/r/coffee/1';
+    rpcResult = { data: [url], error: null };
+    await expect(keepDraftSource(DRAFT, url)).resolves.toEqual([url]);
+    expect(rpcCalls).toEqual([['content_draft_keep_source', { p_draft_id: DRAFT, p_url: url }]]);
+    await expect(keepDraftSource(DRAFT, 'javascript:alert(1)')).rejects.toThrow('invalid');
+    await expect(keepDraftSource('d1', url)).rejects.toThrow('invalid');
+    // Not the member's to change: the function changes nothing.
+    rpcResult = { data: null, error: null };
+    await expect(keepDraftSource(DRAFT, url)).rejects.toThrow('not_found');
+    // 50 kept already: the list comes back without it.
+    rpcResult = { data: ['https://x.example/1'], error: null };
+    await expect(keepDraftSource(DRAFT, url)).rejects.toThrow('full');
+  });
+});
+
 describe('unmarkContentDraftReady', () => {
   it('moves a ready draft back to review, and only a ready one', async () => {
     updated = { status: 'in_review' };
-    await expect(unmarkContentDraftReady(DRAFT)).resolves.toBe('in_review');
+    await expect(unmarkContentDraftReady(DRAFT)).resolves.toEqual({
+      status: 'in_review',
+      tasksReopened: 0,
+    });
+    expect(reopenDraftTasks).not.toHaveBeenCalled();
     expect(calls[0]).toMatchObject({
       op: 'update',
       value: { status: 'in_review' },
@@ -355,6 +380,28 @@ describe('unmarkContentDraftReady', () => {
         ['eq', 'id', DRAFT],
         ['eq', 'status', 'ready'],
       ],
+    });
+  });
+
+  it('opens again the task Ready completed in the action the draft is the work of', async () => {
+    updated = { status: 'in_review', brand_id: 'b1', method: 'create', action_id: 'act-1' };
+    reopenDraftTasks.mockResolvedValue(1);
+    await expect(unmarkContentDraftReady(DRAFT)).resolves.toEqual({
+      status: 'in_review',
+      tasksReopened: 1,
+    });
+    expect(reopenDraftTasks).toHaveBeenCalledWith(
+      expect.anything(),
+      { id: DRAFT, brandId: 'b1', actionId: 'act-1', method: 'create' },
+      'u1',
+    );
+
+    // The draft is back in review even when the task couldn't be opened.
+    reopenDraftTasks.mockRejectedValue(new Error('rls'));
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    await expect(unmarkContentDraftReady(DRAFT)).resolves.toEqual({
+      status: 'in_review',
+      tasksReopened: 0,
     });
   });
 
@@ -371,7 +418,11 @@ describe('unmarkContentDraftReady', () => {
       author: 'user',
       updated_at: '2026-10-20T15:00:00Z',
     };
-    await expect(unmarkContentDraftReady(DRAFT)).resolves.toBe('published');
+    await expect(unmarkContentDraftReady(DRAFT)).resolves.toEqual({
+      status: 'published',
+      tasksReopened: 0,
+    });
+    expect(reopenDraftTasks).not.toHaveBeenCalled();
     await expect(unmarkContentDraftReady('d1')).rejects.toThrow('invalid');
   });
 });

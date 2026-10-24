@@ -257,6 +257,10 @@ export function ExportDialog({
   ];
   if (checks.links.count) {
     const { count, read, broken } = checks.links;
+    // The reads still coming are for some of the unread links at most, as
+    // Before you publish counts them: the rest couldn't be read.
+    const reading = Math.min(linksPending, count - read);
+    const notRead = count - read - reading;
     rows.push(
       broken
         ? {
@@ -264,24 +268,30 @@ export function ExportDialog({
             title: t('checks.links.broken', { broken, count }),
             detail: t('checks.links.brokenDetail'),
           }
-        : read < count && linksPending
+        : reading && notRead
           ? {
               state: 'check',
-              title: t('checks.links.reading', { count }),
-              detail: t('checks.links.readingDetail'),
+              title: t('checks.links.readingAndUnread', { reading, unread: notRead, count }),
+              detail: t('checks.links.unreadDetail'),
             }
-          : read < count
+          : reading
             ? {
-                // Some couldn't be read: no word on whether they answer.
                 state: 'check',
-                title: t('checks.links.unread', { unread: count - read, count }),
-                detail: t('checks.links.unreadDetail'),
+                title: t('checks.links.reading', { reading, count }),
+                detail: t('checks.links.readingDetail'),
               }
-            : {
-                state: 'ok',
-                title: t('checks.links.ok', { count }),
-                detail: t('checks.links.okDetail'),
-              },
+            : notRead
+              ? {
+                  // Some couldn't be read: no word on whether they answer.
+                  state: 'check',
+                  title: t('checks.links.unread', { unread: notRead, count }),
+                  detail: t('checks.links.unreadDetail'),
+                }
+              : {
+                  state: 'ok',
+                  title: t('checks.links.ok', { count }),
+                  detail: t('checks.links.okDetail'),
+                },
     );
   }
   if (checks.images.count) {
