@@ -110,6 +110,25 @@ describe('AiUsageCard', () => {
     expect(container.textContent).toBe('');
   });
 
+  it('scrolls itself into view once read, for the header meter’s See details (#ai-usage)', async () => {
+    const scroll = vi.fn();
+    Element.prototype.scrollIntoView = scroll;
+    vi.mocked(getAiUsage).mockResolvedValue(usage());
+
+    await render();
+    expect(scroll).not.toHaveBeenCalled();
+
+    window.history.replaceState(null, '', '#ai-usage');
+    act(() => root.unmount());
+    root = createRoot(container);
+    await render();
+    expect(scroll).toHaveBeenCalledWith({ block: 'start' });
+    expect(scroll.mock.contexts[0]).toBe(container.querySelector('#ai-usage'));
+    window.history.replaceState(null, '', '#');
+    // jsdom has no scrollIntoView of its own.
+    delete (Element.prototype as { scrollIntoView?: unknown }).scrollIntoView;
+  });
+
   it('says it couldn’t read the usage', async () => {
     const error = vi.spyOn(console, 'error').mockImplementation(() => {});
     vi.mocked(getAiUsage).mockRejectedValue(new Error('down'));

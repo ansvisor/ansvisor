@@ -30,6 +30,7 @@ import { formatDate } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { PLATFORM_LABELS } from '@/config/platform-labels';
 import { REPORT_TEMPLATES } from '@/lib/reports/templates';
+import { HeaderWithAiUsage } from '@/components/ai-usage/ai-usage-meter';
 
 const KNOWN_TEMPLATE_IDS = new Set<string>(REPORT_TEMPLATES.map((tpl) => tpl.id));
 
@@ -203,34 +204,36 @@ export default function ReportDetailPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div className="space-y-1">
-          <Link
-            href="/dashboard/reports"
-            className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
-          >
-            <ArrowLeft className="h-4 w-4" />
-            {t('backToReports')}
-          </Link>
-          <h1 className="text-2xl font-bold tracking-tight">{report.title}</h1>
-          <p className="text-sm text-muted-foreground">
-            {KNOWN_TEMPLATE_IDS.has(report.template) &&
-              t.has(`templates.${report.template}.name`) && (
-                <>{t(`templates.${report.template}.name`)} · </>
-              )}
-            {formatDate(report.dateFrom)} — {formatDate(report.dateTo)} · {t('generatedOn')}{' '}
-            {formatDate(report.createdAt)}
-          </p>
+      <HeaderWithAiUsage>
+        <div className="flex items-center justify-between">
+          <div className="space-y-1">
+            <Link
+              href="/dashboard/reports"
+              className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
+            >
+              <ArrowLeft className="h-4 w-4" />
+              {t('backToReports')}
+            </Link>
+            <h1 className="text-2xl font-bold tracking-tight">{report.title}</h1>
+            <p className="text-sm text-muted-foreground">
+              {KNOWN_TEMPLATE_IDS.has(report.template) &&
+                t.has(`templates.${report.template}.name`) && (
+                  <>{t(`templates.${report.template}.name`)} · </>
+                )}
+              {formatDate(report.dateFrom)} — {formatDate(report.dateTo)} · {t('generatedOn')}{' '}
+              {formatDate(report.createdAt)}
+            </p>
+          </div>
+          <Button onClick={handleDownloadPdf} disabled={downloading} className="gap-2">
+            {downloading ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <FileDown className="h-4 w-4" />
+            )}
+            {t('downloadPDF')}
+          </Button>
         </div>
-        <Button onClick={handleDownloadPdf} disabled={downloading} className="gap-2">
-          {downloading ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : (
-            <FileDown className="h-4 w-4" />
-          )}
-          {t('downloadPDF')}
-        </Button>
-      </div>
+      </HeaderWithAiUsage>
 
       {/* Everything below renders from the immutable saved payload; the
           container id is the future PDF capture root. */}

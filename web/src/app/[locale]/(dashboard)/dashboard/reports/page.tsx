@@ -42,6 +42,7 @@ import {
   type ReportSection,
   type ReportTemplateId,
 } from '@/lib/reports/templates';
+import { HeaderWithAiUsage } from '@/components/ai-usage/ai-usage-meter';
 
 type DatePreset = '7d' | '30d' | '90d' | 'custom';
 
@@ -184,16 +185,18 @@ export default function ReportsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">{t('title')}</h1>
-          <p className="text-muted-foreground">{t('description')}</p>
+      <HeaderWithAiUsage>
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight">{t('title')}</h1>
+            <p className="text-muted-foreground">{t('description')}</p>
+          </div>
+          <Button className="gap-2" onClick={openDialog} disabled={!activeBrandId}>
+            <Plus className="h-4 w-4" />
+            {t('generateReport')}
+          </Button>
         </div>
-        <Button className="gap-2" onClick={openDialog} disabled={!activeBrandId}>
-          <Plus className="h-4 w-4" />
-          {t('generateReport')}
-        </Button>
-      </div>
+      </HeaderWithAiUsage>
 
       <Card>
         <CardHeader>

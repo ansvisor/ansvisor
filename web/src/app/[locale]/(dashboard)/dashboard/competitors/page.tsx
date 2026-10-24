@@ -69,6 +69,7 @@ import {
   Eye,
   Download,
 } from 'lucide-react';
+import { HeaderWithAiUsage } from '@/components/ai-usage/ai-usage-meter';
 
 // ─── Shared Visual Components (mirroring Insights) ───────────────────────────
 
@@ -117,10 +118,12 @@ function PlanGateOverlay() {
   const t = useTranslations('competitors');
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">{t('title')}</h1>
-        <p className="text-muted-foreground">{t('description')}</p>
-      </div>
+      <HeaderWithAiUsage>
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">{t('title')}</h1>
+          <p className="text-muted-foreground">{t('description')}</p>
+        </div>
+      </HeaderWithAiUsage>
       <Card>
         <CardContent className="flex flex-col items-center justify-center py-16 text-center">
           <div className="flex h-14 w-14 items-center justify-center rounded-full bg-amber-100 dark:bg-amber-900/30 mb-4">
@@ -144,10 +147,12 @@ function NoBrandSelected() {
   const t = useTranslations('competitors');
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">{t('title')}</h1>
-        <p className="text-muted-foreground">{t('description')}</p>
-      </div>
+      <HeaderWithAiUsage>
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">{t('title')}</h1>
+          <p className="text-muted-foreground">{t('description')}</p>
+        </div>
+      </HeaderWithAiUsage>
       <Card>
         <CardContent className="flex flex-col items-center justify-center py-16 text-center">
           <div className="flex h-14 w-14 items-center justify-center rounded-full bg-white mb-4">
@@ -1513,10 +1518,12 @@ export default function CompetitorsPage() {
   if (loading) {
     return (
       <div className="space-y-6">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">{t('title')}</h1>
-          <p className="text-muted-foreground">{t('description')}</p>
-        </div>
+        <HeaderWithAiUsage>
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight">{t('title')}</h1>
+            <p className="text-muted-foreground">{t('description')}</p>
+          </div>
+        </HeaderWithAiUsage>
         <div className="flex items-center justify-center py-20">
           <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
         </div>
@@ -1527,39 +1534,41 @@ export default function CompetitorsPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">{t('title')}</h1>
-          <p className="text-muted-foreground">{t('description')}</p>
-        </div>
-        <div className="flex flex-wrap items-end gap-3">
-          <div className="flex items-center gap-2">
-            <DateRangeFilter
-              value={datePreset}
-              presets={COMPETITOR_DATE_PRESETS}
-              onChange={setDatePreset}
-              from={dateFrom}
-              to={dateTo}
-              onFromChange={setDateFrom}
-              onToChange={setDateTo}
-            />
-            {comparisonLoading && (
-              <Loader2
-                className="mb-2 h-4 w-4 animate-spin text-muted-foreground"
-                aria-hidden="true"
-              />
-            )}
+      <HeaderWithAiUsage>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight">{t('title')}</h1>
+            <p className="text-muted-foreground">{t('description')}</p>
           </div>
-          <Button variant="outline" className="gap-2" onClick={() => setSuggestDialogOpen(true)}>
-            <Sparkles className="h-4 w-4" />
-            {t('suggestCompetitors')}
-          </Button>
-          <Button className="gap-2" onClick={() => setDialogOpen(true)}>
-            <Plus className="h-4 w-4" />
-            {t('addCompetitor')}
-          </Button>
+          <div className="flex flex-wrap items-end gap-3">
+            <div className="flex items-center gap-2">
+              <DateRangeFilter
+                value={datePreset}
+                presets={COMPETITOR_DATE_PRESETS}
+                onChange={setDatePreset}
+                from={dateFrom}
+                to={dateTo}
+                onFromChange={setDateFrom}
+                onToChange={setDateTo}
+              />
+              {comparisonLoading && (
+                <Loader2
+                  className="mb-2 h-4 w-4 animate-spin text-muted-foreground"
+                  aria-hidden="true"
+                />
+              )}
+            </div>
+            <Button variant="outline" className="gap-2" onClick={() => setSuggestDialogOpen(true)}>
+              <Sparkles className="h-4 w-4" />
+              {t('suggestCompetitors')}
+            </Button>
+            <Button className="gap-2" onClick={() => setDialogOpen(true)}>
+              <Plus className="h-4 w-4" />
+              {t('addCompetitor')}
+            </Button>
+          </div>
         </div>
-      </div>
+      </HeaderWithAiUsage>
 
       {competitors.length === 0 ? (
         <EmptyState

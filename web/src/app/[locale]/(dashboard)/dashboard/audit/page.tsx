@@ -61,6 +61,7 @@ import { usePagesExport } from './_use-pages-export';
 import { nextAutoRun } from '@/lib/audit-auto-runs';
 import { cn } from '@/lib/utils';
 import { parseListTab, withListTab, type ListTab } from './_list-tab';
+import { HeaderWithAiUsage } from '@/components/ai-usage/ai-usage-meter';
 
 type RangePreset = '7d' | '30d' | '90d' | 'all';
 const RANGE_DAYS: Record<RangePreset, number | null> = { '7d': 7, '30d': 30, '90d': 90, all: null };
@@ -528,16 +529,18 @@ export default function SiteAuditPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold">{t('title')}</h1>
-          <p className="text-sm text-muted-foreground">{t('description')}</p>
+      <HeaderWithAiUsage>
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-bold">{t('title')}</h1>
+            <p className="text-sm text-muted-foreground">{t('description')}</p>
+          </div>
+          <Button variant="outline" className="shrink-0" onClick={() => setSettingsOpen(true)}>
+            <Settings className="h-4 w-4" />
+            {t('settings.button')}
+          </Button>
         </div>
-        <Button variant="outline" className="shrink-0" onClick={() => setSettingsOpen(true)}>
-          <Settings className="h-4 w-4" />
-          {t('settings.button')}
-        </Button>
-      </div>
+      </HeaderWithAiUsage>
       <AuditSettingsDialog
         brandId={activeBrandId}
         open={settingsOpen}

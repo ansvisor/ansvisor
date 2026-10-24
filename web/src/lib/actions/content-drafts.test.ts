@@ -28,9 +28,11 @@ let rpcResult: { data: unknown; error: { message: string } | null };
 vi.mock('@/lib/action-center/assignees', () => ({ readAssignees: vi.fn(async () => new Map()) }));
 vi.mock('@/lib/supabase/admin', () => ({ supabaseAdmin: {} }));
 const completeDraftTasks = vi.hoisted(() => vi.fn());
+const reopenDraftTasks = vi.hoisted(() => vi.fn());
 vi.mock('@/lib/content/action-drafts', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/content/action-drafts')>()),
   completeDraftTasks,
+  reopenDraftTasks,
 }));
 vi.mock('@/lib/supabase/server', () => ({
   createClient: vi.fn(async () => ({
@@ -90,6 +92,7 @@ const {
   saveContentDraft,
   setContentDraftAuthor,
   setContentDraftPageType,
+  unmarkContentDraftReady,
 } = await import('./content-drafts');
 const { bodyHash } = await import('@/lib/content/editor');
 
@@ -102,6 +105,7 @@ beforeEach(() => {
   rpcCalls = [];
   rpcResult = { data: 'v-new', error: null };
   completeDraftTasks.mockReset().mockResolvedValue(0);
+  reopenDraftTasks.mockReset().mockResolvedValue(0);
 });
 
 describe('saveContentDraft', () => {
@@ -340,6 +344,68 @@ describe('setContentDraftAuthor', () => {
     await expect(setContentDraftAuthor('d1', AUTHOR)).rejects.toThrow('invalid');
     expect(calls).toEqual([]);
     await expect(setContentDraftAuthor(DRAFT, AUTHOR)).rejects.toThrow('not_found');
+  });
+});
+
+describe('unmarkContentDraftReady', () => {
+  it('moves a ready draft back to review, and only a ready one', async () => {
+    updated = { status: 'in_review' };
+    await expect(unmarkContentDraftReady(DRAFT)).resolves.toEqual({
+      status: 'in_review',
+      tasksReopened: 0,
+    });
+    expect(reopenDraftTasks).not.toHaveBeenCalled();
+    expect(calls[0]).toMatchObject({
+      op: 'update',
+      value: { status: 'in_review' },
+      filters: [
+        ['eq', 'id', DRAFT],
+        ['eq', 'status', 'ready'],
+      ],
+    });
+  });
+
+  it('opens again the task Ready completed in the action the draft is the work of', async () => {
+    updated = { status: 'in_review', brand_id: 'b1', method: 'create', action_id: 'act-1' };
+    reopenDraftTasks.mockResolvedValue(1);
+    await expect(unmarkContentDraftReady(DRAFT)).resolves.toEqual({
+      status: 'in_review',
+      tasksReopened: 1,
+    });
+    expect(reopenDraftTasks).toHaveBeenCalledWith(
+      expect.anything(),
+      { id: DRAFT, brandId: 'b1', actionId: 'act-1', method: 'create' },
+      'u1',
+    );
+
+    // The draft is back in review even when the task couldn't be opened.
+    reopenDraftTasks.mockRejectedValue(new Error('rls'));
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    await expect(unmarkContentDraftReady(DRAFT)).resolves.toEqual({
+      status: 'in_review',
+      tasksReopened: 0,
+    });
+  });
+
+  it('leaves a draft published meanwhile published, and says so', async () => {
+    updated = null;
+    row = {
+      id: DRAFT,
+      brand_id: 'b1',
+      title: '',
+      page_type: null,
+      method: 'create',
+      status: 'published',
+      body_html: '',
+      author: 'user',
+      updated_at: '2026-10-20T15:00:00Z',
+    };
+    await expect(unmarkContentDraftReady(DRAFT)).resolves.toEqual({
+      status: 'published',
+      tasksReopened: 0,
+    });
+    expect(reopenDraftTasks).not.toHaveBeenCalled();
+    await expect(unmarkContentDraftReady('d1')).rejects.toThrow('invalid');
   });
 });
 

@@ -39,6 +39,7 @@ import { useBrandStore } from '@/stores/use-brand-store';
 import { AssignDialog } from './_assign-dialog';
 import { AiResultsStrip, PageTypeMix } from './_plan-insights';
 import { PlanTable } from './_plan-table';
+import { HeaderWithAiUsage } from '@/components/ai-usage/ai-usage-meter';
 
 type PlanRead = {
   brandId: string;
@@ -287,46 +288,48 @@ export default function ContentPlanPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">{t('title')}</h1>
-          <p className="text-sm text-muted-foreground">{t('description')}</p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <div
-            role="group"
-            aria-label={t('period')}
-            className="inline-flex rounded-lg border bg-muted/40 p-0.5"
-          >
-            {PLAN_PERIODS.map((value) => (
-              <button
-                key={value}
-                type="button"
-                aria-pressed={days === value}
-                onClick={() => changeDays(value)}
-                className={cn(
-                  'rounded-md px-3 py-1 text-sm transition-colors',
-                  days === value
-                    ? 'bg-background font-medium shadow-sm'
-                    : 'text-muted-foreground hover:text-foreground',
-                )}
-              >
-                {t('periods', { days: value })}
-              </button>
-            ))}
+      <HeaderWithAiUsage>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight">{t('title')}</h1>
+            <p className="text-sm text-muted-foreground">{t('description')}</p>
           </div>
-          <Button
-            className="gap-2"
-            onClick={() => {
-              setPreset(null);
-              setStarting(true);
-            }}
-          >
-            <Plus className="h-4 w-4" />
-            {t('newContent')}
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            <div
+              role="group"
+              aria-label={t('period')}
+              className="inline-flex rounded-lg border bg-muted/40 p-0.5"
+            >
+              {PLAN_PERIODS.map((value) => (
+                <button
+                  key={value}
+                  type="button"
+                  aria-pressed={days === value}
+                  onClick={() => changeDays(value)}
+                  className={cn(
+                    'rounded-md px-3 py-1 text-sm transition-colors',
+                    days === value
+                      ? 'bg-background font-medium shadow-sm'
+                      : 'text-muted-foreground hover:text-foreground',
+                  )}
+                >
+                  {t('periods', { days: value })}
+                </button>
+              ))}
+            </div>
+            <Button
+              className="gap-2"
+              onClick={() => {
+                setPreset(null);
+                setStarting(true);
+              }}
+            >
+              <Plus className="h-4 w-4" />
+              {t('newContent')}
+            </Button>
+          </div>
         </div>
-      </div>
+      </HeaderWithAiUsage>
       <NewContentDialog
         open={starting}
         onOpenChange={(open) => {

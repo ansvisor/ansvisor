@@ -1,7 +1,7 @@
 /**
- * Shared helpers for signal evaluators — JSON-LD extraction, link analysis,
- * and readability math. Kept dependency-free (cheerio + plain JS) so signals
- * stay fast and deterministic.
+ * Shared helpers for signal evaluators — JSON-LD extraction and link
+ * analysis (readability's math is in readability.js). Kept dependency-free
+ * (cheerio + plain JS) so signals stay fast and deterministic.
  */
 
 /**
@@ -90,29 +90,6 @@ export function metaContent(ctx, key) {
   const el = ctx.$(`meta[name="${key}"], meta[property="${key}"]`).first();
   const v = el.attr('content');
   return typeof v === 'string' ? v.trim() : null;
-}
-
-// --- Readability (Flesch Reading Ease) ---
-
-function countSyllables(word) {
-  const w = word.toLowerCase().replace(/[^a-z]/g, '');
-  if (!w) return 0;
-  if (w.length <= 3) return 1;
-  const stripped = w.replace(/(?:[^laeiouy]es|ed|[^laeiouy]e)$/, '').replace(/^y/, '');
-  const groups = stripped.match(/[aeiouy]{1,2}/g);
-  return groups ? groups.length : 1;
-}
-
-/**
- * Flesch Reading Ease for an English-ish body of text. Returns null when there
- * isn't enough text to score.
- */
-export function fleschReadingEase(text) {
-  const words = text.split(/\s+/).filter(Boolean);
-  if (words.length < 30) return null;
-  const sentences = (text.match(/[.!?]+(?:\s|$)/g) || []).length || 1;
-  const syllables = words.reduce((acc, w) => acc + countSyllables(w), 0);
-  return 206.835 - 1.015 * (words.length / sentences) - 84.6 * (syllables / words.length);
 }
 
 /** Count occurrences of a list of phrases (case-insensitive) in text. */

@@ -49,6 +49,9 @@ vi.mock('@/hooks/use-user-role', () => ({
   useUserRole: () => ({ role: canManage ? 'admin' : 'analyst', canManage, canAdmin: canManage }),
 }));
 
+vi.mock('@/components/ai-usage/ai-usage-meter', () => ({
+  HeaderWithAiUsage: ({ children }: { children: React.ReactNode }) => children,
+}));
 vi.mock('@/components/action-center/action-center-tabs', () => ({
   ActionCenterTabs: () => null,
 }));

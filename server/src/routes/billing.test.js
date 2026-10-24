@@ -52,6 +52,7 @@ function table(name) {
 
 const deliverEmail = vi.fn();
 const getAiUsage = vi.fn();
+const getDraftAiUsage = vi.fn();
 const getOrgIdForUser = vi.fn();
 vi.mock('../config/supabase.js', () => ({ default: { from: (name) => table(name) } }));
 vi.mock('../lib/email.js', () => ({ deliverEmail: (...args) => deliverEmail(...args) }));
@@ -64,6 +65,7 @@ class PlanLimitError extends Error {
 vi.mock('../lib/plan-guard.js', () => ({
   PlanLimitError,
   getAiUsage: (...args) => getAiUsage(...args),
+  getDraftAiUsage: (...args) => getDraftAiUsage(...args),
   getOrgIdForUser: (...args) => getOrgIdForUser(...args),
 }));
 
@@ -257,6 +259,47 @@ describe('GET /ai-usage', () => {
     getOrgIdForUser.mockResolvedValue('o1');
     getAiUsage.mockRejectedValue(new Error('db down'));
     const res = await fetch(`${baseUrl}/ai-usage`);
+    expect(res.status).toBe(500);
+    expect(await res.json()).toEqual({ error: 'Failed to read AI usage' });
+  });
+});
+
+describe('GET /ai-usage/draft/:draftId', () => {
+  const draftId = 'c0ffee00-0000-4000-8000-000000000001';
+
+  it('reads a page’s share of this period’s AI usage for the member’s organization', async () => {
+    getOrgIdForUser.mockResolvedValue('o1');
+    getDraftAiUsage.mockResolvedValue({ unlimited: false, percent: 3.7 });
+    const res = await fetch(`${baseUrl}/ai-usage/draft/${draftId}`);
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ unlimited: false, percent: 3.7 });
+    expect(getDraftAiUsage).toHaveBeenCalledWith('o1', draftId);
+  });
+
+  it('turns away an id that isn’t one', async () => {
+    getDraftAiUsage.mockReset();
+    const res = await fetch(`${baseUrl}/ai-usage/draft/not-an-id`);
+    expect(res.status).toBe(400);
+    expect(getDraftAiUsage).not.toHaveBeenCalled();
+  });
+
+  it('has no share to show without an organization (self-hosted)', async () => {
+    getOrgIdForUser.mockResolvedValue(null);
+    getDraftAiUsage.mockReset();
+    const res = await fetch(`${baseUrl}/ai-usage/draft/${draftId}`);
+    expect(await res.json()).toEqual({ unlimited: true, percent: null });
+    expect(getDraftAiUsage).not.toHaveBeenCalled();
+  });
+
+  it('answers plan_limit without an active plan, and says it failed when it can’t read', async () => {
+    getOrgIdForUser.mockResolvedValue('o1');
+    getDraftAiUsage.mockRejectedValue(new PlanLimitError('Choose a plan', 402));
+    let res = await fetch(`${baseUrl}/ai-usage/draft/${draftId}`);
+    expect(res.status).toBe(402);
+    expect(await res.json()).toMatchObject({ error: 'plan_limit' });
+
+    getDraftAiUsage.mockRejectedValue(new Error('db down'));
+    res = await fetch(`${baseUrl}/ai-usage/draft/${draftId}`);
     expect(res.status).toBe(500);
     expect(await res.json()).toEqual({ error: 'Failed to read AI usage' });
   });

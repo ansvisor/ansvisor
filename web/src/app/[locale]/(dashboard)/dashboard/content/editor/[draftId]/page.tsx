@@ -1,9 +1,10 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { Link } from '@/i18n/navigation';
+import { useAiUsage } from '@/components/providers/ai-usage-provider';
 import { Button } from '@/components/ui/button';
 import { buttonVariants } from '@/components/ui/button-variants';
 import { LoadingDots } from '@/components/ui/loading-dots';
@@ -93,6 +94,15 @@ export default function ContentEditorPage() {
       setAgentFinishedFor(agentState === 'failed' || stoppedFor === id ? null : id);
     }
   }
+  // The run's end reads the month's AI usage again, so the editor's header
+  // meter shows what it used (AI usage spec §3.3): the editor wasn't open while
+  // the page was being written.
+  const { refresh: refreshAiUsage } = useAiUsage();
+  const writingBefore = useRef(writing);
+  useEffect(() => {
+    if (writingBefore.current && !writing) refreshAiUsage();
+    writingBefore.current = writing;
+  }, [writing, refreshAiUsage]);
   // The agent's run ended, or was stopped: read the draft now, not on the next look.
   const rereadDraft = useCallback(
     (stopped?: boolean) => {

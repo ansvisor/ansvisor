@@ -73,6 +73,7 @@ function quality(over: Partial<QualityRead> = {}): QualityRead {
     canEdit: true,
     hasAuthors: true,
     brandName: 'Acme',
+    team: 'Acme Team',
     siteTrust,
     todos: qualityTodos({ eeat: score, author, hasAuthors: true, canEdit: true }),
     ...over,
