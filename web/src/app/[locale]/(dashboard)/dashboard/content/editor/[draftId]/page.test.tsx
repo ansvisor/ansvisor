@@ -4,7 +4,7 @@ import { NextIntlClientProvider } from 'next-intl';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import messages from '../../../../../../../../messages/en.json';
 import type { Editor } from '@tiptap/core';
-import { RoleProvider } from '@/components/providers/role-provider';
+import { RoleProvider, type TeamRole } from '@/components/providers/role-provider';
 import type { ContentDraft } from '@/lib/content/drafts';
 import type { DraftSuggestion } from '@/lib/content/suggestions';
 import { passageKey, type CitedPassage } from '@/lib/content/cited-passages';
@@ -111,7 +111,10 @@ const brandState = vi.hoisted(() => ({
   activeBrandId: 'b1' as string | null,
   brands: [{ id: 'b1' }, { id: 'b2' }],
   setActiveBrand: vi.fn(),
+  updateBrand: vi.fn(),
 }));
+const updateBrand = vi.hoisted(() => vi.fn());
+vi.mock('@/lib/actions/brand', () => ({ updateBrand }));
 vi.mock('@/stores/use-brand-store', () => ({
   useBrandStore: (selector: (state: typeof brandState) => unknown) => selector(brandState),
 }));
@@ -202,11 +205,11 @@ const draft = (over: Partial<ContentDraft> = {}): ContentDraft => ({
 let container: HTMLDivElement;
 let root: Root;
 
-async function renderPage() {
+async function renderPage(role: TeamRole = 'admin') {
   await act(async () => {
     root.render(
       <NextIntlClientProvider locale="en" messages={messages}>
-        <RoleProvider role="admin">
+        <RoleProvider role={role}>
           <ContentEditorPage />
         </RoleProvider>
       </NextIntlClientProvider>,
@@ -292,6 +295,8 @@ beforeEach(() => {
   localStorage.clear();
   brandState.activeBrandId = 'b1';
   brandState.setActiveBrand.mockReset();
+  brandState.updateBrand.mockReset();
+  updateBrand.mockReset();
   toast.mockReset();
   toast.success.mockReset();
   toast.error.mockReset();
@@ -484,6 +489,79 @@ describe('the content editor', () => {
         'Blog post',
         'Feature page',
       ]);
+    });
+
+    describe('its site type (Quality CE-056)', () => {
+      afterEach(() => {
+        delete process.env.NEXT_PUBLIC_CONTENT_QUALITY_PHASE;
+      });
+
+      it('is set for the whole brand from the menu once phase 2 is live', async () => {
+        process.env.NEXT_PUBLIC_CONTENT_QUALITY_PHASE = '2';
+        updateBrand.mockResolvedValue({ id: 'b1', siteType: 'ecommerce' });
+        getContentDraft.mockResolvedValue(
+          draft({ siteType: 'b2b', pageType: 'feature_page', pageTypeSource: 'user' }),
+        );
+        await renderPage();
+        expect(getMyRuleSets).toHaveBeenCalledTimes(1);
+        const items = await openTypes();
+        expect(items.slice(0, 4).map((item) => item.textContent)).toEqual([
+          'B2B SaaS',
+          'E-commerce',
+          'B2C',
+          'Feature page',
+        ]);
+        // No site type picked yet: the one shown is guessed.
+        expect(document.body.textContent).toContain('Guessed until someone picks one.');
+        await act(async () => items[1].click());
+        expect(updateBrand).toHaveBeenCalledWith('b1', { siteType: 'ecommerce' });
+        expect(brandState.updateBrand).toHaveBeenCalledWith('b1', {
+          id: 'b1',
+          siteType: 'ecommerce',
+        });
+        expect(toast).toHaveBeenCalledWith('Site type set to E-commerce for the whole brand.');
+        // My rules are kept per site type: read again once it is saved.
+        expect(getMyRuleSets).toHaveBeenCalledTimes(2);
+        // A shop's page types now, the type picked kept on the list.
+        const types = (await openTypes()).map((item) => item.textContent);
+        expect(types.slice(3, 5)).toEqual(['Product page', 'Category page']);
+        expect(types.at(-1)).toBe('Feature page');
+
+        // Kept as it was when it can't be saved.
+        vi.spyOn(console, 'error').mockImplementation(() => {});
+        updateBrand.mockRejectedValueOnce(new Error('rls'));
+        await act(async () =>
+          document.querySelectorAll<HTMLElement>('[role="menuitemradio"]')[2].click(),
+        );
+        expect(toast.error).toHaveBeenCalledWith("Couldn't change the site type. Try again.");
+        expect((await openTypes())[3].textContent).toBe('Product page');
+      });
+
+      it('saves a detected page type again for the new site type', async () => {
+        process.env.NEXT_PUBLIC_CONTENT_QUALITY_PHASE = '2';
+        updateBrand.mockResolvedValue({ id: 'b1', siteType: 'ecommerce' });
+        getContentDraft.mockResolvedValue(draft({ siteType: 'b2b', pageTypeSource: 'detected' }));
+        await renderPage();
+        await act(async () => (await openTypes())[1].click());
+        // The server reads the type again on a save (after the autosave's pause).
+        await vi.waitFor(() => expect(saveContentDraft).toHaveBeenCalledTimes(1), {
+          timeout: 3_000,
+        });
+      });
+
+      it('stays in Brand settings for members, and before phase 2', async () => {
+        process.env.NEXT_PUBLIC_CONTENT_QUALITY_PHASE = '2';
+        getContentDraft.mockResolvedValue(draft({ siteType: 'b2b', pageType: 'feature_page' }));
+        await renderPage('analyst');
+        expect((await openTypes())[0].textContent).toBe('Feature page');
+        await act(async () => root.unmount());
+        root = createRoot(container);
+
+        process.env.NEXT_PUBLIC_CONTENT_QUALITY_PHASE = '1';
+        await renderPage();
+        expect((await openTypes())[0].textContent).toBe('Feature page');
+        expect(updateBrand).not.toHaveBeenCalled();
+      });
     });
 
     it('puts the type back when picking it fails', async () => {

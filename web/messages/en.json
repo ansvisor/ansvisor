@@ -3576,7 +3576,12 @@
         "detectedHint": "Detected from the page as you write. Pick a type to keep it.",
         "pickedHint": "You picked this type, so changes to the page don't change it.",
         "siteSettings": "Change the site type in brand settings",
-        "failed": "Couldn't change the page type. Try again."
+        "failed": "Couldn't change the page type. Try again.",
+        "siteTitle": "Site type · for the whole brand",
+        "siteHint": "Sets the page types offered, My rules and what the Content Agent writes, for every page of this brand.",
+        "siteChanged": "Site type set to {site} for the whole brand.",
+        "siteFailed": "Couldn't change the site type. Try again.",
+        "siteGuessed": "Guessed until someone picks one."
       },
       "placeholder": "Start with the page's H1, then write…",
       "documentLabel": "Page content",

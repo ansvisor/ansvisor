@@ -28,6 +28,7 @@ import { AiUsageMeter } from '@/components/ai-usage/ai-usage-meter';
 import { useAiUsage } from '@/components/providers/ai-usage-provider';
 import { PLATFORM_LABELS } from '@/config/platform-labels';
 import { DraftMethodBadge, DraftStatusBadge } from '@/components/content/draft-badges';
+import { updateBrand } from '@/lib/actions/brand';
 import {
   decideDraftSuggestions,
   fixDraftRules,
@@ -89,7 +90,7 @@ import {
   titlePlaceholders,
   withByline,
 } from '@/lib/content/ready-to-publish';
-import { detectPageType } from '@/lib/content/page-types';
+import { detectPageType, isSiteType, type SiteType } from '@/lib/content/page-types';
 import { BAND_CLASSES, qualityAverage, qualityBand, qualityPhase } from '@/lib/content/quality';
 import { eeat, linksToCheck, trust, trustBlocks } from '@/lib/content/quality-checks';
 import { qualityTodos } from '@/lib/content/quality-todos';
@@ -115,6 +116,7 @@ import { saveBlob } from '@/lib/download';
 import { formatMonthDay } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { useBrandStore } from '@/stores/use-brand-store';
+import { useUserRole } from '@/hooks/use-user-role';
 import { AgentCard } from './_agent-card';
 import { AgentDrafting, draftingKey } from './_agent-drafting';
 import { AuthorMenu, MANAGE_AUTHORS_PATH } from './_author-menu';
@@ -310,8 +312,15 @@ export function DraftEditor({
       detectPageType({ title: draft.title, html: draft.bodyHtml }, draft.siteType) ??
       (isPageType(draft.pageType) ? draft.pageType : null),
   );
-  const detectType = (title: string, html: string) =>
-    setDetectedType((had) => detectPageType({ title, html }, draft.siteType) ?? had);
+  // The brand's site type (Quality CE-056, the spec's business type), changed
+  // here for the whole brand; a ref too, as the editor's update handler is
+  // made once.
+  const [siteType, setSiteType] = useState<SiteType>(draft.siteType);
+  const siteTypeRef = useRef(draft.siteType);
+  const detectType = (title: string, html: string) => {
+    const site = siteTypeRef.current;
+    setDetectedType((had) => detectPageType({ title, html }, site) ?? had);
+  };
   const pageType = picked ?? detectedType;
   // The HTML view's text while it is open; null in the visual editor.
   const [htmlSource, setHtmlSource] = useState<string | null>(null);
@@ -445,6 +454,7 @@ export function DraftEditor({
   const reads = useDraftReads(draft.id);
   const rules = useDraftRules({
     draft,
+    siteType,
     html: pageHtml,
     characters: (editor?.storage.characterCount.characters() as number | undefined) ?? 0,
     pageType,
@@ -1869,6 +1879,39 @@ export function DraftEditor({
     }
   };
 
+  // The site type, for the whole brand as in Brand settings: admins and
+  // managers (as the brands table lets them), once Quality's phase 2 is live.
+  // The page types offered, My rules and the agent follow it.
+  const { canManage } = useUserRole();
+  const updateBrandStore = useBrandStore((s) => s.updateBrand);
+  const storedSite = useBrandStore((s) => s.brands.find((b) => b.id === draft.brandId)?.siteType);
+  const siteGuessed = !isSiteType(storedSite);
+  const tSites = useTranslations('brands.siteTypes');
+  const [siteSaving, setSiteSaving] = useState(false);
+  const pickSite = async (next: SiteType) => {
+    if (next === siteType || siteSaving) return;
+    // Taken once saved: My rules are read again for it, and one pick at a time.
+    setSiteSaving(true);
+    const saved = await updateBrand(draft.brandId, { siteType: next }).catch((err) => {
+      console.error('Failed to change the site type:', err);
+      return null;
+    });
+    setSiteSaving(false);
+    if (!saved) {
+      toast.error(t('pageType.siteFailed'));
+      return;
+    }
+    updateBrandStore(draft.brandId, saved);
+    setSiteType(next);
+    siteTypeRef.current = next;
+    const html = editor?.getHTML() ?? pageHtml;
+    detectType(title, html);
+    // A detected type is the server's too: a save reads it again for the new
+    // site type, so the Library and the agent agree with the header.
+    if (picked === null && editor) autosave.schedule({ title, bodyHtml: html });
+    toast(t('pageType.siteChanged', { site: tSites(next) }));
+  };
+
   // Why History waits (the HTML view holds the page, a restore runs), or null.
   const historyWaits =
     htmlSource !== null ? t('history.htmlOpen') : restoring ? t('history.restoring') : null;
@@ -2053,7 +2096,12 @@ export function DraftEditor({
         <div className="mt-1.5 flex flex-wrap items-center gap-2 pl-[38px]">
           <PageTypeMenu
             brandId={draft.brandId}
-            siteType={draft.siteType}
+            siteType={siteType}
+            onPickSite={
+              canManage && qualityPhase() >= 2 ? (next) => void pickSite(next) : undefined
+            }
+            sitePending={siteSaving}
+            siteGuessed={siteGuessed}
             pageType={pageType}
             detected={picked === null}
             isNew={draft.method === 'create'}
@@ -2295,6 +2343,7 @@ export function DraftEditor({
         {panelOpen ? (
           <EditorSidePanel
             draft={draft}
+            siteType={siteType}
             title={title}
             bodyHtml={pageHtml}
             pageType={pageType}

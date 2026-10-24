@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 /**
  * Rebuild outline (Content Editor CE-007): the brief written from the
@@ -352,6 +352,8 @@ describe('rebuildSources', () => {
 });
 
 describe('the brief prompt', () => {
+  afterEach(() => vi.unstubAllEnvs());
+
   it('says a new page is new, and lists none where a source is empty', () => {
     const prompt = buildBriefPrompt({
       brand: { name: 'Acme', language: 'en' },
@@ -365,6 +367,23 @@ describe('the brief prompt', () => {
     expect(prompt).toContain('- burr grinder');
     expect(prompt).not.toContain('headings now');
     expect(prompt).toContain('Write the brief in English.');
+  });
+
+  it('names the brand’s site type once Quality’s phase 2 is live (CE-056)', () => {
+    const draft = { title: 'Rain jackets', page_type: null, method: 'create', source_url: null };
+    const read = (phase) => {
+      vi.stubEnv('CONTENT_QUALITY_PHASE', phase);
+      return buildBriefPrompt({
+        brand: { name: 'Acme', industry: 'Fashion & Apparel', language: 'en' },
+        draft,
+        prompts: [],
+        sources: sources({ fanouts: [], pages: [], queries: [], headings: [] }),
+      });
+    };
+    expect(read('2')).toContain(
+      'Industry: Fashion & Apparel\nSite type: E-commerce (an online shop selling products)\nDescription:',
+    );
+    expect(read('1')).toContain('Industry: Fashion & Apparel\nDescription:');
   });
 
   it('maps an outline with no fan-outs kept to none', () => {
