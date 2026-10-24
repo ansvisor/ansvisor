@@ -3,20 +3,34 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 /**
  * The Billing page's AI usage meter reads the period's spend on the
  * workspace's one AI budget by feature (ai_usage_by_feature, 00242), as
- * shares of the plan's budget.
+ * shares of the plan's budget; the editor meter reads a page's share.
  */
 
 let org;
 let spend;
 let rpcCalls;
+// The page's ledger rows, and the filters its read used.
+let pageRows;
+let pageFilters;
 
 function query(table) {
   const builder = {
     select: () => builder,
-    eq: () => builder,
+    eq: (column, value) => {
+      if (table === 'prompt_improve_usage') pageFilters.push(['eq', column, value]);
+      return builder;
+    },
+    gte: (column, value) => {
+      if (table === 'prompt_improve_usage') pageFilters.push(['gte', column, value]);
+      return builder;
+    },
     maybeSingle: () => builder,
     single: () => builder,
-    then: (resolve) => resolve({ data: table === 'organizations' ? org : null, error: null }),
+    then: (resolve) =>
+      resolve({
+        data: table === 'organizations' ? org : table === 'prompt_improve_usage' ? pageRows : null,
+        error: null,
+      }),
   };
   return builder;
 }
@@ -34,6 +48,8 @@ beforeEach(async () => {
   };
   spend = [];
   rpcCalls = [];
+  pageRows = [];
+  pageFilters = [];
   vi.doMock('../config/supabase.js', () => ({
     default: {
       from: (t) => query(t),
@@ -146,5 +162,50 @@ describe('getAiUsage', () => {
     const usage = await guard.getAiUsage('o1');
     expect(usage).toMatchObject({ unlimited: true, percentUsed: null, features: [] });
     expect(rpcCalls).toEqual([]);
+  });
+});
+
+describe('getDraftAiUsage', () => {
+  it('reads the page’s spend this period as a share of the budget, from the org’s own rows', async () => {
+    // Starter's budget is $1: 0.0371 is 3.7%.
+    pageRows = [{ cost_usd: '0.0250' }, { cost_usd: '0.0121' }];
+    spend = [{ feature: 'content', cost_usd: '0.2' }];
+    expect(await guard.getDraftAiUsage('o1', 'd1')).toEqual({ unlimited: false, percent: 3.7 });
+    expect(pageFilters).toEqual([
+      ['eq', 'organization_id', 'o1'],
+      ['eq', 'content_draft_id', 'd1'],
+      // The same period as the month's figure: it renews on the 20th.
+      ['gte', 'used_at', '2026-10-20T09:00:00.000Z'],
+    ]);
+  });
+
+  it('reads a page with no AI calls as 0, and one with a sliver as 0.1', async () => {
+    expect(await guard.getDraftAiUsage('o1', 'd1')).toEqual({ unlimited: false, percent: 0 });
+    // A small Fix run on a big budget: $0.005 of Enterprise's $10.
+    org = { ...org, plan: 'enterprise' };
+    pageRows = [{ cost_usd: '0.005' }];
+    spend = [{ feature: 'content', cost_usd: '0.005' }];
+    expect(await guard.getDraftAiUsage('o1', 'd1')).toEqual({ unlimited: false, percent: 0.1 });
+  });
+
+  it('scales the page’s spend to fit once the month’s is past the budget, as the month’s figure', async () => {
+    // The last call took the month to $1.07 of Starter's $1, all on this page.
+    pageRows = [{ cost_usd: '1.07' }];
+    spend = [{ feature: 'content', cost_usd: '1.07' }];
+    expect(await guard.getDraftAiUsage('o1', 'd1')).toEqual({ unlimited: false, percent: 100 });
+    // Half of it on this page.
+    pageRows = [{ cost_usd: '0.535' }];
+    expect(await guard.getDraftAiUsage('o1', 'd1')).toEqual({ unlimited: false, percent: 50 });
+  });
+
+  it('rejects with plan_limit without an active plan, and shows none for an unlimited budget', async () => {
+    org = { ...org, subscription_status: 'incomplete' };
+    await expect(guard.getDraftAiUsage('o1', 'd1')).rejects.toMatchObject({ statusCode: 402 });
+
+    delete process.env.IS_CLOUD;
+    vi.resetModules();
+    guard = await import('./plan-guard.js');
+    expect(await guard.getDraftAiUsage('o1', 'd1')).toEqual({ unlimited: true, percent: null });
+    expect(pageFilters).toEqual([]);
   });
 });

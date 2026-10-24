@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { readAiUsage, readUsageLimits } from './ai-usage-client';
+import { readAiUsage, readDraftAiUsage, readUsageLimits } from './ai-usage-client';
 
 /**
  * The header meter's reads, from the browser through the API's proxy: the
@@ -90,5 +90,28 @@ describe('readUsageLimits', () => {
     fetchMock.mockRejectedValueOnce(new Error('offline'));
     expect(await readUsageLimits(null)).toEqual({ auditPages: null, promptLocations: null });
     expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('readDraftAiUsage', () => {
+  it('reads the page’s share through the proxy', async () => {
+    fetchMock.mockResolvedValue(answer(200, { unlimited: false, percent: 3.7 }));
+    expect(await readDraftAiUsage('d 1')).toBe(3.7);
+    expect(fetchMock).toHaveBeenCalledWith('/api/aeo/api/billing/ai-usage/draft/d%201', {
+      headers: { Authorization: 'Bearer token-1' },
+      cache: 'no-store',
+      signal: expect.any(AbortSignal),
+    });
+  });
+
+  it('is null on a plan without an allowance, when it can’t be read, or without a session', async () => {
+    fetchMock.mockResolvedValue(answer(200, { unlimited: true, percent: null }));
+    expect(await readDraftAiUsage('d1')).toBeNull();
+    fetchMock.mockResolvedValue(answer(402, { error: 'plan_limit' }));
+    expect(await readDraftAiUsage('d1')).toBeNull();
+    session = null;
+    fetchMock.mockClear();
+    expect(await readDraftAiUsage('d1')).toBeNull();
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });
