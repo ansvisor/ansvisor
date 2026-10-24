@@ -149,10 +149,14 @@ export function SendDialog({
     }
     const [delivery] = result.deliveries;
     if (delivery?.status === 'failed') {
-      // What the webhook answered, else why it wasn't reached.
+      // What the webhook answered when it refused the page; else why it
+      // failed: not reached, or the workflow's own reason in a callback
+      // after it took the page (a 2xx).
+      const refused =
+        delivery.http_status && (delivery.http_status < 200 || delivery.http_status > 299);
       setProblem(
-        delivery.http_status
-          ? { status: delivery.http_status }
+        refused
+          ? { status: delivery.http_status! }
           : { failed: delivery.error ?? t('errors.failed') },
       );
       return;

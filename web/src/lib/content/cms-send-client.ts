@@ -105,10 +105,10 @@ const STATUS_IDS_PER_READ = 500;
  * A send still queued after this was left by a server that stopped mid-batch
  * (00262 closes it at the workspace's next send): it reads as interrupted,
  * so neither the Library nor the editor waits on it or says it is still
- * going. Read by the browser's clock: one 15 minutes fast would read a send
+ * going. Read by the browser's clock: one 30 minutes fast would read a send
  * under way as interrupted, until its next read.
  */
-const INTERRUPTED_AFTER_MS = 15 * 60_000;
+const INTERRUPTED_AFTER_MS = 30 * 60_000;
 
 /** A send as the Library and the editor read it: one left queued, as interrupted. */
 function lastSend(row: {
