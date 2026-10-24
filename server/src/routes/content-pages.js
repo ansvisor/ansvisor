@@ -7,12 +7,15 @@ import { onBrandDomain } from '../lib/audit/host.js';
 import { MAX_SOURCE_SITES, linkedSites, readSourceClasses } from '../lib/content-source-class.js';
 import { qualityPhase } from '../lib/content-quality.js';
 import { readDraftClaims } from '../lib/content-quality-claims.js';
+import { readPage } from '../lib/content-quality-page.js';
+import { siteTypeOf } from '../lib/content-page-types.js';
 import { checkLinks, reserveReads } from '../lib/link-check.js';
 import { MAX_CONTENT_LENGTH, extractPageContent } from '../lib/page-content.js';
 import { PageFetchError, fetchPage } from '../lib/safe-fetch.js';
 import { PlanLimitError } from '../lib/plan-guard.js';
 import {
   claimsLimiter,
+  pageReadLimiter,
   linkCheckLimiter,
   qualityCheckLimiter,
 } from '../middleware/rate-limiter.js';
@@ -245,6 +248,76 @@ router.post('/claims', claimsLimiter, async (req, res) => {
       'content claims error',
     );
     return res.status(500).json({ error: 'Failed to read the claims', code: 'failed' });
+  }
+});
+
+const pageReadBody = z.object({ draftId: z.guid() });
+
+/**
+ * POST /api/content-pages/page-read { draftId } (Quality CE-049): the
+ * draft's visual proof spots and proof asks, read from the page as saved
+ * with its page type, the brand's business type and the brand's approved
+ * claims about itself (CE-047). Off until Quality's phase 2 is live. A spent
+ * AI budget answers the kept read with `paused`.
+ */
+router.post('/page-read', pageReadLimiter, async (req, res) => {
+  if (qualityPhase() < 2) return res.status(404).json({ error: 'Not available', code: 'off' });
+  const parsed = pageReadBody.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: 'invalid', code: 'invalid' });
+  try {
+    const { data: draft, error } = await supabaseAdmin
+      .from('content_drafts')
+      .select('brand_id, body_html, page_type')
+      .eq('id', parsed.data.draftId)
+      .maybeSingle();
+    if (error) throw error;
+    if (!draft) return res.status(404).json({ error: 'Draft not found', code: 'not_found' });
+    const { orgId } = await assertBrandAccess(draft.brand_id, req.user.id);
+    const [brandRes, factsRes] = await Promise.all([
+      supabaseAdmin
+        .from('brands')
+        .select('name, site_type, industry, shopping_mode_enabled')
+        .eq('id', draft.brand_id)
+        .single(),
+      supabaseAdmin
+        .from('brand_facts')
+        .select('quote')
+        .eq('brand_id', draft.brand_id)
+        .eq('kind', 'claim')
+        .eq('status', 'approved')
+        .is('gone_at', null)
+        // One order for ties (a run's facts share their time): the page's read is kept by them.
+        .order('first_seen_at')
+        .order('id')
+        .limit(10),
+    ]);
+    if (brandRes.error) throw brandRes.error;
+    if (factsRes.error) throw factsRes.error;
+    const brand = brandRes.data;
+    const result = await readPage({
+      orgId,
+      draftId: parsed.data.draftId,
+      html: draft.body_html ?? '',
+      siteType: siteTypeOf({
+        siteType: brand.site_type,
+        industry: brand.industry,
+        shoppingModeEnabled: brand.shopping_mode_enabled,
+      }),
+      pageType: draft.page_type,
+      brandName: brand.name,
+      facts: (factsRes.data ?? []).map((f) => f.quote),
+    });
+    return res.json(result);
+  } catch (err) {
+    if (err?.status === 403 || err?.status === 404) {
+      return res.status(err.status).json({ error: err.message, code: 'forbidden' });
+    }
+    // Not the whole error: a provider's carries the request, the page's words.
+    req.log.error(
+      { err: { name: err?.name, message: err?.message, stack: err?.stack } },
+      'content page read error',
+    );
+    return res.status(500).json({ error: 'Failed to read the page', code: 'failed' });
   }
 });
 
