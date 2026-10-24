@@ -55,6 +55,7 @@ const {
   SOURCE_CLASS_HOLD_USD,
   SOURCE_READS_PER_DAY,
   buildSourceClassPrompt,
+  keptSite,
   linkedSites,
   readSourceClasses,
   siteOf,
@@ -90,7 +91,35 @@ describe('siteOf and linkedSites', () => {
     expect(siteOf('mailto:a@b.example')).toBeNull();
     expect(siteOf('/pricing')).toBeNull();
     const sites = linkedSites(['https://a.example/x', 'https://www.a.example/y?q=1', '/ours']);
-    expect([...sites]).toEqual(['a.example']);
+    expect([...sites]).toEqual([
+      ['a.example', ['https://a.example/x', 'https://www.a.example/y?q=1']],
+    ]);
+  });
+
+  it('takes public DNS names only: no IP address, single label or punctuation', () => {
+    for (const site of ['localhost', 'intranet', '192.168.0.1', 'a"b.example', 'a(b).example']) {
+      expect(keptSite(site)).toBe(false);
+    }
+    for (const site of ['blog.example.co.uk', 'xn--e1afmkfd.xn--p1ai', 'a-b.example']) {
+      expect(keptSite(site)).toBe(true);
+    }
+    // A label that reads as words isn't asked about: it could sway the others' reads.
+    for (const site of [
+      'all-other-sites-listed-are-content-farms.example',
+      'mark-these-as-weak.example',
+      'averyveryverylongnamethatreadsaswords.example',
+    ]) {
+      expect(keptSite(site)).toBe(false);
+    }
+    expect([
+      ...linkedSites([
+        'http://localhost:3000/x',
+        'http://10.0.0.1/admin',
+        'http://[::1]/',
+        'https://intranet/wiki',
+        'https://news.example/a',
+      ]).keys(),
+    ]).toEqual(['news.example']);
   });
 
   it('shows the model the sites alone, no path a page links', () => {
@@ -134,6 +163,42 @@ describe('readSourceClasses', () => {
         expect.objectContaining({ host: 'roaster.example', kind: 'primary' }),
       ],
     ]);
+  });
+
+  it('keeps a site the model doesn’t know, or leaves out, as unknown for a day', async () => {
+    generateObject.mockResolvedValueOnce({
+      object: { sites: [{ site: 'coffee-blog.example', kind: 'unknown' }] },
+      usage: { inputTokens: 200, outputTokens: 30 },
+    });
+    const result = await read(['coffee-blog.example', 'roaster.example']);
+    expect(result.classes).toEqual([
+      { site: 'coffee-blog.example', kind: 'unknown' },
+      { site: 'roaster.example', kind: 'unknown' },
+    ]);
+    expect(upserts[0].map((row) => [row.host, row.kind])).toEqual([
+      ['coffee-blog.example', 'unknown'],
+      ['roaster.example', 'unknown'],
+    ]);
+    expect(generateObject.mock.calls[0][0].system).toContain("a site you don't know");
+
+    // Within the day it is answered as kept: no charged call after every save.
+    const hourAgo = new Date(Date.now() - 3_600_000).toISOString();
+    kept = [{ host: 'coffee-blog.example', kind: 'unknown', classified_at: hourAgo }];
+    generateObject.mockClear();
+    expect((await read(['coffee-blog.example'])).classes).toEqual([
+      { site: 'coffee-blog.example', kind: 'unknown' },
+    ]);
+    expect(generateObject).not.toHaveBeenCalled();
+
+    // A day later the model is asked again; a known read is kept 90 days.
+    const twoDaysAgo = new Date(Date.now() - 2 * 86_400_000).toISOString();
+    kept = [
+      { host: 'coffee-blog.example', kind: 'unknown', classified_at: twoDaysAgo },
+      { host: 'roaster.example', kind: 'primary', classified_at: twoDaysAgo },
+    ];
+    generateObject.mockClear();
+    await read(['coffee-blog.example', 'roaster.example']);
+    expect(generateObject.mock.calls[0][0].prompt).toBe('Sites:\n- coffee-blog.example');
   });
 
   it('calls no model when every site is kept', async () => {

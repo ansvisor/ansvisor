@@ -97,6 +97,19 @@ describe('useSourceClasses', () => {
     expect(kinds()).toEqual(new Map([['blog.example', 'weak']]));
   });
 
+  it('lets a site go when its call fails on its own, to ask again after the next save', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    classifyDraftSources.mockRejectedValueOnce(new Error('network'));
+    await render(['blog.example']);
+    await wait();
+    expect(error).toHaveBeenCalledWith('Failed to read the sources:', expect.any(Error));
+    await render(['blog.example'], 's2');
+    await wait();
+    expect(classifyDraftSources).toHaveBeenCalledTimes(2);
+    expect(kinds()).toEqual(new Map([['blog.example', 'weak']]));
+    error.mockRestore();
+  });
+
   it('stops asking, silently, when the API has the reads off', async () => {
     classifyDraftSources.mockResolvedValueOnce({ error: 'off' });
     await render(['blog.example']);

@@ -61,21 +61,27 @@ export function useSourceClasses(
         askedAt.current.set(site, savedAt);
         asking.current.add(site);
       }
-      void classifyDraftSources(draftId, fresh).then((result) => {
-        for (const site of fresh) asking.current.delete(site);
-        if (!open.current) return;
-        if ('error' in result) {
-          if (result.error === 'ai_budget') setPaused(true);
-          else if (result.error === 'off') setOff(true);
-          else console.error('Failed to read the sources:', result.error);
-          return;
-        }
-        setKinds((prev) => {
-          const next = new Map(prev);
-          for (const { site, kind } of result.classes) next.set(site, kind);
-          return next;
+      // A call that fails on its own (the network, a deploy meanwhile) lets
+      // its sites go too: they're asked about again after the next save.
+      void classifyDraftSources(draftId, fresh)
+        .then((result) => {
+          if (!open.current) return;
+          if ('error' in result) {
+            if (result.error === 'ai_budget') setPaused(true);
+            else if (result.error === 'off') setOff(true);
+            else console.error('Failed to read the sources:', result.error);
+            return;
+          }
+          setKinds((prev) => {
+            const next = new Map(prev);
+            for (const { site, kind } of result.classes) next.set(site, kind);
+            return next;
+          });
+        })
+        .catch((err) => console.error('Failed to read the sources:', err))
+        .finally(() => {
+          for (const site of fresh) asking.current.delete(site);
         });
-      });
     }, SOURCE_CLASS_DELAY_MS);
     return () => clearTimeout(timer);
   }, [draftId, savedAt, key, enabled, paused, off, kinds]);

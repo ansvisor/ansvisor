@@ -557,9 +557,10 @@ export function DraftEditor({
         ? unplacedSites(pageBlocks, brandDomains, {
             competitorDomains: competitorDomains ?? [],
             pageType,
+            kept: new Set(keptSources),
           })
         : [],
-    [sourcesOn, brandDomains, pageBlocks, competitorDomains, pageType],
+    [sourcesOn, brandDomains, pageBlocks, competitorDomains, pageType, keptSources],
   );
   const { kinds: aiKinds, paused: aiPaused } = useSourceClasses(
     draft.id,

@@ -2,7 +2,7 @@ import { classifyDomain, normalizeDomain } from '@/lib/citations/classify';
 import type { ContentAuthor } from './authors';
 import { cleanHref } from './html-allowlist';
 import { ownText, sentencesOf } from './readability';
-import { sourceClass, type AiSourceClass, type SourceClass } from './source-class';
+import { askableSite, sourceClass, type AiSourceClass, type SourceClass } from './source-class';
 
 /**
  * E-E-A-T and Trust (Content Editor Quality spec §2.1, §2.2): checks read
@@ -341,7 +341,12 @@ export function trust({
       pageType: kinds!.pageType,
     });
     const site = normalizeDomain(l.url);
-    const kind = ruled ?? (site ? (kinds!.ai?.get(site) ?? null) : null);
+    // A site the model doesn't know is left out, as one the rules can't
+    // place; a link the person kept counts as kept, read or not (its site
+    // isn't asked about once all its links are: unplacedSites).
+    const read = site ? kinds!.ai?.get(site) : undefined;
+    const kind =
+      ruled ?? (read && read !== 'unknown' ? read : kinds!.kept.has(l.url) ? 'weak' : null);
     return kind && kind !== 'own' ? [{ ...l, kind, ai: ruled === null }] : [];
   });
   const isWeak = (kind: SourceClass): kind is 'weak' | 'competitor' =>
@@ -405,19 +410,29 @@ export function trust({
 /**
  * The sites of the page's sources the rules can't place (CE-046, part b):
  * what the editor asks the model about, each once, as the citations name
- * them.
+ * them. A site whose every link the person kept isn't asked about (a kept
+ * source counts as it is: trust), nor one the API wouldn't ask about
+ * (askableSite).
  */
 export function unplacedSites(
   blocks: TrustBlock[],
   brandDomains: string[],
-  { competitorDomains, pageType }: Pick<SourceRead, 'competitorDomains' | 'pageType'>,
+  {
+    competitorDomains,
+    pageType,
+    kept,
+  }: Pick<SourceRead, 'competitorDomains' | 'pageType' | 'kept'>,
 ): string[] {
-  const sites = new Set<string>();
+  const links = new Map<string, string[]>();
   for (const l of byUrl(pageLinks(blocks, brandDomains).filter((link) => link.external))) {
     const site = normalizeDomain(l.url);
-    if (site && !sourceClass(l.url, { brandDomains, competitorDomains, pageType })) {
-      sites.add(site);
+    if (
+      site &&
+      askableSite(site) &&
+      !sourceClass(l.url, { brandDomains, competitorDomains, pageType })
+    ) {
+      links.set(site, [...(links.get(site) ?? []), l.url]);
     }
   }
-  return [...sites];
+  return [...links].filter(([, urls]) => !urls.every((url) => kept.has(url))).map(([site]) => site);
 }

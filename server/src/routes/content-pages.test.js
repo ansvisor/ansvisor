@@ -237,6 +237,21 @@ describe('POST /api/content-pages/source-classes (Quality CE-046)', () => {
     });
   });
 
+  it('asks about no site whose every link the person kept', async () => {
+    draftRow = {
+      ...draftRow,
+      kept_sources: ['https://www.coffee-blog.example/best', 'https://coffee-blog.example/about'],
+    };
+    await ask({ draftId: DRAFT, sites: ['coffee-blog.example'] });
+    expect(readSourceClasses).toHaveBeenCalledWith(expect.objectContaining({ sites: [] }));
+    // One link still not kept: asked about.
+    draftRow = { ...draftRow, kept_sources: ['https://www.coffee-blog.example/best'] };
+    await ask({ draftId: DRAFT, sites: ['coffee-blog.example'] });
+    expect(readSourceClasses).toHaveBeenLastCalledWith(
+      expect.objectContaining({ sites: ['coffee-blog.example'] }),
+    );
+  });
+
   it('is off before Quality’s phase 2, and says when the AI budget is spent', async () => {
     vi.stubEnv('CONTENT_QUALITY_PHASE', '1');
     expect((await ask({ draftId: DRAFT, sites: ['coffee-blog.example'] })).status).toBe(404);

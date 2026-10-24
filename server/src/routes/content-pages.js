@@ -152,7 +152,7 @@ router.post('/source-classes', qualityCheckLimiter, async (req, res) => {
   try {
     const { data: draft, error } = await supabaseAdmin
       .from('content_drafts')
-      .select('brand_id, body_html')
+      .select('brand_id, body_html, kept_sources')
       .eq('id', parsed.data.draftId)
       .maybeSingle();
     if (error) throw error;
@@ -165,7 +165,11 @@ router.post('/source-classes', qualityCheckLimiter, async (req, res) => {
         .map((_, el) => $(el).attr('href'))
         .get(),
     );
-    const sites = [...new Set(parsed.data.sites)].filter((site) => linked.has(site));
+    // A site whose every link the person kept counts as it is: none to ask about.
+    const keptLinks = new Set(draft.kept_sources ?? []);
+    const sites = [...new Set(parsed.data.sites)].filter(
+      (site) => linked.has(site) && !linked.get(site).every((href) => keptLinks.has(href)),
+    );
     const result = await readSourceClasses({
       orgId,
       draftId: parsed.data.draftId,

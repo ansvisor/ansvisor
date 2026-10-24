@@ -12,8 +12,38 @@ import { classifyDomain, normalizeDomain } from '@/lib/citations/classify';
  */
 
 export type SourceClass = 'primary' | 'secondary' | 'weak' | 'competitor' | 'own';
-/** What the model reads a site as (content_source_classes, 00264). */
-export type AiSourceClass = 'primary' | 'secondary' | 'weak';
+/**
+ * What the model reads a site as (content_source_classes, 00264): unknown
+ * when it doesn't know the site, which Trust leaves out as the rules do.
+ */
+export type AiSourceClass = 'primary' | 'secondary' | 'weak' | 'unknown';
+
+/**
+ * A public DNS name: letters, digits and hyphens in each label, a dot at
+ * least and a letter top-level domain (punycode passes); no IP address, no
+ * single-label name (localhost, an intranet's), no other characters. As
+ * the API's and the table's check.
+ */
+export const SITE_NAME =
+  /^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z][a-z0-9-]{0,61}[a-z0-9]$/;
+
+/**
+ * A site the model may be asked about, as the API takes it (keptSite): a
+ * public DNS name, no "www." left at its start, and no label that reads as
+ * words (longer than 30 characters, or 3 hyphens or more; punycode aside).
+ */
+export function askableSite(site: string): boolean {
+  return (
+    SITE_NAME.test(site) &&
+    !site.startsWith('www.') &&
+    !site
+      .split('.')
+      .some(
+        (label) =>
+          !label.startsWith('xn--') && (label.length > 30 || (label.match(/-/g) ?? []).length >= 3),
+      )
+  );
+}
 /** Sites one ask of the model takes (the API's MAX_SOURCE_SITES). */
 export const MAX_SOURCE_SITES = 20;
 
