@@ -168,11 +168,36 @@ describe('SendDialog', () => {
     expect(button('Send').disabled).toBe(true);
   });
 
-  it('fills the fields from the page when the kept ones can’t be read', async () => {
-    readDraftCms.mockRejectedValue(new Error('offline'));
+  it('holds the send while the last send can’t be read, and reads it again', async () => {
+    // Unread, a page sent before under another slug could land in the CMS twice.
+    readDraftCms.mockRejectedValueOnce(new Error('offline'));
     await render();
-    expect(field('cms-slug').value).toBe('pour-over');
+    expect(alert()).toBe(
+      "Couldn't read this page's last send. Try again before sending, so it doesn't land in your CMS twice.Try again",
+    );
+    expect(button('Send').disabled).toBe(true);
+    let answer: (read: DraftCms) => void = () => {};
+    readDraftCms.mockReturnValueOnce(new Promise((resolve) => (answer = resolve)));
+    const retry = dialog().querySelector<HTMLButtonElement>('[aria-label="Try again"]')!;
+    retry.focus();
+    await act(async () => retry.click());
+    expect(readDraftCms).toHaveBeenCalledTimes(2);
+    // Reading again, it stays where it is (and focus with it), and Send waits.
+    expect(retry.isConnected).toBe(true);
+    expect(retry.disabled).toBe(true);
+    expect(button('Send').disabled).toBe(true);
+    await act(async () => answer({ ...neverSent, fields: { slug: 'coffee' } }));
+    expect(alert()).toBeUndefined();
+    expect(field('cms-slug').value).toBe('coffee');
     expect(button('Send').disabled).toBe(false);
+  });
+
+  it('holds the send the same way when the read answers nothing (before 00262)', async () => {
+    readDraftCms.mockResolvedValueOnce(null);
+    await render();
+    expect(alert()).toContain("Couldn't read this page's last send.");
+    expect(dialog().querySelector('[aria-label="Try again"]')).not.toBeNull();
+    expect(button('Send').disabled).toBe(true);
   });
 
   it('keeps the person’s changes when the kept fields come in after them', async () => {
@@ -185,6 +210,21 @@ describe('SendDialog', () => {
     await act(async () => answer({ ...neverSent, fields: { slug: 'coffee' } }));
     expect(field('cms-slug').value).toBe('my-coffee');
     expect(button('Send').disabled).toBe(false);
+  });
+
+  it('still takes the kept slug when the person changed another field first', async () => {
+    let answer: (read: DraftCms) => void = () => {};
+    readDraftCms.mockReturnValue(new Promise((resolve) => (answer = resolve)));
+    await render();
+    await setValue(field('cms-meta-description'), 'My own words.');
+    await act(async () =>
+      answer({ ...neverSent, fields: { slug: 'coffee', metaDescription: 'Kept words.' } }),
+    );
+    // The slug it was sent under before, or the CMS could get the page twice.
+    expect(field('cms-slug').value).toBe('coffee');
+    expect(dialog().querySelector<HTMLTextAreaElement>('#cms-meta-description')!.value).toBe(
+      'My own words.',
+    );
   });
 
   it('says why the page didn’t go, and stays open', async () => {

@@ -4246,6 +4246,10 @@
         "empty": "The page has nothing under its title yet. Write it first, then send it.",
         "noTitle": "Give the page a title first: your CMS needs one.",
         "tooLong": "The page is over a million characters: shorten it to send it.",
+        "unsaved": "The page has changes that aren't saved, so it wasn't sent.",
+        "applyHtml": "Apply or discard your HTML changes first: they aren't in the page yet.",
+        "readFailed": "Couldn't read this page's last send. Try again before sending, so it doesn't land in your CMS twice.",
+        "retry": "Try again",
         "longTitle": "Shorten the title to 300 characters first: your CMS takes no more.",
         "fields": {
           "title": "Title",

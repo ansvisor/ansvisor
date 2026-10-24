@@ -10,23 +10,27 @@ import type { CmsPage } from './cms-send';
 let session: { access_token: string } | null;
 let reads: Record<string, { data: unknown; error: unknown }>;
 const filters: [string, string, unknown][] = [];
-/** The sends read by draft ids: each read's answer, in turn. */
+/** Each draft's last send, read by draft ids: each read's answer, in turn. */
 let statusReads: { data: unknown; error: unknown }[];
 const statusIds: string[][] = [];
+const rpcs: string[] = [];
 
 vi.mock('@/config/api', () => ({ BROWSER_API_BASE_URL: '/api/aeo' }));
 vi.mock('@/lib/supabase/client', () => ({
   createClient: () => ({
     auth: { getSession: async () => ({ data: { session } }) },
+    rpc: async (fn: string, args: { p_draft_ids: string[] }) => {
+      rpcs.push(fn);
+      statusIds.push(args.p_draft_ids);
+      return statusReads.shift();
+    },
     from: (table: string) => {
       const chain: Record<string, unknown> = {
         select: () => chain,
         eq: (col: string, v: unknown) => (filters.push([table, col, v]), chain),
-        in: (_col: string, ids: string[]) => (statusIds.push(ids), chain),
         order: () => chain,
         limit: () => chain,
         maybeSingle: async () => reads[table],
-        then: (resolve: (r: unknown) => void) => resolve(statusReads.shift()),
       };
       return chain;
     },
@@ -54,6 +58,7 @@ beforeEach(() => {
   session = { access_token: 'token-1' };
   filters.length = 0;
   statusIds.length = 0;
+  rpcs.length = 0;
   statusReads = [];
   fetchMock.mockReset();
   vi.stubGlobal('fetch', fetchMock);
@@ -200,8 +205,8 @@ describe('readCmsStatuses', () => {
     ...over,
   });
 
-  it('gives each draft its last send, a hundred drafts a read', async () => {
-    const ids = Array.from({ length: 150 }, (_, i) => `d${i}`);
+  it('gives each draft its last send, one row a draft, five hundred drafts a read', async () => {
+    const ids = Array.from({ length: 600 }, (_, i) => `d${i}`);
     statusReads = [
       {
         data: [
@@ -211,19 +216,18 @@ describe('readCmsStatuses', () => {
             http_status: 200,
             published_url: 'https://example.com/coffee',
           }),
-          // An older send of the same draft.
-          delivery('d1', 'failed', '2026-10-23T10:00:00Z', { http_status: 500 }),
           delivery(null as unknown as string, 'sent', '2026-10-22T10:00:00Z'),
         ],
         error: null,
       },
       {
-        data: [delivery('d120', 'failed', '2026-10-24T09:00:00Z', { error: 'Not reached' })],
+        data: [delivery('d520', 'failed', '2026-10-24T09:00:00Z', { error: 'Not reached' })],
         error: null,
       },
     ];
     const statuses = await readCmsStatuses(ids);
-    expect(statusIds.map((chunk) => chunk.length)).toEqual([100, 50]);
+    expect(rpcs).toEqual(['content_draft_last_deliveries', 'content_draft_last_deliveries']);
+    expect(statusIds.map((chunk) => chunk.length)).toEqual([500, 100]);
     expect([...statuses.entries()]).toEqual([
       [
         'd1',
@@ -236,7 +240,7 @@ describe('readCmsStatuses', () => {
         },
       ],
       [
-        'd120',
+        'd520',
         {
           status: 'failed',
           at: '2026-10-24T09:00:00Z',
@@ -246,6 +250,19 @@ describe('readCmsStatuses', () => {
         },
       ],
     ]);
+  });
+
+  it('reads a send queued for over 15 minutes as interrupted, a newer one as going', async () => {
+    const ago = (minutes: number) => new Date(Date.now() - minutes * 60_000).toISOString();
+    statusReads = [
+      {
+        data: [delivery('d1', 'queued', ago(16)), delivery('d2', 'queued', ago(2))],
+        error: null,
+      },
+    ];
+    const statuses = await readCmsStatuses(['d1', 'd2']);
+    expect(statuses.get('d1')).toMatchObject({ status: 'failed', error: 'Not sent: interrupted' });
+    expect(statuses.get('d2')).toMatchObject({ status: 'queued', error: null });
   });
 
   it('leaves a read that fails with no sends, as before its table is there', async () => {

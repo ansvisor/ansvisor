@@ -50,11 +50,36 @@ const AUTHOR_MAX = 200;
 const ALT_MAX = 500;
 const IMAGE_SRC_MAX = 2048;
 
-/** What a send starts with: what the draft keeps, else what the page gives. */
+/** A meta title from the page stops about here, at a word, as search results cut it (#1331). */
+const META_TITLE_PREFILL = 60;
+
+/**
+ * Text up to `max` characters, cut at the last space that fits (any space,
+ * a no-break one too), or at `max` with none past half, never inside a
+ * character (an emoji); without the punctuation a cut leaves at its end.
+ */
+function upToWord(text: string, max: number): string {
+  const chars = Array.from(text);
+  if (chars.length <= max) return text;
+  let space = -1;
+  for (let i = max; i >= 0; i--) {
+    if (/\s/u.test(chars[i])) {
+      space = i;
+      break;
+    }
+  }
+  const cut = chars.slice(0, space > max / 2 ? space : max).join('');
+  return cut.replace(/[\s,:;|–—-]+$/u, '');
+}
+
+/**
+ * What a send starts with: what the draft keeps, else what the page gives,
+ * its meta title cut at a word near 60 characters.
+ */
 export function cmsFields(fields: PageFields, kept: Partial<CmsFields> | null): CmsFields {
   return {
     slug: kept?.slug || fields.slug,
-    metaTitle: kept?.metaTitle || fields.metaTitle,
+    metaTitle: kept?.metaTitle || upToWord(fields.metaTitle, META_TITLE_PREFILL),
     metaDescription: kept?.metaDescription || fields.metaDescription,
   };
 }

@@ -82,11 +82,15 @@ export function SendDialog({
     [html, title],
   );
   const pageProblem = useMemo(() => cmsPageProblem(title, html), [title, html]);
-  // Undefined while the draft's kept fields are read.
+  // Undefined while the draft's kept fields are read; null when they couldn't be.
   const [kept, setKept] = useState<DraftCms | null | undefined>(undefined);
+  const [attempt, setAttempt] = useState(0);
+  const [retrying, setRetrying] = useState(false);
   const [fields, setFields] = useState<CmsFields>(() => cmsFields(page, null));
-  // A ref, so the read that comes in after a change sees it.
-  const touched = useRef(false);
+  // The fields the person changed: a ref, so the read that comes in after a
+  // change sees it. The rest take what the draft kept (its slug above all,
+  // or the CMS could get the page twice).
+  const touched = useRef(new Set<keyof CmsFields>());
   const [sending, setSending] = useState(false);
   const [problem, setProblem] = useState<
     { code: CmsSendError; field: string | null } | { status: number } | { failed: string } | null
@@ -98,20 +102,32 @@ export function SendDialog({
       .then((read) => {
         if (cancelled) return;
         setKept(read);
-        // What the draft kept, unless the person has started to change them.
-        if (read && !touched.current) setFields(cmsFields(page, read.fields));
+        setRetrying(false);
+        // What the draft kept, in each field the person hasn't changed.
+        if (!read) return;
+        const fromKept = cmsFields(page, read.fields);
+        setFields((prev) => ({
+          slug: touched.current.has('slug') ? prev.slug : fromKept.slug,
+          metaTitle: touched.current.has('metaTitle') ? prev.metaTitle : fromKept.metaTitle,
+          metaDescription: touched.current.has('metaDescription')
+            ? prev.metaDescription
+            : fromKept.metaDescription,
+        }));
       })
-      // Unread, the fields stay the page's, as for a page never sent.
-      .catch(() => !cancelled && setKept(null));
+      .catch(() => {
+        if (cancelled) return;
+        setKept(null);
+        setRetrying(false);
+      });
     return () => {
       cancelled = true;
     };
-    // Read once as it opens; the fields it fills are the person's after that.
+    // Read as it opens, and on Try again; the fields it fills are the person's after that.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [draftId]);
+  }, [draftId, attempt]);
 
   const change = (key: keyof CmsFields, value: string) => {
-    touched.current = true;
+    touched.current.add(key);
     setProblem(null);
     setFields((prev) => ({ ...prev, [key]: value }));
   };
@@ -265,6 +281,30 @@ export function SendDialog({
           </p>
         )}
 
+        {/* Unread, a page sent before under another slug could land in the
+            CMS twice: the send waits for the read (as the bulk send does). */}
+        {kept === null && (
+          <div
+            role="alert"
+            className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-sm text-red-700 dark:text-red-400"
+          >
+            <span className="min-w-0 flex-1">{t('readFailed')}</span>
+            {/* Kept in place while it reads again, so focus stays on it. */}
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={retrying}
+              aria-label={t('retry')}
+              onClick={() => {
+                setRetrying(true);
+                setAttempt((n) => n + 1);
+              }}
+            >
+              {retrying ? <LoadingDots /> : t('retry')}
+            </Button>
+          </div>
+        )}
+
         {problem && (
           <p role="alert" className="text-sm text-red-700 dark:text-red-400">
             {problemText(problem)}
@@ -277,11 +317,7 @@ export function SendDialog({
           </Button>
           <Button
             disabled={
-              sending ||
-              pageProblem !== null ||
-              placeholders > 0 ||
-              wrong !== null ||
-              kept === undefined
+              sending || pageProblem !== null || placeholders > 0 || wrong !== null || !kept
             }
             onClick={() => void send()}
           >

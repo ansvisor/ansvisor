@@ -34,6 +34,22 @@ const fields: CmsFields = {
 };
 
 describe('cmsFields', () => {
+  it('cuts the page’s meta title at a word near 60 characters, not a kept one', () => {
+    const cut = (metaTitle: string) => cmsFields({ ...page, metaTitle }, null).metaTitle;
+    const long = `${'Pour-over coffee at home: '.repeat(4)}a guide`;
+    // At the last space that fits, without the colon the cut leaves.
+    expect(cut(long)).toBe('Pour-over coffee at home: Pour-over coffee at home');
+    expect(cmsFields({ ...page, metaTitle: long }, { metaTitle: long }).metaTitle).toBe(long);
+    // Exactly 60 stays whole.
+    expect(cut('a'.repeat(60))).toBe('a'.repeat(60));
+    // A no-break space is a space too.
+    expect(cut(`${'b'.repeat(40)}\u00a0${'c'.repeat(30)}`)).toBe('b'.repeat(40));
+    // No space past half: cut at 60 characters, never inside an emoji.
+    const emoji = `${'d'.repeat(59)}☕️☕️`;
+    expect(Array.from(cut(emoji))).toHaveLength(60);
+    expect(cut(`${'e'.repeat(59)}😀x`)).toBe(`${'e'.repeat(59)}😀`);
+  });
+
   it('starts from what the draft kept, else from the page', () => {
     expect(cmsFields(page, null)).toEqual(fields);
     expect(cmsFields(page, { slug: 'coffee', metaDescription: '' })).toEqual({

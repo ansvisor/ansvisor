@@ -1251,6 +1251,7 @@ export type Database = {
           created_at: string
           draft_id: string | null
           error: string | null
+          external_id: string | null
           http_status: number | null
           id: string
           organization_id: string
@@ -1269,6 +1270,7 @@ export type Database = {
           created_at?: string
           draft_id?: string | null
           error?: string | null
+          external_id?: string | null
           http_status?: number | null
           id?: string
           organization_id: string
@@ -1287,6 +1289,7 @@ export type Database = {
           created_at?: string
           draft_id?: string | null
           error?: string | null
+          external_id?: string | null
           http_status?: number | null
           id?: string
           organization_id?: string
@@ -4277,6 +4280,34 @@ export type Database = {
       }
       content_draft_member: { Args: { p_draft_id: string }; Returns: boolean }
       content_draft_restore: { Args: { p_version_id: string }; Returns: Json }
+      content_draft_last_deliveries: {
+        Args: { p_draft_ids: string[] }
+        Returns: {
+          batch_id: string | null
+          brand_id: string
+          created_at: string
+          draft_id: string | null
+          error: string | null
+          external_id: string | null
+          http_status: number | null
+          id: string
+          organization_id: string
+          published_at: string | null
+          published_url: string | null
+          response_excerpt: string | null
+          sent_at: string | null
+          sent_by: string | null
+          slug: string | null
+          status: string
+          title: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "content_draft_deliveries"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       content_draft_snapshot: {
         Args: { p_draft_id: string; p_origin: string }
         Returns: string
