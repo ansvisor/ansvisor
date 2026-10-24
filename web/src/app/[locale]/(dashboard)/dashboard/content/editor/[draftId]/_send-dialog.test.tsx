@@ -164,11 +164,24 @@ describe('SendDialog', () => {
     expect(button('Send').disabled).toBe(true);
   });
 
-  it('fills the fields from the page when the kept ones can’t be read', async () => {
-    readDraftCms.mockRejectedValue(new Error('offline'));
+  it('holds the send while the last send can’t be read, and reads it again', async () => {
+    // Unread, a page sent before under another slug could land in the CMS twice.
+    readDraftCms.mockRejectedValueOnce(new Error('offline'));
     await render();
-    expect(field('cms-slug').value).toBe('pour-over');
+    expect(alert()).toBe(
+      "Couldn't read this page's last send. Try again before sending, so it doesn't land in your CMS twice.Try again",
+    );
+    expect(button('Send').disabled).toBe(true);
+    readDraftCms.mockResolvedValueOnce({ ...neverSent, fields: { slug: 'coffee' } });
+    await act(async () => button('Try again').click());
+    expect(readDraftCms).toHaveBeenCalledTimes(2);
+    expect(alert()).toBeUndefined();
+    expect(field('cms-slug').value).toBe('coffee');
     expect(button('Send').disabled).toBe(false);
+    // A read that answers nothing (before 00262) holds it the same way.
+    readDraftCms.mockResolvedValueOnce(null);
+    await render({ draftId: 'd2' });
+    expect(button('Send').disabled).toBe(true);
   });
 
   it('keeps the person’s changes when the kept fields come in after them', async () => {

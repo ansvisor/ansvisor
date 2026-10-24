@@ -81,8 +81,9 @@ export function SendDialog({
     [html, title],
   );
   const pageProblem = useMemo(() => cmsPageProblem(title, html), [title, html]);
-  // Undefined while the draft's kept fields are read.
+  // Undefined while the draft's kept fields are read; null when they couldn't be.
   const [kept, setKept] = useState<DraftCms | null | undefined>(undefined);
+  const [attempt, setAttempt] = useState(0);
   const [fields, setFields] = useState<CmsFields>(() => cmsFields(page, null));
   // A ref, so the read that comes in after a change sees it.
   const touched = useRef(false);
@@ -100,14 +101,13 @@ export function SendDialog({
         // What the draft kept, unless the person has started to change them.
         if (read && !touched.current) setFields(cmsFields(page, read.fields));
       })
-      // Unread, the fields stay the page's, as for a page never sent.
       .catch(() => !cancelled && setKept(null));
     return () => {
       cancelled = true;
     };
-    // Read once as it opens; the fields it fills are the person's after that.
+    // Read as it opens, and on Try again; the fields it fills are the person's after that.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [draftId]);
+  }, [draftId, attempt]);
 
   const change = (key: keyof CmsFields, value: string) => {
     touched.current = true;
@@ -264,6 +264,27 @@ export function SendDialog({
           </p>
         )}
 
+        {/* Unread, a page sent before under another slug could land in the
+            CMS twice: the send waits for the read (as the bulk send does). */}
+        {kept === null && (
+          <div
+            role="alert"
+            className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-sm text-red-700 dark:text-red-400"
+          >
+            <span className="min-w-0 flex-1">{t('readFailed')}</span>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                setKept(undefined);
+                setAttempt((n) => n + 1);
+              }}
+            >
+              {t('retry')}
+            </Button>
+          </div>
+        )}
+
         {problem && (
           <p role="alert" className="text-sm text-red-700 dark:text-red-400">
             {problemText(problem)}
@@ -276,11 +297,7 @@ export function SendDialog({
           </Button>
           <Button
             disabled={
-              sending ||
-              pageProblem !== null ||
-              placeholders > 0 ||
-              wrong !== null ||
-              kept === undefined
+              sending || pageProblem !== null || placeholders > 0 || wrong !== null || !kept
             }
             onClick={() => void send()}
           >

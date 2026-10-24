@@ -1251,6 +1251,7 @@ export type Database = {
           created_at: string
           draft_id: string | null
           error: string | null
+          external_id: string | null
           http_status: number | null
           id: string
           organization_id: string
@@ -1269,6 +1270,7 @@ export type Database = {
           created_at?: string
           draft_id?: string | null
           error?: string | null
+          external_id?: string | null
           http_status?: number | null
           id?: string
           organization_id: string
@@ -1287,6 +1289,7 @@ export type Database = {
           created_at?: string
           draft_id?: string | null
           error?: string | null
+          external_id?: string | null
           http_status?: number | null
           id?: string
           organization_id?: string

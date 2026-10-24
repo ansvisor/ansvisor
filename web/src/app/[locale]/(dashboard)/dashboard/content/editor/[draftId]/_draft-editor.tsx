@@ -1591,7 +1591,18 @@ export function DraftEditor({
   // Quality is live.
   const { canManage } = useUserRole();
   const [sendOpen, setSendOpen] = useState<{ html: string } | null>(null);
-  const openSend = () => setSendOpen({ html: pageToPublish() });
+  // What's waiting goes out first, as for Mark ready: the CMS gets the page
+  // Ansvisor holds, the one its callback later marks Published. A page that
+  // can't be saved (a teammate or the agent changed it meanwhile) isn't sent.
+  const openSend = async () => {
+    try {
+      await autosave.settle();
+    } catch {
+      toast.error(t('send.unsaved'));
+      return;
+    }
+    setSendOpen({ html: pageToPublish() });
+  };
   const openBeforePublish = (mode: 'markReady' | 'export' | 'send') => {
     setPublishOpen({ mode, html: pageToPublish() });
     if (mode === 'markReady') nudgeAt('markReady');
@@ -2012,7 +2023,7 @@ export function DraftEditor({
                   size="icon-sm"
                   disabled={!editor}
                   aria-label={t('send.button')}
-                  onClick={() => (quality ? openBeforePublish('send') : openSend())}
+                  onClick={() => (quality ? openBeforePublish('send') : void openSend())}
                 >
                   <Send className="h-3.5 w-3.5" />
                 </Button>
@@ -2400,7 +2411,7 @@ export function DraftEditor({
           onContinue={() => {
             const next = publishOpen.mode;
             setPublishOpen(null);
-            if (next === 'send') openSend();
+            if (next === 'send') void openSend();
             else openExport();
           }}
           onClose={() => setPublishOpen(null)}

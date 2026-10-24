@@ -21,6 +21,15 @@ const fields: CmsFields = {
 };
 
 describe('cmsFields', () => {
+  it('cuts the page’s meta title at a word near 60 characters, not a kept one', () => {
+    const long = `${'Pour-over coffee at home: '.repeat(4)}a guide`;
+    const metaTitle = cmsFields({ ...page, metaTitle: long }, null).metaTitle;
+    expect(metaTitle.length).toBeLessThanOrEqual(60);
+    expect(long.startsWith(metaTitle)).toBe(true);
+    expect(long[metaTitle.length]).toBe(' ');
+    expect(cmsFields({ ...page, metaTitle: long }, { metaTitle: long }).metaTitle).toBe(long);
+  });
+
   it('starts from what the draft kept, else from the page', () => {
     expect(cmsFields(page, null)).toEqual(fields);
     expect(cmsFields(page, { slug: 'coffee', metaDescription: '' })).toEqual({

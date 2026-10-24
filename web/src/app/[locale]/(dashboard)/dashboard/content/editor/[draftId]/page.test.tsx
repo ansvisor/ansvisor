@@ -3023,6 +3023,53 @@ describe('the side panel', () => {
       expect(readDraftCms).toHaveBeenCalledWith('d1');
     });
 
+    const editAsHtml = async (html: string) => {
+      await act(async () => button('Edit as HTML')!.click());
+      const source = container.querySelector('textarea')!;
+      await act(async () => {
+        Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!.call(
+          source,
+          html,
+        );
+        source.dispatchEvent(new Event('input', { bubbles: true }));
+      });
+      await act(async () => button('Back to visual')!.click());
+    };
+
+    it('saves what is waiting before it sends, as Mark ready does', async () => {
+      getContentDraft.mockResolvedValue(draft());
+      await renderPage();
+      await editAsHtml('<h1>Pipeline forecasting</h1><p>Edited.</p>');
+      expect(saveContentDraft).not.toHaveBeenCalled();
+      await act(async () => button('Send to CMS')!.click());
+      await act(async () => {});
+      expect(saveContentDraft).toHaveBeenCalledWith(
+        'd1',
+        expect.objectContaining({ bodyHtml: '<h1>Pipeline forecasting</h1><p>Edited.</p>' }),
+      );
+      expect(saveContentDraft.mock.invocationCallOrder[0]).toBeLessThan(
+        readDraftCms.mock.invocationCallOrder[0],
+      );
+      expect(document.querySelector<HTMLTextAreaElement>('#cms-meta-description')!.value).toBe(
+        'Edited.',
+      );
+    });
+
+    it('sends no page it can’t save', async () => {
+      // A teammate or the agent changed the page meanwhile: this tab's version can't go.
+      saveContentDraft.mockResolvedValue({ ok: false, reason: 'conflict' });
+      getContentDraft.mockResolvedValue(draft());
+      await renderPage();
+      await editAsHtml('<h1>Pipeline forecasting</h1><p>Edited.</p>');
+      await act(async () => button('Send to CMS')!.click());
+      await act(async () => {});
+      expect(toast.error).toHaveBeenCalledWith(
+        "The page has changes that aren't saved, so it wasn't sent.",
+      );
+      expect(dialog()).toBeNull();
+      expect(readDraftCms).not.toHaveBeenCalled();
+    });
+
     it('is for admins and managers only', async () => {
       getContentDraft.mockResolvedValue(draft());
       await renderPage('analyst');
