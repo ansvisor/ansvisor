@@ -18,13 +18,52 @@ vi.mock('@/lib/supabase/server', () => ({
     },
   }),
 }));
-const list = vi.fn();
+/** content_image_uploads: the addresses given. */
+type Given = { id: string; organization_id: string; path: string; created_at: string };
+let given: Given[];
+let noteFails: boolean;
+const uploadsTable = {
+  insert: (row: { organization_id: string; path: string }) => ({
+    select: () => ({
+      single: async () => {
+        if (noteFails) return { data: null, error: { message: 'down' } };
+        const kept = { id: `g${given.length + 1}`, created_at: new Date().toISOString(), ...row };
+        given.push(kept);
+        return { data: { id: kept.id }, error: null };
+      },
+    }),
+  }),
+  select: () => {
+    let org = '';
+    const chain = {
+      eq: (_column: string, value: string) => ((org = value), chain),
+      gt: async (_column: string, since: string) => ({
+        count: given.filter((g) => g.organization_id === org && g.created_at > since).length,
+        error: null,
+      }),
+    };
+    return chain;
+  },
+  delete: () => ({
+    eq: (column: 'id' | 'organization_id', value: string) => {
+      const drop = (gone: (g: Given) => boolean) => {
+        given = given.filter((g) => !gone(g));
+        return { error: null };
+      };
+      return {
+        lt: async (_column: string, before: string) =>
+          drop((g) => g.organization_id === value && g.created_at < before),
+        then: (resolve: (result: unknown) => void) => resolve(drop((g) => g[column] === value)),
+      };
+    },
+  }),
+};
 const createSignedUploadUrl = vi.fn();
 vi.mock('@/lib/supabase/admin', () => ({
   supabaseAdmin: {
+    from: () => uploadsTable,
     storage: {
       from: (bucket: string) => ({
-        list: (...args: unknown[]) => list(bucket, ...args),
         createSignedUploadUrl: (...args: unknown[]) => createSignedUploadUrl(bucket, ...args),
         getPublicUrl: (path: string) => ({
           data: { publicUrl: `https://store.example/public/${bucket}/${path}` },
@@ -34,20 +73,21 @@ vi.mock('@/lib/supabase/admin', () => ({
   },
 }));
 let cloud: boolean;
-vi.mock('@/config/plans', () => ({
+vi.mock('@/config/plans', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/config/plans')>()),
   isCloud: () => cloud,
-  isSubscriptionActive: (status: string | null | undefined) =>
-    status === 'active' || status === 'trialing',
 }));
 
 const { prepareImageUpload } = await import('./content-images');
 const { IMAGE_UPLOADS_PER_DAY } = await import('@/lib/content/image-upload-types');
 
-/** Objects in the folder, the newest first, each `hoursAgo` old. */
-const uploaded = (...hoursAgo: number[]) =>
-  hoursAgo.map((h, i) => ({
-    name: `${i}.png`,
-    created_at: new Date(Date.now() - h * 3_600_000).toISOString(),
+/** Addresses given to org-1, `count` of them, each `hoursAgo` old. */
+const givenBefore = (count: number, hoursAgo: number): Given[] =>
+  Array.from({ length: count }, (_, i) => ({
+    id: `old${hoursAgo}-${i}`,
+    organization_id: 'org-1',
+    path: `org-1/${i}.png`,
+    created_at: new Date(Date.now() - hoursAgo * 3_600_000).toISOString(),
   }));
 
 beforeEach(() => {
@@ -55,7 +95,8 @@ beforeEach(() => {
   profile = { organization_id: 'org-1' };
   org = { subscription_status: 'active' };
   cloud = true;
-  list.mockReset().mockResolvedValue({ data: [], error: null });
+  given = [];
+  noteFails = false;
   createSignedUploadUrl.mockReset().mockImplementation(async (_bucket: string, path: string) => ({
     data: { path, token: 'tok', signedUrl: 'https://store.example/sign' },
     error: null,
@@ -89,29 +130,27 @@ describe('prepareImageUpload', () => {
     expect(await prepareImageUpload('image/png')).toMatchObject({ token: 'tok' });
   });
 
-  it('stops at the day’s uploads on the cloud, counting the last 24 hours', async () => {
-    list.mockResolvedValueOnce({
-      data: uploaded(...Array.from({ length: IMAGE_UPLOADS_PER_DAY }, () => 1)),
-      error: null,
-    });
-    expect(await prepareImageUpload('image/png')).toEqual({ error: 'limit' });
-    // One of them older than a day: room for one more.
-    list.mockResolvedValueOnce({
-      data: uploaded(...Array.from({ length: IMAGE_UPLOADS_PER_DAY - 1 }, () => 1), 25),
-      error: null,
-    });
+  it('counts each address given on the cloud, so asking in a loop stops at the day’s cap', async () => {
+    given = givenBefore(IMAGE_UPLOADS_PER_DAY - 1, 1);
     expect(await prepareImageUpload('image/png')).toMatchObject({ token: 'tok' });
-    expect(list).toHaveBeenLastCalledWith('content-images', 'org-1', {
-      limit: IMAGE_UPLOADS_PER_DAY,
-      sortBy: { column: 'created_at', order: 'desc' },
-    });
+    expect(given).toHaveLength(IMAGE_UPLOADS_PER_DAY);
+    // Not yet used, it counts: the next one is refused, and isn't kept.
+    expect(await prepareImageUpload('image/png')).toEqual({ error: 'limit' });
+    expect(given).toHaveLength(IMAGE_UPLOADS_PER_DAY);
+    expect(createSignedUploadUrl).toHaveBeenCalledTimes(1);
+  });
+
+  it('leaves out, and clears, the addresses given more than a day ago', async () => {
+    given = givenBefore(IMAGE_UPLOADS_PER_DAY, 25);
+    expect(await prepareImageUpload('image/png')).toMatchObject({ token: 'tok' });
+    expect(given).toHaveLength(1);
   });
 
   it('has no limits on a self-host', async () => {
     cloud = false;
     org = null;
     expect(await prepareImageUpload('image/png')).toMatchObject({ token: 'tok' });
-    expect(list).not.toHaveBeenCalled();
+    expect(given).toEqual([]);
   });
 
   it('fails with no session or organization, or when storage does', async () => {
@@ -122,8 +161,9 @@ describe('prepareImageUpload', () => {
     profile = null;
     expect(await prepareImageUpload('image/png')).toEqual({ error: 'failed' });
     profile = { organization_id: 'org-1' };
-    list.mockResolvedValueOnce({ data: null, error: { message: 'down' } });
+    noteFails = true;
     expect(await prepareImageUpload('image/png')).toEqual({ error: 'failed' });
+    noteFails = false;
     createSignedUploadUrl.mockResolvedValueOnce({ data: null, error: { message: 'down' } });
     expect(await prepareImageUpload('image/png')).toEqual({ error: 'failed' });
     error.mockRestore();

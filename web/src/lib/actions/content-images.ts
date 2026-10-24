@@ -22,10 +22,11 @@ const DAY_MS = 24 * 60 * 60 * 1000;
  * Lets a member upload one image (00272). The app says who may and how
  * much, not the bucket's policies: only it knows a managed cloud from a
  * self-host. On the cloud, an organization with an active or trialing
- * subscription (the dashboard's gate), IMAGE_UPLOADS_PER_DAY a day; a
- * self-host has no limits. The name is the app's: the organization's
- * folder, a new id and the type's extension. The browser then sends the
- * file itself to the one-time address (no server action's body limit).
+ * subscription (the dashboard's gate), IMAGE_UPLOADS_PER_DAY addresses a
+ * day (content_image_uploads); a self-host has no limits. The name is the
+ * app's: the organization's folder, a new id and the type's extension. The
+ * browser then sends the file itself to the one-time address (no server
+ * action's body limit).
  */
 export async function prepareImageUpload(
   type: string,
@@ -49,6 +50,7 @@ export async function prepareImageUpload(
   const { supabaseAdmin } = await import('@/lib/supabase/admin');
   const images = supabaseAdmin.storage.from(IMAGE_UPLOAD_BUCKET);
 
+  const path = `${orgId}/${randomUUID()}.${ext}`;
   if (isCloud()) {
     const { data: org } = await supabase
       .from('organizations')
@@ -56,23 +58,35 @@ export async function prepareImageUpload(
       .eq('id', orgId)
       .maybeSingle();
     if (!isSubscriptionActive(org?.subscription_status)) return { error: 'plan' };
-    // The folder's newest, as many as a day's cap: how many went up today.
-    const { data: recent, error } = await images.list(orgId, {
-      limit: IMAGE_UPLOADS_PER_DAY,
-      sortBy: { column: 'created_at', order: 'desc' },
-    });
-    if (error) {
-      console.error('Failed to count the day’s image uploads:', error.message);
+    // Each address given counts, kept before the count: addresses asked for
+    // in a loop or at once can't pass the cap, used now or later.
+    const uploads = () => supabaseAdmin.from('content_image_uploads');
+    const since = new Date(Date.now() - DAY_MS).toISOString();
+    const { data: given, error: givenError } = await uploads()
+      .insert({ organization_id: orgId, path })
+      .select('id')
+      .single();
+    if (givenError || !given) {
+      console.error('Failed to note the image upload:', givenError?.message);
       return { error: 'failed' };
     }
-    const since = Date.now() - DAY_MS;
-    const today = (recent ?? []).filter(
-      (o) => o.created_at && Date.parse(o.created_at) > since,
-    ).length;
-    if (today >= IMAGE_UPLOADS_PER_DAY) return { error: 'limit' };
+    const { count, error: countError } = await uploads()
+      .select('id', { count: 'exact', head: true })
+      .eq('organization_id', orgId)
+      .gt('created_at', since);
+    if (countError || count === null) {
+      console.error('Failed to count the day’s image uploads:', countError?.message);
+      return { error: 'failed' };
+    }
+    if (count > IMAGE_UPLOADS_PER_DAY) {
+      // Not given, so it doesn't count either.
+      await uploads().delete().eq('id', given.id);
+      return { error: 'limit' };
+    }
+    // The ones older than a day no longer count.
+    await uploads().delete().eq('organization_id', orgId).lt('created_at', since);
   }
 
-  const path = `${orgId}/${randomUUID()}.${ext}`;
   const { data, error } = await images.createSignedUploadUrl(path);
   if (error || !data) {
     console.error('Failed to prepare the image upload:', error?.message);
