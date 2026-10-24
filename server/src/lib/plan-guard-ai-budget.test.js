@@ -245,7 +245,7 @@ describe('getImproveQuotaStatus', () => {
     };
     const status = await guard.getImproveQuotaStatus('o1', 'google/gemini-3-flash-preview');
     expect(status.spentUsd).toBeCloseTo(0.105);
-    // $0.895 left at $0.02 a call; the checks' $0.0005 would make it 1,790.
-    expect(status.generationsLeft).toBe(44);
+    // Starter's $5 (#1435): $4.895 left at $0.02 a call; the checks' $0.0005 would make it 9,790.
+    expect(status.generationsLeft).toBe(244);
   });
 });
