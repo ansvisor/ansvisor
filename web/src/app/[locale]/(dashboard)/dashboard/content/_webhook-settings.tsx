@@ -130,7 +130,7 @@ export function WebhookSettingsDialog({ open, onOpenChange, brandId }: WebhookSe
 
         {loading ? (
           <div className="flex justify-center py-8">
-            <LoadingDots size="md" className="text-muted-foreground" />
+            <LoadingDots size="md" label={t('loading')} className="text-muted-foreground" />
           </div>
         ) : (
           <div className="space-y-4">

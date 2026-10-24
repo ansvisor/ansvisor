@@ -299,7 +299,7 @@ export function AssetsCard({
                     disabled={sendingKey !== null && sendingKey !== undefined}
                     onClick={() => onSend(a.key)}
                   >
-                    {sendingKey === a.key ? <LoadingDots /> : t('sendAsset')}
+                    {sendingKey === a.key ? <LoadingDots label={t('sending')} /> : t('sendAsset')}
                   </Button>
                 )
               )}

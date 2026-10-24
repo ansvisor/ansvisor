@@ -418,7 +418,7 @@ export function OpportunityDetail({
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
-        <LoadingDots size="md" className="text-muted-foreground" />
+        <LoadingDots size="md" label={t('loadingOpportunity')} className="text-muted-foreground" />
       </div>
     );
   }
