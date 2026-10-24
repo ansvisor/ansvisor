@@ -114,8 +114,12 @@ if (!Object.keys(recorded).length) {
   console.error('No draft was answered: recorded.json is left as it was.');
   process.exit(1);
 }
-// What the guards let through that the agent wasn't given: for a person
-// to look over, the answers being new.
+writeFileSync(
+  new URL('../lib/__fixtures__/no-fabrication/recorded.json', import.meta.url),
+  `${JSON.stringify({ model: modelId, recordedAt: new Date().toISOString(), reviewed: {}, ...recorded }, null, 2)}\n`,
+);
+// Then what the guards let through that the agent wasn't given, for a
+// person to look over: the answers are kept first, whatever happens here.
 const review = {};
 for (const c of CASES) {
   const answer = recorded[c.id];
@@ -127,10 +131,6 @@ for (const c of CASES) {
   const spans = [...new Set(texts.flatMap((text) => toReview(c, text)))];
   if (spans.length) review[c.id] = spans;
 }
-writeFileSync(
-  new URL('../lib/__fixtures__/no-fabrication/recorded.json', import.meta.url),
-  `${JSON.stringify({ model: modelId, recordedAt: new Date().toISOString(), reviewed: {}, ...recorded }, null, 2)}\n`,
-);
 for (const [id, spans] of Object.entries(review)) {
   console.log(`To review, ${id}:\n${spans.map((span) => `  ${span}`).join('\n')}`);
 }

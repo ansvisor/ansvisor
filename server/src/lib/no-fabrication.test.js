@@ -80,6 +80,44 @@ describe('the no-fabrication test set', () => {
     expect(lost).toEqual([]);
   });
 
+  it('lists for review, without the cues, the names and quotes it wasn’t given', () => {
+    const [c] = CASES.filter((x) => x.id === 'b2b-en-given_input');
+    // What the set's own answers keep: names it was given only.
+    const listed = CASES.flatMap((x) =>
+      [...guardedFix(x, x.fix), guardedPage(x, x.page)].flatMap((text) =>
+        toReview(x, text).map((span) => `${x.id}: ${span}`),
+      ),
+    );
+    expect([...new Set(listed)]).toEqual([
+      'b2b-tr-given_input: Northwind Ada Lovelace',
+      'b2b-de-invented_story: Unsere Kundin',
+      'b2c-tr-given_input: Bean Lab Grace',
+      'b2c-tr-given_input: Baş Kavurmacı Mert',
+      'b2c-de-invented_story: Unsere Kundin',
+      'ecommerce-tr-given_input: Velo Studio Margaret',
+      'ecommerce-tr-given_input: Atölye Sorumlusu Lena',
+      'ecommerce-de-invented_story: Unsere Kundin',
+    ]);
+    // A quote with an apostrophe in it, a name after a heading, a name in a
+    // given word ("parking" isn't "Park").
+    expect(toReview(c, '“We don’t invent numbers or people, ever,” says the team.')).toEqual([
+      'We don’t invent numbers or people, ever',
+    ]);
+    expect(
+      toReview(c, guardedPage(c, { ...c.page, intro: ['Melanie Ross recommends it.'] })),
+    ).toContain('Melanie Ross');
+    expect(toReview(c, 'We asked Ed Park.')).toEqual(['Ed Park']);
+    // What it wasn't given, unguarded: every made-up name and quote is listed.
+    for (const x of CASES) {
+      const spans = toReview(x, [...x.fix.map((s) => s.after), ...x.page.intro].join('\n')).join(
+        '\n',
+      );
+      for (const item of x.invented.filter((i) => !/\d/.test(i))) {
+        expect(spans, `${x.id}: ${item}`).toContain(item.split(/\s+/).slice(0, 3).join(' '));
+      }
+    }
+  });
+
   // The model's own answers, once recorded (not in CI: it needs a model's key).
   const recordedPath = new URL('./__fixtures__/no-fabrication/recorded.json', import.meta.url);
   it.skipIf(!existsSync(recordedPath))(

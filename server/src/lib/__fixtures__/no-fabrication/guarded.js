@@ -1,7 +1,7 @@
 import * as cheerio from 'cheerio';
 import { draftPassages, keepSuggestions } from '../../content-agent.js';
 import { inputSources } from '../../content-inputs.js';
-import { knownPeople } from '../../content-people.js';
+import { NAME, isKnown, knownPeople } from '../../content-people.js';
 import {
   htmlText,
   knownNumbers,
@@ -44,6 +44,13 @@ export const resolve = (numbered) => (s) => ({
   ),
 });
 
+/** Text of HTML, a line for each block: a heading's words never run into the next paragraph's. */
+const textOf = (html) =>
+  cheerio
+    .load(String(html).replace(/<\/(?:h[1-6]|p|li|blockquote|td|th)>/gi, '$&\n'), null, false)
+    .root()
+    .text();
+
 /** What suggestions leave on the page once kept: each one's words. */
 export function guardedFix(c, suggestions, open = new Set(['dated'])) {
   const { numbered, known, people } = sourcing(c);
@@ -54,20 +61,13 @@ export function guardedFix(c, suggestions, open = new Set(['dated'])) {
     open,
     null,
     { numbered, known, people },
-  ).map((row) =>
-    row.kind === 'replace'
-      ? row.after_text
-      : cheerio.load(row.after_text, null, false).root().text(),
-  );
+  ).map((row) => (row.kind === 'replace' ? row.after_text : textOf(row.after_text)));
 }
 
 /** What a page written whole says once kept. */
 export function guardedPage(c, page) {
   const { people, knownInPage } = sourcing(c);
-  return cheerio
-    .load(renderPage(sourcedPage(page, knownInPage, people)), null, false)
-    .root()
-    .text();
+  return textOf(renderPage(sourcedPage(page, knownInPage, people)));
 }
 
 /** Text as compared: lower case, one kind of quote mark, single spaces. */
@@ -78,39 +78,38 @@ export const plain = (text) =>
     .replace(/\s+/g, ' ')
     .trim();
 
-/** Every word the agent was given, as one text. */
-function givenText(c) {
-  const { numbered } = sourcing(c);
-  return plain(
-    [
-      htmlText(c.html),
-      c.title,
-      c.brand.name,
-      c.brand.industry,
-      c.brand.description,
-      ...numbered.map(sourceWords),
-      ...c.authors.flatMap((a) => [a.name, a.title]),
-    ].join('\n'),
-  );
-}
-
-const CAPITALISED = /(?<!\p{L})\p{Lu}[\p{Ll}'’-]+(?:\s+\p{Lu}[\p{Ll}'’-]+){1,2}(?!\p{L})/gu;
-const QUOTED = /[“"„«»‚‘]([^“”"„«»‚‘’]{1,400})[”"“»«‘’]/gu;
+/** A name as the people guard reads one: capitalised words, initials, particles. */
+const NAMES = new RegExp(NAME, 'gu');
+/** A quoted span, each pair of marks apart: an apostrophe inside ("don’t") ends none. */
+const QUOTED = [
+  /“([^“”]{1,800})”/g,
+  /„([^„“”]{1,800})[“”]/g,
+  /‚([^‚‘’]{1,800})[‘’]/g,
+  /«([^«»]{1,800})»/g,
+  /»([^»«]{1,800})«/g,
+  /(?<![\p{L}\p{N}])"([^"\n]{1,800})"(?![\p{L}\p{N}])/gu,
+  /(?<!\p{L})‘([^‘]{1,800}?)’(?!\p{L})/gu,
+];
 
 /**
  * What a person should look over in a kept text, without the guards' cues:
- * every run of two or three capitalised words, and every quoted span of
- * four words or more, that the agent wasn't given. The guards read cues
- * ("says", "CEO", "Dr."): this reads none, so it shows what they miss.
+ * every name (as the people guard reads one, a possessive's "’s" off) and
+ * every quoted span of four words or more that the agent wasn't given, as
+ * whole words. The guards read cues ("says", "CEO", "Dr."): this reads
+ * none, so it shows what they miss.
  */
 export function toReview(c, text) {
-  const given = givenText(c);
+  const { people } = sourcing(c);
   const spans = [
-    ...[...text.matchAll(CAPITALISED)].map((m) => m[0]),
-    ...[...text.matchAll(QUOTED)]
+    // A line at a time: a name doesn't run from a heading into its paragraph.
+    ...text
+      .split('\n')
+      .flatMap((line) => [...line.matchAll(NAMES)])
+      .map((m) => m[0].replace(/['’]s$/u, '')),
+    ...QUOTED.flatMap((re) => [...text.matchAll(re)])
       // Its words, not the comma or stop kept inside the marks.
       .map((m) => m[1].trim().replace(/[\s,.;:!?…]+$/u, ''))
       .filter((inner) => inner.split(/\s+/).length >= 4),
   ];
-  return [...new Set(spans.filter((span) => !given.includes(plain(span))))];
+  return [...new Set(spans.filter((span) => !isKnown(span, people)))];
 }

@@ -318,9 +318,19 @@ describe('guardPeople: what the no-fabrication test set found', () => {
       ['Mark the date: it will rain in May or June.', 'Prof. Will Carter agrees.'],
       ['Mark the date: it will rain in May or June.', 'Dr. May Chen agrees.'],
       ['Mark the date: it will rain in May or June.', 'Dr. June Park agrees.'],
+      // A known last name alone, or a common word as one.
+      ['Grace Hopper', 'Dr. Jane Hopper recommends it.'],
+      ['Green tea', 'Dr. Sarah Green recommends it.'],
+      ['Selin Kaya', 'Dr. Ayşe Kaya recommends it.'],
     ]) {
       expect(guardPeople(line, knownPeople(given)).text).toContain(NAME);
     }
+    expect(guardPeople('Dr. Hopper recommends it.', knownPeople('Grace Hopper')).text).toBe(
+      'Dr. Hopper recommends it.',
+    );
+    // A German noun after a known name, a word the page has: still the known name.
+    const german = 'Wir rösten selbst, weil Gründerin Anna Schmidt Kaffee liebt.';
+    expect(guardPeople(german, knownPeople('Anna Schmidt, Gründerin. Kaffee')).text).toBe(german);
     expect(guard('CEO Ada Lovelace Brown agrees.')).toBe(`CEO ${NAME} agrees.`);
     // A known name, a company after its particle: still known.
     expect(guard('CEO Ada Lovelace von Northwind agrees.')).toBe(
@@ -338,6 +348,32 @@ describe('guardPeople: what the no-fabrication test set found', () => {
     expect(
       fix('Fintrail genel müdürü Tom Becker da alıcıların çoğunun aynı fikirde olduğunu ekliyor.'),
     ).toBe(`Fintrail genel müdürü ${NAME} da alıcıların çoğunun aynı fikirde olduğunu ekliyor.`);
+    // A verb said only of people needs no reported speech; one that also
+    // means added needs it, plural and with "da" or "sözlerine" too.
+    for (const [line, out] of [
+      [
+        'Fintrail genel müdürü Ayşe Demir, “Bu her ekip için işe yarıyor” dedi.',
+        `Fintrail genel müdürü ${NAME}, ${QUOTE} dedi.`,
+      ],
+      [
+        'Fintrail genel müdürü Ayşe Demir, ürünün çok hızlı olduğunu da ekledi.',
+        `Fintrail genel müdürü ${NAME}, ürünün çok hızlı olduğunu da ekledi.`,
+      ],
+      [
+        'Fintrail genel müdürü Ayşe Demir, ekiplerin çok memnun olduklarını söyledi.',
+        `Fintrail genel müdürü ${NAME}, ekiplerin çok memnun olduklarını söyledi.`,
+      ],
+      [
+        'Fintrail genel müdürü Ayşe Demir, bunun doğru olduğunu sözlerine ekledi.',
+        `Fintrail genel müdürü ${NAME}, bunun doğru olduğunu sözlerine ekledi.`,
+      ],
+      [
+        'Kurucusu Ayşe Demir de bu yöntemi her ekibe anlatıyor.',
+        `Kurucusu ${NAME} de bu yöntemi her ekibe anlatıyor.`,
+      ],
+    ]) {
+      expect(fix(line)).toBe(out);
+    }
     // A list of tools after a trade isn't a person, nor one "de dahil", nor
     // a name the sentence says nothing of.
     for (const line of [
@@ -364,10 +400,16 @@ describe('guardPeople: what the no-fabrication test set found', () => {
     ]) {
       expect(fix(line)).toBe(line);
     }
-    // A quote they do hold is still read.
+    // A quote they do hold is still read, a guillemet before it on the line too.
     expect(fix('«Haftalık tahmin her şeyi değiştirdi», diyor Priya Shah.')).toBe(
       `${QUOTE}, diyor ${NAME}.`,
     );
+    expect(fix('Ürünler » Analiz: «Haftalık tahmin her şeyi değiştirdi», diyor Priya Shah.')).toBe(
+      `Ürünler » Analiz: ${QUOTE}, diyor ${NAME}.`,
+    );
+    expect(
+      fix('«Schnell» und »Das hat unseren Umsatz wirklich verdoppelt«, sagt Anna Weber.'),
+    ).toBe(`«Schnell» und ${QUOTE}, sagt ${NAME}.`);
   });
 
   it('takes a product that "says" for a person: the trade made for "…, says Tom Becker."', () => {
