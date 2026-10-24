@@ -195,6 +195,11 @@ function draftStatus(value: string): DraftStatus {
 }
 
 const draftId = z.guid();
+/** A kept source: an http(s) address, as the page has it. */
+const keptSource = z
+  .string()
+  .max(2048)
+  .regex(/^https?:\/\//i);
 
 /** What a draft row embeds of its brand: enough to know its site type. */
 const BRAND_SITE = 'brands(site_type, industry, shopping_mode_enabled)';
@@ -220,7 +225,7 @@ export async function getContentDraft(id: string): Promise<ContentDraft | null> 
   const { data, error } = await supabase
     .from('content_drafts')
     .select(
-      `id, brand_id, title, page_type, page_type_source, method, status, body_html, author, author_id, source_url, rules, action_id, agent_state, agent_state_at, agent_run, updated_at, ${BRAND_SITE}, actions(action_no)`,
+      `id, brand_id, title, page_type, page_type_source, method, status, body_html, author, author_id, source_url, rules, kept_sources, action_id, agent_state, agent_state_at, agent_run, updated_at, ${BRAND_SITE}, actions(action_no)`,
     )
     .eq('id', id)
     .maybeSingle();
@@ -240,6 +245,7 @@ export async function getContentDraft(id: string): Promise<ContentDraft | null> 
     author: data.author === 'agent' ? 'agent' : 'user',
     authorId: data.author_id,
     rules: draftRulesSchema.safeParse(data.rules).data ?? NO_DRAFT_RULES,
+    keptSources: data.kept_sources ?? [],
     action:
       data.action_id && data.actions
         ? { id: data.action_id, number: data.actions.action_no }
@@ -1221,6 +1227,26 @@ export async function setContentDraftAuthor(id: string, authorId: string | null)
   if (error?.code === OTHER_ORGANIZATION) throw new Error('invalid');
   if (error) throw new Error(error.message);
   if (!data) throw new Error('not_found');
+}
+
+/**
+ * Keeps a weak source or a competitor's on the page (Quality CE-046): the
+ * person trusts it, so it no longer lowers Trust. Returns the draft's kept
+ * sources after; 'full' when the page keeps 50 already.
+ */
+export async function keepDraftSource(id: string, url: string): Promise<string[]> {
+  if (!draftId.safeParse(id).success || !keptSource.safeParse(url).success) {
+    throw new Error('invalid');
+  }
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc('content_draft_keep_source', {
+    p_draft_id: id,
+    p_url: url,
+  });
+  if (error) throw new Error(error.message);
+  if (!data) throw new Error('not_found');
+  if (!data.includes(url)) throw new Error('full');
+  return data;
 }
 
 /** The statuses the Library's row menu sets directly; Ready goes through markContentDraftReady. */

@@ -4521,6 +4521,10 @@
         "gain": "+{gain, number} {score}",
         "band": "{score, number}, {band}",
         "show": "Show",
+        "keep": "Keep",
+        "keepFailed": "Couldn't keep the source. Try again.",
+        "keepFull": "This page keeps 50 sources already: replace one instead.",
+        "weakSource": "A weak source: a forum, a social post or a competitor's page. See Quality to replace or keep it.",
         "formulas": {
           "flesch": "Flesch Reading Ease",
           "atesman": "Ateşman",
@@ -4536,6 +4540,14 @@
           "freshSources": {
             "line": "{count} of {total} dated {total, plural, one {source} other {sources}} {count, plural, one {is} other {are}} over {months} months old",
             "detail": "Swap them for a newer source, or check whether the page has an update."
+          },
+          "noWeakSources": {
+            "line": "{count, plural, one {# source is} other {# sources are}} weak: a forum, a social post or a competitor's page",
+            "detail": "{kind, select, competitor {{host} is a competitor's page.} other {{host} is a forum or a social post.}} Link the study, official page or data behind it instead, or keep it if you trust it."
+          },
+          "primarySources": {
+            "line": "No primary source yet",
+            "detail": "Link an official page or a study for the page's main claim: a government or standards body, a journal or a research paper."
           },
           "noBrokenLinks": {
             "line": "{count, plural, one {# link doesn't} other {# links don't}} work",

@@ -160,6 +160,8 @@ export interface ContentDraft {
   authorId: string | null;
   /** What the person changed on the page's rules for this draft (CE-009). */
   rules: DraftRules;
+  /** Weak or competitors' sources the person kept (Quality CE-046, 00263): they don't lower Trust. */
+  keptSources: string[];
   /** The Action Center action the draft is the work of (CE-022), shown as "from Action AC-214". */
   action: { id: string; number: number } | null;
   /** Where the Content Agent is on it (CE-015): the editor waits while it writes. */

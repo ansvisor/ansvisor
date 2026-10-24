@@ -38,6 +38,7 @@ import {
   unmarkContentDraftReady,
   restoreDraftVersion,
   setContentDraftAuthor,
+  keepDraftSource,
   setContentDraftPageType,
   startAgentWriting,
   startPageRewrite,
@@ -141,6 +142,7 @@ import { HtmlBlock, copyToClipboard } from './_html-block';
 import { OwnCopies, ownCopyHtml } from './_own-copies';
 import { NextNudge, useNextNudge } from './_next-nudge';
 import { PageInfoStrip, pageInfoKey } from './_page-info';
+import { WeakSourcesMarks, weakSourcesKey } from './_weak-sources';
 import { HeaderTip } from './_header-tip';
 import { NextStepButton, readSkips, wordsUnderTitle, writeSkips } from './_next-step';
 import { useTodoCopy, type QualityRead } from './_quality-tab';
@@ -177,6 +179,8 @@ import { useDraftAutosave, type SaveState } from './_use-autosave';
 const DOCUMENT_CLASS = cn(
   'prose prose-neutral max-w-none dark:prose-invert min-h-[50vh] focus:outline-none',
   'prose-a:font-normal prose-a:text-blue-600 prose-a:underline prose-a:underline-offset-2 dark:prose-a:text-blue-400',
+  // A weak source's amber wavy line takes the place of its link's (CE-046).
+  'prose-a:has-[.quality-weak-source]:no-underline!',
   'prose-h1:text-3xl prose-h1:tracking-tight prose-h2:tracking-tight',
   '[&_table]:my-4 [&_table]:w-full [&_table]:table-fixed [&_td]:border [&_td]:px-2 [&_td]:py-1.5 [&_th]:border [&_th]:bg-muted/50 [&_th]:px-2 [&_th]:py-1.5 [&_th]:text-left',
   // Cells and list items hold paragraphs; their margins would pad every row.
@@ -379,6 +383,7 @@ export function DraftEditor({
       AgentDrafting,
       FlashBlock,
       PageInfoStrip,
+      WeakSourcesMarks,
     ],
     content: draft.bodyHtml,
     // Rendered on the client only, so the server's HTML can't disagree with it.
@@ -520,6 +525,19 @@ export function DraftEditor({
       live = false;
     };
   }, [qualityOn, draft.brandId]);
+  // Phase 2 (CE-046): what kind of source each link is, competitors' pages
+  // by the brand's competitors (read with the sources), less the ones the
+  // person kept.
+  const sourcesOn = qualityPhase() >= 2;
+  const competitorDomains = reads.sources?.data?.competitorDomains;
+  const [keptSources, setKeptSources] = useState(draft.keptSources);
+  const sourceRead = useMemo(
+    () =>
+      sourcesOn
+        ? { competitorDomains: competitorDomains ?? [], pageType, kept: new Set(keptSources) }
+        : null,
+    [sourcesOn, competitorDomains, pageType, keptSources],
+  );
   // The brand's own links aren't sources: Trust waits for its domains.
   const trustScore = useMemo(
     () =>
@@ -529,11 +547,39 @@ export function DraftEditor({
             links: linkChecks,
             brandDomains,
             siteTrust,
+            sources: sourceRead,
             now: Date.now(),
           })
         : null,
-    [qualityOn, pageBlocks, linkChecks, brandDomains, siteTrust],
+    [qualityOn, pageBlocks, linkChecks, brandDomains, siteTrust, sourceRead],
   );
+  // Their links underlined in the draft, Quality's suggestion naming them.
+  const weakKey = (trustScore?.weak ?? []).map((w) => w.url).join('\n');
+  const weakTitle = t('quality.weakSource');
+  useEffect(() => {
+    if (!editor || editor.isDestroyed) return;
+    const urls = new Set(weakKey ? weakKey.split('\n') : []);
+    editor.view.dispatch(
+      editor.state.tr
+        .setMeta(weakSourcesKey, { urls, title: weakTitle })
+        .setMeta('addToHistory', false),
+    );
+  }, [editor, weakKey, weakTitle]);
+  const keepSource = async (url: string) => {
+    setKeptSources((kept) => (kept.includes(url) ? kept : [...kept, url]));
+    try {
+      setKeptSources(await keepDraftSource(draft.id, url));
+    } catch (err) {
+      // Only this one goes back: another kept meanwhile stays.
+      setKeptSources((kept) => kept.filter((source) => source !== url));
+      if (err instanceof Error && err.message === 'full') {
+        toast.error(t('quality.keepFull'));
+        return;
+      }
+      console.error('Failed to keep the source:', err);
+      toast.error(t('quality.keepFailed'));
+    }
+  };
   const qualityScore = qualityAverage([
     eeatScore?.score ?? null,
     trustScore?.score ?? null,
@@ -2330,6 +2376,7 @@ export function DraftEditor({
             onShowInPage={showInPage}
             onShowPlaceholder={showFirstPlaceholder}
             onPickAuthor={() => setAuthorMenuOpen(true)}
+            onKeepSource={sourcesOn ? (url) => void keepSource(url) : undefined}
           />
         ) : (
           <EditorPanelRail onOpen={openPanelTab} />

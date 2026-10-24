@@ -4,6 +4,7 @@ import { useFormatter, useTranslations } from 'next-intl';
 import { Check } from 'lucide-react';
 import { Link } from '@/i18n/navigation';
 import { Button, buttonVariants } from '@/components/ui/button';
+import { normalizeDomain } from '@/lib/citations/classify';
 import type { ContentAuthor } from '@/lib/content/authors';
 import { BAND_CLASSES, qualityBand } from '@/lib/content/quality';
 import {
@@ -60,6 +61,8 @@ export interface Suggestion {
   detail: string;
   /** The passage Show goes to, if any. */
   show: string | null;
+  /** The source Keep keeps (CE-046): the person trusts it all the same. */
+  keep?: string;
 }
 
 /**
@@ -74,6 +77,7 @@ export function QualityTab({
   onShow,
   onShowPlaceholder,
   onPickAuthor,
+  onKeep,
 }: {
   quality: QualityRead;
   /** Scrolls the draft to a passage and marks it. */
@@ -82,6 +86,8 @@ export function QualityTab({
   onShowPlaceholder: () => void;
   /** Opens the header's author menu. */
   onPickAuthor: () => void;
+  /** Keeps a weak source or a competitor's on the page (CE-046). */
+  onKeep?: (url: string) => void;
 }) {
   const t = useTranslations('contentEditor.editor.quality');
   const tSite = useTranslations('audit.siteTrust.checks');
@@ -181,6 +187,16 @@ export function QualityTab({
                       onClick={() => onShow(s.show!)}
                     >
                       {t('show')}
+                    </Button>
+                  )}
+                  {s.keep && onKeep && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 shrink-0"
+                      onClick={() => onKeep(s.keep!)}
+                    >
+                      {t('keep')}
                     </Button>
                   )}
                 </li>
@@ -381,6 +397,8 @@ export type TrustSuggestion = Suggestion & { check: TrustCheckId; count: number 
  * Trust's: figures without a source, sources past FRESH_MONTHS, links that
  * don't answer, each with Show on the first one in the page. A broken link
  * is listed before Trust is scored too, its gain out of the Phase 1 points.
+ * Phase 2 (CE-046): weak or competitors' sources, Show and Keep on the first,
+ * and no primary source among them.
  */
 export function trustSuggestions(t: T, trust: TrustRead | null): TrustSuggestion[] {
   if (!trust) return [];
@@ -411,6 +429,37 @@ export function trustSuggestions(t: T, trust: TrustRead | null): TrustSuggestion
       }),
       detail: t('checks.freshSources.detail'),
       show: trust.stale[0].text,
+    });
+  }
+  // Only once Trust is scored: their gain out of the Phase 1 points would be made up.
+  if (trust.weak.length && trust.score !== null) {
+    const [first] = trust.weak;
+    out.push({
+      key: 'trust:noWeakSources',
+      check: 'noWeakSources',
+      score: 'trust',
+      gain: trustGain(trust, ['noWeakSources']),
+      line: t('checks.noWeakSources.line', { count: trust.weak.length }),
+      count: trust.weak.length,
+      detail: t('checks.noWeakSources.detail', {
+        host: normalizeDomain(first.url),
+        kind: first.kind,
+      }),
+      show: first.text,
+      keep: first.url,
+    });
+  }
+  const primary = trust.checks.find((c) => c.id === 'primarySources');
+  if (primary && primary.points < primary.max && trust.score !== null) {
+    out.push({
+      key: 'trust:primarySources',
+      check: 'primarySources',
+      score: 'trust',
+      gain: trustGain(trust, ['primarySources']),
+      line: t('checks.primarySources.line'),
+      count: 1,
+      detail: t('checks.primarySources.detail'),
+      show: null,
     });
   }
   if (trust.broken.length) {

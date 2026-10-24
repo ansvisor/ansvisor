@@ -17,6 +17,7 @@ const unmarkContentDraftReady = vi.fn();
 const saveContentDraft = vi.fn();
 const setContentDraftPageType = vi.fn();
 const setContentDraftAuthor = vi.fn();
+const keepDraftSource = vi.fn();
 const checkDraftLinks = vi.fn();
 const getSiteTrust = vi.fn();
 vi.mock('@/lib/actions/audits', () => ({
@@ -75,6 +76,7 @@ vi.mock('@/lib/actions/content-drafts', () => ({
   saveContentDraft: (...args: unknown[]) => saveContentDraft(...args),
   setContentDraftPageType: (...args: unknown[]) => setContentDraftPageType(...args),
   setContentDraftAuthor: (...args: unknown[]) => setContentDraftAuthor(...args),
+  keepDraftSource: (...args: unknown[]) => keepDraftSource(...args),
   checkDraftLinks: (...args: unknown[]) => checkDraftLinks(...args),
 }));
 vi.mock('next/navigation', () => ({ useParams: () => ({ draftId: 'd1' }) }));
@@ -191,6 +193,7 @@ const draft = (over: Partial<ContentDraft> = {}): ContentDraft => ({
   author: 'agent',
   authorId: null,
   rules: { set: null, source: null, overrides: {}, textRules: [] },
+  keptSources: [],
   action: null,
   agentState: null,
   agentSince: null,
@@ -264,6 +267,7 @@ beforeEach(() => {
   saveBlob.mockReset();
   setContentDraftPageType.mockReset().mockResolvedValue(undefined);
   setContentDraftAuthor.mockReset().mockResolvedValue(undefined);
+  keepDraftSource.mockReset();
   checkDraftLinks.mockReset().mockResolvedValue({ links: [], skipped: [] });
   getSiteTrust.mockReset().mockRejectedValue(new Error('not in this test'));
   getContentAuthors.mockReset().mockResolvedValue(null);
@@ -2453,6 +2457,107 @@ describe('the side panel', () => {
         Element.prototype.scrollIntoView = original;
         vi.useRealTimers();
       }
+    });
+  });
+
+  describe('Sources by kind (Quality CE-046)', () => {
+    afterEach(() => {
+      delete process.env.NEXT_PUBLIC_CONTENT_QUALITY_PHASE;
+    });
+    const reddit = 'https://www.reddit.com/r/coffee/1';
+    const sourced = draft({
+      bodyHtml:
+        '<h1>Pour-over coffee</h1>' +
+        `<p>People swear by it on <a href="${reddit}">a thread</a>.</p>` +
+        '<p>Brew at 94 °C, as <a href="https://www.reuters.com/x">Reuters</a> reported.</p>',
+    });
+    const weakMarks = () => container.querySelectorAll('.ProseMirror .decoration-wavy');
+
+    it('underlines a weak source in the draft, and keeps it on Keep', async () => {
+      process.env.NEXT_PUBLIC_CONTENT_QUALITY_PHASE = '2';
+      getDraftSources.mockResolvedValue({
+        data: {
+          prompts: [],
+          fanouts: [],
+          citedPages: [],
+          gscQueries: [],
+          brandDomains: ['acme.com'],
+          competitorDomains: [],
+        },
+        choices: [],
+      });
+      keepDraftSource.mockResolvedValue([reddit]);
+      getContentDraft.mockResolvedValue(sourced);
+      window.innerWidth = 1440;
+      await renderPage();
+      expect(weakMarks()).toHaveLength(1);
+      expect(weakMarks()[0].textContent).toBe('a thread');
+      expect(weakMarks()[0].getAttribute('title')).toContain('A weak source');
+
+      const chip = [...container.querySelectorAll<HTMLButtonElement>('header button')].find((b) =>
+        b.textContent?.startsWith('Quality'),
+      )!;
+      await act(async () => chip.click());
+      const row = [...panel()!.querySelectorAll('li')].find((li) =>
+        li.textContent?.includes('weak:'),
+      )!;
+      const keep = [...row.querySelectorAll('button')].find((b) => b.textContent === 'Keep')!;
+      await act(async () => keep.click());
+      expect(keepDraftSource).toHaveBeenCalledWith('d1', reddit);
+      expect(weakMarks()).toHaveLength(0);
+      expect(panel()!.textContent).not.toContain('weak:');
+    });
+
+    it('marks every link to it as the page changes', async () => {
+      process.env.NEXT_PUBLIC_CONTENT_QUALITY_PHASE = '2';
+      getDraftSources.mockResolvedValue({
+        data: {
+          prompts: [],
+          fanouts: [],
+          citedPages: [],
+          gscQueries: [],
+          brandDomains: ['acme.com'],
+          competitorDomains: [],
+        },
+        choices: [],
+      });
+      getContentDraft.mockResolvedValue(sourced);
+      await renderPage();
+      expect(weakMarks()).toHaveLength(1);
+      // The page replaced (as a restore or the HTML view does): both links to it are marked.
+      await act(async () => button('Edit as HTML')!.click());
+      const source = container.querySelector('textarea')!;
+      await act(async () => {
+        Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!.call(
+          source,
+          `<h1>Pour-over coffee</h1><p>One <a href="${reddit}">thread</a>.</p>` +
+            `<p>And <a href="${reddit}">the same thread</a>.</p>`,
+        );
+        source.dispatchEvent(new Event('input', { bubbles: true }));
+      });
+      await act(async () => button('Back to visual')!.click());
+      expect([...weakMarks()].map((mark) => mark.textContent)).toEqual([
+        'thread',
+        'the same thread',
+      ]);
+    });
+
+    it('reads no source’s kind before phase 2', async () => {
+      process.env.NEXT_PUBLIC_CONTENT_QUALITY_PHASE = '1';
+      getDraftSources.mockResolvedValue({
+        data: {
+          prompts: [],
+          fanouts: [],
+          citedPages: [],
+          gscQueries: [],
+          brandDomains: ['acme.com'],
+          competitorDomains: [],
+        },
+        choices: [],
+      });
+      getContentDraft.mockResolvedValue(sourced);
+      await renderPage();
+      expect(weakMarks()).toHaveLength(0);
     });
   });
 

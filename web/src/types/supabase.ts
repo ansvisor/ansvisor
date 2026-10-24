@@ -989,6 +989,7 @@ export type Database = {
           created_at: string
           created_by: string | null
           id: string
+          kept_sources: string[]
           method: string
           opportunity_id: string | null
           page_type: string | null
@@ -1017,6 +1018,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           id?: string
+          kept_sources?: string[]
           method?: string
           opportunity_id?: string | null
           page_type?: string | null
@@ -1045,6 +1047,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           id?: string
+          kept_sources?: string[]
           method?: string
           opportunity_id?: string | null
           page_type?: string | null
@@ -4173,6 +4176,10 @@ export type Database = {
       content_draft_decide_suggestions: {
         Args: { p_ids: string[]; p_status: string }
         Returns: number
+      }
+      content_draft_keep_source: {
+        Args: { p_draft_id: string; p_url: string }
+        Returns: string[]
       }
       content_draft_member: { Args: { p_draft_id: string }; Returns: boolean }
       content_draft_restore: { Args: { p_version_id: string }; Returns: Json }

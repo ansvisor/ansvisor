@@ -125,6 +125,7 @@ export function EditorSidePanel({
   onShowInPage,
   onShowPlaceholder,
   onPickAuthor,
+  onKeepSource,
 }: {
   draft: ContentDraft;
   /** The draft's title, page and type as written now: Sources and Brief read them. */
@@ -172,6 +173,8 @@ export function EditorSidePanel({
   onShowPlaceholder?: () => void;
   /** Opens the header's author menu: Quality's Pick author. */
   onPickAuthor?: () => void;
+  /** Keeps a weak source or a competitor's on the page (Quality CE-046), once phase 2 is live. */
+  onKeepSource?: (url: string) => void;
 }) {
   const t = useTranslations('contentEditor.editor.panel');
   const tEditor = useTranslations('contentEditor.editor');
@@ -389,6 +392,7 @@ export function EditorSidePanel({
                 onShow={(text) => onShowInPage?.(text)}
                 onShowPlaceholder={() => onShowPlaceholder?.()}
                 onPickAuthor={() => onPickAuthor?.()}
+                onKeep={onKeepSource}
               />
             </div>
           )}

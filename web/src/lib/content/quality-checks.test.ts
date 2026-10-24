@@ -219,3 +219,68 @@ describe('trust (Phase 1: figures and links)', () => {
     expect(run('<p>No figures here.</p>').score).toBeNull();
   });
 });
+
+describe('trust (Phase 2: what kind of source each link is, CE-046)', () => {
+  const NOW = Date.parse('2026-10-23T12:00:00Z');
+  const run = (html: string, over: { pageType?: string; kept?: string[] } = {}) =>
+    trust({
+      blocks: trustBlocks(html),
+      links: new Map(),
+      brandDomains: ['acme.com'],
+      sources: {
+        competitorDomains: ['rival.example'],
+        pageType: over.pageType ?? 'guide',
+        kept: new Set(over.kept ?? []),
+      },
+      now: NOW,
+    });
+  const a = (href: string) => `<a href="${href}">source</a>`;
+
+  it('wants a primary source among them, and none weak or a competitor’s', () => {
+    const result = run(
+      `<p>Flu season runs from October ${a('https://www.cdc.gov/flu')}.</p>` +
+        `<p>People say it works ${a('https://www.reddit.com/r/x/1')}.</p>` +
+        `<p>Their tool does it too ${a('https://rival.example/feature')}.</p>` +
+        `<p>Reported by ${a('https://www.reuters.com/x')}, on ${a('https://www.acme.com/blog')}.</p>`,
+    );
+    expect(result.checks).toEqual([
+      { id: 'primarySources', points: TRUST_WEIGHTS.primarySources, max: 15 },
+      { id: 'noWeakSources', points: (TRUST_WEIGHTS.noWeakSources * 2) / 4, max: 10 },
+    ]);
+    // Two placed sources score Trust on their own; the brand's own page isn't one.
+    expect(result.classified).toBe(4);
+    expect(result.score).toBe(80);
+    expect(result.weak.map((w) => [w.url, w.kind])).toEqual([
+      ['https://www.reddit.com/r/x/1', 'weak'],
+      ['https://rival.example/feature', 'competitor'],
+    ]);
+  });
+
+  it('takes a source the person kept, and a competitor’s own page on a comparison', () => {
+    const html =
+      `<p>People say it works ${a('https://www.reddit.com/r/x/1')}.</p>` +
+      `<p>Their pricing ${a('https://rival.example/pricing')}.</p>`;
+    expect(run(html).score).toBe(0);
+    const kept = run(html, { pageType: 'comparison', kept: ['https://www.reddit.com/r/x/1'] });
+    expect(kept.weak).toEqual([]);
+    expect(kept.score).toBe(100);
+  });
+
+  it('leaves out a source the rules can’t place, and waits for two', () => {
+    const result = run(
+      `<p>A blog says so ${a('https://some-blog.example/post')}.</p>` +
+        `<p>Officially ${a('https://www.who.int/news')}.</p>`,
+    );
+    expect(result.classified).toBe(1);
+    expect(result.score).toBeNull();
+    // Before phase 2, none of it is read.
+    const before = trust({
+      blocks: trustBlocks(`<p>${a('https://www.reddit.com/r/x/1')} ${a('https://x.com/a')}</p>`),
+      links: new Map(),
+      brandDomains: [],
+      now: NOW,
+    });
+    expect(before.checks).toEqual([]);
+    expect(before.weak).toEqual([]);
+  });
+});

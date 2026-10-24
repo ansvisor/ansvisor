@@ -87,6 +87,7 @@ const {
   getCitedPassages,
   getContentDraft,
   getDraftVersions,
+  keepDraftSource,
   markContentDraftReady,
   restoreDraftVersion,
   saveContentDraft,
@@ -344,6 +345,23 @@ describe('setContentDraftAuthor', () => {
     await expect(setContentDraftAuthor('d1', AUTHOR)).rejects.toThrow('invalid');
     expect(calls).toEqual([]);
     await expect(setContentDraftAuthor(DRAFT, AUTHOR)).rejects.toThrow('not_found');
+  });
+});
+
+describe('keepDraftSource (Quality CE-046)', () => {
+  it('keeps a source through the draft’s function, an http(s) address only', async () => {
+    const url = 'https://www.reddit.com/r/coffee/1';
+    rpcResult = { data: [url], error: null };
+    await expect(keepDraftSource(DRAFT, url)).resolves.toEqual([url]);
+    expect(rpcCalls).toEqual([['content_draft_keep_source', { p_draft_id: DRAFT, p_url: url }]]);
+    await expect(keepDraftSource(DRAFT, 'javascript:alert(1)')).rejects.toThrow('invalid');
+    await expect(keepDraftSource('d1', url)).rejects.toThrow('invalid');
+    // Not the member's to change: the function changes nothing.
+    rpcResult = { data: null, error: null };
+    await expect(keepDraftSource(DRAFT, url)).rejects.toThrow('not_found');
+    // 50 kept already: the list comes back without it.
+    rpcResult = { data: ['https://x.example/1'], error: null };
+    await expect(keepDraftSource(DRAFT, url)).rejects.toThrow('full');
   });
 });
 
