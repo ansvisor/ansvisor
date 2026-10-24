@@ -4976,6 +4976,25 @@ export type Database = {
           regions: string[]
         }[]
       }
+      shopping_merchant_split: {
+        Args: {
+          p_brand_id: string
+          p_chatgpt_regions?: string[]
+          p_from?: string
+          p_platforms?: string[]
+          p_regions?: string[]
+          p_to?: string
+        }
+        Returns: {
+          amazon_cards: number
+          ebay_cards: number
+          other_marketplace_cards: number
+          own_store_cards: number
+          reseller_cards: number
+          unclassified_cards: number
+          walmart_cards: number
+        }[]
+      }
       shopping_overview: {
         Args: {
           p_brand_id: string
@@ -4985,6 +5004,17 @@ export type Database = {
           p_regions?: string[]
           p_to?: string
           p_trend_from?: string
+        }
+        Returns: Json
+      }
+      shopping_own_product_offers: {
+        Args: {
+          p_brand_id: string
+          p_chatgpt_regions?: string[]
+          p_from?: string
+          p_platforms?: string[]
+          p_regions?: string[]
+          p_to?: string
         }
         Returns: Json
       }

@@ -26,6 +26,7 @@ function keptByOr(filter: string | undefined, row: Record<string, unknown>): boo
 
 let cards: Array<Record<string, unknown>> = [];
 let overviewRow: Record<string, unknown> = {};
+let rpcData: Record<string, unknown> = {};
 let rpcCalls: Array<{ fn: string; args: Record<string, unknown> }> = [];
 let cardCalls: QueryState[] = [];
 
@@ -90,7 +91,7 @@ vi.mock('@/lib/supabase/server', () => ({
     from: (table: string) => fakeQueryBuilder(table),
     rpc: async (fn: string, args: Record<string, unknown>) => {
       rpcCalls.push({ fn, args });
-      return { data: overviewRow, error: null };
+      return { data: fn in rpcData ? rpcData[fn] : overviewRow, error: null };
     },
   }),
 }));
@@ -99,7 +100,9 @@ import {
   getCompetitorProducts,
   getCompetitorSummary,
   getOwnProducts,
+  getResellerPriceAlerts,
   getShoppingKpis,
+  getShoppingMerchantSplit,
   getShoppingOverview,
 } from './shopping';
 
@@ -125,6 +128,7 @@ function card(i: number, role: 'own' | 'competitor' | 'other', matched?: string)
 
 beforeEach(() => {
   cards = [];
+  rpcData = {};
   rpcCalls = [];
   cardCalls = [];
   overviewRow = {
@@ -253,6 +257,30 @@ describe('ChatGPT Shopping market (#1278)', () => {
     expect(rpcCalls[1].args.p_chatgpt_regions).toBeUndefined();
   });
 
+  it("passes the market's regions to the merchant split and offers RPCs only with a market", async () => {
+    rpcData.shopping_merchant_split = [];
+    rpcData.shopping_own_product_offers = [];
+    await getShoppingMerchantSplit('brand-1', { datePreset: '30d', chatgptMarket: 'us' });
+    await getResellerPriceAlerts('brand-1', { datePreset: '30d', chatgptMarket: 'us' });
+    await getShoppingMerchantSplit('brand-1', { datePreset: '30d' });
+    await getResellerPriceAlerts('brand-1', { datePreset: '30d' });
+
+    expect(rpcCalls.map((c) => c.fn)).toEqual([
+      'shopping_merchant_split',
+      'shopping_own_product_offers',
+      'shopping_merchant_split',
+      'shopping_own_product_offers',
+    ]);
+    for (const call of rpcCalls.slice(0, 2)) {
+      expect(call.args.p_chatgpt_regions).toEqual(expect.arrayContaining(['US', 'US-CA']));
+      expect(call.args.p_chatgpt_regions).not.toContain('DE');
+      expect(call.args.p_regions).toBeUndefined();
+    }
+    for (const call of rpcCalls.slice(2)) {
+      expect(call.args.p_chatgpt_regions).toBeUndefined();
+    }
+  });
+
   it('adds no filter without a market', async () => {
     cards = [placed(1, 'own', 'chatgpt-shopping', 'TR')];
     await getOwnProducts('brand-1', { datePreset: '30d' });
@@ -301,5 +329,83 @@ describe('getShoppingKpis', () => {
   it('skips the trend', async () => {
     await getShoppingKpis('brand-1', { datePreset: '30d' });
     expect(rpcCalls[0].args.p_trend_from).toBeUndefined();
+  });
+});
+
+describe('getShoppingMerchantSplit', () => {
+  it("reads the split for the Overview's window and filters", async () => {
+    rpcData.shopping_merchant_split = [
+      {
+        own_store_cards: 286,
+        amazon_cards: 1200,
+        walmart_cards: 400,
+        ebay_cards: 90,
+        other_marketplace_cards: 500,
+        reseller_cards: 11752,
+        unclassified_cards: '1404',
+      },
+    ];
+    const split = await getShoppingMerchantSplit('brand-1', {
+      datePreset: '30d',
+      platforms: ['copilot-web'],
+      regions: ['US'],
+    });
+
+    expect(rpcCalls).toHaveLength(1);
+    expect(rpcCalls[0].fn).toBe('shopping_merchant_split');
+    expect(rpcCalls[0].args).toMatchObject({
+      p_brand_id: 'brand-1',
+      p_from: expect.any(String),
+      p_platforms: ['copilot-web'],
+      p_regions: ['US'],
+    });
+    expect(split.classifiedCards).toBe(14228);
+    expect(split.unclassifiedCards).toBe(1404);
+    expect(split.parts.reduce((sum, p) => sum + p.cards, 0)).toBe(14228);
+    expect(split.parts.reduce((sum, p) => sum + p.percent, 0)).toBe(100);
+  });
+
+  it('is all zeros when the RPC returns no row', async () => {
+    rpcData.shopping_merchant_split = [];
+    const split = await getShoppingMerchantSplit('brand-1', { datePreset: '7d' });
+    expect(split.classifiedCards).toBe(0);
+    expect(split.unclassifiedCards).toBe(0);
+  });
+});
+
+describe('getResellerPriceAlerts', () => {
+  it('flags a marketplace offer at least 5% under the store', async () => {
+    rpcData.shopping_own_product_offers = [
+      {
+        merchant_kind: 'own',
+        marketplace: null,
+        merchant_domain: 'acme.example',
+        merchant_url: 'https://acme.example/runner',
+        listing_id: null,
+        product_title: 'Acme Runner',
+        price_amount: '120.00',
+        price_currency: 'USD',
+      },
+      {
+        merchant_kind: 'marketplace',
+        marketplace: 'amazon',
+        merchant_domain: 'amazon.com',
+        merchant_url: 'https://www.amazon.com/dp/B000000001',
+        listing_id: 'B000000001',
+        product_title: 'Acme Runner',
+        price_amount: 99,
+        price_currency: 'USD',
+      },
+    ];
+    const alerts = await getResellerPriceAlerts('brand-1', { datePreset: '90d' });
+
+    expect(rpcCalls[0].fn).toBe('shopping_own_product_offers');
+    expect(alerts).toHaveLength(1);
+    expect(alerts[0]).toMatchObject({ ownPrice: 120, resellerPrice: 99, currency: 'USD' });
+  });
+
+  it('is empty when the RPC returns no offers', async () => {
+    rpcData.shopping_own_product_offers = [];
+    expect(await getResellerPriceAlerts('brand-1', { datePreset: '30d' })).toEqual([]);
   });
 });

@@ -93,6 +93,9 @@ import { formatRegionDisplay } from '@/lib/region';
 import type { AmazonShareDropAlert } from '@/lib/shopping-amazon-share-alert';
 import { HeaderWithAiUsage } from '@/components/ai-usage/ai-usage-meter';
 import { ShoppingMarketSwitch, useShoppingMarket } from './_market-switch';
+import { MerchantSplitCard } from './merchant_split_card';
+import { ResellerPriceAlerts } from './reseller_price_alerts';
+import { useMerchantDestinations } from './use_merchant_destinations';
 
 const DATE_PRESETS: ShoppingDatePreset[] = ['7d', '30d', '90d', 'all'];
 
@@ -149,6 +152,13 @@ export default function ShoppingPage() {
     }),
     [datePreset, platform, region, shoppingMarket.filter],
   );
+  // Like the Overview's own load, these wait for the market.
+  const destinations = useMerchantDestinations(
+    activeBrandId,
+    filters,
+    hasFullAccess && shoppingMarket.ready,
+  );
+  const destinationsLoading = destinations.loading || !shoppingMarket.ready;
 
   // Load filter options once per brand so the dropdowns only show
   // platform / region values that actually appear in this brand's data.
@@ -318,18 +328,27 @@ export default function ShoppingPage() {
 
             <TabsContent value="overview" className="space-y-6">
               {hasFullAccess ? (
-                <div className="grid gap-4 lg:grid-cols-2">
-                  <PlatformCardRateChart
-                    t={t}
-                    data={charts?.platformCardRate ?? []}
-                    loading={loading}
-                  />
-                  <OwnPresenceTrendChart
-                    t={t}
-                    data={charts?.ownPresenceTrend ?? []}
-                    loading={loading}
-                  />
-                </div>
+                <>
+                  <div className="grid gap-4 lg:grid-cols-2">
+                    <PlatformCardRateChart
+                      t={t}
+                      data={charts?.platformCardRate ?? []}
+                      loading={loading}
+                    />
+                    <OwnPresenceTrendChart
+                      t={t}
+                      data={charts?.ownPresenceTrend ?? []}
+                      loading={loading}
+                    />
+                  </div>
+                  <div className="grid gap-4 lg:grid-cols-2">
+                    <MerchantSplitCard split={destinations.split} loading={destinationsLoading} />
+                    <ResellerPriceAlerts
+                      alerts={destinations.priceAlerts}
+                      loading={destinationsLoading}
+                    />
+                  </div>
+                </>
               ) : (
                 <UpgradeCard t={t} requiredPlan={requiredPlanFor('shopping_analytics')} />
               )}

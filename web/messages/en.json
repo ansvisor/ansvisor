@@ -6723,7 +6723,33 @@
     "drawerTimestamp": "Timestamp",
     "drawerPlatform": "Platform",
     "drawerRegion": "Region",
-    "drawerCardsTitle": "Cards returned"
+    "drawerCardsTitle": "Cards returned",
+    "merchantSplit": {
+      "title": "Where AI sends shoppers",
+      "description": "Where the cards for your products link, in the selected window.",
+      "own_store": "Your store",
+      "amazon": "Amazon",
+      "walmart": "Walmart",
+      "ebay": "eBay",
+      "other_marketplace": "Other marketplaces",
+      "reseller": "Other resellers",
+      "cards": "{count, plural, one {# card} other {# cards}}",
+      "underOnePercent": "<1%",
+      "partLabel": "{destination}: {cards}, {percent}",
+      "unclassified": "{count, plural, one {# card has no merchant link and is} other {# cards have no merchant link and are}} not in the split.",
+      "empty": "No cards for your products link to a merchant in this window."
+    },
+    "resellerPrices": {
+      "title": "Resellers cheaper than you",
+      "description": "Your products sold elsewhere for at least {percent} less than the lowest price on your store, in the same currency, in the selected window.",
+      "empty": "No reseller undercuts your store in this window.",
+      "yourStore": "Your store",
+      "reseller": "Reseller",
+      "lowerBy": "{percent} lower",
+      "untitled": "Untitled product",
+      "unknownMerchant": "Unknown merchant",
+      "openLink": "Open {merchant} in a new tab"
+    }
   },
   "reports": {
     "title": "Reports",

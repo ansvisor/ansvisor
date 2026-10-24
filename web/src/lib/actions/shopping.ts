@@ -7,6 +7,16 @@ import {
   type AmazonShareDropAlert,
 } from '@/lib/shopping-amazon-share-alert';
 import { marketRegionCodes, type ShoppingMarket } from '@/lib/shopping/markets';
+import {
+  toMerchantSplit,
+  type MerchantSplitRow,
+  type ShoppingMerchantSplit,
+} from '@/lib/shopping-merchant-split';
+import {
+  detectResellerPriceAlerts,
+  type MerchantKind,
+  type ResellerPriceAlert,
+} from '@/lib/shopping-reseller-price-alert';
 
 /**
  * Server actions for the Shopping dashboard page. Reads from the
@@ -33,7 +43,8 @@ export interface ShoppingFilters {
   /**
    * ChatGPT Shopping's market (#1278): its results and cards are kept to the
    * market's regions, other platforms' are unaffected. Applies to the card
-   * reads and to the Overview (`p_chatgpt_regions`, 00267).
+   * reads and to the Overview (`p_chatgpt_regions`, 00267), including where
+   * AI sends shoppers and the reseller prices (00268).
    */
   chatgptMarket?: ShoppingMarket;
 }
@@ -82,6 +93,22 @@ function daysAgoIso(days: number): string {
   return new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
 }
 
+/**
+ * The Overview window's RPC arguments: brand, dates, platforms, regions and
+ * ChatGPT Shopping's market (#1278), whose regions go only with a market.
+ */
+function windowArgs(brandId: string, filters: ShoppingFilters) {
+  const { from, to } = resolveDateRange(filters);
+  return {
+    p_brand_id: brandId,
+    p_from: from,
+    p_to: expandDateToEndOfDay(to),
+    p_platforms: filters.platforms?.length ? filters.platforms : undefined,
+    p_regions: filters.regions?.length ? filters.regions : undefined,
+    p_chatgpt_regions: filters.chatgptMarket ? marketRegionCodes(filters.chatgptMarket) : undefined,
+  };
+}
+
 // ── Overview (KPIs + charts) ──────────────────────────────────────────────────
 
 interface ShoppingOverviewRow {
@@ -105,15 +132,9 @@ async function loadShoppingOverview(
   trendFrom?: string,
 ): Promise<ShoppingOverviewRow> {
   const supabase = await createClient();
-  const { from, to } = resolveDateRange(filters);
   const { data, error } = await supabase.rpc('shopping_overview', {
-    p_brand_id: brandId,
-    p_from: from,
-    p_to: expandDateToEndOfDay(to),
-    p_platforms: filters.platforms?.length ? filters.platforms : undefined,
-    p_regions: filters.regions?.length ? filters.regions : undefined,
+    ...windowArgs(brandId, filters),
     p_trend_from: trendFrom,
-    p_chatgpt_regions: filters.chatgptMarket ? marketRegionCodes(filters.chatgptMarket) : undefined,
   });
   if (error) throw new Error(error.message);
   return data as unknown as ShoppingOverviewRow;
@@ -212,6 +233,66 @@ export async function getShoppingAmazonShareDropAlert(
       weekStart: row.week_start,
       amazonCards: Number(row.amazon_cards),
       classifiedCards: Number(row.classified_cards),
+    })),
+  );
+}
+
+/**
+ * "Where AI sends shoppers" (#1277): the brand's own-product cards per
+ * destination over the Overview window and filters, counted in Postgres by
+ * `shopping_merchant_split` so the split holds past PostgREST's 1,000-row cap.
+ */
+export async function getShoppingMerchantSplit(
+  brandId: string,
+  filters: ShoppingFilters,
+): Promise<ShoppingMerchantSplit> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc(
+    'shopping_merchant_split',
+    windowArgs(brandId, filters),
+  );
+  if (error) throw new Error(error.message);
+  return toMerchantSplit((data as MerchantSplitRow[] | null)?.[0]);
+}
+
+interface OwnProductOfferRow {
+  merchant_kind: MerchantKind;
+  marketplace: string | null;
+  merchant_domain: string | null;
+  merchant_url: string | null;
+  listing_id: string | null;
+  product_title: string | null;
+  price_amount: number | string;
+  price_currency: string | null;
+}
+
+/**
+ * Resellers selling the brand's products for at least 5% less than its own
+ * store (#1277), over the Overview window and filters. The RPC returns each
+ * merchant's lowest price per product as one jsonb list (no row cap); the
+ * matching and the 5% rule live in `detectResellerPriceAlerts`.
+ */
+export async function getResellerPriceAlerts(
+  brandId: string,
+  filters: ShoppingFilters,
+): Promise<ResellerPriceAlert[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc(
+    'shopping_own_product_offers',
+    windowArgs(brandId, filters),
+  );
+  if (error) throw new Error(error.message);
+  const rows = (Array.isArray(data) ? data : []) as unknown as OwnProductOfferRow[];
+  return detectResellerPriceAlerts(
+    rows.map((row) => ({
+      merchantKind: row.merchant_kind,
+      marketplace: row.marketplace,
+      merchantDomain: row.merchant_domain,
+      merchantUrl: row.merchant_url,
+      listingId: row.listing_id,
+      productTitle: row.product_title,
+      priceAmount: Number(row.price_amount),
+      priceCurrency: row.price_currency,
     })),
   );
 }
