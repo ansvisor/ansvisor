@@ -18,6 +18,8 @@ export type CmsSendError =
   | 'not_found'
   | 'invalid'
   | 'failed'
+  // More than the API's proxy takes in one request (413).
+  | 'too_large'
   // Not a send's own: the session, another workspace's brand, the rate limiter.
   | 'session'
   | 'workspace'
@@ -34,7 +36,8 @@ export interface CmsDelivery {
 }
 
 export type CmsSendResult =
-  | { ok: true; deliveries: CmsDelivery[] }
+  /** `skipped`: pages past the workspace's sends for the day, not sent. */
+  | { ok: true; deliveries: CmsDelivery[]; skipped: number }
   | { ok: false; code: CmsSendError; field: string | null };
 
 /** A send's own reasons, by the server's code. */
@@ -69,14 +72,16 @@ export async function sendPagesToCms(brandId: string, pages: CmsPage[]): Promise
       code?: string;
       field?: string | null;
       deliveries?: CmsDelivery[];
+      skipped?: number;
     };
     if (!res.ok) {
+      if (res.status === 413) return { ok: false, code: 'too_large', field: null };
       const general = apiFailure(res.status, body);
       const code =
         KNOWN.find((c) => c === body.code) ?? GENERAL.find((c) => c === general) ?? 'failed';
       return { ok: false, code, field: body.field ?? null };
     }
-    return { ok: true, deliveries: body.deliveries ?? [] };
+    return { ok: true, deliveries: body.deliveries ?? [], skipped: body.skipped ?? 0 };
   } catch (err) {
     console.error('Failed to send to the CMS:', err);
     return { ok: false, code: 'failed', field: null };
@@ -190,4 +195,48 @@ export async function readDraftCms(draftId: string): Promise<DraftCms | null> {
         }
       : null,
   };
+}
+
+/**
+ * The slug and meta each draft kept from its last send, for a bulk send
+ * (the dialog's single read is readDraftCms); none for a draft that kept
+ * none. Throws when they can't be read: sent with the page's own slug, a
+ * page sent before could land in the CMS twice.
+ */
+export async function readKeptFields(draftIds: string[]): Promise<Map<string, Partial<CmsFields>>> {
+  const kept = new Map<string, Partial<CmsFields>>();
+  if (!draftIds.length) return kept;
+  const { data, error } = await createClient()
+    .from('content_drafts')
+    .select('id, slug, meta_title, meta_description')
+    .in('id', draftIds);
+  if (error) throw new Error(error.message);
+  for (const row of data ?? []) {
+    kept.set(row.id, {
+      slug: row.slug ?? undefined,
+      metaTitle: row.meta_title ?? undefined,
+      metaDescription: row.meta_description ?? undefined,
+    });
+  }
+  return kept;
+}
+
+/** Sends as they are now, by id: a bulk send's, while they go. Null when they can't be read. */
+export async function readDeliveries(ids: string[]): Promise<CmsDelivery[] | null> {
+  if (!ids.length) return [];
+  const { data, error } = await createClient()
+    .from('content_draft_deliveries')
+    .select('id, draft_id, status, http_status, error')
+    .in('id', ids);
+  if (error) {
+    console.error('Failed to read the sends:', error);
+    return null;
+  }
+  return (data ?? []).map((row) => ({
+    id: row.id,
+    draftId: row.draft_id ?? '',
+    status: row.status as CmsDelivery['status'],
+    http_status: row.http_status,
+    error: row.error,
+  }));
 }

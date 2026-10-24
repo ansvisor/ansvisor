@@ -3,7 +3,10 @@ import type { AuthorsRead, ContentAuthor } from '@/lib/content/authors';
 import { publishableHtml } from '@/lib/content/clean-html';
 import {
   bylineText,
+  exportPlaceholders,
   fragment,
+  pageFields,
+  titlePlaceholders,
   withByline,
   withoutLeadingH1,
   type PageFields,
@@ -42,6 +45,7 @@ export const META_TITLE_MAX = 300;
 export const META_DESCRIPTION_MAX = 500;
 // The server's other limits, which the page itself fills.
 const TITLE_MAX = 300;
+const HTML_MAX = 1_000_000;
 const AUTHOR_MAX = 200;
 const ALT_MAX = 500;
 const IMAGE_SRC_MAX = 2048;
@@ -66,15 +70,17 @@ export function cmsFieldsProblem(
 }
 
 /**
- * Why the page can't go yet, or null: the CMS needs a title, and a page
- * with no words or image under its H1 has nothing to publish.
+ * Why the page can't go yet, or null: the CMS needs a title, a page with no
+ * words or image under its H1 has nothing to publish, and the server takes
+ * a page up to a million characters.
  */
 export function cmsPageProblem(
   title: string,
   html: string,
-): 'noTitle' | 'longTitle' | 'empty' | null {
+): 'noTitle' | 'longTitle' | 'empty' | 'tooLong' | null {
   if (!title.trim()) return 'noTitle';
   if (title.trim().length > TITLE_MAX) return 'longTitle';
+  if (html.length > HTML_MAX) return 'tooLong';
   const body = fragment(withoutLeadingH1(html));
   if (!body.textContent?.trim() && !body.querySelector('img')) return 'empty';
   return null;
@@ -170,4 +176,81 @@ export function cmsPage({
     author: page.author.trim().slice(0, AUTHOR_MAX) || null,
     featuredImage: image ? { src: image, alt: altOf(html, image).slice(0, ALT_MAX) } : null,
   };
+}
+
+/** As the server's: the pages one send takes. */
+export const CMS_PAGES_PER_SEND = 25;
+/**
+ * About as much as one request carries: the browser's go through the API's
+ * proxy, a serverless function whose body is capped at 4.5 MB.
+ */
+const SEND_BODY_BUDGET = 3_000_000;
+
+/** Why a page of a bulk send can't go as it is, or null. */
+export type BulkProblem =
+  | 'noTitle'
+  | 'longTitle'
+  | 'empty'
+  | 'tooLong'
+  | 'placeholders'
+  | 'slug'
+  | 'metaTitle'
+  | 'metaDescription';
+
+export interface BulkItem {
+  draftId: string;
+  title: string;
+  problem: BulkProblem | null;
+  /** The page as it goes; null when it can't. */
+  page: CmsPage | null;
+}
+
+/**
+ * A bulk send's pages, each as the Send dialog would send it unchanged: its
+ * slug and meta what it kept from its last send, else the page's; or why it
+ * can't go (filled in the editor, where its fields can be changed too).
+ */
+export function bulkCmsItems(
+  sources: CmsSource[],
+  kept: ReadonlyMap<string, Partial<CmsFields>>,
+): BulkItem[] {
+  return sources.map((source) => {
+    const { draftId, title, html } = source;
+    const page = pageFields(source);
+    const fields = cmsFields(page, kept.get(draftId) ?? null);
+    const problem =
+      cmsPageProblem(title, html) ??
+      (exportPlaceholders(html) + titlePlaceholders(title, html) > 0 ? 'placeholders' : null) ??
+      cmsFieldsProblem(fields);
+    return {
+      draftId,
+      title,
+      problem,
+      page: problem ? null : cmsPage({ draftId, title, html, fields, page, byline: source.byline }),
+    };
+  });
+}
+
+/**
+ * The pages in sends a request each can carry, in order, by their bytes as
+ * sent: a long page goes alone, never split. Each request is a send of its
+ * own on the server, so the groups' pages go side by side; a group's, one
+ * after another.
+ */
+export function cmsSendGroups(pages: CmsPage[], budget = SEND_BODY_BUDGET): CmsPage[][] {
+  const groups: CmsPage[][] = [];
+  const encoder = new TextEncoder();
+  let size = 0;
+  for (const page of pages) {
+    const pageSize = encoder.encode(JSON.stringify(page)).length;
+    const last = groups.at(-1);
+    if (last && size + pageSize <= budget) {
+      last.push(page);
+      size += pageSize;
+    } else {
+      groups.push([page]);
+      size = pageSize;
+    }
+  }
+  return groups;
 }

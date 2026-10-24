@@ -6,8 +6,12 @@ import {
   cmsFieldsProblem,
   cmsPage,
   cmsPageProblem,
+  bulkCmsItems,
+  cmsSendGroups,
   cmsSource,
   type CmsFields,
+  type CmsPage,
+  type CmsSource,
 } from './cms-send';
 import type { PageFields } from './ready-to-publish';
 
@@ -70,6 +74,7 @@ describe('cmsPageProblem', () => {
     // A new page: its H1 and an empty paragraph.
     expect(cmsPageProblem('Pour-over', '<h1>Pour-over</h1><p></p>')).toBe('empty');
     expect(cmsPageProblem('Pour-over', '')).toBe('empty');
+    expect(cmsPageProblem('Pour-over', `<p>${'a'.repeat(1_000_000)}</p>`)).toBe('tooLong');
   });
 });
 
@@ -201,5 +206,90 @@ describe('cmsSource', () => {
 
   it('gives no author or team byline while Quality is off', () => {
     expect(source({ authors: null })).toMatchObject({ author: null, teamByline: '', byline: null });
+  });
+});
+
+describe('bulkCmsItems', () => {
+  const source = (over: Partial<CmsSource>): CmsSource => ({
+    draftId: 'd1',
+    title: 'Pour-over',
+    html: '<h1>Pour-over</h1>\n<p>Brew it slowly.</p>',
+    sourceUrl: null,
+    author: null,
+    teamByline: 'Acme Team',
+    byline: null,
+    ...over,
+  });
+
+  it('gives each page as the Send dialog would send it, or why it can’t go', () => {
+    const items = bulkCmsItems(
+      [
+        source({}),
+        source({ draftId: 'd2', html: '<h1>Pour-over</h1><p>Use [figure] g.</p>' }),
+        source({ draftId: 'd3', html: '<h1>Pour-over</h1><p></p>' }),
+        source({ draftId: 'd4', title: '東京ガイド', html: '<h1>東京ガイド</h1><p>東京</p>' }),
+        source({ draftId: 'd5', title: ' ' }),
+      ],
+      new Map(),
+    );
+    expect(items.map((item) => [item.draftId, item.problem])).toEqual([
+      ['d1', null],
+      ['d2', 'placeholders'],
+      ['d3', 'empty'],
+      // A title in another script gives no slug: added in the editor.
+      ['d4', 'slug'],
+      ['d5', 'noTitle'],
+    ]);
+    expect(items[0].page).toMatchObject({
+      draftId: 'd1',
+      slug: 'pour-over',
+      metaDescription: 'Brew it slowly.',
+      html: '<p>Brew it slowly.</p>',
+      author: 'Acme Team',
+    });
+    expect(items.slice(1).every((item) => item.page === null)).toBe(true);
+  });
+
+  it('takes the slug and meta the page kept from its last send', () => {
+    const [item] = bulkCmsItems(
+      [source({ draftId: 'd4', title: '東京ガイド', html: '<h1>東京ガイド</h1><p>東京</p>' })],
+      new Map([['d4', { slug: 'tokyo-guide', metaTitle: 'Tokyo' }]]),
+    );
+    expect(item.problem).toBeNull();
+    expect(item.page).toMatchObject({ slug: 'tokyo-guide', metaTitle: 'Tokyo' });
+  });
+});
+
+describe('cmsSendGroups', () => {
+  const sized = (id: string, chars: number): CmsPage => ({
+    draftId: id,
+    title: 'T',
+    slug: 't',
+    metaTitle: '',
+    metaDescription: '',
+    html: 'x'.repeat(chars),
+    author: null,
+    featuredImage: null,
+  });
+
+  it('puts the pages in as few requests as their size allows, in order', () => {
+    const groups = cmsSendGroups(
+      // A page's JSON is about 120 characters past its HTML.
+      [sized('a', 300), sized('b', 300), sized('c', 900), sized('d', 100)],
+      1000,
+    );
+    expect(groups.map((group) => group.map((page) => page.draftId))).toEqual([
+      ['a', 'b'],
+      // A page past the budget goes alone, never split.
+      ['c'],
+      ['d'],
+    ]);
+    expect(cmsSendGroups([])).toEqual([]);
+    // By the bytes sent: a letter outside ASCII takes two or three.
+    expect(cmsSendGroups([sized('a', 200), sized('b', 0)], 500)).toHaveLength(1);
+    expect(
+      cmsSendGroups([{ ...sized('a', 0), html: 'ç'.repeat(200) }, sized('b', 0)], 500),
+    ).toHaveLength(2);
+    expect(cmsSendGroups([sized('a', 10), sized('b', 10)])).toHaveLength(1);
   });
 });

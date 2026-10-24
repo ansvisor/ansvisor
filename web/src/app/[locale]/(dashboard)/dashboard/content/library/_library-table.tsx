@@ -18,6 +18,7 @@ import {
 import { Link } from '@/i18n/navigation';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -73,25 +74,33 @@ export interface LibraryRowActions {
   onSend: (draft: ContentDraftListItem) => void;
 }
 
+/** The rows picked for a bulk Send to CMS (#1331): admins and managers, drafts not archived. */
+export interface LibrarySelection {
+  selected: ReadonlySet<string>;
+  onToggle: (ids: string[], on: boolean) => void;
+}
+
 /**
  * The Library's list (CE-002): one row per draft, the latest changed first.
  * Columns: Content · Type · Method (Create / Optimize) · By (a person or the
  * Content Agent) · Status · Created · Updated. A row opens the draft in the
  * editor; its menu sets the status and, for admins and managers, sends it
  * to the CMS (#1331), archives or deletes it (00233). Beside its status, its
- * last send to the CMS.
+ * last send to the CMS; with a selection, a box to pick rows to send together.
  */
 export function LibraryTable({
   drafts,
   tab,
   actions,
   cms,
+  selection,
 }: {
   drafts: ContentDraftListItem[];
   tab: LibraryTab;
   actions: LibraryRowActions;
   /** Each draft's last send to the CMS; none for a draft never sent. */
   cms: ReadonlyMap<string, CmsStatus>;
+  selection?: LibrarySelection;
 }) {
   const t = useTranslations('contentEditor.library');
   const tTypes = useTranslations('contentEditor.pageTypes');
@@ -108,11 +117,22 @@ export function LibraryTable({
     );
   }
 
+  const ids = drafts.map((draft) => draft.id);
+  const picked = selection ? ids.filter((id) => selection.selected.has(id)).length : 0;
   return (
     <Table>
       <TableHeader>
         <TableRow>
-          <TableHead className="pl-6">{t('columns.content')}</TableHead>
+          {selection && (
+            <TableHead className="w-10 pl-4 pr-0">
+              <Checkbox
+                aria-label={t('bulk.selectAll')}
+                checked={picked === 0 ? false : picked === ids.length ? true : 'indeterminate'}
+                onCheckedChange={(checked) => selection.onToggle(ids, checked === true)}
+              />
+            </TableHead>
+          )}
+          <TableHead className={selection ? 'pl-2' : 'pl-6'}>{t('columns.content')}</TableHead>
           <TableHead>{t('columns.type')}</TableHead>
           <TableHead>{t('columns.method')}</TableHead>
           <TableHead>{t('columns.by')}</TableHead>
@@ -129,7 +149,18 @@ export function LibraryTable({
           const sent = cms.get(draft.id);
           return (
             <TableRow key={draft.id}>
-              <TableCell className="max-w-[180px] pl-6 xl:max-w-[320px]">
+              {selection && (
+                <TableCell className="w-10 pl-4 pr-0">
+                  <Checkbox
+                    aria-label={t('bulk.selectRow', { title: draft.title.trim() || t('untitled') })}
+                    checked={selection.selected.has(draft.id)}
+                    onCheckedChange={(checked) => selection.onToggle([draft.id], checked === true)}
+                  />
+                </TableCell>
+              )}
+              <TableCell
+                className={`max-w-[180px] xl:max-w-[320px] ${selection ? 'pl-2' : 'pl-6'}`}
+              >
                 <Link
                   href={contentEditorPath(draft.id)}
                   className="block truncate font-medium hover:underline"

@@ -48,7 +48,13 @@ vi.mock('@/lib/download', () => ({ saveBlob }));
 const readCmsStatuses = vi.hoisted(() => vi.fn());
 const readDraftCms = vi.hoisted(() => vi.fn());
 const sendPagesToCms = vi.hoisted(() => vi.fn());
-vi.mock('@/lib/content/cms-send-client', () => ({ readCmsStatuses, readDraftCms, sendPagesToCms }));
+vi.mock('@/lib/content/cms-send-client', () => ({
+  readCmsStatuses,
+  readDraftCms,
+  sendPagesToCms,
+  readKeptFields: vi.fn(async () => new Map()),
+  readDeliveries: vi.fn(async () => []),
+}));
 vi.mock('@/lib/actions/content-authors', () => ({ getContentAuthors: vi.fn(async () => null) }));
 
 /** jsdom's Blob has no text(): read it as a browser's FileReader would. */
@@ -183,8 +189,9 @@ describe('the Content Library', () => {
     expect(tab('In review').textContent).toBe('In review2');
     expect(tab('Ready').textContent).toBe('Ready0');
 
+    // After each row's box to pick it (admins and managers).
     const rows = [...container.querySelectorAll('tbody tr')].map((tr) =>
-      [...tr.querySelectorAll('td')].map((td) => td.textContent),
+      [...tr.querySelectorAll('td')].slice(1).map((td) => td.textContent),
     );
     // Created and Updated where the AEO score was; the last cell is the row menu.
     expect(rows[0]).toEqual([
@@ -209,6 +216,8 @@ describe('the Content Library', () => {
     expect(rows[2][3]).toBe('Ggrace@acme.com');
     expect(rows[2][5]).toBe('Dec 30, 2025');
     expect([...container.querySelectorAll('thead th')].map((th) => th.textContent)).toEqual([
+      // The box to pick every row listed.
+      '',
       'Content',
       'Type',
       'Method',
@@ -266,7 +275,7 @@ describe('the Content Library', () => {
       ]);
       await renderPage();
       const status = [...container.querySelectorAll('tbody tr')].map(
-        (tr) => tr.querySelectorAll('td')[4].textContent,
+        (tr) => tr.querySelectorAll('td')[5].textContent,
       );
       expect(status).toEqual(['Agent writing…', 'Agent failed', 'Ready']);
       expect(getContentDrafts).toHaveBeenCalledTimes(1);
@@ -274,7 +283,7 @@ describe('the Content Library', () => {
       getContentDrafts.mockResolvedValue([row({ status: 'in_review', author: 'agent' })]);
       await act(async () => void (await vi.advanceTimersByTimeAsync(5_000)));
       expect(getContentDrafts).toHaveBeenCalledTimes(2);
-      expect(container.querySelector('tbody tr td:nth-child(5)')!.textContent).toBe('In review');
+      expect(container.querySelector('tbody tr td:nth-child(6)')!.textContent).toBe('In review');
       await act(async () => void (await vi.advanceTimersByTimeAsync(10_000)));
       expect(getContentDrafts).toHaveBeenCalledTimes(2);
     } finally {
@@ -502,6 +511,111 @@ describe('Send to CMS from a Library row (#1331)', () => {
     await act(async () => trigger.click());
     const items = [...document.body.querySelectorAll<HTMLElement>('[role="menuitem"]')];
     expect(items.map((el) => el.textContent)).not.toContain('Send to CMS');
+  });
+});
+
+describe('picking rows to send together (#1331)', () => {
+  const box = (label: string) =>
+    container.querySelector<HTMLButtonElement>(`[role="checkbox"][aria-label="${label}"]`);
+  const barButton = (name: string) =>
+    [...container.querySelectorAll<HTMLButtonElement>('button')].find(
+      (b) => b.textContent === name,
+    );
+
+  it('sends the rows picked from the bar, then clears them and reads the sends again', async () => {
+    getContentDrafts.mockResolvedValue([row({}), row({ id: 'd2', title: 'Churn guide' })]);
+    await renderPage();
+    expect(barButton('Send to CMS')).toBeUndefined();
+    await act(async () => box('Select Churn guide')!.click());
+    expect(container.textContent).toContain('1 page selected');
+    expect(box('Select all pages listed')!.getAttribute('data-state')).toBe('indeterminate');
+
+    await act(async () => barButton('Send to CMS')!.click());
+    await act(async () => {});
+    const dialog = document.querySelector('[role="dialog"]')!;
+    expect(dialog.textContent).toContain('Send 1 page to your CMS');
+    expect(getContentDraftPages).toHaveBeenCalledWith('brand-1', ['d2']);
+
+    const close = [...dialog.querySelectorAll<HTMLButtonElement>('button')].find(
+      (b) => b.textContent === 'Cancel',
+    )!;
+    await act(async () => close.click());
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+    expect(container.textContent).not.toContain('page selected');
+    expect(readCmsStatuses).toHaveBeenCalledTimes(2);
+  });
+
+  it('takes up to 25 pages a send', async () => {
+    getContentDrafts.mockResolvedValue(
+      Array.from({ length: 26 }, (_, i) => row({ id: `d${i}`, title: `Draft ${i}` })),
+    );
+    await renderPage();
+    await act(async () => box('Select all pages listed')!.click());
+    expect(container.textContent).toContain('26 pages selected');
+    expect(container.textContent).toContain('Up to 25 pages a send');
+    expect(barButton('Send to CMS')!.disabled).toBe(true);
+
+    await act(async () => box('Select Draft 0')!.click());
+    expect(barButton('Send to CMS')!.disabled).toBe(false);
+    await act(async () => barButton('Clear')!.click());
+    expect(container.textContent).not.toContain('pages selected');
+  });
+
+  it('reads the rows’ sends again while a page is on its way', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    try {
+      getContentDrafts.mockResolvedValue([row({})]);
+      const status = (state: string) =>
+        new Map([
+          [
+            'd1',
+            {
+              status: state,
+              at: '2026-10-24T10:00:00Z',
+              httpStatus: null,
+              error: null,
+              publishedUrl: null,
+            },
+          ],
+        ]);
+      readCmsStatuses.mockResolvedValueOnce(status('queued')).mockResolvedValue(status('sent'));
+      await renderPage();
+      expect(readCmsStatuses).toHaveBeenCalledTimes(1);
+      await act(async () => void (await vi.advanceTimersByTimeAsync(5_000)));
+      expect(readCmsStatuses).toHaveBeenCalledTimes(2);
+      // Sent: no more reads.
+      await act(async () => void (await vi.advanceTimersByTimeAsync(20_000)));
+      expect(readCmsStatuses).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('drops the rows picked when the tab changes', async () => {
+    getContentDrafts.mockResolvedValue([row({}), row({ id: 'd2', title: 'Churn guide' })]);
+    await renderPage();
+    await act(async () => box('Select Churn guide')!.click());
+    expect(container.textContent).toContain('1 page selected');
+    await act(async () => tab('In review').click());
+    await act(async () => tab('All').click());
+    expect(container.textContent).not.toContain('page selected');
+    expect(box('Select Churn guide')!.getAttribute('data-state')).toBe('unchecked');
+  });
+
+  it('has no boxes for members, nor under Archived', async () => {
+    role.canManage = false;
+    getContentDrafts.mockResolvedValue([row({})]);
+    await renderPage();
+    expect(container.querySelector('[role="checkbox"]')).toBeNull();
+
+    act(() => root.unmount());
+    root = createRoot(container);
+    role.canManage = true;
+    window.history.replaceState(null, '', '/dashboard/content/library?tab=archived');
+    getContentDrafts.mockResolvedValue([row({ archivedAt: '2026-10-21T08:00:00Z' })]);
+    await renderPage();
+    expect(container.textContent).toContain('Pipeline forecasting');
+    expect(container.querySelector('[role="checkbox"]')).toBeNull();
   });
 });
 

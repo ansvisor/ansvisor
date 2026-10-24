@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
-import { Plus } from 'lucide-react';
+import { Plus, Send } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import {
@@ -27,16 +27,14 @@ import { NewContentDialog } from '@/components/content/new-content-dialog';
 import { SendDialog } from '@/components/content/send-to-cms-dialog';
 import { useUserRole } from '@/hooks/use-user-role';
 import { useRouter } from '@/i18n/navigation';
-import { getContentAuthors } from '@/lib/actions/content-authors';
 import {
   archiveContentDraft,
   deleteContentDraft,
-  getContentDraftPages,
   getContentDrafts,
   markContentDraftReady,
   setContentDraftStatus,
 } from '@/lib/actions/content-drafts';
-import { cmsSource, type CmsSource } from '@/lib/content/cms-send';
+import { CMS_PAGES_PER_SEND, type CmsSource } from '@/lib/content/cms-send';
 import { readCmsStatuses, type CmsStatus } from '@/lib/content/cms-send-client';
 import {
   AGENT_POLL_MS,
@@ -51,48 +49,14 @@ import {
   type LibraryTab,
 } from '@/lib/content/drafts';
 import { siteTypeOf } from '@/lib/content/page-types';
-import { qualityPhase } from '@/lib/content/quality';
 import { formatNumber } from '@/lib/format';
 import { readUrlChoice, writeUrlParams } from '@/lib/url-state';
 import { useBrandStore } from '@/stores/use-brand-store';
+import { BulkSendDialog } from './_bulk-send-dialog';
+import { readCmsSources } from './_cms-sources';
 import { LibraryExportMenu, useLibraryExport } from './_library-export';
-import { LibraryTable, type LibraryRowActions } from './_library-table';
+import { LibraryTable, type LibraryRowActions, type LibrarySelection } from './_library-table';
 import { HeaderWithAiUsage } from '@/components/ai-usage/ai-usage-meter';
-
-/**
- * A row's page for Send to CMS, made ready as the editor makes its own: its
- * author and the brand's byline line once Quality is live. Null when the
- * page is gone.
- */
-async function readSendSource({
-  brandId,
-  draftId,
-  brandName,
-  brandLanguage,
-  teamByline,
-}: {
-  brandId: string;
-  draftId: string;
-  brandName: string;
-  brandLanguage: string | null | undefined;
-  teamByline: (brand: string) => string;
-}): Promise<CmsSource | null> {
-  const [{ pages }, authors] = await Promise.all([
-    getContentDraftPages(brandId, [draftId]),
-    qualityPhase() >= 1 ? getContentAuthors().catch(() => null) : Promise.resolve(null),
-  ]);
-  const page = pages[0];
-  if (!page) return null;
-  const name = authors?.brands.find((b) => b.id === brandId)?.name ?? brandName;
-  return cmsSource({
-    page,
-    authors,
-    brandId,
-    brandName: name,
-    brandLanguage,
-    teamByline: teamByline(name),
-  });
-}
 
 /** A read of the brand's drafts: null until it comes back. */
 interface LibraryRead {
@@ -131,6 +95,18 @@ export default function ContentLibraryPage() {
   const [sending, setSending] = useState<{ brandId: string; source: CmsSource } | null>(null);
   // Each draft's last send, beside its status; read with the list.
   const [cms, setCms] = useState<ReadonlyMap<string, CmsStatus>>(new Map());
+  // The rows picked to send together, for the brand they were picked in.
+  const [picked, setPicked] = useState<{ brandId: string | null; ids: ReadonlySet<string> }>({
+    brandId: null,
+    ids: new Set(),
+  });
+  // The bulk Send dialog's rows, as they were picked when it opened, and their brand.
+  const [bulk, setBulk] = useState<{
+    brandId: string;
+    brandName: string;
+    brandLanguage: string | null | undefined;
+    drafts: ContentDraftListItem[];
+  } | null>(null);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- one read of the URL after mount
@@ -179,6 +155,14 @@ export default function ContentLibraryPage() {
       cancelled = true;
     };
   }, [readIds, cmsAttempt]);
+  // While a page is on its way to the CMS (a bulk send going on), its row's
+  // send is read again now and then, as the list is while the agent writes.
+  const cmsGoing = [...cms.values()].some((status) => status.status === 'queued');
+  useEffect(() => {
+    if (!cmsGoing) return;
+    const timer = setTimeout(() => setCmsAttempt((n) => n + 1), AGENT_POLL_MS);
+    return () => clearTimeout(timer);
+  }, [cmsGoing, cms]);
 
   const reload = () => setAttempt((n) => n + 1);
   const titleOf = (draft: ContentDraftListItem) => draft.title.trim() || t('untitled');
@@ -214,16 +198,19 @@ export default function ContentLibraryPage() {
     // The draft's brand stays the send's, should the brand switch meanwhile.
     const brandId = activeBrandId;
     setPreparing(true);
-    const source = await readSendSource({
+    const source = await readCmsSources({
       brandId,
-      draftId: draft.id,
+      draftIds: [draft.id],
       brandName: activeBrand?.name ?? '',
       brandLanguage: activeBrand?.language,
       teamByline: (brand) => tEditor('author.organization', { brand }),
-    }).catch((err) => {
-      console.error('Failed to read the page to send:', err);
-      return null;
-    });
+    }).then(
+      (sources) => sources.get(draft.id) ?? null,
+      (err) => {
+        console.error('Failed to read the page to send:', err);
+        return null;
+      },
+    );
     setPreparing(false);
     if (source) setSending({ brandId, source });
     else toast.error(t('rowMenu.sendFailed'));
@@ -259,12 +246,15 @@ export default function ContentLibraryPage() {
     setDeletePending(false);
   };
 
+  const clearPicked = () => setPicked({ brandId: null, ids: new Set() });
   const changeTab = (next: LibraryTab) => {
     setTab(next);
+    clearPicked();
     writeUrlParams({ tab: next }, { tab: 'all' });
   };
   const changeCreated = (next: CreatedRange) => {
     setCreated(next);
+    clearPicked();
     writeUrlParams({ created: next }, { created: 'all' });
   };
 
@@ -282,6 +272,24 @@ export default function ContentLibraryPage() {
   const counts = current?.counts ?? null;
   const inTab = drafts ? draftsInTab(drafts, tab) : [];
   const listed = draftsCreatedIn(inTab, created);
+  // Picked rows still listed (a read may have moved some), never archived ones.
+  const pickedIds = picked.brandId === activeBrandId ? picked.ids : new Set<string>();
+  const pickedDrafts = listed.filter((draft) => pickedIds.has(draft.id) && !draft.archivedAt);
+  const selection: LibrarySelection | undefined =
+    canManage && tab !== 'archived'
+      ? {
+          selected: pickedIds,
+          onToggle: (ids, on) => {
+            const next = new Set(pickedIds);
+            for (const id of ids) {
+              if (on) next.add(id);
+              else next.delete(id);
+            }
+            setPicked({ brandId: activeBrandId, ids: next });
+          },
+        }
+      : undefined;
+  const tooMany = pickedDrafts.length > CMS_PAGES_PER_SEND;
 
   return (
     <div className="space-y-6">
@@ -346,6 +354,40 @@ export default function ContentLibraryPage() {
       </div>
 
       <Card className="py-0">
+        {selection && pickedDrafts.length > 0 && (
+          <div className="flex flex-wrap items-center gap-2 border-b bg-muted/50 px-4 py-2">
+            <span className="text-xs text-muted-foreground">
+              {t('bulk.selected', { count: pickedDrafts.length })}
+            </span>
+            {tooMany && (
+              <span className="text-xs text-amber-800 dark:text-amber-300">
+                {t('bulk.tooMany', { max: CMS_PAGES_PER_SEND })}
+              </span>
+            )}
+            <div className="ml-auto flex items-center gap-1">
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-7 gap-1.5 text-xs"
+                disabled={tooMany}
+                onClick={() =>
+                  setBulk({
+                    brandId: activeBrandId,
+                    brandName: activeBrand?.name ?? '',
+                    brandLanguage: activeBrand?.language,
+                    drafts: pickedDrafts,
+                  })
+                }
+              >
+                <Send className="h-3 w-3" />
+                {t('bulk.sendSelected')}
+              </Button>
+              <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={clearPicked}>
+                {t('bulk.clear')}
+              </Button>
+            </div>
+          </div>
+        )}
         <CardContent className="px-0">
           {current?.failed ? (
             <div className="flex flex-col items-center gap-3 px-6 py-12 text-center">
@@ -370,10 +412,30 @@ export default function ContentLibraryPage() {
               {t('created.empty')}
             </p>
           ) : (
-            <LibraryTable drafts={listed} tab={tab} actions={rowActions} cms={cms} />
+            <LibraryTable
+              drafts={listed}
+              tab={tab}
+              actions={rowActions}
+              cms={cms}
+              selection={selection}
+            />
           )}
         </CardContent>
       </Card>
+      {bulk && (
+        <BulkSendDialog
+          brandId={bulk.brandId}
+          drafts={bulk.drafts}
+          brandName={bulk.brandName}
+          brandLanguage={bulk.brandLanguage}
+          // The sends going on show in the rows as they land.
+          onClose={() => {
+            setBulk(null);
+            clearPicked();
+            setCmsAttempt((n) => n + 1);
+          }}
+        />
+      )}
       {sending && (
         <SendDialog
           draftId={sending.source.draftId}

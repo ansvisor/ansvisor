@@ -33,7 +33,8 @@ vi.mock('@/lib/supabase/client', () => ({
   }),
 }));
 
-const { readCmsStatuses, readDraftCms, sendPagesToCms } = await import('./cms-send-client');
+const { readCmsStatuses, readDeliveries, readDraftCms, readKeptFields, sendPagesToCms } =
+  await import('./cms-send-client');
 
 const page: CmsPage = {
   draftId: 'd1',
@@ -75,7 +76,11 @@ describe('sendPagesToCms', () => {
     expect(result).toEqual({
       ok: true,
       deliveries: [{ id: 'x1', draftId: 'd1', status: 'sent' }],
+      skipped: 0,
     });
+    // Past the workspace's sends for the day: the pages left over.
+    answer(200, { deliveries: [{ id: 'x2', draftId: 'd1', status: 'queued' }], skipped: 3 });
+    expect(await sendPagesToCms('brand-1', [page])).toMatchObject({ ok: true, skipped: 3 });
   });
 
   it('gives the server’s reason, and the field a 400 names', async () => {
@@ -90,6 +95,15 @@ describe('sendPagesToCms', () => {
       ok: false,
       code: 'invalid',
       field: 'pages.0.slug',
+    });
+  });
+
+  it('says when a request was more than the API’s proxy takes', async () => {
+    answer(413, {});
+    expect(await sendPagesToCms('brand-1', [page])).toEqual({
+      ok: false,
+      code: 'too_large',
+      field: null,
     });
   });
 
@@ -239,5 +253,43 @@ describe('readCmsStatuses', () => {
     expect((await readCmsStatuses(['d1'])).size).toBe(0);
     expect((await readCmsStatuses([])).size).toBe(0);
     expect(statusIds).toHaveLength(1);
+  });
+});
+
+describe('readKeptFields and readDeliveries', () => {
+  it('reads the slug and meta each draft kept, none when they can’t be read', async () => {
+    statusReads = [
+      {
+        data: [
+          { id: 'd1', slug: 'coffee', meta_title: null, meta_description: 'Slowly.' },
+          { id: 'd2', slug: null, meta_title: null, meta_description: null },
+        ],
+        error: null,
+      },
+    ];
+    expect([...(await readKeptFields(['d1', 'd2'])).entries()]).toEqual([
+      ['d1', { slug: 'coffee', metaTitle: undefined, metaDescription: 'Slowly.' }],
+      ['d2', { slug: undefined, metaTitle: undefined, metaDescription: undefined }],
+    ]);
+    expect(statusIds).toEqual([['d1', 'd2']]);
+    // Unread, a page sent before would go with another slug: the send waits.
+    statusReads = [{ data: null, error: { message: 'column "slug" does not exist' } }];
+    await expect(readKeptFields(['d1'])).rejects.toThrow('column "slug" does not exist');
+    expect((await readKeptFields([])).size).toBe(0);
+  });
+
+  it('reads the sends as they are now, null when they can’t be read', async () => {
+    statusReads = [
+      {
+        data: [{ id: 'x1', draft_id: 'd1', status: 'failed', http_status: 500, error: 'No' }],
+        error: null,
+      },
+    ];
+    expect(await readDeliveries(['x1'])).toEqual([
+      { id: 'x1', draftId: 'd1', status: 'failed', http_status: 500, error: 'No' },
+    ]);
+    statusReads = [{ data: null, error: { message: 'offline' } }];
+    expect(await readDeliveries(['x1'])).toBeNull();
+    expect(await readDeliveries([])).toEqual([]);
   });
 });
