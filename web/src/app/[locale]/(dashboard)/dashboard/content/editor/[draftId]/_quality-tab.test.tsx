@@ -544,10 +544,8 @@ describe('QualityTab', () => {
       aiChecks: { balanced: pick, disclosure: pick },
     });
     const rows = [...container.querySelectorAll('li')];
-    const disclosure = rows.find((li) => li.textContent?.includes('without saying Acme makes it'))!;
-    expect(disclosure.textContent).toContain(
-      'The page recommends Acme without saying Acme makes it',
-    );
+    const disclosure = rows.find((li) => li.textContent?.includes('Acme without a disclosure'))!;
+    expect(disclosure.textContent).toContain('The page recommends Acme without a disclosure');
     expect(disclosure.textContent).toContain('AI check');
     await act(async () => disclosure.querySelector('button')!.click());
     expect(onShow).toHaveBeenCalledWith('Our top pick is the Acme Ridge 28');
@@ -568,9 +566,7 @@ describe('QualityTab', () => {
       trust: result,
       aiChecks: { balanced: null, disclosure: pick },
     });
-    expect(container.textContent).toContain(
-      'The page recommends your brand without saying your brand makes it',
-    );
+    expect(container.textContent).toContain('The page recommends your brand without a disclosure');
   });
 
   it("asks for the proof of the page's own claims by kind and business, with Add proof link (CE-049)", async () => {
