@@ -56,13 +56,16 @@ const LABEL_KEY = {
 export function HeaderWithAiUsage({
   children,
   banner = true,
+  className,
 }: {
   children: ReactNode;
   banner?: boolean;
+  /** On the header row: room for a drawer's close button, for one. */
+  className?: string;
 }) {
   return (
     <>
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:gap-3">
+      <div className={cn('flex flex-col gap-2 sm:flex-row sm:items-start sm:gap-3', className)}>
         <div className="min-w-0 sm:flex-1">{children}</div>
         <AiUsageMeter className="self-end sm:self-auto" />
       </div>

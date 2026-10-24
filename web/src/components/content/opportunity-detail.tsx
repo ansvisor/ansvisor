@@ -481,9 +481,10 @@ export function OpportunityDetail({
     <div className="@container space-y-6">
       <div className="space-y-3">
         {/* The month's AI usage at the row's right, as on every page, also in
-            the drawer, which covers the Content page's header; the banner
-            follows the whole header block. */}
-        <HeaderWithAiUsage banner={false}>
+            the drawer, which covers the Content page's header; there it
+            leaves room for the drawer's close button (top-3 right-3, 28 px).
+            The banner follows the whole header block. */}
+        <HeaderWithAiUsage banner={false} className={inDrawer ? 'pr-8' : undefined}>
           <div className="flex items-start gap-3">
             {!inDrawer && (
               <Link href="/dashboard/content">
