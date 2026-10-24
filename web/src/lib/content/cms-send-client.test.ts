@@ -10,7 +10,7 @@ import type { CmsPage } from './cms-send';
 let session: { access_token: string } | null;
 let reads: Record<string, { data: unknown; error: unknown }>;
 const filters: [string, string, unknown][] = [];
-/** Each draft's last send, read by draft ids: each read's answer, in turn. */
+/** Reads by ids (each draft's last send, kept fields, sends): each read's answer, in turn. */
 let statusReads: { data: unknown; error: unknown }[];
 const statusIds: string[][] = [];
 const rpcs: string[] = [];
@@ -28,9 +28,11 @@ vi.mock('@/lib/supabase/client', () => ({
       const chain: Record<string, unknown> = {
         select: () => chain,
         eq: (col: string, v: unknown) => (filters.push([table, col, v]), chain),
+        in: (_col: string, ids: string[]) => (statusIds.push(ids), chain),
         order: () => chain,
         limit: () => chain,
         maybeSingle: async () => reads[table],
+        then: (resolve: (r: unknown) => void) => resolve(statusReads.shift()),
       };
       return chain;
     },

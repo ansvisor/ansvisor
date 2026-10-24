@@ -218,7 +218,11 @@ describe('BulkSendDialog', () => {
     await act(async () => void button('Send 2 pages').click());
     expect(sendPagesToCms).toHaveBeenCalledTimes(1);
     // What went shows while the next waits, and the dialog can be closed.
-    expect(lines()).toEqual(['Pour-overSending…', 'Cold brewPlaceholders to fill', 'EspressoWaiting']);
+    expect(lines()).toEqual([
+      'Pour-overSending…',
+      'Cold brewPlaceholders to fill',
+      'EspressoWaiting',
+    ]);
     expect(dialog().querySelector('[role="status"]')!.textContent).toBe('Sending: 0 of 2 done.');
     expect(button('Close')).toBeDefined();
     await act(async () => void (await vi.advanceTimersByTimeAsync(2_000)));
@@ -243,7 +247,11 @@ describe('BulkSendDialog', () => {
     await act(async () => void button('Send 2 pages').click());
     await act(async () => void (await vi.advanceTimersByTimeAsync(15 * 60_000 + 2_000)));
     expect(sendPagesToCms).toHaveBeenCalledTimes(1);
-    expect(lines()).toEqual(['Pour-overSending…', 'Cold brewPlaceholders to fill', 'EspressoNot sent']);
+    expect(lines()).toEqual([
+      'Pour-overSending…',
+      'Cold brewPlaceholders to fill',
+      'EspressoNot sent',
+    ]);
     expect(dialog().textContent).toContain(
       "The pages before it were still going after 15 minutes, so 1 page wasn't sent.",
     );
