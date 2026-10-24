@@ -45,11 +45,23 @@ const IMAGE_SRC_MAX = 2048;
 /** A meta title from the page stops about here, at a word, as search results cut it (#1331). */
 const META_TITLE_PREFILL = 60;
 
-/** Text up to `max` characters, cut at the last word that fits (or at `max` with none past half). */
+/**
+ * Text up to `max` characters, cut at the last space that fits (any space,
+ * a no-break one too), or at `max` with none past half, never inside a
+ * character (an emoji); without the punctuation a cut leaves at its end.
+ */
 function upToWord(text: string, max: number): string {
-  if (text.length <= max) return text;
-  const space = text.slice(0, max + 1).lastIndexOf(' ');
-  return (space > max / 2 ? text.slice(0, space) : text.slice(0, max)).trim();
+  const chars = Array.from(text);
+  if (chars.length <= max) return text;
+  let space = -1;
+  for (let i = max; i >= 0; i--) {
+    if (/\s/u.test(chars[i])) {
+      space = i;
+      break;
+    }
+  }
+  const cut = chars.slice(0, space > max / 2 ? space : max).join('');
+  return cut.replace(/[\s,:;|–—-]+$/u, '');
 }
 
 /**

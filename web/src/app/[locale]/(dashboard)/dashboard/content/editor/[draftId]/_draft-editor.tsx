@@ -1591,17 +1591,37 @@ export function DraftEditor({
   // Quality is live.
   const { canManage } = useUserRole();
   const [sendOpen, setSendOpen] = useState<{ html: string } | null>(null);
+  const [preparing, setPreparing] = useState(false);
+  // HTML edited in the HTML view and not applied isn't in the page to save.
+  const htmlUnapplied = htmlSource !== null && htmlEdited;
   // What's waiting goes out first, as for Mark ready: the CMS gets the page
   // Ansvisor holds, the one its callback later marks Published. A page that
   // can't be saved (a teammate or the agent changed it meanwhile) isn't sent.
   const openSend = async () => {
-    try {
-      await autosave.settle();
-    } catch {
+    if (preparing) return;
+    if (htmlUnapplied) {
+      toast.error(t('send.applyHtml'));
+      return;
+    }
+    setPreparing(true);
+    const saved = await autosave.settle().then(
+      () => true,
+      () => false,
+    );
+    setPreparing(false);
+    if (!saved) {
       toast.error(t('send.unsaved'));
       return;
     }
     setSendOpen({ html: pageToPublish() });
+  };
+  const startSend = () => {
+    if (htmlUnapplied) {
+      toast.error(t('send.applyHtml'));
+      return;
+    }
+    if (quality) openBeforePublish('send');
+    else void openSend();
   };
   const openBeforePublish = (mode: 'markReady' | 'export' | 'send') => {
     setPublishOpen({ mode, html: pageToPublish() });
@@ -2021,11 +2041,16 @@ export function DraftEditor({
                 <Button
                   variant="outline"
                   size="icon-sm"
-                  disabled={!editor}
+                  disabled={
+                    !editor ||
+                    preparing ||
+                    autosave.state === 'conflict' ||
+                    autosave.state === 'too_large'
+                  }
                   aria-label={t('send.button')}
-                  onClick={() => (quality ? openBeforePublish('send') : void openSend())}
+                  onClick={startSend}
                 >
-                  <Send className="h-3.5 w-3.5" />
+                  {preparing ? <LoadingDots /> : <Send className="h-3.5 w-3.5" />}
                 </Button>
               </HeaderTip>
             )}

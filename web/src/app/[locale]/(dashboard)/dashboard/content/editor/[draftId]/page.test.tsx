@@ -3075,6 +3075,42 @@ describe('the side panel', () => {
       expect(readDraftCms).not.toHaveBeenCalled();
     });
 
+    it('waits for HTML edited in the HTML view to be applied', async () => {
+      getContentDraft.mockResolvedValue(draft());
+      await renderPage();
+      await act(async () => button('Edit as HTML')!.click());
+      const source = container.querySelector('textarea')!;
+      await act(async () => {
+        Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!.call(
+          source,
+          '<h1>Pipeline forecasting</h1><p>Not applied.</p>',
+        );
+        source.dispatchEvent(new Event('input', { bubbles: true }));
+      });
+      await act(async () => button('Send to CMS')!.click());
+      expect(toast.error).toHaveBeenCalledWith(
+        "Apply or discard your HTML changes first: they aren't in the page yet.",
+      );
+      expect(dialog()).toBeNull();
+      expect(saveContentDraft).not.toHaveBeenCalled();
+    });
+
+    it('takes one click while it saves', async () => {
+      let saved: (value: unknown) => void = () => {};
+      saveContentDraft.mockReturnValue(new Promise((resolve) => (saved = resolve)));
+      getContentDraft.mockResolvedValue(draft());
+      await renderPage();
+      await editAsHtml('<h1>Pipeline forecasting</h1><p>Edited.</p>');
+      await act(async () => button('Send to CMS')!.click());
+      expect(button('Send to CMS')!.disabled).toBe(true);
+      await act(async () => button('Send to CMS')!.click());
+      expect(saveContentDraft).toHaveBeenCalledTimes(1);
+      await act(async () => saved({ ok: true, updatedAt: '2026-10-20T10:01:00Z', bodyHash: 'h1' }));
+      await act(async () => {});
+      expect(dialog()!.textContent).toContain('Send to CMS');
+      await act(async () => inDialog('Cancel').click());
+    });
+
     it('is for admins and managers only', async () => {
       getContentDraft.mockResolvedValue(draft());
       await renderPage('analyst');
