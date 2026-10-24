@@ -124,10 +124,40 @@ describe('POST /webhooks/content-drafts/:deliveryId/status', () => {
     ]);
   });
 
-  it('keeps no second version when the workflow says it again', async () => {
+  it('keeps no second version, nor a new time, when the workflow says it again', async () => {
     await published('https://acme.example/live');
+    const at = state.deliveries[0].published_at;
+    await new Promise((resolve) => setTimeout(resolve, 5));
     await published('https://acme.example/live');
     expect(state.rpcs).toHaveLength(1);
+    expect(state.deliveries[0].published_at).toBe(at);
+  });
+
+  it('keeps the page as published again when a new send goes live at the same address', async () => {
+    // Published once; the page changed and was sent again, the post updated in place.
+    state.deliveries[0] = {
+      ...state.deliveries[0],
+      status: 'published',
+      published_url: 'https://acme.example/live',
+    };
+    state.drafts[0] = { id: 'd1', status: 'published', published_url: 'https://acme.example/live' };
+    const NEWER = '5e8cd4c2-2bc4-4fb7-8711-bc0ad1bb4a30';
+    state.deliveries.push({
+      id: NEWER,
+      brand_id: 'b1',
+      draft_id: 'd1',
+      status: 'sent',
+      created_at: '2026-10-24T12:00:00Z',
+    });
+    const res = await call(
+      { status: 'published', url: 'https://acme.example/live' },
+      { id: NEWER },
+    );
+    expect(res.status).toBe(200);
+    expect(state.rpcs).toEqual([
+      { name: 'content_draft_snapshot', args: { p_draft_id: 'd1', p_origin: 'publish' } },
+    ]);
+    expect(state.drafts[0].published_at).toEqual(expect.any(String));
   });
 
   it('marks the delivery failed with the workflow’s reason, the page left as it is', async () => {

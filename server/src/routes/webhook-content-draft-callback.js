@@ -90,7 +90,7 @@ router.post('/:deliveryId/status', async (req, res) => {
 
     const { data: delivery, error } = await supabaseAdmin
       .from('content_draft_deliveries')
-      .select('id, brand_id, draft_id, status')
+      .select('id, brand_id, draft_id, status, published_url')
       .eq('id', deliveryId)
       .maybeSingle();
     if (error) throw new Error(error.message);
@@ -137,6 +137,12 @@ router.post('/:deliveryId/status', async (req, res) => {
       return res.json({ success: true, status: failed?.length ? 'failed' : 'published' });
     }
 
+    // This delivery said so already (a workflow's retry): nothing changes,
+    // its time included. A new delivery of a page live at the same address
+    // (the post updated in place) is the page as published again.
+    if (delivery.status === 'published' && delivery.published_url === url) {
+      return res.json({ success: true, status: 'published' });
+    }
     const { error: deliveryError } = await supabaseAdmin
       .from('content_draft_deliveries')
       .update({ status: 'published', published_url: url, published_at: now, ...own })
@@ -152,28 +158,19 @@ router.post('/:deliveryId/status', async (req, res) => {
         .maybeSingle();
       if (latestError) throw new Error(latestError.message);
       if (latest?.id === delivery.id) {
-        const { data: draft, error: draftReadError } = await supabaseAdmin
+        const { error: draftError } = await supabaseAdmin
           .from('content_drafts')
-          .select('status, published_url')
-          .eq('id', delivery.draft_id)
-          .maybeSingle();
-        if (draftReadError) throw new Error(draftReadError.message);
-        // A callback said again (a workflow's retry) changes nothing.
-        if (draft && (draft.status !== 'published' || draft.published_url !== url)) {
-          const { error: draftError } = await supabaseAdmin
-            .from('content_drafts')
-            .update({ status: 'published', published_url: url, published_at: now })
-            .eq('id', delivery.draft_id);
-          if (draftError) throw new Error(draftError.message);
-          // The page as published, in History (00215 keeps "publish" for the
-          // server), unless History's latest version is already this page.
-          const { error: keepError } = await supabaseAdmin.rpc('content_draft_snapshot', {
-            p_draft_id: delivery.draft_id,
-            p_origin: 'publish',
-          });
-          if (keepError) {
-            req.log?.warn?.({ err: keepError }, 'content draft publish version not kept');
-          }
+          .update({ status: 'published', published_url: url, published_at: now })
+          .eq('id', delivery.draft_id);
+        if (draftError) throw new Error(draftError.message);
+        // The page as published, in History (00215 keeps "publish" for the
+        // server), unless History's latest version is already this page.
+        const { error: keepError } = await supabaseAdmin.rpc('content_draft_snapshot', {
+          p_draft_id: delivery.draft_id,
+          p_origin: 'publish',
+        });
+        if (keepError) {
+          req.log?.warn?.({ err: keepError }, 'content draft publish version not kept');
         }
       }
     }

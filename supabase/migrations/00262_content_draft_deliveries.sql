@@ -113,7 +113,7 @@ grant execute on function public.content_draft_last_deliveries(uuid[]) to authen
 -- organization so sends at once can't pass it together (as 00243). It returns
 -- the queued rows; pages past the cap get none.
 -- p_items: [{ "draft_id", "title", "slug" }], in the order they go.
--- A row still queued after 15 minutes was left by a server that stopped
+-- A row still queued after 30 minutes was left by a server that stopped
 -- mid-batch: the next send closes it as interrupted (as 00249 closes runs),
 -- so the Library tells it from one still going. It still counts for the day.
 -- ----------------------------------------------------------------------------
@@ -141,7 +141,7 @@ begin
   set status = 'failed', error = 'Not sent: interrupted'
   where organization_id = p_organization_id
     and status = 'queued'
-    and created_at < now() - interval '15 minutes';
+    and created_at < now() - interval '30 minutes';
 
   select count(*) into used
   from public.content_draft_deliveries
