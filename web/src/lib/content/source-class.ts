@@ -7,10 +7,15 @@ import { classifyDomain, normalizeDomain } from '@/lib/citations/classify';
  * brand's own. Read from the address alone, by the citations' categories
  * (classifyDomain) and a short list of research and standards sites; an
  * address the rules can't place is left out (null), so it neither raises
- * nor lowers Trust.
+ * nor lowers Trust until the model has read its site (part b, Trust's
+ * `ai` reads).
  */
 
 export type SourceClass = 'primary' | 'secondary' | 'weak' | 'competitor' | 'own';
+/** What the model reads a site as (content_source_classes, 00264). */
+export type AiSourceClass = 'primary' | 'secondary' | 'weak';
+/** Sites one ask of the model takes (the API's MAX_SOURCE_SITES). */
+export const MAX_SOURCE_SITES = 20;
 
 /** Research, journals and standards bodies: primary wherever they're cited. */
 const RESEARCH_DOMAINS = [

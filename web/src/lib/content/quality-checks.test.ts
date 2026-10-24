@@ -12,6 +12,7 @@ import {
   trust,
   trustBlocks,
   trustGain,
+  unplacedSites,
   type LinkCheck,
 } from './quality-checks';
 
@@ -264,6 +265,37 @@ describe('trust (Phase 2: what kind of source each link is, CE-046)', () => {
     const kept = run(html, { pageType: 'comparison', kept: ['https://www.reddit.com/r/x/1'] });
     expect(kept.weak).toEqual([]);
     expect(kept.score).toBe(100);
+  });
+
+  it('takes the model’s read of a site the rules can’t place, and names those not read yet', () => {
+    const html =
+      `<p>A blog says so ${a('https://www.coffee-blog.example/best')}.</p>` +
+      `<p>The roaster says ${a('https://roaster.example/beans')}.</p>` +
+      `<p>And ${a('https://unknown.example/x')}.</p>`;
+    const result = trust({
+      blocks: trustBlocks(html),
+      links: new Map(),
+      brandDomains: ['acme.com'],
+      sources: {
+        competitorDomains: [],
+        pageType: 'guide',
+        kept: new Set(),
+        ai: new Map([
+          ['coffee-blog.example', 'weak'],
+          ['roaster.example', 'primary'],
+        ]),
+      },
+      now: NOW,
+    });
+    expect(result.classified).toBe(2);
+    expect(result.weak).toEqual([
+      expect.objectContaining({ url: 'https://www.coffee-blog.example/best', ai: true }),
+    ]);
+    // The sites the editor asks the model about: those the rules can't place.
+    expect(
+      unplacedSites(trustBlocks(html), ['acme.com'], { competitorDomains: [], pageType: 'guide' }),
+    ).toEqual(['coffee-blog.example', 'roaster.example', 'unknown.example']);
+    expect(result.checks.find((c) => c.id === 'primarySources')?.points).toBe(15);
   });
 
   it('leaves out a source the rules can’t place, and waits for two', () => {

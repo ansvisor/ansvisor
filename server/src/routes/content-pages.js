@@ -4,10 +4,13 @@ import { z } from 'zod';
 import supabaseAdmin from '../config/supabase.js';
 import { assertBrandAccess } from '../lib/access.js';
 import { onBrandDomain } from '../lib/audit/host.js';
+import { MAX_SOURCE_SITES, linkedSites, readSourceClasses } from '../lib/content-source-class.js';
+import { qualityPhase } from '../lib/content-quality.js';
 import { checkLinks, reserveReads } from '../lib/link-check.js';
 import { MAX_CONTENT_LENGTH, extractPageContent } from '../lib/page-content.js';
 import { PageFetchError, fetchPage } from '../lib/safe-fetch.js';
-import { linkCheckLimiter } from '../middleware/rate-limiter.js';
+import { PlanLimitError } from '../lib/plan-guard.js';
+import { linkCheckLimiter, qualityCheckLimiter } from '../middleware/rate-limiter.js';
 
 /**
  * Pages brought into the Content Editor (CE-003): Optimize content › Page
@@ -126,6 +129,58 @@ router.post('/links', linkCheckLimiter, async (req, res) => {
     }
     req.log.error({ err }, 'content link check error');
     return res.status(500).json({ error: 'Failed to check the links', code: 'failed' });
+  }
+});
+
+const sourceClassesBody = z.object({
+  draftId: z.guid(),
+  sites: z.array(z.string().trim().toLowerCase().min(1).max(300)).min(1).max(MAX_SOURCE_SITES),
+});
+
+/**
+ * POST /api/content-pages/source-classes { draftId, sites } (Quality CE-046,
+ * part b): the kind of each site the editor's rules can't place, read once
+ * by the model and kept for every workspace. Only sites the draft links, as
+ * saved, are read: the route reads no other site. Off until Quality's phase
+ * 2 is live (CONTENT_QUALITY_PHASE). A spent AI budget answers 429
+ * ai_budget: the editor leaves those sources out of Trust.
+ */
+router.post('/source-classes', qualityCheckLimiter, async (req, res) => {
+  if (qualityPhase() < 2) return res.status(404).json({ error: 'Not available', code: 'off' });
+  const parsed = sourceClassesBody.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: 'invalid', code: 'invalid' });
+  try {
+    const { data: draft, error } = await supabaseAdmin
+      .from('content_drafts')
+      .select('brand_id, body_html')
+      .eq('id', parsed.data.draftId)
+      .maybeSingle();
+    if (error) throw error;
+    if (!draft) return res.status(404).json({ error: 'Draft not found', code: 'not_found' });
+    const { orgId } = await assertBrandAccess(draft.brand_id, req.user.id);
+
+    const $ = cheerio.load(draft.body_html ?? '');
+    const linked = linkedSites(
+      $('a[href]')
+        .map((_, el) => $(el).attr('href'))
+        .get(),
+    );
+    const sites = [...new Set(parsed.data.sites)].filter((site) => linked.has(site));
+    const result = await readSourceClasses({
+      orgId,
+      draftId: parsed.data.draftId,
+      sites,
+    });
+    return res.json(result);
+  } catch (err) {
+    if (err instanceof PlanLimitError) {
+      return res.status(429).json({ error: err.message, code: 'ai_budget' });
+    }
+    if (err?.status === 403 || err?.status === 404) {
+      return res.status(err.status).json({ error: err.message, code: 'forbidden' });
+    }
+    req.log.error({ err }, 'content source class error');
+    return res.status(500).json({ error: 'Failed to read the sources', code: 'failed' });
   }
 });
 

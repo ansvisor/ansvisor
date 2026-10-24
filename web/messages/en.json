@@ -4522,6 +4522,8 @@
         "band": "{score, number}, {band}",
         "show": "Show",
         "keep": "Keep",
+        "aiCheck": "AI check",
+        "aiPaused": "Sources the rules can't place wait for an AI check: this month's AI usage is used up. They count again when it renews.",
         "keepFailed": "Couldn't keep the source. Try again.",
         "keepFull": "This page keeps 50 sources already: replace one instead.",
         "weakSource": "A weak source: a forum, a social post or a competitor's page. See Quality to replace or keep it.",
@@ -6774,6 +6776,7 @@
         "improve": "Improve suggestions",
         "content": "Content Editor (briefs, Content Agent)",
         "action_center": "Action Center task writing",
+        "quality": "Content Editor quality checks",
         "other": "Other"
       },
       "chat": "Agent Chat runs on your own AI key, so it doesn't use this allowance.",

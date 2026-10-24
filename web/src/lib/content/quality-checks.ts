@@ -2,7 +2,7 @@ import { classifyDomain, normalizeDomain } from '@/lib/citations/classify';
 import type { ContentAuthor } from './authors';
 import { cleanHref } from './html-allowlist';
 import { ownText, sentencesOf } from './readability';
-import { sourceClass, type SourceClass } from './source-class';
+import { sourceClass, type AiSourceClass, type SourceClass } from './source-class';
 
 /**
  * E-E-A-T and Trust (Content Editor Quality spec §2.1, §2.2): checks read
@@ -244,9 +244,10 @@ export interface TrustRead extends Score<TrustCheckId> {
   figures: number;
   /**
    * Phase 2 (CE-046): weak or competitors' sources the person hasn't kept,
-   * the page's first first, and how many sources the rules could place.
+   * the page's first first (`ai` when the model read its site), and how
+   * many sources could be placed.
    */
-  weak: { url: string; text: string; kind: 'weak' | 'competitor' }[];
+  weak: { url: string; text: string; kind: 'weak' | 'competitor'; ai: boolean }[];
   classified: number;
 }
 
@@ -256,6 +257,8 @@ export interface SourceRead {
   pageType: string | null;
   /** Weak or competitors' sources the person chose to keep, by their address. */
   kept: ReadonlySet<string>;
+  /** The model's reads of sites the rules can't place (part b), by site. */
+  ai?: ReadonlyMap<string, AiSourceClass>;
 }
 
 /**
@@ -329,16 +332,22 @@ export function trust({
     });
   }
 
-  const classified = kinds
-    ? byUrl(all.filter((l) => l.external)).flatMap((l) => {
-        const kind = sourceClass(l.url, { brandDomains, ...kinds });
-        return kind && kind !== 'own' ? [{ ...l, kind }] : [];
-      })
-    : [];
+  const external = kinds ? byUrl(all.filter((l) => l.external)) : [];
+  const classified = external.flatMap((l) => {
+    // The rules first; a site they can't place, as the model read it.
+    const ruled = sourceClass(l.url, {
+      brandDomains,
+      competitorDomains: kinds!.competitorDomains,
+      pageType: kinds!.pageType,
+    });
+    const site = normalizeDomain(l.url);
+    const kind = ruled ?? (site ? (kinds!.ai?.get(site) ?? null) : null);
+    return kind && kind !== 'own' ? [{ ...l, kind, ai: ruled === null }] : [];
+  });
   const isWeak = (kind: SourceClass): kind is 'weak' | 'competitor' =>
     kind === 'weak' || kind === 'competitor';
-  const weak = classified.flatMap(({ url, text, kind }) =>
-    isWeak(kind) && !kinds?.kept.has(url) ? [{ url, text, kind }] : [],
+  const weak = classified.flatMap(({ url, text, kind, ai }) =>
+    isWeak(kind) && !kinds?.kept.has(url) ? [{ url, text, kind, ai }] : [],
   );
   if (classified.length) {
     checks.push({
@@ -391,4 +400,24 @@ export function trust({
     weak,
     classified: classified.length,
   };
+}
+
+/**
+ * The sites of the page's sources the rules can't place (CE-046, part b):
+ * what the editor asks the model about, each once, as the citations name
+ * them.
+ */
+export function unplacedSites(
+  blocks: TrustBlock[],
+  brandDomains: string[],
+  { competitorDomains, pageType }: Pick<SourceRead, 'competitorDomains' | 'pageType'>,
+): string[] {
+  const sites = new Set<string>();
+  for (const l of byUrl(pageLinks(blocks, brandDomains).filter((link) => link.external))) {
+    const site = normalizeDomain(l.url);
+    if (site && !sourceClass(l.url, { brandDomains, competitorDomains, pageType })) {
+      sites.add(site);
+    }
+  }
+  return [...sites];
 }
