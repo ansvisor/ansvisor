@@ -7,12 +7,16 @@
  *                                     replies going to the customer
  * GET  /api/billing/ai-usage        — this period's AI usage (getAiUsage), for
  *                                     the Billing page's meter
+ * GET  /api/billing/ai-usage/draft/:draftId
+ *                                   — a Content Editor page's share of it
+ *                                     (getDraftAiUsage), for the editor meter
  */
 
 import { Router } from 'express';
+import { z } from 'zod';
 import supabaseAdmin from '../config/supabase.js';
 import { deliverEmail } from '../lib/email.js';
-import { PlanLimitError, getAiUsage, getOrgIdForUser } from '../lib/plan-guard.js';
+import { PlanLimitError, getAiUsage, getDraftAiUsage, getOrgIdForUser } from '../lib/plan-guard.js';
 import {
   DAILY_LIMIT,
   SUBSCRIBED_STATUSES,
@@ -50,6 +54,27 @@ router.get('/ai-usage', async (req, res) => {
       });
     }
     req.log.error({ err: error }, '[billing] AI usage read failed');
+    return res.status(500).json({ error: 'Failed to read AI usage' });
+  }
+});
+
+router.get('/ai-usage/draft/:draftId', async (req, res) => {
+  const draftId = z.guid().safeParse(req.params.draftId);
+  if (!draftId.success) return res.status(400).json({ error: 'Invalid request' });
+  try {
+    const orgId = await getOrgIdForUser(req.user.id);
+    // As /ai-usage: without an org row there is no budget to share.
+    if (!orgId) return res.json({ unlimited: true, percent: null });
+    return res.json(await getDraftAiUsage(orgId, draftId.data));
+  } catch (error) {
+    if (error instanceof PlanLimitError) {
+      return res.status(error.statusCode).json({
+        success: false,
+        error: 'plan_limit',
+        message: error.message,
+      });
+    }
+    req.log.error({ err: error }, '[billing] page AI usage read failed');
     return res.status(500).json({ error: 'Failed to read AI usage' });
   }
 });

@@ -25,6 +25,11 @@ describe('aiUsageToastDue', () => {
     expect(aiUsageToastDue(usage({ percentUsed: 91 }), shown)).toBe(false);
   });
 
+  it('marks the free trial apart, so a plan started within its period warns again', () => {
+    expect(aiUsageToastMark(usage({ trial: true }))).toBe(`${shown}:trial`);
+    expect(aiUsageToastDue(usage(), `${shown}:trial`)).toBe(true);
+  });
+
   it('starts over in a new period, or on a plan changed within one', () => {
     expect(aiUsageToastDue(usage({ periodStart: '2026-11-20T09:00:00.000Z' }), shown)).toBe(true);
     expect(aiUsageToastDue(usage({ plan: 'enterprise' }), shown)).toBe(true);

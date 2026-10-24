@@ -143,6 +143,12 @@ describe('rule sets', () => {
     expect(ruleLength(huge, 'category_page')).toBe(50_000);
   });
 
+  it('counts a word with its vowel signs as one, as Readability does (Hindi)', () => {
+    // Hindi's vowel signs are marks, not letters: the words split at them before.
+    expect(page('<p>यह पहला वाक्य है। यह दूसरा है।</p>').blocks[0].words).toBe(7);
+    expect(page("<p>Don't split well-known words.</p>").blocks[0].words).toBe(4);
+  });
+
   it('says a length in characters as about so many words (v1.1 §3.2)', () => {
     // To the nearest ten from 100 words on, as the Brief shows it.
     expect(wordsForLength(4000)).toBe(670);

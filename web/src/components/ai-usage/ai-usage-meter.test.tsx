@@ -250,6 +250,18 @@ describe('AiUsageMeter', () => {
     expect(popup()!.textContent).not.toContain('Get more AI usage');
   });
 
+  it('names the free trial, and says starting the plan gives more once it’s used up', async () => {
+    vi.mocked(readAiUsage).mockResolvedValue(usage({ trial: true, percentUsed: 100 }));
+    await render();
+    await open();
+    expect(popup()!.textContent).toContain('AI usage this month · Growth free trial');
+    expect(popup()!.textContent).toContain(
+      "The free trial's AI usage is used up. Starting the plan gives its full monthly allowance;",
+    );
+    expect(links()[0]).toEqual(['Start your plan', '/dashboard/settings/billing']);
+    expect(popup()!.textContent).not.toContain('Get more AI usage');
+  });
+
   it('tells a member who isn’t an admin to ask one, instead of the admin’s links', async () => {
     await render('manager');
     await open();
@@ -389,6 +401,17 @@ describe('AiUsageProvider', () => {
     // A plan changed within the period starts over.
     await reread({ plan: 'enterprise', planName: 'Enterprise', percentUsed: 81 });
     expect(toast.warning).toHaveBeenCalledTimes(2);
+  });
+
+  it('toasts the free trial’s warning in its own words', async () => {
+    vi.mocked(readAiUsage).mockResolvedValue(usage({ trial: true, percentUsed: 84 }));
+    await render();
+    expect(toast.warning).toHaveBeenCalledExactlyOnceWith(
+      "You've used 84% of the free trial's AI usage. Starting the plan gives its full monthly allowance.",
+    );
+    expect(localStorage.getItem('aeo:ai-usage-toast')).toBe(
+      '2026-10-20T09:00:00.000Z:growth:trial',
+    );
   });
 
   it('toasts nothing below 80%, on a plan without an allowance, or self-hosted', async () => {
