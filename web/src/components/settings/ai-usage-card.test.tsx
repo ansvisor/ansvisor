@@ -89,6 +89,15 @@ describe('AiUsageCard', () => {
     );
   });
 
+  it('says the free trial’s is used up and starting the plan gives more, not a bigger plan', async () => {
+    vi.mocked(getAiUsage).mockResolvedValue(usage({ trial: true, percentUsed: 100 }));
+    await render();
+    expect(container.textContent).toContain(
+      "The free trial's AI usage is used up. Starting the plan below gives its full monthly allowance.",
+    );
+    expect(container.textContent).not.toContain('A bigger plan');
+  });
+
   it('offers no bigger plan on Enterprise', async () => {
     vi.mocked(getAiUsage).mockResolvedValue(usage({ plan: 'enterprise', percentUsed: 100 }));
     await render();

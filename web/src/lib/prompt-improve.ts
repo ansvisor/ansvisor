@@ -80,6 +80,8 @@ export interface ImproveQuota {
   exhausted: boolean;
   generationsLeft: number | null;
   percentLeft: number | null;
+  /** The free trial's smaller allowance: more comes with starting the plan. */
+  trial?: boolean;
 }
 
 /** The panel's range as sent to the server: the resolved bounds plus the picked preset. */

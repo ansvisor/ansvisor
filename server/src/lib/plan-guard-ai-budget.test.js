@@ -105,8 +105,8 @@ describe('reserveAiBudget', () => {
         fn: 'reserve_ai_usage',
         args: expect.objectContaining({
           p_organization_id: 'o1',
-          // Starter's $1, from the period's start.
-          p_budget: 1,
+          // Starter's $5, from the period's start.
+          p_budget: 5,
           p_since: expect.any(String),
           p_cost: 0.0095,
           p_feature: 'content',
@@ -157,6 +157,21 @@ describe('reserveAiBudget', () => {
     await budget.release();
     // Neither changed nor let go: the hold's row is the call's cost.
     expect(ops).toEqual([]);
+  });
+
+  it('holds a call in the free trial on its $1, and says starting the plan gives more', async () => {
+    org = { ...org, plan: 'growth', subscription_status: 'trialing' };
+    await guard.reserveAiBudget('o1', { feature: 'improve', modelId: 'm', promptId: 'p1' });
+    expect(rpcCalls[0].args.p_budget).toBe(1);
+
+    reserved = null;
+    await expect(
+      guard.reserveAiBudget('o1', { feature: 'improve', modelId: 'm', promptId: 'p1' }),
+    ).rejects.toMatchObject({
+      statusCode: 429,
+      message:
+        "The free trial's AI usage is used up. Starting the plan gives its full monthly allowance.",
+    });
   });
 
   it('refuses once the budget is spent, as the quota did', async () => {

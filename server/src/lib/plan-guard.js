@@ -5,6 +5,7 @@ import {
   isWithinLimit,
   isCloud,
   isSubscriptionActive,
+  TRIAL_AI_BUDGET_USD,
 } from '../config/plans.js';
 import { anchoredPeriodStart, shiftMonthClamped } from './quota-period.js';
 import {
@@ -95,7 +96,24 @@ async function resolveOrgPlanByOrgId(orgId) {
     );
   }
 
-  return applyPlanOverrides(getPlan(org.plan), org);
+  return applyTrialAiBudget(applyPlanOverrides(getPlan(org.plan), org), org);
+}
+
+/**
+ * The free trial's AI budget: while the subscription is trialing, the plan's
+ * AI budget is TRIAL_AI_BUDGET_USD at most, and the plan's own comes once it
+ * is paid; `trial` marks the plan so what reads it can say so. Enterprise
+ * keeps its own: its trials are a deal's, with its budget or contract.
+ */
+export function applyTrialAiBudget(plan, org) {
+  if (org?.subscription_status !== 'trialing' || org.plan === 'enterprise') return plan;
+  const budget = plan.limits.improveMonthlyBudgetUsd ?? -1;
+  if (budget === -1) return plan;
+  return {
+    ...plan,
+    trial: true,
+    limits: { ...plan.limits, improveMonthlyBudgetUsd: Math.min(budget, TRIAL_AI_BUDGET_USD) },
+  };
 }
 
 /**
@@ -325,10 +343,10 @@ async function improveSpendThisPeriod(orgId) {
 
 /**
  * Improve-tab budget (PROMPT-003): a monthly USD budget per organization
- * (plan.limits.improveMonthlyBudgetUsd: Starter $1, Growth $5, Enterprise
- * $10 or 1% of its contract), charged with each generation's real token
- * cost so the budget holds for any model. Users
- * see an estimate of generations left, not dollars. -1 is unlimited.
+ * (plan.limits.improveMonthlyBudgetUsd: Starter $5, Growth $25, Enterprise
+ * $50 or 1% of its contract, the free trial $1), charged with each
+ * generation's real token cost so the budget holds for any model. Users see
+ * an estimate of generations left, not dollars. -1 is unlimited.
  */
 export async function getImproveQuotaStatus(orgId, modelId) {
   const plan = await resolveOrgPlanByOrgId(orgId);
@@ -339,6 +357,7 @@ export async function getImproveQuotaStatus(orgId, modelId) {
   return {
     unlimited: false,
     planName: plan.name,
+    trial: plan.trial === true,
     budgetUsd: budget,
     spentUsd: spent,
     remainingUsd: remaining,
@@ -389,7 +408,9 @@ export async function reserveAiBudget(
     if (error) throw new Error(error.message);
     if (!data) {
       throw new PlanLimitError(
-        `This month's suggestion budget on the ${plan.name} plan is used up. It resets when your subscription renews.`,
+        plan.trial
+          ? "The free trial's AI usage is used up. Starting the plan gives its full monthly allowance."
+          : `This month's suggestion budget on the ${plan.name} plan is used up. It resets when your subscription renews.`,
         429,
       );
     }
@@ -501,6 +522,8 @@ export async function getAiUsage(orgId) {
   const base = {
     plan: plan.id,
     planName: plan.name,
+    // The free trial's smaller budget: getting more means starting the plan.
+    trial: plan.trial === true,
     periodStart: periodStart.toISOString(),
     periodEnd: shiftMonthClamped(periodStart, 1).toISOString(),
   };

@@ -1032,6 +1032,8 @@ function publicQuota(q) {
     exhausted: q.remainingUsd <= 0,
     generationsLeft: q.generationsLeft,
     percentLeft: q.percentLeft,
+    // The free trial's: more comes with starting the plan, not a bigger one.
+    trial: q.trial === true,
   };
 }
 

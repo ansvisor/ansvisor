@@ -45,8 +45,9 @@ export interface PlanLimits {
   maxBriefGenerations: number;
   /**
    * Monthly USD budget for AI usage: Improve-tab model calls (Positions
-   * panel, PROMPT-003) and, later, the Content Editor's AI. Starter $1,
-   * Growth $5, Enterprise $10 (or 1% of its contract); the billing cards
+   * panel, PROMPT-003), the Content Editor's AI and the Action Center's task
+   * writing. Starter $5, Growth $25, Enterprise $50 (or 1% of its contract),
+   * and $1 in the free trial (the server's rule); the billing cards
    * show them as multiples of Starter's. Enforced on the server from each
    * call's real token cost so it holds whichever model is configured.
    * -1 = unlimited (self-host).
@@ -168,12 +169,10 @@ export const PLANS: Record<PlanId, Plan> = {
       maxDomainsPerBrand: 3,
       maxVolumeAnalyses: 4,
       maxBriefGenerations: 10,
-      // AI usage, in tiers the billing cards show as multiples of Starter's:
-      // $1 here (1x), Growth $5 (5x), Enterprise $10 or 1% of its contract.
-      // Spent on Improve and, later, the Content Editor's AI. Starter's is a
-      // trial: enough for a few generations a month (Growth+ was PROMPT-003's
-      // call).
-      improveMonthlyBudgetUsd: 1,
+      // The workspace's one AI budget, in tiers the billing cards show as
+      // multiples of Starter's: $5 here (1x), Growth $25 (5x), Enterprise $50
+      // or 1% of its contract (2026-10-24); the server gives the free trial $1.
+      improveMonthlyBudgetUsd: 5,
       // 0.1% of the $49 price, spent rating suggestions' relevance (VIS-011).
       relevanceMonthlyBudgetUsd: 0.049,
       maxOpportunitiesPerMonth: 10,
@@ -201,7 +200,7 @@ export const PLANS: Record<PlanId, Plan> = {
         // longer gates the feature — only "did you paste a key?" does.
         // Self-host gets the feature unconditionally via env.
         'ai_agent',
-        // Improve on a $1 trial budget (above).
+        // Improve, on Starter's AI budget (above).
         'prompt_improve',
       ],
     },
@@ -220,8 +219,8 @@ export const PLANS: Record<PlanId, Plan> = {
       maxDomainsPerBrand: 10,
       maxVolumeAnalyses: 10,
       maxBriefGenerations: 50,
-      // AI usage: 5x Starter's $1 (the billing card's "5x AI usage").
-      improveMonthlyBudgetUsd: 5,
+      // AI usage: 5x Starter's $5 (the billing card's "5x AI usage").
+      improveMonthlyBudgetUsd: 25,
       // 0.1% of the $249 price, spent rating suggestions' relevance (VIS-011).
       relevanceMonthlyBudgetUsd: 0.249,
       maxOpportunitiesPerMonth: 50,
@@ -265,10 +264,10 @@ export const PLANS: Record<PlanId, Plan> = {
       maxVolumeAnalyses: -1,
       // Per-customer: override via organizations.plan_overrides in the DB.
       maxBriefGenerations: -1,
-      // AI usage: $10 at the least, above Growth's $5.
+      // AI usage: $50 at the least, twice Growth's $25.
       // plan_overrides.contractMonthlyUsd raises it to 1% of the contract; an
       // explicit plan_overrides.improveMonthlyBudgetUsd wins.
-      improveMonthlyBudgetUsd: 10,
+      improveMonthlyBudgetUsd: 50,
       // 0.1% of the $499 floor, raised to 0.1% of contractMonthlyUsd; an
       // explicit plan_overrides.relevanceMonthlyBudgetUsd wins.
       relevanceMonthlyBudgetUsd: 0.499,

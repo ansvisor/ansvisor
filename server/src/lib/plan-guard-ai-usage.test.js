@@ -72,10 +72,10 @@ afterEach(() => {
 
 describe('getAiUsage', () => {
   it('reads the period’s spend by feature as shares of the plan’s budget', async () => {
-    // Starter's budget is $1.
+    // Starter's budget is $5.
     spend = [
-      { feature: 'improve', cost_usd: '0.125' },
-      { feature: 'content', cost_usd: '0.3004' },
+      { feature: 'improve', cost_usd: '0.625' },
+      { feature: 'content', cost_usd: '1.502' },
     ];
     const usage = await guard.getAiUsage('o1');
     expect(rpcCalls).toEqual([
@@ -101,8 +101,8 @@ describe('getAiUsage', () => {
 
   it('reads spend past the budget as all of it, the features scaled to fit', async () => {
     spend = [
-      { feature: 'content', cost_usd: '1.5' },
-      { feature: 'action_center', cost_usd: '0.5' },
+      { feature: 'content', cost_usd: '7.5' },
+      { feature: 'action_center', cost_usd: '2.5' },
     ];
     const usage = await guard.getAiUsage('o1');
     expect(usage.percentUsed).toBe(100);
@@ -114,7 +114,7 @@ describe('getAiUsage', () => {
   });
 
   it('lists spend it can’t place only when there is some', async () => {
-    spend = [{ feature: 'other', cost_usd: '0.05' }];
+    spend = [{ feature: 'other', cost_usd: '0.25' }];
     expect((await guard.getAiUsage('o1')).features).toContainEqual({
       feature: 'other',
       percent: 5,
@@ -126,16 +126,16 @@ describe('getAiUsage', () => {
   });
 
   it('reads just under the budget as just under, and all of it only once spent', async () => {
-    spend = [{ feature: 'improve', cost_usd: '0.9996' }];
+    spend = [{ feature: 'improve', cost_usd: '4.998' }];
     expect((await guard.getAiUsage('o1')).percentUsed).toBe(99.9);
-    spend = [{ feature: 'improve', cost_usd: '1' }];
+    spend = [{ feature: 'improve', cost_usd: '5' }];
     expect((await guard.getAiUsage('o1')).percentUsed).toBe(100);
   });
 
   it('scales unknown spend with the rest when past the budget', async () => {
     spend = [
-      { feature: 'improve', cost_usd: '1.5' },
-      { feature: 'other', cost_usd: '0.5' },
+      { feature: 'improve', cost_usd: '7.5' },
+      { feature: 'other', cost_usd: '2.5' },
     ];
     const usage = await guard.getAiUsage('o1');
     expect(usage.features).toContainEqual({ feature: 'improve', percent: 75 });
@@ -167,9 +167,9 @@ describe('getAiUsage', () => {
 
 describe('getDraftAiUsage', () => {
   it('reads the page’s spend this period as a share of the budget, from the org’s own rows', async () => {
-    // Starter's budget is $1: 0.0371 is 3.7%.
-    pageRows = [{ cost_usd: '0.0250' }, { cost_usd: '0.0121' }];
-    spend = [{ feature: 'content', cost_usd: '0.2' }];
+    // Starter's budget is $5: 0.185 is 3.7%.
+    pageRows = [{ cost_usd: '0.125' }, { cost_usd: '0.06' }];
+    spend = [{ feature: 'content', cost_usd: '1' }];
     expect(await guard.getDraftAiUsage('o1', 'd1')).toEqual({ unlimited: false, percent: 3.7 });
     expect(pageFilters).toEqual([
       ['eq', 'organization_id', 'o1'],
@@ -181,7 +181,7 @@ describe('getDraftAiUsage', () => {
 
   it('reads a page with no AI calls as 0, and one with a sliver as 0.1', async () => {
     expect(await guard.getDraftAiUsage('o1', 'd1')).toEqual({ unlimited: false, percent: 0 });
-    // A small Fix run on a big budget: $0.005 of Enterprise's $10.
+    // A small Fix run on a big budget: $0.005 of Enterprise's $50.
     org = { ...org, plan: 'enterprise' };
     pageRows = [{ cost_usd: '0.005' }];
     spend = [{ feature: 'content', cost_usd: '0.005' }];
@@ -189,12 +189,12 @@ describe('getDraftAiUsage', () => {
   });
 
   it('scales the page’s spend to fit once the month’s is past the budget, as the month’s figure', async () => {
-    // The last call took the month to $1.07 of Starter's $1, all on this page.
-    pageRows = [{ cost_usd: '1.07' }];
-    spend = [{ feature: 'content', cost_usd: '1.07' }];
+    // The last call took the month to $5.35 of Starter's $5, all on this page.
+    pageRows = [{ cost_usd: '5.35' }];
+    spend = [{ feature: 'content', cost_usd: '5.35' }];
     expect(await guard.getDraftAiUsage('o1', 'd1')).toEqual({ unlimited: false, percent: 100 });
     // Half of it on this page.
-    pageRows = [{ cost_usd: '0.535' }];
+    pageRows = [{ cost_usd: '2.675' }];
     expect(await guard.getDraftAiUsage('o1', 'd1')).toEqual({ unlimited: false, percent: 50 });
   });
 
@@ -207,5 +207,38 @@ describe('getDraftAiUsage', () => {
     guard = await import('./plan-guard.js');
     expect(await guard.getDraftAiUsage('o1', 'd1')).toEqual({ unlimited: true, percent: null });
     expect(pageFilters).toEqual([]);
+  });
+});
+
+describe('the free trial’s AI budget', () => {
+  it('is $1 whatever the plan while the subscription is trialing, and says it is the trial’s', async () => {
+    org = { ...org, plan: 'growth', subscription_status: 'trialing' };
+    spend = [{ feature: 'content', cost_usd: '0.21' }];
+    expect(await guard.getAiUsage('o1')).toMatchObject({ trial: true, percentUsed: 21 });
+    // Paid: Growth's own $25.
+    org = { ...org, subscription_status: 'active' };
+    expect(await guard.getAiUsage('o1')).toMatchObject({ trial: false, percentUsed: 0.8 });
+  });
+
+  it('leaves Enterprise with its own (a deal’s budget or contract), and an unlimited one as it is', () => {
+    const plan = (budget) => ({ id: 'x', limits: { improveMonthlyBudgetUsd: budget } });
+    const trialing = (over) => ({ plan: 'starter', subscription_status: 'trialing', ...over });
+    const contract = trialing({ plan: 'enterprise', plan_overrides: { contractMonthlyUsd: 8000 } });
+    expect(guard.applyTrialAiBudget(plan(80), contract)).toEqual(plan(80));
+    expect(guard.applyTrialAiBudget(plan(-1), trialing())).toEqual(plan(-1));
+  });
+
+  it('holds Starter and Growth trials to $1, and a smaller budget to its own', () => {
+    const plan = (budget) => ({ id: 'x', limits: { improveMonthlyBudgetUsd: budget } });
+    const trial = { plan: 'growth', subscription_status: 'trialing' };
+    expect(guard.applyTrialAiBudget(plan(25), trial)).toEqual({
+      id: 'x',
+      trial: true,
+      limits: { improveMonthlyBudgetUsd: 1 },
+    });
+    expect(guard.applyTrialAiBudget(plan(0.5), trial).limits.improveMonthlyBudgetUsd).toBe(0.5);
+    expect(guard.applyTrialAiBudget(plan(25), { ...trial, subscription_status: 'active' })).toEqual(
+      plan(25),
+    );
   });
 });

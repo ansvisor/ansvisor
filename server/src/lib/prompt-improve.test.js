@@ -311,14 +311,15 @@ describe('improveRangeKey', () => {
 });
 
 describe('Improve plan limits', () => {
-  it('is on every plan, in AI usage tiers: Starter $1, Growth $5 (5x), Enterprise $10', async () => {
-    const { PLANS } = await import('../config/plans.js');
-    expect(PLANS.starter.limits.improveMonthlyBudgetUsd).toBe(1);
+  it('is on every plan, in one AI budget: Starter $5, Growth $25 (5x), Enterprise $50, the trial $1', async () => {
+    const { PLANS, TRIAL_AI_BUDGET_USD } = await import('../config/plans.js');
+    expect(PLANS.starter.limits.improveMonthlyBudgetUsd).toBe(5);
+    expect(TRIAL_AI_BUDGET_USD).toBe(1);
     for (const id of ['starter', 'growth', 'enterprise', 'self_hosted']) {
       expect(PLANS[id].limits.features).toContain('prompt_improve');
     }
-    expect(PLANS.growth.limits.improveMonthlyBudgetUsd).toBe(5);
-    expect(PLANS.enterprise.limits.improveMonthlyBudgetUsd).toBe(10);
+    expect(PLANS.growth.limits.improveMonthlyBudgetUsd).toBe(25);
+    expect(PLANS.enterprise.limits.improveMonthlyBudgetUsd).toBe(50);
     expect(PLANS.self_hosted.limits.improveMonthlyBudgetUsd).toBe(-1);
   });
 });

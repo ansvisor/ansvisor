@@ -36,6 +36,7 @@ router.get('/ai-usage', async (req, res) => {
       return res.json({
         plan: 'self_hosted',
         planName: null,
+        trial: false,
         periodStart: null,
         periodEnd: null,
         unlimited: true,

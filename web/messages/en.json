@@ -3879,7 +3879,7 @@
         "aiUsedUp": "This month's AI usage is used up. It resets on {date}.",
         "aiUsedUpNoDate": "This month's AI usage is used up until it resets.",
         "fixErrors": {
-          "ai_budget": "This month's AI usage is spent. Upgrade for more, or try again next month.",
+          "ai_budget": "This month's AI usage is spent. Upgrade for more, or try again once it resets.",
           "no_subscription": "Content Agent needs an active subscription. Choose a plan in Settings › Billing.",
           "empty": "Write something first: the agent improves the page you have.",
           "open_suggestions": "This page has open suggestions, maybe from another tab. They're shown now: accept or reject them first.",
@@ -6237,7 +6237,8 @@
         "left": "{count, plural, one {About # generation left this month} other {About # generations left this month}}",
         "percentLeft": "{percent}% of this month's budget left",
         "usedUp": "This month's suggestion budget is used up. It resets when your subscription renews.",
-        "upgrade": "Upgrade for more"
+        "upgrade": "Upgrade for more",
+        "startPlan": "Start your plan"
       }
     }
   },
@@ -6948,6 +6949,7 @@
       "resets": "Resets on {date}",
       "exhausted": "This period's AI usage is used up. AI features resume on {date}.",
       "exhaustedNoDate": "This period's AI usage is used up. AI features resume when it resets.",
+      "exhaustedTrial": "The free trial's AI usage is used up. Starting the plan below gives its full monthly allowance.",
       "morePlans": "A bigger plan below comes with more.",
       "features": {
         "improve": "Improve suggestions",
@@ -7059,7 +7061,7 @@
       "briefs": "{count, number} content briefs a month",
       "audits": "{count, number} site audits a month",
       "aiUsage": "{count}x AI usage",
-      "aiUsageHint": "A monthly allowance for Ansvisor's AI features: Improve suggestions, the Content Editor's AI and the Action Center's task writing. Agent Chat runs on your own AI key."
+      "aiUsageHint": "A monthly allowance for Ansvisor's AI features: Improve suggestions, the Content Editor's AI and the Action Center's task writing. Agent Chat runs on your own AI key. The free trial comes with a smaller allowance."
     },
     "contactUs": "Contact Us",
     "integrations": "Integrations",
