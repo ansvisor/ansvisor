@@ -108,7 +108,11 @@ const render = async () => {
 };
 const button = (label: string, within: ParentNode = container) =>
   [...within.querySelectorAll('button')].find((b) => b.textContent === label);
-const section = (label: string) => container.querySelector(`section[aria-label="${label}"]`)!;
+/** A section by its heading (aria-labelledby). */
+const section = (label: string) =>
+  [...container.querySelectorAll('section')].find(
+    (s) => document.getElementById(s.getAttribute('aria-labelledby')!)?.textContent === label,
+  )!;
 
 beforeEach(() => {
   vi.useFakeTimers({ toFake: ['Date'] });
@@ -157,22 +161,42 @@ describe('BrandFactsTab', () => {
     expect(container.textContent).toContain('About page: turned our reader away');
   });
 
-  it('approves a fact as the member, then reads the facts as kept', async () => {
+  it('approves a fact as the member, in the list at once, dropping the gone one it replaces', async () => {
+    const gone = fact({ id: 'f0', status: 'approved', gone: true, quote: '$59 per month' });
+    getBrandFacts.mockResolvedValue({ ...READ, facts: [...READ.facts, gone] });
     await render();
     setBrandFactStatus.mockResolvedValue({ id: 'f1', status: 'approved' });
-    const after = {
-      ...READ,
-      facts: [{ ...READ.facts[0], status: 'approved' as const, replaces: null }],
-    };
-    getBrandFacts.mockResolvedValueOnce(after);
     await act(async () => button('Approve', section('To approve (1)'))!.click());
     expect(setBrandFactStatus).toHaveBeenCalledWith('f1', 'approved');
-    expect(container.querySelector('section[aria-label="To approve (1)"]')).toBeNull();
-    expect(section('Approved').textContent).toContain('Pro · $49 / month');
+    // No read of the site, nor of the list: the review is the list's.
+    expect(getBrandFacts).toHaveBeenCalledTimes(1);
+    expect(section('To approve (1)')).toBeUndefined();
+    const approved = section('Approved');
+    expect(approved.textContent).toContain('Pro · $49 / month');
+    expect(approved.textContent).not.toContain('$59 per month');
+  });
 
+  it('reads the list again when a review fails (a read removed the fact meanwhile)', async () => {
+    await render();
     setBrandFactStatus.mockResolvedValue({ error: 'failed' });
-    await act(async () => button('Reject', section('Approved'))!.click());
+    getBrandFacts.mockResolvedValueOnce({ ...READ, facts: READ.facts.slice(1) });
+    await act(async () => button('Approve', section('To approve (1)'))!.click());
     expect(toast.error).toHaveBeenCalledWith("That fact couldn't be saved. Try again.");
+    expect(getBrandFacts).toHaveBeenCalledTimes(2);
+    expect(section('To approve (1)')).toBeUndefined();
+  });
+
+  it('does one thing at a time: no second review, and no read of the site, while one is out', async () => {
+    vi.setSystemTime(Date.parse('2026-10-24T12:10:00Z'));
+    await render();
+    let answer: (value: unknown) => void = () => {};
+    setBrandFactStatus.mockReturnValue(new Promise((resolve) => (answer = resolve)));
+    await act(async () => button('Approve', section('To approve (1)'))!.click());
+    expect(button('Approve', section('To approve (1)'))!.disabled).toBe(true);
+    expect(button('Read again')!.disabled).toBe(true);
+    expect(section('To approve (1)').querySelector('li')!.getAttribute('aria-busy')).toBe('true');
+    await act(async () => answer({ id: 'f1', status: 'approved' }));
+    expect(button('Read again')!.disabled).toBe(false);
   });
 
   it('reads the site again only once the API allows it', async () => {
@@ -188,6 +212,12 @@ describe('BrandFactsTab', () => {
     expect(readBrandFactsAgain).toHaveBeenCalledWith('b1');
     expect(container.textContent).toContain("This month's AI usage is used up");
     expect(container.textContent).toContain('No facts were found on your site yet.');
+  });
+
+  it('says when the API has them off', async () => {
+    getBrandFacts.mockResolvedValueOnce({ error: 'off' });
+    await render();
+    expect(container.textContent).toContain("Brand facts aren't available yet.");
   });
 
   it('says when the brand has no domain, and when the facts can’t be read', async () => {

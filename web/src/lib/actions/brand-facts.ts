@@ -43,7 +43,8 @@ async function call(path: string, init: RequestInit = {}): Promise<Response | Fa
 
 const readOf = async (res: Response | FactsError): Promise<BrandFactsRead | FactsError> => {
   if ('error' in res) return res;
-  const body = (await res.json()) as Partial<BrandFactsRead>;
+  const body = (await res.json().catch(() => null)) as Partial<BrandFactsRead> | null;
+  if (!body) return { error: 'failed' };
   return {
     facts: body.facts ?? [],
     pages: body.pages ?? [],
@@ -76,6 +77,6 @@ export async function setBrandFactStatus(
   }
   const res = await call(`/${factId}`, { method: 'PATCH', body: JSON.stringify({ status }) });
   if ('error' in res) return res;
-  const body = (await res.json()) as { id: string; status: FactStatus };
-  return { id: body.id, status: body.status };
+  const body = (await res.json().catch(() => null)) as { id: string; status: FactStatus } | null;
+  return body ? { id: body.id, status: body.status } : { error: 'failed' };
 }
