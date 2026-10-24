@@ -3021,6 +3021,58 @@ describe('the side panel', () => {
       await act(async () => inDialog('Continue to send').click());
       expect(dialog()!.textContent).toContain('Meta description');
       expect(readDraftCms).toHaveBeenCalledWith('d1');
+      // Closed, so no open dialog is left for the tests after.
+      await act(async () => inDialog('Cancel').click());
+      expect(dialog()).toBeNull();
+    });
+
+    const editAsHtml = async (html: string) => {
+      await act(async () => button('Edit as HTML')!.click());
+      const source = container.querySelector('textarea')!;
+      await act(async () => {
+        Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!.call(
+          source,
+          html,
+        );
+        source.dispatchEvent(new Event('input', { bubbles: true }));
+      });
+      await act(async () => button('Back to visual')!.click());
+    };
+
+    it('saves what is waiting before it sends, as Mark ready does', async () => {
+      getContentDraft.mockResolvedValue(draft());
+      await renderPage();
+      await editAsHtml('<h1>Pipeline forecasting</h1><p>Edited.</p>');
+      expect(saveContentDraft).not.toHaveBeenCalled();
+      await act(async () => button('Send to CMS')!.click());
+      await act(async () => {});
+      expect(saveContentDraft).toHaveBeenCalledWith(
+        'd1',
+        expect.objectContaining({ bodyHtml: '<h1>Pipeline forecasting</h1><p>Edited.</p>' }),
+      );
+      expect(saveContentDraft.mock.invocationCallOrder[0]).toBeLessThan(
+        readDraftCms.mock.invocationCallOrder[0],
+      );
+      expect(document.querySelector<HTMLTextAreaElement>('#cms-meta-description')!.value).toBe(
+        'Edited.',
+      );
+      await act(async () => inDialog('Cancel').click());
+      expect(dialog()).toBeNull();
+    });
+
+    it('sends no page it can’t save', async () => {
+      // A teammate or the agent changed the page meanwhile: this tab's version can't go.
+      saveContentDraft.mockResolvedValue({ ok: false, reason: 'conflict' });
+      getContentDraft.mockResolvedValue(draft());
+      await renderPage();
+      await editAsHtml('<h1>Pipeline forecasting</h1><p>Edited.</p>');
+      await act(async () => button('Send to CMS')!.click());
+      await act(async () => {});
+      expect(toast.error).toHaveBeenCalledWith(
+        "The page has changes that aren't saved, so it wasn't sent.",
+      );
+      expect(dialog()).toBeNull();
+      expect(readDraftCms).not.toHaveBeenCalled();
     });
 
     it('is for admins and managers only', async () => {
@@ -3406,21 +3458,19 @@ describe('the side panel', () => {
       await renderPage();
       await act(async () => nextButton()!.click());
       expect(basket()).not.toBeNull();
-      const elsewhere = document.createElement('button');
-      document.body.append(elsewhere);
-      try {
-        await act(async () => {
-          elsewhere.focus();
-          for (const type of ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click']) {
-            elsewhere.dispatchEvent(new MouseEvent(type, { bubbles: true }));
-          }
-        });
-        await act(async () => new Promise((resolve) => setTimeout(resolve, 150)));
-        expect(basket()).toBeNull();
-        expect(document.activeElement).toBe(elsewhere);
-      } finally {
-        elsewhere.remove();
-      }
+      // The page's own text, as a reader clicks back into it: a button put in
+      // the document after the basket opened reads as another app's, which a
+      // popover doesn't close for.
+      const elsewhere = container.querySelector<HTMLElement>('.ProseMirror')!;
+      await act(async () => {
+        elsewhere.focus();
+        for (const type of ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click']) {
+          elsewhere.dispatchEvent(new MouseEvent(type, { bubbles: true }));
+        }
+      });
+      await act(async () => new Promise((resolve) => setTimeout(resolve, 150)));
+      expect(basket()).toBeNull();
+      expect(document.activeElement).toBe(elsewhere);
     });
 
     it('keeps a skip while the sources load again, as the fan-out rules read them', async () => {
