@@ -221,6 +221,40 @@ describe('trust (Phase 1: figures and links)', () => {
   });
 });
 
+describe('Your input (Phase 2, CE-048)', () => {
+  it("counts the person's experience and data in E-E-A-T once the page uses them", () => {
+    const none = eeat({ author: author(), used: { experience: false, data: false } });
+    // byline 15 + bio 10 of 60.
+    expect(none.score).toBe(42);
+    expect(none.checks.map((c) => c.id)).toEqual([
+      'experience',
+      'originalData',
+      'byline',
+      'authorBio',
+    ]);
+    expect(scoreGain(none, ['experience'])).toBe(33);
+    expect(eeat({ author: author(), used: { experience: true, data: true } }).score).toBe(100);
+    // Before Your input is read: Phase 1's checks alone.
+    expect(eeat({ author: author() }).checks.map((c) => c.id)).toEqual(['byline', 'authorBio']);
+  });
+
+  it("counts an expert's quote in Trust, once Trust is scored", () => {
+    const NOW = Date.parse('2026-10-23T12:00:00Z');
+    const run = (html: string, quote: boolean | null) =>
+      trust({ blocks: trustBlocks(html), links: new Map(), brandDomains: [], quote, now: NOW });
+    const sourced = '<p>Up 40% (<a href="https://src.example/">source</a>).</p>';
+    expect(run(sourced, true).checks).toEqual([
+      { id: 'claimsSourced', points: 30, max: 30 },
+      { id: 'expertQuote', points: TRUST_WEIGHTS.expertQuote, max: TRUST_WEIGHTS.expertQuote },
+    ]);
+    // 30 of 38.
+    expect(run(sourced, false).score).toBe(79);
+    expect(run(sourced, null).checks.map((c) => c.id)).toEqual(['claimsSourced']);
+    // A quote alone doesn't score Trust: one check would set the whole score.
+    expect(run('<p>No figures here.</p>', true).score).toBeNull();
+  });
+});
+
 describe('trust (Phase 2: what kind of source each link is, CE-046)', () => {
   const NOW = Date.parse('2026-10-23T12:00:00Z');
   const run = (html: string, over: { pageType?: string; kept?: string[] } = {}) =>

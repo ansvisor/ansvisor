@@ -11,6 +11,7 @@ const todo = (over: Partial<QualityTodo>): QualityTodo => ({
   id: 'byline',
   done: false,
   gain: 15,
+  score: 'eeat',
   action: 'pickAuthor',
   ...over,
 });

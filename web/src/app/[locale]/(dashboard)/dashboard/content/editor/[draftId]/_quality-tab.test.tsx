@@ -88,6 +88,7 @@ let root: Root;
 const onShow = vi.fn();
 const onPickAuthor = vi.fn();
 const onShowPlaceholder = vi.fn();
+const onAddInput = vi.fn();
 const onKeep = vi.fn();
 
 async function render(quality: QualityRead | Readability | null) {
@@ -100,6 +101,7 @@ async function render(quality: QualityRead | Readability | null) {
           onShow={onShow}
           onShowPlaceholder={onShowPlaceholder}
           onPickAuthor={onPickAuthor}
+          onAddInput={onAddInput}
           onKeep={onKeep}
         />
       </NextIntlClientProvider>,
@@ -254,6 +256,45 @@ describe('QualityTab', () => {
     const done = container.querySelector('[aria-label="Your to-dos"] li')!;
     expect(done.textContent).toBe('Fill the placeholders · DoneAll filled in');
     expect(done.querySelector('button')).toBeNull();
+  });
+
+  it('asks for what only the person can give, each with Add, and its gain (CE-048)', async () => {
+    const none = { experience: false, data: false, quote: false };
+    const score = eeat({ author: ada, used: none });
+    const trustScore = trust({
+      blocks: trustBlocks('<p>Up 40% (<a href="https://src.example/">source</a>).</p>'),
+      links: new Map(),
+      brandDomains: [],
+      quote: false,
+      now: Date.parse('2026-10-24T12:00:00Z'),
+    });
+    await render({
+      ...read(result),
+      eeat: score,
+      trust: trustScore,
+      todos: qualityTodos({
+        eeat: score,
+        author: ada,
+        hasAuthors: true,
+        canEdit: true,
+        used: none,
+        given: { experience: true, data: false, quote: false },
+        trust: trustScore,
+      }),
+    });
+    const rows = [...container.querySelectorAll('[aria-label="Your to-dos"] li')].map(
+      (li) => li.textContent,
+    );
+    expect(rows.slice(2)).toEqual([
+      "Add your own experience · To doIt's in Your input, but the page doesn't use it yet: write it in, or let the agent write from it · +33 E-E-A-TAdd",
+      "Add your own data · To doYour numbers, or Ansvisor data on this page's prompts: the page cites them as yours · +25 E-E-A-TAdd",
+      "Add an expert's quote · To doA real person's words as said, with their name, title and where they said them · +21 TrustAdd",
+    ]);
+    const add = [...container.querySelectorAll('[aria-label="Your to-dos"] li')]
+      .find((li) => li.textContent?.startsWith('Add your own data'))!
+      .querySelector('button')!;
+    await act(async () => add.click());
+    expect(onAddInput).toHaveBeenCalled();
   });
 
   it("says who can complete the profile when the reader can't edit the author", async () => {

@@ -104,9 +104,16 @@ export function AiUsageCard() {
               </div>
               {tone === 'exhausted' && (
                 <p className="mt-1.5 text-sm text-red-600 dark:text-red-400">
-                  {resets ? t('exhausted', { date: resets }) : t('exhaustedNoDate')}
-                  {/* Enterprise has no bigger plan to move to. */}
-                  {usage.plan !== 'enterprise' && <> {t('morePlans')}</>}
+                  {/* In the free trial, more comes with starting the plan, not a bigger one. */}
+                  {usage.trial ? (
+                    t('exhaustedTrial')
+                  ) : (
+                    <>
+                      {resets ? t('exhausted', { date: resets }) : t('exhaustedNoDate')}
+                      {/* Enterprise has no bigger plan to move to. */}
+                      {usage.plan !== 'enterprise' && <> {t('morePlans')}</>}
+                    </>
+                  )}
                 </p>
               )}
             </div>

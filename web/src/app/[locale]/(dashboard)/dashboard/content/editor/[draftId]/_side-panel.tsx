@@ -17,8 +17,10 @@ import { QualityTab, type QualityRead } from './_quality-tab';
 import { RulesTab, type AgentFix, type PageRewrite } from './_rules-tab';
 import { SourcesTab } from './_sources-tab';
 import { useBriefRebuild, type PageNow } from './_use-brief-rebuild';
+import type { DraftInputsRead } from './_use-draft-inputs';
 import type { DraftReads } from './_use-draft-reads';
 import type { DraftRulesState } from './_use-draft-rules';
+import { YourInput, type InputPrompt } from './_your-input';
 
 /** Remembers whether the panel is open, across drafts and visits. */
 const PANEL_OPEN_KEY = 'aeo:content-editor-panel';
@@ -127,6 +129,8 @@ export function EditorSidePanel({
   onShowInPage,
   onShowPlaceholder,
   onPickAuthor,
+  yourInput = null,
+  onAddInput,
   onKeepSource,
 }: {
   draft: ContentDraft;
@@ -150,6 +154,8 @@ export function EditorSidePanel({
     source?: { kind: DraftSourceKind; ref: string };
     /** The brief to build (the Next step basket's Build brief). */
     build?: boolean;
+    /** Brief › Your input to show (Quality's Add, CE-048). */
+    input?: boolean;
   } | null;
   /** Run Agent's Fix open rules, for Rules (CE-018, v1.1 CE-029). */
   agentFix?: AgentFix;
@@ -177,6 +183,10 @@ export function EditorSidePanel({
   onShowPlaceholder?: () => void;
   /** Opens the header's author menu: Quality's Pick author. */
   onPickAuthor?: () => void;
+  /** Brief › Your input (CE-048), with Quality's second phase. */
+  yourInput?: DraftInputsRead | null;
+  /** Opens Brief › Your input: Quality's Add. */
+  onAddInput?: () => void;
   /** Keeps a weak source or a competitor's on the page (Quality CE-046), once phase 2 is live. */
   onKeepSource?: (url: string) => void;
 }) {
@@ -218,6 +228,16 @@ export function EditorSidePanel({
           )
         : null,
     [reads.sources, title, draft.sourceUrl],
+  );
+  // Ansvisor data Your input offers: the draft's prompts with answers, those
+  // it targets first, the most answered first.
+  const inputPrompts = useMemo<InputPrompt[]>(
+    () =>
+      (reads.sources?.data?.prompts ?? [])
+        .filter((p) => p.answers > 0)
+        .sort((a, b) => Number(b.inDraft) - Number(a.inDraft) || b.answers - a.answers)
+        .map(({ id, text, answers, mentioned }) => ({ id, text, answers, mentioned })),
+    [reads.sources],
   );
   const sourcesInUse = sourceCounts ? Object.values(sourceCounts).reduce((a, b) => a + b, 0) : null;
   const dataLine = sourceCounts && (
@@ -371,7 +391,24 @@ export function EditorSidePanel({
             ))}
           </div>
           {briefOpened && (
-            <div hidden={segment !== 'brief'}>
+            <div hidden={segment !== 'brief'} className="space-y-4">
+              {yourInput?.status === 'ready' && (
+                <YourInput
+                  inputs={yourInput.inputs}
+                  prompts={inputPrompts}
+                  onChange={yourInput.change}
+                  // Once Brief shows: a hidden block can't be scrolled to.
+                  scrollRequest={tabRequest?.input && segment === 'brief' ? tabRequest.n : null}
+                />
+              )}
+              {yourInput?.status === 'failed' && (
+                <p className="flex items-center gap-2 text-xs text-muted-foreground">
+                  {tEditor('yourInput.loadError')}
+                  <button type="button" className="font-medium underline" onClick={yourInput.retry}>
+                    {tEditor('yourInput.retry')}
+                  </button>
+                </p>
+              )}
               <BriefTab
                 draftId={draft.id}
                 state={reads.brief}
@@ -396,6 +433,7 @@ export function EditorSidePanel({
                 onShow={(text) => onShowInPage?.(text)}
                 onShowPlaceholder={() => onShowPlaceholder?.()}
                 onPickAuthor={() => onPickAuthor?.()}
+                onAddInput={onAddInput}
                 onKeep={onKeepSource}
               />
             </div>

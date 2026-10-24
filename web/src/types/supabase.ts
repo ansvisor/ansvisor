@@ -1336,6 +1336,44 @@ export type Database = {
           },
         ]
       }
+      content_draft_inputs: {
+        Row: {
+          ansvisor_data: Json
+          data: Json
+          draft_id: string
+          experience: string | null
+          quotes: Json
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          ansvisor_data?: Json
+          data?: Json
+          draft_id: string
+          experience?: string | null
+          quotes?: Json
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          ansvisor_data?: Json
+          data?: Json
+          draft_id?: string
+          experience?: string | null
+          quotes?: Json
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "content_draft_inputs_draft_id_fkey"
+            columns: ["draft_id"]
+            isOneToOne: true
+            referencedRelation: "content_drafts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       content_draft_ready_log: {
         Row: {
           created_at: string

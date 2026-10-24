@@ -81,6 +81,7 @@ export function QualityTab({
   onShow,
   onShowPlaceholder,
   onPickAuthor,
+  onAddInput,
   onKeep,
 }: {
   quality: QualityRead;
@@ -90,6 +91,8 @@ export function QualityTab({
   onShowPlaceholder: () => void;
   /** Opens the header's author menu. */
   onPickAuthor: () => void;
+  /** Opens Brief › Your input (CE-048). */
+  onAddInput?: () => void;
   /** Keeps a weak source or a competitor's on the page (CE-046). */
   onKeep?: (url: string) => void;
 }) {
@@ -159,6 +162,7 @@ export function QualityTab({
                 quality={quality}
                 onShowPlaceholder={onShowPlaceholder}
                 onPickAuthor={onPickAuthor}
+                onAddInput={onAddInput}
               />
             ))}
           </ul>
@@ -275,6 +279,18 @@ export function useTodoCopy() {
               : t('byline.detail.pickAuthor', { byline: team }),
       };
     }
+    // What only the person can give (Brief › Your input, CE-048).
+    if (todo.id === 'experience' || todo.id === 'originalData' || todo.id === 'expertQuote') {
+      return {
+        title: t(`${todo.id}.title`),
+        next: t(`${todo.id}.next`),
+        detail: todo.done
+          ? t(`${todo.id}.done`)
+          : todo.given
+            ? t(`${todo.id}.given`)
+            : t(`${todo.id}.detail`),
+      };
+    }
     if (!author) {
       return {
         title: t('authorProfile.titleNoAuthor'),
@@ -309,11 +325,13 @@ function TodoRow({
   quality,
   onShowPlaceholder,
   onPickAuthor,
+  onAddInput,
 }: {
   todo: QualityTodo;
   quality: QualityRead;
   onShowPlaceholder: () => void;
   onPickAuthor: () => void;
+  onAddInput?: () => void;
 }) {
   const t = useTranslations('contentEditor.editor.quality');
   const { title, detail } = useTodoCopy()(todo, quality);
@@ -359,7 +377,7 @@ function TodoRow({
             <>
               {' · '}
               <span className="font-medium whitespace-nowrap text-emerald-700 tabular-nums dark:text-emerald-300">
-                {t('gain', { gain: todo.gain, score: t('names.eeat') })}
+                {t('gain', { gain: todo.gain, score: t(`names.${todo.score}`) })}
               </span>
             </>
           )}
@@ -371,6 +389,12 @@ function TodoRow({
           <Button variant="outline" size="sm" className="h-7 shrink-0" onClick={onShowPlaceholder}>
             {t('show')}
           </Button>
+        ) : todo.action === 'addInput' ? (
+          onAddInput && (
+            <Button variant="outline" size="sm" className="h-7 shrink-0" onClick={onAddInput}>
+              {t('addInput')}
+            </Button>
+          )
         ) : todo.action === 'pickAuthor' ? (
           <Button variant="outline" size="sm" className="h-7 shrink-0" onClick={onPickAuthor}>
             {t('pickAuthor')}

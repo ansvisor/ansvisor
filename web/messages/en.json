@@ -3878,7 +3878,7 @@
         "aiUsedUp": "This month's AI usage is used up. It resets on {date}.",
         "aiUsedUpNoDate": "This month's AI usage is used up until it resets.",
         "fixErrors": {
-          "ai_budget": "This month's AI usage is spent. Upgrade for more, or try again next month.",
+          "ai_budget": "This month's AI usage is spent. Upgrade for more, or try again once it resets.",
           "no_subscription": "Content Agent needs an active subscription. Choose a plan in Settings › Billing.",
           "empty": "Write something first: the agent improves the page you have.",
           "open_suggestions": "This page has open suggestions, maybe from another tab. They're shown now: accept or reject them first.",
@@ -4545,6 +4545,49 @@
         "markReady": "Mark ready",
         "markReadyAnyway": "Mark ready anyway"
       },
+      "yourInput": {
+        "title": "Your input",
+        "usedAsWritten": "used only as you write it",
+        "save": "Save",
+        "saveFailed": "Couldn't save your input. Try again.",
+        "removeNamed": "Remove {name}",
+        "loadError": "Couldn't read your input.",
+        "retry": "Try again",
+        "experience": {
+          "label": "Your experience",
+          "placeholder": "What did you test or use? What happened? A customer story?",
+          "count": "{count, number} / {max, number}"
+        },
+        "data": {
+          "label": "Your data",
+          "offer": "From your Ansvisor data: in {answers, plural, one {# answer} other {# answers}} to “{prompt}” over the last {days, number} days, {mentioned, plural, =0 {you weren't named} one {you were named once} other {you were named # times}}.",
+          "ansvisor": "In {answers, plural, one {# answer} other {# answers}} to “{prompt}” over the last {days, number} days, {mentioned, plural, =0 {you weren't named} one {you were named once} other {you were named # times}}.",
+          "cited": "Cited as “Ansvisor data, {month}”.",
+          "use": "Use this",
+          "upload": "Upload CSV or Excel",
+          "paste": "Or paste numbers, one row a line, separated by commas",
+          "addPasted": "Add these numbers",
+          "pastedName": "Pasted numbers",
+          "rows": "{count, plural, one {# row} other {# rows}}",
+          "empty": "{name} has no rows to use.",
+          "trimmed": "{name} is kept to its first {count, plural, one {# row} other {# rows}}: that is what fits beside your other data.",
+          "full": "Your data is full. Remove a table to add another.",
+          "tooLarge": "{name} is over 10 MB.",
+          "unsupported": "{name} isn't a CSV or Excel (.xlsx) file."
+        },
+        "quotes": {
+          "label": "Expert quotes",
+          "name": "Name",
+          "title": "Title and company",
+          "text": "The quote, word for word",
+          "sourceUrl": "Source link (https://…)",
+          "source": "Source",
+          "realOnly": "Add quotes from real people only.",
+          "full": "Your quotes are full. Remove one, or shorten this one, to add it.",
+          "add": "Add quote"
+        },
+        "guard": "Content Agent never makes things up. No invented people, quotes, customer stories, test results or numbers. If something is missing, it leaves a [placeholder] for you."
+      },
       "quality": {
         "scores": "Quality scores",
         "names": {
@@ -4571,6 +4614,27 @@
         "addAuthor": "Add author",
         "editAuthor": "Edit author",
         "todos": {
+          "experience": {
+            "title": "Add your own experience",
+            "next": "add your own experience",
+            "detail": "What you tested or used, and what happened: the agent writes from it as you give it, and adds nothing to it",
+            "given": "It's in Your input, but the page doesn't use it yet: write it in, or let the agent write from it",
+            "done": "The page uses your experience"
+          },
+          "originalData": {
+            "title": "Add your own data",
+            "next": "add your own data",
+            "detail": "Your numbers, or Ansvisor data on this page's prompts: the page cites them as yours",
+            "given": "It's in Your input, but the page uses none of its numbers yet",
+            "done": "The page uses your data"
+          },
+          "expertQuote": {
+            "title": "Add an expert's quote",
+            "next": "add an expert's quote",
+            "detail": "A real person's words as said, with their name, title and where they said them",
+            "given": "It's in Your input, but the page doesn't quote it word for word yet",
+            "done": "The page quotes an expert word for word"
+          },
           "title": "Your to-dos",
           "left": "{count, plural, =0 {All done} other {# left · only you can do these}}",
           "done": "Done",
@@ -4622,7 +4686,8 @@
             "showPlaceholder": "Show now",
             "pickAuthor": "Pick now",
             "addAuthor": "Add now",
-            "editAuthor": "Edit now"
+            "editAuthor": "Edit now",
+            "addInput": "Add now"
           },
           "later": "Later"
         },
@@ -4632,6 +4697,7 @@
         "gain": "+{gain, number} {score}",
         "band": "{score, number}, {band}",
         "show": "Show",
+        "addInput": "Add",
         "keep": "Keep",
         "aiCheck": "AI check",
         "aiPaused": "Sources the rules can't place wait for an AI check: this month's AI usage is used up. They count again when it renews.",
@@ -6172,7 +6238,8 @@
         "left": "{count, plural, one {About # generation left this month} other {About # generations left this month}}",
         "percentLeft": "{percent}% of this month's budget left",
         "usedUp": "This month's suggestion budget is used up. It resets when your subscription renews.",
-        "upgrade": "Upgrade for more"
+        "upgrade": "Upgrade for more",
+        "startPlan": "Start your plan"
       }
     }
   },
@@ -6883,6 +6950,7 @@
       "resets": "Resets on {date}",
       "exhausted": "This period's AI usage is used up. AI features resume on {date}.",
       "exhaustedNoDate": "This period's AI usage is used up. AI features resume when it resets.",
+      "exhaustedTrial": "The free trial's AI usage is used up. Starting the plan below gives its full monthly allowance.",
       "morePlans": "A bigger plan below comes with more.",
       "features": {
         "improve": "Improve suggestions",
@@ -6995,7 +7063,7 @@
       "briefs": "{count, number} content briefs a month",
       "audits": "{count, number} site audits a month",
       "aiUsage": "{count}x AI usage",
-      "aiUsageHint": "A monthly allowance for Ansvisor's AI features: Improve suggestions, the Content Editor's AI and the Action Center's task writing. Agent Chat runs on your own AI key."
+      "aiUsageHint": "A monthly allowance for Ansvisor's AI features: Improve suggestions, the Content Editor's AI and the Action Center's task writing. Agent Chat runs on your own AI key. The free trial comes with a smaller allowance."
     },
     "contactUs": "Contact Us",
     "integrations": "Integrations",

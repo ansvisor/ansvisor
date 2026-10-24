@@ -1,5 +1,11 @@
 import type { ContentAuthor } from './authors';
-import { authorProfile, scoreGain, type EeatCheckId, type Score } from './quality-checks';
+import {
+  authorProfile,
+  scoreGain,
+  type EeatCheckId,
+  type Score,
+  type TrustCheckId,
+} from './quality-checks';
 
 /**
  * Your to-dos (Content Editor Quality spec §4, CE-040): what only the person
@@ -7,24 +13,40 @@ import { authorProfile, scoreGain, type EeatCheckId, type Score } from './qualit
  * hand). Everything else is a suggestion the agent can fix. Phase 1's are
  * the placeholders the agent left where it had no real name, quote or
  * number (CE-044), and the author's: the Content Agent can't add, pick or
- * edit authors.
+ * edit authors. Phase 2 adds what only the person can give (Brief › Your
+ * input, CE-048): their experience, their data and an expert's quote.
  */
 
-export type QualityTodoId = 'placeholders' | 'byline' | 'authorProfile';
+export type QualityTodoId =
+  | 'placeholders'
+  | 'byline'
+  | 'authorProfile'
+  | 'experience'
+  | 'originalData'
+  | 'expertQuote';
 
 /**
  * A to-do's one button: Show (the first placeholder, selected to type over),
  * the header's author menu, or Settings › Authors.
  */
-export type QualityTodoAction = 'showPlaceholder' | 'pickAuthor' | 'addAuthor' | 'editAuthor';
+export type QualityTodoAction =
+  | 'showPlaceholder'
+  | 'pickAuthor'
+  | 'addAuthor'
+  | 'editAuthor'
+  | 'addInput';
 
 export interface QualityTodo {
   id: QualityTodoId;
   done: boolean;
-  /** What E-E-A-T gains once it is done; 0 when done, or when no score counts it. */
+  /** What its score gains once it is done; 0 when done, or when no score counts it. */
   gain: number;
+  /** The score it raises: E-E-A-T, or Trust for an expert's quote. */
+  score: 'eeat' | 'trust';
   /** None while it waits on the one before it. */
   action: QualityTodoAction | null;
+  /** Given in Brief › Your input, though the page doesn't use it yet (CE-048). */
+  given?: boolean;
   /** How many it is about (placeholders). */
   count?: number;
 }
@@ -43,6 +65,9 @@ export function qualityTodos({
   hasAuthors,
   placeholders = { count: 0, had: false },
   canEdit = false,
+  used = null,
+  given = null,
+  trust = null,
 }: {
   eeat: Score<EeatCheckId> | null;
   author: ContentAuthor | null;
@@ -54,6 +79,12 @@ export function qualityTodos({
    * told who can.
    */
   canEdit?: boolean;
+  /** Phase 2 (CE-048): what the page uses of Brief › Your input; left out before. */
+  used?: { experience: boolean; data: boolean; quote: boolean } | null;
+  /** What the person gave there (inputsGiven), used or not. */
+  given?: { experience: boolean; data: boolean; quote: boolean } | null;
+  /** Trust, for an expert quote's gain. */
+  trust?: Score<TrustCheckId> | null;
 }): QualityTodo[] {
   const fill: QualityTodo[] =
     placeholders.count || placeholders.had
@@ -62,6 +93,7 @@ export function qualityTodos({
             id: 'placeholders',
             done: placeholders.count === 0,
             gain: 0,
+            score: 'eeat',
             action: 'showPlaceholder',
             count: placeholders.count,
           },
@@ -72,6 +104,7 @@ export function qualityTodos({
     id: 'byline',
     done: !!author,
     gain: scoreGain(eeat, ['byline']),
+    score: 'eeat',
     action: author || hasAuthors ? 'pickAuthor' : 'addAuthor',
   };
   const { bio, links } = authorProfile(author);
@@ -82,7 +115,37 @@ export function qualityTodos({
       id: 'authorProfile',
       done: !!author && bio && links,
       gain: scoreGain(eeat, ['authorBio']),
+      score: 'eeat',
       action: author && canEdit ? 'editAuthor' : null,
     },
+    ...(used
+      ? ([
+          {
+            id: 'experience',
+            done: used.experience,
+            given: !used.experience && !!given?.experience,
+            gain: scoreGain(eeat, ['experience']),
+            score: 'eeat',
+            action: 'addInput',
+          },
+          {
+            id: 'originalData',
+            done: used.data,
+            given: !used.data && !!given?.data,
+            gain: scoreGain(eeat, ['originalData']),
+            score: 'eeat',
+            action: 'addInput',
+          },
+          {
+            id: 'expertQuote',
+            done: used.quote,
+            given: !used.quote && !!given?.quote,
+            gain:
+              !used.quote && trust && trust.score !== null ? scoreGain(trust, ['expertQuote']) : 0,
+            score: 'trust',
+            action: 'addInput',
+          },
+        ] satisfies QualityTodo[])
+      : []),
   ];
 }

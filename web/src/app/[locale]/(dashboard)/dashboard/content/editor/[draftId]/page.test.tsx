@@ -27,6 +27,12 @@ const getContentAuthors = vi.fn();
 vi.mock('@/lib/actions/content-authors', () => ({
   getContentAuthors: (...args: unknown[]) => getContentAuthors(...args),
 }));
+const getDraftInputs = vi.fn();
+const saveDraftInputs = vi.fn();
+vi.mock('@/lib/actions/content-draft-inputs', () => ({
+  getDraftInputs: (...args: unknown[]) => getDraftInputs(...args),
+  saveDraftInputs: (...args: unknown[]) => saveDraftInputs(...args),
+}));
 const getContentImpact = vi.fn();
 const getContentResults = vi.fn();
 const getDraftSources = vi.fn();
@@ -277,6 +283,10 @@ beforeEach(() => {
   checkDraftLinks.mockReset().mockResolvedValue({ links: [], skipped: [] });
   getSiteTrust.mockReset().mockRejectedValue(new Error('not in this test'));
   getContentAuthors.mockReset().mockResolvedValue(null);
+  getDraftInputs
+    .mockReset()
+    .mockResolvedValue({ experience: '', data: [], ansvisorData: [], quotes: [] });
+  saveDraftInputs.mockReset().mockImplementation(async (_id, inputs) => inputs);
   saveContentDraft
     .mockReset()
     .mockResolvedValue({ ok: true, updatedAt: '2026-10-20T10:00:00Z', bodyHash: 'h0' });
@@ -2463,6 +2473,92 @@ describe('the side panel', () => {
       expect(panel()!.textContent).toContain('Not a Google score.');
     });
 
+    it("asks for Your input in its second phase, and Add opens it at Brief's top (CE-048)", async () => {
+      process.env.NEXT_PUBLIC_CONTENT_QUALITY_PHASE = '2';
+      getContentAuthors.mockResolvedValue({
+        authors: [],
+        brands: [{ id: 'b1', name: 'Acme' }],
+        me: { id: 'u1', role: 'admin' },
+      });
+      const experience = 'We tested weekly forecasts with twelve small sales teams.';
+      getDraftInputs.mockResolvedValue({ experience, data: [], ansvisorData: [], quotes: [] });
+      getContentDraft.mockResolvedValue(readable);
+      window.innerWidth = 1440;
+      await renderPage();
+      expect(getDraftInputs).toHaveBeenCalledWith(readable.id);
+      const chip = [...container.querySelectorAll<HTMLButtonElement>('header button')].find((b) =>
+        b.textContent?.startsWith('Quality'),
+      )!;
+      await act(async () => chip.click());
+      const row = [...panel()!.querySelectorAll('[aria-label="Your to-dos"] li')].find((li) =>
+        li.textContent?.startsWith('Add your own experience'),
+      )!;
+      // Given, but the page doesn't use it yet.
+      expect(row.textContent).toContain("It's in Your input, but the page doesn't use it yet");
+      expect(
+        [...panel()!.querySelectorAll('[aria-label="Your to-dos"] li')].map(
+          (li) => li.textContent?.split(' · ')[0],
+        ),
+      ).toEqual([
+        'Add an author for the page',
+        "Complete the author's profile",
+        'Add your own experience',
+        'Add your own data',
+        "Add an expert's quote",
+      ]);
+
+      await act(async () => row.querySelector('button')!.click());
+      expect(selectedSegment()).toBe('Brief');
+      const box = panel()!.querySelector<HTMLTextAreaElement>('#your-experience')!;
+      expect(box.value).toBe(experience);
+      expect(panel()!.textContent).toContain('Your input · used only as you write it');
+
+      // A change is kept as the whole input.
+      await act(async () => {
+        Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!.call(
+          box,
+          `${experience} Forecasts missed by less.`,
+        );
+        box.dispatchEvent(new Event('input', { bubbles: true }));
+      });
+      await act(async () => {
+        box.dispatchEvent(new FocusEvent('focusout', { bubbles: true }));
+      });
+      expect(saveDraftInputs).toHaveBeenCalledWith(readable.id, {
+        experience: `${experience} Forecasts missed by less.`,
+        data: [],
+        ansvisorData: [],
+        quotes: [],
+      });
+    });
+
+    it('scores without Your input when it can’t be read, and Brief offers to read it again', async () => {
+      process.env.NEXT_PUBLIC_CONTENT_QUALITY_PHASE = '2';
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+      try {
+        getContentAuthors.mockResolvedValue({
+          authors: [],
+          brands: [{ id: 'b1', name: 'Acme' }],
+          me: { id: 'u1', role: 'admin' },
+        });
+        getDraftInputs.mockRejectedValueOnce(new Error('offline'));
+        getContentDraft.mockResolvedValue(readable);
+        window.innerWidth = 1440;
+        await renderPage();
+        expect(qualityChip()?.textContent).toMatch(/^Quality \d+/);
+        await pickTab('Brief');
+        const retry = [...panel()!.querySelectorAll('button')].find(
+          (b) => b.textContent === 'Try again',
+        )!;
+        expect(retry.parentElement!.textContent).toBe("Couldn't read your input.Try again");
+        await act(async () => retry.click());
+        expect(getDraftInputs).toHaveBeenCalledTimes(2);
+        expect(panel()!.querySelector('#your-experience')).not.toBeNull();
+      } finally {
+        vi.mocked(console.error).mockRestore();
+      }
+    });
+
     /** The draft above, its Language rule changed for this draft. */
     const inLanguage = (language: { on?: boolean; value?: string }) => ({
       ...readable,
@@ -4562,7 +4658,7 @@ describe('the side panel', () => {
       await act(async () => panelButton('Run Agent').click());
       await act(async () => {});
       expect(toast.error).toHaveBeenCalledWith(
-        "This month's AI usage is spent. Upgrade for more, or try again next month.",
+        "This month's AI usage is spent. Upgrade for more, or try again once it resets.",
       );
     });
 

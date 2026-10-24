@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { ContentAuthor } from './authors';
-import { eeat } from './quality-checks';
+import { eeat, trust } from './quality-checks';
 import { qualityTodos } from './quality-todos';
 
 /** Your to-dos (Quality spec §4, CE-040): only what the person can do, read from the checks. */
@@ -24,8 +24,8 @@ const todos = (a: ContentAuthor | null, hasAuthors = true, canEdit = true) =>
 describe('qualityTodos', () => {
   it("asks to pick the page's author, with the byline's gain, and lists the profile after it", () => {
     expect(todos(null)).toEqual([
-      { id: 'byline', done: false, gain: 60, action: 'pickAuthor' },
-      { id: 'authorProfile', done: false, gain: 40, action: null },
+      { id: 'byline', done: false, gain: 60, score: 'eeat', action: 'pickAuthor' },
+      { id: 'authorProfile', done: false, gain: 40, score: 'eeat', action: null },
     ]);
   });
 
@@ -34,19 +34,21 @@ describe('qualityTodos', () => {
       id: 'byline',
       done: false,
       gain: 60,
+      score: 'eeat',
       action: 'addAuthor',
     });
   });
 
   it("keeps the byline done, then asks to complete the author's profile", () => {
     expect(todos(author({ bio: null, sameAs: [] }))).toEqual([
-      { id: 'byline', done: true, gain: 0, action: 'pickAuthor' },
-      { id: 'authorProfile', done: false, gain: 40, action: 'editAuthor' },
+      { id: 'byline', done: true, gain: 0, score: 'eeat', action: 'pickAuthor' },
+      { id: 'authorProfile', done: false, gain: 40, score: 'eeat', action: 'editAuthor' },
     ]);
     expect(todos(author({ sameAs: [] }))[1]).toEqual({
       id: 'authorProfile',
       done: false,
       gain: 20,
+      score: 'eeat',
       action: 'editAuthor',
     });
   });
@@ -74,6 +76,7 @@ describe('qualityTodos', () => {
       id: 'placeholders',
       done: count === 0,
       gain: 0,
+      score: 'eeat',
       action: 'showPlaceholder',
       count,
     });
@@ -115,5 +118,71 @@ describe('qualityTodos', () => {
         placeholders: { count: 0, had: false },
       }),
     ).toEqual([]);
+  });
+
+  it('asks for what only the person can give, once Your input is read (CE-048)', () => {
+    const none = { experience: false, data: false, quote: false };
+    const quoted = trust({
+      blocks: [{ tag: 'p', text: 'Sales grew 40% in 2025.', links: [] }],
+      links: new Map(),
+      brandDomains: [],
+      quote: false,
+      now: Date.parse('2026-10-24'),
+    });
+    const read = (
+      used: typeof none,
+      given: typeof none | null = null,
+      trustScore: typeof quoted | null = quoted,
+    ) =>
+      qualityTodos({
+        eeat: eeat({ author: author(), used }),
+        author: author(),
+        hasAuthors: true,
+        used,
+        given,
+        trust: trustScore,
+      }).slice(2);
+    expect(read(none)).toEqual([
+      { id: 'experience', done: false, given: false, gain: 33, score: 'eeat', action: 'addInput' },
+      {
+        id: 'originalData',
+        done: false,
+        given: false,
+        gain: 25,
+        score: 'eeat',
+        action: 'addInput',
+      },
+      {
+        id: 'expertQuote',
+        done: false,
+        given: false,
+        gain: 21,
+        score: 'trust',
+        action: 'addInput',
+      },
+    ]);
+    // Given in Your input, the page not using it yet: still to do, said so.
+    expect(read(none, { experience: true, data: false, quote: true }).map((t) => t.given)).toEqual([
+      true,
+      false,
+      true,
+    ]);
+    // Used: checked off, with no gain left.
+    expect(
+      read(
+        { experience: true, data: true, quote: true },
+        { experience: true, data: true, quote: true },
+      ),
+    ).toEqual([
+      expect.objectContaining({ id: 'experience', done: true, given: false, gain: 0 }),
+      expect.objectContaining({ id: 'originalData', done: true, given: false, gain: 0 }),
+      expect.objectContaining({ id: 'expertQuote', done: true, given: false, gain: 0 }),
+    ]);
+    // Trust not scored yet: a quote's gain isn't made up.
+    expect(read(none, null, null)[2]).toMatchObject({ id: 'expertQuote', gain: 0 });
+  });
+
+  it('has no input to-dos before Your input is read', () => {
+    expect(todos(author()).map((t) => t.id)).toEqual(['byline', 'authorProfile']);
   });
 });

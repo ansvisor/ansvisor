@@ -96,6 +96,7 @@ import {
 } from '@/lib/content/ready-to-publish';
 import { detectPageType, isSiteType, type SiteType } from '@/lib/content/page-types';
 import { BAND_CLASSES, qualityAverage, qualityBand, qualityPhase } from '@/lib/content/quality';
+import { inputsGiven, inputsUsed } from '@/lib/content/draft-inputs';
 import {
   eeat,
   linksToCheck,
@@ -176,6 +177,7 @@ import {
   type SuggestionLabels,
 } from './_suggestions';
 import { ONE_H1_AS_IS, OneH1 } from './_one-h1';
+import { useDraftInputs } from './_use-draft-inputs';
 import { useDraftReads } from './_use-draft-reads';
 import { useDraftRules } from './_use-draft-rules';
 import { EditorToolbar } from './_toolbar';
@@ -352,6 +354,8 @@ export function DraftEditor({
     source?: Pick<SuggestionSource, 'kind' | 'ref'>;
     /** The brief to build, from the Next step basket's Build brief. */
     build?: boolean;
+    /** Brief › Your input to show: Quality's Add (CE-048). */
+    input?: boolean;
   } | null>(null);
   const openPanelTab = (tab: PanelTarget, source?: SuggestionSource) => {
     if (!panelOpen) togglePanel();
@@ -513,14 +517,25 @@ export function DraftEditor({
   const brandName =
     authorsRead?.brands.find((b) => b.id === draft.brandId)?.name ?? storeBrandName ?? '';
   const pageAuthor = authorsRead?.authors.find((a) => a.id === authorId) ?? null;
-  // E-E-A-T from the author, Trust from the page's figures and links (their
-  // reads from the API): with Readability, the scores and the header chip's
-  // average (CE-039).
-  const eeatScore = useMemo(
-    () => (qualityOn && authorsRead ? eeat({ author: pageAuthor }) : null),
-    [qualityOn, authorsRead, pageAuthor],
-  );
   const pageBlocks = useMemo(() => (qualityOn ? trustBlocks(pageHtml) : []), [qualityOn, pageHtml]);
+  // Brief › Your input (CE-048), with Quality's second phase: what the page
+  // uses of it counts once it is read.
+  // In that phase the scores wait for it; a read that failed leaves them
+  // without it, and Brief offers to read it again.
+  const inputsRead = useDraftInputs(draft.id, qualityPhase() >= 2);
+  const inputs = inputsRead.status === 'ready' ? inputsRead.inputs : null;
+  const inputsPending = inputsRead.status === 'loading';
+  const used = useMemo(
+    () => (inputs ? inputsUsed(pageBlocks.map((b) => b.text).join('\n'), inputs) : null),
+    [inputs, pageBlocks],
+  );
+  // E-E-A-T from the author (and, in phase 2, the person's experience and
+  // data), Trust from the page's figures and links (their reads from the
+  // API): with Readability, the scores and the header chip's average (CE-039).
+  const eeatScore = useMemo(
+    () => (qualityOn && authorsRead && !inputsPending ? eeat({ author: pageAuthor, used }) : null),
+    [qualityOn, authorsRead, inputsPending, pageAuthor, used],
+  );
   const { checks: linkChecks, pending: linksPending } = useLinkChecks(
     draft.id,
     autosave.savedAt,
@@ -583,17 +598,18 @@ export function DraftEditor({
   // The brand's own links aren't sources: Trust waits for its domains.
   const trustScore = useMemo(
     () =>
-      qualityOn && brandDomains
+      qualityOn && brandDomains && !inputsPending
         ? trust({
             blocks: pageBlocks,
             links: linkChecks,
             brandDomains,
             siteTrust,
+            quote: used ? used.quote : null,
             sources: sourceRead,
             now: Date.now(),
           })
         : null,
-    [qualityOn, pageBlocks, linkChecks, brandDomains, siteTrust, sourceRead],
+    [qualityOn, pageBlocks, linkChecks, brandDomains, siteTrust, inputsPending, used, sourceRead],
   );
   // Their links underlined in the draft, Quality's suggestion naming them.
   const weakKey = (trustScore?.weak ?? []).map((w) => w.url).join('\n');
@@ -652,6 +668,9 @@ export function DraftEditor({
         hasAuthors,
         canEdit: canEditPageAuthor,
         placeholders: { count: placeholderCount, had: hadPlaceholders },
+        used,
+        given: inputs ? inputsGiven(inputs) : null,
+        trust: trustScore,
       })
     : [];
   const quality: QualityRead | null = qualityOn
@@ -672,6 +691,11 @@ export function DraftEditor({
     : null;
   // Quality's Pick author opens the header's menu.
   const [authorMenuOpen, setAuthorMenuOpen] = useState(false);
+  // Quality's Add opens Brief › Your input.
+  const addInput = () => {
+    if (!panelOpen) togglePanel();
+    setTabRequest((prev) => ({ tab: 'brief', n: (prev?.n ?? 0) + 1, input: true }));
+  };
   const nudge = useNextNudge(draft.id, todos);
   const { at: nudgeAt } = nudge;
   // The author's to-dos wait for E-E-A-T: the nudge waits for them.
@@ -2476,6 +2500,7 @@ export function DraftEditor({
                 quality={quality}
                 onShowPlaceholder={showFirstPlaceholder}
                 onPickAuthor={() => setAuthorMenuOpen(true)}
+                onAddInput={addInput}
                 onLater={nudge.later}
                 onAct={nudge.close}
               />
@@ -2513,6 +2538,8 @@ export function DraftEditor({
             onShowInPage={showInPage}
             onShowPlaceholder={showFirstPlaceholder}
             onPickAuthor={() => setAuthorMenuOpen(true)}
+            yourInput={inputsRead.status === 'off' ? null : inputsRead}
+            onAddInput={addInput}
             onKeepSource={sourcesOn ? (url) => void keepSource(url) : undefined}
           />
         ) : (
