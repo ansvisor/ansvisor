@@ -3021,6 +3021,9 @@ describe('the side panel', () => {
       await act(async () => inDialog('Continue to send').click());
       expect(dialog()!.textContent).toContain('Meta description');
       expect(readDraftCms).toHaveBeenCalledWith('d1');
+      // Closed, so no open dialog is left for the tests after.
+      await act(async () => inDialog('Cancel').click());
+      expect(dialog()).toBeNull();
     });
 
     const editAsHtml = async (html: string) => {
@@ -3053,6 +3056,8 @@ describe('the side panel', () => {
       expect(document.querySelector<HTMLTextAreaElement>('#cms-meta-description')!.value).toBe(
         'Edited.',
       );
+      await act(async () => inDialog('Cancel').click());
+      expect(dialog()).toBeNull();
     });
 
     it('sends no page it can’t save', async () => {
@@ -3453,21 +3458,19 @@ describe('the side panel', () => {
       await renderPage();
       await act(async () => nextButton()!.click());
       expect(basket()).not.toBeNull();
-      const elsewhere = document.createElement('button');
-      document.body.append(elsewhere);
-      try {
-        await act(async () => {
-          elsewhere.focus();
-          for (const type of ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click']) {
-            elsewhere.dispatchEvent(new MouseEvent(type, { bubbles: true }));
-          }
-        });
-        await act(async () => new Promise((resolve) => setTimeout(resolve, 150)));
-        expect(basket()).toBeNull();
-        expect(document.activeElement).toBe(elsewhere);
-      } finally {
-        elsewhere.remove();
-      }
+      // The page's own text, as a reader clicks back into it: a button put in
+      // the document after the basket opened reads as another app's, which a
+      // popover doesn't close for.
+      const elsewhere = container.querySelector<HTMLElement>('.ProseMirror')!;
+      await act(async () => {
+        elsewhere.focus();
+        for (const type of ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click']) {
+          elsewhere.dispatchEvent(new MouseEvent(type, { bubbles: true }));
+        }
+      });
+      await act(async () => new Promise((resolve) => setTimeout(resolve, 150)));
+      expect(basket()).toBeNull();
+      expect(document.activeElement).toBe(elsewhere);
     });
 
     it('keeps a skip while the sources load again, as the fan-out rules read them', async () => {
