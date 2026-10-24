@@ -20,6 +20,23 @@ const sentence = (n: number) =>
 const check = (html: string, id: string, language = 'en') =>
   readability(html, language).checks.find((c) => c.id === id);
 
+// Shared with server/src/lib/audit/signals/readability.test.js: Flesch 82 in both.
+const FIXTURE = `<h1>How to brew pour-over coffee at home</h1>
+<p>Pour-over coffee is simple to make, and it tastes clean and bright. You need a dripper, a paper filter, a kettle and fresh beans. Most people wanted a cup that tasted like the café, so we created this guide.</p>
+<h2>What you need</h2>
+<ul>
+<li>A dripper, e.g. a ceramic cone or a flat-bottom brewer.</li>
+<li>Twenty grams of medium-fine coffee for one large mug.</li>
+<li>Water just off the boil, around ninety-four degrees.</li>
+</ul>
+<h2>Step by step</h2>
+<p>Rinse the filter with hot water first. This removes the papery taste and warms the dripper. Then add the coffee and shake it level.</p>
+<p>Start with a short pour, just enough to wet the grounds. Wait thirty seconds while the coffee blooms. Fresh coffee releases gas, and the bloom lets it escape before the main pour.</p>
+<p>Pour slowly in small circles, keeping the water level steady. The whole brew should take about three minutes. If it runs faster, grind finer; if it stalls, grind coarser.</p>
+<blockquote><p>"Taste is the only rule that matters," says our head roaster. "Adjust one thing at a time."</p></blockquote>
+<h2>Common mistakes</h2>
+<p>Many beginners pour too fast, which makes a weak and sour cup. Others use water that is far too hot, which makes the coffee bitter. A beautiful, quiet morning ritual needs a little patience. Measure your coffee, watch the clock and keep notes on each cup.</p>`;
+
 const EASY =
   '<h1>How do small teams forecast pipeline?</h1>' +
   p(
@@ -35,7 +52,7 @@ const EASY =
   );
 
 describe('readability', () => {
-  it('scores a plain page high, over its seven checks', () => {
+  it('reads a plain page over its seven checks', () => {
     const result = readability(EASY, 'en');
     expect(result.checks.map((c) => c.id)).toEqual([
       'avgSentence',
@@ -46,12 +63,39 @@ describe('readability', () => {
       'headingSpacing',
       'passiveJargon',
     ]);
+    // Flesch 101: simpler than the band Site Audit passes (50–70), so no reading-level points.
     expect(result.checks.find((c) => c.id === 'readingLevel')).toMatchObject({
       formula: 'flesch',
+      value: 101,
+      count: 1,
+      points: 0,
     });
     expect(result.checks.find((c) => c.id === 'longSentences')).toMatchObject({ count: 0 });
     expect(result.checks.find((c) => c.id === 'answerFirst')!.points).toBe(15);
-    expect(result.score).toBeGreaterThanOrEqual(80);
+    expect(result.score).toBe(67);
+  });
+
+  it('scores the page Site Audit’s test reads, as Site Audit does', () => {
+    // Shared with server/src/lib/audit/signals/readability.test.js: Flesch 82 in both.
+    expect(check(FIXTURE, 'readingLevel')).toMatchObject({
+      formula: 'flesch',
+      value: 82,
+      count: 1,
+      points: 0,
+      band: { min: 50, max: 70 },
+    });
+  });
+
+  it('reads English by Site Audit’s band: full 50–70, half 30–50 and 70–80, none past', () => {
+    const level = (n: number, times: number) =>
+      check(p(Array.from({ length: times }, () => sentence(n)).join(' ')), 'readingLevel')!;
+    const full = READABILITY_WEIGHTS.readingLevel;
+    // One-syllable words: the sentence's length sets the score.
+    expect(level(55, 1)).toMatchObject({ value: 66, points: full, count: 0 });
+    expect(level(45, 2)).toMatchObject({ value: 77, points: full / 2, count: 1 });
+    expect(level(20, 3)).toMatchObject({ value: 102, points: 0, count: 1 });
+    expect(level(75, 1)).toMatchObject({ value: 46, points: full / 2, count: -1 });
+    expect(level(110, 1)).toMatchObject({ value: 11, points: 0, count: -1 });
   });
 
   it('counts each sentence over 35 words, and shows the first', () => {

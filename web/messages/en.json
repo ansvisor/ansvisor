@@ -4496,6 +4496,8 @@
           "readingLevel": {
             "line": "Reading level {score, number} ({formula})",
             "detail": "Aim for {target} or more: shorter words and sentences.",
+            "detailBand": "Aim for {min}–{max}: shorter words and sentences.",
+            "detailSimple": "Aim for {min}–{max}: the page reads simpler than most readers of it expect. Keep the detail they look for.",
             "lineLength": "Long words and sentences",
             "detailLength": "No reading-level formula for this language yet: read by sentence and word length."
           },
