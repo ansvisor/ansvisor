@@ -10,7 +10,7 @@ import StarterKit from '@tiptap/starter-kit';
 import { TableKit } from '@tiptap/extension-table';
 import Image from '@tiptap/extension-image';
 import { CharacterCount, Placeholder } from '@tiptap/extensions';
-import { ArrowLeft, Bot, Check, Copy, Download, PanelRight, Target, X } from 'lucide-react';
+import { ArrowLeft, Bot, Check, Copy, Download, PanelRight, Send, Target, X } from 'lucide-react';
 import { Link, useRouter } from '@/i18n/navigation';
 import { Button } from '@/components/ui/button';
 import { buttonVariants } from '@/components/ui/button-variants';
@@ -26,8 +26,11 @@ import { LoadingDots } from '@/components/ui/loading-dots';
 import { AiUsageBanner } from '@/components/ai-usage/ai-usage-banner';
 import { AiUsageMeter } from '@/components/ai-usage/ai-usage-meter';
 import { useAiUsage } from '@/components/providers/ai-usage-provider';
+import { useUserRole } from '@/hooks/use-user-role';
 import { PLATFORM_LABELS } from '@/config/platform-labels';
 import { DraftMethodBadge, DraftStatusBadge } from '@/components/content/draft-badges';
+import { SendDialog } from '@/components/content/send-to-cms-dialog';
+import { updateBrand } from '@/lib/actions/brand';
 import {
   decideDraftSuggestions,
   fixDraftRules,
@@ -38,6 +41,7 @@ import {
   unmarkContentDraftReady,
   restoreDraftVersion,
   setContentDraftAuthor,
+  keepDraftSource,
   setContentDraftPageType,
   startAgentWriting,
   startPageRewrite,
@@ -90,7 +94,7 @@ import {
   titlePlaceholders,
   withByline,
 } from '@/lib/content/ready-to-publish';
-import { detectPageType } from '@/lib/content/page-types';
+import { detectPageType, isSiteType, type SiteType } from '@/lib/content/page-types';
 import { BAND_CLASSES, qualityAverage, qualityBand, qualityPhase } from '@/lib/content/quality';
 import { inputsGiven, inputsUsed } from '@/lib/content/draft-inputs';
 import { eeat, linksToCheck, trust, trustBlocks } from '@/lib/content/quality-checks';
@@ -142,6 +146,7 @@ import { HtmlBlock, copyToClipboard } from './_html-block';
 import { OwnCopies, ownCopyHtml } from './_own-copies';
 import { NextNudge, useNextNudge } from './_next-nudge';
 import { PageInfoStrip, pageInfoKey } from './_page-info';
+import { WeakSourcesMarks, weakSourcesKey } from './_weak-sources';
 import { HeaderTip } from './_header-tip';
 import { NextStepButton, readSkips, wordsUnderTitle, writeSkips } from './_next-step';
 import { useTodoCopy, type QualityRead } from './_quality-tab';
@@ -179,6 +184,8 @@ import { useDraftAutosave, type SaveState } from './_use-autosave';
 const DOCUMENT_CLASS = cn(
   'prose prose-neutral max-w-none dark:prose-invert min-h-[50vh] focus:outline-none',
   'prose-a:font-normal prose-a:text-blue-600 prose-a:underline prose-a:underline-offset-2 dark:prose-a:text-blue-400',
+  // A weak source's amber wavy line takes the place of its link's (CE-046).
+  'prose-a:has-[.quality-weak-source]:no-underline!',
   'prose-h1:text-3xl prose-h1:tracking-tight prose-h2:tracking-tight',
   '[&_table]:my-4 [&_table]:w-full [&_table]:table-fixed [&_td]:border [&_td]:px-2 [&_td]:py-1.5 [&_th]:border [&_th]:bg-muted/50 [&_th]:px-2 [&_th]:py-1.5 [&_th]:text-left',
   // Cells and list items hold paragraphs; their margins would pad every row.
@@ -313,8 +320,15 @@ export function DraftEditor({
       detectPageType({ title: draft.title, html: draft.bodyHtml }, draft.siteType) ??
       (isPageType(draft.pageType) ? draft.pageType : null),
   );
-  const detectType = (title: string, html: string) =>
-    setDetectedType((had) => detectPageType({ title, html }, draft.siteType) ?? had);
+  // The brand's site type (Quality CE-056, the spec's business type), changed
+  // here for the whole brand; a ref too, as the editor's update handler is
+  // made once.
+  const [siteType, setSiteType] = useState<SiteType>(draft.siteType);
+  const siteTypeRef = useRef(draft.siteType);
+  const detectType = (title: string, html: string) => {
+    const site = siteTypeRef.current;
+    setDetectedType((had) => detectPageType({ title, html }, site) ?? had);
+  };
   const pageType = picked ?? detectedType;
   // The HTML view's text while it is open; null in the visual editor.
   const [htmlSource, setHtmlSource] = useState<string | null>(null);
@@ -383,6 +397,7 @@ export function DraftEditor({
       AgentDrafting,
       FlashBlock,
       PageInfoStrip,
+      WeakSourcesMarks,
     ],
     content: draft.bodyHtml,
     // Rendered on the client only, so the server's HTML can't disagree with it.
@@ -450,6 +465,7 @@ export function DraftEditor({
   const reads = useDraftReads(draft.id);
   const rules = useDraftRules({
     draft,
+    siteType,
     html: pageHtml,
     characters: (editor?.storage.characterCount.characters() as number | undefined) ?? 0,
     pageType,
@@ -535,6 +551,19 @@ export function DraftEditor({
       live = false;
     };
   }, [qualityOn, draft.brandId]);
+  // Phase 2 (CE-046): what kind of source each link is, competitors' pages
+  // by the brand's competitors (read with the sources), less the ones the
+  // person kept.
+  const sourcesOn = qualityPhase() >= 2;
+  const competitorDomains = reads.sources?.data?.competitorDomains;
+  const [keptSources, setKeptSources] = useState(draft.keptSources);
+  const sourceRead = useMemo(
+    () =>
+      sourcesOn
+        ? { competitorDomains: competitorDomains ?? [], pageType, kept: new Set(keptSources) }
+        : null,
+    [sourcesOn, competitorDomains, pageType, keptSources],
+  );
   // The brand's own links aren't sources: Trust waits for its domains.
   const trustScore = useMemo(
     () =>
@@ -545,11 +574,39 @@ export function DraftEditor({
             brandDomains,
             siteTrust,
             quote: used ? used.quote : null,
+            sources: sourceRead,
             now: Date.now(),
           })
         : null,
-    [qualityOn, pageBlocks, linkChecks, brandDomains, siteTrust, inputsPending, used],
+    [qualityOn, pageBlocks, linkChecks, brandDomains, siteTrust, inputsPending, used, sourceRead],
   );
+  // Their links underlined in the draft, Quality's suggestion naming them.
+  const weakKey = (trustScore?.weak ?? []).map((w) => w.url).join('\n');
+  const weakTitle = t('quality.weakSource');
+  useEffect(() => {
+    if (!editor || editor.isDestroyed) return;
+    const urls = new Set(weakKey ? weakKey.split('\n') : []);
+    editor.view.dispatch(
+      editor.state.tr
+        .setMeta(weakSourcesKey, { urls, title: weakTitle })
+        .setMeta('addToHistory', false),
+    );
+  }, [editor, weakKey, weakTitle]);
+  const keepSource = async (url: string) => {
+    setKeptSources((kept) => (kept.includes(url) ? kept : [...kept, url]));
+    try {
+      setKeptSources(await keepDraftSource(draft.id, url));
+    } catch (err) {
+      // Only this one goes back: another kept meanwhile stays.
+      setKeptSources((kept) => kept.filter((source) => source !== url));
+      if (err instanceof Error && err.message === 'full') {
+        toast.error(t('quality.keepFull'));
+        return;
+      }
+      console.error('Failed to keep the source:', err);
+      toast.error(t('quality.keepFailed'));
+    }
+  };
   const qualityScore = qualityAverage([
     eeatScore?.score ?? null,
     trustScore?.score ?? null,
@@ -1612,10 +1669,47 @@ export function DraftEditor({
   // with Ready to paste read from the page as it is then (its links as they
   // are read).
   const [publishOpen, setPublishOpen] = useState<{
-    mode: 'markReady' | 'export';
+    mode: 'markReady' | 'export' | 'send';
     html: string;
   } | null>(null);
-  const openBeforePublish = (mode: 'markReady' | 'export') => {
+  // Send to CMS (#1331): admins and managers send the page to the brand's
+  // webhook, as the page Export makes ready, past Before you publish once
+  // Quality is live.
+  const { canManage } = useUserRole();
+  const [sendOpen, setSendOpen] = useState<{ html: string } | null>(null);
+  const [preparing, setPreparing] = useState(false);
+  // HTML edited in the HTML view and not applied isn't in the page to save.
+  const htmlUnapplied = htmlSource !== null && htmlEdited;
+  // What's waiting goes out first, as for Mark ready: the CMS gets the page
+  // Ansvisor holds, the one its callback later marks Published. A page that
+  // can't be saved (a teammate or the agent changed it meanwhile) isn't sent.
+  const openSend = async () => {
+    if (preparing) return;
+    if (htmlUnapplied) {
+      toast.error(t('send.applyHtml'));
+      return;
+    }
+    setPreparing(true);
+    const saved = await autosave.settle().then(
+      () => true,
+      () => false,
+    );
+    setPreparing(false);
+    if (!saved) {
+      toast.error(t('send.unsaved'));
+      return;
+    }
+    setSendOpen({ html: pageToPublish() });
+  };
+  const startSend = () => {
+    if (htmlUnapplied) {
+      toast.error(t('send.applyHtml'));
+      return;
+    }
+    if (quality) openBeforePublish('send');
+    else void openSend();
+  };
+  const openBeforePublish = (mode: 'markReady' | 'export' | 'send') => {
     setPublishOpen({ mode, html: pageToPublish() });
     if (mode === 'markReady') nudgeAt('markReady');
   };
@@ -1902,6 +1996,38 @@ export function DraftEditor({
     }
   };
 
+  // The site type, for the whole brand as in Brand settings: admins and
+  // managers (as the brands table lets them), once Quality's phase 2 is live.
+  // The page types offered, My rules and the agent follow it.
+  const updateBrandStore = useBrandStore((s) => s.updateBrand);
+  const storedSite = useBrandStore((s) => s.brands.find((b) => b.id === draft.brandId)?.siteType);
+  const siteGuessed = !isSiteType(storedSite);
+  const tSites = useTranslations('brands.siteTypes');
+  const [siteSaving, setSiteSaving] = useState(false);
+  const pickSite = async (next: SiteType) => {
+    if (next === siteType || siteSaving) return;
+    // Taken once saved: My rules are read again for it, and one pick at a time.
+    setSiteSaving(true);
+    const saved = await updateBrand(draft.brandId, { siteType: next }).catch((err) => {
+      console.error('Failed to change the site type:', err);
+      return null;
+    });
+    setSiteSaving(false);
+    if (!saved) {
+      toast.error(t('pageType.siteFailed'));
+      return;
+    }
+    updateBrandStore(draft.brandId, saved);
+    setSiteType(next);
+    siteTypeRef.current = next;
+    const html = editor?.getHTML() ?? pageHtml;
+    detectType(title, html);
+    // A detected type is the server's too: a save reads it again for the new
+    // site type, so the Library and the agent agree with the header.
+    if (picked === null && editor) autosave.schedule({ title, bodyHtml: html });
+    toast(t('pageType.siteChanged', { site: tSites(next) }));
+  };
+
   // Why History waits (the HTML view holds the page, a restore runs), or null.
   const historyWaits =
     htmlSource !== null ? t('history.htmlOpen') : restoring ? t('history.restoring') : null;
@@ -2030,6 +2156,24 @@ export function DraftEditor({
             ) : (
               <ExportMenu disabled={!editor} onExport={(format) => void exportPage(format)} />
             )}
+            {canManage && (
+              <HeaderTip label={t('send.button')} hint={t('send.hint')}>
+                <Button
+                  variant="outline"
+                  size="icon-sm"
+                  disabled={
+                    !editor ||
+                    preparing ||
+                    autosave.state === 'conflict' ||
+                    autosave.state === 'too_large'
+                  }
+                  aria-label={t('send.button')}
+                  onClick={startSend}
+                >
+                  {preparing ? <LoadingDots /> : <Send className="h-3.5 w-3.5" />}
+                </Button>
+              </HeaderTip>
+            )}
             {/* The one black button. Marked, it reads Ready (a click moves it back
                 to review); published, Published. Narrower than 1024px, ✓ alone. */}
             {status === 'ready' || status === 'published' ? (
@@ -2086,7 +2230,12 @@ export function DraftEditor({
         <div className="mt-1.5 flex flex-wrap items-center gap-2 pl-[38px]">
           <PageTypeMenu
             brandId={draft.brandId}
-            siteType={draft.siteType}
+            siteType={siteType}
+            onPickSite={
+              canManage && qualityPhase() >= 2 ? (next) => void pickSite(next) : undefined
+            }
+            sitePending={siteSaving}
+            siteGuessed={siteGuessed}
             pageType={pageType}
             detected={picked === null}
             isNew={draft.method === 'create'}
@@ -2329,6 +2478,7 @@ export function DraftEditor({
         {panelOpen ? (
           <EditorSidePanel
             draft={draft}
+            siteType={siteType}
             title={title}
             bodyHtml={pageHtml}
             pageType={pageType}
@@ -2357,6 +2507,7 @@ export function DraftEditor({
             onPickAuthor={() => setAuthorMenuOpen(true)}
             yourInput={inputsRead.status === 'off' ? null : inputsRead}
             onAddInput={addInput}
+            onKeepSource={sourcesOn ? (url) => void keepSource(url) : undefined}
           />
         ) : (
           <EditorPanelRail onOpen={openPanelTab} />
@@ -2385,6 +2536,25 @@ export function DraftEditor({
         />
       )}
 
+      {sendOpen && (
+        <SendDialog
+          draftId={draft.id}
+          brandId={draft.brandId}
+          title={title}
+          html={sendOpen.html}
+          sourceUrl={draft.sourceUrl}
+          author={pageAuthor}
+          // Until the authors are read, who it is by isn't known.
+          teamByline={authorsRead ? t('author.organization', { brand: brandName }) : ''}
+          byline={contentByline}
+          onFillNow={() => {
+            setSendOpen(null);
+            fillFirstPlaceholder();
+          }}
+          onClose={() => setSendOpen(null)}
+        />
+      )}
+
       {quality && publishOpen && readyToPaste && (
         <BeforePublish
           mode={publishOpen.mode}
@@ -2395,8 +2565,10 @@ export function DraftEditor({
           }}
           contentByline={contentByline}
           onContinue={() => {
+            const next = publishOpen.mode;
             setPublishOpen(null);
-            openExport();
+            if (next === 'send') void openSend();
+            else openExport();
           }}
           onClose={() => setPublishOpen(null)}
           quality={quality}

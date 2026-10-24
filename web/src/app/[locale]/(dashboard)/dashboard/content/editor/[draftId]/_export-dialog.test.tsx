@@ -266,6 +266,9 @@ describe('ExportDialog', () => {
 
   it('downloads Word and Markdown with the page fields, and remembers the destination', async () => {
     await render({ html: '<p>Done.</p>' });
+    // The dialog moves focus in after it opens: once it has, it won't take
+    // focus back from the arrow keys (it did on a busy machine).
+    await vi.waitFor(() => expect(dialog().contains(document.activeElement)).toBe(true));
     // Arrow keys move along the destinations.
     destination('Webflow').focus();
     await act(async () => {

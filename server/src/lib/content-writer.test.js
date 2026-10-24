@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 /**
  * Start's Agent (Content Editor CE-015): the Content Agent writes a new page
@@ -88,7 +88,7 @@ vi.mock('./content-agent.js', async (importOriginal) => ({
   hasOpenSuggestions: (...args) => hasOpenSuggestions(...args),
 }));
 
-const { briefText, renderPage, runDraftWriting, sourcedPage, startDraftWriting } =
+const { buildWritePrompt, briefText, renderPage, runDraftWriting, sourcedPage, startDraftWriting } =
   await import('./content-writer.js');
 const { NAME_PLACEHOLDER, QUOTE_PLACEHOLDER, knownPeople } = await import('./content-people.js');
 const { textLength } = await import('./content-rewrite.js');
@@ -762,5 +762,25 @@ describe('Rewrite the page to these rules', () => {
     hasOpenSuggestions.mockResolvedValue(true);
     await expect(run()).resolves.toEqual({ skipped: true });
     expect(writes.find((w) => w.table === 'content_draft_suggestions')).toBeUndefined();
+  });
+});
+
+describe('the write prompt', () => {
+  afterEach(() => vi.unstubAllEnvs());
+
+  it('names the brand’s site type once Quality’s phase 2 is live (CE-056)', () => {
+    const write = (phase) => {
+      vi.stubEnv('CONTENT_QUALITY_PHASE', phase);
+      return buildWritePrompt({
+        brand,
+        draft: draftRow(),
+        brief: 'No brief.',
+        input: { sources: { length: 3000 }, rules: [], textRules: [] },
+      });
+    };
+    expect(write('2')).toContain(
+      'Industry: Coffee\nSite type: B2B SaaS (software or services sold to businesses)\nDescription:',
+    );
+    expect(write('')).toContain('Industry: Coffee\nDescription:');
   });
 });

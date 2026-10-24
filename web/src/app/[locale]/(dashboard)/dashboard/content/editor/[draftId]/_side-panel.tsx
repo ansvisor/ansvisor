@@ -5,6 +5,7 @@ import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { isPageType, type ContentDraft } from '@/lib/content/drafts';
+import type { SiteType } from '@/lib/content/page-types';
 import { buildSourceGroups, includedCounts, type DraftSourceKind } from '@/lib/content/sources';
 import { formatNumber } from '@/lib/format';
 import { BAND_CLASSES, qualityBand, qualityPhase } from '@/lib/content/quality';
@@ -108,6 +109,7 @@ export function EditorPanelRail({ onOpen }: { onOpen: (tab: PanelTab) => void })
  */
 export function EditorSidePanel({
   draft,
+  siteType,
   title,
   bodyHtml,
   pageType,
@@ -129,8 +131,11 @@ export function EditorSidePanel({
   onPickAuthor,
   yourInput = null,
   onAddInput,
+  onKeepSource,
 }: {
   draft: ContentDraft;
+  /** The brand's business type as the editor holds it (Quality CE-056). */
+  siteType: SiteType;
   /** The draft's title, page and type as written now: Sources and Brief read them. */
   title: string;
   bodyHtml: string;
@@ -182,6 +187,8 @@ export function EditorSidePanel({
   yourInput?: DraftInputsRead | null;
   /** Opens Brief › Your input: Quality's Add. */
   onAddInput?: () => void;
+  /** Keeps a weak source or a competitor's on the page (Quality CE-046), once phase 2 is live. */
+  onKeepSource?: (url: string) => void;
 }) {
   const t = useTranslations('contentEditor.editor.panel');
   const tEditor = useTranslations('contentEditor.editor');
@@ -427,6 +434,7 @@ export function EditorSidePanel({
                 onShowPlaceholder={() => onShowPlaceholder?.()}
                 onPickAuthor={() => onPickAuthor?.()}
                 onAddInput={onAddInput}
+                onKeep={onKeepSource}
               />
             </div>
           )}
@@ -443,7 +451,7 @@ export function EditorSidePanel({
                     : undefined
                 }
                 state={rules}
-                siteType={draft.siteType}
+                siteType={siteType}
                 draftPageType={isPageType(pageType) ? pageType : null}
               />
             </div>

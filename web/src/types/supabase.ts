@@ -989,15 +989,21 @@ export type Database = {
           created_at: string
           created_by: string | null
           id: string
+          kept_sources: string[]
           method: string
+          meta_description: string | null
+          meta_title: string | null
           opportunity_id: string | null
           page_type: string | null
           page_type_source: string
           prompt_ids: string[]
+          published_at: string | null
+          published_url: string | null
           rules: Json | null
           source_url: string | null
           score_after: number | null
           score_before: number | null
+          slug: string | null
           status: string
           title: string
           updated_at: string
@@ -1017,15 +1023,21 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           id?: string
+          kept_sources?: string[]
           method?: string
+          meta_description?: string | null
+          meta_title?: string | null
           opportunity_id?: string | null
           page_type?: string | null
           page_type_source?: string
           prompt_ids?: string[]
+          published_at?: string | null
+          published_url?: string | null
           rules?: Json | null
           source_url?: string | null
           score_after?: number | null
           score_before?: number | null
+          slug?: string | null
           status?: string
           title?: string
           updated_at?: string
@@ -1045,15 +1057,21 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           id?: string
+          kept_sources?: string[]
           method?: string
+          meta_description?: string | null
+          meta_title?: string | null
           opportunity_id?: string | null
           page_type?: string | null
           page_type_source?: string
           prompt_ids?: string[]
+          published_at?: string | null
+          published_url?: string | null
           rules?: Json | null
           source_url?: string | null
           score_after?: number | null
           score_before?: number | null
+          slug?: string | null
           status?: string
           title?: string
           updated_at?: string
@@ -1225,6 +1243,95 @@ export type Database = {
             columns: ["draft_id"]
             isOneToOne: false
             referencedRelation: "content_drafts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      content_draft_deliveries: {
+        Row: {
+          batch_id: string | null
+          brand_id: string
+          created_at: string
+          draft_id: string | null
+          error: string | null
+          external_id: string | null
+          http_status: number | null
+          id: string
+          organization_id: string
+          published_at: string | null
+          published_url: string | null
+          response_excerpt: string | null
+          sent_at: string | null
+          sent_by: string | null
+          slug: string | null
+          status: string
+          title: string
+        }
+        Insert: {
+          batch_id?: string | null
+          brand_id: string
+          created_at?: string
+          draft_id?: string | null
+          error?: string | null
+          external_id?: string | null
+          http_status?: number | null
+          id?: string
+          organization_id: string
+          published_at?: string | null
+          published_url?: string | null
+          response_excerpt?: string | null
+          sent_at?: string | null
+          sent_by?: string | null
+          slug?: string | null
+          status?: string
+          title: string
+        }
+        Update: {
+          batch_id?: string | null
+          brand_id?: string
+          created_at?: string
+          draft_id?: string | null
+          error?: string | null
+          external_id?: string | null
+          http_status?: number | null
+          id?: string
+          organization_id?: string
+          published_at?: string | null
+          published_url?: string | null
+          response_excerpt?: string | null
+          sent_at?: string | null
+          sent_by?: string | null
+          slug?: string | null
+          status?: string
+          title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "content_draft_deliveries_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brands"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "content_draft_deliveries_draft_id_fkey"
+            columns: ["draft_id"]
+            isOneToOne: false
+            referencedRelation: "content_drafts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "content_draft_deliveries_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "content_draft_deliveries_sent_by_fkey"
+            columns: ["sent_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
         ]
@@ -4211,6 +4318,38 @@ export type Database = {
       content_draft_decide_suggestions: {
         Args: { p_ids: string[]; p_status: string }
         Returns: number
+      }
+      content_draft_keep_source: {
+        Args: { p_draft_id: string; p_url: string }
+        Returns: string[]
+      }
+      content_draft_last_deliveries: {
+        Args: { p_draft_ids: string[] }
+        Returns: {
+          batch_id: string | null
+          brand_id: string
+          created_at: string
+          draft_id: string | null
+          error: string | null
+          external_id: string | null
+          http_status: number | null
+          id: string
+          organization_id: string
+          published_at: string | null
+          published_url: string | null
+          response_excerpt: string | null
+          sent_at: string | null
+          sent_by: string | null
+          slug: string | null
+          status: string
+          title: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "content_draft_deliveries"
+          isOneToOne: false
+          isSetofReturn: true
+        }
       }
       content_draft_member: { Args: { p_draft_id: string }; Returns: boolean }
       content_draft_restore: { Args: { p_version_id: string }; Returns: Json }

@@ -89,6 +89,7 @@ const onShow = vi.fn();
 const onPickAuthor = vi.fn();
 const onShowPlaceholder = vi.fn();
 const onAddInput = vi.fn();
+const onKeep = vi.fn();
 
 async function render(quality: QualityRead | Readability | null) {
   const q = quality && 'eeat' in quality ? quality : read(quality as Readability | null);
@@ -101,6 +102,7 @@ async function render(quality: QualityRead | Readability | null) {
           onShowPlaceholder={onShowPlaceholder}
           onPickAuthor={onPickAuthor}
           onAddInput={onAddInput}
+          onKeep={onKeep}
         />
       </NextIntlClientProvider>,
     );
@@ -110,6 +112,7 @@ async function render(quality: QualityRead | Readability | null) {
 beforeEach(() => {
   onShow.mockReset();
   onPickAuthor.mockReset();
+  onKeep.mockReset();
   container = document.createElement('div');
   root = createRoot(container);
 });
@@ -401,6 +404,35 @@ describe('QualityTab', () => {
     )!;
     await act(async () => figure.querySelector('button')!.click());
     expect(onShow).toHaveBeenCalledWith('Win rates rose 42% last year.');
+  });
+
+  it('asks to replace weak sources, with Show and Keep, and for a primary one (CE-046)', async () => {
+    const html =
+      '<p>People swear by it on <a href="https://www.reddit.com/r/coffee/1">a thread</a>.</p>' +
+      '<p>Their tool too: <a href="https://rival.example/feature">rival</a>.</p>' +
+      '<p>As <a href="https://www.reuters.com/x">Reuters</a> reported.</p>';
+    const result = trust({
+      blocks: trustBlocks(html),
+      links: new Map(),
+      brandDomains: ['acme.com'],
+      sources: { competitorDomains: ['rival.example'], pageType: 'guide', kept: new Set() },
+      now: Date.parse('2026-10-23T12:00:00Z'),
+    });
+    await render({ ...read(null), trust: result });
+    const suggestions = container.querySelector('[aria-label="What would raise it"]')!;
+    const rows = [...suggestions.querySelectorAll('li')];
+    const weak = rows.find((li) => li.textContent?.includes('weak'))!;
+    expect(weak.textContent).toContain(
+      "2 sources are weak: a forum, a social post or a competitor's page",
+    );
+    expect(weak.textContent).toContain('reddit.com is a forum or a social post.');
+    await act(async () => weak.querySelectorAll('button')[0].click());
+    expect(onShow).toHaveBeenCalledWith('People swear by it on a thread.');
+    await act(async () => weak.querySelectorAll('button')[1].click());
+    expect(onKeep).toHaveBeenCalledWith('https://www.reddit.com/r/coffee/1');
+    expect(rows.map((li) => li.textContent)).toContainEqual(
+      expect.stringContaining('No primary source yet'),
+    );
   });
 
   it("shows the site's trust, what is missing and the way to Site Audit", async () => {

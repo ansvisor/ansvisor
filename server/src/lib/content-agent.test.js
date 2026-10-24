@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 /**
  * Fix open rules with agent (Content Editor CE-018): the Content Agent's
@@ -169,6 +169,24 @@ describe('the page as the agent reads it', () => {
     expect(prompt).toContain('Write in English.');
     expect(prompt).toContain('Page type: How-to guide: numbered steps');
     expect(prompt).not.toContain('The page goes on');
+  });
+
+  describe('with Quality’s phase 2 live', () => {
+    afterEach(() => vi.unstubAllEnvs());
+
+    it('names the brand’s site type after its industry (CE-056)', () => {
+      vi.stubEnv('CONTENT_QUALITY_PHASE', '2');
+      const prompt = buildFixPrompt({
+        brand: { name: 'Acme Coffee', industry: 'Food & Beverage', language: 'en' },
+        draft: rows.content_drafts,
+        passages: draftPassages(BODY),
+        lockedKeys: new Set(),
+        input: input(),
+      });
+      expect(prompt).toContain(
+        'Industry: Food & Beverage\nSite type: E-commerce (an online shop selling products)\nDescription:',
+      );
+    });
   });
 
   it('sends a long page only up to its cap, and no passage too long to change', () => {

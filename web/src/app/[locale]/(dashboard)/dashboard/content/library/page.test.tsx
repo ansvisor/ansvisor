@@ -45,6 +45,17 @@ const toast = vi.hoisted(() => Object.assign(vi.fn(), { success: vi.fn(), error:
 vi.mock('sonner', () => ({ toast }));
 const saveBlob = vi.hoisted(() => vi.fn());
 vi.mock('@/lib/download', () => ({ saveBlob }));
+const readCmsStatuses = vi.hoisted(() => vi.fn());
+const readDraftCms = vi.hoisted(() => vi.fn());
+const sendPagesToCms = vi.hoisted(() => vi.fn());
+vi.mock('@/lib/content/cms-send-client', () => ({
+  readCmsStatuses,
+  readDraftCms,
+  sendPagesToCms,
+  readKeptFields: vi.fn(async () => new Map()),
+  readDeliveries: vi.fn(async () => []),
+}));
+vi.mock('@/lib/actions/content-authors', () => ({ getContentAuthors: vi.fn(async () => null) }));
 
 /** jsdom's Blob has no text(): read it as a browser's FileReader would. */
 const readText = (blob: Blob) =>
@@ -132,6 +143,12 @@ beforeEach(() => {
     rest: [],
   }));
   saveBlob.mockReset();
+  readCmsStatuses.mockReset().mockResolvedValue(new Map());
+  readDraftCms.mockReset().mockResolvedValue({ fields: {}, publishedUrl: null, last: null });
+  sendPagesToCms.mockReset().mockResolvedValue({
+    ok: true,
+    deliveries: [{ id: 'x1', draftId: 'd1', status: 'sent' }],
+  });
   role.canManage = true;
 });
 
@@ -172,8 +189,9 @@ describe('the Content Library', () => {
     expect(tab('In review').textContent).toBe('In review2');
     expect(tab('Ready').textContent).toBe('Ready0');
 
+    // After each row's box to pick it (admins and managers).
     const rows = [...container.querySelectorAll('tbody tr')].map((tr) =>
-      [...tr.querySelectorAll('td')].map((td) => td.textContent),
+      [...tr.querySelectorAll('td')].slice(1).map((td) => td.textContent),
     );
     // Created and Updated where the AEO score was; the last cell is the row menu.
     expect(rows[0]).toEqual([
@@ -198,6 +216,8 @@ describe('the Content Library', () => {
     expect(rows[2][3]).toBe('Ggrace@acme.com');
     expect(rows[2][5]).toBe('Dec 30, 2025');
     expect([...container.querySelectorAll('thead th')].map((th) => th.textContent)).toEqual([
+      // The box to pick every row listed.
+      '',
       'Content',
       'Type',
       'Method',
@@ -255,7 +275,7 @@ describe('the Content Library', () => {
       ]);
       await renderPage();
       const status = [...container.querySelectorAll('tbody tr')].map(
-        (tr) => tr.querySelectorAll('td')[4].textContent,
+        (tr) => tr.querySelectorAll('td')[5].textContent,
       );
       expect(status).toEqual(['Agent writing…', 'Agent failed', 'Ready']);
       expect(getContentDrafts).toHaveBeenCalledTimes(1);
@@ -263,7 +283,7 @@ describe('the Content Library', () => {
       getContentDrafts.mockResolvedValue([row({ status: 'in_review', author: 'agent' })]);
       await act(async () => void (await vi.advanceTimersByTimeAsync(5_000)));
       expect(getContentDrafts).toHaveBeenCalledTimes(2);
-      expect(container.querySelector('tbody tr td:nth-child(5)')!.textContent).toBe('In review');
+      expect(container.querySelector('tbody tr td:nth-child(6)')!.textContent).toBe('In review');
       await act(async () => void (await vi.advanceTimersByTimeAsync(10_000)));
       expect(getContentDrafts).toHaveBeenCalledTimes(2);
     } finally {
@@ -325,6 +345,307 @@ describe('the Content Library', () => {
   });
 });
 
+describe('Send to CMS from a Library row (#1331)', () => {
+  const pick = async (title: string, item: string) => {
+    const trigger = container.querySelector<HTMLElement>(`[aria-label="Actions for ${title}"]`)!;
+    await act(async () => trigger.click());
+    const found = [...document.body.querySelectorAll<HTMLElement>('[role="menuitem"]')].find(
+      (el) => el.textContent === item,
+    )!;
+    await act(async () => found.click());
+  };
+  const dialog = () => document.querySelector('[role="dialog"]');
+  const inDialog = (name: string) =>
+    [...document.querySelectorAll<HTMLButtonElement>('[role="dialog"] button')].find(
+      (b) => b.textContent === name,
+    )!;
+
+  it('opens the Send dialog on the row’s page, and reads the sends again once it went', async () => {
+    getContentDrafts.mockResolvedValue([row({})]);
+    await renderPage();
+    expect(readCmsStatuses).toHaveBeenCalledWith(['d1']);
+    await pick('Pipeline forecasting', 'Send to CMS');
+    expect(getContentDraftPages).toHaveBeenCalledWith('brand-1', ['d1']);
+    expect(dialog()!.textContent).toContain('Send to CMS');
+    // The live page's own address part.
+    expect(document.querySelector<HTMLInputElement>('#cms-slug')!.value).toBe('pricing');
+
+    await act(async () => inDialog('Send').click());
+    expect(sendPagesToCms).toHaveBeenCalledWith('brand-1', [
+      expect.objectContaining({
+        draftId: 'd1',
+        slug: 'pricing',
+        html: '<p>Teams trust it.</p>',
+        // Authors come with Quality (CE-038): while it is off, none goes.
+        author: null,
+      }),
+    ]);
+    expect(dialog()).toBeNull();
+    expect(readCmsStatuses).toHaveBeenCalledTimes(2);
+  });
+
+  it('fills a placeholder in the editor', async () => {
+    getContentDrafts.mockResolvedValue([row({})]);
+    getContentDraftPages.mockResolvedValue({
+      pages: [
+        {
+          id: 'd1',
+          title: 'Pipeline forecasting',
+          bodyHtml: '<h1>Pipeline forecasting</h1><p>Teams save [figure] hours.</p>',
+          sourceUrl: null,
+          authorId: null,
+          language: null,
+        },
+      ],
+      rest: [],
+    });
+    await renderPage();
+    await pick('Pipeline forecasting', 'Send to CMS');
+    expect(inDialog('Send').disabled).toBe(true);
+    await act(async () => inDialog('Fill now').click());
+    expect(push).toHaveBeenCalledWith('/dashboard/content/editor/d1');
+  });
+
+  it('says when the page couldn’t be read', async () => {
+    getContentDrafts.mockResolvedValue([row({})]);
+    getContentDraftPages.mockResolvedValue({ pages: [], rest: [] });
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    await renderPage();
+    await pick('Pipeline forecasting', 'Send to CMS');
+    expect(toast.error).toHaveBeenCalledWith("Couldn't open the page to send. Try again.");
+    expect(dialog()).toBeNull();
+  });
+
+  it('shows each row’s last send beside its status', async () => {
+    getContentDrafts.mockResolvedValue([
+      row({}),
+      row({ id: 'd2', title: 'Churn guide', status: 'published' }),
+      row({ id: 'd3', title: 'Never sent' }),
+    ]);
+    readCmsStatuses.mockResolvedValue(
+      new Map([
+        [
+          'd1',
+          {
+            status: 'failed',
+            at: '2026-10-24T10:00:00Z',
+            httpStatus: 500,
+            error: 'The webhook answered 500',
+            publishedUrl: null,
+          },
+        ],
+        [
+          'd2',
+          {
+            status: 'published',
+            at: '2026-10-24T11:00:00Z',
+            httpStatus: 200,
+            error: null,
+            publishedUrl: 'https://acme.example/churn',
+          },
+        ],
+      ]),
+    );
+    await renderPage();
+    const marks = [
+      ...container.querySelectorAll<HTMLElement>(
+        '[aria-label^="The last send"], [aria-label^="Published"]',
+      ),
+    ];
+    expect(marks.map((el) => [el.tagName, el.getAttribute('aria-label')])).toEqual([
+      ['BUTTON', expect.stringMatching(/^The last send to your CMS failed, Oct 24, 2026/)],
+      ['A', expect.stringMatching(/^Published Oct 24, 2026/)],
+    ]);
+    expect(marks[1].getAttribute('href')).toBe('https://acme.example/churn');
+  });
+
+  it('says the workflow’s reason for a page its webhook took that then failed', async () => {
+    getContentDrafts.mockResolvedValue([row({})]);
+    readCmsStatuses.mockResolvedValue(
+      new Map([
+        [
+          'd1',
+          {
+            status: 'failed',
+            at: '2026-10-24T10:00:00Z',
+            httpStatus: 200,
+            error: 'Slug already taken',
+            publishedUrl: null,
+          },
+        ],
+      ]),
+    );
+    await renderPage();
+    const mark = container.querySelector<HTMLElement>('[aria-label^="The last send"]')!;
+    await act(async () => {
+      mark.focus();
+      mark.dispatchEvent(new FocusEvent('focusin', { bubbles: true }));
+    });
+    await act(async () => new Promise((resolve) => setTimeout(resolve, 50)));
+    expect(document.body.textContent).toContain('Slug already taken');
+    expect(document.body.textContent).not.toContain('The webhook answered 200');
+  });
+
+  it('isn’t offered on an archived draft, which the server doesn’t send', async () => {
+    window.history.replaceState(null, '', '/dashboard/content/library?tab=archived');
+    getContentDrafts.mockResolvedValue([row({ archivedAt: '2026-10-21T08:00:00Z' })]);
+    await renderPage();
+    const trigger = container.querySelector<HTMLElement>(
+      '[aria-label="Actions for Pipeline forecasting"]',
+    )!;
+    await act(async () => trigger.click());
+    const items = [...document.body.querySelectorAll<HTMLElement>('[role="menuitem"]')];
+    expect(items.map((el) => el.textContent)).toContain('Restore');
+    expect(items.map((el) => el.textContent)).not.toContain('Send to CMS');
+  });
+
+  it('sends to the draft’s own brand, should the brand switch while its page is read', async () => {
+    getContentDrafts.mockResolvedValue([row({})]);
+    let answer: (read: unknown) => void = () => {};
+    getContentDraftPages.mockReturnValueOnce(new Promise((resolve) => (answer = resolve)));
+    await renderPage();
+    await pick('Pipeline forecasting', 'Send to CMS');
+    brandState.activeBrandId = 'brand-2';
+    await renderPage();
+    await act(async () =>
+      answer({
+        pages: [
+          {
+            id: 'd1',
+            title: 'Pipeline forecasting',
+            bodyHtml: '<h1>Pipeline forecasting</h1><p>Teams trust it.</p>',
+            sourceUrl: null,
+            authorId: null,
+            language: null,
+          },
+        ],
+        rest: [],
+      }),
+    );
+    await act(async () => inDialog('Send').click());
+    expect(sendPagesToCms).toHaveBeenCalledWith('brand-1', [
+      expect.objectContaining({ draftId: 'd1' }),
+    ]);
+  });
+
+  it('is for admins and managers only', async () => {
+    role.canManage = false;
+    getContentDrafts.mockResolvedValue([row({})]);
+    await renderPage();
+    const trigger = container.querySelector<HTMLElement>(
+      '[aria-label="Actions for Pipeline forecasting"]',
+    )!;
+    await act(async () => trigger.click());
+    const items = [...document.body.querySelectorAll<HTMLElement>('[role="menuitem"]')];
+    expect(items.map((el) => el.textContent)).not.toContain('Send to CMS');
+  });
+});
+
+describe('picking rows to send together (#1331)', () => {
+  const box = (label: string) =>
+    container.querySelector<HTMLButtonElement>(`[role="checkbox"][aria-label="${label}"]`);
+  const barButton = (name: string) =>
+    [...container.querySelectorAll<HTMLButtonElement>('button')].find(
+      (b) => b.textContent === name,
+    );
+
+  it('sends the rows picked from the bar, then clears them and reads the sends again', async () => {
+    getContentDrafts.mockResolvedValue([row({}), row({ id: 'd2', title: 'Churn guide' })]);
+    await renderPage();
+    expect(barButton('Send to CMS')).toBeUndefined();
+    await act(async () => box('Select Churn guide')!.click());
+    expect(container.textContent).toContain('1 page selected');
+    expect(box('Select all pages listed')!.getAttribute('data-state')).toBe('indeterminate');
+
+    await act(async () => barButton('Send to CMS')!.click());
+    await act(async () => {});
+    const dialog = document.querySelector('[role="dialog"]')!;
+    expect(dialog.textContent).toContain('Send 1 page to your CMS');
+    expect(getContentDraftPages).toHaveBeenCalledWith('brand-1', ['d2']);
+
+    const close = [...dialog.querySelectorAll<HTMLButtonElement>('button')].find(
+      (b) => b.textContent === 'Cancel',
+    )!;
+    await act(async () => close.click());
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+    expect(container.textContent).not.toContain('page selected');
+    expect(readCmsStatuses).toHaveBeenCalledTimes(2);
+  });
+
+  it('takes up to 25 pages a send', async () => {
+    getContentDrafts.mockResolvedValue(
+      Array.from({ length: 26 }, (_, i) => row({ id: `d${i}`, title: `Draft ${i}` })),
+    );
+    await renderPage();
+    await act(async () => box('Select all pages listed')!.click());
+    expect(container.textContent).toContain('26 pages selected');
+    expect(container.textContent).toContain('Up to 25 pages a send');
+    expect(barButton('Send to CMS')!.disabled).toBe(true);
+
+    await act(async () => box('Select Draft 0')!.click());
+    expect(barButton('Send to CMS')!.disabled).toBe(false);
+    await act(async () => barButton('Clear')!.click());
+    expect(container.textContent).not.toContain('pages selected');
+  });
+
+  it('reads the rows’ sends again while a page is on its way', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    try {
+      getContentDrafts.mockResolvedValue([row({})]);
+      const status = (state: string) =>
+        new Map([
+          [
+            'd1',
+            {
+              status: state,
+              at: '2026-10-24T10:00:00Z',
+              httpStatus: null,
+              error: null,
+              publishedUrl: null,
+            },
+          ],
+        ]);
+      readCmsStatuses.mockResolvedValueOnce(status('queued')).mockResolvedValue(status('sent'));
+      await renderPage();
+      expect(readCmsStatuses).toHaveBeenCalledTimes(1);
+      await act(async () => void (await vi.advanceTimersByTimeAsync(5_000)));
+      expect(readCmsStatuses).toHaveBeenCalledTimes(2);
+      // Sent: no more reads.
+      await act(async () => void (await vi.advanceTimersByTimeAsync(20_000)));
+      expect(readCmsStatuses).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('drops the rows picked when the tab changes', async () => {
+    getContentDrafts.mockResolvedValue([row({}), row({ id: 'd2', title: 'Churn guide' })]);
+    await renderPage();
+    await act(async () => box('Select Churn guide')!.click());
+    expect(container.textContent).toContain('1 page selected');
+    await act(async () => tab('In review').click());
+    await act(async () => tab('All').click());
+    expect(container.textContent).not.toContain('page selected');
+    expect(box('Select Churn guide')!.getAttribute('data-state')).toBe('unchecked');
+  });
+
+  it('has no boxes for members, nor under Archived', async () => {
+    role.canManage = false;
+    getContentDrafts.mockResolvedValue([row({})]);
+    await renderPage();
+    expect(container.querySelector('[role="checkbox"]')).toBeNull();
+
+    act(() => root.unmount());
+    root = createRoot(container);
+    role.canManage = true;
+    window.history.replaceState(null, '', '/dashboard/content/library?tab=archived');
+    getContentDrafts.mockResolvedValue([row({ archivedAt: '2026-10-21T08:00:00Z' })]);
+    await renderPage();
+    expect(container.textContent).toContain('Pipeline forecasting');
+    expect(container.querySelector('[role="checkbox"]')).toBeNull();
+  });
+});
+
 describe('a Library row’s menu (00233)', () => {
   const menuItems = async (title: string) => {
     const trigger = container.querySelector<HTMLElement>(`[aria-label="Actions for ${title}"]`)!;
@@ -348,6 +669,7 @@ describe('a Library row’s menu (00233)', () => {
       'Export Word',
       'Export HTML',
       'Export Markdown',
+      'Send to CMS',
       'Send to Archive',
       'Delete',
     ]);

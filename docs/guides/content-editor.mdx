@@ -147,7 +147,8 @@ The Content Agent never changes these passages. If you edit one, the editor asks
 - **Copy HTML** copies the whole page as HTML, HTML blocks and schema included, to paste into your CMS.
 - **Export** downloads the page as **Word**, **HTML** or **Markdown**. Only the HTML file carries the schema (JSON-LD).
 - **Add HTML** in the toolbar adds an HTML block: an embed, a widget or a form, kept exactly as written. Ansvisor never runs it. **Edit as HTML** shows the page's source; scripts, iframes and inline styles are removed when you switch back.
-- **Mark ready** saves the page, sets it to **Ready** and keeps a version in History. If the draft was sent to the Action Center, it also completes its task there. Ansvisor doesn't publish the page: copy or export it to your site.
+- **Send to CMS** (admins and managers) sends the page to your workflow tool through the brand's webhook, for it to create the post in your CMS. See [Send to CMS](/guides/send-to-cms).
+- **Mark ready** saves the page, sets it to **Ready** and keeps a version in History. If the draft was sent to the Action Center, it also completes its task there. Ansvisor doesn't publish the page: copy or export it to your site, or send it to your CMS.
 - Click **Ready** in the header to move the page back to **In review**. A task that Mark ready completed is open again (**In Progress**), unless someone changed it in the Action Center since or the action is closed.
 
 ## Library
@@ -169,6 +170,7 @@ The columns are Content, Type, Method (Create or Optimize), By (you, the Content
 
 - **Status**: set the draft to In progress, In review, Ready or Published. Ready works like the editor's Mark ready, and moving a ready or published draft back to In progress or In review opens its task again, as the editor's **Ready** does.
 - **Export Word**, **Export HTML** or **Export Markdown** for that draft.
+- **Send to CMS** (admins and managers, not for archived drafts). Beside each row's status, an icon shows its last send: on its way, sent, failed or published. Tick several rows to send up to 25 at once. See [Send to CMS](/guides/send-to-cms).
 - **Send to Archive** or **Restore** (admins and managers).
 - **Delete** (admins and managers): the draft leaves the Library for good, with its versions and suggestions. An Action Center task it was sent as stays.
 
