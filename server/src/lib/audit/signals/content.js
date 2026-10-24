@@ -9,27 +9,41 @@
  * See structure.js for the evaluator shape.
  */
 
-import { fleschReadingEase, jsonLd, typesOf } from './helpers.js';
+import { jsonLd, typesOf } from './helpers.js';
+import { fleschBand, fleschReadingEase, readingBlocks } from './readability.js';
 import { OPENING, checkDescriptionOpening } from '../product-description.js';
+import { extractPageContent } from '../../page-content.js';
 
+/** Past this, after its scripts and styles, a page isn't read: its content takes too long to find. */
+const MAX_READ_HTML = 2_000_000;
+/** What holds no text: most of a page's bytes. */
+const NO_TEXT = /<(script|style|svg|noscript|template)\b[\s\S]*?<\/\1\s*>/gi;
+
+/**
+ * Flesch Reading Ease of the page's main content, as the Content Editor
+ * imports the page and its Quality reads it (signals/readability.js), so a
+ * page scores the same in both. A page whose content can't be found, or has
+ * too few words, gets none: its menus and footer aren't its text.
+ */
 export const readability = {
   key: 'readability',
   evaluate(ctx) {
-    const flesch = fleschReadingEase(ctx.text);
+    const html = (ctx.html ?? '').replace(NO_TEXT, ' ');
+    if (html.length > MAX_READ_HTML) {
+      return { status: 'na', score: null, evidence: { reason: 'page too large to read' } };
+    }
+    let content = '';
+    try {
+      content = extractPageContent(html, ctx.url).html;
+    } catch {
+      // No content found: no score below.
+    }
+    const flesch = fleschReadingEase(readingBlocks(content));
     if (flesch === null) {
       return { status: 'na', score: null, evidence: { reason: 'not enough text' } };
     }
-    const rounded = Math.round(flesch);
-    let status = 'fail';
-    let score = 0;
-    if (flesch >= 50 && flesch <= 70) {
-      status = 'pass';
-      score = 1;
-    } else if ((flesch >= 30 && flesch < 50) || (flesch > 70 && flesch <= 80)) {
-      status = 'warn';
-      score = 0.5;
-    }
-    return { status, score, evidence: { fleschReadingEase: rounded } };
+    const { status, score } = fleschBand(flesch);
+    return { status, score, evidence: { fleschReadingEase: Math.round(flesch) } };
   },
 };
 

@@ -296,7 +296,7 @@
       "label": "Readability (Flesch)",
       "what": "Flesch Reading Ease score (target 50–70 for general audiences).",
       "why": "Engines extract from content humans can read. Sub-30 (academic) and 80+ (childlike) both underperform.",
-      "howToFix": "Shorten sentences. Cut adverbs. Aim for 16-word average sentence length.",
+      "howToFix": "Aim for 50–70. Under 50: shorten sentences and cut adverbs, about 16 words a sentence. Over 70: write fuller sentences with the detail readers expect.",
       "source": "Flesch (1948) + adapted by SGE",
       "impactTier": "standard"
     },

@@ -177,7 +177,9 @@ export function AiUsageMeter({
       </PopoverTrigger>
       <PopoverContent align="end" className="w-80 max-w-[calc(100vw-2rem)] text-sm">
         <PopoverTitle className="text-xs font-normal text-muted-foreground">
-          {usage.planName ? t('popover.title', { plan: usage.planName }) : t('popover.titleNoPlan')}
+          {usage.planName
+            ? t(usage.trial ? 'popover.titleTrial' : 'popover.title', { plan: usage.planName })
+            : t('popover.titleNoPlan')}
         </PopoverTitle>
         <p className="mt-0.5 text-2xl font-semibold tabular-nums">{used}</p>
         <div
@@ -210,7 +212,11 @@ export function AiUsageMeter({
         )}
         {tone === 'exhausted' && (
           <p className="mt-2 text-xs text-red-700 dark:text-red-400">
-            {resets ? t('popover.exhausted', { date: resets }) : t('popover.exhaustedNoDate')}
+            {usage.trial
+              ? t('popover.exhaustedTrial')
+              : resets
+                ? t('popover.exhausted', { date: resets })
+                : t('popover.exhaustedNoDate')}
           </p>
         )}
 
@@ -264,7 +270,12 @@ export function AiUsageMeter({
 
         {!canAdmin && <p className="mt-3 text-xs text-muted-foreground">{t('askAdmin')}</p>}
         <div className="mt-4 flex flex-wrap gap-1.5">
-          <AiUsageGetMore plan={usage.plan} primary={pressing} onFollow={close} />
+          <AiUsageGetMore
+            plan={usage.plan}
+            trial={usage.trial}
+            primary={pressing}
+            onFollow={close}
+          />
           <Link
             href="/dashboard/settings/billing#ai-usage"
             onClick={close}

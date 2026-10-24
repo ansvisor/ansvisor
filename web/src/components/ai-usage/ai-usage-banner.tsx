@@ -36,7 +36,9 @@ export function AiUsageBanner({ className }: { className?: string }) {
       >
         <AlertTriangle className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-500" />
         <p className="min-w-0 flex-1 text-amber-900 dark:text-amber-200">
-          {t('banner.warning', { percent: percentLabel(usage.percentUsed ?? 0) })}
+          {t(usage.trial ? 'banner.warningTrial' : 'banner.warning', {
+            percent: percentLabel(usage.percentUsed ?? 0),
+          })}
         </p>
         <Link
           href="/dashboard/settings/billing#ai-usage"
@@ -58,12 +60,16 @@ export function AiUsageBanner({ className }: { className?: string }) {
     >
       <AlertCircle className="h-4 w-4 shrink-0 text-red-600 dark:text-red-500" />
       <p className="min-w-0 flex-1 text-red-900 dark:text-red-200">
-        {resets ? t('banner.exhausted', { date: resets }) : t('banner.exhaustedNoDate')}
+        {usage.trial
+          ? t('banner.exhaustedTrial')
+          : resets
+            ? t('banner.exhausted', { date: resets })
+            : t('banner.exhaustedNoDate')}
         {!canAdmin && <> {t('askAdmin')}</>}
       </p>
       {canAdmin && (
         <div className="flex flex-wrap gap-1.5">
-          <AiUsageGetMore plan={usage.plan} primary />
+          <AiUsageGetMore plan={usage.plan} trial={usage.trial} primary />
         </div>
       )}
     </div>
