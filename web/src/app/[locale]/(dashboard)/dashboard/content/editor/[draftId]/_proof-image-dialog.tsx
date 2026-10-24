@@ -21,6 +21,9 @@ import { safeImageSrc } from '@/lib/content/editor';
 import type { ProofSpot } from '@/lib/content/page-read';
 import { textRanges } from './_claim-marks';
 
+/** The longest image address the dialog takes, as the database keeps an own image's (00270). */
+const MAX_IMAGE_SRC_LENGTH = 2048;
+
 /**
  * A visual proof spot's Add image (Quality spec §4b, CE-049): the image by
  * its address (one the business hosts), its alt text drafted from the
@@ -75,7 +78,10 @@ export function ProofImageDialog({
   const fieldRef = useRef<HTMLInputElement>(null);
 
   const insert = () => {
-    const safe = safeImageSrc(src.trim());
+    // https only (an http image on an https page may not show), as the page keeps addresses.
+    const checked = safeImageSrc(src.trim());
+    const safe =
+      checked?.startsWith('https:') && checked.length <= MAX_IMAGE_SRC_LENGTH ? checked : null;
     if (!safe) {
       setInvalid('src');
       return;
@@ -112,6 +118,7 @@ export function ProofImageDialog({
               id="proof-image-src"
               ref={fieldRef}
               value={src}
+              maxLength={MAX_IMAGE_SRC_LENGTH}
               placeholder="https://"
               aria-invalid={invalid === 'src'}
               aria-describedby="proof-image-src-hint"
