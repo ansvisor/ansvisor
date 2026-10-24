@@ -393,13 +393,26 @@ describe('guardPeople: what the no-fabrication test set found', () => {
     }
   });
 
-  it('reads guillemets the way a line’s first one opens them, never the words between two quotes', () => {
+  it('reads guillemets around a quote, never the words between two quotes, French spaced ones too', () => {
     for (const line of [
       '«Hızlı» ve «güvenilir» kelimeleri her yerde kullanılıyor ama müşteriler hep «sade» diyor.',
       'Die Wörter »schnell« und »sicher« stehen überall, aber Kunden sagen »einfach«.',
     ]) {
       expect(fix(line)).toBe(line);
     }
+    // French spaces its « … », with a normal, no-break or narrow no-break space.
+    for (const line of [
+      'Les clients disent « rapide » mais ils veulent surtout un service « fiable » au quotidien.',
+      'On parle de « recherche générative » depuis deux ans, et le terme « AEO » se répand vite.',
+      'Le format « question-réponse » aide beaucoup les moteurs, surtout avec un bloc « FAQ » clair.',
+      'Les clients disent «\u00a0rapide\u00a0» mais ils veulent surtout un service «\u00a0fiable\u00a0» au quotidien.',
+      'Les clients disent «\u202frapide\u202f» mais ils veulent surtout un service «\u202ffiable\u202f» au quotidien.',
+    ]) {
+      expect(fix(line)).toBe(line);
+    }
+    expect(fix('Sie sagte: »Wir haben die Kosten in einem Jahr halbiert.«')).toBe(
+      `Sie sagte: ${QUOTE}`,
+    );
     // A quote they do hold is still read, a guillemet before it on the line too.
     expect(fix('«Haftalık tahmin her şeyi değiştirdi», diyor Priya Shah.')).toBe(
       `${QUOTE}, diyor ${NAME}.`,

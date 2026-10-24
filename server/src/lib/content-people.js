@@ -456,7 +456,10 @@ function personIn(name, minWords, known) {
  * ones around words (not an apostrophe's).
  */
 const QUOTES = [
-  /»([^»«]{1,800})«/g,
+  // »…« (German, Danish) hugs its words: French never opens with », and
+  // spaces its own « … », so a span with a space inside its marks is the
+  // words between two French quotes.
+  /»(?=\S)([^»«]{1,800})(?<=\S)«/g,
   /‚([^‚‘’]{1,800})[‘’]/g,
   /“([^“”]{1,800})”/g,
   /„([^„“”]{1,800})[“”]/g,
