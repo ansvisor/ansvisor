@@ -7,7 +7,8 @@ vi.mock('@/lib/actions/content-drafts', () => ({
   readDraftPage: (...args: unknown[]) => readDraftPage(...args),
 }));
 
-const { PAGE_READ_DELAY_MS, PAGE_READ_EVERY_MS, usePageRead } = await import('./_use-page-read');
+const { PROOF_READ_DELAY_MS, PROOF_READ_EVERY_MS, PROOF_READ_SLACK_MS, usePageRead } =
+  await import('./_use-page-read');
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT =
   true;
@@ -60,25 +61,28 @@ afterEach(() => {
 describe('usePageRead', () => {
   it('asks a few seconds after a save, not while there are changes to save, a minute apart', async () => {
     await render('s1', true);
-    await wait(PAGE_READ_EVERY_MS);
+    await wait(PROOF_READ_EVERY_MS);
     expect(readDraftPage).not.toHaveBeenCalled();
     await render('s1');
-    await wait(PAGE_READ_DELAY_MS);
+    await wait(PROOF_READ_DELAY_MS);
     expect(readDraftPage).toHaveBeenCalledWith('d1');
     expect(JSON.parse(attr('data-read'))).toEqual(PAGE);
     await render('s2');
-    await wait(PAGE_READ_DELAY_MS);
+    await wait(PROOF_READ_DELAY_MS);
     expect(readDraftPage).toHaveBeenCalledTimes(1);
-    await wait(PAGE_READ_EVERY_MS);
+    // A few seconds past the minute: the API counts it from when the last ask reached it.
+    await wait(PROOF_READ_EVERY_MS);
+    expect(readDraftPage).toHaveBeenCalledTimes(1);
+    await wait(PROOF_READ_SLACK_MS);
     expect(readDraftPage).toHaveBeenCalledTimes(2);
   });
 
   it('asks again for a kept answer a minute later, without a save', async () => {
     readDraftPage.mockResolvedValueOnce({ ...PAGE, pending: true, limited: false, paused: false });
     await render('s1');
-    await wait(PAGE_READ_DELAY_MS);
+    await wait(PROOF_READ_DELAY_MS);
     expect(attr('data-reading')).toBe('true');
-    await wait(PAGE_READ_EVERY_MS);
+    await wait(PROOF_READ_EVERY_MS + PROOF_READ_SLACK_MS);
     expect(readDraftPage).toHaveBeenCalledTimes(2);
     expect(attr('data-reading')).toBe('false');
   });
@@ -86,10 +90,10 @@ describe('usePageRead', () => {
   it('stops for the session once the budget is spent or the day’s reads are made', async () => {
     readDraftPage.mockResolvedValueOnce({ ...PAGE, pending: false, limited: false, paused: true });
     await render('s1');
-    await wait(PAGE_READ_DELAY_MS);
+    await wait(PROOF_READ_DELAY_MS);
     expect(attr('data-paused')).toBe('true');
     await render('s2');
-    await wait(PAGE_READ_EVERY_MS * 2);
+    await wait(PROOF_READ_EVERY_MS * 2);
     expect(readDraftPage).toHaveBeenCalledTimes(1);
 
     act(() => root.unmount());
@@ -98,10 +102,10 @@ describe('usePageRead', () => {
       .mockReset()
       .mockResolvedValue({ ...PAGE, pending: false, limited: true, paused: false });
     await render('s1');
-    await wait(PAGE_READ_DELAY_MS);
+    await wait(PROOF_READ_DELAY_MS);
     expect(attr('data-limited')).toBe('true');
     await render('s2');
-    await wait(PAGE_READ_EVERY_MS * 2);
+    await wait(PROOF_READ_EVERY_MS * 2);
     expect(readDraftPage).toHaveBeenCalledTimes(1);
   });
 
@@ -112,10 +116,10 @@ describe('usePageRead', () => {
       .mockResolvedValueOnce({ error: 'failed' });
     await render('s1');
     expect(attr('data-settled')).toBe('false');
-    await wait(PAGE_READ_DELAY_MS);
+    await wait(PROOF_READ_DELAY_MS);
     expect(attr('data-settled')).toBe('true');
     expect(attr('data-reading')).toBe('true');
-    await wait(PAGE_READ_EVERY_MS);
+    await wait(PROOF_READ_EVERY_MS + PROOF_READ_SLACK_MS);
     expect(readDraftPage).toHaveBeenCalledTimes(2);
     expect(attr('data-reading')).toBe('false');
     error.mockRestore();
@@ -125,15 +129,15 @@ describe('usePageRead', () => {
     const error = vi.spyOn(console, 'error').mockImplementation(() => {});
     readDraftPage.mockResolvedValueOnce({ error: 'failed' });
     await render('s1');
-    await wait(PAGE_READ_DELAY_MS);
-    await wait(PAGE_READ_EVERY_MS * 2);
+    await wait(PROOF_READ_DELAY_MS);
+    await wait(PROOF_READ_EVERY_MS * 2);
     expect(readDraftPage).toHaveBeenCalledTimes(1);
     readDraftPage.mockResolvedValueOnce({ error: 'off' });
     await render('s2');
-    await wait(PAGE_READ_EVERY_MS);
+    await wait(PROOF_READ_EVERY_MS);
     expect(readDraftPage).toHaveBeenCalledTimes(2);
     await render('s3');
-    await wait(PAGE_READ_EVERY_MS * 2);
+    await wait(PROOF_READ_EVERY_MS * 2);
     expect(readDraftPage).toHaveBeenCalledTimes(2);
     error.mockRestore();
   });

@@ -63,8 +63,9 @@ export interface PageProof extends ProofAsk {
  * that holds its claim and whether the block links out (an http(s) link,
  * as Trust reads it: its proof, on the brand's site or another). Blocks
  * and claims are matched by their words without spaces: a link put on a
- * claim adds one at its edge ("ISO 27001 -certified"). An ask keeps its
- * block as read, so its to-do keeps its key.
+ * claim adds one at its edge ("ISO 27001 -certified"). Its to-do's key
+ * reads the block without spaces (proofKey), so it stays as the block's
+ * spacing changes.
  */
 export function proofsOnPage(blocks: TrustBlock[], proofs: readonly ProofAsk[]): PageProof[] {
   const seen = new Set<string>();

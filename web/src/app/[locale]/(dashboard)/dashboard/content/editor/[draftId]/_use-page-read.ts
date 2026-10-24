@@ -5,9 +5,14 @@ import { readDraftPage } from '@/lib/actions/content-drafts';
 import type { PageRead } from '@/lib/content/page-read';
 
 /** How long after a save the page is asked about, as the claims are. */
-export const PAGE_READ_DELAY_MS = 3_000;
+export const PROOF_READ_DELAY_MS = 3_000;
 /** Asks no closer together than this: the API reads a changed page once a minute. */
-export const PAGE_READ_EVERY_MS = 60_000;
+export const PROOF_READ_EVERY_MS = 60_000;
+/**
+ * Slack on the API's minute: it counts from when the last ask reached it,
+ * which may be a little after the editor sent it.
+ */
+export const PROOF_READ_SLACK_MS = 5_000;
 
 export interface PageReadState {
   /** The page's spots and proof asks, null until the first read. */
@@ -28,7 +33,7 @@ export interface PageReadState {
 /**
  * The page's read for proof (Quality CE-049). The API reads the draft as
  * saved and keeps its read by the page's hash, so the editor asks a few
- * seconds after a save, PAGE_READ_EVERY_MS apart at most, one ask at a
+ * seconds after a save, PROOF_READ_EVERY_MS apart at most, one ask at a
  * time, and not while there are changes to save. An answer the API kept
  * from before the page changed (`pending`) is asked about again a minute
  * later, without a save. A spent AI budget or the day's reads made stop the
@@ -70,7 +75,10 @@ export function usePageRead(
     // Changes not saved yet: their save asks.
     if (!enabled || paused || limited || off || unsaved) return;
     if (askedFor.current === savedAt && !left.current) return;
-    const wait = Math.max(PAGE_READ_DELAY_MS, lastAsk.current + PAGE_READ_EVERY_MS - Date.now());
+    const wait = Math.max(
+      PROOF_READ_DELAY_MS,
+      lastAsk.current + PROOF_READ_EVERY_MS + PROOF_READ_SLACK_MS - Date.now(),
+    );
     const timer = setTimeout(() => {
       // One at a time: a save while one is out is asked about after it.
       if (asking.current) return;
