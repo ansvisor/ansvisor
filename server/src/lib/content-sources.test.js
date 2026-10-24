@@ -70,6 +70,24 @@ describe('sourceSuggestion', () => {
   const known = knownNumbers('Trackers compared in 2026.');
   const one = (text) => [{ text, start: 0 }];
 
+  it('gives a number two sources have to the one it used, then the first', () => {
+    const both = numberSources({
+      fanouts: [{ query: 'crm for 50 users', platforms: [] }],
+      inputs: [
+        { kind: 'input', ref: 'data:1', label: 'Seats', detail: 'Their own data, a table: 50' },
+      ],
+    });
+    const text = 'Teams of 50 forecast weekly.';
+    expect(
+      sourceSuggestion({ named: ['S2'], marks: [], pieces: one(text), numbered: both, known })
+        .sources,
+    ).toEqual([{ kind: 'input', ref: 'data:1', label: 'Seats' }]);
+    // Named by none: the first that has it.
+    expect(
+      sourceSuggestion({ named: [], marks: [], pieces: one(text), numbered: both, known }).sources,
+    ).toEqual([{ kind: 'fanout', ref: 'crm for 50 users', label: 'crm for 50 users' }]);
+  });
+
   it('keeps the sources named and each mark where its words are, marked ones first', () => {
     const text = 'Trackers cover AI answers, per Profound, for the llm visibility tool.';
     expect(

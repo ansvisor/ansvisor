@@ -4407,6 +4407,39 @@ describe('the side panel', () => {
       }
     });
 
+    it("shows the person's own input it was written from, and opens it in Brief (CE-048)", async () => {
+      process.env.NEXT_PUBLIC_CONTENT_QUALITY_PHASE = '2';
+      try {
+        getDraftInputs.mockResolvedValue({
+          experience: '',
+          data: [{ name: 'Survey', rows: [['Teams'], ['1,250']] }],
+          ansvisorData: [],
+          quotes: [],
+        });
+        getContentDraft.mockResolvedValue(traced);
+        getDraftSuggestions.mockResolvedValue([
+          {
+            ...agentSuggestion,
+            afterText: '1,250 teams forecast weekly',
+            sources: [{ kind: 'input', ref: 'data:1', label: 'Survey' }],
+            sourceMarks: [{ start: 0, end: 5, source: 0 }],
+          },
+        ]);
+        await openRules();
+        const card = container.querySelector<HTMLElement>('[data-suggestion="n1"]')!;
+        expect(card.querySelector('ins')!.textContent).toBe('1,2501 teams forecast weekly');
+        expect(card.textContent).toContain('Based on1Your input ·Survey');
+        const chip = [...card.querySelectorAll<HTMLButtonElement>('button')].find((b) =>
+          b.textContent?.includes('Your input'),
+        )!;
+        await act(async () => chip.click());
+        expect(selectedSegment()).toBe('Brief');
+        expect(panel()!.textContent).toContain('Survey · 2 rows');
+      } finally {
+        delete process.env.NEXT_PUBLIC_CONTENT_QUALITY_PHASE;
+      }
+    });
+
     it('marks an insert’s words by its text, found again in the card as drawn', async () => {
       getContentDraft.mockResolvedValue(traced);
       getDraftSuggestions.mockResolvedValue([
