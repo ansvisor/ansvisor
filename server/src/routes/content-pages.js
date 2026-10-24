@@ -11,7 +11,11 @@ import { checkLinks, reserveReads } from '../lib/link-check.js';
 import { MAX_CONTENT_LENGTH, extractPageContent } from '../lib/page-content.js';
 import { PageFetchError, fetchPage } from '../lib/safe-fetch.js';
 import { PlanLimitError } from '../lib/plan-guard.js';
-import { linkCheckLimiter, qualityCheckLimiter } from '../middleware/rate-limiter.js';
+import {
+  claimsLimiter,
+  linkCheckLimiter,
+  qualityCheckLimiter,
+} from '../middleware/rate-limiter.js';
 
 /**
  * Pages brought into the Content Editor (CE-003): Optimize content › Page
@@ -191,8 +195,8 @@ router.post('/source-classes', qualityCheckLimiter, async (req, res) => {
 
 const claimsBody = z.object({
   draftId: z.guid(),
-  // The paragraph the person is writing in: read once they leave it.
-  skip: z.string().max(5000).optional(),
+  // The paragraph the person is writing in, as saved: read once they leave it.
+  skip: z.string().max(20000).optional(),
 });
 
 /**
@@ -203,7 +207,7 @@ const claimsBody = z.object({
  * A spent AI budget answers 429 ai_budget: the editor leaves the claims it
  * hasn't read out of Trust.
  */
-router.post('/claims', qualityCheckLimiter, async (req, res) => {
+router.post('/claims', claimsLimiter, async (req, res) => {
   if (qualityPhase() < 2) return res.status(404).json({ error: 'Not available', code: 'off' });
   const parsed = claimsBody.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: 'invalid', code: 'invalid' });

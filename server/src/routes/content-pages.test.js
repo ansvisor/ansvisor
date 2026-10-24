@@ -290,7 +290,12 @@ describe('POST /api/content-pages/claims (Quality CE-045)', () => {
       body_html: '<p>Ledgerly is the fastest app for teams like yours.</p>',
     };
     readDraftClaims.mockReset().mockResolvedValue({
-      claims: [{ text: 'the fastest app', kind: 'superlative' }],
+      paragraphs: [
+        {
+          text: 'Ledgerly is the fastest app for teams like yours.',
+          claims: [{ text: 'the fastest app', kind: 'superlative' }],
+        },
+      ],
       pending: 0,
       limited: false,
     });
@@ -300,11 +305,9 @@ describe('POST /api/content-pages/claims (Quality CE-045)', () => {
   it("reads the draft's own paragraphs as saved, leaving the one being written", async () => {
     const res = await ask({ draftId: DRAFT, skip: 'Ledgerly is the fastest' });
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({
-      claims: [{ text: 'the fastest app', kind: 'superlative' }],
-      pending: 0,
-      limited: false,
-    });
+    expect((await res.json()).paragraphs[0].claims).toEqual([
+      { text: 'the fastest app', kind: 'superlative' },
+    ]);
     expect(readDraftClaims).toHaveBeenCalledWith({
       orgId: 'o1',
       draftId: DRAFT,
@@ -327,7 +330,7 @@ describe('POST /api/content-pages/claims (Quality CE-045)', () => {
     org = 'o2';
     expect((await ask({ draftId: DRAFT })).status).toBe(403);
     expect((await ask({ draftId: 'nope' })).status).toBe(400);
-    expect((await ask({ draftId: DRAFT, skip: 'x'.repeat(5001) })).status).toBe(400);
+    expect((await ask({ draftId: DRAFT, skip: 'x'.repeat(20001) })).status).toBe(400);
     expect(readDraftClaims).not.toHaveBeenCalled();
   });
 });

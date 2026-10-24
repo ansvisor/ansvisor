@@ -86,6 +86,20 @@ export const qualityCheckLimiter = rateLimit({
   },
 });
 
+// Quality's claims (CE-045): the editor asks after saves, as it does for
+// the sources' kinds, but from a bucket of its own, so neither starves the other.
+export const claimsLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 30,
+  keyGenerator: apiLimiterKey,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    success: false,
+    message: 'Too many requests, please try again later.',
+  },
+});
+
 // Stricter limit for public/unauthenticated endpoints: 30 requests per 15 minutes
 export const publicLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,

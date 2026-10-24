@@ -55,8 +55,10 @@ vi.mock('ai', async (importOriginal) => ({
   generateObject: (...args) => generateObject(...args),
 }));
 
+const { NoObjectGeneratedError } = await import('ai');
 const {
   CLAIMS_HOLD_USD,
+  LEFT_FOR_SOURCES,
   PARAGRAPHS_PER_CALL,
   buildClaimsPrompt,
   draftParagraphs,
@@ -103,15 +105,21 @@ beforeEach(() => {
 const read = (over = {}) => readDraftClaims({ orgId: 'o1', draftId: 'd1', html, ...over });
 
 describe('draftParagraphs', () => {
-  it('reads each paragraph and list item on its own, long enough to hold a claim, once', () => {
+  it('reads the blocks as the editor’s Trust does, each once, long enough to hold a claim', () => {
     const page =
-      `<p>${FAST}</p><ul><li>${SOC}<ul><li>A nested item long enough to be read on its own.</li></ul></li></ul>` +
-      `<p>Too short.</p><p>${FAST}</p><li><p>Inside an item, read with the item and not twice.</p></li>`;
+      `<p>${FAST}</p><ul><li>${SOC}<ul><li>Award-winning support</li></ul></li></ul>` +
+      `<p>Too short</p><p>${FAST}</p><li><p>Inside an item, read with the item.</p></li>` +
+      '<blockquote><p>Rated #1 by G2.</p><p>Loved by users.</p></blockquote>' +
+      '<table><tr><td><p>Clinically tested</p></td></tr></table>' +
+      '<p>Trusted by teams.<br>Studies show it <a href="https://x.example">works</a>.</p>';
     expect(draftParagraphs(page).map((p) => p.text)).toEqual([
       FAST,
       SOC,
-      'A nested item long enough to be read on its own.',
-      'Inside an item, read with the item and not twice.',
+      'Award-winning support',
+      'Inside an item, read with the item.',
+      'Rated #1 by G2. Loved by users.',
+      'Clinically tested',
+      'Trusted by teams. Studies show it works.',
     ]);
     expect(paragraphHash(` ${FAST}  `)).toBe(paragraphHash(FAST));
     expect(paragraphHash(FAST)).toMatch(/^[0-9a-f]{16}$/);
@@ -139,10 +147,15 @@ describe('readDraftClaims', () => {
   it('reads the paragraphs not read yet in one call, keeps each, and holds the budget as quality', async () => {
     const result = await read();
     expect(result).toEqual({
-      claims: [
-        { text: 'the fastest forecasting app', kind: 'superlative' },
-        { text: 'SOC 2 certified', kind: 'fact' },
-        { text: 'studies show teams save hours', kind: 'stat' },
+      paragraphs: [
+        { text: FAST, claims: [{ text: 'the fastest forecasting app', kind: 'superlative' }] },
+        {
+          text: SOC,
+          claims: [
+            { text: 'SOC 2 certified', kind: 'fact' },
+            { text: 'studies show teams save hours', kind: 'stat' },
+          ],
+        },
       ],
       pending: 0,
       limited: false,
@@ -173,7 +186,9 @@ describe('readDraftClaims', () => {
     ];
     const result = await read();
     expect(generateObject).not.toHaveBeenCalled();
-    expect(result.claims).toEqual([{ text: 'the fastest', kind: 'superlative' }]);
+    expect(result.paragraphs).toEqual([
+      { text: FAST, claims: [{ text: 'the fastest', kind: 'superlative' }] },
+    ]);
     expect(deletes).toEqual([
       [
         ['draft_id', 'd1'],
@@ -186,7 +201,7 @@ describe('readDraftClaims', () => {
     const result = await read({ skip: SOC });
     expect(generateObject.mock.calls[0][0].prompt).toBe(`Paragraphs:\n[1] ${FAST}`);
     expect(result.pending).toBe(0);
-    expect(result.claims.map((c) => c.text)).toEqual(['the fastest forecasting app']);
+    expect(result.paragraphs.map((p) => p.text)).toEqual([FAST]);
   });
 
   it('keeps a paragraph the model left out as read, with no claims', async () => {
@@ -219,14 +234,70 @@ describe('readDraftClaims', () => {
     expect(result.pending).toBe(1);
   });
 
-  it("calls no model once the draft's day's Quality calls are made", async () => {
-    readsToday = QUALITY_CALLS_PER_DAY;
+  it("calls no model once the draft's day's Quality calls are made, some left to its sources", async () => {
+    readsToday = QUALITY_CALLS_PER_DAY - LEFT_FOR_SOURCES;
     const result = await read();
     expect(generateObject).not.toHaveBeenCalled();
-    expect(result).toEqual({ claims: [], pending: 2, limited: true });
+    expect(result).toEqual({ paragraphs: [], pending: 2, limited: true });
   });
 
-  it('keeps the hold of a call its timeout cut off, and charges an answer that missed the schema', async () => {
+  it('reads a paragraph answered twice with both answers, each claim once', async () => {
+    generateObject.mockResolvedValueOnce({
+      object: {
+        paragraphs: [
+          { n: 2, claims: [{ text: 'SOC 2 certified', kind: 'fact' }] },
+          {
+            n: 2,
+            claims: [
+              { text: 'SOC 2 certified', kind: 'fact' },
+              { text: 'studies show', kind: 'stat' },
+            ],
+          },
+          // A kind it doesn't know: that claim goes, not the answer.
+          { n: 1, claims: [{ text: 'the fastest', kind: 'opinion' }] },
+        ],
+      },
+      usage: {},
+    });
+    const result = await read();
+    expect(result.paragraphs).toEqual([
+      {
+        text: SOC,
+        claims: [
+          { text: 'SOC 2 certified', kind: 'fact' },
+          { text: 'studies show', kind: 'stat' },
+        ],
+      },
+    ]);
+  });
+
+  it('charges an answer that missed the schema, and reads its paragraphs with none', async () => {
+    generateObject.mockRejectedValueOnce(
+      new NoObjectGeneratedError({
+        message: 'no object',
+        text: '{}',
+        response: {},
+        usage: { inputTokens: 300, outputTokens: 5 },
+        finishReason: 'stop',
+      }),
+    );
+    const result = await read();
+    expect(charge).toHaveBeenCalledWith({ inputTokens: 300, outputTokens: 5 });
+    expect(result).toEqual({ paragraphs: [], pending: 0, limited: false });
+    // Kept as read: not sent, and charged, again on the next save.
+    expect(upserts[0].rows.map((r) => r.claims)).toEqual([[], []]);
+  });
+
+  it('sends a call no more than its share of words', async () => {
+    const long = (i) => `<p>Paragraph ${i} ${'is the best tool there is. '.repeat(80)}</p>`;
+    generateObject.mockResolvedValue({ object: { paragraphs: [] }, usage: {} });
+    const result = await read({ html: [0, 1, 2, 3, 4, 5, 6].map(long).join('') });
+    // Each counted at 2,000 characters at most: three to a call, two calls an ask.
+    expect(generateObject).toHaveBeenCalledTimes(2);
+    expect(result.pending).toBe(1);
+  });
+
+  it('keeps the hold of a call its timeout cut off', async () => {
     const timeout = Object.assign(new Error('timed out'), { name: 'TimeoutError' });
     generateObject.mockRejectedValueOnce(timeout);
     await expect(read()).rejects.toThrow('timed out');
