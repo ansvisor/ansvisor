@@ -110,7 +110,7 @@ export function siteTypeOf({ siteType, industry, shoppingModeEnabled } = {}) {
 }
 
 /** What each kind of site is, for a model prompt: the proof a page asks for follows it. */
-const SITE_TYPE_MEANINGS = {
+export const SITE_TYPE_MEANINGS = {
   b2b: 'software or services sold to businesses',
   ecommerce: 'an online shop selling products',
   b2c: 'a service for consumers',
