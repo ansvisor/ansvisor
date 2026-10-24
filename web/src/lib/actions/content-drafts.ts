@@ -227,7 +227,7 @@ export async function getContentDraft(id: string): Promise<ContentDraft | null> 
   const { data, error } = await supabase
     .from('content_drafts')
     .select(
-      `id, brand_id, title, page_type, page_type_source, method, status, body_html, author, author_id, source_url, rules, kept_sources, action_id, agent_state, agent_state_at, agent_run, updated_at, ${BRAND_SITE}, actions(action_no)`,
+      `id, brand_id, title, page_type, page_type_source, method, status, body_html, author, author_id, source_url, rules, kept_sources, author_real_at, author_profile_at, action_id, agent_state, agent_state_at, agent_run, updated_at, ${BRAND_SITE}, actions(action_no)`,
     )
     .eq('id', id)
     .maybeSingle();
@@ -248,6 +248,7 @@ export async function getContentDraft(id: string): Promise<ContentDraft | null> 
     authorId: data.author_id,
     rules: draftRulesSchema.safeParse(data.rules).data ?? NO_DRAFT_RULES,
     keptSources: data.kept_sources ?? [],
+    authorConfirmed: { real: !!data.author_real_at, profile: !!data.author_profile_at },
     action:
       data.action_id && data.actions
         ? { id: data.action_id, number: data.actions.action_no }
@@ -1359,6 +1360,35 @@ export async function setContentDraftAuthor(id: string, authorId: string | null)
     .select('id')
     .maybeSingle();
   if (error?.code === OTHER_ORGANIZATION) throw new Error('invalid');
+  if (error) throw new Error(error.message);
+  if (!data) throw new Error('not_found');
+}
+
+/**
+ * Confirms, or takes back, what the person says of the author their site
+ * names (00271): a real person (`real`), their profile with a bio and links
+ * (`profile`). Who and when are stamped by the database, from the session.
+ */
+export async function confirmDraftAuthor(
+  id: string,
+  what: 'real' | 'profile',
+  on: boolean,
+): Promise<void> {
+  if (
+    !draftId.safeParse(id).success ||
+    (what !== 'real' && what !== 'profile') ||
+    typeof on !== 'boolean'
+  ) {
+    throw new Error('invalid');
+  }
+  const at = on ? new Date().toISOString() : null;
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from('content_drafts')
+    .update(what === 'real' ? { author_real_at: at } : { author_profile_at: at })
+    .eq('id', id)
+    .select('id')
+    .maybeSingle();
   if (error) throw new Error(error.message);
   if (!data) throw new Error('not_found');
 }

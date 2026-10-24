@@ -18,6 +18,7 @@ const saveContentDraft = vi.fn();
 const setContentDraftPageType = vi.fn();
 const setContentDraftAuthor = vi.fn();
 const keepDraftSource = vi.fn();
+const confirmDraftAuthor = vi.fn();
 const checkDraftClaims = vi.fn();
 const checkDraftLinks = vi.fn();
 const getSiteTrust = vi.fn();
@@ -84,6 +85,7 @@ vi.mock('@/lib/actions/content-drafts', () => ({
   setContentDraftPageType: (...args: unknown[]) => setContentDraftPageType(...args),
   setContentDraftAuthor: (...args: unknown[]) => setContentDraftAuthor(...args),
   keepDraftSource: (...args: unknown[]) => keepDraftSource(...args),
+  confirmDraftAuthor: (...args: unknown[]) => confirmDraftAuthor(...args),
   checkDraftClaims: (...args: unknown[]) => checkDraftClaims(...args),
   checkDraftLinks: (...args: unknown[]) => checkDraftLinks(...args),
 }));
@@ -208,6 +210,7 @@ const draft = (over: Partial<ContentDraft> = {}): ContentDraft => ({
   authorId: null,
   rules: { set: null, source: null, overrides: {}, textRules: [] },
   keptSources: [],
+  authorConfirmed: { real: false, profile: false },
   action: null,
   agentState: null,
   agentSince: null,
@@ -282,6 +285,7 @@ beforeEach(() => {
   setContentDraftPageType.mockReset().mockResolvedValue(undefined);
   setContentDraftAuthor.mockReset().mockResolvedValue(undefined);
   keepDraftSource.mockReset();
+  confirmDraftAuthor.mockReset().mockResolvedValue(undefined);
   checkDraftClaims.mockReset().mockResolvedValue({ blocks: [], pending: 0, limited: false });
   checkDraftLinks.mockReset().mockResolvedValue({ links: [], skipped: [] });
   getSiteTrust.mockReset().mockRejectedValue(new Error('not in this test'));
@@ -2460,6 +2464,38 @@ describe('the side panel', () => {
       expect(
         [...panel()!.querySelectorAll('[role="radio"]')].map((el) => el.textContent),
       ).not.toContainEqual(expect.stringContaining('Quality'));
+    });
+
+    it('saves the author the site names as confirmed, and puts it back when the save fails (00271)', async () => {
+      process.env.NEXT_PUBLIC_CONTENT_QUALITY_PHASE = '1';
+      getContentAuthors.mockResolvedValue({
+        authors: [],
+        brands: [{ id: 'b1', name: 'Acme' }],
+        me: { id: 'u1', role: 'admin' },
+      });
+      getContentDraft.mockResolvedValue(readable);
+      window.innerWidth = 1440;
+      await renderPage();
+      const chip = [...container.querySelectorAll<HTMLButtonElement>('header button')].find((b) =>
+        b.textContent?.startsWith('Quality'),
+      )!;
+      await act(async () => chip.click());
+      const box = () => panel()!.querySelector<HTMLButtonElement>('[role="checkbox"]')!;
+      expect(box().getAttribute('aria-checked')).toBe('false');
+      await act(async () => box().click());
+      expect(confirmDraftAuthor).toHaveBeenCalledWith(readable.id, 'real', true);
+      expect(box().getAttribute('aria-checked')).toBe('true');
+      expect(panel()!.textContent).toContain('E-E-A-T60');
+
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+      try {
+        confirmDraftAuthor.mockRejectedValueOnce(new Error('offline'));
+        await act(async () => box().click());
+        expect(toast.error).toHaveBeenCalledWith("Couldn't save that. Try again.");
+        expect(box().getAttribute('aria-checked')).toBe('true');
+      } finally {
+        vi.mocked(console.error).mockRestore();
+      }
     });
 
     it('scores the page as written, in the header and Instructions › Quality', async () => {

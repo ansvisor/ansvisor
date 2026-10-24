@@ -162,6 +162,11 @@ export interface ContentDraft {
   rules: DraftRules;
   /** Weak or competitors' sources the person kept (Quality CE-046, 00263): they don't lower Trust. */
   keptSources: string[];
+  /**
+   * With no author picked, what a member confirmed of the author the site
+   * names (00271): a real person, and their profile with a bio and links.
+   */
+  authorConfirmed: { real: boolean; profile: boolean };
   /** The Action Center action the draft is the work of (CE-022), shown as "from Action AC-214". */
   action: { id: string; number: number } | null;
   /** Where the Content Agent is on it (CE-015): the editor waits while it writes. */
