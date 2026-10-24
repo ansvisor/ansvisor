@@ -30,8 +30,14 @@ function Probe({
   savedAt: string;
   enabled: boolean;
 }) {
-  const { kinds, paused } = useSourceClasses('d1', savedAt, sites, enabled);
-  return <pre data-kinds={JSON.stringify([...kinds])} data-paused={String(paused)} />;
+  const { kinds, paused, reading } = useSourceClasses('d1', savedAt, sites, enabled);
+  return (
+    <pre
+      data-kinds={JSON.stringify([...kinds])}
+      data-paused={String(paused)}
+      data-reading={String(reading)}
+    />
+  );
 }
 
 const kinds = () =>
@@ -55,7 +61,26 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
+const reading = () => container.querySelector('pre')?.getAttribute('data-reading') === 'true';
+
 describe('useSourceClasses', () => {
+  it('is reading a site until it has its kind, or its ask at this save is answered', async () => {
+    await render(['blog.example']);
+    expect(reading()).toBe(true);
+    await wait();
+    expect(reading()).toBe(false);
+    // An ask that fails: read again after the next save, not reading meanwhile.
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    classifyDraftSources.mockRejectedValueOnce(new Error('offline'));
+    await render(['blog.example', 'forum.example']);
+    expect(reading()).toBe(true);
+    await wait();
+    expect(reading()).toBe(false);
+    await render(['blog.example', 'forum.example'], 's2');
+    expect(reading()).toBe(true);
+    vi.mocked(console.error).mockRestore();
+  });
+
   it('asks about the sites a few seconds after a save, and keeps each read', async () => {
     await render(['blog.example']);
     await wait(SOURCE_CLASS_DELAY_MS - 100);

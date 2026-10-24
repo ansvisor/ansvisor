@@ -595,12 +595,11 @@ export function DraftEditor({
         : [],
     [sourcesOn, brandDomains, pageBlocks, competitorDomains, pageType, keptSources],
   );
-  const { kinds: aiKinds, paused: aiPaused } = useSourceClasses(
-    draft.id,
-    autosave.savedAt,
-    unplaced,
-    sourcesOn,
-  );
+  const {
+    kinds: aiKinds,
+    paused: aiPaused,
+    reading: sourcesReading,
+  } = useSourceClasses(draft.id, autosave.savedAt, unplaced, sourcesOn);
   // The claims in the draft's own words, as the model reads them (CE-045):
   // asked after a save, leaving the block the person is writing in.
   const claimsRead = useClaims(
@@ -809,7 +808,7 @@ export function DraftEditor({
   // The score the header and the panel show (CE-039): once the reads that
   // move it are in, or failed (the authors and, in phase 2, Your input for
   // E-E-A-T; the site's trust, the sources, the links and, in phase 2, the
-  // claims for Trust). Until the first time it says
+  // claims and the sites' kinds for Trust). Until the first time it says
   // it's reading; after, it keeps the last settled score while new reads
   // land (a link added, the agent's page), so it never jumps through the
   // partial averages on the way.
@@ -820,7 +819,8 @@ export function DraftEditor({
     siteTrustRead &&
     reads.sources !== null &&
     linksPending === 0 &&
-    !claimsRead.reading;
+    !claimsRead.reading &&
+    !sourcesReading;
   const [shownQuality, setShownQuality] = useState<{ score: number | null } | null>(null);
   if (qualitySettled && shownQuality?.score !== qualityScore) {
     setShownQuality({ score: qualityScore });
@@ -2444,10 +2444,12 @@ export function DraftEditor({
               type="button"
               onClick={() => openPanelTab('quality')}
               title={t('qualityChipHint')}
-              aria-busy
               className="inline-flex h-5 shrink-0 items-center gap-1.5 rounded-full border bg-muted/40 px-2 text-xs font-medium text-muted-foreground"
             >
-              <span aria-hidden className="h-1.5 w-1.5 animate-pulse rounded-full bg-current" />
+              <span
+                aria-hidden
+                className="h-1.5 w-1.5 animate-pulse rounded-full bg-current motion-reduce:animate-none"
+              />
               {t('qualityChipReading')}
             </button>
           )}
@@ -2456,7 +2458,6 @@ export function DraftEditor({
               type="button"
               onClick={() => openPanelTab('quality')}
               title={t('qualityChipHint')}
-              aria-busy={!qualitySettled}
               className={cn(
                 'inline-flex h-5 shrink-0 items-center gap-1.5 rounded-full border px-2 text-xs font-medium tabular-nums',
                 BAND_CLASSES[qualityBand(shownScore)],
@@ -2467,7 +2468,7 @@ export function DraftEditor({
                 className={cn(
                   'h-1.5 w-1.5 rounded-full bg-current',
                   // New reads landing: the score may move once they're in.
-                  !qualitySettled && 'animate-pulse',
+                  !qualitySettled && 'animate-pulse motion-reduce:animate-none',
                 )}
               />
               {t('qualityChip', { score: shownScore })}

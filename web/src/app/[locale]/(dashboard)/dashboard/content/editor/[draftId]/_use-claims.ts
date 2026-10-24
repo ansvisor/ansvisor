@@ -51,6 +51,8 @@ export function useClaims(
   const [off, setOff] = useState(false);
   const [out, setOut] = useState(false);
   const [pending, setPending] = useState(0);
+  // The save the last ask went out for: a later one is still to be read.
+  const [askedSave, setAskedSave] = useState<string | null>(null);
   // Bumped when the next ask needn't wait for a save: one is out, or
   // something was left for later.
   const [again, setAgain] = useState(0);
@@ -85,6 +87,7 @@ export function useClaims(
       const skip = reader.current();
       asking.current = true;
       askedFor.current = savedAt;
+      setAskedSave(savedAt);
       lastAsk.current = Date.now();
       skipped.current = skip;
       left.current = false;
@@ -108,7 +111,9 @@ export function useClaims(
         })
         .catch((err) => {
           console.error('Failed to read the claims:', err);
-          if (open.current) setBlocks((prev) => prev ?? []);
+          if (!open.current) return;
+          setBlocks((prev) => prev ?? []);
+          setPending(0);
         })
         .finally(() => {
           asking.current = false;
@@ -128,6 +133,12 @@ export function useClaims(
     if (!asking.current) setAgain((n) => n + 1);
   }, []);
 
-  const reading = enabled && !paused && !limited && !off && (blocks === null || out || pending > 0);
+  // A save not asked about yet counts: its claims may move Trust once read.
+  const reading =
+    enabled &&
+    !paused &&
+    !limited &&
+    !off &&
+    (blocks === null || out || pending > 0 || askedSave !== savedAt);
   return { blocks, paused, limited, reading, recheck };
 }

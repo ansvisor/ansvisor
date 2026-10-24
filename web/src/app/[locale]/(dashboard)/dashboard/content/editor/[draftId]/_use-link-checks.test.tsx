@@ -105,6 +105,16 @@ describe('useLinkChecks', () => {
     expect(seen().get('https://new.example/')?.status).toBe('ok');
   });
 
+  it('counts a call that fails on its own as a failed read: no read is coming in this save', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    checkDraftLinks.mockRejectedValueOnce(new Error('offline'));
+    await render(['https://a.example/']);
+    expect(pending()).toBe(1);
+    await wait();
+    expect(pending()).toBe(0);
+    vi.mocked(console.error).mockRestore();
+  });
+
   it("doesn't ask again in the same save after a failed ask, nor with Quality off", async () => {
     checkDraftLinks.mockResolvedValue({ error: 'failed' });
     vi.spyOn(console, 'error').mockImplementation(() => {});

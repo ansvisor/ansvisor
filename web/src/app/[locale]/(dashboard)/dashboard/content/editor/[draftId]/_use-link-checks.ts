@@ -54,26 +54,32 @@ export function useLinkChecks(
     if (!fresh.length) return;
     const timer = setTimeout(() => {
       for (const href of fresh) askedAt.current.set(href, savedAt);
-      void checkDraftLinks(draftId).then((result) => {
-        if ('error' in result) {
-          console.error('Failed to check the draft links:', result.error);
-          if (open.current) {
-            setFailedAt((prev) => new Map([...prev, ...fresh.map((h) => [h, savedAt] as const)]));
+      const failed = (hrefs: string[]) =>
+        setFailedAt((prev) => new Map([...prev, ...hrefs.map((h) => [h, savedAt] as const)]));
+      void checkDraftLinks(draftId)
+        .then((result) => {
+          if ('error' in result) {
+            console.error('Failed to check the draft links:', result.error);
+            if (open.current) failed(fresh);
+            return;
           }
-          return;
-        }
-        if (!open.current) return;
-        if (result.skipped.length) setSkipped((prev) => new Set([...prev, ...result.skipped]));
-        // A link the API never reads is as good as read: it isn't asked about again.
-        for (const href of [...result.links.map((l) => l.href), ...result.skipped]) {
-          read.current.add(href);
-        }
-        setChecks((prev) => {
-          const next = new Map(prev);
-          for (const link of result.links) next.set(link.href, link);
-          return next;
+          if (!open.current) return;
+          if (result.skipped.length) setSkipped((prev) => new Set([...prev, ...result.skipped]));
+          // A link the API never reads is as good as read: it isn't asked about again.
+          for (const href of [...result.links.map((l) => l.href), ...result.skipped]) {
+            read.current.add(href);
+          }
+          setChecks((prev) => {
+            const next = new Map(prev);
+            for (const link of result.links) next.set(link.href, link);
+            return next;
+          });
+        })
+        // The call failing on its own (the network, a deploy meanwhile): as a failed read.
+        .catch((err) => {
+          console.error('Failed to check the draft links:', err);
+          if (open.current) failed(fresh);
         });
-      });
     }, LINK_CHECK_DELAY_MS);
     return () => clearTimeout(timer);
   }, [draftId, savedAt, key, enabled]);

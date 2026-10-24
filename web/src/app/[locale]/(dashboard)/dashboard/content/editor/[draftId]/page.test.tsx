@@ -2491,7 +2491,6 @@ describe('the side panel', () => {
         );
       // Readability alone would say more than the page is worth: no number yet.
       expect(chip()?.textContent).toBe('Quality · reading…');
-      expect(chip()?.getAttribute('aria-busy')).toBe('true');
       await act(async () =>
         authorsIn({
           authors: [],
@@ -2500,10 +2499,26 @@ describe('the side panel', () => {
         }),
       );
       expect(chip()?.textContent).toMatch(/^Quality \d+ · (Strong|Can improve|Needs work)$/);
-      expect(chip()?.getAttribute('aria-busy')).toBe('false');
       const score = chip()!.textContent!.match(/\d+/)![0];
       await act(async () => chip()!.click());
       expect(selectedSegment()).toContain(`Quality${score}`);
+    });
+
+    it('shows the score once the authors fail to load too', async () => {
+      process.env.NEXT_PUBLIC_CONTENT_QUALITY_PHASE = '1';
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+      try {
+        getContentAuthors.mockRejectedValue(new Error('offline'));
+        getContentDraft.mockResolvedValue(readable);
+        window.innerWidth = 1440;
+        await renderPage();
+        const chip = [...container.querySelectorAll<HTMLButtonElement>('header button')].find((b) =>
+          b.textContent?.startsWith('Quality'),
+        );
+        expect(chip?.textContent).toMatch(/^Quality \d+/);
+      } finally {
+        vi.mocked(console.error).mockRestore();
+      }
     });
 
     it("asks for Your input in its second phase, and Add opens it at Brief's top (CE-048)", async () => {
