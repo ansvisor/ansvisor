@@ -48,6 +48,19 @@ describe('eeat (Phase 1: the author)', () => {
     expect(scoreGain(result, ['byline'])).toBe(60);
   });
 
+  it("counts the person's own image as visual proof, and none with images or spots unconfirmed (CE-049)", () => {
+    const visual = (images: number, own: number, openSpots: number) =>
+      eeat({ author: author(), visual: { images, own, openSpots } }).checks.find(
+        (c) => c.id === 'visualProof',
+      );
+    expect(visual(2, 1, 0)).toEqual({ id: 'visualProof', points: 10, max: 10 });
+    expect(visual(2, 0, 0)).toEqual({ id: 'visualProof', points: 0, max: 10 });
+    expect(visual(0, 0, 1)).toEqual({ id: 'visualProof', points: 0, max: 10 });
+    // No image and nothing suggested: the check is left out.
+    expect(visual(0, 0, 0)).toBeUndefined();
+    expect(eeat({ author: author() }).checks.find((c) => c.id === 'visualProof')).toBeUndefined();
+  });
+
   it('gives half the profile points for a bio or links alone', () => {
     // byline 15 + bio 5 of 25.
     expect(eeat({ author: author({ sameAs: [] }) }).score).toBe(80);

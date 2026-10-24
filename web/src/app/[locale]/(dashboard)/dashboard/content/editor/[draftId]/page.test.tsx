@@ -20,6 +20,8 @@ const setContentDraftAuthor = vi.fn();
 const keepDraftSource = vi.fn();
 const checkDraftClaims = vi.fn();
 const readDraftPage = vi.fn();
+const getOwnImages = vi.fn();
+const confirmOwnImage = vi.fn();
 const getBrandFacts = vi.fn();
 const checkDraftLinks = vi.fn();
 const getSiteTrust = vi.fn();
@@ -91,6 +93,8 @@ vi.mock('@/lib/actions/content-drafts', () => ({
   keepDraftSource: (...args: unknown[]) => keepDraftSource(...args),
   checkDraftClaims: (...args: unknown[]) => checkDraftClaims(...args),
   readDraftPage: (...args: unknown[]) => readDraftPage(...args),
+  getOwnImages: (...args: unknown[]) => getOwnImages(...args),
+  confirmOwnImage: (...args: unknown[]) => confirmOwnImage(...args),
   checkDraftLinks: (...args: unknown[]) => checkDraftLinks(...args),
 }));
 vi.mock('next/navigation', () => ({ useParams: () => ({ draftId: 'd1' }) }));
@@ -290,6 +294,8 @@ beforeEach(() => {
   keepDraftSource.mockReset();
   checkDraftClaims.mockReset().mockResolvedValue({ blocks: [], pending: 0, limited: false });
   readDraftPage.mockReset().mockResolvedValue({ error: 'off' });
+  getOwnImages.mockReset().mockResolvedValue([]);
+  confirmOwnImage.mockReset().mockResolvedValue('ok');
   getBrandFacts.mockReset().mockResolvedValue({
     facts: [],
     pages: [],
@@ -2465,6 +2471,7 @@ describe('the side panel', () => {
     });
     afterEach(() => {
       delete process.env.NEXT_PUBLIC_CONTENT_QUALITY_PHASE;
+      vi.useRealTimers();
     });
 
     it('shows nothing of Quality until its first phase is live', async () => {
@@ -2495,6 +2502,7 @@ describe('the side panel', () => {
 
     it("asks for Your input in its second phase, and Add opens it at Brief's top (CE-048)", async () => {
       process.env.NEXT_PUBLIC_CONTENT_QUALITY_PHASE = '2';
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
       getContentAuthors.mockResolvedValue({
         authors: [],
         brands: [{ id: 'b1', name: 'Acme' }],
@@ -2505,6 +2513,8 @@ describe('the side panel', () => {
       getContentDraft.mockResolvedValue(readable);
       window.innerWidth = 1440;
       await renderPage();
+      // In phase 2 E-E-A-T waits for the page's read (its visual proof), after the save.
+      await act(async () => void (await vi.advanceTimersByTimeAsync(3_000)));
       expect(getDraftInputs).toHaveBeenCalledWith(readable.id);
       const chip = [...container.querySelectorAll<HTMLButtonElement>('header button')].find((b) =>
         b.textContent?.startsWith('Quality'),
@@ -2867,6 +2877,79 @@ describe('the side panel', () => {
       await act(async () => void pm.commands.undo());
       expect(container.querySelector('.ProseMirror img')).toBeNull();
       expect(container.querySelector('.ProseMirror [data-proof-spot]')).not.toBeNull();
+    });
+
+    it("confirms the page's own image from Quality, and counts it as visual proof (CE-049, part d)", async () => {
+      process.env.NEXT_PUBLIC_CONTENT_QUALITY_PHASE = '2';
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+      getContentAuthors.mockResolvedValue({
+        authors: [],
+        brands: [{ id: 'b1', name: 'Acme' }],
+        me: { id: 'u1', role: 'admin' },
+      });
+      getDraftInputs.mockResolvedValue({ experience: '', data: [], ansvisorData: [], quotes: [] });
+      getContentDraft.mockResolvedValue(
+        draft({
+          bodyHtml: `<h1>Pipeline forecasting</h1><p>${said} It is easy to set up for any team.</p><img src="https://cdn.acme.com/run.png" alt="A forecast run">`,
+        }),
+      );
+      window.innerWidth = 1440;
+      await renderPage();
+      // The image's page is saved as the editor writes it; the page's read
+      // (here off) comes a few seconds after that save.
+      await act(async () => void (await vi.advanceTimersByTimeAsync(3_000)));
+      await act(async () => void (await vi.advanceTimersByTimeAsync(3_000)));
+      const chip = [...container.querySelectorAll<HTMLButtonElement>('header button')].find((b) =>
+        b.textContent?.startsWith('Quality'),
+      )!;
+      await act(async () => chip.click());
+      const row = () =>
+        [...panel()!.querySelectorAll('[aria-label="Your to-dos"] li')].find((li) =>
+          li.textContent?.startsWith('Show your own image'),
+        )!;
+      expect(row().textContent).toContain("Is the page's image your own");
+      await act(async () =>
+        [...row().querySelectorAll('button')].find((b) => b.textContent === 'Confirm')!.click(),
+      );
+      const box = document.querySelector<HTMLButtonElement>('[role="dialog"] [role="checkbox"]')!;
+      await act(async () => box.click());
+      expect(confirmOwnImage).toHaveBeenCalledWith('d1', 'https://cdn.acme.com/run.png');
+      expect(box.getAttribute('aria-checked')).toBe('true');
+      expect(row().textContent).toContain('The page shows your own image');
+    });
+
+    it('takes a confirm back when the draft keeps 50 already (CE-049, part d)', async () => {
+      process.env.NEXT_PUBLIC_CONTENT_QUALITY_PHASE = '2';
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+      getContentAuthors.mockResolvedValue({
+        authors: [],
+        brands: [{ id: 'b1', name: 'Acme' }],
+        me: { id: 'u1', role: 'admin' },
+      });
+      confirmOwnImage.mockResolvedValue('full');
+      getContentDraft.mockResolvedValue(
+        draft({
+          bodyHtml: `<h1>Pipeline forecasting</h1><p>${said} It is easy to set up for any team.</p><img src="https://cdn.acme.com/run.png" alt="A forecast run">`,
+        }),
+      );
+      window.innerWidth = 1440;
+      await renderPage();
+      await act(async () => void (await vi.advanceTimersByTimeAsync(3_000)));
+      await act(async () => void (await vi.advanceTimersByTimeAsync(3_000)));
+      const chip = [...container.querySelectorAll<HTMLButtonElement>('header button')].find((b) =>
+        b.textContent?.startsWith('Quality'),
+      )!;
+      await act(async () => chip.click());
+      const row = [...panel()!.querySelectorAll('[aria-label="Your to-dos"] li')].find((li) =>
+        li.textContent?.startsWith('Show your own image'),
+      )!;
+      await act(async () =>
+        [...row.querySelectorAll('button')].find((b) => b.textContent === 'Confirm')!.click(),
+      );
+      const box = document.querySelector<HTMLButtonElement>('[role="dialog"] [role="checkbox"]')!;
+      await act(async () => box.click());
+      expect(toast.error).toHaveBeenCalledWith('This page keeps 50 confirmed images already.');
+      expect(box.getAttribute('aria-checked')).toBe('false');
     });
 
     it('takes the claim’s sentence out on Remove', async () => {

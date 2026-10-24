@@ -1374,6 +1374,42 @@ export type Database = {
           },
         ]
       }
+      content_draft_own_images: {
+        Row: {
+          confirmed_at: string
+          confirmed_by: string | null
+          draft_id: string
+          src: string
+        }
+        Insert: {
+          confirmed_at?: string
+          confirmed_by?: string | null
+          draft_id: string
+          src: string
+        }
+        Update: {
+          confirmed_at?: string
+          confirmed_by?: string | null
+          draft_id?: string
+          src?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "content_draft_own_images_draft_id_fkey"
+            columns: ["draft_id"]
+            isOneToOne: false
+            referencedRelation: "content_drafts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "content_draft_own_images_confirmed_by_fkey"
+            columns: ["confirmed_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       content_draft_ready_log: {
         Row: {
           created_at: string

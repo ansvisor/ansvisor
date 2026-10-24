@@ -92,6 +92,8 @@ export function NextNudge({
   onPickAuthor,
   onAddInput,
   onAddSource,
+  onConfirmImages,
+  onAddImage,
   onLater,
   onAct,
 }: {
@@ -105,6 +107,9 @@ export function NextNudge({
   onAddInput?: () => void;
   /** A proof to-do's: its claim selected, the link dialog open (CE-049). */
   onAddSource?: (claim: ClaimMark) => void;
+  /** Visual proof's: Confirm, or the first open spot's Add image (CE-049). */
+  onConfirmImages?: () => void;
+  onAddImage?: () => void;
   onLater: () => void;
   /** It was acted on: it goes. */
   onAct: () => void;
@@ -184,6 +189,19 @@ export function NextNudge({
                 }}
               >
                 {t('act.addProof')}
+              </button>
+            )
+          ) : action === 'confirmImage' || action === 'addImage' ? (
+            (action === 'confirmImage' ? onConfirmImages : onAddImage) && (
+              <button
+                type="button"
+                className={actClass}
+                onClick={() => {
+                  onAct();
+                  (action === 'confirmImage' ? onConfirmImages : onAddImage)!();
+                }}
+              >
+                {t(`act.${action}`)}
               </button>
             )
           ) : action === 'reviewBrandFacts' ? (

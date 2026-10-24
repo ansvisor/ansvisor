@@ -4009,7 +4009,8 @@
           "captionLabel": "Caption (optional)",
           "cancel": "Cancel",
           "insert": "Add image",
-          "gone": "That passage isn't on the page any more, so the image wasn't added."
+          "gone": "That passage isn't on the page any more, so the image wasn't added.",
+          "own": "This is our own image (a screenshot or photo we took), not stock"
         }
       },
       "image": {
@@ -4675,6 +4676,15 @@
             "detail": "Prices, your trial and other facts read from your own site: the page is checked against the ones you approve",
             "done": "Your brand facts are reviewed"
           },
+          "visualProof": {
+            "title": "Show your own image",
+            "next": "show your own image",
+            "detail": {
+              "confirm": "{count, plural, one {Is the page's image your own (a screenshot or photo you took), not stock? Confirm it} other {Are any of the page's # images your own (screenshots or photos you took), not stock? Confirm them}}",
+              "add": "A screenshot or photo you took, where the margin suggests one"
+            },
+            "done": "The page shows your own image"
+          },
           "proof": {
             "title": {
               "award": "Link the award page for “{claim}”",
@@ -4749,7 +4759,9 @@
             "editAuthor": "Edit now",
             "addInput": "Add now",
             "reviewBrandFacts": "Review now",
-            "addProof": "Add now"
+            "addProof": "Add now",
+            "confirmImage": "Confirm now",
+            "addImage": "Add now"
           },
           "later": "Later"
         },
@@ -4767,6 +4779,18 @@
         "addSourceTo": "Add a source to “{claim}”",
         "addProof": "Add proof link",
         "addProofFor": "Add a proof link to “{claim}”",
+        "confirmImage": "Confirm",
+        "addImage": "Add image",
+        "confirmImageFailed": "Couldn't save that. Try again.",
+        "confirmImageFull": "This page keeps 50 confirmed images already.",
+        "confirmImages": {
+          "title": "Your own images",
+          "description": "Only you can tell your own screenshots and photos from stock. Your own count as visual proof.",
+          "own": "Our own image, not stock",
+          "confirmed": "Confirmed: our own image",
+          "noAlt": "No alt text",
+          "done": "Done"
+        },
         "remove": "Remove",
         "removeClaim": "Remove “{sentence}” from the page",
         "claimNoSource": "No source for this claim. Add a source, or take it out. Content Agent will not make one up.",

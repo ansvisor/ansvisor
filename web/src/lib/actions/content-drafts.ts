@@ -2368,3 +2368,60 @@ export async function readDraftPage(
     return { error: 'failed' };
   }
 }
+
+/** The cap trigger's check violation: the draft keeps 50 confirmed images (00270). */
+const OWN_IMAGES_FULL = '23514';
+
+/** An image's address as the page and the database keep it (00270: 8–2048 characters, http(s)). */
+const ownImageSrc = z
+  .string()
+  .min(8)
+  .max(2048)
+  .regex(/^https?:\/\//);
+
+/**
+ * The page's images a member confirmed are their own, not stock (Quality
+ * CE-049, 00270): E-E-A-T's visual proof. Fails soft: none, when they
+ * can't be read.
+ */
+export async function getOwnImages(id: string): Promise<string[]> {
+  if (!draftId.safeParse(id).success) return [];
+  try {
+    const supabase = await createClient();
+    const { data, error } = await supabase
+      .from('content_draft_own_images')
+      .select('src')
+      .eq('draft_id', id);
+    if (error) throw new Error(error.message);
+    return (data ?? []).map((row) => row.src);
+  } catch (err) {
+    console.error('Failed to read the own images:', err);
+    return [];
+  }
+}
+
+/**
+ * Confirms an image on the page is the member's own (00270): their
+ * statement, kept with who made it, as themself and now. Confirmed already
+ * is fine; 'full' when the draft keeps 50.
+ */
+export async function confirmOwnImage(id: string, src: string): Promise<'ok' | 'full'> {
+  if (!draftId.safeParse(id).success || !ownImageSrc.safeParse(src).success) {
+    throw new Error('invalid');
+  }
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) throw new Error('not_found');
+  const { error } = await supabase
+    .from('content_draft_own_images')
+    // When: the database's now (its default), the time its policy checks against.
+    .upsert(
+      { draft_id: id, src, confirmed_by: user.id },
+      { onConflict: 'draft_id,src', ignoreDuplicates: true },
+    );
+  if (error?.code === OWN_IMAGES_FULL) return 'full';
+  if (error) throw new Error(error.message);
+  return 'ok';
+}

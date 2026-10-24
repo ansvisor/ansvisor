@@ -24,6 +24,8 @@ let list: Record<string, unknown>[];
 // Database functions called, and what the next one returns.
 let rpcCalls: [string, unknown][];
 let rpcResult: { data: unknown; error: { message: string } | null };
+// What an upsert answers (an own image's confirm).
+let upsertError: { code: string; message: string } | null;
 
 vi.mock('@/lib/action-center/assignees', () => ({ readAssignees: vi.fn(async () => new Map()) }));
 vi.mock('@/lib/supabase/admin', () => ({ supabaseAdmin: {} }));
@@ -70,6 +72,14 @@ vi.mock('@/lib/supabase/server', () => ({
         },
         update: (value: unknown) => ((call.op = 'update'), (call.value = value), chain),
         insert: (value: unknown) => ((call.op = 'insert'), (call.value = value), chain),
+        upsert: async (value: unknown, options: unknown) => {
+          call.op = 'upsert';
+          call.value = { value, options };
+          return { error: upsertError };
+        },
+        // A read awaited as it is: the list.
+        then: (resolve: (value: unknown) => void) =>
+          resolve(call.op === 'select' ? { data: list, error: null } : result()),
         maybeSingle: async () => result(),
         single: async () => result(),
       };
@@ -95,6 +105,8 @@ const {
   setContentDraftAuthor,
   setContentDraftPageType,
   unmarkContentDraftReady,
+  confirmOwnImage,
+  getOwnImages,
 } = await import('./content-drafts');
 const { bodyHash } = await import('@/lib/content/editor');
 
@@ -104,6 +116,7 @@ beforeEach(() => {
   updates = [];
   row = null;
   list = [];
+  upsertError = null;
   rpcCalls = [];
   rpcResult = { data: 'v-new', error: null };
   completeDraftTasks.mockReset().mockResolvedValue(0);
@@ -346,6 +359,28 @@ describe('setContentDraftAuthor', () => {
     await expect(setContentDraftAuthor('d1', AUTHOR)).rejects.toThrow('invalid');
     expect(calls).toEqual([]);
     await expect(setContentDraftAuthor(DRAFT, AUTHOR)).rejects.toThrow('not_found');
+  });
+});
+
+describe('own images (Quality CE-049, 00270)', () => {
+  const SRC = 'https://cdn.example/run.png';
+
+  it("reads the draft's confirmed images, none when they can't be read", async () => {
+    list = [{ src: SRC }];
+    expect(await getOwnImages(DRAFT)).toEqual([SRC]);
+    expect(calls[0].filters).toEqual([['eq', 'draft_id', DRAFT]]);
+    expect(await getOwnImages('d1')).toEqual([]);
+  });
+
+  it('confirms one as the member, now, once; says when the draft keeps 50', async () => {
+    expect(await confirmOwnImage(DRAFT, SRC)).toBe('ok');
+    const { value, options } = calls[0].value as { value: unknown; options: unknown };
+    // When is the database's now, the time its policy checks against.
+    expect(value).toEqual({ draft_id: DRAFT, src: SRC, confirmed_by: 'u1' });
+    expect(options).toEqual({ onConflict: 'draft_id,src', ignoreDuplicates: true });
+    upsertError = { code: '23514', message: 'A draft keeps 50 confirmed images at most' };
+    expect(await confirmOwnImage(DRAFT, SRC)).toBe('full');
+    await expect(confirmOwnImage(DRAFT, 'data:image/png;base64,x')).rejects.toThrow('invalid');
   });
 });
 

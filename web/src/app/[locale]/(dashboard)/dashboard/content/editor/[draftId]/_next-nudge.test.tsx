@@ -56,6 +56,7 @@ let root: Root;
 const onPickAuthor = vi.fn();
 const onShowPlaceholder = vi.fn();
 const onAddSource = vi.fn();
+const onConfirmImages = vi.fn();
 const MOMENTS: NudgeMoment[] = ['agent', 'acceptAll', 'markReady'];
 
 /** The editor's part: the hook, a button per moment, and the nudge while it shows. */
@@ -77,6 +78,7 @@ function Harness({ todos, author }: { todos: QualityTodo[]; author: ContentAutho
         onShowPlaceholder={onShowPlaceholder}
         onPickAuthor={onPickAuthor}
         onAddSource={onAddSource}
+        onConfirmImages={onConfirmImages}
         onLater={nudge.later}
         onAct={nudge.close}
       />
@@ -188,6 +190,17 @@ describe('NextNudge', () => {
     await render([proof('SOC 2 certified')]);
     await act(async () => nudgeAt('agent'));
     expect(nudge()!.textContent).toContain('add proof for “SOC 2 certified”');
+  });
+
+  it("opens Confirm for the page's own images (CE-049, part d)", async () => {
+    onConfirmImages.mockReset();
+    await render([
+      { id: 'visualProof', done: false, gain: 8, score: 'eeat', action: 'confirmImage', count: 1 },
+    ]);
+    await act(async () => nudgeAt('agent'));
+    expect(nudge()!.textContent).toBe('Next for you: show your own image · 1 of 1Confirm nowLater');
+    await act(async () => button('Confirm now').click());
+    expect(onConfirmImages).toHaveBeenCalled();
   });
 
   it('counts the open ones and skips the done', async () => {

@@ -92,6 +92,8 @@ const onShowPlaceholder = vi.fn();
 const onAddInput = vi.fn();
 const onKeep = vi.fn();
 const onAddSource = vi.fn();
+const onConfirmImages = vi.fn();
+const onAddImage = vi.fn();
 
 async function render(quality: QualityRead | Readability | null) {
   const q = quality && 'eeat' in quality ? quality : read(quality as Readability | null);
@@ -106,6 +108,8 @@ async function render(quality: QualityRead | Readability | null) {
           onAddInput={onAddInput}
           onKeep={onKeep}
           onAddSource={onAddSource}
+          onConfirmImages={onConfirmImages}
+          onAddImage={onAddImage}
         />
       </NextIntlClientProvider>,
     );
@@ -579,6 +583,42 @@ describe('QualityTab', () => {
       'Link the certificate or lab result for “SOC 2 certified”',
     );
     expect(container.textContent).toContain('Link the test report for “40% faster”');
+  });
+
+  it("asks to confirm the page's own images, or to add one at a spot (CE-049, part d)", async () => {
+    const none = { experience: false, data: false, quote: false };
+    const quality = (images: number, openSpots: number): QualityRead => {
+      const score = eeat({ author: ada, used: none, visual: { images, own: 0, openSpots } });
+      return {
+        ...read(null),
+        eeat: score,
+        todos: qualityTodos({
+          eeat: score,
+          author: ada,
+          hasAuthors: true,
+          used: none,
+          visual: { images, own: 0, openSpots },
+        }),
+      };
+    };
+    onConfirmImages.mockReset();
+    onAddImage.mockReset();
+    await render(quality(2, 0));
+    const row = () =>
+      [...container.querySelectorAll('[aria-label="Your to-dos"] li')].find((li) =>
+        li.textContent?.startsWith('Show your own image'),
+      )!;
+    expect(row().textContent).toContain(
+      "Are any of the page's 2 images your own (screenshots or photos you took), not stock? Confirm them",
+    );
+    await act(async () => row().querySelector('button')!.click());
+    expect(onConfirmImages).toHaveBeenCalled();
+    await render(quality(0, 1));
+    expect(row().textContent).toContain(
+      'A screenshot or photo you took, where the margin suggests one',
+    );
+    await act(async () => row().querySelector('button')!.click());
+    expect(onAddImage).toHaveBeenCalled();
   });
 
   it("shows the site's trust, what is missing and the way to Site Audit", async () => {

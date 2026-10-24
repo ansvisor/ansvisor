@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { proofsOnPage, type ProofAsk } from './page-read';
+import { pageImages, proofsOnPage, type ProofAsk } from './page-read';
 import { trustBlocks } from './quality-checks';
 
 /** The page read's proof asks on the page as it is now (Quality spec §4b, CE-049). */
@@ -76,5 +76,21 @@ describe('proofsOnPage', () => {
       proofsOnPage(linkless, [ask('ISO 27001 certified', linkless[0].text, 'certification')])[0]
         .linked,
     ).toBe(false);
+  });
+});
+
+describe('pageImages', () => {
+  it("lists the page's images by their address, once each, in its order", () => {
+    expect(
+      pageImages(
+        '<p>Intro</p><img src="https://cdn.example/a.png" alt="A run"><p><img src="data:image/png;base64,xx"></p>' +
+          '<img src="https://cdn.example/b.jpg"><img src="https://cdn.example/a.png" alt="again">' +
+          // As the database takes an own image's address: lower-case http(s), 2048 at most.
+          `<img src="HTTP://cdn.example/c.png"><img src="https://cdn.example/${'x'.repeat(2048)}.png">`,
+      ),
+    ).toEqual([
+      { src: 'https://cdn.example/a.png', alt: 'A run' },
+      { src: 'https://cdn.example/b.jpg', alt: '' },
+    ]);
   });
 });

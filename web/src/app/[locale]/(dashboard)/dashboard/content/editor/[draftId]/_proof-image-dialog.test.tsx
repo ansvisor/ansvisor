@@ -57,11 +57,12 @@ const input = (id: string) => document.querySelector<HTMLInputElement>(`#${id}`)
 const button = (name: string) =>
   [...document.querySelectorAll<HTMLButtonElement>('button')].find((b) => b.textContent === name)!;
 const onClose = vi.fn();
+const onOwn = vi.fn();
 const render = () =>
   act(async () =>
     root.render(
       <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
-        <ProofImageDialog editor={editor} spot={SPOT} onClose={onClose} />
+        <ProofImageDialog editor={editor} spot={SPOT} onClose={onClose} onOwn={onOwn} />
       </NextIntlClientProvider>,
     ),
   );
@@ -109,6 +110,15 @@ describe('ProofImageDialog', () => {
     await act(async () => button('Add image').click());
     expect(onClose).toHaveBeenCalled();
     expect(editor.getHTML()).toContain(`<img src="${SRC}" alt="The Ridge 28 after a rain test">`);
+  });
+
+  it("says the image put in is the person's own when they tick it (CE-049, part d)", async () => {
+    onOwn.mockReset();
+    await render();
+    await act(async () => setValue(input('proof-image-src'), SRC));
+    await act(async () => document.querySelector<HTMLButtonElement>('#proof-image-own')!.click());
+    await act(async () => button('Add image').click());
+    expect(onOwn).toHaveBeenCalledWith(SRC);
   });
 
   it('says so when the passage left the page meanwhile', async () => {

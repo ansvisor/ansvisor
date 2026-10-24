@@ -91,3 +91,21 @@ export function proofsOnPage(blocks: TrustBlock[], proofs: readonly ProofAsk[]):
     );
   });
 }
+
+/**
+ * The page's images, in its order, each once by its address (an http(s)
+ * one, as the page keeps it): what the person may confirm is their own.
+ */
+export function pageImages(html: string): { src: string; alt: string }[] {
+  const doc = new DOMParser().parseFromString(html, 'text/html');
+  const seen = new Set<string>();
+  return [...doc.querySelectorAll('img[src]')].flatMap((img) => {
+    const src = img.getAttribute('src')!.trim();
+    // As the database takes an own image's address (00270): http(s), 8–2048 characters.
+    if (!/^https?:\/\//.test(src) || src.length < 8 || src.length > 2048 || seen.has(src)) {
+      return [];
+    }
+    seen.add(src);
+    return [{ src, alt: img.getAttribute('alt')?.trim() ?? '' }];
+  });
+}

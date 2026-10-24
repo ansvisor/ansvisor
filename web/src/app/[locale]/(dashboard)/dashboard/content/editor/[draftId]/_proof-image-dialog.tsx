@@ -5,6 +5,7 @@ import type { Editor } from '@tiptap/core';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   Dialog,
   DialogClose,
@@ -57,15 +58,19 @@ export function ProofImageDialog({
   editor,
   spot,
   onClose,
+  onOwn,
 }: {
   editor: Editor;
   spot: ProofSpot;
   onClose: () => void;
+  /** The image put in is the person's own, not stock (CE-049, part d): they ticked it. */
+  onOwn?: (src: string) => void;
 }) {
   const t = useTranslations('contentEditor.editor.proofSpots.dialog');
   const [src, setSrc] = useState('');
   const [alt, setAlt] = useState(spot.alt);
   const [caption, setCaption] = useState('');
+  const [own, setOwn] = useState(false);
   const [invalid, setInvalid] = useState<'src' | 'alt' | null>(null);
   const fieldRef = useRef<HTMLInputElement>(null);
 
@@ -81,6 +86,8 @@ export function ProofImageDialog({
     }
     if (!insertProofImage(editor, spot, { src: safe, alt: alt.trim(), caption })) {
       toast.error(t('gone'));
+    } else if (own) {
+      onOwn?.(safe);
     }
     onClose();
   };
@@ -154,6 +161,19 @@ export function ProofImageDialog({
           {/* Enter in any field adds it. */}
           <button type="submit" hidden />
         </form>
+        {onOwn && (
+          <div className="flex items-start gap-2">
+            <Checkbox
+              id="proof-image-own"
+              className="mt-px"
+              checked={own}
+              onCheckedChange={(on) => setOwn(on === true)}
+            />
+            <Label htmlFor="proof-image-own" className="text-xs leading-snug font-normal">
+              {t('own')}
+            </Label>
+          </div>
+        )}
         <DialogFooter>
           <DialogClose render={<Button variant="outline" />}>{t('cancel')}</DialogClose>
           <Button onClick={insert}>{t('insert')}</Button>

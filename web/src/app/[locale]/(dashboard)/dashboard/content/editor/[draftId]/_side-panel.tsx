@@ -135,6 +135,8 @@ export function EditorSidePanel({
   onKeepSource,
   onAddSource,
   onRemoveClaim,
+  onConfirmImages,
+  onAddImage,
 }: {
   draft: ContentDraft;
   /** The brand's business type as the editor holds it (Quality CE-056). */
@@ -196,6 +198,9 @@ export function EditorSidePanel({
   onAddSource?: (claim: ClaimMark) => void;
   /** Takes a claim's sentence out of the page: Quality's Remove (CE-045). */
   onRemoveClaim?: (claim: ClaimMark) => void;
+  /** Quality's visual proof (CE-049): Confirm the page's images, or Add image at a spot. */
+  onConfirmImages?: () => void;
+  onAddImage?: () => void;
 }) {
   const t = useTranslations('contentEditor.editor.panel');
   const tEditor = useTranslations('contentEditor.editor');
@@ -444,6 +449,8 @@ export function EditorSidePanel({
                 onKeep={onKeepSource}
                 onAddSource={onAddSource}
                 onRemove={onRemoveClaim}
+                onConfirmImages={onConfirmImages}
+                onAddImage={onAddImage}
               />
             </div>
           )}

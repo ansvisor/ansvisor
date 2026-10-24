@@ -103,6 +103,8 @@ export function QualityTab({
   onKeep,
   onAddSource,
   onRemove,
+  onConfirmImages,
+  onAddImage,
 }: {
   quality: QualityRead;
   /** Scrolls the draft to a passage and marks it. */
@@ -119,6 +121,10 @@ export function QualityTab({
   onAddSource?: (claim: ClaimMark) => void;
   /** Takes a claim's sentence out of the page (CE-045). */
   onRemove?: (claim: ClaimMark) => void;
+  /** Opens Confirm: the page's images, each to confirm as the person's own (CE-049). */
+  onConfirmImages?: () => void;
+  /** Opens the first open visual proof spot's Add image (CE-049). */
+  onAddImage?: () => void;
 }) {
   const t = useTranslations('contentEditor.editor.quality');
   const tSite = useTranslations('audit.siteTrust.checks');
@@ -191,6 +197,8 @@ export function QualityTab({
                 onPickAuthor={onPickAuthor}
                 onAddInput={onAddInput}
                 onAddSource={onAddSource}
+                onConfirmImages={onConfirmImages}
+                onAddImage={onAddImage}
               />
             ))}
           </ul>
@@ -372,6 +380,19 @@ export function useTodoCopy() {
         detail: todo.done ? t('brandFacts.done') : t('brandFacts.detail'),
       };
     }
+    // An image the person took themself (CE-049).
+    if (todo.id === 'visualProof') {
+      const count = todo.count ?? 0;
+      return {
+        title: t('visualProof.title'),
+        next: t('visualProof.next'),
+        detail: todo.done
+          ? t('visualProof.done')
+          : todo.action === 'confirmImage'
+            ? t('visualProof.detail.confirm', { count })
+            : t('visualProof.detail.add'),
+      };
+    }
     // What only the person can give (Brief › Your input, CE-048).
     if (todo.id === 'experience' || todo.id === 'originalData' || todo.id === 'expertQuote') {
       return {
@@ -420,6 +441,8 @@ function TodoRow({
   onPickAuthor,
   onAddInput,
   onAddSource,
+  onConfirmImages,
+  onAddImage,
 }: {
   todo: QualityTodo;
   quality: QualityRead;
@@ -428,6 +451,8 @@ function TodoRow({
   onAddInput?: () => void;
   /** A proof to-do's Add proof link: its claim selected, the link dialog open (CE-049). */
   onAddSource?: (claim: ClaimMark) => void;
+  onConfirmImages?: () => void;
+  onAddImage?: () => void;
 }) {
   const t = useTranslations('contentEditor.editor.quality');
   const { title, detail } = useTodoCopy()(todo, quality);
@@ -512,6 +537,18 @@ function TodoRow({
               }
             >
               {t('addProof')}
+            </Button>
+          )
+        ) : todo.action === 'confirmImage' ? (
+          onConfirmImages && (
+            <Button variant="outline" size="sm" className="h-7 shrink-0" onClick={onConfirmImages}>
+              {t('confirmImage')}
+            </Button>
+          )
+        ) : todo.action === 'addImage' ? (
+          onAddImage && (
+            <Button variant="outline" size="sm" className="h-7 shrink-0" onClick={onAddImage}>
+              {t('addImage')}
             </Button>
           )
         ) : todo.action === 'reviewBrandFacts' ? (
