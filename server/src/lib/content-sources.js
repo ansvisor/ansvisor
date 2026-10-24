@@ -138,8 +138,12 @@ function unitOf(text, start, end) {
 /** A placeholder the agent leaves ("[figure, source, 2025]"): it holds no claim. */
 const BRACKETS = /\[[^\]]*\]/g;
 
-/** A number's value as compared: thousands separators dropped ("1,299" is 1299). */
-const valueOf = (token) => token.replace(/[.,](?=\d{3}(?!\d))/g, '');
+/**
+ * A number's value as compared: thousands separators dropped ("1,299" and
+ * "1.299" are 1299), then a decimal comma read as a point ("3,4" is 3.4,
+ * "1.250,5" is 1250.5), as Turkish, German, French and others write it.
+ */
+const valueOf = (token) => token.replace(/[.,](?=\d{3}(?!\d))/g, '').replace(',', '.');
 
 /** The numbers a text holds, each with where it is and its unit ('' for none). */
 export function numbersIn(text) {

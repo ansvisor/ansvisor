@@ -124,8 +124,10 @@ export function inputSources(row, brandName) {
       kind: 'input',
       ref: `ansvisor:${d.promptId}`,
       label: prompt,
-      detail: `Ansvisor data: ${brandName || 'the brand'} was named in ${d.mentioned} of ${d.answers} AI answers to this prompt${share}. Cite it as "Ansvisor data, ${month}"`,
-      note: `over the ${d.days} days to ${d.asOf}`,
+      // The days are the data the person chose: the page may say them. The
+      // date is a note: its digits are no figure.
+      detail: `Ansvisor data: ${brandName || 'the brand'} was named in ${d.mentioned} of ${d.answers} AI answers to this prompt over the last ${d.days} days${share}. Cite it as "Ansvisor data, ${month}"`,
+      note: `to ${d.asOf}`,
     });
   }
 

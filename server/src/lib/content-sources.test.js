@@ -254,6 +254,18 @@ describe('no number without a source', () => {
     ]);
   });
 
+  it('reads a decimal comma as a point, once thousands separators are gone', () => {
+    // Ansvisor data's share is written "3.4%"; a Turkish or a German page writes it with a comma.
+    const share = knownNumbers('named in 28 of 825 AI answers over the last 30 days (3.4%)');
+    expect(addedNumbers('825 yanıtın 28 tanesinde anıldı (%3,4).', share)).toEqual([]);
+    expect(addedNumbers('in 28 von 825 Antworten genannt (3,4 %).', share)).toEqual([]);
+    expect(addedNumbers('Son 30 günde 825 yanıtın 28 tanesinde.', share)).toEqual([]);
+    expect(addedNumbers('in 3,5 % der Antworten', share).map((n) => n.value)).toEqual(['3.5']);
+    // Thousands still read as thousands, both ways.
+    const counts = knownNumbers('1,250 teams and 1250.5 hours');
+    expect(addedNumbers('1.250 Teams, 1.250,5 Stunden, 1,250 teams', counts)).toEqual([]);
+  });
+
   it('puts a placeholder where a page written whole adds one, sign and unit with it', () => {
     expect(placeholderNumbers('Teams see 40% more, at $49 a month, in 2026.', known)).toBe(
       `Teams see ${NUMBER_PLACEHOLDER} more, at ${NUMBER_PLACEHOLDER} a month, in 2026.`,
