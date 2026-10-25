@@ -7540,6 +7540,7 @@
         "ok": "Synced",
         "failed": "Couldn't sync",
         "format_error": "Not a feed",
+        "auth_failed": "Sign-in refused",
         "never": "Not synced yet"
       },
       "products": "{count, plural, one {# product} other {# products}}",
@@ -7567,6 +7568,35 @@
         "workspace": "This brand isn't in your workspace.",
         "busy": "Too many syncs. Wait a few minutes.",
         "failed": "Couldn't sync the catalog. Try again later."
+      },
+      "stores": {
+        "title": "Connect a store",
+        "connect": "Connect {store}",
+        "formLabel": "{store} sign-in",
+        "submit": "Connect",
+        "update": "Update sign-in",
+        "save": "Save sign-in",
+        "cancel": "Cancel",
+        "kept": "The sign-in is checked with the store, then kept encrypted on the server and used only to read the catalog. It isn't shown again.",
+        "notConfigured": "Store connections aren't set up on this server yet.",
+        "connected": "{store} connected. Its products are being read.",
+        "updated": "Sign-in saved. The products are being read again.",
+        "errors": {
+          "connect_failed": "Check what you entered and try again.",
+          "auth_failed": "The store refused this sign-in. Check it and try again.",
+          "unreachable": "The store couldn't be reached. Try again in a moment.",
+          "duplicate": "This store is connected already.",
+          "too_many": "A brand can have 10 sources at most.",
+          "other_account": "This sign-in is for another store. Add that store as a new source.",
+          "not_configured": "Store connections aren't set up on this server yet.",
+          "forbidden": "Only admins and managers can change the catalog.",
+          "not_found": "This store no longer exists.",
+          "invalid": "Fill in every field.",
+          "session": "Your session expired. Sign in again.",
+          "workspace": "This brand isn't in your workspace.",
+          "busy": "Too many requests. Wait a few minutes.",
+          "failed": "Couldn't reach the catalog. Try again later."
+        }
       }
     },
     "integrations_connected": "Connected",

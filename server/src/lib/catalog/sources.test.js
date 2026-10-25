@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -5,10 +6,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 // hard-exits when SUPABASE_* env is absent (as in CI).
 vi.mock('../../config/supabase.js', () => ({ default: {} }));
 
+import { ConnectorHttpError } from '../../connectors/http.js';
+import { logger } from '../logger.js';
 import { PageFetchError } from '../safe-fetch.js';
 import { fakeDb } from './__fixtures__/fake-db.js';
-import { FEED_MAX_BYTES, FEED_TYPES } from '../../connectors/feed-url/index.js';
-import { sourceKey, sweepCatalogSources, syncSource } from './sources.js';
+import { saveCredentials } from './credentials.js';
+import feedUrl, { FEED_MAX_BYTES, FEED_TYPES } from '../../connectors/feed-url/index.js';
+import { redact, sourceKey, sweepCatalogSources, syncSource } from './sources.js';
 
 const fixture = (name) =>
   readFileSync(new URL(`../feeds/__fixtures__/${name}`, import.meta.url), 'utf8');
@@ -31,6 +35,7 @@ beforeEach(() => {
 });
 afterEach(() => {
   delete process.env.IS_CLOUD;
+  vi.restoreAllMocks();
 });
 
 const kept = () => fake.rows('catalog_sources').find((s) => s.id === SOURCE_ID);
@@ -116,6 +121,152 @@ describe('syncSource', () => {
   });
 });
 
+describe('syncSource for a store (00282)', () => {
+  const STORE_ID = '2c8d6a1e-2a3c-4d5e-8f90-123456789abc';
+  const KEY = 'sk_live_store_secret';
+  let store;
+  let saved;
+  const item = {
+    id: 'v1',
+    itemGroupId: 'p1',
+    title: 'Trail Boot',
+    description: null,
+    link: 'https://shop.example/boot',
+    imageLink: null,
+    additionalImageLinks: [],
+    brand: null,
+    gtin: null,
+    mpn: null,
+    price: { amount: 129, currency: 'USD' },
+    salePrice: null,
+    availability: 'in_stock',
+    condition: null,
+    color: null,
+    size: null,
+    material: null,
+    productType: null,
+  };
+  const connector = (readCatalog) => ({
+    kind: 'acme_store',
+    label: 'Acme Store',
+    fields: [],
+    connect: vi.fn(),
+    readCatalog: vi.fn(readCatalog),
+  });
+
+  beforeEach(() => {
+    saved = process.env.CONNECTOR_CREDENTIALS_KEY;
+    process.env.CONNECTOR_CREDENTIALS_KEY = randomBytes(32).toString('base64');
+    store = { id: STORE_ID, brand_id: 'brand-1', kind: 'acme_store', format: 'auto', url: null };
+    fake.rows('catalog_sources').push({ ...store, last_synced_at: null });
+  });
+  afterEach(() => {
+    if (saved === undefined) delete process.env.CONNECTOR_CREDENTIALS_KEY;
+    else process.env.CONNECTOR_CREDENTIALS_KEY = saved;
+  });
+  const row = () => fake.rows('catalog_sources').find((s) => s.id === STORE_ID);
+
+  it('reads a store with its saved sign-in', async () => {
+    await saveCredentials(STORE_ID, { apiKey: KEY }, { db: fake.db });
+    const acme = connector(async () => ({ items: [item], errors: [], format: 'acme_store' }));
+    const request = vi.fn();
+    const outcome = await syncSource(store, {
+      db: fake.db,
+      now: NOW,
+      request,
+      connectors: { acme_store: acme },
+    });
+    expect(acme.readCatalog).toHaveBeenCalledWith(store, { request, credentials: { apiKey: KEY } });
+    expect(outcome).toMatchObject({ status: 'ok', counts: { format: 'acme_store', items: 1 } });
+    expect(fake.rows('catalog_products')).toHaveLength(1);
+  });
+
+  it("asks for the sign-in again when there's none it can open, and reads nothing", async () => {
+    const acme = connector(async () => ({ items: [item], errors: [], format: 'acme_store' }));
+    const outcome = await syncSource(store, {
+      db: fake.db,
+      now: NOW,
+      connectors: { acme_store: acme },
+    });
+    expect(outcome).toEqual({
+      status: 'auth_failed',
+      error: "The store's saved sign-in can't be read. Update it in Settings › Integrations.",
+    });
+    expect(acme.readCatalog).not.toHaveBeenCalled();
+    expect(row()).toMatchObject({ last_status: 'auth_failed' });
+  });
+
+  it("records the store's refusal, its wait and its errors in plain words", async () => {
+    await saveCredentials(STORE_ID, { apiKey: KEY }, { db: fake.db });
+    const cases = [
+      [
+        new ConnectorHttpError('auth', 'GET x/api refused the sign-in (401)', { status: 401 }),
+        'auth_failed',
+        /refused the saved sign-in/,
+      ],
+      [
+        new ConnectorHttpError('rate_limited', 'GET x/api asked to wait', { status: 429 }),
+        'failed',
+        /asked to wait/,
+      ],
+      [
+        new ConnectorHttpError('http_error', 'GET x/api answered 500', { status: 500 }),
+        'failed',
+        /answered 500/,
+      ],
+    ];
+    for (const [err, status, words] of cases) {
+      const acme = connector(async () => {
+        throw err;
+      });
+      const outcome = await syncSource(store, {
+        db: fake.db,
+        now: NOW,
+        connectors: { acme_store: acme },
+      });
+      expect(outcome.status).toBe(status);
+      expect(outcome.error).toMatch(words);
+    }
+  });
+
+  it('keeps the sign-in out of the log when a connector fails on its own', async () => {
+    await saveCredentials(STORE_ID, { apiKey: KEY }, { db: fake.db });
+    const error = vi.spyOn(logger, 'error').mockImplementation(() => {});
+    const acme = connector(async () => {
+      throw new Error(`unexpected answer for key ${KEY}`);
+    });
+    const outcome = await syncSource(store, {
+      db: fake.db,
+      now: NOW,
+      connectors: { acme_store: acme },
+    });
+    expect(outcome).toEqual({
+      status: 'failed',
+      error: "The source couldn't be synced. Try again later.",
+    });
+    expect(error).toHaveBeenCalledTimes(1);
+    expect(JSON.stringify(error.mock.calls)).not.toContain(KEY);
+    expect(JSON.stringify(error.mock.calls)).toContain('[redacted]');
+  });
+
+  it('records a kind this server has no connector for', async () => {
+    const outcome = await syncSource(store, { db: fake.db, now: NOW, connectors: {} });
+    expect(outcome).toEqual({
+      status: 'failed',
+      error: "This server can't read this kind of source.",
+    });
+  });
+});
+
+describe('redact', () => {
+  it('takes every credential value out of a message, but not short ones', () => {
+    expect(
+      redact('key abcd1234 and secret s3cr3t!', { a: 'abcd1234', b: 's3cr3t!', c: 'ab' }),
+    ).toBe('key [redacted] and secret [redacted]');
+    expect(redact(undefined, null)).toBe('');
+  });
+});
+
 describe('sweepCatalogSources', () => {
   it('syncs the due feeds, skipping workspaces without an active subscription on the cloud', async () => {
     process.env.IS_CLOUD = 'true';
@@ -135,5 +286,40 @@ describe('sweepCatalogSources', () => {
     expect(result).toEqual({ due: 2, synced: 1 });
     expect(fetch).toHaveBeenCalledTimes(1);
     expect(fetch.mock.calls[0][0]).toBe('https://shop.example/feed.xml');
+  });
+
+  it('reads stores too, and never an upload', async () => {
+    fake.rows('catalog_sources').push(
+      {
+        id: '3b8d6a1e-2a3c-4d5e-8f90-123456789abc',
+        brand_id: 'brand-1',
+        kind: 'upload',
+        format: 'auto',
+        url: null,
+        last_synced_at: null,
+      },
+      {
+        id: '4b8d6a1e-2a3c-4d5e-8f90-123456789abc',
+        brand_id: 'brand-1',
+        kind: 'acme_store',
+        format: 'auto',
+        url: null,
+        last_synced_at: null,
+      },
+    );
+    const fetch = vi.fn().mockResolvedValue({ html: fixture('google-feed.xml') });
+    const result = await sweepCatalogSources({
+      db: fake.db,
+      now: NOW,
+      fetch,
+      connectors: { feed_url: feedUrl },
+    });
+    expect(result).toEqual({ due: 2, synced: 2 });
+    expect(fetch).toHaveBeenCalledTimes(1);
+    const tried = fake.rows('catalog_sources').filter((s) => s.last_status);
+    expect(tried.map((s) => [s.kind, s.last_status]).sort()).toEqual([
+      ['acme_store', 'failed'],
+      ['feed_url', 'ok'],
+    ]);
   });
 });

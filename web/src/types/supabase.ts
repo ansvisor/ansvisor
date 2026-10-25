@@ -877,8 +877,45 @@ export type Database = {
           },
         ]
       }
+      catalog_source_credentials: {
+        Row: {
+          secret: string
+          set_at: string
+          set_by: string | null
+          source_id: string
+        }
+        Insert: {
+          secret: string
+          set_at?: string
+          set_by?: string | null
+          source_id: string
+        }
+        Update: {
+          secret?: string
+          set_at?: string
+          set_by?: string | null
+          source_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "catalog_source_credentials_set_by_fkey"
+            columns: ["set_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "catalog_source_credentials_source_id_fkey"
+            columns: ["source_id"]
+            isOneToOne: true
+            referencedRelation: "catalog_sources"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       catalog_sources: {
         Row: {
+          account: string | null
           brand_id: string
           created_at: string
           created_by: string | null
@@ -893,6 +930,7 @@ export type Database = {
           url: string | null
         }
         Insert: {
+          account?: string | null
           brand_id: string
           created_at?: string
           created_by?: string | null
@@ -907,6 +945,7 @@ export type Database = {
           url?: string | null
         }
         Update: {
+          account?: string | null
           brand_id?: string
           created_at?: string
           created_by?: string | null
