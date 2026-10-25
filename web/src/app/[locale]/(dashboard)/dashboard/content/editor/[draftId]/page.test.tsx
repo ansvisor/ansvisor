@@ -10,6 +10,7 @@ import type { DraftSuggestion } from '@/lib/content/suggestions';
 import { passageKey, type CitedPassage } from '@/lib/content/cited-passages';
 import { encodeHtmlBlock } from '@/lib/content/html-allowlist';
 import { CLAIMS_EVERY_MS } from './_use-claims';
+import { PROOF_READ_EVERY_MS, PROOF_READ_SLACK_MS } from './_use-page-read';
 import ContentEditorPage from './page';
 
 const getContentDraft = vi.fn();
@@ -18,9 +19,14 @@ const unmarkContentDraftReady = vi.fn();
 const saveContentDraft = vi.fn();
 const setContentDraftPageType = vi.fn();
 const setContentDraftAuthor = vi.fn();
+const setContentDraftReviewer = vi.fn();
 const keepDraftSource = vi.fn();
 const confirmDraftAuthor = vi.fn();
 const checkDraftClaims = vi.fn();
+const readDraftPage = vi.fn();
+const getOwnImages = vi.fn();
+const confirmOwnImage = vi.fn();
+const getBrandFacts = vi.fn();
 const checkDraftLinks = vi.fn();
 const getSiteTrust = vi.fn();
 vi.mock('@/lib/actions/audits', () => ({
@@ -60,6 +66,9 @@ const keepAgentBeforeVersion = vi.fn();
 const fixDraftRules = vi.fn();
 const startAgentWriting = vi.fn();
 const startPageRewrite = vi.fn();
+vi.mock('@/lib/actions/brand-facts', () => ({
+  getBrandFacts: (...args: unknown[]) => getBrandFacts(...args),
+}));
 vi.mock('@/lib/actions/content-drafts', () => ({
   fixDraftRules: (...args: unknown[]) => fixDraftRules(...args),
   startAgentWriting: (...args: unknown[]) => startAgentWriting(...args),
@@ -85,9 +94,13 @@ vi.mock('@/lib/actions/content-drafts', () => ({
   saveContentDraft: (...args: unknown[]) => saveContentDraft(...args),
   setContentDraftPageType: (...args: unknown[]) => setContentDraftPageType(...args),
   setContentDraftAuthor: (...args: unknown[]) => setContentDraftAuthor(...args),
+  setContentDraftReviewer: (...args: unknown[]) => setContentDraftReviewer(...args),
   keepDraftSource: (...args: unknown[]) => keepDraftSource(...args),
   confirmDraftAuthor: (...args: unknown[]) => confirmDraftAuthor(...args),
   checkDraftClaims: (...args: unknown[]) => checkDraftClaims(...args),
+  readDraftPage: (...args: unknown[]) => readDraftPage(...args),
+  getOwnImages: (...args: unknown[]) => getOwnImages(...args),
+  confirmOwnImage: (...args: unknown[]) => confirmOwnImage(...args),
   checkDraftLinks: (...args: unknown[]) => checkDraftLinks(...args),
 }));
 vi.mock('next/navigation', () => ({ useParams: () => ({ draftId: 'd1' }) }));
@@ -209,6 +222,7 @@ const draft = (over: Partial<ContentDraft> = {}): ContentDraft => ({
   bodyHtml: '<h1>Pipeline forecasting</h1><p>Teams trust it.</p>',
   author: 'agent',
   authorId: null,
+  reviewerId: null,
   rules: { set: null, source: null, overrides: {}, textRules: [] },
   keptSources: [],
   authorConfirmed: { real: false, profile: false },
@@ -286,9 +300,21 @@ beforeEach(() => {
   saveBlob.mockReset();
   setContentDraftPageType.mockReset().mockResolvedValue(undefined);
   setContentDraftAuthor.mockReset().mockResolvedValue(undefined);
+  setContentDraftReviewer.mockReset().mockResolvedValue(undefined);
   keepDraftSource.mockReset();
   confirmDraftAuthor.mockReset().mockResolvedValue(undefined);
   checkDraftClaims.mockReset().mockResolvedValue({ blocks: [], pending: 0, limited: false });
+  readDraftPage.mockReset().mockResolvedValue({ error: 'off' });
+  getOwnImages.mockReset().mockResolvedValue([]);
+  confirmOwnImage.mockReset().mockResolvedValue('ok');
+  getBrandFacts.mockReset().mockResolvedValue({
+    facts: [],
+    pages: [],
+    checkedAt: null,
+    recheckAt: null,
+    paused: false,
+    noDomain: false,
+  });
   checkDraftLinks.mockReset().mockResolvedValue({ links: [], skipped: [] });
   getSiteTrust.mockReset().mockRejectedValue(new Error('not in this test'));
   getContentAuthors.mockReset().mockResolvedValue(null);
@@ -2468,6 +2494,7 @@ describe('the side panel', () => {
     });
     afterEach(() => {
       delete process.env.NEXT_PUBLIC_CONTENT_QUALITY_PHASE;
+      vi.useRealTimers();
     });
 
     it('shows nothing of Quality until its first phase is live', async () => {
@@ -2592,6 +2619,7 @@ describe('the side panel', () => {
 
     it("asks for Your input in its second phase, and Add opens it at Brief's top (CE-048)", async () => {
       process.env.NEXT_PUBLIC_CONTENT_QUALITY_PHASE = '2';
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
       getContentAuthors.mockResolvedValue({
         authors: [],
         brands: [{ id: 'b1', name: 'Acme' }],
@@ -2602,6 +2630,8 @@ describe('the side panel', () => {
       getContentDraft.mockResolvedValue(readable);
       window.innerWidth = 1440;
       await renderPage();
+      // In phase 2 E-E-A-T waits for the page's read (its visual proof), after the save.
+      await act(async () => void (await vi.advanceTimersByTimeAsync(3_000)));
       expect(getDraftInputs).toHaveBeenCalledWith(readable.id);
       const chip = [...container.querySelectorAll<HTMLButtonElement>('header button')].find((b) =>
         b.textContent?.startsWith('Quality'),
@@ -2681,6 +2711,41 @@ describe('the side panel', () => {
       }
     });
 
+    it('holds the score until the brand’s facts are read: Trust checks the page against them', async () => {
+      process.env.NEXT_PUBLIC_CONTENT_QUALITY_PHASE = '2';
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+      try {
+        getContentAuthors.mockResolvedValue({
+          authors: [],
+          brands: [{ id: 'b1', name: 'Acme' }],
+          me: { id: 'u1', role: 'admin' },
+        });
+        let factsIn: (value: unknown) => void = () => {};
+        getBrandFacts.mockReturnValue(new Promise((resolve) => (factsIn = resolve)));
+        getContentDraft.mockResolvedValue(readable);
+        window.innerWidth = 1440;
+        await renderPage();
+        await act(async () => void (await vi.advanceTimersByTimeAsync(3_000)));
+        // Every other read is in: the facts still hold it.
+        expect(qualityChip()?.textContent).toBe('Quality · reading…');
+        await act(async () =>
+          factsIn({
+            facts: [],
+            pages: [],
+            checkedAt: null,
+            recheckAt: null,
+            paused: false,
+            noDomain: false,
+          }),
+        );
+        expect(qualityChip()?.textContent).toMatch(
+          /^Quality \d+ · (Strong|Can improve|Needs work)$/,
+        );
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
     it('holds the score while an edit waits for its save: phase 2 reads the page as saved', async () => {
       process.env.NEXT_PUBLIC_CONTENT_QUALITY_PHASE = '2';
       vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
@@ -2716,6 +2781,68 @@ describe('the side panel', () => {
         expect(qualityChip()?.textContent).toContain('updating as the page is read');
         await act(async () => void (await vi.advanceTimersByTimeAsync(CLAIMS_EVERY_MS)));
         expect(checkDraftClaims).toHaveBeenCalledTimes(2);
+        expect(qualityChip()?.textContent).not.toContain('updating');
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('holds the score until the page as saved is read for proof, then settles once (review, #1468)', async () => {
+      process.env.NEXT_PUBLIC_CONTENT_QUALITY_PHASE = '2';
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+      try {
+        getContentAuthors.mockResolvedValue({
+          authors: [],
+          brands: [{ id: 'b1', name: 'Acme' }],
+          me: { id: 'u1', role: 'admin' },
+        });
+        const read = {
+          spots: [],
+          proofs: [],
+          regulated: null,
+          pending: false,
+          limited: false,
+          paused: false,
+        };
+        let pageIn: (value: unknown) => void = () => {};
+        readDraftPage
+          .mockResolvedValueOnce(read)
+          .mockReturnValueOnce(new Promise((resolve) => (pageIn = resolve)));
+        getContentDraft.mockResolvedValue(readable);
+        saveContentDraft.mockResolvedValue({
+          ok: true,
+          updatedAt: '2026-10-20T10:01:00Z',
+          bodyHash: 'h1',
+        });
+        window.innerWidth = 1440;
+        await renderPage();
+        await act(async () => void (await vi.advanceTimersByTimeAsync(3_000)));
+        expect(readDraftPage).toHaveBeenCalledTimes(1);
+        expect(qualityChip()?.textContent).not.toContain('updating');
+        const shown = qualityChip()?.textContent;
+        const editor = (container.querySelector('.ProseMirror') as HTMLElement & { editor: Editor })
+          .editor;
+        await act(async () => {
+          editor.commands.insertContentAt(
+            editor.state.doc.content.size,
+            '<p>Forecasts missed by less each quarter.</p>',
+          );
+        });
+        await act(async () => void (await vi.advanceTimersByTimeAsync(2_000)));
+        expect(saveContentDraft).toHaveBeenCalledTimes(1);
+        // The claims are in; the page's read for the save waits for the API's minute.
+        await act(async () => void (await vi.advanceTimersByTimeAsync(CLAIMS_EVERY_MS)));
+        expect(checkDraftClaims).toHaveBeenCalledTimes(2);
+        expect(qualityChip()?.textContent).toContain('updating as the page is read');
+        await act(
+          async () =>
+            void (await vi.advanceTimersByTimeAsync(PROOF_READ_EVERY_MS + PROOF_READ_SLACK_MS)),
+        );
+        expect(readDraftPage).toHaveBeenCalledTimes(2);
+        // Asked, not answered: the last settled score stays.
+        expect(qualityChip()?.textContent).toContain(shown!.replace(/ ·.*$/, ''));
+        expect(qualityChip()?.textContent).toContain('updating as the page is read');
+        await act(async () => pageIn(read));
         expect(qualityChip()?.textContent).not.toContain('updating');
       } finally {
         vi.useRealTimers();
@@ -2889,6 +3016,528 @@ describe('the side panel', () => {
       expect(link?.textContent).toBe('the fastest forecasting app');
     });
 
+    it("asks for the proof of the brand's own claim, and Add proof link selects it (CE-049)", async () => {
+      process.env.NEXT_PUBLIC_CONTENT_QUALITY_PHASE = '2';
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+      const block = `${said} It is easy to set up for any team.`;
+      checkDraftClaims.mockResolvedValue({
+        blocks: [
+          { text: block, claims: [{ text: 'the fastest forecasting app', kind: 'superlative' }] },
+        ],
+        pending: 0,
+        limited: false,
+      });
+      readDraftPage.mockResolvedValue({
+        spots: [],
+        proofs: [{ claim: 'the fastest forecasting app', block, kind: 'ranking' }],
+        regulated: null,
+        pending: false,
+        limited: false,
+        paused: false,
+      });
+      getContentDraft.mockResolvedValue(claimed);
+      window.innerWidth = 1440;
+      await renderPage();
+      await act(async () => void (await vi.advanceTimersByTimeAsync(3_000)));
+      expect(readDraftPage).toHaveBeenCalledWith('d1');
+      const chip = [...container.querySelectorAll<HTMLButtonElement>('header button')].find((b) =>
+        b.textContent?.startsWith('Quality'),
+      )!;
+      await act(async () => chip.click());
+      const row = [...panel()!.querySelectorAll('li')].find((li) =>
+        li.textContent?.includes('Link the ranking or test behind “the fastest forecasting app”'),
+      )!;
+      expect(row.textContent).toContain('Link its proof, or soften the claim');
+      // Its sentence is the person's to prove: not the agent's to source as well.
+      expect(panel()!.textContent).not.toContain('claim has no source');
+      await act(async () =>
+        [...row.querySelectorAll('button')]
+          .find((b) => b.textContent === 'Add proof link')!
+          .click(),
+      );
+      expect(document.querySelector('#content-link-href')).not.toBeNull();
+      const { state } = (
+        container.querySelector('.ProseMirror') as HTMLElement & { editor: Editor }
+      ).editor;
+      expect(state.doc.textBetween(state.selection.from, state.selection.to)).toBe(
+        'the fastest forecasting app',
+      );
+      // Linked to its proof: the row is checked, not gone.
+      const field = document.querySelector<HTMLInputElement>('#content-link-href')!;
+      await act(async () => {
+        Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(
+          field,
+          'https://www.acme.com/benchmarks',
+        );
+        field.dispatchEvent(new Event('input', { bubbles: true }));
+      });
+      await act(async () =>
+        [...document.querySelectorAll('button')].find((b) => b.textContent === 'Apply')!.click(),
+      );
+      // The page is read again once typing pauses.
+      await act(async () => void (await vi.advanceTimersByTimeAsync(3_000)));
+      const done = [...panel()!.querySelectorAll('li')].find((li) =>
+        li.textContent?.includes('the fastest forecasting app'),
+      )!;
+      expect(done.textContent).toContain('The proof is linked');
+    });
+
+    it('asks a page that puts the brand forward for its disclosure, and Add line puts it under the H1 (CE-050)', async () => {
+      process.env.NEXT_PUBLIC_CONTENT_QUALITY_PHASE = '2';
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+      const block = `${said} It is easy to set up for any team.`;
+      getContentAuthors.mockResolvedValue({
+        authors: [],
+        brands: [{ id: 'b1', name: 'Ledgerly' }],
+        me: { id: 'u1', role: 'admin' },
+      });
+      readDraftPage.mockResolvedValue({
+        spots: [],
+        proofs: [],
+        regulated: null,
+        checks: {
+          answerFirst: null,
+          recommends: { quote: 'Ledgerly is the fastest forecasting app', block },
+          disclosure: null,
+          balance: null,
+          how: null,
+          cut: false,
+          pageType: 'best_of',
+        },
+        pending: false,
+        limited: false,
+        paused: false,
+      });
+      getContentDraft.mockResolvedValue({
+        ...claimed,
+        pageType: 'best_of',
+        pageTypeSource: 'user',
+      });
+      window.innerWidth = 1440;
+      await renderPage();
+      await act(async () => void (await vi.advanceTimersByTimeAsync(3_000)));
+      await act(async () => button('Mark ready')!.click());
+      const line = 'Disclosure: the product this page recommends is offered by Ledgerly.';
+      const dialog = document.querySelector('[role="dialog"]')!;
+      expect(dialog.textContent).toContain('The page recommends Ledgerly without a disclosure');
+      await act(async () =>
+        [...dialog.querySelectorAll('button')].find((b) => b.textContent === 'Add line')!.click(),
+      );
+      const { state } = (
+        container.querySelector('.ProseMirror') as HTMLElement & { editor: Editor }
+      ).editor;
+      // Under the opening paragraph: the answer the H1 gets first stays first.
+      expect(state.doc.child(0).textContent).toBe('Pipeline forecasting');
+      expect(state.doc.child(1).textContent).toBe(block);
+      expect(state.doc.child(2).textContent).toBe(line);
+      expect(dialog.textContent).toContain('Disclosure added');
+      // Opened again before the page is read (it reads the page a moment after
+      // an edit): added, not offered twice.
+      await act(async () => void (await vi.advanceTimersByTimeAsync(500)));
+      await act(async () =>
+        [...dialog.querySelectorAll('button')].find((b) => b.textContent === 'Close')?.click(),
+      );
+      await act(async () => button('Mark ready')!.click());
+      const again = document.querySelector('[role="dialog"]')!;
+      expect(again.textContent).toContain('Disclosure added');
+      expect([...again.querySelectorAll('button')].some((b) => b.textContent === 'Add line')).toBe(
+        false,
+      );
+    });
+
+    it('puts the disclosure line under the answer past a hero image, and counts it before the next read (review, #1480)', async () => {
+      process.env.NEXT_PUBLIC_CONTENT_QUALITY_PHASE = '2';
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+      const block = `${said} It is easy to set up for any team.`;
+      getContentAuthors.mockResolvedValue({
+        authors: [],
+        brands: [{ id: 'b1', name: 'Ledgerly' }],
+        me: { id: 'u1', role: 'admin' },
+      });
+      readDraftPage.mockResolvedValue({
+        spots: [],
+        proofs: [],
+        regulated: null,
+        checks: {
+          answerFirst: null,
+          recommends: { quote: 'Ledgerly is the fastest forecasting app', block },
+          disclosure: null,
+          balance: null,
+          how: null,
+          cut: false,
+          pageType: 'best_of',
+        },
+        pending: false,
+        limited: false,
+        paused: false,
+      });
+      getContentDraft.mockResolvedValue({
+        ...claimed,
+        pageType: 'best_of',
+        pageTypeSource: 'user',
+        bodyHtml: `<h1>Pipeline forecasting</h1><img src="https://cdn.ledgerly.example/hero.png" alt="A forecast"><p></p><p>${block}</p>`,
+      });
+      window.innerWidth = 1440;
+      await renderPage();
+      await act(async () => void (await vi.advanceTimersByTimeAsync(3_000)));
+      await act(async () => button('Mark ready')!.click());
+      const dialog = document.querySelector('[role="dialog"]')!;
+      await act(async () =>
+        [...dialog.querySelectorAll('button')].find((b) => b.textContent === 'Add line')!.click(),
+      );
+      const { state } = (
+        container.querySelector('.ProseMirror') as HTMLElement & { editor: Editor }
+      ).editor;
+      const texts: string[] = [];
+      state.doc.forEach((node) => texts.push(node.textContent));
+      // Past the image and the empty paragraph: under the answer, which stays first.
+      const line = 'Disclosure: the product this page recommends is offered by Ledgerly.';
+      expect(texts.indexOf(line)).toBe(texts.indexOf(block) + 1);
+      // Counted before the page is read again: Quality's suggestion goes.
+      await act(async () => void (await vi.advanceTimersByTimeAsync(500)));
+      await act(async () =>
+        [...dialog.querySelectorAll('button')].find((b) => b.textContent === 'Close')?.click(),
+      );
+      const chip = [...container.querySelectorAll<HTMLButtonElement>('header button')].find((b) =>
+        b.textContent?.startsWith('Quality'),
+      )!;
+      await act(async () => chip.click());
+      expect(panel()!.textContent).not.toContain('without a disclosure');
+    });
+
+    it('shows a visual proof spot beside its passage, and Add image puts the image after it (CE-049)', async () => {
+      process.env.NEXT_PUBLIC_CONTENT_QUALITY_PHASE = '2';
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+      const block = `${said} It is easy to set up for any team.`;
+      readDraftPage.mockResolvedValue({
+        spots: [
+          {
+            passage: 'the fastest forecasting app',
+            block,
+            image: 'A screenshot of a real forecast run, timed',
+            alt: 'A forecast run finishing in 4 seconds',
+          },
+        ],
+        proofs: [],
+        regulated: null,
+        pending: false,
+        limited: false,
+        paused: false,
+      });
+      getContentDraft.mockResolvedValue(claimed);
+      window.innerWidth = 1440;
+      await renderPage();
+      await act(async () => void (await vi.advanceTimersByTimeAsync(3_000)));
+      const spot = container.querySelector<HTMLElement>('.ProseMirror [data-proof-spot]')!;
+      expect(spot.textContent).toContain('A screenshot of a real forecast run, timed');
+      expect(spot.textContent).toContain('For: “the fastest forecasting app”');
+      await act(async () =>
+        spot.querySelector<HTMLButtonElement>('button[aria-label^="Add image for"]')!.click(),
+      );
+      const src = document.querySelector<HTMLInputElement>('#proof-image-src')!;
+      await act(async () => {
+        Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(
+          src,
+          'https://cdn.acme.com/forecast-run.png',
+        );
+        src.dispatchEvent(new Event('input', { bubbles: true }));
+      });
+      await act(async () =>
+        [...document.querySelectorAll('button')]
+          .find((b) => b.textContent === 'Add image' && !b.closest('[data-proof-spot]'))!
+          .click(),
+      );
+      const image = container.querySelector<HTMLImageElement>(
+        '.ProseMirror img[src="https://cdn.acme.com/forecast-run.png"]',
+      )!;
+      expect(image.alt).toBe('A forecast run finishing in 4 seconds');
+      expect(image.previousElementSibling?.textContent).toContain(said);
+      // Filled: the spot goes; Undo takes the image out and brings it back.
+      expect(container.querySelector('.ProseMirror [data-proof-spot]')).toBeNull();
+      const { editor: pm } = container.querySelector('.ProseMirror') as HTMLElement & {
+        editor: Editor;
+      };
+      await act(async () => void pm.commands.undo());
+      expect(container.querySelector('.ProseMirror img')).toBeNull();
+      expect(container.querySelector('.ProseMirror [data-proof-spot]')).not.toBeNull();
+    });
+
+    it("confirms the page's own image from Quality, and counts it as visual proof (CE-049, part d)", async () => {
+      process.env.NEXT_PUBLIC_CONTENT_QUALITY_PHASE = '2';
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+      getContentAuthors.mockResolvedValue({
+        authors: [],
+        brands: [{ id: 'b1', name: 'Acme' }],
+        me: { id: 'u1', role: 'admin' },
+      });
+      getDraftInputs.mockResolvedValue({ experience: '', data: [], ansvisorData: [], quotes: [] });
+      getContentDraft.mockResolvedValue(
+        draft({
+          bodyHtml: `<h1>Pipeline forecasting</h1><p>${said} It is easy to set up for any team.</p><img src="https://cdn.acme.com/run.png" alt="A forecast run">`,
+        }),
+      );
+      window.innerWidth = 1440;
+      await renderPage();
+      // The image's page is saved as the editor writes it; the page's read
+      // (here off) comes a few seconds after that save.
+      await act(async () => void (await vi.advanceTimersByTimeAsync(3_000)));
+      await act(async () => void (await vi.advanceTimersByTimeAsync(3_000)));
+      const chip = [...container.querySelectorAll<HTMLButtonElement>('header button')].find((b) =>
+        b.textContent?.startsWith('Quality'),
+      )!;
+      await act(async () => chip.click());
+      const row = () =>
+        [...panel()!.querySelectorAll('[aria-label="Your to-dos"] li')].find((li) =>
+          li.textContent?.startsWith('Show your own image'),
+        )!;
+      expect(row().textContent).toContain("Is the page's image your own");
+      await act(async () =>
+        [...row().querySelectorAll('button')].find((b) => b.textContent === 'Confirm')!.click(),
+      );
+      const box = document.querySelector<HTMLButtonElement>('[role="dialog"] [role="checkbox"]')!;
+      await act(async () => box.click());
+      expect(confirmOwnImage).toHaveBeenCalledWith('d1', 'https://cdn.acme.com/run.png');
+      expect(box.getAttribute('aria-checked')).toBe('true');
+      expect(row().textContent).toContain('The page shows your own image');
+    });
+
+    it('takes a confirm back when the draft keeps 50 already (CE-049, part d)', async () => {
+      process.env.NEXT_PUBLIC_CONTENT_QUALITY_PHASE = '2';
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+      getContentAuthors.mockResolvedValue({
+        authors: [],
+        brands: [{ id: 'b1', name: 'Acme' }],
+        me: { id: 'u1', role: 'admin' },
+      });
+      confirmOwnImage.mockResolvedValue('full');
+      getContentDraft.mockResolvedValue(
+        draft({
+          bodyHtml: `<h1>Pipeline forecasting</h1><p>${said} It is easy to set up for any team.</p><img src="https://cdn.acme.com/run.png" alt="A forecast run">`,
+        }),
+      );
+      window.innerWidth = 1440;
+      await renderPage();
+      await act(async () => void (await vi.advanceTimersByTimeAsync(3_000)));
+      await act(async () => void (await vi.advanceTimersByTimeAsync(3_000)));
+      const chip = [...container.querySelectorAll<HTMLButtonElement>('header button')].find((b) =>
+        b.textContent?.startsWith('Quality'),
+      )!;
+      await act(async () => chip.click());
+      const row = [...panel()!.querySelectorAll('[aria-label="Your to-dos"] li')].find((li) =>
+        li.textContent?.startsWith('Show your own image'),
+      )!;
+      await act(async () =>
+        [...row.querySelectorAll('button')].find((b) => b.textContent === 'Confirm')!.click(),
+      );
+      const box = document.querySelector<HTMLButtonElement>('[role="dialog"] [role="checkbox"]')!;
+      await act(async () => box.click());
+      expect(toast.error).toHaveBeenCalledWith('This page keeps 50 confirmed images already.');
+      expect(box.getAttribute('aria-checked')).toBe('false');
+    });
+
+    it('asks a page that advises on health for a qualified reviewer, and names them (CE-049, part e)', async () => {
+      process.env.NEXT_PUBLIC_CONTENT_QUALITY_PHASE = '2';
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+      getContentAuthors.mockResolvedValue({
+        authors: [
+          {
+            id: 'a1',
+            name: 'Dr. Ada Lovelace',
+            title: 'MD, Cardiologist',
+            bio: null,
+            photoUrl: null,
+            sameAs: [],
+            userId: null,
+            createdBy: null,
+            defaultFor: [],
+            pages: null,
+          },
+        ],
+        brands: [{ id: 'b1', name: 'Acme' }],
+        me: { id: 'u1', role: 'admin' },
+      });
+      readDraftPage.mockResolvedValue({
+        spots: [],
+        proofs: [],
+        regulated: 'health',
+        pending: false,
+        limited: false,
+        paused: false,
+      });
+      getContentDraft.mockResolvedValue(claimed);
+      window.innerWidth = 1440;
+      await renderPage();
+      await act(async () => void (await vi.advanceTimersByTimeAsync(3_000)));
+      const reviewerButton = () =>
+        [...container.querySelectorAll<HTMLButtonElement>('header button')].find((b) =>
+          /^(Add reviewer|Reviewed by)/.test(b.textContent ?? ''),
+        )!;
+      expect(reviewerButton().textContent).toBe('Add reviewer');
+      await act(async () => reviewerButton().click());
+      const item = [...document.querySelectorAll<HTMLElement>('[role="menuitemradio"]')].find((i) =>
+        i.textContent?.startsWith('Dr. Ada Lovelace'),
+      )!;
+      await act(async () => item.click());
+      expect(setContentDraftReviewer).toHaveBeenCalledWith('d1', 'a1');
+      expect(reviewerButton().textContent).toBe('Reviewed by Dr. Ada Lovelace');
+      // In the Page info strip, outside the page.
+      expect(container.querySelector('[data-page-info]')!.textContent).toContain(
+        'Reviewed by Dr. Ada Lovelace, MD, Cardiologist',
+      );
+      // A save that fails puts back the reviewer saved, and says so.
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+      try {
+        setContentDraftReviewer.mockRejectedValueOnce(new Error('offline'));
+        await act(async () => reviewerButton().click());
+        const none = [...document.querySelectorAll<HTMLElement>('[role="menuitemradio"]')].find(
+          (i) => i.textContent === 'No reviewer',
+        )!;
+        await act(async () => none.click());
+        expect(toast.error).toHaveBeenCalledWith("Couldn't set the reviewer. Try again.");
+        expect(reviewerButton().textContent).toBe('Reviewed by Dr. Ada Lovelace');
+      } finally {
+        vi.mocked(console.error).mockRestore();
+      }
+    });
+
+    it('holds the score for the visual proof when the claims land first, and scores without the own images when they can’t be read (review, #1475)', async () => {
+      process.env.NEXT_PUBLIC_CONTENT_QUALITY_PHASE = '2';
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+      try {
+        getContentAuthors.mockResolvedValue({
+          authors: [],
+          brands: [{ id: 'b1', name: 'Acme' }],
+          me: { id: 'u1', role: 'admin' },
+        });
+        getDraftInputs.mockResolvedValue({
+          experience: '',
+          data: [],
+          ansvisorData: [],
+          quotes: [],
+        });
+        // The own images' call fails (the network, a deploy).
+        getOwnImages.mockRejectedValue(new Error('offline'));
+        let pageIn: (value: unknown) => void = () => {};
+        readDraftPage.mockReturnValue(new Promise((resolve) => (pageIn = resolve)));
+        getContentDraft.mockResolvedValue(
+          draft({
+            bodyHtml: `<h1>Pipeline forecasting</h1><p>${said} It is easy to set up for any team.</p><img src="https://cdn.acme.com/run.png" alt="A forecast run">`,
+          }),
+        );
+        window.innerWidth = 1440;
+        await renderPage();
+        await act(async () => void (await vi.advanceTimersByTimeAsync(3_000)));
+        await act(async () => void (await vi.advanceTimersByTimeAsync(3_000)));
+        // The claims are in; the page's read isn't: no score on Trust and Readability alone.
+        expect(checkDraftClaims).toHaveBeenCalled();
+        expect(readDraftPage).toHaveBeenCalled();
+        const chip = () =>
+          [...container.querySelectorAll<HTMLButtonElement>('header button')].find((b) =>
+            b.textContent?.startsWith('Quality'),
+          );
+        expect(chip()?.textContent).toBe('Quality · reading…');
+        await act(async () =>
+          pageIn({
+            spots: [],
+            proofs: [],
+            regulated: null,
+            pending: false,
+            limited: false,
+            paused: false,
+          }),
+        );
+        // In once, with the confirms made so far (none): it scores.
+        expect(chip()?.textContent).toMatch(/^Quality \d+ · (Strong|Can improve|Needs work)$/);
+        expect(console.error).toHaveBeenCalledWith(
+          'Failed to read the own images:',
+          expect.any(Error),
+        );
+      } finally {
+        vi.mocked(console.error).mockRestore();
+        vi.useRealTimers();
+      }
+    });
+
+    it('holds what the page read found while an edit to it is read again (review, #1479)', async () => {
+      process.env.NEXT_PUBLIC_CONTENT_QUALITY_PHASE = '2';
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+      getContentAuthors.mockResolvedValue({
+        authors: [],
+        brands: [{ id: 'b1', name: 'Acme' }],
+        me: { id: 'u1', role: 'admin' },
+      });
+      const HOW = 'We tested each forecasting app with twelve sales teams for a month.';
+      const answer = (block: string) => ({
+        spots: [],
+        proofs: [],
+        regulated: null,
+        checks: {
+          answerFirst: null,
+          recommends: null,
+          disclosure: null,
+          balance: null,
+          how: { quote: 'We tested each forecasting app', block },
+          cut: false,
+          pageType: 'guide',
+        },
+        pending: false,
+        limited: false,
+        paused: false,
+      });
+      let again: (value: unknown) => void = () => {};
+      readDraftPage
+        .mockResolvedValueOnce(answer(HOW))
+        .mockReturnValueOnce(new Promise((resolve) => (again = resolve)));
+      saveContentDraft.mockResolvedValue({
+        ok: true,
+        updatedAt: '2026-10-20T10:01:00Z',
+        bodyHash: 'h1',
+      });
+      getContentDraft.mockResolvedValue({
+        ...claimed,
+        pageType: 'guide',
+        pageTypeSource: 'user',
+        bodyHtml: `${claimed.bodyHtml}<p>${HOW}</p>`,
+      });
+      window.innerWidth = 1440;
+      await renderPage();
+      await act(async () => void (await vi.advanceTimersByTimeAsync(3_000)));
+      const chip = [...container.querySelectorAll<HTMLButtonElement>('header button')].find((b) =>
+        b.textContent?.startsWith('Quality'),
+      )!;
+      await act(async () => chip.click());
+      const eeatNow = () => panel()!.textContent!.match(/E-E-A-T(\d+)/)?.[1];
+      const found = eeatNow();
+      expect(found).toBeDefined();
+      // A typo fixed in the paragraph that says how the page was made.
+      const editor = (container.querySelector('.ProseMirror') as HTMLElement & { editor: Editor })
+        .editor;
+      let end = -1;
+      editor.state.doc.descendants((node, pos) => {
+        if (node.isTextblock && node.textContent === HOW) end = pos + node.nodeSize - 1;
+      });
+      await act(async () => {
+        editor.commands.insertContentAt(end - 1, ' straight');
+      });
+      // Read on the page as it is now, not saved yet; then saved and not
+      // asked about; then asked: it holds.
+      await act(async () => void (await vi.advanceTimersByTimeAsync(500)));
+      expect(saveContentDraft).not.toHaveBeenCalled();
+      expect(eeatNow()).toBe(found);
+      await act(async () => void (await vi.advanceTimersByTimeAsync(1_500)));
+      expect(saveContentDraft).toHaveBeenCalled();
+      expect(eeatNow()).toBe(found);
+      await act(
+        async () =>
+          void (await vi.advanceTimersByTimeAsync(PROOF_READ_EVERY_MS + PROOF_READ_SLACK_MS)),
+      );
+      expect(readDraftPage).toHaveBeenCalledTimes(2);
+      expect(eeatNow()).toBe(found);
+      await act(async () => again(answer(HOW.replace('month.', 'month straight.'))));
+      expect(eeatNow()).toBe(found);
+    });
+
     it('takes the claim’s sentence out on Remove', async () => {
       process.env.NEXT_PUBLIC_CONTENT_QUALITY_PHASE = '2';
       vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
@@ -2976,6 +3625,86 @@ describe('the side panel', () => {
       expect(row).toBeDefined();
       const labels = [...row.querySelectorAll('button')].map((b) => b.textContent);
       expect(labels).toEqual(['Show']);
+    });
+  });
+
+  describe('Brand facts (Quality CE-047)', () => {
+    afterEach(() => {
+      delete process.env.NEXT_PUBLIC_CONTENT_QUALITY_PHASE;
+    });
+    beforeEach(() => {
+      getDraftSources.mockResolvedValue({
+        data: {
+          prompts: [],
+          fanouts: [],
+          citedPages: [],
+          gscQueries: [],
+          brandDomains: ['acme.com'],
+          competitorDomains: [],
+        },
+        choices: [],
+      });
+    });
+    const fact = (over: Record<string, unknown>) => ({
+      id: 'f1',
+      kind: 'price',
+      value: { plan: 'Pro', amount: 49, currency: 'USD', period: 'month', billed: null, per: null },
+      quote: '$49 per month',
+      sourceUrl: 'https://acme.com/pricing',
+      sourceKind: 'pricing',
+      status: 'approved',
+      reviewedAt: null,
+      firstSeenAt: '2026-10-24T00:00:00Z',
+      gone: false,
+      replaces: null,
+      ...over,
+    });
+
+    it('names a price the page gives that differs, and asks to approve the facts read', async () => {
+      process.env.NEXT_PUBLIC_CONTENT_QUALITY_PHASE = '2';
+      getBrandFacts.mockResolvedValue({
+        facts: [
+          fact({}),
+          fact({ id: 'f2', kind: 'trial', value: { days: 14 }, status: 'pending' }),
+        ],
+        pages: [],
+        checkedAt: null,
+        recheckAt: null,
+        paused: false,
+        noDomain: false,
+      });
+      getContentDraft.mockResolvedValue(
+        draft({
+          bodyHtml:
+            '<h1>Pricing</h1><p>The Pro plan costs $59 per month.</p>' +
+            // A sourced figure: Trust is scored, so Quality's chip is there.
+            '<p>Teams cut 40% of their busywork (<a href="https://research.example/r">report</a>).</p>',
+        }),
+      );
+      window.innerWidth = 1440;
+      await renderPage();
+      expect(getBrandFacts).toHaveBeenCalledWith(draft().brandId);
+      const chip = [...container.querySelectorAll<HTMLButtonElement>('header button')].find((b) =>
+        b.textContent?.startsWith('Quality'),
+      )!;
+      await act(async () => chip.click());
+      expect(panel()!.textContent).toContain(
+        'Price differs from brand facts · Page $59 · pricing page $49',
+      );
+      const todo = [...panel()!.querySelectorAll('li')].find((li) =>
+        li.textContent?.includes('Approve 1 brand fact'),
+      )!;
+      expect(todo.querySelector('a')!.getAttribute('href')).toBe(
+        `/dashboard/brands/${draft().brandId}/settings?tab=facts`,
+      );
+    });
+
+    it('reads no brand facts before Quality’s second phase', async () => {
+      process.env.NEXT_PUBLIC_CONTENT_QUALITY_PHASE = '1';
+      getContentDraft.mockResolvedValue(draft({}));
+      window.innerWidth = 1440;
+      await renderPage();
+      expect(getBrandFacts).not.toHaveBeenCalled();
     });
   });
 
@@ -4160,6 +4889,50 @@ describe('the side panel', () => {
       root = createRoot(container);
       await renderPage();
       expect(nextButton()!.getAttribute('aria-label')).not.toBe('Next · Plan the page');
+    });
+
+    it('drops a stale skip once the reads are in, in phase 2 the brand facts too', async () => {
+      const skips = () => JSON.parse(localStorage.getItem('aeo:next-step-skips:d1')!);
+      getContentAuthors.mockResolvedValue({
+        authors: [],
+        brands: [{ id: 'b1', name: 'Acme' }],
+        me: { id: 'u1', role: 'admin' },
+      });
+      getContentDraft.mockResolvedValue(draft({ method: 'create' }));
+      try {
+        // Phase 1 reads no brand facts: nothing to wait for.
+        process.env.NEXT_PUBLIC_CONTENT_QUALITY_PHASE = '1';
+        localStorage.setItem('aeo:next-step-skips:d1', JSON.stringify({ plan: 'true' }));
+        await renderPage();
+        expect(skips()).toEqual({});
+
+        // Phase 2: they move Trust, which a proof skip was made at.
+        process.env.NEXT_PUBLIC_CONTENT_QUALITY_PHASE = '2';
+        localStorage.setItem('aeo:next-step-skips:d1', JSON.stringify({ plan: 'true' }));
+        let factsIn!: (read: unknown) => void;
+        getBrandFacts.mockReturnValue(new Promise((resolve) => (factsIn = resolve)));
+        vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+        await act(async () => root.unmount());
+        root = createRoot(container);
+        await renderPage();
+        // The page's read for proof is in, a few seconds after it opens.
+        await act(async () => void (await vi.advanceTimersByTimeAsync(3_000)));
+        expect(skips()).toEqual({ plan: 'true' });
+        await act(async () =>
+          factsIn({
+            facts: [],
+            pages: [],
+            checkedAt: null,
+            recheckAt: null,
+            paused: false,
+            noDomain: false,
+          }),
+        );
+        expect(skips()).toEqual({});
+      } finally {
+        vi.useRealTimers();
+        delete process.env.NEXT_PUBLIC_CONTENT_QUALITY_PHASE;
+      }
     });
 
     it("stays open on Skip, and leaves an empty page to the person once they'll write it", async () => {

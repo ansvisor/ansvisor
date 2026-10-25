@@ -164,6 +164,11 @@ export interface ContentDraft {
    * organization byline ("{Brand} Team").
    */
   authorId: string | null;
+  /**
+   * The qualified person who reviewed a page that advises on health,
+   * finance or law (Quality CE-049, 00273): page metadata, from Authors.
+   */
+  reviewerId: string | null;
   /** What the person changed on the page's rules for this draft (CE-009). */
   rules: DraftRules;
   /** Weak or competitors' sources the person kept (Quality CE-046, 00263): they don't lower Trust. */

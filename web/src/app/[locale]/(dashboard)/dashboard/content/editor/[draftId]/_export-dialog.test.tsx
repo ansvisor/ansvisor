@@ -127,6 +127,12 @@ describe('ExportDialog', () => {
     expect(dialog().textContent).toContain(
       'Before you publish: Trust 45, below 60 · no author yet.Review',
     );
+    // A page that puts the brand forward without saying the brand makes it (CE-050).
+    await render({
+      publish: { trustBelow: null, noAuthor: false, noDisclosure: true, article: true, onReview },
+    });
+    expect(dialog().textContent).toContain('Before you publish: no disclosure.Review');
+    await render({ publish: { trustBelow: 45, noAuthor: true, article: true, onReview } });
     await act(async () => button('Review')!.click());
     expect(onReview).toHaveBeenCalled();
     // Nothing to warn about: a quiet line where the author, dates and schema are.

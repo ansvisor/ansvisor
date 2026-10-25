@@ -3999,6 +3999,27 @@
         "cancel": "Cancel",
         "apply": "Apply"
       },
+      "proofSpots": {
+        "title": "Visual proof",
+        "add": "Add image",
+        "for": "For: “{passage}”",
+        "addFor": "Add image for “{passage}”",
+        "marker": "Visual proof: {image}",
+        "dialog": {
+          "title": "Add visual proof",
+          "srcLabel": "Image address",
+          "srcHint": "An image you host: your own screenshot or photo, not a stock one.",
+          "invalid": "Enter the image's web address (https://…).",
+          "altLabel": "Alt text",
+          "altHint": "What the image shows, for readers who can't see it. Drafted from the passage: edit it to match your image.",
+          "altRequired": "Add alt text: what the image shows.",
+          "captionLabel": "Caption (optional)",
+          "cancel": "Cancel",
+          "insert": "Add image",
+          "gone": "That passage isn't on the page any more, so the image wasn't added.",
+          "own": "This is our own image (a screenshot or photo we took), not stock"
+        }
+      },
       "image": {
         "title": "Insert an image",
         "srcLabel": "Image address",
@@ -4308,6 +4329,18 @@
       },
       "rulesChip": "Rules {met}/{total}",
       "rulesChipHint": "Rules this page meets now. Open the Rules tab.",
+      "reviewer": {
+        "title": "Reviewed by",
+        "add": "Add reviewer",
+        "by": "Reviewed by {name}",
+        "byTitle": "Reviewed by {name}, {title}",
+        "change": "Reviewed by {name}: change the reviewer",
+        "hint": "A page that advises on health, money or the law names the qualified person who reviewed it. Page info, not the page's text.",
+        "none": "No reviewer",
+        "qualified": "Qualified people only, from your authors: their title is the credential.",
+        "manage": "Manage authors",
+        "failed": "Couldn't set the reviewer. Try again."
+      },
       "author": {
         "by": "By {name}",
         "change": "By {name}: change who the page is by",
@@ -4404,6 +4437,7 @@
           "warnings": "Before you publish: {list}.",
           "trust": "Trust {trust}, below 60",
           "noAuthor": "no author yet",
+          "noDisclosure": "no disclosure",
           "review": "Review",
           "reviewLabel": "Review Before you publish"
         },
@@ -4562,8 +4596,20 @@
           "other": "Schema for this page type",
           "otherDetail": "Check what your CMS adds for it (Product, ItemList…). The code Ansvisor gives here is for articles."
         },
+        "disclosure": {
+          "ok": "Disclosure",
+          "okDetail": "The page says so: \"{line}\"",
+          "okReading": "The page says so: it is read again with your latest changes.",
+          "none": "The page recommends {brand} without a disclosure",
+          "noneDetail": "Add a line under the opening paragraph: \"{line}\" Readers and AI engines trust a page that says so.",
+          "noneWrite": "Add a line saying the product the page recommends is {brand}'s own: readers and AI engines trust a page that says so.",
+          "add": "Add line",
+          "added": "Disclosure added",
+          "addedDetail": "It is under the opening paragraph now, and counts once the page is read again. Undo takes it out."
+        },
         "linksPending": "Still reading {count, plural, one {# of the page's links} other {# of the page's links}}, so Trust may change.",
         "claimsReading": "Still reading the claims in your own words, so Trust may change.",
+        "pageReading": "Still reading the page for claims that need your proof, so your to-dos may change.",
         "datesNote": "The dates are today's: change them if the page goes out on another day.",
         "headlineLeftOut": "The title still has a placeholder in square brackets, so the code leaves the headline out. Fill it in, and the headline comes back here.",
         "states": {
@@ -4666,12 +4712,62 @@
             "given": "It's in Your input, but the page uses none of its numbers yet",
             "done": "The page uses your data"
           },
+          "whoHowWhy": {
+            "title": "Say how you made this page",
+            "next": "say how you made this page",
+            "detail": "How you tested, picked or researched, and who did it (\"We hiked 120 km with each pack\"): give it in Your input, the agent writes it in as you say it",
+            "done": "The page says how it was made"
+          },
           "expertQuote": {
             "title": "Add an expert's quote",
             "next": "add an expert's quote",
             "detail": "A real person's words as said, with their name, title and where they said them",
             "given": "It's in Your input, but the page doesn't quote it word for word yet",
             "done": "The page quotes an expert word for word"
+          },
+          "brandFacts": {
+            "title": "{count, plural, =0 {Review your brand facts} one {Approve # brand fact} other {Approve # brand facts}}",
+            "next": "approve {count, plural, one {# brand fact} other {# brand facts}}",
+            "detail": "Prices, your trial and other facts read from your own site: the page is checked against the ones you approve",
+            "done": "Your brand facts are reviewed"
+          },
+          "reviewer": {
+            "title": "Add a qualified reviewer",
+            "next": "add a qualified reviewer",
+            "detail": {
+              "pick": "{topic, select, health {The page advises readers on their health} finance {The page advises readers on their money} other {The page advises readers on a legal matter}}: name the qualified person who reviewed it (their title is the credential)",
+              "addAuthor": "{topic, select, health {The page advises readers on their health} finance {The page advises readers on their money} other {The page advises readers on a legal matter}}: add the qualified person who reviewed it in Settings › Authors, with their credential as the title"
+            },
+            "done": "A qualified reviewer is named"
+          },
+          "visualProof": {
+            "title": "Show your own image",
+            "next": "show your own image",
+            "detail": {
+              "confirm": "{count, plural, one {Is the page's image your own (a screenshot or photo you took), not stock? Confirm it} other {Are any of the page's # images your own (screenshots or photos you took), not stock? Confirm them}}",
+              "add": "A screenshot or photo you took, where the margin suggests one"
+            },
+            "done": "The page shows your own image"
+          },
+          "proof": {
+            "title": {
+              "award": "Link the award page for “{claim}”",
+              "certification": "{site, select, b2b {Link the audit report or trust page for “{claim}”} ecommerce {Link the certificate or lab result for “{claim}”} other {Link the license or certificate for “{claim}”}}",
+              "research": "Link the study behind “{claim}”",
+              "rating": "Link the review source for “{claim}”",
+              "ranking": "Link the ranking or test behind “{claim}”",
+              "number": "Link the source of “{claim}”",
+              "test": "{site, select, ecommerce {Link the test report for “{claim}”} other {Link your test result for “{claim}”}}",
+              "customer_case": "Link the customer case for “{claim}”",
+              "unknown": "What proves “{claim}”?"
+            },
+            "next": "add proof for “{claim}”",
+            "detail": {
+              "default": "Only you have this proof: link it on your site or where it's published",
+              "soften": "Link its proof, or soften the claim",
+              "customerCase": "Link the published case, and only with the customer's permission to name them"
+            },
+            "done": "The proof is linked"
           },
           "title": "Your to-dos",
           "left": "{count, plural, =0 {All done} other {# left · only you can do these}}",
@@ -4728,7 +4824,12 @@
             "pickAuthor": "Pick now",
             "addAuthor": "Add now",
             "editAuthor": "Edit now",
-            "addInput": "Add now"
+            "addInput": "Add now",
+            "reviewBrandFacts": "Review now",
+            "addProof": "Add now",
+            "confirmImage": "Confirm now",
+            "pickReviewer": "Pick now",
+            "addImage": "Add now"
           },
           "later": "Later"
         },
@@ -4739,15 +4840,34 @@
         "band": "{score, number}, {band}",
         "show": "Show",
         "addInput": "Add",
+        "reviewBrandFacts": "Review",
         "keep": "Keep",
         "aiCheck": "AI check",
+        "yourBrand": "your brand",
         "addSource": "Add source",
         "addSourceTo": "Add a source to “{claim}”",
+        "addProof": "Add proof link",
+        "addProofFor": "Add a proof link to “{claim}”",
+        "confirmImage": "Confirm",
+        "pickReviewer": "Pick reviewer",
+        "addImage": "Add image",
+        "confirmImageFailed": "Couldn't save that. Try again.",
+        "confirmImageFull": "This page keeps 50 confirmed images already.",
+        "confirmImages": {
+          "title": "Your own images",
+          "description": "Only you can tell your own screenshots and photos from stock. Your own count as visual proof.",
+          "own": "Our own image, not stock",
+          "confirmed": "Confirmed: our own image",
+          "noAlt": "No alt text",
+          "done": "Done"
+        },
         "remove": "Remove",
         "removeClaim": "Remove “{sentence}” from the page",
         "claimNoSource": "No source for this claim. Add a source, or take it out. Content Agent will not make one up.",
         "claimsPaused": "Claims in your own words wait for an AI check: this month's AI usage is used up. They're read again when it renews.",
         "claimsLimited": "Today's AI checks of this page's claims are used up. Paragraphs you change now are checked when you open the page again tomorrow.",
+        "pagePaused": "The page's AI checks, and the claims that need your proof, wait for an AI read of the page: this month's AI usage is used up. The AI checks are left out of the scores until it renews.",
+        "pageLimited": "Today's AI reads of this page are used up: the page's AI checks are left out of the scores. Changes you make now are read when you open the page again tomorrow.",
         "aiPaused": "Sources the rules can't place wait for an AI check: this month's AI usage is used up. They count again when it renews.",
         "keepFailed": "Couldn't keep the source. Try again.",
         "confirmFailed": "Couldn't save that. Try again.",
@@ -4782,6 +4902,18 @@
           "noBrokenLinks": {
             "line": "{count, plural, one {# link doesn't} other {# links don't}} work",
             "detail": "{count, plural, one {Fix or remove it: {url}} other {Fix or remove them, starting with {url}}}"
+          },
+          "brandFacts": {
+            "line": "{kind, select, price {Price} trial {Trial length} founded {Founding year} other {A fact}} differs from brand facts · Page {page} · {source, select, pricing {pricing page} about {About page} product {product page} other {your site}} {fact}",
+            "detail": "{count, plural, one {Match the page to the fact you approved, or check it in Brand settings} other {# facts differ: match the page to the facts you approved, or check them in Brand settings}}"
+          },
+          "disclosure": {
+            "line": "The page recommends {brand} without a disclosure",
+            "detail": "Add a line saying the product the page recommends is {brand}'s own: readers and AI engines trust a page that says so."
+          },
+          "balanced": {
+            "line": "Add an honest weakness",
+            "detail": "Say where your product falls short, or where another option is the better pick: a page that only praises reads as an ad."
           },
           "avgSentence": {
             "line": "Sentences average {words, number} words",
