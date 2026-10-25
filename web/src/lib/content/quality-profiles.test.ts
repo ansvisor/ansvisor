@@ -7,6 +7,7 @@ import {
   checksOff,
   profileFor,
   weighed,
+  waitsForSiteTrust,
   weighedTrust,
 } from './quality-profiles';
 import { READABILITY_WEIGHTS, readability } from './readability';
@@ -65,6 +66,11 @@ describe('PROFILE_WEIGHTS', () => {
       PROFILE_WEIGHTS.article.trust.balanced,
     );
     expect(checksOff('comparison')).not.toContain('disclosure');
+  });
+
+  it('waits for the site’s trust where E-E-A-T weighs the brand’s own information (#1491 review)', () => {
+    expect(waitsForSiteTrust('category')).toBe(true);
+    expect(QUALITY_PROFILES.filter(waitsForSiteTrust)).toEqual(['category']);
   });
 });
 
@@ -156,11 +162,40 @@ describe('weighedTrust', () => {
     // A product page doesn't weigh freshness: a working link and the site aren't Trust.
     const product = weighedTrust(dated, PROFILE_WEIGHTS.product.trust);
     expect(product.score).toBeNull();
-    expect(product.phase1Points).toBe(40);
+    expect(product.phase1Points).toBe(35);
     // A figure brings it in.
     const figure = read(
       '<p>It cut costs by 40% (<a href="https://example.org/report">the report</a>).</p>',
     );
     expect(weighedTrust(figure, PROFILE_WEIGHTS.product.trust).score).not.toBeNull();
+  });
+
+  it('is scored by a compared price where brand facts weigh as much as sourced claims (#1491 review)', () => {
+    // One wrong price, no claim, the site's trust in full.
+    const priced = trust({
+      blocks: trustBlocks('<p>The Ridge 28 costs $59.</p>'),
+      links: new Map(),
+      brandDomains: ['acme.com'],
+      siteTrust: { score: 5 },
+      brandFacts: {
+        compared: 1,
+        mismatches: [
+          {
+            kind: 'price',
+            page: '$59',
+            fact: '$49',
+            source: 'pricing',
+            sentence: 'The Ridge 28 costs $59.',
+          },
+        ],
+      },
+      now,
+    });
+    expect(priced.score).toBeNull();
+    // Brand facts 0 of 30, site trust 15 of 15: 33.
+    expect(weighedTrust(priced, PROFILE_WEIGHTS.product.trust).score).toBe(33);
+    expect(weighedTrust(priced, PROFILE_WEIGHTS.category.trust).score).not.toBeNull();
+    // An article weighs them 10 to its claims' 30: a price alone isn't its Trust.
+    expect(weighedTrust(priced, PROFILE_WEIGHTS.article.trust).score).toBeNull();
   });
 });

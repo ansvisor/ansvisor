@@ -38,6 +38,7 @@ import {
   type IntegrationStatus,
 } from '@/lib/actions/integrations';
 import { matchProperty } from '@/lib/property-match';
+import { CatalogSourcesCard } from './catalog-sources-card';
 import { useIntegrationConnect } from '@/hooks/use-integration-connect';
 
 /**
@@ -76,6 +77,8 @@ export function IntegrationsSection() {
         >
           <GaPropertyMapping />
         </IntegrationCard>
+
+        <CatalogSourcesCard />
       </CardContent>
     </Card>
   );

@@ -117,11 +117,12 @@ import {
   unplacedSites,
   type ClaimMark,
 } from '@/lib/content/quality-checks';
-import { checkDateText, isCheckDateText, pageCheckDate } from '@/lib/content/check-date';
+import { checkDateOnPage, checkDateText, isCheckDateLine } from '@/lib/content/check-date';
 import {
   PROFILE_WEIGHTS,
   checksOff,
   profileFor,
+  waitsForSiteTrust,
   weighed,
   weighedTrust,
 } from '@/lib/content/quality-profiles';
@@ -768,14 +769,16 @@ export function DraftEditor({
   // A comparison's check date (CE-052): E-E-A-T's check and its to-do.
   const checkDateRead = useMemo(
     () =>
-      qualityOn && profile === 'comparison' ? pageCheckDate(pageBlocks.map((b) => b.text)) : null,
+      qualityOn && profile === 'comparison'
+        ? checkDateOnPage(pageBlocks.map((b) => b.text))
+        : null,
     [qualityOn, profile, pageBlocks],
   );
   // A product page's shipping and returns (CE-052): Trust's check, and a
   // to-do that needs no Trust read.
   const shippingRead = useMemo(
-    () => (qualityOn && profile === 'product' ? shippingOnPage(pageHtml) : null),
-    [qualityOn, profile, pageHtml],
+    () => (qualityOn && profile === 'product' ? shippingOnPage(pageHtml, language) : null),
+    [qualityOn, profile, pageHtml, language],
   );
   // The page type's own rules (the Rules tab's, read from the page): one
   // Readability check on the types that weigh it; not ones read by AI or
@@ -895,13 +898,16 @@ export function DraftEditor({
   // E-E-A-T from the author (and, in phase 2, the person's experience and
   // data, and their own images); with Trust and Readability, the scores and
   // the header chip's average (CE-039).
-  // In phase 2 it waits for the visual proof too, so it doesn't move once that lands.
+  // In phase 2 it waits for the visual proof too, so it doesn't move once that lands;
+  // on a type that weighs the brand's own information, for the site's trust.
+  const brandInfoRead = !waitsForSiteTrust(profile) || siteTrustRead;
   const eeatScore = useMemo(
     () =>
       qualityOn &&
       authorsRead &&
       !inputsPending &&
       (!sourcesOn || visualRead) &&
+      brandInfoRead &&
       // Phase 3: the customer cases' confirms are read (CE-052).
       (!casesOn || casesRead)
         ? weighed(
@@ -913,7 +919,7 @@ export function DraftEditor({
               confirmed: authorConfirmed,
               // The brand's own information: only a type that weighs it counts it.
               siteTrust,
-              checkDate: checkDateRead,
+              checkDate: checkDateRead === null ? null : checkDateRead.found,
               cases: caseCount,
             }),
             weights.eeat,
@@ -935,6 +941,7 @@ export function DraftEditor({
       casesOn,
       casesRead,
       caseCount,
+      brandInfoRead,
       weights,
     ],
   );
@@ -1172,7 +1179,7 @@ export function DraftEditor({
         shipping: shippingRead,
         cases: casesOn ? (caseConfirms ?? new Set<string>()) : null,
         checkDate:
-          checkDateRead === null ? null : { found: checkDateRead, line: checkDateText(language) },
+          checkDateRead === null ? null : { ...checkDateRead, line: checkDateText(language) },
         off: checksOff(profile),
       })
     : [];
@@ -1769,19 +1776,17 @@ export function DraftEditor({
       .run();
   };
   // Quality's Add line for a comparison's check date (CE-052): this month's,
-  // over a check date the page has already (an older one, or one not read
-  // as recent), else under the answer. One undo takes it back.
+  // over its own line from before (a top-level paragraph that is only that
+  // line), else under the answer: a date in the person's words (a byline,
+  // the answer) stays theirs. One undo takes it back.
   const addCheckDate = () => {
     const line = checkDateText(language);
     if (!line || !editor || editor.isDestroyed) return;
     let found: { pos: number; size: number } | null = null;
-    editor.state.doc.descendants((node, pos) => {
-      if (found) return false;
-      if (node.type.name === 'paragraph' && isCheckDateText(node.textContent)) {
+    editor.state.doc.forEach((node, pos) => {
+      if (!found && node.type.name === 'paragraph' && isCheckDateLine(node.textContent)) {
         found = { pos, size: node.nodeSize };
-        return false;
       }
-      return true;
     });
     const at = found as { pos: number; size: number } | null;
     if (!at) {

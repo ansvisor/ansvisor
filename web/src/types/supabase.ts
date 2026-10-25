@@ -821,6 +821,122 @@ export type Database = {
           },
         ]
       }
+      catalog_products: {
+        Row: {
+          brand_id: string
+          content_hash: string
+          description: string | null
+          external_id: string
+          first_seen_at: string
+          id: string
+          product_brand: string | null
+          product_type: string | null
+          removed_at: string | null
+          source: string
+          title: string
+          updated_at: string
+          url: string | null
+        }
+        Insert: {
+          brand_id: string
+          content_hash: string
+          description?: string | null
+          external_id: string
+          first_seen_at?: string
+          id?: string
+          product_brand?: string | null
+          product_type?: string | null
+          removed_at?: string | null
+          source: string
+          title: string
+          updated_at?: string
+          url?: string | null
+        }
+        Update: {
+          brand_id?: string
+          content_hash?: string
+          description?: string | null
+          external_id?: string
+          first_seen_at?: string
+          id?: string
+          product_brand?: string | null
+          product_type?: string | null
+          removed_at?: string | null
+          source?: string
+          title?: string
+          updated_at?: string
+          url?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "catalog_products_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brands"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      catalog_sources: {
+        Row: {
+          brand_id: string
+          created_at: string
+          created_by: string | null
+          format: string
+          id: string
+          kind: string
+          label: string | null
+          last_counts: Json | null
+          last_error: string | null
+          last_status: string | null
+          last_synced_at: string | null
+          url: string | null
+        }
+        Insert: {
+          brand_id: string
+          created_at?: string
+          created_by?: string | null
+          format?: string
+          id?: string
+          kind: string
+          label?: string | null
+          last_counts?: Json | null
+          last_error?: string | null
+          last_status?: string | null
+          last_synced_at?: string | null
+          url?: string | null
+        }
+        Update: {
+          brand_id?: string
+          created_at?: string
+          created_by?: string | null
+          format?: string
+          id?: string
+          kind?: string
+          label?: string | null
+          last_counts?: Json | null
+          last_error?: string | null
+          last_status?: string | null
+          last_synced_at?: string | null
+          url?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "catalog_sources_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brands"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "catalog_sources_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       citation_urls: {
         Row: {
           domain: string
