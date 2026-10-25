@@ -105,6 +105,7 @@ async function render(
     disclosureLine = null as string | null,
     disclosureAdded = false,
     product = null as Parameters<typeof BeforePublish>[0]['product'],
+    category = null as Parameters<typeof BeforePublish>[0]['category'],
   } = {},
 ) {
   await act(async () => {
@@ -124,6 +125,7 @@ async function render(
           image={image}
           linksPending={linksPending}
           product={product}
+          category={category}
           onMarkReady={onMarkReady}
           onFixFirst={onFixFirst}
           disclosureLine={disclosureLine}
@@ -331,6 +333,37 @@ describe('BeforePublish', () => {
     expect(rows().some((row) => row.includes('without a disclosure'))).toBe(false);
   });
 
+  it('gives a category page its ItemList of the products it links, and asks for two links where it has fewer (CE-054)', async () => {
+    const items = [
+      { url: 'https://acme.com/products/ridge-28', name: 'Ridge 28' },
+      { url: 'https://acme.com/products/ridge-32', name: 'Ridge 32' },
+    ];
+    await render(quality(), { pageType: 'category_page', title: 'Daypacks', category: { items } });
+    expect(rows().some((row) => row.startsWith('ItemList schema with 2 products'))).toBe(true);
+    expect(jsonLd()).toMatchObject({
+      '@type': 'ItemList',
+      name: 'Daypacks',
+      numberOfItems: 2,
+      itemListElement: [
+        { position: 1, url: 'https://acme.com/products/ridge-28', name: 'Ridge 28' },
+        { position: 2, url: 'https://acme.com/products/ridge-32', name: 'Ridge 32' },
+      ],
+    });
+    expect(dialog().textContent).toContain(
+      "The products are the page's links to your product pages",
+    );
+    // One product: no list, and it says what to link.
+    await render(quality(), {
+      pageType: 'category_page',
+      title: 'Daypacks',
+      category: { items: items.slice(0, 1) },
+    });
+    expect(
+      rows().find((row) => row.startsWith('ItemList schema needs links to your products')),
+    ).toContain('The page links one of your product pages');
+    expect(dialog().querySelector('pre')).toBeNull();
+  });
+
   it('gives a product page its Product schema with the price it states, and asks for one it doesn’t (CE-053)', async () => {
     const product = {
       description: 'A daypack for wet hikes.',
@@ -502,7 +535,7 @@ describe('BeforePublish', () => {
     await render(quality(), { pageType: 'product_page' });
     expect(rows()).toEqual([
       expect.stringContaining('Author for your CMS'),
-      'Schema for this page type · check itCheck what your CMS adds for it (Product, ItemList…). The code Ansvisor gives here is for articles.',
+      'Schema for this page type · check itCheck what your CMS adds for it. The code Ansvisor gives here is for articles, product pages and category pages.',
       expect.stringContaining('Ready to paste'),
     ]);
     expect(dialog().querySelector('pre')).toBeNull();

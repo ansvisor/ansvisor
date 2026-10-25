@@ -14,7 +14,10 @@ import {
 import {
   articleJsonLd,
   isArticlePage,
+  itemListJsonLd,
+  MIN_LISTED,
   productJsonLd,
+  type ListedProduct,
   type PageOfferRead,
   jsonLdScript,
   localDate,
@@ -95,6 +98,7 @@ export function BeforePublish({
   disclosureAdded = false,
   onAddDisclosure,
   product = null,
+  category = null,
 }: {
   /**
    * Phase 3 (CE-053): a product page's Product schema, from its opening
@@ -102,6 +106,11 @@ export function BeforePublish({
    * other pages.
    */
   product?: { description: string | null; images: string[]; offer: PageOfferRead } | null;
+  /**
+   * Phase 3 (CE-054): a category page's ItemList, from its links to the
+   * brand's product pages (listedProducts); null on other pages.
+   */
+  category?: { items: ListedProduct[] } | null;
   /** Opened by Mark ready, by Export, or by Send to CMS. */
   mode?: 'markReady' | 'export' | 'send';
   paste: ReadyToPaste;
@@ -156,7 +165,7 @@ export function BeforePublish({
         .filter((s) => s.gain > 0)
         .sort((a, b) => b.gain - a.gain)
     : [];
-  const article = !product && isArticlePage(pageType);
+  const article = !product && !category && isArticlePage(pageType);
   // Product needs its name and price: without either, no code to paste.
   const productName = pageName(title);
   const offer = product?.offer && !('several' in product.offer) ? product.offer : null;
@@ -173,26 +182,34 @@ export function BeforePublish({
         offer,
       }),
     );
+  // An ItemList lists two products at least: one isn't a list.
+  const itemListLd =
+    category &&
+    category.items.length >= MIN_LISTED &&
+    jsonLdScript(itemListJsonLd({ name: productName, items: category.items }));
   const jsonLd = productLd
     ? productLd
-    : article
-      ? jsonLdScript(
-          articleJsonLd({
-            title,
-            // An author only confirmed (00271) isn't named here: left out, as unknown.
-            author: authorsRead && !(!author && quality.authorConfirmed?.real) ? author : undefined,
-            authorUrl:
-              (author &&
-                siteTrust?.checks.authorPages.authors.find((a) => a.name === author.name)?.url) ||
-              null,
-            brandName,
-            brandUrl: siteTrust?.checks.organizationSchema.url ?? null,
-            image,
-            isNew,
-            today: localDate(new Date()),
-          }),
-        )
-      : null;
+    : itemListLd
+      ? itemListLd
+      : article
+        ? jsonLdScript(
+            articleJsonLd({
+              title,
+              // An author only confirmed (00271) isn't named here: left out, as unknown.
+              author:
+                authorsRead && !(!author && quality.authorConfirmed?.real) ? author : undefined,
+              authorUrl:
+                (author &&
+                  siteTrust?.checks.authorPages.authors.find((a) => a.name === author.name)?.url) ||
+                null,
+              brandName,
+              brandUrl: siteTrust?.checks.organizationSchema.url ?? null,
+              image,
+              isNew,
+              today: localDate(new Date()),
+            }),
+          )
+        : null;
   // Added here: it counts once the page is read again.
   const [added, setAdded] = useState(false);
   // Where the page's type counts it (CE-052): a product page is the brand's own.
@@ -264,18 +281,38 @@ export function BeforePublish({
                       },
                 ]),
           ]
-      : article
+      : category
         ? [
-            { state: 'check' as const, title: t('dates.title'), detail: t('dates.detail') },
-            isNew
-              ? { state: 'check' as const, title: t('schema.title'), detail: t('schema.detail') }
-              : {
+            itemListLd
+              ? {
                   state: 'check' as const,
-                  title: t('schema.titleLive'),
-                  detail: t('schema.detailLive'),
+                  title: t('schema.itemList', { count: category.items.length }),
+                  detail: t('schema.itemListDetail'),
+                }
+              : {
+                  state: 'missing' as const,
+                  title: t('schema.itemListNone'),
+                  detail: t('schema.itemListNoneDetail', { count: category.items.length }),
                 },
           ]
-        : [{ state: 'check' as const, title: t('schema.other'), detail: t('schema.otherDetail') }]),
+        : article
+          ? [
+              { state: 'check' as const, title: t('dates.title'), detail: t('dates.detail') },
+              isNew
+                ? { state: 'check' as const, title: t('schema.title'), detail: t('schema.detail') }
+                : {
+                    state: 'check' as const,
+                    title: t('schema.titleLive'),
+                    detail: t('schema.detailLive'),
+                  },
+            ]
+          : [
+              {
+                state: 'check' as const,
+                title: t('schema.other'),
+                detail: t('schema.otherDetail'),
+              },
+            ]),
     // Phase 2 (CE-050): where the page puts the brand forward.
     ...(disclosure
       ? [
@@ -426,11 +463,11 @@ export function BeforePublish({
             >
               {jsonLd}
             </pre>
-            {titleHasPlaceholder(title) && (
+            {article && titleHasPlaceholder(title) && (
               <p className="text-xs text-amber-700 dark:text-amber-300">{t('headlineLeftOut')}</p>
             )}
             <p className="text-xs text-muted-foreground">
-              {t(productLd ? 'productNote' : 'datesNote')}
+              {t(productLd ? 'productNote' : itemListLd ? 'itemListNote' : 'datesNote')}
             </p>
           </div>
         )}

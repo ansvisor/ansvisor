@@ -4453,6 +4453,7 @@
           "quiet": "Before you publish has the author, dates and schema (JSON-LD) for your CMS.",
           "quietOther": "Before you publish has the author and what your CMS adds for this page type.",
           "quietProduct": "Before you publish has the Product schema (JSON-LD) with the page's price for your CMS.",
+          "quietItemList": "Before you publish has the ItemList schema (JSON-LD) of the products the page links, for your CMS.",
           "warnings": "Before you publish: {list}.",
           "trust": "Trust {trust}, below 60",
           "noAuthor": "no author yet",
@@ -4616,6 +4617,10 @@
           "detailLive": "Often added by your CMS. If not, paste the code below into the page. It gives only the updated date: your page keeps the published date it has.",
           "product": "Product schema with its price",
           "productDetail": "Price read from the page: {price}. Check it's the product's. Often added by your shop's theme; if not, paste the code below into the page. Availability, SKU and reviews come from a product feed, once one is connected.",
+          "itemList": "ItemList schema with {count, plural, one {# product} other {# products}}",
+          "itemListDetail": "Often added by your shop's theme on a collection page. If not, paste the code below into the page. Each product's price and stock go in its own page's Product schema.",
+          "itemListNone": "ItemList schema needs links to your products",
+          "itemListNoneDetail": "{count, plural, =0 {The page links none of your product pages} one {The page links one of your product pages} other {}}: link at least two of the products it lists to their own pages on your site, and the code lists them in the page's order.",
           "productNoName": "Product schema needs the product's name",
           "productNoNameDetail": "The title is empty or still has a placeholder in square brackets: write the product's name there. Without it, search engines show no product result.",
           "productNoPrice": "Product schema needs the price",
@@ -4623,7 +4628,7 @@
           "productSeveral": "Product schema needs one price",
           "productSeveralDetail": "The page states more than one price ({prices}), so the code doesn't guess which is the product's. Write its price once, or its range as one (\"$119–$139\"), or connect your product feed.",
           "other": "Schema for this page type",
-          "otherDetail": "Check what your CMS adds for it (Product, ItemList…). The code Ansvisor gives here is for articles."
+          "otherDetail": "Check what your CMS adds for it. The code Ansvisor gives here is for articles, product pages and category pages."
         },
         "disclosure": {
           "ok": "Disclosure",
@@ -4641,6 +4646,7 @@
         "pageReading": "Still reading the page for claims that need your proof, so your to-dos may change.",
         "productNote": "The price, its currency and the images are the page's own (a \"$\" reads as US dollars): check they match your shop before you paste it.",
         "datesNote": "The dates are today's: change them if the page goes out on another day.",
+        "itemListNote": "The products are the page's links to your product pages, in its order: check the list before you paste it.",
         "headlineLeftOut": "The title still has a placeholder in square brackets, so the code leaves the headline out. Fill it in, and the headline comes back here.",
         "states": {
           "ok": "done",

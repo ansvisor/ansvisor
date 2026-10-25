@@ -98,6 +98,8 @@ import {
   openingParagraph,
   pageName,
   pageOffer,
+  listedProducts,
+  MIN_LISTED,
 } from '@/lib/content/page-schema';
 import { PLACEHOLDER, pagePlaceholders, placeholderIn } from '@/lib/content/placeholders';
 import { HANDOFF_KEYS, handOffItems } from '@/lib/content/hand-off';
@@ -1005,6 +1007,21 @@ export function DraftEditor({
       offer: pageOffer(pageBlocks.map((block) => block.text)),
     };
   }, [profile, images, ownImages, pageHtml, pageBlocks]);
+  // Phase 3 (CE-054): a category page's ItemList in Before you publish, from
+  // its links to the brand's product pages, read against its site.
+  const categorySchema = useMemo(
+    () =>
+      profile === 'category'
+        ? {
+            items: listedProducts(
+              pageHtml,
+              brandDomains ?? [],
+              siteTrust?.checks.organizationSchema.url ?? null,
+            ),
+          }
+        : null,
+    [profile, pageHtml, brandDomains, siteTrust],
+  );
   // The page's price, GTIN and stock against its product in the feed (CE-053).
   const feedRead = useMemo(
     () =>
@@ -3564,6 +3581,7 @@ export function DraftEditor({
             // Only where Before you publish has its code: a name and one price.
             product:
               !!productSchema?.offer && !('several' in productSchema.offer) && !!pageName(title),
+            itemList: (categorySchema?.items.length ?? 0) >= MIN_LISTED,
             onReview: () => {
               setExportOpen(null);
               openBeforePublish('export', exportOpen.destination);
@@ -3617,6 +3635,7 @@ export function DraftEditor({
           disclosureAdded={disclosureOnPage}
           onAddDisclosure={addLineUnderAnswer}
           product={productSchema}
+          category={categorySchema}
           onMarkReady={(anyway) => {
             setPublishOpen(null);
             void markReady(anyway ?? undefined);

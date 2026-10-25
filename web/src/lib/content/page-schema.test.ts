@@ -4,7 +4,9 @@ import {
   articleJsonLd,
   firstImage,
   isArticlePage,
+  itemListJsonLd,
   jsonLdScript,
+  listedProducts,
   localDate,
   pageName,
   titleHasPlaceholder,
@@ -397,5 +399,54 @@ describe('productJsonLd', () => {
       highPrice: '139.00',
       priceCurrency: 'EUR',
     });
+  });
+});
+
+describe('listedProducts (Phase 3, CE-054)', () => {
+  it('reads the page’s links to the brand’s product pages, in order, each once, with their names', () => {
+    const html =
+      '<h1>Daypacks</h1>' +
+      '<ul><li><a href="https://www.acme.com/products/ridge-28?variant=1">Ridge 28</a></li>' +
+      '<li><a href="/products/ridge-32#specs">Ridge 32</a></li>' +
+      '<li><a href="https://acme.com/products/ridge-28">Ridge 28 again</a></li>' +
+      '<li><a href="https://shop.acme.com/urun/kanyon"><img src="https://cdn.acme.com/k.jpg" alt="Kanyon"></a></li></ul>' +
+      // Another site's product, a collection, a post: no product of the brand's.
+      '<p><a href="https://rival.com/products/peak">Peak</a> · <a href="/collections/daypacks">All</a> · <a href="/blog/how-to-pack">Packing</a></p>';
+    expect(listedProducts(html, ['acme.com'], 'https://acme.com')).toEqual([
+      { url: 'https://www.acme.com/products/ridge-28', name: 'Ridge 28' },
+      { url: 'https://acme.com/products/ridge-32', name: 'Ridge 32' },
+      { url: 'https://shop.acme.com/urun/kanyon', name: 'Kanyon' },
+    ]);
+    // A relative link with no site to read it against: left out.
+    expect(listedProducts('<a href="/products/x">X</a>', [], null)).toEqual([]);
+  });
+});
+
+describe('itemListJsonLd', () => {
+  it('lists the products in order under the page’s name, a placeholder name left out', () => {
+    expect(
+      itemListJsonLd({
+        name: 'Daypacks',
+        items: [
+          { url: 'https://acme.com/products/ridge-28', name: 'Ridge 28' },
+          { url: 'https://acme.com/products/ridge-32', name: '[product name]' },
+        ],
+      }),
+    ).toEqual({
+      '@context': 'https://schema.org',
+      '@type': 'ItemList',
+      name: 'Daypacks',
+      numberOfItems: 2,
+      itemListElement: [
+        {
+          '@type': 'ListItem',
+          position: 1,
+          url: 'https://acme.com/products/ridge-28',
+          name: 'Ridge 28',
+        },
+        { '@type': 'ListItem', position: 2, url: 'https://acme.com/products/ridge-32' },
+      ],
+    });
+    expect(itemListJsonLd({ name: null, items: [] })).not.toHaveProperty('name');
   });
 });

@@ -1,7 +1,9 @@
+import { classifyDomain, normalizeDomain } from '@/lib/citations/classify';
 import type { ContentAuthor } from './authors';
 import { factValueText, pagePrices, priceRanges } from './brand-facts';
 import type { PageType } from './drafts';
 import { PLACEHOLDER } from './placeholders';
+import { cleanHref } from './html-allowlist';
 import { isByline, sentencesOf } from './readability';
 
 /**
@@ -360,6 +362,97 @@ export function productJsonLd({
             highPrice: offer.high.toFixed(2),
             priceCurrency: offer.currency,
           },
+  };
+}
+
+/**
+ * A path that is a product's page, by the segment shops put before it
+ * ("/products/ridge-28", "/product/…", "/p/123", "/urun/…", "/produkt/…",
+ * "/produit/…", "/producto/…", "/prodotto/…", "/artikel/…", "/dp/…").
+ */
+const PRODUCT_PATH =
+  /\/(?:products?|p|items?|dp|urun|urunler|produkt|produkte|produit|produits|producto|productos|prodotto|prodotti|artikel)\/[^/?#]+/iu;
+
+/** A product a category page lists: its page and its name as the link gives it. */
+export interface ListedProduct {
+  url: string;
+  name: string | null;
+}
+
+/** The fewest products an ItemList lists (CE-054): one isn't a list. */
+export const MIN_LISTED = 2;
+
+/**
+ * The products a category page lists (Quality spec §11, CE-054): its links
+ * to the brand's own product pages, in the page's order, each once (its
+ * query and hash left out, "www." and a trailing slash alike). A link's text, else its image's alt text, is
+ * the product's name. A relative link is read against the brand's site.
+ */
+export function listedProducts(
+  html: string,
+  brandDomains: readonly string[],
+  base: string | null,
+): ListedProduct[] {
+  const own = brandDomains.map(normalizeDomain).filter(Boolean);
+  const root = base ?? (own[0] ? `https://${own[0]}` : null);
+  const doc = new DOMParser().parseFromString(html, 'text/html');
+  const seen = new Set<string>();
+  const out: ListedProduct[] = [];
+  for (const a of doc.body.querySelectorAll('a[href]')) {
+    const href = cleanHref(a.getAttribute('href') ?? '');
+    if (!href) continue;
+    let url: URL;
+    try {
+      url = root ? new URL(href, root) : new URL(href);
+    } catch {
+      continue;
+    }
+    if (url.protocol !== 'https:' && url.protocol !== 'http:') continue;
+    const host = normalizeDomain(url.href);
+    if (!host || classifyDomain(host, { brandDomains: own, competitorDomains: [] }) !== 'you') {
+      continue;
+    }
+    if (!PRODUCT_PATH.test(url.pathname)) continue;
+    url.search = '';
+    url.hash = '';
+    // One product however its address is written ("www.", a trailing slash).
+    const key = `${host}${url.pathname.replace(/\/+$/, '')}`.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const name = (
+      (a.textContent ?? '').replace(/\s+/g, ' ').trim() ||
+      a.querySelector('img[alt]')?.getAttribute('alt')?.trim() ||
+      ''
+    ).slice(0, 150);
+    out.push({ url: url.href, name: name || null });
+  }
+  return out;
+}
+
+/**
+ * A category page's ItemList (CE-054): the products it lists, in its order,
+ * each its page and name, under the page's name. Only what the page links:
+ * prices and stock are each product's own page's Product.
+ */
+export function itemListJsonLd({
+  name,
+  items,
+}: {
+  /** The page's title as pageName gives it; left out without one. */
+  name: string | null;
+  items: readonly ListedProduct[];
+}): Record<string, unknown> {
+  return {
+    '@context': 'https://schema.org',
+    '@type': 'ItemList',
+    ...(name ? { name } : {}),
+    numberOfItems: items.length,
+    itemListElement: items.map((item, i) => ({
+      '@type': 'ListItem',
+      position: i + 1,
+      url: item.url,
+      ...(item.name && !ONE_PLACEHOLDER.test(item.name) ? { name: item.name } : {}),
+    })),
   };
 }
 
