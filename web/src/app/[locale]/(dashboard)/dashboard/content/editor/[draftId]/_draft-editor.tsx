@@ -167,6 +167,7 @@ import {
   lengthBand,
   rewriteAdvice,
   keptOutOfReach,
+  lengthOutOfReach,
   type ActiveRule,
   type LastRewrite,
   type RewriteReach,
@@ -195,6 +196,7 @@ import {
   citedPassagesKey,
   lockedPassageCount,
   lockedPassagesLeft,
+  longSentences,
   rewriteFloor,
   type HeldEdit,
 } from './_cited-passages';
@@ -1827,6 +1829,25 @@ export function DraftEditor({
     };
   }, [draft.id, shownRewriteId]);
   const reach: RewriteReach = { kept: keptChars, floor: floorChars, last: lastRewrite };
+  // Open rules no run can close on this page (editor test 2026-10-25): every
+  // long sentence inside a passage AI answers quote, a Length out of a
+  // rewrite's reach. They leave the agent's work and Next step; the Rules tab
+  // says they're the person's to decide.
+  const sentenceRule = rules.rules.find(({ rule }) => rule.key === 'sentence' && rule.on);
+  const longOnes =
+    sentenceRule?.status.state === 'bad' && editor && citedRead
+      ? longSentences(editor.state, Number(sentenceRule.rule.current))
+      : null;
+  const lengthHeld = lengthOutOfReach(rules.rules, reach) !== null;
+  const heldKey = `${longOnes && longOnes.held > 0 && longOnes.free === 0 ? 's' : ''}${lengthHeld ? 'l' : ''}`;
+  const heldRules = useMemo(
+    () =>
+      new Set([
+        ...(heldKey.includes('s') ? ['sentence'] : []),
+        ...(heldKey.includes('l') ? ['length'] : []),
+      ]),
+    [heldKey],
+  );
   // The rules as the agent card counts its gain: met now, and the ones still open.
   const cardRules = useMemo(
     () => ({
@@ -2099,10 +2120,15 @@ export function DraftEditor({
       toast(t('suggestions.decideFirst', { count: openSuggestions }));
       return;
     }
-    const { forAgent: open, notForAgent } = openRulesForAgent(rules.rules, only);
+    const {
+      forAgent: open,
+      notForAgent,
+      held: heldOpen,
+    } = openRulesForAgent(rules.rules, only, heldRules);
     if (open.length === 0) {
       // Only rules it can't fix are open: say what to do instead.
-      if (notForAgent.length) toast(t(`suggestions.${notForAgentMessage(notForAgent)}`));
+      if (heldOpen.length) toast(tRules('heldAll'));
+      else if (notForAgent.length) toast(t(`suggestions.${notForAgentMessage(notForAgent)}`));
       return;
     }
     const pageText = editor.getText({ blockSeparator: '\n' });
@@ -2387,6 +2413,7 @@ export function DraftEditor({
     run: (only) => void fixRules(only),
     running: fixRunning,
     blocked: agentFixBlocked(fixRunning),
+    held: heldRules,
   };
   const handOffCard: HandOff | null =
     sourcesOn && quality
@@ -2427,12 +2454,14 @@ export function DraftEditor({
   });
   // The card's Run Agent says why it won't run, as the Rules card does: also
   // when the only rules left open are ones the agent doesn't fix (one H1).
-  const agentRules = openRulesForAgent(rules.rules);
+  const agentRules = openRulesForAgent(rules.rules, undefined, heldRules);
   const cardRunBlocked =
     agentFix.blocked ??
-    (agentRules.forAgent.length === 0 && agentRules.notForAgent.length > 0
-      ? t(`suggestions.${notForAgentMessage(agentRules.notForAgent)}`)
-      : null);
+    (agentRules.forAgent.length === 0 && agentRules.held.length > 0
+      ? tRules('heldAll')
+      : agentRules.forAgent.length === 0 && agentRules.notForAgent.length > 0
+        ? t(`suggestions.${notForAgentMessage(agentRules.notForAgent)}`)
+        : null);
 
   // A drag with files over the page shows where they go; one dropped beside
   // the page (not on its text) goes in at the cursor.
@@ -2819,8 +2848,9 @@ export function DraftEditor({
     published: status === 'published',
     hasBrief: reads.brief.status === 'ready' ? reads.brief.brief !== null : null,
     empty: !pageHasWords,
-    rewrite: rewriteAdvice(rules.rules, reach),
-    openRules: rulesForNext(rules.rules),
+    rewrite: rewriteAdvice(rules.rules, reach, heldRules),
+    openRules: rulesForNext(rules.rules, heldRules),
+    openTotal: rules.rules.filter(({ rule, status }) => rule.on && status.state === 'bad').length,
     quality: quality
       ? { trust: trustNow, trustLow: trustNow !== null && trustNow < TRUST_GATE, todos }
       : null,

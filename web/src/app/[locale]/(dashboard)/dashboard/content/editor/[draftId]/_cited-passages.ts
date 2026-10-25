@@ -247,6 +247,27 @@ export function rewriteFloor(
   return { kept, floor: kept + floor };
 }
 
+/**
+ * The page's sentences over `limit` characters, split as the Sentence rule
+ * splits them (rules.ts), by whether the agent may change them: in a passage
+ * AI answers quote that is locked (held), or not (free). Paragraphs only, as
+ * the rule reads paragraphs and list items.
+ */
+export function longSentences(state: EditorState, limit: number): { held: number; free: number } {
+  const locks = citedLocks(state);
+  let held = 0;
+  let free = 0;
+  state.doc.descendants((node) => {
+    if (!node.isTextblock) return true;
+    if (node.type.name !== 'paragraph') return false;
+    const over = node.textContent.split(/(?<=[.!?])\s+/).filter((s) => s.length > limit).length;
+    if (isLocked(blockKey(node), locks)) held += over;
+    else free += over;
+    return false;
+  });
+  return { held, free };
+}
+
 /** The quoted passages a rewrite keeps now (locked, not unlocked): how many, and their characters. */
 export function lockedPassagesLeft(state: EditorState): { count: number; chars: number } {
   const locks = citedLocks(state);

@@ -5403,7 +5403,7 @@ describe('the side panel', () => {
       expect(basket()).toBeNull();
       expect(nextButton()!.getAttribute('aria-label')).toBe('Next · Plan the page');
       await act(async () => nextButton()!.click());
-      await act(async () => inBasket('Skip')!.click());
+      await act(async () => inBasket('Skip this step')!.click());
       expect(nextButton()!.getAttribute('aria-label')).not.toBe('Next · Plan the page');
       expect(JSON.parse(localStorage.getItem('aeo:next-step-skips:d1')!)).toEqual({
         plan: 'false',
@@ -5466,7 +5466,7 @@ describe('the side panel', () => {
       );
       await renderPage();
       expect(basket()).not.toBeNull();
-      await act(async () => inBasket('Skip')!.click());
+      await act(async () => inBasket('Skip this step')!.click());
       expect(basket()).not.toBeNull();
       expect(nextButton()!.getAttribute('aria-label')).toBe('Next · Write the first draft');
 
@@ -5484,7 +5484,7 @@ describe('the side panel', () => {
         'The page is empty: write it, and the next step follows from what you write.',
       );
       expect(inBasket('Write with Agent')).toBeUndefined();
-      expect(inBasket('Skip')).toBeUndefined();
+      expect(inBasket('Skip this step')).toBeUndefined();
     });
 
     it('leaves focus where a click outside the basket put it', async () => {
@@ -5552,7 +5552,7 @@ describe('the side panel', () => {
       await renderPage();
       expect(nextButton()!.getAttribute('aria-label')).toBe('Next · Fix open rules');
       await act(async () => nextButton()!.click());
-      await act(async () => inBasket('Skip')!.click());
+      await act(async () => inBasket('Skip this step')!.click());
       const skips = () => JSON.parse(localStorage.getItem('aeo:next-step-skips:d1')!);
       const skippedAt = skips().fixRules;
       expect(skippedAt).toContain('fanoutH2');

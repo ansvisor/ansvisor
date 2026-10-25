@@ -251,6 +251,17 @@ describe('the Rules tab', () => {
       );
     });
 
+    it('says a rule held by quoted passages is the person’s to decide', async () => {
+      // Sentences up to 10 characters: the page's one sentence is over, inside a quoted passage.
+      await show(
+        { agentFix: { ...fix(), held: new Set(['sentence']) } },
+        state({ overrides: { sentence: { value: '10' } } }),
+      );
+      expect(container.textContent).toContain(
+        'Kept by AI citations · yours to decide: the long sentences are in passages AI answers quote',
+      );
+    });
+
     it('says why its choice waits under the card, for the choice picked', async () => {
       const agentFix = {
         ...fix(),

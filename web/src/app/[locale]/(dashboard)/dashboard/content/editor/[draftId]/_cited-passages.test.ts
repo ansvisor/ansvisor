@@ -9,6 +9,7 @@ import {
   keptCharacters,
   lockedPassageCount,
   lockedPassagesLeft,
+  longSentences,
   rewriteFloor,
   type HeldEdit,
 } from './_cited-passages';
@@ -150,6 +151,32 @@ describe('rewriteFloor', () => {
         kept: QUOTED.length,
         floor: QUOTED.length + headings + 100,
       });
+    } finally {
+      small.destroy();
+    }
+  });
+});
+
+describe('longSentences', () => {
+  it('counts the long sentences a fix may change apart from those in quoted passages', () => {
+    const long = `${'Long words here '.repeat(4).trim()}.`;
+    const small = new Editor({
+      extensions: [StarterKit, CitedPassages.configure({ onHeld: () => {} })],
+      content: `<h1>${long}</h1><p>${QUOTED} ${long}</p><p>${long} Short.</p>`,
+    });
+    try {
+      const lock = (unlocked: string[] = []) =>
+        small.view.dispatch(
+          small.state.tr.setMeta(citedPassagesKey, {
+            labels: new Map([[passageKey(`${QUOTED} ${long}`), 'Cited by ChatGPT 3×']]),
+            unlocked: new Set(unlocked),
+          }),
+        );
+      lock();
+      // The heading isn't read; one long sentence in the quoted passage, one free.
+      expect(longSentences(small.state, 40)).toEqual({ held: 2, free: 1 });
+      lock([passageKey(`${QUOTED} ${long}`)]);
+      expect(longSentences(small.state, 40)).toEqual({ held: 0, free: 3 });
     } finally {
       small.destroy();
     }

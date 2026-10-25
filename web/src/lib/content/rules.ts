@@ -792,20 +792,28 @@ export function fanoutsToUse(status: RuleStatus, max = 300): string | null {
 
 /**
  * The rules on that the page doesn't meet (of `only`, when given): the ones
- * the Content Agent is asked to fix, and those it can't.
+ * the Content Agent is asked to fix, those it never fixes, and those `held`
+ * on this page by what it keeps word for word (editor test 2026-10-25: long
+ * sentences all inside passages AI answers quote, a Length out of a
+ * rewrite's reach), which are the person's to decide.
  */
 export function openRulesForAgent<T extends { rule: ActiveRule; status: RuleStatus }>(
   rules: T[],
   only?: string[],
-): { forAgent: T[]; notForAgent: T[] } {
+  held: ReadonlySet<string> = NO_HELD,
+): { forAgent: T[]; notForAgent: T[]; held: T[] } {
   const open = rules.filter(
     ({ rule, status }) => rule.on && status.state === 'bad' && (!only || only.includes(rule.key)),
   );
   return {
-    forAgent: open.filter(({ rule }) => !NOT_FOR_AGENT.has(rule.key)),
+    forAgent: open.filter(({ rule }) => !NOT_FOR_AGENT.has(rule.key) && !held.has(rule.key)),
     notForAgent: open.filter(({ rule }) => NOT_FOR_AGENT.has(rule.key)),
+    held: open.filter(({ rule }) => !NOT_FOR_AGENT.has(rule.key) && held.has(rule.key)),
   };
 }
+
+/** No rule held by what the page keeps. */
+export const NO_HELD: ReadonlySet<string> = new Set();
 
 /** How far off its Length a page may be before Rewrite the page to these rules is recommended. */
 export const REWRITE_LENGTH_OFF = 0.3;
@@ -958,6 +966,7 @@ export type RewriteAdvice =
 export function rewriteAdvice<T extends { rule: ActiveRule; status: RuleStatus }>(
   rules: T[],
   reach: RewriteReach = NO_REACH,
+  held: ReadonlySet<string> = NO_HELD,
 ): RewriteAdvice | null {
   const length = rules.find(({ rule }) => rule.key === 'length' && rule.on);
   const target = Number(length?.rule.current);
@@ -979,7 +988,7 @@ export function rewriteAdvice<T extends { rule: ActiveRule; status: RuleStatus }
   }
   // A Length out of reach is no rule a rewrite meets.
   const outOfReach = lengthOutOfReach(rules, reach) !== null;
-  const open = openRulesForAgent(rules).forAgent.filter(
+  const open = openRulesForAgent(rules, undefined, held).forAgent.filter(
     ({ rule }) => !(outOfReach && rule.key === 'length'),
   ).length;
   return open >= REWRITE_OPEN_RULES ? { reason: 'open', count: open } : null;
