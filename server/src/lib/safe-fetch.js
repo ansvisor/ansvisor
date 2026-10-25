@@ -20,6 +20,7 @@ import dns from 'node:dns';
 import http from 'node:http';
 import https from 'node:https';
 import net from 'node:net';
+import { pipeline } from 'node:stream';
 import { TextDecoder } from 'node:util';
 import zlib from 'node:zlib';
 
@@ -200,10 +201,20 @@ function requestOnce(url, { signal, lookup, maxBytes, truncate, types, accept })
           return;
         }
         const encoding = String(res.headers['content-encoding'] ?? '').toLowerCase();
-        let body = res;
-        if (encoding === 'gzip' || encoding === 'x-gzip') body = res.pipe(zlib.createGunzip());
-        else if (encoding === 'deflate') body = res.pipe(zlib.createInflate());
-        else if (encoding === 'br') body = res.pipe(zlib.createBrotliDecompress());
+        let decoder = null;
+        if (encoding === 'gzip' || encoding === 'x-gzip') decoder = zlib.createGunzip();
+        else if (encoding === 'deflate') decoder = zlib.createInflate();
+        else if (encoding === 'br') decoder = zlib.createBrotliDecompress();
+        // pipeline, not pipe: a page cut off part way fails the read instead
+        // of leaving its decoder waiting for an end that never comes, past
+        // the timeout (the request is over by then).
+        if (decoder) pipeline(res, decoder, (err) => err && reject(err));
+        const body = decoder ?? res;
+        res.on('close', () => {
+          if (!res.complete) {
+            reject(new PageFetchError('unreachable', 'The page stopped part way through'));
+          }
+        });
 
         const chunks = [];
         let size = 0;
