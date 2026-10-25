@@ -13,7 +13,7 @@ Ansvisor never publishes on its own. When your workflow tells Ansvisor where the
 ## Connect Webflow
 
 1. In Webflow, open your site's **Site settings → Apps & integrations → API access** and generate an **API token** with **Sites: Read** and **CMS: Read and write**.
-2. In Ansvisor, open **Settings → Integrations** with the brand selected, and paste the token in the **Webflow** card. It's checked with Webflow and kept by our connector service. It's never shown again, and Ansvisor's database doesn't hold it.
+2. In Ansvisor, open **Settings → Integrations** with the brand selected, and paste the token in the **Webflow** card. It's checked with Webflow and kept by our connector service. It's never shown again, and Ansvisor's database doesn't hold it. Only **admins and managers** can connect Webflow, pick the collection, replace the token or disconnect; members see where the brand's pages go.
 3. Pick the **collection** your pages go to (your blog's, for example), then which of its fields takes what:
 
    | Part of the page | Webflow field type | |
@@ -23,7 +23,7 @@ Ansvisor never publishes on its own. When your workflow tells Ansvisor where the
    | Meta description | Plain text | Optional |
    | JSON-LD (structured data) | Plain text | Optional |
 
-   The page's title and slug always go to the item's **Name** and **Slug**. Ansvisor suggests fields from their names (`post-body`, `post-summary`, `seo-title`…); change them if they're wrong, and **Save**. A collection that requires a field Ansvisor doesn't fill can't be picked: make that field optional in Webflow first.
+   The page's title and slug always go to the item's **Name** and **Slug**. Ansvisor suggests fields from their names (`post-body`, `post-summary`, `seo-title`…); change them if they're wrong, and **Save**. A collection that requires a field Ansvisor doesn't fill can't be saved: **Save** names the field. Make it optional in Webflow first.
 4. To use the JSON-LD field, add an **Embed** to the collection template that puts the field inside a `<script type="application/ld+json">` tag.
 
 A site token is one site's, so each brand connects its own. **Replace token** changes it (the collection and fields stay when it's the same site), and **Disconnect** removes it. If Webflow refuses the saved token, the card says so and asks for a new one.
@@ -61,7 +61,7 @@ The dialog fills the fields from the page, and you can change them before sendin
 
 The slug and meta you send are kept on the draft, so the next send starts from them.
 
-**To Webflow**, the page becomes a draft item in the collection. Sending it again **updates** the same item (a new one is made if it was deleted in Webflow, or after you switch collections); a live item's changes wait for your next publish in Webflow. Webflow's rich text has no tables and Ansvisor doesn't upload images yet, so:
+**To Webflow**, the page becomes a draft item in the collection. Sending it again **updates** the same item (a new one is made if it was deleted in Webflow, or after you switch collections); a live item's changes wait for your next publish in Webflow. The item's slug is the page's slug in the form Webflow takes: lowercase letters, digits, `-` and `_`, with accents dropped and dots turned into `-`, so the live address can differ slightly from the slug in the dialog. Webflow's rich text has no tables and Ansvisor doesn't upload images yet, so:
 
 - a table goes as a list, one item a row ("Header: cell · …");
 - images aren't sent: add them in Webflow;
@@ -69,7 +69,7 @@ The slug and meta you send are kept on the draft, so the next send starts from t
 
 The toast says whether the item was made or updated, and what changed on the way.
 
-Once you publish it in Webflow, the page becomes **Published** at its address on your site (`/{collection}/{slug}` on your domain). Ansvisor checks when you open the Library and once a day. A page sent again stays sent until Webflow publishes it again, and a page whose item you deleted in Webflow reads "Removed in Webflow"; send it again to make a new item.
+Once you publish it in Webflow, the page becomes **Published** at its address on your site: `/{collection}/{slug}` on the custom domain the site was last published to, or on its `webflow.io` address when it has none. Ansvisor checks when you open the Library and once a day, for sends from the last 60 days. A page published in Webflow later than that stays "In Webflow as a draft item"; sending it again starts the check over. A page sent again stays sent until Webflow publishes it again, and a page whose item you deleted in Webflow reads "Removed in Webflow"; send it again to make a new item.
 
 The page goes as **Export** makes it: the HTML without its H1 (your CMS's title field carries it), with the byline line if your brand adds the byline to its content. Ansvisor holds the send while:
 
