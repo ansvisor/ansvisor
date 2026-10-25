@@ -63,6 +63,11 @@ export interface QualityTodo {
   proof?: { claim: string; block: string; kind: ProofKind; sentence: string };
   /** How many it is about (placeholders, brand facts to approve). */
   count?: number;
+  /**
+   * With no author picked: the person's own word for the author their site
+   * names (00271), a tick box beside the to-do, and whether it's ticked.
+   */
+  confirm?: { what: 'real' | 'profile'; on: boolean };
 }
 
 /**
@@ -86,6 +91,7 @@ export function qualityTodos({
   trust = null,
   brandFacts = null,
   proofs = null,
+  confirmed = null,
 }: {
   eeat: Score<EeatCheckId> | null;
   author: ContentAuthor | null;
@@ -114,6 +120,8 @@ export function qualityTodos({
    * session: done ones stay listed, checked.
    */
   proofs?: { asks: readonly PageProof[]; had: ReadonlySet<string> } | null;
+  /** What the person confirmed of the author their site names (00271), or null where they can't. */
+  confirmed?: { real: boolean; profile: boolean } | null;
 }): QualityTodo[] {
   const fill: QualityTodo[] =
     placeholders.count || placeholders.had
@@ -162,12 +170,16 @@ export function qualityTodos({
     ];
   });
   if (!eeat || eeat.score === null) return [...fill, ...proofTodos, ...facts];
+  // No author picked: the one the site names may be confirmed instead, the
+  // profile once the author is.
+  const byConfirm = !author && !!confirmed;
   const byline: QualityTodo = {
     id: 'byline',
-    done: !!author,
+    done: !!author || (byConfirm && confirmed.real),
     gain: scoreGain(eeat, ['byline']),
     score: 'eeat',
     action: author || hasAuthors ? 'pickAuthor' : 'addAuthor',
+    ...(byConfirm ? { confirm: { what: 'real' as const, on: confirmed.real } } : {}),
   };
   const { bio, links } = authorProfile(author);
   return [
@@ -175,10 +187,13 @@ export function qualityTodos({
     byline,
     {
       id: 'authorProfile',
-      done: !!author && bio && links,
+      done: (!!author && bio && links) || (byConfirm && confirmed.real && confirmed.profile),
       gain: scoreGain(eeat, ['authorBio']),
       score: 'eeat',
       action: author && canEdit ? 'editAuthor' : null,
+      ...(byConfirm && confirmed.real
+        ? { confirm: { what: 'profile' as const, on: confirmed.profile } }
+        : {}),
     },
     ...(used
       ? ([

@@ -8,6 +8,7 @@ vi.mock('@/lib/actions/content-drafts', () => ({
 }));
 
 const { SOURCE_CLASS_DELAY_MS, useSourceClasses } = await import('./_use-source-classes');
+const { MAX_SOURCE_SITES } = await import('@/lib/content/source-class');
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT =
   true;
@@ -30,8 +31,14 @@ function Probe({
   savedAt: string;
   enabled: boolean;
 }) {
-  const { kinds, paused } = useSourceClasses('d1', savedAt, sites, enabled);
-  return <pre data-kinds={JSON.stringify([...kinds])} data-paused={String(paused)} />;
+  const { kinds, paused, reading } = useSourceClasses('d1', savedAt, sites, enabled);
+  return (
+    <pre
+      data-kinds={JSON.stringify([...kinds])}
+      data-paused={String(paused)}
+      data-reading={String(reading)}
+    />
+  );
 }
 
 const kinds = () =>
@@ -55,7 +62,26 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
+const reading = () => container.querySelector('pre')?.getAttribute('data-reading') === 'true';
+
 describe('useSourceClasses', () => {
+  it('is reading a site until it has its kind, or its ask at this save is answered', async () => {
+    await render(['blog.example']);
+    expect(reading()).toBe(true);
+    await wait();
+    expect(reading()).toBe(false);
+    // An ask that fails: read again after the next save, not reading meanwhile.
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    classifyDraftSources.mockRejectedValueOnce(new Error('offline'));
+    await render(['blog.example', 'forum.example']);
+    expect(reading()).toBe(true);
+    await wait();
+    expect(reading()).toBe(false);
+    await render(['blog.example', 'forum.example'], 's2');
+    expect(reading()).toBe(true);
+    vi.mocked(console.error).mockRestore();
+  });
+
   it('asks about the sites a few seconds after a save, and keeps each read', async () => {
     await render(['blog.example']);
     await wait(SOURCE_CLASS_DELAY_MS - 100);
@@ -107,6 +133,22 @@ describe('useSourceClasses', () => {
     await wait();
     expect(classifyDraftSources).toHaveBeenCalledTimes(2);
     expect(kinds()).toEqual(new Map([['blog.example', 'weak']]));
+    error.mockRestore();
+  });
+
+  it('asks about the sites past a failed batch at the same save', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    classifyDraftSources.mockRejectedValueOnce(new Error('network'));
+    const sites = Array.from({ length: MAX_SOURCE_SITES + 1 }, (_, i) => `site${i}.example`);
+    await render(sites);
+    await wait();
+    expect(classifyDraftSources).toHaveBeenCalledTimes(1);
+    // The one past the batch is still to be read: asked without a save.
+    expect(reading()).toBe(true);
+    await wait();
+    expect(classifyDraftSources).toHaveBeenCalledTimes(2);
+    expect(classifyDraftSources).toHaveBeenLastCalledWith('d1', [sites[MAX_SOURCE_SITES]]);
+    expect(reading()).toBe(false);
     error.mockRestore();
   });
 

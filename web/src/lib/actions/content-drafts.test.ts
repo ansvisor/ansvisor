@@ -93,6 +93,7 @@ const {
   restoreDraftVersion,
   saveContentDraft,
   setContentDraftAuthor,
+  confirmDraftAuthor,
   setContentDraftPageType,
   unmarkContentDraftReady,
 } = await import('./content-drafts');
@@ -346,6 +347,28 @@ describe('setContentDraftAuthor', () => {
     await expect(setContentDraftAuthor('d1', AUTHOR)).rejects.toThrow('invalid');
     expect(calls).toEqual([]);
     await expect(setContentDraftAuthor(DRAFT, AUTHOR)).rejects.toThrow('not_found');
+  });
+});
+
+describe('confirmDraftAuthor (00271)', () => {
+  it('ticks or unticks the author the site names, or their profile; the database stamps who and when', async () => {
+    updated = { id: DRAFT };
+    await confirmDraftAuthor(DRAFT, 'real', true);
+    expect(calls[0]).toMatchObject({ op: 'update', filters: [['eq', 'id', DRAFT]] });
+    expect(Object.keys(calls[0].value as object)).toEqual(['author_real_at']);
+    expect((calls[0].value as { author_real_at: string }).author_real_at).toMatch(/^\d{4}-/);
+    await confirmDraftAuthor(DRAFT, 'profile', false);
+    expect(calls[1]).toMatchObject({ op: 'update', value: { author_profile_at: null } });
+  });
+
+  it('refuses what it doesn’t know, and says so when the draft isn’t the member’s', async () => {
+    await expect(confirmDraftAuthor('d1', 'real', true)).rejects.toThrow('invalid');
+    await expect(confirmDraftAuthor(DRAFT, 'bio' as 'real', true)).rejects.toThrow('invalid');
+    await expect(confirmDraftAuthor(DRAFT, 'real', 'yes' as unknown as boolean)).rejects.toThrow(
+      'invalid',
+    );
+    expect(calls).toEqual([]);
+    await expect(confirmDraftAuthor(DRAFT, 'real', true)).rejects.toThrow('not_found');
   });
 });
 

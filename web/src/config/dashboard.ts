@@ -27,8 +27,8 @@ export type BrandPrefKey = 'shoppingModeEnabled';
 export interface NavChild {
   title: string;
   href: string;
-  /** Other routes that belong to this entry, e.g. the editor to the Library. */
-  activeFor?: string[];
+  /** On one of its pages, it links to that page: the Editor stays on the draft open. */
+  keepsPage?: boolean;
   /** A short tag after the label, e.g. "New". */
   badge?: string;
 }
@@ -80,7 +80,8 @@ export const dashboardNav: NavGroup[] = [
         requiredFeature: 'ai_agent',
       },
       // Content Editor (CE-001): a group, like Prompts. The Plan says what to
-      // do next (CE-014); Opportunities is today's page and keeps
+      // do next (CE-014); the Editor goes back to the draft last opened, else
+      // starts a new page; Opportunities is today's page and keeps
       // /dashboard/content; the Library lists every page written or changed
       // in Ansvisor.
       {
@@ -90,13 +91,10 @@ export const dashboardNav: NavGroup[] = [
         requiredFeature: 'content_optimization',
         children: [
           { title: 'Plan', href: '/dashboard/content/plan', badge: 'New' },
+          // A draft open in the editor (CE-004) is under it.
+          { title: 'Editor', href: '/dashboard/content/editor', keepsPage: true },
           { title: 'Opportunities', href: '/dashboard/content' },
-          // A draft opens in the editor from the Library (CE-004).
-          {
-            title: 'Library',
-            href: '/dashboard/content/library',
-            activeFor: ['/dashboard/content/editor'],
-          },
+          { title: 'Library', href: '/dashboard/content/library' },
         ],
       },
       {
