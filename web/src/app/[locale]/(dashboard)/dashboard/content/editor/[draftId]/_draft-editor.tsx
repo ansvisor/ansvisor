@@ -1933,7 +1933,7 @@ export function DraftEditor({
   // The page's last rewrite, from any run (00285), read on opening and again
   // once a new one is shown: a Length it missed isn't a rewrite's to reach
   // (rules.ts RewriteReach). A later Fix run's batch doesn't hide it.
-  const [lastRewrite, setLastRewrite] = useState<LastRewrite | null>(null);
+  const [lastRewrite, setLastRewrite] = useState<(LastRewrite & { html: string }) | null>(null);
   const shownRewriteId = pageSuggestion?.id ?? null;
   useEffect(() => {
     let cancelled = false;
@@ -1958,12 +1958,19 @@ export function DraftEditor({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- the rewrite's two pages, once
     [pageSuggestion?.id, pageSuggestion?.afterText, pageSuggestion?.beforeHtml, editor],
   );
-  // The rewrite shown, counted as the toolbar counts it, not as the API did:
-  // its Length band is the editor's.
-  const lastCounted =
-    lastRewrite && pageChars && lastRewrite.id === pageSuggestion?.id
-      ? { ...lastRewrite, chars: pageChars.after }
-      : lastRewrite;
+  // The last rewrite counted as the toolbar counts it, not as the API did,
+  // shown or decided since: its Length band is the editor's, and what it came
+  // to reads the same before and after (editor test 2026-10-25).
+  const lastCounted = useMemo(
+    () =>
+      lastRewrite && {
+        target: lastRewrite.target,
+        kept: lastRewrite.kept,
+        chars: lastRewrite.html ? htmlChars(lastRewrite.html) : lastRewrite.chars,
+      },
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- its page, once
+    [lastRewrite, editor],
+  );
   const reach: RewriteReach = { kept: keptChars, floor: floorChars, last: lastCounted };
   // The rules' count stands once My rules and the fan-outs (the fan-out
   // rules' own) are read: before, rules come and go from it.

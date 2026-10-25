@@ -1825,16 +1825,19 @@ export async function keepAgentBeforeVersion(id: string): Promise<void> {
 /**
  * The draft's last page rewrite, whatever became of it, as the API kept it
  * (00285): the characters it came to, the Length it was written to and what
- * it kept. A Length it missed isn't offered again (rules.ts RewriteReach).
- * Numbers only: the rewritten page isn't read for them. Null without one,
- * or for one made before 00285.
+ * it kept, and the page it wrote, for the editor to count as its toolbar
+ * does (the API's count runs a little over). A Length it missed isn't
+ * offered again (rules.ts RewriteReach). One row, read on opening and once a
+ * new rewrite is shown. Null without one, or for one made before 00285.
  */
-export async function getLastPageRewrite(id: string): Promise<LastRewrite | null> {
+export async function getLastPageRewrite(
+  id: string,
+): Promise<(LastRewrite & { html: string }) | null> {
   if (!draftId.safeParse(id).success) throw new Error('invalid');
   const supabase = await createClient();
   const { data, error } = await supabase
     .from('content_draft_suggestions')
-    .select('id, after_chars, length_target, kept_chars')
+    .select('after_text, after_chars, length_target, kept_chars')
     .eq('draft_id', id)
     .eq('kind', 'page')
     .order('created_at', { ascending: false })
@@ -1843,10 +1846,10 @@ export async function getLastPageRewrite(id: string): Promise<LastRewrite | null
   if (error) throw new Error(error.message);
   if (!data || data.after_chars === null || data.kept_chars === null) return null;
   return {
-    id: data.id,
     chars: data.after_chars,
     target: data.length_target,
     kept: data.kept_chars,
+    html: data.after_text,
   };
 }
 
