@@ -52,13 +52,11 @@ describe('ContentSection', () => {
     expect(container.textContent).toContain('AcmeHand off quality fixes automatically');
     expect(container.textContent).toContain('Its changes wait for your review');
     expect(box().getAttribute('aria-checked')).toBe('false');
-    getContentSettings.mockResolvedValue({
-      brands: [{ id: 'b1', name: 'Acme', qualityHandoff: true }],
-      canManage: true,
-    });
     await act(async () => box().click());
     expect(setBrandQualityHandoff).toHaveBeenCalledWith('b1', true);
     expect(box().getAttribute('aria-checked')).toBe('true');
+    // Saved: not read again.
+    expect(getContentSettings).toHaveBeenCalledTimes(1);
   });
 
   it('puts it back when the save fails', async () => {
@@ -84,6 +82,12 @@ describe('ContentSection', () => {
     await render();
     expect(container.textContent).toContain('Add a brand to choose how its pages work.');
     getContentSettings.mockRejectedValue(new Error('down'));
+    act(() => root.unmount());
+    root = createRoot(container);
+    await render();
+    expect(container.textContent).toContain("Couldn't load the brands.");
+    // No workspace to read: no endless wait.
+    getContentSettings.mockResolvedValue(null);
     act(() => root.unmount());
     root = createRoot(container);
     await render();

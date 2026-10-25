@@ -6942,7 +6942,7 @@
       "title": "Content",
       "description": "How the Content Editor works for each brand.",
       "handOff": "Hand off quality fixes automatically",
-      "handOffHint": "New and optimized pages get the Content Agent's quality fixes when they're first opened in the editor. Its changes wait for your review, each run is in the page's History, and each counts toward your AI usage.",
+      "handOffHint": "Pages made while it's on get the Content Agent's quality fixes when they're first opened in the editor; turned off, the ones not handed off yet don't. Its changes wait for your review, each run is in the page's History, and each counts toward your AI usage.",
       "managers": "Only admins and managers can change these.",
       "noBrands": "Add a brand to choose how its pages work.",
       "loading": "Loading the brands",

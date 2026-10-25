@@ -29,7 +29,10 @@ export function ContentSection() {
   const load = useCallback(async () => {
     setFailed(false);
     try {
-      setRead(await getContentSettings());
+      const next = await getContentSettings();
+      setRead(next);
+      // No workspace to read: nothing to wait for.
+      setFailed(!next);
     } catch {
       setFailed(true);
     }
@@ -42,7 +45,14 @@ export function ContentSection() {
     setSaving((prev) => ({ ...prev, [brandId]: on }));
     try {
       await setBrandQualityHandoff(brandId, on);
-      await load();
+      // Saved: shown as saved, with no read again to fail.
+      setRead(
+        (prev) =>
+          prev && {
+            ...prev,
+            brands: prev.brands.map((b) => (b.id === brandId ? { ...b, qualityHandoff: on } : b)),
+          },
+      );
     } catch {
       toast.error(t('saveFailed'));
     } finally {
