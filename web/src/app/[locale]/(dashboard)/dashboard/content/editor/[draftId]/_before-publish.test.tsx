@@ -338,7 +338,11 @@ describe('BeforePublish', () => {
       { url: 'https://acme.com/products/ridge-28', name: 'Ridge 28' },
       { url: 'https://acme.com/products/ridge-32', name: 'Ridge 32' },
     ];
-    await render(quality(), { pageType: 'category_page', title: 'Daypacks', category: { items } });
+    await render(quality(), {
+      pageType: 'category_page',
+      title: 'Daypacks',
+      category: { items, status: 'read' },
+    });
     expect(rows().some((row) => row.startsWith('ItemList schema with 2 products'))).toBe(true);
     expect(jsonLd()).toMatchObject({
       '@type': 'ItemList',
@@ -356,12 +360,37 @@ describe('BeforePublish', () => {
     await render(quality(), {
       pageType: 'category_page',
       title: 'Daypacks',
-      category: { items: items.slice(0, 1) },
+      category: { items: items.slice(0, 1), status: 'read' },
     });
     expect(
       rows().find((row) => row.startsWith('ItemList schema needs links to your products')),
-    ).toContain('The page links one of your product pages');
+    ).toContain('Ansvisor finds one link to your product pages here');
     expect(dialog().querySelector('pre')).toBeNull();
+    // The brand's domains not read yet, or not read at all: no "none" said.
+    await render(quality(), {
+      pageType: 'category_page',
+      title: 'Daypacks',
+      category: { items: [], status: 'reading' },
+    });
+    expect(rows().find((row) => row.startsWith('ItemList schema'))).toContain(
+      "Reading the page's links to your product pages",
+    );
+    await render(quality(), {
+      pageType: 'category_page',
+      title: 'Daypacks',
+      category: { items: [], status: 'unknown' },
+    });
+    expect(rows().find((row) => row.startsWith('ItemList schema'))).toContain(
+      "Your brand's domains couldn't be read",
+    );
+    // A placeholder in the title: the list's name is left out, and it says so.
+    await render(quality(), {
+      pageType: 'category_page',
+      title: '[category name] daypacks',
+      category: { items, status: 'read' },
+    });
+    expect(jsonLd()).not.toHaveProperty('name');
+    expect(dialog().textContent).toContain("so the code leaves the list's name out");
   });
 
   it('gives a product page its Product schema with the price it states, and asks for one it doesn’t (CE-053)', async () => {
@@ -535,7 +564,7 @@ describe('BeforePublish', () => {
     await render(quality(), { pageType: 'product_page' });
     expect(rows()).toEqual([
       expect.stringContaining('Author for your CMS'),
-      'Schema for this page type · check itCheck what your CMS adds for it. The code Ansvisor gives here is for articles, product pages and category pages.',
+      'Schema for this page type · check itCheck what your CMS adds for it (Product, ItemList…). The code Ansvisor gives here is for articles.',
       expect.stringContaining('Ready to paste'),
     ]);
     expect(dialog().querySelector('pre')).toBeNull();
