@@ -12,7 +12,9 @@ import { authorWords, guardPeopleInHtml, knownPeople } from './content-people.js
 import {
   RunStoppedError,
   advanceRun,
+  dropRun,
   finishRun,
+  fixUnderWay,
   isStop,
   runCall,
   startRun,
@@ -33,7 +35,7 @@ import {
   todayText,
 } from './content-sources.js';
 import { getLanguageName } from './languages.js';
-import { reserveAiBudget } from './plan-guard.js';
+import { PlanLimitError, reserveAiBudget } from './plan-guard.js';
 
 /**
  * Fix open rules with agent (Content Editor CE-018, spec §8): the Content
@@ -381,6 +383,8 @@ export function splitReplace(after, tag, links = null) {
  */
 export function keepSuggestions(raw, passages, lockedKeys, ruleKeys, links = null, sourcing = {}) {
   const numbered = sourcing.numbered ?? [];
+  // Quality's hand-off (CE-051): a placeholder is the person's to fill.
+  const keepsPlaceholders = sourcing.keepPlaceholders === true;
   const known = sourcing.known ?? knownNumbers(...passages.map((p) => p.text));
   const people = sourcing.people ?? knownPeople(...passages.map((p) => p.text));
   const kept = [];
@@ -427,6 +431,14 @@ export function keepSuggestions(raw, passages, lockedKeys, ruleKeys, links = nul
       const wordLinks = split.links.slice(0, MAX_LINKS);
       // Linking words the passage already has is a change too.
       const changed = words && (words !== before || wordLinks.length > 0);
+      // Read in what is kept: the passage's new words, and the blocks after it.
+      if (
+        keepsPlaceholders &&
+        changed &&
+        dropsPlaceholder(passage.text, before, `${words} ${textOf(blocks)}`, passage.tag)
+      ) {
+        continue;
+      }
       if (
         changed &&
         (words.length > 2000 ||
@@ -507,6 +519,51 @@ export function promptPassages(passages) {
   return { passages: sent, more: false };
 }
 
+/**
+ * Words in square brackets with a letter and more than one character in
+ * them: a placeholder (CE-044), as the editor reads one (placeholders.ts).
+ */
+const PLACEHOLDER = /\[(?!sic\])(?=[^[\]\n]*\p{L})[^[\]\n]{2,}\](?!\()/giu;
+
+/**
+ * The forms the server's guards write (the number guard's "[figure,
+ * source]", content-people.js's name and quote): in a heading only these
+ * are placeholders, as the editor reads them (placeholders.ts placeholderIn);
+ * brackets a person writes in a title ("[2026 Update]") are part of it.
+ */
+const AGENT_PLACEHOLDER =
+  /\[(?:figure, source[^[\]\n]*|name of a real person|quote from a real person[^[\]\n]*)\](?!\()/giu;
+
+/** Each placeholder in the text, by how many times it is there. */
+function placeholderCounts(text, heading) {
+  const counts = new Map();
+  for (const found of text.match(heading ? AGENT_PLACEHOLDER : PLACEHOLDER) ?? []) {
+    counts.set(found, (counts.get(found) ?? 0) + 1);
+  }
+  return counts;
+}
+
+/**
+ * Whether a replace takes a placeholder out of its passage, filled or
+ * dropped: each placeholder counted before and after the change, so one of
+ * two alike ("[figure, source]" twice) counts too (a "before" may cut into
+ * one: "product name" in "[product name]").
+ */
+export function dropsPlaceholder(passage, before, after, tag = 'p') {
+  const heading = isHeading(tag);
+  const had = placeholderCounts(passage, heading);
+  if (!had.size) return false;
+  const now = placeholderCounts(
+    passage.replace(before, () => String(after ?? '')),
+    heading,
+  );
+  return [...had].some(([placeholder, count]) => (now.get(placeholder) ?? 0) < count);
+}
+
+/** Quality's hand-off (CE-051): the guard drops a fill, so the model isn't asked to make one. */
+const KEEP_PLACEHOLDERS =
+  "Leave every [placeholder] exactly as it is: the person fills it; don't change or remove one.";
+
 /** What the model is told: the brand, the page's passages, and the rules to fix. */
 export function buildFixPrompt({
   brand,
@@ -517,6 +574,7 @@ export function buildFixPrompt({
   input,
   linkTargets = '',
   sources = '',
+  handoff = false,
 }) {
   const lines = passages.map((p, i) => {
     const locked = lockedKeys.has(passageKey(p.text)) ? ', LOCKED' : '';
@@ -534,7 +592,7 @@ Page type: ${pageTypeFormat(draft.page_type)}
 
 Rules the page doesn't meet yet (key: rule — what it asks and how the page reads now):
 ${rules.join('\n')}
-${own.length ? `\nThe writer's own rules, to follow in every change:\n${own.join('\n')}\n` : ''}${sources ? `\n${sources}\n` : ''}${linkTargets ? `\n${linkTargets}\n` : ''}
+${handoff ? `${KEEP_PLACEHOLDERS}\n` : ''}${own.length ? `\nThe writer's own rules, to follow in every change:\n${own.join('\n')}\n` : ''}${sources ? `\n${sources}\n` : ''}${linkTargets ? `\n${linkTargets}\n` : ''}
 The page, passage by passage:
 ${lines.join('\n')}
 
@@ -590,20 +648,37 @@ export function agentWriting(draft, now = Date.now()) {
  * budget, asks the model, and keeps the suggestions the editor can apply as
  * one new batch, linked to the draft's Action Center action if it has one.
  * Throws with `.status` 404 for a draft outside the brand, 409 for a
- * published draft or one whose suggestions are still open, 422 for an empty
- * page, PlanLimitError once the budget is spent — all before charging.
+ * published draft, one whose suggestions are still open or one the agent is
+ * fixing already (`running`), 422 for an empty page, PlanLimitError once
+ * the budget is spent — all before charging.
+ *
+ * `handoff` runs it as Quality's hand-off (CE-051): a run of its own kind,
+ * by a person or the editor on its own (`origin`). The rules are the page's
+ * checks in the server's words, and what the editor sent of them (their
+ * detail) is no fact the agent may write; a placeholder stays the person's.
+ * An automatic one runs only on a draft made while its brand handed off
+ * (quality_handoff, 00275) and while it still does (409 `not_due`), once
+ * (409 `already`); one the AI budget stops
+ * before it begins is taken back, to run once the budget renews.
  */
-export async function fixDraftRules({ draftId, brandId, input }) {
+export async function fixDraftRules({ draftId, brandId, input, handoff = null }) {
   const { data: draft, error: draftError } = await supabaseAdmin
     .from('content_drafts')
     .select(
-      'id, brand_id, title, body_html, page_type, action_id, status, source_url, agent_state, agent_state_at',
+      `id, brand_id, title, body_html, page_type, action_id, status, source_url, agent_state, agent_state_at${handoff ? ', quality_handoff' : ''}`,
     )
     .eq('id', draftId)
     .maybeSingle();
   if (draftError) throw draftError;
   if (!draft || draft.brand_id !== brandId) {
     throw Object.assign(new Error('Draft not found'), { status: 404 });
+  }
+  // An automatic hand-off on a draft its brand doesn't hand off never will be due.
+  if (handoff?.origin === 'auto' && draft.quality_handoff !== true) {
+    throw Object.assign(new Error('The brand hands off no quality fixes'), {
+      status: 409,
+      code: 'not_due',
+    });
   }
   if (draft.status === 'published') {
     throw Object.assign(new Error('The draft is published'), { status: 409, code: 'published' });
@@ -626,23 +701,39 @@ export async function fixDraftRules({ draftId, brandId, input }) {
       code: 'writing',
     });
   }
+  // One fix at a time on a draft (a second tab, a person's beside the auto one).
+  if (await fixUnderWay(draftId)) {
+    throw Object.assign(new Error('The agent is already fixing it'), {
+      status: 409,
+      code: 'running',
+    });
+  }
 
   const { data: brand, error: brandError } = await supabaseAdmin
     .from('brands')
     .select(
-      'name, industry, description, organization_id, language, site_type, shopping_mode_enabled',
+      `name, industry, description, organization_id, language, site_type, shopping_mode_enabled${handoff ? ', content_quality_handoff' : ''}`,
     )
     .eq('id', brandId)
     .single();
   if (brandError) throw brandError;
+  // Turned off since the draft was made: its automatic hand-off doesn't run.
+  if (handoff?.origin === 'auto' && brand.content_quality_handoff !== true) {
+    throw Object.assign(new Error('The brand hands off no quality fixes'), {
+      status: 409,
+      code: 'not_due',
+    });
+  }
 
   // Its steps, named by the work it does (CE-027/035); Stop aborts the call.
   const sources = input.sources;
   const run = await startRun({
     draftId,
-    kind: 'fix',
+    kind: handoff ? 'handoff' : 'fix',
+    origin: handoff?.origin ?? 'person',
+    strict: handoff?.origin === 'auto',
     counts: {
-      rules: input.rules.length,
+      [handoff ? 'checks' : 'rules']: input.rules.length,
       sources: sources
         ? sources.promptIds.length +
           sources.fanouts.length +
@@ -652,7 +743,17 @@ export async function fixDraftRules({ draftId, brandId, input }) {
     },
   });
   try {
-    const result = await fixWithRun({ draft, brand, brandId, draftId, input, passages, more, run });
+    const result = await fixWithRun({
+      draft,
+      brand,
+      brandId,
+      draftId,
+      input,
+      passages,
+      more,
+      run,
+      handoff: !!handoff,
+    });
     await finishRun(run, 'done', { 2: result.count });
     return result;
   } catch (err) {
@@ -660,13 +761,46 @@ export async function fixDraftRules({ draftId, brandId, input }) {
       await finishRun(run, 'stopped');
       throw new RunStoppedError();
     }
-    await finishRun(run, 'failed');
+    // An automatic hand-off the budget stopped before it began: its claim goes.
+    if (handoff?.origin === 'auto' && err instanceof PlanLimitError) await dropRun(run);
+    else await finishRun(run, 'failed');
     throw err;
   }
 }
 
+/** Quality's checks a hand-off fixes with a source: they link the draft's sources (CE-051). */
+const SOURCE_CHECKS = new Set([
+  'trust:claimsSourced',
+  'trust:freshSources',
+  'trust:noWeakSources',
+  'trust:primarySources',
+  'trust:noBrokenLinks',
+]);
+
+/** The brand's approved facts still on its site (CE-047), as their words. */
+async function approvedFacts(brandId) {
+  const { data, error } = await supabaseAdmin
+    .from('brand_facts')
+    .select('quote')
+    .eq('brand_id', brandId)
+    .eq('status', 'approved')
+    .is('gone_at', null);
+  if (error) throw error;
+  return (data ?? []).map((f) => f.quote).filter(Boolean);
+}
+
 /** Fix open rules' run itself, step by step: nothing is kept once it is stopped. */
-async function fixWithRun({ draft, brand, brandId, draftId, input, passages, more, run }) {
+async function fixWithRun({
+  draft,
+  brand,
+  brandId,
+  draftId,
+  input,
+  passages,
+  more,
+  run,
+  handoff = false,
+}) {
   const modelId = contentBriefModelId();
   const lockedKeys = new Set(input.locked.map(passageKey));
   const ruleKeys = new Set(input.rules.map((r) => r.key));
@@ -684,14 +818,20 @@ async function fixWithRun({ draft, brand, brandId, draftId, input, passages, mor
     queries: input.sources?.queries,
     inputs: inputSources(inputRow, brand.name),
   });
+  // A hand-off's details and the person's own rules are the editor's words:
+  // no fact the agent may write. The brand's approved facts are, read here.
+  const ruleWords = handoff
+    ? input.rules.map((r) => r.name)
+    : [...input.rules.flatMap((r) => [r.name, r.detail]), ...input.textRules];
+  const facts = handoff && ruleKeys.has('trust:brandFacts') ? await approvedFacts(brandId) : [];
   const known = knownNumbers(
     htmlText(draft.body_html),
     draft.title,
     brand.name,
     brand.industry,
     brand.description,
-    ...input.rules.flatMap((r) => [r.name, r.detail]),
-    ...input.textRules,
+    ...ruleWords,
+    ...facts,
     todayText(),
   );
   // The people and quotes it may name: the same words, its data's and the authors' (CE-044).
@@ -701,17 +841,21 @@ async function fixWithRun({ draft, brand, brandId, draftId, input, passages, mor
     brand.name,
     brand.industry,
     brand.description,
-    ...input.rules.flatMap((r) => [r.name, r.detail]),
-    ...input.textRules,
+    ...ruleWords,
     ...numbered.map(sourceWords),
     ...(await authorWords(supabaseAdmin, brand.organization_id)),
   );
-  // Where it may link: the brand's pages and the draft's sources (A).
+  // Where it may link: the brand's pages and the draft's sources (A); a
+  // hand-off's source checks link the draft's sources.
+  const linkKeys =
+    handoff && [...ruleKeys].some((key) => SOURCE_CHECKS.has(key))
+      ? new Set([...ruleKeys, 'outboundLinks', 'citeInline'])
+      : ruleKeys;
   const targets = await readLinkTargets({
     brandId,
     draftId,
     sourceUrl: draft.source_url,
-    ruleKeys,
+    ruleKeys: linkKeys,
   });
   // Held on the budget before the call, so calls at once can't pass it.
   const budget = await reserveAiBudget(brand.organization_id, {
@@ -734,8 +878,9 @@ async function fixWithRun({ draft, brand, brandId, draftId, input, passages, mor
           more,
           lockedKeys,
           input,
-          linkTargets: linkTargetsPrompt(targets, ruleKeys),
+          linkTargets: linkTargetsPrompt(targets, linkKeys),
           sources: sourcesPrompt(numbered),
+          handoff,
         }),
         abortSignal,
       }),
@@ -759,7 +904,7 @@ async function fixWithRun({ draft, brand, brandId, draftId, input, passages, mor
     lockedKeys,
     ruleKeys,
     linkAllowList(targets),
-    { numbered, known, people },
+    { numbered, known, people, keepPlaceholders: handoff },
   );
   // Stopped meanwhile: nothing it wrote is kept.
   await stopIfStopped(run);

@@ -24,6 +24,8 @@ let list: Record<string, unknown>[];
 // Database functions called, and what the next one returns.
 let rpcCalls: [string, unknown][];
 let rpcResult: { data: unknown; error: { message: string } | null };
+// What an upsert answers (an own image's confirm).
+let upsertError: { code: string; message: string } | null;
 
 vi.mock('@/lib/action-center/assignees', () => ({ readAssignees: vi.fn(async () => new Map()) }));
 vi.mock('@/lib/supabase/admin', () => ({ supabaseAdmin: {} }));
@@ -70,6 +72,14 @@ vi.mock('@/lib/supabase/server', () => ({
         },
         update: (value: unknown) => ((call.op = 'update'), (call.value = value), chain),
         insert: (value: unknown) => ((call.op = 'insert'), (call.value = value), chain),
+        upsert: async (value: unknown, options: unknown) => {
+          call.op = 'upsert';
+          call.value = { value, options };
+          return { error: upsertError };
+        },
+        // A read awaited as it is: the list.
+        then: (resolve: (value: unknown) => void) =>
+          resolve(call.op === 'select' ? { data: list, error: null } : result()),
         maybeSingle: async () => result(),
         single: async () => result(),
       };
@@ -96,6 +106,9 @@ const {
   confirmDraftAuthor,
   setContentDraftPageType,
   unmarkContentDraftReady,
+  confirmOwnImage,
+  getOwnImages,
+  setContentDraftReviewer,
 } = await import('./content-drafts');
 const { bodyHash } = await import('@/lib/content/editor');
 
@@ -105,6 +118,7 @@ beforeEach(() => {
   updates = [];
   row = null;
   list = [];
+  upsertError = null;
   rpcCalls = [];
   rpcResult = { data: 'v-new', error: null };
   completeDraftTasks.mockReset().mockResolvedValue(0);
@@ -302,6 +316,23 @@ describe('the page type on save (CE-023)', () => {
     });
     expect(calls.map((call) => call.op)).toEqual(['update', 'update']);
   });
+
+  it('reads it with the existing page’s address, as Start did (review, #1479)', async () => {
+    updated = {
+      updated_at: '2026-10-20T15:00:00Z',
+      page_type: 'blog_post',
+      page_type_source: 'detected',
+      source_url: 'https://shop.example/blog/ultralight-tents-for-wet-trips',
+      brands: shop,
+    };
+    // A best-of title on a /blog/ page: still the blog post Start read it as.
+    await saveContentDraft(DRAFT, {
+      title: 'The 7 best ultralight tents',
+      bodyHtml: '<h1>The 7 best ultralight tents</h1>',
+      base,
+    });
+    expect(calls.map((call) => call.op)).toEqual(['update']);
+  });
 });
 
 describe('setContentDraftPageType', () => {
@@ -347,6 +378,45 @@ describe('setContentDraftAuthor', () => {
     await expect(setContentDraftAuthor('d1', AUTHOR)).rejects.toThrow('invalid');
     expect(calls).toEqual([]);
     await expect(setContentDraftAuthor(DRAFT, AUTHOR)).rejects.toThrow('not_found');
+  });
+});
+
+describe('setContentDraftReviewer (Quality CE-049, 00273)', () => {
+  const REVIEWER = '7c9e6679-7425-40de-944b-e07fc1f90ae7';
+
+  it('sets the qualified reviewer, or none; refuses an id that is not one', async () => {
+    updated = { id: DRAFT };
+    await setContentDraftReviewer(DRAFT, REVIEWER);
+    expect(calls[0]).toMatchObject({
+      op: 'update',
+      value: { reviewer_id: REVIEWER },
+      filters: [['eq', 'id', DRAFT]],
+    });
+    await setContentDraftReviewer(DRAFT, null);
+    expect(calls[1]).toMatchObject({ op: 'update', value: { reviewer_id: null } });
+    await expect(setContentDraftReviewer(DRAFT, 'dr-who')).rejects.toThrow('invalid');
+  });
+});
+
+describe('own images (Quality CE-049, 00270)', () => {
+  const SRC = 'https://cdn.example/run.png';
+
+  it("reads the draft's confirmed images, none when they can't be read", async () => {
+    list = [{ src: SRC }];
+    expect(await getOwnImages(DRAFT)).toEqual([SRC]);
+    expect(calls[0].filters).toEqual([['eq', 'draft_id', DRAFT]]);
+    expect(await getOwnImages('d1')).toEqual([]);
+  });
+
+  it('confirms one as the member, now, once; says when the draft keeps 50', async () => {
+    expect(await confirmOwnImage(DRAFT, SRC)).toBe('ok');
+    const { value, options } = calls[0].value as { value: unknown; options: unknown };
+    // When is the database's now, the time its policy checks against.
+    expect(value).toEqual({ draft_id: DRAFT, src: SRC, confirmed_by: 'u1' });
+    expect(options).toEqual({ onConflict: 'draft_id,src', ignoreDuplicates: true });
+    upsertError = { code: '23514', message: 'A draft keeps 50 confirmed images at most' };
+    expect(await confirmOwnImage(DRAFT, SRC)).toBe('full');
+    await expect(confirmOwnImage(DRAFT, 'data:image/png;base64,x')).rejects.toThrow('invalid');
   });
 });
 

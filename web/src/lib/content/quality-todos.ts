@@ -1,10 +1,14 @@
 import type { ContentAuthor } from './authors';
+import { MAX_PROOF_TODOS, type PageProof, type ProofKind } from './page-read';
 import {
   authorProfile,
   scoreGain,
+  sentenceGain,
   type EeatCheckId,
   type Score,
   type TrustCheckId,
+  type TrustRead,
+  squeeze,
 } from './quality-checks';
 
 /**
@@ -14,7 +18,8 @@ import {
  * the placeholders the agent left where it had no real name, quote or
  * number (CE-044), and the author's: the Content Agent can't add, pick or
  * edit authors. Phase 2 adds what only the person can give (Brief › Your
- * input, CE-048): their experience, their data and an expert's quote.
+ * input, CE-048): their experience, their data and an expert's quote; and
+ * the brand's facts read from its site, to approve (CE-047).
  */
 
 export type QualityTodoId =
@@ -23,18 +28,29 @@ export type QualityTodoId =
   | 'authorProfile'
   | 'experience'
   | 'originalData'
-  | 'expertQuote';
+  | 'visualProof'
+  | 'whoHowWhy'
+  | 'expertQuote'
+  | 'proof'
+  | 'reviewer'
+  | 'brandFacts';
 
 /**
  * A to-do's one button: Show (the first placeholder, selected to type over),
- * the header's author menu, or Settings › Authors.
+ * the header's author menu, Settings › Authors, Brief › Your input, or
+ * Brand settings › Brand facts.
  */
 export type QualityTodoAction =
   | 'showPlaceholder'
   | 'pickAuthor'
   | 'addAuthor'
   | 'editAuthor'
-  | 'addInput';
+  | 'addInput'
+  | 'addProof'
+  | 'confirmImage'
+  | 'addImage'
+  | 'pickReviewer'
+  | 'reviewBrandFacts';
 
 export interface QualityTodo {
   id: QualityTodoId;
@@ -47,8 +63,14 @@ export interface QualityTodo {
   action: QualityTodoAction | null;
   /** Given in Brief › Your input, though the page doesn't use it yet (CE-048). */
   given?: boolean;
-  /** How many it is about (placeholders). */
+  /** Its own key when it has more than one row (each proof's). */
+  key?: string;
+  /** The claim a proof to-do asks proof for (CE-049). */
+  proof?: { claim: string; block: string; kind: ProofKind; sentence: string };
+  /** How many it is about (placeholders, brand facts to approve). */
   count?: number;
+  /** What a regulated page advises on: its reviewer's field (CE-049). */
+  topic?: 'health' | 'finance' | 'legal';
   /**
    * With no author picked: the person's own word for the author their site
    * names (00271), a tick box beside the to-do, and whether it's ticked.
@@ -61,8 +83,10 @@ export interface QualityTodo {
  * export never ships one), pick its author (or add one when the workspace
  * has none), then complete their profile, listed from the start so the
  * count holds. Done ones stay on the list, checked; placeholders are listed
- * once the page has had some (`had`, this session). The author's wait for
- * E-E-A-T to be read.
+ * once the page has had some (`had`, this session), the brand facts to
+ * approve likewise, last (Phase 2: the brand's, worth no points of the
+ * page's). The proof of the page's own claims comes after the person's
+ * input (Phase 2, CE-049). The author's wait for E-E-A-T to be read.
  */
 export function qualityTodos({
   eeat,
@@ -73,6 +97,10 @@ export function qualityTodos({
   used = null,
   given = null,
   trust = null,
+  brandFacts = null,
+  proofs = null,
+  visual = null,
+  reviewer = null,
   confirmed = null,
 }: {
   eeat: Score<EeatCheckId> | null;
@@ -89,8 +117,30 @@ export function qualityTodos({
   used?: { experience: boolean; data: boolean; quote: boolean } | null;
   /** What the person gave there (inputsGiven), used or not. */
   given?: { experience: boolean; data: boolean; quote: boolean } | null;
-  /** Trust, for an expert quote's gain. */
-  trust?: Score<TrustCheckId> | null;
+  /** Trust, for an expert quote's gain and a proof's (its unsourced sentences). */
+  trust?: (Score<TrustCheckId> & Partial<Pick<TrustRead, 'unsourced' | 'figures'>>) | null;
+  /**
+   * Phase 2 (CE-047): the brand's facts read from its site that no one has
+   * approved or rejected yet, and whether there were some this session.
+   */
+  brandFacts?: { pending: number; had: boolean } | null;
+  /**
+   * Phase 2 (CE-049): the page's own claims that need the brand's proof, as
+   * the page is now (proofsOnPage), and the keys of the ones asked for this
+   * session: done ones stay listed, checked.
+   */
+  proofs?: { asks: readonly PageProof[]; had: ReadonlySet<string> } | null;
+  /**
+   * Phase 2 (CE-049): the page's images, how many are confirmed the
+   * person's own, and the visual proof spots open (as eeat takes them).
+   */
+  visual?: { images: number; own: number; openSpots: number } | null;
+  /**
+   * Phase 2 (CE-049): a page that advises consumers on health, finance or
+   * law (the page read's `regulated`) asks for a qualified reviewer, from
+   * Authors; null otherwise.
+   */
+  reviewer?: { topic: 'health' | 'finance' | 'legal'; picked: boolean } | null;
   /** What the person confirmed of the author their site names (00271), or null where they can't. */
   confirmed?: { real: boolean; profile: boolean } | null;
 }): QualityTodo[] {
@@ -107,7 +157,52 @@ export function qualityTodos({
           },
         ]
       : [];
-  if (!eeat || eeat.score === null) return fill;
+  // The brand's, not the page's, and worth no points itself: last.
+  const facts: QualityTodo[] =
+    brandFacts && (brandFacts.pending || brandFacts.had)
+      ? [
+          {
+            id: 'brandFacts',
+            done: brandFacts.pending === 0,
+            gain: 0,
+            score: 'trust',
+            action: 'reviewBrandFacts',
+            count: brandFacts.pending,
+          },
+        ]
+      : [];
+  // The page's own claims, in its order: open while its paragraph has no
+  // link, checked once it has; MAX_PROOF_TODOS open at once.
+  let open = 0;
+  const proofTodos: QualityTodo[] = (proofs?.asks ?? []).flatMap((ask) => {
+    const key = proofKey(ask);
+    if (ask.linked && !proofs?.had.has(key)) return [];
+    if (!ask.linked && (open += 1) > MAX_PROOF_TODOS) return [];
+    return [
+      {
+        id: 'proof',
+        key,
+        done: ask.linked,
+        gain: ask.linked ? 0 : sentenceGain(trust, ask.sentence),
+        score: 'trust',
+        action: 'addProof',
+        proof: { claim: ask.claim, block: ask.block, kind: ask.kind, sentence: ask.sentence },
+      } satisfies QualityTodo,
+    ];
+  });
+  const review: QualityTodo[] = reviewer
+    ? [
+        {
+          id: 'reviewer',
+          done: reviewer.picked,
+          gain: 0,
+          score: 'eeat',
+          action: reviewer.picked ? null : hasAuthors ? 'pickReviewer' : 'addAuthor',
+          topic: reviewer.topic,
+        },
+      ]
+    : [];
+  if (!eeat || eeat.score === null) return [...fill, ...proofTodos, ...review, ...facts];
   // No author picked: the one the site names may be confirmed instead, the
   // profile once the author is.
   const byConfirm = !author && !!confirmed;
@@ -151,6 +246,14 @@ export function qualityTodos({
             score: 'eeat',
             action: 'addInput',
           },
+        ] satisfies QualityTodo[])
+      : []),
+    // Not Your input's (read from the page): listed in their place when
+    // that can't be read too.
+    ...visualTodo(eeat, visual),
+    ...howTodo(eeat),
+    ...(used
+      ? ([
           {
             id: 'expertQuote',
             done: used.quote,
@@ -162,5 +265,71 @@ export function qualityTodos({
           },
         ] satisfies QualityTodo[])
       : []),
+    ...proofTodos,
+    ...review,
+    ...facts,
+  ];
+}
+
+/** A text's 32-bit FNV-1a hash, in base 36: a short, stable name for it. */
+function shortHash(text: string): string {
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < text.length; i++) {
+    hash ^= text.charCodeAt(i);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return (hash >>> 0).toString(36);
+}
+
+/**
+ * A proof to-do's key: its claim in its block, both by their words without
+ * spaces, the block by a short hash (the nudge keeps the keys it showed). A
+ * link put on the claim adds a space at its edge, and the API's next answer
+ * carries the claim and its block as the page has them then: the key stays.
+ */
+export const proofKey = (ask: { claim: string; block: string }) =>
+  `proof:${squeeze(ask.claim)}:${shortHash(squeeze(ask.block))}`;
+
+/**
+ * Who / how / why (CE-050): the page says how it was made (how it was
+ * tested, how the picks were chosen, by whom). Only the person knows: Brief
+ * › Your input. Listed where the check counts (the page read's, on pages a
+ * reader trusts more for it).
+ */
+function howTodo(eeat: Score<EeatCheckId>): QualityTodo[] {
+  const check = eeat.checks.find((c) => c.id === 'whoHowWhy');
+  if (!check) return [];
+  return [
+    {
+      id: 'whoHowWhy',
+      done: check.points >= check.max,
+      gain: scoreGain(eeat, ['whoHowWhy']),
+      score: 'eeat',
+      action: 'addInput',
+    },
+  ];
+}
+
+/**
+ * Visual proof (CE-049): an image the person took themself. Images on the
+ * page none of them confirmed: Confirm (only the person can tell their own
+ * from stock); none, with a spot open: Add image there. Checked once one
+ * is confirmed; none when the page has neither.
+ */
+function visualTodo(
+  eeat: Score<EeatCheckId>,
+  visual: { images: number; own: number; openSpots: number } | null,
+): QualityTodo[] {
+  if (!visual || (visual.images === 0 && visual.openSpots === 0)) return [];
+  const done = visual.own > 0;
+  return [
+    {
+      id: 'visualProof',
+      done,
+      gain: scoreGain(eeat, ['visualProof']),
+      score: 'eeat',
+      action: done ? null : visual.images > 0 ? 'confirmImage' : 'addImage',
+      count: visual.images - visual.own,
+    },
   ];
 }

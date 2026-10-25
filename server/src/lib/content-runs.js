@@ -45,6 +45,25 @@ async function shown(what, runId, write) {
 }
 
 /**
+ * Whether one of the agent's fixes (Fix open rules, Quality's hand-off) is
+ * under way on the draft, and not one a stopped server left: a second would
+ * make a model call of its own, charged, and its batch would hide the
+ * first's (another tab, or a person's beside the editor's own hand-off).
+ */
+export async function fixUnderWay(draftId) {
+  const { data, error } = await supabaseAdmin
+    .from('content_agent_runs')
+    .select('id')
+    .eq('draft_id', draftId)
+    .in('kind', ['fix', 'handoff'])
+    .is('finished_at', null)
+    .gt('started_at', new Date(Date.now() - RUN_STALE_MS).toISOString())
+    .limit(1);
+  if (error) throw error;
+  return (data?.length ?? 0) > 0;
+}
+
+/**
  * A run's steps by kind, each a short name for the work the server does
  * then, with the counts the run gives (CE-027/035): the rules it writes to,
  * the sources it gathers (numbered, so a number it adds can be checked), the
@@ -66,6 +85,14 @@ export function runSteps(kind, counts = {}) {
         { key: 'read_rules', count: n(counts.rules) },
         { key: 'gather_sources', count: n(counts.sources) },
         { key: 'rewrite_page', count: null },
+        { key: 'check_sources', count: null },
+      ];
+    case 'handoff':
+      // Quality's hand-off (CE-051): the page's checks instead of its rules.
+      return [
+        { key: 'read_checks', count: n(counts.checks) },
+        { key: 'gather_sources', count: n(counts.sources) },
+        { key: 'write_changes', count: null },
         { key: 'check_sources', count: null },
       ];
     case 'brief':
@@ -91,8 +118,20 @@ export function runSteps(kind, counts = {}) {
  * steps shown and Stop by its signal only. `claimedAt` is the claim a Start
  * or Rewrite holds on the draft (its agent_state_at): a Stop lets go of that
  * claim only, never another run's.
+ *
+ * `origin` says who started it: a person, or the editor on its own (auto,
+ * Quality's hand-off, CE-051). A run that must be written (`strict`) throws
+ * instead of running unshown: an automatic hand-off is one a draft, and its
+ * row is the claim (a second one is 409 `already`).
  */
-export async function startRun({ draftId, kind, counts, claimedAt = null }) {
+export async function startRun({
+  draftId,
+  kind,
+  counts,
+  claimedAt = null,
+  origin = 'person',
+  strict = false,
+}) {
   const steps = runSteps(kind, counts);
   const controller = new AbortController();
   // Runs a stopped server left on the draft are closed: only those older
@@ -106,13 +145,34 @@ export async function startRun({ draftId, kind, counts, claimedAt = null }) {
       .is('finished_at', null)
       .lt('started_at', new Date(Date.now() - RUN_STALE_MS).toISOString()),
   );
-  const data = await shown('run', null, () =>
-    supabaseAdmin
+  // A person's is the column's default: a database before 00275 takes it.
+  const row = {
+    draft_id: draftId,
+    kind,
+    steps,
+    claimed_at: claimedAt,
+    ...(origin === 'person' ? {} : { origin }),
+  };
+  let data;
+  if (strict) {
+    const { data: written, error } = await supabaseAdmin
       .from('content_agent_runs')
-      .insert({ draft_id: draftId, kind, steps, claimed_at: claimedAt })
+      .insert(row)
       .select('id')
-      .single(),
-  );
+      .single();
+    if (error?.code === '23505') {
+      throw Object.assign(new Error('The draft was handed off already'), {
+        status: 409,
+        code: 'already',
+      });
+    }
+    if (error) throw error;
+    data = written;
+  } else {
+    data = await shown('run', null, () =>
+      supabaseAdmin.from('content_agent_runs').insert(row).select('id').single(),
+    );
+  }
   const id = data?.id ?? null;
   if (id) live.set(id, controller);
   return { id, steps, signal: controller.signal };
@@ -231,4 +291,20 @@ export function isStop(err, run) {
     err instanceof RunStoppedError ||
     (Boolean(run?.id) && live.get(run.id)?.signal.aborted === true)
   );
+}
+
+/**
+ * Takes a run's row back, as if it never started: an automatic hand-off the
+ * AI budget stopped before it began is tried again once the budget renews
+ * (its row is the one-a-draft claim). Logged, never thrown.
+ */
+export async function dropRun(run) {
+  if (!run?.id) return;
+  live.delete(run.id);
+  const dropped = await shown('dropped run', run.id, async () => {
+    const { error } = await supabaseAdmin.from('content_agent_runs').delete().eq('id', run.id);
+    return { data: !error, error };
+  });
+  // Not taken back: at least not left under way.
+  if (!dropped) await finishRun(run, 'failed');
 }

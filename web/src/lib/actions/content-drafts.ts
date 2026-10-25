@@ -39,6 +39,12 @@ import { sanitizeDraftHtml } from '@/lib/content/sanitize-draft-html';
 import { matchPagePrompts } from '@/lib/content/page-prompts';
 import type { LinkCheck } from '@/lib/content/quality-checks';
 import { CLAIM_KINDS, type ClaimBlock } from '@/lib/content/claims';
+import {
+  PROOF_KINDS,
+  type PageChecks,
+  type PageQuote,
+  type PageRead,
+} from '@/lib/content/page-read';
 import { MAX_SOURCE_SITES, type AiSourceClass } from '@/lib/content/source-class';
 import {
   NO_DRAFT_RULES,
@@ -227,7 +233,7 @@ export async function getContentDraft(id: string): Promise<ContentDraft | null> 
   const { data, error } = await supabase
     .from('content_drafts')
     .select(
-      `id, brand_id, title, page_type, page_type_source, method, status, body_html, author, author_id, source_url, rules, kept_sources, author_real_at, author_profile_at, action_id, agent_state, agent_state_at, agent_run, updated_at, archived_at, ${BRAND_SITE}, actions(action_no)`,
+      `id, brand_id, title, page_type, page_type_source, method, status, body_html, author, author_id, reviewer_id, source_url, rules, kept_sources, author_real_at, author_profile_at, action_id, agent_state, agent_state_at, agent_run, updated_at, archived_at, ${BRAND_SITE}, actions(action_no)`,
     )
     .eq('id', id)
     .maybeSingle();
@@ -246,6 +252,7 @@ export async function getContentDraft(id: string): Promise<ContentDraft | null> 
     bodyHtml: data.body_html,
     author: data.author === 'agent' ? 'agent' : 'user',
     authorId: data.author_id,
+    reviewerId: data.reviewer_id,
     rules: draftRulesSchema.safeParse(data.rules).data ?? NO_DRAFT_RULES,
     keptSources: data.kept_sources ?? [],
     authorConfirmed: { real: !!data.author_real_at, profile: !!data.author_profile_at },
@@ -1266,13 +1273,17 @@ export async function saveContentDraft(
       .eq('id', id)
       .eq('updated_at', expected)
       .or(`agent_state.is.null,agent_state.neq.writing,agent_state_at.lt."${writingSince}"`)
-      .select(`updated_at, page_type, page_type_source, ${BRAND_SITE}`)
+      .select(`updated_at, page_type, page_type_source, source_url, ${BRAND_SITE}`)
       .maybeSingle();
     if (error) throw new Error(error.message);
     if (data) {
       let updatedAt: string = data.updated_at;
       if (data.page_type_source === 'detected') {
-        const detected = detectPageType({ title, html: bodyHtml }, brandSiteType(data.brands));
+        // With the existing page's address, as Start detected it.
+        const detected = detectPageType(
+          { title, html: bodyHtml, url: data.source_url },
+          brandSiteType(data.brands),
+        );
         // A page that shows no type keeps the one it had (Start's guess).
         if (detected && detected !== data.page_type) {
           // Only over this save: a write in between would otherwise become
@@ -1363,6 +1374,33 @@ export async function setContentDraftAuthor(id: string, authorId: string | null)
   const { data, error } = await supabase
     .from('content_drafts')
     .update({ author_id: authorId })
+    .eq('id', id)
+    .select('id')
+    .maybeSingle();
+  if (error?.code === OTHER_ORGANIZATION) throw new Error('invalid');
+  if (error) throw new Error(error.message);
+  if (!data) throw new Error('not_found');
+}
+
+/**
+ * Sets the qualified person who reviewed a regulated page (Quality CE-049,
+ * 00273), one of Authors, or none. The database checks they are the brand's
+ * organization's.
+ */
+export async function setContentDraftReviewer(
+  id: string,
+  reviewerId: string | null,
+): Promise<void> {
+  if (
+    !draftId.safeParse(id).success ||
+    (reviewerId !== null && !z.guid().safeParse(reviewerId).success)
+  ) {
+    throw new Error('invalid');
+  }
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from('content_drafts')
+    .update({ reviewer_id: reviewerId })
     .eq('id', id)
     .select('id')
     .maybeSingle();
@@ -1691,14 +1729,14 @@ export async function restoreDraftVersion(id: string, versionId: string): Promis
   // Read back, so the type is detected only on the draft the version restored.
   const { data: row, error: rowError } = await supabase
     .from('content_drafts')
-    .select(`page_type, page_type_source, body_html, ${BRAND_SITE}`)
+    .select(`page_type, page_type_source, body_html, source_url, ${BRAND_SITE}`)
     .eq('id', id)
     .maybeSingle();
   if (rowError) {
     console.error('Failed to read the restored draft:', rowError.message);
   } else if (row?.page_type_source === 'detected' && row.body_html === restored.bodyHtml) {
     const detected = detectPageType(
-      { title: restored.title, html: restored.bodyHtml },
+      { title: restored.title, html: restored.bodyHtml, url: row.source_url },
       brandSiteType(row.brands),
     );
     // A page that shows no type keeps the one it had, as on a save.
@@ -2092,6 +2130,8 @@ const AGENT_FIX_ERRORS = [
   'published',
   /** Start or a rewrite holds the draft (another tab, another member). */
   'writing',
+  /** Another fix or hand-off on the draft is under way (another tab, the editor's own). */
+  'running',
   /** Stopped from the editor (CE-027): nothing it wrote is kept. */
   'stopped',
   'failed',
@@ -2160,6 +2200,77 @@ export async function fixDraftRules(
     return { count: Number(body.count) || 0 };
   } catch (err) {
     console.error('Failed to run the Content Agent:', err);
+    return { error: 'unconfirmed' };
+  }
+}
+
+/** Why a hand-off didn't run: Fix's reasons, and an automatic one's (CE-051). */
+const HANDOFF_ERRORS = [
+  ...AGENT_FIX_ERRORS,
+  /** An automatic hand-off on a draft its brand doesn't hand off. */
+  'not_due',
+  /** The draft had its automatic hand-off. */
+  'already',
+  /** The API has Quality's phase 2 off (its CONTENT_QUALITY_PHASE is behind the web's). */
+  'off',
+] as const;
+export type HandOffError = (typeof HANDOFF_ERRORS)[number];
+
+/** What Hand off sends (CE-051): the page's fixable checks, as Fix sends its rules' context. */
+export interface HandOffRequest extends Omit<AgentFixRequest, 'rules'> {
+  /** Each fixable check open on the page, by its suggestion key, with what it names there. */
+  items: { key: string; detail: string }[];
+  /** A person's Hand off, or the editor's on its own (Settings › Content). */
+  origin: 'person' | 'auto';
+}
+
+/**
+ * Hand it off to Content Agent (Quality spec §5, CE-051): the agent fixes
+ * the page's open Quality checks in one run, as suggestions for review,
+ * metered from the organization's AI usage (content-handoff.js). count is
+ * how many it left.
+ */
+export async function handOffDraft(
+  id: string,
+  brandId: string,
+  request: HandOffRequest,
+): Promise<{ count: number } | { error: HandOffError }> {
+  if (!draftId.safeParse(id).success || !draftId.safeParse(brandId).success) {
+    return { error: 'failed' };
+  }
+  const supabase = await createClient();
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  if (!session) return { error: 'failed' };
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/content-drafts/${id}/handoff`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${session.access_token}`,
+      },
+      body: JSON.stringify({
+        brandId,
+        items: request.items.slice(0, 15).map((item) => ({
+          key: item.key.slice(0, 60),
+          detail: item.detail.slice(0, 500),
+        })),
+        textRules: request.textRules.slice(0, 50).map((text) => text.slice(0, 300)),
+        locked: request.locked.slice(0, 500).map((key) => key.slice(0, 5000)),
+        ...(request.sources ? { sources: request.sources } : {}),
+        origin: request.origin,
+      }),
+    });
+    const body = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+    if (!res.ok) {
+      if (typeof body.code !== 'string') return { error: 'unconfirmed' };
+      const code = body.code as HandOffError;
+      return { error: (HANDOFF_ERRORS as readonly string[]).includes(code) ? code : 'failed' };
+    }
+    return { count: Number(body.count) || 0 };
+  } catch (err) {
+    console.error('Failed to hand the draft off:', err);
     return { error: 'unconfirmed' };
   }
 }
@@ -2341,4 +2452,151 @@ export async function saveMyRuleSet(
     { onConflict: 'organization_id,site_type,page_type' },
   );
   if (error) throw new Error(error.message);
+}
+
+/** The page read's checks as the API gives them (CE-050), each found one with its words; else null. */
+function pageChecksOf(value: unknown): PageChecks | null {
+  if (!value || typeof value !== 'object') return null;
+  const checks = value as Record<string, unknown>;
+  const text = (v: unknown): v is string => typeof v === 'string' && v.length > 0;
+  const quote = (v: unknown): PageQuote | null => {
+    const find = v as Partial<PageQuote> | null;
+    return find && text(find.quote) && text(find.block)
+      ? { quote: find.quote, block: find.block }
+      : null;
+  };
+  const first = checks.answerFirst as { answers?: unknown; block?: unknown } | null;
+  return {
+    answerFirst:
+      first && typeof first.answers === 'boolean' && text(first.block)
+        ? { answers: first.answers, block: first.block }
+        : null,
+    recommends: quote(checks.recommends),
+    disclosure: quote(checks.disclosure),
+    balance: quote(checks.balance),
+    how: quote(checks.how),
+    cut: checks.cut === true,
+    pageType: typeof checks.pageType === 'string' ? checks.pageType : null,
+  };
+}
+
+/**
+ * Quality's page read for proof (CE-049): the draft's visual proof spots
+ * and proof asks, read by the API from the page as saved, with its page
+ * type and the brand's business type; once a minute at most (`pending`:
+ * the kept read stands, ask again), `limited` once the draft's page reads
+ * for the day are made, `paused` when the AI budget is spent. Returned, not
+ * thrown: 'off' before Quality's phase 2 is live on the API.
+ */
+export async function readDraftPage(
+  id: string,
+): Promise<
+  | (PageRead & { pending: boolean; limited: boolean; paused: boolean })
+  | { error: 'invalid' | 'failed' | 'off' }
+> {
+  if (!draftId.safeParse(id).success) return { error: 'invalid' };
+  const supabase = await createClient();
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  if (!session) return { error: 'failed' };
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/content-pages/page-read`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${session.access_token}`,
+      },
+      body: JSON.stringify({ draftId: id }),
+    });
+    if (res.status === 404) {
+      const body = (await res.json().catch(() => ({}))) as { code?: string };
+      return { error: body.code === 'off' ? 'off' : 'failed' };
+    }
+    if (!res.ok) return { error: 'failed' };
+    const body = (await res.json()) as Partial<Omit<PageRead, 'checks'>> & {
+      checks?: unknown;
+      pending?: boolean;
+      limited?: boolean;
+      paused?: boolean;
+    };
+    const kinds: readonly string[] = PROOF_KINDS;
+    const text = (value: unknown) => typeof value === 'string' && value.length > 0;
+    return {
+      spots: (body.spots ?? []).filter(
+        (s) => text(s.passage) && text(s.block) && text(s.image) && text(s.alt),
+      ),
+      proofs: (body.proofs ?? []).filter(
+        (p) => text(p.claim) && text(p.block) && kinds.includes(p.kind),
+      ),
+      regulated:
+        body.regulated === 'health' || body.regulated === 'finance' || body.regulated === 'legal'
+          ? body.regulated
+          : null,
+      checks: pageChecksOf(body.checks),
+      pending: body.pending ?? false,
+      limited: body.limited ?? false,
+      paused: body.paused ?? false,
+    };
+  } catch (err) {
+    console.error('Failed to read the draft page:', err);
+    return { error: 'failed' };
+  }
+}
+
+/** The cap trigger's check violation: the draft keeps 50 confirmed images (00270). */
+const OWN_IMAGES_FULL = '23514';
+
+/** An image's address as the page and the database keep it (00270: 8–2048 characters, http(s)). */
+const ownImageSrc = z
+  .string()
+  .min(8)
+  .max(2048)
+  .regex(/^https?:\/\//);
+
+/**
+ * The page's images a member confirmed are their own, not stock (Quality
+ * CE-049, 00270): E-E-A-T's visual proof. Fails soft: none, when they
+ * can't be read.
+ */
+export async function getOwnImages(id: string): Promise<string[]> {
+  if (!draftId.safeParse(id).success) return [];
+  try {
+    const supabase = await createClient();
+    const { data, error } = await supabase
+      .from('content_draft_own_images')
+      .select('src')
+      .eq('draft_id', id);
+    if (error) throw new Error(error.message);
+    return (data ?? []).map((row) => row.src);
+  } catch (err) {
+    console.error('Failed to read the own images:', err);
+    return [];
+  }
+}
+
+/**
+ * Confirms an image on the page is the member's own (00270): their
+ * statement, kept with who made it, as themself and now. Confirmed already
+ * is fine; 'full' when the draft keeps 50.
+ */
+export async function confirmOwnImage(id: string, src: string): Promise<'ok' | 'full'> {
+  if (!draftId.safeParse(id).success || !ownImageSrc.safeParse(src).success) {
+    throw new Error('invalid');
+  }
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) throw new Error('not_found');
+  const { error } = await supabase
+    .from('content_draft_own_images')
+    // When: the database's now (its default), the time its policy checks against.
+    .upsert(
+      { draft_id: id, src, confirmed_by: user.id },
+      { onConflict: 'draft_id,src', ignoreDuplicates: true },
+    );
+  if (error?.code === OWN_IMAGES_FULL) return 'full';
+  if (error) throw new Error(error.message);
+  return 'ok';
 }

@@ -271,6 +271,58 @@ describe('POST /api/content-drafts/:draftId/suggestions', () => {
   });
 });
 
+describe('POST /api/content-drafts/:draftId/handoff (CE-051)', () => {
+  const handOff = (body) =>
+    fetch(`${baseUrl}/${DRAFT}/handoff`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+  const items = [{ key: 'readability:longSentences', detail: '2 sentences over 35 words' }];
+  beforeEach(() => {
+    process.env.CONTENT_QUALITY_PHASE = '2';
+  });
+  afterEach(() => {
+    delete process.env.CONTENT_QUALITY_PHASE;
+  });
+
+  it('hands the page’s checks to the agent for a member of the brand', async () => {
+    const res = await handOff({ brandId: BRAND, items, origin: 'auto' });
+    expect(res.status).toBe(200);
+    await expect(res.json()).resolves.toEqual({ count: 2, batchId: 'b1' });
+    expect(assertBrandAccess).toHaveBeenCalledWith(BRAND, 'u1');
+    expect(fixDraftRules).toHaveBeenCalledWith(
+      expect.objectContaining({
+        draftId: DRAFT,
+        brandId: BRAND,
+        input: expect.objectContaining({
+          rules: [expect.objectContaining({ key: 'readability:longSentences' })],
+        }),
+        handoff: { origin: 'auto' },
+      }),
+    );
+  });
+
+  it('is off before phase 2, refuses a check it doesn’t fix, and says why it didn’t run', async () => {
+    let res = await handOff({ brandId: BRAND, items: [{ key: 'eeat:experience' }] });
+    expect(res.status).toBe(400);
+    for (const code of ['not_due', 'already', 'open_suggestions']) {
+      fixDraftRules.mockRejectedValueOnce(Object.assign(new Error(code), { status: 409, code }));
+      res = await handOff({ brandId: BRAND, items });
+      expect(res.status).toBe(409);
+      await expect(res.json()).resolves.toMatchObject({ code });
+    }
+    fixDraftRules.mockRejectedValueOnce(new PlanLimitError('used up', 429));
+    res = await handOff({ brandId: BRAND, items });
+    expect(res.status).toBe(429);
+    await expect(res.json()).resolves.toMatchObject({ code: 'ai_budget' });
+    process.env.CONTENT_QUALITY_PHASE = '1';
+    res = await handOff({ brandId: BRAND, items });
+    expect(res.status).toBe(404);
+    await expect(res.json()).resolves.toMatchObject({ code: 'off' });
+  });
+});
+
 describe('POST /api/content-drafts/:draftId/stop', () => {
   const stop = (body = { brandId: BRAND }, draftId = DRAFT) =>
     fetch(`${baseUrl}/${draftId}/stop`, {
