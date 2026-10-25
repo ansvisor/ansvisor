@@ -813,6 +813,93 @@ describe('Rewrite the page to these rules', () => {
     await expect(run()).resolves.toEqual({ skipped: true });
     expect(writes.find((w) => w.table === 'content_draft_suggestions')).toBeUndefined();
   });
+
+  describe('a rewrite well past its Length: one more pass cuts it', () => {
+    const cutBudget = { charge: vi.fn(), release: vi.fn(), keep: vi.fn() };
+    // A Length of 100 (up to 120): a cut pass past 135.
+    const toLength = (length = 100) => ({
+      rules: [{ key: 'length', name: 'Length', detail: `aim: ${length} characters` }],
+      sources: { ...input().sources, length },
+    });
+    const long = `<h1>Pour-over coffee</h1><p>[[KEEP 1]]</p><p>[[KEEP 2]]</p><p>${'Long words. '.repeat(10)}</p>`;
+    const short = '<h1>Pour-over coffee</h1><p>[[KEEP 1]]</p><p>[[KEEP 2]]</p><p>Short.</p>';
+    const answers = (...htmls) => {
+      for (const [i, html] of htmls.entries()) {
+        generateObject.mockResolvedValueOnce({
+          object: { html, reason: i ? 'cut it' : 'answered each heading first', sources: [] },
+          usage: { inputTokens: 900 + i, outputTokens: 700 + i },
+        });
+      }
+    };
+    const row = () => writes.find((w) => w.table === 'content_draft_suggestions').value;
+    beforeEach(() => {
+      cutBudget.charge.mockReset();
+      cutBudget.release.mockReset();
+      reserveAiBudget.mockReset().mockResolvedValue(cutBudget);
+    });
+
+    it('cuts its own page to the Length on its own hold, keeping every kept line', async () => {
+      answers(long, short);
+      await expect(run(toLength())).resolves.toEqual({ rewritten: true });
+      expect(generateObject).toHaveBeenCalledTimes(2);
+      const { prompt } = generateObject.mock.calls[1][0];
+      expect(prompt).toContain('Its Length is 100 characters, up to 120. Cut it to about 100.');
+      expect(prompt).toContain('every [[KEEP n]] line exactly as it is');
+      expect(prompt).toContain('Long words.');
+      expect(reserveAiBudget).toHaveBeenCalledWith('org-1', {
+        feature: 'content',
+        modelId: expect.any(String),
+        draftId: DRAFT,
+      });
+      expect(cutBudget.charge).toHaveBeenCalledWith({ inputTokens: 901, outputTokens: 701 });
+      // The cut page, what it kept put back, the first pass's reason.
+      expect(row().after_text).toContain('Short.');
+      expect(row().after_text).not.toContain('Long words.');
+      expect(row().after_text).toContain(QUOTED);
+      expect(row().reason).toBe('answered each heading first');
+      expect(row().after_chars).toBe(textLength(row().after_text));
+    });
+
+    it('keeps the first rewrite when the cut is no shorter, drops a kept line, fails or has no budget', async () => {
+      answers(long, long);
+      await run(toLength());
+      expect(row().after_text).toContain('Long words.');
+
+      writes = [];
+      answers(long, '<h1>Pour-over coffee</h1><p>[[KEEP 1]]</p><p>Short.</p>');
+      await run(toLength());
+      expect(row().after_text).toContain('Long words.');
+
+      writes = [];
+      generateObject.mockResolvedValueOnce({
+        object: { html: long, reason: 'answered each heading first', sources: [] },
+        usage: { inputTokens: 900, outputTokens: 700 },
+      });
+      generateObject.mockRejectedValueOnce(new Error('provider down'));
+      await expect(run(toLength())).resolves.toEqual({ rewritten: true });
+      expect(row().after_text).toContain('Long words.');
+      expect(cutBudget.release).toHaveBeenCalledTimes(1);
+
+      writes = [];
+      generateObject.mockReset();
+      reserveAiBudget.mockRejectedValueOnce(
+        Object.assign(new Error('used up'), { code: 'plan_limit' }),
+      );
+      answers(long);
+      await run(toLength());
+      expect(generateObject).toHaveBeenCalledTimes(1);
+      expect(row().after_text).toContain('Long words.');
+    });
+
+    it('cuts nothing within reach of the Length, or with Length off', async () => {
+      answers(long);
+      await run(toLength(3000));
+      answers(long);
+      await run();
+      expect(generateObject).toHaveBeenCalledTimes(2);
+      expect(reserveAiBudget).not.toHaveBeenCalled();
+    });
+  });
 });
 
 describe('the write prompt', () => {
