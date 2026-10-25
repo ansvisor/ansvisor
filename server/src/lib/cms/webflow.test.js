@@ -256,14 +256,27 @@ describe('where pages live', () => {
             { url: 'https://www.acme.example/', lastPublished: '2026-10-20T10:00:00Z' },
           ],
         },
+        // Never published to its domain: published on webflow.io only.
         { id: 's2', shortName: 'beta', customDomains: [{ url: 'Beta.Example' }] },
         { id: 's3', customDomains: [{ url: 'not a host' }] },
+        { id: 's4', customDomains: [{ url: 'gamma.example' }] },
+        // Both published: the one published to last (the canonical one, as Webflow redirects).
+        {
+          id: 's5',
+          shortName: 'delta',
+          customDomains: [
+            { url: 'delta.example', lastPublished: '2026-10-01T10:00:00Z' },
+            { url: 'www.delta.example', lastPublished: '2026-10-21T10:00:00Z' },
+          ],
+        },
       ],
     });
     expect((await listSites(account)).map((s) => s.host)).toEqual([
       'www.acme.example',
-      'beta.example',
+      'beta.webflow.io',
       null,
+      'gamma.example',
+      'www.delta.example',
     ]);
   });
 
@@ -275,7 +288,12 @@ describe('where pages live', () => {
       isArchived: false,
       fieldData: { slug: 'cold-brew', name: 'Cold brew' },
     });
-    expect(await getItem(account, 'c1', 'i1')).toEqual({ id: 'i1', slug: 'cold-brew', live: true });
+    expect(await getItem(account, 'c1', 'i1')).toEqual({
+      id: 'i1',
+      slug: 'cold-brew',
+      live: true,
+      lastPublished: '2026-10-25T10:00:00Z',
+    });
     expect(executeWebflowTool).toHaveBeenLastCalledWith('WEBFLOW_GET_COLLECTION_ITEM', account, {
       collection_id: 'c1',
       item_id: 'i1',
@@ -291,6 +309,11 @@ describe('where pages live', () => {
       fieldData: { slug: 'x' },
     });
     expect(await getItem(account, 'c1', 'i1')).toMatchObject({ live: false });
+    // Wrapped as { item }.
+    executeWebflowTool.mockResolvedValueOnce({
+      item: { id: 'i1', lastPublished: '2026-10-25T10:00:00Z', fieldData: { slug: 'y' } },
+    });
+    expect(await getItem(account, 'c1', 'i1')).toMatchObject({ slug: 'y', live: true });
     executeWebflowTool.mockRejectedValueOnce(new Error('404 resource_not_found'));
     expect(await getItem(account, 'c1', 'i1')).toBeNull();
     executeWebflowTool.mockRejectedValueOnce(new Error('401 Unauthorized'));

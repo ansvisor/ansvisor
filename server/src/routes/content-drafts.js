@@ -107,7 +107,10 @@ router.post('/webflow-status', cmsLimiter, async (req, res) => {
         .status(err.status)
         .json({ error: err.message, code: err.code ?? ERROR_CODES[err.status] });
     }
-    req.log.error({ err: { name: err?.name } }, 'content draft webflow status error');
+    req.log.error(
+      { err: { name: err?.name, code: err?.code } },
+      'content draft webflow status error',
+    );
     return res.status(502).json({ error: 'Webflow could not be read', code: 'failed' });
   }
 });

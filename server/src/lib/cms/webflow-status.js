@@ -8,18 +8,25 @@ import { WebflowError, getItem, listCollections, listSites } from './webflow.js'
 /**
  * Pages sent to Webflow, published there since (Send to CMS #1331, phase
  * 2): nothing calls back when a Webflow item goes live, so Ansvisor reads
- * the items its sends made, and marks each one live published at the
- * page's address on the site: its host, the collection's slug and the
- * item's (the collection page Webflow makes). Read when the Library opens
- * (a brand at a time, throttled by its route) and once a day for all.
+ * the items its sends made, and marks one published at the page's address
+ * on the site (its host, the collection's slug and the item's: the
+ * collection page Webflow makes) once Webflow published it after the send.
+ * An item published before (a live page sent again) waits for its next
+ * publish. An item deleted in Webflow closes its send. Read when the
+ * Library opens (a brand's newest sends, throttled by its route) and once a
+ * day for all.
  */
 
-/** Items one check reads at most: the most recent sends first. */
-export const ITEMS_PER_CHECK = 25;
+/** Items the Library's check reads: the newest sends. The daily sweep reads the rest. */
+export const ITEMS_ON_DEMAND = 10;
+/** Items the daily sweep reads a brand. */
+export const ITEMS_DAILY = 100;
 /** Sends older than this aren't read again: a draft left that long stays one. */
 const LOOK_BACK_MS = 60 * 24 * 60 * 60 * 1000;
-/** Brands the daily sweep checks, and for how long. */
-export const SWEEP_LIMIT = 200;
+/** Item reads that fail in a row before a check stops: Webflow or Composio is down. */
+const FAILURES_IN_A_ROW = 3;
+/** Connections the daily sweep reads, shuffled so a deadline doesn't leave the same brands out. */
+const SWEEP_CONNECTIONS = 1000;
 const SWEEP_DEADLINE_MS = 10 * 60 * 1000;
 
 const none = { checked: 0, published: [] };
@@ -35,14 +42,28 @@ async function markRefused(connection) {
   if (error) logger.warn({ err: error }, '[webflow-status] refusal not kept');
 }
 
+/** A send whose item was deleted in Webflow: closed, so the page's next send makes a new one. */
+async function closeRemoved(send) {
+  const { error } = await supabaseAdmin
+    .from('content_draft_deliveries')
+    .update({ status: 'failed', error: 'Removed in Webflow' })
+    .eq('id', send.id)
+    .eq('status', 'sent');
+  if (error) logger.warn({ err: error, deliveryId: send.id }, '[webflow-status] removal not kept');
+}
+
+const logged = (err) => ({ name: err?.name, code: err?.code });
+
 /**
  * Reads the brand's pages sent to Webflow and not yet seen live (each
- * page's latest such send, up to ITEMS_PER_CHECK), and marks the live ones
- * published. A token refused stops the check and marks the connection.
+ * page's latest such send, newest first, up to `limit`), and marks the ones
+ * Webflow published after the send published. One item's failure doesn't
+ * stop the others (three in a row do); a token refused stops the check and
+ * marks the connection.
  *
  * @returns {Promise<{ checked: number, published: { draftId: string|null, url: string }[] }>}
  */
-export async function checkWebflowPublished(brandId) {
+export async function checkWebflowPublished(brandId, { limit = ITEMS_ON_DEMAND } = {}) {
   if (!isWebflowConfigured()) return none;
   const { data: connection, error } = await supabaseAdmin
     .from('brand_cms_connections')
@@ -55,7 +76,7 @@ export async function checkWebflowPublished(brandId) {
 
   const { data: rows, error: rowsError } = await supabaseAdmin
     .from('content_draft_deliveries')
-    .select('id, draft_id, status, published_url, external_id, target_collection')
+    .select('id, draft_id, status, published_url, external_id, target_collection, sent_at')
     .eq('brand_id', brandId)
     .eq('target', 'webflow')
     .eq('status', 'sent')
@@ -63,7 +84,7 @@ export async function checkWebflowPublished(brandId) {
     .not('target_collection', 'is', null)
     .gte('sent_at', new Date(Date.now() - LOOK_BACK_MS).toISOString())
     .order('sent_at', { ascending: false })
-    .limit(ITEMS_PER_CHECK * 4);
+    .limit(limit * 4);
   if (rowsError) throw new Error(rowsError.message);
   // A page's latest send: an earlier one made the same item, updated since.
   const seen = new Set();
@@ -73,7 +94,7 @@ export async function checkWebflowPublished(brandId) {
     if (seen.has(key)) continue;
     seen.add(key);
     sends.push(row);
-    if (sends.length === ITEMS_PER_CHECK) break;
+    if (sends.length === limit) break;
   }
   if (!sends.length) return none;
 
@@ -90,12 +111,29 @@ export async function checkWebflowPublished(brandId) {
     const slugOf = new Map(
       (await listCollections(account, site.id)).filter((c) => c.slug).map((c) => [c.id, c.slug]),
     );
+    let failures = 0;
     for (const send of sends) {
       const collection = slugOf.get(send.target_collection);
       if (!collection) continue;
-      const item = await getItem(account, send.target_collection, send.external_id);
+      let item;
+      try {
+        item = await getItem(account, send.target_collection, send.external_id);
+        failures = 0;
+      } catch (err) {
+        if (err instanceof WebflowError && err.code === 'auth_failed') throw err;
+        logger.warn({ err: logged(err), deliveryId: send.id }, '[webflow-status] item not read');
+        if (++failures === FAILURES_IN_A_ROW) break;
+        continue;
+      }
       checked++;
-      if (!item?.live || !item.slug) continue;
+      if (!item) {
+        await closeRemoved(send);
+        continue;
+      }
+      // Live since the send: a live item sent again isn't published until Webflow publishes it again.
+      const publishedAt = Date.parse(item.lastPublished ?? '');
+      const sentAt = Date.parse(send.sent_at ?? '');
+      if (!item.live || !item.slug || !(publishedAt >= sentAt)) continue;
       const url = `https://${site.host}/${encodeURIComponent(collection)}/${encodeURIComponent(item.slug)}`;
       await markDeliveryPublished(send, url);
       published.push({ draftId: send.draft_id, url });
@@ -111,9 +149,9 @@ export async function checkWebflowPublished(brandId) {
 }
 
 /**
- * The daily check, for every brand with Webflow connected (on an active
- * subscription), one at a time until its deadline. A brand's failure is
- * logged and the next goes on.
+ * The daily check, for brands with Webflow connected (on an active
+ * subscription), in a shuffled order so the deadline leaves out different
+ * brands each day; one brand's failure is logged and the next goes on.
  */
 export async function sweepWebflowPublished() {
   if (!isWebflowConfigured()) return { brands: 0, published: 0 };
@@ -124,22 +162,25 @@ export async function sweepWebflowPublished() {
     .eq('provider', 'webflow')
     .eq('status', 'connected')
     .not('site_id', 'is', null)
-    .limit(SWEEP_LIMIT);
+    .limit(SWEEP_CONNECTIONS);
   if (error) throw new Error(`brand_cms_connections read: ${error.message}`);
+  const due = (data ?? []).filter((row) =>
+    isSubscriptionActive(row.brands?.organizations?.subscription_status),
+  );
+  for (let i = due.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [due[i], due[j]] = [due[j], due[i]];
+  }
   let brands = 0;
   let published = 0;
-  for (const row of data ?? []) {
+  for (const row of due) {
     if (Date.now() - started > SWEEP_DEADLINE_MS) break;
-    if (!isSubscriptionActive(row.brands?.organizations?.subscription_status)) continue;
     try {
-      const result = await checkWebflowPublished(row.brand_id);
+      const result = await checkWebflowPublished(row.brand_id, { limit: ITEMS_DAILY });
       brands++;
       published += result.published.length;
     } catch (err) {
-      logger.error(
-        { err: { name: err?.name }, brandId: row.brand_id },
-        '[webflow-status] check failed',
-      );
+      logger.error({ err: logged(err), brandId: row.brand_id }, '[webflow-status] check failed');
     }
   }
   return { brands, published };

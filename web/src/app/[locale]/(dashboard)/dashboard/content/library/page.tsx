@@ -183,13 +183,11 @@ export default function ContentLibraryPage() {
   useEffect(() => {
     if (!inWebflow || !activeBrandId || webflowRead.current.has(activeBrandId)) return;
     webflowRead.current.add(activeBrandId);
-    let cancelled = false;
-    refreshWebflowPublished(activeBrandId).then((published) => {
-      if (!cancelled && published.length) setAttempt((n) => n + 1);
+    // Not cancelled with the effect: a filter or search changing meanwhile
+    // still reads the list again, the brand's pages marked.
+    void refreshWebflowPublished(activeBrandId).then((published) => {
+      if (published.length) setAttempt((n) => n + 1);
     });
-    return () => {
-      cancelled = true;
-    };
   }, [inWebflow, activeBrandId]);
 
   const reload = () => setAttempt((n) => n + 1);

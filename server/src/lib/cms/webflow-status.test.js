@@ -11,7 +11,7 @@ vi.mock('../../config/supabase.js', () => ({
     from: (table) => {
       const q = { table, filters: [] };
       const result = () => {
-        if (table === 'brand_cms_connections' && q.update) {
+        if (q.update) {
           db.updates.push({ table, update: q.update, filters: q.filters });
           return { data: null, error: null };
         }
@@ -57,6 +57,7 @@ vi.mock('../logger.js', () => ({
 const { checkWebflowPublished, sweepWebflowPublished } = await import('./webflow-status.js');
 const { WebflowError } = await import('./webflow.js');
 
+const SENT_AT = '2026-10-24T10:00:00Z';
 const send = (id, draftId, over = {}) => ({
   id,
   draft_id: draftId,
@@ -64,6 +65,7 @@ const send = (id, draftId, over = {}) => ({
   published_url: null,
   external_id: `item-${id}`,
   target_collection: 'c1',
+  sent_at: SENT_AT,
   ...over,
 });
 
@@ -92,6 +94,7 @@ beforeEach(() => {
     id: itemId,
     slug: itemId === 'item-d1' ? 'cold-brew' : 'espresso',
     live: itemId === 'item-d1',
+    lastPublished: itemId === 'item-d1' ? '2026-10-24T12:00:00Z' : null,
   }));
 });
 
@@ -117,6 +120,46 @@ describe('checkWebflowPublished', () => {
       ['not', 'target_collection', 'is', null],
       ['gte', 'sent_at', expect.any(String)],
     ]);
+  });
+
+  it('waits for Webflow’s next publish when a live page is sent again', async () => {
+    // Published before this send: the item is live with what was sent before.
+    db.sends = [send('d1', 'dr1', { sent_at: '2026-10-25T09:00:00Z' })];
+    expect(await checkWebflowPublished('b1')).toEqual({ checked: 1, published: [] });
+    expect(markDeliveryPublished).not.toHaveBeenCalled();
+  });
+
+  it('closes a send whose item was deleted in Webflow, and goes on past one that can’t be read', async () => {
+    db.sends = [send('d3', 'dr3'), send('d4', 'dr4'), send('d1', 'dr1')];
+    webflow.getItem
+      .mockResolvedValueOnce(null)
+      .mockRejectedValueOnce(new WebflowError('failed', 'down'));
+    expect(await checkWebflowPublished('b1')).toEqual({
+      checked: 2,
+      published: [{ draftId: 'dr1', url: 'https://www.acme.example/blog/cold-brew' }],
+    });
+    expect(db.updates).toEqual([
+      {
+        table: 'content_draft_deliveries',
+        update: { status: 'failed', error: 'Removed in Webflow' },
+        filters: [
+          ['eq', 'id', 'd3'],
+          ['eq', 'status', 'sent'],
+        ],
+      },
+    ]);
+  });
+
+  it('stops after three items fail in a row, and reads only as many as asked', async () => {
+    db.sends = ['a', 'b', 'c', 'd'].map((id) => send(id, `dr-${id}`));
+    webflow.getItem.mockRejectedValue(new WebflowError('failed', 'down'));
+    expect(await checkWebflowPublished('b1')).toEqual({ checked: 0, published: [] });
+    expect(webflow.getItem).toHaveBeenCalledTimes(3);
+    webflow.getItem
+      .mockReset()
+      .mockResolvedValue({ id: 'x', slug: 'x', live: false, lastPublished: null });
+    await checkWebflowPublished('b1', { limit: 2 });
+    expect(webflow.getItem).toHaveBeenCalledTimes(2);
   });
 
   it('reads nothing without Webflow set up, connected and on a site', async () => {
@@ -155,7 +198,8 @@ describe('checkWebflowPublished', () => {
         ],
       },
     ]);
-    webflow.getItem.mockRejectedValueOnce(new WebflowError('failed', 'down'));
+    // Webflow or Composio down before the items: the check fails, for the caller to log.
+    webflow.listSites.mockRejectedValueOnce(new WebflowError('failed', 'down'));
     await expect(checkWebflowPublished('b1')).rejects.toMatchObject({ code: 'failed' });
   });
 });
@@ -172,7 +216,9 @@ describe('sweepWebflowPublished', () => {
     webflow.listSites.mockRejectedValueOnce(new Error('down'));
     expect(await sweepWebflowPublished()).toEqual({ brands: 1, published: 1 });
     vi.unstubAllEnvs();
-    expect(logged.join('')).toContain('b1');
+    // The brand that failed (the order is shuffled daily) is logged; the other went on.
+    expect(logged).toHaveLength(1);
+    expect(logged[0]).toMatch(/"brandId":"b[13]"/);
     configured.on = false;
     expect(await sweepWebflowPublished()).toEqual({ brands: 0, published: 0 });
   });

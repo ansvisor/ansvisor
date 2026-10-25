@@ -100,23 +100,25 @@ const HOST =
   /^(?=.{1,253}$)[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)+$/i;
 
 /**
- * The host a site's pages live on: its custom domain (the first one
- * published to, else the first), else its webflow.io address; null when
- * Webflow names neither.
+ * The host a site's pages live on: the custom domain published to last,
+ * else its webflow.io address (a site published only there), else its
+ * first custom domain; null when Webflow names none.
  */
 function siteHost(site) {
   const domains = (Array.isArray(site.customDomains) ? site.customDomains : [])
     .map((d) => ({
       host: text(d?.url)
         .replace(/^https?:\/\//i, '')
-        .replace(/\/.*$/, ''),
-      live: Boolean(d?.lastPublished),
+        .replace(/\/.*$/, '')
+        .toLowerCase(),
+      at: Date.parse(d?.lastPublished ?? '') || 0,
     }))
     .filter((d) => HOST.test(d.host));
-  const custom = domains.find((d) => d.live) ?? domains[0];
-  if (custom) return custom.host.toLowerCase();
-  const short = text(site.shortName);
-  return short && HOST.test(`${short}.webflow.io`) ? `${short.toLowerCase()}.webflow.io` : null;
+  const published = domains.filter((d) => d.at).sort((a, b) => b.at - a.at)[0];
+  if (published) return published.host;
+  const short = text(site.shortName).toLowerCase();
+  if (short && HOST.test(`${short}.webflow.io`)) return `${short}.webflow.io`;
+  return domains[0]?.host ?? null;
 }
 
 /** The sites the token reaches (a site token reaches its own), with the host their pages live on. */
@@ -164,8 +166,8 @@ export async function getCollection(account, collectionId) {
 }
 
 /**
- * An item as Webflow has it: its slug, and whether it's live (published,
- * not a draft, not archived). Null when it's gone.
+ * An item as Webflow has it: its slug, whether it's live (published, not a
+ * draft, not archived) and when it was last published. Null when it's gone.
  */
 export async function getItem(account, collectionId, itemId) {
   let item;
@@ -180,11 +182,14 @@ export async function getItem(account, collectionId, itemId) {
     if (err instanceof WebflowError && err.code === 'not_found') return null;
     throw err;
   }
+  if (item?.item) item = item.item;
   const fields = item.fieldData ?? item.field_data ?? {};
+  const lastPublished = typeof item.lastPublished === 'string' ? item.lastPublished : null;
   return {
     id: typeof item.id === 'string' && item.id ? item.id : itemId,
     slug: text(fields.slug, 256),
-    live: Boolean(item.lastPublished) && item.isDraft !== true && item.isArchived !== true,
+    live: Boolean(lastPublished) && item.isDraft !== true && item.isArchived !== true,
+    lastPublished,
   };
 }
 
