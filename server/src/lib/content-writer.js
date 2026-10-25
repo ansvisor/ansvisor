@@ -4,6 +4,9 @@ import { z } from 'zod';
 import supabaseAdmin from '../config/supabase.js';
 import { resolveModel } from './ai-provider.js';
 import {
+  ATTRIBUTION_RULE,
+  attributableSources,
+  placeholderAttributions,
   FANOUT_RULE,
   HEADING_RULE,
   LINK_RULE,
@@ -156,6 +159,7 @@ ${FANOUT_RULE}
 - Put the keys of the rules a change meets in "rules" (none when it meets none).
 - Use only facts from the page, the brand and your data. Never invent numbers, prices, dates, names, sources or quotes; write a placeholder in square brackets instead, e.g. [figure, source, year].
 ${SOURCES_RULE}
+${ATTRIBUTION_RULE}
 - Keep the page's voice. The most useful changes first, at most ${MAX_AGENT_SUGGESTIONS}.
 - "reason" says in a few words what the change does, e.g. "answer the search 'x' (fan-out)".
 - Write in the language asked for.`;
@@ -510,6 +514,7 @@ async function letGo(draft) {
  * leaves no page, fails the run. The draft's status doesn't change.
  */
 async function rewritePage({
+  attributable,
   draft,
   brand,
   model,
@@ -562,7 +567,8 @@ async function rewritePage({
   // blockquotes too, before what it kept goes back, so the page's own
   // passages are never touched.
   const cleaned = cleanPageHtml(
-    guardPeopleInHtml(answer.html, people).html,
+    // A claim given to a source it wasn't given: a placeholder, not the page dropped.
+    placeholderAttributions(guardPeopleInHtml(answer.html, people).html, attributable),
     rewriteLinks(draft.body_html, linkAllowList(targets)),
     { h1Kept: page.h1Token !== null, originalH1: page.h1 },
   );
@@ -817,6 +823,7 @@ async function writeWithRun({ draft, brand, model, input, budget, rewrite, run }
   );
   const knownInPage = new Set([...known, ...knownNumbers(...numbered.map(sourceWords))]);
   // The people and quotes it may name: the same words, its data's and the authors' (CE-044).
+  const authors = await authorWords(supabaseAdmin, brand.organization_id);
   const people = knownPeople(
     htmlText(draft.body_html),
     draft.title,
@@ -827,11 +834,15 @@ async function writeWithRun({ draft, brand, model, input, budget, rewrite, run }
     ...input.rules.flatMap((r) => [r.name, r.detail]),
     ...input.textRules,
     ...numbered.map(sourceWords),
-    ...(await authorWords(supabaseAdmin, brand.organization_id)),
+    ...authors,
   );
+  // The sources a claim may be given to: the ones the page gives claims to,
+  // its Your input and authors (editor test 2026-10-25).
+  const attributable = attributableSources(draft.body_html, numbered, authors);
 
   if (rewrite) {
     return await rewritePage({
+      attributable,
       draft,
       brand,
       model,
@@ -926,7 +937,7 @@ async function writeWithRun({ draft, brand, model, input, budget, rewrite, run }
     lockedKeys,
     ruleKeys,
     linkAllowList(targets),
-    { numbered, known, people },
+    { numbered, known, people, attributable },
   );
   // Stopped meanwhile: nothing it wrote is kept.
   await stopIfStopped(run);
