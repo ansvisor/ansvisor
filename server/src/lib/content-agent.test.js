@@ -21,6 +21,7 @@ vi.mock('../config/supabase.js', () => ({
       const chain = {
         select: () => chain,
         eq: () => chain,
+        is: () => chain,
         in: () => chain,
         order: () => chain,
         then: (resolve) => resolve(result()),
@@ -49,10 +50,18 @@ vi.mock('./plan-guard.js', async (importOriginal) => ({
 }));
 vi.mock('./logger.js', () => ({ logger: { error: vi.fn(), warn: vi.fn() } }));
 const stopIfStopped = vi.fn();
-vi.mock('./content-runs.js', async (importOriginal) => ({
-  ...(await importOriginal()),
-  stopIfStopped: (...args) => stopIfStopped(...args),
-}));
+/** A run's start, take-back and finish, when a test stands in for them. */
+const runs = vi.hoisted(() => ({ startRun: null, dropRun: null, finishRun: null }));
+vi.mock('./content-runs.js', async (importOriginal) => {
+  const real = await importOriginal();
+  return {
+    ...real,
+    stopIfStopped: (...args) => stopIfStopped(...args),
+    startRun: (...args) => (runs.startRun ?? real.startRun)(...args),
+    dropRun: (...args) => (runs.dropRun ?? real.dropRun)(...args),
+    finishRun: (...args) => (runs.finishRun ?? real.finishRun)(...args),
+  };
+});
 const readLinkTargets = vi.fn();
 vi.mock('./content-links.js', async (importOriginal) => ({
   ...(await importOriginal()),
@@ -64,6 +73,7 @@ const {
   buildFixPrompt,
   cleanInsertHtml,
   draftPassages,
+  dropsPlaceholder,
   fixDraftRules,
   keepSuggestions,
   growsPastLimit,
@@ -1110,5 +1120,176 @@ describe('fixDraftRules', () => {
     expect(held.charge).toHaveBeenCalledTimes(1);
     expect(held.charge).toHaveBeenCalledWith(billed);
     expect(held.release).toHaveBeenCalled();
+  });
+});
+
+describe('Quality’s hand-off (CE-051)', () => {
+  const handoff = (over = {}) =>
+    input({
+      rules: [
+        {
+          key: 'trust:claimsSourced',
+          name: 'Every figure or claim has a source in its paragraph',
+          // The editor's words: no fact the agent may write.
+          detail: 'Brew at 94 degrees for 4 minutes.',
+        },
+      ],
+      locked: [],
+      ...over,
+    });
+
+  it('runs as a hand-off, and keeps the editor’s details from the facts it may write', async () => {
+    generateObject.mockResolvedValue({
+      object: {
+        suggestions: [
+          suggestion({
+            before: 'good coffee and hot water',
+            after: 'good coffee and water at 94 degrees',
+            rules: ['trust:claimsSourced'],
+            sources: [],
+            marks: [],
+          }),
+        ],
+      },
+      usage: { inputTokens: 900, outputTokens: 200 },
+    });
+    await fixDraftRules({
+      draftId: DRAFT,
+      brandId: BRAND,
+      input: handoff(),
+      handoff: { origin: 'person' },
+    });
+    // 94 was only in the editor's detail: a number with no source, so not kept.
+    expect(writes.find((w) => w.table === 'content_draft_suggestions')).toBeUndefined();
+    // A Fix open rules run takes the details as given.
+    writes = [];
+    await fixDraftRules({ draftId: DRAFT, brandId: BRAND, input: handoff() });
+    expect(writes.find((w) => w.table === 'content_draft_suggestions').value[0].after_text).toBe(
+      'good coffee and water at 94 degrees',
+    );
+  });
+
+  it('runs an automatic one only on a draft its brand hands off', async () => {
+    await expect(
+      fixDraftRules({
+        draftId: DRAFT,
+        brandId: BRAND,
+        input: handoff(),
+        handoff: { origin: 'auto' },
+      }),
+    ).rejects.toMatchObject({ status: 409, code: 'not_due' });
+    expect(generateObject).not.toHaveBeenCalled();
+  });
+
+  describe('an automatic one', () => {
+    beforeEach(() => {
+      rows.content_drafts = { ...rows.content_drafts, quality_handoff: true };
+      runs.startRun = vi.fn(async () => ({
+        id: 'run-9',
+        steps: [],
+        signal: new AbortController().signal,
+      }));
+      runs.dropRun = vi.fn(async () => {});
+      runs.finishRun = vi.fn(async () => {});
+    });
+    afterEach(() => {
+      runs.startRun = runs.dropRun = runs.finishRun = null;
+    });
+
+    it('claims its one run, and gives it back when the AI budget stops it before it begins', async () => {
+      reserveAiBudget.mockRejectedValue(new PlanLimitError('used up', 429));
+      await expect(
+        fixDraftRules({
+          draftId: DRAFT,
+          brandId: BRAND,
+          input: handoff(),
+          handoff: { origin: 'auto' },
+        }),
+      ).rejects.toBeInstanceOf(PlanLimitError);
+      expect(runs.startRun).toHaveBeenCalledWith(
+        expect.objectContaining({ kind: 'handoff', origin: 'auto', strict: true }),
+      );
+      expect(runs.dropRun).toHaveBeenCalled();
+      expect(runs.finishRun).not.toHaveBeenCalled();
+    });
+
+    it('keeps a person’s run, the budget spent, as failed', async () => {
+      reserveAiBudget.mockRejectedValue(new PlanLimitError('used up', 429));
+      await expect(
+        fixDraftRules({
+          draftId: DRAFT,
+          brandId: BRAND,
+          input: handoff(),
+          handoff: { origin: 'person' },
+        }),
+      ).rejects.toBeInstanceOf(PlanLimitError);
+      expect(runs.startRun).toHaveBeenCalledWith(
+        expect.objectContaining({ kind: 'handoff', origin: 'person', strict: false }),
+      );
+      expect(runs.dropRun).not.toHaveBeenCalled();
+      expect(runs.finishRun).toHaveBeenCalledWith(expect.anything(), 'failed');
+    });
+  });
+
+  it('links the draft’s sources for its source checks, and writes the brand’s approved facts', async () => {
+    rows.brand_facts = [{ quote: 'Pro costs $49 per month' }];
+    generateObject.mockResolvedValue({
+      object: {
+        suggestions: [
+          suggestion({
+            before: 'good coffee and hot water',
+            after: 'good coffee and hot water, from $49 per month',
+            rules: ['trust:brandFacts'],
+            sources: [],
+            marks: [],
+          }),
+        ],
+      },
+      usage: { inputTokens: 900, outputTokens: 200 },
+    });
+    await fixDraftRules({
+      draftId: DRAFT,
+      brandId: BRAND,
+      input: handoff({
+        rules: [
+          { key: 'trust:brandFacts', name: 'Match the brand’s approved facts', detail: '' },
+          { key: 'trust:claimsSourced', name: 'Every figure has a source', detail: '' },
+        ],
+      }),
+      handoff: { origin: 'person' },
+    });
+    expect(readLinkTargets.mock.calls[0][0].ruleKeys).toEqual(
+      new Set(['trust:brandFacts', 'trust:claimsSourced', 'outboundLinks', 'citeInline']),
+    );
+    expect(writes.find((w) => w.table === 'content_draft_suggestions').value[0].after_text).toBe(
+      'good coffee and hot water, from $49 per month',
+    );
+  });
+
+  it('leaves a placeholder to the person: a change that fills or drops one isn’t kept', () => {
+    const page = 'Brew it for [time, source] at home.';
+    expect(dropsPlaceholder(page, 'for [time, source] at home', 'for 4 minutes at home')).toBe(
+      true,
+    );
+    expect(dropsPlaceholder(page, 'Brew it', 'Steep it')).toBe(false);
+    // A "before" that cuts into the brackets fills it all the same.
+    expect(dropsPlaceholder('Buy [product name] today.', 'product name', 'Ansvisor Pro')).toBe(
+      true,
+    );
+    expect(dropsPlaceholder('See note [1].', 'See note', 'See the note')).toBe(false);
+    const passages = draftPassages('<p>Brew it for [time, source] at home, then pour.</p>');
+    const fill = suggestion({
+      passage: 1,
+      before: 'Brew it for [time, source] at home',
+      after: 'Brew it for a while at home',
+      rules: ['readability:longSentences'],
+      sources: [],
+      marks: [],
+    });
+    const rules = new Set(['readability:longSentences']);
+    expect(
+      keepSuggestions([fill], passages, new Set(), rules, null, { keepPlaceholders: true }),
+    ).toEqual([]);
+    expect(keepSuggestions([fill], passages, new Set(), rules)).toHaveLength(1);
   });
 });
