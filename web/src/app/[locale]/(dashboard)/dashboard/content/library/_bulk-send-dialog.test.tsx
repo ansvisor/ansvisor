@@ -18,6 +18,26 @@ vi.mock('@/lib/content/cms-send-client', () => ({
   readDeliveries,
   sendPagesToCms,
 }));
+// The brand's Webflow connection (#1331, phase 2): none unless a test gives one.
+const webflow = vi.hoisted(() => ({ ready: false }));
+vi.mock('@/lib/webflow-client', () => ({
+  readWebflow: async () => ({
+    ok: true,
+    configured: true,
+    connection: webflow.ready
+      ? {
+          status: 'connected',
+          siteId: 's1',
+          siteName: 'Acme',
+          collectionId: 'c1',
+          collectionName: 'Blog Posts',
+          fieldMap: { body: 'post-body' },
+          connectedAt: '2026-10-25T10:00:00Z',
+          updatedAt: '2026-10-25T10:00:00Z',
+        }
+      : null,
+  }),
+}));
 // One request a page, so a test can refuse the second.
 const oneByOne = vi.hoisted(() => ({ on: false }));
 vi.mock('@/lib/content/cms-send', async (importOriginal) => {
@@ -88,6 +108,7 @@ const lines = () => [...dialog().querySelectorAll('li')].map((li) => li.textCont
 
 beforeEach(() => {
   oneByOne.on = false;
+  webflow.ready = false;
   onClose.mockReset();
   readCmsSources.mockReset().mockResolvedValue(
     new Map([
@@ -142,8 +163,13 @@ describe('BulkSendDialog', () => {
     expect(dialog().textContent).toContain("A page that can't go is left out");
 
     await act(async () => button('Send 2 pages').click());
-    const [, pages] = sendPagesToCms.mock.calls[0] as [string, { draftId: string; slug: string }[]];
+    const [, pages, target] = sendPagesToCms.mock.calls[0] as [
+      string,
+      { draftId: string; slug: string }[],
+      string,
+    ];
     expect(sendPagesToCms).toHaveBeenCalledTimes(1);
+    expect(target).toBe('webhook');
     expect(pages.map((page) => [page.draftId, page.slug])).toEqual([
       ['d1', 'pour-over'],
       // What it kept from its last send.
@@ -167,6 +193,36 @@ describe('BulkSendDialog', () => {
 
     await act(async () => button('Close').click());
     expect(onClose).toHaveBeenCalled();
+  });
+
+  it('sends the pages to the brand’s Webflow collection when Settings has it ready', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
+    webflow.ready = true;
+    sendPagesToCms.mockResolvedValue({
+      ok: true,
+      skipped: 0,
+      deliveries: [
+        { id: 'x1', draftId: 'd1', status: 'queued' },
+        { id: 'x3', draftId: 'd3', status: 'queued' },
+      ],
+    });
+    readDeliveries.mockResolvedValue([
+      { id: 'x1', draftId: 'd1', status: 'sent', http_status: null, error: null },
+      { id: 'x3', draftId: 'd3', status: 'sent', http_status: null, error: null },
+    ]);
+    await render();
+    expect(dialog().textContent).toContain(
+      'Each page goes to Blog Posts in Webflow as a draft item',
+    );
+    const webflowChoice = [...dialog().querySelectorAll('[role="radio"]')].find((r) =>
+      r.textContent?.startsWith('Webflow'),
+    );
+    expect(webflowChoice?.getAttribute('aria-checked')).toBe('true');
+    await act(async () => button('Send 2 pages').click());
+    expect(sendPagesToCms.mock.calls[0]?.[2]).toBe('webflow');
+    // Once sent, the choice is gone.
+    await act(async () => void (await vi.advanceTimersByTimeAsync(2_000)));
+    expect(dialog().querySelector('[role="radio"]')).toBeNull();
   });
 
   it('says why nothing went, and keeps the pages to send again', async () => {

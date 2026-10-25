@@ -11,6 +11,9 @@ vi.mock('sonner', () => ({ toast }));
 const readDraftCms = vi.hoisted(() => vi.fn());
 const sendPagesToCms = vi.hoisted(() => vi.fn());
 vi.mock('@/lib/content/cms-send-client', () => ({ readDraftCms, sendPagesToCms }));
+// The brand's Webflow connection (#1331, phase 2): none unless a test gives one.
+const readWebflow = vi.hoisted(() => vi.fn());
+vi.mock('@/lib/webflow-client', () => ({ readWebflow }));
 
 const { SendDialog } = await import('./send-to-cms-dialog');
 
@@ -71,6 +74,15 @@ beforeEach(() => {
   onClose.mockReset();
   toast.success.mockReset();
   readDraftCms.mockReset().mockResolvedValue(neverSent);
+  readWebflow.mockReset().mockResolvedValue({ ok: true, configured: false, connection: null });
+  // The send target remembered per brand, in this browser.
+  const kept = new Map<string, string>();
+  vi.stubGlobal('localStorage', {
+    getItem: (key: string) => kept.get(key) ?? null,
+    setItem: (key: string, value: string) => void kept.set(key, value),
+    removeItem: (key: string) => void kept.delete(key),
+    clear: () => kept.clear(),
+  });
   sendPagesToCms.mockReset().mockResolvedValue({
     ok: true,
     deliveries: [{ id: 'x1', draftId: 'd1', status: 'sent' }],
@@ -82,6 +94,7 @@ beforeEach(() => {
 afterEach(() => {
   act(() => root.unmount());
   container.remove();
+  vi.unstubAllGlobals();
 });
 
 describe('SendDialog', () => {
@@ -94,19 +107,23 @@ describe('SendDialog', () => {
     expect(dialog().textContent).toContain('15 characters');
 
     await act(async () => button('Send').click());
-    expect(sendPagesToCms).toHaveBeenCalledWith('brand-1', [
-      {
-        draftId: 'd1',
-        title: 'Pour-over',
-        slug: 'pour-over',
-        metaTitle: 'Pour-over',
-        metaDescription: 'Brew it slowly.',
-        // The brand's byline line stays; the CMS's title field carries the H1.
-        html: '<p>By Ada Lovelace</p>\n<p>Brew it slowly.</p>',
-        author: 'Ada Lovelace',
-        featuredImage: null,
-      },
-    ]);
+    expect(sendPagesToCms).toHaveBeenCalledWith(
+      'brand-1',
+      [
+        {
+          draftId: 'd1',
+          title: 'Pour-over',
+          slug: 'pour-over',
+          metaTitle: 'Pour-over',
+          metaDescription: 'Brew it slowly.',
+          // The brand's byline line stays; the CMS's title field carries the H1.
+          html: '<p>By Ada Lovelace</p>\n<p>Brew it slowly.</p>',
+          author: 'Ada Lovelace',
+          featuredImage: null,
+        },
+      ],
+      'webhook',
+    );
     expect(toast.success).toHaveBeenCalledWith('Sent to your CMS');
     expect(onClose).toHaveBeenCalled();
   });
@@ -277,5 +294,103 @@ describe('SendDialog', () => {
     expect(alert()).toBeUndefined();
     expect(onClose).not.toHaveBeenCalled();
     expect(toast.success).not.toHaveBeenCalled();
+  });
+
+  describe('to Webflow (#1331, phase 2)', () => {
+    const ready = {
+      ok: true,
+      configured: true,
+      connection: {
+        status: 'connected',
+        siteId: 's1',
+        siteName: 'Acme',
+        collectionId: 'c1',
+        collectionName: 'Blog Posts',
+        fieldMap: { body: 'post-body' },
+        connectedAt: '2026-10-25T10:00:00Z',
+        updatedAt: '2026-10-25T10:00:00Z',
+      },
+    };
+    const radio = (name: string) =>
+      [...dialog().querySelectorAll<HTMLButtonElement>('[role="radio"]')].find((r) =>
+        r.textContent?.startsWith(name),
+      );
+
+    it('offers no choice while the brand has no Webflow ready', async () => {
+      readWebflow.mockResolvedValue({
+        ...ready,
+        connection: { ...ready.connection, collectionId: null },
+      });
+      await render();
+      expect(radio('Webflow')).toBeUndefined();
+      expect(dialog().textContent).toContain("The page goes to the brand's webhook");
+    });
+
+    it('sends to the Webflow collection first, saying what changed on the way', async () => {
+      readWebflow.mockResolvedValue(ready);
+      sendPagesToCms.mockResolvedValue({
+        ok: true,
+        deliveries: [
+          {
+            id: 'x1',
+            draftId: 'd1',
+            status: 'sent',
+            updated: false,
+            changed: { tables: 2, images: 1 },
+          },
+        ],
+      });
+      await render();
+      expect(radio('Webflow')!.getAttribute('aria-checked')).toBe('true');
+      expect(radio('Webflow')!.textContent).toContain('A draft item in Blog Posts');
+      expect(dialog().textContent).toContain(
+        'The page goes to Blog Posts in Webflow as a draft item',
+      );
+      await act(async () => button('Send').click());
+      expect(sendPagesToCms).toHaveBeenCalledWith('brand-1', expect.any(Array), 'webflow');
+      expect(toast.success).toHaveBeenCalledWith('Sent to Webflow as a draft item', {
+        description: "2 tables went as lists. 1 image wasn't sent: add it in Webflow.",
+      });
+    });
+
+    it('sends to the webhook when picked, and remembers it for the brand', async () => {
+      readWebflow.mockResolvedValue(ready);
+      await render();
+      await act(async () => radio('Your workflow')!.click());
+      await act(async () => button('Send').click());
+      expect(sendPagesToCms).toHaveBeenLastCalledWith('brand-1', expect.any(Array), 'webhook');
+      expect(localStorage.getItem('aeo:cms-target:brand-1')).toBe('webhook');
+    });
+
+    it('says when Webflow updated the item, or why it didn’t take the page', async () => {
+      readWebflow.mockResolvedValue(ready);
+      sendPagesToCms.mockResolvedValueOnce({
+        ok: true,
+        deliveries: [{ id: 'x1', draftId: 'd1', status: 'sent', updated: true }],
+      });
+      await render();
+      await act(async () => button('Send').click());
+      expect(toast.success).toHaveBeenCalledWith('Updated in Webflow', { description: undefined });
+
+      sendPagesToCms.mockResolvedValueOnce({
+        ok: true,
+        deliveries: [
+          {
+            id: 'x2',
+            draftId: 'd1',
+            status: 'failed',
+            error: 'Another Webflow item has this slug.',
+          },
+        ],
+      });
+      await act(async () => button('Send').click());
+      expect(alert()).toBe("Webflow didn't take the page: Another Webflow item has this slug.");
+
+      sendPagesToCms.mockResolvedValueOnce({ ok: false, code: 'in_progress', field: null });
+      await act(async () => button('Send').click());
+      expect(alert()).toBe(
+        'This page is already on its way to Webflow. Wait for it, then send again.',
+      );
+    });
   });
 });

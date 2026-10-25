@@ -55,6 +55,10 @@ vi.mock('@/lib/content/cms-send-client', () => ({
   readKeptFields: vi.fn(async () => new Map()),
   readDeliveries: vi.fn(async () => []),
 }));
+// The brand's Webflow connection (#1331, phase 2): none here.
+vi.mock('@/lib/webflow-client', () => ({
+  readWebflow: async () => ({ ok: true, configured: false, connection: null }),
+}));
 vi.mock('@/lib/actions/content-authors', () => ({ getContentAuthors: vi.fn(async () => null) }));
 
 /** jsdom's Blob has no text(): read it as a browser's FileReader would. */
@@ -380,15 +384,19 @@ describe('Send to CMS from a Library row (#1331)', () => {
     expect(document.querySelector<HTMLInputElement>('#cms-slug')!.value).toBe('pricing');
 
     await act(async () => inDialog('Send').click());
-    expect(sendPagesToCms).toHaveBeenCalledWith('brand-1', [
-      expect.objectContaining({
-        draftId: 'd1',
-        slug: 'pricing',
-        html: '<p>Teams trust it.</p>',
-        // Authors come with Quality (CE-038): while it is off, none goes.
-        author: null,
-      }),
-    ]);
+    expect(sendPagesToCms).toHaveBeenCalledWith(
+      'brand-1',
+      [
+        expect.objectContaining({
+          draftId: 'd1',
+          slug: 'pricing',
+          html: '<p>Teams trust it.</p>',
+          // Authors come with Quality (CE-038): while it is off, none goes.
+          author: null,
+        }),
+      ],
+      'webhook',
+    );
     expect(dialog()).toBeNull();
     expect(readCmsStatuses).toHaveBeenCalledTimes(2);
   });
@@ -469,6 +477,29 @@ describe('Send to CMS from a Library row (#1331)', () => {
     expect(marks[1].getAttribute('href')).toBe('https://acme.example/churn');
   });
 
+  it('says a page sent to Webflow is a draft item there', async () => {
+    getContentDrafts.mockResolvedValue([row({})]);
+    readCmsStatuses.mockResolvedValue(
+      new Map([
+        [
+          'd1',
+          {
+            status: 'sent',
+            target: 'webflow',
+            at: '2026-10-24T10:00:00Z',
+            httpStatus: null,
+            error: null,
+            publishedUrl: null,
+          },
+        ],
+      ]),
+    );
+    await renderPage();
+    expect(
+      container.querySelector('[aria-label^="In Webflow as a draft item since Oct 24, 2026"]'),
+    ).not.toBeNull();
+  });
+
   it('says the workflow’s reason for a page its webhook took that then failed', async () => {
     getContentDrafts.mockResolvedValue([row({})]);
     readCmsStatuses.mockResolvedValue(
@@ -534,9 +565,11 @@ describe('Send to CMS from a Library row (#1331)', () => {
       }),
     );
     await act(async () => inDialog('Send').click());
-    expect(sendPagesToCms).toHaveBeenCalledWith('brand-1', [
-      expect.objectContaining({ draftId: 'd1' }),
-    ]);
+    expect(sendPagesToCms).toHaveBeenCalledWith(
+      'brand-1',
+      [expect.objectContaining({ draftId: 'd1' })],
+      'webhook',
+    );
   });
 
   it('is for admins and managers only', async () => {

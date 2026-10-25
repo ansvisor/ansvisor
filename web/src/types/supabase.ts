@@ -1454,6 +1454,8 @@ export type Database = {
           sent_by: string | null
           slug: string | null
           status: string
+          target: string
+          target_collection: string | null
           title: string
         }
         Insert: {
@@ -1473,6 +1475,8 @@ export type Database = {
           sent_by?: string | null
           slug?: string | null
           status?: string
+          target?: string
+          target_collection?: string | null
           title: string
         }
         Update: {
@@ -1492,6 +1496,8 @@ export type Database = {
           sent_by?: string | null
           slug?: string | null
           status?: string
+          target?: string
+          target_collection?: string | null
           title?: string
         }
         Relationships: [
@@ -4567,6 +4573,8 @@ export type Database = {
           sent_by: string | null
           slug: string | null
           status: string
+          target: string
+          target_collection: string | null
           title: string
         }[]
         SetofOptions: {

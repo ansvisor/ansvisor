@@ -3390,7 +3390,13 @@
         "failed": "The last send to your CMS failed, {when}",
         "published": "Published {when}",
         "openLive": "Published {when}: open the live page in a new tab",
-        "answered": "The webhook answered {status}."
+        "answered": "The webhook answered {status}.",
+        "webflow": {
+          "queued": "Sending to Webflow since {when}",
+          "sent": "In Webflow as a draft item since {when}",
+          "failed": "The last send to Webflow failed, {when}",
+          "published": "Published {when}"
+        }
       },
       "bulk": {
         "selected": "{count, plural, one {# page selected} other {# pages selected}}",
@@ -3401,6 +3407,7 @@
         "selectRow": "Select {title}",
         "title": "{count, plural, one {Send # page to your CMS} other {Send # pages to your CMS}}",
         "description": "Each page goes to the brand's webhook as it is ready to publish, with the slug and meta of its last send, else the page's. Open a page in the editor to change them.",
+        "descriptionWebflow": "Each page goes to {collection} in Webflow as a draft item, as it is ready to publish, with the slug and meta of its last send, else the page's. Open a page in the editor to change them.",
         "readFailed": "Couldn't read the pages. Try again.",
         "retry": "Try again",
         "notFound": "A page was archived or deleted since you picked it. Close this, pick the pages again and send.",
@@ -4296,9 +4303,21 @@
       },
       "send": {
         "button": "Send to CMS",
-        "hint": "Send the page to your CMS through the brand's webhook",
+        "hint": "Send the page to your CMS: Webflow, or your workflow through the brand's webhook",
         "title": "Send to CMS",
         "description": "The page goes to the brand's webhook, for your workflow tool (Zapier, Make, n8n) to publish it in your CMS.",
+        "descriptionWebflow": "The page goes to {collection} in Webflow as a draft item, with its slug and meta. You publish it in Webflow.",
+        "target": {
+          "label": "Send to",
+          "webflow": {
+            "title": "Webflow",
+            "hint": "A draft item in {collection}"
+          },
+          "webhook": {
+            "title": "Your workflow",
+            "hint": "The brand's webhook (Zapier, Make, n8n)"
+          }
+        },
         "placeholders": "{count, plural, one {# placeholder is} other {# placeholders are}} still open. Fill {count, plural, one {it} other {them}} first: none goes to your CMS.",
         "fillNow": "Fill now",
         "empty": "The page has nothing under its title yet. Write it first, then send it.",
@@ -4326,6 +4345,12 @@
           "failed": "The last send failed, {when}.",
           "published": "Published {when}."
         },
+        "lastWebflow": {
+          "queued": "Last sent to Webflow {when}, still on its way.",
+          "sent": "In Webflow as a draft item since {when}.",
+          "failed": "The last send to Webflow failed, {when}.",
+          "published": "Published {when}."
+        },
         "errors": {
           "no_webhook": "This brand has no webhook yet. Set one up in Webhook Settings on Content Opportunities.",
           "webhook_not_subscribed": "The brand's webhook doesn't receive \"Content page sent\". Turn it on in Webhook Settings on Content Opportunities.",
@@ -4337,12 +4362,21 @@
           "failed": "Couldn't send the page. Try again.",
           "too_large": "Too much to send in one go. Send fewer pages, or shorter ones.",
           "webhookStatus": "The webhook answered {status} and didn't take the page. Check your workflow, then send again.",
-          "webhookFailed": "The webhook didn't take the page: {reason}"
+          "webhookFailed": "The webhook didn't take the page: {reason}",
+          "webflowFailed": "Webflow didn't take the page: {reason}",
+          "webflow_not_configured": "Webflow isn't set up on this server. Send to your workflow instead.",
+          "no_webflow": "Connect Webflow in Settings › Integrations first.",
+          "webflow_refused": "Webflow refused the brand's site token. Connect it again in Settings › Integrations.",
+          "webflow_not_ready": "Pick the Webflow collection pages go to in Settings › Integrations.",
+          "in_progress": "This page is already on its way to Webflow. Wait for it, then send again."
         },
         "cancel": "Cancel",
         "send": "Send",
         "sending": "Sending",
-        "sent": "Sent to your CMS"
+        "sent": "Sent to your CMS",
+        "sentWebflow": "Sent to Webflow as a draft item",
+        "sentWebflowUpdated": "Updated in Webflow",
+        "webflowChanged": "{tables, plural, =0 {} one {# table went as a list. } other {# tables went as lists. }}{images, plural, =0 {} one {# image wasn't sent: add it in Webflow.} other {# images weren't sent: add them in Webflow.}}"
       },
       "rulesChip": "Rules {met}/{total}",
       "rulesChipHint": "Rules this page meets now. Open the Rules tab.",

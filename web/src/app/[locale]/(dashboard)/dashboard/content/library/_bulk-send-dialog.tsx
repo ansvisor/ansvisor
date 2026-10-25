@@ -23,6 +23,7 @@ import {
   type CmsSendError,
 } from '@/lib/content/cms-send-client';
 import type { ContentDraftListItem } from '@/lib/content/drafts';
+import { CmsTargetPicker, useCmsTarget } from '@/components/content/cms-target';
 import { readCmsSources } from './_cms-sources';
 
 /** How often the sends going on in the background are read. */
@@ -109,6 +110,7 @@ export function BulkSendDialog({
   // Why a request was refused; with the page its `pages.N` named, when it named one.
   const [failure, setFailure] = useState<Refusal | null>(null);
   const [attempt, setAttempt] = useState(0);
+  const { webflow, target, pick } = useCmsTarget(brandId);
 
   useEffect(() => {
     let cancelled = false;
@@ -185,6 +187,7 @@ export function BulkSendDialog({
   }, []);
 
   const send = async () => {
+    if (!target) return;
     setPhase({ kind: 'sending' });
     setFailure(null);
     const made = new Map<string, CmsDelivery>();
@@ -207,7 +210,7 @@ export function BulkSendDialog({
         notSent += group.length;
         continue;
       }
-      const result = await sendPagesToCms(brandId, group);
+      const result = await sendPagesToCms(brandId, group, target);
       if (!result.ok) {
         // The page a refusal names ("pages.2.html"), as the group's own.
         const index = Number(/^pages\.(\d+)\./.exec(result.field ?? '')?.[1] ?? NaN);
@@ -303,8 +306,22 @@ export function BulkSendDialog({
           <DialogTitle>
             {t('title', { count: phase.kind === 'reading' ? drafts.length : items.length })}
           </DialogTitle>
-          <DialogDescription>{t('description')}</DialogDescription>
+          <DialogDescription>
+            {target === 'webflow'
+              ? t('descriptionWebflow', { collection: webflow ?? '' })
+              : t('description')}
+          </DialogDescription>
         </DialogHeader>
+
+        {/* Where the pages go, before they go: Webflow once Settings has it ready. */}
+        {typeof webflow === 'string' && target && !after && (
+          <CmsTargetPicker
+            value={target}
+            collection={webflow}
+            disabled={phase.kind === 'sending'}
+            onChange={pick}
+          />
+        )}
 
         {phase.kind === 'reading' ? (
           <div className="flex items-center justify-center py-8" aria-busy="true">
@@ -387,7 +404,7 @@ export function BulkSendDialog({
               <Button variant="outline" disabled={phase.kind === 'sending'} onClick={onClose}>
                 {t('cancel')}
               </Button>
-              <Button disabled={busy || ready.length === 0} onClick={() => void send()}>
+              <Button disabled={busy || ready.length === 0 || !target} onClick={() => void send()}>
                 {phase.kind === 'sending' && <LoadingDots className="mr-1" />}
                 {phase.kind === 'sending' ? t('sending') : t('send', { count: ready.length })}
               </Button>
