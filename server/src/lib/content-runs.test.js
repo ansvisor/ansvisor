@@ -8,6 +8,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 let rows;
 let writes;
 let failInsert;
+/** The error an insert answers, when it isn't `failInsert`'s. */
+let insertError;
 
 vi.mock('../config/supabase.js', () => ({
   default: {
@@ -19,13 +21,16 @@ vi.mock('../config/supabase.js', () => ({
           return {
             select: () => ({
               single: async () =>
-                failInsert
-                  ? { data: null, error: new Error('down') }
-                  : { data: { id: 'run-1' }, error: null },
+                insertError
+                  ? { data: null, error: insertError }
+                  : failInsert
+                    ? { data: null, error: new Error('down') }
+                    : { data: { id: 'run-1' }, error: null },
             }),
           };
         },
         update: (value) => (writes.push({ table, op: 'update', value, call }), chain),
+        delete: () => (writes.push({ table, op: 'delete', call }), chain),
         select: (columns) => ((call.columns = columns), chain),
         eq: (col, v) => (call.filters.push(['eq', col, v]), chain),
         is: (col, v) => (call.filters.push(['is', col, v]), chain),
@@ -48,6 +53,7 @@ const {
   RunStoppedError,
   advanceRun,
   callSignal,
+  dropRun,
   finishRun,
   isStop,
   runCall,
@@ -62,6 +68,7 @@ beforeEach(() => {
   rows = {};
   writes = [];
   failInsert = false;
+  insertError = null;
 });
 
 describe('runSteps', () => {
@@ -266,5 +273,60 @@ describe('a run', () => {
       false,
     );
     await finishRun(run, 'failed');
+  });
+});
+
+describe('Quality’s hand-off runs (CE-051)', () => {
+  it('reads the page’s checks first, and writes who started it', async () => {
+    expect(runSteps('handoff', { checks: 6, sources: 12 }).map((s) => [s.key, s.count])).toEqual([
+      ['read_checks', 6],
+      ['gather_sources', 12],
+      ['write_changes', null],
+      ['check_sources', null],
+    ]);
+    await startRun({ draftId: 'd1', kind: 'handoff', counts: {}, origin: 'auto', strict: true });
+    expect(writes.find((w) => w.op === 'insert').value).toMatchObject({
+      kind: 'handoff',
+      origin: 'auto',
+    });
+    // A person's run says so too, as every other run does.
+    writes = [];
+    await startRun({ draftId: 'd1', kind: 'fix', counts: {} });
+    expect(writes.find((w) => w.op === 'insert').value).toMatchObject({ origin: 'person' });
+  });
+
+  it('claims an automatic one once: a second is 409 already, and a run that must be written throws', async () => {
+    insertError = { code: '23505', message: 'duplicate key' };
+    await expect(
+      startRun({ draftId: 'd1', kind: 'handoff', counts: {}, origin: 'auto', strict: true }),
+    ).rejects.toMatchObject({ status: 409, code: 'already' });
+    insertError = null;
+    failInsert = true;
+    await expect(
+      startRun({ draftId: 'd1', kind: 'handoff', counts: {}, origin: 'auto', strict: true }),
+    ).rejects.toThrow('down');
+    // Not strict: it runs unshown, as before.
+    await expect(startRun({ draftId: 'd1', kind: 'fix', counts: {} })).resolves.toMatchObject({
+      id: null,
+    });
+  });
+
+  it('takes a run’s row back, so its claim goes', async () => {
+    const run = await startRun({
+      draftId: 'd1',
+      kind: 'handoff',
+      counts: {},
+      origin: 'auto',
+      strict: true,
+    });
+    await dropRun(run);
+    expect(writes.find((w) => w.op === 'delete')).toMatchObject({
+      table: 'content_agent_runs',
+      call: { filters: [['eq', 'id', 'run-1']] },
+    });
+    // No row written: nothing to take back.
+    writes = [];
+    await dropRun({ id: null });
+    expect(writes).toEqual([]);
   });
 });
