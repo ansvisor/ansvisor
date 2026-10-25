@@ -338,7 +338,10 @@ describe('BeforePublish', () => {
       offer: { price: 129, currency: 'USD' },
     };
     await render(quality(), { pageType: 'product_page', title: 'Ridge 28 daypack', product });
-    expect(rows().some((row) => row.startsWith('Product schema with its price'))).toBe(true);
+    // The price as read, for the person to check.
+    expect(rows().find((row) => row.startsWith('Product schema with its price'))).toContain(
+      "Price read from the page: $129. Check it's the product's.",
+    );
     expect(jsonLd()).toMatchObject({
       '@type': 'Product',
       name: 'Ridge 28 daypack',

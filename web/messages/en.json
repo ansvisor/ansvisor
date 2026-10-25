@@ -4614,7 +4614,7 @@
           "titleLive": "Article schema with dateModified",
           "detailLive": "Often added by your CMS. If not, paste the code below into the page. It gives only the updated date: your page keeps the published date it has.",
           "product": "Product schema with its price",
-          "productDetail": "Often added by your shop's theme. If not, paste the code below into the page. Availability, SKU and reviews come from a product feed, once one is connected.",
+          "productDetail": "Price read from the page: {price}. Check it's the product's. Often added by your shop's theme; if not, paste the code below into the page. Availability, SKU and reviews come from a product feed, once one is connected.",
           "productNoName": "Product schema needs the product's name",
           "productNoNameDetail": "The title is empty or still has a placeholder in square brackets: write the product's name there. Without it, search engines show no product result.",
           "productNoPrice": "Product schema needs the price",
