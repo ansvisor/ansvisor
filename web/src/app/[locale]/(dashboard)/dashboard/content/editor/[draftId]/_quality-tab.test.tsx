@@ -145,7 +145,7 @@ describe('QualityTab', () => {
       p.textContent?.startsWith('Checks and weights for'),
     )!;
     expect(line.textContent).toBe(
-      "Checks and weights for Product page (detected): no author (your brand's), your own product photos, proof for claims, prices that match, short plain copy. Change",
+      "Checks and weights for Product page (detected): no author (your brand's), your own product photos, proof for claims, prices that match, shipping and returns, a specs table and short plain copy. Change",
     );
     await act(async () => line.querySelector('button')!.click());
     expect(onChangeType).toHaveBeenCalled();
