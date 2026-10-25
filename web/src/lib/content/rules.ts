@@ -1029,6 +1029,8 @@ export function checkRule(rule: ActiveRule, page: PageRead, ctx: RuleContext): R
       return most ? atLeast(most, n) : { state: 'bad', code: 'missing' };
     }
     case 'fitQuestions':
+      // Read in English only ("fit", "size"): another language's page isn't scored on it.
+      if (ctx.language && ctx.language !== 'en') return { state: 'info', code: 'englishOnly' };
       return atLeast(
         blocks.filter((b) => isQuestion(b) && /\b(fit|fits|size|sizes|sizing)\b/i.test(b.text))
           .length,

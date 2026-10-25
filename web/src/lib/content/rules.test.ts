@@ -529,6 +529,14 @@ describe('the formats www.ansvisor.com offers', () => {
     expect(define('<h1>Cold brew</h1><p>Cold brew is, simply, coffee steeped cold.</p>')).toEqual({
       state: 'ok',
     });
+    // Fit questions too: a Turkish product page isn't scored on English words (CE-052).
+    expect(
+      checkRule(
+        rule('fitQuestions', 'product_page'),
+        page('<h1>Yürüyüş çantası</h1><h2>Hangi beden bana uyar?</h2><p>Ölçü tablosuna bakın.</p>'),
+        { ...ctx, language: 'tr' },
+      ),
+    ).toEqual({ state: 'info', code: 'englishOnly' });
     // Read in English words only: another language's page isn't counted.
     expect(
       checkRule(

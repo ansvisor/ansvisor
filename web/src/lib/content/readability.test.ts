@@ -457,11 +457,16 @@ describe('withTypeRules (Phase 3, CE-052)', () => {
   it('counts the page type’s rules met as one check, naming the ones not met', () => {
     const read = readability(html, 'en');
     const typed = withTypeRules(read, [
-      { name: 'Specs table', met: false },
+      { name: 'Specs table', met: false, detail: 'Now: missing' },
       { name: 'Fit questions', met: true },
     ]);
     const rules = typed.checks.find((c) => c.id === 'typeRules')!;
-    expect(rules).toMatchObject({ points: 5, max: 10, count: 1, rules: ['Specs table'] });
+    expect(rules).toMatchObject({
+      points: 5,
+      max: 10,
+      count: 1,
+      rules: [{ name: 'Specs table', detail: 'Now: missing' }],
+    });
     // Rescaled with it.
     const points = read.checks.reduce((sum, c) => sum + c.points, 0);
     const max = read.checks.reduce((sum, c) => sum + c.max, 0);

@@ -4706,8 +4706,8 @@
           "change": "Change",
           "changeLabel": "Change the page type",
           "article": "an author with experience, sourced claims, short sentences and the answer first.",
-          "product": "no author (your brand's), your own product photos, proof for claims, prices that match, short plain copy.",
-          "category": "your own product images, prices and claims that match, a short intro.",
+          "product": "no author (your brand's), your own product photos, proof for claims, prices that match, shipping and returns, a specs table and short plain copy.",
+          "category": "your own product images and brand information, prices and claims that match, an intro and a buying FAQ.",
           "feature": "your own screenshots and data, sourced metrics, a price that matches, scannable sections.",
           "comparison": "an author who says how the picks were made, balance and a disclosure, the summary first."
         },
@@ -4995,7 +4995,7 @@
           },
           "typeRules": {
             "line": "{count, plural, one {# page type rule not met} other {# page type rules not met}}: {names}",
-            "detail": "This page type's own rules, as the Rules tab reads them. Meet them there, or Run Agent in Rules."
+            "detail": "{rules}. This page type's own rules, as the Rules tab reads them: meet them there, or Run Agent in Rules."
           }
         }
       },

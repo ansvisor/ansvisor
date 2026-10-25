@@ -81,8 +81,8 @@ export interface ReadabilityCheck {
   ai?: boolean;
   /** The first block that falls short, to show it in the draft. */
   at?: string | null;
-  /** The page type's rules not met yet, by name (typeRules). */
-  rules?: string[];
+  /** The page type's rules not met yet, by name, each with its aim and how the page reads now (typeRules). */
+  rules?: { name: string; detail: string }[];
 }
 
 export interface Readability {
@@ -593,7 +593,7 @@ const TYPE_RULES_POINTS = 10;
  */
 export function withTypeRules(
   read: Readability,
-  rules: readonly { name: string; met: boolean }[],
+  rules: readonly { name: string; met: boolean; detail?: string }[],
 ): Readability {
   if (read.score === null || rules.length === 0) return read;
   const met = rules.filter((r) => r.met).length;
@@ -605,7 +605,7 @@ export function withTypeRules(
       max: TYPE_RULES_POINTS,
       value: rules.length,
       count: rules.length - met,
-      rules: rules.filter((r) => !r.met).map((r) => r.name),
+      rules: rules.filter((r) => !r.met).map((r) => ({ name: r.name, detail: r.detail ?? '' })),
     },
   ];
   const max = checks.reduce((sum, c) => sum + c.max, 0);

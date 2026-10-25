@@ -148,6 +148,8 @@ import {
   openRulesForAgent,
   lengthBand,
   rewriteAdvice,
+  type ActiveRule,
+  type RuleStatus,
 } from '@/lib/content/rules';
 import { aiUsageTone } from '@/lib/billing/ai-usage';
 import { saveBlob } from '@/lib/download';
@@ -373,6 +375,13 @@ export function DraftEditor({
   // Whether the side panel's brief is rebuilding, as it last said.
   const briefNow = useRef(false);
   const tRules = useTranslations('contentEditor.editor.rules');
+  /** A rule's aim and how the page reads now, as the agent is told them (Fix open rules, Hand off). */
+  const aimAndNow = (rule: ActiveRule, status: RuleStatus) => [
+    rule.current
+      ? `${tRules('agent.aim')}: ${rule.current}${rule.unit ? ` ${tRules(`units.${rule.unit}`)}` : ''}`
+      : null,
+    `${tRules('agent.now')}: ${ruleStatusDetail(tStatus, status)}`,
+  ];
   const tStatus = useTranslations('contentEditor.editor.rules.status');
   // History keeps the page before the first suggestion accepted here.
   const agentBeforeKept = useRef(false);
@@ -753,6 +762,12 @@ export function DraftEditor({
   // page's type (an article's before, and for most types).
   const profile = profileFor(pageType);
   const weights = PROFILE_WEIGHTS[profile];
+  // A product page's shipping and returns (CE-052): Trust's check, and a
+  // to-do that needs no Trust read.
+  const shippingRead = useMemo(
+    () => (qualityOn && profile === 'product' ? shippingOnPage(pageHtml) : null),
+    [qualityOn, profile, pageHtml],
+  );
   // The page type's own rules (the Rules tab's, read from the page): one
   // Readability check on the types that weigh it; not ones read by AI or
   // the product feed, nor ones turned off there.
@@ -760,10 +775,18 @@ export function DraftEditor({
     () =>
       rules.rules.flatMap(({ rule, status }) =>
         rule.group === 'type' && rule.check === 'page' && rule.on && status.state !== 'info'
-          ? [{ name: tRules(`names.${rule.key}`), met: status.state === 'ok' }]
+          ? [
+              {
+                name: tRules(`names.${rule.key}`),
+                met: status.state === 'ok',
+                detail: aimAndNow(rule, status).filter(Boolean).join(' · '),
+              },
+            ]
           : [],
       ),
-    [rules.rules, tRules],
+    // aimAndNow reads only tRules and tStatus.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [rules.rules, tRules, tStatus],
   );
   const readable = useMemo(
     () =>
@@ -915,7 +938,7 @@ export function DraftEditor({
               proofs: proofAsks,
               page: aiChecks,
               // A product page's shipping and returns (CE-052).
-              shipping: profile === 'product',
+              shipping: shippingRead,
               now: Date.now(),
             }),
             weights.trust,
@@ -923,7 +946,7 @@ export function DraftEditor({
         : null,
     [
       weights,
-      profile,
+      shippingRead,
       qualityOn,
       pageBlocks,
       linkChecks,
@@ -1043,11 +1066,6 @@ export function DraftEditor({
   // Who may edit the page's author: only they get Edit author (CE-037's rule).
   const canEditPageAuthor =
     !!pageAuthor && !!authorsRead && canEditAuthor(pageAuthor, authorsRead.me);
-  // A product page's shipping and returns (CE-052): its to-do needs no Trust read.
-  const shippingRead = useMemo(
-    () => (profile === 'product' ? shippingOnPage(pageBlocks) : null),
-    [profile, pageBlocks],
-  );
   const todos = qualityOn
     ? qualityTodos({
         eeat: eeatScore,
@@ -1786,10 +1804,7 @@ export function DraftEditor({
           key: rule.key,
           name: tRules(`names.${rule.key}`),
           detail: [
-            rule.current
-              ? `${tRules('agent.aim')}: ${rule.current}${rule.unit ? ` ${tRules(`units.${rule.unit}`)}` : ''}`
-              : null,
-            `${tRules('agent.now')}: ${ruleStatusDetail(tStatus, status)}`,
+            ...aimAndNow(rule, status),
             rule.key === 'aiTraces'
               ? `${tRules('agent.phrases')}: ${aiTracesFound(pageText).join(', ')}`
               : null,

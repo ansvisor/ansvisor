@@ -72,31 +72,41 @@ export type TrustCheckId = keyof typeof TRUST_WEIGHTS;
 
 /** The shipping and returns check's points before a page type weighs it. */
 const SHIPPING_POINTS = 10;
-/** Words that say how a product ships, and how it goes back. */
+/**
+ * Words that say how a product ships, and how it goes back, in a policy's
+ * terms ("free shipping", "delivery in 2 days", "30-day returns", "iade
+ * koşulları"): not "ships with a cable", "in return" or "return on
+ * investment".
+ */
 const SHIPPING_WORDS =
-  /\b(?:shipping|ships|delivery|delivered|dispatch(?:ed)?)\b|\b(?:kargo|teslimat)|\b(?:versand|lieferung|lieferzeit)|\blivraison|\benv[ií]os?\b/iu;
+  /\b(?:shipping|ships? (?:in|within|free|worldwide|from|to|next)|delivery (?:time|in|within|is|costs?|fees?|to)|(?:free|fast|next[- ]day|same[- ]day|express) delivery|delivered (?:in|within|free)|dispatch(?:ed|es)? (?:in|within))\b|\b(?:kargo|teslimat)|\b(?:versand|lieferzeit|lieferung)|\blivraison|\benv[ií]os?\b/iu;
 const RETURN_WORDS =
-  /\b(?:returns?|refunds?|money[- ]back|exchanges?)\b|\b(?:iade|değişim)|\b(?:rückgabe|rücksendung|widerruf)|\b(?:retours?|remboursement)|\bdevoluci[oó]n/iu;
+  /\b(?:returns? (?:policy|within|window|are free|accepted|and exchanges?)|free returns?|easy returns?|\d+[- ]days? (?:returns?|money[- ]back)|refunds?|money[- ]back)\b|\biade|\b(?:rückgabe|rücksendung|widerruf)|\b(?:retours? (?:gratuits?|sous)|remboursement)|\bdevoluci[oó]n/iu;
+/** A link to the shop's shipping or returns page ("/shipping", "/policies/refund-policy", "#returns"). */
+const SHIPPING_LINK =
+  /(?:^|[/#_-])(?:shipping|delivery|kargo|versand(?:kosten)?|lieferung|livraison|envios?)(?:[-_/?#.]|$)/iu;
+const RETURN_LINK =
+  /(?:^|[/#_-])(?:returns?|refunds?|iade|rueckgabe|ruecksendung|widerruf|retours?|reembolsos?|devoluciones?)(?:[-_/?#.]|$)/iu;
+
 /**
  * Whether a page says how its product ships and goes back (Phase 3,
- * CE-052): its words, or a link to the shop's page for each. A product
- * page's to-do reads it too, before Trust is read.
+ * CE-052): its words (headings too) in a policy's terms, or a link to the
+ * shop's page for each. A product page's to-do reads it before Trust does.
+ * Read as written and lowercased the Turkish way too ("İade koşulları").
  */
-export function shippingOnPage(blocks: TrustBlock[]): { shipping: boolean; returns: boolean } {
+export function shippingOnPage(html: string): { shipping: boolean; returns: boolean } {
+  const doc = new DOMParser().parseFromString(html, 'text/html');
+  const texts = [...doc.body.querySelectorAll('p, li, td, th, blockquote, h1, h2, h3, h4, h5, h6')]
+    .map((el) => el.textContent ?? '')
+    .filter((text) => text.trim());
+  const hrefs = [...doc.body.querySelectorAll('a[href]')].map((a) => a.getAttribute('href') ?? '');
+  const says = (words: RegExp) =>
+    texts.some((text) => words.test(text) || words.test(text.toLocaleLowerCase('tr')));
   return {
-    shipping: blocks.some(
-      (b) => SHIPPING_WORDS.test(b.text) || b.links.some((l) => SHIPPING_LINK.test(l)),
-    ),
-    returns: blocks.some(
-      (b) => RETURN_WORDS.test(b.text) || b.links.some((l) => RETURN_LINK.test(l)),
-    ),
+    shipping: says(SHIPPING_WORDS) || hrefs.some((href) => SHIPPING_LINK.test(href)),
+    returns: says(RETURN_WORDS) || hrefs.some((href) => RETURN_LINK.test(href)),
   };
 }
-/** A link to the shop's shipping or returns page ("/shipping", "/policies/refund-policy"). */
-const SHIPPING_LINK =
-  /(?:^|\/)(?:shipping|delivery|kargo|versand|livraison|envios?)(?:[-/?#.]|$)/iu;
-const RETURN_LINK =
-  /(?:^|[/-])(?:returns?|refunds?|iade|rueckgabe|retours?|devoluciones?)(?:[-/?#.]|$)/iu;
 
 /**
  * Trust's Phase 1 points (sourced figures, fresh sources, working links):
@@ -495,14 +505,14 @@ export function trust({
   brandFacts = null,
   proofs = null,
   page = null,
-  shipping = false,
+  shipping = null,
   now,
 }: {
   /**
-   * Phase 3 (CE-052): read whether the page says how shipping and returns
-   * work, or links where they're told (a product page's).
+   * Phase 3 (CE-052): whether a product page says how shipping and returns
+   * work (shippingOnPage); left out elsewhere.
    */
-  shipping?: boolean;
+  shipping?: { shipping: boolean; returns: boolean } | null;
   /** The page's blocks (trustBlocks). */
   blocks: TrustBlock[];
   /** Each link's read, by the link as the page has it; one not read yet isn't counted. */
@@ -688,7 +698,7 @@ export function trust({
     });
   }
 
-  const shippingSaid = shipping ? shippingOnPage(blocks) : null;
+  const shippingSaid = shipping;
   if (shippingSaid) {
     checks.push({
       id: 'shippingReturns',

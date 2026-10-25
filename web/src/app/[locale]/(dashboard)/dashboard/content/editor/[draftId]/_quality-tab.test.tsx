@@ -167,7 +167,14 @@ describe('QualityTab', () => {
       ...result,
       checks: [
         ...result.checks,
-        { id: 'typeRules', points: 0, max: 10, value: 1, count: 1, rules: ['Specs table'] },
+        {
+          id: 'typeRules',
+          points: 0,
+          max: 10,
+          value: 1,
+          count: 1,
+          rules: [{ name: 'Specs table', detail: 'Now: missing' }],
+        },
       ],
     };
     await render({
@@ -175,6 +182,8 @@ describe('QualityTab', () => {
       todos: [{ id: 'shippingReturns', done: false, gain: 4, score: 'trust', action: null }],
     });
     expect(container.textContent).toContain('1 page type rule not met: Specs table');
+    // Each with how the page reads now: what Hand off sends the agent too.
+    expect(container.textContent).toContain('Specs table (Now: missing). This page type');
     expect(container.textContent).toContain('Say how shipping and returns work');
   });
 

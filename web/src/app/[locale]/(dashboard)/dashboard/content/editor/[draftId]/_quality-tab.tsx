@@ -962,7 +962,7 @@ function line(t: T, check: ReadabilityCheck): string {
     case 'typeRules':
       return t('checks.typeRules.line', {
         count: check.count,
-        names: (check.rules ?? []).join(', '),
+        names: (check.rules ?? []).map((r) => r.name).join(', '),
       });
   }
 }
@@ -980,6 +980,14 @@ function detail(t: T, check: ReadabilityCheck): string {
     return check.formula
       ? t('checks.readingLevel.detail', { target: check.target ?? 60 })
       : t('checks.readingLevel.detailLength');
+  }
+  // Each rule with its aim and how the page reads now: what Hand off sends the agent too.
+  if (check.id === 'typeRules') {
+    return t('checks.typeRules.detail', {
+      rules: (check.rules ?? [])
+        .map((r) => (r.detail ? `${r.name} (${r.detail})` : r.name))
+        .join('; '),
+    });
   }
   return t(`checks.${check.id}.detail`);
 }
