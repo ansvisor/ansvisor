@@ -1699,41 +1699,63 @@ export function DraftEditor({
       .catch((err) => console.error('Failed to read the agent suggestions:', err));
   }, [editor, draft.id]);
 
-  // What the agent's open changes would do to the rules (editor test
+  // What the agent's open result would do to the rules (editor test
   // 2026-10-25: a fix run turned 11 of 15 met into 10, a rewrite 4 open into
-  // 5): each, and all of them, accepted into a copy of the page and checked
-  // as the page is. A rule met now that one would break is said on it.
+  // 5): each change, all of them (as Accept all takes them, one after the
+  // other), or a whole page rewritten, checked as the page is, against the
+  // page as it is now (read here, not the rules' deferred read, so a change
+  // just accepted isn't blamed on the rest). A rule met now that it would
+  // break is said.
   const ruleEffects = useMemo(() => {
     if (!editor || editor.isDestroyed) return null;
     const open = suggestions.filter((s) => s.status === 'open' && s.kind !== 'page');
-    if (!open.length) return null;
-    const metNow = new Set(
-      rules.rules
-        .filter(({ rule, status }) => rule.on && status.state === 'ok')
-        .map(({ rule }) => rule.key),
-    );
-    const read = (doc: PmNode) => {
-      const after = rules.checkHtml(
+    const page = suggestions.find((s) => s.kind === 'page' && s.status === 'open') ?? null;
+    if (!open.length && !page) return null;
+    const check = (html: string, characters: number) => rules.checkHtml(html, characters);
+    const ofDoc = (doc: PmNode) =>
+      check(
         getHTMLFromFragment(doc.content, editor.schema),
         (editor.storage.characterCount.characters({ node: doc }) as number | undefined) ?? 0,
       );
+    const now = ofDoc(editor.state.doc);
+    const metNow = new Set(
+      now
+        .filter(({ rule, status }) => rule.on && status.state === 'ok')
+        .map(({ rule }) => rule.key),
+    );
+    const effect = (after: ReturnType<typeof check>, leaveOut: string[] = []) => ({
+      now: rulesMet(now).met,
+      met: rulesMet(after).met,
+      broken: after
+        .filter(
+          ({ rule, status }) =>
+            metNow.has(rule.key) && status.state === 'bad' && !leaveOut.includes(rule.key),
+        )
+        .map(({ rule }) => rule.key),
+    });
+    // A whole page rewritten: its Length is its own line on the card (read
+    // the same way, pageTextLength), so it isn't named again as broken.
+    if (page) {
       return {
-        met: rulesMet(after).met,
-        broken: after
-          .filter(({ rule, status }) => metNow.has(rule.key) && status.state === 'bad')
-          .map(({ rule }) => rule.key),
+        each: new Map<string, string[]>(),
+        all: effect(check(page.afterText, pageTextLength(page.afterText)), ['length']),
       };
-    };
+    }
     const each = new Map<string, string[]>();
-    const all = editor.state.tr;
     for (const s of open) {
       const one = editor.state.tr;
-      if (acceptInto(one, editor.state, s, suggestions)) each.set(s.id, read(one.doc).broken);
-      acceptInto(all, editor.state, s, suggestions);
+      if (acceptInto(one, editor.state, s, suggestions))
+        each.set(s.id, effect(ofDoc(one.doc)).broken);
     }
-    return { each, all: read(all.doc) };
-    // pageHtml: the page as it changes, the copy's start.
-  }, [editor, suggestions, rules.rules, rules.checkHtml, pageHtml]); // eslint-disable-line react-hooks/exhaustive-deps
+    const all = redoDecision(
+      editor.state,
+      suggestions,
+      open.map((s) => s.id),
+      'accept',
+    ).tr;
+    return { each, all: effect(ofDoc(all.doc)) };
+    // pageHtml: the page as it changes (the editor's state is read through it).
+  }, [editor, suggestions, rules.checkHtml, pageHtml]); // eslint-disable-line react-hooks/exhaustive-deps
   const ruleNames = (keys: string[]) =>
     format.list(
       keys.map((key) => tRules(`names.${key}`)),
@@ -1940,28 +1962,7 @@ export function DraftEditor({
     [heldKey],
   );
   // The rules as the agent card counts its gain: met now, and the ones still open.
-  // A whole page rewritten, open: checked as the page is (its Length is the
-  // rewrite's own line, read against the band, B).
-  const pageEffect = useMemo(() => {
-    if (!pageSuggestion || pageSuggestion.status !== 'open') return null;
-    const after = rules
-      .checkHtml(pageSuggestion.afterText, pageTextLength(pageSuggestion.afterText))
-      .filter(({ rule }) => rule.key !== 'length');
-    const metNow = new Set(
-      rules.rules
-        .filter(({ rule, status }) => rule.on && status.state === 'ok')
-        .map(({ rule }) => rule.key),
-    );
-    const lengthMet = metNow.has('length') ? 1 : 0;
-    return {
-      met: rulesMet(after).met + lengthMet,
-      broken: after
-        .filter(({ rule, status }) => metNow.has(rule.key) && status.state === 'bad')
-        .map(({ rule }) => rule.key),
-    };
-    // The rules and their check, not the hook's object (a new one each render).
-  }, [pageSuggestion, rules.rules, rules.checkHtml]); // eslint-disable-line react-hooks/exhaustive-deps
-  const effect = pageEffect ?? ruleEffects?.all ?? null;
+  const effect = ruleEffects?.all ?? null;
   const cardRules = useMemo(
     () => ({
       met: rules.met,
@@ -1974,6 +1975,7 @@ export function DraftEditor({
       ...(effect
         ? {
             after: {
+              now: effect.now,
               met: effect.met,
               breaks: effect.broken.length ? ruleNames(effect.broken) : null,
             },

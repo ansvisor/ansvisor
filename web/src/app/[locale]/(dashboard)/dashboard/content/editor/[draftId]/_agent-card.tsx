@@ -46,7 +46,7 @@ export interface CardRules {
    * break, named. Without it, the gain is read from what each change says
    * it fixes (rulesAfter).
    */
-  after?: { met: number; breaks: string | null };
+  after?: { now: number; met: number; breaks: string | null };
 }
 
 /**
@@ -306,6 +306,8 @@ export function AgentCard({
   const { open, accepted } = suggestionCounts(suggestions);
   const openOnes = suggestions.filter((s) => s.status === 'open');
   const action = suggestions.find((s) => s.actionId && s.actionNo !== null);
+  // From the page as it is now when checked so: never a count a beat behind it.
+  const from = rules.after?.now ?? rules.met;
   const after = rules.after?.met ?? rulesAfter(suggestions, rules);
   // Rules met now that accepting it would break: said, never left to find after.
   const breaks = rules.after?.breaks ? (
@@ -426,18 +428,18 @@ export function AgentCard({
             page.reason
           )}
           {pageLeft > 0 && ` · ${t('placeholders', { count: pageLeft })}`}
-          {rules.after && rules.after.met !== rules.met && (
+          {rules.after && rules.after.met !== from && (
             <>
               {' · '}
               <span
                 className={cn(
                   'font-medium',
-                  rules.after.met > rules.met
+                  rules.after.met > from
                     ? 'text-emerald-700 dark:text-emerald-400'
                     : 'text-amber-700 dark:text-amber-400',
                 )}
               >
-                {t('gain', { met: rules.met, after: rules.after.met, total: rules.total })}
+                {t('gain', { met: from, after: rules.after.met, total: rules.total })}
               </span>
             </>
           )}
@@ -465,19 +467,19 @@ export function AgentCard({
         {sentence(openOnes[0]?.reason ?? '', locale)}
         {openOnes.length > 1 && ` · ${t('more', { count: openOnes.length - 1 })}`}
         {batchLeft > 0 && ` · ${t('placeholders', { count: batchLeft })}`}
-        {after > rules.met && (
+        {after > from && (
           <>
             {' · '}
             <span className="font-medium text-emerald-700 dark:text-emerald-400">
-              {t('gain', { met: rules.met, after, total: rules.total })}
+              {t('gain', { met: from, after, total: rules.total })}
             </span>
           </>
         )}
-        {after < rules.met && (
+        {after < from && (
           <>
             {' · '}
             <span className="font-medium text-amber-700 dark:text-amber-400">
-              {t('gain', { met: rules.met, after, total: rules.total })}
+              {t('gain', { met: from, after, total: rules.total })}
             </span>
           </>
         )}
