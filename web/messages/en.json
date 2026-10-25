@@ -3752,6 +3752,20 @@
             "write": "Rewriting the page",
             "review": "Opens here beside your page to compare"
           }
+        },
+        "doing": {
+          "answerFirst": "Answering the page's main question first",
+          "outline": "Following the outline, one question per section",
+          "missing": "Answering the questions and AI searches the page misses",
+          "quoted": "Leaving the passages AI answers quote as they are",
+          "length": "Bringing the page to its Length",
+          "kept": "Keeping the quoted passages, tables and images word for word",
+          "voice": "Keeping the page's facts and voice",
+          "rules": "Keeping to {count, plural, one {# rule} other {# rules}}",
+          "rulesAny": "Keeping to the rules",
+          "sources": "Drawing on {count, plural, one {# source} other {# sources}}",
+          "sourcesAny": "Drawing on your sources",
+          "placeholders": "Writing a [placeholder] for any fact it doesn't have"
         }
       },
       "agentFailed": {
