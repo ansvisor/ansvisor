@@ -6,6 +6,7 @@ import {
   draftMethodForTask,
   findActionDraft,
   reopenDraftTasks,
+  unpublishDraftWork,
   type ActionDraft,
 } from './action-drafts';
 
@@ -20,6 +21,8 @@ interface Op {
   op: 'select' | 'update' | 'insert';
   value?: unknown;
   filters: [string, string, unknown][];
+  /** An update that reads back the rows it wrote. */
+  returning?: boolean;
 }
 let ops: Op[];
 let rows: Record<string, unknown[]>;
@@ -29,7 +32,7 @@ const db = {
     const op: Op = { table, op: 'select', filters: [] };
     ops.push(op);
     const chain: Record<string, unknown> = {
-      select: () => chain,
+      select: () => (op.op === 'update' && (op.returning = true), chain),
       eq: (col: string, v: unknown) => (op.filters.push(['eq', col, v]), chain),
       in: (col: string, v: unknown) => (op.filters.push(['in', col, v]), chain),
       is: (col: string, v: unknown) => (op.filters.push(['is', col, v]), chain),
@@ -39,7 +42,10 @@ const db = {
       insert: (value: unknown) => ((op.op = 'insert'), (op.value = value), chain),
       maybeSingle: async () => ({ data: rows[table]?.[0] ?? null, error: null }),
       then: (resolve: (r: unknown) => void) =>
-        resolve({ data: op.op === 'select' ? (rows[table] ?? []) : null, error: null }),
+        resolve({
+          data: op.op === 'select' ? (rows[table] ?? []) : op.returning ? [{ id: 'row' }] : null,
+          error: null,
+        }),
     };
     return chain;
   },
@@ -247,5 +253,77 @@ describe('reopenDraftTasks', () => {
     rows.action_tasks = [{ id: 't-optimize', status: 'in_progress' }];
     await expect(reopenDraftTasks(db, draft, 'u1')).resolves.toBe(0);
     expect(ops.some((op) => op.table === 'action_events')).toBe(false);
+  });
+});
+
+describe('unpublishDraftWork', () => {
+  const published = { id: 'd1', brandId: 'b1', actionId: 'act-1' };
+  const live = (over: Record<string, unknown> = {}) => ({
+    status: 'in_progress',
+    updated_at: '2026-10-25T10:00:00Z',
+    payload: {
+      pages: ['https://acme.example/a'],
+      publishedPages: { d1: 'https://acme.example/live', d2: 'https://acme.example/other' },
+    },
+    ...over,
+  });
+
+  it('takes the page out of what the action measures, and reopens the Publish task its publish completed', async () => {
+    rows.actions = [live()];
+    rows.action_tasks = [{ id: 't-publish', status: 'completed' }];
+    rows.action_events = [
+      { data: { taskId: 't-publish', to: 'completed', draftId: 'd1', publishedUrl: 'x' } },
+    ];
+    await expect(unpublishDraftWork(db, published, 'u1')).resolves.toBe(1);
+    expect(ops[0].filters).toEqual([
+      ['eq', 'id', 'act-1'],
+      ['eq', 'brand_id', 'b1'],
+      ['is', 'deleted_at', null],
+    ]);
+    // The other pages stay measured; written only if the action is as read.
+    expect(ops[1]).toMatchObject({
+      table: 'actions',
+      op: 'update',
+      value: {
+        payload: {
+          pages: ['https://acme.example/a'],
+          publishedPages: { d2: 'https://acme.example/other' },
+        },
+      },
+      filters: [
+        ['eq', 'id', 'act-1'],
+        ['eq', 'updated_at', '2026-10-25T10:00:00Z'],
+      ],
+    });
+    expect(ops[2].filters).toContainEqual(['eq', 'task_key', 'publish_content']);
+    const reopened = ops.filter((op) => op.table === 'action_tasks' && op.op === 'update');
+    expect(reopened).toEqual([
+      expect.objectContaining({
+        value: expect.objectContaining({ status: 'in_progress', skip_reason: null }),
+        filters: [
+          ['eq', 'action_id', 'act-1'],
+          ['eq', 'id', 't-publish'],
+        ],
+      }),
+    ]);
+  });
+
+  it('leaves a Publish task another page’s publish or a person completed last', async () => {
+    rows.actions = [live({ payload: { pages: [] } })];
+    rows.action_tasks = [{ id: 't-publish', status: 'completed' }];
+    rows.action_events = [{ data: { taskId: 't-publish', to: 'completed', draftId: 'd2' } }];
+    await expect(unpublishDraftWork(db, published, 'u1')).resolves.toBe(0);
+    rows.action_events = [{ data: { taskId: 't-publish', to: 'completed' } }];
+    await expect(unpublishDraftWork(db, published, 'u1')).resolves.toBe(0);
+    // Not measured there: nothing to take out.
+    expect(ops.some((op) => op.table === 'actions' && op.op === 'update')).toBe(false);
+  });
+
+  it('leaves a closed or deleted action as it is', async () => {
+    rows.actions = [live({ status: 'completed' })];
+    await expect(unpublishDraftWork(db, published, 'u1')).resolves.toBe(0);
+    rows.actions = [];
+    await expect(unpublishDraftWork(db, published, 'u1')).resolves.toBe(0);
+    expect(ops).toHaveLength(2);
   });
 });
