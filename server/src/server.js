@@ -28,6 +28,7 @@ import { rebuildQueuedCitationRollups, REBUILD_QUEUE_SCHEDULE } from './lib/cita
 import { sweepActionValidation } from './lib/action-center/validate.js';
 import { sweepImproveOutcomes } from './lib/action-center/improve-outcome.js';
 import { sweepBrandFacts } from './lib/brand-facts-sweep.js';
+import { sweepCatalogSources } from './lib/catalog/sources.js';
 import { parseScraperResponse } from './lib/cloro-scraper.js';
 import { handleScraperResult } from './lib/cloro-result-handler.js';
 import { verifyCloroWebhook } from './lib/cloro-webhook-verify.js';
@@ -282,6 +283,11 @@ async function runDailyTracking() {
   // Content Editor versions past their 90 days (CE-018).
   pruneContentVersions().catch((err) => {
     logger.error({ err }, '[content-history] daily prune failed');
+  });
+
+  // Catalog feed URLs (#1263): read again once a day, never blocking tracking.
+  sweepCatalogSources().catch((err) => {
+    logger.error({ err }, '[catalog] daily sweep failed');
   });
 
   // Google Analytics sync (#704) — same contract as the Search Console sync

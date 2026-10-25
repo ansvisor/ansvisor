@@ -337,7 +337,7 @@ describe('BeforePublish', () => {
       }),
     );
     expect(rows()[0]).toBe(
-      "Your brand's byline · check itThis page type goes out as Acme Team, with the brand's Organization schema: it needs no author.",
+      "Your brand's byline · check itThis page type goes out under Acme Team: it needs no author.",
     );
   });
 

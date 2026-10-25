@@ -135,6 +135,44 @@ export function parseFacebookCatalogCsv(text) {
   return parseCsv(text, undefined, { description: 'rich_text_description' });
 }
 
+/**
+ * The format a feed's text is in: XML when it starts with a tag, a Meta
+ * catalog CSV when its header has Meta's own columns, else a plain CSV.
+ *
+ * @param {string} text
+ * @returns {'google_xml' | 'meta_csv' | 'csv'}
+ */
+export function detectFormat(text) {
+  const start = text.replace(/^\uFEFF/, '').trimStart();
+  if (start.startsWith('<')) return 'google_xml';
+  const header = start.slice(0, start.search(/\r?\n|$/)).toLowerCase();
+  return /(^|[,\t"])(fb_product_category|rich_text_description|quantity_to_sell_on_facebook)\b/.test(
+    header,
+  )
+    ? 'meta_csv'
+    : 'csv';
+}
+
+/**
+ * A feed in any of the formats read here: `format` names it, or 'auto'
+ * reads it from the text (`detectFormat`).
+ *
+ * @param {string} text
+ * @param {'auto' | 'google_xml' | 'csv' | 'meta_csv'} [format]
+ * @returns {import('./item.js').FeedResult & { format: string }}
+ */
+export function parseFeed(text, format = 'auto') {
+  if (typeof text !== 'string' || !text.trim()) throw new FeedFormatError('The file is empty.');
+  const read = format === 'auto' ? detectFormat(text) : format;
+  const result =
+    read === 'google_xml'
+      ? parseGoogleFeedXml(text)
+      : read === 'meta_csv'
+        ? parseFacebookCatalogCsv(text)
+        : parseCsvFeed(text);
+  return { ...result, format: read };
+}
+
 const ITEM = /<item(?:\s[^>]*)?>([\s\S]*?)<\/item\s*>/g;
 const ENTRY = /<entry(?:\s[^>]*)?>([\s\S]*?)<\/entry\s*>/g;
 

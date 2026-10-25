@@ -119,6 +119,7 @@ import {
   PROFILE_WEIGHTS,
   checksOff,
   profileFor,
+  waitsForSiteTrust,
   weighed,
   weighedTrust,
 } from '@/lib/content/quality-profiles';
@@ -843,10 +844,12 @@ export function DraftEditor({
   // E-E-A-T from the author (and, in phase 2, the person's experience and
   // data, and their own images); with Trust and Readability, the scores and
   // the header chip's average (CE-039).
-  // In phase 2 it waits for the visual proof too, so it doesn't move once that lands.
+  // In phase 2 it waits for the visual proof too, so it doesn't move once that lands;
+  // on a type that weighs the brand's own information, for the site's trust.
+  const brandInfoRead = !waitsForSiteTrust(profile) || siteTrustRead;
   const eeatScore = useMemo(
     () =>
-      qualityOn && authorsRead && !inputsPending && (!sourcesOn || visualRead)
+      qualityOn && authorsRead && !inputsPending && (!sourcesOn || visualRead) && brandInfoRead
         ? weighed(
             eeat({
               author: pageAuthor,
@@ -872,6 +875,7 @@ export function DraftEditor({
       aiChecks,
       authorConfirmed,
       siteTrust,
+      brandInfoRead,
       weights,
     ],
   );

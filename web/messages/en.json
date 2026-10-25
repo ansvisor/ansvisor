@@ -4601,7 +4601,7 @@
           "confirmed": "Author named on your site",
           "confirmedDetail": "You confirmed the page's author is a real person your site names. Check your CMS sets them as the author.",
           "brand": "Your brand's byline",
-          "brandDetail": "This page type goes out as {byline}, with the brand's Organization schema: it needs no author."
+          "brandDetail": "This page type goes out under {byline}: it needs no author."
         },
         "dates": {
           "title": "Visible published and updated dates",
@@ -4707,7 +4707,7 @@
           "changeLabel": "Change the page type",
           "article": "an author with experience, sourced claims, short sentences and the answer first.",
           "product": "no author (your brand's), your own product photos, proof for claims, prices that match, shipping and returns, a specs table and short plain copy.",
-          "category": "your own product images and brand information, prices and claims that match, an intro and a buying FAQ.",
+          "category": "your own product images, your brand's information on its site, prices and claims that match, an intro and a buying FAQ.",
           "feature": "your own screenshots and data, sourced metrics, a price that matches, scannable sections.",
           "comparison": "an author who says how the picks were made, balance and a disclosure, the summary first."
         },
@@ -7495,6 +7495,46 @@
     "integrations_notMapped": "Not mapped",
     "integrations_selectProperty": "Select a property",
     "integrations_description": "Connect external data sources. Connections are shared with your whole organization.",
+    "catalog": {
+      "title": "Product catalog",
+      "description": "Where {brand}'s products come from: a product feed URL, read every day, or a file you upload. Google product feeds (XML), Meta catalog CSVs and store CSV exports work.",
+      "noBrand": "Pick a brand to see its catalog.",
+      "unavailable": "Couldn't read the catalog's sources right now.",
+      "empty": "No catalog yet. Add your product feed's URL, or upload a CSV.",
+      "upload": "Uploaded file",
+      "status": {
+        "ok": "Synced",
+        "failed": "Couldn't sync",
+        "format_error": "Not a feed",
+        "never": "Not synced yet"
+      },
+      "products": "{count, plural, one {# product} other {# products}}",
+      "lastSync": "synced {when}",
+      "skipped": "{count, plural, one {# product was skipped} other {# products were skipped}}",
+      "syncNow": "Sync now",
+      "remove": "Remove",
+      "removeConfirm": "Remove this source? Its products leave the catalog.",
+      "urlLabel": "Product feed URL",
+      "urlPlaceholder": "https://example.com/products.xml",
+      "addFeed": "Add feed",
+      "uploadFile": "Upload a file",
+      "uploadHint": "CSV or XML, up to 4 MB. For a larger catalog, add its feed URL.",
+      "managersOnly": "Admins and managers can add and sync sources.",
+      "synced": "{count, plural, one {# product read} other {# products read}}",
+      "errors": {
+        "invalid": "Enter a feed address starting with http:// or https://.",
+        "duplicate": "This feed is already a source.",
+        "too_many": "A brand can have 10 sources at most.",
+        "forbidden": "Only admins and managers can change the catalog.",
+        "recent": "Synced a moment ago. Try again in a few minutes.",
+        "too_large": "The file is larger than 4 MB. Add its feed URL instead.",
+        "not_found": "This source no longer exists.",
+        "session": "Your session expired. Sign in again.",
+        "workspace": "This brand isn't in your workspace.",
+        "busy": "Too many syncs. Wait a few minutes.",
+        "failed": "Couldn't sync the catalog. Try again later."
+      }
+    },
     "integrations_connected": "Connected",
     "integrations_notConfigured": "Not configured",
     "integrations_disconnect": "Disconnect",
