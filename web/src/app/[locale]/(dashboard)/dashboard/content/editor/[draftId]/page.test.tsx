@@ -2454,6 +2454,15 @@ describe('the side panel', () => {
     expect(panel()!.textContent).toContain('Not used by Content Agent yet');
   });
 
+  it('holds the rules chip’s count until the rule set and the fan-outs are read', async () => {
+    getContentDraft.mockResolvedValue(draft());
+    getDraftSources.mockReturnValue(new Promise(() => {}));
+    await renderPage();
+    // 8 of 12 then 11 of 15 on first paint (editor test 2026-10-25): no count until it stands.
+    const chip = container.querySelector<HTMLButtonElement>('header button[aria-label^="Rules "]')!;
+    expect(chip.getAttribute('aria-label')).toBe('Rules · reading');
+  });
+
   it('shows how many rules the page meets, and opens them from the header', async () => {
     getContentDraft.mockResolvedValue(
       draft({
