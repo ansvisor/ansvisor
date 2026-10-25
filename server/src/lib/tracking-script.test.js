@@ -551,6 +551,41 @@ describe('the tracking snippet with conversions (CE-017)', () => {
     expect(page.beacons.map((b) => b.k ?? 'visit')).toEqual(['visit', 'cv']);
   });
 
+  it('never takes a default pushed after t.js as consent: only the visitor’s update grants', () => {
+    // A CMP or GTM's Consent Initialization tag that runs after t.js, with Google's regional example.
+    const page = runWithConversions({ referrer: 'https://chatgpt.com/' });
+    page.window.dataLayer.push([
+      'consent',
+      'default',
+      { analytics_storage: 'denied', region: ['DE'] },
+    ]);
+    page.window.dataLayer.push(['consent', 'default', { analytics_storage: 'granted' }]);
+    page.window.ansvisor('conversion', { type: 'signup' });
+    expect(page.stored).toBeNull();
+    expect(page.beacons).toHaveLength(1);
+  });
+
+  it('pauses a returning visitor whose page denies by default, regional defaults or not', () => {
+    const dataLayer = [
+      ['consent', 'default', { analytics_storage: 'granted', region: ['US'] }],
+      ['consent', 'default', { analytics_storage: 'denied' }],
+    ];
+    const page = runWithConversions({ stored: earlier(1), dataLayer });
+    expect(page.beacons).toEqual([]);
+    dataLayer.push(['consent', 'update', { analytics_storage: 'granted' }]);
+    expect(page.beacons.map((b) => b.k)).toEqual(['pv']);
+  });
+
+  it('takes a "denied" the site queued before t.js before keeping or sending anything', () => {
+    const page = runWithConversions({
+      stored: earlier(1),
+      consent: 'always',
+      queue: [['consent', 'denied']],
+    });
+    expect(page.beacons).toEqual([]);
+    expect(page.stored).toBeNull();
+  });
+
   it('takes an id kept earlier as the visitor’s consent then, on the pages after', () => {
     const page = runWithConversions({ stored: earlier(1) });
     page.window.ansvisor('conversion', { type: 'demo' });

@@ -38,9 +38,10 @@
  * visit, for 30 days from it (first touch). The id is kept only once the
  * site says the visitor agreed (data-consent="wait", the default):
  * ansvisor('consent', 'granted'), or Google Consent Mode granting
- * analytics_storage in an update, or in a default that names no region (a
- * regional default, "denied in the EU", can't say which this visitor got).
- * An id kept earlier says the visitor agreed then, on the pages after.
+ * analytics_storage in an update, or in a default on the page before t.js
+ * that names no region (a regional default, "denied in the EU", can't say
+ * which this visitor got; a default after t.js only ever pauses). An id
+ * kept earlier says the visitor agreed then, on the pages after.
  * Until then events wait on the page; ansvisor('consent', 'denied'), or a
  * Consent Mode update taking analytics_storage back, deletes the id, and a
  * default that denies it only pauses. data-consent="always" keeps it at
@@ -139,11 +140,9 @@ var dl=window.dataLayer=window.dataLayer||[],up="",df="",rg=!1;
 for(var i=0;i<dl.length;i++){var it=gc(dl[i]);if(!it)continue;if(it[1]==="update")up=it[2].analytics_storage;else if(it[2].region)rg=!0;else df=it[2].analytics_storage}
 if(up==="denied")deny();
 else if(up==="granted")ok=!0;
-else if(rg)ok=old;
 else if(df==="denied")ok=!1;
+else if(rg)ok=old;
 else ok=df==="granted"||old||c.getAttribute("data-consent")==="always";
-if(ok)keep();
-if(old)pv();else last=here();
 function num(x,max,whole){if(typeof x==="string"&&x!=="")x=+x;return typeof x==="number"&&isFinite(x)&&x>=0&&x<=max&&(!whole||x%1===0)?x:void 0}
 function cmd(t,a){
 if(t==="consent"){if(a==="granted")grant();else if(a==="denied")deny();return}
@@ -161,10 +160,12 @@ send(d);
 var Q=window.ansvisor&&window.ansvisor.q||[];
 window.ansvisor=function(t,a){cmd(t,a)};
 for(var i=0;i<Q.length;i++)cmd(Q[i][0],Q[i][1]);
+if(ok)keep();
+if(old&&v)pv();else last=here();
 var dp=dl.push;
 dl.push=function(){
 for(var i=0;i<arguments.length;i++){var it=gc(arguments[i]);if(!it)continue;var s=it[2].analytics_storage;
-if(it[1]==="update"){if(s==="granted")grant();else deny()}else if(!it[2].region){if(s==="granted")grant();else ok=!1}}
+if(it[1]==="update"){if(s==="granted")grant();else deny()}else if(s==="denied")ok=!1}
 return dp.apply(dl,arguments);
 };
 document.addEventListener("submit",function(e){
