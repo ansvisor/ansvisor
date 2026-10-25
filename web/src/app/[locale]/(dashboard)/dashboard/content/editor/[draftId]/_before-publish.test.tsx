@@ -105,6 +105,7 @@ async function render(
     disclosureLine = null as string | null,
     disclosureAdded = false,
     product = null as Parameters<typeof BeforePublish>[0]['product'],
+    category = null as Parameters<typeof BeforePublish>[0]['category'],
   } = {},
 ) {
   await act(async () => {
@@ -124,6 +125,7 @@ async function render(
           image={image}
           linksPending={linksPending}
           product={product}
+          category={category}
           onMarkReady={onMarkReady}
           onFixFirst={onFixFirst}
           disclosureLine={disclosureLine}
@@ -329,6 +331,66 @@ describe('BeforePublish', () => {
       }),
     );
     expect(rows().some((row) => row.includes('without a disclosure'))).toBe(false);
+  });
+
+  it('gives a category page its ItemList of the products it links, and asks for two links where it has fewer (CE-054)', async () => {
+    const items = [
+      { url: 'https://acme.com/products/ridge-28', name: 'Ridge 28' },
+      { url: 'https://acme.com/products/ridge-32', name: 'Ridge 32' },
+    ];
+    await render(quality(), {
+      pageType: 'category_page',
+      title: 'Daypacks',
+      category: { items, status: 'read' },
+    });
+    expect(rows().some((row) => row.startsWith('ItemList schema with 2 products'))).toBe(true);
+    expect(jsonLd()).toMatchObject({
+      '@type': 'ItemList',
+      name: 'Daypacks',
+      numberOfItems: 2,
+      itemListElement: [
+        { position: 1, url: 'https://acme.com/products/ridge-28', name: 'Ridge 28' },
+        { position: 2, url: 'https://acme.com/products/ridge-32', name: 'Ridge 32' },
+      ],
+    });
+    expect(dialog().textContent).toContain(
+      "The products are the page's links to your product pages",
+    );
+    // One product: no list, and it says what to link.
+    await render(quality(), {
+      pageType: 'category_page',
+      title: 'Daypacks',
+      category: { items: items.slice(0, 1), status: 'read' },
+    });
+    expect(
+      rows().find((row) => row.startsWith('ItemList schema needs links to your products')),
+    ).toContain('Ansvisor finds one link to your product pages here');
+    expect(dialog().querySelector('pre')).toBeNull();
+    // The brand's domains not read yet, or not read at all: no "none" said.
+    await render(quality(), {
+      pageType: 'category_page',
+      title: 'Daypacks',
+      category: { items: [], status: 'reading' },
+    });
+    expect(rows().find((row) => row.startsWith('ItemList schema'))).toContain(
+      "Reading the page's links to your product pages",
+    );
+    await render(quality(), {
+      pageType: 'category_page',
+      title: 'Daypacks',
+      category: { items: [], status: 'unknown' },
+    });
+    expect(rows().find((row) => row.startsWith('ItemList schema'))).toContain(
+      "Your brand's domains couldn't be read",
+    );
+    // A placeholder in the title: the list's name is left out, and it says so.
+    await render(quality(), {
+      pageType: 'category_page',
+      title: '[category name] daypacks',
+      category: { items, status: 'read' },
+    });
+    expect(jsonLd()).not.toHaveProperty('name');
+    expect(dialog().textContent).toContain("so the code leaves the list's name out");
   });
 
   it('gives a product page its Product schema with the price it states, and asks for one it doesn’t (CE-053)', async () => {

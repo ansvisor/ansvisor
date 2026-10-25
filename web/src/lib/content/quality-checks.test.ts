@@ -803,6 +803,61 @@ describe('trust: a product page’s shipping and returns (Phase 3, CE-052)', () 
   });
 });
 
+describe('trust: a product page’s price and stock against its feed (Phase 3, CE-053)', () => {
+  const NOW = Date.parse('2026-10-25');
+
+  it('counts the share that matches, names what differs, and is left out where not compared', () => {
+    const run = (feed: Parameters<typeof trust>[0]['feed']) =>
+      trust({
+        blocks: trustBlocks('<p>The Ridge 28 costs $129.</p>'),
+        links: new Map(),
+        brandDomains: ['acme.com'],
+        feed,
+        now: NOW,
+      });
+    const differs = {
+      kind: 'price' as const,
+      page: '$129',
+      feed: '$119',
+      sentence: 'The Ridge 28 costs $129.',
+    };
+    const read = run({ compared: 2, mismatches: [differs] });
+    expect(read.checks.find((c) => c.id === 'feedMatch')).toEqual({
+      id: 'feedMatch',
+      points: 5,
+      max: 10,
+    });
+    expect(read.feed).toEqual([differs]);
+    expect(run({ compared: 0, mismatches: [] }).checks.some((c) => c.id === 'feedMatch')).toBe(
+      false,
+    );
+    expect(run(null).checks.some((c) => c.id === 'feedMatch')).toBe(false);
+    expect(run(null).feed).toEqual([]);
+  });
+});
+
+describe('trust: a category page’s intro facts (Phase 3, CE-054)', () => {
+  it('counts the share the person confirmed, and is left out where the intro states none', () => {
+    const run = (intro: { total: number; confirmed: number } | null) =>
+      trust({
+        blocks: trustBlocks('<p>Choose from 120+ daypacks.</p>'),
+        links: new Map(),
+        brandDomains: ['acme.com'],
+        intro,
+        now: Date.parse('2026-10-25'),
+      });
+    expect(run({ total: 2, confirmed: 1 }).checks.find((c) => c.id === 'introFacts')).toEqual({
+      id: 'introFacts',
+      points: 5,
+      max: 10,
+    });
+    // Trust's own: scored from it alone.
+    expect(run({ total: 1, confirmed: 1 }).score).toBe(100);
+    expect(run({ total: 0, confirmed: 0 }).checks.some((c) => c.id === 'introFacts')).toBe(false);
+    expect(run(null).score).toBeNull();
+  });
+});
+
 describe('eeat: customer cases (Phase 3, CE-052)', () => {
   it('counts the share confirmed publishable, and none where the page has no case', () => {
     const check = (cases: { total: number; confirmed: number } | null) =>
