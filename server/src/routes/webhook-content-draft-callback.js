@@ -7,7 +7,7 @@ import {
   webhookCallbackAuthFailureLimiter,
 } from '../middleware/rate-limiter.js';
 import { webhookSecretsMatch } from '../lib/webhook-secret.js';
-import { markDeliveryPublished } from '../lib/content-published.js';
+import { liveAddress, markDeliveryPublished } from '../lib/content-published.js';
 
 /**
  * Send to CMS's callback (#1331): the workspace's automation tells how a sent
@@ -56,21 +56,6 @@ const statusBody = z.object({
   // Why it failed, as the workflow says it.
   reason: mapped(z.string().trim().max(500)),
 });
-
-/**
- * An http(s) address as the browser reads it (no stray whitespace kept),
- * without sign-in details (they'd be stored and shown as a link), or null.
- */
-function liveAddress(value) {
-  try {
-    const url = new URL(value);
-    if (url.protocol !== 'http:' && url.protocol !== 'https:') return null;
-    if (url.username || url.password) return null;
-    return url.href.length <= MAX_URL ? url.href : null;
-  } catch {
-    return null;
-  }
-}
 
 /**
  * POST /webhooks/content-drafts/:deliveryId/status

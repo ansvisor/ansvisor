@@ -7,6 +7,8 @@ import { qualityPhase } from '../lib/content-quality.js';
 import { rebuildDraftBrief, rebuildSources } from '../lib/content-brief.js';
 import { DeliveryError, sendContentPages, sendInput } from '../lib/content-delivery.js';
 import { checkWebflowPublished } from '../lib/cms/webflow-status.js';
+import { liveAddress, publishDraft } from '../lib/content-published.js';
+import { onBrandDomain } from '../lib/audit/host.js';
 import { cmsLimiter } from '../middleware/rate-limiter.js';
 import { stopDraftRun } from '../lib/content-runs.js';
 import { startDraftWriting, writeDraftInput } from '../lib/content-writer.js';
@@ -74,6 +76,68 @@ router.post('/send', async (req, res) => {
     }
     req.log.error({ err }, 'content draft send error');
     return res.status(502).json({ error: 'The pages could not be sent', code: 'failed' });
+  }
+});
+
+const publishBody = z.object({ url: z.string().max(8192) });
+
+/**
+ * POST /api/content-drafts/:draftId/publish
+ * Body: { url }. A person marks the page Published at its live address
+ * (CE-013): any member of the brand's workspace, as they change its status.
+ * Its Live page tab then measures that address, and a linked action gets
+ * the page (its Publish task done once all its pages are live). Answers
+ * { publishedUrl, publishedAt, taskCompleted, onBrandDomain }: an address
+ * off the brand's domains is kept, but its numbers won't show.
+ */
+router.post('/:draftId/publish', async (req, res) => {
+  const id = z.guid().safeParse(req.params.draftId);
+  const parsed = publishBody.safeParse(req.body ?? {});
+  if (!id.success || !parsed.success) {
+    return res.status(400).json({ error: 'Invalid request', code: 'invalid' });
+  }
+  const url = liveAddress(parsed.data.url);
+  if (!url) {
+    return res.status(400).json({
+      error: 'Give the http(s) address the page is live at, with no sign-in details.',
+      code: 'invalid_url',
+    });
+  }
+  try {
+    const { data: draft, error } = await supabaseAdmin
+      .from('content_drafts')
+      .select('id, brand_id, action_id, archived_at')
+      .eq('id', id.data)
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    // An archived page is restored first, as its status is changed.
+    if (!draft || draft.archived_at) {
+      return res.status(404).json({ error: 'Not found', code: 'not_found' });
+    }
+    await assertBrandAccess(draft.brand_id, req.user.id);
+    const { data: domains, error: domainsError } = await supabaseAdmin
+      .from('brand_domains')
+      .select('domain')
+      .eq('brand_id', draft.brand_id);
+    if (domainsError) throw new Error(domainsError.message);
+    const published = await publishDraft(draft, url, req.user.id);
+    return res.json({
+      ...published,
+      onBrandDomain: onBrandDomain(
+        url,
+        (domains ?? []).map((d) => d.domain),
+      ),
+    });
+  } catch (err) {
+    if (ERROR_CODES[err?.status]) {
+      return res
+        .status(err.status)
+        .json({ error: err.message, code: err.code ?? ERROR_CODES[err.status] });
+    }
+    req.log.error({ err: { name: err?.name } }, 'content draft publish error');
+    return res
+      .status(500)
+      .json({ error: 'The page could not be marked published', code: 'failed' });
   }
 });
 
