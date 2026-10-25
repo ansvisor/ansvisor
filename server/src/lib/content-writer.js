@@ -346,7 +346,8 @@ async function organizationWriting(organizationId, draftId, staleBefore) {
  * that the agent isn't already on it or on another of the organization's
  * drafts, the AI usage budget and the model; marks it 'writing' and runs the
  * model in the background. Throws with `.status` 404 for a draft outside the
- * brand, 409 (code 'not_draft', 'writing' or 'org_writing'), PlanLimitError
+ * brand, 409 (code 'not_draft', 'writing', 'open_suggestions', 'running'
+ * or 'org_writing'), PlanLimitError
  * once the budget is spent, and the provider's error when the model isn't
  * set up — all before anything runs.
  */
@@ -390,7 +391,8 @@ export async function startDraftWriting({ draftId, brandId, input, rewrite = fal
   // A Fix open rules (or Quality's hand-off) still under way on the draft,
   // maybe from another tab: a run beside it would make a model call of its
   // own, charged, and its batch would land on a page this one changes. One at
-  // a time, as Fix open rules refuses beside a Start (content-agent.js).
+  // a time, as Fix open rules refuses beside a Start (content-agent.js). A
+  // live page's Start, which runs as a Fix too, is 'writing' above.
   if (await fixUnderWay(draftId)) {
     throw Object.assign(new Error('The agent is already fixing it'), {
       status: 409,

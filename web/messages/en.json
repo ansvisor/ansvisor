@@ -3574,7 +3574,7 @@
           "writing": "The agent is already working on this draft.",
           "org_writing": "The agent is writing another of your team's drafts, so it didn't start. The draft is in the Library for you to write.",
           "open_suggestions": "This page has suggestions waiting for review, so the agent didn't start. Accept or reject them in the editor first.",
-          "running": "The agent is fixing this page's open rules, so it didn't start. Try again once it has finished.",
+          "running": "The agent is already working on this page, so it didn't start. The draft is in the Library for you to write.",
           "not_draft": "This draft is no longer a draft, so the agent didn't start.",
           "failed": "The agent couldn't start. The draft is in the Library for you to write."
         }

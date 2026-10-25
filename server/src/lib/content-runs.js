@@ -46,9 +46,10 @@ async function shown(what, runId, write) {
 
 /**
  * Whether one of the agent's fixes (Fix open rules, Quality's hand-off) is
- * under way on the draft, and not one a stopped server left: a second would
- * make a model call of its own, charged, and its batch would hide the
- * first's (another tab, or a person's beside the editor's own hand-off).
+ * under way on the draft, and not one a stopped server left nor one Stop
+ * ended (its batch is dropped, stopIfStopped): a second would make a model
+ * call of its own, charged, and its batch would hide the first's (another
+ * tab, or a person's beside the editor's own hand-off).
  */
 export async function fixUnderWay(draftId) {
   const { data, error } = await supabaseAdmin
@@ -57,6 +58,7 @@ export async function fixUnderWay(draftId) {
     .eq('draft_id', draftId)
     .in('kind', ['fix', 'handoff'])
     .is('finished_at', null)
+    .is('stopped_at', null)
     .gt('started_at', new Date(Date.now() - RUN_STALE_MS).toISOString())
     .limit(1);
   if (error) throw error;
@@ -264,8 +266,8 @@ export async function finishRun(run, outcome, counts = {}) {
  * stopped and aborts its model call when it runs here. Answers the runs it
  * stopped, each with the claim it holds on the draft (claimed_at: a Start's
  * or a rewrite's, a live page's Start among them though it runs as a Fix;
- * null for Fix open rules and the brief, which hold none): none when none
- * was under way.
+ * null for Fix open rules, Quality's hand-off and the brief, which hold
+ * none): none when none was under way.
  */
 export async function stopDraftRun(draftId, runId = null) {
   let query = supabaseAdmin
