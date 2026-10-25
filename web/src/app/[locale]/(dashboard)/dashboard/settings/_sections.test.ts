@@ -39,6 +39,19 @@ describe('Authors (CE-037)', () => {
   });
 });
 
+describe('Content (CE-051)', () => {
+  afterEach(() => vi.unstubAllEnvs());
+
+  it("is there with Content Editor Quality's phase 2, as its hand-off is", () => {
+    vi.stubEnv('NEXT_PUBLIC_CONTENT_QUALITY_PHASE', '1');
+    expect(hasSettingsSection('content', selfHost)).toBe(false);
+    expect(resolveSettingsSection('content', cloud)).toBe('account');
+    vi.stubEnv('NEXT_PUBLIC_CONTENT_QUALITY_PHASE', '2');
+    expect(hasSettingsSection('content', selfHost)).toBe(true);
+    expect(resolveSettingsSection('content', selfHost)).toBe('content');
+  });
+});
+
 describe('settingsSectionPath', () => {
   it('keeps the locale prefix and replaces the section', () => {
     expect(settingsSectionPath('/dashboard/settings', 'team')).toBe('/dashboard/settings/team');
