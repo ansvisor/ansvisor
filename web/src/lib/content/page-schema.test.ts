@@ -4,7 +4,9 @@ import {
   articleJsonLd,
   firstImage,
   isArticlePage,
+  itemListJsonLd,
   jsonLdScript,
+  listedProducts,
   localDate,
   pageName,
   titleHasPlaceholder,
@@ -397,5 +399,84 @@ describe('productJsonLd', () => {
       highPrice: '139.00',
       priceCurrency: 'EUR',
     });
+  });
+});
+
+describe('listedProducts (Phase 3, CE-054)', () => {
+  it('reads the page’s links to the brand’s product pages, in order, each once, with their names', () => {
+    const html =
+      '<h1>Daypacks</h1>' +
+      '<ul><li><a href="https://www.acme.com/products/ridge-28?variant=1">Ridge 28</a></li>' +
+      '<li><a href="/products/ridge-32#specs">Ridge 32</a></li>' +
+      // The same products again: another form of the address, a collection's path.
+      '<li><a href="https://acme.com/products/ridge-28/">Ridge 28 again</a></li>' +
+      '<li><a href="/collections/daypacks/products/ridge-32">Ridge 32 again</a></li>' +
+      '<li><a href="https://shop.acme.com/urun/kanyon"><img src="https://cdn.acme.com/k.jpg" alt="Kanyon"></a></li>' +
+      '<li><a href="/product-page/summit">Summit</a></li></ul>' +
+      // Another site's product (one that only starts like the brand's too), a
+      // collection, a post, an image, a product's sub-page.
+      '<p><a href="https://rival.com/products/peak">Peak</a> · <a href="https://acme.com.evil.com/products/x">X</a> · ' +
+      '<a href="/collections/daypacks">All</a> · <a href="/blog/how-to-pack">Packing</a> · ' +
+      '<a href="https://news.acme.com/p/how-to-pack">Post</a> · <a href="/cdn/shop/products/ridge.jpg">Photo</a> · ' +
+      '<a href="/products/ridge-28/reviews">See 24 reviews</a></p>';
+    expect(listedProducts(html, ['acme.com'], 'https://acme.com')).toEqual([
+      { url: 'https://www.acme.com/products/ridge-28', name: 'Ridge 28' },
+      { url: 'https://acme.com/products/ridge-32', name: 'Ridge 32' },
+      { url: 'https://shop.acme.com/urun/kanyon', name: 'Kanyon' },
+      { url: 'https://acme.com/product-page/summit', name: 'Summit' },
+    ]);
+    // A relative link with no site read: against the brand's first domain; none at all, left out.
+    expect(listedProducts('<a href="/products/x">X</a>', ['acme.com'], null)).toEqual([
+      { url: 'https://acme.com/products/x', name: 'X' },
+    ]);
+    expect(listedProducts('<a href="/products/x">X</a>', [], null)).toEqual([]);
+  });
+
+  it('names a product by its card’s words, without its price or a button’s word, an HTML block’s too', () => {
+    const card = '<a href="/products/ridge-28"><h3>Ridge 28</h3><span>$129.00</span></a>';
+    const block = btoa(
+      '<div class="grid"><a href="/products/ridge-32">Shop now</a><a href="/products/ridge-32">Ridge 32</a></div>',
+    );
+    expect(
+      listedProducts(
+        `${card}<div data-html-block="${block}"></div><a href="/products/summit"><img src="s.jpg"></a><a href="/products/summit">Summit</a>`,
+        ['acme.com'],
+        'https://acme.com',
+      ),
+    ).toEqual([
+      { url: 'https://acme.com/products/ridge-28', name: 'Ridge 28' },
+      // A later link's name fills one the first didn't give.
+      { url: 'https://acme.com/products/ridge-32', name: 'Ridge 32' },
+      { url: 'https://acme.com/products/summit', name: 'Summit' },
+    ]);
+  });
+});
+
+describe('itemListJsonLd', () => {
+  it('lists the products in order under the page’s name, a placeholder name left out', () => {
+    expect(
+      itemListJsonLd({
+        name: 'Daypacks',
+        items: [
+          { url: 'https://acme.com/products/ridge-28', name: 'Ridge 28' },
+          { url: 'https://acme.com/products/ridge-32', name: '[product name]' },
+        ],
+      }),
+    ).toEqual({
+      '@context': 'https://schema.org',
+      '@type': 'ItemList',
+      name: 'Daypacks',
+      numberOfItems: 2,
+      itemListElement: [
+        {
+          '@type': 'ListItem',
+          position: 1,
+          url: 'https://acme.com/products/ridge-28',
+          name: 'Ridge 28',
+        },
+        { '@type': 'ListItem', position: 2, url: 'https://acme.com/products/ridge-32' },
+      ],
+    });
+    expect(itemListJsonLd({ name: null, items: [] })).not.toHaveProperty('name');
   });
 });

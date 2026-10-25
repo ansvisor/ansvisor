@@ -877,8 +877,45 @@ export type Database = {
           },
         ]
       }
+      catalog_source_credentials: {
+        Row: {
+          secret: string
+          set_at: string
+          set_by: string | null
+          source_id: string
+        }
+        Insert: {
+          secret: string
+          set_at?: string
+          set_by?: string | null
+          source_id: string
+        }
+        Update: {
+          secret?: string
+          set_at?: string
+          set_by?: string | null
+          source_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "catalog_source_credentials_set_by_fkey"
+            columns: ["set_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "catalog_source_credentials_source_id_fkey"
+            columns: ["source_id"]
+            isOneToOne: true
+            referencedRelation: "catalog_sources"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       catalog_sources: {
         Row: {
+          account: string | null
           brand_id: string
           created_at: string
           created_by: string | null
@@ -893,6 +930,7 @@ export type Database = {
           url: string | null
         }
         Insert: {
+          account?: string | null
           brand_id: string
           created_at?: string
           created_by?: string | null
@@ -907,6 +945,7 @@ export type Database = {
           url?: string | null
         }
         Update: {
+          account?: string | null
           brand_id?: string
           created_at?: string
           created_by?: string | null
@@ -933,6 +972,93 @@ export type Database = {
             columns: ["created_by"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      catalog_variants: {
+        Row: {
+          attributes: Json
+          availability: string | null
+          brand_id: string
+          condition: string | null
+          content_hash: string
+          currency: string | null
+          external_id: string
+          first_seen_at: string
+          gtin: string | null
+          id: string
+          marketplace_item_id: string | null
+          mpn: string | null
+          price: number | null
+          product_id: string
+          removed_at: string | null
+          sale_price: number | null
+          sku: string | null
+          source: string
+          title: string | null
+          updated_at: string
+          url: string | null
+        }
+        Insert: {
+          attributes?: Json
+          availability?: string | null
+          brand_id: string
+          condition?: string | null
+          content_hash: string
+          currency?: string | null
+          external_id: string
+          first_seen_at?: string
+          gtin?: string | null
+          id?: string
+          marketplace_item_id?: string | null
+          mpn?: string | null
+          price?: number | null
+          product_id: string
+          removed_at?: string | null
+          sale_price?: number | null
+          sku?: string | null
+          source: string
+          title?: string | null
+          updated_at?: string
+          url?: string | null
+        }
+        Update: {
+          attributes?: Json
+          availability?: string | null
+          brand_id?: string
+          condition?: string | null
+          content_hash?: string
+          currency?: string | null
+          external_id?: string
+          first_seen_at?: string
+          gtin?: string | null
+          id?: string
+          marketplace_item_id?: string | null
+          mpn?: string | null
+          price?: number | null
+          product_id?: string
+          removed_at?: string | null
+          sale_price?: number | null
+          sku?: string | null
+          source?: string
+          title?: string | null
+          updated_at?: string
+          url?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "catalog_variants_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brands"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "catalog_variants_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "catalog_products"
             referencedColumns: ["id"]
           },
         ]

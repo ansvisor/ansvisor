@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   NO_DRAFT_RULES,
   NOT_FOR_AGENT,
+  notForAgentMessage,
   fanoutsToUse,
   openRulesForAgent,
   activeRules,
@@ -443,6 +444,45 @@ describe('page type rules', () => {
       count: 1,
       of: 3,
     });
+  });
+
+  it('checks a product page against its product in the feed, once one is connected (CE-053)', () => {
+    const feed = (html: string, catalog: RuleContext['catalog']) =>
+      checkRule(rule('feedMatch', 'product_page'), page(html), { ...ctx, catalog });
+    const product = (price: number, availability = 'in_stock') => ({
+      connected: true,
+      product: {
+        title: 'Ridge 28',
+        url: 'https://acme.example/products/ridge-28',
+        via: 'url' as const,
+        variants: [{ price, salePrice: null, currency: 'USD', availability, gtin: null }],
+      },
+    });
+    const html = '<p>The Ridge 28 costs $129.</p><p>In stock.</p>';
+    expect(feed(html, null)).toEqual({ state: 'info', code: 'needsFeed' });
+    expect(feed(html, 'reading')).toEqual({ state: 'info', code: 'feedReading' });
+    expect(feed(html, { connected: false, product: null })).toEqual({
+      state: 'info',
+      code: 'needsFeed',
+    });
+    expect(feed(html, { connected: true, product: null })).toEqual({
+      state: 'info',
+      code: 'notInFeed',
+    });
+    expect(feed('<p>A daypack.</p>', product(129))).toEqual({ state: 'info', code: 'feedNothing' });
+    expect(feed(html, product(129))).toEqual({ state: 'ok' });
+    expect(feed(html, product(119, 'out_of_stock'))).toEqual({
+      state: 'bad',
+      code: 'feedDiffers',
+      count: 2,
+    });
+    // The person checks which is right, the page or the feed: not the agent's,
+    // and the message says so (the extra H1s' first, when both are open).
+    expect(NOT_FOR_AGENT.has('feedMatch')).toBe(true);
+    expect(notForAgentMessage([{ rule: { key: 'feedMatch' } }])).toBe('notForAgentFeed');
+    expect(notForAgentMessage([{ rule: { key: 'feedMatch' } }, { rule: { key: 'oneH1' } }])).toBe(
+      'notForAgent',
+    );
   });
 
   it('checks a product and a category page', () => {
