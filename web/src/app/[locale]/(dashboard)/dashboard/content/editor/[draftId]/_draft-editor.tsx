@@ -166,8 +166,12 @@ import {
   openRulesForAgent,
   lengthBand,
   rewriteAdvice,
+  NO_RULE_CONTEXT,
+  checkRule,
+  heldMessage,
   keptOutOfReach,
   lengthOutOfReach,
+  readPage,
   type ActiveRule,
   type LastRewrite,
   type RewriteReach,
@@ -195,8 +199,9 @@ import {
   citedLocks,
   citedPassagesKey,
   lockedPassageCount,
+  htmlWithoutLocked,
+  lockedKeysLeft,
   lockedPassagesLeft,
-  longSentences,
   rewriteFloor,
   type HeldEdit,
 } from './_cited-passages';
@@ -1833,13 +1838,20 @@ export function DraftEditor({
   // long sentence inside a passage AI answers quote, a Length out of a
   // rewrite's reach. They leave the agent's work and Next step; the Rules tab
   // says they're the person's to decide.
-  const sentenceRule = rules.rules.find(({ rule }) => rule.key === 'sentence' && rule.on);
-  const longOnes =
-    sentenceRule?.status.state === 'bad' && editor && citedRead
-      ? longSentences(editor.state, Number(sentenceRule.rule.current))
-      : null;
+  // The Sentence rule read as the rules read the page, without the locked
+  // passages: met then, every long sentence is in one.
+  const sentenceRule = rules.rules.find(({ rule }) => rule.key === 'sentence' && rule.on)?.rule;
+  const sentenceOpen = rules.rules.some(
+    ({ rule, status }) => rule.key === 'sentence' && rule.on && status.state === 'bad',
+  );
+  const lockedNow = editor && citedRead ? lockedKeysLeft(editor.state).join('\n') : '';
+  const sentenceHeld = useMemo(() => {
+    if (!sentenceRule || !sentenceOpen || !lockedNow) return false;
+    const rest = readPage(htmlWithoutLocked(pageHtml, new Set(lockedNow.split('\n'))), 0);
+    return checkRule(sentenceRule, rest, NO_RULE_CONTEXT).state === 'ok';
+  }, [sentenceRule, sentenceOpen, lockedNow, pageHtml]);
   const lengthHeld = lengthOutOfReach(rules.rules, reach) !== null;
-  const heldKey = `${longOnes && longOnes.held > 0 && longOnes.free === 0 ? 's' : ''}${lengthHeld ? 'l' : ''}`;
+  const heldKey = `${sentenceHeld ? 's' : ''}${lengthHeld ? 'l' : ''}`;
   const heldRules = useMemo(
     () =>
       new Set([
@@ -2127,8 +2139,8 @@ export function DraftEditor({
     } = openRulesForAgent(rules.rules, only, heldRules);
     if (open.length === 0) {
       // Only rules it can't fix are open: say what to do instead.
-      if (heldOpen.length) toast(tRules('heldAll'));
-      else if (notForAgent.length) toast(t(`suggestions.${notForAgentMessage(notForAgent)}`));
+      if (notForAgent.length) toast(t(`suggestions.${notForAgentMessage(notForAgent)}`));
+      else if (heldOpen.length) toast(tRules(heldMessage(heldOpen)));
       return;
     }
     const pageText = editor.getText({ blockSeparator: '\n' });
@@ -2457,10 +2469,10 @@ export function DraftEditor({
   const agentRules = openRulesForAgent(rules.rules, undefined, heldRules);
   const cardRunBlocked =
     agentFix.blocked ??
-    (agentRules.forAgent.length === 0 && agentRules.held.length > 0
-      ? tRules('heldAll')
-      : agentRules.forAgent.length === 0 && agentRules.notForAgent.length > 0
-        ? t(`suggestions.${notForAgentMessage(agentRules.notForAgent)}`)
+    (agentRules.forAgent.length === 0 && agentRules.notForAgent.length > 0
+      ? t(`suggestions.${notForAgentMessage(agentRules.notForAgent)}`)
+      : agentRules.forAgent.length === 0 && agentRules.held.length > 0
+        ? tRules(heldMessage(agentRules.held))
         : null);
 
   // A drag with files over the page shows where they go; one dropped beside
@@ -2870,6 +2882,8 @@ export function DraftEditor({
   // The sources (the fan-out rules read them), and with Quality the site's
   // trust and the link reads (Trust moves as they land).
   const nextRead =
+    // The quoted passages: until they're read, no rule is held by them.
+    citedRead &&
     reads.brief.status !== 'loading' &&
     reads.sources !== null &&
     rules.ready &&

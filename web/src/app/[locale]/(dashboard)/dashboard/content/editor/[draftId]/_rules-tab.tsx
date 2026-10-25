@@ -33,6 +33,7 @@ import {
   MAX_TEXT_RULE_LENGTH,
   NO_HELD,
   NO_REACH,
+  heldMessage,
   RULE_GROUPS,
   notForAgentMessage,
   openRulesForAgent,
@@ -283,8 +284,8 @@ export function RulesTab({
   const blocked =
     runner?.blocked ??
     (mode === 'fix' && fixable === 0
-      ? heldOpen.length > 0
-        ? t('heldAll')
+      ? notForAgent.length === 0 && heldOpen.length > 0
+        ? t(heldMessage(heldOpen))
         : tSuggestions(notForAgentMessage(notForAgent))
       : null);
 
@@ -457,8 +458,8 @@ export function RulesTab({
                   note={
                     rule.key === 'length' && state.lengthConflict
                       ? t('lengthConflict', state.lengthConflict)
-                      : held.has(rule.key) && status.state === 'bad'
-                        ? t(rule.key === 'sentence' ? 'heldSentence' : 'held')
+                      : rule.key === 'sentence' && held.has('sentence') && status.state === 'bad'
+                        ? t('heldSentence')
                         : undefined
                   }
                 />

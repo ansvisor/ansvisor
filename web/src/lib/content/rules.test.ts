@@ -31,6 +31,8 @@ import {
   RULE_LENGTH_MAX,
   lengthBand,
   NO_REACH,
+  NO_RULE_CONTEXT,
+  heldMessage,
   keptOutOfReach,
   lengthOutOfReach,
   rewriteAdvice,
@@ -246,6 +248,20 @@ describe('length and structure', () => {
     expect(held.forAgent.some(({ rule }) => rule.key === 'aiTraces')).toBe(false);
     expect(held.held.map(({ rule }) => rule.key)).toEqual(['aiTraces']);
     expect(held.notForAgent.map(({ rule }) => rule.key)).toEqual(['oneH1']);
+    // What to say when they're all that's left: the quoted passages', else the Length's.
+    expect(heldMessage(held.held)).toBe('heldLength');
+    expect(heldMessage([{ rule: { key: 'sentence' } }])).toBe('heldAll');
+  });
+
+  it('reads a rule met without the locked passages as held by them', () => {
+    const sentence = activeRules(ruleSet('blog_post'), {
+      overrides: { sentence: { value: '20' } },
+    }).find((r) => r.key === 'sentence')!;
+    const long = 'A sentence that runs well past twenty characters.';
+    const all = page(`<h1>T</h1><p>${long}</p><p>Short.</p>`, 60);
+    expect(checkRule(sentence, all, NO_RULE_CONTEXT).state).toBe('bad');
+    const rest = page('<h1>T</h1><p>Short.</p>', 10);
+    expect(checkRule(sentence, rest, NO_RULE_CONTEXT).state).toBe('ok');
   });
 
   it('wants a short summary under the H1, and a short answer under each H2', () => {

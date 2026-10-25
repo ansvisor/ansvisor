@@ -247,25 +247,25 @@ export function rewriteFloor(
   return { kept, floor: kept + floor };
 }
 
-/**
- * The page's sentences over `limit` characters, split as the Sentence rule
- * splits them (rules.ts), by whether the agent may change them: in a passage
- * AI answers quote that is locked (held), or not (free). Paragraphs only, as
- * the rule reads paragraphs and list items.
- */
-export function longSentences(state: EditorState, limit: number): { held: number; free: number } {
+/** The keys of the quoted passages still locked (not unlocked by the person), sorted. */
+export function lockedKeysLeft(state: EditorState): string[] {
   const locks = citedLocks(state);
-  let held = 0;
-  let free = 0;
-  state.doc.descendants((node) => {
-    if (!node.isTextblock) return true;
-    if (node.type.name !== 'paragraph') return false;
-    const over = node.textContent.split(/(?<=[.!?])\s+/).filter((s) => s.length > limit).length;
-    if (isLocked(blockKey(node), locks)) held += over;
-    else free += over;
-    return false;
-  });
-  return { held, free };
+  return [...locks.labels.keys()].filter((key) => !locks.unlocked.has(key)).sort();
+}
+
+/**
+ * The page's HTML without the passages it keeps locked (their blocks, by
+ * the key their words make): what the agent may change, for a rule read as
+ * the rules read the page (readPage), so a rule met without them is held by
+ * them alone.
+ */
+export function htmlWithoutLocked(html: string, keys: ReadonlySet<string>): string {
+  if (!keys.size) return html;
+  const doc = new DOMParser().parseFromString(html, 'text/html');
+  for (const el of doc.body.querySelectorAll('p, li, h1, h2, h3, h4, h5, h6')) {
+    if (keys.has(passageKey(el.textContent ?? ''))) el.remove();
+  }
+  return doc.body.innerHTML;
 }
 
 /** The quoted passages a rewrite keeps now (locked, not unlocked): how many, and their characters. */

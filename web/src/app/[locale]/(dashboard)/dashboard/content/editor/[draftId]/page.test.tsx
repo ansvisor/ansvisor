@@ -1238,6 +1238,48 @@ describe('the content editor', () => {
       expect(container.querySelector('header')!.textContent).toContain('1 cited passage kept');
     });
 
+    it('leaves long sentences only in quoted passages to the person, never sent to Fix', async () => {
+      // Sentences up to 60 characters: the quoted passage's is the only long one.
+      getContentDraft.mockResolvedValue(
+        draft({
+          ...page,
+          bodyHtml: `${page.bodyHtml}<p>We delve into it.</p>`,
+          rules: {
+            set: null,
+            source: null,
+            overrides: { sentence: { value: '60' } },
+            textRules: [],
+          },
+        }),
+      );
+      getCitedPassages.mockResolvedValue(cited);
+      fixDraftRules.mockResolvedValue({ count: 0 });
+      const width = window.innerWidth;
+      window.innerWidth = 1024;
+      try {
+        await renderPage();
+        await act(async () =>
+          container
+            .querySelector<HTMLButtonElement>('header button[aria-label^="Rules "]')!
+            .click(),
+        );
+        expect(container.querySelector('aside')!.textContent).toContain(
+          'Kept by AI citations · yours to decide',
+        );
+        await act(async () =>
+          [...container.querySelector('aside')!.querySelectorAll<HTMLButtonElement>('button')]
+            .find((b) => b.textContent === 'Run Agent')!
+            .click(),
+        );
+        await act(async () => {});
+        const keys = fixDraftRules.mock.calls[0][2].rules.map((r: { key: string }) => r.key);
+        expect(keys).toContain('aiTraces');
+        expect(keys).not.toContain('sentence');
+      } finally {
+        window.innerWidth = width;
+      }
+    });
+
     it('reads nothing for a new page', async () => {
       getContentDraft.mockResolvedValue(draft({ sourceUrl: null }));
       await renderPage();

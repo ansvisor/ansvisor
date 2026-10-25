@@ -815,6 +815,20 @@ export function openRulesForAgent<T extends { rule: ActiveRule; status: RuleStat
 /** No rule held by what the page keeps. */
 export const NO_HELD: ReadonlySet<string> = new Set();
 
+/**
+ * What to say when only held rules are left for the agent: the quoted
+ * passages' (a sentence in one), else the Length's, out of a rewrite's reach.
+ */
+export const heldMessage = (held: readonly { rule: { key: string } }[]) =>
+  held.some(({ rule }) => rule.key === 'sentence') ? 'heldAll' : 'heldLength';
+
+/** A rule read with nothing of the brand's: for checks that read only the page. */
+export const NO_RULE_CONTEXT: RuleContext = {
+  brandDomains: [],
+  competitorDomains: [],
+  fanouts: [],
+};
+
 /** How far off its Length a page may be before Rewrite the page to these rules is recommended. */
 export const REWRITE_LENGTH_OFF = 0.3;
 /** How many rules the agent can fix may be open before it is. */

@@ -8,8 +8,9 @@ import {
   citedPassagesKey,
   keptCharacters,
   lockedPassageCount,
+  htmlWithoutLocked,
+  lockedKeysLeft,
   lockedPassagesLeft,
-  longSentences,
   rewriteFloor,
   type HeldEdit,
 } from './_cited-passages';
@@ -157,29 +158,25 @@ describe('rewriteFloor', () => {
   });
 });
 
-describe('longSentences', () => {
-  it('counts the long sentences a fix may change apart from those in quoted passages', () => {
-    const long = `${'Long words here '.repeat(4).trim()}.`;
-    const small = new Editor({
-      extensions: [StarterKit, CitedPassages.configure({ onHeld: () => {} })],
-      content: `<h1>${long}</h1><p>${QUOTED} ${long}</p><p>${long} Short.</p>`,
-    });
-    try {
-      const lock = (unlocked: string[] = []) =>
-        small.view.dispatch(
-          small.state.tr.setMeta(citedPassagesKey, {
-            labels: new Map([[passageKey(`${QUOTED} ${long}`), 'Cited by ChatGPT 3×']]),
-            unlocked: new Set(unlocked),
-          }),
-        );
-      lock();
-      // The heading isn't read; one long sentence in the quoted passage, one free.
-      expect(longSentences(small.state, 40)).toEqual({ held: 2, free: 1 });
-      lock([passageKey(`${QUOTED} ${long}`)]);
-      expect(longSentences(small.state, 40)).toEqual({ held: 0, free: 3 });
-    } finally {
-      small.destroy();
-    }
+describe('htmlWithoutLocked', () => {
+  it('reads the page without the passages still locked, by their words', () => {
+    const lock = (unlocked: string[] = []) =>
+      editor.view.dispatch(
+        editor.state.tr.setMeta(citedPassagesKey, {
+          labels: new Map([[passageKey(QUOTED), 'Cited by ChatGPT 3×']]),
+          unlocked: new Set(unlocked),
+        }),
+      );
+    lock();
+    expect(lockedKeysLeft(editor.state)).toEqual([passageKey(QUOTED)]);
+    const html = `<h1>T</h1><p>${QUOTED}</p><ul><li><p>${QUOTED}</p></li></ul><p>Free words.</p>`;
+    expect(htmlWithoutLocked(html, new Set(lockedKeysLeft(editor.state)))).toBe(
+      '<h1>T</h1><ul></ul><p>Free words.</p>',
+    );
+    // Unlocked by the person: the agent may change it, so it stays.
+    lock([passageKey(QUOTED)]);
+    expect(lockedKeysLeft(editor.state)).toEqual([]);
+    expect(htmlWithoutLocked(html, new Set())).toBe(html);
   });
 });
 
