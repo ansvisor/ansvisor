@@ -4395,6 +4395,7 @@
         "webflowChanged": "{tables, plural, =0 {} one {# table went as a list. } other {# tables went as lists. }}{images, plural, =0 {} one {# image wasn't sent: add it in Webflow.} other {# images weren't sent: add them in Webflow.}}"
       },
       "rulesChip": "Rules {met}/{total}",
+      "rulesChipReading": "Rules · reading",
       "rulesChipHint": "Rules this page meets now. Open the Rules tab.",
       "reviewer": {
         "title": "Reviewed by",

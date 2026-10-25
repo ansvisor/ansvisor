@@ -222,6 +222,7 @@ export function AgentCard({
   onAllSteps,
   length = null,
   lastRunFailed = false,
+  pageChars = null,
 }: {
   suggestions: DraftSuggestion[];
   rules: CardRules;
@@ -270,6 +271,8 @@ export function AgentCard({
   onAllSteps?: () => void;
   /** The agent's last run failed: said in place of an earlier batch's review. */
   lastRunFailed?: boolean;
+  /** A rewrite's characters, before and after, as the toolbar counts them (the editor's count). */
+  pageChars?: { before: number; after: number } | null;
   /**
    * The page's Length rule (its target and band) and what a rewrite keeps
    * as it is: a rewrite's result is read against it, never the agent's say.
@@ -396,7 +399,7 @@ export function AgentCard({
       </>
     );
   } else if (page) {
-    const { before, after: afterChars } = pageCharacters(page);
+    const { before, after: afterChars } = pageChars ?? pageCharacters(page);
     title =
       page.status === 'open'
         ? tRewrite('ready')
