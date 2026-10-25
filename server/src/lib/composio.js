@@ -259,7 +259,7 @@ export async function runGaReport(entityId, propertyId, body) {
  * keep the account's id (brand_cms_connections, 00283). Not in PROVIDERS:
  * the shared connect flow above is the workspace's OAuth.
  */
-export const WEBFLOW_AUTH_CONFIG_ENV = 'COMPOSIO_WEBFLOW_AUTH_CONFIG_ID';
+const WEBFLOW_AUTH_CONFIG_ENV = 'COMPOSIO_WEBFLOW_AUTH_CONFIG_ID';
 
 /** Pinned as Search Console's is; manual tool execution rejects "latest". */
 const WEBFLOW_TOOLKIT_VERSION = process.env.COMPOSIO_WEBFLOW_TOOLKIT_VERSION || '20260826_00';
@@ -271,16 +271,34 @@ export function isWebflowConfigured() {
 /**
  * A connected account for a Webflow site token, under `entityId`. Returns
  * its id; whether Webflow takes the token is the first tool call's to say.
+ * A new token is a second account until the first is removed (an API-key
+ * account is active whether Webflow takes its token or not), so more than
+ * one is allowed: forgetWebflowAccounts keeps the brand to one.
  */
 export async function connectWebflowToken(entityId, token) {
   const request = await getClient().connectedAccounts.initiate(
     entityId,
     process.env[WEBFLOW_AUTH_CONFIG_ENV],
-    { config: AuthScheme.APIKey({ api_key: token }) },
+    { config: AuthScheme.APIKey({ api_key: token }), allowMultiple: true },
   );
   const id = request?.id ?? request?.connectedAccountId ?? null;
   if (!id) throw new Error('Composio returned no connected account');
   return id;
+}
+
+/**
+ * Removes the Webflow accounts under `entityId` but `keep` (none kept when
+ * it's null): the ones a replaced token, a refused one or a failed removal
+ * left. Throws when one can't be removed.
+ */
+export async function forgetWebflowAccounts(entityId, keep = null) {
+  const accounts = await getClient().connectedAccounts.list({
+    authConfigIds: [process.env[WEBFLOW_AUTH_CONFIG_ENV]],
+    userIds: [entityId],
+  });
+  for (const account of accounts.items ?? []) {
+    if (account.id && account.id !== keep) await deleteConnection(account.id);
+  }
 }
 
 /** A Webflow tool, run on one connected account; its data, or an error with Webflow's words. */

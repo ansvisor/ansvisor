@@ -18,6 +18,7 @@ const composio = {
   isWebflowConfigured: vi.fn(),
   connectWebflowToken: vi.fn(),
   deleteConnection: vi.fn(),
+  forgetWebflowAccounts: vi.fn(),
 };
 const webflow = { listSites: vi.fn(), listCollections: vi.fn(), getCollection: vi.fn() };
 
@@ -52,6 +53,8 @@ function table() {
     }
     return rows.filter(matches);
   };
+  // As a database answers: copies, not the rows themselves.
+  const answer = () => run().map((row) => ({ ...row }));
   const chain = {
     select: () => chain,
     eq: (col, value) => {
@@ -70,9 +73,9 @@ function table() {
       write = { kind: 'delete' };
       return chain;
     },
-    maybeSingle: async () => ({ data: run()[0] ?? null, error: null }),
-    single: async () => ({ data: run()[0] ?? null, error: null }),
-    then: (resolve) => resolve({ data: run(), error: null }),
+    maybeSingle: async () => ({ data: answer()[0] ?? null, error: null }),
+    single: async () => ({ data: answer()[0] ?? null, error: null }),
+    then: (resolve) => resolve({ data: answer(), error: null }),
   };
   return chain;
 }
@@ -97,6 +100,7 @@ vi.mock('../lib/composio.js', () => ({
   isWebflowConfigured: () => composio.isWebflowConfigured(),
   connectWebflowToken: (...args) => composio.connectWebflowToken(...args),
   deleteConnection: (...args) => composio.deleteConnection(...args),
+  forgetWebflowAccounts: (...args) => composio.forgetWebflowAccounts(...args),
 }));
 vi.mock('../lib/cms/webflow.js', async (importOriginal) => ({
   ...(await importOriginal()),
@@ -128,6 +132,7 @@ beforeEach(async () => {
   composio.isWebflowConfigured.mockReset().mockReturnValue(true);
   composio.connectWebflowToken.mockReset().mockResolvedValue('ca_new');
   composio.deleteConnection.mockReset().mockResolvedValue(undefined);
+  composio.forgetWebflowAccounts.mockReset().mockResolvedValue(undefined);
   webflow.listSites.mockReset().mockResolvedValue([{ id: 's1', name: 'Ansvisor' }]);
   webflow.listCollections
     .mockReset()
@@ -228,8 +233,9 @@ describe('POST connect', () => {
     rows.push(connectedRow());
     const body = await (await call('POST', '', { token: TOKEN })).json();
     expect(body.connection).toMatchObject({ collectionId: 'c1', fieldMap: { body: 'post-body' } });
-    expect(composio.deleteConnection).toHaveBeenCalledWith('ca_old');
-    expect(composio.deleteConnection).not.toHaveBeenCalledWith('ca_new');
+    // The brand's other accounts go: the replaced token's, and any left before.
+    expect(composio.forgetWebflowAccounts).toHaveBeenCalledWith(`brand_${BRAND}`, 'ca_new');
+    expect(composio.deleteConnection).not.toHaveBeenCalled();
   });
 
   it('starts over for a token of another site', async () => {
@@ -355,21 +361,104 @@ describe('PUT where pages go', () => {
 });
 
 describe('DELETE disconnect', () => {
-  it('removes the account at Composio and the brand’s connection', async () => {
+  it('removes the brand’s accounts at Composio, then its connection', async () => {
     rows.push(connectedRow());
     const res = await call('DELETE');
     expect(await res.json()).toEqual({ success: true });
-    expect(composio.deleteConnection).toHaveBeenCalledWith('ca_old');
+    expect(composio.forgetWebflowAccounts).toHaveBeenCalledWith(`brand_${BRAND}`);
     expect(rows).toEqual([]);
   });
 
-  it('removes the connection even when Composio can’t, and is for admins and managers', async () => {
+  it('keeps the connection when Composio can’t let go of the token, and is for admins and managers', async () => {
     rows.push(connectedRow());
     role = 'member';
     expect((await call('DELETE')).status).toBe(403);
     role = 'admin';
-    composio.deleteConnection.mockRejectedValueOnce(new Error('down'));
+    composio.forgetWebflowAccounts.mockRejectedValueOnce(new Error('down'));
+    const res = await call('DELETE');
+    expect(res.status).toBe(502);
+    expect(await res.json()).toMatchObject({ code: 'failed' });
+    expect(rows).toHaveLength(1);
+    // A server without Webflow set up can't reach Composio: the row just goes.
+    composio.isWebflowConfigured.mockReturnValue(false);
     expect((await call('DELETE')).status).toBe(200);
     expect(rows).toEqual([]);
+  });
+
+  it('leaves a token connected meanwhile in place', async () => {
+    rows.push(connectedRow());
+    composio.forgetWebflowAccounts.mockImplementationOnce(async () => {
+      rows[0].composio_account_id = 'ca_new';
+    });
+    await call('DELETE');
+    expect(rows).toHaveLength(1);
+  });
+});
+
+describe('races and Webflow’s answers', () => {
+  it('doesn’t save a map checked with a token replaced meanwhile', async () => {
+    rows.push(connectedRow());
+    webflow.getCollection.mockImplementationOnce(async () => {
+      Object.assign(rows[0], { composio_account_id: 'ca_new', site_id: 's2' });
+      return { id: 'c1', name: 'Blog Posts', fields };
+    });
+    const res = await call('PUT', '', { collectionId: 'c1', fieldMap: { body: 'post-body' } });
+    expect(res.status).toBe(409);
+    expect(await res.json()).toMatchObject({ code: 'changed' });
+    expect(rows[0]).toMatchObject({ site_id: 's2', composio_account_id: 'ca_new' });
+  });
+
+  it('marks refused only the token the refusal came back for', async () => {
+    rows.push(connectedRow());
+    webflow.listSites.mockImplementationOnce(async () => {
+      rows[0].composio_account_id = 'ca_new';
+      throw new WebflowError('auth_failed', 'Webflow refused the site token');
+    });
+    await call('GET', '/collections');
+    expect(rows[0].status).toBe('connected');
+  });
+
+  it('connects a refused connection again once Webflow takes its token', async () => {
+    rows.push(connectedRow({ status: 'auth_failed' }));
+    await call('GET', '/collections');
+    expect(rows[0].status).toBe('connected');
+  });
+
+  it('answers a site or collection the token doesn’t reach without marking the token refused', async () => {
+    rows.push(connectedRow());
+    webflow.listCollections.mockRejectedValueOnce(
+      new WebflowError('no_access', 'The site token doesn’t reach this site or collection'),
+    );
+    const res = await call('GET', '/collections');
+    expect(res.status).toBe(403);
+    expect(await res.json()).toMatchObject({ code: 'no_access' });
+    expect(rows[0].status).toBe('connected');
+  });
+
+  it('gives a collection’s fields only for one on a site the token reaches', async () => {
+    rows.push(connectedRow());
+    const other = await call('GET', '/collections/c9');
+    expect(other.status).toBe(404);
+    expect(webflow.getCollection).not.toHaveBeenCalled();
+    // Another of the token's sites, named.
+    webflow.listSites.mockResolvedValueOnce([
+      { id: 's1', name: 'Ansvisor' },
+      { id: 's2', name: 'Docs' },
+    ]);
+    webflow.listCollections.mockResolvedValueOnce([{ id: 'c7', name: 'Guides', slug: 'guide' }]);
+    expect((await call('GET', '/collections/c7?siteId=s2')).status).toBe(200);
+    expect(webflow.listCollections).toHaveBeenLastCalledWith(
+      { entityId: `brand_${BRAND}`, accountId: 'ca_old' },
+      's2',
+    );
+  });
+
+  it('names a brand that isn’t there as not found', async () => {
+    assertBrandAccess.mockRejectedValueOnce(
+      Object.assign(new Error('Brand not found'), { status: 404 }),
+    );
+    const res = await call('GET');
+    expect(res.status).toBe(404);
+    expect(await res.json()).toMatchObject({ code: 'not_found' });
   });
 });

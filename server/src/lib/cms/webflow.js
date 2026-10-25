@@ -9,50 +9,60 @@ import { executeWebflowTool } from '../composio.js';
  */
 
 /** The parts of a page a field map places, and the field types each may go to. */
-export const PART_TYPES = {
+const PART_TYPES = {
   body: ['RichText'],
   metaTitle: ['PlainText'],
   metaDescription: ['PlainText'],
   jsonLd: ['PlainText'],
 };
-export const PAGE_PARTS = Object.keys(PART_TYPES);
+const PAGE_PARTS = Object.keys(PART_TYPES);
 /** Webflow's own fields: every item has them, and Send to CMS always fills them. */
 const OWN_FIELDS = new Set(['name', 'slug']);
 
 /** A Webflow call that didn't go, with the code the web names to the person. */
 export class WebflowError extends Error {
-  /** @param {'auth_failed'|'missing_scopes'|'not_found'|'failed'} code */
+  /** @param {'auth_failed'|'missing_scopes'|'no_access'|'not_found'|'failed'} code */
   constructor(code, message) {
     super(message);
     this.code = code;
   }
 }
 
-/** Webflow's words for a token it refuses, or one without the scopes asked. */
+/** Webflow's words for a token without the scopes asked. */
 const MISSING_SCOPES = /missing[_ ]scopes?/i;
-const REFUSED =
-  /\b40[13]\b|unauthori[sz]ed|forbidden|not[_ ]authori[sz]ed|invalid[_ ](api[_ ])?(token|key)/i;
-const NOT_FOUND = /\b404\b|resource[_ ]not[_ ]found|not[_ ]found/i;
+/** The brand's account gone at Composio: connected again, it works. */
+const ACCOUNT_GONE = /connected[_ ]?account[_ ]?not[_ ]?found/i;
+/** A token Webflow refuses: a 401, never a 403 (a site or collection the token doesn't reach). */
+const REFUSED = /\b401\b|unauthori[sz]ed|not[_ ]authori[sz]ed|invalid[_ ](api[_ ])?(token|key)/i;
+const FORBIDDEN = /\b403\b|forbidden/i;
+const NOT_FOUND = /\b404\b|not[_ ]found/i;
 
 /**
  * A Webflow tool's data. What went wrong is told in our words only: the
  * error Composio passes on is read, never shown or logged, since it may
- * quote the request.
+ * quote the request. Only a refused token (or the brand's account gone)
+ * is auth_failed, which asks the person to connect again.
  */
 async function run(slug, account, args) {
   try {
     return await executeWebflowTool(slug, account, args);
   } catch (err) {
-    const said = String(err?.message ?? '');
+    const said = `${err?.name ?? ''} ${err?.message ?? ''}`;
     if (MISSING_SCOPES.test(said)) {
       throw new WebflowError(
         'missing_scopes',
         'The site token needs the Sites (read) and CMS (read and write) scopes',
       );
     }
-    if (REFUSED.test(said)) throw new WebflowError('auth_failed', 'Webflow refused the site token');
-    if (NOT_FOUND.test(said))
+    if (ACCOUNT_GONE.test(said) || REFUSED.test(said)) {
+      throw new WebflowError('auth_failed', 'Webflow refused the site token');
+    }
+    if (FORBIDDEN.test(said)) {
+      throw new WebflowError('no_access', 'The site token doesn’t reach this site or collection');
+    }
+    if (NOT_FOUND.test(said)) {
       throw new WebflowError('not_found', 'Webflow has no such site or collection');
+    }
     throw new WebflowError('failed', 'Webflow could not be reached');
   }
 }
@@ -149,9 +159,16 @@ export function suggestFieldMap(fields) {
 }
 
 /**
+ * The parts every page has: its meta title falls back to its title, its
+ * meta description to its opening words. A page may have no JSON-LD, so
+ * that field can't be one the collection requires.
+ */
+const ALWAYS_FILLED = new Set(['body', 'metaTitle', 'metaDescription']);
+
+/**
  * Whether a field map fits the collection: a page's body has a rich text
  * field, each part a field of its own of a type it may go to, and every
- * field the collection requires is one Send to CMS fills.
+ * field the collection requires is one Send to CMS always fills.
  *
  * @returns {{ ok: true, map: Record<string, string> } | { ok: false, problems: string[] }}
  */
@@ -180,7 +197,14 @@ export function checkFieldMap(fieldMap, fields) {
   if (!map.body && !problems.some((p) => p.startsWith('body:'))) {
     problems.push('body: pick the rich text field a page goes to');
   }
-  const unfilled = fields.filter((f) => f.required && !OWN_FIELDS.has(f.slug) && !used.has(f.slug));
+  const filled = new Set(
+    Object.entries(map)
+      .filter(([part]) => ALWAYS_FILLED.has(part))
+      .map(([, slug]) => slug),
+  );
+  const unfilled = fields.filter(
+    (f) => f.required && !OWN_FIELDS.has(f.slug) && !filled.has(f.slug),
+  );
   if (unfilled.length) {
     problems.push(
       `The collection requires ${unfilled.map((f) => f.name).join(', ')}, which Send to CMS doesn’t fill: make ${unfilled.length === 1 ? 'it' : 'them'} optional in Webflow, or pick another collection`,

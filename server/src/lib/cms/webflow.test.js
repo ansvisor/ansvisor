@@ -91,6 +91,17 @@ describe('reading the site', () => {
     });
     expect(await said('404 resource_not_found')).toMatchObject({ code: 'not_found' });
     expect(await said('socket hang up')).toMatchObject({ code: 'failed' });
+    // A 403 is a site or collection the token doesn't reach, not a refused token.
+    expect(await said('Request failed with status 403: forbidden')).toMatchObject({
+      code: 'no_access',
+    });
+    // The brand's account gone at Composio: connecting again mends it.
+    executeWebflowTool.mockRejectedValueOnce(
+      Object.assign(new Error('No connected account ca_1'), {
+        name: 'ComposioConnectedAccountNotFoundError',
+      }),
+    );
+    expect(await listSites(account).catch((err) => err)).toMatchObject({ code: 'auth_failed' });
   });
 });
 
@@ -167,5 +178,18 @@ describe('checkFieldMap', () => {
         blog.map((f) => (f.slug === 'post-body' ? { ...f, required: true } : f)),
       ).ok,
     ).toBe(true);
+    // A page's meta description always has words (its opening ones at least);
+    // its JSON-LD may be none.
+    const summaryRequired = blog.map((f) =>
+      f.slug === 'post-summary' ? { ...f, required: true } : f,
+    );
+    expect(
+      checkFieldMap({ body: 'post-body', metaDescription: 'post-summary' }, summaryRequired).ok,
+    ).toBe(true);
+    expect(
+      checkFieldMap({ body: 'post-body', jsonLd: 'post-summary' }, summaryRequired).problems,
+    ).toEqual([
+      'The collection requires Post Summary, which Send to CMS doesn’t fill: make it optional in Webflow, or pick another collection',
+    ]);
   });
 });

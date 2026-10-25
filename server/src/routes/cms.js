@@ -2,7 +2,12 @@ import { Router } from 'express';
 import { z } from 'zod';
 import supabaseAdmin from '../config/supabase.js';
 import { assertBrandAccess } from '../lib/access.js';
-import { connectWebflowToken, deleteConnection, isWebflowConfigured } from '../lib/composio.js';
+import {
+  connectWebflowToken,
+  deleteConnection,
+  forgetWebflowAccounts,
+  isWebflowConfigured,
+} from '../lib/composio.js';
 import {
   WebflowError,
   checkFieldMap,
@@ -119,27 +124,50 @@ async function forget(req, accountId) {
   }
 }
 
+/** Remove the brand's other Webflow accounts (a replaced token's, or one left before). */
+async function forgetOthers(req, entityId, keep) {
+  try {
+    await forgetWebflowAccounts(entityId, keep);
+  } catch (err) {
+    req.log.warn({ err: { name: err?.name } }, 'cms webflow old accounts not removed');
+  }
+}
+
 /**
- * Answers a failure: a refused token marks the connection auth_failed, so
- * Settings asks for a new one. Errors are logged without their message
- * where it may quote what the person typed.
+ * Sets the status of the connection as it was read: a token replaced
+ * meanwhile keeps its own.
  */
-async function fail(req, res, err, what, id) {
+async function setStatus(row, status) {
+  const { error } = await supabaseAdmin
+    .from('brand_cms_connections')
+    .update({ status, updated_at: new Date().toISOString() })
+    .eq('brand_id', row.brand_id)
+    .eq('provider', PROVIDER)
+    .eq('composio_account_id', row.composio_account_id);
+  if (error) throw new Error(error.message);
+}
+
+/** Webflow took the token again: a connection marked refused is connected. */
+async function working(row) {
+  if (row.status === 'auth_failed') await setStatus(row, 'connected');
+}
+
+const WEBFLOW_STATUS = { failed: 502, not_found: 404, no_access: 403 };
+
+/**
+ * Answers a failure: a token Webflow refuses marks the connection that was
+ * read (`row`) auth_failed, so Settings asks for a new one. Errors are
+ * logged without their message where it may quote what the person typed.
+ */
+async function fail(req, res, err, what, row) {
   if (err instanceof WebflowError) {
-    if (err.code === 'auth_failed' && id) {
-      await supabaseAdmin
-        .from('brand_cms_connections')
-        .update({ status: 'auth_failed', updated_at: new Date().toISOString() })
-        .eq('brand_id', id)
-        .eq('provider', PROVIDER);
-    }
-    const status = err.code === 'failed' ? 502 : err.code === 'not_found' ? 404 : 409;
-    return res.status(status).json({ error: err.message, code: err.code });
+    if (err.code === 'auth_failed' && row) await setStatus(row, 'auth_failed').catch(() => {});
+    return res.status(WEBFLOW_STATUS[err.code] ?? 409).json({ error: err.message, code: err.code });
   }
   if (err?.status && err.status < 500) {
     return res.status(err.status).json({
       error: err.message,
-      code: err.code === 'not_in_workspace' ? 'not_in_workspace' : (err.code ?? 'forbidden'),
+      code: err.code ?? (err.status === 404 ? 'not_found' : 'forbidden'),
     });
   }
   req.log.error({ err: { name: err?.name } }, what);
@@ -245,9 +273,8 @@ router.post('/brands/:brandId/webflow', cmsLimiter, async (req, res) => {
       await forget(req, accountId);
       throw new Error(error.message);
     }
-    if (before?.composio_account_id && before.composio_account_id !== accountId) {
-      await forget(req, before.composio_account_id);
-    }
+    // The replaced token's account, and any a failed removal left.
+    await forgetOthers(req, entityId, accountId);
     return res.json({ connection: shape(row), sites });
   } catch (err) {
     return fail(req, res, err, 'cms webflow connect error');
@@ -258,42 +285,66 @@ router.post('/brands/:brandId/webflow', cmsLimiter, async (req, res) => {
 router.get('/brands/:brandId/webflow/collections', cmsLimiter, async (req, res) => {
   const id = brandOf(req, res);
   if (!id) return;
+  let row = null;
   try {
     await assertWriter(id, req.user.id);
     if (!isWebflowConfigured()) return notConfigured(res);
-    const row = await connected(id);
     const asked = req.query.siteId === undefined ? null : webflowId.safeParse(req.query.siteId);
     if (asked && !asked.success)
       return res.status(400).json({ error: 'Invalid site', code: 'invalid' });
+    row = await connected(id);
     const account = accountOf(row);
     const sites = await listSites(account);
+    await working(row);
     const siteId = asked?.data ?? row.site_id ?? (sites.length === 1 ? sites[0].id : null);
     if (!siteId || !sites.some((s) => s.id === siteId)) {
       return res.json({ sites, siteId: null, collections: [] });
     }
     return res.json({ sites, siteId, collections: await listCollections(account, siteId) });
   } catch (err) {
-    return fail(req, res, err, 'cms webflow collections error', id);
+    return fail(req, res, err, 'cms webflow collections error', row);
   }
 });
 
-// GET — a collection's fields, the map they suggest, and the fields it requires.
+/**
+ * The site a request names (else the connection's), when the token
+ * reaches it, and the collection when it's on that site; null otherwise.
+ */
+async function siteAndCollection(account, siteId, collectionId) {
+  const sites = await listSites(account);
+  const site = sites.find((s) => s.id === siteId);
+  if (!site) return null;
+  const collections = await listCollections(account, site.id);
+  return collections.some((c) => c.id === collectionId) ? site : null;
+}
+
+// GET — a collection's fields (one on the site the token reaches) and the map they suggest.
 router.get('/brands/:brandId/webflow/collections/:collectionId', cmsLimiter, async (req, res) => {
   const id = brandOf(req, res);
   if (!id) return;
   const collectionId = webflowId.safeParse(req.params.collectionId);
-  if (!collectionId.success) {
+  const asked = req.query.siteId === undefined ? null : webflowId.safeParse(req.query.siteId);
+  if (!collectionId.success || (asked && !asked.success)) {
     return res.status(400).json({ error: 'Invalid collection', code: 'invalid' });
   }
+  let row = null;
   try {
     await assertWriter(id, req.user.id);
     if (!isWebflowConfigured()) return notConfigured(res);
-    const row = await connected(id);
-    const collection = await getCollection(accountOf(row), collectionId.data);
+    row = await connected(id);
+    const account = accountOf(row);
+    const site = await siteAndCollection(account, asked?.data ?? row.site_id, collectionId.data);
+    await working(row);
+    if (!site) {
+      return res
+        .status(404)
+        .json({ error: 'Pick one of the site’s collections.', code: 'not_found' });
+    }
+    const collection = await getCollection(account, collectionId.data);
     const suggested = suggestFieldMap(collection.fields);
     return res.json({ ...collection, suggested });
   } catch (err) {
-    return fail(req, res, err, 'cms webflow collection error', id);
+    return fail(req, res, err, 'cms webflow collection error', row);
   }
 });
 
@@ -301,23 +352,20 @@ router.get('/brands/:brandId/webflow/collections/:collectionId', cmsLimiter, asy
 router.put('/brands/:brandId/webflow', cmsLimiter, async (req, res) => {
   const id = brandOf(req, res);
   if (!id) return;
+  let row = null;
   try {
     await assertWriter(id, req.user.id);
     if (!isWebflowConfigured()) return notConfigured(res);
     const parsed = mapInput.safeParse(req.body ?? {});
     if (!parsed.success)
       return res.status(400).json({ error: 'Invalid settings', code: 'invalid' });
-    const row = await connected(id);
+    row = await connected(id);
     const account = accountOf(row);
     const { collectionId, fieldMap } = parsed.data;
 
     // The site and the collection must be the token's.
-    const sites = await listSites(account);
-    const site = sites.find((s) => s.id === (parsed.data.siteId ?? row.site_id));
-    if (!site)
-      return res.status(404).json({ error: 'Pick one of the token’s sites.', code: 'not_found' });
-    const collections = await listCollections(account, site.id);
-    if (!collections.some((c) => c.id === collectionId)) {
+    const site = await siteAndCollection(account, parsed.data.siteId ?? row.site_id, collectionId);
+    if (!site) {
       return res
         .status(404)
         .json({ error: 'Pick one of the site’s collections.', code: 'not_found' });
@@ -345,18 +393,25 @@ router.put('/brands/:brandId/webflow', cmsLimiter, async (req, res) => {
       })
       .eq('brand_id', id)
       .eq('provider', PROVIDER)
+      // The token it was checked with: one connected or removed meanwhile isn't overwritten.
+      .eq('composio_account_id', row.composio_account_id)
       .select(COLUMNS)
       .maybeSingle();
     if (error) throw new Error(error.message);
-    // Disconnected while this was read.
-    if (!saved) throw routeError('Connect Webflow first.', 409, 'not_connected');
+    if (!saved) {
+      throw routeError(
+        'Webflow’s connection changed while this was saved. Reload and try again.',
+        409,
+        'changed',
+      );
+    }
     return res.json({ connection: shape(saved) });
   } catch (err) {
-    return fail(req, res, err, 'cms webflow settings error', id);
+    return fail(req, res, err, 'cms webflow settings error', row);
   }
 });
 
-// DELETE — disconnect: the account at Composio, then the brand's row.
+// DELETE — disconnect: the brand's accounts at Composio (the token with them), then its row.
 router.delete('/brands/:brandId/webflow', cmsLimiter, async (req, res) => {
   const id = brandOf(req, res);
   if (!id) return;
@@ -364,12 +419,25 @@ router.delete('/brands/:brandId/webflow', cmsLimiter, async (req, res) => {
     await assertWriter(id, req.user.id);
     const row = await connectionOf(id);
     if (!row) return res.json({ success: true });
-    if (isWebflowConfigured()) await forget(req, row.composio_account_id);
+    // The row stays until Composio has let go of the token, so a disconnect
+    // that didn't happen isn't shown as one. A server without Webflow set up
+    // can't reach Composio: its row just goes.
+    if (isWebflowConfigured()) {
+      try {
+        await forgetWebflowAccounts(row.composio_entity_id);
+      } catch (err) {
+        req.log.warn({ err: { name: err?.name } }, 'cms webflow disconnect not done');
+        return res
+          .status(502)
+          .json({ error: 'Webflow could not be disconnected. Try again.', code: 'failed' });
+      }
+    }
     const { error } = await supabaseAdmin
       .from('brand_cms_connections')
       .delete()
       .eq('brand_id', id)
-      .eq('provider', PROVIDER);
+      .eq('provider', PROVIDER)
+      .eq('composio_account_id', row.composio_account_id);
     if (error) throw new Error(error.message);
     return res.json({ success: true });
   } catch (err) {
