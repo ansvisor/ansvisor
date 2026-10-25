@@ -250,6 +250,7 @@ import {
 import {
   AgentSuggestions,
   acceptInto,
+  placeSuggestion,
   suggestionsKey,
   redoDecision,
   undoInto,
@@ -408,6 +409,9 @@ export function DraftEditor({
   const [rewriting, setRewriting] = useState(false);
   const describeRule = useRuleDescriber();
   const [restoring, setRestoring] = useState(false);
+  // Set at once, not on the next render: two quick clicks restore once
+  // (editor test 2026-10-25: two "Before a restore" versions in a minute).
+  const restoringNow = useRef(false);
   const format = useFormatter();
   // A change to a locked passage, waiting for the person (CE-018).
   const [held, setHeld] = useState<HeldEdit | null>(null);
@@ -1926,6 +1930,22 @@ export function DraftEditor({
     }
   };
   const openSuggestions = suggestions.filter((s) => s.status === 'open').length;
+  // Whether the agent's batch is still the page's: one of its changes is
+  // where the page has it. After a restore, or edits over all of it, its
+  // card and its Undo all go: they'd undo nothing (editor test 2026-10-25).
+  // A whole page rewritten keeps its own card, whose Undo says when the
+  // page changed since.
+  const batchApplies = useMemo(
+    () =>
+      !!editor &&
+      !editor.isDestroyed &&
+      suggestions.some(
+        (s) => s.kind === 'page' || placeSuggestion(editor.state, s, suggestions) !== null,
+      ),
+    // pageHtml: the page as it changes (the editor's state is read through it).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [editor, suggestions, pageHtml],
+  );
   const pageSuggestion = suggestions.find((s) => s.kind === 'page') ?? null;
   // The page's last rewrite, from any run (00285), read on opening and again
   // once a new one is shown: a Length it missed isn't a rewrite's to reach
@@ -3244,7 +3264,8 @@ export function DraftEditor({
   // as the server keeps the page it replaces, and the page can't change
   // while the restore runs.
   const restoreVersion = async (version: DraftVersion, label: string) => {
-    if (!editor || restoring) return;
+    if (!editor || restoringNow.current) return;
+    restoringNow.current = true;
     setRestoring(true);
     editor.setEditable(false, false);
     try {
@@ -3266,11 +3287,24 @@ export function DraftEditor({
       detectType(restored.title, html);
       toast.success(t('history.restored', { version: label }));
       void loadCited();
+      // The agent's open suggestions were for the page before it: they go,
+      // so they hold no later run (open_suggestions), and its card goes
+      // with a batch the page no longer has (batchApplies).
+      const stale = suggestionsNow.current.filter((s) => s.status === 'open').map((s) => s.id);
+      if (stale.length) {
+        await decideDraftSuggestions(stale, 'rejected').catch((err) =>
+          console.error('Failed to set aside the suggestions for the page before:', err),
+        );
+        setSuggestions((now) =>
+          now.map((s) => (stale.includes(s.id) ? { ...s, status: 'rejected' as const } : s)),
+        );
+      }
     } catch (err) {
       console.error('Failed to restore the version:', err);
       toast.error(t('history.restoreFailed'));
     } finally {
       editor.setEditable(true, false);
+      restoringNow.current = false;
       setRestoring(false);
     }
   };
@@ -3695,7 +3729,8 @@ export function DraftEditor({
               </span>
             </p>
           )}
-          {(agentWorking || (suggestions.length > 0 && !(barClosed && openSuggestions === 0))) && (
+          {(agentWorking ||
+            (suggestions.length > 0 && batchApplies && !(barClosed && openSuggestions === 0))) && (
             <AgentCard
               suggestions={suggestions}
               rules={cardRules}

@@ -1158,6 +1158,58 @@ describe('the content editor', () => {
       expect(container.querySelector('header')!.textContent).toContain('Saved');
     });
 
+    it('restores once for two quick clicks', async () => {
+      getContentDraft.mockResolvedValue(draft());
+      getDraftVersions.mockResolvedValue(versions);
+      restoreDraftVersion.mockReturnValue(new Promise(() => {}));
+      await renderPage();
+      const items = await openHistory();
+      await act(async () => {
+        items[1].click();
+        items[1].click();
+      });
+      // One restore, one "Before a restore" (editor test 2026-10-25: two in a minute).
+      expect(restoreDraftVersion).toHaveBeenCalledTimes(1);
+    });
+
+    it('sets aside the agent’s open suggestions for the page before, and its card goes', async () => {
+      getContentDraft.mockResolvedValue(
+        draft({
+          bodyHtml: '<h1>Pipeline forecasting</h1><p>We delve into how teams forecast.</p>',
+        }),
+      );
+      getDraftVersions.mockResolvedValue(versions);
+      getDraftSuggestions.mockResolvedValue([
+        {
+          id: 'n1',
+          batchId: 'b2',
+          actionId: null,
+          actionNo: null,
+          kind: 'replace' as const,
+          blockText: 'We delve into how teams forecast.',
+          beforeText: 'delve into',
+          afterText: 'look at',
+          reason: 'remove an AI trace (rule)',
+          ruleKeys: ['aiTraces'],
+          status: 'open' as const,
+        },
+      ]);
+      restoreDraftVersion.mockResolvedValue({
+        title: 'Old title',
+        bodyHtml: '<h1>Old title</h1><p>As the live page had it.</p>',
+        updatedAt: '2026-10-21T10:00:00Z',
+      });
+      await renderPage();
+      const card = () => container.querySelector('[role="region"][aria-label="Agent suggestions"]');
+      expect(card()).not.toBeNull();
+      const items = await openHistory();
+      await act(async () => items[1].click());
+      await act(async () => {});
+      expect(decideDraftSuggestions).toHaveBeenCalledWith(['n1'], 'rejected');
+      // Its Undo all would undo nothing on the page restored.
+      expect(card()).toBeNull();
+    });
+
     it('keeps the page when the restore fails', async () => {
       vi.spyOn(console, 'error').mockImplementation(() => {});
       getContentDraft.mockResolvedValue(draft());
