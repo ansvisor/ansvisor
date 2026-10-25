@@ -267,12 +267,21 @@ describe('unpublishDraftWork', () => {
     },
     ...over,
   });
+  const taskUpdates = () => ops.filter((op) => op.table === 'action_tasks' && op.op === 'update');
+  const payloadWrites = () =>
+    ops.filter(
+      (op) =>
+        op.table === 'actions' &&
+        op.op === 'update' &&
+        (op.value as { payload?: unknown }).payload !== undefined,
+    );
 
-  it('takes the page out of what the action measures, and reopens the Publish task its publish completed', async () => {
+  it('reopens the Publish task a page’s publish completed, and takes the page out of what the action measures', async () => {
     rows.actions = [live()];
     rows.action_tasks = [{ id: 't-publish', status: 'completed' }];
+    // Completed by another page's publish, the last of the action's work to go live.
     rows.action_events = [
-      { data: { taskId: 't-publish', to: 'completed', draftId: 'd1', publishedUrl: 'x' } },
+      { data: { taskId: 't-publish', to: 'completed', draftId: 'd2', publishedUrl: 'x' } },
     ];
     await expect(unpublishDraftWork(db, published, 'u1')).resolves.toBe(1);
     expect(ops[0].filters).toEqual([
@@ -280,24 +289,8 @@ describe('unpublishDraftWork', () => {
       ['eq', 'brand_id', 'b1'],
       ['is', 'deleted_at', null],
     ]);
-    // The other pages stay measured; written only if the action is as read.
-    expect(ops[1]).toMatchObject({
-      table: 'actions',
-      op: 'update',
-      value: {
-        payload: {
-          pages: ['https://acme.example/a'],
-          publishedPages: { d2: 'https://acme.example/other' },
-        },
-      },
-      filters: [
-        ['eq', 'id', 'act-1'],
-        ['eq', 'updated_at', '2026-10-25T10:00:00Z'],
-      ],
-    });
-    expect(ops[2].filters).toContainEqual(['eq', 'task_key', 'publish_content']);
-    const reopened = ops.filter((op) => op.table === 'action_tasks' && op.op === 'update');
-    expect(reopened).toEqual([
+    expect(ops[1].filters).toContainEqual(['eq', 'task_key', 'publish_content']);
+    expect(taskUpdates()).toEqual([
       expect.objectContaining({
         value: expect.objectContaining({ status: 'in_progress', skip_reason: null }),
         filters: [
@@ -306,24 +299,42 @@ describe('unpublishDraftWork', () => {
         ],
       }),
     ]);
+    // The other pages stay measured; written only if the action is as read.
+    expect(payloadWrites()).toEqual([
+      expect.objectContaining({
+        value: expect.objectContaining({
+          payload: {
+            pages: ['https://acme.example/a'],
+            publishedPages: { d2: 'https://acme.example/other' },
+          },
+        }),
+        filters: [
+          ['eq', 'id', 'act-1'],
+          ['eq', 'updated_at', '2026-10-25T10:00:00Z'],
+        ],
+      }),
+    ]);
   });
 
-  it('leaves a Publish task another page’s publish or a person completed last', async () => {
+  it('leaves a Publish task a person completed last, and writes nothing for a page not measured', async () => {
     rows.actions = [live({ payload: { pages: [] } })];
     rows.action_tasks = [{ id: 't-publish', status: 'completed' }];
-    rows.action_events = [{ data: { taskId: 't-publish', to: 'completed', draftId: 'd2' } }];
-    await expect(unpublishDraftWork(db, published, 'u1')).resolves.toBe(0);
     rows.action_events = [{ data: { taskId: 't-publish', to: 'completed' } }];
     await expect(unpublishDraftWork(db, published, 'u1')).resolves.toBe(0);
-    // Not measured there: nothing to take out.
-    expect(ops.some((op) => op.table === 'actions' && op.op === 'update')).toBe(false);
+    expect(taskUpdates()).toEqual([]);
+    expect(payloadWrites()).toEqual([]);
   });
 
-  it('leaves a closed or deleted action as it is', async () => {
+  it('keeps a closed action’s tasks but stops measuring the page, and leaves a deleted action', async () => {
     rows.actions = [live({ status: 'completed' })];
+    rows.action_tasks = [{ id: 't-publish', status: 'completed' }];
     await expect(unpublishDraftWork(db, published, 'u1')).resolves.toBe(0);
+    expect(ops.some((op) => op.table === 'action_tasks')).toBe(false);
+    expect(payloadWrites()).toHaveLength(1);
+
+    ops = [];
     rows.actions = [];
     await expect(unpublishDraftWork(db, published, 'u1')).resolves.toBe(0);
-    expect(ops).toHaveLength(2);
+    expect(ops).toHaveLength(1);
   });
 });

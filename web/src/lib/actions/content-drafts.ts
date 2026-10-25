@@ -1474,8 +1474,8 @@ const ROW_STATUSES = ['draft', 'in_review', 'published'] as const;
  * the draft's task, so it goes through markContentDraftReady instead. A
  * ready or published draft moved back to Draft or In review opens again the
  * task Ready completed, as the editor's Ready does when clicked; a published
- * one also opens again the Publish task its publish completed, and leaves
- * what its action is measured on (unpublishDraftWork).
+ * one also opens again the Publish task a page's publish completed, and
+ * leaves what its action is measured on (unpublishDraftWork).
  */
 export async function setContentDraftStatus(
   id: string,

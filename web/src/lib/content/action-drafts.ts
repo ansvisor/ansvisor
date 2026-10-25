@@ -268,12 +268,13 @@ async function dropLivePage(
 }
 
 /**
- * A published page taken back (CE-013): its action stops measuring it at
- * its live address, and the Publish task its publish completed goes back to
- * in progress, in the action's History. A Publish task whose latest change
- * wasn't this draft's publish stays as it is, as do a deleted action's
- * (00168) and a closed one's (completed or dismissed). Returns how many
- * tasks it reopened.
+ * A published page taken back (CE-013). Its action's work isn't all live
+ * any more: a Publish task a page's publish completed goes back to in
+ * progress, in the action's History; one a person completed last stays as
+ * it is. And the action stops measuring the page at its live address. A
+ * closed action (completed or dismissed) keeps its tasks but still stops
+ * measuring it: a completed one is measured after it closes. A deleted
+ * action (00168) is left as it is. Returns how many tasks it reopened.
  */
 export async function unpublishDraftWork(
   db: SupabaseClient,
@@ -288,9 +289,20 @@ export async function unpublishDraftWork(
     .is('deleted_at', null)
     .maybeSingle();
   if (actionError) throw new Error(actionError.message);
-  if (!action || CLOSED_ACTION_STATUSES.includes(action.status as ActionStatus)) return 0;
+  if (!action) return 0;
+  const closed = CLOSED_ACTION_STATUSES.includes(action.status as ActionStatus);
+  // The tasks first: an address that can't be taken out doesn't keep Publish done.
+  const reopened = closed ? 0 : await reopenPublishTasks(db, draft, actorId);
   await dropLivePage(db, draft, action);
+  return reopened;
+}
 
+/** The action's Publish tasks a page's publish completed (the trail names a draft), in progress again. */
+async function reopenPublishTasks(
+  db: SupabaseClient,
+  draft: { id: string; brandId: string; actionId: string },
+  actorId: string | null,
+): Promise<number> {
   const { data: tasks, error: tasksError } = await db
     .from('action_tasks')
     .select('id, status')
@@ -302,7 +314,7 @@ export async function unpublishDraftWork(
   const latest = await latestChanges(db, draft.actionId);
   const byPublish = completed.filter((task) => {
     const change = latest.get(task.id);
-    return change?.to === 'completed' && change.draftId === draft.id;
+    return change?.to === 'completed' && typeof change.draftId === 'string';
   });
   await setDraftTasksStatus(
     db,
