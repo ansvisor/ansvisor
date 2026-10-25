@@ -18,7 +18,8 @@ export const LINK_CHECK_DELAY_MS = 3_000;
  * The links are compared as the draft saves them (cleanHref). `pending`
  * counts the links whose read may still come (Before you publish says
  * Trust may change): not read, not one the API never reads, and not asked
- * about at this save without an answer.
+ * about at this save without a read (a failed ask, or an answer that left
+ * it out: over the hourly reads, or written differently on the saved page).
  *
  * @param hrefs the page's http(s) links now, as it has them
  * @param savedAt when the page was last saved
@@ -30,7 +31,8 @@ export function useLinkChecks(
   enabled: boolean,
 ): { checks: Map<string, LinkCheck>; pending: number } {
   const [checks, setChecks] = useState<Map<string, LinkCheck>>(() => new Map());
-  // Links the API never reads, and the save each link's ask failed at.
+  // Links the API never reads, and the save each link's ask failed at or
+  // was answered without it.
   const [skipped, setSkipped] = useState<ReadonlySet<string>>(() => new Set());
   const [failedAt, setFailedAt] = useState<ReadonlyMap<string, string>>(() => new Map());
   // The links read, and the save each other link was last asked about at.
@@ -54,26 +56,38 @@ export function useLinkChecks(
     if (!fresh.length) return;
     const timer = setTimeout(() => {
       for (const href of fresh) askedAt.current.set(href, savedAt);
-      void checkDraftLinks(draftId).then((result) => {
-        if ('error' in result) {
-          console.error('Failed to check the draft links:', result.error);
-          if (open.current) {
-            setFailedAt((prev) => new Map([...prev, ...fresh.map((h) => [h, savedAt] as const)]));
+      // Only the links this ask is still the last one about: an older ask
+      // answering late doesn't undo a newer save's.
+      const failed = (hrefs: string[]) => {
+        const own = hrefs.filter((h) => askedAt.current.get(h) === savedAt);
+        setFailedAt((prev) => new Map([...prev, ...own.map((h) => [h, savedAt] as const)]));
+      };
+      void checkDraftLinks(draftId)
+        .then((result) => {
+          if ('error' in result) {
+            console.error('Failed to check the draft links:', result.error);
+            if (open.current) failed(fresh);
+            return;
           }
-          return;
-        }
-        if (!open.current) return;
-        if (result.skipped.length) setSkipped((prev) => new Set([...prev, ...result.skipped]));
-        // A link the API never reads is as good as read: it isn't asked about again.
-        for (const href of [...result.links.map((l) => l.href), ...result.skipped]) {
-          read.current.add(href);
-        }
-        setChecks((prev) => {
-          const next = new Map(prev);
-          for (const link of result.links) next.set(link.href, link);
-          return next;
+          if (!open.current) return;
+          if (result.skipped.length) setSkipped((prev) => new Set([...prev, ...result.skipped]));
+          // A link the API never reads is as good as read: it isn't asked about again.
+          const answered = new Set([...result.links.map((l) => l.href), ...result.skipped]);
+          for (const href of answered) read.current.add(href);
+          // One the answer left out has no read coming at this save either.
+          const missed = fresh.filter((href) => !answered.has(href));
+          if (missed.length) failed(missed);
+          setChecks((prev) => {
+            const next = new Map(prev);
+            for (const link of result.links) next.set(link.href, link);
+            return next;
+          });
+        })
+        // The call failing on its own (the network, a deploy meanwhile): as a failed read.
+        .catch((err) => {
+          console.error('Failed to check the draft links:', err);
+          if (open.current) failed(fresh);
         });
-      });
     }, LINK_CHECK_DELAY_MS);
     return () => clearTimeout(timer);
   }, [draftId, savedAt, key, enabled]);

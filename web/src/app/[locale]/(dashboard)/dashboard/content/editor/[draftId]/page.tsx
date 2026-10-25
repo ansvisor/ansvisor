@@ -10,6 +10,7 @@ import { buttonVariants } from '@/components/ui/button-variants';
 import { LoadingDots } from '@/components/ui/loading-dots';
 import { getContentDraft } from '@/lib/actions/content-drafts';
 import { AGENT_POLL_MS, CONTENT_LIBRARY_PATH, type ContentDraft } from '@/lib/content/drafts';
+import { writeLastDraft } from '@/lib/content/last-draft';
 import { useBrandStore } from '@/stores/use-brand-store';
 import { AgentWriting } from './_agent-writing';
 import { DraftEditor } from './_draft-editor';
@@ -35,6 +36,8 @@ export default function ContentEditorPage() {
       .then((draft) => {
         if (cancelled) return;
         setRead(draft ? { id: draftId, draft } : { id: draftId, draft: null, failed: false });
+        // Content › Editor comes back to it.
+        if (draft) writeLastDraft(draft.brandId, draft.id);
       })
       .catch((err) => {
         console.error('Failed to open the draft:', err);

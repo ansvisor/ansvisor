@@ -1,9 +1,11 @@
 'use client';
 
+import { useId } from 'react';
 import { useFormatter, useTranslations } from 'next-intl';
 import { Check } from 'lucide-react';
 import { Link } from '@/i18n/navigation';
 import { Button, buttonVariants } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import { normalizeDomain } from '@/lib/citations/classify';
 import type { ContentAuthor } from '@/lib/content/authors';
 import { BAND_CLASSES, qualityBand } from '@/lib/content/quality';
@@ -66,6 +68,13 @@ export interface QualityRead {
   pageLimited?: boolean;
   /** The page read for proof is under way: its to-dos may change. */
   pageReading?: boolean;
+  /**
+   * With no author picked, what the person confirmed of the author their
+   * site names (00271): a real person, and their profile there.
+   */
+  authorConfirmed?: { real: boolean; profile: boolean };
+  /** A confirmation being saved: the boxes wait for it. */
+  authorConfirming?: boolean;
 }
 
 type ScoreName = 'eeat' | 'trust' | 'readability';
@@ -106,6 +115,7 @@ export function QualityTab({
   onConfirmImages,
   onAddImage,
   onPickReviewer,
+  onConfirmAuthor,
 }: {
   quality: QualityRead;
   /** Scrolls the draft to a passage and marks it. */
@@ -120,6 +130,8 @@ export function QualityTab({
   onKeep?: (url: string) => void;
   /** Selects a claim's words and opens the link dialog on them (CE-045). */
   onAddSource?: (claim: ClaimMark) => void;
+  /** Ticks or unticks what the person confirms of the author their site names (00271). */
+  onConfirmAuthor?: (what: 'real' | 'profile', on: boolean) => void;
   /** Takes a claim's sentence out of the page (CE-045). */
   onRemove?: (claim: ClaimMark) => void;
   /** Opens Confirm: the page's images, each to confirm as the person's own (CE-049). */
@@ -203,6 +215,7 @@ export function QualityTab({
                 onConfirmImages={onConfirmImages}
                 onAddImage={onAddImage}
                 onPickReviewer={onPickReviewer}
+                onConfirm={onConfirmAuthor}
               />
             ))}
           </ul>
@@ -355,9 +368,11 @@ export function useTodoCopy() {
         detail:
           todo.done && author
             ? t('byline.done', { name: author.name })
-            : action === 'addAuthor'
-              ? t('byline.detail.addAuthor')
-              : t('byline.detail.pickAuthor', { byline: team }),
+            : todo.done
+              ? t('byline.confirmedDone')
+              : action === 'addAuthor'
+                ? t('byline.detail.addAuthor')
+                : t('byline.detail.pickAuthor', { byline: team }),
       };
     }
     // The page's own claims, their proof asked for by kind and business (CE-049).
@@ -426,7 +441,12 @@ export function useTodoCopy() {
       return {
         title: t('authorProfile.titleNoAuthor'),
         next: t('authorProfile.nextNoAuthor'),
-        detail: t('authorProfile.detail.noAuthor'),
+        // Once the person confirmed a real author their site names, their profile there may be too.
+        detail: todo.done
+          ? t('authorProfile.confirmedDone')
+          : todo.confirm
+            ? t('authorProfile.detail.confirm')
+            : t('authorProfile.detail.noAuthor'),
       };
     }
     const { bio, links } = authorProfile(author);
@@ -461,6 +481,7 @@ function TodoRow({
   onConfirmImages,
   onAddImage,
   onPickReviewer,
+  onConfirm,
 }: {
   todo: QualityTodo;
   quality: QualityRead;
@@ -472,9 +493,12 @@ function TodoRow({
   onConfirmImages?: () => void;
   onAddImage?: () => void;
   onPickReviewer?: () => void;
+  onConfirm?: (what: 'real' | 'profile', on: boolean) => void;
 }) {
   const t = useTranslations('contentEditor.editor.quality');
   const { title, detail } = useTodoCopy()(todo, quality);
+  const confirmId = useId();
+  const { confirm } = todo;
   return (
     <li
       className={cn(
@@ -522,6 +546,21 @@ function TodoRow({
             </>
           )}
         </p>
+        {/* Or the person's own word for the author their site names (00271). */}
+        {confirm && onConfirm && (
+          <div className="mt-1.5 flex items-start gap-2">
+            <Checkbox
+              id={confirmId}
+              className="mt-px"
+              checked={confirm.on}
+              disabled={quality.authorConfirming}
+              onCheckedChange={(on) => onConfirm(confirm.what, on === true)}
+            />
+            <label htmlFor={confirmId} className="text-xs leading-snug text-foreground">
+              {t(`todos.confirm.${confirm.what}`)}
+            </label>
+          </div>
+        )}
       </div>
       {!todo.done &&
         todo.action &&
