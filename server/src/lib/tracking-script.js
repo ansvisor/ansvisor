@@ -28,9 +28,34 @@
  * on: the server marks that visit's pageview, it doesn't count another
  * (gkhngyk on #1247).
  *
+ * Conversions (CE-017, 00286), only on a brand that turned them on and
+ * installed the tag with data-c="1": everything above stays as it was
+ * without it, and nothing is kept in the browser. With it, a visitor who
+ * came from an AI assistant gets a random id (ansvisor_v in localStorage,
+ * with the first AI visit: source, page and time), and the snippet sends
+ * the pages they go on to (k: "pv"), the forms they send and the site's
+ * own ansvisor('conversion', …) calls (k: "cv"), each with that first
+ * visit, for 30 days from it (first touch). The id is kept only once the
+ * site says the visitor agreed (data-consent="wait", the default):
+ * ansvisor('consent', 'granted'), or Google Consent Mode granting
+ * analytics_storage. Until then events wait on the page; ansvisor('consent',
+ * 'denied'), or Consent Mode taking analytics_storage back, deletes the id.
+ * data-consent="always" keeps it at once, for a site whose own banner
+ * covers it. Pages go without their query string, forms without anything
+ * typed in them.
+ *
+ * Forms: one with an email field counts as a signup, unless it says
+ * otherwise (data-ansvisor-goal="demo", "newsletter"…) or opts out
+ * (data-ansvisor="off"); one with a password field (a login) counts only
+ * when it says which goal it is. ansvisor() may be called before t.js
+ * loads (from GTM, say) through the usual queue stub.
+ *
  * Plain ES5 apart from URL / URLSearchParams, as before: it runs on the
  * customer's pages, in whatever browser their visitors have.
  */
+
+/** The goals a conversion can be (traffic-events.js CONVERSION_GOALS). */
+const GOALS = ['signup', 'demo', 'order', 'booking', 'newsletter', 'custom'];
 
 import { AI_SOURCES, AI_SOURCES_VERSION } from './ai-sources.js';
 
@@ -64,9 +89,10 @@ return"";
 }
 var pf=m(h,false);
 if(!pf){try{pf=m(new URLSearchParams(location.search).get("utm_source"),true)}catch(e){}}
-if(!pf)return;
+var c=document.currentScript,cv=!!c&&c.getAttribute("data-c")==="1";
+if(!pf&&!cv)return;
 window.__at=1;
-var c=document.currentScript,k=c.getAttribute("data-t"),o=c.src.replace(/\\/t\\.js(\\?.*)?$/,"");
+var k=c.getAttribute("data-t"),o=c.src.replace(/\\/t\\.js(\\?.*)?$/,"");
 var u=location.href,st=0,x=o+"/track/"+k;
 try{var n=performance.getEntriesByType("navigation")[0];st=n&&n.responseStatus||0}catch(e){}
 function post(d){
@@ -78,12 +104,65 @@ function nfOf(ti){
 if(!st)return /(^|[^0-9])404([^0-9]|$)|not found/i.test(ti)?1:0;
 return st>199&&st<300&&/(^|[|:\\u00b7\\u2022\\u2013\\u2014-]\\s*)(404 page not found|404 not found|404 error|error 404|page not found|not found|404)\\s*([|:\\u00b7\\u2022\\u2013\\u2014-]|$)/i.test(ti)?1:0;
 }
+if(pf){
 var nf=nfOf(document.title||"");
 post({u:u,r:r,s:pf,v:V,a:navigator.userAgent,t:Date.now(),l:navigator.language,d:screen.width+"x"+screen.height,st:st,nf:nf});
 if(!nf&&(!st||st>199&&st<300)){
 var again=function(){setTimeout(function(){if(nfOf(document.title||""))post({k:"nf",u:u,s:pf,a:navigator.userAgent,st:st})},1500)};
 if(document.readyState==="complete")again();else window.addEventListener("load",again);
 }
+}
+if(!cv)return;
+var G=${JSON.stringify(GOALS)},K="ansvisor_v",W=2592e6,now=Date.now();
+var ok=c.getAttribute("data-consent")==="always",q=[],v=null,old=!1,last="";
+function here(){return location.origin+location.pathname}
+try{var j=JSON.parse(localStorage.getItem(K)||"null");if(j&&j.id&&j.f&&now-j.f.at<W){v=j;old=!0}}catch(e){}
+if(!v&&pf){
+var a="ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_",id="",rb=null;
+try{rb=crypto.getRandomValues(new Uint8Array(22))}catch(e){}
+for(var i=0;i<22;i++)id+=a.charAt((rb?rb[i]:Math.floor(Math.random()*256))&63);
+v={id:id,f:{s:pf,u:here(),at:now}};
+}
+function keep(){if(v)try{localStorage.setItem(K,JSON.stringify(v))}catch(e){}}
+function send(d){if(!v)return;d.id=v.id;d.f=v.f;d.u=d.u||here();if(ok)post(d);else q.push(d)}
+function grant(){if(ok&&!q.length){keep();return}ok=!0;keep();var w=q;q=[];for(var i=0;i<w.length;i++)post(w[i])}
+function deny(){ok=!1;q=[];v=null;try{localStorage.removeItem(K)}catch(e){}}
+function pv(){var p=here();if(p===last)return;last=p;send({k:"pv"})}
+if(ok)keep();
+if(old)pv();else last=here();
+function cmd(t,a){
+if(t==="consent"){if(a==="granted")grant();else if(a==="denied")deny();return}
+if(t!=="conversion")return;
+a=a||{};
+var g=String(a.type||a.goal||"custom"),known=G.indexOf(g)!==-1,d={k:"cv",g:known?g:"custom",o:"call"};
+if(a.label||!known)d.n=String(a.label||g).slice(0,80);
+if(typeof a.value==="number")d.val=a.value;
+if(a.currency)d.cur=String(a.currency);
+if(typeof a.units==="number")d.q=a.units;
+if(a.order!=null)d.ref=String(a.order);
+send(d);
+}
+var Q=window.ansvisor&&window.ansvisor.q||[];
+window.ansvisor=function(t,a){cmd(t,a)};
+for(var i=0;i<Q.length;i++)cmd(Q[i][0],Q[i][1]);
+function gcm(it){
+if(!it||it[0]!=="consent"||!it[2]||!it[2].analytics_storage)return;
+if(it[2].analytics_storage==="granted")grant();else if(it[1]==="update")deny();else ok=!1;
+}
+var dl=window.dataLayer;
+if(dl&&dl.push){for(var i=0;i<dl.length;i++)gcm(dl[i]);var dp=dl.push;dl.push=function(){for(var i=0;i<arguments.length;i++)gcm(arguments[i]);return dp.apply(dl,arguments)}}
+document.addEventListener("submit",function(e){
+var f=e.target;
+if(!v||!f||f.tagName!=="FORM"||f.getAttribute("data-ansvisor")==="off")return;
+var g=f.getAttribute("data-ansvisor-goal");
+if(!g){if(f.querySelector("input[type=password]")||!f.querySelector("input[type=email]"))return;g="signup"}
+var d={k:"cv",g:G.indexOf(g)!==-1?g:"custom",o:"form"},n=f.getAttribute("data-ansvisor-label")||f.id||f.getAttribute("name");
+if(n)d.n=String(n).slice(0,80);
+send(d);
+},!0);
+var hp=window.history&&history.pushState;
+if(hp)history.pushState=function(){var res=hp.apply(history,arguments);pv();return res};
+window.addEventListener("popstate",pv);
 })();
 `;
 }
