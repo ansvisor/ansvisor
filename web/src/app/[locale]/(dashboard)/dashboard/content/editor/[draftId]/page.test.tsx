@@ -10,6 +10,7 @@ import type { DraftSuggestion } from '@/lib/content/suggestions';
 import { passageKey, type CitedPassage } from '@/lib/content/cited-passages';
 import { encodeHtmlBlock } from '@/lib/content/html-allowlist';
 import { CLAIMS_EVERY_MS } from './_use-claims';
+import { PROOF_READ_EVERY_MS, PROOF_READ_SLACK_MS } from './_use-page-read';
 import ContentEditorPage from './page';
 
 const getContentDraft = vi.fn();
@@ -2766,6 +2767,68 @@ describe('the side panel', () => {
         expect(qualityChip()?.textContent).toContain('updating as the page is read');
         await act(async () => void (await vi.advanceTimersByTimeAsync(CLAIMS_EVERY_MS)));
         expect(checkDraftClaims).toHaveBeenCalledTimes(2);
+        expect(qualityChip()?.textContent).not.toContain('updating');
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('holds the score until the page as saved is read for proof, then settles once (review, #1468)', async () => {
+      process.env.NEXT_PUBLIC_CONTENT_QUALITY_PHASE = '2';
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+      try {
+        getContentAuthors.mockResolvedValue({
+          authors: [],
+          brands: [{ id: 'b1', name: 'Acme' }],
+          me: { id: 'u1', role: 'admin' },
+        });
+        const read = {
+          spots: [],
+          proofs: [],
+          regulated: null,
+          pending: false,
+          limited: false,
+          paused: false,
+        };
+        let pageIn: (value: unknown) => void = () => {};
+        readDraftPage
+          .mockResolvedValueOnce(read)
+          .mockReturnValueOnce(new Promise((resolve) => (pageIn = resolve)));
+        getContentDraft.mockResolvedValue(readable);
+        saveContentDraft.mockResolvedValue({
+          ok: true,
+          updatedAt: '2026-10-20T10:01:00Z',
+          bodyHash: 'h1',
+        });
+        window.innerWidth = 1440;
+        await renderPage();
+        await act(async () => void (await vi.advanceTimersByTimeAsync(3_000)));
+        expect(readDraftPage).toHaveBeenCalledTimes(1);
+        expect(qualityChip()?.textContent).not.toContain('updating');
+        const shown = qualityChip()?.textContent;
+        const editor = (container.querySelector('.ProseMirror') as HTMLElement & { editor: Editor })
+          .editor;
+        await act(async () => {
+          editor.commands.insertContentAt(
+            editor.state.doc.content.size,
+            '<p>Forecasts missed by less each quarter.</p>',
+          );
+        });
+        await act(async () => void (await vi.advanceTimersByTimeAsync(2_000)));
+        expect(saveContentDraft).toHaveBeenCalledTimes(1);
+        // The claims are in; the page's read for the save waits for the API's minute.
+        await act(async () => void (await vi.advanceTimersByTimeAsync(CLAIMS_EVERY_MS)));
+        expect(checkDraftClaims).toHaveBeenCalledTimes(2);
+        expect(qualityChip()?.textContent).toContain('updating as the page is read');
+        await act(
+          async () =>
+            void (await vi.advanceTimersByTimeAsync(PROOF_READ_EVERY_MS + PROOF_READ_SLACK_MS)),
+        );
+        expect(readDraftPage).toHaveBeenCalledTimes(2);
+        // Asked, not answered: the last settled score stays.
+        expect(qualityChip()?.textContent).toContain(shown!.replace(/ ·.*$/, ''));
+        expect(qualityChip()?.textContent).toContain('updating as the page is read');
+        await act(async () => pageIn(read));
         expect(qualityChip()?.textContent).not.toContain('updating');
       } finally {
         vi.useRealTimers();

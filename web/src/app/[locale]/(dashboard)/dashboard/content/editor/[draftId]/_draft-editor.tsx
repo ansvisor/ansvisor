@@ -681,7 +681,9 @@ export function DraftEditor({
   // The page's own claims that need the brand's proof (CE-049), read from
   // the whole page after a save: proof to-dos while their paragraph has no
   // link, and its own-site link counts as their source.
-  const pageRead = usePageRead(draft.id, autosave.savedAt, sourcesOn, autosave.state !== 'saved');
+  // Only changes on their way hold the ask, as the claims': not a failed
+  // save, a conflict or a page too large.
+  const pageRead = usePageRead(draft.id, autosave.savedAt, sourcesOn, saving);
   const proofAsks = useMemo(
     () => (pageRead.read ? proofsOnPage(pageBlocks, pageRead.read.proofs) : []),
     [pageRead.read, pageBlocks],
@@ -920,8 +922,10 @@ export function DraftEditor({
     linksPending === 0 &&
     !claimsRead.reading &&
     !sourcesReading &&
-    // Phase 2: the brand's approved facts, which Trust checks the page against.
+    // Phase 2: the brand's approved facts, which Trust checks the page
+    // against, and the page's read (its proof to-dos; what it finds scores).
     !(sourcesOn && factsState.status === 'loading') &&
+    !pageRead.reading &&
     // Phase 2 reads the page as saved: an edit's score waits for its save.
     !(sourcesOn && saving);
   const [shownQuality, setShownQuality] = useState<{ score: number | null } | null>(null);
