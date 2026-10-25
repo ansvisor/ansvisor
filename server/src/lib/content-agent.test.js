@@ -75,7 +75,9 @@ const {
   cleanInsertHtml,
   draftPassages,
   addsAttribution,
+  attributableSources,
   dropsName,
+  placeholderAttributions,
   dropsPlaceholder,
   emptyWhy,
   fixDraftRules,
@@ -294,6 +296,20 @@ describe('keepSuggestions', () => {
     expect(
       kept(change('Ansvisor, Profound and LLM Pulse track ChatGPT and Gemini', ['bannedWords'])),
     ).toHaveLength(1);
+    // An insert that gives a claim to a source it wasn't given isn't kept either.
+    expect(
+      kept(
+        suggestion({
+          kind: 'insert',
+          passage: 1,
+          before: '',
+          after: '<p>According to Zapier, these tools cover every engine.</p>',
+          rules: ['dated'],
+          sources: [],
+          marks: [],
+        }),
+      ),
+    ).toEqual([]);
   });
 
   it('reads attributions in English, German and Turkish, and the names past a sentence’s first word', () => {
@@ -318,9 +334,49 @@ describe('keepSuggestions', () => {
         knownPeople('Ada Lovelace, head of data'),
       ),
     ).toBe(false);
-    // A sentence's first word isn't a name; one later is.
-    expect(dropsName('Teams use Ansvisor daily.', 'Teams use it daily.')).toBe(true);
-    expect(dropsName('Delve into forecasting.', 'Look at forecasting.')).toBe(false);
+    // "As Zapier says": the name is Zapier, known when the page gives claims to it.
+    expect(
+      addsAttribution('Teams forecast.', 'As Zapier says, teams forecast.', knownPeople('Zapier')),
+    ).toBe(false);
+    // More ways to give a claim to a source.
+    expect(addsAttribution('', 'According to the Zapier report, teams forecast.')).toBe(true);
+    expect(addsAttribution('', 'According to a 2025 Gartner survey, teams forecast.')).toBe(true);
+    expect(addsAttribution('', "Gartner's research shows teams forecast.")).toBe(true);
+  });
+
+  it('reads a dropped name only in a list: any capitalised word may be a noun, an acronym or a month', () => {
+    expect(
+      dropsName(
+        'Ansvisor tracks ChatGPT, Gemini and Claude.',
+        'Ansvisor tracks ChatGPT and Gemini.',
+      ),
+    ).toBe(true);
+    expect(dropsName('Teams use Ansvisor daily.', 'Teams use it daily.')).toBe(false);
+    expect(dropsName('Most AI search tools track it.', 'Most answer engines track it.')).toBe(
+      false,
+    );
+    expect(
+      dropsName('Funktionen für Marketing Teams im März.', 'Werkzeuge für Marketing-Teams.'),
+    ).toBe(false);
+    // Taken out for a banned word: it may.
+    expect(
+      dropsName('Track ChatGPT, Gemini and Claude.', 'Track ChatGPT and Gemini.', ['bannedWords']),
+    ).toBe(false);
+  });
+
+  it('puts a claim given to a source it wasn’t given as a placeholder, and reads the page’s own', () => {
+    const known = attributableSources(
+      '<p>According to Gartner, teams forecast weekly.</p><p>Zapier, Make and n8n run it.</p>',
+      [{ kind: 'input', ref: 'i1', label: 'Ada Lovelace, head of data', detail: '' }],
+      ['Grace Hopper'],
+    );
+    expect(
+      placeholderAttributions('According to Gartner, most do. According to Zapier, all do.', known),
+    ).toBe('According to Gartner, most do. According to [source], all do.');
+    // Listed by the page, not given claims by it: Zapier isn't one to give a claim to.
+    expect(addsAttribution('', 'Zapier says teams forecast.', known)).toBe(true);
+    expect(addsAttribution('', 'Ada Lovelace says teams forecast.', known)).toBe(false);
+    expect(addsAttribution('', 'Grace Hopper says teams forecast.', known)).toBe(false);
   });
 
   it('keeps no number without a source (CE-033)', () => {

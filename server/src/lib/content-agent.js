@@ -79,10 +79,10 @@ export const HEADING_RULE = `- A heading stays a heading: one short line, an H1 
 export const FANOUT_RULE = `- Fan-outs are the searches AI engines run for the page's questions. For each fan-out a rule names, in its words ("aeo tracker" → "What is an AEO tracker?"), not questions of your own: fanoutH2 wants an H2, fanoutFaq a question ending in "?" under the FAQ heading. Add it as its own question: after the paragraph that ends an existing answer, insert a heading at the level of the FAQ's other questions (an H3 under an H2 FAQ) and a paragraph that answers it. Reword an existing question into a fan-out's words only when its answer still answers it, replacing that question alone. One question per heading: never add a question to a heading. Call a change a fan-out answer only when it uses a fan-out listed.`;
 
 /** The links rule both agent prompts give the model: only the URLs listed, never invented. */
-/** What the agent may say of a source, and the names a passage keeps (editor test 2026-10-25). */
-export const ATTRIBUTION_RULE = `- Never give a claim to a source the page doesn't already ("According to X…", "X says…", "X found that…"): you don't see what a cited page or a link says. A link goes on the words it explains, never as a source for a claim. Keep every name a passage has (a product, a brand, a person): never drop one from a list or a claim.`;
-
 export const LINK_RULE = `- Links: link only to a URL listed under the pages or sources you may link to, copied exactly, as <a href="URL">the words it explains</a>, in a replace's "after" or in an insert. Cite a source by linking the words it supports. Never invent a URL, never link a heading, and when no listed page fits, add no link.`;
+
+/** What the agent may say of a source, and the names a list keeps (editor test 2026-10-25). */
+export const ATTRIBUTION_RULE = `- Never give a claim to a source the page doesn't already ("According to X…", "X says…", "X found that…"): you don't see what a cited page or a link says. A link goes on the words it explains, never as a source for a claim. Keep every name a list has (products, brands, people): never drop one.`;
 
 /** The shortest answer a heading's replace may carry for it to go under the heading. */
 const MIN_ANSWER_CHARS = 40;
@@ -306,12 +306,14 @@ export function growsPastLimit(passage, before, words) {
  * says (SOURCES_RULE), so one it adds puts a claim in a source's mouth
  * (editor test 2026-10-25: an AI Overview's claim given to Zapier).
  */
-// A name as an attribution gives it: a capitalised word, and more after it.
-const SOURCE_NAME = String.raw`(?<name>\p{Lu}[\p{L}\p{N}.&'’-]*(?:\s+\p{Lu}[\p{L}\p{N}.&'’-]*)*)`;
+// A name as an attribution gives it: capitalised words, after an article
+// or a year ("the Zapier report", "a 2025 Gartner survey").
+const SOURCE_NAME = String.raw`(?<name>(?!(?:The|This|That|These|Those|Our|Their|Its|Your|My|His|Her|We|They|It|A|An)\b)\p{Lu}[\p{L}\p{N}.&'’-]*(?:\s+\p{Lu}[\p{L}\p{N}.&'’-]*)*)`;
+const LEAD = String.raw`(?:(?:the|a|an)\s+)?(?:\d{4}\s+)?`;
 const ATTRIBUTIONS = [
-  new RegExp(String.raw`\b[Aa]ccording to\s+${SOURCE_NAME}`, 'gu'),
+  new RegExp(String.raw`\b[Aa]ccording to\s+${LEAD}${SOURCE_NAME}`, 'gu'),
   new RegExp(
-    String.raw`\b(?:[Aa]s\s+(?:reported|noted|stated|found)\s+by|[Pp]er)\s+${SOURCE_NAME}`,
+    String.raw`\b(?:[Aa]s\s+(?:reported|noted|stated|found)\s+by|[Pp]er)\s+${LEAD}${SOURCE_NAME}`,
     'gu',
   ),
   new RegExp(String.raw`${SOURCE_NAME}\s+(?:says|said|claims|claimed|states|stated)\b`, 'gu'),
@@ -319,56 +321,107 @@ const ATTRIBUTIONS = [
     String.raw`${SOURCE_NAME}\s+(?:reports|reported|notes|noted|finds|found|estimates|estimated)\s+that\b`,
     'gu',
   ),
-  new RegExp(String.raw`\b[Ll]aut\s+${SOURCE_NAME}`, 'gu'),
+  new RegExp(
+    String.raw`${SOURCE_NAME}(?:['’]s)?\s+(?:report|study|survey|research|data|analysis)\s+(?:shows|showed|finds|found|says|said|suggests)\b`,
+    'gu',
+  ),
+  new RegExp(String.raw`\b[Ll]aut\s+${LEAD}${SOURCE_NAME}`, 'gu'),
   new RegExp(String.raw`(?<name>\p{Lu}[\p{L}\p{N}.-]*)['’]\p{L}{1,3}\s+göre\b`, 'gu'),
 ];
 
 /**
- * How many claims a text gives to a source the agent wasn't given: one
- * named in the page or in what it was given (`known`, knownPeople: an
- * expert quote from Brief › Your input, a brand the page names) may be.
+ * The sources a claim may be given to on a page: the names it gives claims
+ * to already, Brief › Your input's (an expert, the person's own data) and
+ * the workspace's authors.
  */
-function attributions(text, known) {
-  let count = 0;
-  for (const re of ATTRIBUTIONS) {
-    for (const match of String(text).matchAll(re)) {
-      if (!known || !isKnown(match.groups?.name ?? '', known)) count += 1;
-    }
-  }
-  return count;
+export function attributableSources(pageHtml, numbered, authors = []) {
+  const inputs = numbered.filter((s) => s.kind === 'input').map(sourceWords);
+  return knownPeople(...attributedNames(htmlText(pageHtml)), ...inputs, ...authors);
 }
 
-/** Whether a replace gives more to a source the agent wasn't given than the passage did. */
+/** Each attribution a text writes: the name it gives a claim to, and where. */
+function attributionsIn(text) {
+  const found = [];
+  for (const re of ATTRIBUTIONS) {
+    for (const match of String(text).matchAll(re)) {
+      const name = match.groups?.name ?? '';
+      if (name) found.push({ name, index: match.index + match[0].indexOf(name) });
+    }
+  }
+  return found;
+}
+
+/** The names a text gives claims to: the sources the page already attributes to. */
+export function attributedNames(text) {
+  return attributionsIn(text).map((a) => a.name);
+}
+
+/**
+ * Whether a name is one the agent was given (`known`, knownPeople), or its
+ * last words are ("As Zapier says": "Zapier").
+ */
+function knownName(name, known) {
+  const words = name.split(/\s+/);
+  return words.some((_, i) => isKnown(words.slice(i).join(' '), known));
+}
+
+/** How many claims a text gives to a source the agent wasn't given. */
+function attributions(text, known) {
+  return attributionsIn(text).filter((a) => !known || !knownName(a.name, known)).length;
+}
+
+/**
+ * Whether a change gives more claims to a source the agent wasn't given than
+ * the passage did (an insert: than none). Given: one the page attributes to
+ * already, an expert from Brief › Your input, an author (`known`).
+ */
 export function addsAttribution(before, words, known = null) {
   return attributions(words, known) > attributions(before, known);
 }
 
 /**
- * The names a passage's words hold: words written with a capital past each
- * sentence's first ("Claude", "LLM", "Pulse"), each once. Not a heading's
- * (Title Case), nor "I".
+ * A text with each claim given to a source the agent wasn't given put as a
+ * placeholder ("According to [source], …"): for a page rewritten whole,
+ * where dropping it would drop the page.
  */
-function namesIn(text) {
-  const names = new Set();
-  for (const sentence of String(text).split(/(?<=[.!?:])\s+/u)) {
-    const words = sentence.split(/[^\p{L}\p{N}&+]+/u).filter(Boolean);
-    for (const word of words.slice(1)) {
-      if (word.length > 1 && /^\p{Lu}/u.test(word)) names.add(word);
-    }
+export function placeholderAttributions(text, known = null) {
+  const unknown = attributionsIn(text)
+    .filter((a) => !known || !knownName(a.name, known))
+    .sort((a, b) => b.index - a.index);
+  let out = String(text);
+  for (const { name, index } of unknown) {
+    if (out.slice(index, index + name.length) !== name) continue;
+    out = `${out.slice(0, index)}[source]${out.slice(index + name.length)}`;
   }
-  return names;
+  return out;
 }
 
+// A list of names: two or more capitalised items with commas and an "and"
+// ("Ansvisor, Profound and LLM Pulse"; und, ve, et, y…), or three with commas.
+const ITEM = String.raw`\p{Lu}[\p{L}\p{N}.&+'’-]*(?:\s+\p{Lu}[\p{L}\p{N}.&+'’-]*)*`;
+const AND = String.raw`(?:and|or|und|oder|ve|veya|ile|et|ou|y|o|e|en|of)`;
+const NAME_LIST = new RegExp(
+  String.raw`(?:${ITEM}\s*,\s*)+${ITEM},?\s+${AND}\s+${ITEM}|(?:${ITEM}\s*,\s*){2,}${ITEM}`,
+  'gu',
+);
+const ITEM_RE = new RegExp(ITEM, 'gu');
+
 /**
- * Whether a replace drops a name the passage has: a product, a brand or a
- * person left out of a claim changes the claim (editor test 2026-10-25:
- * Claude dropped from a list of the engines a tool tracks). A change made
- * to take out a banned word or an AI trace may.
+ * Whether a replace drops a name from a list the passage has: a product, a
+ * brand or a person left out of a claim changes the claim (editor test
+ * 2026-10-25: Claude dropped from the engines a tool tracks). Only names in
+ * a list: a capitalised word alone may be any noun (German), an acronym or a
+ * month. A change made to take out a banned word or an AI trace may.
  */
 export function dropsName(before, words, rules = []) {
   if (rules.includes('bannedWords') || rules.includes('aiTraces')) return false;
-  const kept = new Set(String(words).split(/[^\p{L}\p{N}&+]+/u));
-  return [...namesIn(before)].some((name) => !kept.has(name));
+  const after = String(words);
+  for (const list of String(before).match(NAME_LIST) ?? []) {
+    for (const item of list.match(ITEM_RE) ?? []) {
+      if (!after.includes(item)) return true;
+    }
+  }
+  return false;
 }
 
 /**
@@ -463,6 +516,10 @@ export function keepSuggestions(raw, passages, lockedKeys, ruleKeys, links = nul
   const keepsPlaceholders = sourcing.keepPlaceholders === true;
   const known = sourcing.known ?? knownNumbers(...passages.map((p) => p.text));
   const people = sourcing.people ?? knownPeople(...passages.map((p) => p.text));
+  // The sources a claim may be given to: the ones the page gives claims to,
+  // and what it was given (Your input, the authors), never just any name the
+  // page has (a competitor in a list).
+  const attributable = sourcing.attributable ?? people;
   const kept = [];
   const seen = new Set();
   for (const answer of raw) {
@@ -479,7 +536,10 @@ export function keepSuggestions(raw, passages, lockedKeys, ruleKeys, links = nul
     if (!passage || !reason || passage.text.length > MAX_PASSAGE_CHARS) continue;
     const rules = [...new Set(s.rules.filter((key) => ruleKeys.has(key)))];
     const insertOf = (html) =>
-      textOf(html).trim() && html.length <= 20_000
+      textOf(html).trim() &&
+      html.length <= 20_000 &&
+      // A claim given to a source it wasn't given (editor test 2026-10-25).
+      !addsAttribution('', textOf(html), attributable)
         ? {
             id: `insert:${passage.text}:${html}`,
             row: {
@@ -520,7 +580,7 @@ export function keepSuggestions(raw, passages, lockedKeys, ruleKeys, links = nul
         (words.length > 2000 ||
           growsPastLimit(passage, before, words) ||
           asksMoreThanOne(passage, before, words) ||
-          addsAttribution(before, words, people) ||
+          addsAttribution(before, words, attributable) ||
           (!/^h[1-6]$/.test(passage.tag) && dropsName(before, words, rules)))
       )
         continue;
@@ -931,6 +991,7 @@ async function fixWithRun({
     todayText(),
   );
   // The people and quotes it may name: the same words, its data's and the authors' (CE-044).
+  const authors = await authorWords(supabaseAdmin, brand.organization_id);
   const people = knownPeople(
     htmlText(draft.body_html),
     draft.title,
@@ -939,8 +1000,11 @@ async function fixWithRun({
     brand.description,
     ...ruleWords,
     ...numbered.map(sourceWords),
-    ...(await authorWords(supabaseAdmin, brand.organization_id)),
+    ...authors,
   );
+  // The sources a claim may be given to: the ones the page gives claims to,
+  // and its Your input and authors (never just a name the page lists).
+  const attributable = attributableSources(draft.body_html, numbered, authors);
   // Where it may link: the brand's pages and the draft's sources (A); a
   // hand-off's source checks link the draft's sources.
   const linkKeys =
@@ -1000,7 +1064,7 @@ async function fixWithRun({
     lockedKeys,
     ruleKeys,
     linkAllowList(targets),
-    { numbered, known, people, keepPlaceholders: handoff },
+    { numbered, known, people, attributable, keepPlaceholders: handoff },
   );
   // Stopped meanwhile: nothing it wrote is kept.
   await stopIfStopped(run);
