@@ -619,8 +619,9 @@ export function agentWriting(draft, now = Date.now()) {
  * by a person or the editor on its own (`origin`). The rules are the page's
  * checks in the server's words, and what the editor sent of them (their
  * detail) is no fact the agent may write; a placeholder stays the person's.
- * An automatic one runs only on a draft its brand hands off (quality_handoff,
- * 00275: 409 `not_due`), once (409 `already`); one the AI budget stops
+ * An automatic one runs only on a draft made while its brand handed off
+ * (quality_handoff, 00275) and while it still does (409 `not_due`), once
+ * (409 `already`); one the AI budget stops
  * before it begins is taken back, to run once the budget renews.
  */
 export async function fixDraftRules({ draftId, brandId, input, handoff = null }) {
@@ -667,11 +668,18 @@ export async function fixDraftRules({ draftId, brandId, input, handoff = null })
   const { data: brand, error: brandError } = await supabaseAdmin
     .from('brands')
     .select(
-      'name, industry, description, organization_id, language, site_type, shopping_mode_enabled',
+      `name, industry, description, organization_id, language, site_type, shopping_mode_enabled${handoff ? ', content_quality_handoff' : ''}`,
     )
     .eq('id', brandId)
     .single();
   if (brandError) throw brandError;
+  // Turned off since the draft was made: its automatic hand-off doesn't run.
+  if (handoff?.origin === 'auto' && brand.content_quality_handoff !== true) {
+    throw Object.assign(new Error('The brand hands off no quality fixes'), {
+      status: 409,
+      code: 'not_due',
+    });
+  }
 
   // Its steps, named by the work it does (CE-027/035); Stop aborts the call.
   const sources = input.sources;
