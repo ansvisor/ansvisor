@@ -1931,16 +1931,20 @@ export function DraftEditor({
   };
   const openSuggestions = suggestions.filter((s) => s.status === 'open').length;
   // Whether the agent's batch is still the page's: one of its changes is
-  // where the page has it. After a restore, or edits over all of it, its
-  // card and its Undo all go: they'd undo nothing (editor test 2026-10-25).
-  // A whole page rewritten keeps its own card, whose Undo says when the
-  // page changed since.
+  // open, or where the page has it. After a restore (which sets its open
+  // ones aside), or edits over all it changed, its card and its Undo all go:
+  // they'd undo nothing (editor test 2026-10-25). A whole page rewritten
+  // keeps its own card, whose Undo says when the page changed since.
   const batchApplies = useMemo(
     () =>
       !!editor &&
       !editor.isDestroyed &&
       suggestions.some(
-        (s) => s.kind === 'page' || placeSuggestion(editor.state, s, suggestions) !== null,
+        (s) =>
+          // An open one stays in sight to decide: left open, it holds the next run.
+          s.status === 'open' ||
+          s.kind === 'page' ||
+          placeSuggestion(editor.state, s, suggestions) !== null,
       ),
     // pageHtml: the page as it changes (the editor's state is read through it).
     // eslint-disable-next-line react-hooks/exhaustive-deps
