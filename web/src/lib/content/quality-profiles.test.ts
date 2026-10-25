@@ -53,8 +53,13 @@ describe('PROFILE_WEIGHTS', () => {
   it('asks a product page for no author, and a comparison for balance and a disclosure', () => {
     expect(checksOff('product')).toContain('byline');
     expect(checksOff('product')).toContain('authorBio');
-    // An article counts every check but the brand's information, the type rules and shipping.
-    expect([...checksOff('article')].sort()).toEqual(['brandInfo', 'shippingReturns', 'typeRules']);
+    // An article counts every check but the brand's information, the check date, shipping and the type rules.
+    expect([...checksOff('article')].sort()).toEqual([
+      'brandInfo',
+      'checkDate',
+      'shippingReturns',
+      'typeRules',
+    ]);
     expect(PROFILE_WEIGHTS.comparison.trust.balanced).toBeGreaterThan(
       PROFILE_WEIGHTS.article.trust.balanced,
     );

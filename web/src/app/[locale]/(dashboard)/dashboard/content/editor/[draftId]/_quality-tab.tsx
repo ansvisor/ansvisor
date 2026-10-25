@@ -144,6 +144,7 @@ export function QualityTab({
   onConfirmImages,
   onAddImage,
   onPickReviewer,
+  onAddCheckDate,
   handOff = null,
   onConfirmAuthor,
   onChangeType,
@@ -173,6 +174,8 @@ export function QualityTab({
   onAddImage?: () => void;
   /** Opens the header's reviewer menu (CE-049). */
   onPickReviewer?: () => void;
+  /** A comparison's check date to-do: Add line puts this month's under the answer (CE-052). */
+  onAddCheckDate?: () => void;
   /** Hand it off to Content Agent (CE-051): with Quality's phase 2. */
   handOff?: HandOff | null;
 }) {
@@ -270,6 +273,7 @@ export function QualityTab({
                 onConfirmImages={onConfirmImages}
                 onAddImage={onAddImage}
                 onPickReviewer={onPickReviewer}
+                onAddCheckDate={onAddCheckDate}
                 onConfirm={onConfirmAuthor}
               />
             ))}
@@ -480,6 +484,18 @@ export function useTodoCopy() {
             : t('visualProof.detail.add'),
       };
     }
+    // A comparison's check date (CE-052): only the person knows when they checked.
+    if (todo.id === 'checkDate') {
+      return {
+        title: t('checkDate.title'),
+        next: t('checkDate.next'),
+        detail: todo.done
+          ? t('checkDate.done')
+          : todo.action === 'addCheckDate'
+            ? t('checkDate.detail')
+            : t('checkDate.detailWrite'),
+      };
+    }
     // A product page's shipping and returns (CE-052): only the person knows them.
     if (todo.id === 'shippingReturns') {
       return {
@@ -552,6 +568,7 @@ function TodoRow({
   onConfirmImages,
   onAddImage,
   onPickReviewer,
+  onAddCheckDate,
   onConfirm,
 }: {
   todo: QualityTodo;
@@ -564,6 +581,8 @@ function TodoRow({
   onConfirmImages?: () => void;
   onAddImage?: () => void;
   onPickReviewer?: () => void;
+  /** A comparison's check date to-do: Add line puts this month's under the answer (CE-052). */
+  onAddCheckDate?: () => void;
   onConfirm?: (what: 'real' | 'profile', on: boolean) => void;
 }) {
   const t = useTranslations('contentEditor.editor.quality');
@@ -684,6 +703,12 @@ function TodoRow({
           onPickReviewer && (
             <Button variant="outline" size="sm" className="h-7 shrink-0" onClick={onPickReviewer}>
               {t('pickReviewer')}
+            </Button>
+          )
+        ) : todo.action === 'addCheckDate' ? (
+          onAddCheckDate && (
+            <Button variant="outline" size="sm" className="h-7 shrink-0" onClick={onAddCheckDate}>
+              {t('addLine')}
             </Button>
           )
         ) : todo.action === 'reviewBrandFacts' ? (

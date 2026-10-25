@@ -87,6 +87,7 @@ export const PROFILE_WEIGHTS: Readonly<Record<QualityProfile, ProfileWeights>> =
       dates: 0,
       authorSchema: 0,
       brandInfo: 0,
+      checkDate: 0,
     },
     trust: {
       claimsSourced: 30,
@@ -126,6 +127,7 @@ export const PROFILE_WEIGHTS: Readonly<Record<QualityProfile, ProfileWeights>> =
       dates: 0,
       authorSchema: 0,
       brandInfo: 40,
+      checkDate: 0,
     },
     trust: {
       claimsSourced: 25,
@@ -164,6 +166,7 @@ export const PROFILE_WEIGHTS: Readonly<Record<QualityProfile, ProfileWeights>> =
       dates: 0,
       authorSchema: 0,
       brandInfo: 0,
+      checkDate: 0,
     },
     trust: {
       claimsSourced: 35,
@@ -189,20 +192,22 @@ export const PROFILE_WEIGHTS: Readonly<Record<QualityProfile, ProfileWeights>> =
       typeRules: 10,
     },
   },
-  // An author, saying how the picks were made; balance and a disclosure,
+  // An author, saying how the picks were made and when they were last
+  // checked; balance and a disclosure,
   // each rival's facts from its own pages; the summary first and a table
   // side by side.
   comparison: {
     eeat: {
-      experience: 20,
+      experience: 15,
       originalData: 10,
       byline: 15,
       authorBio: 10,
       visualProof: 10,
-      whoHowWhy: 20,
-      dates: 10,
-      authorSchema: 5,
+      whoHowWhy: 15,
+      dates: 5,
+      authorSchema: 0,
       brandInfo: 0,
+      checkDate: 20,
     },
     trust: {
       claimsSourced: 25,

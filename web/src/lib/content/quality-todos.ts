@@ -34,7 +34,8 @@ export type QualityTodoId =
   | 'proof'
   | 'reviewer'
   | 'brandFacts'
-  | 'shippingReturns';
+  | 'shippingReturns'
+  | 'checkDate';
 
 /**
  * A to-do's one button: Show (the first placeholder, selected to type over),
@@ -51,7 +52,8 @@ export type QualityTodoAction =
   | 'confirmImage'
   | 'addImage'
   | 'pickReviewer'
-  | 'reviewBrandFacts';
+  | 'reviewBrandFacts'
+  | 'addCheckDate';
 
 export interface QualityTodo {
   id: QualityTodoId;
@@ -104,6 +106,7 @@ export function qualityTodos({
   reviewer = null,
   confirmed = null,
   shipping = null,
+  checkDate = null,
   off = NONE_OFF,
 }: {
   eeat: Score<EeatCheckId> | null;
@@ -151,6 +154,11 @@ export function qualityTodos({
    * work (Trust's read): only the person knows them.
    */
   shipping?: { shipping: boolean; returns: boolean } | null;
+  /**
+   * Phase 3 (CE-052): whether a comparison shows when it was last checked,
+   * and the line Add line puts in (null for a language without one).
+   */
+  checkDate?: { found: boolean; line: string | null } | null;
   /**
    * Phase 3 (CE-052): the checks the page's type leaves out (checksOff): no
    * to-do asks for them (a product page has the brand's byline, no author).
@@ -284,6 +292,18 @@ export function qualityTodos({
     // that can't be read too.
     ...visualTodo(eeat, visual),
     ...howTodo(eeat),
+    ...(checkDate
+      ? [
+          {
+            id: 'checkDate',
+            done: checkDate.found,
+            gain: scoreGain(eeat, ['checkDate']),
+            score: 'eeat',
+            // Only the person knows when they checked: Add line says this month's.
+            action: checkDate.found || !checkDate.line ? null : 'addCheckDate',
+          } satisfies QualityTodo,
+        ]
+      : []),
     ...(used
       ? ([
           {

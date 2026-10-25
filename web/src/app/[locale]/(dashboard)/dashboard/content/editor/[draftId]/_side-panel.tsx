@@ -139,6 +139,7 @@ export function EditorSidePanel({
   onConfirmImages,
   onAddImage,
   onPickReviewer,
+  onAddCheckDate,
   onChangeType,
   handOff = null,
 }: {
@@ -209,6 +210,8 @@ export function EditorSidePanel({
   onAddImage?: () => void;
   /** Quality's Pick reviewer: the header's reviewer menu (CE-049). */
   onPickReviewer?: () => void;
+  /** Quality's Add line for a comparison's check date (CE-052). */
+  onAddCheckDate?: () => void;
   /** Quality's Change: the header's page type menu (CE-052). */
   onChangeType?: () => void;
   /** Hand it off to Content Agent, Quality's (CE-051). */
@@ -465,6 +468,7 @@ export function EditorSidePanel({
                 onConfirmImages={onConfirmImages}
                 onAddImage={onAddImage}
                 onPickReviewer={onPickReviewer}
+                onAddCheckDate={onAddCheckDate}
                 onChangeType={onChangeType}
                 handOff={handOff}
               />

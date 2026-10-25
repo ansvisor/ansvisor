@@ -4700,6 +4700,7 @@
           "needsWork": "Needs work"
         },
         "estimate": "Ansvisor estimates based on Google's published quality signals. Not a Google score.",
+        "addLine": "Add line",
         "weightsFor": {
           "line": "Checks and weights for {type}{detected, select, yes { (detected)} other {}}:",
           "noType": "an article (no page type yet)",
@@ -4754,6 +4755,13 @@
             "detail": "A real person's words as said, with their name, title and where they said them",
             "given": "It's in Your input, but the page doesn't quote it word for word yet",
             "done": "The page quotes an expert word for word"
+          },
+          "checkDate": {
+            "title": "Show when you last checked",
+            "next": "show when you last checked",
+            "detail": "Comparison readers trust a date they can see. Add line puts this month's under the opening paragraph: check the products first",
+            "detailWrite": "Comparison readers trust a date they can see: write when you last checked the products",
+            "done": "The page shows when it was last checked"
           },
           "shippingReturns": {
             "title": "Say how shipping and returns work",
@@ -4865,7 +4873,8 @@
             "addProof": "Add now",
             "confirmImage": "Confirm now",
             "pickReviewer": "Pick now",
-            "addImage": "Add now"
+            "addImage": "Add now",
+            "addCheckDate": "Add now"
           },
           "later": "Later"
         },

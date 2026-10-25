@@ -2601,6 +2601,39 @@ describe('the side panel', () => {
       expect(text).not.toContain('Add an author for the page');
     });
 
+    it('asks a comparison to show when it was last checked, and Add line puts it under the answer (CE-052)', async () => {
+      process.env.NEXT_PUBLIC_CONTENT_QUALITY_PHASE = '3';
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+      getContentAuthors.mockResolvedValue({
+        authors: [],
+        brands: [{ id: 'b1', name: 'Acme' }],
+        me: { id: 'u1', role: 'admin' },
+      });
+      getContentDraft.mockResolvedValue({ ...readable, pageType: 'comparison' });
+      window.innerWidth = 1440;
+      await renderPage();
+      await act(async () => void (await vi.advanceTimersByTimeAsync(3_000)));
+      const chip = [...container.querySelectorAll<HTMLButtonElement>('header button')].find((b) =>
+        b.textContent?.startsWith('Quality'),
+      )!;
+      await act(async () => chip.click());
+      const row = () =>
+        [...panel()!.querySelectorAll('[aria-label="Your to-dos"] li')].find((li) =>
+          li.textContent?.startsWith('Show when you last checked'),
+        )!;
+      expect(row().textContent).toContain('Add line puts this month');
+      await act(async () =>
+        [...row().querySelectorAll('button')].find((b) => b.textContent === 'Add line')!.click(),
+      );
+      const { state } = (
+        container.querySelector('.ProseMirror') as HTMLElement & { editor: Editor }
+      ).editor;
+      // Under the opening paragraph, the answer first.
+      expect(state.doc.child(2).textContent).toMatch(/^Last checked: \w+ \d{4}\.$/);
+      await act(async () => void (await vi.advanceTimersByTimeAsync(500)));
+      expect(row().textContent).toContain('The page shows when it was last checked');
+    });
+
     it('shows nothing of Quality until its first phase is live', async () => {
       getContentDraft.mockResolvedValue(readable);
       window.innerWidth = 1440;

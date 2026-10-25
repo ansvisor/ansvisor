@@ -115,6 +115,7 @@ import {
   unplacedSites,
   type ClaimMark,
 } from '@/lib/content/quality-checks';
+import { checkDateText, pageCheckDate } from '@/lib/content/check-date';
 import {
   PROFILE_WEIGHTS,
   checksOff,
@@ -762,6 +763,12 @@ export function DraftEditor({
   // page's type (an article's before, and for most types).
   const profile = profileFor(pageType);
   const weights = PROFILE_WEIGHTS[profile];
+  // A comparison's check date (CE-052): E-E-A-T's check and its to-do.
+  const checkDateRead = useMemo(
+    () =>
+      qualityOn && profile === 'comparison' ? pageCheckDate(pageBlocks.map((b) => b.text)) : null,
+    [qualityOn, profile, pageBlocks],
+  );
   // A product page's shipping and returns (CE-052): Trust's check, and a
   // to-do that needs no Trust read.
   const shippingRead = useMemo(
@@ -856,6 +863,7 @@ export function DraftEditor({
               confirmed: authorConfirmed,
               // The brand's own information: only a type that weighs it counts it.
               siteTrust,
+              checkDate: checkDateRead,
             }),
             weights.eeat,
           )
@@ -872,6 +880,7 @@ export function DraftEditor({
       aiChecks,
       authorConfirmed,
       siteTrust,
+      checkDateRead,
       weights,
     ],
   );
@@ -1083,6 +1092,8 @@ export function DraftEditor({
         reviewer: regulated && authorsRead ? { topic: regulated, picked: !!pageReviewer } : null,
         confirmed: authorConfirmed,
         shipping: shippingRead,
+        checkDate:
+          checkDateRead === null ? null : { found: checkDateRead, line: checkDateText(language) },
         off: checksOff(profile),
       })
     : [];
@@ -1639,10 +1650,11 @@ export function DraftEditor({
   const disclosureOnPage =
     !!disclosureLine &&
     squeeze(pageBlocks.map((b) => b.text).join('')).includes(squeeze(disclosureLine));
-  // The disclosure line (CE-050) under the page's opening paragraph (the
-  // answer Answer first reads, past an image, a byline or a date), else
-  // under the page's H1, else at the top; never twice. One undo takes it out.
-  const addDisclosure = (line: string) => {
+  // A line the page says of itself (the disclosure, CE-050; a check date,
+  // CE-052) under the page's opening paragraph (the answer Answer first
+  // reads, past an image, a byline or a date), else under the page's H1,
+  // else at the top; never twice. One undo takes it out.
+  const addLineUnderAnswer = (line: string) => {
     if (!editor || editor.isDestroyed) return;
     const { doc } = editor.state;
     if (squeeze(doc.textContent).includes(squeeze(line))) return;
@@ -1673,6 +1685,11 @@ export function DraftEditor({
       .chain()
       .insertContentAt(at, { type: 'paragraph', content: [{ type: 'text', text: line }] })
       .run();
+  };
+  // Quality's Add line for a comparison's check date (CE-052): this month's.
+  const addCheckDate = () => {
+    const line = checkDateText(language);
+    if (line) addLineUnderAnswer(line);
   };
   const fillFirstPlaceholder = () => {
     if (htmlSource !== null) {
@@ -3232,6 +3249,7 @@ export function DraftEditor({
                 onShowPlaceholder={showFirstPlaceholder}
                 onPickAuthor={() => setAuthorMenuOpen(true)}
                 onPickReviewer={() => setReviewerMenuOpen(true)}
+                onAddCheckDate={addCheckDate}
                 onAddInput={addInput}
                 onAddSource={sourcesOn ? addSource : undefined}
                 onConfirmImages={() => setConfirmingImages(true)}
@@ -3274,6 +3292,7 @@ export function DraftEditor({
             onShowPlaceholder={showFirstPlaceholder}
             onPickAuthor={() => setAuthorMenuOpen(true)}
             onPickReviewer={() => setReviewerMenuOpen(true)}
+            onAddCheckDate={addCheckDate}
             onChangeType={() => setTypeMenuOpen(true)}
             handOff={handOffCard}
             yourInput={inputsRead.status === 'off' ? null : inputsRead}
@@ -3391,7 +3410,7 @@ export function DraftEditor({
           // Not while the HTML view holds the page: its source is what goes out.
           disclosureLine={htmlSource === null ? disclosureLine : null}
           disclosureAdded={disclosureOnPage}
-          onAddDisclosure={addDisclosure}
+          onAddDisclosure={addLineUnderAnswer}
           onMarkReady={(anyway) => {
             setPublishOpen(null);
             void markReady(anyway ?? undefined);

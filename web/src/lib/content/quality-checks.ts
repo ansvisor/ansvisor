@@ -43,9 +43,13 @@ export const EEAT_WEIGHTS = {
   dates: 10,
   authorSchema: 10,
   brandInfo: 0,
+  // Phase 3 (CE-052): a comparison's visible check date; weighed there.
+  checkDate: 0,
 } as const;
 /** The brand info check's points before a page type weighs it (weighed keeps its share). */
 const BRAND_INFO_POINTS = 10;
+/** The check date's points before a page type weighs it. */
+const CHECK_DATE_POINTS = 10;
 export type EeatCheckId = keyof typeof EEAT_WEIGHTS;
 
 /**
@@ -211,8 +215,14 @@ export function eeat({
   how = null,
   confirmed = null,
   siteTrust = null,
+  checkDate = null,
 }: {
   author: ContentAuthor | null;
+  /**
+   * Phase 3 (CE-052): whether a comparison shows when its products were
+   * last checked (pageCheckDate); left out elsewhere.
+   */
+  checkDate?: boolean | null;
   /**
    * The site's trust (its five checks in Site Audit, CE-043): the brand's own
    * information, which only a page type that weighs it counts (CE-052).
@@ -292,6 +302,15 @@ export function eeat({
           : 0,
       max: EEAT_WEIGHTS.authorBio,
     },
+    ...(checkDate !== null
+      ? [
+          {
+            id: 'checkDate' as const,
+            points: checkDate ? CHECK_DATE_POINTS : 0,
+            max: CHECK_DATE_POINTS,
+          },
+        ]
+      : []),
     ...(siteTrust
       ? [
           {
