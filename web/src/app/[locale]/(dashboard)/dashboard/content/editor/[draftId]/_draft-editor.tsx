@@ -98,6 +98,8 @@ import {
   openingParagraph,
   pageName,
   pageOffer,
+  listedProducts,
+  MIN_LISTED,
 } from '@/lib/content/page-schema';
 import { PLACEHOLDER, pagePlaceholders, placeholderIn } from '@/lib/content/placeholders';
 import { HANDOFF_KEYS, handOffItems } from '@/lib/content/hand-off';
@@ -135,6 +137,7 @@ import {
 } from '@/lib/content/quality-profiles';
 import { caseConfirmed, caseKey, proofKey, qualityTodos } from '@/lib/content/quality-todos';
 import { isByline, readability, sentencesOf, withTypeRules } from '@/lib/content/readability';
+import { normalizeDomain } from '@/lib/citations/classify';
 import { brandFactsPath, factMismatches } from '@/lib/content/brand-facts';
 import { feedCheck, type CatalogMatch } from '@/lib/content/feed-match';
 import {
@@ -1005,6 +1008,20 @@ export function DraftEditor({
       offer: pageOffer(pageBlocks.map((block) => block.text)),
     };
   }, [profile, images, ownImages, pageHtml, pageBlocks]);
+  // Phase 3 (CE-054): a category page's ItemList in Before you publish, from
+  // its links to the brand's product pages, read against its site.
+  // The brand's domains as the sources read them; failing that, its site's.
+  const sourcesFailed = !!reads.sources?.failed;
+  const categorySchema = useMemo(() => {
+    if (profile !== 'category') return null;
+    const site = siteTrust?.checks.organizationSchema.url ?? null;
+    const siteHost = site ? normalizeDomain(site) : '';
+    const domains = brandDomains ?? (sourcesFailed && siteHost ? [siteHost] : null);
+    if (!domains) {
+      return { items: [], status: sourcesFailed ? ('unknown' as const) : ('reading' as const) };
+    }
+    return { items: listedProducts(pageHtml, domains, site), status: 'read' as const };
+  }, [profile, pageHtml, brandDomains, sourcesFailed, siteTrust]);
   // The page's price, GTIN and stock against its product in the feed (CE-053).
   const feedRead = useMemo(
     () =>
@@ -3564,6 +3581,8 @@ export function DraftEditor({
             // Only where Before you publish has its code: a name and one price.
             product:
               !!productSchema?.offer && !('several' in productSchema.offer) && !!pageName(title),
+            itemList:
+              categorySchema?.status === 'read' && categorySchema.items.length >= MIN_LISTED,
             onReview: () => {
               setExportOpen(null);
               openBeforePublish('export', exportOpen.destination);
@@ -3617,6 +3636,7 @@ export function DraftEditor({
           disclosureAdded={disclosureOnPage}
           onAddDisclosure={addLineUnderAnswer}
           product={productSchema}
+          category={categorySchema}
           onMarkReady={(anyway) => {
             setPublishOpen(null);
             void markReady(anyway ?? undefined);

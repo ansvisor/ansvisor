@@ -208,6 +208,8 @@ export function ExportDialog({
     article: boolean;
     /** A product page (Phase 3, CE-053): Before you publish has its Product JSON-LD. */
     product?: boolean;
+    /** A category page (Phase 3, CE-054): Before you publish has its ItemList JSON-LD. */
+    itemList?: boolean;
     onReview: () => void;
   } | null;
 }) {
@@ -639,6 +641,7 @@ function PublishLine({
   noDisclosure = false,
   article,
   product = false,
+  itemList = false,
   onReview,
 }: {
   trustBelow: number | null;
@@ -646,6 +649,7 @@ function PublishLine({
   noDisclosure?: boolean;
   article: boolean;
   product?: boolean;
+  itemList?: boolean;
   onReview: () => void;
 }) {
   const t = useTranslations('contentEditor.editor.exportDialog.publish');
@@ -667,7 +671,15 @@ function PublishLine({
       <p className="min-w-0 flex-1">
         {warnings.length
           ? t('warnings', { list: warnings.join(' · ') })
-          : t(article ? 'quiet' : product ? 'quietProduct' : 'quietOther')}
+          : t(
+              article
+                ? 'quiet'
+                : product
+                  ? 'quietProduct'
+                  : itemList
+                    ? 'quietItemList'
+                    : 'quietOther',
+            )}
       </p>
       <Button
         variant="outline"
