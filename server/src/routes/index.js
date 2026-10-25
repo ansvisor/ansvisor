@@ -16,6 +16,7 @@ import actionCenterRoutes from './action-center.js';
 import botRoutes from './bots.js';
 import billingRoutes from './billing.js';
 import brandFactRoutes from './brand-facts.js';
+import catalogRoutes from './catalog.js';
 
 const router = Router();
 
@@ -36,6 +37,7 @@ router.use('/action-center', actionCenterRoutes);
 router.use('/bots', botRoutes);
 router.use('/billing', billingRoutes);
 router.use('/brand-facts', brandFactRoutes);
+router.use('/catalog', catalogRoutes);
 
 router.get('/health', (req, res) => {
   res.json({ status: 'ok', user: req.user?.id });
