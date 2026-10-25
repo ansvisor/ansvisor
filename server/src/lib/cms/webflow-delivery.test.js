@@ -94,12 +94,12 @@ describe('sendToWebflow', () => {
       'post-summary': 'How to make it.',
     });
     expect(webflow.updateItem).not.toHaveBeenCalled();
-    // The page's last item is looked for in this collection, from a send that went.
+    // The page's last item is looked for in this collection, from any send that made one:
+    // one closed as removed in Webflow too, in case it wasn't.
     expect(queries[0].filters).toEqual([
       ['eq', 'draft_id', 'dr1'],
       ['eq', 'target', 'webflow'],
       ['eq', 'target_collection', 'c1'],
-      ['in', 'status', ['sent', 'published']],
       ['not', 'external_id', 'is', null],
       ['neq', 'id', 'd2345678-0000-0000-0000-000000000000'],
     ]);
