@@ -145,6 +145,17 @@ describe('fetchPage against a local site', () => {
         res.end('late');
       }, 300);
     },
+    // The connection drops part way through the body.
+    '/cut': (res) => {
+      res.writeHead(200, { 'content-type': 'text/html', 'content-length': '1000' });
+      res.write('<p>part');
+      setTimeout(() => res.socket.destroy(), 10);
+    },
+    '/cut-gzip': (res) => {
+      res.writeHead(200, { 'content-type': 'text/html', 'content-encoding': 'gzip' });
+      res.write(zlib.gzipSync(`<p>${'x'.repeat(10_000)}</p>`).subarray(0, 40));
+      setTimeout(() => res.socket.destroy(), 10);
+    },
   };
 
   beforeAll(async () => {
@@ -203,6 +214,15 @@ describe('fetchPage against a local site', () => {
     await expect(
       get('/feed.xml', { types: /^\s*application\/xml\b/i, accept: 'application/xml' }),
     ).resolves.toMatchObject({ html: '<rss version="2.0"><channel></channel></rss>' });
+  });
+
+  it('fails a page cut off part way, compressed or not, instead of waiting for it', async () => {
+    // Past its own timeout, a compressed page cut off would wait forever: the
+    // request is already over, so the timeout has nothing left to stop.
+    await expect(get('/cut', { timeoutMs: 2000 })).rejects.toMatchObject({ code: 'unreachable' });
+    await expect(get('/cut-gzip', { timeoutMs: 2000 })).rejects.toMatchObject({
+      code: 'unreachable',
+    });
   });
 
   it('reads the start of a page over the cap when asked to, instead of refusing it', async () => {

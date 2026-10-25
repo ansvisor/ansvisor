@@ -211,10 +211,19 @@ async function syncOnce(
   return outcome;
 }
 
+/** What a source of a workspace without an active subscription records, instead of a read. */
+export const NOT_READ_INACTIVE = {
+  status: 'failed',
+  error: "Not read: this workspace's subscription isn't active.",
+};
+
 /**
  * The daily run: feeds and stores not read for SYNC_EVERY_MS, the longest
  * waiting first, SWEEP_LIMIT a run, one at a time, until SWEEP_DEADLINE_MS.
- * On the managed cloud, only workspaces with an active subscription.
+ * On the managed cloud, only workspaces with an active subscription are
+ * read. A source of any other workspace records that it wasn't read, which
+ * also moves it to the back of the line: left untouched, those sources would
+ * stay first in line every day and could fill a run's every slot.
  */
 export async function sweepCatalogSources({
   db = supabaseAdmin,
@@ -236,10 +245,15 @@ export async function sweepCatalogSources({
     .limit(SWEEP_LIMIT);
   if (error) throw new Error(`catalog_sources read: ${error.message}`);
   let synced = 0;
+  let inactive = 0;
   for (const source of data ?? []) {
     if (Date.now() - started > SWEEP_DEADLINE_MS) break;
-    if (!isSubscriptionActive(source.brands?.organizations?.subscription_status)) continue;
     try {
+      if (!isSubscriptionActive(source.brands?.organizations?.subscription_status)) {
+        await record(db, source.id, now.toISOString(), NOT_READ_INACTIVE);
+        inactive++;
+        continue;
+      }
       await syncSource(source, { db, now, fetch, request, connectors });
       synced++;
     } catch (err) {
@@ -249,5 +263,5 @@ export async function sweepCatalogSources({
       );
     }
   }
-  return { due: (data ?? []).length, synced };
+  return { due: (data ?? []).length, synced, inactive };
 }
