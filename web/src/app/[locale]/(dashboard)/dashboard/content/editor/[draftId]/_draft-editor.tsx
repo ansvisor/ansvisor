@@ -90,7 +90,7 @@ import { PAGE_READ_DELAY_MS, draftTitleFromDoc, safeLinkHref } from '@/lib/conte
 import { JsonLd } from '@/lib/content/json-ld-node';
 import { firstImage, isArticlePage } from '@/lib/content/page-schema';
 import { PLACEHOLDER, pagePlaceholders, placeholderIn } from '@/lib/content/placeholders';
-import { handOffItems } from '@/lib/content/hand-off';
+import { HANDOFF_KEYS, handOffItems } from '@/lib/content/hand-off';
 import {
   blankCode,
   bylineText,
@@ -1686,7 +1686,10 @@ export function DraftEditor({
    * page is saved, the agent leaves a new batch of suggestions for review,
    * and Stop or a lost answer is said as such.
    */
-  const runAgentFix = async (send: () => Promise<{ count: number } | { error: HandOffError }>) => {
+  const runAgentFix = async (
+    send: () => Promise<{ count: number } | { error: HandOffError }>,
+    told: (count: number) => string = fixedMessage,
+  ) => {
     setStoppingRun(null);
     stopSent.current = null;
     setFixing(true);
@@ -1715,7 +1718,7 @@ export function DraftEditor({
         setSuggestions(landed);
         setBarClosed(false);
         agentBeforeKept.current = false;
-        toast.success(fixedMessage(landed.filter((s) => s.status === 'open').length));
+        toast.success(told(landed.filter((s) => s.status === 'open').length));
         nudgeAt('agent');
         return;
       }
@@ -1741,7 +1744,7 @@ export function DraftEditor({
       setBarClosed(false);
       // A new batch: History keeps the page again before its first change.
       agentBeforeKept.current = false;
-      toast.success(fixedMessage(result.count));
+      toast.success(told(result.count));
       nudgeAt('agent');
     } catch (err) {
       console.error('Failed to run the Content Agent:', err);
@@ -1757,11 +1760,17 @@ export function DraftEditor({
   // suggestions, each with what it names on the page; the disclosure only
   // with its line in the page's language.
   const tQuality = useTranslations('contentEditor.editor.quality');
-  const handOffList =
-    sourcesOn && quality
-      ? handOffItems(qualitySuggestions(tQuality, quality), { disclosureLine })
-      : [];
+  const handOffSuggestions = sourcesOn && quality ? qualitySuggestions(tQuality, quality) : [];
+  const handOffList = handOffItems(handOffSuggestions, {
+    // Added, and not read again yet: never a second one.
+    disclosureLine: disclosureOnPage ? null : disclosureLine,
+  });
+  // What AI read of the page (Answer first, the disclosure, balance) is read
+  // again after each save: until then a fix it asked for may be on the page.
+  const handOffWaitsForRead = handOffSuggestions.some((s) => s.ai && HANDOFF_KEYS.has(s.key));
   const [handingOff, setHandingOff] = useState(false);
+  const handedOff = (count: number) =>
+    count >= AGENT_RUN_MAX ? tQuality('handOff.doneMax', { count }) : fixedMessage(count);
   /**
    * The agent fixes the page's open Quality suggestions in one run, as
    * suggestions to review; the to-dos stay the person's (one run, on the
@@ -1780,8 +1789,9 @@ export function DraftEditor({
     const items = handOffList;
     setHandingOff(true);
     try {
-      await runAgentFix(() =>
-        handOffDraft(draft.id, draft.brandId, { items, origin, ...agentContext(editor) }),
+      await runAgentFix(
+        () => handOffDraft(draft.id, draft.brandId, { items, origin, ...agentContext(editor) }),
+        handedOff,
       );
     } finally {
       setHandingOff(false);
@@ -1868,27 +1878,39 @@ export function DraftEditor({
         .setMeta('addToHistory', false),
     );
   }, [editor, spotList, t]);
+  // Fix open rules and Hand off share the agent's fix run (fixing): each
+  // card runs its own, and the other's run is the agent at work.
+  const fixRunning = fixing && !handingOff;
+  const handOffRunning = fixing && handingOff;
+  /** Why the agent's fix can't run now, said on the card whose run isn't the one under way. */
+  const agentFixBlocked = (running: boolean) =>
+    aiUsedUp && !running
+      ? aiUsedUp
+      : openSuggestions > 0
+        ? t('suggestions.decideFirst', { count: openSuggestions })
+        : !citedRead
+          ? t('suggestions.citedLoading')
+          : agentBusy && !running
+            ? t('suggestions.agentBusy')
+            : null;
   const agentFix: AgentFix = {
     run: (only) => void fixRules(only),
-    running: fixing,
-    blocked:
-      aiUsedUp && !fixing
-        ? aiUsedUp
-        : openSuggestions > 0
-          ? t('suggestions.decideFirst', { count: openSuggestions })
-          : !citedRead
-            ? t('suggestions.citedLoading')
-            : agentBusy && !fixing
-              ? t('suggestions.agentBusy')
-              : null,
+    running: fixRunning,
+    blocked: agentFixBlocked(fixRunning),
   };
   const handOffCard: HandOff | null =
     sourcesOn && quality
       ? {
           run: () => void handOff(),
-          running: fixing && handingOff,
+          running: handOffRunning,
           // As Fix's, and not while the page's reads would still move the list.
-          blocked: agentFix.blocked ?? (pageRead.reading ? tQuality('handOff.reading') : null),
+          blocked:
+            agentFixBlocked(handOffRunning) ??
+            (pageRead.reading ||
+            claimsRead.reading ||
+            (handOffWaitsForRead && pageRead.behind && !handOffRunning)
+              ? tQuality('handOff.reading')
+              : null),
           count: handOffList.length,
           todos: quality.todos.filter((todo) => !todo.done).length,
         }

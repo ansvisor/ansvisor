@@ -1,6 +1,6 @@
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { NextIntlClientProvider } from 'next-intl';
+import { createTranslator, NextIntlClientProvider } from 'next-intl';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import messages from '../../../../../../../../messages/en.json';
 import { eeat, trust, trustBlocks, type LinkCheck } from '@/lib/content/quality-checks';
@@ -15,7 +15,7 @@ vi.mock('@/i18n/navigation', () => ({
   ),
 }));
 
-const { QualityTab } = await import('./_quality-tab');
+const { QualityTab, qualitySuggestions } = await import('./_quality-tab');
 type QualityRead = import('./_quality-tab').QualityRead;
 type HandOff = import('./_quality-tab').HandOff;
 
@@ -539,12 +539,16 @@ describe('QualityTab', () => {
     await act(async () => button.click());
     expect(run).toHaveBeenCalled();
 
-    // Blocked: it says why; running: it says so; nothing to fix: it can't run.
+    // Blocked: it says why, on the button too; running: it says so; nothing to fix: it can't run.
     await render(null, { ...handOff, blocked: 'Decide the 2 open suggestions first.' });
-    expect(container.textContent).toContain('Decide the 2 open suggestions first.');
-    expect(
-      [...container.querySelectorAll('button')].find((b) => b.textContent === 'Hand off')!.disabled,
-    ).toBe(true);
+    const held = [...container.querySelectorAll('button')].find(
+      (b) => b.textContent === 'Hand off',
+    )!;
+    expect(held.disabled).toBe(true);
+    const why = held.getAttribute('aria-describedby');
+    expect([...container.querySelectorAll('p')].find((p) => p.id === why)?.textContent).toBe(
+      'Decide the 2 open suggestions first.',
+    );
     await render(null, { ...handOff, running: true });
     expect(container.textContent).toContain('Working…');
     await render(null, { ...handOff, count: 0, todos: 0 });
@@ -552,6 +556,39 @@ describe('QualityTab', () => {
     // Below phase 2: no card.
     await render(null);
     expect(container.querySelector('[aria-label="Hand it off to Content Agent"]')).toBeNull();
+  });
+
+  it('leaves the person a suggestion that asks the other way to the hand-off’s checks (CE-051)', () => {
+    const t = createTranslator({
+      locale: 'en',
+      messages,
+      namespace: 'contentEditor.editor.quality',
+    }) as unknown as Parameters<typeof qualitySuggestions>[0];
+    const byKey = (readability: Readability) =>
+      new Map(qualitySuggestions(t, read(readability)).map((s) => [s.key, s]));
+    // Sentences too short, a page too simple (over the band): longer and harder are the person's.
+    const simple = byKey({
+      ...result,
+      checks: result.checks.map((c) =>
+        c.id === 'avgSentence' ? { ...c, points: 10, value: 9, count: -1 } : c,
+      ),
+    });
+    expect(simple.get('readability:avgSentence')?.handOff).toBe(false);
+    expect(simple.get('readability:readingLevel')?.handOff).toBe(false);
+    expect(simple.get('readability:longSentences')?.handOff).toBeUndefined();
+    // Too long, too hard: the agent's.
+    const hard = byKey({
+      ...result,
+      checks: result.checks.map((c) =>
+        c.id === 'avgSentence'
+          ? { ...c, points: 10, value: 27, count: 1 }
+          : c.id === 'readingLevel'
+            ? { ...c, value: 40, count: -1 }
+            : c,
+      ),
+    });
+    expect(hard.get('readability:avgSentence')?.handOff).toBeUndefined();
+    expect(hard.get('readability:readingLevel')?.handOff).toBeUndefined();
   });
 
   it('asks a page that puts the brand forward to disclose it and add an honest weakness, AI checks, Show on the pick (CE-050)', async () => {

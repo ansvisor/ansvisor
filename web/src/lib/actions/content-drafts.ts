@@ -2168,6 +2168,8 @@ const HANDOFF_ERRORS = [
   'not_due',
   /** The draft had its automatic hand-off. */
   'already',
+  /** The API has Quality's phase 2 off (its CONTENT_QUALITY_PHASE is behind the web's). */
+  'off',
 ] as const;
 export type HandOffError = (typeof HANDOFF_ERRORS)[number];
 

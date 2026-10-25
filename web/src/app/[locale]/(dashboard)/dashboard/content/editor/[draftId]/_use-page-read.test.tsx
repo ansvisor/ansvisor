@@ -34,6 +34,7 @@ function Probe({ savedAt, unsaved = false }: { savedAt: string; unsaved?: boolea
     <pre
       data-read={JSON.stringify(state.read)}
       data-reading={String(state.reading)}
+      data-behind={String(state.behind)}
       data-paused={String(state.paused)}
       data-limited={String(state.limited)}
       data-settled={String(state.settled)}
@@ -75,6 +76,25 @@ describe('usePageRead', () => {
     expect(readDraftPage).toHaveBeenCalledTimes(1);
     await wait(PROOF_READ_SLACK_MS);
     expect(readDraftPage).toHaveBeenCalledTimes(2);
+  });
+
+  it('is behind from a save until the page as saved is answered, a failure too', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    await render('s1');
+    expect(attr('data-behind')).toBe('true');
+    await wait(PROOF_READ_DELAY_MS);
+    expect(attr('data-behind')).toBe('false');
+    // A save within the API's minute: not asked yet, nor reading, but behind.
+    await render('s2');
+    await wait(PROOF_READ_DELAY_MS);
+    expect(attr('data-reading')).toBe('false');
+    expect(attr('data-behind')).toBe('true');
+    readDraftPage.mockResolvedValueOnce({ error: 'failed' });
+    await wait(PROOF_READ_EVERY_MS + PROOF_READ_SLACK_MS);
+    expect(readDraftPage).toHaveBeenCalledTimes(2);
+    // Failed: nothing more comes before the next save.
+    expect(attr('data-behind')).toBe('false');
+    error.mockRestore();
   });
 
   it('asks again for a kept answer a minute later, without a save', async () => {

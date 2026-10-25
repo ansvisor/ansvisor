@@ -3895,6 +3895,7 @@
           "writing": "Content Agent is already writing this page, maybe from another tab. Try again once it has finished.",
           "not_due": "This brand doesn't hand off quality fixes on its own.",
           "already": "Content Agent already had this page's automatic hand-off.",
+          "off": "Hand off isn't available on this workspace yet.",
           "failed": "Content Agent couldn't run. Try again."
         }
       },
@@ -4841,7 +4842,8 @@
           "nothing": "Nothing for the agent to fix · {todos, plural, =0 {nothing left for you} one {# to-do stays yours} other {# to-dos stay yours}}",
           "button": "Hand off",
           "running": "Working…",
-          "reading": "The page is still being read: hand it off once Quality has its scores."
+          "reading": "The page is still being read: hand it off once Quality has its scores.",
+          "doneMax": "Content Agent suggested {count} changes, the most one run makes · review them, then hand it off again for the suggestions still open"
         },
         "addSource": "Add source",
         "addSourceTo": "Add a source to “{claim}”",

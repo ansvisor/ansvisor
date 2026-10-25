@@ -2842,7 +2842,8 @@ describe('the side panel', () => {
         ...claimed,
         bodyHtml: `${claimed.bodyHtml}<p>${long}</p>`,
       });
-      handOffDraft.mockResolvedValue({ count: 1 });
+      let answer: (value: { count: number }) => void = () => {};
+      handOffDraft.mockReturnValue(new Promise((resolve) => (answer = resolve)));
       window.innerWidth = 1440;
       await renderPage();
       await act(async () => void (await vi.advanceTimersByTimeAsync(3_000)));
@@ -2871,8 +2872,17 @@ describe('the side panel', () => {
           ]),
         }),
       );
-      // One run at a time: Fix open rules waits for it.
+      // Its card is the one working; Rules' Run Agent isn't, and waits for it.
+      expect(
+        [...card.querySelectorAll('button')].find((b) => b.textContent === 'Working…'),
+      ).toBeDefined();
+      await pickTab('Rules');
+      const others = [...panel()!.querySelectorAll('button')].filter((b) => !card.contains(b));
+      expect(others.some((b) => b.textContent?.includes('Working'))).toBe(false);
+      expect(others.find((b) => b.textContent === 'Run Agent')?.disabled).toBe(true);
       expect(fixDraftRules).not.toHaveBeenCalled();
+      await act(async () => answer({ count: 1 }));
+      await act(async () => void (await vi.advanceTimersByTimeAsync(0)));
     });
 
     it('asks a page that puts the brand forward for its disclosure, and Add line puts it under the H1 (CE-050)', async () => {

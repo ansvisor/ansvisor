@@ -31,9 +31,10 @@ const MAX_DETAIL = 500;
 
 /**
  * The checks to hand off: the suggestions with a gain, each once, with its
- * line, its detail and the passage it shows. The disclosure goes only with
- * the line to add, in the page's language (disclosureText): the agent writes
- * it as given, never one of its own.
+ * line, its detail and the passage it shows (cut short to fit, never the
+ * rest). One that asks the other way to its check stays the person's. The
+ * disclosure goes only with the line to add, in the page's language
+ * (disclosureText): the agent writes it as given, never one of its own.
  */
 export function handOffItems(
   suggestions: readonly {
@@ -42,22 +43,32 @@ export function handOffItems(
     line: string;
     detail: string;
     show: string | null;
+    handOff?: false;
   }[],
   { disclosureLine = null }: { disclosureLine?: string | null } = {},
 ): { key: string; detail: string }[] {
   const seen = new Set<string>();
   return suggestions.flatMap((s) => {
-    if (s.gain <= 0 || !HANDOFF_KEYS.has(s.key) || seen.has(s.key)) return [];
+    if (s.gain <= 0 || s.handOff === false || !HANDOFF_KEYS.has(s.key) || seen.has(s.key)) {
+      return [];
+    }
     if (s.key === 'trust:disclosure' && !disclosureLine) return [];
     seen.add(s.key);
-    const detail = [
+    const head = [
       s.line,
       s.detail,
-      s.show ? `Where: "${s.show}"` : null,
       s.key === 'trust:disclosure' ? `The line: "${disclosureLine}"` : null,
     ]
       .filter(Boolean)
       .join(' · ');
-    return [{ key: s.key, detail: detail.slice(0, MAX_DETAIL) }];
+    return [{ key: s.key, detail: withPassage(head, s.show) }];
   });
+}
+
+/** The detail, then the passage it shows as far as the API takes it. */
+function withPassage(head: string, show: string | null): string {
+  const room = MAX_DETAIL - head.length - ' · Where: "…"'.length;
+  if (!show || room < 20) return head.slice(0, MAX_DETAIL);
+  const passage = show.length <= room + 1 ? show : `${show.slice(0, room).trimEnd()}…`;
+  return `${head} · Where: "${passage}"`;
 }

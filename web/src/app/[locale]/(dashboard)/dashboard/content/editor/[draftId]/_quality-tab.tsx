@@ -1,5 +1,6 @@
 'use client';
 
+import { useId } from 'react';
 import { useFormatter, useTranslations } from 'next-intl';
 import { Check } from 'lucide-react';
 import { Link } from '@/i18n/navigation';
@@ -102,6 +103,11 @@ export interface Suggestion {
   claim?: ClaimMark;
   /** Read by AI, not by rules alone: it says so (spec §3, "AI check"). */
   ai?: boolean;
+  /**
+   * Hand off leaves it to the person (CE-051): it asks the other way to what
+   * the agent is told for its check (sentences too short, a page too simple).
+   */
+  handOff?: false;
 }
 
 /**
@@ -635,9 +641,15 @@ function readabilitySuggestions(t: T, readability: Readability | null): Suggesti
       detail: detail(t, check),
       show: check.at || null,
       ...(check.ai ? { ai: true } : {}),
+      ...(againstHandOff(check) ? { handOff: false as const } : {}),
     }),
   );
 }
+
+/** Asks for longer sentences or a harder read: the hand-off's checks say shorter and easier. */
+const againstHandOff = (check: ReadabilityCheck) =>
+  (check.id === 'avgSentence' && check.count < 0) ||
+  (check.id === 'readingLevel' && !!check.band && check.count > 0);
 
 /**
  * What would raise the scores, the biggest gain first: Readability's and
@@ -663,7 +675,9 @@ export function qualitySuggestions(t: T, quality: QualityRead): Suggestion[] {
  */
 function HandOffCard({ handOff }: { handOff: HandOff }) {
   const t = useTranslations('contentEditor.editor.quality.handOff');
+  const whyId = useId();
   const { count, todos, running, blocked, run } = handOff;
+  const why = blocked && !running && count > 0 ? blocked : null;
   return (
     <section aria-label={t('title')} className="space-y-2 rounded-xl border bg-card px-3 py-2.5">
       <div className="flex items-start gap-3">
@@ -678,12 +692,15 @@ function HandOffCard({ handOff }: { handOff: HandOff }) {
           className="h-7 shrink-0"
           disabled={running || count === 0 || !!blocked}
           onClick={run}
+          aria-describedby={why ? whyId : undefined}
         >
           {running ? t('running') : t('button')}
         </Button>
       </div>
-      {blocked && !running && count > 0 && (
-        <p className="text-xs text-amber-700 dark:text-amber-300">{blocked}</p>
+      {why && (
+        <p id={whyId} className="text-xs text-amber-700 dark:text-amber-300">
+          {why}
+        </p>
       )}
     </section>
   );

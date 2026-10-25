@@ -24,6 +24,11 @@ export interface PageReadState {
   /** An ask is out, or the page changed within the API's minute. */
   reading: boolean;
   /**
+   * The page as saved now is still to be asked about (or its answer is out):
+   * the read answers an earlier save. Hand off waits on it (CE-051).
+   */
+  behind: boolean;
+  /**
    * The read's first answer is in (a read, a failure, its limits, or off):
    * what waits on the proof to-dos (Next step's skips) can read them.
    */
@@ -53,6 +58,8 @@ export function usePageRead(
   const [failed, setFailed] = useState(false);
   const [out, setOut] = useState(false);
   const [pending, setPending] = useState(false);
+  // The save the last answer (or failure) was for.
+  const [answered, setAnswered] = useState<string | null>(null);
   // Bumped when the next ask needn't wait for a save.
   const [again, setAgain] = useState(0);
   const asking = useRef(false);
@@ -90,6 +97,7 @@ export function usePageRead(
       readDraftPage(draftId)
         .then((result) => {
           if (!open.current) return;
+          setAnswered(savedAt);
           if ('error' in result) {
             if (result.error === 'off') setOff(true);
             // Failed: asked about again after the next save, not on a timer.
@@ -110,6 +118,7 @@ export function usePageRead(
         .catch((err) => {
           console.error('Failed to read the page:', err);
           if (!open.current) return;
+          setAnswered(savedAt);
           setFailed(true);
           setPending(false);
         })
@@ -124,6 +133,7 @@ export function usePageRead(
   }, [draftId, savedAt, enabled, paused, limited, off, unsaved, again]);
 
   const reading = enabled && !paused && !limited && !off && (out || pending);
+  const behind = enabled && !paused && !limited && !off && (out || answered !== savedAt);
   const settled = !enabled || read !== null || failed || off || paused || limited;
-  return { read, paused, limited, reading, settled };
+  return { read, paused, limited, reading, behind, settled };
 }

@@ -1,9 +1,14 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { HANDOFF_KEYS, handOffItems } from './hand-off';
 
 /** Hand off (CE-051): what of Quality's suggestions the agent fixes in one run. */
 
-const suggestion = (key: string, over: Partial<{ gain: number; show: string | null }> = {}) => ({
+const suggestion = (
+  key: string,
+  over: Partial<{ gain: number; show: string | null; handOff: false }> = {},
+) => ({
   key,
   gain: 5,
   line: `${key} line`,
@@ -22,6 +27,8 @@ describe('handOffItems', () => {
         // Nothing to gain, or a key it doesn't fix (a to-do's): left out.
         suggestion('readability:avgSentence', { gain: 0 }),
         suggestion('eeat:experience'),
+        // One that asks the other way to its check (sentences too short): the person's.
+        suggestion('readability:readingLevel', { handOff: false }),
       ]),
     ).toEqual([
       {
@@ -47,10 +54,31 @@ describe('handOffItems', () => {
       },
     ]);
     const long = suggestion('trust:claimsSourced', { show: 'x'.repeat(900) });
-    expect(handOffItems([long])[0].detail).toHaveLength(500);
+    const [cut] = handOffItems([long]);
+    expect(cut.detail).toHaveLength(500);
+    expect(cut.detail).toMatch(
+      /^trust:claimsSourced line · trust:claimsSourced detail · Where: "x+…"$/,
+    );
   });
 
-  it('knows the 15 checks the API fixes', () => {
-    expect(HANDOFF_KEYS.size).toBe(15);
+  it('cuts the passage, never the disclosure line the agent writes as given', () => {
+    const line = `Disclosure: the product this page recommends is offered by ${'Acme '.repeat(30)}.`;
+    const [item] = handOffItems([suggestion('trust:disclosure', { show: 'y'.repeat(400) })], {
+      disclosureLine: line,
+    });
+    expect(item.detail.length).toBeLessThanOrEqual(500);
+    expect(item.detail).toContain(`The line: "${line}"`);
+    expect(item.detail).toMatch(/Where: "y+…"$/);
+  });
+
+  it('knows the checks the API fixes, as the API names them', () => {
+    const server = readFileSync(
+      join(__dirname, '../../../../server/src/lib/content-handoff.js'),
+      'utf8',
+    );
+    const block = server.slice(server.indexOf('HANDOFF_CHECKS = {'), server.indexOf('};'));
+    const keys = [...block.matchAll(/^\s*'([a-z]+:[A-Za-z]+)':/gm)].map((m) => m[1]);
+    expect(keys).toHaveLength(15);
+    expect([...HANDOFF_KEYS].sort()).toEqual(keys.sort());
   });
 });
