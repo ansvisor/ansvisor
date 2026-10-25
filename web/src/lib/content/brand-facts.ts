@@ -133,11 +133,13 @@ const CODE = `(?<![\\p{L}])(?:${ISO.join('|')}|TL)(?![\\p{L}])`;
 /** Thousands by a comma or a point, or by a space when the currency comes after ("1 299 €"). */
 const amount = (groups: string) =>
   String.raw`(?<![\d.,])(?:\d{1,3}(?:${groups}\d{3})+(?:[.,]\d{1,2})?|\d+(?:[.,]\d{1,2})?)(?![\d]|[.,]\d)`;
-/** A currency after an amount, not one before the next ("Ridge 28 $129": $129, not 28 $). */
+/** A currency after an amount, not one written onto the next ("Ridge 28 $129": $129, not 28 $). */
 const PRICE = new RegExp(
-  `(?<before>${MARK}|${CODE})\\s?(?<a>${amount('[.,]')})|(?<b>${amount('[.,\\s]')})\\s?(?<after>${MARK}|${CODE}|zł)(?!\\s?\\d)`,
+  `(?<before>${MARK}|${CODE})\\s?(?<a>${amount('[.,]')})|(?<b>${amount('[.,\\s]')})\\s?(?<after>${MARK}|${CODE}|zł)(?!\\d)`,
   'gu',
 );
+/** "$129.00 CAD": the code after a sign says whose dollar it is. */
+const CODE_AFTER = new RegExp(`^\\s?(?<code>${ISO.join('|')})(?![\\p{L}])`, 'u');
 const MAGNITUDE =
   /^\s*(?:[kmb](?!\p{L})|bn\b|mn\b|thousand|million|billion|milyon|milyar|mio\b|mrd\b)/iu;
 /** "$10–$20", "between $10 and $20": a range, its two ends (a number before the word or dash). */
@@ -202,11 +204,12 @@ export function pagePrices(sentence: string, { rangeEnds = false } = {}): PagePr
     const after = sentence.slice(end, end + 40);
     if (MAGNITUDE.test(after) || /^\s*off(?!\p{L})/iu.test(after)) continue;
     if (!rangeEnds && (RANGE_AFTER.test(after) || RANGE_BEFORE.test(before))) continue;
-    const currency = currencyOf(g.before ?? g.after);
+    const code = g.before && !ISO.includes(g.before) ? CODE_AFTER.exec(after) : null;
+    const currency = code ? code.groups!.code : currencyOf(g.before ?? g.after);
     const value = amountOf(g.a ?? g.b);
     if (!currency || value === null) continue;
     out.push({
-      text: m[0].trim(),
+      text: code ? `${m[0].trim()}${code[0]}` : m[0].trim(),
       amount: value,
       currency,
       period: MONTH.test(after) ? 'month' : YEAR.test(after) ? 'year' : null,
@@ -219,7 +222,7 @@ export function pagePrices(sentence: string, { rangeEnds = false } = {}): PagePr
 
 /** A range's end: an amount with its currency before or after it, or neither ("$119–139"). */
 const rangeEnd = (name: string) =>
-  `(?:(?<${name}Before>${MARK}|${CODE})\\s?)?(?<${name}>${amount('[.,]')})(?:\\s?(?<${name}After>${MARK}|${CODE}|zł))?`;
+  `(?:(?<${name}Before>${MARK}|${CODE})\\s?)?(?<${name}>${amount('[.,]')})(?:\\s?(?<${name}After>${MARK}|${CODE}|zł)(?!\\d))?`;
 const PRICE_RANGE = new RegExp(
   `${rangeEnd('low')}(?<join>\\s?(?:[–—-]|(?<=\\s)(?:to|bis|à|a|ila|ile|and|und|et|y)(?=\\s))\\s?)${rangeEnd('high')}`,
   'giu',
@@ -232,15 +235,20 @@ export interface PriceRange {
   high: number;
   currency: string;
   at: number;
+  /**
+   * Written as ranges are: both ends with their currency, or one and a
+   * dash with no space ("$119–139"). Else ("$119 – 139", "119 bis 139 €")
+   * it may be one, or a price beside a number.
+   */
+  sure: boolean;
 }
 
 /**
  * The price ranges a sentence gives (the ones pagePrices leaves out): the
- * same currency on both ends, the low end first. One written once is a
- * range only as ranges are written, a dash and no space ("$119–139",
- * "119–139 €"), with no word joined to its end: "Ridge 28 – $129" is a
- * name and a price, "$19 - 100% cotton" and "$25-30-day returns" aren't
- * ranges.
+ * same currency on both ends, the low end first, and whether it's sure
+ * (PriceRange). A number before a price ("Ridge 28 – $129") or one after
+ * it with a word ("$129 – 150 reviews", "$19 - 100% cotton", "$25-30-day
+ * returns") is no range.
  */
 export function priceRanges(sentence: string): PriceRange[] {
   const out: PriceRange[] = [];
@@ -253,16 +261,15 @@ export function priceRanges(sentence: string): PriceRange[] {
     const after = sentence.slice(m.index + m[0].length, m.index + m[0].length + 40);
     const lowMarked = !!(g.lowBefore || g.lowAfter);
     const highMarked = !!(g.highBefore || g.highAfter);
-    const once =
-      /^[–—-]$/u.test(g.join) &&
-      !/^(?:%|-?\p{L})/u.test(after) &&
-      ((!!g.lowBefore && !highMarked) || (!lowMarked && !!g.highAfter));
-    const written = (lowMarked && highMarked) || once;
-    if (!written || currencies.size !== 1 || currencies.has(null) || MAGNITUDE.test(after)) {
-      continue;
-    }
+    if (currencies.size !== 1 || currencies.has(null) || MAGNITUDE.test(after)) continue;
     if (low === null || high === null || !(low < high)) continue;
-    out.push({ text: m[0], low, high, currency: [...currencies][0]!, at: m.index });
+    if (!lowMarked && g.highBefore) continue;
+    // "$19 - 100% cotton", "$25-30-day returns", "€20 – 30 Tage Rückgaberecht".
+    if (!highMarked && /^(?:%|-\p{L})/u.test(after)) continue;
+    if (!highMarked && /\s/u.test(g.join) && /^\s+\p{L}/u.test(after)) continue;
+    const sure =
+      (lowMarked && highMarked) || (/^[–—-]$/u.test(g.join) && !/^(?:%|-?\p{L})/u.test(after));
+    out.push({ text: m[0], low, high, currency: [...currencies][0]!, at: m.index, sure });
   }
   return out;
 }

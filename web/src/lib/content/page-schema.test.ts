@@ -187,6 +187,16 @@ describe('pageOffer (Phase 3, CE-053)', () => {
     expect(pageOffer(['Ücretsiz kargo ile 999 TL.'])).toEqual({ price: 999, currency: 'TRY' });
     // An old price that is the page's only one is its price.
     expect(pageOffer(['Regular price $129.00'])).toEqual(ridge);
+    // A currency after its amount stays with it; a code after a sign says whose dollar.
+    expect(pageOffer(['129,00 € 2 Jahre Garantie.'])).toEqual({ price: 129, currency: 'EUR' });
+    expect(pageOffer(['999 TL 3 taksit imkânı.'])).toEqual({ price: 999, currency: 'TRY' });
+    expect(pageOffer(['$129.00 CAD'])).toEqual({ price: 129, currency: 'CAD' });
+    expect(pageOffer(['Galaxy S24+: $999.99 (Regular price $1,099.99)'])).toEqual({
+      price: 999.99,
+      currency: 'USD',
+    });
+    expect(pageOffer(['Heats up in 3 min. $129 (reg. $159).'])).toEqual(ridge);
+    expect(pageOffer(['Kids 10-12 $129.'])).toEqual(ridge);
   });
 
   it('keeps the price beside an amount that isn’t it', () => {
@@ -196,6 +206,7 @@ describe('pageOffer (Phase 3, CE-053)', () => {
     expect(pageOffer(['$129 (reg. $159).'])).toEqual(ridge);
     expect(pageOffer(['$129 instead of $159.'])).toEqual(ridge);
     expect(pageOffer(['Regular price $159.00 Sale price $129.00'])).toEqual(ridge);
+    expect(pageOffer(['129,00 € 159,00 € statt'])).toEqual({ several: ['129,00 €', '159,00 €'] });
     expect(pageOffer(['Original price $159. Now $129.'])).toEqual(ridge);
     expect(pageOffer(['Au lieu de 159 €, 129 €.'])).toEqual({ price: 129, currency: 'EUR' });
     expect(pageOffer(['Antes 159 €, ahora 129 €.'])).toEqual({ price: 129, currency: 'EUR' });
@@ -230,6 +241,22 @@ describe('pageOffer (Phase 3, CE-053)', () => {
       price: 129,
       currency: 'EUR',
     });
+    expect(pageOffer(['Free shipping on all orders $50+', '$129.'])).toEqual(ridge);
+    expect(pageOffer(['Kostenloser Versand für Bestellungen über 50 €.', 'Preis: 129 €.'])).toEqual(
+      { price: 129, currency: 'EUR' },
+    );
+    expect(pageOffer(['Envío gratuito en pedidos superiores a 50 €.', '129 €.'])).toEqual({
+      price: 129,
+      currency: 'EUR',
+    });
+    expect(
+      pageOffer(['Livraison gratuite pour toute commande supérieure à 50 €.', '129 €.']),
+    ).toEqual({ price: 129, currency: 'EUR' });
+    // Savings and installments in other languages.
+    expect(pageOffer(['129 €.', 'Sie sparen 30 €.'])).toEqual({ price: 129, currency: 'EUR' });
+    expect(pageOffer(['129 €.', 'Économisez 30 €.'])).toEqual({ price: 129, currency: 'EUR' });
+    expect(pageOffer(['129 €, o 3 plazos de 43 €.'])).toEqual({ price: 129, currency: 'EUR' });
+    expect(pageOffer(['129 €, oder 3 Raten à 43 €.'])).toEqual({ price: 129, currency: 'EUR' });
     expect(pageOffer(['500 TL üzeri kargo bedava.', 'Fiyatı 999 TL.'])).toEqual({
       price: 999,
       currency: 'TRY',
@@ -254,6 +281,19 @@ describe('pageOffer (Phase 3, CE-053)', () => {
     expect(pageOffer(['$10–$20 monthly.'])).toBeNull();
     // Prices that differ, or in two currencies: the person says which.
     expect(pageOffer(['Small: $119.', 'Large: $139.'])).toEqual({ several: ['$119', '$139'] });
+    expect(pageOffer(['Regular: $119.95', 'Long: $129.95'])).toEqual({
+      several: ['$119.95', '$129.95'],
+    });
+    expect(pageOffer(['$129.', 'Order now: $129.00.'])).toEqual(ridge);
+    // An old price with no lower one beside it isn't dropped for an amount elsewhere.
+    expect(pageOffer(['Regular price $129.00', 'Refer a friend and get $20.'])).toEqual({
+      several: ['$129.00', '$20'],
+    });
+    // "From" and a range written loosely may be several prices.
+    expect(pageOffer(['From $119.'])).toEqual({ several: ['$119'] });
+    expect(pageOffer(['From $119 up to $139.'])).toEqual({ several: ['$119'] });
+    expect(pageOffer(['Preis: 119 – 139 €.'])).toEqual({ several: ['119 – 139 €'] });
+    expect(pageOffer(['Fiyat: 999 - 1.299 TL.'])).toEqual({ several: ['999 - 1.299 TL'] });
     expect(pageOffer(['$129 in the US, €119 in Europe.'])).toEqual({ several: ['$129', '€119'] });
     // A number after a price isn't its range's end.
     expect(pageOffer(['Only $19 - 100% organic cotton.'])).toEqual({ price: 19, currency: 'USD' });
