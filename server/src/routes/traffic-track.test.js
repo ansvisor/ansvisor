@@ -16,6 +16,9 @@ let insertError = null;
 const filters = [];
 let latestPageview = null;
 const updated = [];
+// The brand as each lookup reads it: conversions on or off (CE-017, 00286).
+let brandRow = { id: 'b1' };
+let eventInsertError = null;
 
 vi.mock('../config/supabase.js', () => ({
   default: {
@@ -31,11 +34,11 @@ vi.mock('../config/supabase.js', () => ({
         gte: filter('gte'),
         order: () => chain,
         limit: () => chain,
-        single: async () => ({ data: { id: 'b1' }, error: null }),
+        single: async () => ({ data: brandRow, error: null }),
         maybeSingle: async () => ({ data: latestPageview, error: null }),
         insert: async (row) => {
           inserted.push({ table, row });
-          return { error: insertError };
+          return { error: table === 'ai_traffic_events' ? eventInsertError : insertError };
         },
         update: (fields) => ({
           eq: async (col, val) => {
@@ -82,6 +85,8 @@ beforeEach(() => {
   filters.length = 0;
   latestPageview = null;
   updated.length = 0;
+  brandRow = { id: 'b1' };
+  eventInsertError = null;
 });
 
 const beacon = (body = {}) =>
@@ -305,5 +310,70 @@ describe('POST /track/:trackingCode', () => {
     expect(filters).toContainEqual(['is', 'http_status', null]);
     expect(updated).toHaveLength(1);
     expect(inserted).toEqual([]);
+  });
+});
+
+describe('POST /track/:trackingCode: a journey’s events (CE-017)', () => {
+  const ID = 'Vq3xT0mZ8kLp2RwYbN5sQa';
+  const event = (body) =>
+    fetch(baseUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=UTF-8', 'X-Forwarded-For': '203.0.113.7' },
+      body: JSON.stringify({
+        id: ID,
+        u: 'https://acme.example/thanks?email=ann@example.com',
+        f: { s: 'chatgpt.com', u: 'https://acme.example/blog/crm', at: Date.now() - 60_000 },
+        ...body,
+      }),
+    });
+
+  it('stores a pageview and a conversion for a brand with conversions on, never as a visit', async () => {
+    brandRow = { id: 'b1', conversions_enabled: true };
+    expect((await event({ k: 'pv' })).status).toBe(204);
+    expect((await event({ k: 'cv', g: 'demo', o: 'form', n: 'pricing-demo' })).status).toBe(204);
+    expect(inserted.map(({ table }) => table)).toEqual(['ai_traffic_events', 'ai_traffic_events']);
+    expect(inserted[0].row).toMatchObject({
+      brand_id: 'b1',
+      visitor_id: ID,
+      kind: 'page',
+      // No query string: the email never gets in.
+      url: 'https://acme.example/thanks',
+      first_source: 'chatgpt.com',
+    });
+    expect(inserted[1].row).toMatchObject({
+      kind: 'conversion',
+      goal: 'demo',
+      origin: 'form',
+      label: 'pricing-demo',
+    });
+    // Neither is an AI landing: no visit lookup, no visitor key.
+    expect(findVisitOf).not.toHaveBeenCalled();
+    expect(visitorKey).not.toHaveBeenCalled();
+  });
+
+  it('stores nothing while the brand has conversions off', async () => {
+    expect((await event({ k: 'cv', g: 'signup' })).status).toBe(204);
+    expect(inserted).toEqual([]);
+  });
+
+  it('stores nothing it can’t credit to an AI visit', async () => {
+    brandRow = { id: 'b1', conversions_enabled: true };
+    await event({ k: 'pv', f: { s: 'google.com', u: 'https://acme.example/', at: Date.now() } });
+    await event({ k: 'cv' });
+    expect(inserted).toEqual([]);
+  });
+
+  it('counts an order sent again once, without logging it as a failure', async () => {
+    brandRow = { id: 'b1', conversions_enabled: true };
+    const { default: logger } = await import('../lib/logger.js');
+    vi.mocked(logger.error).mockClear();
+    eventInsertError = { code: '23505', message: 'duplicate key value' };
+    expect(
+      (await event({ k: 'cv', g: 'order', o: 'shopify', ref: '1001', val: 59, cur: 'USD' })).status,
+    ).toBe(204);
+    expect(logger.error).not.toHaveBeenCalled();
+    eventInsertError = { code: '42501', message: 'permission denied' };
+    await event({ k: 'cv', g: 'order', o: 'shopify', ref: '1002' });
+    expect(logger.error).toHaveBeenCalledTimes(1);
   });
 });

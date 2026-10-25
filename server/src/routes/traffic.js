@@ -11,6 +11,7 @@ import {
   landingMedium,
 } from '../lib/ai-sources.js';
 import { buildTrackingScript } from '../lib/tracking-script.js';
+import { eventRow } from '../lib/traffic-events.js';
 
 const router = Router();
 
@@ -103,6 +104,13 @@ router.post('/track/:trackingCode', trafficLimiter, beaconBody, async (req, res)
     }
     if (!body || !body.u) {
       return res.status(400).json({ ok: false });
+    }
+
+    // A journey's pageview or conversion (CE-017), from a snippet installed
+    // with conversions on: stored only while the brand has them on.
+    if (body.k === 'pv' || body.k === 'cv') {
+      await storeEvent(brand.id, body);
+      return res.status(204).end();
     }
 
     const ip =
@@ -213,6 +221,30 @@ router.post('/track/:trackingCode', trafficLimiter, beaconBody, async (req, res)
     return res.status(500).json({ ok: false });
   }
 });
+
+/**
+ * Stores a journey event (traffic-events.js) for a brand with conversions
+ * on. Read here, not with the brand above: a server deployed before 00286
+ * then fails only these, never the visits. Best effort: an order sent again
+ * counts once (its unique ref), anything else that fails is logged.
+ */
+async function storeEvent(brandId, body) {
+  try {
+    const { data: brand, error } = await supabaseAdmin
+      .from('brands')
+      .select('conversions_enabled')
+      .eq('id', brandId)
+      .single();
+    if (error) throw new Error(error.message);
+    if (!brand?.conversions_enabled) return;
+    const row = eventRow(brandId, body);
+    if (!row) return;
+    const { error: insertError } = await supabaseAdmin.from('ai_traffic_events').insert(row);
+    if (insertError && insertError.code !== '23505') throw new Error(insertError.message);
+  } catch (err) {
+    logger.error({ err }, 'traffic event store failed');
+  }
+}
 
 /** How long after a visit its pageview may still be marked as a soft 404. */
 const NOT_FOUND_MARK_WINDOW_MS = 10 * 60 * 1000;

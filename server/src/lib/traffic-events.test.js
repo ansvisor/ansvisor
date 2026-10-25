@@ -1,0 +1,129 @@
+import { describe, expect, it } from 'vitest';
+import { ATTRIBUTION_DAYS, eventRow, eventUrl } from './traffic-events.js';
+
+const NOW = Date.parse('2026-10-26T12:00:00Z');
+const DAY = 24 * 60 * 60 * 1000;
+const ID = 'Vq3xT0mZ8kLp2RwYbN5sQa';
+const first = {
+  s: 'chatgpt.com',
+  u: 'https://acme.example/blog/crm?utm_source=chatgpt.com',
+  at: NOW - DAY,
+};
+
+describe('eventUrl', () => {
+  it('keeps the origin and path, never the query string or the fragment', () => {
+    expect(eventUrl('https://acme.example/thanks?email=ann@example.com#done')).toBe(
+      'https://acme.example/thanks',
+    );
+    expect(eventUrl('javascript:alert(1)')).toBeNull();
+    expect(eventUrl('not a url')).toBeNull();
+  });
+});
+
+describe('eventRow', () => {
+  it('makes a journey pageview, credited to the first AI visit', () => {
+    expect(
+      eventRow(
+        'b1',
+        { k: 'pv', id: ID, u: 'https://acme.example/pricing?plan=pro', f: first },
+        NOW,
+      ),
+    ).toEqual({
+      brand_id: 'b1',
+      visitor_id: ID,
+      kind: 'page',
+      url: 'https://acme.example/pricing',
+      first_source: 'chatgpt.com',
+      first_url: 'https://acme.example/blog/crm',
+      first_at: new Date(NOW - DAY).toISOString(),
+    });
+  });
+
+  it('makes a conversion with its goal, label, value and units; a call when it says no origin', () => {
+    const row = eventRow(
+      'b1',
+      {
+        k: 'cv',
+        id: ID,
+        u: 'https://acme.example/thanks',
+        f: first,
+        g: 'order',
+        n: '  checkout  ',
+        val: 129.5,
+        cur: 'eur',
+        q: 2,
+        ref: 'order-1001',
+      },
+      NOW,
+    );
+    expect(row).toMatchObject({
+      kind: 'conversion',
+      goal: 'order',
+      label: 'checkout',
+      origin: 'call',
+      value: 129.5,
+      currency: 'EUR',
+      units: 2,
+      order_ref: 'order-1001',
+    });
+    expect(
+      eventRow(
+        'b1',
+        { k: 'cv', id: ID, u: 'https://acme.example/', f: first, g: 'demo', o: 'form' },
+        NOW,
+      ),
+    ).toMatchObject({
+      goal: 'demo',
+      origin: 'form',
+      value: null,
+      currency: null,
+      units: null,
+      order_ref: null,
+    });
+  });
+
+  it('keeps a currency only with an amount, and only as a three-letter code', () => {
+    const cv = (extra) =>
+      eventRow(
+        'b1',
+        { k: 'cv', id: ID, u: 'https://acme.example/', f: first, g: 'order', ...extra },
+        NOW,
+      );
+    expect(cv({ cur: 'USD' }).currency).toBeNull();
+    expect(cv({ val: 10, cur: 'EURO' }).currency).toBeNull();
+    expect(cv({ val: 10, cur: ' usd ' }).currency).toBe('USD');
+  });
+
+  it('stores an older snippet’s host under the source list’s key', () => {
+    expect(
+      eventRow(
+        'b1',
+        { k: 'pv', id: ID, u: 'https://acme.example/', f: { ...first, s: 'chat.openai.com' } },
+        NOW,
+      ).first_source,
+    ).toBe('chatgpt.com');
+  });
+
+  it('drops what it can’t credit to an AI visit, or that isn’t one', () => {
+    const pv = (extra) =>
+      eventRow('b1', { k: 'pv', id: ID, u: 'https://acme.example/', f: first, ...extra }, NOW);
+    // Not a source on the list.
+    expect(pv({ f: { ...first, s: 'google.com' } })).toBeNull();
+    // A first visit past the window, or in the future.
+    expect(pv({ f: { ...first, at: NOW - (ATTRIBUTION_DAYS + 1) * DAY } })).toBeNull();
+    expect(pv({ f: { ...first, at: NOW + 2 * DAY } })).toBeNull();
+    // A malformed visitor id, page, or a conversion without a goal.
+    expect(pv({ id: 'short' })).toBeNull();
+    expect(pv({ u: 'ftp://acme.example/' })).toBeNull();
+    expect(
+      eventRow('b1', { k: 'cv', id: ID, u: 'https://acme.example/', f: first }, NOW),
+    ).toBeNull();
+    expect(
+      eventRow('b1', { k: 'cv', id: ID, u: 'https://acme.example/', f: first, g: 'refund' }, NOW),
+    ).toBeNull();
+    // Not a journey event at all.
+    expect(
+      eventRow('b1', { k: 'nf', id: ID, u: 'https://acme.example/', f: first }, NOW),
+    ).toBeNull();
+  });
+});
