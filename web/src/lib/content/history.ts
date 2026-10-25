@@ -25,6 +25,22 @@ export interface DraftVersion {
   createdAt: string;
 }
 
+/**
+ * A hand-off to the Content Agent (Quality CE-051, 00275): History lists it
+ * beside the versions, without Restore (its changes were suggestions; the
+ * page before the first one accepted is a version). Its checks are how many
+ * it was given.
+ */
+export interface DraftHandOff {
+  id: string;
+  /** A person's Hand off, or the editor's on its own (Settings › Content). */
+  origin: 'person' | 'auto';
+  /** Null while it is under way. */
+  outcome: 'done' | 'stopped' | 'failed' | null;
+  checks: number | null;
+  startedAt: string;
+}
+
 /** The draft after a restore, as the server now has it. */
 export interface RestoredDraft {
   title: string;

@@ -26,6 +26,25 @@ export async function readAgentRun(draftId: string): Promise<AgentRun | null> {
 }
 
 /**
+ * Whether the draft had its automatic hand-off (Quality CE-051, 00275: once a
+ * draft, its row the claim), or null when that can't be read.
+ */
+export async function readAutoHandOff(draftId: string): Promise<boolean | null> {
+  const { data, error } = await createClient()
+    .from('content_agent_runs')
+    .select('id')
+    .eq('draft_id', draftId)
+    .eq('kind', 'handoff')
+    .eq('origin', 'auto')
+    .limit(1);
+  if (error) {
+    console.error('Failed to read the automatic hand-off:', error);
+    return null;
+  }
+  return (data ?? []).length > 0;
+}
+
+/**
  * Stop (CE-027): ends the Content Agent's run on the draft — the one the
  * editor shows, so another tab's run goes on — through the API's same-origin
  * proxy; it keeps nothing of what it had. stopped is false when no run was

@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { readAgentRun, stopAgentRun } from './agent-runs-client';
+import { readAgentRun, readAutoHandOff, stopAgentRun } from './agent-runs-client';
 
 /**
  * The Content Agent's run, read and stopped from the browser (CE-027/035):
@@ -7,6 +7,8 @@ import { readAgentRun, stopAgentRun } from './agent-runs-client';
  */
 
 let row: { data: Record<string, unknown> | null; error: Error | null };
+let rows: { data: Record<string, unknown>[] | null; error: Error | null };
+let filters: [string, string][];
 let session: { access_token: string } | null;
 const query = { draft: '', order: '', limit: 0 };
 vi.mock('@/lib/supabase/client', () => ({
@@ -16,10 +18,15 @@ vi.mock('@/lib/supabase/client', () => ({
       expect(table).toBe('content_agent_runs');
       const chain = {
         select: () => chain,
-        eq: (_col: string, value: string) => ((query.draft = value), chain),
+        eq: (col: string, value: string) => (
+          filters.push([col, value]),
+          (query.draft = value),
+          chain
+        ),
         order: (col: string) => ((query.order = col), chain),
         limit: (n: number) => ((query.limit = n), chain),
         maybeSingle: async () => row,
+        then: (resolve: (value: typeof rows) => void) => resolve(rows),
       };
       return chain;
     },
@@ -30,9 +37,29 @@ const fetchMock = vi.fn();
 
 beforeEach(() => {
   row = { data: null, error: null };
+  rows = { data: [], error: null };
+  filters = [];
+  query.draft = '';
   session = { access_token: 'token-1' };
   fetchMock.mockReset();
   vi.stubGlobal('fetch', fetchMock);
+});
+
+describe('readAutoHandOff (Quality CE-051)', () => {
+  it('says whether the draft had its automatic hand-off, null when that can’t be read', async () => {
+    expect(await readAutoHandOff('d1')).toBe(false);
+    expect(filters).toEqual([
+      ['draft_id', 'd1'],
+      ['kind', 'handoff'],
+      ['origin', 'auto'],
+    ]);
+    rows = { data: [{ id: 'r1' }], error: null };
+    expect(await readAutoHandOff('d1')).toBe(true);
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    rows = { data: null, error: new Error('down') };
+    expect(await readAutoHandOff('d1')).toBeNull();
+    vi.mocked(console.error).mockRestore();
+  });
 });
 
 describe('readAgentRun', () => {

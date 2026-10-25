@@ -97,6 +97,7 @@ const {
   getCitedPassages,
   getContentDraft,
   getDraftVersions,
+  getDraftHandoffs,
   classifyDraftSources,
   keepDraftSource,
   markContentDraftReady,
@@ -699,6 +700,38 @@ describe('History', () => {
     const days = (Date.now() - Date.parse(since as string)) / (24 * 60 * 60 * 1000);
     expect(Math.round(days)).toBe(90);
     expect(calls[0].filters).toContainEqual(['eq', 'draft_id', DRAFT]);
+  });
+
+  it('lists the hand-offs of the last 90 days, with who, how they ended and their checks (CE-051)', async () => {
+    list = [
+      {
+        id: 'r2',
+        origin: 'auto',
+        outcome: 'done',
+        steps: [
+          { key: 'read_checks', count: 6 },
+          { key: 'write_changes', count: null },
+        ],
+        started_at: '2026-10-21T10:00:00Z',
+      },
+      { id: 'r1', origin: 'person', outcome: null, steps: [], started_at: '2026-10-20T10:00:00Z' },
+    ];
+    await expect(getDraftHandoffs(DRAFT)).resolves.toEqual([
+      { id: 'r2', origin: 'auto', outcome: 'done', checks: 6, startedAt: '2026-10-21T10:00:00Z' },
+      {
+        id: 'r1',
+        origin: 'person',
+        outcome: null,
+        checks: null,
+        startedAt: '2026-10-20T10:00:00Z',
+      },
+    ]);
+    expect(calls[0].filters).toContainEqual(['eq', 'draft_id', DRAFT]);
+    expect(calls[0].filters).toContainEqual(['eq', 'kind', 'handoff']);
+    const [, since] = calls[0].filters.find(([op]) => op === 'gte')!.slice(1);
+    const days = (Date.now() - Date.parse(since as string)) / (24 * 60 * 60 * 1000);
+    expect(Math.round(days)).toBe(90);
+    await expect(getDraftHandoffs('d1')).rejects.toThrow('invalid');
   });
 
   it('restores a version and returns the page the server has now', async () => {

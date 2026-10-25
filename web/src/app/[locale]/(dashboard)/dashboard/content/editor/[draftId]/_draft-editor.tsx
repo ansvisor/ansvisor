@@ -153,6 +153,7 @@ import { ReviewerMenu } from './_reviewer-menu';
 import { BeforePublish, TRUST_GATE, type ReadyAnyway, type ReadyToPaste } from './_before-publish';
 import { FlashBlock, findBlock, flashKey } from './_flash-block';
 import { useAgentRun } from './_use-agent-run';
+import { useAutoHandOff } from './_use-auto-hand-off';
 import { useLinkChecks } from './_use-link-checks';
 import { WorkingDots } from './_working-dots';
 import { DropOverlay, useAttachments } from './_attach';
@@ -1775,6 +1776,8 @@ export function DraftEditor({
   const runAgentFix = async (
     send: () => Promise<{ count: number } | { error: HandOffError }>,
     told: (count: number) => string = fixedMessage,
+    // What isn't said (the editor's own run: not due, or had already).
+    quiet: readonly HandOffError[] = [],
   ) => {
     setStoppingRun(null);
     stopSent.current = null;
@@ -1814,7 +1817,9 @@ export function DraftEditor({
         return;
       }
       if ('error' in result) {
-        toast.error(t(`suggestions.fixErrors.${result.error}`));
+        if (!quiet.includes(result.error)) {
+          toast.error(t(`suggestions.fixErrors.${result.error}`));
+        }
         // Another tab (or the API) left them: show them here to decide.
         if (result.error === 'open_suggestions') {
           setSuggestions(await getDraftSuggestions(draft.id));
@@ -1879,6 +1884,8 @@ export function DraftEditor({
       await runAgentFix(
         () => handOffDraft(draft.id, draft.brandId, { items, origin, ...agentContext(editor) }),
         handedOff,
+        // The editor's own: a brand that stopped handing off, or another tab's run first.
+        origin === 'auto' ? ['not_due', 'already'] : [],
       );
     } finally {
       setHandingOff(false);
@@ -2002,6 +2009,24 @@ export function DraftEditor({
           todos: quality.todos.filter((todo) => !todo.done).length,
         }
       : null;
+  // Quality's automatic hand-off (CE-051): once a draft its brand hands off,
+  // whose page came from elsewhere (imported to optimize, or the agent's).
+  useAutoHandOff({
+    draftId: draft.id,
+    due:
+      sourcesOn &&
+      draft.qualityHandoff &&
+      (draft.method === 'optimize' || draft.author === 'agent'),
+    ready:
+      qualitySettled &&
+      !!handOffCard &&
+      !handOffCard.blocked &&
+      !handOffCard.running &&
+      !agentWorking &&
+      htmlSource === null,
+    count: handOffList.length,
+    run: () => handOff('auto'),
+  });
   // The card's Run Agent says why it won't run, as the Rules card does: also
   // when the only rules left open are ones the agent doesn't fix (one H1).
   const agentRules = openRulesForAgent(rules.rules);

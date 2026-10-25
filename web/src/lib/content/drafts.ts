@@ -189,6 +189,11 @@ export interface ContentDraft {
   updatedAt: string;
   /** When an admin or manager archived it (00233): Content › Editor doesn't go back to it. */
   archivedAt: string | null;
+  /**
+   * Quality's automatic hand-off (CE-051, 00275): the brand handed off its
+   * new and optimized pages when the draft was made. Its run is once a draft.
+   */
+  qualityHandoff: boolean;
 }
 
 /**

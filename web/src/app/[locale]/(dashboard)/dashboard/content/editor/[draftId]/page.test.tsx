@@ -48,9 +48,11 @@ const getDraftSources = vi.fn();
 const setDraftSourceIncluded = vi.fn();
 const readAgentRun = vi.fn();
 const stopAgentRun = vi.fn();
+const readAutoHandOff = vi.fn();
 vi.mock('@/lib/content/agent-runs-client', () => ({
   readAgentRun: (...args: unknown[]) => readAgentRun(...args),
   stopAgentRun: (...args: unknown[]) => stopAgentRun(...args),
+  readAutoHandOff: (...args: unknown[]) => readAutoHandOff(...args),
 }));
 const getDraftBrief = vi.fn();
 const rebuildDraftBrief = vi.fn();
@@ -58,6 +60,7 @@ const saveDraftRules = vi.fn();
 const getMyRuleSets = vi.fn();
 const saveMyRuleSet = vi.fn();
 const getDraftVersions = vi.fn();
+const getDraftHandoffs = vi.fn();
 const restoreDraftVersion = vi.fn();
 const getCitedPassages = vi.fn();
 const getDraftSuggestions = vi.fn();
@@ -80,6 +83,7 @@ vi.mock('@/lib/actions/content-drafts', () => ({
   keepAgentBeforeVersion: (...args: unknown[]) => keepAgentBeforeVersion(...args),
   getCitedPassages: (...args: unknown[]) => getCitedPassages(...args),
   getDraftVersions: (...args: unknown[]) => getDraftVersions(...args),
+  getDraftHandoffs: (...args: unknown[]) => getDraftHandoffs(...args),
   restoreDraftVersion: (...args: unknown[]) => restoreDraftVersion(...args),
   getMyRuleSets: (...args: unknown[]) => getMyRuleSets(...args),
   saveMyRuleSet: (...args: unknown[]) => saveMyRuleSet(...args),
@@ -234,6 +238,7 @@ const draft = (over: Partial<ContentDraft> = {}): ContentDraft => ({
   agentRun: null,
   updatedAt: '2026-10-20T10:00:00Z',
   archivedAt: null,
+  qualityHandoff: false,
   ...over,
 });
 
@@ -338,6 +343,8 @@ beforeEach(() => {
   getMyRuleSets.mockReset().mockResolvedValue({});
   saveMyRuleSet.mockReset().mockResolvedValue(undefined);
   getDraftVersions.mockReset().mockResolvedValue([]);
+  getDraftHandoffs.mockReset().mockResolvedValue([]);
+  readAutoHandOff.mockReset().mockResolvedValue(false);
   restoreDraftVersion.mockReset();
   getCitedPassages.mockReset().mockResolvedValue([]);
   getDraftSuggestions.mockReset().mockResolvedValue([]);
@@ -1050,6 +1057,31 @@ describe('the content editor', () => {
       expect(document.body.textContent).toContain(
         'Restoring makes a new version. Nothing is lost.',
       );
+    });
+
+    it('lists the hand-offs among the versions by time, with nothing to restore (CE-051)', async () => {
+      getContentDraft.mockResolvedValue(draft());
+      getDraftVersions.mockResolvedValue(versions);
+      getDraftHandoffs.mockResolvedValue([
+        {
+          id: 'r1',
+          origin: 'auto',
+          outcome: 'done',
+          checks: 6,
+          startedAt: '2026-10-15T09:00:00Z',
+        },
+      ]);
+      await renderPage();
+      const items = await openHistory();
+      expect(getDraftHandoffs).toHaveBeenCalledWith('d1');
+      // Only the versions restore; the hand-off sits between them.
+      expect(items).toHaveLength(2);
+      const body = document.body.textContent!;
+      const text = body.slice(body.indexOf('Version history'));
+      expect(text).toContain('Handed off automatically');
+      expect(text).toContain('6 checks · its changes were suggestions to review');
+      expect(text.indexOf('Marked ready')).toBeLessThan(text.indexOf('Handed off automatically'));
+      expect(text.indexOf('Handed off automatically')).toBeLessThan(text.indexOf('Live page'));
     });
 
     it('says when there is nothing to restore yet', async () => {
@@ -3139,6 +3171,61 @@ describe('the side panel', () => {
       expect(fixDraftRules).not.toHaveBeenCalled();
       await act(async () => answer({ count: 1 }));
       await act(async () => void (await vi.advanceTimersByTimeAsync(0)));
+    });
+
+    it('hands an imported page off on its own once Quality is read, once a draft, when its brand does (CE-051)', async () => {
+      process.env.NEXT_PUBLIC_CONTENT_QUALITY_PHASE = '2';
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+      getContentAuthors.mockResolvedValue({
+        authors: [],
+        brands: [{ id: 'b1', name: 'Ledgerly' }],
+        me: { id: 'u1', role: 'admin' },
+      });
+      const long = `Teams ${Array.from({ length: 39 }, () => 'plan').join(' ')}.`;
+      const imported = {
+        ...claimed,
+        author: 'user' as const,
+        method: 'optimize' as const,
+        qualityHandoff: true,
+        bodyHtml: `${claimed.bodyHtml}<p>${long}</p>`,
+      };
+      getContentDraft.mockResolvedValue(imported);
+      handOffDraft.mockResolvedValue({ error: 'already' });
+      window.innerWidth = 1440;
+      await renderPage();
+      // Not before Quality is read.
+      expect(handOffDraft).not.toHaveBeenCalled();
+      await act(async () => void (await vi.advanceTimersByTimeAsync(3_000)));
+      await act(async () => void (await vi.advanceTimersByTimeAsync(0)));
+      expect(readAutoHandOff).toHaveBeenCalledWith('d1');
+      expect(handOffDraft).toHaveBeenCalledTimes(1);
+      expect(handOffDraft).toHaveBeenCalledWith(
+        'd1',
+        'b1',
+        expect.objectContaining({
+          origin: 'auto',
+          items: expect.arrayContaining([
+            expect.objectContaining({ key: 'readability:longSentences' }),
+          ]),
+        }),
+      );
+      // Another tab's run came first: nothing said.
+      expect(toast.error).not.toHaveBeenCalled();
+
+      // A draft that had it, or a brand that doesn't hand off: never.
+      handOffDraft.mockClear();
+      act(() => root.unmount());
+      root = createRoot(container);
+      readAutoHandOff.mockResolvedValue(true);
+      await renderPage();
+      await act(async () => void (await vi.advanceTimersByTimeAsync(3_000)));
+      act(() => root.unmount());
+      root = createRoot(container);
+      readAutoHandOff.mockResolvedValue(false);
+      getContentDraft.mockResolvedValue({ ...imported, qualityHandoff: false });
+      await renderPage();
+      await act(async () => void (await vi.advanceTimersByTimeAsync(3_000)));
+      expect(handOffDraft).not.toHaveBeenCalled();
     });
 
     it('asks a page that puts the brand forward for its disclosure, and Add line puts it under the H1 (CE-050)', async () => {

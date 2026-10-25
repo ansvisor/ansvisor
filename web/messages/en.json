@@ -3936,6 +3936,16 @@
           "publish": "kept on publish",
           "restore": "kept when another version was restored"
         },
+        "handOff": {
+          "person": "Handed off to Content Agent",
+          "auto": "Handed off automatically",
+          "note": {
+            "done": "{count, plural, one {# check} other {# checks}} · its changes were suggestions to review",
+            "stopped": "{count, plural, one {# check} other {# checks}} · stopped",
+            "failed": "{count, plural, one {# check} other {# checks}} · didn't finish",
+            "running": "{count, plural, one {# check} other {# checks}} · under way"
+          }
+        },
         "restore": "Restore",
         "restoreLabel": "Restore {version}, {when}",
         "footer": "Restoring makes a new version. Nothing is lost.",
