@@ -11,8 +11,9 @@ import { readWebflow } from '@/lib/webflow-client';
 /**
  * Where Send to CMS sends (#1331, phase 2): the brand's webhook, or its
  * Webflow collection once Settings › Integrations has it ready (connected,
- * a collection with a body field). The choice is remembered per brand, in
- * this browser; Webflow is the first choice where it's ready. A brand with
+ * a collection with a body field). The choice, picked or sent to, is
+ * remembered per brand, in this browser; Webflow is the first choice where
+ * it's ready. A brand with
  * Webflow connected but not ready sees it, off, so its pages don't go to
  * the webhook unnoticed. A read that fails (or an API without Webflow)
  * leaves the webhook as it was before Webflow: a webhook send doesn't need
@@ -107,6 +108,8 @@ export function useCmsTarget(brandId: string) {
       setPicked({ brandId, target: next });
       remember(brandId, next);
     },
+    /** Pages went there: the brand's choice from now on, as if picked. */
+    sent: (to: CmsTarget) => remember(brandId, to),
   };
 }
 
@@ -179,9 +182,12 @@ export function CmsTargetPicker({
 export function CmsTargetUnchecked({
   reading,
   onRetry,
+  disabled,
 }: {
   reading: boolean;
   onRetry: () => void;
+  /** While sending: the target is fixed until the send is over. */
+  disabled?: boolean;
 }) {
   const t = useTranslations('contentEditor.editor.send.target');
   return (
@@ -193,7 +199,7 @@ export function CmsTargetUnchecked({
       <Button
         size="sm"
         variant="outline"
-        disabled={reading}
+        disabled={reading || disabled}
         aria-label={t('retry')}
         onClick={onRetry}
       >
