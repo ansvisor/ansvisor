@@ -424,7 +424,7 @@ export function keepSuggestions(raw, passages, lockedKeys, ruleKeys, links = nul
       if (lockedKeys.has(passageKey(passage.text))) continue;
       const before = s.before.trim();
       if (!before || !passage.text.includes(before)) continue;
-      if (keepsPlaceholders && dropsPlaceholder(before, s.after)) continue;
+      if (keepsPlaceholders && dropsPlaceholder(passage.text, before, s.after)) continue;
       const split = splitReplace(s.after, passage.tag, links);
       const { words, blocks } = split;
       // As many as a suggestion may keep (00240).
@@ -517,10 +517,16 @@ export function promptPassages(passages) {
  */
 const PLACEHOLDER = /\[(?!sic\])(?=[^[\]\n]*\p{L})[^[\]\n]{2,}\](?!\()/giu;
 
-/** Whether a replace takes out a placeholder its words had: fills it, or drops it. */
-export function dropsPlaceholder(before, after) {
-  const had = before.match(PLACEHOLDER) ?? [];
-  return had.some((placeholder) => !String(after ?? '').includes(placeholder));
+/**
+ * Whether a replace takes a placeholder out of its passage, filled or
+ * dropped: the passage's placeholders, read before and after the change
+ * (a "before" may cut into one: "product name" in "[product name]").
+ */
+export function dropsPlaceholder(passage, before, after) {
+  const had = passage.match(PLACEHOLDER) ?? [];
+  if (!had.length) return false;
+  const changed = passage.replace(before, () => String(after ?? ''));
+  return had.some((placeholder) => !changed.includes(placeholder));
 }
 
 /** What the model is told: the brand, the page's passages, and the rules to fix. */
@@ -629,6 +635,13 @@ export async function fixDraftRules({ draftId, brandId, input, handoff = null })
   if (!draft || draft.brand_id !== brandId) {
     throw Object.assign(new Error('Draft not found'), { status: 404 });
   }
+  // An automatic hand-off on a draft its brand doesn't hand off never will be due.
+  if (handoff?.origin === 'auto' && draft.quality_handoff !== true) {
+    throw Object.assign(new Error('The brand hands off no quality fixes'), {
+      status: 409,
+      code: 'not_due',
+    });
+  }
   if (draft.status === 'published') {
     throw Object.assign(new Error('The draft is published'), { status: 409, code: 'published' });
   }
@@ -648,12 +661,6 @@ export async function fixDraftRules({ draftId, brandId, input, handoff = null })
     throw Object.assign(new Error('The agent is already writing it'), {
       status: 409,
       code: 'writing',
-    });
-  }
-  if (handoff?.origin === 'auto' && draft.quality_handoff !== true) {
-    throw Object.assign(new Error('The brand hands off no quality fixes'), {
-      status: 409,
-      code: 'not_due',
     });
   }
 
@@ -709,6 +716,27 @@ export async function fixDraftRules({ draftId, brandId, input, handoff = null })
   }
 }
 
+/** Quality's checks a hand-off fixes with a source: they link the draft's sources (CE-051). */
+const SOURCE_CHECKS = new Set([
+  'trust:claimsSourced',
+  'trust:freshSources',
+  'trust:noWeakSources',
+  'trust:primarySources',
+  'trust:noBrokenLinks',
+]);
+
+/** The brand's approved facts still on its site (CE-047), as their words. */
+async function approvedFacts(brandId) {
+  const { data, error } = await supabaseAdmin
+    .from('brand_facts')
+    .select('quote')
+    .eq('brand_id', brandId)
+    .eq('status', 'approved')
+    .is('gone_at', null);
+  if (error) throw error;
+  return (data ?? []).map((f) => f.quote).filter(Boolean);
+}
+
 /** Fix open rules' run itself, step by step: nothing is kept once it is stopped. */
 async function fixWithRun({
   draft,
@@ -738,8 +766,12 @@ async function fixWithRun({
     queries: input.sources?.queries,
     inputs: inputSources(inputRow, brand.name),
   });
-  // A hand-off's details are the editor's words: no fact the agent may write.
-  const ruleWords = input.rules.flatMap((r) => (handoff ? [r.name] : [r.name, r.detail]));
+  // A hand-off's details and the person's own rules are the editor's words:
+  // no fact the agent may write. The brand's approved facts are, read here.
+  const ruleWords = handoff
+    ? input.rules.map((r) => r.name)
+    : [...input.rules.flatMap((r) => [r.name, r.detail]), ...input.textRules];
+  const facts = handoff && ruleKeys.has('trust:brandFacts') ? await approvedFacts(brandId) : [];
   const known = knownNumbers(
     htmlText(draft.body_html),
     draft.title,
@@ -747,7 +779,7 @@ async function fixWithRun({
     brand.industry,
     brand.description,
     ...ruleWords,
-    ...input.textRules,
+    ...facts,
     todayText(),
   );
   // The people and quotes it may name: the same words, its data's and the authors' (CE-044).
@@ -758,16 +790,20 @@ async function fixWithRun({
     brand.industry,
     brand.description,
     ...ruleWords,
-    ...input.textRules,
     ...numbered.map(sourceWords),
     ...(await authorWords(supabaseAdmin, brand.organization_id)),
   );
-  // Where it may link: the brand's pages and the draft's sources (A).
+  // Where it may link: the brand's pages and the draft's sources (A); a
+  // hand-off's source checks link the draft's sources.
+  const linkKeys =
+    handoff && [...ruleKeys].some((key) => SOURCE_CHECKS.has(key))
+      ? new Set([...ruleKeys, 'outboundLinks', 'citeInline'])
+      : ruleKeys;
   const targets = await readLinkTargets({
     brandId,
     draftId,
     sourceUrl: draft.source_url,
-    ruleKeys,
+    ruleKeys: linkKeys,
   });
   // Held on the budget before the call, so calls at once can't pass it.
   const budget = await reserveAiBudget(brand.organization_id, {
@@ -790,7 +826,7 @@ async function fixWithRun({
           more,
           lockedKeys,
           input,
-          linkTargets: linkTargetsPrompt(targets, ruleKeys),
+          linkTargets: linkTargetsPrompt(targets, linkKeys),
           sources: sourcesPrompt(numbered),
         }),
         abortSignal,

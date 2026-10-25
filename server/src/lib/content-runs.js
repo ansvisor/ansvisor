@@ -126,7 +126,14 @@ export async function startRun({
       .is('finished_at', null)
       .lt('started_at', new Date(Date.now() - RUN_STALE_MS).toISOString()),
   );
-  const row = { draft_id: draftId, kind, steps, claimed_at: claimedAt, origin };
+  // A person's is the column's default: a database before 00275 takes it.
+  const row = {
+    draft_id: draftId,
+    kind,
+    steps,
+    claimed_at: claimedAt,
+    ...(origin === 'person' ? {} : { origin }),
+  };
   let data;
   if (strict) {
     const { data: written, error } = await supabaseAdmin
@@ -275,7 +282,10 @@ export function isStop(err, run) {
 export async function dropRun(run) {
   if (!run?.id) return;
   live.delete(run.id);
-  await shown('dropped run', run.id, () =>
-    supabaseAdmin.from('content_agent_runs').delete().eq('id', run.id),
-  );
+  const dropped = await shown('dropped run', run.id, async () => {
+    const { error } = await supabaseAdmin.from('content_agent_runs').delete().eq('id', run.id);
+    return { data: !error, error };
+  });
+  // Not taken back: at least not left under way.
+  if (!dropped) await finishRun(run, 'failed');
 }
