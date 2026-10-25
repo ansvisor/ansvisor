@@ -325,7 +325,7 @@ describe('redact', () => {
 });
 
 describe('sweepCatalogSources', () => {
-  it('syncs the due feeds, skipping workspaces without an active subscription on the cloud', async () => {
+  it("syncs the due feeds, and records that an inactive workspace's were not read", async () => {
     process.env.IS_CLOUD = 'true';
     const [first] = fake.rows('catalog_sources');
     first.brands = { organizations: { subscription_status: 'active' } };
@@ -340,9 +340,29 @@ describe('sweepCatalogSources', () => {
     });
     const fetch = vi.fn().mockResolvedValue({ html: fixture('google-feed.xml') });
     const result = await sweepCatalogSources({ db: fake.db, now: NOW, fetch });
-    expect(result).toEqual({ due: 2, synced: 1 });
+    expect(result).toEqual({ due: 2, synced: 1, inactive: 1 });
     expect(fetch).toHaveBeenCalledTimes(1);
     expect(fetch.mock.calls[0][0]).toBe('https://shop.example/feed.xml');
+    // Not read, and said so: it goes to the back of the line instead of
+    // staying first every day.
+    expect(fake.rows('catalog_sources').find((s) => s.brand_id === 'brand-2')).toMatchObject({
+      last_synced_at: NOW.toISOString(),
+      last_status: 'failed',
+      last_error: "Not read: this workspace's subscription isn't active.",
+      last_counts: null,
+    });
+    expect(fake.rows('catalog_products').every((p) => p.brand_id === 'brand-1')).toBe(true);
+  });
+
+  it("keeps a workspace's own catalog for when its subscription is active again", async () => {
+    process.env.IS_CLOUD = 'true';
+    const [first] = fake.rows('catalog_sources');
+    first.brands = { organizations: { subscription_status: 'past_due' } };
+    const fetch = vi.fn();
+    await sweepCatalogSources({ db: fake.db, now: NOW, fetch });
+    expect(fetch).not.toHaveBeenCalled();
+    // Recorded as not read; its products are left as they were, not marked removed.
+    expect(fake.writes.filter((w) => w.table !== 'catalog_sources')).toEqual([]);
   });
 
   it('reads stores too, and never an upload', async () => {
@@ -371,7 +391,7 @@ describe('sweepCatalogSources', () => {
       fetch,
       connectors: { feed_url: feedUrl },
     });
-    expect(result).toEqual({ due: 2, synced: 2 });
+    expect(result).toEqual({ due: 2, synced: 2, inactive: 0 });
     expect(fetch).toHaveBeenCalledTimes(1);
     const tried = fake.rows('catalog_sources').filter((s) => s.last_status);
     expect(tried.map((s) => [s.kind, s.last_status]).sort()).toEqual([
