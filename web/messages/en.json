@@ -4323,7 +4323,7 @@
             "title": "Your workflow",
             "hint": "The brand's webhook (Zapier, Make, n8n)"
           },
-          "readFailed": "Couldn't read where this brand's pages go. Try again before sending.",
+          "unchecked": "Couldn't check Webflow just now, so this goes to your workflow.",
           "retry": "Try again"
         },
         "placeholders": "{count, plural, one {# placeholder is} other {# placeholders are}} still open. Fill {count, plural, one {it} other {them}} first: none goes to your CMS.",
@@ -4376,7 +4376,8 @@
           "no_webflow": "Connect Webflow in Settings › Integrations first.",
           "webflow_refused": "Webflow refused the brand's site token. Connect it again in Settings › Integrations.",
           "webflow_not_ready": "Pick the Webflow collection pages go to in Settings › Integrations.",
-          "in_progress": "This page is already on its way to Webflow. Wait for it, then send again."
+          "in_progress": "This page is already on its way to Webflow. Wait for it, then send again.",
+          "no_webhookWebflow": "This brand's Webflow isn't ready, and it has no webhook. Connect Webflow again or pick its collection in Settings › Integrations."
         },
         "cancel": "Cancel",
         "send": "Send",

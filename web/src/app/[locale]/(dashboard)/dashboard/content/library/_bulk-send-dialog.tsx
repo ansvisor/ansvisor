@@ -23,11 +23,7 @@ import {
   type CmsSendError,
 } from '@/lib/content/cms-send-client';
 import type { ContentDraftListItem } from '@/lib/content/drafts';
-import {
-  CmsTargetPicker,
-  CmsTargetReadFailed,
-  useCmsTarget,
-} from '@/components/content/cms-target';
+import { CmsTargetPicker, CmsTargetUnchecked, useCmsTarget } from '@/components/content/cms-target';
 import { readCmsSources } from './_cms-sources';
 
 /** How often the sends going on in the background are read. */
@@ -118,7 +114,7 @@ export function BulkSendDialog({
     webflow,
     target,
     pick,
-    failed: targetFailed,
+    unchecked: targetUnchecked,
     reading: targetReading,
     retry: retryTarget,
   } = useCmsTarget(brandId);
@@ -303,6 +299,10 @@ export function BulkSendDialog({
     }
     // No page named: any of them may be the one on its way.
     if (code === 'in_progress') return t('inProgress');
+    // Webflow not ready sent the pages to the webhook: what to fix is Webflow.
+    if (code === 'no_webhook' && webflow && !webflow.ready) {
+      return tEditor('send.errors.no_webhookWebflow');
+    }
     return tEditor(`send.errors.${code}`);
   };
 
@@ -343,8 +343,8 @@ export function BulkSendDialog({
             }}
           />
         )}
-        {targetFailed && !after && (
-          <CmsTargetReadFailed reading={targetReading} onRetry={retryTarget} />
+        {targetUnchecked && !after && (
+          <CmsTargetUnchecked reading={targetReading} onRetry={retryTarget} />
         )}
 
         {phase.kind === 'reading' ? (
