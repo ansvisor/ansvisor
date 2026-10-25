@@ -36,6 +36,11 @@ import { MANAGE_AUTHORS_PATH } from './_author-menu';
 /** What Quality reads from the draft and its author, for the segment and the header. */
 export interface QualityRead {
   /**
+   * Phase 3 (CE-052): the page's customer cases' sentences: the person
+   * confirms them, so Hand off never sources or removes them.
+   */
+  caseSentences?: string[];
+  /**
    * Phase 3 (CE-052): the page type the checks and weights follow, whether
    * it was detected (not picked), and its profile; left out before.
    */
@@ -790,7 +795,7 @@ const againstHandOff = (check: ReadabilityCheck) =>
 export function qualitySuggestions(t: T, quality: QualityRead): Suggestion[] {
   return [
     ...readabilitySuggestions(t, quality.readability),
-    ...trustSuggestions(t, quality.trust, proofSentences(quality.todos), {
+    ...trustSuggestions(t, quality.trust, proofSentences(quality.todos, quality.caseSentences), {
       balanced: quality.aiChecks?.balanced ?? null,
       disclosure: quality.aiChecks?.disclosure ?? null,
       brand: quality.brandName,
@@ -1044,7 +1049,14 @@ function detail(t: T, check: ReadabilityCheck): string {
   return t(`checks.${check.id}.detail`);
 }
 
-/** The sentences the open proof to-dos ask the person to prove (CE-049). */
-export function proofSentences(todos: readonly QualityTodo[]): ReadonlySet<string> {
-  return new Set(todos.flatMap((todo) => (todo.proof && !todo.done ? [todo.proof.sentence] : [])));
+/** The sentences the open proof to-dos ask the person to prove (CE-049), and its customer cases'. */
+export function proofSentences(
+  todos: readonly QualityTodo[],
+  /** Phase 3 (CE-052): the page's customer cases' sentences, confirmed or not: the person's. */
+  cases: readonly string[] = [],
+): ReadonlySet<string> {
+  return new Set([
+    ...todos.flatMap((todo) => (todo.proof && !todo.done ? [todo.proof.sentence] : [])),
+    ...cases,
+  ]);
 }

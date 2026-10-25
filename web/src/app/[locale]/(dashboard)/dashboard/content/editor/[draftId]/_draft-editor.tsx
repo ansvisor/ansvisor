@@ -125,7 +125,7 @@ import {
   weighed,
   weighedTrust,
 } from '@/lib/content/quality-profiles';
-import { proofKey, qualityTodos } from '@/lib/content/quality-todos';
+import { caseKey, proofKey, qualityTodos } from '@/lib/content/quality-todos';
 import { isByline, readability, sentencesOf, withTypeRules } from '@/lib/content/readability';
 import { brandFactsPath, factMismatches } from '@/lib/content/brand-facts';
 import {
@@ -816,20 +816,32 @@ export function DraftEditor({
   // Phase 3 (CE-052): a customer case is confirmed publishable, not linked.
   const casesOn = sourcesOn && qualityPhase() >= 3;
   const [caseConfirms, setCaseConfirms] = useState<ReadonlySet<string> | null>(null);
+  // Whether they're read (or failed): until then a case's to-do waits, so
+  // one confirmed before doesn't show open.
+  const [casesRead, setCasesRead] = useState(false);
   useEffect(() => {
     if (!casesOn) return;
     let live = true;
-    void getDraftConfirmations(draft.id).then((rows) => {
-      if (!live) return;
-      // A confirm made before the read lands stays.
-      setCaseConfirms(
-        (prev) =>
-          new Set([
-            ...rows.filter((r) => r.kind === 'customer_case').map((r) => r.key),
-            ...(prev ?? []),
-          ]),
-      );
-    });
+    void getDraftConfirmations(draft.id)
+      .then((rows) => {
+        if (!live) return;
+        setCasesRead(true);
+        // A confirm made before the read lands stays.
+        setCaseConfirms(
+          (prev) =>
+            new Set([
+              ...rows.filter((r) => r.kind === 'customer_case').map((r) => r.key),
+              ...(prev ?? []),
+            ]),
+        );
+      })
+      .catch((err) => {
+        // A failed call (the network, a deploy): the confirms made so far, so E-E-A-T scores.
+        console.error('Failed to read the confirmations:', err);
+        if (!live) return;
+        setCasesRead(true);
+        setCaseConfirms((prev) => prev ?? new Set());
+      });
     return () => {
       live = false;
     };
@@ -837,17 +849,17 @@ export function DraftEditor({
   // The page's customer cases, and how many are confirmed: E-E-A-T's (CE-052).
   const caseCount = useMemo(() => {
     if (!casesOn) return null;
-    const keys = proofAsks.filter((ask) => ask.kind === 'customer_case').map(proofKey);
+    const keys = proofAsks.filter((ask) => ask.kind === 'customer_case').map(caseKey);
     return { total: keys.length, confirmed: keys.filter((k) => caseConfirms?.has(k)).length };
   }, [casesOn, proofAsks, caseConfirms]);
+  const isCase = (ask: (typeof proofAsks)[number]) => casesOn && ask.kind === 'customer_case';
+  // A case's to-do once the confirms are read: open while not confirmed.
   const caseOpen = (ask: (typeof proofAsks)[number]) =>
-    casesOn && ask.kind === 'customer_case'
-      ? !(caseConfirms?.has(proofKey(ask)) ?? false)
-      : !ask.linked;
+    isCase(ask) ? casesRead && !(caseConfirms?.has(caseKey(ask)) ?? false) : !ask.linked;
   const newProofs = proofAsks
     .filter(caseOpen)
     .slice(0, MAX_PROOF_TODOS)
-    .map(proofKey)
+    .map((ask) => (isCase(ask) ? caseKey(ask) : proofKey(ask)))
     .filter((key) => !hadProofs.has(key));
   if (newProofs.length > 0) setHadProofs(new Set([...hadProofs, ...newProofs]));
   // The page's images the person confirmed are their own, not stock (CE-049,
@@ -891,7 +903,7 @@ export function DraftEditor({
       !inputsPending &&
       (!sourcesOn || visualRead) &&
       // Phase 3: the customer cases' confirms are read (CE-052).
-      (!casesOn || caseConfirms !== null)
+      (!casesOn || casesRead)
         ? weighed(
             eeat({
               author: pageAuthor,
@@ -921,7 +933,7 @@ export function DraftEditor({
       siteTrust,
       checkDateRead,
       casesOn,
-      caseConfirms,
+      casesRead,
       caseCount,
       weights,
     ],
@@ -1146,7 +1158,13 @@ export function DraftEditor({
         given: inputs ? inputsGiven(inputs) : null,
         trust: trustScore,
         brandFacts: brandFacts ? { pending: pendingFacts, had: hadPendingFacts } : null,
-        proofs: sourcesOn ? { asks: proofAsks, had: hadProofs } : null,
+        // A case's to-do waits for the confirms' read (CE-052).
+        proofs: sourcesOn
+          ? {
+              asks: casesOn && !casesRead ? proofAsks.filter((ask) => !isCase(ask)) : proofAsks,
+              had: hadProofs,
+            }
+          : null,
         visual,
         // Once the authors are read: who the reviewer is, and whether any can be.
         reviewer: regulated && authorsRead ? { topic: regulated, picked: !!pageReviewer } : null,
@@ -1160,6 +1178,9 @@ export function DraftEditor({
     : [];
   const quality: QualityRead | null = qualityOn
     ? {
+        caseSentences: casesOn
+          ? proofAsks.filter((ask) => ask.kind === 'customer_case').map((ask) => ask.sentence)
+          : [],
         weightsFor:
           qualityPhase() >= 3
             ? { type: pageType ?? null, detected: picked === null, profile }

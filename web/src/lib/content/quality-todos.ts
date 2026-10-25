@@ -206,14 +206,14 @@ export function qualityTodos({
   let open = 0;
   // A customer case's share of E-E-A-T's customer cases, each confirm alike.
   const caseAsks = cases ? (proofs?.asks ?? []).filter((a) => a.kind === 'customer_case') : [];
-  const unconfirmed = caseAsks.filter((a) => !cases!.has(proofKey(a))).length;
+  const unconfirmed = caseAsks.filter((a) => !cases!.has(caseKey(a))).length;
   const caseGain =
     eeat && eeat.score !== null && unconfirmed > 0
       ? Math.round(scoreGain(eeat, ['customerCase']) / unconfirmed)
       : 0;
   const proofTodos: QualityTodo[] = (proofs?.asks ?? []).flatMap((ask) => {
-    const key = proofKey(ask);
     const confirm = !!cases && ask.kind === 'customer_case';
+    const key = confirm ? caseKey(ask) : proofKey(ask);
     const done = confirm ? cases!.has(key) : ask.linked;
     if (done && !proofs?.had.has(key)) return [];
     if (!done && (open += 1) > MAX_PROOF_TODOS) return [];
@@ -365,6 +365,14 @@ function shortHash(text: string): string {
  */
 export const proofKey = (ask: { claim: string; block: string }) =>
   `proof:${squeeze(ask.claim)}:${shortHash(squeeze(ask.block))}`;
+
+/**
+ * A customer case's confirmation key (CE-052, 00279): its claim alone, by
+ * its words without spaces, so a typo fixed in its paragraph keeps the
+ * confirm.
+ */
+export const caseKey = (ask: { claim: string }) =>
+  `case:${squeeze(ask.claim).toLowerCase()}`.slice(0, 400);
 
 /**
  * Who / how / why (CE-050): the page says how it was made (how it was

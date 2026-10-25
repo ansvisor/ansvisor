@@ -15,7 +15,7 @@ vi.mock('@/i18n/navigation', () => ({
   ),
 }));
 
-const { QualityTab, qualitySuggestions } = await import('./_quality-tab');
+const { QualityTab, proofSentences, qualitySuggestions } = await import('./_quality-tab');
 type QualityRead = import('./_quality-tab').QualityRead;
 type HandOff = import('./_quality-tab').HandOff;
 
@@ -185,6 +185,29 @@ describe('QualityTab', () => {
     // Each with how the page reads now: what Hand off sends the agent too.
     expect(container.textContent).toContain('Specs table (Now: missing). This page type');
     expect(container.textContent).toContain('Say how shipping and returns work');
+  });
+
+  it('keeps a customer case’s sentence the person’s, confirmed or not, out of the agent’s sources (CE-052)', () => {
+    const sentence = 'Acme cut close time 40% with Ledgerly.';
+    expect(proofSentences([], [sentence])).toEqual(new Set([sentence]));
+    // An open proof to-do's sentence, as before.
+    expect(
+      proofSentences([
+        {
+          id: 'proof',
+          done: false,
+          gain: 3,
+          score: 'trust',
+          action: 'addProof',
+          proof: {
+            claim: 'ISO 27001',
+            block: 'We are ISO 27001.',
+            kind: 'certification',
+            sentence: 'We are ISO 27001.',
+          },
+        },
+      ]),
+    ).toEqual(new Set(['We are ISO 27001.']));
   });
 
   it('shows the three scores with their bands, labelled an Ansvisor estimate', async () => {

@@ -3231,7 +3231,7 @@ describe('the side panel', () => {
       expect(confirmDraftItem).toHaveBeenCalledWith(
         'd1',
         'customer_case',
-        expect.stringMatching(/^proof:/),
+        expect.stringMatching(/^case:/),
       );
       expect(row().textContent).toContain('You confirmed the customer may be named');
     });
