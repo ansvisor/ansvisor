@@ -241,6 +241,20 @@ describe('AgentCard', () => {
     await render([page], false);
     // Two new: the one the page had isn't the run's.
     expect(container.textContent).toContain('answered each heading first · 2 placeholders to fill');
+    // A list the agent wrote without paragraphs in its items: read by their words.
+    await render(
+      [
+        suggestion({
+          kind: 'page',
+          beforeHtml: '<h1>Old</h1><ul><li><p>Churn fell [figure, source].</p></li></ul>',
+          afterText:
+            '<h1>New</h1><ul><li>Churn fell [figure, source].</li></ul><p>Since [year].</p>',
+          reason: 'kept the list',
+        }),
+      ],
+      false,
+    );
+    expect(container.textContent).toContain('kept the list · 1 placeholder to fill');
     await render(
       [
         suggestion({ afterText: 'look at [figure, source]' }),

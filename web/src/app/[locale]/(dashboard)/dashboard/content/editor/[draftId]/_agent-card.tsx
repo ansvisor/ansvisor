@@ -1,6 +1,6 @@
 'use client';
 
-import { useId, useState } from 'react';
+import { useId, useMemo, useState } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
 import { Check, ChevronRight, User, X } from 'lucide-react';
 import { Link } from '@/i18n/navigation';
@@ -279,6 +279,20 @@ export function AgentCard({
   const tRewrite = useTranslations('contentEditor.editor.rewrite');
   const [comparing, setComparing] = useState(false);
   const page = suggestions.find((s) => s.kind === 'page') ?? null;
+  // The placeholders an open rewrite adds, for the person to fill: read once
+  // a rewrite, not on every key the page takes.
+  const pageOpen = page?.status === 'open';
+  const pageLeft = useMemo(
+    () =>
+      pageOpen && page
+        ? Math.max(
+            0,
+            pagePlaceholders(page.afterText).count - pagePlaceholders(page.beforeHtml ?? '').count,
+          )
+        : 0,
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- the rewrite's two pages, not the object
+    [pageOpen, page?.afterText, page?.beforeHtml],
+  );
   const { open, accepted } = suggestionCounts(suggestions);
   const openOnes = suggestions.filter((s) => s.status === 'open');
   const action = suggestions.find((s) => s.actionId && s.actionNo !== null);
@@ -364,11 +378,6 @@ export function AgentCard({
     );
   } else if (page) {
     const { before, after: afterChars } = pageCharacters(page);
-    // The placeholders the rewrite added, for the person to fill.
-    const pageLeft = Math.max(
-      0,
-      pagePlaceholders(page.afterText).count - pagePlaceholders(page.beforeHtml ?? '').count,
-    );
     title =
       page.status === 'open'
         ? tRewrite('ready')
