@@ -18,6 +18,7 @@ import {
   type PageOfferRead,
   jsonLdScript,
   localDate,
+  offerText,
   pageName,
   titleHasPlaceholder,
 } from '@/lib/content/page-schema';
@@ -232,7 +233,7 @@ export function BeforePublish({
             {
               state: 'check' as const,
               title: t('schema.product'),
-              detail: t('schema.productDetail'),
+              detail: t('schema.productDetail', { price: offerText(offer!) }),
             },
           ]
         : [

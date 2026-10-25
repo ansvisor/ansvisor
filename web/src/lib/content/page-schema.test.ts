@@ -189,7 +189,12 @@ describe('pageOffer (Phase 3, CE-053)', () => {
     expect(pageOffer(['Regular price $129.00'])).toEqual(ridge);
     // A currency after its amount stays with it; a code after a sign says whose dollar.
     expect(pageOffer(['129,00 € 2 Jahre Garantie.'])).toEqual({ price: 129, currency: 'EUR' });
-    expect(pageOffer(['999 TL 3 taksit imkânı.'])).toEqual({ price: 999, currency: 'TRY' });
+    expect(pageOffer(['1.299,00 TL 3 taksit imkânı.'])).toEqual({ price: 1299, currency: 'TRY' });
+    // A code before a dollar sign, a Swiss apostrophe.
+    expect(pageOffer(['CAD $129.00'])).toEqual({ price: 129, currency: 'CAD' });
+    expect(pageOffer(['MX$1,299'])).toEqual({ price: 1299, currency: 'MXN' });
+    expect(pageOffer(["CHF 1'299.–"])).toEqual({ price: 1299, currency: 'CHF' });
+    expect(pageOffer(["1'299.00 CHF"])).toEqual({ price: 1299, currency: 'CHF' });
     expect(pageOffer(['$129.00 CAD'])).toEqual({ price: 129, currency: 'CAD' });
     expect(pageOffer(['Galaxy S24+: $999.99 (Regular price $1,099.99)'])).toEqual({
       price: 999.99,
@@ -252,6 +257,24 @@ describe('pageOffer (Phase 3, CE-053)', () => {
     expect(
       pageOffer(['Livraison gratuite pour toute commande supérieure à 50 €.', '129 €.']),
     ).toEqual({ price: 129, currency: 'EUR' });
+    // A member's, a subscriber's or a code's price, a unit price, PayPal, a balance.
+    expect(pageOffer(['Regular price $129, or $116 with Subscribe & Save.'])).toEqual(ridge);
+    expect(pageOffer(['Regular price $129.00 Member price $116.10'])).toEqual(ridge);
+    expect(pageOffer(['$129. With code SPRING10: $116.10'])).toEqual(ridge);
+    expect(pageOffer(['Regular price $129.00 Unit price $12.90 / per 100g'])).toEqual(ridge);
+    expect(pageOffer(['UVP 129,00 € Grundpreis 25,80 € / 1 kg'])).toEqual({
+      price: 129,
+      currency: 'EUR',
+    });
+    expect(pageOffer(['Regular price $129.00', 'Pay in 4 with PayPal: $32.25'])).toEqual(ridge);
+    expect(pageOffer(['Liste fiyatı 1.599 TL, 300 TL indirimle.'])).toEqual({
+      price: 1599,
+      currency: 'TRY',
+    });
+    expect(
+      pageOffer(['$129.', 'Pre-order with a $50 deposit, balance of $79 at shipping.']),
+    ).toEqual(ridge);
+    expect(pageOffer(['Free shipping on orders between $50 and $100.', '$129.'])).toEqual(ridge);
     // Savings and installments in other languages.
     expect(pageOffer(['129 €.', 'Sie sparen 30 €.'])).toEqual({ price: 129, currency: 'EUR' });
     expect(pageOffer(['129 €.', 'Économisez 30 €.'])).toEqual({ price: 129, currency: 'EUR' });
@@ -291,6 +314,27 @@ describe('pageOffer (Phase 3, CE-053)', () => {
     });
     // "From" and a range written loosely may be several prices.
     expect(pageOffer(['From $119.'])).toEqual({ several: ['$119'] });
+    for (const from of [
+      'From just $129.',
+      'Starting at just $129.',
+      'As low as $129.',
+      'Pricing begins at $129.',
+      'A partir de 129 €.',
+      'A partire da 129 €.',
+      'Vanaf € 129.',
+      'Ab nur 129 €.',
+      "1.299 TL'den başlıyor.",
+    ]) {
+      expect(pageOffer([from])).toHaveProperty('several');
+    }
+    // A number written onto a price: the person says which.
+    expect(pageOffer(['PlayStation 5 549,99 €'])).toEqual({ several: ['5 549,99 €'] });
+    expect(pageOffer(['Ridge 28 € 129'])).toEqual({ several: ['28 €'] });
+    expect(pageOffer(['999 TL 3 taksit imkânı.'])).toEqual({ several: ['999 TL'] });
+    // Another product's range beside the price isn't its range.
+    expect(pageOffer(['Comparable headphones cost $200–$400, but the X1 is $299.'])).toHaveProperty(
+      'several',
+    );
     expect(pageOffer(['From $119 up to $139.'])).toEqual({ several: ['$119'] });
     expect(pageOffer(['Preis: 119 – 139 €.'])).toEqual({ several: ['119 – 139 €'] });
     expect(pageOffer(['Fiyat: 999 - 1.299 TL.'])).toEqual({ several: ['999 - 1.299 TL'] });
