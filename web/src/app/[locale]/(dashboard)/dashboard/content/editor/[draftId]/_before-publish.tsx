@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef } from 'react';
+import { useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { AlertTriangle, Check } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -40,6 +40,8 @@ type Row = {
   detail: string;
   /** Ready to paste's Fill now, while a placeholder is open. */
   fill?: boolean;
+  /** The disclosure's Add line (CE-050): the line it puts under the H1. */
+  add?: string;
 };
 
 /** What Ready to paste reads (Quality spec §7b): placeholders, alt text, links. */
@@ -84,6 +86,9 @@ export function BeforePublish({
   linksPending,
   onMarkReady,
   onFixFirst,
+  disclosureLine = null,
+  disclosureAdded = false,
+  onAddDisclosure,
 }: {
   /** Opened by Mark ready, by Export, or by Send to CMS. */
   mode?: 'markReady' | 'export' | 'send';
@@ -108,6 +113,15 @@ export function BeforePublish({
   onMarkReady: (anyway: ReadyAnyway | null) => void;
   /** Goes to what would raise Trust, the passage named first. */
   onFixFirst: (show: string | null) => void;
+  /**
+   * Phase 2 (CE-050): the disclosure line in the page's language
+   * (disclosureText), or null where there's none to offer.
+   */
+  disclosureLine?: string | null;
+  /** The page has that line already: added, and not read again yet. */
+  disclosureAdded?: boolean;
+  /** Puts the disclosure line under the page's opening paragraph (undoable, as any edit). */
+  onAddDisclosure?: (line: string) => void;
 }) {
   const t = useTranslations('contentEditor.editor.beforePublish');
   const tQuality = useTranslations('contentEditor.editor.quality');
@@ -119,9 +133,14 @@ export function BeforePublish({
   const authorsRead = quality.eeat !== null;
   const trust = quality.trust?.score ?? null;
   const below = trust !== null && trust < TRUST_GATE;
-  // The biggest of what would raise Trust: the warning's reason.
+  // The biggest of what would raise Trust: the warning's reason. The claims
+  // a proof to-do covers count here too: the warning names them.
   const [fix] = below
-    ? trustSuggestions(tQuality, quality.trust)
+    ? trustSuggestions(tQuality, quality.trust, undefined, {
+        balanced: quality.aiChecks?.balanced ?? null,
+        disclosure: quality.aiChecks?.disclosure ?? null,
+        brand: quality.brandName,
+      })
         .filter((s) => s.gain > 0)
         .sort((a, b) => b.gain - a.gain)
     : [];
@@ -144,6 +163,10 @@ export function BeforePublish({
         }),
       )
     : null;
+  // Added here: it counts once the page is read again.
+  const [added, setAdded] = useState(false);
+  const disclosure = quality.aiChecks?.disclosure ?? null;
+  const brand = quality.brandName || tQuality('yourBrand');
   const rows: Row[] = [
     !authorsRead
       ? { state: 'check', title: t('author.ok'), detail: t('author.unknown') }
@@ -175,6 +198,33 @@ export function BeforePublish({
               },
         ]
       : [{ state: 'check' as const, title: t('schema.other'), detail: t('schema.otherDetail') }]),
+    // Phase 2 (CE-050): where the page puts the brand forward.
+    ...(disclosure
+      ? [
+          disclosure.found && !disclosure.added
+            ? {
+                state: 'ok' as const,
+                title: t('disclosure.ok'),
+                detail: disclosure.show
+                  ? t('disclosure.okDetail', { line: disclosure.show })
+                  : t('disclosure.okReading'),
+              }
+            : added || disclosureAdded
+              ? {
+                  state: 'check' as const,
+                  title: t('disclosure.added'),
+                  detail: t('disclosure.addedDetail'),
+                }
+              : {
+                  state: 'missing' as const,
+                  title: t('disclosure.none', { brand }),
+                  detail: disclosureLine
+                    ? t('disclosure.noneDetail', { line: disclosureLine })
+                    : t('disclosure.noneWrite', { brand }),
+                  ...(disclosureLine && onAddDisclosure ? { add: disclosureLine } : {}),
+                },
+        ]
+      : []),
     { ...readyRow(t, paste, linksPending), fill: paste.placeholders > 0 },
   ];
 
@@ -219,6 +269,11 @@ export function BeforePublish({
         {quality.claimsReading && (
           <p role="status" className="text-xs text-muted-foreground">
             {t('claimsReading')}
+          </p>
+        )}
+        {quality.pageReading && (
+          <p role="status" className="text-xs text-muted-foreground">
+            {t('pageReading')}
           </p>
         )}
         <ul className="divide-y rounded-xl border text-sm">
@@ -266,6 +321,19 @@ export function BeforePublish({
                   }}
                 >
                   {t('paste.fill')}
+                </Button>
+              )}
+              {row.add && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="shrink-0"
+                  onClick={() => {
+                    onAddDisclosure?.(row.add!);
+                    setAdded(true);
+                  }}
+                >
+                  {t('disclosure.add')}
                 </Button>
               )}
             </li>

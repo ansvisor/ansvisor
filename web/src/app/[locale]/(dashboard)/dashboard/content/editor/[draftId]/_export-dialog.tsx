@@ -202,6 +202,8 @@ export function ExportDialog({
   publish?: {
     trustBelow: number | null;
     noAuthor: boolean;
+    /** The page puts the brand forward without saying the brand makes it (CE-050). */
+    noDisclosure?: boolean;
     /** An article: Before you publish has its dates and JSON-LD too. */
     article: boolean;
     onReview: () => void;
@@ -626,16 +628,19 @@ export function ExportDialog({
 
 /**
  * Before you publish, one line over Export's options: amber with what it
- * warns about (Trust under 60, no author), else quiet; Review opens it.
+ * warns about (Trust under 60, no author, no disclosure), else quiet;
+ * Review opens it.
  */
 function PublishLine({
   trustBelow,
   noAuthor,
+  noDisclosure = false,
   article,
   onReview,
 }: {
   trustBelow: number | null;
   noAuthor: boolean;
+  noDisclosure?: boolean;
   article: boolean;
   onReview: () => void;
 }) {
@@ -643,6 +648,7 @@ function PublishLine({
   const warnings = [
     ...(trustBelow !== null ? [t('trust', { trust: trustBelow })] : []),
     ...(noAuthor ? [t('noAuthor')] : []),
+    ...(noDisclosure ? [t('noDisclosure')] : []),
   ];
   return (
     <div

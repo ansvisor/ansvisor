@@ -39239,6 +39239,93 @@ comment on table public.content_image_uploads is
 notify pgrst, 'reload schema';
 
 -- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00273_content_draft_reviewer.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00273: Quality CE-049 — a qualified reviewer for regulated pages
+-- ============================================================================
+-- A consumer page that advises on health, finance or law (the page read's
+-- `regulated`, 00270) asks for a qualified reviewer: "Reviewed by {name,
+-- credential}", from Authors only (Quality spec §4b). Like the author
+-- (00257), it is page metadata: the editor shows it outside the page,
+-- never in the page's text.
+--
+--   * content_drafts.reviewer_id: one of the brand's organization's authors,
+--     else null.
+
+alter table public.content_drafts
+  add column if not exists reviewer_id uuid
+    references public.content_authors(id) on delete set null;
+
+create index if not exists content_drafts_reviewer
+  on public.content_drafts (reviewer_id)
+  where reviewer_id is not null;
+
+comment on column public.content_drafts.reviewer_id is
+  'Quality CE-049 (00273): the qualified person who reviewed a regulated page (content_authors), page metadata — never the page''s text; null when none.';
+
+create or replace function public.content_draft_reviewer()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
+begin
+  if new.reviewer_id is not null
+     and (tg_op = 'INSERT' or new.reviewer_id is distinct from old.reviewer_id)
+     and not exists (
+       select 1
+       from public.content_authors a
+       join public.brands b on b.organization_id = a.organization_id
+       where a.id = new.reviewer_id and b.id = new.brand_id
+     )
+  then
+    raise exception 'content draft reviewer is not one of the brand''s organization'
+      using errcode = '23514';
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists content_drafts_reviewer on public.content_drafts;
+create trigger content_drafts_reviewer
+  before insert or update of reviewer_id on public.content_drafts
+  for each row execute function public.content_draft_reviewer();
+
+notify pgrst, 'reload schema';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00274_content_quality_page_checks.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00274: Quality phase 2, CE-050 — the page read's checks
+-- ============================================================================
+-- The page read (00270) also says, in the page's own words:
+--
+--   * answerFirst: whether the paragraph right after the H1 answers it;
+--   * recommends: where the page puts the brand forward among options;
+--   * disclosure: where it says the brand makes what it recommends;
+--   * balance: a real limit of the brand's own product, or where another
+--     option wins;
+--   * how: how the page's content was made (who, how, why);
+--   * cut: whether the model read less than the whole page (a check not
+--     found may be in the rest).
+--
+-- Each found one names its paragraph by its hash, as the read's items do;
+-- null when the page wasn't read for them (a read before this, a missed one).
+
+alter table public.content_quality_pages
+  add column if not exists checks jsonb
+    check (
+      checks is null
+      or (jsonb_typeof(checks) = 'object' and octet_length(checks::text) <= 4096)
+    );
+
+comment on column public.content_quality_pages.checks is
+  'Quality CE-050 (00274): { answerFirst: { block_hash, answers } | null, recommends | disclosure | balance | how: { quote, block_hash } | null, cut: boolean }; null when the page wasn''t read for them.';
+
+notify pgrst, 'reload schema';
+
+-- ─────────────────────────────────────────────────────────────────────────
 -- migrations/00275_content_quality_handoff.sql
 -- ─────────────────────────────────────────────────────────────────────────
 -- ============================================================================

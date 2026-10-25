@@ -261,6 +261,44 @@ describe('reading the page as written', () => {
     // A short H1 is read by all its words.
     const short = `<h1>What is AI?</h1>${p('AI is software that answers questions.')}${body}`;
     expect(check(short, 'answerFirst')!.points).toBe(15);
+    // A byline or a date under the H1 is read past: the answer is the paragraph after it.
+    const bylined = `<h1>Pipeline forecasting</h1>${p('By Jane Doe · October 2026')}${p('Pipeline forecasting is how a team guesses what will close.')}${body}`;
+    expect(check(bylined, 'answerFirst')!.points).toBe(15);
+    // A dated byline's numbers aren't words, as the API counts them.
+    const dated = `<h1>Pipeline forecasting</h1>${p('By Jane Doe · Updated Oct 25, 2026 · 6 min read')}${p('Pipeline forecasting is how a team guesses what will close.')}${body}`;
+    expect(check(dated, 'answerFirst')!.points).toBe(15);
+  });
+
+  it('takes the model’s verdict on the first paragraph in phase 2, while it is still first (CE-050)', () => {
+    const body = p(Array.from({ length: 4 }, () => sentence(15)).join(' '));
+    const first = 'Pipeline forecasting is how a small team guesses what will close.';
+    const html = `<h1>Pipeline forecasting for small teams</h1>${p(first)}${body}`;
+    const read = (aiAnswer: { answers: boolean; block: string; held?: boolean } | null) =>
+      readability(html, 'en', aiAnswer).checks.find((c) => c.id === 'answerFirst')!;
+    // The rule passes it; the model says it doesn't answer.
+    expect(read(null)).toMatchObject({ points: 15 });
+    expect(read(null).ai).toBeUndefined();
+    expect(read({ answers: false, block: first })).toMatchObject({
+      points: 0,
+      ai: true,
+      at: first,
+    });
+    // A verdict on another paragraph (the page changed since): the rule reads it.
+    expect(read({ answers: false, block: 'Teams like a calm Monday.' })).toMatchObject({
+      points: 15,
+    });
+    // Held while the edited page is read again: the verdict stays (review, #1479).
+    expect(
+      read({ answers: false, block: 'Pipeline forecasting is how teams guess.', held: true }),
+    ).toMatchObject({ points: 0, ai: true });
+    // It answers, but it's still a short paragraph to pass.
+    const long = `Pipeline ${sentence(70)}`;
+    expect(
+      readability(`<h1>Pipeline forecasting</h1>${p(long)}${body}`, 'en', {
+        answers: true,
+        block: long,
+      }).checks.find((c) => c.id === 'answerFirst'),
+    ).toMatchObject({ points: 0, ai: true });
   });
 
   it('keeps an abbreviation inside its sentence, and reads passive voice and jargon closely', () => {

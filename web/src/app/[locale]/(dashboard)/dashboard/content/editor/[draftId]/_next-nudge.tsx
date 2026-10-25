@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { Link } from '@/i18n/navigation';
+import type { ClaimMark } from '@/lib/content/quality-checks';
 import type { QualityTodo } from '@/lib/content/quality-todos';
 import { MANAGE_AUTHORS_PATH } from './_author-menu';
 import { useTodoCopy, type QualityRead } from './_quality-tab';
@@ -58,7 +59,7 @@ export function useNextNudge(draftId: string, todos: QualityTodo[]) {
       const first = openNow.current[0];
       if (!first) return;
       const seen = readSeen(draftId);
-      const step = `${moment}:${first.id}`;
+      const step = `${moment}:${first.key ?? first.id}`;
       if (seen.later || seen.steps.includes(step)) return;
       writeSeen(draftId, { ...seen, steps: [...seen.steps, step] });
       setShowing(true);
@@ -90,16 +91,28 @@ export function NextNudge({
   onShowPlaceholder,
   onPickAuthor,
   onAddInput,
+  onAddSource,
+  onConfirmImages,
+  onAddImage,
+  onPickReviewer,
   onLater,
   onAct,
 }: {
   shown: { todo: QualityTodo; count: number } | null;
-  quality: Pick<QualityRead, 'author' | 'team' | 'canEdit'>;
+  quality: Pick<QualityRead, 'author' | 'team' | 'canEdit' | 'brandFactsPath'> &
+    Partial<Pick<QualityRead, 'siteType'>>;
   /** Selects the page's first placeholder, to type over. */
   onShowPlaceholder: () => void;
   onPickAuthor: () => void;
   /** Opens Brief › Your input (CE-048). */
   onAddInput?: () => void;
+  /** A proof to-do's: its claim selected, the link dialog open (CE-049). */
+  onAddSource?: (claim: ClaimMark) => void;
+  /** Visual proof's: Confirm, or the first open spot's Add image (CE-049). */
+  onConfirmImages?: () => void;
+  onAddImage?: () => void;
+  /** A regulated page's: the header's reviewer menu (CE-049). */
+  onPickReviewer?: () => void;
   onLater: () => void;
   /** It was acted on: it goes. */
   onAct: () => void;
@@ -165,6 +178,53 @@ export function NextNudge({
               >
                 {t('act.addInput')}
               </button>
+            )
+          ) : action === 'addProof' ? (
+            onAddSource &&
+            shown.todo.proof && (
+              <button
+                type="button"
+                className={actClass}
+                onClick={() => {
+                  onAct();
+                  const { claim, sentence, block } = shown.todo.proof!;
+                  onAddSource({ text: claim, sentence, block });
+                }}
+              >
+                {t('act.addProof')}
+              </button>
+            )
+          ) : action === 'confirmImage' || action === 'addImage' ? (
+            (action === 'confirmImage' ? onConfirmImages : onAddImage) && (
+              <button
+                type="button"
+                className={actClass}
+                onClick={() => {
+                  onAct();
+                  (action === 'confirmImage' ? onConfirmImages : onAddImage)!();
+                }}
+              >
+                {t(`act.${action}`)}
+              </button>
+            )
+          ) : action === 'pickReviewer' ? (
+            onPickReviewer && (
+              <button
+                type="button"
+                className={actClass}
+                onClick={() => {
+                  onAct();
+                  onPickReviewer();
+                }}
+              >
+                {t('act.pickReviewer')}
+              </button>
+            )
+          ) : action === 'reviewBrandFacts' ? (
+            quality.brandFactsPath && (
+              <Link href={quality.brandFactsPath} className={actClass} onClick={onAct}>
+                {t('act.reviewBrandFacts')}
+              </Link>
             )
           ) : (
             action && (

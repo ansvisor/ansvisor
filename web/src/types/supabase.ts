@@ -1007,6 +1007,7 @@ export type Database = {
           prompt_ids: string[]
           published_at: string | null
           published_url: string | null
+          reviewer_id: string | null
           rules: Json | null
           source_url: string | null
           score_after: number | null
@@ -1046,6 +1047,7 @@ export type Database = {
           prompt_ids?: string[]
           published_at?: string | null
           published_url?: string | null
+          reviewer_id?: string | null
           rules?: Json | null
           source_url?: string | null
           score_after?: number | null
@@ -1085,6 +1087,7 @@ export type Database = {
           prompt_ids?: string[]
           published_at?: string | null
           published_url?: string | null
+          reviewer_id?: string | null
           rules?: Json | null
           source_url?: string | null
           score_after?: number | null
@@ -1098,6 +1101,13 @@ export type Database = {
           {
             foreignKeyName: "content_drafts_author_id_fkey"
             columns: ["author_id"]
+            isOneToOne: false
+            referencedRelation: "content_authors"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "content_drafts_reviewer_id_fkey"
+            columns: ["reviewer_id"]
             isOneToOne: false
             referencedRelation: "content_authors"
             referencedColumns: ["id"]
@@ -1391,6 +1401,42 @@ export type Database = {
             columns: ["draft_id"]
             isOneToOne: true
             referencedRelation: "content_drafts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      content_draft_own_images: {
+        Row: {
+          confirmed_at: string
+          confirmed_by: string | null
+          draft_id: string
+          src: string
+        }
+        Insert: {
+          confirmed_at?: string
+          confirmed_by?: string | null
+          draft_id: string
+          src: string
+        }
+        Update: {
+          confirmed_at?: string
+          confirmed_by?: string | null
+          draft_id?: string
+          src?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "content_draft_own_images_draft_id_fkey"
+            columns: ["draft_id"]
+            isOneToOne: false
+            referencedRelation: "content_drafts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "content_draft_own_images_confirmed_by_fkey"
+            columns: ["confirmed_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
         ]
