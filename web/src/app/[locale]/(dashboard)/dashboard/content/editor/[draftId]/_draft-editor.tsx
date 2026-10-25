@@ -42,6 +42,7 @@ import {
   restoreDraftVersion,
   setContentDraftAuthor,
   setContentDraftReviewer,
+  confirmDraftAuthor,
   keepDraftSource,
   confirmOwnImage,
   getOwnImages,
@@ -548,6 +549,8 @@ export function DraftEditor({
   // Who the page is by (CE-038): page metadata, shown in the header and in a
   // Page info strip outside the page; with Quality's first phase.
   const [authorsRead, setAuthorsRead] = useState<AuthorsRead | null>(null);
+  // Read, or failed to: the header's score waits for it either way.
+  const [authorsTried, setAuthorsTried] = useState(false);
   const [authorId, setAuthorId] = useState(draft.authorId);
   // The qualified reviewer of a page that advises on health, finance or law (CE-049).
   const [reviewerId, setReviewerId] = useState(draft.reviewerId);
@@ -561,7 +564,8 @@ export function DraftEditor({
     let live = true;
     getContentAuthors()
       .then((read) => live && setAuthorsRead(read))
-      .catch((err) => console.error('Failed to load the authors:', err));
+      .catch((err) => console.error('Failed to load the authors:', err))
+      .finally(() => live && setAuthorsTried(true));
     return () => {
       live = false;
     };
@@ -582,6 +586,27 @@ export function DraftEditor({
     () => (inputs ? inputsUsed(pageBlocks.map((b) => b.text).join('\n'), inputs) : null),
     [inputs, pageBlocks],
   );
+  // With no author picked, the person's own word for the one their site
+  // names (00271): ticked here, saved behind, put back if the save fails.
+  const [authorConfirmed, setAuthorConfirmed] = useState(draft.authorConfirmed);
+  // One save at a time (the boxes wait): a failed one puts back the pair as saved.
+  const [confirming, setConfirming] = useState(false);
+  const confirmAuthor = (what: 'real' | 'profile', on: boolean) => {
+    if (confirming) return;
+    const before = authorConfirmed;
+    // Unticking the author unticks their profile too, as the database does.
+    setAuthorConfirmed(
+      what === 'real' && !on ? { real: false, profile: false } : { ...before, [what]: on },
+    );
+    setConfirming(true);
+    confirmDraftAuthor(draft.id, what, on)
+      .catch((err) => {
+        console.error('Failed to save the author confirmation:', err);
+        setAuthorConfirmed(before);
+        toast.error(t('quality.confirmFailed'));
+      })
+      .finally(() => setConfirming(false));
+  };
   // Trust from the page's figures and links (their reads from the API).
   const { checks: linkChecks, pending: linksPending } = useLinkChecks(
     draft.id,
@@ -643,31 +668,31 @@ export function DraftEditor({
         : [],
     [sourcesOn, brandDomains, pageBlocks, competitorDomains, pageType, keptSources],
   );
-  const { kinds: aiKinds, paused: aiPaused } = useSourceClasses(
-    draft.id,
-    autosave.savedAt,
-    unplaced,
-    sourcesOn,
-  );
+  const {
+    kinds: aiKinds,
+    paused: aiPaused,
+    reading: sourcesReading,
+  } = useSourceClasses(draft.id, autosave.savedAt, unplaced, sourcesOn);
+  // A save waiting or under way: the page's reads follow it. Not a failed
+  // save (or a conflict, a page too large): no new save is coming till it's fixed.
+  const saving = autosave.state === 'unsaved' || autosave.state === 'saving';
   // The claims in the draft's own words, as the model reads them (CE-045):
   // asked after a save, leaving the block the person is writing in.
-  const claimsRead = useClaims(
-    draft.id,
-    autosave.savedAt,
-    sourcesOn,
-    autosave.state !== 'saved',
-    () => (editor && !editor.isDestroyed && editor.isFocused ? writingBlock(editor) : null),
+  const claimsRead = useClaims(draft.id, autosave.savedAt, sourcesOn, saving, () =>
+    editor && !editor.isDestroyed && editor.isFocused ? writingBlock(editor) : null,
   );
   const { blocks: claimBlocks, recheck: recheckClaims } = claimsRead;
   // The page's own claims that need the brand's proof (CE-049), read from
   // the whole page after a save: proof to-dos while their paragraph has no
   // link, and its own-site link counts as their source.
-  // Asked again when the page type changes too: the checks depend on it (CE-050).
+  // Asked again when the page type changes too: the checks depend on it
+  // (CE-050). Only changes on their way hold the ask, as the claims': not a
+  // failed save, a conflict or a page too large.
   const pageRead = usePageRead(
     draft.id,
     `${autosave.savedAt}\n${pageType ?? ''}`,
     sourcesOn,
-    autosave.state !== 'saved',
+    saving,
   );
   const proofAsks = useMemo(
     () => (pageRead.read ? proofsOnPage(pageBlocks, pageRead.read.proofs) : []),
@@ -715,10 +740,14 @@ export function DraftEditor({
   useEffect(() => {
     if (!sourcesOn) return;
     let live = true;
-    // A confirm made before the read lands stays.
-    void getOwnImages(draft.id).then(
-      (srcs) => live && setOwnImages((prev) => new Set([...srcs, ...(prev ?? [])])),
-    );
+    // A confirm made before the read lands stays. A failed call (the
+    // network, a deploy) counts the confirms made so far: E-E-A-T still scores.
+    void getOwnImages(draft.id)
+      .then((srcs) => live && setOwnImages((prev) => new Set([...srcs, ...(prev ?? [])])))
+      .catch((err) => {
+        console.error('Failed to read the own images:', err);
+        if (live) setOwnImages((prev) => prev ?? new Set());
+      });
     return () => {
       live = false;
     };
@@ -742,7 +771,13 @@ export function DraftEditor({
   const eeatScore = useMemo(
     () =>
       qualityOn && authorsRead && !inputsPending && (!sourcesOn || visualRead)
-        ? eeat({ author: pageAuthor, used, visual, how: aiChecks?.how ?? null })
+        ? eeat({
+            author: pageAuthor,
+            used,
+            visual,
+            how: aiChecks?.how ?? null,
+            confirmed: authorConfirmed,
+          })
         : null,
     [
       qualityOn,
@@ -754,6 +789,7 @@ export function DraftEditor({
       used,
       visual,
       aiChecks,
+      authorConfirmed,
     ],
   );
   // A page that advises consumers on health, finance or law (the page's read)
@@ -955,6 +991,7 @@ export function DraftEditor({
         visual,
         // Once the authors are read: who the reviewer is, and whether any can be.
         reviewer: regulated && authorsRead ? { topic: regulated, picked: !!pageReviewer } : null,
+        confirmed: authorConfirmed,
       })
     : [];
   const quality: QualityRead | null = qualityOn
@@ -980,6 +1017,8 @@ export function DraftEditor({
         pageReading: pageRead.reading,
         siteType,
         brandFactsPath: sourcesOn ? brandFactsPath(draft.brandId) : null,
+        authorConfirmed,
+        authorConfirming: confirming,
       }
     : null;
   // Quality's Pick author opens the header's menu.
@@ -1011,6 +1050,35 @@ export function DraftEditor({
   const { at: nudgeAt } = nudge;
   // The author's to-dos wait for E-E-A-T: the nudge waits for them.
   const todosRead = eeatScore !== null;
+  // The score the header and the panel show (CE-039): once the reads that
+  // move it are in, or failed (the authors and, in phase 2, Your input for
+  // E-E-A-T; the site's trust, the sources, the links and, in phase 2, the
+  // claims, the sites' kinds and the brand's facts for Trust). Until the first time it says
+  // it's reading; after, it keeps the last settled score while new reads
+  // land (a link added, the agent's page), so it never jumps through the
+  // partial averages on the way.
+  const qualitySettled =
+    qualityOn &&
+    authorsTried &&
+    !inputsPending &&
+    siteTrustRead &&
+    reads.sources !== null &&
+    linksPending === 0 &&
+    !claimsRead.reading &&
+    !sourcesReading &&
+    // Phase 2: the brand's approved facts, which Trust checks the page
+    // against, and the page's read (its proof to-dos; what it finds scores).
+    !(sourcesOn && factsState.status === 'loading') &&
+    !pageRead.reading &&
+    // E-E-A-T's visual proof: the page's read and the own images (CE-049).
+    (!sourcesOn || visualRead) &&
+    // Phase 2 reads the page as saved: an edit's score waits for its save.
+    !(sourcesOn && saving);
+  const [shownQuality, setShownQuality] = useState<{ score: number | null } | null>(null);
+  if (qualitySettled && shownQuality?.score !== qualityScore) {
+    setShownQuality({ score: qualityScore });
+  }
+  const shownScore = shownQuality?.score ?? null;
   const agentNudged = useRef(false);
   useEffect(() => {
     if (!agentFinished || !todosRead || agentNudged.current) return;
@@ -1872,10 +1940,17 @@ export function DraftEditor({
   // The byline line a brand with Add byline to content puts under the H1,
   // in the page's language (its Language rule, else the brand's), as
   // Readability reads it: the language the writer writes the page in.
+  // An author the person confirmed their site names (00271) isn't the team:
+  // no "By {Brand} Team" line goes in for them.
   const contentByline =
-    bylineInContent && authorsRead
+    bylineInContent && authorsRead && (pageAuthor || !authorConfirmed.real)
       ? bylineText(language, pageAuthor?.name ?? null, brandName)
       : null;
+  // The team for the CMS's author field (Export, Send to CMS), in the page's
+  // language; until the authors are read, who it is by isn't known. Not for
+  // an author the person confirmed their site names: the CMS keeps its own.
+  const teamByline =
+    authorsRead && (pageAuthor || !authorConfirmed.real) ? teamName(language, brandName) : '';
   // Export (CE-057), once Quality is live: where it goes, its checks and fields.
   // The page as it was when Export opened: what it shows stays still while open.
   const [exportOpen, setExportOpen] = useState<{
@@ -2681,21 +2756,43 @@ export function DraftEditor({
             <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-current" />
             {t('rulesChip', { met: rules.met, total: rules.total })}
           </button>
-          {qualityScore !== null && (
+          {qualityOn && shownQuality === null && (
+            <button
+              type="button"
+              onClick={() => openPanelTab('quality')}
+              title={t('qualityChipHint')}
+              className="inline-flex h-5 shrink-0 items-center gap-1.5 rounded-full border bg-muted/40 px-2 text-xs font-medium text-muted-foreground"
+            >
+              <span
+                aria-hidden
+                className="h-1.5 w-1.5 animate-pulse rounded-full bg-current motion-reduce:animate-none"
+              />
+              {t('qualityChipReading')}
+            </button>
+          )}
+          {shownScore !== null && (
             <button
               type="button"
               onClick={() => openPanelTab('quality')}
               title={t('qualityChipHint')}
               className={cn(
                 'inline-flex h-5 shrink-0 items-center gap-1.5 rounded-full border px-2 text-xs font-medium tabular-nums',
-                BAND_CLASSES[qualityBand(qualityScore)],
+                BAND_CLASSES[qualityBand(shownScore)],
               )}
             >
-              <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-current" />
-              {t('qualityChip', { score: qualityScore })}
+              <span
+                aria-hidden
+                className={cn(
+                  'h-1.5 w-1.5 rounded-full bg-current',
+                  // New reads landing: the score may move once they're in.
+                  !qualitySettled && 'animate-pulse motion-reduce:animate-none',
+                )}
+              />
+              {t('qualityChip', { score: shownScore })}
               <span className="sr-only">
                 {' · '}
-                {t(`quality.bands.${qualityBand(qualityScore)}`)}
+                {t(`quality.bands.${qualityBand(shownScore)}`)}
+                {!qualitySettled && ` · ${t('qualityChipUpdating')}`}
               </span>
             </button>
           )}
@@ -2922,13 +3019,14 @@ export function DraftEditor({
               briefRebuilding ? null : (aiUsedUp ?? (agentBusy ? t('suggestions.agentBusy') : null))
             }
             quality={quality}
-            qualityScore={qualityScore}
+            qualityScore={shownScore}
             onShowInPage={showInPage}
             onShowPlaceholder={showFirstPlaceholder}
             onPickAuthor={() => setAuthorMenuOpen(true)}
             onPickReviewer={() => setReviewerMenuOpen(true)}
             yourInput={inputsRead.status === 'off' ? null : inputsRead}
             onAddInput={addInput}
+            onConfirmAuthor={confirmAuthor}
             onKeepSource={sourcesOn ? (url) => void keepSource(url) : undefined}
             onAddSource={sourcesOn ? addSource : undefined}
             onRemoveClaim={sourcesOn ? removeClaim : undefined}
@@ -2964,9 +3062,8 @@ export function DraftEditor({
           isNew={draft.method === 'create'}
           sourceUrl={draft.sourceUrl}
           author={pageAuthor}
-          // Until the authors are read, who it is by isn't known. It goes to
-          // the CMS's author field, so in the page's language.
-          teamByline={authorsRead ? teamName(language, brandName) : ''}
+          teamByline={teamByline}
+          siteAuthor={!pageAuthor && authorConfirmed.real}
           byline={contentByline}
           checks={exportChecks}
           linksPending={linksPending}
@@ -2982,7 +3079,7 @@ export function DraftEditor({
               quality.trust?.score != null && quality.trust.score < TRUST_GATE
                 ? quality.trust.score
                 : null,
-            noAuthor: quality.eeat !== null && !quality.author,
+            noAuthor: quality.eeat !== null && !quality.author && !authorConfirmed.real,
             article: isArticlePage(pageType),
             onReview: () => {
               setExportOpen(null);
@@ -3000,9 +3097,7 @@ export function DraftEditor({
           html={sendOpen.html}
           sourceUrl={draft.sourceUrl}
           author={pageAuthor}
-          // Until the authors are read, who it is by isn't known. It goes to
-          // the CMS's author field, so in the page's language, as Export's.
-          teamByline={authorsRead ? teamName(language, brandName) : ''}
+          teamByline={teamByline}
           byline={contentByline}
           onFillNow={() => {
             setSendOpen(null);
