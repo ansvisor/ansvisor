@@ -153,6 +153,13 @@ describe('ExportDialog', () => {
     expect(dialog().textContent).toContain(
       "Before you publish has the Product schema (JSON-LD) with the page's price for your CMS.Review",
     );
+    // A category page (CE-054): its ItemList.
+    await render({
+      publish: { trustBelow: null, noAuthor: false, article: false, itemList: true, onReview },
+    });
+    expect(dialog().textContent).toContain(
+      'Before you publish has the ItemList schema (JSON-LD) of the products the page links, for your CMS.Review',
+    );
   });
 
   it('holds the export while a placeholder is open, and fills it or leaves its sentence out', async () => {

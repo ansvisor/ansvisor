@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { useTranslations } from 'next-intl';
 import { Button } from '@/components/ui/button';
 import { LoadingDots } from '@/components/ui/loading-dots';
@@ -14,8 +14,10 @@ import { readWebflow } from '@/lib/webflow-client';
  * a collection with a body field). The choice is remembered per brand, in
  * this browser; Webflow is the first choice where it's ready. A brand with
  * Webflow connected but not ready sees it, off, so its pages don't go to
- * the webhook unnoticed; one whose connection can't be read sends nothing
- * until it's read.
+ * the webhook unnoticed. A read that fails (or an API without Webflow)
+ * leaves the webhook as it was before Webflow: a webhook send doesn't need
+ * Webflow, and a person who picked Webflow before is told it couldn't be
+ * checked.
  */
 
 const storageKey = (brandId: string) => `aeo:cms-target:${brandId}`;
@@ -43,13 +45,13 @@ export type CmsWebflow =
   | { ready: true; collection: string }
   /** Connected, but its token refused or no collection picked yet. */
   | { ready: false }
-  /** Not connected, or not set up on this server: the webhook only. */
+  /** Not connected, not set up on this server, or not read: the webhook only. */
   | null;
 
 /**
- * The brand's send target: undefined while its Webflow connection is read
- * (or when the read failed: `failed`, with `retry`), then where pages go
- * and how to change it.
+ * The brand's send target: undefined while its Webflow connection is read,
+ * then where pages go and how to change it. A failed read is the webhook;
+ * `unchecked` says so when the person picked Webflow before, with `retry`.
  */
 export function useCmsTarget(brandId: string) {
   const [read, setRead] = useState<{
@@ -83,21 +85,21 @@ export function useCmsTarget(brandId: string) {
   }, [brandId, key]);
 
   const current = read?.key === key ? read : null;
-  // Read again after a failure: it still shows, as trying, until the answer.
-  const failed = current
-    ? current.failed
-    : (read?.failed ?? false) && read?.key.startsWith(`${brandId}:`) === true;
-  const webflow = current && !failed ? current.webflow : undefined;
+  const webflow = current ? current.webflow : undefined;
   const chosen = picked?.brandId === brandId ? picked.target : remembered(brandId);
   const target: CmsTarget | undefined =
     webflow === undefined ? undefined : webflow?.ready ? (chosen ?? 'webflow') : 'webhook';
+  // Read again after a failure: the note stays, as trying, until the answer.
+  const failed = current
+    ? current.failed
+    : (read?.failed ?? false) && read?.key.startsWith(`${brandId}:`) === true;
 
   return {
-    /** The brand's Webflow; undefined while read or when the read failed. */
+    /** The brand's Webflow; undefined while read; null without one, or when it couldn't be read. */
     webflow,
     target,
-    /** The read failed: nothing is sent until it's read again. */
-    failed,
+    /** Couldn't be read, for a person who picked Webflow before: the page goes to the webhook. */
+    unchecked: failed && chosen === 'webflow',
     /** Reading again, after a failure. */
     reading: current === null,
     retry: () => setAttempt((n) => n + 1),
@@ -108,9 +110,13 @@ export function useCmsTarget(brandId: string) {
   };
 }
 
+const TARGETS = ['webflow', 'webhook'] as const;
+
 /**
  * The two targets, when the brand has Webflow: the person picks where pages
- * go. Webflow connected but not ready shows, off, with what to do.
+ * go. Webflow connected but not ready shows, off, with what to do. One tab
+ * stop, the picked card; the arrow keys move to the other and pick it,
+ * past Webflow while it's off.
  */
 export function CmsTargetPicker({
   value,
@@ -124,40 +130,53 @@ export function CmsTargetPicker({
   disabled?: boolean;
 }) {
   const t = useTranslations('contentEditor.editor.send.target');
+  const cards = useRef<Partial<Record<CmsTarget, HTMLButtonElement | null>>>({});
+  const off = (target: CmsTarget) => disabled || (target === 'webflow' && !webflow.ready);
+  const onKey = (event: KeyboardEvent, i: number) => {
+    const step = ({ ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 } as const)[
+      event.key as 'ArrowRight'
+    ];
+    if (!step) return;
+    event.preventDefault();
+    const next = TARGETS[(i + step + TARGETS.length) % TARGETS.length];
+    if (off(next)) return;
+    onChange(next);
+    cards.current[next]?.focus();
+  };
   return (
     <div role="radiogroup" aria-label={t('label')} className="grid grid-cols-2 gap-2">
-      {(['webflow', 'webhook'] as const).map((target) => {
-        const off = disabled || (target === 'webflow' && !webflow.ready);
-        return (
-          <button
-            key={target}
-            type="button"
-            role="radio"
-            aria-checked={value === target}
-            disabled={off}
-            onClick={() => onChange(target)}
-            className={cn(
-              'min-w-0 rounded-xl border px-3 py-2.5 text-left transition-colors hover:bg-muted/50 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:bg-transparent',
-              value === target && 'border-foreground ring-1 ring-inset ring-foreground',
-            )}
-          >
-            <span className="block text-sm font-medium">{t(`${target}.title`)}</span>
-            <span className="block text-xs text-muted-foreground [overflow-wrap:anywhere]">
-              {target === 'webhook'
-                ? t('webhook.hint')
-                : webflow.ready
-                  ? t('webflow.hint', { collection: webflow.collection || t('webflow.collection') })
-                  : t('webflow.notReady')}
-            </span>
-          </button>
-        );
-      })}
+      {TARGETS.map((target, i) => (
+        <button
+          key={target}
+          ref={(el) => void (cards.current[target] = el)}
+          type="button"
+          role="radio"
+          aria-checked={value === target}
+          tabIndex={value === target ? 0 : -1}
+          disabled={off(target)}
+          onClick={() => onChange(target)}
+          onKeyDown={(event) => onKey(event, i)}
+          className={cn(
+            'min-w-0 rounded-xl border px-3 py-2.5 text-left transition-colors hover:bg-muted/50 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:bg-transparent',
+            value === target && 'border-foreground ring-1 ring-inset ring-foreground',
+          )}
+        >
+          <span className="block text-sm font-medium">{t(`${target}.title`)}</span>
+          <span className="block text-xs text-muted-foreground [overflow-wrap:anywhere]">
+            {target === 'webhook'
+              ? t('webhook.hint')
+              : webflow.ready
+                ? t('webflow.hint', { collection: webflow.collection || t('webflow.collection') })
+                : t('webflow.notReady')}
+          </span>
+        </button>
+      ))}
     </div>
   );
 }
 
-/** The brand's Webflow couldn't be read: nothing goes until it is. */
-export function CmsTargetReadFailed({
+/** Webflow couldn't be checked for a person who picked it before: the page goes to the webhook. */
+export function CmsTargetUnchecked({
   reading,
   onRetry,
 }: {
@@ -167,10 +186,10 @@ export function CmsTargetReadFailed({
   const t = useTranslations('contentEditor.editor.send.target');
   return (
     <div
-      role="alert"
-      className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-sm text-red-700 dark:text-red-400"
+      role="status"
+      className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-sm text-muted-foreground"
     >
-      <span className="min-w-0 flex-1">{t('readFailed')}</span>
+      <span className="min-w-0 flex-1">{t('unchecked')}</span>
       <Button
         size="sm"
         variant="outline"

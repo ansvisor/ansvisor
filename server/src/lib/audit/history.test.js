@@ -3,6 +3,7 @@ import {
   AUDIT_RUN_TIMEOUT_MS,
   buildAuditPages,
   buildTrendPoints,
+  findPreviousCompletedAudit,
   pageKey,
   pageStatus,
   parseListPage,
@@ -241,5 +242,76 @@ describe('buildAuditPages', () => {
     expect(page.trend).toHaveLength(PAGE_TREND_POINTS);
     expect(page.trend.at(-1)).toBe(0.9);
     expect(page.trend[0]).toBeCloseTo(0.81);
+  });
+});
+
+describe('findPreviousCompletedAudit', () => {
+  const row = (id, url, created_at, total_score, status = 'completed', final_url = url) => ({
+    id,
+    url,
+    final_url,
+    status,
+    total_score,
+    created_at,
+  });
+
+  it('chooses the nearest earlier completed audit of the same normalized URL', () => {
+    const rows = [
+      row('later', 'https://acme.com/pricing', '2026-10-20T09:00:00Z', '0.8'),
+      row('current', 'https://www.acme.com/pricing/?campaign=x', '2026-10-10T09:00:00Z', '0.7'),
+      row('failed', 'https://acme.com/pricing/', '2026-10-09T09:00:00Z', '0.99', 'failed'),
+      row('previous', 'http://ACME.com/pricing?utm_source=x', '2026-10-08T09:00:00Z', '0.61'),
+      row('older', 'https://acme.com/pricing', '2026-09-20T09:00:00Z', '0.55'),
+      row('other-page', 'https://acme.com/blog', '2026-10-09T09:00:00Z', '0.9'),
+    ];
+
+    expect(findPreviousCompletedAudit(rows, 'current')).toEqual({
+      auditId: 'previous',
+      totalScore: 0.61,
+      createdAt: '2026-10-08T09:00:00Z',
+    });
+  });
+
+  it('uses final_url for page identity when an audit followed a redirect', () => {
+    const rows = [
+      row(
+        'current',
+        'http://acme.com/old',
+        '2026-10-10T09:00:00Z',
+        '0.7',
+        'completed',
+        'https://acme.com/new',
+      ),
+      row('previous', 'https://www.acme.com/new/?utm_source=x', '2026-10-01T09:00:00Z', '0.6'),
+    ];
+
+    expect(findPreviousCompletedAudit(rows, 'current')?.auditId).toBe('previous');
+  });
+
+  it('ignores unscored rows and rows with the same or later created_at', () => {
+    const rows = [
+      row('current', 'https://acme.com/', '2026-10-10T09:00:00Z', '0.7'),
+      row('same-time', 'https://acme.com/', '2026-10-10T09:00:00Z', '0.8'),
+      row('unscored', 'https://acme.com/', '2026-10-09T09:00:00Z', null),
+      row('later', 'https://acme.com/', '2026-10-11T09:00:00Z', '0.9'),
+    ];
+
+    expect(findPreviousCompletedAudit(rows, 'current')).toBeNull();
+  });
+
+  it('returns null when the current audit is missing, unfinished, or has no score', () => {
+    expect(findPreviousCompletedAudit([], 'missing')).toBeNull();
+    expect(
+      findPreviousCompletedAudit(
+        [row('running', 'https://acme.com/', '2026-10-10T09:00:00Z', null, 'running')],
+        'running',
+      ),
+    ).toBeNull();
+    expect(
+      findPreviousCompletedAudit(
+        [row('unscored', 'https://acme.com/', '2026-10-10T09:00:00Z', null)],
+        'unscored',
+      ),
+    ).toBeNull();
   });
 });

@@ -42,7 +42,10 @@ async function markRefused(connection) {
   if (error) logger.warn({ err: error }, '[webflow-status] refusal not kept');
 }
 
-/** A send whose item was deleted in Webflow: closed, so the page's next send makes a new one. */
+/**
+ * A send whose item Webflow says is gone: closed. The page's next send
+ * tries the item again (lastItem), and makes a new one if it is gone.
+ */
 async function closeRemoved(send) {
   const { error } = await supabaseAdmin
     .from('content_draft_deliveries')
