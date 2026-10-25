@@ -34,6 +34,9 @@ import { CATALOG_SETTINGS_PATH } from '@/lib/content/feed-match';
 import { cn } from '@/lib/utils';
 import { MANAGE_AUTHORS_PATH } from './_author-menu';
 
+/** The intro's sentences its to-do quotes, at most (CE-054). */
+const INTRO_QUOTED = 3;
+
 /** What Quality reads from the draft and its author, for the segment and the header. */
 export interface QualityRead {
   /**
@@ -158,6 +161,7 @@ export function QualityTab({
   onPickReviewer,
   onAddCheckDate,
   onConfirmCase,
+  onConfirmIntro,
   handOff = null,
   onConfirmAuthor,
   onChangeType,
@@ -191,6 +195,8 @@ export function QualityTab({
   onAddCheckDate?: () => void;
   /** A customer case's Confirm: the person says the customer may be named (CE-052). */
   onConfirmCase?: (key: string) => void;
+  /** Phase 3 (CE-054): confirms a category intro's facts, all at once. */
+  onConfirmIntro?: () => void;
   /** Hand it off to Content Agent (CE-051): with Quality's phase 2. */
   handOff?: HandOff | null;
 }) {
@@ -306,6 +312,7 @@ export function QualityTab({
                 onPickReviewer={onPickReviewer}
                 onAddCheckDate={onAddCheckDate}
                 onConfirmCase={onConfirmCase}
+                onConfirmIntro={onConfirmIntro}
                 onConfirm={onConfirmAuthor}
               />
             ))}
@@ -466,6 +473,23 @@ export function useTodoCopy() {
                 : t('byline.detail.pickAuthor', { byline: team }),
       };
     }
+    // A category intro's counts and prices (CE-054): only the person knows them.
+    if (todo.id === 'introFacts') {
+      const facts = todo.facts ?? [];
+      return {
+        title: t('introFacts.title'),
+        next: t('introFacts.next'),
+        detail: todo.done
+          ? t('introFacts.done')
+          : t('introFacts.detail', {
+              facts: facts
+                .slice(0, INTRO_QUOTED)
+                .map((fact) => `“${fact}”`)
+                .join(' '),
+              more: Math.max(0, facts.length - INTRO_QUOTED),
+            }),
+      };
+    }
     // The page's own claims, their proof asked for by kind and business (CE-049).
     // A customer case in Phase 3 (CE-052): confirmed publishable, not linked.
     if (todo.id === 'proof' && todo.proof && todo.action === 'confirmCase') {
@@ -619,6 +643,7 @@ function TodoRow({
   onPickReviewer,
   onAddCheckDate,
   onConfirmCase,
+  onConfirmIntro,
   onConfirm,
 }: {
   todo: QualityTodo;
@@ -635,6 +660,8 @@ function TodoRow({
   onAddCheckDate?: () => void;
   /** A customer case's Confirm: the person says the customer may be named (CE-052). */
   onConfirmCase?: (key: string) => void;
+  /** Phase 3 (CE-054): confirms a category intro's facts, all at once. */
+  onConfirmIntro?: () => void;
   onConfirm?: (what: 'real' | 'profile', on: boolean) => void;
 }) {
   const t = useTranslations('contentEditor.editor.quality');
@@ -766,6 +793,12 @@ function TodoRow({
               className="h-7 shrink-0"
               onClick={() => onConfirmCase(todo.key!)}
             >
+              {t('confirmCase')}
+            </Button>
+          )
+        ) : todo.action === 'confirmIntro' ? (
+          onConfirmIntro && (
+            <Button variant="outline" size="sm" className="h-7 shrink-0" onClick={onConfirmIntro}>
               {t('confirmCase')}
             </Button>
           )

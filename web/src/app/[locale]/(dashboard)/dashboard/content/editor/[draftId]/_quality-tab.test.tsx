@@ -98,6 +98,7 @@ const onAddImage = vi.fn();
 const onPickReviewer = vi.fn();
 const onChangeType = vi.fn();
 const onConfirmAuthor = vi.fn();
+const onConfirmIntro = vi.fn();
 
 async function render(quality: QualityRead | Readability | null, handOff: HandOff | null = null) {
   const q = quality && 'eeat' in quality ? quality : read(quality as Readability | null);
@@ -118,6 +119,7 @@ async function render(quality: QualityRead | Readability | null, handOff: HandOf
           onChangeType={onChangeType}
           handOff={handOff}
           onConfirmAuthor={onConfirmAuthor}
+          onConfirmIntro={onConfirmIntro}
         />
       </NextIntlClientProvider>,
     );
@@ -130,6 +132,7 @@ beforeEach(() => {
   onKeep.mockReset();
   onAddSource.mockReset();
   onConfirmAuthor.mockReset();
+  onConfirmIntro.mockReset();
   container = document.createElement('div');
   root = createRoot(container);
 });
@@ -194,6 +197,31 @@ describe('QualityTab', () => {
     expect(container.textContent).toContain("no product in your feed has this page's URL or title");
     await render(read(result));
     expect(container.textContent).not.toContain("Price and stock aren't checked");
+  });
+
+  it('asks a category page to confirm its intro’s counts and prices, quoting them (CE-054)', async () => {
+    await render({
+      ...read(result),
+      todos: [
+        {
+          id: 'introFacts',
+          done: false,
+          gain: 12,
+          score: 'trust',
+          action: 'confirmIntro',
+          count: 2,
+          facts: ['Choose from 120+ daypacks.', 'Prices run $49–$199.'],
+        },
+      ],
+    });
+    const row = [...container.querySelectorAll('[aria-label="Your to-dos"] li')].find((li) =>
+      li.textContent?.startsWith("Confirm the intro's facts"),
+    )!;
+    expect(row.textContent).toContain('“Choose from 120+ daypacks.” “Prices run $49–$199.”');
+    await act(async () =>
+      [...row.querySelectorAll('button')].find((b) => b.textContent === 'Confirm')!.click(),
+    );
+    expect(onConfirmIntro).toHaveBeenCalled();
   });
 
   it('names the page type’s rules not met yet, and a product page’s shipping to-do (CE-052)', async () => {

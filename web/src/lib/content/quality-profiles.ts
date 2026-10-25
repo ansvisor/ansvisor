@@ -100,6 +100,7 @@ export const PROFILE_WEIGHTS: Readonly<Record<QualityProfile, ProfileWeights>> =
       siteTrust: 10,
       shippingReturns: 10,
       feedMatch: 25,
+      introFacts: 0,
     },
     readability: {
       avgSentence: 15,
@@ -130,18 +131,21 @@ export const PROFILE_WEIGHTS: Readonly<Record<QualityProfile, ProfileWeights>> =
       customerCase: 0,
     },
     trust: {
-      claimsSourced: 25,
+      // The checks before intro facts at 0.8 of their points: a page whose
+      // intro states none scores as it did.
+      claimsSourced: 20,
       primarySources: 0,
-      noWeakSources: 5,
-      brandFacts: 30,
+      noWeakSources: 4,
+      brandFacts: 24,
       expertQuote: 0,
       freshSources: 0,
       balanced: 0,
       disclosure: 0,
-      noBrokenLinks: 15,
-      siteTrust: 25,
+      noBrokenLinks: 12,
+      siteTrust: 20,
       shippingReturns: 0,
       feedMatch: 0,
+      introFacts: 20,
     },
     readability: {
       avgSentence: 15,
@@ -184,6 +188,7 @@ export const PROFILE_WEIGHTS: Readonly<Record<QualityProfile, ProfileWeights>> =
       siteTrust: 10,
       shippingReturns: 0,
       feedMatch: 0,
+      introFacts: 0,
     },
     readability: {
       avgSentence: 15,
@@ -227,6 +232,7 @@ export const PROFILE_WEIGHTS: Readonly<Record<QualityProfile, ProfileWeights>> =
       siteTrust: 5,
       shippingReturns: 0,
       feedMatch: 0,
+      introFacts: 0,
     },
     readability: {
       avgSentence: 15,
@@ -283,7 +289,7 @@ export function weighed<Id extends string, S extends Score<Id>>(
 
 /**
  * Trust weighed for a profile, scored as trust() scores it: once a figure,
- * fresh-sources or product feed check is left among the weighed ones, or
+ * fresh-sources, product feed or intro facts check is left among the weighed ones, or
  * two sources are placed; on a type that weighs brand facts as much as
  * sourced claims, once a price is compared with them too. A type isn't
  * scored by its links and site alone. Its unscored gains count out of the
@@ -297,7 +303,11 @@ export function weighedTrust(
   const result = weighed({ ...read, score: read.score ?? 0 }, weights);
   const scored =
     result.checks.some(
-      (c) => c.id === 'claimsSourced' || c.id === 'freshSources' || c.id === 'feedMatch',
+      (c) =>
+        c.id === 'claimsSourced' ||
+        c.id === 'freshSources' ||
+        c.id === 'feedMatch' ||
+        c.id === 'introFacts',
     ) ||
     read.classified >= 2 ||
     // Where prices that match weigh as much as sourced claims (a product or a

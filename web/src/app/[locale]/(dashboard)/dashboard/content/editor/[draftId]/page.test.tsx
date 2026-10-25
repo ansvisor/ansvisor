@@ -3247,6 +3247,72 @@ describe('the side panel', () => {
       expect(link?.textContent).toBe('the fastest forecasting app');
     });
 
+    it('asks a category page to confirm its intro’s facts, kept by the facts, in phase 3 (CE-054)', async () => {
+      process.env.NEXT_PUBLIC_CONTENT_QUALITY_PHASE = '3';
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+      const facts = ['Choose from 120+ daypacks for every trail.', 'Prices run $49–$199.'];
+      // One fact confirmed before, in other words.
+      getDraftConfirmations.mockResolvedValue([{ kind: 'intro_fact', key: 'intro:120+' }]);
+      getContentDraft.mockResolvedValue({
+        ...claimed,
+        pageType: 'category_page',
+        bodyHtml: `<h1>Daypacks</h1><p>${facts.join(' ')}</p><h2>All daypacks</h2><p>Packs for wet hikes.</p>`,
+      });
+      window.innerWidth = 1440;
+      await renderPage();
+      await act(async () => void (await vi.advanceTimersByTimeAsync(3_000)));
+      const chip = [...container.querySelectorAll<HTMLButtonElement>('header button')].find((b) =>
+        b.textContent?.startsWith('Quality'),
+      )!;
+      await act(async () => chip.click());
+      const row = () =>
+        [...panel()!.querySelectorAll('[aria-label="Your to-dos"] li')].find((li) =>
+          li.textContent?.startsWith("Confirm the intro's facts"),
+        )!;
+      // Only the open one is quoted.
+      expect(row().textContent).toContain(`“${facts[1]}”`);
+      expect(row().textContent).not.toContain(`“${facts[0]}”`);
+      await act(async () =>
+        [...row().querySelectorAll('button')].find((b) => b.textContent === 'Confirm')!.click(),
+      );
+      // One row for the facts not confirmed yet.
+      expect(confirmDraftItem).toHaveBeenCalledTimes(1);
+      expect(confirmDraftItem).toHaveBeenCalledWith('d1', 'intro_fact', 'intro:USD49-199');
+      expect(row().textContent).toContain("You confirmed the intro's facts");
+    });
+
+    it('takes an intro confirm back when it can’t be saved (CE-054)', async () => {
+      process.env.NEXT_PUBLIC_CONTENT_QUALITY_PHASE = '3';
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+      confirmDraftItem.mockResolvedValue('full');
+      getContentDraft.mockResolvedValue({
+        ...claimed,
+        pageType: 'category_page',
+        bodyHtml: '<h1>Daypacks</h1><p>Choose from 120+ daypacks.</p><h2>All</h2><p>Packs.</p>',
+      });
+      window.innerWidth = 1440;
+      await renderPage();
+      await act(async () => void (await vi.advanceTimersByTimeAsync(3_000)));
+      const chip = [...container.querySelectorAll<HTMLButtonElement>('header button')].find((b) =>
+        b.textContent?.startsWith('Quality'),
+      )!;
+      await act(async () => chip.click());
+      const row = () =>
+        [...panel()!.querySelectorAll('[aria-label="Your to-dos"] li')].find((li) =>
+          li.textContent?.startsWith("Confirm the intro's facts"),
+        )!;
+      await act(async () =>
+        [...row().querySelectorAll('button')].find((b) => b.textContent === 'Confirm')!.click(),
+      );
+      // Full: still open, Confirm there to try again.
+      expect(row().textContent).not.toContain("You confirmed the intro's facts");
+      expect([...row().querySelectorAll('button')].some((b) => b.textContent === 'Confirm')).toBe(
+        true,
+      );
+      vi.mocked(console.error).mockRestore();
+    });
+
     it('asks a feature page to confirm a customer case may be published, in phase 3 (CE-052)', async () => {
       process.env.NEXT_PUBLIC_CONTENT_QUALITY_PHASE = '3';
       vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });

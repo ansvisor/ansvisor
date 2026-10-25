@@ -97,6 +97,7 @@ export function NextNudge({
   onPickReviewer,
   onAddCheckDate,
   onConfirmCase,
+  onConfirmIntro,
   onLater,
   onAct,
 }: {
@@ -117,6 +118,7 @@ export function NextNudge({
   onPickReviewer?: () => void;
   onAddCheckDate?: () => void;
   onConfirmCase?: (key: string) => void;
+  onConfirmIntro?: () => void;
   onLater: () => void;
   /** It was acted on: it goes. */
   onAct: () => void;
@@ -236,6 +238,19 @@ export function NextNudge({
                 }}
               >
                 {t('act.confirmCase')}
+              </button>
+            )
+          ) : action === 'confirmIntro' ? (
+            onConfirmIntro && (
+              <button
+                type="button"
+                className={actClass}
+                onClick={() => {
+                  onAct();
+                  onConfirmIntro();
+                }}
+              >
+                {t('act.confirmIntro')}
               </button>
             )
           ) : action === 'addCheckDate' ? (
