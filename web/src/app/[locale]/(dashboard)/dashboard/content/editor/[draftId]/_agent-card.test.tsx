@@ -311,7 +311,7 @@ describe('AgentCard', () => {
 
   it('says the last run failed in place of an earlier batch’s review', async () => {
     await render([suggestion({ status: 'accepted' })], false, { lastRunFailed: true });
-    expect(container.textContent).toContain("Content Agent couldn't finish its last run");
+    expect(container.textContent).toContain("Content Agent couldn't finish");
     expect(container.textContent).toContain('Nothing it wrote was kept.');
     expect(container.textContent).not.toContain('All suggestions reviewed');
   });

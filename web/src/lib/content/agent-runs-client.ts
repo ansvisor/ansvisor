@@ -1,6 +1,6 @@
 import { BROWSER_API_BASE_URL } from '@/config/api';
 import { createClient } from '@/lib/supabase/client';
-import { agentRunFrom, type AgentRun } from './agent-runs';
+import { agentRunFrom, type AgentRun, type AgentRunKind } from './agent-runs';
 
 /**
  * The Content Agent's run, read and stopped from the browser (v1.1
@@ -10,11 +10,17 @@ import { agentRunFrom, type AgentRun } from './agent-runs';
  */
 
 /** The draft's latest run (00249, its members may read it), or null. */
-export async function readAgentRun(draftId: string): Promise<AgentRun | null> {
-  const { data, error } = await createClient()
+export async function readAgentRun(
+  draftId: string,
+  kinds?: readonly AgentRunKind[],
+): Promise<AgentRun | null> {
+  let query = createClient()
     .from('content_agent_runs')
     .select('id, kind, steps, step, started_at, finished_at, stopped_at, outcome')
-    .eq('draft_id', draftId)
+    .eq('draft_id', draftId);
+  // Of these kinds only: another kind's later run doesn't hide it.
+  if (kinds?.length) query = query.in('kind', [...kinds]);
+  const { data, error } = await query
     .order('started_at', { ascending: false })
     .limit(1)
     .maybeSingle();

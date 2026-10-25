@@ -208,8 +208,9 @@ const fixBody = fixRulesInput.extend({ brandId: z.guid() });
 /**
  * POST /api/content-drafts/:draftId/suggestions
  * Body: { brandId, rules: [{ key, name, detail }], textRules, locked }
- * Answers { count, batchId }: the suggestions left for review (none when the
- * agent found nothing it could change); 409 `open_suggestions` while the
+ * Answers { count, batchId, why? }: the suggestions left for review (none when
+ * the agent found nothing it could change, with `why`: 'none', 'locked' or
+ * 'dropped', content-agent.js emptyWhy); 409 `open_suggestions` while the
  * latest batch is undecided, 409 `published` for a published draft, 409
  * `running` while a fix or a hand-off on it is under way.
  */
@@ -245,7 +246,7 @@ const handOffBody = handOffInput.extend({ brandId: z.guid() });
 /**
  * POST /api/content-drafts/:draftId/handoff
  * Body: { brandId, items: [{ key, detail }], textRules, locked, sources?, origin }
- * Quality's hand-off (CE-051): answers { count, batchId } as /suggestions
+ * Quality's hand-off (CE-051): answers { count, batchId, why? } as /suggestions
  * does, with its errors; 404 `off` before Quality's phase 2, 409 `not_due`
  * for an automatic one the brand doesn't hand off, 409 `already` when the
  * draft had its automatic one.

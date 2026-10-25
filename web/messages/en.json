@@ -3784,7 +3784,7 @@
         }
       },
       "agentCard": {
-        "runFailed": "Content Agent couldn't finish its last run",
+        "runFailed": "Content Agent couldn't finish",
         "runFailedLine": "Nothing it wrote was kept. Try again; if it fails again, fix what's left yourself.",
         "placeholders": "{count, plural, one {# placeholder} other {# placeholders}} to fill",
         "waiting": "{count, plural, one {Content Agent has # suggestion for you} other {Content Agent has # suggestions for you}}",

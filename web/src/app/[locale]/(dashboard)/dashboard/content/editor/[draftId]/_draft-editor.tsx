@@ -300,7 +300,7 @@ const BRIEF_RUNS = ['brief'] as const;
 /** How a run whose answer was lost on the way ended, as the page and the run's row say. */
 type AgentOutcome =
   | { batch: DraftSuggestion[] }
-  | { nothing: true }
+  | { nothing: true; why?: AgentEmptyWhy }
   | { stopped: true }
   | { failed: true }
   | null;
@@ -309,36 +309,32 @@ type AgentOutcome =
  * How Fix open rules' run ended when its answer didn't come back (a timeout
  * on the way), read every few seconds until the deadline: its batch once it
  * lands, or its row once it's finished (content_agent_runs) — done with
- * nothing left (editor test 2026-10-25: read as "couldn't run" after 90 s),
- * stopped, or failed. Fix open rules only runs with none open, so any open
- * suggestion is the agent's; a run started before this one isn't read. Null
- * when neither came in time.
+ * nothing left, and why (editor test 2026-10-25: read as "couldn't run"
+ * after 90 s), stopped, or failed. Fix open rules only runs with none open,
+ * so any open suggestion is the agent's. Its row is Fix's kinds' latest that
+ * isn't the one there was before it was asked (`before`). Null when neither
+ * came in time.
  */
-async function agentOutcome(draftId: string, asked: number, until: number): Promise<AgentOutcome> {
+async function agentOutcome(
+  draftId: string,
+  before: string | null,
+  until: number,
+): Promise<AgentOutcome> {
   while (Date.now() < until) {
     await new Promise((resolve) => setTimeout(resolve, AGENT_POLL_MS));
     const read = await getDraftSuggestions(draftId).catch(() => null);
     if (read?.some((s) => s.status === 'open')) return { batch: read };
-    const run = await readAgentRun(draftId).catch(() => null);
-    // Its own run: one of Fix's kinds, started once it was asked (the clocks' slack).
-    if (
-      !run ||
-      !(FIX_RUNS as readonly string[]).includes(run.kind) ||
-      Date.parse(run.startedAt) < asked - RUN_CLOCK_SLACK_MS ||
-      !run.finishedAt
-    ) {
-      continue;
-    }
+    const run = await readAgentRun(draftId, FIX_RUNS).catch(() => null);
+    if (!run || run.id === before || !run.finishedAt) continue;
     if (run.outcome === 'stopped') return { stopped: true };
     if (run.outcome === 'failed') return { failed: true };
-    // Done: with what it left (its third step's count), the batch reads next time round.
-    if (run.outcome === 'done' && !run.steps[2]?.count) return { nothing: true };
+    // Done: with what it left (its writing step's count), the batch reads next time round.
+    if (run.outcome === 'done' && !run.steps[2]?.count) {
+      return { nothing: true, why: run.steps[2]?.why };
+    }
   }
   return null;
 }
-
-/** How far the browser's clock may be ahead of the server's, for a run's start. */
-const RUN_CLOCK_SLACK_MS = 30_000;
 
 /** What a paragraph Remove empties goes with, when it was all they held (CE-045). */
 const EMPTIED_WITH = new Set([
@@ -2251,6 +2247,8 @@ export function DraftEditor({
     try {
       // The agent reads the page as saved.
       await autosave.settle();
+      // The run there was before this one: one whose answer is lost is the next.
+      const before = (await readAgentRun(draft.id, FIX_RUNS).catch(() => null))?.id ?? null;
       const result = await send().catch((err) => {
         // The call itself gave up (a timeout on the way): the agent may still finish.
         console.error('Failed to hear back from the Content Agent:', err);
@@ -2264,13 +2262,21 @@ export function DraftEditor({
       }
       if ('error' in result && result.error === 'unconfirmed') {
         // No answer is not a failure: how its run ended says (its batch, or its row).
-        const outcome = await agentOutcome(draft.id, asked, asked + FIX_WAIT_MS);
+        const outcome = await agentOutcome(draft.id, before, asked + FIX_WAIT_MS);
         if (outcome && 'stopped' in outcome) {
           toast(t('agentCard.stopped'));
           return;
         }
         if (outcome && 'nothing' in outcome) {
-          if (!quiet) toast(t('suggestions.nothingToFix'));
+          if (!quiet) {
+            toast(
+              t(
+                outcome.why === 'locked'
+                  ? 'suggestions.nothingToFixLocked'
+                  : 'suggestions.nothingToFix',
+              ),
+            );
+          }
           return;
         }
         if (!outcome || 'failed' in outcome) {
@@ -2387,6 +2393,10 @@ export function DraftEditor({
   // The agent at work from this page: Fix open rules, or the brief. Its run,
   // step by step, and Stop (CE-027/035).
   const agentWorking = fixing || briefRebuilding;
+  // Any run the card follows (Fix, a hand-off, the brief): a failed one before it is behind it.
+  useEffect(() => {
+    if (agentWorking) setLastRunFailed(false);
+  }, [agentWorking]);
   const agentRun = useAgentRun(draft.id, agentWorking, fixing ? FIX_RUNS : BRIEF_RUNS);
   const stopAgent = async () => {
     if (!agentRun) return;

@@ -769,6 +769,9 @@ export async function fixDraftRules({ draftId, brandId, input, handoff = null })
       run,
       handoff: !!handoff,
     });
+    // Why it left nothing, on its writing step: an editor whose answer was
+    // lost reads it there (jsonb, so no column).
+    if (result.why && run?.steps?.[2]) run.steps[2] = { ...run.steps[2], why: result.why };
     await finishRun(run, 'done', { 2: result.count });
     return result;
   } catch (err) {
