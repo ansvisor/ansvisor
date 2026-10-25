@@ -387,8 +387,9 @@ router.post('/:draftId/stop', async (req, res) => {
     const stopped = await stopDraftRun(draftId.data, runId ?? null);
     // A run in the background lets go of the draft once it sees the stop;
     // one no server holds any more never would. The editor opens at once.
-    // Only the claim a stopped run holds: a Stop on a Fix or the brief (which
-    // hold none) leaves a Start or Rewrite on the same draft its claim.
+    // Only the claim a stopped run holds: a Stop on Fix open rules or the
+    // brief (which hold none) leaves a Start or Rewrite on the same draft its
+    // claim. A live page's Start runs as a Fix, and holds its own.
     for (const { claimed_at: claimedAt } of stopped) {
       if (!claimedAt) continue;
       const { error: letGoError } = await supabaseAdmin

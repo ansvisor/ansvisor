@@ -3574,6 +3574,7 @@
           "writing": "The agent is already working on this draft.",
           "org_writing": "The agent is writing another of your team's drafts, so it didn't start. The draft is in the Library for you to write.",
           "open_suggestions": "This page has suggestions waiting for review, so the agent didn't start. Accept or reject them in the editor first.",
+          "running": "The agent is fixing this page's open rules, so it didn't start. Try again once it has finished.",
           "not_draft": "This draft is no longer a draft, so the agent didn't start.",
           "failed": "The agent couldn't start. The draft is in the Library for you to write."
         }
@@ -3765,6 +3766,7 @@
           "writing": "The agent is already working on this draft.",
           "org_writing": "The agent is writing another of your team's drafts. Try again in a minute or two.",
           "open_suggestions": "Accept or reject the open suggestions first, then try again.",
+          "running": "Content Agent is fixing this page, maybe from another tab. Try again once it has finished.",
           "not_draft": "This draft is no longer a draft, so the agent didn't start.",
           "empty": "The page has no text to rewrite yet.",
           "too_long": "The page is too long to rewrite whole. Use Fix open rules, or shorten it first.",

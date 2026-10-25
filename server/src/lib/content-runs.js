@@ -262,8 +262,10 @@ export async function finishRun(run, outcome, counts = {}) {
 /**
  * Stops a draft's run under way (with `runId`, that run only): marks it
  * stopped and aborts its model call when it runs here. Answers the runs it
- * stopped, each with the claim it holds on the draft (claimed_at; null for
- * Fix and the brief, which hold none): none when none was under way.
+ * stopped, each with the claim it holds on the draft (claimed_at: a Start's
+ * or a rewrite's, a live page's Start among them though it runs as a Fix;
+ * null for Fix open rules and the brief, which hold none): none when none
+ * was under way.
  */
 export async function stopDraftRun(draftId, runId = null) {
   let query = supabaseAdmin

@@ -48,7 +48,15 @@ import {
   rewriteSchema,
   textLength,
 } from './content-rewrite.js';
-import { advanceRun, finishRun, isStop, runCall, startRun, stopIfStopped } from './content-runs.js';
+import {
+  advanceRun,
+  finishRun,
+  fixUnderWay,
+  isStop,
+  runCall,
+  startRun,
+  stopIfStopped,
+} from './content-runs.js';
 import { getLanguageName } from './languages.js';
 import { logger } from './logger.js';
 import { reserveAiBudget } from './plan-guard.js';
@@ -377,6 +385,16 @@ export async function startDraftWriting({ draftId, brandId, input, rewrite = fal
     throw Object.assign(new Error('Decide the open suggestions first'), {
       status: 409,
       code: 'open_suggestions',
+    });
+  }
+  // A Fix open rules (or Quality's hand-off) still under way on the draft,
+  // maybe from another tab: a run beside it would make a model call of its
+  // own, charged, and its batch would land on a page this one changes. One at
+  // a time, as Fix open rules refuses beside a Start (content-agent.js).
+  if (await fixUnderWay(draftId)) {
+    throw Object.assign(new Error('The agent is already fixing it'), {
+      status: 409,
+      code: 'running',
     });
   }
   if (rewrite) {
