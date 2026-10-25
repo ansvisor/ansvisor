@@ -316,6 +316,23 @@ describe('the page type on save (CE-023)', () => {
     });
     expect(calls.map((call) => call.op)).toEqual(['update', 'update']);
   });
+
+  it('reads it with the existing page’s address, as Start did (review, #1479)', async () => {
+    updated = {
+      updated_at: '2026-10-20T15:00:00Z',
+      page_type: 'blog_post',
+      page_type_source: 'detected',
+      source_url: 'https://shop.example/blog/ultralight-tents-for-wet-trips',
+      brands: shop,
+    };
+    // A best-of title on a /blog/ page: still the blog post Start read it as.
+    await saveContentDraft(DRAFT, {
+      title: 'The 7 best ultralight tents',
+      bodyHtml: '<h1>The 7 best ultralight tents</h1>',
+      base,
+    });
+    expect(calls.map((call) => call.op)).toEqual(['update']);
+  });
 });
 
 describe('setContentDraftPageType', () => {

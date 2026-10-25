@@ -1273,13 +1273,17 @@ export async function saveContentDraft(
       .eq('id', id)
       .eq('updated_at', expected)
       .or(`agent_state.is.null,agent_state.neq.writing,agent_state_at.lt."${writingSince}"`)
-      .select(`updated_at, page_type, page_type_source, ${BRAND_SITE}`)
+      .select(`updated_at, page_type, page_type_source, source_url, ${BRAND_SITE}`)
       .maybeSingle();
     if (error) throw new Error(error.message);
     if (data) {
       let updatedAt: string = data.updated_at;
       if (data.page_type_source === 'detected') {
-        const detected = detectPageType({ title, html: bodyHtml }, brandSiteType(data.brands));
+        // With the existing page's address, as Start detected it.
+        const detected = detectPageType(
+          { title, html: bodyHtml, url: data.source_url },
+          brandSiteType(data.brands),
+        );
         // A page that shows no type keeps the one it had (Start's guess).
         if (detected && detected !== data.page_type) {
           // Only over this save: a write in between would otherwise become
@@ -1725,14 +1729,14 @@ export async function restoreDraftVersion(id: string, versionId: string): Promis
   // Read back, so the type is detected only on the draft the version restored.
   const { data: row, error: rowError } = await supabase
     .from('content_drafts')
-    .select(`page_type, page_type_source, body_html, ${BRAND_SITE}`)
+    .select(`page_type, page_type_source, body_html, source_url, ${BRAND_SITE}`)
     .eq('id', id)
     .maybeSingle();
   if (rowError) {
     console.error('Failed to read the restored draft:', rowError.message);
   } else if (row?.page_type_source === 'detected' && row.body_html === restored.bodyHtml) {
     const detected = detectPageType(
-      { title: restored.title, html: restored.bodyHtml },
+      { title: restored.title, html: restored.bodyHtml, url: row.source_url },
       brandSiteType(row.brands),
     );
     // A page that shows no type keeps the one it had, as on a save.

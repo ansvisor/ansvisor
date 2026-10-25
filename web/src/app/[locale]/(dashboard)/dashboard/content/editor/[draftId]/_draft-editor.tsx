@@ -364,12 +364,15 @@ export function DraftEditor({
   const onDecide = useRef<(id: string, decision: SuggestionDecision) => void>(() => {});
   // A picked page type, or the one the page shows as it is written. As on
   // a save, a page that shows no type keeps the one it had (the stored one
-  // to start with), so the header and the Library agree.
+  // to start with), so the header and the Library agree; read with the
+  // existing page's address, as Start read it, so both agree on it too.
   const [picked, setPicked] = useState(draft.pageTypeSource === 'user' ? draft.pageType : null);
   const [detectedType, setDetectedType] = useState(
     () =>
-      detectPageType({ title: draft.title, html: draft.bodyHtml }, draft.siteType) ??
-      (isPageType(draft.pageType) ? draft.pageType : null),
+      detectPageType(
+        { title: draft.title, html: draft.bodyHtml, url: draft.sourceUrl },
+        draft.siteType,
+      ) ?? (isPageType(draft.pageType) ? draft.pageType : null),
   );
   // The brand's site type (Quality CE-056, the spec's business type), changed
   // here for the whole brand; a ref too, as the editor's update handler is
@@ -378,7 +381,7 @@ export function DraftEditor({
   const siteTypeRef = useRef(draft.siteType);
   const detectType = (title: string, html: string) => {
     const site = siteTypeRef.current;
-    setDetectedType((had) => detectPageType({ title, html }, site) ?? had);
+    setDetectedType((had) => detectPageType({ title, html, url: draft.sourceUrl }, site) ?? had);
   };
   const pageType = picked ?? detectedType;
   // The HTML view's text while it is open; null in the visual editor.
@@ -702,6 +705,9 @@ export function DraftEditor({
   // before the first read, and once the AI budget or the day's reads are
   // used up (Quality says so), as the score can't follow the page then.
   // Read for another page type: unknown until a read for this one lands.
+  // An edit holds what was found until the page as it is is read: while it
+  // waits for its save too, not only once the ask is out.
+  const pageChanging = pageRead.reading || saving;
   const aiChecks = useMemo(
     () =>
       sourcesOn &&
@@ -709,12 +715,12 @@ export function DraftEditor({
       pageRead.read.checks.pageType === (pageType ?? null) &&
       !pageRead.paused &&
       !pageRead.limited
-        ? aiChecksOnPage(pageBlocks, pageRead.read.checks, pageType, pageRead.reading)
+        ? aiChecksOnPage(pageBlocks, pageRead.read.checks, pageType, pageChanging)
         : null,
     [
       sourcesOn,
       pageRead.read,
-      pageRead.reading,
+      pageChanging,
       pageRead.paused,
       pageRead.limited,
       pageBlocks,

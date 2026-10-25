@@ -3336,6 +3336,85 @@ describe('the side panel', () => {
       }
     });
 
+    it('holds what the page read found while an edit to it is read again (review, #1479)', async () => {
+      process.env.NEXT_PUBLIC_CONTENT_QUALITY_PHASE = '2';
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+      getContentAuthors.mockResolvedValue({
+        authors: [],
+        brands: [{ id: 'b1', name: 'Acme' }],
+        me: { id: 'u1', role: 'admin' },
+      });
+      const HOW = 'We tested each forecasting app with twelve sales teams for a month.';
+      const answer = (block: string) => ({
+        spots: [],
+        proofs: [],
+        regulated: null,
+        checks: {
+          answerFirst: null,
+          recommends: null,
+          disclosure: null,
+          balance: null,
+          how: { quote: 'We tested each forecasting app', block },
+          cut: false,
+          pageType: 'guide',
+        },
+        pending: false,
+        limited: false,
+        paused: false,
+      });
+      let again: (value: unknown) => void = () => {};
+      readDraftPage
+        .mockResolvedValueOnce(answer(HOW))
+        .mockReturnValueOnce(new Promise((resolve) => (again = resolve)));
+      saveContentDraft.mockResolvedValue({
+        ok: true,
+        updatedAt: '2026-10-20T10:01:00Z',
+        bodyHash: 'h1',
+      });
+      getContentDraft.mockResolvedValue({
+        ...claimed,
+        pageType: 'guide',
+        pageTypeSource: 'user',
+        bodyHtml: `${claimed.bodyHtml}<p>${HOW}</p>`,
+      });
+      window.innerWidth = 1440;
+      await renderPage();
+      await act(async () => void (await vi.advanceTimersByTimeAsync(3_000)));
+      const chip = [...container.querySelectorAll<HTMLButtonElement>('header button')].find((b) =>
+        b.textContent?.startsWith('Quality'),
+      )!;
+      await act(async () => chip.click());
+      const eeatNow = () => panel()!.textContent!.match(/E-E-A-T(\d+)/)?.[1];
+      const found = eeatNow();
+      expect(found).toBeDefined();
+      // A typo fixed in the paragraph that says how the page was made.
+      const editor = (container.querySelector('.ProseMirror') as HTMLElement & { editor: Editor })
+        .editor;
+      let end = -1;
+      editor.state.doc.descendants((node, pos) => {
+        if (node.isTextblock && node.textContent === HOW) end = pos + node.nodeSize - 1;
+      });
+      await act(async () => {
+        editor.commands.insertContentAt(end - 1, ' straight');
+      });
+      // Read on the page as it is now, not saved yet; then saved and not
+      // asked about; then asked: it holds.
+      await act(async () => void (await vi.advanceTimersByTimeAsync(500)));
+      expect(saveContentDraft).not.toHaveBeenCalled();
+      expect(eeatNow()).toBe(found);
+      await act(async () => void (await vi.advanceTimersByTimeAsync(1_500)));
+      expect(saveContentDraft).toHaveBeenCalled();
+      expect(eeatNow()).toBe(found);
+      await act(
+        async () =>
+          void (await vi.advanceTimersByTimeAsync(PROOF_READ_EVERY_MS + PROOF_READ_SLACK_MS)),
+      );
+      expect(readDraftPage).toHaveBeenCalledTimes(2);
+      expect(eeatNow()).toBe(found);
+      await act(async () => again(answer(HOW.replace('month.', 'month straight.'))));
+      expect(eeatNow()).toBe(found);
+    });
+
     it('takes the claim’s sentence out on Remove', async () => {
       process.env.NEXT_PUBLIC_CONTENT_QUALITY_PHASE = '2';
       vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });

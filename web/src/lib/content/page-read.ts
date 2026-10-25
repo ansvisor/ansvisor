@@ -111,9 +111,11 @@ export interface AiCheck {
  *     after the H1, while it is still there.
  *
  * Each is null where it doesn't apply, and one not found is left out on a
- * page the model read only part of (`cut`): it may be in the rest. While a
- * read of the page as it is now is under way (`reading`), a find whose
- * block changed counts as still found: a small edit to it doesn't drop it.
+ * page the model read only part of (`cut`): it may be in the rest. Until
+ * the page as it is now is read (`reading`: changes not saved yet, a save
+ * not asked about, an ask out), a find whose block changed counts as still
+ * found, the passage that puts the brand forward still applies and Answer
+ * first's verdict holds (`held`): a small edit doesn't move the scores.
  */
 export function aiChecksOnPage(
   blocks: TrustBlock[],
@@ -124,14 +126,15 @@ export function aiChecksOnPage(
   how: AiCheck | null;
   balanced: AiCheck | null;
   disclosure: AiCheck | null;
-  answerFirst: { answers: boolean; block: string } | null;
+  answerFirst: { answers: boolean; block: string; held?: boolean } | null;
 } {
   const words = new Set(blocks.map((b) => squeeze(b.text)));
   const here = (find: PageQuote | null) =>
     find && words.has(squeeze(find.block)) && squeeze(find.block).includes(squeeze(find.quote))
       ? find
       : null;
-  const recommends = here(checks.recommends);
+  const recommendsHere = here(checks.recommends);
+  const recommends = recommendsHere ?? (reading ? checks.recommends : null);
   const check = (find: PageQuote | null, show: string | null): AiCheck | null => {
     const found = here(find);
     if (!found && find && reading) return { found: true, show: null };
@@ -142,13 +145,16 @@ export function aiChecksOnPage(
     how: pageType && HOW_TYPES.has(pageType) ? check(checks.how, null) : null,
     balanced:
       recommends || (pageType && WEIGHING_TYPES.has(pageType))
-        ? check(checks.balance, recommends?.quote ?? null)
+        ? check(checks.balance, recommendsHere?.quote ?? null)
         : null,
-    disclosure: recommends ? check(checks.disclosure, recommends.quote) : null,
-    answerFirst:
-      checks.answerFirst && words.has(squeeze(checks.answerFirst.block))
+    disclosure: recommends ? check(checks.disclosure, recommendsHere?.quote ?? null) : null,
+    answerFirst: !checks.answerFirst
+      ? null
+      : words.has(squeeze(checks.answerFirst.block))
         ? checks.answerFirst
-        : null,
+        : reading
+          ? { ...checks.answerFirst, held: true }
+          : null,
   };
 }
 
