@@ -106,7 +106,7 @@ async function checkWithStore(connector, input, request) {
         throw new StoreError(
           400,
           'connect_failed',
-          "The store's address isn't a public http(s) address.",
+          "The store's address isn't a public https address.",
         );
       }
       throw new StoreError(

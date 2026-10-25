@@ -168,17 +168,74 @@ describe('syncSource for a store (00282)', () => {
 
   it('reads a store with its saved sign-in', async () => {
     await saveCredentials(STORE_ID, { apiKey: KEY }, { db: fake.db });
-    const acme = connector(async () => ({ items: [item], errors: [], format: 'acme_store' }));
-    const request = vi.fn();
+    const acme = connector(async (_source, ctx) => {
+      await ctx.request('https://shop.example/api/products');
+      return { items: [item], errors: [], format: 'acme_store' };
+    });
+    const request = vi.fn().mockResolvedValue({ status: 200, headers: {}, data: null });
     const outcome = await syncSource(store, {
       db: fake.db,
       now: NOW,
       request,
       connectors: { acme_store: acme },
     });
-    expect(acme.readCatalog).toHaveBeenCalledWith(store, { request, credentials: { apiKey: KEY } });
+    expect(acme.readCatalog).toHaveBeenCalledWith(store, {
+      request: expect.any(Function),
+      credentials: { apiKey: KEY },
+    });
+    // Every call the read makes carries its deadline.
+    expect(request).toHaveBeenCalledWith('https://shop.example/api/products', {
+      signal: expect.any(AbortSignal),
+    });
     expect(outcome).toMatchObject({ status: 'ok', counts: { format: 'acme_store', items: 1 } });
     expect(fake.rows('catalog_products')).toHaveLength(1);
+  });
+
+  it("stops a store's calls at the read's deadline", async () => {
+    await saveCredentials(STORE_ID, { apiKey: KEY }, { db: fake.db });
+    let signal;
+    const acme = connector(async (_source, ctx) => {
+      await ctx.request('https://shop.example/api/products');
+      return { items: [], errors: [], format: 'acme_store' };
+    });
+    const request = vi.fn(async (_address, opts) => {
+      signal = opts.signal;
+      await new Promise((resolve) => setTimeout(resolve, 30));
+      if (opts.signal.aborted) {
+        throw new ConnectorHttpError('timeout', 'GET shop.example/api/products was stopped');
+      }
+      return { status: 200, headers: {}, data: null };
+    });
+    const outcome = await syncSource(store, {
+      db: fake.db,
+      now: NOW,
+      request,
+      readMs: 5,
+      connectors: { acme_store: acme },
+    });
+    expect(signal.aborted).toBe(true);
+    expect(outcome).toEqual({ status: 'failed', error: 'The store took too long to answer.' });
+  });
+
+  it("doesn't read a source twice at once", async () => {
+    await saveCredentials(STORE_ID, { apiKey: KEY }, { db: fake.db });
+    let release;
+    const acme = connector(
+      () =>
+        new Promise((resolve) => {
+          release = () => resolve({ items: [], errors: [], format: 'acme_store' });
+        }),
+    );
+    const options = { db: fake.db, now: NOW, connectors: { acme_store: acme } };
+    const first = syncSource(store, options);
+    await vi.waitFor(() => expect(release).toBeDefined());
+    await expect(syncSource(store, options)).resolves.toEqual({
+      status: 'failed',
+      error: 'This source is being read right now. Try again in a minute.',
+    });
+    release();
+    await expect(first).resolves.toMatchObject({ status: 'ok' });
+    expect(acme.readCatalog).toHaveBeenCalledTimes(1);
   });
 
   it("asks for the sign-in again when there's none it can open, and reads nothing", async () => {

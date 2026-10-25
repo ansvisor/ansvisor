@@ -63,8 +63,9 @@ The example connector (`server/src/connectors/__example__/index.js`) shows all o
 
 Call the platform only through `ctx.request(url, { method, headers, query, body })` (`server/src/connectors/http.js`). It returns `{ status, headers, data }`, with the JSON body in `data`. It:
 
-- reaches only public addresses, on the standard web ports, and doesn't follow redirects;
-- tries again on 429, 502, 503 and 504 and on dropped connections. It waits as long as the store's `Retry-After` header says, or 1, 2 then 4 seconds. A wait longer than a minute ends the run, and the next daily run tries again;
+- reaches only public **https** addresses, on the standard web ports, and doesn't follow redirects. Only the test harness lets it call its fake API over http;
+- tries again on 429. A call that changes nothing (GET, HEAD, PUT, DELETE) is also tried again on 502, 503 and 504 and on dropped connections; a POST isn't, since the store may have taken it. It waits as long as the store's `Retry-After` header says, or 1, 2 then 4 seconds. A wait longer than a minute ends the run, and the next daily run tries again;
+- stops every call of one sync after 10 minutes, so one slow store can't hold the daily run;
 - never puts the query, the headers or the body in an error message.
 
 Send keys in a header (`Authorization`) where the platform allows it, not in the address.

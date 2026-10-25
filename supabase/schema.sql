@@ -39896,6 +39896,9 @@ notify pgrst, 'reload schema';
 --   * `account` names the store's account to the person: a shop's domain,
 --     a seller id. A store's `url` is optional; a feed's is required, and an
 --     upload has none.
+--   * A brand connects each store account once.
+--   * Members remove feed URLs and uploads themselves. A store is removed
+--     through the API, which revokes its sign-in at the store first.
 --   * `auth_failed`: the store refused the saved sign-in.
 --   * The daily run reads every kind but uploads.
 --
@@ -39938,6 +39941,24 @@ create policy "catalog_sources: admin/manager insert"
     )
     and created_by = auth.uid()
   );
+
+-- Members remove feed URLs and uploads; stores go through the API.
+drop policy if exists "catalog_sources: admin/manager delete" on public.catalog_sources;
+create policy "catalog_sources: admin/manager delete"
+  on public.catalog_sources
+  for delete
+  using (
+    kind in ('feed_url', 'upload')
+    and brand_id in (
+      select b.id from public.brands b
+      join public.profiles p on p.organization_id = b.organization_id
+      where p.id = auth.uid() and p.role = any (array['admin'::public.user_role, 'manager'::public.user_role])
+    )
+  );
+
+create unique index if not exists catalog_sources_one_account
+  on public.catalog_sources (brand_id, kind, account)
+  where account is not null;
 
 drop index if exists public.catalog_sources_feed_due_idx;
 create index if not exists catalog_sources_due_idx

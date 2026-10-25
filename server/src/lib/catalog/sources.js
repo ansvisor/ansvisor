@@ -24,6 +24,11 @@ export const SWEEP_LIMIT = 50;
 export const SWEEP_DEADLINE_MS = 10 * 60 * 1000;
 /** Skipped products' errors kept on the source, for the person to see. */
 const ERRORS_KEPT = 5;
+/** A store's read stops calling it after this: one slow store can't hold the daily run. */
+export const STORE_READ_MS = 10 * 60 * 1000;
+
+/** The sources being read in this process: a source isn't read twice at once. */
+const reading = new Set();
 
 /** The catalog's `source` for a catalog source: `src_` and its id without dashes. */
 export function sourceKey(id) {
@@ -111,14 +116,40 @@ async function record(db, id, at, outcome) {
  * passed in. Never throws for the source's own failure: it's recorded and
  * returned.
  *
+ * A source being read already isn't read again at once: the answer says so,
+ * and nothing is recorded. A store's calls stop after `readMs` (STORE_READ_MS).
+ *
  * @param {{ id: string, brand_id: string, kind: string, format: string, url?: string|null, account?: string|null }} source
- * @param {{ text?: string, db?: object, now?: Date, fetch?: Function, request?: Function, connectors?: object }} [options]
- *   `fetch` (a feed's), `request` (a store's HTTP client) and `connectors`
- *   are the tests' stand-ins
+ * @param {{ text?: string, db?: object, now?: Date, fetch?: Function, request?: Function, connectors?: object, readMs?: number }} [options]
+ *   `fetch` (a feed's), `request` (a store's HTTP client), `connectors` and
+ *   `readMs` are the tests' stand-ins
  */
-export async function syncSource(
+export async function syncSource(source, options = {}) {
+  if (reading.has(source.id)) {
+    return {
+      status: 'failed',
+      error: 'This source is being read right now. Try again in a minute.',
+    };
+  }
+  reading.add(source.id);
+  try {
+    return await syncOnce(source, options);
+  } finally {
+    reading.delete(source.id);
+  }
+}
+
+async function syncOnce(
   source,
-  { text, db = supabaseAdmin, now = new Date(), fetch, request = requestJson, connectors } = {},
+  {
+    text,
+    db = supabaseAdmin,
+    now = new Date(),
+    fetch,
+    request = requestJson,
+    connectors,
+    readMs = STORE_READ_MS,
+  },
 ) {
   const at = now.toISOString();
   let outcome;
@@ -133,8 +164,15 @@ export async function syncSource(
         outcome = { status: 'failed', error: "This server can't read this kind of source." };
       } else if (isStore(connector)) {
         credentials = await readCredentials(source.id, { db });
+        // Every call the read makes stops at its deadline.
+        const deadline = AbortSignal.timeout(readMs);
+        const bounded = (address, opts = {}) =>
+          request(address, {
+            ...opts,
+            signal: opts.signal ? AbortSignal.any([opts.signal, deadline]) : deadline,
+          });
         if (!credentials) outcome = NO_SIGN_IN;
-        else parsed = await connector.readCatalog(source, { request, credentials });
+        else parsed = await connector.readCatalog(source, { request: bounded, credentials });
       } else {
         parsed = await connector.readCatalog(source, { fetch, request });
       }

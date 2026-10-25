@@ -1,5 +1,6 @@
 import http from 'node:http';
 import https from 'node:https';
+import { pipeline } from 'node:stream';
 import zlib from 'node:zlib';
 import { PageFetchError, checkPageUrl, publicOnlyLookup } from '../lib/safe-fetch.js';
 
@@ -7,15 +8,17 @@ import { PageFetchError, checkPageUrl, publicOnlyLookup } from '../lib/safe-fetc
  * The HTTP client a store connector calls its platform's API with (#1263).
  *
  * A store's address is often the brand's own (a WooCommerce site), so it is
- * reached like any address a person gives (lib/safe-fetch.js): http(s) on
- * the standard ports, every resolved address public, checked in the
- * connection's own lookup. Redirects aren't followed: an API that redirects
- * would carry the sign-in to another host.
+ * reached like any address a person gives (lib/safe-fetch.js): on the
+ * standard ports, every resolved address public, checked in the
+ * connection's own lookup. Only https: the sign-in never crosses the network
+ * in the clear. Redirects aren't followed: an API that redirects would carry
+ * the sign-in to another host.
  *
- * It waits and tries again on 429 and on 502, 503 and 504, and on a dropped
- * connection: as long as the API's Retry-After says, else 1, 2, 4 seconds
- * (with a little jitter), RETRIES times. A wait longer than MAX_WAIT_MS ends
- * the call ('rate_limited'), and the daily run tries the source again later.
+ * It waits and tries again on 429, and, for a call that changes nothing
+ * (GET, HEAD, PUT, DELETE), on 502, 503 and 504 and on a dropped connection:
+ * as long as the API's Retry-After says, else 1, 2, 4 seconds (with a little
+ * jitter), RETRIES times. A wait longer than MAX_WAIT_MS ends the call
+ * ('rate_limited'), and the daily run tries the source again later.
  *
  * Errors name the method, host and path only: never the query (some APIs
  * take a key there), the headers or the body.
@@ -93,10 +96,19 @@ function once(url, { method, headers, body, lookup, signal, maxBytes }) {
       },
       (res) => {
         const encoding = String(res.headers['content-encoding'] ?? '').toLowerCase();
-        let stream = res;
-        if (encoding === 'gzip' || encoding === 'x-gzip') stream = res.pipe(zlib.createGunzip());
-        else if (encoding === 'deflate') stream = res.pipe(zlib.createInflate());
-        else if (encoding === 'br') stream = res.pipe(zlib.createBrotliDecompress());
+        let decoder = null;
+        if (encoding === 'gzip' || encoding === 'x-gzip') decoder = zlib.createGunzip();
+        else if (encoding === 'deflate') decoder = zlib.createInflate();
+        else if (encoding === 'br') decoder = zlib.createBrotliDecompress();
+        // pipeline, not pipe: an answer cut off part way fails the call
+        // instead of leaving its decoder waiting for an end that never comes.
+        if (decoder) pipeline(res, decoder, (err) => err && reject(err));
+        const stream = decoder ?? res;
+        res.on('close', () => {
+          if (!res.complete) {
+            reject(new ConnectorHttpError('unreachable', `${where(method, url)} stopped part way`));
+          }
+        });
         const chunks = [];
         let size = 0;
         stream.on('data', (chunk) => {
@@ -128,9 +140,11 @@ function once(url, { method, headers, body, lookup, signal, maxBytes }) {
  * Calls a JSON API (see above).
  *
  * @param {string} address
- * @param {{ method?: string, headers?: Record<string, string>, query?: Record<string, string|number>, body?: unknown, timeoutMs?: number, maxBytes?: number, retries?: number, maxWaitMs?: number, lookup?: Function, ports?: string[], sleep?: (ms: number) => Promise<void>, signal?: AbortSignal }} [opts]
- *   `body` is sent as JSON. `lookup` and `ports` replace the public-only
- *   lookup and the web ports, and `sleep` the waits; tests use them.
+ * @param {{ method?: string, headers?: Record<string, string>, query?: Record<string, string|number>, body?: unknown, timeoutMs?: number, maxBytes?: number, retries?: number, maxWaitMs?: number, lookup?: Function, ports?: string[], allowHttp?: boolean, sleep?: (ms: number) => Promise<void>, signal?: AbortSignal }} [opts]
+ *   `body` is sent as JSON. Only https is called: a sign-in never crosses
+ *   the network in the clear. `lookup`, `ports` and `allowHttp` replace the
+ *   public-only lookup, the web ports and https, and `sleep` the waits;
+ *   tests use them.
  * @returns {Promise<{ status: number, headers: object, data: unknown }>} data: the parsed body, or null when empty
  */
 export async function requestJson(address, opts = {}) {
@@ -145,6 +159,7 @@ export async function requestJson(address, opts = {}) {
     maxWaitMs = MAX_WAIT_MS,
     lookup = publicOnlyLookup,
     ports,
+    allowHttp = false,
     sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
     signal: outer = null,
   } = opts;
@@ -154,6 +169,12 @@ export async function requestJson(address, opts = {}) {
   } catch (err) {
     throw new ConnectorHttpError(err.code ?? 'invalid_url', err.message);
   }
+  if (url.protocol !== 'https:' && !allowHttp) {
+    throw new ConnectorHttpError('invalid_url', `${url.host} isn't an https address`);
+  }
+  // A call that changes something is tried again only when the API said it
+  // didn't take it (429): after a 5xx or a dropped connection it may have.
+  const idempotent = ['GET', 'HEAD', 'PUT', 'DELETE'].includes(method.toUpperCase());
   for (const [name, value] of Object.entries(query ?? {})) {
     if (value != null) url.searchParams.set(name, String(value));
   }
@@ -174,7 +195,7 @@ export async function requestJson(address, opts = {}) {
       }
       if (outer?.aborted)
         throw new ConnectorHttpError('timeout', `${where(method, url)} was stopped`);
-      const retriable = signal.aborted || RETRY_ERRNOS.has(err?.code);
+      const retriable = idempotent && (signal.aborted || RETRY_ERRNOS.has(err?.code));
       if (!retriable || attempt >= retries) {
         throw signal.aborted
           ? new ConnectorHttpError('timeout', `${where(method, url)} took too long to answer`)
@@ -207,7 +228,8 @@ export async function requestJson(address, opts = {}) {
           },
         );
       }
-      if (!RETRY_STATUSES.has(status) || attempt >= retries) {
+      const retriable = RETRY_STATUSES.has(status) && (idempotent || status === 429);
+      if (!retriable || attempt >= retries) {
         throw new ConnectorHttpError(
           status === 429 ? 'rate_limited' : 'http_error',
           `${where(method, url)} answered ${status}`,

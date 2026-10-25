@@ -75,11 +75,13 @@ export async function startFakeApi(routes) {
     if (hostname !== FAKE_HOST) return publicOnlyLookup(hostname, options, callback);
     return all ? done(null, [{ address: '127.0.0.1', family: 4 }]) : done(null, '127.0.0.1', 4);
   };
+  // The fake serves plain http on its port; the real client calls https only.
   const request = (address, opts = {}) =>
     requestJson(address, {
       ...opts,
       lookup,
       ports: ['', '80', '443', port],
+      allowHttp: true,
       sleep: async (ms) => {
         waits.push(ms);
       },

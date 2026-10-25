@@ -1,3 +1,5 @@
+import http from 'node:http';
+import zlib from 'node:zlib';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 // The harness reaches the Supabase admin client at import time.
@@ -124,11 +126,55 @@ describe('requestJson against a fake API', () => {
       code: 'too_large',
     });
   });
+
+  it("tries a call that changes something again only when the API said it didn't take it", async () => {
+    let n = 0;
+    api = await startFakeApi({
+      'POST /orders': () => {
+        n += 1;
+        return n === 1 ? { status: 429 } : { status: 503 };
+      },
+    });
+    await expect(
+      api.request(`${api.origin}/orders`, { method: 'POST', body: {} }),
+    ).rejects.toMatchObject({ code: 'http_error', status: 503 });
+    // Once after the 429; the 503 may have been taken, so not again.
+    expect(api.calls).toHaveLength(2);
+  });
+});
+
+describe('requestJson on a connection cut part way', () => {
+  it('fails a compressed answer cut off, instead of waiting for it forever', async () => {
+    const server = http.createServer((req, res) => {
+      res.writeHead(200, { 'content-type': 'application/json', 'content-encoding': 'gzip' });
+      res.write(zlib.gzipSync(JSON.stringify({ s: 'x'.repeat(10_000) })).subarray(0, 40));
+      setTimeout(() => res.socket.destroy(), 10);
+    });
+    await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+    const port = String(server.address().port);
+    const lookup = (hostname, options, callback) =>
+      (typeof options === 'function' ? options : callback)(null, [
+        { address: '127.0.0.1', family: 4 },
+      ]);
+    try {
+      await expect(
+        requestJson(`http://cut.test:${port}/`, {
+          lookup,
+          ports: [port],
+          allowHttp: true,
+          retries: 0,
+          timeoutMs: 5000,
+        }),
+      ).rejects.toMatchObject({ code: 'unreachable' });
+    } finally {
+      await new Promise((resolve) => server.close(resolve));
+    }
+  });
 });
 
 describe('requestJson on the public-only lookup', () => {
   it('never reaches a private address', async () => {
-    for (const address of ['http://127.0.0.1/api', 'http://localhost/api', 'http://[::1]/api']) {
+    for (const address of ['https://127.0.0.1/api', 'https://localhost/api', 'https://[::1]/api']) {
       await expect(requestJson(address, { retries: 0 }), address).rejects.toMatchObject({
         code: 'blocked',
       });
@@ -136,6 +182,13 @@ describe('requestJson on the public-only lookup', () => {
     await expect(requestJson('ftp://shop.example/')).rejects.toMatchObject({ code: 'invalid_url' });
     await expect(requestJson('https://shop.example:8443/')).rejects.toMatchObject({
       code: 'invalid_url',
+    });
+  });
+
+  it('calls https only: a sign-in never goes in the clear', async () => {
+    await expect(requestJson('http://shop.example/api')).rejects.toMatchObject({
+      code: 'invalid_url',
+      message: "shop.example isn't an https address",
     });
   });
 });
