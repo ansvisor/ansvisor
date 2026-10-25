@@ -15,7 +15,8 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { LoadingDots } from '@/components/ui/loading-dots';
-import { publishPage, readPublishAddress, type PublishResult } from '@/lib/content/publish-client';
+import { setContentDraftStatus } from '@/lib/actions/content-drafts';
+import { publishPage, readPublishAddress } from '@/lib/content/publish-client';
 
 /**
  * Mark published (CE-013): the person gives the address the page is live
@@ -23,15 +24,23 @@ import { publishPage, readPublishAddress, type PublishResult } from '@/lib/conte
  * action's results). It starts from where the page went live, else the page
  * it optimizes, else the brand's site with its slug. From the Library's
  * status menu and the editor; rendered only while open.
+ *
+ * An API without the publish route yet (the web goes out first): a page not
+ * yet published becomes Published as before, without its address, and the
+ * person is told; a published page's address can't be changed until then.
  */
 export function PublishDialog({
   draftId,
+  published,
   onClose,
   onPublished,
 }: {
   draftId: string;
+  /** Already published: the dialog changes its address. */
+  published: boolean;
   onClose: () => void;
-  onPublished: (published: Extract<PublishResult, { ok: true }>) => void;
+  /** Where the page is live now; null when the address couldn't be kept. */
+  onPublished: (publishedUrl: string | null) => void;
 }) {
   const t = useTranslations('contentEditor.publish');
   const tFailure = useTranslations('apiFailure');
@@ -61,6 +70,24 @@ export function PublishDialog({
     setSaving(true);
     setProblem(null);
     const result = await publishPage(draftId, url.trim());
+    if (!result.ok && result.code === 'no_route' && !published) {
+      const kept = await setContentDraftStatus(draftId, 'published').then(
+        () => true,
+        (err) => {
+          console.error('Failed to mark the page published:', err);
+          return false;
+        },
+      );
+      setSaving(false);
+      if (!kept) {
+        setProblem(t('failed'));
+        return;
+      }
+      toast.warning(t('addressNotKept'));
+      onPublished(null);
+      onClose();
+      return;
+    }
     setSaving(false);
     if (!result.ok) {
       setProblem(
@@ -74,7 +101,7 @@ export function PublishDialog({
     }
     if (result.onBrandDomain) toast.success(t('done'));
     else toast.warning(t('offDomain'));
-    onPublished(result);
+    onPublished(result.publishedUrl);
     onClose();
   };
 

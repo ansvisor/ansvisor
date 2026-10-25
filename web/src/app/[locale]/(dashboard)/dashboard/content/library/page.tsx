@@ -472,6 +472,8 @@ export default function ContentLibraryPage() {
       {publishing && (
         <PublishDialog
           draftId={publishing}
+          // The row menu offers Published only to a page that isn't.
+          published={false}
           onClose={() => setPublishing(null)}
           onPublished={reload}
         />

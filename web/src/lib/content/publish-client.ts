@@ -12,6 +12,8 @@ import { slugOf } from '@/lib/content/ready-to-publish';
 export type PublishError =
   | 'invalid_url'
   | 'not_found'
+  /** The API has no publish route yet (an API older than CE-013's). */
+  | 'no_route'
   | 'session'
   | 'workspace'
   | 'busy'
@@ -61,6 +63,9 @@ export async function publishPage(draftId: string, url: string): Promise<Publish
     if (!res.ok) {
       if (body.code === 'invalid_url' || body.code === 'invalid')
         return { ok: false, code: 'invalid_url' };
+      // A page gone is the route's own answer; any other 404 (Express's
+      // "Cannot POST", no JSON) is an API without the route.
+      if (res.status === 404 && body.code !== 'not_found') return { ok: false, code: 'no_route' };
       const general = apiFailure(res.status, body);
       return {
         ok: false,

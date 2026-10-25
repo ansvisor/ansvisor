@@ -150,6 +150,7 @@ The Content Agent never changes these passages. If you edit one, the editor asks
 - **Add HTML** in the toolbar adds an HTML block: an embed, a widget or a form, kept exactly as written. Ansvisor never runs it. **Edit as HTML** shows the page's source; scripts, iframes and inline styles are removed when you switch back.
 - **Send to CMS** (admins and managers) sends the page to your workflow tool through the brand's webhook, for it to create the post in your CMS. See [Send to CMS](/guides/send-to-cms).
 - **Mark ready** saves the page, sets it to **Ready** and keeps a version in History. If the draft was sent to the Action Center, it also completes its task there. Ansvisor doesn't publish the page: copy or export it to your site, or send it to your CMS.
+- **Mark published** (the Library's **Status** menu, or **Next step** once the page is ready): once the page is live, tell Ansvisor where. It asks for the live address, starting from the page it optimizes or your site with the page's slug, and the **Live page** tab measures that address from then. If the draft came from the Action Center, its Publish task is completed once all the action's work is live. On a published page, the header's **Published** button changes the address. A page your CMS reports live, or one published in Webflow, gets its address on its own. An archived page is restored first.
 - Click **Ready** in the header to move the page back to **In review**. A task that Mark ready completed is open again (**In Progress**), unless someone changed it in the Action Center since or the action is closed.
 
 ## Library
@@ -162,14 +163,14 @@ The **Library** lists the drafts by status, each tab with its count:
 | **In progress** | Drafts being written. |
 | **In review** | Drafts the Content Agent wrote, waiting for a person. |
 | **Ready** | Drafts marked ready. |
-| **Published** | Drafts you marked as published. |
+| **Published** | Drafts marked published, by you or your CMS. |
 | **Archived** | Drafts sent to the archive. They keep their status for when they're restored. |
 
 The columns are Content, Type, Method (Create or Optimize), By (you, the Content Agent or a teammate), Status, Created and Updated. Click a row to open the draft in the editor. The **Created** filter narrows the list to the last 7, 30 or 90 days.
 
 ### Row menu
 
-- **Status**: set the draft to In progress, In review, Ready or Published. Ready works like the editor's Mark ready, and moving a ready or published draft back to In progress or In review opens its task again, as the editor's **Ready** does.
+- **Status**: set the draft to In progress, In review, Ready or Published. Ready works like the editor's Mark ready. **Published** asks for the page's live address, as the editor's **Mark published** does (not for archived drafts). Moving a ready or published draft back to In progress or In review opens its task again, as the editor's **Ready** does; a published one also opens the action's Publish task again and stops its Live page being measured for the action.
 - **Export Word**, **Export HTML** or **Export Markdown** for that draft.
 - **Send to CMS** (admins and managers, not for archived drafts). Beside each row's status, an icon shows its last send: on its way, sent, failed or published. Tick several rows to send up to 25 at once. See [Send to CMS](/guides/send-to-cms).
 - **Send to Archive** or **Restore** (admins and managers).

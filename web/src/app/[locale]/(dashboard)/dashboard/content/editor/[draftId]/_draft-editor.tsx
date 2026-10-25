@@ -350,6 +350,7 @@ export function DraftEditor({
 }) {
   const t = useTranslations('contentEditor.editor');
   const tNext = useTranslations('contentEditor.editor.nextStep');
+  const tPublish = useTranslations('contentEditor.publish');
   const autosave = useDraftAutosave(draft.id, draft);
   const [title, setTitle] = useState(draft.title);
   // The page as written now, for the side panel's Sources.
@@ -2720,7 +2721,7 @@ export function DraftEditor({
    * History as published, as it stands in the database.
    */
   const openPublish = async () => {
-    if (preparingLive) return;
+    if (preparingLive || draft.archivedAt) return;
     if (htmlUnapplied) {
       toast.error(t('send.applyHtml'));
       return;
@@ -2732,7 +2733,7 @@ export function DraftEditor({
     );
     setPreparingLive(false);
     if (!saved) {
-      toast.error(t('send.unsaved'));
+      toast.error(tPublish('unsaved'));
       return;
     }
     setAskLive(true);
@@ -2885,17 +2886,21 @@ export function DraftEditor({
         return pageRewrite?.blocked ?? null;
       case 'fixRules':
         return agentFix.blocked;
-      // As the header's Mark ready is held.
+      // As the header's Mark ready is held; an archived page is restored first, as in the Library.
       case 'beforePublish':
       case 'markReady':
       case 'markPublished':
-        return marking || preparingLive
-          ? t('nextStep.marking')
-          : autosave.state === 'conflict'
-            ? t('save.conflict')
-            : autosave.state === 'too_large'
-              ? t('save.tooLarge')
-              : null;
+        return action === 'markPublished' && draft.archivedAt
+          ? tPublish('archived')
+          : preparingLive
+            ? t('nextStep.saving')
+            : marking
+              ? t('nextStep.marking')
+              : autosave.state === 'conflict'
+                ? t('save.conflict')
+                : autosave.state === 'too_large'
+                  ? t('save.tooLarge')
+                  : null;
       default:
         return null;
     }
@@ -3235,15 +3240,18 @@ export function DraftEditor({
                 hint={
                   status === 'ready'
                     ? t('header.readyHint')
-                    : liveUrl
-                      ? t('header.publishedHintAt', { url: liveUrl })
-                      : t('header.publishedHint')
+                    : draft.archivedAt
+                      ? tPublish('archived')
+                      : liveUrl
+                        ? t('header.publishedHintAt', { url: liveUrl })
+                        : t('header.publishedHint')
                 }
               >
                 <Button
                   variant="outline"
                   size="sm"
-                  disabled={unmarking}
+                  // An archived page's address waits until it's restored, as in the Library.
+                  disabled={unmarking || (status === 'published' && !!draft.archivedAt)}
                   focusableWhenDisabled
                   aria-label={
                     status === 'ready' ? t('header.readyLabel') : tDraftStatus('published')
@@ -3584,6 +3592,7 @@ export function DraftEditor({
           <EditorSidePanel
             draft={draft}
             liveUrl={liveUrl}
+            published={status === 'published'}
             siteType={siteType}
             title={title}
             bodyHtml={pageHtml}
@@ -3715,10 +3724,11 @@ export function DraftEditor({
       {askLive && (
         <PublishDialog
           draftId={draft.id}
+          published={status === 'published'}
           onClose={() => setAskLive(false)}
-          onPublished={(published) => {
+          onPublished={(url) => {
             setStatus('published');
-            setLiveUrl(published.publishedUrl);
+            setLiveUrl(url);
           }}
         />
       )}

@@ -3214,6 +3214,9 @@
       "failed": "Couldn't mark the page published. Try again.",
       "done": "Published. The Live page tab measures it from now on.",
       "offDomain": "Published. The address isn't on the brand's domains, so its numbers won't show.",
+      "addressNotKept": "Published. The address couldn't be saved yet, so the Live page tab can't measure it.",
+      "unsaved": "The page has changes that aren't saved, so it wasn't marked published.",
+      "archived": "This page is archived. Restore it in the Library first.",
       "cancel": "Cancel",
       "save": "Mark published"
     },
@@ -4093,6 +4096,7 @@
       },
       "impact": {
         "newPage": "This draft is a new page, not live yet, so there's nothing to measure. Mark it published with its live address, and this tab measures it from then.",
+        "publishedNoAddress": "This page is marked published without its live address, so there's nothing to measure. Give the address with the header's Published button, and this tab measures it from then.",
         "thisPage": "The live page today",
         "notForecast": "How the live page does now, not a forecast of what this draft will get.",
         "periodLabel": "Period",
@@ -4449,6 +4453,7 @@
         "working": "Content Agent is working",
         "stop": "Stop",
         "marking": "Marking it ready…",
+        "saving": "Saving the page first…",
         "tipsTitle": "If you see…",
         "tipLine": "{state} →",
         "states": {

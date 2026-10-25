@@ -983,6 +983,32 @@ describe('the content editor', () => {
     expect(document.querySelector('[role="dialog"]')!.textContent).toContain('Mark published');
   });
 
+  it('holds Published on an archived page until it’s restored, as the Library does', async () => {
+    getContentDraft.mockResolvedValue(
+      draft({ status: 'published', archivedAt: '2026-10-25T10:00:00Z' }),
+    );
+    await renderPage();
+    expect(button('Published')!.getAttribute('aria-disabled')).toBe('true');
+    await act(async () => button('Published')!.click());
+    expect(readPublishAddress).not.toHaveBeenCalled();
+  });
+
+  it('asks for the address of a page marked published without one on the Live page tab', async () => {
+    getContentDraft.mockResolvedValue(draft({ status: 'published', method: 'create' }));
+    const width = window.innerWidth;
+    window.innerWidth = 1440;
+    try {
+      await renderPage();
+      await pickTab('Live page');
+      expect(container.textContent).toContain(
+        "This page is marked published without its live address, so there's nothing to measure.",
+      );
+      expect(getContentImpact).not.toHaveBeenCalled();
+    } finally {
+      window.innerWidth = width;
+    }
+  });
+
   it('measures the address a page went live at on the Live page tab, not the page it optimized', async () => {
     getContentDraft.mockResolvedValue(
       draft({

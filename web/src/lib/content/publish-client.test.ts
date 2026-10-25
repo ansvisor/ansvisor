@@ -65,6 +65,9 @@ describe('publishPage', () => {
     expect(await publishPage('d1', 'x')).toEqual({ ok: false, code: 'invalid_url' });
     answer(404, { code: 'not_found' });
     expect(await publishPage('d1', 'x')).toEqual({ ok: false, code: 'not_found' });
+    // Any other 404 (Express's own "Cannot POST", no JSON): an API without the route.
+    fetchMock.mockResolvedValue(new Response('<pre>Cannot POST</pre>', { status: 404 }));
+    expect(await publishPage('d1', 'x')).toEqual({ ok: false, code: 'no_route' });
     answer(403, { code: 'not_in_workspace' });
     expect(await publishPage('d1', 'x')).toEqual({ ok: false, code: 'workspace' });
     answer(500, { code: 'failed' });

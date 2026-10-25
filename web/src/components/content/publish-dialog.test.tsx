@@ -9,6 +9,9 @@ vi.mock('sonner', () => ({ toast }));
 const publishPage = vi.hoisted(() => vi.fn());
 const readPublishAddress = vi.hoisted(() => vi.fn());
 vi.mock('@/lib/content/publish-client', () => ({ publishPage, readPublishAddress }));
+// Published as before the publish route, on an API without it.
+const setContentDraftStatus = vi.hoisted(() => vi.fn());
+vi.mock('@/lib/actions/content-drafts', () => ({ setContentDraftStatus }));
 
 const { PublishDialog } = await import('./publish-dialog');
 
@@ -22,11 +25,16 @@ let root: Root;
 const onClose = vi.fn();
 const onPublished = vi.fn();
 
-async function render() {
+async function render(published = false) {
   await act(async () => {
     root.render(
       <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
-        <PublishDialog draftId="d1" onClose={onClose} onPublished={onPublished} />
+        <PublishDialog
+          draftId="d1"
+          published={published}
+          onClose={onClose}
+          onPublished={onPublished}
+        />
       </NextIntlClientProvider>,
     );
   });
@@ -49,6 +57,7 @@ beforeEach(() => {
   onPublished.mockReset();
   toast.success.mockReset();
   toast.warning.mockReset();
+  setContentDraftStatus.mockReset().mockResolvedValue(undefined);
   readPublishAddress.mockReset().mockResolvedValue('https://acme.example/blog/cold-brew');
   publishPage.mockReset().mockResolvedValue({
     ok: true,
@@ -78,7 +87,7 @@ describe('PublishDialog', () => {
     expect(toast.success).toHaveBeenCalledWith(
       'Published. The Live page tab measures it from now on.',
     );
-    expect(onPublished).toHaveBeenCalledWith(expect.objectContaining({ taskCompleted: true }));
+    expect(onPublished).toHaveBeenCalledWith('https://acme.example/blog/cold-brew');
     expect(onClose).toHaveBeenCalled();
   });
 
@@ -109,6 +118,36 @@ describe('PublishDialog', () => {
     expect(onClose).not.toHaveBeenCalled();
     await type('');
     expect(save().disabled).toBe(true);
+  });
+
+  it('marks the page published without its address on an API without the route, and says so', async () => {
+    publishPage.mockResolvedValue({ ok: false, code: 'no_route' });
+    await render();
+    await act(async () => save().click());
+    expect(setContentDraftStatus).toHaveBeenCalledWith('d1', 'published');
+    expect(toast.warning).toHaveBeenCalledWith(
+      "Published. The address couldn't be saved yet, so the Live page tab can't measure it.",
+    );
+    expect(onPublished).toHaveBeenCalledWith(null);
+    expect(onClose).toHaveBeenCalled();
+  });
+
+  it('can’t change a published page’s address on an API without the route, nor fall back', async () => {
+    publishPage.mockResolvedValue({ ok: false, code: 'no_route' });
+    await render(true);
+    await act(async () => save().click());
+    expect(setContentDraftStatus).not.toHaveBeenCalled();
+    expect(dialog().querySelector('#publish-url-hint')!.textContent).toBe(
+      "Couldn't mark the page published. Try again.",
+    );
+    expect(onClose).not.toHaveBeenCalled();
+
+    // A page gone is the route's own answer.
+    publishPage.mockResolvedValue({ ok: false, code: 'not_found' });
+    await act(async () => save().click());
+    expect(dialog().querySelector('#publish-url-hint')!.textContent).toBe(
+      "This page isn't in the Library anymore.",
+    );
   });
 
   it('waits for the starting address, and starts empty without one', async () => {
