@@ -149,7 +149,7 @@ const RANGE_BEFORE = /\d\s?(?:\S{1,3}\s)?(?:[–—-]|to|bis|ile|ila|and|und|et|
  * $245").
  */
 const NOT_A_PRICE =
-  /(?<!\p{L})(?:was|instead\s+of|regularly|originally|save|saving|savings|off|discount|coupon|credits?|incl\.?|including\s+(?:vat|tax)|inkl\.?|kdv\s+dahil|statt|rabatt|indirim|tasarruf|économisez|ahorra|refund|money-back|extra|additional|add-ons?|ek\s+ücret|zusätzlich|setup|set-up|onboarding|implementation|installation|one-time|kurulum)(?!\p{L})|\d+[\s-]?(?:person|people|users?|seats?|members?|kişi(?:lik)?|kullanıcı)(?!\p{L})/iu;
+  /(?<!\p{L})(?:was|instead\s+of|regularly|originally|sav(?:e|es|ed|ing|ings)|off|discount|coupon|credits?|incl\.?|including\s+(?:vat|tax)|inkl\.?|kdv\s+dahil|statt|rabatt|indirim|tasarruf|économisez|ahorra|refund|money-back|extra|additional|add-ons?|ek\s+ücret|zusätzlich|setup|set-up|onboarding|implementation|installation|one-time|kurulum)(?!\p{L})|\d+[\s-]?(?:person|people|users?|seats?|members?|kişi(?:lik)?|kullanıcı)(?!\p{L})/iu;
 const MONTH =
   /^[^\d$€£¥₹₺]{0,20}?(?:\/\s?(?:mo|mth|month|ay|monat|mois|mes)\b|\b(?:per|a|each)\s+month\b|\bmonthly\b|\baylık\b|\bayda\b|\bmonatlich\b|\b(?:pro|im)\s+monat\b|\bpar\s+mois\b|\b(?:al|por)\s+mes\b)/iu;
 const YEAR =
@@ -284,6 +284,39 @@ function planAt(sentence: string, plan: string, brandNamed: boolean): number {
  */
 const PRICED_AFTER_NAME =
   /^['’]?s?\s+(?:(?:monthly|annual|yearly|base|basic)\s+)?(?:(?:plans?|pricing|price|subscriptions?|licen[cs]es?|membership)\s+)?(?:(?:now|currently|only|just)\s+)?(?:costs?|charges?|is\s+priced\s+at|priced\s+at|starts?\s+(?:at|from)|starting\s+at|kostet|coûte|cuesta)\s+(?:(?:just|only|from|ab|desde)\s+)?$/iu;
+/**
+ * A named plan's own price, said right after its name ("Ledgerly Pro costs
+ * $59", "The Pro plan is $39/mo", "…and the Pro plan $49/month", "Pro:
+ * $49", "Pro ($49/month)"): its "plan" or "tier" word, then nothing, "is",
+ * a colon, a dash, "(" or a pricing verb, and "just", "only" or "from" ("Pro
+ * plan users invoice $12,000", "the Pro plan adds $30" are other amounts).
+ */
+const PRICED_AFTER_PLAN =
+  /^(?:\s+(?:plan|tier|package|edition|paket|planı|tarif)(?!\p{L}))?(?:['’]s)?\s*(?:(?:is|:|[–—-]|\()\s*)?(?:(?:now|currently)\s+)?(?:(?:costs?|charges?|is\s+priced\s+at|priced\s+at|starts?\s+(?:at|from)|starting\s+at|kostet|coûte|cuesta)\s+)?(?:(?:just|only|from|ab|desde)\s+)?$/iu;
+/** Words that compare a price with another ("$30 more than Starter", "$20 less per month than…"). */
+const COMPARING = new Set([
+  'more',
+  'less',
+  'cheaper',
+  'pricier',
+  'than',
+  'mehr',
+  'weniger',
+  'günstiger',
+  'teurer',
+  'als',
+  'daha',
+  'moins',
+  'más',
+  'menos',
+]);
+/** A price compared with another, within a few words after it: no plan's price. */
+const comparedAfter = (sentence: string, price: PagePrice) =>
+  sentence
+    .slice(price.at + price.text.length)
+    .split(/\s+/)
+    .slice(0, 5)
+    .some((word) => COMPARING.has(word.toLowerCase().replace(/[^\p{L}]/gu, '')));
 /** Where a name is in a sentence, as whole words: each start. */
 const namedAt = (sentence: string, name: string) =>
   name.trim().length > 2
@@ -296,25 +329,49 @@ const namedAt = (sentence: string, name: string) =>
 const TRIAL_DAYS = [
   /(?<!\d)(\d{1,3})[\s-]?days?[\s-]+(?:free\s+)?trial/iu,
   /trial\s+(?:of|for|lasts?|is)\s+(\d{1,3})\s+days?(?!\p{L})/iu,
-  /free\s+for\s+(\d{1,3})\s+days?(?!\p{L})/iu,
   /(?<!\d)(\d{1,3})\s+günlük\s+(?:ücretsiz\s+)?deneme/iu,
   /(?<!\d)(\d{1,3})[\s-]?(?:tage|tägige)\s+(?:kostenlose\s+)?(?:testphase|testversion)/iu,
 ];
 const TRIAL_WEEKS = [
   /(?<!\d)(\d{1,2})[\s-]?weeks?[\s-]+(?:free\s+)?trial/iu,
   /trial\s+(?:of|for|lasts?|is)\s+(\d{1,2})\s+weeks?(?!\p{L})/iu,
-  /free\s+for\s+(\d{1,2})\s+weeks?(?!\p{L})/iu,
 ];
+/**
+ * "Free for 14 days": a trial only in a sentence that says "trial", or
+ * after "try" or "use" and the brand ("Ledgerly keeps your files free for
+ * 30 days", "priority support free for 30 days" are no trial).
+ */
+const FREE_FOR: [RegExp, number][] = [
+  [/free\s+for\s+(\d{1,3})\s+days?(?!\p{L})/iu, 1],
+  [/free\s+for\s+(\d{1,2})\s+weeks?(?!\p{L})/iu, 7],
+];
+const SAYS_TRIAL = /trial|deneme|testphase|testversion/iu;
 /** A trial said of the brand's plans: "your free trial", "every plan". */
 const OWN_TRIAL =
   /\b(?:your|our)\s+(?:free\s+)?trial\b|\b(?:every|all|each)\s+plans?\b|\bher\s+plan|\btüm\s+planlar/iu;
-/** Every trial length a text gives, in days. */
-const trialLengths = (text: string) => [
+/** A trial length a text gives, in days, and where it is. */
+interface TrialLength {
+  days: number;
+  at: number;
+}
+/** Every trial length a text gives; "free for N days" where `tried` says it's a trial there. */
+const trialLengths = (text: string, tried: (before: string) => boolean): TrialLength[] => [
   ...TRIAL_DAYS.flatMap((re) =>
-    [...text.matchAll(new RegExp(re.source, 'giu'))].map((m) => Number(m[1])),
+    [...text.matchAll(new RegExp(re.source, 'giu'))].map((m) => ({
+      days: Number(m[1]),
+      at: m.index,
+    })),
   ),
   ...TRIAL_WEEKS.flatMap((re) =>
-    [...text.matchAll(new RegExp(re.source, 'giu'))].map((m) => Number(m[1]) * 7),
+    [...text.matchAll(new RegExp(re.source, 'giu'))].map((m) => ({
+      days: Number(m[1]) * 7,
+      at: m.index,
+    })),
+  ),
+  ...FREE_FOR.flatMap(([re, unit]) =>
+    [...text.matchAll(new RegExp(re.source, 'giu'))]
+      .filter((m) => tried(text.slice(0, m.index)))
+      .map((m) => ({ days: Number(m[1]) * unit, at: m.index })),
   ),
 ];
 /**
@@ -338,21 +395,29 @@ const TURN =
  */
 const foundedOf = (brandName: string, we: boolean) => {
   const name = brandName.trim().length > 2 ? escape(brandName.trim()) : null;
-  const who = (...ours: string[]) => [...(name ? [name] : []), ...(we ? ours : [])].join('|');
-  const start = `(?:^|[,;:(–—]\\s*|(?<![\\p{L}\\p{N}])(?:and|since|when|after|as|ve)\\s+)`;
-  return [
+  const nameStart = `(?:^|[,;:(–—]\\s*|(?<![\\p{L}\\p{N}])(?:and|since|when|after|as|ve)\\s+)`;
+  // "We" only at the sentence's start or after since/when/after/and: after
+  // a colon it may be someone quoted without quote marks ("Acme's CEO told
+  // us: we were founded in 2018").
+  const weStart = `(?:^|(?<![\\p{L}\\p{N}])(?:and|since|when|after|ve)\\s+)`;
+  const forms: [string[], string][] = [
     [
-      who('we', 'our\\s+company'),
+      ['we', 'our\\s+company'],
       `\\s+(?:was|were)\\s+(?:founded|established)\\s+(?:in\\s+)?((?:18|19|20)\\d{2})(?!\\d)`,
     ],
     [
-      who('biz', 'şirketimiz'),
+      ['biz', 'şirketimiz'],
       `\\s+((?:18|19|20)\\d{2})['’]?(?:de|da|te|ta)?\\s+(?:yılında\\s+)?kurul(?:du|muştur|duk)`,
     ],
-    [who('wir'), `\\s+(?:wurde|wurden)\\s+(?:im\\s+jahr\\s+)?((?:18|19|20)\\d{2})\\s+gegründet`],
-  ]
-    .filter(([whom]) => whom)
-    .map(([whom, said]) => new RegExp(`${start}(?:${whom})${said}`, 'iu'));
+    [['wir'], `\\s+(?:wurde|wurden)\\s+(?:im\\s+jahr\\s+)?((?:18|19|20)\\d{2})\\s+gegründet`],
+  ];
+  return forms.flatMap(([ours, said]) => {
+    const who = [
+      ...(name ? [`${nameStart}(?:${name})`] : []),
+      ...(we ? [`${weStart}(?:${ours.join('|')})`] : []),
+    ];
+    return who.length ? [new RegExp(`(?:${who.join('|')})${said}`, 'iu')] : [];
+  });
 };
 /** Quoted speech in a sentence. */
 const QUOTED = /["“”«»„]/u;
@@ -457,20 +522,30 @@ export function factMismatches({
         paired.add(place.plan);
       }
       const names = namedAt(sentence, brandName);
+      // What is said between a name and its price, its currency mark aside.
+      const between = (end: number, price: PagePrice) =>
+        sentence.slice(end, price.at).replace(/[$€£¥₹₺]\s*$/u, '');
       for (const price of sure ? found : []) {
         const nearest = places.length ? (planOf.get(price.at) ?? null) : null;
         if (places.length && !nearest) continue;
-        // No plan named: only a price said right after the brand's name.
+        // A named plan's price: right after its name, as the brand's is.
         if (
-          !nearest &&
-          !names.some(
-            (n) =>
-              n.end <= price.at &&
-              PRICED_AFTER_NAME.test(sentence.slice(n.end, price.at).replace(/[$€£¥₹₺]\s*$/u, '')),
+          nearest &&
+          !(
+            nearest.at < price.at &&
+            PRICED_AFTER_PLAN.test(between(nearest.at + nearest.plan.length, price))
           )
         ) {
           continue;
         }
+        // No plan named: only a price said right after the brand's name.
+        if (
+          !nearest &&
+          !names.some((n) => n.end <= price.at && PRICED_AFTER_NAME.test(between(n.end, price)))
+        ) {
+          continue;
+        }
+        if (comparedAfter(sentence, price)) continue;
         let pool = prices.filter(
           (p) => p.value.currency === price.currency && (!nearest || p.value.plan === nearest.plan),
         );
@@ -494,16 +569,34 @@ export function factMismatches({
     if (trials.length && (brand || OWN_TRIAL.test(sentence))) {
       // Two different trial lengths in the sentence (another brand's beside
       // the brand's, "…; Ledgerly's runs for 14 days") say nothing sure.
-      const owned = (text: string, trial: boolean) =>
+      const owned = (text: string, trial: boolean): TrialLength[] =>
         [...text.matchAll(OWNED_LENGTH)]
           .filter((m) => !trial || /trial/iu.test(m[0]))
-          .map((m) => Number(m[1]) * (/^week/i.test(m[2]) ? 7 : 1));
-      const lengths = new Set([...trialLengths(sentence), ...owned(sentence, false)]);
+          .map((m) => ({ days: Number(m[1]) * (/^week/i.test(m[2]) ? 7 : 1), at: m.index }));
+      // "Free for N days" is a trial in a sentence that says so, or after "try Ledgerly".
+      const tryBrand =
+        brandName.trim().length > 2
+          ? new RegExp(`(?:try|use)\\s+${escape(brandName.trim())}\\s+$`, 'iu')
+          : null;
+      const tried = (before: string) => SAYS_TRIAL.test(sentence) || !!tryBrand?.test(before);
+      const lengths = new Set(
+        [...trialLengths(sentence, tried), ...owned(sentence, false)].map((l) => l.days),
+      );
+      // In a part that is the brand's, only a length after its name or "your
+      // trial", "every plan" ("Unlike Acme's 30-day trial, Ledgerly's needs no
+      // card" is Acme's).
       const own = new Set(
-        sentence
-          .split(TURN)
-          .filter((part) => named(part, brandName) || OWN_TRIAL.test(part))
-          .flatMap((part) => [...trialLengths(part), ...owned(part, true)]),
+        sentence.split(TURN).flatMap((part) => {
+          const anchors = [
+            ...namedAt(part, brandName).map((n) => n.at),
+            ...[...part.matchAll(new RegExp(OWN_TRIAL.source, 'giu'))].map((m) => m.index),
+          ];
+          if (!anchors.length) return [];
+          const from = Math.min(...anchors);
+          return [...trialLengths(part, tried), ...owned(part, true)]
+            .filter((l) => l.at >= from)
+            .map((l) => l.days);
+        }),
       );
       const days = lengths.size === 1 && own.size === 1 ? [...own][0] : null;
       if (days) {

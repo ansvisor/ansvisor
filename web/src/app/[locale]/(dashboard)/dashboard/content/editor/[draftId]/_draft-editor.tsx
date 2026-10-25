@@ -881,7 +881,7 @@ export function DraftEditor({
   // The score the header and the panel show (CE-039): once the reads that
   // move it are in, or failed (the authors and, in phase 2, Your input for
   // E-E-A-T; the site's trust, the sources, the links and, in phase 2, the
-  // claims and the sites' kinds for Trust). Until the first time it says
+  // claims, the sites' kinds and the brand's facts for Trust). Until the first time it says
   // it's reading; after, it keeps the last settled score while new reads
   // land (a link added, the agent's page), so it never jumps through the
   // partial averages on the way.
@@ -894,6 +894,8 @@ export function DraftEditor({
     linksPending === 0 &&
     !claimsRead.reading &&
     !sourcesReading &&
+    // Phase 2: the brand's approved facts, which Trust checks the page against.
+    !(sourcesOn && factsState.status === 'loading') &&
     // Phase 2 reads the page as saved: an edit's score waits for its save.
     !(sourcesOn && saving);
   const [shownQuality, setShownQuality] = useState<{ score: number | null } | null>(null);

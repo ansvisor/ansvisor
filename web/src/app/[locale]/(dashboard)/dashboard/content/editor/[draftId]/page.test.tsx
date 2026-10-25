@@ -2693,6 +2693,41 @@ describe('the side panel', () => {
       }
     });
 
+    it('holds the score until the brand’s facts are read: Trust checks the page against them', async () => {
+      process.env.NEXT_PUBLIC_CONTENT_QUALITY_PHASE = '2';
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+      try {
+        getContentAuthors.mockResolvedValue({
+          authors: [],
+          brands: [{ id: 'b1', name: 'Acme' }],
+          me: { id: 'u1', role: 'admin' },
+        });
+        let factsIn: (value: unknown) => void = () => {};
+        getBrandFacts.mockReturnValue(new Promise((resolve) => (factsIn = resolve)));
+        getContentDraft.mockResolvedValue(readable);
+        window.innerWidth = 1440;
+        await renderPage();
+        await act(async () => void (await vi.advanceTimersByTimeAsync(3_000)));
+        // Every other read is in: the facts still hold it.
+        expect(qualityChip()?.textContent).toBe('Quality · reading…');
+        await act(async () =>
+          factsIn({
+            facts: [],
+            pages: [],
+            checkedAt: null,
+            recheckAt: null,
+            paused: false,
+            noDomain: false,
+          }),
+        );
+        expect(qualityChip()?.textContent).toMatch(
+          /^Quality \d+ · (Strong|Can improve|Needs work)$/,
+        );
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
     it('holds the score while an edit waits for its save: phase 2 reads the page as saved', async () => {
       process.env.NEXT_PUBLIC_CONTENT_QUALITY_PHASE = '2';
       vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
