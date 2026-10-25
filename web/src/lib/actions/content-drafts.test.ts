@@ -26,6 +26,10 @@ let rpcCalls: [string, unknown][];
 let rpcResult: { data: unknown; error: { message: string } | null };
 // What an upsert answers (an own image's confirm).
 let upsertError: { code: string; message: string } | null;
+// Reads answered in turn, each with its own rows, when a test needs them (the catalog's).
+let queue: Record<string, unknown>[][];
+// A read that fails, when a test needs one.
+let readError: string | null;
 
 vi.mock('@/lib/action-center/assignees', () => ({ readAssignees: vi.fn(async () => new Map()) }));
 vi.mock('@/lib/supabase/admin', () => ({ supabaseAdmin: {} }));
@@ -57,15 +61,23 @@ vi.mock('@/lib/supabase/server', () => ({
         eq: (col: string, v: unknown) => (call.filters.push(['eq', col, v]), chain),
         in: (col: string, v: unknown) => (call.filters.push(['in', col, v]), chain),
         gte: (col: string, v: unknown) => (call.filters.push(['gte', col, v]), chain),
+        is: (col: string, v: unknown) => (call.filters.push(['is', col, v]), chain),
+        ilike: (col: string, v: unknown) => (call.filters.push(['ilike', col, v]), chain),
         or: (v: string) => (call.filters.push(['or', v, null]), chain),
         order: () => chain,
         // The list, by its batch when one is asked for; the first row alone
         // when the read is for one (the latest batch).
         limit: () => {
+          if (readError) {
+            const failed = { data: null, error: { message: readError } };
+            return Object.assign(Promise.resolve(failed), { maybeSingle: async () => failed });
+          }
           const batch = call.filters.find(([op, col]) => op === 'eq' && col === 'batch_id');
-          const rows = batch
-            ? list.filter((r) => (r as { batch_id?: unknown }).batch_id === batch[2])
-            : list;
+          const rows = queue.length
+            ? queue.shift()!
+            : batch
+              ? list.filter((r) => (r as { batch_id?: unknown }).batch_id === batch[2])
+              : list;
           return Object.assign(Promise.resolve({ data: rows, error: null }), {
             maybeSingle: async () => ({ data: rows[0] ?? null, error: null }),
           });
@@ -80,7 +92,8 @@ vi.mock('@/lib/supabase/server', () => ({
         // A read awaited as it is: the list.
         then: (resolve: (value: unknown) => void) =>
           resolve(call.op === 'select' ? { data: list, error: null } : result()),
-        maybeSingle: async () => result(),
+        maybeSingle: async () =>
+          queue.length ? { data: queue.shift()![0] ?? null, error: null } : result(),
         single: async () => result(),
       };
       return chain;
@@ -111,6 +124,7 @@ const {
   getOwnImages,
   confirmDraftItem,
   getDraftConfirmations,
+  getCatalogMatch,
   setContentDraftReviewer,
 } = await import('./content-drafts');
 const { bodyHash } = await import('@/lib/content/editor');
@@ -122,6 +136,8 @@ beforeEach(() => {
   row = null;
   list = [];
   upsertError = null;
+  queue = [];
+  readError = null;
   rpcCalls = [];
   rpcResult = { data: 'v-new', error: null };
   completeDraftTasks.mockReset().mockResolvedValue(0);
@@ -1079,5 +1095,118 @@ describe('fixDraftRules', () => {
     }
     vi.unstubAllGlobals();
     await expect(fixDraftRules('../etc', BRAND, request)).resolves.toEqual({ error: 'failed' });
+  });
+});
+
+describe('getCatalogMatch (Quality CE-053)', () => {
+  const variant = {
+    price: '129.00',
+    sale_price: null,
+    currency: 'USD',
+    availability: 'in_stock',
+    gtin: '00012345678905',
+  };
+
+  it('says when the brand has no catalog, and fails soft', async () => {
+    queue = [[{ brand_id: 'b1', source_url: null }], []];
+    expect(await getCatalogMatch(DRAFT, 'Ridge 28')).toEqual({ connected: false, product: null });
+    expect(await getCatalogMatch('d1', 'Ridge 28')).toBeNull();
+    // A read that fails: null, said in the log.
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+    queue = [[{ brand_id: 'b1', source_url: null }]];
+    readError = 'permission denied';
+    expect(await getCatalogMatch(DRAFT, 'Ridge 28')).toBeNull();
+    expect(log).toHaveBeenCalledWith('Failed to read the catalog:', expect.any(Error));
+    log.mockRestore();
+  });
+
+  it('finds the page’s product by its URL as the feed writes it', async () => {
+    queue = [
+      [{ brand_id: 'b1', source_url: 'https://www.acme.com/products/ridge-28/' }],
+      [{ id: 'p0' }],
+      // Narrowed by the path: another product's longer URL isn't the page's.
+      [
+        { id: 'p9', url: 'https://acme.com/products/ridge-28-pro' },
+        { id: 'p1', url: 'https://acme.com/products/ridge-28?variant=42' },
+      ],
+      [{ title: 'Ridge 28', url: 'https://acme.com/products/ridge-28' }],
+      [variant],
+    ];
+    expect(await getCatalogMatch(DRAFT, 'Not its name')).toEqual({
+      connected: true,
+      product: {
+        title: 'Ridge 28',
+        url: 'https://acme.com/products/ridge-28',
+        via: 'url',
+        variants: [
+          {
+            price: 129,
+            salePrice: null,
+            currency: 'USD',
+            availability: 'in_stock',
+            gtin: '00012345678905',
+          },
+        ],
+      },
+    });
+    expect(calls.flatMap((c) => c.filters).filter(([op]) => op === 'ilike')).toEqual([
+      ['ilike', 'url', '%/products/ridge-28%'],
+    ]);
+  });
+
+  it('finds a variant with its own page by its URL, when no product has it (CE-053 review)', async () => {
+    queue = [
+      [{ brand_id: 'b1', source_url: 'https://acme.com/products/boot-blue' }],
+      [{ id: 'p0' }],
+      // The product's URL is its first item's ("boot-red").
+      [],
+      [{ product_id: 'p2', url: 'https://acme.com/products/boot-blue?variant=7' }],
+      [{ title: 'Boot', url: 'https://acme.com/products/boot-red' }],
+      [],
+    ];
+    expect(await getCatalogMatch(DRAFT, 'Boot in blue')).toEqual({
+      connected: true,
+      product: {
+        title: 'Boot',
+        url: 'https://acme.com/products/boot-red',
+        via: 'url',
+        variants: [],
+      },
+    });
+  });
+
+  it('looks a path up as written and as an address encodes it', async () => {
+    queue = [
+      [{ brand_id: 'b1', source_url: 'https://acme.com.tr/%C3%BCr%C3%BCn' }],
+      [{ id: 'p0' }],
+      [{ id: 'p1', url: 'https://acme.com.tr/ürün' }],
+      [],
+      [{ title: 'Ürün', url: 'https://acme.com.tr/ürün' }],
+      [],
+    ];
+    expect((await getCatalogMatch(DRAFT, 'x'))?.product?.via).toBe('url');
+    expect(calls.flatMap((c) => c.filters).filter(([op]) => op === 'ilike')).toEqual([
+      ['ilike', 'url', '%/ürün%'],
+      // Its "%" escaped: a literal one, not a wildcard.
+      ['ilike', 'url', '%/\\%C3\\%BCr\\%C3\\%BCn%'],
+    ]);
+  });
+
+  it('finds it by its title when one product has it, its words matched as written', async () => {
+    queue = [
+      [{ brand_id: 'b1', source_url: null }],
+      [{ id: 'p0' }],
+      [{ id: 'p1' }],
+      [{ title: 'Ridge_28 100%', url: null }],
+      [],
+    ];
+    expect(await getCatalogMatch(DRAFT, ' Ridge_28 100% ')).toEqual({
+      connected: true,
+      product: { title: 'Ridge_28 100%', url: null, via: 'name', variants: [] },
+    });
+    expect(calls.flatMap((c) => c.filters)).toContainEqual(['ilike', 'title', 'Ridge\\_28 100\\%']);
+    // Two products by that name: whose page this is isn't sure.
+    queue = [[{ brand_id: 'b1', source_url: null }], [{ id: 'p0' }], [{ id: 'p1' }, { id: 'p2' }]];
+    expect(await getCatalogMatch(DRAFT, 'Ridge 28')).toEqual({ connected: true, product: null });
   });
 });

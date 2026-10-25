@@ -32,6 +32,7 @@ import { SITE_PAGE_TYPES, type SiteType } from '@/lib/content/page-types';
 import {
   MAX_TEXT_RULE_LENGTH,
   RULE_GROUPS,
+  notForAgentMessage,
   openRulesForAgent,
   lengthOutOfReach,
   rewriteAdvice,
@@ -252,14 +253,16 @@ export function RulesTab({
   const outOfReach = pageRewrite ? lengthOutOfReach(state.rules, pageRewrite.kept ?? 0) : null;
   // The rules the page doesn't meet now, in the tab's order, and those the agent fixes.
   const open = state.rules.filter(({ rule, status }) => rule.on && status.state === 'bad');
-  const fixable = openRulesForAgent(state.rules).forAgent.length;
+  const { forAgent, notForAgent } = openRulesForAgent(state.rules);
+  const fixable = forAgent.length;
   // Run Agent's choice: the safe default, or the whole page (▾) while it is offered.
   const [picked, setPicked] = useState<RunMode>('fix');
   const mode: RunMode = picked === 'rewrite' && pageRewrite ? 'rewrite' : 'fix';
   const runner = mode === 'rewrite' ? pageRewrite : agentFix;
   // Why Run Agent can't run its choice now, said under the card.
   const blocked =
-    runner?.blocked ?? (mode === 'fix' && fixable === 0 ? tSuggestions('notForAgent') : null);
+    runner?.blocked ??
+    (mode === 'fix' && fixable === 0 ? tSuggestions(notForAgentMessage(notForAgent)) : null);
 
   // A draft on My rules for a type the workspace has none for (its type
   // changed, or My rules couldn't be read) shows Ansvisor's set for it.

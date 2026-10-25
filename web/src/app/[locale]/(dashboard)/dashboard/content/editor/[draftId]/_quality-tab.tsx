@@ -30,8 +30,12 @@ import {
   type ReadabilityCheck,
 } from '@/lib/content/readability';
 import { SITE_TRUST_PATH, siteTrustMissing, type SiteTrust } from '@/lib/content/site-trust';
+import { CATALOG_SETTINGS_PATH } from '@/lib/content/feed-match';
 import { cn } from '@/lib/utils';
 import { MANAGE_AUTHORS_PATH } from './_author-menu';
+
+/** The intro's sentences its to-do quotes, at most (CE-054). */
+const INTRO_QUOTED = 3;
 
 /** What Quality reads from the draft and its author, for the segment and the header. */
 export interface QualityRead {
@@ -45,6 +49,12 @@ export interface QualityRead {
    * it was detected (not picked), and its profile; left out before.
    */
   weightsFor?: { type: string | null; detected: boolean; profile: QualityProfile } | null;
+  /**
+   * Phase 3 (CE-053): why a product page isn't checked against a product
+   * feed: no catalog connected, or none of its products is the page's;
+   * null where it is checked, or isn't a product page.
+   */
+  feed?: 'none' | 'notFound' | null;
   /** The page's Readability as written, or null before it is read. */
   readability: Readability | null;
   /** E-E-A-T from the author, or null before the authors are read. */
@@ -151,6 +161,7 @@ export function QualityTab({
   onPickReviewer,
   onAddCheckDate,
   onConfirmCase,
+  onConfirmIntro,
   handOff = null,
   onConfirmAuthor,
   onChangeType,
@@ -184,6 +195,8 @@ export function QualityTab({
   onAddCheckDate?: () => void;
   /** A customer case's Confirm: the person says the customer may be named (CE-052). */
   onConfirmCase?: (key: string) => void;
+  /** Phase 3 (CE-054): confirms a category intro's facts, all at once. */
+  onConfirmIntro?: () => void;
   /** Hand it off to Content Agent (CE-051): with Quality's phase 2. */
   handOff?: HandOff | null;
 }) {
@@ -253,6 +266,22 @@ export function QualityTab({
             )}
           </p>
         )}
+        {quality.feed && (
+          <p className="text-xs text-muted-foreground">
+            {t(`feed.${quality.feed}`)}
+            {quality.feed === 'none' && (
+              <>
+                {' '}
+                <Link
+                  href={CATALOG_SETTINGS_PATH}
+                  className="font-medium text-foreground underline-offset-2 hover:underline"
+                >
+                  {t('feed.connect')}
+                </Link>
+              </>
+            )}
+          </p>
+        )}
         {readability?.score === null && (
           <p className="rounded-xl border border-dashed px-3 py-2.5 text-xs text-muted-foreground">
             {t(readability?.unscored === 'language' ? 'notThisLanguage' : 'tooShort')}
@@ -283,6 +312,7 @@ export function QualityTab({
                 onPickReviewer={onPickReviewer}
                 onAddCheckDate={onAddCheckDate}
                 onConfirmCase={onConfirmCase}
+                onConfirmIntro={onConfirmIntro}
                 onConfirm={onConfirmAuthor}
               />
             ))}
@@ -443,6 +473,23 @@ export function useTodoCopy() {
                 : t('byline.detail.pickAuthor', { byline: team }),
       };
     }
+    // A category intro's counts and prices (CE-054): only the person knows them.
+    if (todo.id === 'introFacts') {
+      const facts = todo.facts ?? [];
+      return {
+        title: t('introFacts.title'),
+        next: t('introFacts.next'),
+        detail: todo.done
+          ? t('introFacts.done')
+          : t('introFacts.detail', {
+              facts: facts
+                .slice(0, INTRO_QUOTED)
+                .map((fact) => `“${fact}”`)
+                .join(' '),
+              more: Math.max(0, facts.length - INTRO_QUOTED),
+            }),
+      };
+    }
     // The page's own claims, their proof asked for by kind and business (CE-049).
     // A customer case in Phase 3 (CE-052): confirmed publishable, not linked.
     if (todo.id === 'proof' && todo.proof && todo.action === 'confirmCase') {
@@ -596,6 +643,7 @@ function TodoRow({
   onPickReviewer,
   onAddCheckDate,
   onConfirmCase,
+  onConfirmIntro,
   onConfirm,
 }: {
   todo: QualityTodo;
@@ -612,6 +660,8 @@ function TodoRow({
   onAddCheckDate?: () => void;
   /** A customer case's Confirm: the person says the customer may be named (CE-052). */
   onConfirmCase?: (key: string) => void;
+  /** Phase 3 (CE-054): confirms a category intro's facts, all at once. */
+  onConfirmIntro?: () => void;
   onConfirm?: (what: 'real' | 'profile', on: boolean) => void;
 }) {
   const t = useTranslations('contentEditor.editor.quality');
@@ -743,6 +793,12 @@ function TodoRow({
               className="h-7 shrink-0"
               onClick={() => onConfirmCase(todo.key!)}
             >
+              {t('confirmCase')}
+            </Button>
+          )
+        ) : todo.action === 'confirmIntro' ? (
+          onConfirmIntro && (
+            <Button variant="outline" size="sm" className="h-7 shrink-0" onClick={onConfirmIntro}>
               {t('confirmCase')}
             </Button>
           )
@@ -918,6 +974,26 @@ export function trustSuggestions(
       count: trust.mismatches.length,
       detail: t('checks.brandFacts.detail', { count: trust.mismatches.length }),
       show: first.sentence,
+    });
+  }
+  // Phase 3 (CE-053): the person checks which is right, the page or the
+  // feed: Hand off leaves it (it isn't one of its keys).
+  const feed = trust.feed ?? [];
+  if (feed.length) {
+    const [first] = feed;
+    out.push({
+      key: 'trust:feedMatch',
+      check: 'feedMatch',
+      score: 'trust',
+      gain: trustGain(trust, ['feedMatch']),
+      line: t('checks.feedMatch.line', {
+        kind: first.kind,
+        page: first.page,
+        feed: first.feed,
+      }),
+      count: feed.length,
+      detail: t('checks.feedMatch.detail', { count: feed.length }),
+      show: first.sentence || null,
     });
   }
   if (trust.stale.length) {
