@@ -11,10 +11,11 @@ export function fakeDb() {
     return tables.get(name);
   };
   const writes = [];
-  const uniqueKey = (table, row) =>
-    table === 'catalog_categories'
-      ? `${row.brand_id}|${row.name}`
-      : `${row.brand_id}|${row.source}|${row.external_id}`;
+  const uniqueKey = (table, row) => {
+    if (table === 'catalog_categories') return `${row.brand_id}|${row.name}`;
+    if (table === 'catalog_source_credentials') return row.source_id;
+    return `${row.brand_id}|${row.source}|${row.external_id}`;
+  };
   // The unique keys' rows, by table, as the database's unique indexes find them.
   const byKey = new Map();
   const keyed = (table) => {
@@ -23,17 +24,28 @@ export function fakeDb() {
   };
 
   function from(table) {
-    const state = { filters: [], range: null, op: 'select', payload: null, returning: null };
+    const state = {
+      filters: [],
+      range: null,
+      op: 'select',
+      payload: null,
+      returning: null,
+      one: null,
+    };
     const run = () => {
       const all = rows(table);
       const match = (row) =>
-        state.filters.every(([kind, column, value]) =>
-          kind === 'eq' ? row[column] === value : value.includes(row[column]),
-        );
+        state.filters.every(([kind, column, value]) => {
+          if (kind === 'eq') return row[column] === value;
+          if (kind === 'neq') return row[column] !== value;
+          return value.includes(row[column]);
+        });
       if (state.op === 'select') {
         const found = all.filter(match).sort((a, b) => (a.id < b.id ? -1 : 1));
         const [start, end] = state.range ?? [0, found.length];
-        return { data: found.slice(start, end + 1), error: null };
+        const data = found.slice(start, end + 1);
+        if (state.one) return { data: data[0] ?? null, error: null };
+        return { data, error: null };
       }
       writes.push({
         table,
@@ -42,7 +54,7 @@ export function fakeDb() {
       });
       if (state.op === 'upsert') {
         const out = [];
-        for (const values of state.payload) {
+        for (const values of [state.payload].flat()) {
           const key = uniqueKey(table, values);
           let row = keyed(table).get(key);
           if (row) Object.assign(row, values);
@@ -56,8 +68,9 @@ export function fakeDb() {
         return { data: out, error: null };
       }
       if (state.op === 'insert') {
-        for (const values of state.payload) all.push({ id: randomUUID(), ...values });
-        return { data: null, error: null };
+        const added = [state.payload].flat().map((values) => ({ id: randomUUID(), ...values }));
+        all.push(...added);
+        return { data: state.one ? added[0] : null, error: null };
       }
       if (state.op === 'update') {
         for (const row of all.filter(match)) Object.assign(row, state.payload);
@@ -76,6 +89,18 @@ export function fakeDb() {
       select: () => builder,
       eq: (column, value) => {
         state.filters.push(['eq', column, value]);
+        return builder;
+      },
+      neq: (column, value) => {
+        state.filters.push(['neq', column, value]);
+        return builder;
+      },
+      single: () => {
+        state.one = 'single';
+        return builder;
+      },
+      maybeSingle: () => {
+        state.one = 'maybe';
         return builder;
       },
       in: (column, values) => {

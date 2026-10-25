@@ -7,6 +7,7 @@ Thank you for your interest in contributing to Ansvisor! This guide will help yo
 - **Bug reports** — found something broken? Open an issue.
 - **Feature requests** — have an idea? Start a discussion or open an issue.
 - **Code contributions** — fix a bug or implement a feature via pull request.
+- **Store connectors** — bring a store's or marketplace's products into the catalog; see [CONNECTORS.md](CONNECTORS.md).
 - **Documentation** — improve guides, fix typos, add examples.
 
 ## Prerequisites

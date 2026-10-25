@@ -1,15 +1,23 @@
 /**
- * A brand's catalog sources (#1263, 00279), as Settings › Integrations shows
- * them: a feed URL the API reads daily, or the file a person uploads.
+ * A brand's catalog sources (#1263, 00279, 00282), as Settings › Integrations
+ * shows them: a feed URL the API reads daily, the file a person uploads, or
+ * a store connected with its sign-in, whose kind is its connector's.
  */
 
-export type CatalogSourceKind = 'feed_url' | 'upload';
+export type CatalogSourceKind = 'feed_url' | 'upload' | (string & {});
 export type CatalogFormat = 'auto' | 'google_xml' | 'csv' | 'meta_csv';
-export type CatalogSyncStatus = 'ok' | 'failed' | 'format_error';
+/** `auth_failed`: the store refused the saved sign-in. */
+export type CatalogSyncStatus = 'ok' | 'failed' | 'format_error' | 'auth_failed';
+
+/** Whether a source is a store, read with its sign-in, rather than a feed or an upload. */
+export function isStoreSource(kind: CatalogSourceKind): boolean {
+  return kind !== 'feed_url' && kind !== 'upload';
+}
 
 /** What a sync did, as the API records it on the source (`last_counts`). */
 export interface CatalogCounts {
-  format: Exclude<CatalogFormat, 'auto'>;
+  /** A feed's format, or a store's kind. */
+  format: string;
   items: number;
   skipped: number;
   /** The first products skipped, and why ("Row 3: price is missing."). */
@@ -23,6 +31,10 @@ export interface CatalogSource {
   kind: CatalogSourceKind;
   format: CatalogFormat;
   url: string | null;
+  /** A store's account as the person knows it (a shop's domain); null for feeds and uploads. */
+  account: string | null;
+  /** A store's name, as the store gave it when connected. */
+  label: string | null;
   lastSyncedAt: string | null;
   lastStatus: CatalogSyncStatus | null;
   lastError: string | null;
