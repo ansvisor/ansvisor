@@ -19,7 +19,7 @@ import { READABILITY_WEIGHTS, type ReadabilityCheckId } from './readability';
  *
  * A weight of 0 leaves the check out, and the score is rescaled over the
  * rest, as for a check not live yet. Ansvisor estimates, until calibrated
- * with citation data (CE-055): QUALITY_WEIGHTS_VERSION names the set.
+ * with citation data (CE-055).
  */
 
 export const QUALITY_PROFILES = [
@@ -30,9 +30,6 @@ export const QUALITY_PROFILES = [
   'comparison',
 ] as const;
 export type QualityProfile = (typeof QUALITY_PROFILES)[number];
-
-/** The weights in use: bumped when calibration (CE-055) changes them. */
-export const QUALITY_WEIGHTS_VERSION = 1;
 
 const BY_TYPE: Readonly<Record<string, QualityProfile>> = {
   product_page: 'product',
@@ -90,10 +87,10 @@ export const PROFILE_WEIGHTS: Readonly<Record<QualityProfile, ProfileWeights>> =
       checkDate: 0,
     },
     trust: {
-      claimsSourced: 30,
+      claimsSourced: 25,
       primarySources: 5,
       noWeakSources: 5,
-      brandFacts: 25,
+      brandFacts: 30,
       expertQuote: 0,
       freshSources: 0,
       balanced: 0,
@@ -246,6 +243,14 @@ export function checksOff(profile: QualityProfile): ReadonlySet<string> {
 }
 
 /**
+ * Whether a profile's E-E-A-T waits for the site's trust: it weighs the
+ * brand's own information (a category page's 40), and a score from the
+ * images alone would jump once the site is read.
+ */
+export const waitsForSiteTrust = (profile: QualityProfile) =>
+  PROFILE_WEIGHTS[profile].eeat.brandInfo > 0;
+
+/**
  * A score's checks weighed for a profile: each keeps its share of its
  * points (half of them stays half), out of the profile's weight; one
  * weighing 0 is left out, and the score rescaled over the rest. A score
@@ -270,17 +275,23 @@ export function weighed<Id extends string, S extends Score<Id>>(
 /**
  * Trust weighed for a profile, scored as trust() scores it: once a figure
  * or fresh-sources check is left among the weighed ones, or two sources are
- * placed. A type that leaves those out isn't scored by its links and site
- * alone. Its unscored gains count out of the type's Phase 1 points.
+ * placed; on a type that weighs brand facts as much as sourced claims, once
+ * a price is compared with them too. A type isn't scored by its links and
+ * site alone. Its unscored gains count out of the type's Phase 1 points.
  */
 export function weighedTrust(
   read: TrustRead,
   weights: ProfileWeights['trust'],
 ): TrustRead & { phase1Points: number } {
-  const result = weighed(read, weights);
+  // Scored here, by the weighed checks: trust() leaves it unscored by its own.
+  const result = weighed({ ...read, score: read.score ?? 0 }, weights);
   const scored =
     result.checks.some((c) => c.id === 'claimsSourced' || c.id === 'freshSources') ||
-    read.classified >= 2;
+    read.classified >= 2 ||
+    // Where prices that match weigh as much as sourced claims (a product or a
+    // category page), a compared one is Trust's own: every price wrong isn't "Not scored".
+    (weights.brandFacts >= weights.claimsSourced &&
+      result.checks.some((c) => c.id === 'brandFacts'));
   return {
     ...result,
     score: scored ? result.score : null,

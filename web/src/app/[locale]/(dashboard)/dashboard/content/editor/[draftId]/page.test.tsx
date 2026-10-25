@@ -2595,8 +2595,8 @@ describe('the side panel', () => {
       await act(async () => chip.click());
       const text = panel()!.textContent!;
       expect(text).toContain('Checks and weights for Product page');
-      // The Rules tab's specs table and fit questions, read from the page.
-      expect(text).toMatch(/2 page type rules not met: .*Specs table/);
+      // The Rules tab's specs table, read from the page; no sizes, so no fit questions.
+      expect(text).toMatch(/1 page type rule not met: Specs table/);
       expect(text).toContain('Say how shipping and returns work');
       expect(text).not.toContain('Add an author for the page');
     });

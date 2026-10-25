@@ -31,6 +31,10 @@ describe('handOffInput', () => {
         .success,
     ).toBe(true);
     expect(HANDOFF_CHECKS['readability:typeRules']).toMatch(/never one made up/);
+    // An answer too: fit, sizes, shipping, returns and prices only from the page and the data.
+    expect(HANDOFF_CHECKS['readability:typeRules']).toMatch(
+      /an answer the page and your data don't give \(fit, sizes, shipping, returns, prices\) is a placeholder too/,
+    );
     expect(
       handOffInput.safeParse({ items: [{ key: 'readability:longSentences' }], origin: 'cron' })
         .success,
