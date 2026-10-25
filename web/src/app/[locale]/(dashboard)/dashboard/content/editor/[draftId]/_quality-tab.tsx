@@ -8,7 +8,9 @@ import { Button, buttonVariants } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { normalizeDomain } from '@/lib/citations/classify';
 import type { ContentAuthor } from '@/lib/content/authors';
+import { isPageType } from '@/lib/content/drafts';
 import { BAND_CLASSES, qualityBand } from '@/lib/content/quality';
+import type { QualityProfile } from '@/lib/content/quality-profiles';
 import {
   authorProfile,
   FRESH_MONTHS,
@@ -33,6 +35,11 @@ import { MANAGE_AUTHORS_PATH } from './_author-menu';
 
 /** What Quality reads from the draft and its author, for the segment and the header. */
 export interface QualityRead {
+  /**
+   * Phase 3 (CE-052): the page type the checks and weights follow, whether
+   * it was detected (not picked), and its profile; left out before.
+   */
+  weightsFor?: { type: string | null; detected: boolean; profile: QualityProfile } | null;
   /** The page's Readability as written, or null before it is read. */
   readability: Readability | null;
   /** E-E-A-T from the author, or null before the authors are read. */
@@ -139,8 +146,11 @@ export function QualityTab({
   onPickReviewer,
   handOff = null,
   onConfirmAuthor,
+  onChangeType,
 }: {
   quality: QualityRead;
+  /** Opens the header's page type menu: the checks and weights follow the type (CE-052). */
+  onChangeType?: () => void;
   /** Scrolls the draft to a passage and marks it. */
   onShow: (text: string) => void;
   /** Selects the page's first placeholder, to type over. */
@@ -168,8 +178,9 @@ export function QualityTab({
 }) {
   const t = useTranslations('contentEditor.editor.quality');
   const tSite = useTranslations('audit.siteTrust.checks');
+  const tTypes = useTranslations('contentEditor.pageTypes');
   const format = useFormatter();
-  const { readability, eeat, trust, siteTrust } = quality;
+  const { readability, eeat, trust, siteTrust, weightsFor } = quality;
   const siteMissing = siteTrust ? siteTrustMissing(siteTrust) : [];
   const scores: { name: ScoreName; score: number | null; empty: string }[] = [
     { name: 'eeat', score: eeat?.score ?? null, empty: t('notScored') },
@@ -209,6 +220,27 @@ export function QualityTab({
           ))}
         </div>
         <p className="text-xs text-muted-foreground">{t('estimate')}</p>
+        {weightsFor && (
+          <p className="text-xs text-muted-foreground">
+            {t('weightsFor.line', {
+              type: isPageType(weightsFor.type) ? tTypes(weightsFor.type) : t('weightsFor.noType'),
+              detected: weightsFor.detected && isPageType(weightsFor.type) ? 'yes' : 'no',
+            })}{' '}
+            {t(`weightsFor.${weightsFor.profile}`)}
+            {onChangeType && (
+              <>
+                {' '}
+                <button
+                  type="button"
+                  onClick={onChangeType}
+                  className="font-medium text-foreground underline-offset-2 hover:underline"
+                >
+                  {t('weightsFor.change')}
+                </button>
+              </>
+            )}
+          </p>
+        )}
         {readability?.score === null && (
           <p className="rounded-xl border border-dashed px-3 py-2.5 text-xs text-muted-foreground">
             {t(readability?.unscored === 'language' ? 'notThisLanguage' : 'tooShort')}

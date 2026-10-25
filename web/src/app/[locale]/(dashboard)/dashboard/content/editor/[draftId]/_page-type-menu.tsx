@@ -39,6 +39,8 @@ export function PageTypeMenu({
   onPickSite,
   sitePending = false,
   siteGuessed = false,
+  open,
+  onOpenChange,
 }: {
   brandId: string;
   siteType: SiteType;
@@ -55,6 +57,9 @@ export function PageTypeMenu({
   sitePending?: boolean;
   /** The brand has no site type picked yet: the one shown is guessed, as Brand settings says. */
   siteGuessed?: boolean;
+  /** Opened from elsewhere too: Quality's Change (CE-052). */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }) {
   const t = useTranslations('contentEditor.editor');
   const tTypes = useTranslations('contentEditor.pageTypes');
@@ -65,7 +70,7 @@ export function PageTypeMenu({
   const label = current ? tTypes(current) : t('pageType.none');
 
   return (
-    <DropdownMenu>
+    <DropdownMenu open={open} onOpenChange={(next) => onOpenChange?.(next)}>
       <DropdownMenuTrigger
         aria-label={t('pageType.change', { type: label })}
         title={detected ? t('pageType.detectedHint') : (sourceUrl ?? undefined)}

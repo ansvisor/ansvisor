@@ -102,6 +102,7 @@ export function qualityTodos({
   visual = null,
   reviewer = null,
   confirmed = null,
+  off = NONE_OFF,
 }: {
   eeat: Score<EeatCheckId> | null;
   author: ContentAuthor | null;
@@ -143,6 +144,11 @@ export function qualityTodos({
   reviewer?: { topic: 'health' | 'finance' | 'legal'; picked: boolean } | null;
   /** What the person confirmed of the author their site names (00271), or null where they can't. */
   confirmed?: { real: boolean; profile: boolean } | null;
+  /**
+   * Phase 3 (CE-052): the checks the page's type leaves out (checksOff): no
+   * to-do asks for them (a product page has the brand's byline, no author).
+   */
+  off?: ReadonlySet<string>;
 }): QualityTodo[] {
   const fill: QualityTodo[] =
     placeholders.count || placeholders.had
@@ -215,7 +221,8 @@ export function qualityTodos({
     ...(byConfirm ? { confirm: { what: 'real' as const, on: confirmed.real } } : {}),
   };
   const { bio, links } = authorProfile(author);
-  return [
+  const wanted = (todo: QualityTodo) => !off.has(CHECK_OF[todo.id] ?? todo.id);
+  const todos: QualityTodo[] = [
     ...fill,
     byline,
     {
@@ -269,7 +276,12 @@ export function qualityTodos({
     ...review,
     ...facts,
   ];
+  return todos.filter(wanted);
 }
+
+const NONE_OFF: ReadonlySet<string> = new Set();
+/** The check each to-do raises, where its id isn't the check's. */
+const CHECK_OF: Partial<Record<string, string>> = { authorProfile: 'authorBio' };
 
 /** A text's 32-bit FNV-1a hash, in base 36: a short, stable name for it. */
 function shortHash(text: string): string {

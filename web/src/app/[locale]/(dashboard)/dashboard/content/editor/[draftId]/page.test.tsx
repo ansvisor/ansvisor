@@ -2532,6 +2532,47 @@ describe('the side panel', () => {
       vi.useRealTimers();
     });
 
+    it('weighs the checks by the page type in phase 3, and follows a type changed from Quality (CE-052)', async () => {
+      process.env.NEXT_PUBLIC_CONTENT_QUALITY_PHASE = '3';
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+      getContentAuthors.mockResolvedValue({
+        authors: [],
+        brands: [{ id: 'b1', name: 'Acme' }],
+        me: { id: 'u1', role: 'admin' },
+      });
+      // A feature page goes out under the brand: no author asked for.
+      getContentDraft.mockResolvedValue(readable);
+      window.innerWidth = 1440;
+      await renderPage();
+      await act(async () => void (await vi.advanceTimersByTimeAsync(3_000)));
+      const chip = [...container.querySelectorAll<HTMLButtonElement>('header button')].find((b) =>
+        b.textContent?.startsWith('Quality'),
+      )!;
+      await act(async () => chip.click());
+      const line = () =>
+        [...panel()!.querySelectorAll('p')].find((p) =>
+          p.textContent?.startsWith('Checks and weights for'),
+        )!;
+      expect(line().textContent).toContain(
+        'Checks and weights for Feature page: your own screenshots',
+      );
+      const todos = () =>
+        [...panel()!.querySelectorAll('[aria-label="Your to-dos"] li')].map(
+          (li) => li.textContent?.split(' · ')[0],
+        );
+      expect(todos()).not.toContain('Add an author for the page');
+
+      // Change opens the header's menu; a blog post asks for its author.
+      await act(async () => line().querySelector('button')!.click());
+      const blog = [...document.querySelectorAll<HTMLElement>('[role="menuitemradio"]')].find(
+        (item) => item.textContent?.startsWith('Blog post'),
+      )!;
+      await act(async () => blog.click());
+      expect(setContentDraftPageType).toHaveBeenCalledWith('d1', 'blog_post');
+      expect(line().textContent).toContain('Checks and weights for Blog post: an author');
+      expect(todos()).toContain('Add an author for the page');
+    });
+
     it('shows nothing of Quality until its first phase is live', async () => {
       getContentDraft.mockResolvedValue(readable);
       window.innerWidth = 1440;

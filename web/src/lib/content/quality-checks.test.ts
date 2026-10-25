@@ -162,6 +162,9 @@ describe('trust (Phase 1: figures and links)', () => {
     expect(run(linkOnly, working).score).toBeNull();
     expect(trustGain(run(linkOnly, dead), ['noBrokenLinks'])).toBe(8);
     expect(trustGain(run(linkOnly, working), ['noBrokenLinks'])).toBe(0);
+    // Out of the page type's Phase 1 points when weighed for it (CE-052).
+    expect(trustGain({ ...run(linkOnly, dead), phase1Points: 75 }, ['noBrokenLinks'])).toBe(4);
+    expect(trustGain({ ...run(linkOnly, dead), phase1Points: 0 }, ['noBrokenLinks'])).toBe(0);
 
     // With a figure the links count among Trust's live checks: 30 + 0 of 33.
     const withFigure = run(

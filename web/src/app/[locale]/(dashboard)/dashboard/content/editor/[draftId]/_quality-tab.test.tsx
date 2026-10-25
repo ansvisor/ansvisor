@@ -96,6 +96,7 @@ const onAddSource = vi.fn();
 const onConfirmImages = vi.fn();
 const onAddImage = vi.fn();
 const onPickReviewer = vi.fn();
+const onChangeType = vi.fn();
 const onConfirmAuthor = vi.fn();
 
 async function render(quality: QualityRead | Readability | null, handOff: HandOff | null = null) {
@@ -114,6 +115,7 @@ async function render(quality: QualityRead | Readability | null, handOff: HandOf
           onConfirmImages={onConfirmImages}
           onAddImage={onAddImage}
           onPickReviewer={onPickReviewer}
+          onChangeType={onChangeType}
           handOff={handOff}
           onConfirmAuthor={onConfirmAuthor}
         />
@@ -134,6 +136,32 @@ beforeEach(() => {
 afterEach(() => act(() => root.unmount()));
 
 describe('QualityTab', () => {
+  it('says which page type the checks and weights follow, and Change opens its menu (CE-052)', async () => {
+    await render({
+      ...read(result),
+      weightsFor: { type: 'product_page', detected: true, profile: 'product' },
+    });
+    const line = [...container.querySelectorAll('p')].find((p) =>
+      p.textContent?.startsWith('Checks and weights for'),
+    )!;
+    expect(line.textContent).toBe(
+      "Checks and weights for Product page (detected): no author (your brand's), your own product photos, proof for claims, prices that match, short plain copy. Change",
+    );
+    await act(async () => line.querySelector('button')!.click());
+    expect(onChangeType).toHaveBeenCalled();
+    // No page type yet: an article's.
+    await render({
+      ...read(result),
+      weightsFor: { type: null, detected: true, profile: 'article' },
+    });
+    expect(container.textContent).toContain(
+      'Checks and weights for an article (no page type yet): an author with experience',
+    );
+    // Before Phase 3: no line.
+    await render(read(result));
+    expect(container.textContent).not.toContain('Checks and weights for');
+  });
+
   it('shows the three scores with their bands, labelled an Ansvisor estimate', async () => {
     await render(result);
     const scores = container.querySelector('[aria-label="Quality scores"]')!;

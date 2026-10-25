@@ -1,0 +1,247 @@
+import { qualityPhase } from './quality';
+import {
+  EEAT_WEIGHTS,
+  TRUST_WEIGHTS,
+  type EeatCheckId,
+  type Score,
+  type TrustCheckId,
+} from './quality-checks';
+import { READABILITY_WEIGHTS, type ReadabilityCheckId } from './readability';
+
+/**
+ * Page types (Content Editor Quality spec §11, Phase 3, CE-052): the three
+ * scores keep their names, but what each counts, and how much, follows the
+ * page's type. A product page has no author (the brand's byline) and wants
+ * real photos and proof; a category page short copy and real images; a
+ * feature page screenshots and sourced metrics; a comparison balance and a
+ * disclosure. Every other type reads as an article (a blog post or a guide).
+ *
+ * A weight of 0 leaves the check out, and the score is rescaled over the
+ * rest, as for a check not live yet. Ansvisor estimates, until calibrated
+ * with citation data (CE-055): QUALITY_WEIGHTS_VERSION names the set.
+ */
+
+export const QUALITY_PROFILES = [
+  'article',
+  'product',
+  'category',
+  'feature',
+  'comparison',
+] as const;
+export type QualityProfile = (typeof QUALITY_PROFILES)[number];
+
+/** The weights in use: bumped when calibration (CE-055) changes them. */
+export const QUALITY_WEIGHTS_VERSION = 1;
+
+const BY_TYPE: Readonly<Record<string, QualityProfile>> = {
+  product_page: 'product',
+  category_page: 'category',
+  collection_page: 'category',
+  feature_page: 'feature',
+  solution_page: 'feature',
+  integration: 'feature',
+  pricing: 'feature',
+  comparison: 'comparison',
+  alternatives: 'comparison',
+  best_of: 'comparison',
+};
+
+/** The page type's profile: an article for any other type, none, or before Phase 3. */
+export function profileFor(
+  pageType: string | null | undefined,
+  phase: number = qualityPhase(),
+): QualityProfile {
+  return phase >= 3 && pageType ? (BY_TYPE[pageType] ?? 'article') : 'article';
+}
+
+export interface ProfileWeights {
+  eeat: Record<EeatCheckId, number>;
+  trust: Record<TrustCheckId, number>;
+  readability: Record<ReadabilityCheckId, number>;
+}
+
+/**
+ * Each profile's checks and points. The article's are the spec's blog
+ * defaults (§2); the others follow §11's table. Checks a type still lacks
+ * (reviews, a product feed, a customer case, a check date: Phase 3's later
+ * parts) join with their own points, rescaling the rest.
+ */
+export const PROFILE_WEIGHTS: Readonly<Record<QualityProfile, ProfileWeights>> = {
+  article: {
+    eeat: { ...EEAT_WEIGHTS },
+    trust: { ...TRUST_WEIGHTS },
+    readability: { ...READABILITY_WEIGHTS },
+  },
+  // No author (the brand's byline); real product photos; proof for its
+  // claims and prices that match; short, plain copy.
+  product: {
+    eeat: {
+      experience: 20,
+      originalData: 20,
+      byline: 0,
+      authorBio: 0,
+      visualProof: 60,
+      whoHowWhy: 0,
+      dates: 0,
+      authorSchema: 0,
+    },
+    trust: {
+      claimsSourced: 30,
+      primarySources: 5,
+      noWeakSources: 5,
+      brandFacts: 30,
+      expertQuote: 0,
+      freshSources: 0,
+      balanced: 0,
+      disclosure: 0,
+      noBrokenLinks: 10,
+      siteTrust: 20,
+    },
+    readability: {
+      avgSentence: 20,
+      longSentences: 25,
+      readingLevel: 25,
+      answerFirst: 0,
+      shortParagraphs: 20,
+      headingSpacing: 0,
+      passiveJargon: 10,
+    },
+  },
+  // Low E-E-A-T weight: real product images; prices and claims that match
+  // the brand's; a short intro.
+  category: {
+    eeat: {
+      experience: 0,
+      originalData: 0,
+      byline: 0,
+      authorBio: 0,
+      visualProof: 100,
+      whoHowWhy: 0,
+      dates: 0,
+      authorSchema: 0,
+    },
+    trust: {
+      claimsSourced: 25,
+      primarySources: 0,
+      noWeakSources: 5,
+      brandFacts: 30,
+      expertQuote: 0,
+      freshSources: 0,
+      balanced: 0,
+      disclosure: 0,
+      noBrokenLinks: 15,
+      siteTrust: 25,
+    },
+    readability: {
+      avgSentence: 25,
+      longSentences: 25,
+      readingLevel: 25,
+      answerFirst: 0,
+      shortParagraphs: 25,
+      headingSpacing: 0,
+      passiveJargon: 0,
+    },
+  },
+  // Product screenshots weigh most, then the person's data and use;
+  // sourced metrics and a price that matches; scannable sections.
+  feature: {
+    eeat: {
+      experience: 25,
+      originalData: 25,
+      byline: 0,
+      authorBio: 0,
+      visualProof: 50,
+      whoHowWhy: 0,
+      dates: 0,
+      authorSchema: 0,
+    },
+    trust: {
+      claimsSourced: 35,
+      primarySources: 10,
+      noWeakSources: 5,
+      brandFacts: 20,
+      expertQuote: 10,
+      freshSources: 5,
+      balanced: 0,
+      disclosure: 0,
+      noBrokenLinks: 5,
+      siteTrust: 10,
+    },
+    readability: {
+      avgSentence: 20,
+      longSentences: 15,
+      readingLevel: 15,
+      answerFirst: 10,
+      shortParagraphs: 20,
+      headingSpacing: 15,
+      passiveJargon: 5,
+    },
+  },
+  // An author, saying how the picks were made; balance and a disclosure,
+  // each rival's facts from its own pages; the summary first.
+  comparison: {
+    eeat: {
+      experience: 20,
+      originalData: 10,
+      byline: 15,
+      authorBio: 10,
+      visualProof: 10,
+      whoHowWhy: 20,
+      dates: 10,
+      authorSchema: 5,
+    },
+    trust: {
+      claimsSourced: 25,
+      primarySources: 15,
+      noWeakSources: 5,
+      brandFacts: 5,
+      expertQuote: 0,
+      freshSources: 5,
+      balanced: 20,
+      disclosure: 15,
+      noBrokenLinks: 5,
+      siteTrust: 5,
+    },
+    readability: {
+      avgSentence: 20,
+      longSentences: 15,
+      readingLevel: 15,
+      answerFirst: 25,
+      shortParagraphs: 10,
+      headingSpacing: 10,
+      passiveJargon: 5,
+    },
+  },
+};
+
+/** The checks a profile leaves out (weight 0): no to-do or suggestion asks for them. */
+export function checksOff(profile: QualityProfile): ReadonlySet<string> {
+  const w = PROFILE_WEIGHTS[profile];
+  return new Set(
+    [...Object.entries(w.eeat), ...Object.entries(w.trust), ...Object.entries(w.readability)]
+      .filter(([, points]) => points === 0)
+      .map(([id]) => id),
+  );
+}
+
+/**
+ * A score's checks weighed for a profile: each keeps its share of its
+ * points (half of them stays half), out of the profile's weight; one
+ * weighing 0 is left out, and the score rescaled over the rest. A score
+ * that wasn't given (none of its checks live) stays not given.
+ */
+export function weighed<Id extends string, S extends Score<Id>>(
+  result: S,
+  weights: Readonly<Record<Id, number>>,
+): S {
+  const checks = result.checks.flatMap((c) => {
+    const max = weights[c.id] ?? c.max;
+    return max > 0 ? [{ ...c, points: c.max > 0 ? (c.points / c.max) * max : 0, max }] : [];
+  });
+  const total = checks.reduce((sum, c) => sum + c.max, 0);
+  const score =
+    result.score === null || total === 0
+      ? null
+      : Math.round((checks.reduce((sum, c) => sum + c.points, 0) / total) * 100);
+  return { ...result, checks, score };
+}

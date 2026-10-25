@@ -18,6 +18,7 @@ import {
   localDate,
   titleHasPlaceholder,
 } from '@/lib/content/page-schema';
+import { checksOff } from '@/lib/content/quality-profiles';
 import { cn } from '@/lib/utils';
 import { copyToClipboard } from './_html-block';
 import { trustSuggestions, type QualityRead } from './_quality-tab';
@@ -181,11 +182,18 @@ export function BeforePublish({
         : quality.authorConfirmed?.real
           ? // The person confirmed the author their site names (00271).
             { state: 'check', title: t('author.confirmed'), detail: t('author.confirmedDetail') }
-          : {
-              state: 'missing',
-              title: t('author.none'),
-              detail: t('author.noneDetail', { byline: quality.team }),
-            },
+          : quality.weightsFor && checksOff(quality.weightsFor.profile).has('byline')
+            ? // A page type that goes out under the brand (CE-052): a product page.
+              {
+                state: 'check',
+                title: t('author.brand'),
+                detail: t('author.brandDetail', { byline: quality.team }),
+              }
+            : {
+                state: 'missing',
+                title: t('author.none'),
+                detail: t('author.noneDetail', { byline: quality.team }),
+              },
     ...(article
       ? [
           { state: 'check' as const, title: t('dates.title'), detail: t('dates.detail') },

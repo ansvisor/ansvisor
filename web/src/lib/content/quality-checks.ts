@@ -121,14 +121,19 @@ export function sentenceGain(
 /**
  * A Trust suggestion's gain. While Trust isn't scored (no figure and no
  * dated source yet), the checks' missing points count out of the Phase 1
- * points, so a broken link still says what fixing it is worth.
+ * points (the page type's, CE-052, when weighed for it), so a broken link
+ * still says what fixing it is worth.
  */
-export function trustGain(result: Score<TrustCheckId>, ids: TrustCheckId[]): number {
+export function trustGain(
+  result: Score<TrustCheckId> & { phase1Points?: number },
+  ids: TrustCheckId[],
+): number {
   if (result.score !== null) return scoreGain(result, ids);
+  const phase1 = result.phase1Points ?? TRUST_PHASE1_POINTS;
   const missing = result.checks
     .filter((c) => ids.includes(c.id))
     .reduce((sum, c) => sum + c.max - c.points, 0);
-  return Math.round((missing / TRUST_PHASE1_POINTS) * 100);
+  return phase1 > 0 ? Math.round((missing / phase1) * 100) : 0;
 }
 
 /** What an author's profile has: a short bio, and profile links (Person schema's sameAs). */

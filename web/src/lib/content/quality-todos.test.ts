@@ -30,6 +30,17 @@ describe('qualityTodos', () => {
     ]);
   });
 
+  it('asks for no author on a page type that goes out under the brand (CE-052)', () => {
+    const product = qualityTodos({
+      eeat: eeat({ author: null, used: { experience: false, data: false } }),
+      author: null,
+      hasAuthors: true,
+      used: { experience: false, data: false, quote: false },
+      off: new Set(['byline', 'authorBio', 'expertQuote']),
+    });
+    expect(product.map((t) => t.id)).toEqual(['experience', 'originalData']);
+  });
+
   it('asks to add an author when the workspace has none', () => {
     expect(todos(null, false)[0]).toEqual({
       id: 'byline',

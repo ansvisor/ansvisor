@@ -309,6 +309,18 @@ describe('BeforePublish', () => {
     expect(jsonLd()).not.toHaveProperty('author');
   });
 
+  it('names the brand’s byline as checked on a page type that wants no author (CE-052)', async () => {
+    await render(
+      quality({
+        author: null,
+        weightsFor: { type: 'product_page', detected: false, profile: 'product' },
+      }),
+    );
+    expect(rows()[0]).toBe(
+      "Your brand's byline · check itThis page type goes out as Acme Team, with the brand's Organization schema: it needs no author.",
+    );
+  });
+
   it('names the team byline as missing, and keeps a live page its published date', async () => {
     await render(quality({ author: null }), { isNew: false, image: null });
     const [author, , schema] = rows();

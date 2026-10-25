@@ -4599,7 +4599,9 @@
           "none": "No author yet",
           "noneDetail": "The page goes out as {byline}, with the brand's Organization schema. A real author raises E-E-A-T.",
           "confirmed": "Author named on your site",
-          "confirmedDetail": "You confirmed the page's author is a real person your site names. Check your CMS sets them as the author."
+          "confirmedDetail": "You confirmed the page's author is a real person your site names. Check your CMS sets them as the author.",
+          "brand": "Your brand's byline",
+          "brandDetail": "This page type goes out as {byline}, with the brand's Organization schema: it needs no author."
         },
         "dates": {
           "title": "Visible published and updated dates",
@@ -4698,6 +4700,16 @@
           "needsWork": "Needs work"
         },
         "estimate": "Ansvisor estimates based on Google's published quality signals. Not a Google score.",
+        "weightsFor": {
+          "line": "Checks and weights for {type}{detected, select, yes { (detected)} other {}}:",
+          "noType": "an article (no page type yet)",
+          "change": "Change",
+          "article": "an author with experience, sourced claims, short sentences and the answer first.",
+          "product": "no author (your brand's), your own product photos, proof for claims, prices that match, short plain copy.",
+          "category": "your own product images, prices and claims that match, a short intro.",
+          "feature": "your own screenshots and data, sourced metrics, a price that matches, scannable sections.",
+          "comparison": "an author who says how the picks were made, balance and a disclosure, the summary first."
+        },
         "tooShort": "Write a few paragraphs: Readability is read from the page as you write.",
         "tooShortShort": "Too short yet",
         "notScored": "Not scored yet",
