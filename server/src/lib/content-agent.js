@@ -14,6 +14,7 @@ import {
   advanceRun,
   dropRun,
   finishRun,
+  fixUnderWay,
   isStop,
   runCall,
   startRun,
@@ -424,13 +425,20 @@ export function keepSuggestions(raw, passages, lockedKeys, ruleKeys, links = nul
       if (lockedKeys.has(passageKey(passage.text))) continue;
       const before = s.before.trim();
       if (!before || !passage.text.includes(before)) continue;
-      if (keepsPlaceholders && dropsPlaceholder(passage.text, before, s.after)) continue;
       const split = splitReplace(s.after, passage.tag, links);
       const { words, blocks } = split;
       // As many as a suggestion may keep (00240).
       const wordLinks = split.links.slice(0, MAX_LINKS);
       // Linking words the passage already has is a change too.
       const changed = words && (words !== before || wordLinks.length > 0);
+      // Read in what is kept: the passage's new words, and the blocks after it.
+      if (
+        keepsPlaceholders &&
+        changed &&
+        dropsPlaceholder(passage.text, before, `${words} ${textOf(blocks)}`, passage.tag)
+      ) {
+        continue;
+      }
       if (
         changed &&
         (words.length > 2000 ||
@@ -518,16 +526,43 @@ export function promptPassages(passages) {
 const PLACEHOLDER = /\[(?!sic\])(?=[^[\]\n]*\p{L})[^[\]\n]{2,}\](?!\()/giu;
 
 /**
- * Whether a replace takes a placeholder out of its passage, filled or
- * dropped: the passage's placeholders, read before and after the change
- * (a "before" may cut into one: "product name" in "[product name]").
+ * The forms the server's guards write (the number guard's "[figure,
+ * source]", content-people.js's name and quote): in a heading only these
+ * are placeholders, as the editor reads them (placeholders.ts placeholderIn);
+ * brackets a person writes in a title ("[2026 Update]") are part of it.
  */
-export function dropsPlaceholder(passage, before, after) {
-  const had = passage.match(PLACEHOLDER) ?? [];
-  if (!had.length) return false;
-  const changed = passage.replace(before, () => String(after ?? ''));
-  return had.some((placeholder) => !changed.includes(placeholder));
+const AGENT_PLACEHOLDER =
+  /\[(?:figure, source[^[\]\n]*|name of a real person|quote from a real person[^[\]\n]*)\](?!\()/giu;
+
+/** Each placeholder in the text, by how many times it is there. */
+function placeholderCounts(text, heading) {
+  const counts = new Map();
+  for (const found of text.match(heading ? AGENT_PLACEHOLDER : PLACEHOLDER) ?? []) {
+    counts.set(found, (counts.get(found) ?? 0) + 1);
+  }
+  return counts;
 }
+
+/**
+ * Whether a replace takes a placeholder out of its passage, filled or
+ * dropped: each placeholder counted before and after the change, so one of
+ * two alike ("[figure, source]" twice) counts too (a "before" may cut into
+ * one: "product name" in "[product name]").
+ */
+export function dropsPlaceholder(passage, before, after, tag = 'p') {
+  const heading = isHeading(tag);
+  const had = placeholderCounts(passage, heading);
+  if (!had.size) return false;
+  const now = placeholderCounts(
+    passage.replace(before, () => String(after ?? '')),
+    heading,
+  );
+  return [...had].some(([placeholder, count]) => (now.get(placeholder) ?? 0) < count);
+}
+
+/** Quality's hand-off (CE-051): the guard drops a fill, so the model isn't asked to make one. */
+const KEEP_PLACEHOLDERS =
+  "Leave every [placeholder] exactly as it is: the person fills it; don't change or remove one.";
 
 /** What the model is told: the brand, the page's passages, and the rules to fix. */
 export function buildFixPrompt({
@@ -539,6 +574,7 @@ export function buildFixPrompt({
   input,
   linkTargets = '',
   sources = '',
+  handoff = false,
 }) {
   const lines = passages.map((p, i) => {
     const locked = lockedKeys.has(passageKey(p.text)) ? ', LOCKED' : '';
@@ -556,7 +592,7 @@ Page type: ${pageTypeFormat(draft.page_type)}
 
 Rules the page doesn't meet yet (key: rule — what it asks and how the page reads now):
 ${rules.join('\n')}
-${own.length ? `\nThe writer's own rules, to follow in every change:\n${own.join('\n')}\n` : ''}${sources ? `\n${sources}\n` : ''}${linkTargets ? `\n${linkTargets}\n` : ''}
+${handoff ? `${KEEP_PLACEHOLDERS}\n` : ''}${own.length ? `\nThe writer's own rules, to follow in every change:\n${own.join('\n')}\n` : ''}${sources ? `\n${sources}\n` : ''}${linkTargets ? `\n${linkTargets}\n` : ''}
 The page, passage by passage:
 ${lines.join('\n')}
 
@@ -612,8 +648,9 @@ export function agentWriting(draft, now = Date.now()) {
  * budget, asks the model, and keeps the suggestions the editor can apply as
  * one new batch, linked to the draft's Action Center action if it has one.
  * Throws with `.status` 404 for a draft outside the brand, 409 for a
- * published draft or one whose suggestions are still open, 422 for an empty
- * page, PlanLimitError once the budget is spent — all before charging.
+ * published draft, one whose suggestions are still open or one the agent is
+ * fixing already (`running`), 422 for an empty page, PlanLimitError once
+ * the budget is spent — all before charging.
  *
  * `handoff` runs it as Quality's hand-off (CE-051): a run of its own kind,
  * by a person or the editor on its own (`origin`). The rules are the page's
@@ -662,6 +699,13 @@ export async function fixDraftRules({ draftId, brandId, input, handoff = null })
     throw Object.assign(new Error('The agent is already writing it'), {
       status: 409,
       code: 'writing',
+    });
+  }
+  // One fix at a time on a draft (a second tab, a person's beside the auto one).
+  if (await fixUnderWay(draftId)) {
+    throw Object.assign(new Error('The agent is already fixing it'), {
+      status: 409,
+      code: 'running',
     });
   }
 
@@ -836,6 +880,7 @@ async function fixWithRun({
           input,
           linkTargets: linkTargetsPrompt(targets, linkKeys),
           sources: sourcesPrompt(numbered),
+          handoff,
         }),
         abortSignal,
       }),

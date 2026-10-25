@@ -119,7 +119,8 @@ const fixBody = fixRulesInput.extend({ brandId: z.guid() });
  * Body: { brandId, rules: [{ key, name, detail }], textRules, locked }
  * Answers { count, batchId }: the suggestions left for review (none when the
  * agent found nothing it could change); 409 `open_suggestions` while the
- * latest batch is undecided, 409 `published` for a published draft.
+ * latest batch is undecided, 409 `published` for a published draft, 409
+ * `running` while a fix or a hand-off on it is under way.
  */
 router.post('/:draftId/suggestions', async (req, res) => {
   const draftId = z.guid().safeParse(req.params.draftId);

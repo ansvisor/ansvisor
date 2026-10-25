@@ -45,6 +45,25 @@ async function shown(what, runId, write) {
 }
 
 /**
+ * Whether one of the agent's fixes (Fix open rules, Quality's hand-off) is
+ * under way on the draft, and not one a stopped server left: a second would
+ * make a model call of its own, charged, and its batch would hide the
+ * first's (another tab, or a person's beside the editor's own hand-off).
+ */
+export async function fixUnderWay(draftId) {
+  const { data, error } = await supabaseAdmin
+    .from('content_agent_runs')
+    .select('id')
+    .eq('draft_id', draftId)
+    .in('kind', ['fix', 'handoff'])
+    .is('finished_at', null)
+    .gt('started_at', new Date(Date.now() - RUN_STALE_MS).toISOString())
+    .limit(1);
+  if (error) throw error;
+  return (data?.length ?? 0) > 0;
+}
+
+/**
  * A run's steps by kind, each a short name for the work the server does
  * then, with the counts the run gives (CE-027/035): the rules it writes to,
  * the sources it gathers (numbered, so a number it adds can be checked), the

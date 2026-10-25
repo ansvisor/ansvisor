@@ -130,7 +130,8 @@ export function BeforePublish({
     ? jsonLdScript(
         articleJsonLd({
           title,
-          author: authorsRead ? author : undefined,
+          // An author only confirmed (00271) isn't named here: left out, as unknown.
+          author: authorsRead && !(!author && quality.authorConfirmed?.real) ? author : undefined,
           authorUrl:
             (author &&
               siteTrust?.checks.authorPages.authors.find((a) => a.name === author.name)?.url) ||
@@ -154,11 +155,14 @@ export function BeforePublish({
               ? t('author.inContent', { line: contentByline })
               : t('author.okDetail', { name: author.name }),
           }
-        : {
-            state: 'missing',
-            title: t('author.none'),
-            detail: t('author.noneDetail', { byline: quality.team }),
-          },
+        : quality.authorConfirmed?.real
+          ? // The person confirmed the author their site names (00271).
+            { state: 'check', title: t('author.confirmed'), detail: t('author.confirmedDetail') }
+          : {
+              state: 'missing',
+              title: t('author.none'),
+              detail: t('author.noneDetail', { byline: quality.team }),
+            },
     ...(article
       ? [
           { state: 'check' as const, title: t('dates.title'), detail: t('dates.detail') },

@@ -11,6 +11,8 @@ let failInsert;
 /** The error an insert answers, when it isn't `failInsert`'s. */
 let insertError;
 let failDelete = false;
+/** The reads made, each with its filters. */
+let reads;
 
 vi.mock('../config/supabase.js', () => ({
   default: {
@@ -42,9 +44,10 @@ vi.mock('../config/supabase.js', () => ({
                 ),
               };
         },
-        select: (columns) => ((call.columns = columns), chain),
+        select: (columns) => ((call.columns = columns), reads.push(call), chain),
         eq: (col, v) => (call.filters.push(['eq', col, v]), chain),
         is: (col, v) => (call.filters.push(['is', col, v]), chain),
+        in: (col, v) => (call.filters.push(['in', col, v]), chain),
         gt: (col, v) => (call.filters.push(['gt', col, v]), chain),
         lt: (col, v) => (call.filters.push(['lt', col, v]), chain),
         gte: () => chain,
@@ -66,6 +69,7 @@ const {
   callSignal,
   dropRun,
   finishRun,
+  fixUnderWay,
   isStop,
   runCall,
   runSteps,
@@ -78,8 +82,28 @@ const {
 beforeEach(() => {
   rows = {};
   writes = [];
+  reads = [];
   failInsert = false;
   insertError = null;
+});
+
+describe('fixUnderWay', () => {
+  it('finds a fix or a hand-off still going on the draft, not one a stopped server left', async () => {
+    rows.updated = [{ id: 'run-1' }];
+    await expect(fixUnderWay('d1')).resolves.toBe(true);
+    const [read] = reads;
+    expect(read.table).toBe('content_agent_runs');
+    expect(read.filters).toEqual([
+      ['eq', 'draft_id', 'd1'],
+      ['in', 'kind', ['fix', 'handoff']],
+      ['is', 'finished_at', null],
+      ['gt', 'started_at', expect.any(String)],
+    ]);
+    // Within RUN_STALE_MS: an older one is a stopped server's.
+    expect(Date.now() - Date.parse(read.filters[3][2])).toBeGreaterThanOrEqual(10 * 60_000);
+    rows.updated = [];
+    await expect(fixUnderWay('d1')).resolves.toBe(false);
+  });
 });
 
 describe('runSteps', () => {
