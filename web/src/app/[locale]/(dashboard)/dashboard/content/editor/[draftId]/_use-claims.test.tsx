@@ -95,6 +95,20 @@ describe('useClaims', () => {
     expect(checkDraftClaims).toHaveBeenCalledTimes(2);
   });
 
+  it('is reading a save until its claims are asked about', async () => {
+    await render('s1');
+    await wait(CLAIMS_DELAY_MS);
+    expect(attr('data-reading')).toBe('false');
+    // A new save within the half minute: still to be read, the score may move.
+    await render('s2');
+    await wait(CLAIMS_DELAY_MS);
+    expect(checkDraftClaims).toHaveBeenCalledTimes(1);
+    expect(attr('data-reading')).toBe('true');
+    await wait(CLAIMS_EVERY_MS);
+    expect(checkDraftClaims).toHaveBeenCalledTimes(2);
+    expect(attr('data-reading')).toBe('false');
+  });
+
   it('asks about a save made while an ask is out once it is back', async () => {
     let answer: (value: unknown) => void = () => {};
     checkDraftClaims.mockReturnValueOnce(new Promise((resolve) => (answer = resolve)));

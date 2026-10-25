@@ -25,11 +25,13 @@ export function useSourceClasses(
   savedAt: string,
   sites: string[],
   enabled: boolean,
-): { kinds: ReadonlyMap<string, AiSourceClass>; paused: boolean } {
+): { kinds: ReadonlyMap<string, AiSourceClass>; paused: boolean; reading: boolean } {
   const [kinds, setKinds] = useState<ReadonlyMap<string, AiSourceClass>>(() => new Map());
   const [paused, setPaused] = useState(false);
   // The API has them off (its Quality phase under 2): nothing to ask.
   const [off, setOff] = useState(false);
+  // Each site's last answer (or failure), by the save it was asked at.
+  const [answered, setAnswered] = useState<ReadonlyMap<string, string>>(() => new Map());
   const askedAt = useRef(new Map<string, string>());
   // Sites an ask is out for: a save meanwhile doesn't ask about them again.
   const asking = useRef(new Set<string>());
@@ -81,10 +83,23 @@ export function useSourceClasses(
         .catch((err) => console.error('Failed to read the sources:', err))
         .finally(() => {
           for (const site of fresh) asking.current.delete(site);
+          if (open.current) {
+            setAnswered(
+              (prev) => new Map([...prev, ...fresh.map((site) => [site, savedAt] as const)]),
+            );
+          }
         });
     }, SOURCE_CLASS_DELAY_MS);
     return () => clearTimeout(timer);
-  }, [draftId, savedAt, key, enabled, paused, off, kinds]);
+    // Each answer (a failed one too) lets the sites past the batch, or held
+    // while their ask was out, be asked at this save.
+  }, [draftId, savedAt, key, enabled, paused, off, kinds, answered]);
 
-  return { kinds, paused };
+  // A site with no read and none answered at this save is still to be read.
+  const reading =
+    enabled &&
+    !paused &&
+    !off &&
+    sites.some((site) => site && !kinds.has(site) && answered.get(site) !== savedAt);
+  return { kinds, paused, reading };
 }

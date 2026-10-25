@@ -178,6 +178,7 @@ describe('cmsSource', () => {
     bodyHtml: '<h1>Pour-over</h1><p>Brew it slowly.</p>',
     sourceUrl: 'https://acme.example/pour-over',
     authorId: 'a1',
+    authorConfirmed: false,
     language: null,
   };
   const ada = { id: 'a1', name: 'Ada Lovelace' } as ContentAuthor;
@@ -228,6 +229,19 @@ describe('cmsSource', () => {
     ).toBe('Acme-Team');
     // No brand name read: no team to name.
     expect(source({ brandName: '' }).teamByline).toBe('');
+  });
+
+  it('names no team, nor its byline line, for an author the site names (00271)', () => {
+    const confirmed = { ...stored, authorId: null, authorConfirmed: true };
+    expect(source({ authors: authors(true), page: confirmed })).toMatchObject({
+      author: null,
+      teamByline: '',
+      byline: null,
+    });
+    // A picked author is the page's either way.
+    expect(
+      source({ authors: authors(true), page: { ...stored, authorConfirmed: true } }),
+    ).toMatchObject({ author: ada, teamByline: 'Acme Team', byline: 'By Ada Lovelace' });
   });
 
   it('gives no author or team byline while Quality is off', () => {

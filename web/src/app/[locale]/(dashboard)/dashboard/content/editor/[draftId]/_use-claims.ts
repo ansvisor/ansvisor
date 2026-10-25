@@ -30,9 +30,10 @@ export interface ClaimsRead {
  * The claims in the draft's own words (Quality CE-045). The API reads the
  * draft as saved and keeps each block's read, so the editor asks a few
  * seconds after a save, CLAIMS_EVERY_MS apart at most, one ask at a time,
- * and not while there are changes to save (the API would read the page
- * before them). It leaves the block the person is writing in (`writingIn`,
- * read when it asks; null when they aren't), and asks again for one left,
+ * and not while a save is waiting or under way (the API would read the page
+ * before it; a failed save isn't one, the page as last saved is read). It
+ * leaves the block the person is writing in (`writingIn`, read when it
+ * asks; null when they aren't), and asks again for one left,
  * or for blocks an ask had no calls left for, without waiting for a save.
  * A spent AI budget or the day's reads made stop the asks for the session;
  * an API with them off stops them silently; a failed ask waits for the next
@@ -51,6 +52,8 @@ export function useClaims(
   const [off, setOff] = useState(false);
   const [out, setOut] = useState(false);
   const [pending, setPending] = useState(0);
+  // The save the last ask went out for: a later one is still to be read.
+  const [askedSave, setAskedSave] = useState<string | null>(null);
   // Bumped when the next ask needn't wait for a save: one is out, or
   // something was left for later.
   const [again, setAgain] = useState(0);
@@ -85,6 +88,7 @@ export function useClaims(
       const skip = reader.current();
       asking.current = true;
       askedFor.current = savedAt;
+      setAskedSave(savedAt);
       lastAsk.current = Date.now();
       skipped.current = skip;
       left.current = false;
@@ -108,7 +112,9 @@ export function useClaims(
         })
         .catch((err) => {
           console.error('Failed to read the claims:', err);
-          if (open.current) setBlocks((prev) => prev ?? []);
+          if (!open.current) return;
+          setBlocks((prev) => prev ?? []);
+          setPending(0);
         })
         .finally(() => {
           asking.current = false;
@@ -128,6 +134,12 @@ export function useClaims(
     if (!asking.current) setAgain((n) => n + 1);
   }, []);
 
-  const reading = enabled && !paused && !limited && !off && (blocks === null || out || pending > 0);
+  // A save not asked about yet counts: its claims may move Trust once read.
+  const reading =
+    enabled &&
+    !paused &&
+    !limited &&
+    !off &&
+    (blocks === null || out || pending > 0 || askedSave !== savedAt);
   return { blocks, paused, limited, reading, recheck };
 }

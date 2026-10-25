@@ -47,6 +47,17 @@ describe('eeat (Phase 1: the author)', () => {
     expect(scoreGain(result, ['byline'])).toBe(60);
   });
 
+  it('counts the author the site names once the person confirms them, the profile with them', () => {
+    expect(eeat({ author: null, confirmed: { real: true, profile: false } }).score).toBe(60);
+    expect(eeat({ author: null, confirmed: { real: true, profile: true } }).score).toBe(100);
+    // A profile with no real author confirmed counts nothing.
+    expect(eeat({ author: null, confirmed: { real: false, profile: true } }).score).toBe(0);
+    // A picked author is read as it is: confirmations don't add to it.
+    expect(
+      eeat({ author: author({ sameAs: [] }), confirmed: { real: true, profile: true } }).score,
+    ).toBe(80);
+  });
+
   it('gives half the profile points for a bio or links alone', () => {
     // byline 15 + bio 5 of 25.
     expect(eeat({ author: author({ sameAs: [] }) }).score).toBe(80);

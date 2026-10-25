@@ -132,6 +132,7 @@ export function EditorSidePanel({
   onPickAuthor,
   yourInput = null,
   onAddInput,
+  onConfirmAuthor,
   onKeepSource,
   onAddSource,
   onRemoveClaim,
@@ -190,6 +191,8 @@ export function EditorSidePanel({
   yourInput?: DraftInputsRead | null;
   /** Opens Brief › Your input: Quality's Add. */
   onAddInput?: () => void;
+  /** Quality's tick boxes for the author the site names (00271). */
+  onConfirmAuthor?: (what: 'real' | 'profile', on: boolean) => void;
   /** Keeps a weak source or a competitor's on the page (Quality CE-046), once phase 2 is live. */
   onKeepSource?: (url: string) => void;
   /** Selects a claim's words and opens the link dialog on them: Quality's Add source (CE-045). */
@@ -441,6 +444,7 @@ export function EditorSidePanel({
                 onShowPlaceholder={() => onShowPlaceholder?.()}
                 onPickAuthor={() => onPickAuthor?.()}
                 onAddInput={onAddInput}
+                onConfirmAuthor={onConfirmAuthor}
                 onKeep={onKeepSource}
                 onAddSource={onAddSource}
                 onRemove={onRemoveClaim}
