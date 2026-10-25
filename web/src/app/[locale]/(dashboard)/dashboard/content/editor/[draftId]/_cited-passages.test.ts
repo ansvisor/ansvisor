@@ -8,6 +8,7 @@ import {
   citedPassagesKey,
   keptCharacters,
   lockedPassageCount,
+  rewriteFloor,
   type HeldEdit,
 } from './_cited-passages';
 
@@ -79,6 +80,48 @@ describe('keptCharacters', () => {
       // Unlocked by the person: the agent may reword it.
       lock([passageKey(QUOTED)]);
       expect(keptCharacters(small.state)).toBe(quote.length);
+    } finally {
+      small.destroy();
+    }
+  });
+});
+
+describe('rewriteFloor', () => {
+  it('adds the headings and the least answer where nothing kept stands to what a rewrite keeps', () => {
+    const quote = 'A customer said it saved them a week.';
+    const small = new Editor({
+      extensions: [StarterKit, CitedPassages.configure({ onHeld: () => {} })],
+      content:
+        '<h1>Title</h1><p>Summary to rewrite.</p>' +
+        `<h2>Tool A</h2><p>${QUOTED}</p>` +
+        `<h2>Tool B</h2><p>Plain answer.</p><blockquote><p>${quote}</p></blockquote>` +
+        '<h3>Questions?</h3><p>Plain too.</p>',
+    });
+    try {
+      const lock = (unlocked: string[] = []) =>
+        small.view.dispatch(
+          small.state.tr.setMeta(citedPassagesKey, {
+            labels: new Map([[passageKey(QUOTED), 'Cited by ChatGPT 3×']]),
+            unlocked: new Set(unlocked),
+          }),
+        );
+      lock();
+      const kept = QUOTED.length + quote.length;
+      const headings = 'Title'.length + 'Tool A'.length + 'Tool B'.length + 'Questions?'.length;
+      // The quoted passage answers Tool A; a quote doesn't answer Tool B; the
+      // summary and the question need theirs.
+      expect(rewriteFloor(small.state, { summary: true })).toEqual({
+        kept,
+        floor: kept + headings + 100 * 3,
+      });
+      // No summary asked for: none counted.
+      expect(rewriteFloor(small.state, { summary: false }).floor).toBe(kept + headings + 100 * 2);
+      // Unlocked: Tool A's answer is the rewrite's to write.
+      lock([passageKey(QUOTED)]);
+      expect(rewriteFloor(small.state, { summary: true })).toEqual({
+        kept: quote.length,
+        floor: quote.length + headings + 100 * 4,
+      });
     } finally {
       small.destroy();
     }

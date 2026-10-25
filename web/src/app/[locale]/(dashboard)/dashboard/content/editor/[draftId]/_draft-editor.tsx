@@ -38,6 +38,7 @@ import {
   type HandOffError,
   getCitedPassages,
   getDraftSuggestions,
+  getLastPageRewriteLength,
   keepAgentBeforeVersion,
   markContentDraftReady,
   unmarkContentDraftReady,
@@ -166,6 +167,7 @@ import {
   lengthBand,
   rewriteAdvice,
   type ActiveRule,
+  type RewriteReach,
   type RuleStatus,
 } from '@/lib/content/rules';
 import { aiUsageTone } from '@/lib/billing/ai-usage';
@@ -189,8 +191,8 @@ import {
   CitedPassages,
   citedLocks,
   citedPassagesKey,
-  keptCharacters,
   lockedPassageCount,
+  rewriteFloor,
   type HeldEdit,
 } from './_cited-passages';
 import { ExportDialog, type ExportDestination } from './_export-dialog';
@@ -224,7 +226,7 @@ import { qualitySuggestions, useTodoCopy, type HandOff, type QualityRead } from 
 import { PageTypeMenu } from './_page-type-menu';
 import type { AgentRewrite } from './_brief-tab';
 import { ruleStatusDetail, type AgentFix, type PageRewrite } from './_rules-tab';
-import { pageChangedSince } from './_page-rewrite';
+import { pageChangedSince, pageCharacters } from './_page-rewrite';
 import {
   EditorPanelRail,
   EditorSidePanel,
@@ -599,8 +601,13 @@ export function DraftEditor({
     catalog: feedOn ? (catalog === undefined ? 'reading' : catalog) : null,
   });
   // What a page rewrite keeps as it is (the passages AI answers quote, tables,
-  // images…), read as the characters are: a Length under it is out of reach.
-  const keptChars = editor && citedRead ? keptCharacters(editor.state) : 0;
+  // images…), read as the characters are, and the least it comes to with the
+  // headings and their answers: a Length under that is out of reach.
+  const summaryAsked = rules.rules.some(({ rule }) => rule.key === 'summary' && rule.on);
+  const { kept: keptChars, floor: floorChars } =
+    editor && citedRead
+      ? rewriteFloor(editor.state, { summary: summaryAsked })
+      : { kept: 0, floor: 0 };
   // The Length the page is written to, for what the agent's rewrite reached.
   const lengthRule = rules.rules.find(({ rule }) => rule.key === 'length' && rule.on)?.rule;
   const lengthTarget = Number(lengthRule?.current);
@@ -1800,6 +1807,30 @@ export function DraftEditor({
   };
   const openSuggestions = suggestions.filter((s) => s.status === 'open').length;
   const pageSuggestion = suggestions.find((s) => s.kind === 'page') ?? null;
+  // What the page's last rewrite came to, from any run: the one shown now,
+  // else the last read (a later Fix run's batch doesn't hide it). A Length
+  // it missed isn't a rewrite's to reach (rules.ts RewriteReach).
+  const [lastRewrite, setLastRewrite] = useState<number | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    getLastPageRewriteLength(draft.id)
+      .then((chars) => {
+        if (!cancelled) setLastRewrite((shown) => shown ?? chars);
+      })
+      .catch((err) => console.error("Failed to read the page's last rewrite:", err));
+    return () => {
+      cancelled = true;
+    };
+  }, [draft.id]);
+  const shownRewrite = pageSuggestion ? pageCharacters(pageSuggestion).after : null;
+  useEffect(() => {
+    if (shownRewrite !== null) setLastRewrite(shownRewrite);
+  }, [shownRewrite]);
+  const reach: RewriteReach = {
+    kept: keptChars,
+    floor: floorChars,
+    reached: shownRewrite ?? lastRewrite,
+  };
   // The rules as the agent card counts its gain: met now, and the ones still open.
   const cardRules = useMemo(
     () => ({
@@ -2657,7 +2688,7 @@ export function DraftEditor({
     ? {
         run: () => void rewritePage(),
         running: rewriting,
-        kept: keptChars,
+        reach,
         blocked:
           aiUsedUp && !rewriting
             ? aiUsedUp
@@ -2786,7 +2817,7 @@ export function DraftEditor({
     published: status === 'published',
     hasBrief: reads.brief.status === 'ready' ? reads.brief.brief !== null : null,
     empty: !pageHasWords,
-    rewrite: rewriteAdvice(rules.rules, keptChars),
+    rewrite: rewriteAdvice(rules.rules, reach),
     openRules: rulesForNext(rules.rules),
     quality: quality
       ? { trust: trustNow, trustLow: trustNow !== null && trustNow < TRUST_GATE, todos }

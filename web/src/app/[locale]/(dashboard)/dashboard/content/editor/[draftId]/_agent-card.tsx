@@ -12,7 +12,6 @@ import {
   type SuggestionStatus,
 } from '@/lib/content/suggestions';
 import { shownSteps, stepMessage, type AgentRun } from '@/lib/content/agent-runs';
-import { KEPT_LENGTH_SHARE } from '@/lib/content/rules';
 import { cn } from '@/lib/utils';
 import { PageCompareDialog, pageCharacters } from './_page-rewrite';
 import { WorkingDots } from './_working-dots';
@@ -375,7 +374,7 @@ export function AgentCard({
             <span className="text-amber-700 dark:text-amber-400">
               {tRewrite('lengthMissed', { target: missed.target })}
               {afterChars > missed.max &&
-                missed.kept >= missed.target * KEPT_LENGTH_SHARE &&
+                missed.kept > 0 &&
                 ` ${tRewrite('lengthKept', { kept: missed.kept })}`}
             </span>
           ) : (

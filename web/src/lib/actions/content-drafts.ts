@@ -51,6 +51,7 @@ import {
   NO_DRAFT_RULES,
   draftRulesFit,
   draftRulesSchema,
+  pageTextLength,
   ruleSetFits,
   savedRuleSetSchema,
   startingRules,
@@ -1819,6 +1820,27 @@ export async function keepAgentBeforeVersion(id: string): Promise<void> {
   if (!draftId.safeParse(id).success) throw new Error('invalid');
   const supabase = await createClient();
   await keepVersion(supabase, id, 'agent_before');
+}
+
+/**
+ * The characters the draft's last page rewrite came to, whatever became of
+ * it (Length's reach, rules.ts RewriteReach): one that missed the Length
+ * isn't offered again for it. Counted here, so the page's text never
+ * travels for a number. Null without one.
+ */
+export async function getLastPageRewriteLength(id: string): Promise<number | null> {
+  if (!draftId.safeParse(id).success) throw new Error('invalid');
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from('content_draft_suggestions')
+    .select('after_text')
+    .eq('draft_id', id)
+    .eq('kind', 'page')
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  return typeof data?.after_text === 'string' ? pageTextLength(data.after_text) : null;
 }
 
 /**

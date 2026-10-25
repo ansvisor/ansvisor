@@ -165,13 +165,40 @@ describe('the Rules tab', () => {
       expect(main().textContent).toBe('Run Agent');
     });
 
-    it('says when the Length is out of a rewrite’s reach for what it keeps, recommending none for it', async () => {
-      // 15,921 characters for 3,000, 2,900 of them passages AI answers quote and tables.
-      await show({ agentFix: fix(), pageRewrite: { ...fix(), kept: 2_900 } });
+    it('says when the Length is out of a rewrite’s reach, recommending none for it, with a Length it can reach', async () => {
+      // 15,921 characters for 3,000 (up to 3,600): a rewrite keeping 2,900 can't go under 3,900.
+      await show({
+        agentFix: fix(),
+        pageRewrite: { ...fix(), reach: { kept: 2_900, floor: 3_900, reached: null } },
+      });
+      const notes = () =>
+        [...container.querySelectorAll('[role="note"]')].map((n) => n.textContent ?? '');
+      expect(notes().some((n) => n.startsWith('Recommended: the page is'))).toBe(false);
+      expect(notes()).toContainEqual(
+        expect.stringContaining(
+          "The page is 15,921 characters for a Length of 3,000, but a rewrite can't go much under 3,900: 2,900 are passages AI answers quote, tables and other blocks it keeps as they are, and each heading needs its answer. Raise the Length to about 4,000, or unlock passages you're fine to have reworded.",
+        ),
+      );
+      change.mockClear();
+      await act(async () =>
+        buttons()
+          .find((b) => b.textContent === 'Raise Length to 4,000')!
+          .click(),
+      );
+      expect(change).toHaveBeenCalledWith('length', { value: '4000' });
+    });
+
+    it('doesn’t offer a rewrite again for a Length the last one missed', async () => {
+      await show({
+        agentFix: fix(),
+        pageRewrite: { ...fix(), reach: { kept: 900, floor: 1_500, reached: 9_800 } },
+      });
       const notes = [...container.querySelectorAll('[role="note"]')].map((n) => n.textContent);
       expect(notes.some((n) => n?.startsWith('Recommended: the page is'))).toBe(false);
       expect(notes).toContainEqual(
-        "The page is 15,921 characters for a Length of 3,000, but 2,900 of them are passages AI answers quote, tables and other blocks a rewrite keeps as they are. Raise the Length to about 4,500, or unlock passages you're fine to have reworded.",
+        expect.stringContaining(
+          "The page is 15,921 characters for a Length of 3,000. The last rewrite came to 9,800, so another won't get there. Raise the Length to about 10,000",
+        ),
       );
     });
 

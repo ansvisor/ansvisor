@@ -31,6 +31,7 @@ import { isPageType, type PageType } from '@/lib/content/drafts';
 import { SITE_PAGE_TYPES, type SiteType } from '@/lib/content/page-types';
 import {
   MAX_TEXT_RULE_LENGTH,
+  NO_REACH,
   RULE_GROUPS,
   notForAgentMessage,
   openRulesForAgent,
@@ -38,6 +39,7 @@ import {
   rewriteAdvice,
   splitRules,
   type ActiveRule,
+  type RewriteReach,
   type RuleStatus,
   type TextRule,
 } from '@/lib/content/rules';
@@ -87,8 +89,8 @@ export interface PageRewrite {
   running: boolean;
   /** Why it can't run now (suggestions still open), or null. */
   blocked: string | null;
-  /** The characters it keeps as they are (keptCharacters): a Length under them is out of reach. */
-  kept?: number;
+  /** What it keeps, the least it comes to and what the last one came to: a Length under them is out of reach. */
+  reach?: RewriteReach;
 }
 
 /** Run Agent's two ways: the open rules fixed a few passages at a time, or the whole page. */
@@ -248,9 +250,11 @@ export function RulesTab({
   ];
 
   // Rewrite the page whole when small edits can't get there.
-  const advice = pageRewrite ? rewriteAdvice(state.rules, pageRewrite.kept ?? 0) : null;
-  // A Length the rewrite can't reach for what it keeps: said, never recommended.
-  const outOfReach = pageRewrite ? lengthOutOfReach(state.rules, pageRewrite.kept ?? 0) : null;
+  const advice = pageRewrite ? rewriteAdvice(state.rules, pageRewrite.reach) : null;
+  // A Length the rewrite can't reach: said with a Length it can, never recommended.
+  const outOfReach = pageRewrite
+    ? lengthOutOfReach(state.rules, pageRewrite.reach ?? NO_REACH)
+    : null;
   // The rules the page doesn't meet now, in the tab's order, and those the agent fixes.
   const open = state.rules.filter(({ rule, status }) => rule.on && status.state === 'bad');
   const { forAgent, notForAgent } = openRulesForAgent(state.rules);
@@ -336,10 +340,28 @@ export function RulesTab({
             </p>
           )}
           {outOfReach && (
-            <p className="flex gap-1.5 text-xs" role="note">
+            <div className="flex gap-1.5 text-xs" role="note">
               <Info aria-hidden className="mt-0.5 h-3 w-3 shrink-0 text-muted-foreground" />
-              <span>{t('lengthOutOfReach', { ...outOfReach })}</span>
-            </p>
+              <div className="min-w-0 space-y-1.5">
+                <p>
+                  {t(outOfReach.why === 'reached' ? 'lengthOutOfReachRun' : 'lengthOutOfReach', {
+                    count: outOfReach.count,
+                    target: outOfReach.target,
+                    kept: outOfReach.kept,
+                    least: outOfReach.least,
+                    suggested: outOfReach.suggested,
+                  })}
+                </p>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-7 text-xs"
+                  onClick={() => state.change('length', { value: String(outOfReach.suggested) })}
+                >
+                  {t('raiseLength', { suggested: outOfReach.suggested })}
+                </Button>
+              </div>
+            </div>
           )}
         </RunCard>
       )}

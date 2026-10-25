@@ -4,6 +4,7 @@ import { Plugin, PluginKey, type EditorState, type Transaction } from '@tiptap/p
 import { Mapping } from '@tiptap/pm/transform';
 import { Decoration, DecorationSet } from '@tiptap/pm/view';
 import { passageKey } from '@/lib/content/cited-passages';
+import { LEAST_ANSWER, LEAST_SUMMARY } from '@/lib/content/rules';
 
 /**
  * Locked passages in the editor (CE-018): a passage AI answers quote today
@@ -187,6 +188,58 @@ export function keptCharacters(state: EditorState): number {
     if (keep) kept += block.textBetween(0, block.content.size, undefined, ' ').length;
   });
   return kept;
+}
+
+/**
+ * The least a page rewrite comes to, for Length's reach (rules.ts
+ * RewriteReach): what it keeps (keptCharacters), each heading (a rewrite
+ * keeps the sections, content-rewrite.js), and, at their least, an answer
+ * under each heading (it answers each first) and a summary under the H1
+ * (when the rules ask for one) where no kept passage stands there already.
+ * Low on purpose, so a Length called out of reach really is.
+ */
+export function rewriteFloor(
+  state: EditorState,
+  { summary }: { summary: boolean },
+): { kept: number; floor: number } {
+  const locks = citedLocks(state);
+  let kept = 0;
+  let floor = 0;
+  // The section open now: under a heading, or the H1's summary; null before the H1.
+  let section: { least: number; answered: boolean } | null = null;
+  const close = () => {
+    if (section && !section.answered) floor += section.least;
+  };
+  state.doc.forEach((block) => {
+    const text = () => block.textBetween(0, block.content.size, undefined, ' ').length;
+    const locked = block.isTextblock && isLocked(blockKey(block), locks);
+    if (block.type.name === 'heading') {
+      close();
+      if (locked) kept += text();
+      else floor += text();
+      const level = Number(block.attrs.level);
+      section =
+        level === 1
+          ? { least: summary ? LEAST_SUMMARY : 0, answered: !summary }
+          : { least: LEAST_ANSWER, answered: false };
+      return;
+    }
+    let keep = KEPT_NODES.has(block.type.name) || locked;
+    // A quoted passage stands as the answer; a table or an image doesn't.
+    let answers = locked;
+    if (!keep) {
+      block.descendants((node) => {
+        if (node.type.name === 'image' || node.type.name === 'table') keep = true;
+        else if (node.isTextblock && isLocked(blockKey(node), locks)) keep = answers = true;
+        return !answers;
+      });
+    }
+    if (!keep) return;
+    kept += text();
+    if (answers && section) section.answered = true;
+  });
+  close();
+  return { kept, floor: kept + floor };
 }
 
 /** How many quoted passages the page has now (the marks the plugin keeps). */

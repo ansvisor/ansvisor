@@ -798,28 +798,45 @@ describe('rewriteAdvice', () => {
     expect(rewriteAdvice(statuses(60_001))).toBeNull();
   });
 
-  it("doesn't recommend shortening a page whose kept blocks are most of its Length", () => {
-    // The user's page: 6,877 characters for 4,000, 3,799 of them quoted passages and tables.
+  it("doesn't recommend shortening a page a rewrite can't bring under its Length", () => {
     const page = statuses(6_877, [], '4000');
-    expect(rewriteAdvice(page, 3_799)).toBeNull();
-    expect(lengthOutOfReach(page, 3_799)).toEqual({
+    // The least a rewrite comes to (kept + headings + least answers) past the band's top (4,800).
+    const floor = { kept: 3_799, floor: 5_100, reached: null };
+    expect(rewriteAdvice(page, floor)).toBeNull();
+    expect(lengthOutOfReach(page, floor)).toEqual({
       count: 6_877,
       target: 4_000,
       kept: 3_799,
-      suggested: 6_000,
+      why: 'floor',
+      least: 5_100,
+      suggested: 5_500,
     });
-    // Little kept: a rewrite still gets there.
-    expect(rewriteAdvice(page, 1_000)).toMatchObject({ reason: 'length' });
-    expect(lengthOutOfReach(page, 1_000)).toBeNull();
+    // The user's test page (2026-10-25): 78% kept, so not out of reach by its kept
+    // blocks alone, but the last rewrite came to 5,468: a rewrite isn't offered again.
+    const run = { kept: 3_125, floor: 4_300, reached: 5_468 };
+    expect(rewriteAdvice(page, run)).toBeNull();
+    expect(lengthOutOfReach(page, run)).toMatchObject({
+      why: 'reached',
+      least: 5_468,
+      suggested: 5_500,
+    });
+    // A last rewrite within the band, or little kept: a rewrite still gets there.
+    expect(lengthOutOfReach(page, { ...run, reached: 4_700 })).toBeNull();
+    expect(rewriteAdvice(page, { kept: 1_000, floor: 1_800, reached: null })).toMatchObject({
+      reason: 'length',
+    });
     // Many rules open: still a rewrite, for them, the Length out of reach not among them.
     expect(
-      rewriteAdvice(statuses(6_877, ['faq', 'summary', 'h2Answer'], '4000'), 3_799),
+      rewriteAdvice(statuses(6_877, ['faq', 'summary', 'h2Answer'], '4000'), floor),
     ).toBeNull();
     expect(
-      rewriteAdvice(statuses(6_877, ['faq', 'summary', 'h2Answer', 'keywords'], '4000'), 3_799),
+      rewriteAdvice(statuses(6_877, ['faq', 'summary', 'h2Answer', 'keywords'], '4000'), floor),
     ).toMatchObject({ reason: 'open' });
-    // Under its Length, what is kept doesn't stop it.
-    expect(lengthOutOfReach(statuses(2_000, [], '4000'), 3_799)).toBeNull();
+    // Under its Length, what is kept or reached doesn't stop it.
+    expect(lengthOutOfReach(statuses(2_000, [], '4000'), run)).toBeNull();
+    // A Length suggested never past the page as it is.
+    expect(lengthOutOfReach(statuses(5_200, [], '4000'), run)?.suggested).toBe(5_500);
+    expect(lengthOutOfReach(statuses(4_900, [], '4000'), run)?.suggested).toBe(5_000);
   });
 
   it('recommends it for 4 rules or more the agent can fix', () => {
