@@ -1184,6 +1184,7 @@ describe('Quality’s hand-off (CE-051)', () => {
   describe('an automatic one', () => {
     beforeEach(() => {
       rows.content_drafts = { ...rows.content_drafts, quality_handoff: true };
+      rows.brands = { ...rows.brands, content_quality_handoff: true };
       runs.startRun = vi.fn(async () => ({
         id: 'run-9',
         steps: [],
@@ -1194,6 +1195,19 @@ describe('Quality’s hand-off (CE-051)', () => {
     });
     afterEach(() => {
       runs.startRun = runs.dropRun = runs.finishRun = null;
+    });
+
+    it('doesn’t run once the brand turned it off, though the draft was made while it was on', async () => {
+      rows.brands = { ...rows.brands, content_quality_handoff: false };
+      await expect(
+        fixDraftRules({
+          draftId: DRAFT,
+          brandId: BRAND,
+          input: handoff(),
+          handoff: { origin: 'auto' },
+        }),
+      ).rejects.toMatchObject({ status: 409, code: 'not_due' });
+      expect(runs.startRun).not.toHaveBeenCalled();
     });
 
     it('claims its one run, and gives it back when the AI budget stops it before it begins', async () => {
