@@ -39,6 +39,7 @@ import {
 } from '@/lib/actions/integrations';
 import { matchProperty } from '@/lib/property-match';
 import { CatalogSourcesCard } from './catalog-sources-card';
+import { WebflowCard } from './webflow-card';
 import { useIntegrationConnect } from '@/hooks/use-integration-connect';
 
 /**
@@ -79,6 +80,8 @@ export function IntegrationsSection() {
         </IntegrationCard>
 
         <CatalogSourcesCard />
+
+        <WebflowCard />
       </CardContent>
     </Card>
   );
