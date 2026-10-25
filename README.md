@@ -1,6 +1,6 @@
 <div align="center">
 
-[![Ansvisor Banner](https://cdn.prod.website-files.com/69e606308fb6f96fb911b251/6aa99287516ddd71037ffae7_Ansvisor%20-%20AI%20Search%20Intelligence%20Platform%20for%20Better%20AI%20Visibility.png)](https://www.ansvisor.com)
+[![Ansvisor: Open-Source Agentic AI Search Execution Platform](.github/assets/ansvisor-readme-banner.png)](https://www.ansvisor.com)
 
 [![🚀 Try the Cloud — ansvisor.com](https://img.shields.io/badge/🚀_Try_the_Cloud-ansvisor.com-6366f1?style=for-the-badge&logoColor=white&logo=vercel)](https://www.ansvisor.com)
 [![📚 Docs](https://img.shields.io/badge/📚_Docs-docs.ansvisor.com-10b981?style=for-the-badge&logoColor=white&logo=readthedocs)](https://docs.ansvisor.com)
@@ -9,23 +9,23 @@
 
 </div>
 
-# Ansvisor — Open-Source AI Search Intelligence Platform
+# Ansvisor — Open-Source Agentic AI Search Execution Platform
 
 **[AI Visibility Platform](https://www.ansvisor.com/)** · **[Documentation](https://docs.ansvisor.com/)**
 
-**Business + AI Search Data → Signals → Actions → Tasks → AI Visibility Outcomes**
+**Business + AI Search Data → Signals → Actions → Agent-Drafted Fixes → AI Visibility Outcomes**
 
-Ansvisor is an **open-source AI Search Intelligence Platform** that helps brands understand, measure, and improve their visibility across AI Search.
+Ansvisor is an **open-source, agentic AI Search Execution Platform**. It shows how your brand appears in AI answers, finds where you can win, and turns that into work your team can ship. Agents find opportunities, turn signals into prioritized actions and draft the fixes. You approve what goes live.
 
 Connect business data and traditional search signals with AI Search behavior across ChatGPT, Google AI Overviews, Google AI Mode, Gemini, Claude, Perplexity, Microsoft Copilot, Grok, and other AI platforms to discover opportunities, prioritize what matters, and improve brand visibility.
 
-Track prompts, mentions, citations, competitors, AI traffic, and the sources AI systems rely on — all in one platform.
+Track prompts, mentions, citations, competitors, AI traffic, and the sources AI systems rely on. Then act on them in the same place: plan content, let the Content Agent draft and fix pages, and follow every action against your AI Search KPIs.
 
 Self-host Ansvisor for free or use the managed [Ansvisor Cloud](https://www.ansvisor.com/).
 
 We're building Ansvisor in the open because we believe companies shouldn't need another black box to understand a black box.
 
-Our goal is to make AI Search intelligence more transparent, measurable, actionable, and accessible.
+Our goal is to make AI Search work more transparent, measurable, actionable, and accessible.
 
 > ⭐ **If you believe AI Visibility should be open and community-driven, star the repo — it's how the next team discovers Ansvisor.**
 
@@ -47,11 +47,15 @@ This shift is making [Answer Engine Optimization (AEO)](https://www.ansvisor.com
 
 Instead of treating AI visibility as another isolated analytics dashboard, Ansvisor connects business data, traditional search signals, and AI Search behavior to help teams understand what is happening, discover where opportunities exist, prioritize what matters, and take action.
 
+Agents do the groundwork. They surface opportunities, prepare briefs and drafts, and keep actions moving. People stay in charge of what ships.
+
 With Ansvisor, you can:
 
-- [**AI Search Intelligence Platform**](https://www.ansvisor.com/platform) — Bring AI visibility, prompts, citations, competitors, AI traffic, content intelligence, and optimization workflows together in one platform.
+- [**AI Search Execution Platform**](https://www.ansvisor.com/platform) — Bring AI visibility, prompts, citations, competitors, AI traffic, content, and execution workflows together in one platform.
 - [**Action Center**](https://www.ansvisor.com/features/ai-search-actions-kpis-action-center) — Turn signals across your workspace and connected data sources into prioritized actions and tasks aligned with your AI Search KPIs.
+- [**Agentic Content Editor**](https://www.ansvisor.com/features/agentic-content-editor) — The Content Agent writes and fixes pages from your prompts, query fan-outs, and cited pages, checks them against your content rules, and waits for your approval before anything changes.
 - [**Answer Engine Insights & AI Visibility**](https://www.ansvisor.com/features/answer-engine-insights) — Track how your brand appears, performs, and is represented across leading AI platforms.
+- [**AI Brand Mentions & Sentiment**](https://www.ansvisor.com/features/ai-brand-mentions-sentiment) — See how AI platforms describe your brand: the exact quotes, the sentiment, and where you appear in each answer, compared with your competitors.
 - [**Prompt Monitoring & Volumes**](https://www.ansvisor.com/features/prompt-monitoring-volumes) — Discover and track relevant prompts, analyze demand, and measure how your visibility changes over time.
 - [**AI Citation Monitoring**](https://www.ansvisor.com/features/citations-monitoring) — Discover which domains, URLs, competitors, and third-party sources AI systems cite.
 - [**Competitor Tracking & Benchmarking**](https://www.ansvisor.com/features/competitor-tracking-benchmarking) — Compare your visibility, citations, mentions, and share of voice with competitors.
@@ -61,7 +65,7 @@ With Ansvisor, you can:
 - [**AI Visibility Site Audit**](https://www.ansvisor.com/features/ai-visibility-site-audit) — Analyze technical and content signals that can affect how AI systems discover, understand, and retrieve your website.
 - [**MCP Server**](https://docs.ansvisor.com/guides/mcp-server) — Connect Ansvisor's AI Search intelligence with AI assistants and agent workflows through the Model Context Protocol (MCP).
 
-The result is a clearer path from fragmented data to useful intelligence:
+The result is a clearer path from fragmented data to shipped improvements in AI visibility.
 
 ---
 
