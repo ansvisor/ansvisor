@@ -1931,7 +1931,7 @@ export function DraftEditor({
   const openSuggestions = suggestions.filter((s) => s.status === 'open').length;
   const pageSuggestion = suggestions.find((s) => s.kind === 'page') ?? null;
   // The page's last rewrite, from any run (00285), read on opening and again
-  // once a new one is shown: a Length it missed isn't a rewrite's to reach
+  // whenever the rewrite shown changes: a Length it missed isn't a rewrite's to reach
   // (rules.ts RewriteReach). A later Fix run's batch doesn't hide it.
   const [lastRewrite, setLastRewrite] = useState<(LastRewrite & { html: string }) | null>(null);
   const shownRewriteId = pageSuggestion?.id ?? null;

@@ -1827,8 +1827,9 @@ export async function keepAgentBeforeVersion(id: string): Promise<void> {
  * (00285): the characters it came to, the Length it was written to and what
  * it kept, and the page it wrote, for the editor to count as its toolbar
  * does (the API's count runs a little over). A Length it missed isn't
- * offered again (rules.ts RewriteReach). One row, read on opening and once a
- * new rewrite is shown. Null without one, or for one made before 00285.
+ * offered again (rules.ts RewriteReach). One row, read on opening and
+ * whenever the rewrite shown changes. Null without one, or for one made
+ * before 00285 (after_chars marks those).
  */
 export async function getLastPageRewrite(
   id: string,
