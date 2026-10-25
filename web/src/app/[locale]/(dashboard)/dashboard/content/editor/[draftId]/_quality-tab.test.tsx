@@ -17,6 +17,7 @@ vi.mock('@/i18n/navigation', () => ({
 
 const { QualityTab } = await import('./_quality-tab');
 type QualityRead = import('./_quality-tab').QualityRead;
+type HandOff = import('./_quality-tab').HandOff;
 
 /**
  * Instructions › Quality (Quality spec §3, CE-039): the scores, their label,
@@ -96,7 +97,7 @@ const onConfirmImages = vi.fn();
 const onAddImage = vi.fn();
 const onPickReviewer = vi.fn();
 
-async function render(quality: QualityRead | Readability | null) {
+async function render(quality: QualityRead | Readability | null, handOff: HandOff | null = null) {
   const q = quality && 'eeat' in quality ? quality : read(quality as Readability | null);
   await act(async () => {
     root.render(
@@ -112,6 +113,7 @@ async function render(quality: QualityRead | Readability | null) {
           onConfirmImages={onConfirmImages}
           onAddImage={onAddImage}
           onPickReviewer={onPickReviewer}
+          handOff={handOff}
         />
       </NextIntlClientProvider>,
     );
@@ -523,6 +525,33 @@ describe('QualityTab', () => {
     expect(container.textContent).toContain(
       "Sources the rules can't place wait for an AI check: this month's AI usage is used up.",
     );
+  });
+
+  it('hands the suggestions off in one run, the to-dos staying the person’s (CE-051)', async () => {
+    const run = vi.fn();
+    const handOff = { run, running: false, blocked: null, count: 3, todos: 2 };
+    await render(null, handOff);
+    const card = container.querySelector('[aria-label="Hand it off to Content Agent"]')!;
+    expect(card.textContent).toContain(
+      'Fixes 3 suggestions in one run, for you to review · 2 to-dos stay yours',
+    );
+    const button = [...card.querySelectorAll('button')].find((b) => b.textContent === 'Hand off')!;
+    await act(async () => button.click());
+    expect(run).toHaveBeenCalled();
+
+    // Blocked: it says why; running: it says so; nothing to fix: it can't run.
+    await render(null, { ...handOff, blocked: 'Decide the 2 open suggestions first.' });
+    expect(container.textContent).toContain('Decide the 2 open suggestions first.');
+    expect(
+      [...container.querySelectorAll('button')].find((b) => b.textContent === 'Hand off')!.disabled,
+    ).toBe(true);
+    await render(null, { ...handOff, running: true });
+    expect(container.textContent).toContain('Working…');
+    await render(null, { ...handOff, count: 0, todos: 0 });
+    expect(container.textContent).toContain('Nothing for the agent to fix · nothing left for you');
+    // Below phase 2: no card.
+    await render(null);
+    expect(container.querySelector('[aria-label="Hand it off to Content Agent"]')).toBeNull();
   });
 
   it('asks a page that puts the brand forward to disclose it and add an honest weakness, AI checks, Show on the pick (CE-050)', async () => {

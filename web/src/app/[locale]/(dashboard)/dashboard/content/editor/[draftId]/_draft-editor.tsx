@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useFormatter, useTranslations } from 'next-intl';
 import { toast } from 'sonner';
-import { EditorContent, useEditor } from '@tiptap/react';
+import { EditorContent, useEditor, type Editor } from '@tiptap/react';
 import type { Node as PmNode } from '@tiptap/pm/model';
 import { TextSelection, type Transaction } from '@tiptap/pm/state';
 import StarterKit from '@tiptap/starter-kit';
@@ -34,6 +34,8 @@ import { updateBrand } from '@/lib/actions/brand';
 import {
   decideDraftSuggestions,
   fixDraftRules,
+  handOffDraft,
+  type HandOffError,
   getCitedPassages,
   getDraftSuggestions,
   keepAgentBeforeVersion,
@@ -88,6 +90,7 @@ import { PAGE_READ_DELAY_MS, draftTitleFromDoc, safeLinkHref } from '@/lib/conte
 import { JsonLd } from '@/lib/content/json-ld-node';
 import { firstImage, isArticlePage } from '@/lib/content/page-schema';
 import { PLACEHOLDER, pagePlaceholders, placeholderIn } from '@/lib/content/placeholders';
+import { handOffItems } from '@/lib/content/hand-off';
 import {
   blankCode,
   bylineText,
@@ -188,7 +191,7 @@ import {
   wordsUnderTitle,
   writeSkips,
 } from './_next-step';
-import { useTodoCopy, type QualityRead } from './_quality-tab';
+import { qualitySuggestions, useTodoCopy, type HandOff, type QualityRead } from './_quality-tab';
 import { PageTypeMenu } from './_page-type-menu';
 import type { AgentRewrite } from './_brief-tab';
 import { ruleStatusDetail, type AgentFix, type PageRewrite } from './_rules-tab';
@@ -248,7 +251,8 @@ const DOCUMENT_CLASS = cn(
 const FIX_WAIT_MS = 90_000;
 
 /** The runs the agent card shows: Fix open rules', or the brief's. */
-const FIX_RUNS = ['fix'] as const;
+// Fix open rules, and Quality's hand-off (CE-051): the same card, steps and Stop.
+const FIX_RUNS = ['fix', 'handoff'] as const;
 const BRIEF_RUNS = ['brief'] as const;
 
 /**
@@ -1649,23 +1653,40 @@ export function DraftEditor({
             .join(' · '),
         };
       }),
-      textRules: rules.textRules.filter(({ rule }) => rule.on).map(({ rule }) => rule.text),
-      locked: (() => {
-        const locks = citedLocks(editor.state);
-        return [...locks.labels.keys()].filter((key) => !locks.unlocked.has(key));
-      })(),
-      // The data it writes from: the sources the Sources tab keeps (CE-033).
-      ...(reads.sources?.data
-        ? {
-            sources: rebuildSources(reads.sources.data, reads.sources.choices, {
-              title,
-              sourceUrl: draft.sourceUrl,
-              html: editor.getHTML(),
-              length: rules.length,
-            }),
-          }
-        : {}),
+      ...agentContext(editor),
     };
+    await runAgentFix(() => fixDraftRules(draft.id, draft.brandId, request));
+  };
+
+  /**
+   * What every fix by the agent sends besides its rules: the person's own
+   * rules, the locked passages, and the sources the Sources tab keeps, which
+   * it writes from (CE-033).
+   */
+  const agentContext = (ed: Editor) => ({
+    textRules: rules.textRules.filter(({ rule }) => rule.on).map(({ rule }) => rule.text),
+    locked: (() => {
+      const locks = citedLocks(ed.state);
+      return [...locks.labels.keys()].filter((key) => !locks.unlocked.has(key));
+    })(),
+    ...(reads.sources?.data
+      ? {
+          sources: rebuildSources(reads.sources.data, reads.sources.choices, {
+            title,
+            sourceUrl: draft.sourceUrl,
+            html: ed.getHTML(),
+            length: rules.length,
+          }),
+        }
+      : {}),
+  });
+
+  /**
+   * One of the agent's fixes from this page (Fix open rules, Hand off): the
+   * page is saved, the agent leaves a new batch of suggestions for review,
+   * and Stop or a lost answer is said as such.
+   */
+  const runAgentFix = async (send: () => Promise<{ count: number } | { error: HandOffError }>) => {
     setStoppingRun(null);
     stopSent.current = null;
     setFixing(true);
@@ -1673,7 +1694,7 @@ export function DraftEditor({
     try {
       // The agent reads the page as saved.
       await autosave.settle();
-      const result = await fixDraftRules(draft.id, draft.brandId, request).catch((err) => {
+      const result = await send().catch((err) => {
         // The call itself gave up (a timeout on the way): the agent may still finish.
         console.error('Failed to hear back from the Content Agent:', err);
         return { error: 'unconfirmed' as const };
@@ -1729,6 +1750,41 @@ export function DraftEditor({
       setFixing(false);
       setStoppingRun(null);
       stopSent.current = null;
+    }
+  };
+
+  // Hand it off to Content Agent (Quality spec §5, CE-051): Quality's open
+  // suggestions, each with what it names on the page; the disclosure only
+  // with its line in the page's language.
+  const tQuality = useTranslations('contentEditor.editor.quality');
+  const handOffList =
+    sourcesOn && quality
+      ? handOffItems(qualitySuggestions(tQuality, quality), { disclosureLine })
+      : [];
+  const [handingOff, setHandingOff] = useState(false);
+  /**
+   * The agent fixes the page's open Quality suggestions in one run, as
+   * suggestions to review; the to-dos stay the person's (one run, on the
+   * workspace's AI usage).
+   */
+  const handOff = async (origin: 'person' | 'auto' = 'person') => {
+    if (!editor || fixing || starting || rewriting || !citedRead) return;
+    if (openSuggestions > 0) {
+      toast(t('suggestions.decideFirst', { count: openSuggestions }));
+      return;
+    }
+    if (handOffList.length === 0) {
+      toast(t('suggestions.nothingToFix'));
+      return;
+    }
+    const items = handOffList;
+    setHandingOff(true);
+    try {
+      await runAgentFix(() =>
+        handOffDraft(draft.id, draft.brandId, { items, origin, ...agentContext(editor) }),
+      );
+    } finally {
+      setHandingOff(false);
     }
   };
 
@@ -1826,6 +1882,17 @@ export function DraftEditor({
               ? t('suggestions.agentBusy')
               : null,
   };
+  const handOffCard: HandOff | null =
+    sourcesOn && quality
+      ? {
+          run: () => void handOff(),
+          running: fixing && handingOff,
+          // As Fix's, and not while the page's reads would still move the list.
+          blocked: agentFix.blocked ?? (pageRead.reading ? tQuality('handOff.reading') : null),
+          count: handOffList.length,
+          todos: quality.todos.filter((todo) => !todo.done).length,
+        }
+      : null;
   // The card's Run Agent says why it won't run, as the Rules card does: also
   // when the only rules left open are ones the agent doesn't fix (one H1).
   const agentRules = openRulesForAgent(rules.rules);
@@ -2965,6 +3032,7 @@ export function DraftEditor({
             onShowPlaceholder={showFirstPlaceholder}
             onPickAuthor={() => setAuthorMenuOpen(true)}
             onPickReviewer={() => setReviewerMenuOpen(true)}
+            handOff={handOffCard}
             yourInput={inputsRead.status === 'off' ? null : inputsRead}
             onAddInput={addInput}
             onKeepSource={sourcesOn ? (url) => void keepSource(url) : undefined}

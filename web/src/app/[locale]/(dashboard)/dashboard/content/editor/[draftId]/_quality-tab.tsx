@@ -76,6 +76,17 @@ export interface QualityRead {
 
 type ScoreName = 'eeat' | 'trust' | 'readability';
 
+/** Hand it off to Content Agent (Quality spec §5, CE-051), as the editor runs it. */
+export interface HandOff {
+  run: () => void;
+  running: boolean;
+  /** Why it can't run now (suggestions still open, AI usage spent, reads under way), or null. */
+  blocked: string | null;
+  /** The suggestions it fixes in one run, and the to-dos that stay the person's. */
+  count: number;
+  todos: number;
+}
+
 export interface Suggestion {
   key: string;
   // E-E-A-T's are the person's to-dos.
@@ -112,6 +123,7 @@ export function QualityTab({
   onConfirmImages,
   onAddImage,
   onPickReviewer,
+  handOff = null,
 }: {
   quality: QualityRead;
   /** Scrolls the draft to a passage and marks it. */
@@ -134,6 +146,8 @@ export function QualityTab({
   onAddImage?: () => void;
   /** Opens the header's reviewer menu (CE-049). */
   onPickReviewer?: () => void;
+  /** Hand it off to Content Agent (CE-051): with Quality's phase 2. */
+  handOff?: HandOff | null;
 }) {
   const t = useTranslations('contentEditor.editor.quality');
   const tSite = useTranslations('audit.siteTrust.checks');
@@ -147,16 +161,7 @@ export function QualityTab({
   ];
   const { todos } = quality;
   const todosLeft = todos.filter((todo) => !todo.done).length;
-  const suggestions = [
-    ...readabilitySuggestions(t, readability),
-    ...trustSuggestions(t, trust, proofSentences(todos), {
-      balanced: quality.aiChecks?.balanced ?? null,
-      disclosure: quality.aiChecks?.disclosure ?? null,
-      brand: quality.brandName,
-    }),
-  ]
-    .filter((s) => s.gain > 0)
-    .sort((a, b) => b.gain - a.gain);
+  const suggestions = qualitySuggestions(t, quality);
   // Every live check has its points: none to raise, none of the person's left
   // (a page too short to read says so instead).
   const allDone = suggestions.length === 0 && todosLeft === 0 && readability?.score !== null;
@@ -193,6 +198,8 @@ export function QualityTab({
           </p>
         )}
       </section>
+
+      {handOff && <HandOffCard handOff={handOff} />}
 
       {todos.length > 0 && (
         <section aria-label={t('todos.title')} className="space-y-2">
@@ -629,6 +636,56 @@ function readabilitySuggestions(t: T, readability: Readability | null): Suggesti
       show: check.at || null,
       ...(check.ai ? { ai: true } : {}),
     }),
+  );
+}
+
+/**
+ * What would raise the scores, the biggest gain first: Readability's and
+ * Trust's suggestions with a gain (E-E-A-T's are the person's to-dos). Hand
+ * off fixes these (CE-051).
+ */
+export function qualitySuggestions(t: T, quality: QualityRead): Suggestion[] {
+  return [
+    ...readabilitySuggestions(t, quality.readability),
+    ...trustSuggestions(t, quality.trust, proofSentences(quality.todos), {
+      balanced: quality.aiChecks?.balanced ?? null,
+      disclosure: quality.aiChecks?.disclosure ?? null,
+      brand: quality.brandName,
+    }),
+  ]
+    .filter((s) => s.gain > 0)
+    .sort((a, b) => b.gain - a.gain);
+}
+
+/**
+ * Hand it off to Content Agent (Quality spec §5, CE-051): one run fixes
+ * every suggestion, as suggestions to review; the to-dos stay the person's.
+ */
+function HandOffCard({ handOff }: { handOff: HandOff }) {
+  const t = useTranslations('contentEditor.editor.quality.handOff');
+  const { count, todos, running, blocked, run } = handOff;
+  return (
+    <section aria-label={t('title')} className="space-y-2 rounded-xl border bg-card px-3 py-2.5">
+      <div className="flex items-start gap-3">
+        <div className="min-w-0 flex-1">
+          <h4 className="text-sm font-medium">{t('title')}</h4>
+          <p className="text-xs text-muted-foreground">
+            {count > 0 ? t('line', { count, todos }) : t('nothing', { todos })}
+          </p>
+        </div>
+        <Button
+          size="sm"
+          className="h-7 shrink-0"
+          disabled={running || count === 0 || !!blocked}
+          onClick={run}
+        >
+          {running ? t('running') : t('button')}
+        </Button>
+      </div>
+      {blocked && !running && count > 0 && (
+        <p className="text-xs text-amber-700 dark:text-amber-300">{blocked}</p>
+      )}
+    </section>
   );
 }
 

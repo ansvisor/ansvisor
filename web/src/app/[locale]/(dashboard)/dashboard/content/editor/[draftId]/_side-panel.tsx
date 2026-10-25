@@ -14,7 +14,7 @@ import { cn } from '@/lib/utils';
 import { BriefTab, type AgentRewrite } from './_brief-tab';
 import { DataNote, UsesYourData } from './_data-note';
 import { ImpactTab } from './_impact-tab';
-import { QualityTab, type QualityRead } from './_quality-tab';
+import { QualityTab, type HandOff, type QualityRead } from './_quality-tab';
 import { RulesTab, type AgentFix, type PageRewrite } from './_rules-tab';
 import { SourcesTab } from './_sources-tab';
 import { useBriefRebuild, type PageNow } from './_use-brief-rebuild';
@@ -138,6 +138,7 @@ export function EditorSidePanel({
   onConfirmImages,
   onAddImage,
   onPickReviewer,
+  handOff = null,
 }: {
   draft: ContentDraft;
   /** The brand's business type as the editor holds it (Quality CE-056). */
@@ -204,6 +205,8 @@ export function EditorSidePanel({
   onAddImage?: () => void;
   /** Quality's Pick reviewer: the header's reviewer menu (CE-049). */
   onPickReviewer?: () => void;
+  /** Hand it off to Content Agent, Quality's (CE-051). */
+  handOff?: HandOff | null;
 }) {
   const t = useTranslations('contentEditor.editor.panel');
   const tEditor = useTranslations('contentEditor.editor');
@@ -455,6 +458,7 @@ export function EditorSidePanel({
                 onConfirmImages={onConfirmImages}
                 onAddImage={onAddImage}
                 onPickReviewer={onPickReviewer}
+                handOff={handOff}
               />
             </div>
           )}

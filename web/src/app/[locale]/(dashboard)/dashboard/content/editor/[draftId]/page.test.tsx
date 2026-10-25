@@ -61,6 +61,7 @@ const getDraftSuggestions = vi.fn();
 const decideDraftSuggestions = vi.fn();
 const keepAgentBeforeVersion = vi.fn();
 const fixDraftRules = vi.fn();
+const handOffDraft = vi.fn();
 const startAgentWriting = vi.fn();
 const startPageRewrite = vi.fn();
 vi.mock('@/lib/actions/brand-facts', () => ({
@@ -68,6 +69,7 @@ vi.mock('@/lib/actions/brand-facts', () => ({
 }));
 vi.mock('@/lib/actions/content-drafts', () => ({
   fixDraftRules: (...args: unknown[]) => fixDraftRules(...args),
+  handOffDraft: (...args: unknown[]) => handOffDraft(...args),
   startAgentWriting: (...args: unknown[]) => startAgentWriting(...args),
   startPageRewrite: (...args: unknown[]) => startPageRewrite(...args),
   getDraftSuggestions: (...args: unknown[]) => getDraftSuggestions(...args),
@@ -335,6 +337,7 @@ beforeEach(() => {
   decideDraftSuggestions.mockReset().mockResolvedValue(1);
   keepAgentBeforeVersion.mockReset().mockResolvedValue(undefined);
   fixDraftRules.mockReset().mockResolvedValue({ count: 0 });
+  handOffDraft.mockReset().mockResolvedValue({ count: 0 });
   startAgentWriting.mockReset().mockResolvedValue({ started: true });
   startPageRewrite.mockReset().mockResolvedValue({ started: true });
   localStorage.clear();
@@ -2824,6 +2827,52 @@ describe('the side panel', () => {
         li.textContent?.includes('the fastest forecasting app'),
       )!;
       expect(done.textContent).toContain('The proof is linked');
+    });
+
+    it("hands the page's open Quality suggestions off to the agent in one run (CE-051)", async () => {
+      process.env.NEXT_PUBLIC_CONTENT_QUALITY_PHASE = '2';
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+      getContentAuthors.mockResolvedValue({
+        authors: [],
+        brands: [{ id: 'b1', name: 'Ledgerly' }],
+        me: { id: 'u1', role: 'admin' },
+      });
+      const long = `Teams ${Array.from({ length: 39 }, () => 'plan').join(' ')}.`;
+      getContentDraft.mockResolvedValue({
+        ...claimed,
+        bodyHtml: `${claimed.bodyHtml}<p>${long}</p>`,
+      });
+      handOffDraft.mockResolvedValue({ count: 1 });
+      window.innerWidth = 1440;
+      await renderPage();
+      await act(async () => void (await vi.advanceTimersByTimeAsync(3_000)));
+      const chip = [...container.querySelectorAll<HTMLButtonElement>('header button')].find((b) =>
+        b.textContent?.startsWith('Quality'),
+      )!;
+      await act(async () => chip.click());
+      const card = panel()!.querySelector('[aria-label="Hand it off to Content Agent"]')!;
+      expect(card.textContent).toContain('in one run, for you to review');
+      await act(async () =>
+        [...card.querySelectorAll<HTMLButtonElement>('button')]
+          .find((b) => b.textContent === 'Hand off')!
+          .click(),
+      );
+      await act(async () => void (await vi.advanceTimersByTimeAsync(0)));
+      expect(handOffDraft).toHaveBeenCalledWith(
+        'd1',
+        'b1',
+        expect.objectContaining({
+          origin: 'person',
+          items: expect.arrayContaining([
+            expect.objectContaining({
+              key: 'readability:longSentences',
+              detail: expect.stringContaining(long),
+            }),
+          ]),
+        }),
+      );
+      // One run at a time: Fix open rules waits for it.
+      expect(fixDraftRules).not.toHaveBeenCalled();
     });
 
     it('asks a page that puts the brand forward for its disclosure, and Add line puts it under the H1 (CE-050)', async () => {

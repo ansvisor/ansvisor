@@ -2161,6 +2161,75 @@ export async function fixDraftRules(
   }
 }
 
+/** Why a hand-off didn't run: Fix's reasons, and an automatic one's (CE-051). */
+const HANDOFF_ERRORS = [
+  ...AGENT_FIX_ERRORS,
+  /** An automatic hand-off on a draft its brand doesn't hand off. */
+  'not_due',
+  /** The draft had its automatic hand-off. */
+  'already',
+] as const;
+export type HandOffError = (typeof HANDOFF_ERRORS)[number];
+
+/** What Hand off sends (CE-051): the page's fixable checks, as Fix sends its rules' context. */
+export interface HandOffRequest extends Omit<AgentFixRequest, 'rules'> {
+  /** Each fixable check open on the page, by its suggestion key, with what it names there. */
+  items: { key: string; detail: string }[];
+  /** A person's Hand off, or the editor's on its own (Settings › Content). */
+  origin: 'person' | 'auto';
+}
+
+/**
+ * Hand it off to Content Agent (Quality spec §5, CE-051): the agent fixes
+ * the page's open Quality checks in one run, as suggestions for review,
+ * metered from the organization's AI usage (content-handoff.js). count is
+ * how many it left.
+ */
+export async function handOffDraft(
+  id: string,
+  brandId: string,
+  request: HandOffRequest,
+): Promise<{ count: number } | { error: HandOffError }> {
+  if (!draftId.safeParse(id).success || !draftId.safeParse(brandId).success) {
+    return { error: 'failed' };
+  }
+  const supabase = await createClient();
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  if (!session) return { error: 'failed' };
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/content-drafts/${id}/handoff`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${session.access_token}`,
+      },
+      body: JSON.stringify({
+        brandId,
+        items: request.items.slice(0, 15).map((item) => ({
+          key: item.key.slice(0, 60),
+          detail: item.detail.slice(0, 500),
+        })),
+        textRules: request.textRules.slice(0, 50).map((text) => text.slice(0, 300)),
+        locked: request.locked.slice(0, 500).map((key) => key.slice(0, 5000)),
+        ...(request.sources ? { sources: request.sources } : {}),
+        origin: request.origin,
+      }),
+    });
+    const body = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+    if (!res.ok) {
+      if (typeof body.code !== 'string') return { error: 'unconfirmed' };
+      const code = body.code as HandOffError;
+      return { error: (HANDOFF_ERRORS as readonly string[]).includes(code) ? code : 'failed' };
+    }
+    return { count: Number(body.count) || 0 };
+  } catch (err) {
+    console.error('Failed to hand the draft off:', err);
+    return { error: 'unconfirmed' };
+  }
+}
+
 const AGENT_WRITE_ERRORS = [
   'ai_budget',
   'no_subscription',

@@ -3801,6 +3801,8 @@
         "steps": {
           "readRules": "Reading {count, plural, one {# rule} other {# rules}}",
           "readRulesAny": "Reading rules",
+          "readChecks": "Reading {count, plural, one {# check} other {# checks}}",
+          "readChecksAny": "Reading checks",
           "gatherSources": "Gathering {count, plural, one {# source} other {# sources}}",
           "gatherSourcesAny": "Gathering sources",
           "writeChanges": "Writing {count, plural, one {# change} other {# changes}}",
@@ -3891,6 +3893,8 @@
           "open_suggestions": "This page has open suggestions, maybe from another tab. They're shown now: accept or reject them first.",
           "published": "This page is published. Content Agent suggests changes to drafts only.",
           "writing": "Content Agent is already writing this page, maybe from another tab. Try again once it has finished.",
+          "not_due": "This brand doesn't hand off quality fixes on its own.",
+          "already": "Content Agent already had this page's automatic hand-off.",
           "failed": "Content Agent couldn't run. Try again."
         }
       },
@@ -4831,6 +4835,14 @@
         "keep": "Keep",
         "aiCheck": "AI check",
         "yourBrand": "your brand",
+        "handOff": {
+          "title": "Hand it off to Content Agent",
+          "line": "Fixes {count, plural, one {# suggestion} other {# suggestions}} in one run, for you to review · {todos, plural, =0 {nothing left for you} one {# to-do stays yours} other {# to-dos stay yours}}",
+          "nothing": "Nothing for the agent to fix · {todos, plural, =0 {nothing left for you} one {# to-do stays yours} other {# to-dos stay yours}}",
+          "button": "Hand off",
+          "running": "Working…",
+          "reading": "The page is still being read: hand it off once Quality has its scores."
+        },
         "addSource": "Add source",
         "addSourceTo": "Add a source to “{claim}”",
         "addProof": "Add proof link",

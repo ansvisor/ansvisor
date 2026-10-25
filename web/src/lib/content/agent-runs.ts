@@ -7,6 +7,8 @@
 
 export const RUN_STEP_KEYS = [
   'read_rules',
+  // Quality's hand-off (CE-051): the page's checks instead of its rules.
+  'read_checks',
   'gather_sources',
   'write_changes',
   'rewrite_page',
@@ -23,7 +25,7 @@ export interface RunStep {
   count: number | null;
 }
 
-export type AgentRunKind = 'fix' | 'rewrite' | 'write' | 'brief';
+export type AgentRunKind = 'fix' | 'rewrite' | 'write' | 'brief' | 'handoff';
 
 export interface AgentRun {
   id: string;
@@ -59,7 +61,9 @@ export function agentRunFrom(row: Record<string, unknown> | null): AgentRun | nu
       : [],
   );
   const kind = row.kind;
-  if (!steps.length || !['fix', 'rewrite', 'write', 'brief'].includes(kind as string)) return null;
+  if (!steps.length || !['fix', 'rewrite', 'write', 'brief', 'handoff'].includes(kind as string)) {
+    return null;
+  }
   const outcome = row.outcome;
   return {
     id: row.id,
