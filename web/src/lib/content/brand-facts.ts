@@ -148,6 +148,8 @@ const RANGE_BEFORE = /\d\s?(?:\S{1,3}\s)?(?:[–—-]|to|bis|ile|ila|and|und|et|
  * a discount, credits, tax added, or a team's bill ("A 5-person team pays
  * $245").
  */
+/** Whether a sentence's amounts are no product's price (an old one, a saving, an add-on…). */
+export const notAPrice = (sentence: string) => NOT_A_PRICE.test(sentence);
 const NOT_A_PRICE =
   /(?<!\p{L})(?:was|instead\s+of|regularly|originally|sav(?:e|es|ed|ing|ings)|off|discount|coupon|credits?|incl\.?|including\s+(?:vat|tax)|inkl\.?|kdv\s+dahil|statt|rabatt|indirim|tasarruf|économisez|ahorra|refund|money-back|extra|additional|add-ons?|ek\s+ücret|zusätzlich|setup|set-up|onboarding|implementation|installation|one-time|kurulum)(?!\p{L})|\d+[\s-]?(?:person|people|users?|seats?|members?|kişi(?:lik)?|kullanıcı)(?!\p{L})/iu;
 const MONTH =

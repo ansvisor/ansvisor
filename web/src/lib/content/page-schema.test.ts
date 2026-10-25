@@ -7,6 +7,9 @@ import {
   jsonLdScript,
   localDate,
   titleHasPlaceholder,
+  openingParagraph,
+  pageOffer,
+  productJsonLd,
 } from './page-schema';
 
 /** Before you publish's JSON-LD (Quality spec §7, CE-041): from the page's facts, nothing made up. */
@@ -135,5 +138,80 @@ describe('isArticlePage', () => {
 describe('localDate', () => {
   it('gives the local day', () => {
     expect(localDate(new Date(2026, 0, 5, 23, 30))).toBe('2026-01-05');
+  });
+});
+
+describe('pageOffer (Phase 3, CE-053)', () => {
+  it('reads one price as the Offer, several as a range, in one currency', () => {
+    expect(pageOffer(['The Ridge 28 costs $129.'])).toEqual({ price: 129, currency: 'USD' });
+    expect(pageOffer(['Small: $119.', 'Large: $139.', 'Small: $119.'])).toEqual({
+      low: 119,
+      high: 139,
+      currency: 'USD',
+      count: 2,
+    });
+  });
+
+  it('reads none where whose price is which isn’t sure, or the amount isn’t the product’s', () => {
+    expect(pageOffer(['A sturdy daypack for wet hikes.'])).toBeNull();
+    expect(pageOffer(['$129 in the US, €119 in Europe.'])).toBeNull();
+    // A shipping threshold, an old price, a saving: no price of the product's.
+    expect(pageOffer(['Free shipping on orders over $50.', 'It costs $129.'])).toEqual({
+      price: 129,
+      currency: 'USD',
+    });
+    expect(pageOffer(['Now $99, was $129.'])).toBeNull();
+    expect(pageOffer(['Save $30 this week.'])).toBeNull();
+  });
+});
+
+describe('openingParagraph', () => {
+  it('gives the first paragraph past a byline, cut at a word under 500 characters', () => {
+    expect(
+      openingParagraph('<h1>Ridge 28</h1><p>By Acme Team</p><p>A daypack for wet hikes.</p>'),
+    ).toBe('A daypack for wet hikes.');
+    const long = openingParagraph(`<p>${'word '.repeat(150)}end.</p>`)!;
+    expect(long.length).toBeLessThanOrEqual(501);
+    expect(long.endsWith('…')).toBe(true);
+    expect(openingParagraph('<h1>Ridge 28</h1>')).toBeNull();
+  });
+});
+
+describe('productJsonLd', () => {
+  it('gives a Product with its Offer, or an AggregateOffer for a range, and only what the page states', () => {
+    expect(
+      productJsonLd({
+        name: 'Ridge 28 daypack',
+        description: 'A daypack for wet hikes.',
+        images: ['https://cdn.acme.com/ridge.jpg'],
+        brandName: 'Acme',
+        offer: { price: 129, currency: 'USD' },
+      }),
+    ).toEqual({
+      '@context': 'https://schema.org',
+      '@type': 'Product',
+      name: 'Ridge 28 daypack',
+      description: 'A daypack for wet hikes.',
+      image: 'https://cdn.acme.com/ridge.jpg',
+      brand: { '@type': 'Brand', name: 'Acme' },
+      offers: { '@type': 'Offer', price: '129.00', priceCurrency: 'USD' },
+    });
+    const range = productJsonLd({
+      name: 'Ridge [model name]',
+      description: null,
+      images: [],
+      brandName: 'Acme',
+      offer: { low: 119, high: 139, currency: 'EUR', count: 2 },
+    });
+    // A placeholder isn't the product's name; no availability or reviews are made up.
+    expect(range).not.toHaveProperty('name');
+    expect(range).not.toHaveProperty('image');
+    expect(range.offers).toEqual({
+      '@type': 'AggregateOffer',
+      lowPrice: '119.00',
+      highPrice: '139.00',
+      priceCurrency: 'EUR',
+      offerCount: 2,
+    });
   });
 });

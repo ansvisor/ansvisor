@@ -1,11 +1,14 @@
 import type { ContentAuthor } from './authors';
+import { notAPrice, pagePrices } from './brand-facts';
 import type { PageType } from './drafts';
 import { PLACEHOLDER } from './placeholders';
+import { isByline, sentencesOf } from './readability';
 
 /**
  * The page's JSON-LD for Before you publish (Content Editor Quality spec §7,
  * CE-041): an Article from its title, author, brand and dates, for the
- * person to paste when their CMS doesn't write one. A person byline brings
+ * person to paste when their CMS doesn't write one; a product page's
+ * Product with its Offer in Phase 3 (CE-053). A person byline brings
  * their Person schema (sameAs from their profile links); the organization
  * byline, the brand's Organization. Nothing in it is made up: what isn't
  * known is left out.
@@ -105,6 +108,94 @@ export function articleJsonLd({
     publisher: organization,
     ...(isNew ? { datePublished: today } : {}),
     dateModified: today,
+  };
+}
+
+/**
+ * A product page's price as the page states it (Quality spec §11, CE-053):
+ * one price is the product's Offer; several (sizes, plans) its range. None
+ * when the page states none, or in more than one currency (whose is which
+ * isn't sure). Amounts that aren't the product's price are left out: an old
+ * price, a saving, an add-on (brand facts' rules), a shipping threshold or a
+ * minimum order ("free shipping over $50").
+ */
+export type PageOffer =
+  | { price: number; currency: string }
+  | { low: number; high: number; currency: string; count: number };
+
+const THRESHOLD =
+  /\b(?:shipping|delivery|orders?|over|above|spend|minimum|min\.|kargo|versand|livraison|env[ií]o)\b/iu;
+
+export function pageOffer(texts: readonly string[]): PageOffer | null {
+  const prices = texts
+    .flatMap((text) => sentencesOf(text))
+    .filter((sentence) => !notAPrice(sentence) && !THRESHOLD.test(sentence))
+    .flatMap((sentence) => pagePrices(sentence))
+    .filter((price) => price.amount > 0);
+  if (!prices.length) return null;
+  const currencies = new Set(prices.map((p) => p.currency));
+  if (currencies.size > 1) return null;
+  const [currency] = currencies;
+  const amounts = [...new Set(prices.map((p) => p.amount))].sort((a, b) => a - b);
+  return amounts.length === 1
+    ? { price: amounts[0], currency }
+    : { low: amounts[0], high: amounts[amounts.length - 1], currency, count: amounts.length };
+}
+
+/** The page's opening paragraph (past a byline or a date), as Product's description: up to 500 characters. */
+export function openingParagraph(html: string): string | null {
+  const doc = new DOMParser().parseFromString(html, 'text/html');
+  for (const p of doc.body.querySelectorAll('p')) {
+    const text = (p.textContent ?? '').replace(/\s+/g, ' ').trim();
+    if (!text || isByline(text)) continue;
+    if (text.length <= 500) return text;
+    const cut = text.slice(0, 500);
+    return `${cut.slice(0, cut.lastIndexOf(' ') > 0 ? cut.lastIndexOf(' ') : 500)}…`;
+  }
+  return null;
+}
+
+export interface ProductSchemaInput {
+  /** The page's title (its H1): the product's name. */
+  name: string;
+  description: string | null;
+  /** The person's own images on the page first (CE-049), else its first image. */
+  images: string[];
+  brandName: string;
+  offer: PageOffer;
+}
+
+/**
+ * A product page's JSON-LD (CE-053): Product with its Offer, from the page
+ * as written. Only what the page states: availability, SKU, GTIN and
+ * reviews come from a product feed and connected reviews, which aren't
+ * connected yet; a price the page doesn't state gives none (pageOffer).
+ */
+export function productJsonLd({
+  name,
+  description,
+  images,
+  brandName,
+  offer,
+}: ProductSchemaInput): Record<string, unknown> {
+  return {
+    '@context': 'https://schema.org',
+    '@type': 'Product',
+    // A placeholder isn't the product's name: it is left out until filled.
+    ...(name.trim() && !titleHasPlaceholder(name) ? { name: name.trim() } : {}),
+    ...(description ? { description } : {}),
+    ...(images.length ? { image: images.length === 1 ? images[0] : images } : {}),
+    ...(brandName.trim() ? { brand: { '@type': 'Brand', name: brandName.trim() } } : {}),
+    offers:
+      'price' in offer
+        ? { '@type': 'Offer', price: offer.price.toFixed(2), priceCurrency: offer.currency }
+        : {
+            '@type': 'AggregateOffer',
+            lowPrice: offer.low.toFixed(2),
+            highPrice: offer.high.toFixed(2),
+            priceCurrency: offer.currency,
+            offerCount: offer.count,
+          },
   };
 }
 

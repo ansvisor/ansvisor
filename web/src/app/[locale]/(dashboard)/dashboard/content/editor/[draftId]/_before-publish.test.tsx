@@ -104,6 +104,7 @@ async function render(
     title = 'How small teams forecast',
     disclosureLine = null as string | null,
     disclosureAdded = false,
+    product = null as Parameters<typeof BeforePublish>[0]['product'],
   } = {},
 ) {
   await act(async () => {
@@ -122,6 +123,7 @@ async function render(
           pageType={pageType}
           image={image}
           linksPending={linksPending}
+          product={product}
           onMarkReady={onMarkReady}
           onFixFirst={onFixFirst}
           disclosureLine={disclosureLine}
@@ -327,6 +329,33 @@ describe('BeforePublish', () => {
       }),
     );
     expect(rows().some((row) => row.includes('without a disclosure'))).toBe(false);
+  });
+
+  it('gives a product page its Product schema with the price it states, and asks for one it doesn’t (CE-053)', async () => {
+    const product = {
+      description: 'A daypack for wet hikes.',
+      images: ['https://cdn.acme.com/ridge.jpg'],
+      offer: { price: 129, currency: 'USD' },
+    };
+    await render(quality(), { pageType: 'product_page', title: 'Ridge 28 daypack', product });
+    expect(rows().some((row) => row.startsWith('Product schema with its price'))).toBe(true);
+    expect(jsonLd()).toMatchObject({
+      '@type': 'Product',
+      name: 'Ridge 28 daypack',
+      offers: { '@type': 'Offer', price: '129.00', priceCurrency: 'USD' },
+    });
+    expect(dialog().textContent).toContain('The price and images are the page');
+    // No price on the page: no code to paste, and it says why.
+    await render(quality(), {
+      pageType: 'product_page',
+      title: 'Ridge 28 daypack',
+      product: { ...product, offer: null },
+    });
+    expect(rows().some((row) => row.startsWith('Product schema needs the price'))).toBe(true);
+    expect(dialog().querySelector('pre')).toBeNull();
+    expect(
+      [...dialog().querySelectorAll('button')].some((b) => b.textContent === 'Copy JSON-LD'),
+    ).toBe(false);
   });
 
   it('names the brand’s byline as checked on a page type that wants no author (CE-052)', async () => {

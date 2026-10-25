@@ -14,6 +14,8 @@ import {
 import {
   articleJsonLd,
   isArticlePage,
+  productJsonLd,
+  type PageOffer,
   jsonLdScript,
   localDate,
   titleHasPlaceholder,
@@ -90,7 +92,14 @@ export function BeforePublish({
   disclosureLine = null,
   disclosureAdded = false,
   onAddDisclosure,
+  product = null,
 }: {
+  /**
+   * Phase 3 (CE-053): a product page's Product schema, from its opening
+   * paragraph, its images and the price it states (pageOffer); null on
+   * other pages.
+   */
+  product?: { description: string | null; images: string[]; offer: PageOffer | null } | null;
   /** Opened by Mark ready, by Export, or by Send to CMS. */
   mode?: 'markReady' | 'export' | 'send';
   paste: ReadyToPaste;
@@ -145,25 +154,38 @@ export function BeforePublish({
         .filter((s) => s.gain > 0)
         .sort((a, b) => b.gain - a.gain)
     : [];
-  const article = isArticlePage(pageType);
-  const jsonLd = article
-    ? jsonLdScript(
-        articleJsonLd({
-          title,
-          // An author only confirmed (00271) isn't named here: left out, as unknown.
-          author: authorsRead && !(!author && quality.authorConfirmed?.real) ? author : undefined,
-          authorUrl:
-            (author &&
-              siteTrust?.checks.authorPages.authors.find((a) => a.name === author.name)?.url) ||
-            null,
-          brandName,
-          brandUrl: siteTrust?.checks.organizationSchema.url ?? null,
-          image,
-          isNew,
-          today: localDate(new Date()),
-        }),
-      )
-    : null;
+  const article = !product && isArticlePage(pageType);
+  const productLd =
+    product?.offer &&
+    jsonLdScript(
+      productJsonLd({
+        name: title,
+        description: product.description,
+        images: product.images,
+        brandName,
+        offer: product.offer,
+      }),
+    );
+  const jsonLd = productLd
+    ? productLd
+    : article
+      ? jsonLdScript(
+          articleJsonLd({
+            title,
+            // An author only confirmed (00271) isn't named here: left out, as unknown.
+            author: authorsRead && !(!author && quality.authorConfirmed?.real) ? author : undefined,
+            authorUrl:
+              (author &&
+                siteTrust?.checks.authorPages.authors.find((a) => a.name === author.name)?.url) ||
+              null,
+            brandName,
+            brandUrl: siteTrust?.checks.organizationSchema.url ?? null,
+            image,
+            isNew,
+            today: localDate(new Date()),
+          }),
+        )
+      : null;
   // Added here: it counts once the page is read again.
   const [added, setAdded] = useState(false);
   // Where the page's type counts it (CE-052): a product page is the brand's own.
@@ -198,18 +220,32 @@ export function BeforePublish({
                 title: t('author.none'),
                 detail: t('author.noneDetail', { byline: quality.team }),
               },
-    ...(article
+    ...(product
       ? [
-          { state: 'check' as const, title: t('dates.title'), detail: t('dates.detail') },
-          isNew
-            ? { state: 'check' as const, title: t('schema.title'), detail: t('schema.detail') }
-            : {
+          product.offer
+            ? {
                 state: 'check' as const,
-                title: t('schema.titleLive'),
-                detail: t('schema.detailLive'),
+                title: t('schema.product'),
+                detail: t('schema.productDetail'),
+              }
+            : {
+                state: 'missing' as const,
+                title: t('schema.productNoPrice'),
+                detail: t('schema.productNoPriceDetail'),
               },
         ]
-      : [{ state: 'check' as const, title: t('schema.other'), detail: t('schema.otherDetail') }]),
+      : article
+        ? [
+            { state: 'check' as const, title: t('dates.title'), detail: t('dates.detail') },
+            isNew
+              ? { state: 'check' as const, title: t('schema.title'), detail: t('schema.detail') }
+              : {
+                  state: 'check' as const,
+                  title: t('schema.titleLive'),
+                  detail: t('schema.detailLive'),
+                },
+          ]
+        : [{ state: 'check' as const, title: t('schema.other'), detail: t('schema.otherDetail') }]),
     // Phase 2 (CE-050): where the page puts the brand forward.
     ...(disclosure
       ? [
@@ -363,7 +399,9 @@ export function BeforePublish({
             {titleHasPlaceholder(title) && (
               <p className="text-xs text-amber-700 dark:text-amber-300">{t('headlineLeftOut')}</p>
             )}
-            <p className="text-xs text-muted-foreground">{t('datesNote')}</p>
+            <p className="text-xs text-muted-foreground">
+              {t(productLd ? 'productNote' : 'datesNote')}
+            </p>
           </div>
         )}
         <DialogFooter className="gap-2 sm:justify-between">
