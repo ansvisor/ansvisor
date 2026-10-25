@@ -91,8 +91,10 @@ function DoingLine({
   const counted = (key: 'read_rules' | 'gather_sources') =>
     run?.steps.find((step) => step.key === key)?.count ?? null;
   const counts = { rules: counted('read_rules'), sources: counted('gather_sources') };
-  // No sources gathered: not a line to say.
-  const lines = DOING[mode].filter((line) => line !== 'sources' || counts.sources !== 0);
+  // None read (the step's chip is left out too): not a line to say.
+  const lines = DOING[mode].filter(
+    (line) => (line !== 'rules' && line !== 'sources') || counts[line] !== 0,
+  );
   const line = lines[Math.floor((seconds ?? 0) / DOING_S) % lines.length];
   const said = (): string => {
     if (line !== 'rules' && line !== 'sources') return t(line);
@@ -238,7 +240,7 @@ export function AgentWriting({
                     aria-current={i === WRITING ? 'step' : undefined}
                     className={cn(
                       'flex items-center gap-2.5 text-sm',
-                      i === WRITING && 'relative -mx-2 overflow-hidden rounded-md px-2 py-1',
+                      i === WRITING && 'relative -mx-2 -my-1 overflow-hidden rounded-md px-2 py-1',
                       i > WRITING && 'text-muted-foreground',
                     )}
                   >
