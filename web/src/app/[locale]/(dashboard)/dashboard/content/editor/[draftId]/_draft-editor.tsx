@@ -136,7 +136,7 @@ import {
   weighedTrust,
 } from '@/lib/content/quality-profiles';
 import { caseConfirmed, caseKey, proofKey, qualityTodos } from '@/lib/content/quality-todos';
-import { introFacts } from '@/lib/content/intro-facts';
+import { confirmedFacts, introConfirmKeys, introFacts } from '@/lib/content/intro-facts';
 import { isByline, readability, sentencesOf, withTypeRules } from '@/lib/content/readability';
 import { normalizeDomain } from '@/lib/citations/classify';
 import { brandFactsPath, factMismatches } from '@/lib/content/brand-facts';
@@ -900,15 +900,20 @@ export function DraftEditor({
       live = false;
     };
   }, [draft.id, casesOn]);
-  // Phase 3 (CE-054): a category intro's counts and prices, and the ones the
-  // person confirmed, once the confirms are read: Trust's intro facts and
-  // their to-do.
+  // Phase 3 (CE-054): a category intro's counts and prices, in the page's
+  // language, and the facts the person confirmed. Trust counts them at once
+  // (none confirmed until the confirms are read, as a customer case); the
+  // to-do waits for the read.
   const introOn = casesOn && profile === 'category';
-  const intro = useMemo(() => (introOn ? introFacts(pageHtml) : []), [introOn, pageHtml]);
+  const intro = useMemo(
+    () => (introOn ? introFacts(pageHtml, language) : []),
+    [introOn, pageHtml, language],
+  );
+  const introConfirmed = useMemo(() => confirmedFacts(introConfirms ?? []), [introConfirms]);
+  const introAll = useMemo(() => [...new Set(intro.flatMap((fact) => fact.facts))], [intro]);
   const introRead = useMemo(
-    () =>
-      introOn && casesRead ? { facts: intro, confirmed: introConfirms ?? new Set<string>() } : null,
-    [introOn, casesRead, intro, introConfirms],
+    () => (introOn && casesRead ? { facts: intro, confirmed: introConfirmed } : null),
+    [introOn, casesRead, intro, introConfirmed],
   );
   // The page's customer cases, and how many are confirmed: E-E-A-T's (CE-052).
   const caseCount = useMemo(() => {
@@ -1057,13 +1062,11 @@ export function DraftEditor({
   );
   // Confirm: only the person can tell their own image from stock.
   const [confirmingImages, setConfirmingImages] = useState(false);
-  // Quality's Confirm on a customer case (CE-052): the person's statement
-  // that the customer may be named; put back if it can't be saved.
   // Quality's Confirm on a category intro's facts (CE-054): the person's
-  // word that its counts and prices are right, each sentence's; put back if
-  // they can't be saved.
+  // word that its counts and prices are right, the ones not confirmed yet in
+  // one row; put back if it can't be saved.
   const confirmIntro = async () => {
-    const keys = intro.map((fact) => fact.key).filter((key) => !introConfirms?.has(key));
+    const keys = introConfirmKeys(introAll.filter((fact) => !introConfirmed.has(fact)));
     if (!keys.length) return;
     setIntroConfirms((prev) => new Set([...(prev ?? []), ...keys]));
     const takeBack = (back: string[]) =>
@@ -1083,6 +1086,8 @@ export function DraftEditor({
       }
     }
   };
+  // Quality's Confirm on a customer case (CE-052): the person's statement
+  // that the customer may be named; put back if it can't be saved.
   const confirmCase = async (key: string) => {
     if (caseConfirms?.has(key)) return;
     setCaseConfirms((prev) => new Set([...(prev ?? []), key]));
@@ -1158,10 +1163,10 @@ export function DraftEditor({
               // A product page's shipping and returns (CE-052), price and stock (CE-053).
               shipping: shippingRead,
               feed: feedRead,
-              intro: introRead
+              intro: introOn
                 ? {
-                    total: introRead.facts.length,
-                    confirmed: introRead.facts.filter((f) => introRead.confirmed.has(f.key)).length,
+                    total: introAll.length,
+                    confirmed: introAll.filter((fact) => introConfirmed.has(fact)).length,
                   }
                 : null,
               now: Date.now(),
@@ -1173,7 +1178,9 @@ export function DraftEditor({
       weights,
       shippingRead,
       feedRead,
-      introRead,
+      introOn,
+      introAll,
+      introConfirmed,
       qualityOn,
       pageBlocks,
       linkChecks,

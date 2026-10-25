@@ -34,6 +34,9 @@ import { CATALOG_SETTINGS_PATH } from '@/lib/content/feed-match';
 import { cn } from '@/lib/utils';
 import { MANAGE_AUTHORS_PATH } from './_author-menu';
 
+/** The intro's sentences its to-do quotes, at most (CE-054). */
+const INTRO_QUOTED = 3;
+
 /** What Quality reads from the draft and its author, for the segment and the header. */
 export interface QualityRead {
   /**
@@ -470,20 +473,25 @@ export function useTodoCopy() {
                 : t('byline.detail.pickAuthor', { byline: team }),
       };
     }
-    // The page's own claims, their proof asked for by kind and business (CE-049).
-    // A customer case in Phase 3 (CE-052): confirmed publishable, not linked.
     // A category intro's counts and prices (CE-054): only the person knows them.
     if (todo.id === 'introFacts') {
+      const facts = todo.facts ?? [];
       return {
-        title: t('introFacts.title', { count: todo.count ?? 0 }),
+        title: t('introFacts.title'),
         next: t('introFacts.next'),
         detail: todo.done
           ? t('introFacts.done')
           : t('introFacts.detail', {
-              facts: (todo.facts ?? []).map((fact) => `“${fact}”`).join(' '),
+              facts: facts
+                .slice(0, INTRO_QUOTED)
+                .map((fact) => `“${fact}”`)
+                .join(' '),
+              more: Math.max(0, facts.length - INTRO_QUOTED),
             }),
       };
     }
+    // The page's own claims, their proof asked for by kind and business (CE-049).
+    // A customer case in Phase 3 (CE-052): confirmed publishable, not linked.
     if (todo.id === 'proof' && todo.proof && todo.action === 'confirmCase') {
       return {
         title: t('proof.confirmCase.title', { claim: todo.proof.claim }),

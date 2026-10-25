@@ -131,15 +131,17 @@ export const PROFILE_WEIGHTS: Readonly<Record<QualityProfile, ProfileWeights>> =
       customerCase: 0,
     },
     trust: {
+      // The checks before intro facts at 0.8 of their points: a page whose
+      // intro states none scores as it did.
       claimsSourced: 20,
       primarySources: 0,
-      noWeakSources: 5,
-      brandFacts: 25,
+      noWeakSources: 4,
+      brandFacts: 24,
       expertQuote: 0,
       freshSources: 0,
       balanced: 0,
       disclosure: 0,
-      noBrokenLinks: 10,
+      noBrokenLinks: 12,
       siteTrust: 20,
       shippingReturns: 0,
       feedMatch: 0,

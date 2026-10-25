@@ -215,7 +215,7 @@ describe('QualityTab', () => {
       ],
     });
     const row = [...container.querySelectorAll('[aria-label="Your to-dos"] li')].find((li) =>
-      li.textContent?.startsWith("Confirm the intro's counts and prices"),
+      li.textContent?.startsWith("Confirm the intro's facts"),
     )!;
     expect(row.textContent).toContain('“Choose from 120+ daypacks.” “Prices run $49–$199.”');
     await act(async () =>

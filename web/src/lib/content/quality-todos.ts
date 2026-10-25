@@ -87,7 +87,7 @@ export interface QualityTodo {
    * sentence is an unsourced claim until it is, confirmed or not.
    */
   trustGain?: number;
-  /** A category intro's facts not confirmed yet, each its sentence (CE-054). */
+  /** A category intro's sentences with a fact not confirmed yet (CE-054). */
   facts?: string[];
   /** A check date the page has, over a year old: Add line's own line (it replaces it), or the person's words. */
   old?: 'line' | 'text';
@@ -182,11 +182,11 @@ export function qualityTodos({
   cases?: ReadonlySet<string> | null;
   /**
    * Phase 3 (CE-054): a category page's intro facts (introFacts) and the
-   * ones the person confirmed, by key; null elsewhere, or before the
-   * confirms are read.
+   * facts the person confirmed (confirmedFacts); null elsewhere, or before
+   * the confirms are read.
    */
   intro?: {
-    facts: readonly { sentence: string; key: string }[];
+    facts: readonly { sentence: string; facts: readonly string[] }[];
     confirmed: ReadonlySet<string>;
   } | null;
   /**
@@ -267,9 +267,10 @@ export function qualityTodos({
         },
       ]
     : [];
-  // Only the person knows the category's counts and prices are right: one confirm for them all.
+  // Only the person knows the category's counts and prices are right: one
+  // confirm for them all. A sentence is open while a fact in it is.
   const unconfirmedFacts = intro
-    ? intro.facts.filter((fact) => !intro.confirmed.has(fact.key))
+    ? intro.facts.filter((fact) => fact.facts.some((f) => !intro.confirmed.has(f)))
     : [];
   const introTodo: QualityTodo[] =
     intro && intro.facts.length

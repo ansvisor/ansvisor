@@ -4797,10 +4797,10 @@
             "done": "The page shows when it was last checked"
           },
           "introFacts": {
-            "title": "{count, plural, one {Confirm the intro's count or price} other {Confirm the intro's counts and prices}}",
-            "next": "confirm the intro's counts and prices, once you've checked them",
-            "detail": "Only you know they're right: check them against your catalog, then confirm. {facts}",
-            "done": "You confirmed the intro's counts and prices"
+            "title": "Confirm the intro's facts",
+            "next": "confirm the intro's facts, once you've checked them",
+            "detail": "Its counts and prices: only you know they're right. Check them against your catalog, then confirm. {facts}{more, plural, =0 {} one { and # more} other { and # more}}",
+            "done": "You confirmed the intro's facts"
           },
           "shippingReturns": {
             "title": "Say how shipping and returns work",

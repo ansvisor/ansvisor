@@ -234,8 +234,8 @@ describe('qualityTodos', () => {
 
   it('asks to confirm a category intro’s counts and prices, all at once (CE-054)', () => {
     const facts = [
-      { sentence: 'Choose from 120+ daypacks.', key: 'intro:choosefrom120+daypacks.' },
-      { sentence: 'Prices run $49–$199.', key: 'intro:pricesrun$49–$199.' },
+      { sentence: 'Choose from 120+ daypacks.', facts: ['120+'] },
+      { sentence: 'Prices run $49–$199.', facts: ['USD49-199'] },
     ];
     const read = trust({
       blocks: trustBlocks('<p>Choose from 120+ daypacks.</p><p>Prices run $49–$199.</p>'),
@@ -253,15 +253,15 @@ describe('qualityTodos', () => {
         intro: { facts, confirmed: new Set(confirmed) },
         off: checksOff('category'),
       }).find((t) => t.id === 'introFacts');
-    expect(run([facts[0].key])).toMatchObject({
+    expect(run(['120+'])).toMatchObject({
       done: false,
       action: 'confirmIntro',
       score: 'trust',
       count: 1,
       facts: ['Prices run $49–$199.'],
     });
-    expect(run([facts[0].key])!.gain).toBeGreaterThan(0);
-    expect(run(facts.map((f) => f.key))).toMatchObject({
+    expect(run(['120+'])!.gain).toBeGreaterThan(0);
+    expect(run(['120+', 'USD49-199'])).toMatchObject({
       done: true,
       action: null,
       gain: 0,
