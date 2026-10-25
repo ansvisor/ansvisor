@@ -237,12 +237,18 @@ describe('AgentCard', () => {
       afterText: '<h1>New</h1><p>Shorter.</p>',
       reason: 'shortened the content to about 4 characters',
     });
-    // 12 characters for a Length of 4 (3–5): missed, most of it kept.
-    await render([page], false, { length: { target: 4, min: 3, max: 5, kept: 4 } });
+    // 12 characters for a Length of 4 (3–5): missed, and what it keeps puts it out of reach.
+    await render([page], false, {
+      length: { target: 4, min: 3, max: 5, kept: 4, outOfReach: true },
+    });
     expect(container.textContent).toContain(
       '37 → 12 characters · Length 4 not reached (4 characters are passages AI answers quote, tables and other blocks a rewrite keeps as they are)',
     );
     expect(container.textContent).not.toContain('shortened the content');
+    // Something kept, but not why it missed: not named as the reason.
+    await render([page], false, { length: { target: 4, min: 3, max: 5, kept: 4 } });
+    expect(container.textContent).toContain('37 → 12 characters · Length 4 not reached');
+    expect(container.textContent).not.toContain('characters are passages AI answers quote');
     // Within the Length: the agent's own words.
     await render([page], false, { length: { target: 12, min: 10, max: 14, kept: 0 } });
     expect(container.textContent).toContain(

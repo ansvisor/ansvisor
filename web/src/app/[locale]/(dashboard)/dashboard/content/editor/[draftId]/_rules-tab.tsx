@@ -344,13 +344,20 @@ export function RulesTab({
               <Info aria-hidden className="mt-0.5 h-3 w-3 shrink-0 text-muted-foreground" />
               <div className="min-w-0 space-y-1.5">
                 <p>
-                  {t(outOfReach.why === 'reached' ? 'lengthOutOfReachRun' : 'lengthOutOfReach', {
-                    count: outOfReach.count,
-                    target: outOfReach.target,
-                    kept: outOfReach.kept,
-                    least: outOfReach.least,
-                    suggested: outOfReach.suggested,
-                  })}
+                  {t(
+                    outOfReach.why === 'reached'
+                      ? 'lengthOutOfReachRun'
+                      : outOfReach.kept > 0
+                        ? 'lengthOutOfReach'
+                        : 'lengthOutOfReachHeadings',
+                    {
+                      count: outOfReach.count,
+                      target: outOfReach.target,
+                      kept: outOfReach.kept,
+                      least: outOfReach.least,
+                      suggested: outOfReach.suggested,
+                    },
+                  )}
                 </p>
                 <Button
                   size="sm"

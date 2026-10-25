@@ -169,7 +169,7 @@ describe('the Rules tab', () => {
       // 15,921 characters for 3,000 (up to 3,600): a rewrite keeping 2,900 can't go under 3,900.
       await show({
         agentFix: fix(),
-        pageRewrite: { ...fix(), reach: { kept: 2_900, floor: 3_900, reached: null } },
+        pageRewrite: { ...fix(), reach: { kept: 2_900, floor: 3_900, last: null } },
       });
       const notes = () =>
         [...container.querySelectorAll('[role="note"]')].map((n) => n.textContent ?? '');
@@ -191,13 +191,29 @@ describe('the Rules tab', () => {
     it('doesn’t offer a rewrite again for a Length the last one missed', async () => {
       await show({
         agentFix: fix(),
-        pageRewrite: { ...fix(), reach: { kept: 900, floor: 1_500, reached: 9_800 } },
+        pageRewrite: {
+          ...fix(),
+          reach: { kept: 900, floor: 1_500, last: { chars: 9_800, target: 3_000, kept: 900 } },
+        },
       });
       const notes = [...container.querySelectorAll('[role="note"]')].map((n) => n.textContent);
       expect(notes.some((n) => n?.startsWith('Recommended: the page is'))).toBe(false);
       expect(notes).toContainEqual(
         expect.stringContaining(
           "The page is 15,921 characters for a Length of 3,000. The last rewrite came to 9,800, so another won't get there. Raise the Length to about 10,000",
+        ),
+      );
+    });
+
+    it('says so of the headings alone, when nothing is kept', async () => {
+      await show({
+        agentFix: fix(),
+        pageRewrite: { ...fix(), reach: { kept: 0, floor: 3_700, last: null } },
+      });
+      const notes = [...container.querySelectorAll('[role="note"]')].map((n) => n.textContent);
+      expect(notes).toContainEqual(
+        expect.stringContaining(
+          'but its headings and an answer under each come to about 3,700. Raise the Length to about 4,000, or use fewer sections.',
         ),
       );
     });

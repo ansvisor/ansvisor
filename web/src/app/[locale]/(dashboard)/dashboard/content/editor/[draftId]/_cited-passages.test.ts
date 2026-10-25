@@ -126,6 +126,32 @@ describe('rewriteFloor', () => {
       small.destroy();
     }
   });
+
+  it('takes a quoted passage in a quote as the answer, and asks none of a heading over deeper ones', () => {
+    const small = new Editor({
+      extensions: [StarterKit, CitedPassages.configure({ onHeld: () => {} })],
+      content:
+        '<h1>Title</h1>' +
+        `<h2>Tools</h2><h3>Tool A</h3><blockquote><p>${QUOTED}</p></blockquote>` +
+        '<h3>Tool B</h3><p>Plain.</p>',
+    });
+    try {
+      small.view.dispatch(
+        small.state.tr.setMeta(citedPassagesKey, {
+          labels: new Map([[passageKey(QUOTED), 'Cited by ChatGPT 3×']]),
+          unlocked: new Set(),
+        }),
+      );
+      const headings = 'Title'.length + 'Tools'.length + 'Tool A'.length + 'Tool B'.length;
+      // Tools groups; Tool A's answer is the quoted passage; only Tool B needs one.
+      expect(rewriteFloor(small.state, { summary: false })).toEqual({
+        kept: QUOTED.length,
+        floor: QUOTED.length + headings + 100,
+      });
+    } finally {
+      small.destroy();
+    }
+  });
 });
 
 describe('locked passages', () => {

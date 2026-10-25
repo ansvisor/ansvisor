@@ -814,6 +814,16 @@ export const REWRITE_OPEN_RULES = 4;
 /** The most text a page sent whole may hold (content-rewrite.js MAX_REWRITE_CHARS). */
 export const REWRITE_MAX_CHARS = 60_000;
 
+/** The page's last rewrite, as the API keeps it (00285). */
+export interface LastRewrite {
+  /** The characters it came to. */
+  chars: number;
+  /** The Length it was written to; null with Length off. */
+  target: number | null;
+  /** The characters it kept word for word. */
+  kept: number;
+}
+
 /**
  * What a page rewrite can't go under, and what the last one came to: a
  * Length under either is out of its reach (editor test 2026-10-25, where a
@@ -828,12 +838,12 @@ export interface RewriteReach {
    * nothing kept stands (rewriteFloor in the editor). Kept low on purpose.
    */
   floor: number;
-  /** The characters the page's last rewrite came to (any of its runs), or null for none. */
-  reached: number | null;
+  /** The page's last rewrite, or null for none (or one made before 00285). */
+  last: LastRewrite | null;
 }
 
 /** Nothing known about what a rewrite keeps or reached: every Length is in reach. */
-export const NO_REACH: RewriteReach = { kept: 0, floor: 0, reached: null };
+export const NO_REACH: RewriteReach = { kept: 0, floor: 0, last: null };
 
 /** A long page whose Length a rewrite can't reach, and a Length it could. */
 export interface LengthOutOfReach {
@@ -841,19 +851,35 @@ export interface LengthOutOfReach {
   target: number;
   /** The characters a rewrite keeps as they are. */
   kept: number;
-  /** Why: the least a rewrite comes to is past the Length, or the last rewrite came to `reached`. */
+  /** Why: the least a rewrite comes to is past the Length, or the last rewrite came to `least`. */
   why: 'floor' | 'reached';
-  /** The least a rewrite comes to (why 'floor'), or what the last one came to (why 'reached'). */
+  /** The least a rewrite comes to: the estimate, or what the last one came to, the more. */
   least: number;
   /** A Length the page can be rewritten to: that, up to the 500. */
   suggested: number;
 }
 
 /**
+ * What the last rewrite says of this Length: the characters it came to, when
+ * it was written to a Length (not with Length off), nothing kept then was
+ * unlocked since (the counts differ by about a space a block, so a little
+ * slack), and it was asked for this Length or a shorter one, or missed its
+ * own: either way a rewrite doesn't go under what it came to. Null when it
+ * says nothing (a rewrite to 10,000 says nothing of 3,000).
+ */
+function lastRewriteSays(last: LastRewrite | null, target: number, kept: number): number | null {
+  if (!last || last.target === null) return null;
+  if (kept < last.kept * 0.98 - 20) return null;
+  const missedItsOwn = last.chars > lengthBand(last.target).max;
+  return target >= last.target || missedItsOwn ? last.chars : null;
+}
+
+/**
  * Whether the page is over its Length by more than a rewrite could take
  * out: the least a rewrite comes to (`reach.floor`) is past the top of the
- * Length's band, or the last rewrite already came to more than it. Null
- * otherwise, and for a page under its Length.
+ * Length's band, or the last rewrite (lastRewriteSays) came to more than it.
+ * A last rewrite that got within the band says it's in reach, whatever the
+ * estimate. Null otherwise, and for a page under its Length.
  */
 export function lengthOutOfReach<T extends { rule: ActiveRule; status: RuleStatus }>(
   rules: T[],
@@ -871,11 +897,12 @@ export function lengthOutOfReach<T extends { rule: ActiveRule; status: RuleStatu
     return null;
   }
   const { max } = lengthBand(target);
-  const reached = reach.reached !== null && reach.reached > max ? reach.reached : null;
-  if (reach.floor <= max && reached === null) return null;
-  // What the last rewrite really came to says more than the estimate.
-  const why = reached !== null ? 'reached' : 'floor';
-  const least = reached ?? reach.floor;
+  const reached = lastRewriteSays(reach.last, target, reach.kept);
+  if (reached !== null && reached <= max) return null;
+  if (reached === null && reach.floor <= max) return null;
+  // The more of the two, so the Length suggested is one a rewrite can reach.
+  const least = Math.max(reach.floor, reached ?? 0);
+  const why = reached !== null && reached >= reach.floor ? 'reached' : 'floor';
   // A Length the page fits as a rewrite leaves it, never under the rule's
   // own value nor past its top, nor past the page as it is (that would read short).
   const roundUp = (n: number) => Math.ceil(n / 500) * 500;

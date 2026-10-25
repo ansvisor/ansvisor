@@ -596,6 +596,11 @@ async function rewritePage({
     after_text: html,
     reason: clean(stripSourceIds(object.reason)).slice(0, 300) || 'Rewrote the page to the rules',
     rule_keys: [...ruleKeys],
+    // What it was asked for and came to (00285): a Length it missed isn't
+    // offered again. With Length off, it was asked for none.
+    length_target: ruleKeys.has('length') ? length : null,
+    kept_chars: page.keptChars,
+    after_chars: textLength(html),
     ...(sources.length ? { sources } : {}),
   });
   if (insertError) throw insertError;

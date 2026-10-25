@@ -38,7 +38,7 @@ import {
   type HandOffError,
   getCitedPassages,
   getDraftSuggestions,
-  getLastPageRewriteLength,
+  getLastPageRewrite,
   keepAgentBeforeVersion,
   markContentDraftReady,
   unmarkContentDraftReady,
@@ -166,7 +166,9 @@ import {
   openRulesForAgent,
   lengthBand,
   rewriteAdvice,
+  lengthOutOfReach,
   type ActiveRule,
+  type LastRewrite,
   type RewriteReach,
   type RuleStatus,
 } from '@/lib/content/rules';
@@ -226,7 +228,7 @@ import { qualitySuggestions, useTodoCopy, type HandOff, type QualityRead } from 
 import { PageTypeMenu } from './_page-type-menu';
 import type { AgentRewrite } from './_brief-tab';
 import { ruleStatusDetail, type AgentFix, type PageRewrite } from './_rules-tab';
-import { pageChangedSince, pageCharacters } from './_page-rewrite';
+import { pageChangedSince } from './_page-rewrite';
 import {
   EditorPanelRail,
   EditorSidePanel,
@@ -1807,30 +1809,23 @@ export function DraftEditor({
   };
   const openSuggestions = suggestions.filter((s) => s.status === 'open').length;
   const pageSuggestion = suggestions.find((s) => s.kind === 'page') ?? null;
-  // What the page's last rewrite came to, from any run: the one shown now,
-  // else the last read (a later Fix run's batch doesn't hide it). A Length
-  // it missed isn't a rewrite's to reach (rules.ts RewriteReach).
-  const [lastRewrite, setLastRewrite] = useState<number | null>(null);
+  // The page's last rewrite, from any run (00285), read on opening and again
+  // once a new one is shown: a Length it missed isn't a rewrite's to reach
+  // (rules.ts RewriteReach). A later Fix run's batch doesn't hide it.
+  const [lastRewrite, setLastRewrite] = useState<LastRewrite | null>(null);
+  const shownRewriteId = pageSuggestion?.id ?? null;
   useEffect(() => {
     let cancelled = false;
-    getLastPageRewriteLength(draft.id)
-      .then((chars) => {
-        if (!cancelled) setLastRewrite((shown) => shown ?? chars);
+    getLastPageRewrite(draft.id)
+      .then((last) => {
+        if (!cancelled) setLastRewrite(last);
       })
       .catch((err) => console.error("Failed to read the page's last rewrite:", err));
     return () => {
       cancelled = true;
     };
-  }, [draft.id]);
-  const shownRewrite = pageSuggestion ? pageCharacters(pageSuggestion).after : null;
-  useEffect(() => {
-    if (shownRewrite !== null) setLastRewrite(shownRewrite);
-  }, [shownRewrite]);
-  const reach: RewriteReach = {
-    kept: keptChars,
-    floor: floorChars,
-    reached: shownRewrite ?? lastRewrite,
-  };
+  }, [draft.id, shownRewriteId]);
+  const reach: RewriteReach = { kept: keptChars, floor: floorChars, last: lastRewrite };
   // The rules as the agent card counts its gain: met now, and the ones still open.
   const cardRules = useMemo(
     () => ({
@@ -3493,7 +3488,10 @@ export function DraftEditor({
                     }
                   : null
               }
-              length={length}
+              // The kept blocks are named only when they put the Length out of reach.
+              length={
+                length && { ...length, outOfReach: lengthOutOfReach(rules.rules, reach) !== null }
+              }
               onAllSteps={() => {
                 setNextFocus(true);
                 setNextOpen(true);

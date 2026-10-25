@@ -205,40 +205,44 @@ export function rewriteFloor(
   const locks = citedLocks(state);
   let kept = 0;
   let floor = 0;
-  // The section open now: under a heading, or the H1's summary; null before the H1.
-  let section: { least: number; answered: boolean } | null = null;
-  const close = () => {
-    if (section && !section.answered) floor += section.least;
+  // The section open now: under a heading (its level), or the H1's summary;
+  // null before the H1. `empty` until a block stands under it.
+  let section: { level: number; least: number; answered: boolean; empty: boolean } | null = null;
+  const close = (next: number) => {
+    // A heading that only groups the deeper ones under it (an H2 over H3s)
+    // needs no answer of its own.
+    const grouping = section && section.empty && section.level > 1 && next > section.level;
+    if (section && !section.answered && !grouping) floor += section.least;
   };
   state.doc.forEach((block) => {
     const text = () => block.textBetween(0, block.content.size, undefined, ' ').length;
     const locked = block.isTextblock && isLocked(blockKey(block), locks);
     if (block.type.name === 'heading') {
-      close();
+      const level = Number(block.attrs.level);
+      close(level);
       if (locked) kept += text();
       else floor += text();
-      const level = Number(block.attrs.level);
       section =
         level === 1
-          ? { least: summary ? LEAST_SUMMARY : 0, answered: !summary }
-          : { least: LEAST_ANSWER, answered: false };
+          ? { level, least: summary ? LEAST_SUMMARY : 0, answered: !summary, empty: true }
+          : { level, least: LEAST_ANSWER, answered: false, empty: true };
       return;
     }
+    if (section) section.empty = false;
     let keep = KEPT_NODES.has(block.type.name) || locked;
-    // A quoted passage stands as the answer; a table or an image doesn't.
+    // A quoted passage stands as the answer, in a list or a quote too; a
+    // table or an image alone doesn't.
     let answers = locked;
-    if (!keep) {
-      block.descendants((node) => {
-        if (node.type.name === 'image' || node.type.name === 'table') keep = true;
-        else if (node.isTextblock && isLocked(blockKey(node), locks)) keep = answers = true;
-        return !answers;
-      });
-    }
+    block.descendants((node) => {
+      if (node.type.name === 'image' || node.type.name === 'table') keep = true;
+      else if (node.isTextblock && isLocked(blockKey(node), locks)) keep = answers = true;
+      return !answers;
+    });
     if (!keep) return;
     kept += text();
     if (answers && section) section.answered = true;
   });
-  close();
+  close(0);
   return { kept, floor: kept + floor };
 }
 

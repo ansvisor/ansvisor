@@ -68,7 +68,7 @@ const restoreDraftVersion = vi.fn();
 const getCitedPassages = vi.fn();
 const getDraftSuggestions = vi.fn();
 // What the page's last rewrite came to (Length's reach): none unless a test gives one.
-const getLastPageRewriteLength = vi.fn();
+const getLastPageRewrite = vi.fn();
 const decideDraftSuggestions = vi.fn();
 const keepAgentBeforeVersion = vi.fn();
 const fixDraftRules = vi.fn();
@@ -84,7 +84,7 @@ vi.mock('@/lib/actions/content-drafts', () => ({
   startAgentWriting: (...args: unknown[]) => startAgentWriting(...args),
   startPageRewrite: (...args: unknown[]) => startPageRewrite(...args),
   getDraftSuggestions: (...args: unknown[]) => getDraftSuggestions(...args),
-  getLastPageRewriteLength: (...args: unknown[]) => getLastPageRewriteLength(...args),
+  getLastPageRewrite: (...args: unknown[]) => getLastPageRewrite(...args),
   decideDraftSuggestions: (...args: unknown[]) => decideDraftSuggestions(...args),
   keepAgentBeforeVersion: (...args: unknown[]) => keepAgentBeforeVersion(...args),
   getCitedPassages: (...args: unknown[]) => getCitedPassages(...args),
@@ -364,7 +364,7 @@ beforeEach(() => {
   restoreDraftVersion.mockReset();
   getCitedPassages.mockReset().mockResolvedValue([]);
   getDraftSuggestions.mockReset().mockResolvedValue([]);
-  getLastPageRewriteLength.mockReset().mockResolvedValue(null);
+  getLastPageRewrite.mockReset().mockResolvedValue(null);
   decideDraftSuggestions.mockReset().mockResolvedValue(1);
   keepAgentBeforeVersion.mockReset().mockResolvedValue(undefined);
   fixDraftRules.mockReset().mockResolvedValue({ count: 0 });
@@ -6482,7 +6482,7 @@ describe('the side panel', () => {
       getContentDraft.mockResolvedValue(long);
       await openRules();
       // What the last rewrite came to is read once, for Length's reach.
-      expect(getLastPageRewriteLength).toHaveBeenCalledWith('d1');
+      expect(getLastPageRewrite).toHaveBeenCalledWith('d1');
 
       // ▾ › Rewrite the whole page: the button says so, then runs it.
       await act(async () =>

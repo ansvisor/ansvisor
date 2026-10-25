@@ -51,11 +51,11 @@ import {
   NO_DRAFT_RULES,
   draftRulesFit,
   draftRulesSchema,
-  pageTextLength,
   ruleSetFits,
   savedRuleSetSchema,
   startingRules,
   type DraftRulesInput,
+  type LastRewrite,
   type SavedRuleSet,
 } from '@/lib/content/rules';
 import {
@@ -1823,24 +1823,26 @@ export async function keepAgentBeforeVersion(id: string): Promise<void> {
 }
 
 /**
- * The characters the draft's last page rewrite came to, whatever became of
- * it (Length's reach, rules.ts RewriteReach): one that missed the Length
- * isn't offered again for it. Counted here, so the page's text never
- * travels for a number. Null without one.
+ * The draft's last page rewrite, whatever became of it, as the API kept it
+ * (00285): the characters it came to, the Length it was written to and what
+ * it kept. A Length it missed isn't offered again (rules.ts RewriteReach).
+ * Numbers only: the rewritten page isn't read for them. Null without one,
+ * or for one made before 00285.
  */
-export async function getLastPageRewriteLength(id: string): Promise<number | null> {
+export async function getLastPageRewrite(id: string): Promise<LastRewrite | null> {
   if (!draftId.safeParse(id).success) throw new Error('invalid');
   const supabase = await createClient();
   const { data, error } = await supabase
     .from('content_draft_suggestions')
-    .select('after_text')
+    .select('after_chars, length_target, kept_chars')
     .eq('draft_id', id)
     .eq('kind', 'page')
     .order('created_at', { ascending: false })
     .limit(1)
     .maybeSingle();
   if (error) throw new Error(error.message);
-  return typeof data?.after_text === 'string' ? pageTextLength(data.after_text) : null;
+  if (!data || data.after_chars === null || data.kept_chars === null) return null;
+  return { chars: data.after_chars, target: data.length_target, kept: data.kept_chars };
 }
 
 /**

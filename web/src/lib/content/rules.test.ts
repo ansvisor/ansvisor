@@ -801,7 +801,7 @@ describe('rewriteAdvice', () => {
   it("doesn't recommend shortening a page a rewrite can't bring under its Length", () => {
     const page = statuses(6_877, [], '4000');
     // The least a rewrite comes to (kept + headings + least answers) past the band's top (4,800).
-    const floor = { kept: 3_799, floor: 5_100, reached: null };
+    const floor = { kept: 3_799, floor: 5_100, last: null };
     expect(rewriteAdvice(page, floor)).toBeNull();
     expect(lengthOutOfReach(page, floor)).toEqual({
       count: 6_877,
@@ -811,18 +811,8 @@ describe('rewriteAdvice', () => {
       least: 5_100,
       suggested: 5_500,
     });
-    // The user's test page (2026-10-25): 78% kept, so not out of reach by its kept
-    // blocks alone, but the last rewrite came to 5,468: a rewrite isn't offered again.
-    const run = { kept: 3_125, floor: 4_300, reached: 5_468 };
-    expect(rewriteAdvice(page, run)).toBeNull();
-    expect(lengthOutOfReach(page, run)).toMatchObject({
-      why: 'reached',
-      least: 5_468,
-      suggested: 5_500,
-    });
-    // A last rewrite within the band, or little kept: a rewrite still gets there.
-    expect(lengthOutOfReach(page, { ...run, reached: 4_700 })).toBeNull();
-    expect(rewriteAdvice(page, { kept: 1_000, floor: 1_800, reached: null })).toMatchObject({
+    // Little kept: a rewrite still gets there.
+    expect(rewriteAdvice(page, { kept: 1_000, floor: 1_800, last: null })).toMatchObject({
       reason: 'length',
     });
     // Many rules open: still a rewrite, for them, the Length out of reach not among them.
@@ -832,10 +822,45 @@ describe('rewriteAdvice', () => {
     expect(
       rewriteAdvice(statuses(6_877, ['faq', 'summary', 'h2Answer', 'keywords'], '4000'), floor),
     ).toMatchObject({ reason: 'open' });
-    // Under its Length, what is kept or reached doesn't stop it.
-    expect(lengthOutOfReach(statuses(2_000, [], '4000'), run)).toBeNull();
-    // A Length suggested never past the page as it is.
-    expect(lengthOutOfReach(statuses(5_200, [], '4000'), run)?.suggested).toBe(5_500);
+    // Under its Length, what is kept doesn't stop it.
+    expect(lengthOutOfReach(statuses(2_000, [], '4000'), floor)).toBeNull();
+  });
+
+  it('doesn’t offer a rewrite again for a Length the last one missed, and only then', () => {
+    const page = statuses(6_877, [], '4000');
+    // The user's test page (2026-10-25): 78% kept, so in reach by its kept blocks
+    // alone, but the last rewrite, written to 4,000, came to 5,468.
+    const missed = { chars: 5_468, target: 4_000, kept: 3_125 };
+    const run = { kept: 3_125, floor: 4_300, last: missed };
+    expect(rewriteAdvice(page, run)).toBeNull();
+    expect(lengthOutOfReach(page, run)).toMatchObject({
+      why: 'reached',
+      least: 5_468,
+      suggested: 5_500,
+    });
+    // Asked for a shorter Length since: it didn't reach the longer one either.
+    expect(lengthOutOfReach(statuses(6_877, [], '3000'), run)).toMatchObject({ why: 'reached' });
+    // A rewrite that met a longer Length says nothing of a shorter one.
+    const met = { ...run, last: { chars: 9_800, target: 10_000, kept: 3_125 } };
+    expect(lengthOutOfReach(page, met)).toBeNull();
+    expect(rewriteAdvice(page, { ...met, kept: 1_000, floor: 1_800 })).toMatchObject({
+      reason: 'length',
+    });
+    // Written with Length off: it was asked for none.
+    expect(lengthOutOfReach(page, { ...run, last: { ...missed, target: null } })).toBeNull();
+    // A passage unlocked since: a rewrite may go shorter now.
+    expect(lengthOutOfReach(page, { ...run, kept: 2_900 })).toBeNull();
+    // The last one got within the band: in reach, whatever the estimate says.
+    expect(
+      lengthOutOfReach(page, { ...run, floor: 5_000, last: { ...missed, chars: 4_700 } }),
+    ).toBeNull();
+    // Past both: the more of the two, so one Raise is enough.
+    expect(lengthOutOfReach(page, { ...run, floor: 6_200 })).toMatchObject({
+      why: 'floor',
+      least: 6_200,
+      suggested: 6_500,
+    });
+    // Never a Length past the page as it is.
     expect(lengthOutOfReach(statuses(4_900, [], '4000'), run)?.suggested).toBe(5_000);
   });
 
