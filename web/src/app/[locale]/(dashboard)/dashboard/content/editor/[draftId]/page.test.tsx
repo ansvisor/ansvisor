@@ -173,6 +173,10 @@ vi.mock('@/lib/download', () => ({ saveBlob }));
 const readDraftCms = vi.hoisted(() => vi.fn());
 const sendPagesToCms = vi.hoisted(() => vi.fn());
 vi.mock('@/lib/content/cms-send-client', () => ({ readDraftCms, sendPagesToCms }));
+// The brand's Webflow connection (#1331, phase 2): none here.
+vi.mock('@/lib/webflow-client', () => ({
+  readWebflow: async () => ({ ok: true, configured: false, connection: null }),
+}));
 
 (
   globalThis as typeof globalThis & {
@@ -4864,16 +4868,20 @@ describe('the side panel', () => {
         'pipeline-forecasting',
       );
       await act(async () => inDialog('Send').click());
-      expect(sendPagesToCms).toHaveBeenCalledWith('b1', [
-        expect.objectContaining({
-          draftId: 'd1',
-          title: 'Pipeline forecasting',
-          slug: 'pipeline-forecasting',
-          html: '<p>Teams trust it.</p>',
-          // Authors come with Quality (CE-038): while it is off, none goes.
-          author: null,
-        }),
-      ]);
+      expect(sendPagesToCms).toHaveBeenCalledWith(
+        'b1',
+        [
+          expect.objectContaining({
+            draftId: 'd1',
+            title: 'Pipeline forecasting',
+            slug: 'pipeline-forecasting',
+            html: '<p>Teams trust it.</p>',
+            // Authors come with Quality (CE-038): while it is off, none goes.
+            author: null,
+          }),
+        ],
+        'webhook',
+      );
       expect(dialog()).toBeNull();
     });
 
@@ -4886,9 +4894,11 @@ describe('the side panel', () => {
         await act(async () => button('Send to CMS')!.click());
         await act(async () => inDialog('Continue to send').click());
         await act(async () => inDialog('Send').click());
-        expect(sendPagesToCms).toHaveBeenCalledWith('b1', [
-          expect.objectContaining({ draftId: 'd1', author: 'Acme Ekibi' }),
-        ]);
+        expect(sendPagesToCms).toHaveBeenCalledWith(
+          'b1',
+          [expect.objectContaining({ draftId: 'd1', author: 'Acme Ekibi' })],
+          'webhook',
+        );
       } finally {
         brandState.brands = [{ id: 'b1' }, { id: 'b2' }];
       }
@@ -4909,9 +4919,11 @@ describe('the side panel', () => {
       await act(async () => inDialog('Continue to send').click());
       await act(async () => inDialog('Send').click());
       // The CMS keeps its own author.
-      expect(sendPagesToCms).toHaveBeenCalledWith('b1', [
-        expect.objectContaining({ draftId: 'd1', author: null, html: '<p>Teams trust it.</p>' }),
-      ]);
+      expect(sendPagesToCms).toHaveBeenCalledWith(
+        'b1',
+        [expect.objectContaining({ draftId: 'd1', author: null, html: '<p>Teams trust it.</p>' })],
+        'webhook',
+      );
     });
 
     it('opens Before you publish first while Quality is on', async () => {

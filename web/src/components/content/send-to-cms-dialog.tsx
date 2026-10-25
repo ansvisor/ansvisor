@@ -34,10 +34,12 @@ import {
   type DraftCms,
 } from '@/lib/content/cms-send-client';
 import { exportPlaceholders, pageFields, titlePlaceholders } from '@/lib/content/ready-to-publish';
+import { CmsTargetPicker, CmsTargetUnchecked, useCmsTarget } from './cms-target';
 
 /**
  * Send to CMS (#1331): the page to the brand's webhook, for the workspace's
- * CMS or automation to publish. Its slug and meta are filled from the page,
+ * CMS or automation to publish, or to its Webflow collection as a draft item
+ * (phase 2, when Settings has Webflow ready). Its slug and meta are filled from the page,
  * or what the draft kept, and editable; they stay on the draft. The page
  * goes as Export makes it ready (CE-057): no placeholder goes, so they are
  * filled first. From the editor's header and a Library row; rendered only
@@ -93,8 +95,21 @@ export function SendDialog({
   const touched = useRef(new Set<keyof CmsFields>());
   const [sending, setSending] = useState(false);
   const [problem, setProblem] = useState<
-    { code: CmsSendError; field: string | null } | { status: number } | { failed: string } | null
+    | { code: CmsSendError; field: string | null }
+    | { status: number }
+    | { failed: string; webflow: boolean }
+    | null
   >(null);
+  const {
+    webflow,
+    target,
+    pick,
+    sent: keepTarget,
+    unchecked: targetUnchecked,
+    reading: targetReading,
+    retry: retryTarget,
+  } = useCmsTarget(brandId);
+  const collection = webflow?.ready ? webflow.collection || t('target.webflow.collection') : '';
 
   useEffect(() => {
     let cancelled = false;
@@ -137,11 +152,14 @@ export function SendDialog({
   const slugWrong = wrong === 'slug' && !slugEmpty;
 
   const send = async () => {
+    if (!target) return;
     setSending(true);
     setProblem(null);
-    const result = await sendPagesToCms(brandId, [
-      cmsPage({ draftId, title, html, fields, page, byline }),
-    ]);
+    const result = await sendPagesToCms(
+      brandId,
+      [cmsPage({ draftId, title, html, fields, page, byline })],
+      target,
+    );
     setSending(false);
     if (!result.ok) {
       setProblem({ code: result.code, field: result.field });
@@ -157,19 +175,37 @@ export function SendDialog({
       setProblem(
         refused
           ? { status: delivery.http_status! }
-          : { failed: delivery.error ?? t('errors.failed') },
+          : { failed: delivery.error ?? t('errors.failed'), webflow: target === 'webflow' },
       );
       return;
     }
-    toast.success(t('sent'));
+    keepTarget(target);
+    if (target === 'webflow') {
+      // What of the page Webflow's rich text couldn't keep: tables went as lists, images not yet.
+      const changed = delivery?.changed;
+      toast.success(delivery?.updated ? t('sentWebflowUpdated') : t('sentWebflow'), {
+        description:
+          changed && (changed.tables || changed.images)
+            ? t('webflowChanged', { tables: changed.tables, images: changed.images })
+            : undefined,
+      });
+    } else {
+      toast.success(t('sent'));
+    }
     onClose();
   };
 
   const problemText = (shown: NonNullable<typeof problem>) => {
     if ('status' in shown) return t('errors.webhookStatus', { status: shown.status });
-    if ('failed' in shown) return t('errors.webhookFailed', { reason: shown.failed });
+    if ('failed' in shown) {
+      return t(shown.webflow ? 'errors.webflowFailed' : 'errors.webhookFailed', {
+        reason: shown.failed,
+      });
+    }
     const { code, field } = shown;
     if (code === 'session' || code === 'workspace' || code === 'busy') return tFailure(code);
+    // Webflow not ready sent the page to the webhook: what to fix is Webflow.
+    if (code === 'no_webhook' && webflow && !webflow.ready) return t('errors.no_webhookWebflow');
     // The server names the path ("pages.0.slug"); the field is its last part.
     if (code === 'invalid' && field) {
       return t('errors.invalidField', { field: field.split('.').pop() ?? 'other' });
@@ -185,8 +221,29 @@ export function SendDialog({
       <DialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>{t('title')}</DialogTitle>
-          <DialogDescription>{t('description')}</DialogDescription>
+          <DialogDescription>
+            {!target
+              ? t('descriptionReading')
+              : target === 'webflow'
+                ? t('descriptionWebflow', { collection })
+                : t('description')}
+          </DialogDescription>
         </DialogHeader>
+
+        {webflow && target && (
+          <CmsTargetPicker
+            value={target}
+            webflow={webflow}
+            disabled={sending}
+            onChange={(next) => {
+              pick(next);
+              setProblem(null);
+            }}
+          />
+        )}
+        {targetUnchecked && (
+          <CmsTargetUnchecked reading={targetReading} onRetry={retryTarget} disabled={sending} />
+        )}
 
         {pageProblem && (
           <div className="flex items-center gap-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-200">
@@ -275,7 +332,7 @@ export function SendDialog({
               </>
             ) : (
               last &&
-              t(`last.${last.status}`, {
+              t(last.target === 'webflow' ? `lastWebflow.${last.status}` : `last.${last.status}`, {
                 when: format.dateTime(new Date(last.at), {
                   dateStyle: 'medium',
                   timeStyle: 'short',
@@ -321,7 +378,12 @@ export function SendDialog({
           </Button>
           <Button
             disabled={
-              sending || pageProblem !== null || placeholders > 0 || wrong !== null || !kept
+              sending ||
+              pageProblem !== null ||
+              placeholders > 0 ||
+              wrong !== null ||
+              !kept ||
+              !target
             }
             onClick={() => void send()}
           >

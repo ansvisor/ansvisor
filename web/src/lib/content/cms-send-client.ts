@@ -9,10 +9,20 @@ import type { CmsFields, CmsPage } from '@/lib/content/cms-send';
  * which Next runs one at a time, behind the editor's own.
  */
 
+/** Where pages go: the brand's webhook (phase 1) or its Webflow collection (phase 2). */
+export type CmsTarget = 'webhook' | 'webflow';
+
 /** Why a send didn't go, as the server names it. */
 export type CmsSendError =
   | 'no_webhook'
   | 'webhook_not_subscribed'
+  // Webflow (00283, 00284): not on this server, not connected, its token
+  // refused, no collection picked, or the page already on its way.
+  | 'webflow_not_configured'
+  | 'no_webflow'
+  | 'webflow_refused'
+  | 'webflow_not_ready'
+  | 'in_progress'
   | 'daily_limit'
   | 'forbidden'
   | 'not_found'
@@ -33,6 +43,9 @@ export interface CmsDelivery {
   http_status?: number | null;
   /** Why it failed, as the server wrote it ("The webhook could not be reached"). */
   error?: string | null;
+  /** Webflow, one page: its item updated (not made), and what of the page changed on the way. */
+  updated?: boolean;
+  changed?: { tables: number; images: number };
 }
 
 export type CmsSendResult =
@@ -44,6 +57,11 @@ export type CmsSendResult =
 const KNOWN: readonly CmsSendError[] = [
   'no_webhook',
   'webhook_not_subscribed',
+  'webflow_not_configured',
+  'no_webflow',
+  'webflow_refused',
+  'webflow_not_ready',
+  'in_progress',
   'daily_limit',
   'forbidden',
   'not_found',
@@ -53,8 +71,15 @@ const KNOWN: readonly CmsSendError[] = [
 /** The reasons any call can fail for, as the other calls read them (BUG-001). */
 const GENERAL: readonly CmsSendError[] = ['session', 'workspace', 'busy'];
 
-/** Sends pages of one brand to its webhook: one is sent before this answers, more go on. */
-export async function sendPagesToCms(brandId: string, pages: CmsPage[]): Promise<CmsSendResult> {
+/**
+ * Sends pages of one brand to its webhook, or its Webflow collection: one is
+ * sent before this answers, more go on.
+ */
+export async function sendPagesToCms(
+  brandId: string,
+  pages: CmsPage[],
+  target: CmsTarget = 'webhook',
+): Promise<CmsSendResult> {
   try {
     const {
       data: { session },
@@ -66,7 +91,7 @@ export async function sendPagesToCms(brandId: string, pages: CmsPage[]): Promise
         'Content-Type': 'application/json',
         Authorization: `Bearer ${session.access_token}`,
       },
-      body: JSON.stringify({ brandId, pages }),
+      body: JSON.stringify({ brandId, pages, target }),
     });
     const body = (await res.json().catch(() => ({}))) as {
       code?: string;
@@ -91,6 +116,8 @@ export async function sendPagesToCms(brandId: string, pages: CmsPage[]): Promise
 /** A draft's last send, as the Library shows it beside its status. */
 export interface CmsStatus {
   status: CmsDelivery['status'];
+  /** Where it went: the webhook, or Webflow (a draft item there once sent). */
+  target: CmsTarget;
   /** When it was published, sent or queued. */
   at: string;
   /** What the webhook answered, when it did; else why it wasn't reached. */
@@ -117,11 +144,13 @@ function lastSend(row: {
   sent_at: string | null;
   published_at: string | null;
   error: string | null;
-}): { status: CmsDelivery['status']; at: string; error: string | null } {
+  target?: string | null;
+}): { status: CmsDelivery['status']; target: CmsTarget; at: string; error: string | null } {
   const interrupted =
     row.status === 'queued' && Date.parse(row.created_at) < Date.now() - INTERRUPTED_AFTER_MS;
   return {
     status: interrupted ? 'failed' : (row.status as CmsDelivery['status']),
+    target: row.target === 'webflow' ? 'webflow' : 'webhook',
     at: row.published_at ?? row.sent_at ?? row.created_at,
     error: interrupted ? 'Not sent: interrupted' : row.error,
   };
@@ -163,7 +192,12 @@ export async function readCmsStatuses(draftIds: string[]): Promise<Map<string, C
 export interface DraftCms {
   fields: Partial<CmsFields>;
   publishedUrl: string | null;
-  last: { status: CmsDelivery['status']; at: string; error: string | null } | null;
+  last: {
+    status: CmsDelivery['status'];
+    target: CmsTarget;
+    at: string;
+    error: string | null;
+  } | null;
 }
 
 /**
@@ -181,7 +215,7 @@ export async function readDraftCms(draftId: string): Promise<DraftCms | null> {
       .maybeSingle(),
     supabase
       .from('content_draft_deliveries')
-      .select('status, created_at, sent_at, published_at, error')
+      .select('status, created_at, sent_at, published_at, error, target')
       .eq('draft_id', draftId)
       .order('created_at', { ascending: false })
       .limit(1)

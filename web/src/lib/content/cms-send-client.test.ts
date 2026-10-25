@@ -78,7 +78,7 @@ describe('sendPagesToCms', () => {
     expect(fetchMock).toHaveBeenCalledWith('/api/aeo/api/content-drafts/send', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: 'Bearer token-1' },
-      body: JSON.stringify({ brandId: 'brand-1', pages: [page] }),
+      body: JSON.stringify({ brandId: 'brand-1', pages: [page], target: 'webhook' }),
     });
     expect(result).toEqual({
       ok: true,
@@ -88,6 +88,13 @@ describe('sendPagesToCms', () => {
     // Past the workspace's sends for the day: the pages left over.
     answer(200, { deliveries: [{ id: 'x2', draftId: 'd1', status: 'queued' }], skipped: 3 });
     expect(await sendPagesToCms('brand-1', [page])).toMatchObject({ ok: true, skipped: 3 });
+    // To the brand's Webflow collection (#1331, phase 2).
+    answer(200, { deliveries: [{ id: 'x3', draftId: 'd1', status: 'sent', updated: true }] });
+    expect(await sendPagesToCms('brand-1', [page], 'webflow')).toMatchObject({
+      ok: true,
+      deliveries: [{ updated: true }],
+    });
+    expect(JSON.parse(fetchMock.mock.calls.at(-1)![1].body)).toMatchObject({ target: 'webflow' });
   });
 
   it('gives the server’s reason, and the field a 400 names', async () => {
@@ -103,6 +110,16 @@ describe('sendPagesToCms', () => {
       code: 'invalid',
       field: 'pages.0.slug',
     });
+    for (const code of [
+      'webflow_not_configured',
+      'no_webflow',
+      'webflow_refused',
+      'webflow_not_ready',
+      'in_progress',
+    ]) {
+      answer(409, { code });
+      expect(await sendPagesToCms('brand-1', [page], 'webflow')).toMatchObject({ ok: false, code });
+    }
   });
 
   it('says when a request was more than the API’s proxy takes', async () => {
@@ -171,7 +188,7 @@ describe('readDraftCms', () => {
     expect(await readDraftCms('d1')).toEqual({
       fields: { slug: 'coffee', metaTitle: undefined, metaDescription: 'Slowly.' },
       publishedUrl: 'https://example.com/coffee',
-      last: { status: 'sent', at: '2026-10-24T10:00:02Z', error: null },
+      last: { status: 'sent', target: 'webhook', at: '2026-10-24T10:00:02Z', error: null },
     });
     expect(filters).toEqual([
       ['content_drafts', 'id', 'd1'],
@@ -258,6 +275,7 @@ describe('readCmsStatuses', () => {
         'd1',
         {
           status: 'published',
+          target: 'webhook',
           at: '2026-10-24T12:00:00Z',
           httpStatus: 200,
           error: null,
@@ -268,6 +286,7 @@ describe('readCmsStatuses', () => {
         'd520',
         {
           status: 'failed',
+          target: 'webhook',
           at: '2026-10-24T09:00:00Z',
           httpStatus: null,
           error: 'Not reached',
@@ -288,6 +307,19 @@ describe('readCmsStatuses', () => {
     const statuses = await readCmsStatuses(['d1', 'd2']);
     expect(statuses.get('d1')).toMatchObject({ status: 'failed', error: 'Not sent: interrupted' });
     expect(statuses.get('d2')).toMatchObject({ status: 'queued', error: null });
+  });
+
+  it('says which sends went to Webflow', async () => {
+    statusReads = [
+      {
+        data: [delivery('d1', 'sent', '2026-10-24T10:00:00Z', { target: 'webflow' })],
+        error: null,
+      },
+    ];
+    expect((await readCmsStatuses(['d1'])).get('d1')).toMatchObject({
+      status: 'sent',
+      target: 'webflow',
+    });
   });
 
   it('leaves a read that fails with no sends, as before its table is there', async () => {
