@@ -861,17 +861,30 @@ export interface LengthOutOfReach {
 
 /**
  * What the last rewrite says of this Length: the characters it came to, when
- * it was written to a Length (not with Length off), nothing kept then was
- * unlocked since (the counts differ by about a space a block, so a little
- * slack), and it was asked for this Length or a shorter one, or missed its
- * own: either way a rewrite doesn't go under what it came to. Null when it
- * says nothing (a rewrite to 10,000 says nothing of 3,000).
+ * it was written to a Length (not with Length off), the page keeps what it
+ * kept then (nothing unlocked or locked since; the counts differ by about a
+ * space a block, so a little slack), and it was asked for this Length or a
+ * shorter one, or missed its own and this one is within that one's band.
+ * Null when it says nothing (a rewrite to 10,000 says nothing of 3,000).
  */
 function lastRewriteSays(last: LastRewrite | null, target: number, kept: number): number | null {
   if (!last || last.target === null) return null;
-  if (kept < last.kept * 0.98 - 20) return null;
-  const missedItsOwn = last.chars > lengthBand(last.target).max;
+  if (Math.abs(kept - last.kept) > last.kept * 0.02 + 20) return null;
+  const band = lengthBand(last.target);
+  const missedItsOwn = last.chars > band.max && target >= band.min;
   return target >= last.target || missedItsOwn ? last.chars : null;
+}
+
+/**
+ * Whether what a rewrite keeps, with the headings and their answers, puts
+ * the Length out of its reach on its own: what the agent card names as why
+ * a rewrite missed (the rewrite itself is no reason).
+ */
+export function keptOutOfReach<T extends { rule: ActiveRule; status: RuleStatus }>(
+  rules: T[],
+  reach: RewriteReach,
+): boolean {
+  return lengthOutOfReach(rules, { ...reach, last: null }) !== null;
 }
 
 /**

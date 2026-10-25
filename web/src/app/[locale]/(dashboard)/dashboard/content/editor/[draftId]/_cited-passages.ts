@@ -228,7 +228,8 @@ export function rewriteFloor(
           : { level, least: LEAST_ANSWER, answered: false, empty: true };
       return;
     }
-    if (section) section.empty = false;
+    // An empty paragraph between an H2 and its H3s doesn't make it a section of its own.
+    if (section && (!block.isTextblock || block.textContent.trim())) section.empty = false;
     let keep = KEPT_NODES.has(block.type.name) || locked;
     // A quoted passage stands as the answer, in a list or a quote too; a
     // table or an image alone doesn't.

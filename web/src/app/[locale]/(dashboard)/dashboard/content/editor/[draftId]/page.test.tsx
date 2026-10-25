@@ -6518,6 +6518,8 @@ describe('the side panel', () => {
       await act(async () => {});
 
       expect(bar()!.textContent).toContain('Content Agent rewrote the page to its rules');
+      // What the last rewrite came to is read on opening, and again for the one now shown.
+      expect(getLastPageRewrite).toHaveBeenCalledTimes(2);
       // A whole page is never a card in the page.
       expect(container.querySelector('[data-suggestion]')).toBeNull();
       await act(async () => button(bar()!, 'Compare').click());
