@@ -71,6 +71,11 @@ export interface QualityTodo {
   count?: number;
   /** What a regulated page advises on: its reviewer's field (CE-049). */
   topic?: 'health' | 'finance' | 'legal';
+  /**
+   * With no author picked: the person's own word for the author their site
+   * names (00271), a tick box beside the to-do, and whether it's ticked.
+   */
+  confirm?: { what: 'real' | 'profile'; on: boolean };
 }
 
 /**
@@ -96,6 +101,7 @@ export function qualityTodos({
   proofs = null,
   visual = null,
   reviewer = null,
+  confirmed = null,
 }: {
   eeat: Score<EeatCheckId> | null;
   author: ContentAuthor | null;
@@ -135,6 +141,8 @@ export function qualityTodos({
    * Authors; null otherwise.
    */
   reviewer?: { topic: 'health' | 'finance' | 'legal'; picked: boolean } | null;
+  /** What the person confirmed of the author their site names (00271), or null where they can't. */
+  confirmed?: { real: boolean; profile: boolean } | null;
 }): QualityTodo[] {
   const fill: QualityTodo[] =
     placeholders.count || placeholders.had
@@ -195,12 +203,16 @@ export function qualityTodos({
       ]
     : [];
   if (!eeat || eeat.score === null) return [...fill, ...proofTodos, ...review, ...facts];
+  // No author picked: the one the site names may be confirmed instead, the
+  // profile once the author is.
+  const byConfirm = !author && !!confirmed;
   const byline: QualityTodo = {
     id: 'byline',
-    done: !!author,
+    done: !!author || (byConfirm && confirmed.real),
     gain: scoreGain(eeat, ['byline']),
     score: 'eeat',
     action: author || hasAuthors ? 'pickAuthor' : 'addAuthor',
+    ...(byConfirm ? { confirm: { what: 'real' as const, on: confirmed.real } } : {}),
   };
   const { bio, links } = authorProfile(author);
   return [
@@ -208,10 +220,13 @@ export function qualityTodos({
     byline,
     {
       id: 'authorProfile',
-      done: !!author && bio && links,
+      done: (!!author && bio && links) || (byConfirm && confirmed.real && confirmed.profile),
       gain: scoreGain(eeat, ['authorBio']),
       score: 'eeat',
       action: author && canEdit ? 'editAuthor' : null,
+      ...(byConfirm && confirmed.real
+        ? { confirm: { what: 'profile' as const, on: confirmed.profile } }
+        : {}),
     },
     ...(used
       ? ([
@@ -231,8 +246,14 @@ export function qualityTodos({
             score: 'eeat',
             action: 'addInput',
           },
-          ...visualTodo(eeat, visual),
-          ...howTodo(eeat),
+        ] satisfies QualityTodo[])
+      : []),
+    // Not Your input's (read from the page): listed in their place when
+    // that can't be read too.
+    ...visualTodo(eeat, visual),
+    ...howTodo(eeat),
+    ...(used
+      ? ([
           {
             id: 'expertQuote',
             done: used.quote,

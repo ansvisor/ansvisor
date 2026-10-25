@@ -395,7 +395,7 @@ export function readability(
    * with that paragraph's words; it stands while the paragraph is still
    * the first, else the rule reads it.
    */
-  aiAnswer: { answers: boolean; block: string } | null = null,
+  aiAnswer: { answers: boolean; block: string; held?: boolean } | null = null,
 ): Readability {
   const blocks = readBlocks(html);
   const lang = languageCode(language);
@@ -493,7 +493,10 @@ export function readability(
     h1Words.some((w) => w.length >= 4) ? h1Words.filter((w) => w.length >= 4) : h1Words,
   );
   const read =
-    !!first && !!aiAnswer && first.text.replace(/\s+/g, '') === aiAnswer.block.replace(/\s+/g, '');
+    !!first &&
+    !!aiAnswer &&
+    // Held while the edited page is read again (aiChecksOnPage).
+    (!!aiAnswer.held || first.text.replace(/\s+/g, '') === aiAnswer.block.replace(/\s+/g, ''));
   // The model reads whether it answers; it is still a short paragraph to pass.
   const answers = read
     ? aiAnswer!.answers && first.words <= 60

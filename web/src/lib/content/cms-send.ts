@@ -135,7 +135,9 @@ export interface CmsSource {
  * field as Export names it, and the brand's byline line, both in the page's
  * language (its own Language rule, else the brand's; a workspace's My rules
  * for the type aren't read here). `authors` is null while Quality is off,
- * as the editor reads none then.
+ * as the editor reads none then. With no author picked and the one the site
+ * names confirmed (00271), neither the team nor its byline line: the CMS
+ * keeps its own author.
  */
 export function cmsSource({
   page,
@@ -153,14 +155,15 @@ export function cmsSource({
   const language = page.language ?? brandLanguage;
   const author = authors?.authors.find((a) => a.id === page.authorId) ?? null;
   const inContent = authors?.brands.find((b) => b.id === brandId)?.bylineInContent ?? false;
+  const confirmed = !author && page.authorConfirmed;
   return {
     draftId: page.id,
     title: page.title,
     html: publishableHtml(page.bodyHtml),
     sourceUrl: page.sourceUrl,
     author,
-    teamByline: authors ? teamName(language, brandName) : '',
-    byline: inContent ? bylineText(language, author?.name ?? null, brandName) : null,
+    teamByline: authors && !confirmed ? teamName(language, brandName) : '',
+    byline: inContent && !confirmed ? bylineText(language, author?.name ?? null, brandName) : null,
   };
 }
 

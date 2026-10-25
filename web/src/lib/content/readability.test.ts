@@ -273,7 +273,7 @@ describe('reading the page as written', () => {
     const body = p(Array.from({ length: 4 }, () => sentence(15)).join(' '));
     const first = 'Pipeline forecasting is how a small team guesses what will close.';
     const html = `<h1>Pipeline forecasting for small teams</h1>${p(first)}${body}`;
-    const read = (aiAnswer: { answers: boolean; block: string } | null) =>
+    const read = (aiAnswer: { answers: boolean; block: string; held?: boolean } | null) =>
       readability(html, 'en', aiAnswer).checks.find((c) => c.id === 'answerFirst')!;
     // The rule passes it; the model says it doesn't answer.
     expect(read(null)).toMatchObject({ points: 15 });
@@ -287,6 +287,10 @@ describe('reading the page as written', () => {
     expect(read({ answers: false, block: 'Teams like a calm Monday.' })).toMatchObject({
       points: 15,
     });
+    // Held while the edited page is read again: the verdict stays (review, #1479).
+    expect(
+      read({ answers: false, block: 'Pipeline forecasting is how teams guess.', held: true }),
+    ).toMatchObject({ points: 0, ai: true });
     // It answers, but it's still a short paragraph to pass.
     const long = `Pipeline ${sentence(70)}`;
     expect(

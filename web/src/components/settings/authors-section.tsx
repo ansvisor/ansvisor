@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
+import { ImageUploadButton } from '@/components/content/image-upload-button';
 import {
   Dialog,
   DialogClose,
@@ -388,6 +389,7 @@ function AuthorDialog({
   onSaved: () => Promise<void>;
 }) {
   const t = useTranslations('settings.authors');
+  const tUpload = useTranslations('content.imageUpload');
   const tCommon = useTranslations('common');
   const [form, setForm] = useState<{
     name: string;
@@ -518,6 +520,14 @@ function AuthorDialog({
               aria-invalid={badPhoto}
               onChange={(e) => setForm({ ...form, photoUrl: e.target.value })}
             />
+            {/* Or the photo from their computer (00272): its address fills the field. */}
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+              <ImageUploadButton
+                className="h-7"
+                onUploaded={(url) => setForm((prev) => ({ ...prev, photoUrl: url }))}
+              />
+              <span className="text-xs text-muted-foreground">{tUpload('hint')}</span>
+            </div>
           </div>
           <div className="space-y-1">
             <label className="flex items-center gap-2 text-sm">

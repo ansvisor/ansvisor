@@ -50,7 +50,7 @@ import {
 } from '@/lib/content/drafts';
 import { siteTypeOf } from '@/lib/content/page-types';
 import { formatNumber } from '@/lib/format';
-import { readUrlChoice, writeUrlParams } from '@/lib/url-state';
+import { readUrlChoice, readUrlParam, writeUrlParams } from '@/lib/url-state';
 import { useBrandStore } from '@/stores/use-brand-store';
 import { BulkSendDialog } from './_bulk-send-dialog';
 import { readCmsSources } from './_cms-sources';
@@ -72,7 +72,8 @@ interface LibraryRead {
  * Content Agent wrote or changed in Ansvisor, by status, and what was
  * archived (00233). A row's menu sets its status; admins and managers also
  * send it to the CMS (#1331), archive, restore and delete. The tab lives in
- * the URL (?tab=in_review), so a link can open "Library › In review".
+ * the URL (?tab=in_review), so a link can open "Library › In review";
+ * ?new=1 opens New content (Content › Editor with no draft to go back to).
  */
 export default function ContentLibraryPage() {
   const t = useTranslations('contentEditor.library');
@@ -111,6 +112,11 @@ export default function ContentLibraryPage() {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- one read of the URL after mount
     setTab(readUrlChoice('tab', LIBRARY_TABS, 'all'));
     setCreated(readUrlChoice('created', CREATED_RANGES, 'all'));
+    // Once: closed, it doesn't open again on a reload.
+    if (readUrlParam('new') === '1') {
+      setStarting(true);
+      writeUrlParams({ new: null });
+    }
   }, []);
   const { exporting, exportList, exportDraft } = useLibraryExport(activeBrandId);
 
