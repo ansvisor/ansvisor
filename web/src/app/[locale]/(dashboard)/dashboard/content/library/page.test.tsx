@@ -48,8 +48,10 @@ vi.mock('@/lib/download', () => ({ saveBlob }));
 const readCmsStatuses = vi.hoisted(() => vi.fn());
 const readDraftCms = vi.hoisted(() => vi.fn());
 const sendPagesToCms = vi.hoisted(() => vi.fn());
+const refreshWebflowPublished = vi.hoisted(() => vi.fn());
 vi.mock('@/lib/content/cms-send-client', () => ({
   readCmsStatuses,
+  refreshWebflowPublished,
   readDraftCms,
   sendPagesToCms,
   readKeptFields: vi.fn(async () => new Map()),
@@ -123,6 +125,7 @@ beforeEach(() => {
   document.body.appendChild(container);
   root = createRoot(container);
   getContentDrafts.mockReset();
+  refreshWebflowPublished.mockReset().mockResolvedValue([]);
   getContentStartOptions.mockReset().mockResolvedValue({
     opportunities: [],
     prompts: [],
@@ -498,6 +501,40 @@ describe('Send to CMS from a Library row (#1331)', () => {
     expect(
       container.querySelector('[aria-label^="In Webflow as a draft item since Oct 24, 2026"]'),
     ).not.toBeNull();
+    // Webflow says when it goes live: asked once as the Library opens.
+    expect(refreshWebflowPublished).toHaveBeenCalledTimes(1);
+    expect(refreshWebflowPublished).toHaveBeenCalledWith('brand-1');
+  });
+
+  it('reads the list again when pages sent to Webflow went live there', async () => {
+    getContentDrafts.mockResolvedValue([row({})]);
+    readCmsStatuses.mockResolvedValue(
+      new Map([
+        [
+          'd1',
+          {
+            status: 'sent',
+            target: 'webflow',
+            at: '2026-10-24T10:00:00Z',
+            httpStatus: null,
+            error: null,
+            publishedUrl: null,
+          },
+        ],
+      ]),
+    );
+    refreshWebflowPublished.mockResolvedValue(['d1']);
+    await renderPage();
+    await act(async () => {});
+    expect(getContentDrafts).toHaveBeenCalledTimes(2);
+    // Once a brand per visit, however often the list is read.
+    expect(refreshWebflowPublished).toHaveBeenCalledTimes(1);
+  });
+
+  it('doesn’t ask Webflow for a brand with no page there', async () => {
+    getContentDrafts.mockResolvedValue([row({})]);
+    await renderPage();
+    expect(refreshWebflowPublished).not.toHaveBeenCalled();
   });
 
   it('says the workflow’s reason for a page its webhook took that then failed', async () => {

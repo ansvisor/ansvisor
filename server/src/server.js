@@ -29,6 +29,7 @@ import { sweepActionValidation } from './lib/action-center/validate.js';
 import { sweepImproveOutcomes } from './lib/action-center/improve-outcome.js';
 import { sweepBrandFacts } from './lib/brand-facts-sweep.js';
 import { sweepCatalogSources } from './lib/catalog/sources.js';
+import { sweepWebflowPublished } from './lib/cms/webflow-status.js';
 import { parseScraperResponse } from './lib/cloro-scraper.js';
 import { handleScraperResult } from './lib/cloro-result-handler.js';
 import { verifyCloroWebhook } from './lib/cloro-webhook-verify.js';
@@ -288,6 +289,11 @@ async function runDailyTracking() {
   // Catalog feed URLs (#1263): read again once a day, never blocking tracking.
   sweepCatalogSources().catch((err) => {
     logger.error({ err }, '[catalog] daily sweep failed');
+  });
+
+  // Pages sent to Webflow, published there since (#1331): read once a day.
+  sweepWebflowPublished().catch((err) => {
+    logger.error({ err: { name: err?.name } }, '[webflow-status] daily sweep failed');
   });
 
   // Google Analytics sync (#704) — same contract as the Search Console sync

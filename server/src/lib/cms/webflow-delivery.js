@@ -11,7 +11,12 @@ import { fieldDataFor, toWebflowRichText, webflowSlug } from './webflow-items.js
  * batches the deliveries as it does for the webhook.
  */
 
-/** The item the page's last Webflow send made in this collection, if any. */
+/**
+ * The item the page's last Webflow send made in this collection, if any,
+ * whatever became of that send: one closed as "Removed in Webflow" is tried
+ * too, as a wrong "removed" costs nothing (updateItem's not_found makes a
+ * new item).
+ */
 async function lastItem(draftId, collectionId, deliveryId) {
   const { data, error } = await supabaseAdmin
     .from('content_draft_deliveries')
@@ -19,7 +24,6 @@ async function lastItem(draftId, collectionId, deliveryId) {
     .eq('draft_id', draftId)
     .eq('target', 'webflow')
     .eq('target_collection', collectionId)
-    .in('status', ['sent', 'published'])
     .not('external_id', 'is', null)
     .neq('id', deliveryId)
     .order('created_at', { ascending: false })

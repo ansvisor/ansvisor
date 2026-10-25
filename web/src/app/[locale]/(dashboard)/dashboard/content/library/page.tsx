@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 import { Plus, Send } from 'lucide-react';
@@ -35,7 +35,11 @@ import {
   setContentDraftStatus,
 } from '@/lib/actions/content-drafts';
 import { CMS_PAGES_PER_SEND, type CmsSource } from '@/lib/content/cms-send';
-import { readCmsStatuses, type CmsStatus } from '@/lib/content/cms-send-client';
+import {
+  readCmsStatuses,
+  refreshWebflowPublished,
+  type CmsStatus,
+} from '@/lib/content/cms-send-client';
 import {
   AGENT_POLL_MS,
   CREATED_RANGES,
@@ -168,6 +172,23 @@ export default function ContentLibraryPage() {
     const timer = setTimeout(() => setCmsAttempt((n) => n + 1), AGENT_POLL_MS);
     return () => clearTimeout(timer);
   }, [cmsGoing, cms]);
+
+  // Pages in Webflow as draft items: Webflow says when one goes live, so the
+  // API reads them once as the Library opens for the brand (and daily); the
+  // list is read again when it marked any published.
+  const inWebflow = [...cms.values()].some(
+    (status) => status.target === 'webflow' && status.status === 'sent',
+  );
+  const webflowRead = useRef(new Set<string>());
+  useEffect(() => {
+    if (!inWebflow || !activeBrandId || webflowRead.current.has(activeBrandId)) return;
+    webflowRead.current.add(activeBrandId);
+    // Not cancelled with the effect: a filter or search changing meanwhile
+    // still reads the list again, the brand's pages marked.
+    void refreshWebflowPublished(activeBrandId).then((published) => {
+      if (published.length) setAttempt((n) => n + 1);
+    });
+  }, [inWebflow, activeBrandId]);
 
   const reload = () => setAttempt((n) => n + 1);
   const titleOf = (draft: ContentDraftListItem) => draft.title.trim() || t('untitled');

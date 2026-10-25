@@ -12,6 +12,7 @@ const {
   checkFieldMap,
   createItem,
   getCollection,
+  getItem,
   listCollections,
   listSites,
   suggestFieldMap,
@@ -40,13 +41,15 @@ describe('reading the site', () => {
         { displayName: 'no id' },
       ],
     });
-    expect(await listSites(account)).toEqual([{ id: 's1', name: 'Ansvisor' }]);
+    expect(await listSites(account)).toEqual([
+      { id: 's1', name: 'Ansvisor', host: 'ansvisor.webflow.io' },
+    ]);
     expect(executeWebflowTool).toHaveBeenCalledWith('WEBFLOW_LIST_WEBFLOW_SITES', account, {});
 
     executeWebflowTool.mockResolvedValueOnce({
       response_data: { sites: [{ id: 's2', shortName: 'acme' }] },
     });
-    expect(await listSites(account)).toEqual([{ id: 's2', name: 'acme' }]);
+    expect(await listSites(account)).toEqual([{ id: 's2', name: 'acme', host: 'acme.webflow.io' }]);
   });
 
   it('lists a site’s collections, and a collection’s fields a person can fill', async () => {
@@ -238,5 +241,82 @@ describe('items', () => {
     expect(await said('400 Bad Request: validation_error on field post-summary')).toMatchObject({
       code: 'invalid',
     });
+  });
+});
+
+describe('where pages live', () => {
+  it('reads a site’s host: its custom domain published to, else its first, else webflow.io', async () => {
+    executeWebflowTool.mockResolvedValueOnce({
+      sites: [
+        {
+          id: 's1',
+          shortName: 'acme',
+          customDomains: [
+            { url: 'staging.acme.example', lastPublished: null },
+            { url: 'https://www.acme.example/', lastPublished: '2026-10-20T10:00:00Z' },
+          ],
+        },
+        // Never published to its domain: published on webflow.io only.
+        { id: 's2', shortName: 'beta', customDomains: [{ url: 'Beta.Example' }] },
+        { id: 's3', customDomains: [{ url: 'not a host' }] },
+        { id: 's4', customDomains: [{ url: 'gamma.example' }] },
+        // Both published: the one published to last (the canonical one, as Webflow redirects).
+        {
+          id: 's5',
+          shortName: 'delta',
+          customDomains: [
+            { url: 'delta.example', lastPublished: '2026-10-01T10:00:00Z' },
+            { url: 'www.delta.example', lastPublished: '2026-10-21T10:00:00Z' },
+          ],
+        },
+      ],
+    });
+    expect((await listSites(account)).map((s) => s.host)).toEqual([
+      'www.acme.example',
+      'beta.webflow.io',
+      null,
+      'gamma.example',
+      'www.delta.example',
+    ]);
+  });
+
+  it('reads whether an item is live, and its slug; a deleted one is none', async () => {
+    executeWebflowTool.mockResolvedValueOnce({
+      id: 'i1',
+      lastPublished: '2026-10-25T10:00:00Z',
+      isDraft: false,
+      isArchived: false,
+      fieldData: { slug: 'cold-brew', name: 'Cold brew' },
+    });
+    expect(await getItem(account, 'c1', 'i1')).toEqual({
+      id: 'i1',
+      slug: 'cold-brew',
+      live: true,
+      lastPublished: '2026-10-25T10:00:00Z',
+    });
+    expect(executeWebflowTool).toHaveBeenLastCalledWith('WEBFLOW_GET_COLLECTION_ITEM', account, {
+      collection_id: 'c1',
+      item_id: 'i1',
+    });
+    executeWebflowTool.mockResolvedValueOnce({
+      response_data: { id: 'i1', lastPublished: null, isDraft: true, fieldData: { slug: 'x' } },
+    });
+    expect(await getItem(account, 'c1', 'i1')).toMatchObject({ live: false });
+    executeWebflowTool.mockResolvedValueOnce({
+      id: 'i1',
+      lastPublished: '2026-10-25T10:00:00Z',
+      isDraft: true,
+      fieldData: { slug: 'x' },
+    });
+    expect(await getItem(account, 'c1', 'i1')).toMatchObject({ live: false });
+    // Wrapped as { item }.
+    executeWebflowTool.mockResolvedValueOnce({
+      item: { id: 'i1', lastPublished: '2026-10-25T10:00:00Z', fieldData: { slug: 'y' } },
+    });
+    expect(await getItem(account, 'c1', 'i1')).toMatchObject({ slug: 'y', live: true });
+    executeWebflowTool.mockRejectedValueOnce(new Error('404 resource_not_found'));
+    expect(await getItem(account, 'c1', 'i1')).toBeNull();
+    executeWebflowTool.mockRejectedValueOnce(new Error('401 Unauthorized'));
+    await expect(getItem(account, 'c1', 'i1')).rejects.toMatchObject({ code: 'auth_failed' });
   });
 });
