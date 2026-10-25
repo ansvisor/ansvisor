@@ -21,11 +21,25 @@ const generateObject = vi.fn();
 vi.mock('../config/supabase.js', () => ({
   default: {
     from: (table) => {
+      let columns = null;
       const chain = {
-        select: () => chain,
+        // Only the columns asked for, as the database answers.
+        select: (list) => ((columns = list ?? null), chain),
         eq: () => chain,
         gte: () => chain,
-        maybeSingle: async () => ({ data: kept, error: null }),
+        maybeSingle: async () => ({
+          data:
+            kept && columns
+              ? Object.fromEntries(
+                  columns
+                    .split(',')
+                    .map((c) => c.trim())
+                    .filter((c) => c in kept)
+                    .map((c) => [c, kept[c]]),
+                )
+              : kept,
+          error: null,
+        }),
         upsert: async (row, options) => (upserts.push({ row, options }), { error: null }),
         then: (resolve) => resolve({ count: readsToday, error: null, table }),
       };
@@ -556,5 +570,269 @@ describe('readPage', () => {
     );
     await expect(read()).rejects.toThrow('slow');
     expect(keep).toHaveBeenCalled();
+  });
+});
+
+describe('page checks (CE-050)', () => {
+  const FIRST =
+    'For wet hikes, the best daypack is the Trailmade Ridge 28, because its welded seams keep water out.';
+  const PICK =
+    'Our top pick is the Trailmade Ridge 28, ahead of the Osprey Talon and the Deuter Speed Lite.';
+  const DISCLOSE = 'Disclosure: Trailmade makes the Ridge 28, so weigh our pick with that in mind.';
+  const LIMIT =
+    'The Ridge 28 has no hip-belt pockets, so the Osprey Talon is the better pick for long runs.';
+  const HOW = 'We hiked 120 km in the rain with each pack and weighed every one on the same scale.';
+  const PAGE =
+    `<h1>The best daypacks for wet hikes</h1><p>${FIRST}</p><h2>Our pick</h2><p>${PICK}</p>` +
+    `<p>${DISCLOSE}</p><p>${LIMIT}</p><h2>How we tested</h2><p>${HOW}</p>${filler('pack')}`;
+  const checksAnswer = (over = {}) => ({
+    spots: [],
+    proofs: [],
+    regulated: null,
+    answer_first: 'yes',
+    recommends: { n: 2, quote: 'Our top pick is the Trailmade Ridge 28' },
+    disclosure: { n: 3, quote: 'Trailmade makes the Ridge 28' },
+    balance: { n: 4, quote: 'the Osprey Talon is the better pick for long runs' },
+    how: { n: 5, quote: 'We hiked 120 km in the rain with each pack' },
+    ...over,
+  });
+  const outline = pageOutline(PAGE);
+  const hashOf = (text) => outline.find((item) => item.text === text).hash;
+  const keptChecks = (answerOver = {}, options = {}) =>
+    keptPageRead(outline, checksAnswer(answerOver), 'ecommerce', {
+      pageType: 'best_of',
+      brandName: 'Trailmade',
+      ...options,
+    }).checks;
+
+  it('keeps each check in its paragraph’s own words, by the paragraph’s hash', () => {
+    expect(keptChecks()).toEqual({
+      answerFirst: { block_hash: hashOf(FIRST), answers: true },
+      recommends: { quote: 'Our top pick is the Trailmade Ridge 28', block_hash: hashOf(PICK) },
+      disclosure: { quote: 'Trailmade makes the Ridge 28', block_hash: hashOf(DISCLOSE) },
+      balance: {
+        quote: 'the Osprey Talon is the better pick for long runs',
+        block_hash: hashOf(LIMIT),
+      },
+      how: { quote: 'We hiked 120 km in the rain with each pack', block_hash: hashOf(HOW) },
+      cut: false,
+    });
+    // The verdict is the answer's first word, however it's written.
+    for (const said of ['No', 'No.', 'no, it opens with a story']) {
+      expect(keptChecks({ answer_first: said }).answerFirst).toEqual({
+        block_hash: hashOf(FIRST),
+        answers: false,
+      });
+    }
+    expect(keptChecks({ answer_first: 'Yes.' }).answerFirst).toMatchObject({ answers: true });
+  });
+
+  it('reads the brand by its whole name, in the quote or its sentence', () => {
+    // A short name inside another word ("Ace" in "workspace") isn't the brand.
+    const ace = pageOutline(
+      `<h1>Best note apps</h1><p>${FIRST}</p><p>Our pick is Notion, the best workspace to replace your notes app.</p>${filler('app')}`,
+    );
+    const pick = { n: 2, quote: 'Our pick is Notion, the best workspace' };
+    expect(
+      keptPageRead(ace, checksAnswer({ recommends: pick }), 'b2b', {
+        pageType: 'best_of',
+        brandName: 'Ace',
+      }).checks.recommends,
+    ).toBeNull();
+    // Another sentence of its block naming the brand doesn't make the pick the brand's.
+    const other = pageOutline(
+      `<h1>Best note apps</h1><p>${FIRST}</p><p>Trailmade makes packs. Our pick is Notion, the best workspace.</p>${filler('app')}`,
+    );
+    expect(
+      keptPageRead(other, checksAnswer({ recommends: pick }), 'b2b', {
+        pageType: 'best_of',
+        brandName: 'Trailmade',
+      }).checks.recommends,
+    ).toBeNull();
+  });
+
+  it('reads past a byline or a date under the H1, and says when the page was cut', () => {
+    const bylined = pageOutline(
+      `<h1>The best daypacks for wet hikes</h1><p>By Jane Doe · October 2026</p><p>${FIRST}</p>${filler('pack')}`,
+    );
+    const firstHash = bylined.find((item) => item.text === FIRST).hash;
+    expect(
+      keptPageRead(bylined, checksAnswer({ recommends: null }), 'ecommerce', {
+        pageType: 'best_of',
+        brandName: 'Trailmade',
+      }).checks,
+    ).toMatchObject({ answerFirst: { block_hash: firstHash }, cut: false });
+    expect(
+      buildPagePrompt({
+        outline: bylined,
+        siteType: 'ecommerce',
+        pageType: 'best_of',
+        brandName: 'Trailmade',
+      }),
+    ).toContain('First paragraph after the H1: [2]');
+    // A short answer is a sentence: it's the first paragraph.
+    const short = pageOutline(
+      `<h1>What is a daypack?</h1><p>A small pack for one day.</p>${filler('pack')}`,
+    );
+    expect(
+      buildPagePrompt({
+        outline: short,
+        siteType: 'ecommerce',
+        pageType: 'guide',
+        brandName: 'Trailmade',
+      }),
+    ).toContain('First paragraph after the H1: [1]');
+    const long = pageOutline(
+      `${PAGE}${Array.from({ length: 60 }, (_, i) => filler(`shell ${i}`)).join('')}`,
+    );
+    expect(
+      keptPageRead(long, checksAnswer(), 'ecommerce', {
+        pageType: 'best_of',
+        brandName: 'Trailmade',
+      }).checks.cut,
+    ).toBe(true);
+  });
+
+  it('reads the brand put forward only on a page that chooses, with the brand named; its disclosure only then', () => {
+    // A product page describes the brand's own thing: nothing put forward, no disclosure asked.
+    expect(keptChecks({}, { pageType: 'product_page' })).toMatchObject({
+      recommends: null,
+      disclosure: null,
+      balance: null,
+      how: { block_hash: hashOf(HOW) },
+    });
+    // Another brand's name: not the brand's own pick. Balance still counts on a best-of list.
+    expect(keptChecks({}, { brandName: 'Northwind' })).toMatchObject({
+      recommends: null,
+      disclosure: null,
+      balance: { block_hash: hashOf(LIMIT) },
+    });
+    // A page type not set is read.
+    expect(keptChecks({}, { pageType: null }).recommends).toMatchObject({
+      block_hash: hashOf(PICK),
+    });
+  });
+
+  it('drops a quote not on the page, an unclear answer, and answer first under a list', () => {
+    expect(
+      keptChecks({
+        answer_first: 'unclear',
+        how: { n: 5, quote: 'We tested every pack for a year' },
+        balance: { n: 9, quote: 'the Osprey Talon is the better pick for long runs' },
+      }),
+    ).toMatchObject({ answerFirst: null, how: null, balance: null });
+    const listed = pageOutline(`<h1>Packs</h1><ul><li>${FIRST}</li></ul><p>${HOW}</p>`);
+    expect(
+      keptPageRead(listed, checksAnswer({ recommends: null }), 'ecommerce', {
+        pageType: 'best_of',
+        brandName: 'Trailmade',
+      }).checks.answerFirst,
+    ).toBeNull();
+  });
+
+  it('names the first paragraph after the H1 for the model, or none', () => {
+    const prompt = buildPagePrompt({
+      outline,
+      siteType: 'ecommerce',
+      pageType: 'best_of',
+      brandName: 'Trailmade',
+    });
+    expect(prompt).toContain('First paragraph after the H1: [1]');
+    expect(
+      buildPagePrompt({
+        outline: pageOutline(`<h1>Packs</h1><h2>Why</h2><p>${HOW}</p>`),
+        siteType: 'ecommerce',
+        pageType: 'best_of',
+        brandName: 'Trailmade',
+      }),
+    ).toContain('First paragraph after the H1: none');
+  });
+
+  it('keeps the checks on the row, maps them to the page, and drops one whose paragraph changed', async () => {
+    generateObject.mockResolvedValue({
+      object: checksAnswer(),
+      usage: { inputTokens: 1, outputTokens: 1 },
+    });
+    const result = await read({ html: PAGE, pageType: 'best_of' });
+    expect(upserts[0].row.checks).toEqual(keptChecks());
+    expect(result.checks).toEqual({
+      answerFirst: { answers: true, block: FIRST },
+      recommends: { quote: 'Our top pick is the Trailmade Ridge 28', block: PICK },
+      disclosure: { quote: 'Trailmade makes the Ridge 28', block: DISCLOSE },
+      balance: { quote: 'the Osprey Talon is the better pick for long runs', block: LIMIT },
+      how: { quote: 'We hiked 120 km in the rain with each pack', block: HOW },
+      cut: false,
+      pageType: 'best_of',
+    });
+
+    // Within the minute the kept read stands: a paragraph put before the first one,
+    // and the limit reworded.
+    kept = upserts[0].row;
+    const changed = PAGE.replace(
+      `<p>${FIRST}</p>`,
+      `<p>Rain finds every seam, and every pack on the trail leaks in the end.</p><p>${FIRST}</p>`,
+    ).replace(LIMIT, 'The Ridge 28 has no hip-belt pockets.');
+    const again = await read({ html: changed, pageType: 'best_of', now: NOW + 1000 });
+    expect(again.pending).toBe(true);
+    expect(again.checks).toMatchObject({
+      answerFirst: null,
+      balance: null,
+      recommends: { block: PICK },
+    });
+  });
+
+  it('reads a kept read for the page type as it is now, and reads again for a new brand name', async () => {
+    generateObject.mockResolvedValue({
+      object: checksAnswer(),
+      usage: { inputTokens: 1, outputTokens: 1 },
+    });
+    await read({ html: PAGE, pageType: 'best_of' });
+    kept = upserts[0].row;
+    // A product page within the minute: nothing put forward, no disclosure asked.
+    const asProduct = await read({ html: PAGE, pageType: 'product_page', now: NOW + 1000 });
+    expect(asProduct.pending).toBe(true);
+    expect(asProduct.checks).toMatchObject({
+      recommends: null,
+      disclosure: null,
+      balance: null,
+      // Read for a best-of list: the editor waits for a read as a product page.
+      pageType: 'best_of',
+    });
+    expect(
+      pageHash({ outline, siteType: 'ecommerce', pageType: 'best_of', brandName: 'Trailmade' }),
+    ).not.toBe(
+      pageHash({
+        outline,
+        siteType: 'ecommerce',
+        pageType: 'best_of',
+        brandName: 'Trailmade Gear',
+      }),
+    );
+  });
+
+  it('has no checks for a short page, a missed read, or a read from before them', async () => {
+    expect(
+      (await read({ html: '<h1>Short</h1><p>Only a few words on this page.</p>' })).checks,
+    ).toBeNull();
+    // The page as read, kept: an unchanged page isn't read again.
+    const keptRow = {
+      page_hash: pageHash({
+        outline,
+        siteType: 'ecommerce',
+        pageType: 'best_of',
+        brandName: 'Trailmade',
+      }),
+      spots: [],
+      proofs: [],
+      regulated: null,
+      missed: false,
+      read_at: new Date(NOW).toISOString(),
+      day_reads: 1,
+      day_started_at: new Date(NOW).toISOString(),
+    };
+    kept = { ...keptRow, checks: undefined };
+    expect((await read({ html: PAGE, pageType: 'best_of', now: NOW + 1000 })).checks).toBeNull();
+    kept = { ...keptRow, missed: true, checks: keptChecks() };
+    expect((await read({ html: PAGE, pageType: 'best_of', now: NOW + 1000 })).checks).toBeNull();
   });
 });

@@ -661,6 +661,7 @@ export type Database = {
           language: string | null
           logo_url: string | null
           name: string
+          openai_product_feed: boolean
           organization_id: string
           region: string | null
           shopping_mode_enabled: boolean
@@ -687,6 +688,7 @@ export type Database = {
           language?: string | null
           logo_url?: string | null
           name: string
+          openai_product_feed?: boolean
           organization_id: string
           region?: string | null
           shopping_mode_enabled?: boolean
@@ -713,6 +715,7 @@ export type Database = {
           language?: string | null
           logo_url?: string | null
           name?: string
+          openai_product_feed?: boolean
           organization_id?: string
           region?: string | null
           shopping_mode_enabled?: boolean
