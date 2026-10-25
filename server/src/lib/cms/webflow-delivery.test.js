@@ -1,0 +1,169 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+/**
+ * Send to CMS to Webflow (#1331, phase 2): a page goes to the brand's
+ * collection as a draft item, or updates the item its last send made there.
+ */
+
+let previous;
+const queries = [];
+const updates = [];
+vi.mock('../../config/supabase.js', () => ({
+  default: {
+    from: (table) => {
+      const q = { table, filters: [] };
+      const chain = {
+        select: () => chain,
+        eq: (col, value) => (q.filters.push(['eq', col, value]), chain),
+        neq: (col, value) => (q.filters.push(['neq', col, value]), chain),
+        in: (col, value) => (q.filters.push(['in', col, value]), chain),
+        not: (col, op, value) => (q.filters.push(['not', col, op, value]), chain),
+        order: () => chain,
+        limit: () => chain,
+        update: (row) => (updates.push({ table, row, filters: q.filters }), chain),
+        maybeSingle: async () => {
+          queries.push(q);
+          return { data: previous ? { external_id: previous } : null, error: null };
+        },
+        then: (resolve) => resolve({ data: null, error: null }),
+      };
+      return chain;
+    },
+  },
+}));
+const logged = [];
+vi.mock('../logger.js', () => ({
+  logger: { warn: (...args) => logged.push(JSON.stringify(args)) },
+}));
+const webflow = { createItem: vi.fn(), updateItem: vi.fn() };
+vi.mock('./webflow.js', async (importOriginal) => ({
+  ...(await importOriginal()),
+  createItem: (...args) => webflow.createItem(...args),
+  updateItem: (...args) => webflow.updateItem(...args),
+}));
+
+const { sendToWebflow } = await import('./webflow-delivery.js');
+const { WebflowError } = await import('./webflow.js');
+
+const connection = {
+  brand_id: 'b1',
+  composio_entity_id: 'brand_b1',
+  composio_account_id: 'ca_1',
+  collection_id: 'c1',
+  field_map: { body: 'post-body', metaDescription: 'post-summary' },
+};
+const account = { entityId: 'brand_b1', accountId: 'ca_1' };
+const send = (over = {}) =>
+  sendToWebflow({
+    delivery: { id: 'd2345678-0000-0000-0000-000000000000' },
+    page: {
+      draftId: 'dr1',
+      title: 'Cold brew at home',
+      slug: 'cold-brew-at-home',
+      metaTitle: '',
+      metaDescription: 'How to make it.',
+      ...over,
+    },
+    html: '<h2>Why</h2><p>Smooth.</p><table><tr><td>a</td></tr></table><img src="https://x.example/a.png">',
+    jsonLd: [],
+    connection,
+  });
+
+beforeEach(() => {
+  previous = null;
+  queries.length = 0;
+  updates.length = 0;
+  logged.length = 0;
+  webflow.createItem.mockReset().mockResolvedValue('item-new');
+  webflow.updateItem.mockReset().mockResolvedValue('item-old');
+});
+
+describe('sendToWebflow', () => {
+  it('makes a draft item of a page sent for the first time', async () => {
+    expect(await send()).toEqual({
+      taken: true,
+      externalId: 'item-new',
+      collectionId: 'c1',
+      updated: false,
+      changed: { tables: 1, images: 1 },
+    });
+    expect(webflow.createItem).toHaveBeenCalledWith(account, 'c1', {
+      name: 'Cold brew at home',
+      slug: 'cold-brew-at-home',
+      'post-body': '<h2>Why</h2><p>Smooth.</p><ul><li>a</li></ul>',
+      'post-summary': 'How to make it.',
+    });
+    expect(webflow.updateItem).not.toHaveBeenCalled();
+    // The page's last item is looked for in this collection, from a send that went.
+    expect(queries[0].filters).toEqual([
+      ['eq', 'draft_id', 'dr1'],
+      ['eq', 'target', 'webflow'],
+      ['eq', 'target_collection', 'c1'],
+      ['in', 'status', ['sent', 'published']],
+      ['not', 'external_id', 'is', null],
+      ['neq', 'id', 'd2345678-0000-0000-0000-000000000000'],
+    ]);
+  });
+
+  it('updates the item the page’s last send made, or makes a new one when it was deleted in Webflow', async () => {
+    previous = 'item-old';
+    expect(await send()).toMatchObject({ taken: true, externalId: 'item-old', updated: true });
+    expect(webflow.updateItem).toHaveBeenCalledWith(account, 'c1', 'item-old', expect.any(Object));
+    expect(webflow.createItem).not.toHaveBeenCalled();
+
+    webflow.updateItem.mockRejectedValueOnce(new WebflowError('not_found', 'gone'));
+    expect(await send()).toMatchObject({ taken: true, externalId: 'item-new', updated: false });
+
+    // Any other refusal of the update is the send's: no second item.
+    webflow.createItem.mockClear();
+    webflow.updateItem.mockRejectedValueOnce(
+      new WebflowError('invalid', 'Webflow refused the item'),
+    );
+    expect(await send()).toMatchObject({ taken: false, failure: 'Webflow refused the item' });
+    expect(webflow.createItem).not.toHaveBeenCalled();
+  });
+
+  it('gives Webflow a slug it takes, from the title when the page’s has nothing left', async () => {
+    await send({ slug: 'soğuk.demleme' });
+    expect(webflow.createItem.mock.calls[0][2].slug).toBe('soguk-demleme');
+    await send({ slug: '…', title: 'Café crème' });
+    expect(webflow.createItem.mock.calls[1][2].slug).toBe('cafe-creme');
+    // Another script: the draft's own, the same on every send.
+    await send({ slug: 'привет-мир', title: '日本語' });
+    await send({ slug: 'привет-мир', title: '日本語' });
+    expect(webflow.createItem.mock.calls[2][2].slug).toBe('page-dr1');
+    expect(webflow.createItem.mock.calls[3][2].slug).toBe('page-dr1');
+  });
+
+  it('marks the token refused when Webflow refuses it, and says what went wrong in its own words', async () => {
+    webflow.createItem.mockRejectedValueOnce(
+      new WebflowError('auth_failed', 'Webflow refused the site token'),
+    );
+    expect(await send()).toEqual({
+      taken: false,
+      failure: 'Webflow refused the site token',
+      refused: true,
+    });
+    expect(updates).toEqual([
+      {
+        table: 'brand_cms_connections',
+        row: { status: 'auth_failed', updated_at: expect.any(String) },
+        filters: [
+          ['eq', 'brand_id', 'b1'],
+          ['eq', 'provider', 'webflow'],
+          ['eq', 'composio_account_id', 'ca_1'],
+        ],
+      },
+    ]);
+
+    webflow.createItem.mockRejectedValueOnce(
+      new WebflowError('slug_taken', 'Another item in the collection has this slug'),
+    );
+    expect(await send()).toMatchObject({ failure: 'Another item in the collection has this slug' });
+    expect(updates).toHaveLength(1);
+
+    webflow.createItem.mockRejectedValueOnce(new Error('socket hang up at token wf_secret'));
+    expect(await send()).toEqual({ taken: false, failure: 'Webflow could not be reached' });
+    expect(logged.join('')).not.toContain('wf_secret');
+  });
+});

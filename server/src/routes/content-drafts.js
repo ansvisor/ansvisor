@@ -18,7 +18,7 @@ import { PlanLimitError } from '../lib/plan-guard.js';
  * (CE-018); Hand off has it fix the page's open Quality checks (CE-051);
  * Start's Agent has the Content Agent do the page (CE-015);
  * Stop ends the agent's run under way, changing nothing (v1.1 CE-027); and
- * Send to CMS sends pages to the brand's webhook (#1331).
+ * Send to CMS sends pages to the brand's webhook or its Webflow collection (#1331).
  */
 
 const router = Router();
@@ -44,7 +44,7 @@ async function assertSender(userId) {
 
 /**
  * POST /api/content-drafts/send
- * Body: { brandId, pages: [{ draftId, title, slug, metaTitle, metaDescription, html, author, featuredImage }] }
+ * Body: { brandId, target?: 'webhook' | 'webflow', pages: [{ draftId, title, slug, metaTitle, metaDescription, html, author, featuredImage }] }
  * One page is sent before this answers: { deliveries: [{ id, status, http_status, error }] };
  * more (up to 25) go on in the background: { batchId, deliveries: queued, skipped }.
  */
@@ -55,11 +55,11 @@ router.post('/send', async (req, res) => {
     const field = parsed.error.issues[0]?.path.join('.') ?? null;
     return res.status(400).json({ error: 'Invalid request', code: 'invalid', field });
   }
-  const { brandId, pages } = parsed.data;
+  const { brandId, pages, target } = parsed.data;
   try {
     const { orgId } = await assertBrandAccess(brandId, req.user.id);
     await assertSender(req.user.id);
-    const sent = await sendContentPages({ orgId, brandId, userId: req.user.id, pages });
+    const sent = await sendContentPages({ orgId, brandId, userId: req.user.id, pages, target });
     return res.json(sent);
   } catch (err) {
     if (err instanceof DeliveryError) {

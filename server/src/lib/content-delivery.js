@@ -6,6 +6,8 @@ import { logger } from './logger.js';
 import { PageFetchError } from './safe-fetch.js';
 import { languageCodeOf } from './languages.js';
 import { postJson } from './safe-post.js';
+import { isWebflowConfigured } from './composio.js';
+import { sendToWebflow } from './cms/webflow-delivery.js';
 
 /**
  * Send to CMS, phase 1 (#1331): an admin or manager sends Content Editor
@@ -21,6 +23,10 @@ import { postJson } from './safe-post.js';
  * in the background, one page after another, and the Library follows its
  * rows. A row a restarted server left queued is closed as interrupted by
  * the workspace's next send (reserve_content_deliveries).
+ *
+ * Phase 2: a page can go to the brand's Webflow collection instead (00283,
+ * cms/webflow-delivery.js), as a draft item, under the same cap, batches
+ * and delivery rows; a delivery says where it went (`target`, 00284).
  */
 
 export const DELIVERY_EVENT = 'content_draft.sent';
@@ -54,15 +60,22 @@ export const deliveryPage = z.object({
     .default(null),
 });
 
+/** Where pages go: the brand's webhook (phase 1) or its Webflow collection (phase 2). */
+const DELIVERY_TARGETS = ['webhook', 'webflow'];
+
 export const sendInput = z.object({
   // guid, not uuid: brand ids aren't all RFC 4122 versions (seeded ones).
   brandId: z.guid(),
   pages: z.array(deliveryPage).min(1).max(PAGES_PER_SEND),
+  target: z.enum(DELIVERY_TARGETS).default('webhook'),
 });
 
 /** A send that can't go, with the code the web names to the person. */
 export class DeliveryError extends Error {
-  /** @param {'no_webhook'|'webhook_not_subscribed'|'not_found'|'daily_limit'} code */
+  /**
+   * @param {'no_webhook'|'webhook_not_subscribed'|'webflow_not_configured'|'no_webflow'|
+   *   'webflow_refused'|'webflow_not_ready'|'in_progress'|'not_found'|'daily_limit'} code
+   */
   constructor(code, message, status) {
     super(message);
     this.code = code;
@@ -215,6 +228,38 @@ async function webhooksFor(brandId) {
   return subscribed;
 }
 
+/** The brand's Webflow connection, ready to take pages (a collection with a body field). */
+async function webflowFor(brandId) {
+  if (!isWebflowConfigured()) {
+    throw new DeliveryError('webflow_not_configured', 'Webflow is not set up on this server.', 503);
+  }
+  const { data, error } = await supabaseAdmin
+    .from('brand_cms_connections')
+    .select('brand_id, composio_account_id, composio_entity_id, status, collection_id, field_map')
+    .eq('brand_id', brandId)
+    .eq('provider', 'webflow')
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  if (!data) {
+    throw new DeliveryError('no_webflow', 'Connect Webflow in Settings › Integrations.', 409);
+  }
+  if (data.status === 'auth_failed') {
+    throw new DeliveryError(
+      'webflow_refused',
+      'Webflow refused the site token. Connect it again in Settings › Integrations.',
+      409,
+    );
+  }
+  if (!data.collection_id || !data.field_map?.body) {
+    throw new DeliveryError(
+      'webflow_not_ready',
+      'Pick the Webflow collection pages go to in Settings › Integrations.',
+      409,
+    );
+  }
+  return data;
+}
+
 async function brandFor(brandId) {
   const [{ data: brand }, { data: domains }] = await Promise.all([
     supabaseAdmin.from('brands').select('id, name, industry, language').eq('id', brandId).single(),
@@ -235,15 +280,10 @@ async function brandFor(brandId) {
 }
 
 /**
- * Sends one queued delivery to the brand's webhooks and writes how it went:
- * sent once any of them takes it (with that one's answer), else failed with
- * the last reason. A callback can land before the webhook answers (an
- * automation that publishes, or fails, first): then the delivery keeps what
- * the callback said, and that is what comes back.
+ * The page to the brand's webhooks: taken once any of them takes it (with
+ * that one's answer), else the last answer and reason.
  */
-async function deliver({ delivery, page, brand, configs }) {
-  const html = cleanPublishHtml(page.html);
-  const jsonLd = jsonLdOf(html);
+async function sendToWebhooks({ delivery, page, brand, html, jsonLd, configs }) {
   let taken = null;
   let last = null;
   let failure = null;
@@ -272,19 +312,65 @@ async function deliver({ delivery, page, brand, configs }) {
     }
   }
   const answered = taken ?? last;
-  const update = {
-    status: taken ? 'sent' : 'failed',
-    http_status: answered?.status ?? null,
-    response_excerpt: answered?.answer ? answered.answer.slice(0, EXCERPT_CHARS) : null,
-    error: taken ? null : (failure ?? 'Not sent').slice(0, 500),
-    sent_at: new Date().toISOString(),
+  return {
+    taken: Boolean(taken),
+    failure,
+    fields: {
+      http_status: answered?.status ?? null,
+      response_excerpt: answered?.answer ? answered.answer.slice(0, EXCERPT_CHARS) : null,
+    },
   };
+}
+
+/**
+ * Sends one queued delivery, to the brand's webhooks or its Webflow
+ * collection, and writes how it went: sent, or failed with the reason. A
+ * Webflow item's id and collection are kept on the delivery, so the page's
+ * next send updates the item. A webhook's callback can land before the
+ * webhook answers (an automation that publishes, or fails, first): then the
+ * delivery keeps what the callback said, and that is what comes back.
+ */
+async function deliver({ delivery, page, brand, configs, webflow }) {
+  const html = cleanPublishHtml(page.html);
+  const jsonLd = jsonLdOf(html);
+  const sent = webflow
+    ? await sendToWebflow({ delivery, page, html, jsonLd, connection: webflow })
+    : await sendToWebhooks({ delivery, page, brand, html, jsonLd, configs });
+  const update = {
+    status: sent.taken ? 'sent' : 'failed',
+    ...(sent.fields ?? { http_status: null, response_excerpt: null }),
+    error: sent.taken ? null : (sent.failure ?? 'Not sent').slice(0, 500),
+    sent_at: new Date().toISOString(),
+    ...(sent.externalId
+      ? { external_id: sent.externalId, target_collection: sent.collectionId }
+      : {}),
+  };
+  // How Webflow took it, for the one page's answer (and the batch); not kept.
+  const how = webflow
+    ? sent.taken
+      ? { updated: sent.updated, changed: sent.changed }
+      : { refused: Boolean(sent.refused) }
+    : {};
   const { data: written, error } = await supabaseAdmin
     .from('content_draft_deliveries')
     .update(update)
     .eq('id', delivery.id)
     .eq('status', 'queued')
     .select('id');
+  if (sent.externalId && (error || (written && !written.length))) {
+    // The item is in Webflow whatever the row says: its id is kept, or the
+    // page's next send makes a second item and fails on its slug.
+    const { error: idError } = await supabaseAdmin
+      .from('content_draft_deliveries')
+      .update({ external_id: sent.externalId, target_collection: sent.collectionId })
+      .eq('id', delivery.id);
+    if (idError) {
+      logger.error(
+        { err: idError, deliveryId: delivery.id },
+        '[content-delivery] item id not kept',
+      );
+    }
+  }
   if (error) {
     logger.error({ err: error, deliveryId: delivery.id }, '[content-delivery] write failed');
   } else if (written && !written.length) {
@@ -294,9 +380,9 @@ async function deliver({ delivery, page, brand, configs }) {
       .select('status, error, published_url')
       .eq('id', delivery.id)
       .maybeSingle();
-    if (told) return { id: delivery.id, draftId: page.draftId, ...update, ...told };
+    if (told) return { id: delivery.id, draftId: page.draftId, ...update, ...told, ...how };
   }
-  return { id: delivery.id, draftId: page.draftId, ...update };
+  return { id: delivery.id, draftId: page.draftId, ...update, ...how };
 }
 
 /** A queued delivery that doesn't go, closed as failed with the reason. */
@@ -311,9 +397,17 @@ async function closeQueued(delivery, reason) {
   }
 }
 
-/** The batch's pages, one after another; one deleted or archived before its turn doesn't go. */
-async function deliverBatch(going, { brand, configs, batchId }) {
+/**
+ * The batch's pages, one after another; one deleted or archived before its
+ * turn doesn't go, and once Webflow refuses the token, the rest don't either.
+ */
+async function deliverBatch(going, { brand, configs, webflow, batchId }) {
+  let refused = null;
   for (const [i, item] of going.entries()) {
+    if (refused) {
+      await closeQueued(item.delivery, refused).catch(() => {});
+      continue;
+    }
     // A short pause between pages, none before the first.
     if (i > 0) await new Promise((resolve) => setTimeout(resolve, PAUSE_MS));
     try {
@@ -327,7 +421,8 @@ async function deliverBatch(going, { brand, configs, batchId }) {
         await closeQueued(item.delivery, 'The page was deleted or archived before it was sent');
         continue;
       }
-      await deliver({ ...item, brand, configs });
+      const sent = await deliver({ ...item, brand, configs, webflow });
+      if (sent.refused) refused = sent.error ?? 'Webflow refused the site token';
     } catch (err) {
       logger.error(
         { err, batchId, deliveryId: item.delivery.id },
@@ -363,7 +458,8 @@ async function myRuleSets(orgId, drafts) {
 
 /**
  * Sends pages of one brand: checks they are the brand's (not archived), that
- * a webhook takes the event, reserves them against the day's cap (those past
+ * a webhook takes the event (or the brand's Webflow collection is ready, for
+ * target 'webflow'), reserves them against the day's cap (those past
  * it don't go), keeps each page's slug and meta on its draft, then sends
  * them. One page is sent before this returns; more go on in the background,
  * so a CMS isn't sent 25 posts at once.
@@ -372,7 +468,13 @@ async function myRuleSets(orgId, drafts) {
  *   deliveries: the sent one (one page) or the queued ones (more); skipped:
  *   pages past the day's cap
  */
-export async function sendContentPages({ orgId, brandId, userId, pages: asked }) {
+export async function sendContentPages({
+  orgId,
+  brandId,
+  userId,
+  pages: asked,
+  target = 'webhook',
+}) {
   // A page named twice goes once.
   const byId = new Map(asked.map((p) => [p.draftId, p]));
   const pages = [...byId.values()];
@@ -387,7 +489,8 @@ export async function sendContentPages({ orgId, brandId, userId, pages: asked })
   if ((drafts ?? []).length !== ids.length) {
     throw new DeliveryError('not_found', 'A page to send is not in this brand', 404);
   }
-  const configs = await webhooksFor(brandId);
+  const webflow = target === 'webflow' ? await webflowFor(brandId) : null;
+  const configs = webflow ? [] : await webhooksFor(brandId);
 
   const batchId = pages.length > 1 ? crypto.randomUUID() : null;
   const { data: queued, error: reserveError } = await supabaseAdmin.rpc(
@@ -399,9 +502,20 @@ export async function sendContentPages({ orgId, brandId, userId, pages: asked })
       p_batch_id: batchId,
       p_items: pages.map((p) => ({ draft_id: p.draftId, title: p.title, slug: p.slug })),
       p_limit: DAILY_DELIVERIES,
+      p_target: target,
     },
   );
-  if (reserveError) throw new Error(reserveError.message);
+  if (reserveError) {
+    // 00284: a page already on its way to Webflow isn't sent again meanwhile.
+    if (/delivery_in_progress/.test(reserveError.message ?? '')) {
+      throw new DeliveryError(
+        'in_progress',
+        'A page is already being sent to Webflow. Wait for it, then send again.',
+        409,
+      );
+    }
+    throw new Error(reserveError.message);
+  }
   const rows = queued ?? [];
   if (!rows.length) {
     throw new DeliveryError(
@@ -463,10 +577,10 @@ export async function sendContentPages({ orgId, brandId, userId, pages: asked })
     };
   }
   if (pages.length === 1) {
-    const sent = await deliver({ ...going[0], brand, configs });
+    const sent = await deliver({ ...going[0], brand, configs, webflow });
     return { batchId, deliveries: [sent], skipped: 0 };
   }
-  void deliverBatch(going, { brand, configs, batchId });
+  void deliverBatch(going, { brand, configs, webflow, batchId });
   return {
     batchId,
     deliveries: rows.map((r) => ({ id: r.id, draftId: r.draft_id, status: r.status })),

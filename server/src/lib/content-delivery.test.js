@@ -13,6 +13,9 @@ const db = {
   // What a callback that landed first left on the delivery.
   told: null,
   configs: [],
+  // The brand's Webflow connection (00283), and whether this server has Webflow set up.
+  webflow: null,
+  webflowConfigured: true,
   queued: [],
   updates: [],
   rpc: [],
@@ -39,6 +42,7 @@ function from(table) {
       return { data: db.drafts.filter((d) => !ids || ids.includes(d.id)), error: null };
     }
     if (table === 'webhook_configs') return { data: db.configs, error: null };
+    if (table === 'brand_cms_connections') return { data: db.webflow, error: null };
     if (table === 'brands') return { data: db.brand, error: null };
     if (table === 'brand_domains') return { data: [{ domain: 'acme.example' }], error: null };
     return { data: null, error: null };
@@ -52,6 +56,7 @@ function from(table) {
     limit: () => chain,
     single: async () => result(),
     maybeSingle: async () => {
+      if (table === 'brand_cms_connections') return result();
       const { data } = result();
       const id = q.filters.find(([op, col]) => op === 'eq' && col === 'id')?.[2];
       return { data: (data ?? []).find((d) => d.id === id) ?? null, error: null };
@@ -67,12 +72,17 @@ vi.mock('../config/supabase.js', () => ({
     from: (t) => from(t),
     rpc: async (fn, args) => {
       db.rpc.push({ fn, args });
-      return { data: db.queued, error: null };
+      return db.rpcError ? { data: null, error: db.rpcError } : { data: db.queued, error: null };
     },
   },
 }));
 const postJson = vi.fn();
 vi.mock('./safe-post.js', () => ({ postJson: (...args) => postJson(...args) }));
+vi.mock('./composio.js', () => ({ isWebflowConfigured: () => db.webflowConfigured }));
+const sendToWebflow = vi.fn();
+vi.mock('./cms/webflow-delivery.js', () => ({
+  sendToWebflow: (...args) => sendToWebflow(...args),
+}));
 
 const { DAILY_DELIVERIES, DeliveryError, PAUSE_MS, cleanPublishHtml, sendContentPages, signBody } =
   await import('./content-delivery.js');
@@ -121,7 +131,11 @@ beforeEach(() => {
   db.queued = [row(page().draftId)];
   db.updates = [];
   db.rpc = [];
+  db.webflow = null;
+  db.webflowConfigured = true;
+  db.rpcError = null;
   postJson.mockReset().mockResolvedValue({ status: 200, answer: '{"ok":true}' });
+  sendToWebflow.mockReset();
 });
 
 afterEach(() => {
@@ -185,6 +199,7 @@ describe('sendContentPages', () => {
           p_batch_id: null,
           p_items: [{ draft_id: page().draftId, title: page().title, slug: 'best-aeo-tools' }],
           p_limit: DAILY_DELIVERIES,
+          p_target: 'webhook',
         },
       },
     ]);
@@ -429,5 +444,136 @@ describe('sendContentPages', () => {
     await expect(send()).rejects.toMatchObject({ code: 'webhook_not_subscribed', status: 409 });
     expect(db.rpc).toEqual([]);
     expect(postJson).not.toHaveBeenCalled();
+  });
+});
+
+describe('sendContentPages to Webflow (phase 2)', () => {
+  const connection = {
+    brand_id: 'b1',
+    composio_account_id: 'ca_1',
+    composio_entity_id: 'brand_b1',
+    status: 'connected',
+    collection_id: 'c1',
+    field_map: { body: 'post-body' },
+  };
+  const toWebflow = (pages = [page()]) =>
+    sendContentPages({ orgId: 'o1', brandId: 'b1', userId: 'u1', pages, target: 'webflow' });
+
+  it('sends a page to the brand’s collection, not its webhooks, and keeps the item on the delivery', async () => {
+    db.webflow = connection;
+    sendToWebflow.mockResolvedValue({
+      taken: true,
+      externalId: 'item-1',
+      collectionId: 'c1',
+      updated: false,
+      changed: { tables: 0, images: 0 },
+    });
+    const sent = await toWebflow();
+    expect(db.rpc[0].args.p_target).toBe('webflow');
+    expect(postJson).not.toHaveBeenCalled();
+    expect(sendToWebflow).toHaveBeenCalledWith(
+      expect.objectContaining({
+        connection,
+        html: '<h2>Why</h2><p>Because.</p>',
+        jsonLd: [],
+        page: expect.objectContaining({ draftId: page().draftId, slug: 'best-aeo-tools' }),
+      }),
+    );
+    const write = db.updates.find((u) => u.table === 'content_draft_deliveries');
+    expect(write.update).toMatchObject({
+      status: 'sent',
+      error: null,
+      http_status: null,
+      external_id: 'item-1',
+      target_collection: 'c1',
+    });
+    expect(sent.deliveries[0]).toMatchObject({ status: 'sent', updated: false });
+  });
+
+  it('writes a page Webflow didn’t take as failed, with the reason', async () => {
+    db.webflow = connection;
+    sendToWebflow.mockResolvedValue({
+      taken: false,
+      failure: 'Another item in the collection has this slug',
+    });
+    const sent = await toWebflow();
+    const write = db.updates.find((u) => u.table === 'content_draft_deliveries');
+    expect(write.update).toMatchObject({
+      status: 'failed',
+      error: 'Another item in the collection has this slug',
+    });
+    expect(write.update).not.toHaveProperty('external_id');
+    expect(sent.deliveries[0]).not.toHaveProperty('updated');
+  });
+
+  it('refuses before reserving when Webflow isn’t ready to take pages', async () => {
+    db.webflowConfigured = false;
+    await expect(toWebflow()).rejects.toMatchObject({
+      code: 'webflow_not_configured',
+      status: 503,
+    });
+    db.webflowConfigured = true;
+    await expect(toWebflow()).rejects.toMatchObject({ code: 'no_webflow', status: 409 });
+    db.webflow = { ...connection, status: 'auth_failed' };
+    await expect(toWebflow()).rejects.toMatchObject({ code: 'webflow_refused', status: 409 });
+    db.webflow = { ...connection, collection_id: null };
+    await expect(toWebflow()).rejects.toMatchObject({ code: 'webflow_not_ready', status: 409 });
+    db.webflow = { ...connection, field_map: {} };
+    await expect(toWebflow()).rejects.toMatchObject({ code: 'webflow_not_ready' });
+    expect(db.rpc).toEqual([]);
+    expect(sendToWebflow).not.toHaveBeenCalled();
+  });
+
+  it('sends a batch one page after another, to Webflow', async () => {
+    vi.useFakeTimers();
+    db.webflow = connection;
+    const second = page({ draftId: 'c0ffee00-0000-4000-8000-000000000002', slug: 'second' });
+    db.drafts = [draft(page().draftId), draft(second.draftId)];
+    db.queued = [row(page().draftId), row(second.draftId)];
+    sendToWebflow.mockResolvedValue({ taken: true, externalId: 'i', collectionId: 'c1' });
+    await toWebflow([page(), second]);
+    await vi.runAllTimersAsync();
+    expect(sendToWebflow).toHaveBeenCalledTimes(2);
+    expect(postJson).not.toHaveBeenCalled();
+  });
+
+  it('refuses a page already on its way to Webflow', async () => {
+    db.webflow = connection;
+    db.rpcError = { message: 'delivery_in_progress' };
+    await expect(toWebflow()).rejects.toMatchObject({ code: 'in_progress', status: 409 });
+    expect(sendToWebflow).not.toHaveBeenCalled();
+  });
+
+  it('stops a batch once Webflow refuses the token, closing the rest with the reason', async () => {
+    vi.useFakeTimers();
+    db.webflow = connection;
+    const second = page({ draftId: 'c0ffee00-0000-4000-8000-000000000002', slug: 'second' });
+    db.drafts = [draft(page().draftId), draft(second.draftId)];
+    db.queued = [row(page().draftId), row(second.draftId)];
+    sendToWebflow.mockResolvedValue({
+      taken: false,
+      failure: 'Webflow refused the site token',
+      refused: true,
+    });
+    await toWebflow([page(), second]);
+    await vi.runAllTimersAsync();
+    expect(sendToWebflow).toHaveBeenCalledTimes(1);
+    const closed = db.updates.filter(
+      (u) =>
+        u.table === 'content_draft_deliveries' &&
+        u.update.error === 'Webflow refused the site token',
+    );
+    expect(closed).toHaveLength(2);
+  });
+
+  it('keeps the item’s id even when the delivery’s row was written meanwhile', async () => {
+    db.webflow = connection;
+    db.told = { status: 'failed', error: 'Not sent: interrupted', published_url: null };
+    sendToWebflow.mockResolvedValue({ taken: true, externalId: 'item-9', collectionId: 'c1' });
+    await toWebflow();
+    expect(db.updates.map((u) => u.update)).toContainEqual({
+      external_id: 'item-9',
+      target_collection: 'c1',
+    });
   });
 });

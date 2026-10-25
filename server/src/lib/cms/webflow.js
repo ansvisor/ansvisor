@@ -21,7 +21,7 @@ const OWN_FIELDS = new Set(['name', 'slug']);
 
 /** A Webflow call that didn't go, with the code the web names to the person. */
 export class WebflowError extends Error {
-  /** @param {'auth_failed'|'missing_scopes'|'no_access'|'not_found'|'failed'} code */
+  /** @param {'auth_failed'|'missing_scopes'|'no_access'|'not_found'|'slug_taken'|'invalid'|'failed'} code */
   constructor(code, message) {
     super(message);
     this.code = code;
@@ -36,6 +36,10 @@ const ACCOUNT_GONE = /connected[_ ]?account[_ ]?not[_ ]?found/i;
 const REFUSED = /\b401\b|unauthori[sz]ed|not[_ ]authori[sz]ed|invalid[_ ](api[_ ])?(token|key)/i;
 const FORBIDDEN = /\b403\b|forbidden/i;
 const NOT_FOUND = /\b404\b|not[_ ]found/i;
+/** An item Webflow won't take: its slug another item's, or a field's value. */
+const SLUG_TAKEN =
+  /slug[\s\S]{0,80}(unique|already|duplicate|taken|exists)|(unique|already|duplicate|taken|exists)[\s\S]{0,80}slug/i;
+const INVALID = /\b(400|409|422)\b|validation|invalid[_ ](field|value|request)/i;
 
 /**
  * A Webflow tool's data. What went wrong is told in our words only: the
@@ -62,6 +66,18 @@ async function run(slug, account, args) {
     }
     if (NOT_FOUND.test(said)) {
       throw new WebflowError('not_found', 'Webflow has no such site or collection');
+    }
+    if (SLUG_TAKEN.test(said)) {
+      throw new WebflowError(
+        'slug_taken',
+        'Another Webflow item has this slug. Change the page’s slug, or remove that item in Webflow.',
+      );
+    }
+    if (INVALID.test(said)) {
+      throw new WebflowError(
+        'invalid',
+        'Webflow refused the item: a field doesn’t take what was sent',
+      );
     }
     throw new WebflowError('failed', 'Webflow could not be reached');
   }
@@ -121,6 +137,41 @@ export async function getCollection(account, collectionId) {
     name: text(collection.displayName) || text(collection.slug) || collectionId,
     fields,
   };
+}
+
+/** An item's id from Webflow's answer, however Composio wraps it. */
+function itemIdOf(data) {
+  const item = objectOf(data);
+  const id = item?.id ?? item?.item?.id ?? item?.items?.[0]?.id;
+  if (typeof id !== 'string' || !id) throw new WebflowError('failed', 'Webflow gave no item back');
+  return id;
+}
+
+/** A new item in the collection, as a draft: Webflow's own publish puts it live. Its id. */
+export async function createItem(account, collectionId, fieldData) {
+  const data = await run('WEBFLOW_CREATE_COLLECTION_ITEM', account, {
+    collection_id: collectionId,
+    field_data: fieldData,
+    is_draft: true,
+  });
+  return itemIdOf(data);
+}
+
+/**
+ * The item's fields written again. Its draft or live state is left as it is:
+ * a live item's change waits for Webflow's next publish. Its id.
+ */
+export async function updateItem(account, collectionId, itemId, fieldData) {
+  const data = await run('WEBFLOW_UPDATE_COLLECTION_ITEM_V2', account, {
+    collection_id: collectionId,
+    item_id: itemId,
+    fieldData,
+  });
+  try {
+    return itemIdOf(data);
+  } catch {
+    return itemId;
+  }
 }
 
 /** The words a field's slug or name is read for, by part: the first field that has them is suggested. */
