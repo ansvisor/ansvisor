@@ -104,6 +104,7 @@ export function SendDialog({
     webflow,
     target,
     pick,
+    sent: keepTarget,
     unchecked: targetUnchecked,
     reading: targetReading,
     retry: retryTarget,
@@ -178,6 +179,7 @@ export function SendDialog({
       );
       return;
     }
+    keepTarget(target);
     if (target === 'webflow') {
       // What of the page Webflow's rich text couldn't keep: tables went as lists, images not yet.
       const changed = delivery?.changed;
@@ -239,7 +241,9 @@ export function SendDialog({
             }}
           />
         )}
-        {targetUnchecked && <CmsTargetUnchecked reading={targetReading} onRetry={retryTarget} />}
+        {targetUnchecked && (
+          <CmsTargetUnchecked reading={targetReading} onRetry={retryTarget} disabled={sending} />
+        )}
 
         {pageProblem && (
           <div className="flex items-center gap-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-200">

@@ -19,23 +19,25 @@ vi.mock('@/lib/content/cms-send-client', () => ({
   sendPagesToCms,
 }));
 // The brand's Webflow connection (#1331, phase 2): none unless a test gives one.
-const webflow = vi.hoisted(() => ({ ready: false }));
+const webflow = vi.hoisted(() => ({ ready: false, refused: false, failed: false }));
 vi.mock('@/lib/webflow-client', () => ({
   readWebflow: async () => ({
-    ok: true,
+    ok: !webflow.failed,
+    code: 'failed',
     configured: true,
-    connection: webflow.ready
-      ? {
-          status: 'connected',
-          siteId: 's1',
-          siteName: 'Acme',
-          collectionId: 'c1',
-          collectionName: 'Blog Posts',
-          fieldMap: { body: 'post-body' },
-          connectedAt: '2026-10-25T10:00:00Z',
-          updatedAt: '2026-10-25T10:00:00Z',
-        }
-      : null,
+    connection:
+      webflow.ready || webflow.refused
+        ? {
+            status: webflow.refused ? 'auth_failed' : 'connected',
+            siteId: 's1',
+            siteName: 'Acme',
+            collectionId: 'c1',
+            collectionName: 'Blog Posts',
+            fieldMap: { body: 'post-body' },
+            connectedAt: '2026-10-25T10:00:00Z',
+            updatedAt: '2026-10-25T10:00:00Z',
+          }
+        : null,
   }),
 }));
 // One request a page, so a test can refuse the second.
@@ -108,7 +110,15 @@ const lines = () => [...dialog().querySelectorAll('li')].map((li) => li.textCont
 
 beforeEach(() => {
   oneByOne.on = false;
-  webflow.ready = false;
+  Object.assign(webflow, { ready: false, refused: false, failed: false });
+  // The send target remembered per brand, in this browser.
+  const kept = new Map<string, string>();
+  vi.stubGlobal('localStorage', {
+    getItem: (key: string) => kept.get(key) ?? null,
+    setItem: (key: string, value: string) => void kept.set(key, value),
+    removeItem: (key: string) => void kept.delete(key),
+    clear: () => kept.clear(),
+  });
   onClose.mockReset();
   readCmsSources.mockReset().mockResolvedValue(
     new Map([
@@ -130,6 +140,7 @@ afterEach(() => {
   act(() => root.unmount());
   container.remove();
   vi.useRealTimers();
+  vi.unstubAllGlobals();
 });
 
 describe('BulkSendDialog', () => {
@@ -220,9 +231,41 @@ describe('BulkSendDialog', () => {
     expect(webflowChoice?.getAttribute('aria-checked')).toBe('true');
     await act(async () => button('Send 2 pages').click());
     expect(sendPagesToCms.mock.calls[0]?.[2]).toBe('webflow');
+    expect(localStorage.getItem('aeo:cms-target:brand-1')).toBe('webflow');
     // Once sent, the choice is gone.
     await act(async () => void (await vi.advanceTimersByTimeAsync(2_000)));
     expect(dialog().querySelector('[role="radio"]')).toBeNull();
+  });
+
+  it('sends to the webhook when Webflow can’t be read, saying so to a person who sent to Webflow', async () => {
+    webflow.failed = true;
+    localStorage.setItem('aeo:cms-target:brand-1', 'webflow');
+    sendPagesToCms.mockResolvedValue({
+      ok: true,
+      skipped: 0,
+      deliveries: [
+        { id: 'x1', draftId: 'd1', status: 'sent' },
+        { id: 'x3', draftId: 'd3', status: 'sent' },
+      ],
+    });
+    await render();
+    expect(dialog().querySelector('[role="radio"]')).toBeNull();
+    expect(dialog().querySelector('[role="status"]')!.textContent).toContain(
+      "Couldn't check Webflow just now, so this send goes to your workflow.",
+    );
+    expect(button('Send 2 pages').disabled).toBe(false);
+    await act(async () => button('Send 2 pages').click());
+    expect(sendPagesToCms.mock.calls[0]?.[2]).toBe('webhook');
+  });
+
+  it('says Webflow isn’t ready when the brand has no webhook either', async () => {
+    webflow.refused = true;
+    sendPagesToCms.mockResolvedValue({ ok: false, code: 'no_webhook', field: null });
+    await render();
+    await act(async () => button('Send 2 pages').click());
+    expect(dialog().querySelector('[role="alert"]')!.textContent).toBe(
+      "This brand's Webflow isn't ready, and it has no webhook. Connect Webflow again or pick its collection in Settings › Integrations.",
+    );
   });
 
   it('says why nothing went, and keeps the pages to send again', async () => {

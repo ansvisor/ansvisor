@@ -358,7 +358,7 @@ describe('SendDialog', () => {
       readWebflow.mockResolvedValueOnce({ ok: false, code: 'failed' }).mockResolvedValue(ready);
       await render();
       expect(dialog().querySelector('[role="status"]')!.textContent).toContain(
-        "Couldn't check Webflow just now, so this goes to your workflow.",
+        "Couldn't check Webflow just now, so this send goes to your workflow.",
       );
       expect(button('Send').disabled).toBe(false);
       await act(async () => button('Try again').click());
@@ -408,6 +408,8 @@ describe('SendDialog', () => {
           new KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true }),
         );
       });
+      // Webflow, off, isn't picked: the brand's choice stays.
+      expect(localStorage.getItem('aeo:cms-target:brand-1')).toBe('webhook');
       expect(radio('Your workflow')!.getAttribute('aria-checked')).toBe('true');
     });
 
@@ -450,6 +452,8 @@ describe('SendDialog', () => {
       );
       await act(async () => button('Send').click());
       expect(sendPagesToCms).toHaveBeenCalledWith('brand-1', expect.any(Array), 'webflow');
+      // Sent there: the brand's choice, so a failed read later says so.
+      expect(localStorage.getItem('aeo:cms-target:brand-1')).toBe('webflow');
       expect(toast.success).toHaveBeenCalledWith('Sent to Webflow as a draft item', {
         description: "2 tables went as lists. 1 image wasn't sent: add it in Webflow.",
       });
