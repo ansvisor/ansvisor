@@ -21,7 +21,10 @@ export interface PageReadState {
   paused: boolean;
   /** The draft's page reads for the day are made: no more asks this session. */
   limited: boolean;
-  /** An ask is out, or the page changed within the API's minute. */
+  /**
+   * An ask is out, the page changed within the API's minute, or a save is
+   * still to be asked about (its read may move the scores).
+   */
   reading: boolean;
   /**
    * The read's first answer is in (a read, a failure, its limits, or off):
@@ -53,6 +56,8 @@ export function usePageRead(
   const [failed, setFailed] = useState(false);
   const [out, setOut] = useState(false);
   const [pending, setPending] = useState(false);
+  // The save the last ask went out for: a later one is still to be read.
+  const [askedSave, setAskedSave] = useState<string | null>(null);
   // Bumped when the next ask needn't wait for a save.
   const [again, setAgain] = useState(0);
   const asking = useRef(false);
@@ -84,6 +89,7 @@ export function usePageRead(
       if (asking.current) return;
       asking.current = true;
       askedFor.current = savedAt;
+      setAskedSave(savedAt);
       lastAsk.current = Date.now();
       left.current = false;
       setOut(true);
@@ -123,7 +129,9 @@ export function usePageRead(
     return () => clearTimeout(timer);
   }, [draftId, savedAt, enabled, paused, limited, off, unsaved, again]);
 
-  const reading = enabled && !paused && !limited && !off && (out || pending);
+  // A save not asked about yet counts, as the claims' does (useClaims).
+  const reading =
+    enabled && !paused && !limited && !off && (out || pending || askedSave !== savedAt);
   const settled = !enabled || read !== null || failed || off || paused || limited;
   return { read, paused, limited, reading, settled };
 }

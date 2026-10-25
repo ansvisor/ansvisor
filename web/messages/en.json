@@ -128,6 +128,7 @@
     "contentOpportunities": "Opportunities",
     "contentLibrary": "Library",
     "contentPlan": "Plan",
+    "contentEditor": "Editor",
     "toggleSubmenu": "Show or hide {label}"
   },
   "actionCenter": {
@@ -4346,6 +4347,8 @@
       },
       "qualityChip": "Quality {score}",
       "qualityChipHint": "An Ansvisor estimate of this page's quality. Open Quality.",
+      "qualityChipReading": "Quality · reading…",
+      "qualityChipUpdating": "updating as the page is read",
       "nextStep": {
         "label": "Next step",
         "short": "Next",
@@ -4507,6 +4510,7 @@
           "noImage": "None in the page",
           "noSlug": "None from the title: set it in your CMS",
           "noAuthor": "Not read yet: set it in your CMS",
+          "siteAuthor": "Your site's own: your CMS keeps it",
           "copy": "Copy",
           "copyLabel": "Copy {field}",
           "copied": "{field} copied"
@@ -4562,7 +4566,9 @@
           "inContent": "Exports put \"{line}\" under the H1: this brand adds the byline to content, for a CMS with no author field.",
           "unknown": "The authors couldn't be read here, so the code below leaves the author out. Set the page's author in your CMS.",
           "none": "No author yet",
-          "noneDetail": "The page goes out as {byline}, with the brand's Organization schema. A real author raises E-E-A-T."
+          "noneDetail": "The page goes out as {byline}, with the brand's Organization schema. A real author raises E-E-A-T.",
+          "confirmed": "Author named on your site",
+          "confirmedDetail": "You confirmed the page's author is a real person your site names. Check your CMS sets them as the author."
         },
         "dates": {
           "title": "Visible published and updated dates",
@@ -4663,6 +4669,10 @@
         "addAuthor": "Add author",
         "editAuthor": "Edit author",
         "todos": {
+          "confirm": {
+            "real": "The author is a real person, named on your site",
+            "profile": "Their profile on your site has a short bio and profile links"
+          },
           "experience": {
             "title": "Add your own experience",
             "next": "add your own experience",
@@ -4730,10 +4740,11 @@
               "addAuthor": "add an author for the page"
             },
             "detail": {
-              "pickAuthor": "It's by {byline} now: a named person shows who stands behind the page",
+              "pickAuthor": "It's by {byline} now: a named person shows who stands behind the page. Or, if your site names the author, confirm it",
               "addAuthor": "Add the people who write for you in Settings › Authors. Real people only: the agent can't add them"
             },
-            "done": "By {name}"
+            "done": "By {name}",
+            "confirmedDone": "You confirmed your site names a real person as the author"
           },
           "authorProfile": {
             "title": "Complete {name}'s profile",
@@ -4742,6 +4753,7 @@
             "nextNoAuthor": "complete the author's profile",
             "detail": {
               "noAuthor": "Once the page has an author: two sentences on what they know, and a profile link",
+              "confirm": "Or, if your site shows their profile, confirm it",
               "both": "Add them in Settings › Authors: two sentences on what they know, and a LinkedIn or other profile link",
               "bio": "Add a short bio in Settings › Authors: two sentences on what they know",
               "links": "Add a LinkedIn or other profile link in Settings › Authors"
@@ -4751,7 +4763,8 @@
               "bio": "{member, select, yes {{name}, whoever added them or an admin can add a short bio in Settings › Authors} other {Whoever added {name} or an admin can add a short bio in Settings › Authors}}",
               "links": "{member, select, yes {{name}, whoever added them or an admin can add a profile link in Settings › Authors} other {Whoever added {name} or an admin can add a profile link in Settings › Authors}}"
             },
-            "done": "Short bio and profile links are in"
+            "done": "Short bio and profile links are in",
+            "confirmedDone": "You confirmed their profile on your site has a bio and links"
           }
         },
         "nudge": {
@@ -4791,6 +4804,7 @@
         "pageLimited": "Today's AI reads of this page are used up. Changes you make now are read when you open the page again tomorrow.",
         "aiPaused": "Sources the rules can't place wait for an AI check: this month's AI usage is used up. They count again when it renews.",
         "keepFailed": "Couldn't keep the source. Try again.",
+        "confirmFailed": "Couldn't save that. Try again.",
         "keepFull": "This page keeps 50 sources already: replace one instead.",
         "weakSource": "A weak source: a forum, a social post or a competitor's page. See Quality to replace or keep it.",
         "formulas": {
@@ -5067,6 +5081,18 @@
     }
   },
   "content": {
+    "imageUpload": {
+      "button": "Upload from your computer",
+      "uploading": "Uploading…",
+      "hint": "JPG, PNG, WebP or GIF, up to 5 MB. Anyone with its address can see it, like any image on a web page.",
+      "errors": {
+        "type": "Use a JPG, PNG, WebP or GIF image.",
+        "size": "That image is over 5 MB. Use a smaller one.",
+        "plan": "Uploads come with an active plan. Paste the image's address instead.",
+        "limit": "That's today's uploads for your workspace. Paste the image's address, or upload again tomorrow.",
+        "failed": "Couldn't upload the image. Try again."
+      }
+    },
     "title": "Content Opportunities",
     "description": "AI-powered content recommendations to improve your visibility in AI-generated answers.",
     "opportunities": "Opportunities",
