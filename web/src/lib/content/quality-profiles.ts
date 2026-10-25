@@ -88,10 +88,10 @@ export const PROFILE_WEIGHTS: Readonly<Record<QualityProfile, ProfileWeights>> =
       customerCase: 0,
     },
     trust: {
-      claimsSourced: 25,
+      claimsSourced: 20,
       primarySources: 5,
       noWeakSources: 5,
-      brandFacts: 10,
+      brandFacts: 20,
       expertQuote: 0,
       freshSources: 0,
       balanced: 0,
@@ -99,7 +99,7 @@ export const PROFILE_WEIGHTS: Readonly<Record<QualityProfile, ProfileWeights>> =
       noBrokenLinks: 5,
       siteTrust: 10,
       shippingReturns: 10,
-      feedMatch: 30,
+      feedMatch: 25,
     },
     readability: {
       avgSentence: 15,

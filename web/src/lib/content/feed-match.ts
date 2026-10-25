@@ -12,6 +12,9 @@ import { sentencesOf } from './readability';
  * it.
  */
 
+/** Where a brand's product feed is connected: Settings › Integrations' product catalog (#1263). */
+export const CATALOG_SETTINGS_PATH = '/dashboard/settings/integrations';
+
 /** A variant of the page's product as the feed gives it. */
 export interface FeedVariant {
   price: number | null;
@@ -72,12 +75,12 @@ export function pageKey(url: string | null | undefined): string | null {
 }
 
 const OUT_OF_STOCK =
-  /(?<!\p{L})(?:out\s+of\s+stock|sold\s+out|currently\s+unavailable|(?:not|no\s+longer|isn['’]?t|aren['’]?t)\s+(?:currently\s+)?in\s+stock|back\s+in\s+stock|stokta\s+(?:yok|değil|kalmadı)|tükendi|ausverkauft|nicht\s+(?:mehr\s+)?(?:auf\s+lager|vorrätig|lieferbar)|épuisé|en\s+rupture(?:\s+de\s+stock)?|plus\s+en\s+stock|agotado|sin\s+stock)(?!\p{L})/iu;
+  /(?<!\p{L})(?:out\s+of\s+stock|sold\s+out|currently\s+unavailable|(?:not|no\s+longer|isn['’]?t|aren['’]?t)\s+(?:currently\s+)?in\s+stock|(?:notify|email|tell|alert|let)\s+(?:me|us|you)?\s*(?:when|if|once)(?!\p{L})[^.]{0,40}?back\s+in\s+stock|stokta\s+(?:yok|değil|kalma|bulunma|mevcut\s+değil)\p{L}*|tükendi|ausverkauft|nicht\s+(?:mehr\s+)?(?:auf\s+lager|vorrätig|lieferbar)|épuisé|en\s+rupture(?:\s+de\s+stock)?|plus\s+en\s+stock|agotado|sin\s+stock)(?!\p{L})/iu;
 const IN_STOCK =
-  /(?<!\p{L})(?:in\s+stock|available\s+now|stokta|stoktan\s+teslim|auf\s+lager|vorrätig|sofort\s+lieferbar|en\s+stock)(?!\p{L})/iu;
+  /(?<!\p{L})(?:in\s+stock|available\s+now|stokta(?!\s+(?:yok|değil|kalma|bulunma|mevcut\s+değil))|stoktan\s+teslim|auf\s+lager|vorrätig|sofort\s+lieferbar|en\s+stock)(?!\p{L})/iu;
 /** A shipping policy's "items in stock ship in 24 hours": no word on this product's stock. */
 const STOCK_POLICY =
-  /(?<!\p{L})(?:items?|products?|orders?|articles?)\s+(?:(?:that|which)\s+are\s+)?in\s+stock(?!\p{L})/iu;
+  /(?<!\p{L})(?:items?|products?|orders?|articles?)\s+(?:(?:that|which)\s+are\s+)?(?:not\s+|no\s+longer\s+)?in\s+stock(?!\p{L})/iu;
 
 /** What the page says of its stock, and where; none where it says nothing, or both. */
 export function stockOnPage(
@@ -85,12 +88,14 @@ export function stockOnPage(
 ): { stock: 'in' | 'out'; sentence: string } | null {
   let found: { stock: 'in' | 'out'; sentence: string } | null = null;
   for (const sentence of texts.flatMap((text) => sentencesOf(text))) {
-    const out = OUT_OF_STOCK.test(sentence);
-    const stock = out
-      ? 'out'
-      : IN_STOCK.test(sentence) && !STOCK_POLICY.test(sentence)
-        ? 'in'
-        : null;
+    // A shipping policy first: "items not in stock ship in 3 weeks" says nothing of this one.
+    const stock = STOCK_POLICY.test(sentence)
+      ? null
+      : OUT_OF_STOCK.test(sentence)
+        ? 'out'
+        : IN_STOCK.test(sentence)
+          ? 'in'
+          : null;
     if (!stock) continue;
     if (found && found.stock !== stock) return null;
     found ??= { stock, sentence };
@@ -118,11 +123,12 @@ export function feedStock(variants: readonly FeedVariant[]): 'in' | 'out' | null
  * months" is the UPC alone).
  */
 const GTIN_ON_PAGE =
-  /(?<!\p{L})(?:gtin(?:-?(?:8|12|13|14))?|ean(?:-?13)?|upc|isbn(?:-?13)?)\s*[:#]?\s*((?:\d-?){7,13}\d)(?![\d-])/iu;
+  /(?<!\p{L})(?:gtin(?:-?(?:8|12|13|14))?|ean(?:-?(?:8|13))?|upc|isbn(?:-?13)?)\s*[:#]?\s*((?:\d-?){7,13}\d)(?![\d-])/iu;
 
 /** A GTIN's own check: 8, 12, 13 or 14 digits, the last one GS1's check digit. */
 function validGtin(digits: string): boolean {
-  if (![8, 12, 13, 14].includes(digits.length)) return false;
+  // All zeros pass the check digit, and are no product's.
+  if (![8, 12, 13, 14].includes(digits.length) || !/[1-9]/.test(digits)) return false;
   const body = [...digits.slice(0, -1)].reverse().map(Number);
   const sum = body.reduce((total, d, i) => total + d * (i % 2 === 0 ? 3 : 1), 0);
   return (10 - (sum % 10)) % 10 === Number(digits.at(-1));
@@ -194,6 +200,7 @@ export function feedCheck({
   if (offer && !('several' in offer)) {
     const inCurrency = priced.filter((p) => p.currency === offer.currency);
     const nows = inCurrency.map((p) => p.now);
+    const regulars = inCurrency.flatMap((p) => (p.regular === null ? [] : [p.regular]));
     // Another currency is another market's feed: not compared.
     if (inCurrency.length) {
       compared += 1;
@@ -208,7 +215,10 @@ export function feedCheck({
               (p) =>
                 same(p.now, offer.price) || (p.regular !== null && same(p.regular, offer.price)),
             )
-          : same(offer.low, low) && same(offer.high, high);
+          : (same(offer.low, low) && same(offer.high, high)) ||
+            (regulars.length > 0 &&
+              same(offer.low, Math.min(...regulars)) &&
+              same(offer.high, Math.max(...regulars)));
       if (!matches) {
         const at = priceSentence(texts, page);
         mismatches.push({

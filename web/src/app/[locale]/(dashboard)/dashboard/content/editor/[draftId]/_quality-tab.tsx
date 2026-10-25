@@ -30,6 +30,7 @@ import {
   type ReadabilityCheck,
 } from '@/lib/content/readability';
 import { SITE_TRUST_PATH, siteTrustMissing, type SiteTrust } from '@/lib/content/site-trust';
+import { CATALOG_SETTINGS_PATH } from '@/lib/content/feed-match';
 import { cn } from '@/lib/utils';
 import { MANAGE_AUTHORS_PATH } from './_author-menu';
 
@@ -260,7 +261,20 @@ export function QualityTab({
           </p>
         )}
         {quality.feed && (
-          <p className="text-xs text-muted-foreground">{t(`feed.${quality.feed}`)}</p>
+          <p className="text-xs text-muted-foreground">
+            {t(`feed.${quality.feed}`)}
+            {quality.feed === 'none' && (
+              <>
+                {' '}
+                <Link
+                  href={CATALOG_SETTINGS_PATH}
+                  className="font-medium text-foreground underline-offset-2 hover:underline"
+                >
+                  {t('feed.connect')}
+                </Link>
+              </>
+            )}
+          </p>
         )}
         {readability?.score === null && (
           <p className="rounded-xl border border-dashed px-3 py-2.5 text-xs text-muted-foreground">

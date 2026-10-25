@@ -2720,6 +2720,22 @@ export async function confirmDraftItem(
 
 /** A product's name as the page's title gives it: one line, up to the catalog's length. */
 const catalogTitle = z.string().trim().min(1).max(1000);
+/** A page's path as an address encodes it and as it reads, in its own case ("/%C3%9Cber", "/Über"). */
+function pathForms(url: string): string[] {
+  try {
+    const path = new URL(url.trim()).pathname.replace(/\/+$/, '');
+    if (path.length <= 1) return [];
+    let decoded = path;
+    try {
+      decoded = decodeURIComponent(path);
+    } catch {
+      // Not encoded as UTF-8: looked up as it is.
+    }
+    return [...new Set([decoded, path])];
+  } catch {
+    return [];
+  }
+}
 /** Escape `\`, `%` and `_`: a path or a title matched as written. */
 const likeText = (value: string) => value.replace(/[\\%_]/g, (ch) => `\\${ch}`);
 
@@ -2753,29 +2769,44 @@ export async function getCatalogMatch(id: string, title: string): Promise<Catalo
     let productId: string | null = null;
     let via: 'url' | 'name' = 'url';
     const key = pageKey(draft.source_url);
-    const path = key ? key.slice(key.indexOf('/')) : '';
+    const forms = key ? pathForms(draft.source_url!) : [];
     // PostgREST reads "*" in a pattern as a wildcard: such a path or title isn't looked up.
-    if (key && path.length > 1 && !path.includes('*')) {
+    if (key && forms.length && !forms.some((form) => form.includes('*'))) {
       // The brand's live products (their index), narrowed by the path as
-      // written and as an address encodes it, then compared whole: a feed's
-      // URL may carry a query ("?variant=…") or another form of the host.
-      const forms = [...new Set([path, encodeURI(path)])];
-      const reads = await Promise.all(
-        forms.map((form) =>
-          supabase
-            .from('catalog_products')
-            .select('id, url')
-            .eq('brand_id', brand)
-            .is('removed_at', null)
-            .ilike('url', `%${likeText(form)}%`)
-            .limit(100),
-        ),
-      );
-      const ids = new Set<string>();
-      for (const read of reads) {
-        if (read.error) throw new Error(read.error.message);
-        for (const p of read.data ?? []) if (pageKey(p.url) === key) ids.add(p.id);
-      }
+      // written and as an address encodes it, in its own case, then compared
+      // whole: a feed's URL may carry a query ("?variant=…") or another
+      // form of the host.
+      const byUrl = async (table: 'catalog_products' | 'catalog_variants') => {
+        const ids = new Set<string>();
+        for (const form of forms) {
+          const read =
+            table === 'catalog_products'
+              ? await supabase
+                  .from('catalog_products')
+                  .select('id, url')
+                  .eq('brand_id', brand)
+                  .is('removed_at', null)
+                  .ilike('url', `%${likeText(form)}%`)
+                  .limit(100)
+              : await supabase
+                  .from('catalog_variants')
+                  .select('product_id, url')
+                  .eq('brand_id', brand)
+                  .is('removed_at', null)
+                  .ilike('url', `%${likeText(form)}%`)
+                  .limit(100);
+          if (read.error) throw new Error(read.error.message);
+          for (const row of read.data ?? []) {
+            if (pageKey(row.url) !== key) continue;
+            ids.add('product_id' in row ? row.product_id : row.id);
+          }
+        }
+        return ids;
+      };
+      // A product's URL is its first item's link: a variant with its own
+      // page ("boot-blue" grouped under "boot-red") is found by its own.
+      let ids = await byUrl('catalog_products');
+      if (ids.size === 0) ids = await byUrl('catalog_variants');
       if (ids.size === 1) productId = [...ids][0];
     }
     const name = catalogTitle.safeParse(title);

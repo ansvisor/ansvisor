@@ -4717,6 +4717,7 @@
         "confirmCaseFull": "This page keeps 50 confirmations already.",
         "feed": {
           "none": "Price and stock aren't checked: no product feed is connected for this brand yet.",
+          "connect": "Connect a feed",
           "notFound": "Price and stock aren't checked: no product in your feed has this page's URL or title."
         },
         "weightsFor": {

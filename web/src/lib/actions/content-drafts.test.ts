@@ -1154,6 +1154,27 @@ describe('getCatalogMatch (Quality CE-053)', () => {
     ]);
   });
 
+  it('finds a variant with its own page by its URL, when no product has it (CE-053 review)', async () => {
+    queue = [
+      [{ brand_id: 'b1', source_url: 'https://acme.com/products/boot-blue' }],
+      [{ id: 'p0' }],
+      // The product's URL is its first item's ("boot-red").
+      [],
+      [{ product_id: 'p2', url: 'https://acme.com/products/boot-blue?variant=7' }],
+      [{ title: 'Boot', url: 'https://acme.com/products/boot-red' }],
+      [],
+    ];
+    expect(await getCatalogMatch(DRAFT, 'Boot in blue')).toEqual({
+      connected: true,
+      product: {
+        title: 'Boot',
+        url: 'https://acme.com/products/boot-red',
+        via: 'url',
+        variants: [],
+      },
+    });
+  });
+
   it('looks a path up as written and as an address encodes it', async () => {
     queue = [
       [{ brand_id: 'b1', source_url: 'https://acme.com.tr/%C3%BCr%C3%BCn' }],

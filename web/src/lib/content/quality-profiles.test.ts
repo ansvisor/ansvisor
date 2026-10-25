@@ -167,7 +167,7 @@ describe('weighedTrust', () => {
     // A product page doesn't weigh freshness: a working link and the site aren't Trust.
     const product = weighedTrust(dated, PROFILE_WEIGHTS.product.trust);
     expect(product.score).toBeNull();
-    expect(product.phase1Points).toBe(30);
+    expect(product.phase1Points).toBe(25);
     // A figure brings it in.
     const figure = read(
       '<p>It cut costs by 40% (<a href="https://example.org/report">the report</a>).</p>',

@@ -37,20 +37,27 @@ describe('stockOnPage', () => {
     expect(stockOnPage(['Stokta, hemen kargoda.'])?.stock).toBe('in');
     expect(stockOnPage(['Derzeit ausverkauft.'])?.stock).toBe('out');
     expect(stockOnPage(['Black is in stock.', 'Blue is out of stock.'])).toBeNull();
-    // Out, however it's said: not, no longer, back in stock (soon).
+    // Out, however it's said: not, no longer, "email me when it's back in stock".
     for (const out of [
       'Email me when it is back in stock.',
       'Not in stock right now.',
       'No longer in stock.',
       'Bu ürün stokta değil.',
       'Stokta kalmadı.',
+      'Ürün stokta yoktur.',
+      'Stokta bulunmamaktadır.',
+      'Stokta mevcut değil.',
       'Plus en stock.',
       'Nicht mehr vorrätig.',
     ]) {
-      expect(stockOnPage([out])?.stock).toBe('out');
+      expect(stockOnPage([out])?.stock, out).toBe('out');
     }
+    // Back in stock is in stock.
+    expect(stockOnPage(['Back in stock!'])?.stock).toBe('in');
+    expect(stockOnPage(['In stock, back in stock alerts available.'])?.stock).toBe('in');
     // A shipping policy says nothing of this product's stock.
     expect(stockOnPage(['Orders for items in stock ship within 24 hours.'])).toBeNull();
+    expect(stockOnPage(['Items not in stock ship within 3 weeks.'])).toBeNull();
     expect(stockOnPage(['Ships today.'])).toBeNull();
     expect(stockOnPage(['A daypack for wet hikes.'])).toBeNull();
   });
@@ -97,6 +104,14 @@ describe('feedCheck', () => {
         { kind: 'stock', page: 'in', feed: 'out', sentence: 'In stock.' },
       ],
     });
+    // A range at the regular prices while the feed keeps an old sale.
+    expect(
+      feedCheck({
+        texts: ['$139–$149.'],
+        offer: { low: 139, high: 149, currency: 'USD' },
+        variants: [variant({ price: 139, salePrice: 119 }), variant({ price: 149 })],
+      }).mismatches,
+    ).toEqual([]);
     // On sale in the feed: the sale price, or the regular one (the sale may be over).
     const onSale = [variant({ salePrice: 99.5 })];
     expect(
@@ -122,6 +137,21 @@ describe('feedCheck', () => {
     expect(
       feedCheck({
         texts: ['EAN 1234567890123.'],
+        offer: null,
+        variants: [variant({ gtin: '4006381333931' })],
+      }),
+    ).toEqual({ compared: 0, mismatches: [] });
+    // An EAN-8 by its label; all zeros is no product's code.
+    expect(
+      feedCheck({
+        texts: ['EAN-8 96385074.'],
+        offer: null,
+        variants: [variant({ gtin: '96385074' })],
+      }),
+    ).toEqual({ compared: 1, mismatches: [] });
+    expect(
+      feedCheck({
+        texts: ['EAN 0000000000000.'],
         offer: null,
         variants: [variant({ gtin: '4006381333931' })],
       }),

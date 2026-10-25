@@ -186,6 +186,10 @@ describe('QualityTab', () => {
     expect(container.textContent).toContain(
       "Price and stock aren't checked: no product feed is connected",
     );
+    expect(
+      container.querySelector<HTMLAnchorElement>('a[href="/dashboard/settings/integrations"]')
+        ?.textContent,
+    ).toBe('Connect a feed');
     await render({ ...read(result), feed: 'notFound' });
     expect(container.textContent).toContain("no product in your feed has this page's URL or title");
     await render(read(result));
