@@ -313,4 +313,49 @@ describe('WebflowCard', () => {
     expect(container.querySelector('input[type="password"]')).toBeNull();
     expect(container.textContent).toContain('Which field takes what');
   });
+
+  it('saves only what the pickers show, a field deleted in Webflow since left out', async () => {
+    client.readWebflow.mockResolvedValue({
+      ok: true,
+      configured: true,
+      connection: { ...CONNECTED, fieldMap: { body: 'post-body', metaTitle: 'seo-title-gone' } },
+    });
+    await render();
+    await click(button('Save'));
+    expect(client.saveWebflowSettings).toHaveBeenCalledWith('b1', {
+      siteId: 's1',
+      collectionId: 'c1',
+      fieldMap: { body: 'post-body' },
+    });
+  });
+
+  it('names a refused map’s parts by their labels, read out', async () => {
+    client.readWebflow.mockResolvedValue({ ok: true, configured: true, connection: CONNECTED });
+    client.saveWebflowSettings.mockResolvedValue({
+      ok: false,
+      code: 'invalid_map',
+      problems: ['metaTitle: the collection has no field "x"', 'The collection requires Category'],
+    });
+    await render();
+    await click(button('Save'));
+    const list = container.querySelector('ul[role="alert"]')!;
+    expect([...list.querySelectorAll('li')].map((li) => li.textContent)).toEqual([
+      'Meta title: the collection has no field "x"',
+      'The collection requires Category',
+    ]);
+  });
+
+  it('tells a member that pages can’t go while the token is refused', async () => {
+    role.canManage = false;
+    client.readWebflow.mockResolvedValue({
+      ok: true,
+      configured: true,
+      connection: { ...CONNECTED, status: 'auth_failed' },
+    });
+    await render();
+    expect(container.textContent).toContain(
+      "Webflow refused the token. Pages can't go there until an admin or manager pastes a new one.",
+    );
+    expect(container.textContent).not.toContain('Pages go to Blog Posts.');
+  });
 });

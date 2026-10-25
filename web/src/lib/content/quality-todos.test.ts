@@ -232,6 +232,53 @@ describe('qualityTodos', () => {
     expect(row.trustGain).toBeGreaterThan(0);
   });
 
+  it('asks to confirm a category intro’s counts and prices, all at once (CE-054)', () => {
+    const facts = [
+      { sentence: 'Choose from 120+ daypacks.', facts: ['120+'] },
+      { sentence: 'Prices run $49–$199.', facts: ['USD49-199'] },
+    ];
+    const read = trust({
+      blocks: trustBlocks('<p>Choose from 120+ daypacks.</p><p>Prices run $49–$199.</p>'),
+      links: new Map(),
+      brandDomains: ['acme.com'],
+      intro: { total: 2, confirmed: 1 },
+      now: Date.parse('2026-10-25'),
+    });
+    const run = (confirmed: string[]) =>
+      qualityTodos({
+        eeat: null,
+        trust: weighedTrust(read, PROFILE_WEIGHTS.category.trust),
+        author: null,
+        hasAuthors: true,
+        intro: { facts, confirmed: new Set(confirmed) },
+        off: checksOff('category'),
+      }).find((t) => t.id === 'introFacts');
+    expect(run(['120+'])).toMatchObject({
+      done: false,
+      action: 'confirmIntro',
+      score: 'trust',
+      count: 1,
+      facts: ['Prices run $49–$199.'],
+    });
+    expect(run(['120+'])!.gain).toBeGreaterThan(0);
+    expect(run(['120+', 'USD49-199'])).toMatchObject({
+      done: true,
+      action: null,
+      gain: 0,
+      count: 0,
+    });
+    // No facts in the intro: no to-do.
+    expect(
+      qualityTodos({
+        eeat: null,
+        trust: null,
+        author: null,
+        hasAuthors: true,
+        intro: { facts: [], confirmed: new Set() },
+      }).some((t) => t.id === 'introFacts'),
+    ).toBe(false);
+  });
+
   it('asks to add an author when the workspace has none', () => {
     expect(todos(null, false)[0]).toEqual({
       id: 'byline',

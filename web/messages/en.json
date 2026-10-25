@@ -2793,6 +2793,7 @@
     "failed": "Audit failed. Please try again.",
     "takingLongerThanExpected": "This audit is taking longer than expected.",
     "checkAgain": "Check again",
+    "scoreChange": "{change} since {date}",
     "grade": {
       "good": "Good",
       "needsWork": "Needs work",
@@ -3904,6 +3905,7 @@
         "fixedMax": "Content Agent suggested {count} changes, the most one run makes · review them, then run it again for the rules still open",
         "nothingToFix": "Content Agent found nothing it could change without new facts.",
         "notForAgent": "Content Agent doesn't change heading levels: make the extra H1s H2s in the toolbar.",
+        "notForAgentFeed": "Content Agent doesn't change a price, GTIN or stock: check which is right, the page or your product feed, and fix that one.",
         "decideFirst": "{count, plural, one {Review the open suggestion first, then run the agent.} other {Review the open suggestions first, then run the agent.}}",
         "citedLoading": "Reading which passages AI quotes, so the agent leaves them as they are…",
         "agentBusy": "Content Agent is already working on this page. Wait for it to finish.",
@@ -4335,7 +4337,7 @@
             "title": "Your workflow",
             "hint": "The brand's webhook (Zapier, Make, n8n)"
           },
-          "readFailed": "Couldn't read where this brand's pages go. Try again before sending.",
+          "unchecked": "Couldn't check Webflow just now, so this goes to your workflow.",
           "retry": "Try again"
         },
         "placeholders": "{count, plural, one {# placeholder is} other {# placeholders are}} still open. Fill {count, plural, one {it} other {them}} first: none goes to your CMS.",
@@ -4388,7 +4390,8 @@
           "no_webflow": "Connect Webflow in Settings › Integrations first.",
           "webflow_refused": "Webflow refused the brand's site token. Connect it again in Settings › Integrations.",
           "webflow_not_ready": "Pick the Webflow collection pages go to in Settings › Integrations.",
-          "in_progress": "This page is already on its way to Webflow. Wait for it, then send again."
+          "in_progress": "This page is already on its way to Webflow. Wait for it, then send again.",
+          "no_webhookWebflow": "This brand's Webflow isn't ready, and it has no webhook. Connect Webflow again or pick its collection in Settings › Integrations."
         },
         "cancel": "Cancel",
         "send": "Send",
@@ -4507,6 +4510,7 @@
           "quiet": "Before you publish has the author, dates and schema (JSON-LD) for your CMS.",
           "quietOther": "Before you publish has the author and what your CMS adds for this page type.",
           "quietProduct": "Before you publish has the Product schema (JSON-LD) with the page's price for your CMS.",
+          "quietItemList": "Before you publish has the ItemList schema (JSON-LD) of the products the page links, for your CMS.",
           "warnings": "Before you publish: {list}.",
           "trust": "Trust {trust}, below 60",
           "noAuthor": "no author yet",
@@ -4670,6 +4674,13 @@
           "detailLive": "Often added by your CMS. If not, paste the code below into the page. It gives only the updated date: your page keeps the published date it has.",
           "product": "Product schema with its price",
           "productDetail": "Price read from the page: {price}. Check it's the product's. Often added by your shop's theme; if not, paste the code below into the page. Availability, SKU and reviews come from a product feed, once one is connected.",
+          "itemList": "ItemList schema with {count, plural, one {# product} other {# products}}",
+          "itemListDetail": "Often added by your shop's theme on a collection page. If not, paste the code below into the page. Each product's price and stock go in its own page's Product schema.",
+          "itemListNone": "ItemList schema needs links to your products",
+          "itemListNoneDetail": "{count, plural, =0 {Ansvisor finds no links to your product pages here} one {Ansvisor finds one link to your product pages here} other {Ansvisor finds # links to your product pages here}} (/products/…, /product/…): link at least two of the products it lists to their own pages on your site, and the code lists them in the page's order.",
+          "itemListTitle": "ItemList schema",
+          "itemListReading": "Reading the page's links to your product pages…",
+          "itemListUnknown": "Your brand's domains couldn't be read, so its product links can't be told: check the ItemList your CMS adds.",
           "productNoName": "Product schema needs the product's name",
           "productNoNameDetail": "The title is empty or still has a placeholder in square brackets: write the product's name there. Without it, search engines show no product result.",
           "productNoPrice": "Product schema needs the price",
@@ -4677,7 +4688,8 @@
           "productSeveral": "Product schema needs one price",
           "productSeveralDetail": "The page states more than one price ({prices}), so the code doesn't guess which is the product's. Write its price once, or its range as one (\"$119–$139\"), or connect your product feed.",
           "other": "Schema for this page type",
-          "otherDetail": "Check what your CMS adds for it (Product, ItemList…). The code Ansvisor gives here is for articles."
+          "otherDetail": "Check what your CMS adds for it (Product, ItemList…). The code Ansvisor gives here is for articles.",
+          "otherDetailTyped": "Check what your CMS adds for it. The code Ansvisor gives here is for articles, product pages and category pages."
         },
         "disclosure": {
           "ok": "Disclosure",
@@ -4695,7 +4707,9 @@
         "pageReading": "Still reading the page for claims that need your proof, so your to-dos may change.",
         "productNote": "The price, its currency and the images are the page's own (a \"$\" reads as US dollars): check they match your shop before you paste it.",
         "datesNote": "The dates are today's: change them if the page goes out on another day.",
+        "itemListNote": "The products are the page's links to your product pages, in its order: check the list before you paste it.",
         "headlineLeftOut": "The title still has a placeholder in square brackets, so the code leaves the headline out. Fill it in, and the headline comes back here.",
+        "nameLeftOut": "The title still has a placeholder in square brackets, so the code leaves the list's name out. Fill it in, and the name comes back here.",
         "states": {
           "ok": "done",
           "check": "check it",
@@ -4769,13 +4783,18 @@
         "confirmCase": "Confirm",
         "confirmCaseFailed": "Couldn't save that confirmation. Try again.",
         "confirmCaseFull": "This page keeps 50 confirmations already.",
+        "feed": {
+          "none": "Price and stock aren't checked: no product feed is connected for this brand yet.",
+          "connect": "Connect a feed",
+          "notFound": "Price and stock aren't checked: no product in your feed has this page's URL or title."
+        },
         "weightsFor": {
           "line": "Checks and weights for {type}{detected, select, yes { (detected)} other {}}:",
           "noType": "an article (no page type yet)",
           "change": "Change",
           "changeLabel": "Change the page type",
           "article": "an author with experience, sourced claims, short sentences and the answer first.",
-          "product": "no author (your brand's), your own product photos, proof for claims, prices that match, shipping and returns, a specs table and short plain copy.",
+          "product": "no author (your brand's), your own product photos, proof for claims, the price and stock your product feed has, shipping and returns, a specs table and short plain copy.",
           "category": "your own product images, your brand's information on its site, prices and claims that match, an intro and a buying FAQ.",
           "feature": "your own screenshots and data, customer cases you may publish, sourced metrics, a price that matches, a comparison table, proof per section and use case steps in scannable sections.",
           "comparison": "an author who says how the picks were made and when they were last checked, balance and a disclosure, a side-by-side table, the summary first."
@@ -4833,6 +4852,12 @@
             "detailOld": "The page's check date is over a year old. Add line puts this month's under the opening paragraph: check the products first, then update or remove the old date",
             "detailWrite": "Comparison readers trust a date they can see: write when you last checked the products",
             "done": "The page shows when it was last checked"
+          },
+          "introFacts": {
+            "title": "Confirm the intro's facts",
+            "next": "confirm the intro's facts, once you've checked them",
+            "detail": "Its counts and prices: only you know they're right. Check them against your catalog, then confirm. {facts}{more, plural, =0 {} one { and # more} other { and # more}}",
+            "done": "You confirmed the intro's facts"
           },
           "shippingReturns": {
             "title": "Say how shipping and returns work",
@@ -4953,7 +4978,8 @@
             "pickReviewer": "Pick now",
             "addImage": "Add now",
             "addCheckDate": "Add now",
-            "confirmCase": "Confirm now"
+            "confirmCase": "Confirm now",
+            "confirmIntro": "Confirm now"
           },
           "later": "Later"
         },
@@ -5039,6 +5065,10 @@
           "brandFacts": {
             "line": "{kind, select, price {Price} trial {Trial length} founded {Founding year} other {A fact}} differs from brand facts · Page {page} · {source, select, pricing {pricing page} about {About page} product {product page} other {your site}} {fact}",
             "detail": "{count, plural, one {Match the page to the fact you approved, or check it in Brand settings} other {# facts differ: match the page to the facts you approved, or check them in Brand settings}}"
+          },
+          "feedMatch": {
+            "line": "{kind, select, price {Price} gtin {GTIN} other {Stock}} differs from your product feed · Page {kind, select, stock {{page, select, in {in stock} other {out of stock}}} other {{page}}} · Feed {kind, select, stock {{feed, select, in {in stock} other {out of stock}}} other {{feed}}}",
+            "detail": "{count, plural, one {Check which is right, and fix the page or your feed: search engines and Merchant Center compare them} other {# differ: check which is right, and fix the page or your feed. Search engines and Merchant Center compare them}}"
           },
           "disclosure": {
             "line": "The page recommends {brand} without a disclosure",
@@ -5149,7 +5179,7 @@
           "aiTraces": "Finds phrases that read as machine-written (delve, in today's fast-paced world, not only… but also). Fixing them comes with the Content Agent.",
           "whoFor": "Who the page is for, in one sentence, e.g. \"Sales leaders at 20–200 person B2B teams\".",
           "first40Words": "ChatGPT reads about the first 50 tokens (~40 words) of a product description. The rest is ignored.",
-          "feedMatch": "Checked against the product feed once it's connected.",
+          "feedMatch": "Checked against the product in your product feed with this page's URL, or else its name: the price, any GTIN the page gives, and the stock, where both say them.",
           "definitionFirst": "The paragraph under the H1 says what the term is (\"X is …\") in a few words: what answer engines quote for \"what is\" prompts.",
           "measureSteps": "The longest numbered list on the page counts as the steps."
         },
@@ -5187,6 +5217,10 @@
           "notSet": "Not set",
           "aiCheck": "AI check",
           "needsFeed": "Needs feed",
+          "feedReading": "Reading feed",
+          "notInFeed": "Not in feed",
+          "feedNothing": "Nothing to compare",
+          "feedDiffers": "{count, plural, one {# differs} other {# differ}} from feed",
           "noFanouts": "No fan-outs",
           "addPrompts": "Add prompts",
           "noFanoutsHint": "No fan-outs yet: they come from the page's prompts. Add its prompts in Sources.",
@@ -7595,6 +7629,7 @@
         "ok": "Synced",
         "failed": "Couldn't sync",
         "format_error": "Not a feed",
+        "auth_failed": "Sign-in refused",
         "never": "Not synced yet"
       },
       "products": "{count, plural, one {# product} other {# products}}",
@@ -7622,6 +7657,35 @@
         "workspace": "This brand isn't in your workspace.",
         "busy": "Too many syncs. Wait a few minutes.",
         "failed": "Couldn't sync the catalog. Try again later."
+      },
+      "stores": {
+        "title": "Connect a store",
+        "connect": "Connect {store}",
+        "formLabel": "{store} sign-in",
+        "submit": "Connect",
+        "update": "Update sign-in",
+        "save": "Save sign-in",
+        "cancel": "Cancel",
+        "kept": "The sign-in is checked with the store, then kept encrypted on the server and used only to read the catalog. It isn't shown again.",
+        "notConfigured": "Store connections aren't set up on this server yet.",
+        "connected": "{store} connected. Its products are being read.",
+        "updated": "Sign-in saved. The products are being read again.",
+        "errors": {
+          "connect_failed": "Check what you entered and try again.",
+          "auth_failed": "The store refused this sign-in. Check it and try again.",
+          "unreachable": "The store couldn't be reached. Try again in a moment.",
+          "duplicate": "This store is connected already.",
+          "too_many": "A brand can have 10 sources at most.",
+          "other_account": "This sign-in is for another store. Add that store as a new source.",
+          "not_configured": "Store connections aren't set up on this server yet.",
+          "forbidden": "Only admins and managers can change the catalog.",
+          "not_found": "This store no longer exists.",
+          "invalid": "Fill in every field.",
+          "session": "Your session expired. Sign in again.",
+          "workspace": "This brand isn't in your workspace.",
+          "busy": "Too many requests. Wait a few minutes.",
+          "failed": "Couldn't reach the catalog. Try again later."
+        }
       }
     },
     "webflow": {
@@ -7634,6 +7698,7 @@
       "refused": "Token refused",
       "site": "Site: {site}",
       "notConnectedMember": "Not connected. Admins and managers can connect Webflow.",
+      "refusedMember": "Webflow refused the token. Pages can't go there until an admin or manager pastes a new one.",
       "pagesGoTo": "Pages go to {collection}.",
       "noCollection": "No collection picked yet.",
       "tokenLabel": "Site token",

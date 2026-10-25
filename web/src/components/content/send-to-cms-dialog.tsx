@@ -34,7 +34,7 @@ import {
   type DraftCms,
 } from '@/lib/content/cms-send-client';
 import { exportPlaceholders, pageFields, titlePlaceholders } from '@/lib/content/ready-to-publish';
-import { CmsTargetPicker, CmsTargetReadFailed, useCmsTarget } from './cms-target';
+import { CmsTargetPicker, CmsTargetUnchecked, useCmsTarget } from './cms-target';
 
 /**
  * Send to CMS (#1331): the page to the brand's webhook, for the workspace's
@@ -104,7 +104,7 @@ export function SendDialog({
     webflow,
     target,
     pick,
-    failed: targetFailed,
+    unchecked: targetUnchecked,
     reading: targetReading,
     retry: retryTarget,
   } = useCmsTarget(brandId);
@@ -202,6 +202,8 @@ export function SendDialog({
     }
     const { code, field } = shown;
     if (code === 'session' || code === 'workspace' || code === 'busy') return tFailure(code);
+    // Webflow not ready sent the page to the webhook: what to fix is Webflow.
+    if (code === 'no_webhook' && webflow && !webflow.ready) return t('errors.no_webhookWebflow');
     // The server names the path ("pages.0.slug"); the field is its last part.
     if (code === 'invalid' && field) {
       return t('errors.invalidField', { field: field.split('.').pop() ?? 'other' });
@@ -237,7 +239,7 @@ export function SendDialog({
             }}
           />
         )}
-        {targetFailed && <CmsTargetReadFailed reading={targetReading} onRetry={retryTarget} />}
+        {targetUnchecked && <CmsTargetUnchecked reading={targetReading} onRetry={retryTarget} />}
 
         {pageProblem && (
           <div className="flex items-center gap-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-200">

@@ -57,6 +57,15 @@ const MAX_URL = 2048;
 const PAGE_WRITES = 3;
 /** A task a person or the system can still complete: not done, skipped, failed or waiting. */
 const OPEN_TASKS = ['todo', 'in_progress'];
+/** The library tasks a draft is the work of, by its method (the web's DRAFT_TASK_KEYS). */
+const DRAFT_TASK_KEYS = {
+  create: ['create_content_draft'],
+  optimize: ['optimize_content', 'refresh_content'],
+};
+/** A task no longer outstanding work (the web's TASK_DONE). */
+const TASK_DONE = ['completed', 'skipped', 'failed'];
+/** A draft whose writing is done. */
+const DRAFT_DONE = ['ready', 'published'];
 
 /**
  * An http(s) address as the browser reads it (no stray whitespace kept),
@@ -128,23 +137,23 @@ async function setLivePage(action, draftId, url) {
   throw new Error('the action changed while its live page was written');
 }
 
+/** The pages an action names (payload.pages). */
+const namedPages = (action) => (Array.isArray(action.payload?.pages) ? action.payload.pages : []);
+
 /**
  * Whether the action's work is all live: a published create draft when it
  * has a Create task, and a published optimize draft for each page it names
- * when it has an Optimize or Refresh task (as Ready completes them).
+ * when it has an Optimize or Refresh task (as Ready completes them). Work
+ * whose task someone skipped isn't waited for.
  */
-async function workPublished(action, tasks) {
-  const keys = new Set(tasks.map((task) => task.task_key));
-  const { data: drafts, error } = await supabaseAdmin
-    .from('content_drafts')
-    .select('id, method, source_url, status')
-    .eq('action_id', action.id)
-    .is('archived_at', null);
-  if (error) throw new Error(error.message);
-  const live = (drafts ?? []).filter((d) => d.status === 'published');
+function workPublished(action, tasks, drafts) {
+  const keys = new Set(
+    tasks.filter((task) => task.status !== 'skipped').map((task) => task.task_key),
+  );
+  const live = drafts.filter((d) => d.status === 'published');
   if (keys.has('create_content_draft') && !live.some((d) => d.method === 'create')) return false;
   if (keys.has('optimize_content') || keys.has('refresh_content')) {
-    const pages = Array.isArray(action.payload?.pages) ? action.payload.pages : [];
+    const pages = namedPages(action);
     const optimized = new Set(live.filter((d) => d.method === 'optimize').map((d) => d.source_url));
     if (pages.some((page) => !optimized.has(page))) return false;
     if (!pages.length && !live.some((d) => d.method === 'optimize')) return false;
@@ -153,10 +162,59 @@ async function workPublished(action, tasks) {
 }
 
 /**
+ * Completes the tasks as read, unless they changed meanwhile, each in the
+ * action's History naming the draft (so taking the page back reopens it,
+ * as the web's reopenDraftTasks reads the trail). Returns how many.
+ */
+async function completeTasks(actionId, todo, data, actorId) {
+  const now = new Date().toISOString();
+  for (const task of todo) {
+    const { error } = await supabaseAdmin
+      .from('action_tasks')
+      .update({ status: 'completed', skip_reason: null, updated_at: now })
+      .eq('id', task.id)
+      .eq('status', task.status);
+    if (error) throw new Error(error.message);
+    // Best effort, as the drawer's: a missing trail entry doesn't undo the change.
+    await supabaseAdmin.from('action_events').insert({
+      action_id: actionId,
+      event: 'task_status',
+      data: { taskId: task.id, to: 'completed', ...data },
+      actor_id: actorId,
+    });
+  }
+  return todo.length;
+}
+
+/**
+ * The page's own work, done as Mark ready does it (the web's
+ * completeDraftTasks): its Create task, or its Optimize or Refresh task
+ * once each page the action names has a ready or published draft. A page
+ * published without Mark ready (sent straight to a CMS, or marked live at
+ * an address) doesn't leave open the work Publish depends on.
+ */
+function ownTasks(action, draft, tasks, drafts) {
+  const method = draft.method === 'create' ? 'create' : 'optimize';
+  if (method === 'optimize') {
+    const pages = namedPages(action);
+    const done = new Set(
+      drafts
+        .filter((d) => d.method === 'optimize' && DRAFT_DONE.includes(d.status))
+        .map((d) => d.source_url),
+    );
+    if (pages.length > 1 && pages.some((page) => !done.has(page))) return [];
+  }
+  return tasks.filter(
+    (task) => DRAFT_TASK_KEYS[method].includes(task.task_key) && !TASK_DONE.includes(task.status),
+  );
+}
+
+/**
  * A linked action, its draft live at `url`: the address joins what it's
- * measured on (when on the brand's domains), and once all its work is live,
- * its open Publish task is done, in its History. A deleted action (00168)
- * is left as it is. Returns whether the task was completed.
+ * measured on (when on the brand's domains), the page's own task is done
+ * (ownTasks), and once all its work is live, its open Publish task is done
+ * too, each in its History. A deleted action (00168) is left as it is.
+ * Returns whether the Publish task was completed.
  */
 async function completePublishTask(draft, url, { actorId = null, onDomain } = {}) {
   const { data: action, error } = await supabaseAdmin
@@ -176,28 +234,33 @@ async function completePublishTask(draft, url, { actorId = null, onDomain } = {}
     .select('id, task_key, status')
     .eq('action_id', action.id);
   if (tasksError) throw new Error(tasksError.message);
+  const { data: drafts, error: draftsError } = await supabaseAdmin
+    .from('content_drafts')
+    .select('id, method, source_url, status')
+    .eq('action_id', action.id)
+    .is('archived_at', null);
+  if (draftsError) throw new Error(draftsError.message);
+
+  const changed = await completeTasks(
+    action.id,
+    ownTasks(action, draft, tasks ?? [], drafts ?? []),
+    { draftId: draft.id },
+    actorId,
+  );
   const todo = (tasks ?? []).filter(
     (task) => task.task_key === 'publish_content' && OPEN_TASKS.includes(task.status),
   );
-  if (!todo.length || !(await workPublished(action, tasks ?? []))) return false;
-  const now = new Date().toISOString();
-  for (const task of todo) {
-    const { error: taskError } = await supabaseAdmin
-      .from('action_tasks')
-      .update({ status: 'completed', skip_reason: null, updated_at: now })
-      .eq('id', task.id)
-      .in('status', OPEN_TASKS);
-    if (taskError) throw new Error(taskError.message);
-    // Best effort, as the drawer's: a missing trail entry doesn't undo the change.
-    await supabaseAdmin.from('action_events').insert({
-      action_id: action.id,
-      event: 'task_status',
-      data: { taskId: task.id, to: 'completed', draftId: draft.id, publishedUrl: url },
-      actor_id: actorId,
-    });
+  const publish =
+    todo.length > 0 && workPublished(action, tasks ?? [], drafts ?? [])
+      ? await completeTasks(action.id, todo, { draftId: draft.id, publishedUrl: url }, actorId)
+      : 0;
+  if (changed + publish > 0) {
+    await supabaseAdmin
+      .from('actions')
+      .update({ updated_at: new Date().toISOString() })
+      .eq('id', action.id);
   }
-  await supabaseAdmin.from('actions').update({ updated_at: now }).eq('id', action.id);
-  return true;
+  return publish > 0;
 }
 
 /**
@@ -218,7 +281,7 @@ export async function markDraftPublished(
     .from('content_drafts')
     .update({ status: 'published', published_url: url, published_at: at })
     .eq('id', draftId)
-    .select('id, brand_id, action_id')
+    .select('id, brand_id, action_id, method')
     .maybeSingle();
   if (error) throw new Error(error.message);
   const { error: keepError } = await supabaseAdmin.rpc('content_draft_snapshot', {
