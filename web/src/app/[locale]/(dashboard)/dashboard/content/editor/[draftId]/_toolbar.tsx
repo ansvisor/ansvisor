@@ -25,6 +25,7 @@ import {
   Trash2,
   type LucideIcon,
 } from 'lucide-react';
+import { ImageUploadButton } from '@/components/content/image-upload-button';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -438,9 +439,10 @@ function LinkDialog({ editor, onClose }: { editor: Editor; onClose: () => void }
   );
 }
 
-/** Insert an image by its address; uploads come with attachments (CE-006). */
+/** Insert an image by its address, or uploaded from the person's computer (00272). */
 function ImageDialog({ editor, onClose }: { editor: Editor; onClose: () => void }) {
   const t = useTranslations('contentEditor.editor.image');
+  const tUpload = useTranslations('content.imageUpload');
   const [src, setSrc] = useState('');
   const [alt, setAlt] = useState('');
   const [invalid, setInvalid] = useState(false);
@@ -487,6 +489,17 @@ function ImageDialog({ editor, onClose }: { editor: Editor; onClose: () => void 
               }}
             />
             {invalid && <p className="text-xs text-destructive">{t('invalid')}</p>}
+            {/* Or from their computer (00272): its address fills the field. */}
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+              <ImageUploadButton
+                className="h-7"
+                onUploaded={(url) => {
+                  setSrc(url);
+                  setInvalid(false);
+                }}
+              />
+              <span className="text-xs text-muted-foreground">{tUpload('hint')}</span>
+            </div>
           </div>
           <div className="space-y-2">
             <Label htmlFor="content-image-alt">{t('altLabel')}</Label>

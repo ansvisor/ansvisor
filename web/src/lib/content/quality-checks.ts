@@ -147,6 +147,7 @@ export function eeat({
   author,
   used = null,
   visual = null,
+  confirmed = null,
 }: {
   author: ContentAuthor | null;
   /**
@@ -156,6 +157,12 @@ export function eeat({
    * count none; a page with neither leaves the check out. Left out before.
    */
   visual?: { images: number; own: number; openSpots: number } | null;
+  /**
+   * With no author picked, what the person confirmed of the one their site
+   * names (00271): a real person (the byline's points), and their profile
+   * there with a bio and links (the profile's, with the first).
+   */
+  confirmed?: { real: boolean; profile: boolean } | null;
   /**
    * Phase 2 (CE-048): whether the page uses the person's experience and
    * their data (Brief › Your input, inputsUsed); left out before.
@@ -188,10 +195,18 @@ export function eeat({
           },
         ]
       : []),
-    { id: 'byline', points: author ? EEAT_WEIGHTS.byline : 0, max: EEAT_WEIGHTS.byline },
+    {
+      id: 'byline',
+      points: author || confirmed?.real ? EEAT_WEIGHTS.byline : 0,
+      max: EEAT_WEIGHTS.byline,
+    },
     {
       id: 'authorBio',
-      points: author ? (EEAT_WEIGHTS.authorBio * ((bio ? 1 : 0) + (links ? 1 : 0))) / 2 : 0,
+      points: author
+        ? (EEAT_WEIGHTS.authorBio * ((bio ? 1 : 0) + (links ? 1 : 0))) / 2
+        : confirmed?.real && confirmed.profile
+          ? EEAT_WEIGHTS.authorBio
+          : 0,
       max: EEAT_WEIGHTS.authorBio,
     },
   ]);

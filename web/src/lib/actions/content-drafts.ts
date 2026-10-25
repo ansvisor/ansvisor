@@ -228,7 +228,7 @@ export async function getContentDraft(id: string): Promise<ContentDraft | null> 
   const { data, error } = await supabase
     .from('content_drafts')
     .select(
-      `id, brand_id, title, page_type, page_type_source, method, status, body_html, author, author_id, source_url, rules, kept_sources, action_id, agent_state, agent_state_at, agent_run, updated_at, ${BRAND_SITE}, actions(action_no)`,
+      `id, brand_id, title, page_type, page_type_source, method, status, body_html, author, author_id, source_url, rules, kept_sources, author_real_at, author_profile_at, action_id, agent_state, agent_state_at, agent_run, updated_at, archived_at, ${BRAND_SITE}, actions(action_no)`,
     )
     .eq('id', id)
     .maybeSingle();
@@ -249,6 +249,7 @@ export async function getContentDraft(id: string): Promise<ContentDraft | null> 
     authorId: data.author_id,
     rules: draftRulesSchema.safeParse(data.rules).data ?? NO_DRAFT_RULES,
     keptSources: data.kept_sources ?? [],
+    authorConfirmed: { real: !!data.author_real_at, profile: !!data.author_profile_at },
     action:
       data.action_id && data.actions
         ? { id: data.action_id, number: data.actions.action_no }
@@ -257,6 +258,7 @@ export async function getContentDraft(id: string): Promise<ContentDraft | null> 
     agentSince: data.agent_state_at,
     agentRun: agentRunOf(data.agent_run),
     updatedAt: data.updated_at,
+    archivedAt: data.archived_at,
   };
 }
 
@@ -268,6 +270,11 @@ export interface DraftPage {
   sourceUrl: string | null;
   /** Who the page is by (CE-038), for Send to CMS. */
   authorId: string | null;
+  /**
+   * The person confirmed their site names the page's author (00271): with
+   * none picked, Send to CMS names no team, the CMS keeps its own.
+   */
+  authorConfirmed: boolean;
   /** The language the draft's own Language rule names, or null: the brand's. */
   language: string | null;
 }
@@ -308,7 +315,7 @@ export async function getContentDraftPages(
   const supabase = await createClient();
   const { data, error } = await supabase
     .from('content_drafts')
-    .select('id, title, body_html, source_url, author_id, rules')
+    .select('id, title, body_html, source_url, author_id, author_real_at, rules')
     .eq('brand_id', brandId)
     .in('id', parsed.data);
   if (error) throw new Error(error.message);
@@ -321,6 +328,7 @@ export async function getContentDraftPages(
         bodyHtml: row.body_html,
         sourceUrl: row.source_url,
         authorId: row.author_id,
+        authorConfirmed: row.author_real_at !== null,
         language: draftLanguage(row.rules),
       },
     ]),
@@ -1360,6 +1368,35 @@ export async function setContentDraftAuthor(id: string, authorId: string | null)
     .select('id')
     .maybeSingle();
   if (error?.code === OTHER_ORGANIZATION) throw new Error('invalid');
+  if (error) throw new Error(error.message);
+  if (!data) throw new Error('not_found');
+}
+
+/**
+ * Confirms, or takes back, what the person says of the author their site
+ * names (00271): a real person (`real`), their profile with a bio and links
+ * (`profile`). Who and when are stamped by the database, from the session.
+ */
+export async function confirmDraftAuthor(
+  id: string,
+  what: 'real' | 'profile',
+  on: boolean,
+): Promise<void> {
+  if (
+    !draftId.safeParse(id).success ||
+    (what !== 'real' && what !== 'profile') ||
+    typeof on !== 'boolean'
+  ) {
+    throw new Error('invalid');
+  }
+  const at = on ? new Date().toISOString() : null;
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from('content_drafts')
+    .update(what === 'real' ? { author_real_at: at } : { author_profile_at: at })
+    .eq('id', id)
+    .select('id')
+    .maybeSingle();
   if (error) throw new Error(error.message);
   if (!data) throw new Error('not_found');
 }
