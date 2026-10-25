@@ -169,7 +169,7 @@ export function AgentWriting({
   method: DraftMethod;
   /** When the agent started (content_drafts.agent_state_at). */
   since: string | null;
-  /** Rewrite the page to these rules, as this tab started it. */
+  /** Rewrite the page to these rules (the draft's agent_run): its run is a rewrite. */
   rewrite?: boolean;
   /** The run ended (stopped, done or failed): the page reads the draft again. */
   onRunEnded?: (stopped?: boolean) => void;

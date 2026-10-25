@@ -1000,10 +1000,13 @@ describe('the content editor', () => {
       expect(stopAgentRun).toHaveBeenCalledWith('d1', 'b1', 'r2');
     });
 
-    it('shows no Fix’s steps while a new page is written, nor a Start’s while the page is rewritten', async () => {
-      for (const [method, agentRun, kind] of [
-        ['create', 'write', 'fix'],
-        ['optimize', 'rewrite', 'fix'],
+    it('shows only the run the page waits on: a rewrite’s on a new page, never another kind’s', async () => {
+      for (const [method, agentRun, kind, shown] of [
+        // A new page's rewrite: its run is a rewrite, not the Start's write.
+        ['create', 'rewrite', 'rewrite', true],
+        ['create', 'rewrite', 'write', false],
+        ['create', 'write', 'fix', false],
+        ['optimize', 'rewrite', 'fix', false],
       ] as const) {
         getContentDraft.mockResolvedValue(
           draft({
@@ -1017,7 +1020,7 @@ describe('the content editor', () => {
         readAgentRun.mockResolvedValue({
           id: 'r3',
           kind,
-          steps: [{ key: 'write_changes', count: null }],
+          steps: [{ key: 'check_sources', count: null }],
           step: 0,
           startedAt: new Date().toISOString(),
           finishedAt: null,
@@ -1027,10 +1030,10 @@ describe('the content editor', () => {
         await renderPage();
         await act(async () => {});
         // Another run's: the fixed list stays, with no Stop for it.
-        expect(container.querySelector('[role="status"]')!.textContent).not.toContain(
-          'Writing changes',
-        );
-        expect(button('Stop')).toBeUndefined();
+        expect(
+          container.querySelector('[role="status"]')!.textContent!.includes('Checking sources'),
+        ).toBe(shown);
+        expect(button('Stop') !== undefined).toBe(shown);
         await act(async () => root.unmount());
         root = createRoot(container);
       }
