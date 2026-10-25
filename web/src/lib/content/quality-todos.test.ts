@@ -3,7 +3,7 @@ import type { ContentAuthor } from './authors';
 import type { PageProof } from './page-read';
 import { eeat, trust, trustBlocks } from './quality-checks';
 import { PROFILE_WEIGHTS, checksOff, weighed, weighedTrust } from './quality-profiles';
-import { caseKey, proofKey, qualityTodos } from './quality-todos';
+import { caseConfirmed, caseKey, proofKey, qualityTodos } from './quality-todos';
 
 /** Your to-dos (Quality spec §4, CE-040): only what the person can do, read from the checks. */
 
@@ -184,6 +184,52 @@ describe('qualityTodos', () => {
       action: 'addProof',
       score: 'trust',
     });
+  });
+
+  it('keeps a case confirmed when the next read picks other words of its sentence (#1496 review)', () => {
+    const sentence = 'Acme cut its close time by 40% with Ledgerly in one quarter.';
+    const shorter = { claim: 'Acme cut its close time', sentence };
+    const longer = { claim: 'Acme cut its close time by 40%', sentence };
+    // Confirmed on one slice, read again as the other: still confirmed, no second row.
+    expect(caseConfirmed(new Set([caseKey(shorter)]), longer)).toBe(true);
+    expect(caseConfirmed(new Set([caseKey(longer)]), shorter)).toBe(true);
+    // Another case, or a name alone, isn't this one.
+    const other = {
+      claim: 'Brightline doubled its pipeline',
+      sentence: 'Brightline doubled its pipeline.',
+    };
+    expect(caseConfirmed(new Set([caseKey(shorter)]), other)).toBe(false);
+    expect(caseConfirmed(new Set(['case:acme']), longer)).toBe(false);
+    // A confirm of another kind doesn't count.
+    expect(caseConfirmed(new Set([`intro:${caseKey(longer).slice(5)}`]), longer)).toBe(false);
+  });
+
+  it('says linking a confirmed case still raises Trust (#1496 review)', () => {
+    const sentence = 'Acme cut its close time by 40% with Ledgerly.';
+    const read = trust({
+      blocks: trustBlocks(`<p>${sentence}</p>`),
+      links: new Map(),
+      brandDomains: ['ledgerly.com'],
+      now: Date.parse('2026-10-25'),
+    });
+    const ask = {
+      claim: 'Acme cut its close time by 40%',
+      block: sentence,
+      kind: 'customer_case' as const,
+      sentence,
+      linked: false,
+    };
+    const row = qualityTodos({
+      eeat: null,
+      trust: read,
+      author: null,
+      hasAuthors: true,
+      proofs: { asks: [ask], had: new Set([caseKey(ask)]) },
+      cases: new Set([caseKey(ask)]),
+      off: checksOff('feature'),
+    }).find((t) => t.id === 'proof')!;
+    expect(row).toMatchObject({ done: true, action: 'confirmCase' });
+    expect(row.trustGain).toBeGreaterThan(0);
   });
 
   it('asks to add an author when the workspace has none', () => {

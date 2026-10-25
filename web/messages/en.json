@@ -4821,8 +4821,9 @@
             "confirmCase": {
               "title": "Confirm you may publish the customer case “{claim}”",
               "next": "confirm the customer case",
-              "detail": "A customer's name, logo or results go out only with their permission: confirm you have it. Link the published case too, if there is one",
-              "done": "You confirmed the customer may be named"
+              "detail": "A customer's name, logo or results go out only with their permission: confirm you have it",
+              "done": "You confirmed the customer may be named",
+              "link": "Linking the published case raises Trust too (+{gain, number} Trust)"
             }
           },
           "title": "Your to-dos",

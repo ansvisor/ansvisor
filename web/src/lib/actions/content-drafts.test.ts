@@ -423,7 +423,7 @@ describe('own images (Quality CE-049, 00270)', () => {
   });
 });
 
-describe('confirmations (Quality CE-052, 00279)', () => {
+describe('confirmations (Quality CE-052, 00280)', () => {
   const KEY = 'proof:Acmecutclosetime40%:abc123';
 
   it("reads the draft's confirmations by kind and key, leaving out kinds it doesn't know", async () => {

@@ -126,7 +126,7 @@ import {
   weighed,
   weighedTrust,
 } from '@/lib/content/quality-profiles';
-import { caseKey, proofKey, qualityTodos } from '@/lib/content/quality-todos';
+import { caseConfirmed, caseKey, proofKey, qualityTodos } from '@/lib/content/quality-todos';
 import { isByline, readability, sentencesOf, withTypeRules } from '@/lib/content/readability';
 import { brandFactsPath, factMismatches } from '@/lib/content/brand-facts';
 import {
@@ -769,9 +769,7 @@ export function DraftEditor({
   // A comparison's check date (CE-052): E-E-A-T's check and its to-do.
   const checkDateRead = useMemo(
     () =>
-      qualityOn && profile === 'comparison'
-        ? checkDateOnPage(pageBlocks.map((b) => b.text))
-        : null,
+      qualityOn && profile === 'comparison' ? checkDateOnPage(pageBlocks.map((b) => b.text)) : null,
     [qualityOn, profile, pageBlocks],
   );
   // A product page's shipping and returns (CE-052): Trust's check, and a
@@ -852,13 +850,17 @@ export function DraftEditor({
   // The page's customer cases, and how many are confirmed: E-E-A-T's (CE-052).
   const caseCount = useMemo(() => {
     if (!casesOn) return null;
-    const keys = proofAsks.filter((ask) => ask.kind === 'customer_case').map(caseKey);
-    return { total: keys.length, confirmed: keys.filter((k) => caseConfirms?.has(k)).length };
+    const asks = proofAsks.filter((ask) => ask.kind === 'customer_case');
+    const confirms = caseConfirms ?? new Set<string>();
+    return {
+      total: asks.length,
+      confirmed: asks.filter((ask) => caseConfirmed(confirms, ask)).length,
+    };
   }, [casesOn, proofAsks, caseConfirms]);
   const isCase = (ask: (typeof proofAsks)[number]) => casesOn && ask.kind === 'customer_case';
   // A case's to-do once the confirms are read: open while not confirmed.
   const caseOpen = (ask: (typeof proofAsks)[number]) =>
-    isCase(ask) ? casesRead && !(caseConfirms?.has(caseKey(ask)) ?? false) : !ask.linked;
+    isCase(ask) ? casesRead && !caseConfirmed(caseConfirms ?? new Set(), ask) : !ask.linked;
   const newProofs = proofAsks
     .filter(caseOpen)
     .slice(0, MAX_PROOF_TODOS)
@@ -2082,10 +2084,22 @@ export function DraftEditor({
       return;
     }
     const items = handOffList;
+    const context = agentContext(editor);
+    // The customer cases' paragraphs (CE-052): the person vouches for them,
+    // so the agent leaves them as it leaves a locked passage.
+    const cases = casesOn
+      ? proofAsks.filter((ask) => ask.kind === 'customer_case').map((ask) => ask.block)
+      : [];
     setHandingOff(true);
     try {
       await runAgentFix(
-        () => handOffDraft(draft.id, draft.brandId, { items, origin, ...agentContext(editor) }),
+        () =>
+          handOffDraft(draft.id, draft.brandId, {
+            items,
+            origin,
+            ...context,
+            locked: [...context.locked, ...cases],
+          }),
         handedOff,
         origin === 'auto',
       );

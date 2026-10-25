@@ -449,7 +449,10 @@ export function useTodoCopy() {
       return {
         title: t('proof.confirmCase.title', { claim: todo.proof.claim }),
         next: t('proof.confirmCase.next'),
-        detail: todo.done ? t('proof.confirmCase.done') : t('proof.confirmCase.detail'),
+        detail: [
+          todo.done ? t('proof.confirmCase.done') : t('proof.confirmCase.detail'),
+          ...(todo.trustGain ? [t('proof.confirmCase.link', { gain: todo.trustGain })] : []),
+        ].join('. '),
       };
     }
     if (todo.id === 'proof' && todo.proof) {
