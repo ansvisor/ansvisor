@@ -937,6 +937,93 @@ export type Database = {
           },
         ]
       }
+      catalog_variants: {
+        Row: {
+          attributes: Json
+          availability: string | null
+          brand_id: string
+          condition: string | null
+          content_hash: string
+          currency: string | null
+          external_id: string
+          first_seen_at: string
+          gtin: string | null
+          id: string
+          marketplace_item_id: string | null
+          mpn: string | null
+          price: number | null
+          product_id: string
+          removed_at: string | null
+          sale_price: number | null
+          sku: string | null
+          source: string
+          title: string | null
+          updated_at: string
+          url: string | null
+        }
+        Insert: {
+          attributes?: Json
+          availability?: string | null
+          brand_id: string
+          condition?: string | null
+          content_hash: string
+          currency?: string | null
+          external_id: string
+          first_seen_at?: string
+          gtin?: string | null
+          id?: string
+          marketplace_item_id?: string | null
+          mpn?: string | null
+          price?: number | null
+          product_id: string
+          removed_at?: string | null
+          sale_price?: number | null
+          sku?: string | null
+          source: string
+          title?: string | null
+          updated_at?: string
+          url?: string | null
+        }
+        Update: {
+          attributes?: Json
+          availability?: string | null
+          brand_id?: string
+          condition?: string | null
+          content_hash?: string
+          currency?: string | null
+          external_id?: string
+          first_seen_at?: string
+          gtin?: string | null
+          id?: string
+          marketplace_item_id?: string | null
+          mpn?: string | null
+          price?: number | null
+          product_id?: string
+          removed_at?: string | null
+          sale_price?: number | null
+          sku?: string | null
+          source?: string
+          title?: string | null
+          updated_at?: string
+          url?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "catalog_variants_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brands"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "catalog_variants_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "catalog_products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       citation_urls: {
         Row: {
           domain: string

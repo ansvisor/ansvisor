@@ -30,6 +30,7 @@ import {
   type ReadabilityCheck,
 } from '@/lib/content/readability';
 import { SITE_TRUST_PATH, siteTrustMissing, type SiteTrust } from '@/lib/content/site-trust';
+import { CATALOG_SETTINGS_PATH } from '@/lib/content/feed-match';
 import { cn } from '@/lib/utils';
 import { MANAGE_AUTHORS_PATH } from './_author-menu';
 
@@ -45,6 +46,12 @@ export interface QualityRead {
    * it was detected (not picked), and its profile; left out before.
    */
   weightsFor?: { type: string | null; detected: boolean; profile: QualityProfile } | null;
+  /**
+   * Phase 3 (CE-053): why a product page isn't checked against a product
+   * feed: no catalog connected, or none of its products is the page's;
+   * null where it is checked, or isn't a product page.
+   */
+  feed?: 'none' | 'notFound' | null;
   /** The page's Readability as written, or null before it is read. */
   readability: Readability | null;
   /** E-E-A-T from the author, or null before the authors are read. */
@@ -249,6 +256,22 @@ export function QualityTab({
                 >
                   {t('weightsFor.change')}
                 </button>
+              </>
+            )}
+          </p>
+        )}
+        {quality.feed && (
+          <p className="text-xs text-muted-foreground">
+            {t(`feed.${quality.feed}`)}
+            {quality.feed === 'none' && (
+              <>
+                {' '}
+                <Link
+                  href={CATALOG_SETTINGS_PATH}
+                  className="font-medium text-foreground underline-offset-2 hover:underline"
+                >
+                  {t('feed.connect')}
+                </Link>
               </>
             )}
           </p>
@@ -918,6 +941,26 @@ export function trustSuggestions(
       count: trust.mismatches.length,
       detail: t('checks.brandFacts.detail', { count: trust.mismatches.length }),
       show: first.sentence,
+    });
+  }
+  // Phase 3 (CE-053): the person checks which is right, the page or the
+  // feed: Hand off leaves it (it isn't one of its keys).
+  const feed = trust.feed ?? [];
+  if (feed.length) {
+    const [first] = feed;
+    out.push({
+      key: 'trust:feedMatch',
+      check: 'feedMatch',
+      score: 'trust',
+      gain: trustGain(trust, ['feedMatch']),
+      line: t('checks.feedMatch.line', {
+        kind: first.kind,
+        page: first.page,
+        feed: first.feed,
+      }),
+      count: feed.length,
+      detail: t('checks.feedMatch.detail', { count: feed.length }),
+      show: first.sentence || null,
     });
   }
   if (trust.stale.length) {

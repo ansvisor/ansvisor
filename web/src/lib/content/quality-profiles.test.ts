@@ -54,14 +54,19 @@ describe('PROFILE_WEIGHTS', () => {
   it('asks a product page for no author, and a comparison for balance and a disclosure', () => {
     expect(checksOff('product')).toContain('byline');
     expect(checksOff('product')).toContain('authorBio');
-    // An article counts every check but the brand's information, the check date, shipping and the type rules.
+    // An article counts every check but the brand's information, the check
+    // date, customer cases, shipping, the product feed and the type rules.
     expect([...checksOff('article')].sort()).toEqual([
       'brandInfo',
       'checkDate',
       'customerCase',
+      'feedMatch',
       'shippingReturns',
       'typeRules',
     ]);
+    // A product page's price and stock against its feed weigh most in its Trust (CE-053).
+    const productTrust = Object.values(PROFILE_WEIGHTS.product.trust);
+    expect(PROFILE_WEIGHTS.product.trust.feedMatch).toBe(Math.max(...productTrust));
     expect(PROFILE_WEIGHTS.comparison.trust.balanced).toBeGreaterThan(
       PROFILE_WEIGHTS.article.trust.balanced,
     );
@@ -162,12 +167,21 @@ describe('weighedTrust', () => {
     // A product page doesn't weigh freshness: a working link and the site aren't Trust.
     const product = weighedTrust(dated, PROFILE_WEIGHTS.product.trust);
     expect(product.score).toBeNull();
-    expect(product.phase1Points).toBe(35);
+    expect(product.phase1Points).toBe(25);
     // A figure brings it in.
     const figure = read(
       '<p>It cut costs by 40% (<a href="https://example.org/report">the report</a>).</p>',
     );
     expect(weighedTrust(figure, PROFILE_WEIGHTS.product.trust).score).not.toBeNull();
+    // So does its product feed's check (CE-053).
+    const fed = trust({
+      blocks: trustBlocks('<p>The Ridge 28 costs $129.</p>'),
+      links: new Map(),
+      brandDomains: [],
+      feed: { compared: 1, mismatches: [] },
+      now: Date.parse('2026-10-25'),
+    });
+    expect(weighedTrust(fed, PROFILE_WEIGHTS.product.trust).score).toBe(100);
   });
 
   it('is scored by a compared price where brand facts weigh as much as sourced claims (#1491 review)', () => {

@@ -60,9 +60,9 @@ export interface ProfileWeights {
 
 /**
  * Each profile's checks and points. The article's are the spec's blog
- * defaults (§2); the others follow §11's table. Checks a type still lacks
- * (reviews, a product feed, a customer case, a check date: Phase 3's later
- * parts) join with their own points, rescaling the rest.
+ * defaults (§2); the others follow §11's table. A check a page can't be
+ * read for yet (a product feed that doesn't have the page's product, and
+ * reviews, not connected yet) is left out, the rest rescaled.
  */
 export const PROFILE_WEIGHTS: Readonly<Record<QualityProfile, ProfileWeights>> = {
   article: {
@@ -71,8 +71,8 @@ export const PROFILE_WEIGHTS: Readonly<Record<QualityProfile, ProfileWeights>> =
     readability: { ...READABILITY_WEIGHTS },
   },
   // No author (the brand's byline); real product photos; proof for its
-  // claims, prices that match, how it ships and goes back; short, plain
-  // copy with its specs table.
+  // claims, the price and stock its feed has (most), how it ships and goes
+  // back; short, plain copy with its specs table.
   product: {
     eeat: {
       experience: 20,
@@ -88,17 +88,18 @@ export const PROFILE_WEIGHTS: Readonly<Record<QualityProfile, ProfileWeights>> =
       customerCase: 0,
     },
     trust: {
-      claimsSourced: 25,
+      claimsSourced: 20,
       primarySources: 5,
       noWeakSources: 5,
-      brandFacts: 30,
+      brandFacts: 20,
       expertQuote: 0,
       freshSources: 0,
       balanced: 0,
       disclosure: 0,
-      noBrokenLinks: 10,
-      siteTrust: 15,
+      noBrokenLinks: 5,
+      siteTrust: 10,
       shippingReturns: 10,
+      feedMatch: 25,
     },
     readability: {
       avgSentence: 15,
@@ -140,6 +141,7 @@ export const PROFILE_WEIGHTS: Readonly<Record<QualityProfile, ProfileWeights>> =
       noBrokenLinks: 15,
       siteTrust: 25,
       shippingReturns: 0,
+      feedMatch: 0,
     },
     readability: {
       avgSentence: 15,
@@ -181,6 +183,7 @@ export const PROFILE_WEIGHTS: Readonly<Record<QualityProfile, ProfileWeights>> =
       noBrokenLinks: 5,
       siteTrust: 10,
       shippingReturns: 0,
+      feedMatch: 0,
     },
     readability: {
       avgSentence: 15,
@@ -223,6 +226,7 @@ export const PROFILE_WEIGHTS: Readonly<Record<QualityProfile, ProfileWeights>> =
       noBrokenLinks: 5,
       siteTrust: 5,
       shippingReturns: 0,
+      feedMatch: 0,
     },
     readability: {
       avgSentence: 15,
@@ -278,11 +282,12 @@ export function weighed<Id extends string, S extends Score<Id>>(
 }
 
 /**
- * Trust weighed for a profile, scored as trust() scores it: once a figure
- * or fresh-sources check is left among the weighed ones, or two sources are
- * placed; on a type that weighs brand facts as much as sourced claims, once
- * a price is compared with them too. A type isn't scored by its links and
- * site alone. Its unscored gains count out of the type's Phase 1 points.
+ * Trust weighed for a profile, scored as trust() scores it: once a figure,
+ * fresh-sources or product feed check is left among the weighed ones, or
+ * two sources are placed; on a type that weighs brand facts as much as
+ * sourced claims, once a price is compared with them too. A type isn't
+ * scored by its links and site alone. Its unscored gains count out of the
+ * type's Phase 1 points.
  */
 export function weighedTrust(
   read: TrustRead,
@@ -291,7 +296,9 @@ export function weighedTrust(
   // Scored here, by the weighed checks: trust() leaves it unscored by its own.
   const result = weighed({ ...read, score: read.score ?? 0 }, weights);
   const scored =
-    result.checks.some((c) => c.id === 'claimsSourced' || c.id === 'freshSources') ||
+    result.checks.some(
+      (c) => c.id === 'claimsSourced' || c.id === 'freshSources' || c.id === 'feedMatch',
+    ) ||
     read.classified >= 2 ||
     // Where prices that match weigh as much as sourced claims (a product or a
     // category page), a compared one is Trust's own: every price wrong isn't "Not scored".

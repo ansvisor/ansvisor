@@ -3,6 +3,7 @@ import type { ContentAuthor } from './authors';
 import { cleanHref } from './html-allowlist';
 import { languageCode, ownText, sentencesOf } from './readability';
 import type { FactMismatch } from './brand-facts';
+import type { FeedMismatch } from './feed-match';
 import type { ClaimBlock } from './claims';
 import { askableSite, sourceClass, type AiSourceClass, type SourceClass } from './source-class';
 
@@ -75,11 +76,16 @@ export const TRUST_WEIGHTS = {
   siteTrust: 5,
   // Phase 3 (CE-052): a product page's shipping and returns; weighed there.
   shippingReturns: 0,
+  // Phase 3 (CE-053): a product page's price and stock against its product
+  // feed; weighed there, and only where the feed has the page's product.
+  feedMatch: 0,
 } as const;
 export type TrustCheckId = keyof typeof TRUST_WEIGHTS;
 
 /** The shipping and returns check's points before a page type weighs it. */
 const SHIPPING_POINTS = 10;
+/** The product feed check's points before a page type weighs it. */
+const FEED_POINTS = 10;
 /**
  * Words that say how a product ships, in a policy's terms: "free shipping",
  * "shipping takes 2 days", "Free UK delivery on orders over £50", "Standard
@@ -540,6 +546,8 @@ export interface TrustRead extends Score<TrustCheckId> {
   mismatches: FactMismatch[];
   /** Phase 3 (CE-052): whether the page says how shipping and returns work; null where not read. */
   shipping?: { shipping: boolean; returns: boolean } | null;
+  /** Phase 3 (CE-053): where the page's price and stock differ from its product feed's. */
+  feed?: FeedMismatch[];
 }
 
 /**
@@ -569,10 +577,10 @@ export interface SourceRead {
  * links that answer, and the site's trust (its five checks in Site Audit).
  * A check with nothing to read (no figure, no dated source, no link read
  * yet, no site trust read) is left out, and site trust counts only beside a
- * check of the page's own. Trust is scored only once a figure or a dated
- * source is there: working links alone are 3 points, and one link would set
- * the whole score (one dead link 0, one working link 100), as Readability
- * waits for MIN_WORDS.
+ * check of the page's own. Trust is scored only once a figure, a dated
+ * source or a product feed's check is there: working links alone are 3
+ * points, and one link would set the whole score (one dead link 0, one
+ * working link 100), as Readability waits for MIN_WORDS.
  *
  * With `sources` (Phase 2, CE-046), each source's kind counts too: a primary
  * one among them (official, research, standards), and none weak (forums,
@@ -609,8 +617,14 @@ export function trust({
   proofs = null,
   page = null,
   shipping = null,
+  feed = null,
   now,
 }: {
+  /**
+   * Phase 3 (CE-053): a product page's price and stock against its product
+   * in the brand's feed (feedCheck); left out where the feed doesn't have it.
+   */
+  feed?: { compared: number; mismatches: FeedMismatch[] } | null;
   /**
    * Phase 3 (CE-052): whether a product page says how shipping and returns
    * work (shippingOnPage); left out elsewhere.
@@ -811,6 +825,14 @@ export function trust({
     });
   }
 
+  if (feed && feed.compared > 0) {
+    checks.push({
+      id: 'feedMatch',
+      points: (FEED_POINTS * (feed.compared - feed.mismatches.length)) / feed.compared,
+      max: FEED_POINTS,
+    });
+  }
+
   // The site's 5 points weigh with what the page itself shows: alone, they'd
   // be the page's whole Trust.
   if (siteTrust && checks.length) {
@@ -821,9 +843,11 @@ export function trust({
     });
   }
 
+  // A product page's feed check is Trust's own too (CE-053).
   const scored =
-    checks.some((c) => c.id === 'claimsSourced' || c.id === 'freshSources') ||
-    classified.length >= 2;
+    checks.some(
+      (c) => c.id === 'claimsSourced' || c.id === 'freshSources' || c.id === 'feedMatch',
+    ) || classified.length >= 2;
   return {
     ...(scored ? scoreOf(checks) : { score: null, checks }),
     broken: broken.map(({ url, text }) => ({ url, text })),
@@ -837,6 +861,7 @@ export function trust({
     classified: classified.length,
     mismatches: brandFacts?.mismatches ?? [],
     shipping: shippingSaid,
+    feed: feed?.mismatches ?? [],
   };
 }
 
