@@ -109,6 +109,8 @@ const {
   unmarkContentDraftReady,
   confirmOwnImage,
   getOwnImages,
+  confirmDraftItem,
+  getDraftConfirmations,
   setContentDraftReviewer,
 } = await import('./content-drafts');
 const { bodyHash } = await import('@/lib/content/editor');
@@ -418,6 +420,33 @@ describe('own images (Quality CE-049, 00270)', () => {
     upsertError = { code: '23514', message: 'A draft keeps 50 confirmed images at most' };
     expect(await confirmOwnImage(DRAFT, SRC)).toBe('full');
     await expect(confirmOwnImage(DRAFT, 'data:image/png;base64,x')).rejects.toThrow('invalid');
+  });
+});
+
+describe('confirmations (Quality CE-052, 00279)', () => {
+  const KEY = 'proof:Acmecutclosetime40%:abc123';
+
+  it("reads the draft's confirmations by kind and key, leaving out kinds it doesn't know", async () => {
+    list = [
+      { kind: 'customer_case', key: KEY },
+      { kind: 'something_new', key: 'x' },
+    ];
+    expect(await getDraftConfirmations(DRAFT)).toEqual([{ kind: 'customer_case', key: KEY }]);
+    expect(calls[0].filters).toEqual([['eq', 'draft_id', DRAFT]]);
+    expect(await getDraftConfirmations('d1')).toEqual([]);
+  });
+
+  it('confirms one as the member, now, once; says when the draft keeps 50', async () => {
+    expect(await confirmDraftItem(DRAFT, 'customer_case', KEY)).toBe('ok');
+    const { value, options } = calls[0].value as { value: unknown; options: unknown };
+    expect(value).toEqual({ draft_id: DRAFT, kind: 'customer_case', key: KEY, confirmed_by: 'u1' });
+    expect(options).toEqual({ onConflict: 'draft_id,kind,key', ignoreDuplicates: true });
+    upsertError = { code: '23514', message: 'A draft keeps 50 confirmations at most' };
+    expect(await confirmDraftItem(DRAFT, 'customer_case', KEY)).toBe('full');
+    await expect(confirmDraftItem(DRAFT, 'other' as 'customer_case', KEY)).rejects.toThrow(
+      'invalid',
+    );
+    await expect(confirmDraftItem(DRAFT, 'customer_case', '')).rejects.toThrow('invalid');
   });
 });
 

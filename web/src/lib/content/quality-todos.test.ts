@@ -126,6 +126,42 @@ describe('qualityTodos', () => {
     expect(run({ found: true, line: 'x' })).toMatchObject({ done: true, action: null, gain: 0 });
   });
 
+  it('asks to confirm a customer case may be published, not to link it, in Phase 3 (CE-052)', () => {
+    const ask = {
+      claim: 'Acme cut close time 40%',
+      block: 'Acme cut close time 40% with Ledgerly.',
+      kind: 'customer_case' as const,
+      sentence: 'Acme cut close time 40% with Ledgerly.',
+      linked: true,
+    };
+    const run = (cases: ReadonlySet<string> | null, had: string[] = []) =>
+      qualityTodos({
+        eeat: weighed(
+          eeat({
+            author: null,
+            cases: { total: 1, confirmed: cases?.has(proofKey(ask)) ? 1 : 0 },
+          }),
+          PROFILE_WEIGHTS.feature.eeat,
+        ),
+        author: null,
+        hasAuthors: true,
+        proofs: { asks: [ask], had: new Set(had) },
+        cases,
+        off: checksOff('feature'),
+      }).find((t) => t.id === 'proof');
+    // Linked isn't enough: only the person knows they may name the customer.
+    expect(run(new Set())).toMatchObject({
+      done: false,
+      action: 'confirmCase',
+      score: 'eeat',
+      key: proofKey(ask),
+    });
+    expect(run(new Set())!.gain).toBeGreaterThan(0);
+    expect(run(new Set([proofKey(ask)]), [proofKey(ask)])).toMatchObject({ done: true, gain: 0 });
+    // Before Phase 3 (or before they're read): the link, as before.
+    expect(run(null)).toBeUndefined();
+  });
+
   it('asks to add an author when the workspace has none', () => {
     expect(todos(null, false)[0]).toEqual({
       id: 'byline',

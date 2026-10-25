@@ -46,7 +46,9 @@ import {
   setContentDraftReviewer,
   confirmDraftAuthor,
   keepDraftSource,
+  confirmDraftItem,
   confirmOwnImage,
+  getDraftConfirmations,
   getOwnImages,
   setContentDraftPageType,
   startAgentWriting,
@@ -811,8 +813,39 @@ export function DraftEditor({
   // A proof to-do asked for this session stays, checked once it has a link.
   const [hadProofs, setHadProofs] = useState<ReadonlySet<string>>(() => new Set());
   // The ones shown open: the first MAX_PROOF_TODOS with no link, as the to-dos list them.
+  // Phase 3 (CE-052): a customer case is confirmed publishable, not linked.
+  const casesOn = sourcesOn && qualityPhase() >= 3;
+  const [caseConfirms, setCaseConfirms] = useState<ReadonlySet<string> | null>(null);
+  useEffect(() => {
+    if (!casesOn) return;
+    let live = true;
+    void getDraftConfirmations(draft.id).then((rows) => {
+      if (!live) return;
+      // A confirm made before the read lands stays.
+      setCaseConfirms(
+        (prev) =>
+          new Set([
+            ...rows.filter((r) => r.kind === 'customer_case').map((r) => r.key),
+            ...(prev ?? []),
+          ]),
+      );
+    });
+    return () => {
+      live = false;
+    };
+  }, [draft.id, casesOn]);
+  // The page's customer cases, and how many are confirmed: E-E-A-T's (CE-052).
+  const caseCount = useMemo(() => {
+    if (!casesOn) return null;
+    const keys = proofAsks.filter((ask) => ask.kind === 'customer_case').map(proofKey);
+    return { total: keys.length, confirmed: keys.filter((k) => caseConfirms?.has(k)).length };
+  }, [casesOn, proofAsks, caseConfirms]);
+  const caseOpen = (ask: (typeof proofAsks)[number]) =>
+    casesOn && ask.kind === 'customer_case'
+      ? !(caseConfirms?.has(proofKey(ask)) ?? false)
+      : !ask.linked;
   const newProofs = proofAsks
-    .filter((ask) => !ask.linked)
+    .filter(caseOpen)
     .slice(0, MAX_PROOF_TODOS)
     .map(proofKey)
     .filter((key) => !hadProofs.has(key));
@@ -853,7 +886,12 @@ export function DraftEditor({
   // In phase 2 it waits for the visual proof too, so it doesn't move once that lands.
   const eeatScore = useMemo(
     () =>
-      qualityOn && authorsRead && !inputsPending && (!sourcesOn || visualRead)
+      qualityOn &&
+      authorsRead &&
+      !inputsPending &&
+      (!sourcesOn || visualRead) &&
+      // Phase 3: the customer cases' confirms are read (CE-052).
+      (!casesOn || caseConfirms !== null)
         ? weighed(
             eeat({
               author: pageAuthor,
@@ -864,6 +902,7 @@ export function DraftEditor({
               // The brand's own information: only a type that weighs it counts it.
               siteTrust,
               checkDate: checkDateRead,
+              cases: caseCount,
             }),
             weights.eeat,
           )
@@ -881,6 +920,9 @@ export function DraftEditor({
       authorConfirmed,
       siteTrust,
       checkDateRead,
+      casesOn,
+      caseConfirms,
+      caseCount,
       weights,
     ],
   );
@@ -890,6 +932,24 @@ export function DraftEditor({
   const pageReviewer = authorsRead?.authors.find((a) => a.id === reviewerId) ?? null;
   // Confirm: only the person can tell their own image from stock.
   const [confirmingImages, setConfirmingImages] = useState(false);
+  // Quality's Confirm on a customer case (CE-052): the person's statement
+  // that the customer may be named; put back if it can't be saved.
+  const confirmCase = async (key: string) => {
+    if (caseConfirms?.has(key)) return;
+    setCaseConfirms((prev) => new Set([...(prev ?? []), key]));
+    const takeBack = () =>
+      setCaseConfirms((prev) => new Set([...(prev ?? [])].filter((had) => had !== key)));
+    try {
+      if ((await confirmDraftItem(draft.id, 'customer_case', key)) === 'full') {
+        takeBack();
+        toast.error(t('quality.confirmCaseFull'));
+      }
+    } catch (err) {
+      console.error('Failed to confirm the customer case:', err);
+      takeBack();
+      toast.error(t('quality.confirmCaseFailed'));
+    }
+  };
   const confirmImage = async (src: string) => {
     // Already confirmed: nothing to take back if the save fails.
     const had = ownImages?.has(src) ?? false;
@@ -1092,6 +1152,7 @@ export function DraftEditor({
         reviewer: regulated && authorsRead ? { topic: regulated, picked: !!pageReviewer } : null,
         confirmed: authorConfirmed,
         shipping: shippingRead,
+        cases: casesOn ? (caseConfirms ?? new Set<string>()) : null,
         checkDate:
           checkDateRead === null ? null : { found: checkDateRead, line: checkDateText(language) },
         off: checksOff(profile),
@@ -3273,6 +3334,7 @@ export function DraftEditor({
                 onPickAuthor={() => setAuthorMenuOpen(true)}
                 onPickReviewer={() => setReviewerMenuOpen(true)}
                 onAddCheckDate={htmlSource === null ? addCheckDate : undefined}
+                onConfirmCase={(key) => void confirmCase(key)}
                 onAddInput={addInput}
                 onAddSource={sourcesOn ? addSource : undefined}
                 onConfirmImages={() => setConfirmingImages(true)}
@@ -3316,6 +3378,7 @@ export function DraftEditor({
             onPickAuthor={() => setAuthorMenuOpen(true)}
             onPickReviewer={() => setReviewerMenuOpen(true)}
             onAddCheckDate={htmlSource === null ? addCheckDate : undefined}
+            onConfirmCase={(key) => void confirmCase(key)}
             onChangeType={() => setTypeMenuOpen(true)}
             handOff={handOffCard}
             yourInput={inputsRead.status === 'off' ? null : inputsRead}

@@ -88,6 +88,7 @@ export const PROFILE_WEIGHTS: Readonly<Record<QualityProfile, ProfileWeights>> =
       authorSchema: 0,
       brandInfo: 0,
       checkDate: 0,
+      customerCase: 0,
     },
     trust: {
       claimsSourced: 30,
@@ -128,6 +129,7 @@ export const PROFILE_WEIGHTS: Readonly<Record<QualityProfile, ProfileWeights>> =
       authorSchema: 0,
       brandInfo: 40,
       checkDate: 0,
+      customerCase: 0,
     },
     trust: {
       claimsSourced: 25,
@@ -153,20 +155,22 @@ export const PROFILE_WEIGHTS: Readonly<Record<QualityProfile, ProfileWeights>> =
       typeRules: 30,
     },
   },
-  // Product screenshots weigh most, then the person's data and use;
+  // Product screenshots weigh most, then real customer cases (confirmed
+  // publishable) and the person's data and use;
   // sourced metrics and a price that matches; scannable sections.
   feature: {
     eeat: {
-      experience: 25,
-      originalData: 25,
+      experience: 20,
+      originalData: 20,
       byline: 0,
       authorBio: 0,
-      visualProof: 50,
+      visualProof: 35,
       whoHowWhy: 0,
       dates: 0,
       authorSchema: 0,
       brandInfo: 0,
       checkDate: 0,
+      customerCase: 25,
     },
     trust: {
       claimsSourced: 35,
@@ -208,6 +212,7 @@ export const PROFILE_WEIGHTS: Readonly<Record<QualityProfile, ProfileWeights>> =
       authorSchema: 0,
       brandInfo: 0,
       checkDate: 20,
+      customerCase: 0,
     },
     trust: {
       claimsSourced: 25,

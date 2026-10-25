@@ -96,6 +96,7 @@ export function NextNudge({
   onAddImage,
   onPickReviewer,
   onAddCheckDate,
+  onConfirmCase,
   onLater,
   onAct,
 }: {
@@ -115,6 +116,7 @@ export function NextNudge({
   /** A regulated page's: the header's reviewer menu (CE-049). */
   onPickReviewer?: () => void;
   onAddCheckDate?: () => void;
+  onConfirmCase?: (key: string) => void;
   onLater: () => void;
   /** It was acted on: it goes. */
   onAct: () => void;
@@ -220,6 +222,20 @@ export function NextNudge({
                 }}
               >
                 {t('act.pickReviewer')}
+              </button>
+            )
+          ) : action === 'confirmCase' ? (
+            onConfirmCase &&
+            shown.todo.key && (
+              <button
+                type="button"
+                className={actClass}
+                onClick={() => {
+                  onAct();
+                  onConfirmCase(shown.todo.key!);
+                }}
+              >
+                {t('act.confirmCase')}
               </button>
             )
           ) : action === 'addCheckDate' ? (

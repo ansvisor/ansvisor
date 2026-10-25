@@ -145,6 +145,7 @@ export function QualityTab({
   onAddImage,
   onPickReviewer,
   onAddCheckDate,
+  onConfirmCase,
   handOff = null,
   onConfirmAuthor,
   onChangeType,
@@ -176,6 +177,8 @@ export function QualityTab({
   onPickReviewer?: () => void;
   /** A comparison's check date to-do: Add line puts this month's under the answer (CE-052). */
   onAddCheckDate?: () => void;
+  /** A customer case's Confirm: the person says the customer may be named (CE-052). */
+  onConfirmCase?: (key: string) => void;
   /** Hand it off to Content Agent (CE-051): with Quality's phase 2. */
   handOff?: HandOff | null;
 }) {
@@ -274,6 +277,7 @@ export function QualityTab({
                 onAddImage={onAddImage}
                 onPickReviewer={onPickReviewer}
                 onAddCheckDate={onAddCheckDate}
+                onConfirmCase={onConfirmCase}
                 onConfirm={onConfirmAuthor}
               />
             ))}
@@ -435,6 +439,14 @@ export function useTodoCopy() {
       };
     }
     // The page's own claims, their proof asked for by kind and business (CE-049).
+    // A customer case in Phase 3 (CE-052): confirmed publishable, not linked.
+    if (todo.id === 'proof' && todo.proof && todo.action === 'confirmCase') {
+      return {
+        title: t('proof.confirmCase.title', { claim: todo.proof.claim }),
+        next: t('proof.confirmCase.next'),
+        detail: todo.done ? t('proof.confirmCase.done') : t('proof.confirmCase.detail'),
+      };
+    }
     if (todo.id === 'proof' && todo.proof) {
       const { claim, kind } = todo.proof;
       return {
@@ -569,6 +581,7 @@ function TodoRow({
   onAddImage,
   onPickReviewer,
   onAddCheckDate,
+  onConfirmCase,
   onConfirm,
 }: {
   todo: QualityTodo;
@@ -583,6 +596,8 @@ function TodoRow({
   onPickReviewer?: () => void;
   /** A comparison's check date to-do: Add line puts this month's under the answer (CE-052). */
   onAddCheckDate?: () => void;
+  /** A customer case's Confirm: the person says the customer may be named (CE-052). */
+  onConfirmCase?: (key: string) => void;
   onConfirm?: (what: 'real' | 'profile', on: boolean) => void;
 }) {
   const t = useTranslations('contentEditor.editor.quality');
@@ -703,6 +718,18 @@ function TodoRow({
           onPickReviewer && (
             <Button variant="outline" size="sm" className="h-7 shrink-0" onClick={onPickReviewer}>
               {t('pickReviewer')}
+            </Button>
+          )
+        ) : todo.action === 'confirmCase' ? (
+          onConfirmCase &&
+          todo.key && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-7 shrink-0"
+              onClick={() => onConfirmCase(todo.key!)}
+            >
+              {t('confirmCase')}
             </Button>
           )
         ) : todo.action === 'addCheckDate' ? (

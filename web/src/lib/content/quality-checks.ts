@@ -45,11 +45,15 @@ export const EEAT_WEIGHTS = {
   brandInfo: 0,
   // Phase 3 (CE-052): a comparison's visible check date; weighed there.
   checkDate: 0,
+  // Phase 3 (CE-052): a feature page's customer cases, confirmed publishable.
+  customerCase: 0,
 } as const;
 /** The brand info check's points before a page type weighs it (weighed keeps its share). */
 const BRAND_INFO_POINTS = 10;
 /** The check date's points before a page type weighs it. */
 const CHECK_DATE_POINTS = 10;
+/** The customer cases' points before a page type weighs them. */
+const CUSTOMER_CASE_POINTS = 10;
 export type EeatCheckId = keyof typeof EEAT_WEIGHTS;
 
 /**
@@ -216,8 +220,15 @@ export function eeat({
   confirmed = null,
   siteTrust = null,
   checkDate = null,
+  cases = null,
 }: {
   author: ContentAuthor | null;
+  /**
+   * Phase 3 (CE-052): the page's customer cases (its proof asks of that
+   * kind) and how many the person confirmed may be published; left out
+   * where it has none.
+   */
+  cases?: { total: number; confirmed: number } | null;
   /**
    * Phase 3 (CE-052): whether a comparison shows when its products were
    * last checked (pageCheckDate); left out elsewhere.
@@ -302,6 +313,15 @@ export function eeat({
           : 0,
       max: EEAT_WEIGHTS.authorBio,
     },
+    ...(cases && cases.total > 0
+      ? [
+          {
+            id: 'customerCase' as const,
+            points: (CUSTOMER_CASE_POINTS * Math.min(cases.confirmed, cases.total)) / cases.total,
+            max: CUSTOMER_CASE_POINTS,
+          },
+        ]
+      : []),
     ...(checkDate !== null
       ? [
           {

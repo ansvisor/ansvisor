@@ -53,7 +53,8 @@ export type QualityTodoAction =
   | 'addImage'
   | 'pickReviewer'
   | 'reviewBrandFacts'
-  | 'addCheckDate';
+  | 'addCheckDate'
+  | 'confirmCase';
 
 export interface QualityTodo {
   id: QualityTodoId;
@@ -107,6 +108,7 @@ export function qualityTodos({
   confirmed = null,
   shipping = null,
   checkDate = null,
+  cases = null,
   off = NONE_OFF,
 }: {
   eeat: Score<EeatCheckId> | null;
@@ -160,6 +162,13 @@ export function qualityTodos({
    */
   checkDate?: { found: boolean; line: string | null } | null;
   /**
+   * Phase 3 (CE-052): the customer cases the person confirmed may be
+   * published, by their proof to-do's key: a case's to-do is that confirm,
+   * not a link (only the person knows they may name the customer). Null
+   * before Phase 3, or before they're read.
+   */
+  cases?: ReadonlySet<string> | null;
+  /**
    * Phase 3 (CE-052): the checks the page's type leaves out (checksOff): no
    * to-do asks for them (a product page has the brand's byline, no author).
    */
@@ -195,18 +204,27 @@ export function qualityTodos({
   // The page's own claims, in its order: open while its paragraph has no
   // link, checked once it has; MAX_PROOF_TODOS open at once.
   let open = 0;
+  // A customer case's share of E-E-A-T's customer cases, each confirm alike.
+  const caseAsks = cases ? (proofs?.asks ?? []).filter((a) => a.kind === 'customer_case') : [];
+  const unconfirmed = caseAsks.filter((a) => !cases!.has(proofKey(a))).length;
+  const caseGain =
+    eeat && eeat.score !== null && unconfirmed > 0
+      ? Math.round(scoreGain(eeat, ['customerCase']) / unconfirmed)
+      : 0;
   const proofTodos: QualityTodo[] = (proofs?.asks ?? []).flatMap((ask) => {
     const key = proofKey(ask);
-    if (ask.linked && !proofs?.had.has(key)) return [];
-    if (!ask.linked && (open += 1) > MAX_PROOF_TODOS) return [];
+    const confirm = !!cases && ask.kind === 'customer_case';
+    const done = confirm ? cases!.has(key) : ask.linked;
+    if (done && !proofs?.had.has(key)) return [];
+    if (!done && (open += 1) > MAX_PROOF_TODOS) return [];
     return [
       {
         id: 'proof',
         key,
-        done: ask.linked,
-        gain: ask.linked ? 0 : sentenceGain(trust, ask.sentence),
-        score: 'trust',
-        action: 'addProof',
+        done,
+        gain: done ? 0 : confirm ? caseGain : sentenceGain(trust, ask.sentence),
+        score: confirm ? 'eeat' : 'trust',
+        action: confirm ? 'confirmCase' : 'addProof',
         proof: { claim: ask.claim, block: ask.block, kind: ask.kind, sentence: ask.sentence },
       } satisfies QualityTodo,
     ];

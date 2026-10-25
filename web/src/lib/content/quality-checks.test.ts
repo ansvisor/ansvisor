@@ -765,3 +765,13 @@ describe('trust: a product page’s shipping and returns (Phase 3, CE-052)', () 
     expect(run(null).shipping).toBeNull();
   });
 });
+
+describe('eeat: customer cases (Phase 3, CE-052)', () => {
+  it('counts the share confirmed publishable, and none where the page has no case', () => {
+    const check = (cases: { total: number; confirmed: number } | null) =>
+      eeat({ author: null, cases }).checks.find((c) => c.id === 'customerCase');
+    expect(check({ total: 2, confirmed: 1 })).toEqual({ id: 'customerCase', points: 5, max: 10 });
+    expect(check({ total: 0, confirmed: 0 })).toBeUndefined();
+    expect(check(null)).toBeUndefined();
+  });
+});

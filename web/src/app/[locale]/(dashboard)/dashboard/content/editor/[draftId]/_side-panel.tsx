@@ -140,6 +140,7 @@ export function EditorSidePanel({
   onAddImage,
   onPickReviewer,
   onAddCheckDate,
+  onConfirmCase,
   onChangeType,
   handOff = null,
 }: {
@@ -212,6 +213,8 @@ export function EditorSidePanel({
   onPickReviewer?: () => void;
   /** Quality's Add line for a comparison's check date (CE-052). */
   onAddCheckDate?: () => void;
+  /** Quality's Confirm on a customer case (CE-052). */
+  onConfirmCase?: (key: string) => void;
   /** Quality's Change: the header's page type menu (CE-052). */
   onChangeType?: () => void;
   /** Hand it off to Content Agent, Quality's (CE-051). */
@@ -469,6 +472,7 @@ export function EditorSidePanel({
                 onAddImage={onAddImage}
                 onPickReviewer={onPickReviewer}
                 onAddCheckDate={onAddCheckDate}
+                onConfirmCase={onConfirmCase}
                 onChangeType={onChangeType}
                 handOff={handOff}
               />

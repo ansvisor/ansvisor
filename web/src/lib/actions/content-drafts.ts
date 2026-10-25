@@ -2651,3 +2651,68 @@ export async function confirmOwnImage(id: string, src: string): Promise<'ok' | '
   if (error) throw new Error(error.message);
   return 'ok';
 }
+
+/** What a member can confirm on a draft that only they know (Quality CE-052, 00279). */
+export type ConfirmationKind = 'customer_case' | 'intro_fact';
+const confirmationKind = z.enum(['customer_case', 'intro_fact']);
+const confirmationKey = z.string().min(1).max(400);
+
+/**
+ * The draft's confirmations (00279): what a member said only they could (a
+ * customer case may be published; a category intro's facts are right), by
+ * kind and key. Fails soft: none, when they can't be read.
+ */
+export async function getDraftConfirmations(
+  id: string,
+): Promise<{ kind: ConfirmationKind; key: string }[]> {
+  if (!draftId.safeParse(id).success) return [];
+  try {
+    const supabase = await createClient();
+    const { data, error } = await supabase
+      .from('content_draft_confirmations')
+      .select('kind, key')
+      .eq('draft_id', id);
+    if (error) throw new Error(error.message);
+    return (data ?? []).flatMap((row) =>
+      confirmationKind.safeParse(row.kind).success
+        ? [{ kind: row.kind as ConfirmationKind, key: row.key }]
+        : [],
+    );
+  } catch (err) {
+    console.error('Failed to read the confirmations:', err);
+    return [];
+  }
+}
+
+/**
+ * Confirms one (00279): the member's statement, kept with who made it, as
+ * themself and now. Confirmed already is fine; 'full' when the draft keeps 50.
+ */
+export async function confirmDraftItem(
+  id: string,
+  kind: ConfirmationKind,
+  key: string,
+): Promise<'ok' | 'full'> {
+  if (
+    !draftId.safeParse(id).success ||
+    !confirmationKind.safeParse(kind).success ||
+    !confirmationKey.safeParse(key).success
+  ) {
+    throw new Error('invalid');
+  }
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) throw new Error('not_found');
+  const { error } = await supabase
+    .from('content_draft_confirmations')
+    // When: the database's now (its default), the time its policy checks against.
+    .upsert(
+      { draft_id: id, kind, key, confirmed_by: user.id },
+      { onConflict: 'draft_id,kind,key', ignoreDuplicates: true },
+    );
+  if (error?.code === OWN_IMAGES_FULL) return 'full';
+  if (error) throw new Error(error.message);
+  return 'ok';
+}

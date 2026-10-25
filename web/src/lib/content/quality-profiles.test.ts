@@ -57,6 +57,7 @@ describe('PROFILE_WEIGHTS', () => {
     expect([...checksOff('article')].sort()).toEqual([
       'brandInfo',
       'checkDate',
+      'customerCase',
       'shippingReturns',
       'typeRules',
     ]);

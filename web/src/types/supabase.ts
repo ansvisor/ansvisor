@@ -1281,6 +1281,45 @@ export type Database = {
           },
         ]
       }
+      content_draft_confirmations: {
+        Row: {
+          confirmed_at: string
+          confirmed_by: string | null
+          draft_id: string
+          key: string
+          kind: string
+        }
+        Insert: {
+          confirmed_at?: string
+          confirmed_by?: string | null
+          draft_id: string
+          key: string
+          kind: string
+        }
+        Update: {
+          confirmed_at?: string
+          confirmed_by?: string | null
+          draft_id?: string
+          key?: string
+          kind?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "content_draft_confirmations_draft_id_fkey"
+            columns: ["draft_id"]
+            isOneToOne: false
+            referencedRelation: "content_drafts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "content_draft_confirmations_confirmed_by_fkey"
+            columns: ["confirmed_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       content_draft_deliveries: {
         Row: {
           batch_id: string | null
