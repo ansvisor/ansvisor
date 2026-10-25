@@ -5,6 +5,7 @@ import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 import { getMyRuleSets, saveDraftRules, saveMyRuleSet } from '@/lib/actions/content-drafts';
 import { isPageType, type ContentDraft, type PageType } from '@/lib/content/drafts';
+import type { CatalogMatch } from '@/lib/content/feed-match';
 import type { SiteType } from '@/lib/content/page-types';
 import {
   MAX_TEXT_RULES,
@@ -90,6 +91,7 @@ export function useDraftRules({
   characters,
   pageType,
   reads,
+  catalog = null,
 }: {
   draft: ContentDraft;
   /** The brand's business type as the editor holds it: My rules are kept per type (00227). */
@@ -98,6 +100,8 @@ export function useDraftRules({
   characters: number;
   pageType: string | null;
   reads: Pick<DraftReads, 'brief' | 'sources'>;
+  /** The page's product in the brand's catalog (CE-053), for the feed rule (RuleContext's). */
+  catalog?: CatalogMatch | 'reading' | null;
 }): DraftRulesState {
   const t = useTranslations('contentEditor.editor.rules');
   const tTypes = useTranslations('contentEditor.pageTypes');
@@ -132,7 +136,7 @@ export function useDraftRules({
   const sources = reads.sources;
   const ctx = useMemo<RuleContext>(() => {
     if (!sources || sources.failed) {
-      return { brandDomains: [], competitorDomains: [], fanouts: [], language };
+      return { brandDomains: [], competitorDomains: [], fanouts: [], language, catalog };
     }
     const fanouts = buildSourceGroups(sources.data, sources.choices, {
       title: draft.title,
@@ -146,8 +150,9 @@ export function useDraftRules({
       competitorDomains: sources.data.competitorDomains,
       fanouts: fanouts ?? [],
       language,
+      catalog,
     };
-  }, [sources, draft.title, draft.sourceUrl, language]);
+  }, [sources, draft.title, draft.sourceUrl, language, catalog]);
   const brief = reads.brief;
   const keywords = useMemo(
     () => (brief.status === 'ready' ? (brief.brief?.keywords ?? []) : []),
