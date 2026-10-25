@@ -115,7 +115,7 @@ import {
   unplacedSites,
   type ClaimMark,
 } from '@/lib/content/quality-checks';
-import { checkDateText, pageCheckDate } from '@/lib/content/check-date';
+import { checkDateText, isCheckDateText, pageCheckDate } from '@/lib/content/check-date';
 import {
   PROFILE_WEIGHTS,
   checksOff,
@@ -1686,10 +1686,33 @@ export function DraftEditor({
       .insertContentAt(at, { type: 'paragraph', content: [{ type: 'text', text: line }] })
       .run();
   };
-  // Quality's Add line for a comparison's check date (CE-052): this month's.
+  // Quality's Add line for a comparison's check date (CE-052): this month's,
+  // over a check date the page has already (an older one, or one not read
+  // as recent), else under the answer. One undo takes it back.
   const addCheckDate = () => {
     const line = checkDateText(language);
-    if (line) addLineUnderAnswer(line);
+    if (!line || !editor || editor.isDestroyed) return;
+    let found: { pos: number; size: number } | null = null;
+    editor.state.doc.descendants((node, pos) => {
+      if (found) return false;
+      if (node.type.name === 'paragraph' && isCheckDateText(node.textContent)) {
+        found = { pos, size: node.nodeSize };
+        return false;
+      }
+      return true;
+    });
+    const at = found as { pos: number; size: number } | null;
+    if (!at) {
+      addLineUnderAnswer(line);
+      return;
+    }
+    editor
+      .chain()
+      .insertContentAt(
+        { from: at.pos, to: at.pos + at.size },
+        { type: 'paragraph', content: [{ type: 'text', text: line }] },
+      )
+      .run();
   };
   const fillFirstPlaceholder = () => {
     if (htmlSource !== null) {
@@ -3249,7 +3272,7 @@ export function DraftEditor({
                 onShowPlaceholder={showFirstPlaceholder}
                 onPickAuthor={() => setAuthorMenuOpen(true)}
                 onPickReviewer={() => setReviewerMenuOpen(true)}
-                onAddCheckDate={addCheckDate}
+                onAddCheckDate={htmlSource === null ? addCheckDate : undefined}
                 onAddInput={addInput}
                 onAddSource={sourcesOn ? addSource : undefined}
                 onConfirmImages={() => setConfirmingImages(true)}
@@ -3292,7 +3315,7 @@ export function DraftEditor({
             onShowPlaceholder={showFirstPlaceholder}
             onPickAuthor={() => setAuthorMenuOpen(true)}
             onPickReviewer={() => setReviewerMenuOpen(true)}
-            onAddCheckDate={addCheckDate}
+            onAddCheckDate={htmlSource === null ? addCheckDate : undefined}
             onChangeType={() => setTypeMenuOpen(true)}
             handOff={handOffCard}
             yourInput={inputsRead.status === 'off' ? null : inputsRead}

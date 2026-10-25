@@ -2629,9 +2629,45 @@ describe('the side panel', () => {
         container.querySelector('.ProseMirror') as HTMLElement & { editor: Editor }
       ).editor;
       // Under the opening paragraph, the answer first.
-      expect(state.doc.child(2).textContent).toMatch(/^Last checked: \w+ \d{4}\.$/);
+      expect(state.doc.child(2).textContent).toMatch(/^Last checked: \w+ \d{4}$/);
       await act(async () => void (await vi.advanceTimersByTimeAsync(500)));
       expect(row().textContent).toContain('The page shows when it was last checked');
+    });
+
+    it('replaces a stale check date with this month’s rather than adding a second (CE-052)', async () => {
+      process.env.NEXT_PUBLIC_CONTENT_QUALITY_PHASE = '3';
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+      getContentAuthors.mockResolvedValue({
+        authors: [],
+        brands: [{ id: 'b1', name: 'Acme' }],
+        me: { id: 'u1', role: 'admin' },
+      });
+      getContentDraft.mockResolvedValue({
+        ...readable,
+        pageType: 'comparison',
+        bodyHtml: readable.bodyHtml.replace('</h1>', '</h1><p>Last checked: May 2021</p>'),
+      });
+      window.innerWidth = 1440;
+      await renderPage();
+      await act(async () => void (await vi.advanceTimersByTimeAsync(3_000)));
+      const chip = [...container.querySelectorAll<HTMLButtonElement>('header button')].find((b) =>
+        b.textContent?.startsWith('Quality'),
+      )!;
+      await act(async () => chip.click());
+      const row = [...panel()!.querySelectorAll('[aria-label="Your to-dos"] li')].find((li) =>
+        li.textContent?.startsWith('Show when you last checked'),
+      )!;
+      await act(async () =>
+        [...row.querySelectorAll('button')].find((b) => b.textContent === 'Add line')!.click(),
+      );
+      const { state } = (
+        container.querySelector('.ProseMirror') as HTMLElement & { editor: Editor }
+      ).editor;
+      const texts: string[] = [];
+      state.doc.forEach((node) => texts.push(node.textContent));
+      expect(texts.filter((t) => t.startsWith('Last checked:'))).toHaveLength(1);
+      expect(texts[1]).toMatch(/^Last checked: \w+ \d{4}$/);
+      expect(texts[1]).not.toContain('2021');
     });
 
     it('shows nothing of Quality until its first phase is live', async () => {
