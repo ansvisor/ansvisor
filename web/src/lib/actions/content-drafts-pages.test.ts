@@ -44,6 +44,7 @@ const page = (n: number) => ({
   body_html: `<h1>Draft ${n}</h1>`,
   source_url: null,
   author_id: null,
+  author_real_at: null,
   rules: null,
 });
 
@@ -63,6 +64,7 @@ describe('getContentDraftPages', () => {
       bodyHtml: '<h1>Draft 3</h1>',
       sourceUrl: null,
       authorId: null,
+      authorConfirmed: false,
       language: null,
     });
     expect(reads).toEqual([{ brand: BRAND, ids: [id(3), id(9), id(1)] }]);
@@ -71,16 +73,21 @@ describe('getContentDraftPages', () => {
   it('gives the author and the language the draft’s own Language rule names', async () => {
     const rules = (language: unknown) => ({ set: null, overrides: { language } });
     stored = [
-      { ...page(1), author_id: id(7), rules: rules({ value: ' Turkish ' }) },
+      {
+        ...page(1),
+        author_id: id(7),
+        author_real_at: '2026-10-24T10:00:00Z',
+        rules: rules({ value: ' Turkish ' }),
+      },
       // Off, or on without a value of its own: the brand's language.
       { ...page(2), rules: rules({ on: false, value: 'German' }) },
       { ...page(3), rules: rules({ on: true }) },
     ];
     const { pages } = await getContentDraftPages(BRAND, [id(1), id(2), id(3)]);
-    expect(pages.map((p) => [p.authorId, p.language])).toEqual([
-      [id(7), 'Turkish'],
-      [null, null],
-      [null, null],
+    expect(pages.map((p) => [p.authorId, p.authorConfirmed, p.language])).toEqual([
+      [id(7), true, 'Turkish'],
+      [null, false, null],
+      [null, false, null],
     ]);
   });
 

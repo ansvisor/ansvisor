@@ -18,6 +18,7 @@ export const dashboardNavLabelKeys: Record<string, string> = {
   'Prompts Insights': 'promptsInsights',
   Content: 'content',
   Plan: 'contentPlan',
+  Editor: 'contentEditor',
   Opportunities: 'contentOpportunities',
   Library: 'contentLibrary',
   'Site Audit': 'audit',
@@ -46,25 +47,31 @@ export function getDashboardNavLabel(title: string, t: Translator): string {
 }
 
 /**
- * The submenu entry the current page belongs to: its own route, one it is
- * `activeFor` (the editor, for the Library), or a page under either (a
- * topic's page sits under Topics). When one entry's route holds another's
+ * The submenu entry the current page belongs to: its own route, or a page
+ * under it (a topic's page sits under Topics, a draft under the Editor).
+ * When one entry's route holds another's
  * (Opportunities is /dashboard/content, the Library is
  * /dashboard/content/library), the longer match wins, so only one is current.
  */
 export function activeChildHref(children: NavChild[], pathname: string): string | null {
   let best: string | null = null;
   let bestLength = -1;
-  for (const child of children) {
-    for (const route of [child.href, ...(child.activeFor ?? [])]) {
-      const matches = pathname === route || pathname.startsWith(`${route}/`);
-      if (matches && route.length > bestLength) {
-        best = child.href;
-        bestLength = route.length;
-      }
+  for (const { href } of children) {
+    const matches = pathname === href || pathname.startsWith(`${href}/`);
+    if (matches && href.length > bestLength) {
+      best = href;
+      bestLength = href.length;
     }
   }
   return best;
+}
+
+/**
+ * Where a submenu entry links: its route, or the page open under it when it
+ * keeps it (the Editor, on a draft: clicking it doesn't open the draft again).
+ */
+export function childLinkHref(child: NavChild, pathname: string): string {
+  return child.keepsPage && pathname.startsWith(`${child.href}/`) ? pathname : child.href;
 }
 
 /** Brand preferences hide a navigation item entirely; they are intentionally

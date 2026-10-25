@@ -39111,6 +39111,134 @@ comment on table public.content_draft_own_images is
 notify pgrst, 'reload schema';
 
 -- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00271_content_draft_author_confirmed.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00271: Quality — the page's author confirmed by the person (E-E-A-T)
+-- ============================================================================
+-- E-E-A-T counts who stands behind a page: a real, named author (the
+-- byline) with a profile (a bio and links). Many sites already show their
+-- author through the CMS, so picking one of Ansvisor's authors isn't the
+-- only way: the person can confirm, page by page,
+--
+--   * author_real:    the page's author is a real person, named on our site;
+--   * author_profile: their profile there has a bio and links.
+--
+-- Each is the person's own statement, kept with who made it and when; a
+-- trigger stamps both from the session, so no one confirms in another's
+-- name, and unticking clears them.
+
+alter table public.content_drafts
+  add column if not exists author_real_at timestamptz,
+  add column if not exists author_real_by uuid references public.profiles(id) on delete set null,
+  add column if not exists author_profile_at timestamptz,
+  add column if not exists author_profile_by uuid references public.profiles(id) on delete set null;
+
+comment on column public.content_drafts.author_real_at is
+  'Quality (00271): when a member confirmed the page''s author is a real person named on the site (E-E-A-T byline); null when not confirmed.';
+comment on column public.content_drafts.author_profile_at is
+  'Quality (00271): when a member confirmed the author''s profile on the site has a bio and links (E-E-A-T profile); null when not confirmed.';
+
+-- Who and when come from the session, not the request: a confirmation is
+-- stamped now, by the member making it; a change to who alone is undone,
+-- clearing it too. Only a role that bypasses RLS changes who alone: the
+-- profiles FK's on delete set null, run as the table's owner. On insert
+-- OLD is null: a draft starts with only what the session stamps.
+create or replace function public.content_drafts_author_confirmed()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
+begin
+  if new.author_real_at is distinct from old.author_real_at then
+    if new.author_real_at is null then
+      -- Unticked: the profile's word goes with the author's.
+      new.author_real_by := null;
+      new.author_profile_at := null;
+      new.author_profile_by := null;
+      return new;
+    end if;
+    new.author_real_at := now();
+    new.author_real_by := auth.uid();
+  elsif new.author_real_by is distinct from old.author_real_by
+    and (tg_op = 'INSERT'
+         or not (select rolbypassrls from pg_catalog.pg_roles where rolname = current_user)) then
+    new.author_real_by := old.author_real_by;
+  end if;
+  if new.author_profile_at is distinct from old.author_profile_at then
+    if new.author_profile_at is null then
+      new.author_profile_by := null;
+    else
+      new.author_profile_at := now();
+      new.author_profile_by := auth.uid();
+    end if;
+  elsif new.author_profile_by is distinct from old.author_profile_by
+    and (tg_op = 'INSERT'
+         or not (select rolbypassrls from pg_catalog.pg_roles where rolname = current_user)) then
+    new.author_profile_by := old.author_profile_by;
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists content_drafts_author_confirmed on public.content_drafts;
+create trigger content_drafts_author_confirmed
+  before insert or update on public.content_drafts
+  for each row execute function public.content_drafts_author_confirmed();
+
+notify pgrst, 'reload schema';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00272_content_images_storage.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00272: Content images — upload an image instead of pasting its address
+-- ============================================================================
+-- Most people have the screenshot or photo on their computer, not at an
+-- address. The Content Editor's image dialogs and an author's photo upload
+-- it here: a public bucket (the page and the CMS show it by its address),
+-- JPEG, PNG, WebP or GIF, 5 MB at most.
+--
+-- Each organization's images go under its own folder ({organization_id}/
+-- {id}.{ext}). Members have no policy here: the app gives a one-time
+-- upload address for a name it makes, and says who may upload and how
+-- much (on the managed cloud, an organization with an active or trialing
+-- subscription, a number a day; only the app knows a cloud from a
+-- self-host). Nothing is overwritten or deleted from the app; anyone with
+-- an image's address can see it, as any image on a published page.
+
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values (
+  'content-images',
+  'content-images',
+  true,
+  5242880,
+  array['image/jpeg', 'image/png', 'image/webp', 'image/gif']
+)
+-- Run again, it leaves the bucket as an admin may have set it.
+on conflict (id) do nothing;
+
+-- Each one-time upload address the app gives, on the managed cloud: the
+-- day's cap counts them, not the files arrived (an address may be used
+-- later). Only the service role reads and writes it.
+create table if not exists public.content_image_uploads (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  path text not null,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists content_image_uploads_org_created_idx
+  on public.content_image_uploads (organization_id, created_at);
+
+alter table public.content_image_uploads enable row level security;
+
+comment on table public.content_image_uploads is
+  'Content images (00272): each one-time upload address given on the managed cloud, for the daily cap. Service role only.';
+
+notify pgrst, 'reload schema';
+
+-- ─────────────────────────────────────────────────────────────────────────
 -- migrations/00274_content_quality_page_checks.sql
 -- ─────────────────────────────────────────────────────────────────────────
 -- ============================================================================
@@ -39141,4 +39269,75 @@ comment on column public.content_quality_pages.checks is
   'Quality CE-050 (00274): { answerFirst: { block_hash, answers } | null, recommends | disclosure | balance | how: { quote, block_hash } | null, cut: boolean }; null when the page wasn''t read for them.';
 
 notify pgrst, 'reload schema';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00276_organization_insert_columns.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00276: a new organization's plan and billing are set by the server
+-- ============================================================================
+-- An organization's plan, billing state and AI key columns belong to the
+-- server: Stripe's webhook, the billing routes and the key settings write them
+-- with the service role (00062). Onboarding creates the organization with the
+-- person's own session, and sends only its name and slug; every other column
+-- starts at its default.
+--
+-- 00062's guard compares the new row with the old one, so it ran on update
+-- only. On insert there is no old row: the columns are held to their defaults
+-- instead. A role that bypasses row-level security (the service role,
+-- migrations) still sets them, as before.
+
+create or replace function public.guard_organization_server_columns()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
+begin
+  if (select rolbypassrls from pg_catalog.pg_roles where rolname = current_user) then
+    return new;
+  end if;
+
+  if tg_op = 'INSERT' then
+    if new.plan is distinct from 'free'
+       or new.plan_overrides is not null
+       or new.subscription_status is distinct from 'incomplete'
+       or new.subscription_ends_at is not null
+       or new.stripe_customer_id is not null
+       or new.stripe_subscription_id is not null
+       or new.anthropic_api_key_encrypted is not null
+       or new.anthropic_api_key_last4 is not null
+       or new.anthropic_api_key_set_at is not null
+       or new.anthropic_api_key_set_by is not null
+    then
+      raise exception 'organization column is managed server-side and cannot be set from the client'
+        using errcode = '42501';
+    end if;
+    return new;
+  end if;
+
+  if new.plan is distinct from old.plan
+     or new.plan_overrides is distinct from old.plan_overrides
+     or new.subscription_status is distinct from old.subscription_status
+     or new.subscription_ends_at is distinct from old.subscription_ends_at
+     or new.stripe_customer_id is distinct from old.stripe_customer_id
+     or new.stripe_subscription_id is distinct from old.stripe_subscription_id
+     or new.anthropic_api_key_encrypted is distinct from old.anthropic_api_key_encrypted
+     or new.anthropic_api_key_last4 is distinct from old.anthropic_api_key_last4
+     or new.anthropic_api_key_set_at is distinct from old.anthropic_api_key_set_at
+     or new.anthropic_api_key_set_by is distinct from old.anthropic_api_key_set_by
+  then
+    raise exception 'organization column is managed server-side and cannot be set from the client'
+      using errcode = '42501';
+  end if;
+
+  return new;
+end;
+$$;
+
+drop trigger if exists organizations_guard_server_columns on public.organizations;
+
+create trigger organizations_guard_server_columns
+  before insert or update on public.organizations
+  for each row
+  execute function public.guard_organization_server_columns();
 

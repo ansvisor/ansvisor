@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { dashboardNav } from '@/config/dashboard';
 import {
   activeChildHref,
+  childLinkHref,
   dashboardNavLabelKeys,
   getDashboardNavGroupLabel,
   getDashboardNavLabel,
@@ -40,19 +41,16 @@ describe('getDashboardNavLabel', () => {
   });
 
   // Content Editor (CE-001): Content is a group, the Plan first and new
-  // (CE-014); Opportunities keeps today's route.
-  it('lists the Plan, Opportunities and the Library under Content', () => {
+  // (CE-014), then the Editor; Opportunities keeps today's route.
+  it('lists the Plan, the Editor, Opportunities and the Library under Content', () => {
     const items = dashboardNav.flatMap((group) => group.items);
     const content = items.find((item) => item.title === 'Content')!;
     expect(content.href).toBe('/dashboard/content');
     expect(content.children).toEqual([
       { title: 'Plan', href: '/dashboard/content/plan', badge: 'New' },
+      { title: 'Editor', href: '/dashboard/content/editor', keepsPage: true },
       { title: 'Opportunities', href: '/dashboard/content' },
-      {
-        title: 'Library',
-        href: '/dashboard/content/library',
-        activeFor: ['/dashboard/content/editor'],
-      },
+      { title: 'Library', href: '/dashboard/content/library' },
     ]);
   });
 
@@ -140,10 +138,13 @@ describe('activeChildHref', () => {
     );
   });
 
-  it('marks the Library while a draft is open in the editor', () => {
+  it('marks the Editor while a draft is open in it', () => {
     const items = dashboardNav.flatMap((group) => group.items);
     const children = items.find((item) => item.title === 'Content')!.children!;
     expect(activeChildHref(children, '/dashboard/content/editor/d1')).toBe(
+      '/dashboard/content/editor',
+    );
+    expect(activeChildHref(children, '/dashboard/content/library')).toBe(
       '/dashboard/content/library',
     );
     expect(activeChildHref(children, '/dashboard/content/3f2a')).toBe('/dashboard/content');
@@ -162,5 +163,26 @@ describe('activeChildHref', () => {
     );
     expect(activeChildHref(prompts, '/dashboard/prompts/topicsx')).toBeNull();
     expect(activeChildHref(content, '/dashboard/audit')).toBeNull();
+  });
+});
+
+describe('childLinkHref', () => {
+  const children = dashboardNav
+    .flatMap((group) => group.items)
+    .find((item) => item.title === 'Content')!.children!;
+  const editor = children.find((c) => c.title === 'Editor')!;
+  const library = children.find((c) => c.title === 'Library')!;
+
+  it('keeps the Editor on the draft open, so clicking it doesn’t open it again', () => {
+    expect(childLinkHref(editor, '/dashboard/content/editor/d1')).toBe(
+      '/dashboard/content/editor/d1',
+    );
+    expect(childLinkHref(editor, '/dashboard/content/library')).toBe('/dashboard/content/editor');
+  });
+
+  it('links any other entry to its own route', () => {
+    expect(childLinkHref(library, '/dashboard/content/library')).toBe('/dashboard/content/library');
+    const topics = { title: 'Topics', href: '/dashboard/prompts/topics' };
+    expect(childLinkHref(topics, '/dashboard/prompts/topics/t1')).toBe('/dashboard/prompts/topics');
   });
 });
