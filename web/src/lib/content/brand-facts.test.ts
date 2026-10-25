@@ -109,6 +109,11 @@ describe('pagePrices', () => {
     // A dash after a plan's name isn't a range.
     expect(pagePrices('Pro – $49 per month')[0]).toMatchObject({ amount: 49 });
     expect(pagePrices('Since 2019 199 € per month')[0]).toMatchObject({ amount: 199 });
+    // A currency after an amount isn't the next one's: "Ridge 28 $129" is $129.
+    expect(pagePrices('Ridge 28 $129').map((p) => p.amount)).toEqual([129]);
+    // With its ends, a range is read as two prices, for priceRanges' readers.
+    expect(pagePrices('Ridge 28 – $129').map((p) => p.amount)).toEqual([]);
+    expect(pagePrices('Ridge 28 – $129', { rangeEnds: true }).map((p) => p.amount)).toEqual([129]);
   });
 });
 
@@ -133,6 +138,11 @@ describe('priceRanges', () => {
     expect(ends('$10–€20')).toEqual([]);
     expect(ends('Raised $1–$2M')).toEqual([]);
     expect(ends('$129 – 2 colors')).toEqual([]);
+    // One currency is a range only by a dash, no space, and no word joined to its end.
+    expect(ends('Only $19 - 100% organic cotton')).toEqual([]);
+    expect(ends('$25-30-day returns, $19-100%')).toEqual([]);
+    expect(ends('$129 – 150 reviews')).toEqual([]);
+    expect(ends('$5 a 12-pack, 119 und 139 €')).toEqual([]);
   });
 });
 

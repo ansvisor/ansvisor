@@ -117,82 +117,150 @@ export function articleJsonLd({
 
 /**
  * A product page's price as the page states it (Quality spec §11, CE-053):
- * one price is the product's Offer; several (sizes, a range) give its low
- * and high. None when the page states none, or in more than one currency
- * (whose is which isn't sure). Each amount is read by the words around it,
- * so a sentence keeps its price beside one that isn't: "$129 (was $159)",
- * "$129, or 4 payments of $32.25", "€129 inkl. MwSt.".
+ * one price is the product's Offer, a range it writes ("$119–$139") its low
+ * and high. Each amount is read by the words around it, so a sentence keeps
+ * its price beside one that isn't: "$129 (was $159)", "$129, or 4 payments
+ * of $32.25", "€129 inkl. MwSt.". A price on the page is pasted as the
+ * product's, so nothing is guessed: prices that differ ("Small: $119",
+ * "Large: $139", or one this reading missed) are `several`, for the person
+ * to write once or as a range.
  */
 export type PageOffer =
   | { price: number; currency: string }
   | { low: number; high: number; currency: string };
+export type PageOfferRead = PageOffer | { several: string[] } | null;
 
 /**
  * Just before an amount, words that make it no price of the product's: a
- * threshold ("orders over $50", "spend $75", "minimum $20"), an old price
- * ("was", "instead of", "statt"), a saving or an extra ("save $30", "an
- * extra $10"), an installment ("4 payments of $32"), a bundle ("2 for $30").
+ * threshold ("orders over $50", "spend $75", "minimum $20", "Versand ab
+ * 50 €"), an old price ("was", "instead of", "statt", "au lieu de"), a
+ * saving, a worth or an extra ("save up to $30", "worth $30", "an extra
+ * $10", "earn $13"), an installment ("4 payments of $32"), a bundle ("2 for
+ * $30"), or a bill added to it ("+ $9.95", "zzgl. 4,95 €").
  */
 const NOT_THE_PRICE_BEFORE =
-  /(?:(?<![\p{L}-])(?:over|above|more\s+than|at\s+least|minimum(?:\s+(?:order|spend|purchase))?(?:\s+of)?|min\.|spend(?:ing)?|orders?\s+(?:over|above|of|from)|was|were|regularly|reg\.|originally|instead\s+of|compare\s+at|list\s+price|msrp|rrp|uvp|statt|save|saving|savings\s+of|(?:an?\s+)?extra|additional|discount\s+of|(?:payments?|installments?|instalments?|deposit)\s+of)|(?:^|\(|\bbuy\s+|\bany\s+|\bor\s+)\s*(?:\d{1,2}|two|three|four|five)\s+for|\d\s*[x×])\s*:?\s*$/iu;
+  /(?:(?<![\p{L}-])(?:over|above|more\s+than|at\s+least|minimum(?:\s+(?:order|spend|purchase))?(?:\s+of)?|min\.?(?:\s+(?:order|spend|purchase))?(?:\s+of)?|spend(?:ing)?|orders?\s+(?:over|above|of|from)|was|were|instead\s+of|statt|bisher|vorher|au\s+lieu\s+de|prix\s+barré|antes|precio\s+anterior|save(?:\s+up\s+to)?|saving|savings(?:\s+of)?|you\s+save\b[^.;$€£¥₹₺]{0,12}|up\s+to|worth|valued\s+at|value\s+of|earn|(?:an?\s+)?extra|additional|discount\s+of|gift\s+cards?|(?:store\s+)?credit|(?:payments?|installments?|instalments?|deposit)\s+of|zzgl|zuzüglich)|(?:shipping|delivery|versand|livraison|env[ií]o|kargo)\p{L}*(?:\s+\p{L}+){0,2}\s+(?:ab|dès|desde|from)|(?:^|\(|\bbuy\s+|\bany\s+|\bor\s+)\s*(?:\d{1,2}|two|three|four|five)\s+for|\d\s*[x×]|\+)\s*:?\s*\(?\s*$/iu;
+/** "plus $9.95 shipping": lower case, so a model named Plus keeps its price. */
+const PLUS_BEFORE = /(?<!\p{L})plus\s*$/u;
 /**
- * Before an amount in its clause, words of another bill: shipping, a
- * financing plan, an add-on or an accessory, setup ("Free shipping on
- * orders over $50", "Pay in 4 with Klarna: $32.25", "Add a rain cover for
- * $19").
+ * An old price that is the product's when it's the page's only one ("Regular
+ * price $129"), and isn't beside another ("Regular price $159 Sale price
+ * $129").
+ */
+const OLD_PRICE_BEFORE =
+  /(?<!\p{L})(?:regular(?:ly)?|reg\.?|original(?:ly)?|retail|list|compare\s+at|msrp|rrp|uvp|eski|liste|piyasa)(?:\s+(?:price|fiyat(?:ı)?))?\s*:?\s*$/iu;
+/**
+ * Within its last words before an amount, another bill: shipping (free
+ * shipping is no bill: "with free shipping costs $129") or financing
+ * ("Shipping: $5.99", "Pay in 4 with Klarna: $32.25").
  */
 const ANOTHER_BILL =
-  /(?<!\p{L})(?:shipping|delivery|postage|versand\p{L}*|livraison|env[ií]os?|kargo\p{L}*|frete|affirm|klarna|afterpay|sezzle|taksit\p{L}*|financing|finanzierung|interest[\s-]free|sold\s+separately|ayrı\s+satılır|add(?:-ons?|\s+an?|\s+on)|accessor(?:y|ies)|aksesuar\p{L}*|zubehör|installation|setup|set-up|kurulum)(?!\p{L})/iu;
+  /(?<!(?:free|kostenlose[rn]?|gratuite?|gratis|ücretsiz|bedava)\s+)(?<!\p{L})(?:shipping|delivery|postage|versand(?!kostenfrei)\p{L}*|livraison|env[ií]os?|kargo\p{L}*|frete|affirm|klarna|afterpay|sezzle|taksit\p{L}*|financing|finanzierung|interest[\s-]free)(?!\p{L})/iu;
+/**
+ * In its clause before an amount, an add-on, an accessory by its label or
+ * setup ("Add a waterproof rain cover for $19", "Accessories: rain cover
+ * $19", "Installation: $99").
+ */
+const ADD_ON =
+  /(?<!\p{L})(?:sold\s+separately|ayrı\s+satılır|add(?:-ons?|\s+an?|\s+on)|(?:accessor(?:y|ies)|aksesuar\p{L}*|zubehör)\s*:|installation|setup|set-up|kurulum)(?!\p{L})/iu;
 /**
  * Right after an amount: a unit price ("$0.50/oz", "€12 pro kg"), a
- * range's period ("$10–$20 a month"), what it isn't ("$30 off", "a $10 coupon", "$5 fee", "$30 less", "500 TL
- * üzeri", "₺1.299 yerine"), a bundle ("$25 for 2"), financing ("$32.25
- * with Klarna") or an add-on ("$19, sold separately").
+ * range's period ("$10–$20 a month"), what it isn't ("$30 off", "a $10
+ * coupon", "$5 fee", "$30 less", "($30 value)", "$13 in rewards", "500 TL
+ * üzeri", "₺1.299 yerine"), another bill ("$9.95 shipping", "$4 tax"), a
+ * bundle ("$25 for 2"), financing ("$32.25 with Klarna") or an add-on
+ * ("$19, sold separately").
  */
 const NOT_THE_PRICE_AFTER =
-  /^(?:\s*(?:\/\s*|per\s+|pro\s+|a\s+)(?:100\s?)?(?:kg|g|lb|lbs|oz|fl\.?\s?oz|ml|cl|l|unit|ct|count|piece|pc|item|sq\.?\s?ft|m²|m2|stück|adet|serving)(?!\p{L})|\s*(?:off|discount|coupon|(?:store\s+)?credits?|gift\s+cards?|fee|surcharge|deposit|rebate|cash\s?back|savings?|less|more|cheaper|yerine|(?:ve\s+)?üzeri|minimum|or\s+(?:more|above|over))(?!\p{L})|\s*(?:\/\s*|per\s+|a\s+|an\s+|each\s+)(?:mo|mth|month|yr|year|wk|week|day)(?!\p{L})|\s*for\s+(?:\d|two|three|four|five)(?![\p{N}\p{L}])|\s*(?:today\s+)?(?:with|via|through)\s+(?:affirm|klarna|afterpay|sezzle)(?!\p{L})|[^.;]{0,6}(?:sold\s+)?separately|[^.;]{0,6}ayrı\s+satılır)/iu;
+  /^(?:\s*(?:\/\s*|per\s+|pro\s+|a\s+)(?:100\s?)?(?:kg|g|lb|lbs|oz|fl\.?\s?oz|ml|cl|l|unit|ct|count|piece|pc|item|sq\.?\s?ft|m²|m2|stück|adet|serving)(?!\p{L})|\s*(?:\/\s*|per\s+|pro\s+|im\s+|a\s+|an\s+|each\s+|par\s+|al\s+|por\s+)(?:mo|mth|month|monat|mois|mes|yr|year|jahr|an|año|wk|week|day)(?!\p{L})|\s*(?:monthly|yearly|annually|monatlich|jährlich|aylık|yıllık)(?!\p{L})|\s*(?:off|discount|coupon|(?:store\s+)?credits?|gift\s+cards?|fee|surcharge|deposit|rebate|cash\s?back|savings?|less|more|cheaper|value|in\s+(?:rewards?|credit|points)|trade-in|yerine|(?:ve\s+)?üzeri|minimum|or\s+(?:more|above|over))(?!\p{L})|\s*(?:shipping|delivery|postage|s&h|handling|versand\p{L}*|porto|livraison|env[ií]os?|kargo\p{L}*|frete|(?:sales\s+)?tax(?:es)?|vat|mwst|kdv)(?!\p{L})(?!\s+(?:incl\p{L}*|inkl\p{L}*|dahil|included))|\s*for\s+(?:\d|two|three|four|five)(?![\p{N}\p{L}])|\s*(?:today\s+)?(?:with|via|through)\s+(?:affirm|klarna|afterpay|sezzle)(?!\p{L})|[^.;]{0,6}(?:sold\s+)?separately|[^.;]{0,6}ayrı\s+satılır)/iu;
 
-/** Whether an amount, from `at` to `end` in its sentence, is the product's price by the words around it. */
-function theProducts(sentence: string, at: number, end: number, since: number): boolean {
+/** How an amount reads by the words around it: another bill, an old price, or the product's. */
+function amountKind(
+  sentence: string,
+  at: number,
+  end: number,
+  since: number,
+): 'not' | 'old' | 'price' {
   // Its clause, since the amount before it: "Free shipping, and it's $129" keeps $129.
   const lead = sentence
     .slice(Math.max(since, at - 48), at)
     .split(/,\s|;|\s[–—]\s/u)
     .pop()!;
-  const after = sentence.slice(end, end + 40);
-  return !(
+  const lastWords = lead.trim().split(/\s+/).slice(-5).join(' ');
+  if (
     NOT_THE_PRICE_BEFORE.test(lead) ||
-    ANOTHER_BILL.test(lead) ||
-    NOT_THE_PRICE_AFTER.test(after)
-  );
+    PLUS_BEFORE.test(lead) ||
+    ANOTHER_BILL.test(lastWords) ||
+    ADD_ON.test(lead) ||
+    NOT_THE_PRICE_AFTER.test(sentence.slice(end, end + 40))
+  ) {
+    return 'not';
+  }
+  return OLD_PRICE_BEFORE.test(lead) ? 'old' : 'price';
 }
 
-export function pageOffer(texts: readonly string[]): PageOffer | null {
-  const amounts: { low: number; high: number; currency: string }[] = [];
-  for (const sentence of texts.flatMap((text) => sentencesOf(text))) {
-    const found = [
+/** Abbreviations a price sits beside, kept from ending a sentence ("$99 (reg. $129)", "zzgl. 4,95 €"). */
+const ABBREVIATION = /(?<!\p{L})(reg|min|zzgl|inkl|exkl|incl|excl|approx|ca|uvp|vs)\.(?=\s)/giu;
+
+export function pageOffer(texts: readonly string[]): PageOfferRead {
+  const found: {
+    low: number;
+    high: number;
+    currency: string;
+    text: string;
+    range: boolean;
+    old: boolean;
+  }[] = [];
+  const sentences = texts.flatMap((text) =>
+    // A one-dot leader keeps the abbreviation's dot: sentencesOf puts it back.
+    sentencesOf(text.replace(ABBREVIATION, '$1․')),
+  );
+  for (const sentence of sentences) {
+    const ranges = priceRanges(sentence);
+    const inRange = (at: number) => ranges.some((r) => at >= r.at && at < r.at + r.text.length);
+    const amounts = [
       // A price by the month or the year is a plan's or a payment's, not a product's.
-      ...pagePrices(sentence)
-        .filter((price) => price.period === null)
-        .map((price) => ({ ...price, low: price.amount, high: price.amount })),
-      ...priceRanges(sentence),
+      ...pagePrices(sentence, { rangeEnds: true })
+        .filter((price) => price.period === null && !inRange(price.at))
+        .map((price) => ({ ...price, low: price.amount, high: price.amount, range: false })),
+      ...ranges.map((range) => ({ ...range, range: true })),
     ].sort((a, b) => a.at - b.at);
     let since = 0;
-    for (const price of found) {
-      const end = price.at + price.text.length;
-      if (price.low > 0 && theProducts(sentence, price.at, end, since)) {
-        amounts.push({ low: price.low, high: price.high, currency: price.currency });
+    for (const amount of amounts) {
+      const end = amount.at + amount.text.length;
+      const kind = amountKind(sentence, amount.at, end, since);
+      if (amount.low > 0 && kind !== 'not') {
+        found.push({
+          low: amount.low,
+          high: amount.high,
+          currency: amount.currency,
+          text: amount.text.trim(),
+          range: amount.range,
+          old: kind === 'old',
+        });
       }
       since = end;
     }
   }
-  if (!amounts.length) return null;
-  const currencies = new Set(amounts.map((a) => a.currency));
-  if (currencies.size > 1) return null;
-  const [currency] = currencies;
-  const low = Math.min(...amounts.map((a) => a.low));
-  const high = Math.max(...amounts.map((a) => a.high));
-  return low === high ? { price: low, currency } : { low, high, currency };
+  // An old price counts only where the page gives no other.
+  const prices = found.some((p) => !p.old) ? found.filter((p) => !p.old) : found;
+  if (!prices.length) return null;
+  const [first] = prices;
+  const same = (p: (typeof prices)[number]) => p.currency === first.currency;
+  const ranges = prices.filter((p) => p.range);
+  const range = ranges[0];
+  if (
+    prices.every(same) &&
+    (range
+      ? ranges.every((r) => r.low === range.low && r.high === range.high) &&
+        prices.every((p) => p.low >= range.low && p.high <= range.high)
+      : prices.every((p) => p.low === first.low))
+  ) {
+    return range
+      ? { low: range.low, high: range.high, currency: range.currency }
+      : { price: first.low, currency: first.currency };
+  }
+  return { several: [...new Set(prices.map((p) => p.text))] };
 }
 
 /** The page's opening paragraph (past a byline or a date), as Product's description: up to 500 characters. */

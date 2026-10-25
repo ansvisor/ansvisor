@@ -133,8 +133,9 @@ const CODE = `(?<![\\p{L}])(?:${ISO.join('|')}|TL)(?![\\p{L}])`;
 /** Thousands by a comma or a point, or by a space when the currency comes after ("1 299 €"). */
 const amount = (groups: string) =>
   String.raw`(?<![\d.,])(?:\d{1,3}(?:${groups}\d{3})+(?:[.,]\d{1,2})?|\d+(?:[.,]\d{1,2})?)(?![\d]|[.,]\d)`;
+/** A currency after an amount, not one before the next ("Ridge 28 $129": $129, not 28 $). */
 const PRICE = new RegExp(
-  `(?<before>${MARK}|${CODE})\\s?(?<a>${amount('[.,]')})|(?<b>${amount('[.,\\s]')})\\s?(?<after>${MARK}|${CODE}|zł)`,
+  `(?<before>${MARK}|${CODE})\\s?(?<a>${amount('[.,]')})|(?<b>${amount('[.,\\s]')})\\s?(?<after>${MARK}|${CODE}|zł)(?!\\s?\\d)`,
   'gu',
 );
 const MAGNITUDE =
@@ -188,9 +189,11 @@ export interface PagePrice {
 
 /**
  * The prices a sentence gives, the way the API reads a brand's: a scale
- * ("$2M"), a range ("$10–$20") and "$10 off" are none.
+ * ("$2M"), a range ("$10–$20") and "$10 off" are none. With `rangeEnds`, a
+ * range's ends are read too, for a reader that takes its ranges apart
+ * (priceRanges): "Ridge 28 – $129" is a price after all.
  */
-export function pagePrices(sentence: string): PagePrice[] {
+export function pagePrices(sentence: string, { rangeEnds = false } = {}): PagePrice[] {
   const out: PagePrice[] = [];
   for (const m of sentence.matchAll(PRICE)) {
     const g = m.groups!;
@@ -198,7 +201,7 @@ export function pagePrices(sentence: string): PagePrice[] {
     const before = sentence.slice(Math.max(0, m.index - 24), m.index);
     const after = sentence.slice(end, end + 40);
     if (MAGNITUDE.test(after) || /^\s*off(?!\p{L})/iu.test(after)) continue;
-    if (RANGE_AFTER.test(after) || RANGE_BEFORE.test(before)) continue;
+    if (!rangeEnds && (RANGE_AFTER.test(after) || RANGE_BEFORE.test(before))) continue;
     const currency = currencyOf(g.before ?? g.after);
     const value = amountOf(g.a ?? g.b);
     if (!currency || value === null) continue;
@@ -218,7 +221,7 @@ export function pagePrices(sentence: string): PagePrice[] {
 const rangeEnd = (name: string) =>
   `(?:(?<${name}Before>${MARK}|${CODE})\\s?)?(?<${name}>${amount('[.,]')})(?:\\s?(?<${name}After>${MARK}|${CODE}|zł))?`;
 const PRICE_RANGE = new RegExp(
-  `${rangeEnd('low')}\\s?(?:[–—-]|(?<=\\s)(?:to|bis|à|a|ila|ile|and|und|et|y)(?=\\s))\\s?${rangeEnd('high')}`,
+  `${rangeEnd('low')}(?<join>\\s?(?:[–—-]|(?<=\\s)(?:to|bis|à|a|ila|ile|and|und|et|y)(?=\\s))\\s?)${rangeEnd('high')}`,
   'giu',
 );
 
@@ -233,8 +236,11 @@ export interface PriceRange {
 
 /**
  * The price ranges a sentence gives (the ones pagePrices leaves out): the
- * same currency on both ends, or one written once, as ranges are ("$119–139",
- * "119–139 €"; "Ridge 28 – $129" is a name and a price), the low end first.
+ * same currency on both ends, the low end first. One written once is a
+ * range only as ranges are written, a dash and no space ("$119–139",
+ * "119–139 €"), with no word joined to its end: "Ridge 28 – $129" is a
+ * name and a price, "$19 - 100% cotton" and "$25-30-day returns" aren't
+ * ranges.
  */
 export function priceRanges(sentence: string): PriceRange[] {
   const out: PriceRange[] = [];
@@ -247,8 +253,11 @@ export function priceRanges(sentence: string): PriceRange[] {
     const after = sentence.slice(m.index + m[0].length, m.index + m[0].length + 40);
     const lowMarked = !!(g.lowBefore || g.lowAfter);
     const highMarked = !!(g.highBefore || g.highAfter);
-    const written =
-      (lowMarked && highMarked) || (!!g.lowBefore && !highMarked) || (!lowMarked && !!g.highAfter);
+    const once =
+      /^[–—-]$/u.test(g.join) &&
+      !/^(?:%|-?\p{L})/u.test(after) &&
+      ((!!g.lowBefore && !highMarked) || (!lowMarked && !!g.highAfter));
+    const written = (lowMarked && highMarked) || once;
     if (!written || currencies.size !== 1 || currencies.has(null) || MAGNITUDE.test(after)) {
       continue;
     }

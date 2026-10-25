@@ -362,6 +362,21 @@ describe('BeforePublish', () => {
       product: { ...product, offer: null },
     });
     expect(rows().some((row) => row.startsWith('Product schema needs the price'))).toBe(true);
+    // Prices that differ: the code doesn't guess which is the product's.
+    await render(quality(), {
+      pageType: 'product_page',
+      title: 'Ridge 28 daypack',
+      product: { ...product, offer: { several: ['$119', '$139'] } },
+    });
+    expect(rows().find((row) => row.startsWith('Product schema needs one price'))).toContain(
+      'more than one price ($119, $139)',
+    );
+    expect(dialog().querySelector('pre')).toBeNull();
+    await render(quality(), {
+      pageType: 'product_page',
+      title: 'Ridge 28 daypack',
+      product: { ...product, offer: null },
+    });
     expect(dialog().querySelector('pre')).toBeNull();
     expect(
       [...dialog().querySelectorAll('button')].some((b) => b.textContent === 'Copy JSON-LD'),

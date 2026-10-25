@@ -91,7 +91,13 @@ import {
 } from '@/lib/content/clean-html';
 import { PAGE_READ_DELAY_MS, draftTitleFromDoc, safeLinkHref } from '@/lib/content/editor';
 import { JsonLd } from '@/lib/content/json-ld-node';
-import { firstImage, isArticlePage, openingParagraph, pageOffer } from '@/lib/content/page-schema';
+import {
+  firstImage,
+  isArticlePage,
+  openingParagraph,
+  pageName,
+  pageOffer,
+} from '@/lib/content/page-schema';
 import { PLACEHOLDER, pagePlaceholders, placeholderIn } from '@/lib/content/placeholders';
 import { HANDOFF_KEYS, handOffItems } from '@/lib/content/hand-off';
 import {
@@ -3481,7 +3487,9 @@ export function DraftEditor({
             noDisclosure:
               aiChecks?.disclosure?.found === false && !checksOff(profile).has('disclosure'),
             article: isArticlePage(pageType),
-            product: !!productSchema,
+            // Only where Before you publish has its code: a name and one price.
+            product:
+              !!productSchema?.offer && !('several' in productSchema.offer) && !!pageName(title),
             onReview: () => {
               setExportOpen(null);
               openBeforePublish('export', exportOpen.destination);

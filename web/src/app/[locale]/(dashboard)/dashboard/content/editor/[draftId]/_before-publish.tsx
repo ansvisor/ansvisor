@@ -15,7 +15,7 @@ import {
   articleJsonLd,
   isArticlePage,
   productJsonLd,
-  type PageOffer,
+  type PageOfferRead,
   jsonLdScript,
   localDate,
   pageName,
@@ -100,7 +100,7 @@ export function BeforePublish({
    * paragraph, its images and the price it states (pageOffer); null on
    * other pages.
    */
-  product?: { description: string | null; images: string[]; offer: PageOffer | null } | null;
+  product?: { description: string | null; images: string[]; offer: PageOfferRead } | null;
   /** Opened by Mark ready, by Export, or by Send to CMS. */
   mode?: 'markReady' | 'export' | 'send';
   paste: ReadyToPaste;
@@ -158,8 +158,10 @@ export function BeforePublish({
   const article = !product && isArticlePage(pageType);
   // Product needs its name and price: without either, no code to paste.
   const productName = pageName(title);
+  const offer = product?.offer && !('several' in product.offer) ? product.offer : null;
   const productLd =
-    product?.offer &&
+    product &&
+    offer &&
     productName &&
     jsonLdScript(
       productJsonLd({
@@ -167,7 +169,7 @@ export function BeforePublish({
         description: product.description,
         images: product.images,
         brandName,
-        offer: product.offer,
+        offer,
       }),
     );
   const jsonLd = productLd
@@ -243,14 +245,22 @@ export function BeforePublish({
                     detail: t('schema.productNoNameDetail'),
                   },
                 ]),
-            ...(product.offer
+            ...(offer
               ? []
               : [
-                  {
-                    state: 'missing' as const,
-                    title: t('schema.productNoPrice'),
-                    detail: t('schema.productNoPriceDetail'),
-                  },
+                  product.offer && 'several' in product.offer
+                    ? {
+                        state: 'missing' as const,
+                        title: t('schema.productSeveral'),
+                        detail: t('schema.productSeveralDetail', {
+                          prices: product.offer.several.join(', '),
+                        }),
+                      }
+                    : {
+                        state: 'missing' as const,
+                        title: t('schema.productNoPrice'),
+                        detail: t('schema.productNoPriceDetail'),
+                      },
                 ]),
           ]
       : article

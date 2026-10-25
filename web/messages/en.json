@@ -4618,7 +4618,9 @@
           "productNoName": "Product schema needs the product's name",
           "productNoNameDetail": "The title is empty or still has a placeholder in square brackets: write the product's name there. Without it, search engines show no product result.",
           "productNoPrice": "Product schema needs the price",
-          "productNoPriceDetail": "The page states no price (or more than one currency): add the product's price to the page, or connect your product feed. Without it, search engines show no product result.",
+          "productNoPriceDetail": "The page states no price: add the product's price to the page, or connect your product feed. Without it, search engines show no product result.",
+          "productSeveral": "Product schema needs one price",
+          "productSeveralDetail": "The page states more than one price ({prices}), so the code doesn't guess which is the product's. Write its price once, or its range as one (\"$119–$139\"), or connect your product feed.",
           "other": "Schema for this page type",
           "otherDetail": "Check what your CMS adds for it (Product, ItemList…). The code Ansvisor gives here is for articles."
         },
