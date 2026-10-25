@@ -8,7 +8,6 @@ import { rebuildDraftBrief, rebuildSources } from '../lib/content-brief.js';
 import { DeliveryError, sendContentPages, sendInput } from '../lib/content-delivery.js';
 import { checkWebflowPublished } from '../lib/cms/webflow-status.js';
 import { liveAddress, publishDraft } from '../lib/content-published.js';
-import { onBrandDomain } from '../lib/audit/host.js';
 import { cmsLimiter } from '../middleware/rate-limiter.js';
 import { stopDraftRun } from '../lib/content-runs.js';
 import { startDraftWriting, writeDraftInput } from '../lib/content-writer.js';
@@ -115,19 +114,7 @@ router.post('/:draftId/publish', async (req, res) => {
       return res.status(404).json({ error: 'Not found', code: 'not_found' });
     }
     await assertBrandAccess(draft.brand_id, req.user.id);
-    const { data: domains, error: domainsError } = await supabaseAdmin
-      .from('brand_domains')
-      .select('domain')
-      .eq('brand_id', draft.brand_id);
-    if (domainsError) throw new Error(domainsError.message);
-    const published = await publishDraft(draft, url, req.user.id);
-    return res.json({
-      ...published,
-      onBrandDomain: onBrandDomain(
-        url,
-        (domains ?? []).map((d) => d.domain),
-      ),
-    });
+    return res.json(await publishDraft(draft, url, req.user.id));
   } catch (err) {
     if (ERROR_CODES[err?.status]) {
       return res

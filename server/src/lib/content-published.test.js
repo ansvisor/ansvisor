@@ -2,61 +2,100 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 /**
  * A page marked Published at its live address (CE-013), by a person or a
- * CMS: the draft, its History version, and a linked action's page and
- * Publish task.
+ * CMS: the draft, its History version, and a linked action's measured pages
+ * and Publish task. The tables live in memory, their filters applied.
  */
 
-const db = {
-  action: null,
-  others: [],
-  tasks: [],
-  writes: [],
-  rpcs: [],
-};
+let tables;
+const clone = (value) => JSON.parse(JSON.stringify(value));
+const rpcs = [];
+const events = [];
+
+function query(name) {
+  const filters = [];
+  let write = null;
+  let returning = false;
+  const rows = () => tables[name].filter((row) => filters.every((f) => f(row)));
+  const run = () => {
+    if (write?.insert) {
+      tables[name].push(write.insert);
+      return { data: null, error: null };
+    }
+    if (write?.update) {
+      const hit = rows();
+      for (const row of hit) Object.assign(row, clone(write.update));
+      return { data: returning ? hit.map((r) => ({ ...r })) : null, error: null };
+    }
+    return { data: rows().map((r) => clone(r)), error: null };
+  };
+  const chain = {
+    select: () => ((returning = true), chain),
+    eq: (col, value) => (filters.push((row) => row[col] === value), chain),
+    neq: (col, value) => (filters.push((row) => row[col] !== value), chain),
+    is: (col, value) => (filters.push((row) => (row[col] ?? null) === value), chain),
+    in: (col, values) => (filters.push((row) => values.includes(row[col])), chain),
+    // The latest delivery is the only one these tests give a draft.
+    order: () => chain,
+    limit: () => chain,
+    update: (row) => ((write = { update: row }), chain),
+    insert: (row) => ((write = { insert: row }), chain),
+    maybeSingle: async () => {
+      const { data } = run();
+      return { data: Array.isArray(data) ? (data[0] ?? null) : data, error: null };
+    },
+    then: (resolve) => resolve(run()),
+  };
+  return chain;
+}
+
 vi.mock('../config/supabase.js', () => ({
   default: {
-    from: (table) => {
-      const q = { table, filters: [], write: null };
-      const result = () => {
-        if (q.write) {
-          db.writes.push({ table, ...q.write, filters: q.filters });
-          return { data: null, error: null };
-        }
-        if (table === 'actions') return { data: db.action, error: null };
-        if (table === 'content_drafts') return { data: db.others, error: null };
-        if (table === 'action_tasks') return { data: db.tasks, error: null };
-        return { data: null, error: null };
-      };
-      const chain = {
-        select: () => chain,
-        eq: (col, value) => (q.filters.push(['eq', col, value]), chain),
-        neq: (col, value) => (q.filters.push(['neq', col, value]), chain),
-        is: (col, value) => (q.filters.push(['is', col, value]), chain),
-        update: (row) => ((q.write = { update: row }), chain),
-        insert: (row) => ((q.write = { insert: row }), chain),
-        maybeSingle: async () => result(),
-        then: (resolve) => resolve(result()),
-      };
-      return chain;
-    },
+    from: (name) => query(name),
     rpc: async (fn, args) => {
-      db.rpcs.push({ fn, args });
+      rpcs.push({ fn, args });
       return { data: 'v1', error: null };
     },
   },
 }));
+vi.mock('./logger.js', () => ({
+  logger: { warn: (...args) => events.push(args), error: () => {} },
+}));
 
-const { liveAddress, markDraftPublished, publishDraft } = await import('./content-published.js');
+const { liveAddress, markDeliveryPublished, publishDraft } = await import('./content-published.js');
 
-const URL_LIVE = 'https://www.acme.example/blog/cold-brew';
-const draft = (over = {}) => ({ id: 'dr1', brand_id: 'b1', action_id: null, ...over });
+const LIVE = 'https://www.acme.example/blog/cold-brew';
+
+const draft = (over = {}) => ({
+  id: 'dr1',
+  brand_id: 'b1',
+  action_id: null,
+  method: 'create',
+  source_url: null,
+  status: 'ready',
+  archived_at: null,
+  ...over,
+});
+const task = (id, key, status = 'todo') => ({ id, action_id: 'a1', task_key: key, status });
 
 beforeEach(() => {
-  db.action = null;
-  db.others = [];
-  db.tasks = [];
-  db.writes = [];
-  db.rpcs = [];
+  tables = {
+    content_drafts: [draft()],
+    actions: [
+      {
+        id: 'a1',
+        brand_id: 'b1',
+        deleted_at: null,
+        updated_at: '2026-10-20T10:00:00Z',
+        payload: { source: 'content_draft', pages: [] },
+      },
+    ],
+    action_tasks: [],
+    action_events: [],
+    brand_domains: [{ brand_id: 'b1', domain: 'acme.example' }],
+    content_draft_deliveries: [],
+  };
+  rpcs.length = 0;
+  events.length = 0;
 });
 
 describe('liveAddress', () => {
@@ -71,86 +110,125 @@ describe('liveAddress', () => {
   });
 });
 
-describe('markDraftPublished', () => {
-  it('publishes the page at its address and keeps it in History', async () => {
-    await markDraftPublished('dr1', URL_LIVE, '2026-10-25T10:00:00Z');
-    expect(db.writes).toEqual([
-      {
-        table: 'content_drafts',
-        update: {
-          status: 'published',
-          published_url: URL_LIVE,
-          published_at: '2026-10-25T10:00:00Z',
-        },
-        filters: [['eq', 'id', 'dr1']],
-      },
-    ]);
-    expect(db.rpcs).toEqual([
+describe('publishDraft', () => {
+  it('publishes the page at its address, in History, saying whether it’s on the brand’s domains', async () => {
+    expect(await publishDraft(tables.content_drafts[0], LIVE, 'u1')).toMatchObject({
+      publishedUrl: LIVE,
+      taskCompleted: false,
+      onBrandDomain: true,
+    });
+    expect(tables.content_drafts[0]).toMatchObject({ status: 'published', published_url: LIVE });
+    expect(rpcs).toEqual([
       { fn: 'content_draft_snapshot', args: { p_draft_id: 'dr1', p_origin: 'publish' } },
     ]);
+    expect(
+      (await publishDraft(tables.content_drafts[0], 'https://medium.com/@acme/x', 'u1'))
+        .onBrandDomain,
+    ).toBe(false);
+  });
+
+  it('measures the live page with the action, beside the pages it names, and moves it when published again', async () => {
+    tables.content_drafts[0].action_id = 'a1';
+    tables.actions[0].payload.pages = ['https://www.acme.example/old'];
+    await publishDraft(tables.content_drafts[0], LIVE, 'u1');
+    expect(tables.actions[0].payload).toEqual({
+      source: 'content_draft',
+      // The pages the action works through stay as they were.
+      pages: ['https://www.acme.example/old'],
+      publishedPages: { dr1: LIVE },
+    });
+    await publishDraft(tables.content_drafts[0], 'https://www.acme.example/blog/cold-brew-2', 'u1');
+    expect(tables.actions[0].payload.publishedPages).toEqual({
+      dr1: 'https://www.acme.example/blog/cold-brew-2',
+    });
+    // Off the brand's domains, its numbers can't be read: it leaves the measurement.
+    await publishDraft(tables.content_drafts[0], 'https://medium.com/@acme/x', 'u1');
+    expect(tables.actions[0].payload.publishedPages).toEqual({});
+  });
+
+  it('completes the Publish task once the action’s work is live, in its History', async () => {
+    tables.content_drafts[0].action_id = 'a1';
+    tables.action_tasks = [
+      task('t0', 'create_content_draft', 'completed'),
+      task('t1', 'publish_content'),
+    ];
+    expect((await publishDraft(tables.content_drafts[0], LIVE, 'u1')).taskCompleted).toBe(true);
+    expect(tables.action_tasks[1]).toMatchObject({ status: 'completed', skip_reason: null });
+    expect(tables.action_events).toEqual([
+      {
+        action_id: 'a1',
+        event: 'task_status',
+        data: { taskId: 't1', to: 'completed', draftId: 'dr1', publishedUrl: LIVE },
+        actor_id: 'u1',
+      },
+    ]);
+  });
+
+  it('waits for every page an Optimize task names, a draft each, before Publish is done', async () => {
+    const pages = ['https://www.acme.example/a', 'https://www.acme.example/b'];
+    tables.actions[0].payload.pages = pages;
+    tables.content_drafts = [
+      draft({ id: 'dr1', action_id: 'a1', method: 'optimize', source_url: pages[0] }),
+    ];
+    tables.action_tasks = [
+      task('t0', 'optimize_content', 'completed'),
+      task('t1', 'publish_content'),
+    ];
+    // Page b has no draft yet.
+    expect((await publishDraft(tables.content_drafts[0], pages[0], 'u1')).taskCompleted).toBe(
+      false,
+    );
+    tables.content_drafts.push(
+      draft({ id: 'dr2', action_id: 'a1', method: 'optimize', source_url: pages[1] }),
+    );
+    expect((await publishDraft(tables.content_drafts[1], pages[1], 'u1')).taskCompleted).toBe(true);
+    // An archived draft doesn't count.
+    tables.action_tasks[1].status = 'todo';
+    tables.content_drafts[0].status = 'ready';
+    tables.content_drafts[0].archived_at = '2026-10-24T10:00:00Z';
+    expect((await publishDraft(tables.content_drafts[1], pages[1], 'u1')).taskCompleted).toBe(
+      false,
+    );
+  });
+
+  it('leaves a Publish task someone skipped, and a deleted action, as they are', async () => {
+    tables.content_drafts[0].action_id = 'a1';
+    tables.action_tasks = [task('t1', 'publish_content', 'skipped')];
+    expect((await publishDraft(tables.content_drafts[0], LIVE, 'u1')).taskCompleted).toBe(false);
+    expect(tables.action_tasks[0].status).toBe('skipped');
+    tables.actions[0].deleted_at = '2026-10-24T10:00:00Z';
+    tables.actions[0].payload = { pages: [] };
+    await publishDraft(tables.content_drafts[0], LIVE, 'u1');
+    expect(tables.actions[0].payload).toEqual({ pages: [] });
+    // Another brand's action isn't touched either.
+    tables.actions[0] = { ...tables.actions[0], deleted_at: null, brand_id: 'b2' };
+    await publishDraft(tables.content_drafts[0], LIVE, 'u1');
+    expect(tables.actions[0].payload).toEqual({ pages: [] });
+  });
+
+  it('keeps the page published when the action’s part fails, saying so in the log', async () => {
+    tables.content_drafts[0].action_id = 'a1';
+    tables.actions[0].payload = null;
+    tables.action_tasks = null;
+    const published = await publishDraft(tables.content_drafts[0], LIVE, 'u1');
+    expect(published.taskCompleted).toBe(false);
+    expect(tables.content_drafts[0].status).toBe('published');
+    expect(events.length).toBe(1);
   });
 });
 
-describe('publishDraft', () => {
-  it('publishes a page with no action, and touches no action', async () => {
-    const published = await publishDraft(draft(), URL_LIVE, 'u1');
-    expect(published).toMatchObject({ publishedUrl: URL_LIVE, taskCompleted: false });
-    expect(db.writes.map((w) => w.table)).toEqual(['content_drafts']);
-  });
-
-  it('gives a linked action the live page and completes its Publish task, once', async () => {
-    db.action = { id: 'a1', payload: { source: 'content_draft', pages: [] } };
-    db.tasks = [
-      { id: 't1', status: 'todo' },
-      { id: 't2', status: 'completed' },
-    ];
-    const published = await publishDraft(draft({ action_id: 'a1' }), URL_LIVE, 'u1');
-    expect(published.taskCompleted).toBe(true);
-    const actionWrite = db.writes.find((w) => w.table === 'actions');
-    expect(actionWrite.update.payload).toEqual({ source: 'content_draft', pages: [URL_LIVE] });
-    expect(db.writes.filter((w) => w.table === 'action_tasks')).toEqual([
-      {
-        table: 'action_tasks',
-        update: { status: 'completed', updated_at: expect.any(String) },
-        filters: [['eq', 'id', 't1']],
-      },
-    ]);
-    expect(db.writes.find((w) => w.table === 'action_events').insert).toEqual({
-      action_id: 'a1',
-      event: 'task_status',
-      data: { taskId: 't1', to: 'completed', draftId: 'dr1', publishedUrl: URL_LIVE },
-      actor_id: 'u1',
-    });
-
-    // Its page already there: the payload isn't written again.
-    db.writes = [];
-    db.action = { id: 'a1', payload: { pages: [URL_LIVE] } };
-    db.tasks = [{ id: 't1', status: 'completed' }];
-    expect((await publishDraft(draft({ action_id: 'a1' }), URL_LIVE, 'u1')).taskCompleted).toBe(
-      false,
+describe('markDeliveryPublished', () => {
+  it('tells the action of a page its CMS published, as a person’s publish does', async () => {
+    tables.content_drafts[0].action_id = 'a1';
+    tables.action_tasks = [task('t1', 'publish_content')];
+    tables.content_draft_deliveries = [{ id: 'x1', draft_id: 'dr1', status: 'sent' }];
+    await markDeliveryPublished(
+      { id: 'x1', draft_id: 'dr1', status: 'sent', published_url: null },
+      LIVE,
     );
-    expect(db.writes.map((w) => w.table)).toEqual(['content_drafts']);
-  });
-
-  it('leaves the Publish task while another page of the action isn’t live', async () => {
-    db.action = { id: 'a1', payload: { pages: ['https://www.acme.example/a'] } };
-    db.others = [{ id: 'dr2' }];
-    db.tasks = [{ id: 't1', status: 'todo' }];
-    expect((await publishDraft(draft({ action_id: 'a1' }), URL_LIVE, 'u1')).taskCompleted).toBe(
-      false,
-    );
-    expect(db.writes.find((w) => w.table === 'actions').update.payload.pages).toEqual([
-      'https://www.acme.example/a',
-      URL_LIVE,
-    ]);
-    expect(db.writes.some((w) => w.table === 'action_tasks')).toBe(false);
-  });
-
-  it('leaves a deleted action as it is', async () => {
-    db.action = null;
-    expect((await publishDraft(draft({ action_id: 'a1' }), URL_LIVE, 'u1')).taskCompleted).toBe(
-      false,
-    );
-    expect(db.writes.map((w) => w.table)).toEqual(['content_drafts']);
+    expect(tables.content_drafts[0]).toMatchObject({ status: 'published', published_url: LIVE });
+    expect(tables.actions[0].payload.publishedPages).toEqual({ dr1: LIVE });
+    expect(tables.action_tasks[0].status).toBe('completed');
+    expect(tables.action_events[0].actor_id).toBeNull();
   });
 });

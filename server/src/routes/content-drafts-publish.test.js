@@ -48,6 +48,7 @@ beforeEach(async () => {
     publishedUrl: url,
     publishedAt: '2026-10-25T10:00:00Z',
     taskCompleted: true,
+    onBrandDomain: url.includes('acme.example'),
   }));
   const app = express();
   app.use(express.json());
@@ -90,9 +91,11 @@ describe('POST /api/content-drafts/:draftId/publish', () => {
     );
   });
 
-  it('keeps an address off the brand’s domains, saying so', async () => {
+  it('answers a failure to publish in plain words', async () => {
+    publishDraft.mockRejectedValueOnce(new Error('db down'));
     const res = await publish({ url: 'https://medium.com/@acme/cold-brew' });
-    expect(await res.json()).toMatchObject({ onBrandDomain: false });
+    expect(res.status).toBe(500);
+    expect(await res.json()).toMatchObject({ code: 'failed' });
   });
 
   it('refuses an address that isn’t one, a page archived or gone, and another workspace’s', async () => {
