@@ -646,6 +646,7 @@ export type Database = {
       brands: {
         Row: {
           content_byline: boolean
+          content_quality_handoff: boolean
           created_at: string
           description: string | null
           ga_property_id: string | null
@@ -660,6 +661,7 @@ export type Database = {
           language: string | null
           logo_url: string | null
           name: string
+          openai_product_feed: boolean
           organization_id: string
           region: string | null
           shopping_mode_enabled: boolean
@@ -671,6 +673,7 @@ export type Database = {
         }
         Insert: {
           content_byline?: boolean
+          content_quality_handoff?: boolean
           created_at?: string
           description?: string | null
           ga_property_id?: string | null
@@ -685,6 +688,7 @@ export type Database = {
           language?: string | null
           logo_url?: string | null
           name: string
+          openai_product_feed?: boolean
           organization_id: string
           region?: string | null
           shopping_mode_enabled?: boolean
@@ -696,6 +700,7 @@ export type Database = {
         }
         Update: {
           content_byline?: boolean
+          content_quality_handoff?: boolean
           created_at?: string
           description?: string | null
           ga_property_id?: string | null
@@ -710,6 +715,7 @@ export type Database = {
           language?: string | null
           logo_url?: string | null
           name?: string
+          openai_product_feed?: boolean
           organization_id?: string
           region?: string | null
           shopping_mode_enabled?: boolean
@@ -979,6 +985,7 @@ export type Database = {
           agent_run: string | null
           agent_state: string | null
           agent_state_at: string | null
+          quality_handoff: boolean
           archived_at: string | null
           archived_by: string | null
           author: string
@@ -1003,6 +1010,7 @@ export type Database = {
           prompt_ids: string[]
           published_at: string | null
           published_url: string | null
+          reviewer_id: string | null
           rules: Json | null
           source_url: string | null
           score_after: number | null
@@ -1017,6 +1025,7 @@ export type Database = {
           agent_run?: string | null
           agent_state?: string | null
           agent_state_at?: string | null
+          quality_handoff?: boolean
           archived_at?: string | null
           archived_by?: string | null
           author?: string
@@ -1041,6 +1050,7 @@ export type Database = {
           prompt_ids?: string[]
           published_at?: string | null
           published_url?: string | null
+          reviewer_id?: string | null
           rules?: Json | null
           source_url?: string | null
           score_after?: number | null
@@ -1055,6 +1065,7 @@ export type Database = {
           agent_run?: string | null
           agent_state?: string | null
           agent_state_at?: string | null
+          quality_handoff?: boolean
           archived_at?: string | null
           archived_by?: string | null
           author?: string
@@ -1079,6 +1090,7 @@ export type Database = {
           prompt_ids?: string[]
           published_at?: string | null
           published_url?: string | null
+          reviewer_id?: string | null
           rules?: Json | null
           source_url?: string | null
           score_after?: number | null
@@ -1092,6 +1104,13 @@ export type Database = {
           {
             foreignKeyName: "content_drafts_author_id_fkey"
             columns: ["author_id"]
+            isOneToOne: false
+            referencedRelation: "content_authors"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "content_drafts_reviewer_id_fkey"
+            columns: ["reviewer_id"]
             isOneToOne: false
             referencedRelation: "content_authors"
             referencedColumns: ["id"]
@@ -1219,6 +1238,7 @@ export type Database = {
           finished_at: string | null
           id: string
           kind: string
+          origin: string
           outcome: string | null
           started_at: string
           step: number
@@ -1231,6 +1251,7 @@ export type Database = {
           finished_at?: string | null
           id?: string
           kind: string
+          origin?: string
           outcome?: string | null
           started_at?: string
           step?: number
@@ -1243,6 +1264,7 @@ export type Database = {
           finished_at?: string | null
           id?: string
           kind?: string
+          origin?: string
           outcome?: string | null
           started_at?: string
           step?: number
@@ -1382,6 +1404,42 @@ export type Database = {
             columns: ["draft_id"]
             isOneToOne: true
             referencedRelation: "content_drafts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      content_draft_own_images: {
+        Row: {
+          confirmed_at: string
+          confirmed_by: string | null
+          draft_id: string
+          src: string
+        }
+        Insert: {
+          confirmed_at?: string
+          confirmed_by?: string | null
+          draft_id: string
+          src: string
+        }
+        Update: {
+          confirmed_at?: string
+          confirmed_by?: string | null
+          draft_id?: string
+          src?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "content_draft_own_images_draft_id_fkey"
+            columns: ["draft_id"]
+            isOneToOne: false
+            referencedRelation: "content_drafts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "content_draft_own_images_confirmed_by_fkey"
+            columns: ["confirmed_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
         ]

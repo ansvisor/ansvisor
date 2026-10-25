@@ -39239,6 +39239,169 @@ comment on table public.content_image_uploads is
 notify pgrst, 'reload schema';
 
 -- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00273_content_draft_reviewer.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00273: Quality CE-049 — a qualified reviewer for regulated pages
+-- ============================================================================
+-- A consumer page that advises on health, finance or law (the page read's
+-- `regulated`, 00270) asks for a qualified reviewer: "Reviewed by {name,
+-- credential}", from Authors only (Quality spec §4b). Like the author
+-- (00257), it is page metadata: the editor shows it outside the page,
+-- never in the page's text.
+--
+--   * content_drafts.reviewer_id: one of the brand's organization's authors,
+--     else null.
+
+alter table public.content_drafts
+  add column if not exists reviewer_id uuid
+    references public.content_authors(id) on delete set null;
+
+create index if not exists content_drafts_reviewer
+  on public.content_drafts (reviewer_id)
+  where reviewer_id is not null;
+
+comment on column public.content_drafts.reviewer_id is
+  'Quality CE-049 (00273): the qualified person who reviewed a regulated page (content_authors), page metadata — never the page''s text; null when none.';
+
+create or replace function public.content_draft_reviewer()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
+begin
+  if new.reviewer_id is not null
+     and (tg_op = 'INSERT' or new.reviewer_id is distinct from old.reviewer_id)
+     and not exists (
+       select 1
+       from public.content_authors a
+       join public.brands b on b.organization_id = a.organization_id
+       where a.id = new.reviewer_id and b.id = new.brand_id
+     )
+  then
+    raise exception 'content draft reviewer is not one of the brand''s organization'
+      using errcode = '23514';
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists content_drafts_reviewer on public.content_drafts;
+create trigger content_drafts_reviewer
+  before insert or update of reviewer_id on public.content_drafts
+  for each row execute function public.content_draft_reviewer();
+
+notify pgrst, 'reload schema';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00274_content_quality_page_checks.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00274: Quality phase 2, CE-050 — the page read's checks
+-- ============================================================================
+-- The page read (00270) also says, in the page's own words:
+--
+--   * answerFirst: whether the paragraph right after the H1 answers it;
+--   * recommends: where the page puts the brand forward among options;
+--   * disclosure: where it says the brand makes what it recommends;
+--   * balance: a real limit of the brand's own product, or where another
+--     option wins;
+--   * how: how the page's content was made (who, how, why);
+--   * cut: whether the model read less than the whole page (a check not
+--     found may be in the rest).
+--
+-- Each found one names its paragraph by its hash, as the read's items do;
+-- null when the page wasn't read for them (a read before this, a missed one).
+
+alter table public.content_quality_pages
+  add column if not exists checks jsonb
+    check (
+      checks is null
+      or (jsonb_typeof(checks) = 'object' and octet_length(checks::text) <= 4096)
+    );
+
+comment on column public.content_quality_pages.checks is
+  'Quality CE-050 (00274): { answerFirst: { block_hash, answers } | null, recommends | disclosure | balance | how: { quote, block_hash } | null, cut: boolean }; null when the page wasn''t read for them.';
+
+notify pgrst, 'reload schema';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00275_content_quality_handoff.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00275: Quality phase 2, CE-051 — hand it off to the Content Agent
+-- ============================================================================
+-- Hand off has the Content Agent fix every fixable Quality suggestion in one
+-- run, as suggestions the person reviews: a run of its own kind. A brand may
+-- hand off its new and optimized pages on their own (Settings › Content,
+-- off by default); each such draft gets its automatic run once.
+--
+--   * content_agent_runs.kind gains 'handoff'; origin says who started a
+--     run: a person, or the editor on its own ('auto'), one a draft;
+--   * brands.content_quality_handoff: the brand's setting;
+--   * content_drafts.quality_handoff: the setting as it was when the draft
+--     was made (a trigger copies it; a member can't change it), so turning
+--     it on reaches new drafts only.
+
+alter table public.content_agent_runs drop constraint if exists content_agent_runs_kind_check;
+alter table public.content_agent_runs
+  add constraint content_agent_runs_kind_check
+  check (kind in ('fix', 'rewrite', 'write', 'brief', 'handoff'));
+
+alter table public.content_agent_runs
+  add column if not exists origin text not null default 'person'
+  check (origin in ('person', 'auto'));
+
+-- An automatic hand-off is once a draft: its row is the claim.
+create unique index if not exists content_agent_runs_auto_handoff
+  on public.content_agent_runs (draft_id)
+  where kind = 'handoff' and origin = 'auto';
+
+comment on column public.content_agent_runs.origin is
+  'Content Agent run (00275): who started it — a person, or the editor on its own (auto: Quality''s hand-off, once a draft).';
+
+alter table public.brands
+  add column if not exists content_quality_handoff boolean not null default false;
+
+comment on column public.brands.content_quality_handoff is
+  'Quality CE-051 (00275): hand off quality fixes automatically — new and optimized pages get the Content Agent''s hand-off run, its changes left for review. Off by default.';
+
+alter table public.content_drafts
+  add column if not exists quality_handoff boolean not null default false;
+
+comment on column public.content_drafts.quality_handoff is
+  'Quality CE-051 (00275): the brand''s hand-off setting when the draft was made (a trigger copies it); its automatic hand-off runs once.';
+
+-- As the member who makes the draft (RLS reads their brand); the server
+-- bypasses RLS. A change by a member is undone: only the server sets it.
+create or replace function public.content_draft_quality_handoff()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
+begin
+  if tg_op = 'INSERT' then
+    select b.content_quality_handoff into new.quality_handoff
+    from public.brands b
+    where b.id = new.brand_id;
+    new.quality_handoff := coalesce(new.quality_handoff, false);
+  elsif new.quality_handoff is distinct from old.quality_handoff
+    and not (select rolbypassrls from pg_catalog.pg_roles where rolname = current_user)
+  then
+    new.quality_handoff := old.quality_handoff;
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists content_drafts_quality_handoff on public.content_drafts;
+create trigger content_drafts_quality_handoff
+  before insert or update of quality_handoff on public.content_drafts
+  for each row execute function public.content_draft_quality_handoff();
+
+notify pgrst, 'reload schema';
+
+-- ─────────────────────────────────────────────────────────────────────────
 -- migrations/00276_organization_insert_columns.sql
 -- ─────────────────────────────────────────────────────────────────────────
 -- ============================================================================
@@ -39308,6 +39471,25 @@ create trigger organizations_guard_server_columns
   before insert or update on public.organizations
   for each row
   execute function public.guard_organization_server_columns();
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00277_brand_openai_product_feed.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00277: a brand's word that it sends OpenAI a direct product feed (#1281)
+-- ============================================================================
+-- In the US, ChatGPT Shopping picks products from OpenAI's own product
+-- index. There's no public API to check whether a catalog is in it, so the
+-- Shopping page shows what we can know: the brand's own word that it sends a
+-- direct feed (this column), else whether its own products appear in tracked
+-- US ChatGPT Shopping answers. Off by default. Admins and managers change it,
+-- as the rest of a brand (brands: admin/manager update).
+
+alter table public.brands
+  add column if not exists openai_product_feed boolean not null default false;
+
+comment on column public.brands.openai_product_feed is
+  'Shopping (#1281): the brand says it sends OpenAI a direct product feed, so its catalog is in OpenAI''s product index (ChatGPT Shopping, US). Off by default.';
 
 -- ─────────────────────────────────────────────────────────────────────────
 -- migrations/00278_catalog.sql

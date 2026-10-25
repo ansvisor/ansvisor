@@ -188,11 +188,44 @@ describe('nextStep', () => {
     ).toBe('length');
   });
 
+  it("keeps a proof skip when the brand facts' to-do joins later (review, #1465)", () => {
+    const s = state({ quality: { trust: 54, trustLow: true, todos: [todo({})] } });
+    const skipped = { ...s, skipped: { proof: stepState('proof', s) } };
+    const withFacts = {
+      ...skipped,
+      quality: {
+        trust: 54,
+        trustLow: true,
+        todos: [
+          todo({}),
+          todo({ id: 'brandFacts', action: 'reviewBrandFacts', score: 'trust', gain: 0, count: 2 }),
+        ],
+      },
+    };
+    expect(liveSkips(withFacts)).toEqual({ proof: stepState('proof', s) });
+  });
+
   it('drops a skip once its state changed, so it never comes back to life', () => {
     const s = state({ openRules: ['faq', 'summary'] });
     const skipped = { ...s, skipped: { fixRules: stepState('fixRules', s) } };
     expect(liveSkips(skipped)).toEqual({ fixRules: 'faq,summary' });
     expect(liveSkips({ ...skipped, openRules: ['faq'] })).toEqual({});
+  });
+
+  it('reads each proof to-do by its own key: another claim opening brings a skipped step back (CE-049)', () => {
+    const proof = (key: string) =>
+      todo({ id: 'proof', key, score: 'trust', action: 'addProof', gain: 3 });
+    const s = state({
+      quality: { trust: 54, trustLow: true, todos: [proof('proof:a:1'), proof('proof:b:2')] },
+    });
+    const skipped = { ...s, skipped: { proof: stepState('proof', s) } };
+    expect(liveSkips(skipped)).toEqual({ proof: 'true:proof:a:1,proof:b:2' });
+    expect(
+      liveSkips({
+        ...skipped,
+        quality: { trust: 54, trustLow: true, todos: [proof('proof:a:1'), proof('proof:c:3')] },
+      }),
+    ).toEqual({});
   });
 });
 

@@ -66,3 +66,22 @@ describe('agent runs', () => {
     expect(stepMessage({ key: 'write_changes', count: null })).toEqual({ key: 'writeChangesAny' });
   });
 });
+
+describe('Quality’s hand-off runs (CE-051)', () => {
+  it('reads a hand-off run, its checks read first', () => {
+    const run = agentRunFrom({
+      id: 'run-1',
+      kind: 'handoff',
+      steps: [
+        { key: 'read_checks', count: 6 },
+        { key: 'write_changes', count: null },
+      ],
+      step: 0,
+      started_at: new Date().toISOString(),
+      finished_at: null,
+      outcome: null,
+    });
+    expect(run).toMatchObject({ kind: 'handoff' });
+    expect(stepMessage(run!.steps[0])).toEqual({ key: 'readChecks', count: 6 });
+  });
+});

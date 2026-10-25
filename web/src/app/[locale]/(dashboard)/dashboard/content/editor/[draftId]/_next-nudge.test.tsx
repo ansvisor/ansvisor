@@ -55,6 +55,9 @@ let container: HTMLDivElement;
 let root: Root;
 const onPickAuthor = vi.fn();
 const onShowPlaceholder = vi.fn();
+const onAddSource = vi.fn();
+const onConfirmImages = vi.fn();
+const onPickReviewer = vi.fn();
 const MOMENTS: NudgeMoment[] = ['agent', 'acceptAll', 'markReady'];
 
 /** The editor's part: the hook, a button per moment, and the nudge while it shows. */
@@ -67,9 +70,17 @@ function Harness({ todos, author }: { todos: QualityTodo[]; author: ContentAutho
       ))}
       <NextNudge
         shown={nudge.shown}
-        quality={{ author, team: 'Acme Team', canEdit: true }}
+        quality={{
+          author,
+          team: 'Acme Team',
+          canEdit: true,
+          brandFactsPath: '/dashboard/brands/b1/settings?tab=facts',
+        }}
         onShowPlaceholder={onShowPlaceholder}
         onPickAuthor={onPickAuthor}
+        onAddSource={onAddSource}
+        onConfirmImages={onConfirmImages}
+        onPickReviewer={onPickReviewer}
         onLater={nudge.later}
         onAct={nudge.close}
       />
@@ -97,6 +108,7 @@ beforeEach(() => {
   sessionStorage.clear();
   onPickAuthor.mockReset();
   onShowPlaceholder.mockReset();
+  onAddSource.mockReset();
   container = document.createElement('div');
   root = createRoot(container);
 });
@@ -133,6 +145,84 @@ describe('NextNudge', () => {
     await act(async () => button('Show now').click());
     expect(onShowPlaceholder).toHaveBeenCalled();
     expect(nudge()).toBeNull();
+  });
+
+  it('sends the brand facts to approve to Brand settings (CE-047)', async () => {
+    const facts: QualityTodo = {
+      id: 'brandFacts',
+      done: false,
+      gain: 0,
+      score: 'trust',
+      action: 'reviewBrandFacts',
+      count: 2,
+    };
+    await render([facts]);
+    await act(async () => nudgeAt('agent'));
+    expect(nudge()!.textContent).toBe(
+      'Next for you: approve 2 brand facts · 1 of 1Review nowLater',
+    );
+    expect(button('Review now').getAttribute('href')).toBe(
+      '/dashboard/brands/b1/settings?tab=facts',
+    );
+  });
+
+  it("selects a proof to-do's claim for its link, each claim once per moment (CE-049)", async () => {
+    const proof = (claim: string): QualityTodo => ({
+      id: 'proof',
+      key: `proof:${claim}\nWe are ${claim}.`,
+      done: false,
+      gain: 4,
+      score: 'trust',
+      action: 'addProof',
+      proof: { claim, block: `We are ${claim}.`, kind: 'award', sentence: `We are ${claim}.` },
+    });
+    await render([proof('award-winning'), proof('SOC 2 certified')]);
+    await act(async () => nudgeAt('agent'));
+    expect(nudge()!.textContent).toBe(
+      'Next for you: add proof for “award-winning” · 1 of 2Add nowLater',
+    );
+    await act(async () => button('Add now').click());
+    expect(onAddSource).toHaveBeenCalledWith({
+      text: 'award-winning',
+      sentence: 'We are award-winning.',
+      block: 'We are award-winning.',
+    });
+    expect(nudge()).toBeNull();
+    // The next claim is another to-do: the same moment shows it.
+    await render([proof('SOC 2 certified')]);
+    await act(async () => nudgeAt('agent'));
+    expect(nudge()!.textContent).toContain('add proof for “SOC 2 certified”');
+  });
+
+  it("opens Confirm for the page's own images (CE-049, part d)", async () => {
+    onConfirmImages.mockReset();
+    await render([
+      { id: 'visualProof', done: false, gain: 8, score: 'eeat', action: 'confirmImage', count: 1 },
+    ]);
+    await act(async () => nudgeAt('agent'));
+    expect(nudge()!.textContent).toBe('Next for you: show your own image · 1 of 1Confirm nowLater');
+    await act(async () => button('Confirm now').click());
+    expect(onConfirmImages).toHaveBeenCalled();
+  });
+
+  it('opens the reviewer menu for a regulated page (CE-049, part e)', async () => {
+    onPickReviewer.mockReset();
+    await render([
+      {
+        id: 'reviewer',
+        done: false,
+        gain: 0,
+        score: 'eeat',
+        action: 'pickReviewer',
+        topic: 'legal',
+      },
+    ]);
+    await act(async () => nudgeAt('agent'));
+    expect(nudge()!.textContent).toBe(
+      'Next for you: add a qualified reviewer · 1 of 1Pick nowLater',
+    );
+    await act(async () => button('Pick now').click());
+    expect(onPickReviewer).toHaveBeenCalled();
   });
 
   it('counts the open ones and skips the done', async () => {

@@ -2,6 +2,8 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { assertBrandAccess } from '../lib/access.js';
 import { fixDraftRules, fixRulesInput } from '../lib/content-agent.js';
+import { handOffDraft, handOffInput } from '../lib/content-handoff.js';
+import { qualityPhase } from '../lib/content-quality.js';
 import { rebuildDraftBrief, rebuildSources } from '../lib/content-brief.js';
 import { DeliveryError, sendContentPages, sendInput } from '../lib/content-delivery.js';
 import { stopDraftRun } from '../lib/content-runs.js';
@@ -13,7 +15,8 @@ import { PlanLimitError } from '../lib/plan-guard.js';
  * Content Editor drafts: Rebuild outline in the editor's Brief tab writes
  * the draft's brief from the sources the person kept (CE-007); Fix open
  * rules with agent leaves the Content Agent's suggestions for review
- * (CE-018); Start's Agent has the Content Agent do the page (CE-015);
+ * (CE-018); Hand off has it fix the page's open Quality checks (CE-051);
+ * Start's Agent has the Content Agent do the page (CE-015);
  * Stop ends the agent's run under way, changing nothing (v1.1 CE-027); and
  * Send to CMS sends pages to the brand's webhook (#1331).
  */
@@ -116,7 +119,8 @@ const fixBody = fixRulesInput.extend({ brandId: z.guid() });
  * Body: { brandId, rules: [{ key, name, detail }], textRules, locked }
  * Answers { count, batchId }: the suggestions left for review (none when the
  * agent found nothing it could change); 409 `open_suggestions` while the
- * latest batch is undecided, 409 `published` for a published draft.
+ * latest batch is undecided, 409 `published` for a published draft, 409
+ * `running` while a fix or a hand-off on it is under way.
  */
 router.post('/:draftId/suggestions', async (req, res) => {
   const draftId = z.guid().safeParse(req.params.draftId);
@@ -141,6 +145,44 @@ router.post('/:draftId/suggestions', async (req, res) => {
         .json({ error: err.message, code: err.code ?? ERROR_CODES[err.status] });
     }
     req.log.error({ err }, 'content draft agent fix error');
+    return res.status(502).json({ error: 'The agent could not run', code: 'failed' });
+  }
+});
+
+const handOffBody = handOffInput.extend({ brandId: z.guid() });
+
+/**
+ * POST /api/content-drafts/:draftId/handoff
+ * Body: { brandId, items: [{ key, detail }], textRules, locked, sources?, origin }
+ * Quality's hand-off (CE-051): answers { count, batchId } as /suggestions
+ * does, with its errors; 404 `off` before Quality's phase 2, 409 `not_due`
+ * for an automatic one the brand doesn't hand off, 409 `already` when the
+ * draft had its automatic one.
+ */
+router.post('/:draftId/handoff', async (req, res) => {
+  if (qualityPhase() < 2) return res.status(404).json({ error: 'Not available', code: 'off' });
+  const draftId = z.guid().safeParse(req.params.draftId);
+  const parsed = handOffBody.safeParse(req.body ?? {});
+  if (!draftId.success || !parsed.success) {
+    return res.status(400).json({ error: 'Invalid request', code: 'invalid' });
+  }
+  const { brandId, ...input } = parsed.data;
+  try {
+    await assertBrandAccess(brandId, req.user.id);
+    const result = await handOffDraft({ draftId: draftId.data, brandId, input });
+    return res.json(result);
+  } catch (err) {
+    if (err instanceof PlanLimitError) {
+      // 402: no active subscription, not a spent budget.
+      const code = err.statusCode === 402 ? 'no_subscription' : 'ai_budget';
+      return res.status(err.statusCode).json({ error: err.message, code });
+    }
+    if (ERROR_CODES[err?.status]) {
+      return res
+        .status(err.status)
+        .json({ error: err.message, code: err.code ?? ERROR_CODES[err.status] });
+    }
+    req.log.error({ err }, 'content draft hand-off error');
     return res.status(502).json({ error: 'The agent could not run', code: 'failed' });
   }
 });

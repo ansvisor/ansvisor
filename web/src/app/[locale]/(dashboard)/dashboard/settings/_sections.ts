@@ -10,6 +10,7 @@ export const SETTINGS_SECTIONS = [
   'organization',
   'team',
   'authors',
+  'content',
   'notifications',
   'integrations',
   'api-keys',
@@ -24,6 +25,8 @@ const CLOUD_ONLY: readonly SettingsSection[] = ['ai-providers', 'billing'];
 
 /** Content Editor Quality's Authors (CE-037): only while its phase is live. */
 const hasAuthors = () => qualityPhase() >= 1;
+/** Content's settings (Quality's hand-off, CE-051): with Quality's phase 2. */
+const hasContent = () => qualityPhase() >= 2;
 
 /** Older names an address may still carry: ?tab=project, ?tab=agent. */
 const RENAMED: Record<string, SettingsSection> = {
@@ -48,6 +51,7 @@ export function resolveSettingsSection(
 /** Whether this install shows the section. */
 export function hasSettingsSection(section: SettingsSection, { isCloud }: { isCloud: boolean }) {
   if (section === 'authors' && !hasAuthors()) return false;
+  if (section === 'content' && !hasContent()) return false;
   return isCloud || !CLOUD_ONLY.includes(section);
 }
 

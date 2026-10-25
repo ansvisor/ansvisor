@@ -40,6 +40,20 @@ export const PARAGRAPH_SENTENCES = 4;
 export const SECTION_WORDS = 300;
 /** A page shorter than this gets no Readability score yet: too little to read. */
 export const MIN_WORDS = 50;
+/**
+ * A paragraph under the H1 this short and not a sentence (no full stop at
+ * its end) is a byline, a date or a note: answer first reads past it.
+ */
+export const MIN_ANSWER_WORDS = 8;
+const ENDS_A_SENTENCE = /[.!?…。！？]["”’')\]]*$/u;
+/**
+ * A byline, a date or a note: short, and not a sentence ("By Jane Doe ·
+ * October 2026"), its words counted as the API's page read counts them
+ * (a number isn't one), so both read the same first paragraph.
+ */
+export const isByline = (text: string) =>
+  (text.match(/\p{L}[\p{L}\p{N}'’-]*/gu) ?? []).length < MIN_ANSWER_WORDS &&
+  !ENDS_A_SENTENCE.test(text.trim());
 
 export type ReadingFormula = 'flesch' | 'atesman' | 'amstad' | 'kandelMoles' | 'fernandezHuerta';
 
@@ -57,6 +71,8 @@ export interface ReadabilityCheck {
   target?: number;
   /** English's band instead of a target: the score that reads right for most readers. */
   band?: { min: number; max: number };
+  /** Read by the model, not by rules: its suggestion says so ("AI check", CE-050). */
+  ai?: boolean;
   /** The first block that falls short, to show it in the draft. */
   at?: string | null;
 }
@@ -371,7 +387,16 @@ const COMMON = new Set([
  * be read. `language` is the one the draft is written in (its Language rule,
  * else the brand's), English when unset.
  */
-export function readability(html: string, language: string | null | undefined): Readability {
+export function readability(
+  html: string,
+  language: string | null | undefined,
+  /**
+   * Phase 2 (CE-050): the model's verdict on the paragraph after the H1,
+   * with that paragraph's words; it stands while the paragraph is still
+   * the first, else the rule reads it.
+   */
+  aiAnswer: { answers: boolean; block: string; held?: boolean } | null = null,
+): Readability {
   const blocks = readBlocks(html);
   const lang = languageCode(language);
   const prose = blocks.filter(isProse);
@@ -450,11 +475,16 @@ export function readability(html: string, language: string | null | undefined): 
     });
   }
 
-  // Answer first: the first block under the H1 is a short paragraph that
-  // names what the H1 asks (a heuristic; Phase 2 reads it with a model). A
-  // page without an H1 has nothing to answer, and doesn't pass.
+  // Answer first: the first block under the H1 (past a byline, a date or a
+  // note) is a short paragraph that names what the H1 asks (a heuristic;
+  // Phase 2 reads it with a model, as the API's page read finds the same
+  // paragraph). A page without an H1 has nothing to answer, and doesn't pass.
   const h1 = blocks.findIndex((b) => b.tag === 'h1');
-  const first = h1 === -1 ? undefined : blocks[h1 + 1];
+  let at = h1 === -1 ? -1 : h1 + 1;
+  while (at !== -1 && blocks[at]?.tag === 'p' && isByline(blocks[at].text)) {
+    at += 1;
+  }
+  const first = at === -1 ? undefined : blocks[at];
   const wordsOf = (text: string) => text.toLocaleLowerCase(lang ?? 'en').match(/\p{L}{2,}/gu) ?? [];
   // The H1's subject: its words but the question words and the commonest
   // ones, the longer ones when it has any ("What is AI?" is about "ai").
@@ -462,17 +492,25 @@ export function readability(html: string, language: string | null | undefined): 
   const subject = new Set(
     h1Words.some((w) => w.length >= 4) ? h1Words.filter((w) => w.length >= 4) : h1Words,
   );
-  const answers =
+  const read =
     !!first &&
-    first.tag === 'p' &&
-    first.words <= 60 &&
-    wordsOf(first.text).some((w) => subject.has(w));
+    !!aiAnswer &&
+    // Held while the edited page is read again (aiChecksOnPage).
+    (!!aiAnswer.held || first.text.replace(/\s+/g, '') === aiAnswer.block.replace(/\s+/g, ''));
+  // The model reads whether it answers; it is still a short paragraph to pass.
+  const answers = read
+    ? aiAnswer!.answers && first.words <= 60
+    : !!first &&
+      first.tag === 'p' &&
+      first.words <= 60 &&
+      wordsOf(first.text).some((w) => subject.has(w));
   check({
     id: 'answerFirst',
     points: answers ? READABILITY_WEIGHTS.answerFirst : 0,
     value: first?.words ?? 0,
     count: answers ? 0 : 1,
     at: answers ? null : (first?.text ?? (h1 === -1 ? null : blocks[h1].text)),
+    ...(read ? { ai: true } : {}),
   });
 
   // Short paragraphs: the share with at most 4 sentences.

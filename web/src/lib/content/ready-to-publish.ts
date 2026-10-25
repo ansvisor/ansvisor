@@ -481,6 +481,32 @@ export function teamName(language: string | null | undefined, brand: string): st
 }
 
 /**
+ * The disclosure line (CE-050) in the page's language, for a page that puts
+ * the brand forward among options: what it recommends is the brand's own
+ * (offered by it, which fits a product, a service or software alike). It
+ * goes out with the page, so in the page's language; a language not here
+ * gets none (the person writes it).
+ */
+const DISCLOSURES: Record<string, string> = {
+  en: 'Disclosure: the product this page recommends is offered by {brand}.',
+  tr: 'Açıklama: Bu sayfada önerilen ürün {brand} tarafından sunuluyor.',
+  de: 'Hinweis: Das auf dieser Seite empfohlene Produkt wird von {brand} angeboten.',
+  fr: 'Transparence : le produit recommandé sur cette page est proposé par {brand}.',
+  es: 'Aviso: el producto que recomienda esta página lo ofrece {brand}.',
+  pt: 'Aviso: o produto recomendado nesta página é oferecido por {brand}.',
+  it: 'Trasparenza: il prodotto consigliato in questa pagina è offerto da {brand}.',
+  nl: 'Transparantie: het product dat deze pagina aanbeveelt, wordt aangeboden door {brand}.',
+  sv: 'Upplysning: produkten som den här sidan rekommenderar erbjuds av {brand}.',
+};
+
+/** The disclosure line for a page in `language`, or null (no brand read, or a language not here). */
+export function disclosureText(language: string | null | undefined, brand: string): string | null {
+  const line = DISCLOSURES[languageCode(language) ?? ''];
+  // A function, so a "$" in a name is written as it is.
+  return line && brand.trim() ? line.replace('{brand}', () => brand.trim()) : null;
+}
+
+/**
  * Where the end tag of the HTML's k-th H1 ends, counted from 0, or null.
  * Comments and code are blanked first (blankCode): an H1 there is no element.
  */
