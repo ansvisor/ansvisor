@@ -52,6 +52,7 @@ function state(
     ...rulesMet(checked),
     length: 3000,
     lengthConflict: null,
+    checkHtml: () => checked,
     change,
     pickSet,
     addTextRules,

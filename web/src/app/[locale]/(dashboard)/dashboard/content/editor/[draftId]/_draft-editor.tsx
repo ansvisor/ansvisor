@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useFormatter, useTranslations } from 'next-intl';
 import { toast } from 'sonner';
+import { getHTMLFromFragment } from '@tiptap/core';
 import { EditorContent, useEditor, type Editor } from '@tiptap/react';
 import type { Node as PmNode } from '@tiptap/pm/model';
 import { TextSelection, type Transaction } from '@tiptap/pm/state';
@@ -173,6 +174,8 @@ import {
   keptOutOfReach,
   lengthOutOfReach,
   readPage,
+  pageTextLength,
+  rulesMet,
   type ActiveRule,
   type LastRewrite,
   type RewriteReach,
@@ -1656,6 +1659,7 @@ export function DraftEditor({
   const suggestionLabels = useMemo<SuggestionLabels>(
     () => ({
       agent: t('suggestions.agent'),
+      breaks: (names: string) => t('suggestions.breaks', { names }),
       accept: t('suggestions.accept'),
       reject: t('suggestions.reject'),
       accepted: t('suggestions.accepted'),
@@ -1695,16 +1699,63 @@ export function DraftEditor({
       .catch((err) => console.error('Failed to read the agent suggestions:', err));
   }, [editor, draft.id]);
 
+  // What the agent's open changes would do to the rules (editor test
+  // 2026-10-25: a fix run turned 11 of 15 met into 10, a rewrite 4 open into
+  // 5): each, and all of them, accepted into a copy of the page and checked
+  // as the page is. A rule met now that one would break is said on it.
+  const ruleEffects = useMemo(() => {
+    if (!editor || editor.isDestroyed) return null;
+    const open = suggestions.filter((s) => s.status === 'open' && s.kind !== 'page');
+    if (!open.length) return null;
+    const metNow = new Set(
+      rules.rules
+        .filter(({ rule, status }) => rule.on && status.state === 'ok')
+        .map(({ rule }) => rule.key),
+    );
+    const read = (doc: PmNode) => {
+      const after = rules.checkHtml(
+        getHTMLFromFragment(doc.content, editor.schema),
+        (editor.storage.characterCount.characters({ node: doc }) as number | undefined) ?? 0,
+      );
+      return {
+        met: rulesMet(after).met,
+        broken: after
+          .filter(({ rule, status }) => metNow.has(rule.key) && status.state === 'bad')
+          .map(({ rule }) => rule.key),
+      };
+    };
+    const each = new Map<string, string[]>();
+    const all = editor.state.tr;
+    for (const s of open) {
+      const one = editor.state.tr;
+      if (acceptInto(one, editor.state, s, suggestions)) each.set(s.id, read(one.doc).broken);
+      acceptInto(all, editor.state, s, suggestions);
+    }
+    return { each, all: read(all.doc) };
+    // pageHtml: the page as it changes, the copy's start.
+  }, [editor, suggestions, rules.rules, rules.checkHtml, pageHtml]); // eslint-disable-line react-hooks/exhaustive-deps
+  const ruleNames = (keys: string[]) =>
+    format.list(
+      keys.map((key) => tRules(`names.${key}`)),
+      { type: 'conjunction' },
+    );
+
   // The page shows them as they are now.
   useEffect(() => {
     suggestionsNow.current = suggestions;
     if (!editor || editor.isDestroyed) return;
-    // A whole page (Rewrite the whole page) has its own bar, not a card.
-    const cards = suggestions.filter((s) => s.kind !== 'page');
+    // A whole page (Rewrite the whole page) has its own bar, not a card; each
+    // card says which rules met now it would break.
+    const cards = suggestions
+      .filter((s) => s.kind !== 'page')
+      .map((s) => {
+        const broken = ruleEffects?.each.get(s.id);
+        return broken?.length ? { ...s, breaks: ruleNames(broken) } : s;
+      });
     editor.view.dispatch(
       editor.state.tr.setMeta(suggestionsKey, { suggestions: cards, labels: suggestionLabels }),
     );
-  }, [editor, suggestions, suggestionLabels]);
+  }, [editor, suggestions, suggestionLabels, ruleEffects]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // While Fix open rules runs, a dashed card in the page where its change
   // will most likely land, from which of the kept data (CE-027/035).
@@ -1889,6 +1940,28 @@ export function DraftEditor({
     [heldKey],
   );
   // The rules as the agent card counts its gain: met now, and the ones still open.
+  // A whole page rewritten, open: checked as the page is (its Length is the
+  // rewrite's own line, read against the band, B).
+  const pageEffect = useMemo(() => {
+    if (!pageSuggestion || pageSuggestion.status !== 'open') return null;
+    const after = rules
+      .checkHtml(pageSuggestion.afterText, pageTextLength(pageSuggestion.afterText))
+      .filter(({ rule }) => rule.key !== 'length');
+    const metNow = new Set(
+      rules.rules
+        .filter(({ rule, status }) => rule.on && status.state === 'ok')
+        .map(({ rule }) => rule.key),
+    );
+    const lengthMet = metNow.has('length') ? 1 : 0;
+    return {
+      met: rulesMet(after).met + lengthMet,
+      broken: after
+        .filter(({ rule, status }) => metNow.has(rule.key) && status.state === 'bad')
+        .map(({ rule }) => rule.key),
+    };
+    // The rules and their check, not the hook's object (a new one each render).
+  }, [pageSuggestion, rules.rules, rules.checkHtml]); // eslint-disable-line react-hooks/exhaustive-deps
+  const effect = pageEffect ?? ruleEffects?.all ?? null;
   const cardRules = useMemo(
     () => ({
       met: rules.met,
@@ -1898,8 +1971,16 @@ export function DraftEditor({
           .filter(({ rule, status }) => rule.on && status.state === 'bad')
           .map(({ rule }) => rule.key),
       ),
+      ...(effect
+        ? {
+            after: {
+              met: effect.met,
+              breaks: effect.broken.length ? ruleNames(effect.broken) : null,
+            },
+          }
+        : {}),
     }),
-    [rules.met, rules.total, rules.rules],
+    [rules.met, rules.total, rules.rules, effect], // eslint-disable-line react-hooks/exhaustive-deps
   );
 
   /**

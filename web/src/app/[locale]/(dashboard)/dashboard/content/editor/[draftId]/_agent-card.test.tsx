@@ -316,6 +316,13 @@ describe('AgentCard', () => {
     expect(container.textContent).not.toContain('All suggestions reviewed');
   });
 
+  it('reads the gain from the page with the changes in, and names a rule they would break', async () => {
+    await render([suggestion()], false, {
+      rules: { ...rules, after: { met: 8, breaks: 'Internal links' } },
+    });
+    expect(container.textContent).toContain('Rules 9 → 8 of 14 · would break Internal links');
+  });
+
   it('says it is working, with nothing to press', async () => {
     await render([], true);
     const card = container.querySelector('[role="region"]')!;
