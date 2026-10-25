@@ -3208,7 +3208,7 @@
       "description": "Where is the page live? Its Live page tab measures this address, and an action it came from counts its results from there.",
       "label": "Live address",
       "hint": "The page's full address on your site, as people open it.",
-      "invalidUrl": "Give the page's full address, starting with https://.",
+      "invalidUrl": "Give the page's full address, starting with https:// or http://.",
       "notFound": "This page isn't in the Library anymore.",
       "failed": "Couldn't mark the page published. Try again.",
       "done": "Published. The Live page tab measures it from now on.",

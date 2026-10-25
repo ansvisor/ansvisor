@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -39,13 +39,17 @@ export function PublishDialog({
   const [url, setUrl] = useState<string | undefined>(undefined);
   const [saving, setSaving] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
+  const input = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     let cancelled = false;
     readPublishAddress(draftId)
       .catch(() => '')
       .then((address) => {
-        if (!cancelled) setUrl((now) => now ?? address);
+        if (cancelled) return;
+        setUrl((now) => now ?? address);
+        // Disabled while it was read: the field takes focus once it can be typed in.
+        requestAnimationFrame(() => input.current?.focus());
       });
     return () => {
       cancelled = true;
@@ -83,6 +87,8 @@ export function PublishDialog({
         </DialogHeader>
         <form
           className="space-y-1.5"
+          // The address is checked by the API, its words from en.json, not the browser's.
+          noValidate
           onSubmit={(e) => {
             e.preventDefault();
             if (!saving) void save();
@@ -90,6 +96,7 @@ export function PublishDialog({
         >
           <Label htmlFor="publish-url">{t('label')}</Label>
           <Input
+            ref={input}
             id="publish-url"
             type="url"
             inputMode="url"
@@ -106,7 +113,8 @@ export function PublishDialog({
           />
           <p
             id="publish-url-hint"
-            role={problem ? 'alert' : undefined}
+            // Always there, so a problem in it is read out as it comes.
+            aria-live="polite"
             className={
               problem ? 'text-xs text-red-700 dark:text-red-400' : 'text-xs text-muted-foreground'
             }

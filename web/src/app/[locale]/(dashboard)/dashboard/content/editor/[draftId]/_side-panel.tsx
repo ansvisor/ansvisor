@@ -531,6 +531,8 @@ export function EditorSidePanel({
         {opened.has('impact') && (
           <div hidden={tab !== 'impact'}>
             <ImpactTab
+              // Another address (marked published at it) reads anew, not the last one's numbers.
+              key={liveUrl ?? draft.sourceUrl ?? 'none'}
               brandId={draft.brandId}
               pageUrl={liveUrl ?? draft.sourceUrl}
               rebuilding={rebuilding}

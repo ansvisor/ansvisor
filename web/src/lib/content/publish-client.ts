@@ -1,6 +1,7 @@
 import { BROWSER_API_BASE_URL } from '@/config/api';
 import { apiFailure } from '@/lib/api-failure';
 import { createClient } from '@/lib/supabase/client';
+import { slugOf } from '@/lib/content/ready-to-publish';
 
 /**
  * A page marked Published at its live address (CE-013), from the browser
@@ -27,6 +28,16 @@ export type PublishResult =
       taskCompleted: boolean;
     }
   | { ok: false; code: PublishError };
+
+/** Where the page is live now (CE-013), or null: after it was published elsewhere meanwhile. */
+export async function readLiveUrl(draftId: string): Promise<string | null> {
+  const { data } = await createClient()
+    .from('content_drafts')
+    .select('published_url')
+    .eq('id', draftId)
+    .maybeSingle();
+  return data?.published_url ?? null;
+}
 
 /** Marks the page Published at `url`. */
 export async function publishPage(draftId: string, url: string): Promise<PublishResult> {
@@ -78,13 +89,15 @@ export async function publishPage(draftId: string, url: string): Promise<Publish
 /**
  * The address the dialog starts from: where the page went live (a CMS's, or
  * one given before), else the page it optimizes, else the brand's site with
- * the page's slug. Empty when none can be read.
+ * the page's slug (its last send's, else its title's: never the site's home
+ * page, which the person would mark live with one click). Empty when none
+ * can be read.
  */
 export async function readPublishAddress(draftId: string): Promise<string> {
   const supabase = createClient();
   const { data: draft, error } = await supabase
     .from('content_drafts')
-    .select('brand_id, published_url, source_url, slug')
+    .select('brand_id, title, published_url, source_url, slug')
     .eq('id', draftId)
     .maybeSingle();
   if (error || !draft) return '';
@@ -101,6 +114,7 @@ export async function readPublishAddress(draftId: string): Promise<string> {
     .trim()
     .replace(/^https?:\/\//i, '')
     .replace(/\/.*$/, '');
-  if (!host) return '';
-  return `https://${host}/${draft.slug ?? ''}`;
+  const slug = draft.slug || slugOf(draft.title ?? '', null);
+  if (!host || !slug) return '';
+  return `https://${host}/${slug}`;
 }

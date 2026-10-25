@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const reads = vi.hoisted(() => ({
   draft: null as Record<string, unknown> | null,
   domain: null as { domain: string } | null,
+  filters: [] as [string, unknown][],
 }));
 vi.mock('@/lib/supabase/client', () => ({
   createClient: () => ({
@@ -12,7 +13,7 @@ vi.mock('@/lib/supabase/client', () => ({
     from: (table: string) => {
       const chain = {
         select: () => chain,
-        eq: () => chain,
+        eq: (col: string, value: unknown) => (reads.filters.push([col, value]), chain),
         limit: () => chain,
         maybeSingle: async () => ({
           data: table === 'content_drafts' ? reads.draft : reads.domain,
@@ -24,7 +25,7 @@ vi.mock('@/lib/supabase/client', () => ({
   }),
 }));
 
-const { publishPage, readPublishAddress } = await import('./publish-client');
+const { publishPage, readLiveUrl, readPublishAddress } = await import('./publish-client');
 
 const fetchMock = vi.fn();
 beforeEach(() => {
@@ -32,6 +33,7 @@ beforeEach(() => {
   vi.stubGlobal('fetch', fetchMock);
   reads.draft = null;
   reads.domain = null;
+  reads.filters = [];
 });
 const answer = (status: number, body: unknown) =>
   fetchMock.mockResolvedValue(new Response(JSON.stringify(body), { status }));
@@ -84,9 +86,23 @@ describe('readPublishAddress', () => {
     reads.draft = { ...reads.draft, source_url: null, slug: 'cold-brew' };
     reads.domain = { domain: 'https://www.acme.example/' };
     expect(await readPublishAddress('d1')).toBe('https://www.acme.example/cold-brew');
+    // The brand's primary domain.
+    expect(reads.filters).toContainEqual(['is_primary', true]);
+    // No slug yet (never sent): the title's, never the site's home page.
+    reads.draft = { ...reads.draft, slug: null, title: 'Cold Brew at Home' };
+    expect(await readPublishAddress('d1')).toBe('https://www.acme.example/cold-brew-at-home');
+    reads.draft = { ...reads.draft, title: '' };
+    expect(await readPublishAddress('d1')).toBe('');
     reads.domain = null;
     expect(await readPublishAddress('d1')).toBe('');
     reads.draft = null;
     expect(await readPublishAddress('d1')).toBe('');
+  });
+
+  it('reads where the page is live now', async () => {
+    reads.draft = { published_url: 'https://acme.example/live' };
+    expect(await readLiveUrl('d1')).toBe('https://acme.example/live');
+    reads.draft = null;
+    expect(await readLiveUrl('d1')).toBeNull();
   });
 });

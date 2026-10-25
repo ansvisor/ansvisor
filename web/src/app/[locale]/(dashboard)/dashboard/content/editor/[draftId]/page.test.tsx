@@ -48,7 +48,8 @@ const getContentImpact = vi.fn();
 // Mark published (CE-013).
 const publishPage = vi.hoisted(() => vi.fn());
 const readPublishAddress = vi.hoisted(() => vi.fn(async () => 'https://acme.example.com/pipeline'));
-vi.mock('@/lib/content/publish-client', () => ({ publishPage, readPublishAddress }));
+const readLiveUrl = vi.hoisted(() => vi.fn(async () => 'https://acme.example.com/pipeline'));
+vi.mock('@/lib/content/publish-client', () => ({ publishPage, readPublishAddress, readLiveUrl }));
 const getContentResults = vi.fn();
 const getDraftSources = vi.fn();
 const setDraftSourceIncluded = vi.fn();
@@ -348,6 +349,8 @@ beforeEach(() => {
     .mockReset()
     .mockResolvedValue({ ok: true, updatedAt: '2026-10-20T10:00:00Z', bodyHash: 'h0' });
   getContentImpact.mockReset().mockResolvedValue(null);
+  publishPage.mockReset();
+  readPublishAddress.mockReset().mockResolvedValue('https://acme.example.com/pipeline');
   getContentResults.mockReset().mockResolvedValue(null);
   getDraftSources.mockReset().mockResolvedValue(null);
   readAgentRun.mockReset().mockResolvedValue(null);
@@ -959,6 +962,8 @@ describe('the content editor', () => {
     unmarkContentDraftReady.mockResolvedValueOnce({ status: 'published', tasksReopened: 0 });
     await act(async () => button('Ready: click to move it back to review')!.click());
     expect(toast).toHaveBeenCalledWith('Its status is now Published, so it stays.');
+    // Its live address, for the Live page tab.
+    expect(readLiveUrl).toHaveBeenCalledWith('d1');
     // Published, a click opens its live address (CE-013).
     expect(button('Published')!.getAttribute('aria-disabled')).not.toBe('true');
   });
@@ -973,6 +978,29 @@ describe('the content editor', () => {
     await act(async () => button('Published')!.click());
     expect(readPublishAddress).toHaveBeenCalledWith('d1');
     expect(document.querySelector('[role="dialog"]')!.textContent).toContain('Mark published');
+  });
+
+  it('measures the address a page went live at on the Live page tab, not the page it optimized', async () => {
+    getContentDraft.mockResolvedValue(
+      draft({
+        status: 'published',
+        sourceUrl: 'https://acme.example.com/pricing',
+        publishedUrl: 'https://acme.example.com/pricing-2026',
+      }),
+    );
+    const width = window.innerWidth;
+    window.innerWidth = 1440;
+    try {
+      await renderPage();
+      await pickTab('Live page');
+      expect(getContentImpact).toHaveBeenCalledWith(
+        'b1',
+        'https://acme.example.com/pricing-2026',
+        30,
+      );
+    } finally {
+      window.innerWidth = width;
+    }
   });
 
   it('marks a ready page published from Next step, and the Live page tab measures its address', async () => {

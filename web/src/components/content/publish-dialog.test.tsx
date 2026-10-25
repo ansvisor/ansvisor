@@ -102,9 +102,10 @@ describe('PublishDialog', () => {
     await render();
     await type('acme.example/x');
     await act(async () => save().click());
-    expect(dialog().querySelector('[role="alert"]')!.textContent).toBe(
-      "Give the page's full address, starting with https://.",
+    expect(dialog().querySelector('#publish-url-hint')!.textContent).toBe(
+      "Give the page's full address, starting with https:// or http://.",
     );
+    expect(input().getAttribute('aria-invalid')).toBe('true');
     expect(onClose).not.toHaveBeenCalled();
     await type('');
     expect(save().disabled).toBe(true);

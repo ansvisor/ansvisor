@@ -828,6 +828,14 @@ describe('a Library row’s menu (00233)', () => {
 
     await act(async () => tab('Archived').click());
     expect(container.textContent).toContain('Old pricing page');
+    // An archived page is restored before it's marked live (CE-013).
+    const published = (await menuItems('Old pricing page')).find(
+      (el) => el.textContent === 'Published',
+    )!;
+    expect(published.hasAttribute('data-disabled')).toBe(true);
+    await act(async () =>
+      document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })),
+    );
     await pick('Old pricing page', 'Restore');
     expect(archiveContentDraft).toHaveBeenLastCalledWith('d2', false);
   });
