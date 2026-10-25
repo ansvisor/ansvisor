@@ -8,6 +8,7 @@ import {
   citedPassagesKey,
   keptCharacters,
   lockedPassageCount,
+  lockedPassagesLeft,
   rewriteFloor,
   type HeldEdit,
 } from './_cited-passages';
@@ -156,9 +157,18 @@ describe('rewriteFloor', () => {
 });
 
 describe('locked passages', () => {
-  it('marks the quoted passage and counts it', () => {
+  it('marks the quoted passage and counts it, and how many a rewrite keeps', () => {
     expect(lockedPassageCount(editor.state)).toBe(1);
+    expect(lockedPassagesLeft(editor.state)).toBe(1);
     expect(editor.view.dom.querySelectorAll('.cited-passage')).toHaveLength(1);
+    // Unlocked by the person: a rewrite keeps none.
+    editor.view.dispatch(
+      editor.state.tr.setMeta(citedPassagesKey, {
+        labels: new Map([[passageKey(QUOTED), 'Cited by ChatGPT 3×']]),
+        unlocked: new Set([passageKey(QUOTED)]),
+      }),
+    );
+    expect(lockedPassagesLeft(editor.state)).toBe(0);
   });
 
   it('reads only the paragraph a keystroke changes, not the whole page', () => {

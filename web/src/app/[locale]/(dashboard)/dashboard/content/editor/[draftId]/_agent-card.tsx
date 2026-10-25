@@ -384,6 +384,8 @@ export function AgentCard({
                 missed.outOfReach &&
                 missed.kept > 0 &&
                 ` ${tRewrite('lengthKept', { kept: missed.kept })}`}
+              {/* Asked to shorten it, it came out longer: said, not offered silently. */}
+              {afterChars > missed.max && afterChars > before && ` · ${tRewrite('longer')}`}
             </span>
           ) : (
             page.reason

@@ -194,6 +194,7 @@ import {
   citedLocks,
   citedPassagesKey,
   lockedPassageCount,
+  lockedPassagesLeft,
   rewriteFloor,
   type HeldEdit,
 } from './_cited-passages';
@@ -2631,7 +2632,12 @@ export function DraftEditor({
    * rewrites the whole page in the background; the page waits for it, then
    * opens with the rewrite to compare.
    */
-  const rewritePage = async () => {
+  /**
+   * Rewrite the page to these rules. `citedToo`: the passages AI answers
+   * quote are rewritten too (the Rules tab's choice when what they keep puts
+   * the Length out of reach); the person compares it before anything changes.
+   */
+  const rewritePage = async ({ citedToo = false }: { citedToo?: boolean } = {}) => {
     // Never before the locked passages are read: the rewrite would be told none are.
     if (!editor || agentBusy || !citedRead) return;
     setRewriting(true);
@@ -2656,7 +2662,7 @@ export function DraftEditor({
           textRules: rules.textRules.filter(({ rule }) => rule.on).map(({ rule }) => rule.text),
         },
         // The passages still locked here, the ones the person didn't unlock.
-        [...locks.labels.keys()].filter((key) => !locks.unlocked.has(key)),
+        citedToo ? [] : [...locks.labels.keys()].filter((key) => !locks.unlocked.has(key)),
       );
       // Each rule says how the page reads now, as Fix open rules' do.
       const statusOf = new Map(inEffect.map(({ rule, status }) => [rule.key, status]));
@@ -2681,9 +2687,10 @@ export function DraftEditor({
   };
   const pageRewrite: PageRewrite | undefined = canMarkReady
     ? {
-        run: () => void rewritePage(),
+        run: (options) => void rewritePage(options),
         running: rewriting,
         reach,
+        cited: editor && citedRead ? lockedPassagesLeft(editor.state) : 0,
         blocked:
           aiUsedUp && !rewriting
             ? aiUsedUp

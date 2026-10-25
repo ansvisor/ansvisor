@@ -256,6 +256,19 @@ describe('AgentCard', () => {
     );
   });
 
+  it('says when a rewrite meant to shorten the page came out longer', async () => {
+    const page = suggestion({
+      kind: 'page',
+      beforeHtml: '<h1>Old</h1><p>Short.</p>',
+      afterText: '<h1>New</h1><p>A much longer page than before.</p>',
+      reason: 'answered each heading first',
+    });
+    await render([page], false, { length: { target: 4, min: 3, max: 5, kept: 0 } });
+    expect(container.textContent).toContain(
+      '10 → 35 characters · Length 4 not reached · longer than the page before',
+    );
+  });
+
   it('says it is working, with nothing to press', async () => {
     await render([], true);
     const card = container.querySelector('[role="region"]')!;

@@ -186,6 +186,26 @@ describe('the Rules tab', () => {
           .click(),
       );
       expect(change).toHaveBeenCalledWith('length', { value: '4000' });
+      // No quoted passage kept: no rewrite of them to offer.
+      expect(buttons().some((b) => b.textContent === 'Rewrite, cited passages too')).toBe(false);
+    });
+
+    it('offers to rewrite the cited passages too, when they hold the Length out of reach', async () => {
+      const pageRewrite = {
+        ...fix(),
+        reach: { kept: 2_900, floor: 3_900, last: null },
+        cited: 3,
+      };
+      await show({ agentFix: fix(), pageRewrite });
+      expect(container.textContent).toContain(
+        'That rewrites the passages AI answers quote as well, so they may stop being quoted.',
+      );
+      await act(async () =>
+        buttons()
+          .find((b) => b.textContent === 'Rewrite, cited passages too')!
+          .click(),
+      );
+      expect(pageRewrite.run).toHaveBeenCalledWith({ citedToo: true });
     });
 
     it('doesn’t offer a rewrite again for a Length the last one missed', async () => {
