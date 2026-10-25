@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   NO_DRAFT_RULES,
   NOT_FOR_AGENT,
+  notForAgentMessage,
   fanoutsToUse,
   openRulesForAgent,
   activeRules,
@@ -459,6 +460,7 @@ describe('page type rules', () => {
     });
     const html = '<p>The Ridge 28 costs $129.</p><p>In stock.</p>';
     expect(feed(html, null)).toEqual({ state: 'info', code: 'needsFeed' });
+    expect(feed(html, 'reading')).toEqual({ state: 'info', code: 'feedReading' });
     expect(feed(html, { connected: false, product: null })).toEqual({
       state: 'info',
       code: 'needsFeed',
@@ -474,8 +476,13 @@ describe('page type rules', () => {
       code: 'feedDiffers',
       count: 2,
     });
-    // The person checks which is right, the page or the feed: not the agent's.
+    // The person checks which is right, the page or the feed: not the agent's,
+    // and the message says so (the extra H1s' first, when both are open).
     expect(NOT_FOR_AGENT.has('feedMatch')).toBe(true);
+    expect(notForAgentMessage([{ rule: { key: 'feedMatch' } }])).toBe('notForAgentFeed');
+    expect(notForAgentMessage([{ rule: { key: 'feedMatch' } }, { rule: { key: 'oneH1' } }])).toBe(
+      'notForAgent',
+    );
   });
 
   it('checks a product and a category page', () => {

@@ -184,7 +184,7 @@ describe('QualityTab', () => {
     // No feed, or no product in it with the page's URL or title: a line says so.
     await render({ ...read(result), feed: 'none' });
     expect(container.textContent).toContain(
-      "Price and stock aren't checked: connect your product feed",
+      "Price and stock aren't checked: no product feed is connected",
     );
     await render({ ...read(result), feed: 'notFound' });
     expect(container.textContent).toContain("no product in your feed has this page's URL or title");

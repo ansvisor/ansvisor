@@ -3882,6 +3882,7 @@
         "fixedMax": "Content Agent suggested {count} changes, the most one run makes · review them, then run it again for the rules still open",
         "nothingToFix": "Content Agent found nothing it could change without new facts.",
         "notForAgent": "Content Agent doesn't change heading levels: make the extra H1s H2s in the toolbar.",
+        "notForAgentFeed": "Content Agent doesn't change a price, GTIN or stock: check which is right, the page or your product feed, and fix that one.",
         "decideFirst": "{count, plural, one {Review the open suggestion first, then run the agent.} other {Review the open suggestions first, then run the agent.}}",
         "citedLoading": "Reading which passages AI quotes, so the agent leaves them as they are…",
         "agentBusy": "Content Agent is already working on this page. Wait for it to finish.",
@@ -4715,7 +4716,7 @@
         "confirmCaseFailed": "Couldn't save that confirmation. Try again.",
         "confirmCaseFull": "This page keeps 50 confirmations already.",
         "feed": {
-          "none": "Price and stock aren't checked: connect your product feed, and the page's price, GTIN and stock are checked against it.",
+          "none": "Price and stock aren't checked: no product feed is connected for this brand yet.",
           "notFound": "Price and stock aren't checked: no product in your feed has this page's URL or title."
         },
         "weightsFor": {
@@ -5136,6 +5137,7 @@
           "notSet": "Not set",
           "aiCheck": "AI check",
           "needsFeed": "Needs feed",
+          "feedReading": "Reading feed",
           "notInFeed": "Not in feed",
           "feedNothing": "Nothing to compare",
           "feedDiffers": "{count, plural, one {# differs} other {# differ}} from feed",

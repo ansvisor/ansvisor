@@ -607,6 +607,7 @@ export type RuleStatus =
       code:
         | 'aiCheck'
         | 'needsFeed'
+        | 'feedReading'
         | 'notInFeed'
         | 'feedNothing'
         | 'noFanouts'
@@ -624,9 +625,10 @@ export interface RuleContext {
   language?: string | null;
   /**
    * The page's product in the brand's catalog (getCatalogMatch, Quality
-   * CE-053), for "Price, GTIN and stock match the feed"; none while not read.
+   * CE-053), for "Price, GTIN and stock match the feed": 'reading' while it
+   * is read; none where the feed isn't checked (before Phase 3, other types).
    */
-  catalog?: CatalogMatch | null;
+  catalog?: CatalogMatch | 'reading' | null;
 }
 
 /** Phrases that read as machine-written (spec §10, "Remove AI traces"). */
@@ -747,6 +749,10 @@ const atLeast = (have: number, want: number): RuleStatus =>
  * (the page or the feed may be the one that's wrong).
  */
 export const NOT_FOR_AGENT = new Set(['oneH1', 'feedMatch']);
+
+/** What to do instead, for the open rules the agent doesn't fix: its message's key. */
+export const notForAgentMessage = (open: readonly { rule: { key: string } }[]) =>
+  open.some(({ rule }) => rule.key === 'oneH1') ? 'notForAgent' : 'notForAgentFeed';
 
 /**
  * The fan-outs a rule still needs (fanoutH2, fanoutFaq), quoted for the
@@ -888,7 +894,11 @@ export function rewriteAdvice<T extends { rule: ActiveRule; status: RuleStatus }
  * "Price, GTIN and stock match the feed" (CE-053): the page against its
  * product in the brand's catalog, once a catalog is connected and has it.
  */
-function feedStatus(page: PageRead, catalog: CatalogMatch | null | undefined): RuleStatus {
+function feedStatus(
+  page: PageRead,
+  catalog: CatalogMatch | 'reading' | null | undefined,
+): RuleStatus {
+  if (catalog === 'reading') return { state: 'info', code: 'feedReading' };
   if (!catalog?.connected) return { state: 'info', code: 'needsFeed' };
   if (!catalog.product) return { state: 'info', code: 'notInFeed' };
   const texts = page.blocks.map((b) => b.text);

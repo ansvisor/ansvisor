@@ -2754,36 +2754,32 @@ export async function getCatalogMatch(id: string, title: string): Promise<Catalo
     let via: 'url' | 'name' = 'url';
     const key = pageKey(draft.source_url);
     const path = key ? key.slice(key.indexOf('/')) : '';
-    if (key && path.length > 1) {
-      // Narrowed by the path, then compared whole: a feed's URL may carry a
-      // query ("?variant=…") or another form of the host.
-      const pattern = `%${likeText(path)}%`;
-      const [products, variants] = await Promise.all([
-        supabase
-          .from('catalog_products')
-          .select('id, url')
-          .eq('brand_id', brand)
-          .is('removed_at', null)
-          .ilike('url', pattern)
-          .limit(20),
-        supabase
-          .from('catalog_variants')
-          .select('product_id, url')
-          .eq('brand_id', brand)
-          .is('removed_at', null)
-          .ilike('url', pattern)
-          .limit(20),
-      ]);
-      if (products.error) throw new Error(products.error.message);
-      if (variants.error) throw new Error(variants.error.message);
-      const ids = new Set([
-        ...(products.data ?? []).filter((p) => pageKey(p.url) === key).map((p) => p.id),
-        ...(variants.data ?? []).filter((v) => pageKey(v.url) === key).map((v) => v.product_id),
-      ]);
+    // PostgREST reads "*" in a pattern as a wildcard: such a path or title isn't looked up.
+    if (key && path.length > 1 && !path.includes('*')) {
+      // The brand's live products (their index), narrowed by the path as
+      // written and as an address encodes it, then compared whole: a feed's
+      // URL may carry a query ("?variant=…") or another form of the host.
+      const forms = [...new Set([path, encodeURI(path)])];
+      const reads = await Promise.all(
+        forms.map((form) =>
+          supabase
+            .from('catalog_products')
+            .select('id, url')
+            .eq('brand_id', brand)
+            .is('removed_at', null)
+            .ilike('url', `%${likeText(form)}%`)
+            .limit(100),
+        ),
+      );
+      const ids = new Set<string>();
+      for (const read of reads) {
+        if (read.error) throw new Error(read.error.message);
+        for (const p of read.data ?? []) if (pageKey(p.url) === key) ids.add(p.id);
+      }
       if (ids.size === 1) productId = [...ids][0];
     }
     const name = catalogTitle.safeParse(title);
-    if (!productId && name.success) {
+    if (!productId && name.success && !name.data.includes('*')) {
       const { data, error } = await supabase
         .from('catalog_products')
         .select('id')
@@ -2801,13 +2797,20 @@ export async function getCatalogMatch(id: string, title: string): Promise<Catalo
     if (!productId) return { connected: true, product: null };
 
     const [product, variants] = await Promise.all([
-      supabase.from('catalog_products').select('title, url').eq('id', productId).maybeSingle(),
+      supabase
+        .from('catalog_products')
+        .select('title, url')
+        .eq('id', productId)
+        .is('removed_at', null)
+        .maybeSingle(),
+      // By price, so a range's low end is among them however many there are.
       supabase
         .from('catalog_variants')
         .select('price, sale_price, currency, availability, gtin')
         .eq('product_id', productId)
         .is('removed_at', null)
-        .limit(100),
+        .order('price', { ascending: true })
+        .limit(200),
     ]);
     if (product.error) throw new Error(product.error.message);
     if (variants.error) throw new Error(variants.error.message);

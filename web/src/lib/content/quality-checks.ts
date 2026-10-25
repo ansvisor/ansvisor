@@ -513,10 +513,10 @@ export interface SourceRead {
  * links that answer, and the site's trust (its five checks in Site Audit).
  * A check with nothing to read (no figure, no dated source, no link read
  * yet, no site trust read) is left out, and site trust counts only beside a
- * check of the page's own. Trust is scored only once a figure or a dated
- * source is there: working links alone are 3 points, and one link would set
- * the whole score (one dead link 0, one working link 100), as Readability
- * waits for MIN_WORDS.
+ * check of the page's own. Trust is scored only once a figure, a dated
+ * source or a product feed's check is there: working links alone are 3
+ * points, and one link would set the whole score (one dead link 0, one
+ * working link 100), as Readability waits for MIN_WORDS.
  *
  * With `sources` (Phase 2, CE-046), each source's kind counts too: a primary
  * one among them (official, research, standards), and none weak (forums,
@@ -779,9 +779,11 @@ export function trust({
     });
   }
 
+  // A product page's feed check is Trust's own too (CE-053).
   const scored =
-    checks.some((c) => c.id === 'claimsSourced' || c.id === 'freshSources') ||
-    classified.length >= 2;
+    checks.some(
+      (c) => c.id === 'claimsSourced' || c.id === 'freshSources' || c.id === 'feedMatch',
+    ) || classified.length >= 2;
   return {
     ...(scored ? scoreOf(checks) : { score: null, checks }),
     broken: broken.map(({ url, text }) => ({ url, text })),

@@ -100,8 +100,8 @@ export function useDraftRules({
   characters: number;
   pageType: string | null;
   reads: Pick<DraftReads, 'brief' | 'sources'>;
-  /** The page's product in the brand's catalog (CE-053), for the feed rule; none while not read. */
-  catalog?: CatalogMatch | null;
+  /** The page's product in the brand's catalog (CE-053), for the feed rule (RuleContext's). */
+  catalog?: CatalogMatch | 'reading' | null;
 }): DraftRulesState {
   const t = useTranslations('contentEditor.editor.rules');
   const tTypes = useTranslations('contentEditor.pageTypes');

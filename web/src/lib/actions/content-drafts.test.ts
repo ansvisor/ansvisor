@@ -28,6 +28,8 @@ let rpcResult: { data: unknown; error: { message: string } | null };
 let upsertError: { code: string; message: string } | null;
 // Reads answered in turn, each with its own rows, when a test needs them (the catalog's).
 let queue: Record<string, unknown>[][];
+// A read that fails, when a test needs one.
+let readError: string | null;
 
 vi.mock('@/lib/action-center/assignees', () => ({ readAssignees: vi.fn(async () => new Map()) }));
 vi.mock('@/lib/supabase/admin', () => ({ supabaseAdmin: {} }));
@@ -66,6 +68,10 @@ vi.mock('@/lib/supabase/server', () => ({
         // The list, by its batch when one is asked for; the first row alone
         // when the read is for one (the latest batch).
         limit: () => {
+          if (readError) {
+            const failed = { data: null, error: { message: readError } };
+            return Object.assign(Promise.resolve(failed), { maybeSingle: async () => failed });
+          }
           const batch = call.filters.find(([op, col]) => op === 'eq' && col === 'batch_id');
           const rows = queue.length
             ? queue.shift()!
@@ -131,6 +137,7 @@ beforeEach(() => {
   list = [];
   upsertError = null;
   queue = [];
+  readError = null;
   rpcCalls = [];
   rpcResult = { data: 'v-new', error: null };
   completeDraftTasks.mockReset().mockResolvedValue(0);
@@ -1104,6 +1111,13 @@ describe('getCatalogMatch (Quality CE-053)', () => {
     queue = [[{ brand_id: 'b1', source_url: null }], []];
     expect(await getCatalogMatch(DRAFT, 'Ridge 28')).toEqual({ connected: false, product: null });
     expect(await getCatalogMatch('d1', 'Ridge 28')).toBeNull();
+    // A read that fails: null, said in the log.
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+    queue = [[{ brand_id: 'b1', source_url: null }]];
+    readError = 'permission denied';
+    expect(await getCatalogMatch(DRAFT, 'Ridge 28')).toBeNull();
+    expect(log).toHaveBeenCalledWith('Failed to read the catalog:', expect.any(Error));
+    log.mockRestore();
   });
 
   it('finds the page’s product by its URL as the feed writes it', async () => {
@@ -1111,8 +1125,10 @@ describe('getCatalogMatch (Quality CE-053)', () => {
       [{ brand_id: 'b1', source_url: 'https://www.acme.com/products/ridge-28/' }],
       [{ id: 'p0' }],
       // Narrowed by the path: another product's longer URL isn't the page's.
-      [{ id: 'p9', url: 'https://acme.com/products/ridge-28-pro' }],
-      [{ product_id: 'p1', url: 'https://acme.com/products/ridge-28?variant=42' }],
+      [
+        { id: 'p9', url: 'https://acme.com/products/ridge-28-pro' },
+        { id: 'p1', url: 'https://acme.com/products/ridge-28?variant=42' },
+      ],
       [{ title: 'Ridge 28', url: 'https://acme.com/products/ridge-28' }],
       [variant],
     ];
@@ -1135,7 +1151,23 @@ describe('getCatalogMatch (Quality CE-053)', () => {
     });
     expect(calls.flatMap((c) => c.filters).filter(([op]) => op === 'ilike')).toEqual([
       ['ilike', 'url', '%/products/ridge-28%'],
-      ['ilike', 'url', '%/products/ridge-28%'],
+    ]);
+  });
+
+  it('looks a path up as written and as an address encodes it', async () => {
+    queue = [
+      [{ brand_id: 'b1', source_url: 'https://acme.com.tr/%C3%BCr%C3%BCn' }],
+      [{ id: 'p0' }],
+      [{ id: 'p1', url: 'https://acme.com.tr/ürün' }],
+      [],
+      [{ title: 'Ürün', url: 'https://acme.com.tr/ürün' }],
+      [],
+    ];
+    expect((await getCatalogMatch(DRAFT, 'x'))?.product?.via).toBe('url');
+    expect(calls.flatMap((c) => c.filters).filter(([op]) => op === 'ilike')).toEqual([
+      ['ilike', 'url', '%/ürün%'],
+      // Its "%" escaped: a literal one, not a wildcard.
+      ['ilike', 'url', '%/\\%C3\\%BCr\\%C3\\%BCn%'],
     ]);
   });
 

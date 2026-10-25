@@ -18,6 +18,8 @@ describe('pageKey', () => {
       'acme.com/products/ridge-28',
     );
     expect(pageKey('http://acme.com/products/ridge-28')).toBe('acme.com/products/ridge-28');
+    expect(pageKey('https://acme.com.tr/%C3%BCr%C3%BCn/')).toBe('acme.com.tr/ürün');
+    expect(pageKey('https://acme.com.tr/ürün')).toBe('acme.com.tr/ürün');
     expect(pageKey('ftp://acme.com/x')).toBeNull();
     expect(pageKey('not a url')).toBeNull();
     expect(pageKey(null)).toBeNull();
@@ -35,6 +37,21 @@ describe('stockOnPage', () => {
     expect(stockOnPage(['Stokta, hemen kargoda.'])?.stock).toBe('in');
     expect(stockOnPage(['Derzeit ausverkauft.'])?.stock).toBe('out');
     expect(stockOnPage(['Black is in stock.', 'Blue is out of stock.'])).toBeNull();
+    // Out, however it's said: not, no longer, back in stock (soon).
+    for (const out of [
+      'Email me when it is back in stock.',
+      'Not in stock right now.',
+      'No longer in stock.',
+      'Bu ürün stokta değil.',
+      'Stokta kalmadı.',
+      'Plus en stock.',
+      'Nicht mehr vorrätig.',
+    ]) {
+      expect(stockOnPage([out])?.stock).toBe('out');
+    }
+    // A shipping policy says nothing of this product's stock.
+    expect(stockOnPage(['Orders for items in stock ship within 24 hours.'])).toBeNull();
+    expect(stockOnPage(['Ships today.'])).toBeNull();
     expect(stockOnPage(['A daypack for wet hikes.'])).toBeNull();
   });
 });
@@ -80,14 +97,35 @@ describe('feedCheck', () => {
         { kind: 'stock', page: 'in', feed: 'out', sentence: 'In stock.' },
       ],
     });
-    // On sale in the feed, full price on the page.
+    // On sale in the feed: the sale price, or the regular one (the sale may be over).
+    const onSale = [variant({ salePrice: 99.5 })];
+    expect(
+      feedCheck({ texts: ['$99.50.'], offer: { price: 99.5, currency: 'USD' }, variants: onSale })
+        .mismatches,
+    ).toEqual([]);
+    expect(
+      feedCheck({ texts: ['$129.'], offer: { price: 129, currency: 'USD' }, variants: onSale })
+        .mismatches,
+    ).toEqual([]);
+    expect(
+      feedCheck({ texts: ['$139.'], offer: { price: 139, currency: 'USD' }, variants: onSale })
+        .mismatches[0],
+    ).toMatchObject({ kind: 'price', page: '$139', feed: '$99.50' });
+    // A GTIN's code alone, never the number after it; one that fails its check digit says nothing.
     expect(
       feedCheck({
-        texts: ['$129.'],
-        offer: { price: 129, currency: 'USD' },
-        variants: [variant({ salePrice: 99.5 })],
-      }).mismatches[0],
-    ).toMatchObject({ kind: 'price', feed: '$99.50' });
+        texts: ['UPC: 012345678905 12 months warranty.'],
+        offer: null,
+        variants: [variant({ gtin: '012345678905' })],
+      }),
+    ).toEqual({ compared: 1, mismatches: [] });
+    expect(
+      feedCheck({
+        texts: ['EAN 1234567890123.'],
+        offer: null,
+        variants: [variant({ gtin: '4006381333931' })],
+      }),
+    ).toEqual({ compared: 0, mismatches: [] });
     // A GTIN the feed doesn't have; a UPC's leading zeros don't count.
     expect(
       feedCheck({

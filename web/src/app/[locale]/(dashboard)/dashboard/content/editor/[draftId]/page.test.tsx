@@ -26,6 +26,7 @@ const checkDraftClaims = vi.fn();
 const readDraftPage = vi.fn();
 const getOwnImages = vi.fn();
 const getDraftConfirmations = vi.fn();
+const getCatalogMatch = vi.fn();
 const confirmDraftItem = vi.fn();
 const confirmOwnImage = vi.fn();
 const getBrandFacts = vi.fn();
@@ -109,6 +110,7 @@ vi.mock('@/lib/actions/content-drafts', () => ({
   readDraftPage: (...args: unknown[]) => readDraftPage(...args),
   getOwnImages: (...args: unknown[]) => getOwnImages(...args),
   getDraftConfirmations: (...args: unknown[]) => getDraftConfirmations(...args),
+  getCatalogMatch: (...args: unknown[]) => getCatalogMatch(...args),
   confirmDraftItem: (...args: unknown[]) => confirmDraftItem(...args),
   confirmOwnImage: (...args: unknown[]) => confirmOwnImage(...args),
   checkDraftLinks: (...args: unknown[]) => checkDraftLinks(...args),
@@ -318,6 +320,7 @@ beforeEach(() => {
   readDraftPage.mockReset().mockResolvedValue({ error: 'off' });
   getOwnImages.mockReset().mockResolvedValue([]);
   getDraftConfirmations.mockReset().mockResolvedValue([]);
+  getCatalogMatch.mockReset().mockResolvedValue({ connected: false, product: null });
   confirmDraftItem.mockReset().mockResolvedValue('ok');
   confirmOwnImage.mockReset().mockResolvedValue('ok');
   getBrandFacts.mockReset().mockResolvedValue({
@@ -2605,6 +2608,9 @@ describe('the side panel', () => {
       expect(text).toMatch(/2 page type rules not met: .*Specs table/);
       expect(text).toContain('Say how shipping and returns work');
       expect(text).not.toContain('Add an author for the page');
+      // No product feed yet (CE-053): the price and stock aren't checked, and it says so.
+      expect(getCatalogMatch).toHaveBeenCalledWith('d1', readable.title);
+      expect(text).toContain("Price and stock aren't checked: no product feed is connected");
     });
 
     it('asks a comparison to show when it was last checked, and Add line puts it under the answer (CE-052)', async () => {

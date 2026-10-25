@@ -167,5 +167,14 @@ describe('weighedTrust', () => {
       '<p>It cut costs by 40% (<a href="https://example.org/report">the report</a>).</p>',
     );
     expect(weighedTrust(figure, PROFILE_WEIGHTS.product.trust).score).not.toBeNull();
+    // So does its product feed's check (CE-053).
+    const fed = trust({
+      blocks: trustBlocks('<p>The Ridge 28 costs $129.</p>'),
+      links: new Map(),
+      brandDomains: [],
+      feed: { compared: 1, mismatches: [] },
+      now: Date.parse('2026-10-25'),
+    });
+    expect(weighedTrust(fed, PROFILE_WEIGHTS.product.trust).score).toBe(100);
   });
 });

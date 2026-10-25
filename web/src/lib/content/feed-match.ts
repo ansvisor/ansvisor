@@ -1,4 +1,4 @@
-import { pagePrices } from './brand-facts';
+import { factValueText, pagePrices } from './brand-facts';
 import type { PageOfferRead } from './page-schema';
 import { sentencesOf } from './readability';
 
@@ -58,7 +58,13 @@ export function pageKey(url: string | null | undefined): string | null {
   try {
     const u = new URL(url.trim());
     if (u.protocol !== 'http:' && u.protocol !== 'https:') return null;
-    const path = u.pathname.replace(/\/+$/, '');
+    // A path as written ("/ürün"), whether the address has it encoded or not.
+    let path = u.pathname.replace(/\/+$/, '');
+    try {
+      path = decodeURIComponent(path);
+    } catch {
+      // Not encoded as UTF-8: compared as it is.
+    }
     return `${u.hostname.toLowerCase().replace(/^www\./, '')}${path}`.toLowerCase();
   } catch {
     return null;
@@ -66,9 +72,12 @@ export function pageKey(url: string | null | undefined): string | null {
 }
 
 const OUT_OF_STOCK =
-  /(?<!\p{L})(?:out\s+of\s+stock|sold\s+out|currently\s+unavailable|stokta\s+yok|tükendi|ausverkauft|nicht\s+(?:auf\s+lager|vorrätig|lieferbar)|épuisé|en\s+rupture(?:\s+de\s+stock)?|agotado|sin\s+stock)(?!\p{L})/iu;
+  /(?<!\p{L})(?:out\s+of\s+stock|sold\s+out|currently\s+unavailable|(?:not|no\s+longer|isn['’]?t|aren['’]?t)\s+(?:currently\s+)?in\s+stock|back\s+in\s+stock|stokta\s+(?:yok|değil|kalmadı)|tükendi|ausverkauft|nicht\s+(?:mehr\s+)?(?:auf\s+lager|vorrätig|lieferbar)|épuisé|en\s+rupture(?:\s+de\s+stock)?|plus\s+en\s+stock|agotado|sin\s+stock)(?!\p{L})/iu;
 const IN_STOCK =
-  /(?<!\p{L})(?:in\s+stock|available\s+now|ships\s+(?:today|now)|stokta(?!\s+yok)|stoktan\s+teslim|auf\s+lager|vorrätig|sofort\s+lieferbar|en\s+stock)(?!\p{L})/iu;
+  /(?<!\p{L})(?:in\s+stock|available\s+now|stokta|stoktan\s+teslim|auf\s+lager|vorrätig|sofort\s+lieferbar|en\s+stock)(?!\p{L})/iu;
+/** A shipping policy's "items in stock ship in 24 hours": no word on this product's stock. */
+const STOCK_POLICY =
+  /(?<!\p{L})(?:items?|products?|orders?|articles?)\s+(?:(?:that|which)\s+are\s+)?in\s+stock(?!\p{L})/iu;
 
 /** What the page says of its stock, and where; none where it says nothing, or both. */
 export function stockOnPage(
@@ -77,7 +86,11 @@ export function stockOnPage(
   let found: { stock: 'in' | 'out'; sentence: string } | null = null;
   for (const sentence of texts.flatMap((text) => sentencesOf(text))) {
     const out = OUT_OF_STOCK.test(sentence);
-    const stock = out ? 'out' : IN_STOCK.test(sentence) ? 'in' : null;
+    const stock = out
+      ? 'out'
+      : IN_STOCK.test(sentence) && !STOCK_POLICY.test(sentence)
+        ? 'in'
+        : null;
     if (!stock) continue;
     if (found && found.stock !== stock) return null;
     found ??= { stock, sentence };
@@ -99,9 +112,21 @@ export function feedStock(variants: readonly FeedVariant[]): 'in' | 'out' | null
   return read.length && read.every((s) => s === 'out') ? 'out' : null;
 }
 
-/** "GTIN: 00012345678905", "EAN 4006381333931", "UPC: 012345678905": the code, its digits only. */
+/**
+ * "GTIN: 00012345678905", "EAN 4006381333931", "ISBN 978-3-16-148410-0":
+ * the code, hyphens allowed, never across a space ("UPC 012345678905 12
+ * months" is the UPC alone).
+ */
 const GTIN_ON_PAGE =
-  /(?<!\p{L})(?:gtin(?:-?(?:8|12|13|14))?|ean(?:-?13)?|upc|isbn(?:-?13)?)\s*[:#]?\s*((?:\d[\s-]?){7,13}\d)(?!\d)/iu;
+  /(?<!\p{L})(?:gtin(?:-?(?:8|12|13|14))?|ean(?:-?13)?|upc|isbn(?:-?13)?)\s*[:#]?\s*((?:\d-?){7,13}\d)(?![\d-])/iu;
+
+/** A GTIN's own check: 8, 12, 13 or 14 digits, the last one GS1's check digit. */
+function validGtin(digits: string): boolean {
+  if (![8, 12, 13, 14].includes(digits.length)) return false;
+  const body = [...digits.slice(0, -1)].reverse().map(Number);
+  const sum = body.reduce((total, d, i) => total + d * (i % 2 === 0 ? 3 : 1), 0);
+  return (10 - (sum % 10)) % 10 === Number(digits.at(-1));
+}
 
 /** A GTIN as a number reads it: digits, leading zeros dropped (a UPC is a GTIN-14 with two). */
 const gtinKey = (code: string) => code.replace(/\D/g, '').replace(/^0+/, '');
@@ -112,7 +137,9 @@ function gtinsOnPage(texts: readonly string[]): { code: string; sentence: string
     .flatMap((text) => sentencesOf(text))
     .flatMap((sentence) => {
       const m = GTIN_ON_PAGE.exec(sentence);
-      return m ? [{ code: m[1].replace(/[\s-]/g, ''), sentence }] : [];
+      const code = m?.[1].replace(/-/g, '') ?? '';
+      // A number that isn't a GTIN's (its length or check digit) says nothing.
+      return validGtin(code) ? [{ code, sentence }] : [];
     });
 }
 
@@ -122,17 +149,9 @@ const priceNow = (v: FeedVariant) =>
 
 const same = (a: number, b: number) => Math.abs(a - b) < 0.005;
 
-const money = (amount: number, currency: string) => {
-  try {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency,
-      maximumFractionDigits: Number.isInteger(amount) ? 0 : 2,
-    }).format(amount);
-  } catch {
-    return `${amount} ${currency}`;
-  }
-};
+/** An amount as a person reads it ("$119"), as brand facts write theirs. */
+const money = (amount: number, currency: string) =>
+  factValueText('price', { plan: '', amount, currency, period: null, billed: null, per: null });
 
 /** The first sentence that gives an amount, as the page writes it. */
 function priceSentence(
@@ -168,19 +187,27 @@ export function feedCheck({
 
   const priced = variants.flatMap((v) => {
     const now = priceNow(v);
-    return now !== null && v.currency ? [{ now, currency: v.currency.toUpperCase() }] : [];
+    return now !== null && v.currency
+      ? [{ now, regular: v.price, currency: v.currency.toUpperCase() }]
+      : [];
   });
   if (offer && !('several' in offer)) {
-    const inCurrency = priced.filter((p) => p.currency === offer.currency).map((p) => p.now);
+    const inCurrency = priced.filter((p) => p.currency === offer.currency);
+    const nows = inCurrency.map((p) => p.now);
     // Another currency is another market's feed: not compared.
     if (inCurrency.length) {
       compared += 1;
-      const low = Math.min(...inCurrency);
-      const high = Math.max(...inCurrency);
+      const low = Math.min(...nows);
+      const high = Math.max(...nows);
       const page = 'price' in offer ? offer.price : offer.low;
+      // A sale price the feed keeps after the sale may be over: the regular
+      // price matches too.
       const matches =
         'price' in offer
-          ? inCurrency.some((now) => same(now, offer.price))
+          ? inCurrency.some(
+              (p) =>
+                same(p.now, offer.price) || (p.regular !== null && same(p.regular, offer.price)),
+            )
           : same(offer.low, low) && same(offer.high, high);
       if (!matches) {
         const at = priceSentence(texts, page);

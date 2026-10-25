@@ -277,10 +277,11 @@ export function weighed<Id extends string, S extends Score<Id>>(
 }
 
 /**
- * Trust weighed for a profile, scored as trust() scores it: once a figure
- * or fresh-sources check is left among the weighed ones, or two sources are
- * placed. A type that leaves those out isn't scored by its links and site
- * alone. Its unscored gains count out of the type's Phase 1 points.
+ * Trust weighed for a profile, scored as trust() scores it: once a figure,
+ * fresh-sources or product feed check is left among the weighed ones, or
+ * two sources are placed. A type that leaves those out isn't scored by its
+ * links and site alone. Its unscored gains count out of the type's Phase 1
+ * points.
  */
 export function weighedTrust(
   read: TrustRead,
@@ -288,8 +289,9 @@ export function weighedTrust(
 ): TrustRead & { phase1Points: number } {
   const result = weighed(read, weights);
   const scored =
-    result.checks.some((c) => c.id === 'claimsSourced' || c.id === 'freshSources') ||
-    read.classified >= 2;
+    result.checks.some(
+      (c) => c.id === 'claimsSourced' || c.id === 'freshSources' || c.id === 'feedMatch',
+    ) || read.classified >= 2;
   return {
     ...result,
     score: scored ? result.score : null,
