@@ -138,6 +138,7 @@ import {
 import { caseConfirmed, caseKey, proofKey, qualityTodos } from '@/lib/content/quality-todos';
 import { introFacts } from '@/lib/content/intro-facts';
 import { isByline, readability, sentencesOf, withTypeRules } from '@/lib/content/readability';
+import { normalizeDomain } from '@/lib/citations/classify';
 import { brandFactsPath, factMismatches } from '@/lib/content/brand-facts';
 import { feedCheck, type CatalogMatch } from '@/lib/content/feed-match';
 import {
@@ -1030,19 +1031,18 @@ export function DraftEditor({
   }, [profile, images, ownImages, pageHtml, pageBlocks]);
   // Phase 3 (CE-054): a category page's ItemList in Before you publish, from
   // its links to the brand's product pages, read against its site.
-  const categorySchema = useMemo(
-    () =>
-      profile === 'category'
-        ? {
-            items: listedProducts(
-              pageHtml,
-              brandDomains ?? [],
-              siteTrust?.checks.organizationSchema.url ?? null,
-            ),
-          }
-        : null,
-    [profile, pageHtml, brandDomains, siteTrust],
-  );
+  // The brand's domains as the sources read them; failing that, its site's.
+  const sourcesFailed = !!reads.sources?.failed;
+  const categorySchema = useMemo(() => {
+    if (profile !== 'category') return null;
+    const site = siteTrust?.checks.organizationSchema.url ?? null;
+    const siteHost = site ? normalizeDomain(site) : '';
+    const domains = brandDomains ?? (sourcesFailed && siteHost ? [siteHost] : null);
+    if (!domains) {
+      return { items: [], status: sourcesFailed ? ('unknown' as const) : ('reading' as const) };
+    }
+    return { items: listedProducts(pageHtml, domains, site), status: 'read' as const };
+  }, [profile, pageHtml, brandDomains, sourcesFailed, siteTrust]);
   // The page's price, GTIN and stock against its product in the feed (CE-053).
   const feedRead = useMemo(
     () =>
@@ -3636,7 +3636,8 @@ export function DraftEditor({
             // Only where Before you publish has its code: a name and one price.
             product:
               !!productSchema?.offer && !('several' in productSchema.offer) && !!pageName(title),
-            itemList: (categorySchema?.items.length ?? 0) >= MIN_LISTED,
+            itemList:
+              categorySchema?.status === 'read' && categorySchema.items.length >= MIN_LISTED,
             onReview: () => {
               setExportOpen(null);
               openBeforePublish('export', exportOpen.destination);

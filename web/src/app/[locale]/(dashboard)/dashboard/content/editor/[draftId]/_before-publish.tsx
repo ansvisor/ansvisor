@@ -25,6 +25,7 @@ import {
   pageName,
   titleHasPlaceholder,
 } from '@/lib/content/page-schema';
+import { qualityPhase } from '@/lib/content/quality';
 import { checksOff } from '@/lib/content/quality-profiles';
 import { cn } from '@/lib/utils';
 import { copyToClipboard } from './_html-block';
@@ -110,7 +111,7 @@ export function BeforePublish({
    * Phase 3 (CE-054): a category page's ItemList, from its links to the
    * brand's product pages (listedProducts); null on other pages.
    */
-  category?: { items: ListedProduct[] } | null;
+  category?: { items: ListedProduct[]; status: 'read' | 'reading' | 'unknown' } | null;
   /** Opened by Mark ready, by Export, or by Send to CMS. */
   mode?: 'markReady' | 'export' | 'send';
   paste: ReadyToPaste;
@@ -184,7 +185,7 @@ export function BeforePublish({
     );
   // An ItemList lists two products at least: one isn't a list.
   const itemListLd =
-    category &&
+    category?.status === 'read' &&
     category.items.length >= MIN_LISTED &&
     jsonLdScript(itemListJsonLd({ name: productName, items: category.items }));
   const jsonLd = productLd
@@ -283,17 +284,27 @@ export function BeforePublish({
           ]
       : category
         ? [
-            itemListLd
+            category.status !== 'read'
               ? {
                   state: 'check' as const,
-                  title: t('schema.itemList', { count: category.items.length }),
-                  detail: t('schema.itemListDetail'),
+                  title: t('schema.itemListTitle'),
+                  detail: t(
+                    category.status === 'reading'
+                      ? 'schema.itemListReading'
+                      : 'schema.itemListUnknown',
+                  ),
                 }
-              : {
-                  state: 'missing' as const,
-                  title: t('schema.itemListNone'),
-                  detail: t('schema.itemListNoneDetail', { count: category.items.length }),
-                },
+              : itemListLd
+                ? {
+                    state: 'check' as const,
+                    title: t('schema.itemList', { count: category.items.length }),
+                    detail: t('schema.itemListDetail'),
+                  }
+                : {
+                    state: 'missing' as const,
+                    title: t('schema.itemListNone'),
+                    detail: t('schema.itemListNoneDetail', { count: category.items.length }),
+                  },
           ]
         : article
           ? [
@@ -310,7 +321,8 @@ export function BeforePublish({
               {
                 state: 'check' as const,
                 title: t('schema.other'),
-                detail: t('schema.otherDetail'),
+                // Phase 3 gives product and category pages their code too.
+                detail: t(qualityPhase() >= 3 ? 'schema.otherDetailTyped' : 'schema.otherDetail'),
               },
             ]),
     // Phase 2 (CE-050): where the page puts the brand forward.
@@ -463,8 +475,10 @@ export function BeforePublish({
             >
               {jsonLd}
             </pre>
-            {article && titleHasPlaceholder(title) && (
-              <p className="text-xs text-amber-700 dark:text-amber-300">{t('headlineLeftOut')}</p>
+            {(article || itemListLd) && titleHasPlaceholder(title) && (
+              <p className="text-xs text-amber-700 dark:text-amber-300">
+                {t(itemListLd ? 'nameLeftOut' : 'headlineLeftOut')}
+              </p>
             )}
             <p className="text-xs text-muted-foreground">
               {t(productLd ? 'productNote' : itemListLd ? 'itemListNote' : 'datesNote')}
