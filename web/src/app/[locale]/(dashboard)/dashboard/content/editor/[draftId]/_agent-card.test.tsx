@@ -210,7 +210,7 @@ describe('AgentCard', () => {
     // Working: the run, not the step.
     await render([], true, { next: step });
     expect(card.textContent).toBe('Content Agent is working');
-    // A rewrite to decide: still under the step, with its own buttons.
+    // A rewrite to decide heads with what it is, not the step after it, with its own buttons.
     await render(
       [
         suggestion({
@@ -223,11 +223,32 @@ describe('AgentCard', () => {
       false,
       { next: step },
     );
-    expect(card.textContent).toContain('Next · Shorten to your Length');
+    expect(card.textContent).not.toContain('Next · Shorten to your Length');
     expect(card.textContent).toContain(
-      'Last run: Content Agent rewrote the page to its rules · 37 → 12 characters · cut to the Length',
+      'Content Agent rewrote the page to its rules37 → 12 characters · cut to the Length',
     );
     expect(buttons()).toEqual(['Compare', 'Reject', 'Accept']);
+  });
+
+  it('says how many placeholders the result leaves to fill', async () => {
+    const page = suggestion({
+      kind: 'page',
+      beforeHtml: '<h1>Old</h1><p>Teams cut churn by [figure, source].</p>',
+      afterText:
+        '<h1>New</h1><p>Teams cut churn by [figure, source].</p><p>[name of a real person] said so in [year].</p>',
+      reason: 'answered each heading first',
+    });
+    await render([page], false);
+    // Two new: the one the page had isn't the run's.
+    expect(container.textContent).toContain('answered each heading first · 2 placeholders to fill');
+    await render(
+      [
+        suggestion({ afterText: 'look at [figure, source]' }),
+        suggestion({ id: 's2', beforeText: 'old', afterText: 'new' }),
+      ],
+      false,
+    );
+    expect(container.textContent).toContain('1 placeholder to fill');
   });
 
   it('reads a rewrite against the Length, not the agent’s say, and says what it kept', async () => {
