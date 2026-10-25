@@ -109,7 +109,29 @@ export async function basketScope(action) {
     if (error) throw new Error(error.message);
     promptIds = (prompts || []).map((p) => p.id);
   }
-  return { promptIds, pages: Array.isArray(payload.pages) ? payload.pages : [] };
+  return { promptIds, pages: scopePages(payload) };
+}
+
+/**
+ * The pages an action is measured on: the ones it names, and the addresses
+ * its drafts went live at (publishedPages by draft, CE-013), each once.
+ */
+function scopePages(payload) {
+  const named = Array.isArray(payload.pages) ? payload.pages : [];
+  const live =
+    payload.publishedPages && typeof payload.publishedPages === 'object'
+      ? Object.values(payload.publishedPages)
+      : [];
+  const seen = new Set();
+  const pages = [];
+  for (const url of [...named, ...live]) {
+    if (typeof url !== 'string') continue;
+    const key = pageScope([url]).keys[0] ?? url;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    pages.push(url);
+  }
+  return pages;
 }
 
 /** The basket's metrics over one window. */

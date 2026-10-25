@@ -80,6 +80,19 @@ describe('basketValues', () => {
 });
 
 describe('basketScope', () => {
+  it('measures the pages an action names and those its drafts went live at, each once', async () => {
+    expect(
+      (
+        await basketScope({
+          payload: {
+            pages: ['https://www.acme.example/a/'],
+            publishedPages: { d1: 'https://acme.example/a', d2: 'https://acme.example/new' },
+          },
+        })
+      ).pages,
+    ).toEqual(['https://www.acme.example/a/', 'https://acme.example/new']);
+  });
+
   it('uses the prompt ids the action was sent with', async () => {
     expect(await basketScope({ payload: { promptIds: ['p1'], pages: ['u'] } })).toEqual({
       promptIds: ['p1'],
