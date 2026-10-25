@@ -74,7 +74,7 @@ export const sendInput = z.object({
 export class DeliveryError extends Error {
   /**
    * @param {'no_webhook'|'webhook_not_subscribed'|'webflow_not_configured'|'no_webflow'|
-   *   'webflow_refused'|'webflow_not_ready'|'not_found'|'daily_limit'} code
+   *   'webflow_refused'|'webflow_not_ready'|'in_progress'|'not_found'|'daily_limit'} code
    */
   constructor(code, message, status) {
     super(message);
@@ -345,14 +345,32 @@ async function deliver({ delivery, page, brand, configs, webflow }) {
       ? { external_id: sent.externalId, target_collection: sent.collectionId }
       : {}),
   };
-  // How Webflow took it, for the one page's answer; not kept.
-  const how = webflow && sent.taken ? { updated: sent.updated, changed: sent.changed } : {};
+  // How Webflow took it, for the one page's answer (and the batch); not kept.
+  const how = webflow
+    ? sent.taken
+      ? { updated: sent.updated, changed: sent.changed }
+      : { refused: Boolean(sent.refused) }
+    : {};
   const { data: written, error } = await supabaseAdmin
     .from('content_draft_deliveries')
     .update(update)
     .eq('id', delivery.id)
     .eq('status', 'queued')
     .select('id');
+  if (sent.externalId && (error || (written && !written.length))) {
+    // The item is in Webflow whatever the row says: its id is kept, or the
+    // page's next send makes a second item and fails on its slug.
+    const { error: idError } = await supabaseAdmin
+      .from('content_draft_deliveries')
+      .update({ external_id: sent.externalId, target_collection: sent.collectionId })
+      .eq('id', delivery.id);
+    if (idError) {
+      logger.error(
+        { err: idError, deliveryId: delivery.id },
+        '[content-delivery] item id not kept',
+      );
+    }
+  }
   if (error) {
     logger.error({ err: error, deliveryId: delivery.id }, '[content-delivery] write failed');
   } else if (written && !written.length) {
@@ -379,9 +397,17 @@ async function closeQueued(delivery, reason) {
   }
 }
 
-/** The batch's pages, one after another; one deleted or archived before its turn doesn't go. */
+/**
+ * The batch's pages, one after another; one deleted or archived before its
+ * turn doesn't go, and once Webflow refuses the token, the rest don't either.
+ */
 async function deliverBatch(going, { brand, configs, webflow, batchId }) {
+  let refused = null;
   for (const [i, item] of going.entries()) {
+    if (refused) {
+      await closeQueued(item.delivery, refused).catch(() => {});
+      continue;
+    }
     // A short pause between pages, none before the first.
     if (i > 0) await new Promise((resolve) => setTimeout(resolve, PAUSE_MS));
     try {
@@ -395,7 +421,8 @@ async function deliverBatch(going, { brand, configs, webflow, batchId }) {
         await closeQueued(item.delivery, 'The page was deleted or archived before it was sent');
         continue;
       }
-      await deliver({ ...item, brand, configs, webflow });
+      const sent = await deliver({ ...item, brand, configs, webflow });
+      if (sent.refused) refused = sent.error ?? 'Webflow refused the site token';
     } catch (err) {
       logger.error(
         { err, batchId, deliveryId: item.delivery.id },
@@ -478,7 +505,17 @@ export async function sendContentPages({
       p_target: target,
     },
   );
-  if (reserveError) throw new Error(reserveError.message);
+  if (reserveError) {
+    // 00284: a page already on its way to Webflow isn't sent again meanwhile.
+    if (/delivery_in_progress/.test(reserveError.message ?? '')) {
+      throw new DeliveryError(
+        'in_progress',
+        'A page is already being sent to Webflow. Wait for it, then send again.',
+        409,
+      );
+    }
+    throw new Error(reserveError.message);
+  }
   const rows = queued ?? [];
   if (!rows.length) {
     throw new DeliveryError(

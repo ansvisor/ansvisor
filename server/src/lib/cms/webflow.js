@@ -68,7 +68,10 @@ async function run(slug, account, args) {
       throw new WebflowError('not_found', 'Webflow has no such site or collection');
     }
     if (SLUG_TAKEN.test(said)) {
-      throw new WebflowError('slug_taken', 'Another item in the collection has this slug');
+      throw new WebflowError(
+        'slug_taken',
+        'Another Webflow item has this slug. Change the page’s slug, or remove that item in Webflow.',
+      );
     }
     if (INVALID.test(said)) {
       throw new WebflowError(

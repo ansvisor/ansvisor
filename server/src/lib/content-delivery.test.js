@@ -72,7 +72,7 @@ vi.mock('../config/supabase.js', () => ({
     from: (t) => from(t),
     rpc: async (fn, args) => {
       db.rpc.push({ fn, args });
-      return { data: db.queued, error: null };
+      return db.rpcError ? { data: null, error: db.rpcError } : { data: db.queued, error: null };
     },
   },
 }));
@@ -133,6 +133,7 @@ beforeEach(() => {
   db.rpc = [];
   db.webflow = null;
   db.webflowConfigured = true;
+  db.rpcError = null;
   postJson.mockReset().mockResolvedValue({ status: 200, answer: '{"ok":true}' });
   sendToWebflow.mockReset();
 });
@@ -534,5 +535,45 @@ describe('sendContentPages to Webflow (phase 2)', () => {
     await vi.runAllTimersAsync();
     expect(sendToWebflow).toHaveBeenCalledTimes(2);
     expect(postJson).not.toHaveBeenCalled();
+  });
+
+  it('refuses a page already on its way to Webflow', async () => {
+    db.webflow = connection;
+    db.rpcError = { message: 'delivery_in_progress' };
+    await expect(toWebflow()).rejects.toMatchObject({ code: 'in_progress', status: 409 });
+    expect(sendToWebflow).not.toHaveBeenCalled();
+  });
+
+  it('stops a batch once Webflow refuses the token, closing the rest with the reason', async () => {
+    vi.useFakeTimers();
+    db.webflow = connection;
+    const second = page({ draftId: 'c0ffee00-0000-4000-8000-000000000002', slug: 'second' });
+    db.drafts = [draft(page().draftId), draft(second.draftId)];
+    db.queued = [row(page().draftId), row(second.draftId)];
+    sendToWebflow.mockResolvedValue({
+      taken: false,
+      failure: 'Webflow refused the site token',
+      refused: true,
+    });
+    await toWebflow([page(), second]);
+    await vi.runAllTimersAsync();
+    expect(sendToWebflow).toHaveBeenCalledTimes(1);
+    const closed = db.updates.filter(
+      (u) =>
+        u.table === 'content_draft_deliveries' &&
+        u.update.error === 'Webflow refused the site token',
+    );
+    expect(closed).toHaveLength(2);
+  });
+
+  it('keeps the item’s id even when the delivery’s row was written meanwhile', async () => {
+    db.webflow = connection;
+    db.told = { status: 'failed', error: 'Not sent: interrupted', published_url: null };
+    sendToWebflow.mockResolvedValue({ taken: true, externalId: 'item-9', collectionId: 'c1' });
+    await toWebflow();
+    expect(db.updates.map((u) => u.update)).toContainEqual({
+      external_id: 'item-9',
+      target_collection: 'c1',
+    });
   });
 });

@@ -88,10 +88,12 @@ router.post('/:deliveryId/status', async (req, res) => {
     // answer the same, so this route doesn't tell which deliveries exist.
     if (!UUID.test(deliveryId)) return res.status(401).json(DENIED);
 
+    // A webhook's delivery only: a Webflow one (00284) is the API's own to write.
     const { data: delivery, error } = await supabaseAdmin
       .from('content_draft_deliveries')
       .select('id, brand_id, draft_id, status, published_url')
       .eq('id', deliveryId)
+      .eq('target', 'webhook')
       .maybeSingle();
     if (error) throw new Error(error.message);
     if (!delivery) return res.status(401).json(DENIED);

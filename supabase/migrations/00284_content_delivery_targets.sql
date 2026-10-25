@@ -13,7 +13,9 @@
 --
 -- reserve_content_deliveries takes the target, 'webhook' when it's left out:
 -- the API before this change calls it with six arguments and still works,
--- so the migration goes first.
+-- so the migration goes first. For Webflow it refuses (delivery_in_progress)
+-- pages a send still has queued: two sends of one page at once would both
+-- make an item, the second refused on its slug.
 --
 -- Adding the columns checks content_draft_deliveries' rows once (the check
 -- constraints), under its lock: a few hundred rows at most so far.
@@ -32,7 +34,8 @@ comment on column public.content_draft_deliveries.target_collection is
 drop function if exists public.reserve_content_deliveries(uuid, uuid, uuid, uuid, jsonb, integer);
 
 -- ----------------------------------------------------------------------------
--- As 00262, with the target each queued row goes to.
+-- As 00262, with the target each queued row goes to, and no second Webflow
+-- send of a page while one is queued.
 -- ----------------------------------------------------------------------------
 create or replace function public.reserve_content_deliveries(
   p_organization_id uuid,
@@ -69,6 +72,19 @@ begin
   room := greatest(0, p_limit - used);
   if room = 0 or jsonb_typeof(p_items) <> 'array' then
     return;
+  end if;
+
+  -- Under the lock, so two sends of one page can't both pass.
+  if p_target = 'webflow' and exists (
+    select 1
+    from public.content_draft_deliveries d
+    join jsonb_array_elements(p_items) as items(item)
+      on d.draft_id = (item ->> 'draft_id')::uuid
+    where d.organization_id = p_organization_id
+      and d.target = 'webflow'
+      and d.status = 'queued'
+  ) then
+    raise exception 'delivery_in_progress' using errcode = 'P0001';
   end if;
 
   return query

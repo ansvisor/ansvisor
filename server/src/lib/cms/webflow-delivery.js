@@ -45,7 +45,7 @@ async function markRefused(connection) {
  * made there is updated (a new one is made when it was deleted in Webflow),
  * else a new draft item is made. What went wrong is said in our words.
  *
- * @returns {Promise<{ taken: boolean, failure?: string, externalId?: string,
+ * @returns {Promise<{ taken: boolean, failure?: string, refused?: boolean, externalId?: string,
  *   collectionId?: string, updated?: boolean, changed?: { tables: number, images: number } }>}
  */
 export async function sendToWebflow({ delivery, page, html, jsonLd, connection }) {
@@ -55,8 +55,8 @@ export async function sendToWebflow({ delivery, page, html, jsonLd, connection }
   };
   const collectionId = connection.collection_id;
   const { html: body, changed } = toWebflowRichText(html);
-  const slug =
-    webflowSlug(page.slug) ?? webflowSlug(page.title) ?? `page-${delivery.id.slice(0, 8)}`;
+  // A slug in another script has nothing left: the draft's own, the same every send.
+  const slug = webflowSlug(page.slug) ?? webflowSlug(page.title) ?? `page-${page.draftId}`;
   const fieldData = fieldDataFor({ page, slug, body, jsonLd }, connection.field_map ?? {});
   try {
     const before = await lastItem(page.draftId, collectionId, delivery.id);
@@ -73,7 +73,10 @@ export async function sendToWebflow({ delivery, page, html, jsonLd, connection }
     return { taken: true, externalId: itemId, collectionId, updated, changed };
   } catch (err) {
     if (err instanceof WebflowError) {
-      if (err.code === 'auth_failed') await markRefused(connection);
+      if (err.code === 'auth_failed') {
+        await markRefused(connection);
+        return { taken: false, failure: err.message, refused: true };
+      }
       return { taken: false, failure: err.message };
     }
     logger.warn(

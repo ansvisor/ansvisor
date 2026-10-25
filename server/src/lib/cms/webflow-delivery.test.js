@@ -95,14 +95,14 @@ describe('sendToWebflow', () => {
     });
     expect(webflow.updateItem).not.toHaveBeenCalled();
     // The page's last item is looked for in this collection, from a send that went.
-    expect(queries[0].filters).toEqual(
-      expect.arrayContaining([
-        ['eq', 'draft_id', 'dr1'],
-        ['eq', 'target', 'webflow'],
-        ['eq', 'target_collection', 'c1'],
-        ['in', 'status', ['sent', 'published']],
-      ]),
-    );
+    expect(queries[0].filters).toEqual([
+      ['eq', 'draft_id', 'dr1'],
+      ['eq', 'target', 'webflow'],
+      ['eq', 'target_collection', 'c1'],
+      ['in', 'status', ['sent', 'published']],
+      ['not', 'external_id', 'is', null],
+      ['neq', 'id', 'd2345678-0000-0000-0000-000000000000'],
+    ]);
   });
 
   it('updates the item the page’s last send made, or makes a new one when it was deleted in Webflow', async () => {
@@ -113,6 +113,14 @@ describe('sendToWebflow', () => {
 
     webflow.updateItem.mockRejectedValueOnce(new WebflowError('not_found', 'gone'));
     expect(await send()).toMatchObject({ taken: true, externalId: 'item-new', updated: false });
+
+    // Any other refusal of the update is the send's: no second item.
+    webflow.createItem.mockClear();
+    webflow.updateItem.mockRejectedValueOnce(
+      new WebflowError('invalid', 'Webflow refused the item'),
+    );
+    expect(await send()).toMatchObject({ taken: false, failure: 'Webflow refused the item' });
+    expect(webflow.createItem).not.toHaveBeenCalled();
   });
 
   it('gives Webflow a slug it takes, from the title when the page’s has nothing left', async () => {
@@ -120,13 +128,22 @@ describe('sendToWebflow', () => {
     expect(webflow.createItem.mock.calls[0][2].slug).toBe('soguk-demleme');
     await send({ slug: '…', title: 'Café crème' });
     expect(webflow.createItem.mock.calls[1][2].slug).toBe('cafe-creme');
+    // Another script: the draft's own, the same on every send.
+    await send({ slug: 'привет-мир', title: '日本語' });
+    await send({ slug: 'привет-мир', title: '日本語' });
+    expect(webflow.createItem.mock.calls[2][2].slug).toBe('page-dr1');
+    expect(webflow.createItem.mock.calls[3][2].slug).toBe('page-dr1');
   });
 
   it('marks the token refused when Webflow refuses it, and says what went wrong in its own words', async () => {
     webflow.createItem.mockRejectedValueOnce(
       new WebflowError('auth_failed', 'Webflow refused the site token'),
     );
-    expect(await send()).toEqual({ taken: false, failure: 'Webflow refused the site token' });
+    expect(await send()).toEqual({
+      taken: false,
+      failure: 'Webflow refused the site token',
+      refused: true,
+    });
     expect(updates).toEqual([
       {
         table: 'brand_cms_connections',

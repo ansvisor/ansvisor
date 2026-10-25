@@ -45,6 +45,39 @@ describe('toWebflowRichText', () => {
   });
 });
 
+describe('toWebflowRichText, on what pages hold', () => {
+  it('reads a cell’s paragraphs, items and lines a space apart, and keeps its links', () => {
+    expect(
+      toWebflowRichText(
+        '<table><tr><th>Tool</th><th>Notes</th></tr><tr><td><p>Acme</p></td><td><p>First</p><p>Second, <a href="https://acme.example/src" class="x">source</a></p><ul><li>a</li><li>b</li></ul>x<br>y</td></tr></table>',
+      ).html,
+    ).toBe(
+      '<ul><li><strong>Tool</strong>: Acme · <strong>Notes</strong>: First Second, <a href="https://acme.example/src">source</a> a b x y</li></ul>',
+    );
+  });
+
+  it('keeps a table a figure wraps, and a table in a cell once', () => {
+    const wrapped = toWebflowRichText(
+      '<figure class="wp-block-table"><table><tr><td>a</td><td>b</td></tr></table><figcaption>Prices</figcaption></figure>',
+    );
+    expect(wrapped.html).toBe('<ul><li>a · b</li></ul><p>Prices</p>');
+    expect(wrapped.changed.tables).toBe(1);
+    const nested = toWebflowRichText(
+      '<table><tr><td>Plan<table><tr><td>x</td><td>y</td></tr></table></td><td>z</td></tr></table>',
+    );
+    expect(nested.html).toBe('<ul><li>Plan x · y · z</li></ul>');
+    expect(nested.changed.tables).toBe(1);
+  });
+
+  it('puts words outside a block in a paragraph, an item outside a list too, and counts a picture once', () => {
+    const { html, changed } = toWebflowRichText(
+      '<div>Loose <strong>words</strong></div><h2>Next</h2><menu><li>Orphan</li></menu><!-- note --><picture><source srcset="a.webp"><img src="a.png"></picture>',
+    );
+    expect(html).toBe('<p>Loose <strong>words</strong></p><h2>Next</h2><p>Orphan</p>');
+    expect(changed.images).toBe(1);
+  });
+});
+
 describe('webflowSlug', () => {
   it('makes a slug Webflow takes', () => {
     expect(webflowSlug('soğuk-demleme-kahve')).toBe('soguk-demleme-kahve');
@@ -84,8 +117,9 @@ describe('fieldDataFor', () => {
     expect(data['seo-title']).toBe('Cold brew at home');
     // The opening words, cut at a word.
     expect(data['post-summary']).toMatch(/^Cold brew is coffee steeped .{60,}…$/);
-    expect(data['post-summary'].length).toBeLessThanOrEqual(161);
-    expect(data.schema).toBe('{"@type":"Article","headline":"<\\/script>"}');
+    expect(data['post-summary'].length).toBeLessThanOrEqual(160);
+    expect(data.schema).toBe('{"@type":"Article","headline":"\\u003c/script>"}');
+    expect(JSON.parse(data.schema)).toEqual({ '@type': 'Article', headline: '</script>' });
   });
 
   it('sends the page’s own meta, several JSON-LD blocks as a list, and nothing for a part the map leaves out', () => {
@@ -105,12 +139,12 @@ describe('fieldDataFor', () => {
       'post-summary': 'How to make it.',
       schema: '[{"@type":"Article"},{"@type":"FAQPage"}]',
     });
-    // No JSON-LD: the field is left as it is.
+    // No JSON-LD: the field is emptied, so an item sent again loses what the page dropped.
     expect(
       fieldDataFor(
         { page, slug: 's', body: '<p>x</p>', jsonLd: [] },
         { body: 'b', jsonLd: 'schema' },
       ),
-    ).not.toHaveProperty('schema');
+    ).toHaveProperty('schema', '');
   });
 });

@@ -69,6 +69,7 @@ beforeEach(async () => {
       brand_id: 'b1',
       draft_id: 'd1',
       status: 'sent',
+      target: 'webhook',
       created_at: '2026-10-24T10:00:00Z',
     },
   ];
@@ -152,6 +153,7 @@ describe('POST /webhooks/content-drafts/:deliveryId/status', () => {
       brand_id: 'b1',
       draft_id: 'd1',
       status: 'sent',
+      target: 'webhook',
       created_at: '2026-10-24T12:00:00Z',
     });
     const res = await call(
@@ -274,12 +276,20 @@ describe('POST /webhooks/content-drafts/:deliveryId/status', () => {
     expect(state.rpcs).toHaveLength(1);
   });
 
+  it('answers a Webflow delivery’s id as it does an unknown one: the API writes those itself', async () => {
+    state.deliveries[0].target = 'webflow';
+    const res = await published('https://acme.example/live');
+    expect(res.status).toBe(401);
+    expect(state.deliveries[0].status).toBe('sent');
+  });
+
   it('moves the page’s address only for its latest delivery', async () => {
     state.deliveries.push({
       id: 'newer',
       brand_id: 'b1',
       draft_id: 'd1',
       status: 'sent',
+      target: 'webhook',
       created_at: '2026-10-24T11:00:00Z',
     });
     const res = await published('https://acme.example/old');
