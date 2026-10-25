@@ -90,6 +90,7 @@ const onPickAuthor = vi.fn();
 const onShowPlaceholder = vi.fn();
 const onAddInput = vi.fn();
 const onKeep = vi.fn();
+const onConfirmAuthor = vi.fn();
 
 async function render(quality: QualityRead | Readability | null) {
   const q = quality && 'eeat' in quality ? quality : read(quality as Readability | null);
@@ -103,6 +104,7 @@ async function render(quality: QualityRead | Readability | null) {
           onPickAuthor={onPickAuthor}
           onAddInput={onAddInput}
           onKeep={onKeep}
+          onConfirmAuthor={onConfirmAuthor}
         />
       </NextIntlClientProvider>,
     );
@@ -113,6 +115,7 @@ beforeEach(() => {
   onShow.mockReset();
   onPickAuthor.mockReset();
   onKeep.mockReset();
+  onConfirmAuthor.mockReset();
   container = document.createElement('div');
   root = createRoot(container);
 });
@@ -180,6 +183,45 @@ describe('QualityTab', () => {
     expect(container.textContent).toContain('Nothing to raise here for now');
   });
 
+  it('offers to confirm the author the site names, then their profile (00271)', async () => {
+    const withConfirmed = (real: boolean, profile: boolean): QualityRead => {
+      const score = eeat({ author: null, confirmed: { real, profile } });
+      return {
+        ...read(null, null),
+        eeat: score,
+        authorConfirmed: { real, profile },
+        todos: qualityTodos({
+          eeat: score,
+          author: null,
+          hasAuthors: true,
+          confirmed: { real, profile },
+        }),
+      };
+    };
+    await render(withConfirmed(false, false));
+    const box = () => container.querySelectorAll<HTMLButtonElement>('[role="checkbox"]');
+    expect(box()).toHaveLength(1);
+    expect(box()[0].closest('li')!.textContent).toContain(
+      'The author is a real person, named on your site',
+    );
+    await act(async () => box()[0].click());
+    expect(onConfirmAuthor).toHaveBeenCalledWith('real', true);
+
+    // Confirmed: the byline checked, the profile's own box offered.
+    await render(withConfirmed(true, false));
+    const [byline, profile] = [...container.querySelectorAll('[aria-label="Your to-dos"] li')];
+    expect(byline.textContent).toContain(
+      'You confirmed your site names a real person as the author',
+    );
+    expect(profile.textContent).toContain('Or, if your site shows their profile, confirm it');
+    expect(box()).toHaveLength(2);
+    await act(async () => box()[1].click());
+    expect(onConfirmAuthor).toHaveBeenLastCalledWith('profile', true);
+    expect(container.querySelector('[aria-label="Quality scores"]')!.textContent).toContain(
+      'E-E-A-T60',
+    );
+  });
+
   it("lists picking the page's author as a to-do, and opens the menu", async () => {
     await render(read(result, null));
     const scores = container.querySelector('[aria-label="Quality scores"]')!;
@@ -190,7 +232,7 @@ describe('QualityTab', () => {
     );
     const [row, profile] = [...todos.querySelectorAll('li')];
     expect(row.textContent).toBe(
-      "Pick the page's author · To doIt's by Acme Team now: a named person shows who stands behind the page · +60 E-E-A-TPick author",
+      "Pick the page's author · To doIt's by Acme Team now: a named person shows who stands behind the page. Or, if your site names the author, confirm it · +60 E-E-A-TPick author",
     );
     // The profile waits on the author: listed, with no button yet.
     expect(profile.textContent).toBe(

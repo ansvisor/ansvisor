@@ -85,13 +85,14 @@ describe('useLinkChecks', () => {
     expect(checkDraftLinks).toHaveBeenCalledTimes(1);
   });
 
-  it('asks about a link not saved yet again after the next save', async () => {
+  it('asks about a link the answer left out again after the next save, not holding this one', async () => {
+    // Not saved yet (or over the hourly reads): the API's answer leaves it out.
     saved = ['https://a.example/'];
     await render(['https://a.example/', 'https://new.example/']);
     await wait();
     expect(seen().has('https://new.example/')).toBe(false);
-    // Its read comes after the next save.
-    expect(pending()).toBe(1);
+    // No read is coming at this save: it doesn't hold the score.
+    expect(pending()).toBe(0);
 
     // Same save: not asked again.
     await render(['https://a.example/', 'https://new.example/', 'https://a.example/']);
@@ -100,9 +101,36 @@ describe('useLinkChecks', () => {
 
     saved = ['https://a.example/', 'https://new.example/'];
     await render(['https://a.example/', 'https://new.example/'], 's2');
+    // Its read comes after the next save.
+    expect(pending()).toBe(1);
     await wait();
     expect(checkDraftLinks).toHaveBeenCalledTimes(2);
+    expect(pending()).toBe(0);
     expect(seen().get('https://new.example/')?.status).toBe('ok');
+  });
+
+  it("doesn't let an older save's late answer hold a newer save's left-out link", async () => {
+    let lateA!: (answer: unknown) => void;
+    checkDraftLinks.mockImplementationOnce(() => new Promise((resolve) => (lateA = resolve)));
+    await render(['https://a.example/']);
+    await wait();
+    // A newer save asks again; its answer leaves the link out (over the hourly reads).
+    await render(['https://a.example/'], 's2');
+    await wait();
+    expect(checkDraftLinks).toHaveBeenCalledTimes(2);
+    expect(pending()).toBe(0);
+    await act(async () => lateA({ links: [], skipped: [] }));
+    expect(pending()).toBe(0);
+  });
+
+  it('counts a call that fails on its own as a failed read: no read is coming in this save', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    checkDraftLinks.mockRejectedValueOnce(new Error('offline'));
+    await render(['https://a.example/']);
+    expect(pending()).toBe(1);
+    await wait();
+    expect(pending()).toBe(0);
+    vi.mocked(console.error).mockRestore();
   });
 
   it("doesn't ask again in the same save after a failed ask, nor with Quality off", async () => {

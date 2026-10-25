@@ -294,6 +294,14 @@ describe('BeforePublish', () => {
     expect(jsonLd()).not.toHaveProperty('author');
   });
 
+  it('names an author the person confirmed their site names as checked, not missing (00271)', async () => {
+    await render(quality({ author: null, authorConfirmed: { real: true, profile: false } }));
+    expect(rows()[0]).toContain('Author named on your site · check it');
+    expect(rows()[0]).toContain('Check your CMS sets them as the author.');
+    // Not the brand's Organization: the author isn't named here, so left out.
+    expect(jsonLd()).not.toHaveProperty('author');
+  });
+
   it('names the team byline as missing, and keeps a live page its published date', async () => {
     await render(quality({ author: null }), { isNew: false, image: null });
     const [author, , schema] = rows();
