@@ -534,6 +534,8 @@ export function DraftEditor({
   // Who the page is by (CE-038): page metadata, shown in the header and in a
   // Page info strip outside the page; with Quality's first phase.
   const [authorsRead, setAuthorsRead] = useState<AuthorsRead | null>(null);
+  // Read, or failed to: the header's score waits for it either way.
+  const [authorsTried, setAuthorsTried] = useState(false);
   const [authorId, setAuthorId] = useState(draft.authorId);
   // The author the database holds, and the latest pick: a slower pick that
   // fails after a later one landed doesn't roll the menu back.
@@ -545,7 +547,8 @@ export function DraftEditor({
     let live = true;
     getContentAuthors()
       .then((read) => live && setAuthorsRead(read))
-      .catch((err) => console.error('Failed to load the authors:', err));
+      .catch((err) => console.error('Failed to load the authors:', err))
+      .finally(() => live && setAuthorsTried(true));
     return () => {
       live = false;
     };
@@ -638,20 +641,18 @@ export function DraftEditor({
         : [],
     [sourcesOn, brandDomains, pageBlocks, competitorDomains, pageType, keptSources],
   );
-  const { kinds: aiKinds, paused: aiPaused } = useSourceClasses(
-    draft.id,
-    autosave.savedAt,
-    unplaced,
-    sourcesOn,
-  );
+  const {
+    kinds: aiKinds,
+    paused: aiPaused,
+    reading: sourcesReading,
+  } = useSourceClasses(draft.id, autosave.savedAt, unplaced, sourcesOn);
+  // A save waiting or under way: the page's reads follow it. Not a failed
+  // save (or a conflict, a page too large): no new save is coming till it's fixed.
+  const saving = autosave.state === 'unsaved' || autosave.state === 'saving';
   // The claims in the draft's own words, as the model reads them (CE-045):
   // asked after a save, leaving the block the person is writing in.
-  const claimsRead = useClaims(
-    draft.id,
-    autosave.savedAt,
-    sourcesOn,
-    autosave.state !== 'saved',
-    () => (editor && !editor.isDestroyed && editor.isFocused ? writingBlock(editor) : null),
+  const claimsRead = useClaims(draft.id, autosave.savedAt, sourcesOn, saving, () =>
+    editor && !editor.isDestroyed && editor.isFocused ? writingBlock(editor) : null,
   );
   const { blocks: claimBlocks, recheck: recheckClaims } = claimsRead;
   // Out of the editor (to Quality, to Before you publish): the block left
@@ -852,6 +853,29 @@ export function DraftEditor({
   const { at: nudgeAt } = nudge;
   // The author's to-dos wait for E-E-A-T: the nudge waits for them.
   const todosRead = eeatScore !== null;
+  // The score the header and the panel show (CE-039): once the reads that
+  // move it are in, or failed (the authors and, in phase 2, Your input for
+  // E-E-A-T; the site's trust, the sources, the links and, in phase 2, the
+  // claims and the sites' kinds for Trust). Until the first time it says
+  // it's reading; after, it keeps the last settled score while new reads
+  // land (a link added, the agent's page), so it never jumps through the
+  // partial averages on the way.
+  const qualitySettled =
+    qualityOn &&
+    authorsTried &&
+    !inputsPending &&
+    siteTrustRead &&
+    reads.sources !== null &&
+    linksPending === 0 &&
+    !claimsRead.reading &&
+    !sourcesReading &&
+    // Phase 2 reads the page as saved: an edit's score waits for its save.
+    !(sourcesOn && saving);
+  const [shownQuality, setShownQuality] = useState<{ score: number | null } | null>(null);
+  if (qualitySettled && shownQuality?.score !== qualityScore) {
+    setShownQuality({ score: qualityScore });
+  }
+  const shownScore = shownQuality?.score ?? null;
   const agentNudged = useRef(false);
   useEffect(() => {
     if (!agentFinished || !todosRead || agentNudged.current) return;
@@ -2478,21 +2502,43 @@ export function DraftEditor({
             <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-current" />
             {t('rulesChip', { met: rules.met, total: rules.total })}
           </button>
-          {qualityScore !== null && (
+          {qualityOn && shownQuality === null && (
+            <button
+              type="button"
+              onClick={() => openPanelTab('quality')}
+              title={t('qualityChipHint')}
+              className="inline-flex h-5 shrink-0 items-center gap-1.5 rounded-full border bg-muted/40 px-2 text-xs font-medium text-muted-foreground"
+            >
+              <span
+                aria-hidden
+                className="h-1.5 w-1.5 animate-pulse rounded-full bg-current motion-reduce:animate-none"
+              />
+              {t('qualityChipReading')}
+            </button>
+          )}
+          {shownScore !== null && (
             <button
               type="button"
               onClick={() => openPanelTab('quality')}
               title={t('qualityChipHint')}
               className={cn(
                 'inline-flex h-5 shrink-0 items-center gap-1.5 rounded-full border px-2 text-xs font-medium tabular-nums',
-                BAND_CLASSES[qualityBand(qualityScore)],
+                BAND_CLASSES[qualityBand(shownScore)],
               )}
             >
-              <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-current" />
-              {t('qualityChip', { score: qualityScore })}
+              <span
+                aria-hidden
+                className={cn(
+                  'h-1.5 w-1.5 rounded-full bg-current',
+                  // New reads landing: the score may move once they're in.
+                  !qualitySettled && 'animate-pulse motion-reduce:animate-none',
+                )}
+              />
+              {t('qualityChip', { score: shownScore })}
               <span className="sr-only">
                 {' · '}
-                {t(`quality.bands.${qualityBand(qualityScore)}`)}
+                {t(`quality.bands.${qualityBand(shownScore)}`)}
+                {!qualitySettled && ` · ${t('qualityChipUpdating')}`}
               </span>
             </button>
           )}
@@ -2714,7 +2760,7 @@ export function DraftEditor({
               briefRebuilding ? null : (aiUsedUp ?? (agentBusy ? t('suggestions.agentBusy') : null))
             }
             quality={quality}
-            qualityScore={qualityScore}
+            qualityScore={shownScore}
             onShowInPage={showInPage}
             onShowPlaceholder={showFirstPlaceholder}
             onPickAuthor={() => setAuthorMenuOpen(true)}

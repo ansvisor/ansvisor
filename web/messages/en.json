@@ -128,6 +128,7 @@
     "contentOpportunities": "Opportunities",
     "contentLibrary": "Library",
     "contentPlan": "Plan",
+    "contentEditor": "Editor",
     "toggleSubmenu": "Show or hide {label}"
   },
   "actionCenter": {
@@ -4326,6 +4327,8 @@
       },
       "qualityChip": "Quality {score}",
       "qualityChipHint": "An Ansvisor estimate of this page's quality. Open Quality.",
+      "qualityChipReading": "Quality · reading…",
+      "qualityChipUpdating": "updating as the page is read",
       "nextStep": {
         "label": "Next step",
         "short": "Next",

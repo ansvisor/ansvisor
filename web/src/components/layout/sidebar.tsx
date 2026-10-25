@@ -11,6 +11,7 @@ import { carriedParams, PROMPTS_BASE } from '@/lib/prompts-routes';
 import { dashboardNav } from '@/config/dashboard';
 import {
   activeChildHref,
+  childLinkHref,
   getDashboardNavLabel,
   getDashboardNavGroupLabel,
   shouldShowDashboardNavItem,
@@ -440,7 +441,7 @@ export function Sidebar() {
                               return (
                                 <li key={child.href}>
                                   <Link
-                                    href={`${child.href}${carry}`}
+                                    href={`${childLinkHref(child, pathname)}${carry}`}
                                     data-nav-item="child"
                                     aria-current={childActive ? 'page' : undefined}
                                     className={cn(
