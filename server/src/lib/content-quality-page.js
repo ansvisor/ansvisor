@@ -606,7 +606,8 @@ export async function readPage({
   const { data: kept, error } = await supabaseAdmin
     .from('content_quality_pages')
     .select(
-      'page_hash, spots, proofs, regulated, checks, missed, read_at, day_reads, day_started_at',
+      // page_type: what its checks were read for (the editor scores only those).
+      'page_hash, page_type, spots, proofs, regulated, checks, missed, read_at, day_reads, day_started_at',
     )
     .eq('draft_id', draftId)
     .maybeSingle();

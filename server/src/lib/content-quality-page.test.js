@@ -21,11 +21,25 @@ const generateObject = vi.fn();
 vi.mock('../config/supabase.js', () => ({
   default: {
     from: (table) => {
+      let columns = null;
       const chain = {
-        select: () => chain,
+        // Only the columns asked for, as the database answers.
+        select: (list) => ((columns = list ?? null), chain),
         eq: () => chain,
         gte: () => chain,
-        maybeSingle: async () => ({ data: kept, error: null }),
+        maybeSingle: async () => ({
+          data:
+            kept && columns
+              ? Object.fromEntries(
+                  columns
+                    .split(',')
+                    .map((c) => c.trim())
+                    .filter((c) => c in kept)
+                    .map((c) => [c, kept[c]]),
+                )
+              : kept,
+          error: null,
+        }),
         upsert: async (row, options) => (upserts.push({ row, options }), { error: null }),
         then: (resolve) => resolve({ count: readsToday, error: null, table }),
       };
