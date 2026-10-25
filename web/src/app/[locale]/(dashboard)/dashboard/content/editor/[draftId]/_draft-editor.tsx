@@ -250,7 +250,6 @@ import {
 import {
   AgentSuggestions,
   acceptInto,
-  placeSuggestion,
   suggestionsKey,
   redoDecision,
   undoInto,
@@ -1930,26 +1929,6 @@ export function DraftEditor({
     }
   };
   const openSuggestions = suggestions.filter((s) => s.status === 'open').length;
-  // Whether the agent's batch is still the page's: one of its changes is
-  // open, or where the page has it. After a restore (which sets its open
-  // ones aside), or edits over all it changed, its card and its Undo all go:
-  // they'd undo nothing (editor test 2026-10-25). A whole page rewritten
-  // keeps its own card, whose Undo says when the page changed since.
-  const batchApplies = useMemo(
-    () =>
-      !!editor &&
-      !editor.isDestroyed &&
-      suggestions.some(
-        (s) =>
-          // An open one stays in sight to decide: left open, it holds the next run.
-          s.status === 'open' ||
-          s.kind === 'page' ||
-          placeSuggestion(editor.state, s, suggestions) !== null,
-      ),
-    // pageHtml: the page as it changes (the editor's state is read through it).
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [editor, suggestions, pageHtml],
-  );
   const pageSuggestion = suggestions.find((s) => s.kind === 'page') ?? null;
   // The page's last rewrite, from any run (00285), read on opening and again
   // once a new one is shown: a Length it missed isn't a rewrite's to reach
@@ -3292,17 +3271,26 @@ export function DraftEditor({
       toast.success(t('history.restored', { version: label }));
       void loadCited();
       // The agent's open suggestions were for the page before it: they go,
-      // so they hold no later run (open_suggestions), and its card goes
-      // with a batch the page no longer has (batchApplies).
+      // so they hold no later run (open_suggestions). Left open when that
+      // fails, for the person to decide on the card.
       const stale = suggestionsNow.current.filter((s) => s.status === 'open').map((s) => s.id);
-      if (stale.length) {
-        await decideDraftSuggestions(stale, 'rejected').catch((err) =>
-          console.error('Failed to set aside the suggestions for the page before:', err),
-        );
+      const setAside =
+        stale.length === 0 ||
+        (await decideDraftSuggestions(stale, 'rejected').then(
+          () => true,
+          (err) => {
+            console.error('Failed to set aside the suggestions for the page before:', err);
+            return false;
+          },
+        ));
+      if (stale.length && setAside) {
         setSuggestions((now) =>
           now.map((s) => (stale.includes(s.id) ? { ...s, status: 'rejected' as const } : s)),
         );
       }
+      // Its card goes as if closed, with its Undo all and last run: they were
+      // for the page before (editor test 2026-10-25). A new batch opens it.
+      setBarClosed(true);
     } catch (err) {
       console.error('Failed to restore the version:', err);
       toast.error(t('history.restoreFailed'));
@@ -3358,9 +3346,18 @@ export function DraftEditor({
     toast(t('pageType.siteChanged', { site: tSites(next) }));
   };
 
-  // Why History waits (the HTML view holds the page, a restore runs), or null.
+  // Why History waits (the HTML view holds the page, a restore runs, the
+  // agent's changes land or a decision on them saves), or null.
   const historyWaits =
-    htmlSource !== null ? t('history.htmlOpen') : restoring ? t('history.restoring') : null;
+    htmlSource !== null
+      ? t('history.htmlOpen')
+      : restoring
+        ? t('history.restoring')
+        : fixing
+          ? t('history.agentWorking')
+          : deciding
+            ? t('history.deciding')
+            : null;
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -3733,8 +3730,7 @@ export function DraftEditor({
               </span>
             </p>
           )}
-          {(agentWorking ||
-            (suggestions.length > 0 && batchApplies && !(barClosed && openSuggestions === 0))) && (
+          {(agentWorking || (suggestions.length > 0 && !(barClosed && openSuggestions === 0))) && (
             <AgentCard
               suggestions={suggestions}
               rules={cardRules}

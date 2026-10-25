@@ -1172,7 +1172,7 @@ describe('the content editor', () => {
       expect(restoreDraftVersion).toHaveBeenCalledTimes(1);
     });
 
-    it('sets aside the agent’s open suggestions for the page before, and its card goes', async () => {
+    it('sets aside the agent’s open suggestions for the page before, and closes its card', async () => {
       getContentDraft.mockResolvedValue(
         draft({
           bodyHtml: '<h1>Pipeline forecasting</h1><p>We delve into how teams forecast.</p>',
@@ -1208,6 +1208,139 @@ describe('the content editor', () => {
       expect(decideDraftSuggestions).toHaveBeenCalledWith(['n1'], 'rejected');
       // Its Undo all would undo nothing on the page restored.
       expect(card()).toBeNull();
+    });
+
+    it('closes the card of a batch already decided: its Undo all and last run were for the page before', async () => {
+      getContentDraft.mockResolvedValue(
+        draft({
+          bodyHtml:
+            '<h1>Pipeline forecasting</h1><p>Teams look at how they forecast.</p><p>Teams trust it.</p>',
+        }),
+      );
+      getDraftVersions.mockResolvedValue(versions);
+      const decided = {
+        batchId: 'b2',
+        actionId: null,
+        actionNo: null,
+        kind: 'replace' as const,
+        reason: 'remove an AI trace (rule)',
+        ruleKeys: ['aiTraces'],
+      };
+      getDraftSuggestions.mockResolvedValue([
+        {
+          ...decided,
+          id: 'a1',
+          blockText: 'Teams delve into how they forecast.',
+          beforeText: 'delve into',
+          afterText: 'look at',
+          status: 'accepted' as const,
+        },
+        // Its passage is on the version restored too.
+        {
+          ...decided,
+          id: 'r1',
+          blockText: 'Teams trust it.',
+          beforeText: 'trust',
+          afterText: 'rely on',
+          status: 'rejected' as const,
+        },
+      ]);
+      restoreDraftVersion.mockResolvedValue({
+        title: 'Old title',
+        bodyHtml:
+          '<h1>Old title</h1><p>Teams delve into how they forecast.</p><p>Teams trust it.</p>',
+        updatedAt: '2026-10-21T10:00:00Z',
+      });
+      await renderPage();
+      const card = () => container.querySelector('[role="region"][aria-label="Agent suggestions"]');
+      expect(card()).not.toBeNull();
+      const items = await openHistory();
+      await act(async () => items[1].click());
+      await act(async () => {});
+      // Nothing open to set aside.
+      expect(decideDraftSuggestions).not.toHaveBeenCalled();
+      expect(card()).toBeNull();
+    });
+
+    it('leaves the agent’s open suggestions on its card when they can’t be set aside', async () => {
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+      getContentDraft.mockResolvedValue(
+        draft({
+          bodyHtml: '<h1>Pipeline forecasting</h1><p>We delve into how teams forecast.</p>',
+        }),
+      );
+      getDraftVersions.mockResolvedValue(versions);
+      getDraftSuggestions.mockResolvedValue([
+        {
+          id: 'n1',
+          batchId: 'b2',
+          actionId: null,
+          actionNo: null,
+          kind: 'replace' as const,
+          blockText: 'We delve into how teams forecast.',
+          beforeText: 'delve into',
+          afterText: 'look at',
+          reason: 'remove an AI trace (rule)',
+          ruleKeys: ['aiTraces'],
+          status: 'open' as const,
+        },
+      ]);
+      decideDraftSuggestions.mockRejectedValue(new Error('offline'));
+      restoreDraftVersion.mockResolvedValue({
+        title: 'Old title',
+        bodyHtml: '<h1>Old title</h1><p>We delve into how teams forecast.</p>',
+        updatedAt: '2026-10-21T10:00:00Z',
+      });
+      await renderPage();
+      const items = await openHistory();
+      await act(async () => items[1].click());
+      await act(async () => {});
+      // Still open on the server: on the card to decide, never shown as set aside.
+      const card = container.querySelector('[role="region"][aria-label="Agent suggestions"]');
+      expect(card).not.toBeNull();
+      expect(
+        [...card!.querySelectorAll('button')].some((b) => b.textContent === 'Accept all'),
+      ).toBe(true);
+    });
+
+    it('waits while a decision on the agent’s changes saves', async () => {
+      getContentDraft.mockResolvedValue(
+        draft({
+          bodyHtml: '<h1>Pipeline forecasting</h1><p>We delve into how teams forecast.</p>',
+        }),
+      );
+      getDraftSuggestions.mockResolvedValue([
+        {
+          id: 'n1',
+          batchId: 'b2',
+          actionId: null,
+          actionNo: null,
+          kind: 'replace' as const,
+          blockText: 'We delve into how teams forecast.',
+          beforeText: 'delve into',
+          afterText: 'look at',
+          reason: 'remove an AI trace (rule)',
+          ruleKeys: ['aiTraces'],
+          status: 'open' as const,
+        },
+      ]);
+      let saved: () => void = () => {};
+      decideDraftSuggestions.mockReturnValueOnce(new Promise<void>((r) => (saved = r)));
+      await renderPage();
+      const card = container.querySelector('[role="region"][aria-label="Agent suggestions"]')!;
+      await act(async () =>
+        [...card.querySelectorAll('button')].find((b) => b.textContent === 'Accept all')!.click(),
+      );
+      // A restore now would set the same suggestions aside under the decision.
+      expect(button('History')!.title).toBe("Saving your decision on the agent's changes…");
+      expect(button('History')!.disabled || button('History')!.hasAttribute('data-disabled')).toBe(
+        true,
+      );
+      await act(async () => saved());
+      await act(async () => {});
+      expect(button('History')!.disabled || button('History')!.hasAttribute('data-disabled')).toBe(
+        false,
+      );
     });
 
     it('keeps the page when the restore fails', async () => {
