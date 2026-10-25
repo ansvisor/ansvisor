@@ -309,6 +309,13 @@ describe('AgentCard', () => {
     expect(container.textContent).not.toContain('longer than the page before');
   });
 
+  it('says the last run failed in place of an earlier batch’s review', async () => {
+    await render([suggestion({ status: 'accepted' })], false, { lastRunFailed: true });
+    expect(container.textContent).toContain("Content Agent couldn't finish its last run");
+    expect(container.textContent).toContain('Nothing it wrote was kept.');
+    expect(container.textContent).not.toContain('All suggestions reviewed');
+  });
+
   it('says it is working, with nothing to press', async () => {
     await render([], true);
     const card = container.querySelector('[role="region"]')!;

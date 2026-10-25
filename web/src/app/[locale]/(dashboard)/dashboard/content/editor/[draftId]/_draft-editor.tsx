@@ -39,6 +39,7 @@ import {
   getCitedPassages,
   getDraftSuggestions,
   getLastPageRewrite,
+  type AgentEmptyWhy,
   keepAgentBeforeVersion,
   markContentDraftReady,
   unmarkContentDraftReady,
@@ -58,7 +59,7 @@ import {
 } from '@/lib/actions/content-drafts';
 import { getSiteTrust } from '@/lib/actions/audits';
 import { getContentAuthors } from '@/lib/actions/content-authors';
-import { stopAgentRun } from '@/lib/content/agent-runs-client';
+import { readAgentRun, stopAgentRun } from '@/lib/content/agent-runs-client';
 import { agentWriteRequest, useRuleDescriber } from '@/lib/content/agent-write';
 import { authorInitials, canEditAuthor, type AuthorsRead } from '@/lib/content/authors';
 import type { SiteTrust } from '@/lib/content/site-trust';
@@ -296,19 +297,48 @@ const FIX_WAIT_MS = 90_000;
 const FIX_RUNS = ['fix', 'handoff'] as const;
 const BRIEF_RUNS = ['brief'] as const;
 
+/** How a run whose answer was lost on the way ended, as the page and the run's row say. */
+type AgentOutcome =
+  | { batch: DraftSuggestion[] }
+  | { nothing: true }
+  | { stopped: true }
+  | { failed: true }
+  | null;
+
 /**
- * The draft's suggestions once a new open batch lands, read every few
- * seconds until the deadline; null if none did. Fix open rules only runs
- * with none open, so any open one is the agent's.
+ * How Fix open rules' run ended when its answer didn't come back (a timeout
+ * on the way), read every few seconds until the deadline: its batch once it
+ * lands, or its row once it's finished (content_agent_runs) — done with
+ * nothing left (editor test 2026-10-25: read as "couldn't run" after 90 s),
+ * stopped, or failed. Fix open rules only runs with none open, so any open
+ * suggestion is the agent's; a run started before this one isn't read. Null
+ * when neither came in time.
  */
-async function agentBatch(draftId: string, until: number): Promise<DraftSuggestion[] | null> {
+async function agentOutcome(draftId: string, asked: number, until: number): Promise<AgentOutcome> {
   while (Date.now() < until) {
     await new Promise((resolve) => setTimeout(resolve, AGENT_POLL_MS));
     const read = await getDraftSuggestions(draftId).catch(() => null);
-    if (read?.some((s) => s.status === 'open')) return read;
+    if (read?.some((s) => s.status === 'open')) return { batch: read };
+    const run = await readAgentRun(draftId).catch(() => null);
+    // Its own run: one of Fix's kinds, started once it was asked (the clocks' slack).
+    if (
+      !run ||
+      !(FIX_RUNS as readonly string[]).includes(run.kind) ||
+      Date.parse(run.startedAt) < asked - RUN_CLOCK_SLACK_MS ||
+      !run.finishedAt
+    ) {
+      continue;
+    }
+    if (run.outcome === 'stopped') return { stopped: true };
+    if (run.outcome === 'failed') return { failed: true };
+    // Done: with what it left (its third step's count), the batch reads next time round.
+    if (run.outcome === 'done' && !run.steps[2]?.count) return { nothing: true };
   }
   return null;
 }
+
+/** How far the browser's clock may be ahead of the server's, for a run's start. */
+const RUN_CLOCK_SLACK_MS = 30_000;
 
 /** What a paragraph Remove empties goes with, when it was all they held (CE-045). */
 const EMPTIED_WITH = new Set([
@@ -390,6 +420,8 @@ export function DraftEditor({
   const [citedRead, setCitedRead] = useState(!draft.sourceUrl);
   // An agent's suggestions (CE-018): its latest batch, with what was decided.
   const [suggestions, setSuggestions] = useState<DraftSuggestion[]>([]);
+  // The agent's last run failed (Fix or hand-off): the card says so over an earlier batch.
+  const [lastRunFailed, setLastRunFailed] = useState(false);
   const suggestionsNow = useRef(suggestions);
   const [deciding, setDeciding] = useState(false);
   const [barClosed, setBarClosed] = useState(false);
@@ -2196,14 +2228,22 @@ export function DraftEditor({
    * and Stop or a lost answer is said as such.
    */
   const runAgentFix = async (
-    send: () => Promise<{ count: number } | { error: HandOffError }>,
+    send: () => Promise<{ count: number; why?: AgentEmptyWhy } | { error: HandOffError }>,
     told: (count: number) => string = fixedMessage,
     // The editor's own run (the automatic hand-off): what the person didn't
     // start isn't said when it doesn't run or finds nothing, only logged.
     quiet = false,
   ) => {
-    const failed = (key: string, error: string) =>
-      quiet ? console.warn('The automatic hand-off did not run:', error) : toast.error(t(key));
+    const failed = (key: string, error: string) => {
+      if (quiet) {
+        console.warn('The automatic hand-off did not run:', error);
+        return;
+      }
+      toast.error(t(key));
+      // The card's last run says so, not an earlier batch's review.
+      if (error === 'failed') setLastRunFailed(true);
+    };
+    setLastRunFailed(false);
     setStoppingRun(null);
     stopSent.current = null;
     setFixing(true);
@@ -2223,12 +2263,21 @@ export function DraftEditor({
         return;
       }
       if ('error' in result && result.error === 'unconfirmed') {
-        // No answer is not a failure: its batch shows if it lands in time.
-        const landed = await agentBatch(draft.id, asked + FIX_WAIT_MS);
-        if (!landed) {
+        // No answer is not a failure: how its run ended says (its batch, or its row).
+        const outcome = await agentOutcome(draft.id, asked, asked + FIX_WAIT_MS);
+        if (outcome && 'stopped' in outcome) {
+          toast(t('agentCard.stopped'));
+          return;
+        }
+        if (outcome && 'nothing' in outcome) {
+          if (!quiet) toast(t('suggestions.nothingToFix'));
+          return;
+        }
+        if (!outcome || 'failed' in outcome) {
           failed('suggestions.fixErrors.failed', 'failed');
           return;
         }
+        const landed = outcome.batch;
         setSuggestions(landed);
         setBarClosed(false);
         agentBeforeKept.current = false;
@@ -2251,7 +2300,16 @@ export function DraftEditor({
         return;
       }
       if (result.count === 0) {
-        if (!quiet) toast(t('suggestions.nothingToFix'));
+        // Why, so the person knows what to do: every change it had was in a quoted passage.
+        if (!quiet) {
+          toast(
+            t(
+              result.why === 'locked'
+                ? 'suggestions.nothingToFixLocked'
+                : 'suggestions.nothingToFix',
+            ),
+          );
+        }
         return;
       }
       setSuggestions(await getDraftSuggestions(draft.id));
@@ -3498,6 +3556,7 @@ export function DraftEditor({
               busy={deciding || htmlSource !== null}
               working={agentWorking}
               run={agentRun}
+              lastRunFailed={lastRunFailed}
               onStop={() => void stopAgent()}
               stopping={stoppingRun !== null && stoppingRun === agentRun?.id}
               onAcceptAll={() =>

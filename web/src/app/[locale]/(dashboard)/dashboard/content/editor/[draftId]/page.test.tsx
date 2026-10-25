@@ -6373,6 +6373,52 @@ describe('the side panel', () => {
       }
     });
 
+    it('says the agent found nothing when its run ended with none, not that it couldn’t run', async () => {
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
+      try {
+        getContentDraft.mockResolvedValue(traced);
+        getDraftSuggestions.mockResolvedValue([]);
+        fixDraftRules.mockResolvedValue({ error: 'unconfirmed' });
+        await openRules();
+        // Its run, started once it was asked and done with nothing left (editor test 2026-10-25).
+        readAgentRun.mockResolvedValue({
+          id: 'r9',
+          kind: 'fix',
+          steps: [
+            { key: 'read_rules', count: 3 },
+            { key: 'gather_sources', count: 0 },
+            { key: 'write_changes', count: 0 },
+          ],
+          step: 3,
+          startedAt: new Date().toISOString(),
+          finishedAt: new Date().toISOString(),
+          stoppedAt: null,
+          outcome: 'done',
+        });
+
+        await act(async () => panelButton('Run Agent').click());
+        await act(async () => void (await vi.advanceTimersByTimeAsync(10_000)));
+        await act(async () => {});
+        expect(toast).toHaveBeenCalledWith(
+          'Content Agent found nothing it could change without new facts.',
+        );
+        expect(toast.error).not.toHaveBeenCalled();
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('says what to do when every change it had was in a quoted passage', async () => {
+      getContentDraft.mockResolvedValue(traced);
+      fixDraftRules.mockResolvedValue({ count: 0, why: 'locked' });
+      await openRules();
+      await act(async () => panelButton('Run Agent').click());
+      await act(async () => {});
+      expect(toast).toHaveBeenCalledWith(
+        "Content Agent's changes were all in passages AI answers quote, which it keeps. Unlock the ones you're fine to change (Edit anyway), or change them yourself.",
+      );
+    });
+
     it('says the agent couldn’t run when no batch lands in time', async () => {
       vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
       try {

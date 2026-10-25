@@ -2227,6 +2227,12 @@ export interface AgentFixRequest {
   sources?: RebuildSources;
 }
 
+/** Why a run left nothing to review (content-agent.js emptyWhy). */
+export type AgentEmptyWhy = 'none' | 'locked' | 'dropped';
+
+const fixEmptyWhy = (why: unknown): { why?: AgentEmptyWhy } =>
+  why === 'none' || why === 'locked' || why === 'dropped' ? { why } : {};
+
 /**
  * Fix open rules with agent (CE-018): the Content Agent reads the draft as
  * saved and leaves suggestions on the rules sent, for review in the page,
@@ -2237,7 +2243,7 @@ export async function fixDraftRules(
   id: string,
   brandId: string,
   request: AgentFixRequest,
-): Promise<{ count: number } | { error: AgentFixError }> {
+): Promise<{ count: number; why?: AgentEmptyWhy } | { error: AgentFixError }> {
   if (!draftId.safeParse(id).success || !draftId.safeParse(brandId).success) {
     return { error: 'failed' };
   }
@@ -2273,7 +2279,7 @@ export async function fixDraftRules(
       const code = body.code as AgentFixError;
       return { error: (AGENT_FIX_ERRORS as readonly string[]).includes(code) ? code : 'failed' };
     }
-    return { count: Number(body.count) || 0 };
+    return { count: Number(body.count) || 0, ...fixEmptyWhy(body.why) };
   } catch (err) {
     console.error('Failed to run the Content Agent:', err);
     return { error: 'unconfirmed' };
@@ -2310,7 +2316,7 @@ export async function handOffDraft(
   id: string,
   brandId: string,
   request: HandOffRequest,
-): Promise<{ count: number } | { error: HandOffError }> {
+): Promise<{ count: number; why?: AgentEmptyWhy } | { error: HandOffError }> {
   if (!draftId.safeParse(id).success || !draftId.safeParse(brandId).success) {
     return { error: 'failed' };
   }
@@ -2344,7 +2350,7 @@ export async function handOffDraft(
       const code = body.code as HandOffError;
       return { error: (HANDOFF_ERRORS as readonly string[]).includes(code) ? code : 'failed' };
     }
-    return { count: Number(body.count) || 0 };
+    return { count: Number(body.count) || 0, ...fixEmptyWhy(body.why) };
   } catch (err) {
     console.error('Failed to hand the draft off:', err);
     return { error: 'unconfirmed' };
