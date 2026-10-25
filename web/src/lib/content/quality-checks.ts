@@ -79,6 +79,9 @@ export const TRUST_WEIGHTS = {
   // Phase 3 (CE-053): a product page's price and stock against its product
   // feed; weighed there, and only where the feed has the page's product.
   feedMatch: 0,
+  // Phase 3 (CE-054): a category page's intro facts the person confirmed;
+  // weighed there, and only where its intro states a count or a price.
+  introFacts: 0,
 } as const;
 export type TrustCheckId = keyof typeof TRUST_WEIGHTS;
 
@@ -86,6 +89,8 @@ export type TrustCheckId = keyof typeof TRUST_WEIGHTS;
 const SHIPPING_POINTS = 10;
 /** The product feed check's points before a page type weighs it. */
 const FEED_POINTS = 10;
+/** The intro facts check's points before a page type weighs it. */
+const INTRO_POINTS = 10;
 /**
  * Words that say how a product ships, in a policy's terms: "free shipping",
  * "shipping takes 2 days", "Free UK delivery on orders over £50", "Standard
@@ -618,8 +623,14 @@ export function trust({
   page = null,
   shipping = null,
   feed = null,
+  intro = null,
   now,
 }: {
+  /**
+   * Phase 3 (CE-054): a category page's intro facts (introFacts) and how
+   * many the person confirmed; left out where its intro states none.
+   */
+  intro?: { total: number; confirmed: number } | null;
   /**
    * Phase 3 (CE-053): a product page's price and stock against its product
    * in the brand's feed (feedCheck); left out where the feed doesn't have it.
@@ -825,6 +836,14 @@ export function trust({
     });
   }
 
+  if (intro && intro.total > 0) {
+    checks.push({
+      id: 'introFacts',
+      points: (INTRO_POINTS * Math.min(intro.confirmed, intro.total)) / intro.total,
+      max: INTRO_POINTS,
+    });
+  }
+
   if (feed && feed.compared > 0) {
     checks.push({
       id: 'feedMatch',
@@ -843,10 +862,14 @@ export function trust({
     });
   }
 
-  // A product page's feed check is Trust's own too (CE-053).
+  // A product page's feed check (CE-053) and a category's intro facts (CE-054) are Trust's own too.
   const scored =
     checks.some(
-      (c) => c.id === 'claimsSourced' || c.id === 'freshSources' || c.id === 'feedMatch',
+      (c) =>
+        c.id === 'claimsSourced' ||
+        c.id === 'freshSources' ||
+        c.id === 'feedMatch' ||
+        c.id === 'introFacts',
     ) || classified.length >= 2;
   return {
     ...(scored ? scoreOf(checks) : { score: null, checks }),

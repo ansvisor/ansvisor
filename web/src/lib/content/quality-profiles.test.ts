@@ -61,9 +61,15 @@ describe('PROFILE_WEIGHTS', () => {
       'checkDate',
       'customerCase',
       'feedMatch',
+      'introFacts',
       'shippingReturns',
       'typeRules',
     ]);
+    // A category page's intro facts weigh in its Trust, and brand facts still weigh as much as claims (CE-054).
+    expect(PROFILE_WEIGHTS.category.trust.introFacts).toBeGreaterThan(0);
+    expect(PROFILE_WEIGHTS.category.trust.brandFacts).toBeGreaterThanOrEqual(
+      PROFILE_WEIGHTS.category.trust.claimsSourced,
+    );
     // A product page's price and stock against its feed weigh most in its Trust (CE-053).
     const productTrust = Object.values(PROFILE_WEIGHTS.product.trust);
     expect(PROFILE_WEIGHTS.product.trust.feedMatch).toBe(Math.max(...productTrust));

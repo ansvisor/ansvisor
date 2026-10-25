@@ -3247,6 +3247,45 @@ describe('the side panel', () => {
       expect(link?.textContent).toBe('the fastest forecasting app');
     });
 
+    it('asks a category page to confirm its intro’s counts and prices, in phase 3 (CE-054)', async () => {
+      process.env.NEXT_PUBLIC_CONTENT_QUALITY_PHASE = '3';
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+      const facts = ['Choose from 120+ daypacks for every trail.', 'Prices run $49–$199.'];
+      getContentDraft.mockResolvedValue({
+        ...claimed,
+        pageType: 'category_page',
+        bodyHtml: `<h1>Daypacks</h1><p>${facts.join(' ')}</p><h2>All daypacks</h2><p>Packs for wet hikes.</p>`,
+      });
+      window.innerWidth = 1440;
+      await renderPage();
+      await act(async () => void (await vi.advanceTimersByTimeAsync(3_000)));
+      const chip = [...container.querySelectorAll<HTMLButtonElement>('header button')].find((b) =>
+        b.textContent?.startsWith('Quality'),
+      )!;
+      await act(async () => chip.click());
+      const row = () =>
+        [...panel()!.querySelectorAll('[aria-label="Your to-dos"] li')].find((li) =>
+          li.textContent?.startsWith("Confirm the intro's counts and prices"),
+        )!;
+      expect(row().textContent).toContain(`“${facts[0]}”`);
+      await act(async () =>
+        [...row().querySelectorAll('button')].find((b) => b.textContent === 'Confirm')!.click(),
+      );
+      // Each sentence's fact, the person's word for it.
+      for (const fact of facts) {
+        expect(confirmDraftItem).toHaveBeenCalledWith(
+          'd1',
+          'intro_fact',
+          `intro:${fact.replace(/\s+/g, '').toLowerCase()}`,
+        );
+      }
+      expect(
+        [...panel()!.querySelectorAll('[aria-label="Your to-dos"] li')].some((li) =>
+          li.textContent?.includes("You confirmed the intro's counts and prices"),
+        ),
+      ).toBe(true);
+    });
+
     it('asks a feature page to confirm a customer case may be published, in phase 3 (CE-052)', async () => {
       process.env.NEXT_PUBLIC_CONTENT_QUALITY_PHASE = '3';
       vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });

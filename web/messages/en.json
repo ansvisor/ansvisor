@@ -4791,6 +4791,12 @@
             "detailWrite": "Comparison readers trust a date they can see: write when you last checked the products",
             "done": "The page shows when it was last checked"
           },
+          "introFacts": {
+            "title": "{count, plural, one {Confirm the intro's count or price} other {Confirm the intro's counts and prices}}",
+            "next": "confirm the intro's counts and prices, once you've checked them",
+            "detail": "Only you know they're right: check them against your catalog, then confirm. {facts}",
+            "done": "You confirmed the intro's counts and prices"
+          },
           "shippingReturns": {
             "title": "Say how shipping and returns work",
             "next": "say how shipping and returns work",
@@ -4910,7 +4916,8 @@
             "pickReviewer": "Pick now",
             "addImage": "Add now",
             "addCheckDate": "Add now",
-            "confirmCase": "Confirm now"
+            "confirmCase": "Confirm now",
+            "confirmIntro": "Confirm now"
           },
           "later": "Later"
         },

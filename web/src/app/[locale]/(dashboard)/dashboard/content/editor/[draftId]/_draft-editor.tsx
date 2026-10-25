@@ -136,6 +136,7 @@ import {
   weighedTrust,
 } from '@/lib/content/quality-profiles';
 import { caseConfirmed, caseKey, proofKey, qualityTodos } from '@/lib/content/quality-todos';
+import { introFacts } from '@/lib/content/intro-facts';
 import { isByline, readability, sentencesOf, withTypeRules } from '@/lib/content/readability';
 import { brandFactsPath, factMismatches } from '@/lib/content/brand-facts';
 import { feedCheck, type CatalogMatch } from '@/lib/content/feed-match';
@@ -858,6 +859,8 @@ export function DraftEditor({
   // Phase 3 (CE-052): a customer case is confirmed publishable, not linked.
   const casesOn = sourcesOn && qualityPhase() >= 3;
   const [caseConfirms, setCaseConfirms] = useState<ReadonlySet<string> | null>(null);
+  // A category intro's facts the person confirmed (CE-054), read with the cases'.
+  const [introConfirms, setIntroConfirms] = useState<ReadonlySet<string> | null>(null);
   // Whether they're read (or failed): until then a case's to-do waits, so
   // one confirmed before doesn't show open.
   const [casesRead, setCasesRead] = useState(false);
@@ -876,6 +879,13 @@ export function DraftEditor({
               ...(prev ?? []),
             ]),
         );
+        setIntroConfirms(
+          (prev) =>
+            new Set([
+              ...rows.filter((r) => r.kind === 'intro_fact').map((r) => r.key),
+              ...(prev ?? []),
+            ]),
+        );
       })
       .catch((err) => {
         // A failed call (the network, a deploy): the confirms made so far, so E-E-A-T scores.
@@ -883,11 +893,22 @@ export function DraftEditor({
         if (!live) return;
         setCasesRead(true);
         setCaseConfirms((prev) => prev ?? new Set());
+        setIntroConfirms((prev) => prev ?? new Set());
       });
     return () => {
       live = false;
     };
   }, [draft.id, casesOn]);
+  // Phase 3 (CE-054): a category intro's counts and prices, and the ones the
+  // person confirmed, once the confirms are read: Trust's intro facts and
+  // their to-do.
+  const introOn = casesOn && profile === 'category';
+  const intro = useMemo(() => (introOn ? introFacts(pageHtml) : []), [introOn, pageHtml]);
+  const introRead = useMemo(
+    () =>
+      introOn && casesRead ? { facts: intro, confirmed: introConfirms ?? new Set<string>() } : null,
+    [introOn, casesRead, intro, introConfirms],
+  );
   // The page's customer cases, and how many are confirmed: E-E-A-T's (CE-052).
   const caseCount = useMemo(() => {
     if (!casesOn) return null;
@@ -1038,6 +1059,30 @@ export function DraftEditor({
   const [confirmingImages, setConfirmingImages] = useState(false);
   // Quality's Confirm on a customer case (CE-052): the person's statement
   // that the customer may be named; put back if it can't be saved.
+  // Quality's Confirm on a category intro's facts (CE-054): the person's
+  // word that its counts and prices are right, each sentence's; put back if
+  // they can't be saved.
+  const confirmIntro = async () => {
+    const keys = intro.map((fact) => fact.key).filter((key) => !introConfirms?.has(key));
+    if (!keys.length) return;
+    setIntroConfirms((prev) => new Set([...(prev ?? []), ...keys]));
+    const takeBack = (back: string[]) =>
+      setIntroConfirms((prev) => new Set([...(prev ?? [])].filter((had) => !back.includes(had))));
+    for (const [i, key] of keys.entries()) {
+      try {
+        if ((await confirmDraftItem(draft.id, 'intro_fact', key)) === 'full') {
+          takeBack(keys.slice(i));
+          toast.error(t('quality.confirmCaseFull'));
+          return;
+        }
+      } catch (err) {
+        console.error('Failed to confirm the intro facts:', err);
+        takeBack(keys.slice(i));
+        toast.error(t('quality.confirmCaseFailed'));
+        return;
+      }
+    }
+  };
   const confirmCase = async (key: string) => {
     if (caseConfirms?.has(key)) return;
     setCaseConfirms((prev) => new Set([...(prev ?? []), key]));
@@ -1113,6 +1158,12 @@ export function DraftEditor({
               // A product page's shipping and returns (CE-052), price and stock (CE-053).
               shipping: shippingRead,
               feed: feedRead,
+              intro: introRead
+                ? {
+                    total: introRead.facts.length,
+                    confirmed: introRead.facts.filter((f) => introRead.confirmed.has(f.key)).length,
+                  }
+                : null,
               now: Date.now(),
             }),
             weights.trust,
@@ -1122,6 +1173,7 @@ export function DraftEditor({
       weights,
       shippingRead,
       feedRead,
+      introRead,
       qualityOn,
       pageBlocks,
       linkChecks,
@@ -1265,6 +1317,7 @@ export function DraftEditor({
         confirmed: authorConfirmed,
         shipping: shippingRead,
         cases: casesOn ? (caseConfirms ?? new Set<string>()) : null,
+        intro: introRead,
         checkDate:
           checkDateRead === null ? null : { ...checkDateRead, line: checkDateText(language) },
         off: checksOff(profile),
@@ -3468,6 +3521,7 @@ export function DraftEditor({
                 onPickReviewer={() => setReviewerMenuOpen(true)}
                 onAddCheckDate={htmlSource === null ? addCheckDate : undefined}
                 onConfirmCase={(key) => void confirmCase(key)}
+                onConfirmIntro={() => void confirmIntro()}
                 onAddInput={addInput}
                 onAddSource={sourcesOn ? addSource : undefined}
                 onConfirmImages={() => setConfirmingImages(true)}
@@ -3512,6 +3566,7 @@ export function DraftEditor({
             onPickReviewer={() => setReviewerMenuOpen(true)}
             onAddCheckDate={htmlSource === null ? addCheckDate : undefined}
             onConfirmCase={(key) => void confirmCase(key)}
+            onConfirmIntro={() => void confirmIntro()}
             onChangeType={() => setTypeMenuOpen(true)}
             handOff={handOffCard}
             yourInput={inputsRead.status === 'off' ? null : inputsRead}
