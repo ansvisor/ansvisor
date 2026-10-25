@@ -55,6 +55,7 @@ With Ansvisor, you can:
 - [**Action Center**](https://www.ansvisor.com/features/ai-search-actions-kpis-action-center) — Turn signals across your workspace and connected data sources into prioritized actions and tasks aligned with your AI Search KPIs.
 - [**Agentic Content Editor**](https://www.ansvisor.com/features/agentic-content-editor) — The Content Agent writes and fixes pages from your prompts, query fan-outs, and cited pages, checks them against your content rules, and waits for your approval before anything changes.
 - [**Answer Engine Insights & AI Visibility**](https://www.ansvisor.com/features/answer-engine-insights) — Track how your brand appears, performs, and is represented across leading AI platforms.
+- [**AI Brand Mentions & Sentiment**](https://www.ansvisor.com/features/ai-brand-mentions-sentiment) — See how AI platforms describe your brand: the exact quotes, the sentiment, and where you appear in each answer, compared with your competitors.
 - [**Prompt Monitoring & Volumes**](https://www.ansvisor.com/features/prompt-monitoring-volumes) — Discover and track relevant prompts, analyze demand, and measure how your visibility changes over time.
 - [**AI Citation Monitoring**](https://www.ansvisor.com/features/citations-monitoring) — Discover which domains, URLs, competitors, and third-party sources AI systems cite.
 - [**Competitor Tracking & Benchmarking**](https://www.ansvisor.com/features/competitor-tracking-benchmarking) — Compare your visibility, citations, mentions, and share of voice with competitors.
