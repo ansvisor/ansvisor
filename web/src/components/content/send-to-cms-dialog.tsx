@@ -34,7 +34,7 @@ import {
   type DraftCms,
 } from '@/lib/content/cms-send-client';
 import { exportPlaceholders, pageFields, titlePlaceholders } from '@/lib/content/ready-to-publish';
-import { CmsTargetPicker, useCmsTarget } from './cms-target';
+import { CmsTargetPicker, CmsTargetReadFailed, useCmsTarget } from './cms-target';
 
 /**
  * Send to CMS (#1331): the page to the brand's webhook, for the workspace's
@@ -100,7 +100,15 @@ export function SendDialog({
     | { failed: string; webflow: boolean }
     | null
   >(null);
-  const { webflow, target, pick } = useCmsTarget(brandId);
+  const {
+    webflow,
+    target,
+    pick,
+    failed: targetFailed,
+    reading: targetReading,
+    retry: retryTarget,
+  } = useCmsTarget(brandId);
+  const collection = webflow?.ready ? webflow.collection || t('target.webflow.collection') : '';
 
   useEffect(() => {
     let cancelled = false;
@@ -210,16 +218,18 @@ export function SendDialog({
         <DialogHeader>
           <DialogTitle>{t('title')}</DialogTitle>
           <DialogDescription>
-            {target === 'webflow'
-              ? t('descriptionWebflow', { collection: webflow ?? '' })
-              : t('description')}
+            {!target
+              ? t('descriptionReading')
+              : target === 'webflow'
+                ? t('descriptionWebflow', { collection })
+                : t('description')}
           </DialogDescription>
         </DialogHeader>
 
-        {typeof webflow === 'string' && target && (
+        {webflow && target && (
           <CmsTargetPicker
             value={target}
-            collection={webflow}
+            webflow={webflow}
             disabled={sending}
             onChange={(next) => {
               pick(next);
@@ -227,6 +237,7 @@ export function SendDialog({
             }}
           />
         )}
+        {targetFailed && <CmsTargetReadFailed reading={targetReading} onRetry={retryTarget} />}
 
         {pageProblem && (
           <div className="flex items-center gap-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-200">

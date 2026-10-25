@@ -3437,6 +3437,7 @@
         "waitedOut": "The pages before {count, plural, one {it} other {them}} were still going after 30 minutes, so {count, plural, one {# page wasn't} other {# pages weren't}} sent. Send {count, plural, one {it} other {them}} again once they have gone.",
         "closedUnsent": "{count, plural, one {# page wasn't sent} other {# pages weren't sent}}: the dialog closed while the pages before {count, plural, one {it} other {them}} were still going. Send {count, plural, one {it} other {them}} again from the Library.",
         "skipped": "{count, plural, one {# page wasn't sent} other {# pages weren't sent}}: the workspace has sent 200 pages in the last 24 hours. Try again later.",
+        "inProgress": "A page is already on its way to Webflow. Wait for it, then send again.",
         "close": "Close",
         "cancel": "Cancel",
         "send": "{count, plural, one {Send # page} other {Send # pages}}",
@@ -4307,16 +4308,21 @@
         "title": "Send to CMS",
         "description": "The page goes to the brand's webhook, for your workflow tool (Zapier, Make, n8n) to publish it in your CMS.",
         "descriptionWebflow": "The page goes to {collection} in Webflow as a draft item, with its slug and meta. You publish it in Webflow.",
+        "descriptionReading": "The page goes to your CMS with its slug and meta, kept on the page.",
         "target": {
           "label": "Send to",
           "webflow": {
             "title": "Webflow",
-            "hint": "A draft item in {collection}"
+            "hint": "A draft item in {collection}",
+            "collection": "your collection",
+            "notReady": "Not ready: connect it again or pick its collection in Settings › Integrations"
           },
           "webhook": {
             "title": "Your workflow",
             "hint": "The brand's webhook (Zapier, Make, n8n)"
-          }
+          },
+          "readFailed": "Couldn't read where this brand's pages go. Try again before sending.",
+          "retry": "Try again"
         },
         "placeholders": "{count, plural, one {# placeholder is} other {# placeholders are}} still open. Fill {count, plural, one {it} other {them}} first: none goes to your CMS.",
         "fillNow": "Fill now",

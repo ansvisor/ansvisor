@@ -235,6 +235,22 @@ describe('BulkSendDialog', () => {
     expect(button('Send 2 pages').disabled).toBe(false);
   });
 
+  it('says a page is already on its way to Webflow, and clears it when the webhook is picked', async () => {
+    webflow.ready = true;
+    sendPagesToCms.mockResolvedValue({ ok: false, code: 'in_progress', field: null });
+    await render();
+    await act(async () => button('Send 2 pages').click());
+    expect(sendPagesToCms.mock.calls[0]?.[2]).toBe('webflow');
+    expect(dialog().querySelector('[role="alert"]')!.textContent).toBe(
+      'A page is already on its way to Webflow. Wait for it, then send again.',
+    );
+    const workflow = [...dialog().querySelectorAll<HTMLElement>('[role="radio"]')].find((r) =>
+      r.textContent?.startsWith('Your workflow'),
+    );
+    await act(async () => workflow!.click());
+    expect(dialog().querySelector('[role="alert"]')).toBeNull();
+  });
+
   it('keeps what went when a later request is refused for the day', async () => {
     oneByOne.on = true;
     sendPagesToCms

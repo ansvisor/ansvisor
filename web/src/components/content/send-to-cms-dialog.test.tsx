@@ -316,14 +316,59 @@ describe('SendDialog', () => {
         r.textContent?.startsWith(name),
       );
 
-    it('offers no choice while the brand has no Webflow ready', async () => {
-      readWebflow.mockResolvedValue({
-        ...ready,
-        connection: { ...ready.connection, collectionId: null },
-      });
+    it('offers no choice to a brand without Webflow', async () => {
       await render();
       expect(radio('Webflow')).toBeUndefined();
       expect(dialog().textContent).toContain("The page goes to the brand's webhook");
+    });
+
+    it('shows Webflow connected but not ready, off, so the webhook isn’t picked unnoticed', async () => {
+      localStorage.setItem('aeo:cms-target:brand-1', 'webflow');
+      readWebflow.mockResolvedValue({
+        ...ready,
+        connection: { ...ready.connection, status: 'auth_failed' },
+      });
+      await render();
+      expect(radio('Webflow')!.disabled).toBe(true);
+      expect(radio('Webflow')!.textContent).toContain('Not ready');
+      expect(radio('Your workflow')!.getAttribute('aria-checked')).toBe('true');
+      await act(async () => button('Send').click());
+      expect(sendPagesToCms).toHaveBeenLastCalledWith('brand-1', expect.any(Array), 'webhook');
+    });
+
+    it('sends nothing while it reads where pages go', async () => {
+      readWebflow.mockReturnValue(new Promise(() => {}));
+      await render();
+      expect(button('Send').disabled).toBe(true);
+      expect(dialog().textContent).toContain('The page goes to your CMS with its slug and meta');
+    });
+
+    it('asks to read again when where pages go can’t be read', async () => {
+      readWebflow.mockResolvedValueOnce({ ok: false, code: 'failed' }).mockResolvedValue(ready);
+      await render();
+      expect(alert()).toContain("Couldn't read where this brand's pages go.");
+      expect(button('Send').disabled).toBe(true);
+      await act(async () => button('Try again').click());
+      expect(readWebflow).toHaveBeenCalledTimes(2);
+      expect(radio('Webflow')!.getAttribute('aria-checked')).toBe('true');
+      expect(button('Send').disabled).toBe(false);
+    });
+
+    it('starts from the brand’s remembered choice', async () => {
+      localStorage.setItem('aeo:cms-target:brand-1', 'webhook');
+      readWebflow.mockResolvedValue(ready);
+      await render();
+      expect(radio('Your workflow')!.getAttribute('aria-checked')).toBe('true');
+    });
+
+    it('says the last send went to Webflow', async () => {
+      readWebflow.mockResolvedValue(ready);
+      readDraftCms.mockResolvedValue({
+        ...neverSent,
+        last: { status: 'sent', target: 'webflow', at: '2026-10-24T10:00:00Z', error: null },
+      });
+      await render();
+      expect(dialog().textContent).toContain('In Webflow as a draft item since Oct 24, 2026');
     });
 
     it('sends to the Webflow collection first, saying what changed on the way', async () => {

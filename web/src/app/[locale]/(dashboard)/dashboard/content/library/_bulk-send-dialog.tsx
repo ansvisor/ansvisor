@@ -23,7 +23,11 @@ import {
   type CmsSendError,
 } from '@/lib/content/cms-send-client';
 import type { ContentDraftListItem } from '@/lib/content/drafts';
-import { CmsTargetPicker, useCmsTarget } from '@/components/content/cms-target';
+import {
+  CmsTargetPicker,
+  CmsTargetReadFailed,
+  useCmsTarget,
+} from '@/components/content/cms-target';
 import { readCmsSources } from './_cms-sources';
 
 /** How often the sends going on in the background are read. */
@@ -110,7 +114,17 @@ export function BulkSendDialog({
   // Why a request was refused; with the page its `pages.N` named, when it named one.
   const [failure, setFailure] = useState<Refusal | null>(null);
   const [attempt, setAttempt] = useState(0);
-  const { webflow, target, pick } = useCmsTarget(brandId);
+  const {
+    webflow,
+    target,
+    pick,
+    failed: targetFailed,
+    reading: targetReading,
+    retry: retryTarget,
+  } = useCmsTarget(brandId);
+  const collection = webflow?.ready
+    ? webflow.collection || tEditor('send.target.webflow.collection')
+    : '';
 
   useEffect(() => {
     let cancelled = false;
@@ -287,6 +301,8 @@ export function BulkSendDialog({
         ? t('invalidPage', { title, field: named })
         : tEditor('send.errors.invalidField', { field: named });
     }
+    // No page named: any of them may be the one on its way.
+    if (code === 'in_progress') return t('inProgress');
     return tEditor(`send.errors.${code}`);
   };
 
@@ -307,20 +323,28 @@ export function BulkSendDialog({
             {t('title', { count: phase.kind === 'reading' ? drafts.length : items.length })}
           </DialogTitle>
           <DialogDescription>
-            {target === 'webflow'
-              ? t('descriptionWebflow', { collection: webflow ?? '' })
-              : t('description')}
+            {!target
+              ? tEditor('send.descriptionReading')
+              : target === 'webflow'
+                ? t('descriptionWebflow', { collection })
+                : t('description')}
           </DialogDescription>
         </DialogHeader>
 
         {/* Where the pages go, before they go: Webflow once Settings has it ready. */}
-        {typeof webflow === 'string' && target && !after && (
+        {webflow && target && !after && (
           <CmsTargetPicker
             value={target}
-            collection={webflow}
+            webflow={webflow}
             disabled={phase.kind === 'sending'}
-            onChange={pick}
+            onChange={(next) => {
+              pick(next);
+              setFailure(null);
+            }}
           />
+        )}
+        {targetFailed && !after && (
+          <CmsTargetReadFailed reading={targetReading} onRetry={retryTarget} />
         )}
 
         {phase.kind === 'reading' ? (
