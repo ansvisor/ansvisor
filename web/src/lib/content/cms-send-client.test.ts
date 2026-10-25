@@ -39,8 +39,14 @@ vi.mock('@/lib/supabase/client', () => ({
   }),
 }));
 
-const { readCmsStatuses, readDeliveries, readDraftCms, readKeptFields, sendPagesToCms } =
-  await import('./cms-send-client');
+const {
+  readCmsStatuses,
+  readDeliveries,
+  readDraftCms,
+  readKeptFields,
+  refreshWebflowPublished,
+  sendPagesToCms,
+} = await import('./cms-send-client');
 
 const page: CmsPage = {
   draftId: 'd1',
@@ -160,6 +166,20 @@ describe('sendPagesToCms', () => {
     // No route yet (the API before the send was deployed).
     answer(404, {});
     expect(await sendPagesToCms('brand-1', [page])).toMatchObject({ ok: false, code: 'failed' });
+  });
+});
+
+describe('refreshWebflowPublished', () => {
+  it('asks the API to read the brand’s Webflow pages, and gives the drafts it marked published', async () => {
+    answer(200, { checked: 2, published: [{ draftId: 'd1', url: 'https://a.example/b/c' }] });
+    expect(await refreshWebflowPublished('brand-1')).toEqual(['d1']);
+    expect(fetchMock).toHaveBeenCalledWith('/api/aeo/api/content-drafts/webflow-status', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer token-1' },
+      body: JSON.stringify({ brandId: 'brand-1' }),
+    });
+    answer(502, { code: 'failed' });
+    expect(await refreshWebflowPublished('brand-1')).toEqual([]);
   });
 });
 

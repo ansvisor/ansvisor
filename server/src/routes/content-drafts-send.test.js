@@ -25,6 +25,10 @@ vi.mock('../config/supabase.js', () => ({
   },
 }));
 vi.mock('../lib/access.js', () => ({ assertBrandAccess: (...args) => assertBrandAccess(...args) }));
+const checkWebflowPublished = vi.fn();
+vi.mock('../lib/cms/webflow-status.js', () => ({
+  checkWebflowPublished: (...args) => checkWebflowPublished(...args),
+}));
 vi.mock('../lib/content-delivery.js', async (importOriginal) => ({
   ...(await importOriginal()),
   sendContentPages: (...args) => sendContentPages(...args),
@@ -131,5 +135,49 @@ describe('POST /api/content-drafts/send', () => {
     res = await send({ brandId: BRAND, pages: [page] });
     expect(res.status).toBe(502);
     expect(await res.json()).toMatchObject({ code: 'failed' });
+  });
+});
+
+describe('POST /api/content-drafts/webflow-status', () => {
+  const check = (body) =>
+    fetch(`${baseUrl}/webflow-status`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+
+  it('reads the brand’s Webflow pages for any member, a brand at most every two minutes', async () => {
+    role = 'member';
+    const brand = '44444444-4444-4444-4444-444444444444';
+    checkWebflowPublished.mockReset().mockResolvedValue({
+      checked: 1,
+      published: [{ draftId: DRAFT, url: 'https://a.example/b/c' }],
+    });
+    const first = await check({ brandId: brand });
+    expect(await first.json()).toEqual({
+      checked: 1,
+      published: [{ draftId: DRAFT, url: 'https://a.example/b/c' }],
+    });
+    expect(assertBrandAccess).toHaveBeenCalledWith(brand, 'u1');
+    expect(await (await check({ brandId: brand })).json()).toEqual({
+      checked: 0,
+      published: [],
+      recent: true,
+    });
+    expect(checkWebflowPublished).toHaveBeenCalledTimes(1);
+  });
+
+  it('refuses another workspace’s brand and a malformed one, and names a failure', async () => {
+    assertBrandAccess.mockRejectedValueOnce(
+      Object.assign(new Error('nope'), { status: 403, code: 'not_in_workspace' }),
+    );
+    const other = await check({ brandId: '55555555-5555-5555-5555-555555555555' });
+    expect(other.status).toBe(403);
+    expect(await other.json()).toMatchObject({ code: 'not_in_workspace' });
+    expect((await check({ brandId: 'x' })).status).toBe(400);
+    checkWebflowPublished.mockReset().mockRejectedValue(new Error('down'));
+    const failed = await check({ brandId: '66666666-6666-6666-6666-666666666666' });
+    expect(failed.status).toBe(502);
+    expect(await failed.json()).toMatchObject({ code: 'failed' });
   });
 });

@@ -7,6 +7,7 @@ import {
   webhookCallbackAuthFailureLimiter,
 } from '../middleware/rate-limiter.js';
 import { webhookSecretsMatch } from '../lib/webhook-secret.js';
+import { markDeliveryPublished } from '../lib/content-published.js';
 
 /**
  * Send to CMS's callback (#1331): the workspace's automation tells how a sent
@@ -119,7 +120,6 @@ router.post('/:deliveryId/status', async (req, res) => {
       });
     }
     const { status, externalId, reason } = parsed.data;
-    const now = new Date().toISOString();
     const own = externalId ? { external_id: externalId } : {};
 
     if (status === 'failed') {
@@ -139,53 +139,8 @@ router.post('/:deliveryId/status', async (req, res) => {
       return res.json({ success: true, status: failed?.length ? 'failed' : 'published' });
     }
 
-    // This delivery said so already (a workflow's retry): nothing changes,
-    // its time included, but a CMS id the retry adds. A new delivery of a
-    // page live at the same address (the post updated in place) is the page
-    // as published again.
-    if (delivery.status === 'published' && delivery.published_url === url) {
-      if (externalId) {
-        const { error: idError } = await supabaseAdmin
-          .from('content_draft_deliveries')
-          .update(own)
-          .eq('id', delivery.id);
-        if (idError) throw new Error(idError.message);
-      }
-      return res.json({ success: true, status: 'published' });
-    }
-    if (delivery.draft_id) {
-      const { data: latest, error: latestError } = await supabaseAdmin
-        .from('content_draft_deliveries')
-        .select('id')
-        .eq('draft_id', delivery.draft_id)
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      if (latestError) throw new Error(latestError.message);
-      if (latest?.id === delivery.id) {
-        const { error: draftError } = await supabaseAdmin
-          .from('content_drafts')
-          .update({ status: 'published', published_url: url, published_at: now })
-          .eq('id', delivery.draft_id);
-        if (draftError) throw new Error(draftError.message);
-        // The page as published, in History (00215 keeps "publish" for the
-        // server), unless History's latest version is already this page.
-        const { error: keepError } = await supabaseAdmin.rpc('content_draft_snapshot', {
-          p_draft_id: delivery.draft_id,
-          p_origin: 'publish',
-        });
-        if (keepError) {
-          req.log?.warn?.({ err: keepError }, 'content draft publish version not kept');
-        }
-      }
-    }
-    // The delivery last: a write above that fails answers 500, and the
-    // workflow's retry, finding it not yet published, does it all again.
-    const { error: deliveryError } = await supabaseAdmin
-      .from('content_draft_deliveries')
-      .update({ status: 'published', published_url: url, published_at: now, ...own })
-      .eq('id', delivery.id);
-    if (deliveryError) throw new Error(deliveryError.message);
+    // A workflow's retry changes nothing but a CMS id it adds (content-published.js).
+    await markDeliveryPublished(delivery, url, { externalId });
     return res.json({ success: true, status: 'published' });
   } catch (error) {
     req.log?.error?.({ err: error }, 'content draft status callback error');

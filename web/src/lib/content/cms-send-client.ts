@@ -113,6 +113,36 @@ export async function sendPagesToCms(
   }
 }
 
+/**
+ * Asks the API to read the brand's pages sent to Webflow, and mark the ones
+ * published there since (#1331, phase 2). The pages it marked, by draft;
+ * none when it couldn't read or read a moment ago.
+ */
+export async function refreshWebflowPublished(brandId: string): Promise<string[]> {
+  try {
+    const {
+      data: { session },
+    } = await createClient().auth.getSession();
+    if (!session) return [];
+    const res = await fetch(`${BROWSER_API_BASE_URL}/api/content-drafts/webflow-status`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${session.access_token}`,
+      },
+      body: JSON.stringify({ brandId }),
+    });
+    if (!res.ok) return [];
+    const body = (await res.json().catch(() => ({}))) as {
+      published?: { draftId?: string | null }[];
+    };
+    return (body.published ?? []).flatMap((p) => (p.draftId ? [p.draftId] : []));
+  } catch (err) {
+    console.error('Failed to read the pages sent to Webflow:', err);
+    return [];
+  }
+}
+
 /** A draft's last send, as the Library shows it beside its status. */
 export interface CmsStatus {
   status: CmsDelivery['status'];

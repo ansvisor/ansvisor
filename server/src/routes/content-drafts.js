@@ -6,6 +6,8 @@ import { handOffDraft, handOffInput } from '../lib/content-handoff.js';
 import { qualityPhase } from '../lib/content-quality.js';
 import { rebuildDraftBrief, rebuildSources } from '../lib/content-brief.js';
 import { DeliveryError, sendContentPages, sendInput } from '../lib/content-delivery.js';
+import { checkWebflowPublished } from '../lib/cms/webflow-status.js';
+import { cmsLimiter } from '../middleware/rate-limiter.js';
 import { stopDraftRun } from '../lib/content-runs.js';
 import { startDraftWriting, writeDraftInput } from '../lib/content-writer.js';
 import supabaseAdmin from '../config/supabase.js';
@@ -72,6 +74,41 @@ router.post('/send', async (req, res) => {
     }
     req.log.error({ err }, 'content draft send error');
     return res.status(502).json({ error: 'The pages could not be sent', code: 'failed' });
+  }
+});
+
+/** A brand's Webflow pages read at most this often on demand (the daily sweep reads them too). */
+const WEBFLOW_STATUS_EVERY_MS = 2 * 60 * 1000;
+const webflowChecked = new Map();
+const webflowStatusBody = z.object({ brandId: z.guid() });
+
+/**
+ * POST /api/content-drafts/webflow-status
+ * Body: { brandId }. Pages the brand sent to Webflow, published there since,
+ * marked published at their address (cms/webflow-status.js). For any member
+ * of the brand's workspace (the Library asks when it opens), a brand at most
+ * every two minutes: { checked, published: [{ draftId, url }], recent? }.
+ */
+router.post('/webflow-status', cmsLimiter, async (req, res) => {
+  const parsed = webflowStatusBody.safeParse(req.body ?? {});
+  if (!parsed.success) return res.status(400).json({ error: 'Invalid request', code: 'invalid' });
+  const { brandId } = parsed.data;
+  try {
+    await assertBrandAccess(brandId, req.user.id);
+    const last = webflowChecked.get(brandId) ?? 0;
+    if (Date.now() - last < WEBFLOW_STATUS_EVERY_MS) {
+      return res.json({ checked: 0, published: [], recent: true });
+    }
+    webflowChecked.set(brandId, Date.now());
+    return res.json(await checkWebflowPublished(brandId));
+  } catch (err) {
+    if (ERROR_CODES[err?.status]) {
+      return res
+        .status(err.status)
+        .json({ error: err.message, code: err.code ?? ERROR_CODES[err.status] });
+    }
+    req.log.error({ err: { name: err?.name } }, 'content draft webflow status error');
+    return res.status(502).json({ error: 'Webflow could not be read', code: 'failed' });
   }
 });
 

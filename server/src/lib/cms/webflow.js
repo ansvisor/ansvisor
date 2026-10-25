@@ -96,7 +96,30 @@ const objectOf = (data) => data?.response_data ?? data?.data ?? data ?? {};
 
 const text = (value, max = 300) => (typeof value === 'string' ? value.trim().slice(0, max) : '');
 
-/** The sites the token reaches: a site token reaches its own. */
+const HOST =
+  /^(?=.{1,253}$)[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)+$/i;
+
+/**
+ * The host a site's pages live on: its custom domain (the first one
+ * published to, else the first), else its webflow.io address; null when
+ * Webflow names neither.
+ */
+function siteHost(site) {
+  const domains = (Array.isArray(site.customDomains) ? site.customDomains : [])
+    .map((d) => ({
+      host: text(d?.url)
+        .replace(/^https?:\/\//i, '')
+        .replace(/\/.*$/, ''),
+      live: Boolean(d?.lastPublished),
+    }))
+    .filter((d) => HOST.test(d.host));
+  const custom = domains.find((d) => d.live) ?? domains[0];
+  if (custom) return custom.host.toLowerCase();
+  const short = text(site.shortName);
+  return short && HOST.test(`${short}.webflow.io`) ? `${short.toLowerCase()}.webflow.io` : null;
+}
+
+/** The sites the token reaches (a site token reaches its own), with the host their pages live on. */
 export async function listSites(account) {
   const data = await run('WEBFLOW_LIST_WEBFLOW_SITES', account, {});
   return listOf(data, 'sites')
@@ -104,6 +127,7 @@ export async function listSites(account) {
     .map((site) => ({
       id: site.id,
       name: text(site.displayName) || text(site.shortName) || site.id,
+      host: siteHost(site),
     }));
 }
 
@@ -136,6 +160,31 @@ export async function getCollection(account, collectionId) {
     id: typeof collection.id === 'string' && collection.id ? collection.id : collectionId,
     name: text(collection.displayName) || text(collection.slug) || collectionId,
     fields,
+  };
+}
+
+/**
+ * An item as Webflow has it: its slug, and whether it's live (published,
+ * not a draft, not archived). Null when it's gone.
+ */
+export async function getItem(account, collectionId, itemId) {
+  let item;
+  try {
+    item = objectOf(
+      await run('WEBFLOW_GET_COLLECTION_ITEM', account, {
+        collection_id: collectionId,
+        item_id: itemId,
+      }),
+    );
+  } catch (err) {
+    if (err instanceof WebflowError && err.code === 'not_found') return null;
+    throw err;
+  }
+  const fields = item.fieldData ?? item.field_data ?? {};
+  return {
+    id: typeof item.id === 'string' && item.id ? item.id : itemId,
+    slug: text(fields.slug, 256),
+    live: Boolean(item.lastPublished) && item.isDraft !== true && item.isArchived !== true,
   };
 }
 
