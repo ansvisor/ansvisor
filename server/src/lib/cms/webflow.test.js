@@ -7,8 +7,16 @@ vi.mock('../composio.js', () => ({
   executeWebflowTool: (...args) => executeWebflowTool(...args),
 }));
 
-const { WebflowError, checkFieldMap, getCollection, listCollections, listSites, suggestFieldMap } =
-  await import('./webflow.js');
+const {
+  WebflowError,
+  checkFieldMap,
+  createItem,
+  getCollection,
+  listCollections,
+  listSites,
+  suggestFieldMap,
+  updateItem,
+} = await import('./webflow.js');
 
 const account = { entityId: 'brand_b1', accountId: 'ca_1' };
 
@@ -191,5 +199,44 @@ describe('checkFieldMap', () => {
     ).toEqual([
       'The collection requires Post Summary, which Send to CMS doesn’t fill: make it optional in Webflow, or pick another collection',
     ]);
+  });
+});
+
+describe('items', () => {
+  it('makes a draft item, and writes an item again leaving its state as it is', async () => {
+    executeWebflowTool.mockResolvedValueOnce({ id: 'item-1', isDraft: true });
+    expect(await createItem(account, 'c1', { name: 'A', slug: 'a' })).toBe('item-1');
+    expect(executeWebflowTool).toHaveBeenLastCalledWith('WEBFLOW_CREATE_COLLECTION_ITEM', account, {
+      collection_id: 'c1',
+      field_data: { name: 'A', slug: 'a' },
+      is_draft: true,
+    });
+    executeWebflowTool.mockResolvedValueOnce({ response_data: { id: 'item-1' } });
+    expect(await updateItem(account, 'c1', 'item-1', { name: 'B', slug: 'a' })).toBe('item-1');
+    expect(executeWebflowTool).toHaveBeenLastCalledWith(
+      'WEBFLOW_UPDATE_COLLECTION_ITEM_V2',
+      account,
+      { collection_id: 'c1', item_id: 'item-1', fieldData: { name: 'B', slug: 'a' } },
+    );
+    // An answer with no item: the one written.
+    executeWebflowTool.mockResolvedValueOnce({});
+    expect(await updateItem(account, 'c1', 'item-1', {})).toBe('item-1');
+    executeWebflowTool.mockResolvedValueOnce({});
+    await expect(createItem(account, 'c1', {})).rejects.toMatchObject({ code: 'failed' });
+  });
+
+  it('names an item Webflow won’t take', async () => {
+    const said = async (message) => {
+      executeWebflowTool.mockRejectedValueOnce(new Error(message));
+      return createItem(account, 'c1', {}).catch((err) => err);
+    };
+    expect(
+      await said("400 validation_error: Unique value is already in database: 'slug'"),
+    ).toMatchObject({
+      code: 'slug_taken',
+    });
+    expect(await said('400 Bad Request: validation_error on field post-summary')).toMatchObject({
+      code: 'invalid',
+    });
   });
 });

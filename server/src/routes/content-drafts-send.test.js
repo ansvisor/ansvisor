@@ -86,6 +86,7 @@ describe('POST /api/content-drafts/send', () => {
       brandId: BRAND,
       userId: 'u1',
       pages: [{ ...page, metaTitle: '', metaDescription: '', author: null, featuredImage: null }],
+      target: 'webhook',
     });
   });
 
