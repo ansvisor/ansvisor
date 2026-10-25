@@ -6948,6 +6948,17 @@
     "drawerPlatform": "Platform",
     "drawerRegion": "Region",
     "drawerCardsTitle": "Cards returned",
+    "matchScore": {
+      "title": "Match with each prompt",
+      "estimate": "Ansvisor estimate",
+      "description": "How well this product's title matches each prompt it was shown for, with the searches AI ran for it: a keyword match from 0 to 100. It's our estimate, not ChatGPT's own score.",
+      "yours": "This product",
+      "shownFirst": "Shown first",
+      "shownFirstThis": "Shown first in the latest answer",
+      "missing": "Missing:",
+      "empty": "No prompt to compare with in this window.",
+      "unavailable": "Couldn't read the match right now."
+    },
     "merchantSplit": {
       "title": "Where AI sends shoppers",
       "description": "Where the cards for your products link, in the selected window.",
@@ -6973,6 +6984,29 @@
       "untitled": "Untitled product",
       "unknownMerchant": "Unknown merchant",
       "openLink": "Open {merchant} in a new tab"
+    },
+    "openaiIndex": {
+      "title": "ChatGPT in the US",
+      "description": "In the US, ChatGPT Shopping picks products from OpenAI's own product index. There's no public way to check either status, so this shows what we can know.",
+      "unavailable": "Couldn't read this right now.",
+      "catalogLabel": "Catalog in OpenAI's product index",
+      "status": {
+        "direct_feed": "Direct feed",
+        "found": "Found, source unknown",
+        "not_found": "Not found in tracked answers"
+      },
+      "detail": {
+        "direct_feed": "You send OpenAI a direct product feed.",
+        "found": "Your own products appear in tracked US ChatGPT Shopping answers in this window ({count, plural, one {# card} other {# cards}}). They likely come from a copy of your site, but we can't confirm the source.",
+        "not_found": "None of your own products appear in tracked US ChatGPT Shopping answers in this window."
+      },
+      "catalogAdvice": "Send OpenAI a direct product feed, or connect a Shopify store with its ChatGPT channel on.",
+      "directFeedLabel": "We send OpenAI a direct product feed",
+      "directFeedManagers": "Admins and managers can change this.",
+      "saveFailed": "Couldn't save. Try again.",
+      "verifiedLabel": "Verified seller in ChatGPT",
+      "verifiedStatus": "Unknown",
+      "verifiedDetail": "OpenAI hasn't said how the verified-seller flag is granted, and in early tests shops without it were left out of answers. Until it says more, send a direct product feed."
     }
   },
   "reports": {
