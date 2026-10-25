@@ -14,6 +14,7 @@ import { usePlanContext } from '@/components/providers/plan-provider';
 import { BillingSection } from '@/components/settings/billing-section';
 import { TeamSection } from '@/components/settings/team-section';
 import { AuthorsSection } from '@/components/settings/authors-section';
+import { ContentSection } from '@/components/settings/content-section';
 import { ApiKeysSection } from '@/components/settings/api-keys-section';
 import { AiProvidersSection } from '@/components/settings/ai-providers-section';
 import { NotificationsSection } from '@/components/settings/notifications-section';
@@ -82,6 +83,7 @@ export function SettingsView({ section }: { section: SettingsSection }) {
     organization: t('organization'),
     team: t('team'),
     authors: t('authors.title'),
+    content: t('content.title'),
     notifications: t('notifications'),
     integrations: t('integrations'),
     'api-keys': t('apiKeys'),
@@ -177,6 +179,8 @@ export function SettingsView({ section }: { section: SettingsSection }) {
           {active === 'team' && <TeamSection />}
 
           {active === 'authors' && hasSettingsSection('authors', { isCloud }) && <AuthorsSection />}
+
+          {active === 'content' && hasSettingsSection('content', { isCloud }) && <ContentSection />}
 
           {active === 'notifications' && <NotificationsSection />}
 

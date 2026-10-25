@@ -646,6 +646,7 @@ export type Database = {
       brands: {
         Row: {
           content_byline: boolean
+          content_quality_handoff: boolean
           created_at: string
           description: string | null
           ga_property_id: string | null
@@ -671,6 +672,7 @@ export type Database = {
         }
         Insert: {
           content_byline?: boolean
+          content_quality_handoff?: boolean
           created_at?: string
           description?: string | null
           ga_property_id?: string | null
@@ -696,6 +698,7 @@ export type Database = {
         }
         Update: {
           content_byline?: boolean
+          content_quality_handoff?: boolean
           created_at?: string
           description?: string | null
           ga_property_id?: string | null
@@ -979,6 +982,7 @@ export type Database = {
           agent_run: string | null
           agent_state: string | null
           agent_state_at: string | null
+          quality_handoff: boolean
           archived_at: string | null
           archived_by: string | null
           author: string
@@ -1018,6 +1022,7 @@ export type Database = {
           agent_run?: string | null
           agent_state?: string | null
           agent_state_at?: string | null
+          quality_handoff?: boolean
           archived_at?: string | null
           archived_by?: string | null
           author?: string
@@ -1057,6 +1062,7 @@ export type Database = {
           agent_run?: string | null
           agent_state?: string | null
           agent_state_at?: string | null
+          quality_handoff?: boolean
           archived_at?: string | null
           archived_by?: string | null
           author?: string
@@ -1229,6 +1235,7 @@ export type Database = {
           finished_at: string | null
           id: string
           kind: string
+          origin: string
           outcome: string | null
           started_at: string
           step: number
@@ -1241,6 +1248,7 @@ export type Database = {
           finished_at?: string | null
           id?: string
           kind: string
+          origin?: string
           outcome?: string | null
           started_at?: string
           step?: number
@@ -1253,6 +1261,7 @@ export type Database = {
           finished_at?: string | null
           id?: string
           kind?: string
+          origin?: string
           outcome?: string | null
           started_at?: string
           step?: number
