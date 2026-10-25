@@ -1,12 +1,13 @@
 -- ============================================================================
--- 00279: Quality phase 3, CE-052 — what only the person can confirm
+-- 00280: Quality phase 3, CE-052 — what only the person can confirm
 -- ============================================================================
 -- What Quality can't verify on its own becomes a confirm step, never a pass
 -- (Content Editor Quality spec §11): a customer's case (their name, logo or
 -- results) goes out only with their permission, and only the person knows
 -- they have it. Their statement is kept here, with who made it, by what it
--- is about: its kind, and its key (a proof ask's, by its claim and block).
--- Category pages' intro facts (CE-054) are confirmed here too.
+-- is about: its kind, and its key (a customer case's, by its claim's words;
+-- the page matches a case to it by those words). Category pages' intro
+-- facts (CE-054) are confirmed here too.
 
 create table if not exists public.content_draft_confirmations (
   draft_id uuid not null references public.content_drafts(id) on delete cascade,
@@ -23,7 +24,7 @@ grant select, insert on table public.content_draft_confirmations to authenticate
 grant all on table public.content_draft_confirmations to service_role;
 
 comment on table public.content_draft_confirmations is
-  'Quality CE-052 (00279): what a member confirmed that only they can (a customer case may be published; a category intro''s facts are right), by kind and key, with who and when. Members read their drafts'' and confirm as themselves; no update or delete.';
+  'Quality CE-052 (00280): what a member confirmed that only they can (a customer case may be published; a category intro''s facts are right), by kind and key, with who and when. Members read their drafts'' and confirm as themselves; no update or delete.';
 
 drop policy if exists "content_draft_confirmations: member select" on public.content_draft_confirmations;
 create policy "content_draft_confirmations: member select"

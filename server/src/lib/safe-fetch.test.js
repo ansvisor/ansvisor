@@ -127,6 +127,10 @@ describe('fetchPage against a local site', () => {
       res.writeHead(200, { 'content-type': 'application/pdf' });
       res.end('%PDF');
     },
+    '/feed.xml': (res) => {
+      res.writeHead(200, { 'content-type': 'application/xml; charset=utf-8' });
+      res.end('<rss version="2.0"><channel></channel></rss>');
+    },
     '/missing': (res) => {
       res.writeHead(404, { 'content-type': 'text/html' });
       res.end('nope');
@@ -192,6 +196,13 @@ describe('fetchPage against a local site', () => {
     await expect(get('/missing')).rejects.toMatchObject({ code: 'http_error', status: 404 });
     await expect(get('/big', { maxBytes: 1_000 })).rejects.toMatchObject({ code: 'too_large' });
     await expect(get('/slow', { timeoutMs: 50 })).rejects.toMatchObject({ code: 'timeout' });
+  });
+
+  it('reads another content type only when asked to', async () => {
+    await expect(get('/feed.xml')).rejects.toMatchObject({ code: 'not_html' });
+    await expect(
+      get('/feed.xml', { types: /^\s*application\/xml\b/i, accept: 'application/xml' }),
+    ).resolves.toMatchObject({ html: '<rss version="2.0"><channel></channel></rss>' });
   });
 
   it('reads the start of a page over the cap when asked to, instead of refusing it', async () => {

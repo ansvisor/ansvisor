@@ -2604,13 +2604,59 @@ describe('the side panel', () => {
       await act(async () => chip.click());
       const text = panel()!.textContent!;
       expect(text).toContain('Checks and weights for Product page');
-      // The Rules tab's specs table and fit questions, read from the page.
-      expect(text).toMatch(/2 page type rules not met: .*Specs table/);
+      // The Rules tab's specs table, read from the page; no sizes, so no fit questions.
+      expect(text).toMatch(/1 page type rule not met: Specs table/);
       expect(text).toContain('Say how shipping and returns work');
       expect(text).not.toContain('Add an author for the page');
       // No product feed yet (CE-053): the price and stock aren't checked, and it says so.
       expect(getCatalogMatch).toHaveBeenCalledWith('d1', readable.title);
       expect(text).toContain("Price and stock aren't checked: no product feed is connected");
+    });
+
+    it('leaves a date in the person’s words alone, and replaces only its own old line (#1495 review)', async () => {
+      process.env.NEXT_PUBLIC_CONTENT_QUALITY_PHASE = '3';
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+      getContentAuthors.mockResolvedValue({
+        authors: [],
+        brands: [{ id: 'b1', name: 'Acme' }],
+        me: { id: 'u1', role: 'admin' },
+      });
+      const byline = 'By Jane Doe · Updated March 2023';
+      const answer = 'We tested 9 CRMs in 2024; HubSpot fits small teams best.';
+      getContentDraft.mockResolvedValue({
+        ...readable,
+        pageType: 'comparison',
+        bodyHtml:
+          `<h1>Best CRMs for small teams</h1><p>${byline}</p><p>${answer}</p>` +
+          '<h2>How we picked</h2><p>We set each one up with a real pipeline and a team of three.</p>' +
+          '<p>Last checked: May 2021</p>',
+      });
+      window.innerWidth = 1440;
+      await renderPage();
+      await act(async () => void (await vi.advanceTimersByTimeAsync(3_000)));
+      const chip = [...container.querySelectorAll<HTMLButtonElement>('header button')].find((b) =>
+        b.textContent?.startsWith('Quality'),
+      )!;
+      await act(async () => chip.click());
+      const row = [...panel()!.querySelectorAll('[aria-label="Your to-dos"] li')].find((li) =>
+        li.textContent?.startsWith('Update when you last checked'),
+      )!;
+      expect(row.textContent).toContain('Add line replaces it with this month');
+      await act(async () =>
+        [...row.querySelectorAll('button')].find((b) => b.textContent === 'Add line')!.click(),
+      );
+      const { state } = (
+        container.querySelector('.ProseMirror') as HTMLElement & { editor: Editor }
+      ).editor;
+      const blocks: string[] = [];
+      state.doc.forEach((node) => void blocks.push(node.textContent));
+      // The byline and the answer stay; the old line is this month's now, once.
+      expect(blocks).toContain(byline);
+      expect(blocks).toContain(answer);
+      expect(blocks.filter((text) => text.startsWith('Last checked:'))).toEqual([
+        expect.stringMatching(/^Last checked: \w+ \d{4}$/),
+      ]);
+      expect(blocks.at(-1)).not.toBe('Last checked: May 2021');
     });
 
     it('asks a comparison to show when it was last checked, and Add line puts it under the answer (CE-052)', async () => {
@@ -2667,7 +2713,7 @@ describe('the side panel', () => {
       )!;
       await act(async () => chip.click());
       const row = [...panel()!.querySelectorAll('[aria-label="Your to-dos"] li')].find((li) =>
-        li.textContent?.startsWith('Show when you last checked'),
+        li.textContent?.startsWith('Update when you last checked'),
       )!;
       await act(async () =>
         [...row.querySelectorAll('button')].find((b) => b.textContent === 'Add line')!.click(),
@@ -3306,6 +3352,51 @@ describe('the side panel', () => {
         li.textContent?.includes('the fastest forecasting app'),
       )!;
       expect(done.textContent).toContain('The proof is linked');
+    });
+
+    it('hands off with the customer cases’ paragraphs left as they are, in phase 3 (#1496 review)', async () => {
+      process.env.NEXT_PUBLIC_CONTENT_QUALITY_PHASE = '3';
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+      getContentAuthors.mockResolvedValue({
+        authors: [],
+        brands: [{ id: 'b1', name: 'Ledgerly' }],
+        me: { id: 'u1', role: 'admin' },
+      });
+      const block = 'Acme cut its close time by 40% with Ledgerly in one quarter.';
+      readDraftPage.mockResolvedValue({
+        spots: [],
+        proofs: [{ claim: 'Acme cut its close time by 40%', block, kind: 'customer_case' }],
+        regulated: null,
+        pending: false,
+        limited: false,
+        paused: false,
+      });
+      const long = `Teams ${Array.from({ length: 39 }, () => 'plan').join(' ')}.`;
+      getContentDraft.mockResolvedValue({
+        ...claimed,
+        pageType: 'feature_page',
+        bodyHtml: `${claimed.bodyHtml}<p>${block}</p><p>${long}</p>`,
+      });
+      window.innerWidth = 1440;
+      await renderPage();
+      await act(async () => void (await vi.advanceTimersByTimeAsync(3_000)));
+      const chip = [...container.querySelectorAll<HTMLButtonElement>('header button')].find((b) =>
+        b.textContent?.startsWith('Quality'),
+      )!;
+      await act(async () => chip.click());
+      const card = panel()!.querySelector('[aria-label="Hand it off to Content Agent"]')!;
+      await act(async () =>
+        [...card.querySelectorAll<HTMLButtonElement>('button')]
+          .find((b) => b.textContent === 'Hand off')!
+          .click(),
+      );
+      await act(async () => void (await vi.advanceTimersByTimeAsync(0)));
+      // The server leaves a locked passage as it is: the case's paragraph is one.
+      expect(handOffDraft).toHaveBeenCalledWith(
+        'd1',
+        'b1',
+        expect.objectContaining({ locked: expect.arrayContaining([block]) }),
+      );
     });
 
     it("hands the page's open Quality suggestions off to the agent in one run (CE-051)", async () => {

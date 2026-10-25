@@ -2653,13 +2653,13 @@ export async function confirmOwnImage(id: string, src: string): Promise<'ok' | '
   return 'ok';
 }
 
-/** What a member can confirm on a draft that only they know (Quality CE-052, 00279). */
+/** What a member can confirm on a draft that only they know (Quality CE-052, 00280). */
 export type ConfirmationKind = 'customer_case' | 'intro_fact';
 const confirmationKind = z.enum(['customer_case', 'intro_fact']);
 const confirmationKey = z.string().min(1).max(400);
 
 /**
- * The draft's confirmations (00279): what a member said only they could (a
+ * The draft's confirmations (00280): what a member said only they could (a
  * customer case may be published; a category intro's facts are right), by
  * kind and key. Fails soft: none, when they can't be read.
  */
@@ -2686,7 +2686,7 @@ export async function getDraftConfirmations(
 }
 
 /**
- * Confirms one (00279): the member's statement, kept with who made it, as
+ * Confirms one (00280): the member's statement, kept with who made it, as
  * themself and now. Confirmed already is fine; 'full' when the draft keeps 50.
  */
 export async function confirmDraftItem(

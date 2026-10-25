@@ -35,13 +35,31 @@ export function checkDateText(
 }
 
 /**
+ * Add line's own line, in any of the languages above: its label, then a
+ * month and a year, and nothing else ("Last checked: May 2021", "Última
+ * revisión: octubre de 2026"). Only this is replaced: a date in the
+ * person's own words (a byline, the answer) is theirs.
+ */
+const CHECK_DATE_LINE = new RegExp(
+  `^\\s*(?:${Object.values(LINES)
+    .map((line) => line.replace(/\s*:\s*\{date\}$/u, '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+    .join('|')})\\s*:\\s*[\\p{L}.]+(?:\\s+de)?\\s+\\d{4}\\s*$`,
+  'iu',
+);
+
+/** Whether a block is Add line's own check date line, at any date: Add line replaces it. */
+export const isCheckDateLine = (text: string) =>
+  CHECK_DATE_LINE.test(text) || CHECK_DATE_LINE.test(text.toLocaleLowerCase('tr'));
+
+/**
  * Words (and their stems) that say a page was checked, tested, reviewed or
  * updated, the verb or the label ("Last update", "Son güncelleme",
- * "Letzte Aktualisierung"), in the languages above; each at a word's start
- * ("untested", "areas of" aren't one).
+ * "Letzte Aktualisierung", "Letzte Prüfung"), in the languages above; each
+ * at a word's start ("untested", "areas of" aren't one), and in the forms
+ * that mean checked ("verification", "updates", "kontrolü" aren't).
  */
 const CHECKED =
-  /(?<!\p{L})(?:checked|tested|reviewed|verified|updated?|as of|kontrol|güncelle|incele|test edil|doğrula|geprüft|überprüf|getestet|aktualisier|stand:|vérifi|mise? à jour|testé|révis|revis|actualiza|verifica|probad|atualiza|testad|controllat|controllo|aggiorna|gecontroleerd|getest|bijgewerkt|kontrollerad|uppdaterad|granskad)/giu;
+  /(?<!\p{L})(?:checked|tested|reviewed|verified|updated|last update|last modified|as of|son kontrol|kontrol edil|güncelle|incele|test edil|doğrula|geprüft|überprüf|prüfung|getestet|aktualisier|stand:|vérifi|mise? à jour|actualisé|testé|révis|revis|actualiza|verificad[oa]|verificaç|verificat[oaie](?!\p{L})|probad|atualiza|testad|testato|controllat|controllo|aggiorna|gecontroleerd|getest|bijgewerkt|kontrollerad|uppdaterad|granskad)/giu;
 const YEAR = /(?<!\d)(?:19|20)\d{2}(?!\d)/g;
 /** A block this short is a label ("Updated March 2026"): its date is the page's. */
 const LABEL_WORDS = 12;
@@ -62,11 +80,6 @@ function checkedYears(text: string): number[] {
   return out;
 }
 
-/** Whether a block says when the page was checked, at any date: Add line replaces it. */
-export function isCheckDateText(text: string): boolean {
-  return checkedYears(text).length > 0;
-}
-
 /**
  * Whether the page says when it was last checked: a block with a "checked"
  * word and a year from the last two (a check date older than that tells the
@@ -77,4 +90,18 @@ export function pageCheckDate(texts: readonly string[], now = new Date()): boole
   return texts.some((text) =>
     checkedYears(text).some((year) => year >= from && year <= now.getFullYear()),
   );
+}
+
+/**
+ * What the page says of when it was checked: a recent date (found), else an
+ * older one, in Add line's own line (it replaces it) or in the person's
+ * words (they update it), or none.
+ */
+export function checkDateOnPage(
+  texts: readonly string[],
+  now = new Date(),
+): { found: boolean; old: 'line' | 'text' | null } {
+  if (pageCheckDate(texts, now)) return { found: true, old: null };
+  if (texts.some(isCheckDateLine)) return { found: false, old: 'line' };
+  return { found: false, old: texts.some((text) => checkedYears(text).length) ? 'text' : null };
 }

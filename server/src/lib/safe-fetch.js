@@ -27,6 +27,10 @@ export const FETCH_TIMEOUT_MS = 10_000;
 export const MAX_PAGE_BYTES = 3 * 1024 * 1024;
 export const MAX_REDIRECTS = 5;
 
+/** The content types a web page comes as, and what a request asks for. */
+const HTML_TYPES = /^\s*(text\/html|application\/xhtml\+xml)\b/i;
+const HTML_ACCEPT = 'text/html,application/xhtml+xml;q=0.9,*/*;q=0.1';
+
 const USER_AGENT = 'Mozilla/5.0 (compatible; AnsvisorBot/1.0; +https://ansvisor.com)';
 
 export class PageFetchError extends Error {
@@ -160,7 +164,7 @@ function decode(buffer, contentType) {
  * One request, no redirects followed: the response, or where it redirects to.
  * A body over `maxBytes` is refused, or with `truncate` cut off there.
  */
-function requestOnce(url, { signal, lookup, maxBytes, truncate }) {
+function requestOnce(url, { signal, lookup, maxBytes, truncate, types, accept }) {
   return new Promise((resolve, reject) => {
     const client = url.protocol === 'https:' ? https : http;
     const req = client.request(
@@ -172,7 +176,7 @@ function requestOnce(url, { signal, lookup, maxBytes, truncate }) {
         signal,
         headers: {
           'user-agent': USER_AGENT,
-          accept: 'text/html,application/xhtml+xml;q=0.9,*/*;q=0.1',
+          accept,
           'accept-encoding': 'gzip, deflate, br',
         },
       },
@@ -190,7 +194,7 @@ function requestOnce(url, { signal, lookup, maxBytes, truncate }) {
           return;
         }
         const contentType = res.headers['content-type'] ?? '';
-        if (!/^\s*(text\/html|application\/xhtml\+xml)\b/i.test(contentType)) {
+        if (!types.test(contentType)) {
           res.destroy();
           reject(new PageFetchError('not_html', `The address is ${contentType || 'not a page'}`));
           return;
@@ -236,12 +240,14 @@ function requestOnce(url, { signal, lookup, maxBytes, truncate }) {
  * A web page's HTML, fetched safely (see above).
  *
  * @param {string} address
- * @param {{ timeoutMs?: number, maxBytes?: number, truncate?: boolean, maxRedirects?: number, lookup?: Function, ports?: string[], signal?: AbortSignal }} [opts]
+ * @param {{ timeoutMs?: number, maxBytes?: number, truncate?: boolean, maxRedirects?: number, lookup?: Function, ports?: string[], signal?: AbortSignal, types?: RegExp, accept?: string }} [opts]
  *   `signal` ends the read early too (a run's Stop), as its timeout does.
  *   `truncate` reads a page over `maxBytes` up to it, instead of refusing it
  *   ('too_large'), for a caller that needs only its start.
  *   `lookup` and `ports` replace the public-only lookup and the web ports;
  *   tests use them to reach a local server.
+ *   `types` and `accept` read something other than a web page (a product
+ *   feed): the content types taken, else 'not_html', and the Accept header.
  * @returns {Promise<{ url: string, status: number, html: string }>} url is the address after redirects
  */
 export async function fetchPage(address, opts = {}) {
@@ -249,6 +255,8 @@ export async function fetchPage(address, opts = {}) {
     timeoutMs = FETCH_TIMEOUT_MS,
     maxBytes = MAX_PAGE_BYTES,
     truncate = false,
+    types = HTML_TYPES,
+    accept = HTML_ACCEPT,
     maxRedirects = MAX_REDIRECTS,
     lookup = publicOnlyLookup,
     ports = WEB_PORTS,
@@ -261,7 +269,7 @@ export async function fetchPage(address, opts = {}) {
   for (let hops = 0; ; hops += 1) {
     let res;
     try {
-      res = await requestOnce(url, { signal, lookup, maxBytes, truncate });
+      res = await requestOnce(url, { signal, lookup, maxBytes, truncate, types, accept });
     } catch (err) {
       if (err instanceof PageFetchError) throw err;
       if (signal.aborted) throw new PageFetchError('timeout', 'The page took too long to answer');
