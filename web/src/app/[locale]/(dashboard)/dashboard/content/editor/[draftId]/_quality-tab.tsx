@@ -487,12 +487,18 @@ export function useTodoCopy() {
     // A comparison's check date (CE-052): only the person knows when they checked.
     if (todo.id === 'checkDate') {
       return {
-        title: t('checkDate.title'),
+        title: t(todo.old && !todo.done ? 'checkDate.titleOld' : 'checkDate.title'),
         next: t('checkDate.next'),
         detail: todo.done
           ? t('checkDate.done')
           : todo.action === 'addCheckDate'
-            ? t('checkDate.detail')
+            ? t(
+                todo.old === 'line'
+                  ? 'checkDate.detailReplace'
+                  : todo.old === 'text'
+                    ? 'checkDate.detailOld'
+                    : 'checkDate.detail',
+              )
             : t('checkDate.detailWrite'),
       };
     }

@@ -4710,7 +4710,7 @@
           "product": "no author (your brand's), your own product photos, proof for claims, prices that match, shipping and returns, a specs table and short plain copy.",
           "category": "your own product images, your brand's information on its site, prices and claims that match, an intro and a buying FAQ.",
           "feature": "your own screenshots and data, sourced metrics, a price that matches, a comparison table, proof per section and use case steps in scannable sections.",
-          "comparison": "an author who says how the picks were made, balance and a disclosure, a side-by-side table, the summary first."
+          "comparison": "an author who says how the picks were made and when they were last checked, balance and a disclosure, a side-by-side table, the summary first."
         },
         "tooShort": "Write a few paragraphs: Readability is read from the page as you write.",
         "tooShortShort": "Too short yet",
@@ -4758,8 +4758,11 @@
           },
           "checkDate": {
             "title": "Show when you last checked",
-            "next": "show when you last checked",
+            "titleOld": "Update when you last checked",
+            "next": "show when you last checked, once you've checked the products",
             "detail": "Comparison readers trust a date they can see. Add line puts this month's under the opening paragraph: check the products first",
+            "detailReplace": "The page's check date is over a year old. Add line replaces it with this month's: check the products first",
+            "detailOld": "The page's check date is over a year old. Add line puts this month's under the opening paragraph: check the products first, then update or remove the old date",
             "detailWrite": "Comparison readers trust a date they can see: write when you last checked the products",
             "done": "The page shows when it was last checked"
           },

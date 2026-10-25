@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { checkDateText, isCheckDateText, pageCheckDate } from './check-date';
+import { checkDateOnPage, checkDateText, isCheckDateLine, pageCheckDate } from './check-date';
 import { isByline } from './readability';
 
 /** A comparison's visible check date (Quality spec §11, CE-052). */
@@ -34,6 +34,11 @@ describe('pageCheckDate', () => {
       'Dernière mise à jour : octobre 2026',
       'Última actualización: octubre de 2026',
       'Ultimo aggiornamento: ottobre 2026',
+      'Letzte Prüfung: Oktober 2026',
+      'Actualisé le 3 octobre 2026',
+      'Testato a ottobre 2026',
+      'Last modified: October 2026',
+      'Verificado en octubre de 2026',
     ]) {
       expect(pageCheckDate([text], NOW), text).toBe(true);
     }
@@ -46,14 +51,48 @@ describe('pageCheckDate', () => {
       'We checked every plan.',
       'Areas of improvement for 2026.',
       'Untested before 2026.',
+      // Words that aren't a check: a verification, updates, a control.
+      'Email verification since 2025.',
+      'Free updates since 2025.',
+      "Ebeveyn kontrolü 2025'te geldi.",
       'We tested a dozen tools for this guide, comparing price, speed, support and integrations for small teams; Acme launched in 2026.',
     ]) {
       expect(pageCheckDate([text], NOW), text).toBe(false);
     }
   });
 
-  it('tells a check date at any year, for Add line to replace', () => {
-    expect(isCheckDateText('Last checked: May 2021')).toBe(true);
-    expect(isCheckDateText('Our pick for small teams.')).toBe(false);
+  it('tells Add line’s own line at any year, for it to replace, and no one else’s date (#1495 review)', () => {
+    for (const language of ['en', 'tr', 'de', 'fr', 'es', 'pt', 'it', 'nl', 'sv']) {
+      expect(isCheckDateLine(checkDateText(language, new Date('2021-05-10'))!), language).toBe(
+        true,
+      );
+    }
+    for (const text of [
+      'By Jane Doe · Updated March 2023',
+      'We tested 9 CRMs in 2024; HubSpot fits small teams best.',
+      'Acme updated its pricing in 2023, and the Pro plan now costs more.',
+      'Last checked: May 2021, by our team.',
+      'Our pick for small teams.',
+    ]) {
+      expect(isCheckDateLine(text), text).toBe(false);
+    }
+  });
+});
+
+describe('checkDateOnPage', () => {
+  it('tells a recent date, an old line Add line replaces, and an old date in the person’s words', () => {
+    expect(checkDateOnPage(['Last checked: October 2026'], NOW)).toEqual({
+      found: true,
+      old: null,
+    });
+    expect(checkDateOnPage(['Last checked: May 2021'], NOW)).toEqual({ found: false, old: 'line' });
+    expect(checkDateOnPage(['By Jane Doe · Updated March 2023'], NOW)).toEqual({
+      found: false,
+      old: 'text',
+    });
+    expect(checkDateOnPage(['Our pick for small teams.'], NOW)).toEqual({
+      found: false,
+      old: null,
+    });
   });
 });

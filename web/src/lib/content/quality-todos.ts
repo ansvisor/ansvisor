@@ -79,6 +79,8 @@ export interface QualityTodo {
    * names (00271), a tick box beside the to-do, and whether it's ticked.
    */
   confirm?: { what: 'real' | 'profile'; on: boolean };
+  /** A check date the page has, over a year old: Add line's own line (it replaces it), or the person's words. */
+  old?: 'line' | 'text';
 }
 
 /**
@@ -158,7 +160,7 @@ export function qualityTodos({
    * Phase 3 (CE-052): whether a comparison shows when it was last checked,
    * and the line Add line puts in (null for a language without one).
    */
-  checkDate?: { found: boolean; line: string | null } | null;
+  checkDate?: { found: boolean; old?: 'line' | 'text' | null; line: string | null } | null;
   /**
    * Phase 3 (CE-052): the checks the page's type leaves out (checksOff): no
    * to-do asks for them (a product page has the brand's byline, no author).
@@ -301,6 +303,7 @@ export function qualityTodos({
             score: 'eeat',
             // Only the person knows when they checked: Add line says this month's.
             action: checkDate.found || !checkDate.line ? null : 'addCheckDate',
+            ...(!checkDate.found && checkDate.old ? { old: checkDate.old } : {}),
           } satisfies QualityTodo,
         ]
       : []),
