@@ -4337,7 +4337,7 @@
             "title": "Your workflow",
             "hint": "The brand's webhook (Zapier, Make, n8n)"
           },
-          "unchecked": "Couldn't check Webflow just now, so this goes to your workflow.",
+          "unchecked": "Couldn't check Webflow just now, so this send goes to your workflow.",
           "retry": "Try again"
         },
         "placeholders": "{count, plural, one {# placeholder is} other {# placeholders are}} still open. Fill {count, plural, one {it} other {them}} first: none goes to your CMS.",

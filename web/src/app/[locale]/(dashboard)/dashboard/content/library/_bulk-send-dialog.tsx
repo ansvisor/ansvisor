@@ -114,6 +114,7 @@ export function BulkSendDialog({
     webflow,
     target,
     pick,
+    sent: keepTarget,
     unchecked: targetUnchecked,
     reading: targetReading,
     retry: retryTarget,
@@ -279,6 +280,7 @@ export function BulkSendDialog({
       setPhase({ kind: 'ready' });
       return;
     }
+    keepTarget(target);
     const left = [...made.values()].some((d) => d.status === 'queued');
     setPhase(
       left && !waitedOut
@@ -344,7 +346,11 @@ export function BulkSendDialog({
           />
         )}
         {targetUnchecked && !after && (
-          <CmsTargetUnchecked reading={targetReading} onRetry={retryTarget} />
+          <CmsTargetUnchecked
+            reading={targetReading}
+            onRetry={retryTarget}
+            disabled={phase.kind === 'sending'}
+          />
         )}
 
         {phase.kind === 'reading' ? (
