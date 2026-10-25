@@ -3,7 +3,9 @@ import { LANGUAGES } from '@/config/prompt-options';
 import { classifyDomain, normalizeDomain } from '@/lib/citations/classify';
 import { PAGE_TYPES, type DraftMethod, type PageType } from '@/lib/content/drafts';
 import { lengthTarget } from '@/lib/content/editor';
+import { feedCheck, type CatalogMatch } from '@/lib/content/feed-match';
 import { decodeHtmlBlock } from '@/lib/content/html-allowlist';
+import { pageOffer } from '@/lib/content/page-schema';
 import { countWords } from '@/lib/content/readability';
 import { wordsOf } from '@/lib/content/sources';
 
@@ -595,12 +597,22 @@ export type RuleStatus =
   /** Out of the Length rule's band, as it reads (lengthBand). */
   | { state: 'bad'; code: 'short' | 'long'; count: number; min: number; max: number }
   | { state: 'bad'; code: 'words'; count: number }
+  /** The page's price, GTIN or stock differs from its product's in the feed (CE-053). */
+  | { state: 'bad'; code: 'feedDiffers'; count: number }
   | { state: 'bad'; code: 'missing' | 'noH2' | 'notSet' }
   /** No FAQ yet: the fan-outs its questions should use, the most searched first. */
   | { state: 'bad'; code: 'needsFaq'; missing?: string[] }
   | {
       state: 'info';
-      code: 'aiCheck' | 'needsFeed' | 'noFanouts' | 'addKeywords' | 'notHowTo' | 'englishOnly';
+      code:
+        | 'aiCheck'
+        | 'needsFeed'
+        | 'notInFeed'
+        | 'feedNothing'
+        | 'noFanouts'
+        | 'addKeywords'
+        | 'notHowTo'
+        | 'englishOnly';
     };
 
 export interface RuleContext {
@@ -610,6 +622,11 @@ export interface RuleContext {
   fanouts: string[];
   /** The brand's language (brands.language); none reads as English. */
   language?: string | null;
+  /**
+   * The page's product in the brand's catalog (getCatalogMatch, Quality
+   * CE-053), for "Price, GTIN and stock match the feed"; none while not read.
+   */
+  catalog?: CatalogMatch | null;
 }
 
 /** Phrases that read as machine-written (spec §10, "Remove AI traces"). */
@@ -725,9 +742,11 @@ const atLeast = (have: number, want: number): RuleStatus =>
 
 /**
  * Rules the Content Agent can't fix: it changes words and adds blocks, never
- * a heading's level, so a page's extra H1s are made H2s in the editor.
+ * a heading's level, so a page's extra H1s are made H2s in the editor; a
+ * price, GTIN or stock that differs from the feed is the person's to check
+ * (the page or the feed may be the one that's wrong).
  */
-export const NOT_FOR_AGENT = new Set(['oneH1']);
+export const NOT_FOR_AGENT = new Set(['oneH1', 'feedMatch']);
 
 /**
  * The fan-outs a rule still needs (fanoutH2, fanoutFaq), quoted for the
@@ -865,9 +884,28 @@ export function rewriteAdvice<T extends { rule: ActiveRule; status: RuleStatus }
   return open >= REWRITE_OPEN_RULES ? { reason: 'open', count: open } : null;
 }
 
+/**
+ * "Price, GTIN and stock match the feed" (CE-053): the page against its
+ * product in the brand's catalog, once a catalog is connected and has it.
+ */
+function feedStatus(page: PageRead, catalog: CatalogMatch | null | undefined): RuleStatus {
+  if (!catalog?.connected) return { state: 'info', code: 'needsFeed' };
+  if (!catalog.product) return { state: 'info', code: 'notInFeed' };
+  const texts = page.blocks.map((b) => b.text);
+  const { compared, mismatches } = feedCheck({
+    texts,
+    offer: pageOffer(texts),
+    variants: catalog.product.variants,
+  });
+  if (!compared) return { state: 'info', code: 'feedNothing' };
+  return mismatches.length
+    ? { state: 'bad', code: 'feedDiffers', count: mismatches.length }
+    : { state: 'ok' };
+}
+
 /** Checks one rule against the page as written. */
 export function checkRule(rule: ActiveRule, page: PageRead, ctx: RuleContext): RuleStatus {
-  if (rule.check === 'feed') return { state: 'info', code: 'needsFeed' };
+  if (rule.check === 'feed') return feedStatus(page, ctx.catalog);
   if (rule.key === 'whoFor' && !rule.current.trim()) return { state: 'bad', code: 'notSet' };
   if (rule.check === 'ai') return { state: 'info', code: 'aiCheck' };
 

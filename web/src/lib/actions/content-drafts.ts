@@ -37,6 +37,7 @@ import {
 import { detectPageType, siteTypeOf, type SiteType } from '@/lib/content/page-types';
 import { sanitizeDraftHtml } from '@/lib/content/sanitize-draft-html';
 import { matchPagePrompts } from '@/lib/content/page-prompts';
+import { pageKey, type CatalogMatch } from '@/lib/content/feed-match';
 import type { LinkCheck } from '@/lib/content/quality-checks';
 import { CLAIM_KINDS, type ClaimBlock } from '@/lib/content/claims';
 import {
@@ -2715,4 +2716,121 @@ export async function confirmDraftItem(
   if (error?.code === OWN_IMAGES_FULL) return 'full';
   if (error) throw new Error(error.message);
   return 'ok';
+}
+
+/** A product's name as the page's title gives it: one line, up to the catalog's length. */
+const catalogTitle = z.string().trim().min(1).max(1000);
+/** Escape `\`, `%` and `_`: a path or a title matched as written. */
+const likeText = (value: string) => value.replace(/[\\%_]/g, (ch) => `\\${ch}`);
+
+/**
+ * The draft's product in the brand's catalog (00278; Quality CE-053): by
+ * the page's URL (an optimize draft's), else by its title, when one product
+ * has it. Says whether a catalog is connected at all, so Quality can say to
+ * connect one. Fails soft: null, when it can't be read.
+ */
+export async function getCatalogMatch(id: string, title: string): Promise<CatalogMatch | null> {
+  if (!draftId.safeParse(id).success) return null;
+  try {
+    const supabase = await createClient();
+    const { data: draft, error: draftError } = await supabase
+      .from('content_drafts')
+      .select('brand_id, source_url')
+      .eq('id', id)
+      .maybeSingle();
+    if (draftError) throw new Error(draftError.message);
+    if (!draft) return null;
+    const brand = draft.brand_id;
+    const { data: one, error: oneError } = await supabase
+      .from('catalog_products')
+      .select('id')
+      .eq('brand_id', brand)
+      .is('removed_at', null)
+      .limit(1);
+    if (oneError) throw new Error(oneError.message);
+    if (!one?.length) return { connected: false, product: null };
+
+    let productId: string | null = null;
+    let via: 'url' | 'name' = 'url';
+    const key = pageKey(draft.source_url);
+    const path = key ? key.slice(key.indexOf('/')) : '';
+    if (key && path.length > 1) {
+      // Narrowed by the path, then compared whole: a feed's URL may carry a
+      // query ("?variant=…") or another form of the host.
+      const pattern = `%${likeText(path)}%`;
+      const [products, variants] = await Promise.all([
+        supabase
+          .from('catalog_products')
+          .select('id, url')
+          .eq('brand_id', brand)
+          .is('removed_at', null)
+          .ilike('url', pattern)
+          .limit(20),
+        supabase
+          .from('catalog_variants')
+          .select('product_id, url')
+          .eq('brand_id', brand)
+          .is('removed_at', null)
+          .ilike('url', pattern)
+          .limit(20),
+      ]);
+      if (products.error) throw new Error(products.error.message);
+      if (variants.error) throw new Error(variants.error.message);
+      const ids = new Set([
+        ...(products.data ?? []).filter((p) => pageKey(p.url) === key).map((p) => p.id),
+        ...(variants.data ?? []).filter((v) => pageKey(v.url) === key).map((v) => v.product_id),
+      ]);
+      if (ids.size === 1) productId = [...ids][0];
+    }
+    const name = catalogTitle.safeParse(title);
+    if (!productId && name.success) {
+      const { data, error } = await supabase
+        .from('catalog_products')
+        .select('id')
+        .eq('brand_id', brand)
+        .is('removed_at', null)
+        .ilike('title', likeText(name.data))
+        .limit(2);
+      if (error) throw new Error(error.message);
+      // Two products by one name: whose page this is isn't sure.
+      if (data?.length === 1) {
+        productId = data[0].id;
+        via = 'name';
+      }
+    }
+    if (!productId) return { connected: true, product: null };
+
+    const [product, variants] = await Promise.all([
+      supabase.from('catalog_products').select('title, url').eq('id', productId).maybeSingle(),
+      supabase
+        .from('catalog_variants')
+        .select('price, sale_price, currency, availability, gtin')
+        .eq('product_id', productId)
+        .is('removed_at', null)
+        .limit(100),
+    ]);
+    if (product.error) throw new Error(product.error.message);
+    if (variants.error) throw new Error(variants.error.message);
+    if (!product.data) return { connected: true, product: null };
+    const amount = (value: number | string | null) =>
+      value === null || !Number.isFinite(Number(value)) ? null : Number(value);
+    return {
+      connected: true,
+      product: {
+        title: product.data.title,
+        url: product.data.url,
+        via,
+        variants: (variants.data ?? []).map((v) => ({
+          price: amount(v.price),
+          salePrice: amount(v.sale_price),
+          currency: v.currency,
+          availability: v.availability,
+          gtin: v.gtin,
+        })),
+      },
+    };
+  } catch (err) {
+    console.error('Failed to read the catalog:', err);
+    return null;
+  }
 }

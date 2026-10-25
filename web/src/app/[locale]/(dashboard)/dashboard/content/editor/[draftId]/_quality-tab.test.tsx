@@ -145,7 +145,7 @@ describe('QualityTab', () => {
       p.textContent?.startsWith('Checks and weights for'),
     )!;
     expect(line.textContent).toBe(
-      "Checks and weights for Product page (detected): no author (your brand's), your own product photos, proof for claims, prices that match, shipping and returns, a specs table and short plain copy. Change",
+      "Checks and weights for Product page (detected): no author (your brand's), your own product photos, proof for claims, the price and stock your product feed has, shipping and returns, a specs table and short plain copy. Change",
     );
     await act(async () => line.querySelector('button')!.click());
     expect(onChangeType).toHaveBeenCalled();
@@ -160,6 +160,36 @@ describe('QualityTab', () => {
     // Before Phase 3: no line.
     await render(read(result));
     expect(container.textContent).not.toContain('Checks and weights for');
+  });
+
+  it('names a price that differs from the product feed, and says when there is none to check (CE-053)', async () => {
+    const trustRead = trust({
+      blocks: trustBlocks('<p>The Ridge 28 costs $129.</p><p>In stock.</p>'),
+      links: new Map(),
+      brandDomains: [],
+      feed: {
+        compared: 2,
+        mismatches: [
+          { kind: 'price', page: '$129', feed: '$119', sentence: 'The Ridge 28 costs $129.' },
+          { kind: 'stock', page: 'in', feed: 'out', sentence: 'In stock.' },
+        ],
+      },
+      now: Date.parse('2026-10-25T12:00:00Z'),
+    });
+    await render({ ...read(result), trust: trustRead });
+    expect(container.textContent).toContain(
+      'Price differs from your product feed · Page $129 · Feed $119',
+    );
+    expect(container.textContent).toContain('2 differ: check which is right');
+    // No feed, or no product in it with the page's URL or title: a line says so.
+    await render({ ...read(result), feed: 'none' });
+    expect(container.textContent).toContain(
+      "Price and stock aren't checked: connect your product feed",
+    );
+    await render({ ...read(result), feed: 'notFound' });
+    expect(container.textContent).toContain("no product in your feed has this page's URL or title");
+    await render(read(result));
+    expect(container.textContent).not.toContain("Price and stock aren't checked");
   });
 
   it('names the page type’s rules not met yet, and a product page’s shipping to-do (CE-052)', async () => {

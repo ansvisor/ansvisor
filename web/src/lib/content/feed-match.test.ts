@@ -1,0 +1,133 @@
+import { describe, expect, it } from 'vitest';
+import { feedCheck, feedStock, pageKey, stockOnPage, type FeedVariant } from './feed-match';
+
+/** A product page against its product feed (Quality spec §11, CE-053). */
+
+const variant = (over: Partial<FeedVariant> = {}): FeedVariant => ({
+  price: 129,
+  salePrice: null,
+  currency: 'USD',
+  availability: 'in_stock',
+  gtin: null,
+  ...over,
+});
+
+describe('pageKey', () => {
+  it('reads an address as feeds write it: no www, trailing slash or query', () => {
+    expect(pageKey('https://www.Acme.com/products/Ridge-28/?variant=42#specs')).toBe(
+      'acme.com/products/ridge-28',
+    );
+    expect(pageKey('http://acme.com/products/ridge-28')).toBe('acme.com/products/ridge-28');
+    expect(pageKey('ftp://acme.com/x')).toBeNull();
+    expect(pageKey('not a url')).toBeNull();
+    expect(pageKey(null)).toBeNull();
+  });
+});
+
+describe('stockOnPage', () => {
+  it('reads what the page says of its stock, and none where it says both', () => {
+    expect(stockOnPage(['Ships in 2 days.', 'In stock and ready to ship.'])).toEqual({
+      stock: 'in',
+      sentence: 'In stock and ready to ship.',
+    });
+    expect(stockOnPage(['Sorry, this one is sold out.'])?.stock).toBe('out');
+    expect(stockOnPage(['Stokta yok.'])?.stock).toBe('out');
+    expect(stockOnPage(['Stokta, hemen kargoda.'])?.stock).toBe('in');
+    expect(stockOnPage(['Derzeit ausverkauft.'])?.stock).toBe('out');
+    expect(stockOnPage(['Black is in stock.', 'Blue is out of stock.'])).toBeNull();
+    expect(stockOnPage(['A daypack for wet hikes.'])).toBeNull();
+  });
+});
+
+describe('feedStock', () => {
+  it('is in when a variant is, out when every one is, and none for pre-orders', () => {
+    expect(feedStock([variant({ availability: 'out_of_stock' }), variant()])).toBe('in');
+    expect(feedStock([variant({ availability: 'out of stock' })])).toBe('out');
+    expect(feedStock([variant({ availability: 'preorder' })])).toBeNull();
+    expect(feedStock([variant({ availability: null })])).toBeNull();
+    expect(feedStock([])).toBeNull();
+  });
+});
+
+describe('feedCheck', () => {
+  const texts = ['The Ridge 28 costs $129.', 'In stock.'];
+
+  it('passes a page whose price and stock are the feed’s', () => {
+    expect(
+      feedCheck({ texts, offer: { price: 129, currency: 'USD' }, variants: [variant()] }),
+    ).toEqual({ compared: 2, mismatches: [] });
+    // A range is the feed's low and high; a sale price is the price now.
+    expect(
+      feedCheck({
+        texts: ['Sizes run $119–$139.'],
+        offer: { low: 119, high: 139, currency: 'USD' },
+        variants: [variant({ price: 149, salePrice: 119 }), variant({ price: 139 })],
+      }),
+    ).toEqual({ compared: 1, mismatches: [] });
+  });
+
+  it('names a price, a GTIN or a stock that differs, with the sentence to show', () => {
+    expect(
+      feedCheck({
+        texts,
+        offer: { price: 129, currency: 'USD' },
+        variants: [variant({ price: 119, availability: 'out_of_stock' })],
+      }),
+    ).toEqual({
+      compared: 2,
+      mismatches: [
+        { kind: 'price', page: '$129', feed: '$119', sentence: 'The Ridge 28 costs $129.' },
+        { kind: 'stock', page: 'in', feed: 'out', sentence: 'In stock.' },
+      ],
+    });
+    // On sale in the feed, full price on the page.
+    expect(
+      feedCheck({
+        texts: ['$129.'],
+        offer: { price: 129, currency: 'USD' },
+        variants: [variant({ salePrice: 99.5 })],
+      }).mismatches[0],
+    ).toMatchObject({ kind: 'price', feed: '$99.50' });
+    // A GTIN the feed doesn't have; a UPC's leading zeros don't count.
+    expect(
+      feedCheck({
+        texts: ['GTIN: 00012345678905.'],
+        offer: null,
+        variants: [variant({ gtin: '012345678905' })],
+      }),
+    ).toEqual({ compared: 1, mismatches: [] });
+    expect(
+      feedCheck({
+        texts: ['EAN 4006381333931.'],
+        offer: null,
+        variants: [variant({ gtin: '4006381333948' })],
+      }).mismatches,
+    ).toEqual([
+      {
+        kind: 'gtin',
+        page: '4006381333931',
+        feed: '4006381333948',
+        sentence: 'EAN 4006381333931.',
+      },
+    ]);
+  });
+
+  it('compares only what both state: no price, several, another currency, no stock', () => {
+    const none = { compared: 0, mismatches: [] };
+    expect(feedCheck({ texts: ['A daypack.'], offer: null, variants: [variant()] })).toEqual(none);
+    expect(
+      feedCheck({
+        texts: ['$119. $139.'],
+        offer: { several: ['$119', '$139'] },
+        variants: [variant()],
+      }),
+    ).toEqual(none);
+    expect(
+      feedCheck({
+        texts: ['€119.'],
+        offer: { price: 119, currency: 'EUR' },
+        variants: [variant({ availability: null })],
+      }),
+    ).toEqual(none);
+  });
+});

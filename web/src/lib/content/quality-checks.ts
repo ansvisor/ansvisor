@@ -3,6 +3,7 @@ import type { ContentAuthor } from './authors';
 import { cleanHref } from './html-allowlist';
 import { ownText, sentencesOf } from './readability';
 import type { FactMismatch } from './brand-facts';
+import type { FeedMismatch } from './feed-match';
 import type { ClaimBlock } from './claims';
 import { askableSite, sourceClass, type AiSourceClass, type SourceClass } from './source-class';
 
@@ -75,11 +76,16 @@ export const TRUST_WEIGHTS = {
   siteTrust: 5,
   // Phase 3 (CE-052): a product page's shipping and returns; weighed there.
   shippingReturns: 0,
+  // Phase 3 (CE-053): a product page's price and stock against its product
+  // feed; weighed there, and only where the feed has the page's product.
+  feedMatch: 0,
 } as const;
 export type TrustCheckId = keyof typeof TRUST_WEIGHTS;
 
 /** The shipping and returns check's points before a page type weighs it. */
 const SHIPPING_POINTS = 10;
+/** The product feed check's points before a page type weighs it. */
+const FEED_POINTS = 10;
 /**
  * Words that say how a product ships, and how it goes back, in a policy's
  * terms ("free shipping", "delivery in 2 days", "30-day returns", "iade
@@ -476,6 +482,8 @@ export interface TrustRead extends Score<TrustCheckId> {
   mismatches: FactMismatch[];
   /** Phase 3 (CE-052): whether the page says how shipping and returns work; null where not read. */
   shipping?: { shipping: boolean; returns: boolean } | null;
+  /** Phase 3 (CE-053): where the page's price and stock differ from its product feed's. */
+  feed?: FeedMismatch[];
 }
 
 /**
@@ -545,8 +553,14 @@ export function trust({
   proofs = null,
   page = null,
   shipping = null,
+  feed = null,
   now,
 }: {
+  /**
+   * Phase 3 (CE-053): a product page's price and stock against its product
+   * in the brand's feed (feedCheck); left out where the feed doesn't have it.
+   */
+  feed?: { compared: number; mismatches: FeedMismatch[] } | null;
   /**
    * Phase 3 (CE-052): whether a product page says how shipping and returns
    * work (shippingOnPage); left out elsewhere.
@@ -747,6 +761,14 @@ export function trust({
     });
   }
 
+  if (feed && feed.compared > 0) {
+    checks.push({
+      id: 'feedMatch',
+      points: (FEED_POINTS * (feed.compared - feed.mismatches.length)) / feed.compared,
+      max: FEED_POINTS,
+    });
+  }
+
   // The site's 5 points weigh with what the page itself shows: alone, they'd
   // be the page's whole Trust.
   if (siteTrust && checks.length) {
@@ -773,6 +795,7 @@ export function trust({
     classified: classified.length,
     mismatches: brandFacts?.mismatches ?? [],
     shipping: shippingSaid,
+    feed: feed?.mismatches ?? [],
   };
 }
 

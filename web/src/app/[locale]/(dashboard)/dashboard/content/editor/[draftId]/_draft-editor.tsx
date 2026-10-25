@@ -48,6 +48,7 @@ import {
   keepDraftSource,
   confirmDraftItem,
   confirmOwnImage,
+  getCatalogMatch,
   getDraftConfirmations,
   getOwnImages,
   setContentDraftPageType,
@@ -134,6 +135,7 @@ import {
 import { caseKey, proofKey, qualityTodos } from '@/lib/content/quality-todos';
 import { isByline, readability, sentencesOf, withTypeRules } from '@/lib/content/readability';
 import { brandFactsPath, factMismatches } from '@/lib/content/brand-facts';
+import { feedCheck, type CatalogMatch } from '@/lib/content/feed-match';
 import {
   MAX_PROOF_TODOS,
   aiChecksOnPage,
@@ -552,6 +554,27 @@ export function DraftEditor({
   // The rules the page is written to, checked as it reads now (CE-009).
   // The brief and sources, read once: the rules check against them, the panel shows them.
   const reads = useDraftReads(draft.id);
+  // Phase 3 (CE-053): a product page's product in the brand's catalog, by
+  // its URL or its title, read once typing pauses: Trust and the Rules
+  // tab's feed rule check the page against it. Undefined while not read.
+  const feedOn = profileFor(pageType) === 'product';
+  const [catalog, setCatalog] = useState<CatalogMatch | null | undefined>(undefined);
+  useEffect(() => {
+    if (!feedOn) return;
+    let live = true;
+    const timer = setTimeout(() => {
+      getCatalogMatch(draft.id, title)
+        .then((read) => live && setCatalog(read))
+        .catch((err) => {
+          console.error('Failed to read the catalog:', err);
+          if (live) setCatalog(null);
+        });
+    }, PAGE_READ_DELAY_MS);
+    return () => {
+      live = false;
+      clearTimeout(timer);
+    };
+  }, [feedOn, draft.id, title]);
   const rules = useDraftRules({
     draft,
     siteType,
@@ -559,6 +582,7 @@ export function DraftEditor({
     characters: (editor?.storage.characterCount.characters() as number | undefined) ?? 0,
     pageType,
     reads,
+    catalog: feedOn ? catalog : null,
   });
   // What a page rewrite keeps as it is (the passages AI answers quote, tables,
   // images…), read as the characters are: a Length under it is out of reach.
@@ -963,6 +987,18 @@ export function DraftEditor({
       offer: pageOffer(pageBlocks.map((block) => block.text)),
     };
   }, [profile, images, ownImages, pageHtml, pageBlocks]);
+  // The page's price, GTIN and stock against its product in the feed (CE-053).
+  const feedRead = useMemo(
+    () =>
+      feedOn && catalog?.product && productSchema
+        ? feedCheck({
+            texts: pageBlocks.map((block) => block.text),
+            offer: productSchema.offer,
+            variants: catalog.product.variants,
+          })
+        : null,
+    [feedOn, catalog, productSchema, pageBlocks],
+  );
   // Confirm: only the person can tell their own image from stock.
   const [confirmingImages, setConfirmingImages] = useState(false);
   // Quality's Confirm on a customer case (CE-052): the person's statement
@@ -1039,8 +1075,9 @@ export function DraftEditor({
               brandFacts: factCheck,
               proofs: proofAsks,
               page: aiChecks,
-              // A product page's shipping and returns (CE-052).
+              // A product page's shipping and returns (CE-052), price and stock (CE-053).
               shipping: shippingRead,
+              feed: feedRead,
               now: Date.now(),
             }),
             weights.trust,
@@ -1049,6 +1086,7 @@ export function DraftEditor({
     [
       weights,
       shippingRead,
+      feedRead,
       qualityOn,
       pageBlocks,
       linkChecks,
@@ -1205,6 +1243,14 @@ export function DraftEditor({
         weightsFor:
           qualityPhase() >= 3
             ? { type: pageType ?? null, detected: picked === null, profile }
+            : null,
+        feed:
+          feedOn && catalog
+            ? !catalog.connected
+              ? 'none'
+              : !catalog.product
+                ? 'notFound'
+                : null
             : null,
         readability: readable,
         eeat: eeatScore,

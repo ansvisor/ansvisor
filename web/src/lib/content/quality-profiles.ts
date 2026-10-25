@@ -63,9 +63,9 @@ export interface ProfileWeights {
 
 /**
  * Each profile's checks and points. The article's are the spec's blog
- * defaults (§2); the others follow §11's table. Checks a type still lacks
- * (reviews, a product feed, a customer case, a check date: Phase 3's later
- * parts) join with their own points, rescaling the rest.
+ * defaults (§2); the others follow §11's table. A check a page can't be
+ * read for yet (a product feed that doesn't have the page's product, and
+ * reviews, not connected yet) is left out, the rest rescaled.
  */
 export const PROFILE_WEIGHTS: Readonly<Record<QualityProfile, ProfileWeights>> = {
   article: {
@@ -74,8 +74,8 @@ export const PROFILE_WEIGHTS: Readonly<Record<QualityProfile, ProfileWeights>> =
     readability: { ...READABILITY_WEIGHTS },
   },
   // No author (the brand's byline); real product photos; proof for its
-  // claims, prices that match, how it ships and goes back; short, plain
-  // copy with its specs table.
+  // claims, the price and stock its feed has (most), how it ships and goes
+  // back; short, plain copy with its specs table.
   product: {
     eeat: {
       experience: 20,
@@ -91,17 +91,18 @@ export const PROFILE_WEIGHTS: Readonly<Record<QualityProfile, ProfileWeights>> =
       customerCase: 0,
     },
     trust: {
-      claimsSourced: 30,
+      claimsSourced: 25,
       primarySources: 5,
       noWeakSources: 5,
-      brandFacts: 25,
+      brandFacts: 10,
       expertQuote: 0,
       freshSources: 0,
       balanced: 0,
       disclosure: 0,
-      noBrokenLinks: 10,
-      siteTrust: 15,
+      noBrokenLinks: 5,
+      siteTrust: 10,
       shippingReturns: 10,
+      feedMatch: 30,
     },
     readability: {
       avgSentence: 15,
@@ -143,6 +144,7 @@ export const PROFILE_WEIGHTS: Readonly<Record<QualityProfile, ProfileWeights>> =
       noBrokenLinks: 15,
       siteTrust: 25,
       shippingReturns: 0,
+      feedMatch: 0,
     },
     readability: {
       avgSentence: 15,
@@ -184,6 +186,7 @@ export const PROFILE_WEIGHTS: Readonly<Record<QualityProfile, ProfileWeights>> =
       noBrokenLinks: 5,
       siteTrust: 10,
       shippingReturns: 0,
+      feedMatch: 0,
     },
     readability: {
       avgSentence: 15,
@@ -226,6 +229,7 @@ export const PROFILE_WEIGHTS: Readonly<Record<QualityProfile, ProfileWeights>> =
       noBrokenLinks: 5,
       siteTrust: 5,
       shippingReturns: 0,
+      feedMatch: 0,
     },
     readability: {
       avgSentence: 15,

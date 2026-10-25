@@ -26,6 +26,8 @@ let rpcCalls: [string, unknown][];
 let rpcResult: { data: unknown; error: { message: string } | null };
 // What an upsert answers (an own image's confirm).
 let upsertError: { code: string; message: string } | null;
+// Reads answered in turn, each with its own rows, when a test needs them (the catalog's).
+let queue: Record<string, unknown>[][];
 
 vi.mock('@/lib/action-center/assignees', () => ({ readAssignees: vi.fn(async () => new Map()) }));
 vi.mock('@/lib/supabase/admin', () => ({ supabaseAdmin: {} }));
@@ -57,15 +59,19 @@ vi.mock('@/lib/supabase/server', () => ({
         eq: (col: string, v: unknown) => (call.filters.push(['eq', col, v]), chain),
         in: (col: string, v: unknown) => (call.filters.push(['in', col, v]), chain),
         gte: (col: string, v: unknown) => (call.filters.push(['gte', col, v]), chain),
+        is: (col: string, v: unknown) => (call.filters.push(['is', col, v]), chain),
+        ilike: (col: string, v: unknown) => (call.filters.push(['ilike', col, v]), chain),
         or: (v: string) => (call.filters.push(['or', v, null]), chain),
         order: () => chain,
         // The list, by its batch when one is asked for; the first row alone
         // when the read is for one (the latest batch).
         limit: () => {
           const batch = call.filters.find(([op, col]) => op === 'eq' && col === 'batch_id');
-          const rows = batch
-            ? list.filter((r) => (r as { batch_id?: unknown }).batch_id === batch[2])
-            : list;
+          const rows = queue.length
+            ? queue.shift()!
+            : batch
+              ? list.filter((r) => (r as { batch_id?: unknown }).batch_id === batch[2])
+              : list;
           return Object.assign(Promise.resolve({ data: rows, error: null }), {
             maybeSingle: async () => ({ data: rows[0] ?? null, error: null }),
           });
@@ -80,7 +86,8 @@ vi.mock('@/lib/supabase/server', () => ({
         // A read awaited as it is: the list.
         then: (resolve: (value: unknown) => void) =>
           resolve(call.op === 'select' ? { data: list, error: null } : result()),
-        maybeSingle: async () => result(),
+        maybeSingle: async () =>
+          queue.length ? { data: queue.shift()![0] ?? null, error: null } : result(),
         single: async () => result(),
       };
       return chain;
@@ -111,6 +118,7 @@ const {
   getOwnImages,
   confirmDraftItem,
   getDraftConfirmations,
+  getCatalogMatch,
   setContentDraftReviewer,
 } = await import('./content-drafts');
 const { bodyHash } = await import('@/lib/content/editor');
@@ -122,6 +130,7 @@ beforeEach(() => {
   row = null;
   list = [];
   upsertError = null;
+  queue = [];
   rpcCalls = [];
   rpcResult = { data: 'v-new', error: null };
   completeDraftTasks.mockReset().mockResolvedValue(0);
@@ -1079,5 +1088,72 @@ describe('fixDraftRules', () => {
     }
     vi.unstubAllGlobals();
     await expect(fixDraftRules('../etc', BRAND, request)).resolves.toEqual({ error: 'failed' });
+  });
+});
+
+describe('getCatalogMatch (Quality CE-053)', () => {
+  const variant = {
+    price: '129.00',
+    sale_price: null,
+    currency: 'USD',
+    availability: 'in_stock',
+    gtin: '00012345678905',
+  };
+
+  it('says when the brand has no catalog, and fails soft', async () => {
+    queue = [[{ brand_id: 'b1', source_url: null }], []];
+    expect(await getCatalogMatch(DRAFT, 'Ridge 28')).toEqual({ connected: false, product: null });
+    expect(await getCatalogMatch('d1', 'Ridge 28')).toBeNull();
+  });
+
+  it('finds the page’s product by its URL as the feed writes it', async () => {
+    queue = [
+      [{ brand_id: 'b1', source_url: 'https://www.acme.com/products/ridge-28/' }],
+      [{ id: 'p0' }],
+      // Narrowed by the path: another product's longer URL isn't the page's.
+      [{ id: 'p9', url: 'https://acme.com/products/ridge-28-pro' }],
+      [{ product_id: 'p1', url: 'https://acme.com/products/ridge-28?variant=42' }],
+      [{ title: 'Ridge 28', url: 'https://acme.com/products/ridge-28' }],
+      [variant],
+    ];
+    expect(await getCatalogMatch(DRAFT, 'Not its name')).toEqual({
+      connected: true,
+      product: {
+        title: 'Ridge 28',
+        url: 'https://acme.com/products/ridge-28',
+        via: 'url',
+        variants: [
+          {
+            price: 129,
+            salePrice: null,
+            currency: 'USD',
+            availability: 'in_stock',
+            gtin: '00012345678905',
+          },
+        ],
+      },
+    });
+    expect(calls.flatMap((c) => c.filters).filter(([op]) => op === 'ilike')).toEqual([
+      ['ilike', 'url', '%/products/ridge-28%'],
+      ['ilike', 'url', '%/products/ridge-28%'],
+    ]);
+  });
+
+  it('finds it by its title when one product has it, its words matched as written', async () => {
+    queue = [
+      [{ brand_id: 'b1', source_url: null }],
+      [{ id: 'p0' }],
+      [{ id: 'p1' }],
+      [{ title: 'Ridge_28 100%', url: null }],
+      [],
+    ];
+    expect(await getCatalogMatch(DRAFT, ' Ridge_28 100% ')).toEqual({
+      connected: true,
+      product: { title: 'Ridge_28 100%', url: null, via: 'name', variants: [] },
+    });
+    expect(calls.flatMap((c) => c.filters)).toContainEqual(['ilike', 'title', 'Ridge\\_28 100\\%']);
+    // Two products by that name: whose page this is isn't sure.
+    queue = [[{ brand_id: 'b1', source_url: null }], [{ id: 'p0' }], [{ id: 'p1' }, { id: 'p2' }]];
+    expect(await getCatalogMatch(DRAFT, 'Ridge 28')).toEqual({ connected: true, product: null });
   });
 });
