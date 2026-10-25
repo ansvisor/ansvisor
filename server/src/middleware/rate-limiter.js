@@ -131,6 +131,20 @@ export const catalogLimiter = rateLimit({
   },
 });
 
+// A brand's CMS connection (Send to CMS, #1331): each call reaches Webflow
+// through Composio, so a member's are few.
+export const cmsLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 60,
+  keyGenerator: apiLimiterKey,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    success: false,
+    message: 'Too many requests, please try again later.',
+  },
+});
+
 export const brandFactsLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 30,
