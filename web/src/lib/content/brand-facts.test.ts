@@ -109,8 +109,17 @@ describe('pagePrices', () => {
     // A dash after a plan's name isn't a range.
     expect(pagePrices('Pro – $49 per month')[0]).toMatchObject({ amount: 49 });
     expect(pagePrices('Since 2019 199 € per month')[0]).toMatchObject({ amount: 199 });
-    // A currency after an amount isn't the next one's: "Ridge 28 $129" is $129.
+    // A currency after an amount isn't the next one's: "Ridge 28 $129" is $129;
+    // one after its own amount stays with it.
     expect(pagePrices('Ridge 28 $129').map((p) => p.amount)).toEqual([129]);
+    expect(pagePrices('129,00 € 159,00 €').map((p) => p.amount)).toEqual([129, 159]);
+    expect(pagePrices('Pro 49 € 10 Nutzer').map((p) => p.amount)).toEqual([49]);
+    // A code after a sign says whose dollar it is.
+    expect(pagePrices('$129.00 CAD')[0]).toMatchObject({
+      text: '$129.00 CAD',
+      amount: 129,
+      currency: 'CAD',
+    });
     // With its ends, a range is read as two prices, for priceRanges' readers.
     expect(pagePrices('Ridge 28 – $129').map((p) => p.amount)).toEqual([]);
     expect(pagePrices('Ridge 28 – $129', { rangeEnds: true }).map((p) => p.amount)).toEqual([129]);
@@ -118,31 +127,37 @@ describe('pagePrices', () => {
 });
 
 describe('priceRanges', () => {
-  it('reads a range’s two ends in one currency, written once or on both', () => {
+  it('reads a range’s two ends in one currency, and whether it is written as ranges are', () => {
     const ends = (sentence: string) =>
-      priceRanges(sentence).map((r) => [r.low, r.high, r.currency]);
+      priceRanges(sentence).map((r) => [r.low, r.high, r.currency, r.sure]);
     expect(ends('Paying $10–$20 or between $30 and $40.')).toEqual([
-      [10, 20, 'USD'],
-      [30, 40, 'USD'],
+      [10, 20, 'USD', true],
+      [30, 40, 'USD', true],
     ]);
     expect(ends('From $119-139, or 119–139 € in Europe.')).toEqual([
-      [119, 139, 'USD'],
-      [119, 139, 'EUR'],
+      [119, 139, 'USD', true],
+      [119, 139, 'EUR', true],
     ]);
     expect(ends('De 49 € à 99 €, ou 49 TL ile 99 TL.')).toEqual([
-      [49, 99, 'EUR'],
-      [49, 99, 'TRY'],
+      [49, 99, 'EUR', true],
+      [49, 99, 'TRY', true],
     ]);
-    // A name's number and a price, two currencies, a scale, high before low: no range.
+    // One currency with a spaced dash or a word may be a range, or a price beside a number.
+    expect(ends('Preis: 119 – 139 €, $119 to 139, 999 - 1.299 TL')).toEqual([
+      [119, 139, 'EUR', false],
+      [119, 139, 'USD', false],
+      [999, 1299, 'TRY', false],
+    ]);
+    // A name's number before a price, a number after one with a word: no range.
     expect(ends('Ridge 28 – $129')).toEqual([]);
+    expect(ends('Only $19 - 100% organic cotton')).toEqual([]);
+    expect(ends('$25-30-day returns, $5 a 12-pack')).toEqual([]);
+    expect(ends('$129 – 150 reviews, €20 – 30 Tage Rückgaberecht')).toEqual([]);
+    expect(ends('Kids 10-12 $129')).toEqual([]);
+    // Two currencies, a scale, high before low: no range.
     expect(ends('$10–€20')).toEqual([]);
     expect(ends('Raised $1–$2M')).toEqual([]);
     expect(ends('$129 – 2 colors')).toEqual([]);
-    // One currency is a range only by a dash, no space, and no word joined to its end.
-    expect(ends('Only $19 - 100% organic cotton')).toEqual([]);
-    expect(ends('$25-30-day returns, $19-100%')).toEqual([]);
-    expect(ends('$129 – 150 reviews')).toEqual([]);
-    expect(ends('$5 a 12-pack, 119 und 139 €')).toEqual([]);
   });
 });
 

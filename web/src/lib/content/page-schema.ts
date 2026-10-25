@@ -139,16 +139,16 @@ export type PageOfferRead = PageOffer | { several: string[] } | null;
  * $30"), or a bill added to it ("+ $9.95", "zzgl. 4,95 €").
  */
 const NOT_THE_PRICE_BEFORE =
-  /(?:(?<![\p{L}-])(?:over|above|more\s+than|at\s+least|minimum(?:\s+(?:order|spend|purchase))?(?:\s+of)?|min\.?(?:\s+(?:order|spend|purchase))?(?:\s+of)?|spend(?:ing)?|orders?\s+(?:over|above|of|from)|was|were|instead\s+of|statt|bisher|vorher|au\s+lieu\s+de|prix\s+barré|antes|precio\s+anterior|save(?:\s+up\s+to)?|saving|savings(?:\s+of)?|you\s+save\b[^.;$€£¥₹₺]{0,12}|up\s+to|worth|valued\s+at|value\s+of|earn|(?:an?\s+)?extra|additional|discount\s+of|gift\s+cards?|(?:store\s+)?credit|(?:payments?|installments?|instalments?|deposit)\s+of|zzgl|zuzüglich)|(?:shipping|delivery|versand|livraison|env[ií]o|kargo)\p{L}*(?:\s+\p{L}+){0,2}\s+(?:ab|dès|desde|from)|(?:^|\(|\bbuy\s+|\bany\s+|\bor\s+)\s*(?:\d{1,2}|two|three|four|five)\s+for|\d\s*[x×]|\+)\s*:?\s*\(?\s*$/iu;
+  /(?:(?<![\p{L}-])(?:over|above|more\s+than|at\s+least|minimum(?:\s+(?:order|spend|purchase))?(?:\s+of)?|(?<!\d\s?)min\.?(?:\s+(?:order|spend|purchase))?(?:\s+of)?|spend(?:ing)?|orders?(?:\s+(?:over|above|of|from))?|bestellungen|commandes?|pedidos?|siparişler(?:de)?|über|superior(?:es)?\s+a|supérieure?s?\s+à|plus\s+de|más\s+de|was|were|instead\s+of|statt|bisher|vorher|au\s+lieu\s+de|prix\s+barré|antes|precio\s+anterior|save(?:\s+up\s+to)?|saving|savings(?:\s+of)?|you\s+save\b[^.;$€£¥₹₺]{0,12}|sie\s+sparen|sparen\s+sie|économisez|ahorr(?:a|as|o\s+de)|tasarruf(?:unuz)?|up\s+to|worth|valued\s+at|value\s+of|earn|(?:an?\s+)?extra|additional|discount\s+of|gift\s+cards?|(?:store\s+)?credit|(?:payments?|installments?|instalments?|deposit)\s+of|raten?\s+(?:à|von|zu|a)|plazos\s+de|mensualités\s+de|zzgl|zuzüglich)|(?:shipping|delivery|versand|livraison|env[ií]o|kargo)\p{L}*(?:\s+\p{L}+){0,2}\s+(?:ab|dès|desde|from)|(?:^|\(|\bbuy\s+|\bany\s+|\bor\s+)\s*(?:\d{1,2}|two|three|four|five)\s+for|\d\s*[x×]|(?<![\p{L}\p{N}])\+)\s*:?\s*\(?\s*$/iu;
 /** "plus $9.95 shipping": lower case, so a model named Plus keeps its price. */
 const PLUS_BEFORE = /(?<!\p{L})plus\s*$/u;
 /**
- * An old price that is the product's when it's the page's only one ("Regular
- * price $129"), and isn't beside another ("Regular price $159 Sale price
- * $129").
+ * An old price ("Regular price", "Original price", "reg.", "compare at"):
+ * dropped beside a lower price in its block ("Regular price $159 Sale price
+ * $129"), else a price like the others. "Regular" alone is a size.
  */
 const OLD_PRICE_BEFORE =
-  /(?<!\p{L})(?:regular(?:ly)?|reg\.?|original(?:ly)?|retail|list|compare\s+at|msrp|rrp|uvp|eski|liste|piyasa)(?:\s+(?:price|fiyat(?:ı)?))?\s*:?\s*$/iu;
+  /(?<!\p{L})(?:(?:regular|original|retail|list|eski|liste|piyasa)\s+(?:price|fiyat(?:ı)?)|regularly|originally|reg\.|compare\s+at|msrp|rrp|uvp)\s*:?\s*$/iu;
 /**
  * Within its last words before an amount, another bill: shipping (free
  * shipping is no bill: "with free shipping costs $129") or financing
@@ -172,7 +172,7 @@ const ADD_ON =
  * ("$19, sold separately").
  */
 const NOT_THE_PRICE_AFTER =
-  /^(?:\s*(?:\/\s*|per\s+|pro\s+|a\s+)(?:100\s?)?(?:kg|g|lb|lbs|oz|fl\.?\s?oz|ml|cl|l|unit|ct|count|piece|pc|item|sq\.?\s?ft|m²|m2|stück|adet|serving)(?!\p{L})|\s*(?:\/\s*|per\s+|pro\s+|im\s+|a\s+|an\s+|each\s+|par\s+|al\s+|por\s+)(?:mo|mth|month|monat|mois|mes|yr|year|jahr|an|año|wk|week|day)(?!\p{L})|\s*(?:monthly|yearly|annually|monatlich|jährlich|aylık|yıllık)(?!\p{L})|\s*(?:off|discount|coupon|(?:store\s+)?credits?|gift\s+cards?|fee|surcharge|deposit|rebate|cash\s?back|savings?|less|more|cheaper|value|in\s+(?:rewards?|credit|points)|trade-in|yerine|(?:ve\s+)?üzeri|minimum|or\s+(?:more|above|over))(?!\p{L})|\s*(?:shipping|delivery|postage|s&h|handling|versand\p{L}*|porto|livraison|env[ií]os?|kargo\p{L}*|frete|(?:sales\s+)?tax(?:es)?|vat|mwst|kdv)(?!\p{L})(?!\s+(?:incl\p{L}*|inkl\p{L}*|dahil|included))|\s*for\s+(?:\d|two|three|four|five)(?![\p{N}\p{L}])|\s*(?:today\s+)?(?:with|via|through)\s+(?:affirm|klarna|afterpay|sezzle)(?!\p{L})|[^.;]{0,6}(?:sold\s+)?separately|[^.;]{0,6}ayrı\s+satılır)/iu;
+  /^(?:\+(?!\s?\d)|\s*(?:\/\s*|per\s+|pro\s+|a\s+)(?:100\s?)?(?:kg|g|lb|lbs|oz|fl\.?\s?oz|ml|cl|l|unit|ct|count|piece|pc|item|sq\.?\s?ft|m²|m2|stück|adet|serving)(?!\p{L})|\s*(?:\/\s*|per\s+|pro\s+|im\s+|a\s+|an\s+|each\s+|par\s+|al\s+|por\s+)(?:mo|mth|month|monat|mois|mes|yr|year|jahr|an|año|wk|week|day)(?!\p{L})|\s*(?:monthly|yearly|annually|monatlich|jährlich|aylık|yıllık)(?!\p{L})|\s*(?:off|discount|coupon|(?:store\s+)?credits?|gift\s+cards?|fee|surcharge|deposit|rebate|cash\s?back|savings?|less|more|cheaper|value|in\s+(?:rewards?|credit|points)|trade-in|yerine|(?:ve\s+)?üzeri|minimum|or\s+(?:more|above|over))(?!\p{L})|\s*(?:shipping|delivery|postage|s&h|handling|versand\p{L}*|porto|livraison|env[ií]os?|kargo\p{L}*|frete|(?:sales\s+)?tax(?:es)?|vat|mwst|kdv)(?!\p{L})(?!\s+(?:incl\p{L}*|inkl\p{L}*|dahil|included))|\s*for\s+(?:\d|two|three|four|five)(?![\p{N}\p{L}])|\s*(?:today\s+)?(?:with|via|through)\s+(?:affirm|klarna|afterpay|sezzle)(?!\p{L})|[^.;]{0,6}(?:sold\s+)?separately|[^.;]{0,6}ayrı\s+satılır)/iu;
 
 /** How an amount reads by the words around it: another bill, an old price, or the product's. */
 function amountKind(
@@ -199,8 +199,12 @@ function amountKind(
   return OLD_PRICE_BEFORE.test(lead) ? 'old' : 'price';
 }
 
+/** The prices that differ Before you publish lists, at most. */
+const SEVERAL_SHOWN = 5;
+
 /** Abbreviations a price sits beside, kept from ending a sentence ("$99 (reg. $129)", "zzgl. 4,95 €"). */
-const ABBREVIATION = /(?<!\p{L})(reg|min|zzgl|inkl|exkl|incl|excl|approx|ca|uvp|vs)\.(?=\s)/giu;
+const ABBREVIATION =
+  /(?<!\p{L})(?<!\d\s?)(reg|min|zzgl|inkl|exkl|incl|excl|approx|ca|uvp|vs)\.(?=\s)/giu;
 
 export function pageOffer(texts: readonly string[]): PageOfferRead {
   const found: {
@@ -208,48 +212,61 @@ export function pageOffer(texts: readonly string[]): PageOfferRead {
     high: number;
     currency: string;
     text: string;
+    block: number;
     range: boolean;
     old: boolean;
+    /** Not sure to be one price: "From $119", "$119 – 139", "119 bis 139 €". */
+    unsure: boolean;
   }[] = [];
-  const sentences = texts.flatMap((text) =>
+  texts.forEach((text, block) => {
     // A one-dot leader keeps the abbreviation's dot: sentencesOf puts it back.
-    sentencesOf(text.replace(ABBREVIATION, '$1․')),
-  );
-  for (const sentence of sentences) {
-    const ranges = priceRanges(sentence);
-    const inRange = (at: number) => ranges.some((r) => at >= r.at && at < r.at + r.text.length);
-    const amounts = [
-      // A price by the month or the year is a plan's or a payment's, not a product's.
-      ...pagePrices(sentence, { rangeEnds: true })
-        .filter((price) => price.period === null && !inRange(price.at))
-        .map((price) => ({ ...price, low: price.amount, high: price.amount, range: false })),
-      ...ranges.map((range) => ({ ...range, range: true })),
-    ].sort((a, b) => a.at - b.at);
-    let since = 0;
-    for (const amount of amounts) {
-      const end = amount.at + amount.text.length;
-      const kind = amountKind(sentence, amount.at, end, since);
-      if (amount.low > 0 && kind !== 'not') {
-        found.push({
-          low: amount.low,
-          high: amount.high,
-          currency: amount.currency,
-          text: amount.text.trim(),
-          range: amount.range,
-          old: kind === 'old',
-        });
+    for (const sentence of sentencesOf(text.replace(ABBREVIATION, '$1\u2024'))) {
+      const ranges = priceRanges(sentence);
+      const inRange = (at: number) => ranges.some((r) => at >= r.at && at < r.at + r.text.length);
+      const amounts = [
+        // A price by the month or the year is a plan's or a payment's, not a product's.
+        ...pagePrices(sentence, { rangeEnds: true })
+          .filter((price) => price.period === null && !inRange(price.at))
+          .map((price) => ({
+            ...price,
+            low: price.amount,
+            high: price.amount,
+            range: false,
+            unsure: price.from,
+          })),
+        ...ranges.map((range) => ({ ...range, range: true, unsure: !range.sure })),
+      ].sort((a, b) => a.at - b.at);
+      let since = 0;
+      for (const amount of amounts) {
+        const end = amount.at + amount.text.length;
+        const kind = amountKind(sentence, amount.at, end, since);
+        if (amount.low > 0 && kind !== 'not') {
+          found.push({
+            low: amount.low,
+            high: amount.high,
+            currency: amount.currency,
+            text: amount.text.trim(),
+            block,
+            range: amount.range,
+            old: kind === 'old',
+            unsure: amount.unsure,
+          });
+        }
+        since = end;
       }
-      since = end;
     }
-  }
-  // An old price counts only where the page gives no other.
-  const prices = found.some((p) => !p.old) ? found.filter((p) => !p.old) : found;
+  });
+  // An old price beside a lower one in its block is the old one.
+  const prices = found.filter(
+    (p) => !p.old || !found.some((q) => !q.old && q.block === p.block && q.high < p.low),
+  );
   if (!prices.length) return null;
   const [first] = prices;
   const same = (p: (typeof prices)[number]) => p.currency === first.currency;
   const ranges = prices.filter((p) => p.range);
   const range = ranges[0];
   if (
+    !prices.some((p) => p.unsure) &&
     prices.every(same) &&
     (range
       ? ranges.every((r) => r.low === range.low && r.high === range.high) &&
@@ -260,7 +277,13 @@ export function pageOffer(texts: readonly string[]): PageOfferRead {
       ? { low: range.low, high: range.high, currency: range.currency }
       : { price: first.low, currency: first.currency };
   }
-  return { several: [...new Set(prices.map((p) => p.text))] };
+  // Each price once, as the page first writes it ("$129" and "$129.00" are one).
+  const seen = new Map<string, string>();
+  for (const p of prices) {
+    const key = `${p.currency} ${p.low} ${p.high} ${p.unsure}`;
+    if (!seen.has(key)) seen.set(key, p.text);
+  }
+  return { several: [...seen.values()].slice(0, SEVERAL_SHOWN) };
 }
 
 /** The page's opening paragraph (past a byline or a date), as Product's description: up to 500 characters. */
