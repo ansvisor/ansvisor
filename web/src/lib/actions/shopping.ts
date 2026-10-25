@@ -6,7 +6,9 @@ import {
   detectAmazonShareDrop,
   type AmazonShareDropAlert,
 } from '@/lib/shopping-amazon-share-alert';
+import { z } from 'zod';
 import { marketRegionCodes, type ShoppingMarket } from '@/lib/shopping/markets';
+import { matchScores, missingWords, queryTerms, sameProduct } from '@/lib/shopping/match-score';
 import {
   toMerchantSplit,
   type MerchantSplitRow,
@@ -576,6 +578,149 @@ export async function getOwnProducts(
   );
 
   return aggregateProducts(data);
+}
+
+// ── Match with each prompt (#1282) ─────────────────────────────────────────────
+
+/** Prompts read at once for one product's match. */
+const MATCH_MAX_PROMPTS = 20;
+/** Searches AI ran for a prompt, kept for its query. */
+const MATCH_MAX_SEARCHES = 20;
+
+export interface ProductPromptMatch {
+  promptId: string;
+  promptText: string;
+  /** The product's keyword match with the prompt and its searches, 0–100 (Ansvisor estimate). */
+  score: number;
+  /** The query's words the product's title doesn't have. */
+  missing: string[];
+  /**
+   * The product AI showed first for the prompt in its latest answer in the
+   * window, with its score; `isThis` when it's this product. Null with no
+   * card in the window.
+   */
+  top: { title: string; score: number; isThis: boolean } | null;
+}
+
+interface MatchCardRow {
+  id: string;
+  created_at: string;
+  position: number | null;
+  product_title: string | null;
+  prompt_result_id: string;
+  prompt_results: { prompt_id: string; search_queries: unknown } | null;
+}
+
+/** A result's searches: `search_queries` holds `{ query, source_platform }` entries. */
+function searchesOf(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((entry) =>
+      entry && typeof entry === 'object' ? (entry as { query?: unknown }).query : null,
+    )
+    .filter((query): query is string => typeof query === 'string' && query.trim() !== '');
+}
+
+/**
+ * How well one of the brand's own products matches each prompt it was shown
+ * for (#1282, part 1: keywords): BM25 between the prompt with the searches AI
+ * ran for it and the titles of every product shown for it in the window, as
+ * `matchScores` computes. With it, the product AI showed first in the
+ * prompt's latest answer, and its score. RLS keeps the cards, results and
+ * prompts to the caller's organization.
+ */
+export async function getProductMatchScores(
+  brandId: string,
+  productTitle: string,
+  promptIds: string[],
+  filters: ShoppingFilters,
+): Promise<ProductPromptMatch[]> {
+  const ids = [...new Set(promptIds)];
+  if (
+    !z.guid().safeParse(brandId).success ||
+    typeof productTitle !== 'string' ||
+    !productTitle.trim() ||
+    productTitle.length > 500 ||
+    !ids.length ||
+    ids.length > MATCH_MAX_PROMPTS ||
+    !ids.every((id) => z.guid().safeParse(id).success)
+  ) {
+    throw new Error('invalid');
+  }
+  const supabase = await createClient();
+  const [rows, prompts] = await Promise.all([
+    fetchAllCards<MatchCardRow>(() =>
+      cardsInWindow(
+        supabase,
+        brandId,
+        filters,
+        'id, created_at, position, product_title, prompt_result_id, prompt_results:prompt_result_id!inner(prompt_id, search_queries)',
+      ).in('prompt_results.prompt_id', ids),
+    ),
+    supabase.from('prompts').select('id, text').in('id', ids),
+  ]);
+  if (prompts.error) throw new Error(prompts.error.message);
+  const textOf = new Map((prompts.data ?? []).map((p) => [p.id as string, p.text as string]));
+
+  const byPrompt = new Map<
+    string,
+    { titles: string[]; searches: Set<string>; results: Map<string, MatchCardRow[]> }
+  >();
+  for (const row of rows) {
+    const promptId = row.prompt_results?.prompt_id;
+    const title = row.product_title?.trim();
+    if (!promptId || !title) continue;
+    let group = byPrompt.get(promptId);
+    if (!group) {
+      group = { titles: [], searches: new Set(), results: new Map() };
+      byPrompt.set(promptId, group);
+    }
+    if (!group.titles.some((t) => sameProduct(t, title))) group.titles.push(title);
+    for (const query of searchesOf(row.prompt_results?.search_queries)) {
+      if (group.searches.size < MATCH_MAX_SEARCHES) group.searches.add(query);
+    }
+    const cards = group.results.get(row.prompt_result_id) ?? [];
+    cards.push(row);
+    group.results.set(row.prompt_result_id, cards);
+  }
+
+  return ids.flatMap((promptId) => {
+    const promptText = textOf.get(promptId);
+    if (!promptText) return [];
+    const group = byPrompt.get(promptId);
+    const terms = queryTerms(promptText, [...(group?.searches ?? [])]);
+    const others = (group?.titles ?? []).filter((t) => !sameProduct(t, productTitle));
+    const docs = [productTitle, ...others];
+    const scores = matchScores(terms, docs);
+
+    // The latest answer's first card: its results ordered by when, then by position.
+    let top: ProductPromptMatch['top'] = null;
+    const latest = [...(group?.results.values() ?? [])]
+      .map((cards) => ({
+        at: cards.reduce((m, c) => (c.created_at > m ? c.created_at : m), ''),
+        cards,
+      }))
+      .sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : 0))[0];
+    const first = latest?.cards
+      .filter((c) => c.product_title?.trim())
+      .sort((a, b) => (a.position ?? Infinity) - (b.position ?? Infinity))[0];
+    if (first?.product_title) {
+      const title = first.product_title.trim();
+      const isThis = sameProduct(title, productTitle);
+      const index = isThis ? 0 : docs.findIndex((d) => sameProduct(d, title));
+      top = { title, score: scores[index] ?? 0, isThis };
+    }
+
+    return [
+      {
+        promptId,
+        promptText,
+        score: scores[0],
+        missing: missingWords(terms, productTitle),
+        top,
+      },
+    ];
+  });
 }
 
 export async function getCompetitorProducts(
