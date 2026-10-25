@@ -8,7 +8,7 @@ import { Link } from '@/i18n/navigation';
 import { Button } from '@/components/ui/button';
 import { buttonVariants } from '@/components/ui/button-variants';
 import { stopAgentRun } from '@/lib/content/agent-runs-client';
-import type { AgentRun } from '@/lib/content/agent-runs';
+import type { AgentRun, AgentRunKind } from '@/lib/content/agent-runs';
 import { CONTENT_LIBRARY_PATH, type DraftMethod } from '@/lib/content/drafts';
 import { cn } from '@/lib/utils';
 import { AgentTile, RunSteps, StepSweep } from './_agent-card';
@@ -34,8 +34,16 @@ const WRITING = STEPS.indexOf('write');
  */
 const SLOW_AFTER_S = 120;
 
-/** The runs this page waits on: a new page, or the whole page rewritten. */
-const WRITING_RUNS = ['write', 'rewrite'] as const;
+/**
+ * The run this page waits on, as the server starts it (content-writer.js
+ * startWritingRun): a Start on a new page writes it, one on a live page runs
+ * as a Fix (its suggestions), and a rewrite rewrites the whole page.
+ */
+const WRITING_RUNS = {
+  create: ['write'],
+  optimize: ['fix'],
+  rewrite: ['rewrite'],
+} as const satisfies Record<DraftMethod | 'rewrite', readonly AgentRunKind[]>;
 
 /**
  * What the agent does while it writes, as its prompt asks it
@@ -169,7 +177,7 @@ export function AgentWriting({
   const t = useTranslations('contentEditor.editor');
   const seconds = elapsedSeconds(since, useNow({ updateInterval: 1000 }));
   const mode = rewrite ? 'rewrite' : method;
-  const live = useAgentRun(draftId, true, WRITING_RUNS);
+  const live = useAgentRun(draftId, true, WRITING_RUNS[mode]);
   const [stopping, setStopping] = useState(false);
   // The last run read stays until the editor opens: the fixed list never
   // comes back for a moment at its end.
