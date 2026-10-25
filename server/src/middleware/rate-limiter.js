@@ -117,6 +117,20 @@ export const pageReadLimiter = rateLimit({
 
 // A brand's facts read from its site again when asked (Quality CE-047): a
 // few model calls, so its own bucket.
+// Catalog syncs and uploads (#1263): each reads a feed or a file of up to
+// 50 MB / 4 MB, so a member's are few.
+export const catalogLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 20,
+  keyGenerator: apiLimiterKey,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    success: false,
+    message: 'Too many requests, please try again later.',
+  },
+});
+
 export const brandFactsLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 30,
