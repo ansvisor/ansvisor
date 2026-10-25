@@ -327,6 +327,18 @@ describe('qualityTodos', () => {
     expect(visualTodo(0, 0, 1)).toMatchObject({ done: false, action: 'addImage' });
     expect(visualTodo(2, 1, 0)).toMatchObject({ done: true, action: null, gain: 0 });
     expect(visualTodo(0, 0, 0)).toBeUndefined();
+    // Your input not read: visual proof still counts, so its to-do is still listed.
+    const unread = qualityTodos({
+      eeat: eeat({ author: author(), visual: { images: 2, own: 0, openSpots: 0 } }),
+      author: author(),
+      hasAuthors: true,
+      used: null,
+      visual: { images: 2, own: 0, openSpots: 0 },
+    });
+    expect(unread.find((t) => t.id === 'visualProof')).toMatchObject({
+      done: false,
+      action: 'confirmImage',
+    });
   });
 
   it('asks a page that advises on health, money or the law for a qualified reviewer (CE-049)', () => {
@@ -389,5 +401,37 @@ describe('qualityTodos', () => {
     expect(how(false)!.gain).toBeGreaterThan(0);
     expect(how(true)).toMatchObject({ done: true, gain: 0 });
     expect(how(null)).toBeUndefined();
+  });
+
+  it('offers to confirm the author the site names instead of picking one, the profile once they are', () => {
+    const read = (real: boolean, profile: boolean) =>
+      qualityTodos({
+        eeat: eeat({ author: null, confirmed: { real, profile } }),
+        author: null,
+        hasAuthors: true,
+        confirmed: { real, profile },
+      }).map(({ id, done, confirm }) => ({ id, done, confirm }));
+    expect(read(false, false)).toEqual([
+      { id: 'byline', done: false, confirm: { what: 'real', on: false } },
+      { id: 'authorProfile', done: false, confirm: undefined },
+    ]);
+    expect(read(true, false)).toEqual([
+      { id: 'byline', done: true, confirm: { what: 'real', on: true } },
+      { id: 'authorProfile', done: false, confirm: { what: 'profile', on: false } },
+    ]);
+    expect(read(true, true)[1]).toEqual({
+      id: 'authorProfile',
+      done: true,
+      confirm: { what: 'profile', on: true },
+    });
+    // A picked author: nothing to confirm.
+    expect(
+      qualityTodos({
+        eeat: eeat({ author: author() }),
+        author: author(),
+        hasAuthors: true,
+        confirmed: { real: false, profile: false },
+      }).map((t) => t.confirm),
+    ).toEqual([undefined, undefined]);
   });
 });

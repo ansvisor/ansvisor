@@ -983,6 +983,10 @@ export type Database = {
           archived_by: string | null
           author: string
           author_id: string | null
+          author_profile_at: string | null
+          author_profile_by: string | null
+          author_real_at: string | null
+          author_real_by: string | null
           body_html: string
           brief: Json | null
           brand_id: string
@@ -1018,6 +1022,10 @@ export type Database = {
           archived_by?: string | null
           author?: string
           author_id?: string | null
+          author_profile_at?: string | null
+          author_profile_by?: string | null
+          author_real_at?: string | null
+          author_real_by?: string | null
           body_html?: string
           brief?: Json | null
           brand_id: string
@@ -1053,6 +1061,10 @@ export type Database = {
           archived_by?: string | null
           author?: string
           author_id?: string | null
+          author_profile_at?: string | null
+          author_profile_by?: string | null
+          author_real_at?: string | null
+          author_real_by?: string | null
           body_html?: string
           brief?: Json | null
           brand_id?: string

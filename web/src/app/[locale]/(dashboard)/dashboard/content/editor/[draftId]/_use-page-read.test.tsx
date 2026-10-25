@@ -77,6 +77,25 @@ describe('usePageRead', () => {
     expect(readDraftPage).toHaveBeenCalledTimes(2);
   });
 
+  it('counts a save not asked about yet as reading, until its ask is answered or fails (review, #1468)', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    await render('s1');
+    expect(attr('data-reading')).toBe('true');
+    await wait(PROOF_READ_DELAY_MS);
+    expect(attr('data-reading')).toBe('false');
+    // A save within the API's minute: not asked yet, still reading.
+    await render('s2');
+    await wait(PROOF_READ_DELAY_MS);
+    expect(readDraftPage).toHaveBeenCalledTimes(1);
+    expect(attr('data-reading')).toBe('true');
+    readDraftPage.mockResolvedValueOnce({ error: 'failed' });
+    await wait(PROOF_READ_EVERY_MS + PROOF_READ_SLACK_MS);
+    expect(readDraftPage).toHaveBeenCalledTimes(2);
+    // Failed: nothing more comes before the next save.
+    expect(attr('data-reading')).toBe('false');
+    error.mockRestore();
+  });
+
   it('asks again for a kept answer a minute later, without a save', async () => {
     readDraftPage.mockResolvedValueOnce({ ...PAGE, pending: true, limited: false, paused: false });
     await render('s1');

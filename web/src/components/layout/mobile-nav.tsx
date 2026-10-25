@@ -7,6 +7,7 @@ import { dashboardNav } from '@/config/dashboard';
 import { BrandSwitcher } from '@/components/layout/brand-switcher';
 import {
   activeChildHref,
+  childLinkHref,
   getDashboardNavLabel,
   shouldShowDashboardNavItem,
 } from '@/lib/dashboard-navigation';
@@ -167,7 +168,11 @@ export function MobileNav() {
                     {link}
                     <div className="ml-7 border-l pl-2">
                       {item.children.map((child) => (
-                        <Link key={child.href} href={child.href} onClick={() => setOpen(false)}>
+                        <Link
+                          key={child.href}
+                          href={childLinkHref(child, pathname)}
+                          onClick={() => setOpen(false)}
+                        >
                           <span
                             className={cn(
                               'flex items-center gap-2 rounded-md px-3 py-1.5 text-sm transition-colors',

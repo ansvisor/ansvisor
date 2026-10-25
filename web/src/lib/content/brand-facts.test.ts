@@ -225,6 +225,49 @@ describe('factMismatches', () => {
     ]);
   });
 
+  it('reads a plan’s price only right after its name, and no figure compared or saved (review 2, #1465)', () => {
+    expect(
+      check([
+        'The Pro plan costs $30 more than Starter.',
+        'Ledgerly Pro saves most teams $300 a month.',
+        'Pro plan users invoice an average of $12,000 a month.',
+        'Moving from Starter to the Pro plan adds $30 a month.',
+        'Team leads at Ledgerly approve $40,000 a month in expenses.',
+        'Ledgerly costs $20 less per month than most bookkeeping apps.',
+        // A trial that's another's before the brand's name, or files and support kept free.
+        "Unlike Acme's 30-day trial, Ledgerly's needs no credit card.",
+        'Unlike Acme, which offers a 30-day trial, Ledgerly gives you 14 days free.',
+        'Ledgerly keeps your files free for 30 days after you cancel.',
+        'Every plan includes priority support free for 30 days.',
+        // "We" after a colon: someone quoted without quote marks.
+        "Acme's CEO told us: we were founded in 2018 to fix bookkeeping.",
+      ]),
+    ).toEqual({ compared: 0, mismatches: [] });
+    // Right after the plan's name, with a colon, a dash or "(", they're still read.
+    expect(
+      check([
+        'Ledgerly Pro: $59 a month.',
+        'Ledgerly Pro – $59 per month.',
+        'Ledgerly Pro ($59/month).',
+      ]).mismatches,
+    ).toMatchObject([
+      { kind: 'price', page: '$59' },
+      { kind: 'price', page: '$59' },
+      { kind: 'price', page: '$59' },
+    ]);
+    expect(check(['Try Ledgerly free for 3 weeks.']).mismatches).toMatchObject([
+      { kind: 'trial', page: '21-day' },
+    ]);
+    expect(check(['Ledgerly is free for 30 days during the trial.']).mismatches).toMatchObject([
+      { kind: 'trial', page: '30-day' },
+    ]);
+    expect(check(['Since 2014: we were founded in 2014.']).mismatches).toEqual([]);
+    expect(check(['After years of planning, we were founded in 2018.']).mismatches).toEqual([]);
+    expect(check(['We were founded in 2018 in Lisbon.']).mismatches).toMatchObject([
+      { kind: 'founded', page: '2018' },
+    ]);
+  });
+
   it('compares a trial only where it is the brand’s, its days beside it', () => {
     expect(check(['Every plan has a 30-day free trial.']).mismatches).toEqual([
       {

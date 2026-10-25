@@ -9,6 +9,8 @@ import type { ContentDraft } from '@/lib/content/drafts';
 import type { DraftSuggestion } from '@/lib/content/suggestions';
 import { passageKey, type CitedPassage } from '@/lib/content/cited-passages';
 import { encodeHtmlBlock } from '@/lib/content/html-allowlist';
+import { CLAIMS_EVERY_MS } from './_use-claims';
+import { PROOF_READ_EVERY_MS, PROOF_READ_SLACK_MS } from './_use-page-read';
 import ContentEditorPage from './page';
 
 const getContentDraft = vi.fn();
@@ -19,6 +21,7 @@ const setContentDraftPageType = vi.fn();
 const setContentDraftAuthor = vi.fn();
 const setContentDraftReviewer = vi.fn();
 const keepDraftSource = vi.fn();
+const confirmDraftAuthor = vi.fn();
 const checkDraftClaims = vi.fn();
 const readDraftPage = vi.fn();
 const getOwnImages = vi.fn();
@@ -93,6 +96,7 @@ vi.mock('@/lib/actions/content-drafts', () => ({
   setContentDraftAuthor: (...args: unknown[]) => setContentDraftAuthor(...args),
   setContentDraftReviewer: (...args: unknown[]) => setContentDraftReviewer(...args),
   keepDraftSource: (...args: unknown[]) => keepDraftSource(...args),
+  confirmDraftAuthor: (...args: unknown[]) => confirmDraftAuthor(...args),
   checkDraftClaims: (...args: unknown[]) => checkDraftClaims(...args),
   readDraftPage: (...args: unknown[]) => readDraftPage(...args),
   getOwnImages: (...args: unknown[]) => getOwnImages(...args),
@@ -221,11 +225,13 @@ const draft = (over: Partial<ContentDraft> = {}): ContentDraft => ({
   reviewerId: null,
   rules: { set: null, source: null, overrides: {}, textRules: [] },
   keptSources: [],
+  authorConfirmed: { real: false, profile: false },
   action: null,
   agentState: null,
   agentSince: null,
   agentRun: null,
   updatedAt: '2026-10-20T10:00:00Z',
+  archivedAt: null,
   ...over,
 });
 
@@ -296,6 +302,7 @@ beforeEach(() => {
   setContentDraftAuthor.mockReset().mockResolvedValue(undefined);
   setContentDraftReviewer.mockReset().mockResolvedValue(undefined);
   keepDraftSource.mockReset();
+  confirmDraftAuthor.mockReset().mockResolvedValue(undefined);
   checkDraftClaims.mockReset().mockResolvedValue({ blocks: [], pending: 0, limited: false });
   readDraftPage.mockReset().mockResolvedValue({ error: 'off' });
   getOwnImages.mockReset().mockResolvedValue([]);
@@ -402,6 +409,18 @@ describe('the content editor', () => {
     // The HTML block is named, not only an icon.
     expect(button('Add an HTML block')!.textContent).toBe('Add HTML');
     expect(container.querySelector('.ProseMirror h1')!.textContent).toBe('Pipeline forecasting');
+  });
+
+  it('remembers the draft for Content › Editor, per brand', async () => {
+    getContentDraft.mockResolvedValue(draft());
+    await renderPage();
+    expect(localStorage.getItem('aeo:content-last-draft:b1')).toBe('d1');
+  });
+
+  it('remembers nothing for a draft that isn’t there', async () => {
+    getContentDraft.mockResolvedValue(null);
+    await renderPage();
+    expect(localStorage.getItem('aeo:content-last-draft:b1')).toBeNull();
   });
 
   it('keeps one H1: Heading 1 is off outside the title', async () => {
@@ -2488,6 +2507,57 @@ describe('the side panel', () => {
       ).not.toContainEqual(expect.stringContaining('Quality'));
     });
 
+    it('saves the author the site names as confirmed, and puts it back when the save fails (00271)', async () => {
+      process.env.NEXT_PUBLIC_CONTENT_QUALITY_PHASE = '1';
+      getContentAuthors.mockResolvedValue({
+        authors: [],
+        brands: [{ id: 'b1', name: 'Acme' }],
+        me: { id: 'u1', role: 'admin' },
+      });
+      getContentDraft.mockResolvedValue(readable);
+      window.innerWidth = 1440;
+      await renderPage();
+      const chip = [...container.querySelectorAll<HTMLButtonElement>('header button')].find((b) =>
+        b.textContent?.startsWith('Quality'),
+      )!;
+      await act(async () => chip.click());
+      const box = () => panel()!.querySelector<HTMLButtonElement>('[role="checkbox"]')!;
+      expect(box().getAttribute('aria-checked')).toBe('false');
+      await act(async () => box().click());
+      expect(confirmDraftAuthor).toHaveBeenCalledWith(readable.id, 'real', true);
+      expect(box().getAttribute('aria-checked')).toBe('true');
+      expect(panel()!.textContent).toContain('E-E-A-T60');
+
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+      try {
+        confirmDraftAuthor.mockRejectedValueOnce(new Error('offline'));
+        await act(async () => box().click());
+        expect(toast.error).toHaveBeenCalledWith("Couldn't save that. Try again.");
+        expect(box().getAttribute('aria-checked')).toBe('true');
+
+        // Unticking the author unticks the profile too: a failed save puts both back.
+        const profile = () => panel()!.querySelectorAll<HTMLButtonElement>('[role="checkbox"]')[1]!;
+        await act(async () => profile().click());
+        expect(profile().getAttribute('aria-checked')).toBe('true');
+        confirmDraftAuthor.mockRejectedValueOnce(new Error('offline'));
+        await act(async () => box().click());
+        expect(box().getAttribute('aria-checked')).toBe('true');
+        expect(profile().getAttribute('aria-checked')).toBe('true');
+
+        // One save at a time: the boxes wait for it.
+        let saved!: () => void;
+        confirmDraftAuthor.mockReturnValueOnce(new Promise<void>((resolve) => (saved = resolve)));
+        await act(async () => profile().click());
+        expect(profile().getAttribute('aria-checked')).toBe('false');
+        expect(box().disabled).toBe(true);
+        expect(profile().disabled).toBe(true);
+        await act(async () => saved());
+        expect(profile().disabled).toBe(false);
+      } finally {
+        vi.mocked(console.error).mockRestore();
+      }
+    });
+
     it('scores the page as written, in the header and Instructions › Quality', async () => {
       process.env.NEXT_PUBLIC_CONTENT_QUALITY_PHASE = '1';
       getContentDraft.mockResolvedValue(readable);
@@ -2502,6 +2572,49 @@ describe('the side panel', () => {
       expect(selectedSegment()).toMatch(/^Quality\d+ · (Strong|Can improve|Needs work)$/);
       expect(panel()!.textContent).toContain('Readability');
       expect(panel()!.textContent).toContain('Not a Google score.');
+    });
+
+    it('says it is reading until the page’s reads are in, then shows one score, not the partial ones', async () => {
+      process.env.NEXT_PUBLIC_CONTENT_QUALITY_PHASE = '1';
+      let authorsIn!: (read: unknown) => void;
+      getContentAuthors.mockReturnValue(new Promise((resolve) => (authorsIn = resolve)));
+      getContentDraft.mockResolvedValue(readable);
+      window.innerWidth = 1440;
+      await renderPage();
+      const chip = () =>
+        [...container.querySelectorAll<HTMLButtonElement>('header button')].find((b) =>
+          b.textContent?.startsWith('Quality'),
+        );
+      // Readability alone would say more than the page is worth: no number yet.
+      expect(chip()?.textContent).toBe('Quality · reading…');
+      await act(async () =>
+        authorsIn({
+          authors: [],
+          brands: [{ id: 'b1', name: 'Acme' }],
+          me: { id: 'u1', role: 'admin' },
+        }),
+      );
+      expect(chip()?.textContent).toMatch(/^Quality \d+ · (Strong|Can improve|Needs work)$/);
+      const score = chip()!.textContent!.match(/\d+/)![0];
+      await act(async () => chip()!.click());
+      expect(selectedSegment()).toContain(`Quality${score}`);
+    });
+
+    it('shows the score once the authors fail to load too', async () => {
+      process.env.NEXT_PUBLIC_CONTENT_QUALITY_PHASE = '1';
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+      try {
+        getContentAuthors.mockRejectedValue(new Error('offline'));
+        getContentDraft.mockResolvedValue(readable);
+        window.innerWidth = 1440;
+        await renderPage();
+        const chip = [...container.querySelectorAll<HTMLButtonElement>('header button')].find((b) =>
+          b.textContent?.startsWith('Quality'),
+        );
+        expect(chip?.textContent).toMatch(/^Quality \d+/);
+      } finally {
+        vi.mocked(console.error).mockRestore();
+      }
     });
 
     it("asks for Your input in its second phase, and Add opens it at Brief's top (CE-048)", async () => {
@@ -2569,6 +2682,7 @@ describe('the side panel', () => {
     it('scores without Your input when it can’t be read, and Brief offers to read it again', async () => {
       process.env.NEXT_PUBLIC_CONTENT_QUALITY_PHASE = '2';
       vi.spyOn(console, 'error').mockImplementation(() => {});
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
       try {
         getContentAuthors.mockResolvedValue({
           authors: [],
@@ -2579,6 +2693,9 @@ describe('the side panel', () => {
         getContentDraft.mockResolvedValue(readable);
         window.innerWidth = 1440;
         await renderPage();
+        // The claims are read after a save's pause: no score until they are.
+        expect(qualityChip()?.textContent).toBe('Quality · reading…');
+        await act(async () => void (await vi.advanceTimersByTimeAsync(3_000)));
         expect(qualityChip()?.textContent).toMatch(/^Quality \d+/);
         await pickTab('Brief');
         const retry = [...panel()!.querySelectorAll('button')].find(
@@ -2590,6 +2707,145 @@ describe('the side panel', () => {
         expect(panel()!.querySelector('#your-experience')).not.toBeNull();
       } finally {
         vi.mocked(console.error).mockRestore();
+        vi.useRealTimers();
+      }
+    });
+
+    it('holds the score until the brand’s facts are read: Trust checks the page against them', async () => {
+      process.env.NEXT_PUBLIC_CONTENT_QUALITY_PHASE = '2';
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+      try {
+        getContentAuthors.mockResolvedValue({
+          authors: [],
+          brands: [{ id: 'b1', name: 'Acme' }],
+          me: { id: 'u1', role: 'admin' },
+        });
+        let factsIn: (value: unknown) => void = () => {};
+        getBrandFacts.mockReturnValue(new Promise((resolve) => (factsIn = resolve)));
+        getContentDraft.mockResolvedValue(readable);
+        window.innerWidth = 1440;
+        await renderPage();
+        await act(async () => void (await vi.advanceTimersByTimeAsync(3_000)));
+        // Every other read is in: the facts still hold it.
+        expect(qualityChip()?.textContent).toBe('Quality · reading…');
+        await act(async () =>
+          factsIn({
+            facts: [],
+            pages: [],
+            checkedAt: null,
+            recheckAt: null,
+            paused: false,
+            noDomain: false,
+          }),
+        );
+        expect(qualityChip()?.textContent).toMatch(
+          /^Quality \d+ · (Strong|Can improve|Needs work)$/,
+        );
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('holds the score while an edit waits for its save: phase 2 reads the page as saved', async () => {
+      process.env.NEXT_PUBLIC_CONTENT_QUALITY_PHASE = '2';
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+      try {
+        getContentAuthors.mockResolvedValue({
+          authors: [],
+          brands: [{ id: 'b1', name: 'Acme' }],
+          me: { id: 'u1', role: 'admin' },
+        });
+        getContentDraft.mockResolvedValue(readable);
+        saveContentDraft.mockResolvedValue({
+          ok: true,
+          updatedAt: '2026-10-20T10:01:00Z',
+          bodyHash: 'h1',
+        });
+        window.innerWidth = 1440;
+        await renderPage();
+        await act(async () => void (await vi.advanceTimersByTimeAsync(3_000)));
+        expect(qualityChip()?.textContent).not.toContain('updating');
+        const editor = (container.querySelector('.ProseMirror') as HTMLElement & { editor: Editor })
+          .editor;
+        await act(async () => {
+          editor.commands.insertContentAt(
+            editor.state.doc.content.size,
+            '<p>Forecasts missed by less each quarter.</p>',
+          );
+        });
+        // Not saved yet: the claims read is the page's before the edit.
+        expect(qualityChip()?.textContent).toContain('updating as the page is read');
+        await act(async () => void (await vi.advanceTimersByTimeAsync(2_000)));
+        expect(saveContentDraft).toHaveBeenCalledTimes(1);
+        // Saved: the score waits for its claims, asked a few seconds later.
+        expect(qualityChip()?.textContent).toContain('updating as the page is read');
+        await act(async () => void (await vi.advanceTimersByTimeAsync(CLAIMS_EVERY_MS)));
+        expect(checkDraftClaims).toHaveBeenCalledTimes(2);
+        expect(qualityChip()?.textContent).not.toContain('updating');
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('holds the score until the page as saved is read for proof, then settles once (review, #1468)', async () => {
+      process.env.NEXT_PUBLIC_CONTENT_QUALITY_PHASE = '2';
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+      try {
+        getContentAuthors.mockResolvedValue({
+          authors: [],
+          brands: [{ id: 'b1', name: 'Acme' }],
+          me: { id: 'u1', role: 'admin' },
+        });
+        const read = {
+          spots: [],
+          proofs: [],
+          regulated: null,
+          pending: false,
+          limited: false,
+          paused: false,
+        };
+        let pageIn: (value: unknown) => void = () => {};
+        readDraftPage
+          .mockResolvedValueOnce(read)
+          .mockReturnValueOnce(new Promise((resolve) => (pageIn = resolve)));
+        getContentDraft.mockResolvedValue(readable);
+        saveContentDraft.mockResolvedValue({
+          ok: true,
+          updatedAt: '2026-10-20T10:01:00Z',
+          bodyHash: 'h1',
+        });
+        window.innerWidth = 1440;
+        await renderPage();
+        await act(async () => void (await vi.advanceTimersByTimeAsync(3_000)));
+        expect(readDraftPage).toHaveBeenCalledTimes(1);
+        expect(qualityChip()?.textContent).not.toContain('updating');
+        const shown = qualityChip()?.textContent;
+        const editor = (container.querySelector('.ProseMirror') as HTMLElement & { editor: Editor })
+          .editor;
+        await act(async () => {
+          editor.commands.insertContentAt(
+            editor.state.doc.content.size,
+            '<p>Forecasts missed by less each quarter.</p>',
+          );
+        });
+        await act(async () => void (await vi.advanceTimersByTimeAsync(2_000)));
+        expect(saveContentDraft).toHaveBeenCalledTimes(1);
+        // The claims are in; the page's read for the save waits for the API's minute.
+        await act(async () => void (await vi.advanceTimersByTimeAsync(CLAIMS_EVERY_MS)));
+        expect(checkDraftClaims).toHaveBeenCalledTimes(2);
+        expect(qualityChip()?.textContent).toContain('updating as the page is read');
+        await act(
+          async () =>
+            void (await vi.advanceTimersByTimeAsync(PROOF_READ_EVERY_MS + PROOF_READ_SLACK_MS)),
+        );
+        expect(readDraftPage).toHaveBeenCalledTimes(2);
+        // Asked, not answered: the last settled score stays.
+        expect(qualityChip()?.textContent).toContain(shown!.replace(/ ·.*$/, ''));
+        expect(qualityChip()?.textContent).toContain('updating as the page is read');
+        await act(async () => pageIn(read));
+        expect(qualityChip()?.textContent).not.toContain('updating');
+      } finally {
+        vi.useRealTimers();
       }
     });
 
@@ -3082,6 +3338,144 @@ describe('the side panel', () => {
       } finally {
         vi.mocked(console.error).mockRestore();
       }
+    });
+
+    it('holds the score for the visual proof when the claims land first, and scores without the own images when they can’t be read (review, #1475)', async () => {
+      process.env.NEXT_PUBLIC_CONTENT_QUALITY_PHASE = '2';
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+      try {
+        getContentAuthors.mockResolvedValue({
+          authors: [],
+          brands: [{ id: 'b1', name: 'Acme' }],
+          me: { id: 'u1', role: 'admin' },
+        });
+        getDraftInputs.mockResolvedValue({
+          experience: '',
+          data: [],
+          ansvisorData: [],
+          quotes: [],
+        });
+        // The own images' call fails (the network, a deploy).
+        getOwnImages.mockRejectedValue(new Error('offline'));
+        let pageIn: (value: unknown) => void = () => {};
+        readDraftPage.mockReturnValue(new Promise((resolve) => (pageIn = resolve)));
+        getContentDraft.mockResolvedValue(
+          draft({
+            bodyHtml: `<h1>Pipeline forecasting</h1><p>${said} It is easy to set up for any team.</p><img src="https://cdn.acme.com/run.png" alt="A forecast run">`,
+          }),
+        );
+        window.innerWidth = 1440;
+        await renderPage();
+        await act(async () => void (await vi.advanceTimersByTimeAsync(3_000)));
+        await act(async () => void (await vi.advanceTimersByTimeAsync(3_000)));
+        // The claims are in; the page's read isn't: no score on Trust and Readability alone.
+        expect(checkDraftClaims).toHaveBeenCalled();
+        expect(readDraftPage).toHaveBeenCalled();
+        const chip = () =>
+          [...container.querySelectorAll<HTMLButtonElement>('header button')].find((b) =>
+            b.textContent?.startsWith('Quality'),
+          );
+        expect(chip()?.textContent).toBe('Quality · reading…');
+        await act(async () =>
+          pageIn({
+            spots: [],
+            proofs: [],
+            regulated: null,
+            pending: false,
+            limited: false,
+            paused: false,
+          }),
+        );
+        // In once, with the confirms made so far (none): it scores.
+        expect(chip()?.textContent).toMatch(/^Quality \d+ · (Strong|Can improve|Needs work)$/);
+        expect(console.error).toHaveBeenCalledWith(
+          'Failed to read the own images:',
+          expect.any(Error),
+        );
+      } finally {
+        vi.mocked(console.error).mockRestore();
+        vi.useRealTimers();
+      }
+    });
+
+    it('holds what the page read found while an edit to it is read again (review, #1479)', async () => {
+      process.env.NEXT_PUBLIC_CONTENT_QUALITY_PHASE = '2';
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+      getContentAuthors.mockResolvedValue({
+        authors: [],
+        brands: [{ id: 'b1', name: 'Acme' }],
+        me: { id: 'u1', role: 'admin' },
+      });
+      const HOW = 'We tested each forecasting app with twelve sales teams for a month.';
+      const answer = (block: string) => ({
+        spots: [],
+        proofs: [],
+        regulated: null,
+        checks: {
+          answerFirst: null,
+          recommends: null,
+          disclosure: null,
+          balance: null,
+          how: { quote: 'We tested each forecasting app', block },
+          cut: false,
+          pageType: 'guide',
+        },
+        pending: false,
+        limited: false,
+        paused: false,
+      });
+      let again: (value: unknown) => void = () => {};
+      readDraftPage
+        .mockResolvedValueOnce(answer(HOW))
+        .mockReturnValueOnce(new Promise((resolve) => (again = resolve)));
+      saveContentDraft.mockResolvedValue({
+        ok: true,
+        updatedAt: '2026-10-20T10:01:00Z',
+        bodyHash: 'h1',
+      });
+      getContentDraft.mockResolvedValue({
+        ...claimed,
+        pageType: 'guide',
+        pageTypeSource: 'user',
+        bodyHtml: `${claimed.bodyHtml}<p>${HOW}</p>`,
+      });
+      window.innerWidth = 1440;
+      await renderPage();
+      await act(async () => void (await vi.advanceTimersByTimeAsync(3_000)));
+      const chip = [...container.querySelectorAll<HTMLButtonElement>('header button')].find((b) =>
+        b.textContent?.startsWith('Quality'),
+      )!;
+      await act(async () => chip.click());
+      const eeatNow = () => panel()!.textContent!.match(/E-E-A-T(\d+)/)?.[1];
+      const found = eeatNow();
+      expect(found).toBeDefined();
+      // A typo fixed in the paragraph that says how the page was made.
+      const editor = (container.querySelector('.ProseMirror') as HTMLElement & { editor: Editor })
+        .editor;
+      let end = -1;
+      editor.state.doc.descendants((node, pos) => {
+        if (node.isTextblock && node.textContent === HOW) end = pos + node.nodeSize - 1;
+      });
+      await act(async () => {
+        editor.commands.insertContentAt(end - 1, ' straight');
+      });
+      // Read on the page as it is now, not saved yet; then saved and not
+      // asked about; then asked: it holds.
+      await act(async () => void (await vi.advanceTimersByTimeAsync(500)));
+      expect(saveContentDraft).not.toHaveBeenCalled();
+      expect(eeatNow()).toBe(found);
+      await act(async () => void (await vi.advanceTimersByTimeAsync(1_500)));
+      expect(saveContentDraft).toHaveBeenCalled();
+      expect(eeatNow()).toBe(found);
+      await act(
+        async () =>
+          void (await vi.advanceTimersByTimeAsync(PROOF_READ_EVERY_MS + PROOF_READ_SLACK_MS)),
+      );
+      expect(readDraftPage).toHaveBeenCalledTimes(2);
+      expect(eeatNow()).toBe(found);
+      await act(async () => again(answer(HOW.replace('month.', 'month straight.'))));
+      expect(eeatNow()).toBe(found);
     });
 
     it('takes the claim’s sentence out on Remove', async () => {
@@ -3931,6 +4325,26 @@ describe('the side panel', () => {
       }
     });
 
+    it('sends no author for one the site names, nor the team’s byline line (00271)', async () => {
+      process.env.NEXT_PUBLIC_CONTENT_QUALITY_PHASE = '1';
+      getContentAuthors.mockResolvedValue({
+        authors: [],
+        brands: [{ id: 'b1', name: 'Acme', bylineInContent: true }],
+        me: { id: 'u1', role: 'admin' },
+      });
+      getContentDraft.mockResolvedValue(
+        draft({ pageType: 'blog_post', authorConfirmed: { real: true, profile: false } }),
+      );
+      await renderPage();
+      await act(async () => button('Send to CMS')!.click());
+      await act(async () => inDialog('Continue to send').click());
+      await act(async () => inDialog('Send').click());
+      // The CMS keeps its own author.
+      expect(sendPagesToCms).toHaveBeenCalledWith('b1', [
+        expect.objectContaining({ draftId: 'd1', author: null, html: '<p>Teams trust it.</p>' }),
+      ]);
+    });
+
     it('opens Before you publish first while Quality is on', async () => {
       process.env.NEXT_PUBLIC_CONTENT_QUALITY_PHASE = '1';
       getContentDraft.mockResolvedValue(draft({ pageType: 'blog_post' }));
@@ -4078,6 +4492,17 @@ describe('the side panel', () => {
       expect(dialog()!.textContent).toContain('Meta titlePipeline forecasting');
       expect(dialog()!.textContent).toContain('AuthorAcme Team → your CMS author field');
       expect(inDialog('Download Word').disabled).toBe(false);
+    });
+
+    it('leaves the author to the CMS for one the site names, with no warning (00271)', async () => {
+      getContentDraft.mockResolvedValue(
+        draft({ pageType: 'blog_post', authorConfirmed: { real: true, profile: false } }),
+      );
+      await renderPage();
+      await act(async () => button('Export')!.click());
+      expect(dialog()!.textContent).toContain('Content · ready to paste');
+      expect(dialog()!.textContent).not.toContain('no author yet');
+      expect(dialog()!.textContent).toContain("AuthorYour site's own: your CMS keeps it");
     });
 
     it('names the team in the page’s language in the CMS author field', async () => {

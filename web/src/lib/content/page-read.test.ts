@@ -161,4 +161,24 @@ describe('aiChecksOnPage (CE-050)', () => {
       show: null,
     });
   });
+
+  it('holds the pick and Answer first’s verdict while the edited page is read again (review, #1479)', () => {
+    const typo = trustBlocks(
+      `<h1>Best daypacks</h1><p>The best daypack for wet hikes is the Trailmade Ridge 28!</p><p>Our top pick is the Trailmade Ridge 28, ahead of the Osprey Talon!</p><p>${HOW}</p>`,
+    );
+    // Read again: the pick still applies (no Show: its words moved), the verdict is held.
+    expect(aiChecksOnPage(typo, checks(), 'feature_page', true)).toEqual({
+      how: null,
+      balanced: { found: false, show: null },
+      disclosure: { found: false, show: null },
+      answerFirst: { answers: true, block: FIRST, held: true },
+    });
+    // Once read and still edited: the pick doesn't apply, and the verdict goes.
+    expect(aiChecksOnPage(typo, checks(), 'feature_page')).toEqual({
+      how: null,
+      balanced: null,
+      disclosure: null,
+      answerFirst: null,
+    });
+  });
 });
