@@ -1,5 +1,5 @@
 import type { ContentAuthor } from './authors';
-import { notAPrice, pagePrices } from './brand-facts';
+import { pagePrices, priceRanges } from './brand-facts';
 import type { PageType } from './drafts';
 import { PLACEHOLDER } from './placeholders';
 import { isByline, sentencesOf } from './readability';
@@ -38,6 +38,10 @@ const ONE_PLACEHOLDER = new RegExp(PLACEHOLDER.source, 'iu');
 
 /** Whether the title still has a placeholder: it would ship as the headline. */
 export const titleHasPlaceholder = (title: string) => ONE_PLACEHOLDER.test(title);
+
+/** The title as the page's name (Article's headline, Product's name); none while empty or a placeholder's in it. */
+export const pageName = (title: string) =>
+  title.trim() && !titleHasPlaceholder(title) ? title.trim() : null;
 
 /** The page's first image with a full https address, as JSON-LD's image. */
 export function firstImage(html: string): string | null {
@@ -102,7 +106,7 @@ export function articleJsonLd({
     '@context': 'https://schema.org',
     '@type': 'Article',
     // A placeholder isn't the page's headline: it is left out until filled.
-    ...(title.trim() && !titleHasPlaceholder(title) ? { headline: title.trim() } : {}),
+    ...(pageName(title) ? { headline: pageName(title) } : {}),
     ...(image ? { image } : {}),
     ...(author !== undefined ? { author: person ?? organization } : {}),
     publisher: organization,
@@ -113,33 +117,82 @@ export function articleJsonLd({
 
 /**
  * A product page's price as the page states it (Quality spec §11, CE-053):
- * one price is the product's Offer; several (sizes, plans) its range. None
- * when the page states none, or in more than one currency (whose is which
- * isn't sure). Amounts that aren't the product's price are left out: an old
- * price, a saving, an add-on (brand facts' rules), a shipping threshold or a
- * minimum order ("free shipping over $50").
+ * one price is the product's Offer; several (sizes, a range) give its low
+ * and high. None when the page states none, or in more than one currency
+ * (whose is which isn't sure). Each amount is read by the words around it,
+ * so a sentence keeps its price beside one that isn't: "$129 (was $159)",
+ * "$129, or 4 payments of $32.25", "€129 inkl. MwSt.".
  */
 export type PageOffer =
   | { price: number; currency: string }
-  | { low: number; high: number; currency: string; count: number };
+  | { low: number; high: number; currency: string };
 
-const THRESHOLD =
-  /\b(?:shipping|delivery|orders?|over|above|spend|minimum|min\.|kargo|versand|livraison|env[ií]o)\b/iu;
+/**
+ * Just before an amount, words that make it no price of the product's: a
+ * threshold ("orders over $50", "spend $75", "minimum $20"), an old price
+ * ("was", "instead of", "statt"), a saving or an extra ("save $30", "an
+ * extra $10"), an installment ("4 payments of $32"), a bundle ("2 for $30").
+ */
+const NOT_THE_PRICE_BEFORE =
+  /(?:(?<![\p{L}-])(?:over|above|more\s+than|at\s+least|minimum(?:\s+(?:order|spend|purchase))?(?:\s+of)?|min\.|spend(?:ing)?|orders?\s+(?:over|above|of|from)|was|were|regularly|reg\.|originally|instead\s+of|compare\s+at|list\s+price|msrp|rrp|uvp|statt|save|saving|savings\s+of|(?:an?\s+)?extra|additional|discount\s+of|(?:payments?|installments?|instalments?|deposit)\s+of)|(?:^|\(|\bbuy\s+|\bany\s+|\bor\s+)\s*(?:\d{1,2}|two|three|four|five)\s+for|\d\s*[x×])\s*:?\s*$/iu;
+/**
+ * Before an amount in its clause, words of another bill: shipping, a
+ * financing plan, an add-on or an accessory, setup ("Free shipping on
+ * orders over $50", "Pay in 4 with Klarna: $32.25", "Add a rain cover for
+ * $19").
+ */
+const ANOTHER_BILL =
+  /(?<!\p{L})(?:shipping|delivery|postage|versand\p{L}*|livraison|env[ií]os?|kargo\p{L}*|frete|affirm|klarna|afterpay|sezzle|taksit\p{L}*|financing|finanzierung|interest[\s-]free|sold\s+separately|ayrı\s+satılır|add(?:-ons?|\s+an?|\s+on)|accessor(?:y|ies)|aksesuar\p{L}*|zubehör|installation|setup|set-up|kurulum)(?!\p{L})/iu;
+/**
+ * Right after an amount: a unit price ("$0.50/oz", "€12 pro kg"), a
+ * range's period ("$10–$20 a month"), what it isn't ("$30 off", "a $10 coupon", "$5 fee", "$30 less", "500 TL
+ * üzeri", "₺1.299 yerine"), a bundle ("$25 for 2"), financing ("$32.25
+ * with Klarna") or an add-on ("$19, sold separately").
+ */
+const NOT_THE_PRICE_AFTER =
+  /^(?:\s*(?:\/\s*|per\s+|pro\s+|a\s+)(?:100\s?)?(?:kg|g|lb|lbs|oz|fl\.?\s?oz|ml|cl|l|unit|ct|count|piece|pc|item|sq\.?\s?ft|m²|m2|stück|adet|serving)(?!\p{L})|\s*(?:off|discount|coupon|(?:store\s+)?credits?|gift\s+cards?|fee|surcharge|deposit|rebate|cash\s?back|savings?|less|more|cheaper|yerine|(?:ve\s+)?üzeri|minimum|or\s+(?:more|above|over))(?!\p{L})|\s*(?:\/\s*|per\s+|a\s+|an\s+|each\s+)(?:mo|mth|month|yr|year|wk|week|day)(?!\p{L})|\s*for\s+(?:\d|two|three|four|five)(?![\p{N}\p{L}])|\s*(?:today\s+)?(?:with|via|through)\s+(?:affirm|klarna|afterpay|sezzle)(?!\p{L})|[^.;]{0,6}(?:sold\s+)?separately|[^.;]{0,6}ayrı\s+satılır)/iu;
+
+/** Whether an amount, from `at` to `end` in its sentence, is the product's price by the words around it. */
+function theProducts(sentence: string, at: number, end: number, since: number): boolean {
+  // Its clause, since the amount before it: "Free shipping, and it's $129" keeps $129.
+  const lead = sentence
+    .slice(Math.max(since, at - 48), at)
+    .split(/,\s|;|\s[–—]\s/u)
+    .pop()!;
+  const after = sentence.slice(end, end + 40);
+  return !(
+    NOT_THE_PRICE_BEFORE.test(lead) ||
+    ANOTHER_BILL.test(lead) ||
+    NOT_THE_PRICE_AFTER.test(after)
+  );
+}
 
 export function pageOffer(texts: readonly string[]): PageOffer | null {
-  const prices = texts
-    .flatMap((text) => sentencesOf(text))
-    .filter((sentence) => !notAPrice(sentence) && !THRESHOLD.test(sentence))
-    .flatMap((sentence) => pagePrices(sentence))
-    .filter((price) => price.amount > 0);
-  if (!prices.length) return null;
-  const currencies = new Set(prices.map((p) => p.currency));
+  const amounts: { low: number; high: number; currency: string }[] = [];
+  for (const sentence of texts.flatMap((text) => sentencesOf(text))) {
+    const found = [
+      // A price by the month or the year is a plan's or a payment's, not a product's.
+      ...pagePrices(sentence)
+        .filter((price) => price.period === null)
+        .map((price) => ({ ...price, low: price.amount, high: price.amount })),
+      ...priceRanges(sentence),
+    ].sort((a, b) => a.at - b.at);
+    let since = 0;
+    for (const price of found) {
+      const end = price.at + price.text.length;
+      if (price.low > 0 && theProducts(sentence, price.at, end, since)) {
+        amounts.push({ low: price.low, high: price.high, currency: price.currency });
+      }
+      since = end;
+    }
+  }
+  if (!amounts.length) return null;
+  const currencies = new Set(amounts.map((a) => a.currency));
   if (currencies.size > 1) return null;
   const [currency] = currencies;
-  const amounts = [...new Set(prices.map((p) => p.amount))].sort((a, b) => a - b);
-  return amounts.length === 1
-    ? { price: amounts[0], currency }
-    : { low: amounts[0], high: amounts[amounts.length - 1], currency, count: amounts.length };
+  const low = Math.min(...amounts.map((a) => a.low));
+  const high = Math.max(...amounts.map((a) => a.high));
+  return low === high ? { price: low, currency } : { low, high, currency };
 }
 
 /** The page's opening paragraph (past a byline or a date), as Product's description: up to 500 characters. */
@@ -156,8 +209,9 @@ export function openingParagraph(html: string): string | null {
 }
 
 export interface ProductSchemaInput {
-  /** The page's title (its H1): the product's name. */
+  /** The page's title (its H1) as pageName gives it: Product needs a name, so there is none without it. */
   name: string;
+  /** The opening paragraph: left out while a placeholder's in it. */
   description: string | null;
   /** The person's own images on the page first (CE-049), else its first image. */
   images: string[];
@@ -181,9 +235,8 @@ export function productJsonLd({
   return {
     '@context': 'https://schema.org',
     '@type': 'Product',
-    // A placeholder isn't the product's name: it is left out until filled.
-    ...(name.trim() && !titleHasPlaceholder(name) ? { name: name.trim() } : {}),
-    ...(description ? { description } : {}),
+    name,
+    ...(description && !ONE_PLACEHOLDER.test(description) ? { description } : {}),
     ...(images.length ? { image: images.length === 1 ? images[0] : images } : {}),
     ...(brandName.trim() ? { brand: { '@type': 'Brand', name: brandName.trim() } } : {}),
     offers:
@@ -194,7 +247,6 @@ export function productJsonLd({
             lowPrice: offer.low.toFixed(2),
             highPrice: offer.high.toFixed(2),
             priceCurrency: offer.currency,
-            offerCount: offer.count,
           },
   };
 }

@@ -206,6 +206,8 @@ export function ExportDialog({
     noDisclosure?: boolean;
     /** An article: Before you publish has its dates and JSON-LD too. */
     article: boolean;
+    /** A product page (Phase 3, CE-053): Before you publish has its Product JSON-LD. */
+    product?: boolean;
     onReview: () => void;
   } | null;
 }) {
@@ -636,12 +638,14 @@ function PublishLine({
   noAuthor,
   noDisclosure = false,
   article,
+  product = false,
   onReview,
 }: {
   trustBelow: number | null;
   noAuthor: boolean;
   noDisclosure?: boolean;
   article: boolean;
+  product?: boolean;
   onReview: () => void;
 }) {
   const t = useTranslations('contentEditor.editor.exportDialog.publish');
@@ -663,7 +667,7 @@ function PublishLine({
       <p className="min-w-0 flex-1">
         {warnings.length
           ? t('warnings', { list: warnings.join(' · ') })
-          : t(article ? 'quiet' : 'quietOther')}
+          : t(article ? 'quiet' : product ? 'quietProduct' : 'quietOther')}
       </p>
       <Button
         variant="outline"

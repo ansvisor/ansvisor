@@ -3481,6 +3481,7 @@ export function DraftEditor({
             noDisclosure:
               aiChecks?.disclosure?.found === false && !checksOff(profile).has('disclosure'),
             article: isArticlePage(pageType),
+            product: !!productSchema,
             onReview: () => {
               setExportOpen(null);
               openBeforePublish('export', exportOpen.destination);

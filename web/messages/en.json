@@ -4451,6 +4451,7 @@
         "publish": {
           "quiet": "Before you publish has the author, dates and schema (JSON-LD) for your CMS.",
           "quietOther": "Before you publish has the author and what your CMS adds for this page type.",
+          "quietProduct": "Before you publish has the Product schema (JSON-LD) with the page's price for your CMS.",
           "warnings": "Before you publish: {list}.",
           "trust": "Trust {trust}, below 60",
           "noAuthor": "no author yet",
@@ -4614,6 +4615,8 @@
           "detailLive": "Often added by your CMS. If not, paste the code below into the page. It gives only the updated date: your page keeps the published date it has.",
           "product": "Product schema with its price",
           "productDetail": "Often added by your shop's theme. If not, paste the code below into the page. Availability, SKU and reviews come from a product feed, once one is connected.",
+          "productNoName": "Product schema needs the product's name",
+          "productNoNameDetail": "The title is empty or still has a placeholder in square brackets: write the product's name there. Without it, search engines show no product result.",
           "productNoPrice": "Product schema needs the price",
           "productNoPriceDetail": "The page states no price (or more than one currency): add the product's price to the page, or connect your product feed. Without it, search engines show no product result.",
           "other": "Schema for this page type",
@@ -4633,7 +4636,7 @@
         "linksPending": "Still reading {count, plural, one {# of the page's links} other {# of the page's links}}, so Trust may change.",
         "claimsReading": "Still reading the claims in your own words, so Trust may change.",
         "pageReading": "Still reading the page for claims that need your proof, so your to-dos may change.",
-        "productNote": "The price and images are the page's own: check they match your shop before you paste it.",
+        "productNote": "The price, its currency and the images are the page's own (a \"$\" reads as US dollars): check they match your shop before you paste it.",
         "datesNote": "The dates are today's: change them if the page goes out on another day.",
         "headlineLeftOut": "The title still has a placeholder in square brackets, so the code leaves the headline out. Fill it in, and the headline comes back here.",
         "states": {

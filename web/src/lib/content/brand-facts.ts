@@ -148,8 +148,6 @@ const RANGE_BEFORE = /\d\s?(?:\S{1,3}\s)?(?:[–—-]|to|bis|ile|ila|and|und|et|
  * a discount, credits, tax added, or a team's bill ("A 5-person team pays
  * $245").
  */
-/** Whether a sentence's amounts are no product's price (an old one, a saving, an add-on…). */
-export const notAPrice = (sentence: string) => NOT_A_PRICE.test(sentence);
 const NOT_A_PRICE =
   /(?<!\p{L})(?:was|instead\s+of|regularly|originally|sav(?:e|es|ed|ing|ings)|off|discount|coupon|credits?|incl\.?|including\s+(?:vat|tax)|inkl\.?|kdv\s+dahil|statt|rabatt|indirim|tasarruf|économisez|ahorra|refund|money-back|extra|additional|add-ons?|ek\s+ücret|zusätzlich|setup|set-up|onboarding|implementation|installation|one-time|kurulum)(?!\p{L})|\d+[\s-]?(?:person|people|users?|seats?|members?|kişi(?:lik)?|kullanıcı)(?!\p{L})/iu;
 const MONTH =
@@ -212,6 +210,50 @@ export function pagePrices(sentence: string): PagePrice[] {
       from: FROM.test(before) || FROM_AFTER.test(after),
       at: m.index,
     });
+  }
+  return out;
+}
+
+/** A range's end: an amount with its currency before or after it, or neither ("$119–139"). */
+const rangeEnd = (name: string) =>
+  `(?:(?<${name}Before>${MARK}|${CODE})\\s?)?(?<${name}>${amount('[.,]')})(?:\\s?(?<${name}After>${MARK}|${CODE}|zł))?`;
+const PRICE_RANGE = new RegExp(
+  `${rangeEnd('low')}\\s?(?:[–—-]|(?<=\\s)(?:to|bis|à|a|ila|ile|and|und|et|y)(?=\\s))\\s?${rangeEnd('high')}`,
+  'giu',
+);
+
+/** A range a sentence gives ("$119–$139", "119–139 €", "€20 to €30"): its two ends, in one currency. */
+export interface PriceRange {
+  text: string;
+  low: number;
+  high: number;
+  currency: string;
+  at: number;
+}
+
+/**
+ * The price ranges a sentence gives (the ones pagePrices leaves out): the
+ * same currency on both ends, or one written once, as ranges are ("$119–139",
+ * "119–139 €"; "Ridge 28 – $129" is a name and a price), the low end first.
+ */
+export function priceRanges(sentence: string): PriceRange[] {
+  const out: PriceRange[] = [];
+  for (const m of sentence.matchAll(PRICE_RANGE)) {
+    const g = m.groups!;
+    const marks = [g.lowBefore, g.lowAfter, g.highBefore, g.highAfter].filter(Boolean);
+    const currencies = new Set(marks.map((mark) => currencyOf(mark)));
+    const low = amountOf(g.low);
+    const high = amountOf(g.high);
+    const after = sentence.slice(m.index + m[0].length, m.index + m[0].length + 40);
+    const lowMarked = !!(g.lowBefore || g.lowAfter);
+    const highMarked = !!(g.highBefore || g.highAfter);
+    const written =
+      (lowMarked && highMarked) || (!!g.lowBefore && !highMarked) || (!lowMarked && !!g.highAfter);
+    if (!written || currencies.size !== 1 || currencies.has(null) || MAGNITUDE.test(after)) {
+      continue;
+    }
+    if (low === null || high === null || !(low < high)) continue;
+    out.push({ text: m[0], low, high, currency: [...currencies][0]!, at: m.index });
   }
   return out;
 }

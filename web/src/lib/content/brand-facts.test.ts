@@ -4,6 +4,7 @@ import {
   factMismatches,
   factValueText,
   pagePrices,
+  priceRanges,
   type BrandFact,
 } from './brand-facts';
 
@@ -108,6 +109,30 @@ describe('pagePrices', () => {
     // A dash after a plan's name isn't a range.
     expect(pagePrices('Pro – $49 per month')[0]).toMatchObject({ amount: 49 });
     expect(pagePrices('Since 2019 199 € per month')[0]).toMatchObject({ amount: 199 });
+  });
+});
+
+describe('priceRanges', () => {
+  it('reads a range’s two ends in one currency, written once or on both', () => {
+    const ends = (sentence: string) =>
+      priceRanges(sentence).map((r) => [r.low, r.high, r.currency]);
+    expect(ends('Paying $10–$20 or between $30 and $40.')).toEqual([
+      [10, 20, 'USD'],
+      [30, 40, 'USD'],
+    ]);
+    expect(ends('From $119-139, or 119–139 € in Europe.')).toEqual([
+      [119, 139, 'USD'],
+      [119, 139, 'EUR'],
+    ]);
+    expect(ends('De 49 € à 99 €, ou 49 TL ile 99 TL.')).toEqual([
+      [49, 99, 'EUR'],
+      [49, 99, 'TRY'],
+    ]);
+    // A name's number and a price, two currencies, a scale, high before low: no range.
+    expect(ends('Ridge 28 – $129')).toEqual([]);
+    expect(ends('$10–€20')).toEqual([]);
+    expect(ends('Raised $1–$2M')).toEqual([]);
+    expect(ends('$129 – 2 colors')).toEqual([]);
   });
 });
 

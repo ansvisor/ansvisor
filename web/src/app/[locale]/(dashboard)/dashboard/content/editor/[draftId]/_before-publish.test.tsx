@@ -344,8 +344,18 @@ describe('BeforePublish', () => {
       name: 'Ridge 28 daypack',
       offers: { '@type': 'Offer', price: '129.00', priceCurrency: 'USD' },
     });
-    expect(dialog().textContent).toContain('The price and images are the page');
-    // No price on the page: no code to paste, and it says why.
+    expect(dialog().textContent).toContain('The price, its currency and the images are the page');
+    // No name or no price: no code to paste, and it says why.
+    await render(quality(), {
+      pageType: 'product_page',
+      title: '[name of a real person] daypack',
+      product,
+    });
+    expect(rows().some((row) => row.startsWith("Product schema needs the product's name"))).toBe(
+      true,
+    );
+    expect(rows().some((row) => row.startsWith('Product schema needs the price'))).toBe(false);
+    expect(dialog().querySelector('pre')).toBeNull();
     await render(quality(), {
       pageType: 'product_page',
       title: 'Ridge 28 daypack',

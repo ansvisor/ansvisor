@@ -146,6 +146,13 @@ describe('ExportDialog', () => {
     expect(dialog().textContent).toContain(
       'Before you publish has the author and what your CMS adds for this page type.Review',
     );
+    // A product page in Phase 3 (CE-053): its Product schema.
+    await render({
+      publish: { trustBelow: null, noAuthor: false, article: false, product: true, onReview },
+    });
+    expect(dialog().textContent).toContain(
+      "Before you publish has the Product schema (JSON-LD) with the page's price for your CMS.Review",
+    );
   });
 
   it('holds the export while a placeholder is open, and fills it or leaves its sentence out', async () => {

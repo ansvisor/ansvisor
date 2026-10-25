@@ -18,6 +18,7 @@ import {
   type PageOffer,
   jsonLdScript,
   localDate,
+  pageName,
   titleHasPlaceholder,
 } from '@/lib/content/page-schema';
 import { checksOff } from '@/lib/content/quality-profiles';
@@ -155,11 +156,14 @@ export function BeforePublish({
         .sort((a, b) => b.gain - a.gain)
     : [];
   const article = !product && isArticlePage(pageType);
+  // Product needs its name and price: without either, no code to paste.
+  const productName = pageName(title);
   const productLd =
     product?.offer &&
+    productName &&
     jsonLdScript(
       productJsonLd({
-        name: title,
+        name: productName,
         description: product.description,
         images: product.images,
         brandName,
@@ -221,19 +225,34 @@ export function BeforePublish({
                 detail: t('author.noneDetail', { byline: quality.team }),
               },
     ...(product
-      ? [
-          product.offer
-            ? {
-                state: 'check' as const,
-                title: t('schema.product'),
-                detail: t('schema.productDetail'),
-              }
-            : {
-                state: 'missing' as const,
-                title: t('schema.productNoPrice'),
-                detail: t('schema.productNoPriceDetail'),
-              },
-        ]
+      ? productLd
+        ? [
+            {
+              state: 'check' as const,
+              title: t('schema.product'),
+              detail: t('schema.productDetail'),
+            },
+          ]
+        : [
+            ...(productName
+              ? []
+              : [
+                  {
+                    state: 'missing' as const,
+                    title: t('schema.productNoName'),
+                    detail: t('schema.productNoNameDetail'),
+                  },
+                ]),
+            ...(product.offer
+              ? []
+              : [
+                  {
+                    state: 'missing' as const,
+                    title: t('schema.productNoPrice'),
+                    detail: t('schema.productNoPriceDetail'),
+                  },
+                ]),
+          ]
       : article
         ? [
             { state: 'check' as const, title: t('dates.title'), detail: t('dates.detail') },
