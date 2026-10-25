@@ -35,6 +35,7 @@ import {
 } from 'lucide-react';
 import { useBrandStore } from '@/stores/use-brand-store';
 import { useFeatureGate } from '@/hooks/use-feature-gate';
+import { useUserRole } from '@/hooks/use-user-role';
 import {
   getShoppingFilterOptions,
   getShoppingOverview,
@@ -94,8 +95,10 @@ import type { AmazonShareDropAlert } from '@/lib/shopping-amazon-share-alert';
 import { HeaderWithAiUsage } from '@/components/ai-usage/ai-usage-meter';
 import { ShoppingMarketSwitch, useShoppingMarket } from './_market-switch';
 import { MerchantSplitCard } from './merchant_split_card';
+import { OpenAiIndexCard } from './openai_index_card';
 import { ResellerPriceAlerts } from './reseller_price_alerts';
 import { useMerchantDestinations } from './use_merchant_destinations';
+import { useOpenAiIndex } from './use_openai_index';
 
 const DATE_PRESETS: ShoppingDatePreset[] = ['7d', '30d', '90d', 'all'];
 
@@ -115,6 +118,7 @@ export default function ShoppingPage() {
   const tCommon = useTranslations('common');
   const { activeBrandId } = useBrandStore();
   const { canUse, requiredPlanFor } = useFeatureGate();
+  const { canManage } = useUserRole();
   const hasFullAccess = canUse('shopping_analytics');
 
   const [datePreset, setDatePreset] = useState<ShoppingDatePreset>('30d');
@@ -159,6 +163,9 @@ export default function ShoppingPage() {
     hasFullAccess && shoppingMarket.ready,
   );
   const destinationsLoading = destinations.loading || !shoppingMarket.ready;
+  // ChatGPT in the US (#1281): only while the market shown is the US.
+  const showOpenAiIndex = shoppingMarket.shown === 'us';
+  const openAiIndex = useOpenAiIndex(activeBrandId, datePreset, hasFullAccess && showOpenAiIndex);
 
   // Load filter options once per brand so the dropdowns only show
   // platform / region values that actually appear in this brand's data.
@@ -348,6 +355,14 @@ export default function ShoppingPage() {
                       loading={destinationsLoading}
                     />
                   </div>
+                  {showOpenAiIndex && (
+                    <OpenAiIndexCard
+                      read={openAiIndex.read}
+                      loading={openAiIndex.loading}
+                      canManage={canManage}
+                      onDirectFeedChange={openAiIndex.setDirectFeed}
+                    />
+                  )}
                 </>
               ) : (
                 <UpgradeCard t={t} requiredPlan={requiredPlanFor('shopping_analytics')} />
