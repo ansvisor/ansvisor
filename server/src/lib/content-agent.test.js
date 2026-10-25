@@ -74,6 +74,8 @@ const {
   buildFixPrompt,
   cleanInsertHtml,
   draftPassages,
+  addsAttribution,
+  dropsName,
   dropsPlaceholder,
   emptyWhy,
   fixDraftRules,
@@ -255,6 +257,70 @@ describe('keepSuggestions', () => {
         ],
       },
     ]);
+  });
+
+  it('keeps no claim given to a source, nor a change that drops a name (editor test 2026-10-25)', () => {
+    const listed = [
+      {
+        tag: 'p',
+        text: 'Ansvisor, Profound and LLM Pulse track ChatGPT, Gemini and Claude.',
+      },
+    ];
+    const change = (after, rules = ['dated']) =>
+      suggestion({
+        passage: 1,
+        before: 'Ansvisor, Profound and LLM Pulse track ChatGPT, Gemini and Claude',
+        after,
+        rules,
+        sources: [],
+        marks: [],
+      });
+    const kept = (s) =>
+      keepSuggestions([s], listed, new Set(), new Set(['dated', 'bannedWords']), null, sourcing);
+    // An AI Overview's claim given to Zapier, and Claude dropped: neither kept.
+    expect(
+      kept(
+        change(
+          'According to Zapier, Ansvisor, Profound and LLM Pulse track ChatGPT, Gemini and Claude',
+        ),
+      ),
+    ).toEqual([]);
+    expect(kept(change('Ansvisor, Profound and LLM Pulse track ChatGPT and Gemini'))).toEqual([]);
+    // Every name kept, no source made up: kept.
+    expect(
+      kept(change('Ansvisor, Profound and LLM Pulse each track ChatGPT, Gemini and Claude')),
+    ).toHaveLength(1);
+    // A banned word taken out may go.
+    expect(
+      kept(change('Ansvisor, Profound and LLM Pulse track ChatGPT and Gemini', ['bannedWords'])),
+    ).toHaveLength(1);
+  });
+
+  it('reads attributions in English, German and Turkish, and the names past a sentence’s first word', () => {
+    expect(addsAttribution('Teams forecast.', 'According to Gartner, teams forecast.')).toBe(true);
+    expect(addsAttribution('Teams forecast.', 'Gartner found that teams forecast.')).toBe(true);
+    expect(addsAttribution('Teams forecast.', 'Laut Gartner prognostizieren Teams.')).toBe(true);
+    expect(addsAttribution('Teams forecast.', 'Teams prognostizieren, laut Gartner.')).toBe(true);
+    expect(addsAttribution('Ekipler tahmin eder.', "Gartner'a göre ekipler tahmin eder.")).toBe(
+      true,
+    );
+    // One the passage had already: none added.
+    expect(
+      addsAttribution('According to Gartner, teams forecast.', 'According to Gartner, teams plan.'),
+    ).toBe(false);
+    // "The report says" names no one.
+    expect(addsAttribution('Teams forecast.', 'The report says teams forecast.')).toBe(false);
+    // One the agent was given (an expert from Your input, a brand the page names) may be.
+    expect(
+      addsAttribution(
+        'Teams forecast.',
+        'Ada Lovelace says teams forecast.',
+        knownPeople('Ada Lovelace, head of data'),
+      ),
+    ).toBe(false);
+    // A sentence's first word isn't a name; one later is.
+    expect(dropsName('Teams use Ansvisor daily.', 'Teams use it daily.')).toBe(true);
+    expect(dropsName('Delve into forecasting.', 'Look at forecasting.')).toBe(false);
   });
 
   it('keeps no number without a source (CE-033)', () => {

@@ -8,7 +8,7 @@ import { contentBriefModelId, rebuildSources } from './content-brief.js';
 import { inputSources, readDraftInputs } from './content-inputs.js';
 import { linkAllowList, linkKey, linkTargetsPrompt, readLinkTargets } from './content-links.js';
 import { siteTypeLine, pageTypeFormat } from './content-page-types.js';
-import { authorWords, guardPeopleInHtml, knownPeople } from './content-people.js';
+import { authorWords, guardPeopleInHtml, isKnown, knownPeople } from './content-people.js';
 import {
   RunStoppedError,
   advanceRun,
@@ -79,6 +79,9 @@ export const HEADING_RULE = `- A heading stays a heading: one short line, an H1 
 export const FANOUT_RULE = `- Fan-outs are the searches AI engines run for the page's questions. For each fan-out a rule names, in its words ("aeo tracker" → "What is an AEO tracker?"), not questions of your own: fanoutH2 wants an H2, fanoutFaq a question ending in "?" under the FAQ heading. Add it as its own question: after the paragraph that ends an existing answer, insert a heading at the level of the FAQ's other questions (an H3 under an H2 FAQ) and a paragraph that answers it. Reword an existing question into a fan-out's words only when its answer still answers it, replacing that question alone. One question per heading: never add a question to a heading. Call a change a fan-out answer only when it uses a fan-out listed.`;
 
 /** The links rule both agent prompts give the model: only the URLs listed, never invented. */
+/** What the agent may say of a source, and the names a passage keeps (editor test 2026-10-25). */
+export const ATTRIBUTION_RULE = `- Never give a claim to a source the page doesn't already ("According to X…", "X says…", "X found that…"): you don't see what a cited page or a link says. A link goes on the words it explains, never as a source for a claim. Keep every name a passage has (a product, a brand, a person): never drop one from a list or a claim.`;
+
 export const LINK_RULE = `- Links: link only to a URL listed under the pages or sources you may link to, copied exactly, as <a href="URL">the words it explains</a>, in a replace's "after" or in an insert. Cite a source by linking the words it supports. Never invent a URL, never link a heading, and when no listed page fits, add no link.`;
 
 /** The shortest answer a heading's replace may carry for it to go under the heading. */
@@ -154,6 +157,7 @@ ${FANOUT_RULE}
 - Never change a passage marked LOCKED: AI assistants quote its wording today. You may insert after it.
 - Use only facts from the page, the brand and your data. Never invent numbers, prices, dates, names, sources or quotes. When a rule needs a fact you don't have, write a placeholder in square brackets, e.g. [figure, source, year].
 ${SOURCES_RULE}
+${ATTRIBUTION_RULE}
 - Keep the page's voice and change as little as each rule needs. At most ${MAX_AGENT_SUGGESTIONS} suggestions.
 - "reason" says in a few words what the change does and why, e.g. "add a dated data point (rule)".
 - Write in the language asked for.`;
@@ -293,6 +297,78 @@ export function growsPastLimit(passage, before, words) {
   const now = passage.text.trim().length;
   const then = passage.text.replace(before, () => words).trim().length;
   return then > headingLimit(passage.tag) && then > now;
+}
+
+/**
+ * Attributions a change can write: "According to Zapier…", "as reported by
+ * Gartner", "per Forrester", "Zapier says…", "Zapier found that…", "laut
+ * Zapier", "Zapier'e göre". The agent never sees what a cited page or a link
+ * says (SOURCES_RULE), so one it adds puts a claim in a source's mouth
+ * (editor test 2026-10-25: an AI Overview's claim given to Zapier).
+ */
+// A name as an attribution gives it: a capitalised word, and more after it.
+const SOURCE_NAME = String.raw`(?<name>\p{Lu}[\p{L}\p{N}.&'’-]*(?:\s+\p{Lu}[\p{L}\p{N}.&'’-]*)*)`;
+const ATTRIBUTIONS = [
+  new RegExp(String.raw`\b[Aa]ccording to\s+${SOURCE_NAME}`, 'gu'),
+  new RegExp(
+    String.raw`\b(?:[Aa]s\s+(?:reported|noted|stated|found)\s+by|[Pp]er)\s+${SOURCE_NAME}`,
+    'gu',
+  ),
+  new RegExp(String.raw`${SOURCE_NAME}\s+(?:says|said|claims|claimed|states|stated)\b`, 'gu'),
+  new RegExp(
+    String.raw`${SOURCE_NAME}\s+(?:reports|reported|notes|noted|finds|found|estimates|estimated)\s+that\b`,
+    'gu',
+  ),
+  new RegExp(String.raw`\b[Ll]aut\s+${SOURCE_NAME}`, 'gu'),
+  new RegExp(String.raw`(?<name>\p{Lu}[\p{L}\p{N}.-]*)['’]\p{L}{1,3}\s+göre\b`, 'gu'),
+];
+
+/**
+ * How many claims a text gives to a source the agent wasn't given: one
+ * named in the page or in what it was given (`known`, knownPeople: an
+ * expert quote from Brief › Your input, a brand the page names) may be.
+ */
+function attributions(text, known) {
+  let count = 0;
+  for (const re of ATTRIBUTIONS) {
+    for (const match of String(text).matchAll(re)) {
+      if (!known || !isKnown(match.groups?.name ?? '', known)) count += 1;
+    }
+  }
+  return count;
+}
+
+/** Whether a replace gives more to a source the agent wasn't given than the passage did. */
+export function addsAttribution(before, words, known = null) {
+  return attributions(words, known) > attributions(before, known);
+}
+
+/**
+ * The names a passage's words hold: words written with a capital past each
+ * sentence's first ("Claude", "LLM", "Pulse"), each once. Not a heading's
+ * (Title Case), nor "I".
+ */
+function namesIn(text) {
+  const names = new Set();
+  for (const sentence of String(text).split(/(?<=[.!?:])\s+/u)) {
+    const words = sentence.split(/[^\p{L}\p{N}&+]+/u).filter(Boolean);
+    for (const word of words.slice(1)) {
+      if (word.length > 1 && /^\p{Lu}/u.test(word)) names.add(word);
+    }
+  }
+  return names;
+}
+
+/**
+ * Whether a replace drops a name the passage has: a product, a brand or a
+ * person left out of a claim changes the claim (editor test 2026-10-25:
+ * Claude dropped from a list of the engines a tool tracks). A change made
+ * to take out a banned word or an AI trace may.
+ */
+export function dropsName(before, words, rules = []) {
+  if (rules.includes('bannedWords') || rules.includes('aiTraces')) return false;
+  const kept = new Set(String(words).split(/[^\p{L}\p{N}&+]+/u));
+  return [...namesIn(before)].some((name) => !kept.has(name));
 }
 
 /**
@@ -443,7 +519,9 @@ export function keepSuggestions(raw, passages, lockedKeys, ruleKeys, links = nul
         changed &&
         (words.length > 2000 ||
           growsPastLimit(passage, before, words) ||
-          asksMoreThanOne(passage, before, words))
+          asksMoreThanOne(passage, before, words) ||
+          addsAttribution(before, words, people) ||
+          (!/^h[1-6]$/.test(passage.tag) && dropsName(before, words, rules)))
       )
         continue;
       changes = [
