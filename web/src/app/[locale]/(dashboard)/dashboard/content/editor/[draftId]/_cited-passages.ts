@@ -247,15 +247,19 @@ export function rewriteFloor(
   return { kept, floor: kept + floor };
 }
 
-/** How many quoted passages a rewrite keeps now: the locked ones the person didn't unlock. */
-export function lockedPassagesLeft(state: EditorState): number {
+/** The quoted passages a rewrite keeps now (locked, not unlocked): how many, and their characters. */
+export function lockedPassagesLeft(state: EditorState): { count: number; chars: number } {
   const locks = citedLocks(state);
   let count = 0;
+  let chars = 0;
   state.doc.descendants((node) => {
-    if (node.isTextblock && isLocked(blockKey(node), locks)) count += 1;
+    if (node.isTextblock && isLocked(blockKey(node), locks)) {
+      count += 1;
+      chars += node.textContent.length;
+    }
     return !node.isTextblock;
   });
-  return count;
+  return { count, chars };
 }
 
 /** How many quoted passages the page has now (the marks the plugin keeps). */

@@ -879,6 +879,17 @@ describe('rewriteAdvice', () => {
     });
     // Never a Length past the page as it is.
     expect(lengthOutOfReach(statuses(4_900, [], '4000'), run)?.suggested).toBe(5_000);
+    // Rewritten with its cited passages too (it kept less): still missing says keeping them misses too…
+    const citedToo = { ...run, last: { chars: 5_200, target: 4_000, kept: 0 } };
+    expect(lengthOutOfReach(page, citedToo)).toMatchObject({ why: 'reached', least: 5_200 });
+    // …but coming within the band doesn't say keeping them does.
+    expect(
+      lengthOutOfReach(page, {
+        ...citedToo,
+        floor: 5_000,
+        last: { ...citedToo.last, chars: 4_500 },
+      }),
+    ).toMatchObject({ why: 'floor', least: 5_000 });
   });
 
   it('names what a rewrite keeps as why it missed only when that alone puts the Length out of reach', () => {

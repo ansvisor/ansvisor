@@ -35,6 +35,7 @@ import {
   RULE_GROUPS,
   notForAgentMessage,
   openRulesForAgent,
+  lengthBand,
   lengthOutOfReach,
   rewriteAdvice,
   splitRules,
@@ -92,8 +93,8 @@ export interface PageRewrite {
   blocked: string | null;
   /** What it keeps, the least it comes to and what the last one came to: a Length under them is out of reach. */
   reach?: RewriteReach;
-  /** The passages AI answers quote that it keeps now (locked, not unlocked). */
-  cited?: number;
+  /** The passages AI answers quote that it keeps now (locked, not unlocked): how many, their characters. */
+  cited?: { count: number; chars: number };
 }
 
 /** Run Agent's two ways: the open rules fixed a few passages at a time, or the whole page. */
@@ -258,6 +259,14 @@ export function RulesTab({
   const outOfReach = pageRewrite
     ? lengthOutOfReach(state.rules, pageRewrite.reach ?? NO_REACH)
     : null;
+  // Rewrite the cited passages too: offered when they are what holds the
+  // Length out of reach, the rest fitting without them.
+  const cited = pageRewrite?.cited;
+  const citedHold =
+    !!outOfReach &&
+    !!cited &&
+    cited.count > 0 &&
+    (pageRewrite?.reach ?? NO_REACH).floor - cited.chars <= lengthBand(outOfReach.target).max;
   // The rules the page doesn't meet now, in the tab's order, and those the agent fixes.
   const open = state.rules.filter(({ rule, status }) => rule.on && status.state === 'bad');
   const { forAgent, notForAgent } = openRulesForAgent(state.rules);
@@ -372,7 +381,7 @@ export function RulesTab({
                     {t('raiseLength', { suggested: outOfReach.suggested })}
                   </Button>
                   {/* The quoted passages kept are what holds it: rewritten too, compared first. */}
-                  {pageRewrite && (pageRewrite.cited ?? 0) > 0 && (
+                  {citedHold && (
                     <Button
                       size="sm"
                       variant="outline"
@@ -384,9 +393,7 @@ export function RulesTab({
                     </Button>
                   )}
                 </div>
-                {pageRewrite && (pageRewrite.cited ?? 0) > 0 && (
-                  <p className="text-muted-foreground">{t('rewriteCitedTooHint')}</p>
-                )}
+                {citedHold && <p className="text-muted-foreground">{t('rewriteCitedTooHint')}</p>}
               </div>
             </div>
           )}

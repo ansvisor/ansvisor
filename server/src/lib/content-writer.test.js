@@ -815,7 +815,11 @@ describe('Rewrite the page to these rules', () => {
   });
 
   describe('a rewrite well past its Length: one more pass cuts it', () => {
-    const cutBudget = { charge: vi.fn(), release: vi.fn(), keep: vi.fn() };
+    const cutBudget = {
+      charge: vi.fn(async () => {}),
+      release: vi.fn(async () => {}),
+      keep: vi.fn(async () => {}),
+    };
     // A Length of 100 (up to 120): a cut pass past 135.
     const toLength = (length = 100) => ({
       rules: [{ key: 'length', name: 'Length', detail: `aim: ${length} characters` }],
@@ -833,8 +837,9 @@ describe('Rewrite the page to these rules', () => {
     };
     const row = () => writes.find((w) => w.table === 'content_draft_suggestions').value;
     beforeEach(() => {
-      cutBudget.charge.mockReset();
-      cutBudget.release.mockReset();
+      cutBudget.charge.mockClear();
+      cutBudget.release.mockClear();
+      cutBudget.keep.mockClear();
       reserveAiBudget.mockReset().mockResolvedValue(cutBudget);
     });
 
@@ -870,15 +875,25 @@ describe('Rewrite the page to these rules', () => {
       await run(toLength());
       expect(row().after_text).toContain('Long words.');
 
+      // Kept lines written into a paragraph: restoreKept couldn't put them back.
+      writes = [];
+      answers(long, '<h1>Pour-over coffee</h1><p>[[KEEP 1]] [[KEEP 2]] Short.</p>');
+      await expect(run(toLength())).resolves.toEqual({ rewritten: true });
+      expect(row().after_text).toContain('Long words.');
+
       writes = [];
       generateObject.mockResolvedValueOnce({
         object: { html: long, reason: 'answered each heading first', sources: [] },
         usage: { inputTokens: 900, outputTokens: 700 },
       });
       generateObject.mockRejectedValueOnce(new Error('provider down'));
+      cutBudget.charge.mockClear();
+      cutBudget.release.mockClear();
       await expect(run(toLength())).resolves.toEqual({ rewritten: true });
       expect(row().after_text).toContain('Long words.');
-      expect(cutBudget.release).toHaveBeenCalledTimes(1);
+      // Nothing billed for a failed call: its hold goes.
+      expect(cutBudget.charge).not.toHaveBeenCalled();
+      expect(cutBudget.release).toHaveBeenCalled();
 
       writes = [];
       generateObject.mockReset();
@@ -889,6 +904,18 @@ describe('Rewrite the page to these rules', () => {
       await run(toLength());
       expect(generateObject).toHaveBeenCalledTimes(1);
       expect(row().after_text).toContain('Long words.');
+    });
+
+    it('keeps the hold of a cut stopped while it runs, and writes nothing', async () => {
+      const { RunStoppedError } = await import('./content-runs.js');
+      answers(long);
+      generateObject.mockRejectedValueOnce(new RunStoppedError());
+      cutBudget.keep.mockClear();
+      await run(toLength());
+      expect(cutBudget.keep).toHaveBeenCalledTimes(1);
+      expect(
+        writes.find((w) => w.table === 'content_draft_suggestions' && w.kind === 'insert'),
+      ).toBeUndefined();
     });
 
     it('cuts nothing within reach of the Length, or with Length off', async () => {

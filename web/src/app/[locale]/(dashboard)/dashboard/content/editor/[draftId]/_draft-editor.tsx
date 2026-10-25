@@ -2690,7 +2690,7 @@ export function DraftEditor({
         run: (options) => void rewritePage(options),
         running: rewriting,
         reach,
-        cited: editor && citedRead ? lockedPassagesLeft(editor.state) : 0,
+        cited: editor && citedRead ? lockedPassagesLeft(editor.state) : undefined,
         blocked:
           aiUsedUp && !rewriting
             ? aiUsedUp

@@ -666,9 +666,12 @@ async function cutToLength({ answer, page, length, brand, draft, model, run }) {
     const cut = isPageHtml(object.html)
       ? ownText({ ...page, html: object.html }) + page.keptChars
       : Infinity;
-    const keepsAll = [...page.kept.keys()].every((n) =>
-      object.html.includes(`[[${page.word} ${n}]]`),
-    );
+    // Each kept line on its own, as restoreKept puts them back: one written
+    // into a paragraph would fail the whole run.
+    const keepsAll =
+      cut < Infinity &&
+      restoreKept(object.html, page.kept, { word: page.word, h1Token: page.h1Token }).missing
+        .length === 0;
     if (cut >= total || !keepsAll) {
       logger.info(
         { draftId: draft.id, total, cut },
@@ -676,9 +679,8 @@ async function cutToLength({ answer, page, length, brand, draft, model, run }) {
       );
       return answer;
     }
-    // The data both passes say they wrote from; the first's reason says what changed.
-    const sources = [...new Set([...(answer.sources ?? []), ...(object.sources ?? [])])];
-    return { ...answer, html: object.html, sources };
+    // The first pass's data and reason: the cut had no data to name, only the page.
+    return { ...answer, html: object.html };
   } catch (err) {
     if (isStop(err, run)) throw err;
     if (NoObjectGeneratedError.isInstance(err) && err.usage) await budget.charge(err.usage);
@@ -688,6 +690,9 @@ async function cutToLength({ answer, page, length, brand, draft, model, run }) {
       '[content-writer] the cut pass failed; the first rewrite stands',
     );
     return answer;
+  } finally {
+    // A stop before the call went out leaves the hold unused: it goes (a no-op once charged or kept).
+    await budget.release();
   }
 }
 
