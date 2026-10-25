@@ -8,7 +8,14 @@ vi.mock('@/lib/supabase/client', () => ({
   }),
 }));
 
-const { syncCatalogSource, uploadCatalogFile } = await import('./catalog-client');
+const {
+  connectStore,
+  listStoreConnectors,
+  removeStore,
+  syncCatalogSource,
+  updateStoreSignIn,
+  uploadCatalogFile,
+} = await import('./catalog-client');
 
 const fetchMock = vi.fn();
 beforeEach(() => {
@@ -60,5 +67,62 @@ describe('uploadCatalogFile', () => {
     const file = new File(['x'.repeat(4 * 1024 * 1024 + 1)], 'big.csv');
     expect(await uploadCatalogFile('b1', file)).toEqual({ ok: false, code: 'too_large' });
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('stores (00282)', () => {
+  it("lists the connectors, or nothing when the API can't be read", async () => {
+    answer(200, {
+      connectors: [{ kind: 'acme_store', label: 'Acme Store', fields: [] }],
+      ready: true,
+    });
+    expect(await listStoreConnectors()).toEqual({
+      connectors: [{ kind: 'acme_store', label: 'Acme Store', fields: [] }],
+      ready: true,
+    });
+    expect(fetchMock.mock.calls[0][0]).toBe('/api/aeo/api/catalog/connectors');
+    answer(500, {});
+    expect(await listStoreConnectors()).toBeNull();
+  });
+
+  it('sends what the person typed to the API only, as JSON with the session', async () => {
+    answer(201, { id: 'st1', account: 'shop.example' });
+    expect(await connectStore('b1', 'acme_store', { apiKey: 'ak_secret' })).toEqual({ ok: true });
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe('/api/aeo/api/catalog/sources');
+    expect(init).toMatchObject({
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer tok' },
+    });
+    expect(JSON.parse(init.body)).toEqual({
+      brandId: 'b1',
+      kind: 'acme_store',
+      input: { apiKey: 'ak_secret' },
+    });
+
+    answer(200, { ok: true });
+    await updateStoreSignIn('st1', { apiKey: 'ak_new' });
+    expect(fetchMock.mock.calls[1][0]).toBe('/api/aeo/api/catalog/sources/st1/credentials');
+    expect(fetchMock.mock.calls[1][1].method).toBe('PUT');
+    await removeStore('st1');
+    expect(fetchMock.mock.calls[2][0]).toBe('/api/aeo/api/catalog/sources/st1');
+    expect(fetchMock.mock.calls[2][1].method).toBe('DELETE');
+  });
+
+  it("keeps the store's own words only for what to fix", async () => {
+    answer(400, { code: 'connect_failed', error: "That isn't a web address." });
+    expect(await connectStore('b1', 'acme_store', {})).toEqual({
+      ok: false,
+      code: 'connect_failed',
+      message: "That isn't a web address.",
+    });
+    answer(400, { code: 'auth_failed', error: 'The store refused this sign-in.' });
+    expect(await connectStore('b1', 'acme_store', {})).toEqual({
+      ok: false,
+      code: 'auth_failed',
+      message: null,
+    });
+    answer(429, { message: 'Too many requests' });
+    expect(await updateStoreSignIn('st1', {})).toEqual({ ok: false, code: 'busy', message: null });
   });
 });

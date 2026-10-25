@@ -1,16 +1,33 @@
 import express, { Router } from 'express';
 import { z } from 'zod';
 import supabaseAdmin from '../config/supabase.js';
+import { storeConnectors } from '../connectors/index.js';
 import { assertBrandAccess } from '../lib/access.js';
+import { credentialsConfigured } from '../lib/catalog/credentials.js';
 import { syncSource } from '../lib/catalog/sources.js';
+import {
+  StoreError,
+  connectStore,
+  disconnectStore,
+  reconnectStore,
+} from '../lib/catalog/stores.js';
 import { catalogLimiter } from '../middleware/rate-limiter.js';
 
 /**
- * A brand's catalog sources (#1263, 00279). Members see them through RLS;
- * admins and managers add and remove feed URLs there too. The server syncs:
- *   - POST /api/catalog/sources/:id/sync: a feed read now;
+ * A brand's catalog sources (#1263, 00279, 00282). Members see them through
+ * RLS; admins and managers add and remove feed URLs there too. The server
+ * syncs, and holds the stores' sign-ins:
+ *   - POST /api/catalog/sources/:id/sync: a feed or a store read now;
  *   - POST /api/catalog/upload?brandId=…&format=…: a CSV (or XML) file as
- *     the request's body, kept as the brand's upload source.
+ *     the request's body, kept as the brand's upload source;
+ *   - GET /api/catalog/connectors: the stores a person can connect, and
+ *     their fields;
+ *   - POST /api/catalog/sources { brandId, kind, input }: a store connected,
+ *     its sign-in checked with it and kept encrypted, then read;
+ *   - PUT /api/catalog/sources/:id/credentials { input }: its sign-in
+ *     replaced;
+ *   - DELETE /api/catalog/sources/:id: a store removed, with its sign-in and
+ *     its products.
  */
 
 const router = Router();
@@ -37,6 +54,9 @@ async function assertWriter(brandId, userId) {
 }
 
 function fail(req, res, err, what) {
+  if (err instanceof StoreError) {
+    return res.status(err.status).json({ error: err.message, code: err.code });
+  }
   if (err?.status === 403 || err?.status === 404) {
     return res.status(err.status).json({
       error: err.message,
@@ -58,17 +78,94 @@ const outcomeBody = (outcome) => ({
   counts: outcome.counts ?? null,
 });
 
-// POST /api/catalog/sources/:id/sync — read a feed now.
+const SOURCE_COLUMNS = 'id, brand_id, kind, format, url, account, label, last_synced_at';
+/** The kinds members add themselves; every other kind is a store's. */
+const OWN_KINDS = ['feed_url', 'upload'];
+
+async function sourceById(id) {
+  const parsed = z.guid().safeParse(id);
+  if (!parsed.success) return null;
+  const { data } = await supabaseAdmin
+    .from('catalog_sources')
+    .select(SOURCE_COLUMNS)
+    .eq('id', parsed.data)
+    .maybeSingle();
+  return data ?? null;
+}
+
+/** A store's first read, or its read after a new sign-in: not waited on, recorded on its row. */
+function syncLater(req, source) {
+  syncSource(source).catch((err) =>
+    req.log.error({ err: { name: err?.name }, sourceId: source.id }, 'catalog store sync error'),
+  );
+}
+
+// GET /api/catalog/connectors — the stores a person can connect.
+router.get('/connectors', (req, res) => {
+  res.json({ connectors: storeConnectors(), ready: credentialsConfigured() });
+});
+
+const connectBody = z.object({
+  brandId: z.guid(),
+  kind: z.string().regex(/^[a-z][a-z0-9_]{1,39}$/),
+  input: z.record(z.string(), z.string()),
+});
+
+// POST /api/catalog/sources — connect a store.
+router.post('/sources', catalogLimiter, async (req, res) => {
+  const parsed = connectBody.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: 'invalid', code: 'invalid' });
+  const { brandId, kind, input } = parsed.data;
+  try {
+    await assertWriter(brandId, req.user.id);
+    const source = await connectStore({ brandId, kind, input, userId: req.user.id });
+    syncLater(req, source);
+    return res.status(201).json({ id: source.id, account: source.account });
+  } catch (err) {
+    return fail(req, res, err, 'catalog store connect error');
+  }
+});
+
+// PUT /api/catalog/sources/:id/credentials — replace a store's sign-in.
+router.put('/sources/:id/credentials', catalogLimiter, async (req, res) => {
+  const parsed = z.object({ input: z.record(z.string(), z.string()) }).safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: 'invalid', code: 'invalid' });
+  try {
+    const source = await sourceById(req.params.id);
+    if (!source || OWN_KINDS.includes(source.kind)) {
+      return res.status(404).json({ error: 'Not found', code: 'not_found' });
+    }
+    await assertWriter(source.brand_id, req.user.id);
+    await reconnectStore({ source, input: parsed.data.input, userId: req.user.id });
+    syncLater(req, source);
+    return res.json({ ok: true });
+  } catch (err) {
+    return fail(req, res, err, 'catalog store reconnect error');
+  }
+});
+
+// DELETE /api/catalog/sources/:id — remove a store (feeds and uploads are removed through RLS).
+router.delete('/sources/:id', catalogLimiter, async (req, res) => {
+  try {
+    const source = await sourceById(req.params.id);
+    if (!source || OWN_KINDS.includes(source.kind)) {
+      return res.status(404).json({ error: 'Not found', code: 'not_found' });
+    }
+    await assertWriter(source.brand_id, req.user.id);
+    await disconnectStore(source);
+    return res.json({ ok: true });
+  } catch (err) {
+    return fail(req, res, err, 'catalog store disconnect error');
+  }
+});
+
+// POST /api/catalog/sources/:id/sync — read a feed or a store now.
 router.post('/sources/:id/sync', catalogLimiter, async (req, res) => {
   const parsed = z.guid().safeParse(req.params.id);
   if (!parsed.success) return res.status(400).json({ error: 'invalid', code: 'invalid' });
   try {
-    const { data: source } = await supabaseAdmin
-      .from('catalog_sources')
-      .select('id, brand_id, kind, format, url, last_synced_at')
-      .eq('id', parsed.data)
-      .maybeSingle();
-    if (!source || source.kind !== 'feed_url') {
+    const source = await sourceById(parsed.data);
+    if (!source || source.kind === 'upload') {
       return res.status(404).json({ error: 'Not found', code: 'not_found' });
     }
     await assertWriter(source.brand_id, req.user.id);

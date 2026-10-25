@@ -1,7 +1,9 @@
+import { classifyDomain, normalizeDomain } from '@/lib/citations/classify';
 import type { ContentAuthor } from './authors';
 import { factValueText, pagePrices, priceRanges } from './brand-facts';
 import type { PageType } from './drafts';
 import { PLACEHOLDER } from './placeholders';
+import { cleanHref, decodeHtmlBlock } from './html-allowlist';
 import { isByline, sentencesOf } from './readability';
 
 /**
@@ -360,6 +362,147 @@ export function productJsonLd({
             highPrice: offer.high.toFixed(2),
             priceCurrency: offer.currency,
           },
+  };
+}
+
+/**
+ * A path that is a product's page: the segment shops put before it, then
+ * the product's own one, last ("/products/ridge-28", "/product/…",
+ * "/product-page/…", "/urun/…", "/produkt/…", "/produit/…", "/producto/…",
+ * "/prodotto/…"). Not a page under it ("/products/ridge-28/reviews").
+ */
+const PRODUCT_PATH =
+  /\/(?:products?|product-page|urun|produkte?|produits?|productos?|prodott[oi])\/[^/?#]+\/?$/iu;
+/** A file, not a page ("/cdn/shop/products/ridge.jpg"): only an .html page is one. */
+const FILE_PATH = /\.(?!html?$)[a-z0-9]{2,5}$/iu;
+/** A card's button, not a product's name ("Shop now", "Add to cart", "Sepete ekle"). */
+const BUTTON_WORDS =
+  /^(?:shop(?:\s+now)?|buy(?:\s+now)?|view(?:\s+(?:product|details))?|see\s+(?:details|more|product)|learn\s+more|details|more|add\s+to\s+(?:cart|bag|basket)|sepete\s+ekle|incele|satın\s+al|jetzt\s+kaufen|in\s+den\s+warenkorb|acheter|ajouter\s+au\s+panier|comprar|ver\s+más|añadir\s+al\s+carrito)$/iu;
+
+/** A product a category page lists: its page and its name as the link gives it. */
+export interface ListedProduct {
+  url: string;
+  name: string | null;
+}
+
+/** The fewest products an ItemList lists (CE-054): one isn't a list. */
+export const MIN_LISTED = 2;
+/** The most it lists: a category's first page of products. */
+export const MAX_LISTED = 100;
+
+/**
+ * A link's name: its words, apart where its markup is ("Ridge 28" and
+ * "$129.00" in a card), its prices out; else its image's alt text. Not a
+ * button's word ("Shop now").
+ */
+function linkName(a: Element): string | null {
+  const words: string[] = [];
+  const walk = (node: Node) => {
+    if (node.nodeType === Node.TEXT_NODE) words.push(node.textContent ?? '');
+    else node.childNodes.forEach(walk);
+  };
+  walk(a);
+  let text = words.join(' ').replace(/\s+/g, ' ').trim();
+  for (const price of pagePrices(text, { rangeEnds: true }).reverse()) {
+    text = `${text.slice(0, price.at)} ${text.slice(price.at + price.text.length)}`;
+  }
+  text = text
+    .replace(/\s+/g, ' ')
+    .replace(/^[\s·|,–—-]+|[\s·|,–—-]+$/gu, '')
+    .trim();
+  if (!text || BUTTON_WORDS.test(text))
+    text = a.querySelector('img[alt]')?.getAttribute('alt')?.trim() ?? '';
+  return text ? text.slice(0, 150) : null;
+}
+
+/**
+ * The products a category page lists (Quality spec §11, CE-054): its links
+ * to the brand's own product pages, an HTML block's too, in the page's
+ * order, each once ("www.", a trailing slash, a query, a hash, and a
+ * Shopify collection's path before "/products/" alike), MAX_LISTED at
+ * most. A relative link is read against the brand's site, else its first
+ * domain. A name a later link gives fills one the first didn't.
+ */
+export function listedProducts(
+  html: string,
+  brandDomains: readonly string[],
+  base: string | null,
+): ListedProduct[] {
+  const own = brandDomains.map(normalizeDomain).filter(Boolean);
+  const root = base ?? (own[0] ? `https://${own[0]}` : null);
+  const doc = new DOMParser().parseFromString(html, 'text/html');
+  const links: Element[] = [];
+  for (const el of doc.body.querySelectorAll('a[href], [data-html-block]')) {
+    if (el.tagName === 'A') {
+      links.push(el);
+      continue;
+    }
+    const inner = decodeHtmlBlock(el.getAttribute('data-html-block') ?? '');
+    if (inner) {
+      links.push(
+        ...new DOMParser().parseFromString(inner, 'text/html').body.querySelectorAll('a[href]'),
+      );
+    }
+  }
+  const byKey = new Map<string, ListedProduct>();
+  for (const a of links) {
+    const href = cleanHref(a.getAttribute('href') ?? '');
+    if (!href) continue;
+    let url: URL;
+    try {
+      url = root ? new URL(href, root) : new URL(href);
+    } catch {
+      continue;
+    }
+    if (url.protocol !== 'https:' && url.protocol !== 'http:') continue;
+    const host = normalizeDomain(url.href);
+    if (!host || classifyDomain(host, { brandDomains: own, competitorDomains: [] }) !== 'you') {
+      continue;
+    }
+    if (!PRODUCT_PATH.test(url.pathname) || FILE_PATH.test(url.pathname)) continue;
+    url.search = '';
+    url.hash = '';
+    // One product however its address is written.
+    const path = url.pathname
+      .replace(/\/collections\/[^/]+(?=\/products\/)/iu, '')
+      .replace(/\/+$/, '');
+    const key = `${host}${path}`.toLowerCase();
+    const name = linkName(a);
+    const had = byKey.get(key);
+    if (had) {
+      if (!had.name && name) had.name = name;
+      continue;
+    }
+    if (byKey.size >= MAX_LISTED) continue;
+    byKey.set(key, { url: url.href, name });
+  }
+  return [...byKey.values()];
+}
+
+/**
+ * A category page's ItemList (CE-054): the products it lists, in its order,
+ * each its page and name, under the page's name. Only what the page links:
+ * prices and stock are each product's own page's Product.
+ */
+export function itemListJsonLd({
+  name,
+  items,
+}: {
+  /** The page's title as pageName gives it; left out without one. */
+  name: string | null;
+  items: readonly ListedProduct[];
+}): Record<string, unknown> {
+  return {
+    '@context': 'https://schema.org',
+    '@type': 'ItemList',
+    ...(name ? { name } : {}),
+    numberOfItems: items.length,
+    itemListElement: items.map((item, i) => ({
+      '@type': 'ListItem',
+      position: i + 1,
+      url: item.url,
+      ...(item.name && !ONE_PLACEHOLDER.test(item.name) ? { name: item.name } : {}),
+    })),
   };
 }
 
