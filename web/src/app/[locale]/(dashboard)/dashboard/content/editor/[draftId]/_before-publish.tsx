@@ -201,7 +201,7 @@ export function BeforePublish({
     // Phase 2 (CE-050): where the page puts the brand forward.
     ...(disclosure
       ? [
-          disclosure.found
+          disclosure.found && !disclosure.added
             ? {
                 state: 'ok' as const,
                 title: t('disclosure.ok'),

@@ -96,6 +96,8 @@ export const WEIGHING_TYPES: ReadonlySet<string> = new Set([
 export interface AiCheck {
   found: boolean;
   show: string | null;
+  /** The disclosure line Add line put in (CE-050): counted before the page is read again. */
+  added?: boolean;
 }
 
 /**

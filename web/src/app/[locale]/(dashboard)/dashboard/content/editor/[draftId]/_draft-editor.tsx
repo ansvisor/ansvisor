@@ -710,25 +710,32 @@ export function DraftEditor({
   // An edit holds what was found until the page as it is is read: while it
   // waits for its save too, not only once the ask is out.
   const pageChanging = pageRead.reading || saving;
-  const aiChecks = useMemo(
-    () =>
+  // The disclosure line Add line puts in (CE-050) is the disclosure while
+  // the page has it: Trust, Quality and Export count it before it is read.
+  const aiChecks = useMemo(() => {
+    const checks =
       sourcesOn &&
       pageRead.read?.checks &&
       pageRead.read.checks.pageType === (pageType ?? null) &&
       !pageRead.paused &&
       !pageRead.limited
         ? aiChecksOnPage(pageBlocks, pageRead.read.checks, pageType, pageChanging)
-        : null,
-    [
-      sourcesOn,
-      pageRead.read,
-      pageChanging,
-      pageRead.paused,
-      pageRead.limited,
-      pageBlocks,
-      pageType,
-    ],
-  );
+        : null;
+    const line = checks?.disclosure?.found === false ? disclosureText(language, brandName) : null;
+    return line && squeeze(pageBlocks.map((b) => b.text).join('')).includes(squeeze(line))
+      ? { ...checks!, disclosure: { found: true, show: line, added: true } }
+      : checks;
+  }, [
+    sourcesOn,
+    pageRead.read,
+    pageChanging,
+    pageRead.paused,
+    pageRead.limited,
+    pageBlocks,
+    pageType,
+    language,
+    brandName,
+  ]);
   const readable = useMemo(
     () => (qualityOn ? readability(pageHtml, language, aiChecks?.answerFirst ?? null) : null),
     [qualityOn, pageHtml, language, aiChecks],
@@ -1550,8 +1557,8 @@ export function DraftEditor({
     !!disclosureLine &&
     squeeze(pageBlocks.map((b) => b.text).join('')).includes(squeeze(disclosureLine));
   // The disclosure line (CE-050) under the page's opening paragraph (the
-  // answer Answer first reads, past a byline or a date), else under the
-  // page's H1, else at the top; never twice. One undo takes it out.
+  // answer Answer first reads, past an image, a byline or a date), else
+  // under the page's H1, else at the top; never twice. One undo takes it out.
   const addDisclosure = (line: string) => {
     if (!editor || editor.isDestroyed) return;
     const { doc } = editor.state;
@@ -1568,8 +1575,13 @@ export function DraftEditor({
     if (index !== -1) {
       const para = (i: number) =>
         i < doc.childCount && doc.child(i).type.name === 'paragraph' ? doc.child(i) : null;
+      // Past what has no words (a hero image, an empty paragraph), as
+      // Readability and the page read do, and a byline or a date.
+      const skipped = (i: number) =>
+        i < doc.childCount &&
+        (!doc.child(i).textContent.trim() || (!!para(i) && isByline(doc.child(i).textContent)));
       let next = index;
-      while (para(next) && isByline(para(next)!.textContent)) next += 1;
+      while (skipped(next)) next += 1;
       if (para(next)?.textContent.trim()) {
         for (let i = index; i <= next; i++) at += doc.child(i).nodeSize;
       }

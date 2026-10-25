@@ -3145,6 +3145,66 @@ describe('the side panel', () => {
       );
     });
 
+    it('puts the disclosure line under the answer past a hero image, and counts it before the next read (review, #1480)', async () => {
+      process.env.NEXT_PUBLIC_CONTENT_QUALITY_PHASE = '2';
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+      const block = `${said} It is easy to set up for any team.`;
+      getContentAuthors.mockResolvedValue({
+        authors: [],
+        brands: [{ id: 'b1', name: 'Ledgerly' }],
+        me: { id: 'u1', role: 'admin' },
+      });
+      readDraftPage.mockResolvedValue({
+        spots: [],
+        proofs: [],
+        regulated: null,
+        checks: {
+          answerFirst: null,
+          recommends: { quote: 'Ledgerly is the fastest forecasting app', block },
+          disclosure: null,
+          balance: null,
+          how: null,
+          cut: false,
+          pageType: 'best_of',
+        },
+        pending: false,
+        limited: false,
+        paused: false,
+      });
+      getContentDraft.mockResolvedValue({
+        ...claimed,
+        pageType: 'best_of',
+        pageTypeSource: 'user',
+        bodyHtml: `<h1>Pipeline forecasting</h1><img src="https://cdn.ledgerly.example/hero.png" alt="A forecast"><p></p><p>${block}</p>`,
+      });
+      window.innerWidth = 1440;
+      await renderPage();
+      await act(async () => void (await vi.advanceTimersByTimeAsync(3_000)));
+      await act(async () => button('Mark ready')!.click());
+      const dialog = document.querySelector('[role="dialog"]')!;
+      await act(async () =>
+        [...dialog.querySelectorAll('button')].find((b) => b.textContent === 'Add line')!.click(),
+      );
+      const { state } = (
+        container.querySelector('.ProseMirror') as HTMLElement & { editor: Editor }
+      ).editor;
+      const texts: string[] = [];
+      state.doc.forEach((node) => texts.push(node.textContent));
+      // Past the image and the empty paragraph: under the answer, which stays first.
+      const line = 'Disclosure: the product this page recommends is offered by Ledgerly.';
+      expect(texts.indexOf(line)).toBe(texts.indexOf(block) + 1);
+      // Counted before the page is read again: Quality's suggestion goes.
+      await act(async () => void (await vi.advanceTimersByTimeAsync(500)));
+      await act(async () =>
+        [...dialog.querySelectorAll('button')].find((b) => b.textContent === 'Close')?.click(),
+      );
+      const chip = [...container.querySelectorAll<HTMLButtonElement>('header button')].find((b) =>
+        b.textContent?.startsWith('Quality'),
+      )!;
+      await act(async () => chip.click());
+      expect(panel()!.textContent).not.toContain('without a disclosure');
+    });
+
     it('shows a visual proof spot beside its passage, and Add image puts the image after it (CE-049)', async () => {
       process.env.NEXT_PUBLIC_CONTENT_QUALITY_PHASE = '2';
       vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
