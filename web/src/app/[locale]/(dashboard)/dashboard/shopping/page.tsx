@@ -94,6 +94,7 @@ import type { AmazonShareDropAlert } from '@/lib/shopping-amazon-share-alert';
 import { HeaderWithAiUsage } from '@/components/ai-usage/ai-usage-meter';
 import { ShoppingMarketSwitch, useShoppingMarket } from './_market-switch';
 import { MerchantSplitCard } from './merchant_split_card';
+import { ProductMatchScores } from './product_match_scores';
 import { ResellerPriceAlerts } from './reseller_price_alerts';
 import { useMerchantDestinations } from './use_merchant_destinations';
 
@@ -498,6 +499,8 @@ export default function ShoppingPage() {
           {hasFullAccess && (
             <ProductAppearancesDrawer
               t={t}
+              brandId={activeBrandId}
+              filters={filters}
               product={selectedProduct}
               onOpenChange={(open) => {
                 if (!open) setSelectedProduct(null);
@@ -1400,9 +1403,17 @@ interface ProductAppearancesDrawerProps {
   t: ReturnType<typeof useTranslations<'shopping'>>;
   product: ShoppingProduct | null;
   onOpenChange: (open: boolean) => void;
+  brandId: string;
+  filters: ShoppingFilters;
 }
 
-function ProductAppearancesDrawer({ t, product, onOpenChange }: ProductAppearancesDrawerProps) {
+function ProductAppearancesDrawer({
+  t,
+  product,
+  onOpenChange,
+  brandId,
+  filters,
+}: ProductAppearancesDrawerProps) {
   const isOpen = product !== null;
 
   return (
@@ -1420,6 +1431,10 @@ function ProductAppearancesDrawer({ t, product, onOpenChange }: ProductAppearanc
         </SheetHeader>
 
         <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
+          {/* The brand's own products only: a competitor's text isn't the brand's to change. */}
+          {product && !product.competitor_name && (
+            <ProductMatchScores brandId={brandId} filters={filters} product={product} />
+          )}
           {product?.appearances.map((app) => {
             const dateStr = new Date(app.created_at).toLocaleDateString(undefined, {
               month: 'short',

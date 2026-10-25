@@ -6790,6 +6790,17 @@
     "drawerPlatform": "Platform",
     "drawerRegion": "Region",
     "drawerCardsTitle": "Cards returned",
+    "matchScore": {
+      "title": "Match with each prompt",
+      "estimate": "Ansvisor estimate",
+      "description": "How well this product's title matches each prompt it was shown for, with the searches AI ran for it: a keyword match from 0 to 100. It's our estimate, not ChatGPT's own score.",
+      "yours": "This product",
+      "shownFirst": "Shown first",
+      "shownFirstThis": "Shown first in the latest answer",
+      "missing": "Missing:",
+      "empty": "No prompt to compare with in this window.",
+      "unavailable": "Couldn't read the match right now."
+    },
     "merchantSplit": {
       "title": "Where AI sends shoppers",
       "description": "Where the cards for your products link, in the selected window.",
