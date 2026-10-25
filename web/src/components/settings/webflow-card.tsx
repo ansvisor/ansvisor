@@ -45,6 +45,21 @@ import {
 } from '@/lib/webflow-client';
 import { useBrandStore } from '@/stores/use-brand-store';
 
+/** The parts of a map whose field is still one of that part's choices, each field once. */
+function fitting(map: WebflowFieldMap, fields: WebflowField[]): WebflowFieldMap {
+  const kept: WebflowFieldMap = {};
+  const used = new Set<string>();
+  for (const part of WEBFLOW_PARTS) {
+    const slug = map[part];
+    const field = fields.find((f) => f.slug === slug);
+    if (!slug || !field || field.type !== WEBFLOW_PART_TYPES[part]) continue;
+    if (slug === 'name' || slug === 'slug' || used.has(slug)) continue;
+    kept[part] = slug;
+    used.add(slug);
+  }
+  return kept;
+}
+
 /** A part the map leaves out. */
 const NOT_SENT = '__none__';
 /** Answers that mean the connection changed: it's read again. */
@@ -202,9 +217,11 @@ export function WebflowCard() {
         <p className="text-sm text-muted-foreground">
           {!connection
             ? t('notConnectedMember')
-            : connection.collectionName
-              ? t('pagesGoTo', { collection: connection.collectionName })
-              : t('noCollection')}
+            : connection.status === 'auth_failed'
+              ? t('refusedMember')
+              : connection.collectionName
+                ? t('pagesGoTo', { collection: connection.collectionName })
+                : t('noCollection')}
         </p>
       ) : !connection || connection.status === 'auth_failed' || replacing ? (
         <div className="space-y-3">
@@ -275,6 +292,7 @@ function TokenForm({
       <div className="flex flex-wrap gap-2">
         <Input
           id={`webflow-token-${brandId}`}
+          aria-describedby={`webflow-token-hint-${brandId}`}
           type="password"
           autoComplete="off"
           spellCheck={false}
@@ -298,7 +316,9 @@ function TokenForm({
           </Button>
         )}
       </div>
-      <p className="text-xs text-muted-foreground">{t('tokenHint')}</p>
+      <p id={`webflow-token-hint-${brandId}`} className="text-xs text-muted-foreground">
+        {t('tokenHint')}
+      </p>
     </form>
   );
 }
@@ -403,8 +423,13 @@ function WebflowMapping({
         return;
       }
       setFieldsRead({ key, fields: result.fields, failed: false });
+      // Only what the pickers can show: a saved part whose field was deleted
+      // or changed type in Webflow since is left out, so what's saved is what's shown.
       setMap(
-        collectionId === saved.current.collectionId ? saved.current.fieldMap : result.suggested,
+        fitting(
+          collectionId === saved.current.collectionId ? saved.current.fieldMap : result.suggested,
+          result.fields,
+        ),
       );
     });
     return () => {
@@ -429,6 +454,11 @@ function WebflowMapping({
     onSaved(result.connection);
   };
 
+  /** The API names a part by its key ("metaTitle: …"): the person reads its label. */
+  const problemText = (problem: string) => {
+    const part = WEBFLOW_PARTS.find((p) => problem.startsWith(`${p}: `));
+    return part ? `${t(`parts.${part}`)}: ${problem.slice(part.length + 2)}` : problem;
+  };
   const siteItems = sites.map((s) => ({ value: s.id, label: s.name }));
   const collectionItems = (collections ?? []).map((c) => ({ value: c.id, label: c.name }));
   const required = new Set((fields ?? []).filter((f) => f.required).map((f) => f.slug));
@@ -531,9 +561,9 @@ function WebflowMapping({
           )}
           {map.jsonLd && <p className="text-xs text-muted-foreground">{t('jsonLdHint')}</p>}
           {problems.length > 0 && (
-            <ul className="list-disc space-y-1 pl-5 text-xs text-destructive">
+            <ul role="alert" className="list-disc space-y-1 pl-5 text-xs text-destructive">
               {problems.map((p) => (
-                <li key={p}>{p}</li>
+                <li key={p}>{problemText(p)}</li>
               ))}
             </ul>
           )}

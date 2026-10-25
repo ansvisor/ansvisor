@@ -2,7 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import express from 'express';
 
 /**
- * A brand's catalog sources (#1263): a feed synced now, a file uploaded;
+ * A brand's catalog sources (#1263): a feed or a store synced now, a file
+ * uploaded, a store connected, its sign-in replaced, a store removed;
  * admins and managers only, a brand of their own workspace only.
  */
 
@@ -13,6 +14,10 @@ let sources;
 let inserted;
 const assertBrandAccess = vi.fn();
 const syncSource = vi.fn();
+const connectStore = vi.fn();
+const reconnectStore = vi.fn();
+const disconnectStore = vi.fn();
+let configured;
 
 vi.mock('../config/supabase.js', () => ({
   default: {
@@ -56,8 +61,38 @@ vi.mock('../lib/access.js', () => ({
 vi.mock('../lib/catalog/sources.js', () => ({
   syncSource: (...args) => syncSource(...args),
 }));
+// The limiter's 20 a quarter-hour would end this file's run part way.
+vi.mock('../middleware/rate-limiter.js', () => ({ catalogLimiter: (_req, _res, next) => next() }));
+vi.mock('../lib/catalog/credentials.js', () => ({
+  credentialsConfigured: () => configured,
+}));
+vi.mock('../lib/catalog/stores.js', async () => {
+  class StoreError extends Error {
+    constructor(status, code, message) {
+      super(message);
+      this.status = status;
+      this.code = code;
+    }
+  }
+  return {
+    StoreError,
+    connectStore: (...args) => connectStore(...args),
+    reconnectStore: (...args) => reconnectStore(...args),
+    disconnectStore: (...args) => disconnectStore(...args),
+  };
+});
+vi.mock('../connectors/index.js', () => ({
+  storeConnectors: () => [
+    {
+      kind: 'acme_store',
+      label: 'Acme Store',
+      fields: [{ name: 'apiKey', label: 'API key', secret: true }],
+    },
+  ],
+}));
 
 const { default: router } = await import('./catalog.js');
+const { StoreError } = await import('../lib/catalog/stores.js');
 
 let server;
 let base;
@@ -76,6 +111,15 @@ beforeEach(async () => {
   ];
   assertBrandAccess.mockReset().mockResolvedValue({ orgId: 'org-1' });
   syncSource.mockReset().mockResolvedValue({ status: 'ok', counts: { items: 4 } });
+  connectStore.mockReset().mockResolvedValue({
+    id: 'store-1',
+    brand_id: BRAND,
+    kind: 'acme_store',
+    account: 'shop.example',
+  });
+  reconnectStore.mockReset().mockResolvedValue(undefined);
+  disconnectStore.mockReset().mockResolvedValue(undefined);
+  configured = true;
   const app = express();
   app.use(express.json());
   app.use((req, _res, next) => {
@@ -92,6 +136,23 @@ beforeEach(async () => {
 afterEach(() => new Promise((resolve) => server.close(resolve)));
 
 const sync = (id = SOURCE) => fetch(`${base}/sources/${id}/sync`, { method: 'POST' });
+const send = (method, path, body) =>
+  fetch(`${base}${path}`, {
+    method,
+    headers: { 'content-type': 'application/json' },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+const STORE = '5c8d6a1e-2a3c-4d5e-8f90-123456789abc';
+const addStore = () =>
+  sources.push({
+    id: STORE,
+    brand_id: BRAND,
+    kind: 'acme_store',
+    format: 'auto',
+    url: null,
+    account: 'shop.example',
+    last_synced_at: null,
+  });
 const upload = (body, query = `brandId=${BRAND}`) =>
   fetch(`${base}/upload?${query}`, {
     method: 'POST',
@@ -106,6 +167,14 @@ describe('POST /api/catalog/sources/:id/sync', () => {
     expect(await res.json()).toEqual({ status: 'ok', error: null, counts: { items: 4 } });
     expect(assertBrandAccess).toHaveBeenCalledWith(BRAND, 'user-1');
     expect(syncSource).toHaveBeenCalledWith(expect.objectContaining({ id: SOURCE }));
+  });
+
+  it('syncs a store too', async () => {
+    addStore();
+    expect((await sync(STORE)).status).toBe(200);
+    expect(syncSource).toHaveBeenCalledWith(
+      expect.objectContaining({ id: STORE, kind: 'acme_store' }),
+    );
   });
 
   it('refuses an analyst, another workspace, an upload source and a bad id', async () => {
@@ -173,5 +242,98 @@ describe('POST /api/catalog/upload', () => {
     expect(big.status).toBe(413);
     expect((await big.json()).code).toBe('too_large');
     expect(syncSource).not.toHaveBeenCalled();
+  });
+});
+
+describe('GET /api/catalog/connectors', () => {
+  it('lists the stores a person can connect, and whether the server can keep a sign-in', async () => {
+    configured = false;
+    const res = await fetch(`${base}/connectors`);
+    expect(await res.json()).toEqual({
+      connectors: [
+        {
+          kind: 'acme_store',
+          label: 'Acme Store',
+          fields: [{ name: 'apiKey', label: 'API key', secret: true }],
+        },
+      ],
+      ready: false,
+    });
+  });
+});
+
+describe('POST /api/catalog/sources', () => {
+  const body = { brandId: BRAND, kind: 'acme_store', input: { apiKey: 'sk_secret' } };
+
+  it('connects a store for an admin or a manager, then reads it without waiting', async () => {
+    role = 'manager';
+    const res = await send('POST', '/sources', body);
+    expect(res.status).toBe(201);
+    expect(await res.json()).toEqual({ id: 'store-1', account: 'shop.example' });
+    expect(assertBrandAccess).toHaveBeenCalledWith(BRAND, 'user-1');
+    expect(connectStore).toHaveBeenCalledWith({
+      brandId: BRAND,
+      kind: 'acme_store',
+      input: { apiKey: 'sk_secret' },
+      userId: 'user-1',
+    });
+    expect(syncSource).toHaveBeenCalledWith(expect.objectContaining({ id: 'store-1' }));
+  });
+
+  it("answers the store's refusal in the person's words, and connects nothing for an analyst", async () => {
+    connectStore.mockRejectedValueOnce(
+      new StoreError(400, 'auth_failed', 'The store refused this sign-in. Check it and try again.'),
+    );
+    const refused = await send('POST', '/sources', body);
+    expect(refused.status).toBe(400);
+    expect(await refused.json()).toEqual({
+      error: 'The store refused this sign-in. Check it and try again.',
+      code: 'auth_failed',
+    });
+    role = 'analyst';
+    expect((await send('POST', '/sources', body)).status).toBe(403);
+    expect((await send('POST', '/sources', { ...body, kind: 'Acme Store' })).status).toBe(400);
+    expect((await send('POST', '/sources', { ...body, input: { apiKey: 42 } })).status).toBe(400);
+    expect(connectStore).toHaveBeenCalledTimes(1);
+    expect(syncSource).not.toHaveBeenCalled();
+  });
+});
+
+describe('PUT /api/catalog/sources/:id/credentials', () => {
+  it("replaces a store's sign-in, then reads it again", async () => {
+    addStore();
+    const res = await send('PUT', `/sources/${STORE}/credentials`, { input: { apiKey: 'sk_new' } });
+    expect(res.status).toBe(200);
+    expect(reconnectStore).toHaveBeenCalledWith({
+      source: expect.objectContaining({ id: STORE, account: 'shop.example' }),
+      input: { apiKey: 'sk_new' },
+      userId: 'user-1',
+    });
+    expect(syncSource).toHaveBeenCalledTimes(1);
+  });
+
+  it('has no sign-in for a feed, and none to change for an analyst', async () => {
+    expect((await send('PUT', `/sources/${SOURCE}/credentials`, { input: {} })).status).toBe(404);
+    addStore();
+    role = 'analyst';
+    expect((await send('PUT', `/sources/${STORE}/credentials`, { input: {} })).status).toBe(403);
+    expect(reconnectStore).not.toHaveBeenCalled();
+  });
+});
+
+describe('DELETE /api/catalog/sources/:id', () => {
+  it('removes a store for an admin or a manager', async () => {
+    addStore();
+    expect((await send('DELETE', `/sources/${STORE}`)).status).toBe(200);
+    expect(disconnectStore).toHaveBeenCalledWith(expect.objectContaining({ id: STORE }));
+  });
+
+  it("leaves feeds to the person's own removal, and stores to their admins and managers", async () => {
+    expect((await send('DELETE', `/sources/${SOURCE}`)).status).toBe(404);
+    addStore();
+    role = 'analyst';
+    expect((await send('DELETE', `/sources/${STORE}`)).status).toBe(403);
+    expect((await send('DELETE', '/sources/nope')).status).toBe(404);
+    expect(disconnectStore).not.toHaveBeenCalled();
   });
 });

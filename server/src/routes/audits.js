@@ -28,6 +28,7 @@ import { normStoredDomain } from '../lib/audit/host.js';
 import {
   buildAuditPages,
   buildTrendPoints,
+  findPreviousCompletedAudit,
   pageKey,
   parseListPage,
   TREND_LIMIT,
@@ -1197,12 +1198,37 @@ router.get('/:id', async (req, res) => {
 
     await assertBrandAccess(audit.brand_id, userId);
 
-    const { data: signalRows } = await supabaseAdmin
-      .from('audit_signal_results')
-      .select('*')
-      .eq('audit_id', id);
+    // The history read is best-effort and can run alongside the signal read.
+    // Its result uses the same page grouping as GET /pages.
+    const historyPromise =
+      audit.status === 'completed' && audit.total_score != null
+        ? readBrandAudits(audit.brand_id).catch((historyErr) => {
+            req.log.warn({ err: historyErr, auditId: id }, 'audit previous score lookup failed');
+            return null;
+          })
+        : Promise.resolve(null);
 
-    return res.json({ success: true, audit: assembleAudit(audit, signalRows ?? []) });
+    const [{ data: signalRows }, historyResult] = await Promise.all([
+      supabaseAdmin.from('audit_signal_results').select('*').eq('audit_id', id),
+      historyPromise,
+    ]);
+
+    if (historyResult?.error) {
+      req.log.warn({ err: historyResult.error, auditId: id }, 'audit previous score lookup failed');
+    }
+    const previous =
+      historyResult && !historyResult.error
+        ? findPreviousCompletedAudit(historyResult.data ?? [], id)
+        : null;
+
+    return res.json({
+      success: true,
+      audit: {
+        ...assembleAudit(audit, signalRows ?? []),
+        previousScore: previous?.totalScore ?? null,
+        previousCreatedAt: previous?.createdAt ?? null,
+      },
+    });
   } catch (err) {
     if (err.status) {
       return res.status(err.status).json({ success: false, message: err.message });
