@@ -45,7 +45,7 @@ describe('handOffDraft', () => {
   });
 
   it('says why it didn’t run, and an answer lost on the way as unconfirmed', async () => {
-    for (const code of ['not_due', 'already', 'open_suggestions', 'ai_budget']) {
+    for (const code of ['not_due', 'already', 'running', 'off', 'open_suggestions', 'ai_budget']) {
       answer({ code }, 409);
       await expect(handOffDraft(DRAFT, BRAND, request)).resolves.toEqual({ error: code });
     }

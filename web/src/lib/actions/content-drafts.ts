@@ -2130,6 +2130,8 @@ const AGENT_FIX_ERRORS = [
   'published',
   /** Start or a rewrite holds the draft (another tab, another member). */
   'writing',
+  /** Another fix or hand-off on the draft is under way (another tab, the editor's own). */
+  'running',
   /** Stopped from the editor (CE-027): nothing it wrote is kept. */
   'stopped',
   'failed',

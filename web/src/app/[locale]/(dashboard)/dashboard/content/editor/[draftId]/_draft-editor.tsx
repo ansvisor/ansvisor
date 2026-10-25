@@ -1852,7 +1852,8 @@ export function DraftEditor({
     disclosureLine: disclosureOnPage ? null : disclosureLine,
   });
   // What AI read of the page (Answer first, the disclosure, balance) is read
-  // again after each save: until then a fix it asked for may be on the page.
+  // again after each save (usePageRead's reading): until then a fix it
+  // asked for may be on the page.
   const handOffWaitsForRead = handOffSuggestions.some((s) => s.ai && HANDOFF_KEYS.has(s.key));
   const [handingOff, setHandingOff] = useState(false);
   const handedOff = (count: number) =>
@@ -1989,12 +1990,12 @@ export function DraftEditor({
       ? {
           run: () => void handOff(),
           running: handOffRunning,
-          // As Fix's, and not while the page's reads would still move the list.
+          // As Fix's, and not while the page's reads would still move the list:
+          // the claims; the page's read before its first answer, or while a
+          // fix of what AI read of it may be on the page (it reads each save).
           blocked:
             agentFixBlocked(handOffRunning) ??
-            (pageRead.reading ||
-            claimsRead.reading ||
-            (handOffWaitsForRead && pageRead.reading && !handOffRunning)
+            (claimsRead.reading || (pageRead.reading && (!pageRead.read || handOffWaitsForRead))
               ? tQuality('handOff.reading')
               : null),
           count: handOffList.length,

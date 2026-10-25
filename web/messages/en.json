@@ -3894,6 +3894,7 @@
           "open_suggestions": "This page has open suggestions, maybe from another tab. They're shown now: accept or reject them first.",
           "published": "This page is published. Content Agent suggests changes to drafts only.",
           "writing": "Content Agent is already writing this page, maybe from another tab. Try again once it has finished.",
+          "running": "Content Agent is already fixing this page, maybe from another tab. Try again once it has finished.",
           "not_due": "This brand doesn't hand off quality fixes on its own.",
           "already": "Content Agent already had this page's automatic hand-off.",
           "off": "Hand off isn't available on this workspace yet.",
