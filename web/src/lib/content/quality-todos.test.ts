@@ -185,4 +185,36 @@ describe('qualityTodos', () => {
   it('has no input to-dos before Your input is read', () => {
     expect(todos(author()).map((t) => t.id)).toEqual(['byline', 'authorProfile']);
   });
+
+  it('offers to confirm the author the site names instead of picking one, the profile once they are', () => {
+    const read = (real: boolean, profile: boolean) =>
+      qualityTodos({
+        eeat: eeat({ author: null, confirmed: { real, profile } }),
+        author: null,
+        hasAuthors: true,
+        confirmed: { real, profile },
+      }).map(({ id, done, confirm }) => ({ id, done, confirm }));
+    expect(read(false, false)).toEqual([
+      { id: 'byline', done: false, confirm: { what: 'real', on: false } },
+      { id: 'authorProfile', done: false, confirm: undefined },
+    ]);
+    expect(read(true, false)).toEqual([
+      { id: 'byline', done: true, confirm: { what: 'real', on: true } },
+      { id: 'authorProfile', done: false, confirm: { what: 'profile', on: false } },
+    ]);
+    expect(read(true, true)[1]).toEqual({
+      id: 'authorProfile',
+      done: true,
+      confirm: { what: 'profile', on: true },
+    });
+    // A picked author: nothing to confirm.
+    expect(
+      qualityTodos({
+        eeat: eeat({ author: author() }),
+        author: author(),
+        hasAuthors: true,
+        confirmed: { real: false, profile: false },
+      }).map((t) => t.confirm),
+    ).toEqual([undefined, undefined]);
+  });
 });
