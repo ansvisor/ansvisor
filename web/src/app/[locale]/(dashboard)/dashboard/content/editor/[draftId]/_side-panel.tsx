@@ -110,6 +110,7 @@ export function EditorPanelRail({ onOpen }: { onOpen: (tab: PanelTab) => void })
  */
 export function EditorSidePanel({
   draft,
+  liveUrl = null,
   siteType,
   title,
   bodyHtml,
@@ -145,6 +146,11 @@ export function EditorSidePanel({
   handOff = null,
 }: {
   draft: ContentDraft;
+  /**
+   * Where the page is live, as the editor holds it (CE-013: marked published
+   * since it opened): the Live page tab measures it, else the page it optimizes.
+   */
+  liveUrl?: string | null;
   /** The brand's business type as the editor holds it (Quality CE-056). */
   siteType: SiteType;
   /** The draft's title, page and type as written now: Sources and Brief read them. */
@@ -526,7 +532,7 @@ export function EditorSidePanel({
           <div hidden={tab !== 'impact'}>
             <ImpactTab
               brandId={draft.brandId}
-              pageUrl={draft.sourceUrl}
+              pageUrl={liveUrl ?? draft.sourceUrl}
               rebuilding={rebuilding}
               blocked={briefBlocked}
               onUseLostPrompts={(promptIds) => void rebuild({ addPrompts: promptIds })}

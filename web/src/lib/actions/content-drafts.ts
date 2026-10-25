@@ -236,7 +236,7 @@ export async function getContentDraft(id: string): Promise<ContentDraft | null> 
   const { data, error } = await supabase
     .from('content_drafts')
     .select(
-      `id, brand_id, title, page_type, page_type_source, method, status, body_html, author, author_id, reviewer_id, source_url, rules, kept_sources, author_real_at, author_profile_at, action_id, agent_state, agent_state_at, agent_run, updated_at, archived_at, quality_handoff, ${BRAND_SITE}, actions(action_no)`,
+      `id, brand_id, title, page_type, page_type_source, method, status, body_html, author, author_id, reviewer_id, source_url, published_url, rules, kept_sources, author_real_at, author_profile_at, action_id, agent_state, agent_state_at, agent_run, updated_at, archived_at, quality_handoff, ${BRAND_SITE}, actions(action_no)`,
     )
     .eq('id', id)
     .maybeSingle();
@@ -250,6 +250,7 @@ export async function getContentDraft(id: string): Promise<ContentDraft | null> 
     pageTypeSource: data.page_type_source === 'user' ? 'user' : 'detected',
     siteType: brandSiteType(data.brands),
     sourceUrl: data.source_url,
+    publishedUrl: data.published_url ?? null,
     method: data.method as DraftMethod,
     status: draftStatus(data.status),
     bodyHtml: data.body_html,

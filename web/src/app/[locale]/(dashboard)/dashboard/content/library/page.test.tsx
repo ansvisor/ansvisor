@@ -49,6 +49,10 @@ const readCmsStatuses = vi.hoisted(() => vi.fn());
 const readDraftCms = vi.hoisted(() => vi.fn());
 const sendPagesToCms = vi.hoisted(() => vi.fn());
 const refreshWebflowPublished = vi.hoisted(() => vi.fn());
+// Mark published (CE-013).
+const publishPage = vi.hoisted(() => vi.fn());
+const readPublishAddress = vi.hoisted(() => vi.fn());
+vi.mock('@/lib/content/publish-client', () => ({ publishPage, readPublishAddress }));
 vi.mock('@/lib/content/cms-send-client', () => ({
   readCmsStatuses,
   refreshWebflowPublished,
@@ -126,6 +130,14 @@ beforeEach(() => {
   root = createRoot(container);
   getContentDrafts.mockReset();
   refreshWebflowPublished.mockReset().mockResolvedValue([]);
+  readPublishAddress.mockReset().mockResolvedValue('https://acme.example/pipeline-forecasting');
+  publishPage.mockReset().mockResolvedValue({
+    ok: true,
+    publishedUrl: 'https://acme.example/pipeline-forecasting',
+    publishedAt: '2026-10-25T10:00:00Z',
+    onBrandDomain: true,
+    taskCompleted: false,
+  });
   getContentStartOptions.mockReset().mockResolvedValue({
     opportunities: [],
     prompts: [],
@@ -763,8 +775,20 @@ describe('a Library row’s menu (00233)', () => {
     expect(markContentDraftReady).toHaveBeenCalledWith('d1');
     expect(getContentDrafts).toHaveBeenCalledTimes(2);
 
+    // Published asks where the page is live (CE-013), from where it can tell.
     await pick('Pipeline forecasting', 'Published');
-    expect(setContentDraftStatus).toHaveBeenCalledWith('d1', 'published');
+    expect(setContentDraftStatus).not.toHaveBeenCalledWith('d1', 'published');
+    expect(readPublishAddress).toHaveBeenCalledWith('d1');
+    const dialog = document.querySelector('[role="dialog"]')!;
+    expect(dialog.querySelector<HTMLInputElement>('#publish-url')!.value).toBe(
+      'https://acme.example/pipeline-forecasting',
+    );
+    const save = [...dialog.querySelectorAll('button')].find(
+      (b) => b.textContent === 'Mark published',
+    )!;
+    await act(async () => save.click());
+    expect(publishPage).toHaveBeenCalledWith('d1', 'https://acme.example/pipeline-forecasting');
+    expect(getContentDrafts).toHaveBeenCalledTimes(3);
   });
 
   it('lets members set a status only', async () => {

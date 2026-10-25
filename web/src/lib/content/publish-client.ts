@@ -1,0 +1,106 @@
+import { BROWSER_API_BASE_URL } from '@/config/api';
+import { apiFailure } from '@/lib/api-failure';
+import { createClient } from '@/lib/supabase/client';
+
+/**
+ * A page marked Published at its live address (CE-013), from the browser
+ * through the API's proxy: the address is the server's to write, as a CMS's
+ * is (00262), and a linked action gets the live page with it.
+ */
+
+export type PublishError =
+  | 'invalid_url'
+  | 'not_found'
+  | 'session'
+  | 'workspace'
+  | 'busy'
+  | 'failed';
+
+export type PublishResult =
+  | {
+      ok: true;
+      publishedUrl: string;
+      publishedAt: string;
+      /** Off the brand's domains, it's kept, but the Live page tab can't measure it. */
+      onBrandDomain: boolean;
+      /** The linked action's Publish task done (every page it names live). */
+      taskCompleted: boolean;
+    }
+  | { ok: false; code: PublishError };
+
+/** Marks the page Published at `url`. */
+export async function publishPage(draftId: string, url: string): Promise<PublishResult> {
+  try {
+    const {
+      data: { session },
+    } = await createClient().auth.getSession();
+    if (!session) return { ok: false, code: 'session' };
+    const res = await fetch(
+      `${BROWSER_API_BASE_URL}/api/content-drafts/${encodeURIComponent(draftId)}/publish`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({ url }),
+      },
+    );
+    const body = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+    if (!res.ok) {
+      if (body.code === 'invalid_url' || body.code === 'invalid')
+        return { ok: false, code: 'invalid_url' };
+      const general = apiFailure(res.status, body);
+      return {
+        ok: false,
+        code:
+          general === 'session' ||
+          general === 'workspace' ||
+          general === 'busy' ||
+          general === 'not_found'
+            ? general
+            : 'failed',
+      };
+    }
+    return {
+      ok: true,
+      publishedUrl: String(body.publishedUrl ?? url),
+      publishedAt: String(body.publishedAt ?? new Date().toISOString()),
+      onBrandDomain: body.onBrandDomain !== false,
+      taskCompleted: body.taskCompleted === true,
+    };
+  } catch (err) {
+    console.error('Failed to mark the page published:', err);
+    return { ok: false, code: 'failed' };
+  }
+}
+
+/**
+ * The address the dialog starts from: where the page went live (a CMS's, or
+ * one given before), else the page it optimizes, else the brand's site with
+ * the page's slug. Empty when none can be read.
+ */
+export async function readPublishAddress(draftId: string): Promise<string> {
+  const supabase = createClient();
+  const { data: draft, error } = await supabase
+    .from('content_drafts')
+    .select('brand_id, published_url, source_url, slug')
+    .eq('id', draftId)
+    .maybeSingle();
+  if (error || !draft) return '';
+  if (draft.published_url) return draft.published_url;
+  if (draft.source_url) return draft.source_url;
+  const { data: domain } = await supabase
+    .from('brand_domains')
+    .select('domain')
+    .eq('brand_id', draft.brand_id)
+    .eq('is_primary', true)
+    .limit(1)
+    .maybeSingle();
+  const host = String(domain?.domain ?? '')
+    .trim()
+    .replace(/^https?:\/\//i, '')
+    .replace(/\/.*$/, '');
+  if (!host) return '';
+  return `https://${host}/${draft.slug ?? ''}`;
+}
