@@ -194,6 +194,30 @@ describe('publishDraft', () => {
     expect((await publishDraft(tables.content_drafts[1], pages[1], 'u1')).taskCompleted).toBe(true);
   });
 
+  it('leaves a task changed meanwhile as it is, with nothing in its History', async () => {
+    tables.content_drafts[0].action_id = 'a1';
+    tables.action_tasks = [task('t1', 'publish_content')];
+    // Skipped in the drawer between the read and the write.
+    const realFilter = tables.action_tasks.filter.bind(tables.action_tasks);
+    let reads = 0;
+    tables.action_tasks.filter = (fn) => {
+      reads += 1;
+      if (reads === 2) tables.action_tasks[0].status = 'skipped';
+      return realFilter(fn);
+    };
+    expect((await publishDraft(tables.content_drafts[0], LIVE, 'u1')).taskCompleted).toBe(false);
+    expect(tables.action_tasks[0].status).toBe('skipped');
+    expect(tables.action_events).toEqual([]);
+  });
+
+  it('reads only the brand pages an action names, once each', async () => {
+    const page = 'https://www.acme.example/a';
+    tables.actions[0].payload.pages = [page, page, 'not a page', 42];
+    tables.content_drafts = [draft({ action_id: 'a1', method: 'optimize', source_url: page })];
+    tables.action_tasks = [task('t0', 'optimize_content'), task('t1', 'publish_content')];
+    expect((await publishDraft(tables.content_drafts[0], page, 'u1')).taskCompleted).toBe(true);
+  });
+
   it('doesn’t wait for work someone skipped', async () => {
     tables.content_drafts = [draft({ action_id: 'a1', method: 'optimize', source_url: LIVE })];
     tables.action_tasks = [

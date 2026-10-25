@@ -137,8 +137,12 @@ async function setLivePage(action, draftId, url) {
   throw new Error('the action changed while its live page was written');
 }
 
-/** The pages an action names (payload.pages). */
-const namedPages = (action) => (Array.isArray(action.payload?.pages) ? action.payload.pages : []);
+/** The brand pages an action names (payload.pages), once each, as the web's actionPages reads them. */
+function namedPages(action) {
+  const pages = action.payload?.pages;
+  if (!Array.isArray(pages)) return [];
+  return [...new Set(pages.filter((p) => typeof p === 'string' && /^https?:\/\//i.test(p)))];
+}
 
 /**
  * Whether the action's work is all live: a published create draft when it
@@ -162,19 +166,24 @@ function workPublished(action, tasks, drafts) {
 }
 
 /**
- * Completes the tasks as read, unless they changed meanwhile, each in the
- * action's History naming the draft (so taking the page back reopens it,
- * as the web's reopenDraftTasks reads the trail). Returns how many.
+ * Completes the tasks as read, each in the action's History naming the
+ * draft (so taking the page back reopens it, as the web's reopenDraftTasks
+ * reads the trail). A task changed meanwhile (skipped in the drawer, say)
+ * is left as it is, with no entry. Returns how many it completed.
  */
 async function completeTasks(actionId, todo, data, actorId) {
   const now = new Date().toISOString();
+  let done = 0;
   for (const task of todo) {
-    const { error } = await supabaseAdmin
+    const { data: changed, error } = await supabaseAdmin
       .from('action_tasks')
       .update({ status: 'completed', skip_reason: null, updated_at: now })
       .eq('id', task.id)
-      .eq('status', task.status);
+      .eq('status', task.status)
+      .select('id');
     if (error) throw new Error(error.message);
+    if (!changed?.length) continue;
+    done += 1;
     // Best effort, as the drawer's: a missing trail entry doesn't undo the change.
     await supabaseAdmin.from('action_events').insert({
       action_id: actionId,
@@ -183,7 +192,7 @@ async function completeTasks(actionId, todo, data, actorId) {
       actor_id: actorId,
     });
   }
-  return todo.length;
+  return done;
 }
 
 /**
