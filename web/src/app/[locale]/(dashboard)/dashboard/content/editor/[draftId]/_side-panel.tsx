@@ -243,7 +243,8 @@ export function EditorSidePanel({
       prev.has(next) && prev.has(nextTab) ? prev : new Set([...prev, next, nextTab]),
     );
   };
-  const rulesOpen = Math.max(0, rules.total - rules.met);
+  // None said while the count is still read (the header's chip says so).
+  const rulesOpen = rules.settled === false ? 0 : Math.max(0, rules.total - rules.met);
   // Quality shows once its first phase is live (NEXT_PUBLIC_CONTENT_QUALITY_PHASE).
   const segments = SEGMENTS.filter((value) => value !== 'quality' || qualityPhase() >= 1);
 

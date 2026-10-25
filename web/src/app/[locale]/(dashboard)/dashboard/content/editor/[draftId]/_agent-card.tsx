@@ -680,6 +680,7 @@ export function AgentCard({
           onOpenChange={setComparing}
           busy={busy}
           onDecide={onDecidePage}
+          chars={pageChars}
         />
       )}
     </div>

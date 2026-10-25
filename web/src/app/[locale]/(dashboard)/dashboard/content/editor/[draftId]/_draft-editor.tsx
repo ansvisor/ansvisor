@@ -1943,10 +1943,33 @@ export function DraftEditor({
       cancelled = true;
     };
   }, [draft.id, shownRewriteId]);
-  const reach: RewriteReach = { kept: keptChars, floor: floorChars, last: lastRewrite };
+  // A rewrite's characters, before and after, as the toolbar counts them.
+  const pageChars = useMemo(
+    () =>
+      pageSuggestion
+        ? {
+            before: htmlChars(pageSuggestion.beforeHtml ?? ''),
+            after: htmlChars(pageSuggestion.afterText),
+          }
+        : null,
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- the rewrite's two pages, once
+    [pageSuggestion?.id, pageSuggestion?.afterText, pageSuggestion?.beforeHtml, editor],
+  );
+  // The rewrite shown, counted as the toolbar counts it, not as the API did:
+  // its Length band is the editor's.
+  const lastCounted =
+    lastRewrite && pageChars && lastRewrite.id === pageSuggestion?.id
+      ? { ...lastRewrite, chars: pageChars.after }
+      : lastRewrite;
+  const reach: RewriteReach = { kept: keptChars, floor: floorChars, last: lastCounted };
   // The rules' count stands once My rules and the fan-outs (the fan-out
   // rules' own) are read: before, rules come and go from it.
-  const rulesSettled = rules.ready && reads.sources !== null;
+  const rulesSettled =
+    rules.ready &&
+    reads.sources !== null &&
+    // The keywords rule reads the brief, the feed rule the catalog.
+    reads.brief.status !== 'loading' &&
+    (!feedOn || catalog !== undefined);
   // Open rules no run can close on this page (editor test 2026-10-25): every
   // long sentence inside a passage AI answers quote, a Length out of a
   // rewrite's reach. They leave the agent's work and Next step; the Rules tab
@@ -1974,19 +1997,9 @@ export function DraftEditor({
     [heldKey],
   );
   // The rules as the agent card counts its gain: met now, and the ones still open.
+  // The rules as the side panel shows them: their count once it stands.
+  const rulesShown = { ...rules, settled: rulesSettled };
   const effect = ruleEffects?.all ?? null;
-  // A rewrite's characters, before and after, as the toolbar counts them.
-  const pageChars = useMemo(
-    () =>
-      pageSuggestion
-        ? {
-            before: htmlChars(pageSuggestion.beforeHtml ?? ''),
-            after: htmlChars(pageSuggestion.afterText),
-          }
-        : null,
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- the rewrite's two pages, once
-    [pageSuggestion?.id, pageSuggestion?.afterText, pageSuggestion?.beforeHtml, editor],
-  );
   const cardRules = useMemo(
     () => ({
       met: rules.met,
@@ -1996,7 +2009,8 @@ export function DraftEditor({
           .filter(({ rule, status }) => rule.on && status.state === 'bad')
           .map(({ rule }) => rule.key),
       ),
-      ...(effect
+      // The gain once the count stands: never one a read still to land moves.
+      ...(effect && rulesSettled
         ? {
             after: {
               now: effect.now,
@@ -2006,7 +2020,7 @@ export function DraftEditor({
           }
         : {}),
     }),
-    [rules.met, rules.total, rules.rules, effect], // eslint-disable-line react-hooks/exhaustive-deps
+    [rules.met, rules.total, rules.rules, effect, rulesSettled], // eslint-disable-line react-hooks/exhaustive-deps
   );
 
   /**
@@ -2812,7 +2826,7 @@ export function DraftEditor({
       const result = await startAgentWriting(draft.id, draft.brandId, {
         ...request,
         // "Reading N rules" says what the rules chip counts.
-        counted: rules.total,
+        counted: rulesSettled ? rules.total : undefined,
       });
       if ('error' in result) {
         toast.error(t(`agentFailed.errors.${result.error}`));
@@ -2895,7 +2909,7 @@ export function DraftEditor({
       const result = await startPageRewrite(draft.id, draft.brandId, {
         ...request,
         // "Reading N rules" says what the rules chip counts.
-        counted: rules.total,
+        counted: rulesSettled ? rules.total : undefined,
       });
       if ('error' in result) {
         toast.error(t(`agentFailed.errors.${result.error}`));
@@ -3820,7 +3834,7 @@ export function DraftEditor({
             title={title}
             bodyHtml={pageHtml}
             pageType={pageType}
-            rules={rules}
+            rules={rulesShown}
             reads={reads}
             tabRequest={tabRequest}
             agentFix={agentFix}
