@@ -164,6 +164,47 @@ describe('publishDraft', () => {
     ]);
   });
 
+  it('completes the page’s own task too, as Mark ready does, so Publish doesn’t wait on it', async () => {
+    tables.content_drafts[0].action_id = 'a1';
+    tables.action_tasks = [task('t0', 'create_content_draft'), task('t1', 'publish_content')];
+    expect((await publishDraft(tables.content_drafts[0], LIVE, 'u1')).taskCompleted).toBe(true);
+    expect(tables.action_tasks.map((t) => t.status)).toEqual(['completed', 'completed']);
+    // Each change names the draft: taking the page back reopens them.
+    expect(tables.action_events.map((e) => e.data)).toEqual([
+      { taskId: 't0', to: 'completed', draftId: 'dr1' },
+      { taskId: 't1', to: 'completed', draftId: 'dr1', publishedUrl: LIVE },
+    ]);
+  });
+
+  it('completes an Optimize task naming several pages once each has a ready draft', async () => {
+    const pages = ['https://www.acme.example/a', 'https://www.acme.example/b'];
+    tables.actions[0].payload.pages = pages;
+    tables.content_drafts = [
+      draft({ id: 'dr1', action_id: 'a1', method: 'optimize', source_url: pages[0] }),
+    ];
+    tables.action_tasks = [task('t0', 'optimize_content'), task('t1', 'publish_content')];
+    await publishDraft(tables.content_drafts[0], pages[0], 'u1');
+    expect(tables.action_tasks.map((t) => t.status)).toEqual(['todo', 'todo']);
+    // Page b's draft is ready, not live: the work is done, Publish waits.
+    tables.content_drafts.push(
+      draft({ id: 'dr2', action_id: 'a1', method: 'optimize', source_url: pages[1] }),
+    );
+    await publishDraft(tables.content_drafts[0], pages[0], 'u1');
+    expect(tables.action_tasks.map((t) => t.status)).toEqual(['completed', 'todo']);
+    expect((await publishDraft(tables.content_drafts[1], pages[1], 'u1')).taskCompleted).toBe(true);
+  });
+
+  it('doesn’t wait for work someone skipped', async () => {
+    tables.content_drafts = [draft({ action_id: 'a1', method: 'optimize', source_url: LIVE })];
+    tables.action_tasks = [
+      task('t0', 'create_content_draft', 'skipped'),
+      task('t1', 'optimize_content'),
+      task('t2', 'publish_content'),
+    ];
+    expect((await publishDraft(tables.content_drafts[0], LIVE, 'u1')).taskCompleted).toBe(true);
+    expect(tables.action_tasks.map((t) => t.status)).toEqual(['skipped', 'completed', 'completed']);
+  });
+
   it('waits for every page an Optimize task names, a draft each, before Publish is done', async () => {
     const pages = ['https://www.acme.example/a', 'https://www.acme.example/b'];
     tables.actions[0].payload.pages = pages;
