@@ -766,8 +766,8 @@ export function DraftEditor({
   // A product page's shipping and returns (CE-052): Trust's check, and a
   // to-do that needs no Trust read.
   const shippingRead = useMemo(
-    () => (qualityOn && profile === 'product' ? shippingOnPage(pageHtml) : null),
-    [qualityOn, profile, pageHtml],
+    () => (qualityOn && profile === 'product' ? shippingOnPage(pageHtml, language) : null),
+    [qualityOn, profile, pageHtml, language],
   );
   // The page type's own rules (the Rules tab's, read from the page): one
   // Readability check on the types that weigh it; not ones read by AI or

@@ -86,10 +86,10 @@ export const PROFILE_WEIGHTS: Readonly<Record<QualityProfile, ProfileWeights>> =
       brandInfo: 0,
     },
     trust: {
-      claimsSourced: 30,
+      claimsSourced: 25,
       primarySources: 5,
       noWeakSources: 5,
-      brandFacts: 25,
+      brandFacts: 30,
       expertQuote: 0,
       freshSources: 0,
       balanced: 0,

@@ -4,7 +4,7 @@ import { classifyDomain, normalizeDomain } from '@/lib/citations/classify';
 import { PAGE_TYPES, type DraftMethod, type PageType } from '@/lib/content/drafts';
 import { lengthTarget } from '@/lib/content/editor';
 import { decodeHtmlBlock } from '@/lib/content/html-allowlist';
-import { countWords } from '@/lib/content/readability';
+import { countWords, languageCode } from '@/lib/content/readability';
 import { wordsOf } from '@/lib/content/sources';
 
 /**
@@ -600,7 +600,14 @@ export type RuleStatus =
   | { state: 'bad'; code: 'needsFaq'; missing?: string[] }
   | {
       state: 'info';
-      code: 'aiCheck' | 'needsFeed' | 'noFanouts' | 'addKeywords' | 'notHowTo' | 'englishOnly';
+      code:
+        | 'aiCheck'
+        | 'needsFeed'
+        | 'noFanouts'
+        | 'addKeywords'
+        | 'notHowTo'
+        | 'englishOnly'
+        | 'noSizes';
     };
 
 export interface RuleContext {
@@ -664,11 +671,27 @@ function carries(fanout: string, text: string): boolean {
   return words.filter((w) => have.has(w)).length / words.length >= 0.75;
 }
 
+/**
+ * An FAQ's heading, in the languages it's read in ("FAQ", "Häufig gestellte
+ * Fragen", "Questions fréquentes", "Preguntas frecuentes", "Sıkça Sorulan
+ * Sorular"…), lowercased the Turkish way too.
+ */
+const FAQ_HEADING =
+  /(?<!\p{L})(?:faqs?|frequently asked|häufig gestellte fragen|häufige fragen|questions fréquentes|foire aux questions|preguntas frecuentes|sıkça sorulan sorular|sık sorulan sorular|sss|domande frequenti|perguntas frequentes|veelgestelde vragen)(?!\p{L})/iu;
+/**
+ * A product's sizes on its page: a size chart or guide, "sizes", letter
+ * sizes or a country's numbered ones ("XS", "XL", "EU 42", "US 9.5").
+ */
+const SIZES =
+  /(?<!\p{L})(?:size\s+(?:chart|guide|table)|sizes|sizing|xxs|xs|xl|xxl|xxxl|(?:eu|us|uk)\s?\d{1,2}(?:[.,]5)?)(?!\p{L})/iu;
+/** The languages an FAQ's heading is read in: another page's missing FAQ isn't said. */
+const FAQ_LANGUAGES = new Set(['en', 'de', 'fr', 'es', 'tr', 'it', 'pt', 'nl']);
+const isFaqHeading = (text: string) =>
+  FAQ_HEADING.test(text) || FAQ_HEADING.test(text.toLocaleLowerCase('tr'));
+
 /** The FAQ's questions: the blocks after an "FAQ" heading, up to the next H2, that ask one. */
 function faqQuestions(blocks: PageBlock[]): string[] | null {
-  const start = blocks.findIndex(
-    (b) => (b.tag === 'h2' || b.tag === 'h3') && /\b(faq|faqs|frequently asked)\b/i.test(b.text),
-  );
+  const start = blocks.findIndex((b) => (b.tag === 'h2' || b.tag === 'h3') && isFaqHeading(b.text));
   if (start < 0) return null;
   const level = blocks[start].tag;
   const questions: string[] = [];
@@ -939,7 +962,12 @@ export function checkRule(rule: ActiveRule, page: PageRead, ctx: RuleContext): R
     case 'faq':
     case 'buyingFaq': {
       const questions = faqQuestions(blocks);
-      if (!questions) return { state: 'bad', code: 'missing' };
+      if (!questions) {
+        // A language whose FAQ heading isn't read: not said to be missing.
+        return FAQ_LANGUAGES.has(languageCode(ctx.language) ?? '')
+          ? { state: 'bad', code: 'missing' }
+          : { state: 'info', code: 'englishOnly' };
+      }
       return atLeast(questions.length, n);
     }
     case 'fanoutFaq': {
@@ -1028,14 +1056,18 @@ export function checkRule(rule: ActiveRule, page: PageRead, ctx: RuleContext): R
       );
       return most ? atLeast(most, n) : { state: 'bad', code: 'missing' };
     }
-    case 'fitQuestions':
+    case 'fitQuestions': {
       // Read in English only ("fit", "size"): another language's page isn't scored on it.
       if (ctx.language && ctx.language !== 'en') return { state: 'info', code: 'englishOnly' };
-      return atLeast(
-        blocks.filter((b) => isQuestion(b) && /\b(fit|fits|size|sizes|sizing)\b/i.test(b.text))
-          .length,
-        n,
-      );
+      const asked = blocks.filter(
+        (b) => isQuestion(b) && /\b(fit|fits|size|sizes|sizing)\b/i.test(b.text),
+      ).length;
+      // A product with no sizes (a coffee grinder) has no fit to ask about.
+      if (!asked && !blocks.some((b) => SIZES.test(b.text))) {
+        return { state: 'info', code: 'noSizes' };
+      }
+      return atLeast(asked, n);
+    }
     case 'introText': {
       const words = blocks
         .slice(h1 + 1, firstH2 < 0 ? undefined : firstH2)

@@ -1,7 +1,7 @@
 import { classifyDomain, normalizeDomain } from '@/lib/citations/classify';
 import type { ContentAuthor } from './authors';
 import { cleanHref } from './html-allowlist';
-import { ownText, sentencesOf } from './readability';
+import { languageCode, ownText, sentencesOf } from './readability';
 import type { FactMismatch } from './brand-facts';
 import type { ClaimBlock } from './claims';
 import { askableSite, sourceClass, type AiSourceClass, type SourceClass } from './source-class';
@@ -73,38 +73,102 @@ export type TrustCheckId = keyof typeof TRUST_WEIGHTS;
 /** The shipping and returns check's points before a page type weighs it. */
 const SHIPPING_POINTS = 10;
 /**
- * Words that say how a product ships, and how it goes back, in a policy's
- * terms ("free shipping", "delivery in 2 days", "30-day returns", "iade
- * koşulları"): not "ships with a cable", "in return" or "return on
+ * Words that say how a product ships, in a policy's terms: "free shipping",
+ * "shipping takes 2 days", "Free UK delivery on orders over £50", "Standard
+ * delivery 3–5 working days", "Expédition sous 24h", "Entrega en 24/48
+ * horas", "ücretsiz kargo", "2 iş gününde teslim". Not a bare "shipping"
+ * ("Shipping weight: 1.2 kg"), "ships with a cable", or a product named
+ * for it ("kargo pantolon").
+ */
+const SHIPPING_WORDS = new RegExp(
+  String.raw`(?<!\p{L})(?:${[
+    String.raw`(?:free|fast|standard|express|next[- ]day|same[- ]day|flat[- ]rate|worldwide|international)\s+(?:\p{L}+\s+)?(?:shipping|delivery)`,
+    String.raw`shipping\s+(?:is|costs?|fees?|times?|takes|in|within|on|to|from|policy|rates?|&|and|information|details|options)`,
+    String.raw`ships?\s+(?:in|within|free|worldwide|from|next|same|today|by)`,
+    String.raw`delivery\s*:?\s*(?:\p{L}+\s+){0,3}(?:\d+(?:\s*[–—-]\s*\d+)?|one|two|three)\s*(?:working\s+|business\s+)?(?:days?|hours?|h|weeks?)(?!\p{L})`,
+    String.raw`delivery\s+(?:times?|in|within|costs?|fees?|is\s+free|charges?)`,
+    String.raw`delivered\s+(?:in|within|free|by)`,
+    String.raw`dispatch(?:ed|es)?\s+(?:in|within|the\s+same)`,
+    String.raw`(?:kostenlose[rn]?\s+)?versand(?:kostenfrei|kosten|\s+(?:in|innerhalb|ab|ist|kostet))`,
+    String.raw`lieferzeit|lieferung\s+(?:in|innerhalb)`,
+    String.raw`livraison\s+(?:gratuite|offerte|en|sous|express|standard|sous)|exp[ée]di(?:tion|é(?:e|s)?)\s+(?:sous|en|le|gratuite)`,
+    String.raw`env[ií]os?\s+(?:gratis|gratuito|en|a|de\s+\d)|entrega\s+(?:en|gratuita|gratis|de\s+\d)`,
+    String.raw`(?:ücretsiz|bedava|hızlı|aynı\s+gün)\s+kargo|kargo\s+(?:ücretsiz|bedava|ücreti|süresi|ile|firması|bedeli)|kargoya\s+verilir|teslimat\s+(?:süresi|ücreti|bilgileri)|teslim\s+edilir`,
+  ].join('|')})`,
+  'iu',
+);
+/**
+ * Words that say how a product goes back: "30-day returns", "Returns are
+ * accepted within 30 days", "free returns", "satisfait ou remboursé",
+ * "kostenlose Retoure", "iade koşulları". Not "in return" or "return on
  * investment".
  */
-const SHIPPING_WORDS =
-  /\b(?:shipping|ships? (?:in|within|free|worldwide|from|to|next)|delivery (?:time|in|within|is|costs?|fees?|to)|(?:free|fast|next[- ]day|same[- ]day|express) delivery|delivered (?:in|within|free)|dispatch(?:ed|es)? (?:in|within))\b|\b(?:kargo|teslimat)|\b(?:versand|lieferzeit|lieferung)|\blivraison|\benv[ií]os?\b/iu;
-const RETURN_WORDS =
-  /\b(?:returns? (?:policy|within|window|are free|accepted|and exchanges?)|free returns?|easy returns?|\d+[- ]days? (?:returns?|money[- ]back)|refunds?|money[- ]back)\b|\biade|\b(?:rückgabe|rücksendung|widerruf)|\b(?:retours? (?:gratuits?|sous)|remboursement)|\bdevoluci[oó]n/iu;
-/** A link to the shop's shipping or returns page ("/shipping", "/policies/refund-policy", "#returns"). */
+const RETURN_WORDS = new RegExp(
+  String.raw`(?<!\p{L})(?:${[
+    String.raw`returns?\s+(?:policy|within|window|are\s+(?:free|accepted|easy)|is\s+free|accepted|and\s+exchanges?|&\s+exchanges?)`,
+    String.raw`(?:free|easy|hassle[- ]free)\s+returns?|\d+[- ]days?\s+(?:returns?|money[- ]back|refund)`,
+    String.raw`refunds?\s+(?:policy|within|in)|full\s+refund|money[- ]back`,
+    String.raw`iade|değişim\s+(?:hakkı|süresi|koşulları)|ücretsiz\s+değişim`,
+    String.raw`rückgabe|rücksendung|widerruf|(?:kostenlose\s+)?retoure|umtausch`,
+    String.raw`retours?\s+(?:gratuits?|sous|accept[ée]s?|offerts?)|remboursement|satisfait\s+ou\s+rembours[ée]`,
+    String.raw`devoluci[oó]n|reembolso`,
+  ].join('|')})`,
+  'iu',
+);
+/** A heading that names the policy ("Shipping & Returns", "Versand", "İade"): it counts with text under it. */
+const SHIPPING_HEADING =
+  /^(?:shipping|delivery|shipping\s+(?:&|and)\s+(?:returns|delivery)|delivery\s+(?:&|and)\s+returns|versand(?:\s*(?:&|und)\s*(?:rückgabe|lieferung))?|lieferung|livraison(?:\s+et\s+retours)?|env[ií]os?(?:\s+y\s+devoluciones)?|kargo(?:\s+(?:ve|&)\s+iade)?|teslimat(?:\s+(?:ve|&)\s+iade)?)(?:\s+(?:policy|information|info|bilgileri|politikası))?[\s:]*$/iu;
+const RETURN_HEADING =
+  /^(?:(?:shipping|delivery)\s+(?:&|and)\s+)?(?:returns?(?:\s+(?:&|and)\s+(?:exchanges?|refunds?))?|refunds?|exchanges?|(?:versand\s*(?:&|und)\s*)?rückgabe|retours|(?:livraison\s+et\s+)?retours|(?:env[ií]os?\s+y\s+)?devoluciones|(?:kargo\s+(?:ve|&)\s+)?iade(?:\s+(?:ve|&)\s+değişim)?|değişim)(?:\s+(?:policy|information|info|koşulları|politikası))?[\s:]*$/iu;
+/**
+ * A link to the shop's shipping or returns page, by its own path
+ * ("/shipping", "/pages/shipping-and-returns", "/policies/refund-policy",
+ * "#returns"); not a product's ("/collections/delivery-bags").
+ */
 const SHIPPING_LINK =
-  /(?:^|[/#_-])(?:shipping|delivery|kargo|versand(?:kosten)?|lieferung|livraison|envios?)(?:[-_/?#.]|$)/iu;
+  /(?:^|[/#])(?:shipping|delivery|kargo|teslimat|versand(?:kosten)?|lieferung|livraison|envios?)(?:[-_](?:policy|policies|info|information|and[-_](?:returns?|delivery)|returns?|bilgileri|politikasi))*\/?(?:$|[?#])/iu;
 const RETURN_LINK =
-  /(?:^|[/#_-])(?:returns?|refunds?|iade|rueckgabe|ruecksendung|widerruf|retours?|reembolsos?|devoluciones?)(?:[-_/?#.]|$)/iu;
+  /(?:^|[/#])(?:(?:shipping|delivery)[-_]and[-_])?(?:returns?|refunds?|iade|rueckgabe|ruecksendung|widerruf|retours?|reembolsos?|devoluciones?)(?:[-_](?:policy|policies|info|information|and[-_](?:exchanges?|refunds?)|kosullari))*\/?(?:$|[?#])/iu;
+/** The languages these words are written for: another page is read by its links alone. */
+const SHIPPING_LANGUAGES = new Set(['en', 'tr', 'de', 'fr', 'es']);
 
 /**
  * Whether a page says how its product ships and goes back (Phase 3,
- * CE-052): its words (headings too) in a policy's terms, or a link to the
- * shop's page for each. A product page's to-do reads it before Trust does.
- * Read as written and lowercased the Turkish way too ("İade koşulları").
+ * CE-052): its words in a policy's terms, a heading that names the policy
+ * with text under it, or a link to the shop's page for each. A product
+ * page's to-do reads it before Trust does. Read as written and lowercased
+ * the Turkish way too ("İade koşulları"). A page in a language these words
+ * aren't written for is read by its links alone, and isn't asked (null)
+ * when it has none.
  */
-export function shippingOnPage(html: string): { shipping: boolean; returns: boolean } {
+export function shippingOnPage(
+  html: string,
+  language: string | null = 'en',
+): { shipping: boolean; returns: boolean } | null {
   const doc = new DOMParser().parseFromString(html, 'text/html');
-  const texts = [...doc.body.querySelectorAll('p, li, td, th, blockquote, h1, h2, h3, h4, h5, h6')]
-    .map((el) => el.textContent ?? '')
-    .filter((text) => text.trim());
+  const blocks = [...doc.body.querySelectorAll('p, li, td, th, blockquote, h1, h2, h3, h4, h5, h6')]
+    .map((el) => ({ heading: /^H\d$/.test(el.tagName), text: (el.textContent ?? '').trim() }))
+    .filter((block) => block.text);
   const hrefs = [...doc.body.querySelectorAll('a[href]')].map((a) => a.getAttribute('href') ?? '');
-  const says = (words: RegExp) =>
-    texts.some((text) => words.test(text) || words.test(text.toLocaleLowerCase('tr')));
+  const linked = {
+    shipping: hrefs.some((href) => SHIPPING_LINK.test(href)),
+    returns: hrefs.some((href) => RETURN_LINK.test(href)),
+  };
+  if (!SHIPPING_LANGUAGES.has(languageCode(language) ?? '')) {
+    return linked.shipping || linked.returns ? linked : null;
+  }
+  const read = (text: string, words: RegExp) =>
+    words.test(text) || words.test(text.toLocaleLowerCase('tr'));
+  // A heading that names the policy, with text under it before the next heading.
+  const headed = (heading: RegExp) =>
+    blocks.some(
+      (block, i) =>
+        block.heading && read(block.text, heading) && blocks[i + 1] && !blocks[i + 1].heading,
+    );
+  const says = (words: RegExp) => blocks.some((block) => read(block.text, words));
   return {
-    shipping: says(SHIPPING_WORDS) || hrefs.some((href) => SHIPPING_LINK.test(href)),
-    returns: says(RETURN_WORDS) || hrefs.some((href) => RETURN_LINK.test(href)),
+    shipping: linked.shipping || says(SHIPPING_WORDS) || headed(SHIPPING_HEADING),
+    returns: linked.returns || says(RETURN_WORDS) || headed(RETURN_HEADING),
   };
 }
 

@@ -730,15 +730,52 @@ describe('shippingOnPage (Phase 3, CE-052)', () => {
     });
   });
 
+  it('reads the common ways shops state their terms (#1494 review)', () => {
+    const shipping = [
+      '<h3>Delivery &amp; Returns</h3><p>We send every order with tracking.</p>',
+      '<p>Standard delivery 3–5 working days.</p>',
+      '<p>Free UK delivery on orders over £50.</p>',
+      '<p>Delivery: 2–4 working days.</p>',
+      '<p>Expédition sous 24h.</p>',
+      '<p>Entrega en 24/48 horas.</p>',
+      '<p>Versand innerhalb von 2 Tagen.</p>',
+      '<p>Siparişiniz 2 iş gününde teslim edilir.</p>',
+      '<h2>Shipping</h2><p>Orders leave our warehouse daily.</p>',
+    ];
+    for (const html of shipping) expect(read(html)?.shipping).toBe(true);
+    const returns = [
+      '<p>Returns are accepted within 30 days.</p>',
+      '<h2>Returns &amp; Exchanges</h2><p>Send it back unused.</p>',
+      '<p>Retours acceptés, satisfait ou remboursé.</p>',
+      '<p>Reembolso en 14 días.</p>',
+      '<p>Kostenlose Retoure und Umtausch.</p>',
+      '<p>Ücretsiz değişim hakkı.</p>',
+    ];
+    for (const html of returns) expect(read(html)?.returns).toBe(true);
+  });
+
   it('reads no policy in everyday words', () => {
     for (const html of [
       '<p>Ships with a USB-C cable. In return, you get a two-year warranty.</p>',
       '<p>A strong return on investment, served from a content delivery network.</p>',
       '<p>Press Return to save. Trade it on any stock exchange.</p>',
       '<p>A sturdy daypack for wet hikes.</p>',
+      // A spec, a product's link, a product named for the word.
+      '<table><tr><td>Shipping weight</td><td>1.2 kg</td></tr></table>',
+      '<p>See our <a href="/collections/delivery-bags">delivery bags</a>.</p>',
+      '<p>Kargo pantolon, yüzde 100 pamuk.</p>',
+      // A policy's heading with nothing under it.
+      '<h2>Shipping</h2><h2>Materials</h2><p>Recycled nylon.</p>',
     ]) {
       expect(read(html)).toEqual({ shipping: false, returns: false });
     }
+  });
+
+  it('reads a page in a language its words aren’t written for by its links alone', () => {
+    expect(shippingOnPage('<p>Spedizione gratuita in 24 ore.</p>', 'it')).toBeNull();
+    expect(
+      shippingOnPage('<p>Vedi <a href="/policies/shipping-policy">spedizione</a>.</p>', 'it'),
+    ).toEqual({ shipping: true, returns: false });
   });
 });
 

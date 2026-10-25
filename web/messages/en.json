@@ -4708,8 +4708,8 @@
           "article": "an author with experience, sourced claims, short sentences and the answer first.",
           "product": "no author (your brand's), your own product photos, proof for claims, prices that match, shipping and returns, a specs table and short plain copy.",
           "category": "your own product images, your brand's information on its site, prices and claims that match, an intro and a buying FAQ.",
-          "feature": "your own screenshots and data, sourced metrics, a price that matches, scannable sections.",
-          "comparison": "an author who says how the picks were made, balance and a disclosure, the summary first."
+          "feature": "your own screenshots and data, sourced metrics, a price that matches, a comparison table, proof per section and use case steps in scannable sections.",
+          "comparison": "an author who says how the picks were made, balance and a disclosure, a side-by-side table, the summary first."
         },
         "tooShort": "Write a few paragraphs: Readability is read from the page as you write.",
         "tooShortShort": "Too short yet",
@@ -5105,6 +5105,7 @@
           "addKeywords": "Add keywords",
           "notHowTo": "Not a how-to",
           "englishOnly": "English only",
+          "noSizes": "No sizes",
           "numberCheck": "Number check"
         },
         "mineName": "My rules · {type}",
