@@ -3208,6 +3208,65 @@ describe('the side panel', () => {
       expect(box.getAttribute('aria-checked')).toBe('false');
     });
 
+    it('holds the score for the visual proof when the claims land first, and scores without the own images when they can’t be read (review, #1475)', async () => {
+      process.env.NEXT_PUBLIC_CONTENT_QUALITY_PHASE = '2';
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+      try {
+        getContentAuthors.mockResolvedValue({
+          authors: [],
+          brands: [{ id: 'b1', name: 'Acme' }],
+          me: { id: 'u1', role: 'admin' },
+        });
+        getDraftInputs.mockResolvedValue({
+          experience: '',
+          data: [],
+          ansvisorData: [],
+          quotes: [],
+        });
+        // The own images' call fails (the network, a deploy).
+        getOwnImages.mockRejectedValue(new Error('offline'));
+        let pageIn: (value: unknown) => void = () => {};
+        readDraftPage.mockReturnValue(new Promise((resolve) => (pageIn = resolve)));
+        getContentDraft.mockResolvedValue(
+          draft({
+            bodyHtml: `<h1>Pipeline forecasting</h1><p>${said} It is easy to set up for any team.</p><img src="https://cdn.acme.com/run.png" alt="A forecast run">`,
+          }),
+        );
+        window.innerWidth = 1440;
+        await renderPage();
+        await act(async () => void (await vi.advanceTimersByTimeAsync(3_000)));
+        await act(async () => void (await vi.advanceTimersByTimeAsync(3_000)));
+        // The claims are in; the page's read isn't: no score on Trust and Readability alone.
+        expect(checkDraftClaims).toHaveBeenCalled();
+        expect(readDraftPage).toHaveBeenCalled();
+        const chip = () =>
+          [...container.querySelectorAll<HTMLButtonElement>('header button')].find((b) =>
+            b.textContent?.startsWith('Quality'),
+          );
+        expect(chip()?.textContent).toBe('Quality · reading…');
+        await act(async () =>
+          pageIn({
+            spots: [],
+            proofs: [],
+            regulated: null,
+            pending: false,
+            limited: false,
+            paused: false,
+          }),
+        );
+        // In once, with the confirms made so far (none): it scores.
+        expect(chip()?.textContent).toMatch(/^Quality \d+ · (Strong|Can improve|Needs work)$/);
+        expect(console.error).toHaveBeenCalledWith(
+          'Failed to read the own images:',
+          expect.any(Error),
+        );
+      } finally {
+        vi.mocked(console.error).mockRestore();
+        vi.useRealTimers();
+      }
+    });
+
     it('takes the claim’s sentence out on Remove', async () => {
       process.env.NEXT_PUBLIC_CONTENT_QUALITY_PHASE = '2';
       vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });

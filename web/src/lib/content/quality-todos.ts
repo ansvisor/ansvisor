@@ -222,7 +222,12 @@ export function qualityTodos({
             score: 'eeat',
             action: 'addInput',
           },
-          ...visualTodo(eeat, visual),
+        ] satisfies QualityTodo[])
+      : []),
+    // Not Your input's: listed in its place when that can't be read too.
+    ...visualTodo(eeat, visual),
+    ...(used
+      ? ([
           {
             id: 'expertQuote',
             done: used.quote,

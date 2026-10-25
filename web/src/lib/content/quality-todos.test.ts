@@ -327,7 +327,14 @@ describe('qualityTodos', () => {
     expect(visualTodo(0, 0, 1)).toMatchObject({ done: false, action: 'addImage' });
     expect(visualTodo(2, 1, 0)).toMatchObject({ done: true, action: null, gain: 0 });
     expect(visualTodo(0, 0, 0)).toBeUndefined();
-  });
+    // Your input not read: visual proof still counts, so its to-do is still listed.
+    const unread = qualityTodos({
+      eeat: eeat({ author: author(), visual: { images: 2, own: 0, openSpots: 0 } }),
+      author: author(),
+      hasAuthors: true,
+      used: null,
+      visual: { images: 2, own: 0, openSpots: 0 },
+    });
     expect(unread.find((t) => t.id === 'visualProof')).toMatchObject({
       done: false,
       action: 'confirmImage',

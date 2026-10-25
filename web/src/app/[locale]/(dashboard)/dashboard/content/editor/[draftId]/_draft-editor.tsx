@@ -701,10 +701,14 @@ export function DraftEditor({
   useEffect(() => {
     if (!sourcesOn) return;
     let live = true;
-    // A confirm made before the read lands stays.
-    void getOwnImages(draft.id).then(
-      (srcs) => live && setOwnImages((prev) => new Set([...srcs, ...(prev ?? [])])),
-    );
+    // A confirm made before the read lands stays. A failed call (the
+    // network, a deploy) counts the confirms made so far: E-E-A-T still scores.
+    void getOwnImages(draft.id)
+      .then((srcs) => live && setOwnImages((prev) => new Set([...srcs, ...(prev ?? [])])))
+      .catch((err) => {
+        console.error('Failed to read the own images:', err);
+        if (live) setOwnImages((prev) => prev ?? new Set());
+      });
     return () => {
       live = false;
     };
@@ -992,6 +996,8 @@ export function DraftEditor({
     // against, and the page's read (its proof to-dos; what it finds scores).
     !(sourcesOn && factsState.status === 'loading') &&
     !pageRead.reading &&
+    // E-E-A-T's visual proof: the page's read and the own images (CE-049).
+    (!sourcesOn || visualRead) &&
     // Phase 2 reads the page as saved: an edit's score waits for its save.
     !(sourcesOn && saving);
   const [shownQuality, setShownQuality] = useState<{ score: number | null } | null>(null);
