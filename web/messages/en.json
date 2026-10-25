@@ -4601,7 +4601,7 @@
           "confirmed": "Author named on your site",
           "confirmedDetail": "You confirmed the page's author is a real person your site names. Check your CMS sets them as the author.",
           "brand": "Your brand's byline",
-          "brandDetail": "This page type goes out as {byline}, with the brand's Organization schema: it needs no author."
+          "brandDetail": "This page type goes out under {byline}: it needs no author."
         },
         "dates": {
           "title": "Visible published and updated dates",
@@ -4707,7 +4707,7 @@
           "changeLabel": "Change the page type",
           "article": "an author with experience, sourced claims, short sentences and the answer first.",
           "product": "no author (your brand's), your own product photos, proof for claims, prices that match, short plain copy.",
-          "category": "your own product images, prices and claims that match, a short intro.",
+          "category": "your own product images, your brand's information on its site, prices and claims that match.",
           "feature": "your own screenshots and data, sourced metrics, a price that matches, scannable sections.",
           "comparison": "an author who says how the picks were made, balance and a disclosure, the summary first."
         },
