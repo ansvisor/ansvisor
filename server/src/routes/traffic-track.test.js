@@ -16,25 +16,35 @@ let insertError = null;
 const filters = [];
 let latestPageview = null;
 const updated = [];
-// The brand as each lookup reads it: conversions on or off (CE-017, 00286).
-let brandRow = { id: 'b1' };
+// The brand's conversions setting as its own read answers it (CE-017,
+// 00286): the visit's read asks for the id only, and never sees it.
+let conversionsRead = { data: { conversions_enabled: false }, error: null };
 let eventInsertError = null;
+// The brands reads' filters, to tell which brand the setting was read for.
+const brandFilters = [];
 
 vi.mock('../config/supabase.js', () => ({
   default: {
     from: (table) => {
       const filter = (op) => (col, val) => {
         if (table === 'ai_traffic_logs') filters.push([op, col, val]);
+        if (table === 'brands') brandFilters.push([chain.columns, op, col, val]);
         return chain;
       };
       const chain = {
-        select: () => chain,
+        select: (columns) => {
+          chain.columns = columns;
+          return chain;
+        },
         eq: filter('eq'),
         is: filter('is'),
         gte: filter('gte'),
         order: () => chain,
         limit: () => chain,
-        single: async () => ({ data: brandRow, error: null }),
+        single: async () =>
+          chain.columns === 'conversions_enabled'
+            ? conversionsRead
+            : { data: { id: 'b1' }, error: null },
         maybeSingle: async () => ({ data: latestPageview, error: null }),
         insert: async (row) => {
           inserted.push({ table, row });
@@ -85,8 +95,9 @@ beforeEach(() => {
   filters.length = 0;
   latestPageview = null;
   updated.length = 0;
-  brandRow = { id: 'b1' };
+  conversionsRead = { data: { conversions_enabled: false }, error: null };
   eventInsertError = null;
+  brandFilters.length = 0;
 });
 
 const beacon = (body = {}) =>
@@ -328,7 +339,7 @@ describe('POST /track/:trackingCode: a journey’s events (CE-017)', () => {
     });
 
   it('stores a pageview and a conversion for a brand with conversions on, never as a visit', async () => {
-    brandRow = { id: 'b1', conversions_enabled: true };
+    conversionsRead = { data: { conversions_enabled: true }, error: null };
     expect((await event({ k: 'pv' })).status).toBe(204);
     expect((await event({ k: 'cv', g: 'demo', o: 'form', n: 'pricing-demo' })).status).toBe(204);
     expect(inserted.map(({ table }) => table)).toEqual(['ai_traffic_events', 'ai_traffic_events']);
@@ -349,6 +360,23 @@ describe('POST /track/:trackingCode: a journey’s events (CE-017)', () => {
     // Neither is an AI landing: no visit lookup, no visitor key.
     expect(findVisitOf).not.toHaveBeenCalled();
     expect(visitorKey).not.toHaveBeenCalled();
+    // The setting is read for this brand, by its own read.
+    expect(brandFilters).toContainEqual(['conversions_enabled', 'eq', 'id', 'b1']);
+  });
+
+  it('fails only the events when the setting can’t be read (a server before 00286), never the visits', async () => {
+    conversionsRead = {
+      data: null,
+      error: { message: 'column brands.conversions_enabled does not exist' },
+    };
+    const { default: logger } = await import('../lib/logger.js');
+    vi.mocked(logger.error).mockClear();
+    expect((await event({ k: 'cv', g: 'signup' })).status).toBe(204);
+    expect(inserted).toEqual([]);
+    expect(logger.error).toHaveBeenCalledTimes(1);
+    // A visit reads the brand's id only, and is stored as ever.
+    expect((await beacon()).status).toBe(204);
+    expect(inserted.map(({ table }) => table)).toEqual(['ai_traffic_logs']);
   });
 
   it('stores nothing while the brand has conversions off', async () => {
@@ -356,15 +384,16 @@ describe('POST /track/:trackingCode: a journey’s events (CE-017)', () => {
     expect(inserted).toEqual([]);
   });
 
-  it('stores nothing it can’t credit to an AI visit', async () => {
-    brandRow = { id: 'b1', conversions_enabled: true };
+  it('stores nothing it can’t credit to an AI visit, and doesn’t read the brand for it', async () => {
+    conversionsRead = { data: { conversions_enabled: true }, error: null };
     await event({ k: 'pv', f: { s: 'google.com', u: 'https://acme.example/', at: Date.now() } });
     await event({ k: 'cv' });
     expect(inserted).toEqual([]);
+    expect(brandFilters.filter(([columns]) => columns === 'conversions_enabled')).toEqual([]);
   });
 
   it('counts an order sent again once, without logging it as a failure', async () => {
-    brandRow = { id: 'b1', conversions_enabled: true };
+    conversionsRead = { data: { conversions_enabled: true }, error: null };
     const { default: logger } = await import('../lib/logger.js');
     vi.mocked(logger.error).mockClear();
     eventInsertError = { code: '23505', message: 'duplicate key value' };

@@ -26,7 +26,8 @@ export const ATTRIBUTION_DAYS = 30;
 const CLOCK_SKEW_MS = 24 * 60 * 60 * 1000;
 
 const visitorId = z.string().regex(/^[A-Za-z0-9_-]{16,64}$/);
-const pageUrl = z.string().min(1).max(4096);
+// Long ad and tracking tags are cut off with the query string (eventUrl).
+const pageUrl = z.string().min(1).max(16384);
 
 const eventBody = z.object({
   k: z.enum(['pv', 'cv']),
@@ -62,10 +63,24 @@ export function eventUrl(raw) {
   }
 }
 
-const trimmed = (value, max) => {
-  const text = typeof value === 'string' ? value.trim().slice(0, max) : '';
-  return text || null;
-};
+/**
+ * A form's or a call's own name ("pricing-demo"), or null: never what looks
+ * like a person's details (an email, a phone number), should a site put one
+ * there.
+ */
+export function eventLabel(value) {
+  const text = typeof value === 'string' ? value.trim().slice(0, 80) : '';
+  if (!text || !/^[\p{L}\p{N} _.:#/-]+$/u.test(text) || /\d{7,}/.test(text.replace(/[ .-]/g, ''))) {
+    return null;
+  }
+  return text;
+}
+
+/** An order's id at the shop ("1001", "#1001", "gid://shopify/Order/1"), or null. */
+export function orderRef(value) {
+  const text = typeof value === 'string' ? value.trim() : '';
+  return /^[A-Za-z0-9_#:/.-]{1,128}$/.test(text) ? text : null;
+}
 
 /**
  * The row an event makes for the brand, or null when it makes none: not a
@@ -90,7 +105,8 @@ export function eventRow(brandId, body, now = Date.now()) {
     url,
     first_source: firstSource,
     first_url: firstUrl,
-    first_at: new Date(event.f.at).toISOString(),
+    // Never after the event itself, with a browser clock running ahead.
+    first_at: new Date(Math.min(event.f.at, now)).toISOString(),
   };
   if (event.k === 'pv') return row;
   if (!event.g) return null;
@@ -98,12 +114,12 @@ export function eventRow(brandId, body, now = Date.now()) {
   return {
     ...row,
     goal: event.g,
-    label: trimmed(event.n, 80),
+    label: eventLabel(event.n),
     origin: event.o ?? 'call',
     value: event.val ?? null,
     // A currency only with an amount, and only a three-letter code.
     currency: event.val !== undefined && /^[A-Z]{3}$/.test(currency) ? currency : null,
     units: event.q ?? null,
-    order_ref: trimmed(event.ref, 128),
+    order_ref: orderRef(event.ref),
   };
 }

@@ -40205,7 +40205,9 @@ notify pgrst, 'reload schema';
 --   * `url` is the page without its query string or fragment: a thank-you
 --     page's ?email=… never gets in.
 --   * `order_ref`: an order's own id at the shop (Shopify's pixel), once per
---     brand, so an order the pixel sends twice counts once.
+--     visitor, so an order the pixel sends twice counts once. Per visitor,
+--     not per brand: the tracking code is public, and an order id sent first
+--     by anyone else must not shut the real one out.
 --   * Members read their brands' events; only the server writes them.
 
 alter table public.brands
@@ -40240,10 +40242,13 @@ create table if not exists public.ai_traffic_events (
   constraint ai_traffic_events_kind check (
     (kind = 'conversion' and goal is not null and origin is not null)
     or (kind = 'page' and goal is null and origin is null and order_ref is null)
-  ),
-  -- An order counts once however often it is sent (NULLs never clash).
-  constraint ai_traffic_events_order unique (brand_id, order_ref)
+  )
 );
+
+-- An order counts once however often its visitor's browser sends it.
+create unique index if not exists ai_traffic_events_order
+  on public.ai_traffic_events (brand_id, visitor_id, order_ref)
+  where order_ref is not null;
 
 create index if not exists ai_traffic_events_brand_time
   on public.ai_traffic_events (brand_id, occurred_at desc);

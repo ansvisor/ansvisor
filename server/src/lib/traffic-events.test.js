@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ATTRIBUTION_DAYS, eventRow, eventUrl } from './traffic-events.js';
+import { ATTRIBUTION_DAYS, eventLabel, eventRow, eventUrl, orderRef } from './traffic-events.js';
 
 const NOW = Date.parse('2026-10-26T12:00:00Z');
 const DAY = 24 * 60 * 60 * 1000;
@@ -17,6 +17,23 @@ describe('eventUrl', () => {
     );
     expect(eventUrl('javascript:alert(1)')).toBeNull();
     expect(eventUrl('not a url')).toBeNull();
+  });
+});
+
+describe('eventLabel and orderRef', () => {
+  it('keep a form’s or a call’s own name, never what looks like a person’s details', () => {
+    expect(eventLabel('  pricing-demo ')).toBe('pricing-demo');
+    expect(eventLabel('Sipariş #12')).toBe('Sipariş #12');
+    expect(eventLabel('ann@example.com')).toBeNull();
+    expect(eventLabel('+90 555 123 45 67')).toBeNull();
+    expect(eventLabel('')).toBeNull();
+  });
+
+  it('keep an order’s id at the shop as it is, and nothing else', () => {
+    expect(orderRef('#1001')).toBe('#1001');
+    expect(orderRef('gid://shopify/Order/123456789')).toBe('gid://shopify/Order/123456789');
+    expect(orderRef('a b')).toBeNull();
+    expect(orderRef('x'.repeat(129))).toBeNull();
   });
 });
 
@@ -92,6 +109,23 @@ describe('eventRow', () => {
     expect(cv({ cur: 'USD' }).currency).toBeNull();
     expect(cv({ val: 10, cur: 'EURO' }).currency).toBeNull();
     expect(cv({ val: 10, cur: ' usd ' }).currency).toBe('USD');
+  });
+
+  it('never dates the first visit after the event, with a browser clock running ahead', () => {
+    expect(
+      eventRow(
+        'b1',
+        { k: 'pv', id: ID, u: 'https://acme.example/', f: { ...first, at: NOW + 60 * 60 * 1000 } },
+        NOW,
+      ).first_at,
+    ).toBe(new Date(NOW).toISOString());
+  });
+
+  it('takes a page whose ad tags make its address long: they go with the query string', () => {
+    const long = `https://acme.example/pricing?${'utm_term=x&'.repeat(600)}`;
+    expect(eventRow('b1', { k: 'pv', id: ID, u: long, f: first }, NOW).url).toBe(
+      'https://acme.example/pricing',
+    );
   });
 
   it('stores an older snippet’s host under the source list’s key', () => {

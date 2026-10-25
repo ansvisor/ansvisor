@@ -229,6 +229,9 @@ router.post('/track/:trackingCode', trafficLimiter, beaconBody, async (req, res)
  * counts once (its unique ref), anything else that fails is logged.
  */
 async function storeEvent(brandId, body) {
+  // What can't be stored needs no look at the brand.
+  const row = eventRow(brandId, body);
+  if (!row) return;
   try {
     const { data: brand, error } = await supabaseAdmin
       .from('brands')
@@ -237,8 +240,6 @@ async function storeEvent(brandId, body) {
       .single();
     if (error) throw new Error(error.message);
     if (!brand?.conversions_enabled) return;
-    const row = eventRow(brandId, body);
-    if (!row) return;
     const { error: insertError } = await supabaseAdmin.from('ai_traffic_events').insert(row);
     if (insertError && insertError.code !== '23505') throw new Error(insertError.message);
   } catch (err) {
