@@ -77,6 +77,17 @@ export function pageKey(url) {
 }
 
 /**
+ * The shared page identity used by the Pages list and a report's comparison.
+ * Prefer the final URL because redirects should group with audits of their
+ * destination; pageKey then ignores www, scheme, query, fragment and trailing
+ * slash in the same way as buildAuditPages.
+ */
+function pageIdentityForAudit(row) {
+  const url = row.final_url ?? row.url;
+  return { url, ...(pageKey(url) ?? { key: url, host: null, path: url }) };
+}
+
+/**
  * How long a run may stay `running`. An audit takes a minute or two and a
  * queued bulk run waits longer; one older than this was cut short by a
  * restart (the bulk queue lives in memory) and will never complete, so it
@@ -116,8 +127,7 @@ export function buildAuditPages(rowsNewestFirst, now = Date.now()) {
   for (const r of rowsNewestFirst ?? []) {
     if (seen.has(r.id)) continue;
     seen.add(r.id);
-    const url = r.final_url ?? r.url;
-    const page = pageKey(url) ?? { key: url, host: null, path: url };
+    const { url, ...page } = pageIdentityForAudit(r);
     if (!groups.has(page.key)) groups.set(page.key, { ...page, runs: [] });
     groups.get(page.key).runs.push({
       id: r.id,
@@ -156,4 +166,49 @@ export function buildAuditPages(rowsNewestFirst, now = Date.now()) {
       runCount: runs.length,
     };
   });
+}
+
+/**
+ * Find the immediately previous completed, scored audit for one audit's page.
+ * This assumes the same created_at / id descending order used by readBrandAudits.
+ * Strictly earlier created_at timestamps are required; a failed, running, or
+ * unscored audit never becomes the comparison point.
+ */
+export function findPreviousCompletedAudit(rowsNewestFirst, auditId) {
+  const seen = new Set();
+  let currentKey = null;
+  let currentCreatedAt = null;
+  let foundCurrent = false;
+
+  for (const row of rowsNewestFirst ?? []) {
+    // A paged read can repeat the same row at a slice boundary.
+    if (seen.has(row.id)) continue;
+    seen.add(row.id);
+
+    const { key } = pageIdentityForAudit(row);
+
+    if (!foundCurrent) {
+      if (row.id !== auditId) continue;
+      if (row.status !== 'completed' || row.total_score == null) return null;
+
+      currentCreatedAt = Date.parse(row.created_at);
+      if (!Number.isFinite(currentCreatedAt)) return null;
+      currentKey = key;
+      foundCurrent = true;
+      continue;
+    }
+
+    const createdAt = Date.parse(row.created_at);
+    if (!Number.isFinite(createdAt) || createdAt >= currentCreatedAt) continue;
+    if (key !== currentKey) continue;
+    if (row.status !== 'completed' || row.total_score == null) continue;
+
+    return {
+      auditId: row.id,
+      totalScore: Number(row.total_score),
+      createdAt: row.created_at,
+    };
+  }
+
+  return null;
 }

@@ -2793,6 +2793,7 @@
     "failed": "Audit failed. Please try again.",
     "takingLongerThanExpected": "This audit is taking longer than expected.",
     "checkAgain": "Check again",
+    "scoreChange": "{change} since {date}",
     "grade": {
       "good": "Good",
       "needsWork": "Needs work",

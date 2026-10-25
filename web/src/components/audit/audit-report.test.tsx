@@ -24,7 +24,10 @@ const rec = (over: Partial<AuditRecommendation> = {}): AuditRecommendation => ({
   ...over,
 });
 
-const audit = (recommendations: AuditRecommendation[]): AuditResult => ({
+const audit = (
+  recommendations: AuditRecommendation[],
+  previous: Pick<AuditResult, 'previousScore' | 'previousCreatedAt'> = {},
+): AuditResult => ({
   id: 'a1',
   brandId: 'b1',
   url: 'https://ansvisor.com/pricing',
@@ -40,16 +43,20 @@ const audit = (recommendations: AuditRecommendation[]): AuditResult => ({
   completedAt: '2026-10-17T09:01:00.000Z',
   signals: [],
   recommendations,
+  ...previous,
 });
 
 let container: HTMLDivElement;
 let root: Root;
 
-function render(recommendations: AuditRecommendation[]) {
+function render(
+  recommendations: AuditRecommendation[],
+  previous: Pick<AuditResult, 'previousScore' | 'previousCreatedAt'> = {},
+) {
   act(() => {
     root.render(
       <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
-        <AuditReport audit={audit(recommendations)} />
+        <AuditReport audit={audit(recommendations, previous)} />
       </NextIntlClientProvider>,
     );
   });
@@ -106,5 +113,38 @@ describe('AuditReport recommendations', () => {
     expect(container.querySelectorAll('pre')).toHaveLength(1);
     expect(marks()).toEqual([]);
     expect(container.textContent).not.toContain(NOTE);
+  });
+});
+
+describe('AuditReport score change', () => {
+  it('shows a positive percentage-point delta and the previous audit date', () => {
+    render([], {
+      previousScore: 0.56,
+      previousCreatedAt: '2026-09-28T09:00:00.000Z',
+    });
+
+    expect(container.textContent).toContain('+7 since Sep 28');
+  });
+
+  it('shows negative and zero deltas accurately', () => {
+    render([], {
+      previousScore: 0.7,
+      previousCreatedAt: '2026-09-28T09:00:00.000Z',
+    });
+    expect(container.textContent).toContain('-7 since Sep 28');
+
+    render([], {
+      previousScore: 0.63,
+      previousCreatedAt: '2026-09-28T09:00:00.000Z',
+    });
+    expect(container.textContent).toContain('0 since Sep 28');
+  });
+
+  it('does not show a delta when there is no prior completed score/date', () => {
+    render([]);
+    expect(container.textContent).not.toContain('since');
+
+    render([], { previousScore: 0.56 });
+    expect(container.textContent).not.toContain('since');
   });
 });
