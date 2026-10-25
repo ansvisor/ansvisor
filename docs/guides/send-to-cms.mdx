@@ -8,7 +8,7 @@ description: "Send Content Editor pages to Webflow as draft items, or to your CM
 - **Webflow:** the page goes straight into a collection of your brand's Webflow site as a **draft item**. You publish it in Webflow.
 - **Your workflow:** the page goes to your brand's webhook as a content package (the page ready to publish, its title, slug, meta title, meta description, author and featured image). Your workflow tool (n8n, Make, Zapier or your own endpoint) turns it into a post or page in your CMS, and decides whether it lands as a draft or goes live.
 
-Ansvisor never publishes on its own. When your workflow tells Ansvisor where the page went live, the draft becomes **Published** and its address shows in the Library.
+Ansvisor never publishes on its own. When your workflow tells Ansvisor where the page went live, or once you publish the item in Webflow, the draft becomes **Published** and its address shows in the Library.
 
 ## Connect Webflow
 
@@ -68,6 +68,8 @@ The slug and meta you send are kept on the draft, so the next send starts from t
 - a meta description left empty goes as the page's opening words.
 
 The toast says whether the item was made or updated, and what changed on the way.
+
+Once you publish it in Webflow, the page becomes **Published** at its address on your site (`/{collection}/{slug}` on your domain). Ansvisor checks when you open the Library and once a day. A page sent again stays sent until Webflow publishes it again, and a page whose item you deleted in Webflow reads "Removed in Webflow"; send it again to make a new item.
 
 The page goes as **Export** makes it: the HTML without its H1 (your CMS's title field carries it), with the byline line if your brand adds the byline to its content. Ansvisor holds the send while:
 
