@@ -35,9 +35,11 @@ export interface DraftHandOff {
   id: string;
   /** A person's Hand off, or the editor's on its own (Settings › Content). */
   origin: 'person' | 'auto';
-  /** Null while it is under way. */
+  /** Null while it is under way; one a stopped server left reads as failed. */
   outcome: 'done' | 'stopped' | 'failed' | null;
   checks: number | null;
+  /** The suggestions it left, once done (0: nothing it could change). */
+  changes: number | null;
   startedAt: string;
 }
 

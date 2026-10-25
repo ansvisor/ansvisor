@@ -1776,9 +1776,12 @@ export function DraftEditor({
   const runAgentFix = async (
     send: () => Promise<{ count: number } | { error: HandOffError }>,
     told: (count: number) => string = fixedMessage,
-    // What isn't said (the editor's own run: not due, or had already).
-    quiet: readonly HandOffError[] = [],
+    // The editor's own run (the automatic hand-off): what the person didn't
+    // start isn't said when it doesn't run or finds nothing, only logged.
+    quiet = false,
   ) => {
+    const failed = (key: string, error: string) =>
+      quiet ? console.warn('The automatic hand-off did not run:', error) : toast.error(t(key));
     setStoppingRun(null);
     stopSent.current = null;
     setFixing(true);
@@ -1801,7 +1804,7 @@ export function DraftEditor({
         // No answer is not a failure: its batch shows if it lands in time.
         const landed = await agentBatch(draft.id, asked + FIX_WAIT_MS);
         if (!landed) {
-          toast.error(t('suggestions.fixErrors.failed'));
+          failed('suggestions.fixErrors.failed', 'failed');
           return;
         }
         setSuggestions(landed);
@@ -1817,9 +1820,7 @@ export function DraftEditor({
         return;
       }
       if ('error' in result) {
-        if (!quiet.includes(result.error)) {
-          toast.error(t(`suggestions.fixErrors.${result.error}`));
-        }
+        failed(`suggestions.fixErrors.${result.error}`, result.error);
         // Another tab (or the API) left them: show them here to decide.
         if (result.error === 'open_suggestions') {
           setSuggestions(await getDraftSuggestions(draft.id));
@@ -1828,7 +1829,7 @@ export function DraftEditor({
         return;
       }
       if (result.count === 0) {
-        toast(t('suggestions.nothingToFix'));
+        if (!quiet) toast(t('suggestions.nothingToFix'));
         return;
       }
       setSuggestions(await getDraftSuggestions(draft.id));
@@ -1839,7 +1840,7 @@ export function DraftEditor({
       nudgeAt('agent');
     } catch (err) {
       console.error('Failed to run the Content Agent:', err);
-      toast.error(t('suggestions.fixErrors.failed'));
+      failed('suggestions.fixErrors.failed', 'failed');
     } finally {
       setFixing(false);
       setStoppingRun(null);
@@ -1884,8 +1885,7 @@ export function DraftEditor({
       await runAgentFix(
         () => handOffDraft(draft.id, draft.brandId, { items, origin, ...agentContext(editor) }),
         handedOff,
-        // The editor's own: a brand that stopped handing off, or another tab's run first.
-        origin === 'auto' ? ['not_due', 'already'] : [],
+        origin === 'auto',
       );
     } finally {
       setHandingOff(false);
@@ -2013,9 +2013,11 @@ export function DraftEditor({
   // whose page came from elsewhere (imported to optimize, or the agent's).
   useAutoHandOff({
     draftId: draft.id,
+    brandId: draft.brandId,
     due:
       sourcesOn &&
       draft.qualityHandoff &&
+      status !== 'published' &&
       (draft.method === 'optimize' || draft.author === 'agent'),
     ready:
       qualitySettled &&

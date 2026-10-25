@@ -3197,7 +3197,7 @@ describe('the side panel', () => {
       expect(handOffDraft).not.toHaveBeenCalled();
       await act(async () => void (await vi.advanceTimersByTimeAsync(3_000)));
       await act(async () => void (await vi.advanceTimersByTimeAsync(0)));
-      expect(readAutoHandOff).toHaveBeenCalledWith('d1');
+      expect(readAutoHandOff).toHaveBeenCalledWith('d1', 'b1');
       expect(handOffDraft).toHaveBeenCalledTimes(1);
       expect(handOffDraft).toHaveBeenCalledWith(
         'd1',
@@ -3211,6 +3211,15 @@ describe('the side panel', () => {
       );
       // Another tab's run came first: nothing said.
       expect(toast.error).not.toHaveBeenCalled();
+      // A brand that stopped handing off since: nothing said either.
+      handOffDraft.mockClear().mockResolvedValue({ error: 'not_due' });
+      act(() => root.unmount());
+      root = createRoot(container);
+      await renderPage();
+      await act(async () => void (await vi.advanceTimersByTimeAsync(3_000)));
+      await act(async () => void (await vi.advanceTimersByTimeAsync(0)));
+      expect(handOffDraft).toHaveBeenCalledTimes(1);
+      expect(toast.error).not.toHaveBeenCalled();
 
       // A draft that had it, or a brand that doesn't hand off: never.
       handOffDraft.mockClear();
@@ -3223,6 +3232,12 @@ describe('the side panel', () => {
       root = createRoot(container);
       readAutoHandOff.mockResolvedValue(false);
       getContentDraft.mockResolvedValue({ ...imported, qualityHandoff: false });
+      await renderPage();
+      await act(async () => void (await vi.advanceTimersByTimeAsync(3_000)));
+      // Nor a published page.
+      act(() => root.unmount());
+      root = createRoot(container);
+      getContentDraft.mockResolvedValue({ ...imported, status: 'published' as const });
       await renderPage();
       await act(async () => void (await vi.advanceTimersByTimeAsync(3_000)));
       expect(handOffDraft).not.toHaveBeenCalled();

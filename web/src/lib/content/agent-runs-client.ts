@@ -26,22 +26,28 @@ export async function readAgentRun(draftId: string): Promise<AgentRun | null> {
 }
 
 /**
- * Whether the draft had its automatic hand-off (Quality CE-051, 00275: once a
- * draft, its row the claim), or null when that can't be read.
+ * Whether the draft's automatic hand-off is behind it (Quality CE-051,
+ * 00275): it had it (once a draft, its row the claim), or its brand no
+ * longer hands off (Settings › Content: the server would answer `not_due`).
+ * Null when that can't be read.
  */
-export async function readAutoHandOff(draftId: string): Promise<boolean | null> {
-  const { data, error } = await createClient()
-    .from('content_agent_runs')
-    .select('id')
-    .eq('draft_id', draftId)
-    .eq('kind', 'handoff')
-    .eq('origin', 'auto')
-    .limit(1);
-  if (error) {
-    console.error('Failed to read the automatic hand-off:', error);
+export async function readAutoHandOff(draftId: string, brandId: string): Promise<boolean | null> {
+  const supabase = createClient();
+  const [runs, brand] = await Promise.all([
+    supabase
+      .from('content_agent_runs')
+      .select('id')
+      .eq('draft_id', draftId)
+      .eq('kind', 'handoff')
+      .eq('origin', 'auto')
+      .limit(1),
+    supabase.from('brands').select('content_quality_handoff').eq('id', brandId).maybeSingle(),
+  ]);
+  if (runs.error || brand.error) {
+    console.error('Failed to read the automatic hand-off:', runs.error ?? brand.error);
     return null;
   }
-  return (data ?? []).length > 0;
+  return (runs.data ?? []).length > 0 || brand.data?.content_quality_handoff !== true;
 }
 
 /**

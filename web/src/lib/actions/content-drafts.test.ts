@@ -714,17 +714,54 @@ describe('History', () => {
         ],
         started_at: '2026-10-21T10:00:00Z',
       },
-      { id: 'r1', origin: 'person', outcome: null, steps: [], started_at: '2026-10-20T10:00:00Z' },
-    ];
-    await expect(getDraftHandoffs(DRAFT)).resolves.toEqual([
-      { id: 'r2', origin: 'auto', outcome: 'done', checks: 6, startedAt: '2026-10-21T10:00:00Z' },
       {
         id: 'r1',
         origin: 'person',
+        outcome: 'done',
+        steps: [
+          { key: 'read_checks', count: 2 },
+          { key: 'write_changes', count: 0 },
+        ],
+        started_at: '2026-10-20T10:00:00Z',
+      },
+      // Stopped before its outcome was written; left by a stopped server; under way.
+      {
+        id: 'r0',
+        origin: 'person',
         outcome: null,
-        checks: null,
+        steps: [],
+        started_at: '2026-10-19T10:00:00Z',
+        stopped_at: '2026-10-19T10:00:30Z',
+      },
+      { id: 'rs', origin: 'auto', outcome: null, steps: [], started_at: '2026-10-18T10:00:00Z' },
+      {
+        id: 'rn',
+        origin: 'person',
+        outcome: null,
+        steps: [],
+        started_at: new Date().toISOString(),
+      },
+    ];
+    await expect(getDraftHandoffs(DRAFT)).resolves.toEqual([
+      {
+        id: 'r2',
+        origin: 'auto',
+        outcome: 'done',
+        checks: 6,
+        changes: null,
+        startedAt: '2026-10-21T10:00:00Z',
+      },
+      {
+        id: 'r1',
+        origin: 'person',
+        outcome: 'done',
+        checks: 2,
+        changes: 0,
         startedAt: '2026-10-20T10:00:00Z',
       },
+      expect.objectContaining({ id: 'r0', outcome: 'stopped', changes: null }),
+      expect.objectContaining({ id: 'rs', outcome: 'failed' }),
+      expect.objectContaining({ id: 'rn', outcome: null }),
     ]);
     expect(calls[0].filters).toContainEqual(['eq', 'draft_id', DRAFT]);
     expect(calls[0].filters).toContainEqual(['eq', 'kind', 'handoff']);

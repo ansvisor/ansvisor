@@ -16,12 +16,14 @@ import { readAutoHandOff } from '@/lib/content/agent-runs-client';
  */
 export function useAutoHandOff({
   draftId,
+  brandId,
   due,
   ready,
   count,
   run,
 }: {
   draftId: string;
+  brandId: string;
   /** The brand hands off this draft, and its page didn't start empty here. */
   due: boolean;
   /** Quality is read and Hand off may run now. */
@@ -30,19 +32,19 @@ export function useAutoHandOff({
   count: number;
   run: () => Promise<void>;
 }): void {
-  // Whether the draft had its automatic run: read once. Unread counts as had,
-  // so it never runs twice.
+  // Whether the draft's automatic run is behind it (it had it, or its brand
+  // stopped handing off): read once. Unread counts as had, so it never runs twice.
   const [had, setHad] = useState<boolean | null>(null);
   useEffect(() => {
     if (!due) return;
     let live = true;
-    void readAutoHandOff(draftId).then((read) => {
+    void readAutoHandOff(draftId, brandId).then((read) => {
       if (live) setHad(read ?? true);
     });
     return () => {
       live = false;
     };
-  }, [draftId, due]);
+  }, [draftId, brandId, due]);
   const runRef = useRef(run);
   useEffect(() => {
     runRef.current = run;

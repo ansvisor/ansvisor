@@ -87,6 +87,7 @@ import {
   type RestoredDraft,
   type VersionOrigin,
 } from '@/lib/content/history';
+import { RUN_STALE_MS } from '@/lib/content/agent-runs';
 import type { AgentWriteRequest } from '@/lib/content/agent-write';
 import {
   actionPages,
@@ -1718,7 +1719,7 @@ export async function getDraftHandoffs(id: string): Promise<DraftHandOff[]> {
   const since = new Date(Date.now() - HISTORY_DAYS * 24 * 60 * 60 * 1000).toISOString();
   const { data, error } = await supabase
     .from('content_agent_runs')
-    .select('id, origin, outcome, steps, started_at')
+    .select('id, origin, outcome, steps, started_at, stopped_at')
     .eq('draft_id', id)
     .eq('kind', 'handoff')
     .gte('started_at', since)
@@ -1729,15 +1730,26 @@ export async function getDraftHandoffs(id: string): Promise<DraftHandOff[]> {
     const steps = Array.isArray(row.steps)
       ? (row.steps as { key?: unknown; count?: unknown }[])
       : [];
-    const checks = steps.find((step) => step?.key === 'read_checks')?.count;
+    const count = (key: string) => {
+      const n = steps.find((step) => step?.key === key)?.count;
+      return Number.isInteger(n) ? (n as number) : null;
+    };
+    // Stopped before its outcome was written; or left by a server that
+    // stopped, past the longest run (RUN_STALE_MS): not under way.
+    const outcome =
+      row.outcome === 'done' || row.outcome === 'stopped' || row.outcome === 'failed'
+        ? row.outcome
+        : row.stopped_at
+          ? 'stopped'
+          : Date.now() - Date.parse(row.started_at) > RUN_STALE_MS
+            ? 'failed'
+            : null;
     return {
       id: row.id,
       origin: row.origin === 'auto' ? 'auto' : 'person',
-      outcome:
-        row.outcome === 'done' || row.outcome === 'stopped' || row.outcome === 'failed'
-          ? row.outcome
-          : null,
-      checks: Number.isInteger(checks) ? (checks as number) : null,
+      outcome,
+      checks: count('read_checks'),
+      changes: outcome === 'done' ? count('write_changes') : null,
       startedAt: row.started_at,
     };
   });

@@ -64,7 +64,7 @@ export function HistoryMenu({
       : [
           ...versions.map((version) => ({ at: version.createdAt, version, handOff: null })),
           ...handOffs.map((handOff) => ({ at: handOff.startedAt, version: null, handOff })),
-        ].sort((a, b) => b.at.localeCompare(a.at));
+        ].sort((a, b) => Date.parse(b.at) - Date.parse(a.at));
 
   /** "Today 10:42", or "Oct 12, 10:42". */
   const when = (iso: string) => {
@@ -124,9 +124,10 @@ export function HistoryMenu({
                       </span>
                       <span className="block text-xs text-muted-foreground">
                         {when(handOff.startedAt)} ·{' '}
-                        {t(`handOff.note.${handOff.outcome ?? 'running'}`, {
-                          count: handOff.checks ?? 0,
-                        })}
+                        {t(
+                          `handOff.note.${handOff.changes === 0 ? 'none' : (handOff.outcome ?? 'running')}`,
+                          { count: handOff.checks ?? 0 },
+                        )}
                       </span>
                     </span>
                     <Bot className="mt-0.5 h-3 w-3 shrink-0 text-muted-foreground" aria-hidden />

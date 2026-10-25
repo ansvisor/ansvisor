@@ -23,7 +23,7 @@ let root: Root;
 const run = vi.fn(async () => {});
 
 function Probe({ due = true, ready = false, count = 3 }) {
-  useAutoHandOff({ draftId: 'd1', due, ready, count, run });
+  useAutoHandOff({ draftId: 'd1', brandId: 'b1', due, ready, count, run });
   return null;
 }
 const render = (props: { due?: boolean; ready?: boolean; count?: number } = {}) =>
@@ -42,7 +42,7 @@ afterEach(() => {
 describe('useAutoHandOff', () => {
   it('hands off once, as soon as Quality is read and nothing holds it', async () => {
     await render();
-    expect(readAutoHandOff).toHaveBeenCalledWith('d1');
+    expect(readAutoHandOff).toHaveBeenCalledWith('d1', 'b1');
     // Not ready yet (the reads, an open suggestion, the budget): it waits.
     expect(run).not.toHaveBeenCalled();
     await render({ ready: true });
@@ -67,6 +67,15 @@ describe('useAutoHandOff', () => {
     await render({ due: false, ready: true });
     expect(readAutoHandOff).not.toHaveBeenCalled();
     expect(run).not.toHaveBeenCalled();
+  });
+
+  it('waits for the read of whether it had it when Quality is ready first', async () => {
+    let read: (value: boolean) => void = () => {};
+    readAutoHandOff.mockReturnValue(new Promise((resolve) => (read = resolve)));
+    await render({ ready: true });
+    expect(run).not.toHaveBeenCalled();
+    await act(async () => read(false));
+    expect(run).toHaveBeenCalledTimes(1);
   });
 
   it('runs none this session when there is nothing to fix the first time it may', async () => {
