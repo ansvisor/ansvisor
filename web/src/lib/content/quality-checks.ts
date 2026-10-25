@@ -65,8 +65,38 @@ export const TRUST_WEIGHTS = {
   disclosure: 5,
   noBrokenLinks: 3,
   siteTrust: 5,
+  // Phase 3 (CE-052): a product page's shipping and returns; weighed there.
+  shippingReturns: 0,
 } as const;
 export type TrustCheckId = keyof typeof TRUST_WEIGHTS;
+
+/** The shipping and returns check's points before a page type weighs it. */
+const SHIPPING_POINTS = 10;
+/** Words that say how a product ships, and how it goes back. */
+const SHIPPING_WORDS =
+  /\b(?:shipping|ships|delivery|delivered|dispatch(?:ed)?)\b|\b(?:kargo|teslimat)|\b(?:versand|lieferung|lieferzeit)|\blivraison|\benv[ií]os?\b/iu;
+const RETURN_WORDS =
+  /\b(?:returns?|refunds?|money[- ]back|exchanges?)\b|\b(?:iade|değişim)|\b(?:rückgabe|rücksendung|widerruf)|\b(?:retours?|remboursement)|\bdevoluci[oó]n/iu;
+/**
+ * Whether a page says how its product ships and goes back (Phase 3,
+ * CE-052): its words, or a link to the shop's page for each. A product
+ * page's to-do reads it too, before Trust is read.
+ */
+export function shippingOnPage(blocks: TrustBlock[]): { shipping: boolean; returns: boolean } {
+  return {
+    shipping: blocks.some(
+      (b) => SHIPPING_WORDS.test(b.text) || b.links.some((l) => SHIPPING_LINK.test(l)),
+    ),
+    returns: blocks.some(
+      (b) => RETURN_WORDS.test(b.text) || b.links.some((l) => RETURN_LINK.test(l)),
+    ),
+  };
+}
+/** A link to the shop's shipping or returns page ("/shipping", "/policies/refund-policy"). */
+const SHIPPING_LINK =
+  /(?:^|\/)(?:shipping|delivery|kargo|versand|livraison|envios?)(?:[-/?#.]|$)/iu;
+const RETURN_LINK =
+  /(?:^|[/-])(?:returns?|refunds?|iade|rueckgabe|retours?|devoluciones?)(?:[-/?#.]|$)/iu;
 
 /**
  * Trust's Phase 1 points (sourced figures, fresh sources, working links):
@@ -395,6 +425,8 @@ export interface TrustRead extends Score<TrustCheckId> {
   classified: number;
   /** Phase 2 (CE-047): the page's facts that differ from the brand's approved ones. */
   mismatches: FactMismatch[];
+  /** Phase 3 (CE-052): whether the page says how shipping and returns work; null where not read. */
+  shipping?: { shipping: boolean; returns: boolean } | null;
 }
 
 /**
@@ -463,8 +495,14 @@ export function trust({
   brandFacts = null,
   proofs = null,
   page = null,
+  shipping = false,
   now,
 }: {
+  /**
+   * Phase 3 (CE-052): read whether the page says how shipping and returns
+   * work, or links where they're told (a product page's).
+   */
+  shipping?: boolean;
   /** The page's blocks (trustBlocks). */
   blocks: TrustBlock[];
   /** Each link's read, by the link as the page has it; one not read yet isn't counted. */
@@ -650,6 +688,16 @@ export function trust({
     });
   }
 
+  const shippingSaid = shipping ? shippingOnPage(blocks) : null;
+  if (shippingSaid) {
+    checks.push({
+      id: 'shippingReturns',
+      points:
+        (SHIPPING_POINTS * (Number(shippingSaid.shipping) + Number(shippingSaid.returns))) / 2,
+      max: SHIPPING_POINTS,
+    });
+  }
+
   // The site's 5 points weigh with what the page itself shows: alone, they'd
   // be the page's whole Trust.
   if (siteTrust && checks.length) {
@@ -675,6 +723,7 @@ export function trust({
     weak,
     classified: classified.length,
     mismatches: brandFacts?.mismatches ?? [],
+    shipping: shippingSaid,
   };
 }
 

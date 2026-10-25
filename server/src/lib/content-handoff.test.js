@@ -25,6 +25,12 @@ describe('handOffInput', () => {
     // A to-do (the person's), or a key it doesn't know: refused.
     expect(handOffInput.safeParse({ items: [{ key: 'eeat:experience' }] }).success).toBe(false);
     expect(handOffInput.safeParse({ items: [] }).success).toBe(false);
+    // Phase 3 (CE-052): the page type's own rules, as the Rules tab reads them.
+    expect(
+      handOffInput.safeParse({ items: [{ key: 'readability:typeRules', detail: 'Specs table' }] })
+        .success,
+    ).toBe(true);
+    expect(HANDOFF_CHECKS['readability:typeRules']).toMatch(/never one made up/);
     expect(
       handOffInput.safeParse({ items: [{ key: 'readability:longSentences' }], origin: 'cron' })
         .success,

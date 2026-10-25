@@ -49,6 +49,31 @@ describe('qualityTodos', () => {
     ]);
   });
 
+  it('asks a product page to say how shipping and returns work: only the person knows (CE-052)', () => {
+    const base = {
+      eeat: weighed(
+        eeat({ author: null, used: { experience: true, data: true } }),
+        PROFILE_WEIGHTS.product.eeat,
+      ),
+      author: null,
+      hasAuthors: true,
+    };
+    const ships = (shipping: boolean, returns: boolean) =>
+      qualityTodos({ ...base, shipping: { shipping, returns }, off: checksOff('product') }).find(
+        (t) => t.id === 'shippingReturns',
+      );
+    expect(ships(true, false)).toMatchObject({ done: false, score: 'trust', action: null });
+    expect(ships(true, true)).toMatchObject({ done: true, gain: 0 });
+    // Another type doesn't ask.
+    expect(
+      qualityTodos({
+        ...base,
+        shipping: { shipping: false, returns: false },
+        off: checksOff('feature'),
+      }).some((t) => t.id === 'shippingReturns'),
+    ).toBe(false);
+  });
+
   it('asks to add an author when the workspace has none', () => {
     expect(todos(null, false)[0]).toEqual({
       id: 'byline',

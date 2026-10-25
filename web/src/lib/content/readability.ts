@@ -16,10 +16,15 @@ export const READABILITY_CHECKS = [
   'shortParagraphs',
   'headingSpacing',
   'passiveJargon',
+  // Phase 3 (CE-052): the page type's own rules, as the Rules tab reads them.
+  'typeRules',
 ] as const;
 export type ReadabilityCheckId = (typeof READABILITY_CHECKS)[number];
 
-/** Each check's weight (spec §2.3): 100 in all. */
+/**
+ * Each check's weight (spec §2.3): 100 in all. The page type's rules count
+ * only on the types that weigh them (quality-profiles.ts).
+ */
 export const READABILITY_WEIGHTS: Record<ReadabilityCheckId, number> = {
   avgSentence: 25,
   longSentences: 15,
@@ -28,6 +33,7 @@ export const READABILITY_WEIGHTS: Record<ReadabilityCheckId, number> = {
   shortParagraphs: 10,
   headingSpacing: 10,
   passiveJargon: 5,
+  typeRules: 0,
 };
 
 /** A sentence longer than this is long (spec: "No sentence over 35 words"). */
@@ -75,6 +81,8 @@ export interface ReadabilityCheck {
   ai?: boolean;
   /** The first block that falls short, to show it in the draft. */
   at?: string | null;
+  /** The page type's rules not met yet, by name (typeRules). */
+  rules?: string[];
 }
 
 export interface Readability {
@@ -572,6 +580,37 @@ export function readability(
   const max = checks.reduce((sum, c) => sum + c.max, 0);
   const points = checks.reduce((sum, c) => sum + c.points, 0);
   return { score: Math.round((points / max) * 100), checks, words };
+}
+
+/** The type rules check's points before a page type weighs it (weighed keeps its share). */
+const TYPE_RULES_POINTS = 10;
+
+/**
+ * The page type's own rules as one Readability check (Phase 3, CE-052): the
+ * Rules tab's, read from the page (a specs table, a side-by-side table, an
+ * intro, a buying FAQ), their share met; the ones turned off there aren't
+ * counted. A page too short to read, or a type with none, has none.
+ */
+export function withTypeRules(
+  read: Readability,
+  rules: readonly { name: string; met: boolean }[],
+): Readability {
+  if (read.score === null || rules.length === 0) return read;
+  const met = rules.filter((r) => r.met).length;
+  const checks: ReadabilityCheck[] = [
+    ...read.checks,
+    {
+      id: 'typeRules',
+      points: (TYPE_RULES_POINTS * met) / rules.length,
+      max: TYPE_RULES_POINTS,
+      value: rules.length,
+      count: rules.length - met,
+      rules: rules.filter((r) => !r.met).map((r) => r.name),
+    },
+  ];
+  const max = checks.reduce((sum, c) => sum + c.max, 0);
+  const points = checks.reduce((sum, c) => sum + c.points, 0);
+  return { ...read, checks, score: Math.round((points / max) * 100) };
 }
 
 /** How much a check would add to the score if it were met, rescaled as the score is. */

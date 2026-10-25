@@ -2573,6 +2573,34 @@ describe('the side panel', () => {
       expect(todos()).toContain('Add an author for the page');
     });
 
+    it('asks a product page for its type rules and its shipping and returns in phase 3 (CE-052)', async () => {
+      process.env.NEXT_PUBLIC_CONTENT_QUALITY_PHASE = '3';
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+      getContentAuthors.mockResolvedValue({
+        authors: [],
+        brands: [{ id: 'b1', name: 'Acme' }],
+        me: { id: 'u1', role: 'admin' },
+      });
+      getContentDraft.mockResolvedValue({
+        ...readable,
+        pageType: 'product_page',
+        siteType: 'ecommerce',
+      });
+      window.innerWidth = 1440;
+      await renderPage();
+      await act(async () => void (await vi.advanceTimersByTimeAsync(3_000)));
+      const chip = [...container.querySelectorAll<HTMLButtonElement>('header button')].find((b) =>
+        b.textContent?.startsWith('Quality'),
+      )!;
+      await act(async () => chip.click());
+      const text = panel()!.textContent!;
+      expect(text).toContain('Checks and weights for Product page');
+      // The Rules tab's specs table and fit questions, read from the page.
+      expect(text).toMatch(/2 page type rules not met: .*Specs table/);
+      expect(text).toContain('Say how shipping and returns work');
+      expect(text).not.toContain('Add an author for the page');
+    });
+
     it('shows nothing of Quality until its first phase is live', async () => {
       getContentDraft.mockResolvedValue(readable);
       window.innerWidth = 1440;

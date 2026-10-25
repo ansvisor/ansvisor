@@ -88,6 +88,7 @@ import {
   type VersionOrigin,
 } from '@/lib/content/history';
 import { RUN_STALE_MS } from '@/lib/content/agent-runs';
+import { HANDOFF_KEYS } from '@/lib/content/hand-off';
 import type { AgentWriteRequest } from '@/lib/content/agent-write';
 import {
   actionPages,
@@ -2302,7 +2303,7 @@ export async function handOffDraft(
       },
       body: JSON.stringify({
         brandId,
-        items: request.items.slice(0, 15).map((item) => ({
+        items: request.items.slice(0, HANDOFF_KEYS.size).map((item) => ({
           key: item.key.slice(0, 60),
           detail: item.detail.slice(0, 500),
         })),

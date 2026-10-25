@@ -694,3 +694,52 @@ describe('the page read’s AI checks (Phase 2, CE-050)', () => {
     ).toBeNull();
   });
 });
+
+describe('trust: a product page’s shipping and returns (Phase 3, CE-052)', () => {
+  const NOW = Date.parse('2026-10-25');
+  const read = (html: string, shipping = true) =>
+    trust({
+      blocks: trustBlocks(html),
+      links: new Map(),
+      brandDomains: ['acme.com'],
+      shipping,
+      now: NOW,
+    }).shipping;
+
+  it('reads whether the page says how shipping and returns work, or links where they’re told', () => {
+    expect(read('<p>Free shipping in 2 days. Returns within 30 days.</p>')).toEqual({
+      shipping: true,
+      returns: true,
+    });
+    expect(read('<p>Ships next day.</p>')).toEqual({ shipping: true, returns: false });
+    expect(
+      read(
+        '<p>See <a href="/policies/shipping-policy">delivery</a> and <a href="/pages/returns">this</a>.</p>',
+      ),
+    ).toEqual({ shipping: true, returns: true });
+    expect(read('<p>Kargo ücretsiz, 14 gün içinde iade.</p>')).toEqual({
+      shipping: true,
+      returns: true,
+    });
+    expect(read('<p>A sturdy daypack for wet hikes.</p>')).toEqual({
+      shipping: false,
+      returns: false,
+    });
+  });
+
+  it('is read only for a product page, and counts half for one of the two', () => {
+    expect(read('<p>Free shipping.</p>', false)).toBeNull();
+    const result = trust({
+      blocks: trustBlocks('<p>Win rates rose 42% last year. Free shipping.</p>'),
+      links: new Map(),
+      brandDomains: ['acme.com'],
+      shipping: true,
+      now: NOW,
+    });
+    expect(result.checks.find((c) => c.id === 'shippingReturns')).toEqual({
+      id: 'shippingReturns',
+      points: 5,
+      max: 10,
+    });
+  });
+});

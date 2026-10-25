@@ -78,7 +78,7 @@ describe('handOffItems', () => {
     );
     const block = server.slice(server.indexOf('HANDOFF_CHECKS = {'), server.indexOf('};'));
     const keys = [...block.matchAll(/^\s*'([a-z]+:[A-Za-z]+)':/gm)].map((m) => m[1]);
-    expect(keys).toHaveLength(15);
+    expect(keys).toHaveLength(16);
     expect([...HANDOFF_KEYS].sort()).toEqual(keys.sort());
   });
 });

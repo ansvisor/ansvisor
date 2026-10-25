@@ -24,6 +24,8 @@ export const HANDOFF_CHECKS = {
   'readability:headingSpacing':
     'A heading every 200–300 words: add an H2 or H3 where a section runs long, named for what it covers',
   'readability:passiveJargon': 'Active voice and plain words: rewrite passive sentences and jargon',
+  'readability:typeRules':
+    "The page type's own structure named here (a specs table, a side-by-side table, an intro, a buying FAQ, how-to steps): add what's missing, from the page and your data only; write a placeholder where a fact is missing, never one made up",
   'trust:claimsSourced':
     'Every figure or claim has a source in its paragraph: link one from your data; where you have none, write the figure as a placeholder or soften the claim, never make one up',
   'trust:brandFacts':

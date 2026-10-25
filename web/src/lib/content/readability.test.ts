@@ -9,6 +9,7 @@ import {
   readabilityGain,
   sentencesOf,
   syllablesOf,
+  withTypeRules,
 } from './readability';
 
 /** Readability (Quality spec §2.3, CE-036): seven checks read from the draft as written. */
@@ -447,5 +448,36 @@ describe('the parts', () => {
     expect(languageCode('Klingon')).toBeNull();
     // Each brand language, as its Language rule says it.
     for (const { code } of LANGUAGES) expect(languageCode(languageRuleValue(code))).toBe(code);
+  });
+});
+
+describe('withTypeRules (Phase 3, CE-052)', () => {
+  const html = `<h1>Pipeline</h1>${p(Array.from({ length: 6 }, () => sentence(15)).join(' '))}`;
+
+  it('counts the page type’s rules met as one check, naming the ones not met', () => {
+    const read = readability(html, 'en');
+    const typed = withTypeRules(read, [
+      { name: 'Specs table', met: false },
+      { name: 'Fit questions', met: true },
+    ]);
+    const rules = typed.checks.find((c) => c.id === 'typeRules')!;
+    expect(rules).toMatchObject({ points: 5, max: 10, count: 1, rules: ['Specs table'] });
+    // Rescaled with it.
+    const points = read.checks.reduce((sum, c) => sum + c.points, 0);
+    const max = read.checks.reduce((sum, c) => sum + c.max, 0);
+    expect(typed.score).toBe(Math.round(((points + 5) / (max + 10)) * 100));
+    // All met: full points.
+    expect(
+      withTypeRules(read, [{ name: 'Specs table', met: true }]).checks.find(
+        (c) => c.id === 'typeRules',
+      ),
+    ).toMatchObject({ points: 10, count: 0 });
+  });
+
+  it('adds none to a page too short to read, or with no type rules', () => {
+    const short = readability(`<h1>Pipeline</h1>${p(sentence(10))}`, 'en');
+    expect(withTypeRules(short, [{ name: 'Specs table', met: false }])).toBe(short);
+    const read = readability(html, 'en');
+    expect(withTypeRules(read, [])).toBe(read);
   });
 });

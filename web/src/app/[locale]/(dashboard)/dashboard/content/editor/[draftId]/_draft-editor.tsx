@@ -108,6 +108,7 @@ import { inputsGiven, inputsUsed } from '@/lib/content/draft-inputs';
 import {
   eeat,
   linksToCheck,
+  shippingOnPage,
   squeeze,
   trust,
   trustBlocks,
@@ -122,7 +123,7 @@ import {
   weighedTrust,
 } from '@/lib/content/quality-profiles';
 import { proofKey, qualityTodos } from '@/lib/content/quality-todos';
-import { isByline, readability, sentencesOf } from '@/lib/content/readability';
+import { isByline, readability, sentencesOf, withTypeRules } from '@/lib/content/readability';
 import { brandFactsPath, factMismatches } from '@/lib/content/brand-facts';
 import {
   MAX_PROOF_TODOS,
@@ -752,15 +753,30 @@ export function DraftEditor({
   // page's type (an article's before, and for most types).
   const profile = profileFor(pageType);
   const weights = PROFILE_WEIGHTS[profile];
+  // The page type's own rules (the Rules tab's, read from the page): one
+  // Readability check on the types that weigh it; not ones read by AI or
+  // the product feed, nor ones turned off there.
+  const typeRules = useMemo(
+    () =>
+      rules.rules.flatMap(({ rule, status }) =>
+        rule.group === 'type' && rule.check === 'page' && rule.on && status.state !== 'info'
+          ? [{ name: tRules(`names.${rule.key}`), met: status.state === 'ok' }]
+          : [],
+      ),
+    [rules.rules, tRules],
+  );
   const readable = useMemo(
     () =>
       qualityOn
         ? weighed(
-            readability(pageHtml, language, aiChecks?.answerFirst ?? null),
+            withTypeRules(
+              readability(pageHtml, language, aiChecks?.answerFirst ?? null),
+              typeRules,
+            ),
             weights.readability,
           )
         : null,
-    [qualityOn, pageHtml, language, aiChecks, weights],
+    [qualityOn, pageHtml, language, aiChecks, weights, typeRules],
   );
   // A proof to-do asked for this session stays, checked once it has a link.
   const [hadProofs, setHadProofs] = useState<ReadonlySet<string>>(() => new Set());
@@ -898,6 +914,8 @@ export function DraftEditor({
               brandFacts: factCheck,
               proofs: proofAsks,
               page: aiChecks,
+              // A product page's shipping and returns (CE-052).
+              shipping: profile === 'product',
               now: Date.now(),
             }),
             weights.trust,
@@ -905,6 +923,7 @@ export function DraftEditor({
         : null,
     [
       weights,
+      profile,
       qualityOn,
       pageBlocks,
       linkChecks,
@@ -1024,6 +1043,11 @@ export function DraftEditor({
   // Who may edit the page's author: only they get Edit author (CE-037's rule).
   const canEditPageAuthor =
     !!pageAuthor && !!authorsRead && canEditAuthor(pageAuthor, authorsRead.me);
+  // A product page's shipping and returns (CE-052): its to-do needs no Trust read.
+  const shippingRead = useMemo(
+    () => (profile === 'product' ? shippingOnPage(pageBlocks) : null),
+    [profile, pageBlocks],
+  );
   const todos = qualityOn
     ? qualityTodos({
         eeat: eeatScore,
@@ -1040,6 +1064,7 @@ export function DraftEditor({
         // Once the authors are read: who the reviewer is, and whether any can be.
         reviewer: regulated && authorsRead ? { topic: regulated, picked: !!pageReviewer } : null,
         confirmed: authorConfirmed,
+        shipping: shippingRead,
         off: checksOff(profile),
       })
     : [];

@@ -162,6 +162,22 @@ describe('QualityTab', () => {
     expect(container.textContent).not.toContain('Checks and weights for');
   });
 
+  it('names the page type’s rules not met yet, and a product page’s shipping to-do (CE-052)', async () => {
+    const typed: Readability = {
+      ...result,
+      checks: [
+        ...result.checks,
+        { id: 'typeRules', points: 0, max: 10, value: 1, count: 1, rules: ['Specs table'] },
+      ],
+    };
+    await render({
+      ...read(typed),
+      todos: [{ id: 'shippingReturns', done: false, gain: 4, score: 'trust', action: null }],
+    });
+    expect(container.textContent).toContain('1 page type rule not met: Specs table');
+    expect(container.textContent).toContain('Say how shipping and returns work');
+  });
+
   it('shows the three scores with their bands, labelled an Ansvisor estimate', async () => {
     await render(result);
     const scores = container.querySelector('[aria-label="Quality scores"]')!;

@@ -16,6 +16,8 @@ export const HANDOFF_KEYS: ReadonlySet<string> = new Set([
   'readability:shortParagraphs',
   'readability:headingSpacing',
   'readability:passiveJargon',
+  // Phase 3 (CE-052): the page type's own rules, as the Rules tab reads them.
+  'readability:typeRules',
   'trust:claimsSourced',
   'trust:brandFacts',
   'trust:freshSources',

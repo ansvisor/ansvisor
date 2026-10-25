@@ -74,7 +74,8 @@ export const PROFILE_WEIGHTS: Readonly<Record<QualityProfile, ProfileWeights>> =
     readability: { ...READABILITY_WEIGHTS },
   },
   // No author (the brand's byline); real product photos; proof for its
-  // claims and prices that match; short, plain copy.
+  // claims, prices that match, how it ships and goes back; short, plain
+  // copy with its specs table.
   product: {
     eeat: {
       experience: 20,
@@ -91,27 +92,29 @@ export const PROFILE_WEIGHTS: Readonly<Record<QualityProfile, ProfileWeights>> =
       claimsSourced: 30,
       primarySources: 5,
       noWeakSources: 5,
-      brandFacts: 30,
+      brandFacts: 25,
       expertQuote: 0,
       freshSources: 0,
       balanced: 0,
       disclosure: 0,
       noBrokenLinks: 10,
-      siteTrust: 20,
+      siteTrust: 15,
+      shippingReturns: 10,
     },
     readability: {
-      avgSentence: 20,
-      longSentences: 25,
-      readingLevel: 25,
+      avgSentence: 15,
+      longSentences: 20,
+      readingLevel: 20,
       answerFirst: 0,
-      shortParagraphs: 20,
+      shortParagraphs: 15,
       headingSpacing: 0,
       passiveJargon: 10,
+      typeRules: 20,
     },
   },
   // Low E-E-A-T weight: real product images and the brand's own
   // information (its site's trust); prices and claims that match the
-  // brand's; a short intro.
+  // brand's; a short intro and a buying FAQ.
   category: {
     eeat: {
       experience: 0,
@@ -135,15 +138,17 @@ export const PROFILE_WEIGHTS: Readonly<Record<QualityProfile, ProfileWeights>> =
       disclosure: 0,
       noBrokenLinks: 15,
       siteTrust: 25,
+      shippingReturns: 0,
     },
     readability: {
-      avgSentence: 25,
-      longSentences: 25,
-      readingLevel: 25,
+      avgSentence: 15,
+      longSentences: 20,
+      readingLevel: 20,
       answerFirst: 0,
-      shortParagraphs: 25,
+      shortParagraphs: 15,
       headingSpacing: 0,
       passiveJargon: 0,
+      typeRules: 30,
     },
   },
   // Product screenshots weigh most, then the person's data and use;
@@ -171,19 +176,22 @@ export const PROFILE_WEIGHTS: Readonly<Record<QualityProfile, ProfileWeights>> =
       disclosure: 0,
       noBrokenLinks: 5,
       siteTrust: 10,
+      shippingReturns: 0,
     },
     readability: {
-      avgSentence: 20,
+      avgSentence: 15,
       longSentences: 15,
       readingLevel: 15,
       answerFirst: 10,
-      shortParagraphs: 20,
+      shortParagraphs: 15,
       headingSpacing: 15,
       passiveJargon: 5,
+      typeRules: 10,
     },
   },
   // An author, saying how the picks were made; balance and a disclosure,
-  // each rival's facts from its own pages; the summary first.
+  // each rival's facts from its own pages; the summary first and a table
+  // side by side.
   comparison: {
     eeat: {
       experience: 20,
@@ -207,15 +215,17 @@ export const PROFILE_WEIGHTS: Readonly<Record<QualityProfile, ProfileWeights>> =
       disclosure: 15,
       noBrokenLinks: 5,
       siteTrust: 5,
+      shippingReturns: 0,
     },
     readability: {
-      avgSentence: 20,
-      longSentences: 15,
+      avgSentence: 15,
+      longSentences: 10,
       readingLevel: 15,
       answerFirst: 25,
       shortParagraphs: 10,
-      headingSpacing: 10,
+      headingSpacing: 5,
       passiveJargon: 5,
+      typeRules: 15,
     },
   },
 };

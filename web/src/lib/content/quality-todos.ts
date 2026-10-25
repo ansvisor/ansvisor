@@ -33,7 +33,8 @@ export type QualityTodoId =
   | 'expertQuote'
   | 'proof'
   | 'reviewer'
-  | 'brandFacts';
+  | 'brandFacts'
+  | 'shippingReturns';
 
 /**
  * A to-do's one button: Show (the first placeholder, selected to type over),
@@ -102,6 +103,7 @@ export function qualityTodos({
   visual = null,
   reviewer = null,
   confirmed = null,
+  shipping = null,
   off = NONE_OFF,
 }: {
   eeat: Score<EeatCheckId> | null;
@@ -144,6 +146,11 @@ export function qualityTodos({
   reviewer?: { topic: 'health' | 'finance' | 'legal'; picked: boolean } | null;
   /** What the person confirmed of the author their site names (00271), or null where they can't. */
   confirmed?: { real: boolean; profile: boolean } | null;
+  /**
+   * Phase 3 (CE-052): whether a product page says how shipping and returns
+   * work (Trust's read): only the person knows them.
+   */
+  shipping?: { shipping: boolean; returns: boolean } | null;
   /**
    * Phase 3 (CE-052): the checks the page's type leaves out (checksOff): no
    * to-do asks for them (a product page has the brand's byline, no author).
@@ -196,6 +203,20 @@ export function qualityTodos({
       } satisfies QualityTodo,
     ];
   });
+  const ships: QualityTodo[] = shipping
+    ? [
+        {
+          id: 'shippingReturns',
+          done: shipping.shipping && shipping.returns,
+          gain:
+            trust && trust.score !== null && !(shipping.shipping && shipping.returns)
+              ? scoreGain(trust, ['shippingReturns'])
+              : 0,
+          score: 'trust',
+          action: null,
+        },
+      ]
+    : [];
   const review: QualityTodo[] = reviewer
     ? [
         {
@@ -208,7 +229,11 @@ export function qualityTodos({
         },
       ]
     : [];
-  if (!eeat || eeat.score === null) return [...fill, ...proofTodos, ...review, ...facts];
+  if (!eeat || eeat.score === null) {
+    return [...fill, ...proofTodos, ...ships, ...review, ...facts].filter(
+      (todo) => !off.has(todo.id),
+    );
+  }
   // No author picked: the one the site names may be confirmed instead, the
   // profile once the author is.
   const byConfirm = !author && !!confirmed;
@@ -273,6 +298,7 @@ export function qualityTodos({
         ] satisfies QualityTodo[])
       : []),
     ...proofTodos,
+    ...ships,
     ...review,
     ...facts,
   ];
