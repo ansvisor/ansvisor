@@ -285,6 +285,8 @@ function runWithConversions({
   dataLayer,
   queue,
   installed = true,
+  crypto,
+  storageThrows = false,
 } = {}) {
   const sent = [];
   const storage = new Map(stored ? [['ansvisor_v', JSON.stringify(stored)]] : []);
@@ -320,11 +322,24 @@ function runWithConversions({
     },
     location,
     history,
-    localStorage: {
-      getItem: (key) => storage.get(key) ?? null,
-      setItem: (key, value) => storage.set(key, String(value)),
-      removeItem: (key) => storage.delete(key),
-    },
+    localStorage: storageThrows
+      ? {
+          getItem: () => {
+            throw new Error('SecurityError');
+          },
+          setItem: () => {
+            throw new Error('QuotaExceededError');
+          },
+          removeItem: () => {
+            throw new Error('SecurityError');
+          },
+        }
+      : {
+          getItem: (key) => storage.get(key) ?? null,
+          setItem: (key, value) => storage.set(key, String(value)),
+          removeItem: (key) => storage.delete(key),
+        },
+    ...(crypto ? { crypto } : {}),
     setTimeout: () => {},
     navigator: {
       userAgent: 'Mozilla/5.0',
@@ -353,6 +368,7 @@ function runWithConversions({
     },
     window,
     history,
+    storage,
     submit: (form) => (listeners['document:submit'] || []).forEach((fn) => fn({ target: form })),
     popstate: () => (listeners['window:popstate'] || []).forEach((fn) => fn()),
   };
@@ -361,12 +377,16 @@ function runWithConversions({
 /** A form as the submit listener reads it: its attributes and the inputs it has. */
 const form = (attributes = {}, inputs = ['email']) => ({
   tagName: 'FORM',
-  id: attributes.id ?? '',
+  // An input named "id" shadows the property: the snippet reads the attribute.
+  id: { tagName: 'INPUT' },
   getAttribute: (name) => attributes[name] ?? null,
-  querySelector: (selector) => {
-    const type = /type=(\w+)/.exec(selector)?.[1];
-    return inputs.includes(type) ? {} : null;
-  },
+  // An input matches [attr=value] by its value, [attr*=value] by part of it.
+  querySelector: (selector) =>
+    [...selector.matchAll(/(\*?)=([\w-]+)\]/g)].some(([, part, value]) =>
+      inputs.some((input) => (part ? input.includes(value) : input === value)),
+    )
+      ? {}
+      : null,
 });
 
 const DAY = 24 * 60 * 60 * 1000;
@@ -513,6 +533,110 @@ describe('the tracking snippet with conversions (CE-017)', () => {
       origin: 'call',
       first_source: 'chatgpt.com',
     });
+  });
+
+  it('waits for the visitor’s own choice when Consent Mode’s default names a region', () => {
+    // Google's own example: denied in the EU, granted elsewhere — this visitor may be in the EU.
+    const dataLayer = [
+      ['consent', 'default', { analytics_storage: 'denied', region: ['DE', 'FR'] }],
+      ['consent', 'default', { analytics_storage: 'granted' }],
+    ];
+    const page = runWithConversions({ referrer: 'https://chatgpt.com/', dataLayer });
+    page.window.ansvisor('conversion', { type: 'signup' });
+    expect(page.stored).toBeNull();
+    expect(page.beacons).toHaveLength(1);
+    // The visitor says yes: the id is kept and what waited goes.
+    dataLayer.push(['consent', 'update', { analytics_storage: 'granted' }]);
+    expect(page.stored).not.toBeNull();
+    expect(page.beacons.map((b) => b.k ?? 'visit')).toEqual(['visit', 'cv']);
+  });
+
+  it('takes an id kept earlier as the visitor’s consent then, on the pages after', () => {
+    const page = runWithConversions({ stored: earlier(1) });
+    page.window.ansvisor('conversion', { type: 'demo' });
+    expect(page.beacons.map((b) => b.k)).toEqual(['pv', 'cv']);
+  });
+
+  it('pauses an "always" site whose Consent Mode default denies it, until it’s granted', () => {
+    const dataLayer = [['consent', 'default', { analytics_storage: 'denied' }]];
+    const page = runWithConversions({
+      referrer: 'https://chatgpt.com/',
+      consent: 'always',
+      dataLayer,
+    });
+    expect(page.stored).toBeNull();
+    page.window.ansvisor('conversion', { type: 'order', value: 10, currency: 'USD' });
+    expect(page.beacons).toHaveLength(1);
+    dataLayer.push(['consent', 'update', { analytics_storage: 'granted' }]);
+    expect(page.beacons[1]).toMatchObject({ k: 'cv', g: 'order', val: 10 });
+  });
+
+  it('listens to Consent Mode on a page whose dataLayer isn’t there yet', () => {
+    const page = runWithConversions({ referrer: 'https://chatgpt.com/' });
+    page.window.dataLayer.push(['consent', 'update', { analytics_storage: 'granted' }]);
+    expect(page.stored).not.toBeNull();
+  });
+
+  it('sends a value, units and an order only as the server takes them', () => {
+    const page = runWithConversions({ stored: earlier(1), consent: 'always' });
+    page.window.ansvisor('conversion', {
+      type: 'order',
+      value: Number.NaN,
+      units: 1.5,
+      currency: 'EUR',
+    });
+    page.window.ansvisor('conversion', {
+      type: 'order',
+      value: '49.90',
+      units: 2,
+      order: 'x'.repeat(300),
+    });
+    page.window.ansvisor('conversion', 'demo');
+    const [nan, text, short] = page.beacons.filter((b) => b.k === 'cv');
+    expect(nan).not.toHaveProperty('val');
+    expect(nan).not.toHaveProperty('q');
+    expect(text).toMatchObject({ val: 49.9, q: 2 });
+    expect(text.ref).toHaveLength(200);
+    expect(short).toMatchObject({ g: 'demo' });
+    // Each makes a row (or, past the server's own limits, still none that fails).
+    expect(eventRow('b1', nan)).not.toBeNull();
+    expect(eventRow('b1', short)).not.toBeNull();
+  });
+
+  it('counts a form once a page, a signup with a new password, and an email field by its name', () => {
+    const page = runWithConversions({ stored: earlier(1), consent: 'always' });
+    const trial = form({ id: 'trial' });
+    page.submit(trial);
+    page.submit(trial);
+    page.submit(form({ name: 'join' }, ['email', 'password', 'new-password']));
+    page.submit(form({ name: 'subscribe' }, ['email-field']));
+    expect(page.beacons.filter((b) => b.k === 'cv').map((b) => b.n)).toEqual([
+      'trial',
+      'join',
+      'subscribe',
+    ]);
+  });
+
+  it('makes the id from crypto where there is one, and deletes one past its 30 days', () => {
+    const crypto = { getRandomValues: (bytes) => bytes.fill(1) };
+    const page = runWithConversions({
+      referrer: 'https://chatgpt.com/',
+      consent: 'always',
+      crypto,
+    });
+    expect(page.stored.id).toBe('B'.repeat(22));
+    const expired = runWithConversions({ stored: earlier(31) });
+    expect(expired.storage.has('ansvisor_v')).toBe(false);
+  });
+
+  it('still sends the visit, and breaks nothing, where storage throws', () => {
+    const page = runWithConversions({
+      referrer: 'https://chatgpt.com/',
+      consent: 'always',
+      storageThrows: true,
+    });
+    page.window.ansvisor('conversion', { type: 'signup' });
+    expect(page.beacons.map((b) => b.k ?? 'visit')).toEqual(['visit', 'cv']);
   });
 
   it('sends nothing for a visitor who never came from an AI assistant', () => {
