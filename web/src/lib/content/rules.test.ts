@@ -30,6 +30,7 @@ import {
   RULE_LENGTH_MIN,
   RULE_LENGTH_MAX,
   lengthBand,
+  keptOutOfReach,
   lengthOutOfReach,
   rewriteAdvice,
   type RuleStatus,
@@ -838,8 +839,16 @@ describe('rewriteAdvice', () => {
       least: 5_468,
       suggested: 5_500,
     });
-    // Asked for a shorter Length since: it didn't reach the longer one either.
-    expect(lengthOutOfReach(statuses(6_877, [], '3000'), run)).toMatchObject({ why: 'reached' });
+    // Asked for a little less since (within its band): it didn't reach the longer one either.
+    expect(lengthOutOfReach(statuses(6_877, [], '3500'), run)).toMatchObject({ why: 'reached' });
+    // Asked for much less: what it came to for 4,000 says nothing; the estimate decides.
+    expect(lengthOutOfReach(statuses(6_877, [], '3000'), run)).toMatchObject({
+      why: 'floor',
+      least: 4_300,
+    });
+    // A near miss of 10,000 says nothing of 3,000 either.
+    const near = { ...run, floor: 1_800, last: { chars: 12_400, target: 10_000, kept: 3_125 } };
+    expect(lengthOutOfReach(statuses(6_877, [], '3000'), near)).toBeNull();
     // A rewrite that met a longer Length says nothing of a shorter one.
     const met = { ...run, last: { chars: 9_800, target: 10_000, kept: 3_125 } };
     expect(lengthOutOfReach(page, met)).toBeNull();
@@ -850,6 +859,14 @@ describe('rewriteAdvice', () => {
     expect(lengthOutOfReach(page, { ...run, last: { ...missed, target: null } })).toBeNull();
     // A passage unlocked since: a rewrite may go shorter now.
     expect(lengthOutOfReach(page, { ...run, kept: 2_900 })).toBeNull();
+    // More locked since: what it came to then doesn't say it gets there now.
+    expect(
+      lengthOutOfReach(page, {
+        kept: 4_500,
+        floor: 5_200,
+        last: { chars: 4_500, target: 4_000, kept: 1_000 },
+      }),
+    ).toMatchObject({ why: 'floor', least: 5_200 });
     // The last one got within the band: in reach, whatever the estimate says.
     expect(
       lengthOutOfReach(page, { ...run, floor: 5_000, last: { ...missed, chars: 4_700 } }),
@@ -862,6 +879,14 @@ describe('rewriteAdvice', () => {
     });
     // Never a Length past the page as it is.
     expect(lengthOutOfReach(statuses(4_900, [], '4000'), run)?.suggested).toBe(5_000);
+  });
+
+  it('names what a rewrite keeps as why it missed only when that alone puts the Length out of reach', () => {
+    const page = statuses(6_877, [], '4000');
+    const missed = { chars: 5_468, target: 4_000, kept: 3_125 };
+    // The rewrite missed, but its kept blocks and headings alone fit: not their doing.
+    expect(keptOutOfReach(page, { kept: 3_125, floor: 4_300, last: missed })).toBe(false);
+    expect(keptOutOfReach(page, { kept: 3_799, floor: 5_100, last: missed })).toBe(true);
   });
 
   it('recommends it for 4 rules or more the agent can fix', () => {

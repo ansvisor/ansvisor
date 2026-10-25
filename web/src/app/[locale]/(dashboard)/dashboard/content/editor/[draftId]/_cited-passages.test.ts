@@ -132,7 +132,8 @@ describe('rewriteFloor', () => {
       extensions: [StarterKit, CitedPassages.configure({ onHeld: () => {} })],
       content:
         '<h1>Title</h1>' +
-        `<h2>Tools</h2><h3>Tool A</h3><blockquote><p>${QUOTED}</p></blockquote>` +
+        // An empty paragraph under Tools still leaves it a heading that groups.
+        `<h2>Tools</h2><p></p><h3>Tool A</h3><blockquote><p>${QUOTED}</p></blockquote>` +
         '<h3>Tool B</h3><p>Plain.</p>',
     });
     try {

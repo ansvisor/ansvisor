@@ -166,7 +166,7 @@ import {
   openRulesForAgent,
   lengthBand,
   rewriteAdvice,
-  lengthOutOfReach,
+  keptOutOfReach,
   type ActiveRule,
   type LastRewrite,
   type RewriteReach,
@@ -3489,9 +3489,7 @@ export function DraftEditor({
                   : null
               }
               // The kept blocks are named only when they put the Length out of reach.
-              length={
-                length && { ...length, outOfReach: lengthOutOfReach(rules.rules, reach) !== null }
-              }
+              length={length && { ...length, outOfReach: keptOutOfReach(rules.rules, reach) }}
               onAllSteps={() => {
                 setNextFocus(true);
                 setNextOpen(true);
