@@ -39,6 +39,7 @@ import { sanitizeDraftHtml } from '@/lib/content/sanitize-draft-html';
 import { matchPagePrompts } from '@/lib/content/page-prompts';
 import type { LinkCheck } from '@/lib/content/quality-checks';
 import { CLAIM_KINDS, type ClaimBlock } from '@/lib/content/claims';
+import { PROOF_KINDS, type PageRead } from '@/lib/content/page-read';
 import { MAX_SOURCE_SITES, type AiSourceClass } from '@/lib/content/source-class';
 import {
   NO_DRAFT_RULES,
@@ -227,7 +228,7 @@ export async function getContentDraft(id: string): Promise<ContentDraft | null> 
   const { data, error } = await supabase
     .from('content_drafts')
     .select(
-      `id, brand_id, title, page_type, page_type_source, method, status, body_html, author, author_id, source_url, rules, kept_sources, author_real_at, author_profile_at, action_id, agent_state, agent_state_at, agent_run, updated_at, archived_at, ${BRAND_SITE}, actions(action_no)`,
+      `id, brand_id, title, page_type, page_type_source, method, status, body_html, author, author_id, reviewer_id, source_url, rules, kept_sources, author_real_at, author_profile_at, action_id, agent_state, agent_state_at, agent_run, updated_at, archived_at, ${BRAND_SITE}, actions(action_no)`,
     )
     .eq('id', id)
     .maybeSingle();
@@ -246,6 +247,7 @@ export async function getContentDraft(id: string): Promise<ContentDraft | null> 
     bodyHtml: data.body_html,
     author: data.author === 'agent' ? 'agent' : 'user',
     authorId: data.author_id,
+    reviewerId: data.reviewer_id,
     rules: draftRulesSchema.safeParse(data.rules).data ?? NO_DRAFT_RULES,
     keptSources: data.kept_sources ?? [],
     authorConfirmed: { real: !!data.author_real_at, profile: !!data.author_profile_at },
@@ -1372,6 +1374,33 @@ export async function setContentDraftAuthor(id: string, authorId: string | null)
 }
 
 /**
+ * Sets the qualified person who reviewed a regulated page (Quality CE-049,
+ * 00273), one of Authors, or none. The database checks they are the brand's
+ * organization's.
+ */
+export async function setContentDraftReviewer(
+  id: string,
+  reviewerId: string | null,
+): Promise<void> {
+  if (
+    !draftId.safeParse(id).success ||
+    (reviewerId !== null && !z.guid().safeParse(reviewerId).success)
+  ) {
+    throw new Error('invalid');
+  }
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from('content_drafts')
+    .update({ reviewer_id: reviewerId })
+    .eq('id', id)
+    .select('id')
+    .maybeSingle();
+  if (error?.code === OTHER_ORGANIZATION) throw new Error('invalid');
+  if (error) throw new Error(error.message);
+  if (!data) throw new Error('not_found');
+}
+
+/**
  * Confirms, or takes back, what the person says of the author their site
  * names (00271): a real person (`real`), their profile with a bio and links
  * (`profile`). Who and when are stamped by the database, from the session.
@@ -2341,4 +2370,123 @@ export async function saveMyRuleSet(
     { onConflict: 'organization_id,site_type,page_type' },
   );
   if (error) throw new Error(error.message);
+}
+
+/**
+ * Quality's page read for proof (CE-049): the draft's visual proof spots
+ * and proof asks, read by the API from the page as saved, with its page
+ * type and the brand's business type; once a minute at most (`pending`:
+ * the kept read stands, ask again), `limited` once the draft's page reads
+ * for the day are made, `paused` when the AI budget is spent. Returned, not
+ * thrown: 'off' before Quality's phase 2 is live on the API.
+ */
+export async function readDraftPage(
+  id: string,
+): Promise<
+  | (PageRead & { pending: boolean; limited: boolean; paused: boolean })
+  | { error: 'invalid' | 'failed' | 'off' }
+> {
+  if (!draftId.safeParse(id).success) return { error: 'invalid' };
+  const supabase = await createClient();
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  if (!session) return { error: 'failed' };
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/content-pages/page-read`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${session.access_token}`,
+      },
+      body: JSON.stringify({ draftId: id }),
+    });
+    if (res.status === 404) {
+      const body = (await res.json().catch(() => ({}))) as { code?: string };
+      return { error: body.code === 'off' ? 'off' : 'failed' };
+    }
+    if (!res.ok) return { error: 'failed' };
+    const body = (await res.json()) as Partial<PageRead> & {
+      pending?: boolean;
+      limited?: boolean;
+      paused?: boolean;
+    };
+    const kinds: readonly string[] = PROOF_KINDS;
+    const text = (value: unknown) => typeof value === 'string' && value.length > 0;
+    return {
+      spots: (body.spots ?? []).filter(
+        (s) => text(s.passage) && text(s.block) && text(s.image) && text(s.alt),
+      ),
+      proofs: (body.proofs ?? []).filter(
+        (p) => text(p.claim) && text(p.block) && kinds.includes(p.kind),
+      ),
+      regulated:
+        body.regulated === 'health' || body.regulated === 'finance' || body.regulated === 'legal'
+          ? body.regulated
+          : null,
+      pending: body.pending ?? false,
+      limited: body.limited ?? false,
+      paused: body.paused ?? false,
+    };
+  } catch (err) {
+    console.error('Failed to read the draft page:', err);
+    return { error: 'failed' };
+  }
+}
+
+/** The cap trigger's check violation: the draft keeps 50 confirmed images (00270). */
+const OWN_IMAGES_FULL = '23514';
+
+/** An image's address as the page and the database keep it (00270: 8–2048 characters, http(s)). */
+const ownImageSrc = z
+  .string()
+  .min(8)
+  .max(2048)
+  .regex(/^https?:\/\//);
+
+/**
+ * The page's images a member confirmed are their own, not stock (Quality
+ * CE-049, 00270): E-E-A-T's visual proof. Fails soft: none, when they
+ * can't be read.
+ */
+export async function getOwnImages(id: string): Promise<string[]> {
+  if (!draftId.safeParse(id).success) return [];
+  try {
+    const supabase = await createClient();
+    const { data, error } = await supabase
+      .from('content_draft_own_images')
+      .select('src')
+      .eq('draft_id', id);
+    if (error) throw new Error(error.message);
+    return (data ?? []).map((row) => row.src);
+  } catch (err) {
+    console.error('Failed to read the own images:', err);
+    return [];
+  }
+}
+
+/**
+ * Confirms an image on the page is the member's own (00270): their
+ * statement, kept with who made it, as themself and now. Confirmed already
+ * is fine; 'full' when the draft keeps 50.
+ */
+export async function confirmOwnImage(id: string, src: string): Promise<'ok' | 'full'> {
+  if (!draftId.safeParse(id).success || !ownImageSrc.safeParse(src).success) {
+    throw new Error('invalid');
+  }
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) throw new Error('not_found');
+  const { error } = await supabase
+    .from('content_draft_own_images')
+    // When: the database's now (its default), the time its policy checks against.
+    .upsert(
+      { draft_id: id, src, confirmed_by: user.id },
+      { onConflict: 'draft_id,src', ignoreDuplicates: true },
+    );
+  if (error?.code === OWN_IMAGES_FULL) return 'full';
+  if (error) throw new Error(error.message);
+  return 'ok';
 }

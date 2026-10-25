@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import messages from '../../../../../../../../messages/en.json';
 import { eeat, trust, trustBlocks, type LinkCheck } from '@/lib/content/quality-checks';
 import type { ContentAuthor } from '@/lib/content/authors';
+import { proofsOnPage } from '@/lib/content/page-read';
 import { qualityTodos } from '@/lib/content/quality-todos';
 import type { Readability } from '@/lib/content/readability';
 
@@ -90,6 +91,10 @@ const onPickAuthor = vi.fn();
 const onShowPlaceholder = vi.fn();
 const onAddInput = vi.fn();
 const onKeep = vi.fn();
+const onAddSource = vi.fn();
+const onConfirmImages = vi.fn();
+const onAddImage = vi.fn();
+const onPickReviewer = vi.fn();
 const onConfirmAuthor = vi.fn();
 
 async function render(quality: QualityRead | Readability | null) {
@@ -104,6 +109,10 @@ async function render(quality: QualityRead | Readability | null) {
           onPickAuthor={onPickAuthor}
           onAddInput={onAddInput}
           onKeep={onKeep}
+          onAddSource={onAddSource}
+          onConfirmImages={onConfirmImages}
+          onAddImage={onAddImage}
+          onPickReviewer={onPickReviewer}
           onConfirmAuthor={onConfirmAuthor}
         />
       </NextIntlClientProvider>,
@@ -115,6 +124,7 @@ beforeEach(() => {
   onShow.mockReset();
   onPickAuthor.mockReset();
   onKeep.mockReset();
+  onAddSource.mockReset();
   onConfirmAuthor.mockReset();
   container = document.createElement('div');
   root = createRoot(container);
@@ -298,6 +308,60 @@ describe('QualityTab', () => {
     const done = container.querySelector('[aria-label="Your to-dos"] li')!;
     expect(done.textContent).toBe('Fill the placeholders · DoneAll filled in');
     expect(done.querySelector('button')).toBeNull();
+  });
+
+  it('links the brand facts to approve to Brand settings, and names a price that differs (CE-047)', async () => {
+    const author = ada;
+    const score = eeat({ author });
+    const blocks = trustBlocks(
+      '<p>Pro costs $59 per month.</p><p>Up 40% (<a href="https://a.example">report</a>).</p>',
+    );
+    const trustRead = trust({
+      blocks,
+      links: new Map(),
+      brandDomains: [],
+      brandFacts: {
+        compared: 1,
+        mismatches: [
+          {
+            kind: 'price',
+            page: '$59',
+            fact: '$49',
+            source: 'pricing',
+            sentence: 'Pro costs $59 per month.',
+          },
+        ],
+      },
+      now: Date.parse('2026-10-24T12:00:00Z'),
+    });
+    await render({
+      ...read(result),
+      trust: trustRead,
+      brandFactsPath: '/dashboard/brands/b1/settings?tab=facts',
+      todos: qualityTodos({
+        eeat: score,
+        author,
+        hasAuthors: true,
+        brandFacts: { pending: 2, had: true },
+      }),
+    });
+    // Last: the brand's, worth no points of the page's.
+    const rows = [...container.querySelectorAll('[aria-label="Your to-dos"] li')];
+    const row = rows.at(-1)!;
+    expect(row.textContent).toContain('Approve 2 brand facts');
+    expect(row.querySelector('a')!.getAttribute('href')).toBe(
+      '/dashboard/brands/b1/settings?tab=facts',
+    );
+    const suggestion = [...container.querySelectorAll('li')].find((li) =>
+      li.textContent?.includes('differs from brand facts'),
+    )!;
+    expect(suggestion.textContent).toContain(
+      'Price differs from brand facts · Page $59 · pricing page $49',
+    );
+    await act(async () =>
+      [...suggestion.querySelectorAll('button')].find((b) => b.textContent === 'Show')!.click(),
+    );
+    expect(onShow).toHaveBeenCalledWith('Pro costs $59 per month.');
   });
 
   it('asks for what only the person can give, each with Add, and its gain (CE-048)', async () => {
@@ -501,6 +565,127 @@ describe('QualityTab', () => {
     expect(container.textContent).toContain(
       "Sources the rules can't place wait for an AI check: this month's AI usage is used up.",
     );
+  });
+
+  it("asks for the proof of the page's own claims by kind and business, with Add proof link (CE-049)", async () => {
+    const html =
+      '<p>Ledgerly is 40% faster than spreadsheets.</p>' +
+      '<p>Every plan is SOC 2 certified.</p>' +
+      '<p>Teams forecast 3x more often.</p>';
+    const blocks = trustBlocks(html);
+    const proofs = proofsOnPage(blocks, [
+      { claim: '40% faster', block: blocks[0].text, kind: 'test' },
+      { claim: 'SOC 2 certified', block: blocks[1].text, kind: 'certification' },
+      { claim: 'the best', block: 'a paragraph since rewritten', kind: 'ranking' },
+    ]);
+    const trustScore = trust({
+      blocks,
+      links: new Map(),
+      brandDomains: ['acme.com'],
+      proofs,
+      now: Date.parse('2026-10-24T12:00:00Z'),
+    });
+    const quality = (siteType: QualityRead['siteType']): QualityRead => ({
+      ...read(null),
+      trust: trustScore,
+      siteType,
+      pageLimited: true,
+      todos: qualityTodos({
+        eeat: null,
+        author: null,
+        hasAuthors: true,
+        trust: trustScore,
+        proofs: { asks: proofs, had: new Set() },
+      }),
+    });
+    await render(quality('b2b'));
+    const todos = container.querySelector('[aria-label="Your to-dos"]')!;
+    const rows = [...todos.querySelectorAll('li')].map((li) => li.textContent);
+    expect(rows).toEqual([
+      expect.stringMatching(
+        /^Link your test result for “40% faster” · To doOnly you have this proof/,
+      ),
+      expect.stringMatching(/^Link the audit report or trust page for “SOC 2 certified”/),
+    ]);
+    // The page's other figure is still the agent's to source: one sentence, its share of the gain.
+    const suggestions = container.querySelector('[aria-label="What would raise it"]')!;
+    expect(suggestions.textContent).toContain('1 sentence with a figure has no source');
+    expect(container.textContent).toContain("Today's AI reads of this page are used up.");
+    await act(async () =>
+      container
+        .querySelector<HTMLButtonElement>('[aria-label="Add a proof link to “40% faster”"]')!
+        .click(),
+    );
+    expect(onAddSource).toHaveBeenCalledWith({
+      text: '40% faster',
+      sentence: 'Ledgerly is 40% faster than spreadsheets.',
+      block: 'Ledgerly is 40% faster than spreadsheets.',
+    });
+
+    await render(quality('ecommerce'));
+    expect(container.textContent).toContain(
+      'Link the certificate or lab result for “SOC 2 certified”',
+    );
+    expect(container.textContent).toContain('Link the test report for “40% faster”');
+  });
+
+  it("asks to confirm the page's own images, or to add one at a spot (CE-049, part d)", async () => {
+    const none = { experience: false, data: false, quote: false };
+    const quality = (images: number, openSpots: number): QualityRead => {
+      const score = eeat({ author: ada, used: none, visual: { images, own: 0, openSpots } });
+      return {
+        ...read(null),
+        eeat: score,
+        todos: qualityTodos({
+          eeat: score,
+          author: ada,
+          hasAuthors: true,
+          used: none,
+          visual: { images, own: 0, openSpots },
+        }),
+      };
+    };
+    onConfirmImages.mockReset();
+    onAddImage.mockReset();
+    await render(quality(2, 0));
+    const row = () =>
+      [...container.querySelectorAll('[aria-label="Your to-dos"] li')].find((li) =>
+        li.textContent?.startsWith('Show your own image'),
+      )!;
+    expect(row().textContent).toContain(
+      "Are any of the page's 2 images your own (screenshots or photos you took), not stock? Confirm them",
+    );
+    await act(async () => row().querySelector('button')!.click());
+    expect(onConfirmImages).toHaveBeenCalled();
+    await render(quality(0, 1));
+    expect(row().textContent).toContain(
+      'A screenshot or photo you took, where the margin suggests one',
+    );
+    await act(async () => row().querySelector('button')!.click());
+    expect(onAddImage).toHaveBeenCalled();
+  });
+
+  it('asks for a qualified reviewer, and opens their menu (CE-049, part e)', async () => {
+    onPickReviewer.mockReset();
+    const score = eeat({ author: ada });
+    await render({
+      ...read(null),
+      eeat: score,
+      todos: qualityTodos({
+        eeat: score,
+        author: ada,
+        hasAuthors: true,
+        reviewer: { topic: 'finance', picked: false },
+      }),
+    });
+    const row = [...container.querySelectorAll('[aria-label="Your to-dos"] li')].find((li) =>
+      li.textContent?.startsWith('Add a qualified reviewer'),
+    )!;
+    expect(row.textContent).toContain(
+      'The page advises readers on their money: name the qualified person who reviewed it',
+    );
+    await act(async () => row.querySelector('button')!.click());
+    expect(onPickReviewer).toHaveBeenCalled();
   });
 
   it("shows the site's trust, what is missing and the way to Site Audit", async () => {

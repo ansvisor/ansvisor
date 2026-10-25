@@ -59,6 +59,15 @@ export interface QualityRead {
   claimsLimited?: boolean;
   /** Some of the page's claims aren't read yet: Trust may change (CE-045). */
   claimsReading?: boolean;
+  /** Where the brand's facts are approved: Brand settings › Brand facts (CE-047). */
+  brandFactsPath?: string | null;
+  /** The brand's business type: a proof to-do's wording follows it (CE-049). */
+  siteType?: 'b2b' | 'ecommerce' | 'b2c';
+  /** The page read for proof waits: the AI budget is spent, or its reads for the day made (CE-049). */
+  pagePaused?: boolean;
+  pageLimited?: boolean;
+  /** The page read for proof is under way: its to-dos may change. */
+  pageReading?: boolean;
   /**
    * With no author picked, what the person confirmed of the author their
    * site names (00271): a real person, and their profile there.
@@ -103,6 +112,9 @@ export function QualityTab({
   onKeep,
   onAddSource,
   onRemove,
+  onConfirmImages,
+  onAddImage,
+  onPickReviewer,
   onConfirmAuthor,
 }: {
   quality: QualityRead;
@@ -122,6 +134,12 @@ export function QualityTab({
   onConfirmAuthor?: (what: 'real' | 'profile', on: boolean) => void;
   /** Takes a claim's sentence out of the page (CE-045). */
   onRemove?: (claim: ClaimMark) => void;
+  /** Opens Confirm: the page's images, each to confirm as the person's own (CE-049). */
+  onConfirmImages?: () => void;
+  /** Opens the first open visual proof spot's Add image (CE-049). */
+  onAddImage?: () => void;
+  /** Opens the header's reviewer menu (CE-049). */
+  onPickReviewer?: () => void;
 }) {
   const t = useTranslations('contentEditor.editor.quality');
   const tSite = useTranslations('audit.siteTrust.checks');
@@ -135,7 +153,10 @@ export function QualityTab({
   ];
   const { todos } = quality;
   const todosLeft = todos.filter((todo) => !todo.done).length;
-  const suggestions = [...readabilitySuggestions(t, readability), ...trustSuggestions(t, trust)]
+  const suggestions = [
+    ...readabilitySuggestions(t, readability),
+    ...trustSuggestions(t, trust, proofSentences(todos)),
+  ]
     .filter((s) => s.gain > 0)
     .sort((a, b) => b.gain - a.gain);
   // Every live check has its points: none to raise, none of the person's left
@@ -184,12 +205,16 @@ export function QualityTab({
           <ul className="space-y-2">
             {todos.map((todo) => (
               <TodoRow
-                key={todo.id}
+                key={todo.key ?? todo.id}
                 todo={todo}
                 quality={quality}
                 onShowPlaceholder={onShowPlaceholder}
                 onPickAuthor={onPickAuthor}
                 onAddInput={onAddInput}
+                onAddSource={onAddSource}
+                onConfirmImages={onConfirmImages}
+                onAddImage={onAddImage}
+                onPickReviewer={onPickReviewer}
                 onConfirm={onConfirmAuthor}
               />
             ))}
@@ -279,6 +304,10 @@ export function QualityTab({
 
       {quality.aiPaused && <p className="text-xs text-muted-foreground">{t('aiPaused')}</p>}
       {quality.claimsPaused && <p className="text-xs text-muted-foreground">{t('claimsPaused')}</p>}
+      {quality.pagePaused && <p className="text-xs text-muted-foreground">{t('pagePaused')}</p>}
+      {quality.pageLimited && !quality.pagePaused && (
+        <p className="text-xs text-muted-foreground">{t('pageLimited')}</p>
+      )}
       {quality.claimsLimited && !quality.claimsPaused && (
         <p className="text-xs text-muted-foreground">{t('claimsLimited')}</p>
       )}
@@ -316,7 +345,12 @@ export function useTodoCopy() {
   const t = useTranslations('contentEditor.editor.quality.todos');
   return (
     todo: QualityTodo,
-    { author, team, canEdit }: Pick<QualityRead, 'author' | 'team' | 'canEdit'>,
+    {
+      author,
+      team,
+      canEdit,
+      siteType,
+    }: Pick<QualityRead, 'author' | 'team' | 'canEdit'> & Partial<Pick<QualityRead, 'siteType'>>,
   ) => {
     if (todo.id === 'placeholders') {
       const count = todo.count ?? 0;
@@ -339,6 +373,56 @@ export function useTodoCopy() {
               : action === 'addAuthor'
                 ? t('byline.detail.addAuthor')
                 : t('byline.detail.pickAuthor', { byline: team }),
+      };
+    }
+    // The page's own claims, their proof asked for by kind and business (CE-049).
+    if (todo.id === 'proof' && todo.proof) {
+      const { claim, kind } = todo.proof;
+      return {
+        title: t(`proof.title.${kind}`, { claim, site: siteType ?? 'b2b' }),
+        next: t('proof.next', { claim }),
+        detail: todo.done
+          ? t('proof.done')
+          : kind === 'ranking' || kind === 'unknown'
+            ? t('proof.detail.soften')
+            : kind === 'customer_case'
+              ? t('proof.detail.customerCase')
+              : t('proof.detail.default'),
+      };
+    }
+    // The brand's facts read from its site, to approve (CE-047).
+    if (todo.id === 'brandFacts') {
+      const count = todo.count ?? 0;
+      return {
+        title: t('brandFacts.title', { count }),
+        next: t('brandFacts.next', { count }),
+        detail: todo.done ? t('brandFacts.done') : t('brandFacts.detail'),
+      };
+    }
+    // A qualified reviewer for a page that advises on health, finance or law (CE-049).
+    if (todo.id === 'reviewer') {
+      const topic = todo.topic ?? 'health';
+      return {
+        title: t('reviewer.title'),
+        next: t('reviewer.next'),
+        detail: todo.done
+          ? t('reviewer.done')
+          : todo.action === 'addAuthor'
+            ? t('reviewer.detail.addAuthor', { topic })
+            : t('reviewer.detail.pick', { topic }),
+      };
+    }
+    // An image the person took themself (CE-049).
+    if (todo.id === 'visualProof') {
+      const count = todo.count ?? 0;
+      return {
+        title: t('visualProof.title'),
+        next: t('visualProof.next'),
+        detail: todo.done
+          ? t('visualProof.done')
+          : todo.action === 'confirmImage'
+            ? t('visualProof.detail.confirm', { count })
+            : t('visualProof.detail.add'),
       };
     }
     // What only the person can give (Brief › Your input, CE-048).
@@ -393,6 +477,10 @@ function TodoRow({
   onShowPlaceholder,
   onPickAuthor,
   onAddInput,
+  onAddSource,
+  onConfirmImages,
+  onAddImage,
+  onPickReviewer,
   onConfirm,
 }: {
   todo: QualityTodo;
@@ -400,6 +488,11 @@ function TodoRow({
   onShowPlaceholder: () => void;
   onPickAuthor: () => void;
   onAddInput?: () => void;
+  /** A proof to-do's Add proof link: its claim selected, the link dialog open (CE-049). */
+  onAddSource?: (claim: ClaimMark) => void;
+  onConfirmImages?: () => void;
+  onAddImage?: () => void;
+  onPickReviewer?: () => void;
   onConfirm?: (what: 'real' | 'profile', on: boolean) => void;
 }) {
   const t = useTranslations('contentEditor.editor.quality');
@@ -485,6 +578,52 @@ function TodoRow({
           <Button variant="outline" size="sm" className="h-7 shrink-0" onClick={onPickAuthor}>
             {t('pickAuthor')}
           </Button>
+        ) : todo.action === 'addProof' ? (
+          onAddSource &&
+          todo.proof && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-7 shrink-0"
+              aria-label={t('addProofFor', { claim: todo.proof.claim })}
+              onClick={() =>
+                onAddSource({
+                  text: todo.proof!.claim,
+                  sentence: todo.proof!.sentence,
+                  block: todo.proof!.block,
+                })
+              }
+            >
+              {t('addProof')}
+            </Button>
+          )
+        ) : todo.action === 'confirmImage' ? (
+          onConfirmImages && (
+            <Button variant="outline" size="sm" className="h-7 shrink-0" onClick={onConfirmImages}>
+              {t('confirmImage')}
+            </Button>
+          )
+        ) : todo.action === 'addImage' ? (
+          onAddImage && (
+            <Button variant="outline" size="sm" className="h-7 shrink-0" onClick={onAddImage}>
+              {t('addImage')}
+            </Button>
+          )
+        ) : todo.action === 'pickReviewer' ? (
+          onPickReviewer && (
+            <Button variant="outline" size="sm" className="h-7 shrink-0" onClick={onPickReviewer}>
+              {t('pickReviewer')}
+            </Button>
+          )
+        ) : todo.action === 'reviewBrandFacts' ? (
+          quality.brandFactsPath && (
+            <Link
+              href={quality.brandFactsPath}
+              className={cn(buttonVariants({ variant: 'outline', size: 'sm' }), 'h-7 shrink-0')}
+            >
+              {t('reviewBrandFacts')}
+            </Link>
+          )
         ) : (
           <Link
             href={MANAGE_AUTHORS_PATH}
@@ -521,29 +660,59 @@ export type TrustSuggestion = Suggestion & { check: TrustCheckId; count: number 
  * don't answer, each with Show on the first one in the page. A broken link
  * is listed before Trust is scored too, its gain out of the Phase 1 points.
  * Phase 2 (CE-046): weak or competitors' sources, Show and Keep on the first,
- * and no primary source among them.
+ * and no primary source among them. Phase 2 (CE-047): a price, trial or
+ * founding year that differs from the brand's approved facts, listed before
+ * Trust is scored too, as a broken link is.
  */
-export function trustSuggestions(t: T, trust: TrustRead | null): TrustSuggestion[] {
+export function trustSuggestions(
+  t: T,
+  trust: TrustRead | null,
+  covered: ReadonlySet<string> = new Set(),
+): TrustSuggestion[] {
   if (!trust) return [];
   const out: TrustSuggestion[] = [];
-  if (trust.unsourced.length) {
+  // A sentence a proof to-do asks the person to prove isn't the agent's to
+  // source as well (CE-049).
+  const unsourced = trust.unsourced.filter((sentence) => !covered.has(sentence));
+  if (unsourced.length) {
     // Phase 2 (CE-045): claims the model read count with the figures, so
     // the line says claims; Add source and Remove act on the page's first.
     const claims = trust.aiClaims > 0;
-    const first = trust.unsourced[0];
+    const first = unsourced[0];
     out.push({
       key: 'trust:claimsSourced',
       check: 'claimsSourced',
       score: 'trust',
-      gain: trustGain(trust, ['claimsSourced']),
+      // Each sentence's share: the covered ones' is their to-dos'.
+      gain: Math.round(
+        (trustGain(trust, ['claimsSourced']) * unsourced.length) / trust.unsourced.length,
+      ),
       line: t(claims ? 'checks.claimsSourced.lineClaims' : 'checks.claimsSourced.line', {
-        count: trust.unsourced.length,
+        count: unsourced.length,
       }),
-      count: trust.unsourced.length,
+      count: unsourced.length,
       detail: t(claims ? 'checks.claimsSourced.detailClaims' : 'checks.claimsSourced.detail'),
       show: first,
       ai: claims,
       claim: trust.marks.find((mark) => mark.sentence === first),
+    });
+  }
+  if (trust.mismatches.length) {
+    const [first] = trust.mismatches;
+    out.push({
+      key: 'trust:brandFacts',
+      check: 'brandFacts',
+      score: 'trust',
+      gain: trustGain(trust, ['brandFacts']),
+      line: t('checks.brandFacts.line', {
+        kind: first.kind,
+        page: first.page,
+        source: first.source,
+        fact: first.fact,
+      }),
+      count: trust.mismatches.length,
+      detail: t('checks.brandFacts.detail', { count: trust.mismatches.length }),
+      show: first.sentence,
     });
   }
   if (trust.stale.length) {
@@ -652,4 +821,9 @@ function detail(t: T, check: ReadabilityCheck): string {
       : t('checks.readingLevel.detailLength');
   }
   return t(`checks.${check.id}.detail`);
+}
+
+/** The sentences the open proof to-dos ask the person to prove (CE-049). */
+export function proofSentences(todos: readonly QualityTodo[]): ReadonlySet<string> {
+  return new Set(todos.flatMap((todo) => (todo.proof && !todo.done ? [todo.proof.sentence] : [])));
 }

@@ -9,6 +9,7 @@ import {
   eeat,
   linksToCheck,
   scoreGain,
+  sentenceGain,
   trust,
   trustBlocks,
   trustGain,
@@ -45,6 +46,19 @@ describe('eeat (Phase 1: the author)', () => {
     const result = eeat({ author: null });
     expect(result.score).toBe(0);
     expect(scoreGain(result, ['byline'])).toBe(60);
+  });
+
+  it("counts the person's own image as visual proof, and none with images or spots unconfirmed (CE-049)", () => {
+    const visual = (images: number, own: number, openSpots: number) =>
+      eeat({ author: author(), visual: { images, own, openSpots } }).checks.find(
+        (c) => c.id === 'visualProof',
+      );
+    expect(visual(2, 1, 0)).toEqual({ id: 'visualProof', points: 10, max: 10 });
+    expect(visual(2, 0, 0)).toEqual({ id: 'visualProof', points: 0, max: 10 });
+    expect(visual(0, 0, 1)).toEqual({ id: 'visualProof', points: 0, max: 10 });
+    // No image and nothing suggested: the check is left out.
+    expect(visual(0, 0, 0)).toBeUndefined();
+    expect(eeat({ author: author() }).checks.find((c) => c.id === 'visualProof')).toBeUndefined();
   });
 
   it('counts the author the site names once the person confirms them, the profile with them', () => {
@@ -553,5 +567,92 @@ describe('trust: the claims the model read (Phase 2, CE-045)', () => {
       ['the fastest app', 'Ledgerly is the fastest app. Every plan is SOC 2 certified.'],
       ['SOC 2 certified', 'Ledgerly is the fastest app. Every plan is SOC 2 certified.'],
     ]);
+  });
+});
+
+describe('trust: consistent with brand facts (Phase 2, CE-047)', () => {
+  const NOW = Date.parse('2026-10-24T12:00:00Z');
+  const mismatch = {
+    kind: 'price' as const,
+    page: '$59',
+    fact: '$49',
+    source: 'pricing' as const,
+    sentence: 'Pro costs $59 per month.',
+  };
+  const read = (
+    brandFacts: Parameters<typeof trust>[0]['brandFacts'],
+    html = '<p>Pro costs $59 per month.</p>',
+  ) =>
+    trust({ blocks: trustBlocks(html), links: new Map(), brandDomains: [], brandFacts, now: NOW });
+
+  it('gives the share of the compared facts that match, and names the ones that don’t', () => {
+    const result = read({ compared: 2, mismatches: [mismatch] });
+    expect(result.checks.find((c) => c.id === 'brandFacts')).toEqual({
+      id: 'brandFacts',
+      points: 5,
+      max: 10,
+    });
+    expect(result.mismatches).toEqual([mismatch]);
+  });
+
+  it('leaves the check out with nothing compared, and scores no Trust from it alone', () => {
+    expect(read({ compared: 0, mismatches: [] }).checks.map((c) => c.id)).toEqual([]);
+    const alone = read({ compared: 1, mismatches: [] }, '<p>A page with no figure.</p>');
+    expect(alone.score).toBeNull();
+    expect(read(null).mismatches).toEqual([]);
+  });
+});
+
+describe('trust: the proof of the brand’s own claims (Phase 2, CE-049)', () => {
+  const NOW = Date.parse('2026-10-24T12:00:00Z');
+  const html =
+    '<p>Ledgerly cut close times by 40% (<a href="https://www.acme.com/awards">award</a>). The market grew 12% in 2025.</p>' +
+    '<p>Teams forecast 3x faster (<a href="https://www.acme.com/blog">blog</a>).</p>';
+  const blocks = trustBlocks(html);
+  const read = (proofs: { block: string; sentence: string }[] | null, page = blocks) =>
+    trust({ blocks: page, links: new Map(), brandDomains: ['acme.com'], proofs, now: NOW });
+  const award = { block: blocks[0].text, sentence: 'Ledgerly cut close times by 40% ( award).' };
+
+  it("counts a link to the brand's own site as the source of its own claim's sentence, and nowhere else", () => {
+    expect(read(null).unsourced).toEqual([
+      'Ledgerly cut close times by 40% ( award).',
+      'The market grew 12% in 2025.',
+      'Teams forecast 3x faster ( blog).',
+    ]);
+    // The block's other figure isn't the brand's to prove: its own link doesn't source it.
+    expect(read([award]).unsourced).toEqual([
+      'The market grew 12% in 2025.',
+      'Teams forecast 3x faster ( blog).',
+    ]);
+  });
+
+  it('finds the proof once a link on its claim adds a space at its edge', () => {
+    const linked = trustBlocks(
+      '<p>We are <a href="https://www.acme.com/trust">ISO 27001</a>-certified for 3 years.</p>',
+    );
+    expect(linked[0].text).toBe('We are ISO 27001 -certified for 3 years.');
+    expect(
+      read(
+        [
+          {
+            block: 'We are ISO 27001-certified for 3 years.',
+            sentence: 'We are ISO 27001-certified for 3 years.',
+          },
+        ],
+        linked,
+      ).unsourced,
+    ).toEqual([]);
+  });
+
+  it("gives a sentence's gain only while it is unsourced", () => {
+    const result = read(null);
+    const sentence = 'Teams forecast 3x faster ( blog).';
+    const gain = sentenceGain(result, sentence);
+    expect(gain).toBeGreaterThan(0);
+    expect(gain).toBe(
+      (read([{ block: blocks[1].text, sentence }]).score ?? 0) - (result.score ?? 0),
+    );
+    expect(sentenceGain(result, 'Not on the page.')).toBe(0);
+    expect(sentenceGain(null, sentence)).toBe(0);
   });
 });

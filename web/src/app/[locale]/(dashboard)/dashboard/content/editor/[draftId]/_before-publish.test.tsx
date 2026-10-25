@@ -151,6 +151,7 @@ const trustRead = (over: Partial<TrustRead>): TrustRead => ({
   aiClaims: 0,
   weak: [],
   classified: 0,
+  mismatches: [],
   ...over,
 });
 

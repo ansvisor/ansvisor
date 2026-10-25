@@ -2,8 +2,12 @@ import { classifyDomain, normalizeDomain } from '@/lib/citations/classify';
 import type { ContentAuthor } from './authors';
 import { cleanHref } from './html-allowlist';
 import { ownText, sentencesOf } from './readability';
+import type { FactMismatch } from './brand-facts';
 import type { ClaimBlock } from './claims';
 import { askableSite, sourceClass, type AiSourceClass, type SourceClass } from './source-class';
+
+/** A text's words without their spaces, as compared where an inline tag may add one. */
+export const squeeze = (text: string) => text.replace(/\s+/g, '');
 
 /**
  * E-E-A-T and Trust (Content Editor Quality spec §2.1, §2.2): checks read
@@ -96,6 +100,25 @@ export function scoreGain<Id extends string>(result: Score<Id>, ids: Id[]): numb
 }
 
 /**
+ * What sourcing one sentence would add to Trust: its share of the claims'
+ * points (CE-049's proof to-dos). Zero when Trust isn't scored or the
+ * sentence has its source.
+ */
+export function sentenceGain(
+  trust: (Score<TrustCheckId> & Partial<Pick<TrustRead, 'unsourced' | 'figures'>>) | null,
+  sentence: string,
+): number {
+  if (!trust || trust.score === null || !trust.unsourced?.includes(sentence)) return 0;
+  const figures = trust.figures ?? 0;
+  const raised = trust.checks.map((c) =>
+    c.id === 'claimsSourced' && figures > 0
+      ? { ...c, points: Math.min(c.max, c.points + c.max / figures) }
+      : c,
+  );
+  return (scoreOf(raised).score ?? 0) - trust.score;
+}
+
+/**
  * A Trust suggestion's gain. While Trust isn't scored (no figure and no
  * dated source yet), the checks' missing points count out of the Phase 1
  * points, so a broken link still says what fixing it is worth.
@@ -123,9 +146,17 @@ export function authorProfile(author: ContentAuthor | null): { bio: boolean; lin
 export function eeat({
   author,
   used = null,
+  visual = null,
   confirmed = null,
 }: {
   author: ContentAuthor | null;
+  /**
+   * Phase 2 (CE-049): the page's images, how many of them the person
+   * confirmed are their own (not stock), and the visual proof spots still
+   * open. Own ones are visual proof; images or spots with none confirmed
+   * count none; a page with neither leaves the check out. Left out before.
+   */
+  visual?: { images: number; own: number; openSpots: number } | null;
   /**
    * With no author picked, what the person confirmed of the one their site
    * names (00271): a real person (the byline's points), and their profile
@@ -151,6 +182,16 @@ export function eeat({
             id: 'originalData' as const,
             points: used.data ? EEAT_WEIGHTS.originalData : 0,
             max: EEAT_WEIGHTS.originalData,
+          },
+        ]
+      : []),
+    // Own images are among the page's: images or open spots bring the check in.
+    ...(visual && (visual.images > 0 || visual.openSpots > 0)
+      ? [
+          {
+            id: 'visualProof' as const,
+            points: visual.own > 0 ? EEAT_WEIGHTS.visualProof : 0,
+            max: EEAT_WEIGHTS.visualProof,
           },
         ]
       : []),
@@ -300,6 +341,8 @@ export interface TrustRead extends Score<TrustCheckId> {
    */
   weak: { url: string; text: string; kind: 'weak' | 'competitor'; ai: boolean }[];
   classified: number;
+  /** Phase 2 (CE-047): the page's facts that differ from the brand's approved ones. */
+  mismatches: FactMismatch[];
 }
 
 /**
@@ -342,6 +385,15 @@ export interface SourceRead {
  *
  * With `claims` (Phase 2, CE-045), the claims the model read count as the
  * figures do, each sentence once: Trust is scored from them alone too.
+ *
+ * With `brandFacts` (Phase 2, CE-047), the page's prices, trial and founding
+ * year compared with the brand's approved facts count: the share that
+ * matched. Like a working link, it doesn't score Trust on its own.
+ *
+ * With `proofs` (Phase 2, CE-049), the sentence holding the brand's own
+ * claim (an award, a certification, its own test) is sourced by a link in
+ * its block to the brand's own site too: its award or trust page is the
+ * proof. The block's other sentences aren't.
  */
 export function trust({
   blocks,
@@ -351,6 +403,8 @@ export function trust({
   quote = null,
   sources: kinds = null,
   claims = null,
+  brandFacts = null,
+  proofs = null,
   now,
 }: {
   /** The page's blocks (trustBlocks). */
@@ -369,6 +423,13 @@ export function trust({
   sources?: SourceRead | null;
   /** Phase 2: the claims the model read in the page's own words (CE-045); left out before. */
   claims?: readonly ClaimBlock[] | null;
+  /** Phase 2: the page against the brand's approved facts (factMismatches, CE-047); left out before. */
+  brandFacts?: { compared: number; mismatches: FactMismatch[] } | null;
+  /**
+   * Phase 2: the brand's own claims' sentences, each in its block (the page
+   * read's proofs on the page, CE-049).
+   */
+  proofs?: readonly { block: string; sentence: string }[] | null;
   now: number;
 }): TrustRead {
   const all = pageLinks(blocks, brandDomains);
@@ -377,11 +438,19 @@ export function trust({
   // Each sentence once, where the page has it first: a nested list item's
   // text is its parent's too.
   const figures = new Map<string, { sourced: boolean; block: number }>();
-  const sourcedBlock = (index: number) => all.some((l) => l.external && l.block === index);
+  // A proof's block and sentence by their words without spaces: a link put
+  // on its claim adds one at the link's edge ("ISO 27001 -certified").
+  const proofOf = (block: string, sentence: string) => `${squeeze(block)}\n${squeeze(sentence)}`;
+  const ownProof = new Set((proofs ?? []).map((p) => proofOf(p.block, p.sentence)));
+  const sourcedIn = (index: number, sentence: string) =>
+    all.some(
+      (l) =>
+        l.block === index && (l.external || ownProof.has(proofOf(blocks[index].text, sentence))),
+    );
   const addFigure = (sentence: string, block: number) => {
     const had = figures.get(sentence);
     figures.set(sentence, {
-      sourced: (had?.sourced ?? false) || sourcedBlock(block),
+      sourced: (had?.sourced ?? false) || sourcedIn(block, sentence),
       block: had?.block ?? block,
     });
   };
@@ -497,6 +566,16 @@ export function trust({
     });
   }
 
+  if (brandFacts && brandFacts.compared > 0) {
+    checks.push({
+      id: 'brandFacts',
+      points:
+        (TRUST_WEIGHTS.brandFacts * (brandFacts.compared - brandFacts.mismatches.length)) /
+        brandFacts.compared,
+      max: TRUST_WEIGHTS.brandFacts,
+    });
+  }
+
   if (quote !== null) {
     checks.push({
       id: 'expertQuote',
@@ -529,6 +608,7 @@ export function trust({
     aiClaims,
     weak,
     classified: classified.length,
+    mismatches: brandFacts?.mismatches ?? [],
   };
 }
 

@@ -119,7 +119,8 @@ export function BeforePublish({
   const authorsRead = quality.eeat !== null;
   const trust = quality.trust?.score ?? null;
   const below = trust !== null && trust < TRUST_GATE;
-  // The biggest of what would raise Trust: the warning's reason.
+  // The biggest of what would raise Trust: the warning's reason. The claims
+  // a proof to-do covers count here too: the warning names them.
   const [fix] = below
     ? trustSuggestions(tQuality, quality.trust)
         .filter((s) => s.gain > 0)
@@ -219,6 +220,11 @@ export function BeforePublish({
         {quality.claimsReading && (
           <p role="status" className="text-xs text-muted-foreground">
             {t('claimsReading')}
+          </p>
+        )}
+        {quality.pageReading && (
+          <p role="status" className="text-xs text-muted-foreground">
+            {t('pageReading')}
           </p>
         )}
         <ul className="divide-y rounded-xl border text-sm">
