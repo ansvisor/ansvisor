@@ -7642,6 +7642,7 @@
       "refused": "Token refused",
       "site": "Site: {site}",
       "notConnectedMember": "Not connected. Admins and managers can connect Webflow.",
+      "refusedMember": "Webflow refused the token. Pages can't go there until an admin or manager pastes a new one.",
       "pagesGoTo": "Pages go to {collection}.",
       "noCollection": "No collection picked yet.",
       "tokenLabel": "Site token",
