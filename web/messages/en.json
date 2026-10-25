@@ -3215,7 +3215,7 @@
       "done": "Published. The Live page tab measures it from now on.",
       "offDomain": "Published. The address isn't on the brand's domains, so its numbers won't show.",
       "addressNotKept": "Published. The address couldn't be saved yet, so the Live page tab can't measure it.",
-      "unsaved": "The page has changes that aren't saved, so it wasn't marked published.",
+      "unsaved": "The page has changes that aren't saved, so its live address can't be set yet.",
       "archived": "This page is archived. Restore it in the Library first.",
       "cancel": "Cancel",
       "save": "Mark published"

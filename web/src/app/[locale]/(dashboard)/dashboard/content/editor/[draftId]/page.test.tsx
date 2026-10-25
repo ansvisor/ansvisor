@@ -1080,6 +1080,39 @@ describe('the content editor', () => {
     }
   });
 
+  it('holds Next step’s Mark published on an archived page, saying why', async () => {
+    getContentDraft.mockResolvedValue(
+      draft({ status: 'ready', method: 'create', archivedAt: '2026-10-25T10:00:00Z' }),
+    );
+    const width = window.innerWidth;
+    window.innerWidth = 1440;
+    process.env.NEXT_PUBLIC_CONTENT_QUALITY_PHASE = '1';
+    try {
+      getContentAuthors.mockResolvedValue({
+        authors: [],
+        brands: [{ id: 'b1', name: 'Acme' }],
+        me: { id: 'u1', role: 'analyst' },
+      });
+      await renderPage();
+      const next = [...container.querySelectorAll<HTMLButtonElement>('header button')].find((b) =>
+        b.textContent?.startsWith('Next'),
+      )!;
+      await act(async () => {
+        next.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
+        next.click();
+      });
+      const mark = [...document.querySelectorAll<HTMLButtonElement>('button')].find(
+        (b) => b.textContent === 'Mark published',
+      )!;
+      expect(mark.disabled).toBe(true);
+      const why = document.getElementById(mark.getAttribute('aria-describedby')!);
+      expect(why!.textContent).toBe('This page is archived. Restore it in the Library first.');
+    } finally {
+      delete process.env.NEXT_PUBLIC_CONTENT_QUALITY_PHASE;
+      window.innerWidth = width;
+    }
+  });
+
   it("puts the caret at the end of the page's H1 when the title is clicked", async () => {
     getContentDraft.mockResolvedValue(draft());
     await renderPage();
