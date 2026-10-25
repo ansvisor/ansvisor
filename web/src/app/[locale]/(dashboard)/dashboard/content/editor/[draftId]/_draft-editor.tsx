@@ -114,7 +114,13 @@ import {
   unplacedSites,
   type ClaimMark,
 } from '@/lib/content/quality-checks';
-import { PROFILE_WEIGHTS, checksOff, profileFor, weighed } from '@/lib/content/quality-profiles';
+import {
+  PROFILE_WEIGHTS,
+  checksOff,
+  profileFor,
+  weighed,
+  weighedTrust,
+} from '@/lib/content/quality-profiles';
 import { proofKey, qualityTodos } from '@/lib/content/quality-todos';
 import { isByline, readability, sentencesOf } from '@/lib/content/readability';
 import { brandFactsPath, factMismatches } from '@/lib/content/brand-facts';
@@ -809,6 +815,8 @@ export function DraftEditor({
               visual,
               how: aiChecks?.how ?? null,
               confirmed: authorConfirmed,
+              // The brand's own information: only a type that weighs it counts it.
+              siteTrust,
             }),
             weights.eeat,
           )
@@ -824,6 +832,7 @@ export function DraftEditor({
       visual,
       aiChecks,
       authorConfirmed,
+      siteTrust,
       weights,
     ],
   );
@@ -877,29 +886,22 @@ export function DraftEditor({
   const trustScore = useMemo(
     () =>
       qualityOn && brandDomains && !inputsPending
-        ? {
-            ...weighed(
-              trust({
-                blocks: pageBlocks,
-                links: linkChecks,
-                brandDomains,
-                siteTrust,
-                quote: used ? used.quote : null,
-                sources: sourceRead,
-                claims: claimBlocks,
-                brandFacts: factCheck,
-                proofs: proofAsks,
-                page: aiChecks,
-                now: Date.now(),
-              }),
-              weights.trust,
-            ),
-            // What a broken link's gain is out of while Trust isn't scored.
-            phase1Points:
-              weights.trust.claimsSourced +
-              weights.trust.freshSources +
-              weights.trust.noBrokenLinks,
-          }
+        ? weighedTrust(
+            trust({
+              blocks: pageBlocks,
+              links: linkChecks,
+              brandDomains,
+              siteTrust,
+              quote: used ? used.quote : null,
+              sources: sourceRead,
+              claims: claimBlocks,
+              brandFacts: factCheck,
+              proofs: proofAsks,
+              page: aiChecks,
+              now: Date.now(),
+            }),
+            weights.trust,
+          )
         : null,
     [
       weights,
@@ -3295,7 +3297,8 @@ export function DraftEditor({
               !quality.author &&
               !authorConfirmed.real &&
               !checksOff(profile).has('byline'),
-            noDisclosure: aiChecks?.disclosure?.found === false,
+            noDisclosure:
+              aiChecks?.disclosure?.found === false && !checksOff(profile).has('disclosure'),
             article: isArticlePage(pageType),
             onReview: () => {
               setExportOpen(null);

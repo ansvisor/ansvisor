@@ -4704,6 +4704,7 @@
           "line": "Checks and weights for {type}{detected, select, yes { (detected)} other {}}:",
           "noType": "an article (no page type yet)",
           "change": "Change",
+          "changeLabel": "Change the page type",
           "article": "an author with experience, sourced claims, short sentences and the answer first.",
           "product": "no author (your brand's), your own product photos, proof for claims, prices that match, short plain copy.",
           "category": "your own product images, prices and claims that match, a short intro.",

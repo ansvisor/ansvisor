@@ -5,6 +5,7 @@ import {
   type EeatCheckId,
   type Score,
   type TrustCheckId,
+  type TrustRead,
 } from './quality-checks';
 import { READABILITY_WEIGHTS, type ReadabilityCheckId } from './readability';
 
@@ -84,6 +85,7 @@ export const PROFILE_WEIGHTS: Readonly<Record<QualityProfile, ProfileWeights>> =
       whoHowWhy: 0,
       dates: 0,
       authorSchema: 0,
+      brandInfo: 0,
     },
     trust: {
       claimsSourced: 30,
@@ -107,18 +109,20 @@ export const PROFILE_WEIGHTS: Readonly<Record<QualityProfile, ProfileWeights>> =
       passiveJargon: 10,
     },
   },
-  // Low E-E-A-T weight: real product images; prices and claims that match
-  // the brand's; a short intro.
+  // Low E-E-A-T weight: real product images and the brand's own
+  // information (its site's trust); prices and claims that match the
+  // brand's; a short intro.
   category: {
     eeat: {
       experience: 0,
       originalData: 0,
       byline: 0,
       authorBio: 0,
-      visualProof: 100,
+      visualProof: 60,
       whoHowWhy: 0,
       dates: 0,
       authorSchema: 0,
+      brandInfo: 40,
     },
     trust: {
       claimsSourced: 25,
@@ -154,6 +158,7 @@ export const PROFILE_WEIGHTS: Readonly<Record<QualityProfile, ProfileWeights>> =
       whoHowWhy: 0,
       dates: 0,
       authorSchema: 0,
+      brandInfo: 0,
     },
     trust: {
       claimsSourced: 35,
@@ -189,6 +194,7 @@ export const PROFILE_WEIGHTS: Readonly<Record<QualityProfile, ProfileWeights>> =
       whoHowWhy: 20,
       dates: 10,
       authorSchema: 5,
+      brandInfo: 0,
     },
     trust: {
       claimsSourced: 25,
@@ -244,4 +250,25 @@ export function weighed<Id extends string, S extends Score<Id>>(
       ? null
       : Math.round((checks.reduce((sum, c) => sum + c.points, 0) / total) * 100);
   return { ...result, checks, score };
+}
+
+/**
+ * Trust weighed for a profile, scored as trust() scores it: once a figure
+ * or fresh-sources check is left among the weighed ones, or two sources are
+ * placed. A type that leaves those out isn't scored by its links and site
+ * alone. Its unscored gains count out of the type's Phase 1 points.
+ */
+export function weighedTrust(
+  read: TrustRead,
+  weights: ProfileWeights['trust'],
+): TrustRead & { phase1Points: number } {
+  const result = weighed(read, weights);
+  const scored =
+    result.checks.some((c) => c.id === 'claimsSourced' || c.id === 'freshSources') ||
+    read.classified >= 2;
+  return {
+    ...result,
+    score: scored ? result.score : null,
+    phase1Points: weights.claimsSourced + weights.freshSources + weights.noBrokenLinks,
+  };
 }

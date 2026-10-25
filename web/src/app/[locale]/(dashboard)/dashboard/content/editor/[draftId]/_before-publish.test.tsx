@@ -309,6 +309,26 @@ describe('BeforePublish', () => {
     expect(jsonLd()).not.toHaveProperty('author');
   });
 
+  it('asks a product page for no disclosure: it is the brand’s own (CE-052)', async () => {
+    const recommends = {
+      aiChecks: {
+        how: null,
+        balanced: null,
+        disclosure: { found: false, show: 'Acme Ridge is our pick' },
+        answerFirst: null,
+      },
+    };
+    await render(quality(recommends));
+    expect(rows().some((row) => row.includes('without a disclosure'))).toBe(true);
+    await render(
+      quality({
+        ...recommends,
+        weightsFor: { type: 'product_page', detected: false, profile: 'product' },
+      }),
+    );
+    expect(rows().some((row) => row.includes('without a disclosure'))).toBe(false);
+  });
+
   it('names the brand’s byline as checked on a page type that wants no author (CE-052)', async () => {
     await render(
       quality({

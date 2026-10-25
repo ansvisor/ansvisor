@@ -28,7 +28,11 @@ export interface Score<Id extends string = string> {
   checks: ScoreCheck<Id>[];
 }
 
-/** E-E-A-T's checks and points (blog defaults); Phase 1 reads the author's. */
+/**
+ * E-E-A-T's checks and points (blog defaults); Phase 1 reads the author's.
+ * The brand's own information (its site's trust, CE-043) counts only on
+ * the page types that weigh it (a category page, quality-profiles.ts).
+ */
 export const EEAT_WEIGHTS = {
   experience: 20,
   originalData: 15,
@@ -38,7 +42,10 @@ export const EEAT_WEIGHTS = {
   whoHowWhy: 10,
   dates: 10,
   authorSchema: 10,
+  brandInfo: 0,
 } as const;
+/** The brand info check's points before a page type weighs it (weighed keeps its share). */
+const BRAND_INFO_POINTS = 10;
 export type EeatCheckId = keyof typeof EEAT_WEIGHTS;
 
 /**
@@ -129,12 +136,21 @@ export function trustGain(
   ids: TrustCheckId[],
 ): number {
   if (result.score !== null) return scoreGain(result, ids);
-  const phase1 = result.phase1Points ?? TRUST_PHASE1_POINTS;
-  const missing = result.checks
-    .filter((c) => ids.includes(c.id))
-    .reduce((sum, c) => sum + c.max - c.points, 0);
-  return phase1 > 0 ? Math.round((missing / phase1) * 100) : 0;
+  const named = result.checks.filter((c) => ids.includes(c.id));
+  const missing = named.reduce((sum, c) => sum + c.max - c.points, 0);
+  // A check outside Phase 1's (brand facts) counts out of its own points too.
+  const out =
+    (result.phase1Points ?? TRUST_PHASE1_POINTS) +
+    named.filter((c) => !PHASE1_CHECKS.has(c.id)).reduce((sum, c) => sum + c.max, 0);
+  return out > 0 ? Math.round((missing / out) * 100) : 0;
 }
+
+/** Trust's Phase 1 checks: sourced figures, fresh sources, working links. */
+const PHASE1_CHECKS: ReadonlySet<TrustCheckId> = new Set([
+  'claimsSourced',
+  'freshSources',
+  'noBrokenLinks',
+]);
 
 /** What an author's profile has: a short bio, and profile links (Person schema's sameAs). */
 export function authorProfile(author: ContentAuthor | null): { bio: boolean; links: boolean } {
@@ -154,8 +170,14 @@ export function eeat({
   visual = null,
   how = null,
   confirmed = null,
+  siteTrust = null,
 }: {
   author: ContentAuthor | null;
+  /**
+   * The site's trust (its five checks in Site Audit, CE-043): the brand's own
+   * information, which only a page type that weighs it counts (CE-052).
+   */
+  siteTrust?: { score: number } | null;
   /**
    * Phase 2 (CE-050): whether the page says how it was made (tested,
    * picked, researched, by whom), as the page read finds it; null where it
@@ -230,6 +252,15 @@ export function eeat({
           : 0,
       max: EEAT_WEIGHTS.authorBio,
     },
+    ...(siteTrust
+      ? [
+          {
+            id: 'brandInfo' as const,
+            points: (BRAND_INFO_POINTS * siteTrust.score) / 5,
+            max: BRAND_INFO_POINTS,
+          },
+        ]
+      : []),
   ]);
 }
 

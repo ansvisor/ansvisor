@@ -1,14 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import { PAGE_TYPES } from './drafts';
-import { EEAT_WEIGHTS, TRUST_WEIGHTS, eeat } from './quality-checks';
+import { EEAT_WEIGHTS, TRUST_WEIGHTS, eeat, trust, trustBlocks } from './quality-checks';
 import {
   PROFILE_WEIGHTS,
   QUALITY_PROFILES,
   checksOff,
   profileFor,
   weighed,
+  weighedTrust,
 } from './quality-profiles';
-import { READABILITY_WEIGHTS } from './readability';
+import { READABILITY_WEIGHTS, readability } from './readability';
 
 /**
  * Page types (Quality spec §11, CE-052): what the three scores count, and
@@ -52,7 +53,8 @@ describe('PROFILE_WEIGHTS', () => {
   it('asks a product page for no author, and a comparison for balance and a disclosure', () => {
     expect(checksOff('product')).toContain('byline');
     expect(checksOff('product')).toContain('authorBio');
-    expect(checksOff('article').size).toBe(0);
+    // An article counts every check but the brand's own information.
+    expect([...checksOff('article')]).toEqual(['brandInfo']);
     expect(PROFILE_WEIGHTS.comparison.trust.balanced).toBeGreaterThan(
       PROFILE_WEIGHTS.article.trust.balanced,
     );
@@ -88,5 +90,71 @@ describe('weighed', () => {
     expect(weighed({ score: null, checks: [] }, PROFILE_WEIGHTS.product.eeat).score).toBeNull();
     const authorOnly = eeat({ author });
     expect(weighed(authorOnly, PROFILE_WEIGHTS.product.eeat)).toEqual({ score: null, checks: [] });
+  });
+
+  it('keeps what else a score carries (Readability’s words)', () => {
+    const html = `<h1>Pipeline</h1><p>${'Teams count each deal once a week. '.repeat(12)}</p>`;
+    const read = readability(html, 'en');
+    expect(weighed(read, PROFILE_WEIGHTS.product.readability)).toMatchObject({
+      words: read.words,
+    });
+  });
+
+  it('weighs a category page’s E-E-A-T with the brand’s own information, not all or nothing', () => {
+    const category = (own: number, site: number) =>
+      weighed(
+        eeat({
+          author: null,
+          visual: { images: 2, own, openSpots: 0 },
+          siteTrust: { score: site },
+        }),
+        PROFILE_WEIGHTS.category.eeat,
+      ).score;
+    // Stock images only, the site's trust in full: 40 of 100.
+    expect(category(0, 5)).toBe(40);
+    expect(category(1, 5)).toBe(100);
+    // An article leaves the brand's information out.
+    expect(
+      weighed(eeat({ author, siteTrust: { score: 0 } }), PROFILE_WEIGHTS.article.eeat).checks.map(
+        (c) => c.id,
+      ),
+    ).toEqual(['byline', 'authorBio']);
+  });
+});
+
+describe('weighedTrust', () => {
+  const now = Date.parse('2026-10-25');
+  const read = (html: string) =>
+    trust({
+      blocks: trustBlocks(html),
+      links: new Map([
+        [
+          'https://example.org/report',
+          {
+            href: 'https://example.org/report',
+            status: 'ok',
+            httpStatus: 200,
+            date: '2019-01-01T00:00:00.000Z',
+          },
+        ],
+      ]),
+      brandDomains: ['acme.com'],
+      siteTrust: { score: 5 },
+      now,
+    });
+
+  it('isn’t scored by links and the site alone on a type that leaves freshness out', () => {
+    const dated = read('<p>See <a href="https://example.org/report">the report</a>.</p>');
+    // An article reads its stale source: scored.
+    expect(weighedTrust(dated, PROFILE_WEIGHTS.article.trust).score).not.toBeNull();
+    // A product page doesn't weigh freshness: a working link and the site aren't Trust.
+    const product = weighedTrust(dated, PROFILE_WEIGHTS.product.trust);
+    expect(product.score).toBeNull();
+    expect(product.phase1Points).toBe(40);
+    // A figure brings it in.
+    const figure = read(
+      '<p>It cut costs by 40% (<a href="https://example.org/report">the report</a>).</p>',
+    );
+    expect(weighedTrust(figure, PROFILE_WEIGHTS.product.trust).score).not.toBeNull();
   });
 });

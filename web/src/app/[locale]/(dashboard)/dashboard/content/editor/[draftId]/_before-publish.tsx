@@ -166,7 +166,11 @@ export function BeforePublish({
     : null;
   // Added here: it counts once the page is read again.
   const [added, setAdded] = useState(false);
-  const disclosure = quality.aiChecks?.disclosure ?? null;
+  // Where the page's type counts it (CE-052): a product page is the brand's own.
+  const disclosure =
+    quality.weightsFor && checksOff(quality.weightsFor.profile).has('disclosure')
+      ? null
+      : (quality.aiChecks?.disclosure ?? null);
   const brand = quality.brandName || tQuality('yourBrand');
   const rows: Row[] = [
     !authorsRead

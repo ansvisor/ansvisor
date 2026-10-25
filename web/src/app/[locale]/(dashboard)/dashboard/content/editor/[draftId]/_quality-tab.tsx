@@ -233,6 +233,7 @@ export function QualityTab({
                 <button
                   type="button"
                   onClick={onChangeType}
+                  aria-label={t('weightsFor.changeLabel')}
                   className="font-medium text-foreground underline-offset-2 hover:underline"
                 >
                   {t('weightsFor.change')}
