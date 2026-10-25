@@ -3,8 +3,10 @@ import { describe, expect, it } from 'vitest';
 import { csvRows } from './csv.js';
 import {
   FeedFormatError,
+  detectFormat,
   parseCsvFeed,
   parseFacebookCatalogCsv,
+  parseFeed,
   parseGoogleFeedXml,
 } from './index.js';
 import { parseMoney } from './item.js';
@@ -212,5 +214,23 @@ describe('parseCsvFeed', () => {
       title: 'Product 9999, blue',
       price: { amount: 9999.99, currency: 'USD' },
     });
+  });
+});
+
+describe('detectFormat and parseFeed', () => {
+  it('reads XML, a Meta catalog CSV and a plain CSV by their text', () => {
+    expect(detectFormat(fixture('google-feed.xml'))).toBe('google_xml');
+    expect(detectFormat(fixture('google-feed-atom.xml'))).toBe('google_xml');
+    expect(detectFormat(fixture('facebook-catalog.csv'))).toBe('meta_csv');
+    expect(detectFormat(fixture('store-export.csv'))).toBe('csv');
+  });
+
+  it('parses in the format named, or the one it reads, and says which', () => {
+    const auto = parseFeed(fixture('facebook-catalog.csv'));
+    expect(auto.format).toBe('meta_csv');
+    expect(auto.items).toHaveLength(4);
+    expect(parseFeed(fixture('store-export.csv'), 'csv').format).toBe('csv');
+    expect(() => parseFeed('   ')).toThrow('The file is empty.');
+    expect(() => parseFeed(fixture('store-export.csv'), 'google_xml')).toThrow(FeedFormatError);
   });
 });

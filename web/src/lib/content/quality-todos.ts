@@ -80,6 +80,13 @@ export interface QualityTodo {
    * names (00271), a tick box beside the to-do, and whether it's ticked.
    */
   confirm?: { what: 'real' | 'profile'; on: boolean };
+  /**
+   * A customer case's Trust share while it isn't linked (CE-052): its
+   * sentence is an unsourced claim until it is, confirmed or not.
+   */
+  trustGain?: number;
+  /** A check date the page has, over a year old: Add line's own line (it replaces it), or the person's words. */
+  old?: 'line' | 'text';
 }
 
 /**
@@ -160,7 +167,7 @@ export function qualityTodos({
    * Phase 3 (CE-052): whether a comparison shows when it was last checked,
    * and the line Add line puts in (null for a language without one).
    */
-  checkDate?: { found: boolean; line: string | null } | null;
+  checkDate?: { found: boolean; old?: 'line' | 'text' | null; line: string | null } | null;
   /**
    * Phase 3 (CE-052): the customer cases the person confirmed may be
    * published, by their proof to-do's key: a case's to-do is that confirm,
@@ -206,7 +213,7 @@ export function qualityTodos({
   let open = 0;
   // A customer case's share of E-E-A-T's customer cases, each confirm alike.
   const caseAsks = cases ? (proofs?.asks ?? []).filter((a) => a.kind === 'customer_case') : [];
-  const unconfirmed = caseAsks.filter((a) => !cases!.has(caseKey(a))).length;
+  const unconfirmed = caseAsks.filter((a) => !caseConfirmed(cases!, a)).length;
   const caseGain =
     eeat && eeat.score !== null && unconfirmed > 0
       ? Math.round(scoreGain(eeat, ['customerCase']) / unconfirmed)
@@ -214,7 +221,9 @@ export function qualityTodos({
   const proofTodos: QualityTodo[] = (proofs?.asks ?? []).flatMap((ask) => {
     const confirm = !!cases && ask.kind === 'customer_case';
     const key = confirm ? caseKey(ask) : proofKey(ask);
-    const done = confirm ? cases!.has(key) : ask.linked;
+    const done = confirm ? caseConfirmed(cases!, ask) : ask.linked;
+    // Linking the published case still raises Trust: said beside the confirm.
+    const linkGain = confirm && !ask.linked ? sentenceGain(trust, ask.sentence) : 0;
     if (done && !proofs?.had.has(key)) return [];
     if (!done && (open += 1) > MAX_PROOF_TODOS) return [];
     return [
@@ -226,6 +235,7 @@ export function qualityTodos({
         score: confirm ? 'eeat' : 'trust',
         action: confirm ? 'confirmCase' : 'addProof',
         proof: { claim: ask.claim, block: ask.block, kind: ask.kind, sentence: ask.sentence },
+        ...(linkGain > 0 ? { trustGain: linkGain } : {}),
       } satisfies QualityTodo,
     ];
   });
@@ -319,6 +329,7 @@ export function qualityTodos({
             score: 'eeat',
             // Only the person knows when they checked: Add line says this month's.
             action: checkDate.found || !checkDate.line ? null : 'addCheckDate',
+            ...(!checkDate.found && checkDate.old ? { old: checkDate.old } : {}),
           } satisfies QualityTodo,
         ]
       : []),
@@ -367,12 +378,39 @@ export const proofKey = (ask: { claim: string; block: string }) =>
   `proof:${squeeze(ask.claim)}:${shortHash(squeeze(ask.block))}`;
 
 /**
- * A customer case's confirmation key (CE-052, 00279): its claim alone, by
+ * A customer case's confirmation key (CE-052, 00280): its claim alone, by
  * its words without spaces, so a typo fixed in its paragraph keeps the
  * confirm.
  */
 export const caseKey = (ask: { claim: string }) =>
   `case:${squeeze(ask.claim).toLowerCase()}`.slice(0, 400);
+
+/** The fewest letters a confirm's words match a case's sentence by: a name alone isn't its case. */
+const CASE_WORDS = 12;
+
+/**
+ * Whether a customer case is confirmed (CE-052): by its own key, or by a
+ * confirm's words, as the page read picks its claim's words again after a
+ * save ("Acme cut its close time" one time, "Acme cut its close time by
+ * 40%" the next): a confirmed claim's words in its sentence, or its claim's
+ * in a confirmed one's.
+ */
+export function caseConfirmed(
+  confirms: ReadonlySet<string>,
+  ask: { claim: string; sentence: string },
+): boolean {
+  const key = caseKey(ask);
+  if (confirms.has(key)) return true;
+  const claim = key.slice('case:'.length);
+  const sentence = squeeze(ask.sentence).toLowerCase();
+  for (const confirmed of confirms) {
+    if (!confirmed.startsWith('case:')) continue;
+    const words = confirmed.slice('case:'.length);
+    if (words.length >= CASE_WORDS && sentence.includes(words)) return true;
+    if (claim.length >= CASE_WORDS && words.includes(claim)) return true;
+  }
+  return false;
+}
 
 /**
  * Who / how / why (CE-050): the page says how it was made (how it was
