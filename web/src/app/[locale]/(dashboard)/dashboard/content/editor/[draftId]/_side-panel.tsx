@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { rulesForAgent, useRuleDescriber } from '@/lib/content/agent-write';
 import { isPageType, type ContentDraft } from '@/lib/content/drafts';
 import type { SiteType } from '@/lib/content/page-types';
 import { buildSourceGroups, includedCounts, type DraftSourceKind } from '@/lib/content/sources';
@@ -237,10 +238,16 @@ export function EditorSidePanel({
   const [tab, setTab] = useState<PanelTab>('instructions');
   const [segment, setSegment] = useState<InstructionSegment>('rules');
   const [opened, setOpened] = useState<Set<PanelTarget>>(() => new Set(['instructions', 'rules']));
+  const describeRule = useRuleDescriber();
   const page = useRef<PageNow>({ title, html: bodyHtml, length: rules.length });
   const sourcesNow = useRef(reads.sources);
   useEffect(() => {
-    page.current = { title, html: bodyHtml, length: rules.length };
+    page.current = {
+      title,
+      html: bodyHtml,
+      length: rules.length,
+      rules: rulesForAgent(rules.rules, describeRule),
+    };
     sourcesNow.current = reads.sources;
   });
 

@@ -2392,14 +2392,22 @@ describe('the side panel', () => {
     await pickTab('Sources');
     await act(async () => button('Rebuild with selection')!.click());
 
-    expect(rebuildDraftBrief).toHaveBeenCalledWith('d1', 'b1', {
-      promptIds: [],
-      fanouts: [{ query: 'pipeline forecasting', platforms: ['copilot-web'] }],
-      pages: [],
-      queries: [],
-      headings: [],
-      length: 3000,
-    });
+    expect(rebuildDraftBrief).toHaveBeenCalledWith(
+      'd1',
+      'b1',
+      {
+        promptIds: [],
+        fanouts: [{ query: 'pipeline forecasting', platforms: ['copilot-web'] }],
+        pages: [],
+        queries: [],
+        headings: [],
+        length: 3000,
+      },
+      // The rules in effect, as the agent reads them.
+      expect.arrayContaining([
+        expect.objectContaining({ key: expect.any(String), name: expect.any(String) }),
+      ]),
+    );
     expect(toast.success).toHaveBeenCalledWith('Brief rebuilt from 1 source');
     expect(selectedTab()).toBe('Instructions');
     expect(selectedSegment()).toBe('Brief');

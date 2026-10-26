@@ -17,7 +17,7 @@ vi.mock('@/lib/actions/content-drafts', () => ({
   getCitedPassages: (...args: unknown[]) => getCitedPassages(...args),
 }));
 
-const { agentWriteRequest } = await import('./agent-write');
+const { agentWriteRequest, rulesForAgent } = await import('./agent-write');
 const { fanoutsToUse } = await import('./rules');
 
 const data: DraftSourcesData = {
@@ -156,5 +156,35 @@ describe('agentWriteRequest', () => {
       length: expect.any(Number),
     });
     expect(request.rules.length).toBeGreaterThan(0);
+  });
+});
+
+describe('rulesForAgent', () => {
+  it('gives the rules in effect as the agent reads them: on, the agent’s, a fan-out rule with its fan-outs', () => {
+    const rules = activeRules(ruleSet('product_page'), NO_DRAFT_RULES);
+    const summary = rules.find((rule) => rule.key === 'summary')!;
+    const feed = rules.find((rule) => rule.key === 'feedMatch')!;
+    const off = { ...rules.find((rule) => rule.key === 'faq')!, on: false };
+    const fanout = rules.find((rule) => rule.key === 'fanoutH2')!;
+    const status = { state: 'bad', code: 'missing', fanouts: ['espresso under 500'] } as never;
+    const seen: unknown[] = [];
+    const read = rulesForAgent(
+      [
+        { rule: summary, status: { state: 'ok' } as never },
+        { rule: feed },
+        { rule: off },
+        { rule: fanout, status },
+      ],
+      (rule, given) => {
+        seen.push([rule.key, given]);
+        return { name: `name:${rule.key}`, detail: rule.current };
+      },
+    );
+    expect(read.map((rule) => rule.key)).toEqual(['summary', 'fanoutH2']);
+    // Only a fan-out rule is described with its status (the fan-outs it still needs).
+    expect(seen).toEqual([
+      ['summary', undefined],
+      ['fanoutH2', status],
+    ]);
   });
 });
