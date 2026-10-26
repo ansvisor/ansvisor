@@ -355,14 +355,27 @@ describe('sweepCatalogSources', () => {
   });
 
   it("keeps a workspace's own catalog for when its subscription is active again", async () => {
+    // The feed was read while the workspace was active.
+    await syncSource(source, {
+      db: fake.db,
+      now: NOW,
+      fetch: async () => ({ html: fixture('google-feed.xml') }),
+    });
+    const before = fake.rows('catalog_products').map((p) => ({ ...p }));
+    expect(before.length).toBeGreaterThan(0);
+
     process.env.IS_CLOUD = 'true';
     const [first] = fake.rows('catalog_sources');
     first.brands = { organizations: { subscription_status: 'past_due' } };
+    first.last_synced_at = null;
+    fake.writes.length = 0;
     const fetch = vi.fn();
     await sweepCatalogSources({ db: fake.db, now: NOW, fetch });
     expect(fetch).not.toHaveBeenCalled();
     // Recorded as not read; its products are left as they were, not marked removed.
     expect(fake.writes.filter((w) => w.table !== 'catalog_sources')).toEqual([]);
+    expect(fake.rows('catalog_products')).toEqual(before);
+    expect(fake.rows('catalog_products').every((p) => p.removed_at === null)).toBe(true);
   });
 
   it('reads stores too, and never an upload', async () => {

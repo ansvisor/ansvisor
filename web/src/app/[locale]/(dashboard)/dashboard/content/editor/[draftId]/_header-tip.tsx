@@ -37,7 +37,11 @@ export function HeaderTip({
       </TooltipTrigger>
       <TooltipContent side="bottom" className={cn('max-w-60', narrowOnly && 'lg:hidden')}>
         <span className="block font-medium">{label}</span>
-        {hint && <span className="mt-0.5 block text-muted-foreground">{hint}</span>}
+        {hint && (
+          <span className="mt-0.5 block text-muted-foreground [overflow-wrap:anywhere]">
+            {hint}
+          </span>
+        )}
       </TooltipContent>
     </Tooltip>
   );

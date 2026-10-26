@@ -99,6 +99,7 @@ import {
   findActionDraft,
   reopenDraftTasks,
   setDraftTasksStatus,
+  unpublishDraftWork,
   type ActionDraft,
 } from '@/lib/content/action-drafts';
 import { supabaseAdmin } from '@/lib/supabase/admin';
@@ -238,7 +239,7 @@ export async function getContentDraft(id: string): Promise<ContentDraft | null> 
   const { data, error } = await supabase
     .from('content_drafts')
     .select(
-      `id, brand_id, title, page_type, page_type_source, method, status, body_html, author, author_id, reviewer_id, source_url, rules, kept_sources, author_real_at, author_profile_at, action_id, agent_state, agent_state_at, agent_run, updated_at, archived_at, quality_handoff, ${BRAND_SITE}, actions(action_no)`,
+      `id, brand_id, title, page_type, page_type_source, method, status, body_html, author, author_id, reviewer_id, source_url, published_url, rules, kept_sources, author_real_at, author_profile_at, action_id, agent_state, agent_state_at, agent_run, updated_at, archived_at, quality_handoff, ${BRAND_SITE}, actions(action_no)`,
     )
     .eq('id', id)
     .maybeSingle();
@@ -252,6 +253,7 @@ export async function getContentDraft(id: string): Promise<ContentDraft | null> 
     pageTypeSource: data.page_type_source === 'user' ? 'user' : 'detected',
     siteType: brandSiteType(data.brands),
     sourceUrl: data.source_url,
+    publishedUrl: data.published_url ?? null,
     method: data.method as DraftMethod,
     status: draftStatus(data.status),
     bodyHtml: data.body_html,
@@ -1472,7 +1474,9 @@ const ROW_STATUSES = ['draft', 'in_review', 'published'] as const;
  * editor's own status changes). Ready keeps a History version and completes
  * the draft's task, so it goes through markContentDraftReady instead. A
  * ready or published draft moved back to Draft or In review opens again the
- * task Ready completed, as the editor's Ready does when clicked.
+ * task Ready completed, as the editor's Ready does when clicked; a published
+ * one also opens again the Publish task a page's publish completed, and
+ * leaves what its action is measured on (unpublishDraftWork).
  */
 export async function setContentDraftStatus(
   id: string,
@@ -1499,6 +1503,34 @@ export async function setContentDraftStatus(
   if (!data) throw new Error('not_found');
   const wasDone = before.status === 'ready' || before.status === 'published';
   if (wasDone && status !== 'published') await reopenTasksOf(supabase, id, before);
+  if (before.status === 'published' && status !== 'published') {
+    await unpublishOf(supabase, id, before);
+  }
+}
+
+/**
+ * A published draft taken back, in its action (unpublishDraftWork). The
+ * draft's status has changed either way: a failure is logged, and a task
+ * left done can be changed in the drawer.
+ */
+async function unpublishOf(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  id: string,
+  draft: { brand_id: string; action_id: string | null },
+): Promise<void> {
+  if (!draft.action_id) return;
+  try {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    await unpublishDraftWork(
+      supabase,
+      { id, brandId: draft.brand_id, actionId: draft.action_id },
+      user?.id ?? null,
+    );
+  } catch (err) {
+    console.error('Failed to take the page back in its action:', err);
+  }
 }
 
 /**
@@ -2363,6 +2395,8 @@ const AGENT_WRITE_ERRORS = [
   'writing',
   'org_writing',
   'open_suggestions',
+  // A Fix open rules or Quality's hand-off still under way on the draft (content-writer.js).
+  'running',
   'not_draft',
   // Rewrite the page to these rules: a page with no text, or one too long to send whole.
   'empty',

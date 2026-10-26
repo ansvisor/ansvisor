@@ -139,6 +139,11 @@ describe('fetchPage against a local site', () => {
       res.writeHead(200, { 'content-type': 'text/html' });
       res.end('x'.repeat(5_000));
     },
+    // Small on the wire, large once opened: the cap counts what's opened.
+    '/big-gzip': (res) => {
+      res.writeHead(200, { 'content-type': 'text/html', 'content-encoding': 'gzip' });
+      res.end(zlib.gzipSync('x'.repeat(50_000)));
+    },
     '/slow': (res) => {
       setTimeout(() => {
         res.writeHead(200, { 'content-type': 'text/html' });
@@ -233,6 +238,16 @@ describe('fetchPage against a local site', () => {
     // Under the cap, the whole page, as without it.
     await expect(get('/page', { truncate: true })).resolves.toMatchObject({
       html: '<h1>Pricing</h1><p>Plans ünd prices</p>',
+    });
+  });
+
+  it('counts a compressed page by what it opens to, refused or cut at the cap', async () => {
+    await expect(get('/big-gzip', { maxBytes: 1_000 })).rejects.toMatchObject({
+      code: 'too_large',
+    });
+    await expect(get('/big-gzip', { maxBytes: 1_000, truncate: true })).resolves.toMatchObject({
+      status: 200,
+      html: 'x'.repeat(1_000),
     });
   });
 });
