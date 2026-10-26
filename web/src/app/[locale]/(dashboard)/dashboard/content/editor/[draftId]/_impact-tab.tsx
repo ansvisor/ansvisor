@@ -46,12 +46,15 @@ interface ImpactRead {
 export function ImpactTab({
   brandId,
   pageUrl,
+  published = false,
   rebuilding = false,
   blocked = null,
   onUseLostPrompts,
 }: {
   brandId: string;
   pageUrl: string | null;
+  /** Marked published: without an address, it's asked for, not called not live. */
+  published?: boolean;
   /** Use lost prompts in this draft: they join its sources and the brief is rebuilt. */
   rebuilding?: boolean;
   /** Why the brief can't be rebuilt now (the agent is at work on the page), or null. */
@@ -82,9 +85,14 @@ export function ImpactTab({
     };
   }, [brandId, pageUrl, period, attempt]);
 
-  // A new page has nothing to measure until it is live at an address.
+  // A new page has nothing to measure until it is live at an address: one
+  // marked published before CE-013 has none yet.
   if (!pageUrl) {
-    return <p className="text-sm text-muted-foreground">{t('newPage')}</p>;
+    return (
+      <p className="text-sm text-muted-foreground">
+        {t(published ? 'publishedNoAddress' : 'newPage')}
+      </p>
+    );
   }
 
   const current = read?.period === period ? read : null;

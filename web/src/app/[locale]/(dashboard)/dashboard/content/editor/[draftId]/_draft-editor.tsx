@@ -30,6 +30,8 @@ import { useAiUsage } from '@/components/providers/ai-usage-provider';
 import { useUserRole } from '@/hooks/use-user-role';
 import { PLATFORM_LABELS } from '@/config/platform-labels';
 import { DraftMethodBadge, DraftStatusBadge } from '@/components/content/draft-badges';
+import { PublishDialog } from '@/components/content/publish-dialog';
+import { readLiveUrl } from '@/lib/content/publish-client';
 import { SendDialog } from '@/components/content/send-to-cms-dialog';
 import { updateBrand } from '@/lib/actions/brand';
 import {
@@ -389,6 +391,7 @@ export function DraftEditor({
 }) {
   const t = useTranslations('contentEditor.editor');
   const tNext = useTranslations('contentEditor.editor.nextStep');
+  const tPublish = useTranslations('contentEditor.publish');
   const autosave = useDraftAutosave(draft.id, draft);
   const [title, setTitle] = useState(draft.title);
   // The page as written now, for the side panel's Sources.
@@ -398,6 +401,10 @@ export function DraftEditor({
   const flashTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   useEffect(() => () => clearTimeout(pageReadTimer.current), []);
   const [status, setStatus] = useState(draft.status);
+  // Where the page is live (CE-013), and Mark published open.
+  const [liveUrl, setLiveUrl] = useState(draft.publishedUrl);
+  const [askLive, setAskLive] = useState(false);
+  const [preparingLive, setPreparingLive] = useState(false);
   const tDraftStatus = useTranslations('contentEditor.status');
   const [marking, setMarking] = useState(false);
   // The Content Agent couldn't finish the page Start gave it (CE-015).
@@ -2934,6 +2941,28 @@ export function DraftEditor({
     }
     setSendOpen({ html: pageToPublish() });
   };
+  /**
+   * Mark published (CE-013), once the page is saved: the server keeps it in
+   * History as published, as it stands in the database.
+   */
+  const openPublish = async () => {
+    if (preparingLive || draft.archivedAt) return;
+    if (htmlUnapplied) {
+      toast.error(t('send.applyHtml'));
+      return;
+    }
+    setPreparingLive(true);
+    const saved = await autosave.settle().then(
+      () => true,
+      () => false,
+    );
+    setPreparingLive(false);
+    if (!saved) {
+      toast.error(tPublish('unsaved'));
+      return;
+    }
+    setAskLive(true);
+  };
   const startSend = () => {
     if (htmlUnapplied) {
       toast.error(t('send.applyHtml'));
@@ -3085,16 +3114,21 @@ export function DraftEditor({
         return pageRewrite?.blocked ?? null;
       case 'fixRules':
         return agentFix.blocked;
-      // As the header's Mark ready is held.
+      // As the header's Mark ready is held; an archived page is restored first, as in the Library.
       case 'beforePublish':
       case 'markReady':
-        return marking
-          ? t('nextStep.marking')
-          : autosave.state === 'conflict'
-            ? t('save.conflict')
-            : autosave.state === 'too_large'
-              ? t('save.tooLarge')
-              : null;
+      case 'markPublished':
+        return action === 'markPublished' && draft.archivedAt
+          ? tPublish('archived')
+          : preparingLive
+            ? t('nextStep.saving')
+            : marking
+              ? t('nextStep.marking')
+              : autosave.state === 'conflict'
+                ? t('save.conflict')
+                : autosave.state === 'too_large'
+                  ? t('save.tooLarge')
+                  : null;
       default:
         return null;
     }
@@ -3138,6 +3172,9 @@ export function DraftEditor({
       case 'export':
         openExport();
         return;
+      case 'markPublished':
+        void openPublish();
+        return;
     }
   };
 
@@ -3153,6 +3190,8 @@ export function DraftEditor({
     try {
       const { status: now, tasksReopened } = await unmarkContentDraftReady(draft.id);
       setStatus(now);
+      // Published from the Library meanwhile: its live address, for the Live page tab.
+      if (now === 'published') void readLiveUrl(draft.id).then((url) => url && setLiveUrl(url));
       if (now !== 'in_review') toast(t('header.notReady', { status: tDraftStatus(now) }));
       else if (tasksReopened > 0 && draft.action) {
         toast(t('header.backInReviewAction', { no: draft.action.number, count: tasksReopened }));
@@ -3421,22 +3460,31 @@ export function DraftEditor({
               </HeaderTip>
             )}
             {/* The one black button. Marked, it reads Ready (a click moves it back
-                to review); published, Published. Narrower than 1024px, ✓ alone. */}
+                to review); published, Published (a click changes its live
+                address, CE-013). Narrower than 1024px, ✓ alone. */}
             {status === 'ready' || status === 'published' ? (
               <HeaderTip
                 label={tDraftStatus(status)}
-                hint={status === 'ready' ? t('header.readyHint') : t('header.publishedHint')}
+                hint={
+                  status === 'ready'
+                    ? t('header.readyHint')
+                    : draft.archivedAt
+                      ? tPublish('archived')
+                      : liveUrl
+                        ? t('header.publishedHintAt', { url: liveUrl })
+                        : t('header.publishedHint')
+                }
               >
                 <Button
                   variant="outline"
                   size="sm"
-                  // Published stays focusable, so its tip says where to change it.
-                  disabled={status === 'published' || unmarking}
+                  // An archived page's address waits until it's restored, as in the Library.
+                  disabled={unmarking || (status === 'published' && !!draft.archivedAt)}
                   focusableWhenDisabled
                   aria-label={
                     status === 'ready' ? t('header.readyLabel') : tDraftStatus('published')
                   }
-                  onClick={() => void unmarkReady()}
+                  onClick={() => void (status === 'published' ? openPublish() : unmarkReady())}
                   className="border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 hover:text-emerald-800 disabled:opacity-100 dark:border-emerald-900 dark:bg-emerald-950 dark:text-emerald-300 dark:hover:bg-emerald-900"
                 >
                   {unmarking ? <LoadingDots /> : <Check className="h-3.5 w-3.5" />}
@@ -3773,6 +3821,8 @@ export function DraftEditor({
         {panelOpen ? (
           <EditorSidePanel
             draft={draft}
+            liveUrl={liveUrl}
+            published={status === 'published'}
             siteType={siteType}
             title={title}
             bodyHtml={pageHtml}
@@ -3898,6 +3948,18 @@ export function DraftEditor({
             fillFirstPlaceholder();
           }}
           onClose={() => setSendOpen(null)}
+        />
+      )}
+
+      {askLive && (
+        <PublishDialog
+          draftId={draft.id}
+          published={status === 'published'}
+          onClose={() => setAskLive(false)}
+          onPublished={(url) => {
+            setStatus('published');
+            setLiveUrl(url);
+          }}
         />
       )}
 
