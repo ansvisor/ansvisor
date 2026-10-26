@@ -4149,6 +4149,7 @@
           "other": "Other",
           "journeys": "Top journeys",
           "thisPage": "This page",
+          "journeyCount": "{count, plural, one {# conversion} other {# conversions}}",
           "cards": {
             "signup": "Signups",
             "demo": "Demo forms",
@@ -4157,8 +4158,7 @@
             "newsletter": "Newsletter signups",
             "custom": "Other conversions",
             "revenue": "Revenue",
-            "units": "Units sold",
-            "other": "Other conversions"
+            "units": "Units sold"
           },
           "goals": {
             "signup": "Signup",

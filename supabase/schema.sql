@@ -40290,20 +40290,31 @@ notify pgrst, 'reload schema';
 -- content_page_conversions(brand, page, days) returns one jsonb over the last
 -- N whole UTC days, ending yesterday, as content_page_results (00210):
 --   * enabled: whether the brand has conversions on;
+--   * page: the page's key, for the tab to find it in the journeys;
 --   * goals: per goal, the conversions and their units, of journeys through
---     the page: a conversion whose journey (its first AI visit, first_at)
---     landed on the page, went through it before, or converted on it;
---   * revenue: their value per currency (a value without one isn't summed);
+--     the page: a conversion whose journey (its visitor id: the snippet
+--     makes a new one for each journey) landed on the page, went through it
+--     before, or converted on it;
+--   * revenue: the value of their orders and bookings per currency (a value
+--     without one isn't summed);
 --   * sources: per AI source the journey started from (first touch), its
 --     conversions;
---   * journeys: the five most frequent, each its source, its pages in order
---     (the landing page, the pages after without repeats in a row, the page
---     it converted on, as lower(normalize_page_path) keys), its goal and how
---     many.
+--   * journeys: the five most frequent (the latest first among as many), each
+--     its source, its pages in order (the landing page, the pages after
+--     without repeats in a row, the page it converted on, as
+--     lower(normalize_page_path) keys), its goal and how many.
+-- The journey's first AI visit isn't its key: the server keeps a browser's
+-- clock from dating it after the event, so first_at may differ within one.
+-- Conversions are read through their own partial index: most events are
+-- pageviews.
 -- A page is one lower(normalize_page_path) key, as in 00209 / 00210.
 --
 -- Security definer with an organization check, as content_page_results, and
 -- planned for each call's own values (plan_cache_mode).
+
+create index if not exists ai_traffic_events_conversions
+  on public.ai_traffic_events (brand_id, occurred_at desc)
+  where kind = 'conversion';
 
 create or replace function public.content_page_conversions(
   p_brand_id uuid,
@@ -40357,18 +40368,17 @@ begin
         select 1 from public.ai_traffic_events p
         where p.brand_id = p_brand_id
           and p.visitor_id = c.visitor_id
-          and p.first_at = c.first_at
           and p.kind = 'page'
           and p.occurred_at <= c.occurred_at
           and lower(public.normalize_page_path(p.url)) = v_key
       )
   ),
   paths as (
-    select t.first_source, t.goal, (
-      select array_agg(s.page order by s.at, s.ord)
+    select t.first_source, t.goal, t.occurred_at, (
+      select array_agg(s.page order by s.ord <> 0, s.at, s.ord)
       from (
         select steps.page, steps.at, steps.ord,
-          lag(steps.page) over (order by steps.at, steps.ord) as before
+          lag(steps.page) over (order by steps.ord <> 0, steps.at, steps.ord) as before
         from (
           select lower(public.normalize_page_path(t.first_url)) as page, t.first_at as at, 0 as ord
           union all
@@ -40376,7 +40386,6 @@ begin
           from public.ai_traffic_events p
           where p.brand_id = p_brand_id
             and p.visitor_id = t.visitor_id
-            and p.first_at = t.first_at
             and p.kind = 'page'
             and p.occurred_at <= t.occurred_at
           union all
@@ -40388,6 +40397,7 @@ begin
     from through t
   )
   select jsonb_build_object(
+    'page', v_key,
     'enabled', coalesce((select b.conversions_enabled from public.brands b where b.id = p_brand_id), false),
     'goals', coalesce((
       select jsonb_agg(jsonb_build_object('goal', g.goal, 'count', g.n, 'units', g.units)
@@ -40403,7 +40413,7 @@ begin
       from (
         select currency, sum(value)::numeric as value
         from through
-        where value is not null and currency is not null
+        where goal in ('order', 'booking') and value is not null and currency is not null
         group by currency
       ) r
     ), '[]'::jsonb),
@@ -40415,12 +40425,12 @@ begin
     'journeys', coalesce((
       select jsonb_agg(jsonb_build_object('source', j.first_source, 'pages', to_jsonb(j.pages),
           'goal', j.goal, 'count', j.n)
-        order by j.n desc, j.first_source, j.goal)
+        order by j.n desc, j.latest desc, j.first_source, j.goal)
       from (
-        select first_source, pages, goal, count(*)::bigint as n
+        select first_source, pages, goal, count(*)::bigint as n, max(occurred_at) as latest
         from paths
         group by first_source, pages, goal
-        order by count(*) desc, first_source, goal
+        order by count(*) desc, max(occurred_at) desc, first_source, goal
         limit 5
       ) j
     ), '[]'::jsonb)

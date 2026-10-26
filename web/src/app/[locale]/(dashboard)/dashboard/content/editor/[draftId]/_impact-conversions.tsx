@@ -8,7 +8,6 @@ import {
   conversionCards,
   conversionSources,
   journeyPages,
-  pageKey,
   type ContentConversions,
   type ResultCard,
 } from '@/lib/content/conversions';
@@ -36,23 +35,22 @@ function money(value: number, currency: string): string {
  * orders, revenue and units, or bookings, revenue and newsletter signups),
  * per AI source the journey started from, and the most frequent journeys,
  * this page outlined. From the AI Traffic snippet; with conversions off,
- * where to turn them on.
+ * where to turn them on, and what they counted before.
  */
 export function ImpactConversions({
   conversions,
   brandId,
-  pageUrl,
 }: {
   conversions: ContentConversions;
   brandId: string;
-  pageUrl: string;
 }) {
   const t = useTranslations('contentEditor.editor.impact.conversions');
   const brand = useBrandStore((s) => s.brands.find((b) => b.id === brandId));
   const site = brand ? siteTypeOf(brand) : 'b2b';
   const cards = conversionCards(conversions, site);
   const sources = conversionSources(conversions);
-  const here = pageKey(pageUrl);
+  // Off, what they counted before still shows, under the note.
+  const counted = conversions.goals.length > 0;
 
   return (
     <section className="space-y-2">
@@ -60,7 +58,7 @@ export function ImpactConversions({
         {t('title')} <span className="font-normal">· {t('subtitle')}</span>
       </h4>
 
-      {!conversions.enabled ? (
+      {!conversions.enabled && (
         <p className="rounded-lg border border-dashed px-3 py-2 text-xs text-muted-foreground">
           {t('off')}{' '}
           <Link
@@ -71,7 +69,8 @@ export function ImpactConversions({
             <ExternalLink className="h-3 w-3" />
           </Link>
         </p>
-      ) : (
+      )}
+      {(conversions.enabled || counted) && (
         <>
           <div className="grid grid-cols-2 gap-2">
             {cards.map((card) => (
@@ -130,12 +129,15 @@ export function ImpactConversions({
                           />
                           {page === null ? (
                             <span className="text-muted-foreground">…</span>
-                          ) : page === here ? (
+                          ) : page === conversions.page ? (
                             <span className="rounded-md border border-foreground px-1.5 py-0.5 font-medium">
                               {t('thisPage')}
                             </span>
                           ) : (
-                            <span className="min-w-0 truncate rounded-md border px-1.5 py-0.5 text-muted-foreground">
+                            <span
+                              title={page}
+                              className="min-w-0 truncate rounded-md border px-1.5 py-0.5 text-muted-foreground"
+                            >
                               {page}
                             </span>
                           )}
@@ -151,6 +153,10 @@ export function ImpactConversions({
                     </span>
                     <span className="shrink-0 pt-0.5 tabular-nums text-muted-foreground">
                       {formatNumber(journey.count)}
+                      <span className="sr-only">
+                        {' '}
+                        {t('journeyCount', { count: journey.count })}
+                      </span>
                     </span>
                   </li>
                 ))}

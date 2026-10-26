@@ -343,6 +343,7 @@ describe('the Live page tab', () => {
 
   describe('conversions from AI journeys through the page (CE-017)', () => {
     const conversions = (over: Partial<ContentConversions> = {}): ContentConversions => ({
+      page: '/pricing',
       enabled: true,
       goals: [
         { goal: 'demo', count: 4, units: 0 },
@@ -375,8 +376,8 @@ describe('the Live page tab', () => {
       await render();
       expect(getContentConversions).toHaveBeenCalledWith('b1', PAGE, 30);
       const cards = [...section().querySelectorAll('.grid > div')].map((el) => el.textContent);
-      // Its own goals first; a newsletter isn't a B2B site's, so it's another conversion.
-      expect(cards).toEqual(['Signups2', 'Demo forms4', 'Other conversions1']);
+      // Its own goals first, then a card for each other goal it had.
+      expect(cards).toEqual(['Signups2', 'Demo forms4', 'Newsletter signups1']);
       const rows = [...section().querySelectorAll('tbody tr')].map((tr) =>
         [...tr.children].map((cell) => cell.textContent),
       );
@@ -385,7 +386,9 @@ describe('the Live page tab', () => {
         ['Perplexity', '2'],
       ]);
       const journey = section().querySelector('ol li')!;
-      expect(journey.textContent).toBe('ChatGPT/blog/crm-data-hygieneThis pageDemo form4');
+      expect(journey.textContent).toBe(
+        'ChatGPT/blog/crm-data-hygieneThis pageDemo form4 4 conversions',
+      );
     });
 
     it('shows a shop’s orders, revenue per currency and units sold', async () => {
@@ -403,7 +406,7 @@ describe('the Live page tab', () => {
       expect(cards).toEqual(['Orders3', 'Revenue€1,290', 'Units sold7']);
     });
 
-    it('says where to turn them on while the brand has them off', async () => {
+    it('says where to turn them on while the brand has them off, and what they counted before', async () => {
       getContentImpact.mockResolvedValue(impact());
       getContentConversions.mockResolvedValue(conversions({ enabled: false }));
       await render();
@@ -411,6 +414,17 @@ describe('the Live page tab', () => {
       expect(section().querySelector('a')!.getAttribute('href')).toBe(
         '/dashboard/brands/b1/settings?tab=tracking',
       );
+      expect(section().querySelectorAll('.grid > div')).toHaveLength(3);
+
+      // Nothing counted: the note alone.
+      getContentConversions.mockResolvedValue(
+        conversions({ enabled: false, goals: [], sources: [], journeys: [] }),
+      );
+      await act(async () => root.unmount());
+      root = createRoot(container);
+      await render();
+      expect(section().querySelector('.grid')).toBeNull();
+      expect(section().querySelector('table')).toBeNull();
     });
 
     it('leaves the rest of the tab when they can’t be read', async () => {

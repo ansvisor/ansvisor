@@ -12,10 +12,12 @@ import type { SiteType } from './page-types';
 export type ConversionGoal = 'signup' | 'demo' | 'order' | 'booking' | 'newsletter' | 'custom';
 
 export interface ContentConversions {
+  /** The page's key, as its journeys name it (lower(normalize_page_path)). */
+  page: string;
   /** The brand has conversions on. */
   enabled: boolean;
   goals: { goal: ConversionGoal; count: number; units: number }[];
-  /** Value per currency: one without a currency isn't summed. */
+  /** Orders' and bookings' value per currency: one without a currency isn't summed. */
   revenue: { currency: string; value: number }[];
   /** Per AI source the journey started from. */
   sources: { platform: string; conversions: number }[];
@@ -38,13 +40,13 @@ export const SITE_RESULTS: Record<SiteType, readonly ResultKey[]> = {
 };
 
 export type ResultCard =
-  | { key: ConversionGoal | 'units' | 'other'; value: number }
+  | { key: ConversionGoal | 'units'; value: number }
   | { key: 'revenue'; value: { currency: string; value: number }[] };
 
 /**
  * The cards for a site: its own goals, revenue and units, always, at 0 when
- * there are none; then one for any other goal, with the conversions the
- * site's goals leave out.
+ * there are none; then a card for each other goal it had, the most first (a
+ * shop's newsletter form counts as a signup, and shows as one).
  */
 export function conversionCards(conversions: ContentConversions, site: SiteType): ResultCard[] {
   const count = (goal: ConversionGoal) =>
@@ -57,10 +59,10 @@ export function conversionCards(conversions: ContentConversions, site: SiteType)
     }
     return { key, value: count(key) };
   });
-  const other = conversions.goals
-    .filter((g) => !(keys as readonly string[]).includes(g.goal))
-    .reduce((sum, g) => sum + g.count, 0);
-  return other > 0 ? [...cards, { key: 'other', value: other }] : cards;
+  const others: ResultCard[] = conversions.goals
+    .filter((g) => g.count > 0 && !(keys as readonly string[]).includes(g.goal))
+    .map((g) => ({ key: g.goal, value: g.count }));
+  return [...cards, ...others];
 }
 
 /**
@@ -84,25 +86,6 @@ export function conversionSources(
         b.conversions - a.conversions ||
         (a.name ?? '').localeCompare(b.name ?? ''),
     );
-}
-
-/**
- * A page as content_page_conversions keys it (lower(normalize_page_path)):
- * no host, query string, fragment or trailing slash, escapes decoded where
- * they decode, lower case; the site's root is "/".
- */
-export function pageKey(url: string): string {
-  const path = url
-    .replace(/^[a-zA-Z][a-zA-Z0-9+.-]*:\/\/[^/]*/, '')
-    .split('?')[0]
-    .split('#')[0];
-  let decoded = path;
-  try {
-    decoded = decodeURIComponent(path);
-  } catch {
-    // A malformed escape stays as it is, as the database's url_decode_safe.
-  }
-  return (decoded.replace(/\/+$/, '') || '/').toLowerCase();
 }
 
 /**

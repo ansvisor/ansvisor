@@ -324,9 +324,7 @@ function ImpactBody({
 
       {results && <ImpactResults results={results} />}
 
-      {conversions && (
-        <ImpactConversions conversions={conversions} brandId={brandId} pageUrl={pageUrl} />
-      )}
+      {conversions && <ImpactConversions conversions={conversions} brandId={brandId} />}
 
       {cited.cur > 0 && (
         <section className="space-y-1.5">

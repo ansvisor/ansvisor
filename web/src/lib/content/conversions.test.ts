@@ -3,11 +3,11 @@ import {
   conversionCards,
   conversionSources,
   journeyPages,
-  pageKey,
   type ContentConversions,
 } from './conversions';
 
 const read = (over: Partial<ContentConversions> = {}): ContentConversions => ({
+  page: '/pricing',
   enabled: true,
   goals: [],
   revenue: [],
@@ -29,7 +29,7 @@ describe('conversionCards', () => {
     ]);
   });
 
-  it('reads a shop’s units from its orders, and adds the goals its site leaves out', () => {
+  it('reads a shop’s units from its orders, and gives each goal its site leaves out a card of its own', () => {
     const conversions = read({
       goals: [
         { goal: 'order', count: 3, units: 7 },
@@ -42,7 +42,9 @@ describe('conversionCards', () => {
       { key: 'order', value: 3 },
       { key: 'revenue', value: [{ currency: 'USD', value: 120 }] },
       { key: 'units', value: 7 },
-      { key: 'other', value: 3 },
+      // A shop's newsletter form counts as a signup: it shows as one.
+      { key: 'signup', value: 2 },
+      { key: 'custom', value: 1 },
     ]);
   });
 });
@@ -65,15 +67,6 @@ describe('conversionSources', () => {
       { name: 'ChatGPT', conversions: 3 },
       { name: null, conversions: 9 },
     ]);
-  });
-});
-
-describe('pageKey', () => {
-  it('keys a page as the database does: no host, query, fragment or trailing slash, lower case', () => {
-    expect(pageKey('https://Acme.example/Pricing/?plan=pro#faq')).toBe('/pricing');
-    expect(pageKey('https://acme.example')).toBe('/');
-    expect(pageKey('https://acme.example/caf%C3%A9')).toBe('/café');
-    expect(pageKey('https://acme.example/100%')).toBe('/100%');
   });
 });
 
