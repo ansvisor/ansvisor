@@ -40213,6 +40213,8 @@ notify pgrst, 'reload schema';
 --   * The server stores at most a few hundred pageviews per visitor id in
 --     the window and a few conversions a day, so a journey's reads stay
 --     bounded (routes/traffic.js).
+--   * `page_key` and `first_key`: the pages' keys, made once on insert, for
+--     the journeys' reads.
 --   * Members read their brands' events; only the server writes them.
 
 alter table public.brands
@@ -40243,6 +40245,11 @@ create table if not exists public.ai_traffic_events (
   first_url text not null check (char_length(first_url) between 1 and 2048),
   first_at timestamptz not null,
   occurred_at timestamptz not null default now(),
+  -- The pages' keys as journeys read them (lower(normalize_page_path), as in
+  -- 00209 / 00210): made once when the row is stored, so a journey's reads
+  -- (00287, 00288) compare keys rather than work each address out again.
+  page_key text generated always as (lower(public.normalize_page_path(url))) stored,
+  first_key text generated always as (lower(public.normalize_page_path(first_url))) stored,
   -- A conversion says what it was and where it came from; a pageview neither.
   constraint ai_traffic_events_kind check (
     (kind = 'conversion' and goal is not null and origin is not null)
