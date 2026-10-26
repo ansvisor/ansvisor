@@ -7946,6 +7946,7 @@
         "saveFailed": "Couldn't save it. Try again.",
         "copyTag": "Copy the tag",
         "copyConsent": "Copy the consent call",
+        "copyDeny": "Copy the refusal call",
         "copyCall": "Copy the conversion call",
         "copyOrderCall": "Copy the order call",
         "copyPixel": "Copy the Shopify pixel",
@@ -7957,14 +7958,16 @@
           "wait": "Wait for the visitor's consent (recommended)",
           "always": "Don't wait: our own banner covers it",
           "waitHint": "No id is kept and no journey is sent until your site says the visitor agreed. AI visits themselves are counted as before.",
-          "alwaysHint": "Use this only if your cookie banner or privacy policy already covers analytics storage."
+          "alwaysHint": "Use this only if your cookie banner already asks for analytics storage, or where no consent is needed."
         },
         "steps": {
           "tag": "Use this tag",
           "tagHelp": "It replaces the tag you have, before the closing <code>{tag}</code> tag of every page. The first line lets your site call ansvisor() before the tag has loaded.",
           "consent": "When the visitor agrees",
           "consentHelp": "Call this from your cookie banner once the visitor agrees, and on every page after.",
-          "consentMode": "Google Consent Mode works on its own: the snippet follows <code>{name}</code>. A banner set up inside Google Tag Manager needs a tag that runs the line above once consent is given.",
+          "refuse": "When the visitor refuses",
+          "denyHelp": "Call this when the visitor says no, or takes consent back: the id kept in their browser is deleted, and nothing more is sent.",
+          "consentMode": "Google Consent Mode works on its own: the snippet follows <code>{name}</code>. A banner set up inside Google Tag Manager needs a tag for each line above, run when the visitor chooses.",
           "forms": "Forms",
           "formsHelp": "A form with an email field counts as a signup, contact and newsletter forms too: add <code>{goal}</code> to name its goal (demo, newsletter, booking), or <code>{off}</code> to leave it out. A login with a password doesn't count. Don't also call a signup from your own code for the same form, or it counts twice.",
           "calls": "Other conversions",

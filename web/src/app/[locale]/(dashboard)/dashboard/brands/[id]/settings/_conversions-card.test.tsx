@@ -104,6 +104,8 @@ describe('ConversionsCard', () => {
         /^<script>window\.ansvisor=window\.ansvisor\|\|.*<\/script>\n<script src="https:\/\/api\.ansvisor\.test\/t\.js" data-t="abc123" data-c="1" data-consent="wait" defer><\/script>$/,
       ),
       "ansvisor('consent', 'granted');",
+      // And the refusal: an id kept earlier is taken as consent until it's called.
+      "ansvisor('consent', 'denied');",
       "ansvisor('conversion', { type: 'demo' });",
       expect.stringContaining("type: 'order'"),
     ]);
@@ -137,8 +139,10 @@ describe('ConversionsCard', () => {
     await click(always);
     expect(updateBrand).toHaveBeenCalledWith('b1', { conversionsConsent: 'always' });
     expect(codes()[0]).toContain('data-consent="always"');
-    // Nothing to wait for: no consent step.
+    // Nothing to wait for: no grant, but a visitor who refuses still says so.
     expect(codes()).not.toContain("ansvisor('consent', 'granted');");
+    expect(codes()).toContain("ansvisor('consent', 'denied');");
+    expect(container.textContent).toContain('When the visitor refuses');
   });
 
   it('turns the consent mode back when it couldn’t save it', async () => {
