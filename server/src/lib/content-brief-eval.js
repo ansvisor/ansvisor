@@ -101,8 +101,8 @@ function urlKey(url) {
  * goal, the audience, version 2's essentials, angle and proof to gather,
  * each heading and key point, a section's answer, format and facts (with the
  * kind of source each needs and the source to check it against), the
- * keywords as one line, the fan-outs left out and the freshness; each with
- * whether it's a heading.
+ * keywords as one line, the fan-outs left out, the freshness, the names as
+ * written and the links planned; each with whether it's a heading.
  */
 function briefFields(brief) {
   const fresh = brief.freshness;
@@ -144,6 +144,24 @@ function briefFields(brief) {
         .join('; '),
       heading: false,
     },
+    {
+      label: 'Names as written: ',
+      text: [
+        brief.entities?.brand,
+        ...(brief.entities?.products ?? []),
+        ...(brief.entities?.competitors ?? []),
+      ]
+        .filter(Boolean)
+        .join(', '),
+      heading: false,
+    },
+    ...['internal', 'outbound'].flatMap((kind) =>
+      (brief.links?.[kind] ?? []).map((link) => ({
+        label: `Link (${kind}${link.section ? `, in "${link.section}"` : ''}): `,
+        text: `${link.anchor} → ${link.url}`,
+        heading: false,
+      })),
+    ),
   ].filter((f) => f.text);
 }
 
@@ -172,8 +190,16 @@ export function briefChecks(brief, c) {
   const guard = briefGuard(c);
   // Each field read as the guard reads it: a heading as one, a question in quotes kept.
   const found = briefFields(brief).map((f) => guard.found(f.text, f.heading));
+  // The addresses it was given: the cited pages, the live page, the pages it may link to.
   const given = new Set(
-    [...c.sources.pages.map((p) => p.url), c.draft.source_url].filter(Boolean).map(urlKey),
+    [
+      ...c.sources.pages.map((p) => p.url),
+      c.draft.source_url,
+      ...(c.targets?.own ?? []).map((p) => p.url),
+      ...(c.targets?.sources ?? []).map((p) => p.url),
+    ]
+      .filter(Boolean)
+      .map(urlKey),
   );
   const answered = new Set(brief.outline.map((s) => s.fanout).filter(Boolean));
   const leftOut = new Set(brief.leftOut ?? []);
@@ -237,7 +263,7 @@ ${list(c.prompts)}
 
 AI searches (fan-outs) it was given:
 ${list(c.sources.fanouts.map((f) => f.query))}
-
+${c.competitors?.length ? `\nCompetitors it was given: ${c.competitors.join(', ')}\n` : ''}${c.targets?.own?.length ? `\nThe brand's pages it may link to:\n${list(c.targets.own.map((p) => `${p.title} — ${p.url}`))}\n` : ''}
 The brief:
 ${briefFields(brief)
   .map((f) => `${f.label}${f.text}`)

@@ -203,6 +203,7 @@ describe('the checks anyone can repeat', () => {
     expect(prompt).toContain('Angle: Ledgerly’s own variance data across customers');
     expect(prompt).toContain('Proof to gather (data): Average error before and after switching');
     expect(prompt).toContain('Freshness: date The error figure, with its month');
+    expect(prompt).toContain('Names as written: Ledgerly');
     expect(briefChecks(brief, FIRST).invented.urls).toEqual(['www.made-up.example/tldr']);
   });
 
@@ -218,6 +219,21 @@ describe('the checks anyone can repeat', () => {
       FIRST,
     );
     expect(left).toMatchObject({ fanoutCoverage: 1, leftOut: 1 });
+  });
+
+  it('take the pages a case may link to as given, and tell the judge its competitors', () => {
+    const c = CASES.find((k) => k.competitors.length && k.targets.own.length);
+    const brief = {
+      ...shapeBrief(GOOD, c),
+      links: {
+        internal: [{ url: c.targets.own[0].url, anchor: 'see the page', section: null }],
+        outbound: [],
+      },
+    };
+    expect(briefChecks(brief, c).invented.urls).toEqual([]);
+    const prompt = buildJudgePrompt(c, brief);
+    expect(prompt).toContain(`Competitors it was given: ${c.competitors.join(', ')}`);
+    expect(prompt).toContain(`Link (internal): see the page → ${c.targets.own[0].url}`);
   });
 
   it('take an address the case gave: a cited page, or the live page', () => {

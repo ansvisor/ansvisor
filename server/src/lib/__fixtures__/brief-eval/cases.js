@@ -4,8 +4,9 @@
  * types each site type has, new pages and live ones. Each is what Rebuild
  * outline is given: the brand, the draft, the prompts and the Sources tab's
  * fan-outs, Search Console queries, cited pages, the live page's headings
- * and the length its rules ask for. Made-up brands and pages only: no
- * customer's.
+ * and the length its rules ask for; a few, with the brief rules (2026),
+ * the brand's competitors and the pages it may link to. Made-up brands and
+ * pages only: no customer's.
  *
  * `node src/scripts/eval-brief.js` writes each one's brief and the judge's
  * scores beside them (recorded.json).
@@ -90,6 +91,11 @@ function kase(siteType, language, pageType, page) {
       headings: page.headings ?? [],
       length: LENGTHS[page.length ?? 'medium'],
     },
+    competitors: page.competitors ?? [],
+    targets: {
+      own: (page.own ?? []).map(([url, title]) => ({ url, title })),
+      sources: (page.cited ?? []).map(([url]) => ({ url, title: '' })),
+    },
   };
 }
 
@@ -120,6 +126,11 @@ export const CASES = [
     ],
     queries: ['cash forecasting excel vs software'],
     cited: [['https://www.g2.com/categories/cash-flow-management', 'review']],
+    competitors: ['Cashwise', 'Forecastly'],
+    own: [
+      ['https://ledgerly.example/features/rolling-forecasts', 'Rolling cash forecasts'],
+      ['https://ledgerly.example/pricing', 'Ledgerly pricing'],
+    ],
   }),
   kase('b2b', 'en', 'guide', {
     title: 'How to reconcile a cash forecast with the bank',
@@ -264,6 +275,11 @@ export const CASES = [
     ],
     queries: ['small group hiking tours europe'],
     cited: [['https://www.example-travel-mag.com/best-hiking-tours', 'blog']],
+    competitors: ['Summit Circle', 'Wanderwise'],
+    own: [
+      ['https://trailhead.example/trips/dolomites', 'Dolomites Hut Trek'],
+      ['https://trailhead.example/trips/picos', 'Picos de Europa Traverse'],
+    ],
   }),
   // B2C, Turkish.
   kase('b2c', 'tr', 'guide', {
@@ -355,6 +371,11 @@ export const CASES = [
     queries: ['how to choose a city bike'],
     cited: [['https://www.reddit.com/r/bikecommuting/comments/def', 'forum']],
     length: 'long',
+    competitors: ['Urban Pedal Co'],
+    own: [
+      ['https://velo.example/bikes/city-eight', 'City Eight'],
+      ['https://velo.example/size-guide', 'Bike size guide'],
+    ],
   }),
   kase('ecommerce', 'en', 'sizing_guide', {
     title: 'Bike size guide',

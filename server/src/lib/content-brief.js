@@ -9,6 +9,8 @@ import {
   siteTypeLine,
 } from './content-page-types.js';
 import { inputSources, readDraftInputs } from './content-inputs.js';
+import { NO_LINK_TARGETS, linkKey, readLinkTargets } from './content-links.js';
+import { logger } from './logger.js';
 import { getLanguageName } from './languages.js';
 import {
   RunStoppedError,
@@ -145,7 +147,23 @@ export const BRIEF_V2_LIMITS = {
   leftOut: 20,
   leftOutQuery: 300,
   datedPoint: 300,
+  entity: 120,
+  entities: 10,
+  internalLinks: 8,
+  outboundLinks: 5,
+  anchor: 120,
+  linkSection: 300,
 };
+/**
+ * The pages a brief may plan links to, as many as its prompt lists: the
+ * brand's own (the most cited and visited first) and the sources kept.
+ */
+export const BRIEF_LINK_PAGES = { own: 12, sources: 8 };
+/** The competitors a brief's prompt lists, and how long a page's title is there. */
+const COMPETITORS_LISTED = 20;
+const TITLE_CHARS = 150;
+/** The link rules readLinkTargets reads both lists for. */
+const LINK_RULES = new Set(['internalLinks', 'outboundLinks']);
 /**
  * How a section is best shown; the kind of source a fact needs; the brand's
  * own proof to gather, as Brief › Your input takes it (web brief.ts).
@@ -178,6 +196,13 @@ export const outlineSchema = z.object({
   keywords: z.array(z.string()).describe('Up to 10 keywords.'),
 });
 
+/** A link a brief plans: a page listed, the words to link, the H2 it goes in. */
+const LINK_ITEM = z.object({
+  url: z.string().describe('The address, copied exactly from the list.'),
+  anchor: z.string().describe('The words to link: a few words the section says.'),
+  section: z.string().nullable().describe('The H2 it goes in, as written, or null for anywhere.'),
+});
+
 /**
  * Version 2's: each section with its answer, format and facts; the page's
  * essentials, angle, proof to gather, fan-outs left out and point to date.
@@ -206,6 +231,16 @@ export const outlineSchemaV2 = outlineSchema.extend({
     .string()
     .nullable()
     .describe('What the page should date, as a note, or null when nothing in it dates.'),
+  products: z
+    .array(z.string())
+    .describe("The brand's products the page names, written exactly as the data writes them."),
+  competitors: z
+    .array(z.string())
+    .describe('The competitors listed that the page names, written as listed.'),
+  links: z.object({
+    internal: z.array(LINK_ITEM).describe("Up to 5 of the brand's pages listed to link to."),
+    outbound: z.array(LINK_ITEM).describe('Up to 3 of the sources listed to link to.'),
+  }),
   outline: z
     .array(
       outlineSchema.shape.outline.element.extend({
@@ -269,6 +304,8 @@ export const SYSTEM_PROMPT_V2 = `${SYSTEM_PROMPT}
 - One topic: in "leftOut", copy exactly the fan-outs listed that belong on another page; none when they all fit.
 - In "datedPoint", say what the page should date (a price, a figure with its month), or null when nothing in it dates.
 - The person's input, when listed, is their own: plan with it as given. Never invent a customer, a test, a quote or a figure beyond it.
+- Names as written: in "products", the brand's products the page names, written exactly as the data writes them; in "competitors", the competitors listed that it names, as listed. Never another spelling.
+- In "links", pick up to 5 of the brand's pages and up to 3 of the sources listed to link to, each by its address copied exactly, with the words to link and the H2 it goes in. None when none is listed.
 - "format", "sourceType" and a proof's "kind" are keys: write them as listed, in English, whatever the brief's language.
 - Headings: each H2 about 8 to 15 words, under 90 characters.
 - No keyword stuffing, and no wording made to trigger a citation: write for the reader.
@@ -317,7 +354,7 @@ export async function rebuildDraftBrief({ draftId, brandId, sources, rules = [] 
     throw Object.assign(new Error('Draft not found'), { status: 404 });
   }
 
-  const [brandRes, promptsRes, inputRow] = await Promise.all([
+  const [brandRes, promptsRes, inputRow, competitorsRes, linkTargets] = await Promise.all([
     supabaseAdmin
       .from('brands')
       .select(
@@ -334,9 +371,37 @@ export async function rebuildDraftBrief({ draftId, brandId, sources, rules = [] 
       : Promise.resolve({ data: [], error: null }),
     // Brief › Your input (CE-048, Quality's second phase), with the brief rules on.
     briefRulesOn() ? readDraftInputs(draftId) : Promise.resolve(null),
+    // The competitors' names as written, and the pages it may link to (a failed read: none).
+    briefRulesOn()
+      ? supabaseAdmin.from('competitors').select('name').eq('brand_id', brandId)
+      : Promise.resolve({ data: [], error: null }),
+    briefRulesOn()
+      ? readLinkTargets({ brandId, draftId, sourceUrl: draft.source_url, ruleKeys: LINK_RULES })
+      : Promise.resolve(NO_LINK_TARGETS),
   ]);
   if (brandRes.error) throw brandRes.error;
   if (promptsRes.error) throw promptsRes.error;
+  // A failed read of the competitors leaves none, as a failed read of the link targets does.
+  if (competitorsRes.error) {
+    logger.warn({ err: competitorsRes.error, draftId }, '[content-brief] competitors not read');
+  }
+  const competitors = [
+    ...new Set(
+      (competitorsRes.error ? [] : (competitorsRes.data ?? []))
+        .map((c) => String(c.name ?? '').trim())
+        .filter(Boolean),
+    ),
+  ].slice(0, COMPETITORS_LISTED);
+  // An address the web keeps (BRIEF_V2_LIMITS.url), and a title the prompt can hold.
+  const linkable = (pages, max) =>
+    pages
+      .filter((page) => page.url.length <= BRIEF_V2_LIMITS.url)
+      .slice(0, max)
+      .map((page) => ({ ...page, title: String(page.title ?? '').slice(0, TITLE_CHARS) }));
+  const targets = {
+    own: linkable(linkTargets.own, BRIEF_LINK_PAGES.own),
+    sources: linkable(linkTargets.sources, BRIEF_LINK_PAGES.sources),
+  };
   const brand = brandRes.data;
   const prompts = (promptsRes.data ?? []).map((p) => p.text);
   // The rules only with the brief rules on: the brief plans to them then, and may say their numbers.
@@ -368,6 +433,8 @@ export async function rebuildDraftBrief({ draftId, brandId, sources, rules = [] 
       sources,
       rules: planTo,
       inputs,
+      competitors,
+      targets,
       run,
     });
     await finishRun(run, 'done');
@@ -383,7 +450,18 @@ export async function rebuildDraftBrief({ draftId, brandId, sources, rules = [] 
 }
 
 /** The rebuild itself, step by step: nothing is saved once it is stopped. */
-async function briefWithRun({ draft, draftId, brand, prompts, sources, rules, inputs, run }) {
+async function briefWithRun({
+  draft,
+  draftId,
+  brand,
+  prompts,
+  sources,
+  rules,
+  inputs,
+  competitors,
+  targets,
+  run,
+}) {
   const modelId = contentBriefModelId();
   // Held on the budget before the call, so calls at once can't pass it.
   const budget = await reserveAiBudget(brand.organization_id, {
@@ -407,7 +485,16 @@ async function briefWithRun({ draft, draftId, brand, prompts, sources, rules, in
         model: resolveModel(modelId),
         schema: briefSchema(),
         system: briefSystemPrompt(),
-        prompt: buildBriefPrompt({ brand, draft, prompts, sources, rules, inputs }),
+        prompt: buildBriefPrompt({
+          brand,
+          draft,
+          prompts,
+          sources,
+          rules,
+          inputs,
+          competitors,
+          targets,
+        }),
         abortSignal,
       }),
     );
@@ -426,7 +513,7 @@ async function briefWithRun({ draft, draftId, brand, prompts, sources, rules, in
   await advanceRun(run, 2);
 
   const brief = {
-    ...shapeBrief(object, { brand, draft, prompts, sources, rules, inputs }),
+    ...shapeBrief(object, { brand, draft, prompts, sources, rules, inputs, competitors, targets }),
     origin: 'rebuild',
     builtAt: new Date().toISOString(),
     builtFrom: {
@@ -460,9 +547,9 @@ export function shapeBrief(object, args) {
 
 /**
  * Under content_drafts.brief's 64 KB (00212), with room for jsonb's spaces:
- * past it, the fan-outs left out go, then the facts' sources (a whole
- * address, 2 KB at most), then the facts, so a brief charged for is one that
- * saves.
+ * past it, the links go, then the fan-outs left out, then the facts' sources
+ * (a whole address, 2 KB at most), then the facts, so a brief charged for is
+ * one that saves.
  */
 const BRIEF_BYTES = 60_000;
 const withFacts = (brief, strip) => ({
@@ -470,6 +557,7 @@ const withFacts = (brief, strip) => ({
   outline: brief.outline.map((section) => ({ ...section, facts: strip(section.facts ?? []) })),
 });
 const FIT_STEPS = [
+  (brief) => ({ ...brief, links: null }),
   (brief) => ({ ...brief, leftOut: [] }),
   (brief) => withFacts(brief, (list) => list.map((f) => ({ ...f, source: null }))),
   (brief) => withFacts(brief, () => []),
@@ -485,8 +573,20 @@ function fitBrief(brief) {
   return fitted;
 }
 
-function shapeWhole(object, { brand, draft, prompts, sources, rules, inputs = [] }) {
-  const guard = briefGuard({ brand, draft, prompts, sources, rules, inputs });
+function shapeWhole(
+  object,
+  {
+    brand,
+    draft,
+    prompts,
+    sources,
+    rules,
+    inputs = [],
+    competitors = [],
+    targets = NO_LINK_TARGETS,
+  },
+) {
+  const guard = briefGuard({ brand, draft, prompts, sources, rules, inputs, competitors });
   // Version 2's (a model answer with them): each section's plan, the page's.
   const v2 =
     'tldr' in object ||
@@ -517,7 +617,31 @@ function shapeWhole(object, { brand, draft, prompts, sources, rules, inputs = []
           .filter(Boolean),
       ),
     ].slice(0, BRIEF_LIMITS.keywords),
-    ...(v2 ? { version: 2, ...pagePlan(object, { guard, words, outline, sources, draft }) } : {}),
+    ...(v2
+      ? {
+          version: 2,
+          ...pagePlan(object, { guard, words, outline, sources, draft }),
+          ...namesAndLinks(object, {
+            guard,
+            words,
+            outline,
+            brand,
+            competitors,
+            targets,
+            // The brand's own words: a product is one it writes (never a
+            // prompt's, a search's or a rule's name: "ChatGPT", "FAQ").
+            own: [
+              brand?.name,
+              brand?.industry,
+              brand?.description,
+              draft.title,
+              ...sources.headings,
+              ...inputs.map(sourceWords),
+              ...targets.own.map((page) => page.title),
+            ],
+          }),
+        }
+      : {}),
   };
 }
 
@@ -568,6 +692,84 @@ function pagePlan(object, { guard, words, outline, sources, draft }) {
             yearInTitle: dates?.yearInTitle ?? false,
           }
         : null,
+  };
+}
+
+/** Text as a name is compared: one form of each character, in small letters. */
+const nameKey = (text) =>
+  String(text ?? '')
+    .normalize('NFKC')
+    .trim()
+    .replace(/\s+/g, ' ')
+    .toLowerCase();
+
+/**
+ * The names and links of version 2, the brief rules' entities and links:
+ * - the brand's name as kept;
+ * - competitors the model names, each one listed, as listed;
+ * - products the model names, each where the brand's own words write it
+ *   (`own`: its name, description, the page's title and headings, Your
+ *   input, its pages' titles), as written there (never the brand's or a
+ *   competitor's name), so none is made up or respelled;
+ * - links to the pages listed only (`targets`, by their address as links
+ *   compare it), each with its words guarded and cut (one whose words came
+ *   back with a placeholder goes), and the H2 it goes in when the outline
+ *   has it (else anywhere).
+ */
+function namesAndLinks(object, { guard, words, outline, brand, competitors, targets, own }) {
+  const L = BRIEF_V2_LIMITS;
+  const listed = new Map(competitors.map((name) => [nameKey(name), name]));
+  const competitorsNamed = [
+    ...new Set((object.competitors ?? []).map((name) => listed.get(nameKey(name))).filter(Boolean)),
+  ]
+    .map((name) => name.slice(0, L.entity))
+    .slice(0, L.entities);
+  // Straight and curly apostrophes alike: a match's place is the same in both.
+  const straight = (text) => text.replace(/[‘’]/g, "'");
+  const data = own.filter(Boolean).join('\n');
+  const plain = straight(data);
+  const taken = new Set([nameKey(brand?.name), ...listed.keys()]);
+  const products = [];
+  for (const name of object.products ?? []) {
+    const wanted = String(name ?? '').trim();
+    if (!wanted || wanted.length > L.entity || taken.has(nameKey(wanted))) continue;
+    const escaped = straight(wanted).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const at = plain.match(new RegExp(`(?<![\\p{L}\\p{N}])${escaped}(?![\\p{L}\\p{N}])`, 'iu'));
+    const asWritten = at ? data.slice(at.index, at.index + at[0].length) : null;
+    if (!asWritten || taken.has(nameKey(asWritten))) continue;
+    taken.add(nameKey(asWritten));
+    products.push(asWritten);
+    if (products.length >= L.entities) break;
+  }
+  const headings = new Map(outline.map((section) => [nameKey(section.heading), section.heading]));
+  const linksTo = (items, pages, max) => {
+    const allowed = new Map(pages.map((page) => [linkKey(page.url), page.url]));
+    const seen = new Set();
+    const kept = [];
+    for (const item of items ?? []) {
+      const key = linkKey(item?.url);
+      const url = key && allowed.get(key);
+      const anchor = clip(guard.text(words(item?.anchor ?? '')), L.anchor);
+      // Words that came back with a placeholder aren't ones to link.
+      if (!url || !anchor || /\[[^\]]*\]/.test(anchor) || seen.has(key)) continue;
+      seen.add(key);
+      const section = headings.get(nameKey(item?.section)) ?? null;
+      kept.push({ url, anchor, section: section ? section.slice(0, L.linkSection) : null });
+      if (kept.length >= max) break;
+    }
+    return kept;
+  };
+  const internal = linksTo(object.links?.internal, targets.own, L.internalLinks);
+  const outbound = linksTo(object.links?.outbound, targets.sources, L.outboundLinks);
+  return {
+    entities: {
+      brand: String(brand?.name ?? '')
+        .trim()
+        .slice(0, L.entity),
+      products,
+      competitors: competitorsNamed,
+    },
+    links: internal.length || outbound.length ? { internal, outbound } : null,
   };
 }
 
@@ -631,8 +833,16 @@ export function briefNumbered(sources, inputs = []) {
  * one, as a placeholder can't be searched for; `found` lists what a text
  * adds, read the same way (the brief eval's gate).
  */
-export function briefGuard({ brand, draft, prompts, sources, rules, inputs }) {
-  const { given, known, people } = briefKnown({ brand, draft, prompts, sources, rules, inputs });
+export function briefGuard({ brand, draft, prompts, sources, rules, inputs, competitors }) {
+  const { given, known, people } = briefKnown({
+    brand,
+    draft,
+    prompts,
+    sources,
+    rules,
+    inputs,
+    competitors,
+  });
   // The names and quotes a text may have: a question in quotes in it too.
   const askedIn = (words) => {
     const questions = [...words.matchAll(QUOTED_QUESTION)].map((m) => m[1]);
@@ -665,7 +875,15 @@ export function briefGuard({ brand, draft, prompts, sources, rules, inputs }) {
  * The rules it plans to are among them ("aim: 60 words"), and the person's
  * own input, word for word.
  */
-export function briefKnown({ brand, draft, prompts, sources, rules = [], inputs = [] }) {
+export function briefKnown({
+  brand,
+  draft,
+  prompts,
+  sources,
+  rules = [],
+  inputs = [],
+  competitors = [],
+}) {
   const given = [
     brand?.name,
     brand?.industry,
@@ -678,6 +896,7 @@ export function briefKnown({ brand, draft, prompts, sources, rules = [], inputs 
     String(sources.length),
     ...rules.flatMap((rule) => [rule.name, rule.detail]),
     ...inputs.map(sourceWords),
+    ...competitors,
   ];
   return { given, known: knownNumbers(...given, todayText()), people: knownPeople(...given) };
 }
@@ -726,7 +945,16 @@ function fanoutMatcher(fanouts) {
 }
 
 /** What the model is told: the brand, the page, and the sources kept. */
-export function buildBriefPrompt({ brand, draft, prompts, sources, rules = [], inputs = [] }) {
+export function buildBriefPrompt({
+  brand,
+  draft,
+  prompts,
+  sources,
+  rules = [],
+  inputs = [],
+  competitors = [],
+  targets = NO_LINK_TARGETS,
+}) {
   const list = (items) => (items.length ? items.map((item) => `- ${item}`).join('\n') : '- none');
   const v2 = briefRulesOn();
   // With the brief rules on, each cited page and each piece of the person's
@@ -738,6 +966,18 @@ export function buildBriefPrompt({ brand, draft, prompts, sources, rules = [], i
         .map((n) => `${n.id}: ${n.label} (${n.detail})`)
     : sources.pages.map((p) => `${p.url} (${p.kind})`);
   // Without a note (a quote's address, a day): a fact cites the input by its number.
+  const pageLines = (pages) => pages.map((p) => `${p.title || p.url} — ${p.url}`);
+  const linkable = v2
+    ? [
+        competitors.length ? `\nCompetitors (names as written): ${competitors.join(', ')}\n` : '',
+        targets.own.length
+          ? `\nThe brand's pages to link to:\n${list(pageLines(targets.own))}\n`
+          : '',
+        targets.sources.length
+          ? `\nSources to link to and cite:\n${list(pageLines(targets.sources))}\n`
+          : '',
+      ].join('')
+    : '';
   const given = numbered
     .filter((n) => n.kind === 'input')
     .map((n) => `${n.id} "${n.label}": ${n.detail}`);
@@ -766,6 +1006,6 @@ ${list(sources.queries)}
 
 Pages AI cites for these prompts today:
 ${list(pages)}
-${given.length ? `\nThe person's own input for this page (Brief › Your input):\n${list(given)}\n` : ''}
+${given.length ? `\nThe person's own input for this page (Brief › Your input):\n${list(given)}\n` : ''}${linkable}
 ${sources.headings.length ? `The page's headings now:\n${list(sources.headings)}\n\n` : ''}Write the brief in ${getLanguageName(brand?.language)}.`;
 }
