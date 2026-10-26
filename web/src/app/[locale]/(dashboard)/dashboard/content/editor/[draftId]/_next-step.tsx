@@ -190,6 +190,7 @@ export function NextStepButton({
   const name = stepName(t, step.id, state);
   const now = path.findIndex((p) => p.state === 'now');
   const why = blocked(step.primary);
+  const whyAlternative = step.alternative ? blocked(step.alternative) : null;
   const whyId = useId();
   // After Skip, the new step's button takes focus (Skip itself may be gone).
   const primaryRef = useRef<HTMLButtonElement>(null);
@@ -271,7 +272,8 @@ export function NextStepButton({
                 <Button
                   variant="outline"
                   size="sm"
-                  disabled={blocked(step.alternative) !== null}
+                  disabled={whyAlternative !== null}
+                  aria-describedby={!why && whyAlternative ? whyId : undefined}
                   onClick={() => onAction(step.alternative!)}
                 >
                   {t(`actions.${step.alternative}`)}
@@ -290,12 +292,14 @@ export function NextStepButton({
                 </Button>
               )}
             </div>
-            {why && (
+            {/* The step's own button first; else why the other one is held
+                (Mark published on an archived page). */}
+            {(why ?? whyAlternative) && (
               <p
                 id={whyId}
                 className="text-xs text-amber-700 [overflow-wrap:anywhere] dark:text-amber-400"
               >
-                {why}
+                {why ?? whyAlternative}
               </p>
             )}
           </div>

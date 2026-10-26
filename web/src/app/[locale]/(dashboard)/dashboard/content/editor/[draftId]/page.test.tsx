@@ -46,6 +46,11 @@ vi.mock('@/lib/actions/content-draft-inputs', () => ({
   saveDraftInputs: (...args: unknown[]) => saveDraftInputs(...args),
 }));
 const getContentImpact = vi.fn();
+// Mark published (CE-013).
+const publishPage = vi.hoisted(() => vi.fn());
+const readPublishAddress = vi.hoisted(() => vi.fn(async () => 'https://acme.example.com/pipeline'));
+const readLiveUrl = vi.hoisted(() => vi.fn(async () => 'https://acme.example.com/pipeline'));
+vi.mock('@/lib/content/publish-client', () => ({ publishPage, readPublishAddress, readLiveUrl }));
 const getContentResults = vi.fn();
 const getDraftSources = vi.fn();
 const setDraftSourceIncluded = vi.fn();
@@ -233,6 +238,7 @@ const draft = (over: Partial<ContentDraft> = {}): ContentDraft => ({
   pageTypeSource: 'user',
   siteType: 'b2b',
   sourceUrl: null,
+  publishedUrl: null,
   method: 'optimize',
   status: 'in_review',
   bodyHtml: '<h1>Pipeline forecasting</h1><p>Teams trust it.</p>',
@@ -346,6 +352,8 @@ beforeEach(() => {
     .mockReset()
     .mockResolvedValue({ ok: true, updatedAt: '2026-10-20T10:00:00Z', bodyHash: 'h0' });
   getContentImpact.mockReset().mockResolvedValue(null);
+  publishPage.mockReset();
+  readPublishAddress.mockReset().mockResolvedValue('https://acme.example.com/pipeline');
   getContentResults.mockReset().mockResolvedValue(null);
   getDraftSources.mockReset().mockResolvedValue(null);
   readAgentRun.mockReset().mockResolvedValue(null);
@@ -957,15 +965,152 @@ describe('the content editor', () => {
     unmarkContentDraftReady.mockResolvedValueOnce({ status: 'published', tasksReopened: 0 });
     await act(async () => button('Ready: click to move it back to review')!.click());
     expect(toast).toHaveBeenCalledWith('Its status is now Published, so it stays.');
-    expect(button('Published')!.getAttribute('aria-disabled')).toBe('true');
+    // Its live address, for the Live page tab.
+    expect(readLiveUrl).toHaveBeenCalledWith('d1');
+    // Published, a click opens its live address (CE-013).
+    expect(button('Published')!.getAttribute('aria-disabled')).not.toBe('true');
   });
 
-  it('says Published, not to be undone here, on a published page', async () => {
-    getContentDraft.mockResolvedValue(draft({ status: 'published' }));
+  it('says Published on a published page, a click away from its live address (CE-013)', async () => {
+    getContentDraft.mockResolvedValue(
+      draft({ status: 'published', publishedUrl: 'https://acme.example.com/pipeline' }),
+    );
     await renderPage();
     expect(button('Mark ready')).toBeUndefined();
-    // Disabled but focusable, so its tip says where to change it.
+    expect(button('Published')!.getAttribute('aria-disabled')).not.toBe('true');
+    await act(async () => button('Published')!.click());
+    expect(readPublishAddress).toHaveBeenCalledWith('d1');
+    expect(document.querySelector('[role="dialog"]')!.textContent).toContain('Mark published');
+  });
+
+  it('holds Published on an archived page until it’s restored, as the Library does', async () => {
+    getContentDraft.mockResolvedValue(
+      draft({ status: 'published', archivedAt: '2026-10-25T10:00:00Z' }),
+    );
+    await renderPage();
     expect(button('Published')!.getAttribute('aria-disabled')).toBe('true');
+    await act(async () => button('Published')!.click());
+    expect(readPublishAddress).not.toHaveBeenCalled();
+  });
+
+  it('asks for the address of a page marked published without one on the Live page tab', async () => {
+    getContentDraft.mockResolvedValue(draft({ status: 'published', method: 'create' }));
+    const width = window.innerWidth;
+    window.innerWidth = 1440;
+    try {
+      await renderPage();
+      await pickTab('Live page');
+      expect(container.textContent).toContain(
+        "This page is marked published without its live address, so there's nothing to measure.",
+      );
+      expect(getContentImpact).not.toHaveBeenCalled();
+    } finally {
+      window.innerWidth = width;
+    }
+  });
+
+  it('measures the address a page went live at on the Live page tab, not the page it optimized', async () => {
+    getContentDraft.mockResolvedValue(
+      draft({
+        status: 'published',
+        sourceUrl: 'https://acme.example.com/pricing',
+        publishedUrl: 'https://acme.example.com/pricing-2026',
+      }),
+    );
+    const width = window.innerWidth;
+    window.innerWidth = 1440;
+    try {
+      await renderPage();
+      await pickTab('Live page');
+      expect(getContentImpact).toHaveBeenCalledWith(
+        'b1',
+        'https://acme.example.com/pricing-2026',
+        30,
+      );
+    } finally {
+      window.innerWidth = width;
+    }
+  });
+
+  it('marks a ready page published from Next step, and the Live page tab measures its address', async () => {
+    getContentDraft.mockResolvedValue(draft({ status: 'ready', method: 'create' }));
+    publishPage.mockResolvedValue({
+      ok: true,
+      publishedUrl: 'https://acme.example.com/pipeline',
+      publishedAt: '2026-10-25T10:00:00Z',
+      onBrandDomain: true,
+      taskCompleted: false,
+    });
+    const width = window.innerWidth;
+    window.innerWidth = 1440;
+    // Next step comes with Quality.
+    process.env.NEXT_PUBLIC_CONTENT_QUALITY_PHASE = '1';
+    try {
+      getContentAuthors.mockResolvedValue({
+        authors: [],
+        brands: [{ id: 'b1', name: 'Acme' }],
+        me: { id: 'u1', role: 'analyst' },
+      });
+      await renderPage();
+      // The header's Next step: Ready to publish, Mark published beside Export.
+      const next = [...container.querySelectorAll<HTMLButtonElement>('header button')].find((b) =>
+        b.textContent?.startsWith('Next'),
+      )!;
+      await act(async () => {
+        next.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
+        next.click();
+      });
+      await act(async () => {
+        [...document.querySelectorAll<HTMLButtonElement>('button')]
+          .find((b) => b.textContent === 'Mark published')!
+          .click();
+      });
+      await act(async () => {
+        [...document.querySelectorAll<HTMLButtonElement>('[role="dialog"] button')]
+          .find((b) => b.textContent === 'Mark published')!
+          .click();
+      });
+      expect(publishPage).toHaveBeenCalledWith('d1', 'https://acme.example.com/pipeline');
+      expect(button('Published')).toBeDefined();
+      await pickTab('Live page');
+      expect(getContentImpact).toHaveBeenCalledWith('b1', 'https://acme.example.com/pipeline', 30);
+    } finally {
+      delete process.env.NEXT_PUBLIC_CONTENT_QUALITY_PHASE;
+      window.innerWidth = width;
+    }
+  });
+
+  it('holds Next step’s Mark published on an archived page, saying why', async () => {
+    getContentDraft.mockResolvedValue(
+      draft({ status: 'ready', method: 'create', archivedAt: '2026-10-25T10:00:00Z' }),
+    );
+    const width = window.innerWidth;
+    window.innerWidth = 1440;
+    process.env.NEXT_PUBLIC_CONTENT_QUALITY_PHASE = '1';
+    try {
+      getContentAuthors.mockResolvedValue({
+        authors: [],
+        brands: [{ id: 'b1', name: 'Acme' }],
+        me: { id: 'u1', role: 'analyst' },
+      });
+      await renderPage();
+      const next = [...container.querySelectorAll<HTMLButtonElement>('header button')].find((b) =>
+        b.textContent?.startsWith('Next'),
+      )!;
+      await act(async () => {
+        next.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
+        next.click();
+      });
+      const mark = [...document.querySelectorAll<HTMLButtonElement>('button')].find(
+        (b) => b.textContent === 'Mark published',
+      )!;
+      expect(mark.disabled).toBe(true);
+      const why = document.getElementById(mark.getAttribute('aria-describedby')!);
+      expect(why!.textContent).toBe('This page is archived. Restore it in the Library first.');
+    } finally {
+      delete process.env.NEXT_PUBLIC_CONTENT_QUALITY_PHASE;
+      window.innerWidth = width;
+    }
   });
 
   it("puts the caret at the end of the page's H1 when the title is clicked", async () => {
