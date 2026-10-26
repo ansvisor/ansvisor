@@ -1,7 +1,13 @@
 import { createHash } from 'node:crypto';
 import { z } from 'zod';
 import { HEADING_LIMITS } from './content-agent.js';
-import { SYSTEM_PROMPT, briefGuard, buildBriefPrompt, outlineSchema } from './content-brief.js';
+import {
+  briefGuard,
+  briefRulesOn,
+  briefSchema,
+  briefSystemPrompt,
+  buildBriefPrompt,
+} from './content-brief.js';
 import { NAME_PLACEHOLDER, QUOTE_PLACEHOLDER } from './content-people.js';
 import { qualityPhase } from './content-quality.js';
 import { NUMBER_PLACEHOLDER } from './content-sources.js';
@@ -60,7 +66,7 @@ export const BRIEF_CRITERIA = [
   },
   {
     key: 'format',
-    ask: 'Does it say how each part is best shown (a table for a comparison, steps for a how-to, a question FAQ at the end), with short headings (H1 up to 60 characters, H2 about 8–15 words)?',
+    ask: 'Does it say how each part is best shown (a table for a comparison, steps for a how-to, a question FAQ at the end), with short H2 headings (about 8–15 words)?',
   },
   {
     key: 'naturalLanguage',
@@ -92,8 +98,9 @@ function urlKey(url) {
 
 /**
  * A brief's fields as the judge sees them and as a quote is read in: the
- * goal, the audience, each heading and key point, the keywords as one line;
- * each with whether it's a heading.
+ * goal, the audience, each heading and key point, version 2's answer, format
+ * and facts (with the kind of source each needs and the page to check it
+ * against), the keywords as one line; each with whether it's a heading.
  */
 function briefFields(brief) {
   return [
@@ -102,6 +109,13 @@ function briefFields(brief) {
     ...brief.outline.flatMap((s) => [
       { label: 'H2: ', text: s.heading, heading: true },
       ...s.keyPoints.map((point) => ({ label: '- ', text: point, heading: false })),
+      { label: 'Answer: ', text: s.answer, heading: false },
+      { label: 'Format: ', text: s.format, heading: false },
+      ...(s.facts ?? []).map((f) => ({
+        label: `Fact (${f.sourceType}${f.source ? `, check against ${f.source.label}` : ''}): `,
+        text: f.claim,
+        heading: false,
+      })),
     ]),
     { label: 'Keywords: ', text: brief.keywords.join(', '), heading: false },
   ].filter((f) => f.text);
@@ -253,21 +267,32 @@ export function readJudged(answer, brief) {
 
 /**
  * The brief's prompt as recorded: a hash of its rules, its schema and the
- * prompt each case gets, under Quality's phase (the site type line shows
- * from phase 2). A record made under another one is stale.
+ * prompt each case gets, under Quality's phase (the site type line shows from
+ * phase 2) and with the brief rules (2026) on or off (CONTENT_BRIEF_RULES:
+ * version 2's rules, schema and numbered data). A record made under another
+ * one is stale.
  */
-export function promptVersion(cases, phase = qualityPhase()) {
-  const before = process.env.CONTENT_QUALITY_PHASE;
+export function promptVersion(cases, { phase = qualityPhase(), rules = briefRulesOn() } = {}) {
+  const before = {
+    phase: process.env.CONTENT_QUALITY_PHASE,
+    rules: process.env.CONTENT_BRIEF_RULES,
+  };
   process.env.CONTENT_QUALITY_PHASE = String(phase);
+  process.env.CONTENT_BRIEF_RULES = rules ? 'true' : 'false';
   try {
     const hash = createHash('sha256')
-      .update(SYSTEM_PROMPT)
-      .update(JSON.stringify(z.toJSONSchema(outlineSchema)));
+      .update(briefSystemPrompt())
+      .update(JSON.stringify(z.toJSONSchema(briefSchema())));
     for (const c of cases) hash.update(buildBriefPrompt(c));
     return hash.digest('hex').slice(0, 12);
   } finally {
-    if (before === undefined) delete process.env.CONTENT_QUALITY_PHASE;
-    else process.env.CONTENT_QUALITY_PHASE = before;
+    for (const [key, name] of [
+      ['phase', 'CONTENT_QUALITY_PHASE'],
+      ['rules', 'CONTENT_BRIEF_RULES'],
+    ]) {
+      if (before[key] === undefined) delete process.env[name];
+      else process.env[name] = before[key];
+    }
   }
 }
 

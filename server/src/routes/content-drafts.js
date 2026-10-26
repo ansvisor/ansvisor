@@ -4,7 +4,7 @@ import { assertBrandAccess } from '../lib/access.js';
 import { fixDraftRules, fixRulesInput } from '../lib/content-agent.js';
 import { handOffDraft, handOffInput } from '../lib/content-handoff.js';
 import { qualityPhase } from '../lib/content-quality.js';
-import { rebuildDraftBrief, rebuildSources } from '../lib/content-brief.js';
+import { briefRules, rebuildDraftBrief, rebuildSources } from '../lib/content-brief.js';
 import { DeliveryError, sendContentPages, sendInput } from '../lib/content-delivery.js';
 import { checkWebflowPublished } from '../lib/cms/webflow-status.js';
 import { liveAddress, publishDraft } from '../lib/content-published.js';
@@ -170,11 +170,13 @@ const rebuildBody = z.object({
   // guid, not uuid: brand ids aren't all RFC 4122 versions (seeded ones).
   brandId: z.guid(),
   sources: rebuildSources,
+  /** The rules in effect, as Fix sends them: read with the brief rules (2026) on. */
+  rules: briefRules.optional(),
 });
 
 /**
  * POST /api/content-drafts/:draftId/brief
- * Body: { brandId, sources: { promptIds, fanouts, pages, queries, headings, length } }
+ * Body: { brandId, sources: { promptIds, fanouts, pages, queries, headings, length }, rules? }
  */
 router.post('/:draftId/brief', async (req, res) => {
   const draftId = z.guid().safeParse(req.params.draftId);
@@ -182,10 +184,10 @@ router.post('/:draftId/brief', async (req, res) => {
   if (!draftId.success || !parsed.success) {
     return res.status(400).json({ error: 'Invalid request', code: 'invalid' });
   }
-  const { brandId, sources } = parsed.data;
+  const { brandId, sources, rules } = parsed.data;
   try {
     await assertBrandAccess(brandId, req.user.id);
-    const brief = await rebuildDraftBrief({ draftId: draftId.data, brandId, sources });
+    const brief = await rebuildDraftBrief({ draftId: draftId.data, brandId, sources, rules });
     return res.json({ brief });
   } catch (err) {
     if (err instanceof PlanLimitError) {
