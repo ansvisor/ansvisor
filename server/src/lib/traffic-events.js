@@ -64,12 +64,15 @@ const eventBody = z.object({
 /** What a path segment holding an email is stored as. */
 export const EMAIL_SEGMENT = '[email]';
 
+/** An email in a path segment, raw or encoded: a name, an @, a domain ("/@acme" is a handle). */
+const EMAIL_IN_SEGMENT = /[^@/]+(?:@|%40)[^@/]+\.[^@/]+/i;
+
 /**
  * A page's address as stored: its origin and path, no query string or
  * fragment (a thank-you page's ?email=… never gets in), and a path segment
  * that holds an email, raw or encoded (/unsubscribe/ann%40example.com), as
- * EMAIL_SEGMENT: the page still counts, the address stays out. Null when it
- * isn't an http(s) address.
+ * EMAIL_SEGMENT: the page still counts, the address stays out. A handle
+ * ("/@acme/post") stays. Null when it isn't an http(s) address.
  */
 export function eventUrl(raw) {
   try {
@@ -77,7 +80,7 @@ export function eventUrl(raw) {
     if (url.protocol !== 'http:' && url.protocol !== 'https:') return null;
     const path = url.pathname
       .split('/')
-      .map((segment) => (/@|%40/i.test(segment) ? EMAIL_SEGMENT : segment))
+      .map((segment) => (EMAIL_IN_SEGMENT.test(segment) ? EMAIL_SEGMENT : segment))
       .join('/');
     return `${url.origin}${path}`.slice(0, 2048);
   } catch {
