@@ -16,26 +16,49 @@ let insertError = null;
 const filters = [];
 let latestPageview = null;
 const updated = [];
+// The brand's conversions setting as its own read answers it (CE-017,
+// 00286): the visit's read asks for the id only, and never sees it.
+let conversionsRead = { data: { conversions_enabled: false }, error: null };
+let eventInsertError = null;
+// The brands reads' filters, to tell which brand the setting was read for.
+const brandFilters = [];
+// A visitor's earlier events as the limit read finds them, and its filters.
+let earlierEvents = 0;
+const eventFilters = [];
 
 vi.mock('../config/supabase.js', () => ({
   default: {
     from: (table) => {
       const filter = (op) => (col, val) => {
         if (table === 'ai_traffic_logs') filters.push([op, col, val]);
+        if (table === 'brands') brandFilters.push([chain.columns, op, col, val]);
+        if (table === 'ai_traffic_events') eventFilters.push([op, col, val]);
         return chain;
       };
       const chain = {
-        select: () => chain,
+        select: (columns) => {
+          chain.columns = columns;
+          return chain;
+        },
         eq: filter('eq'),
         is: filter('is'),
         gte: filter('gte'),
         order: () => chain,
-        limit: () => chain,
-        single: async () => ({ data: { id: 'b1' }, error: null }),
+        limit: (n) =>
+          table === 'ai_traffic_events'
+            ? Promise.resolve({
+                data: Array.from({ length: Math.min(earlierEvents, n) }, (_, i) => ({ id: i })),
+                error: null,
+              })
+            : chain,
+        single: async () =>
+          chain.columns === 'conversions_enabled'
+            ? conversionsRead
+            : { data: { id: 'b1' }, error: null },
         maybeSingle: async () => ({ data: latestPageview, error: null }),
         insert: async (row) => {
           inserted.push({ table, row });
-          return { error: insertError };
+          return { error: table === 'ai_traffic_events' ? eventInsertError : insertError };
         },
         update: (fields) => ({
           eq: async (col, val) => {
@@ -48,7 +71,10 @@ vi.mock('../config/supabase.js', () => ({
     },
   },
 }));
-vi.mock('../middleware/rate-limiter.js', () => ({ trafficLimiter: (req, res, next) => next() }));
+vi.mock('../middleware/rate-limiter.js', () => ({
+  trafficLimiter: (req, res, next) => next(),
+  journeyEventLimiter: (req, res, next) => next(),
+}));
 vi.mock('../lib/logger.js', () => {
   const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
   return { default: logger, logger };
@@ -82,6 +108,11 @@ beforeEach(() => {
   filters.length = 0;
   latestPageview = null;
   updated.length = 0;
+  conversionsRead = { data: { conversions_enabled: false }, error: null };
+  eventInsertError = null;
+  brandFilters.length = 0;
+  earlierEvents = 0;
+  eventFilters.length = 0;
 });
 
 const beacon = (body = {}) =>
@@ -336,5 +367,117 @@ describe('POST /track/:trackingCode', () => {
       expect(res.status, type).toBe(413);
     }
     expect(inserted).toEqual([]);
+  });
+});
+
+describe('POST /track/:trackingCode: a journey’s events (CE-017)', () => {
+  const ID = 'Vq3xT0mZ8kLp2RwYbN5sQa';
+  const event = (body) =>
+    fetch(baseUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=UTF-8', 'X-Forwarded-For': '203.0.113.7' },
+      body: JSON.stringify({
+        id: ID,
+        u: 'https://acme.example/thanks?email=ann@example.com',
+        f: { s: 'chatgpt.com', u: 'https://acme.example/blog/crm', at: Date.now() - 60_000 },
+        ...body,
+      }),
+    });
+
+  it('stores a pageview and a conversion for a brand with conversions on, never as a visit', async () => {
+    conversionsRead = { data: { conversions_enabled: true }, error: null };
+    expect((await event({ k: 'pv' })).status).toBe(204);
+    expect((await event({ k: 'cv', g: 'demo', o: 'form', n: 'pricing-demo' })).status).toBe(204);
+    expect(inserted.map(({ table }) => table)).toEqual(['ai_traffic_events', 'ai_traffic_events']);
+    expect(inserted[0].row).toMatchObject({
+      brand_id: 'b1',
+      visitor_id: ID,
+      kind: 'page',
+      // No query string: the email never gets in.
+      url: 'https://acme.example/thanks',
+      first_source: 'chatgpt.com',
+    });
+    expect(inserted[1].row).toMatchObject({
+      kind: 'conversion',
+      goal: 'demo',
+      origin: 'form',
+      label: 'pricing-demo',
+    });
+    // Neither is an AI landing: no visit lookup, no visitor key.
+    expect(findVisitOf).not.toHaveBeenCalled();
+    expect(visitorKey).not.toHaveBeenCalled();
+    // The setting is read for this brand, by its own read.
+    expect(brandFilters).toContainEqual(['conversions_enabled', 'eq', 'id', 'b1']);
+  });
+
+  it('fails only the events when the setting can’t be read (a server before 00286), never the visits', async () => {
+    conversionsRead = {
+      data: null,
+      error: { message: 'column brands.conversions_enabled does not exist' },
+    };
+    const { default: logger } = await import('../lib/logger.js');
+    vi.mocked(logger.error).mockClear();
+    expect((await event({ k: 'cv', g: 'signup' })).status).toBe(204);
+    expect(inserted).toEqual([]);
+    expect(logger.error).toHaveBeenCalledTimes(1);
+    // A visit reads the brand's id only, and is stored as ever.
+    expect((await beacon()).status).toBe(204);
+    expect(inserted.map(({ table }) => table)).toEqual(['ai_traffic_logs']);
+  });
+
+  it('stores nothing while the brand has conversions off', async () => {
+    expect((await event({ k: 'cv', g: 'signup' })).status).toBe(204);
+    expect(inserted).toEqual([]);
+  });
+
+  it('stores nothing it can’t credit to an AI visit, and doesn’t read the brand for it', async () => {
+    conversionsRead = { data: { conversions_enabled: true }, error: null };
+    await event({ k: 'pv', f: { s: 'google.com', u: 'https://acme.example/', at: Date.now() } });
+    await event({ k: 'cv' });
+    expect(inserted).toEqual([]);
+    expect(brandFilters.filter(([columns]) => columns === 'conversions_enabled')).toEqual([]);
+  });
+
+  it('stores no more for a visitor id past its limits: pageviews in the window, conversions a day', async () => {
+    conversionsRead = { data: { conversions_enabled: true }, error: null };
+    earlierEvents = 299;
+    await event({ k: 'pv' });
+    expect(inserted).toHaveLength(1);
+    // Read for this brand, visitor and kind, over the attribution window.
+    expect(eventFilters).toEqual(
+      expect.arrayContaining([
+        ['eq', 'brand_id', 'b1'],
+        ['eq', 'visitor_id', ID],
+        ['eq', 'kind', 'page'],
+      ]),
+    );
+    const since = Date.parse(eventFilters.find(([op]) => op === 'gte')[2]);
+    expect(Date.now() - since).toBeGreaterThan(29 * 24 * 60 * 60 * 1000);
+    earlierEvents = 300;
+    await event({ k: 'pv' });
+    expect(inserted).toHaveLength(1);
+
+    eventFilters.length = 0;
+    earlierEvents = 10;
+    await event({ k: 'cv', g: 'signup' });
+    expect(inserted).toHaveLength(1);
+    expect(eventFilters).toContainEqual(['eq', 'kind', 'conversion']);
+    earlierEvents = 9;
+    await event({ k: 'cv', g: 'signup' });
+    expect(inserted).toHaveLength(2);
+  });
+
+  it('counts an order sent again once, without logging it as a failure', async () => {
+    conversionsRead = { data: { conversions_enabled: true }, error: null };
+    const { default: logger } = await import('../lib/logger.js');
+    vi.mocked(logger.error).mockClear();
+    eventInsertError = { code: '23505', message: 'duplicate key value' };
+    expect(
+      (await event({ k: 'cv', g: 'order', o: 'shopify', ref: '1001', val: 59, cur: 'USD' })).status,
+    ).toBe(204);
+    expect(logger.error).not.toHaveBeenCalled();
+    eventInsertError = { code: '42501', message: 'permission denied' };
+    await event({ k: 'cv', g: 'order', o: 'shopify', ref: '1002' });
+    expect(logger.error).toHaveBeenCalledTimes(1);
   });
 });
