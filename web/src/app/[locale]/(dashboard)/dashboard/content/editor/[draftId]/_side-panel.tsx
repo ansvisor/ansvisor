@@ -7,6 +7,7 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { rulesForBrief, useRuleDescriber } from '@/lib/content/agent-write';
 import { isPageType, type ContentDraft } from '@/lib/content/drafts';
 import type { SiteType } from '@/lib/content/page-types';
+import { inputsGiven } from '@/lib/content/draft-inputs';
 import { buildSourceGroups, includedCounts, type DraftSourceKind } from '@/lib/content/sources';
 import { formatNumber } from '@/lib/format';
 import { BAND_CLASSES, qualityBand, qualityPhase } from '@/lib/content/quality';
@@ -472,6 +473,8 @@ export function EditorSidePanel({
                 rewrite={agentRewrite}
                 dataLine={dataLine}
                 blocked={briefBlocked}
+                given={yourInput?.status === 'ready' ? inputsGiven(yourInput.inputs) : null}
+                onAddInput={onAddInput}
               />
             </div>
           )}
