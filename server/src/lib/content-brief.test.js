@@ -140,7 +140,7 @@ describe('rebuildDraftBrief', () => {
     generateObject.mockResolvedValue({
       object: {
         goal: 'Win 73% of home baristas',
-        audience: 'Home baristas',
+        audience: 'Home baristas who drink 4 cups a day',
         outline: [
           {
             heading: 'The 12 best espresso machines under $500',
@@ -163,6 +163,8 @@ describe('rebuildDraftBrief', () => {
     const brief = await rebuildDraftBrief({ draftId: DRAFT, brandId: BRAND, sources: sources() });
 
     expect(brief.goal).toBe(`Win ${NUMBER_PLACEHOLDER} of home baristas`);
+    // A lone digit is a count, as on a page.
+    expect(brief.audience).toBe('Home baristas who drink 4 cups a day');
     expect(brief.outline).toEqual([
       {
         // A heading's number as a page's: "$500" is the prompt's.
@@ -318,7 +320,7 @@ describe('rebuildDraftBrief', () => {
             platform: null,
           },
           ...Array.from({ length: 14 }, (_, i) => ({
-            heading: `Section ${i}`,
+            heading: `Section ${String.fromCharCode(97 + i)}`,
             keyPoints: [],
             fanout: null,
             platform: null,
@@ -448,6 +450,49 @@ describe('the brief guard', () => {
     expect(guard.keeps('espresso under 500')).toBe(true);
     expect(guard.keeps('espresso 2021')).toBe(false);
     expect(guard.text(null)).toBe('');
+  });
+
+  it('reads names in a heading by their honorific, and drops a keyword that names someone', () => {
+    const guard = guardFor();
+    expect(guard.heading('Why Dr. Jane Doe pulls short shots')).toBe(
+      `Why ${NAME_PLACEHOLDER} pulls short shots`,
+    );
+    expect(guard.keeps('Dr. Jane Doe espresso')).toBe(false);
+  });
+
+  it('leaves a question in quotes alone: it is one to answer, not a quote', () => {
+    const guard = guardFor();
+    expect(guard.text('Answer "Which espresso machine should I buy first?" up top')).toBe(
+      'Answer "Which espresso machine should I buy first?" up top',
+    );
+    expect(guard.text('Quote “Pressure matters far more than price for beginners”')).toBe(
+      `Quote ${QUOTE_PLACEHOLDER}`,
+    );
+  });
+
+  it('reads Turkish percentages as the writer does', () => {
+    const guard = guardFor({ prompts: ['Espresso makinelerinde %25 indirim var mı?'] });
+    expect(guard.text('%25 indirimi anlat')).toBe('%25 indirimi anlat');
+    expect(guard.text('Satışlar yüzde 40 arttı')).toBe(
+      `Satışlar yüzde ${NUMBER_PLACEHOLDER} arttı`,
+    );
+  });
+});
+
+describe('the brief\u2019s cut', () => {
+  it('never splits a placeholder: one the cut would reach goes whole', () => {
+    const [section] = mapOutline(
+      [
+        {
+          heading: 'Heading',
+          keyPoints: [`${'a'.repeat(490)} ${NUMBER_PLACEHOLDER}`],
+          fanout: null,
+          platform: null,
+        },
+      ],
+      [],
+    );
+    expect(section.keyPoints).toEqual(['a'.repeat(490)]);
   });
 });
 
