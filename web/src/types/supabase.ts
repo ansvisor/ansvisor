@@ -647,6 +647,8 @@ export type Database = {
         Row: {
           content_byline: boolean
           content_quality_handoff: boolean
+          conversions_consent: string
+          conversions_enabled: boolean
           created_at: string
           description: string | null
           ga_property_id: string | null
@@ -674,6 +676,8 @@ export type Database = {
         Insert: {
           content_byline?: boolean
           content_quality_handoff?: boolean
+          conversions_consent?: string
+          conversions_enabled?: boolean
           created_at?: string
           description?: string | null
           ga_property_id?: string | null
@@ -701,6 +705,8 @@ export type Database = {
         Update: {
           content_byline?: boolean
           content_quality_handoff?: boolean
+          conversions_consent?: string
+          conversions_enabled?: boolean
           created_at?: string
           description?: string | null
           ga_property_id?: string | null
