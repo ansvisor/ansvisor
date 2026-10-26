@@ -415,6 +415,9 @@ export function DraftEditor({
   const [rewriting, setRewriting] = useState(false);
   const describeRule = useRuleDescriber();
   const [restoring, setRestoring] = useState(false);
+  // Set at once, not on the next render: two quick clicks restore once
+  // (editor test 2026-10-25: two "Before a restore" versions in a minute).
+  const restoringNow = useRef(false);
   const format = useFormatter();
   // A change to a locked passage, waiting for the person (CE-018).
   const [held, setHeld] = useState<HeldEdit | null>(null);
@@ -3283,7 +3286,8 @@ export function DraftEditor({
   // as the server keeps the page it replaces, and the page can't change
   // while the restore runs.
   const restoreVersion = async (version: DraftVersion, label: string) => {
-    if (!editor || restoring) return;
+    if (!editor || restoringNow.current) return;
+    restoringNow.current = true;
     setRestoring(true);
     editor.setEditable(false, false);
     try {
@@ -3305,11 +3309,33 @@ export function DraftEditor({
       detectType(restored.title, html);
       toast.success(t('history.restored', { version: label }));
       void loadCited();
+      // The agent's open suggestions were for the page before it: they go,
+      // so they hold no later run (open_suggestions). Left open when that
+      // fails, for the person to decide on the card.
+      const stale = suggestionsNow.current.filter((s) => s.status === 'open').map((s) => s.id);
+      const setAside =
+        stale.length === 0 ||
+        (await decideDraftSuggestions(stale, 'rejected').then(
+          () => true,
+          (err) => {
+            console.error('Failed to set aside the suggestions for the page before:', err);
+            return false;
+          },
+        ));
+      if (stale.length && setAside) {
+        setSuggestions((now) =>
+          now.map((s) => (stale.includes(s.id) ? { ...s, status: 'rejected' as const } : s)),
+        );
+      }
+      // Its card goes as if closed, with its Undo all and last run: they were
+      // for the page before (editor test 2026-10-25). A new batch opens it.
+      setBarClosed(true);
     } catch (err) {
       console.error('Failed to restore the version:', err);
       toast.error(t('history.restoreFailed'));
     } finally {
       editor.setEditable(true, false);
+      restoringNow.current = false;
       setRestoring(false);
     }
   };
@@ -3359,9 +3385,18 @@ export function DraftEditor({
     toast(t('pageType.siteChanged', { site: tSites(next) }));
   };
 
-  // Why History waits (the HTML view holds the page, a restore runs), or null.
+  // Why History waits (the HTML view holds the page, a restore runs, the
+  // agent's changes land or a decision on them saves), or null.
   const historyWaits =
-    htmlSource !== null ? t('history.htmlOpen') : restoring ? t('history.restoring') : null;
+    htmlSource !== null
+      ? t('history.htmlOpen')
+      : restoring
+        ? t('history.restoring')
+        : fixing
+          ? t('history.agentWorking')
+          : deciding
+            ? t('history.deciding')
+            : null;
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">

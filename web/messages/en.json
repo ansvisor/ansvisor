@@ -3989,7 +3989,9 @@
         "restored": "Restored “{version}”. The page before it is in History.",
         "restoreFailed": "Couldn't restore it. Try again.",
         "htmlOpen": "Go back to the page to use History",
-        "restoring": "Restoring…"
+        "restoring": "Restoring…",
+        "agentWorking": "Content Agent is working on the page. History opens once it's done.",
+        "deciding": "Saving your decision on the agent's changes…"
       },
       "markReadyFailed": "Couldn't mark it ready. Try again.",
       "markReadyUnsaved": "The page has changes that aren't saved, so it wasn't marked ready.",
