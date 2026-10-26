@@ -45,12 +45,13 @@ const draft = { id: 'd1', brandId: 'b1', sourceUrl: null } as unknown as Content
 const onSourcesRead = vi.fn();
 const onRebuilt = vi.fn();
 let inHand: SourcesRead | null;
+let rulesNow: { key: string; name: string; detail: string }[] | undefined;
 
 /** The hook behind buttons, as the side panel drives it. */
 function Harness() {
   const { rebuild } = useBriefRebuild({
     draft,
-    pageNow: () => ({ title: 'T', html: '<h1>T</h1>', length: 3000 }),
+    pageNow: () => ({ title: 'T', html: '<h1>T</h1>', length: 3000, rules: rulesNow }),
     sourcesNow: () => inHand,
     onSourcesRead,
     onRebuilt,
@@ -78,6 +79,7 @@ beforeEach(async () => {
   getDraftSources.mockResolvedValue(SOURCES);
   rebuildDraftBrief.mockResolvedValue({ brief: { builtFrom: null } });
   inHand = { ...SOURCES, failed: false };
+  rulesNow = undefined;
   container = document.createElement('div');
   root = createRoot(container);
   await act(async () =>
@@ -97,6 +99,15 @@ describe('useBriefRebuild', () => {
     expect(getDraftSources).not.toHaveBeenCalled();
     expect(onSourcesRead).not.toHaveBeenCalled();
     expect(onRebuilt).toHaveBeenCalled();
+  });
+
+  it('sends the rules in effect beside the sources, so the brief plans to them', async () => {
+    rulesNow = [{ key: 'h2Answer', name: 'Answer under each H2', detail: 'aim: 60 words' }];
+    await press('rebuild');
+    const [, , sources, rules] = rebuildDraftBrief.mock.calls[0];
+    expect(sources).toMatchObject({ length: 3000 });
+    expect(sources).not.toHaveProperty('rules');
+    expect(rules).toEqual(rulesNow);
   });
 
   it('reads the sources once after adding prompts, and hands that read to the editor', async () => {

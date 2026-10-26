@@ -373,7 +373,13 @@ export default function ContentPlanPage() {
         </div>
       ) : (
         <>
-          {shown && current && <AiResultsStrip results={shown.results} days={current.days} />}
+          {shown && current && (
+            <AiResultsStrip
+              results={shown.results}
+              conversions={shown.conversions}
+              days={current.days}
+            />
+          )}
           {mix && (
             <PageTypeMix
               rows={mix.rows}
