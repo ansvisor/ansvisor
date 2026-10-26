@@ -169,6 +169,7 @@ import {
   lengthWarns,
   notForAgentMessage,
   openRulesForAgent,
+  overLengthFor,
   lengthBand,
   rewriteAdvice,
   NO_RULE_CONTEXT,
@@ -2339,7 +2340,11 @@ export function DraftEditor({
       }),
       ...agentContext(editor),
     };
-    await runAgentFix(() => fixDraftRules(draft.id, draft.brandId, request));
+    // A page over a Length it isn't sent: what it adds stays short.
+    const overLength = overLengthFor(rules.rules, open);
+    await runAgentFix(() =>
+      fixDraftRules(draft.id, draft.brandId, overLength ? { ...request, overLength } : request),
+    );
   };
 
   /**
@@ -2519,6 +2524,8 @@ export function DraftEditor({
     const cases = casesOn
       ? proofAsks.filter((ask) => ask.kind === 'customer_case').map((ask) => ask.block)
       : [];
+    // Its checks add text too: on a page over its Length, kept short.
+    const overLength = overLengthFor(rules.rules, []);
     setHandingOff(true);
     try {
       await runAgentFix(
@@ -2528,6 +2535,7 @@ export function DraftEditor({
             origin,
             ...context,
             locked: [...context.locked, ...cases],
+            ...(overLength ? { overLength } : {}),
           }),
         handedOff,
         origin === 'auto',

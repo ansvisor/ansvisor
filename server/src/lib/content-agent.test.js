@@ -84,6 +84,7 @@ const {
   dropsPlaceholder,
   emptyWhy,
   fixDraftRules,
+  fixRulesInput,
   keepSuggestions,
   growsPastLimit,
   htmlLines,
@@ -207,6 +208,34 @@ describe('the page as the agent reads it', () => {
         'Industry: Food & Beverage\nSite type: E-commerce (an online shop selling products)\nDescription:',
       );
     });
+  });
+
+  it('tells it of a page over its Length it isn’t asked to shorten (editor test 2026-10-26)', () => {
+    const prompt = (overLength) =>
+      buildFixPrompt({
+        brand: { name: 'Acme Coffee', language: 'en' },
+        draft: rows.content_drafts,
+        passages: draftPassages(BODY),
+        lockedKeys: new Set(),
+        input: { ...input(), overLength },
+      });
+    expect(prompt({ count: 17_683, max: 16_798 })).toContain(
+      "- faq: FAQ with 5 questions — missing\nThe page is already 17,683 characters, past the most its Length allows (16,798). The Length isn't among the rules here, so don't cut the page for it.",
+    );
+    // Within its Length, or none sent: nothing said.
+    expect(prompt({ count: 9_000, max: 16_798 })).not.toContain('its Length allows');
+    expect(prompt(undefined)).not.toContain('its Length allows');
+    expect(
+      fixRulesInput.parse({ ...input(), overLength: { count: 17_683, max: 16_798 } }),
+    ).toMatchObject({
+      overLength: { count: 17_683, max: 16_798 },
+    });
+    expect(() =>
+      fixRulesInput.parse({ ...input(), overLength: { count: -1, max: 16_798 } }),
+    ).toThrow();
+    expect(() =>
+      fixRulesInput.parse({ ...input(), overLength: { count: 17_683, max: 0 } }),
+    ).toThrow();
   });
 
   it('sends a long page only up to its cap, and no passage too long to change', () => {

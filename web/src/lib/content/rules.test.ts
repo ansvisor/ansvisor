@@ -5,6 +5,7 @@ import {
   notForAgentMessage,
   fanoutsToUse,
   openRulesForAgent,
+  overLengthFor,
   activeRules,
   effectiveRules,
   splitRules,
@@ -251,6 +252,36 @@ describe('length and structure', () => {
     // What to say when they're all that's left: the quoted passages', else the Length's.
     expect(heldMessage(held.held)).toBe('heldLength');
     expect(heldMessage([{ rule: { key: 'sentence' } }])).toBe('heldAll');
+  });
+
+  it('tells a Fix run of a page over its Length it doesn’t send (editor test 2026-10-26)', () => {
+    const rules = activeRules(ruleSet('blog_post'), {
+      overrides: { length: { value: '1000' } },
+    });
+    const statuses = (characters: number) =>
+      rules.map((r) => ({
+        rule: r,
+        status: checkRule(r, page('<h1>T</h1><p>x</p>', characters), ctx),
+      }));
+    const over = statuses(1_500);
+    const { forAgent, held } = openRulesForAgent(over, undefined, new Set(['length']));
+    expect(held.map(({ rule }) => rule.key)).toEqual(['length']);
+    expect(overLengthFor(over, forAgent)).toEqual({ count: 1_500, max: 1_200 });
+    // Sent as a rule, it says so itself; within its Length, or short: nothing.
+    expect(overLengthFor(over, openRulesForAgent(over).forAgent)).toBeUndefined();
+    // Asked for some rules only, Length not among them; a hand-off, which sends none.
+    expect(overLengthFor(over, openRulesForAgent(over, ['faq']).forAgent)).toEqual({
+      count: 1_500,
+      max: 1_200,
+    });
+    expect(overLengthFor(over, [])).toEqual({ count: 1_500, max: 1_200 });
+    expect(overLengthFor(statuses(1_150), forAgent)).toBeUndefined();
+    expect(overLengthFor(statuses(200), forAgent)).toBeUndefined();
+    // Length off.
+    const off = activeRules(ruleSet('blog_post'), { overrides: { length: { on: false } } }).map(
+      (r) => ({ rule: r, status: checkRule(r, page('<h1>T</h1><p>x</p>', 1_500), ctx) }),
+    );
+    expect(overLengthFor(off, [])).toBeUndefined();
   });
 
   it('reads a rule met without the locked passages as held by them', () => {

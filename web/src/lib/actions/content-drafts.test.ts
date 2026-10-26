@@ -104,6 +104,7 @@ vi.mock('@/lib/supabase/server', () => ({
 const {
   createContentDraft,
   fixDraftRules,
+  handOffDraft,
   decideDraftSuggestions,
   getDraftSuggestions,
   getLastRestoreAt,
@@ -1102,6 +1103,32 @@ describe('fixDraftRules', () => {
     expect(url).toMatch(new RegExp(`/api/content-drafts/${DRAFT}/suggestions$`));
     expect((init.headers as Record<string, string>).Authorization).toBe('Bearer tok');
     expect(JSON.parse(init.body as string)).toEqual({ brandId: BRAND, ...request });
+    vi.unstubAllGlobals();
+  });
+
+  it('sends a hand-off how far over its Length the page is too', async () => {
+    const fetchMock = vi.fn(async () => Response.json({ count: 1 }));
+    vi.stubGlobal('fetch', fetchMock);
+    const overLength = { count: 17_683, max: 16_798 };
+    await handOffDraft(DRAFT, BRAND, {
+      items: [{ key: 'readability:longSentences', detail: '' }],
+      textRules: [],
+      locked: [],
+      origin: 'person',
+      overLength,
+    });
+    const [, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    expect(JSON.parse(init.body as string).overLength).toEqual(overLength);
+    vi.unstubAllGlobals();
+  });
+
+  it('sends how far over its Length the page is, when the Length rule isn’t sent', async () => {
+    const fetchMock = vi.fn(async () => Response.json({ count: 1 }));
+    vi.stubGlobal('fetch', fetchMock);
+    const overLength = { count: 17_683, max: 16_798 };
+    await fixDraftRules(DRAFT, BRAND, { ...request, overLength });
+    const [, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    expect(JSON.parse(init.body as string)).toEqual({ brandId: BRAND, ...request, overLength });
     vi.unstubAllGlobals();
   });
 

@@ -2321,6 +2321,8 @@ export interface AgentFixRequest {
   locked: string[];
   /** The sources the Sources tab keeps, which the agent writes from (v1.1 CE-033). */
   sources?: RebuildSources;
+  /** The page over a Length it isn't sent (rules.ts overLengthFor). */
+  overLength?: { count: number; max: number };
 }
 
 /** Why a run left nothing to review (content-agent.js emptyWhy). */
@@ -2366,6 +2368,7 @@ export async function fixDraftRules(
         locked: request.locked.slice(0, 500).map((key) => key.slice(0, 5000)),
         // Already within the server's limits (rebuildSources).
         ...(request.sources ? { sources: request.sources } : {}),
+        ...(request.overLength ? { overLength: request.overLength } : {}),
       }),
     });
     const body = (await res.json().catch(() => ({}))) as Record<string, unknown>;
@@ -2437,6 +2440,7 @@ export async function handOffDraft(
         textRules: request.textRules.slice(0, 50).map((text) => text.slice(0, 300)),
         locked: request.locked.slice(0, 500).map((key) => key.slice(0, 5000)),
         ...(request.sources ? { sources: request.sources } : {}),
+        ...(request.overLength ? { overLength: request.overLength } : {}),
         origin: request.origin,
       }),
     });

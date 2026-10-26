@@ -81,6 +81,8 @@ export async function handOffDraft({ draftId, brandId, input }) {
       textRules: input.textRules,
       locked: input.locked,
       ...(input.sources ? { sources: input.sources } : {}),
+      // Its checks add text too (an FAQ, a specs table, headings).
+      ...(input.overLength ? { overLength: input.overLength } : {}),
     },
     handoff: { origin: input.origin },
   });
