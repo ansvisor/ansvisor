@@ -86,6 +86,7 @@ const {
   fixDraftRules,
   keepSuggestions,
   growsPastLimit,
+  pageLanguageOf,
   HEADING_LIMITS,
   inlineText,
   MAX_PROMPT_PASSAGE_CHARS,
@@ -433,12 +434,20 @@ describe('keepSuggestions', () => {
   });
 
   it('reads no attribution in "per" before a noun, "claims" or "states" as nouns, or a comparison with "göre"', () => {
+    // "states" after a number or "all" is the noun, before "that" too.
+    expect(addsAttribution('', 'We ship to all 50 US states that allow wine delivery.')).toBe(
+      false,
+    );
+    expect(addsAttribution('', 'We ship to all US states that allow it.')).toBe(false);
+    expect(addsAttribution('', 'Gartner states that teams forecast.')).toBe(true);
     expect(addsAttribution('', 'Kontaktieren Sie uns per E-Mail.')).toBe(false);
     expect(addsAttribution('', 'Pricing is per SKU, or per API call.')).toBe(false);
     expect(addsAttribution('', 'It ships to all 50 US states.')).toBe(false);
     expect(addsAttribution('', 'Warranty claims are handled in a day.')).toBe(false);
     expect(addsAttribution('', "Gemini, ChatGPT'ye göre daha hızlı.")).toBe(false);
-    expect(addsAttribution('', "ChatGPT'ye göre en iyisi Gemini.")).toBe(false);
+    // "en" after "göre" is the source's claim: "according to ChatGPT, the best one is Gemini".
+    expect(addsAttribution('', "ChatGPT'ye göre en iyisi Gemini.")).toBe(true);
+    expect(addsAttribution('', "Gartner'a göre en hızlı büyüyen pazar Hindistan.")).toBe(true);
     // The attributions themselves still are.
     expect(addsAttribution('', 'Per Gartner, teams forecast.')).toBe(true);
     expect(addsAttribution('', "Per Gartner's survey, teams forecast.")).toBe(true);
@@ -734,6 +743,80 @@ describe('keepSuggestions', () => {
  * line ("What is LLM SEO? LLM SEO optimizes…", "Frequently Asked
  * QuestionsWhat is an AEO tracker?…"): it now goes after the heading.
  */
+describe('blocks, names and languages as the review read them (#1520)', () => {
+  const listed = [{ tag: 'p', text: 'Track ChatGPT, Gemini and Claude.' }];
+  const keep = (s, over = {}) =>
+    keepSuggestions([s], listed, new Set(), new Set(['dated']), null, { ...sourcing, ...over });
+  const insert = (after) =>
+    suggestion({ kind: 'insert', passage: 1, before: '', after, sources: [], marks: [] });
+
+  it('reads compact blocks with a space between them, as it reads the page', () => {
+    // A list turned into bullets, written compact: every name is still there.
+    const bullets = suggestion({
+      passage: 1,
+      before: 'Track ChatGPT, Gemini and Claude.',
+      after: 'Track these engines:<ul><li>ChatGPT</li><li>Gemini</li><li>Claude</li></ul>',
+      sources: [],
+      marks: [],
+    });
+    expect(keep(bullets).map((row) => row.kind)).toEqual(['replace', 'insert']);
+    // A page that cites Gartner: a block after the one citing it isn't read into its name.
+    const cites = attributableSources('<p>According to Gartner, teams forecast.</p>', [], []);
+    expect(
+      keep(
+        insert('<p>Teams plan weekly, according to Gartner.</p><p>Most teams plan monthly.</p>'),
+        {
+          attributable: cites,
+        },
+      ),
+    ).toHaveLength(1);
+    // A heading before the claim doesn't hide it.
+    expect(
+      keep(insert('<h2>Forecasting basics</h2><p>According to Zapier, teams forecast.</p>'), {
+        attributable: cites,
+      }),
+    ).toEqual([]);
+  });
+
+  it('reads a name of eight words at most, so a long run of capitals reads fast', () => {
+    const run = Array.from(
+      { length: 3000 },
+      (_, i) => `Word${String.fromCharCode(65 + (i % 26))}`,
+    ).join(' ');
+    const started = Date.now();
+    attributedNames(`${run} says teams forecast.`);
+    dropsName(`${run}, Alpha and Beta.`, `${run}, Alpha and Beta.`, `${run} and Alpha.`);
+    expect(Date.now() - started).toBeLessThan(500);
+    expect(attributedNames('Alpha Beta Gamma Delta Epsilon Zeta Eta Theta Iota says so.')).toEqual([
+      'Beta Gamma Delta Epsilon Zeta Eta Theta Iota',
+    ]);
+  });
+
+  it('never skips a name’s last word: "Grammarly" is a name', () => {
+    const known = knownPeople('According to Grammarly, teams write faster.');
+    expect(addsAttribution('', 'According to Grammarly, most teams do.', known)).toBe(false);
+    expect(placeholderAttributions('According to Grammarly, most teams do.', knownPeople(''))).toBe(
+      'According to [source], most teams do.',
+    );
+  });
+
+  it('reads "per" by the page’s language: its Language rule, else the brand’s', () => {
+    const language = (detail) => [{ key: 'language', name: 'Language', detail }];
+    expect(pageLanguageOf(language('aim: German'), 'en')).toBe('de');
+    expect(pageLanguageOf(language('aim: English (US)'), 'tr')).toBe('en');
+    expect(pageLanguageOf([], 'tr')).toBe('tr');
+    expect(pageLanguageOf([], null)).toBeNull();
+    // An English brand's German page: "per E-Mail" is no source.
+    const german = attributableSources(
+      '<p>Hallo</p>',
+      [],
+      [],
+      pageLanguageOf(language('aim: German'), 'en'),
+    );
+    expect(addsAttribution('', 'Kontaktieren Sie uns per E-Mail.', german)).toBe(false);
+  });
+});
+
 describe('no invented people or quotes (CE-044)', () => {
   const passages = draftPassages(BODY);
   const ruleKeys = new Set(['dated', 'faq']);

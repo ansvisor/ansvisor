@@ -43,7 +43,7 @@ import {
   textPieces,
   todayText,
 } from './content-sources.js';
-import { getLanguageName } from './languages.js';
+import { getLanguageName, languageCodeOf } from './languages.js';
 import { PlanLimitError, reserveAiBudget } from './plan-guard.js';
 
 /**
@@ -319,10 +319,12 @@ export function growsPastLimit(passage, before, words) {
 // or after an initial ("U.S."), never the one that ends its sentence
 // ("…according to Gartner. The plan").
 const NAME_DOT = String.raw`\.(?=[\p{L}\p{N}])|(?<=(?:^|[^\p{L}\p{N}]|\.)\p{Lu})\.`;
+/** The most words a source's name is read with: a run of capitalised words past it isn't one. */
+const MAX_NAME_WORDS = 8;
 const NAME_WORD = String.raw`(?<![\p{L}\p{N}&'’.-])\p{Lu}(?:[\p{L}\p{N}&'’-]|${NAME_DOT})*`;
 // A name as an attribution gives it: capitalised words, after an article
 // or a year ("the Zapier report", "a 2025 Gartner survey").
-const SOURCE_NAME = String.raw`(?<name>(?!(?:The|This|That|These|Those|Our|Their|Its|Your|My|His|Her|We|They|It|A|An)\b)${NAME_WORD}(?:\s+${NAME_WORD})*)`;
+const SOURCE_NAME = String.raw`(?<name>(?!(?:The|This|That|These|Those|Our|Their|Its|Your|My|His|Her|We|They|It|A|An)\b)${NAME_WORD}(?:\s+${NAME_WORD}){0,${MAX_NAME_WORDS - 1}})`;
 const LEAD = String.raw`(?:(?:the|a|an)\s+)?(?:\d{4}\s+)?`;
 const ATTRIBUTIONS = [
   new RegExp(String.raw`\b[Aa]ccording to\s+${LEAD}${SOURCE_NAME}`, 'gu'),
@@ -332,9 +334,10 @@ const ATTRIBUTIONS = [
   ),
   new RegExp(String.raw`${SOURCE_NAME}\s+(?:says|said)\b`, 'gu'),
   // "Claims" and "states" are nouns too ("Warranty claims are…", "all 50
-  // US states"): those, as "reports" and the rest, only before "that".
+  // US states"): those, as "reports" and the rest, only before "that", and
+  // never after a number or "all" ("all 50 US states that allow…").
   new RegExp(
-    String.raw`${SOURCE_NAME}\s+(?:claims|claimed|states|stated|reports|reported|notes|noted|finds|found|estimates|estimated)\s+that\b`,
+    String.raw`(?<!(?:\b[Aa]ll|\p{N})\s+)${SOURCE_NAME}\s+(?:claims|claimed|states|stated|reports|reported|notes|noted|finds|found|estimates|estimated)\s+that\b`,
     'gu',
   ),
   new RegExp(
@@ -368,9 +371,10 @@ const ATTRIBUTIONS = [
     String.raw`(?<name>(?<![\p{L}\p{N}.-])\p{Lu}(?:[\p{L}\p{N}-]|${NAME_DOT})*)['’]\p{L}{1,3}\s+(?:raporuna|araştırmasına|verilerine|anketine|çalışmasına|açıklamasına)\s+göre\b`,
     'gu',
   ),
-  // "Gartner'a göre", never a comparison ("ChatGPT'ye göre daha hızlı").
+  // "Gartner'a göre", never a comparison ("ChatGPT'ye göre daha hızlı");
+  // "en" after it is the source's claim ("Gartner'a göre en hızlı büyüyen").
   new RegExp(
-    String.raw`(?<name>(?<![\p{L}\p{N}.-])\p{Lu}(?:[\p{L}\p{N}-]|${NAME_DOT})*)['’]\p{L}{1,3}\s+göre\b(?!\s+(?:daha|en)\b)`,
+    String.raw`(?<name>(?<![\p{L}\p{N}.-])\p{Lu}(?:[\p{L}\p{N}-]|${NAME_DOT})*)['’]\p{L}{1,3}\s+göre\b(?!\s+daha\b)`,
     'gu',
   ),
 ];
@@ -386,6 +390,16 @@ const PER_ATTRIBUTIONS = [
   new RegExp(String.raw`\b[Pp]er\s+${LEAD}${SOURCE_NAME}(?=['’]s\b)`, 'gu'),
   new RegExp(String.raw`,\s*per\s+${LEAD}${SOURCE_NAME}(?=\s*[.;!?]|\s*$)`, 'gu'),
 ];
+
+/**
+ * The page's language: its Language rule's when the editor sends it on, as
+ * the CMS send reads it (content-delivery.js), else the brand's.
+ */
+export function pageLanguageOf(rules = [], brandLanguage = null) {
+  const detail = rules.find((r) => r.key === 'language')?.detail ?? '';
+  const aim = detail.split(' · ')[0].match(/^aim:\s*(.*)$/i)?.[1];
+  return languageCodeOf(aim) || languageCodeOf(brandLanguage) || brandLanguage || null;
+}
 
 /** The attributions read on a page in this language: "per" on an English one (or one not said). */
 const attributionsFor = (language) =>
@@ -424,11 +438,14 @@ export function attributedNames(text, language = null) {
 /**
  * Where a name's own words start: past the words a sentence starts with, a
  * role or an adverb ("As Zapier", "CEO Jane Doe", "Recently Gartner"), as
- * personIn (content-people.js) reads a person's.
+ * personIn (content-people.js) reads a person's; never past its last word,
+ * which is the name ("Grammarly", "Coach").
  */
 function nameStart(name) {
-  for (const word of name.matchAll(/\S+/g)) {
+  const words = [...name.matchAll(/\S+/g)];
+  for (const [i, word] of words.entries()) {
     const lower = word[0].toLowerCase();
+    if (i === words.length - 1) return word.index;
     if (!NOT_NAMES.has(lower) && !isRole(lower) && !/^\p{L}+ly$/u.test(lower)) return word.index;
   }
   return name.length;
@@ -521,7 +538,7 @@ export function placeholderAttributionsInHtml(html, known = null) {
 // ("Ansvisor, Profound and LLM Pulse"; und, ve, et, y…), or three with
 // commas; a dot only inside a word, as in a source's name.
 const ITEM_WORD = String.raw`(?<![\p{L}\p{N}&+'’.-])\p{Lu}(?:[\p{L}\p{N}&+'’-]|${NAME_DOT})*`;
-const ITEM = String.raw`${ITEM_WORD}(?:\s+${ITEM_WORD})*`;
+const ITEM = String.raw`${ITEM_WORD}(?:\s+${ITEM_WORD}){0,${MAX_NAME_WORDS - 1}}`;
 const AND = String.raw`(?:and|or|&|und|oder|ve|veya|ile|et|ou|y|o|e|en|of)`;
 const NAME_LIST = new RegExp(
   String.raw`(?:${ITEM}\s*,\s*)+${ITEM},?\s+${AND}\s+${ITEM}|(?:${ITEM}\s*,\s*){2,}${ITEM}`,
@@ -715,11 +732,14 @@ export function keepSuggestions(raw, passages, lockedKeys, ruleKeys, links = nul
     const reason = stripSourceIds(s.reason).trim().slice(0, 300);
     if (!passage || !reason || passage.text.length > MAX_PASSAGE_CHARS) continue;
     const rules = [...new Set(s.rules.filter((key) => ruleKeys.has(key)))];
+    // Blocks read as the page is (attributableSources), a space between
+    // them: compact HTML ("<li>ChatGPT</li><li>Gemini</li>") never runs
+    // their words together.
     const insertOf = (html) =>
-      textOf(html).trim() &&
+      htmlText(html).trim() &&
       html.length <= 20_000 &&
       // A claim given to a source it wasn't given (editor test 2026-10-25).
-      !addsAttribution('', textOf(html), attributable)
+      !addsAttribution('', htmlText(html), attributable)
         ? {
             id: `insert:${passage.text}:${html}`,
             row: {
@@ -751,7 +771,7 @@ export function keepSuggestions(raw, passages, lockedKeys, ruleKeys, links = nul
       if (
         keepsPlaceholders &&
         changed &&
-        dropsPlaceholder(passage.text, before, `${words} ${textOf(blocks)}`, passage.tag)
+        dropsPlaceholder(passage.text, before, `${words} ${htmlText(blocks)}`, passage.tag)
       ) {
         continue;
       }
@@ -762,7 +782,7 @@ export function keepSuggestions(raw, passages, lockedKeys, ruleKeys, links = nul
           asksMoreThanOne(passage, before, words) ||
           addsAttribution(before, words, attributable) ||
           (!/^h[1-6]$/.test(passage.tag) &&
-            dropsName(passage.text, before, words, rules, textOf(blocks), banned)))
+            dropsName(passage.text, before, words, rules, htmlText(blocks), banned)))
       )
         continue;
       changes = [
@@ -1185,7 +1205,12 @@ async function fixWithRun({
   );
   // The sources a claim may be given to: the ones the page gives claims to,
   // and its Your input and authors (never just a name the page lists).
-  const attributable = attributableSources(draft.body_html, numbered, authors, brand.language);
+  const attributable = attributableSources(
+    draft.body_html,
+    numbered,
+    authors,
+    pageLanguageOf(input.rules, brand.language),
+  );
   // Where it may link: the brand's pages and the draft's sources (A); a
   // hand-off's source checks link the draft's sources.
   const linkKeys =
