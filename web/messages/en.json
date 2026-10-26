@@ -4595,6 +4595,7 @@
         "path": "All steps",
         "skip": "Skip this step",
         "skipped": "· skipped",
+        "passed": "· yours in the Rules tab",
         "working": "Content Agent is working",
         "stop": "Stop",
         "marking": "Marking it ready…",
@@ -4605,6 +4606,7 @@
           "done": "done",
           "now": "now",
           "skipped": "skipped",
+          "passed": "taken by Content Agent, what's left is yours in the Rules tab",
           "ahead": "to do"
         },
         "steps": {

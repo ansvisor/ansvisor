@@ -94,11 +94,12 @@ export interface NextStepState {
   /** The steps skipped, each with the state it was skipped at (stepState). */
   skipped: Partial<Record<NextStepId, string>>;
   /**
-   * The agent took the third step (thirdStepTried): it is passed, with rules
-   * still open or the Length still off, and what's left is the person's in
-   * the Rules tab.
+   * The third-step steps the agent took (thirdStepTried), each with what the
+   * page read then: passed while that holds (thirdStepPasses), with rules
+   * still open or the Length off, and what's left is the person's in the
+   * Rules tab.
    */
-  thirdTried?: boolean;
+  thirdPasses?: ThirdPasses;
 }
 
 export interface NextStep {
@@ -109,7 +110,8 @@ export interface NextStep {
   skippable: boolean;
 }
 
-export type PathState = 'done' | 'skipped' | 'now' | 'ahead';
+/** 'passed': the agent took it, and what's left is the person's (thirdStepPasses). */
+export type PathState = 'done' | 'skipped' | 'passed' | 'now' | 'ahead';
 
 export type TipId = 'longPage' | 'shortPage' | 'someRules' | 'noBrief' | 'lowTrust';
 
@@ -157,33 +159,67 @@ export function stepState(id: NextStepId, s: NextStepState): string {
 }
 
 /** The third step, as the page needs it: its Length, or its open rules. */
-const THIRD_STEPS: readonly NextStepId[] = ['length', 'fixRules'];
+export type ThirdStepId = 'length' | 'fixRules';
 
 /**
- * A run of the agent on the third step (Fix open rules, or Rewrite page
- * while it was the step): the latest batch on the page when it began;
- * whether it found nothing to change; and, once taken, `passed`, which holds
- * whatever runs after. A run that fails, is stopped or never runs isn't one.
+ * A run of the agent on the third step: the step it takes (a rewrite takes
+ * the Length, a Fix of every rule the step counts takes Fix open rules); its kind,
+ * to read how it ended once the editor opens again; when it began; the
+ * latest batch on the page then; and whether it found nothing to change.
+ * A run that fails, is stopped or never runs isn't one.
  */
 export interface ThirdTry {
+  step: ThirdStepId;
+  kind: 'fix' | 'rewrite';
+  /** When it began (ISO), against the run row's start. */
+  at: string;
   batch: string | null;
   ended?: boolean;
-  passed?: boolean;
 }
 
 /**
- * Whether the agent has taken the third step (editor test 2026-10-26): its
- * run found nothing to change, or left a batch since and every change in it
- * is decided. Next then moves on to the fourth, whatever the rules read
- * after; the page doesn't wait on rules no run of the agent closes.
+ * A third-step step the agent took, with what the page read then: the open
+ * rules a Fix run can close (rulesForNext) and the Length's state.
+ */
+export interface ThirdPass {
+  rules: string[];
+  length: string;
+}
+export type ThirdPasses = Partial<Record<ThirdStepId, ThirdPass>>;
+
+/**
+ * Whether the agent has taken the step its run was for (editor test
+ * 2026-10-26): it found nothing to change, or left a batch since and every
+ * change in it is decided.
  */
 export function thirdStepTried(
   attempt: ThirdTry | null,
   now: { batch: string | null; open: number; busy: boolean },
 ): boolean {
-  if (attempt?.passed) return true;
   if (!attempt || now.busy || now.open > 0) return false;
   return attempt.ended === true || (now.batch !== null && now.batch !== attempt.batch);
+}
+
+/** What a pass keeps of the page as it reads when the step is taken. */
+export function thirdPassOf(s: NextStepState): ThirdPass {
+  return { rules: s.openRules, length: stepState('length', s) };
+}
+
+/**
+ * The steps passed that still hold: the Length reads as it did and, for Fix
+ * open rules, every rule open now was open when the agent took it (one it
+ * never saw brings the step back, one it couldn't close doesn't). A step
+ * whose page has moved on is the agent's again.
+ */
+export function thirdStepPasses(s: NextStepState): Set<ThirdStepId> {
+  const held = new Set<ThirdStepId>();
+  const length = stepState('length', s);
+  for (const [id, pass] of Object.entries(s.thirdPasses ?? {}) as [ThirdStepId, ThirdPass][]) {
+    if (!pass || pass.length !== length) continue;
+    if (id === 'fixRules' && !s.openRules.every((rule) => pass.rules.includes(rule))) continue;
+    held.add(id);
+  }
+  return held;
 }
 
 /** The skips that still hold: one whose step's state has changed since is dropped. */
@@ -284,7 +320,8 @@ export function nextStep(s: NextStepState): NextPath {
         alternative: s.published ? null : 'markPublished',
         skippable: false,
       };
-  const tried = (id: NextStepId) => s.thirdTried === true && THIRD_STEPS.includes(id);
+  const passes = thirdStepPasses(s);
+  const tried = (id: NextStepId) => passes.has(id as ThirdStepId);
   const step =
     due.find((d) => !tried(d.id) && (!d.skippable || s.skipped[d.id] !== stepState(d.id, s))) ??
     check;
@@ -314,8 +351,10 @@ export function nextStep(s: NextStepState): NextPath {
         ? 'ahead'
         : // Passed while its state still calls for it: it was skipped,
           // unless the agent took it.
-          calledFor.has(id) && !tried(id)
-          ? 'skipped'
+          calledFor.has(id)
+          ? tried(id)
+            ? 'passed'
+            : 'skipped'
           : 'done') as PathState,
   }));
 
