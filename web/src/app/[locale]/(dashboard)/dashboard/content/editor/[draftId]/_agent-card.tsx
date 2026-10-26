@@ -102,7 +102,7 @@ function AgentIcon({ working, slow }: { working: boolean; slow: boolean }) {
   );
 }
 
-function AgentTile({
+export function AgentTile({
   tone,
   count,
 }: {
@@ -163,10 +163,33 @@ function PersonTile() {
 }
 
 /**
+ * A light that passes over the step under way, again and again: the agent's
+ * card's sweep, faint enough for a chip. Gone with reduced motion.
+ */
+export function StepSweep() {
+  return (
+    <span
+      aria-hidden
+      className="pointer-events-none absolute inset-0 animate-agent-sweep bg-[linear-gradient(110deg,transparent_30%,color-mix(in_oklab,var(--foreground)_9%,transparent)_50%,transparent_70%)] bg-[length:250%_100%] [animation-duration:2.2s] motion-reduce:hidden"
+    />
+  );
+}
+
+/**
  * A run's steps as chips (CE-027/035), named by the data they use: the ones
  * done in green with a check, the one under way in full, the rest muted.
  */
-export function RunSteps({ run }: { run: AgentRun }) {
+export function RunSteps({
+  run,
+  moving = false,
+}: {
+  run: AgentRun;
+  /**
+   * The step under way moves (a sweep and the agent's dots), where nothing
+   * else on the page says the agent works (CE-026: its waiting page).
+   */
+  moving?: boolean;
+}) {
   const t = useTranslations('contentEditor.editor.agentCard.steps');
   const shown = shownSteps(run);
   return (
@@ -187,11 +210,14 @@ export function RunSteps({ run }: { run: AgentRun }) {
                 done &&
                   'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300',
                 now && 'bg-background font-medium text-foreground',
+                now && moving && 'relative overflow-hidden',
                 !done && !now && 'border-dashed text-muted-foreground',
               )}
             >
+              {now && moving && <StepSweep />}
               {done && <Check aria-hidden className="h-3 w-3 shrink-0" />}
               {t(key, count === undefined ? {} : { count })}
+              {now && moving && <WorkingDots className="ml-0.5" />}
             </span>
           </li>
         );
@@ -222,6 +248,7 @@ export function AgentCard({
   onAllSteps,
   length = null,
   lastRunFailed = false,
+  pageChars = null,
 }: {
   suggestions: DraftSuggestion[];
   rules: CardRules;
@@ -270,6 +297,8 @@ export function AgentCard({
   onAllSteps?: () => void;
   /** The agent's last run failed: said in place of an earlier batch's review. */
   lastRunFailed?: boolean;
+  /** A rewrite's characters, before and after, as the toolbar counts them (the editor's count). */
+  pageChars?: { before: number; after: number } | null;
   /**
    * The page's Length rule (its target and band) and what a rewrite keeps
    * as it is: a rewrite's result is read against it, never the agent's say.
@@ -396,7 +425,7 @@ export function AgentCard({
       </>
     );
   } else if (page) {
-    const { before, after: afterChars } = pageCharacters(page);
+    const { before, after: afterChars } = pageChars ?? pageCharacters(page);
     title =
       page.status === 'open'
         ? tRewrite('ready')
@@ -677,6 +706,7 @@ export function AgentCard({
           onOpenChange={setComparing}
           busy={busy}
           onDecide={onDecidePage}
+          chars={pageChars}
         />
       )}
     </div>

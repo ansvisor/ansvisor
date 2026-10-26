@@ -48,4 +48,6 @@ export interface RestoredDraft {
   title: string;
   bodyHtml: string;
   updatedAt: string;
+  /** Whether the page changed (00289); false for the version the page already was, unsaid before 00289. */
+  restored?: boolean;
 }

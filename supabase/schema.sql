@@ -40216,3 +40216,819 @@ comment on column public.content_draft_suggestions.kept_chars is
 comment on column public.content_draft_suggestions.after_chars is
   'The characters a page rewrite came to (00285).';
 
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00286_ai_traffic_conversions.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00286: conversions from AI visits, as the AI Traffic snippet sees them (CE-017)
+-- ============================================================================
+-- The snippet counts AI-referred landings (ai_traffic_logs). With conversions
+-- on, it also follows a visitor who came from an AI assistant through the
+-- site to a goal (a signup, a demo form, an order…), so the Content Editor
+-- can show what a page earns from AI visits, and the journeys that got there.
+--
+--   * Off by default, per brand (`conversions_enabled`). A brand that leaves
+--     it off sends nothing new: the snippet keeps nothing in the browser, as
+--     it always has.
+--   * `conversions_consent`: 'wait' (default) keeps the visitor's id only once
+--     the site says the visitor agreed (its consent banner, or Google Consent
+--     Mode); 'always' keeps it at once, for sites whose own banner covers it.
+--     The snippet reads it from its install tag; the server keeps it for the
+--     Settings page.
+--   * `ai_traffic_events`: a journey's pageviews and its conversions. One
+--     visitor id per browser, random and first-party: never the IP address,
+--     never a name or an email. Each row carries the first AI visit it is
+--     credited to (first touch, within 30 days), so a journey reads without
+--     joining the landing logs.
+--   * `url` is the page without its query string or fragment: a thank-you
+--     page's ?email=… never gets in, nor a path segment holding an email
+--     (stored as "[email]").
+--   * `order_ref`: a hash of the brand and an order's own id at the shop
+--     (Shopify's pixel, a site's call), once per visitor, so an order sent
+--     twice counts once; only ever compared, so the id itself isn't kept.
+--     Per visitor, not per brand: the tracking code is public, and an order
+--     id sent first by anyone else must not shut the real one out.
+--   * The server stores at most a few hundred pageviews per visitor id in
+--     the window and a few conversions a day, so a journey's reads stay
+--     bounded (routes/traffic.js).
+--   * `page_key` and `first_key`: the pages' keys, made once on insert, for
+--     the journeys' reads.
+--   * Members read their brands' events; only the server writes them.
+
+alter table public.brands
+  add column if not exists conversions_enabled boolean not null default false,
+  add column if not exists conversions_consent text not null default 'wait'
+    check (conversions_consent in ('wait', 'always'));
+
+comment on column public.brands.conversions_enabled is
+  'CE-017 (00286): the AI Traffic snippet follows AI visitors to conversions (ai_traffic_events). Off by default.';
+comment on column public.brands.conversions_consent is
+  'CE-017 (00286): ''wait'' keeps the snippet''s visitor id only after the site''s consent, ''always'' at once.';
+
+create table if not exists public.ai_traffic_events (
+  id uuid primary key default gen_random_uuid(),
+  brand_id uuid not null references public.brands(id) on delete cascade,
+  visitor_id text not null check (visitor_id ~ '^[A-Za-z0-9_-]{16,64}$'),
+  kind text not null check (kind in ('page', 'conversion')),
+  url text not null check (char_length(url) between 1 and 2048),
+  goal text check (goal in ('signup', 'demo', 'order', 'booking', 'newsletter', 'custom')),
+  -- The form's or the call's own name ("pricing-demo"), never what was typed in it.
+  label text check (label is null or char_length(label) between 1 and 80),
+  origin text check (origin in ('call', 'form', 'shopify')),
+  value numeric(14, 2) check (value is null or value >= 0),
+  currency text check (currency is null or currency ~ '^[A-Z]{3}$'),
+  units integer check (units is null or units between 0 and 100000),
+  order_ref text check (order_ref is null or char_length(order_ref) between 1 and 128),
+  first_source text not null check (char_length(first_source) between 1 and 64),
+  first_url text not null check (char_length(first_url) between 1 and 2048),
+  first_at timestamptz not null,
+  occurred_at timestamptz not null default now(),
+  -- The pages' keys as journeys read them (lower(normalize_page_path), as in
+  -- 00209 / 00210): made once when the row is stored, so a journey's reads
+  -- (00287, 00288) compare keys rather than work each address out again.
+  page_key text generated always as (lower(public.normalize_page_path(url))) stored,
+  first_key text generated always as (lower(public.normalize_page_path(first_url))) stored,
+  -- A conversion says what it was and where it came from; a pageview neither.
+  constraint ai_traffic_events_kind check (
+    (kind = 'conversion' and goal is not null and origin is not null)
+    or (kind = 'page' and goal is null and origin is null and order_ref is null)
+  )
+);
+
+-- A database that ran this file before the keys were added gets them, and
+-- loses the brand-time index nothing reads.
+alter table public.ai_traffic_events
+  add column if not exists page_key text
+    generated always as (lower(public.normalize_page_path(url))) stored,
+  add column if not exists first_key text
+    generated always as (lower(public.normalize_page_path(first_url))) stored;
+drop index if exists public.ai_traffic_events_brand_time;
+
+-- An order counts once however often its visitor's browser sends it.
+create unique index if not exists ai_traffic_events_order
+  on public.ai_traffic_events (brand_id, visitor_id, order_ref)
+  where order_ref is not null;
+
+create index if not exists ai_traffic_events_journey
+  on public.ai_traffic_events (brand_id, visitor_id, occurred_at);
+
+alter table public.ai_traffic_events enable row level security;
+revoke all on table public.ai_traffic_events from anon, authenticated;
+grant select on table public.ai_traffic_events to authenticated;
+grant all on table public.ai_traffic_events to service_role;
+
+drop policy if exists "ai_traffic_events: member select" on public.ai_traffic_events;
+create policy "ai_traffic_events: member select"
+  on public.ai_traffic_events
+  for select
+  using (
+    brand_id in (
+      select b.id from public.brands b
+      join public.profiles p on p.organization_id = b.organization_id
+      where p.id = auth.uid()
+    )
+  );
+
+comment on table public.ai_traffic_events is
+  'CE-017 (00286): journeys of visitors who came from an AI assistant, as the AI Traffic snippet sends them with conversions on: pageviews and conversions (goal, value, units; an order once by the hash of its id, order_ref), each credited to the first AI visit (first_source, first_url, first_at). A random first-party visitor id; no IP, name or email. Members read; the server writes.';
+
+notify pgrst, 'reload schema';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00287_content_page_conversions.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00287: conversions from AI journeys through a page, for the editor's Live page tab
+-- ============================================================================
+-- With conversions on (00286), the AI Traffic snippet follows a visitor who
+-- came from an AI assistant to a goal. The Live page tab (CE-016) shows what
+-- the page a draft optimizes took part in (Content Editor spec v2 §7, CE-017).
+--
+-- content_page_conversions(brand, page, days) returns one jsonb over the last
+-- N whole UTC days, ending yesterday, as content_page_results (00210):
+--   * enabled: whether the brand has conversions on;
+--   * page: the page's key, for the tab to find it in the journeys;
+--   * goals: per goal, the conversions and their units, of journeys through
+--     the page: a conversion whose journey (its visitor id: the snippet
+--     makes a new one for each journey) landed on the page, went through it
+--     before, or converted on it;
+--   * revenue: the value of their orders and bookings per currency (a value
+--     without one isn't summed);
+--   * sources: per AI source the journey started from (first touch), its
+--     conversions;
+--   * journeys: the five most frequent (the latest first among as many), each
+--     its source, its pages in order (the landing page, the pages after
+--     without repeats in a row, the page it converted on, as
+--     lower(normalize_page_path) keys), its goal and how many.
+-- The journey's first AI visit isn't its key: the server keeps a browser's
+-- clock from dating it after the event, so first_at may differ within one.
+-- Conversions are read through their own partial index: most events are
+-- pageviews. Pages are compared by the keys stored with each event
+-- (page_key, first_key, 00286). The reads are bounded whatever a sender
+-- stored: a visitor id's pageviews are read once for the page, from a day
+-- before its first AI visit; a journey's steps are the latest 100 pageviews
+-- before its conversion; and the journeys are the latest 2,000
+-- conversions' (the counts take all).
+-- A page is one lower(normalize_page_path) key, as in 00209 / 00210.
+--
+-- Security definer with an organization check, as content_page_results, and
+-- planned for each call's own values (plan_cache_mode).
+
+create index if not exists ai_traffic_events_conversions
+  on public.ai_traffic_events (brand_id, occurred_at desc)
+  where kind = 'conversion';
+
+create or replace function public.content_page_conversions(
+  p_brand_id uuid,
+  p_page text,
+  p_days integer
+)
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path to 'public'
+set plan_cache_mode to 'force_custom_plan'
+as $$
+declare
+  v_key text := lower(public.normalize_page_path(p_page));
+  -- The last whole day.
+  v_last_day date := (now() at time zone 'utc')::date - 1;
+  v_from timestamptz;
+  v_until timestamptz;
+  v_result jsonb;
+begin
+  if not exists (
+    select 1 from public.brands b
+    join public.profiles pf on pf.organization_id = b.organization_id
+    where b.id = p_brand_id and pf.id = auth.uid()
+  ) and auth.role() is distinct from 'service_role' then
+    return null;
+  end if;
+  if p_days is null or p_days < 1 or p_days > 366 or p_page is null then
+    raise exception 'content_page_conversions: a page and 1 to 366 days are needed'
+      using errcode = '22023';
+  end if;
+
+  v_from := (v_last_day - p_days + 1)::timestamp at time zone 'utc';
+  v_until := (v_last_day + 1)::timestamp at time zone 'utc';
+
+  with conversions as (
+    select c.*
+    from public.ai_traffic_events c
+    where c.brand_id = p_brand_id
+      and c.kind = 'conversion'
+      and c.occurred_at >= v_from
+      and c.occurred_at < v_until
+  ),
+  -- When each visitor id first saw the page in its journey: read once per
+  -- visitor id however many conversions it has, from a day before its first
+  -- AI visit (first_at is clamped per event, within the server's clock
+  -- allowance) to its last conversion, by the stored keys.
+  seen as (
+    select v.visitor_id, (
+      select min(e.occurred_at)
+      from public.ai_traffic_events e
+      where e.brand_id = p_brand_id
+        and e.visitor_id = v.visitor_id
+        and e.kind = 'page'
+        and e.page_key = v_key
+        and e.occurred_at >= v.since
+        and e.occurred_at <= v.last_at
+    ) as at
+    from (
+      select visitor_id, min(first_at) - interval '1 day' as since, max(occurred_at) as last_at
+      from conversions
+      group by visitor_id
+    ) v
+  ),
+  -- A conversion whose journey landed on the page, went through it, or converted on it.
+  through as (
+    select c.*
+    from conversions c
+    left join seen s on s.visitor_id = c.visitor_id
+    where c.first_key = v_key
+      or c.page_key = v_key
+      or (s.at is not null and s.at <= c.occurred_at and s.at >= c.first_at - interval '1 day')
+  ),
+  -- The paths of the latest 2,000 (the counts above take all): the landing
+  -- page, the latest 100 pageviews before the conversion, the page it
+  -- converted on.
+  paths as (
+    select t.first_source, t.goal, t.occurred_at, (
+      select array_agg(s.page order by s.ord <> 0, s.at, s.ord)
+      from (
+        select steps.page, steps.at, steps.ord,
+          lag(steps.page) over (order by steps.ord <> 0, steps.at, steps.ord) as before
+        from (
+          select t.first_key as page, t.first_at as at, 0 as ord
+          union all
+          select p.page_key, p.occurred_at, 1
+          from (
+            select e.page_key, e.occurred_at
+            from public.ai_traffic_events e
+            where e.brand_id = p_brand_id
+              and e.visitor_id = t.visitor_id
+              and e.kind = 'page'
+              and e.occurred_at >= t.first_at - interval '1 day'
+              and e.occurred_at <= t.occurred_at
+            order by e.occurred_at desc
+            limit 100
+          ) p
+          union all
+          select t.page_key, t.occurred_at, 2
+        ) steps
+      ) s
+      where s.before is distinct from s.page
+    ) as pages
+    from (select * from through order by occurred_at desc limit 2000) t
+  )
+  select jsonb_build_object(
+    'page', v_key,
+    'enabled', coalesce((select b.conversions_enabled from public.brands b where b.id = p_brand_id), false),
+    'goals', coalesce((
+      select jsonb_agg(jsonb_build_object('goal', g.goal, 'count', g.n, 'units', g.units)
+        order by g.n desc, g.goal)
+      from (
+        select goal, count(*)::bigint as n, coalesce(sum(units), 0)::bigint as units
+        from through group by goal
+      ) g
+    ), '[]'::jsonb),
+    'revenue', coalesce((
+      select jsonb_agg(jsonb_build_object('currency', r.currency, 'value', r.value)
+        order by r.value desc, r.currency)
+      from (
+        select currency, sum(value)::numeric as value
+        from through
+        where goal in ('order', 'booking') and value is not null and currency is not null
+        group by currency
+      ) r
+    ), '[]'::jsonb),
+    'sources', coalesce((
+      select jsonb_agg(jsonb_build_object('platform', s.first_source, 'conversions', s.n)
+        order by s.n desc, s.first_source)
+      from (select first_source, count(*)::bigint as n from through group by first_source) s
+    ), '[]'::jsonb),
+    'journeys', coalesce((
+      select jsonb_agg(jsonb_build_object('source', j.first_source, 'pages', to_jsonb(j.pages),
+          'goal', j.goal, 'count', j.n)
+        order by j.n desc, j.latest desc, j.first_source, j.goal)
+      from (
+        select first_source, pages, goal, count(*)::bigint as n, max(occurred_at) as latest
+        from paths
+        group by first_source, pages, goal
+        order by count(*) desc, max(occurred_at) desc, first_source, goal
+        limit 5
+      ) j
+    ), '[]'::jsonb)
+  ) into v_result;
+  return v_result;
+end;
+$$;
+
+revoke all on function public.content_page_conversions(uuid, text, integer) from public, anon;
+grant execute on function public.content_page_conversions(uuid, text, integer)
+  to authenticated, service_role;
+
+comment on function public.content_page_conversions(uuid, text, integer) is
+  'Content Editor (CE-017, 00287): conversions of AI journeys through one page over the last N whole UTC days (ending yesterday), from the AI Traffic snippet (ai_traffic_events, 00286): per goal with units, value per currency, per first AI source, and the five most frequent journeys (source, pages, goal). Security definer with an organization check.';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00289_content_draft_restored_at.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00289: when a draft's page was last restored from History
+-- ============================================================================
+-- The editor opens the agent's card closed when its latest batch is from
+-- before the page was last restored: that batch was for the page before
+-- (#1522's follow-up, #1536). The "restore" version can't say when: it is
+-- kept only when the page differs from the draft's latest version (00215,
+-- content_draft_keep_version), so a restore right after Mark ready, or after
+-- an Undo all, leaves none.
+--
+-- content_drafts.restored_at is set by content_draft_restore (00215) each
+-- time it changes the page; a restore of the page the draft already is
+-- leaves it as it was, and says so ('restored': false), so the editor sets
+-- nothing aside for it. Null for a draft never restored, and for one
+-- restored before this: no backfill, as an update to content_drafts moves
+-- its updated_at (the Library's order, an open editor's save base), and
+-- #1522 hasn't shipped. It is the server's to write:
+-- guard_content_draft_server_columns (00262) refuses a member's.
+
+alter table public.content_drafts
+  add column if not exists restored_at timestamptz;
+
+comment on column public.content_drafts.restored_at is
+  'When content_draft_restore last changed the page to a History version (00289): the agent''s batch from before it was for the page before. Null when never restored.';
+
+-- As 00215's, with restored_at set when the page changes, and whether it did.
+create or replace function public.content_draft_restore(p_version_id uuid)
+returns jsonb
+language plpgsql
+volatile
+security definer
+set search_path to 'public'
+as $$
+declare
+  v_version public.content_draft_versions%rowtype;
+  v_draft public.content_drafts%rowtype;
+  v_changed boolean;
+begin
+  select * into v_version
+  from public.content_draft_versions v
+  where v.id = p_version_id and v.created_at >= now() - interval '90 days';
+  if v_version.id is null or not public.content_draft_member(v_version.draft_id) then
+    return null;
+  end if;
+
+  select * into v_draft from public.content_drafts d where d.id = v_version.draft_id;
+  -- Already this page: nothing to keep or change.
+  v_changed := v_draft.title is distinct from v_version.title
+    or v_draft.body_html is distinct from v_version.body_html;
+  if v_changed then
+    perform public.content_draft_keep_version(v_version.draft_id, 'restore');
+
+    update public.content_drafts d
+    set title = v_version.title, body_html = v_version.body_html, restored_at = now()
+    where d.id = v_version.draft_id
+    returning * into v_draft;
+  end if;
+
+  return jsonb_build_object(
+    'title', v_draft.title,
+    'bodyHtml', v_draft.body_html,
+    'updatedAt', v_draft.updated_at,
+    'restored', v_changed
+  );
+end;
+$$;
+
+revoke all on function public.content_draft_restore(uuid) from public, anon;
+grant execute on function public.content_draft_restore(uuid) to authenticated, service_role;
+
+-- ----------------------------------------------------------------------------
+-- When the page was restored is the server's: as 00262's, with restored_at.
+-- ----------------------------------------------------------------------------
+create or replace function public.guard_content_draft_server_columns()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
+begin
+  -- A role that bypasses RLS is server-side (service role, migrations).
+  if (select rolbypassrls from pg_catalog.pg_roles where rolname = current_user) then
+    return new;
+  end if;
+
+  if tg_op = 'INSERT' then
+    if new.score_before is not null or new.score_after is not null then
+      raise exception 'content draft scores are set server-side'
+        using errcode = '42501';
+    end if;
+    if new.action_id is not null then
+      raise exception 'content draft action is set server-side'
+        using errcode = '42501';
+    end if;
+    if new.agent_state is not null or new.agent_state_at is not null
+       or new.agent_run is not null then
+      raise exception 'content draft agent state is set server-side'
+        using errcode = '42501';
+    end if;
+    if new.published_url is not null or new.published_at is not null then
+      raise exception 'content draft live address is set server-side'
+        using errcode = '42501';
+    end if;
+    if new.restored_at is not null then
+      raise exception 'content draft restore time is set server-side'
+        using errcode = '42501';
+    end if;
+  elsif new.brand_id is distinct from old.brand_id
+     or new.author is distinct from old.author
+     or new.created_by is distinct from old.created_by
+     or new.created_at is distinct from old.created_at
+     or new.score_before is distinct from old.score_before
+     or new.score_after is distinct from old.score_after
+     or new.action_id is distinct from old.action_id
+     or new.agent_state is distinct from old.agent_state
+     or new.agent_state_at is distinct from old.agent_state_at
+     or new.agent_run is distinct from old.agent_run
+     or new.published_url is distinct from old.published_url
+     or new.published_at is distinct from old.published_at
+     or new.restored_at is distinct from old.restored_at
+  then
+    raise exception 'content draft column is managed server-side'
+      using errcode = '42501';
+  end if;
+  return new;
+end;
+$$;
+
+notify pgrst, 'reload schema';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00290_mentions_perception_live_narrower.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00290: the Perception tab's filtered views, read faster (Mentions & Sentiment, MS-09)
+-- ============================================================================
+-- 00241 computes the default view ahead; a filtered one (a platform, a
+-- country, a topic or a search) still reads mentions_perception_live. On
+-- production (2026-10-26, the Ansvisor brand, read-only):
+--   * ChatGPT only took 6.3 s at 30 days, and failed at 90 days (8.7 s twice,
+--     past the 8 s statement timeout: "Couldn't load");
+--   * a search failed at 30 days the same way;
+--   * the morning report's 'mentions_perception_live' probe took 10.9 s at
+--     30 days and 8.9 s at 90.
+-- The default view opened in 1.1–1.2 s from its snapshot. The target is 3 s
+-- for every view.
+--
+-- The same output for every window and filter, with less read:
+--   1. The window before is read only for what the tab shows of it: each
+--      entity's mentions and co-mentions (mentions_entities_daily, small)
+--      and the previous answers of the brand's 15 terms shown. 00237 summed
+--      every shown entity's every term over both windows for those 15
+--      numbers.
+--      * The rollups (whole days, no topic or search) now read the shown
+--        entities' terms for the window and only the brand's for the window
+--        before: about 6 entity-windows of rows instead of 10.
+--      * A topic or a search (and a window under two days) still reads both
+--        windows' answers, which the mentions and co-mentions need, but
+--        unnests only the brand's from the window before.
+--      A platform or a country is checked inside the key (after the day), so
+--      a filtered view reads as many index entries as the default one.
+--   2. mentions_terms_daily's key carries the count (include answers), so
+--      the terms' sums come from the index alone. It replaces 00231's
+--      mentions_terms_daily_key: the same key, still unique, nulls not
+--      distinct.
+--   3. Autovacuum runs on both rollups about daily, as 00236 does for the
+--      Insights rollups: each refresh deletes and rewrites a range of days,
+--      and an index-only scan still goes to the table for a page that isn't
+--      all-visible yet. mentions_entities_daily has no covering index; it
+--      gets the dead rows cleared and its statistics kept current.
+--
+-- On a large mentions_terms_daily, build the index by hand first, which
+-- doesn't hold back the refreshes, with no statement timeout; this migration
+-- then finds it in place:
+--   set statement_timeout = 0;
+--   create unique index concurrently if not exists mentions_terms_daily_key_cover
+--     on public.mentions_terms_daily (brand_id, entity, day, platform, region, term)
+--     include (answers) nulls not distinct;
+--   -- indisvalid must be true before the old key goes:
+--   select indisvalid from pg_index
+--     where indexrelid = 'public.mentions_terms_daily_key_cover'::regclass;
+--   drop index concurrently if exists public.mentions_terms_daily_key;
+-- A build that stopped part way leaves an invalid index under that name;
+-- drop it and build again. This migration refuses to drop the old key while
+-- the new one is invalid.
+
+create unique index if not exists mentions_terms_daily_key_cover
+  on public.mentions_terms_daily (brand_id, entity, day, platform, region, term)
+  include (answers)
+  nulls not distinct;
+
+do $$
+begin
+  if exists (
+    select 1 from pg_index
+    where indexrelid = 'public.mentions_terms_daily_key_cover'::regclass
+      and not indisvalid
+  ) then
+    raise exception 'mentions_terms_daily_key_cover is invalid (a concurrent build stopped part way): drop it and build it again';
+  end if;
+end;
+$$;
+
+-- The Perception reads and the refreshes don't queue behind the drop for
+-- long: it gives up after 3 s instead (run it again).
+set lock_timeout = '3s';
+
+drop index if exists public.mentions_terms_daily_key;
+
+reset lock_timeout;
+
+alter table public.mentions_terms_daily set (
+  autovacuum_vacuum_scale_factor = 0.01,
+  autovacuum_vacuum_insert_scale_factor = 0.01,
+  autovacuum_analyze_scale_factor = 0.02
+);
+
+alter table public.mentions_entities_daily set (
+  autovacuum_vacuum_scale_factor = 0.01,
+  autovacuum_vacuum_insert_scale_factor = 0.01,
+  autovacuum_analyze_scale_factor = 0.02
+);
+
+-- 00241's read, the window before narrowed to the brand's terms shown.
+create or replace function public.mentions_perception_live(
+  p_brand_id  uuid,
+  p_date_from timestamptz,
+  p_date_to   timestamptz default null,
+  p_platform  text default null,
+  p_region    text default null,
+  p_topic_id  uuid default null,
+  p_search    text default null
+)
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path to 'public'
+set work_mem to '64MB'
+set plan_cache_mode to 'force_custom_plan'
+as $$
+declare
+  v_to         timestamptz := coalesce(p_date_to, now());
+  v_from       timestamptz := least(p_date_from, coalesce(p_date_to, now()));
+  v_days       integer;
+  v_day_to     date;
+  v_start      timestamptz;
+  v_end        timestamptz;
+  v_prev_start timestamptz;
+  v_search     text := nullif(btrim(lower(coalesce(p_search, ''))), '');
+  v_rollup     boolean;
+  v_start_day  date;
+  v_end_day    date;
+  v_prev_day   date;
+  v_result     jsonb;
+begin
+  v_days := greatest(1, ceil(extract(epoch from v_to - v_from) / 86400.0 - 1.0 / 24)::integer);
+  if v_days < 2 then
+    v_start := v_from;
+    v_end   := v_to + interval '1 microsecond';
+  else
+    v_day_to := (v_to at time zone 'utc')::date;
+    v_start  := (v_day_to - (v_days - 1))::timestamp at time zone 'utc';
+    v_end    := (v_day_to + 1)::timestamp at time zone 'utc';
+  end if;
+  v_prev_start := v_start - (v_end - v_start);
+  -- Whole UTC days with no topic or search read the daily rollups (00231);
+  -- a window under two days, or a filter on the prompts, reads the answers'
+  -- terms as before. The branch not taken is pruned (plan_cache_mode).
+  v_rollup    := v_days >= 2 and p_topic_id is null and v_search is null;
+  v_start_day := (v_start at time zone 'utc')::date;
+  v_end_day   := (v_end at time zone 'utc')::date;
+  v_prev_day  := (v_prev_start at time zone 'utc')::date;
+
+  with
+  prompts_in as (
+    select p.id
+    from public.prompts p
+    join public.prompt_sets ps on ps.id = p.prompt_set_id
+    where ps.brand_id = p_brand_id
+      and (p_topic_id is null or p.topic_id = p_topic_id)
+      and (v_search is null or position(v_search in lower(p.text)) > 0)
+  ),
+  rows_in as (
+    select t.result_id, t.entity, t.terms, (t.created_at >= v_start) as cur
+    from public.mentions_answer_terms t
+    join prompts_in pi on pi.id = t.prompt_id
+    where not v_rollup
+      and t.brand_id = p_brand_id
+      and t.created_at >= v_prev_start
+      and t.created_at < v_end
+      and (p_platform is null or t.platform = p_platform)
+      and (p_region is null or t.region = p_region)
+  ),
+  entity_counts as (
+    select entity,
+           count(*) filter (where cur)     as mentions,
+           count(*) filter (where not cur) as prev_mentions
+    from rows_in
+    group by entity
+    union all
+    select d.entity,
+           coalesce(sum(d.answers) filter (where d.day >= v_start_day), 0),
+           coalesce(sum(d.answers) filter (where d.day < v_start_day), 0)
+    from public.mentions_entities_daily d
+    where v_rollup
+      and d.brand_id = p_brand_id
+      and d.day >= v_prev_day
+      and d.day < v_end_day
+      and (p_platform is null or d.platform = p_platform)
+      and (p_region is null or d.region = p_region)
+    group by d.entity
+  ),
+  shown as (
+    select 'brand'::text as entity, 0 as rank
+    union all
+    select * from (
+      select ec.entity, row_number() over (order by ec.mentions desc, ec.entity)::int
+      from entity_counts ec
+      join public.competitors co on co.id::text = ec.entity and co.brand_id = p_brand_id
+      where ec.mentions > 0
+      order by ec.mentions desc, ec.entity
+      limit 4
+    ) top_competitors
+  ),
+  -- The shown entities' terms in the window. The window before is read
+  -- only for the brand's terms shown (brand_prev).
+  term_counts_all as (
+    select r.entity, term, count(*) as answers
+    from rows_in r
+    join shown s on s.entity = r.entity
+    cross join lateral unnest(r.terms) as term
+    where r.cur
+    group by r.entity, term
+    union all
+    select d.entity, d.term, sum(d.answers)
+    from public.mentions_terms_daily d
+    join shown s on s.entity = d.entity
+    where v_rollup
+      and d.brand_id = p_brand_id
+      and d.day >= v_start_day
+      and d.day < v_end_day
+      and (p_platform is null or d.platform = p_platform)
+      and (p_region is null or d.region = p_region)
+    group by d.entity, d.term
+  ),
+  -- Each entity's 60 most frequent terms are the candidates.
+  candidates as (
+    select entity, term, answers
+    from (
+      select t.*, row_number() over (partition by t.entity order by t.answers desc, t.term) as rn
+      from term_counts_all t
+      where t.answers > 0
+    ) ranked
+    where rn <= 60
+  ),
+  -- A word that nearly always comes in one phrase is that phrase: "fresh" and
+  -- "roast" give way to "fresh roast" when it has 80% of their answers.
+  term_counts as (
+    select c.*
+    from candidates c
+    where position(' ' in c.term) > 0
+       or not exists (
+         select 1 from candidates p
+         where p.entity = c.entity
+           and position(' ' in p.term) > 0
+           and (p.term like c.term || ' %' or p.term like '% ' || c.term)
+           and p.answers >= 0.8 * c.answers)
+  ),
+  brand_terms as (
+    select term, answers
+    from term_counts
+    where entity = 'brand' and answers > 0
+    order by answers desc, term
+    limit 15
+  ),
+  -- Those terms' answers in the window before, for their trend.
+  brand_prev as (
+    select term, count(*) as prev_answers
+    from rows_in r
+    cross join lateral unnest(r.terms) as term
+    where not r.cur
+      and r.entity = 'brand'
+      and term in (select bt.term from brand_terms bt)
+    group by term
+    union all
+    select d.term, sum(d.answers)
+    from public.mentions_terms_daily d
+    where v_rollup
+      and d.brand_id = p_brand_id
+      and d.entity = 'brand'
+      and d.day >= v_prev_day
+      and d.day < v_start_day
+      and d.term in (select bt.term from brand_terms bt)
+      and (p_platform is null or d.platform = p_platform)
+      and (p_region is null or d.region = p_region)
+    group by d.term
+  ),
+  -- The terms that tell the brands apart most: the widest spread between the
+  -- highest and lowest share of mentions, then the highest shares.
+  attributes as (
+    select u.term
+    from (select distinct term from term_counts) u
+    cross join shown s
+    left join term_counts_all tc on tc.entity = s.entity and tc.term = u.term
+    left join entity_counts ec on ec.entity = s.entity
+    group by u.term
+    order by
+      max(coalesce(tc.answers, 0)::numeric / nullif(ec.mentions, 0))
+        - min(coalesce(tc.answers, 0)::numeric / nullif(ec.mentions, 0)) desc nulls last,
+      sum(coalesce(tc.answers, 0)::numeric / nullif(ec.mentions, 0)) desc nulls last,
+      u.term
+    limit 8
+  ),
+  -- A competitor's rows in answers that name the brand too, in one pass.
+  co as (
+    select x.entity,
+           count(*) filter (where x.cur)     as co_mentions,
+           count(*) filter (where not x.cur) as prev_co_mentions
+    from (
+      select r.entity, r.cur,
+             bool_or(r.entity = 'brand') over (partition by r.result_id) as with_brand
+      from rows_in r
+    ) x
+    where x.entity <> 'brand' and x.with_brand
+    group by x.entity
+    union all
+    select d.entity,
+           coalesce(sum(d.with_brand) filter (where d.day >= v_start_day), 0),
+           coalesce(sum(d.with_brand) filter (where d.day < v_start_day), 0)
+    from public.mentions_entities_daily d
+    where v_rollup
+      and d.entity <> 'brand'
+      and d.brand_id = p_brand_id
+      and d.day >= v_prev_day
+      and d.day < v_end_day
+      and (p_platform is null or d.platform = p_platform)
+      and (p_region is null or d.region = p_region)
+    group by d.entity
+    having sum(d.with_brand) > 0
+  )
+  select jsonb_build_object(
+    'window', jsonb_build_object('from', v_start, 'to', v_end, 'days', v_days),
+    'entities', coalesce((
+      select jsonb_agg(jsonb_build_object(
+               'entity', s.entity,
+               'name', case when s.entity = 'brand' then b.name else co.name end,
+               'is_brand', s.entity = 'brand',
+               'mentions', coalesce(ec.mentions, 0),
+               'prev_mentions', coalesce(ec.prev_mentions, 0))
+             order by s.rank)
+      from shown s
+      left join entity_counts ec on ec.entity = s.entity
+      left join public.brands b on s.entity = 'brand' and b.id = p_brand_id
+      left join public.competitors co on co.id::text = s.entity and co.brand_id = p_brand_id
+    ), '[]'::jsonb),
+    'brand_terms', coalesce((
+      select jsonb_agg(jsonb_build_object(
+               'term', bt.term, 'answers', bt.answers,
+               'prev_answers', coalesce(bp.prev_answers, 0))
+             order by bt.answers desc, bt.term)
+      from brand_terms bt
+      left join brand_prev bp on bp.term = bt.term
+    ), '[]'::jsonb),
+    'attributes', coalesce((
+      select jsonb_agg(jsonb_build_object(
+               'term', a.term,
+               'values', (
+                 select jsonb_agg(jsonb_build_object(
+                          'entity', s.entity, 'answers', coalesce(tc.answers, 0))
+                        order by s.rank)
+                 from shown s
+                 left join term_counts_all tc on tc.entity = s.entity and tc.term = a.term)))
+      from attributes a
+    ), '[]'::jsonb),
+    'co_mentions', coalesce((
+      select jsonb_agg(jsonb_build_object(
+               'competitor_id', c.entity,
+               'name', comp.name,
+               'co_mentions', c.co_mentions,
+               'prev_co_mentions', c.prev_co_mentions)
+             order by c.co_mentions desc, comp.name)
+      from co c
+      join public.competitors comp on comp.id::text = c.entity and comp.brand_id = p_brand_id
+    ), '[]'::jsonb)
+  )
+  into v_result;
+
+  return v_result;
+end;
+$$;
+
+revoke all on function public.mentions_perception_live(uuid, timestamptz, timestamptz, text, text, uuid, text)
+  from public, anon, authenticated;
+grant execute on function public.mentions_perception_live(uuid, timestamptz, timestamptz, text, text, uuid, text)
+  to service_role;
+

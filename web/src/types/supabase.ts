@@ -647,6 +647,8 @@ export type Database = {
         Row: {
           content_byline: boolean
           content_quality_handoff: boolean
+          conversions_consent: string
+          conversions_enabled: boolean
           created_at: string
           description: string | null
           ga_property_id: string | null
@@ -674,6 +676,8 @@ export type Database = {
         Insert: {
           content_byline?: boolean
           content_quality_handoff?: boolean
+          conversions_consent?: string
+          conversions_enabled?: boolean
           created_at?: string
           description?: string | null
           ga_property_id?: string | null
@@ -701,6 +705,8 @@ export type Database = {
         Update: {
           content_byline?: boolean
           content_quality_handoff?: boolean
+          conversions_consent?: string
+          conversions_enabled?: boolean
           created_at?: string
           description?: string | null
           ga_property_id?: string | null
@@ -1252,6 +1258,7 @@ export type Database = {
           prompt_ids: string[]
           published_at: string | null
           published_url: string | null
+          restored_at: string | null
           reviewer_id: string | null
           rules: Json | null
           source_url: string | null
@@ -1292,6 +1299,7 @@ export type Database = {
           prompt_ids?: string[]
           published_at?: string | null
           published_url?: string | null
+          restored_at?: string | null
           reviewer_id?: string | null
           rules?: Json | null
           source_url?: string | null
@@ -1332,6 +1340,7 @@ export type Database = {
           prompt_ids?: string[]
           published_at?: string | null
           published_url?: string | null
+          restored_at?: string | null
           reviewer_id?: string | null
           rules?: Json | null
           source_url?: string | null
@@ -4728,6 +4737,10 @@ export type Database = {
       content_draft_versions_prune: {
         Args: { p_before: string; p_limit: number }
         Returns: number
+      }
+      content_page_conversions: {
+        Args: { p_brand_id: string; p_days: number; p_page: string }
+        Returns: Json
       }
       content_page_impact: {
         Args: { p_brand_id: string; p_days: number; p_page: string }

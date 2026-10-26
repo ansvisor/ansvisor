@@ -5,6 +5,7 @@ import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 import { addDraftPrompts, getDraftSources, rebuildDraftBrief } from '@/lib/actions/content-drafts';
 import { builtFromCount, rebuildSources, type DraftBrief } from '@/lib/content/brief';
+import type { AgentRule } from '@/lib/content/agent-write';
 import type { ContentDraft } from '@/lib/content/drafts';
 import type { DraftSourceChoice, DraftSourcesData } from '@/lib/content/sources';
 import type { SourcesRead } from './_use-draft-reads';
@@ -15,6 +16,8 @@ export interface PageNow {
   html: string;
   /** The length the rules ask for. */
   length: number;
+  /** The rules in effect, as the agent reads them: the brief plans to them. */
+  rules?: AgentRule[];
 }
 
 /**
@@ -79,6 +82,7 @@ export function useBriefRebuild({
           html: page.html,
           length: page.length,
         }),
+        page.rules,
       );
       if ('error' in result) {
         // Stopped from the agent card (CE-027): no failure, nothing changed.

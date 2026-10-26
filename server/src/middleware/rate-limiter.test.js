@@ -1,5 +1,11 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { apiLimiterKey, botIngestKey, webhookCallbackKey } from './rate-limiter.js';
+import {
+  apiLimiterKey,
+  botIngestKey,
+  isJourneyBeacon,
+  journeyEventKey,
+  webhookCallbackKey,
+} from './rate-limiter.js';
 import {
   markBotSenderVerified,
   markTokenVerified,
@@ -114,5 +120,25 @@ describe('rate-limiter – webhookCallbackKey', () => {
 
   it('falls back to the anonymous IP bucket when the secret is missing', () => {
     expect(webhookCallbackKey({ headers: {}, ip: '1.1.1.1' })).toBe('ip:1.1.1.1');
+  });
+});
+
+describe('rate-limiter – journey events (CE-017)', () => {
+  it('buckets a journey event by its tracking code, whatever the address', () => {
+    expect(journeyEventKey({ params: { trackingCode: 'abc123' }, ip: '203.0.113.7' })).toBe(
+      'journey:abc123',
+    );
+    expect(journeyEventKey({ params: { trackingCode: 'abc123' }, ip: '198.51.100.9' })).toBe(
+      'journey:abc123',
+    );
+  });
+
+  it('counts only pageviews and conversions, as a string or a parsed body: never a visit', () => {
+    expect(isJourneyBeacon('{"k":"pv","u":"https://acme.example/"}')).toBe(true);
+    expect(isJourneyBeacon({ k: 'cv' })).toBe(true);
+    expect(isJourneyBeacon('{"u":"https://acme.example/","s":"chatgpt.com"}')).toBe(false);
+    expect(isJourneyBeacon({ k: 'nf' })).toBe(false);
+    expect(isJourneyBeacon('not json')).toBe(false);
+    expect(isJourneyBeacon(undefined)).toBe(false);
   });
 });

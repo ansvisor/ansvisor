@@ -186,6 +186,15 @@ describe('rebuildDraftBrief', () => {
     expect(JSON.parse(init.body)).toEqual({ brandId: BRAND, sources });
   });
 
+  it('sends the rules in effect beside the sources, and none when there are none', async () => {
+    fetchMock.mockResolvedValue({ ok: true, json: async () => ({ brief }) });
+    const rules = [{ key: 'h2Answer', name: 'Answer under each H2', detail: 'aim: 60 words' }];
+    await rebuildDraftBrief(DRAFT, BRAND, sources, rules);
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({ brandId: BRAND, sources, rules });
+    await rebuildDraftBrief(DRAFT, BRAND, sources, []);
+    expect(JSON.parse(fetchMock.mock.calls[1][1].body)).toEqual({ brandId: BRAND, sources });
+  });
+
   it('names why it didn’t, and anything unexpected as failed', async () => {
     for (const [body, ok, error] of [
       [{ code: 'ai_budget' }, false, 'ai_budget'],
