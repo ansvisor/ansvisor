@@ -445,6 +445,57 @@ describe('keepSuggestions', () => {
     expect(addsAttribution('', "Gartner'a göre ekipler tahmin eder.")).toBe(true);
   });
 
+  it('knows a source named with a role or an adverb before it, and its end of two words', () => {
+    const known = knownPeople('Jane Doe', 'According to Gartner, teams forecast.');
+    expect(addsAttribution('', 'Acme CEO Jane Doe says that teams forecast.', known)).toBe(false);
+    expect(addsAttribution('', 'CEO Jane Doe says teams forecast.', known)).toBe(false);
+    expect(addsAttribution('', 'Recently Gartner said that teams forecast.', known)).toBe(false);
+    expect(placeholderAttributions('CEO Jane Doe says teams forecast.', known)).toBe(
+      'CEO Jane Doe says teams forecast.',
+    );
+  });
+
+  it('puts only the name as a placeholder: the word a sentence starts with stays', () => {
+    const known = knownPeople('According to Gartner, teams forecast.');
+    expect(placeholderAttributions('As Zapier says, teams forecast.', known)).toBe(
+      'As [source] says, teams forecast.',
+    );
+    expect(placeholderAttributions('While Zapier says that teams forecast, …', known)).toBe(
+      'While [source] says that teams forecast, …',
+    );
+    expect(placeholderAttributions('According to the U.S. Census Bureau, most do.', known)).toBe(
+      'According to the [source], most do.',
+    );
+    expect(attributedNames('According to the U.S. Census Bureau, most do.')).toEqual([
+      'U.S. Census Bureau',
+    ]);
+  });
+
+  it('reads "per" as an attribution on an English page only', () => {
+    const german = attributableSources('<p>Wir planen.</p>', [], [], 'de');
+    expect(addsAttribution('', 'Per E-Mail, Telefon oder Chat erreichen Sie uns.', german)).toBe(
+      false,
+    );
+    expect(addsAttribution('', 'Sie erreichen uns telefonisch, per E-Mail.', german)).toBe(false);
+    expect(placeholderAttributions('Kontaktieren Sie uns telefonisch, per E-Mail.', german)).toBe(
+      'Kontaktieren Sie uns telefonisch, per E-Mail.',
+    );
+    // "laut" is German's.
+    expect(addsAttribution('', 'Laut Gartner planen Teams.', german)).toBe(true);
+    const english = attributableSources('<p>Teams plan.</p>', [], [], 'en');
+    expect(addsAttribution('', 'Per Gartner, teams plan.', english)).toBe(true);
+    // An acronym may be a source too ("Per IDC, …"): "Per SKU, …" reads as one.
+    expect(addsAttribution('', 'Per SKU, you pay once.', english)).toBe(true);
+  });
+
+  it('reads a long run of capitals quickly', () => {
+    const started = performance.now();
+    addsAttribution('', `According to ${'A'.repeat(20000)} says that.`);
+    const list = `${'B'.repeat(20000)}, C and D`;
+    dropsName(list, list, 'C and D');
+    expect(performance.now() - started).toBeLessThan(500);
+  });
+
   it('knows a source by its possessive, and never by its last word alone', () => {
     const known = knownPeople('According to Gartner, teams forecast.', 'Our research team');
     expect(
