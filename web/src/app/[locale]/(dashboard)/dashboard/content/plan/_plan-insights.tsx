@@ -1,10 +1,10 @@
 'use client';
 
-import { useId, useState } from 'react';
+import { Fragment, useId, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { ChevronDown, ChevronRight, Sparkles, X } from 'lucide-react';
 import { Link } from '@/i18n/navigation';
-import type { PlanConversions } from '@/lib/content/conversions';
+import { journeyPages, type PlanConversions } from '@/lib/content/conversions';
 import type { PageType } from '@/lib/content/drafts';
 import type { MixRow, PlanResults } from '@/lib/content/plan-mix';
 import type { PlanPeriod } from '@/lib/content/plan';
@@ -44,7 +44,8 @@ export function AiResultsStrip({
       );
     }
   }
-  for (const { goal, count } of conversions?.goals.slice(0, STRIP_GOALS) ?? []) {
+  const goals = conversions?.goals.slice(0, STRIP_GOALS) ?? [];
+  for (const { goal, count } of goals) {
     parts.push(t(`goals.${goal}`, { count, value: formatNumber(count) }));
   }
   const journey = conversions?.journey ?? null;
@@ -55,7 +56,7 @@ export function AiResultsStrip({
       <span className="font-medium">{parts.join(' · ')}</span>
       {!results.analytics && (
         <span className="text-muted-foreground">
-          {t.rich('needsAnalytics', {
+          {t.rich(goals.length > 0 ? 'needsAnalyticsMore' : 'needsAnalytics', {
             link: (chunks) => (
               <Link
                 href="/dashboard/traffic"
@@ -70,22 +71,28 @@ export function AiResultsStrip({
       {journey && (
         <p className="flex w-full min-w-0 flex-wrap items-center gap-1 text-xs text-muted-foreground">
           <span>{t('topJourney')}</span>
-          <span className="font-medium text-foreground">
+          <span className="rounded-md bg-muted px-1.5 py-0.5">
             {isNamedPlatform(journey.source) ? getPlatformName(journey.source) : t('otherSource')}
           </span>
-          {journey.pages.map((page, i) => (
-            <span key={i} className="flex min-w-0 items-center gap-1">
-              <ChevronRight aria-hidden className="h-3 w-3 shrink-0" />
-              <span title={page} className="min-w-0 truncate">
-                {page}
-              </span>
-            </span>
+          {journeyPages(journey.pages).map((page, i) => (
+            <Fragment key={i}>
+              <ChevronRight aria-hidden className="h-3 w-3 shrink-0 text-muted-foreground/60" />
+              {page === null ? (
+                <span>…</span>
+              ) : (
+                <span title={page} className="min-w-0 truncate rounded-md border px-1.5 py-0.5">
+                  {page}
+                </span>
+              )}
+            </Fragment>
           ))}
-          <ChevronRight aria-hidden className="h-3 w-3 shrink-0" />
-          <span className="text-emerald-700 dark:text-emerald-300">
+          <ChevronRight aria-hidden className="h-3 w-3 shrink-0 text-muted-foreground/60" />
+          <span className="rounded-md bg-emerald-50 px-1.5 py-0.5 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">
             {t(`journeyGoals.${journey.goal}`)}
           </span>
-          <span>· {formatNumber(journey.count)}</span>
+          <span>
+            · {t('journeyCount', { count: journey.count, value: formatNumber(journey.count) })}
+          </span>
         </p>
       )}
     </div>

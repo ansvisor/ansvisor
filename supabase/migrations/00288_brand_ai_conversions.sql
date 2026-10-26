@@ -10,9 +10,11 @@
 -- 90 whole UTC days, ending yesterday, as content_plan_insights (00226):
 --   * enabled: whether the brand has conversions on;
 --   * goals: per goal, its conversions, the most first;
---   * journey: the most frequent journey to a conversion (the latest first
---     among as many), its source, pages and goal, as content_page_conversions
---     (00287) builds them, and how many; null without one.
+--   * journey: the most frequent journey to a conversion among the period's
+--     latest 2,000 (the latest first among as many), its source, pages and
+--     goal, as content_page_conversions (00287) builds them, and how many;
+--     null without one. The bound keeps a big brand's 90 days from holding
+--     the Plan page up: the goals still count every conversion.
 --
 -- Security definer with an organization check, as content_plan_insights.
 
@@ -76,7 +78,7 @@ begin
       ) s
       where s.before is distinct from s.page
     ) as pages
-    from conversions t
+    from (select * from conversions order by occurred_at desc limit 2000) t
   )
   select jsonb_build_object(
     'enabled', coalesce((select b.conversions_enabled from public.brands b where b.id = p_brand_id), false),

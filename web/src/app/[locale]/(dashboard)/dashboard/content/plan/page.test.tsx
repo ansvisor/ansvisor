@@ -420,18 +420,22 @@ describe('the Content plan', () => {
     expect(section().textContent).not.toContain('Priority list filtered to');
   });
 
-  it('adds the goals the snippet followed AI visitors to, and the top journey (CE-017)', async () => {
+  it('adds the four goals the snippet followed AI visitors to most, and the top journey (CE-017)', async () => {
     getContentPlanInsights.mockResolvedValue({
       ...INSIGHTS,
       conversions: {
         enabled: true,
         goals: [
-          { goal: 'demo', count: 20 },
           { goal: 'signup', count: 48 },
+          { goal: 'demo', count: 20 },
+          { goal: 'order', count: 10 },
+          { goal: 'newsletter', count: 3 },
+          { goal: 'custom', count: 1 },
         ],
+        // A long journey: the first page, a gap and the last three.
         journey: {
           source: 'chatgpt.com',
-          pages: ['/blog/crm-data-hygiene', '/pricing'],
+          pages: ['/blog/crm-data-hygiene', '/a', '/b', '/c', '/d', '/pricing'],
           goal: 'demo',
           count: 4,
         },
@@ -439,11 +443,25 @@ describe('the Content plan', () => {
     });
     await renderPage();
     expect(container.textContent).toContain(
-      '1,240 visits · 48 key events · 12 orders · 3,210 revenue · 20 demo forms · 48 signups',
+      '1,240 visits · 48 key events · 12 orders · 3,210 revenue · 48 signups · 20 demo forms · 10 orders from journeys · 3 newsletter signups',
     );
+    expect(container.textContent).not.toContain('other conversion');
     expect(container.textContent).toContain(
-      'Top journey:ChatGPT/blog/crm-data-hygiene/pricingDemo form· 4',
+      'Top journey:ChatGPT/blog/crm-data-hygiene…/c/d/pricingDemo form· 4 conversions',
     );
+  });
+
+  it('asks for Google Analytics beside the goals, without a journey line when there’s none', async () => {
+    getContentPlanInsights.mockResolvedValue({
+      ...INSIGHTS,
+      results: { ...INSIGHTS.results, analytics: false, purchases: false },
+      conversions: { enabled: true, goals: [{ goal: 'signup', count: 1 }], journey: null },
+    });
+    await renderPage();
+    expect(container.textContent).toContain(
+      '1,240 visits · 1 signupConnect Google Analytics for key events and revenue.',
+    );
+    expect(container.textContent).not.toContain('Top journey');
   });
 
   it('asks for Google Analytics to show what AI visitors did', async () => {

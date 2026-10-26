@@ -82,7 +82,8 @@ const {
 beforeEach(() => {
   reads = {};
   rpcResult = { days: 30, pages: [] };
-  rpcByName = {};
+  // Read the insights alone: the snippet's conversions as none.
+  rpcByName = { brand_ai_conversions: { data: null } };
   rpcCalls = [];
   filters = [];
   single = {};
@@ -379,14 +380,21 @@ describe('getContentPlanInsights', () => {
   });
 
   it('reads the rest when the conversions can’t be read (a database before 00288)', async () => {
-    vi.spyOn(console, 'error').mockImplementation(() => {});
-    rpcByName = {
-      brand_ai_conversions: { error: { message: 'function brand_ai_conversions does not exist' } },
-    };
-    rpcResult = { totalCitations: 3, citations: [], results: { visits: 4 } };
-    const read = (await getContentPlanInsights(BRAND, 30))!;
-    expect(read.conversions).toBeNull();
-    expect(read.results.visits).toBe(4);
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      rpcByName = {
+        brand_ai_conversions: {
+          error: { message: 'function brand_ai_conversions does not exist' },
+        },
+      };
+      rpcResult = { totalCitations: 3, citations: [], results: { visits: 4 } };
+      const read = (await getContentPlanInsights(BRAND, 30))!;
+      expect(read.conversions).toBeNull();
+      expect(read.results.visits).toBe(4);
+      expect(logged).toHaveBeenCalled();
+    } finally {
+      logged.mockRestore();
+    }
   });
 
   it('counts Analytics as connected only as AI Traffic does: connected and synced', async () => {

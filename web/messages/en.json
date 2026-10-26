@@ -3224,6 +3224,7 @@
         "orders": "{count, plural, one {{value} order} other {{value} orders}}",
         "revenue": "{value} revenue",
         "needsAnalytics": "<link>Connect Google Analytics</link> to see what they did next.",
+        "needsAnalyticsMore": "<link>Connect Google Analytics</link> for key events and revenue.",
         "goals": {
           "signup": "{count, plural, one {{value} signup} other {{value} signups}}",
           "demo": "{count, plural, one {{value} demo form} other {{value} demo forms}}",
@@ -3233,6 +3234,7 @@
           "custom": "{count, plural, one {{value} other conversion} other {{value} other conversions}}"
         },
         "topJourney": "Top journey:",
+        "journeyCount": "{count, plural, one {{value} conversion} other {{value} conversions}}",
         "otherSource": "Other",
         "journeyGoals": {
           "signup": "Signup",
