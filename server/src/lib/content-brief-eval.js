@@ -160,7 +160,9 @@ const PLACEHOLDERS = [NUMBER_PLACEHOLDER, NAME_PLACEHOLDER, QUOTE_PLACEHOLDER];
  * The checks anyone can repeat, for one case's brief (after shapeBrief):
  *   * sections, those without a key point, headings past the editor's limit,
  *     and keywords past the ten the prompt asks for;
- *   * fanoutCoverage: the share of the case's fan-outs an H2 answers;
+ *   * fanoutCoverage: the share of the case's fan-outs an H2 answers, of
+ *     those the brief keeps (version 2 leaves some to another page, as
+ *     leftOut counts);
  *   * placeholders: the figures, names and quotes the guard took out;
  *   * invented (the gate, all 0): figures and names or quotes the guard let
  *     through that the case didn't give, and addresses it didn't list.
@@ -174,15 +176,18 @@ export function briefChecks(brief, c) {
     [...c.sources.pages.map((p) => p.url), c.draft.source_url].filter(Boolean).map(urlKey),
   );
   const answered = new Set(brief.outline.map((s) => s.fanout).filter(Boolean));
+  const leftOut = new Set(brief.leftOut ?? []);
+  const kept = c.sources.fanouts.filter((f) => !leftOut.has(f.query));
   return {
     sections: brief.outline.length,
     sectionsInRange: brief.outline.length >= SECTIONS.min && brief.outline.length <= SECTIONS.max,
     emptySections: brief.outline.filter((s) => s.keyPoints.length === 0).length,
     longHeadings: brief.outline.filter((s) => s.heading.length > HEADING_LIMITS.other).length,
     extraKeywords: Math.max(0, brief.keywords.length - MAX_KEYWORDS),
-    fanoutCoverage: c.sources.fanouts.length
-      ? c.sources.fanouts.filter((f) => answered.has(f.query)).length / c.sources.fanouts.length
+    fanoutCoverage: kept.length
+      ? kept.filter((f) => answered.has(f.query)).length / kept.length
       : null,
+    leftOut: c.sources.fanouts.length - kept.length,
     placeholders: PLACEHOLDERS.reduce((n, p) => n + text.split(p).length - 1, 0),
     invented: {
       figures: found.flatMap((f) => f.figures),

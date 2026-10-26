@@ -465,14 +465,14 @@ export function shapeBrief(object, args) {
  * saves.
  */
 const BRIEF_BYTES = 60_000;
-const facts = (brief, strip) => ({
+const withFacts = (brief, strip) => ({
   ...brief,
   outline: brief.outline.map((section) => ({ ...section, facts: strip(section.facts ?? []) })),
 });
 const FIT_STEPS = [
   (brief) => ({ ...brief, leftOut: [] }),
-  (brief) => facts(brief, (list) => list.map((f) => ({ ...f, source: null }))),
-  (brief) => facts(brief, () => []),
+  (brief) => withFacts(brief, (list) => list.map((f) => ({ ...f, source: null }))),
+  (brief) => withFacts(brief, () => []),
 ];
 function fitBrief(brief) {
   const size = (b) => Buffer.byteLength(JSON.stringify(b));
@@ -737,9 +737,10 @@ export function buildBriefPrompt({ brand, draft, prompts, sources, rules = [], i
         .filter((n) => n.kind === 'cited_page')
         .map((n) => `${n.id}: ${n.label} (${n.detail})`)
     : sources.pages.map((p) => `${p.url} (${p.kind})`);
+  // Without a note (a quote's address, a day): a fact cites the input by its number.
   const given = numbered
     .filter((n) => n.kind === 'input')
-    .map((n) => `${n.id} "${n.label}": ${n.detail}${n.note ? ` (${n.note})` : ''}`);
+    .map((n) => `${n.id} "${n.label}": ${n.detail}`);
   const leans =
     v2 && Object.hasOwn(PAGE_TYPE_SECTION_FORMATS, draft.page_type ?? '')
       ? PAGE_TYPE_SECTION_FORMATS[draft.page_type]

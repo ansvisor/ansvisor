@@ -206,6 +206,20 @@ describe('the checks anyone can repeat', () => {
     expect(briefChecks(brief, FIRST).invented.urls).toEqual(['www.made-up.example/tldr']);
   });
 
+  it('count coverage over the fan-outs the brief keeps: one left for another page isn’t missed', () => {
+    // GOOD answers all four of the case's fan-outs; without the first one's H2:
+    const [first] = FIRST.sources.fanouts;
+    const outline = GOOD.outline.filter((s) => s.fanout !== first.query);
+    const missed = briefChecks(shapeBrief({ ...GOOD, outline }, FIRST), FIRST);
+    expect(missed).toMatchObject({ fanoutCoverage: 0.75, leftOut: 0 });
+    // Left for another page, it isn't missed.
+    const left = briefChecks(
+      shapeBrief({ ...GOOD, outline, tldr: null, proof: [], leftOut: [first.query] }, FIRST),
+      FIRST,
+    );
+    expect(left).toMatchObject({ fanoutCoverage: 1, leftOut: 1 });
+  });
+
   it('take an address the case gave: a cited page, or the live page', () => {
     const live = CASES.find((c) => c.draft.method === 'optimize');
     const brief = shapeBrief(

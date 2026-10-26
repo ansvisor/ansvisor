@@ -1097,6 +1097,11 @@ describe('the brief rules (2026), behind CONTENT_BRIEF_RULES', () => {
         .match(/export const DRAFT_SOURCE_KINDS = \[([^\]]*)\]/)[1]
         .matchAll(/'([a-z_]+)'/g),
     ].map((m) => m[1]);
-    for (const n of briefNumbered(sources())) expect(draftKinds).toContain(n.kind);
+    // …and Brief › Your input, which a suggestion keeps as 'input' too.
+    expect(webSources).toMatch(/SUGGESTION_SOURCE_KINDS = \[\.\.\.DRAFT_SOURCE_KINDS, 'input'\]/);
+    const inputs = [{ kind: 'input', ref: 'experience', label: 'We tested', detail: 'We tested' }];
+    for (const n of briefNumbered(sources(), inputs)) {
+      expect([...draftKinds, 'input']).toContain(n.kind);
+    }
   });
 });
