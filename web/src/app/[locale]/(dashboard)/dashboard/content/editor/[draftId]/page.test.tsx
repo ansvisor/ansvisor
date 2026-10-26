@@ -67,6 +67,7 @@ const getDraftHandoffs = vi.fn();
 const restoreDraftVersion = vi.fn();
 const getCitedPassages = vi.fn();
 const getDraftSuggestions = vi.fn();
+const getLastRestoreAt = vi.fn();
 // What the page's last rewrite came to (Length's reach): none unless a test gives one.
 const getLastPageRewrite = vi.fn();
 const decideDraftSuggestions = vi.fn();
@@ -84,6 +85,7 @@ vi.mock('@/lib/actions/content-drafts', () => ({
   startAgentWriting: (...args: unknown[]) => startAgentWriting(...args),
   startPageRewrite: (...args: unknown[]) => startPageRewrite(...args),
   getDraftSuggestions: (...args: unknown[]) => getDraftSuggestions(...args),
+  getLastRestoreAt: (...args: unknown[]) => getLastRestoreAt(...args),
   getLastPageRewrite: (...args: unknown[]) => getLastPageRewrite(...args),
   decideDraftSuggestions: (...args: unknown[]) => decideDraftSuggestions(...args),
   keepAgentBeforeVersion: (...args: unknown[]) => keepAgentBeforeVersion(...args),
@@ -364,6 +366,7 @@ beforeEach(() => {
   restoreDraftVersion.mockReset();
   getCitedPassages.mockReset().mockResolvedValue([]);
   getDraftSuggestions.mockReset().mockResolvedValue([]);
+  getLastRestoreAt.mockReset().mockResolvedValue(null);
   getLastPageRewrite.mockReset().mockResolvedValue(null);
   decideDraftSuggestions.mockReset().mockResolvedValue(1);
   keepAgentBeforeVersion.mockReset().mockResolvedValue(undefined);
@@ -1403,6 +1406,123 @@ describe('the content editor', () => {
       expect(decideDraftSuggestions).toHaveBeenCalledWith(['n1'], 'rejected');
       // Its Undo all would undo nothing on the page restored.
       expect(card()).toBeNull();
+      // Said, as they counted toward AI usage.
+      expect(toast.success).toHaveBeenCalledWith(
+        expect.stringMatching(
+          /^Restored “.+”\. The agent’s open change was for the page before, so it was set aside\.$/,
+        ),
+      );
+    });
+
+    it('waits while a restore runs: the card’s buttons and the agent’s runs', async () => {
+      getContentDraft.mockResolvedValue(
+        draft({
+          bodyHtml: '<h1>Pipeline forecasting</h1><p>We delve into how teams forecast.</p>',
+        }),
+      );
+      getDraftVersions.mockResolvedValue(versions);
+      getDraftSuggestions.mockResolvedValue([
+        {
+          id: 'n1',
+          batchId: 'b2',
+          actionId: null,
+          actionNo: null,
+          kind: 'replace' as const,
+          blockText: 'We delve into how teams forecast.',
+          beforeText: 'delve into',
+          afterText: 'look at',
+          reason: 'remove an AI trace (rule)',
+          ruleKeys: ['aiTraces'],
+          status: 'open' as const,
+        },
+      ]);
+      let restored: (value: unknown) => void = () => {};
+      restoreDraftVersion.mockReturnValue(new Promise((r) => (restored = r)));
+      await renderPage();
+      const accept = () =>
+        [
+          ...container
+            .querySelector('[role="region"][aria-label="Agent suggestions"]')!
+            .querySelectorAll('button'),
+        ].find((b) => b.textContent === 'Accept all')!;
+      const items = await openHistory();
+      await act(async () => items[1].click());
+      // The decision would land under the restore setting the same ones aside.
+      expect(accept().disabled || accept().hasAttribute('data-disabled')).toBe(true);
+      await act(async () =>
+        restored({
+          title: 'Old title',
+          bodyHtml: '<h1>Old title</h1><p>We delve into how teams forecast.</p>',
+          updatedAt: '2026-10-21T10:00:00Z',
+        }),
+      );
+      await act(async () => {});
+      expect(decideDraftSuggestions).toHaveBeenCalledTimes(1);
+      expect(decideDraftSuggestions).toHaveBeenCalledWith(['n1'], 'rejected');
+    });
+
+    // A batch, decided or open, the agent left on 21 October.
+    const ranBefore = (status: 'accepted' | 'open') => [
+      {
+        id: 'a1',
+        batchId: 'b2',
+        actionId: null,
+        actionNo: null,
+        kind: 'replace' as const,
+        blockText: 'Teams delve into how they forecast.',
+        beforeText: 'delve into',
+        afterText: 'look at',
+        reason: 'remove an AI trace (rule)',
+        ruleKeys: ['aiTraces'],
+        status,
+        createdAt: '2026-10-21T10:00:00Z',
+      },
+    ];
+    const agentCard = () =>
+      container.querySelector('[role="region"][aria-label="Agent suggestions"]');
+
+    it('opens the card closed for a batch from before the page was last restored', async () => {
+      getContentDraft.mockResolvedValue(
+        draft({ bodyHtml: '<h1>Pipeline forecasting</h1><p>Teams look at how they forecast.</p>' }),
+      );
+      getLastRestoreAt.mockResolvedValue('2026-10-22T09:00:00Z');
+      getDraftSuggestions.mockResolvedValue(ranBefore('accepted'));
+      await renderPage();
+      // After a reload, or in another tab: its Undo all was for the page before.
+      expect(getLastRestoreAt).toHaveBeenCalledWith('d1');
+      expect(agentCard()).toBeNull();
+    });
+
+    it('still shows a batch from before the restore with open changes to decide', async () => {
+      getContentDraft.mockResolvedValue(
+        draft({
+          bodyHtml: '<h1>Pipeline forecasting</h1><p>Teams delve into how they forecast.</p>',
+        }),
+      );
+      getLastRestoreAt.mockResolvedValue('2026-10-22T09:00:00Z');
+      getDraftSuggestions.mockResolvedValue(ranBefore('open'));
+      await renderPage();
+      expect(agentCard()).not.toBeNull();
+    });
+
+    it('shows a batch left after the last restore as ever', async () => {
+      getContentDraft.mockResolvedValue(
+        draft({ bodyHtml: '<h1>Pipeline forecasting</h1><p>Teams look at how they forecast.</p>' }),
+      );
+      getLastRestoreAt.mockResolvedValue('2026-10-20T09:00:00Z');
+      getDraftSuggestions.mockResolvedValue(ranBefore('accepted'));
+      await renderPage();
+      expect(agentCard()).not.toBeNull();
+    });
+
+    it('shows the batch as ever when the last restore can’t be read', async () => {
+      getContentDraft.mockResolvedValue(
+        draft({ bodyHtml: '<h1>Pipeline forecasting</h1><p>Teams look at how they forecast.</p>' }),
+      );
+      getLastRestoreAt.mockRejectedValue(new Error('offline'));
+      getDraftSuggestions.mockResolvedValue(ranBefore('accepted'));
+      await renderPage();
+      expect(agentCard()).not.toBeNull();
     });
 
     it('closes the card of a batch already decided: its Undo all and last run were for the page before', async () => {

@@ -1712,6 +1712,26 @@ export async function getDraftVersions(id: string): Promise<DraftVersion[]> {
 }
 
 /**
+ * When the draft's page was last restored from History (its "restore"
+ * version, kept as the restore ran), or null. The agent's batch from before
+ * it was for the page before: the editor opens its card closed.
+ */
+export async function getLastRestoreAt(id: string): Promise<string | null> {
+  if (!draftId.safeParse(id).success) throw new Error('invalid');
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from('content_draft_versions')
+    .select('created_at')
+    .eq('draft_id', id)
+    .eq('origin', 'restore')
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  return data?.created_at ?? null;
+}
+
+/**
  * History's hand-offs (Quality CE-051): the draft's runs of Hand off (00275,
  * its members may read them) in the last 90 days, the latest first, each
  * with who started it, how it ended and how many checks it was given.

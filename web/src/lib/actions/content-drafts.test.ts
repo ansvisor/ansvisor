@@ -106,6 +106,7 @@ const {
   fixDraftRules,
   decideDraftSuggestions,
   getDraftSuggestions,
+  getLastRestoreAt,
   keepAgentBeforeVersion,
   getCitedPassages,
   getContentDraft,
@@ -973,6 +974,18 @@ describe('agent suggestions', () => {
     expect(calls[0].filters).toContainEqual(['eq', 'draft_id', DRAFT]);
     // The latest batch is found first; only its rows are read whole.
     expect(calls[1].filters).toContainEqual(['eq', 'batch_id', 'new']);
+  });
+
+  it('reads when the page was last restored, or none', async () => {
+    queue = [[{ created_at: '2026-10-22T09:00:00Z' }]];
+    await expect(getLastRestoreAt(DRAFT)).resolves.toBe('2026-10-22T09:00:00Z');
+    expect(calls[0].filters).toEqual([
+      ['eq', 'draft_id', DRAFT],
+      ['eq', 'origin', 'restore'],
+    ]);
+    queue = [[]];
+    await expect(getLastRestoreAt(DRAFT)).resolves.toBeNull();
+    await expect(getLastRestoreAt('../etc')).rejects.toThrow('invalid');
   });
 
   it('reads none for a draft the agent never suggested on', async () => {

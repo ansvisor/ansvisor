@@ -39,6 +39,7 @@ import {
   type HandOffError,
   getCitedPassages,
   getDraftSuggestions,
+  getLastRestoreAt,
   getLastPageRewrite,
   type AgentEmptyWhy,
   keepAgentBeforeVersion,
@@ -1703,11 +1704,17 @@ export function DraftEditor({
     [t, tDetail, sourceRows],
   );
 
-  // The latest batch, read when the editor opens.
+  // The latest batch, read when the editor opens. One from before the page
+  // was last restored was for the page before: its card opens closed, as it
+  // closed in the tab that restored it (open ones it still has show).
   useEffect(() => {
     if (!editor) return;
-    getDraftSuggestions(draft.id)
-      .then(setSuggestions)
+    Promise.all([getDraftSuggestions(draft.id), getLastRestoreAt(draft.id).catch(() => null)])
+      .then(([read, restoredAt]) => {
+        setSuggestions(read);
+        const ranAt = read[0]?.createdAt;
+        if (restoredAt && ranAt && Date.parse(ranAt) < Date.parse(restoredAt)) setBarClosed(true);
+      })
       .catch((err) => console.error('Failed to read the agent suggestions:', err));
   }, [editor, draft.id]);
 
@@ -2285,8 +2292,9 @@ export function DraftEditor({
    * batch of suggestions for review.
    */
   const fixRules = async (only?: string[]) => {
-    // One agent run at a time, and never before the locked passages are read.
-    if (!editor || fixing || starting || rewriting || !citedRead) return;
+    // One agent run at a time, never before the locked passages are read,
+    // nor while a restore replaces the page it would read.
+    if (!editor || fixing || starting || rewriting || !citedRead || restoringNow.current) return;
     if (openSuggestions > 0) {
       toast(t('suggestions.decideFirst', { count: openSuggestions }));
       return;
@@ -2487,7 +2495,7 @@ export function DraftEditor({
    * workspace's AI usage).
    */
   const handOff = async (origin: 'person' | 'auto' = 'person') => {
-    if (!editor || fixing || starting || rewriting || !citedRead) return;
+    if (!editor || fixing || starting || rewriting || !citedRead || restoringNow.current) return;
     if (openSuggestions > 0) {
       toast(t('suggestions.decideFirst', { count: openSuggestions }));
       return;
@@ -2812,7 +2820,7 @@ export function DraftEditor({
    * here, and the page waits for it.
    */
   const startAgent = async () => {
-    if (!editor) return;
+    if (!editor || restoringNow.current) return;
     setStarting(true);
     try {
       await autosave.settle();
@@ -2883,7 +2891,7 @@ export function DraftEditor({
    */
   const rewritePage = async ({ citedToo = false }: { citedToo?: boolean } = {}) => {
     // Never before the locked passages are read: the rewrite would be told none are.
-    if (!editor || agentBusy || !citedRead) return;
+    if (!editor || agentBusy || !citedRead || restoringNow.current) return;
     setRewriting(true);
     try {
       await autosave.settle();
@@ -3275,7 +3283,6 @@ export function DraftEditor({
       setTitle(restored.title);
       setPageHtml(html);
       detectType(restored.title, html);
-      toast.success(t('history.restored', { version: label }));
       void loadCited();
       // The agent's open suggestions were for the page before it: they go,
       // so they hold no later run (open_suggestions). Left open when that
@@ -3295,6 +3302,8 @@ export function DraftEditor({
           now.map((s) => (stale.includes(s.id) ? { ...s, status: 'rejected' as const } : s)),
         );
       }
+      // It says what went: they counted toward AI usage, and many may still apply.
+      toast.success(t('history.restored', { version: label, count: setAside ? stale.length : 0 }));
       // Its card goes as if closed, with its Undo all and last run: they were
       // for the page before (editor test 2026-10-25). A new batch opens it.
       setBarClosed(true);
@@ -3744,7 +3753,7 @@ export function DraftEditor({
               sourceCount={batchSources(suggestions).length}
               onSeeSources={() => openPanelTab('sources')}
               // Not while the HTML view holds the page: it would write over it.
-              busy={deciding || htmlSource !== null}
+              busy={deciding || restoring || htmlSource !== null}
               working={agentWorking}
               run={agentRun}
               lastRunFailed={lastRunFailed}
