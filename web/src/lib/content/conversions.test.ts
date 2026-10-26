@@ -90,5 +90,12 @@ describe('journeyPages', () => {
     expect(journeyPages(pages, '/e')).toEqual(['/a', null, '/d', '/e', '/f']);
     expect(journeyPages(pages, '/other')).toEqual(['/a', null, '/d', '/e', '/f']);
     expect(journeyPages(['/a', '/pricing'], '/pricing')).toEqual(['/a', '/pricing']);
+    // Right after the first page: no gap between them.
+    expect(journeyPages(['/a', '/pricing', '/b', '/c', '/d', '/e', '/f'], '/pricing')).toEqual([
+      '/a',
+      '/pricing',
+      null,
+      '/f',
+    ]);
   });
 });
