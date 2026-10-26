@@ -15,40 +15,75 @@
 -- The same output for every window and filter, with less read:
 --   1. The window before is read only for what the tab shows of it: each
 --      entity's mentions and co-mentions (mentions_entities_daily, small)
---      and the previous answers of the brand's 15 terms shown. 00237 counted
---      every shown entity's every term over both windows, half of the read,
---      for those 15 numbers.
+--      and the previous answers of the brand's 15 terms shown. 00237 summed
+--      every shown entity's every term over both windows for those 15
+--      numbers.
+--      * The rollups (whole days, no topic or search) now read the shown
+--        entities' terms for the window and only the brand's for the window
+--        before: about 6 entity-windows of rows instead of 10.
+--      * A topic or a search (and a window under two days) still reads both
+--        windows' answers, which the mentions and co-mentions need, but
+--        unnests only the brand's from the window before.
+--      A platform or a country is checked inside the key (after the day), so
+--      a filtered view reads as many index entries as the default one.
 --   2. mentions_terms_daily's key carries the count (include answers), so
---      the terms' sums can come from the index alone. It replaces 00231's
+--      the terms' sums come from the index alone. It replaces 00231's
 --      mentions_terms_daily_key: the same key, still unique, nulls not
 --      distinct.
---   3. Autovacuum runs on both rollups at 1–2% of their rows, as 00224 does
---      for the answers: each refresh deletes and rewrites a range of days,
+--   3. Autovacuum runs on both rollups about daily, as 00236 does for the
+--      Insights rollups: each refresh deletes and rewrites a range of days,
 --      and an index-only scan still goes to the table for a page that isn't
---      all-visible yet.
+--      all-visible yet. mentions_entities_daily has no covering index; it
+--      gets the dead rows cleared and its statistics kept current.
 --
 -- On a large mentions_terms_daily, build the index by hand first, which
--- doesn't hold back the refreshes; this migration then finds it in place:
+-- doesn't hold back the refreshes, with no statement timeout; this migration
+-- then finds it in place:
+--   set statement_timeout = 0;
 --   create unique index concurrently if not exists mentions_terms_daily_key_cover
 --     on public.mentions_terms_daily (brand_id, entity, day, platform, region, term)
 --     include (answers) nulls not distinct;
+--   -- indisvalid must be true before the old key goes:
+--   select indisvalid from pg_index
+--     where indexrelid = 'public.mentions_terms_daily_key_cover'::regclass;
 --   drop index concurrently if exists public.mentions_terms_daily_key;
+-- A build that stopped part way leaves an invalid index under that name;
+-- drop it and build again. This migration refuses to drop the old key while
+-- the new one is invalid.
 
 create unique index if not exists mentions_terms_daily_key_cover
   on public.mentions_terms_daily (brand_id, entity, day, platform, region, term)
   include (answers)
   nulls not distinct;
 
+do $$
+begin
+  if exists (
+    select 1 from pg_index
+    where indexrelid = 'public.mentions_terms_daily_key_cover'::regclass
+      and not indisvalid
+  ) then
+    raise exception 'mentions_terms_daily_key_cover is invalid (a concurrent build stopped part way): drop it and build it again';
+  end if;
+end;
+$$;
+
+-- The Perception reads and the refreshes don't queue behind the drop for
+-- long: it gives up after 3 s instead (run it again).
+set lock_timeout = '3s';
+
 drop index if exists public.mentions_terms_daily_key;
 
+reset lock_timeout;
+
 alter table public.mentions_terms_daily set (
-  autovacuum_vacuum_scale_factor = 0.02,
+  autovacuum_vacuum_scale_factor = 0.01,
   autovacuum_vacuum_insert_scale_factor = 0.01,
   autovacuum_analyze_scale_factor = 0.02
 );
 
 alter table public.mentions_entities_daily set (
-  autovacuum_vacuum_scale_factor = 0.02,
+  autovacuum_vacuum_scale_factor = 0.01,
   autovacuum_vacuum_insert_scale_factor = 0.01,
   autovacuum_analyze_scale_factor = 0.02
 );
