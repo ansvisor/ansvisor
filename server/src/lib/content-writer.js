@@ -4,6 +4,10 @@ import { z } from 'zod';
 import supabaseAdmin from '../config/supabase.js';
 import { resolveModel } from './ai-provider.js';
 import {
+  ATTRIBUTION_RULE,
+  attributableSources,
+  bannedWordsOf,
+  placeholderAttributionsInHtml,
   FANOUT_RULE,
   HEADING_RULE,
   LINK_RULE,
@@ -19,6 +23,7 @@ import {
 } from './content-agent.js';
 import { contentBriefModelId, rebuildSources } from './content-brief.js';
 import { inputSources, readDraftInputs } from './content-inputs.js';
+import { draftLanguage } from './content-language.js';
 import { linkAllowList, linkTargetsPrompt, readLinkTargets } from './content-links.js';
 import { siteTypeLine, pageTypeFormat } from './content-page-types.js';
 import { authorWords, guardPeople, guardPeopleInHtml, knownPeople } from './content-people.js';
@@ -116,6 +121,12 @@ export const writeDraftInput = z.object({
   textRules: z.array(z.string().trim().min(1).max(300)).max(50).default([]),
   /** The passages AI answers quote today, by passageKey (an existing page's). */
   locked: z.array(z.string().max(5000)).max(500).default([]),
+  /**
+   * How many rules the editor counts (its "met of total": those it checks on
+   * the page), for the run's "Reading N rules" step; the rules sent also
+   * hold those only AI can read (tone, language).
+   */
+  counted: z.number().int().min(0).max(60).optional(),
 });
 
 export const pageSchema = z.object({
@@ -164,6 +175,7 @@ ${FANOUT_RULE}
 - Put the keys of the rules a change meets in "rules" (none when it meets none).
 - Use only facts from the page, the brand and your data. Never invent numbers, prices, dates, names, sources or quotes; write a placeholder in square brackets instead, e.g. [figure, source, year].
 ${SOURCES_RULE}
+${ATTRIBUTION_RULE}
 - Keep the page's voice. The most useful changes first, at most ${MAX_AGENT_SUGGESTIONS}.
 - "reason" says in a few words what the change does, e.g. "answer the search 'x' (fan-out)".
 - Write in the language asked for.`;
@@ -363,7 +375,7 @@ export async function startDraftWriting({ draftId, brandId, input, rewrite = fal
   const { data: draft, error: draftError } = await supabaseAdmin
     .from('content_drafts')
     .select(
-      'id, brand_id, title, page_type, method, source_url, body_html, status, agent_state, agent_state_at, opportunity_id, brief, action_id',
+      'id, brand_id, title, page_type, rules, method, source_url, body_html, status, agent_state, agent_state_at, opportunity_id, brief, action_id',
     )
     .eq('id', draftId)
     .maybeSingle();
@@ -530,6 +542,7 @@ async function letGo(draft) {
  * leaves no page, fails the run. The draft's status doesn't change.
  */
 async function rewritePage({
+  attributable,
   draft,
   brand,
   model,
@@ -582,7 +595,8 @@ async function rewritePage({
   // blockquotes too, before what it kept goes back, so the page's own
   // passages are never touched.
   const cleaned = cleanPageHtml(
-    guardPeopleInHtml(answer.html, people).html,
+    // A claim given to a source it wasn't given: a placeholder, not the page dropped.
+    placeholderAttributionsInHtml(guardPeopleInHtml(answer.html, people).html, attributable),
     rewriteLinks(draft.body_html, linkAllowList(targets)),
     { h1Kept: page.h1Token !== null, originalH1: page.h1 },
   );
@@ -790,7 +804,8 @@ function startWritingRun(draft, input, rewrite) {
     claimedAt: draft.agent_state === 'writing' ? (draft.agent_state_at ?? null) : null,
     kind: rewrite ? 'rewrite' : draft.method === 'create' ? 'write' : 'fix',
     counts: {
-      rules: input.rules.length,
+      // As the editor counts them, so the step and its rules chip agree (editor test 2026-10-25).
+      rules: input.counted ?? input.rules.length,
       sources: promptIds.length + fanouts.length + pages.length + queries.length,
     },
   });
@@ -837,6 +852,7 @@ async function writeWithRun({ draft, brand, model, input, budget, rewrite, run }
   );
   const knownInPage = new Set([...known, ...knownNumbers(...numbered.map(sourceWords))]);
   // The people and quotes it may name: the same words, its data's and the authors' (CE-044).
+  const authors = await authorWords(supabaseAdmin, brand.organization_id);
   const people = knownPeople(
     htmlText(draft.body_html),
     draft.title,
@@ -847,11 +863,20 @@ async function writeWithRun({ draft, brand, model, input, budget, rewrite, run }
     ...input.rules.flatMap((r) => [r.name, r.detail]),
     ...input.textRules,
     ...numbered.map(sourceWords),
-    ...(await authorWords(supabaseAdmin, brand.organization_id)),
+    ...authors,
+  );
+  // The sources a claim may be given to: the ones the page gives claims to,
+  // its Your input and authors (editor test 2026-10-25).
+  const attributable = attributableSources(
+    draft.body_html,
+    numbered,
+    authors,
+    await draftLanguage(draft, brand.organization_id, brand.language),
   );
 
   if (rewrite) {
     return await rewritePage({
+      attributable,
       draft,
       brand,
       model,
@@ -946,7 +971,7 @@ async function writeWithRun({ draft, brand, model, input, budget, rewrite, run }
     lockedKeys,
     ruleKeys,
     linkAllowList(targets),
-    { numbered, known, people },
+    { numbered, known, people, attributable, banned: bannedWordsOf(input.rules) },
   );
   // Stopped meanwhile: nothing it wrote is kept.
   await stopIfStopped(run);
