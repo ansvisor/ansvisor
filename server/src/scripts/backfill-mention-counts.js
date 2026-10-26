@@ -15,15 +15,24 @@
  *     `<Entity … value="X" …/>` tags in the text. The tags' attributes counted
  *     as mentions and shifted positions. Every brand of an active or trialing
  *     organization, and only its answers that still hold a tag: the text is
- *     saved without the tags, as new answers are, and recounted.
- * --brand narrows to one brand regardless.
+ *     saved without the tags, as new answers are, and recounted. The text
+ *     can't be put back from here: keep a copy first, e.g.
+ *       create table prompt_results_entity_markup_backup as
+ *         select id, response, sentiment, mention_count, visibility_score,
+ *                mention_position, mentioned_entity_count, competitor_mentions
+ *         from prompt_results where response like '%<Entity%';
+ * --brand narrows to one brand regardless. Rows are counted by today's parser
+ * (mention-recount.js): the ones it rewrites pick up its other changes too.
  *
- * Idempotent: rows whose recomputed values equal the stored ones are skipped.
+ * Idempotent: rows whose recomputed values equal the stored ones are skipped,
+ * and a cleaned answer leaves the filter, so a stopped run is run again.
  * Afterwards, refresh each changed brand's rollups; the commands are printed
  * at the end.
  */
 import 'dotenv/config';
 import supabaseAdmin from '../config/supabase.js';
+import { IN_FILTER_CHUNK, selectInChunks } from '../lib/chunked-in.js';
+import { addDays, dayChunks, resultDayBound } from '../lib/citations-rollups.js';
 import { recountRow } from '../lib/mention-recount.js';
 
 const BATCH_SIZE = 250;
@@ -114,48 +123,40 @@ async function recountRows(rows, brandInfo, competitors) {
   return [updated, skipped];
 }
 
-const WEEK_MS = 7 * 86_400_000;
+/** Tagged answers read per page: one UTC day of a brand's holds fewer. */
+const ID_PAGE = 1000;
 
 /**
- * The brand's answers that still hold a ChatGPT entity tag, by id, a week of
- * answers at a time (the brand and date index; each answer's text is read
+ * The brand's answers that still hold a ChatGPT entity tag, by id, a UTC day
+ * of answers at a time (the brand and date index; each answer's text read
  * once). Listed before any is cleaned: a cleaned answer leaves the filter,
  * which would shift offset pages taken during the writes.
  */
 async function taggedRowIds(brandId) {
-  const { data: first, error: firstErr } = await withRetry(
-    () =>
-      supabaseAdmin
-        .from('prompt_results')
-        .select('created_at')
-        .eq('brand_id', brandId)
-        .order('created_at', { ascending: true })
-        .limit(1),
-    'first answer',
+  const [first, last] = await withRetry(
+    () => Promise.all([resultDayBound(brandId, true), resultDayBound(brandId, false)]),
+    'answer days',
   );
-  if (firstErr) throw new Error(firstErr.message);
-  if (!first?.length) return [];
-
+  if (!first || !last) return [];
   const ids = [];
-  const end = Date.now() + 86_400_000;
-  for (let from = Date.parse(first[0].created_at); from < end; from += WEEK_MS) {
-    for (let offset = 0; ; offset += BATCH_SIZE) {
+  for (const [day] of dayChunks(first, last, 1)) {
+    for (let offset = 0; ; offset += ID_PAGE) {
       const { data, error } = await withRetry(
         () =>
           supabaseAdmin
             .from('prompt_results')
             .select('id')
             .eq('brand_id', brandId)
-            .gte('created_at', new Date(from).toISOString())
-            .lt('created_at', new Date(from + WEEK_MS).toISOString())
+            .gte('created_at', `${day}T00:00:00Z`)
+            .lt('created_at', `${addDays(day, 1)}T00:00:00Z`)
             .like('response', '%<Entity%')
             .order('id', { ascending: true })
-            .range(offset, offset + BATCH_SIZE - 1),
+            .range(offset, offset + ID_PAGE - 1),
         'tagged ids',
       );
       if (error) throw new Error(error.message);
       ids.push(...(data ?? []).map((r) => r.id));
-      if (!data || data.length < BATCH_SIZE) break;
+      if (!data || data.length < ID_PAGE) break;
     }
   }
   return ids;
@@ -167,12 +168,14 @@ async function backfillTagged(brand) {
   let updated = 0;
   let skipped = 0;
   for (let i = 0; i < ids.length; i += BATCH_SIZE) {
+    // A URL of 100 ids at a time (chunked-in.js).
     const { data: rows, error } = await withRetry(
       () =>
-        supabaseAdmin
-          .from('prompt_results')
-          .select(ROW_COLUMNS)
-          .in('id', ids.slice(i, i + BATCH_SIZE)),
+        selectInChunks(
+          ids.slice(i, i + BATCH_SIZE),
+          (chunk) => supabaseAdmin.from('prompt_results').select(ROW_COLUMNS).in('id', chunk),
+          IN_FILTER_CHUNK,
+        ),
       'page fetch',
     );
     if (error) throw new Error(error.message);
@@ -251,8 +254,9 @@ for (const brand of brands) {
 
 console.log(`Done. ${total} row(s) ${dryRun ? 'would be ' : ''}updated.`);
 if (changed.length && !dryRun) {
-  // Both read the counts: Insights' rollups, and Mentions' rollups with the
-  // answers' terms (an entity's terms are kept only where it's mentioned).
+  // Each reads the counts: Insights' rollups; Mentions' with the answers'
+  // terms (an entity's terms are kept only where it's mentioned), their
+  // rollups and Perception's snapshots; Citations' (we_mention, comp_present).
   console.log('Refresh the rollups for the changed brands:');
   for (const brand of changed) {
     console.log(
@@ -260,6 +264,9 @@ if (changed.length && !dryRun) {
     );
     console.log(
       `  MENTIONS_BACKFILL_BRAND=${brand.id} node src/scripts/backfill-mentions-daily.js  # ${brand.name}`,
+    );
+    console.log(
+      `  CITATIONS_BACKFILL_BRAND=${brand.id} node src/scripts/backfill-citations-daily.js  # ${brand.name}`,
     );
   }
 }

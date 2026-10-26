@@ -116,6 +116,31 @@ describe('recountRow', () => {
     ).toBeNull();
   });
 
+  it('reads an answer that no longer names the brand as neutral, as one is saved', () => {
+    // The brand only in the tag's disambig: its sentiment was read as if named.
+    const row = stored(
+      'Try <Entity category="software" value="Rival" disambig="Acme alternative"/> today.',
+      { sentiment: 'positive', mention_count: 1, visibility_score: 55, mention_position: 2 },
+    );
+    const next = recountRow(row, brandInfo, competitors, { cleanMarkup: true });
+    expect(next).toMatchObject({
+      response: 'Try Rival today.',
+      sentiment: 'neutral',
+      mention_count: 0,
+      mention_position: null,
+    });
+    // Positive no longer lifts the score of an answer that doesn't name it.
+    expect(next.visibility_score).toBe(
+      recountRow(stored('Try Rival today.'), brandInfo, competitors)?.visibility_score ?? 0,
+    );
+    expect(
+      recountRow(written(row, next), brandInfo, competitors, { cleanMarkup: true }),
+    ).toBeNull();
+    // Still named: its sentiment stays as it was read.
+    const named = stored('Acme leads.', { sentiment: 'positive' });
+    expect(recountRow(named, brandInfo, competitors)?.sentiment).toBeUndefined();
+  });
+
   it('keeps an entry whose competitor is gone as it was', () => {
     const gone = {
       competitor_id: 'c9',

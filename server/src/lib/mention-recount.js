@@ -11,7 +11,9 @@
  *
  * Sentiment is not re-analysed: an answer that now counts as mentioning the
  * brand keeps the 'neutral' it was stored with, because re-running the model
- * over thousands of answers is a separate decision.
+ * over thousands of answers is a separate decision. One that no longer
+ * mentions it is 'neutral', as an answer is saved (cloro-result-handler.js):
+ * a brand named only in an entity tag's disambig had its sentiment read.
  */
 import { stripEntityMarkup } from './entity-markup.js';
 import { parseResponse } from './response-parser.js';
@@ -19,12 +21,13 @@ import { parseResponse } from './response-parser.js';
 /** The row's new values, or null when nothing changes. */
 export function recountRow(row, brandInfo, competitors, { cleanMarkup = false } = {}) {
   const response = cleanMarkup ? stripEntityMarkup(row.response ?? '') : (row.response ?? '');
-  const metrics = parseResponse(
-    { text: response, citations: Array.isArray(row.citations) ? row.citations : [] },
-    brandInfo,
-    row.sentiment ?? 'neutral',
-    competitors,
-  );
+  const answer = { text: response, citations: Array.isArray(row.citations) ? row.citations : [] };
+  let sentiment = row.sentiment ?? 'neutral';
+  let metrics = parseResponse(answer, brandInfo, sentiment, competitors);
+  if (metrics.mentionCount === 0 && sentiment !== 'neutral') {
+    sentiment = 'neutral';
+    metrics = parseResponse(answer, brandInfo, sentiment, competitors);
+  }
   const fresh = new Map(metrics.competitorMentions.map((m) => [m.competitor_id, m]));
   const entries = Array.isArray(row.competitor_mentions) ? row.competitor_mentions : [];
   const competitorMentions = entries.map((entry) => {
@@ -45,10 +48,12 @@ export function recountRow(row, brandInfo, competitors, { cleanMarkup = false } 
     mentioned_entity_count: metrics.mentionedEntityCount,
     competitor_mentions: competitorMentions,
   };
-  // Only a text the tags came out of is written back.
+  // Only a text the tags came out of, and a sentiment that moved, are written back.
   if (cleanMarkup && response !== (row.response ?? '')) next.response = response;
+  if (sentiment !== (row.sentiment ?? 'neutral')) next.sentiment = sentiment;
   const unchanged =
     next.response === undefined &&
+    next.sentiment === undefined &&
     next.mention_count === row.mention_count &&
     next.visibility_score === row.visibility_score &&
     next.mention_position === row.mention_position &&
