@@ -74,9 +74,11 @@ vi.mock('./plan-guard.js', async (importOriginal) => ({
 vi.mock('./logger.js', () => ({ logger: { error: vi.fn(), info: vi.fn(), warn: vi.fn() } }));
 const readLinkTargets = vi.hoisted(() => vi.fn());
 const stopIfStopped = vi.fn();
+const fixUnderWay = vi.hoisted(() => vi.fn());
 vi.mock('./content-runs.js', async (importOriginal) => ({
   ...(await importOriginal()),
   stopIfStopped: (...args) => stopIfStopped(...args),
+  fixUnderWay: (...args) => fixUnderWay(...args),
 }));
 vi.mock('./content-links.js', async (importOriginal) => ({
   ...(await importOriginal()),
@@ -161,6 +163,7 @@ beforeEach(() => {
   });
   reserveAiBudget.mockReset().mockImplementation(realGuard.reserveAiBudget);
   hasOpenSuggestions.mockReset().mockResolvedValue(false);
+  fixUnderWay.mockReset().mockResolvedValue(false);
   stopIfStopped.mockReset().mockResolvedValue(undefined);
 });
 
@@ -364,6 +367,32 @@ describe('startDraftWriting', () => {
       startDraftWriting({ draftId: DRAFT, brandId: BRAND, input: input() }),
     ).resolves.toEqual({ started: true });
     expect(hasOpenSuggestions).not.toHaveBeenCalled();
+  });
+
+  it('waits while a Fix open rules runs on the draft, before charging, for a Start or a rewrite', async () => {
+    fixUnderWay.mockResolvedValue(true);
+    for (const [row, rewrite] of [
+      [draftRow(), false],
+      [draftRow({ method: 'optimize', source_url: 'https://acme.example/x' }), false],
+      [draftRow({ method: 'optimize', source_url: 'https://acme.example/x' }), true],
+    ]) {
+      rows.content_drafts = row;
+      await expect(
+        startDraftWriting({ draftId: DRAFT, brandId: BRAND, input: input(), rewrite }),
+      ).rejects.toMatchObject({ status: 409, code: 'running' });
+    }
+    expect(fixUnderWay).toHaveBeenCalledWith(DRAFT);
+    // Nothing held on the budget, no claim on the draft, no model call.
+    expect(reserveAiBudget).not.toHaveBeenCalled();
+    expect(writes).toEqual([]);
+    expect(generateObject).not.toHaveBeenCalled();
+
+    // Once it has finished, the Start goes.
+    fixUnderWay.mockResolvedValue(false);
+    rows.content_drafts = draftRow();
+    await expect(
+      startDraftWriting({ draftId: DRAFT, brandId: BRAND, input: input() }),
+    ).resolves.toEqual({ started: true });
   });
 
   it('writes one of the organization’s drafts at a time', async () => {

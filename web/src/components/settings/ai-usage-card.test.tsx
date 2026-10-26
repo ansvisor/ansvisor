@@ -62,17 +62,17 @@ describe('AiUsageCard', () => {
     await render();
     const text = container.textContent;
     expect(text).toContain("This period's AI usage");
-    expect(text).toContain('42% used');
+    expect(text).toContain('42.5% used');
     expect(text).toContain('Resets on November 20, 2026');
     expect([...container.querySelectorAll('li')].map((li) => li.textContent)).toEqual([
-      'Improve suggestions12%',
+      'Improve suggestions12.5%',
       'Content Editor (briefs, Content Agent)30%',
-      'Action Center task writing<1%',
+      'Action Center task writing0.4%',
     ]);
     expect(text).toContain("Agent Chat runs on your own AI key, so it doesn't use this allowance.");
     const bar = container.querySelector('[role="progressbar"]')!;
     expect(bar.getAttribute('aria-valuenow')).toBe('42');
-    expect(bar.getAttribute('aria-valuetext')).toBe('42% used');
+    expect(bar.getAttribute('aria-valuetext')).toBe('42.5% used');
     expect((bar.firstElementChild as HTMLElement).style.width).toBe('42.5%');
     expect(text).not.toContain('used up');
   });
@@ -148,12 +148,20 @@ describe('AiUsageCard', () => {
 });
 
 describe('the meter’s reading', () => {
-  it('reads a sliver as under 1%, else whole percents, rounded down', () => {
+  it('reads the share as it is now, to a tenth, rounded down', () => {
     expect(percentLabel(0)).toBe('0%');
-    expect(percentLabel(0.4)).toBe('<1%');
-    expect(percentLabel(12.5)).toBe('12%');
+    // A sliver still reads as used.
+    expect(percentLabel(0.04)).toBe('<0.1%');
+    expect(percentLabel(0.4)).toBe('0.4%');
+    // Each run shows: 1.1, 1.2, … rather than 1% until it's 2%.
+    expect(percentLabel(1.1)).toBe('1.1%');
+    expect(percentLabel(2.3)).toBe('2.3%');
+    expect(percentLabel(4.9)).toBe('4.9%');
+    expect(percentLabel(28)).toBe('28%');
+    expect(percentLabel(28.3)).toBe('28.3%');
     // Never all of it before it is.
-    expect(percentLabel(99.9)).toBe('99%');
+    expect(percentLabel(99.9)).toBe('99.9%');
+    expect(percentLabel(99.96)).toBe('99.9%');
     expect(percentLabel(100)).toBe('100%');
   });
 

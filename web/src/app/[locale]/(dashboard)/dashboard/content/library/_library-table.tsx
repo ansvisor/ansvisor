@@ -237,7 +237,8 @@ function RowMenu({ draft, actions }: { draft: ContentDraftListItem; actions: Lib
           {DRAFT_STATUSES.map((status) => (
             <DropdownMenuItem
               key={status}
-              disabled={status === draft.status}
+              // An archived page is restored before it's marked live (CE-013).
+              disabled={status === draft.status || (status === 'published' && !!draft.archivedAt)}
               onClick={() => actions.onStatus(draft, status)}
             >
               <Check

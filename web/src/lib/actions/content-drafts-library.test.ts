@@ -17,9 +17,11 @@ let writeResult: { data: unknown; error: { code?: string; message: string } | nu
 vi.mock('@/lib/action-center/assignees', () => ({ readAssignees: vi.fn(async () => new Map()) }));
 vi.mock('@/lib/supabase/admin', () => ({ supabaseAdmin: {} }));
 const reopenDraftTasks = vi.hoisted(() => vi.fn());
+const unpublishDraftWork = vi.hoisted(() => vi.fn());
 vi.mock('@/lib/content/action-drafts', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/content/action-drafts')>()),
   reopenDraftTasks,
+  unpublishDraftWork,
 }));
 vi.mock('@/lib/supabase/server', () => ({
   createClient: vi.fn(async () => ({
@@ -152,6 +154,34 @@ describe('the Library row menu (00233)', () => {
     reopenDraftTasks.mockClear();
     await setContentDraftStatus(DRAFT, 'published');
     expect(reopenDraftTasks).not.toHaveBeenCalled();
+    // Only a published page leaves what its action measures.
+    expect(unpublishDraftWork).not.toHaveBeenCalled();
+  });
+
+  it('takes a published page back in its action too: its Publish task and its live address', async () => {
+    reopenDraftTasks.mockReset().mockResolvedValue(1);
+    unpublishDraftWork.mockReset().mockResolvedValue(1);
+    writeResult = {
+      data: { id: DRAFT, status: 'published', brand_id: 'b1', method: 'create', action_id: 'a1' },
+      error: null,
+    };
+    await setContentDraftStatus(DRAFT, 'in_review');
+    expect(reopenDraftTasks).toHaveBeenCalledWith(
+      expect.anything(),
+      { id: DRAFT, brandId: 'b1', actionId: 'a1', method: 'create' },
+      'u1',
+    );
+    expect(unpublishDraftWork).toHaveBeenCalledWith(
+      expect.anything(),
+      { id: DRAFT, brandId: 'b1', actionId: 'a1' },
+      'u1',
+    );
+    // The status has changed either way.
+    unpublishDraftWork.mockRejectedValueOnce(new Error('boom'));
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    await expect(setContentDraftStatus(DRAFT, 'draft')).resolves.toBeUndefined();
+    expect(error).toHaveBeenCalled();
+    error.mockRestore();
   });
 
   it('refuses Ready (it goes through Mark ready) and a malformed id, writing nothing', async () => {

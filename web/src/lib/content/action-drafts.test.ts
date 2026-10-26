@@ -6,6 +6,7 @@ import {
   draftMethodForTask,
   findActionDraft,
   reopenDraftTasks,
+  unpublishDraftWork,
   type ActionDraft,
 } from './action-drafts';
 
@@ -20,6 +21,8 @@ interface Op {
   op: 'select' | 'update' | 'insert';
   value?: unknown;
   filters: [string, string, unknown][];
+  /** An update that reads back the rows it wrote. */
+  returning?: boolean;
 }
 let ops: Op[];
 let rows: Record<string, unknown[]>;
@@ -29,7 +32,7 @@ const db = {
     const op: Op = { table, op: 'select', filters: [] };
     ops.push(op);
     const chain: Record<string, unknown> = {
-      select: () => chain,
+      select: () => (op.op === 'update' && (op.returning = true), chain),
       eq: (col: string, v: unknown) => (op.filters.push(['eq', col, v]), chain),
       in: (col: string, v: unknown) => (op.filters.push(['in', col, v]), chain),
       is: (col: string, v: unknown) => (op.filters.push(['is', col, v]), chain),
@@ -39,7 +42,10 @@ const db = {
       insert: (value: unknown) => ((op.op = 'insert'), (op.value = value), chain),
       maybeSingle: async () => ({ data: rows[table]?.[0] ?? null, error: null }),
       then: (resolve: (r: unknown) => void) =>
-        resolve({ data: op.op === 'select' ? (rows[table] ?? []) : null, error: null }),
+        resolve({
+          data: op.op === 'select' ? (rows[table] ?? []) : op.returning ? [{ id: 'row' }] : null,
+          error: null,
+        }),
     };
     return chain;
   },
@@ -247,5 +253,88 @@ describe('reopenDraftTasks', () => {
     rows.action_tasks = [{ id: 't-optimize', status: 'in_progress' }];
     await expect(reopenDraftTasks(db, draft, 'u1')).resolves.toBe(0);
     expect(ops.some((op) => op.table === 'action_events')).toBe(false);
+  });
+});
+
+describe('unpublishDraftWork', () => {
+  const published = { id: 'd1', brandId: 'b1', actionId: 'act-1' };
+  const live = (over: Record<string, unknown> = {}) => ({
+    status: 'in_progress',
+    updated_at: '2026-10-25T10:00:00Z',
+    payload: {
+      pages: ['https://acme.example/a'],
+      publishedPages: { d1: 'https://acme.example/live', d2: 'https://acme.example/other' },
+    },
+    ...over,
+  });
+  const taskUpdates = () => ops.filter((op) => op.table === 'action_tasks' && op.op === 'update');
+  const payloadWrites = () =>
+    ops.filter(
+      (op) =>
+        op.table === 'actions' &&
+        op.op === 'update' &&
+        (op.value as { payload?: unknown }).payload !== undefined,
+    );
+
+  it('reopens the Publish task a page’s publish completed, and takes the page out of what the action measures', async () => {
+    rows.actions = [live()];
+    rows.action_tasks = [{ id: 't-publish', status: 'completed' }];
+    // Completed by another page's publish, the last of the action's work to go live.
+    rows.action_events = [
+      { data: { taskId: 't-publish', to: 'completed', draftId: 'd2', publishedUrl: 'x' } },
+    ];
+    await expect(unpublishDraftWork(db, published, 'u1')).resolves.toBe(1);
+    expect(ops[0].filters).toEqual([
+      ['eq', 'id', 'act-1'],
+      ['eq', 'brand_id', 'b1'],
+      ['is', 'deleted_at', null],
+    ]);
+    expect(ops[1].filters).toContainEqual(['eq', 'task_key', 'publish_content']);
+    expect(taskUpdates()).toEqual([
+      expect.objectContaining({
+        value: expect.objectContaining({ status: 'in_progress', skip_reason: null }),
+        filters: [
+          ['eq', 'action_id', 'act-1'],
+          ['eq', 'id', 't-publish'],
+        ],
+      }),
+    ]);
+    // The other pages stay measured; written only if the action is as read.
+    expect(payloadWrites()).toEqual([
+      expect.objectContaining({
+        value: expect.objectContaining({
+          payload: {
+            pages: ['https://acme.example/a'],
+            publishedPages: { d2: 'https://acme.example/other' },
+          },
+        }),
+        filters: [
+          ['eq', 'id', 'act-1'],
+          ['eq', 'updated_at', '2026-10-25T10:00:00Z'],
+        ],
+      }),
+    ]);
+  });
+
+  it('leaves a Publish task a person completed last, and writes nothing for a page not measured', async () => {
+    rows.actions = [live({ payload: { pages: [] } })];
+    rows.action_tasks = [{ id: 't-publish', status: 'completed' }];
+    rows.action_events = [{ data: { taskId: 't-publish', to: 'completed' } }];
+    await expect(unpublishDraftWork(db, published, 'u1')).resolves.toBe(0);
+    expect(taskUpdates()).toEqual([]);
+    expect(payloadWrites()).toEqual([]);
+  });
+
+  it('keeps a closed action’s tasks but stops measuring the page, and leaves a deleted action', async () => {
+    rows.actions = [live({ status: 'completed' })];
+    rows.action_tasks = [{ id: 't-publish', status: 'completed' }];
+    await expect(unpublishDraftWork(db, published, 'u1')).resolves.toBe(0);
+    expect(ops.some((op) => op.table === 'action_tasks')).toBe(false);
+    expect(payloadWrites()).toHaveLength(1);
+
+    ops = [];
+    rows.actions = [];
+    await expect(unpublishDraftWork(db, published, 'u1')).resolves.toBe(0);
+    expect(ops).toHaveLength(1);
   });
 });
