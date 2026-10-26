@@ -180,10 +180,13 @@ Every highlight and warning also has a `key` that identifies its subject.
     "title": "Update the shipping guide",
     "status": "todo",
     "type": "content",
+    "url": "/guides/shipping",
     "where": "acme.example/guides/shipping",
     "why": "The page is missing useful details.",
+    "change": { "before": null, "after": "A table of shipping costs by country." },
     "how": ["Add a comparison table."],
     "done_when": "The updated page is live.",
+    "check": "auto",
     "effort": "~2h",
     "role": "Content writer"
   },
@@ -204,6 +207,8 @@ Every highlight and warning also has a `key` that identifies its subject.
   }
 }
 ```
+
+`url` is the exact page, `change` the text to replace (`before`, null when the change adds text) and the new text (`after`), and `check` how the task is checked: `auto` (the page is fetched again), `rerun` (the prompts run again) or `manual` (a person confirms). Each is null when the task has none.
 
 ### `content_draft.sent`
 

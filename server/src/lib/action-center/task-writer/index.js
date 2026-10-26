@@ -27,7 +27,7 @@ import { getTask } from '../tasks/registry.js';
 import { IMPROVE_ACTION_KIND } from '../from-prompt-improve.js';
 import { OPPORTUNITY_ACTION_KIND } from '../from-opportunity.js';
 import { buildEvidence, evidenceForPrompt, hasTargets } from './evidence.js';
-import { MAX_TASKS, sameTask, taskProblems } from './quality.js';
+import { MAX_TASKS, pageAddress, sameTask, taskProblems } from './quality.js';
 import { buildRetryPrompt, buildTaskWriterPrompt, taskWriterSchema } from './prompt.js';
 
 /** Whether this deployment writes tasks at all. */
@@ -369,10 +369,13 @@ export async function replaceTasks(actionId, tasks, { now = new Date() } = {}) {
         mode: 'human',
         permission: 'read',
         details: {
+          url: pageAddress(task.url),
           where: task.where.trim(),
           why: task.why.trim(),
+          change: { before: task.change.before.trim() || null, after: task.change.after.trim() },
           how: task.how.map((step) => step.trim()).filter(Boolean),
           doneWhen: task.doneWhen.trim(),
+          check: task.check.trim().toLowerCase(),
           type: task.type,
           effort: task.effort.trim(),
           role: task.role.trim(),

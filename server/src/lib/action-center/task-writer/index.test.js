@@ -104,10 +104,13 @@ const { isTouched, keepsTask, sweepActionTasks, writeTasksForAction } = await im
 
 const task = (over = {}) => ({
   title: 'Add a 2026 shipping table to /blog/shipping',
+  url: 'acme.example/blog/shipping',
   where: 'acme.example/blog/shipping · lost on ChatGPT',
   why: 'Cited #2 until Oct 12.',
+  change: { before: '', after: 'A 2026 table of countries and costs.' },
   how: ['Add a table.', 'Put "2026" in the title.'],
   doneWhen: 'Cited again within 14 days.',
+  check: 'rerun',
   type: 'content',
   effort: '~2h',
   role: 'Content writer',
@@ -228,6 +231,8 @@ describe('writeTasksForAction', () => {
           task({ title: 'Refresh content for 7 prompts', refs: ['page:1'] }),
           task({
             title: 'Pitch acme to seriouseats.com',
+            url: 'https://seriouseats.com/best',
+            check: 'Manual',
             where: 'seriouseats.com/best',
             refs: ['domain:1'],
             type: 'outreach',
@@ -260,6 +265,14 @@ describe('writeTasksForAction', () => {
       [5, 'Link /blog/shipping from the pricing page'],
     ]);
     expect(tasks[2].details).toMatchObject({ source: 'ai', type: 'content', refs: ['page:1'] });
+    // The exact page, the change (nothing it replaces: null) and how it's checked (AC-010).
+    // A host and path as the evidence shows it is stored with its https://.
+    expect(tasks[2].details).toMatchObject({
+      url: 'https://acme.example/blog/shipping',
+      change: { before: null, after: 'A 2026 table of countries and costs.' },
+      check: 'rerun',
+    });
+    expect(tasks[3].details).toMatchObject({ check: 'manual' });
 
     // Held on the budget once, then both calls charged to it.
     expect(reserveAiBudget).toHaveBeenCalledWith('o1', {
