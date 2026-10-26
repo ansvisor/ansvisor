@@ -129,13 +129,16 @@ export const fixRulesInput = z.object({
    * The page past its Length when Length isn't among the rules (held for the
    * person, or not picked: editor test 2026-10-26): its characters and the
    * most it may have, so what the agent adds for the other rules stays short.
+   * A hint, never a reason to refuse the run: a value out of range (a Length
+   * of 0 reads every page as long, at most 0) is dropped.
    */
   overLength: z
     .object({
       count: z.number().int().min(0).max(10_000_000),
       max: z.number().int().min(1).max(10_000_000),
     })
-    .optional(),
+    .optional()
+    .catch(undefined),
 });
 
 export const suggestionsSchema = z.object({
@@ -987,7 +990,8 @@ export function buildFixPrompt({
   if (more) lines.push('(The page goes on; suggest changes only to the passages above.)');
   const rules = input.rules.map((r) => `- ${r.key}: ${r.name}${r.detail ? ` — ${r.detail}` : ''}`);
   const own = input.textRules.map((text) => `- ${text}`);
-  const over = overLengthLine(input.overLength);
+  // Said only when the Length isn't among the rules: the line says it isn't.
+  const over = input.rules.some((r) => r.key === 'length') ? '' : overLengthLine(input.overLength);
   return `Brand: ${brand?.name || 'Unknown'}
 Industry: ${brand?.industry || 'Not specified'}
 ${siteTypeLine(brand)}Description: ${brand?.description || 'N/A'}

@@ -230,12 +230,27 @@ describe('the page as the agent reads it', () => {
     ).toMatchObject({
       overLength: { count: 17_683, max: 16_798 },
     });
-    expect(() =>
-      fixRulesInput.parse({ ...input(), overLength: { count: -1, max: 16_798 } }),
-    ).toThrow();
-    expect(() =>
-      fixRulesInput.parse({ ...input(), overLength: { count: 17_683, max: 0 } }),
-    ).toThrow();
+    // A value out of range is dropped, never a reason to refuse the run.
+    for (const overLength of [{ count: -1, max: 16_798 }, { count: 17_683, max: 0 }, 'long']) {
+      const parsed = fixRulesInput.parse({ ...input(), overLength });
+      expect(parsed.overLength).toBeUndefined();
+      expect(parsed.rules).toHaveLength(2);
+    }
+    // With the Length among the rules, the line isn't said: it says it isn't.
+    expect(
+      buildFixPrompt({
+        brand: { name: 'Acme Coffee', language: 'en' },
+        draft: rows.content_drafts,
+        passages: draftPassages(BODY),
+        lockedKeys: new Set(),
+        input: {
+          ...input({
+            rules: [{ key: 'length', name: 'Length', detail: 'aim 13,998 · 17,683' }],
+          }),
+          overLength: { count: 17_683, max: 16_798 },
+        },
+      }),
+    ).not.toContain('its Length allows');
   });
 
   it('sends a long page only up to its cap, and no passage too long to change', () => {

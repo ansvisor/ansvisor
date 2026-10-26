@@ -2034,6 +2034,8 @@ describe('the content editor', () => {
         const keys = fixDraftRules.mock.calls[0][2].rules.map((r: { key: string }) => r.key);
         expect(keys).toContain('aiTraces');
         expect(keys).not.toContain('sentence');
+        // Within its Length (none set here): no overLength.
+        expect(fixDraftRules.mock.calls[0][2]).not.toHaveProperty('overLength');
       } finally {
         window.innerWidth = width;
       }
@@ -4351,6 +4353,57 @@ describe('the side panel', () => {
       await act(async () => void (await vi.advanceTimersByTimeAsync(0)));
     });
 
+    it('tells a hand-off how far past its Length the page is, and only then (#1552 review)', async () => {
+      process.env.NEXT_PUBLIC_CONTENT_QUALITY_PHASE = '2';
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+      getContentAuthors.mockResolvedValue({
+        authors: [],
+        brands: [{ id: 'b1', name: 'Ledgerly' }],
+        me: { id: 'u1', role: 'admin' },
+      });
+      const long = `Teams ${Array.from({ length: 39 }, () => 'plan').join(' ')}.`;
+      const handOff = async (length: string) => {
+        getContentDraft.mockResolvedValue({
+          ...claimed,
+          bodyHtml: `${claimed.bodyHtml}<p>${long}</p>`,
+          rules: {
+            set: null,
+            source: null,
+            overrides: { length: { value: length } },
+            textRules: [],
+          },
+        });
+        window.innerWidth = 1440;
+        await renderPage();
+        await act(async () => void (await vi.advanceTimersByTimeAsync(3_000)));
+        const chip = [...container.querySelectorAll<HTMLButtonElement>('header button')].find((b) =>
+          b.textContent?.startsWith('Quality'),
+        )!;
+        await act(async () => chip.click());
+        const card = panel()!.querySelector('[aria-label="Hand it off to Content Agent"]')!;
+        await act(async () =>
+          [...card.querySelectorAll<HTMLButtonElement>('button')]
+            .find((b) => b.textContent === 'Hand off')!
+            .click(),
+        );
+        await act(async () => void (await vi.advanceTimersByTimeAsync(0)));
+        return handOffDraft.mock.calls.at(-1)![2];
+      };
+      const again = async (length: string) => {
+        await act(async () => root.unmount());
+        root = createRoot(container);
+        handOffDraft.mockClear();
+        return handOff(length);
+      };
+      // A Length of 100: the page is past its band's top, 120.
+      const first = await handOff('100');
+      expect(first).toMatchObject({ overLength: { count: expect.any(Number), max: 120 } });
+      // Its Length the page's own count: within its band, nothing said.
+      expect(await again(String(first.overLength.count))).not.toHaveProperty('overLength');
+      // A Length of 0 reads every page as long, at most 0: nothing said either.
+      expect(await again('0')).not.toHaveProperty('overLength');
+    });
+
     it('hands an imported page off on its own once Quality is read, once a draft, when its brand does (CE-051)', async () => {
       process.env.NEXT_PUBLIC_CONTENT_QUALITY_PHASE = '2';
       vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
@@ -6631,6 +6684,25 @@ describe('the side panel', () => {
       expect(
         container.querySelector('[role="region"][aria-label="Agent suggestions"]')!.textContent,
       ).toContain('would break Max sentence length');
+    });
+
+    it('tells a Fix run how far past its Length the page is when it doesn’t send the Length (#1552 review)', async () => {
+      getContentDraft.mockResolvedValue({
+        ...traced,
+        rules: { set: null, source: null, overrides: { length: { value: '20' } }, textRules: [] },
+      });
+      getDraftSuggestions.mockResolvedValue([]);
+      fixDraftRules.mockResolvedValue({ count: 0 });
+      await openRules();
+      await act(async () => panelButton('Run Agent').click());
+      await act(async () => {});
+      const sent = fixDraftRules.mock.calls[0][2];
+      // Sent as a rule, it says how far off the page is itself; held, the hint does.
+      if (sent.rules.some((r: { key: string }) => r.key === 'length')) {
+        expect(sent).not.toHaveProperty('overLength');
+      } else {
+        expect(sent.overLength).toEqual({ count: expect.any(Number), max: 24 });
+      }
     });
 
     it('says the month’s AI usage is used up before anything else, and runs nothing', async () => {

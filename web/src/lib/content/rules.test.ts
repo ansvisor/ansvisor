@@ -277,6 +277,11 @@ describe('length and structure', () => {
     expect(overLengthFor(over, [])).toEqual({ count: 1_500, max: 1_200 });
     expect(overLengthFor(statuses(1_150), forAgent)).toBeUndefined();
     expect(overLengthFor(statuses(200), forAgent)).toBeUndefined();
+    // A Length of 0 reads every page as long, at most 0: nothing said.
+    const zero = activeRules(ruleSet('blog_post'), { overrides: { length: { value: '0' } } }).map(
+      (r) => ({ rule: r, status: checkRule(r, page('<h1>T</h1><p>x</p>', 1_500), ctx) }),
+    );
+    expect(overLengthFor(zero, [])).toBeUndefined();
     // Length off.
     const off = activeRules(ruleSet('blog_post'), { overrides: { length: { on: false } } }).map(
       (r) => ({ rule: r, status: checkRule(r, page('<h1>T</h1><p>x</p>', 1_500), ctx) }),
