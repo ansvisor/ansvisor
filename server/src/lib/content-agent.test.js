@@ -76,6 +76,7 @@ const {
   draftPassages,
   addsAttribution,
   attributableSources,
+  attributedNames,
   dropsName,
   placeholderAttributions,
   dropsPlaceholder,
@@ -344,24 +345,115 @@ describe('keepSuggestions', () => {
     expect(addsAttribution('', "Gartner's research shows teams forecast.")).toBe(true);
   });
 
+  // A replace of the whole passage: its words before and after.
+  const drops = (before, words, rules, blocks) => dropsName(before, before, words, rules, blocks);
+
   it('reads a dropped name only in a list: any capitalised word may be a noun, an acronym or a month', () => {
     expect(
-      dropsName(
-        'Ansvisor tracks ChatGPT, Gemini and Claude.',
-        'Ansvisor tracks ChatGPT and Gemini.',
-      ),
+      drops('Ansvisor tracks ChatGPT, Gemini and Claude.', 'Ansvisor tracks ChatGPT and Gemini.'),
     ).toBe(true);
-    expect(dropsName('Teams use Ansvisor daily.', 'Teams use it daily.')).toBe(false);
-    expect(dropsName('Most AI search tools track it.', 'Most answer engines track it.')).toBe(
+    expect(drops('Teams use Ansvisor daily.', 'Teams use it daily.')).toBe(false);
+    expect(drops('Most AI search tools track it.', 'Most answer engines track it.')).toBe(false);
+    expect(drops('Funktionen für Marketing Teams im März.', 'Werkzeuge für Marketing-Teams.')).toBe(
       false,
     );
-    expect(
-      dropsName('Funktionen für Marketing Teams im März.', 'Werkzeuge für Marketing-Teams.'),
-    ).toBe(false);
     // Taken out for a banned word: it may.
     expect(
-      dropsName('Track ChatGPT, Gemini and Claude.', 'Track ChatGPT and Gemini.', ['bannedWords']),
+      drops('Track ChatGPT, Gemini and Claude.', 'Track ChatGPT and Gemini.', ['bannedWords']),
     ).toBe(false);
+  });
+
+  it('keeps a change that keeps every name, worded or cased another way', () => {
+    // An item read by its last word, in any case.
+    expect(
+      drops('Ask ChatGPT, Gemini or Claude for one.', 'When you ask ChatGPT, Gemini or Claude…'),
+    ).toBe(false);
+    // A possessive or a case ending moved.
+    expect(
+      drops(
+        'Compare ChatGPT, Gemini and Claude’s answers.',
+        'Compare the answers from ChatGPT, Gemini and Claude.',
+      ),
+    ).toBe(false);
+    expect(drops("ChatGPT, Gemini ve Claude'u izler.", "ChatGPT, Gemini ve Claude'da izler.")).toBe(
+      false,
+    );
+    // A list ending its sentence, and a change going on after its last name.
+    expect(
+      drops(
+        'It works with Shopify, WooCommerce and Magento.',
+        'It works with Shopify, WooCommerce and Magento in five minutes.',
+      ),
+    ).toBe(false);
+    // A list turned into bullets: the names are in the blocks added.
+    expect(
+      drops(
+        'Track ChatGPT, Gemini and Claude.',
+        'Track these engines:',
+        [],
+        'ChatGPT Gemini Claude',
+      ),
+    ).toBe(false);
+  });
+
+  it('reads a name dropped through a short replace, in the passage as changed', () => {
+    const passage = 'Ansvisor tracks ChatGPT, Gemini and Claude.';
+    expect(dropsName(passage, 'Gemini and Claude', 'Gemini')).toBe(true);
+    expect(dropsName(passage, 'Gemini and Claude', 'Gemini and Claude too')).toBe(false);
+    // Items the replace doesn't touch stay as they are.
+    expect(dropsName(passage, 'Ansvisor tracks', 'It tracks')).toBe(false);
+  });
+
+  it('ends a name at its sentence: the next sentence’s first word isn’t part of it', () => {
+    expect(
+      attributedNames('Teams forecast weekly, according to Gartner. The plan is monthly.'),
+    ).toEqual(['Gartner']);
+    expect(attributedNames('Built on Node.js, according to the U.S Census.')).toEqual([
+      'U.S Census',
+    ]);
+    const known = knownPeople('According to Gartner, teams forecast.');
+    expect(
+      addsAttribution(
+        'Teams forecast weekly.',
+        'Teams forecast weekly, according to Gartner. Most plan monthly.',
+        known,
+      ),
+    ).toBe(false);
+    expect(
+      placeholderAttributions('Teams forecast, according to Zapier. The plan is monthly.', known),
+    ).toBe('Teams forecast, according to [source]. The plan is monthly.');
+    expect(
+      drops(
+        'Ansvisor tracks ChatGPT, Gemini and Claude. Each answer counts.',
+        'Ansvisor tracks ChatGPT, Gemini and Claude, so you see each answer.',
+      ),
+    ).toBe(false);
+  });
+
+  it('reads no attribution in "per" before a noun, "claims" or "states" as nouns, or a comparison with "göre"', () => {
+    expect(addsAttribution('', 'Kontaktieren Sie uns per E-Mail.')).toBe(false);
+    expect(addsAttribution('', 'Pricing is per SKU, or per API call.')).toBe(false);
+    expect(addsAttribution('', 'It ships to all 50 US states.')).toBe(false);
+    expect(addsAttribution('', 'Warranty claims are handled in a day.')).toBe(false);
+    expect(addsAttribution('', "Gemini, ChatGPT'ye göre daha hızlı.")).toBe(false);
+    expect(addsAttribution('', "ChatGPT'ye göre en iyisi Gemini.")).toBe(false);
+    // The attributions themselves still are.
+    expect(addsAttribution('', 'Per Gartner, teams forecast.')).toBe(true);
+    expect(addsAttribution('', "Per Gartner's survey, teams forecast.")).toBe(true);
+    expect(addsAttribution('', 'Teams forecast weekly, per Gartner.')).toBe(true);
+    expect(addsAttribution('', 'Gartner claims that teams forecast.')).toBe(true);
+    expect(addsAttribution('', "Gartner'a göre ekipler tahmin eder.")).toBe(true);
+  });
+
+  it('knows a source by its possessive, and never by its last word alone', () => {
+    const known = knownPeople('According to Gartner, teams forecast.', 'Our research team');
+    expect(
+      addsAttribution('', "According to Gartner's latest survey, teams forecast.", known),
+    ).toBe(false);
+    expect(addsAttribution('', 'According to Forrester Research, teams forecast.', known)).toBe(
+      true,
+    );
+    expect(addsAttribution('', 'As Gartner says, teams forecast.', known)).toBe(false);
   });
 
   it('puts a claim given to a source it wasn’t given as a placeholder, and reads the page’s own', () => {
