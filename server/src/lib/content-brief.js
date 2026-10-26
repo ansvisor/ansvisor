@@ -14,8 +14,8 @@ import {
   stopIfStopped,
 } from './content-runs.js';
 import { citedPagesLength } from './content-cited-length.js';
-import { guardPeople, knownPeople } from './content-people.js';
-import { knownNumbers, placeholderNumbers, todayText } from './content-sources.js';
+import { guardPeople, knownPeople, peopleEdits } from './content-people.js';
+import { addedNumbers, knownNumbers, placeholderNumbers, todayText } from './content-sources.js';
 import { reserveAiBudget } from './plan-guard.js';
 
 /**
@@ -98,7 +98,7 @@ export const BRIEF_LIMITS = {
 
 // No counts or lengths enforced on the model: a miss would fail the whole
 // call (charged all the same). They are asked for here and cut afterwards.
-const outlineSchema = z.object({
+export const outlineSchema = z.object({
   goal: z.string().describe('What the page must achieve for the brand, in one sentence.'),
   audience: z.string().describe('Who the page is for, in one sentence.'),
   outline: z
@@ -120,7 +120,7 @@ const outlineSchema = z.object({
   keywords: z.array(z.string()).describe('Up to 10 keywords.'),
 });
 
-const SYSTEM_PROMPT = `You are a senior content strategist for Answer Engine Optimization (AEO). You plan one web page so AI assistants (ChatGPT, Perplexity, Gemini, Copilot, Google's AI Overviews) cite it.
+export const SYSTEM_PROMPT = `You are a senior content strategist for Answer Engine Optimization (AEO). You plan one web page so AI assistants (ChatGPT, Perplexity, Gemini, Copilot, Google's AI Overviews) cite it.
 
 Rules:
 - Plan an outline of H2 sections. Each H2 should answer one of the AI searches (fan-outs) listed, the most searched first, and name it exactly in "fanout" with one of its platform keys in "platform". An H2 that answers none has null for both.
@@ -257,27 +257,8 @@ async function briefWithRun({ draft, draftId, brand, prompts, sources, run }) {
   // Each H2 matched to the fan-out it answers (mapOutline).
   await advanceRun(run, 2);
 
-  // What it adds beyond what it was built from goes as a placeholder, before the cut.
-  const guard = briefGuard({ brand, draft, prompts, sources });
   const brief = {
-    goal: clip(guard.text(object.goal), BRIEF_LIMITS.goal),
-    audience: clip(guard.text(object.audience), BRIEF_LIMITS.audience),
-    outline: mapOutline(
-      object.outline.map((section) => ({
-        ...section,
-        heading: guard.heading(section.heading),
-        keyPoints: (section.keyPoints ?? []).map((point) => guard.text(point)),
-      })),
-      sources.fanouts,
-    ),
-    keywords: [
-      ...new Set(
-        object.keywords
-          .filter(guard.keeps)
-          .map((k) => k.trim().slice(0, BRIEF_LIMITS.keyword))
-          .filter(Boolean),
-      ),
-    ].slice(0, BRIEF_LIMITS.keywords),
+    ...shapeBrief(object, { brand, draft, prompts, sources }),
     origin: 'rebuild',
     builtAt: new Date().toISOString(),
     builtFrom: {
@@ -299,6 +280,37 @@ async function briefWithRun({ draft, draftId, brand, prompts, sources, run }) {
 }
 
 /**
+ * The brief as saved, from the model's answer: what it adds beyond what it
+ * was built from as a placeholder (briefGuard), before the cut; each H2
+ * matched to the fan-out it answers (mapOutline); the keywords kept once.
+ * The brief eval (content-brief-eval.js) reads the model's answers through
+ * it too.
+ */
+export function shapeBrief(object, { brand, draft, prompts, sources }) {
+  const guard = briefGuard({ brand, draft, prompts, sources });
+  return {
+    goal: clip(guard.text(object.goal), BRIEF_LIMITS.goal),
+    audience: clip(guard.text(object.audience), BRIEF_LIMITS.audience),
+    outline: mapOutline(
+      object.outline.map((section) => ({
+        ...section,
+        heading: guard.heading(section.heading),
+        keyPoints: (section.keyPoints ?? []).map((point) => guard.text(point)),
+      })),
+      sources.fanouts,
+    ),
+    keywords: [
+      ...new Set(
+        object.keywords
+          .filter(guard.keeps)
+          .map((k) => k.trim().slice(0, BRIEF_LIMITS.keyword))
+          .filter(Boolean),
+      ),
+    ].slice(0, BRIEF_LIMITS.keywords),
+  };
+}
+
+/**
  * What a brief may say without a placeholder: the numbers (CE-033), names
  * and quotes (CE-044) of what it was built from — the brand, the page, the
  * prompts, searches, queries and headings kept, the length asked for — and
@@ -306,9 +318,42 @@ async function briefWithRun({ draft, draftId, brand, prompts, sources, run }) {
  * figure or a person made up in one would pass the writer's own guard.
  * `text` and `heading` put each one added as a placeholder, as a written
  * page's are, a question in quotes aside; `keeps` drops a keyword that adds
- * one, as a placeholder can't be searched for.
+ * one, as a placeholder can't be searched for; `found` lists what a text
+ * adds, read the same way (the brief eval's gate).
  */
 export function briefGuard({ brand, draft, prompts, sources }) {
+  const { given, known, people } = briefKnown({ brand, draft, prompts, sources });
+  // The names and quotes a text may have: a question in quotes in it too.
+  const askedIn = (words) => {
+    const questions = [...words.matchAll(QUOTED_QUESTION)].map((m) => m[1]);
+    return questions.length ? knownPeople(...given, ...questions) : people;
+  };
+  const text = (words, heading = false) => {
+    const numbered = placeholderNumbers(words ?? '', known);
+    return guardPeople(numbered, askedIn(numbered), { heading }).text;
+  };
+  return {
+    text,
+    heading: (words) => text(words, true),
+    keeps: (keyword) => text(keyword) === String(keyword ?? ''),
+    /** What a text says that it wasn't given, as the guard reads it: what it would take out. */
+    found: (words, heading = false) => {
+      const read = String(words ?? '');
+      return {
+        figures: addedNumbers(read, known).map((n) => read.slice(n.start, n.end)),
+        people: peopleEdits(read, askedIn(read), { heading }).map((e) =>
+          read.slice(e.start, e.end),
+        ),
+      };
+    },
+  };
+}
+
+/**
+ * What a brief is built from (`given`), and the numbers (`known`) and the
+ * names and quotes (`people`) it may say: briefGuard's, and the brief eval's.
+ */
+export function briefKnown({ brand, draft, prompts, sources }) {
   const given = [
     brand?.name,
     brand?.industry,
@@ -320,19 +365,7 @@ export function briefGuard({ brand, draft, prompts, sources }) {
     ...sources.headings,
     String(sources.length),
   ];
-  const known = knownNumbers(...given, todayText());
-  const people = knownPeople(...given);
-  const text = (words, heading = false) => {
-    const numbered = placeholderNumbers(words ?? '', known);
-    const questions = [...numbered.matchAll(QUOTED_QUESTION)].map((m) => m[1]);
-    const asked = questions.length ? knownPeople(...given, ...questions) : people;
-    return guardPeople(numbered, asked, { heading }).text;
-  };
-  return {
-    text,
-    heading: (words) => text(words, true),
-    keeps: (keyword) => text(keyword) === String(keyword ?? ''),
-  };
+  return { given, known: knownNumbers(...given, todayText()), people: knownPeople(...given) };
 }
 
 /**
