@@ -2,6 +2,8 @@ import { readFileSync } from 'node:fs';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   PAGE_TYPE_FORMATS,
+  PAGE_TYPE_FRESHNESS,
+  PAGE_TYPE_SECTION_FORMATS,
   SITE_PAGE_TYPES,
   SITE_TYPES,
   siteTypeLine,
@@ -9,6 +11,21 @@ import {
   sitePageTypeLines,
   siteTypeOf,
 } from './content-page-types.js';
+
+describe('the brief’s plan by page type', () => {
+  it('leans and dates only page types the editor has', () => {
+    for (const type of [
+      ...Object.keys(PAGE_TYPE_SECTION_FORMATS),
+      ...Object.keys(PAGE_TYPE_FRESHNESS),
+    ]) {
+      expect(PAGE_TYPE_FORMATS, type).toHaveProperty(type);
+    }
+    // A page with the year in its title shows when it was updated too.
+    for (const [type, dates] of Object.entries(PAGE_TYPE_FRESHNESS)) {
+      expect(dates.updatedLine || !dates.yearInTitle, type).toBe(true);
+    }
+  });
+});
 
 describe('pageTypeFormat', () => {
   it('names a page type as the person picks it, with its format', () => {

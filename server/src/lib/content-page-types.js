@@ -60,6 +60,20 @@ export const PAGE_TYPE_SECTION_FORMATS = {
   definition: 'the term defined in its first sentence, then paragraphs',
 };
 
+/**
+ * The page types whose picks, prices or terms date (brief rules 2026,
+ * freshness): each shows an "Updated" line; a ranked or compared one has the
+ * year in its title too ("Best espresso machines in 2026").
+ */
+export const PAGE_TYPE_FRESHNESS = {
+  best_of: { updatedLine: true, yearInTitle: true },
+  buying_guide: { updatedLine: true, yearInTitle: true },
+  alternatives: { updatedLine: true, yearInTitle: true },
+  comparison: { updatedLine: true, yearInTitle: true },
+  pricing: { updatedLine: true, yearInTitle: false },
+  policy: { updatedLine: true, yearInTitle: false },
+};
+
 /** Kinds of site (brands.site_type, 00205), as web/src/lib/content/page-types.ts has them. */
 export const SITE_TYPES = ['b2b', 'ecommerce', 'b2c'];
 
