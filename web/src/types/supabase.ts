@@ -4738,6 +4738,10 @@ export type Database = {
         Args: { p_before: string; p_limit: number }
         Returns: number
       }
+      content_page_conversions: {
+        Args: { p_brand_id: string; p_days: number; p_page: string }
+        Returns: Json
+      }
       content_page_impact: {
         Args: { p_brand_id: string; p_days: number; p_page: string }
         Returns: Json

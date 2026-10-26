@@ -6,7 +6,12 @@ import { Check, ExternalLink } from 'lucide-react';
 import { Link } from '@/i18n/navigation';
 import { Button } from '@/components/ui/button';
 import { LoadingDots } from '@/components/ui/loading-dots';
-import { getContentImpact, getContentResults } from '@/lib/actions/content-drafts';
+import {
+  getContentConversions,
+  getContentImpact,
+  getContentResults,
+} from '@/lib/actions/content-drafts';
+import type { ContentConversions } from '@/lib/content/conversions';
 import {
   DEFAULT_IMPACT_PERIOD,
   GSC_PAGE_DAYS,
@@ -24,6 +29,7 @@ import { formatNumber } from '@/lib/format';
 import { formatPctChange } from '@/lib/traffic-kpis';
 import type { VisitChange } from '@/lib/traffic-change';
 import { cn } from '@/lib/utils';
+import { ImpactConversions } from './_impact-conversions';
 import { ImpactResults } from './_impact-results';
 import { WorkingDots } from './_working-dots';
 
@@ -32,6 +38,8 @@ interface ImpactRead {
   period: ImpactPeriod;
   impact: ContentImpact | null;
   results: ContentResults | null;
+  /** Conversions of AI journeys through the page (CE-017): null when they couldn't be read. */
+  conversions: ContentConversions | null;
   failed: boolean;
 }
 
@@ -72,13 +80,20 @@ export function ImpactTab({
     Promise.all([
       getContentImpact(brandId, pageUrl, period),
       getContentResults(brandId, pageUrl, period),
+      // Its own: a failure leaves the rest of the tab, without this section.
+      getContentConversions(brandId, pageUrl, period).catch((err) => {
+        console.error('Failed to read the page conversions:', err);
+        return null;
+      }),
     ])
-      .then(([impact, results]) => {
-        if (!cancelled) setRead({ period, impact, results, failed: false });
+      .then(([impact, results, conversions]) => {
+        if (!cancelled) setRead({ period, impact, results, conversions, failed: false });
       })
       .catch((err) => {
         console.error('Failed to read the page impact:', err);
-        if (!cancelled) setRead({ period, impact: null, results: null, failed: true });
+        if (!cancelled) {
+          setRead({ period, impact: null, results: null, conversions: null, failed: true });
+        }
       });
     return () => {
       cancelled = true;
@@ -150,6 +165,8 @@ export function ImpactTab({
         <ImpactBody
           impact={impact}
           results={current.results}
+          conversions={current.conversions}
+          brandId={brandId}
           period={period}
           pageUrl={pageUrl}
           rebuilding={rebuilding}
@@ -164,6 +181,8 @@ export function ImpactTab({
 function ImpactBody({
   impact,
   results,
+  conversions,
+  brandId,
   period,
   pageUrl,
   rebuilding,
@@ -172,6 +191,8 @@ function ImpactBody({
 }: {
   impact: ContentImpact;
   results: ContentResults | null;
+  conversions: ContentConversions | null;
+  brandId: string;
   period: ImpactPeriod;
   pageUrl: string;
   rebuilding: boolean;
@@ -310,6 +331,8 @@ function ImpactBody({
       </section>
 
       {results && <ImpactResults results={results} />}
+
+      {conversions && <ImpactConversions conversions={conversions} brandId={brandId} />}
 
       {cited.cur > 0 && (
         <section className="space-y-1.5">

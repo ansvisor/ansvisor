@@ -28,6 +28,7 @@ import {
 } from '@/lib/content/drafts';
 import { escapeHtml } from '@/lib/content/attachments';
 import { IMPACT_PERIODS, type ContentImpact, type ContentResults } from '@/lib/content/impact';
+import type { ContentConversions } from '@/lib/content/conversions';
 import {
   MAX_BODY_HTML_LENGTH,
   MAX_TITLE_LENGTH,
@@ -1119,6 +1120,26 @@ export async function getContentResults(
   });
   if (error) throw new Error(error.message);
   return (data as ContentResults | null) ?? null;
+}
+
+/**
+ * Conversions of AI journeys through the page (CE-017, 00287), for the Live
+ * page tab's period: from the AI Traffic snippet with conversions on.
+ */
+export async function getContentConversions(
+  brandId: string,
+  page: string,
+  days: number,
+): Promise<ContentConversions | null> {
+  if (!impactArgsValid(brandId, page, days)) throw new Error('invalid');
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc('content_page_conversions', {
+    p_brand_id: brandId,
+    p_page: page,
+    p_days: days,
+  });
+  if (error) throw new Error(error.message);
+  return (data as ContentConversions | null) ?? null;
 }
 
 /** A brand id, a period the tab offers and a web page's address. */

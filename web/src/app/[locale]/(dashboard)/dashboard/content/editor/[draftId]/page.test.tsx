@@ -52,6 +52,7 @@ const readPublishAddress = vi.hoisted(() => vi.fn(async () => 'https://acme.exam
 const readLiveUrl = vi.hoisted(() => vi.fn(async () => 'https://acme.example.com/pipeline'));
 vi.mock('@/lib/content/publish-client', () => ({ publishPage, readPublishAddress, readLiveUrl }));
 const getContentResults = vi.fn();
+const getContentConversions = vi.fn();
 const getDraftSources = vi.fn();
 const setDraftSourceIncluded = vi.fn();
 const readAgentRun = vi.fn();
@@ -107,6 +108,7 @@ vi.mock('@/lib/actions/content-drafts', () => ({
   rebuildDraftBrief: (...args: unknown[]) => rebuildDraftBrief(...args),
   getContentImpact: (...args: unknown[]) => getContentImpact(...args),
   getContentResults: (...args: unknown[]) => getContentResults(...args),
+  getContentConversions: (...args: unknown[]) => getContentConversions(...args),
   getContentDraft: (...args: unknown[]) => getContentDraft(...args),
   markContentDraftReady: (...args: unknown[]) => markContentDraftReady(...args),
   unmarkContentDraftReady: (...args: unknown[]) => unmarkContentDraftReady(...args),
@@ -357,6 +359,7 @@ beforeEach(() => {
     .mockReset()
     .mockResolvedValue({ ok: true, updatedAt: '2026-10-20T10:00:00Z', bodyHash: 'h0' });
   getContentImpact.mockReset().mockResolvedValue(null);
+  getContentConversions.mockReset().mockResolvedValue(null);
   publishPage.mockReset();
   readPublishAddress.mockReset().mockResolvedValue('https://acme.example.com/pipeline');
   getContentResults.mockReset().mockResolvedValue(null);
