@@ -25,6 +25,19 @@ export interface ContentConversions {
   journeys: { source: string; pages: string[]; goal: ConversionGoal; count: number }[];
 }
 
+/**
+ * The brand's conversions from AI journeys in the Plan's period
+ * (brand_ai_conversions, 00288), for its AI results strip.
+ */
+export interface PlanConversions {
+  /** The brand has conversions on. */
+  enabled: boolean;
+  /** Per goal, the most first. */
+  goals: { goal: ConversionGoal; count: number }[];
+  /** The most frequent journey to a conversion, or null. */
+  journey: { source: string; pages: string[]; goal: ConversionGoal; count: number } | null;
+}
+
 /** What a result card shows: a goal's count, the revenue, or the units ordered. */
 export type ResultKey = ConversionGoal | 'revenue' | 'units';
 
