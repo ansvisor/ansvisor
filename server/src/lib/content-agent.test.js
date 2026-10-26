@@ -96,7 +96,8 @@ const {
 } = await import('./content-agent.js');
 const { linkKey, NO_LINK_TARGETS } = await import('./content-links.js');
 const { knownNumbers, numberSources } = await import('./content-sources.js');
-const { NAME_PLACEHOLDER, QUOTE_PLACEHOLDER, knownPeople } = await import('./content-people.js');
+const { NAME_PLACEHOLDER, QUOTE_PLACEHOLDER, guardPeople, knownPeople } =
+  await import('./content-people.js');
 const { PlanLimitError } = await import('./plan-guard.js');
 // The real hold: self-hosted here, so it reserves nothing and writes each charge.
 const realGuard = await vi.importActual('./plan-guard.js');
@@ -860,9 +861,19 @@ describe('attributions as the review of #1537 read them', () => {
         'Download the 2025 report from Gartner, then share it with your team.',
         'The Performance report from Google Search Console shows clicks and impressions.',
         'Who says B2B content has to be boring?',
+        'In this report from Google Search Console, you can see clicks.',
+        'In the Performance report from Google Search Console, clicks are listed.',
+        'Built in a study from Figma, the kit has 40 parts.',
       ],
       false,
     );
+    // An acronym is a name, even one a sentence could start with ("ama").
+    reads(
+      ['According to AMA, most marketers plan weekly.', 'AMA says that most plan weekly.'],
+      true,
+    );
+    // Turkish sentence words are the attributions' only: the people guard still reads a person.
+    expect(guardPeople('Son Heung-min said the team won.', none).text).toContain(NAME_PLACEHOLDER);
     reads(
       [
         'In a 2025 report by Gartner, most teams forecast weekly.',
@@ -886,7 +897,10 @@ describe('attributions as the review of #1537 read them', () => {
     expect(addsAttribution('', 'Gartner’s data shows that most pages gain.', known)).toBe(true);
   });
 
-  it('keeps the possessive out of the placeholder', () => {
+  it('keeps the possessive out of the placeholder, never a name’s own apostrophe', () => {
+    expect(placeholderAttributions("According to O'Day, most do.", none)).toBe(
+      'According to [source], most do.',
+    );
     expect(placeholderAttributions("According to Gartner's latest survey, most do.", none)).toBe(
       "According to [source]'s latest survey, most do.",
     );
@@ -900,12 +914,27 @@ describe('attributions as the review of #1537 read them', () => {
       [
         "Gartner'ın 2025 raporuna göre pazar büyüyor.",
         "Gartner'ın son raporuna göre pazar büyüyor.",
-        'Gartner raporuna göre pazar büyüyor.',
+        'Pazar, Gartner raporuna göre büyüyor.',
         'TÜİK verilerine göre enflasyon düştü.',
+        'HubSpot verilerine göre e-posta açılma oranı düştü.',
       ],
       true,
     );
-    reads(['Son raporuna göre pazar büyüyor.'], false);
+    // Without the ending, a sentence's first noun isn't a name.
+    reads(
+      [
+        'Son raporuna göre pazar büyüyor.',
+        'Ürün açıklamasına göre kahve makinesi on bardak yapar.',
+        'Sipariş verilerine göre en çok satan model bu.',
+        'Haziran verilerine göre satışlar arttı.',
+      ],
+      false,
+    );
+    // The brand's own: "Panelinizdeki Ansvisor verilerine göre" reads Ansvisor, known.
+    const known = attributableSources('<p>Ansvisor</p>', [], [], 'tr', ['Ansvisor']);
+    expect(addsAttribution('', 'Panelinizdeki Ansvisor verilerine göre trafik arttı.', known)).toBe(
+      false,
+    );
     expect(placeholderAttributions("Google Analytics'e göre trafik arttı.", none)).toBe(
       "[source]'e göre trafik arttı.",
     );
@@ -926,10 +955,20 @@ describe('attributions as the review of #1537 read them', () => {
         'Laut Hersteller hält der Akku zehn Stunden.',
         'Laut Herstellerangaben hält der Akku zehn Stunden.',
         'Laut Datenblatt wiegt es zwei Kilo.',
+        'Laut Datenblättern wiegt es zwei Kilo.',
+        'Nach Angaben des Herstellers hält der Akku zehn Stunden.',
+        // A noun German capitalises, after an article or as a plural.
+        'Dem Bericht zufolge wächst der Markt.',
+        'Einer Studie zufolge wächst der Markt.',
+        'Herstellerangaben zufolge hält der Akku zehn Stunden.',
+        'Kundenbewertungen zufolge ist er leise.',
+        'Unseren Messungen zufolge ist er leise.',
+        'Insidern zufolge wächst der Markt.',
+        'Neuesten Zahlen zufolge wächst der Markt.',
       ],
       false,
     );
-    reads(['Laut Gartner wächst der Markt.'], true);
+    reads(['Laut Gartner wächst der Markt.', 'IDC zufolge wächst der Markt.'], true);
   });
 });
 

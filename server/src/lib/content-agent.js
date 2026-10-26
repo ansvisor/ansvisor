@@ -343,6 +343,20 @@ const SOURCE_NAME = String.raw`(?<name>(?!(?:The|This|That|These|Those|Our|Their
 /** A name before a Turkish ending ("Google Analytics'e göre"): capitalised words, a few at most. */
 const TR_WORD = String.raw`(?<![\p{L}\p{N}.-])\p{Lu}(?:[\p{L}\p{N}-]|${NAME_DOT})*`;
 const TR_NAME = String.raw`(?<name>${TR_WORD}(?:\s+${TR_WORD}){0,2})`;
+/** A name shaped as one, sentence's start or not: an acronym (TÜİK, GA4) or a capital after a small letter (HubSpot). */
+const TR_SHAPED = String.raw`(?<name>(?<![\p{L}\p{N}.-])\p{Lu}(?:[\p{Lu}\p{N}]+(?![\p{Ll}])|(?=[\p{L}\p{N}]*?(?:\p{Ll}\p{Lu}|\p{L}\p{N}))[\p{L}\p{N}]+))`;
+/** A source's report, study, data or survey "göre": a year or a small word before it. */
+const TR_REPORT = String.raw`(?:(?:\d{4}|\p{Ll}+)\s+)?(?:raporuna|araştırmasına|verilerine|anketine|çalışmasına|açıklamasına)\s+göre\b`;
+/** German articles and possessives before a noun ("dem Bericht", "unseren Messungen"). */
+const DE_DET = String.raw`(?:[Dd](?:em|er|en|ie|as|es)|[Ee]in(?:e|er|em|en|es)?|[Uu]nser(?:e|er|em|en|es)?|[Ii]hr(?:e|er|em|en|es)?|[Nn]euesten|[Aa]ktuellen|[Jj]üngsten)`;
+/**
+ * Turkish words a sentence starts with before a source's name ("Ancak
+ * Gartner'a göre", "Son raporuna göre"): read past by the attributions only,
+ * never by the people guard ("Son Heung-min").
+ */
+const TR_SENTENCE_WORDS = new Set(
+  'ancak ama fakat ayrıca bu şu bir ve ile son yeni özellikle'.split(' '),
+);
 const LEAD = String.raw`(?:(?:the|a|an)\s+)?(?:\d{4}\s+)?`;
 const ATTRIBUTIONS = [
   new RegExp(String.raw`\b[Aa]ccording to\s+${LEAD}${SOURCE_NAME}`, 'gu'),
@@ -368,14 +382,21 @@ const ATTRIBUTIONS = [
     String.raw`${SOURCE_NAME}(?:['’]s)?\s+(?:report|study|survey|research|data|analysis)\s+(?:shows|showed|finds|found|says|said|suggests)\b`,
     'gu',
   ),
-  // Never the maker's own words, as product pages give them ("laut
-  // Hersteller", "laut Herstellerangaben", "laut Datenblatt").
-  new RegExp(String.raw`\b[Ll]aut\s+${LEAD}(?!Hersteller|Datenblatt)${SOURCE_NAME}`, 'gu'),
-  // "nach Angaben von Gartner", "Gartner zufolge"; never a noun German
-  // capitalises ("Berichten zufolge", "den Angaben zufolge").
-  new RegExp(String.raw`\b[Nn]ach\s+Angaben\s+(?:von|des|der)\s+${LEAD}${SOURCE_NAME}`, 'gu'),
+  // Never the maker's own words or a manual, as product pages give them
+  // ("laut Hersteller", "laut Herstellerangaben", "laut Datenblättern",
+  // "laut Anleitung").
   new RegExp(
-    String.raw`${SOURCE_NAME}(?<!\b(?:Berichten|Medienberichten|Angaben|Experten|Analysten|Schätzungen|Studien|Umfragen|Informationen|Quellen|Forschern|Daten))\s+zufolge\b`,
+    String.raw`\b[Ll]aut\s+${LEAD}(?!Hersteller|Datenbl|Anleitung|Bedienungsanleitung|Produktbeschreibung|Gesetz)${SOURCE_NAME}`,
+    'gu',
+  ),
+  // "nach Angaben von Gartner", never the maker's ("des Herstellers").
+  new RegExp(String.raw`\b[Nn]ach\s+Angaben\s+von\s+${LEAD}(?!Hersteller)${SOURCE_NAME}`, 'gu'),
+  // "Gartner zufolge"; never a noun German capitalises: after an article
+  // ("Dem Bericht zufolge", "Einer Studie zufolge") or a plural ("Berichten",
+  // "Herstellerangaben", "Insidern zufolge"), the cost a name like Nielsen
+  // pays.
+  new RegExp(
+    String.raw`(?<!\b${DE_DET}\s+)(?!${DE_DET}\b|Hersteller)${SOURCE_NAME}(?<!\p{Ll}(?:en|ern))\s+zufolge\b`,
     'gu',
   ),
   // "As Zapier notes, …", "As Zapier puts it, …": the verb then a comma or
@@ -390,10 +411,13 @@ const ATTRIBUTIONS = [
     'gu',
   ),
   // "In a 2025 report by Gartner, …", "According to a survey from Statista,
-  // …": the comma only after one of those, never a product's sentence ("Send
-  // a survey from Typeform, Jotform or Google Forms").
+  // …": the comma only after "according to", "per" or a sentence's "In",
+  // with small words between that aren't a product's or the reader's ("In
+  // this report from Google Search Console, you can…", "In the Performance
+  // report from…"), never a product's sentence ("Send a survey from
+  // Typeform, Jotform or Google Forms").
   new RegExp(
-    String.raw`(?<=\b(?:[Aa]ccording\s+to|[Ii]n|[Pp]er)\s+(?:[\p{L}\p{N}]+\s+){0,3})(?:[Rr]eport|[Ss]tudy|[Ss]urvey|[Pp]aper|[Pp]oll)\s+(?:by|from)\s+${LEAD}${SOURCE_NAME}(?=\s*,)`,
+    String.raw`(?<=(?:\b[Aa]ccording\s+to|\b[Pp]er|(?:^|[.!?]\s+)In)\s+(?:(?!(?:your|this|our|each|these|those|that|my|their)\b)[\p{Ll}\p{N}]+\s+){0,3})(?:[Rr]eport|[Ss]tudy|[Ss]urvey|[Pp]aper|[Pp]oll)\s+(?:by|from)\s+${LEAD}${SOURCE_NAME}(?=\s*,)`,
     'gu',
   ),
   // "data from Statista shows that …" or a figure, never a tool's ("Data
@@ -409,13 +433,14 @@ const ATTRIBUTIONS = [
     'gu',
   ),
   // "Gartner'ın raporuna göre": a source's report, study, data or survey.
-  // With or without its ending ("Gartner raporuna", "TÜİK verilerine"), a
-  // year or a word before the noun ("Gartner'ın 2025 raporuna", "son
+  // A year or a word before the noun ("Gartner'ın 2025 raporuna", "son
   // raporuna"), a name of more words than one ("Google Analytics").
-  new RegExp(
-    String.raw`${TR_NAME}(?:['’]\p{L}{1,3})?\s+(?:(?:\d{4}|\p{Ll}+)\s+)?(?:raporuna|araştırmasına|verilerine|anketine|çalışmasına|açıklamasına)\s+göre\b`,
-    'gu',
-  ),
+  new RegExp(String.raw`${TR_NAME}['’]\p{L}{1,3}\s+${TR_REPORT}`, 'gu'),
+  // Without its ending ("Gartner raporuna", "TÜİK verilerine"): a name in
+  // the sentence, or one shaped as a name (TÜİK, GA4, HubSpot), never a
+  // sentence's first noun ("Ürün açıklamasına göre", "Sipariş verilerine").
+  new RegExp(String.raw`(?<=[^\s.!?:]\s+)${TR_NAME}\s+${TR_REPORT}`, 'gu'),
+  new RegExp(String.raw`${TR_SHAPED}\s+${TR_REPORT}`, 'gu'),
   // "Gartner'a göre", never a comparison ("ChatGPT'ye göre daha hızlı");
   // "en" after it is the source's claim ("Gartner'a göre en hızlı büyüyen").
   new RegExp(String.raw`${TR_NAME}['’]\p{L}{1,3}\s+göre\b(?!\s+daha\b)`, 'gu'),
@@ -488,7 +513,10 @@ function nameStart(name) {
   const words = [...name.matchAll(/\S+/g)];
   for (const [i, word] of words.entries()) {
     const lower = word[0].toLowerCase();
-    if (NOT_NAMES.has(lower)) continue;
+    // A sentence's word, never an acronym written as one ("According to AMA").
+    if ((NOT_NAMES.has(lower) || TR_SENTENCE_WORDS.has(lower)) && !/^\p{Lu}{2,}$/u.test(word[0])) {
+      continue;
+    }
     const ly = /^\p{L}+ly$/u.test(lower);
     if (!ly && !isRole(lower)) return word.index;
     if (i === words.length - 1 && (ly || /^\p{Lu}\p{Ll}+$/u.test(word[0]))) return word.index;
@@ -557,7 +585,7 @@ function attributionEdits(text, known) {
     if (known && knownName(name, known)) continue;
     const start = index + nameStart(name);
     // The possessive stays: "According to [source]'s latest survey".
-    const end = index + name.replace(/['’]\p{L}{0,3}$/u, '').length;
+    const end = index + name.replace(/['’]\p{Ll}{1,3}$/u, '').length;
     if (start >= end || edits.some((e) => start < e.end && end > e.start)) continue;
     edits.push({ start, end, text: '[source]' });
   }
