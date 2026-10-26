@@ -291,6 +291,42 @@ describe('the Brief tab', () => {
     expect(toast.success).toHaveBeenCalledWith('Brief saved');
   });
 
+  it('keeps what Edit brief doesn’t show: version 2’s answer, format, facts and page plan', async () => {
+    saveDraftBrief.mockImplementation(async (_id, next: DraftBrief) => ({ ...next }));
+    const planned: DraftBrief = {
+      ...brief,
+      version: 2,
+      tldr: 'The page’s essentials.',
+      proof: [{ kind: 'data', what: 'Our own shot times', have: false }],
+      outline: brief.outline.map((section, i) =>
+        i === 0
+          ? {
+              ...section,
+              answer: 'Under $500, a single boiler with a PID.',
+              format: 'table' as const,
+              facts: [{ claim: 'Average price', source: 'statistic' as const, ref: null }],
+            }
+          : section,
+      ),
+    };
+    await render({ status: 'ready', brief: planned });
+    await act(async () => button('Edit brief').click());
+    await act(async () => button('Save brief').click());
+    const saved = saveDraftBrief.mock.calls[0][1] as DraftBrief;
+    expect(saved).toMatchObject({
+      version: 2,
+      tldr: 'The page’s essentials.',
+      proof: planned.proof,
+    });
+    expect(saved.outline[0]).toMatchObject({
+      answer: 'Under $500, a single boiler with a PID.',
+      format: 'table',
+      facts: [{ claim: 'Average price', source: 'statistic', ref: null }],
+    });
+    // The editor's own field stays its own.
+    expect(saved.outline[0]).not.toHaveProperty('points');
+  });
+
   it('keeps the edit open when saving fails', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
     saveDraftBrief.mockRejectedValue(new Error('boom'));

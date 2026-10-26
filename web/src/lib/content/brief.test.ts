@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  BRIEF_V2_LIMITS,
   briefFromOpportunity,
   builtFromCount,
   draftBriefSchema,
@@ -7,6 +8,7 @@ import {
   type DraftBrief,
 } from './brief';
 import type { DraftSourcesData } from './sources';
+import v2 from './__fixtures__/brief-v2.json';
 
 const data: DraftSourcesData = {
   prompts: [
@@ -113,6 +115,35 @@ describe('the brief', () => {
     expect(
       draftBriefSchema.safeParse({ ...brief, citedLength: { characters: 4300, pages: 0 } }).success,
     ).toBe(false);
+  });
+
+  it('reads version 2 as the server writes it, and a brief from before it as it was (brief-v2.json)', () => {
+    const read = draftBriefSchema.parse(v2);
+    // Every field kept: the server's sample, as it's tested there too.
+    expect(read).toEqual(v2);
+    expect(read.outline[0]).toMatchObject({ format: 'paragraphs', facts: expect.any(Array) });
+    const before = draftBriefSchema.parse(brief);
+    expect(before.version).toBeUndefined();
+    expect(before.outline[0].facts).toBeUndefined();
+  });
+
+  it('keeps version 2 to its limits', () => {
+    const fail = (change: Record<string, unknown>) =>
+      draftBriefSchema.safeParse({ ...v2, ...change }).success;
+    const section = v2.outline[0];
+    expect(fail({ version: 3 })).toBe(false);
+    expect(fail({ tldr: 'x'.repeat(BRIEF_V2_LIMITS.tldr + 1) })).toBe(false);
+    expect(fail({ outline: [{ ...section, format: 'carousel' }] })).toBe(false);
+    expect(
+      fail({
+        outline: [{ ...section, facts: Array(BRIEF_V2_LIMITS.facts + 1).fill(section.facts[0]) }],
+      }),
+    ).toBe(false);
+    expect(fail({ proof: [{ kind: 'rumour', what: 'x', have: false }] })).toBe(false);
+    expect(
+      fail({ links: { internal: [{ url: '', anchor: 'x', section: null }], outbound: [] } }),
+    ).toBe(false);
+    expect(fail({ freshness: null, entities: null, links: null })).toBe(true);
   });
 
   it('reads an opportunity’s brief until the draft has its own', () => {
