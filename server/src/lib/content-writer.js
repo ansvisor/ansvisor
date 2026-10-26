@@ -872,6 +872,7 @@ async function writeWithRun({ draft, brand, model, input, budget, rewrite, run }
     numbered,
     authors,
     await draftLanguage(draft, brand.organization_id, brand.language),
+    [brand.name],
   );
 
   if (rewrite) {

@@ -847,6 +847,92 @@ describe('blocks, names and languages as the review read them (#1520)', () => {
   });
 });
 
+describe('attributions as the review of #1537 read them', () => {
+  const none = knownPeople('');
+  const reads = (texts, expected) => {
+    for (const text of texts) expect(addsAttribution('', text), text).toBe(expected);
+  };
+
+  it('reads no product sentence as a claim: a comma after "from X", a tool’s report that "shows"', () => {
+    reads(
+      [
+        'Send a survey from Typeform, Jotform or Google Forms.',
+        'Download the 2025 report from Gartner, then share it with your team.',
+        'The Performance report from Google Search Console shows clicks and impressions.',
+        'Who says B2B content has to be boring?',
+      ],
+      false,
+    );
+    reads(
+      [
+        'In a 2025 report by Gartner, most teams forecast weekly.',
+        'According to a survey from Statista, most teams forecast weekly.',
+        'A survey from Statista shows that most teams forecast weekly.',
+        'A report from Gartner shows 40 teams forecast weekly.',
+        'A survey from Statista finds most teams forecast weekly.',
+      ],
+      true,
+    );
+  });
+
+  it('knows the brand’s own name: its report or data says what it says', () => {
+    const known = attributableSources('<p>Acme tracks AI answers.</p>', [], [], 'en', ['Acme']);
+    expect(addsAttribution('', 'Acme’s data shows that most pages gain citations.', known)).toBe(
+      false,
+    );
+    expect(
+      addsAttribution('', 'A weekly report from Acme shows that your top pages gain.', known),
+    ).toBe(false);
+    expect(addsAttribution('', 'Gartner’s data shows that most pages gain.', known)).toBe(true);
+  });
+
+  it('keeps the possessive out of the placeholder', () => {
+    expect(placeholderAttributions("According to Gartner's latest survey, most do.", none)).toBe(
+      "According to [source]'s latest survey, most do.",
+    );
+    expect(placeholderAttributions('Gartner’s research shows teams forecast.', none)).toBe(
+      '[source]’s research shows teams forecast.',
+    );
+  });
+
+  it('reads Turkish reports with or without the ending, a word before the noun, a name of more words', () => {
+    reads(
+      [
+        "Gartner'ın 2025 raporuna göre pazar büyüyor.",
+        "Gartner'ın son raporuna göre pazar büyüyor.",
+        'Gartner raporuna göre pazar büyüyor.',
+        'TÜİK verilerine göre enflasyon düştü.',
+      ],
+      true,
+    );
+    reads(['Son raporuna göre pazar büyüyor.'], false);
+    expect(placeholderAttributions("Google Analytics'e göre trafik arttı.", none)).toBe(
+      "[source]'e göre trafik arttı.",
+    );
+    expect(placeholderAttributions("Ancak Google Analytics'e göre trafik arttı.", none)).toBe(
+      "Ancak [source]'e göre trafik arttı.",
+    );
+  });
+
+  it('reads German "zufolge" and "nach Angaben von", never the maker’s own words', () => {
+    reads(
+      ['Gartner zufolge wächst der Markt.', 'Nach Angaben von Gartner wächst der Markt.'],
+      true,
+    );
+    reads(
+      [
+        'Berichten zufolge wächst der Markt.',
+        'Den Angaben zufolge wächst der Markt.',
+        'Laut Hersteller hält der Akku zehn Stunden.',
+        'Laut Herstellerangaben hält der Akku zehn Stunden.',
+        'Laut Datenblatt wiegt es zwei Kilo.',
+      ],
+      false,
+    );
+    reads(['Laut Gartner wächst der Markt.'], true);
+  });
+});
+
 describe('no invented people or quotes (CE-044)', () => {
   const passages = draftPassages(BODY);
   const ruleKeys = new Set(['dated', 'faq']);
@@ -1319,6 +1405,23 @@ describe('fixDraftRules', () => {
     rows.content_drafts.rules = null;
     rows.content_rule_sets = { overrides: { language: { value: 'German' } } };
     expect(await fix()).toBe(1);
+  });
+
+  it('gives a claim to the brand’s own data: its name is known', async () => {
+    generateObject.mockResolvedValue({
+      object: {
+        suggestions: [
+          suggestion({
+            after: 'good coffee and hot water, as Acme Coffee’s data shows that brews improve',
+            sources: [],
+            marks: [],
+          }),
+        ],
+      },
+      usage: { inputTokens: 900, outputTokens: 200 },
+    });
+    const { count } = await fixDraftRules({ draftId: DRAFT, brandId: BRAND, input: input() });
+    expect(count).toBe(1);
   });
 
   it('charges the budget, asks the model and keeps one batch for review', async () => {

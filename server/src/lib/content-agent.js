@@ -340,6 +340,9 @@ const NAME_WORD = String.raw`(?<![\p{L}\p{N}&'’.-])\p{Lu}(?:[\p{L}\p{N}&'’-]
 // A name as an attribution gives it: capitalised words, after an article
 // or a year ("the Zapier report", "a 2025 Gartner survey").
 const SOURCE_NAME = String.raw`(?<name>(?!(?:The|This|That|These|Those|Our|Their|Its|Your|My|His|Her|We|They|It|A|An)\b)${NAME_WORD}(?:\s+${NAME_WORD}){0,${MAX_NAME_WORDS - 1}})`;
+/** A name before a Turkish ending ("Google Analytics'e göre"): capitalised words, a few at most. */
+const TR_WORD = String.raw`(?<![\p{L}\p{N}.-])\p{Lu}(?:[\p{L}\p{N}-]|${NAME_DOT})*`;
+const TR_NAME = String.raw`(?<name>${TR_WORD}(?:\s+${TR_WORD}){0,2})`;
 const LEAD = String.raw`(?:(?:the|a|an)\s+)?(?:\d{4}\s+)?`;
 const ATTRIBUTIONS = [
   new RegExp(String.raw`\b[Aa]ccording to\s+${LEAD}${SOURCE_NAME}`, 'gu'),
@@ -365,14 +368,32 @@ const ATTRIBUTIONS = [
     String.raw`${SOURCE_NAME}(?:['’]s)?\s+(?:report|study|survey|research|data|analysis)\s+(?:shows|showed|finds|found|says|said|suggests)\b`,
     'gu',
   ),
-  new RegExp(String.raw`\b[Ll]aut\s+${LEAD}${SOURCE_NAME}`, 'gu'),
+  // Never the maker's own words, as product pages give them ("laut
+  // Hersteller", "laut Herstellerangaben", "laut Datenblatt").
+  new RegExp(String.raw`\b[Ll]aut\s+${LEAD}(?!Hersteller|Datenblatt)${SOURCE_NAME}`, 'gu'),
+  // "nach Angaben von Gartner", "Gartner zufolge"; never a noun German
+  // capitalises ("Berichten zufolge", "den Angaben zufolge").
+  new RegExp(String.raw`\b[Nn]ach\s+Angaben\s+(?:von|des|der)\s+${LEAD}${SOURCE_NAME}`, 'gu'),
+  new RegExp(
+    String.raw`${SOURCE_NAME}(?<!\b(?:Berichten|Medienberichten|Angaben|Experten|Analysten|Schätzungen|Studien|Umfragen|Informationen|Quellen|Forschern|Daten))\s+zufolge\b`,
+    'gu',
+  ),
   // "As Zapier notes, …", "As Zapier puts it, …": the verb then a comma or
   // "that", never an event ("As Google adds AI Overviews to more queries").
   new RegExp(String.raw`\b[Aa]s\s+${LEAD}${SOURCE_NAME}\s+${SPEECH}(?=\s*[,:]|\s+that\b)`, 'gu'),
-  // "a 2025 report by Gartner, …", "a survey from Statista finds": as a
-  // claim's source, never a thing to get ("Download the report from Gartner.").
+  // "a survey from Statista finds": as a claim's source, never a thing to get
+  // ("Download the report from Gartner."); "shows" only before "that" or a
+  // figure, as a tool's report shows things too ("The Performance report
+  // from Google Search Console shows clicks").
   new RegExp(
-    String.raw`\b(?:[Rr]eport|[Ss]tudy|[Ss]urvey|[Pp]aper|[Pp]oll)\s+(?:by|from)\s+${LEAD}${SOURCE_NAME}(?=\s*,|\s+(?:shows?|showed|finds|found|says|said|suggests?|suggested|reveals?|revealed|estimates?|estimated)\b)`,
+    String.raw`\b(?:[Rr]eport|[Ss]tudy|[Ss]urvey|[Pp]aper|[Pp]oll)\s+(?:by|from)\s+${LEAD}${SOURCE_NAME}(?=\s+(?:(?:shows?|showed)\s+(?:that\b|\p{N})|(?:finds|found|says|said|suggests?|suggested|reveals?|revealed|estimates?|estimated)\b))`,
+    'gu',
+  ),
+  // "In a 2025 report by Gartner, …", "According to a survey from Statista,
+  // …": the comma only after one of those, never a product's sentence ("Send
+  // a survey from Typeform, Jotform or Google Forms").
+  new RegExp(
+    String.raw`(?<=\b(?:[Aa]ccording\s+to|[Ii]n|[Pp]er)\s+(?:[\p{L}\p{N}]+\s+){0,3})(?:[Rr]eport|[Ss]tudy|[Ss]urvey|[Pp]aper|[Pp]oll)\s+(?:by|from)\s+${LEAD}${SOURCE_NAME}(?=\s*,)`,
     'gu',
   ),
   // "data from Statista shows that …" or a figure, never a tool's ("Data
@@ -388,16 +409,16 @@ const ATTRIBUTIONS = [
     'gu',
   ),
   // "Gartner'ın raporuna göre": a source's report, study, data or survey.
+  // With or without its ending ("Gartner raporuna", "TÜİK verilerine"), a
+  // year or a word before the noun ("Gartner'ın 2025 raporuna", "son
+  // raporuna"), a name of more words than one ("Google Analytics").
   new RegExp(
-    String.raw`(?<name>(?<![\p{L}\p{N}.-])\p{Lu}(?:[\p{L}\p{N}-]|${NAME_DOT})*)['’]\p{L}{1,3}\s+(?:raporuna|araştırmasına|verilerine|anketine|çalışmasına|açıklamasına)\s+göre\b`,
+    String.raw`${TR_NAME}(?:['’]\p{L}{1,3})?\s+(?:(?:\d{4}|\p{Ll}+)\s+)?(?:raporuna|araştırmasına|verilerine|anketine|çalışmasına|açıklamasına)\s+göre\b`,
     'gu',
   ),
   // "Gartner'a göre", never a comparison ("ChatGPT'ye göre daha hızlı");
   // "en" after it is the source's claim ("Gartner'a göre en hızlı büyüyen").
-  new RegExp(
-    String.raw`(?<name>(?<![\p{L}\p{N}.-])\p{Lu}(?:[\p{L}\p{N}-]|${NAME_DOT})*)['’]\p{L}{1,3}\s+göre\b(?!\s+daha\b)`,
-    'gu',
-  ),
+  new RegExp(String.raw`${TR_NAME}['’]\p{L}{1,3}\s+göre\b(?!\s+daha\b)`, 'gu'),
 ];
 
 /**
@@ -421,7 +442,7 @@ const attributionsFor = (language) =>
  * to already, Brief › Your input's (an expert, the person's own data) and
  * the workspace's authors.
  */
-export function attributableSources(pageHtml, numbered, authors = [], language = null) {
+export function attributableSources(pageHtml, numbered, authors = [], language = null, own = []) {
   const inputs = numbered.filter((s) => s.kind === 'input').map(sourceWords);
   return {
     // Read line by line, as a change's blocks are (htmlLines).
@@ -429,6 +450,8 @@ export function attributableSources(pageHtml, numbered, authors = [], language =
       ...htmlLines(pageHtml).flatMap((line) => attributedNames(line, language)),
       ...inputs,
       ...authors,
+      // The brand's own: its report or data says what it says ("A weekly report from Acme").
+      ...own,
     ),
     language,
   };
@@ -440,7 +463,10 @@ function attributionsIn(text, language = null) {
   for (const re of attributionsFor(language)) {
     for (const match of String(text).matchAll(re)) {
       const name = match.groups?.name ?? '';
-      if (name) found.push({ name, index: match.index + match[0].indexOf(name) });
+      // A sentence's words alone ("Who says", "Son raporuna göre") name no one.
+      if (name && nameStart(name) < name.length) {
+        found.push({ name, index: match.index + match[0].indexOf(name) });
+      }
     }
   }
   return found;
@@ -530,7 +556,8 @@ function attributionEdits(text, known) {
   for (const { name, index } of attributionsIn(text, known?.language)) {
     if (known && knownName(name, known)) continue;
     const start = index + nameStart(name);
-    const end = index + name.length;
+    // The possessive stays: "According to [source]'s latest survey".
+    const end = index + name.replace(/['’]\p{L}{0,3}$/u, '').length;
     if (start >= end || edits.some((e) => start < e.end && end > e.start)) continue;
     edits.push({ start, end, text: '[source]' });
   }
@@ -1236,6 +1263,7 @@ async function fixWithRun({
     numbered,
     authors,
     await draftLanguage(draft, brand.organization_id, brand.language),
+    [brand.name],
   );
   // Where it may link: the brand's pages and the draft's sources (A); a
   // hand-off's source checks link the draft's sources.

@@ -398,7 +398,9 @@ export const NOT_NAMES = new Set(
     'as when if but and so then while because after before like unlike for in on at by with from to of ' +
     'also yet still now here there what why how who where which ' +
     // German articles and the words a sentence starts with before a name.
-    'der die das dem den des ein eine einer wie laut'
+    'der die das dem den des ein eine einer wie laut ' +
+    // Turkish ones ("Ancak Gartner'a göre", "Son raporuna göre").
+    'ancak ama fakat ayrıca bu şu bir ve ile son yeni özellikle'
   ).split(' '),
 );
 /** A name after these is a place ("In Silicon Valley, the founder…"). */
