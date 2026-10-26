@@ -3803,6 +3803,7 @@
         }
       },
       "agentCard": {
+        "placeholders": "{count, plural, one {# placeholder} other {# placeholders}} to fill",
         "waiting": "{count, plural, one {Content Agent has # suggestion for you} other {Content Agent has # suggestions for you}}",
         "gain": "Rules {met, number} → {after, number} of {total, number}",
         "review": "Review",

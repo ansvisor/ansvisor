@@ -1,6 +1,6 @@
 'use client';
 
-import { useId, useState } from 'react';
+import { useId, useMemo, useState } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
 import { Check, ChevronRight, User, X } from 'lucide-react';
 import { Link } from '@/i18n/navigation';
@@ -14,6 +14,7 @@ import {
 import { shownSteps, stepMessage, type AgentRun } from '@/lib/content/agent-runs';
 import { cn } from '@/lib/utils';
 import { PageCompareDialog, pageCharacters } from './_page-rewrite';
+import { PLACEHOLDER, pagePlaceholders } from '@/lib/content/placeholders';
 import { WorkingDots } from './_working-dots';
 
 /**
@@ -278,6 +279,20 @@ export function AgentCard({
   const tRewrite = useTranslations('contentEditor.editor.rewrite');
   const [comparing, setComparing] = useState(false);
   const page = suggestions.find((s) => s.kind === 'page') ?? null;
+  // The placeholders an open rewrite adds, for the person to fill: read once
+  // a rewrite, not on every key the page takes.
+  const pageOpen = page?.status === 'open';
+  const pageLeft = useMemo(
+    () =>
+      pageOpen && page
+        ? Math.max(
+            0,
+            pagePlaceholders(page.afterText).count - pagePlaceholders(page.beforeHtml ?? '').count,
+          )
+        : 0,
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- the rewrite's two pages, not the object
+    [pageOpen, page?.afterText, page?.beforeHtml],
+  );
   const { open, accepted } = suggestionCounts(suggestions);
   const openOnes = suggestions.filter((s) => s.status === 'open');
   const action = suggestions.find((s) => s.actionId && s.actionNo !== null);
@@ -393,6 +408,7 @@ export function AgentCard({
           ) : (
             page.reason
           )}
+          {pageLeft > 0 && ` · ${t('placeholders', { count: pageLeft })}`}
           {builtFrom}
         </>
       ) : page.status === 'accepted' && stillOpen > 0 ? (
@@ -400,10 +416,22 @@ export function AgentCard({
       ) : null;
   } else if (open > 0) {
     title = t('waiting', { count: open });
+    // The placeholders its changes add, for the person to fill once accepted.
+    const batchLeft = openOnes.reduce(
+      (n, s) =>
+        n +
+        Math.max(
+          0,
+          (s.afterText.match(PLACEHOLDER) ?? []).length -
+            (s.beforeText.match(PLACEHOLDER) ?? []).length,
+        ),
+      0,
+    );
     line = (
       <>
         {sentence(openOnes[0]?.reason ?? '', locale)}
         {openOnes.length > 1 && ` · ${t('more', { count: openOnes.length - 1 })}`}
+        {batchLeft > 0 && ` · ${t('placeholders', { count: batchLeft })}`}
         {after > rules.met && (
           <>
             {' · '}
@@ -443,8 +471,11 @@ export function AgentCard({
   }
 
   // With the basket (Next step spec §3), the card heads with the step and
-  // who takes it; what the agent left is its last run, under it.
-  const stepHead = !working && next?.title ? next : null;
+  // who takes it; what the agent left is its last run, under it. Not while
+  // the agent's result waits for a decision: it heads with what it is
+  // (editor test 2026-10-25: "Next · Shorten…" over a rewrite read as
+  // another agent).
+  const stepHead = nextShown && next?.title ? next : null;
   let lastRun: React.ReactNode = null;
   if (stepHead) {
     const run = title;
