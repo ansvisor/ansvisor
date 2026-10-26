@@ -2,7 +2,13 @@ import { NoObjectGeneratedError, generateObject } from 'ai';
 import { z } from 'zod';
 import supabaseAdmin from '../config/supabase.js';
 import { resolveModel } from './ai-provider.js';
-import { siteTypeLine, pageTypeFormat } from './content-page-types.js';
+import {
+  PAGE_TYPE_FRESHNESS,
+  PAGE_TYPE_SECTION_FORMATS,
+  pageTypeFormat,
+  siteTypeLine,
+} from './content-page-types.js';
+import { inputSources, readDraftInputs } from './content-inputs.js';
 import { getLanguageName } from './languages.js';
 import {
   RunStoppedError,
@@ -15,7 +21,15 @@ import {
 } from './content-runs.js';
 import { citedPagesLength } from './content-cited-length.js';
 import { guardPeople, knownPeople, peopleEdits } from './content-people.js';
-import { addedNumbers, knownNumbers, placeholderNumbers, todayText } from './content-sources.js';
+import {
+  addedNumbers,
+  knownNumbers,
+  numberSources,
+  placeholderNumbers,
+  sourceWords,
+  stripSourceIds,
+  todayText,
+} from './content-sources.js';
 import { reserveAiBudget } from './plan-guard.js';
 
 /**
@@ -81,6 +95,15 @@ export const rebuildSources = z.object({
 });
 
 /**
+ * The rules in effect, as Fix sends them to the agent (content-writer.js
+ * writeDraftInput), beside the sources: with the brief rules (2026) on, the
+ * brief plans to them. Cut to fit, as the sources are.
+ */
+export const briefRules = z
+  .array(z.object({ key: cut(60), name: cut(200), detail: cut(500).default('') }))
+  .max(60);
+
+/**
  * The limits the web reads a brief with (web/src/lib/content/brief.ts
  * draftBriefSchema): the model's output is cut to them, so a brief saved and
  * charged for is one the editor can show.
@@ -95,6 +118,41 @@ export const BRIEF_LIMITS = {
   keywords: 15,
   keyword: 80,
 };
+
+/**
+ * The brief rules (2026) on (CONTENT_BRIEF_RULES=true): the brief plans each
+ * section's answer, format and facts, as version 2 (web brief.ts). Off until
+ * the brief eval (content-brief-eval.js) passes them: then the brief is
+ * version 1, as before.
+ */
+export function briefRulesOn() {
+  return process.env.CONTENT_BRIEF_RULES === 'true';
+}
+
+/**
+ * Version 2's limits, as the web reads them (web/src/lib/content/brief.ts
+ * BRIEF_V2_LIMITS, which content-brief.test.js reads to compare).
+ */
+export const BRIEF_V2_LIMITS = {
+  answer: 600,
+  facts: 4,
+  claim: 300,
+  url: 2048,
+  tldr: 500,
+  angle: 500,
+  proof: 6,
+  proofWhat: 300,
+  leftOut: 20,
+  leftOutQuery: 300,
+  datedPoint: 300,
+};
+/**
+ * How a section is best shown; the kind of source a fact needs; the brand's
+ * own proof to gather, as Brief › Your input takes it (web brief.ts).
+ */
+export const BRIEF_FORMATS = ['paragraphs', 'list', 'steps', 'table', 'faq'];
+export const FACT_SOURCES = ['statistic', 'study', 'quote', 'example', 'official'];
+export const PROOF_KINDS = ['experience', 'data', 'case', 'test', 'quote'];
 
 // No counts or lengths enforced on the model: a miss would fail the whole
 // call (charged all the same). They are asked for here and cut afterwards.
@@ -120,6 +178,76 @@ export const outlineSchema = z.object({
   keywords: z.array(z.string()).describe('Up to 10 keywords.'),
 });
 
+/**
+ * Version 2's: each section with its answer, format and facts; the page's
+ * essentials, angle, proof to gather, fan-outs left out and point to date.
+ */
+export const outlineSchemaV2 = outlineSchema.extend({
+  tldr: z
+    .string()
+    .nullable()
+    .describe("What the page's essentials at its top must state: a note to the writer."),
+  angle: z
+    .string()
+    .nullable()
+    .describe("What this page can show that commodity pages can't: a note to the writer."),
+  proof: z
+    .array(
+      z.object({
+        kind: z.string().meta({ enum: PROOF_KINDS }).describe('Its kind.'),
+        what: z.string().describe('What to gather, as a note: never a figure.'),
+      }),
+    )
+    .describe("Up to 4 pieces of the brand's own proof to gather."),
+  leftOut: z
+    .array(z.string())
+    .describe('Fan-outs from the list that belong on another page, copied exactly.'),
+  datedPoint: z
+    .string()
+    .nullable()
+    .describe('What the page should date, as a note, or null when nothing in it dates.'),
+  outline: z
+    .array(
+      outlineSchema.shape.outline.element.extend({
+        answer: z
+          .string()
+          .nullable()
+          .describe(
+            "What the section's first sentences must answer directly, in one line: a note to the writer, not the answer.",
+          ),
+        // Keys from the list, in the JSON schema the model is held to: a
+        // brief in Turkish or German would translate a free word ("tablo").
+        // Read as any text, so a model that writes "Table" doesn't fail the
+        // whole call (charged all the same): sectionPlan reads the key.
+        format: z
+          .string()
+          .meta({ enum: BRIEF_FORMATS })
+          .nullable()
+          .describe('How the section is best shown.'),
+        facts: z
+          .array(
+            z.object({
+              claim: z
+                .string()
+                .describe('A fact the section should state, as what to find out: never a figure.'),
+              sourceType: z
+                .string()
+                .meta({ enum: FACT_SOURCES })
+                .describe('The kind of source it needs.'),
+              source: z
+                .string()
+                .nullable()
+                .describe(
+                  'The number (S1…) of the cited page to check it against, or null to find one.',
+                ),
+            }),
+          )
+          .describe('Up to 2 facts.'),
+      }),
+    )
+    .describe('3 to 10 sections.'),
+});
+
 export const SYSTEM_PROMPT = `You are a senior content strategist for Answer Engine Optimization (AEO). You plan one web page so AI assistants (ChatGPT, Perplexity, Gemini, Copilot, Google's AI Overviews) cite it.
 
 Rules:
@@ -130,7 +258,33 @@ Rules:
 - Cited pages show what AI quotes today; plan to answer better than them, never to copy them.
 - Write every field in the language asked for.`;
 
+/** Version 2's rules (the brief rules, 2026), after version 1's. */
+export const SYSTEM_PROMPT_V2 = `${SYSTEM_PROMPT}
+- Answer first: in "answer", say what each section's first sentences must answer directly, as a note to the writer, with no word count: the rules give the length.
+- In "facts", name about one fact per section the page should state, with the kind of source it needs. In "source", give the number (S1…) of the person's input that gives it, or of a cited page only when it is the one to check that fact against (you see only its address, never its words); when unsure, null. Never write a figure of your own.
+- The numbers (S1…) go in "source" only, never in another field.
+- In "format", say how each section is best shown: a table for a comparison, numbered steps for a how-to, a list for picks or criteria, paragraphs for an explanation, faq for questions (its key points are the questions).
+- Top first: in "tldr", say what the page's essentials at its top must state, as a note to the writer.
+- In "angle", say what this page can show that commodity pages can't: the brand's own data, cases, tests or first-hand experience. In "proof", list up to 4 of them to gather, each with its kind; one the person's input already gives, by its name.
+- One topic: in "leftOut", copy exactly the fan-outs listed that belong on another page; none when they all fit.
+- In "datedPoint", say what the page should date (a price, a figure with its month), or null when nothing in it dates.
+- The person's input, when listed, is their own: plan with it as given. Never invent a customer, a test, a quote or a figure beyond it.
+- "format", "sourceType" and a proof's "kind" are keys: write them as listed, in English, whatever the brief's language.
+- Headings: each H2 about 8 to 15 words, under 90 characters.
+- No keyword stuffing, and no wording made to trigger a citation: write for the reader.
+- Follow the rules the page is written to, when listed.`;
+
+/** The brief's rules and schema: version 2's with the brief rules on, else version 1's. */
+export function briefSystemPrompt() {
+  return briefRulesOn() ? SYSTEM_PROMPT_V2 : SYSTEM_PROMPT;
+}
+export function briefSchema() {
+  return briefRulesOn() ? outlineSchemaV2 : outlineSchema;
+}
+
 const norm = (text) => text.trim().replace(/\s+/g, ' ').toLowerCase();
+/** A fan-out as matched: without the quotes the prompt lists it in, as the model may copy them. */
+const fanoutKey = (text) => norm(text.trim().replace(/^["“„«]\s*|\s*["”“»]$/g, ''));
 
 /**
  * Text cut to `max` characters, never inside a placeholder: one the cut would
@@ -152,7 +306,7 @@ const QUOTED_QUESTION = /["“„«»]([^"“”„«»\n]{1,300}\?)["”“»«
  * brand, 422 with no sources to build from, PlanLimitError once the budget
  * is spent.
  */
-export async function rebuildDraftBrief({ draftId, brandId, sources }) {
+export async function rebuildDraftBrief({ draftId, brandId, sources, rules = [] }) {
   const { data: draft, error: draftError } = await supabaseAdmin
     .from('content_drafts')
     .select('id, brand_id, title, page_type, method, source_url')
@@ -163,7 +317,7 @@ export async function rebuildDraftBrief({ draftId, brandId, sources }) {
     throw Object.assign(new Error('Draft not found'), { status: 404 });
   }
 
-  const [brandRes, promptsRes] = await Promise.all([
+  const [brandRes, promptsRes, inputRow] = await Promise.all([
     supabaseAdmin
       .from('brands')
       .select(
@@ -178,11 +332,16 @@ export async function rebuildDraftBrief({ draftId, brandId, sources }) {
           .in('id', sources.promptIds)
           .eq('prompt_sets.brand_id', brandId)
       : Promise.resolve({ data: [], error: null }),
+    // Brief › Your input (CE-048, Quality's second phase), with the brief rules on.
+    briefRulesOn() ? readDraftInputs(draftId) : Promise.resolve(null),
   ]);
   if (brandRes.error) throw brandRes.error;
   if (promptsRes.error) throw promptsRes.error;
   const brand = brandRes.data;
   const prompts = (promptsRes.data ?? []).map((p) => p.text);
+  // The rules only with the brief rules on: the brief plans to them then, and may say their numbers.
+  const planTo = briefRulesOn() ? rules : [];
+  const inputs = inputSources(inputRow, brand.name);
 
   if (!prompts.length && !sources.fanouts.length && !sources.queries.length) {
     throw Object.assign(new Error('No prompts, fan-outs or queries to build from'), {
@@ -201,7 +360,16 @@ export async function rebuildDraftBrief({ draftId, brandId, sources }) {
     },
   });
   try {
-    const brief = await briefWithRun({ draft, draftId, brand, prompts, sources, run });
+    const brief = await briefWithRun({
+      draft,
+      draftId,
+      brand,
+      prompts,
+      sources,
+      rules: planTo,
+      inputs,
+      run,
+    });
     await finishRun(run, 'done');
     return brief;
   } catch (err) {
@@ -215,7 +383,7 @@ export async function rebuildDraftBrief({ draftId, brandId, sources }) {
 }
 
 /** The rebuild itself, step by step: nothing is saved once it is stopped. */
-async function briefWithRun({ draft, draftId, brand, prompts, sources, run }) {
+async function briefWithRun({ draft, draftId, brand, prompts, sources, rules, inputs, run }) {
   const modelId = contentBriefModelId();
   // Held on the budget before the call, so calls at once can't pass it.
   const budget = await reserveAiBudget(brand.organization_id, {
@@ -237,9 +405,9 @@ async function briefWithRun({ draft, draftId, brand, prompts, sources, run }) {
     generated = await runCall(run, budget, CALL_TIMEOUT_MS, (abortSignal) =>
       generateObject({
         model: resolveModel(modelId),
-        schema: outlineSchema,
-        system: SYSTEM_PROMPT,
-        prompt: buildBriefPrompt({ brand, draft, prompts, sources }),
+        schema: briefSchema(),
+        system: briefSystemPrompt(),
+        prompt: buildBriefPrompt({ brand, draft, prompts, sources, rules, inputs }),
         abortSignal,
       }),
     );
@@ -258,7 +426,7 @@ async function briefWithRun({ draft, draftId, brand, prompts, sources, run }) {
   await advanceRun(run, 2);
 
   const brief = {
-    ...shapeBrief(object, { brand, draft, prompts, sources }),
+    ...shapeBrief(object, { brand, draft, prompts, sources, rules, inputs }),
     origin: 'rebuild',
     builtAt: new Date().toISOString(),
     builtFrom: {
@@ -286,28 +454,170 @@ async function briefWithRun({ draft, draftId, brand, prompts, sources, run }) {
  * The brief eval (content-brief-eval.js) reads the model's answers through
  * it too.
  */
-export function shapeBrief(object, { brand, draft, prompts, sources }) {
-  const guard = briefGuard({ brand, draft, prompts, sources });
+export function shapeBrief(object, args) {
+  return fitBrief(shapeWhole(object, args));
+}
+
+/**
+ * Under content_drafts.brief's 64 KB (00212), with room for jsonb's spaces:
+ * past it, the fan-outs left out go, then the facts' sources (a whole
+ * address, 2 KB at most), then the facts, so a brief charged for is one that
+ * saves.
+ */
+const BRIEF_BYTES = 60_000;
+const withFacts = (brief, strip) => ({
+  ...brief,
+  outline: brief.outline.map((section) => ({ ...section, facts: strip(section.facts ?? []) })),
+});
+const FIT_STEPS = [
+  (brief) => ({ ...brief, leftOut: [] }),
+  (brief) => withFacts(brief, (list) => list.map((f) => ({ ...f, source: null }))),
+  (brief) => withFacts(brief, () => []),
+];
+function fitBrief(brief) {
+  const size = (b) => Buffer.byteLength(JSON.stringify(b));
+  if (brief.version !== 2) return brief;
+  let fitted = brief;
+  for (const step of FIT_STEPS) {
+    if (size(fitted) <= BRIEF_BYTES) break;
+    fitted = step(fitted);
+  }
+  return fitted;
+}
+
+function shapeWhole(object, { brand, draft, prompts, sources, rules, inputs = [] }) {
+  const guard = briefGuard({ brand, draft, prompts, sources, rules, inputs });
+  // Version 2's (a model answer with them): each section's plan, the page's.
+  const v2 =
+    'tldr' in object ||
+    'proof' in object ||
+    object.outline.some((section) => 'answer' in section || 'facts' in section);
+  const byId = v2 ? new Map(briefNumbered(sources, inputs).map((n) => [n.id, n])) : null;
+  // Version 2's numbers (S1…) belong in a fact's source only: taken out of the words.
+  const words = v2 ? (text) => stripSourceIds(text, byId.size) : (text) => text;
+  const outline = mapOutline(
+    object.outline.map((section) => ({
+      ...section,
+      heading: guard.heading(words(section.heading)),
+      keyPoints: (section.keyPoints ?? []).map((point) => guard.text(words(point))),
+      ...(v2 ? sectionPlan(section, guard, byId, words) : {}),
+    })),
+    sources.fanouts,
+  );
   return {
-    goal: clip(guard.text(object.goal), BRIEF_LIMITS.goal),
-    audience: clip(guard.text(object.audience), BRIEF_LIMITS.audience),
-    outline: mapOutline(
-      object.outline.map((section) => ({
-        ...section,
-        heading: guard.heading(section.heading),
-        keyPoints: (section.keyPoints ?? []).map((point) => guard.text(point)),
-      })),
-      sources.fanouts,
-    ),
+    goal: clip(guard.text(words(object.goal)), BRIEF_LIMITS.goal),
+    audience: clip(guard.text(words(object.audience)), BRIEF_LIMITS.audience),
+    outline,
     keywords: [
       ...new Set(
         object.keywords
+          .map((keyword) => words(keyword))
           .filter(guard.keeps)
           .map((k) => k.trim().slice(0, BRIEF_LIMITS.keyword))
           .filter(Boolean),
       ),
     ].slice(0, BRIEF_LIMITS.keywords),
+    ...(v2 ? { version: 2, ...pagePlan(object, { guard, words, outline, sources, draft }) } : {}),
   };
+}
+
+/**
+ * The page's plan of version 2, cut to the web's limits and guarded as the
+ * rest: its essentials (tldr) and angle; the brand's own proof to gather, of
+ * a kind the web knows; the fan-outs left out for another page, each one the
+ * person kept that no H2 answers, as listed; its freshness, the point to
+ * date as the model names it, the "Updated" line and the year in the title
+ * by page type (PAGE_TYPE_FRESHNESS).
+ */
+function pagePlan(object, { guard, words, outline, sources, draft }) {
+  const L = BRIEF_V2_LIMITS;
+  const note = (text, max) => clip(guard.text(words(text ?? '')), max) || null;
+  const proof = (object.proof ?? [])
+    .map((p) => {
+      const kind = keyOf(p?.kind);
+      const what = clip(guard.text(words(p?.what ?? '')), L.proofWhat);
+      return PROOF_KINDS.includes(kind) && what ? { kind, what } : null;
+    })
+    .filter(Boolean)
+    .slice(0, L.proof);
+  const kept = fanoutMatcher(sources.fanouts);
+  const answered = new Set(outline.map((section) => section.fanout).filter(Boolean));
+  const leftOut = [
+    ...new Set(
+      (object.leftOut ?? [])
+        .map((query) => kept(String(query ?? ''))?.query)
+        .filter((query) => query && !answered.has(query)),
+    ),
+  ]
+    .map((query) => query.slice(0, L.leftOutQuery))
+    .slice(0, L.leftOut);
+  const dates = Object.hasOwn(PAGE_TYPE_FRESHNESS, draft.page_type ?? '')
+    ? PAGE_TYPE_FRESHNESS[draft.page_type]
+    : null;
+  const datedPoint = note(object.datedPoint, L.datedPoint);
+  return {
+    tldr: note(object.tldr, L.tldr),
+    angle: note(object.angle, L.angle),
+    proof,
+    leftOut,
+    freshness:
+      datedPoint || dates
+        ? {
+            datedPoint,
+            updatedLine: dates?.updatedLine ?? false,
+            yearInTitle: dates?.yearInTitle ?? false,
+          }
+        : null,
+  };
+}
+
+/** A key the model was asked for, as the web lists it: trimmed, in small letters. */
+const keyOf = (value) =>
+  String(value ?? '')
+    .trim()
+    .toLowerCase();
+
+/**
+ * A section's plan of version 2, cut to the web's limits (BRIEF_V2_LIMITS)
+ * and guarded as the rest: its answer, its format if one the web knows, its
+ * facts (a kind of source the web knows; the cited page to check it against
+ * by kind and ref, as a suggestion keeps its source, never its number in
+ * this run: S1 is another page once the Sources tab changes).
+ */
+function sectionPlan(section, guard, byId, words) {
+  const answer = clip(guard.text(words(section.answer ?? '')), BRIEF_V2_LIMITS.answer);
+  const format = BRIEF_FORMATS.includes(keyOf(section.format)) ? keyOf(section.format) : null;
+  const facts = (section.facts ?? [])
+    .map((fact) => {
+      const claim = clip(guard.text(words(fact?.claim ?? '')), BRIEF_V2_LIMITS.claim);
+      const sourceType = keyOf(fact?.sourceType);
+      if (!claim || !FACT_SOURCES.includes(sourceType)) return null;
+      const given = byId.get(
+        String(fact?.source ?? '')
+          .trim()
+          .toUpperCase(),
+      );
+      const label = given ? given.label.trim().slice(0, BRIEF_V2_LIMITS.claim) : '';
+      return {
+        claim,
+        sourceType,
+        source: label
+          ? { kind: given.kind, ref: given.ref.slice(0, BRIEF_V2_LIMITS.url), label }
+          : null,
+      };
+    })
+    .filter(Boolean)
+    .slice(0, BRIEF_V2_LIMITS.facts);
+  return { answer: answer || null, format, facts };
+}
+
+/**
+ * The cited pages, then Brief › Your input, numbered as the writer numbers
+ * its data (S1…, numberSources): version 2's facts name their source by it.
+ * Only those: a prompt, a fan-out or a query is a question, not a source.
+ */
+export function briefNumbered(sources, inputs = []) {
+  return numberSources({ pages: sources.pages, inputs });
 }
 
 /**
@@ -321,8 +631,8 @@ export function shapeBrief(object, { brand, draft, prompts, sources }) {
  * one, as a placeholder can't be searched for; `found` lists what a text
  * adds, read the same way (the brief eval's gate).
  */
-export function briefGuard({ brand, draft, prompts, sources }) {
-  const { given, known, people } = briefKnown({ brand, draft, prompts, sources });
+export function briefGuard({ brand, draft, prompts, sources, rules, inputs }) {
+  const { given, known, people } = briefKnown({ brand, draft, prompts, sources, rules, inputs });
   // The names and quotes a text may have: a question in quotes in it too.
   const askedIn = (words) => {
     const questions = [...words.matchAll(QUOTED_QUESTION)].map((m) => m[1]);
@@ -352,8 +662,10 @@ export function briefGuard({ brand, draft, prompts, sources }) {
 /**
  * What a brief is built from (`given`), and the numbers (`known`) and the
  * names and quotes (`people`) it may say: briefGuard's, and the brief eval's.
+ * The rules it plans to are among them ("aim: 60 words"), and the person's
+ * own input, word for word.
  */
-export function briefKnown({ brand, draft, prompts, sources }) {
+export function briefKnown({ brand, draft, prompts, sources, rules = [], inputs = [] }) {
   const given = [
     brand?.name,
     brand?.industry,
@@ -364,6 +676,8 @@ export function briefKnown({ brand, draft, prompts, sources }) {
     ...sources.queries,
     ...sources.headings,
     String(sources.length),
+    ...rules.flatMap((rule) => [rule.name, rule.detail]),
+    ...inputs.map(sourceWords),
   ];
   return { given, known: knownNumbers(...given, todayText()), people: knownPeople(...given) };
 }
@@ -375,10 +689,10 @@ export function briefKnown({ brand, draft, prompts, sources }) {
  * left empty goes, long text is shortened, and the lists are capped.
  */
 export function mapOutline(outline, fanouts) {
-  const byQuery = new Map(fanouts.map((f) => [norm(f.query), f]));
+  const kept = fanoutMatcher(fanouts);
   return outline
     .map((section) => {
-      const fanout = section.fanout ? byQuery.get(norm(section.fanout)) : undefined;
+      const fanout = section.fanout ? kept(section.fanout) : undefined;
       const platform =
         fanout && fanout.platforms.includes(section.platform)
           ? section.platform
@@ -391,24 +705,56 @@ export function mapOutline(outline, fanouts) {
           .slice(0, BRIEF_LIMITS.keyPoints),
         fanout: fanout?.query ?? null,
         platform: fanout ? platform : null,
+        // Version 2's plan (shapeBrief), as shaped.
+        ...('answer' in section
+          ? { answer: section.answer, format: section.format, facts: section.facts }
+          : {}),
       };
     })
     .filter((section) => section.heading)
     .slice(0, BRIEF_LIMITS.sections);
 }
 
+/**
+ * The kept fan-out a text names, or undefined: as listed first, then without
+ * its quotes, as the model may copy it.
+ */
+function fanoutMatcher(fanouts) {
+  const asListed = new Map(fanouts.map((f) => [norm(f.query), f]));
+  const unquoted = new Map(fanouts.map((f) => [fanoutKey(f.query), f]));
+  return (text) => asListed.get(norm(text)) ?? unquoted.get(fanoutKey(text));
+}
+
 /** What the model is told: the brand, the page, and the sources kept. */
-export function buildBriefPrompt({ brand, draft, prompts, sources }) {
+export function buildBriefPrompt({ brand, draft, prompts, sources, rules = [], inputs = [] }) {
   const list = (items) => (items.length ? items.map((item) => `- ${item}`).join('\n') : '- none');
+  const v2 = briefRulesOn();
+  // With the brief rules on, each cited page and each piece of the person's
+  // input by its number (S1…), for the facts' sources.
+  const numbered = v2 ? briefNumbered(sources, inputs) : [];
+  const pages = v2
+    ? numbered
+        .filter((n) => n.kind === 'cited_page')
+        .map((n) => `${n.id}: ${n.label} (${n.detail})`)
+    : sources.pages.map((p) => `${p.url} (${p.kind})`);
+  // Without a note (a quote's address, a day): a fact cites the input by its number.
+  const given = numbered
+    .filter((n) => n.kind === 'input')
+    .map((n) => `${n.id} "${n.label}": ${n.detail}`);
+  const leans =
+    v2 && Object.hasOwn(PAGE_TYPE_SECTION_FORMATS, draft.page_type ?? '')
+      ? PAGE_TYPE_SECTION_FORMATS[draft.page_type]
+      : null;
+  const listed = v2 ? rules.filter((r) => r.name) : [];
   return `Brand: ${brand?.name || 'Unknown'}
 Industry: ${brand?.industry || 'Not specified'}
 ${siteTypeLine(brand)}Description: ${brand?.description || 'N/A'}
 
 Page: ${draft.title || 'Untitled'}
 Page type: ${pageTypeFormat(draft.page_type)}
-${draft.method === 'optimize' && draft.source_url ? `Existing page to improve: ${draft.source_url}` : 'A new page.'}
+${leans ? `Its sections lean to: ${leans}.\n` : ''}${draft.method === 'optimize' && draft.source_url ? `Existing page to improve: ${draft.source_url}` : 'A new page.'}
 Length: about ${sources.length} characters.
-
+${listed.length ? `\nRules the page is written to:\n${list(listed.map((r) => (r.detail ? `${r.name}: ${r.detail}` : r.name)))}\n` : ''}
 Prompts the page must answer:
 ${list(prompts)}
 
@@ -419,7 +765,7 @@ Google searches people use (Search Console):
 ${list(sources.queries)}
 
 Pages AI cites for these prompts today:
-${list(sources.pages.map((p) => `${p.url} (${p.kind})`))}
-
+${list(pages)}
+${given.length ? `\nThe person's own input for this page (Brief › Your input):\n${list(given)}\n` : ''}
 ${sources.headings.length ? `The page's headings now:\n${list(sources.headings)}\n\n` : ''}Write the brief in ${getLanguageName(brand?.language)}.`;
 }

@@ -3770,6 +3770,20 @@
             "write": "Rewriting the page",
             "review": "Opens here beside your page to compare"
           }
+        },
+        "doing": {
+          "answerFirst": "Answering the page's main question first",
+          "outline": "Giving each section one question to answer",
+          "missing": "Answering questions the page misses",
+          "quoted": "Leaving passages AI quotes as they are",
+          "length": "Keeping the page near its target length",
+          "kept": "Keeping quoted passages, tables and images",
+          "voice": "Keeping the page's facts and voice",
+          "rules": "Keeping to {count, plural, one {# rule} other {# rules}}",
+          "rulesAny": "Keeping to the rules",
+          "sources": "Drawing on {count, plural, one {# source} other {# sources}}",
+          "sourcesAny": "Drawing on your sources",
+          "placeholders": "Adding a [placeholder] for facts it lacks"
         }
       },
       "agentFailed": {
@@ -3986,10 +4000,13 @@
         "restore": "Restore",
         "restoreLabel": "Restore {version}, {when}",
         "footer": "Restoring makes a new version. Nothing is lost.",
-        "restored": "Restored “{version}”. The page before it is in History.",
+        "restoredSame": "“{version}” is the page as it is: nothing changed.",
+        "restored": "Restored “{version}”. {count, plural, =0 {The page before it is in History.} one {The agent’s open change was for the page before, so it was set aside.} other {The agent’s # open changes were for the page before, so they were set aside.}}",
         "restoreFailed": "Couldn't restore it. Try again.",
         "htmlOpen": "Go back to the page to use History",
-        "restoring": "Restoring…"
+        "restoring": "Restoring…",
+        "agentWorking": "Content Agent is working on the page. History opens once it's done.",
+        "deciding": "Saving your decision on the agent's changes…"
       },
       "markReadyFailed": "Couldn't mark it ready. Try again.",
       "markReadyUnsaved": "The page has changes that aren't saved, so it wasn't marked ready.",
@@ -4416,6 +4433,7 @@
         "webflowChanged": "{tables, plural, =0 {} one {# table went as a list. } other {# tables went as lists. }}{images, plural, =0 {} one {# image wasn't sent: add it in Webflow.} other {# images weren't sent: add them in Webflow.}}"
       },
       "rulesChip": "Rules {met}/{total}",
+      "rulesChipReading": "Rules · reading",
       "rulesChipHint": "Rules this page meets now. Open the Rules tab.",
       "reviewer": {
         "title": "Reviewed by",
@@ -5138,6 +5156,7 @@
         "setName": "{type} · Ansvisor default",
         "pickSet": "Pick a page type",
         "met": "{met} of {total} rules met",
+        "metReading": "Reading the rules…",
         "typeGroup": "{type} rules",
         "groups": {
           "type": "Page type rules",
