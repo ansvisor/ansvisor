@@ -37,7 +37,7 @@ import { contentBriefModelId } from '../lib/content-brief.js';
 import { inputSources } from '../lib/content-inputs.js';
 import { numberSources, sourcesPrompt } from '../lib/content-sources.js';
 import {
-  WRITE_SYSTEM_PROMPT,
+  writeSystemPrompt,
   briefText,
   buildWritePrompt,
   pageSchema,
@@ -99,7 +99,7 @@ for (const c of CASES.slice(0, count)) {
       generateObject({
         model,
         schema: pageSchema,
-        system: WRITE_SYSTEM_PROMPT,
+        system: writeSystemPrompt(),
         prompt: buildWritePrompt({ brand, draft, numbered, brief: briefText(null, null), input }),
       }),
     ]);

@@ -90,8 +90,20 @@ vi.mock('./content-agent.js', async (importOriginal) => ({
   hasOpenSuggestions: (...args) => hasOpenSuggestions(...args),
 }));
 
-const { buildWritePrompt, briefText, renderPage, runDraftWriting, sourcedPage, startDraftWriting } =
-  await import('./content-writer.js');
+const {
+  WRITE_SYSTEM_PROMPT,
+  buildWritePrompt,
+  briefText,
+  renderPage,
+  rewriteSystemPrompt,
+  runDraftWriting,
+  sourcedPage,
+  startDraftWriting,
+  suggestSystemPrompt,
+  writeSystemPrompt,
+} = await import('./content-writer.js');
+const { WRITING_GUARDRAIL } = await import('./content-brief.js');
+const { REWRITE_SYSTEM_PROMPT } = await import('./content-rewrite.js');
 const { NAME_PLACEHOLDER, QUOTE_PLACEHOLDER, knownPeople } = await import('./content-people.js');
 const { textLength } = await import('./content-rewrite.js');
 const { passageKey } = await import('./content-agent.js');
@@ -987,5 +999,69 @@ describe('the write prompt', () => {
       'Industry: Coffee\nSite type: B2B SaaS (software or services sold to businesses)\nDescription:',
     );
     expect(write('')).toContain('Industry: Coffee\nDescription:');
+  });
+});
+
+describe('the brief rules (2026) in the Content Agent', () => {
+  afterEach(() => vi.unstubAllEnvs());
+  const planned = {
+    goal: 'Sell beans',
+    audience: 'Home brewers',
+    outline: [
+      {
+        heading: 'Ratio',
+        keyPoints: ['Grams per cup'],
+        fanout: null,
+        platform: null,
+        answer: 'Name the ratio first.',
+        format: 'table',
+        facts: [{ claim: 'The ratio cafés use', sourceType: 'study', source: null }],
+      },
+    ],
+    keywords: ['pour over'],
+    version: 2,
+    tldr: 'A 1:16 ratio suits most beans.',
+    proof: [{ kind: 'test', what: 'Our cupping notes' }],
+  };
+
+  it('asks as before while they are off: the same prompts, the brief as version 1', () => {
+    expect(writeSystemPrompt()).toBe(WRITE_SYSTEM_PROMPT);
+    expect(rewriteSystemPrompt()).toBe(REWRITE_SYSTEM_PROMPT);
+    expect(suggestSystemPrompt()).not.toContain(WRITING_GUARDRAIL);
+    const brief = briefText(planned, null);
+    expect(brief).not.toContain('TL;DR');
+    expect(brief).not.toContain('Section plans');
+  });
+
+  it('with them on, gives each prompt the guardrail and the writer the plan and short headings', () => {
+    vi.stubEnv('CONTENT_BRIEF_RULES', 'true');
+    for (const prompt of [writeSystemPrompt(), suggestSystemPrompt(), rewriteSystemPrompt()]) {
+      expect(prompt).toContain(WRITING_GUARDRAIL);
+    }
+    expect(writeSystemPrompt()).toContain("Follow the brief's section plans");
+    expect(writeSystemPrompt()).toContain('each section heading about 8 to 15 words');
+    const brief = briefText(planned, null);
+    expect(brief).toContain('Goal: Sell beans');
+    expect(brief).toContain("TL;DR (what the page's top must say): A 1:16 ratio suits most beans.");
+    expect(brief).toContain(
+      '- Ratio — answer first: Name the ratio first.; show as a comparison, the same points for each option in turn; state: The ratio cafés use (study, a placeholder until a source is found)',
+    );
+    expect(brief).toContain(
+      'Proof to gather (write it only from Your input; else a placeholder): test: Our cupping notes',
+    );
+  });
+
+  it('writes a new page from the plan, with them on', async () => {
+    vi.stubEnv('CONTENT_BRIEF_RULES', 'true');
+    await runDraftWriting({
+      draft: draftRow({ brief: planned }),
+      brand,
+      model: 'model:m',
+      input: input(),
+      budget,
+    });
+    const call = generateObject.mock.calls[0][0];
+    expect(call.system).toContain(WRITING_GUARDRAIL);
+    expect(call.prompt).toContain('Section plans:');
   });
 });
