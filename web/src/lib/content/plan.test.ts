@@ -2,9 +2,12 @@ import { describe, expect, it } from 'vitest';
 import {
   MAX_ROWS,
   buildPlan,
+  conversionsValue,
   dropSeverity,
+  pageValueOf,
   planPriorityLevel,
   rowsFor,
+  visitsValue,
   type PlanAnswers,
   type PlanDraft,
   type PlanMark,
@@ -24,6 +27,7 @@ const page = (path: string, over: Partial<PlanPage> = {}): PlanPage => ({
   citations: { cur: 2, prev: 2 },
   platformsDown: [],
   aiVisits: 0,
+  conversions: null,
   ...over,
 });
 const opportunity = (id: string, over: Partial<PlanOpportunity> = {}): PlanOpportunity => ({
@@ -360,11 +364,74 @@ describe("a row's score breakdown", () => {
     expect(rows.map((r) => [r.title, r.scoreParts[2], r.score])).toEqual([
       [
         'a',
-        { kind: 'pageValue', reason: 'visits', visits: 1000, value: 1, points: 20, max: 20 },
+        {
+          kind: 'pageValue',
+          reason: 'visits',
+          visits: 1000,
+          conversions: null,
+          value: 1,
+          points: 20,
+          max: 20,
+        },
         46,
       ],
-      ['b', { kind: 'pageValue', reason: 'visits', visits: 0, value: 0, points: 0, max: 20 }, 30],
+      [
+        'b',
+        {
+          kind: 'pageValue',
+          reason: 'visits',
+          visits: 0,
+          conversions: null,
+          value: 0,
+          points: 0,
+          max: 20,
+        },
+        30,
+      ],
     ]);
+  });
+
+  it('weighs the conversions a page took part in, with conversions on: 60% visits, 40% conversions', () => {
+    const { rows } = plan([
+      page('/a', { citations: { cur: 18, prev: 18 }, aiVisits: 1000, conversions: 20 }),
+      page('/b', { citations: { cur: 18, prev: 18 }, aiVisits: 1000, conversions: 0 }),
+      page('/c', { citations: { cur: 18, prev: 18 }, aiVisits: 10, conversions: 20 }),
+    ]);
+    const parts = Object.fromEntries(rows.map((r) => [r.title, r.scoreParts[2]]));
+    // Visits and 20 conversions in full: the whole 20 points.
+    expect(parts.a).toEqual({
+      kind: 'pageValue',
+      reason: 'visits',
+      visits: 1000,
+      conversions: 20,
+      value: 1,
+      points: 20,
+      max: 20,
+    });
+    // The same visits, none converting: 60% of the value.
+    expect(parts.b).toMatchObject({ conversions: 0, value: 0.6, points: 12 });
+    // Few visits, many conversions: the conversions lift it.
+    expect(parts.c.points).toBe(12.2);
+    expect(pageValueOf(10, null)).toBeCloseTo(visitsValue(10));
+    expect(conversionsValue(20)).toBe(1);
+    expect(conversionsValue(0)).toBe(0);
+  });
+
+  it('weighs conversions only once some page has any, and reads them as traffic data', () => {
+    // Turned on, none yet in the window: visits alone, as before.
+    const none = plan([
+      page('/a', { citations: { cur: 18, prev: 18 }, aiVisits: 1000, conversions: 0 }),
+    ]);
+    expect(none.rows[0].scoreParts[2]).toMatchObject({ conversions: null, value: 1, points: 20 });
+    // Conversions but no AI visit on any page: still data, not unknown.
+    const converting = plan([
+      page('/a', { citations: { cur: 18, prev: 18 }, aiVisits: 0, conversions: 5 }),
+    ]);
+    expect(converting.rows[0].scoreParts[2]).toMatchObject({
+      reason: 'visits',
+      visits: 0,
+      conversions: 5,
+    });
   });
 
   it('gives an opportunity on a page losing ground the drop and the opportunity both', () => {
