@@ -31,6 +31,8 @@ export interface AgentWriteRequest {
   rules: { key: string; name: string; detail: string }[];
   textRules: string[];
   locked: string[];
+  /** How many rules the editor counts ("met of total"): the run's "Reading N rules" says the same. */
+  counted?: number;
 }
 
 /** The server's limit on rules (content-writer.js writeDraftInput). */

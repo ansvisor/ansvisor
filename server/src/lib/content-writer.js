@@ -119,6 +119,12 @@ export const writeDraftInput = z.object({
   textRules: z.array(z.string().trim().min(1).max(300)).max(50).default([]),
   /** The passages AI answers quote today, by passageKey (an existing page's). */
   locked: z.array(z.string().max(5000)).max(500).default([]),
+  /**
+   * How many rules the editor counts (its "met of total": those it checks on
+   * the page), for the run's "Reading N rules" step; the rules sent also
+   * hold those only AI can read (tone, language).
+   */
+  counted: z.number().int().min(0).max(60).optional(),
 });
 
 export const pageSchema = z.object({
@@ -796,7 +802,8 @@ function startWritingRun(draft, input, rewrite) {
     claimedAt: draft.agent_state === 'writing' ? (draft.agent_state_at ?? null) : null,
     kind: rewrite ? 'rewrite' : draft.method === 'create' ? 'write' : 'fix',
     counts: {
-      rules: input.rules.length,
+      // As the editor counts them, so the step and its rules chip agree (editor test 2026-10-25).
+      rules: input.counted ?? input.rules.length,
       sources: promptIds.length + fanouts.length + pages.length + queries.length,
     },
   });

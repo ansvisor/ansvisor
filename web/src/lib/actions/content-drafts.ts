@@ -1868,7 +1868,7 @@ export async function getLastPageRewrite(id: string): Promise<LastRewrite | null
   const supabase = await createClient();
   const { data, error } = await supabase
     .from('content_draft_suggestions')
-    .select('after_chars, length_target, kept_chars')
+    .select('id, after_chars, length_target, kept_chars')
     .eq('draft_id', id)
     .eq('kind', 'page')
     .order('created_at', { ascending: false })
@@ -1876,7 +1876,12 @@ export async function getLastPageRewrite(id: string): Promise<LastRewrite | null
     .maybeSingle();
   if (error) throw new Error(error.message);
   if (!data || data.after_chars === null || data.kept_chars === null) return null;
-  return { chars: data.after_chars, target: data.length_target, kept: data.kept_chars };
+  return {
+    id: data.id,
+    chars: data.after_chars,
+    target: data.length_target,
+    kept: data.kept_chars,
+  };
 }
 
 /**

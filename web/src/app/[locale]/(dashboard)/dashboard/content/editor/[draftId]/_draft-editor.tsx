@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useFormatter, useTranslations } from 'next-intl';
 import { toast } from 'sonner';
-import { getHTMLFromFragment } from '@tiptap/core';
+import { createDocument, getHTMLFromFragment } from '@tiptap/core';
 import { EditorContent, useEditor, type Editor } from '@tiptap/react';
 import type { Node as PmNode } from '@tiptap/pm/model';
 import { TextSelection, type Transaction } from '@tiptap/pm/state';
@@ -656,6 +656,15 @@ export function DraftEditor({
     editor && citedRead
       ? rewriteFloor(editor.state, { summary: summaryAsked })
       : { kept: 0, floor: 0 };
+  // A page's characters as the toolbar counts them (the editor's own
+  // count), for a rewrite's before and after (editor test 2026-10-25: the
+  // card said 6,725 → 5,571 where the counter said 6,617 → 5,468).
+  const htmlChars = (html: string) =>
+    editor && !editor.isDestroyed
+      ? ((editor.storage.characterCount.characters({
+          node: createDocument(html, editor.schema),
+        }) as number | undefined) ?? pageTextLength(html))
+      : pageTextLength(html);
   // The Length the page is written to, for what the agent's rewrite reached.
   const lengthRule = rules.rules.find(({ rule }) => rule.key === 'length' && rule.on)?.rule;
   const lengthTarget = Number(lengthRule?.current);
@@ -1741,11 +1750,11 @@ export function DraftEditor({
         .map(({ rule }) => rule.key),
     });
     // A whole page rewritten: its Length is its own line on the card (read
-    // the same way, pageTextLength), so it isn't named again as broken.
+    // the same way, the editor's count), so it isn't named again as broken.
     if (page) {
       return {
         each: new Map<string, string[]>(),
-        all: effect(check(page.afterText, pageTextLength(page.afterText)), ['length']),
+        all: effect(check(page.afterText, htmlChars(page.afterText)), ['length']),
       };
     }
     const each = new Map<string, string[]>();
@@ -1941,7 +1950,33 @@ export function DraftEditor({
       cancelled = true;
     };
   }, [draft.id, shownRewriteId]);
-  const reach: RewriteReach = { kept: keptChars, floor: floorChars, last: lastRewrite };
+  // A rewrite's characters, before and after, as the toolbar counts them.
+  const pageChars = useMemo(
+    () =>
+      pageSuggestion
+        ? {
+            before: htmlChars(pageSuggestion.beforeHtml ?? ''),
+            after: htmlChars(pageSuggestion.afterText),
+          }
+        : null,
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- the rewrite's two pages, once
+    [pageSuggestion?.id, pageSuggestion?.afterText, pageSuggestion?.beforeHtml, editor],
+  );
+  // The rewrite shown, counted as the toolbar counts it, not as the API did:
+  // its Length band is the editor's.
+  const lastCounted =
+    lastRewrite && pageChars && lastRewrite.id === pageSuggestion?.id
+      ? { ...lastRewrite, chars: pageChars.after }
+      : lastRewrite;
+  const reach: RewriteReach = { kept: keptChars, floor: floorChars, last: lastCounted };
+  // The rules' count stands once My rules and the fan-outs (the fan-out
+  // rules' own) are read: before, rules come and go from it.
+  const rulesSettled =
+    rules.ready &&
+    reads.sources !== null &&
+    // The keywords rule reads the brief, the feed rule the catalog.
+    reads.brief.status !== 'loading' &&
+    (!feedOn || catalog !== undefined);
   // Open rules no run can close on this page (editor test 2026-10-25): every
   // long sentence inside a passage AI answers quote, a Length out of a
   // rewrite's reach. They leave the agent's work and Next step; the Rules tab
@@ -1969,6 +2004,8 @@ export function DraftEditor({
     [heldKey],
   );
   // The rules as the agent card counts its gain: met now, and the ones still open.
+  // The rules as the side panel shows them: their count once it stands.
+  const rulesShown = { ...rules, settled: rulesSettled };
   const effect = ruleEffects?.all ?? null;
   const cardRules = useMemo(
     () => ({
@@ -1979,7 +2016,8 @@ export function DraftEditor({
           .filter(({ rule, status }) => rule.on && status.state === 'bad')
           .map(({ rule }) => rule.key),
       ),
-      ...(effect
+      // The gain once the count stands: never one a read still to land moves.
+      ...(effect && rulesSettled
         ? {
             after: {
               now: effect.now,
@@ -1989,7 +2027,7 @@ export function DraftEditor({
           }
         : {}),
     }),
-    [rules.met, rules.total, rules.rules, effect], // eslint-disable-line react-hooks/exhaustive-deps
+    [rules.met, rules.total, rules.rules, effect, rulesSettled], // eslint-disable-line react-hooks/exhaustive-deps
   );
 
   /**
@@ -2792,7 +2830,11 @@ export function DraftEditor({
           textRules: rules.textRules.filter(({ rule }) => rule.on).map(({ rule }) => rule.text),
         },
       );
-      const result = await startAgentWriting(draft.id, draft.brandId, request);
+      const result = await startAgentWriting(draft.id, draft.brandId, {
+        ...request,
+        // "Reading N rules" says what the rules chip counts.
+        counted: rulesSettled ? rules.total : undefined,
+      });
       if ('error' in result) {
         toast.error(t(`agentFailed.errors.${result.error}`));
         return;
@@ -2871,7 +2913,11 @@ export function DraftEditor({
         const now = `${tRules('agent.now')}: ${ruleStatusDetail(tStatus, status)}`;
         return { ...rule, detail: [rule.detail, now].filter(Boolean).join(' · ').slice(0, 500) };
       });
-      const result = await startPageRewrite(draft.id, draft.brandId, request);
+      const result = await startPageRewrite(draft.id, draft.brandId, {
+        ...request,
+        // "Reading N rules" says what the rules chip counts.
+        counted: rulesSettled ? rules.total : undefined,
+      });
       if ('error' in result) {
         toast.error(t(`agentFailed.errors.${result.error}`));
         return;
@@ -3565,16 +3611,26 @@ export function DraftEditor({
             type="button"
             onClick={() => openPanelTab('rules')}
             title={t('rulesChipHint')}
-            aria-label={t('rulesChip', { met: rules.met, total: rules.total })}
+            aria-label={
+              rulesSettled
+                ? t('rulesChip', { met: rules.met, total: rules.total })
+                : t('rulesChipReading')
+            }
             className={cn(
               'inline-flex h-5 shrink-0 items-center gap-1.5 rounded-full border px-2 text-xs font-medium',
-              rules.total > 0 && rules.met === rules.total
-                ? 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950 dark:text-emerald-300'
-                : 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-300',
+              !rulesSettled
+                ? 'text-muted-foreground'
+                : rules.total > 0 && rules.met === rules.total
+                  ? 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950 dark:text-emerald-300'
+                  : 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-300',
             )}
           >
             <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-current" />
-            {t('rulesChip', { met: rules.met, total: rules.total })}
+            {/* One count once the set and the fan-outs are read (editor test
+                2026-10-25: 8 of 12 on first paint, then 11 of 15). */}
+            {rulesSettled
+              ? t('rulesChip', { met: rules.met, total: rules.total })
+              : t('rulesChipReading')}
           </button>
           {qualityOn && shownQuality === null && (
             <button
@@ -3741,6 +3797,7 @@ export function DraftEditor({
               }
               // The kept blocks are named only when they put the Length out of reach.
               length={length && { ...length, outOfReach: keptOutOfReach(rules.rules, reach) }}
+              pageChars={pageChars}
               onAllSteps={() => {
                 setNextFocus(true);
                 setNextOpen(true);
@@ -3827,7 +3884,7 @@ export function DraftEditor({
             title={title}
             bodyHtml={pageHtml}
             pageType={pageType}
-            rules={rules}
+            rules={rulesShown}
             reads={reads}
             tabRequest={tabRequest}
             agentFix={agentFix}
