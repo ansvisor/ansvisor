@@ -127,6 +127,47 @@ export type Database = {
           },
         ]
       }
+      action_task_reviews: {
+        Row: {
+          action_id: string
+          created_at: string
+          details: Json
+          id: string
+          missing: string[]
+          source: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          action_id: string
+          created_at?: string
+          details?: Json
+          id?: string
+          missing?: string[]
+          source?: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          action_id?: string
+          created_at?: string
+          details?: Json
+          id?: string
+          missing?: string[]
+          source?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "action_task_reviews_action_id_fkey"
+            columns: ["action_id"]
+            isOneToOne: false
+            referencedRelation: "actions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       action_tasks: {
         Row: {
           action_id: string
@@ -4415,6 +4456,10 @@ export type Database = {
         Returns: Json
       }
       apply_prompt_locations: { Args: { p_updates: Json }; Returns: number }
+      approve_action_task_review: {
+        Args: { p_details: Json; p_review_id: string; p_title: string }
+        Returns: string
+      }
       brand_ai_conversions: {
         Args: { p_brand_id: string; p_days?: number }
         Returns: Json

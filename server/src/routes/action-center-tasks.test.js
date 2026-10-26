@@ -78,8 +78,14 @@ describe('regenerateTasks', () => {
   });
 
   it('writes as the caller and says how many were written and kept', async () => {
-    writeTasksForAction.mockResolvedValueOnce({ status: 'written', tasks: [{}, {}, {}], kept: 2 });
-    expect(await regenerateTasks('a1', 'u1')).toEqual({ written: 3, kept: 2 });
+    writeTasksForAction.mockResolvedValueOnce({
+      status: 'written',
+      tasks: [{}, {}, {}],
+      reviews: [{}],
+      kept: 2,
+    });
+    // With how many wait in Needs review (AC-010).
+    expect(await regenerateTasks('a1', 'u1')).toEqual({ written: 3, kept: 2, reviews: 1 });
     expect(writeTasksForAction).toHaveBeenCalledWith('a1', { trigger: 'regenerate', userId: 'u1' });
   });
 
