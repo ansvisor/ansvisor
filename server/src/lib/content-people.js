@@ -391,7 +391,7 @@ const NAME_CUES = [
 ];
 
 /** Capitalised words that start a sentence, not a name ("The team said", "As Ada says"). */
-const NOT_NAMES = new Set(
+export const NOT_NAMES = new Set(
   (
     'the this that these those our your their his her its a an every each some most many one we they it ' +
     'as when if but and so then while because after before like unlike for in on at by with from to of ' +
