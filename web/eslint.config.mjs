@@ -33,14 +33,11 @@ const eslintConfig = defineConfig([
           message: "Name the locale: pass 'en-US' instead of [].",
         },
         // new Intl.NumberFormat(), Intl.NumberFormat(undefined, …), new Intl.Collator([]).
-        // Intl.DateTimeFormat() alone reads the browser's time zone (lib/time-zone.ts).
-        {
-          selector: "NewExpression[callee.object.name='Intl'][arguments.length=0]",
-          message: "Name the locale: pass 'en-US'.",
-        },
+        // A formatter with no arguments only to read its resolvedOptions() (the
+        // browser's time zone, lib/time-zone.ts) formats nothing, with or without `new`.
         {
           selector:
-            "CallExpression[callee.object.name='Intl'][callee.property.name!='DateTimeFormat'][arguments.length=0]",
+            ":matches(NewExpression, CallExpression)[callee.object.name='Intl'][arguments.length=0]:not(MemberExpression[property.name='resolvedOptions'] > .object)",
           message: "Name the locale: pass 'en-US'.",
         },
         {
