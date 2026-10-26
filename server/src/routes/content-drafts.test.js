@@ -114,11 +114,27 @@ describe('POST /api/content-drafts/:draftId/brief', () => {
     expect(rebuildDraftBrief).toHaveBeenCalledWith({ draftId: DRAFT, brandId: BRAND, sources });
   });
 
+  it('passes the rules in effect on, cut to fit', async () => {
+    const rules = [
+      { key: 'faq', name: 'FAQ', detail: 'aim: 5 questions' },
+      { key: 'h1', name: 'H1' },
+    ];
+    const res = await rebuild({ brandId: BRAND, sources, rules });
+    expect(res.status).toBe(200);
+    expect(rebuildDraftBrief).toHaveBeenCalledWith({
+      draftId: DRAFT,
+      brandId: BRAND,
+      sources,
+      rules: [rules[0], { ...rules[1], detail: '' }],
+    });
+  });
+
   it('refuses a malformed draft, brand or source list', async () => {
     for (const [body, draftId] of [
       [{ brandId: BRAND, sources }, 'd1'],
       [{ brandId: 'b1', sources }, DRAFT],
       [{ brandId: BRAND, sources: { ...sources, promptIds: ['p1'] } }, DRAFT],
+      [{ brandId: BRAND, sources, rules: Array(61).fill({ key: 'faq', name: 'FAQ' }) }, DRAFT],
     ]) {
       const res = await rebuild(body, draftId);
       expect(res.status).toBe(400);

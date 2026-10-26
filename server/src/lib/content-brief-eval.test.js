@@ -152,6 +152,40 @@ describe('the checks anyone can repeat', () => {
     expect(briefChecks(brief, FIRST).invented.urls).toEqual(['www.made-up.example/x']);
   });
 
+  it('read version 2’s answers and facts too: the judge sees them, the gate reads them', () => {
+    const page = FIRST.sources.pages[0].url;
+    const section = {
+      ...GOOD.outline[0],
+      answer: 'Say what a rolling forecast is, as https://made-up.example/answer does.',
+      format: 'paragraphs',
+      facts: [
+        { claim: 'How often teams re-forecast', sourceType: 'study', source: 'S1' },
+        { claim: 'What www.made-up.example/claim found', sourceType: 'statistic', source: null },
+      ],
+    };
+    const brief = shapeBrief({ ...GOOD, outline: [section, ...GOOD.outline.slice(1)] }, FIRST);
+    const prompt = buildJudgePrompt(FIRST, brief);
+    expect(prompt).toContain('Answer: Say what a rolling forecast is');
+    expect(prompt).toContain('Format: paragraphs');
+    expect(prompt).toContain(`Fact (study, check against ${page}): How often teams re-forecast`);
+    expect(prompt).toContain('Fact (statistic): What www.made-up.example/claim found');
+    expect(briefChecks(brief, FIRST).invented.urls).toEqual([
+      'https://made-up.example/answer',
+      'www.made-up.example/claim',
+    ]);
+    // A figure the model wrote in a fact, before the guard.
+    const raw = {
+      ...brief,
+      outline: [
+        {
+          ...brief.outline[0],
+          facts: [{ claim: '73% re-forecast', sourceType: 'study', source: null }],
+        },
+      ],
+    };
+    expect(briefChecks(raw, FIRST).invented.figures).toEqual(['73']);
+  });
+
   it('take an address the case gave: a cited page, or the live page', () => {
     const live = CASES.find((c) => c.draft.method === 'optimize');
     const brief = shapeBrief(
@@ -242,6 +276,12 @@ describe('a judge’s answer as kept', () => {
     const before = [process.env.CONTENT_QUALITY_PHASE, process.env.CONTENT_BRIEF_RULES];
     promptVersion(CASES, { phase: 3, rules: true });
     expect([process.env.CONTENT_QUALITY_PHASE, process.env.CONTENT_BRIEF_RULES]).toEqual(before);
+  });
+
+  it('asks as version 1 always has with the brief rules off: the baseline’s hashes', () => {
+    // Changed on purpose? Record the version 1 baseline again, then these.
+    expect(promptVersion(CASES, { phase: 0, rules: false })).toBe('245d727b9091');
+    expect(promptVersion(CASES, { phase: 2, rules: false })).toBe('bfa5ca4994bf');
   });
 });
 

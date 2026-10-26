@@ -98,8 +98,9 @@ function urlKey(url) {
 
 /**
  * A brief's fields as the judge sees them and as a quote is read in: the
- * goal, the audience, each heading and key point, the keywords as one line;
- * each with whether it's a heading.
+ * goal, the audience, each heading and key point, version 2's answer, format
+ * and facts (with the kind of source each needs and the page to check it
+ * against), the keywords as one line; each with whether it's a heading.
  */
 function briefFields(brief) {
   return [
@@ -108,6 +109,13 @@ function briefFields(brief) {
     ...brief.outline.flatMap((s) => [
       { label: 'H2: ', text: s.heading, heading: true },
       ...s.keyPoints.map((point) => ({ label: '- ', text: point, heading: false })),
+      { label: 'Answer: ', text: s.answer, heading: false },
+      { label: 'Format: ', text: s.format, heading: false },
+      ...(s.facts ?? []).map((f) => ({
+        label: `Fact (${f.sourceType}${f.source ? `, check against ${f.source.label}` : ''}): `,
+        text: f.claim,
+        heading: false,
+      })),
     ]),
     { label: 'Keywords: ', text: brief.keywords.join(', '), heading: false },
   ].filter((f) => f.text);
