@@ -13,6 +13,7 @@ import {
   authorWords,
   guardPeopleInHtml,
   isKnown,
+  isRole,
   knownPeople,
 } from './content-people.js';
 import {
@@ -312,9 +313,11 @@ export function growsPastLimit(passage, before, words) {
  * says (SOURCES_RULE), so one it adds puts a claim in a source's mouth
  * (editor test 2026-10-25: an AI Overview's claim given to Zapier).
  */
-// A capitalised word of a name: a dot only inside it ("Node.js", "U.S"),
-// never the one that ends its sentence ("…according to Gartner. The plan").
-const NAME_WORD = String.raw`\p{Lu}(?:[\p{L}\p{N}&'’-]|\.(?=[\p{L}\p{N}]))*`;
+// A capitalised word of a name, starting a word: a dot inside it ("Node.js")
+// or after an initial ("U.S."), never the one that ends its sentence
+// ("…according to Gartner. The plan").
+const NAME_DOT = String.raw`\.(?=[\p{L}\p{N}])|(?<=(?:^|[^\p{L}\p{N}]|\.)\p{Lu})\.`;
+const NAME_WORD = String.raw`(?<![\p{L}\p{N}&'’.-])\p{Lu}(?:[\p{L}\p{N}&'’-]|${NAME_DOT})*`;
 // A name as an attribution gives it: capitalised words, after an article
 // or a year ("the Zapier report", "a 2025 Gartner survey").
 const SOURCE_NAME = String.raw`(?<name>(?!(?:The|This|That|These|Those|Our|Their|Its|Your|My|His|Her|We|They|It|A|An)\b)${NAME_WORD}(?:\s+${NAME_WORD})*)`;
@@ -325,11 +328,6 @@ const ATTRIBUTIONS = [
     String.raw`\b[Aa]s\s+(?:reported|noted|stated|found)\s+by\s+${LEAD}${SOURCE_NAME}`,
     'gu',
   ),
-  // "Per Gartner, …", "per Gartner's survey", "…, per Gartner.": never "per
-  // SKU, or per API call" or "per E-Mail".
-  new RegExp(String.raw`\bPer\s+${LEAD}${SOURCE_NAME}(?=\s*,)`, 'gu'),
-  new RegExp(String.raw`\b[Pp]er\s+${LEAD}${SOURCE_NAME}(?=['’]s\b)`, 'gu'),
-  new RegExp(String.raw`,\s*per\s+${LEAD}${SOURCE_NAME}(?=\s*[.;!?]|\s*$)`, 'gu'),
   new RegExp(String.raw`${SOURCE_NAME}\s+(?:says|said)\b`, 'gu'),
   // "Claims" and "states" are nouns too ("Warranty claims are…", "all 50
   // US states"): those, as "reports" and the rest, only before "that".
@@ -344,25 +342,44 @@ const ATTRIBUTIONS = [
   new RegExp(String.raw`\b[Ll]aut\s+${LEAD}${SOURCE_NAME}`, 'gu'),
   // "Gartner'a göre", never a comparison ("ChatGPT'ye göre daha hızlı").
   new RegExp(
-    String.raw`(?<name>\p{Lu}(?:[\p{L}\p{N}-]|\.(?=[\p{L}\p{N}]))*)['’]\p{L}{1,3}\s+göre\b(?!\s+(?:daha|en)\b)`,
+    String.raw`(?<name>(?<![\p{L}\p{N}.-])\p{Lu}(?:[\p{L}\p{N}-]|${NAME_DOT})*)['’]\p{L}{1,3}\s+göre\b(?!\s+(?:daha|en)\b)`,
     'gu',
   ),
 ];
+
+/**
+ * "Per Gartner, …", "per Gartner's survey", "…, per Gartner.": read on an
+ * English page only, as German writes "per E-Mail", "per App" (an English
+ * "Per SKU, you pay…" still reads as one: an acronym may be a source too,
+ * "Per IDC, …").
+ */
+const PER_ATTRIBUTIONS = [
+  new RegExp(String.raw`\bPer\s+${LEAD}${SOURCE_NAME}(?=\s*,)`, 'gu'),
+  new RegExp(String.raw`\b[Pp]er\s+${LEAD}${SOURCE_NAME}(?=['’]s\b)`, 'gu'),
+  new RegExp(String.raw`,\s*per\s+${LEAD}${SOURCE_NAME}(?=\s*[.;!?]|\s*$)`, 'gu'),
+];
+
+/** The attributions read on a page in this language: "per" on an English one (or one not said). */
+const attributionsFor = (language) =>
+  !language || /^en\b/i.test(language) ? [...ATTRIBUTIONS, ...PER_ATTRIBUTIONS] : ATTRIBUTIONS;
 
 /**
  * The sources a claim may be given to on a page: the names it gives claims
  * to already, Brief › Your input's (an expert, the person's own data) and
  * the workspace's authors.
  */
-export function attributableSources(pageHtml, numbered, authors = []) {
+export function attributableSources(pageHtml, numbered, authors = [], language = null) {
   const inputs = numbered.filter((s) => s.kind === 'input').map(sourceWords);
-  return knownPeople(...attributedNames(htmlText(pageHtml)), ...inputs, ...authors);
+  return {
+    ...knownPeople(...attributedNames(htmlText(pageHtml), language), ...inputs, ...authors),
+    language,
+  };
 }
 
 /** Each attribution a text writes: the name it gives a claim to, and where. */
-function attributionsIn(text) {
+function attributionsIn(text, language = null) {
   const found = [];
-  for (const re of ATTRIBUTIONS) {
+  for (const re of attributionsFor(language)) {
     for (const match of String(text).matchAll(re)) {
       const name = match.groups?.name ?? '';
       if (name) found.push({ name, index: match.index + match[0].indexOf(name) });
@@ -372,25 +389,45 @@ function attributionsIn(text) {
 }
 
 /** The names a text gives claims to: the sources the page already attributes to. */
-export function attributedNames(text) {
-  return attributionsIn(text).map((a) => a.name);
+export function attributedNames(text, language = null) {
+  return attributionsIn(text, language).map((a) => a.name);
 }
 
 /**
- * Whether a name is one the agent was given (`known`, knownPeople): read
- * without a possessive ("Gartner's latest survey") or the words a sentence
- * starts with ("As Zapier says": "Zapier"), but whole: "Forrester Research"
- * isn't known for the word "research" in a bio.
+ * Where a name's own words start: past the words a sentence starts with, a
+ * role or an adverb ("As Zapier", "CEO Jane Doe", "Recently Gartner"), as
+ * personIn (content-people.js) reads a person's.
+ */
+function nameStart(name) {
+  for (const word of name.matchAll(/\S+/g)) {
+    const lower = word[0].toLowerCase();
+    if (!NOT_NAMES.has(lower) && !isRole(lower) && !/^\p{L}+ly$/u.test(lower)) return word.index;
+  }
+  return name.length;
+}
+
+/**
+ * Whether a name is one the agent was given (`known`, knownPeople): its own
+ * words (nameStart), without a possessive ("Gartner's latest survey"),
+ * whole or their end of two words at least ("Acme CEO Jane Doe": "Jane
+ * Doe"). "Forrester Research" isn't known for the word "research" in a bio.
  */
 function knownName(name, known) {
-  const words = name.replace(/['’]\p{L}{0,3}$/u, '').split(/\s+/);
-  const start = words.findIndex((word) => !NOT_NAMES.has(word.toLowerCase()));
-  return start !== -1 && isKnown(words.slice(start).join(' '), known);
+  const words = name
+    .slice(nameStart(name))
+    .replace(/['’]\p{L}{0,3}$/u, '')
+    .split(/\s+/)
+    .filter(Boolean);
+  for (let i = 0; words.length - i >= (i === 0 ? 1 : 2); i++) {
+    if (isKnown(words.slice(i).join(' '), known)) return true;
+  }
+  return false;
 }
 
 /** How many claims a text gives to a source the agent wasn't given. */
 function attributions(text, known) {
-  return attributionsIn(text).filter((a) => !known || !knownName(a.name, known)).length;
+  return attributionsIn(text, known?.language).filter((a) => !known || !knownName(a.name, known))
+    .length;
 }
 
 /**
@@ -408,13 +445,16 @@ export function addsAttribution(before, words, known = null) {
  * where dropping it would drop the page.
  */
 export function placeholderAttributions(text, known = null) {
-  const unknown = attributionsIn(text)
+  const unknown = attributionsIn(text, known?.language)
     .filter((a) => !known || !knownName(a.name, known))
     .sort((a, b) => b.index - a.index);
   let out = String(text);
   for (const { name, index } of unknown) {
     if (out.slice(index, index + name.length) !== name) continue;
-    out = `${out.slice(0, index)}[source]${out.slice(index + name.length)}`;
+    // The name's own words go; a sentence's first word before it stays ("As [source] says").
+    const start = nameStart(name);
+    if (start >= name.length) continue;
+    out = `${out.slice(0, index + start)}[source]${out.slice(index + name.length)}`;
   }
   return out;
 }
@@ -422,7 +462,7 @@ export function placeholderAttributions(text, known = null) {
 // A list of names: two or more capitalised items with commas and an "and"
 // ("Ansvisor, Profound and LLM Pulse"; und, ve, et, y…), or three with
 // commas; a dot only inside a word, as in a source's name.
-const ITEM_WORD = String.raw`\p{Lu}(?:[\p{L}\p{N}&+'’-]|\.(?=[\p{L}\p{N}]))*`;
+const ITEM_WORD = String.raw`(?<![\p{L}\p{N}&+'’.-])\p{Lu}(?:[\p{L}\p{N}&+'’-]|${NAME_DOT})*`;
 const ITEM = String.raw`${ITEM_WORD}(?:\s+${ITEM_WORD})*`;
 const AND = String.raw`(?:and|or|und|oder|ve|veya|ile|et|ou|y|o|e|en|of)`;
 const NAME_LIST = new RegExp(
@@ -1040,7 +1080,7 @@ async function fixWithRun({
   );
   // The sources a claim may be given to: the ones the page gives claims to,
   // and its Your input and authors (never just a name the page lists).
-  const attributable = attributableSources(draft.body_html, numbered, authors);
+  const attributable = attributableSources(draft.body_html, numbered, authors, brand.language);
   // Where it may link: the brand's pages and the draft's sources (A); a
   // hand-off's source checks link the draft's sources.
   const linkKeys =
