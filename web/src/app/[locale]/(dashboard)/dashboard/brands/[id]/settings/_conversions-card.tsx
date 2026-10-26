@@ -220,6 +220,7 @@ export function ConversionsCard({
                     <>
                       <p className="text-xs text-muted-foreground">{t('steps.consentHelp')}</p>
                       <CopyBlock text={CONSENT_CALL} label={t('copyConsent')} />
+                      <p className="pt-1 text-xs font-medium">{t('steps.refuse')}</p>
                     </>
                   )}
                   <p className="text-xs text-muted-foreground">{t('steps.denyHelp')}</p>

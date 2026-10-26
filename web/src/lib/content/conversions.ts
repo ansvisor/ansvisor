@@ -111,5 +111,7 @@ export function journeyPages(pages: string[], keep?: string): (string | null)[] 
   if (pages.length <= 5) return pages;
   const shown = [pages[0], null, ...pages.slice(-3)];
   if (keep === undefined || shown.includes(keep) || !pages.includes(keep)) return shown;
-  return [pages[0], null, keep, null, pages[pages.length - 1]];
+  // A gap only where pages are left out: none before the page right after the first.
+  const at = pages.indexOf(keep);
+  return [pages[0], ...(at > 1 ? [null] : []), keep, null, pages[pages.length - 1]];
 }

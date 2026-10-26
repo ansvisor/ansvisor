@@ -639,11 +639,16 @@ describe('the tracking snippet with conversions (CE-017)', () => {
   });
 
   it('never stops the site’s own push or route change when its own part fails', () => {
-    const dataLayer = [];
-    const page = runWithConversions({ stored: earlier(1), dataLayer });
+    const page = runWithConversions({ stored: earlier(1) });
     page.failSends();
     expect(() => page.window.history.pushState({}, '', '/checkout')).not.toThrow();
     expect(page.location.pathname).toBe('/checkout');
+    expect(() => page.popstate()).not.toThrow();
+    // A grant sending what waited, with the beacon failing: the push still goes in.
+    const dataLayer = [];
+    const landing = runWithConversions({ referrer: 'https://chatgpt.com/', dataLayer });
+    landing.window.ansvisor('conversion', { type: 'demo' });
+    landing.failSends();
     expect(() =>
       dataLayer.push(['consent', 'update', { analytics_storage: 'granted' }]),
     ).not.toThrow();
