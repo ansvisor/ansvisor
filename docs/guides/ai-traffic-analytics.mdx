@@ -28,7 +28,7 @@ A section whose source isn't connected stays on the page with a **Needs …** ta
     ```html
     <script src="https://YOUR_API_URL/t.js" data-t="YOUR_TRACKING_CODE" defer></script>
     ```
-    The page fills in your own address and tracking code, so copy it rather than typing it.
+    The page fills in your own address and tracking code, so copy it rather than typing it. To follow AI visitors to signups, demo forms and orders, use the tag from [Conversions from AI visits](#conversions-from-ai-visits) instead.
   </Step>
   <Step title="Paste into your site">
     Add the script before `</head>` on every page you want to track, **your 404 page included**, so [Broken AI links](#pages) can see visitors who land on a missing page. For Next.js, drop it in your root layout. For WordPress, use a header injection plugin. For static sites, edit the template.
@@ -197,6 +197,100 @@ It goes to the brand's [Daily Pulse](/guides/daily-pulse) recipients. To turn it
 
 No e-mail goes out for a week with no AI visits in it or the week before, or when the organization's subscription isn't active. A send that fails on Monday is tried again on Tuesday and Wednesday. The e-mail is cloud only.
 
+## Conversions from AI visits
+
+Google Analytics' key events say how many AI sessions converted. To see which pages AI visitors went through on the way to a signup, a demo form or an order, turn on conversions for the brand. The snippet then follows visitors who came from an AI assistant for 30 days from that first visit, and credits each conversion to the assistant that first sent them (first touch). The [Content Editor](/guides/content-editor) shows what came of it: the **Live page** tab per page, and the Content plan's AI results line for the whole site.
+
+Conversions are off by default. A brand that doesn't turn them on keeps the tag it has, and the snippet keeps storing nothing.
+
+<Steps>
+  <Step title="Turn conversions on">
+    In **Brand settings → Tracking**, under **Conversions from AI visits**, switch on **Track conversions from AI visits** and choose **Consent**:
+
+    - **Wait for the visitor's consent** (recommended): no id is kept and no journey is sent until your site says the visitor agreed. AI visits themselves are counted as before.
+    - **Don't wait: our own banner covers it**: use this only if your cookie banner or privacy policy already covers analytics storage.
+
+    Only admins and managers can change it.
+  </Step>
+  <Step title="Replace the tag">
+    **Copy the tag** and use it in place of the one you have, before `</head>` on every page. It has two lines:
+    ```html
+    <script>window.ansvisor=window.ansvisor||function(){(ansvisor.q=ansvisor.q||[]).push(arguments)};</script>
+    <script src="https://YOUR_API_URL/t.js" data-t="YOUR_TRACKING_CODE" data-c="1" data-consent="wait" defer></script>
+    ```
+    The first line lets your site call `ansvisor()` before the snippet has loaded: the calls wait for it.
+  </Step>
+  <Step title="Say when the visitor agrees">
+    With **Wait for the visitor's consent**, call this from your cookie banner once the visitor agrees, and on every page after:
+    ```js
+    ansvisor('consent', 'granted');
+    ```
+    If the visitor later says no, `ansvisor('consent', 'denied')` deletes the id. Google Consent Mode needs no call: see [Consent](#consent).
+  </Step>
+  <Step title="Count your conversions">
+    Forms with an email field count on their own (see [Forms](#forms)). For anything else, such as a thank-you page or a purchase, call `ansvisor('conversion', …)` from your own code (see [Conversion calls](#conversion-calls)). On Shopify, add the [Shopify pixel](#shopify) for orders.
+  </Step>
+</Steps>
+
+### Consent
+
+With **Wait for the visitor's consent**, the snippet keeps the visitor's events on the page until it knows they agreed, and drops them if they leave first. It counts as agreeing when:
+
+- your site calls `ansvisor('consent', 'granted')`;
+- Google Consent Mode grants `analytics_storage` in an `update`, or in a `default` set on the page before the snippet that names no region. A regional default ("denied in the EU") can't say which this visitor got, so the snippet waits for an update. A default set after the snippet only ever pauses it;
+- the visitor already has an id from an earlier page, which means they agreed then.
+
+A Consent Mode `update` that takes `analytics_storage` back deletes the id, as `ansvisor('consent', 'denied')` does. With **Don't wait**, the id is kept at once unless Consent Mode says otherwise.
+
+<Note>
+A cookie banner set up inside Google Tag Manager (a consent template) doesn't reach the snippet by itself. Add a tag in Tag Manager that runs `ansvisor('consent', 'granted');` once consent is given.
+</Note>
+
+### Forms
+
+When a visitor the snippet follows sends a form with an email field, it counts as a **signup**, once per page. Contact and newsletter forms count too. On the `<form>` tag:
+
+- `data-ansvisor-goal="demo"` names its goal instead: `signup`, `demo`, `order`, `booking`, `newsletter` or `custom`. A form with a goal counts even without an email field;
+- `data-ansvisor="off"` leaves it out;
+- `data-ansvisor-label="pricing-demo"` names the form; otherwise its `id` or `name` does.
+
+A form with a password field counts only as a signup (`autocomplete="new-password"`), never as a login, unless it names its goal. Nothing typed in a form is sent. Don't also call a conversion from your own code for the same form, or it counts twice.
+
+### Conversion calls
+
+```js
+ansvisor('conversion', { type: 'demo' });
+ansvisor('conversion', { type: 'order', value: 129.5, currency: 'EUR', units: 2, order: '1001' });
+```
+
+| Field | What it is |
+|---|---|
+| `type` | The goal: `signup`, `demo`, `order`, `booking`, `newsletter` or `custom`. Another name counts as `custom`, under that name. |
+| `value`, `currency` | What the conversion was worth, and its currency as a three-letter code. Revenue adds up orders' and bookings' values per currency. |
+| `units` | How many items an order had. |
+| `order` | Your own order id. An order sent twice for the same visitor counts once. |
+| `label` | A name for the conversion, up to 80 characters, such as `pricing-demo`. Never put what the visitor typed here. |
+
+### Shopify
+
+Shopify runs no theme code on its checkout, so orders come from a Customer events pixel:
+
+1. In **Brand settings → Tracking**, click **Show the Shopify pixel**, then **Copy the Shopify pixel**.
+2. In Shopify admin, open **Settings › Customer events › Add custom pixel** and name it Ansvisor.
+3. Under **Customer privacy**, set **Permission** to **Analytics** and **Data sale** to **Data collected does not qualify as data sale**.
+4. Paste the code, save, then **Connect** it.
+
+The pixel sends each completed checkout's value, currency and units for visitors the snippet followed on your storefront, so the storefront still needs the tag in `theme.liquid`. If your store asks for consent, also add the consent script (**Copy the Shopify consent script**) to `theme.liquid`, after the tag, so the answers from Shopify's cookie banner reach the snippet. A headless store whose checkout is on another domain can't link its orders this way.
+
+### What it can't see
+
+- Visitors who refuse cookies, in the EU for example.
+- AI visits that arrive without a referrer: they count as Direct.
+- Google's AI Overviews and AI Mode, which stay an estimate.
+- Journeys from one subdomain to another, `www` to `app` for example: each keeps its own id.
+- Forms inside an iframe (a Typeform or Calendly embed) or a shadow root, forms sent from script with `form.submit()`, and posts without a form. Call `ansvisor('conversion', …)` for these.
+- Conversions after Safari has cleared the id: it does so after 7 days without a visit to your site.
+
 ## Supported AI sources
 
 The snippet and the Google Analytics sync count the same AI assistants, from one list (`server/src/lib/ai-sources.json`):
@@ -214,7 +308,9 @@ Google Analytics also counts its own **AI Assistant** channel, so an assistant t
 
 ## Privacy
 
-The snippet sends nothing unless the visitor arrived from an AI assistant on the list above. For an AI-referred visit it sends the page address, the referrer, the AI source, the browser's user agent, language and screen size, and the page's HTTP status as the browser saw it. Ansvisor adds the country the request came from. **The snippet sets no cookies and stores nothing in the visitor's browser.**
+The snippet sends nothing unless the visitor arrived from an AI assistant on the list above. For an AI-referred visit it sends the page address, the referrer, the AI source, the browser's user agent, language and screen size, and the page's HTTP status as the browser saw it. Ansvisor adds the country the request came from. **The snippet sets no cookies. Without conversions, it stores nothing in the visitor's browser.**
+
+With [conversions](#conversions-from-ai-visits) on, it stores one item, `ansvisor_v` in the browser's local storage, for visitors who came from an AI assistant and, unless you chose **Don't wait**, agreed: a random id with the source, page and time of their first AI visit. It's deleted after 30 days, or when the visitor withdraws consent. For those visitors the snippet also sends the addresses of the pages they go on to (without their query string), the forms they send (the goal and the form's name, never what was typed in it) and your conversion calls. No name, email or IP address is stored with a conversion.
 
 **The visitor's IP address is never stored.** To group a visit's pageviews into one visit, Ansvisor keeps a one-way key made from the IP address, your brand and a random salt that changes every day. Each day's salt is deleted after two days. From then on, nothing links a key to an address, and one visitor's days can't be joined. A visit that runs past midnight (UTC) counts as two.
 
