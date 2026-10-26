@@ -10,6 +10,8 @@ const O9 = '99999999-9999-9999-9999-999999999999';
 
 let reads: Record<string, unknown>;
 let rpcResult: unknown;
+/** A function's own answer, where a test gives one (else rpcResult). */
+let rpcByName: Record<string, { data?: unknown; error?: { message: string } }>;
 let rpcCalls: [string, unknown][];
 let filters: [string, string, string, unknown][];
 /** One row a .maybeSingle() read or write returns, by table (null: none). */
@@ -21,7 +23,9 @@ vi.mock('@/lib/supabase/server', () => ({
     auth: { getUser: async () => ({ data: { user: { id: 'u1' } } }) },
     rpc: async (name: string, args: unknown) => (
       rpcCalls.push([name, args]),
-      { data: rpcResult, error: null }
+      name in rpcByName
+        ? { data: rpcByName[name].data ?? null, error: rpcByName[name].error ?? null }
+        : { data: rpcResult, error: null }
     ),
     from: (table: string) => {
       // A read by id (the hidden opportunities) answers from `${table}#id`.
@@ -78,6 +82,7 @@ const {
 beforeEach(() => {
   reads = {};
   rpcResult = { days: 30, pages: [] };
+  rpcByName = {};
   rpcCalls = [];
   filters = [];
   single = {};
@@ -339,7 +344,13 @@ describe('getPlanPriorities', () => {
 });
 
 describe('getContentPlanInsights', () => {
-  it('reads what AI cites and what AI visits brought in', async () => {
+  it('reads what AI cites and what AI visits brought in, with the snippet’s conversions', async () => {
+    const conversions = {
+      enabled: true,
+      goals: [{ goal: 'demo', count: 2 }],
+      journey: { source: 'chatgpt.com', pages: ['/blog', '/pricing'], goal: 'demo', count: 2 },
+    };
+    rpcByName = { brand_ai_conversions: { data: conversions } };
     rpcResult = {
       days: 30,
       totalCitations: 120,
@@ -359,8 +370,23 @@ describe('getContentPlanInsights', () => {
         analytics: true,
         purchases: false,
       },
+      conversions,
     });
-    expect(rpcCalls).toEqual([['content_plan_insights', { p_brand_id: BRAND, p_days: 30 }]]);
+    expect(rpcCalls).toEqual([
+      ['content_plan_insights', { p_brand_id: BRAND, p_days: 30 }],
+      ['brand_ai_conversions', { p_brand_id: BRAND, p_days: 30 }],
+    ]);
+  });
+
+  it('reads the rest when the conversions can’t be read (a database before 00288)', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    rpcByName = {
+      brand_ai_conversions: { error: { message: 'function brand_ai_conversions does not exist' } },
+    };
+    rpcResult = { totalCitations: 3, citations: [], results: { visits: 4 } };
+    const read = (await getContentPlanInsights(BRAND, 30))!;
+    expect(read.conversions).toBeNull();
+    expect(read.results.visits).toBe(4);
   });
 
   it('counts Analytics as connected only as AI Traffic does: connected and synced', async () => {

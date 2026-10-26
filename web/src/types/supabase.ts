@@ -4403,6 +4403,10 @@ export type Database = {
         Returns: Json
       }
       apply_prompt_locations: { Args: { p_updates: Json }; Returns: number }
+      brand_ai_conversions: {
+        Args: { p_brand_id: string; p_days?: number }
+        Returns: Json
+      }
       citation_competitor_sources: {
         Args: {
           p_brand_domains: string[]

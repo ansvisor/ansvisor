@@ -420,6 +420,32 @@ describe('the Content plan', () => {
     expect(section().textContent).not.toContain('Priority list filtered to');
   });
 
+  it('adds the goals the snippet followed AI visitors to, and the top journey (CE-017)', async () => {
+    getContentPlanInsights.mockResolvedValue({
+      ...INSIGHTS,
+      conversions: {
+        enabled: true,
+        goals: [
+          { goal: 'demo', count: 20 },
+          { goal: 'signup', count: 48 },
+        ],
+        journey: {
+          source: 'chatgpt.com',
+          pages: ['/blog/crm-data-hygiene', '/pricing'],
+          goal: 'demo',
+          count: 4,
+        },
+      },
+    });
+    await renderPage();
+    expect(container.textContent).toContain(
+      '1,240 visits · 48 key events · 12 orders · 3,210 revenue · 20 demo forms · 48 signups',
+    );
+    expect(container.textContent).toContain(
+      'Top journey:ChatGPT/blog/crm-data-hygiene/pricingDemo form· 4',
+    );
+  });
+
   it('asks for Google Analytics to show what AI visitors did', async () => {
     getContentPlanInsights.mockResolvedValue({
       ...INSIGHTS,
