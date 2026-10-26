@@ -93,6 +93,17 @@ export function stepActor(step: NextStep): 'agent' | 'you' {
   return AGENT_ACTIONS.has(step.primary) ? 'agent' : 'you';
 }
 
+/**
+ * Fix open rules' reason: the rules a run can close, and the others the
+ * Rules tab counts as open (Length, a setting only the person fills, rules
+ * held by quoted passages), so the two never seem to disagree.
+ */
+function fixRulesReason(t: T, state: NextStepState): string {
+  const fix = t('reasons.fixRules', { count: state.openRules.length });
+  const others = (state.openTotal ?? state.openRules.length) - state.openRules.length;
+  return others > 0 ? `${fix} ${t('reasons.fixRulesOthers', { count: others })}` : fix;
+}
+
 /** Why the step is next, from the page's own numbers. */
 export function stepReason(
   t: T,
@@ -105,9 +116,9 @@ export function stepReason(
     case 'length':
       return state.rewrite?.reason === 'length'
         ? t('reasons.length', { count: state.rewrite.count, target: state.rewrite.target })
-        : t('reasons.fixRules', { count: state.openRules.length });
+        : fixRulesReason(t, state);
     case 'fixRules':
-      return t('reasons.fixRules', { count: state.openRules.length });
+      return fixRulesReason(t, state);
     case 'write':
     case 'import':
       // Once the person said they'd write it, the step is theirs.
@@ -190,6 +201,7 @@ export function NextStepButton({
   const name = stepName(t, step.id, state);
   const now = path.findIndex((p) => p.state === 'now');
   const why = blocked(step.primary);
+  const whyAlternative = step.alternative ? blocked(step.alternative) : null;
   const whyId = useId();
   // After Skip, the new step's button takes focus (Skip itself may be gone).
   const primaryRef = useRef<HTMLButtonElement>(null);
@@ -271,7 +283,8 @@ export function NextStepButton({
                 <Button
                   variant="outline"
                   size="sm"
-                  disabled={blocked(step.alternative) !== null}
+                  disabled={whyAlternative !== null}
+                  aria-describedby={!why && whyAlternative ? whyId : undefined}
                   onClick={() => onAction(step.alternative!)}
                 >
                   {t(`actions.${step.alternative}`)}
@@ -290,12 +303,14 @@ export function NextStepButton({
                 </Button>
               )}
             </div>
-            {why && (
+            {/* The step's own button first; else why the other one is held
+                (Mark published on an archived page). */}
+            {(why ?? whyAlternative) && (
               <p
                 id={whyId}
                 className="text-xs text-amber-700 [overflow-wrap:anywhere] dark:text-amber-400"
               >
-                {why}
+                {why ?? whyAlternative}
               </p>
             )}
           </div>

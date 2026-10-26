@@ -1,6 +1,6 @@
 'use client';
 
-import { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 import { getMyRuleSets, saveDraftRules, saveMyRuleSet } from '@/lib/actions/content-drafts';
@@ -51,6 +51,11 @@ export interface DraftRulesState {
   length: number;
   /** The sections and questions the rules ask for take more than Length allows. */
   lengthConflict: { need: number; max: number } | null;
+  /**
+   * The rules checked against another page (an agent's change applied to a
+   * copy): what it would meet and break (editor test 2026-10-25).
+   */
+  checkHtml: (html: string, characters: number) => { rule: ActiveRule; status: RuleStatus }[];
   /** Turns a rule on or off, or gives it a value, for this draft. */
   change: (key: string, change: { on?: boolean; value?: string }) => void;
   /** Loads a set into the draft: a type's Ansvisor default, or the workspace's My rules for it. */
@@ -185,6 +190,13 @@ export function useDraftRules({
     [rules, page, ctx],
   );
   const { met, total } = rulesMet(checked);
+  const checkHtml = useCallback(
+    (other: string, count: number) => {
+      const read = readPage(other, count);
+      return rules.map((rule) => ({ rule, status: checkRule(rule, read, ctx) }));
+    },
+    [rules, ctx],
+  );
   const conflict = useMemo(
     () => lengthConflict(checked, ctx.fanouts.length),
     [checked, ctx.fanouts.length],
@@ -246,6 +258,7 @@ export function useDraftRules({
     total,
     length: ruleLength(rules, setType),
     lengthConflict: conflict,
+    checkHtml,
     change: (key, change) =>
       edited({
         overrides: { ...effective.overrides, [key]: { ...effective.overrides[key], ...change } },

@@ -23,6 +23,8 @@ export interface RunStep {
   key: RunStepKey;
   /** How many of what it reads ("20 cited pages"), or null. */
   count: number | null;
+  /** Why its writing step left nothing (content-agent.js emptyWhy), once done. */
+  why?: 'none' | 'locked' | 'dropped';
 }
 
 export type AgentRunKind = 'fix' | 'rewrite' | 'write' | 'brief' | 'handoff';
@@ -56,6 +58,9 @@ export function agentRunFrom(row: Record<string, unknown> | null): AgentRun | nu
           {
             key: s.key as RunStepKey,
             count: Number.isInteger(s.count) ? (s.count as number) : null,
+            ...(s.why === 'none' || s.why === 'locked' || s.why === 'dropped'
+              ? { why: s.why }
+              : {}),
           },
         ]
       : [],
