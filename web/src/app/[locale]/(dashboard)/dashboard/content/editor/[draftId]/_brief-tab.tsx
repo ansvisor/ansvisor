@@ -362,16 +362,16 @@ function BriefEditor({
         ...brief,
         goal: goal.trim(),
         audience: audience.trim(),
+        // What Edit brief doesn't show (version 2's answer, format, facts) is kept.
         outline: sections
           .filter((s) => s.heading.trim())
-          .map((s) => ({
+          .map(({ points, ...s }) => ({
+            ...s,
             heading: s.heading.trim(),
-            keyPoints: s.points
+            keyPoints: points
               .split('\n')
               .map((p) => p.trim())
               .filter(Boolean),
-            fanout: s.fanout,
-            platform: s.platform,
           })),
         keywords: [
           ...new Set(
@@ -386,7 +386,7 @@ function BriefEditor({
       onSaved(saved);
     } catch (err) {
       console.error('Failed to save the brief:', err);
-      toast.error(t('failed'));
+      toast.error(t(err instanceof Error && err.message === 'too_long' ? 'tooLong' : 'failed'));
     } finally {
       setSaving(false);
     }

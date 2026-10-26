@@ -73,6 +73,8 @@ const getDraftHandoffs = vi.fn();
 const restoreDraftVersion = vi.fn();
 const getCitedPassages = vi.fn();
 const getDraftSuggestions = vi.fn();
+// What the page's last rewrite came to (Length's reach): none unless a test gives one.
+const getLastPageRewrite = vi.fn();
 const decideDraftSuggestions = vi.fn();
 const keepAgentBeforeVersion = vi.fn();
 const fixDraftRules = vi.fn();
@@ -88,6 +90,7 @@ vi.mock('@/lib/actions/content-drafts', () => ({
   startAgentWriting: (...args: unknown[]) => startAgentWriting(...args),
   startPageRewrite: (...args: unknown[]) => startPageRewrite(...args),
   getDraftSuggestions: (...args: unknown[]) => getDraftSuggestions(...args),
+  getLastPageRewrite: (...args: unknown[]) => getLastPageRewrite(...args),
   decideDraftSuggestions: (...args: unknown[]) => decideDraftSuggestions(...args),
   keepAgentBeforeVersion: (...args: unknown[]) => keepAgentBeforeVersion(...args),
   getCitedPassages: (...args: unknown[]) => getCitedPassages(...args),
@@ -372,6 +375,7 @@ beforeEach(() => {
   restoreDraftVersion.mockReset();
   getCitedPassages.mockReset().mockResolvedValue([]);
   getDraftSuggestions.mockReset().mockResolvedValue([]);
+  getLastPageRewrite.mockReset().mockResolvedValue(null);
   decideDraftSuggestions.mockReset().mockResolvedValue(1);
   keepAgentBeforeVersion.mockReset().mockResolvedValue(undefined);
   fixDraftRules.mockReset().mockResolvedValue({ count: 0 });
@@ -1380,6 +1384,48 @@ describe('the content editor', () => {
         '✓ Cited by ChatGPT 14× and Perplexity 6× in 30 days · keep wording',
       );
       expect(container.querySelector('header')!.textContent).toContain('1 cited passage kept');
+    });
+
+    it('leaves long sentences only in quoted passages to the person, never sent to Fix', async () => {
+      // Sentences up to 60 characters: the quoted passage's is the only long one.
+      getContentDraft.mockResolvedValue(
+        draft({
+          ...page,
+          bodyHtml: `${page.bodyHtml}<p>We delve into it.</p>`,
+          rules: {
+            set: null,
+            source: null,
+            overrides: { sentence: { value: '60' } },
+            textRules: [],
+          },
+        }),
+      );
+      getCitedPassages.mockResolvedValue(cited);
+      fixDraftRules.mockResolvedValue({ count: 0 });
+      const width = window.innerWidth;
+      window.innerWidth = 1024;
+      try {
+        await renderPage();
+        await act(async () =>
+          container
+            .querySelector<HTMLButtonElement>('header button[aria-label^="Rules "]')!
+            .click(),
+        );
+        expect(container.querySelector('aside')!.textContent).toContain(
+          'Kept by AI citations · yours to decide',
+        );
+        await act(async () =>
+          [...container.querySelector('aside')!.querySelectorAll<HTMLButtonElement>('button')]
+            .find((b) => b.textContent === 'Run Agent')!
+            .click(),
+        );
+        await act(async () => {});
+        const keys = fixDraftRules.mock.calls[0][2].rules.map((r: { key: string }) => r.key);
+        expect(keys).toContain('aiTraces');
+        expect(keys).not.toContain('sentence');
+      } finally {
+        window.innerWidth = width;
+      }
     });
 
     it('reads nothing for a new page', async () => {
@@ -5547,7 +5593,7 @@ describe('the side panel', () => {
       expect(basket()).toBeNull();
       expect(nextButton()!.getAttribute('aria-label')).toBe('Next · Plan the page');
       await act(async () => nextButton()!.click());
-      await act(async () => inBasket('Skip')!.click());
+      await act(async () => inBasket('Skip this step')!.click());
       expect(nextButton()!.getAttribute('aria-label')).not.toBe('Next · Plan the page');
       expect(JSON.parse(localStorage.getItem('aeo:next-step-skips:d1')!)).toEqual({
         plan: 'false',
@@ -5610,7 +5656,7 @@ describe('the side panel', () => {
       );
       await renderPage();
       expect(basket()).not.toBeNull();
-      await act(async () => inBasket('Skip')!.click());
+      await act(async () => inBasket('Skip this step')!.click());
       expect(basket()).not.toBeNull();
       expect(nextButton()!.getAttribute('aria-label')).toBe('Next · Write the first draft');
 
@@ -5628,7 +5674,7 @@ describe('the side panel', () => {
         'The page is empty: write it, and the next step follows from what you write.',
       );
       expect(inBasket('Write with Agent')).toBeUndefined();
-      expect(inBasket('Skip')).toBeUndefined();
+      expect(inBasket('Skip this step')).toBeUndefined();
     });
 
     it('leaves focus where a click outside the basket put it', async () => {
@@ -5696,7 +5742,7 @@ describe('the side panel', () => {
       await renderPage();
       expect(nextButton()!.getAttribute('aria-label')).toBe('Next · Fix open rules');
       await act(async () => nextButton()!.click());
-      await act(async () => inBasket('Skip')!.click());
+      await act(async () => inBasket('Skip this step')!.click());
       const skips = () => JSON.parse(localStorage.getItem('aeo:next-step-skips:d1')!);
       const skippedAt = skips().fixRules;
       expect(skippedAt).toContain('fanoutH2');
@@ -5802,6 +5848,22 @@ describe('the side panel', () => {
       [...panel()!.querySelectorAll<HTMLButtonElement>('button')].find(
         (b) => b.textContent === label,
       )!;
+
+    it('says when a change would break a rule the page meets now, on it and on the card', async () => {
+      getContentDraft.mockResolvedValue(traced);
+      // Its new words make the page's one sentence run past 150 characters.
+      getDraftSuggestions.mockResolvedValue([
+        { ...agentSuggestion, afterText: `look ${'very '.repeat(35)}closely at` },
+      ]);
+      await renderPage();
+      await act(async () => {});
+      expect(container.querySelector('.ProseMirror')!.textContent).toContain(
+        'Would break Max sentence length',
+      );
+      expect(
+        container.querySelector('[role="region"][aria-label="Agent suggestions"]')!.textContent,
+      ).toContain('would break Max sentence length');
+    });
 
     it('says the month’s AI usage is used up before anything else, and runs nothing', async () => {
       aiUsage.usage = usageAt(100);
@@ -6475,6 +6537,96 @@ describe('the side panel', () => {
       }
     });
 
+    describe('when its answer is lost on the way', () => {
+      const ended = (over: Record<string, unknown>) => ({
+        id: 'r9',
+        kind: 'fix',
+        steps: [
+          { key: 'read_rules', count: 3 },
+          { key: 'gather_sources', count: 0 },
+          { key: 'write_changes', count: 0 },
+        ],
+        step: 3,
+        startedAt: new Date().toISOString(),
+        finishedAt: new Date().toISOString(),
+        stoppedAt: null,
+        outcome: 'done',
+        ...over,
+      });
+      /** Fix's runs as read: `earlier` before it was asked, `then` after. */
+      const runs = (earlier: unknown, then: unknown) => {
+        let read = 0;
+        readAgentRun.mockImplementation(async (_id: string, kinds?: string[]) =>
+          kinds ? (read++ === 0 ? earlier : then) : null,
+        );
+      };
+      async function run() {
+        vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
+        getContentDraft.mockResolvedValue(traced);
+        getDraftSuggestions.mockResolvedValue([]);
+        fixDraftRules.mockResolvedValue({ error: 'unconfirmed' });
+        await openRules();
+        await act(async () => panelButton('Run Agent').click());
+        await act(async () => void (await vi.advanceTimersByTimeAsync(10_000)));
+        await act(async () => {});
+      }
+      afterEach(() => vi.useRealTimers());
+
+      it('says it found nothing when its run ended with none, and why, not that it couldn’t run', async () => {
+        // Done with nothing left, every change in a quoted passage (editor test 2026-10-25).
+        runs(
+          null,
+          ended({
+            steps: [
+              { key: 'read_rules', count: 3 },
+              { key: 'gather_sources', count: 0 },
+              { key: 'write_changes', count: 0, why: 'locked' },
+            ],
+          }),
+        );
+        await run();
+        expect(toast).toHaveBeenCalledWith(
+          "Content Agent's changes were all in passages AI answers quote, which it keeps. Unlock the ones you're fine to change (Edit anyway), or change them yourself.",
+        );
+        expect(toast.error).not.toHaveBeenCalled();
+      });
+
+      it('says it stopped, or failed, as its row says, without waiting out the minute and a half', async () => {
+        runs(null, ended({ outcome: 'stopped' }));
+        await run();
+        expect(toast).toHaveBeenCalledWith('Stopped · nothing was changed');
+        expect(toast.error).not.toHaveBeenCalled();
+        vi.useRealTimers();
+        act(() => root.unmount());
+        root = createRoot(container);
+        toast.mockClear();
+        runs(null, ended({ outcome: 'failed' }));
+        await run();
+        expect(toast.error).toHaveBeenCalledWith("Content Agent couldn't run. Try again.");
+      });
+
+      it('never reads the run there was before it was asked as this one', async () => {
+        const earlier = ended({ id: 'r8', outcome: 'stopped' });
+        runs(earlier, earlier);
+        await run();
+        expect(toast).not.toHaveBeenCalledWith('Stopped · nothing was changed');
+        await act(async () => void (await vi.advanceTimersByTimeAsync(85_000)));
+        await act(async () => {});
+        expect(toast.error).toHaveBeenCalledWith("Content Agent couldn't run. Try again.");
+      });
+    });
+
+    it('says what to do when every change it had was in a quoted passage', async () => {
+      getContentDraft.mockResolvedValue(traced);
+      fixDraftRules.mockResolvedValue({ count: 0, why: 'locked' });
+      await openRules();
+      await act(async () => panelButton('Run Agent').click());
+      await act(async () => {});
+      expect(toast).toHaveBeenCalledWith(
+        "Content Agent's changes were all in passages AI answers quote, which it keeps. Unlock the ones you're fine to change (Edit anyway), or change them yourself.",
+      );
+    });
+
     it('says the agent couldn’t run when no batch lands in time', async () => {
       vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
       try {
@@ -6625,6 +6777,8 @@ describe('the side panel', () => {
     it('sends the rules in effect, how the page reads against each, and the page waits', async () => {
       getContentDraft.mockResolvedValue(long);
       await openRules();
+      // What the last rewrite came to is read once, for Length's reach.
+      expect(getLastPageRewrite).toHaveBeenCalledWith('d1');
 
       // ▾ › Rewrite the whole page: the button says so, then runs it.
       await act(async () =>
@@ -6660,6 +6814,8 @@ describe('the side panel', () => {
       await act(async () => {});
 
       expect(bar()!.textContent).toContain('Content Agent rewrote the page to its rules');
+      // What the last rewrite came to is read on opening, and again for the one now shown.
+      expect(getLastPageRewrite).toHaveBeenCalledTimes(2);
       // A whole page is never a card in the page.
       expect(container.querySelector('[data-suggestion]')).toBeNull();
       await act(async () => button(bar()!, 'Compare').click());

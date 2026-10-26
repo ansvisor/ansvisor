@@ -56,14 +56,17 @@ import {
   savedRuleSetSchema,
   startingRules,
   type DraftRulesInput,
+  type LastRewrite,
   type SavedRuleSet,
 } from '@/lib/content/rules';
 import {
+  MAX_BRIEF_BYTES,
   briefFromOpportunity,
   draftBriefSchema,
   type DraftBrief,
   type RebuildSources,
 } from '@/lib/content/brief';
+import { jsonbBytes } from '@/lib/content/draft-inputs';
 import type { ContentBrief } from '@/types';
 import {
   CITED_DAYS,
@@ -1875,6 +1878,29 @@ export async function keepAgentBeforeVersion(id: string): Promise<void> {
 }
 
 /**
+ * The draft's last page rewrite, whatever became of it, as the API kept it
+ * (00285): the characters it came to, the Length it was written to and what
+ * it kept. A Length it missed isn't offered again (rules.ts RewriteReach).
+ * Numbers only: the rewritten page isn't read for them. Null without one,
+ * or for one made before 00285.
+ */
+export async function getLastPageRewrite(id: string): Promise<LastRewrite | null> {
+  if (!draftId.safeParse(id).success) throw new Error('invalid');
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from('content_draft_suggestions')
+    .select('after_chars, length_target, kept_chars')
+    .eq('draft_id', id)
+    .eq('kind', 'page')
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  if (!data || data.after_chars === null || data.kept_chars === null) return null;
+  return { chars: data.after_chars, target: data.length_target, kept: data.kept_chars };
+}
+
+/**
  * An agent's suggestions on the draft (CE-018, 00217): its latest batch, in
  * the order the agent left them, with the Action Center action it came from.
  */
@@ -2149,6 +2175,12 @@ export async function getDraftBrief(id: string): Promise<{ brief: DraftBrief | n
   if (!draft) return null;
   const own = draftBriefSchema.safeParse(draft.brief);
   if (own.success) return { brief: own.data };
+  // A brief of its own this editor can't read: said as a failed read, never
+  // as the opportunity's or none, so Edit brief can't write over it.
+  if (draft.brief != null) {
+    console.error('The draft brief can’t be read:', own.error.issues.slice(0, 3));
+    return null;
+  }
   if (!draft.opportunity_id) return { brief: null };
   const { data: opportunity, error: oppError } = await supabase
     .from('content_opportunities')
@@ -2164,6 +2196,8 @@ export async function getDraftBrief(id: string): Promise<{ brief: DraftBrief | n
 export async function saveDraftBrief(id: string, brief: DraftBrief): Promise<DraftBrief> {
   const parsed = draftBriefSchema.safeParse({ ...brief, origin: 'edit' });
   if (!draftId.safeParse(id).success || !parsed.success) throw new Error('invalid');
+  // The column's 64 KB (00212): said, not a failed save.
+  if (jsonbBytes(parsed.data) > MAX_BRIEF_BYTES) throw new Error('too_long');
   const supabase = await createClient();
   const { data, error } = await supabase
     .from('content_drafts')
@@ -2256,6 +2290,12 @@ export interface AgentFixRequest {
   sources?: RebuildSources;
 }
 
+/** Why a run left nothing to review (content-agent.js emptyWhy). */
+export type AgentEmptyWhy = 'none' | 'locked' | 'dropped';
+
+const fixEmptyWhy = (why: unknown): { why?: AgentEmptyWhy } =>
+  why === 'none' || why === 'locked' || why === 'dropped' ? { why } : {};
+
 /**
  * Fix open rules with agent (CE-018): the Content Agent reads the draft as
  * saved and leaves suggestions on the rules sent, for review in the page,
@@ -2266,7 +2306,7 @@ export async function fixDraftRules(
   id: string,
   brandId: string,
   request: AgentFixRequest,
-): Promise<{ count: number } | { error: AgentFixError }> {
+): Promise<{ count: number; why?: AgentEmptyWhy } | { error: AgentFixError }> {
   if (!draftId.safeParse(id).success || !draftId.safeParse(brandId).success) {
     return { error: 'failed' };
   }
@@ -2302,7 +2342,7 @@ export async function fixDraftRules(
       const code = body.code as AgentFixError;
       return { error: (AGENT_FIX_ERRORS as readonly string[]).includes(code) ? code : 'failed' };
     }
-    return { count: Number(body.count) || 0 };
+    return { count: Number(body.count) || 0, ...fixEmptyWhy(body.why) };
   } catch (err) {
     console.error('Failed to run the Content Agent:', err);
     return { error: 'unconfirmed' };
@@ -2339,7 +2379,7 @@ export async function handOffDraft(
   id: string,
   brandId: string,
   request: HandOffRequest,
-): Promise<{ count: number } | { error: HandOffError }> {
+): Promise<{ count: number; why?: AgentEmptyWhy } | { error: HandOffError }> {
   if (!draftId.safeParse(id).success || !draftId.safeParse(brandId).success) {
     return { error: 'failed' };
   }
@@ -2373,7 +2413,7 @@ export async function handOffDraft(
       const code = body.code as HandOffError;
       return { error: (HANDOFF_ERRORS as readonly string[]).includes(code) ? code : 'failed' };
     }
-    return { count: Number(body.count) || 0 };
+    return { count: Number(body.count) || 0, ...fixEmptyWhy(body.why) };
   } catch (err) {
     console.error('Failed to hand the draft off:', err);
     return { error: 'unconfirmed' };

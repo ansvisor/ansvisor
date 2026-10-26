@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useFormatter, useTranslations } from 'next-intl';
 import { toast } from 'sonner';
+import { getHTMLFromFragment } from '@tiptap/core';
 import { EditorContent, useEditor, type Editor } from '@tiptap/react';
 import type { Node as PmNode } from '@tiptap/pm/model';
 import { TextSelection, type Transaction } from '@tiptap/pm/state';
@@ -40,6 +41,8 @@ import {
   type HandOffError,
   getCitedPassages,
   getDraftSuggestions,
+  getLastPageRewrite,
+  type AgentEmptyWhy,
   keepAgentBeforeVersion,
   markContentDraftReady,
   unmarkContentDraftReady,
@@ -59,7 +62,7 @@ import {
 } from '@/lib/actions/content-drafts';
 import { getSiteTrust } from '@/lib/actions/audits';
 import { getContentAuthors } from '@/lib/actions/content-authors';
-import { stopAgentRun } from '@/lib/content/agent-runs-client';
+import { readAgentRun, stopAgentRun } from '@/lib/content/agent-runs-client';
 import { agentWriteRequest, useRuleDescriber } from '@/lib/content/agent-write';
 import { authorInitials, canEditAuthor, type AuthorsRead } from '@/lib/content/authors';
 import type { SiteTrust } from '@/lib/content/site-trust';
@@ -167,7 +170,17 @@ import {
   openRulesForAgent,
   lengthBand,
   rewriteAdvice,
+  NO_RULE_CONTEXT,
+  checkRule,
+  heldMessage,
+  keptOutOfReach,
+  lengthOutOfReach,
+  readPage,
+  pageTextLength,
+  rulesMet,
   type ActiveRule,
+  type LastRewrite,
+  type RewriteReach,
   type RuleStatus,
 } from '@/lib/content/rules';
 import { aiUsageTone } from '@/lib/billing/ai-usage';
@@ -191,8 +204,11 @@ import {
   CitedPassages,
   citedLocks,
   citedPassagesKey,
-  keptCharacters,
   lockedPassageCount,
+  htmlWithoutLocked,
+  lockedKeysLeft,
+  lockedPassagesLeft,
+  rewriteFloor,
   type HeldEdit,
 } from './_cited-passages';
 import { ExportDialog, type ExportDestination } from './_export-dialog';
@@ -286,16 +302,41 @@ const FIX_WAIT_MS = 90_000;
 const FIX_RUNS = ['fix', 'handoff'] as const;
 const BRIEF_RUNS = ['brief'] as const;
 
+/** How a run whose answer was lost on the way ended, as the page and the run's row say. */
+type AgentOutcome =
+  | { batch: DraftSuggestion[] }
+  | { nothing: true; why?: AgentEmptyWhy }
+  | { stopped: true }
+  | { failed: true }
+  | null;
+
 /**
- * The draft's suggestions once a new open batch lands, read every few
- * seconds until the deadline; null if none did. Fix open rules only runs
- * with none open, so any open one is the agent's.
+ * How Fix open rules' run ended when its answer didn't come back (a timeout
+ * on the way), read every few seconds until the deadline: its batch once it
+ * lands, or its row once it's finished (content_agent_runs) — done with
+ * nothing left, and why (editor test 2026-10-25: read as "couldn't run"
+ * after 90 s), stopped, or failed. Fix open rules only runs with none open,
+ * so any open suggestion is the agent's. Its row is Fix's kinds' latest that
+ * isn't the one there was before it was asked (`before`). Null when neither
+ * came in time.
  */
-async function agentBatch(draftId: string, until: number): Promise<DraftSuggestion[] | null> {
+async function agentOutcome(
+  draftId: string,
+  before: string | null,
+  until: number,
+): Promise<AgentOutcome> {
   while (Date.now() < until) {
     await new Promise((resolve) => setTimeout(resolve, AGENT_POLL_MS));
     const read = await getDraftSuggestions(draftId).catch(() => null);
-    if (read?.some((s) => s.status === 'open')) return read;
+    if (read?.some((s) => s.status === 'open')) return { batch: read };
+    const run = await readAgentRun(draftId, FIX_RUNS).catch(() => null);
+    if (!run || run.id === before || !run.finishedAt) continue;
+    if (run.outcome === 'stopped') return { stopped: true };
+    if (run.outcome === 'failed') return { failed: true };
+    // Done: with what it left (its writing step's count), the batch reads next time round.
+    if (run.outcome === 'done' && !run.steps[2]?.count) {
+      return { nothing: true, why: run.steps[2]?.why };
+    }
   }
   return null;
 }
@@ -385,6 +426,8 @@ export function DraftEditor({
   const [citedRead, setCitedRead] = useState(!draft.sourceUrl);
   // An agent's suggestions (CE-018): its latest batch, with what was decided.
   const [suggestions, setSuggestions] = useState<DraftSuggestion[]>([]);
+  // The agent's last run failed (Fix or hand-off): the card says so over an earlier batch.
+  const [lastRunFailed, setLastRunFailed] = useState(false);
   const suggestionsNow = useRef(suggestions);
   const [deciding, setDeciding] = useState(false);
   const [barClosed, setBarClosed] = useState(false);
@@ -606,8 +649,13 @@ export function DraftEditor({
     catalog: feedOn ? (catalog === undefined ? 'reading' : catalog) : null,
   });
   // What a page rewrite keeps as it is (the passages AI answers quote, tables,
-  // images…), read as the characters are: a Length under it is out of reach.
-  const keptChars = editor && citedRead ? keptCharacters(editor.state) : 0;
+  // images…), read as the characters are, and the least it comes to with the
+  // headings and their answers: a Length under that is out of reach.
+  const summaryAsked = rules.rules.some(({ rule }) => rule.key === 'summary' && rule.on);
+  const { kept: keptChars, floor: floorChars } =
+    editor && citedRead
+      ? rewriteFloor(editor.state, { summary: summaryAsked })
+      : { kept: 0, floor: 0 };
   // The Length the page is written to, for what the agent's rewrite reached.
   const lengthRule = rules.rules.find(({ rule }) => rule.key === 'length' && rule.on)?.rule;
   const lengthTarget = Number(lengthRule?.current);
@@ -1618,6 +1666,7 @@ export function DraftEditor({
   const suggestionLabels = useMemo<SuggestionLabels>(
     () => ({
       agent: t('suggestions.agent'),
+      breaks: (names: string) => t('suggestions.breaks', { names }),
       accept: t('suggestions.accept'),
       reject: t('suggestions.reject'),
       accepted: t('suggestions.accepted'),
@@ -1657,16 +1706,85 @@ export function DraftEditor({
       .catch((err) => console.error('Failed to read the agent suggestions:', err));
   }, [editor, draft.id]);
 
+  // What the agent's open result would do to the rules (editor test
+  // 2026-10-25: a fix run turned 11 of 15 met into 10, a rewrite 4 open into
+  // 5): each change, all of them (as Accept all takes them, one after the
+  // other), or a whole page rewritten, checked as the page is, against the
+  // page as it is now (read here, not the rules' deferred read, so a change
+  // just accepted isn't blamed on the rest). A rule met now that it would
+  // break is said.
+  const ruleEffects = useMemo(() => {
+    if (!editor || editor.isDestroyed) return null;
+    const open = suggestions.filter((s) => s.status === 'open' && s.kind !== 'page');
+    const page = suggestions.find((s) => s.kind === 'page' && s.status === 'open') ?? null;
+    if (!open.length && !page) return null;
+    const check = (html: string, characters: number) => rules.checkHtml(html, characters);
+    const ofDoc = (doc: PmNode) =>
+      check(
+        getHTMLFromFragment(doc.content, editor.schema),
+        (editor.storage.characterCount.characters({ node: doc }) as number | undefined) ?? 0,
+      );
+    const now = ofDoc(editor.state.doc);
+    const metNow = new Set(
+      now
+        .filter(({ rule, status }) => rule.on && status.state === 'ok')
+        .map(({ rule }) => rule.key),
+    );
+    const effect = (after: ReturnType<typeof check>, leaveOut: string[] = []) => ({
+      now: rulesMet(now).met,
+      met: rulesMet(after).met,
+      broken: after
+        .filter(
+          ({ rule, status }) =>
+            metNow.has(rule.key) && status.state === 'bad' && !leaveOut.includes(rule.key),
+        )
+        .map(({ rule }) => rule.key),
+    });
+    // A whole page rewritten: its Length is its own line on the card (read
+    // the same way, pageTextLength), so it isn't named again as broken.
+    if (page) {
+      return {
+        each: new Map<string, string[]>(),
+        all: effect(check(page.afterText, pageTextLength(page.afterText)), ['length']),
+      };
+    }
+    const each = new Map<string, string[]>();
+    for (const s of open) {
+      const one = editor.state.tr;
+      if (acceptInto(one, editor.state, s, suggestions))
+        each.set(s.id, effect(ofDoc(one.doc)).broken);
+    }
+    const all = redoDecision(
+      editor.state,
+      suggestions,
+      open.map((s) => s.id),
+      'accept',
+    ).tr;
+    return { each, all: effect(ofDoc(all.doc)) };
+    // pageHtml: the page as it changes (the editor's state is read through it).
+  }, [editor, suggestions, rules.checkHtml, pageHtml]); // eslint-disable-line react-hooks/exhaustive-deps
+  const ruleNames = (keys: string[]) =>
+    format.list(
+      keys.map((key) => tRules(`names.${key}`)),
+      { type: 'conjunction' },
+    );
+
   // The page shows them as they are now.
   useEffect(() => {
     suggestionsNow.current = suggestions;
     if (!editor || editor.isDestroyed) return;
-    // A whole page (Rewrite the whole page) has its own bar, not a card.
-    const cards = suggestions.filter((s) => s.kind !== 'page');
+    // A whole page (Rewrite the whole page) has its own bar, not a card; each
+    // card says which rules met now it would break.
+    const cards = suggestions
+      .filter((s) => s.kind !== 'page')
+      .map((s) => {
+        const broken = ruleEffects?.each.get(s.id);
+        return broken?.length ? { ...s, breaks: ruleNames(broken) } : s;
+      });
     editor.view.dispatch(
       editor.state.tr.setMeta(suggestionsKey, { suggestions: cards, labels: suggestionLabels }),
     );
-  }, [editor, suggestions, suggestionLabels]);
+  }, [editor, suggestions, suggestionLabels, ruleEffects]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // While Fix open rules runs, a dashed card in the page where its change
   // will most likely land, from which of the kept data (CE-027/035).
@@ -1807,7 +1925,51 @@ export function DraftEditor({
   };
   const openSuggestions = suggestions.filter((s) => s.status === 'open').length;
   const pageSuggestion = suggestions.find((s) => s.kind === 'page') ?? null;
+  // The page's last rewrite, from any run (00285), read on opening and again
+  // once a new one is shown: a Length it missed isn't a rewrite's to reach
+  // (rules.ts RewriteReach). A later Fix run's batch doesn't hide it.
+  const [lastRewrite, setLastRewrite] = useState<LastRewrite | null>(null);
+  const shownRewriteId = pageSuggestion?.id ?? null;
+  useEffect(() => {
+    let cancelled = false;
+    getLastPageRewrite(draft.id)
+      .then((last) => {
+        if (!cancelled) setLastRewrite(last);
+      })
+      .catch((err) => console.error("Failed to read the page's last rewrite:", err));
+    return () => {
+      cancelled = true;
+    };
+  }, [draft.id, shownRewriteId]);
+  const reach: RewriteReach = { kept: keptChars, floor: floorChars, last: lastRewrite };
+  // Open rules no run can close on this page (editor test 2026-10-25): every
+  // long sentence inside a passage AI answers quote, a Length out of a
+  // rewrite's reach. They leave the agent's work and Next step; the Rules tab
+  // says they're the person's to decide.
+  // The Sentence rule read as the rules read the page, without the locked
+  // passages: met then, every long sentence is in one.
+  const sentenceRule = rules.rules.find(({ rule }) => rule.key === 'sentence' && rule.on)?.rule;
+  const sentenceOpen = rules.rules.some(
+    ({ rule, status }) => rule.key === 'sentence' && rule.on && status.state === 'bad',
+  );
+  const lockedNow = editor && citedRead ? lockedKeysLeft(editor.state).join('\n') : '';
+  const sentenceHeld = useMemo(() => {
+    if (!sentenceRule || !sentenceOpen || !lockedNow) return false;
+    const rest = readPage(htmlWithoutLocked(pageHtml, new Set(lockedNow.split('\n'))), 0);
+    return checkRule(sentenceRule, rest, NO_RULE_CONTEXT).state === 'ok';
+  }, [sentenceRule, sentenceOpen, lockedNow, pageHtml]);
+  const lengthHeld = lengthOutOfReach(rules.rules, reach) !== null;
+  const heldKey = `${sentenceHeld ? 's' : ''}${lengthHeld ? 'l' : ''}`;
+  const heldRules = useMemo(
+    () =>
+      new Set([
+        ...(heldKey.includes('s') ? ['sentence'] : []),
+        ...(heldKey.includes('l') ? ['length'] : []),
+      ]),
+    [heldKey],
+  );
   // The rules as the agent card counts its gain: met now, and the ones still open.
+  const effect = ruleEffects?.all ?? null;
   const cardRules = useMemo(
     () => ({
       met: rules.met,
@@ -1817,8 +1979,17 @@ export function DraftEditor({
           .filter(({ rule, status }) => rule.on && status.state === 'bad')
           .map(({ rule }) => rule.key),
       ),
+      ...(effect
+        ? {
+            after: {
+              now: effect.now,
+              met: effect.met,
+              breaks: effect.broken.length ? ruleNames(effect.broken) : null,
+            },
+          }
+        : {}),
     }),
-    [rules.met, rules.total, rules.rules],
+    [rules.met, rules.total, rules.rules, effect], // eslint-disable-line react-hooks/exhaustive-deps
   );
 
   /**
@@ -2079,10 +2250,15 @@ export function DraftEditor({
       toast(t('suggestions.decideFirst', { count: openSuggestions }));
       return;
     }
-    const { forAgent: open, notForAgent } = openRulesForAgent(rules.rules, only);
+    const {
+      forAgent: open,
+      notForAgent,
+      held: heldOpen,
+    } = openRulesForAgent(rules.rules, only, heldRules);
     if (open.length === 0) {
       // Only rules it can't fix are open: say what to do instead.
       if (notForAgent.length) toast(t(`suggestions.${notForAgentMessage(notForAgent)}`));
+      else if (heldOpen.length) toast(tRules(heldMessage(heldOpen)));
       return;
     }
     const pageText = editor.getText({ blockSeparator: '\n' });
@@ -2138,14 +2314,22 @@ export function DraftEditor({
    * and Stop or a lost answer is said as such.
    */
   const runAgentFix = async (
-    send: () => Promise<{ count: number } | { error: HandOffError }>,
+    send: () => Promise<{ count: number; why?: AgentEmptyWhy } | { error: HandOffError }>,
     told: (count: number) => string = fixedMessage,
     // The editor's own run (the automatic hand-off): what the person didn't
     // start isn't said when it doesn't run or finds nothing, only logged.
     quiet = false,
   ) => {
-    const failed = (key: string, error: string) =>
-      quiet ? console.warn('The automatic hand-off did not run:', error) : toast.error(t(key));
+    const failed = (key: string, error: string) => {
+      if (quiet) {
+        console.warn('The automatic hand-off did not run:', error);
+        return;
+      }
+      toast.error(t(key));
+      // The card's last run says so, not an earlier batch's review.
+      if (error === 'failed') setLastRunFailed(true);
+    };
+    setLastRunFailed(false);
     setStoppingRun(null);
     stopSent.current = null;
     setFixing(true);
@@ -2153,6 +2337,8 @@ export function DraftEditor({
     try {
       // The agent reads the page as saved.
       await autosave.settle();
+      // The run there was before this one: one whose answer is lost is the next.
+      const before = (await readAgentRun(draft.id, FIX_RUNS).catch(() => null))?.id ?? null;
       const result = await send().catch((err) => {
         // The call itself gave up (a timeout on the way): the agent may still finish.
         console.error('Failed to hear back from the Content Agent:', err);
@@ -2165,12 +2351,29 @@ export function DraftEditor({
         return;
       }
       if ('error' in result && result.error === 'unconfirmed') {
-        // No answer is not a failure: its batch shows if it lands in time.
-        const landed = await agentBatch(draft.id, asked + FIX_WAIT_MS);
-        if (!landed) {
+        // No answer is not a failure: how its run ended says (its batch, or its row).
+        const outcome = await agentOutcome(draft.id, before, asked + FIX_WAIT_MS);
+        if (outcome && 'stopped' in outcome) {
+          toast(t('agentCard.stopped'));
+          return;
+        }
+        if (outcome && 'nothing' in outcome) {
+          if (!quiet) {
+            toast(
+              t(
+                outcome.why === 'locked'
+                  ? 'suggestions.nothingToFixLocked'
+                  : 'suggestions.nothingToFix',
+              ),
+            );
+          }
+          return;
+        }
+        if (!outcome || 'failed' in outcome) {
           failed('suggestions.fixErrors.failed', 'failed');
           return;
         }
+        const landed = outcome.batch;
         setSuggestions(landed);
         setBarClosed(false);
         agentBeforeKept.current = false;
@@ -2193,7 +2396,16 @@ export function DraftEditor({
         return;
       }
       if (result.count === 0) {
-        if (!quiet) toast(t('suggestions.nothingToFix'));
+        // Why, so the person knows what to do: every change it had was in a quoted passage.
+        if (!quiet) {
+          toast(
+            t(
+              result.why === 'locked'
+                ? 'suggestions.nothingToFixLocked'
+                : 'suggestions.nothingToFix',
+            ),
+          );
+        }
         return;
       }
       setSuggestions(await getDraftSuggestions(draft.id));
@@ -2271,6 +2483,10 @@ export function DraftEditor({
   // The agent at work from this page: Fix open rules, or the brief. Its run,
   // step by step, and Stop (CE-027/035).
   const agentWorking = fixing || briefRebuilding;
+  // Any run the card follows (Fix, a hand-off, the brief): a failed one before it is behind it.
+  useEffect(() => {
+    if (agentWorking) setLastRunFailed(false);
+  }, [agentWorking]);
   const agentRun = useAgentRun(draft.id, agentWorking, fixing ? FIX_RUNS : BRIEF_RUNS);
   const stopAgent = async () => {
     if (!agentRun) return;
@@ -2367,6 +2583,7 @@ export function DraftEditor({
     run: (only) => void fixRules(only),
     running: fixRunning,
     blocked: agentFixBlocked(fixRunning),
+    held: heldRules,
   };
   const handOffCard: HandOff | null =
     sourcesOn && quality
@@ -2407,12 +2624,14 @@ export function DraftEditor({
   });
   // The card's Run Agent says why it won't run, as the Rules card does: also
   // when the only rules left open are ones the agent doesn't fix (one H1).
-  const agentRules = openRulesForAgent(rules.rules);
+  const agentRules = openRulesForAgent(rules.rules, undefined, heldRules);
   const cardRunBlocked =
     agentFix.blocked ??
     (agentRules.forAgent.length === 0 && agentRules.notForAgent.length > 0
       ? t(`suggestions.${notForAgentMessage(agentRules.notForAgent)}`)
-      : null);
+      : agentRules.forAgent.length === 0 && agentRules.held.length > 0
+        ? tRules(heldMessage(agentRules.held))
+        : null);
 
   // A drag with files over the page shows where they go; one dropped beside
   // the page (not on its text) goes in at the cursor.
@@ -2612,7 +2831,12 @@ export function DraftEditor({
    * rewrites the whole page in the background; the page waits for it, then
    * opens with the rewrite to compare.
    */
-  const rewritePage = async () => {
+  /**
+   * Rewrite the page to these rules. `citedToo`: the passages AI answers
+   * quote are rewritten too (the Rules tab's choice when what they keep puts
+   * the Length out of reach); the person compares it before anything changes.
+   */
+  const rewritePage = async ({ citedToo = false }: { citedToo?: boolean } = {}) => {
     // Never before the locked passages are read: the rewrite would be told none are.
     if (!editor || agentBusy || !citedRead) return;
     setRewriting(true);
@@ -2637,7 +2861,7 @@ export function DraftEditor({
           textRules: rules.textRules.filter(({ rule }) => rule.on).map(({ rule }) => rule.text),
         },
         // The passages still locked here, the ones the person didn't unlock.
-        [...locks.labels.keys()].filter((key) => !locks.unlocked.has(key)),
+        citedToo ? [] : [...locks.labels.keys()].filter((key) => !locks.unlocked.has(key)),
       );
       // Each rule says how the page reads now, as Fix open rules' do.
       const statusOf = new Map(inEffect.map(({ rule, status }) => [rule.key, status]));
@@ -2662,9 +2886,10 @@ export function DraftEditor({
   };
   const pageRewrite: PageRewrite | undefined = canMarkReady
     ? {
-        run: () => void rewritePage(),
+        run: (options) => void rewritePage(options),
         running: rewriting,
-        kept: keptChars,
+        reach,
+        cited: editor && citedRead ? lockedPassagesLeft(editor.state) : undefined,
         blocked:
           aiUsedUp && !rewriting
             ? aiUsedUp
@@ -2815,8 +3040,9 @@ export function DraftEditor({
     published: status === 'published',
     hasBrief: reads.brief.status === 'ready' ? reads.brief.brief !== null : null,
     empty: !pageHasWords,
-    rewrite: rewriteAdvice(rules.rules, keptChars),
-    openRules: rulesForNext(rules.rules),
+    rewrite: rewriteAdvice(rules.rules, reach, heldRules),
+    openRules: rulesForNext(rules.rules, heldRules),
+    openTotal: rules.rules.filter(({ rule, status }) => rule.on && status.state === 'bad').length,
     quality: quality
       ? { trust: trustNow, trustLow: trustNow !== null && trustNow < TRUST_GATE, todos }
       : null,
@@ -2836,6 +3062,8 @@ export function DraftEditor({
   // The sources (the fan-out rules read them), and with Quality the site's
   // trust and the link reads (Trust moves as they land).
   const nextRead =
+    // The quoted passages: until they're read, no rule is held by them.
+    citedRead &&
     reads.brief.status !== 'loading' &&
     reads.sources !== null &&
     rules.ready &&
@@ -3469,6 +3697,7 @@ export function DraftEditor({
               busy={deciding || htmlSource !== null}
               working={agentWorking}
               run={agentRun}
+              lastRunFailed={lastRunFailed}
               onStop={() => void stopAgent()}
               stopping={stoppingRun !== null && stoppingRun === agentRun?.id}
               onAcceptAll={() =>
@@ -3510,7 +3739,8 @@ export function DraftEditor({
                     }
                   : null
               }
-              length={length}
+              // The kept blocks are named only when they put the Length out of reach.
+              length={length && { ...length, outOfReach: keptOutOfReach(rules.rules, reach) }}
               onAllSteps={() => {
                 setNextFocus(true);
                 setNextOpen(true);
