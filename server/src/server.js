@@ -69,11 +69,15 @@ app.use('/cloro/callback', express.raw({ type: 'application/json', limit: '50mb'
 // parsers: the route checks the secret first, then reads the Worker's JSON,
 // the gzipped Logpush file or the Vercel drain's logs raw itself.
 app.use('/', botIngestRoutes);
-app.use(bodyParser.json({ limit: '50mb' }));
-app.use(bodyParser.urlencoded({ limit: '50mb', extended: true }));
 
 // --- Public traffic tracking (before helmet/cors — needs its own CORS for any origin) ---
+// Mounted before the JSON and form parsers too: anyone can post to /track, so
+// its own limiter runs first and its body is read only up to its own 64 KB,
+// whatever its content type, never by the 50 MB parsers below.
 app.use('/', trafficRoutes);
+
+app.use(bodyParser.json({ limit: '50mb' }));
+app.use(bodyParser.urlencoded({ limit: '50mb', extended: true }));
 
 // --- Request logger (before everything to catch all requests) ---
 app.use(requestIdMiddleware);
