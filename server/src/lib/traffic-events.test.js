@@ -35,6 +35,14 @@ describe('holdsEmail', () => {
     }
     expect(Date.now() - started).toBeLessThan(50);
   });
+
+  it('reads a long address of many short segments with malformed escapes fast', () => {
+    const address = `https://acme.example/ann%40example%2Ecom/${'a%E0/'.repeat(3_200)}`;
+    const started = Date.now();
+    expect(eventUrl(address)).toMatch(/^https:\/\/acme\.example\/\[email\]\/a%E0\//);
+    // A decode per segment took about 11 ms here; reading the escapes as they are, under 1.
+    expect(Date.now() - started).toBeLessThan(8);
+  });
 });
 
 describe('eventUrl', () => {

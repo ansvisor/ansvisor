@@ -67,17 +67,13 @@ export const EMAIL_SEGMENT = '[email]';
 /**
  * Whether a path segment holds an email, raw or encoded (an encoded dot too):
  * a name, an @, then a dot past it. An @ at the start is a handle ("/@acme",
- * "/@acme.dev"). One pass over the segment, whatever its length: any sender's
- * address is read with it.
+ * "/@acme.dev"). Read without decoding: an escape always stands for at least
+ * one character, and only %40 and %2E stand for an @ or a dot, so the answer
+ * is the decoded one's, and a malformed escape costs nothing (a decode would
+ * throw on each of an address's many segments).
  */
 export function holdsEmail(segment) {
-  let text;
-  try {
-    text = decodeURIComponent(segment);
-  } catch {
-    // A malformed escape elsewhere in it: its @ and dots still read.
-    text = segment.replace(/%40/gi, '@').replace(/%2e/gi, '.');
-  }
+  const text = segment.replace(/%40/gi, '@').replace(/%2e/gi, '.');
   const at = text.indexOf('@', 1);
   return at > 0 && text.indexOf('.', at + 2) > 0;
 }
