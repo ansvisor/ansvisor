@@ -26,6 +26,7 @@ describe('holdsEmail', () => {
     expect(holdsEmail('ann%40example.com')).toBe(true);
     // A malformed escape elsewhere in it: the @ is still read.
     expect(holdsEmail('ann%40example.com%E0')).toBe(true);
+    expect(holdsEmail('ann%40example%2Ecom%E0')).toBe(true);
     expect(holdsEmail('@acme')).toBe(false);
     expect(holdsEmail('pricing')).toBe(false);
     const started = Date.now();
