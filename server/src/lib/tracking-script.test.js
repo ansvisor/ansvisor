@@ -289,6 +289,7 @@ function runWithConversions({
   storageThrows = false,
 } = {}) {
   const sent = [];
+  let sendsFail = false;
   const storage = new Map(stored ? [['ansvisor_v', JSON.stringify(stored)]] : []);
   const listeners = {};
   const on = (scope) => (type, fn) => (listeners[`${scope}:${type}`] ||= []).push(fn);
@@ -344,7 +345,10 @@ function runWithConversions({
     navigator: {
       userAgent: 'Mozilla/5.0',
       language: 'en-US',
-      sendBeacon: (url, blob) => sent.push({ url, blob }),
+      sendBeacon: (url, blob) => {
+        if (sendsFail) throw new Error('beacon failed');
+        sent.push({ url, blob });
+      },
     },
     screen: { width: 1440, height: 900 },
     URL,
@@ -370,6 +374,11 @@ function runWithConversions({
     history,
     storage,
     submit: (form) => (listeners['document:submit'] || []).forEach((fn) => fn({ target: form })),
+    listeners,
+    location,
+    failSends: () => {
+      sendsFail = true;
+    },
     popstate: () => (listeners['window:popstate'] || []).forEach((fn) => fn()),
   };
 }
@@ -584,6 +593,61 @@ describe('the tracking snippet with conversions (CE-017)', () => {
     });
     expect(page.beacons).toEqual([]);
     expect(page.stored).toBeNull();
+  });
+
+  it('keeps the AI landing through a "denied" the visitor takes back: the grant keeps it and sends what waited', () => {
+    const dataLayer = [];
+    const page = runWithConversions({ referrer: 'https://chatgpt.com/', dataLayer });
+    // A banner pushing the visitor's state before they choose.
+    dataLayer.push(['consent', 'update', { analytics_storage: 'denied' }]);
+    expect(page.stored).toBeNull();
+    page.window.ansvisor('conversion', { type: 'demo' });
+    dataLayer.push(['consent', 'update', { analytics_storage: 'granted' }]);
+    expect(page.stored.f.s).toBe('chatgpt.com');
+    expect(page.beacons.filter((b) => b.k === 'cv')).toMatchObject([
+      { g: 'demo', f: { s: 'chatgpt.com' } },
+    ]);
+    // The site's call says no again: the stored id goes, what waited too.
+    page.window.ansvisor('consent', 'denied');
+    expect(page.stored).toBeNull();
+  });
+
+  it('runs the queued consent calls first: a "denied" queued after a conversion still comes first', () => {
+    const page = runWithConversions({
+      stored: earlier(1),
+      queue: [
+        ['conversion', { type: 'demo' }],
+        ['consent', 'denied'],
+      ],
+    });
+    expect(page.beacons).toEqual([]);
+    expect(page.stored).toBeNull();
+  });
+
+  it('adds no hooks for a visitor it doesn’t follow: no dataLayer, push, route or form hook', () => {
+    const page = runWithConversions({ referrer: '', consent: 'always' });
+    const pushState = page.history.pushState;
+    expect(page.window.dataLayer).toBeUndefined();
+    expect(page.window.history.pushState).toBe(pushState);
+    expect(page.listeners['document:submit']).toBeUndefined();
+    expect(page.listeners['window:popstate']).toBeUndefined();
+    // The site's calls still find ansvisor() and do nothing.
+    page.window.ansvisor('conversion', { type: 'signup' });
+    page.window.ansvisor('consent', 'granted');
+    expect(page.beacons).toEqual([]);
+    expect(page.stored).toBeNull();
+  });
+
+  it('never stops the site’s own push or route change when its own part fails', () => {
+    const dataLayer = [];
+    const page = runWithConversions({ stored: earlier(1), dataLayer });
+    page.failSends();
+    expect(() => page.window.history.pushState({}, '', '/checkout')).not.toThrow();
+    expect(page.location.pathname).toBe('/checkout');
+    expect(() =>
+      dataLayer.push(['consent', 'update', { analytics_storage: 'granted' }]),
+    ).not.toThrow();
+    expect(dataLayer).toHaveLength(1);
   });
 
   it('takes an id kept earlier as the visitor’s consent then, on the pages after', () => {
