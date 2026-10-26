@@ -1252,6 +1252,7 @@ export type Database = {
           prompt_ids: string[]
           published_at: string | null
           published_url: string | null
+          restored_at: string | null
           reviewer_id: string | null
           rules: Json | null
           source_url: string | null
@@ -1292,6 +1293,7 @@ export type Database = {
           prompt_ids?: string[]
           published_at?: string | null
           published_url?: string | null
+          restored_at?: string | null
           reviewer_id?: string | null
           rules?: Json | null
           source_url?: string | null
@@ -1332,6 +1334,7 @@ export type Database = {
           prompt_ids?: string[]
           published_at?: string | null
           published_url?: string | null
+          restored_at?: string | null
           reviewer_id?: string | null
           rules?: Json | null
           source_url?: string | null
