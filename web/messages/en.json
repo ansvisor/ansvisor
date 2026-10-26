@@ -3239,7 +3239,27 @@
         "keyEvents": "{count, plural, one {{value} key event} other {{value} key events}}",
         "orders": "{count, plural, one {{value} order} other {{value} orders}}",
         "revenue": "{value} revenue",
-        "needsAnalytics": "<link>Connect Google Analytics</link> to see what they did next."
+        "needsAnalytics": "<link>Connect Google Analytics</link> to see what they did next.",
+        "needsAnalyticsMore": "<link>Connect Google Analytics</link> for key events and revenue.",
+        "goals": {
+          "signup": "{count, plural, one {{value} signup} other {{value} signups}}",
+          "demo": "{count, plural, one {{value} demo form} other {{value} demo forms}}",
+          "order": "{count, plural, one {{value} order from a journey} other {{value} orders from journeys}}",
+          "booking": "{count, plural, one {{value} booking} other {{value} bookings}}",
+          "newsletter": "{count, plural, one {{value} newsletter signup} other {{value} newsletter signups}}",
+          "custom": "{count, plural, one {{value} other conversion} other {{value} other conversions}}"
+        },
+        "topJourney": "Top journey:",
+        "journeyCount": "{count, plural, one {{value} conversion} other {{value} conversions}}",
+        "otherSource": "Other",
+        "journeyGoals": {
+          "signup": "Signup",
+          "demo": "Demo form",
+          "order": "Purchase",
+          "booking": "Booking",
+          "newsletter": "Newsletter",
+          "custom": "Conversion"
+        }
       },
       "mix": {
         "title": "What AI cites in your topics",
@@ -4000,7 +4020,8 @@
         "restore": "Restore",
         "restoreLabel": "Restore {version}, {when}",
         "footer": "Restoring makes a new version. Nothing is lost.",
-        "restored": "Restored “{version}”. The page before it is in History.",
+        "restoredSame": "“{version}” is the page as it is: nothing changed.",
+        "restored": "Restored “{version}”. {count, plural, =0 {The page before it is in History.} one {The agent’s open change was for the page before, so it was set aside.} other {The agent’s # open changes were for the page before, so they were set aside.}}",
         "restoreFailed": "Couldn't restore it. Try again.",
         "htmlOpen": "Go back to the page to use History",
         "restoring": "Restoring…",
@@ -4177,6 +4198,41 @@
           },
           "legend": "Visits come from the tracking snippet, or from Google Analytics on days without it. Key events, orders and revenue are Google Analytics' sessions that started on this page from an AI assistant.",
           "legendVisits": "Visits come from the tracking snippet."
+        },
+        "conversions": {
+          "title": "Conversions from AI journeys",
+          "subtitle": "through this page, from the AI Traffic snippet",
+          "off": "Conversions aren't on for this brand, so the snippet doesn't follow AI visitors to them.",
+          "turnOn": "Turn them on in Brand settings",
+          "none": "No conversions from AI journeys through this page in this period.",
+          "bySource": "Conversions by AI source",
+          "columns": {
+            "source": "AI source",
+            "conversions": "Conversions"
+          },
+          "other": "Other",
+          "journeys": "Top journeys",
+          "thisPage": "This page",
+          "journeyCount": "{count, plural, one {# conversion} other {# conversions}}",
+          "cards": {
+            "signup": "Signups",
+            "demo": "Demo forms",
+            "order": "Orders",
+            "booking": "Bookings",
+            "newsletter": "Newsletter signups",
+            "custom": "Other conversions",
+            "revenue": "Revenue",
+            "units": "Units sold"
+          },
+          "goals": {
+            "signup": "Signup",
+            "demo": "Demo form",
+            "order": "Purchase",
+            "booking": "Booking",
+            "newsletter": "Newsletter",
+            "custom": "Conversion"
+          },
+          "legend": "A conversion counts here when its journey landed on this page, went through it, or ended on it, credited to the AI assistant of its first visit (30 days). Visitors who refuse cookies and AI visits without a referrer aren't seen."
         },
         "overlap": {
           "title": "Your other pages for these prompts",
@@ -7992,6 +8048,59 @@
       "deleteButton": "Delete Brand Permanently",
       "managersOnlyEdit": "Only admins and managers can change these settings.",
       "adminsOnlyDelete": "Only admins can delete a brand.",
+      "conversions": {
+        "title": "Conversions from AI visits",
+        "description": "Follow visitors who came from an AI assistant to a signup, a demo form or an order, so the Content Editor shows what each page earns.",
+        "label": "Track conversions from AI visits",
+        "help": "Off, with the tag without them, the snippet keeps nothing in the browser. On, it keeps a random id for AI visitors only, never a name or an email.",
+        "managersOnly": "Only admins and managers can change this.",
+        "on": "Conversions are on. Use the tag below on your site.",
+        "off": "Conversions are off. Put the tag without them back on your site: until then it still keeps the id in visitors' browsers.",
+        "saveFailed": "Couldn't save it. Try again.",
+        "copyTag": "Copy the tag",
+        "copyConsent": "Copy the consent call",
+        "copyDeny": "Copy the refusal call",
+        "copyCall": "Copy the conversion call",
+        "copyOrderCall": "Copy the order call",
+        "copyPixel": "Copy the Shopify pixel",
+        "copyBridge": "Copy the Shopify consent script",
+        "copied": "Copied",
+        "noTag": "There's no tag to show yet: the server URL or the brand's tracking code is missing.",
+        "consent": {
+          "label": "Consent",
+          "wait": "Wait for the visitor's consent (recommended)",
+          "always": "Don't wait: our own banner covers it",
+          "waitHint": "No id is kept and no journey is sent until your site says the visitor agreed. AI visits themselves are counted as before.",
+          "alwaysHint": "Use this only if your cookie banner already asks for analytics storage, or where no consent is needed."
+        },
+        "steps": {
+          "tag": "Use this tag",
+          "tagHelp": "It replaces the tag you have, before the closing <code>{tag}</code> tag of every page. The first line lets your site call ansvisor() before the tag has loaded.",
+          "consent": "When the visitor agrees",
+          "consentHelp": "Call this from your cookie banner once the visitor agrees, and on every page after.",
+          "refuse": "When the visitor refuses",
+          "denyHelp": "Call this when the visitor says no, or takes consent back, and on every page after, while they say no: the id kept in their browser is deleted, and nothing more is sent.",
+          "consentMode": "Google Consent Mode works on its own: the snippet follows <code>{name}</code>. A banner set up inside Google Tag Manager needs a tag for each line above, run when the visitor chooses.",
+          "forms": "Forms",
+          "formsHelp": "A form with an email field counts as a signup, contact and newsletter forms too: add <code>{goal}</code> to name its goal (demo, newsletter, booking), or <code>{off}</code> to leave it out. A login with a password doesn't count. Don't also call a signup from your own code for the same form, or it counts twice.",
+          "calls": "Other conversions",
+          "callsHelp": "Call these from your own code, on a thank-you page or after a purchase. The tag's first line keeps them until it loads.",
+          "shopify": "Shopify store",
+          "shopifyHelp": "In Shopify admin, open Settings › Customer events › Add custom pixel and name it Ansvisor. Under Customer privacy, set Permission to Analytics and Data sale to \"Data collected does not qualify as data sale\". Paste this code, save, then connect it.",
+          "shopifyConsent": "Your store asks for consent: add this to your theme (theme.liquid, after the tag) so Shopify's cookie banner gives its answer.",
+          "shopifyHeadless": "A headless store whose checkout is on another domain can't link its orders this way.",
+          "showPixel": "Show the Shopify pixel"
+        },
+        "limits": {
+          "title": "What it can't see",
+          "consent": "Visitors who refuse cookies, in the EU for example.",
+          "direct": "AI visits that arrive without a referrer: they count as Direct.",
+          "estimate": "Google's AI Overviews and AI Mode, which stay an estimate.",
+          "domains": "Journeys from one subdomain to another, www to app for example: each keeps its own id.",
+          "iframes": "Forms inside an iframe, like a Typeform or Calendly embed.",
+          "personal": "No name, email or IP address is stored with a conversion."
+        }
+      },
       "shopping": {
         "title": "Shopping mode",
         "description": "Turn this on if this brand is in e-commerce. We’ll add ChatGPT Shopping to every prompt under this brand and show Product Visibility in the menu.",

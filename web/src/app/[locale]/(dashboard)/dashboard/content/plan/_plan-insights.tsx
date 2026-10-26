@@ -1,21 +1,36 @@
 'use client';
 
-import { useId, useState } from 'react';
+import { Fragment, useId, useState } from 'react';
 import { useTranslations } from 'next-intl';
-import { ChevronDown, Sparkles, X } from 'lucide-react';
+import { ChevronDown, ChevronRight, Sparkles, X } from 'lucide-react';
 import { Link } from '@/i18n/navigation';
+import { journeyPages, type PlanConversions } from '@/lib/content/conversions';
 import type { PageType } from '@/lib/content/drafts';
 import type { MixRow, PlanResults } from '@/lib/content/plan-mix';
 import type { PlanPeriod } from '@/lib/content/plan';
 import { formatNumber } from '@/lib/format';
+import { getPlatformName, isNamedPlatform } from '@/lib/traffic-platforms';
 import { cn } from '@/lib/utils';
+
+/** Goals on the strip: the four with the most conversions. */
+const STRIP_GOALS = 4;
 
 /**
  * The AI results strip (CE-014): what visitors from AI assistants did on the
  * site in the period. Key events need Google Analytics; orders and revenue
- * show when its property reports purchases.
+ * show when its property reports purchases. With conversions on (CE-017),
+ * the goals the AI Traffic snippet followed them to, and the top journey.
  */
-export function AiResultsStrip({ results, days }: { results: PlanResults; days: PlanPeriod }) {
+export function AiResultsStrip({
+  results,
+  conversions = null,
+  days,
+}: {
+  results: PlanResults;
+  /** The snippet's conversions, or null when they couldn't be read. */
+  conversions?: PlanConversions | null;
+  days: PlanPeriod;
+}) {
   const t = useTranslations('contentEditor.plan.results');
   const parts = [t('visits', { count: results.visits, value: formatNumber(results.visits) })];
   if (results.analytics) {
@@ -29,6 +44,11 @@ export function AiResultsStrip({ results, days }: { results: PlanResults; days: 
       );
     }
   }
+  const goals = conversions?.goals.slice(0, STRIP_GOALS) ?? [];
+  for (const { goal, count } of goals) {
+    parts.push(t(`goals.${goal}`, { count, value: formatNumber(count) }));
+  }
+  const journey = conversions?.journey ?? null;
   return (
     <div className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-xl border bg-muted/40 px-4 py-2.5 text-sm">
       <Sparkles aria-hidden className="h-4 w-4 shrink-0 text-muted-foreground" />
@@ -36,7 +56,7 @@ export function AiResultsStrip({ results, days }: { results: PlanResults; days: 
       <span className="font-medium">{parts.join(' · ')}</span>
       {!results.analytics && (
         <span className="text-muted-foreground">
-          {t.rich('needsAnalytics', {
+          {t.rich(goals.length > 0 ? 'needsAnalyticsMore' : 'needsAnalytics', {
             link: (chunks) => (
               <Link
                 href="/dashboard/traffic"
@@ -47,6 +67,33 @@ export function AiResultsStrip({ results, days }: { results: PlanResults; days: 
             ),
           })}
         </span>
+      )}
+      {journey && (
+        <p className="flex w-full min-w-0 flex-wrap items-center gap-1 text-xs text-muted-foreground">
+          <span>{t('topJourney')}</span>
+          <span className="rounded-md bg-muted px-1.5 py-0.5">
+            {isNamedPlatform(journey.source) ? getPlatformName(journey.source) : t('otherSource')}
+          </span>
+          {journeyPages(journey.pages).map((page, i) => (
+            <Fragment key={i}>
+              <ChevronRight aria-hidden className="h-3 w-3 shrink-0 text-muted-foreground/60" />
+              {page === null ? (
+                <span>…</span>
+              ) : (
+                <span title={page} className="min-w-0 truncate rounded-md border px-1.5 py-0.5">
+                  {page}
+                </span>
+              )}
+            </Fragment>
+          ))}
+          <ChevronRight aria-hidden className="h-3 w-3 shrink-0 text-muted-foreground/60" />
+          <span className="rounded-md bg-emerald-50 px-1.5 py-0.5 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">
+            {t(`journeyGoals.${journey.goal}`)}
+          </span>
+          <span>
+            · {t('journeyCount', { count: journey.count, value: formatNumber(journey.count) })}
+          </span>
+        </p>
       )}
     </div>
   );
