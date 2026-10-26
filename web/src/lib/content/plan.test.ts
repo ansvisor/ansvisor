@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   MAX_ROWS,
   buildPlan,
+  conversionsShareOf,
   conversionsValue,
   dropSeverity,
   pageValueOf,
@@ -391,7 +392,7 @@ describe("a row's score breakdown", () => {
     ]);
   });
 
-  it('weighs the conversions a page took part in, with conversions on: 60% visits, 40% conversions', () => {
+  it('weighs the conversions a page took part in, with conversions on: 60% visits, 40% conversions once the pages have 20', () => {
     const { rows } = plan([
       page('/a', { citations: { cur: 18, prev: 18 }, aiVisits: 1000, conversions: 20 }),
       page('/b', { citations: { cur: 18, prev: 18 }, aiVisits: 1000, conversions: 0 }),
@@ -432,6 +433,23 @@ describe("a row's score breakdown", () => {
       visits: 0,
       conversions: 5,
     });
+  });
+
+  it('weighs conversions more as the listed pages have more, in full at 20', () => {
+    // One conversion: a 2% share, so no row moves by more than 0.4 points.
+    const one = plan([
+      page('/a', { citations: { cur: 18, prev: 18 }, aiVisits: 1000, conversions: 0 }),
+      page('/b', { citations: { cur: 18, prev: 18 }, aiVisits: 1000, conversions: 1 }),
+    ]);
+    const parts = Object.fromEntries(one.rows.map((r) => [r.title, r.scoreParts[2]]));
+    expect(parts.a).toMatchObject({ conversions: 0, points: 19.6 });
+    expect(parts.b).toMatchObject({ conversions: 1, points: 19.7 });
+    expect(conversionsShareOf([page('/a')])).toBe(0);
+    expect(conversionsShareOf([page('/a', { conversions: 1 })])).toBeCloseTo(0.02);
+    expect(
+      conversionsShareOf([page('/a', { conversions: 4 }), page('/b', { conversions: 6 })]),
+    ).toBeCloseTo(0.2);
+    expect(conversionsShareOf([page('/a', { conversions: 40 })])).toBe(0.4);
   });
 
   it('gives an opportunity on a page losing ground the drop and the opportunity both', () => {

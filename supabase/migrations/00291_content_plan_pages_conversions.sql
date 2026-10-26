@@ -5,7 +5,7 @@
 -- (#1356). With conversions on (CE-017, 00286), it weighs the conversions
 -- the page took part in too, as the editor's Live page tab counts them
 -- (00287): a conversion whose AI journey landed on the page, went through
--- it, or converted on it, in the window.
+-- it, or converted on it, in the window, of the latest 2,000.
 --
 -- Each page of the list gets 'conversions': that count, or null for a brand
 -- with conversions off (unknown, never zero). Everything else is 00238's,
@@ -171,7 +171,9 @@ begin
     group by v.page_key
   ),
   -- Conversions from AI journeys in the window, with conversions on (00286):
-  -- through its own partial index (00287).
+  -- the latest 2,000, as 00287 and 00288 bound their journeys, through 00287's
+  -- partial index (brand_id, occurred_at desc), so the read stops there. The
+  -- score counts 20 in full; past 2,000, a page's count is of the latest.
   conversions as materialized (
     select c.id, c.visitor_id, c.first_key, c.page_key, c.first_at, c.occurred_at
     from public.ai_traffic_events c
@@ -180,6 +182,8 @@ begin
       and c.kind = 'conversion'
       and c.occurred_at >= v_cur
       and c.occurred_at < v_until
+    order by c.occurred_at desc
+    limit 2000
   ),
   -- When each visitor id first saw each listed page, from a day before its
   -- first AI visit to its last conversion: 00287's `seen`, for every listed
@@ -261,4 +265,4 @@ end;
 $$;
 
 comment on function public.content_plan_pages(uuid, integer) is
-  'Content Editor (CE-014): the brand''s 100 most cited pages over the last N (7, 30 or 90) whole UTC days to yesterday and the N before, from the daily rollups: citations, the brand''s answers in each window, platforms citing at a lower rate, AI visits and, with conversions on (00291), the conversions from AI journeys that landed on, went through or converted on each page (null with conversions off); with the earlier window''s first day and the brand''s first tracked day. Security definer with an organization check.';
+  'Content Editor (CE-014): the brand''s 100 most cited pages over the last N (7, 30 or 90) whole UTC days to yesterday and the N before, from the daily rollups: citations, the brand''s answers in each window, platforms citing at a lower rate, AI visits and, with conversions on (00291), the conversions from AI journeys that landed on, went through or converted on each page, of the latest 2,000 (null with conversions off); with the earlier window''s first day and the brand''s first tracked day. Security definer with an organization check.';

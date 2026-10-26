@@ -169,10 +169,12 @@ const FULL_VISITS = 1000;
 /** Conversions in the period that count in full (on a log scale). */
 const FULL_CONVERSIONS = 20;
 /**
- * A page's value from its AI visits and, with conversions on, the
- * conversions it took part in (spec v2: page value is visits and conversions).
+ * The conversions' share of a page's value, with its AI visits the rest (spec
+ * v2: page value is visits and conversions), once FULL_CONVERSIONS are counted
+ * on the listed pages; it grows to it with the data, so one conversion doesn't
+ * re-weigh every page.
  */
-const PAGE_VALUE_SPLIT = { visits: 0.6, conversions: 0.4 };
+const CONVERSIONS_SHARE = 0.4;
 const FULL_CITATIONS = 30;
 /** Citations lost that make a drop as bad as losing them all. */
 const FULL_LOST = 20;
@@ -190,14 +192,23 @@ export function conversionsValue(conversions: number): number {
   return Math.min(1, Math.log10(1 + Math.max(0, conversions)) / Math.log10(1 + FULL_CONVERSIONS));
 }
 /**
- * A page's value: its AI visits, and with conversions on (a count, not
- * null) 60% visits and 40% conversions.
+ * A page's value: its AI visits, and with conversions weighed (a count, not
+ * null) the conversions' `share`, 40% once the listed pages have 20.
  */
-export function pageValueOf(visits: number, conversions: number | null): number {
+export function pageValueOf(
+  visits: number,
+  conversions: number | null,
+  share: number = CONVERSIONS_SHARE,
+): number {
   return conversions === null
     ? visitsValue(visits)
-    : PAGE_VALUE_SPLIT.visits * visitsValue(visits) +
-        PAGE_VALUE_SPLIT.conversions * conversionsValue(conversions);
+    : (1 - share) * visitsValue(visits) + share * conversionsValue(conversions);
+}
+
+/** The conversions' share of page value: up to 40%, by the conversions counted on the listed pages. */
+export function conversionsShareOf(pages: PlanPage[]): number {
+  const seen = pages.reduce((n, p) => n + (p.conversions ?? 0), 0);
+  return CONVERSIONS_SHARE * Math.min(1, seen / FULL_CONVERSIONS);
 }
 
 /**
@@ -244,7 +255,7 @@ function scoreParts({
   opportunityScore,
   page,
   trafficKnown,
-  conversionsKnown,
+  conversionsShare,
 }: {
   action: PlanAction;
   drop: { pct: number; lost: number } | null;
@@ -254,8 +265,8 @@ function scoreParts({
   page: PlanPage | undefined;
   /** Whether the brand has AI traffic data at all. */
   trafficKnown: boolean;
-  /** Whether any listed page has conversions: until then they aren't weighed. */
-  conversionsKnown: boolean;
+  /** The conversions' share of page value (conversionsShareOf): 0 until a listed page has any. */
+  conversionsShare: number;
 }): PlanScorePart[] {
   const create = action === 'create';
   return [
@@ -284,8 +295,12 @@ function scoreParts({
             kind: 'pageValue',
             reason: 'visits',
             visits: page.aiVisits,
-            conversions: conversionsKnown ? page.conversions : null,
-            value: pageValueOf(page.aiVisits, conversionsKnown ? page.conversions : null),
+            conversions: conversionsShare > 0 ? page.conversions : null,
+            value: pageValueOf(
+              page.aiVisits,
+              conversionsShare > 0 ? page.conversions : null,
+              conversionsShare,
+            ),
           })
         : part({ kind: 'pageValue', reason: 'unknown', value: NEUTRAL_PAGE_VALUE }),
     part({
@@ -345,9 +360,11 @@ export function buildPlan({
   // No page with an AI visit or a conversion: the brand has no AI traffic
   // data (no Analytics, no snippet), so a page's value is unknown, not nothing.
   const trafficKnown = pages.some((p) => p.aiVisits > 0 || (p.conversions ?? 0) > 0);
-  // Conversions weigh once some listed page has any: turned on with none yet
-  // in the window, they'd cut every visited page's value before any data.
-  const conversionsKnown = pages.some((p) => (p.conversions ?? 0) > 0);
+  // Conversions weigh once some listed page has any, and more as they come:
+  // turned on with none yet in the window, they'd cut every visited page's
+  // value before any data. Each conversion a listed page counts adds 2%, so
+  // the first, on one page, moves a row by 0.4 points at most.
+  const conversionsShare = conversionsShareOf(pages);
 
   for (const o of opportunities) {
     const create = !o.decision || CREATE_DECISIONS.has(o.decision) || !o.targetPage;
@@ -367,7 +384,7 @@ export function buildPlan({
       opportunityScore: Math.round(o.score),
       page,
       trafficKnown,
-      conversionsKnown,
+      conversionsShare,
     });
     rows.push({
       key: `opportunity:${o.id}`,
@@ -416,7 +433,7 @@ export function buildPlan({
         opportunityScore: null,
         page,
         trafficKnown,
-        conversionsKnown,
+        conversionsShare,
       });
       rows.push({
         ...base,
@@ -434,7 +451,7 @@ export function buildPlan({
         opportunityScore: null,
         page,
         trafficKnown,
-        conversionsKnown,
+        conversionsShare,
       });
       protect.push({
         ...base,
