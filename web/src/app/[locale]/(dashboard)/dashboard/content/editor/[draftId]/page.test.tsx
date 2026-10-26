@@ -6518,6 +6518,96 @@ describe('the side panel', () => {
       }
     });
 
+    describe('when its answer is lost on the way', () => {
+      const ended = (over: Record<string, unknown>) => ({
+        id: 'r9',
+        kind: 'fix',
+        steps: [
+          { key: 'read_rules', count: 3 },
+          { key: 'gather_sources', count: 0 },
+          { key: 'write_changes', count: 0 },
+        ],
+        step: 3,
+        startedAt: new Date().toISOString(),
+        finishedAt: new Date().toISOString(),
+        stoppedAt: null,
+        outcome: 'done',
+        ...over,
+      });
+      /** Fix's runs as read: `earlier` before it was asked, `then` after. */
+      const runs = (earlier: unknown, then: unknown) => {
+        let read = 0;
+        readAgentRun.mockImplementation(async (_id: string, kinds?: string[]) =>
+          kinds ? (read++ === 0 ? earlier : then) : null,
+        );
+      };
+      async function run() {
+        vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
+        getContentDraft.mockResolvedValue(traced);
+        getDraftSuggestions.mockResolvedValue([]);
+        fixDraftRules.mockResolvedValue({ error: 'unconfirmed' });
+        await openRules();
+        await act(async () => panelButton('Run Agent').click());
+        await act(async () => void (await vi.advanceTimersByTimeAsync(10_000)));
+        await act(async () => {});
+      }
+      afterEach(() => vi.useRealTimers());
+
+      it('says it found nothing when its run ended with none, and why, not that it couldn’t run', async () => {
+        // Done with nothing left, every change in a quoted passage (editor test 2026-10-25).
+        runs(
+          null,
+          ended({
+            steps: [
+              { key: 'read_rules', count: 3 },
+              { key: 'gather_sources', count: 0 },
+              { key: 'write_changes', count: 0, why: 'locked' },
+            ],
+          }),
+        );
+        await run();
+        expect(toast).toHaveBeenCalledWith(
+          "Content Agent's changes were all in passages AI answers quote, which it keeps. Unlock the ones you're fine to change (Edit anyway), or change them yourself.",
+        );
+        expect(toast.error).not.toHaveBeenCalled();
+      });
+
+      it('says it stopped, or failed, as its row says, without waiting out the minute and a half', async () => {
+        runs(null, ended({ outcome: 'stopped' }));
+        await run();
+        expect(toast).toHaveBeenCalledWith('Stopped · nothing was changed');
+        expect(toast.error).not.toHaveBeenCalled();
+        vi.useRealTimers();
+        act(() => root.unmount());
+        root = createRoot(container);
+        toast.mockClear();
+        runs(null, ended({ outcome: 'failed' }));
+        await run();
+        expect(toast.error).toHaveBeenCalledWith("Content Agent couldn't run. Try again.");
+      });
+
+      it('never reads the run there was before it was asked as this one', async () => {
+        const earlier = ended({ id: 'r8', outcome: 'stopped' });
+        runs(earlier, earlier);
+        await run();
+        expect(toast).not.toHaveBeenCalledWith('Stopped · nothing was changed');
+        await act(async () => void (await vi.advanceTimersByTimeAsync(85_000)));
+        await act(async () => {});
+        expect(toast.error).toHaveBeenCalledWith("Content Agent couldn't run. Try again.");
+      });
+    });
+
+    it('says what to do when every change it had was in a quoted passage', async () => {
+      getContentDraft.mockResolvedValue(traced);
+      fixDraftRules.mockResolvedValue({ count: 0, why: 'locked' });
+      await openRules();
+      await act(async () => panelButton('Run Agent').click());
+      await act(async () => {});
+      expect(toast).toHaveBeenCalledWith(
+        "Content Agent's changes were all in passages AI answers quote, which it keeps. Unlock the ones you're fine to change (Edit anyway), or change them yourself.",
+      );
+    });
+
     it('says the agent couldn’t run when no batch lands in time', async () => {
       vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
       try {

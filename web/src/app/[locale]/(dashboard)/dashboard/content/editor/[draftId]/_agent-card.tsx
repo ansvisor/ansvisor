@@ -214,6 +214,7 @@ export function AgentCard({
   next = null,
   onAllSteps,
   length = null,
+  lastRunFailed = false,
 }: {
   suggestions: DraftSuggestion[];
   rules: CardRules;
@@ -260,6 +261,8 @@ export function AgentCard({
   } | null;
   /** Opens the basket with every step. */
   onAllSteps?: () => void;
+  /** The agent's last run failed: said in place of an earlier batch's review. */
+  lastRunFailed?: boolean;
   /**
    * The page's Length rule (its target and band) and what a rewrite keeps
    * as it is: a rewrite's result is read against it, never the agent's say.
@@ -454,6 +457,9 @@ export function AgentCard({
         )}
       </>
     );
+  } else if (lastRunFailed) {
+    title = t('runFailed');
+    line = t('runFailedLine');
   } else {
     title = t('reviewed');
     line = (

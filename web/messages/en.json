@@ -3803,6 +3803,8 @@
         }
       },
       "agentCard": {
+        "runFailed": "Content Agent couldn't finish",
+        "runFailedLine": "Nothing it wrote was kept. Try again; if it fails again, fix what's left yourself.",
         "placeholders": "{count, plural, one {# placeholder} other {# placeholders}} to fill",
         "waiting": "{count, plural, one {Content Agent has # suggestion for you} other {Content Agent has # suggestions for you}}",
         "gain": "Rules {met, number} → {after, number} of {total, number}",
@@ -3911,6 +3913,7 @@
         "fixed": "{count, plural, one {Content Agent suggested # change} other {Content Agent suggested # changes}} · review them in the page",
         "fixedMax": "Content Agent suggested {count} changes, the most one run makes · review them, then run it again for the rules still open",
         "nothingToFix": "Content Agent found nothing it could change without new facts.",
+        "nothingToFixLocked": "Content Agent's changes were all in passages AI answers quote, which it keeps. Unlock the ones you're fine to change (Edit anyway), or change them yourself.",
         "notForAgent": "Content Agent doesn't change heading levels: make the extra H1s H2s in the toolbar.",
         "notForAgentFeed": "Content Agent doesn't change a price, GTIN or stock: check which is right, the page or your product feed, and fix that one.",
         "decideFirst": "{count, plural, one {Review the open suggestion first, then run the agent.} other {Review the open suggestions first, then run the agent.}}",
