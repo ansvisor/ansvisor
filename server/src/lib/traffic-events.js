@@ -75,8 +75,8 @@ export function holdsEmail(segment) {
   try {
     text = decodeURIComponent(segment);
   } catch {
-    // A malformed escape elsewhere in it.
-    text = segment.replace(/%40/gi, '@');
+    // A malformed escape elsewhere in it: its @ and dots still read.
+    text = segment.replace(/%40/gi, '@').replace(/%2e/gi, '.');
   }
   const at = text.indexOf('@', 1);
   return at > 0 && text.indexOf('.', at + 2) > 0;
