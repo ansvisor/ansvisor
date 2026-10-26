@@ -24,6 +24,7 @@ import {
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { LoadingDots } from '@/components/ui/loading-dots';
 import { NewContentDialog } from '@/components/content/new-content-dialog';
+import { PublishDialog } from '@/components/content/publish-dialog';
 import { SendDialog } from '@/components/content/send-to-cms-dialog';
 import { useUserRole } from '@/hooks/use-user-role';
 import { useRouter } from '@/i18n/navigation';
@@ -97,6 +98,8 @@ export default function ContentLibraryPage() {
   // Send to CMS: while the row's page is read, then the dialog's page.
   const [preparing, setPreparing] = useState(false);
   const [sending, setSending] = useState<{ brandId: string; source: CmsSource } | null>(null);
+  // Mark published open, on a draft (CE-013).
+  const [publishing, setPublishing] = useState<string | null>(null);
   // Each draft's last send, beside its status; read with the list.
   const [cms, setCms] = useState<ReadonlyMap<string, CmsStatus>>(new Map());
   // The rows picked to send together, for the brand they were picked in.
@@ -244,6 +247,11 @@ export default function ContentLibraryPage() {
   const rowActions: LibraryRowActions = {
     canManage,
     onStatus: (draft: ContentDraftListItem, status: DraftStatus) => {
+      // Published asks where the page is live (CE-013): tracking starts there.
+      if (status === 'published') {
+        setPublishing(draft.id);
+        return;
+      }
       // Ready keeps a History version and completes the draft's task, as the editor's Mark ready.
       const change =
         status === 'ready'
@@ -461,6 +469,16 @@ export default function ContentLibraryPage() {
           }}
         />
       )}
+      {publishing && (
+        <PublishDialog
+          draftId={publishing}
+          // The row menu offers Published only to a page that isn't.
+          published={false}
+          onClose={() => setPublishing(null)}
+          onPublished={reload}
+        />
+      )}
+
       {sending && (
         <SendDialog
           draftId={sending.source.draftId}

@@ -118,7 +118,7 @@ export function AiUsageMeter({
         aria-hidden
         className={cn(
           'hidden shrink-0 sm:inline-block',
-          compact ? 'h-7 w-12 xl:w-[7.5rem]' : 'h-8 w-[7.75rem]',
+          compact ? 'h-7 w-[3.625rem] xl:w-[8.25rem]' : 'h-8 w-[8.5rem]',
           className,
         )}
       />
@@ -181,7 +181,8 @@ export function AiUsageMeter({
         >
           <span className={cn('block h-full rounded-full', FILL_CLASS[tone])} style={{ width }} />
         </span>
-        <span aria-hidden className="tabular-nums">
+        {/* As wide as "99.9%": the button keeps its width as the tenths move. */}
+        <span aria-hidden className="inline-block min-w-9 text-right tabular-nums">
           {used}
         </span>
       </PopoverTrigger>

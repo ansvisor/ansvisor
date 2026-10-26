@@ -477,6 +477,21 @@ export function keepSuggestions(raw, passages, lockedKeys, ruleKeys, links = nul
 }
 
 /**
+ * Why a run left nothing to review (editor test 2026-10-25), so the editor
+ * says what to do: the model proposed nothing ('none'); every change it
+ * proposed was in a passage AI answers quote, which the page keeps word for
+ * word ('locked'); or the checks dropped the rest ('dropped': an invented
+ * number, a heading grown too long…).
+ */
+export function emptyWhy(raw, passages, lockedKeys) {
+  if (!raw?.length) return 'none';
+  const onLocked = raw.filter(
+    (s) => s.kind === 'replace' && lockedKeys.has(passageKey(passages[s.passage - 1]?.text ?? '')),
+  );
+  return onLocked.length === raw.length ? 'locked' : 'dropped';
+}
+
+/**
  * A change row with the sources its suggestion names and the marks on its
  * words (a replace's after_text, an insert's HTML read as text); null when
  * it adds a number neither the page nor a source has (sourceSuggestion).
@@ -754,6 +769,9 @@ export async function fixDraftRules({ draftId, brandId, input, handoff = null })
       run,
       handoff: !!handoff,
     });
+    // Why it left nothing, on its writing step: an editor whose answer was
+    // lost reads it there (jsonb, so no column).
+    if (result.why && run?.steps?.[2]) run.steps[2] = { ...run.steps[2], why: result.why };
     await finishRun(run, 'done', { 2: result.count });
     return result;
   } catch (err) {
@@ -908,7 +926,9 @@ async function fixWithRun({
   );
   // Stopped meanwhile: nothing it wrote is kept.
   await stopIfStopped(run);
-  if (!rows.length) return { count: 0, batchId: null };
+  if (!rows.length) {
+    return { count: 0, batchId: null, why: emptyWhy(object.suggestions, passages, lockedKeys) };
+  }
 
   const batchId = randomUUID();
   const { error: insertError } = await supabaseAdmin.from('content_draft_suggestions').insert(
