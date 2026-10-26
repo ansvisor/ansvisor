@@ -18,6 +18,13 @@ import {
   type RuleStatus,
 } from './rules';
 
+/** A rule as the agent reads it: its key, its name and what it asks. */
+export interface AgentRule {
+  key: string;
+  name: string;
+  detail: string;
+}
+
 /**
  * What the Content Agent is given when Start hands it a draft (CE-015), as
  * the API's content-writer.js reads it: the sources the Sources tab keeps
@@ -28,7 +35,7 @@ import {
  */
 export interface AgentWriteRequest {
   sources: RebuildSources;
-  rules: { key: string; name: string; detail: string }[];
+  rules: AgentRule[];
   textRules: string[];
   locked: string[];
   /** How many rules the editor counts ("met of total"): the run's "Reading N rules" says the same. */
@@ -71,6 +78,40 @@ export function useRuleDescriber(): RuleDescriber {
 
 /** The rules whose status names the fan-outs to use. */
 const FANOUT_RULES = new Set(['fanoutH2', 'fanoutFaq']);
+
+/**
+ * The rules in effect as the editor checks them, as the agent reads them: on,
+ * the agent's to follow, described, a fan-out rule with the fan-outs it still
+ * needs. Rebuild outline sends them, so the brief plans to them (brief rules,
+ * 2026; the API reads them with CONTENT_BRIEF_RULES on).
+ */
+export function rulesForAgent(
+  checked: { rule: ActiveRule; status?: RuleStatus }[],
+  describe: RuleDescriber,
+): AgentRule[] {
+  return checked
+    .filter(({ rule }) => rule.on && rule.check !== 'feed' && !NOT_FOR_AGENT.has(rule.key))
+    .slice(0, MAX_AGENT_RULES)
+    .map(({ rule, status }) => ({
+      key: rule.key,
+      ...describe(rule, FANOUT_RULES.has(rule.key) ? status : undefined),
+    }));
+}
+
+/**
+ * The rules a rebuilt brief plans to: the agent's (rulesForAgent), without
+ * the Keywords rule while it holds the brief's own keywords — a rebuild
+ * writes them anew from the sources — unless the person set it.
+ */
+export function rulesForBrief(
+  checked: { rule: ActiveRule; status?: RuleStatus }[],
+  describe: RuleDescriber,
+): AgentRule[] {
+  return rulesForAgent(
+    checked.filter(({ rule }) => rule.key !== 'keywords' || rule.changed),
+    describe,
+  );
+}
 
 /** The page's headings and paragraphs, as the editor's passages. */
 function pagePassages(html: string): string[] {

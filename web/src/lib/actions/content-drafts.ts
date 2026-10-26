@@ -93,7 +93,7 @@ import {
 } from '@/lib/content/history';
 import { RUN_STALE_MS } from '@/lib/content/agent-runs';
 import { HANDOFF_KEYS } from '@/lib/content/hand-off';
-import type { AgentWriteRequest } from '@/lib/content/agent-write';
+import type { AgentRule, AgentWriteRequest } from '@/lib/content/agent-write';
 import {
   actionPages,
   completeDraftTasks,
@@ -2238,6 +2238,8 @@ export async function rebuildDraftBrief(
   id: string,
   brandId: string,
   sources: RebuildSources,
+  /** The rules in effect, as the agent reads them: the brief plans to them (brief rules, 2026). */
+  rules?: AgentRule[],
 ): Promise<{ brief: DraftBrief } | { error: BriefRebuildError }> {
   if (!draftId.safeParse(id).success || !draftId.safeParse(brandId).success) {
     return { error: 'failed' };
@@ -2254,7 +2256,7 @@ export async function rebuildDraftBrief(
         'Content-Type': 'application/json',
         Authorization: `Bearer ${session.access_token}`,
       },
-      body: JSON.stringify({ brandId, sources }),
+      body: JSON.stringify({ brandId, sources, ...(rules?.length ? { rules } : {}) }),
     });
     const body = (await res.json().catch(() => ({}))) as Record<string, unknown>;
     if (!res.ok) {
