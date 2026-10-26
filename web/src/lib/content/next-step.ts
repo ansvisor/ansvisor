@@ -93,6 +93,12 @@ export interface NextStepState {
   quality: { trust: number | null; trustLow: boolean; todos: QualityTodo[] } | null;
   /** The steps skipped, each with the state it was skipped at (stepState). */
   skipped: Partial<Record<NextStepId, string>>;
+  /**
+   * The agent took the third step (thirdStepTried): it is passed, with rules
+   * still open or the Length still off, and what's left is the person's in
+   * the Rules tab.
+   */
+  thirdTried?: boolean;
 }
 
 export interface NextStep {
@@ -148,6 +154,36 @@ export function stepState(id: NextStepId, s: NextStepState): string {
     default:
       return '';
   }
+}
+
+/** The third step, as the page needs it: its Length, or its open rules. */
+const THIRD_STEPS: readonly NextStepId[] = ['length', 'fixRules'];
+
+/**
+ * A run of the agent on the third step (Fix open rules, or Rewrite page
+ * while it was the step): the latest batch on the page when it began;
+ * whether it found nothing to change; and, once taken, `passed`, which holds
+ * whatever runs after. A run that fails, is stopped or never runs isn't one.
+ */
+export interface ThirdTry {
+  batch: string | null;
+  ended?: boolean;
+  passed?: boolean;
+}
+
+/**
+ * Whether the agent has taken the third step (editor test 2026-10-26): its
+ * run found nothing to change, or left a batch since and every change in it
+ * is decided. Next then moves on to the fourth, whatever the rules read
+ * after; the page doesn't wait on rules no run of the agent closes.
+ */
+export function thirdStepTried(
+  attempt: ThirdTry | null,
+  now: { batch: string | null; open: number; busy: boolean },
+): boolean {
+  if (attempt?.passed) return true;
+  if (!attempt || now.busy || now.open > 0) return false;
+  return attempt.ended === true || (now.batch !== null && now.batch !== attempt.batch);
 }
 
 /** The skips that still hold: one whose step's state has changed since is dropped. */
@@ -248,7 +284,10 @@ export function nextStep(s: NextStepState): NextPath {
         alternative: s.published ? null : 'markPublished',
         skippable: false,
       };
-  const step = due.find((d) => !d.skippable || s.skipped[d.id] !== stepState(d.id, s)) ?? check;
+  const tried = (id: NextStepId) => s.thirdTried === true && THIRD_STEPS.includes(id);
+  const step =
+    due.find((d) => !tried(d.id) && (!d.skippable || s.skipped[d.id] !== stepState(d.id, s))) ??
+    check;
 
   // The third step is the one the page needs: its Length, or its open rules
   // (an empty page, its title alone, isn't read against its Length).
@@ -273,8 +312,9 @@ export function nextStep(s: NextStepState): NextPath {
       ? 'now'
       : i > now
         ? 'ahead'
-        : // Passed while its state still calls for it: it was skipped.
-          calledFor.has(id)
+        : // Passed while its state still calls for it: it was skipped,
+          // unless the agent took it.
+          calledFor.has(id) && !tried(id)
           ? 'skipped'
           : 'done') as PathState,
   }));
