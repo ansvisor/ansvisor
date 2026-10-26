@@ -1,5 +1,14 @@
+import { createHash } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
-import { ATTRIBUTION_DAYS, eventLabel, eventRow, eventUrl, orderRef } from './traffic-events.js';
+import {
+  ATTRIBUTION_DAYS,
+  EMAIL_SEGMENT,
+  eventLabel,
+  eventRow,
+  eventUrl,
+  orderKey,
+  orderRef,
+} from './traffic-events.js';
 
 const NOW = Date.parse('2026-10-26T12:00:00Z');
 const DAY = 24 * 60 * 60 * 1000;
@@ -18,6 +27,34 @@ describe('eventUrl', () => {
     expect(eventUrl('javascript:alert(1)')).toBeNull();
     expect(eventUrl('not a url')).toBeNull();
   });
+
+  it('keeps no email in the path: its segment goes as a placeholder, raw or encoded', () => {
+    expect(eventUrl('https://acme.example/unsubscribe/ann@example.com')).toBe(
+      `https://acme.example/unsubscribe/${EMAIL_SEGMENT}`,
+    );
+    expect(eventUrl('https://acme.example/account/ann%40example.com/orders')).toBe(
+      `https://acme.example/account/${EMAIL_SEGMENT}/orders`,
+    );
+    expect(eventUrl('https://acme.example/account/ANN%40EXAMPLE.COM')).toBe(
+      `https://acme.example/account/${EMAIL_SEGMENT}`,
+    );
+    // The first visit's landing page is read the same way.
+    expect(
+      eventRow(
+        'b1',
+        {
+          k: 'pv',
+          id: ID,
+          u: 'https://acme.example/u/ann@example.com',
+          f: { ...first, u: 'https://acme.example/invite/bob%40example.com' },
+        },
+        NOW,
+      ),
+    ).toMatchObject({
+      url: `https://acme.example/u/${EMAIL_SEGMENT}`,
+      first_url: `https://acme.example/invite/${EMAIL_SEGMENT}`,
+    });
+  });
 });
 
 describe('eventLabel and orderRef', () => {
@@ -34,6 +71,17 @@ describe('eventLabel and orderRef', () => {
     expect(orderRef('gid://shopify/Order/123456789')).toBe('gid://shopify/Order/123456789');
     expect(orderRef('a b')).toBeNull();
     expect(orderRef('x'.repeat(129))).toBeNull();
+  });
+
+  it('store an order’s id as a hash of the brand and the id: compared, never kept as it is', () => {
+    const key = orderKey('b1', ' #1001 ');
+    expect(key).toBe(createHash('sha256').update('b1:#1001').digest('hex'));
+    expect(key).toHaveLength(64);
+    // The same order counts once for its brand; another brand's is another.
+    expect(orderKey('b1', '#1001')).toBe(key);
+    expect(orderKey('b2', '#1001')).not.toBe(key);
+    expect(orderKey('b1', 'a b')).toBeNull();
+    expect(orderKey('b1', undefined)).toBeNull();
   });
 });
 
@@ -81,7 +129,7 @@ describe('eventRow', () => {
       value: 129.5,
       currency: 'EUR',
       units: 2,
-      order_ref: 'order-1001',
+      order_ref: orderKey('b1', 'order-1001'),
     });
     expect(
       eventRow(

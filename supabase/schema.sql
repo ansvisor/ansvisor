@@ -40203,11 +40203,16 @@ notify pgrst, 'reload schema';
 --     credited to (first touch, within 30 days), so a journey reads without
 --     joining the landing logs.
 --   * `url` is the page without its query string or fragment: a thank-you
---     page's ?email=… never gets in.
---   * `order_ref`: an order's own id at the shop (Shopify's pixel), once per
---     visitor, so an order the pixel sends twice counts once. Per visitor,
---     not per brand: the tracking code is public, and an order id sent first
---     by anyone else must not shut the real one out.
+--     page's ?email=… never gets in, nor a path segment holding an email
+--     (stored as "[email]").
+--   * `order_ref`: a hash of the brand and an order's own id at the shop
+--     (Shopify's pixel, a site's call), once per visitor, so an order sent
+--     twice counts once; only ever compared, so the id itself isn't kept.
+--     Per visitor, not per brand: the tracking code is public, and an order
+--     id sent first by anyone else must not shut the real one out.
+--   * The server stores at most a few hundred pageviews per visitor id in
+--     the window and a few conversions a day, so a journey's reads stay
+--     bounded (routes/traffic.js).
 --   * Members read their brands' events; only the server writes them.
 
 alter table public.brands
@@ -40250,8 +40255,6 @@ create unique index if not exists ai_traffic_events_order
   on public.ai_traffic_events (brand_id, visitor_id, order_ref)
   where order_ref is not null;
 
-create index if not exists ai_traffic_events_brand_time
-  on public.ai_traffic_events (brand_id, occurred_at desc);
 create index if not exists ai_traffic_events_journey
   on public.ai_traffic_events (brand_id, visitor_id, occurred_at);
 
@@ -40273,7 +40276,7 @@ create policy "ai_traffic_events: member select"
   );
 
 comment on table public.ai_traffic_events is
-  'CE-017 (00286): journeys of visitors who came from an AI assistant, as the AI Traffic snippet sends them with conversions on: pageviews and conversions (goal, value, units; Shopify orders once by order_ref), each credited to the first AI visit (first_source, first_url, first_at). A random first-party visitor id; no IP, name or email. Members read; the server writes.';
+  'CE-017 (00286): journeys of visitors who came from an AI assistant, as the AI Traffic snippet sends them with conversions on: pageviews and conversions (goal, value, units; an order once by the hash of its id, order_ref), each credited to the first AI visit (first_source, first_url, first_at). A random first-party visitor id; no IP, name or email. Members read; the server writes.';
 
 notify pgrst, 'reload schema';
 
