@@ -59,11 +59,13 @@ import {
   type SavedRuleSet,
 } from '@/lib/content/rules';
 import {
+  MAX_BRIEF_BYTES,
   briefFromOpportunity,
   draftBriefSchema,
   type DraftBrief,
   type RebuildSources,
 } from '@/lib/content/brief';
+import { jsonbBytes } from '@/lib/content/draft-inputs';
 import type { ContentBrief } from '@/types';
 import {
   CITED_DAYS,
@@ -2152,6 +2154,12 @@ export async function getDraftBrief(id: string): Promise<{ brief: DraftBrief | n
   if (!draft) return null;
   const own = draftBriefSchema.safeParse(draft.brief);
   if (own.success) return { brief: own.data };
+  // A brief of its own this editor can't read: said as a failed read, never
+  // as the opportunity's or none, so Edit brief can't write over it.
+  if (draft.brief != null) {
+    console.error('The draft brief can’t be read:', own.error.issues.slice(0, 3));
+    return null;
+  }
   if (!draft.opportunity_id) return { brief: null };
   const { data: opportunity, error: oppError } = await supabase
     .from('content_opportunities')
@@ -2167,6 +2175,8 @@ export async function getDraftBrief(id: string): Promise<{ brief: DraftBrief | n
 export async function saveDraftBrief(id: string, brief: DraftBrief): Promise<DraftBrief> {
   const parsed = draftBriefSchema.safeParse({ ...brief, origin: 'edit' });
   if (!draftId.safeParse(id).success || !parsed.success) throw new Error('invalid');
+  // The column's 64 KB (00212): said, not a failed save.
+  if (jsonbBytes(parsed.data) > MAX_BRIEF_BYTES) throw new Error('too_long');
   const supabase = await createClient();
   const { data, error } = await supabase
     .from('content_drafts')
