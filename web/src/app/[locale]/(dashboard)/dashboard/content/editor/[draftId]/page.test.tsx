@@ -852,6 +852,129 @@ describe('the content editor', () => {
       expect(getContentDraft.mock.calls.length).toBe(reads + 1);
     });
 
+    it('moves while it works, with a line on what it does, and stands still with reduced motion (CE-026)', async () => {
+      vi.useFakeTimers({
+        toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'Date'],
+      });
+      try {
+        getContentDraft.mockResolvedValue(
+          draft({
+            status: 'draft',
+            method: 'create',
+            agentState: 'writing',
+            agentSince: new Date().toISOString(),
+          }),
+        );
+        readAgentRun.mockResolvedValue({
+          id: 'r1',
+          kind: 'write',
+          steps: [
+            { key: 'read_rules', count: 9 },
+            { key: 'gather_sources', count: 52 },
+            { key: 'write_page', count: null },
+            { key: 'check_sources', count: null },
+          ],
+          step: 2,
+          startedAt: new Date().toISOString(),
+          finishedAt: null,
+          stoppedAt: null,
+          outcome: null,
+        });
+        await renderPage();
+        await act(async () => {});
+        const status = container.querySelector('[role="status"]')!;
+        // The agent's tile breathes, the step under way has its sweep and dots.
+        expect(status.querySelector('.animate-agent-breathe')).not.toBeNull();
+        const now = status.querySelector('[aria-current="step"]')!;
+        expect(now.textContent).toBe('Writing the page');
+        expect(now.querySelector('.animate-agent-sweep')).not.toBeNull();
+        expect(now.querySelector('.animate-agent-dot')).not.toBeNull();
+        // One line at a time on what it does, with what its run read.
+        expect(status.textContent).toContain("Answering the page's main question first");
+        await act(async () => void (await vi.advanceTimersByTimeAsync(4_000)));
+        expect(status.textContent).toContain('Giving each section one question to answer');
+        expect(status.textContent).not.toContain("Answering the page's main question first");
+        await act(async () => void (await vi.advanceTimersByTimeAsync(4_000)));
+        expect(status.textContent).toContain('Keeping to 9 rules');
+        await act(async () => void (await vi.advanceTimersByTimeAsync(4_000)));
+        expect(status.textContent).toContain('Drawing on 52 sources');
+        // The page drawn in, line by line.
+        expect(container.querySelectorAll('.animate-agent-fill').length).toBeGreaterThan(0);
+        // No spinning ring, and all of it still with reduced motion.
+        expect(container.querySelector('.animate-spin')).toBeNull();
+        const moving = [...container.querySelectorAll('[class*="animate-agent"], .animate-in')];
+        expect(
+          moving.every((el) =>
+            /motion-reduce:(animate-none|hidden)/.test(el.getAttribute('class')!),
+          ),
+        ).toBe(true);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('says what it does on a live page', async () => {
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
+      try {
+        getContentDraft.mockResolvedValue(
+          draft({
+            status: 'draft',
+            agentState: 'writing',
+            agentSince: new Date(Date.now() - 4_000).toISOString(),
+          }),
+        );
+        await renderPage();
+        const status = container.querySelector('[role="status"]')!;
+        // Optimize, its second line: the passages it keeps.
+        expect(status.textContent).toContain('Leaving passages AI quotes as they are');
+        expect(status.querySelector('[aria-current="step"] .animate-agent-sweep')).not.toBeNull();
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('says nothing of rules or sources its run read none of', async () => {
+      vi.useFakeTimers({
+        toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'Date'],
+      });
+      try {
+        getContentDraft.mockResolvedValue(
+          draft({
+            status: 'draft',
+            method: 'create',
+            agentState: 'writing',
+            agentSince: new Date().toISOString(),
+          }),
+        );
+        readAgentRun.mockResolvedValue({
+          id: 'r1',
+          kind: 'write',
+          steps: [
+            { key: 'read_rules', count: 0 },
+            { key: 'gather_sources', count: 0 },
+            { key: 'write_page', count: null },
+          ],
+          step: 2,
+          startedAt: new Date().toISOString(),
+          finishedAt: null,
+          stoppedAt: null,
+          outcome: null,
+        });
+        await renderPage();
+        await act(async () => {});
+        const status = container.querySelector('[role="status"]')!;
+        const said: string[] = [];
+        for (let i = 0; i < 5; i++) {
+          said.push(status.textContent!);
+          await act(async () => void (await vi.advanceTimersByTimeAsync(4_000)));
+        }
+        expect(said.join(' ')).toContain('Adding a [placeholder] for facts it lacks');
+        expect(said.join(' ')).not.toMatch(/Keeping to|Drawing on/);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
     it('reads the draft at once when its run ends, its steps shown till then', async () => {
       vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
       try {

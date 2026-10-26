@@ -3770,6 +3770,20 @@
             "write": "Rewriting the page",
             "review": "Opens here beside your page to compare"
           }
+        },
+        "doing": {
+          "answerFirst": "Answering the page's main question first",
+          "outline": "Giving each section one question to answer",
+          "missing": "Answering questions the page misses",
+          "quoted": "Leaving passages AI quotes as they are",
+          "length": "Keeping the page near its target length",
+          "kept": "Keeping quoted passages, tables and images",
+          "voice": "Keeping the page's facts and voice",
+          "rules": "Keeping to {count, plural, one {# rule} other {# rules}}",
+          "rulesAny": "Keeping to the rules",
+          "sources": "Drawing on {count, plural, one {# source} other {# sources}}",
+          "sourcesAny": "Drawing on your sources",
+          "placeholders": "Adding a [placeholder] for facts it lacks"
         }
       },
       "agentFailed": {
