@@ -50,13 +50,15 @@ export interface UsageLimits {
 }
 
 /**
- * A share as it reads: a sliver as "<1%", else whole percents, rounded down
- * so nothing reads as all of it before it is (the server sends 100 only
- * once the allowance is spent).
+ * A share as it is now, to the tenth the server sends ("1.1%", "28.3%",
+ * "99.9%"; "28%" when whole), so each run shows; a sliver under a tenth
+ * as "<0.1%". Rounded down, so nothing reads as all of it before it is
+ * (the server sends 100 only once the allowance is spent).
  */
 export function percentLabel(percent: number): string {
-  if (percent > 0 && percent < 1) return '<1%';
-  return `${Math.floor(percent)}%`;
+  if (percent > 0 && percent < 0.1) return '<0.1%';
+  // The tiny nudge keeps a tenth the server sent (2.3 × 10) from flooring below it.
+  return `${Math.floor(percent * 10 + 1e-9) / 10}%`;
 }
 
 /** Warning from 80% of the allowance, used up at 100%. */
