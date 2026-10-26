@@ -4322,6 +4322,56 @@
           "no_sources": "Keep at least one prompt, fan-out or Search Console query to build from.",
           "failed": "Couldn't rebuild the brief. Try again."
         },
+        "tldr": "TL;DR",
+        "angle": "Angle",
+        "answerFirst": "Answer first: {answer}",
+        "formats": {
+          "paragraphs": "Paragraphs",
+          "list": "List",
+          "steps": "Steps",
+          "table": "Table",
+          "faq": "FAQ"
+        },
+        "factSources": {
+          "statistic": "Statistic",
+          "study": "Study",
+          "quote": "Quote",
+          "example": "Example",
+          "official": "Official source"
+        },
+        "fact": "{kind}: {claim}",
+        "factFrom": "From {source}",
+        "factToFind": "Source to find",
+        "proof": {
+          "title": "Proof to gather",
+          "info": "What only your brand can show. Add it in Your input and the Content Agent writes from it.",
+          "kinds": {
+            "experience": "Experience",
+            "data": "Data",
+            "case": "Case",
+            "test": "Test",
+            "quote": "Quote"
+          },
+          "have": "In Your input",
+          "add": "Add input"
+        },
+        "notes": {
+          "title": "Writing notes",
+          "names": "Names as written",
+          "brand": "Brand",
+          "products": "Products",
+          "competitors": "Competitors",
+          "links": "Links",
+          "internal": "Internal",
+          "outbound": "Outbound",
+          "inSection": "in “{section}”",
+          "anywhere": "anywhere",
+          "freshness": "Freshness",
+          "datedPoint": "Date: {point}",
+          "updatedLine": "Show an “Updated” date",
+          "yearInTitle": "Put the year in the title",
+          "leftOut": "Left for another page"
+        },
         "editor": {
           "goal": "Goal",
           "audience": "Audience",
@@ -4336,7 +4386,17 @@
           "cancel": "Cancel",
           "saved": "Brief saved",
           "failed": "Couldn't save the brief. Try again.",
-          "tooLong": "The brief is too long to save. Shorten its sections or key points."
+          "tooLong": "The brief is too long to save. Shorten its sections or key points.",
+          "tldr": "TL;DR: what the page's top must say",
+          "angle": "Angle: what only this page can show",
+          "answer": "Section {index} answer first",
+          "answerLabel": "Answer first",
+          "answerPlaceholder": "What the section's first sentences must answer",
+          "proof": "Proof to gather",
+          "proofKind": "Proof {index} kind",
+          "proofWhat": "Proof {index}",
+          "removeProof": "Remove proof {index}",
+          "addProof": "Add proof"
         }
       },
       "export": {

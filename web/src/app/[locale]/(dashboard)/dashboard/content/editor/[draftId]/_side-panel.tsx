@@ -18,6 +18,7 @@ import { QualityTab, type HandOff, type QualityRead } from './_quality-tab';
 import { RulesTab, type AgentFix, type PageRewrite } from './_rules-tab';
 import { SourcesTab } from './_sources-tab';
 import { useBriefRebuild, type PageNow } from './_use-brief-rebuild';
+import { inputsGiven } from '@/lib/content/draft-inputs';
 import type { DraftInputsRead } from './_use-draft-inputs';
 import type { DraftReads } from './_use-draft-reads';
 import type { DraftRulesState } from './_use-draft-rules';
@@ -466,6 +467,8 @@ export function EditorSidePanel({
                 rewrite={agentRewrite}
                 dataLine={dataLine}
                 blocked={briefBlocked}
+                given={yourInput?.status === 'ready' ? inputsGiven(yourInput.inputs) : null}
+                onAddInput={onAddInput}
               />
             </div>
           )}
