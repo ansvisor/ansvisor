@@ -12,9 +12,11 @@
 --   * goals: per goal, its conversions, the most first;
 --   * journey: the most frequent journey to a conversion among the period's
 --     latest 2,000 (the latest first among as many), its source, pages and
---     goal, as content_page_conversions (00287) builds them, and how many;
---     null without one. The bound keeps a big brand's 90 days from holding
---     the Plan page up: the goals still count every conversion.
+--     goal, as content_page_conversions (00287) builds them (the latest 100
+--     pageviews before the conversion), and how many; null without one. The
+--     bounds keep a big brand's 90 days, or a visitor id with a long
+--     history, from holding the Plan page up: the goals still count every
+--     conversion.
 --
 -- Security definer with an organization check, as content_plan_insights.
 
@@ -57,6 +59,11 @@ begin
       and c.occurred_at >= v_from
       and c.occurred_at < v_until
   ),
+  -- The latest 2,000's paths (the goals take all): the landing page, the
+  -- latest 100 pageviews before the conversion, from a day before its first
+  -- AI visit (first_at is clamped per event, within the server's clock
+  -- allowance), the page it converted on; by the keys stored with each
+  -- event (00286).
   paths as (
     select t.first_source, t.goal, t.occurred_at, (
       select array_agg(s.page order by s.ord <> 0, s.at, s.ord)
@@ -64,16 +71,22 @@ begin
         select steps.page, steps.at, steps.ord,
           lag(steps.page) over (order by steps.ord <> 0, steps.at, steps.ord) as before
         from (
-          select lower(public.normalize_page_path(t.first_url)) as page, t.first_at as at, 0 as ord
+          select t.first_key as page, t.first_at as at, 0 as ord
           union all
-          select lower(public.normalize_page_path(p.url)), p.occurred_at, 1
-          from public.ai_traffic_events p
-          where p.brand_id = p_brand_id
-            and p.visitor_id = t.visitor_id
-            and p.kind = 'page'
-            and p.occurred_at <= t.occurred_at
+          select p.page_key, p.occurred_at, 1
+          from (
+            select e.page_key, e.occurred_at
+            from public.ai_traffic_events e
+            where e.brand_id = p_brand_id
+              and e.visitor_id = t.visitor_id
+              and e.kind = 'page'
+              and e.occurred_at >= t.first_at - interval '1 day'
+              and e.occurred_at <= t.occurred_at
+            order by e.occurred_at desc
+            limit 100
+          ) p
           union all
-          select lower(public.normalize_page_path(t.url)), t.occurred_at, 2
+          select t.page_key, t.occurred_at, 2
         ) steps
       ) s
       where s.before is distinct from s.page
