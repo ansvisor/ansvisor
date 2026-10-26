@@ -332,8 +332,10 @@ export function growsPastLimit(passage, before, words) {
  */
 // A capitalised word of a name, starting a word: a dot inside it ("Node.js")
 // or after an initial ("U.S."), never the one that ends its sentence
-// ("…according to Gartner. The plan").
-const NAME_DOT = String.raw`\.(?=[\p{L}\p{N}])|(?<=(?:^|[^\p{L}\p{N}]|\.)\p{Lu})\.`;
+// ("…according to Gartner. The plan"). A dot is taken one way only: an
+// initial's is one no letter follows, so a run of initials ("U.S.U.S.…")
+// is read in linear time, never tried both ways at each dot.
+const NAME_DOT = String.raw`\.(?=[\p{L}\p{N}])|(?<=(?:^|[^\p{L}\p{N}]|\.)\p{Lu})\.(?![\p{L}\p{N}])`;
 /** The most words a source's name is read with: a run of capitalised words past it isn't one. */
 const MAX_NAME_WORDS = 8;
 const NAME_WORD = String.raw`(?<![\p{L}\p{N}&'’.-])\p{Lu}(?:[\p{L}\p{N}&'’-]|${NAME_DOT})*`;
