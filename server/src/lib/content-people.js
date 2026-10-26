@@ -241,7 +241,7 @@ export const isRole = (lower) =>
 const NOT_TITLE_NEXT = `(?!(?:${[...TITLE_NOUNS].map(eitherCase).join('|')})(?!\\p{L}))`;
 
 /** Speech, read with a quote: whoever or whatever says it, it is a quote. */
-const SPEECH = String.raw`(?:says|said|told|tells|explains|explained|notes|noted|writes|wrote|recalls|recalled|adds|added|argues|argued|believes|warns|warned|states|stated|puts it|put it|emphasi[sz]es|emphasi[sz]ed|suggests|suggested|recommends|recommended|advises|advised|points out|pointed out|shares|shared|observes|observed|insists|insisted|admits|admitted|comments|commented|agrees|agreed|claims|claimed|predicts|predicted|describes|described|sagt|sagte|meint|erklärt|dit|explique|dice|explica|afirma|söyledi|diyor|belirtti|açıkladı|dedi|anlattı)`;
+export const SPEECH = String.raw`(?:says|said|told|tells|explains|explained|notes|noted|writes|wrote|recalls|recalled|adds|added|argues|argued|believes|warns|warned|states|stated|puts it|put it|emphasi[sz]es|emphasi[sz]ed|suggests|suggested|recommends|recommended|advises|advised|points out|pointed out|shares|shared|observes|observed|insists|insisted|admits|admitted|comments|commented|agrees|agreed|claims|claimed|predicts|predicted|describes|described|sagt|sagte|meint|erklärt|dit|explique|dice|explica|afirma|söyledi|diyor|belirtti|açıkladı|dedi|anlattı)`;
 /**
  * Verbs said of people only, read with a name that has no honorific or role
  * ("Marco Rossi said"): the rest of SPEECH a product or a company does too
@@ -612,11 +612,28 @@ export function guardPeopleInHtml(html, known) {
       });
   });
 
+  count += editLines($, (text, heading) => peopleEdits(text, known, { heading }));
+  if (!count) return { html, count };
+  return { html: $.html(), count };
+}
+
+/**
+ * Edits a loaded HTML's words line by line: each line's text, its own text
+ * nodes and its inline tags' (bold, links) in order, read as one, so a name
+ * or a phrase across a link is read whole and an entity is read as its
+ * character ("AT&T", never "AT&amp;T"). `editsFor(text, heading)` gives a
+ * line's edits, { start, end, text }, apart and in order; each goes in the
+ * text node it starts in, the rest of its words cut. A link or a bold whose
+ * words all went goes too. Code and what isn't words are left alone.
+ * Returns how many edits were made.
+ */
+export function editLines($, editsFor) {
+  let count = 0;
   // A line: its own text nodes and its inline tags', in order, read as one.
   const line = (nodes, heading) => {
     if (!nodes.length) return;
     const joined = nodes.map((n) => n.data).join('');
-    const edits = peopleEdits(joined, known, { heading });
+    const edits = editsFor(joined, heading);
     if (!edits.length) return;
     count += edits.length;
     const starts = [];
@@ -654,7 +671,11 @@ export function guardPeopleInHtml(html, known) {
     for (const node of $(el).contents().get()) {
       if (node.type === 'text') run.push(node);
       else if (node.type !== 'tag' || KEPT_AS_IS.has(node.name)) continue;
-      else if (BLOCKS.has(node.name)) {
+      // A line break ends a line: "Gartner<br>The plan" is two.
+      else if (node.name === 'br') {
+        line(run, heading);
+        run = [];
+      } else if (BLOCKS.has(node.name)) {
         line(run, heading);
         run = [];
         walk(node, HEADINGS.has(node.name));
@@ -663,12 +684,13 @@ export function guardPeopleInHtml(html, known) {
     line(run, heading);
   };
   walk($.root(), false);
-  if (!count) return { html, count };
-  // A link or a bold whose words all went with a name or a quote goes too.
-  $('a, strong, em, b, i, u, s, span, mark, small, sup, sub').each((_, el) => {
-    if (!$(el).text() && !$(el).find('img, br').length) $(el).remove();
-  });
-  return { html: $.html(), count };
+  if (count) {
+    // A link or a bold whose words all went with an edit goes too.
+    $('a, strong, em, b, i, u, s, span, mark, small, sup, sub').each((_, el) => {
+      if (!$(el).text() && !$(el).find('img, br').length) $(el).remove();
+    });
+  }
+  return count;
 }
 
 /**

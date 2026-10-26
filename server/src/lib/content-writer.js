@@ -6,7 +6,8 @@ import { resolveModel } from './ai-provider.js';
 import {
   ATTRIBUTION_RULE,
   attributableSources,
-  placeholderAttributions,
+  bannedWordsOf,
+  placeholderAttributionsInHtml,
   FANOUT_RULE,
   HEADING_RULE,
   LINK_RULE,
@@ -22,6 +23,7 @@ import {
 } from './content-agent.js';
 import { contentBriefModelId, rebuildSources } from './content-brief.js';
 import { inputSources, readDraftInputs } from './content-inputs.js';
+import { draftLanguage } from './content-language.js';
 import { linkAllowList, linkTargetsPrompt, readLinkTargets } from './content-links.js';
 import { siteTypeLine, pageTypeFormat } from './content-page-types.js';
 import { authorWords, guardPeople, guardPeopleInHtml, knownPeople } from './content-people.js';
@@ -373,7 +375,7 @@ export async function startDraftWriting({ draftId, brandId, input, rewrite = fal
   const { data: draft, error: draftError } = await supabaseAdmin
     .from('content_drafts')
     .select(
-      'id, brand_id, title, page_type, method, source_url, body_html, status, agent_state, agent_state_at, opportunity_id, brief, action_id',
+      'id, brand_id, title, page_type, rules, method, source_url, body_html, status, agent_state, agent_state_at, opportunity_id, brief, action_id',
     )
     .eq('id', draftId)
     .maybeSingle();
@@ -594,7 +596,7 @@ async function rewritePage({
   // passages are never touched.
   const cleaned = cleanPageHtml(
     // A claim given to a source it wasn't given: a placeholder, not the page dropped.
-    placeholderAttributions(guardPeopleInHtml(answer.html, people).html, attributable),
+    placeholderAttributionsInHtml(guardPeopleInHtml(answer.html, people).html, attributable),
     rewriteLinks(draft.body_html, linkAllowList(targets)),
     { h1Kept: page.h1Token !== null, originalH1: page.h1 },
   );
@@ -865,7 +867,12 @@ async function writeWithRun({ draft, brand, model, input, budget, rewrite, run }
   );
   // The sources a claim may be given to: the ones the page gives claims to,
   // its Your input and authors (editor test 2026-10-25).
-  const attributable = attributableSources(draft.body_html, numbered, authors, brand.language);
+  const attributable = attributableSources(
+    draft.body_html,
+    numbered,
+    authors,
+    await draftLanguage(draft, brand.organization_id, brand.language),
+  );
 
   if (rewrite) {
     return await rewritePage({
@@ -964,7 +971,7 @@ async function writeWithRun({ draft, brand, model, input, budget, rewrite, run }
     lockedKeys,
     ruleKeys,
     linkAllowList(targets),
-    { numbered, known, people, attributable },
+    { numbered, known, people, attributable, banned: bannedWordsOf(input.rules) },
   );
   // Stopped meanwhile: nothing it wrote is kept.
   await stopIfStopped(run);
