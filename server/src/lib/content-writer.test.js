@@ -90,8 +90,20 @@ vi.mock('./content-agent.js', async (importOriginal) => ({
   hasOpenSuggestions: (...args) => hasOpenSuggestions(...args),
 }));
 
-const { buildWritePrompt, briefText, renderPage, runDraftWriting, sourcedPage, startDraftWriting } =
-  await import('./content-writer.js');
+const {
+  WRITE_SYSTEM_PROMPT,
+  buildWritePrompt,
+  briefText,
+  renderPage,
+  rewriteSystemPrompt,
+  runDraftWriting,
+  sourcedPage,
+  startDraftWriting,
+  suggestSystemPrompt,
+  writeSystemPrompt,
+} = await import('./content-writer.js');
+const { WRITING_GUARDRAIL } = await import('./content-brief.js');
+const { REWRITE_SYSTEM_PROMPT } = await import('./content-rewrite.js');
 const { NAME_PLACEHOLDER, QUOTE_PLACEHOLDER, knownPeople } = await import('./content-people.js');
 const { textLength } = await import('./content-rewrite.js');
 const { passageKey } = await import('./content-agent.js');
@@ -987,5 +999,204 @@ describe('the write prompt', () => {
       'Industry: Coffee\nSite type: B2B SaaS (software or services sold to businesses)\nDescription:',
     );
     expect(write('')).toContain('Industry: Coffee\nDescription:');
+  });
+});
+
+describe('the brief rules (2026) in the Content Agent', () => {
+  afterEach(() => vi.unstubAllEnvs());
+  const planned = {
+    goal: 'Sell beans',
+    audience: 'Home brewers',
+    outline: [
+      {
+        heading: 'Ratio',
+        keyPoints: ['Grams per cup'],
+        fanout: null,
+        platform: null,
+        answer: 'Name the ratio first.',
+        format: 'table',
+        facts: [{ claim: 'The ratio cafés use', sourceType: 'study', source: null }],
+      },
+    ],
+    keywords: ['pour over'],
+    version: 2,
+    tldr: 'A 1:16 ratio suits most beans.',
+    proof: [{ kind: 'test', what: 'Our cupping notes' }],
+  };
+  // A plan whose facts name their sources, and whose links' addresses hold a
+  // number and a name the agent wasn't given.
+  const linked = {
+    ...planned,
+    outline: [
+      {
+        ...planned.outline[0],
+        facts: [
+          {
+            claim: 'Our grind sizes',
+            sourceType: 'example',
+            source: { kind: 'input', ref: 'in-1', label: 'Grind chart' },
+          },
+          {
+            claim: 'The ratio cafés use',
+            sourceType: 'study',
+            source: {
+              kind: 'cited_page',
+              ref: 'https://news.example/ratio',
+              label: 'https://news.example/ratio',
+            },
+          },
+        ],
+      },
+    ],
+    links: {
+      internal: [
+        { anchor: 'our tools', url: 'https://acme.example/top-37-tools', section: 'Ratio' },
+      ],
+      outbound: [
+        {
+          anchor: 'an interview',
+          url: 'https://news.example/interview-with-john-smith',
+          section: null,
+        },
+      ],
+    },
+  };
+
+  it('asks as before while they are off: the same prompts, the brief as version 1', () => {
+    expect(writeSystemPrompt()).toBe(WRITE_SYSTEM_PROMPT);
+    expect(rewriteSystemPrompt()).toBe(REWRITE_SYSTEM_PROMPT);
+    expect(suggestSystemPrompt()).not.toContain(WRITING_GUARDRAIL);
+    // Word for word what version 1's fields give.
+    expect(briefText(planned, null)).toBe(
+      briefText(
+        {
+          goal: planned.goal,
+          audience: planned.audience,
+          keywords: planned.keywords,
+          outline: planned.outline.map((s) => ({
+            heading: s.heading,
+            keyPoints: s.keyPoints,
+            fanout: s.fanout,
+            platform: s.platform,
+          })),
+        },
+        null,
+      ),
+    );
+    expect(briefText(planned, null)).not.toContain('TL;DR');
+  });
+
+  it('with them on, gives each prompt the guardrail and the writer the plan and short headings', () => {
+    vi.stubEnv('CONTENT_BRIEF_RULES', 'true');
+    for (const prompt of [writeSystemPrompt(), suggestSystemPrompt(), rewriteSystemPrompt()]) {
+      expect(prompt).toContain(WRITING_GUARDRAIL);
+    }
+    expect(writeSystemPrompt()).toContain("Follow the brief's section plans");
+    expect(writeSystemPrompt()).toContain('each section heading about 8 to 15 words');
+    const brief = briefText(planned, null);
+    expect(brief).toContain('Goal: Sell beans');
+    expect(brief).toContain("TL;DR (what the page's top must say): A 1:16 ratio suits most beans.");
+    expect(brief).toContain(
+      '- Ratio — answer first: Name the ratio first.; show as a comparison, the same points for each option in turn; give a fact on: The ratio cafés use (study, a placeholder until a source is found)',
+    );
+    expect(brief).toContain(
+      'Proof to gather (write it only from Your input; else a placeholder): test: Our cupping notes',
+    );
+  });
+
+  it('writes a new page from the plan, with them on', async () => {
+    vi.stubEnv('CONTENT_BRIEF_RULES', 'true');
+    await runDraftWriting({
+      draft: draftRow({ brief: planned }),
+      brand,
+      model: 'model:m',
+      input: input(),
+      budget,
+    });
+    const call = generateObject.mock.calls[0][0];
+    expect(call.system).toContain(WRITING_GUARDRAIL);
+    expect(call.prompt).toContain('Section plans:');
+  });
+
+  it("names a fact's source by its kind, and leaves the planned links out for a new page", async () => {
+    vi.stubEnv('CONTENT_BRIEF_RULES', 'true');
+    const brief = briefText(linked, null);
+    expect(brief).toContain(
+      'give a fact on: Our grind sizes (example, from Your input "Grind chart")',
+    );
+    expect(brief).toContain(
+      "give a fact on: The ratio cafés use (study, a placeholder: check it against https://news.example/ratio, whose words you don't see)",
+    );
+    expect(brief).toContain(
+      'Links planned (only as the links rule allows): "our tools" → https://acme.example/top-37-tools in "Ratio"',
+    );
+    expect(briefText(linked, null, { links: false })).not.toContain('Links planned');
+    // A new page's writer has no links rule: it isn't told of them.
+    await runDraftWriting({
+      draft: draftRow({ brief: linked }),
+      brand,
+      model: 'model:m',
+      input: input(),
+      budget,
+    });
+    expect(generateObject.mock.calls[0][0].prompt).not.toContain('Links planned');
+  });
+
+  it('gives an existing page’s suggestions the guardrail and the links planned', async () => {
+    vi.stubEnv('CONTENT_BRIEF_RULES', 'true');
+    generateObject.mockResolvedValue({
+      object: { suggestions: [] },
+      usage: { inputTokens: 10, outputTokens: 20 },
+    });
+    await runDraftWriting({
+      draft: draftRow({
+        method: 'optimize',
+        source_url: 'https://acme.example/pour-over',
+        body_html: '<h1>Pour-over</h1><p>Use good coffee.</p>',
+        brief: linked,
+      }),
+      brand,
+      model: 'model:m',
+      input: input(),
+      budget,
+    });
+    const call = generateObject.mock.calls[0][0];
+    expect(call.system).toContain(WRITING_GUARDRAIL);
+    expect(call.prompt).toContain('Links planned');
+  });
+
+  it("never lets a planned link's address vouch for a number or a name", async () => {
+    vi.stubEnv('CONTENT_BRIEF_RULES', 'true');
+    generateObject.mockResolvedValue({
+      object: {
+        html:
+          '<h1>Pour-over</h1><p>Try 37 tools for it.</p>' +
+          '<p>John Smith said the bloom matters.</p>',
+        reason: 'followed the plan',
+      },
+      usage: { inputTokens: 900, outputTokens: 700 },
+    });
+    await expect(
+      runDraftWriting({
+        draft: draftRow({
+          method: 'optimize',
+          status: 'in_review',
+          body_html: '<h1>Pour-over</h1><p>Use good coffee.</p>',
+          brief: linked,
+        }),
+        brand,
+        model: 'model:m',
+        input: input(),
+        budget,
+        rewrite: true,
+      }),
+    ).resolves.toEqual({ rewritten: true });
+    const call = generateObject.mock.calls[0][0];
+    expect(call.system).toContain(WRITING_GUARDRAIL);
+    // The rewrite is told of the links; its guards never read their addresses.
+    expect(call.prompt).toContain('https://acme.example/top-37-tools');
+    const row = writes.find((w) => w.table === 'content_draft_suggestions').value;
+    expect(row.after_text).toContain('<p>Try [figure, source] tools for it.</p>');
+    expect(row.after_text).toContain(`<p>${NAME_PLACEHOLDER} said the bloom matters.</p>`);
   });
 });

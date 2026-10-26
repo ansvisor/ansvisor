@@ -319,6 +319,95 @@ export function briefSchema() {
   return briefRulesOn() ? outlineSchemaV2 : outlineSchema;
 }
 
+/**
+ * The brief rules' guardrail (Bing's February 2026 guidelines), for the
+ * Content Agent's prompts that write a page's words (content-writer.js:
+ * write, suggest, rewrite), with the brief rules on.
+ */
+export const WRITING_GUARDRAIL =
+  '- No keyword stuffing, and no wording made to trigger a citation: write for the reader.';
+
+/**
+ * How the writer can show a section: no page it writes has a table yet, so a
+ * table is a comparison set out point by point.
+ */
+const FORMAT_FOR_WRITER = {
+  paragraphs: 'paragraphs',
+  list: 'a bulleted list',
+  steps: 'numbered steps, in order',
+  table: 'a comparison, the same points for each option in turn',
+  faq: 'questions, each answered directly',
+};
+
+/**
+ * A version 2 brief's plan as the Content Agent reads it (brief rules, 2026),
+ * after the brief's goal, outline and keywords: the essentials at the top,
+ * the angle, each section's answer, format and facts (one from Your input
+ * by its name; one to check against a cited page, whose words the writer
+ * doesn't see, or with none, a placeholder), the proof to gather (from Your
+ * input only), the searches left to another page, freshness, the names as
+ * written and, unless `links` is false (a new page's writer has no links
+ * rule), the links planned: never an allow list, the links rule decides.
+ * '' with the brief rules off, or for an older brief.
+ */
+export function briefForWriter(brief, { links: withLinks = true } = {}) {
+  if (!briefRulesOn() || brief?.version !== 2) return '';
+  const lines = [];
+  if (brief.tldr) lines.push(`TL;DR (what the page's top must say): ${brief.tldr}`);
+  if (brief.angle) lines.push(`Angle (what only this page shows): ${brief.angle}`);
+  const plans = (brief.outline ?? [])
+    .map((section) => {
+      const parts = [];
+      if (section.answer) parts.push(`answer first: ${section.answer}`);
+      if (FORMAT_FOR_WRITER[section.format])
+        parts.push(`show as ${FORMAT_FOR_WRITER[section.format]}`);
+      for (const fact of section.facts ?? []) {
+        const source =
+          fact.source?.kind === 'input'
+            ? `from Your input "${fact.source.label}"`
+            : fact.source
+              ? `a placeholder: check it against ${fact.source.label}, whose words you don't see`
+              : 'a placeholder until a source is found';
+        parts.push(`give a fact on: ${fact.claim} (${fact.sourceType}, ${source})`);
+      }
+      return parts.length ? `${section.heading} — ${parts.join('; ')}` : null;
+    })
+    .filter(Boolean);
+  if (plans.length) lines.push(`Section plans:\n${plans.map((plan) => `- ${plan}`).join('\n')}`);
+  if (brief.proof?.length) {
+    lines.push(
+      `Proof to gather (write it only from Your input; else a placeholder): ${brief.proof.map((p) => `${p.kind}: ${p.what}`).join('; ')}`,
+    );
+  }
+  if (brief.leftOut?.length) {
+    lines.push(
+      `Keep to one topic; these searches are for another page: ${brief.leftOut.join('; ')}`,
+    );
+  }
+  const fresh = brief.freshness;
+  const dates = [
+    fresh?.datedPoint && `date ${fresh.datedPoint}`,
+    fresh?.updatedLine && 'show an "Updated" date line',
+    fresh?.yearInTitle && 'the year in the title, when you write it',
+  ].filter(Boolean);
+  if (dates.length) lines.push(`Freshness: ${dates.join('; ')}`);
+  const names = [
+    brief.entities?.brand,
+    ...(brief.entities?.products ?? []),
+    ...(brief.entities?.competitors ?? []),
+  ].filter(Boolean);
+  if (names.length) lines.push(`Names, written exactly so: ${names.join(', ')}`);
+  const links = withLinks
+    ? [...(brief.links?.internal ?? []), ...(brief.links?.outbound ?? [])]
+    : [];
+  if (links.length) {
+    lines.push(
+      `Links planned (only as the links rule allows): ${links.map((l) => `"${l.anchor}" → ${l.url}${l.section ? ` in "${l.section}"` : ''}`).join('; ')}`,
+    );
+  }
+  return lines.join('\n');
+}
+
 const norm = (text) => text.trim().replace(/\s+/g, ' ').toLowerCase();
 /** A fan-out as matched: without the quotes the prompt lists it in, as the model may copy them. */
 const fanoutKey = (text) => norm(text.trim().replace(/^["“„«]\s*|\s*["”“»]$/g, ''));

@@ -85,6 +85,7 @@ const {
   mapOutline,
   outlineSchema,
   outlineSchemaV2,
+  briefForWriter,
   briefNumbered,
   briefRules,
   rebuildDraftBrief,
@@ -1348,5 +1349,50 @@ describe('the brief rules (2026), behind CONTENT_BRIEF_RULES', () => {
     for (const n of briefNumbered(sources(), inputs)) {
       expect([...draftKinds, 'input']).toContain(n.kind);
     }
+  });
+});
+
+describe('briefForWriter', () => {
+  afterEach(() => {
+    delete process.env.CONTENT_BRIEF_RULES;
+  });
+  // The web's sample of version 2 (web/src/lib/content/__fixtures__/brief-v2.json).
+  const sample = JSON.parse(
+    readFileSync(
+      new URL('../../../web/src/lib/content/__fixtures__/brief-v2.json', import.meta.url),
+      'utf8',
+    ),
+  );
+
+  it('says nothing with the brief rules off, or for a brief before version 2', () => {
+    expect(briefForWriter(sample)).toBe('');
+    process.env.CONTENT_BRIEF_RULES = 'true';
+    expect(briefForWriter({ ...sample, version: undefined })).toBe('');
+  });
+
+  it('gives the writer the plan: top, angle, sections, proof, scope, freshness, names, links', () => {
+    process.env.CONTENT_BRIEF_RULES = 'true';
+    const text = briefForWriter(sample);
+    expect(text).toContain(`TL;DR (what the page's top must say): ${sample.tldr}`);
+    expect(text).toContain(`Angle (what only this page shows): ${sample.angle}`);
+    expect(text).toContain(
+      `- ${sample.outline[0].heading} — answer first: ${sample.outline[0].answer}`,
+    );
+    // A table the writer can't make is a comparison set out point by point.
+    expect(text).toContain('show as a comparison, the same points for each option in turn');
+    expect(text).toContain('(study, a placeholder until a source is found)');
+    expect(text).toContain('(statistic, from Your input "Forecast error by month")');
+    expect(text).toContain(
+      'Proof to gather (write it only from Your input; else a placeholder): data:',
+    );
+    expect(text).toContain(
+      `Keep to one topic; these searches are for another page: ${sample.leftOut[0]}`,
+    );
+    expect(text).toContain('Freshness: date');
+    expect(text).toContain('Names, written exactly so:');
+    expect(text).toContain('Links planned (only as the links rule allows):');
+    // Without the links: a new page's writer has no links rule.
+    expect(briefForWriter(sample, { links: false })).not.toContain('Links planned');
+    expect(briefForWriter(sample, { links: false })).toContain('Names, written exactly so:');
   });
 });
