@@ -33,7 +33,7 @@ import {
   draftPassages,
   suggestionsSchema,
 } from '../lib/content-agent.js';
-import { contentBriefModelId } from '../lib/content-brief.js';
+import { briefRulesOn, contentBriefModelId } from '../lib/content-brief.js';
 import { inputSources } from '../lib/content-inputs.js';
 import { numberSources, sourcesPrompt } from '../lib/content-sources.js';
 import {
@@ -116,7 +116,7 @@ if (!Object.keys(recorded).length) {
 }
 writeFileSync(
   new URL('../lib/__fixtures__/no-fabrication/recorded.json', import.meta.url),
-  `${JSON.stringify({ model: modelId, recordedAt: new Date().toISOString(), reviewed: {}, ...recorded }, null, 2)}\n`,
+  `${JSON.stringify({ model: modelId, briefRules: briefRulesOn(), recordedAt: new Date().toISOString(), reviewed: {}, ...recorded }, null, 2)}\n`,
 );
 // Then what the guards let through that the agent wasn't given, for a
 // person to look over: the answers are kept first, whatever happens here.

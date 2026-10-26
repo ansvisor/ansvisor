@@ -1381,7 +1381,7 @@ describe('briefForWriter', () => {
     // A table the writer can't make is a comparison set out point by point.
     expect(text).toContain('show as a comparison, the same points for each option in turn');
     expect(text).toContain('(study, a placeholder until a source is found)');
-    expect(text).toContain('(statistic, from Forecast error by month)');
+    expect(text).toContain('(statistic, from Your input "Forecast error by month")');
     expect(text).toContain(
       'Proof to gather (write it only from Your input; else a placeholder): data:',
     );
@@ -1391,5 +1391,8 @@ describe('briefForWriter', () => {
     expect(text).toContain('Freshness: date');
     expect(text).toContain('Names, written exactly so:');
     expect(text).toContain('Links planned (only as the links rule allows):');
+    // Without the links: a new page's writer has no links rule.
+    expect(briefForWriter(sample, { links: false })).not.toContain('Links planned');
+    expect(briefForWriter(sample, { links: false })).toContain('Names, written exactly so:');
   });
 });

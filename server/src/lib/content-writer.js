@@ -174,7 +174,7 @@ How to write:
  * kept short (the editor's limits), and the guardrail.
  */
 const WRITE_RULES_2026 = `- Follow the brief's section plans when it has them: each section's answer first, its format, the facts it names (a placeholder until a source is found), the names as written.
-- Headings are one short line: the title up to ${HEADING_LIMITS.h1} characters, each section heading about 8 to 15 words and under ${HEADING_LIMITS.other} characters. Never put a sentence or an answer in a heading.
+- Headings are one short line: the title up to ${HEADING_LIMITS.h1} characters, each section heading about 8 to 15 words (a fan-out's own words, when shorter) and under ${HEADING_LIMITS.other} characters. Never put a sentence or an answer in a heading.
 ${WRITING_GUARDRAIL}`;
 
 /** The prompts as the run uses them: version 1's, or with the brief rules (2026) on, theirs too. */
@@ -263,14 +263,14 @@ export function sourcedPage(page, known, people = knownPeople()) {
 }
 
 /** The brief as the model reads it: the draft's own, else its opportunity's. */
-export function briefText(draftBrief, opportunityBrief) {
+export function briefText(draftBrief, opportunityBrief, { links = true } = {}) {
   if (draftBrief?.outline?.length || draftBrief?.goal) {
     const sections = draftBrief.outline.map(
       (s) =>
         `${s.heading}${s.keyPoints?.length ? `: ${s.keyPoints.join('; ')}` : ''}${s.fanout ? ` (answers the AI search "${s.fanout}")` : ''}`,
     );
     // Version 2's plan after it, with the brief rules on (briefForWriter).
-    const plan = briefForWriter(draftBrief);
+    const plan = briefForWriter(draftBrief, { links });
     return `Goal: ${draftBrief.goal || '—'}
 Audience: ${draftBrief.audience || '—'}
 Outline:
@@ -855,7 +855,14 @@ async function writeWithRun({ draft, brand, model, input, budget, rewrite, run }
       : Promise.resolve({ data: null, error: null }),
   ]);
   if (opportunityRes.error) throw opportunityRes.error;
-  const brief = briefText(draft.brief, opportunityRes.data?.brief);
+  // A new page's writer has no links rule: the brief's planned links are left out for it.
+  const brief = briefText(draft.brief, opportunityRes.data?.brief, {
+    links: rewrite || draft.method !== 'create',
+  });
+  // What the brief gives the guards: never its addresses (a planned link's
+  // "/top-37-tools", "/interview-with-john-smith"), as sourceWords keeps a
+  // cited page's out.
+  const briefGiven = brief.replace(/https?:\/\/\S+/g, ' ');
   // The data it writes from, numbered (CE-033), Brief › Your input last
   // (CE-048); the numbers a suggestion may write unmarked (the page's, the
   // brand's, the brief's, the rules', today's), and those a page written
@@ -873,7 +880,7 @@ async function writeWithRun({ draft, brand, model, input, budget, rewrite, run }
     brand.name,
     brand.industry,
     brand.description,
-    brief,
+    briefGiven,
     ...input.rules.flatMap((r) => [r.name, r.detail]),
     ...input.textRules,
     todayText(),
@@ -887,7 +894,7 @@ async function writeWithRun({ draft, brand, model, input, budget, rewrite, run }
     brand.name,
     brand.industry,
     brand.description,
-    brief,
+    briefGiven,
     ...input.rules.flatMap((r) => [r.name, r.detail]),
     ...input.textRules,
     ...numbered.map(sourceWords),
