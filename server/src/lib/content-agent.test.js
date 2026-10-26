@@ -489,11 +489,11 @@ describe('keepSuggestions', () => {
   });
 
   it('reads a long run of capitals quickly', () => {
-    const started = performance.now();
+    const started = Date.now();
     addsAttribution('', `According to ${'A'.repeat(20000)} says that.`);
     const list = `${'B'.repeat(20000)}, C and D`;
     dropsName(list, list, 'C and D');
-    expect(performance.now() - started).toBeLessThan(500);
+    expect(Date.now() - started).toBeLessThan(500);
   });
 
   it('knows a source by its possessive, and never by its last word alone', () => {
