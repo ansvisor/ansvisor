@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   ATTRIBUTION_DAYS,
   EMAIL_SEGMENT,
+  holdsEmail,
   eventLabel,
   eventRow,
   eventUrl,
@@ -18,6 +19,22 @@ const first = {
   u: 'https://acme.example/blog/crm?utm_source=chatgpt.com',
   at: NOW - DAY,
 };
+
+describe('holdsEmail', () => {
+  it('reads a path segment once, however long: any sender’s address is read with it', () => {
+    expect(holdsEmail('ann@example.com')).toBe(true);
+    expect(holdsEmail('ann%40example.com')).toBe(true);
+    // A malformed escape elsewhere in it: the @ is still read.
+    expect(holdsEmail('ann%40example.com%E0')).toBe(true);
+    expect(holdsEmail('@acme')).toBe(false);
+    expect(holdsEmail('pricing')).toBe(false);
+    const started = Date.now();
+    for (const segment of ['a'.repeat(16_384), 'a.'.repeat(8_192), `x${'%40a'.repeat(4_000)}`]) {
+      holdsEmail(segment);
+    }
+    expect(Date.now() - started).toBeLessThan(50);
+  });
+});
 
 describe('eventUrl', () => {
   it('keeps the origin and path, never the query string or the fragment', () => {
@@ -38,8 +55,13 @@ describe('eventUrl', () => {
     expect(eventUrl('https://acme.example/account/ANN%40EXAMPLE.COM')).toBe(
       `https://acme.example/account/${EMAIL_SEGMENT}`,
     );
+    // An encoded dot too.
+    expect(eventUrl('https://acme.example/account/ann%40example%2Ecom')).toBe(
+      `https://acme.example/account/${EMAIL_SEGMENT}`,
+    );
     // A handle isn't an email: the page keeps its key.
     expect(eventUrl('https://acme.example/@acme/post')).toBe('https://acme.example/@acme/post');
+    expect(eventUrl('https://acme.example/@acme.dev')).toBe('https://acme.example/@acme.dev');
     // The first visit's landing page is read the same way.
     expect(
       eventRow(

@@ -64,8 +64,23 @@ const eventBody = z.object({
 /** What a path segment holding an email is stored as. */
 export const EMAIL_SEGMENT = '[email]';
 
-/** An email in a path segment, raw or encoded: a name, an @, a domain ("/@acme" is a handle). */
-const EMAIL_IN_SEGMENT = /[^@/]+(?:@|%40)[^@/]+\.[^@/]+/i;
+/**
+ * Whether a path segment holds an email, raw or encoded (an encoded dot too):
+ * a name, an @, then a dot past it. An @ at the start is a handle ("/@acme",
+ * "/@acme.dev"). One pass over the segment, whatever its length: any sender's
+ * address is read with it.
+ */
+export function holdsEmail(segment) {
+  let text;
+  try {
+    text = decodeURIComponent(segment);
+  } catch {
+    // A malformed escape elsewhere in it.
+    text = segment.replace(/%40/gi, '@');
+  }
+  const at = text.indexOf('@', 1);
+  return at > 0 && text.indexOf('.', at + 2) > 0;
+}
 
 /**
  * A page's address as stored: its origin and path, no query string or
@@ -80,7 +95,7 @@ export function eventUrl(raw) {
     if (url.protocol !== 'http:' && url.protocol !== 'https:') return null;
     const path = url.pathname
       .split('/')
-      .map((segment) => (EMAIL_IN_SEGMENT.test(segment) ? EMAIL_SEGMENT : segment))
+      .map((segment) => (holdsEmail(segment) ? EMAIL_SEGMENT : segment))
       .join('/');
     return `${url.origin}${path}`.slice(0, 2048);
   } catch {
