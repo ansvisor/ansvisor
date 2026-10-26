@@ -388,7 +388,7 @@ function description(root: HTMLElement): string {
 }
 
 /** A live page's own address part ("/blog/pour-over"), else the title as one. */
-function slugOf(title: string, sourceUrl: string | null): string {
+export function slugOf(title: string, sourceUrl: string | null): string {
   if (sourceUrl) {
     try {
       const parts = new URL(sourceUrl).pathname
