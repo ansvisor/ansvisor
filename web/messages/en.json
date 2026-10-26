@@ -4135,6 +4135,41 @@
           "legend": "Visits come from the tracking snippet, or from Google Analytics on days without it. Key events, orders and revenue are Google Analytics' sessions that started on this page from an AI assistant.",
           "legendVisits": "Visits come from the tracking snippet."
         },
+        "conversions": {
+          "title": "Conversions from AI journeys",
+          "subtitle": "through this page, from the AI Traffic snippet",
+          "off": "Conversions aren't on for this brand, so the snippet doesn't follow AI visitors to them.",
+          "turnOn": "Turn them on in Brand settings",
+          "none": "No conversions from AI journeys through this page in this period.",
+          "bySource": "Conversions by AI source",
+          "columns": {
+            "source": "AI source",
+            "conversions": "Conversions"
+          },
+          "other": "Other",
+          "journeys": "Top journeys",
+          "thisPage": "This page",
+          "cards": {
+            "signup": "Signups",
+            "demo": "Demo forms",
+            "order": "Orders",
+            "booking": "Bookings",
+            "newsletter": "Newsletter signups",
+            "custom": "Other conversions",
+            "revenue": "Revenue",
+            "units": "Units sold",
+            "other": "Other conversions"
+          },
+          "goals": {
+            "signup": "Signup",
+            "demo": "Demo form",
+            "order": "Purchase",
+            "booking": "Booking",
+            "newsletter": "Newsletter",
+            "custom": "Conversion"
+          },
+          "legend": "A conversion counts here when its journey landed on this page, went through it, or ended on it, credited to the AI assistant of its first visit (30 days). Visitors who refuse cookies and AI visits without a referrer aren't seen."
+        },
         "overlap": {
           "title": "Your other pages for these prompts",
           "only": "{count, plural, one {The only page cited for its prompt} other {The only page cited for its # prompts}} · no overlap",
