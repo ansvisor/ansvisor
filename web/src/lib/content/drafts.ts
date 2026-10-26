@@ -154,6 +154,11 @@ export interface ContentDraft {
   siteType: SiteType;
   /** The existing page an optimize draft is for, when Start picked one. */
   sourceUrl: string | null;
+  /**
+   * Where the page is live (CE-013): given when it was marked published, or
+   * by its CMS (00262). The Live page tab measures it, else sourceUrl.
+   */
+  publishedUrl: string | null;
   method: DraftMethod;
   status: DraftStatus;
   bodyHtml: string;
