@@ -432,7 +432,9 @@ export function RulesTab({
           </SelectContent>
         </Select>
         <p className="text-xs text-muted-foreground" role="status">
-          {t('met', { met: state.met, total: state.total })}
+          {state.settled === false
+            ? t('metReading')
+            : t('met', { met: state.met, total: state.total })}
         </p>
       </div>
 

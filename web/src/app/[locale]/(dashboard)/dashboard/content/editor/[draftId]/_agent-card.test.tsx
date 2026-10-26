@@ -344,6 +344,17 @@ describe('AgentCard', () => {
     );
   });
 
+  it('counts a rewrite’s characters as the toolbar does, when the editor gives them', async () => {
+    const page = suggestion({
+      kind: 'page',
+      beforeHtml: '<h1>Old</h1><p>A much longer page than this one.</p>',
+      afterText: '<h1>New</h1><p>Shorter.</p>',
+      reason: 'cut it',
+    });
+    await render([page], false, { pageChars: { before: 6_617, after: 5_468 } });
+    expect(container.textContent).toContain('6,617 → 5,468 characters');
+  });
+
   it('says it is working, with nothing to press', async () => {
     await render([], true);
     const card = container.querySelector('[role="region"]')!;

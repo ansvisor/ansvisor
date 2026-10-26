@@ -59,11 +59,13 @@ import {
   type SavedRuleSet,
 } from '@/lib/content/rules';
 import {
+  MAX_BRIEF_BYTES,
   briefFromOpportunity,
   draftBriefSchema,
   type DraftBrief,
   type RebuildSources,
 } from '@/lib/content/brief';
+import { jsonbBytes } from '@/lib/content/draft-inputs';
 import type { ContentBrief } from '@/types';
 import {
   CITED_DAYS,
@@ -1744,6 +1746,23 @@ export async function getDraftVersions(id: string): Promise<DraftVersion[]> {
 }
 
 /**
+ * When the draft's page was last restored from History (00289: set each time
+ * a restore changes the page), or null. The agent's batch from before it was
+ * for the page before: the editor opens its card closed.
+ */
+export async function getLastRestoreAt(id: string): Promise<string | null> {
+  if (!draftId.safeParse(id).success) throw new Error('invalid');
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from('content_drafts')
+    .select('restored_at')
+    .eq('id', id)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  return data?.restored_at ?? null;
+}
+
+/**
  * History's hand-offs (Quality CE-051): the draft's runs of Hand off (00275,
  * its members may read them) in the last 90 days, the latest first, each
  * with who started it, how it ended and how many checks it was given.
@@ -1840,7 +1859,12 @@ export async function restoreDraftVersion(id: string, versionId: string): Promis
       else if (typed) updatedAt = typed.updated_at;
     }
   }
-  return { title: restored.title, bodyHtml: restored.bodyHtml, updatedAt };
+  return {
+    title: restored.title,
+    bodyHtml: restored.bodyHtml,
+    updatedAt,
+    ...(typeof restored.restored === 'boolean' ? { restored: restored.restored } : {}),
+  };
 }
 
 /**
@@ -1857,16 +1881,20 @@ export async function keepAgentBeforeVersion(id: string): Promise<void> {
 /**
  * The draft's last page rewrite, whatever became of it, as the API kept it
  * (00285): the characters it came to, the Length it was written to and what
- * it kept. A Length it missed isn't offered again (rules.ts RewriteReach).
- * Numbers only: the rewritten page isn't read for them. Null without one,
- * or for one made before 00285.
+ * it kept, and the page it wrote, for the editor to count as its toolbar
+ * does (the API's count runs a little over). A Length it missed isn't
+ * offered again (rules.ts RewriteReach). One row, read on opening and
+ * whenever the rewrite shown changes. Null without one, or for one made
+ * before 00285 (after_chars marks those).
  */
-export async function getLastPageRewrite(id: string): Promise<LastRewrite | null> {
+export async function getLastPageRewrite(
+  id: string,
+): Promise<(LastRewrite & { html: string }) | null> {
   if (!draftId.safeParse(id).success) throw new Error('invalid');
   const supabase = await createClient();
   const { data, error } = await supabase
     .from('content_draft_suggestions')
-    .select('after_chars, length_target, kept_chars')
+    .select('after_text, after_chars, length_target, kept_chars')
     .eq('draft_id', id)
     .eq('kind', 'page')
     .order('created_at', { ascending: false })
@@ -1874,7 +1902,12 @@ export async function getLastPageRewrite(id: string): Promise<LastRewrite | null
     .maybeSingle();
   if (error) throw new Error(error.message);
   if (!data || data.after_chars === null || data.kept_chars === null) return null;
-  return { chars: data.after_chars, target: data.length_target, kept: data.kept_chars };
+  return {
+    chars: data.after_chars,
+    target: data.length_target,
+    kept: data.kept_chars,
+    html: data.after_text,
+  };
 }
 
 /**
@@ -2152,6 +2185,12 @@ export async function getDraftBrief(id: string): Promise<{ brief: DraftBrief | n
   if (!draft) return null;
   const own = draftBriefSchema.safeParse(draft.brief);
   if (own.success) return { brief: own.data };
+  // A brief of its own this editor can't read: said as a failed read, never
+  // as the opportunity's or none, so Edit brief can't write over it.
+  if (draft.brief != null) {
+    console.error('The draft brief can’t be read:', own.error.issues.slice(0, 3));
+    return null;
+  }
   if (!draft.opportunity_id) return { brief: null };
   const { data: opportunity, error: oppError } = await supabase
     .from('content_opportunities')
@@ -2167,6 +2206,8 @@ export async function getDraftBrief(id: string): Promise<{ brief: DraftBrief | n
 export async function saveDraftBrief(id: string, brief: DraftBrief): Promise<DraftBrief> {
   const parsed = draftBriefSchema.safeParse({ ...brief, origin: 'edit' });
   if (!draftId.safeParse(id).success || !parsed.success) throw new Error('invalid');
+  // The column's 64 KB (00212): said, not a failed save.
+  if (jsonbBytes(parsed.data) > MAX_BRIEF_BYTES) throw new Error('too_long');
   const supabase = await createClient();
   const { data, error } = await supabase
     .from('content_drafts')

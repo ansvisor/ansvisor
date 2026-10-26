@@ -72,6 +72,7 @@ const getDraftHandoffs = vi.fn();
 const restoreDraftVersion = vi.fn();
 const getCitedPassages = vi.fn();
 const getDraftSuggestions = vi.fn();
+const getLastRestoreAt = vi.fn();
 // What the page's last rewrite came to (Length's reach): none unless a test gives one.
 const getLastPageRewrite = vi.fn();
 const decideDraftSuggestions = vi.fn();
@@ -89,6 +90,7 @@ vi.mock('@/lib/actions/content-drafts', () => ({
   startAgentWriting: (...args: unknown[]) => startAgentWriting(...args),
   startPageRewrite: (...args: unknown[]) => startPageRewrite(...args),
   getDraftSuggestions: (...args: unknown[]) => getDraftSuggestions(...args),
+  getLastRestoreAt: (...args: unknown[]) => getLastRestoreAt(...args),
   getLastPageRewrite: (...args: unknown[]) => getLastPageRewrite(...args),
   decideDraftSuggestions: (...args: unknown[]) => decideDraftSuggestions(...args),
   keepAgentBeforeVersion: (...args: unknown[]) => keepAgentBeforeVersion(...args),
@@ -372,6 +374,7 @@ beforeEach(() => {
   restoreDraftVersion.mockReset();
   getCitedPassages.mockReset().mockResolvedValue([]);
   getDraftSuggestions.mockReset().mockResolvedValue([]);
+  getLastRestoreAt.mockReset().mockResolvedValue(null);
   getLastPageRewrite.mockReset().mockResolvedValue(null);
   decideDraftSuggestions.mockReset().mockResolvedValue(1);
   keepAgentBeforeVersion.mockReset().mockResolvedValue(undefined);
@@ -852,6 +855,201 @@ describe('the content editor', () => {
       expect(getContentDraft.mock.calls.length).toBe(reads + 1);
     });
 
+    it('moves while it works, with a line on what it does, and stands still with reduced motion (CE-026)', async () => {
+      vi.useFakeTimers({
+        toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'Date'],
+      });
+      try {
+        getContentDraft.mockResolvedValue(
+          draft({
+            status: 'draft',
+            method: 'create',
+            agentState: 'writing',
+            agentSince: new Date().toISOString(),
+          }),
+        );
+        readAgentRun.mockResolvedValue({
+          id: 'r1',
+          kind: 'write',
+          steps: [
+            { key: 'read_rules', count: 9 },
+            { key: 'gather_sources', count: 52 },
+            { key: 'write_page', count: null },
+            { key: 'check_sources', count: null },
+          ],
+          step: 2,
+          startedAt: new Date().toISOString(),
+          finishedAt: null,
+          stoppedAt: null,
+          outcome: null,
+        });
+        await renderPage();
+        await act(async () => {});
+        const status = container.querySelector('[role="status"]')!;
+        // The agent's tile breathes, the step under way has its sweep and dots.
+        expect(status.querySelector('.animate-agent-breathe')).not.toBeNull();
+        const now = status.querySelector('[aria-current="step"]')!;
+        expect(now.textContent).toBe('Writing the page');
+        expect(now.querySelector('.animate-agent-sweep')).not.toBeNull();
+        expect(now.querySelector('.animate-agent-dot')).not.toBeNull();
+        // One line at a time on what it does, with what its run read.
+        expect(status.textContent).toContain("Answering the page's main question first");
+        await act(async () => void (await vi.advanceTimersByTimeAsync(4_000)));
+        expect(status.textContent).toContain('Giving each section one question to answer');
+        expect(status.textContent).not.toContain("Answering the page's main question first");
+        await act(async () => void (await vi.advanceTimersByTimeAsync(4_000)));
+        expect(status.textContent).toContain('Keeping to 9 rules');
+        await act(async () => void (await vi.advanceTimersByTimeAsync(4_000)));
+        expect(status.textContent).toContain('Drawing on 52 sources');
+        // The page drawn in, line by line.
+        expect(container.querySelectorAll('.animate-agent-fill').length).toBeGreaterThan(0);
+        // No spinning ring, and all of it still with reduced motion.
+        expect(container.querySelector('.animate-spin')).toBeNull();
+        const moving = [...container.querySelectorAll('[class*="animate-agent"], .animate-in')];
+        expect(
+          moving.every((el) =>
+            /motion-reduce:(animate-none|hidden)/.test(el.getAttribute('class')!),
+          ),
+        ).toBe(true);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('says what it does on a live page', async () => {
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
+      try {
+        getContentDraft.mockResolvedValue(
+          draft({
+            status: 'draft',
+            agentState: 'writing',
+            agentSince: new Date(Date.now() - 4_000).toISOString(),
+          }),
+        );
+        await renderPage();
+        const status = container.querySelector('[role="status"]')!;
+        // Optimize, its second line: the passages it keeps.
+        expect(status.textContent).toContain('Leaving passages AI quotes as they are');
+        expect(status.querySelector('[aria-current="step"] .animate-agent-sweep')).not.toBeNull();
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('says nothing of rules or sources its run read none of', async () => {
+      vi.useFakeTimers({
+        toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'Date'],
+      });
+      try {
+        getContentDraft.mockResolvedValue(
+          draft({
+            status: 'draft',
+            method: 'create',
+            agentState: 'writing',
+            agentSince: new Date().toISOString(),
+          }),
+        );
+        readAgentRun.mockResolvedValue({
+          id: 'r1',
+          kind: 'write',
+          steps: [
+            { key: 'read_rules', count: 0 },
+            { key: 'gather_sources', count: 0 },
+            { key: 'write_page', count: null },
+          ],
+          step: 2,
+          startedAt: new Date().toISOString(),
+          finishedAt: null,
+          stoppedAt: null,
+          outcome: null,
+        });
+        await renderPage();
+        await act(async () => {});
+        const status = container.querySelector('[role="status"]')!;
+        const said: string[] = [];
+        for (let i = 0; i < 5; i++) {
+          said.push(status.textContent!);
+          await act(async () => void (await vi.advanceTimersByTimeAsync(4_000)));
+        }
+        expect(said.join(' ')).toContain('Adding a [placeholder] for facts it lacks');
+        expect(said.join(' ')).not.toMatch(/Keeping to|Drawing on/);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('shows a live page’s Start, which runs as a Fix, and stops it', async () => {
+      getContentDraft.mockResolvedValue(
+        draft({ status: 'draft', agentState: 'writing', agentSince: new Date().toISOString() }),
+      );
+      readAgentRun.mockResolvedValue({
+        id: 'r2',
+        kind: 'fix',
+        steps: [
+          { key: 'read_rules', count: 7 },
+          { key: 'gather_sources', count: 3 },
+          { key: 'write_changes', count: null },
+          { key: 'check_sources', count: null },
+        ],
+        step: 2,
+        startedAt: new Date().toISOString(),
+        finishedAt: null,
+        stoppedAt: null,
+        outcome: null,
+      });
+      await renderPage();
+      await act(async () => {});
+      const status = container.querySelector('[role="status"]')!;
+      // Its real steps, not the fixed list, and its Stop.
+      expect([...status.querySelectorAll('li')].map((li) => li.textContent)).toEqual([
+        'Reading 7 rules',
+        'Gathering 3 sources',
+        'Writing changes',
+        'Checking sources',
+      ]);
+      await act(async () => button('Stop')!.click());
+      expect(stopAgentRun).toHaveBeenCalledWith('d1', 'b1', 'r2');
+    });
+
+    it('shows only the run the page waits on: a rewrite’s on a new page, never another kind’s', async () => {
+      for (const [method, agentRun, kind, shown] of [
+        // A new page's rewrite: its run is a rewrite, not the Start's write.
+        ['create', 'rewrite', 'rewrite', true],
+        ['create', 'rewrite', 'write', false],
+        ['create', 'write', 'fix', false],
+        ['optimize', 'rewrite', 'fix', false],
+      ] as const) {
+        getContentDraft.mockResolvedValue(
+          draft({
+            status: 'draft',
+            method,
+            agentState: 'writing',
+            agentRun,
+            agentSince: new Date().toISOString(),
+          }),
+        );
+        readAgentRun.mockResolvedValue({
+          id: 'r3',
+          kind,
+          steps: [{ key: 'check_sources', count: null }],
+          step: 0,
+          startedAt: new Date().toISOString(),
+          finishedAt: null,
+          stoppedAt: null,
+          outcome: null,
+        });
+        await renderPage();
+        await act(async () => {});
+        // Another run's: the fixed list stays, with no Stop for it.
+        expect(
+          container.querySelector('[role="status"]')!.textContent!.includes('Checking sources'),
+        ).toBe(shown);
+        expect(button('Stop') !== undefined).toBe(shown);
+        await act(async () => root.unmount());
+        root = createRoot(container);
+      }
+    });
+
     it('reads the draft at once when its run ends, its steps shown till then', async () => {
       vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
       try {
@@ -1301,6 +1499,419 @@ describe('the content editor', () => {
       // Nothing from before the restore is sent after it.
       expect(saveContentDraft).toHaveBeenCalledTimes(1);
       expect(container.querySelector('header')!.textContent).toContain('Saved');
+    });
+
+    it('restores once for two quick clicks', async () => {
+      getContentDraft.mockResolvedValue(draft());
+      getDraftVersions.mockResolvedValue(versions);
+      restoreDraftVersion.mockReturnValue(new Promise(() => {}));
+      await renderPage();
+      const items = await openHistory();
+      await act(async () => {
+        items[1].click();
+        items[1].click();
+      });
+      // One restore, one "Before a restore" (editor test 2026-10-25: two in a minute).
+      expect(restoreDraftVersion).toHaveBeenCalledTimes(1);
+    });
+
+    it('sets aside the agent’s open suggestions for the page before, and closes its card', async () => {
+      getContentDraft.mockResolvedValue(
+        draft({
+          bodyHtml: '<h1>Pipeline forecasting</h1><p>We delve into how teams forecast.</p>',
+        }),
+      );
+      getDraftVersions.mockResolvedValue(versions);
+      getDraftSuggestions.mockResolvedValue([
+        {
+          id: 'n1',
+          batchId: 'b2',
+          actionId: null,
+          actionNo: null,
+          kind: 'replace' as const,
+          blockText: 'We delve into how teams forecast.',
+          beforeText: 'delve into',
+          afterText: 'look at',
+          reason: 'remove an AI trace (rule)',
+          ruleKeys: ['aiTraces'],
+          status: 'open' as const,
+        },
+      ]);
+      restoreDraftVersion.mockResolvedValue({
+        title: 'Old title',
+        bodyHtml: '<h1>Old title</h1><p>As the live page had it.</p>',
+        updatedAt: '2026-10-21T10:00:00Z',
+      });
+      await renderPage();
+      const card = () => container.querySelector('[role="region"][aria-label="Agent suggestions"]');
+      expect(card()).not.toBeNull();
+      const items = await openHistory();
+      await act(async () => items[1].click());
+      await act(async () => {});
+      expect(decideDraftSuggestions).toHaveBeenCalledWith(['n1'], 'rejected');
+      // Its Undo all would undo nothing on the page restored.
+      expect(card()).toBeNull();
+      // Said, as they counted toward AI usage.
+      expect(toast.success).toHaveBeenCalledWith(
+        expect.stringMatching(
+          /^Restored “.+”\. The agent’s open change was for the page before, so it was set aside\.$/,
+        ),
+      );
+    });
+
+    it('waits while a restore runs: the card’s buttons and the agent’s runs', async () => {
+      getContentDraft.mockResolvedValue(
+        draft({
+          bodyHtml: '<h1>Pipeline forecasting</h1><p>We delve into how teams forecast.</p>',
+        }),
+      );
+      getDraftVersions.mockResolvedValue(versions);
+      getDraftSuggestions.mockResolvedValue([
+        {
+          id: 'n1',
+          batchId: 'b2',
+          actionId: null,
+          actionNo: null,
+          kind: 'replace' as const,
+          blockText: 'We delve into how teams forecast.',
+          beforeText: 'delve into',
+          afterText: 'look at',
+          reason: 'remove an AI trace (rule)',
+          ruleKeys: ['aiTraces'],
+          status: 'open' as const,
+        },
+      ]);
+      let restored: (value: unknown) => void = () => {};
+      restoreDraftVersion.mockReturnValue(new Promise((r) => (restored = r)));
+      await renderPage();
+      const accept = () =>
+        [
+          ...container
+            .querySelector('[role="region"][aria-label="Agent suggestions"]')!
+            .querySelectorAll('button'),
+        ].find((b) => b.textContent === 'Accept all')!;
+      const items = await openHistory();
+      await act(async () => items[1].click());
+      // The decision would land under the restore setting the same ones aside.
+      expect(accept().disabled || accept().hasAttribute('data-disabled')).toBe(true);
+      // The card on the page too.
+      const inPage = [
+        ...container
+          .querySelector('.ProseMirror [data-suggestion="n1"]')!
+          .querySelectorAll('button'),
+      ].find((b) => b.textContent === 'Accept')!;
+      await act(async () => inPage.click());
+      await act(async () =>
+        restored({
+          title: 'Old title',
+          bodyHtml: '<h1>Old title</h1><p>We delve into how teams forecast.</p>',
+          updatedAt: '2026-10-21T10:00:00Z',
+        }),
+      );
+      await act(async () => {});
+      expect(decideDraftSuggestions).toHaveBeenCalledTimes(1);
+      expect(decideDraftSuggestions).toHaveBeenCalledWith(['n1'], 'rejected');
+    });
+
+    // A batch, decided or open, the agent left on 21 October.
+    const ranBefore = (status: 'accepted' | 'open') => [
+      {
+        id: 'a1',
+        batchId: 'b2',
+        actionId: null,
+        actionNo: null,
+        kind: 'replace' as const,
+        blockText: 'Teams delve into how they forecast.',
+        beforeText: 'delve into',
+        afterText: 'look at',
+        reason: 'remove an AI trace (rule)',
+        ruleKeys: ['aiTraces'],
+        status,
+        createdAt: '2026-10-21T10:00:00Z',
+      },
+    ];
+    const agentCard = () =>
+      container.querySelector('[role="region"][aria-label="Agent suggestions"]');
+
+    it('holds Try again while a restore runs', async () => {
+      getContentDraft.mockResolvedValue(draft({ status: 'draft', agentState: 'failed' }));
+      getDraftVersions.mockResolvedValue(versions);
+      restoreDraftVersion.mockReturnValue(new Promise(() => {}));
+      await renderPage();
+      const items = await openHistory();
+      await act(async () => items[1].click());
+      expect(button('Try again')!.disabled).toBe(true);
+      await act(async () => button('Try again')!.click());
+      expect(startAgentWriting).not.toHaveBeenCalled();
+    });
+
+    it('says how many open changes it set aside', async () => {
+      getContentDraft.mockResolvedValue(
+        draft({
+          bodyHtml:
+            '<h1>Pipeline forecasting</h1><p>We delve into how teams forecast.</p><p>Teams trust it.</p>',
+        }),
+      );
+      getDraftVersions.mockResolvedValue(versions);
+      const open = {
+        batchId: 'b2',
+        actionId: null,
+        actionNo: null,
+        kind: 'replace' as const,
+        reason: 'remove an AI trace (rule)',
+        ruleKeys: ['aiTraces'],
+        status: 'open' as const,
+      };
+      getDraftSuggestions.mockResolvedValue([
+        {
+          ...open,
+          id: 'n1',
+          blockText: 'We delve into how teams forecast.',
+          beforeText: 'delve into',
+          afterText: 'look at',
+        },
+        {
+          ...open,
+          id: 'n2',
+          blockText: 'Teams trust it.',
+          beforeText: 'trust',
+          afterText: 'rely on',
+        },
+      ]);
+      restoreDraftVersion.mockResolvedValue({
+        title: 'Old title',
+        bodyHtml: '<h1>Old title</h1><p>As the live page had it.</p>',
+        updatedAt: '2026-10-21T10:00:00Z',
+      });
+      await renderPage();
+      const items = await openHistory();
+      await act(async () => items[1].click());
+      await act(async () => {});
+      expect(decideDraftSuggestions).toHaveBeenCalledWith(['n1', 'n2'], 'rejected');
+      expect(toast.success).toHaveBeenCalledWith(
+        expect.stringMatching(
+          /^Restored “.+”\. The agent’s 2 open changes were for the page before, so they were set aside\.$/,
+        ),
+      );
+    });
+
+    it('sets nothing aside when the version is the page as it is', async () => {
+      const body = '<h1>Pipeline forecasting</h1><p>We delve into how teams forecast.</p>';
+      getContentDraft.mockResolvedValue(draft({ bodyHtml: body }));
+      getDraftVersions.mockResolvedValue(versions);
+      getDraftSuggestions.mockResolvedValue([
+        {
+          id: 'n1',
+          batchId: 'b2',
+          actionId: null,
+          actionNo: null,
+          kind: 'replace' as const,
+          blockText: 'We delve into how teams forecast.',
+          beforeText: 'delve into',
+          afterText: 'look at',
+          reason: 'remove an AI trace (rule)',
+          ruleKeys: ['aiTraces'],
+          status: 'open' as const,
+        },
+      ]);
+      // The server left the draft as it was, and says so (00289).
+      restoreDraftVersion.mockResolvedValue({
+        title: 'Pipeline forecasting',
+        bodyHtml: body,
+        updatedAt: '2026-10-20T10:00:00Z',
+        restored: false,
+      });
+      await renderPage();
+      const items = await openHistory();
+      await act(async () => items[1].click());
+      await act(async () => {});
+      expect(decideDraftSuggestions).not.toHaveBeenCalled();
+      expect(
+        container.querySelector('[role="region"][aria-label="Agent suggestions"]'),
+      ).not.toBeNull();
+      expect(toast.success).toHaveBeenCalledWith(
+        expect.stringMatching(/^“.+” is the page as it is: nothing changed\.$/),
+      );
+    });
+
+    it('opens the card closed for a batch from before the page was last restored', async () => {
+      getContentDraft.mockResolvedValue(
+        draft({ bodyHtml: '<h1>Pipeline forecasting</h1><p>Teams look at how they forecast.</p>' }),
+      );
+      getLastRestoreAt.mockResolvedValue('2026-10-22T09:00:00Z');
+      getDraftSuggestions.mockResolvedValue(ranBefore('accepted'));
+      await renderPage();
+      // After a reload, or in another tab: its Undo all was for the page before.
+      expect(getLastRestoreAt).toHaveBeenCalledWith('d1');
+      expect(agentCard()).toBeNull();
+    });
+
+    it('still shows a batch from before the restore with open changes to decide', async () => {
+      getContentDraft.mockResolvedValue(
+        draft({
+          bodyHtml: '<h1>Pipeline forecasting</h1><p>Teams delve into how they forecast.</p>',
+        }),
+      );
+      getLastRestoreAt.mockResolvedValue('2026-10-22T09:00:00Z');
+      getDraftSuggestions.mockResolvedValue(ranBefore('open'));
+      await renderPage();
+      expect(agentCard()).not.toBeNull();
+    });
+
+    it('shows a batch left after the last restore as ever', async () => {
+      getContentDraft.mockResolvedValue(
+        draft({ bodyHtml: '<h1>Pipeline forecasting</h1><p>Teams look at how they forecast.</p>' }),
+      );
+      getLastRestoreAt.mockResolvedValue('2026-10-20T09:00:00Z');
+      getDraftSuggestions.mockResolvedValue(ranBefore('accepted'));
+      await renderPage();
+      expect(agentCard()).not.toBeNull();
+    });
+
+    it('shows the batch as ever when the last restore can’t be read', async () => {
+      getContentDraft.mockResolvedValue(
+        draft({ bodyHtml: '<h1>Pipeline forecasting</h1><p>Teams look at how they forecast.</p>' }),
+      );
+      getLastRestoreAt.mockRejectedValue(new Error('offline'));
+      getDraftSuggestions.mockResolvedValue(ranBefore('accepted'));
+      await renderPage();
+      expect(agentCard()).not.toBeNull();
+    });
+
+    it('closes the card of a batch already decided: its Undo all and last run were for the page before', async () => {
+      getContentDraft.mockResolvedValue(
+        draft({
+          bodyHtml:
+            '<h1>Pipeline forecasting</h1><p>Teams look at how they forecast.</p><p>Teams trust it.</p>',
+        }),
+      );
+      getDraftVersions.mockResolvedValue(versions);
+      const decided = {
+        batchId: 'b2',
+        actionId: null,
+        actionNo: null,
+        kind: 'replace' as const,
+        reason: 'remove an AI trace (rule)',
+        ruleKeys: ['aiTraces'],
+      };
+      getDraftSuggestions.mockResolvedValue([
+        {
+          ...decided,
+          id: 'a1',
+          blockText: 'Teams delve into how they forecast.',
+          beforeText: 'delve into',
+          afterText: 'look at',
+          status: 'accepted' as const,
+        },
+        // Its passage is on the version restored too.
+        {
+          ...decided,
+          id: 'r1',
+          blockText: 'Teams trust it.',
+          beforeText: 'trust',
+          afterText: 'rely on',
+          status: 'rejected' as const,
+        },
+      ]);
+      restoreDraftVersion.mockResolvedValue({
+        title: 'Old title',
+        bodyHtml:
+          '<h1>Old title</h1><p>Teams delve into how they forecast.</p><p>Teams trust it.</p>',
+        updatedAt: '2026-10-21T10:00:00Z',
+      });
+      await renderPage();
+      const card = () => container.querySelector('[role="region"][aria-label="Agent suggestions"]');
+      expect(card()).not.toBeNull();
+      const items = await openHistory();
+      await act(async () => items[1].click());
+      await act(async () => {});
+      // Nothing open to set aside.
+      expect(decideDraftSuggestions).not.toHaveBeenCalled();
+      expect(card()).toBeNull();
+    });
+
+    it('leaves the agent’s open suggestions on its card when they can’t be set aside', async () => {
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+      getContentDraft.mockResolvedValue(
+        draft({
+          bodyHtml: '<h1>Pipeline forecasting</h1><p>We delve into how teams forecast.</p>',
+        }),
+      );
+      getDraftVersions.mockResolvedValue(versions);
+      getDraftSuggestions.mockResolvedValue([
+        {
+          id: 'n1',
+          batchId: 'b2',
+          actionId: null,
+          actionNo: null,
+          kind: 'replace' as const,
+          blockText: 'We delve into how teams forecast.',
+          beforeText: 'delve into',
+          afterText: 'look at',
+          reason: 'remove an AI trace (rule)',
+          ruleKeys: ['aiTraces'],
+          status: 'open' as const,
+        },
+      ]);
+      decideDraftSuggestions.mockRejectedValue(new Error('offline'));
+      restoreDraftVersion.mockResolvedValue({
+        title: 'Old title',
+        bodyHtml: '<h1>Old title</h1><p>We delve into how teams forecast.</p>',
+        updatedAt: '2026-10-21T10:00:00Z',
+      });
+      await renderPage();
+      const items = await openHistory();
+      await act(async () => items[1].click());
+      await act(async () => {});
+      // Still open on the server: on the card to decide, never shown as set aside.
+      expect(toast.success).toHaveBeenCalledWith(
+        expect.stringMatching(/^Restored “.+”\. The page before it is in History\.$/),
+      );
+      const card = container.querySelector('[role="region"][aria-label="Agent suggestions"]');
+      expect(card).not.toBeNull();
+      expect(
+        [...card!.querySelectorAll('button')].some((b) => b.textContent === 'Accept all'),
+      ).toBe(true);
+    });
+
+    it('waits while a decision on the agent’s changes saves', async () => {
+      getContentDraft.mockResolvedValue(
+        draft({
+          bodyHtml: '<h1>Pipeline forecasting</h1><p>We delve into how teams forecast.</p>',
+        }),
+      );
+      getDraftSuggestions.mockResolvedValue([
+        {
+          id: 'n1',
+          batchId: 'b2',
+          actionId: null,
+          actionNo: null,
+          kind: 'replace' as const,
+          blockText: 'We delve into how teams forecast.',
+          beforeText: 'delve into',
+          afterText: 'look at',
+          reason: 'remove an AI trace (rule)',
+          ruleKeys: ['aiTraces'],
+          status: 'open' as const,
+        },
+      ]);
+      let saved: () => void = () => {};
+      decideDraftSuggestions.mockReturnValueOnce(new Promise<void>((r) => (saved = r)));
+      await renderPage();
+      const card = container.querySelector('[role="region"][aria-label="Agent suggestions"]')!;
+      await act(async () =>
+        [...card.querySelectorAll('button')].find((b) => b.textContent === 'Accept all')!.click(),
+      );
+      // A restore now would set the same suggestions aside under the decision.
+      expect(button('History')!.title).toBe("Saving your decision on the agent's changes…");
+      expect(button('History')!.disabled || button('History')!.hasAttribute('data-disabled')).toBe(
+        true,
+      );
+      await act(async () => saved());
+      await act(async () => {});
+      expect(button('History')!.disabled || button('History')!.hasAttribute('data-disabled')).toBe(
+        false,
+      );
     });
 
     it('keeps the page when the restore fails', async () => {
@@ -2597,6 +3208,15 @@ describe('the side panel', () => {
     await renderPage();
     await pickTab('Sources');
     expect(panel()!.textContent).toContain('Not used by Content Agent yet');
+  });
+
+  it('holds the rules chip’s count until the rule set and the fan-outs are read', async () => {
+    getContentDraft.mockResolvedValue(draft());
+    getDraftSources.mockReturnValue(new Promise(() => {}));
+    await renderPage();
+    // 8 of 12 then 11 of 15 on first paint (editor test 2026-10-25): no count until it stands.
+    const chip = container.querySelector<HTMLButtonElement>('header button[aria-label^="Rules "]')!;
+    expect(chip.getAttribute('aria-label')).toBe('Rules · reading');
   });
 
   it('shows how many rules the page meets, and opens them from the header', async () => {
@@ -4746,10 +5366,11 @@ describe('the side panel', () => {
       getContentDraft.mockResolvedValue(
         draft({ status: 'draft', agentState: 'writing', agentSince: new Date().toISOString() }),
       );
+      // A Start on a live page runs as a Fix (content-writer.js startWritingRun).
       readAgentRun.mockResolvedValue({
         id: 'r1',
-        kind: 'write',
-        steps: [{ key: 'write_page', count: null }],
+        kind: 'fix',
+        steps: [{ key: 'write_changes', count: null }],
         step: 0,
         startedAt: new Date().toISOString(),
         finishedAt: null,
@@ -6770,6 +7391,33 @@ describe('the side panel', () => {
     const bar = () =>
       container.querySelector('[role="region"][aria-label="Rewritten page"]') as HTMLElement | null;
     const page = () => container.querySelector('.ProseMirror')!.textContent;
+
+    it('reads what the last rewrite came to as the toolbar counts it, shown or decided since', async () => {
+      getContentDraft.mockResolvedValue(
+        draft({
+          pageType: 'blog_post',
+          bodyHtml: `<h1>Pipeline forecasting</h1><p>${'Teams forecast from the pipeline. '.repeat(12).trim()}</p>`,
+          rules: {
+            set: null,
+            source: null,
+            overrides: { length: { value: '100' } },
+            textRules: [],
+          },
+        }),
+      );
+      // Decided since (a later Fix batch shows): the API counted it a little
+      // over; its page reads 1,200 as the editor counts it (4 + 1,196).
+      getLastPageRewrite.mockResolvedValue({
+        chars: 1250,
+        target: 100,
+        kept: 0,
+        html: `<h1>Plan</h1><p>${'x'.repeat(1196)}</p>`,
+      });
+      await openRules();
+      const text = panel()!.textContent;
+      expect(text).toContain('The last rewrite came to 1,200');
+      expect(text).not.toContain('1,250');
+    });
 
     it('sends the rules in effect, how the page reads against each, and the page waits', async () => {
       getContentDraft.mockResolvedValue(long);
