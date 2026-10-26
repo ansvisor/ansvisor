@@ -35,4 +35,11 @@ describe('pagePlaceholders', () => {
       ),
     ).toEqual({ count: 2 });
   });
+  it('reads a list item written without a paragraph by its own words, once', () => {
+    expect(
+      pagePlaceholders(
+        '<ul><li>Churn fell [figure, source].<ul><li>Then [year].</li></ul></li><li><p>[price]</p></li></ul>',
+      ).count,
+    ).toBe(3);
+  });
 });

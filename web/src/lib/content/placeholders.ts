@@ -31,16 +31,31 @@ export interface PagePlaceholders {
   count: number;
 }
 
+/** Elements inside a line of text: what a list item's own words are made of. */
+const INLINE = /^(A|STRONG|EM|B|I|U|S|SPAN|CODE|MARK|SUB|SUP|SMALL|BR)$/;
+
+/** A list item's own words: its text and inline elements, not the blocks inside it. */
+function itemOwnText(li: Element): string {
+  let text = '';
+  for (const node of li.childNodes) {
+    if (node.nodeType === Node.TEXT_NODE) text += node.textContent ?? '';
+    else if (node instanceof Element && INLINE.test(node.tagName)) text += node.textContent ?? '';
+  }
+  return text;
+}
+
 /**
  * The page's placeholders. The editor keeps every line of text in a
  * paragraph or a heading (in lists, quotes and tables too), so each is read
- * once there.
+ * once there; a list item written without one (an agent's rewrite) is read
+ * by its own words.
  */
 export function pagePlaceholders(html: string): PagePlaceholders {
   const doc = new DOMParser().parseFromString(html, 'text/html');
   let count = 0;
-  for (const el of doc.body.querySelectorAll('p, h1, h2, h3, h4, h5, h6')) {
-    count += (el.textContent ?? '').match(placeholderIn(el.tagName !== 'P'))?.length ?? 0;
+  for (const el of doc.body.querySelectorAll('p, h1, h2, h3, h4, h5, h6, li')) {
+    const text = el.tagName === 'LI' ? itemOwnText(el) : (el.textContent ?? '');
+    count += text.match(placeholderIn(/^H\d$/.test(el.tagName)))?.length ?? 0;
   }
   return { count };
 }

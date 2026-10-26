@@ -145,8 +145,8 @@ describe('AiUsageMeter', () => {
   it('shows the month’s share with a bar, named with what it shows', async () => {
     await render();
     const button = trigger()!;
-    expect(button.textContent).toBe('AI21%');
-    expect(button.getAttribute('aria-label')).toBe('AI 21% used this month');
+    expect(button.textContent).toBe('AI21.4%');
+    expect(button.getAttribute('aria-label')).toBe('AI 21.4% used this month');
     expect(button.className).toContain('text-foreground');
     expect(button.querySelector<HTMLElement>('[style]')!.style.width).toBe('21.4%');
   });
@@ -208,8 +208,8 @@ describe('AiUsageMeter', () => {
     const rows = [...popup()!.querySelectorAll('li')].map((li) => li.textContent);
     expect(rows).toEqual([
       'Improve suggestions4%',
-      'Content Editor (briefs, Content Agent)17%',
-      'Action Center task writing<1%',
+      'Content Editor (briefs, Content Agent)17.2%',
+      'Action Center task writing0.2%',
       'Agent Chat, on your own AI keyNot counted',
       'Site Audit pages42 of 500',
       'Prompt locations1,148 of 2,000',
@@ -311,7 +311,7 @@ describe('AiUsageMeter in the Content Editor', () => {
     const [label, bar] = trigger()!.querySelectorAll('span');
     expect(label.className).toContain('hidden xl:inline');
     expect(bar.className).toContain('hidden xl:block');
-    expect(trigger()!.title).toBe('AI 21% used this month');
+    expect(trigger()!.title).toBe('AI 21.4% used this month');
   });
 
   it('adds the page’s share of the month, read on each opening', async () => {
@@ -322,13 +322,14 @@ describe('AiUsageMeter in the Content Editor', () => {
     expect(readDraftAiUsage).toHaveBeenCalledWith('d1');
     expect(page()!.textContent).toBe('This page this monthLoading...');
     await act(async () => answer(3.7));
-    expect(page()!.textContent).toBe('This page this month3%');
+    // Under 10%, to a tenth: a few runs show.
+    expect(page()!.textContent).toBe('This page this month3.7%');
 
-    // A sliver reads as under 1%; one it can't read is left out.
+    // A sliver under a tenth still reads as used; one it can't read is left out.
     await act(async () => trigger()!.click());
-    vi.mocked(readDraftAiUsage).mockResolvedValue(0.1);
+    vi.mocked(readDraftAiUsage).mockResolvedValue(0.04);
     await open();
-    expect(page()!.textContent).toBe('This page this month<1%');
+    expect(page()!.textContent).toBe('This page this month<0.1%');
     await act(async () => trigger()!.click());
     vi.mocked(readDraftAiUsage).mockResolvedValue(null);
     await open();
@@ -497,7 +498,7 @@ describe('AiUsageProvider', () => {
     await act(async () => window.dispatchEvent(new Event('focus')));
     await act(async () => {});
     expect(readAiUsage).toHaveBeenCalledTimes(2);
-    expect(trigger()!.textContent).toBe('AI21%');
+    expect(trigger()!.textContent).toBe('AI21.4%');
   });
 
   it('reads again when the tab becomes visible, not while it is hidden', async () => {
