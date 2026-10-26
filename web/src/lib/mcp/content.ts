@@ -38,7 +38,7 @@ import {
 const LIST_LIMIT = 100;
 
 const DRAFT_COLUMNS =
-  'id, brand_id, title, status, method, page_type, author, source_url, published_url, body_html, action_id, prompt_ids, updated_at, agent_state, agent_state_at, brands!inner(organization_id, site_type, industry, shopping_mode_enabled), actions(action_no)';
+  'id, brand_id, title, status, method, page_type, author, source_url, published_url, published_at, body_html, action_id, prompt_ids, updated_at, agent_state, agent_state_at, brands!inner(organization_id, site_type, industry, shopping_mode_enabled), actions(action_no)';
 
 interface DraftRow {
   id: string;
@@ -51,6 +51,8 @@ interface DraftRow {
   source_url: string | null;
   /** Where the page went live (Send to CMS or marked published, 00262), as the Live page tab reads it. */
   published_url: string | null;
+  /** When it went live, set with published_url (00262). */
+  published_at: string | null;
   body_html: string;
   action_id: string | null;
   prompt_ids: string[] | null;
@@ -189,6 +191,9 @@ export interface McpDraft {
   page_type: string | null;
   author: string;
   source_url: string | null;
+  /** Where and since when the page is live (00262): null until it goes live. */
+  published_url: string | null;
+  published_at: string | null;
   action: { id: string; number: number | null } | null;
   editor_path: string;
   body_html: string;
@@ -230,6 +235,8 @@ export async function getContentDraftFor(
     page_type: draft.page_type,
     author: draft.author,
     source_url: draft.source_url,
+    published_url: draft.published_url,
+    published_at: draft.published_at,
     action: draft.action_id ? { id: draft.action_id, number: actionNo(draft) } : null,
     editor_path: contentEditorPath(draft.id),
     body_html: draft.body_html,
