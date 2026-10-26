@@ -1636,7 +1636,7 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
       const impact = await getContentImpactFor(auth, args.draft_id, args.days);
       if (impact === 'no_page') {
         return {
-          content: [{ type: 'text' as const, text: 'This draft is a new page, not live yet' }],
+          content: [{ type: 'text' as const, text: 'This draft has no live address yet' }],
           isError: true,
         };
       }

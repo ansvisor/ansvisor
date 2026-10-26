@@ -38,7 +38,7 @@ import {
 const LIST_LIMIT = 100;
 
 const DRAFT_COLUMNS =
-  'id, brand_id, title, status, method, page_type, author, source_url, body_html, action_id, prompt_ids, updated_at, agent_state, agent_state_at, brands!inner(organization_id, site_type, industry, shopping_mode_enabled), actions(action_no)';
+  'id, brand_id, title, status, method, page_type, author, source_url, published_url, body_html, action_id, prompt_ids, updated_at, agent_state, agent_state_at, brands!inner(organization_id, site_type, industry, shopping_mode_enabled), actions(action_no)';
 
 interface DraftRow {
   id: string;
@@ -49,6 +49,8 @@ interface DraftRow {
   page_type: string | null;
   author: string;
   source_url: string | null;
+  /** Where the page went live (Send to CMS or marked published, 00262), as the Live page tab reads it. */
+  published_url: string | null;
   body_html: string;
   action_id: string | null;
   prompt_ids: string[] | null;
@@ -370,7 +372,8 @@ export async function createContentDraftFor(
 
 /**
  * The draft's page in AI answers, AI visits and Google over the period
- * (CE-016, 00209), as the Impact tab reads it. 'no_page' for a draft that
+ * (CE-016, 00209), as the Live page tab reads it: the address it was
+ * published at, else the page it optimizes. 'no_page' for a draft that
  * isn't of a live page yet; null outside the organization.
  */
 export async function getContentImpactFor(
@@ -380,12 +383,13 @@ export async function getContentImpactFor(
 ): Promise<Record<string, unknown> | 'no_page' | null> {
   const draft = await draftFor(auth, draftId);
   if (!draft) return null;
-  if (!draft.source_url) return 'no_page';
+  const page = draft.published_url ?? draft.source_url;
+  if (!page) return 'no_page';
   if (!(IMPACT_PERIODS as readonly number[]).includes(days))
     throw new Error('days must be 7, 30, 90 or 365');
   const { data, error } = await supabaseAdmin.rpc('content_page_impact', {
     p_brand_id: draft.brand_id,
-    p_page: draft.source_url,
+    p_page: page,
     p_days: days,
   });
   if (error) throw new Error(error.message);

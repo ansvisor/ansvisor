@@ -22,10 +22,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
   try {
     const impact = await getContentImpactFor(auth, id, days.data);
     if (impact === 'no_page') {
-      return NextResponse.json(
-        { error: 'This draft is a new page, not live yet' },
-        { status: 409 },
-      );
+      return NextResponse.json({ error: 'This draft has no live address yet' }, { status: 409 });
     }
     if (!impact) return NextResponse.json({ error: 'Draft not found' }, { status: 404 });
     return NextResponse.json(impact);
