@@ -275,9 +275,9 @@ describe('guardPeople: what the review found', () => {
     texts(' ').forEach((text) => guardPeople(text, people));
     for (const space of [' ', '\u00a0', '\n']) {
       for (const text of texts(space.repeat(30_000))) {
-        const started = performance.now();
+        const started = Date.now();
         guardPeople(text, people);
-        expect(performance.now() - started).toBeLessThan(150);
+        expect(Date.now() - started).toBeLessThan(150);
       }
     }
   });

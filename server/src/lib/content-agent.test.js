@@ -621,9 +621,9 @@ describe('keepSuggestions', () => {
     reads(' ').forEach((read) => read());
     for (const space of [' ', '\u00a0', '\n']) {
       for (const read of reads(space.repeat(30_000))) {
-        const started = performance.now();
+        const started = Date.now();
         read();
-        expect(performance.now() - started).toBeLessThan(150);
+        expect(Date.now() - started).toBeLessThan(150);
       }
     }
   });
