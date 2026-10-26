@@ -14,6 +14,8 @@ import {
   stopIfStopped,
 } from './content-runs.js';
 import { citedPagesLength } from './content-cited-length.js';
+import { guardPeople, knownPeople } from './content-people.js';
+import { knownNumbers, placeholderNumbers, todayText } from './content-sources.js';
 import { reserveAiBudget } from './plan-guard.js';
 
 /**
@@ -131,6 +133,19 @@ Rules:
 const norm = (text) => text.trim().replace(/\s+/g, ' ').toLowerCase();
 
 /**
+ * Text cut to `max` characters, never inside a placeholder: one the cut would
+ * split ("[figure, so") goes whole.
+ */
+const clip = (text, max) => {
+  const cut = text.trim().slice(0, max);
+  const open = cut.lastIndexOf('[');
+  return open > cut.lastIndexOf(']') ? cut.slice(0, open).trimEnd() : cut;
+};
+
+/** A question in quotes ("Which machine should I buy?"): one to answer, not a person's words. */
+const QUOTED_QUESTION = /["“„«»]([^"“”„«»\n]{1,300}\?)["”“»«]/gu;
+
+/**
  * Builds the brief: reads the draft and its brand, keeps the prompts that are
  * the brand's, charges the AI usage budget, asks the model, and saves the
  * brief on the draft. Throws with `.status` 404 for a draft outside the
@@ -242,13 +257,25 @@ async function briefWithRun({ draft, draftId, brand, prompts, sources, run }) {
   // Each H2 matched to the fan-out it answers (mapOutline).
   await advanceRun(run, 2);
 
+  // What it adds beyond what it was built from goes as a placeholder, before the cut.
+  const guard = briefGuard({ brand, draft, prompts, sources });
   const brief = {
-    goal: object.goal.trim().slice(0, BRIEF_LIMITS.goal),
-    audience: object.audience.trim().slice(0, BRIEF_LIMITS.audience),
-    outline: mapOutline(object.outline, sources.fanouts),
+    goal: clip(guard.text(object.goal), BRIEF_LIMITS.goal),
+    audience: clip(guard.text(object.audience), BRIEF_LIMITS.audience),
+    outline: mapOutline(
+      object.outline.map((section) => ({
+        ...section,
+        heading: guard.heading(section.heading),
+        keyPoints: (section.keyPoints ?? []).map((point) => guard.text(point)),
+      })),
+      sources.fanouts,
+    ),
     keywords: [
       ...new Set(
-        object.keywords.map((k) => k.trim().slice(0, BRIEF_LIMITS.keyword)).filter(Boolean),
+        object.keywords
+          .filter(guard.keeps)
+          .map((k) => k.trim().slice(0, BRIEF_LIMITS.keyword))
+          .filter(Boolean),
       ),
     ].slice(0, BRIEF_LIMITS.keywords),
     origin: 'rebuild',
@@ -272,6 +299,43 @@ async function briefWithRun({ draft, draftId, brand, prompts, sources, run }) {
 }
 
 /**
+ * What a brief may say without a placeholder: the numbers (CE-033), names
+ * and quotes (CE-044) of what it was built from — the brand, the page, the
+ * prompts, searches, queries and headings kept, the length asked for — and
+ * today's year. The writer reads a brief as something it was given, so a
+ * figure or a person made up in one would pass the writer's own guard.
+ * `text` and `heading` put each one added as a placeholder, as a written
+ * page's are, a question in quotes aside; `keeps` drops a keyword that adds
+ * one, as a placeholder can't be searched for.
+ */
+export function briefGuard({ brand, draft, prompts, sources }) {
+  const given = [
+    brand?.name,
+    brand?.industry,
+    brand?.description,
+    draft.title,
+    ...prompts,
+    ...sources.fanouts.map((f) => f.query),
+    ...sources.queries,
+    ...sources.headings,
+    String(sources.length),
+  ];
+  const known = knownNumbers(...given, todayText());
+  const people = knownPeople(...given);
+  const text = (words, heading = false) => {
+    const numbered = placeholderNumbers(words ?? '', known);
+    const questions = [...numbered.matchAll(QUOTED_QUESTION)].map((m) => m[1]);
+    const asked = questions.length ? knownPeople(...given, ...questions) : people;
+    return guardPeople(numbered, asked, { heading }).text;
+  };
+  return {
+    text,
+    heading: (words) => text(words, true),
+    keeps: (keyword) => text(keyword) === String(keyword ?? ''),
+  };
+}
+
+/**
  * Keeps an H2's fan-out only when it is one the person kept, written as
  * listed, and its platform only when that search ran there. Cut to the
  * limits the web reads a brief with (BRIEF_LIMITS): a heading or key point
@@ -287,9 +351,9 @@ export function mapOutline(outline, fanouts) {
           ? section.platform
           : (fanout?.platforms[0] ?? null);
       return {
-        heading: (section.heading ?? '').trim().slice(0, BRIEF_LIMITS.heading),
+        heading: clip(section.heading ?? '', BRIEF_LIMITS.heading),
         keyPoints: (section.keyPoints ?? [])
-          .map((p) => p.trim().slice(0, BRIEF_LIMITS.keyPoint))
+          .map((p) => clip(p, BRIEF_LIMITS.keyPoint))
           .filter(Boolean)
           .slice(0, BRIEF_LIMITS.keyPoints),
         fanout: fanout?.query ?? null,
