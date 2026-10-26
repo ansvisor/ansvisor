@@ -245,6 +245,18 @@ describe('startDraftWriting', () => {
     expect(
       writes.find((w) => w.table === 'content_agent_runs' && w.kind === 'insert').value,
     ).toMatchObject({ kind: 'write', claimed_at: draftUpdates()[0].agent_state_at });
+    await vi.waitFor(() => expect(draftUpdates()).toHaveLength(2));
+  });
+
+  it('says it reads as many rules as the editor counts, when it says so', async () => {
+    await startDraftWriting({ draftId: DRAFT, brandId: BRAND, input: input({ counted: 7 }) });
+    const run = writes.find((w) => w.table === 'content_agent_runs' && w.kind === 'insert').value;
+    expect(run.steps.find((s) => s.key === 'read_rules')).toMatchObject({ count: 7 });
+    await vi.waitFor(() => expect(draftUpdates()).toHaveLength(2));
+  });
+
+  it('writes the new page for review once claimed', async () => {
+    await startDraftWriting({ draftId: DRAFT, brandId: BRAND, input: input() });
 
     await vi.waitFor(() => expect(draftUpdates()).toHaveLength(2));
     // It ends only its own claim: a newer run's, after a Stop let go, is left alone.

@@ -49,6 +49,11 @@ export interface DraftRulesState {
   total: number;
   /** The page length the rules ask for. */
   length: number;
+  /**
+   * Whether the count stands (set by the editor once the set, the fan-outs,
+   * the brief and the catalog are read): before, rules come and go from it.
+   */
+  settled?: boolean;
   /** The sections and questions the rules ask for take more than Length allows. */
   lengthConflict: { need: number; max: number } | null;
   /**

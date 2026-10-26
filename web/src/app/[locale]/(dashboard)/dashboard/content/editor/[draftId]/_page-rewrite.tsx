@@ -94,15 +94,18 @@ export function PageCompareDialog({
   onOpenChange,
   busy,
   onDecide,
+  chars = null,
 }: {
   suggestion: DraftSuggestion;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   busy: boolean;
   onDecide: (status: SuggestionStatus) => void;
+  /** Its characters as the toolbar counts them, when the editor gives them. */
+  chars?: { before: number; after: number } | null;
 }) {
   const t = useTranslations('contentEditor.editor.rewrite');
-  const { before, after } = pageCharacters(suggestion);
+  const { before, after } = chars ?? pageCharacters(suggestion);
   const decide = (status: SuggestionStatus) => {
     onOpenChange(false);
     onDecide(status);

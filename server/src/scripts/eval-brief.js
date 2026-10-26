@@ -20,9 +20,9 @@
  * prints a key, and isn't run in CI:
  * the answers it keeps are the models' of the day, for a person to record
  * again when the brief's prompt or the models change (the test skips a
- * record made under another prompt or Quality phase: run it with the phase
- * the API runs with, CONTENT_QUALITY_PHASE). Under a dollar at today's
- * prices.
+ * record made under another prompt, Quality phase or brief rules: run it
+ * with the CONTENT_QUALITY_PHASE the API runs with, and CONTENT_BRIEF_RULES=
+ * true to record version 2's briefs). Under a dollar at today's prices.
  */
 import 'dotenv/config';
 import { writeFileSync } from 'fs';
@@ -30,10 +30,11 @@ import { generateObject } from 'ai';
 import { CASES } from '../lib/__fixtures__/brief-eval/cases.js';
 import { resolveModel } from '../lib/ai-provider.js';
 import {
-  SYSTEM_PROMPT,
+  briefRulesOn,
+  briefSchema,
+  briefSystemPrompt,
   buildBriefPrompt,
   contentBriefModelId,
-  outlineSchema,
   shapeBrief,
 } from '../lib/content-brief.js';
 import { qualityPhase } from '../lib/content-quality.js';
@@ -69,8 +70,8 @@ for (const c of CASES.slice(0, count)) {
   try {
     const written = await generateObject({
       model,
-      schema: outlineSchema,
-      system: SYSTEM_PROMPT,
+      schema: briefSchema(),
+      system: briefSystemPrompt(),
       prompt: buildBriefPrompt(c),
       abortSignal: AbortSignal.timeout(CALL_TIMEOUT_MS),
     });
@@ -116,6 +117,7 @@ writeFileSync(
       model: modelId,
       judgeModel: judgeModelId,
       qualityPhase: qualityPhase(),
+      briefRules: briefRulesOn(),
       promptVersion: promptVersion(CASES),
       recordedAt: new Date().toISOString(),
       cases: recorded,
