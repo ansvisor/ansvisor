@@ -15,19 +15,43 @@
  *     `<Entity … value="X" …/>` tags in the text. The tags' attributes counted
  *     as mentions and shifted positions. Every brand of an active or trialing
  *     organization, and only its answers that still hold a tag: the text is
- *     saved without the tags, as new answers are, and recounted. The text
- *     can't be put back from here: keep a copy first, e.g.
- *       create table prompt_results_entity_markup_backup as
- *         select id, response, sentiment, mention_count, visibility_score,
- *                mention_position, mentioned_entity_count, competitor_mentions
- *         from prompt_results where response like '%<Entity%';
+ *     saved without the tags, as new answers are, and recounted.
  * --brand narrows to one brand regardless. Rows are counted by today's parser
  * (mention-recount.js): the ones it rewrites pick up its other changes too.
  *
+ * Before --entity-markup runs on production, keep a copy: nothing else holds
+ * the text with its tags. In a schema of its own (no grants: a table made by
+ * hand in public gets that schema's, with row level security off), a week of
+ * answers at a time on the date index, dropped once the run is checked:
+ *   create schema if not exists backfill_backup;
+ *   create table backfill_backup.prompt_results_entity_markup as
+ *     select id, brand_id, created_at, response, sentiment, mention_count, visibility_score,
+ *            mention_position, mentioned_entity_count, competitor_mentions
+ *     from public.prompt_results
+ *     where false;
+ *   -- once per week of answers, oldest first:
+ *   insert into backfill_backup.prompt_results_entity_markup
+ *     select id, brand_id, created_at, response, sentiment, mention_count, visibility_score,
+ *            mention_position, mentioned_entity_count, competitor_mentions
+ *     from public.prompt_results
+ *     where created_at >= '<day>' and created_at < '<day + 7>'
+ *       and response like '%<Entity%';
+ * To put it back (for one brand, add `and b.brand_id = '<id>'`), then run the
+ * three refreshes the run printed again:
+ *   update public.prompt_results p
+ *     set response = b.response, sentiment = b.sentiment, mention_count = b.mention_count,
+ *         visibility_score = b.visibility_score, mention_position = b.mention_position,
+ *         mentioned_entity_count = b.mentioned_entity_count,
+ *         competitor_mentions = b.competitor_mentions
+ *     from backfill_backup.prompt_results_entity_markup b
+ *     where p.id = b.id;
+ *   drop schema backfill_backup cascade;  -- once the run is checked
+ *
  * Idempotent: rows whose recomputed values equal the stored ones are skipped,
- * and a cleaned answer leaves the filter, so a stopped run is run again.
- * Afterwards, refresh each changed brand's rollups; the commands are printed
- * at the end.
+ * and a cleaned answer leaves the filter, so a stopped run is run again. Each
+ * changed brand's refresh commands are printed as soon as its rows are
+ * written: a run stopped later, and run again, finds that brand clean. A dry
+ * run prints a few rows per brand, before → after, and its sentiment changes.
  */
 import 'dotenv/config';
 import supabaseAdmin from '../config/supabase.js';
@@ -46,11 +70,20 @@ const brandArg = args.includes('--brand') ? args[args.indexOf('--brand') + 1] : 
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-/** Retry transient network failures (connection resets on long walks). */
+/**
+ * Retry transient network failures (connection resets on long walks): thrown,
+ * or returned by supabase-js as an error with no code.
+ */
 async function withRetry(fn, label) {
   for (let attempt = 1; ; attempt++) {
     try {
-      return await fn();
+      const result = await fn();
+      if (result?.error && !result.error.code && attempt < 4) {
+        console.warn(`  retry ${attempt}/3 after error in ${label}: ${result.error.message}`);
+        await sleep(attempt * 2000);
+        continue;
+      }
+      return result;
     } catch (err) {
       if (attempt >= 4) throw err;
       console.warn(`  retry ${attempt}/3 after error in ${label}: ${err.message}`);
@@ -96,8 +129,40 @@ async function brandContext(brand) {
 const ROW_COLUMNS =
   'id, response, citations, sentiment, mention_count, visibility_score, mention_position, mentioned_entity_count, competitor_mentions';
 
-/** Recounts these rows and writes the ones that changed; returns [updated, skipped]. */
-async function recountRows(rows, brandInfo, competitors) {
+/** Rows a dry run prints per brand, before → after. */
+const DRY_RUN_SAMPLES = 3;
+
+/** The competitors an answer names, as its entries count them. */
+const namedCompetitors = (entries) =>
+  (Array.isArray(entries) ? entries : [])
+    .filter((e) => e.mention_count > 0)
+    .map((e) => e.name)
+    .join(', ') || '—';
+
+/** One row's change, as a dry run prints it. */
+function sampleLine(row, next) {
+  const moved = (label, before, after) =>
+    before === after ? null : `${label} ${before ?? '—'} → ${after ?? '—'}`;
+  const parts = [
+    moved('mentions', row.mention_count, next.mention_count),
+    moved('position', row.mention_position, next.mention_position),
+    moved(
+      'competitors named',
+      namedCompetitors(row.competitor_mentions),
+      namedCompetitors(next.competitor_mentions),
+    ),
+    next.response !== undefined ? 'text cleaned' : null,
+    next.sentiment !== undefined ? `sentiment ${row.sentiment} → ${next.sentiment}` : null,
+  ].filter(Boolean);
+  return `    ${row.id}: ${parts.join(' · ') || 'score only'}`;
+}
+
+/**
+ * Recounts these rows and writes the ones that changed (a dry run writes
+ * none, and keeps a few as samples); returns [updated, skipped] and adds the
+ * sentiment changes to `report`.
+ */
+async function recountRows(rows, brandInfo, competitors, report) {
   let updated = 0;
   let skipped = 0;
   for (let i = 0; i < rows.length; i += CONCURRENCY) {
@@ -108,6 +173,10 @@ async function recountRows(rows, brandInfo, competitors) {
         if (!next) {
           skipped++;
           return;
+        }
+        if (next.sentiment !== undefined) report.sentiment++;
+        if (dryRun && report.samples.length < DRY_RUN_SAMPLES) {
+          report.samples.push(sampleLine(row, next));
         }
         if (!dryRun) {
           const { error: updateErr } = await withRetry(
@@ -162,7 +231,7 @@ async function taggedRowIds(brandId) {
   return ids;
 }
 
-async function backfillTagged(brand) {
+async function backfillTagged(brand, report) {
   const { brandInfo, competitors } = await brandContext(brand);
   const ids = await taggedRowIds(brand.id);
   let updated = 0;
@@ -179,7 +248,7 @@ async function backfillTagged(brand) {
       'page fetch',
     );
     if (error) throw new Error(error.message);
-    const [u, k] = await recountRows(rows ?? [], brandInfo, competitors);
+    const [u, k] = await recountRows(rows ?? [], brandInfo, competitors, report);
     updated += u;
     skipped += k;
     console.log(
@@ -190,8 +259,8 @@ async function backfillTagged(brand) {
   return updated;
 }
 
-async function backfillBrand(brand) {
-  if (entityMarkup) return backfillTagged(brand);
+async function backfillBrand(brand, report) {
+  if (entityMarkup) return backfillTagged(brand, report);
   const { brandInfo, competitors } = await brandContext(brand);
   let updated = 0;
   let skipped = 0;
@@ -214,7 +283,7 @@ async function backfillBrand(brand) {
     if (error) throw new Error(error.message);
     if (!rows?.length) break;
 
-    const [u, k] = await recountRows(rows, brandInfo, competitors);
+    const [u, k] = await recountRows(rows, brandInfo, competitors, report);
     updated += u;
     skipped += k;
 
@@ -244,30 +313,41 @@ console.log(
   `Recounting mentions${entityMarkup ? ' in answers with entity tags' : ''} for ${brands.length} brand(s)${dryRun ? ' — DRY RUN' : ''}`,
 );
 
+/**
+ * A changed brand's refreshes. Each reads the counts: Insights' rollups;
+ * Mentions' with the answers' terms (an entity's terms are kept only where
+ * it's mentioned), their rollups and Perception's snapshots; Citations'
+ * (we_mention, comp_present).
+ */
+const refreshCommands = (brand) => [
+  `  INSIGHTS_BACKFILL_BRAND=${brand.id} node src/scripts/backfill-insights-daily.js  # ${brand.name}`,
+  `  MENTIONS_BACKFILL_BRAND=${brand.id} node src/scripts/backfill-mentions-daily.js  # ${brand.name}`,
+  `  CITATIONS_BACKFILL_BRAND=${brand.id} node src/scripts/backfill-citations-daily.js  # ${brand.name}`,
+];
+
 const changed = [];
 let total = 0;
 for (const brand of brands) {
-  const n = await backfillBrand(brand);
+  const report = { samples: [], sentiment: 0 };
+  const n = await backfillBrand(brand, report);
   total += n;
-  if (n > 0) changed.push(brand);
+  if (n === 0) continue;
+  changed.push(brand);
+  if (dryRun) {
+    console.log(
+      `  ${brand.name}: ${report.sentiment} sentiment change(s) to neutral; for example:`,
+    );
+    for (const line of report.samples) console.log(line);
+  } else {
+    // Now, not at the end: a run stopped later and run again finds this brand clean.
+    console.log(`  ${brand.name} written; refresh its rollups:`);
+    for (const line of refreshCommands(brand)) console.log(line);
+  }
 }
 
 console.log(`Done. ${total} row(s) ${dryRun ? 'would be ' : ''}updated.`);
 if (changed.length && !dryRun) {
-  // Each reads the counts: Insights' rollups; Mentions' with the answers'
-  // terms (an entity's terms are kept only where it's mentioned), their
-  // rollups and Perception's snapshots; Citations' (we_mention, comp_present).
-  console.log('Refresh the rollups for the changed brands:');
-  for (const brand of changed) {
-    console.log(
-      `  INSIGHTS_BACKFILL_BRAND=${brand.id} node src/scripts/backfill-insights-daily.js  # ${brand.name}`,
-    );
-    console.log(
-      `  MENTIONS_BACKFILL_BRAND=${brand.id} node src/scripts/backfill-mentions-daily.js  # ${brand.name}`,
-    );
-    console.log(
-      `  CITATIONS_BACKFILL_BRAND=${brand.id} node src/scripts/backfill-citations-daily.js  # ${brand.name}`,
-    );
-  }
+  console.log('Refresh the rollups for the changed brands (each was printed as it finished):');
+  for (const brand of changed) for (const line of refreshCommands(brand)) console.log(line);
 }
 process.exit(0);
