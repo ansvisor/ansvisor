@@ -671,7 +671,11 @@ export function editLines($, editsFor) {
     for (const node of $(el).contents().get()) {
       if (node.type === 'text') run.push(node);
       else if (node.type !== 'tag' || KEPT_AS_IS.has(node.name)) continue;
-      else if (BLOCKS.has(node.name)) {
+      // A line break ends a line: "Gartner<br>The plan" is two.
+      else if (node.name === 'br') {
+        line(run, heading);
+        run = [];
+      } else if (BLOCKS.has(node.name)) {
         line(run, heading);
         run = [];
         walk(node, HEADINGS.has(node.name));

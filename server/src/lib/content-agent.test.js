@@ -497,10 +497,15 @@ describe('keepSuggestions', () => {
         '<p>According to <a href="https://zapier.com/blog">Zapier</a>, teams forecast.</p>',
         known,
       ),
-    ).toBe('<p>According to <a href="https://zapier.com/blog">[source]</a>, teams forecast.</p>');
+      // The link goes too: it would still give the claim to its page.
+    ).toBe('<p>According to [source], teams forecast.</p>');
     expect(placeholderAttributionsInHtml('<p>According to AT&amp;T, most do.</p>', known)).toBe(
       '<p>According to [source], most do.</p>',
     );
+    // A line break ends a line: the next one's first word isn't the name's.
+    expect(
+      placeholderAttributionsInHtml('<p>According to Zapier<br>The plan is monthly.</p>', known),
+    ).toBe('<p>According to [source]<br>The plan is monthly.</p>');
     // A known one, and a page with none: the HTML as it was.
     const html = '<h2>Plans</h2><p>According to <strong>Gartner</strong>, teams plan.</p>';
     expect(placeholderAttributionsInHtml(html, known)).toBe(html);
@@ -512,14 +517,25 @@ describe('keepSuggestions', () => {
       'As Zapier puts it, teams forecast.',
       'According to a 2025 report by Gartner, teams forecast.',
       'A survey from Statista finds teams forecast.',
-      'Data from Statista shows teams forecast.',
+      'Data from Statista shows that teams forecast.',
+      'Data from Statista shows 60% of teams forecast.',
       "Gartner'ın raporuna göre ekipler tahmin eder.",
       'Laut einer aktuellen Studie von Gartner planen Teams.',
     ]) {
       expect(addsAttribution('', text), text).toBe(true);
     }
-    // What a product does isn't an attribution.
-    expect(addsAttribution('', 'Data from Shopify syncs every hour.')).toBe(false);
+    // What a product does, an event or a thing to get isn't an attribution.
+    for (const text of [
+      'Data from Shopify syncs every hour.',
+      'Data from GA4 shows where visitors come from.',
+      'As Google adds AI Overviews to more queries, clicks fall.',
+      'Visibility shifts as ChatGPT adds shopping results.',
+      'Download the 2025 report from Gartner.',
+      'Keyword research from Ahrefs helps you plan.',
+      'Laut der Anleitung des Herstellers geht es so.',
+    ]) {
+      expect(addsAttribution('', text), text).toBe(false);
+    }
     expect(
       placeholderAttributions('As Zapier notes, teams forecast.', knownPeople('Gartner')),
     ).toBe('As [source] notes, teams forecast.');
@@ -531,14 +547,23 @@ describe('keepSuggestions', () => {
     expect(drops('Ansvisor, Profound & Peec AI track it.', 'Ansvisor and Profound track it.')).toBe(
       true,
     );
-    // Two nouns: not a list.
+    // Two nouns, two terms: not a list.
     expect(drops('For Sales and Marketing teams.', 'For marketing teams.')).toBe(false);
+    expect(drops('Combine SEO and AEO.', 'Combine SEO.')).toBe(false);
+    expect(drops('For B2B and B2C shops.', 'For B2B shops.')).toBe(false);
   });
 
   it('lets a change for a banned word drop only the item that is one', () => {
     const rules = [{ key: 'bannedWords', name: 'Banned words', detail: 'Aim: seamless, Claude' }];
     expect(bannedWordsOf(rules)).toEqual(['seamless', 'Claude']);
     expect(bannedWordsOf([])).toEqual([]);
+    // As the editor sends it, with the count after; never the count alone.
+    expect(
+      bannedWordsOf([
+        { key: 'bannedWords', name: 'x', detail: 'aim: seamless, leverage · now: 2 found' },
+      ]),
+    ).toEqual(['seamless', 'leverage']);
+    expect(bannedWordsOf([{ key: 'bannedWords', name: 'x', detail: 'now: 3 found' }])).toEqual([]);
     const banned = bannedWordsOf(rules);
     const passage = 'Track ChatGPT, Gemini and Claude.';
     expect(
@@ -547,6 +572,22 @@ describe('keepSuggestions', () => {
     expect(
       dropsName(passage, passage, 'Track ChatGPT and Claude.', ['bannedWords'], '', banned),
     ).toBe(true);
+    // The banned word goes; the name in the same item stays.
+    const shops = 'Leverage Shopify, WooCommerce and Magento.';
+    const leverage = ['leverage'];
+    expect(
+      dropsName(shops, shops, 'Use WooCommerce and Magento.', ['bannedWords'], '', leverage),
+    ).toBe(true);
+    expect(
+      dropsName(
+        shops,
+        shops,
+        'Use Shopify, WooCommerce and Magento.',
+        ['bannedWords'],
+        '',
+        leverage,
+      ),
+    ).toBe(false);
   });
 
   it('reads a long run of capitals quickly', () => {

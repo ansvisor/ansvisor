@@ -342,21 +342,25 @@ const ATTRIBUTIONS = [
     'gu',
   ),
   new RegExp(String.raw`\b[Ll]aut\s+${LEAD}${SOURCE_NAME}`, 'gu'),
-  // "As Zapier notes / explains / puts it, …".
-  new RegExp(String.raw`\b[Aa]s\s+${LEAD}${SOURCE_NAME}\s+${SPEECH}\b`, 'gu'),
-  // "a 2025 report by Gartner", "a survey from Statista".
+  // "As Zapier notes, …", "As Zapier puts it, …": the verb then a comma or
+  // "that", never an event ("As Google adds AI Overviews to more queries").
+  new RegExp(String.raw`\b[Aa]s\s+${LEAD}${SOURCE_NAME}\s+${SPEECH}(?=\s*[,:]|\s+that\b)`, 'gu'),
+  // "a 2025 report by Gartner, …", "a survey from Statista finds": as a
+  // claim's source, never a thing to get ("Download the report from Gartner.").
   new RegExp(
-    String.raw`\b(?:[Rr]eport|[Ss]tudy|[Ss]urvey|[Aa]nalysis|[Rr]esearch|[Pp]aper|[Pp]oll|[Ii]ndex)\s+(?:by|from)\s+${LEAD}${SOURCE_NAME}`,
+    String.raw`\b(?:[Rr]eport|[Ss]tudy|[Ss]urvey|[Pp]aper|[Pp]oll)\s+(?:by|from)\s+${LEAD}${SOURCE_NAME}(?=\s*,|\s+(?:shows?|showed|finds|found|says|said|suggests?|suggested|reveals?|revealed|estimates?|estimated)\b)`,
     'gu',
   ),
-  // "data from Statista shows": with what it shows, as "data from Shopify syncs" gives nothing.
+  // "data from Statista shows that …" or a figure, never a tool's ("Data
+  // from GA4 shows where visitors come from").
   new RegExp(
-    String.raw`\b(?:[Dd]ata|[Ff]igures|[Nn]umbers|[Ss]tatistics)\s+from\s+${LEAD}${SOURCE_NAME}\s+(?:shows?|showed|finds|found|suggests?|suggested|reveals?|revealed|says)\b`,
+    String.raw`\b(?:[Dd]ata|[Ff]igures|[Nn]umbers|[Ss]tatistics)\s+from\s+${LEAD}${SOURCE_NAME}\s+(?:shows?|showed|finds|found|suggests?|suggested|reveals?|revealed)(?=\s+(?:that\b|\p{N}))`,
     'gu',
   ),
-  // "laut einer (aktuellen) Studie von Gartner".
+  // "laut einer (aktuellen) Studie von Gartner": by "von" only, as German
+  // writes every noun with a capital ("laut der Anleitung des Herstellers").
   new RegExp(
-    String.raw`\b[Ll]aut\s+(?:einer|einem|der|dem|des)\s+(?:\p{L}+\s+){1,2}(?:von|der|des)\s+${LEAD}${SOURCE_NAME}`,
+    String.raw`\b[Ll]aut\s+(?:einer|einem|der|dem|des)\s+(?:\p{L}+\s+){1,2}von\s+${LEAD}${SOURCE_NAME}`,
     'gu',
   ),
   // "Gartner'ın raporuna göre": a source's report, study, data or survey.
@@ -505,7 +509,12 @@ function attributionEdits(text, known) {
  */
 export function placeholderAttributionsInHtml(html, known = null) {
   const $ = cheerio.load(html || '', null, false);
-  return editLines($, (text) => attributionEdits(text, known)) ? $.html() : html;
+  if (!editLines($, (text) => attributionEdits(text, known))) return html;
+  // A link whose words all became the placeholder would still give the claim to its page.
+  $('a').each((_, el) => {
+    if ($(el).text() === '[source]') $(el).replaceWith('[source]');
+  });
+  return $.html();
 }
 
 // A list of names: two or more capitalised items with commas and an "and"
@@ -520,13 +529,13 @@ const NAME_LIST = new RegExp(
 );
 const ITEM_RE = new RegExp(ITEM, 'gu');
 // Two names ("ChatGPT and Claude", "Shopify & WooCommerce"), read as a list
-// only when one is shaped as a product's or a brand's (a capital inside it,
-// two capitals, a digit): "Sales and Marketing" is two nouns.
+// only when one is shaped as a product's or a brand's (a capital after a small
+// letter): "Sales and Marketing", "SEO and AEO", "B2B and B2C" are terms.
 const TWO_NAMES = new RegExp(
   String.raw`${ITEM}\s+(?:and|or|&|und|oder|ve|veya|ile|et|ou)\s+${ITEM}`,
   'gu',
 );
-const BRANDISH = /\p{Ll}\p{Lu}|\p{Lu}{2}|\d/u;
+const BRANDISH = /\p{Ll}\p{Lu}/u;
 
 /** The lists of names a text has: three or more, and two shaped as a brand's. */
 function nameLists(text) {
@@ -537,14 +546,15 @@ function nameLists(text) {
 }
 
 /**
- * The words the Banned words rule lists, as its detail sends them ("Aim:
- * seamless, leverage, robust"): empty without the rule.
+ * The words the Banned words rule lists, as the editor's detail sends them:
+ * "aim: seamless, leverage" then " · now: 3 found" (web/src/lib/content/
+ * agent-write.ts, useRuleDescriber; en.json rules.agent.aim). Empty without
+ * the rule, or without its aim (an empty list): never the count.
  */
 export function bannedWordsOf(rules = []) {
   const detail = rules.find((r) => r.key === 'bannedWords')?.detail ?? '';
-  return detail
-    .split(' · ')[0]
-    .replace(/^[^:]*:\s*/, '')
+  const aim = detail.split(' · ')[0].match(/^aim:\s*(.*)$/i);
+  return (aim?.[1] ?? '')
     .split(/[,;]/)
     .map((w) => w.trim())
     .filter(Boolean);
@@ -568,17 +578,24 @@ export function dropsName(passageText, before, words, rules = [], blocksText = '
   // Taking out a banned word: the item that is one may go, no other. Without
   // the rule's words, any may, as before.
   if (rules.includes('bannedWords') && banned.length === 0) return false;
-  const isBanned = (item) =>
-    rules.includes('bannedWords') && banned.some((word) => isKnown(word, knownPeople(item)));
+  // An item's words without the banned ones: "Leverage Shopify" is still Shopify.
+  const unbanned = (item) =>
+    item
+      .split(/\s+/)
+      .filter(
+        (word) =>
+          !rules.includes('bannedWords') ||
+          !banned.some((b) => isKnown(word.replace(/['’]\p{L}*$/u, ''), knownPeople(b))),
+      );
   const text = String(passageText);
   const changed = knownPeople(`${text.replace(before, () => words)} ${blocksText}`);
   for (const list of nameLists(text)) {
     for (const item of list.match(ITEM_RE) ?? []) {
-      if (!String(before).includes(item) || isBanned(item)) continue;
-      const last = item
-        .split(/\s+/)
-        .pop()
-        .replace(/['’]\p{L}*$/u, '');
+      if (!String(before).includes(item)) continue;
+      const rest = unbanned(item);
+      // The item is a banned word: it may go.
+      if (!rest.length) continue;
+      const last = rest.at(-1).replace(/['’]\p{L}*$/u, '');
       if (!isKnown(last, changed)) return true;
     }
   }
