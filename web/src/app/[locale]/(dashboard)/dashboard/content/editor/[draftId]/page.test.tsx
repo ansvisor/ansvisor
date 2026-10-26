@@ -975,6 +975,78 @@ describe('the content editor', () => {
       }
     });
 
+    it('shows a live page’s Start, which runs as a Fix, and stops it', async () => {
+      getContentDraft.mockResolvedValue(
+        draft({ status: 'draft', agentState: 'writing', agentSince: new Date().toISOString() }),
+      );
+      readAgentRun.mockResolvedValue({
+        id: 'r2',
+        kind: 'fix',
+        steps: [
+          { key: 'read_rules', count: 7 },
+          { key: 'gather_sources', count: 3 },
+          { key: 'write_changes', count: null },
+          { key: 'check_sources', count: null },
+        ],
+        step: 2,
+        startedAt: new Date().toISOString(),
+        finishedAt: null,
+        stoppedAt: null,
+        outcome: null,
+      });
+      await renderPage();
+      await act(async () => {});
+      const status = container.querySelector('[role="status"]')!;
+      // Its real steps, not the fixed list, and its Stop.
+      expect([...status.querySelectorAll('li')].map((li) => li.textContent)).toEqual([
+        'Reading 7 rules',
+        'Gathering 3 sources',
+        'Writing changes',
+        'Checking sources',
+      ]);
+      await act(async () => button('Stop')!.click());
+      expect(stopAgentRun).toHaveBeenCalledWith('d1', 'b1', 'r2');
+    });
+
+    it('shows only the run the page waits on: a rewrite’s on a new page, never another kind’s', async () => {
+      for (const [method, agentRun, kind, shown] of [
+        // A new page's rewrite: its run is a rewrite, not the Start's write.
+        ['create', 'rewrite', 'rewrite', true],
+        ['create', 'rewrite', 'write', false],
+        ['create', 'write', 'fix', false],
+        ['optimize', 'rewrite', 'fix', false],
+      ] as const) {
+        getContentDraft.mockResolvedValue(
+          draft({
+            status: 'draft',
+            method,
+            agentState: 'writing',
+            agentRun,
+            agentSince: new Date().toISOString(),
+          }),
+        );
+        readAgentRun.mockResolvedValue({
+          id: 'r3',
+          kind,
+          steps: [{ key: 'check_sources', count: null }],
+          step: 0,
+          startedAt: new Date().toISOString(),
+          finishedAt: null,
+          stoppedAt: null,
+          outcome: null,
+        });
+        await renderPage();
+        await act(async () => {});
+        // Another run's: the fixed list stays, with no Stop for it.
+        expect(
+          container.querySelector('[role="status"]')!.textContent!.includes('Checking sources'),
+        ).toBe(shown);
+        expect(button('Stop') !== undefined).toBe(shown);
+        await act(async () => root.unmount());
+        root = createRoot(container);
+      }
+    });
+
     it('reads the draft at once when its run ends, its steps shown till then', async () => {
       vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
       try {
@@ -5063,10 +5135,11 @@ describe('the side panel', () => {
       getContentDraft.mockResolvedValue(
         draft({ status: 'draft', agentState: 'writing', agentSince: new Date().toISOString() }),
       );
+      // A Start on a live page runs as a Fix (content-writer.js startWritingRun).
       readAgentRun.mockResolvedValue({
         id: 'r1',
-        kind: 'write',
-        steps: [{ key: 'write_page', count: null }],
+        kind: 'fix',
+        steps: [{ key: 'write_changes', count: null }],
         step: 0,
         startedAt: new Date().toISOString(),
         finishedAt: null,
