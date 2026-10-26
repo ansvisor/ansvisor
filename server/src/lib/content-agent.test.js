@@ -74,11 +74,19 @@ const {
   buildFixPrompt,
   cleanInsertHtml,
   draftPassages,
+  addsAttribution,
+  attributableSources,
+  attributedNames,
+  dropsName,
+  placeholderAttributions,
+  placeholderAttributionsInHtml,
+  bannedWordsOf,
   dropsPlaceholder,
   emptyWhy,
   fixDraftRules,
   keepSuggestions,
   growsPastLimit,
+  htmlLines,
   HEADING_LIMITS,
   inlineText,
   MAX_PROMPT_PASSAGE_CHARS,
@@ -257,6 +265,393 @@ describe('keepSuggestions', () => {
     ]);
   });
 
+  it('keeps no claim given to a source, nor a change that drops a name (editor test 2026-10-25)', () => {
+    const listed = [
+      {
+        tag: 'p',
+        text: 'Ansvisor, Profound and LLM Pulse track ChatGPT, Gemini and Claude.',
+      },
+    ];
+    const change = (after, rules = ['dated']) =>
+      suggestion({
+        passage: 1,
+        before: 'Ansvisor, Profound and LLM Pulse track ChatGPT, Gemini and Claude',
+        after,
+        rules,
+        sources: [],
+        marks: [],
+      });
+    const kept = (s) =>
+      keepSuggestions([s], listed, new Set(), new Set(['dated', 'bannedWords']), null, sourcing);
+    // An AI Overview's claim given to Zapier, and Claude dropped: neither kept.
+    expect(
+      kept(
+        change(
+          'According to Zapier, Ansvisor, Profound and LLM Pulse track ChatGPT, Gemini and Claude',
+        ),
+      ),
+    ).toEqual([]);
+    expect(kept(change('Ansvisor, Profound and LLM Pulse track ChatGPT and Gemini'))).toEqual([]);
+    // Every name kept, no source made up: kept.
+    expect(
+      kept(change('Ansvisor, Profound and LLM Pulse each track ChatGPT, Gemini and Claude')),
+    ).toHaveLength(1);
+    // A banned word taken out may go.
+    expect(
+      kept(change('Ansvisor, Profound and LLM Pulse track ChatGPT and Gemini', ['bannedWords'])),
+    ).toHaveLength(1);
+    // An insert that gives a claim to a source it wasn't given isn't kept either.
+    expect(
+      kept(
+        suggestion({
+          kind: 'insert',
+          passage: 1,
+          before: '',
+          after: '<p>According to Zapier, these tools cover every engine.</p>',
+          rules: ['dated'],
+          sources: [],
+          marks: [],
+        }),
+      ),
+    ).toEqual([]);
+  });
+
+  it('reads attributions in English, German and Turkish, and the names past a sentence’s first word', () => {
+    expect(addsAttribution('Teams forecast.', 'According to Gartner, teams forecast.')).toBe(true);
+    expect(addsAttribution('Teams forecast.', 'Gartner found that teams forecast.')).toBe(true);
+    expect(addsAttribution('Teams forecast.', 'Laut Gartner prognostizieren Teams.')).toBe(true);
+    expect(addsAttribution('Teams forecast.', 'Teams prognostizieren, laut Gartner.')).toBe(true);
+    expect(addsAttribution('Ekipler tahmin eder.', "Gartner'a göre ekipler tahmin eder.")).toBe(
+      true,
+    );
+    // One the passage had already: none added.
+    expect(
+      addsAttribution('According to Gartner, teams forecast.', 'According to Gartner, teams plan.'),
+    ).toBe(false);
+    // "The report says" names no one.
+    expect(addsAttribution('Teams forecast.', 'The report says teams forecast.')).toBe(false);
+    // One the agent was given (an expert from Your input, a brand the page names) may be.
+    expect(
+      addsAttribution(
+        'Teams forecast.',
+        'Ada Lovelace says teams forecast.',
+        knownPeople('Ada Lovelace, head of data'),
+      ),
+    ).toBe(false);
+    // "As Zapier says": the name is Zapier, known when the page gives claims to it.
+    expect(
+      addsAttribution('Teams forecast.', 'As Zapier says, teams forecast.', knownPeople('Zapier')),
+    ).toBe(false);
+    // More ways to give a claim to a source.
+    expect(addsAttribution('', 'According to the Zapier report, teams forecast.')).toBe(true);
+    expect(addsAttribution('', 'According to a 2025 Gartner survey, teams forecast.')).toBe(true);
+    expect(addsAttribution('', "Gartner's research shows teams forecast.")).toBe(true);
+  });
+
+  // A replace of the whole passage: its words before and after.
+  const drops = (before, words, rules, blocks) => dropsName(before, before, words, rules, blocks);
+
+  it('reads a dropped name only in a list: any capitalised word may be a noun, an acronym or a month', () => {
+    expect(
+      drops('Ansvisor tracks ChatGPT, Gemini and Claude.', 'Ansvisor tracks ChatGPT and Gemini.'),
+    ).toBe(true);
+    expect(drops('Teams use Ansvisor daily.', 'Teams use it daily.')).toBe(false);
+    expect(drops('Most AI search tools track it.', 'Most answer engines track it.')).toBe(false);
+    expect(drops('Funktionen für Marketing Teams im März.', 'Werkzeuge für Marketing-Teams.')).toBe(
+      false,
+    );
+    // Taken out for a banned word: it may.
+    expect(
+      drops('Track ChatGPT, Gemini and Claude.', 'Track ChatGPT and Gemini.', ['bannedWords']),
+    ).toBe(false);
+  });
+
+  it('keeps a change that keeps every name, worded or cased another way', () => {
+    // An item read by its last word, in any case.
+    expect(
+      drops('Ask ChatGPT, Gemini or Claude for one.', 'When you ask ChatGPT, Gemini or Claude…'),
+    ).toBe(false);
+    // A possessive or a case ending moved.
+    expect(
+      drops(
+        'Compare ChatGPT, Gemini and Claude’s answers.',
+        'Compare the answers from ChatGPT, Gemini and Claude.',
+      ),
+    ).toBe(false);
+    expect(drops("ChatGPT, Gemini ve Claude'u izler.", "ChatGPT, Gemini ve Claude'da izler.")).toBe(
+      false,
+    );
+    // A list ending its sentence, and a change going on after its last name.
+    expect(
+      drops(
+        'It works with Shopify, WooCommerce and Magento.',
+        'It works with Shopify, WooCommerce and Magento in five minutes.',
+      ),
+    ).toBe(false);
+    // A list turned into bullets: the names are in the blocks added.
+    expect(
+      drops(
+        'Track ChatGPT, Gemini and Claude.',
+        'Track these engines:',
+        [],
+        'ChatGPT Gemini Claude',
+      ),
+    ).toBe(false);
+  });
+
+  it('reads a name dropped through a short replace, in the passage as changed', () => {
+    const passage = 'Ansvisor tracks ChatGPT, Gemini and Claude.';
+    expect(dropsName(passage, 'Gemini and Claude', 'Gemini')).toBe(true);
+    expect(dropsName(passage, 'Gemini and Claude', 'Gemini and Claude too')).toBe(false);
+    // Items the replace doesn't touch stay as they are.
+    expect(dropsName(passage, 'Ansvisor tracks', 'It tracks')).toBe(false);
+  });
+
+  it('ends a name at its sentence: the next sentence’s first word isn’t part of it', () => {
+    expect(
+      attributedNames('Teams forecast weekly, according to Gartner. The plan is monthly.'),
+    ).toEqual(['Gartner']);
+    expect(attributedNames('Built on Node.js, according to the U.S Census.')).toEqual([
+      'U.S Census',
+    ]);
+    const known = knownPeople('According to Gartner, teams forecast.');
+    expect(
+      addsAttribution(
+        'Teams forecast weekly.',
+        'Teams forecast weekly, according to Gartner. Most plan monthly.',
+        known,
+      ),
+    ).toBe(false);
+    expect(
+      placeholderAttributions('Teams forecast, according to Zapier. The plan is monthly.', known),
+    ).toBe('Teams forecast, according to [source]. The plan is monthly.');
+    expect(
+      drops(
+        'Ansvisor tracks ChatGPT, Gemini and Claude. Each answer counts.',
+        'Ansvisor tracks ChatGPT, Gemini and Claude, so you see each answer.',
+      ),
+    ).toBe(false);
+  });
+
+  it('reads no attribution in "per" before a noun, "claims" or "states" as nouns, or a comparison with "göre"', () => {
+    // "states" after a number or "all" is the noun, before "that" too.
+    expect(addsAttribution('', 'We ship to all 50 US states that allow wine delivery.')).toBe(
+      false,
+    );
+    expect(addsAttribution('', 'We ship to all US states that allow it.')).toBe(false);
+    expect(addsAttribution('', 'Gartner states that teams forecast.')).toBe(true);
+    expect(addsAttribution('', 'Kontaktieren Sie uns per E-Mail.')).toBe(false);
+    expect(addsAttribution('', 'Pricing is per SKU, or per API call.')).toBe(false);
+    expect(addsAttribution('', 'It ships to all 50 US states.')).toBe(false);
+    expect(addsAttribution('', 'Warranty claims are handled in a day.')).toBe(false);
+    expect(addsAttribution('', "Gemini, ChatGPT'ye göre daha hızlı.")).toBe(false);
+    // "en" after "göre" is the source's claim: "according to ChatGPT, the best one is Gemini".
+    expect(addsAttribution('', "ChatGPT'ye göre en iyisi Gemini.")).toBe(true);
+    expect(addsAttribution('', "Gartner'a göre en hızlı büyüyen pazar Hindistan.")).toBe(true);
+    // The attributions themselves still are.
+    expect(addsAttribution('', 'Per Gartner, teams forecast.')).toBe(true);
+    expect(addsAttribution('', "Per Gartner's survey, teams forecast.")).toBe(true);
+    expect(addsAttribution('', 'Teams forecast weekly, per Gartner.')).toBe(true);
+    expect(addsAttribution('', 'Gartner claims that teams forecast.')).toBe(true);
+    expect(addsAttribution('', "Gartner'a göre ekipler tahmin eder.")).toBe(true);
+  });
+
+  it('knows a source named with a role or an adverb before it, and its end of two words', () => {
+    const known = knownPeople('Jane Doe', 'According to Gartner, teams forecast.');
+    expect(addsAttribution('', 'Acme CEO Jane Doe says that teams forecast.', known)).toBe(false);
+    expect(addsAttribution('', 'CEO Jane Doe says teams forecast.', known)).toBe(false);
+    expect(addsAttribution('', 'Recently Gartner said that teams forecast.', known)).toBe(false);
+    expect(placeholderAttributions('CEO Jane Doe says teams forecast.', known)).toBe(
+      'CEO Jane Doe says teams forecast.',
+    );
+  });
+
+  it('puts only the name as a placeholder: the word a sentence starts with stays', () => {
+    const known = knownPeople('According to Gartner, teams forecast.');
+    expect(placeholderAttributions('As Zapier says, teams forecast.', known)).toBe(
+      'As [source] says, teams forecast.',
+    );
+    expect(placeholderAttributions('While Zapier says that teams forecast, …', known)).toBe(
+      'While [source] says that teams forecast, …',
+    );
+    expect(placeholderAttributions('According to the U.S. Census Bureau, most do.', known)).toBe(
+      'According to the [source], most do.',
+    );
+    expect(attributedNames('According to the U.S. Census Bureau, most do.')).toEqual([
+      'U.S. Census Bureau',
+    ]);
+  });
+
+  it('reads "per" as an attribution on an English page only', () => {
+    const german = attributableSources('<p>Wir planen.</p>', [], [], 'de');
+    expect(addsAttribution('', 'Per E-Mail, Telefon oder Chat erreichen Sie uns.', german)).toBe(
+      false,
+    );
+    expect(addsAttribution('', 'Sie erreichen uns telefonisch, per E-Mail.', german)).toBe(false);
+    expect(placeholderAttributions('Kontaktieren Sie uns telefonisch, per E-Mail.', german)).toBe(
+      'Kontaktieren Sie uns telefonisch, per E-Mail.',
+    );
+    // "laut" is German's.
+    expect(addsAttribution('', 'Laut Gartner planen Teams.', german)).toBe(true);
+    const english = attributableSources('<p>Teams plan.</p>', [], [], 'en');
+    expect(addsAttribution('', 'Per Gartner, teams plan.', english)).toBe(true);
+    // An acronym may be a source too ("Per IDC, …"): "Per SKU, …" reads as one.
+    expect(addsAttribution('', 'Per SKU, you pay once.', english)).toBe(true);
+  });
+
+  it('reads a rewrite’s HTML line by line: a linked name, an entity', () => {
+    const known = knownPeople('According to Gartner, teams forecast.');
+    expect(
+      placeholderAttributionsInHtml(
+        '<p>According to <a href="https://zapier.com/blog">Zapier</a>, teams forecast.</p>',
+        known,
+      ),
+      // The link goes too: it would still give the claim to its page.
+    ).toBe('<p>According to [source], teams forecast.</p>');
+    expect(placeholderAttributionsInHtml('<p>According to AT&amp;T, most do.</p>', known)).toBe(
+      '<p>According to [source], most do.</p>',
+    );
+    // A line break ends a line: the next one's first word isn't the name's.
+    expect(
+      placeholderAttributionsInHtml('<p>According to Zapier<br>The plan is monthly.</p>', known),
+    ).toBe('<p>According to [source]<br>The plan is monthly.</p>');
+    // A known one, and a page with none: the HTML as it was.
+    const html = '<h2>Plans</h2><p>According to <strong>Gartner</strong>, teams plan.</p>';
+    expect(placeholderAttributionsInHtml(html, known)).toBe(html);
+  });
+
+  it('reads more wordings: "As X notes", "a report by X", "data from X shows", Turkish and German', () => {
+    for (const text of [
+      'As Zapier notes, teams forecast.',
+      'As Zapier puts it, teams forecast.',
+      'According to a 2025 report by Gartner, teams forecast.',
+      'A survey from Statista finds teams forecast.',
+      'Data from Statista shows that teams forecast.',
+      'Data from Statista shows 60% of teams forecast.',
+      "Gartner'ın raporuna göre ekipler tahmin eder.",
+      'Laut einer aktuellen Studie von Gartner planen Teams.',
+    ]) {
+      expect(addsAttribution('', text), text).toBe(true);
+    }
+    // What a product does, an event or a thing to get isn't an attribution.
+    for (const text of [
+      'Data from Shopify syncs every hour.',
+      'Data from GA4 shows where visitors come from.',
+      'As Google adds AI Overviews to more queries, clicks fall.',
+      'Visibility shifts as ChatGPT adds shopping results.',
+      'Download the 2025 report from Gartner.',
+      'Keyword research from Ahrefs helps you plan.',
+      'Laut der Anleitung des Herstellers geht es so.',
+    ]) {
+      expect(addsAttribution('', text), text).toBe(false);
+    }
+    expect(
+      placeholderAttributions('As Zapier notes, teams forecast.', knownPeople('Gartner')),
+    ).toBe('As [source] notes, teams forecast.');
+  });
+
+  it('reads two names as a list when one is shaped as a brand’s, and "&"', () => {
+    expect(drops('Track ChatGPT and Claude.', 'Track ChatGPT.')).toBe(true);
+    expect(drops('Sync Shopify & WooCommerce stores.', 'Sync Shopify stores.')).toBe(true);
+    expect(drops('Ansvisor, Profound & Peec AI track it.', 'Ansvisor and Profound track it.')).toBe(
+      true,
+    );
+    // Two nouns, two terms: not a list.
+    expect(drops('For Sales and Marketing teams.', 'For marketing teams.')).toBe(false);
+    expect(drops('Combine SEO and AEO.', 'Combine SEO.')).toBe(false);
+    expect(drops('For B2B and B2C shops.', 'For B2B shops.')).toBe(false);
+  });
+
+  it('lets a change for a banned word drop only the item that is one', () => {
+    const rules = [{ key: 'bannedWords', name: 'Banned words', detail: 'Aim: seamless, Claude' }];
+    expect(bannedWordsOf(rules)).toEqual(['seamless', 'Claude']);
+    expect(bannedWordsOf([])).toEqual([]);
+    // As the editor sends it, with the count after; never the count alone.
+    expect(
+      bannedWordsOf([
+        { key: 'bannedWords', name: 'x', detail: 'aim: seamless, leverage · now: 2 found' },
+      ]),
+    ).toEqual(['seamless', 'leverage']);
+    expect(bannedWordsOf([{ key: 'bannedWords', name: 'x', detail: 'now: 3 found' }])).toEqual([]);
+    const banned = bannedWordsOf(rules);
+    const passage = 'Track ChatGPT, Gemini and Claude.';
+    expect(
+      dropsName(passage, passage, 'Track ChatGPT and Gemini.', ['bannedWords'], '', banned),
+    ).toBe(false);
+    expect(
+      dropsName(passage, passage, 'Track ChatGPT and Claude.', ['bannedWords'], '', banned),
+    ).toBe(true);
+    // The banned word goes; the name in the same item stays.
+    const shops = 'Leverage Shopify, WooCommerce and Magento.';
+    const leverage = ['leverage'];
+    expect(
+      dropsName(shops, shops, 'Use WooCommerce and Magento.', ['bannedWords'], '', leverage),
+    ).toBe(true);
+    expect(
+      dropsName(
+        shops,
+        shops,
+        'Use Shopify, WooCommerce and Magento.',
+        ['bannedWords'],
+        '',
+        leverage,
+      ),
+    ).toBe(false);
+  });
+
+  it('reads a long run of capitals quickly', () => {
+    const started = Date.now();
+    addsAttribution('', `According to ${'A'.repeat(20000)} says that.`);
+    const list = `${'B'.repeat(20000)}, C and D`;
+    dropsName(list, list, 'C and D');
+    expect(Date.now() - started).toBeLessThan(500);
+  });
+
+  it('reads a long run of initials quickly: each dot is read one way', () => {
+    const initials = 'U.S.'.repeat(10_000);
+    const started = Date.now();
+    addsAttribution('', `According to ${initials} says that.`);
+    dropsName(`${initials}, C and D`, `${initials}, C and D`, 'C and D');
+    placeholderAttributions(`Per ${initials}'s survey, most do.`);
+    expect(Date.now() - started).toBeLessThan(500);
+    // Dotted names read as before.
+    expect(attributedNames('Built on Node.js, according to the U.S Census.')).toEqual([
+      'U.S Census',
+    ]);
+    expect(attributedNames('According to the U.S. Census Bureau, most do.')).toEqual([
+      'U.S. Census Bureau',
+    ]);
+    expect(attributedNames('According to J.D. Power, most do.')).toEqual(['J.D. Power']);
+    expect(attributedNames('Teams forecast, per the U.N.')).toEqual(['U.N.']);
+    expect(attributedNames("U.S.'e göre enflasyon düştü.")).toEqual(['U.S.']);
+  });
+
+  it('knows a source by its possessive, and never by its last word alone', () => {
+    const known = knownPeople('According to Gartner, teams forecast.', 'Our research team');
+    expect(
+      addsAttribution('', "According to Gartner's latest survey, teams forecast.", known),
+    ).toBe(false);
+    expect(addsAttribution('', 'According to Forrester Research, teams forecast.', known)).toBe(
+      true,
+    );
+    expect(addsAttribution('', 'As Gartner says, teams forecast.', known)).toBe(false);
+  });
+
+  it('puts a claim given to a source it wasn’t given as a placeholder, and reads the page’s own', () => {
+    const known = attributableSources(
+      '<p>According to Gartner, teams forecast weekly.</p><p>Zapier, Make and n8n run it.</p>',
+      [{ kind: 'input', ref: 'i1', label: 'Ada Lovelace, head of data', detail: '' }],
+      ['Grace Hopper'],
+    );
+    expect(
+      placeholderAttributions('According to Gartner, most do. According to Zapier, all do.', known),
+    ).toBe('According to Gartner, most do. According to [source], all do.');
+    // Listed by the page, not given claims by it: Zapier isn't one to give a claim to.
+    expect(addsAttribution('', 'Zapier says teams forecast.', known)).toBe(true);
+    expect(addsAttribution('', 'Ada Lovelace says teams forecast.', known)).toBe(false);
+    expect(addsAttribution('', 'Grace Hopper says teams forecast.', known)).toBe(false);
+  });
+
   it('keeps no number without a source (CE-033)', () => {
     // A figure in none of the data: not kept, even marked to a source.
     const invented = { after: '87% of baristas use freshly ground coffee' };
@@ -367,6 +762,110 @@ describe('keepSuggestions', () => {
  * line ("What is LLM SEO? LLM SEO optimizes…", "Frequently Asked
  * QuestionsWhat is an AEO tracker?…"): it now goes after the heading.
  */
+describe('blocks, names and languages as the review read them (#1520)', () => {
+  const listed = [{ tag: 'p', text: 'Track ChatGPT, Gemini and Claude.' }];
+  const keep = (s, over = {}) =>
+    keepSuggestions([s], listed, new Set(), new Set(['dated']), null, { ...sourcing, ...over });
+  const insert = (after) =>
+    suggestion({ kind: 'insert', passage: 1, before: '', after, sources: [], marks: [] });
+
+  it('reads compact blocks with a space between them, as it reads the page', () => {
+    // A list turned into bullets, written compact: every name is still there.
+    const bullets = suggestion({
+      passage: 1,
+      before: 'Track ChatGPT, Gemini and Claude.',
+      after: 'Track these engines:<ul><li>ChatGPT</li><li>Gemini</li><li>Claude</li></ul>',
+      sources: [],
+      marks: [],
+    });
+    expect(keep(bullets).map((row) => row.kind)).toEqual(['replace', 'insert']);
+    // A page that cites Gartner: a block after the one citing it isn't read into its name.
+    const cites = attributableSources('<p>According to Gartner, teams forecast.</p>', [], []);
+    expect(
+      keep(
+        insert('<p>Teams plan weekly, according to Gartner.</p><p>Most teams plan monthly.</p>'),
+        {
+          attributable: cites,
+        },
+      ),
+    ).toHaveLength(1);
+    // A heading before the claim doesn't hide it.
+    expect(
+      keep(insert('<h2>Forecasting basics</h2><p>According to Zapier, teams forecast.</p>'), {
+        attributable: cites,
+      }),
+    ).toEqual([]);
+  });
+
+  it('reads a name of eight words at most, so a long run of capitals reads fast', () => {
+    const run = Array.from(
+      { length: 3000 },
+      (_, i) => `Word${String.fromCharCode(65 + (i % 26))}`,
+    ).join(' ');
+    const started = Date.now();
+    attributedNames(`${run} says teams forecast.`);
+    dropsName(`${run}, Alpha and Beta.`, `${run}, Alpha and Beta.`, `${run} and Alpha.`);
+    expect(Date.now() - started).toBeLessThan(500);
+    expect(attributedNames('Alpha Beta Gamma Delta Epsilon Zeta Eta Theta Iota says so.')).toEqual([
+      'Beta Gamma Delta Epsilon Zeta Eta Theta Iota',
+    ]);
+  });
+
+  it('never skips a name’s last word: "Grammarly" is a name', () => {
+    const known = knownPeople('According to Grammarly, teams write faster.');
+    expect(addsAttribution('', 'According to Grammarly, most teams do.', known)).toBe(false);
+    expect(placeholderAttributions('According to Grammarly, most teams do.', knownPeople(''))).toBe(
+      'According to [source], most teams do.',
+    );
+  });
+
+  it('reads a change line by line: a linked name whole, a heading apart from the line after it', () => {
+    expect(
+      htmlLines('<h2>Forecasting Basics</h2><p>Per <a href="#">Gartner</a>’s survey, most do.</p>'),
+    ).toEqual(['Forecasting Basics', 'Per Gartner’s survey, most do.']);
+    const cites = attributableSources(
+      '<p><a href="https://gartner.example">Gartner</a>’s report shows teams forecast.</p>',
+      [],
+      [],
+    );
+    // The page's linked source is read, and a Title Case heading doesn't run into it.
+    expect(
+      keep(insert('<h2>Forecasting Basics</h2><p>Gartner says most teams forecast.</p>'), {
+        attributable: cites,
+      }),
+    ).toHaveLength(1);
+  });
+
+  it('never reads a name past a sentence’s word or a lone "CEO"', () => {
+    const none = knownPeople('');
+    for (const text of [
+      'Who says B2B content has to be boring?',
+      'Most said they use ChatGPT weekly.',
+      'Our CEO said that we ship weekly.',
+    ]) {
+      expect(placeholderAttributions(text, none), text).toBe(text);
+    }
+  });
+
+  it('reads "states" and "claims" as nouns after a count, and reads years before a source', () => {
+    for (const text of [
+      'We ship to all 50 US states that allow wine delivery.',
+      'It works in most US states that allow it.',
+      'We ship to the 48 contiguous US states that allow it.',
+      'It covers all 50 New England states that allow it.',
+    ]) {
+      expect(addsAttribution('', text), text).toBe(false);
+    }
+    for (const text of [
+      'By 2026 Gartner estimates that most teams will forecast weekly.',
+      'In 2025 Gartner found that most teams forecast weekly.',
+      'In Q3 2025 IDC estimated that most teams forecast weekly.',
+    ]) {
+      expect(addsAttribution('', text), text).toBe(true);
+    }
+  });
+});
+
 describe('no invented people or quotes (CE-044)', () => {
   const passages = draftPassages(BODY);
   const ruleKeys = new Set(['dated', 'faq']);
@@ -818,6 +1317,29 @@ describe('cleanInsertHtml', () => {
 });
 
 describe('fixDraftRules', () => {
+  it('reads attributions in the page’s language: its Language rule, or My rules’ when it has none', async () => {
+    // ", per E-Mail." gives a claim to a source on an English page, never on a German one.
+    const perEmail = suggestion({
+      after: 'good coffee and hot water; order by phone, per E-Mail',
+      sources: [],
+      marks: [],
+    });
+    const fix = async () => {
+      generateObject.mockResolvedValue({
+        object: { suggestions: [perEmail] },
+        usage: { inputTokens: 900, outputTokens: 200 },
+      });
+      return (await fixDraftRules({ draftId: DRAFT, brandId: BRAND, input: input() })).count;
+    };
+    expect(await fix()).toBe(0);
+    rows.content_drafts.rules = { overrides: { language: { value: 'German' } } };
+    expect(await fix()).toBe(1);
+    // No rules of its own: the workspace's My rules for its page type.
+    rows.content_drafts.rules = null;
+    rows.content_rule_sets = { overrides: { language: { value: 'German' } } };
+    expect(await fix()).toBe(1);
+  });
+
   it('charges the budget, asks the model and keeps one batch for review', async () => {
     generateObject.mockResolvedValue({
       object: {

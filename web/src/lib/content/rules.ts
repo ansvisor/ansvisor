@@ -838,7 +838,7 @@ export const REWRITE_MAX_CHARS = 60_000;
 
 /** The page's last rewrite, as the API keeps it (00285). */
 export interface LastRewrite {
-  /** The characters it came to. */
+  /** The characters it came to (the editor counts its page again, as its toolbar does). */
   chars: number;
   /** The Length it was written to; null with Length off. */
   target: number | null;

@@ -4,7 +4,7 @@ import { z } from 'zod';
 import supabaseAdmin from '../config/supabase.js';
 import { logger } from './logger.js';
 import { PageFetchError } from './safe-fetch.js';
-import { languageCodeOf } from './languages.js';
+import { rulesLanguage, untouchedRules } from './content-language.js';
 import { postJson } from './safe-post.js';
 import { isWebflowConfigured } from './composio.js';
 import { sendToWebflow } from './cms/webflow-delivery.js';
@@ -434,14 +434,7 @@ async function deliverBatch(going, { brand, configs, webflow, batchId }) {
 }
 
 /** A draft no one has set rules on: the workspace's My rules apply (rules.ts effectiveRules). */
-function untouched(rules) {
-  return (
-    !rules ||
-    (rules.source == null &&
-      !Object.keys(rules.overrides ?? {}).length &&
-      !(rules.textRules ?? []).length)
-  );
-}
+const untouched = untouchedRules;
 
 /** The workspace's My rules (00214) for these drafts' types, by type; none when unread. */
 async function myRuleSets(orgId, drafts) {
@@ -564,16 +557,12 @@ export async function sendContentPages({
     const rules = untouched(draft.rules)
       ? mine.get(draft.rules?.set ?? draft.page_type)
       : draft.rules;
-    const rule = rules?.overrides?.language;
     item.page = {
       ...item.page,
       method: draft.method ?? null,
       sourceUrl: draft.source_url ?? null,
       pageType: draft.page_type ?? null,
-      language:
-        (rule?.on !== false && languageCodeOf(rule?.value)) ||
-        languageCodeOf(brand.language) ||
-        'en',
+      language: rulesLanguage(rules, brand.language) || 'en',
     };
   }
   if (pages.length === 1) {
