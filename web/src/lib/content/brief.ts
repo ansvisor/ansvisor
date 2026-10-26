@@ -1,11 +1,13 @@
 import { z } from 'zod';
 import type { ContentBrief } from '@/types';
 import {
+  SUGGESTION_SOURCE_KINDS,
   buildSourceGroups,
   readDraftDoc,
   type DraftSourceChoice,
   type DraftSourcesData,
 } from '@/lib/content/sources';
+import type { SuggestionSource } from '@/lib/content/suggestions';
 
 /**
  * The editor's Brief tab (Content Editor CE-007, spec §10): what the page
@@ -19,29 +21,42 @@ import {
 export const BRIEF_ORIGINS = ['rebuild', 'edit', 'opportunity'] as const;
 export type BriefOrigin = (typeof BRIEF_ORIGINS)[number];
 
+// The brief rules (2026) a brief plans with, from its version 2 (server
+// content-brief.js, behind CONTENT_BRIEF_RULES): each optional, so a brief
+// from before them reads as it was, and Edit brief keeps them. A value this
+// editor doesn't know yet, from a newer server, reads as none rather than
+// hiding the brief: a new one is added here, and shipped, before the server
+// writes it.
+
 /**
- * The brief rules (2026) a brief plans with, from its version 2 (server
- * content-brief.js, behind CONTENT_BRIEF_RULES): each optional, so a brief
- * from before them reads as it was, and Edit brief keeps them.
+ * How a section is best shown: a table for a comparison, steps for a how-to.
+ * A "faq" section's key points are its questions.
  */
-/** How a section is best shown: a table for a comparison, steps for a how-to… */
 export const BRIEF_FORMATS = ['paragraphs', 'list', 'steps', 'table', 'faq'] as const;
 export type BriefFormat = (typeof BRIEF_FORMATS)[number];
 /** The kind of source a fact to state needs. */
 export const FACT_SOURCES = ['statistic', 'study', 'quote', 'example', 'official'] as const;
 export type FactSource = (typeof FACT_SOURCES)[number];
-/** Proof to gather: the brand's own, which AI can't find elsewhere. */
-export const PROOF_KINDS = ['experience', 'data', 'case', 'test', 'screenshot', 'quote'] as const;
+/**
+ * Proof to gather: the brand's own, which AI can't find elsewhere, as Brief ›
+ * Your input takes it (experience, data, quotes; a case or a test as
+ * experience).
+ */
+export const PROOF_KINDS = ['experience', 'data', 'case', 'test', 'quote'] as const;
 export type ProofKind = (typeof PROOF_KINDS)[number];
 
-/** A fact a section states: what, the kind of source it needs, and its source's number (S1…) when one is given. */
+/**
+ * A fact a section states: what, the kind of source it needs, and the source
+ * it was given for it, kept as a suggestion keeps its (00248): by kind and
+ * ref, with its name, never its number in one run (S1…).
+ */
 export interface BriefFact {
   claim: string;
-  source: FactSource;
-  ref: string | null;
+  sourceType: FactSource;
+  source: SuggestionSource | null;
 }
 
-/** A page to link to: its address, the words to link, the section it goes in. */
+/** A page to link to: its address, the words to link, the section it goes in (null: anywhere). */
 export interface BriefLink {
   url: string;
   anchor: string;
@@ -55,8 +70,8 @@ export interface BriefSection {
   fanout: string | null;
   /** The platform key that ran it (perplexity-web, copilot-web…). */
   platform: string | null;
-  /** What the section's first, direct answer must say (answer first). */
-  answer?: string;
+  /** What the section's first, direct answer must say: a note to the writer, not the answer. */
+  answer?: string | null;
   format?: BriefFormat | null;
   facts?: BriefFact[];
 }
@@ -80,14 +95,18 @@ export interface DraftBrief {
   /** 2 once it plans with the brief rules (2026); absent before. */
   version?: 2;
   /** The page's essentials, for its top. */
-  tldr?: string;
+  tldr?: string | null;
   /** What the page says that commodity pages don't. */
-  angle?: string;
-  /** The brand's own proof to gather; `have` when Brief › Your input has it. */
-  proof?: { kind: ProofKind; what: string; have: boolean }[];
+  angle?: string | null;
+  /**
+   * The brand's own proof to gather. Whether Brief › Your input has it is read
+   * from Your input when shown, never kept here: it changes after a rebuild.
+   */
+  proof?: { kind: ProofKind; what: string }[];
   /** Fan-outs kept out: another topic, for another page. */
   leftOut?: string[];
-  freshness?: { datedPoint: string | null; checkedLine: boolean; yearInTitle: boolean } | null;
+  /** A dated point to give, an "Updated" line, the year in the title. */
+  freshness?: { datedPoint: string | null; updatedLine: boolean; yearInTitle: boolean } | null;
   /** Names as they are written: the brand, its products, the competitors given. */
   entities?: { brand: string; products: string[]; competitors: string[] } | null;
   links?: { internal: BriefLink[]; outbound: BriefLink[] } | null;
@@ -95,18 +114,20 @@ export interface DraftBrief {
 
 /** Limits a brief keeps to, the server's (content-brief.js) and the column's (00212). */
 export const MAX_BRIEF_SECTIONS = 12;
+/** content_drafts.brief's check (00212), as jsonb writes it as text. */
+export const MAX_BRIEF_BYTES = 65_536;
 const text = (max: number) => z.string().trim().max(max);
 
 /**
  * Version 2's limits: the server cuts its brief to them (content-brief.js),
- * so a brief it saves is one the editor reads (a field past one hides the
- * brief). __fixtures__/brief-v2.json is the sample both sides test.
+ * and the editor reads past them by cutting too, so a newer server's brief
+ * still shows. __fixtures__/brief-v2.json is the sample both sides test; the
+ * server's test reads this file for the limits and the kinds.
  */
 export const BRIEF_V2_LIMITS = {
-  answer: 400,
+  answer: 600,
   facts: 4,
   claim: 300,
-  ref: 10,
   tldr: 500,
   angle: 500,
   proof: 6,
@@ -124,8 +145,31 @@ export const BRIEF_V2_LIMITS = {
 } as const;
 const L = BRIEF_V2_LIMITS;
 
+/** A text of version 2: cut to its limit, null or absent for none. */
+const v2text = (max: number) =>
+  z.preprocess(
+    (value) => (typeof value === 'string' ? value.trim().slice(0, max) : value),
+    z.string().nullish(),
+  );
+/**
+ * A list of version 2: the items this editor reads, up to its limit; one it
+ * can't (a kind from a newer server, an address that isn't http) is left
+ * out, not the whole brief.
+ */
+const v2list = <T extends z.ZodType>(item: T, max: number) =>
+  z.preprocess(
+    (value) =>
+      Array.isArray(value) ? value.filter((v) => item.safeParse(v).success).slice(0, max) : value,
+    z.array(item).max(max).optional(),
+  );
+/** An http(s) address only: a link the Brief tab shows is never "javascript:…". */
+const address = z
+  .string()
+  .trim()
+  .max(L.url)
+  .pipe(z.url({ protocol: /^https?$/ }));
 const linkSchema = z.object({
-  url: text(L.url).min(1),
+  url: address,
   anchor: text(L.anchor),
   section: text(L.linkSection).nullable(),
 });
@@ -140,18 +184,22 @@ export const draftBriefSchema = z.object({
         keyPoints: z.array(text(500).min(1)).max(8),
         fanout: text(300).nullable(),
         platform: text(60).nullable(),
-        answer: text(L.answer).optional(),
-        format: z.enum(BRIEF_FORMATS).nullable().optional(),
-        facts: z
-          .array(
-            z.object({
-              claim: text(L.claim).min(1),
-              source: z.enum(FACT_SOURCES),
-              ref: text(L.ref).nullable(),
-            }),
-          )
-          .max(L.facts)
-          .optional(),
+        answer: v2text(L.answer),
+        format: z.enum(BRIEF_FORMATS).nullish().catch(null),
+        facts: v2list(
+          z.object({
+            claim: text(L.claim).min(1),
+            sourceType: z.enum(FACT_SOURCES),
+            source: z
+              .object({
+                kind: z.enum(SUGGESTION_SOURCE_KINDS),
+                ref: text(L.url).min(1),
+                label: text(L.claim).min(1),
+              })
+              .nullable(),
+          }),
+          L.facts,
+        ),
       }),
     )
     .max(MAX_BRIEF_SECTIONS),
@@ -173,43 +221,35 @@ export const draftBriefSchema = z.object({
     })
     .nullable()
     .optional(),
-  version: z.literal(2).optional(),
-  tldr: text(L.tldr).optional(),
-  angle: text(L.angle).optional(),
-  proof: z
-    .array(
-      z.object({
-        kind: z.enum(PROOF_KINDS),
-        what: text(L.proofWhat).min(1),
-        have: z.boolean(),
-      }),
-    )
-    .max(L.proof)
-    .optional(),
-  leftOut: z.array(text(L.leftOutQuery).min(1)).max(L.leftOut).optional(),
+  // A later version reads as the rules it shares with this one.
+  version: z.literal(2).optional().catch(undefined),
+  tldr: v2text(L.tldr),
+  angle: v2text(L.angle),
+  proof: v2list(z.object({ kind: z.enum(PROOF_KINDS), what: text(L.proofWhat).min(1) }), L.proof),
+  leftOut: v2list(text(L.leftOutQuery).min(1), L.leftOut),
   freshness: z
     .object({
-      datedPoint: text(L.datedPoint).nullable(),
-      checkedLine: z.boolean(),
+      datedPoint: v2text(L.datedPoint).transform((v) => v ?? null),
+      updatedLine: z.boolean(),
       yearInTitle: z.boolean(),
     })
-    .nullable()
-    .optional(),
+    .nullish()
+    .catch(null),
   entities: z
     .object({
-      brand: text(L.entity),
-      products: z.array(text(L.entity).min(1)).max(L.entities),
-      competitors: z.array(text(L.entity).min(1)).max(L.entities),
+      brand: v2text(L.entity).transform((v) => v ?? ''),
+      products: v2list(text(L.entity).min(1), L.entities).transform((v) => v ?? []),
+      competitors: v2list(text(L.entity).min(1), L.entities).transform((v) => v ?? []),
     })
-    .nullable()
-    .optional(),
+    .nullish()
+    .catch(null),
   links: z
     .object({
-      internal: z.array(linkSchema).max(L.internalLinks),
-      outbound: z.array(linkSchema).max(L.outboundLinks),
+      internal: v2list(linkSchema, L.internalLinks).transform((v) => v ?? []),
+      outbound: v2list(linkSchema, L.outboundLinks).transform((v) => v ?? []),
     })
-    .nullable()
-    .optional(),
+    .nullish()
+    .catch(null),
 });
 
 /** The brief of the opportunity a draft started from, until the draft has its own. */

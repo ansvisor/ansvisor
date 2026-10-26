@@ -4311,7 +4311,8 @@
           "save": "Save brief",
           "cancel": "Cancel",
           "saved": "Brief saved",
-          "failed": "Couldn't save the brief. Try again."
+          "failed": "Couldn't save the brief. Try again.",
+          "tooLong": "The brief is too long to save. Shorten its sections or key points."
         }
       },
       "export": {

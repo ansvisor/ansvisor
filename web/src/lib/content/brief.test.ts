@@ -127,23 +127,46 @@ describe('the brief', () => {
     expect(before.outline[0].facts).toBeUndefined();
   });
 
-  it('keeps version 2 to its limits', () => {
-    const fail = (change: Record<string, unknown>) =>
-      draftBriefSchema.safeParse({ ...v2, ...change }).success;
+  it('reads what a newer server may write without hiding the brief', () => {
+    const read = (change: Record<string, unknown>) =>
+      draftBriefSchema.safeParse({ ...v2, ...change });
     const section = v2.outline[0];
-    expect(fail({ version: 3 })).toBe(false);
-    expect(fail({ tldr: 'x'.repeat(BRIEF_V2_LIMITS.tldr + 1) })).toBe(false);
-    expect(fail({ outline: [{ ...section, format: 'carousel' }] })).toBe(false);
-    expect(
-      fail({
-        outline: [{ ...section, facts: Array(BRIEF_V2_LIMITS.facts + 1).fill(section.facts[0]) }],
-      }),
-    ).toBe(false);
-    expect(fail({ proof: [{ kind: 'rumour', what: 'x', have: false }] })).toBe(false);
-    expect(
-      fail({ links: { internal: [{ url: '', anchor: 'x', section: null }], outbound: [] } }),
-    ).toBe(false);
-    expect(fail({ freshness: null, entities: null, links: null })).toBe(true);
+    // A later version, an unknown format: the brief shows, the value reads as none.
+    expect(read({ version: 3 })).toMatchObject({ success: true, data: { version: undefined } });
+    const unknownFormat = read({ outline: [{ ...section, format: 'carousel' }] });
+    expect(unknownFormat.success && unknownFormat.data.outline[0].format).toBeNull();
+    // An item of a kind it doesn't know goes; the rest stay, up to the limit.
+    const fact = section.facts[0];
+    const facts = read({
+      outline: [
+        {
+          ...section,
+          facts: [
+            { ...fact, sourceType: 'rumour' },
+            ...Array(BRIEF_V2_LIMITS.facts + 1).fill(fact),
+          ],
+        },
+      ],
+    });
+    expect(facts.success && facts.data.outline[0].facts).toHaveLength(BRIEF_V2_LIMITS.facts);
+    const proof = read({ proof: [{ kind: 'screenshot', what: 'x' }, v2.proof[0]] });
+    expect(proof.success && proof.data.proof).toEqual([v2.proof[0]]);
+    // A long text is cut; none reads as none.
+    const long = read({ tldr: 'x'.repeat(BRIEF_V2_LIMITS.tldr + 50), angle: null });
+    expect(long.success && long.data.tldr).toHaveLength(BRIEF_V2_LIMITS.tldr);
+    expect(long.success && long.data.angle).toBeNull();
+    expect(read({ freshness: null, entities: null, links: null }).success).toBe(true);
+  });
+
+  it('keeps a link to an http(s) address only', () => {
+    const links = (url: string) =>
+      draftBriefSchema.parse({
+        ...v2,
+        links: { internal: [{ url, anchor: 'x', section: null }], outbound: [] },
+      }).links?.internal;
+    expect(links('https://ledgerly.example/pricing')).toHaveLength(1);
+    expect(links('javascript:alert(1)')).toEqual([]);
+    expect(links('ftp://ledgerly.example/x')).toEqual([]);
   });
 
   it('reads an opportunity’s brief until the draft has its own', () => {

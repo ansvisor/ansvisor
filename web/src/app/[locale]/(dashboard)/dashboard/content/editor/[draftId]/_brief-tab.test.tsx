@@ -297,14 +297,14 @@ describe('the Brief tab', () => {
       ...brief,
       version: 2,
       tldr: 'The page’s essentials.',
-      proof: [{ kind: 'data', what: 'Our own shot times', have: false }],
+      proof: [{ kind: 'data', what: 'Our own shot times' }],
       outline: brief.outline.map((section, i) =>
         i === 0
           ? {
               ...section,
               answer: 'Under $500, a single boiler with a PID.',
               format: 'table' as const,
-              facts: [{ claim: 'Average price', source: 'statistic' as const, ref: null }],
+              facts: [{ claim: 'Average price', sourceType: 'statistic' as const, source: null }],
             }
           : section,
       ),
@@ -321,10 +321,21 @@ describe('the Brief tab', () => {
     expect(saved.outline[0]).toMatchObject({
       answer: 'Under $500, a single boiler with a PID.',
       format: 'table',
-      facts: [{ claim: 'Average price', source: 'statistic', ref: null }],
+      facts: [{ claim: 'Average price', sourceType: 'statistic', source: null }],
     });
     // The editor's own field stays its own.
     expect(saved.outline[0]).not.toHaveProperty('points');
+  });
+
+  it('says a brief too long to save is too long', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    saveDraftBrief.mockRejectedValue(new Error('too_long'));
+    await render({ status: 'ready', brief });
+    await act(async () => button('Edit brief').click());
+    await act(async () => button('Save brief').click());
+    expect(toast.error).toHaveBeenCalledWith(
+      'The brief is too long to save. Shorten its sections or key points.',
+    );
   });
 
   it('keeps the edit open when saving fails', async () => {

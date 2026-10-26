@@ -386,7 +386,7 @@ function BriefEditor({
       onSaved(saved);
     } catch (err) {
       console.error('Failed to save the brief:', err);
-      toast.error(t('failed'));
+      toast.error(t(err instanceof Error && err.message === 'too_long' ? 'tooLong' : 'failed'));
     } finally {
       setSaving(false);
     }
