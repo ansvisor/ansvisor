@@ -252,4 +252,17 @@ describe('rulesForNext', () => {
       ]),
     ).toEqual(['aiTraces', 'summary']);
   });
+
+  it('leaves out rules held by what the page keeps: no Fix run closes them, so Next moves on', () => {
+    const rule = (key: string) => ({ key, on: true, current: '150' }) as never;
+    const statuses = [
+      {
+        rule: rule('sentence'),
+        status: { state: 'bad' as const, code: 'over' as const, count: 3 },
+      },
+      { rule: rule('summary'), status: { state: 'ok' as const } },
+    ];
+    expect(rulesForNext(statuses)).toEqual(['sentence']);
+    expect(rulesForNext(statuses, new Set(['sentence']))).toEqual([]);
+  });
 });

@@ -8,6 +8,8 @@ import {
   citedPassagesKey,
   keptCharacters,
   lockedPassageCount,
+  htmlWithoutLocked,
+  lockedKeysLeft,
   lockedPassagesLeft,
   rewriteFloor,
   type HeldEdit,
@@ -153,6 +155,28 @@ describe('rewriteFloor', () => {
     } finally {
       small.destroy();
     }
+  });
+});
+
+describe('htmlWithoutLocked', () => {
+  it('reads the page without the passages still locked, by their words', () => {
+    const lock = (unlocked: string[] = []) =>
+      editor.view.dispatch(
+        editor.state.tr.setMeta(citedPassagesKey, {
+          labels: new Map([[passageKey(QUOTED), 'Cited by ChatGPT 3×']]),
+          unlocked: new Set(unlocked),
+        }),
+      );
+    lock();
+    expect(lockedKeysLeft(editor.state)).toEqual([passageKey(QUOTED)]);
+    const html = `<h1>T</h1><p>${QUOTED}</p><ul><li><p>${QUOTED}</p></li></ul><p>Free words.</p>`;
+    expect(htmlWithoutLocked(html, new Set(lockedKeysLeft(editor.state)))).toBe(
+      '<h1>T</h1><ul></ul><p>Free words.</p>',
+    );
+    // Unlocked by the person: the agent may change it, so it stays.
+    lock([passageKey(QUOTED)]);
+    expect(lockedKeysLeft(editor.state)).toEqual([]);
+    expect(htmlWithoutLocked(html, new Set())).toBe(html);
   });
 });
 

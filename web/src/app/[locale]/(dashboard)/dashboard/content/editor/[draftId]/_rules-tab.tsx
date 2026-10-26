@@ -31,7 +31,9 @@ import { isPageType, type PageType } from '@/lib/content/drafts';
 import { SITE_PAGE_TYPES, type SiteType } from '@/lib/content/page-types';
 import {
   MAX_TEXT_RULE_LENGTH,
+  NO_HELD,
   NO_REACH,
+  heldMessage,
   RULE_GROUPS,
   notForAgentMessage,
   openRulesForAgent,
@@ -82,6 +84,8 @@ export interface AgentFix {
   running: boolean;
   /** Why it can't run now (suggestions still open), or null. */
   blocked: string | null;
+  /** Open rules no run can close here: held by what the page keeps (openRulesForAgent). */
+  held?: ReadonlySet<string>;
 }
 
 /** Rewrite the whole page to these rules, as the editor runs it: one suggestion. */
@@ -254,7 +258,8 @@ export function RulesTab({
   ];
 
   // Rewrite the page whole when small edits can't get there.
-  const advice = pageRewrite ? rewriteAdvice(state.rules, pageRewrite.reach) : null;
+  const held = agentFix?.held ?? NO_HELD;
+  const advice = pageRewrite ? rewriteAdvice(state.rules, pageRewrite.reach, held) : null;
   // A Length the rewrite can't reach: said with a Length it can, never recommended.
   const outOfReach = pageRewrite
     ? lengthOutOfReach(state.rules, pageRewrite.reach ?? NO_REACH)
@@ -269,7 +274,7 @@ export function RulesTab({
     (pageRewrite?.reach ?? NO_REACH).floor - cited.chars <= lengthBand(outOfReach.target).max;
   // The rules the page doesn't meet now, in the tab's order, and those the agent fixes.
   const open = state.rules.filter(({ rule, status }) => rule.on && status.state === 'bad');
-  const { forAgent, notForAgent } = openRulesForAgent(state.rules);
+  const { forAgent, notForAgent, held: heldOpen } = openRulesForAgent(state.rules, undefined, held);
   const fixable = forAgent.length;
   // Run Agent's choice: the safe default, or the whole page (▾) while it is offered.
   const [picked, setPicked] = useState<RunMode>('fix');
@@ -278,7 +283,11 @@ export function RulesTab({
   // Why Run Agent can't run its choice now, said under the card.
   const blocked =
     runner?.blocked ??
-    (mode === 'fix' && fixable === 0 ? tSuggestions(notForAgentMessage(notForAgent)) : null);
+    (mode === 'fix' && fixable === 0
+      ? notForAgent.length === 0 && heldOpen.length > 0
+        ? t(heldMessage(heldOpen))
+        : tSuggestions(notForAgentMessage(notForAgent))
+      : null);
 
   // A draft on My rules for a type the workspace has none for (its type
   // changed, or My rules couldn't be read) shows Ansvisor's set for it.
@@ -449,7 +458,9 @@ export function RulesTab({
                   note={
                     rule.key === 'length' && state.lengthConflict
                       ? t('lengthConflict', state.lengthConflict)
-                      : undefined
+                      : rule.key === 'sentence' && held.has('sentence') && status.state === 'bad'
+                        ? t('heldSentence')
+                        : undefined
                   }
                 />
               ))}

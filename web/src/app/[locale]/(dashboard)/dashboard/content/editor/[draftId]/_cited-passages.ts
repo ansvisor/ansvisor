@@ -247,6 +247,27 @@ export function rewriteFloor(
   return { kept, floor: kept + floor };
 }
 
+/** The keys of the quoted passages still locked (not unlocked by the person), sorted. */
+export function lockedKeysLeft(state: EditorState): string[] {
+  const locks = citedLocks(state);
+  return [...locks.labels.keys()].filter((key) => !locks.unlocked.has(key)).sort();
+}
+
+/**
+ * The page's HTML without the passages it keeps locked (their blocks, by
+ * the key their words make): what the agent may change, for a rule read as
+ * the rules read the page (readPage), so a rule met without them is held by
+ * them alone.
+ */
+export function htmlWithoutLocked(html: string, keys: ReadonlySet<string>): string {
+  if (!keys.size) return html;
+  const doc = new DOMParser().parseFromString(html, 'text/html');
+  for (const el of doc.body.querySelectorAll('p, li, h1, h2, h3, h4, h5, h6')) {
+    if (keys.has(passageKey(el.textContent ?? ''))) el.remove();
+  }
+  return doc.body.innerHTML;
+}
+
 /** The quoted passages a rewrite keeps now (locked, not unlocked): how many, and their characters. */
 export function lockedPassagesLeft(state: EditorState): { count: number; chars: number } {
   const locks = citedLocks(state);

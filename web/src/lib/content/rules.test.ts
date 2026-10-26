@@ -30,6 +30,9 @@ import {
   RULE_LENGTH_MIN,
   RULE_LENGTH_MAX,
   lengthBand,
+  NO_REACH,
+  NO_RULE_CONTEXT,
+  heldMessage,
   keptOutOfReach,
   lengthOutOfReach,
   rewriteAdvice,
@@ -240,6 +243,25 @@ describe('length and structure', () => {
     expect(one.forAgent.map(({ rule }) => rule.key)).toEqual(['aiTraces']);
     expect(one.notForAgent).toEqual([]);
     expect(openRulesForAgent(statuses, ['oneH1']).forAgent).toEqual([]);
+    // Held on this page by what it keeps word for word: the person's, apart.
+    const held = openRulesForAgent(statuses, undefined, new Set(['aiTraces']));
+    expect(held.forAgent.some(({ rule }) => rule.key === 'aiTraces')).toBe(false);
+    expect(held.held.map(({ rule }) => rule.key)).toEqual(['aiTraces']);
+    expect(held.notForAgent.map(({ rule }) => rule.key)).toEqual(['oneH1']);
+    // What to say when they're all that's left: the quoted passages', else the Length's.
+    expect(heldMessage(held.held)).toBe('heldLength');
+    expect(heldMessage([{ rule: { key: 'sentence' } }])).toBe('heldAll');
+  });
+
+  it('reads a rule met without the locked passages as held by them', () => {
+    const sentence = activeRules(ruleSet('blog_post'), {
+      overrides: { sentence: { value: '20' } },
+    }).find((r) => r.key === 'sentence')!;
+    const long = 'A sentence that runs well past twenty characters.';
+    const all = page(`<h1>T</h1><p>${long}</p><p>Short.</p>`, 60);
+    expect(checkRule(sentence, all, NO_RULE_CONTEXT).state).toBe('bad');
+    const rest = page('<h1>T</h1><p>Short.</p>', 10);
+    expect(checkRule(sentence, rest, NO_RULE_CONTEXT).state).toBe('ok');
   });
 
   it('wants a short summary under the H1, and a short answer under each H2', () => {
@@ -901,6 +923,14 @@ describe('rewriteAdvice', () => {
   });
 
   it('recommends it for 4 rules or more the agent can fix', () => {
+    // A rule held by what the page keeps isn't one a rewrite fixes.
+    expect(
+      rewriteAdvice(
+        statuses(null, ['faq', 'summary', 'h2Answer', 'sentence']),
+        NO_REACH,
+        new Set(['sentence']),
+      ),
+    ).toBeNull();
     expect(rewriteAdvice(statuses(null, ['faq', 'summary', 'h2Answer']))).toBeNull();
     expect(rewriteAdvice(statuses(null, ['faq', 'summary', 'h2Answer', 'keywords']))).toEqual({
       reason: 'open',
