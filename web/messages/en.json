@@ -3239,7 +3239,27 @@
         "keyEvents": "{count, plural, one {{value} key event} other {{value} key events}}",
         "orders": "{count, plural, one {{value} order} other {{value} orders}}",
         "revenue": "{value} revenue",
-        "needsAnalytics": "<link>Connect Google Analytics</link> to see what they did next."
+        "needsAnalytics": "<link>Connect Google Analytics</link> to see what they did next.",
+        "needsAnalyticsMore": "<link>Connect Google Analytics</link> for key events and revenue.",
+        "goals": {
+          "signup": "{count, plural, one {{value} signup} other {{value} signups}}",
+          "demo": "{count, plural, one {{value} demo form} other {{value} demo forms}}",
+          "order": "{count, plural, one {{value} order from a journey} other {{value} orders from journeys}}",
+          "booking": "{count, plural, one {{value} booking} other {{value} bookings}}",
+          "newsletter": "{count, plural, one {{value} newsletter signup} other {{value} newsletter signups}}",
+          "custom": "{count, plural, one {{value} other conversion} other {{value} other conversions}}"
+        },
+        "topJourney": "Top journey:",
+        "journeyCount": "{count, plural, one {{value} conversion} other {{value} conversions}}",
+        "otherSource": "Other",
+        "journeyGoals": {
+          "signup": "Signup",
+          "demo": "Demo form",
+          "order": "Purchase",
+          "booking": "Booking",
+          "newsletter": "Newsletter",
+          "custom": "Conversion"
+        }
       },
       "mix": {
         "title": "What AI cites in your topics",
