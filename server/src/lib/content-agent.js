@@ -8,7 +8,13 @@ import { contentBriefModelId, rebuildSources } from './content-brief.js';
 import { inputSources, readDraftInputs } from './content-inputs.js';
 import { linkAllowList, linkKey, linkTargetsPrompt, readLinkTargets } from './content-links.js';
 import { siteTypeLine, pageTypeFormat } from './content-page-types.js';
-import { authorWords, guardPeopleInHtml, isKnown, knownPeople } from './content-people.js';
+import {
+  NOT_NAMES,
+  authorWords,
+  guardPeopleInHtml,
+  isKnown,
+  knownPeople,
+} from './content-people.js';
 import {
   RunStoppedError,
   advanceRun,
@@ -82,7 +88,7 @@ export const FANOUT_RULE = `- Fan-outs are the searches AI engines run for the p
 export const LINK_RULE = `- Links: link only to a URL listed under the pages or sources you may link to, copied exactly, as <a href="URL">the words it explains</a>, in a replace's "after" or in an insert. Cite a source by linking the words it supports. Never invent a URL, never link a heading, and when no listed page fits, add no link.`;
 
 /** What the agent may say of a source, and the names a list keeps (editor test 2026-10-25). */
-export const ATTRIBUTION_RULE = `- Never give a claim to a source the page doesn't already ("According to X…", "X says…", "X found that…"): you don't see what a cited page or a link says. A link goes on the words it explains, never as a source for a claim. Keep every name a list has (products, brands, people): never drop one.`;
+export const ATTRIBUTION_RULE = `- Never give a claim to a source that neither the page nor Your input gives ("According to X…", "X says…", "X found that…"): you don't see what a cited page or a link says. A link goes on the words it explains, never as a source for a claim. Keep every name a list has (products, brands, people): never drop one.`;
 
 /** The shortest answer a heading's replace may carry for it to go under the heading. */
 const MIN_ANSWER_CHARS = 40;
@@ -306,19 +312,29 @@ export function growsPastLimit(passage, before, words) {
  * says (SOURCES_RULE), so one it adds puts a claim in a source's mouth
  * (editor test 2026-10-25: an AI Overview's claim given to Zapier).
  */
+// A capitalised word of a name: a dot only inside it ("Node.js", "U.S"),
+// never the one that ends its sentence ("…according to Gartner. The plan").
+const NAME_WORD = String.raw`\p{Lu}(?:[\p{L}\p{N}&'’-]|\.(?=[\p{L}\p{N}]))*`;
 // A name as an attribution gives it: capitalised words, after an article
 // or a year ("the Zapier report", "a 2025 Gartner survey").
-const SOURCE_NAME = String.raw`(?<name>(?!(?:The|This|That|These|Those|Our|Their|Its|Your|My|His|Her|We|They|It|A|An)\b)\p{Lu}[\p{L}\p{N}.&'’-]*(?:\s+\p{Lu}[\p{L}\p{N}.&'’-]*)*)`;
+const SOURCE_NAME = String.raw`(?<name>(?!(?:The|This|That|These|Those|Our|Their|Its|Your|My|His|Her|We|They|It|A|An)\b)${NAME_WORD}(?:\s+${NAME_WORD})*)`;
 const LEAD = String.raw`(?:(?:the|a|an)\s+)?(?:\d{4}\s+)?`;
 const ATTRIBUTIONS = [
   new RegExp(String.raw`\b[Aa]ccording to\s+${LEAD}${SOURCE_NAME}`, 'gu'),
   new RegExp(
-    String.raw`\b(?:[Aa]s\s+(?:reported|noted|stated|found)\s+by|[Pp]er)\s+${LEAD}${SOURCE_NAME}`,
+    String.raw`\b[Aa]s\s+(?:reported|noted|stated|found)\s+by\s+${LEAD}${SOURCE_NAME}`,
     'gu',
   ),
-  new RegExp(String.raw`${SOURCE_NAME}\s+(?:says|said|claims|claimed|states|stated)\b`, 'gu'),
+  // "Per Gartner, …", "per Gartner's survey", "…, per Gartner.": never "per
+  // SKU, or per API call" or "per E-Mail".
+  new RegExp(String.raw`\bPer\s+${LEAD}${SOURCE_NAME}(?=\s*,)`, 'gu'),
+  new RegExp(String.raw`\b[Pp]er\s+${LEAD}${SOURCE_NAME}(?=['’]s\b)`, 'gu'),
+  new RegExp(String.raw`,\s*per\s+${LEAD}${SOURCE_NAME}(?=\s*[.;!?]|\s*$)`, 'gu'),
+  new RegExp(String.raw`${SOURCE_NAME}\s+(?:says|said)\b`, 'gu'),
+  // "Claims" and "states" are nouns too ("Warranty claims are…", "all 50
+  // US states"): those, as "reports" and the rest, only before "that".
   new RegExp(
-    String.raw`${SOURCE_NAME}\s+(?:reports|reported|notes|noted|finds|found|estimates|estimated)\s+that\b`,
+    String.raw`${SOURCE_NAME}\s+(?:claims|claimed|states|stated|reports|reported|notes|noted|finds|found|estimates|estimated)\s+that\b`,
     'gu',
   ),
   new RegExp(
@@ -326,7 +342,11 @@ const ATTRIBUTIONS = [
     'gu',
   ),
   new RegExp(String.raw`\b[Ll]aut\s+${LEAD}${SOURCE_NAME}`, 'gu'),
-  new RegExp(String.raw`(?<name>\p{Lu}[\p{L}\p{N}.-]*)['’]\p{L}{1,3}\s+göre\b`, 'gu'),
+  // "Gartner'a göre", never a comparison ("ChatGPT'ye göre daha hızlı").
+  new RegExp(
+    String.raw`(?<name>\p{Lu}(?:[\p{L}\p{N}-]|\.(?=[\p{L}\p{N}]))*)['’]\p{L}{1,3}\s+göre\b(?!\s+(?:daha|en)\b)`,
+    'gu',
+  ),
 ];
 
 /**
@@ -357,12 +377,15 @@ export function attributedNames(text) {
 }
 
 /**
- * Whether a name is one the agent was given (`known`, knownPeople), or its
- * last words are ("As Zapier says": "Zapier").
+ * Whether a name is one the agent was given (`known`, knownPeople): read
+ * without a possessive ("Gartner's latest survey") or the words a sentence
+ * starts with ("As Zapier says": "Zapier"), but whole: "Forrester Research"
+ * isn't known for the word "research" in a bio.
  */
 function knownName(name, known) {
-  const words = name.split(/\s+/);
-  return words.some((_, i) => isKnown(words.slice(i).join(' '), known));
+  const words = name.replace(/['’]\p{L}{0,3}$/u, '').split(/\s+/);
+  const start = words.findIndex((word) => !NOT_NAMES.has(word.toLowerCase()));
+  return start !== -1 && isKnown(words.slice(start).join(' '), known);
 }
 
 /** How many claims a text gives to a source the agent wasn't given. */
@@ -397,8 +420,10 @@ export function placeholderAttributions(text, known = null) {
 }
 
 // A list of names: two or more capitalised items with commas and an "and"
-// ("Ansvisor, Profound and LLM Pulse"; und, ve, et, y…), or three with commas.
-const ITEM = String.raw`\p{Lu}[\p{L}\p{N}.&+'’-]*(?:\s+\p{Lu}[\p{L}\p{N}.&+'’-]*)*`;
+// ("Ansvisor, Profound and LLM Pulse"; und, ve, et, y…), or three with
+// commas; a dot only inside a word, as in a source's name.
+const ITEM_WORD = String.raw`\p{Lu}(?:[\p{L}\p{N}&+'’-]|\.(?=[\p{L}\p{N}]))*`;
+const ITEM = String.raw`${ITEM_WORD}(?:\s+${ITEM_WORD})*`;
 const AND = String.raw`(?:and|or|und|oder|ve|veya|ile|et|ou|y|o|e|en|of)`;
 const NAME_LIST = new RegExp(
   String.raw`(?:${ITEM}\s*,\s*)+${ITEM},?\s+${AND}\s+${ITEM}|(?:${ITEM}\s*,\s*){2,}${ITEM}`,
@@ -411,14 +436,24 @@ const ITEM_RE = new RegExp(ITEM, 'gu');
  * brand or a person left out of a claim changes the claim (editor test
  * 2026-10-25: Claude dropped from the engines a tool tracks). Only names in
  * a list: a capitalised word alone may be any noun (German), an acronym or a
- * month. A change made to take out a banned word or an AI trace may.
+ * month. Each item the replace touches is read in the passage as changed,
+ * the blocks it adds too, by its last word, whole and in any case, without
+ * a possessive or a case ending ("Ask ChatGPT" → "ask ChatGPT", "Claude's"
+ * → "Claude", "Claude'u" → "Claude'da"). A change made to take out a banned
+ * word or an AI trace may.
  */
-export function dropsName(before, words, rules = []) {
+export function dropsName(passageText, before, words, rules = [], blocksText = '') {
   if (rules.includes('bannedWords') || rules.includes('aiTraces')) return false;
-  const after = String(words);
-  for (const list of String(before).match(NAME_LIST) ?? []) {
+  const text = String(passageText);
+  const changed = knownPeople(`${text.replace(before, () => words)} ${blocksText}`);
+  for (const list of text.match(NAME_LIST) ?? []) {
     for (const item of list.match(ITEM_RE) ?? []) {
-      if (!after.includes(item)) return true;
+      if (!String(before).includes(item)) continue;
+      const last = item
+        .split(/\s+/)
+        .pop()
+        .replace(/['’]\p{L}*$/u, '');
+      if (!isKnown(last, changed)) return true;
     }
   }
   return false;
@@ -581,7 +616,8 @@ export function keepSuggestions(raw, passages, lockedKeys, ruleKeys, links = nul
           growsPastLimit(passage, before, words) ||
           asksMoreThanOne(passage, before, words) ||
           addsAttribution(before, words, attributable) ||
-          (!/^h[1-6]$/.test(passage.tag) && dropsName(before, words, rules)))
+          (!/^h[1-6]$/.test(passage.tag) &&
+            dropsName(passage.text, before, words, rules, textOf(blocks))))
       )
         continue;
       changes = [
