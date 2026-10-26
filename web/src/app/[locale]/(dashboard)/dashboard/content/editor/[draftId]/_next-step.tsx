@@ -14,6 +14,7 @@ import {
   type NextStepId,
   type NextStepState,
   type PathState,
+  type ThirdPasses,
   type ThirdTry,
 } from '@/lib/content/next-step';
 import { cn } from '@/lib/utils';
@@ -52,23 +53,45 @@ export function writeSkips(draftId: string, skips: Partial<Record<NextStepId, st
   }
 }
 
-/** The agent's run on the third step on this draft, in this browser (thirdStepTried). */
+/**
+ * The agent on the third step on this draft, in this browser: the run under
+ * way or waiting for a decision (thirdStepTried), and the steps it took with
+ * what the page read then (thirdStepPasses). An attempt kept before these
+ * (#1550's, with no step) is read as none.
+ */
+export interface ThirdStepStore {
+  attempt: ThirdTry | null;
+  passes: ThirdPasses;
+}
+const NO_THIRD_STEP: ThirdStepStore = { attempt: null, passes: {} };
 const thirdTryKey = (draftId: string) => `aeo:next-step-third-try:${draftId}`;
 
-export function readThirdTry(draftId: string): ThirdTry | null {
+export function readThirdStep(draftId: string): ThirdStepStore {
   try {
-    const read = JSON.parse(localStorage.getItem(thirdTryKey(draftId)) ?? 'null') as unknown;
-    if (read && typeof read === 'object' && 'batch' in read) return read as ThirdTry;
+    const read = JSON.parse(localStorage.getItem(thirdTryKey(draftId)) ?? 'null') as {
+      attempt?: unknown;
+      passes?: unknown;
+    } | null;
+    if (read && typeof read === 'object' && 'passes' in read) {
+      const attempt = read.attempt as ThirdTry | null;
+      return {
+        attempt: attempt && typeof attempt === 'object' && 'step' in attempt ? attempt : null,
+        passes: read.passes && typeof read.passes === 'object' ? (read.passes as ThirdPasses) : {},
+      };
+    }
   } catch {
     // Storage unavailable (private mode) or unreadable: none taken.
   }
-  return null;
+  return NO_THIRD_STEP;
 }
 
-export function writeThirdTry(draftId: string, attempt: ThirdTry | null) {
+export function writeThirdStep(draftId: string, store: ThirdStepStore) {
   try {
-    if (attempt) localStorage.setItem(thirdTryKey(draftId), JSON.stringify(attempt));
-    else localStorage.removeItem(thirdTryKey(draftId));
+    if (store.attempt || Object.keys(store.passes).length) {
+      localStorage.setItem(thirdTryKey(draftId), JSON.stringify(store));
+    } else {
+      localStorage.removeItem(thirdTryKey(draftId));
+    }
   } catch {
     // Kept for this visit only.
   }
@@ -189,6 +212,7 @@ const PATH_DOT: Record<PathState, string> = {
   done: 'bg-foreground text-background',
   now: 'bg-foreground/10 text-foreground ring-1 ring-foreground',
   skipped: 'bg-muted text-muted-foreground',
+  passed: 'bg-muted text-muted-foreground',
   ahead: 'bg-muted text-muted-foreground',
 };
 
@@ -348,7 +372,8 @@ export function NextStepButton({
                 'flex items-center gap-2 text-[13px]',
                 p.state === 'done' && 'text-muted-foreground line-through',
                 p.state === 'now' && 'font-medium',
-                (p.state === 'ahead' || p.state === 'skipped') && 'text-muted-foreground',
+                (p.state === 'ahead' || p.state === 'skipped' || p.state === 'passed') &&
+                  'text-muted-foreground',
               )}
             >
               <span
@@ -362,9 +387,9 @@ export function NextStepButton({
               </span>
               <span className="min-w-0 [overflow-wrap:anywhere]">
                 {stepName(t, p.id, state)}
-                {p.state === 'skipped' && (
+                {(p.state === 'skipped' || p.state === 'passed') && (
                   <span aria-hidden className="ml-1.5 text-xs no-underline">
-                    {t('skipped')}
+                    {t(p.state)}
                   </span>
                 )}
                 <span className="sr-only"> · {t(`states.${p.state}`)}</span>

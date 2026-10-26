@@ -6478,6 +6478,20 @@ describe('the side panel', () => {
       });
       // Where Next goes from Fix open rules on this page: step 4.
       const MOVED_ON = 'Next · Add proof and author';
+      // A pass waits for the rules' read of the page (PAGE_READ_DELAY_MS and a beat).
+      const settle = () => act(() => new Promise((resolve) => setTimeout(resolve, 700)));
+      const stored = () => JSON.parse(localStorage.getItem('aeo:next-step-third-try:d1') ?? 'null');
+      const LONG = {
+        method: 'create' as const,
+        pageType: 'blog_post',
+        bodyHtml: `<h1>Pipeline forecasting</h1>${'<p>Teams trust the forecast because it reads the pipeline every day.</p>'.repeat(30)}`,
+        rules: {
+          set: null,
+          source: 'default' as const,
+          overrides: { length: { value: '400' } },
+          textRules: [],
+        },
+      };
       const runFix = async () => {
         await renderPage();
         expect(nextButton()!.getAttribute('aria-label')).toBe('Next · Fix open rules');
@@ -6510,19 +6524,251 @@ describe('the side panel', () => {
         await act(async () =>
           [...card.querySelectorAll('button')].find((b) => b.textContent === 'Reject all')!.click(),
         );
-        await act(async () => {});
+        await settle();
         // Rejected, the fan-out rule is still open, and Next moves on.
         expect(nextButton()!.getAttribute('aria-label')).toBe(MOVED_ON);
+        // The path says it was passed, not done.
+        await act(async () => nextButton()!.click());
+        expect(basket()!.textContent).toContain('Fix open rules· yours in the Rules tab');
+        // Passed with what the page read then: the rule left open.
         expect(JSON.parse(localStorage.getItem('aeo:next-step-third-try:d1')!)).toEqual({
-          batch: null,
-          passed: true,
+          attempt: null,
+          passes: { fixRules: { rules: expect.arrayContaining(['fanoutH2']), length: '' } },
         });
+      });
+
+      it('isn’t passed by a Fix of some of its rules only (#1550 review)', async () => {
+        getContentDraft.mockResolvedValue(
+          draft({
+            method: 'create',
+            pageType: 'blog_post',
+            bodyHtml: '<h1>Pipeline forecasting</h1><p>We delve into how teams forecast.</p>',
+            rules: {
+              set: null,
+              source: 'default',
+              overrides: { length: { on: false } },
+              textRules: [],
+            },
+          }),
+        );
+        getDraftSuggestions.mockResolvedValue([]);
+        // It finds nothing to change: a run of the whole step would pass it.
+        fixDraftRules.mockResolvedValue({ count: 0 });
+        await renderPage();
+        expect(nextButton()!.getAttribute('aria-label')).toBe('Next · Fix open rules');
+        // The Rules tab's Fix on Remove AI traces alone isn't the step.
+        await act(async () =>
+          container
+            .querySelector<HTMLButtonElement>('header button[aria-label^="Rules "]')!
+            .click(),
+        );
+        const fixTraces = [
+          ...container.querySelectorAll<HTMLButtonElement>('aside li button'),
+        ].find((b) => b.textContent === 'Fix');
+        expect(fixTraces).toBeDefined();
+        await act(async () => fixTraces!.click());
+        await act(async () => {});
+        expect(fixDraftRules.mock.calls[0][2].rules.map((r: { key: string }) => r.key)).toEqual([
+          'aiTraces',
+        ]);
+        expect(nextButton()!.getAttribute('aria-label')).toBe('Next · Fix open rules');
+      });
+
+      it('on the Length step, isn’t passed by a Fix, and is by a rewrite once decided', async () => {
+        getContentDraft.mockResolvedValue(draft(LONG));
+        getDraftSuggestions.mockResolvedValue([]);
+        fixDraftRules.mockResolvedValue({ count: 0 });
+        await renderPage();
+        expect(nextButton()!.getAttribute('aria-label')).toBe('Next · Shorten to your Length');
+        // The step's other button, Fix open rules: it takes Fix open rules, not the Length.
+        await act(async () => nextButton()!.click());
+        await act(async () => inBasket('Fix open rules')!.click());
+        await settle();
+        expect(nextButton()!.getAttribute('aria-label')).toBe('Next · Shorten to your Length');
+        expect(stored().passes).toEqual({ fixRules: expect.any(Object) });
+
+        // A rewrite begun on it, then the waiting page; its page decided.
+        localStorage.setItem(
+          'aeo:next-step-third-try:d1',
+          JSON.stringify({
+            attempt: { step: 'length', kind: 'rewrite', at: new Date().toISOString(), batch: null },
+            passes: {},
+          }),
+        );
+        getDraftSuggestions.mockResolvedValue([
+          {
+            id: 'p9',
+            batchId: 'b9',
+            actionId: null,
+            actionNo: null,
+            kind: 'page' as const,
+            blockText: 'Pipeline forecasting',
+            beforeText: '',
+            beforeHtml: LONG.bodyHtml,
+            afterText: LONG.bodyHtml,
+            reason: 'rewrote the page to the rules',
+            ruleKeys: ['length'],
+            status: 'rejected' as const,
+          },
+        ]);
+        await act(async () => root.unmount());
+        root = createRoot(container);
+        await renderPage();
+        await settle();
+        expect(nextButton()!.getAttribute('aria-label')).not.toBe('Next · Shorten to your Length');
+        expect(stored().passes).toEqual({ length: expect.any(Object) });
+      });
+
+      it.each([
+        ['stopped', { outcome: 'stopped' }],
+        ['failed', { outcome: 'failed' }],
+        // A Stop writes stopped_at before the outcome.
+        ['stopped, its outcome not yet written', { outcome: null }],
+      ])('drops an attempt whose run was %s while the page was closed', async (_, ended) => {
+        const attempt = {
+          step: 'fixRules',
+          kind: 'rewrite',
+          at: new Date(Date.now() - 60_000).toISOString(),
+          batch: null,
+        };
+        localStorage.setItem('aeo:next-step-third-try:d1', JSON.stringify({ attempt, passes: {} }));
+        readAgentRun.mockResolvedValue({
+          id: 'r1',
+          kind: 'rewrite',
+          steps: [],
+          step: 0,
+          startedAt: new Date().toISOString(),
+          finishedAt: new Date().toISOString(),
+          stoppedAt: ended.outcome === 'failed' ? null : new Date().toISOString(),
+          ...ended,
+        });
+        // A batch from something else, decided: it mustn't pass the step.
+        getDraftSuggestions.mockResolvedValue([
+          {
+            id: 'n7',
+            batchId: 'b7',
+            actionId: null,
+            actionNo: null,
+            kind: 'replace' as const,
+            blockText: 'Teams trust it.',
+            beforeText: 'trust',
+            afterText: 'rely on',
+            reason: 'a Quality check (hand-off)',
+            ruleKeys: [],
+            status: 'rejected' as const,
+          },
+        ]);
+        await renderPage();
+        await settle();
+        expect(readAgentRun).toHaveBeenCalledWith('d1', ['rewrite']);
+        expect(JSON.parse(localStorage.getItem('aeo:next-step-third-try:d1') ?? 'null')).toBeNull();
+        expect(nextButton()!.getAttribute('aria-label')).toBe('Next · Fix open rules');
+      });
+
+      it('drops a rewrite’s attempt when the page opens on that rewrite having failed', async () => {
+        localStorage.setItem(
+          'aeo:next-step-third-try:d1',
+          JSON.stringify({
+            attempt: { step: 'length', kind: 'rewrite', at: new Date().toISOString(), batch: null },
+            passes: {},
+          }),
+        );
+        getContentDraft.mockResolvedValue(
+          draft({ ...LONG, agentState: 'failed', agentRun: 'rewrite' }),
+        );
+        await renderPage();
+        await act(async () => {});
+        expect(stored()).toBeNull();
+      });
+
+      it('brings the step back once a rule opens that the agent never saw', async () => {
+        getDraftSuggestions.mockResolvedValue([]);
+        fixDraftRules.mockResolvedValue({ count: 0 });
+        await runFix();
+        await settle();
+        expect(nextButton()!.getAttribute('aria-label')).toBe(MOVED_ON);
+        // As if fanoutH2 had opened since the step was taken.
+        const key = 'aeo:next-step-third-try:d1';
+        const stored = JSON.parse(localStorage.getItem(key)!);
+        stored.passes.fixRules.rules = stored.passes.fixRules.rules.filter(
+          (rule: string) => rule !== 'fanoutH2',
+        );
+        localStorage.setItem(key, JSON.stringify(stored));
+        await act(async () => root.unmount());
+        root = createRoot(container);
+        await renderPage();
+        expect(nextButton()!.getAttribute('aria-label')).toBe('Next · Fix open rules');
+        // The pass that no longer holds is dropped, as a stale skip is.
+        await settle();
+        expect(JSON.parse(localStorage.getItem(key) ?? 'null')).toBeNull();
+      });
+
+      it('takes the step when the answer was lost and its run says it found nothing', async () => {
+        vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+        getDraftSuggestions.mockResolvedValue([]);
+        fixDraftRules.mockResolvedValue({ error: 'unconfirmed' });
+        // The run there was before it is none; once it was asked, its row says it found nothing.
+        const run = {
+          id: 'r9',
+          kind: 'fix',
+          steps: [
+            { key: 'read', count: null },
+            { key: 'rules', count: 1 },
+            { key: 'write', count: 0 },
+          ],
+          step: 3,
+          startedAt: new Date().toISOString(),
+          finishedAt: new Date().toISOString(),
+          stoppedAt: null,
+          outcome: 'done',
+        };
+        readAgentRun.mockImplementation(async () => (fixDraftRules.mock.calls.length ? run : null));
+        try {
+          await renderPage();
+          await act(async () => nextButton()!.click());
+          await act(async () => inBasket('Fix open rules')!.click());
+          await act(async () => void (await vi.advanceTimersByTimeAsync(6_000)));
+          await act(async () => void (await vi.advanceTimersByTimeAsync(1_000)));
+          expect(nextButton()!.getAttribute('aria-label')).toBe(MOVED_ON);
+        } finally {
+          vi.useRealTimers();
+        }
+      });
+
+      it('is the restored page’s again after a restore', async () => {
+        getDraftSuggestions.mockResolvedValue([]);
+        fixDraftRules.mockResolvedValue({ count: 0 });
+        await runFix();
+        await settle();
+        expect(nextButton()!.getAttribute('aria-label')).toBe(MOVED_ON);
+        getDraftVersions.mockResolvedValue([
+          { id: 'v1', origin: 'import', title: 'Old title', createdAt: '2026-10-12T09:42:00Z' },
+        ]);
+        restoreDraftVersion.mockResolvedValue({
+          title: 'Old title',
+          bodyHtml: '<h1>Old title</h1><p>As it was.</p>',
+          updatedAt: '2026-10-21T10:00:00Z',
+          restored: true,
+        });
+        const trigger = button('History')!;
+        await act(async () => {
+          trigger.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
+          trigger.click();
+        });
+        await act(async () => {});
+        const items = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')];
+        await act(async () => items[items.length - 1].click());
+        await act(async () => {});
+        expect(restoreDraftVersion).toHaveBeenCalled();
+        expect(stored()).toBeNull();
+        expect(nextButton()!.getAttribute('aria-label')).toBe('Next · Fix open rules');
       });
 
       it('moves on when it found nothing to change', async () => {
         getDraftSuggestions.mockResolvedValue([]);
         fixDraftRules.mockResolvedValue({ count: 0 });
         await runFix();
+        await settle();
         expect(nextButton()!.getAttribute('aria-label')).toBe(MOVED_ON);
         // Opened again, it holds.
         await act(async () => root.unmount());

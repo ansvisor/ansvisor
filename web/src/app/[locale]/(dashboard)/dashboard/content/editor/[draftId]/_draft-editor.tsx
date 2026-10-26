@@ -159,10 +159,13 @@ import {
   nextStep,
   rulesForNext,
   stepState,
+  thirdPassOf,
+  thirdStepPasses,
   thirdStepTried,
   type NextAction,
   type NextStepId,
   type NextStepState,
+  type ThirdStepId,
   type ThirdTry,
 } from '@/lib/content/next-step';
 import {
@@ -236,13 +239,14 @@ import { HeaderTip } from './_header-tip';
 import {
   NextStepButton,
   readSkips,
-  readThirdTry,
+  readThirdStep,
+  type ThirdStepStore,
   stepActor,
   stepName,
   stepReason,
   wordsUnderTitle,
   writeSkips,
-  writeThirdTry,
+  writeThirdStep,
 } from './_next-step';
 import { qualitySuggestions, useTodoCopy, type HandOff, type QualityRead } from './_quality-tab';
 import { PageTypeMenu } from './_page-type-menu';
@@ -306,6 +310,8 @@ const FIX_WAIT_MS = 90_000;
 /** The runs the agent card shows: Fix open rules', or the brief's. */
 // Fix open rules, and Quality's hand-off (CE-051): the same card, steps and Stop.
 const FIX_RUNS = ['fix', 'handoff'] as const;
+/** How long after the page's read a third-step pass waits for the rules' deferred read. */
+const PASS_SETTLE_MS = 250;
 const BRIEF_RUNS = ['brief'] as const;
 
 /** How a run whose answer was lost on the way ended, as the page and the run's row say. */
@@ -438,27 +444,52 @@ export function DraftEditor({
   // The agent's last run failed (Fix or hand-off): the card says so over an earlier batch.
   const [lastRunFailed, setLastRunFailed] = useState(false);
   const suggestionsNow = useRef(suggestions);
-  // The agent's run on the Next step basket's third step (Fix open rules,
-  // Rewrite page), and that step as it is now: once the run's changes are
-  // decided, Next moves on to the fourth (thirdStepTried).
-  const [thirdTry, setThirdTry] = useState<ThirdTry | null>(() => readThirdTry(draft.id));
-  const thirdTryNow = useRef(thirdTry);
+  // The agent on the Next step basket's third step (Fix open rules, Rewrite
+  // page): its run, and the steps it took with what the page read then; and
+  // the step as it is now. Once the run's changes are decided, Next moves on
+  // (thirdStepTried, thirdStepPasses).
+  const [thirdStep, setThirdStep] = useState<ThirdStepStore>(() => readThirdStep(draft.id));
+  const thirdStepNow = useRef(thirdStep);
   const nextStepNow = useRef<NextStepId | null>(null);
-  const saveThirdTry = (attempt: ThirdTry | null) => {
-    thirdTryNow.current = attempt;
-    setThirdTry(attempt);
-    writeThirdTry(draft.id, attempt);
+  // An attempt kept from before the editor opened, not yet taken: whether
+  // its run was read (below). Until then no step passes on it.
+  const [attemptChecked, setAttemptChecked] = useState(
+    () => !thirdStep.attempt || thirdStep.attempt.ended === true,
+  );
+  const saveThirdStep = (store: ThirdStepStore) => {
+    thirdStepNow.current = store;
+    setThirdStep(store);
+    writeThirdStep(draft.id, store);
   };
+  const saveThirdTry = (attempt: ThirdTry | null) =>
+    saveThirdStep({ ...thirdStepNow.current, attempt });
   /**
-   * Notes a run the third step takes, from the batch on the page now; the
-   * attempt before it, to put back when the run doesn't happen or is stopped.
-   * Null when the third step isn't Next's.
+   * Notes a run the third step takes, from the batch on the page now, while
+   * Next's step (`at`, as it was when the run was asked for) is the third: a
+   * rewrite takes the Length, a Fix takes Fix open rules, and only when it's
+   * asked for every rule the step counts (Remove AI traces alone isn't the
+   * step). The attempt before it, to put back when the run doesn't happen or
+   * is stopped; null when it isn't the step's run.
    */
-  const beginThirdTry = (): { prev: ThirdTry | null } | null => {
-    if (nextStepNow.current !== 'length' && nextStepNow.current !== 'fixRules') return null;
-    const prev = thirdTryNow.current;
-    if (prev?.passed) return null;
-    saveThirdTry({ batch: suggestionsNow.current[0]?.batchId ?? null });
+  const beginThirdTry = (
+    kind: ThirdTry['kind'],
+    { only, at = nextStepNow.current }: { only?: string[]; at?: NextStepId | null } = {},
+  ): { prev: ThirdTry | null } | null => {
+    if (at !== 'length' && at !== 'fixRules') return null;
+    if (
+      kind === 'fix' &&
+      only &&
+      !rulesForNext(rules.rules, heldRules).every((key) => only.includes(key))
+    ) {
+      return null;
+    }
+    const prev = thirdStepNow.current.attempt;
+    saveThirdTry({
+      step: kind === 'rewrite' ? 'length' : 'fixRules',
+      kind,
+      at: new Date().toISOString(),
+      batch: suggestionsNow.current[0]?.batchId ?? null,
+    });
     return { prev };
   };
   const [deciding, setDeciding] = useState(false);
@@ -2374,7 +2405,7 @@ export function DraftEditor({
         fixDraftRules(draft.id, draft.brandId, overLength ? { ...request, overLength } : request),
       undefined,
       false,
-      beginThirdTry(),
+      beginThirdTry('fix', { only }),
     );
   };
 
@@ -2420,7 +2451,8 @@ export function DraftEditor({
       if (third) saveThirdTry(third.prev);
     };
     const nothing = () => {
-      if (third) saveThirdTry({ ...(thirdTryNow.current ?? { batch: null }), ended: true });
+      const now = thirdStepNow.current.attempt;
+      if (third && now) saveThirdTry({ ...now, ended: true });
     };
     const failed = (key: string, error: string) => {
       untried();
@@ -2914,6 +2946,8 @@ export function DraftEditor({
         toast.error(t(`agentFailed.errors.${result.error}`));
         return;
       }
+      // A page written again: the third step is the new page's.
+      saveThirdStep({ attempt: null, passes: {} });
       onAgentStarted?.('write');
     } catch (err) {
       console.error('Failed to start the Content Agent again:', err);
@@ -2958,6 +2992,8 @@ export function DraftEditor({
   const rewritePage = async ({ citedToo = false }: { citedToo?: boolean } = {}) => {
     // Never before the locked passages are read: the rewrite would be told none are.
     if (!editor || agentBusy || !citedRead || restoringNow.current) return;
+    // Next's step as the person asked for it, before the waits below.
+    const stepAsked = nextStepNow.current;
     setRewriting(true);
     try {
       await autosave.settle();
@@ -3000,7 +3036,7 @@ export function DraftEditor({
         return;
       }
       // Under way: the page it leaves takes Next's third step, if it is that.
-      beginThirdTry();
+      beginThirdTry('rewrite', { at: stepAsked });
       onAgentStarted?.('rewrite');
     } catch (err) {
       console.error('Failed to start the page rewrite:', err);
@@ -3161,20 +3197,13 @@ export function DraftEditor({
     [qualityOn, pageHtml],
   );
   const trustNow = quality?.trust?.score ?? null;
-  // Taken, it stays passed: a later run (a hand-off, Run Agent on step 4)
-  // doesn't bring the step back while it works or its changes wait.
-  const thirdTried = thirdStepTried(thirdTry, {
+  // The run's changes decided (or it found nothing): its step is passed once
+  // the steps' reads are in (below), with what the page reads then.
+  const thirdTaken = thirdStepTried(thirdStep.attempt, {
     batch: suggestions[0]?.batchId ?? null,
     open: openSuggestions,
     busy: agentWorking || rewriting,
   });
-  useEffect(() => {
-    if (!thirdTried || !thirdTry || thirdTry.passed) return;
-    const passed = { ...thirdTry, passed: true };
-    thirdTryNow.current = passed;
-    writeThirdTry(draft.id, passed);
-    setThirdTry(passed);
-  }, [thirdTried, thirdTry, draft.id]);
   const nextState: NextStepState = {
     method: draft.method,
     open: canMarkReady,
@@ -3188,7 +3217,7 @@ export function DraftEditor({
       ? { trust: trustNow, trustLow: trustNow !== null && trustNow < TRUST_GATE, todos }
       : null,
     skipped,
-    thirdTried,
+    thirdPasses: thirdStep.passes,
   };
   const next = nextStep(nextState);
   useEffect(() => {
@@ -3232,6 +3261,82 @@ export function DraftEditor({
     // nextState is read as it is when a skip goes stale.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [staleSkips, draft.id]);
+  // A step the agent took passes with the rules open and the Length as they
+  // read once its changes are decided: while they read so, Next moves on; a
+  // rule the agent never saw, or a Length that moved, brings it back. The
+  // rules read the page a beat behind a decision (PAGE_READ_DELAY_MS, then a
+  // deferred read), so the pass waits for that, and keeps the page as it
+  // reads after; and for an attempt kept from before, for its run to be read.
+  const nextStateNow = useRef(nextState);
+  useEffect(() => {
+    nextStateNow.current = nextState;
+  });
+  useEffect(() => {
+    if (!thirdTaken || !nextRead || !attemptChecked) return;
+    const timer = setTimeout(() => {
+      const { attempt, passes } = thirdStepNow.current;
+      if (!attempt) return;
+      saveThirdStep({
+        attempt: null,
+        passes: { ...passes, [attempt.step]: thirdPassOf(nextStateNow.current) },
+      });
+    }, PAGE_READ_DELAY_MS + PASS_SETTLE_MS);
+    return () => clearTimeout(timer);
+    // pageHtml: each read of the page starts the wait again.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [thirdTaken, nextRead, attemptChecked, pageHtml]);
+  // A pass that no longer holds is dropped, as a stale skip is, so a page
+  // that reads as it did again later doesn't bring it back to life.
+  const stalePasses =
+    nextRead && Object.keys(thirdStep.passes).length !== thirdStepPasses(nextState).size;
+  useEffect(() => {
+    if (!stalePasses) return;
+    const held = thirdStepPasses(nextStateNow.current);
+    const { attempt, passes } = thirdStepNow.current;
+    saveThirdStep({
+      attempt,
+      passes: Object.fromEntries(
+        Object.entries(passes).filter(([id]) => held.has(id as ThirdStepId)),
+      ),
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stalePasses]);
+  // An attempt whose run failed or was stopped while the editor was closed
+  // (a rewrite runs on its waiting page) is none: a later batch from anything
+  // else must not pass the step. A Stop writes stopped_at before the run's
+  // outcome, so a stopped run with no outcome yet is stopped. A run still
+  // under way is left to finish: its batch passes the step.
+  useEffect(() => {
+    const attempt = thirdStepNow.current.attempt;
+    if (!attempt || attempt.ended) return;
+    if (attempt.kind === 'rewrite' && failedRewrite) {
+      saveThirdTry(null);
+      setAttemptChecked(true);
+      return;
+    }
+    let live = true;
+    readAgentRun(draft.id, [attempt.kind])
+      .then(
+        (run) => {
+          // Its own run: begun with it (the server's clock may differ a little).
+          if (!live || !run || Date.parse(run.startedAt) < Date.parse(attempt.at) - 60_000) {
+            return;
+          }
+          if (run.outcome === 'failed' || run.outcome === 'stopped' || run.stoppedAt) {
+            saveThirdTry(null);
+          }
+        },
+        () => {},
+      )
+      .finally(() => {
+        if (live) setAttemptChecked(true);
+      });
+    return () => {
+      live = false;
+    };
+    // Once, as the editor opens.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draft.id]);
   // It starts open on a new page, and folds once its first step (the brief)
   // is done; Skip or another step doesn't fold it.
   const nextShownOnce = useRef<'no' | 'open' | 'done'>('no');
@@ -3442,7 +3547,7 @@ export function DraftEditor({
       // suggestions set aside are no decision of the agent's.
       if (!samePage) {
         setBarClosed(true);
-        saveThirdTry(null);
+        saveThirdStep({ attempt: null, passes: {} });
       }
     } catch (err) {
       console.error('Failed to restore the version:', err);
