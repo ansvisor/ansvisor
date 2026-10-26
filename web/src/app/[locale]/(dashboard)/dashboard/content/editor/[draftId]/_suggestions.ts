@@ -36,6 +36,8 @@ export type SuggestionDecision = 'accept' | 'reject' | 'undo' | 'restore';
 /** The words on the cards, from the editor's messages. */
 export interface SuggestionLabels {
   agent: string;
+  /** "Would break …": the rules met now it would break, named (editor test 2026-10-25). */
+  breaks?: (names: string) => string;
   accept: string;
   reject: string;
   accepted: string;
@@ -516,10 +518,20 @@ function button(
   return node;
 }
 
-/** The card's top line: the agent and why, then its buttons or what was decided. */
-function head(s: DraftSuggestion, labels: SuggestionLabels, controls: HTMLElement[]): HTMLElement {
+/**
+ * The card's top line: the agent and why, then its buttons or what was
+ * decided. An open one that would break a rule met now says which.
+ */
+function head(
+  s: DraftSuggestion & { breaks?: string },
+  labels: SuggestionLabels,
+  controls: HTMLElement[],
+): HTMLElement {
   const line = el('div', 'flex items-center gap-2 text-xs text-muted-foreground');
   line.append(el('span', 'min-w-0 truncate', `${labels.agent} · ${s.reason}`));
+  if (s.status === 'open' && s.breaks && labels.breaks) {
+    line.append(el('span', 'shrink-0 text-amber-700 dark:text-amber-400', labels.breaks(s.breaks)));
+  }
   const right = el('span', 'ml-auto flex shrink-0 items-center gap-1.5');
   right.append(...controls);
   line.append(right);
@@ -659,7 +671,7 @@ export const AgentSuggestions = Extension.create<{
         const widget = (pos: number) =>
           Decoration.widget(pos, () => card(s, labels, blocked, decide, open), {
             // Drawn again once the sources are read, for their hover details.
-            key: `${s.id}:${s.status}:${blocked ?? ''}:${s.reason}:${labels.sourceTip ? 1 : 0}`,
+            key: `${s.id}:${s.status}:${blocked ?? ''}:${s.reason}:${(s as { breaks?: string }).breaks ?? ''}:${labels.sourceTip ? 1 : 0}`,
             side: -1,
             ignoreSelection: true,
             stopEvent: () => true,

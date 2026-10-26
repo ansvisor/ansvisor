@@ -740,6 +740,10 @@ describe('Rewrite the page to these rules', () => {
       before_html: existing.body_html,
       reason: 'cut to about 3,000 characters',
       rule_keys: ['length', 'faq'],
+      // What it was asked for and came to (00285): the kept passage and table count.
+      length_target: 3000,
+      kept_chars: textLength(`${QUOTED} Ratio 1:16`),
+      after_chars: textLength(row.after_text),
     });
     expect(row.after_text).toBe(
       `<h1>Pour-over coffee</h1><p>${QUOTED}</p><p>Use good coffee, freshly ground.</p>` +
@@ -766,6 +770,8 @@ describe('Rewrite the page to these rules', () => {
     });
     await expect(run()).resolves.toEqual({ rewritten: true });
     const row = writes.find((w) => w.table === 'content_draft_suggestions').value;
+    // Length off: it was asked for none (00285).
+    expect(row.length_target).toBeNull();
     // The fan-out it named; S7 isn't on the list.
     expect(row.sources).toEqual([
       { kind: 'fanout', ref: 'pour over ratio', label: 'pour over ratio' },
@@ -835,6 +841,120 @@ describe('Rewrite the page to these rules', () => {
     hasOpenSuggestions.mockResolvedValue(true);
     await expect(run()).resolves.toEqual({ skipped: true });
     expect(writes.find((w) => w.table === 'content_draft_suggestions')).toBeUndefined();
+  });
+
+  describe('a rewrite well past its Length: one more pass cuts it', () => {
+    const cutBudget = {
+      charge: vi.fn(async () => {}),
+      release: vi.fn(async () => {}),
+      keep: vi.fn(async () => {}),
+    };
+    // A Length of 100 (up to 120): a cut pass past 135.
+    const toLength = (length = 100) => ({
+      rules: [{ key: 'length', name: 'Length', detail: `aim: ${length} characters` }],
+      sources: { ...input().sources, length },
+    });
+    const long = `<h1>Pour-over coffee</h1><p>[[KEEP 1]]</p><p>[[KEEP 2]]</p><p>${'Long words. '.repeat(10)}</p>`;
+    const short = '<h1>Pour-over coffee</h1><p>[[KEEP 1]]</p><p>[[KEEP 2]]</p><p>Short.</p>';
+    const answers = (...htmls) => {
+      for (const [i, html] of htmls.entries()) {
+        generateObject.mockResolvedValueOnce({
+          object: { html, reason: i ? 'cut it' : 'answered each heading first', sources: [] },
+          usage: { inputTokens: 900 + i, outputTokens: 700 + i },
+        });
+      }
+    };
+    const row = () => writes.find((w) => w.table === 'content_draft_suggestions').value;
+    beforeEach(() => {
+      cutBudget.charge.mockClear();
+      cutBudget.release.mockClear();
+      cutBudget.keep.mockClear();
+      reserveAiBudget.mockReset().mockResolvedValue(cutBudget);
+    });
+
+    it('cuts its own page to the Length on its own hold, keeping every kept line', async () => {
+      answers(long, short);
+      await expect(run(toLength())).resolves.toEqual({ rewritten: true });
+      expect(generateObject).toHaveBeenCalledTimes(2);
+      const { prompt } = generateObject.mock.calls[1][0];
+      expect(prompt).toContain('Its Length is 100 characters, up to 120. Cut it to about 100.');
+      expect(prompt).toContain('every [[KEEP n]] line exactly as it is');
+      expect(prompt).toContain('Long words.');
+      expect(reserveAiBudget).toHaveBeenCalledWith('org-1', {
+        feature: 'content',
+        modelId: expect.any(String),
+        draftId: DRAFT,
+      });
+      expect(cutBudget.charge).toHaveBeenCalledWith({ inputTokens: 901, outputTokens: 701 });
+      // The cut page, what it kept put back, the first pass's reason.
+      expect(row().after_text).toContain('Short.');
+      expect(row().after_text).not.toContain('Long words.');
+      expect(row().after_text).toContain(QUOTED);
+      expect(row().reason).toBe('answered each heading first');
+      expect(row().after_chars).toBe(textLength(row().after_text));
+    });
+
+    it('keeps the first rewrite when the cut is no shorter, drops a kept line, fails or has no budget', async () => {
+      answers(long, long);
+      await run(toLength());
+      expect(row().after_text).toContain('Long words.');
+
+      writes = [];
+      answers(long, '<h1>Pour-over coffee</h1><p>[[KEEP 1]]</p><p>Short.</p>');
+      await run(toLength());
+      expect(row().after_text).toContain('Long words.');
+
+      // Kept lines written into a paragraph: restoreKept couldn't put them back.
+      writes = [];
+      answers(long, '<h1>Pour-over coffee</h1><p>[[KEEP 1]] [[KEEP 2]] Short.</p>');
+      await expect(run(toLength())).resolves.toEqual({ rewritten: true });
+      expect(row().after_text).toContain('Long words.');
+
+      writes = [];
+      generateObject.mockResolvedValueOnce({
+        object: { html: long, reason: 'answered each heading first', sources: [] },
+        usage: { inputTokens: 900, outputTokens: 700 },
+      });
+      generateObject.mockRejectedValueOnce(new Error('provider down'));
+      cutBudget.charge.mockClear();
+      cutBudget.release.mockClear();
+      await expect(run(toLength())).resolves.toEqual({ rewritten: true });
+      expect(row().after_text).toContain('Long words.');
+      // Nothing billed for a failed call: its hold goes.
+      expect(cutBudget.charge).not.toHaveBeenCalled();
+      expect(cutBudget.release).toHaveBeenCalled();
+
+      writes = [];
+      generateObject.mockReset();
+      reserveAiBudget.mockRejectedValueOnce(
+        Object.assign(new Error('used up'), { code: 'plan_limit' }),
+      );
+      answers(long);
+      await run(toLength());
+      expect(generateObject).toHaveBeenCalledTimes(1);
+      expect(row().after_text).toContain('Long words.');
+    });
+
+    it('keeps the hold of a cut stopped while it runs, and writes nothing', async () => {
+      const { RunStoppedError } = await import('./content-runs.js');
+      answers(long);
+      generateObject.mockRejectedValueOnce(new RunStoppedError());
+      cutBudget.keep.mockClear();
+      await run(toLength());
+      expect(cutBudget.keep).toHaveBeenCalledTimes(1);
+      expect(
+        writes.find((w) => w.table === 'content_draft_suggestions' && w.kind === 'insert'),
+      ).toBeUndefined();
+    });
+
+    it('cuts nothing within reach of the Length, or with Length off', async () => {
+      answers(long);
+      await run(toLength(3000));
+      answers(long);
+      await run();
+      expect(generateObject).toHaveBeenCalledTimes(2);
+      expect(reserveAiBudget).not.toHaveBeenCalled();
+    });
   });
 });
 

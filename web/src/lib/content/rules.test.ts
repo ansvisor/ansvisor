@@ -30,6 +30,10 @@ import {
   RULE_LENGTH_MIN,
   RULE_LENGTH_MAX,
   lengthBand,
+  NO_REACH,
+  NO_RULE_CONTEXT,
+  heldMessage,
+  keptOutOfReach,
   lengthOutOfReach,
   rewriteAdvice,
   type RuleStatus,
@@ -239,6 +243,25 @@ describe('length and structure', () => {
     expect(one.forAgent.map(({ rule }) => rule.key)).toEqual(['aiTraces']);
     expect(one.notForAgent).toEqual([]);
     expect(openRulesForAgent(statuses, ['oneH1']).forAgent).toEqual([]);
+    // Held on this page by what it keeps word for word: the person's, apart.
+    const held = openRulesForAgent(statuses, undefined, new Set(['aiTraces']));
+    expect(held.forAgent.some(({ rule }) => rule.key === 'aiTraces')).toBe(false);
+    expect(held.held.map(({ rule }) => rule.key)).toEqual(['aiTraces']);
+    expect(held.notForAgent.map(({ rule }) => rule.key)).toEqual(['oneH1']);
+    // What to say when they're all that's left: the quoted passages', else the Length's.
+    expect(heldMessage(held.held)).toBe('heldLength');
+    expect(heldMessage([{ rule: { key: 'sentence' } }])).toBe('heldAll');
+  });
+
+  it('reads a rule met without the locked passages as held by them', () => {
+    const sentence = activeRules(ruleSet('blog_post'), {
+      overrides: { sentence: { value: '20' } },
+    }).find((r) => r.key === 'sentence')!;
+    const long = 'A sentence that runs well past twenty characters.';
+    const all = page(`<h1>T</h1><p>${long}</p><p>Short.</p>`, 60);
+    expect(checkRule(sentence, all, NO_RULE_CONTEXT).state).toBe('bad');
+    const rest = page('<h1>T</h1><p>Short.</p>', 10);
+    expect(checkRule(sentence, rest, NO_RULE_CONTEXT).state).toBe('ok');
   });
 
   it('wants a short summary under the H1, and a short answer under each H2', () => {
@@ -798,31 +821,116 @@ describe('rewriteAdvice', () => {
     expect(rewriteAdvice(statuses(60_001))).toBeNull();
   });
 
-  it("doesn't recommend shortening a page whose kept blocks are most of its Length", () => {
-    // The user's page: 6,877 characters for 4,000, 3,799 of them quoted passages and tables.
+  it("doesn't recommend shortening a page a rewrite can't bring under its Length", () => {
     const page = statuses(6_877, [], '4000');
-    expect(rewriteAdvice(page, 3_799)).toBeNull();
-    expect(lengthOutOfReach(page, 3_799)).toEqual({
+    // The least a rewrite comes to (kept + headings + least answers) past the band's top (4,800).
+    const floor = { kept: 3_799, floor: 5_100, last: null };
+    expect(rewriteAdvice(page, floor)).toBeNull();
+    expect(lengthOutOfReach(page, floor)).toEqual({
       count: 6_877,
       target: 4_000,
       kept: 3_799,
-      suggested: 6_000,
+      why: 'floor',
+      least: 5_100,
+      suggested: 5_500,
     });
     // Little kept: a rewrite still gets there.
-    expect(rewriteAdvice(page, 1_000)).toMatchObject({ reason: 'length' });
-    expect(lengthOutOfReach(page, 1_000)).toBeNull();
+    expect(rewriteAdvice(page, { kept: 1_000, floor: 1_800, last: null })).toMatchObject({
+      reason: 'length',
+    });
     // Many rules open: still a rewrite, for them, the Length out of reach not among them.
     expect(
-      rewriteAdvice(statuses(6_877, ['faq', 'summary', 'h2Answer'], '4000'), 3_799),
+      rewriteAdvice(statuses(6_877, ['faq', 'summary', 'h2Answer'], '4000'), floor),
     ).toBeNull();
     expect(
-      rewriteAdvice(statuses(6_877, ['faq', 'summary', 'h2Answer', 'keywords'], '4000'), 3_799),
+      rewriteAdvice(statuses(6_877, ['faq', 'summary', 'h2Answer', 'keywords'], '4000'), floor),
     ).toMatchObject({ reason: 'open' });
     // Under its Length, what is kept doesn't stop it.
-    expect(lengthOutOfReach(statuses(2_000, [], '4000'), 3_799)).toBeNull();
+    expect(lengthOutOfReach(statuses(2_000, [], '4000'), floor)).toBeNull();
+  });
+
+  it('doesn’t offer a rewrite again for a Length the last one missed, and only then', () => {
+    const page = statuses(6_877, [], '4000');
+    // The user's test page (2026-10-25): 78% kept, so in reach by its kept blocks
+    // alone, but the last rewrite, written to 4,000, came to 5,468.
+    const missed = { chars: 5_468, target: 4_000, kept: 3_125 };
+    const run = { kept: 3_125, floor: 4_300, last: missed };
+    expect(rewriteAdvice(page, run)).toBeNull();
+    expect(lengthOutOfReach(page, run)).toMatchObject({
+      why: 'reached',
+      least: 5_468,
+      suggested: 5_500,
+    });
+    // Asked for a little less since (within its band): it didn't reach the longer one either.
+    expect(lengthOutOfReach(statuses(6_877, [], '3500'), run)).toMatchObject({ why: 'reached' });
+    // Asked for much less: what it came to for 4,000 says nothing; the estimate decides.
+    expect(lengthOutOfReach(statuses(6_877, [], '3000'), run)).toMatchObject({
+      why: 'floor',
+      least: 4_300,
+    });
+    // A near miss of 10,000 says nothing of 3,000 either.
+    const near = { ...run, floor: 1_800, last: { chars: 12_400, target: 10_000, kept: 3_125 } };
+    expect(lengthOutOfReach(statuses(6_877, [], '3000'), near)).toBeNull();
+    // A rewrite that met a longer Length says nothing of a shorter one.
+    const met = { ...run, last: { chars: 9_800, target: 10_000, kept: 3_125 } };
+    expect(lengthOutOfReach(page, met)).toBeNull();
+    expect(rewriteAdvice(page, { ...met, kept: 1_000, floor: 1_800 })).toMatchObject({
+      reason: 'length',
+    });
+    // Written with Length off: it was asked for none.
+    expect(lengthOutOfReach(page, { ...run, last: { ...missed, target: null } })).toBeNull();
+    // A passage unlocked since: a rewrite may go shorter now.
+    expect(lengthOutOfReach(page, { ...run, kept: 2_900 })).toBeNull();
+    // More locked since: what it came to then doesn't say it gets there now.
+    expect(
+      lengthOutOfReach(page, {
+        kept: 4_500,
+        floor: 5_200,
+        last: { chars: 4_500, target: 4_000, kept: 1_000 },
+      }),
+    ).toMatchObject({ why: 'floor', least: 5_200 });
+    // The last one got within the band: in reach, whatever the estimate says.
+    expect(
+      lengthOutOfReach(page, { ...run, floor: 5_000, last: { ...missed, chars: 4_700 } }),
+    ).toBeNull();
+    // Past both: the more of the two, so one Raise is enough.
+    expect(lengthOutOfReach(page, { ...run, floor: 6_200 })).toMatchObject({
+      why: 'floor',
+      least: 6_200,
+      suggested: 6_500,
+    });
+    // Never a Length past the page as it is.
+    expect(lengthOutOfReach(statuses(4_900, [], '4000'), run)?.suggested).toBe(5_000);
+    // Rewritten with its cited passages too (it kept less): still missing says keeping them misses too…
+    const citedToo = { ...run, last: { chars: 5_200, target: 4_000, kept: 0 } };
+    expect(lengthOutOfReach(page, citedToo)).toMatchObject({ why: 'reached', least: 5_200 });
+    // …but coming within the band doesn't say keeping them does.
+    expect(
+      lengthOutOfReach(page, {
+        ...citedToo,
+        floor: 5_000,
+        last: { ...citedToo.last, chars: 4_500 },
+      }),
+    ).toMatchObject({ why: 'floor', least: 5_000 });
+  });
+
+  it('names what a rewrite keeps as why it missed only when that alone puts the Length out of reach', () => {
+    const page = statuses(6_877, [], '4000');
+    const missed = { chars: 5_468, target: 4_000, kept: 3_125 };
+    // The rewrite missed, but its kept blocks and headings alone fit: not their doing.
+    expect(keptOutOfReach(page, { kept: 3_125, floor: 4_300, last: missed })).toBe(false);
+    expect(keptOutOfReach(page, { kept: 3_799, floor: 5_100, last: missed })).toBe(true);
   });
 
   it('recommends it for 4 rules or more the agent can fix', () => {
+    // A rule held by what the page keeps isn't one a rewrite fixes.
+    expect(
+      rewriteAdvice(
+        statuses(null, ['faq', 'summary', 'h2Answer', 'sentence']),
+        NO_REACH,
+        new Set(['sentence']),
+      ),
+    ).toBeNull();
     expect(rewriteAdvice(statuses(null, ['faq', 'summary', 'h2Answer']))).toBeNull();
     expect(rewriteAdvice(statuses(null, ['faq', 'summary', 'h2Answer', 'keywords']))).toEqual({
       reason: 'open',

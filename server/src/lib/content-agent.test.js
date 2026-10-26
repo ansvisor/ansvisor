@@ -75,6 +75,7 @@ const {
   cleanInsertHtml,
   draftPassages,
   dropsPlaceholder,
+  emptyWhy,
   fixDraftRules,
   keepSuggestions,
   growsPastLimit,
@@ -1015,11 +1016,32 @@ describe('fixDraftRules', () => {
     expect(writes.find((w) => w.table === 'prompt_improve_usage')).toBeDefined();
   });
 
+  it('says why a run left nothing: none proposed, all in quoted passages, or dropped', () => {
+    const passages = [
+      { tag: 'p', text: 'A quoted passage.' },
+      { tag: 'p', text: 'A free one.' },
+    ];
+    const locked = new Set([passageKey('A quoted passage.')]);
+    expect(emptyWhy([], passages, locked)).toBe('none');
+    expect(emptyWhy([{ kind: 'replace', passage: 1 }], passages, locked)).toBe('locked');
+    expect(
+      emptyWhy(
+        [
+          { kind: 'replace', passage: 1 },
+          { kind: 'replace', passage: 2 },
+        ],
+        passages,
+        locked,
+      ),
+    ).toBe('dropped');
+    expect(emptyWhy([{ kind: 'insert', passage: 1 }], passages, locked)).toBe('dropped');
+  });
+
   it('keeps nothing when the agent found nothing it could change', async () => {
     generateObject.mockResolvedValue({ object: { suggestions: [] }, usage: {} });
     await expect(
       fixDraftRules({ draftId: DRAFT, brandId: BRAND, input: input() }),
-    ).resolves.toEqual({ count: 0, batchId: null });
+    ).resolves.toEqual({ count: 0, batchId: null, why: 'none' });
     expect(writes.some((w) => w.table === 'content_draft_suggestions')).toBe(false);
   });
 
@@ -1065,7 +1087,7 @@ describe('fixDraftRules', () => {
     });
     await expect(
       fixDraftRules({ draftId: DRAFT, brandId: BRAND, input: input() }),
-    ).resolves.toEqual({ count: 0, batchId: null });
+    ).resolves.toEqual({ count: 0, batchId: null, why: 'none' });
   });
 
   it('refuses a published draft, or one whose latest batch is still open, before charging', async () => {
@@ -1095,7 +1117,7 @@ describe('fixDraftRules', () => {
     generateObject.mockResolvedValue({ object: { suggestions: [] }, usage: {} });
     await expect(
       fixDraftRules({ draftId: DRAFT, brandId: BRAND, input: input() }),
-    ).resolves.toEqual({ count: 0, batchId: null });
+    ).resolves.toEqual({ count: 0, batchId: null, why: 'none' });
   });
 
   it('stops at the budget', async () => {

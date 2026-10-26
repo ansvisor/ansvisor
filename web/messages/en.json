@@ -3803,6 +3803,10 @@
         }
       },
       "agentCard": {
+        "breaks": "would break {names}",
+        "runFailed": "Content Agent couldn't finish",
+        "runFailedLine": "Nothing it wrote was kept. Try again; if it fails again, fix what's left yourself.",
+        "placeholders": "{count, plural, one {# placeholder} other {# placeholders}} to fill",
         "waiting": "{count, plural, one {Content Agent has # suggestion for you} other {Content Agent has # suggestions for you}}",
         "gain": "Rules {met, number} → {after, number} of {total, number}",
         "review": "Review",
@@ -3853,6 +3857,7 @@
         "ready": "Content Agent rewrote the page to its rules",
         "characters": "{before, number} → {after, number} characters",
         "lengthMissed": "Length {target, number} not reached",
+        "longer": "longer than the page before",
         "lengthKept": "({kept, number} characters are passages AI answers quote, tables and other blocks a rewrite keeps as they are)",
         "accepted": "Rewrite accepted",
         "rejected": "Rewrite rejected",
@@ -3909,6 +3914,8 @@
         "fixed": "{count, plural, one {Content Agent suggested # change} other {Content Agent suggested # changes}} · review them in the page",
         "fixedMax": "Content Agent suggested {count} changes, the most one run makes · review them, then run it again for the rules still open",
         "nothingToFix": "Content Agent found nothing it could change without new facts.",
+        "breaks": "Would break {names}",
+        "nothingToFixLocked": "Content Agent's changes were all in passages AI answers quote, which it keeps. Unlock the ones you're fine to change (Edit anyway), or change them yourself.",
         "notForAgent": "Content Agent doesn't change heading levels: make the extra H1s H2s in the toolbar.",
         "notForAgentFeed": "Content Agent doesn't change a price, GTIN or stock: check which is right, the page or your product feed, and fix that one.",
         "decideFirst": "{count, plural, one {Review the open suggestion first, then run the agent.} other {Review the open suggestions first, then run the agent.}}",
@@ -4346,7 +4353,8 @@
           "save": "Save brief",
           "cancel": "Cancel",
           "saved": "Brief saved",
-          "failed": "Couldn't save the brief. Try again."
+          "failed": "Couldn't save the brief. Try again.",
+          "tooLong": "The brief is too long to save. Shorten its sections or key points."
         }
       },
       "export": {
@@ -4485,7 +4493,7 @@
         "stepOf": "Step {n} of {total}",
         "allDone": "Every step is done",
         "path": "All steps",
-        "skip": "Skip",
+        "skip": "Skip this step",
         "skipped": "· skipped",
         "working": "Content Agent is working",
         "stop": "Stop",
@@ -4516,7 +4524,8 @@
           "writeMine": "The page is empty: write it, and the next step follows from what you write.",
           "import": "The live page didn't come in. I write a first draft from your sources, or you write it yourself.",
           "length": "{count, number} characters against a Length of {target, number}. Small fixes won't get there, so rewrite it in one go.",
-          "fixRules": "{count, plural, one {# rule is} other {# rules are}} still open. Small, reviewable changes for them.",
+          "fixRules": "{count, plural, one {# rule is} other {# rules are}} still open for the agent. Small, reviewable changes for them.",
+          "fixRulesOthers": "{count, plural, one {# more is} other {# more are}} yours to decide in the Rules tab.",
           "proofTrust": "Trust is {trust}, under {gate}. The Quality tab names what raises it.",
           "proofTrustTodo": "Trust is {trust}, under {gate}. Only you can do this first: {todo}.",
           "proofTodo": "Only you can do this: {todo}.",
@@ -5300,8 +5309,16 @@
           "length": "Recommended: the page is {count, number} characters for a Length of {target, number} ({percent, number}% off). A rewrite gets there in one go.",
           "open": "Recommended: {count, number} rules are open. A rewrite meets them together."
         },
-        "lengthOutOfReach": "The page is {count, number} characters for a Length of {target, number}, but {kept, number} of them are passages AI answers quote, tables and other blocks a rewrite keeps as they are. Raise the Length to about {suggested, number}, or unlock passages you're fine to have reworded.",
+        "lengthOutOfReach": "The page is {count, number} characters for a Length of {target, number}, but a rewrite can't go much under {least, number}: {kept, number} are passages AI answers quote, tables and other blocks it keeps as they are, and each heading needs its answer. Raise the Length to about {suggested, number}, or unlock passages you're fine to have reworded.",
+        "lengthOutOfReachRun": "The page is {count, number} characters for a Length of {target, number}. The last rewrite came to {least, number}, so another won't get there. Raise the Length to about {suggested, number}, or unlock passages you're fine to have reworded.",
+        "lengthOutOfReachHeadings": "The page is {count, number} characters for a Length of {target, number}, but its headings and an answer under each come to about {least, number}. Raise the Length to about {suggested, number}, or use fewer sections.",
+        "raiseLength": "Raise Length to {suggested, number}",
+        "rewriteCitedToo": "Rewrite, cited passages too",
+        "rewriteCitedTooHint": "That rewrites the passages AI answers quote as well, so they may stop being quoted. You compare it with the page before anything changes.",
         "lengthConflict": "The fan-out H2s, FAQ questions and summary these rules still ask for take about {need, number} characters, more than Length allows (up to {max, number}). Raise Length, or ask for fewer.",
+        "heldAll": "What's left open is kept by AI citations, and yours to decide: the agent leaves passages AI answers quote as they are.",
+        "heldLength": "Only the Length is left open, and a rewrite can't reach it. Raise the Length, or leave it.",
+        "heldSentence": "Kept by AI citations · yours to decide: the long sentences are in passages AI answers quote, which the agent keeps. Shorten them yourself (Edit anyway), or leave them quoted.",
         "fixTrace": "Fix",
         "fixTraceHint": "Content Agent rewrites only these phrases, for you to review",
         "agent": {
