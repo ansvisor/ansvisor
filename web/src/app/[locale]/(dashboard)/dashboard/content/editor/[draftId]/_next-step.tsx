@@ -14,6 +14,7 @@ import {
   type NextStepId,
   type NextStepState,
   type PathState,
+  type ThirdTry,
 } from '@/lib/content/next-step';
 import { cn } from '@/lib/utils';
 import { RunSteps } from './_agent-card';
@@ -48,6 +49,28 @@ export function writeSkips(draftId: string, skips: Partial<Record<NextStepId, st
     localStorage.setItem(skipsKey(draftId), JSON.stringify(skips));
   } catch {
     // Skipped for this visit only.
+  }
+}
+
+/** The agent's run on the third step on this draft, in this browser (thirdStepTried). */
+const thirdTryKey = (draftId: string) => `aeo:next-step-third-try:${draftId}`;
+
+export function readThirdTry(draftId: string): ThirdTry | null {
+  try {
+    const read = JSON.parse(localStorage.getItem(thirdTryKey(draftId)) ?? 'null') as unknown;
+    if (read && typeof read === 'object' && 'batch' in read) return read as ThirdTry;
+  } catch {
+    // Storage unavailable (private mode) or unreadable: none taken.
+  }
+  return null;
+}
+
+export function writeThirdTry(draftId: string, attempt: ThirdTry | null) {
+  try {
+    if (attempt) localStorage.setItem(thirdTryKey(draftId), JSON.stringify(attempt));
+    else localStorage.removeItem(thirdTryKey(draftId));
+  } catch {
+    // Kept for this visit only.
   }
 }
 
