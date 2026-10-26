@@ -838,7 +838,7 @@ async function writeWithRun({ draft, brand, model, input, budget, rewrite, run }
   );
   // The sources a claim may be given to: the ones the page gives claims to,
   // its Your input and authors (editor test 2026-10-25).
-  const attributable = attributableSources(draft.body_html, numbered, authors);
+  const attributable = attributableSources(draft.body_html, numbered, authors, brand.language);
 
   if (rewrite) {
     return await rewritePage({
