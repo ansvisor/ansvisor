@@ -179,6 +179,40 @@ export const trafficLimiter = rateLimit({
   handler: (_req, res) => res.status(204).end(),
 });
 
+/** Whether a beacon is a journey's pageview or conversion (CE-017), as the route reads its body. */
+export function isJourneyBeacon(body) {
+  let read = body;
+  if (typeof read === 'string') {
+    try {
+      read = JSON.parse(read);
+    } catch {
+      return false;
+    }
+  }
+  return read?.k === 'pv' || read?.k === 'cv';
+}
+
+/** A journey event's bucket: its tracking code, whatever address sends it. */
+export function journeyEventKey(req) {
+  return 'journey:' + req.params.trackingCode;
+}
+
+// A brand's journey events (CE-017): 3,000 a minute per tracking code, beside
+// the 60 per address, so a sender cycling addresses can't fill the table. A
+// big shop's AI visitors send a few pageviews each, far below it. Visits
+// aren't counted here; past it, the events are dropped as the address
+// limiter drops beacons.
+export const journeyEventLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 3000,
+  keyGenerator: journeyEventKey,
+  skip: (req) => !isJourneyBeacon(req.body),
+  standardHeaders: false,
+  legacyHeaders: false,
+  message: '',
+  handler: (_req, res) => res.status(204).end(),
+});
+
 /**
  * AI-bot ingest key (AT-010): the connection, since a Cloudflare Worker's
  * requests leave from addresses Cloudflare shares across its customers. Only

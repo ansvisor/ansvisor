@@ -93,13 +93,14 @@ describe('shopifyPixelCode', () => {
     expect(await completeCheckout({ stored: { id: VISITOR.id } })).toEqual([]);
   });
 
-  it('leaves out an amount that isn’t a number, and names the order by its token without an id', async () => {
+  it('leaves out an amount that isn’t a number, and an order ref without the order’s id: never the token', async () => {
     const [{ body }] = await completeCheckout({
       checkout: { totalPrice: { amount: 'n/a' }, order: undefined },
     });
     expect(body).not.toHaveProperty('val');
     expect(body).not.toHaveProperty('cur');
-    expect(body.ref).toBe('tok-1');
+    expect(body).not.toHaveProperty('ref');
+    expect(JSON.stringify(body)).not.toContain('tok-1');
   });
 
   it('leaves out an amount or units the server wouldn’t take, and still sends the order', async () => {

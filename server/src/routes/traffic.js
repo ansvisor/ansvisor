@@ -1,6 +1,6 @@
 import express, { Router } from 'express';
 import supabaseAdmin from '../config/supabase.js';
-import { trafficLimiter } from '../middleware/rate-limiter.js';
+import { journeyEventLimiter, trafficLimiter } from '../middleware/rate-limiter.js';
 import logger from '../lib/logger.js';
 import { findVisitOf } from '../lib/traffic-visits.js';
 import { visitorKey as anonymousVisitorKey } from '../lib/visitor-key.js';
@@ -11,7 +11,7 @@ import {
   landingMedium,
 } from '../lib/ai-sources.js';
 import { buildTrackingScript } from '../lib/tracking-script.js';
-import { eventRow } from '../lib/traffic-events.js';
+import { VISITOR_LIMITS, eventRow } from '../lib/traffic-events.js';
 
 const router = Router();
 
@@ -22,6 +22,8 @@ const router = Router();
 // API callers): the global json parser handles those and this middleware no-ops
 // once a body has already been parsed.
 const beaconBody = express.text({ type: ['text/plain', 'application/json'], limit: '64kb' });
+// The body read, then a journey event's own limit by tracking code (CE-017).
+const trackBody = [beaconBody, journeyEventLimiter];
 
 let cachedScript = null;
 let cachedEtag = null;
@@ -73,7 +75,7 @@ router.options('/track/:trackingCode', (req, res) => {
 /**
  * POST /track/:trackingCode — receive beacon data from t.js
  */
-router.post('/track/:trackingCode', trafficLimiter, beaconBody, async (req, res) => {
+router.post('/track/:trackingCode', trafficLimiter, trackBody, async (req, res) => {
   res.set('Access-Control-Allow-Origin', '*');
   try {
     const { trackingCode } = req.params;
@@ -225,7 +227,9 @@ router.post('/track/:trackingCode', trafficLimiter, beaconBody, async (req, res)
 /**
  * Stores a journey event (traffic-events.js) for a brand with conversions
  * on. Read here, not with the brand above: a server deployed before 00286
- * then fails only these, never the visits. Best effort: an order sent again
+ * then fails only these, never the visits. A visitor id past its limits
+ * (VISITOR_LIMITS) stores no more, so whatever a sender does, a journey's
+ * reads (00287, 00288) stay bounded. Best effort: an order sent again
  * counts once (its unique ref), anything else that fails is logged.
  */
 async function storeEvent(brandId, body) {
@@ -240,6 +244,19 @@ async function storeEvent(brandId, body) {
       .single();
     if (error) throw new Error(error.message);
     if (!brand?.conversions_enabled) return;
+    // Its pageviews in the attribution window, or its conversions in a day,
+    // read up to the limit through the journey index.
+    const limit = VISITOR_LIMITS[row.kind];
+    const { data: earlier, error: countError } = await supabaseAdmin
+      .from('ai_traffic_events')
+      .select('id')
+      .eq('brand_id', brandId)
+      .eq('visitor_id', row.visitor_id)
+      .eq('kind', row.kind)
+      .gte('occurred_at', new Date(Date.now() - limit.windowMs).toISOString())
+      .limit(limit.max);
+    if (countError) throw new Error(countError.message);
+    if ((earlier?.length ?? 0) >= limit.max) return;
     const { error: insertError } = await supabaseAdmin.from('ai_traffic_events').insert(row);
     if (insertError && insertError.code !== '23505') throw new Error(insertError.message);
   } catch (err) {

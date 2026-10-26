@@ -43,11 +43,18 @@
  * which this visitor got; a default after t.js only ever pauses). An id
  * kept earlier says the visitor agreed then, on the pages after.
  * Until then events wait on the page; ansvisor('consent', 'denied'), or a
- * Consent Mode update taking analytics_storage back, deletes the id, and a
- * default that denies it only pauses. data-consent="always" keeps it at
+ * Consent Mode update taking analytics_storage back, deletes the stored id
+ * and what waited, and a default that denies it only pauses. The page keeps
+ * the id in memory, so a grant later on it (a banner pushing "denied" until
+ * the visitor chooses, a visitor changing their mind) still keeps the AI
+ * landing. Calls queued before t.js run consent first, so a queued
+ * "denied" comes before anything is sent. data-consent="always" keeps it at
  * once, for a site whose own banner covers it, unless Consent Mode says
  * otherwise. Pages go without their query string, forms without anything
- * typed in them; an id past its 30 days is deleted.
+ * typed in them; an id past its 30 days is deleted. A visitor it doesn't
+ * follow (no AI visit, no id kept) gets no hooks: no dataLayer made, no
+ * wrapped push or pushState, no submit listener; and the hooks it adds
+ * never stop the site's own push or route change.
  *
  * Forms: one with an email field counts as a signup once per page, unless
  * it says otherwise (data-ansvisor-goal="demo", "newsletter"…) or opts out
@@ -133,10 +140,10 @@ v={id:id,f:{s:pf,u:here(),at:now}};
 function keep(){if(v)try{localStorage.setItem(K,JSON.stringify(v))}catch(e){}}
 function send(d){if(!v)return;d.id=v.id;d.f=v.f;d.u=d.u||here();if(ok)post(d);else q.push(d)}
 function grant(){ok=!0;keep();var w=q;q=[];for(var i=0;i<w.length;i++)post(w[i])}
-function deny(){ok=!1;q=[];v=null;try{localStorage.removeItem(K)}catch(e){}}
+function deny(){ok=!1;q=[];try{localStorage.removeItem(K)}catch(e){}}
 function pv(){var p=here();if(p===last)return;last=p;send({k:"pv"})}
 function gc(it){return it&&it[0]==="consent"&&it[2]&&it[2].analytics_storage?it:null}
-var dl=window.dataLayer=window.dataLayer||[],up="",df="",rg=!1;
+var dl=window.dataLayer||[],up="",df="",rg=!1;
 for(var i=0;i<dl.length;i++){var it=gc(dl[i]);if(!it)continue;if(it[1]==="update")up=it[2].analytics_storage;else if(it[2].region)rg=!0;else df=it[2].analytics_storage}
 if(up==="denied")deny();
 else if(up==="granted")ok=!0;
@@ -159,13 +166,16 @@ send(d);
 }
 var Q=window.ansvisor&&window.ansvisor.q||[];
 window.ansvisor=function(t,a){cmd(t,a)};
-for(var i=0;i<Q.length;i++)cmd(Q[i][0],Q[i][1]);
+for(var i=0;i<Q.length;i++)if(Q[i][0]==="consent")cmd(Q[i][0],Q[i][1]);
+for(var i=0;i<Q.length;i++)if(Q[i][0]!=="consent")cmd(Q[i][0],Q[i][1]);
+if(!v)return;
+window.dataLayer=dl;
 if(ok)keep();
-if(old&&v)pv();else last=here();
+if(old)pv();else last=here();
 var dp=dl.push;
 dl.push=function(){
-for(var i=0;i<arguments.length;i++){var it=gc(arguments[i]);if(!it)continue;var s=it[2].analytics_storage;
-if(it[1]==="update"){if(s==="granted")grant();else deny()}else if(s==="denied")ok=!1}
+try{for(var i=0;i<arguments.length;i++){var it=gc(arguments[i]);if(!it)continue;var s=it[2].analytics_storage;
+if(it[1]==="update"){if(s==="granted")grant();else deny()}else if(s==="denied")ok=!1}}catch(e){}
 return dp.apply(dl,arguments);
 };
 document.addEventListener("submit",function(e){
@@ -183,7 +193,7 @@ if(n)d.n=String(n).slice(0,80);
 send(d);
 },!0);
 var hp=window.history&&history.pushState;
-if(hp)history.pushState=function(){var res=hp.apply(history,arguments);pv();return res};
+if(hp)history.pushState=function(){var res=hp.apply(history,arguments);try{pv()}catch(e){}return res};
 window.addEventListener("popstate",pv);
 })();
 `;

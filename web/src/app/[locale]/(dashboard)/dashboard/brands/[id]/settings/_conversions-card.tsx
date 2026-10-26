@@ -23,6 +23,7 @@ import {
   CONSENT_CALL,
   CONSENT_MODES,
   CONVERSION_CALL,
+  DENY_CALL,
   FORM_GOAL_ATTRIBUTE,
   FORM_OFF_ATTRIBUTE,
   ORDER_CALL,
@@ -213,15 +214,20 @@ export function ConversionsCard({
                   </p>
                   <CopyBlock text={tag} label={t('copyTag')} />
                 </Step>
-                {consent === 'wait' && (
-                  <Step title={t('steps.consent')}>
-                    <p className="text-xs text-muted-foreground">{t('steps.consentHelp')}</p>
-                    <CopyBlock text={CONSENT_CALL} label={t('copyConsent')} />
-                    <p className="text-xs text-muted-foreground">
-                      {t.rich('steps.consentMode', { name: 'analytics_storage', code })}
-                    </p>
-                  </Step>
-                )}
+                {/* Waiting: the grant and the refusal; not waiting, the refusal only. */}
+                <Step title={t(consent === 'wait' ? 'steps.consent' : 'steps.refuse')}>
+                  {consent === 'wait' && (
+                    <>
+                      <p className="text-xs text-muted-foreground">{t('steps.consentHelp')}</p>
+                      <CopyBlock text={CONSENT_CALL} label={t('copyConsent')} />
+                    </>
+                  )}
+                  <p className="text-xs text-muted-foreground">{t('steps.denyHelp')}</p>
+                  <CopyBlock text={DENY_CALL} label={t('copyDeny')} />
+                  <p className="text-xs text-muted-foreground">
+                    {t.rich('steps.consentMode', { name: 'analytics_storage', code })}
+                  </p>
+                </Step>
                 <Step title={t('steps.forms')}>
                   <p className="text-xs text-muted-foreground">
                     {t.rich('steps.formsHelp', {
