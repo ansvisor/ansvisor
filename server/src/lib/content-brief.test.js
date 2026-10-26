@@ -62,8 +62,10 @@ vi.mock('./content-runs.js', async (importOriginal) => ({
   stopIfStopped: (...args) => stopIfStopped(...args),
 }));
 
-const { buildBriefPrompt, mapOutline, rebuildDraftBrief, rebuildSources } =
+const { briefGuard, buildBriefPrompt, mapOutline, rebuildDraftBrief, rebuildSources } =
   await import('./content-brief.js');
+const { NAME_PLACEHOLDER, QUOTE_PLACEHOLDER } = await import('./content-people.js');
+const { NUMBER_PLACEHOLDER } = await import('./content-sources.js');
 const { PlanLimitError } = await import('./plan-guard.js');
 // The real hold: self-hosted here, so it reserves nothing and writes each charge.
 const realGuard = await vi.importActual('./plan-guard.js');
@@ -133,6 +135,61 @@ beforeEach(() => {
 });
 
 describe('rebuildDraftBrief', () => {
+  it('puts a number, name or quote its sources don\u2019t have as a placeholder, as the writer would', async () => {
+    const year = new Date().getUTCFullYear();
+    generateObject.mockResolvedValue({
+      object: {
+        goal: 'Win 73% of home baristas',
+        audience: 'Home baristas who drink 4 cups a day',
+        outline: [
+          {
+            heading: 'The 12 best espresso machines under $500',
+            keyPoints: [
+              'Dr. Jane Doe recommends a flat burr',
+              '"Pressure matters far more than price," says the owner',
+              'Machines under 500 dollars',
+              'Compare 3 grinders',
+              `The best machines of ${year}`,
+            ],
+            fanout: 'home espresso grinder',
+            platform: 'copilot-web',
+          },
+        ],
+        keywords: ['espresso', 'top 12 espresso machines', 'espresso under 500'],
+      },
+      usage: { inputTokens: 1000, outputTokens: 500 },
+    });
+
+    const brief = await rebuildDraftBrief({ draftId: DRAFT, brandId: BRAND, sources: sources() });
+
+    expect(brief.goal).toBe(`Win ${NUMBER_PLACEHOLDER} of home baristas`);
+    // A lone digit is a count, as on a page.
+    expect(brief.audience).toBe('Home baristas who drink 4 cups a day');
+    expect(brief.outline).toEqual([
+      {
+        // A heading's number as a page's: "$500" is the prompt's.
+        heading: `The ${NUMBER_PLACEHOLDER} best espresso machines under $500`,
+        keyPoints: [
+          `${NAME_PLACEHOLDER} recommends a flat burr`,
+          `${QUOTE_PLACEHOLDER} says the owner`,
+          // The fan-out's number, a count and this year stay.
+          'Machines under 500 dollars',
+          'Compare 3 grinders',
+          `The best machines of ${year}`,
+        ],
+        fanout: 'home espresso grinder',
+        platform: 'copilot-web',
+      },
+    ]);
+    // A keyword that adds one goes: a placeholder can't be searched for.
+    expect(brief.keywords).toEqual(['espresso', 'espresso under 500']);
+    expect(draftWrites().at(-1)).toEqual({
+      table: 'content_drafts',
+      op: 'update',
+      value: { brief },
+    });
+  });
+
   it('writes the brief from the kept sources, charges AI usage, and saves it on the draft', async () => {
     const brief = await rebuildDraftBrief({ draftId: DRAFT, brandId: BRAND, sources: sources() });
 
@@ -255,18 +312,24 @@ describe('rebuildDraftBrief', () => {
           { heading: '   ', keyPoints: ['Lost'], fanout: null, platform: null },
           {
             heading: 'h'.repeat(400),
-            keyPoints: Array.from({ length: 10 }, (_, i) => `${i}`.repeat(600)),
+            // Letters: a number the sources don't have would go as a placeholder.
+            keyPoints: Array.from({ length: 10 }, (_, i) =>
+              String.fromCharCode(97 + i).repeat(600),
+            ),
             fanout: null,
             platform: null,
           },
           ...Array.from({ length: 14 }, (_, i) => ({
-            heading: `Section ${i}`,
+            heading: `Section ${String.fromCharCode(97 + i)}`,
             keyPoints: [],
             fanout: null,
             platform: null,
           })),
         ],
-        keywords: Array.from({ length: 20 }, (_, i) => `${i} ${'k'.repeat(90)}`),
+        keywords: Array.from(
+          { length: 20 },
+          (_, i) => `${String.fromCharCode(97 + i)}${'k'.repeat(90)}`,
+        ),
       },
       usage: { inputTokens: 1000, outputTokens: 500 },
     });
@@ -348,6 +411,88 @@ describe('rebuildSources', () => {
   it('brings the length into the range a rebuild takes', () => {
     expect(rebuildSources.parse(sources({ length: 50 })).length).toBe(100);
     expect(rebuildSources.parse(sources({ length: 60_000 })).length).toBe(50_000);
+  });
+});
+
+describe('the brief guard', () => {
+  const guardFor = (over = {}) =>
+    briefGuard({
+      brand: { name: 'Acme 24', industry: null, description: 'Roasting since 1998' },
+      draft: { title: 'The 2019 espresso guide' },
+      prompts: ['Who is Ada Lovelace?'],
+      sources: sources({ headings: ['Our 7-day trial'] }),
+      ...over,
+    });
+
+  it('knows what the brief was built from: the brand, the page, its sources and the length', () => {
+    const guard = guardFor();
+    for (const text of [
+      'Acme 24 has roasted since 1998',
+      'Update the 2019 guide',
+      'Keep the 7-day trial',
+      'About 3,000 characters',
+      'Machines under 500',
+      'Ask Ada Lovelace',
+    ]) {
+      expect(guard.text(text)).toBe(text);
+    }
+  });
+
+  it('puts what it adds as a placeholder, and drops a keyword that adds one', () => {
+    const guard = guardFor();
+    expect(guard.text('Prices rose 40% in 2021')).toBe(
+      `Prices rose ${NUMBER_PLACEHOLDER} in ${NUMBER_PLACEHOLDER}`,
+    );
+    expect(guard.heading('Why CEO Grace Hopper chose Acme')).toBe(
+      'Why CEO Grace Hopper chose Acme',
+    );
+    expect(guard.text('Ask CEO Grace Hopper')).toBe(`Ask CEO ${NAME_PLACEHOLDER}`);
+    expect(guard.keeps('espresso under 500')).toBe(true);
+    expect(guard.keeps('espresso 2021')).toBe(false);
+    expect(guard.text(null)).toBe('');
+  });
+
+  it('reads names in a heading by their honorific, and drops a keyword that names someone', () => {
+    const guard = guardFor();
+    expect(guard.heading('Why Dr. Jane Doe pulls short shots')).toBe(
+      `Why ${NAME_PLACEHOLDER} pulls short shots`,
+    );
+    expect(guard.keeps('Dr. Jane Doe espresso')).toBe(false);
+  });
+
+  it('leaves a question in quotes alone: it is one to answer, not a quote', () => {
+    const guard = guardFor();
+    expect(guard.text('Answer "Which espresso machine should I buy first?" up top')).toBe(
+      'Answer "Which espresso machine should I buy first?" up top',
+    );
+    expect(guard.text('Quote “Pressure matters far more than price for beginners”')).toBe(
+      `Quote ${QUOTE_PLACEHOLDER}`,
+    );
+  });
+
+  it('reads Turkish percentages as the writer does', () => {
+    const guard = guardFor({ prompts: ['Espresso makinelerinde %25 indirim var mı?'] });
+    expect(guard.text('%25 indirimi anlat')).toBe('%25 indirimi anlat');
+    expect(guard.text('Satışlar yüzde 40 arttı')).toBe(
+      `Satışlar yüzde ${NUMBER_PLACEHOLDER} arttı`,
+    );
+  });
+});
+
+describe('the brief\u2019s cut', () => {
+  it('never splits a placeholder: one the cut would reach goes whole', () => {
+    const [section] = mapOutline(
+      [
+        {
+          heading: 'Heading',
+          keyPoints: [`${'a'.repeat(490)} ${NUMBER_PLACEHOLDER}`],
+          fanout: null,
+          platform: null,
+        },
+      ],
+      [],
+    );
+    expect(section.keyPoints).toEqual(['a'.repeat(490)]);
   });
 });
 

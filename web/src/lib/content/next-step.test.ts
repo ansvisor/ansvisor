@@ -154,7 +154,13 @@ describe('nextStep', () => {
     expect(nextStep(state({ quality: null })).step.primary).toBe('markReady');
     expect(ids(state({ quality: null }))).toHaveLength(4);
     const ready = state({ open: false, openRules: rules(3) });
-    expect(nextStep(ready).step).toMatchObject({ id: 'ready', primary: 'export' });
+    // Marked ready: Mark published beside Export, for its live address (CE-013); published, Export alone.
+    expect(nextStep(ready).step).toMatchObject({
+      id: 'ready',
+      primary: 'export',
+      alternative: 'markPublished',
+    });
+    expect(nextStep({ ...ready, published: true }).step.alternative).toBeNull();
     expect(nextStep(ready).path.every((p) => p.state === 'done' || p.state === 'skipped')).toBe(
       true,
     );
