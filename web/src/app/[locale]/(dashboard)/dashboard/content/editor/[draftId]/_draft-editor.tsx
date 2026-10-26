@@ -3296,7 +3296,10 @@ export function DraftEditor({
       // so they hold no later run (open_suggestions). Left open when that
       // fails, for the person to decide on the card; and kept when the
       // version is the page it was (nothing was restored).
-      const samePage = html === pageBefore && restored.title === title;
+      // As the server says (00289), or, from a database before it, as the page reads.
+      const samePage =
+        restored.restored === false ||
+        (restored.restored === undefined && html === pageBefore && restored.title === title);
       const stale = samePage
         ? []
         : suggestionsNow.current.filter((s) => s.status === 'open').map((s) => s.id);
@@ -3315,7 +3318,11 @@ export function DraftEditor({
         );
       }
       // It says what went: they counted toward AI usage, and many may still apply.
-      toast.success(t('history.restored', { version: label, count: setAside ? stale.length : 0 }));
+      toast.success(
+        samePage
+          ? t('history.restoredSame', { version: label })
+          : t('history.restored', { version: label, count: setAside ? stale.length : 0 }),
+      );
       // Its card goes as if closed, with its Undo all and last run: they were
       // for the page before (editor test 2026-10-25). A new batch opens it.
       if (!samePage) setBarClosed(true);

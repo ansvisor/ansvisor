@@ -829,6 +829,18 @@ describe('History', () => {
     });
     expect(rpcCalls).toEqual([['content_draft_restore', { p_version_id: VERSION }]]);
 
+    // Whether the page changed, as the server says it (00289).
+    rpcResult = {
+      data: {
+        title: 'Old',
+        bodyHtml: '<h1>Old</h1>',
+        updatedAt: '2026-10-21T10:00:00Z',
+        restored: false,
+      },
+      error: null,
+    };
+    await expect(restoreDraftVersion(DRAFT, VERSION)).resolves.toMatchObject({ restored: false });
+
     rpcResult = { data: null, error: null };
     await expect(restoreDraftVersion(DRAFT, VERSION)).rejects.toThrow('not_found');
     await expect(restoreDraftVersion(DRAFT, '../etc')).rejects.toThrow('invalid');

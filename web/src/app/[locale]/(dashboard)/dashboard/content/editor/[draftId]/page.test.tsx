@@ -1569,11 +1569,12 @@ describe('the content editor', () => {
           status: 'open' as const,
         },
       ]);
-      // The server left the draft as it was: nothing was restored.
+      // The server left the draft as it was, and says so (00289).
       restoreDraftVersion.mockResolvedValue({
         title: 'Pipeline forecasting',
         bodyHtml: body,
         updatedAt: '2026-10-20T10:00:00Z',
+        restored: false,
       });
       await renderPage();
       const items = await openHistory();
@@ -1583,6 +1584,9 @@ describe('the content editor', () => {
       expect(
         container.querySelector('[role="region"][aria-label="Agent suggestions"]'),
       ).not.toBeNull();
+      expect(toast.success).toHaveBeenCalledWith(
+        expect.stringMatching(/^“.+” is the page as it is: nothing changed\.$/),
+      );
     });
 
     it('opens the card closed for a batch from before the page was last restored', async () => {

@@ -1825,7 +1825,12 @@ export async function restoreDraftVersion(id: string, versionId: string): Promis
       else if (typed) updatedAt = typed.updated_at;
     }
   }
-  return { title: restored.title, bodyHtml: restored.bodyHtml, updatedAt };
+  return {
+    title: restored.title,
+    bodyHtml: restored.bodyHtml,
+    updatedAt,
+    ...(typeof restored.restored === 'boolean' ? { restored: restored.restored } : {}),
+  };
 }
 
 /**

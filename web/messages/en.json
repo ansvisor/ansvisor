@@ -3981,6 +3981,7 @@
         "restore": "Restore",
         "restoreLabel": "Restore {version}, {when}",
         "footer": "Restoring makes a new version. Nothing is lost.",
+        "restoredSame": "“{version}” is the page as it is: nothing changed.",
         "restored": "Restored “{version}”. {count, plural, =0 {The page before it is in History.} one {The agent’s open change was for the page before, so it was set aside.} other {The agent’s # open changes were for the page before, so they were set aside.}}",
         "restoreFailed": "Couldn't restore it. Try again.",
         "htmlOpen": "Go back to the page to use History",
