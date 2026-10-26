@@ -2365,6 +2365,8 @@ const AGENT_WRITE_ERRORS = [
   'writing',
   'org_writing',
   'open_suggestions',
+  // A Fix open rules or Quality's hand-off still under way on the draft (content-writer.js).
+  'running',
   'not_draft',
   // Rewrite the page to these rules: a page with no text, or one too long to send whole.
   'empty',
