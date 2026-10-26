@@ -6,7 +6,6 @@ import { resolveModel } from './ai-provider.js';
 import {
   ATTRIBUTION_RULE,
   attributableSources,
-  pageLanguageOf,
   bannedWordsOf,
   placeholderAttributionsInHtml,
   FANOUT_RULE,
@@ -24,6 +23,7 @@ import {
 } from './content-agent.js';
 import { contentBriefModelId, rebuildSources } from './content-brief.js';
 import { inputSources, readDraftInputs } from './content-inputs.js';
+import { draftLanguage } from './content-language.js';
 import { linkAllowList, linkTargetsPrompt, readLinkTargets } from './content-links.js';
 import { siteTypeLine, pageTypeFormat } from './content-page-types.js';
 import { authorWords, guardPeople, guardPeopleInHtml, knownPeople } from './content-people.js';
@@ -375,7 +375,7 @@ export async function startDraftWriting({ draftId, brandId, input, rewrite = fal
   const { data: draft, error: draftError } = await supabaseAdmin
     .from('content_drafts')
     .select(
-      'id, brand_id, title, page_type, method, source_url, body_html, status, agent_state, agent_state_at, opportunity_id, brief, action_id',
+      'id, brand_id, title, page_type, rules, method, source_url, body_html, status, agent_state, agent_state_at, opportunity_id, brief, action_id',
     )
     .eq('id', draftId)
     .maybeSingle();
@@ -871,7 +871,7 @@ async function writeWithRun({ draft, brand, model, input, budget, rewrite, run }
     draft.body_html,
     numbered,
     authors,
-    pageLanguageOf(input.rules, brand.language),
+    await draftLanguage(draft, brand.organization_id, brand.language),
   );
 
   if (rewrite) {

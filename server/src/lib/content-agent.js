@@ -43,7 +43,8 @@ import {
   textPieces,
   todayText,
 } from './content-sources.js';
-import { getLanguageName, languageCodeOf } from './languages.js';
+import { draftLanguage } from './content-language.js';
+import { getLanguageName } from './languages.js';
 import { PlanLimitError, reserveAiBudget } from './plan-guard.js';
 
 /**
@@ -285,6 +286,20 @@ const textOf = (html) =>
     .root()
     .text();
 
+/**
+ * HTML's lines as text, as the guards read them (editLines): each block and
+ * each line break apart, a line's inline tags read with it ("<a>Gartner</a>'s
+ * report" whole).
+ */
+export function htmlLines(html) {
+  const lines = [];
+  editLines(cheerio.load(html || '', null, false), (text) => {
+    lines.push(text);
+    return [];
+  });
+  return lines;
+}
+
 const isHeading = (tag) => /^h[1-6]$/.test(tag);
 
 /** A question, then what follows it: "?" before a space, or a full-width "？". */
@@ -334,10 +349,16 @@ const ATTRIBUTIONS = [
   ),
   new RegExp(String.raw`${SOURCE_NAME}\s+(?:says|said)\b`, 'gu'),
   // "Claims" and "states" are nouns too ("Warranty claims are…", "all 50
-  // US states"): those, as "reports" and the rest, only before "that", and
-  // never after a number or "all" ("all 50 US states that allow…").
+  // US states"): those, as "reports" and the rest, only before "that".
   new RegExp(
-    String.raw`(?<!(?:\b[Aa]ll|\p{N})\s+)${SOURCE_NAME}\s+(?:claims|claimed|states|stated|reports|reported|notes|noted|finds|found|estimates|estimated)\s+that\b`,
+    String.raw`${SOURCE_NAME}\s+(?:reports|reported|notes|noted|finds|found|estimates|estimated)\s+that\b`,
+    'gu',
+  ),
+  // …and never a run of names counted ("all 50 US states that allow…", "most
+  // US states that", "the 48 contiguous US states that"), or one read from
+  // the middle of a name ("New England states that").
+  new RegExp(
+    String.raw`(?<!(?:\b(?:[Aa]ll|[Mm]ost|[Mm]any|[Ss]ome|[Ss]everal|[Bb]oth|[Ee]very|\d{1,3})(?:\s+\p{Ll}+){0,2}|\p{Lu}[\p{L}\p{N}&.'’-]*)\s+)${SOURCE_NAME}\s+(?:claims|claimed|states|stated)\s+that\b`,
     'gu',
   ),
   new RegExp(
@@ -391,16 +412,6 @@ const PER_ATTRIBUTIONS = [
   new RegExp(String.raw`,\s*per\s+${LEAD}${SOURCE_NAME}(?=\s*[.;!?]|\s*$)`, 'gu'),
 ];
 
-/**
- * The page's language: its Language rule's when the editor sends it on, as
- * the CMS send reads it (content-delivery.js), else the brand's.
- */
-export function pageLanguageOf(rules = [], brandLanguage = null) {
-  const detail = rules.find((r) => r.key === 'language')?.detail ?? '';
-  const aim = detail.split(' · ')[0].match(/^aim:\s*(.*)$/i)?.[1];
-  return languageCodeOf(aim) || languageCodeOf(brandLanguage) || brandLanguage || null;
-}
-
 /** The attributions read on a page in this language: "per" on an English one (or one not said). */
 const attributionsFor = (language) =>
   !language || /^en\b/i.test(language) ? [...ATTRIBUTIONS, ...PER_ATTRIBUTIONS] : ATTRIBUTIONS;
@@ -413,7 +424,12 @@ const attributionsFor = (language) =>
 export function attributableSources(pageHtml, numbered, authors = [], language = null) {
   const inputs = numbered.filter((s) => s.kind === 'input').map(sourceWords);
   return {
-    ...knownPeople(...attributedNames(htmlText(pageHtml), language), ...inputs, ...authors),
+    // Read line by line, as a change's blocks are (htmlLines).
+    ...knownPeople(
+      ...htmlLines(pageHtml).flatMap((line) => attributedNames(line, language)),
+      ...inputs,
+      ...authors,
+    ),
     language,
   };
 }
@@ -438,15 +454,18 @@ export function attributedNames(text, language = null) {
 /**
  * Where a name's own words start: past the words a sentence starts with, a
  * role or an adverb ("As Zapier", "CEO Jane Doe", "Recently Gartner"), as
- * personIn (content-people.js) reads a person's; never past its last word,
- * which is the name ("Grammarly", "Coach").
+ * personIn (content-people.js) reads a person's. Its last word is the name
+ * when it is an "-ly" word or a capitalised role ("Grammarly", "Coach"),
+ * never a sentence's word ("Who says", "Most said") or "CEO" alone.
  */
 function nameStart(name) {
   const words = [...name.matchAll(/\S+/g)];
   for (const [i, word] of words.entries()) {
     const lower = word[0].toLowerCase();
-    if (i === words.length - 1) return word.index;
-    if (!NOT_NAMES.has(lower) && !isRole(lower) && !/^\p{L}+ly$/u.test(lower)) return word.index;
+    if (NOT_NAMES.has(lower)) continue;
+    const ly = /^\p{L}+ly$/u.test(lower);
+    if (!ly && !isRole(lower)) return word.index;
+    if (i === words.length - 1 && (ly || /^\p{Lu}\p{Ll}+$/u.test(word[0]))) return word.index;
   }
   return name.length;
 }
@@ -732,14 +751,15 @@ export function keepSuggestions(raw, passages, lockedKeys, ruleKeys, links = nul
     const reason = stripSourceIds(s.reason).trim().slice(0, 300);
     if (!passage || !reason || passage.text.length > MAX_PASSAGE_CHARS) continue;
     const rules = [...new Set(s.rules.filter((key) => ruleKeys.has(key)))];
-    // Blocks read as the page is (attributableSources), a space between
-    // them: compact HTML ("<li>ChatGPT</li><li>Gemini</li>") never runs
-    // their words together.
-    const insertOf = (html) =>
-      htmlText(html).trim() &&
-      html.length <= 20_000 &&
-      // A claim given to a source it wasn't given (editor test 2026-10-25).
-      !addsAttribution('', htmlText(html), attributable)
+    // Blocks read line by line (htmlLines): compact HTML
+    // ("<li>ChatGPT</li><li>Gemini</li>") never runs their words together,
+    // and a linked name ("<a>Gartner</a>'s report") is read whole.
+    const insertOf = (html) => {
+      const lines = htmlLines(html);
+      return lines.some((line) => line.trim()) &&
+        html.length <= 20_000 &&
+        // A claim given to a source it wasn't given (editor test 2026-10-25).
+        !lines.some((line) => addsAttribution('', line, attributable))
         ? {
             id: `insert:${passage.text}:${html}`,
             row: {
@@ -752,6 +772,7 @@ export function keepSuggestions(raw, passages, lockedKeys, ruleKeys, links = nul
             },
           }
         : null;
+    };
     // One suggestion's changes are kept together, or not at all: a split
     // replace never leaves a question without its answer.
     let changes;
@@ -771,7 +792,12 @@ export function keepSuggestions(raw, passages, lockedKeys, ruleKeys, links = nul
       if (
         keepsPlaceholders &&
         changed &&
-        dropsPlaceholder(passage.text, before, `${words} ${htmlText(blocks)}`, passage.tag)
+        dropsPlaceholder(
+          passage.text,
+          before,
+          `${words} ${htmlLines(blocks).join(' ')}`,
+          passage.tag,
+        )
       ) {
         continue;
       }
@@ -782,7 +808,7 @@ export function keepSuggestions(raw, passages, lockedKeys, ruleKeys, links = nul
           asksMoreThanOne(passage, before, words) ||
           addsAttribution(before, words, attributable) ||
           (!/^h[1-6]$/.test(passage.tag) &&
-            dropsName(passage.text, before, words, rules, htmlText(blocks), banned)))
+            dropsName(passage.text, before, words, rules, htmlLines(blocks).join(' '), banned)))
       )
         continue;
       changes = [
@@ -1019,7 +1045,7 @@ export async function fixDraftRules({ draftId, brandId, input, handoff = null })
   const { data: draft, error: draftError } = await supabaseAdmin
     .from('content_drafts')
     .select(
-      `id, brand_id, title, body_html, page_type, action_id, status, source_url, agent_state, agent_state_at${handoff ? ', quality_handoff' : ''}`,
+      `id, brand_id, title, body_html, page_type, rules, action_id, status, source_url, agent_state, agent_state_at${handoff ? ', quality_handoff' : ''}`,
     )
     .eq('id', draftId)
     .maybeSingle();
@@ -1209,7 +1235,7 @@ async function fixWithRun({
     draft.body_html,
     numbered,
     authors,
-    pageLanguageOf(input.rules, brand.language),
+    await draftLanguage(draft, brand.organization_id, brand.language),
   );
   // Where it may link: the brand's pages and the draft's sources (A); a
   // hand-off's source checks link the draft's sources.
