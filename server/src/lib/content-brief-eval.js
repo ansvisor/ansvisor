@@ -66,7 +66,7 @@ export const BRIEF_CRITERIA = [
   },
   {
     key: 'format',
-    ask: 'Does it say how each part is best shown (a table for a comparison, steps for a how-to, a question FAQ at the end), with short headings (H1 up to 60 characters, H2 about 8–15 words)?',
+    ask: 'Does it say how each part is best shown (a table for a comparison, steps for a how-to, a question FAQ at the end), with short H2 headings (about 8–15 words)?',
   },
   {
     key: 'naturalLanguage',

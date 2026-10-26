@@ -166,16 +166,25 @@ export const outlineSchemaV2 = outlineSchema.extend({
           .describe(
             "What the section's first sentences must answer directly, in one line: a note to the writer, not the answer.",
           ),
-        // Keys, chosen from the list: a brief in Turkish or German would
-        // translate a free word ("tablo"), which the web can't read.
-        format: z.enum(BRIEF_FORMATS).nullable().describe('How the section is best shown.'),
+        // Keys from the list, in the JSON schema the model is held to: a
+        // brief in Turkish or German would translate a free word ("tablo").
+        // Read as any text, so a model that writes "Table" doesn't fail the
+        // whole call (charged all the same): sectionPlan reads the key.
+        format: z
+          .string()
+          .meta({ enum: BRIEF_FORMATS })
+          .nullable()
+          .describe('How the section is best shown.'),
         facts: z
           .array(
             z.object({
               claim: z
                 .string()
                 .describe('A fact the section should state, as what to find out: never a figure.'),
-              sourceType: z.enum(FACT_SOURCES).describe('The kind of source it needs.'),
+              sourceType: z
+                .string()
+                .meta({ enum: FACT_SOURCES })
+                .describe('The kind of source it needs.'),
               source: z
                 .string()
                 .nullable()
@@ -414,7 +423,7 @@ function shapeWhole(object, { brand, draft, prompts, sources, rules }) {
   const v2 = object.outline.some((section) => 'answer' in section || 'facts' in section);
   const byId = v2 ? new Map(briefNumbered(sources).map((n) => [n.id, n])) : null;
   // Version 2's numbers (S1…) belong in a fact's source only: taken out of the words.
-  const words = v2 ? stripSourceIds : (text) => text;
+  const words = v2 ? (text) => stripSourceIds(text, byId.size) : (text) => text;
   return {
     goal: clip(guard.text(words(object.goal)), BRIEF_LIMITS.goal),
     audience: clip(guard.text(words(object.audience)), BRIEF_LIMITS.audience),
@@ -423,14 +432,14 @@ function shapeWhole(object, { brand, draft, prompts, sources, rules }) {
         ...section,
         heading: guard.heading(words(section.heading)),
         keyPoints: (section.keyPoints ?? []).map((point) => guard.text(words(point))),
-        ...(v2 ? sectionPlan(section, guard, byId) : {}),
+        ...(v2 ? sectionPlan(section, guard, byId, words) : {}),
       })),
       sources.fanouts,
     ),
     keywords: [
       ...new Set(
         object.keywords
-          .map(words)
+          .map((keyword) => words(keyword))
           .filter(guard.keeps)
           .map((k) => k.trim().slice(0, BRIEF_LIMITS.keyword))
           .filter(Boolean),
@@ -453,12 +462,12 @@ const keyOf = (value) =>
  * by kind and ref, as a suggestion keeps its source, never its number in
  * this run: S1 is another page once the Sources tab changes).
  */
-function sectionPlan(section, guard, byId) {
-  const answer = clip(guard.text(stripSourceIds(section.answer)), BRIEF_V2_LIMITS.answer);
+function sectionPlan(section, guard, byId, words) {
+  const answer = clip(guard.text(words(section.answer ?? '')), BRIEF_V2_LIMITS.answer);
   const format = BRIEF_FORMATS.includes(keyOf(section.format)) ? keyOf(section.format) : null;
   const facts = (section.facts ?? [])
     .map((fact) => {
-      const claim = clip(guard.text(stripSourceIds(fact?.claim)), BRIEF_V2_LIMITS.claim);
+      const claim = clip(guard.text(words(fact?.claim ?? '')), BRIEF_V2_LIMITS.claim);
       const sourceType = keyOf(fact?.sourceType);
       if (!claim || !FACT_SOURCES.includes(sourceType)) return null;
       const given = byId.get(
@@ -556,10 +565,14 @@ export function briefKnown({ brand, draft, prompts, sources, rules = [] }) {
  * left empty goes, long text is shortened, and the lists are capped.
  */
 export function mapOutline(outline, fanouts) {
-  const byQuery = new Map(fanouts.map((f) => [fanoutKey(f.query), f]));
+  // As listed first; then without its quotes, as the model may copy it.
+  const asListed = new Map(fanouts.map((f) => [norm(f.query), f]));
+  const unquoted = new Map(fanouts.map((f) => [fanoutKey(f.query), f]));
   return outline
     .map((section) => {
-      const fanout = section.fanout ? byQuery.get(fanoutKey(section.fanout)) : undefined;
+      const fanout = section.fanout
+        ? (asListed.get(norm(section.fanout)) ?? unquoted.get(fanoutKey(section.fanout)))
+        : undefined;
       const platform =
         fanout && fanout.platforms.includes(section.platform)
           ? section.platform

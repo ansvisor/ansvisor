@@ -1,5 +1,6 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { z } from 'zod';
 
 /**
  * Rebuild outline (Content Editor CE-007): the brief written from the
@@ -564,6 +565,21 @@ describe('the brief prompt', () => {
     expect(read('1')).toContain('Industry: Fashion & Apparel\nDescription:');
   });
 
+  it('matches a fan-out copied in its quotes, one written as listed first', () => {
+    const fanouts = [
+      { query: 'best crm', platforms: ['chatgpt'] },
+      { query: '"best crm"', platforms: ['copilot-web'] },
+      { query: 'crm for startups', platforms: ['perplexity-web'] },
+    ];
+    const section = (fanout) => ({ heading: 'H', keyPoints: [], fanout, platform: null });
+    expect(
+      mapOutline(
+        [section('"best crm"'), section('best crm'), section('“crm for startups”')],
+        fanouts,
+      ).map((s) => s.fanout),
+    ).toEqual(['"best crm"', 'best crm', 'crm for startups']);
+  });
+
   it('maps an outline with no fan-outs kept to none', () => {
     expect(mapOutline(outline.slice(0, 1), [])).toEqual([
       {
@@ -651,7 +667,8 @@ describe('the brief rules (2026), behind CONTENT_BRIEF_RULES', () => {
           },
           {
             heading: 'Grinders (S1)',
-            keyPoints: ['Burr vs blade [S1, S2]'],
+            // Only the numbers given go: a name with one stays.
+            keyPoints: ['Burr vs blade [S1]', 'Model (S23) grinders'],
             fanout: null,
             platform: null,
             answer: null,
@@ -680,7 +697,7 @@ describe('the brief rules (2026), behind CONTENT_BRIEF_RULES', () => {
     expect(section.format).toBeNull();
     expect(second).toMatchObject({
       heading: 'Grinders',
-      keyPoints: ['Burr vs blade'],
+      keyPoints: ['Burr vs blade', 'Model (S23) grinders'],
       format: 'table',
     });
     const page = {
@@ -698,23 +715,63 @@ describe('the brief rules (2026), behind CONTENT_BRIEF_RULES', () => {
     expect(section.facts.length).toBeLessThanOrEqual(BRIEF_V2_LIMITS.facts);
   });
 
-  it('asks for the format and the source’s kind by key, so a brief in Turkish can’t translate them', () => {
-    const answer = (section) =>
-      outlineSchemaV2.safeParse({
+  it('holds the model to the format and source keys, without failing a call on one off the list', () => {
+    // The JSON schema the model is given, as the AI SDK writes it.
+    const json = z.toJSONSchema(outlineSchemaV2, { target: 'draft-7', io: 'input' });
+    const section = json.properties.outline.items.properties;
+    expect(section.format.anyOf).toEqual([
+      { type: 'string', enum: BRIEF_FORMATS },
+      { type: 'null' },
+    ]);
+    expect(section.facts.items.properties.sourceType.enum).toEqual(FACT_SOURCES);
+    expect(SYSTEM_PROMPT_V2).toContain('write them as listed, in English');
+    // A model that writes "Table" or a translated key still answers: read by key afterwards.
+    const read = outlineSchemaV2.safeParse({
+      goal: 'g',
+      audience: 'a',
+      outline: [
+        {
+          heading: 'h',
+          keyPoints: [],
+          fanout: null,
+          platform: null,
+          answer: null,
+          format: 'Tablo',
+          facts: [{ claim: 'c', sourceType: 'Statistic', source: null }],
+        },
+      ],
+      keywords: [],
+    });
+    expect(read.success).toBe(true);
+  });
+
+  it('leaves version 1’s words as they were: numbers aren’t taken out, the rules aren’t known', async () => {
+    generateObject.mockResolvedValue({
+      object: {
         goal: 'g',
         audience: 'a',
         outline: [
-          { heading: 'h', keyPoints: [], fanout: null, platform: null, answer: null, ...section },
+          {
+            heading: 'Machines',
+            keyPoints: ['Price bands (S1)', 'Answer in 60 words'],
+            fanout: null,
+            platform: null,
+          },
         ],
         keywords: [],
-      }).success;
-    expect(answer({ format: 'table', facts: [] })).toBe(true);
-    expect(answer({ format: null, facts: [] })).toBe(true);
-    expect(answer({ format: 'tablo', facts: [] })).toBe(false);
-    const fact = (sourceType) => ({ claim: 'c', sourceType, source: null });
-    expect(answer({ format: null, facts: [fact('statistic')] })).toBe(true);
-    expect(answer({ format: null, facts: [fact('istatistik')] })).toBe(false);
-    expect(SYSTEM_PROMPT_V2).toContain('write them as listed, in English');
+      },
+      usage: { inputTokens: 10, outputTokens: 5 },
+    });
+    const brief = await rebuildDraftBrief({
+      draftId: DRAFT,
+      brandId: BRAND,
+      sources: sources(),
+      rules: RULES,
+    });
+    expect(brief.outline[0].keyPoints).toEqual([
+      'Price bands (S1)',
+      `Answer in ${NUMBER_PLACEHOLDER} words`,
+    ]);
   });
 
   it('fits the brief under the column’s 64 KB: sources go first, then facts', async () => {

@@ -116,7 +116,7 @@ describe('POST /api/content-drafts/:draftId/brief', () => {
 
   it('passes the rules in effect on, cut to fit', async () => {
     const rules = [
-      { key: 'faq', name: 'FAQ', detail: 'aim: 5 questions' },
+      { key: 'faq', name: 'F'.repeat(250), detail: 'aim: 5 questions' },
       { key: 'h1', name: 'H1' },
     ];
     const res = await rebuild({ brandId: BRAND, sources, rules });
@@ -125,7 +125,10 @@ describe('POST /api/content-drafts/:draftId/brief', () => {
       draftId: DRAFT,
       brandId: BRAND,
       sources,
-      rules: [rules[0], { ...rules[1], detail: '' }],
+      rules: [
+        { ...rules[0], name: 'F'.repeat(200) },
+        { ...rules[1], detail: '' },
+      ],
     });
   });
 
