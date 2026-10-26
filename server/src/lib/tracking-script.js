@@ -194,7 +194,7 @@ send(d);
 },!0);
 var hp=window.history&&history.pushState;
 if(hp)history.pushState=function(){var res=hp.apply(history,arguments);try{pv()}catch(e){}return res};
-window.addEventListener("popstate",pv);
+window.addEventListener("popstate",function(){try{pv()}catch(e){}});
 })();
 `;
 }
