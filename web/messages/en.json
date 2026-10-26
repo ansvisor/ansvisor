@@ -8005,7 +8005,7 @@
           "consent": "When the visitor agrees",
           "consentHelp": "Call this from your cookie banner once the visitor agrees, and on every page after.",
           "refuse": "When the visitor refuses",
-          "denyHelp": "Call this when the visitor says no, or takes consent back: the id kept in their browser is deleted, and nothing more is sent.",
+          "denyHelp": "Call this when the visitor says no, or takes consent back, and on every page after while they say no: the id kept in their browser is deleted, and nothing more is sent.",
           "consentMode": "Google Consent Mode works on its own: the snippet follows <code>{name}</code>. A banner set up inside Google Tag Manager needs a tag for each line above, run when the visitor chooses.",
           "forms": "Forms",
           "formsHelp": "A form with an email field counts as a signup, contact and newsletter forms too: add <code>{goal}</code> to name its goal (demo, newsletter, booking), or <code>{off}</code> to leave it out. A login with a password doesn't count. Don't also call a signup from your own code for the same form, or it counts twice.",
