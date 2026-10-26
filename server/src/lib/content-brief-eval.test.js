@@ -186,6 +186,26 @@ describe('the checks anyone can repeat', () => {
     expect(briefChecks(raw, FIRST).invented.figures).toEqual(['73']);
   });
 
+  it('read the page’s plan too: essentials, angle, proof, fan-outs left out, freshness', () => {
+    const brief = shapeBrief(
+      {
+        ...GOOD,
+        tldr: 'A rolling forecast keeps cash visible, per www.made-up.example/tldr.',
+        angle: 'Ledgerly’s own variance data across customers',
+        proof: [{ kind: 'data', what: 'Average error before and after switching' }],
+        leftOut: [FIRST.sources.fanouts.at(-1).query],
+        datedPoint: 'The error figure, with its month',
+      },
+      FIRST,
+    );
+    const prompt = buildJudgePrompt(FIRST, brief);
+    expect(prompt).toContain('TL;DR: A rolling forecast keeps cash visible');
+    expect(prompt).toContain('Angle: Ledgerly’s own variance data across customers');
+    expect(prompt).toContain('Proof to gather (data): Average error before and after switching');
+    expect(prompt).toContain('Freshness: date The error figure, with its month');
+    expect(briefChecks(brief, FIRST).invented.urls).toEqual(['www.made-up.example/tldr']);
+  });
+
   it('take an address the case gave: a cited page, or the live page', () => {
     const live = CASES.find((c) => c.draft.method === 'optimize');
     const brief = shapeBrief(

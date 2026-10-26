@@ -98,14 +98,24 @@ function urlKey(url) {
 
 /**
  * A brief's fields as the judge sees them and as a quote is read in: the
- * goal, the audience, each heading and key point, version 2's answer, format
- * and facts (with the kind of source each needs and the page to check it
- * against), the keywords as one line; each with whether it's a heading.
+ * goal, the audience, version 2's essentials, angle and proof to gather,
+ * each heading and key point, a section's answer, format and facts (with the
+ * kind of source each needs and the source to check it against), the
+ * keywords as one line, the fan-outs left out and the freshness; each with
+ * whether it's a heading.
  */
 function briefFields(brief) {
+  const fresh = brief.freshness;
   return [
     { label: 'Goal: ', text: brief.goal, heading: false },
     { label: 'Audience: ', text: brief.audience, heading: false },
+    { label: 'TL;DR: ', text: brief.tldr, heading: false },
+    { label: 'Angle: ', text: brief.angle, heading: false },
+    ...(brief.proof ?? []).map((p) => ({
+      label: `Proof to gather (${p.kind}): `,
+      text: p.what,
+      heading: false,
+    })),
     ...brief.outline.flatMap((s) => [
       { label: 'H2: ', text: s.heading, heading: true },
       ...s.keyPoints.map((point) => ({ label: '- ', text: point, heading: false })),
@@ -118,6 +128,22 @@ function briefFields(brief) {
       })),
     ]),
     { label: 'Keywords: ', text: brief.keywords.join(', '), heading: false },
+    {
+      label: 'Left out, for another page: ',
+      text: (brief.leftOut ?? []).join(', '),
+      heading: false,
+    },
+    {
+      label: 'Freshness: ',
+      text: [
+        fresh?.datedPoint && `date ${fresh.datedPoint}`,
+        fresh?.updatedLine && 'an "Updated" line',
+        fresh?.yearInTitle && 'the year in the title',
+      ]
+        .filter(Boolean)
+        .join('; '),
+      heading: false,
+    },
   ].filter((f) => f.text);
 }
 
