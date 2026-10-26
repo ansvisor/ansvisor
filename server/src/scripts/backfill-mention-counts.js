@@ -1,33 +1,30 @@
 /**
- * Recount brand and competitor mentions on historical prompt_results (#871).
+ * Recount brand and competitor mentions on historical prompt_results: re-runs
+ * parseResponse over the stored answer text and rewrites what it derives
+ * (mention-recount.js).
  *
- * Names starting or ending with a character outside ASCII [A-Za-z0-9_]
- * ("Ümit", "İpek", "Acme, Inc.", "星云科技") were never matched, so
- * their answers were stored with zero mentions. This re-runs parseResponse
- * over the stored answer text and rewrites what it derives:
+ * Run: `node src/scripts/backfill-mention-counts.js [--entity-markup] [--brand <id>] [--dry-run]`
  *
- *   - mention_count, visibility_score, mention_position, mentioned_entity_count
- *   - mention_count, visibility_score and mention_position of each existing
- *     competitor_mentions entry whose competitor still exists
- *
- * Sentiment is not re-analysed: an answer that now counts as mentioning the
- * brand keeps the 'neutral' it was stored with, because re-running the model
- * over thousands of answers is a separate decision.
- *
- * Run: `node src/scripts/backfill-mention-counts.js [--brand <id>] [--dry-run]`
- *
- * Scope: brands of active or trialing organizations whose own name or any
- * competitor name starts or ends outside [A-Za-z0-9_] — every other brand's
- * counts are unchanged by the fix. --brand narrows to one brand regardless.
+ * Two fixes, two scopes:
+ *   - by default (#871): names starting or ending with a character outside
+ *     ASCII [A-Za-z0-9_] ("Ümit", "İpek", "Acme, Inc.", "星云科技") were never
+ *     matched, so their answers were stored with zero mentions. Brands of
+ *     active or trialing organizations whose own name or any competitor name
+ *     is such a name; every other brand's counts are unchanged by the fix.
+ *   - `--entity-markup` (#1097): ChatGPT answers saved with its
+ *     `<Entity … value="X" …/>` tags in the text. The tags' attributes counted
+ *     as mentions and shifted positions. Every brand of an active or trialing
+ *     organization, and only its answers that still hold a tag: the text is
+ *     saved without the tags, as new answers are, and recounted.
+ * --brand narrows to one brand regardless.
  *
  * Idempotent: rows whose recomputed values equal the stored ones are skipped.
- * Afterwards, refresh each changed brand's rollups with
- * `INSIGHTS_BACKFILL_BRAND=<id> node src/scripts/backfill-insights-daily.js`;
- * the ids are printed at the end.
+ * Afterwards, refresh each changed brand's rollups; the commands are printed
+ * at the end.
  */
 import 'dotenv/config';
 import supabaseAdmin from '../config/supabase.js';
-import { parseResponse } from '../lib/response-parser.js';
+import { recountRow } from '../lib/mention-recount.js';
 
 const BATCH_SIZE = 250;
 const BATCH_PAUSE_MS = 250;
@@ -35,6 +32,7 @@ const CONCURRENCY = 20;
 
 const args = process.argv.slice(2);
 const dryRun = args.includes('--dry-run');
+const entityMarkup = args.includes('--entity-markup');
 const brandArg = args.includes('--brand') ? args[args.indexOf('--brand') + 1] : null;
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -86,44 +84,111 @@ async function brandContext(brand) {
   };
 }
 
-/** The row's new values, or null when nothing changes. */
-function recount(row, brandInfo, competitors) {
-  const metrics = parseResponse(
-    { text: row.response ?? '', citations: Array.isArray(row.citations) ? row.citations : [] },
-    brandInfo,
-    row.sentiment ?? 'neutral',
-    competitors,
-  );
-  const fresh = new Map(metrics.competitorMentions.map((m) => [m.competitor_id, m]));
-  const entries = Array.isArray(row.competitor_mentions) ? row.competitor_mentions : [];
-  const competitorMentions = entries.map((entry) => {
-    const m = fresh.get(entry.competitor_id);
-    if (!m) return entry;
-    return {
-      ...entry,
-      mention_count: m.mention_count,
-      visibility_score: m.visibility_score,
-      mention_position: m.mention_position,
-    };
-  });
+const ROW_COLUMNS =
+  'id, response, citations, sentiment, mention_count, visibility_score, mention_position, mentioned_entity_count, competitor_mentions';
 
-  const next = {
-    mention_count: metrics.mentionCount,
-    visibility_score: metrics.visibilityScore,
-    mention_position: metrics.mentionPosition,
-    mentioned_entity_count: metrics.mentionedEntityCount,
-    competitor_mentions: competitorMentions,
-  };
-  const unchanged =
-    next.mention_count === row.mention_count &&
-    next.visibility_score === row.visibility_score &&
-    next.mention_position === row.mention_position &&
-    next.mentioned_entity_count === row.mentioned_entity_count &&
-    JSON.stringify(competitorMentions) === JSON.stringify(entries);
-  return unchanged ? null : next;
+/** Recounts these rows and writes the ones that changed; returns [updated, skipped]. */
+async function recountRows(rows, brandInfo, competitors) {
+  let updated = 0;
+  let skipped = 0;
+  for (let i = 0; i < rows.length; i += CONCURRENCY) {
+    const chunk = rows.slice(i, i + CONCURRENCY);
+    await Promise.all(
+      chunk.map(async (row) => {
+        const next = recountRow(row, brandInfo, competitors, { cleanMarkup: entityMarkup });
+        if (!next) {
+          skipped++;
+          return;
+        }
+        if (!dryRun) {
+          const { error: updateErr } = await withRetry(
+            () => supabaseAdmin.from('prompt_results').update(next).eq('id', row.id),
+            'row update',
+          );
+          if (updateErr) throw new Error(updateErr.message);
+        }
+        updated++;
+      }),
+    );
+  }
+  return [updated, skipped];
+}
+
+const WEEK_MS = 7 * 86_400_000;
+
+/**
+ * The brand's answers that still hold a ChatGPT entity tag, by id, a week of
+ * answers at a time (the brand and date index; each answer's text is read
+ * once). Listed before any is cleaned: a cleaned answer leaves the filter,
+ * which would shift offset pages taken during the writes.
+ */
+async function taggedRowIds(brandId) {
+  const { data: first, error: firstErr } = await withRetry(
+    () =>
+      supabaseAdmin
+        .from('prompt_results')
+        .select('created_at')
+        .eq('brand_id', brandId)
+        .order('created_at', { ascending: true })
+        .limit(1),
+    'first answer',
+  );
+  if (firstErr) throw new Error(firstErr.message);
+  if (!first?.length) return [];
+
+  const ids = [];
+  const end = Date.now() + 86_400_000;
+  for (let from = Date.parse(first[0].created_at); from < end; from += WEEK_MS) {
+    for (let offset = 0; ; offset += BATCH_SIZE) {
+      const { data, error } = await withRetry(
+        () =>
+          supabaseAdmin
+            .from('prompt_results')
+            .select('id')
+            .eq('brand_id', brandId)
+            .gte('created_at', new Date(from).toISOString())
+            .lt('created_at', new Date(from + WEEK_MS).toISOString())
+            .like('response', '%<Entity%')
+            .order('id', { ascending: true })
+            .range(offset, offset + BATCH_SIZE - 1),
+        'tagged ids',
+      );
+      if (error) throw new Error(error.message);
+      ids.push(...(data ?? []).map((r) => r.id));
+      if (!data || data.length < BATCH_SIZE) break;
+    }
+  }
+  return ids;
+}
+
+async function backfillTagged(brand) {
+  const { brandInfo, competitors } = await brandContext(brand);
+  const ids = await taggedRowIds(brand.id);
+  let updated = 0;
+  let skipped = 0;
+  for (let i = 0; i < ids.length; i += BATCH_SIZE) {
+    const { data: rows, error } = await withRetry(
+      () =>
+        supabaseAdmin
+          .from('prompt_results')
+          .select(ROW_COLUMNS)
+          .in('id', ids.slice(i, i + BATCH_SIZE)),
+      'page fetch',
+    );
+    if (error) throw new Error(error.message);
+    const [u, k] = await recountRows(rows ?? [], brandInfo, competitors);
+    updated += u;
+    skipped += k;
+    console.log(
+      `  ${brand.name}: ${updated} changed, ${skipped} unchanged of ${ids.length} tagged`,
+    );
+    await sleep(BATCH_PAUSE_MS);
+  }
+  return updated;
 }
 
 async function backfillBrand(brand) {
+  if (entityMarkup) return backfillTagged(brand);
   const { brandInfo, competitors } = await brandContext(brand);
   let updated = 0;
   let skipped = 0;
@@ -135,9 +200,7 @@ async function backfillBrand(brand) {
       () =>
         supabaseAdmin
           .from('prompt_results')
-          .select(
-            'id, response, citations, sentiment, mention_count, visibility_score, mention_position, mentioned_entity_count, competitor_mentions',
-          )
+          .select(ROW_COLUMNS)
           .eq('brand_id', brand.id)
           .not('response', 'is', null)
           .order('created_at', { ascending: false })
@@ -148,26 +211,9 @@ async function backfillBrand(brand) {
     if (error) throw new Error(error.message);
     if (!rows?.length) break;
 
-    for (let i = 0; i < rows.length; i += CONCURRENCY) {
-      const chunk = rows.slice(i, i + CONCURRENCY);
-      await Promise.all(
-        chunk.map(async (row) => {
-          const next = recount(row, brandInfo, competitors);
-          if (!next) {
-            skipped++;
-            return;
-          }
-          if (!dryRun) {
-            const { error: updateErr } = await withRetry(
-              () => supabaseAdmin.from('prompt_results').update(next).eq('id', row.id),
-              'row update',
-            );
-            if (updateErr) throw new Error(updateErr.message);
-          }
-          updated++;
-        }),
-      );
-    }
+    const [u, k] = await recountRows(rows, brandInfo, competitors);
+    updated += u;
+    skipped += k;
 
     console.log(`  ${brand.name}: ${updated} changed, ${skipped} unchanged`);
     if (rows.length < BATCH_SIZE) break;
@@ -180,7 +226,7 @@ async function backfillBrand(brand) {
 const candidates = await brandsInScope();
 const brands = [];
 for (const brand of candidates) {
-  if (brandArg || isAffectedName(brand.name)) {
+  if (brandArg || entityMarkup || isAffectedName(brand.name)) {
     brands.push(brand);
     continue;
   }
@@ -191,7 +237,9 @@ for (const brand of candidates) {
   if ((comps ?? []).some((c) => isAffectedName(c.name))) brands.push(brand);
 }
 
-console.log(`Recounting mentions for ${brands.length} brand(s)${dryRun ? ' — DRY RUN' : ''}`);
+console.log(
+  `Recounting mentions${entityMarkup ? ' in answers with entity tags' : ''} for ${brands.length} brand(s)${dryRun ? ' — DRY RUN' : ''}`,
+);
 
 const changed = [];
 let total = 0;
@@ -203,10 +251,15 @@ for (const brand of brands) {
 
 console.log(`Done. ${total} row(s) ${dryRun ? 'would be ' : ''}updated.`);
 if (changed.length && !dryRun) {
+  // Both read the counts: Insights' rollups, and Mentions' rollups with the
+  // answers' terms (an entity's terms are kept only where it's mentioned).
   console.log('Refresh the rollups for the changed brands:');
   for (const brand of changed) {
     console.log(
       `  INSIGHTS_BACKFILL_BRAND=${brand.id} node src/scripts/backfill-insights-daily.js  # ${brand.name}`,
+    );
+    console.log(
+      `  MENTIONS_BACKFILL_BRAND=${brand.id} node src/scripts/backfill-mentions-daily.js  # ${brand.name}`,
     );
   }
 }
