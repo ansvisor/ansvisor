@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { rulesForBrief, useRuleDescriber } from '@/lib/content/agent-write';
 import { isPageType, type ContentDraft } from '@/lib/content/drafts';
 import type { SiteType } from '@/lib/content/page-types';
 import { inputsGiven } from '@/lib/content/draft-inputs';
@@ -238,10 +239,12 @@ export function EditorSidePanel({
   const [tab, setTab] = useState<PanelTab>('instructions');
   const [segment, setSegment] = useState<InstructionSegment>('rules');
   const [opened, setOpened] = useState<Set<PanelTarget>>(() => new Set(['instructions', 'rules']));
-  const page = useRef<PageNow>({ title, html: bodyHtml, length: rules.length });
+  const describeRule = useRuleDescriber();
+  // The rules as checked; described only when a rebuild asks for them, not on every keystroke.
+  const page = useRef({ title, html: bodyHtml, length: rules.length, checks: rules.rules });
   const sourcesNow = useRef(reads.sources);
   useEffect(() => {
-    page.current = { title, html: bodyHtml, length: rules.length };
+    page.current = { title, html: bodyHtml, length: rules.length, checks: rules.rules };
     sourcesNow.current = reads.sources;
   });
 
@@ -309,7 +312,10 @@ export function EditorSidePanel({
 
   const { rebuilding, rebuild } = useBriefRebuild({
     draft,
-    pageNow: () => page.current,
+    pageNow: (): PageNow => {
+      const { checks, ...now } = page.current;
+      return { ...now, rules: rulesForBrief(checks, describeRule) };
+    },
     sourcesNow: () => sourcesNow.current,
     onSourcesRead: (read) => reads.setSources(read),
     onRebuilt: (next) => {
