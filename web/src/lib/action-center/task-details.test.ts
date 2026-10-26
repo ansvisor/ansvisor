@@ -4,6 +4,8 @@ import {
   cleanTaskDetailsEdit,
   isTaskDetailsEdit,
   parseTaskDetails,
+  withTemplateDoneWhen,
+  withoutTemplateDoneWhen,
 } from './task-details';
 
 const empty = {
@@ -102,6 +104,54 @@ describe('parseTaskDetails', () => {
     expect(parseTaskDetails([])).toBeNull();
     expect(parseTaskDetails('text')).toBeNull();
     expect(parseTaskDetails({ where: '  ', how: [] })).toBeNull();
+  });
+});
+
+describe('withTemplateDoneWhen', () => {
+  const doneWhenOf = (key: string) => (key === 'refresh_content' ? 'Refreshed and live' : null);
+
+  it("gives a library task its template's Done when until someone writes one (AC-010)", () => {
+    expect(withTemplateDoneWhen(null, 'refresh_content', doneWhenOf)).toEqual({
+      ...empty,
+      doneWhen: 'Refreshed and live',
+    });
+    const own = parseTaskDetails({ doneWhen: 'Our own check', check: 'auto' });
+    expect(withTemplateDoneWhen(own, 'refresh_content', doneWhenOf)).toBe(own);
+    const checked = parseTaskDetails({ check: 'auto' });
+    expect(withTemplateDoneWhen(checked, 'refresh_content', doneWhenOf)).toEqual({
+      ...checked,
+      doneWhen: 'Refreshed and live',
+    });
+    // No template, or a task written by hand: as it is.
+    expect(withTemplateDoneWhen(null, 'analyze_citations', doneWhenOf)).toBeNull();
+    expect(withTemplateDoneWhen(checked, null, doneWhenOf)).toBe(checked);
+  });
+});
+
+describe('withoutTemplateDoneWhen', () => {
+  const edit = {
+    url: '',
+    where: '',
+    why: '',
+    before: '',
+    after: '',
+    how: [],
+    doneWhen: ' Refreshed and live ',
+    check: null,
+    type: null,
+    effort: '~1h',
+    role: '',
+  };
+  const shown = parseTaskDetails({ doneWhen: 'Refreshed and live' });
+
+  it("gives the template's Done when back as none when it's left as it was (AC-010)", () => {
+    expect(withoutTemplateDoneWhen(edit, null, shown).doneWhen).toBe('');
+    // Changed, it's the person's.
+    expect(withoutTemplateDoneWhen({ ...edit, doneWhen: 'Ours' }, null, shown).doneWhen).toBe(
+      'Ours',
+    );
+    // The task's own, the same words or not, stays its own.
+    expect(withoutTemplateDoneWhen(edit, shown, shown).doneWhen).toBe(' Refreshed and live ');
   });
 });
 

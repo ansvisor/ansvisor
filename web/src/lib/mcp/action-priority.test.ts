@@ -166,6 +166,39 @@ describe('getActionFor', () => {
     }
   });
 
+  it("gives a library task its template's Done when (AC-010)", async () => {
+    taskRows = [
+      {
+        id: 't2',
+        position: 1,
+        task_key: 'refresh_content',
+        title: null,
+        status: 'todo',
+        details: { check: 'auto', source: 'template' },
+      },
+      {
+        id: 't3',
+        position: 2,
+        task_key: 'analyze_citations',
+        title: null,
+        status: 'todo',
+        details: null,
+      },
+    ];
+    try {
+      const action = await getActionFor(auth, 'a1');
+      expect(action?.tasks[0].details).toMatchObject({
+        check: 'auto',
+        done_when:
+          'The page has its new facts and date, or its draft is marked ready in the Content Editor',
+      });
+      // The analysis has no template.
+      expect(action?.tasks[1].details).toBeNull();
+    } finally {
+      taskRows = [];
+    }
+  });
+
   it('gives the action its priority', async () => {
     const action = await getActionFor(auth, 'a1');
     expect(action?.priority).toEqual({

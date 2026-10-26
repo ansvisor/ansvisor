@@ -49,6 +49,7 @@ export const EXPORT_NAMESPACES = {
   taskStatus: 'actionCenter.taskStatus',
   taskTypes: 'actionCenter.taskTypes',
   taskChecks: 'actionCenter.taskChecks',
+  taskDoneWhen: 'actionCenter.taskDoneWhen',
   signals: 'actionCenter.signalsPage',
   signalTexts: 'actionCenter.signalTexts',
   signalCategories: 'actionCenter.signalCategories',
@@ -304,6 +305,7 @@ export function labelActionExport(input: ActionExportInput, t: ExportTranslators
       skipped: (reason) => t.export('skipped', { reason }),
       taskType: (type) => t.taskTypes(type),
       taskCheck: (check) => t.taskChecks(check),
+      templateDoneWhen: (taskKey) => (t.taskDoneWhen.has?.(taskKey) ? t.taskDoneWhen(taskKey) : ''),
       taskChange: ({ before, after }) =>
         before
           ? t.export('taskChangeLine', { before, after })

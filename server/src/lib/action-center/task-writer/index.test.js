@@ -219,6 +219,13 @@ describe('isTouched', () => {
     expect(
       isTouched([{ task_key: null, title: 'x', status: 'todo', details: { source: 'ai' } }]),
     ).toBe(false);
+    // A template's details (AC-010) are no one's work; edited (the mark gone) or sent, they are.
+    const filled = { doneWhen: 'Done', check: 'auto', source: 'template' };
+    expect(isTouched([{ ...template, details: filled }])).toBe(false);
+    expect(isTouched([{ ...template, details: { ...filled, source: undefined } }])).toBe(true);
+    expect(
+      isTouched([{ ...template, details: { ...filled, sent: { webhook: { at: 'x' } } } }]),
+    ).toBe(true);
   });
 });
 

@@ -147,6 +147,38 @@ export function parseTaskDetails(raw: unknown): ActionTaskDetails | null {
   return hasTaskDetails(details) ? details : null;
 }
 
+/**
+ * A library task's details with its template's Done when (AC-010) when it
+ * has none of its own, in the reader's language (en.json
+ * actionCenter.taskDoneWhen): `doneWhenOf` reads it by task key, null
+ * without one.
+ */
+export function withTemplateDoneWhen(
+  details: ActionTaskDetails | null,
+  taskKey: string | null,
+  doneWhenOf: (taskKey: string) => string | null,
+): ActionTaskDetails | null {
+  if (details?.doneWhen || !taskKey) return details;
+  const doneWhen = doneWhenOf(taskKey);
+  if (!doneWhen) return details;
+  return details ? { ...details, doneWhen } : parseTaskDetails({ doneWhen });
+}
+
+/**
+ * An edit with the template's Done when left as it was, given back as none
+ * (AC-010): it stays the template's, in the reader's language, as an
+ * unchanged title does. `stored` is the task's own details, `shown` them
+ * with the template's (withTemplateDoneWhen).
+ */
+export function withoutTemplateDoneWhen<T extends TaskDetailsEdit>(
+  edit: T,
+  stored: ActionTaskDetails | null,
+  shown: ActionTaskDetails | null,
+): T {
+  const template = !stored?.doneWhen ? shown?.doneWhen : null;
+  return template && edit.doneWhen.trim() === template ? { ...edit, doneWhen: '' } : edit;
+}
+
 /** Whether any field says something. */
 export function hasTaskDetails(details: ActionTaskDetails): boolean {
   return (

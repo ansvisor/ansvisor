@@ -1,5 +1,6 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
+import { parseTaskDetails } from './task-details';
 import type { ActionDetail, ActionItem } from '@/lib/actions/action-center';
 import type { Signal } from '@/lib/signals/map';
 import {
@@ -139,6 +140,8 @@ const texts: ExportTexts = {
   taskType: (type) => ({ content: 'Content', outreach: 'Outreach' })[type] ?? type,
   taskCheck: (check) => `check.${check}`,
   taskChange: ({ before, after }) => (before ? `${before} → ${after}` : `Add: ${after}`),
+  templateDoneWhen: (taskKey) =>
+    taskKey === 'refresh_content' ? 'The page has its new facts and date' : '',
   taskSent: (to) => (to === 'content' ? 'Sent to Content' : 'Sent to the webhook'),
   answerSource: 'AI answer',
 };
@@ -387,6 +390,27 @@ describe('the Excel file', () => {
       'Skipped: Done by hand',
     ]);
     expect(sheets[3].data[1][6]).toBe('ChatGPT, Gemini');
+  });
+});
+
+describe('a library task’s Done when (AC-010)', () => {
+  it('is its template’s until someone writes one', () => {
+    const library = (details: (typeof detail.tasks)[number]['details']) =>
+      buildActionExport(
+        action,
+        {
+          ...detail,
+          tasks: [{ ...detail.tasks[1], taskKey: 'refresh_content', title: null, details }],
+        },
+        texts,
+        { origin: 'https://app.example', timeZone: 'Europe/Istanbul' },
+      ).tasks[0].doneWhen;
+    expect(library(null)).toBe('The page has its new facts and date');
+    // A template's check alone (AC-010 part 3) still takes its Done when.
+    expect(library(parseTaskDetails({ check: 'auto' }))).toBe(
+      'The page has its new facts and date',
+    );
+    expect(library(parseTaskDetails({ doneWhen: 'Our own check' }))).toBe('Our own check');
   });
 });
 

@@ -215,6 +215,16 @@ describe('sendTrafficPagesToActionCenter', () => {
     expect(keys.length).toBeGreaterThan(0);
     expect(keys.every((k) => captureAiTraffic.tasks.includes(k))).toBe(true);
     expect(keys).toEqual(captureAiTraffic.tasks.filter((k) => keys.includes(k)));
+    // One page: each change on it carries the page's full URL, and how it's checked (AC-010).
+    const onPage = tasks.filter((t) => t.details?.check === 'auto');
+    expect(onPage.length).toBeGreaterThan(0);
+    for (const task of onPage) {
+      expect(task.details, task.task_key).toEqual({
+        check: 'auto',
+        url: 'https://www.acme-coffee.example.com',
+        source: 'template',
+      });
+    }
   });
 
   it('still sends, unmeasured, when the brand has no domain', async () => {

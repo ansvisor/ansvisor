@@ -72,6 +72,7 @@ export function ActionExportButtons({
     taskStatus: useTranslations(EXPORT_NAMESPACES.taskStatus),
     taskTypes: useTranslations(EXPORT_NAMESPACES.taskTypes),
     taskChecks: useTranslations(EXPORT_NAMESPACES.taskChecks),
+    taskDoneWhen: useTranslations(EXPORT_NAMESPACES.taskDoneWhen),
     signals: useTranslations(EXPORT_NAMESPACES.signals),
     signalTexts: useTranslations(EXPORT_NAMESPACES.signalTexts),
     signalCategories: useTranslations(EXPORT_NAMESPACES.signalCategories),
