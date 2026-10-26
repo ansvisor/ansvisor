@@ -1,6 +1,6 @@
 'use client';
 
-import { useId, useState } from 'react';
+import { useId, useMemo, useState } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
 import { Check, ChevronRight, User, X } from 'lucide-react';
 import { Link } from '@/i18n/navigation';
@@ -12,9 +12,9 @@ import {
   type SuggestionStatus,
 } from '@/lib/content/suggestions';
 import { shownSteps, stepMessage, type AgentRun } from '@/lib/content/agent-runs';
-import { KEPT_LENGTH_SHARE } from '@/lib/content/rules';
 import { cn } from '@/lib/utils';
 import { PageCompareDialog, pageCharacters } from './_page-rewrite';
+import { PLACEHOLDER, pagePlaceholders } from '@/lib/content/placeholders';
 import { WorkingDots } from './_working-dots';
 
 /**
@@ -40,6 +40,13 @@ export interface CardRules {
   total: number;
   /** The keys of the rules on that the page doesn't meet now. */
   open: Set<string>;
+  /**
+   * What accepting the open result would do, checked on a copy of the page
+   * (editor test 2026-10-25): the rules met then, and those met now it would
+   * break, named. Without it, the gain is read from what each change says
+   * it fixes (rulesAfter).
+   */
+  after?: { now: number; met: number; breaks: string | null };
 }
 
 /**
@@ -214,6 +221,7 @@ export function AgentCard({
   next = null,
   onAllSteps,
   length = null,
+  lastRunFailed = false,
 }: {
   suggestions: DraftSuggestion[];
   rules: CardRules;
@@ -260,11 +268,20 @@ export function AgentCard({
   } | null;
   /** Opens the basket with every step. */
   onAllSteps?: () => void;
+  /** The agent's last run failed: said in place of an earlier batch's review. */
+  lastRunFailed?: boolean;
   /**
    * The page's Length rule (its target and band) and what a rewrite keeps
    * as it is: a rewrite's result is read against it, never the agent's say.
    */
-  length?: { target: number; min: number; max: number; kept: number } | null;
+  length?: {
+    target: number;
+    min: number;
+    max: number;
+    kept: number;
+    /** What the rewrite keeps puts the Length out of its reach (rules.ts lengthOutOfReach). */
+    outOfReach?: boolean;
+  } | null;
 }) {
   const t = useTranslations('contentEditor.editor.agentCard');
   const locale = useLocale();
@@ -272,10 +289,33 @@ export function AgentCard({
   const tRewrite = useTranslations('contentEditor.editor.rewrite');
   const [comparing, setComparing] = useState(false);
   const page = suggestions.find((s) => s.kind === 'page') ?? null;
+  // The placeholders an open rewrite adds, for the person to fill: read once
+  // a rewrite, not on every key the page takes.
+  const pageOpen = page?.status === 'open';
+  const pageLeft = useMemo(
+    () =>
+      pageOpen && page
+        ? Math.max(
+            0,
+            pagePlaceholders(page.afterText).count - pagePlaceholders(page.beforeHtml ?? '').count,
+          )
+        : 0,
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- the rewrite's two pages, not the object
+    [pageOpen, page?.afterText, page?.beforeHtml],
+  );
   const { open, accepted } = suggestionCounts(suggestions);
   const openOnes = suggestions.filter((s) => s.status === 'open');
   const action = suggestions.find((s) => s.actionId && s.actionNo !== null);
-  const after = rulesAfter(suggestions, rules);
+  // From the page as it is now when checked so: never a count a beat behind it.
+  const from = rules.after?.now ?? rules.met;
+  const after = rules.after?.met ?? rulesAfter(suggestions, rules);
+  // Rules met now that accepting it would break: said, never left to find after.
+  const breaks = rules.after?.breaks ? (
+    <span className="text-amber-700 dark:text-amber-400">
+      {' · '}
+      {t('breaks', { names: rules.after.breaks })}
+    </span>
+  ) : null;
   const stillOpen = Math.max(0, rules.total - rules.met);
   // Run Agent shows once nothing is left to decide; why it can't run is
   // written in the card, never only on hover (as the Rules card does, CE-028).
@@ -375,12 +415,35 @@ export function AgentCard({
             <span className="text-amber-700 dark:text-amber-400">
               {tRewrite('lengthMissed', { target: missed.target })}
               {afterChars > missed.max &&
-                missed.kept >= missed.target * KEPT_LENGTH_SHARE &&
+                missed.outOfReach &&
+                missed.kept > 0 &&
                 ` ${tRewrite('lengthKept', { kept: missed.kept })}`}
+              {/* Asked to shorten it, it came out longer: said, not offered silently. */}
+              {afterChars > missed.max &&
+                before > missed.max &&
+                afterChars > before &&
+                ` · ${tRewrite('longer')}`}
             </span>
           ) : (
             page.reason
           )}
+          {pageLeft > 0 && ` · ${t('placeholders', { count: pageLeft })}`}
+          {rules.after && rules.after.met !== from && (
+            <>
+              {' · '}
+              <span
+                className={cn(
+                  'font-medium',
+                  rules.after.met > from
+                    ? 'text-emerald-700 dark:text-emerald-400'
+                    : 'text-amber-700 dark:text-amber-400',
+                )}
+              >
+                {t('gain', { met: from, after: rules.after.met, total: rules.total })}
+              </span>
+            </>
+          )}
+          {breaks}
           {builtFrom}
         </>
       ) : page.status === 'accepted' && stillOpen > 0 ? (
@@ -388,18 +451,39 @@ export function AgentCard({
       ) : null;
   } else if (open > 0) {
     title = t('waiting', { count: open });
+    // The placeholders its changes add, for the person to fill once accepted.
+    const batchLeft = openOnes.reduce(
+      (n, s) =>
+        n +
+        Math.max(
+          0,
+          (s.afterText.match(PLACEHOLDER) ?? []).length -
+            (s.beforeText.match(PLACEHOLDER) ?? []).length,
+        ),
+      0,
+    );
     line = (
       <>
         {sentence(openOnes[0]?.reason ?? '', locale)}
         {openOnes.length > 1 && ` · ${t('more', { count: openOnes.length - 1 })}`}
-        {after > rules.met && (
+        {batchLeft > 0 && ` · ${t('placeholders', { count: batchLeft })}`}
+        {after > from && (
           <>
             {' · '}
             <span className="font-medium text-emerald-700 dark:text-emerald-400">
-              {t('gain', { met: rules.met, after, total: rules.total })}
+              {t('gain', { met: from, after, total: rules.total })}
             </span>
           </>
         )}
+        {after < from && (
+          <>
+            {' · '}
+            <span className="font-medium text-amber-700 dark:text-amber-400">
+              {t('gain', { met: from, after, total: rules.total })}
+            </span>
+          </>
+        )}
+        {breaks}
         {builtFrom}
         {action && (
           <>
@@ -414,6 +498,9 @@ export function AgentCard({
         )}
       </>
     );
+  } else if (lastRunFailed) {
+    title = t('runFailed');
+    line = t('runFailedLine');
   } else {
     title = t('reviewed');
     line = (
@@ -431,8 +518,11 @@ export function AgentCard({
   }
 
   // With the basket (Next step spec §3), the card heads with the step and
-  // who takes it; what the agent left is its last run, under it.
-  const stepHead = !working && next?.title ? next : null;
+  // who takes it; what the agent left is its last run, under it. Not while
+  // the agent's result waits for a decision: it heads with what it is
+  // (editor test 2026-10-25: "Next · Shorten…" over a rewrite read as
+  // another agent).
+  const stepHead = nextShown && next?.title ? next : null;
   let lastRun: React.ReactNode = null;
   if (stepHead) {
     const run = title;

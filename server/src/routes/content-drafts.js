@@ -210,8 +210,9 @@ const fixBody = fixRulesInput.extend({ brandId: z.guid() });
 /**
  * POST /api/content-drafts/:draftId/suggestions
  * Body: { brandId, rules: [{ key, name, detail }], textRules, locked }
- * Answers { count, batchId }: the suggestions left for review (none when the
- * agent found nothing it could change); 409 `open_suggestions` while the
+ * Answers { count, batchId, why? }: the suggestions left for review (none when
+ * the agent found nothing it could change, with `why`: 'none', 'locked' or
+ * 'dropped', content-agent.js emptyWhy); 409 `open_suggestions` while the
  * latest batch is undecided, 409 `published` for a published draft, 409
  * `running` while a fix or a hand-off on it is under way.
  */
@@ -247,7 +248,7 @@ const handOffBody = handOffInput.extend({ brandId: z.guid() });
 /**
  * POST /api/content-drafts/:draftId/handoff
  * Body: { brandId, items: [{ key, detail }], textRules, locked, sources?, origin }
- * Quality's hand-off (CE-051): answers { count, batchId } as /suggestions
+ * Quality's hand-off (CE-051): answers { count, batchId, why? } as /suggestions
  * does, with its errors; 404 `off` before Quality's phase 2, 409 `not_due`
  * for an automatic one the brand doesn't hand off, 409 `already` when the
  * draft had its automatic one.
@@ -288,8 +289,9 @@ const writeBody = writeDraftInput.extend({ brandId: z.guid() });
  * Answers 202 { started: true } at once: the agent runs in the background
  * and the draft shows where it is (agent_state). 409 when the draft is marked
  * ready or published (code not_draft), the agent is on it (code writing) or on
- * another of the organization's drafts (code org_writing), or an existing
- * page's suggestions are still open (code open_suggestions).
+ * another of the organization's drafts (code org_writing), an existing
+ * page's suggestions are still open (code open_suggestions), or a Fix open
+ * rules still runs on it (code running).
  */
 router.post('/:draftId/write', async (req, res) => {
   const draftId = z.guid().safeParse(req.params.draftId);
@@ -324,7 +326,7 @@ router.post('/:draftId/write', async (req, res) => {
  * Rewrite the page to these rules: the agent rewrites the whole page in the
  * background and leaves it as ONE suggestion to compare and accept or
  * reject. Answers 202 { started: true } at once; 409 as /write (not_draft,
- * writing, org_writing, open_suggestions); 422 when the page has no text
+ * writing, org_writing, open_suggestions, running); 422 when the page has no text
  * (empty) or is too long to send whole (too_long).
  */
 router.post('/:draftId/rewrite', async (req, res) => {
@@ -389,8 +391,9 @@ router.post('/:draftId/stop', async (req, res) => {
     const stopped = await stopDraftRun(draftId.data, runId ?? null);
     // A run in the background lets go of the draft once it sees the stop;
     // one no server holds any more never would. The editor opens at once.
-    // Only the claim a stopped run holds: a Stop on a Fix or the brief (which
-    // hold none) leaves a Start or Rewrite on the same draft its claim.
+    // Only the claim a stopped run holds: a Stop on Fix open rules or the
+    // brief (which hold none) leaves a Start or Rewrite on the same draft its
+    // claim. A live page's Start runs as a Fix, and holds its own.
     for (const { claimed_at: claimedAt } of stopped) {
       if (!claimedAt) continue;
       const { error: letGoError } = await supabaseAdmin
