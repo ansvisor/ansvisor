@@ -88,7 +88,7 @@ beforeEach(() => {
 });
 
 describe('fixUnderWay', () => {
-  it('finds a fix or a hand-off still going on the draft, not one a stopped server left', async () => {
+  it('finds a fix or a hand-off still going on the draft, not one a stopped server left nor one Stop ended', async () => {
     rows.updated = [{ id: 'run-1' }];
     await expect(fixUnderWay('d1')).resolves.toBe(true);
     const [read] = reads;
@@ -97,10 +97,12 @@ describe('fixUnderWay', () => {
       ['eq', 'draft_id', 'd1'],
       ['in', 'kind', ['fix', 'handoff']],
       ['is', 'finished_at', null],
+      // Stopped: its batch is dropped, so a Start or another Fix may go.
+      ['is', 'stopped_at', null],
       ['gt', 'started_at', expect.any(String)],
     ]);
     // Within RUN_STALE_MS: an older one is a stopped server's.
-    expect(Date.now() - Date.parse(read.filters[3][2])).toBeGreaterThanOrEqual(10 * 60_000);
+    expect(Date.now() - Date.parse(read.filters[4][2])).toBeGreaterThanOrEqual(10 * 60_000);
     rows.updated = [];
     await expect(fixUnderWay('d1')).resolves.toBe(false);
   });

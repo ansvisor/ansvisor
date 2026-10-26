@@ -932,6 +932,14 @@ describe('startAgentWriting', () => {
     await expect(startAgentWriting(OPPORTUNITY, BRAND, request)).resolves.toEqual({
       error: 'ai_budget',
     });
+    // A Fix open rules still under way on the draft.
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response('{"code":"running"}', { status: 409 })),
+    );
+    await expect(startAgentWriting(OPPORTUNITY, BRAND, request)).resolves.toEqual({
+      error: 'running',
+    });
     vi.stubGlobal(
       'fetch',
       vi.fn(async () => new Response('{"code":"something_new"}', { status: 500 })),
