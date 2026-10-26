@@ -1840,7 +1840,8 @@ export function DraftEditor({
    * as it was in History before the first agent change.
    */
   const decide = async (ids: string[], decision: SuggestionDecision | 'undo_all') => {
-    if (!editor || deciding) return;
+    // Never under a restore: it sets the open ones aside on the page it puts in.
+    if (!editor || deciding || restoringNow.current) return;
     const all = suggestionsNow.current;
     const next = all.map((s) => ({ ...s }));
     const picked = next.filter((s) => ids.includes(s.id));
@@ -2228,7 +2229,7 @@ export function DraftEditor({
    * isn't written over: the person runs the rewrite again.
    */
   const decidePage = async (s: DraftSuggestion, to: SuggestionStatus) => {
-    if (!editor || deciding) return;
+    if (!editor || deciding || restoringNow.current) return;
     const undo = to === 'open' && s.status === 'accepted';
     // What the page must still read as for the change to go in.
     const expected = to === 'accepted' ? (s.beforeHtml ?? '') : undo ? s.afterText : null;
@@ -2621,13 +2622,15 @@ export function DraftEditor({
   const agentFixBlocked = (running: boolean) =>
     aiUsedUp && !running
       ? aiUsedUp
-      : openSuggestions > 0
-        ? t('suggestions.decideFirst', { count: openSuggestions })
-        : !citedRead
-          ? t('suggestions.citedLoading')
-          : agentBusy && !running
-            ? t('suggestions.agentBusy')
-            : null;
+      : restoring
+        ? t('history.restoring')
+        : openSuggestions > 0
+          ? t('suggestions.decideFirst', { count: openSuggestions })
+          : !citedRead
+            ? t('suggestions.citedLoading')
+            : agentBusy && !running
+              ? t('suggestions.agentBusy')
+              : null;
   const agentFix: AgentFix = {
     run: (only) => void fixRules(only),
     running: fixRunning,
@@ -2869,11 +2872,13 @@ export function DraftEditor({
         blocked:
           aiUsedUp && !starting
             ? aiUsedUp
-            : openSuggestions > 0
-              ? t('suggestions.decideFirst', { count: openSuggestions })
-              : agentBusy && !starting
-                ? t('suggestions.agentBusy')
-                : null,
+            : restoring
+              ? t('history.restoring')
+              : openSuggestions > 0
+                ? t('suggestions.decideFirst', { count: openSuggestions })
+                : agentBusy && !starting
+                  ? t('suggestions.agentBusy')
+                  : null,
       }
     : undefined;
 
@@ -2950,13 +2955,15 @@ export function DraftEditor({
         blocked:
           aiUsedUp && !rewriting
             ? aiUsedUp
-            : openSuggestions > 0
-              ? t('suggestions.decideFirst', { count: openSuggestions })
-              : !citedRead
-                ? t('suggestions.citedLoading')
-                : agentBusy && !rewriting
-                  ? t('suggestions.agentBusy')
-                  : null,
+            : restoring
+              ? t('history.restoring')
+              : openSuggestions > 0
+                ? t('suggestions.decideFirst', { count: openSuggestions })
+                : !citedRead
+                  ? t('suggestions.citedLoading')
+                  : agentBusy && !rewriting
+                    ? t('suggestions.agentBusy')
+                    : null,
       }
     : undefined;
   // Before you publish (CE-041) opens on Mark ready once Quality is live,
@@ -3269,6 +3276,7 @@ export function DraftEditor({
     try {
       await autosave.settle();
       const restored = await restoreDraftVersion(draft.id, version.id);
+      const pageBefore = editor.getHTML();
       editor
         .chain()
         .setMeta(CITED_EDIT_ALLOWED, true)
@@ -3286,8 +3294,12 @@ export function DraftEditor({
       void loadCited();
       // The agent's open suggestions were for the page before it: they go,
       // so they hold no later run (open_suggestions). Left open when that
-      // fails, for the person to decide on the card.
-      const stale = suggestionsNow.current.filter((s) => s.status === 'open').map((s) => s.id);
+      // fails, for the person to decide on the card; and kept when the
+      // version is the page it was (nothing was restored).
+      const samePage = html === pageBefore && restored.title === title;
+      const stale = samePage
+        ? []
+        : suggestionsNow.current.filter((s) => s.status === 'open').map((s) => s.id);
       const setAside =
         stale.length === 0 ||
         (await decideDraftSuggestions(stale, 'rejected').then(
@@ -3306,7 +3318,7 @@ export function DraftEditor({
       toast.success(t('history.restored', { version: label, count: setAside ? stale.length : 0 }));
       // Its card goes as if closed, with its Undo all and last run: they were
       // for the page before (editor test 2026-10-25). A new batch opens it.
-      setBarClosed(true);
+      if (!samePage) setBarClosed(true);
     } catch (err) {
       console.error('Failed to restore the version:', err);
       toast.error(t('history.restoreFailed'));
@@ -3707,7 +3719,9 @@ export function DraftEditor({
                   size="sm"
                   className="h-7"
                   // Used up, as the red strip above says: it would only fail again.
-                  disabled={!!aiUsedUp || agentBusy || !editor || (failedRewrite && !citedRead)}
+                  disabled={
+                    !!aiUsedUp || agentBusy || restoring || !editor || (failedRewrite && !citedRead)
+                  }
                   title={aiUsedUp ?? undefined}
                   onClick={() => void (failedRewrite ? rewritePage() : startAgent())}
                 >

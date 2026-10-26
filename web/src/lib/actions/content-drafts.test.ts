@@ -976,13 +976,12 @@ describe('agent suggestions', () => {
     expect(calls[1].filters).toContainEqual(['eq', 'batch_id', 'new']);
   });
 
-  it('reads when the page was last restored, or none', async () => {
-    queue = [[{ created_at: '2026-10-22T09:00:00Z' }]];
+  it('reads when the page was last restored, or none (00289)', async () => {
+    queue = [[{ restored_at: '2026-10-22T09:00:00Z' }]];
     await expect(getLastRestoreAt(DRAFT)).resolves.toBe('2026-10-22T09:00:00Z');
-    expect(calls[0].filters).toEqual([
-      ['eq', 'draft_id', DRAFT],
-      ['eq', 'origin', 'restore'],
-    ]);
+    expect(calls[0].filters).toEqual([['eq', 'id', DRAFT]]);
+    queue = [[{ restored_at: null }]];
+    await expect(getLastRestoreAt(DRAFT)).resolves.toBeNull();
     queue = [[]];
     await expect(getLastRestoreAt(DRAFT)).resolves.toBeNull();
     await expect(getLastRestoreAt('../etc')).rejects.toThrow('invalid');

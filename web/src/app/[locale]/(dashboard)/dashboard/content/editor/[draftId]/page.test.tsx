@@ -1449,6 +1449,13 @@ describe('the content editor', () => {
       await act(async () => items[1].click());
       // The decision would land under the restore setting the same ones aside.
       expect(accept().disabled || accept().hasAttribute('data-disabled')).toBe(true);
+      // The card on the page too.
+      const inPage = [
+        ...container
+          .querySelector('.ProseMirror [data-suggestion="n1"]')!
+          .querySelectorAll('button'),
+      ].find((b) => b.textContent === 'Accept')!;
+      await act(async () => inPage.click());
       await act(async () =>
         restored({
           title: 'Old title',
@@ -1480,6 +1487,103 @@ describe('the content editor', () => {
     ];
     const agentCard = () =>
       container.querySelector('[role="region"][aria-label="Agent suggestions"]');
+
+    it('holds Try again while a restore runs', async () => {
+      getContentDraft.mockResolvedValue(draft({ status: 'draft', agentState: 'failed' }));
+      getDraftVersions.mockResolvedValue(versions);
+      restoreDraftVersion.mockReturnValue(new Promise(() => {}));
+      await renderPage();
+      const items = await openHistory();
+      await act(async () => items[1].click());
+      expect(button('Try again')!.disabled).toBe(true);
+      await act(async () => button('Try again')!.click());
+      expect(startAgentWriting).not.toHaveBeenCalled();
+    });
+
+    it('says how many open changes it set aside', async () => {
+      getContentDraft.mockResolvedValue(
+        draft({
+          bodyHtml:
+            '<h1>Pipeline forecasting</h1><p>We delve into how teams forecast.</p><p>Teams trust it.</p>',
+        }),
+      );
+      getDraftVersions.mockResolvedValue(versions);
+      const open = {
+        batchId: 'b2',
+        actionId: null,
+        actionNo: null,
+        kind: 'replace' as const,
+        reason: 'remove an AI trace (rule)',
+        ruleKeys: ['aiTraces'],
+        status: 'open' as const,
+      };
+      getDraftSuggestions.mockResolvedValue([
+        {
+          ...open,
+          id: 'n1',
+          blockText: 'We delve into how teams forecast.',
+          beforeText: 'delve into',
+          afterText: 'look at',
+        },
+        {
+          ...open,
+          id: 'n2',
+          blockText: 'Teams trust it.',
+          beforeText: 'trust',
+          afterText: 'rely on',
+        },
+      ]);
+      restoreDraftVersion.mockResolvedValue({
+        title: 'Old title',
+        bodyHtml: '<h1>Old title</h1><p>As the live page had it.</p>',
+        updatedAt: '2026-10-21T10:00:00Z',
+      });
+      await renderPage();
+      const items = await openHistory();
+      await act(async () => items[1].click());
+      await act(async () => {});
+      expect(decideDraftSuggestions).toHaveBeenCalledWith(['n1', 'n2'], 'rejected');
+      expect(toast.success).toHaveBeenCalledWith(
+        expect.stringMatching(
+          /^Restored “.+”\. The agent’s 2 open changes were for the page before, so they were set aside\.$/,
+        ),
+      );
+    });
+
+    it('sets nothing aside when the version is the page as it is', async () => {
+      const body = '<h1>Pipeline forecasting</h1><p>We delve into how teams forecast.</p>';
+      getContentDraft.mockResolvedValue(draft({ bodyHtml: body }));
+      getDraftVersions.mockResolvedValue(versions);
+      getDraftSuggestions.mockResolvedValue([
+        {
+          id: 'n1',
+          batchId: 'b2',
+          actionId: null,
+          actionNo: null,
+          kind: 'replace' as const,
+          blockText: 'We delve into how teams forecast.',
+          beforeText: 'delve into',
+          afterText: 'look at',
+          reason: 'remove an AI trace (rule)',
+          ruleKeys: ['aiTraces'],
+          status: 'open' as const,
+        },
+      ]);
+      // The server left the draft as it was: nothing was restored.
+      restoreDraftVersion.mockResolvedValue({
+        title: 'Pipeline forecasting',
+        bodyHtml: body,
+        updatedAt: '2026-10-20T10:00:00Z',
+      });
+      await renderPage();
+      const items = await openHistory();
+      await act(async () => items[1].click());
+      await act(async () => {});
+      expect(decideDraftSuggestions).not.toHaveBeenCalled();
+      expect(
+        container.querySelector('[role="region"][aria-label="Agent suggestions"]'),
+      ).not.toBeNull();
+    });
 
     it('opens the card closed for a batch from before the page was last restored', async () => {
       getContentDraft.mockResolvedValue(
@@ -1611,6 +1715,9 @@ describe('the content editor', () => {
       await act(async () => items[1].click());
       await act(async () => {});
       // Still open on the server: on the card to decide, never shown as set aside.
+      expect(toast.success).toHaveBeenCalledWith(
+        expect.stringMatching(/^Restored “.+”\. The page before it is in History\.$/),
+      );
       const card = container.querySelector('[role="region"][aria-label="Agent suggestions"]');
       expect(card).not.toBeNull();
       expect(
