@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { liveSkips, nextStep, rulesForNext, stepState, type NextStepState } from './next-step';
+import {
+  liveSkips,
+  nextStep,
+  rulesForNext,
+  stepState,
+  thirdStepTried,
+  type NextStepState,
+} from './next-step';
 import type { QualityTodo } from './quality-todos';
 
 /**
@@ -232,6 +239,65 @@ describe('nextStep', () => {
         quality: { trust: 54, trustLow: true, todos: [proof('proof:a:1'), proof('proof:c:3')] },
       }),
     ).toEqual({});
+  });
+});
+
+describe('the third step, once the agent took it (editor test 2026-10-26)', () => {
+  it('moves on to proof with a rule still open and the Length off', () => {
+    // As on the tested page: Trust 47, under its gate.
+    const quality = { trust: 47, trustLow: true, todos: [] };
+    const fix = state({ method: 'optimize', openRules: ['h2Answer'], quality });
+    expect(nextStep(fix).step.id).toBe('fixRules');
+    expect(nextStep({ ...fix, thirdTried: true }).step.id).toBe('proof');
+    expect(ids({ ...fix, thirdTried: true })).toEqual([
+      'plan:done',
+      'import:done',
+      'fixRules:done',
+      'proof:now',
+      'check:ahead',
+    ]);
+    // A page far off its Length passes its rewrite step the same way.
+    const long = state({
+      method: 'optimize',
+      rewrite: { reason: 'length', count: 17_683, target: 13_998, percent: 26 },
+      openRules: ['h2Answer'],
+      quality,
+    });
+    expect(nextStep(long).step.id).toBe('length');
+    expect(nextStep({ ...long, thirdTried: true }).step.id).toBe('proof');
+    // With Quality off, to Mark ready.
+    expect(nextStep({ ...long, quality: null, thirdTried: true }).step.id).toBe('check');
+  });
+
+  it('keeps the steps before it: an empty page is still written first', () => {
+    const s = state({ empty: true, openRules: rules(3), thirdTried: true });
+    expect(nextStep(s).step.id).toBe('write');
+  });
+
+  it("reads the agent's run as taken once what it left is decided, or it ended with nothing", () => {
+    const attempt = { batch: 'b1' };
+    // The run is under way, or its batch waits for a decision: not yet.
+    expect(thirdStepTried(attempt, { batch: 'b1', open: 0, busy: true })).toBe(false);
+    expect(thirdStepTried(attempt, { batch: 'b2', open: 3, busy: false })).toBe(false);
+    // Its batch, every change decided (accepted or rejected).
+    expect(thirdStepTried(attempt, { batch: 'b2', open: 0, busy: false })).toBe(true);
+    // The batch from before it is no answer of its: stopped, the step stays.
+    expect(thirdStepTried(attempt, { batch: 'b1', open: 0, busy: false })).toBe(false);
+    // It found nothing to change: there's nothing to decide.
+    expect(thirdStepTried({ ...attempt, ended: true }, { batch: 'b1', open: 0, busy: false })).toBe(
+      true,
+    );
+    // A first batch, on a page that had none.
+    expect(thirdStepTried({ batch: null }, { batch: 'b1', open: 0, busy: false })).toBe(true);
+    expect(thirdStepTried(null, { batch: 'b1', open: 0, busy: false })).toBe(false);
+    // Found nothing, but another run is under way: not yet.
+    expect(thirdStepTried({ ...attempt, ended: true }, { batch: 'b1', open: 0, busy: true })).toBe(
+      false,
+    );
+    // Once taken, a later run working or its changes waiting don't bring it back.
+    expect(thirdStepTried({ ...attempt, passed: true }, { batch: 'b3', open: 2, busy: true })).toBe(
+      true,
+    );
   });
 });
 

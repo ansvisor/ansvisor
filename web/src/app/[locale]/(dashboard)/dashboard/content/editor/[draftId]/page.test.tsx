@@ -6439,6 +6439,141 @@ describe('the side panel', () => {
       expect(basket()!.textContent).toContain('Content Agent is working');
     });
 
+    describe('once the agent took Fix open rules (editor test 2026-10-26)', () => {
+      beforeEach(() => {
+        getDraftSources.mockResolvedValue({
+          data: {
+            prompts: [],
+            fanouts: [{ query: 'pipeline forecasting', platforms: ['copilot-web'], searched: 2 }],
+            citedPages: [],
+            gscQueries: [],
+            brandDomains: [],
+            competitorDomains: [],
+          },
+          choices: [],
+        });
+        getDraftBrief.mockResolvedValue({
+          brief: {
+            goal: 'Win forecasting searches',
+            audience: 'Sales leaders',
+            outline: [],
+            keywords: [],
+            origin: 'rebuild',
+            builtAt: '2026-10-21T10:00:00Z',
+            builtFrom: { prompts: 0, fanouts: 1, pages: 0, queries: 0 },
+          },
+        });
+        getContentDraft.mockResolvedValue(
+          draft({
+            method: 'create',
+            pageType: 'blog_post',
+            rules: {
+              set: null,
+              source: 'default',
+              overrides: { length: { on: false } },
+              textRules: [],
+            },
+          }),
+        );
+      });
+      // Where Next goes from Fix open rules on this page: step 4.
+      const MOVED_ON = 'Next · Add proof and author';
+      const runFix = async () => {
+        await renderPage();
+        expect(nextButton()!.getAttribute('aria-label')).toBe('Next · Fix open rules');
+        await act(async () => nextButton()!.click());
+        await act(async () => inBasket('Fix open rules')!.click());
+        await act(async () => {});
+      };
+
+      it('moves on once its changes are decided, with the rule still open', async () => {
+        getDraftSuggestions.mockResolvedValueOnce([]).mockResolvedValue([
+          {
+            id: 'n9',
+            batchId: 'b9',
+            actionId: null,
+            actionNo: null,
+            kind: 'replace' as const,
+            blockText: 'Teams trust it.',
+            beforeText: 'trust',
+            afterText: 'rely on',
+            reason: 'answer the AI search (rule)',
+            ruleKeys: ['fanoutH2'],
+            status: 'open' as const,
+          },
+        ]);
+        fixDraftRules.mockResolvedValue({ count: 1 });
+        await runFix();
+        // Its change waits for a decision: the step stays.
+        expect(nextButton()!.getAttribute('aria-label')).toBe('Next · Fix open rules');
+        const card = container.querySelector('[role="region"][aria-label="Agent suggestions"]')!;
+        await act(async () =>
+          [...card.querySelectorAll('button')].find((b) => b.textContent === 'Reject all')!.click(),
+        );
+        await act(async () => {});
+        // Rejected, the fan-out rule is still open, and Next moves on.
+        expect(nextButton()!.getAttribute('aria-label')).toBe(MOVED_ON);
+        expect(JSON.parse(localStorage.getItem('aeo:next-step-third-try:d1')!)).toEqual({
+          batch: null,
+          passed: true,
+        });
+      });
+
+      it('moves on when it found nothing to change', async () => {
+        getDraftSuggestions.mockResolvedValue([]);
+        fixDraftRules.mockResolvedValue({ count: 0 });
+        await runFix();
+        expect(nextButton()!.getAttribute('aria-label')).toBe(MOVED_ON);
+        // Opened again, it holds.
+        await act(async () => root.unmount());
+        root = createRoot(container);
+        await renderPage();
+        expect(nextButton()!.getAttribute('aria-label')).toBe(MOVED_ON);
+      });
+
+      it('stays when the run failed, or never ran', async () => {
+        getDraftSuggestions.mockResolvedValue([]);
+        fixDraftRules.mockResolvedValue({ error: 'failed' });
+        await runFix();
+        expect(nextButton()!.getAttribute('aria-label')).toBe('Next · Fix open rules');
+        expect(localStorage.getItem('aeo:next-step-third-try:d1')).toBeNull();
+      });
+
+      it('stays when the changes it shows are another tab’s, decided here', async () => {
+        getDraftSuggestions.mockResolvedValueOnce([]).mockResolvedValue([
+          {
+            id: 'n8',
+            batchId: 'b8',
+            actionId: null,
+            actionNo: null,
+            kind: 'replace' as const,
+            blockText: 'Teams trust it.',
+            beforeText: 'trust',
+            afterText: 'rely on',
+            reason: 'answer the AI search (rule)',
+            ruleKeys: ['fanoutH2'],
+            status: 'open' as const,
+          },
+        ]);
+        // Another tab's run left changes to decide first: this one never ran.
+        fixDraftRules.mockResolvedValue({ error: 'open_suggestions' });
+        await runFix();
+        const card = container.querySelector('[role="region"][aria-label="Agent suggestions"]')!;
+        await act(async () =>
+          [...card.querySelectorAll('button')].find((b) => b.textContent === 'Reject all')!.click(),
+        );
+        await act(async () => {});
+        expect(nextButton()!.getAttribute('aria-label')).toBe('Next · Fix open rules');
+      });
+
+      it('stays when the run is stopped', async () => {
+        getDraftSuggestions.mockResolvedValue([]);
+        fixDraftRules.mockResolvedValue({ error: 'stopped' });
+        await runFix();
+        expect(nextButton()!.getAttribute('aria-label')).toBe('Next · Fix open rules');
+      });
+    });
+
     it('stays out of the header while Quality is off', async () => {
       delete process.env.NEXT_PUBLIC_CONTENT_QUALITY_PHASE;
       getContentDraft.mockResolvedValue(

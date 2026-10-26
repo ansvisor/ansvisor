@@ -53,6 +53,7 @@ import {
   UserPlus,
 } from 'lucide-react';
 import { useRouter } from '@/i18n/navigation';
+import { formatDate } from '@/lib/format';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -381,7 +382,7 @@ function InvitationRow({
         <p className="text-xs text-muted-foreground">
           {expired
             ? t('team_expired')
-            : t('team_expires', { date: new Date(invitation.expiresAt).toLocaleDateString() })}
+            : t('team_expires', { date: formatDate(invitation.expiresAt) })}
         </p>
       </div>
       <Badge variant="outline">{roleLabel(t, invitation.role)}</Badge>

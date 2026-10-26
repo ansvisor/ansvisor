@@ -23,6 +23,7 @@ import { cn } from '@/lib/utils';
 import { PLATFORM_LABELS } from '@/config/platform-labels';
 import { ResponseDetail } from '@/components/results/response-detail';
 import { formatRegionDisplay } from '@/lib/region';
+import { formatDateTime } from '@/lib/format';
 import { HeaderWithAiUsage } from '@/components/ai-usage/ai-usage-meter';
 
 function SentimentBadge({ sentiment }: { sentiment: 'positive' | 'neutral' | 'negative' }) {
@@ -209,7 +210,7 @@ export default function ResultDetailPage() {
       {/* Timestamp */}
       <div className="flex items-center gap-2 text-xs text-muted-foreground pb-6">
         <Clock className="h-3.5 w-3.5" />
-        {tDetail('checkedAt', { date: new Date(result.createdAt).toLocaleString() })}
+        {tDetail('checkedAt', { date: formatDateTime(result.createdAt) })}
       </div>
     </div>
   );

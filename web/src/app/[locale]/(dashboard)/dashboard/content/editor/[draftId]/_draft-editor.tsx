@@ -159,9 +159,11 @@ import {
   nextStep,
   rulesForNext,
   stepState,
+  thirdStepTried,
   type NextAction,
   type NextStepId,
   type NextStepState,
+  type ThirdTry,
 } from '@/lib/content/next-step';
 import {
   aiTracesFound,
@@ -234,11 +236,13 @@ import { HeaderTip } from './_header-tip';
 import {
   NextStepButton,
   readSkips,
+  readThirdTry,
   stepActor,
   stepName,
   stepReason,
   wordsUnderTitle,
   writeSkips,
+  writeThirdTry,
 } from './_next-step';
 import { qualitySuggestions, useTodoCopy, type HandOff, type QualityRead } from './_quality-tab';
 import { PageTypeMenu } from './_page-type-menu';
@@ -434,6 +438,29 @@ export function DraftEditor({
   // The agent's last run failed (Fix or hand-off): the card says so over an earlier batch.
   const [lastRunFailed, setLastRunFailed] = useState(false);
   const suggestionsNow = useRef(suggestions);
+  // The agent's run on the Next step basket's third step (Fix open rules,
+  // Rewrite page), and that step as it is now: once the run's changes are
+  // decided, Next moves on to the fourth (thirdStepTried).
+  const [thirdTry, setThirdTry] = useState<ThirdTry | null>(() => readThirdTry(draft.id));
+  const thirdTryNow = useRef(thirdTry);
+  const nextStepNow = useRef<NextStepId | null>(null);
+  const saveThirdTry = (attempt: ThirdTry | null) => {
+    thirdTryNow.current = attempt;
+    setThirdTry(attempt);
+    writeThirdTry(draft.id, attempt);
+  };
+  /**
+   * Notes a run the third step takes, from the batch on the page now; the
+   * attempt before it, to put back when the run doesn't happen or is stopped.
+   * Null when the third step isn't Next's.
+   */
+  const beginThirdTry = (): { prev: ThirdTry | null } | null => {
+    if (nextStepNow.current !== 'length' && nextStepNow.current !== 'fixRules') return null;
+    const prev = thirdTryNow.current;
+    if (prev?.passed) return null;
+    saveThirdTry({ batch: suggestionsNow.current[0]?.batchId ?? null });
+    return { prev };
+  };
   const [deciding, setDeciding] = useState(false);
   const [barClosed, setBarClosed] = useState(false);
   const [fixing, setFixing] = useState(false);
@@ -2342,8 +2369,12 @@ export function DraftEditor({
     };
     // A page over a Length it isn't sent: what it adds stays short.
     const overLength = overLengthFor(rules.rules, open);
-    await runAgentFix(() =>
-      fixDraftRules(draft.id, draft.brandId, overLength ? { ...request, overLength } : request),
+    await runAgentFix(
+      () =>
+        fixDraftRules(draft.id, draft.brandId, overLength ? { ...request, overLength } : request),
+      undefined,
+      false,
+      beginThirdTry(),
     );
   };
 
@@ -2381,8 +2412,18 @@ export function DraftEditor({
     // The editor's own run (the automatic hand-off): what the person didn't
     // start isn't said when it doesn't run or finds nothing, only logged.
     quiet = false,
+    // Fix open rules as Next's third step (beginThirdTry): found nothing, it
+    // is taken; failed, stopped or never run, the attempt before it is back.
+    third: { prev: ThirdTry | null } | null = null,
   ) => {
+    const untried = () => {
+      if (third) saveThirdTry(third.prev);
+    };
+    const nothing = () => {
+      if (third) saveThirdTry({ ...(thirdTryNow.current ?? { batch: null }), ended: true });
+    };
     const failed = (key: string, error: string) => {
+      untried();
       if (quiet) {
         console.warn('The automatic hand-off did not run:', error);
         return;
@@ -2409,6 +2450,7 @@ export function DraftEditor({
       const stop = stopSent.current;
       if ('error' in result && result.error === 'unconfirmed' && stop && (await stop)) {
         // Stopped, and the answer was lost on the way: nothing it had is kept.
+        untried();
         toast(t('agentCard.stopped'));
         return;
       }
@@ -2416,10 +2458,12 @@ export function DraftEditor({
         // No answer is not a failure: how its run ended says (its batch, or its row).
         const outcome = await agentOutcome(draft.id, before, asked + FIX_WAIT_MS);
         if (outcome && 'stopped' in outcome) {
+          untried();
           toast(t('agentCard.stopped'));
           return;
         }
         if (outcome && 'nothing' in outcome) {
+          nothing();
           if (!quiet) {
             toast(
               t(
@@ -2445,6 +2489,7 @@ export function DraftEditor({
       }
       if ('error' in result && result.error === 'stopped') {
         // Stopped from the card: no failure, and nothing changed.
+        untried();
         toast(t('agentCard.stopped'));
         return;
       }
@@ -2458,6 +2503,7 @@ export function DraftEditor({
         return;
       }
       if (result.count === 0) {
+        nothing();
         // Why, so the person knows what to do: every change it had was in a quoted passage.
         if (!quiet) {
           toast(
@@ -2953,6 +2999,8 @@ export function DraftEditor({
         toast.error(t(`agentFailed.errors.${result.error}`));
         return;
       }
+      // Under way: the page it leaves takes Next's third step, if it is that.
+      beginThirdTry();
       onAgentStarted?.('rewrite');
     } catch (err) {
       console.error('Failed to start the page rewrite:', err);
@@ -3113,6 +3161,20 @@ export function DraftEditor({
     [qualityOn, pageHtml],
   );
   const trustNow = quality?.trust?.score ?? null;
+  // Taken, it stays passed: a later run (a hand-off, Run Agent on step 4)
+  // doesn't bring the step back while it works or its changes wait.
+  const thirdTried = thirdStepTried(thirdTry, {
+    batch: suggestions[0]?.batchId ?? null,
+    open: openSuggestions,
+    busy: agentWorking || rewriting,
+  });
+  useEffect(() => {
+    if (!thirdTried || !thirdTry || thirdTry.passed) return;
+    const passed = { ...thirdTry, passed: true };
+    thirdTryNow.current = passed;
+    writeThirdTry(draft.id, passed);
+    setThirdTry(passed);
+  }, [thirdTried, thirdTry, draft.id]);
   const nextState: NextStepState = {
     method: draft.method,
     open: canMarkReady,
@@ -3126,8 +3188,12 @@ export function DraftEditor({
       ? { trust: trustNow, trustLow: trustNow !== null && trustNow < TRUST_GATE, todos }
       : null,
     skipped,
+    thirdTried,
   };
   const next = nextStep(nextState);
+  useEffect(() => {
+    nextStepNow.current = next.step.id;
+  });
   const firstTodo = todos.find((todo) => !todo.done);
   const todoLine = firstTodo && quality ? todoCopy(firstTodo, quality).next : null;
   const skipStep = (id: NextStepId) => {
@@ -3372,7 +3438,12 @@ export function DraftEditor({
       );
       // Its card goes as if closed, with its Undo all and last run: they were
       // for the page before (editor test 2026-10-25). A new batch opens it.
-      if (!samePage) setBarClosed(true);
+      // And Next's third step is the restored page's again: its open
+      // suggestions set aside are no decision of the agent's.
+      if (!samePage) {
+        setBarClosed(true);
+        saveThirdTry(null);
+      }
     } catch (err) {
       console.error('Failed to restore the version:', err);
       toast.error(t('history.restoreFailed'));

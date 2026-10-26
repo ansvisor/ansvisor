@@ -31,6 +31,7 @@ import {
 } from 'lucide-react';
 import { ShareOfVoicePlatformChart } from '../../../insights/_charts';
 import { cn } from '@/lib/utils';
+import { formatNumber } from '@/lib/format';
 import dynamic from 'next/dynamic';
 import { HeaderWithAiUsage } from '@/components/ai-usage/ai-usage-meter';
 const DynamicVisibilityTrendChart = dynamic(
@@ -296,13 +297,13 @@ export default function TopicDetailPage({ params }: { params: Promise<{ id: stri
           <KpiCard
             icon={Zap}
             label="Brand mentions"
-            value={summary.totalMentions.toLocaleString()}
+            value={formatNumber(summary.totalMentions)}
             change={summary.mentionsChange}
           />
           <KpiCard
             icon={Quote}
             label="Citations"
-            value={summary.totalCitations.toLocaleString()}
+            value={formatNumber(summary.totalCitations)}
             change={summary.citationsChange}
           />
           <KpiCard

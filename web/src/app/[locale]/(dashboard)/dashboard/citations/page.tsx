@@ -85,6 +85,7 @@ import {
 } from '@/components/ui/table';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
+import { formatNumber } from '@/lib/format';
 import { HeaderWithAiUsage } from '@/components/ai-usage/ai-usage-meter';
 
 // ─── Constants ───────────────────────────────────────────────────────────────
@@ -1062,7 +1063,7 @@ export default function CitationsPage() {
     () => [
       {
         title: t('kpiTotalCitations'),
-        value: totals ? totals.citations.toLocaleString() : '—',
+        value: totals ? formatNumber(totals.citations) : '—',
         sub: t('kpiTotalCitationsSub', {
           results: totals?.results ?? 0,
         }),
@@ -1070,7 +1071,7 @@ export default function CitationsPage() {
       },
       {
         title: t('kpiUniqueDomains'),
-        value: totals ? domainsInScope.toLocaleString() : '—',
+        value: totals ? formatNumber(domainsInScope) : '—',
         sub: t('kpiUniqueDomainsSub', {
           urls: totals?.urls ?? 0,
         }),
