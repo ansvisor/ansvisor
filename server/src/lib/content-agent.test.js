@@ -991,6 +991,64 @@ describe('attributions as the review of #1537 read them', () => {
   });
 });
 
+describe('the review of #1537, round 2 (low follow-ups)', () => {
+  it('ends a line at a line break inside a bold or a link too', () => {
+    expect(
+      htmlLines(
+        '<p><strong>Forecasting basics<br>According to Zapier, teams forecast.</strong></p>',
+      ),
+    ).toEqual(['Forecasting basics', 'According to Zapier, teams forecast.']);
+    expect(
+      htmlLines(
+        '<p><em>Teams plan weekly, according to Gartner.<br>Most teams plan monthly.</em></p>',
+      ),
+    ).toEqual(['Teams plan weekly, according to Gartner.', 'Most teams plan monthly.']);
+    expect(htmlLines('<p><strong>ChatGPT<br>Gemini<br>Claude</strong></p>')).toEqual([
+      'ChatGPT',
+      'Gemini',
+      'Claude',
+    ]);
+    // A claim a bold's line break hid is read; one on a page that cites the source isn't new.
+    const cites = attributableSources('<p>According to Gartner, teams forecast.</p>', [], []);
+    expect(
+      keepSuggestions(
+        [
+          suggestion({
+            kind: 'insert',
+            passage: 1,
+            before: '',
+            after:
+              '<p><strong>Forecasting basics<br>According to Zapier, teams forecast.</strong></p>',
+            sources: [],
+            marks: [],
+          }),
+        ],
+        [{ tag: 'p', text: 'Track ChatGPT, Gemini and Claude.' }],
+        new Set(),
+        new Set(['dated']),
+        null,
+        { ...sourcing, attributable: cites },
+      ),
+    ).toEqual([]);
+  });
+
+  it('reads "states" and "claims" as nouns after a count at a sentence’s start, and a claim after small words', () => {
+    for (const text of [
+      'Most US states that allow it ship wine.',
+      'Every FDA states that list it are fine.',
+    ]) {
+      expect(addsAttribution('', text), text).toBe(false);
+      expect(placeholderAttributions(text, knownPeople('')), text).toBe(text);
+    }
+    for (const text of [
+      'In some cases Gartner states that most teams forecast weekly.',
+      'For many years Gartner claims that most teams forecast weekly.',
+    ]) {
+      expect(addsAttribution('', text), text).toBe(true);
+    }
+  });
+});
+
 describe('no invented people or quotes (CE-044)', () => {
   const passages = draftPassages(BODY);
   const ruleKeys = new Set(['dated', 'faq']);

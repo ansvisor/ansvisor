@@ -374,10 +374,12 @@ const ATTRIBUTIONS = [
     'gu',
   ),
   // …and never a run of names counted ("all 50 US states that allow…", "most
-  // US states that", "the 48 contiguous US states that"), or one read from
-  // the middle of a name ("New England states that").
+  // US states that", "Most US states that", "the 48 contiguous US states
+  // that"), or one read from the middle of a name ("New England states
+  // that"); small words between only after a number or "all", so "In some
+  // cases Gartner states that" is read.
   new RegExp(
-    String.raw`(?<!(?:\b(?:[Aa]ll|[Mm]ost|[Mm]any|[Ss]ome|[Ss]everal|[Bb]oth|[Ee]very|\d{1,3})(?:\s+\p{Ll}+){0,2}|\p{Lu}[\p{L}\p{N}&.'’-]*)\s+)${SOURCE_NAME}\s+(?:claims|claimed|states|stated)\s+that\b`,
+    String.raw`(?<!(?:\b(?:[Aa]ll|\d{1,3})(?:\s+\p{Ll}+){0,2}|\b(?:[Mm]ost|[Mm]any|[Ss]ome|[Ss]everal|[Bb]oth|[Ee]very)|\p{Lu}[\p{L}\p{N}&.'’-]*)\s+)(?!(?:All|Most|Many|Some|Several|Both|Every)\b)${SOURCE_NAME}\s+(?:claims|claimed|states|stated)\s+that\b`,
     'gu',
   ),
   new RegExp(
@@ -1292,7 +1294,7 @@ async function fixWithRun({
     draft.body_html,
     numbered,
     authors,
-    await draftLanguage(draft, brand.organization_id, brand.language),
+    await draftLanguage(draft, brand),
     [brand.name],
   );
   // Where it may link: the brand's pages and the draft's sources (A); a

@@ -629,6 +629,7 @@ export function guardPeopleInHtml(html, known) {
  */
 export function editLines($, editsFor) {
   let count = 0;
+  const BREAK = Symbol('line end');
   // A line: its own text nodes and its inline tags', in order, read as one.
   const line = (nodes, heading) => {
     if (!nodes.length) return;
@@ -655,14 +656,18 @@ export function editLines($, editsFor) {
       });
     }
   };
-  // An inline tag's text, with any line inside it read on its own.
+  // An inline tag's text, with any line inside it read on its own: a line
+  // break or a block in a bold or a link ends the line there too (BREAK).
   const inlineText = (el) => {
     const out = [];
     for (const node of $(el).contents().get()) {
       if (node.type === 'text') out.push(node);
       else if (node.type !== 'tag' || KEPT_AS_IS.has(node.name)) continue;
-      else if (BLOCKS.has(node.name)) walk(node, HEADINGS.has(node.name));
-      else out.push(...inlineText(node));
+      else if (node.name === 'br') out.push(BREAK);
+      else if (BLOCKS.has(node.name)) {
+        out.push(BREAK);
+        walk(node, HEADINGS.has(node.name));
+      } else out.push(...inlineText(node));
     }
     return out;
   };
@@ -679,7 +684,15 @@ export function editLines($, editsFor) {
         line(run, heading);
         run = [];
         walk(node, HEADINGS.has(node.name));
-      } else run.push(...inlineText(node));
+      } else {
+        for (const piece of inlineText(node)) {
+          if (piece !== BREAK) run.push(piece);
+          else {
+            line(run, heading);
+            run = [];
+          }
+        }
+      }
     }
     line(run, heading);
   };
