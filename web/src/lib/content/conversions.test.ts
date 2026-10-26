@@ -81,4 +81,14 @@ describe('journeyPages', () => {
       '/f',
     ]);
   });
+
+  it('keeps the page the tab is about in view when it would fall in the gap', () => {
+    const pages = ['/a', '/b', '/pricing', '/c', '/d', '/e', '/f'];
+    expect(journeyPages(pages, '/pricing')).toEqual(['/a', null, '/pricing', null, '/f']);
+    // Shown already, or not in the journey: as without it.
+    expect(journeyPages(pages, '/a')).toEqual(['/a', null, '/d', '/e', '/f']);
+    expect(journeyPages(pages, '/e')).toEqual(['/a', null, '/d', '/e', '/f']);
+    expect(journeyPages(pages, '/other')).toEqual(['/a', null, '/d', '/e', '/f']);
+    expect(journeyPages(['/a', '/pricing'], '/pricing')).toEqual(['/a', '/pricing']);
+  });
 });

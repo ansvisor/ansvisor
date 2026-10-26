@@ -40203,11 +40203,18 @@ notify pgrst, 'reload schema';
 --     credited to (first touch, within 30 days), so a journey reads without
 --     joining the landing logs.
 --   * `url` is the page without its query string or fragment: a thank-you
---     page's ?email=… never gets in.
---   * `order_ref`: an order's own id at the shop (Shopify's pixel), once per
---     visitor, so an order the pixel sends twice counts once. Per visitor,
---     not per brand: the tracking code is public, and an order id sent first
---     by anyone else must not shut the real one out.
+--     page's ?email=… never gets in, nor a path segment holding an email
+--     (stored as "[email]").
+--   * `order_ref`: a hash of the brand and an order's own id at the shop
+--     (Shopify's pixel, a site's call), once per visitor, so an order sent
+--     twice counts once; only ever compared, so the id itself isn't kept.
+--     Per visitor, not per brand: the tracking code is public, and an order
+--     id sent first by anyone else must not shut the real one out.
+--   * The server stores at most a few hundred pageviews per visitor id in
+--     the window and a few conversions a day, so a journey's reads stay
+--     bounded (routes/traffic.js).
+--   * `page_key` and `first_key`: the pages' keys, made once on insert, for
+--     the journeys' reads.
 --   * Members read their brands' events; only the server writes them.
 
 alter table public.brands
@@ -40238,6 +40245,11 @@ create table if not exists public.ai_traffic_events (
   first_url text not null check (char_length(first_url) between 1 and 2048),
   first_at timestamptz not null,
   occurred_at timestamptz not null default now(),
+  -- The pages' keys as journeys read them (lower(normalize_page_path), as in
+  -- 00209 / 00210): made once when the row is stored, so a journey's reads
+  -- (00287, 00288) compare keys rather than work each address out again.
+  page_key text generated always as (lower(public.normalize_page_path(url))) stored,
+  first_key text generated always as (lower(public.normalize_page_path(first_url))) stored,
   -- A conversion says what it was and where it came from; a pageview neither.
   constraint ai_traffic_events_kind check (
     (kind = 'conversion' and goal is not null and origin is not null)
@@ -40250,8 +40262,6 @@ create unique index if not exists ai_traffic_events_order
   on public.ai_traffic_events (brand_id, visitor_id, order_ref)
   where order_ref is not null;
 
-create index if not exists ai_traffic_events_brand_time
-  on public.ai_traffic_events (brand_id, occurred_at desc);
 create index if not exists ai_traffic_events_journey
   on public.ai_traffic_events (brand_id, visitor_id, occurred_at);
 
@@ -40273,7 +40283,7 @@ create policy "ai_traffic_events: member select"
   );
 
 comment on table public.ai_traffic_events is
-  'CE-017 (00286): journeys of visitors who came from an AI assistant, as the AI Traffic snippet sends them with conversions on: pageviews and conversions (goal, value, units; Shopify orders once by order_ref), each credited to the first AI visit (first_source, first_url, first_at). A random first-party visitor id; no IP, name or email. Members read; the server writes.';
+  'CE-017 (00286): journeys of visitors who came from an AI assistant, as the AI Traffic snippet sends them with conversions on: pageviews and conversions (goal, value, units; an order once by the hash of its id, order_ref), each credited to the first AI visit (first_source, first_url, first_at). A random first-party visitor id; no IP, name or email. Members read; the server writes.';
 
 notify pgrst, 'reload schema';
 
@@ -40306,7 +40316,12 @@ notify pgrst, 'reload schema';
 -- The journey's first AI visit isn't its key: the server keeps a browser's
 -- clock from dating it after the event, so first_at may differ within one.
 -- Conversions are read through their own partial index: most events are
--- pageviews.
+-- pageviews. Pages are compared by the keys stored with each event
+-- (page_key, first_key, 00286). The reads are bounded whatever a sender
+-- stored: a visitor id's pageviews are read once for the page, from a day
+-- before its first AI visit; a journey's steps are the latest 100 pageviews
+-- before its conversion; and the journeys are the latest 2,000
+-- conversions' (the counts take all).
 -- A page is one lower(normalize_page_path) key, as in 00209 / 00210.
 --
 -- Security definer with an organization check, as content_page_results, and
@@ -40359,20 +40374,39 @@ begin
       and c.occurred_at >= v_from
       and c.occurred_at < v_until
   ),
+  -- When each visitor id first saw the page in its journey: read once per
+  -- visitor id however many conversions it has, from a day before its first
+  -- AI visit (first_at is clamped per event, within the server's clock
+  -- allowance) to its last conversion, by the stored keys.
+  seen as (
+    select v.visitor_id, (
+      select min(e.occurred_at)
+      from public.ai_traffic_events e
+      where e.brand_id = p_brand_id
+        and e.visitor_id = v.visitor_id
+        and e.kind = 'page'
+        and e.page_key = v_key
+        and e.occurred_at >= v.since
+        and e.occurred_at <= v.last_at
+    ) as at
+    from (
+      select visitor_id, min(first_at) - interval '1 day' as since, max(occurred_at) as last_at
+      from conversions
+      group by visitor_id
+    ) v
+  ),
+  -- A conversion whose journey landed on the page, went through it, or converted on it.
   through as (
     select c.*
     from conversions c
-    where lower(public.normalize_page_path(c.first_url)) = v_key
-      or lower(public.normalize_page_path(c.url)) = v_key
-      or exists (
-        select 1 from public.ai_traffic_events p
-        where p.brand_id = p_brand_id
-          and p.visitor_id = c.visitor_id
-          and p.kind = 'page'
-          and p.occurred_at <= c.occurred_at
-          and lower(public.normalize_page_path(p.url)) = v_key
-      )
+    left join seen s on s.visitor_id = c.visitor_id
+    where c.first_key = v_key
+      or c.page_key = v_key
+      or (s.at is not null and s.at <= c.occurred_at and s.at >= c.first_at - interval '1 day')
   ),
+  -- The paths of the latest 2,000 (the counts above take all): the landing
+  -- page, the latest 100 pageviews before the conversion, the page it
+  -- converted on.
   paths as (
     select t.first_source, t.goal, t.occurred_at, (
       select array_agg(s.page order by s.ord <> 0, s.at, s.ord)
@@ -40380,21 +40414,27 @@ begin
         select steps.page, steps.at, steps.ord,
           lag(steps.page) over (order by steps.ord <> 0, steps.at, steps.ord) as before
         from (
-          select lower(public.normalize_page_path(t.first_url)) as page, t.first_at as at, 0 as ord
+          select t.first_key as page, t.first_at as at, 0 as ord
           union all
-          select lower(public.normalize_page_path(p.url)), p.occurred_at, 1
-          from public.ai_traffic_events p
-          where p.brand_id = p_brand_id
-            and p.visitor_id = t.visitor_id
-            and p.kind = 'page'
-            and p.occurred_at <= t.occurred_at
+          select p.page_key, p.occurred_at, 1
+          from (
+            select e.page_key, e.occurred_at
+            from public.ai_traffic_events e
+            where e.brand_id = p_brand_id
+              and e.visitor_id = t.visitor_id
+              and e.kind = 'page'
+              and e.occurred_at >= t.first_at - interval '1 day'
+              and e.occurred_at <= t.occurred_at
+            order by e.occurred_at desc
+            limit 100
+          ) p
           union all
-          select lower(public.normalize_page_path(t.url)), t.occurred_at, 2
+          select t.page_key, t.occurred_at, 2
         ) steps
       ) s
       where s.before is distinct from s.page
     ) as pages
-    from through t
+    from (select * from through order by occurred_at desc limit 2000) t
   )
   select jsonb_build_object(
     'page', v_key,

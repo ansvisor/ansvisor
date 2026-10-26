@@ -42,6 +42,13 @@ export function trackingSnippetTag(
 export const CONSENT_CALL = "ansvisor('consent', 'granted');";
 
 /**
+ * What the site calls when the visitor says no or takes consent back: the
+ * snippet takes an id kept earlier as consent given, so without it a
+ * visitor who changes their mind is still followed.
+ */
+export const DENY_CALL = "ansvisor('consent', 'denied');";
+
+/**
  * Shopify's own cookie banner, told to the snippet (Customer Privacy API):
  * the answer when the visitor gives it, and on each page the one given
  * before (or that none is needed where they are).
@@ -74,8 +81,9 @@ export const FORM_OFF_ATTRIBUTE = 'data-ansvisor="off"';
  * (the checkout is on the shop's domain; a headless store's checkout on
  * another domain can't read it). A visitor the snippet didn't follow (no AI
  * visit, no consent) sends nothing; the server credits the rest as the
- * snippet's events, and counts an order sent twice once, by its id (by the
- * checkout's token only where Shopify gives no id). Only an amount and
+ * snippet's events, and counts an order sent twice once, by its id; one
+ * Shopify gives no id for goes without, as the checkout's token isn't an
+ * order's id (it's in the thank-you page's path). Only an amount and
  * units the server takes go. The checkout's address goes as /checkout: its
  * path carries the order's token. Null without an API URL or a tracking
  * code.
@@ -108,7 +116,7 @@ analytics.subscribe("checkout_completed", async (event) => {
   const value = Number(total.amount);
   if (Number.isFinite(value) && value >= 0 && value <= 1e9) order.val = value;
   if (typeof total.currencyCode === "string") order.cur = total.currencyCode;
-  const ref = (checkout.order && checkout.order.id) || checkout.token;
+  const ref = checkout.order && checkout.order.id;
   if (ref) order.ref = String(ref);
   fetch(ANSVISOR_TRACK, {
     method: "POST",

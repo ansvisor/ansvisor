@@ -121,7 +121,7 @@ export function ImpactConversions({
                           ? getPlatformName(journey.source)
                           : t('other')}
                       </span>
-                      {journeyPages(journey.pages).map((page, j) => (
+                      {journeyPages(journey.pages, conversions.page).map((page, j) => (
                         <Fragment key={j}>
                           <ChevronRight
                             aria-hidden
