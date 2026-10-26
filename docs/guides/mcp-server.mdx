@@ -307,7 +307,7 @@ Drafts are read and written as a person would in the editor. Ansvisor never publ
 | `create_content_draft` | Write a new draft as the agent (`create`, or `optimize` a page on the brand's domains); it goes to the Library's In review. | **yes** |
 | `add_content_source` | Add a prompt, a cited page or a Search Console query to the draft's sources. | **yes** |
 | `suggest_content_changes` | Leave up to 20 suggestions (replace or insert, each with a reason) for a person to accept or reject. Refused on a published draft, while open suggestions wait, or while the Content Agent writes it. | **yes** |
-| `set_content_draft_ready` | Mark a draft ready, as the editor's Mark ready does; a linked action's writing task is completed. A draft in review waits for a person. | **yes** |
+| `set_content_draft_ready` | Set a draft ready, as the editor's Mark ready does, without its Before you publish check; a linked action's writing task completes once every page it names has a ready draft. A draft in review waits for a person. | **yes** |
 
 ### Site audit
 

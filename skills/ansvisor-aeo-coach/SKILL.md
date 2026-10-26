@@ -11,12 +11,12 @@ description: |
   (mentions, sentiment, what AI associates with it). Uses the Ansvisor
   MCP server tools (`list_brands`,
   `get_visibility_summary`, `get_competitor_comparison`,
-  `get_mentions_summary`, `list_actions`, …) to fetch the data,
+  `list_actions`, …) to fetch the data,
   then interprets it the way a marketing analyst would — not just
   dumping numbers, but pointing at what changed and what to do about it.
-  Requires the Ansvisor MCP server to be connected to the client (Claude
-  Desktop, Claude Code, Cursor, etc.); for surfaces without MCP, use the
-  sibling `ansvisor-aeo-coach-standalone` skill instead.
+  Requires the Ansvisor MCP server connected to the client (Claude
+  Desktop, Claude Code, Cursor, etc.); without MCP, use the sibling
+  `ansvisor-aeo-coach-standalone` skill.
 ---
 
 # Ansvisor AEO Coach
@@ -287,9 +287,12 @@ accepts it.
   plain text) or an `insert` after it (`after` as simple HTML), with a
   short `reason`. You write them: Ansvisor calls no LLM. Ones the editor
   can't apply come back in `dropped` with the reason *(write)*.
-- **`set_content_draft_ready`** — the editor's **Mark ready**: a `draft`
-  becomes `ready`, History keeps it as a version, and a linked action's
-  writing task is completed (`action_tasks_done`). A draft `in_review`
+- **`set_content_draft_ready`** — sets the status as the editor's **Mark
+  ready** does: a `draft` becomes `ready` and History keeps it as a
+  version. It skips the editor's Before you publish check (its Trust
+  warning), so point the person to it with `editor_path` first. A linked
+  action's writing task completes once every page the action names has a
+  ready draft (`action_tasks_done`; 0 until then). A draft `in_review`
   waits for a person to mark it ready in the editor *(write)*.
 
 **Shopping**
@@ -652,14 +655,18 @@ When the user asks how AI describes the brand, why sentiment moved
    while a person still has open suggestions on it, or while the
    Content Agent is writing it: say so and stop. Report how many were
    kept and any `dropped`.
-5. When the user says the draft is done, offer `set_content_draft_ready`
-   and call it after they confirm *(write)*. A draft `in_review` is
-   marked ready by a person in the editor: give them its `editor_path`.
+5. When the user says the draft is done, give them its `editor_path` to
+   run Before you publish, then offer `set_content_draft_ready` and call
+   it after they confirm *(write)*. A draft `in_review` is marked ready
+   by a person in the editor.
 6. Once the page is live, `get_content_impact` (30 days by default)
    says whether it paid off: lead with `citations` and `aiVisits`
    (`cur` vs `prev`), then `promptCounts.lost`. `gscSince` is the first
    day of Search Console data (null: none); when it falls after the
-   period before began, the Google clicks don't compare.
+   period before began, the Google clicks don't compare. The windows are
+   the last `days` against the `days` before, not before and after the
+   page went live: pick the period closest to how long it has been live,
+   and say so.
 
 ## Formatting principles
 
