@@ -63,8 +63,8 @@ describe('SnippetDialog', () => {
         </NextIntlClientProvider>,
       );
     });
-    expect(document.body.querySelector('pre')!.textContent).toBe(
-      '<script src="https://api.example.com/t.js" data-t="t_abc123" data-c="1" data-consent="wait" defer></script>',
+    expect(document.body.querySelector('pre')!.textContent).toMatch(
+      /window\.ansvisor=window\.ansvisor\|\|[\s\S]*<script src="https:\/\/api\.example\.com\/t\.js" data-t="t_abc123" data-c="1" data-consent="wait" defer><\/script>$/,
     );
   });
 });

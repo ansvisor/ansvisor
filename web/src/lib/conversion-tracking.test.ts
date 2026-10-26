@@ -1,6 +1,6 @@
 import { runInNewContext } from 'vm';
 import { describe, expect, it } from 'vitest';
-import { shopifyPixelCode, trackingSnippetTag } from './conversion-tracking';
+import { QUEUE_STUB, shopifyPixelCode, trackingSnippetTag } from './conversion-tracking';
 
 const API = 'https://api.ansvisor.test';
 const VISITOR = {
@@ -13,8 +13,9 @@ describe('trackingSnippetTag', () => {
     expect(trackingSnippetTag(API, 'abc123')).toBe(
       '<script src="https://api.ansvisor.test/t.js" data-t="abc123" defer></script>',
     );
+    // With the queue stub above it: the tag is deferred, the site's calls come first.
     expect(trackingSnippetTag(API, 'abc123', 'wait')).toBe(
-      '<script src="https://api.ansvisor.test/t.js" data-t="abc123" data-c="1" data-consent="wait" defer></script>',
+      `${QUEUE_STUB}\n<script src="https://api.ansvisor.test/t.js" data-t="abc123" data-c="1" data-consent="wait" defer></script>`,
     );
     expect(trackingSnippetTag(null, 'abc123')).toBeNull();
     expect(trackingSnippetTag(API, undefined)).toBeNull();
@@ -99,6 +100,18 @@ describe('shopifyPixelCode', () => {
     expect(body).not.toHaveProperty('val');
     expect(body).not.toHaveProperty('cur');
     expect(body.ref).toBe('tok-1');
+  });
+
+  it('leaves out an amount or units the server wouldn’t take, and still sends the order', async () => {
+    const [{ body }] = await completeCheckout({
+      checkout: {
+        totalPrice: { amount: 2e9, currencyCode: 'IDR' },
+        lineItems: [{ quantity: 200000 }],
+      },
+    });
+    expect(body).not.toHaveProperty('val');
+    expect(body).not.toHaveProperty('q');
+    expect(body).toMatchObject({ g: 'order', cur: 'IDR', ref: 'gid://shopify/OrderIdentity/1001' });
   });
 
   it('is null without an API URL or a tracking code', () => {

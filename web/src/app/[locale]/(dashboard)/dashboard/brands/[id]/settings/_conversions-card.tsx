@@ -26,7 +26,7 @@ import {
   FORM_GOAL_ATTRIBUTE,
   FORM_OFF_ATTRIBUTE,
   ORDER_CALL,
-  QUEUE_STUB,
+  SHOPIFY_CONSENT_BRIDGE,
   isConversionsConsent,
   shopifyPixelCode,
   trackingSnippetTag,
@@ -39,8 +39,11 @@ const code = (chunks: ReactNode) => (
   <code className="rounded bg-muted px-1 py-0.5 text-[11px]">{chunks}</code>
 );
 
-/** A line of code to copy, wrapping in its box so a long one never widens the card. */
-function CopyBlock({ text }: { text: string }) {
+/**
+ * Code to copy, wrapping in its box so a long line never widens the card;
+ * its button says what it copies.
+ */
+function CopyBlock({ text, label }: { text: string; label: string }) {
   const t = useTranslations('brands.settings.conversions');
   const [copied, setCopied] = useState(false);
   const copy = () => {
@@ -58,7 +61,7 @@ function CopyBlock({ text }: { text: string }) {
         size="icon"
         className="absolute top-2 right-2 h-7 w-7"
         onClick={copy}
-        aria-label={copied ? t('copied') : t('copy')}
+        aria-label={copied ? t('copied') : label}
       >
         {copied ? (
           <Check className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
@@ -100,6 +103,16 @@ export function ConversionsCard({
   const { canManage } = useUserRole();
   const [enabled, setEnabled] = useState(brand.conversionsEnabled === true);
   const [consent, setConsent] = useState<ConversionsConsent>(brand.conversionsConsent ?? 'wait');
+  // As the brand reads now: another admin's change, or the store read again.
+  const [read, setRead] = useState({
+    on: brand.conversionsEnabled,
+    consent: brand.conversionsConsent,
+  });
+  if (read.on !== brand.conversionsEnabled || read.consent !== brand.conversionsConsent) {
+    setRead({ on: brand.conversionsEnabled, consent: brand.conversionsConsent });
+    setEnabled(brand.conversionsEnabled === true);
+    setConsent(brand.conversionsConsent ?? 'wait');
+  }
   const [saving, setSaving] = useState(false);
   const [showPixel, setShowPixel] = useState(siteTypeOf(brand) === 'ecommerce');
   const apiUrl = getPublicApiBaseUrl();
@@ -198,12 +211,12 @@ export function ConversionsCard({
                   <p className="text-xs text-muted-foreground">
                     {t.rich('steps.tagHelp', { tag: '</head>', code })}
                   </p>
-                  <CopyBlock text={tag} />
+                  <CopyBlock text={tag} label={t('copyTag')} />
                 </Step>
                 {consent === 'wait' && (
                   <Step title={t('steps.consent')}>
                     <p className="text-xs text-muted-foreground">{t('steps.consentHelp')}</p>
-                    <CopyBlock text={CONSENT_CALL} />
+                    <CopyBlock text={CONSENT_CALL} label={t('copyConsent')} />
                     <p className="text-xs text-muted-foreground">
                       {t.rich('steps.consentMode', { name: 'analytics_storage', code })}
                     </p>
@@ -220,16 +233,23 @@ export function ConversionsCard({
                 </Step>
                 <Step title={t('steps.calls')}>
                   <p className="text-xs text-muted-foreground">{t('steps.callsHelp')}</p>
-                  <CopyBlock text={CONVERSION_CALL} />
-                  <CopyBlock text={ORDER_CALL} />
-                  <p className="text-xs text-muted-foreground">{t('steps.queueHelp')}</p>
-                  <CopyBlock text={QUEUE_STUB} />
+                  <CopyBlock text={CONVERSION_CALL} label={t('copyCall')} />
+                  <CopyBlock text={ORDER_CALL} label={t('copyOrderCall')} />
                 </Step>
                 <Step title={t('steps.shopify')}>
                   {showPixel && pixel ? (
                     <>
                       <p className="text-xs text-muted-foreground">{t('steps.shopifyHelp')}</p>
-                      <CopyBlock text={pixel} />
+                      <CopyBlock text={pixel} label={t('copyPixel')} />
+                      {consent === 'wait' && (
+                        <>
+                          <p className="text-xs text-muted-foreground">
+                            {t('steps.shopifyConsent')}
+                          </p>
+                          <CopyBlock text={SHOPIFY_CONSENT_BRIDGE} label={t('copyBridge')} />
+                        </>
+                      )}
+                      <p className="text-xs text-muted-foreground">{t('steps.shopifyHeadless')}</p>
                     </>
                   ) : (
                     <Button variant="outline" size="sm" onClick={() => setShowPixel(true)}>
@@ -248,6 +268,8 @@ export function ConversionsCard({
                 <li>{t('limits.consent')}</li>
                 <li>{t('limits.direct')}</li>
                 <li>{t('limits.estimate')}</li>
+                <li>{t('limits.domains')}</li>
+                <li>{t('limits.iframes')}</li>
                 <li>{t('limits.personal')}</li>
               </ul>
             </div>

@@ -84,7 +84,9 @@ describe('ConversionsCard', () => {
   it('says what it does and shows nothing to install while it’s off', async () => {
     await render();
     expect(container.textContent).toContain('Track conversions from AI visits');
-    expect(container.textContent).toContain('Off, the snippet keeps nothing in the browser.');
+    expect(container.textContent).toContain(
+      'Off, with the tag without them, the snippet keeps nothing',
+    );
     expect(codes()).toEqual([]);
   });
 
@@ -97,12 +99,16 @@ describe('ConversionsCard', () => {
       'Conversions are on. Use the tag below on your site.',
     );
     expect(codes()).toEqual([
-      '<script src="https://api.ansvisor.test/t.js" data-t="abc123" data-c="1" data-consent="wait" defer></script>',
+      // The queue stub and the tag, copied together: calls before it loads are kept.
+      expect.stringMatching(
+        /^<script>window\.ansvisor=window\.ansvisor\|\|.*<\/script>\n<script src="https:\/\/api\.ansvisor\.test\/t\.js" data-t="abc123" data-c="1" data-consent="wait" defer><\/script>$/,
+      ),
       "ansvisor('consent', 'granted');",
       "ansvisor('conversion', { type: 'demo' });",
       expect.stringContaining("type: 'order'"),
-      expect.stringContaining('window.ansvisor=window.ansvisor||'),
     ]);
+    // Each copy button says what it copies.
+    expect(container.querySelector('button[aria-label="Copy the tag"]')).not.toBeNull();
     expect(container.textContent).toContain("What it can't see");
   });
 
@@ -135,9 +141,36 @@ describe('ConversionsCard', () => {
     expect(codes()).not.toContain("ansvisor('consent', 'granted');");
   });
 
-  it('shows the Shopify pixel at once for a shop, behind a button for others', async () => {
+  it('turns the consent mode back when it couldn’t save it', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    updateBrand.mockRejectedValue(new Error('offline'));
+    await render({ conversionsEnabled: true });
+    const label = [...container.querySelectorAll('label')].find(
+      (l) => l.textContent === 'Consent',
+    )!;
+    await click(container.querySelector(`[id="${label.htmlFor}"]`)!);
+    const always = [...document.querySelectorAll<HTMLElement>('[role="option"]')].find(
+      (o) => o.textContent === "Don't wait: our own banner covers it",
+    )!;
+    await act(async () => {
+      always.dispatchEvent(new MouseEvent('mousemove', { bubbles: true }));
+    });
+    await click(always);
+    expect(toast.error).toHaveBeenCalledWith("Couldn't save it. Try again.");
+    expect(codes()[0]).toContain('data-consent="wait"');
+  });
+
+  it('shows what the brand says now, after another admin changed it', async () => {
+    await render();
+    expect(codes()).toEqual([]);
+    await render({ conversionsEnabled: true, conversionsConsent: 'always' });
+    expect(codes()[0]).toContain('data-consent="always"');
+  });
+
+  it('shows the Shopify pixel at once for a shop, with the consent script its banner needs', async () => {
     await render({ conversionsEnabled: true, siteType: 'ecommerce' });
     expect(codes().some((code) => code?.includes('checkout_completed'))).toBe(true);
+    expect(codes().some((code) => code?.includes('visitorConsentCollected'))).toBe(true);
 
     // Another brand: a card of its own.
     act(() => root.unmount());
