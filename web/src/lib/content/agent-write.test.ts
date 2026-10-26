@@ -17,7 +17,7 @@ vi.mock('@/lib/actions/content-drafts', () => ({
   getCitedPassages: (...args: unknown[]) => getCitedPassages(...args),
 }));
 
-const { agentWriteRequest, rulesForAgent } = await import('./agent-write');
+const { agentWriteRequest, rulesForAgent, rulesForBrief } = await import('./agent-write');
 const { fanoutsToUse } = await import('./rules');
 
 const data: DraftSourcesData = {
@@ -186,5 +186,27 @@ describe('rulesForAgent', () => {
       ['summary', undefined],
       ['fanoutH2', status],
     ]);
+  });
+});
+
+describe('rulesForBrief', () => {
+  it('leaves out the Keywords rule while it holds the brief’s own keywords, not one the person set', () => {
+    const describe = (rule: ActiveRule) => ({ name: rule.key, detail: rule.current });
+    const fromBrief = activeRules(ruleSet('guide', { keywords: ['old', 'words'] }), NO_DRAFT_RULES);
+    expect(
+      rulesForBrief(
+        fromBrief.map((rule) => ({ rule })),
+        describe,
+      ).map((r) => r.key),
+    ).not.toContain('keywords');
+    const set = activeRules(ruleSet('guide', { keywords: ['old', 'words'] }), {
+      overrides: { keywords: { value: 'espresso, grinder' } },
+    });
+    expect(
+      rulesForBrief(
+        set.map((rule) => ({ rule })),
+        describe,
+      ).find((r) => r.key === 'keywords'),
+    ).toEqual({ key: 'keywords', name: 'keywords', detail: 'espresso, grinder' });
   });
 });

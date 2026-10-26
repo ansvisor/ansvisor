@@ -2404,10 +2404,14 @@ describe('the side panel', () => {
         length: 3000,
       },
       // The rules in effect, as the agent reads them.
-      expect.arrayContaining([
-        expect.objectContaining({ key: expect.any(String), name: expect.any(String) }),
-      ]),
+      expect.any(Array),
     );
+    const sent = (rebuildDraftBrief.mock.calls[0][3] as { key: string; name: string }[]).map(
+      (rule) => rule.key,
+    );
+    expect(sent).toContain('length');
+    // Not the editor's own (one H1), nor the brief's own keywords: a rebuild writes them anew.
+    for (const key of ['oneH1', 'feedMatch', 'keywords']) expect(sent).not.toContain(key);
     expect(toast.success).toHaveBeenCalledWith('Brief rebuilt from 1 source');
     expect(selectedTab()).toBe('Instructions');
     expect(selectedSegment()).toBe('Brief');

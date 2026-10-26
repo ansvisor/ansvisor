@@ -96,6 +96,21 @@ export function rulesForAgent(
     }));
 }
 
+/**
+ * The rules a rebuilt brief plans to: the agent's (rulesForAgent), without
+ * the Keywords rule while it holds the brief's own keywords — a rebuild
+ * writes them anew from the sources — unless the person set it.
+ */
+export function rulesForBrief(
+  checked: { rule: ActiveRule; status?: RuleStatus }[],
+  describe: RuleDescriber,
+): AgentRule[] {
+  return rulesForAgent(
+    checked.filter(({ rule }) => rule.key !== 'keywords' || rule.changed),
+    describe,
+  );
+}
+
 /** The page's headings and paragraphs, as the editor's passages. */
 function pagePassages(html: string): string[] {
   const doc = new DOMParser().parseFromString(html, 'text/html');
