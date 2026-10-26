@@ -12,7 +12,6 @@ import {
   type SuggestionStatus,
 } from '@/lib/content/suggestions';
 import { shownSteps, stepMessage, type AgentRun } from '@/lib/content/agent-runs';
-import { KEPT_LENGTH_SHARE } from '@/lib/content/rules';
 import { cn } from '@/lib/utils';
 import { PageCompareDialog, pageCharacters } from './_page-rewrite';
 import { WorkingDots } from './_working-dots';
@@ -264,7 +263,14 @@ export function AgentCard({
    * The page's Length rule (its target and band) and what a rewrite keeps
    * as it is: a rewrite's result is read against it, never the agent's say.
    */
-  length?: { target: number; min: number; max: number; kept: number } | null;
+  length?: {
+    target: number;
+    min: number;
+    max: number;
+    kept: number;
+    /** What the rewrite keeps puts the Length out of its reach (rules.ts lengthOutOfReach). */
+    outOfReach?: boolean;
+  } | null;
 }) {
   const t = useTranslations('contentEditor.editor.agentCard');
   const locale = useLocale();
@@ -375,7 +381,8 @@ export function AgentCard({
             <span className="text-amber-700 dark:text-amber-400">
               {tRewrite('lengthMissed', { target: missed.target })}
               {afterChars > missed.max &&
-                missed.kept >= missed.target * KEPT_LENGTH_SHARE &&
+                missed.outOfReach &&
+                missed.kept > 0 &&
                 ` ${tRewrite('lengthKept', { kept: missed.kept })}`}
             </span>
           ) : (

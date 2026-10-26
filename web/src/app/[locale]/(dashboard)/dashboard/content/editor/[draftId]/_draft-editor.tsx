@@ -40,6 +40,7 @@ import {
   type HandOffError,
   getCitedPassages,
   getDraftSuggestions,
+  getLastPageRewrite,
   keepAgentBeforeVersion,
   markContentDraftReady,
   unmarkContentDraftReady,
@@ -167,7 +168,10 @@ import {
   openRulesForAgent,
   lengthBand,
   rewriteAdvice,
+  keptOutOfReach,
   type ActiveRule,
+  type LastRewrite,
+  type RewriteReach,
   type RuleStatus,
 } from '@/lib/content/rules';
 import { aiUsageTone } from '@/lib/billing/ai-usage';
@@ -191,8 +195,8 @@ import {
   CitedPassages,
   citedLocks,
   citedPassagesKey,
-  keptCharacters,
   lockedPassageCount,
+  rewriteFloor,
   type HeldEdit,
 } from './_cited-passages';
 import { ExportDialog, type ExportDestination } from './_export-dialog';
@@ -606,8 +610,13 @@ export function DraftEditor({
     catalog: feedOn ? (catalog === undefined ? 'reading' : catalog) : null,
   });
   // What a page rewrite keeps as it is (the passages AI answers quote, tables,
-  // images…), read as the characters are: a Length under it is out of reach.
-  const keptChars = editor && citedRead ? keptCharacters(editor.state) : 0;
+  // images…), read as the characters are, and the least it comes to with the
+  // headings and their answers: a Length under that is out of reach.
+  const summaryAsked = rules.rules.some(({ rule }) => rule.key === 'summary' && rule.on);
+  const { kept: keptChars, floor: floorChars } =
+    editor && citedRead
+      ? rewriteFloor(editor.state, { summary: summaryAsked })
+      : { kept: 0, floor: 0 };
   // The Length the page is written to, for what the agent's rewrite reached.
   const lengthRule = rules.rules.find(({ rule }) => rule.key === 'length' && rule.on)?.rule;
   const lengthTarget = Number(lengthRule?.current);
@@ -1807,6 +1816,23 @@ export function DraftEditor({
   };
   const openSuggestions = suggestions.filter((s) => s.status === 'open').length;
   const pageSuggestion = suggestions.find((s) => s.kind === 'page') ?? null;
+  // The page's last rewrite, from any run (00285), read on opening and again
+  // once a new one is shown: a Length it missed isn't a rewrite's to reach
+  // (rules.ts RewriteReach). A later Fix run's batch doesn't hide it.
+  const [lastRewrite, setLastRewrite] = useState<LastRewrite | null>(null);
+  const shownRewriteId = pageSuggestion?.id ?? null;
+  useEffect(() => {
+    let cancelled = false;
+    getLastPageRewrite(draft.id)
+      .then((last) => {
+        if (!cancelled) setLastRewrite(last);
+      })
+      .catch((err) => console.error("Failed to read the page's last rewrite:", err));
+    return () => {
+      cancelled = true;
+    };
+  }, [draft.id, shownRewriteId]);
+  const reach: RewriteReach = { kept: keptChars, floor: floorChars, last: lastRewrite };
   // The rules as the agent card counts its gain: met now, and the ones still open.
   const cardRules = useMemo(
     () => ({
@@ -2664,7 +2690,7 @@ export function DraftEditor({
     ? {
         run: () => void rewritePage(),
         running: rewriting,
-        kept: keptChars,
+        reach,
         blocked:
           aiUsedUp && !rewriting
             ? aiUsedUp
@@ -2815,7 +2841,7 @@ export function DraftEditor({
     published: status === 'published',
     hasBrief: reads.brief.status === 'ready' ? reads.brief.brief !== null : null,
     empty: !pageHasWords,
-    rewrite: rewriteAdvice(rules.rules, keptChars),
+    rewrite: rewriteAdvice(rules.rules, reach),
     openRules: rulesForNext(rules.rules),
     quality: quality
       ? { trust: trustNow, trustLow: trustNow !== null && trustNow < TRUST_GATE, todos }
@@ -3510,7 +3536,8 @@ export function DraftEditor({
                     }
                   : null
               }
-              length={length}
+              // The kept blocks are named only when they put the Length out of reach.
+              length={length && { ...length, outOfReach: keptOutOfReach(rules.rules, reach) }}
               onAllSteps={() => {
                 setNextFocus(true);
                 setNextOpen(true);

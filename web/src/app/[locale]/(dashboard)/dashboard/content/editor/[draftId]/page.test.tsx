@@ -72,6 +72,8 @@ const getDraftHandoffs = vi.fn();
 const restoreDraftVersion = vi.fn();
 const getCitedPassages = vi.fn();
 const getDraftSuggestions = vi.fn();
+// What the page's last rewrite came to (Length's reach): none unless a test gives one.
+const getLastPageRewrite = vi.fn();
 const decideDraftSuggestions = vi.fn();
 const keepAgentBeforeVersion = vi.fn();
 const fixDraftRules = vi.fn();
@@ -87,6 +89,7 @@ vi.mock('@/lib/actions/content-drafts', () => ({
   startAgentWriting: (...args: unknown[]) => startAgentWriting(...args),
   startPageRewrite: (...args: unknown[]) => startPageRewrite(...args),
   getDraftSuggestions: (...args: unknown[]) => getDraftSuggestions(...args),
+  getLastPageRewrite: (...args: unknown[]) => getLastPageRewrite(...args),
   decideDraftSuggestions: (...args: unknown[]) => decideDraftSuggestions(...args),
   keepAgentBeforeVersion: (...args: unknown[]) => keepAgentBeforeVersion(...args),
   getCitedPassages: (...args: unknown[]) => getCitedPassages(...args),
@@ -369,6 +372,7 @@ beforeEach(() => {
   restoreDraftVersion.mockReset();
   getCitedPassages.mockReset().mockResolvedValue([]);
   getDraftSuggestions.mockReset().mockResolvedValue([]);
+  getLastPageRewrite.mockReset().mockResolvedValue(null);
   decideDraftSuggestions.mockReset().mockResolvedValue(1);
   keepAgentBeforeVersion.mockReset().mockResolvedValue(undefined);
   fixDraftRules.mockReset().mockResolvedValue({ count: 0 });
@@ -6622,6 +6626,8 @@ describe('the side panel', () => {
     it('sends the rules in effect, how the page reads against each, and the page waits', async () => {
       getContentDraft.mockResolvedValue(long);
       await openRules();
+      // What the last rewrite came to is read once, for Length's reach.
+      expect(getLastPageRewrite).toHaveBeenCalledWith('d1');
 
       // ▾ › Rewrite the whole page: the button says so, then runs it.
       await act(async () =>
@@ -6657,6 +6663,8 @@ describe('the side panel', () => {
       await act(async () => {});
 
       expect(bar()!.textContent).toContain('Content Agent rewrote the page to its rules');
+      // What the last rewrite came to is read on opening, and again for the one now shown.
+      expect(getLastPageRewrite).toHaveBeenCalledTimes(2);
       // A whole page is never a card in the page.
       expect(container.querySelector('[data-suggestion]')).toBeNull();
       await act(async () => button(bar()!, 'Compare').click());

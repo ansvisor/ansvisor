@@ -740,6 +740,10 @@ describe('Rewrite the page to these rules', () => {
       before_html: existing.body_html,
       reason: 'cut to about 3,000 characters',
       rule_keys: ['length', 'faq'],
+      // What it was asked for and came to (00285): the kept passage and table count.
+      length_target: 3000,
+      kept_chars: textLength(`${QUOTED} Ratio 1:16`),
+      after_chars: textLength(row.after_text),
     });
     expect(row.after_text).toBe(
       `<h1>Pour-over coffee</h1><p>${QUOTED}</p><p>Use good coffee, freshly ground.</p>` +
@@ -766,6 +770,8 @@ describe('Rewrite the page to these rules', () => {
     });
     await expect(run()).resolves.toEqual({ rewritten: true });
     const row = writes.find((w) => w.table === 'content_draft_suggestions').value;
+    // Length off: it was asked for none (00285).
+    expect(row.length_target).toBeNull();
     // The fan-out it named; S7 isn't on the list.
     expect(row.sources).toEqual([
       { kind: 'fanout', ref: 'pour over ratio', label: 'pour over ratio' },

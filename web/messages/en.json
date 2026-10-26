@@ -5265,7 +5265,10 @@
           "length": "Recommended: the page is {count, number} characters for a Length of {target, number} ({percent, number}% off). A rewrite gets there in one go.",
           "open": "Recommended: {count, number} rules are open. A rewrite meets them together."
         },
-        "lengthOutOfReach": "The page is {count, number} characters for a Length of {target, number}, but {kept, number} of them are passages AI answers quote, tables and other blocks a rewrite keeps as they are. Raise the Length to about {suggested, number}, or unlock passages you're fine to have reworded.",
+        "lengthOutOfReach": "The page is {count, number} characters for a Length of {target, number}, but a rewrite can't go much under {least, number}: {kept, number} are passages AI answers quote, tables and other blocks it keeps as they are, and each heading needs its answer. Raise the Length to about {suggested, number}, or unlock passages you're fine to have reworded.",
+        "lengthOutOfReachRun": "The page is {count, number} characters for a Length of {target, number}. The last rewrite came to {least, number}, so another won't get there. Raise the Length to about {suggested, number}, or unlock passages you're fine to have reworded.",
+        "lengthOutOfReachHeadings": "The page is {count, number} characters for a Length of {target, number}, but its headings and an answer under each come to about {least, number}. Raise the Length to about {suggested, number}, or use fewer sections.",
+        "raiseLength": "Raise Length to {suggested, number}",
         "lengthConflict": "The fan-out H2s, FAQ questions and summary these rules still ask for take about {need, number} characters, more than Length allows (up to {max, number}). Raise Length, or ask for fewer.",
         "fixTrace": "Fix",
         "fixTraceHint": "Content Agent rewrites only these phrases, for you to review",

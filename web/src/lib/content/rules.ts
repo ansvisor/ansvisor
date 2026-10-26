@@ -814,12 +814,36 @@ export const REWRITE_OPEN_RULES = 4;
 /** The most text a page sent whole may hold (content-rewrite.js MAX_REWRITE_CHARS). */
 export const REWRITE_MAX_CHARS = 60_000;
 
+/** The page's last rewrite, as the API keeps it (00285). */
+export interface LastRewrite {
+  /** The characters it came to. */
+  chars: number;
+  /** The Length it was written to; null with Length off. */
+  target: number | null;
+  /** The characters it kept word for word. */
+  kept: number;
+}
+
 /**
- * A Length out of a rewrite's reach: what a rewrite keeps as it is (the
- * passages AI answers quote, tables, images, quotes, HTML blocks, the
- * server's keepBlocks) is this share of it or more.
+ * What a page rewrite can't go under, and what the last one came to: a
+ * Length under either is out of its reach (editor test 2026-10-25, where a
+ * page kept 78% of its Length and three rewrites never got there).
  */
-export const KEPT_LENGTH_SHARE = 0.85;
+export interface RewriteReach {
+  /** The characters it keeps as they are (the passages AI answers quote, tables, images…). */
+  kept: number;
+  /**
+   * The least a rewrite that keeps them comes to: those, the headings, and
+   * the least answer under each heading and summary under the H1 where
+   * nothing kept stands (rewriteFloor in the editor). Kept low on purpose.
+   */
+  floor: number;
+  /** The page's last rewrite, or null for none (or one made before 00285). */
+  last: LastRewrite | null;
+}
+
+/** Nothing known about what a rewrite keeps or reached: every Length is in reach. */
+export const NO_REACH: RewriteReach = { kept: 0, floor: 0, last: null };
 
 /** A long page whose Length a rewrite can't reach, and a Length it could. */
 export interface LengthOutOfReach {
@@ -827,18 +851,52 @@ export interface LengthOutOfReach {
   target: number;
   /** The characters a rewrite keeps as they are. */
   kept: number;
-  /** A Length with room for the kept blocks and the words around them, to the 500. */
+  /** Why: the least a rewrite comes to is past the Length, or the last rewrite came to `least`. */
+  why: 'floor' | 'reached';
+  /** The least a rewrite comes to: the estimate, or what the last one came to, the more. */
+  least: number;
+  /** A Length the page can be rewritten to: that, up to the 500. */
   suggested: number;
 }
 
 /**
- * Whether the page is over its Length by more than a rewrite could take out:
- * the blocks it keeps are KEPT_LENGTH_SHARE of the Length or more. Null
- * otherwise, and for a page under its Length.
+ * What the last rewrite says of this Length: the characters it came to, when
+ * it was written to a Length (not with Length off), the page keeps what it
+ * kept then (nothing unlocked or locked since; the counts differ by about a
+ * space a block, so a little slack), and it was asked for this Length or a
+ * shorter one, or missed its own and this one is within that one's band.
+ * Null when it says nothing (a rewrite to 10,000 says nothing of 3,000).
+ */
+function lastRewriteSays(last: LastRewrite | null, target: number, kept: number): number | null {
+  if (!last || last.target === null) return null;
+  if (Math.abs(kept - last.kept) > last.kept * 0.02 + 20) return null;
+  const band = lengthBand(last.target);
+  const missedItsOwn = last.chars > band.max && target >= band.min;
+  return target >= last.target || missedItsOwn ? last.chars : null;
+}
+
+/**
+ * Whether what a rewrite keeps, with the headings and their answers, puts
+ * the Length out of its reach on its own: what the agent card names as why
+ * a rewrite missed (the rewrite itself is no reason).
+ */
+export function keptOutOfReach<T extends { rule: ActiveRule; status: RuleStatus }>(
+  rules: T[],
+  reach: RewriteReach,
+): boolean {
+  return lengthOutOfReach(rules, { ...reach, last: null }) !== null;
+}
+
+/**
+ * Whether the page is over its Length by more than a rewrite could take
+ * out: the least a rewrite comes to (`reach.floor`) is past the top of the
+ * Length's band, or the last rewrite (lastRewriteSays) came to more than it.
+ * A last rewrite that got within the band says it's in reach, whatever the
+ * estimate. Null otherwise, and for a page under its Length.
  */
 export function lengthOutOfReach<T extends { rule: ActiveRule; status: RuleStatus }>(
   rules: T[],
-  kept: number,
+  reach: RewriteReach,
 ): LengthOutOfReach | null {
   const length = rules.find(({ rule }) => rule.key === 'length' && rule.on);
   const target = Number(length?.rule.current);
@@ -851,17 +909,25 @@ export function lengthOutOfReach<T extends { rule: ActiveRule; status: RuleStatu
   ) {
     return null;
   }
-  if (kept < target * KEPT_LENGTH_SHARE) return null;
-  // Room for the kept blocks and the words around them, not past the page
-  // as it is (that would read short) nor the rule's own top.
+  const { max } = lengthBand(target);
+  const reached = lastRewriteSays(reach.last, target, reach.kept);
+  if (reached !== null && reached <= max) return null;
+  if (reached === null && reach.floor <= max) return null;
+  // The more of the two, so the Length suggested is one a rewrite can reach.
+  const least = Math.max(reach.floor, reached ?? 0);
+  const why = reached !== null && reached >= reach.floor ? 'reached' : 'floor';
+  // A Length the page fits as a rewrite leaves it, never under the rule's
+  // own value nor past its top, nor past the page as it is (that would read short).
   const roundUp = (n: number) => Math.ceil(n / 500) * 500;
   return {
     count: status.count,
     target,
-    kept,
+    kept: reach.kept,
+    why,
+    least,
     suggested: Math.min(
       RULE_LENGTH_MAX,
-      Math.max(target, Math.min(roundUp(kept * 1.5), roundUp(status.count))),
+      Math.max(target, Math.min(roundUp(least), roundUp(status.count))),
     ),
   };
 }
@@ -874,12 +940,13 @@ export type RewriteAdvice =
 /**
  * Whether the Rules tab recommends Rewrite the page to these rules over
  * Apply rules with Agent's few edits a run: the page more than 30% off its
- * Length (one a rewrite can reach, given the `kept` characters it keeps),
- * or 4 rules or more open that the agent can fix. Null otherwise.
+ * Length (one a rewrite can reach, given what it keeps and what the last
+ * one came to: never again after one missed it), or 4 rules or more open
+ * that the agent can fix. Null otherwise.
  */
 export function rewriteAdvice<T extends { rule: ActiveRule; status: RuleStatus }>(
   rules: T[],
-  kept = 0,
+  reach: RewriteReach = NO_REACH,
 ): RewriteAdvice | null {
   const length = rules.find(({ rule }) => rule.key === 'length' && rule.on);
   const target = Number(length?.rule.current);
@@ -895,12 +962,12 @@ export function rewriteAdvice<T extends { rule: ActiveRule; status: RuleStatus }
     target > 0
   ) {
     const off = Math.abs(status.count - target) / target;
-    if (off > REWRITE_LENGTH_OFF && !lengthOutOfReach(rules, kept)) {
+    if (off > REWRITE_LENGTH_OFF && !lengthOutOfReach(rules, reach)) {
       return { reason: 'length', count: status.count, target, percent: Math.round(off * 100) };
     }
   }
   // A Length out of reach is no rule a rewrite meets.
-  const outOfReach = lengthOutOfReach(rules, kept) !== null;
+  const outOfReach = lengthOutOfReach(rules, reach) !== null;
   const open = openRulesForAgent(rules).forAgent.filter(
     ({ rule }) => !(outOfReach && rule.key === 'length'),
   ).length;
@@ -1168,7 +1235,9 @@ export function lengthWarns(statuses: { rule: ActiveRule; status: RuleStatus }[]
  */
 const LEAST_SECTION = 200;
 const LEAST_QUESTION = 150;
-const LEAST_SUMMARY = 100;
+export const LEAST_SUMMARY = 100;
+/** The least answer under a heading, a sentence or two (rewriteFloor). */
+export const LEAST_ANSWER = 100;
 
 /**
  * Rules that can't both be met (Content Agent rule gaps, C): the fan-out
