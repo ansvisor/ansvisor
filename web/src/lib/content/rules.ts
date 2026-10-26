@@ -861,18 +861,28 @@ export interface LengthOutOfReach {
 
 /**
  * What the last rewrite says of this Length: the characters it came to, when
- * it was written to a Length (not with Length off), the page keeps what it
- * kept then (nothing unlocked or locked since; the counts differ by about a
- * space a block, so a little slack), and it was asked for this Length or a
- * shorter one, or missed its own and this one is within that one's band.
- * Null when it says nothing (a rewrite to 10,000 says nothing of 3,000).
+ * it was written to a Length (not with Length off) and it was asked for
+ * this Length or a longer one, or missed its own and this one is within that
+ * one's band. Null when it says nothing (a rewrite to 10,000 says nothing of
+ * 3,000), or the page keeps less now than it kept then (a passage unlocked
+ * since: a rewrite may go shorter). The counts differ by about a space a
+ * block, so a little slack. `inReach`: whether coming within the band would
+ * say this Length is in reach — not when the page keeps more now than then
+ * (one rewritten with its cited passages too, say): keeping less and still
+ * missing says keeping more misses too, but not the other way round.
  */
-function lastRewriteSays(last: LastRewrite | null, target: number, kept: number): number | null {
+function lastRewriteSays(
+  last: LastRewrite | null,
+  target: number,
+  kept: number,
+): { chars: number; inReach: boolean } | null {
   if (!last || last.target === null) return null;
-  if (Math.abs(kept - last.kept) > last.kept * 0.02 + 20) return null;
+  const slack = last.kept * 0.02 + 20;
+  if (last.kept > kept + slack) return null;
   const band = lengthBand(last.target);
   const missedItsOwn = last.chars > band.max && target >= band.min;
-  return target >= last.target || missedItsOwn ? last.chars : null;
+  if (target < last.target && !missedItsOwn) return null;
+  return { chars: last.chars, inReach: last.kept >= kept - slack };
 }
 
 /**
@@ -910,8 +920,9 @@ export function lengthOutOfReach<T extends { rule: ActiveRule; status: RuleStatu
     return null;
   }
   const { max } = lengthBand(target);
-  const reached = lastRewriteSays(reach.last, target, reach.kept);
-  if (reached !== null && reached <= max) return null;
+  const says = lastRewriteSays(reach.last, target, reach.kept);
+  if (says?.inReach && says.chars <= max) return null;
+  const reached = says && says.chars > max ? says.chars : null;
   if (reached === null && reach.floor <= max) return null;
   // The more of the two, so the Length suggested is one a rewrite can reach.
   const least = Math.max(reach.floor, reached ?? 0);

@@ -186,6 +186,39 @@ describe('the Rules tab', () => {
           .click(),
       );
       expect(change).toHaveBeenCalledWith('length', { value: '4000' });
+      // No quoted passage kept: no rewrite of them to offer.
+      expect(buttons().some((b) => b.textContent === 'Rewrite, cited passages too')).toBe(false);
+    });
+
+    it('offers to rewrite the cited passages too, when they hold the Length out of reach', async () => {
+      const pageRewrite = {
+        ...fix(),
+        // Without the 600 characters of cited passages, the rest fits under 3,600.
+        reach: { kept: 2_900, floor: 3_900, last: null },
+        cited: { count: 3, chars: 600 },
+      };
+      await show({ agentFix: fix(), pageRewrite });
+      expect(container.textContent).toContain(
+        'That rewrites the passages AI answers quote as well, so they may stop being quoted.',
+      );
+      await act(async () =>
+        buttons()
+          .find((b) => b.textContent === 'Rewrite, cited passages too')!
+          .click(),
+      );
+      expect(pageRewrite.run).toHaveBeenCalledWith({ citedToo: true });
+    });
+
+    it('doesn’t offer it when the cited passages aren’t what holds the Length', async () => {
+      await show({
+        agentFix: fix(),
+        pageRewrite: {
+          ...fix(),
+          reach: { kept: 2_900, floor: 3_900, last: null },
+          cited: { count: 1, chars: 100 },
+        },
+      });
+      expect(buttons().some((b) => b.textContent === 'Rewrite, cited passages too')).toBe(false);
     });
 
     it('doesn’t offer a rewrite again for a Length the last one missed', async () => {

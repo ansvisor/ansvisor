@@ -35,6 +35,7 @@ import {
   RULE_GROUPS,
   notForAgentMessage,
   openRulesForAgent,
+  lengthBand,
   lengthOutOfReach,
   rewriteAdvice,
   splitRules,
@@ -85,12 +86,15 @@ export interface AgentFix {
 
 /** Rewrite the whole page to these rules, as the editor runs it: one suggestion. */
 export interface PageRewrite {
-  run: () => void;
+  /** `citedToo`: the passages AI answers quote are rewritten too. */
+  run: (options?: { citedToo?: boolean }) => void;
   running: boolean;
   /** Why it can't run now (suggestions still open), or null. */
   blocked: string | null;
   /** What it keeps, the least it comes to and what the last one came to: a Length under them is out of reach. */
   reach?: RewriteReach;
+  /** The passages AI answers quote that it keeps now (locked, not unlocked): how many, their characters. */
+  cited?: { count: number; chars: number };
 }
 
 /** Run Agent's two ways: the open rules fixed a few passages at a time, or the whole page. */
@@ -255,6 +259,14 @@ export function RulesTab({
   const outOfReach = pageRewrite
     ? lengthOutOfReach(state.rules, pageRewrite.reach ?? NO_REACH)
     : null;
+  // Rewrite the cited passages too: offered when they are what holds the
+  // Length out of reach, the rest fitting without them.
+  const cited = pageRewrite?.cited;
+  const citedHold =
+    !!outOfReach &&
+    !!cited &&
+    cited.count > 0 &&
+    (pageRewrite?.reach ?? NO_REACH).floor - cited.chars <= lengthBand(outOfReach.target).max;
   // The rules the page doesn't meet now, in the tab's order, and those the agent fixes.
   const open = state.rules.filter(({ rule, status }) => rule.on && status.state === 'bad');
   const { forAgent, notForAgent } = openRulesForAgent(state.rules);
@@ -359,14 +371,29 @@ export function RulesTab({
                     },
                   )}
                 </p>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="h-7 text-xs"
-                  onClick={() => state.change('length', { value: String(outOfReach.suggested) })}
-                >
-                  {t('raiseLength', { suggested: outOfReach.suggested })}
-                </Button>
+                <div className="flex flex-wrap gap-1.5">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-7 text-xs"
+                    onClick={() => state.change('length', { value: String(outOfReach.suggested) })}
+                  >
+                    {t('raiseLength', { suggested: outOfReach.suggested })}
+                  </Button>
+                  {/* The quoted passages kept are what holds it: rewritten too, compared first. */}
+                  {citedHold && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-7 text-xs"
+                      disabled={pageRewrite.running || pageRewrite.blocked !== null}
+                      onClick={() => pageRewrite.run({ citedToo: true })}
+                    >
+                      {t('rewriteCitedToo')}
+                    </Button>
+                  )}
+                </div>
+                {citedHold && <p className="text-muted-foreground">{t('rewriteCitedTooHint')}</p>}
               </div>
             </div>
           )}

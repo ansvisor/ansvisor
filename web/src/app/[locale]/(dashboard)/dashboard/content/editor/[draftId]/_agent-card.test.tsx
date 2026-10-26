@@ -256,6 +256,24 @@ describe('AgentCard', () => {
     );
   });
 
+  it('says when a rewrite meant to shorten the page came out longer', async () => {
+    const page = suggestion({
+      kind: 'page',
+      beforeHtml: '<h1>Old</h1><p>Short.</p>',
+      afterText: '<h1>New</h1><p>A much longer page than before.</p>',
+      reason: 'answered each heading first',
+    });
+    // Before 10, over the Length's top (5): asked to shorten it, it came out longer.
+    await render([page], false, { length: { target: 4, min: 3, max: 5, kept: 0 } });
+    expect(container.textContent).toContain(
+      '10 → 35 characters · Length 4 not reached · longer than the page before',
+    );
+    // A page under its Length, asked to grow: longer is what it was asked for.
+    await render([page], false, { length: { target: 20, min: 16, max: 24, kept: 0 } });
+    expect(container.textContent).toContain('10 → 35 characters · Length 20 not reached');
+    expect(container.textContent).not.toContain('longer than the page before');
+  });
+
   it('says it is working, with nothing to press', async () => {
     await render([], true);
     const card = container.querySelector('[role="region"]')!;

@@ -79,6 +79,14 @@ import { reserveAiBudget } from './plan-guard.js';
 
 /** How long the model may take: nobody waits on the request. */
 const CALL_TIMEOUT_MS = 180_000;
+/** How far a Length's band reaches either side of it (the editor's LENGTH_TOLERANCE). */
+const LENGTH_TOLERANCE = 0.2;
+/**
+ * How far past the top of its Length's band a rewrite may come before one
+ * more pass cuts it: 15% of the Length (editor test 2026-10-25, where
+ * rewrites for 4,000 came to 5,468, 6,843 and 7,335 characters).
+ */
+const CUT_PASS_OVER = 0.15;
 
 // A 'writing' older than WRITING_STALE_MS (content-agent.js, which Fix open
 // rules checks too) was left by a server that stopped: it can start again.
@@ -563,14 +571,18 @@ async function rewritePage({
     }),
   );
   await budget.charge(usage);
+  if (!isPageHtml(object.html)) throw new Error('The agent answered with no page in HTML');
+  // Well past its Length: one more pass that only cuts.
+  const answer = ruleKeys.has('length')
+    ? await cutToLength({ answer: object, page, length, brand, draft, model, run })
+    : object;
   await advanceRun(run, 3);
 
-  if (!isPageHtml(object.html)) throw new Error('The agent answered with no page in HTML');
   // No invented person or quote (CE-044): read in its words as written,
   // blockquotes too, before what it kept goes back, so the page's own
   // passages are never touched.
   const cleaned = cleanPageHtml(
-    guardPeopleInHtml(object.html, people).html,
+    guardPeopleInHtml(answer.html, people).html,
     rewriteLinks(draft.body_html, linkAllowList(targets)),
     { h1Kept: page.h1Token !== null, originalH1: page.h1 },
   );
@@ -595,7 +607,7 @@ async function rewritePage({
   await stopIfStopped(run);
   // The data it says it wrote from (CE-033).
   const { sources } = sourceSuggestion({
-    named: object.sources,
+    named: answer.sources,
     marks: [],
     pieces: [],
     numbered,
@@ -614,7 +626,7 @@ async function rewritePage({
     before_text: '',
     before_html: draft.body_html,
     after_text: html,
-    reason: clean(stripSourceIds(object.reason)).slice(0, 300) || 'Rewrote the page to the rules',
+    reason: clean(stripSourceIds(answer.reason)).slice(0, 300) || 'Rewrote the page to the rules',
     rule_keys: [...ruleKeys],
     // What it was asked for and came to (00285): a Length it missed isn't
     // offered again. With Length off, it was asked for none.
@@ -634,6 +646,85 @@ async function rewritePage({
     return await letGo(draft);
   }
   return { rewritten: true };
+}
+
+/**
+ * One more pass when a rewrite came well past its Length (CUT_PASS_OVER past
+ * its band's top): the model cuts its own page to the Length, keeping every
+ * heading with its answer, each kept line, the links and the facts. On its
+ * own hold on the budget, so a budget the first pass used up skips it. The
+ * cut is taken only when it is shorter and keeps every kept line; else, or
+ * when it fails, the first rewrite stands (logged). A stop goes through.
+ */
+async function cutToLength({ answer, page, length, brand, draft, model, run }) {
+  const total = ownText({ ...page, html: answer.html }) + page.keptChars;
+  const max = Math.round(length * (1 + LENGTH_TOLERANCE));
+  if (total <= max + length * CUT_PASS_OVER) return answer;
+  const budget = await reserveAiBudget(brand.organization_id, {
+    feature: 'content',
+    modelId: contentBriefModelId(),
+    draftId: draft.id,
+  }).catch((err) => {
+    logger.info(
+      { draftId: draft.id, code: err?.code },
+      '[content-writer] no budget to cut further',
+    );
+    return null;
+  });
+  if (!budget) return answer;
+  try {
+    const { object, usage } = await runCall(run, budget, CALL_TIMEOUT_MS, (abortSignal) =>
+      generateObject({
+        model,
+        schema: rewriteSchema,
+        system: REWRITE_SYSTEM_PROMPT,
+        prompt: cutPrompt({ html: answer.html, page, total, length, max }),
+        abortSignal,
+      }),
+    );
+    await budget.charge(usage);
+    const cut = isPageHtml(object.html)
+      ? ownText({ ...page, html: object.html }) + page.keptChars
+      : Infinity;
+    // Each kept line on its own, as restoreKept puts them back: one written
+    // into a paragraph would fail the whole run.
+    const keepsAll =
+      cut < Infinity &&
+      restoreKept(object.html, page.kept, { word: page.word, h1Token: page.h1Token }).missing
+        .length === 0;
+    if (cut >= total || !keepsAll) {
+      logger.info(
+        { draftId: draft.id, total, cut },
+        '[content-writer] the cut pass kept nothing shorter',
+      );
+      return answer;
+    }
+    // The first pass's data and reason: the cut had no data to name, only the page.
+    return { ...answer, html: object.html };
+  } catch (err) {
+    if (isStop(err, run)) throw err;
+    if (NoObjectGeneratedError.isInstance(err) && err.usage) await budget.charge(err.usage);
+    else await budget.release();
+    logger.warn(
+      { err: { name: err?.name, message: err?.message }, draftId: draft.id },
+      '[content-writer] the cut pass failed; the first rewrite stands',
+    );
+    return answer;
+  } finally {
+    // A stop before the call went out leaves the hold unused: it goes (a no-op once charged or kept).
+    await budget.release();
+  }
+}
+
+/** What the cut pass is told: its own page, how long it is and the Length to cut it to. */
+function cutPrompt({ html, page, total, length, max }) {
+  return `Your rewrite below is about ${total} characters of text, ${page.keptChars} of them in kept blocks, which count toward Length. Its Length is ${length} characters, up to ${max}. Cut it to about ${length}.
+
+Cut repetition, filler, long examples and the least useful detail first. Keep the H1 and every heading, a short answer under each heading, every [[${page.word} n]] line exactly as it is and on its own, the links on their words, the facts and any placeholders in square brackets. Add nothing new. Return the whole page.
+
+${html}
+
+Write in the page's own language.`;
 }
 
 /**
