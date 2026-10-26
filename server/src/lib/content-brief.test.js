@@ -54,6 +54,11 @@ vi.mock('./plan-guard.js', async (importOriginal) => ({
   reserveAiBudget: (...args) => reserveAiBudget(...args),
 }));
 vi.mock('./logger.js', () => ({ logger: { error: vi.fn(), warn: vi.fn() } }));
+const readLinkTargets = vi.fn();
+vi.mock('./content-links.js', async (importOriginal) => ({
+  ...(await importOriginal()),
+  readLinkTargets: (...args) => readLinkTargets(...args),
+}));
 const citedPagesLength = vi.fn();
 vi.mock('./content-cited-length.js', () => ({
   citedPagesLength: (...args) => citedPagesLength(...args),
@@ -122,6 +127,7 @@ const outline = [
 beforeEach(() => {
   stopIfStopped.mockReset().mockResolvedValue(undefined);
   citedPagesLength.mockReset().mockResolvedValue({ characters: 4300, pages: 1 });
+  readLinkTargets.mockReset().mockResolvedValue({ own: [], sources: [] });
   writes = [];
   filters = [];
   rows = {
@@ -737,6 +743,9 @@ describe('the brief rules (2026), behind CONTENT_BRIEF_RULES', () => {
       proof: [{ kind: 'Fallstudie', what: 'w' }],
       leftOut: [],
       datedPoint: null,
+      products: [],
+      competitors: [],
+      links: { internal: [], outbound: [] },
       outline: [
         {
           heading: 'h',
@@ -887,6 +896,114 @@ describe('the brief rules (2026), behind CONTENT_BRIEF_RULES', () => {
     });
   });
 
+  it('names the brand, its competitors as listed and its products as the data writes them, and links to the pages listed only', async () => {
+    process.env.CONTENT_BRIEF_RULES = 'true';
+    rows.competitors = [{ name: 'Acme Rival' }, { name: ' ' }];
+    readLinkTargets.mockResolvedValue({
+      own: [
+        { url: 'https://acme.example/guides/grinders', title: 'Grinder guide' },
+        ...Array.from({ length: 14 }, (_, i) => ({
+          url: `https://acme.example/p/${i}`,
+          title: `Page ${i}`,
+        })),
+      ],
+      sources: [{ url: 'https://sca.example/brew', title: 'SCA brew' }],
+    });
+    generateObject.mockResolvedValue({
+      object: {
+        goal: 'g',
+        audience: 'a',
+        tldr: null,
+        angle: null,
+        proof: [],
+        leftOut: [],
+        datedPoint: null,
+        products: ['bambino plus', 'Made Up 3000', 'Acme Coffee', 'acme rival', 'Bambino Plus'],
+        competitors: ['acme rival', 'Unknown Co'],
+        links: {
+          internal: [
+            {
+              url: 'https://acme.example/guides/grinders/?utm_source=x',
+              anchor: 'our grinder guide',
+              section: 'grinders',
+            },
+            { url: 'https://made-up.example/x', anchor: 'made up', section: null },
+            { url: 'https://acme.example/guides/grinders', anchor: 'again', section: null },
+          ],
+          outbound: [
+            { url: 'https://sca.example/brew', anchor: '73% of baristas agree', section: 'Nope' },
+            { url: 'https://acme.example/p/13', anchor: 'not a source', section: null },
+          ],
+        },
+        outline: [
+          {
+            heading: 'Grinders',
+            keyPoints: [],
+            fanout: null,
+            platform: null,
+            answer: null,
+            format: null,
+            facts: [],
+          },
+        ],
+        keywords: [],
+      },
+      usage: { inputTokens: 10, outputTokens: 5 },
+    });
+    const brief = await rebuildDraftBrief({
+      draftId: DRAFT,
+      brandId: BRAND,
+      sources: sources({ headings: ['Breville Bambino Plus vs Gaggia Classic'] }),
+    });
+    expect(readLinkTargets).toHaveBeenCalledWith({
+      brandId: BRAND,
+      draftId: DRAFT,
+      sourceUrl: 'https://acme.example/guides/espresso',
+      ruleKeys: new Set(['internalLinks', 'outboundLinks']),
+    });
+    const prompt = generateObject.mock.calls[0][0].prompt;
+    expect(prompt).toContain('Competitors (names as written): Acme Rival\n');
+    expect(prompt).toContain(
+      "The brand's pages to link to:\n- Grinder guide — https://acme.example/guides/grinders",
+    );
+    expect(prompt).toContain('Sources to link to and cite:\n- SCA brew — https://sca.example/brew');
+    // Twelve of the brand's pages at most: the most cited first.
+    expect(prompt).toContain('Page 10 — ');
+    expect(prompt).not.toContain('Page 11 — ');
+    expect(brief.entities).toEqual({
+      brand: 'Acme Coffee',
+      // As the data writes it, once; none made up, never the brand's or a competitor's.
+      products: ['Bambino Plus'],
+      competitors: ['Acme Rival'],
+    });
+    expect(brief.links).toEqual({
+      // A page listed, by its address as listed, in the H2 the outline has.
+      internal: [
+        {
+          url: 'https://acme.example/guides/grinders',
+          anchor: 'our grinder guide',
+          section: 'Grinders',
+        },
+      ],
+      // Its words guarded as the rest; a section the outline doesn't have: anywhere.
+      outbound: [
+        {
+          url: 'https://sca.example/brew',
+          anchor: '[figure, source] of baristas agree',
+          section: null,
+        },
+      ],
+    });
+  });
+
+  it('reads no competitors and no pages to link to while the brief rules are off', async () => {
+    rows.competitors = [{ name: 'Acme Rival' }];
+    await rebuildDraftBrief({ draftId: DRAFT, brandId: BRAND, sources: sources() });
+    expect(readLinkTargets).not.toHaveBeenCalled();
+    expect(filters.some((f) => f.table === 'competitors')).toBe(false);
+    expect(generateObject.mock.calls[0][0].prompt).not.toContain('Competitors');
+  });
+
   it('reads no input while the brief rules are off', async () => {
     vi.stubEnv('CONTENT_QUALITY_PHASE', '2');
     rows.content_draft_inputs = {
@@ -958,6 +1075,54 @@ describe('the brief rules (2026), behind CONTENT_BRIEF_RULES', () => {
     expect(Buffer.byteLength(JSON.stringify(brief))).toBeLessThan(64_000);
     expect(brief.outline[0].facts).toHaveLength(4);
     expect(brief.outline.every((s) => s.facts.every((f) => f.source === null))).toBe(true);
+  });
+
+  it('lets the links go first, when that is enough to fit', async () => {
+    process.env.CONTENT_BRIEF_RULES = 'true';
+    const long = (i) => `https://acme.example/${'p'.repeat(1900)}/${i}`;
+    readLinkTargets.mockResolvedValue({
+      own: Array.from({ length: 8 }, (_, i) => ({ url: long(i), title: `P${i}` })),
+      sources: [],
+    });
+    const section = (i) => ({
+      heading: `Machines ${String.fromCharCode(97 + i)}`,
+      keyPoints: [],
+      fanout: null,
+      platform: null,
+      answer: '中'.repeat(600),
+      format: null,
+      // Two bytes a character: with the links past the limit, without them under it.
+      facts: Array(4).fill({ claim: 'é'.repeat(300), sourceType: 'study', source: null }),
+    });
+    generateObject.mockResolvedValue({
+      object: {
+        goal: 'g',
+        audience: 'a',
+        tldr: null,
+        angle: null,
+        proof: [],
+        leftOut: ['home espresso grinder'],
+        datedPoint: null,
+        products: [],
+        competitors: [],
+        links: {
+          internal: Array.from({ length: 8 }, (_, i) => ({
+            url: long(i),
+            anchor: 'a'.repeat(120),
+            section: null,
+          })),
+          outbound: [],
+        },
+        outline: Array.from({ length: 12 }, (_, i) => section(i)),
+        keywords: [],
+      },
+      usage: { inputTokens: 10, outputTokens: 5 },
+    });
+    const brief = await rebuildDraftBrief({ draftId: DRAFT, brandId: BRAND, sources: sources() });
+    expect(Buffer.byteLength(JSON.stringify(brief))).toBeLessThan(64_000);
+    expect(brief.links).toBeNull();
+    expect(brief.leftOut).toEqual(['home espresso grinder']);
+    expect(brief.outline[0].facts).toHaveLength(4);
   });
 
   it('lets the fan-outs left out go first, when that is enough to fit', async () => {

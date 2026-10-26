@@ -101,8 +101,8 @@ function urlKey(url) {
  * goal, the audience, version 2's essentials, angle and proof to gather,
  * each heading and key point, a section's answer, format and facts (with the
  * kind of source each needs and the source to check it against), the
- * keywords as one line, the fan-outs left out and the freshness; each with
- * whether it's a heading.
+ * keywords as one line, the fan-outs left out, the freshness, the names as
+ * written and the links planned; each with whether it's a heading.
  */
 function briefFields(brief) {
   const fresh = brief.freshness;
@@ -144,6 +144,24 @@ function briefFields(brief) {
         .join('; '),
       heading: false,
     },
+    {
+      label: 'Names as written: ',
+      text: [
+        brief.entities?.brand,
+        ...(brief.entities?.products ?? []),
+        ...(brief.entities?.competitors ?? []),
+      ]
+        .filter(Boolean)
+        .join(', '),
+      heading: false,
+    },
+    ...['internal', 'outbound'].flatMap((kind) =>
+      (brief.links?.[kind] ?? []).map((link) => ({
+        label: `Link (${kind}${link.section ? `, in "${link.section}"` : ''}): `,
+        text: `${link.anchor} → ${link.url}`,
+        heading: false,
+      })),
+    ),
   ].filter((f) => f.text);
 }
 

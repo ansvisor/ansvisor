@@ -203,6 +203,7 @@ describe('the checks anyone can repeat', () => {
     expect(prompt).toContain('Angle: Ledgerly’s own variance data across customers');
     expect(prompt).toContain('Proof to gather (data): Average error before and after switching');
     expect(prompt).toContain('Freshness: date The error figure, with its month');
+    expect(prompt).toContain('Names as written: Ledgerly');
     expect(briefChecks(brief, FIRST).invented.urls).toEqual(['www.made-up.example/tldr']);
   });
 
