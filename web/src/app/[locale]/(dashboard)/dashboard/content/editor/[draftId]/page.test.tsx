@@ -7161,6 +7161,33 @@ describe('the side panel', () => {
       container.querySelector('[role="region"][aria-label="Rewritten page"]') as HTMLElement | null;
     const page = () => container.querySelector('.ProseMirror')!.textContent;
 
+    it('reads what the last rewrite came to as the toolbar counts it, shown or decided since', async () => {
+      getContentDraft.mockResolvedValue(
+        draft({
+          pageType: 'blog_post',
+          bodyHtml: `<h1>Pipeline forecasting</h1><p>${'Teams forecast from the pipeline. '.repeat(12).trim()}</p>`,
+          rules: {
+            set: null,
+            source: null,
+            overrides: { length: { value: '100' } },
+            textRules: [],
+          },
+        }),
+      );
+      // Decided since (a later Fix batch shows): the API counted it a little
+      // over; its page reads 1,200 as the editor counts it (4 + 1,196).
+      getLastPageRewrite.mockResolvedValue({
+        chars: 1250,
+        target: 100,
+        kept: 0,
+        html: `<h1>Plan</h1><p>${'x'.repeat(1196)}</p>`,
+      });
+      await openRules();
+      const text = panel()!.textContent;
+      expect(text).toContain('The last rewrite came to 1,200');
+      expect(text).not.toContain('1,250');
+    });
+
     it('sends the rules in effect, how the page reads against each, and the page waits', async () => {
       getContentDraft.mockResolvedValue(long);
       await openRules();
