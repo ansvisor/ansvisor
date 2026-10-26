@@ -6,7 +6,8 @@ import { resolveModel } from './ai-provider.js';
 import {
   ATTRIBUTION_RULE,
   attributableSources,
-  placeholderAttributions,
+  bannedWordsOf,
+  placeholderAttributionsInHtml,
   FANOUT_RULE,
   HEADING_RULE,
   LINK_RULE,
@@ -574,7 +575,7 @@ async function rewritePage({
   // passages are never touched.
   const cleaned = cleanPageHtml(
     // A claim given to a source it wasn't given: a placeholder, not the page dropped.
-    placeholderAttributions(guardPeopleInHtml(answer.html, people).html, attributable),
+    placeholderAttributionsInHtml(guardPeopleInHtml(answer.html, people).html, attributable),
     rewriteLinks(draft.body_html, linkAllowList(targets)),
     { h1Kept: page.h1Token !== null, originalH1: page.h1 },
   );
@@ -944,7 +945,7 @@ async function writeWithRun({ draft, brand, model, input, budget, rewrite, run }
     lockedKeys,
     ruleKeys,
     linkAllowList(targets),
-    { numbered, known, people, attributable },
+    { numbered, known, people, attributable, banned: bannedWordsOf(input.rules) },
   );
   // Stopped meanwhile: nothing it wrote is kept.
   await stopIfStopped(run);

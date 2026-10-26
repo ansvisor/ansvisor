@@ -10,7 +10,9 @@ import { linkAllowList, linkKey, linkTargetsPrompt, readLinkTargets } from './co
 import { siteTypeLine, pageTypeFormat } from './content-page-types.js';
 import {
   NOT_NAMES,
+  SPEECH,
   authorWords,
+  editLines,
   guardPeopleInHtml,
   isKnown,
   isRole,
@@ -340,6 +342,28 @@ const ATTRIBUTIONS = [
     'gu',
   ),
   new RegExp(String.raw`\b[Ll]aut\s+${LEAD}${SOURCE_NAME}`, 'gu'),
+  // "As Zapier notes / explains / puts it, …".
+  new RegExp(String.raw`\b[Aa]s\s+${LEAD}${SOURCE_NAME}\s+${SPEECH}\b`, 'gu'),
+  // "a 2025 report by Gartner", "a survey from Statista".
+  new RegExp(
+    String.raw`\b(?:[Rr]eport|[Ss]tudy|[Ss]urvey|[Aa]nalysis|[Rr]esearch|[Pp]aper|[Pp]oll|[Ii]ndex)\s+(?:by|from)\s+${LEAD}${SOURCE_NAME}`,
+    'gu',
+  ),
+  // "data from Statista shows": with what it shows, as "data from Shopify syncs" gives nothing.
+  new RegExp(
+    String.raw`\b(?:[Dd]ata|[Ff]igures|[Nn]umbers|[Ss]tatistics)\s+from\s+${LEAD}${SOURCE_NAME}\s+(?:shows?|showed|finds|found|suggests?|suggested|reveals?|revealed|says)\b`,
+    'gu',
+  ),
+  // "laut einer (aktuellen) Studie von Gartner".
+  new RegExp(
+    String.raw`\b[Ll]aut\s+(?:einer|einem|der|dem|des)\s+(?:\p{L}+\s+){1,2}(?:von|der|des)\s+${LEAD}${SOURCE_NAME}`,
+    'gu',
+  ),
+  // "Gartner'ın raporuna göre": a source's report, study, data or survey.
+  new RegExp(
+    String.raw`(?<name>(?<![\p{L}\p{N}.-])\p{Lu}(?:[\p{L}\p{N}-]|${NAME_DOT})*)['’]\p{L}{1,3}\s+(?:raporuna|araştırmasına|verilerine|anketine|çalışmasına|açıklamasına)\s+göre\b`,
+    'gu',
+  ),
   // "Gartner'a göre", never a comparison ("ChatGPT'ye göre daha hızlı").
   new RegExp(
     String.raw`(?<name>(?<![\p{L}\p{N}.-])\p{Lu}(?:[\p{L}\p{N}-]|${NAME_DOT})*)['’]\p{L}{1,3}\s+göre\b(?!\s+(?:daha|en)\b)`,
@@ -445,18 +469,43 @@ export function addsAttribution(before, words, known = null) {
  * where dropping it would drop the page.
  */
 export function placeholderAttributions(text, known = null) {
-  const unknown = attributionsIn(text, known?.language)
-    .filter((a) => !known || !knownName(a.name, known))
-    .sort((a, b) => b.index - a.index);
-  let out = String(text);
-  for (const { name, index } of unknown) {
-    if (out.slice(index, index + name.length) !== name) continue;
-    // The name's own words go; a sentence's first word before it stays ("As [source] says").
-    const start = nameStart(name);
-    if (start >= name.length) continue;
-    out = `${out.slice(0, index + start)}[source]${out.slice(index + name.length)}`;
+  const s = String(text);
+  let out = '';
+  let at = 0;
+  for (const e of attributionEdits(s, known)) {
+    out += s.slice(at, e.start) + e.text;
+    at = e.end;
   }
-  return out;
+  return out + s.slice(at);
+}
+
+/**
+ * Each claim a text gives to a source the agent wasn't given, as an edit
+ * that puts the name's own words as "[source]" (a sentence's first word
+ * before it stays: "As [source] says"), apart and in order: a name two
+ * wordings read ("As Zapier says") goes once.
+ */
+function attributionEdits(text, known) {
+  const edits = [];
+  for (const { name, index } of attributionsIn(text, known?.language)) {
+    if (known && knownName(name, known)) continue;
+    const start = index + nameStart(name);
+    const end = index + name.length;
+    if (start >= end || edits.some((e) => start < e.end && end > e.start)) continue;
+    edits.push({ start, end, text: '[source]' });
+  }
+  return edits.sort((a, b) => a.start - b.start);
+}
+
+/**
+ * An HTML page with each claim given to a source the agent wasn't given put
+ * as a placeholder, line by line in its words (editLines): a name linked to
+ * its page ("According to <a>Zapier</a>, …") is read, and an entity is read
+ * as its character ("AT&T"). The HTML as it was when there's none.
+ */
+export function placeholderAttributionsInHtml(html, known = null) {
+  const $ = cheerio.load(html || '', null, false);
+  return editLines($, (text) => attributionEdits(text, known)) ? $.html() : html;
 }
 
 // A list of names: two or more capitalised items with commas and an "and"
@@ -464,12 +513,42 @@ export function placeholderAttributions(text, known = null) {
 // commas; a dot only inside a word, as in a source's name.
 const ITEM_WORD = String.raw`(?<![\p{L}\p{N}&+'’.-])\p{Lu}(?:[\p{L}\p{N}&+'’-]|${NAME_DOT})*`;
 const ITEM = String.raw`${ITEM_WORD}(?:\s+${ITEM_WORD})*`;
-const AND = String.raw`(?:and|or|und|oder|ve|veya|ile|et|ou|y|o|e|en|of)`;
+const AND = String.raw`(?:and|or|&|und|oder|ve|veya|ile|et|ou|y|o|e|en|of)`;
 const NAME_LIST = new RegExp(
   String.raw`(?:${ITEM}\s*,\s*)+${ITEM},?\s+${AND}\s+${ITEM}|(?:${ITEM}\s*,\s*){2,}${ITEM}`,
   'gu',
 );
 const ITEM_RE = new RegExp(ITEM, 'gu');
+// Two names ("ChatGPT and Claude", "Shopify & WooCommerce"), read as a list
+// only when one is shaped as a product's or a brand's (a capital inside it,
+// two capitals, a digit): "Sales and Marketing" is two nouns.
+const TWO_NAMES = new RegExp(
+  String.raw`${ITEM}\s+(?:and|or|&|und|oder|ve|veya|ile|et|ou)\s+${ITEM}`,
+  'gu',
+);
+const BRANDISH = /\p{Ll}\p{Lu}|\p{Lu}{2}|\d/u;
+
+/** The lists of names a text has: three or more, and two shaped as a brand's. */
+function nameLists(text) {
+  const twos = (text.match(TWO_NAMES) ?? []).filter((pair) =>
+    (pair.match(ITEM_RE) ?? []).some((item) => BRANDISH.test(item)),
+  );
+  return [...(text.match(NAME_LIST) ?? []), ...twos];
+}
+
+/**
+ * The words the Banned words rule lists, as its detail sends them ("Aim:
+ * seamless, leverage, robust"): empty without the rule.
+ */
+export function bannedWordsOf(rules = []) {
+  const detail = rules.find((r) => r.key === 'bannedWords')?.detail ?? '';
+  return detail
+    .split(' · ')[0]
+    .replace(/^[^:]*:\s*/, '')
+    .split(/[,;]/)
+    .map((w) => w.trim())
+    .filter(Boolean);
+}
 
 /**
  * Whether a replace drops a name from a list the passage has: a product, a
@@ -479,16 +558,23 @@ const ITEM_RE = new RegExp(ITEM, 'gu');
  * month. Each item the replace touches is read in the passage as changed,
  * the blocks it adds too, by its last word, whole and in any case, without
  * a possessive or a case ending ("Ask ChatGPT" → "ask ChatGPT", "Claude's"
- * → "Claude", "Claude'u" → "Claude'da"). A change made to take out a banned
- * word or an AI trace may.
+ * → "Claude", "Claude'u" → "Claude'da"). Two names count as a list when one
+ * is shaped as a brand's (nameLists). A change made to take out an AI trace
+ * may drop any; one taking out a banned word only the item that is one
+ * (`banned`, bannedWordsOf).
  */
-export function dropsName(passageText, before, words, rules = [], blocksText = '') {
-  if (rules.includes('bannedWords') || rules.includes('aiTraces')) return false;
+export function dropsName(passageText, before, words, rules = [], blocksText = '', banned = []) {
+  if (rules.includes('aiTraces')) return false;
+  // Taking out a banned word: the item that is one may go, no other. Without
+  // the rule's words, any may, as before.
+  if (rules.includes('bannedWords') && banned.length === 0) return false;
+  const isBanned = (item) =>
+    rules.includes('bannedWords') && banned.some((word) => isKnown(word, knownPeople(item)));
   const text = String(passageText);
   const changed = knownPeople(`${text.replace(before, () => words)} ${blocksText}`);
-  for (const list of text.match(NAME_LIST) ?? []) {
+  for (const list of nameLists(text)) {
     for (const item of list.match(ITEM_RE) ?? []) {
-      if (!String(before).includes(item)) continue;
+      if (!String(before).includes(item) || isBanned(item)) continue;
       const last = item
         .split(/\s+/)
         .pop()
@@ -595,6 +681,8 @@ export function keepSuggestions(raw, passages, lockedKeys, ruleKeys, links = nul
   // and what it was given (Your input, the authors), never just any name the
   // page has (a competitor in a list).
   const attributable = sourcing.attributable ?? people;
+  // The Banned words rule's words: a change taking one out may drop that item only.
+  const banned = sourcing.banned ?? [];
   const kept = [];
   const seen = new Set();
   for (const answer of raw) {
@@ -657,7 +745,7 @@ export function keepSuggestions(raw, passages, lockedKeys, ruleKeys, links = nul
           asksMoreThanOne(passage, before, words) ||
           addsAttribution(before, words, attributable) ||
           (!/^h[1-6]$/.test(passage.tag) &&
-            dropsName(passage.text, before, words, rules, textOf(blocks))))
+            dropsName(passage.text, before, words, rules, textOf(blocks), banned)))
       )
         continue;
       changes = [
@@ -1140,7 +1228,14 @@ async function fixWithRun({
     lockedKeys,
     ruleKeys,
     linkAllowList(targets),
-    { numbered, known, people, attributable, keepPlaceholders: handoff },
+    {
+      numbered,
+      known,
+      people,
+      attributable,
+      keepPlaceholders: handoff,
+      banned: bannedWordsOf(input.rules),
+    },
   );
   // Stopped meanwhile: nothing it wrote is kept.
   await stopIfStopped(run);
