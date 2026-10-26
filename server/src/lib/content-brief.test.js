@@ -22,7 +22,11 @@ vi.mock('../config/supabase.js', () => ({
     from: (table) => {
       const call = { table, filters: [] };
       filters.push(call);
-      const result = () => ({ data: rows[table] ?? null, error: null });
+      // A table set to an Error fails its read.
+      const result = () =>
+        rows[table] instanceof Error
+          ? { data: null, error: rows[table] }
+          : { data: rows[table] ?? null, error: null };
       const chain = {
         select: () => chain,
         eq: (col, v) => (call.filters.push(['eq', col, v]), chain),
@@ -985,15 +989,91 @@ describe('the brief rules (2026), behind CONTENT_BRIEF_RULES', () => {
           section: 'Grinders',
         },
       ],
-      // Its words guarded as the rest; a section the outline doesn't have: anywhere.
-      outbound: [
-        {
-          url: 'https://sca.example/brew',
-          anchor: '[figure, source] of baristas agree',
-          section: null,
-        },
-      ],
+      // Words that came back with a placeholder aren't linked; a source as an internal link isn't one.
+      outbound: [],
     });
+  });
+
+  it('takes a product only from the brand’s own words, as written there, and caps each list', async () => {
+    process.env.CONTENT_BRIEF_RULES = 'true';
+    vi.stubEnv('CONTENT_QUALITY_PHASE', '2');
+    rows.brands.name = null;
+    rows.competitors = new Error('down');
+    rows.content_draft_inputs = {
+      experience: 'We tune every Barista Pro before it ships.',
+      data: [],
+      ansvisor_data: [],
+      quotes: [],
+    };
+    const page = (i, host) => ({
+      url: `https://${host}.example/${i}`,
+      title: `T${i}${'x'.repeat(200)}`,
+    });
+    readLinkTargets.mockResolvedValue({
+      own: [
+        { url: `https://acme.example/${'p'.repeat(2100)}`, title: 'Too long an address' },
+        ...Array.from({ length: 14 }, (_, i) => page(i, 'acme')),
+      ],
+      sources: Array.from({ length: 10 }, (_, i) => page(i, 'sca')),
+    });
+    const link = (host) => (_, i) => ({
+      url: `https://${host}.example/${i}`,
+      anchor: `words ${i}`,
+      section: null,
+    });
+    generateObject.mockResolvedValue({
+      object: {
+        goal: 'g',
+        audience: 'a',
+        tldr: null,
+        angle: null,
+        proof: [],
+        leftOut: [],
+        datedPoint: null,
+        // "ChatGPT" is a prompt's, "FAQ" a rule's: neither the brand's.
+        products: [
+          'barista pro',
+          'C++ SDK',
+          'ChatGPT',
+          'FAQ',
+          ...Array.from({ length: 12 }, (_, i) => `Kit ${i}`),
+        ],
+        competitors: [],
+        links: {
+          internal: Array.from({ length: 12 }, link('acme')),
+          outbound: Array.from({ length: 8 }, link('sca')),
+        },
+        outline: [],
+        keywords: [],
+      },
+      usage: { inputTokens: 10, outputTokens: 5 },
+    });
+    const brief = await rebuildDraftBrief({
+      draftId: DRAFT,
+      brandId: BRAND,
+      sources: sources({
+        headings: [`The C++ SDK, ${Array.from({ length: 12 }, (_, i) => `Kit ${i}`).join(', ')}`],
+      }),
+      rules: [{ key: 'faq', name: 'FAQ', detail: '' }],
+    });
+    const prompt = generateObject.mock.calls[0][0].prompt;
+    // A failed read of the competitors: none listed, the rebuild goes on.
+    expect(prompt).not.toContain('Competitors');
+    // An address the web can't keep isn't offered; titles are cut; 12 and 8 pages at most.
+    expect(prompt).not.toContain('Too long an address');
+    expect(prompt).toContain(`T0${'x'.repeat(148)} — https://acme.example/0`);
+    expect(prompt).toContain('https://acme.example/11');
+    expect(prompt).not.toContain('https://acme.example/12');
+    expect(prompt).toContain('https://sca.example/7');
+    expect(prompt).not.toContain('https://sca.example/8');
+    expect(brief.entities.brand).toBe('');
+    expect(brief.entities.products).toEqual([
+      'Barista Pro',
+      'C++ SDK',
+      ...Array.from({ length: 8 }, (_, i) => `Kit ${i}`),
+    ]);
+    expect(brief.links.internal).toHaveLength(BRIEF_V2_LIMITS.internalLinks);
+    expect(brief.links.outbound).toHaveLength(BRIEF_V2_LIMITS.outboundLinks);
   });
 
   it('reads no competitors and no pages to link to while the brief rules are off', async () => {

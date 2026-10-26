@@ -10,6 +10,7 @@ import {
 } from './content-page-types.js';
 import { inputSources, readDraftInputs } from './content-inputs.js';
 import { NO_LINK_TARGETS, linkKey, readLinkTargets } from './content-links.js';
+import { logger } from './logger.js';
 import { getLanguageName } from './languages.js';
 import {
   RunStoppedError,
@@ -158,6 +159,9 @@ export const BRIEF_V2_LIMITS = {
  * brand's own (the most cited and visited first) and the sources kept.
  */
 export const BRIEF_LINK_PAGES = { own: 12, sources: 8 };
+/** The competitors a brief's prompt lists, and how long a page's title is there. */
+const COMPETITORS_LISTED = 20;
+const TITLE_CHARS = 150;
 /** The link rules readLinkTargets reads both lists for. */
 const LINK_RULES = new Set(['internalLinks', 'outboundLinks']);
 /**
@@ -377,13 +381,26 @@ export async function rebuildDraftBrief({ draftId, brandId, sources, rules = [] 
   ]);
   if (brandRes.error) throw brandRes.error;
   if (promptsRes.error) throw promptsRes.error;
-  if (competitorsRes.error) throw competitorsRes.error;
+  // A failed read of the competitors leaves none, as a failed read of the link targets does.
+  if (competitorsRes.error) {
+    logger.warn({ err: competitorsRes.error, draftId }, '[content-brief] competitors not read');
+  }
   const competitors = [
-    ...new Set((competitorsRes.data ?? []).map((c) => String(c.name ?? '').trim()).filter(Boolean)),
-  ];
+    ...new Set(
+      (competitorsRes.error ? [] : (competitorsRes.data ?? []))
+        .map((c) => String(c.name ?? '').trim())
+        .filter(Boolean),
+    ),
+  ].slice(0, COMPETITORS_LISTED);
+  // An address the web keeps (BRIEF_V2_LIMITS.url), and a title the prompt can hold.
+  const linkable = (pages, max) =>
+    pages
+      .filter((page) => page.url.length <= BRIEF_V2_LIMITS.url)
+      .slice(0, max)
+      .map((page) => ({ ...page, title: String(page.title ?? '').slice(0, TITLE_CHARS) }));
   const targets = {
-    own: linkTargets.own.slice(0, BRIEF_LINK_PAGES.own),
-    sources: linkTargets.sources.slice(0, BRIEF_LINK_PAGES.sources),
+    own: linkable(linkTargets.own, BRIEF_LINK_PAGES.own),
+    sources: linkable(linkTargets.sources, BRIEF_LINK_PAGES.sources),
   };
   const brand = brandRes.data;
   const prompts = (promptsRes.data ?? []).map((p) => p.text);
@@ -611,7 +628,17 @@ function shapeWhole(
             brand,
             competitors,
             targets,
-            given: briefKnown({ brand, draft, prompts, sources, rules, inputs }).given,
+            // The brand's own words: a product is one it writes (never a
+            // prompt's, a search's or a rule's name: "ChatGPT", "FAQ").
+            own: [
+              brand?.name,
+              brand?.industry,
+              brand?.description,
+              draft.title,
+              ...sources.headings,
+              ...inputs.map(sourceWords),
+              ...targets.own.map((page) => page.title),
+            ],
           }),
         }
       : {}),
@@ -680,13 +707,16 @@ const nameKey = (text) =>
  * The names and links of version 2, the brief rules' entities and links:
  * - the brand's name as kept;
  * - competitors the model names, each one listed, as listed;
- * - products the model names, each where the data writes it, as written
- *   there (never the brand's or a competitor's name), so no spelling is made up;
+ * - products the model names, each where the brand's own words write it
+ *   (`own`: its name, description, the page's title and headings, Your
+ *   input, its pages' titles), as written there (never the brand's or a
+ *   competitor's name), so none is made up or respelled;
  * - links to the pages listed only (`targets`, by their address as links
- *   compare it), each with its words guarded and cut, and the H2 it goes in
- *   when the outline has it (else anywhere).
+ *   compare it), each with its words guarded and cut (one whose words came
+ *   back with a placeholder goes), and the H2 it goes in when the outline
+ *   has it (else anywhere).
  */
-function namesAndLinks(object, { guard, words, outline, brand, competitors, targets, given }) {
+function namesAndLinks(object, { guard, words, outline, brand, competitors, targets, own }) {
   const L = BRIEF_V2_LIMITS;
   const listed = new Map(competitors.map((name) => [nameKey(name), name]));
   const competitorsNamed = [
@@ -694,16 +724,18 @@ function namesAndLinks(object, { guard, words, outline, brand, competitors, targ
   ]
     .map((name) => name.slice(0, L.entity))
     .slice(0, L.entities);
-  const data = given.filter(Boolean).join('\n');
+  // Straight and curly apostrophes alike: a match's place is the same in both.
+  const straight = (text) => text.replace(/[‘’]/g, "'");
+  const data = own.filter(Boolean).join('\n');
+  const plain = straight(data);
   const taken = new Set([nameKey(brand?.name), ...listed.keys()]);
   const products = [];
   for (const name of object.products ?? []) {
     const wanted = String(name ?? '').trim();
     if (!wanted || wanted.length > L.entity || taken.has(nameKey(wanted))) continue;
-    const escaped = wanted.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const asWritten = data.match(
-      new RegExp(`(?<![\\p{L}\\p{N}])${escaped}(?![\\p{L}\\p{N}])`, 'iu'),
-    )?.[0];
+    const escaped = straight(wanted).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const at = plain.match(new RegExp(`(?<![\\p{L}\\p{N}])${escaped}(?![\\p{L}\\p{N}])`, 'iu'));
+    const asWritten = at ? data.slice(at.index, at.index + at[0].length) : null;
     if (!asWritten || taken.has(nameKey(asWritten))) continue;
     taken.add(nameKey(asWritten));
     products.push(asWritten);
@@ -718,7 +750,8 @@ function namesAndLinks(object, { guard, words, outline, brand, competitors, targ
       const key = linkKey(item?.url);
       const url = key && allowed.get(key);
       const anchor = clip(guard.text(words(item?.anchor ?? '')), L.anchor);
-      if (!url || !anchor || seen.has(key)) continue;
+      // Words that came back with a placeholder aren't ones to link.
+      if (!url || !anchor || /\[[^\]]*\]/.test(anchor) || seen.has(key)) continue;
       seen.add(key);
       const section = headings.get(nameKey(item?.section)) ?? null;
       kept.push({ url, anchor, section: section ? section.slice(0, L.linkSection) : null });
@@ -933,7 +966,7 @@ export function buildBriefPrompt({
         .map((n) => `${n.id}: ${n.label} (${n.detail})`)
     : sources.pages.map((p) => `${p.url} (${p.kind})`);
   // Without a note (a quote's address, a day): a fact cites the input by its number.
-  const pageLines = (pages) => pages.map((p) => `${p.title} — ${p.url}`);
+  const pageLines = (pages) => pages.map((p) => `${p.title || p.url} — ${p.url}`);
   const linkable = v2
     ? [
         competitors.length ? `\nCompetitors (names as written): ${competitors.join(', ')}\n` : '',
