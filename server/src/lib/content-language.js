@@ -1,6 +1,7 @@
 import supabaseAdmin from '../config/supabase.js';
 import { logger } from './logger.js';
 import { languageCodeOf } from './languages.js';
+import { siteTypeOf } from './content-page-types.js';
 
 /**
  * A page's language, as the editor shows it and the CMS send reads it: its
@@ -28,22 +29,33 @@ export function rulesLanguage(rules, brandLanguage) {
   );
 }
 
+/** The brand's kind of site, as My rules (00227) and the editor key a set by it. */
+export function brandSiteType(brand) {
+  return siteTypeOf({
+    siteType: brand?.site_type,
+    industry: brand?.industry,
+    shoppingModeEnabled: brand?.shopping_mode_enabled,
+  });
+}
+
 /**
- * A draft's language, reading the workspace's My rules for its page type
- * when it has no rules of its own. A failed read leaves the brand's.
+ * A draft's language, reading the workspace's My rules for its page type and
+ * the brand's kind of site (as the editor's getMyRuleSets does) when it has
+ * no rules of its own. A failed read leaves the brand's.
  */
-export async function draftLanguage(draft, organizationId, brandLanguage) {
+export async function draftLanguage(draft, brand) {
   let rules = draft.rules;
   const type = rules?.set ?? draft.page_type;
-  if (untouchedRules(rules) && type && organizationId) {
+  if (untouchedRules(rules) && type && brand?.organization_id) {
     const { data, error } = await supabaseAdmin
       .from('content_rule_sets')
       .select('overrides')
-      .eq('organization_id', organizationId)
+      .eq('organization_id', brand.organization_id)
+      .eq('site_type', brandSiteType(brand))
       .eq('page_type', type)
       .maybeSingle();
     if (error) logger.warn({ err: error }, '[content-language] My rules not read');
     rules = error ? null : (data ?? null);
   }
-  return rulesLanguage(rules, brandLanguage);
+  return rulesLanguage(rules, brand?.language);
 }

@@ -20,7 +20,9 @@ vi.mock('../config/supabase.js', () => ({
 }));
 vi.mock('./logger.js', () => ({ logger: { warn: vi.fn() } }));
 
-const { draftLanguage, rulesLanguage, untouchedRules } = await import('./content-language.js');
+const { brandSiteType, draftLanguage, rulesLanguage, untouchedRules } =
+  await import('./content-language.js');
+const brand = (over = {}) => ({ organization_id: 'org-1', language: 'en', ...over });
 
 beforeEach(() => {
   rows = {};
@@ -51,7 +53,7 @@ describe('untouchedRules', () => {
 describe('draftLanguage', () => {
   it('reads the draft’s own rules, without My rules', async () => {
     const draft = { page_type: 'guide', rules: { overrides: { language: { value: 'German' } } } };
-    expect(await draftLanguage(draft, 'org-1', 'en')).toBe('de');
+    expect(await draftLanguage(draft, brand())).toBe('de');
     expect(reads).toEqual([]);
   });
 
@@ -60,21 +62,38 @@ describe('draftLanguage', () => {
       data: { overrides: { language: { value: 'German' } } },
       error: null,
     };
-    expect(await draftLanguage({ page_type: 'guide', rules: null }, 'org-1', 'en')).toBe('de');
+    expect(
+      await draftLanguage(
+        { page_type: 'guide', rules: null },
+        brand({ shopping_mode_enabled: true }),
+      ),
+    ).toBe('de');
+    // Keyed by the brand's kind of site too (00227), as the editor reads them.
     expect(reads[0]).toEqual({
       table: 'content_rule_sets',
       filters: [
         ['organization_id', 'org-1'],
+        ['site_type', 'ecommerce'],
         ['page_type', 'guide'],
       ],
     });
     // The set a draft's rules name, over its page type.
-    await draftLanguage({ page_type: 'guide', rules: { set: 'best_of' } }, 'org-1', 'en');
-    expect(reads[1].filters[1]).toEqual(['page_type', 'best_of']);
+    await draftLanguage({ page_type: 'guide', rules: { set: 'best_of' } }, brand());
+    expect(reads[1].filters[2]).toEqual(['page_type', 'best_of']);
   });
 
   it('keeps the brand’s when My rules can’t be read', async () => {
     rows.content_rule_sets = { data: null, error: new Error('down') };
-    expect(await draftLanguage({ page_type: 'guide', rules: null }, 'org-1', 'tr')).toBe('tr');
+    expect(
+      await draftLanguage({ page_type: 'guide', rules: null }, brand({ language: 'tr' })),
+    ).toBe('tr');
+  });
+});
+
+describe('brandSiteType', () => {
+  it('reads the brand’s kind of site as the editor does', () => {
+    expect(brandSiteType({ site_type: 'b2c' })).toBe('b2c');
+    expect(brandSiteType({ shopping_mode_enabled: true })).toBe('ecommerce');
+    expect(brandSiteType({})).toBe('b2b');
   });
 });

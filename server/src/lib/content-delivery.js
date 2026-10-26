@@ -4,7 +4,7 @@ import { z } from 'zod';
 import supabaseAdmin from '../config/supabase.js';
 import { logger } from './logger.js';
 import { PageFetchError } from './safe-fetch.js';
-import { rulesLanguage, untouchedRules } from './content-language.js';
+import { brandSiteType, rulesLanguage, untouchedRules } from './content-language.js';
 import { postJson } from './safe-post.js';
 import { isWebflowConfigured } from './composio.js';
 import { sendToWebflow } from './cms/webflow-delivery.js';
@@ -436,14 +436,24 @@ async function deliverBatch(going, { brand, configs, webflow, batchId }) {
 /** A draft no one has set rules on: the workspace's My rules apply (rules.ts effectiveRules). */
 const untouched = untouchedRules;
 
-/** The workspace's My rules (00214) for these drafts' types, by type; none when unread. */
-async function myRuleSets(orgId, drafts) {
+/**
+ * The workspace's My rules (00214) for these drafts' types and the brand's
+ * kind of site (00227 keys a set by both, as the editor reads it), by type;
+ * none when unread.
+ */
+async function myRuleSets(orgId, brandId, drafts) {
   const types = [...new Set(drafts.map((d) => d.rules?.set ?? d.page_type).filter(Boolean))];
   if (!types.length) return new Map();
+  const { data: brand } = await supabaseAdmin
+    .from('brands')
+    .select('site_type, industry, shopping_mode_enabled')
+    .eq('id', brandId)
+    .single();
   const { data, error } = await supabaseAdmin
     .from('content_rule_sets')
     .select('page_type, overrides')
     .eq('organization_id', orgId)
+    .eq('site_type', brandSiteType(brand))
     .in('page_type', types);
   if (error) logger.warn({ err: error }, '[content-delivery] My rules not read');
   return new Map((data ?? []).map((set) => [set.page_type, set]));
@@ -549,6 +559,7 @@ export async function sendContentPages({
     brandFor(brandId),
     myRuleSets(
       orgId,
+      brandId,
       going.map((item) => rowOf.get(item.page.draftId)).filter((d) => d && untouched(d.rules)),
     ),
   ]);
