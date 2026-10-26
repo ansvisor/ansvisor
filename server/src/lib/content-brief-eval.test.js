@@ -11,7 +11,7 @@ import { BAD, GOOD, GOOD_JUDGED } from './__fixtures__/brief-eval/samples.js';
 
 vi.mock('../config/supabase.js', () => ({ default: {} }));
 
-const { PAGE_TYPE_FORMATS } = await import('./content-page-types.js');
+const { PAGE_TYPE_FORMATS, SITE_PAGE_TYPES } = await import('./content-page-types.js');
 const { shapeBrief } = await import('./content-brief.js');
 const {
   BRIEF_CRITERIA,
@@ -41,6 +41,8 @@ describe('the brief eval’s cases', () => {
   it('gives each what Rebuild outline is given: a page type, prompts and fan-outs', () => {
     for (const c of CASES) {
       expect(PAGE_TYPE_FORMATS[c.draft.page_type], c.id).toBeTruthy();
+      // One the editor offers its site type.
+      expect(SITE_PAGE_TYPES[c.siteType], c.id).toContain(c.draft.page_type);
       expect(c.prompts.length, c.id).toBeGreaterThan(0);
       expect(c.sources.fanouts.length, c.id).toBeGreaterThanOrEqual(2);
       expect(c.brand.language).toBe(c.language);
@@ -70,7 +72,9 @@ describe('the rubric', () => {
     const prompt = buildJudgePrompt(FIRST, brief);
     expect(prompt).toContain('Rolling cash forecasts (feature_page, a new page), for Ledgerly');
     expect(prompt).toContain('- rolling cash forecast vs static budget');
-    expect(prompt).toContain('"heading": "What a rolling 13-week cash forecast is"');
+    // The brief as plain lines: what a quote is read in.
+    expect(prompt).toContain('H2: What a rolling 13-week cash forecast is');
+    expect(prompt).toContain('Keywords: rolling cash forecast, 13 week cash flow model');
     for (const { key } of BRIEF_CRITERIA) expect(prompt).toContain(`- ${key}: `);
   });
 });
@@ -118,6 +122,36 @@ describe('the checks anyone can repeat', () => {
     expect(passesGate(checks)).toBe(false);
   });
 
+  it('read each line as the guard does: a heading as one, a question in quotes kept', () => {
+    const brief = shapeBrief(
+      {
+        ...GOOD,
+        outline: [
+          {
+            heading: 'What Every CFO Should Know About Cash Forecasts',
+            keyPoints: ['Answer "Can Ledgerly replace Excel for a cash forecast?" first.'],
+            fanout: null,
+            platform: null,
+          },
+          ...GOOD.outline.slice(1),
+        ],
+      },
+      FIRST,
+    );
+    expect(briefChecks(brief, FIRST).invented).toEqual({ figures: [], people: [], urls: [] });
+  });
+
+  it('read an address as its host and path: a given one however written, one without a scheme too', () => {
+    const brief = shapeBrief(
+      {
+        ...GOOD,
+        audience: 'Read https://WWW.Reddit.com/r/FPandA/comments/abc/ and www.made-up.example/x.',
+      },
+      FIRST,
+    );
+    expect(briefChecks(brief, FIRST).invented.urls).toEqual(['www.made-up.example/x']);
+  });
+
   it('take an address the case gave: a cited page, or the live page', () => {
     const live = CASES.find((c) => c.draft.method === 'optimize');
     const brief = shapeBrief(
@@ -142,6 +176,21 @@ describe('a judge’s answer as kept', () => {
     expect(judged.links).toMatchObject({ score: 0, unquoted: true });
     // Left out: 0.
     expect(judged.freshness).toMatchObject({ score: 0, quote: '' });
+  });
+
+  it('reads a quote as written in any quotes or apostrophes, shortened, but three words at least', () => {
+    const brief = shapeBrief(GOOD, FIRST);
+    const read = (quote) =>
+      readJudged({ scores: [{ key: 'uniqueAngle', score: 2, quote, why: '' }] }, brief).uniqueAngle;
+    expect(read("Proof to gather: Ledgerly's own variance data").score).toBe(2);
+    expect(read('“Proof to gather: Ledgerly’s own variance data”').score).toBe(2);
+    expect(read('Proof to gather … variance data from customers').score).toBe(2);
+    expect(read('Ledgerly')).toMatchObject({ score: 0, unquoted: true });
+    // Across two lines: not the brief's words.
+    expect(read('three key takeaways for the reader. A table comparing')).toMatchObject({
+      score: 0,
+      unquoted: true,
+    });
   });
 
   it('reads a score as a whole number from 0 to 2', () => {
@@ -182,29 +231,38 @@ describe('a judge’s answer as kept', () => {
     });
   });
 
-  it('names the brief’s prompt by a short hash, the same each time', () => {
-    expect(promptVersion(FIRST)).toMatch(/^[0-9a-f]{12}$/);
-    expect(promptVersion(FIRST)).toBe(promptVersion(FIRST));
-    expect(promptVersion(CASES[1])).not.toBe(promptVersion(FIRST));
+  it('names the brief’s prompt by a short hash of every case’s, under Quality’s phase', () => {
+    expect(promptVersion(CASES)).toMatch(/^[0-9a-f]{12}$/);
+    expect(promptVersion(CASES)).toBe(promptVersion(CASES));
+    expect(promptVersion(CASES.slice(1))).not.toBe(promptVersion(CASES));
+    // From phase 2 the prompt names the site type.
+    expect(promptVersion(CASES, 2)).not.toBe(promptVersion(CASES, 0));
+    // The phase is read for it, and left as it was.
+    const before = process.env.CONTENT_QUALITY_PHASE;
+    promptVersion(CASES, 3);
+    expect(process.env.CONTENT_QUALITY_PHASE).toBe(before);
   });
 });
 
-// The models' own briefs, once recorded: read only while the brief's prompt is the one they were written under.
+// The models' own briefs, once recorded: read only while the brief's prompt
+// (under the Quality phase they were recorded with) is the one they were
+// written under. Their checks are made again here, for free.
 const recordedPath = new URL('./__fixtures__/brief-eval/recorded.json', import.meta.url);
 const recorded = existsSync(recordedPath) ? JSON.parse(readFileSync(recordedPath, 'utf8')) : null;
-const current = recorded && recorded.promptVersion === promptVersion(FIRST);
+const current =
+  recorded && recorded.promptVersion === promptVersion(CASES, recorded.qualityPhase ?? 0);
 
 describe('the recorded briefs', () => {
   it.skipIf(!current)(
-    'leave nothing in any brief that it wasn’t given, and plan 3 to 10 sections',
+    'answer every case, leave nothing in any brief it wasn’t given, and plan 3 to 10 sections',
     () => {
-      const results = Object.entries(recorded.cases);
-      expect(results.length).toBeGreaterThan(0);
-      const failed = results.filter(([, r]) => !passesGate(r.checks)).map(([id]) => id);
-      expect(failed).toEqual([]);
-      const inRange = results.filter(([, r]) => r.checks.sectionsInRange).length;
-      expect(inRange / results.length).toBeGreaterThanOrEqual(0.9);
-      for (const [id, r] of results) {
+      const results = CASES.map((c) => [c, recorded.cases[c.id]]);
+      expect(results.filter(([, r]) => !r || r.error).map(([c]) => c.id)).toEqual([]);
+      const checked = results.map(([c, r]) => [c.id, briefChecks(shapeBrief(r.object, c), c), r]);
+      expect(checked.filter(([, checks]) => !passesGate(checks)).map(([id]) => id)).toEqual([]);
+      const inRange = checked.filter(([, checks]) => checks.sectionsInRange).length;
+      expect(inRange / checked.length).toBeGreaterThanOrEqual(0.9);
+      for (const [id, , r] of checked) {
         expect(Object.keys(r.judged), id).toEqual(BRIEF_CRITERIA.map((k) => k.key));
       }
     },
@@ -214,7 +272,7 @@ describe('the recorded briefs', () => {
     'waits for a new record: the brief’s prompt changed since',
     () => {
       // A stale record is said, not failed: the maintainer records again.
-      expect(recorded.promptVersion).not.toBe(promptVersion(FIRST));
+      expect(recorded.promptVersion).not.toBe(promptVersion(CASES, recorded.qualityPhase ?? 0));
     },
   );
 });

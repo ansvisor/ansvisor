@@ -13,12 +13,16 @@
  *   node src/scripts/eval-brief.js [count]
  *   count defaults to every case: two calls each, the brief and its judge.
  *
- * Writes src/lib/__fixtures__/brief-eval/recorded.json, only when at least
- * one case was answered, and prints the sums. Reads and writes no database,
- * charges no workspace's AI usage, never prints a key, and isn't run in CI:
+ * Writes src/lib/__fixtures__/brief-eval/recorded.json for a whole run (every
+ * case answered), else recorded.partial.json beside it (not committed), and
+ * prints the sums. A case that fails is recorded with its error, never left
+ * out. Reads and writes no database, charges no workspace's AI usage, never
+ * prints a key, and isn't run in CI:
  * the answers it keeps are the models' of the day, for a person to record
  * again when the brief's prompt or the models change (the test skips a
- * record made under another prompt). About a dollar at today's prices.
+ * record made under another prompt or Quality phase: run it with the phase
+ * the API runs with, CONTENT_QUALITY_PHASE). Under a dollar at today's
+ * prices.
  */
 import 'dotenv/config';
 import { writeFileSync } from 'fs';
@@ -32,6 +36,7 @@ import {
   outlineSchema,
   shapeBrief,
 } from '../lib/content-brief.js';
+import { qualityPhase } from '../lib/content-quality.js';
 import {
   JUDGE_SYSTEM_PROMPT,
   briefChecks,
@@ -49,11 +54,15 @@ const count = Math.max(
   Math.min(CASES.length, Number.parseInt(process.argv[2] ?? `${CASES.length}`, 10) || CASES.length),
 );
 
+/** How long one call may take before the case is recorded as failed. */
+const CALL_TIMEOUT_MS = 120_000;
+
 const modelId = contentBriefModelId();
 const judgeModelId = briefEvalJudgeModelId();
 const model = resolveModel(modelId);
 const judge = resolveModel(judgeModelId);
 const recorded = {};
+const answered = {};
 const started = Date.now();
 
 for (const c of CASES.slice(0, count)) {
@@ -63,41 +72,51 @@ for (const c of CASES.slice(0, count)) {
       schema: outlineSchema,
       system: SYSTEM_PROMPT,
       prompt: buildBriefPrompt(c),
+      abortSignal: AbortSignal.timeout(CALL_TIMEOUT_MS),
     });
     const brief = shapeBrief(written.object, c);
-    const checks = briefChecks(brief, c);
+    // The judge at its model's own temperature: newer models take no other.
     const graded = await generateObject({
       model: judge,
       schema: judgeSchema,
       system: JUDGE_SYSTEM_PROMPT,
       prompt: buildJudgePrompt(c, brief),
-      temperature: 0,
+      abortSignal: AbortSignal.timeout(CALL_TIMEOUT_MS),
     });
+    const judged = readJudged(graded.object, brief);
+    // The model's own answer is kept: the test shapes and checks it again for free.
     recorded[c.id] = {
-      brief,
+      object: written.object,
       usage: written.usage,
       judgeUsage: graded.usage,
-      checks,
-      judged: readJudged(graded.object, brief),
+      judged,
     };
-    const gate = passesGate(checks) ? 'passes' : 'FAILS';
+    answered[c.id] = { checks: briefChecks(brief, c), judged, usage: written.usage };
+    const gate = passesGate(answered[c.id].checks) ? 'passes' : 'FAILS';
     console.log(`${c.id}: ${brief.outline.length} sections, gate ${gate}`);
   } catch (err) {
-    console.error(`${c.id}: failed (${err?.message ?? err})`);
+    // Kept and counted: a record that leaves a case out reads better than it is.
+    recorded[c.id] = { error: String(err?.message ?? err).slice(0, 300) };
+    console.error(`${c.id}: failed (${recorded[c.id].error})`);
   }
 }
 
-if (!Object.keys(recorded).length) {
-  console.error('No case was answered: recorded.json is left as it was.');
+if (!Object.keys(answered).length) {
+  console.error('No case was answered: nothing is written.');
   process.exit(1);
 }
+const failed = Object.keys(recorded).filter((id) => recorded[id].error);
+// Only a whole run, every case answered, is the record; another goes beside it.
+const whole = count === CASES.length && failed.length === 0;
+const file = whole ? 'recorded.json' : 'recorded.partial.json';
 writeFileSync(
-  new URL('../lib/__fixtures__/brief-eval/recorded.json', import.meta.url),
+  new URL(`../lib/__fixtures__/brief-eval/${file}`, import.meta.url),
   `${JSON.stringify(
     {
       model: modelId,
       judgeModel: judgeModelId,
-      promptVersion: promptVersion(CASES[0]),
+      qualityPhase: qualityPhase(),
+      promptVersion: promptVersion(CASES),
       recordedAt: new Date().toISOString(),
       cases: recorded,
     },
@@ -105,7 +124,7 @@ writeFileSync(
     2,
   )}\n`,
 );
-console.log(JSON.stringify(summarize(recorded), null, 2));
+console.log(JSON.stringify(summarize(answered), null, 2));
 console.log(
-  `Recorded ${Object.keys(recorded).length} of ${count} cases with ${modelId}, judged by ${judgeModelId}, in ${((Date.now() - started) / 1000).toFixed(0)} s.`,
+  `Answered ${Object.keys(answered).length} of ${count} cases (${failed.length} failed) with ${modelId}, judged by ${judgeModelId}, in ${((Date.now() - started) / 1000).toFixed(0)} s: ${file}.`,
 );

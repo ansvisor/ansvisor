@@ -14,8 +14,8 @@ import {
   stopIfStopped,
 } from './content-runs.js';
 import { citedPagesLength } from './content-cited-length.js';
-import { guardPeople, knownPeople } from './content-people.js';
-import { knownNumbers, placeholderNumbers, todayText } from './content-sources.js';
+import { guardPeople, knownPeople, peopleEdits } from './content-people.js';
+import { addedNumbers, knownNumbers, placeholderNumbers, todayText } from './content-sources.js';
 import { reserveAiBudget } from './plan-guard.js';
 
 /**
@@ -318,20 +318,34 @@ export function shapeBrief(object, { brand, draft, prompts, sources }) {
  * figure or a person made up in one would pass the writer's own guard.
  * `text` and `heading` put each one added as a placeholder, as a written
  * page's are, a question in quotes aside; `keeps` drops a keyword that adds
- * one, as a placeholder can't be searched for.
+ * one, as a placeholder can't be searched for; `found` lists what a text
+ * adds, read the same way (the brief eval's gate).
  */
 export function briefGuard({ brand, draft, prompts, sources }) {
   const { given, known, people } = briefKnown({ brand, draft, prompts, sources });
+  // The names and quotes a text may have: a question in quotes in it too.
+  const askedIn = (words) => {
+    const questions = [...words.matchAll(QUOTED_QUESTION)].map((m) => m[1]);
+    return questions.length ? knownPeople(...given, ...questions) : people;
+  };
   const text = (words, heading = false) => {
     const numbered = placeholderNumbers(words ?? '', known);
-    const questions = [...numbered.matchAll(QUOTED_QUESTION)].map((m) => m[1]);
-    const asked = questions.length ? knownPeople(...given, ...questions) : people;
-    return guardPeople(numbered, asked, { heading }).text;
+    return guardPeople(numbered, askedIn(numbered), { heading }).text;
   };
   return {
     text,
     heading: (words) => text(words, true),
     keeps: (keyword) => text(keyword) === String(keyword ?? ''),
+    /** What a text says that it wasn't given, as the guard reads it: what it would take out. */
+    found: (words, heading = false) => {
+      const read = String(words ?? '');
+      return {
+        figures: addedNumbers(read, known).map((n) => read.slice(n.start, n.end)),
+        people: peopleEdits(read, askedIn(read), { heading }).map((e) =>
+          read.slice(e.start, e.end),
+        ),
+      };
+    },
   };
 }
 

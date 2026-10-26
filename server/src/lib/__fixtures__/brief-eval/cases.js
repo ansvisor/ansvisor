@@ -276,8 +276,8 @@ export const CASES = [
     ],
     queries: ['kapadokya balon turu', 'balon turu ne zaman'],
   }),
-  kase('b2c', 'tr', 'policy', {
-    title: 'İptal ve iade koşulları',
+  kase('b2c', 'tr', 'help_faq', {
+    title: 'İptal ve iade: sık sorulanlar',
     live: 'https://kapadokyarotalari.example/iptal-iade',
     headings: ['İptal', 'İade'],
     prompts: ['Tur iptal edilirse ücret iade edilir mi?'],

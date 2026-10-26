@@ -1,9 +1,10 @@
 import { createHash } from 'node:crypto';
 import { z } from 'zod';
 import { HEADING_LIMITS } from './content-agent.js';
-import { SYSTEM_PROMPT, briefKnown, buildBriefPrompt } from './content-brief.js';
-import { NAME_PLACEHOLDER, QUOTE_PLACEHOLDER, peopleEdits } from './content-people.js';
-import { NUMBER_PLACEHOLDER, addedNumbers } from './content-sources.js';
+import { SYSTEM_PROMPT, briefGuard, buildBriefPrompt, outlineSchema } from './content-brief.js';
+import { NAME_PLACEHOLDER, QUOTE_PLACEHOLDER } from './content-people.js';
+import { qualityPhase } from './content-quality.js';
+import { NUMBER_PLACEHOLDER } from './content-sources.js';
 
 /**
  * The brief eval (CE-EVAL-001): how good the Content Editor's briefs are,
@@ -76,17 +77,40 @@ const SECTIONS = { min: 3, max: 10 };
 /** Keywords it should list, as its prompt asks: up to 10. */
 const MAX_KEYWORDS = 10;
 
-const URL_RE = /https?:\/\/[^\s"'<>)\]]+/gi;
+// An address: with its scheme, or a host starting "www.".
+const URL_RE = /(?:https?:\/\/|\bwww\.)[^\s"'<>)\]]+/gi;
 
-/** A brief's words, every field, as one text: what the gate and the quotes are read in. */
-export function briefText(brief) {
+/** An address as compared: its host without "www." and in small letters, its path without the last "/". */
+function urlKey(url) {
+  try {
+    const read = new URL(/^www\./i.test(url) ? `https://${url}` : url);
+    return `${read.hostname.toLowerCase().replace(/^www\./, '')}${read.pathname.replace(/\/+$/, '')}`;
+  } catch {
+    return url.toLowerCase();
+  }
+}
+
+/**
+ * A brief's fields as the judge sees them and as a quote is read in: the
+ * goal, the audience, each heading and key point, the keywords as one line;
+ * each with whether it's a heading.
+ */
+function briefFields(brief) {
   return [
-    brief.goal,
-    brief.audience,
-    ...brief.outline.flatMap((s) => [s.heading, ...s.keyPoints]),
-    ...brief.keywords,
-  ]
-    .filter(Boolean)
+    { label: 'Goal: ', text: brief.goal, heading: false },
+    { label: 'Audience: ', text: brief.audience, heading: false },
+    ...brief.outline.flatMap((s) => [
+      { label: 'H2: ', text: s.heading, heading: true },
+      ...s.keyPoints.map((point) => ({ label: '- ', text: point, heading: false })),
+    ]),
+    { label: 'Keywords: ', text: brief.keywords.join(', '), heading: false },
+  ].filter((f) => f.text);
+}
+
+/** A brief's words, every field, as one text. */
+export function briefText(brief) {
+  return briefFields(brief)
+    .map((f) => f.text)
     .join('\n');
 }
 
@@ -103,10 +127,13 @@ const PLACEHOLDERS = [NUMBER_PLACEHOLDER, NAME_PLACEHOLDER, QUOTE_PLACEHOLDER];
  */
 export function briefChecks(brief, c) {
   const text = briefText(brief);
-  const { known, people } = briefKnown(c);
-  const given = new Set([...c.sources.pages.map((p) => p.url), c.draft.source_url].filter(Boolean));
+  const guard = briefGuard(c);
+  // Each field read as the guard reads it: a heading as one, a question in quotes kept.
+  const found = briefFields(brief).map((f) => guard.found(f.text, f.heading));
+  const given = new Set(
+    [...c.sources.pages.map((p) => p.url), c.draft.source_url].filter(Boolean).map(urlKey),
+  );
   const answered = new Set(brief.outline.map((s) => s.fanout).filter(Boolean));
-  const pieces = text.split('\n');
   return {
     sections: brief.outline.length,
     sectionsInRange: brief.outline.length >= SECTIONS.min && brief.outline.length <= SECTIONS.max,
@@ -118,15 +145,11 @@ export function briefChecks(brief, c) {
       : null,
     placeholders: PLACEHOLDERS.reduce((n, p) => n + text.split(p).length - 1, 0),
     invented: {
-      figures: pieces.flatMap((piece) =>
-        addedNumbers(piece, known).map((n) => piece.slice(n.start, n.end)),
-      ),
-      people: pieces.flatMap((piece) =>
-        peopleEdits(piece, people).map((e) => piece.slice(e.start, e.end)),
-      ),
+      figures: found.flatMap((f) => f.figures),
+      people: found.flatMap((f) => f.people),
       urls: [...text.matchAll(URL_RE)]
         .map((m) => m[0].replace(/[.,;:!?]+$/, ''))
-        .filter((url) => !given.has(url)),
+        .filter((url) => !given.has(urlKey(url))),
     },
   };
 }
@@ -141,7 +164,7 @@ export function passesGate(checks) {
 export const judgeSchema = z.object({
   scores: z.array(
     z.object({
-      key: z.string(),
+      key: z.enum(BRIEF_CRITERIA.map((k) => k.key)),
       score: z.number(),
       quote: z.string(),
       why: z.string(),
@@ -153,7 +176,7 @@ export const JUDGE_SYSTEM_PROMPT = `You grade one content brief: the plan a writ
 
 Rules:
 - Score each criterion listed 0 (missing), 1 (partly) or 2 (fully), from what the brief says only. Don't reward length or fill in what it leaves out.
-- For a score above 0, put in "quote" the brief's own words that earn it, copied exactly, at most 30 words. For 0, leave "quote" empty.
+- For a score above 0, put in "quote" the brief's own words that earn it, copied exactly from one of its lines, at least 3 words and at most 30. For 0, leave "quote" empty.
 - A placeholder in square brackets, e.g. [figure, source], marks a fact for the writer to find: that is correct, not a missing fact.
 - In "why", one short sentence.
 - Score every criterion listed, once each, by its key.`;
@@ -171,17 +194,30 @@ AI searches (fan-outs) it was given:
 ${list(c.sources.fanouts.map((f) => f.query))}
 
 The brief:
-${JSON.stringify({ goal: brief.goal, audience: brief.audience, outline: brief.outline, keywords: brief.keywords }, null, 2)}
+${briefFields(brief)
+  .map((f) => `${f.label}${f.text}`)
+  .join('\n')}
 
 Criteria:
 ${BRIEF_CRITERIA.map((k) => `- ${k.key}: ${k.ask}`).join('\n')}`;
 }
 
-const words = (text) =>
+/** Text as a quote is compared: one form of each character, straight quotes, small letters, single spaces. */
+const norm = (text) =>
   String(text ?? '')
+    .normalize('NFKC')
+    .replace(/[‘’]/g, "'")
+    .replace(/[“”„«»]/g, '"')
     .toLowerCase()
     .replace(/\s+/g, ' ')
     .trim();
+const EDGES = /^["'\s.,;:!?-]+|["'\s.,;:!?-]+$/g;
+/** A quote's parts: without the marks around it, split where it was shortened ("…"). */
+const quoteParts = (quote) =>
+  norm(quote)
+    .split(/\s*(?:…|\.\.\.)\s*/)
+    .map((part) => part.replace(EDGES, ''))
+    .filter(Boolean);
 
 /**
  * The judge's answer as kept: one score per criterion, a whole number 0 to
@@ -190,14 +226,18 @@ const words = (text) =>
  * the brief doesn't say.
  */
 export function readJudged(answer, brief) {
-  const text = words(briefText(brief));
+  const fields = briefFields(brief).map((f) => norm(f.text));
   const byKey = new Map((answer?.scores ?? []).map((s) => [s.key, s]));
   return Object.fromEntries(
     BRIEF_CRITERIA.map(({ key }) => {
       const s = byKey.get(key);
       const score = Math.max(0, Math.min(2, Math.round(Number(s?.score) || 0)));
-      const quote = words(s?.quote);
-      const unquoted = score > 0 && (!quote || !text.includes(quote));
+      const parts = quoteParts(s?.quote);
+      // Three words at least, each part within one line of the brief.
+      const quoted =
+        parts.join(' ').split(' ').length >= 3 &&
+        parts.every((part) => fields.some((field) => field.includes(part)));
+      const unquoted = score > 0 && !quoted;
       return [
         key,
         {
@@ -212,14 +252,23 @@ export function readJudged(answer, brief) {
 }
 
 /**
- * The brief's prompt as recorded: a hash of its rules and of the prompt the
- * first case gets. A record made under another one is stale.
+ * The brief's prompt as recorded: a hash of its rules, its schema and the
+ * prompt each case gets, under Quality's phase (the site type line shows
+ * from phase 2). A record made under another one is stale.
  */
-export function promptVersion(firstCase) {
-  return createHash('sha256')
-    .update(`${SYSTEM_PROMPT}\n${buildBriefPrompt(firstCase)}`)
-    .digest('hex')
-    .slice(0, 12);
+export function promptVersion(cases, phase = qualityPhase()) {
+  const before = process.env.CONTENT_QUALITY_PHASE;
+  process.env.CONTENT_QUALITY_PHASE = String(phase);
+  try {
+    const hash = createHash('sha256')
+      .update(SYSTEM_PROMPT)
+      .update(JSON.stringify(z.toJSONSchema(outlineSchema)));
+    for (const c of cases) hash.update(buildBriefPrompt(c));
+    return hash.digest('hex').slice(0, 12);
+  } finally {
+    if (before === undefined) delete process.env.CONTENT_QUALITY_PHASE;
+    else process.env.CONTENT_QUALITY_PHASE = before;
+  }
 }
 
 /** A record's sums: per criterion its mean score, the gate, the checks, the tokens. */
