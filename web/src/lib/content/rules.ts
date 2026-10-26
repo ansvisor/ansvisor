@@ -820,7 +820,7 @@ export const NO_HELD: ReadonlySet<string> = new Set();
  * for the person, or not picked; a hand-off sends none: editor test
  * 2026-10-26): its characters and the most it may have, so what the agent
  * adds for the other rules stays short. Undefined with Length off, within
- * it, or sent.
+ * it, sent, or a Length of 0.
  */
 export function overLengthFor<T extends { rule: ActiveRule; status: RuleStatus }>(
   rules: T[],
@@ -829,7 +829,8 @@ export function overLengthFor<T extends { rule: ActiveRule; status: RuleStatus }
   const length = rules.find(({ rule }) => rule.key === 'length' && rule.on);
   if (!length || sent.some(({ rule }) => rule.key === 'length')) return undefined;
   const { status } = length;
-  return status.state === 'bad' && 'code' in status && status.code === 'long'
+  // A Length of 0 reads every page as long, at most 0: nothing to say.
+  return status.state === 'bad' && 'code' in status && status.code === 'long' && status.max >= 1
     ? { count: status.count, max: status.max }
     : undefined;
 }
