@@ -63,6 +63,8 @@ export function findActionDraft(
 const TASK_DONE = ['completed', 'skipped', 'failed'];
 /** A draft whose writing is done. */
 const DRAFT_DONE: DraftStatus[] = ['ready', 'published'];
+/** Tries at writing an action's live pages when another write lands between (as the API's). */
+const PAGE_WRITES = 3;
 
 /**
  * Moves an action's tasks to a status for a draft's work, as a change in the
@@ -183,19 +185,8 @@ export async function reopenDraftTasks(
   const completed = (tasks ?? []).filter((task) => task.status === 'completed');
   if (!completed.length) return 0;
 
-  const { data: events, error: eventsError } = await db
-    .from('action_events')
-    .select('data')
-    .eq('action_id', draft.actionId)
-    .eq('event', 'task_status')
-    .order('created_at', { ascending: false });
-  if (eventsError) throw new Error(eventsError.message);
-  // Each task's latest change, newest first: a draft's Ready names its draft.
-  const latest = new Map<string, { to?: unknown; draftId?: unknown }>();
-  for (const event of events ?? []) {
-    const data = event.data as { taskId?: unknown; to?: unknown; draftId?: unknown } | null;
-    if (typeof data?.taskId === 'string' && !latest.has(data.taskId)) latest.set(data.taskId, data);
-  }
+  // A draft's Ready (or its publish) names its draft.
+  const latest = await latestChanges(db, draft.actionId);
   const byReady = completed.filter((task) => {
     const change = latest.get(task.id);
     return change?.to === 'completed' && typeof change.draftId === 'string';
@@ -208,4 +199,129 @@ export async function reopenDraftTasks(
     actorId,
   );
   return byReady.length;
+}
+
+/** Each task's latest change in the action's History. */
+async function latestChanges(
+  db: SupabaseClient,
+  actionId: string,
+): Promise<Map<string, { to?: unknown; draftId?: unknown }>> {
+  const { data: events, error } = await db
+    .from('action_events')
+    .select('data')
+    .eq('action_id', actionId)
+    .eq('event', 'task_status')
+    .order('created_at', { ascending: false });
+  if (error) throw new Error(error.message);
+  // Newest first: the first change read for a task is its latest.
+  const latest = new Map<string, { to?: unknown; draftId?: unknown }>();
+  for (const event of events ?? []) {
+    const data = event.data as { taskId?: unknown; to?: unknown; draftId?: unknown } | null;
+    if (typeof data?.taskId === 'string' && !latest.has(data.taskId)) latest.set(data.taskId, data);
+  }
+  return latest;
+}
+
+/**
+ * The draft's live address out of what its action is measured on
+ * (payload.publishedPages, CE-013). Written only when the payload is still
+ * as read, read again when another write landed first, as the API writes it.
+ */
+async function dropLivePage(
+  db: SupabaseClient,
+  draft: { id: string; actionId: string },
+  action: { payload: unknown; updated_at: string },
+): Promise<void> {
+  let current = action;
+  for (let attempt = 0; attempt < PAGE_WRITES; attempt++) {
+    const payload =
+      current.payload && typeof current.payload === 'object'
+        ? (current.payload as Record<string, unknown>)
+        : {};
+    const live =
+      payload.publishedPages && typeof payload.publishedPages === 'object'
+        ? { ...(payload.publishedPages as Record<string, unknown>) }
+        : {};
+    if (!(draft.id in live)) return;
+    delete live[draft.id];
+    const { data, error } = await db
+      .from('actions')
+      .update({
+        payload: { ...payload, publishedPages: live },
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', draft.actionId)
+      .eq('updated_at', current.updated_at)
+      .select('id');
+    if (error) throw new Error(error.message);
+    if (data?.length) return;
+    const { data: again, error: readError } = await db
+      .from('actions')
+      .select('payload, updated_at')
+      .eq('id', draft.actionId)
+      .maybeSingle();
+    if (readError) throw new Error(readError.message);
+    if (!again) return;
+    current = again;
+  }
+  throw new Error('the action changed while its live page was taken out');
+}
+
+/**
+ * A published page taken back (CE-013). Its action's work isn't all live
+ * any more: a Publish task a page's publish completed goes back to in
+ * progress, in the action's History; one a person completed last stays as
+ * it is. And the action stops measuring the page at its live address. A
+ * closed action (completed or dismissed) keeps its tasks but still stops
+ * measuring it: a completed one is measured after it closes. A deleted
+ * action (00168) is left as it is. Returns how many tasks it reopened.
+ */
+export async function unpublishDraftWork(
+  db: SupabaseClient,
+  draft: { id: string; brandId: string; actionId: string },
+  actorId: string | null,
+): Promise<number> {
+  const { data: action, error: actionError } = await db
+    .from('actions')
+    .select('status, payload, updated_at')
+    .eq('id', draft.actionId)
+    .eq('brand_id', draft.brandId)
+    .is('deleted_at', null)
+    .maybeSingle();
+  if (actionError) throw new Error(actionError.message);
+  if (!action) return 0;
+  const closed = CLOSED_ACTION_STATUSES.includes(action.status as ActionStatus);
+  // The tasks first: an address that can't be taken out doesn't keep Publish done.
+  const reopened = closed ? 0 : await reopenPublishTasks(db, draft, actorId);
+  await dropLivePage(db, draft, action);
+  return reopened;
+}
+
+/** The action's Publish tasks a page's publish completed (the trail names a draft), in progress again. */
+async function reopenPublishTasks(
+  db: SupabaseClient,
+  draft: { id: string; brandId: string; actionId: string },
+  actorId: string | null,
+): Promise<number> {
+  const { data: tasks, error: tasksError } = await db
+    .from('action_tasks')
+    .select('id, status')
+    .eq('action_id', draft.actionId)
+    .eq('task_key', 'publish_content');
+  if (tasksError) throw new Error(tasksError.message);
+  const completed = (tasks ?? []).filter((task) => task.status === 'completed');
+  if (!completed.length) return 0;
+  const latest = await latestChanges(db, draft.actionId);
+  const byPublish = completed.filter((task) => {
+    const change = latest.get(task.id);
+    return change?.to === 'completed' && typeof change.draftId === 'string';
+  });
+  await setDraftTasksStatus(
+    db,
+    draft,
+    byPublish.map((task) => task.id),
+    'in_progress',
+    actorId,
+  );
+  return byPublish.length;
 }

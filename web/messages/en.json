@@ -3204,6 +3204,22 @@
     "openDetails": "Open topic details"
   },
   "contentEditor": {
+    "publish": {
+      "title": "Mark published",
+      "description": "Where is the page live? Its Live page tab measures this address, and an action it came from counts its results from there.",
+      "label": "Live address",
+      "hint": "The page's full address on your site, as people open it.",
+      "invalidUrl": "Give the page's full address, starting with https:// or http://.",
+      "notFound": "This page isn't in the Library anymore.",
+      "failed": "Couldn't mark the page published. Try again.",
+      "done": "Published. The Live page tab measures it from now on.",
+      "offDomain": "Published. The address isn't on the brand's domains, so its numbers won't show.",
+      "addressNotKept": "Published. The address couldn't be saved yet, so the Live page tab can't measure it.",
+      "unsaved": "The page has changes that aren't saved, so its live address can't be set yet.",
+      "archived": "This page is archived. Restore it in the Library first.",
+      "cancel": "Cancel",
+      "save": "Mark published"
+    },
     "plan": {
       "title": "Content plan",
       "description": "What to create, optimize or protect next.",
@@ -3574,6 +3590,7 @@
           "writing": "The agent is already working on this draft.",
           "org_writing": "The agent is writing another of your team's drafts, so it didn't start. The draft is in the Library for you to write.",
           "open_suggestions": "This page has suggestions waiting for review, so the agent didn't start. Accept or reject them in the editor first.",
+          "running": "The agent is already working on this page, so it didn't start. The draft is in the Library for you to write.",
           "not_draft": "This draft is no longer a draft, so the agent didn't start.",
           "failed": "The agent couldn't start. The draft is in the Library for you to write."
         }
@@ -3670,7 +3687,8 @@
         "runningHint": "The Content Agent is working on this page. Click to follow its steps or stop it.",
         "readyLabel": "Ready: click to move it back to review",
         "readyHint": "Marked ready. Click to move it back to review.",
-        "publishedHint": "Published. Change its status in the Library.",
+        "publishedHint": "Published. Click to give the address it's live at.",
+        "publishedHintAt": "Live at {url}. Click to change the address.",
         "backInReview": "Back in review.",
         "backInReviewAction": "Back in review, and {count, plural, one {its task} other {its # tasks}} in Action AC-{no} {count, plural, one {is} other {are}} open again.",
         "backInReviewFailed": "Couldn't move it back to review.",
@@ -3765,6 +3783,7 @@
           "writing": "The agent is already working on this draft.",
           "org_writing": "The agent is writing another of your team's drafts. Try again in a minute or two.",
           "open_suggestions": "Accept or reject the open suggestions first, then try again.",
+          "running": "Content Agent is fixing this page, maybe from another tab. Try again once it has finished.",
           "not_draft": "This draft is no longer a draft, so the agent didn't start.",
           "empty": "The page has no text to rewrite yet.",
           "too_long": "The page is too long to rewrite whole. Use Fix open rules, or shorten it first.",
@@ -3784,6 +3803,10 @@
         }
       },
       "agentCard": {
+        "breaks": "would break {names}",
+        "runFailed": "Content Agent couldn't finish",
+        "runFailedLine": "Nothing it wrote was kept. Try again; if it fails again, fix what's left yourself.",
+        "placeholders": "{count, plural, one {# placeholder} other {# placeholders}} to fill",
         "waiting": "{count, plural, one {Content Agent has # suggestion for you} other {Content Agent has # suggestions for you}}",
         "gain": "Rules {met, number} → {after, number} of {total, number}",
         "review": "Review",
@@ -3834,6 +3857,7 @@
         "ready": "Content Agent rewrote the page to its rules",
         "characters": "{before, number} → {after, number} characters",
         "lengthMissed": "Length {target, number} not reached",
+        "longer": "longer than the page before",
         "lengthKept": "({kept, number} characters are passages AI answers quote, tables and other blocks a rewrite keeps as they are)",
         "accepted": "Rewrite accepted",
         "rejected": "Rewrite rejected",
@@ -3890,6 +3914,8 @@
         "fixed": "{count, plural, one {Content Agent suggested # change} other {Content Agent suggested # changes}} · review them in the page",
         "fixedMax": "Content Agent suggested {count} changes, the most one run makes · review them, then run it again for the rules still open",
         "nothingToFix": "Content Agent found nothing it could change without new facts.",
+        "breaks": "Would break {names}",
+        "nothingToFixLocked": "Content Agent's changes were all in passages AI answers quote, which it keeps. Unlock the ones you're fine to change (Edit anyway), or change them yourself.",
         "notForAgent": "Content Agent doesn't change heading levels: make the extra H1s H2s in the toolbar.",
         "notForAgentFeed": "Content Agent doesn't change a price, GTIN or stock: check which is right, the page or your product feed, and fix that one.",
         "decideFirst": "{count, plural, one {Review the open suggestion first, then run the agent.} other {Review the open suggestions first, then run the agent.}}",
@@ -4078,7 +4104,8 @@
         }
       },
       "impact": {
-        "newPage": "This draft is a new page, not live yet, so there's nothing to measure. This tab shows the live page's numbers when a draft optimizes one.",
+        "newPage": "This draft is a new page, not live yet, so there's nothing to measure. Mark it published with its live address, and this tab measures it from then.",
+        "publishedNoAddress": "This page is marked published without its live address, so there's nothing to measure. Give the address with the header's Published button, and this tab measures it from then.",
         "thisPage": "The live page today",
         "notForecast": "How the live page does now, not a forecast of what this draft will get.",
         "periodLabel": "Period",
@@ -4430,11 +4457,12 @@
         "stepOf": "Step {n} of {total}",
         "allDone": "Every step is done",
         "path": "All steps",
-        "skip": "Skip",
+        "skip": "Skip this step",
         "skipped": "· skipped",
         "working": "Content Agent is working",
         "stop": "Stop",
         "marking": "Marking it ready…",
+        "saving": "Saving the page first…",
         "tipsTitle": "If you see…",
         "tipLine": "{state} →",
         "states": {
@@ -4460,13 +4488,14 @@
           "writeMine": "The page is empty: write it, and the next step follows from what you write.",
           "import": "The live page didn't come in. I write a first draft from your sources, or you write it yourself.",
           "length": "{count, number} characters against a Length of {target, number}. Small fixes won't get there, so rewrite it in one go.",
-          "fixRules": "{count, plural, one {# rule is} other {# rules are}} still open. Small, reviewable changes for them.",
+          "fixRules": "{count, plural, one {# rule is} other {# rules are}} still open for the agent. Small, reviewable changes for them.",
+          "fixRulesOthers": "{count, plural, one {# more is} other {# more are}} yours to decide in the Rules tab.",
           "proofTrust": "Trust is {trust}, under {gate}. The Quality tab names what raises it.",
           "proofTrustTodo": "Trust is {trust}, under {gate}. Only you can do this first: {todo}.",
           "proofTodo": "Only you can do this: {todo}.",
           "check": "Links, schema, placeholders and Trust {gate}+, before you mark it ready.",
           "checkRules": "The rules are met. Mark it ready when you are.",
-          "ready": "Every step is done. Export it for your CMS.",
+          "ready": "Every step is done. Export it for your CMS, and mark it published once it's live.",
           "published": "It's published. Export it again when the page changes."
         },
         "actions": {
@@ -4480,7 +4509,8 @@
           "showTodos": "Show to-dos",
           "beforePublish": "Before you publish",
           "markReady": "Mark ready",
-          "export": "Export"
+          "export": "Export",
+          "markPublished": "Mark published"
         },
         "tips": {
           "longPage": "Page far longer than Length",
@@ -5243,8 +5273,16 @@
           "length": "Recommended: the page is {count, number} characters for a Length of {target, number} ({percent, number}% off). A rewrite gets there in one go.",
           "open": "Recommended: {count, number} rules are open. A rewrite meets them together."
         },
-        "lengthOutOfReach": "The page is {count, number} characters for a Length of {target, number}, but {kept, number} of them are passages AI answers quote, tables and other blocks a rewrite keeps as they are. Raise the Length to about {suggested, number}, or unlock passages you're fine to have reworded.",
+        "lengthOutOfReach": "The page is {count, number} characters for a Length of {target, number}, but a rewrite can't go much under {least, number}: {kept, number} are passages AI answers quote, tables and other blocks it keeps as they are, and each heading needs its answer. Raise the Length to about {suggested, number}, or unlock passages you're fine to have reworded.",
+        "lengthOutOfReachRun": "The page is {count, number} characters for a Length of {target, number}. The last rewrite came to {least, number}, so another won't get there. Raise the Length to about {suggested, number}, or unlock passages you're fine to have reworded.",
+        "lengthOutOfReachHeadings": "The page is {count, number} characters for a Length of {target, number}, but its headings and an answer under each come to about {least, number}. Raise the Length to about {suggested, number}, or use fewer sections.",
+        "raiseLength": "Raise Length to {suggested, number}",
+        "rewriteCitedToo": "Rewrite, cited passages too",
+        "rewriteCitedTooHint": "That rewrites the passages AI answers quote as well, so they may stop being quoted. You compare it with the page before anything changes.",
         "lengthConflict": "The fan-out H2s, FAQ questions and summary these rules still ask for take about {need, number} characters, more than Length allows (up to {max, number}). Raise Length, or ask for fewer.",
+        "heldAll": "What's left open is kept by AI citations, and yours to decide: the agent leaves passages AI answers quote as they are.",
+        "heldLength": "Only the Length is left open, and a rewrite can't reach it. Raise the Length, or leave it.",
+        "heldSentence": "Kept by AI citations · yours to decide: the long sentences are in passages AI answers quote, which the agent keeps. Shorten them yourself (Edit anyway), or leave them quoted.",
         "fixTrace": "Fix",
         "fixTraceHint": "Content Agent rewrites only these phrases, for you to review",
         "agent": {

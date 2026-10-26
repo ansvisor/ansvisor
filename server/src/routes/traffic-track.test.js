@@ -306,4 +306,35 @@ describe('POST /track/:trackingCode', () => {
     expect(updated).toHaveLength(1);
     expect(inserted).toEqual([]);
   });
+
+  it('reads an application/json beacon itself, as text, without the server-wide JSON parser', async () => {
+    findVisitOf.mockResolvedValue(null);
+    const res = await fetch(baseUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Forwarded-For': '203.0.113.7' },
+      body: JSON.stringify({
+        u: 'https://acme.example/menu',
+        s: 'gemini.google.com',
+        a: 'Mozilla/5.0',
+      }),
+    });
+    expect(res.status).toBe(204);
+    expect(inserted[0].row).toMatchObject({ url: 'https://acme.example/menu' });
+  });
+
+  it('refuses a body over 64 KB, whatever its type, before reading it all', async () => {
+    for (const type of ['text/plain', 'application/json']) {
+      const res = await fetch(baseUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': type, 'X-Forwarded-For': '203.0.113.7' },
+        body: JSON.stringify({
+          u: 'https://acme.example/',
+          s: 'gemini.google.com',
+          pad: 'x'.repeat(70_000),
+        }),
+      });
+      expect(res.status, type).toBe(413);
+    }
+    expect(inserted).toEqual([]);
+  });
 });

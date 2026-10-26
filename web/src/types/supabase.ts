@@ -1817,6 +1817,7 @@ export type Database = {
       content_draft_suggestions: {
         Row: {
           action_id: string | null
+          after_chars: number | null
           after_links: Json | null
           after_text: string
           agent: string
@@ -1829,7 +1830,9 @@ export type Database = {
           decided_by: string | null
           draft_id: string
           id: string
+          kept_chars: number | null
           kind: string
+          length_target: number | null
           position: number
           reason: string
           rule_keys: string[]
@@ -1839,6 +1842,7 @@ export type Database = {
         }
         Insert: {
           action_id?: string | null
+          after_chars?: number | null
           after_links?: Json | null
           after_text: string
           agent?: string
@@ -1851,7 +1855,9 @@ export type Database = {
           decided_by?: string | null
           draft_id: string
           id?: string
+          kept_chars?: number | null
           kind: string
+          length_target?: number | null
           position?: number
           reason: string
           rule_keys?: string[]
@@ -1861,6 +1867,7 @@ export type Database = {
         }
         Update: {
           action_id?: string | null
+          after_chars?: number | null
           after_links?: Json | null
           after_text?: string
           agent?: string
@@ -1873,7 +1880,9 @@ export type Database = {
           decided_by?: string | null
           draft_id?: string
           id?: string
+          kept_chars?: number | null
           kind?: string
+          length_target?: number | null
           position?: number
           reason?: string
           rule_keys?: string[]

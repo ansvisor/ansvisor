@@ -99,6 +99,14 @@ describe('NextStepButton', () => {
     expect(onOpenChange).toHaveBeenCalledWith(true, expect.anything());
   });
 
+  it('counts the rules the agent can fix, and says how many more the Rules tab counts', async () => {
+    // Length far off and a rule held by quoted passages: open in the Rules tab, not for Fix.
+    await render(state({ method: 'optimize', openRules: ['faq'], openTotal: 3 }));
+    expect(popup()!.textContent).toContain(
+      '1 rule is still open for the agent. Small, reviewable changes for them. 2 more are yours to decide in the Rules tab.',
+    );
+  });
+
   it('says why from the page, with its button, the other one and Skip', async () => {
     await render(
       state({
@@ -115,7 +123,7 @@ describe('NextStepButton', () => {
     expect(onAction).toHaveBeenCalledWith('rewritePage');
     await act(async () => button('Fix open rules')!.click());
     expect(onAction).toHaveBeenCalledWith('fixRules');
-    await act(async () => button('Skip')!.click());
+    await act(async () => button('Skip this step')!.click());
     expect(onSkip).toHaveBeenCalledWith('length');
     expect(path()).toEqual([
       'Plan the page · done',
@@ -161,7 +169,7 @@ describe('NextStepButton', () => {
     await render(state());
     expect(popup()!.textContent).toContain('Check and mark ready');
     expect(button('Before you publish')).toBeDefined();
-    expect(button('Skip')).toBeUndefined();
+    expect(button('Skip this step')).toBeUndefined();
     // Published: Export, saying it went out.
     await render(state({ open: false, published: true }));
     expect(popup()!.textContent).toContain(
@@ -173,7 +181,7 @@ describe('NextStepButton', () => {
   it("moves focus to the next step's button after Skip, and reads the step out", async () => {
     const s = state({ openRules: ['faq'] });
     await render(s);
-    await act(async () => button('Skip')!.click());
+    await act(async () => button('Skip this step')!.click());
     expect(onSkip).toHaveBeenCalledWith('fixRules');
     // The editor passes the skip on: the step after it shows.
     await render({ ...s, skipped: { fixRules: 'faq' } });
