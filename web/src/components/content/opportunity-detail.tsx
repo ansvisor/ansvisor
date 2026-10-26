@@ -76,6 +76,7 @@ import { NewContentDialog, type DialogPreset } from '@/components/content/new-co
 import { useAssetTypeLabel } from '@/hooks/use-asset-type-label';
 import { toast } from 'sonner';
 import { suggestedDate } from '@/lib/suggested-date';
+import { formatNumber } from '@/lib/format';
 
 export const IMPACT_COLORS: Record<string, string> = {
   high: 'border-red-500/30 bg-red-500/10 text-red-600 dark:text-red-400',
@@ -807,7 +808,7 @@ export function OpportunityDetail({
                     {brief.contentType.replace(/-/g, ' ')}
                   </Badge>
                   <Badge variant="outline" className="text-xs tabular-nums">
-                    ~{brief.targetWordCount.toLocaleString()} words
+                    ~{formatNumber(brief.targetWordCount)} words
                   </Badge>
                 </div>
               </div>

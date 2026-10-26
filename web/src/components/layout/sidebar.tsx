@@ -22,6 +22,7 @@ import { useFeatureGate } from '@/hooks/use-feature-gate';
 import { useAgentKeyStatus } from '@/hooks/use-agent-key-status';
 import { siteConfig } from '@/config/site';
 import { cn } from '@/lib/utils';
+import { formatNumber } from '@/lib/format';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -464,7 +465,7 @@ export function Sidebar() {
                                     )}
                                     {child.href.endsWith('/tracked') && trackedCount !== null && (
                                       <span className="text-[11px] tabular-nums text-muted-foreground">
-                                        {trackedCount.toLocaleString()}
+                                        {formatNumber(trackedCount)}
                                       </span>
                                     )}
                                   </Link>

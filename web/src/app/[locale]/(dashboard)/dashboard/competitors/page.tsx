@@ -524,7 +524,7 @@ function groupH2HByPrompt(groups: HeadToHeadGroup[]): PromptComparisonGroup[] {
 
 function formatTimestamp(iso: string): string {
   const d = new Date(iso);
-  return d.toLocaleDateString(undefined, {
+  return d.toLocaleDateString('en-US', {
     month: 'short',
     day: 'numeric',
   });
@@ -985,7 +985,7 @@ function GapStrengthList({ items, type }: { items: HeadToHeadGroup[]; type: 'gap
                   )}
                   {!hasMultiple && group.items[0].latestAt && (
                     <span className="text-muted-foreground">
-                      {new Date(group.items[0].latestAt).toLocaleDateString(undefined, {
+                      {new Date(group.items[0].latestAt).toLocaleDateString('en-US', {
                         day: 'numeric',
                         month: 'short',
                         year: 'numeric',
@@ -1035,7 +1035,7 @@ function GapStrengthList({ items, type }: { items: HeadToHeadGroup[]; type: 'gap
                     </span>
                     {item.latestAt && (
                       <span className="text-muted-foreground whitespace-nowrap">
-                        {new Date(item.latestAt).toLocaleDateString(undefined, {
+                        {new Date(item.latestAt).toLocaleDateString('en-US', {
                           day: 'numeric',
                           month: 'short',
                         })}

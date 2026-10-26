@@ -11,6 +11,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { LoadingDots } from '@/components/ui/loading-dots';
 import { useAssetTypeLabel } from '@/hooks/use-asset-type-label';
 import { getOpportunityActions, type OpportunityActionResult } from '@/lib/actions/content';
+import { formatDate } from '@/lib/format';
 import type {
   ContentOpportunityDecision,
   ContentOpportunitySourceData,
@@ -391,7 +392,11 @@ export function OpportunityResultsCard({ actionIds }: { actionIds: string[] }) {
                 {a.title && <p className="text-xs text-muted-foreground line-clamp-2">{a.title}</p>}
                 {a.status === 'completed' && a.outcome === 'pending_measurement' && measureFrom ? (
                   <p className="text-xs text-muted-foreground">
-                    {t('resultsPending', { date: measureFrom.toLocaleDateString() })}
+                    {t('resultsPending', {
+                      date: formatDate(
+                        Number.isNaN(measureFrom.getTime()) ? null : measureFrom.toISOString(),
+                      ),
+                    })}
                   </p>
                 ) : a.status === 'completed' ? (
                   <div className="space-y-1">
