@@ -235,12 +235,13 @@ describe('a judge’s answer as kept', () => {
     expect(promptVersion(CASES)).toMatch(/^[0-9a-f]{12}$/);
     expect(promptVersion(CASES)).toBe(promptVersion(CASES));
     expect(promptVersion(CASES.slice(1))).not.toBe(promptVersion(CASES));
-    // From phase 2 the prompt names the site type.
-    expect(promptVersion(CASES, 2)).not.toBe(promptVersion(CASES, 0));
-    // The phase is read for it, and left as it was.
-    const before = process.env.CONTENT_QUALITY_PHASE;
-    promptVersion(CASES, 3);
-    expect(process.env.CONTENT_QUALITY_PHASE).toBe(before);
+    // From phase 2 the prompt names the site type; the brief rules change it too.
+    expect(promptVersion(CASES, { phase: 2 })).not.toBe(promptVersion(CASES, { phase: 0 }));
+    expect(promptVersion(CASES, { rules: true })).not.toBe(promptVersion(CASES, { rules: false }));
+    // Both are read for it, and left as they were.
+    const before = [process.env.CONTENT_QUALITY_PHASE, process.env.CONTENT_BRIEF_RULES];
+    promptVersion(CASES, { phase: 3, rules: true });
+    expect([process.env.CONTENT_QUALITY_PHASE, process.env.CONTENT_BRIEF_RULES]).toEqual(before);
   });
 });
 
@@ -249,8 +250,11 @@ describe('a judge’s answer as kept', () => {
 // written under. Their checks are made again here, for free.
 const recordedPath = new URL('./__fixtures__/brief-eval/recorded.json', import.meta.url);
 const recorded = existsSync(recordedPath) ? JSON.parse(readFileSync(recordedPath, 'utf8')) : null;
-const current =
-  recorded && recorded.promptVersion === promptVersion(CASES, recorded.qualityPhase ?? 0);
+const recordedUnder = {
+  phase: recorded?.qualityPhase ?? 0,
+  rules: recorded?.briefRules ?? false,
+};
+const current = recorded && recorded.promptVersion === promptVersion(CASES, recordedUnder);
 
 describe('the recorded briefs', () => {
   it.skipIf(!current)(
@@ -272,7 +276,7 @@ describe('the recorded briefs', () => {
     'waits for a new record: the brief’s prompt changed since',
     () => {
       // A stale record is said, not failed: the maintainer records again.
-      expect(recorded.promptVersion).not.toBe(promptVersion(CASES, recorded.qualityPhase ?? 0));
+      expect(recorded.promptVersion).not.toBe(promptVersion(CASES, recordedUnder));
     },
   );
 });

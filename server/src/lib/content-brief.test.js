@@ -1,3 +1,4 @@
+import { existsSync, readFileSync } from 'node:fs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 /**
@@ -62,8 +63,20 @@ vi.mock('./content-runs.js', async (importOriginal) => ({
   stopIfStopped: (...args) => stopIfStopped(...args),
 }));
 
-const { briefGuard, buildBriefPrompt, mapOutline, rebuildDraftBrief, rebuildSources } =
-  await import('./content-brief.js');
+const {
+  BRIEF_FORMATS,
+  BRIEF_V2_LIMITS,
+  FACT_SOURCES,
+  SYSTEM_PROMPT,
+  SYSTEM_PROMPT_V2,
+  briefGuard,
+  buildBriefPrompt,
+  mapOutline,
+  outlineSchema,
+  outlineSchemaV2,
+  rebuildDraftBrief,
+  rebuildSources,
+} = await import('./content-brief.js');
 const { NAME_PLACEHOLDER, QUOTE_PLACEHOLDER } = await import('./content-people.js');
 const { NUMBER_PLACEHOLDER } = await import('./content-sources.js');
 const { PlanLimitError } = await import('./plan-guard.js');
@@ -540,5 +553,202 @@ describe('the brief prompt', () => {
         platform: null,
       },
     ]);
+  });
+});
+
+describe('the brief rules (2026), behind CONTENT_BRIEF_RULES', () => {
+  afterEach(() => {
+    delete process.env.CONTENT_BRIEF_RULES;
+  });
+
+  it('asks as before while they are off: the same rules, schema and prompt', async () => {
+    await rebuildDraftBrief({ draftId: DRAFT, brandId: BRAND, sources: sources() });
+    const call = generateObject.mock.calls[0][0];
+    expect(call.system).toBe(SYSTEM_PROMPT);
+    expect(call.schema).toBe(outlineSchema);
+    expect(call.prompt).not.toMatch(/\bS\d+: /);
+    expect(call.prompt).not.toContain('Its sections lean to');
+    const brief = writes.find((w) => w.table === 'content_drafts')?.value.brief;
+    expect(brief).not.toHaveProperty('version');
+    expect(brief.outline[0]).not.toHaveProperty('answer');
+  });
+
+  it('asks for each section’s answer, format and facts, with the data numbered and the rules', async () => {
+    process.env.CONTENT_BRIEF_RULES = 'true';
+    generateObject.mockResolvedValue({
+      object: { goal: 'g', audience: 'a', outline: [], keywords: [] },
+      usage: { inputTokens: 10, outputTokens: 5 },
+    });
+    await rebuildDraftBrief({
+      draftId: DRAFT,
+      brandId: BRAND,
+      sources: rebuildSources.parse({
+        ...sources(),
+        rules: [{ key: 'h2Answer', name: 'Answer under each H2', detail: 'aim: 60 words' }],
+      }),
+    });
+    const call = generateObject.mock.calls[0][0];
+    expect(call.system).toBe(SYSTEM_PROMPT_V2);
+    expect(call.schema).toBe(outlineSchemaV2);
+    // The data by its number: the prompt, the fan-outs, the cited page, the query.
+    expect(call.prompt).toContain('- S1: Best espresso machines under $500?');
+    expect(call.prompt).toContain('- S2: "Best espresso machine under 500"');
+    expect(call.prompt).toContain('- S4: https://www.reddit.com/r/espresso/x (forum)');
+    expect(call.prompt).toContain('- S5: espresso machine under 500');
+    expect(call.prompt).toContain(
+      'Its sections lean to: a list of the criteria, and a table of the picks.',
+    );
+    expect(call.prompt).toContain(
+      'Rules the page is written to:\n- Answer under each H2: aim: 60 words',
+    );
+  });
+
+  it('keeps each section’s plan, cut and guarded as the rest, its facts’ sources by kind and ref', async () => {
+    process.env.CONTENT_BRIEF_RULES = 'true';
+    const fact = (over) => ({
+      claim: 'Average price of a machine',
+      sourceType: 'statistic',
+      source: 'S2',
+      ...over,
+    });
+    generateObject.mockResolvedValue({
+      object: {
+        goal: 'Help buyers pick',
+        audience: 'Home baristas',
+        outline: [
+          {
+            heading: 'The best espresso machines under $500',
+            keyPoints: ['Price bands'],
+            fanout: 'Best espresso machine under 500',
+            platform: 'copilot-web',
+            answer: 'Say that 73% of buyers pick a single boiler.',
+            format: 'carousel',
+            facts: [
+              fact(),
+              fact({ sourceType: 'rumour' }),
+              fact({ claim: '41% of baristas say so', sourceType: 'Study', source: 'S99' }),
+              fact({ source: 's1' }),
+              fact({ source: null }),
+              fact({ claim: ' ' }),
+              fact(),
+            ],
+          },
+        ],
+        keywords: ['espresso'],
+      },
+      usage: { inputTokens: 1000, outputTokens: 500 },
+    });
+    const brief = await rebuildDraftBrief({ draftId: DRAFT, brandId: BRAND, sources: sources() });
+    expect(brief.version).toBe(2);
+    const [section] = brief.outline;
+    expect(section.answer).toBe('Say that [figure, source] of buyers pick a single boiler.');
+    // A format the web doesn't know: none.
+    expect(section.format).toBeNull();
+    const fanout = {
+      kind: 'fanout',
+      ref: 'best espresso machine under 500',
+      label: 'Best espresso machine under 500',
+    };
+    expect(section.facts).toEqual([
+      { claim: 'Average price of a machine', sourceType: 'statistic', source: fanout },
+      // A number the data doesn't have, a source it doesn't list.
+      { claim: '[figure, source] of baristas say so', sourceType: 'study', source: null },
+      {
+        claim: 'Average price of a machine',
+        sourceType: 'statistic',
+        source: { kind: 'prompt', ref: PROMPT, label: 'Best espresso machines under $500?' },
+      },
+      { claim: 'Average price of a machine', sourceType: 'statistic', source: null },
+    ]);
+    expect(section.facts.length).toBeLessThanOrEqual(BRIEF_V2_LIMITS.facts);
+  });
+
+  it('fits the brief under the column’s 64 KB: sources go first, then facts', async () => {
+    process.env.CONTENT_BRIEF_RULES = 'true';
+    const long = 'https://www.reddit.com/r/espresso/' + 'x'.repeat(2000);
+    const section = (i) => ({
+      heading: `Machines ${String.fromCharCode(97 + i)}`,
+      keyPoints: [],
+      fanout: null,
+      platform: null,
+      answer: null,
+      format: null,
+      facts: Array(4).fill({ claim: 'c'.repeat(300), sourceType: 'study', source: 'S4' }),
+    });
+    generateObject.mockResolvedValue({
+      object: {
+        goal: 'g',
+        audience: 'a',
+        outline: Array.from({ length: 12 }, (_, i) => section(i)),
+        keywords: [],
+      },
+      usage: { inputTokens: 10, outputTokens: 5 },
+    });
+    const brief = await rebuildDraftBrief({
+      draftId: DRAFT,
+      brandId: BRAND,
+      sources: sources({ pages: [{ url: long, kind: 'forum' }] }),
+    });
+    expect(Buffer.byteLength(JSON.stringify(brief))).toBeLessThan(64_000);
+    expect(brief.outline[0].facts).toHaveLength(4);
+    expect(brief.outline.every((s) => s.facts.every((f) => f.source === null))).toBe(true);
+  });
+
+  it('cuts a long answer and claim to the web’s limits, never splitting a placeholder', async () => {
+    process.env.CONTENT_BRIEF_RULES = 'true';
+    generateObject.mockResolvedValue({
+      object: {
+        goal: 'g',
+        audience: 'a',
+        outline: [
+          {
+            heading: 'Machines',
+            keyPoints: [],
+            fanout: null,
+            platform: null,
+            answer: 'a'.repeat(700),
+            format: 'table',
+            facts: [{ claim: 'c'.repeat(400), sourceType: 'study', source: null }],
+          },
+        ],
+        keywords: [],
+      },
+      usage: { inputTokens: 10, outputTokens: 5 },
+    });
+    const brief = await rebuildDraftBrief({ draftId: DRAFT, brandId: BRAND, sources: sources() });
+    expect(brief.outline[0].answer).toHaveLength(BRIEF_V2_LIMITS.answer);
+    expect(brief.outline[0].format).toBe('table');
+    expect(brief.outline[0].facts[0].claim).toHaveLength(BRIEF_V2_LIMITS.claim);
+  });
+
+  // The web's reading of version 2 (web/src/lib/content/brief.ts, #1539): read
+  // here so the two can't drift apart unseen; skipped until the web has it.
+  const webBrief = new URL('../../../web/src/lib/content/brief.ts', import.meta.url);
+  const webText = existsSync(webBrief) ? readFileSync(webBrief, 'utf8') : '';
+  const webHasV2 = webText.includes('BRIEF_V2_LIMITS');
+  it.skipIf(!webHasV2)('writes version 2 to the web’s limits, kinds and sample', () => {
+    const limits = webText.match(/export const BRIEF_V2_LIMITS = \{([\s\S]*?)\} as const/)[1];
+    const limit = (key) => Number(limits.match(new RegExp(`\\b${key}: (\\d+)`))[1]);
+    for (const key of ['answer', 'facts', 'claim', 'url']) {
+      expect(BRIEF_V2_LIMITS[key], key).toBe(limit(key));
+    }
+    const kinds = (name) =>
+      [
+        ...webText
+          .match(new RegExp(`export const ${name} = \\[([^\\]]*)\\]`))[1]
+          .matchAll(/'([a-z_]+)'/g),
+      ].map((m) => m[1]);
+    expect(BRIEF_FORMATS).toEqual(kinds('BRIEF_FORMATS'));
+    expect(FACT_SOURCES).toEqual(kinds('FACT_SOURCES'));
+    const sample = JSON.parse(
+      readFileSync(
+        new URL('../../../web/src/lib/content/__fixtures__/brief-v2.json', import.meta.url),
+        'utf8',
+      ),
+    );
+    for (const section of sample.outline) {
+      expect(BRIEF_FORMATS).toContain(section.format);
+      for (const f of section.facts) expect(FACT_SOURCES).toContain(f.sourceType);
+    }
   });
 });
