@@ -103,9 +103,15 @@ export function sourcesPrompt(numbered) {
 /** A source number written into the words in brackets ("(S2)", "[S1, S3]"): never the page's. */
 const SOURCE_ID = /\s?[([]S\d{1,3}(?:\s*[,;]\s*S\d{1,3})*[)\]]/g;
 
-/** Words with the source numbers the model wrote into them taken out. */
-export function stripSourceIds(text) {
-  return String(text ?? '').replace(SOURCE_ID, '');
+/**
+ * Words with the source numbers the model wrote into them taken out: with
+ * `count`, only S1 to S{count}, the numbers it was given, so a name with one
+ * ("Galaxy (S23)") stays.
+ */
+export function stripSourceIds(text, count = Infinity) {
+  return String(text ?? '').replace(SOURCE_ID, (ids) =>
+    ids.match(/\d+/g).every((n) => Number(n) <= count) ? '' : ids,
+  );
 }
 
 /**

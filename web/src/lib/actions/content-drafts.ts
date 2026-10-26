@@ -93,7 +93,7 @@ import {
 } from '@/lib/content/history';
 import { RUN_STALE_MS } from '@/lib/content/agent-runs';
 import { HANDOFF_KEYS } from '@/lib/content/hand-off';
-import type { AgentWriteRequest } from '@/lib/content/agent-write';
+import type { AgentRule, AgentWriteRequest } from '@/lib/content/agent-write';
 import {
   actionPages,
   completeDraftTasks,
@@ -1746,6 +1746,23 @@ export async function getDraftVersions(id: string): Promise<DraftVersion[]> {
 }
 
 /**
+ * When the draft's page was last restored from History (00289: set each time
+ * a restore changes the page), or null. The agent's batch from before it was
+ * for the page before: the editor opens its card closed.
+ */
+export async function getLastRestoreAt(id: string): Promise<string | null> {
+  if (!draftId.safeParse(id).success) throw new Error('invalid');
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from('content_drafts')
+    .select('restored_at')
+    .eq('id', id)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  return data?.restored_at ?? null;
+}
+
+/**
  * History's hand-offs (Quality CE-051): the draft's runs of Hand off (00275,
  * its members may read them) in the last 90 days, the latest first, each
  * with who started it, how it ended and how many checks it was given.
@@ -1842,7 +1859,12 @@ export async function restoreDraftVersion(id: string, versionId: string): Promis
       else if (typed) updatedAt = typed.updated_at;
     }
   }
-  return { title: restored.title, bodyHtml: restored.bodyHtml, updatedAt };
+  return {
+    title: restored.title,
+    bodyHtml: restored.bodyHtml,
+    updatedAt,
+    ...(typeof restored.restored === 'boolean' ? { restored: restored.restored } : {}),
+  };
 }
 
 /**
@@ -2216,6 +2238,8 @@ export async function rebuildDraftBrief(
   id: string,
   brandId: string,
   sources: RebuildSources,
+  /** The rules in effect, as the agent reads them: the brief plans to them (brief rules, 2026). */
+  rules?: AgentRule[],
 ): Promise<{ brief: DraftBrief } | { error: BriefRebuildError }> {
   if (!draftId.safeParse(id).success || !draftId.safeParse(brandId).success) {
     return { error: 'failed' };
@@ -2232,7 +2256,7 @@ export async function rebuildDraftBrief(
         'Content-Type': 'application/json',
         Authorization: `Bearer ${session.access_token}`,
       },
-      body: JSON.stringify({ brandId, sources }),
+      body: JSON.stringify({ brandId, sources, ...(rules?.length ? { rules } : {}) }),
     });
     const body = (await res.json().catch(() => ({}))) as Record<string, unknown>;
     if (!res.ok) {
