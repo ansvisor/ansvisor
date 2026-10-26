@@ -53,7 +53,7 @@ import {
   Target,
   TrendingUp,
 } from 'lucide-react';
-import { formatDate } from '@/lib/format';
+import { formatDate, formatNumber } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { HeaderWithAiUsage } from '@/components/ai-usage/ai-usage-meter';
 
@@ -286,19 +286,19 @@ export default function CitationUrlDetailPage() {
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
             <KpiCard
               title="Total citations"
-              value={data.totals.citations.toLocaleString()}
+              value={formatNumber(data.totals.citations)}
               sub={`across ${data.totals.answers} answers`}
               icon={Quote}
             />
             <KpiCard
               title="Answers citing"
-              value={data.totals.answers.toLocaleString()}
+              value={formatNumber(data.totals.answers)}
               sub="AI answers include this URL"
               icon={MessagesSquare}
             />
             <KpiCard
               title="Prompts"
-              value={data.totals.prompts.toLocaleString()}
+              value={formatNumber(data.totals.prompts)}
               sub="distinct prompts triggering it"
               icon={ListChecks}
             />
@@ -382,7 +382,7 @@ export default function CitationUrlDetailPage() {
                   ) : (
                     <div className="space-y-3">
                       <div className="text-2xl font-bold tabular-nums">
-                        {data.owned.traffic.totalVisits.toLocaleString()}
+                        {formatNumber(data.owned.traffic.totalVisits)}
                       </div>
                       <ul className="space-y-1.5">
                         {data.owned.traffic.byPlatform.map((p) => (
