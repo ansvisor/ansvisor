@@ -91,7 +91,7 @@ describe('AiUsageBanner', () => {
   it('warns in amber from 80%, with where to see the usage', async () => {
     state.usage = usage();
     await render();
-    expect(container.textContent).toContain("You've used 84% of this month's AI limit.");
+    expect(container.textContent).toContain("You've used 84.6% of this month's AI limit.");
     expect(container.firstElementChild!.className).toContain('bg-amber-50');
     expect(container.firstElementChild!.className).toContain('dark:bg-amber-950/30');
     expect(links()).toEqual([['See usage', '/dashboard/settings/billing#ai-usage']]);
@@ -114,7 +114,7 @@ describe('AiUsageBanner', () => {
     state.usage = usage({ trial: true });
     await render();
     expect(container.textContent).toContain(
-      "You've used 84% of the free trial's AI usage. Starting the plan gives its full monthly allowance.",
+      "You've used 84.6% of the free trial's AI usage. Starting the plan gives its full monthly allowance.",
     );
 
     state.usage = usage({ trial: true, percentUsed: 100 });

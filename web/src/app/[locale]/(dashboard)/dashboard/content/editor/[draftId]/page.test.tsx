@@ -409,7 +409,7 @@ describe('the content editor', () => {
     await act(async () => {});
     expect(readDraftAiUsage).toHaveBeenCalledWith('d1');
     expect(document.querySelector('[data-slot="popover-content"]')!.textContent).toContain(
-      'This page this month3%',
+      'This page this month3.7%',
     );
   });
 
