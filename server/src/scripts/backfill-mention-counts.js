@@ -36,16 +36,17 @@
  *     from public.prompt_results
  *     where created_at >= '<day>' and created_at < '<day + 7>'
  *       and response like '%<Entity%';
- * To put it back (for one brand, add `and b.brand_id = '<id>'`), then run the
- * three refreshes the run printed again:
+ * To put it back, in parts as it was filled: one brand at a time (or a week
+ * at a time on b.created_at), then run the three refreshes it printed again:
  *   update public.prompt_results p
  *     set response = b.response, sentiment = b.sentiment, mention_count = b.mention_count,
  *         visibility_score = b.visibility_score, mention_position = b.mention_position,
  *         mentioned_entity_count = b.mentioned_entity_count,
  *         competitor_mentions = b.competitor_mentions
  *     from backfill_backup.prompt_results_entity_markup b
- *     where p.id = b.id;
- *   drop schema backfill_backup cascade;  -- once the run is checked
+ *     where p.id = b.id and b.brand_id = '<id>';
+ * Once the run is checked, on its own, never with the restore:
+ *   drop schema backfill_backup cascade;
  *
  * Idempotent: rows whose recomputed values equal the stored ones are skipped,
  * and a cleaned answer leaves the filter, so a stopped run is run again. Each
@@ -115,14 +116,31 @@ async function brandsInScope() {
   return brands ?? [];
 }
 
+/**
+ * The brand's domains and competitors, as an answer is counted with them. A
+ * read that fails stops the run: counted without them, every answer would
+ * lose its domain mentions or its competitors, and a cleaned answer leaves
+ * the filter, so running again wouldn't revisit it.
+ */
 async function brandContext(brand) {
-  const [{ data: domains }, { data: competitors }] = await Promise.all([
-    supabaseAdmin.from('brand_domains').select('domain').eq('brand_id', brand.id),
-    supabaseAdmin.from('competitors').select('id, name, domain').eq('brand_id', brand.id),
+  const [domainsRes, competitorsRes] = await Promise.all([
+    withRetry(
+      () => supabaseAdmin.from('brand_domains').select('domain').eq('brand_id', brand.id),
+      'brand domains',
+    ),
+    withRetry(
+      () => supabaseAdmin.from('competitors').select('id, name, domain').eq('brand_id', brand.id),
+      'competitors',
+    ),
   ]);
+  if (domainsRes.error) throw new Error(domainsRes.error.message);
+  if (competitorsRes.error) throw new Error(competitorsRes.error.message);
   return {
-    brandInfo: { brandName: brand.name, domains: (domains ?? []).map((d) => d.domain) },
-    competitors: competitors ?? [],
+    brandInfo: {
+      brandName: brand.name,
+      domains: (domainsRes.data ?? []).map((d) => d.domain),
+    },
+    competitors: competitorsRes.data ?? [],
   };
 }
 
@@ -302,10 +320,12 @@ for (const brand of candidates) {
     brands.push(brand);
     continue;
   }
-  const { data: comps } = await supabaseAdmin
-    .from('competitors')
-    .select('name')
-    .eq('brand_id', brand.id);
+  // A failed read stops the run, never drops the brand from it unsaid.
+  const { data: comps, error: compsError } = await withRetry(
+    () => supabaseAdmin.from('competitors').select('name').eq('brand_id', brand.id),
+    'competitors',
+  );
+  if (compsError) throw new Error(compsError.message);
   if ((comps ?? []).some((c) => isAffectedName(c.name))) brands.push(brand);
 }
 
