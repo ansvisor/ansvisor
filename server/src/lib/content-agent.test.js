@@ -607,6 +607,25 @@ describe('keepSuggestions', () => {
     expect(Date.now() - started).toBeLessThan(500);
   });
 
+  it('reads a long run of initials quickly: each dot is read one way', () => {
+    const initials = 'U.S.'.repeat(10_000);
+    const started = Date.now();
+    addsAttribution('', `According to ${initials} says that.`);
+    dropsName(`${initials}, C and D`, `${initials}, C and D`, 'C and D');
+    placeholderAttributions(`Per ${initials}'s survey, most do.`);
+    expect(Date.now() - started).toBeLessThan(500);
+    // Dotted names read as before.
+    expect(attributedNames('Built on Node.js, according to the U.S Census.')).toEqual([
+      'U.S Census',
+    ]);
+    expect(attributedNames('According to the U.S. Census Bureau, most do.')).toEqual([
+      'U.S. Census Bureau',
+    ]);
+    expect(attributedNames('According to J.D. Power, most do.')).toEqual(['J.D. Power']);
+    expect(attributedNames('Teams forecast, per the U.N.')).toEqual(['U.N.']);
+    expect(attributedNames("U.S.'e göre enflasyon düştü.")).toEqual(['U.S.']);
+  });
+
   it('knows a source by its possessive, and never by its last word alone', () => {
     const known = knownPeople('According to Gartner, teams forecast.', 'Our research team');
     expect(
