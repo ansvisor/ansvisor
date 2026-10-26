@@ -19,8 +19,8 @@ const router = Router();
 // request — application/json would require a preflight, which beacons can't do,
 // so the browser silently blocks them. Read the body as text here; the handler
 // JSON-parses it. application/json is still accepted (older cached t.js, direct
-// API callers): the global json parser handles those and this middleware no-ops
-// once a body has already been parsed.
+// API callers) and read the same way: these routes are mounted before the
+// server's JSON parser, so a body is read here, up to 64 KB, whatever its type.
 const beaconBody = express.text({ type: ['text/plain', 'application/json'], limit: '64kb' });
 // The body read, then a journey event's own limit by tracking code (CE-017).
 const trackBody = [beaconBody, journeyEventLimiter];
@@ -94,8 +94,8 @@ router.post('/track/:trackingCode', trafficLimiter, trackBody, async (req, res) 
       return res.status(404).json({ ok: false });
     }
 
-    // Body arrives as a JSON string (text/plain beacon) or an already-parsed
-    // object (application/json via the global json parser). Normalize both.
+    // Body arrives as a JSON string (beaconBody reads every type as text); an
+    // object only if something upstream parsed it first. Normalize both.
     let body = req.body;
     if (typeof body === 'string') {
       try {

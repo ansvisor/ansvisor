@@ -154,7 +154,13 @@ describe('nextStep', () => {
     expect(nextStep(state({ quality: null })).step.primary).toBe('markReady');
     expect(ids(state({ quality: null }))).toHaveLength(4);
     const ready = state({ open: false, openRules: rules(3) });
-    expect(nextStep(ready).step).toMatchObject({ id: 'ready', primary: 'export' });
+    // Marked ready: Mark published beside Export, for its live address (CE-013); published, Export alone.
+    expect(nextStep(ready).step).toMatchObject({
+      id: 'ready',
+      primary: 'export',
+      alternative: 'markPublished',
+    });
+    expect(nextStep({ ...ready, published: true }).step.alternative).toBeNull();
     expect(nextStep(ready).path.every((p) => p.state === 'done' || p.state === 'skipped')).toBe(
       true,
     );
@@ -245,5 +251,18 @@ describe('rulesForNext', () => {
         { rule: rule('aiTraces'), status: { state: 'bad', code: 'found', count: 1 } },
       ]),
     ).toEqual(['aiTraces', 'summary']);
+  });
+
+  it('leaves out rules held by what the page keeps: no Fix run closes them, so Next moves on', () => {
+    const rule = (key: string) => ({ key, on: true, current: '150' }) as never;
+    const statuses = [
+      {
+        rule: rule('sentence'),
+        status: { state: 'bad' as const, code: 'over' as const, count: 3 },
+      },
+      { rule: rule('summary'), status: { state: 'ok' as const } },
+    ];
+    expect(rulesForNext(statuses)).toEqual(['sentence']);
+    expect(rulesForNext(statuses, new Set(['sentence']))).toEqual([]);
   });
 });
