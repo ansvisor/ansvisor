@@ -235,7 +235,8 @@ const ROLE_TR = new RegExp(
   `^(?:${[...ROLE_WORDS_TR, ...TITLE_WORDS_TR].join('|')})${TR_ANY}$`,
   'u',
 );
-const isRole = (lower) => ROLE_SET.has(lower) || ROLE_TR.test(lower) || TITLE_NOUNS.has(lower);
+export const isRole = (lower) =>
+  ROLE_SET.has(lower) || ROLE_TR.test(lower) || TITLE_NOUNS.has(lower);
 /** No title word next, as the first word after a role ("Yönetici Paneli Giriş Sayfası"). */
 const NOT_TITLE_NEXT = `(?!(?:${[...TITLE_NOUNS].map(eitherCase).join('|')})(?!\\p{L}))`;
 
