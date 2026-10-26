@@ -90,8 +90,13 @@ export function conversionSources(
 
 /**
  * A journey's pages as the tab shows them: all of them up to five, or the
- * first, a gap and the last three.
+ * first, a gap and the last three; with `keep` (the page the tab is about)
+ * only in the gap, the first, a gap, that page, a gap and the last, so the
+ * page stays in view.
  */
-export function journeyPages(pages: string[]): (string | null)[] {
-  return pages.length <= 5 ? pages : [pages[0], null, ...pages.slice(-3)];
+export function journeyPages(pages: string[], keep?: string): (string | null)[] {
+  if (pages.length <= 5) return pages;
+  const shown = [pages[0], null, ...pages.slice(-3)];
+  if (keep === undefined || shown.includes(keep) || !pages.includes(keep)) return shown;
+  return [pages[0], null, keep, null, pages[pages.length - 1]];
 }

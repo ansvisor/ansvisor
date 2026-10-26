@@ -391,6 +391,26 @@ describe('the Live page tab', () => {
       );
     });
 
+    it('keeps this page in view when a long journey is shortened', async () => {
+      getContentImpact.mockResolvedValue(impact());
+      getContentConversions.mockResolvedValue(
+        conversions({
+          journeys: [
+            {
+              source: 'chatgpt.com',
+              pages: ['/blog/a', '/blog/b', '/pricing', '/c', '/d', '/e', '/checkout'],
+              goal: 'demo',
+              count: 1,
+            },
+          ],
+        }),
+      );
+      await render();
+      expect(section().querySelector('ol li')!.textContent).toBe(
+        'ChatGPT/blog/a…This page…/checkoutDemo form1 1 conversion',
+      );
+    });
+
     it('shows a shop’s orders, revenue per currency and units sold', async () => {
       store.brands = [{ id: 'b1', siteType: 'ecommerce' }];
       getContentImpact.mockResolvedValue(impact());
