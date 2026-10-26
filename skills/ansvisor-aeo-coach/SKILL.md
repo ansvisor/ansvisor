@@ -6,9 +6,10 @@ description: |
   AI search engines (ChatGPT, Gemini, Perplexity, Claude, Copilot, Grok,
   Google AI Overviews, AI Mode), why visibility changed, how they compare
   to competitors, which sources cite them, or what to do next (Action
-  Center, content gaps, Improve suggestions, page audits), or how AI
-  talks about the brand (mentions, sentiment, what AI associates with
-  it). Uses the Ansvisor MCP server tools (`list_brands`,
+  Center, content gaps, Improve suggestions, page audits, prompt
+  suggestions, Content Editor drafts), or how AI talks about the brand
+  (mentions, sentiment, what AI associates with it). Uses the Ansvisor
+  MCP server tools (`list_brands`,
   `get_visibility_summary`, `get_competitor_comparison`,
   `get_mentions_summary`, `list_actions`, …) to fetch the data,
   then interprets it the way a marketing analyst would — not just
@@ -42,6 +43,9 @@ Activate this skill when the user asks anything in the shape of:
 - _"How is AI talking about us?" / "Why did sentiment drop on Gemini?"_
 - _"What does AI associate us with?"_
 - _"What should we work on next?" / "Did last month's work pay off?"_
+- _"Which prompts should we start tracking?"_
+- _"What's waiting in the Content Editor?" / "Did the page we optimized
+  pay off?"_
 - _"Give me a daily / weekly standup on `<brand name>`."_
 
 If you don't see the Ansvisor MCP tools listed below in your available
@@ -136,12 +140,21 @@ timestamps (`date_from` / `date_to`).
   per-entry `visibility_rate_pct` on a shared denominator, mentions and
   citations, overall **share of voice**, and the same split per model
   and platform. Filters: dates, `model`, `region`, `topic_id`.
+- **`list_competitors`** — the competitors set up for the brand: `id`,
+  `name` and `domain`. A setup list, not a ranking: for how they do,
+  use `get_competitor_comparison`.
 - **`list_citations`** — which domains and URLs AI cites alongside the
   brand, classified by source type (news, review, owned, social, forum,
   competitor, you). Filter with `source_filter`: `all`, `owned`,
   `competitor` or `external`.
 - **`get_ai_traffic`** — visits referred by AI engines: per platform,
   top landing pages, countries.
+- **`list_reports`** — the brand's saved reports, newest first: `id`,
+  `title`, `template`, `date_from` / `date_to` and `created_at`.
+  `limit` (default 50, max 100).
+- **`get_report`** — one saved report in full, with its stored
+  `payload`. It doesn't regenerate: the numbers are its own window's,
+  as they were when it was made, so don't quote them as today's.
 
 **Mentions & sentiment**
 
@@ -201,6 +214,20 @@ answers; no LLM is called.
 - **`list_topic_suggestions`** — pending AI topic suggestions.
   **`accept_topic_suggestion`** / **`dismiss_topic_suggestion`** act on
   one *(writes)*.
+- **`list_prompt_suggestions`** — pending AI prompt suggestions:
+  `suggested_text`, topic, `reason`, `est_volume`, `relevance`,
+  `generated_at` and `expires_at`, with `stale: true` when there are
+  none or all have expired. `est_volume` is an AI guess, not a
+  measurement: quote it as low confidence, likely anywhere from half to
+  twice the number. New suggestions are generated in the dashboard, not
+  over MCP.
+- **`accept_prompt_suggestion`** — tracks one as a new active prompt,
+  on the platforms and models of the brand's latest active prompt
+  (ChatGPT when there is none) that the plan allows, in the brand's own
+  location. It uses one prompt location: with none left it fails with
+  the plan-limit message *(write)*.
+- **`dismiss_prompt_suggestion`** — hides one from future suggestion
+  lists *(write)*.
 
 **Content & pages**
 
@@ -217,6 +244,53 @@ answers; no LLM is called.
   scores and fixes.
 - **`run_site_audit`** — audit a URL. Uses a monthly credit and runs
   ~30s; poll `get_site_audit` *(write)*.
+
+**Content Editor**
+
+Drafts are read and written as a person would in the editor. Ansvisor
+never publishes, and a suggestion is never applied until a person
+accepts it.
+
+- **`list_content_drafts`** — the brand's drafts, latest changed first
+  (up to 100): `title`, `status` (`draft`, `in_review`, `ready`,
+  `published`), `method` (`create` a new page, or `optimize` the live
+  page at `source_url`), `page_type`, `author` (`user` or `agent`),
+  `open_suggestions` (how many wait for review) and `editor_path`.
+  Filter: `status`.
+- **`get_content_draft`** — one draft: `body_html`, the page as
+  numbered `passages` (`locked: true` = AI answers quote it today), the
+  Action Center `action` it belongs to, the `open_suggestions` still
+  waiting, and `link_targets` (`own_pages`, `sources`): the only URLs a
+  suggestion may link to.
+- **`get_content_sources`** — what the draft draws on over 30 days, as
+  the Sources tab shows it: its prompts, the AI searches (fan-outs) run
+  for them, the pages AI cites, Search Console queries, and the
+  person's `choices` (sources left out or added).
+- **`get_content_impact`** — what the draft's live page earns over
+  `days` (7, 30, 90 or 365; default 30) against the period before, as
+  the Live page tab reads it: `citations`, `aiVisits` and `gscClicks`
+  (`cur` / `prev`), `promptCounts` (`cur`, `prev`, `lost`), the
+  `prompts` citing it, and `overlap` (the brand's other pages cited for
+  the same prompts). A draft of a new page, not live yet, has none.
+- **`create_content_draft`** — write a new draft as the agent: `title`,
+  `body_html` (starting with its H1), `method` (`create` by default, or
+  `optimize` with a `source_url` on the brand's domains), optional
+  `page_type` (detected when left out) and `prompt_ids`. It goes to the
+  Library's **In review** for a person *(write)*.
+- **`add_content_source`** — add a source, as the Sources tab's Add
+  does: `kind` `prompt` (`ref` = a tracked prompt's id), `cited_page`
+  (an http(s) address) or `gsc_query` (a Search Console query)
+  *(write)*.
+- **`suggest_content_changes`** — leave up to 20 suggestions on a draft
+  for a person to accept or reject. Each names a `passage` number from
+  `get_content_draft`: a `replace` (`before` copied exactly, `after` as
+  plain text) or an `insert` after it (`after` as simple HTML), with a
+  short `reason`. You write them: Ansvisor calls no LLM. Ones the editor
+  can't apply come back in `dropped` with the reason *(write)*.
+- **`set_content_draft_ready`** — the editor's **Mark ready**: a `draft`
+  becomes `ready`, History keeps it as a version, and a linked action's
+  writing task is completed (`action_tasks_done`). A draft `in_review`
+  waits for a person to mark it ready in the editor *(write)*.
 
 **Shopping**
 
@@ -246,8 +320,18 @@ answers; no LLM is called.
   `details` also has `sent_to_content` and `sent_to_webhook`: where the
   task was sent.
 
+  When some of what the action is about was removed since it was made
+  (a prompt deleted or paused, a competitor deleted), its `payload`
+  reads the count left: `targetCount` (of `targetEntity`) is what is
+  still there, `createdTargetCount` the count it was made with, and
+  `removedCount` and `removedLabels` (up to 20 names) what went. A
+  priority `reason` or task title that counted them counts what is
+  left. Quote the count left, and say how many were removed.
+
   With `format: "markdown"` it returns the action as the dashboard's
-  **Copy Data** writes it; `format: "csv"` returns its **Export CSV**.
+  **Copy Data** writes it, its **Affected** list being what the action
+  is about less what was removed since; `format: "csv"` returns its
+  **Export CSV**, a row per affected item, task and signal.
 - **`list_signals`** — detected changes, newest first. Each signal has:
   - `where`: the prompt, topic, platforms, locations, domain, competitor
     or pages it is about;
@@ -404,7 +488,8 @@ or any "do I have gaps" question:
 
 4. Empty topics are often the biggest unlock — point at them first.
    `list_topic_suggestions` may already hold ideas; offer to accept one
-   rather than inventing topics.
+   rather than inventing topics. The same goes for prompts with
+   `list_prompt_suggestions` (workflow 11).
 5. `get_prompt_volumes` tells you which prompts carry real demand —
    use it to say which gaps matter most. Quote the estimated range, and
    lean less on `low`-confidence rows.
@@ -535,6 +620,46 @@ When the user asks how AI describes the brand, why sentiment moved
 7. See
    [`references/sentiment-interpretation.md`](references/sentiment-interpretation.md)
    for when a sentiment move matters and when it's noise.
+
+### 11. Prompt suggestions ("what should we start tracking?")
+
+1. Call `list_prompt_suggestions(brand_id)`. With `stale: true` there is
+   nothing current to offer: new suggestions are generated in the
+   dashboard, not over MCP.
+2. Show the best few: text, topic, `reason`, and `est_volume` as a
+   rough AI guess, never as measured demand.
+3. Call `get_prompt_usage` first: each accepted suggestion uses one
+   prompt location (see workflow 5, step 6).
+4. Act only on the suggestions the user names, after they confirm:
+   `accept_prompt_suggestion` starts tracking one,
+   `dismiss_prompt_suggestion` hides it *(writes)*. If an accept fails
+   with the plan-limit message, relay it as it is.
+5. Report the prompts added (`prompt_text`).
+
+### 12. Content Editor drafts ("what's waiting in the editor?")
+
+1. Call `list_content_drafts`. Lead with the drafts a person has to act
+   on: `in_review`, or with `open_suggestions`.
+2. For one draft, call `get_content_draft` (its passages and open
+   suggestions) and `get_content_sources` (what it draws on).
+3. When the user wants a prompt, a cited page or a Search Console query
+   added to its sources, confirm it and call `add_content_source`
+   *(write)*.
+4. When they want changes suggested, write them from the draft and its
+   sources, show them, and send them with `suggest_content_changes` only
+   after they confirm *(write)*. Never touch a `locked` passage, and
+   link only to `link_targets`. It is refused on a published draft,
+   while a person still has open suggestions on it, or while the
+   Content Agent is writing it: say so and stop. Report how many were
+   kept and any `dropped`.
+5. When the user says the draft is done, offer `set_content_draft_ready`
+   and call it after they confirm *(write)*. A draft `in_review` is
+   marked ready by a person in the editor: give them its `editor_path`.
+6. Once the page is live, `get_content_impact` (30 days by default)
+   says whether it paid off: lead with `citations` and `aiVisits`
+   (`cur` vs `prev`), then `promptCounts.lost`. `gscSince` is the first
+   day of Search Console data (null: none); when it falls after the
+   period before began, the Google clicks don't compare.
 
 ## Formatting principles
 

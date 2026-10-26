@@ -220,7 +220,7 @@ instead.
 
 ## Available tools
 
-The MCP server exposes **36 tools**. Descriptions below match
+The MCP server exposes **50 tools**. Descriptions below match
 [`web/src/lib/mcp/server.ts`](https://github.com/ansvisor/ansvisor/blob/main/web/src/lib/mcp/server.ts).
 Tools that change data are marked **writes** — only call them on explicit user
 intent, not during exploratory queries.
@@ -293,6 +293,21 @@ curl "https://app.ansvisor.com/api/mcp/mentions/summary?brand_id=<brand_id>&plat
 | `get_content_opportunity` | Full details for one opportunity, including metrics, intent, competitors, and any existing brief. | |
 | `generate_content_brief` | Generate or overwrite an AI content brief for an opportunity (LLM cost/latency). | **yes** |
 | `update_opportunity_status` | Move an opportunity through workflow states (`new`, `reviewed`, `sent`, `in_progress`, `done`, `dismissed`). | **yes** |
+
+### Content Editor
+
+Drafts are read and written as a person would in the editor. Ansvisor never publishes, and a suggestion isn't applied until a person accepts it. None of these tools calls an LLM: the assistant writes the drafts and suggestions itself.
+
+| Tool | What it does | Writes |
+| --- | --- | --- |
+| `list_content_drafts` | The brand's drafts, latest changed first (up to 100), with status, method (`create` or `optimize`), author, open suggestions and the editor path; filter by `status`. | |
+| `get_content_draft` | One draft: its HTML, its numbered passages (`locked` ones AI answers quote today), its Action Center action, the open suggestions and the only pages a suggestion may link to. | |
+| `get_content_sources` | What the draft draws on over 30 days, as the Sources tab shows it: prompts, AI searches (fan-outs), cited pages, Search Console queries and the person's choices. | |
+| `get_content_impact` | What the draft's live page earns (citations, AI visits, Google clicks, the prompts citing it) against the period before, as the Live page tab reads it. Only for a draft of a live page. | |
+| `create_content_draft` | Write a new draft as the agent (`create`, or `optimize` a page on the brand's domains); it goes to the Library's In review. | **yes** |
+| `add_content_source` | Add a prompt, a cited page or a Search Console query to the draft's sources. | **yes** |
+| `suggest_content_changes` | Leave up to 20 suggestions (replace or insert, each with a reason) for a person to accept or reject. Refused on a published draft, while open suggestions wait, or while the Content Agent writes it. | **yes** |
+| `set_content_draft_ready` | Mark a draft ready, as the editor's Mark ready does; a linked action's writing task is completed. A draft in review waits for a person. | **yes** |
 
 ### Site audit
 
