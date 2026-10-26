@@ -265,6 +265,23 @@ describe('guardPeople: what the review found', () => {
     expect(fix('It was explained by Marco Rossi.')).toBe(`It was explained by ${NAME}.`);
   });
 
+  it('reads a long run of spaces quickly, after a quote mark too (review, #1544)', () => {
+    // A character past Latin-1 (’, “): V8 skips no position then.
+    const texts = (run) => [
+      `Ürün’${run}sarah, our head of growth.`,
+      `“Pour slowly”${run}says it.`,
+      `"Pour slowly"${run}it says.`,
+    ];
+    texts(' ').forEach((text) => guardPeople(text, people));
+    for (const space of [' ', '\u00a0', '\n']) {
+      for (const text of texts(space.repeat(30_000))) {
+        const started = performance.now();
+        guardPeople(text, people);
+        expect(performance.now() - started).toBeLessThan(150);
+      }
+    }
+  });
+
   it('reads long text quickly, whatever its words', () => {
     const word = `A${'a'.repeat(400)}`;
     const long = `${word} ${word} ${word} said. `.repeat(10);

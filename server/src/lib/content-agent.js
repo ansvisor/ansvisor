@@ -377,9 +377,10 @@ const ATTRIBUTIONS = [
   // US states that", "Most US states that", "the 48 contiguous US states
   // that"), or one read from the middle of a name ("New England states
   // that"); small words between only after a number or "all", so "In some
-  // cases Gartner states that" is read.
+  // cases Gartner states that" is read. A capital first, as below: a
+  // lookbehind ending in a run of spaces isn't tried at each of them.
   new RegExp(
-    String.raw`(?<!(?:\b(?:[Aa]ll|\d{1,3})(?:\s+\p{Ll}+){0,2}|\b(?:[Mm]ost|[Mm]any|[Ss]ome|[Ss]everal|[Bb]oth|[Ee]very)|\p{Lu}[\p{L}\p{N}&.'’-]*)\s+)(?!(?:All|Most|Many|Some|Several|Both|Every)\b)${SOURCE_NAME}\s+(?:claims|claimed|states|stated)\s+that\b`,
+    String.raw`(?=\p{Lu})(?<!(?:\b(?:[Aa]ll|\d{1,3})(?:\s+\p{Ll}+){0,2}|\b(?:[Mm]ost|[Mm]any|[Ss]ome|[Ss]everal|[Bb]oth|[Ee]very)|\p{Lu}[\p{L}\p{N}&.'’-]*)\s+)(?!(?:All|Most|Many|Some|Several|Both|Every)\b)${SOURCE_NAME}\s+(?:claims|claimed|states|stated)\s+that\b`,
     'gu',
   ),
   new RegExp(
@@ -398,9 +399,10 @@ const ATTRIBUTIONS = [
   // "Gartner zufolge"; never a noun German capitalises: after an article
   // ("Dem Bericht zufolge", "Einer Studie zufolge") or a plural ("Berichten",
   // "Herstellerangaben", "Insidern zufolge"), the cost a name like Nielsen
-  // pays.
+  // pays. A capital first: the lookbehind ends in a run of spaces, and tried
+  // at each of a long run's, it would read it in time growing with its square.
   new RegExp(
-    String.raw`(?<!\b${DE_DET}\s+)(?!${DE_DET}\b|Hersteller)${SOURCE_NAME}(?<!\p{Ll}(?:en|ern))\s+zufolge\b`,
+    String.raw`(?=\p{Lu})(?<!\b${DE_DET}\s+)(?!${DE_DET}\b|Hersteller)${SOURCE_NAME}(?<!\p{Ll}(?:en|ern))\s+zufolge\b`,
     'gu',
   ),
   // "As Zapier notes, …", "As Zapier puts it, …": the verb then a comma or
@@ -409,9 +411,11 @@ const ATTRIBUTIONS = [
   // "a survey from Statista finds": as a claim's source, never a thing to get
   // ("Download the report from Gartner."); "shows" only before "that" or a
   // figure, as a tool's report shows things too ("The Performance report
-  // from Google Search Console shows clicks").
+  // from Google Search Console shows clicks"). One short aside may come
+  // before the verb ("A 2025 report by Gartner, published in May, found…"),
+  // bounded so the read stays linear.
   new RegExp(
-    String.raw`\b(?:[Rr]eport|[Ss]tudy|[Ss]urvey|[Pp]aper|[Pp]oll)\s+(?:by|from)\s+${LEAD}${SOURCE_NAME}(?=\s+(?:(?:shows?|showed)\s+(?:that\b|\p{N})|(?:finds|found|says|said|suggests?|suggested|reveals?|revealed|estimates?|estimated)\b))`,
+    String.raw`\b(?:[Rr]eport|[Ss]tudy|[Ss]urvey|[Pp]aper|[Pp]oll)\s+(?:by|from)\s+${LEAD}${SOURCE_NAME}(?=(?:\s*,[^,.!?;]{1,80},)?\s+(?:(?:shows?|showed)\s+(?:that\b|\p{N})|(?:finds|found|says|said|suggests?|suggested|reveals?|revealed|estimates?|estimated)\b))`,
     'gu',
   ),
   // "In a 2025 report by Gartner, …", "According to a survey from Statista,
@@ -419,9 +423,11 @@ const ATTRIBUTIONS = [
   // with small words between that aren't a product's or the reader's ("In
   // this report from Google Search Console, you can…", "In the Performance
   // report from…"), never a product's sentence ("Send a survey from
-  // Typeform, Jotform or Google Forms").
+  // Typeform, Jotform or Google Forms"). The noun is looked for first: a
+  // lookbehind ending in a run of spaces, tried at each of them, would read
+  // a long run in time growing with its square.
   new RegExp(
-    String.raw`(?<=(?:\b[Aa]ccording\s+to|\b[Pp]er|(?:^|[.!?]\s+)In)\s+(?:(?!(?:your|this|our|each|these|those|that|my|their)\b)[\p{Ll}\p{N}]+\s+){0,3})(?:[Rr]eport|[Ss]tudy|[Ss]urvey|[Pp]aper|[Pp]oll)\s+(?:by|from)\s+${LEAD}${SOURCE_NAME}(?=\s*,)`,
+    String.raw`(?=(?:[Rr]eport|[Ss]tudy|[Ss]urvey|[Pp]aper|[Pp]oll)\s)(?<=(?:\b[Aa]ccording\s+to|\b[Pp]er|(?:^|[.!?]\s+)In)\s+(?:(?!(?:your|this|our|each|these|those|that|my|their)\b)[\p{Ll}\p{N}]+\s+){0,3})(?:[Rr]eport|[Ss]tudy|[Ss]urvey|[Pp]aper|[Pp]oll)\s+(?:by|from)\s+${LEAD}${SOURCE_NAME}(?=\s*,)`,
     'gu',
   ),
   // "data from Statista shows that …" or a figure, never a tool's ("Data
@@ -443,7 +449,8 @@ const ATTRIBUTIONS = [
   // Without its ending ("Gartner raporuna", "TÜİK verilerine"): a name in
   // the sentence, or one shaped as a name (TÜİK, GA4, HubSpot), never a
   // sentence's first noun ("Ürün açıklamasına göre", "Sipariş verilerine").
-  new RegExp(String.raw`(?<=[^\s.!?:]\s+)${TR_NAME}\s+${TR_REPORT}`, 'gu'),
+  // A capital first, so the lookbehind isn't tried in a run of spaces.
+  new RegExp(String.raw`(?=\p{Lu})(?<=[^\s.!?:]\s+)${TR_NAME}\s+${TR_REPORT}`, 'gu'),
   new RegExp(String.raw`${TR_SHAPED}\s+${TR_REPORT}`, 'gu'),
   // "Gartner'a göre", never a comparison ("ChatGPT'ye göre daha hızlı");
   // "en" after it is the source's claim ("Gartner'a göre en hızlı büyüyen").

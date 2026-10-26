@@ -327,27 +327,31 @@ const NAME_CUES = [
     words: 2,
     role: true,
   },
-  // "Sarah, our head of growth", at a sentence's start: a single name.
+  // "Sarah, our head of growth", at a sentence's start: a single name. A
+  // capital first, so the lookbehind (ending in spaces) isn't tried in a
+  // run of them: tried at each, a long run reads in time growing with its square.
   {
     re: new RegExp(
-      String.raw`(?<=^|[.!?]\s+|[“"]\s*)(?<name>${WORD}),\s+(?:our|the|a|an|their|its)\s+(?:[\p{L}-]+\s+){0,3}${ROLE_ANY}(?!\p{L})`,
+      String.raw`(?=\p{Lu})(?<=^|[.!?]\s+|[“"]\s*)(?<name>${WORD}),\s+(?:our|the|a|an|their|its)\s+(?:[\p{L}-]+\s+){0,3}${ROLE_ANY}(?!\p{L})`,
       'gu',
     ),
     words: 1,
     role: true,
   },
   // Whoever says a quote, right next to it: "“…,” says Jane Doe", "„…“,
-  // sagt Anna Schmidt", "“…” diyor Ayşe Demir", "“…,” Jane Doe says".
+  // sagt Anna Schmidt", "“…” diyor Ayşe Demir", "“…,” Jane Doe says". The
+  // spaces read one way only (a mark between, or none), so a quote mark
+  // before a long run of them reads in time growing with the run, not its square.
   {
     re: new RegExp(
-      String.raw`${QUOTE_END}\s*[,.!?]?\s*${QUOTE_SAYS}(?!\p{L})\s+(?<name>${NAME})`,
+      String.raw`${QUOTE_END}\s*(?:[,.!?]\s*)?${QUOTE_SAYS}(?!\p{L})\s+(?<name>${NAME})`,
       'gu',
     ),
     words: 2,
   },
   {
     re: new RegExp(
-      String.raw`${QUOTE_END}\s*[,.!?]?\s*(?<name>${NAME})\s+${QUOTE_SAYS}(?!\p{L})`,
+      String.raw`${QUOTE_END}\s*(?:[,.!?]\s*)?(?<name>${NAME})\s+${QUOTE_SAYS}(?!\p{L})`,
       'gu',
     ),
     words: 2,

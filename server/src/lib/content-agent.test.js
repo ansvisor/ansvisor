@@ -608,6 +608,44 @@ describe('keepSuggestions', () => {
     expect(Date.now() - started).toBeLessThan(500);
   });
 
+  it('reads a long run of spaces quickly: no lookbehind is tried at each of them', () => {
+    // A character past Latin-1 (’, ı) in each: V8 skips no position then.
+    const reads = (run) => [
+      () => attributableSources(`<p>Ürün${run}açıklamasına göre</p>`, [], []),
+      () => placeholderAttributions(`In a’s${run}b report from Gartner, most do.`),
+      () => addsAttribution('', `x${run}Gartner raporuna göre en hızlı.`),
+      () => attributedNames(`Dem’${run}Bericht zufolge.`),
+      () => attributedNames(`Most’${run}US states that allow it.`),
+    ];
+    // Compiled once, apart from the timing.
+    reads(' ').forEach((read) => read());
+    for (const space of [' ', '\u00a0', '\n']) {
+      for (const read of reads(space.repeat(30_000))) {
+        const started = performance.now();
+        read();
+        expect(performance.now() - started).toBeLessThan(150);
+      }
+    }
+  });
+
+  it('reads a claim with a short aside after "a report by X" (review, #1544)', () => {
+    expect(
+      attributedNames('A 2025 report by Gartner, published in May, found that 40% of teams plan.'),
+    ).toEqual(['Gartner']);
+    expect(
+      attributedNames(
+        'A recent study from Stanford, which surveyed 500 teams, shows that most plan.',
+      ),
+    ).toEqual(['Stanford']);
+    // Still never a product's sentence, nor an aside past its bound.
+    expect(
+      attributedNames('The Performance report from Google Search Console shows clicks.'),
+    ).toEqual([]);
+    expect(
+      attributedNames(`A report by Gartner, ${'and so on '.repeat(10)}, found that most plan.`),
+    ).toEqual([]);
+  });
+
   it('reads a long run of initials quickly: each dot is read one way', () => {
     const initials = 'U.S.'.repeat(10_000);
     const started = Date.now();
