@@ -184,11 +184,14 @@ export function tableThatFits(tables: InputTable[], table: InputTable): InputTab
 }
 
 /** Which kinds of input the person gave, used or not. */
-export function inputsGiven(inputs: DraftInputs): {
+export interface InputsGiven {
   experience: boolean;
   data: boolean;
   quote: boolean;
-} {
+}
+
+/** Which kinds of input the person gave, used or not. */
+export function inputsGiven(inputs: DraftInputs): InputsGiven {
   return {
     experience: inputs.experience.trim().length > 0,
     data: inputs.data.length > 0 || inputs.ansvisorData.length > 0,

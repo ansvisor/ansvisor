@@ -4353,15 +4353,17 @@
             "quote": "Quote"
           },
           "have": "In Your input",
-          "add": "Add input"
+          "add": "Add input",
+          "addFor": "Add input: {what}"
         },
         "notes": {
           "title": "Writing notes",
           "names": "Names as written",
-          "brand": "Brand",
-          "products": "Products",
-          "competitors": "Competitors",
+          "brand": "Brand: {name}",
+          "products": "Products: {names}",
+          "competitors": "Competitors: {names}",
           "links": "Links",
+          "link": "<muted>{kind} · </muted>{anchor} <muted>→ {page} · {where}</muted>",
           "internal": "Internal",
           "outbound": "Outbound",
           "inSection": "in “{section}”",

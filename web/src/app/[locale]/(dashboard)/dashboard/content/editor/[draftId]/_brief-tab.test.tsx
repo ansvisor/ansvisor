@@ -5,7 +5,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import messages from '../../../../../../../../messages/en.json';
 import type { DraftBrief } from '@/lib/content/brief';
 import type { DraftMethod } from '@/lib/content/drafts';
-import { BriefTab, type AgentRewrite, type BriefState, type InputsGiven } from './_brief-tab';
+import type { InputsGiven } from '@/lib/content/draft-inputs';
+import { BriefTab, type AgentRewrite, type BriefState } from './_brief-tab';
 
 const saveDraftBrief = vi.fn();
 vi.mock('@/lib/actions/content-drafts', () => ({
@@ -494,7 +495,8 @@ describe('a brief of version 2 (the brief rules, 2026)', () => {
     expect(rows[0]!.textContent).toContain('Test');
     expect(rows[0]!.textContent).toContain('Add input');
     expect(rows[1]!.textContent).toContain('In Your input');
-    await act(async () => button('Add input').click());
+    // Each named by its proof, for a screen reader; the visible words in the name.
+    await act(async () => button('Add input: Shot times on each machine').click());
     expect(onAddInput).toHaveBeenCalledTimes(1);
   });
 
@@ -507,18 +509,22 @@ describe('a brief of version 2 (the brief rules, 2026)', () => {
   it('folds the writing notes until opened: names, links, freshness, fan-outs left out', async () => {
     await render({ status: 'ready', brief: planned });
     const notes = button('Writing notes');
+    const region = document.getElementById(notes.getAttribute('aria-controls')!)!;
     expect(notes.getAttribute('aria-expanded')).toBe('false');
-    expect(container.textContent).not.toContain('Barista Pro');
+    // In the page, hidden while folded, so aria-controls names it.
+    expect(region.hidden).toBe(true);
     await act(async () => notes.click());
     expect(notes.getAttribute('aria-expanded')).toBe('true');
-    const text = container.textContent ?? '';
+    expect(region.hidden).toBe(false);
+    const text = region.textContent ?? '';
     expect(text).toContain('Brand: Acme Coffee');
     expect(text).toContain('Products: Barista Pro');
     expect(text).toContain('Competitors: Acme Rival');
     expect(text).toContain('our grinder guide');
     expect(text).toContain('in “Care and cleaning”');
-    expect(text).toContain('brewing standards');
-    expect(text).toContain('anywhere');
+    expect(text).toContain('Internal · our grinder guide → /guides/grinders');
+    // An outbound link names its site.
+    expect(text).toContain('Outbound · brewing standards → sca.example/brew · anywhere');
     expect(text).toContain('Date: Each price, with its month');
     expect(text).toContain('Show an “Updated” date');
     expect(text).toContain('Put the year in the title');
@@ -583,5 +589,38 @@ describe('a brief of version 2 (the brief rules, 2026)', () => {
     const saved = saveDraftBrief.mock.calls[0][1] as DraftBrief;
     expect(saved).not.toHaveProperty('tldr');
     expect(saved.outline[0]).not.toHaveProperty('answer');
+  });
+
+  it('changes a proof’s kind, and offers no more than six', async () => {
+    saveDraftBrief.mockImplementation(async (_id, next: DraftBrief) => ({ ...next }));
+    await render({ status: 'ready', brief: planned });
+    await act(async () => button('Edit brief').click());
+    const click = async (el: Element | undefined) => {
+      await act(async () => {
+        el!.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
+        (el as HTMLElement).click();
+      });
+    };
+    await click(container.querySelector('[aria-label="Proof 2 kind"]')!);
+    const quote = [...document.querySelectorAll<HTMLElement>('[role="option"]')].find(
+      (o) => o.textContent === 'Quote',
+    )!;
+    // Base UI picks the highlighted option: the pointer moves onto it first.
+    await act(async () => {
+      quote.dispatchEvent(new MouseEvent('mousemove', { bubbles: true }));
+    });
+    await click(quote);
+    for (let i = 0; i < 4; i++) await act(async () => button('Add proof').click());
+    // Six: no more to add.
+    expect(container.querySelectorAll('input[aria-label^="Proof "]')).toHaveLength(6);
+    expect(
+      [...container.querySelectorAll('button')].some((b) => b.textContent === 'Add proof'),
+    ).toBe(false);
+    await act(async () => button('Save brief').click());
+    const saved = saveDraftBrief.mock.calls[0][1] as DraftBrief;
+    expect(saved.proof).toEqual([
+      { kind: 'test', what: 'Shot times on each machine' },
+      { kind: 'quote', what: 'Returns by model' },
+    ]);
   });
 });

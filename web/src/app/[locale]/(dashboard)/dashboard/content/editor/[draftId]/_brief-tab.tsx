@@ -16,6 +16,7 @@ import {
 import { Textarea } from '@/components/ui/textarea';
 import { LoadingDots } from '@/components/ui/loading-dots';
 import { saveDraftBrief } from '@/lib/actions/content-drafts';
+import type { InputsGiven } from '@/lib/content/draft-inputs';
 import {
   BRIEF_V2_LIMITS,
   MAX_BRIEF_SECTIONS,
@@ -50,13 +51,6 @@ export type BriefState =
   | { status: 'loading' }
   | { status: 'failed' }
   | { status: 'ready'; brief: DraftBrief | null };
-
-/** Which kinds of input Brief › Your input has (draft-inputs.ts inputsGiven). */
-export interface InputsGiven {
-  experience: boolean;
-  data: boolean;
-  quote: boolean;
-}
 
 /** The input a kind of proof is given as: a case or a test is the person's experience. */
 const PROOF_INPUT: Record<ProofKind, keyof InputsGiven> = {
@@ -117,7 +111,7 @@ export function BriefTab({
   dataLine?: React.ReactNode;
   /** Why Run Agent waits (another agent run from the page), or null. */
   blocked?: string | null;
-  /** What Your input has, once read: proof it has is marked. */
+  /** What Your input has, once read (draft-inputs.ts inputsGiven): proof it has is marked. */
   given?: InputsGiven | null;
   /** Opens Brief › Your input, for a proof to gather. */
   onAddInput?: () => void;
@@ -288,8 +282,8 @@ export function BriefTab({
                 {(section.facts ?? []).length > 0 && (
                   <ul className="mt-1.5 space-y-1 text-[11px]">
                     {(section.facts ?? []).map((fact, j) => (
-                      <li key={j}>
-                        <span>
+                      <li key={j} className="min-w-0">
+                        <span className="break-words">
                           {t('fact', {
                             kind: t(`factSources.${fact.sourceType}`),
                             claim: fact.claim,
@@ -297,7 +291,7 @@ export function BriefTab({
                         </span>
                         <span
                           className="block truncate text-muted-foreground"
-                          title={fact.source?.ref}
+                          title={fact.source?.label}
                         >
                           {fact.source
                             ? t('factFrom', { source: fact.source.label })
@@ -436,7 +430,7 @@ function ProofList({
               <span className="shrink-0 rounded-md bg-muted px-1.5 text-[10.5px]">
                 {t(`kinds.${item.kind}`)}
               </span>
-              <span className="min-w-0 flex-1">{item.what}</span>
+              <span className="min-w-0 flex-1 break-words">{item.what}</span>
               {have ? (
                 <span className="inline-flex shrink-0 items-center gap-1 text-[11px] text-emerald-700 dark:text-emerald-400">
                   <Check className="h-3 w-3" aria-hidden />
@@ -448,6 +442,8 @@ function ProofList({
                   <button
                     type="button"
                     className="shrink-0 text-[11px] font-medium underline"
+                    // Each row's own name: "Add input" alone says nothing out of context.
+                    aria-label={t('addFor', { what: item.what })}
                     onClick={onAddInput}
                   >
                     {t('add')}
@@ -481,6 +477,9 @@ function WritingNotes({ brief }: { brief: DraftBrief }) {
   const hasNames =
     !!names && (!!names.brand || names.products.length + names.competitors.length > 0);
   if (!hasNames && !links.length && !fresh && !leftOut.length) return null;
+  const muted = (chunks: React.ReactNode) => (
+    <span className="text-muted-foreground">{chunks}</span>
+  );
   return (
     <section className="overflow-hidden rounded-lg border">
       <h4 className="text-xs font-medium">
@@ -498,77 +497,80 @@ function WritingNotes({ brief }: { brief: DraftBrief }) {
           />
         </button>
       </h4>
-      {open && (
-        <dl id={id} className="space-y-2 border-t px-3 py-2 text-xs">
-          {hasNames && names && (
-            <div>
-              <dt className="text-muted-foreground">{t('names')}</dt>
-              <dd className="space-y-0.5">
-                {names.brand && (
-                  <p>
-                    {t('brand')}: {names.brand}
-                  </p>
-                )}
-                {names.products.length > 0 && (
-                  <p>
-                    {t('products')}: {names.products.join(', ')}
-                  </p>
-                )}
-                {names.competitors.length > 0 && (
-                  <p>
-                    {t('competitors')}: {names.competitors.join(', ')}
-                  </p>
-                )}
-              </dd>
-            </div>
-          )}
-          {links.length > 0 && (
-            <div>
-              <dt className="text-muted-foreground">{t('links')}</dt>
-              <dd>
-                <ul className="space-y-0.5">
-                  {links.map((link) => (
-                    <li key={`${link.kind}:${link.url}`} className="min-w-0">
-                      <span className="text-muted-foreground">{t(link.kind)} · </span>
-                      {link.anchor}{' '}
-                      <span className="break-all text-muted-foreground" title={link.url}>
-                        → {pagePath(link.url)}
-                      </span>{' '}
-                      <span className="text-muted-foreground">
-                        · {link.section ? t('inSection', { section: link.section }) : t('anywhere')}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              </dd>
-            </div>
-          )}
-          {fresh && (
-            <div>
-              <dt className="text-muted-foreground">{t('freshness')}</dt>
-              <dd className="space-y-0.5">
-                {fresh.datedPoint && <p>{t('datedPoint', { point: fresh.datedPoint })}</p>}
-                {fresh.updatedLine && <p>{t('updatedLine')}</p>}
-                {fresh.yearInTitle && <p>{t('yearInTitle')}</p>}
-              </dd>
-            </div>
-          )}
-          {leftOut.length > 0 && (
-            <div>
-              <dt className="text-muted-foreground">{t('leftOut')}</dt>
-              <dd>
-                <ul className="list-disc pl-4">
-                  {leftOut.map((query) => (
-                    <li key={query}>{query}</li>
-                  ))}
-                </ul>
-              </dd>
-            </div>
-          )}
-        </dl>
-      )}
+      {/* Kept in the page, hidden while folded, so aria-controls names it. */}
+      <dl id={id} hidden={!open} className="space-y-2 border-t px-3 py-2 text-xs">
+        {hasNames && names && (
+          <div>
+            <dt className="text-muted-foreground">{t('names')}</dt>
+            <dd className="space-y-0.5 break-words">
+              {names.brand && <p>{t('brand', { name: names.brand })}</p>}
+              {names.products.length > 0 && (
+                <p>{t('products', { names: names.products.join(', ') })}</p>
+              )}
+              {names.competitors.length > 0 && (
+                <p>{t('competitors', { names: names.competitors.join(', ') })}</p>
+              )}
+            </dd>
+          </div>
+        )}
+        {links.length > 0 && (
+          <div>
+            <dt className="text-muted-foreground">{t('links')}</dt>
+            <dd>
+              <ul className="space-y-0.5">
+                {links.map((link, i) => (
+                  <li key={i} className="min-w-0 break-words" title={link.url}>
+                    {t.rich('link', {
+                      kind: t(link.kind),
+                      anchor: link.anchor,
+                      // An outbound link names its site; the brand's own, its page.
+                      page: link.kind === 'outbound' ? sitePage(link.url) : pagePath(link.url),
+                      where: link.section
+                        ? t('inSection', { section: link.section })
+                        : t('anywhere'),
+                      muted,
+                    })}
+                  </li>
+                ))}
+              </ul>
+            </dd>
+          </div>
+        )}
+        {fresh && (
+          <div>
+            <dt className="text-muted-foreground">{t('freshness')}</dt>
+            <dd className="space-y-0.5 break-words">
+              {fresh.datedPoint && <p>{t('datedPoint', { point: fresh.datedPoint })}</p>}
+              {fresh.updatedLine && <p>{t('updatedLine')}</p>}
+              {fresh.yearInTitle && <p>{t('yearInTitle')}</p>}
+            </dd>
+          </div>
+        )}
+        {leftOut.length > 0 && (
+          <div>
+            <dt className="text-muted-foreground">{t('leftOut')}</dt>
+            <dd>
+              <ul className="list-disc pl-4 break-words">
+                {leftOut.map((query, i) => (
+                  <li key={i}>{query}</li>
+                ))}
+              </ul>
+            </dd>
+          </div>
+        )}
+      </dl>
     </section>
   );
+}
+
+/** A page on another site, as a writer tells it apart: its host and path. */
+function sitePage(url: string): string {
+  try {
+    const parsed = new URL(url);
+    return `${parsed.hostname.replace(/^www\./, '')}${parsed.pathname.replace(/\/$/, '')}`;
+  } catch {
+    return url;
+  }
 }
 
 /** What Edit brief starts from when the draft has no brief: H2s added by hand. */
@@ -602,7 +604,8 @@ function BriefEditor({
   );
   const [keywords, setKeywords] = useState(brief.keywords.join(', '));
   // Version 2's plan, edited as the rest; a brief before it gets none added.
-  const v2 = brief.version === 2;
+  // Read once, when Edit opens: a rebuild landing meanwhile doesn't change the form.
+  const [v2] = useState(brief.version === 2);
   const [tldr, setTldr] = useState(brief.tldr ?? '');
   const [angle, setAngle] = useState(brief.angle ?? '');
   const [proof, setProof] = useState(brief.proof ?? []);
