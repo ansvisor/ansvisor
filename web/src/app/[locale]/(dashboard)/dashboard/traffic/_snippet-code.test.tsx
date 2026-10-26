@@ -54,4 +54,17 @@ describe('SnippetDialog', () => {
     await act(async () => copy.click());
     expect(writeText).toHaveBeenCalledWith(tag);
   });
+
+  it('shows the tag with conversions for a brand that has them on (CE-017)', async () => {
+    await act(async () => {
+      root.render(
+        <NextIntlClientProvider locale="en" messages={messages}>
+          <SnippetDialog trackingCode="t_abc123" conversions="wait" open onOpenChange={() => {}} />
+        </NextIntlClientProvider>,
+      );
+    });
+    expect(document.body.querySelector('pre')!.textContent).toBe(
+      '<script src="https://api.example.com/t.js" data-t="t_abc123" data-c="1" data-consent="wait" defer></script>',
+    );
+  });
 });

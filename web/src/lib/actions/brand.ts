@@ -9,6 +9,7 @@ import { API_BASE_URL } from '@/config/api';
 import type { Brand, BrandDomain, Industry } from '@/types';
 import { MAX_PINNED_COMPETITORS } from '@/lib/insights-trend';
 import { isSiteType, type SiteType } from '@/lib/content/page-types';
+import { isConversionsConsent, type ConversionsConsent } from '@/lib/conversion-tracking';
 
 function mapDomainRow(d: Record<string, unknown>): BrandDomain {
   return {
@@ -35,6 +36,8 @@ function mapBrandRow(brand: Record<string, unknown>, domains: Record<string, unk
     trackingCode: (brand.tracking_code as string | null) ?? undefined,
     shoppingModeEnabled: !!brand.shopping_mode_enabled,
     siteType: (brand.site_type as string | null) ?? undefined,
+    conversionsEnabled: brand.conversions_enabled === true,
+    conversionsConsent: brand.conversions_consent === 'always' ? 'always' : 'wait',
     isActive: brand.is_active === undefined ? true : !!brand.is_active,
     domains: domains.map(mapDomainRow),
     createdAt: brand.created_at as string,
@@ -166,6 +169,9 @@ interface UpdateBrandInput {
   language?: string;
   /** The kind of site, for the Content Editor's page types (CE-023). */
   siteType?: SiteType | null;
+  /** Conversions from AI visits (CE-017): on or off, and the snippet's consent mode. */
+  conversionsEnabled?: boolean;
+  conversionsConsent?: ConversionsConsent;
 }
 
 export async function updateBrand(id: string, updates: UpdateBrandInput): Promise<Brand> {
@@ -189,6 +195,13 @@ export async function updateBrand(id: string, updates: UpdateBrandInput): Promis
       throw new Error('Unknown site type');
     }
     payload.site_type = updates.siteType ?? null;
+  }
+  if (updates.conversionsEnabled !== undefined) {
+    payload.conversions_enabled = updates.conversionsEnabled === true;
+  }
+  if (updates.conversionsConsent !== undefined) {
+    if (!isConversionsConsent(updates.conversionsConsent)) throw new Error('Unknown consent mode');
+    payload.conversions_consent = updates.conversionsConsent;
   }
 
   const { data, error } = await supabase

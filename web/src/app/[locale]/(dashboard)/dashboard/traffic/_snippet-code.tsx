@@ -7,12 +7,14 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { getPublicApiBaseUrl } from '@/config/api';
+import { trackingSnippetTag, type ConversionsConsent } from '@/lib/conversion-tracking';
 
-/** The tracking snippet tag for a brand, or null without a code or an API URL. */
-function snippetTag(trackingCode?: string): string | null {
-  const apiUrl = getPublicApiBaseUrl();
-  if (!trackingCode || !apiUrl) return null;
-  return `<script src="${apiUrl}/t.js" data-t="${trackingCode}" defer></script>`;
+/**
+ * The tracking snippet tag for a brand, with conversions when it has them on
+ * (CE-017), or null without a code or an API URL.
+ */
+function snippetTag(trackingCode?: string, conversions?: ConversionsConsent | null): string | null {
+  return trackingSnippetTag(getPublicApiBaseUrl(), trackingCode, conversions ?? null);
 }
 
 /**
@@ -65,9 +67,16 @@ function SnippetCode({ snippet }: { snippet: string }) {
  * visit in the last week (AT-001). Once it has, the code sits behind the
  * sources strip's Code button instead of staying at the top for good.
  */
-export function SnippetBanner({ trackingCode }: { trackingCode?: string }) {
+export function SnippetBanner({
+  trackingCode,
+  conversions,
+}: {
+  trackingCode?: string;
+  /** The brand's consent mode when it has conversions on, else null. */
+  conversions?: ConversionsConsent | null;
+}) {
   const t = useTranslations('traffic');
-  const snippet = snippetTag(trackingCode);
+  const snippet = snippetTag(trackingCode, conversions);
   if (!snippet) return null;
 
   return (
@@ -86,15 +95,18 @@ export function SnippetBanner({ trackingCode }: { trackingCode?: string }) {
 /** The snippet's code in a dialog, from the sources strip's Code or Install button. */
 export function SnippetDialog({
   trackingCode,
+  conversions,
   open,
   onOpenChange,
 }: {
   trackingCode?: string;
+  /** The brand's consent mode when it has conversions on, else null. */
+  conversions?: ConversionsConsent | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
   const t = useTranslations('traffic');
-  const snippet = snippetTag(trackingCode);
+  const snippet = snippetTag(trackingCode, conversions);
   if (!snippet) return null;
 
   return (

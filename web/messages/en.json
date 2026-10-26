@@ -7935,6 +7935,48 @@
       "deleteButton": "Delete Brand Permanently",
       "managersOnlyEdit": "Only admins and managers can change these settings.",
       "adminsOnlyDelete": "Only admins can delete a brand.",
+      "conversions": {
+        "title": "Conversions from AI visits",
+        "description": "Follow visitors who came from an AI assistant to a signup, a demo form or an order, so the Content Editor shows what each page earns.",
+        "label": "Track conversions from AI visits",
+        "help": "Off, the snippet keeps nothing in the browser. On, it keeps a random id for AI visitors only, never a name or an email.",
+        "managersOnly": "Only admins and managers can change this.",
+        "on": "Conversions are on. Use the tag below on your site.",
+        "off": "Conversions are off. The tag without them is enough again.",
+        "saveFailed": "Couldn't save it. Try again.",
+        "copy": "Copy",
+        "copied": "Copied",
+        "noTag": "The server URL isn't set, so there's no tag to show yet.",
+        "consent": {
+          "label": "Consent",
+          "wait": "Wait for the visitor's consent (recommended)",
+          "always": "Don't wait: our own banner covers it",
+          "waitHint": "Nothing is kept or sent until your site says the visitor agreed.",
+          "alwaysHint": "Use this only if your cookie banner or privacy policy already covers analytics storage."
+        },
+        "steps": {
+          "tag": "Use this tag",
+          "tagHelp": "It replaces the tag you have, before the closing {tag} tag of every page.",
+          "consent": "When the visitor agrees",
+          "consentHelp": "Call this from your cookie banner once the visitor agrees, and on every page after.",
+          "consentMode": "Google Consent Mode works on its own: the snippet follows {name}. A banner set up inside Google Tag Manager needs a tag that runs the line above once consent is given.",
+          "forms": "Forms",
+          "formsHelp": "A form with an email field counts as a signup. Add {goal} to a form to name its goal (demo, newsletter, booking), or {off} to leave it out. Logins don't count.",
+          "calls": "Other conversions",
+          "callsHelp": "Call these from your own code, on a thank-you page or after a purchase:",
+          "queueHelp": "For calls made before the tag loads (from Google Tag Manager, say), add this above it:",
+          "shopify": "Shopify store",
+          "shopifyHelp": "In Shopify admin, open Settings › Customer events › Add custom pixel and name it Ansvisor. Under Customer privacy, set Permission to Analytics and Data sale to \"Data collected does not qualify as data sale\". Paste this code, save, then connect it.",
+          "showPixel": "Show the Shopify pixel"
+        },
+        "limits": {
+          "title": "What it can't see",
+          "consent": "Visitors who refuse cookies, in the EU for example.",
+          "direct": "AI visits that arrive without a referrer: they count as Direct.",
+          "estimate": "Google's AI Overviews and AI Mode, which stay an estimate.",
+          "personal": "No personal data is stored with a conversion."
+        }
+      },
       "shopping": {
         "title": "Shopping mode",
         "description": "Turn this on if this brand is in e-commerce. We’ll add ChatGPT Shopping to every prompt under this brand and show Product Visibility in the menu.",

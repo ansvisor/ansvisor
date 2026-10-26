@@ -414,6 +414,8 @@ export default function TrafficPage() {
 
 function TrafficPageContent({ brand }: { brand: Brand }) {
   const t = useTranslations('traffic');
+  // The tag follows AI visitors to conversions once the brand turned them on (CE-017).
+  const conversions = brand.conversionsEnabled ? (brand.conversionsConsent ?? 'wait') : null;
   const tCommon = useTranslations('common');
   const tVisits = useTranslations('traffic.visits');
   const tTrend = useTranslations('traffic.trend');
@@ -743,10 +745,11 @@ function TrafficPageContent({ brand }: { brand: Brand }) {
           )}
           {/* The code stays open only while the snippet sends nothing (F3). */}
           {(sourcesFailed || (sources && !snippetDetected(sources.snippetLastVisitAt))) && (
-            <SnippetBanner trackingCode={brand.trackingCode} />
+            <SnippetBanner trackingCode={brand.trackingCode} conversions={conversions} />
           )}
           <SnippetDialog
             trackingCode={brand.trackingCode}
+            conversions={conversions}
             open={codeOpen}
             onOpenChange={setCodeOpen}
           />
