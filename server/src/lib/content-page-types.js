@@ -38,6 +38,42 @@ export function pageTypeFormat(pageType) {
   return Object.hasOwn(PAGE_TYPE_FORMATS, pageType) ? PAGE_TYPE_FORMATS[pageType] : pageType;
 }
 
+/**
+ * What a page type's sections lean to (the brief rules, 2026: format hints),
+ * for the brief's v2 prompt (content-brief.js, CONTENT_BRIEF_RULES). A type
+ * not here leans to paragraphs.
+ */
+export const PAGE_TYPE_SECTION_FORMATS = {
+  comparison: 'a table comparing the options, with a verdict',
+  alternatives: 'a table comparing the options',
+  pricing: 'a table of the plans',
+  guide: 'numbered steps',
+  itinerary: 'a day-by-day list',
+  best_of: 'a ranked list, with the reason for each',
+  buying_guide: 'a list of the criteria, and a table of the picks',
+  sizing_guide: 'a size chart table',
+  docs_faq: 'questions answered directly, as an FAQ',
+  help_faq: 'questions answered directly, as an FAQ',
+  product_page: 'a specs table',
+  category_page: 'a list of the range',
+  collection_page: 'a list of the picks',
+  definition: 'the term defined in its first sentence, then paragraphs',
+};
+
+/**
+ * The page types whose picks, prices or terms date (brief rules 2026,
+ * freshness): each shows an "Updated" line; a ranked or compared one has the
+ * year in its title too ("Best espresso machines in 2026").
+ */
+export const PAGE_TYPE_FRESHNESS = {
+  best_of: { updatedLine: true, yearInTitle: true },
+  buying_guide: { updatedLine: true, yearInTitle: true },
+  alternatives: { updatedLine: true, yearInTitle: true },
+  comparison: { updatedLine: true, yearInTitle: true },
+  pricing: { updatedLine: true, yearInTitle: false },
+  policy: { updatedLine: true, yearInTitle: false },
+};
+
 /** Kinds of site (brands.site_type, 00205), as web/src/lib/content/page-types.ts has them. */
 export const SITE_TYPES = ['b2b', 'ecommerce', 'b2c'];
 

@@ -238,6 +238,10 @@ describe('no number without a source', () => {
     expect(stripSourceIds('Trackers (S2) cover AI [S1, S3]. Amazon S3 stays.')).toBe(
       'Trackers cover AI. Amazon S3 stays.',
     );
+    // Only the numbers given: a name with one stays.
+    expect(stripSourceIds('Grinders (S1) for the Galaxy (S23) [S1, S9]', 2)).toBe(
+      'Grinders for the Galaxy (S23) [S1, S9]',
+    );
   });
 
   it('reads no figure in words with digits, and matches a claim to its unit', () => {
