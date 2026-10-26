@@ -816,6 +816,25 @@ export function openRulesForAgent<T extends { rule: ActiveRule; status: RuleStat
 export const NO_HELD: ReadonlySet<string> = new Set();
 
 /**
+ * A page past its Length when a Fix run doesn't send the Length rule (held
+ * for the person, or not picked; a hand-off sends none: editor test
+ * 2026-10-26): its characters and the most it may have, so what the agent
+ * adds for the other rules stays short. Undefined with Length off, within
+ * it, or sent.
+ */
+export function overLengthFor<T extends { rule: ActiveRule; status: RuleStatus }>(
+  rules: T[],
+  sent: readonly { rule: ActiveRule }[],
+): { count: number; max: number } | undefined {
+  const length = rules.find(({ rule }) => rule.key === 'length' && rule.on);
+  if (!length || sent.some(({ rule }) => rule.key === 'length')) return undefined;
+  const { status } = length;
+  return status.state === 'bad' && 'code' in status && status.code === 'long'
+    ? { count: status.count, max: status.max }
+    : undefined;
+}
+
+/**
  * What to say when only held rules are left for the agent: the quoted
  * passages' (a sentence in one), else the Length's, out of a rewrite's reach.
  */

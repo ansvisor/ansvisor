@@ -125,6 +125,17 @@ export const fixRulesInput = z.object({
   locked: z.array(z.string().max(5000)).max(500).default([]),
   /** The sources the Sources tab keeps (v1.1 CE-033); none from an older editor. */
   sources: rebuildSources.optional(),
+  /**
+   * The page past its Length when Length isn't among the rules (held for the
+   * person, or not picked: editor test 2026-10-26): its characters and the
+   * most it may have, so what the agent adds for the other rules stays short.
+   */
+  overLength: z
+    .object({
+      count: z.number().int().min(0).max(10_000_000),
+      max: z.number().int().min(1).max(10_000_000),
+    })
+    .optional(),
 });
 
 export const suggestionsSchema = z.object({
@@ -946,6 +957,17 @@ export function dropsPlaceholder(passage, before, after, tag = 'p') {
 const KEEP_PLACEHOLDERS =
   "Leave every [placeholder] exactly as it is: the person fills it; don't change or remove one.";
 
+/**
+ * What the model is told of a page already over its Length that it isn't
+ * asked to shorten: fixing the other rules, it adds no more than they need
+ * (editor test 2026-10-26: fan-out sections, FAQ answers and H2 answers took a
+ * page 26% over its Length further over).
+ */
+export function overLengthLine(over) {
+  if (!over || over.count <= over.max) return '';
+  return `The page is already ${over.count.toLocaleString('en-US')} characters, past the most its Length allows (${over.max.toLocaleString('en-US')}). The Length isn't among the rules here, so don't cut the page for it. Fix each rule with as few words as it needs: an answer in one or two sentences, no section, list, table or example a rule doesn't ask for, and a replace no longer than the words it replaces unless the rule needs words added (a keyword, a figure, a name).`;
+}
+
 /** What the model is told: the brand, the page's passages, and the rules to fix. */
 export function buildFixPrompt({
   brand,
@@ -965,6 +987,7 @@ export function buildFixPrompt({
   if (more) lines.push('(The page goes on; suggest changes only to the passages above.)');
   const rules = input.rules.map((r) => `- ${r.key}: ${r.name}${r.detail ? ` — ${r.detail}` : ''}`);
   const own = input.textRules.map((text) => `- ${text}`);
+  const over = overLengthLine(input.overLength);
   return `Brand: ${brand?.name || 'Unknown'}
 Industry: ${brand?.industry || 'Not specified'}
 ${siteTypeLine(brand)}Description: ${brand?.description || 'N/A'}
@@ -974,7 +997,7 @@ Page type: ${pageTypeFormat(draft.page_type)}
 
 Rules the page doesn't meet yet (key: rule — what it asks and how the page reads now):
 ${rules.join('\n')}
-${handoff ? `${KEEP_PLACEHOLDERS}\n` : ''}${own.length ? `\nThe writer's own rules, to follow in every change:\n${own.join('\n')}\n` : ''}${sources ? `\n${sources}\n` : ''}${linkTargets ? `\n${linkTargets}\n` : ''}
+${over ? `${over}\n` : ''}${handoff ? `${KEEP_PLACEHOLDERS}\n` : ''}${own.length ? `\nThe writer's own rules, to follow in every change:\n${own.join('\n')}\n` : ''}${sources ? `\n${sources}\n` : ''}${linkTargets ? `\n${linkTargets}\n` : ''}
 The page, passage by passage:
 ${lines.join('\n')}
 
