@@ -38,6 +38,8 @@ describe('eventUrl', () => {
     expect(eventUrl('https://acme.example/account/ANN%40EXAMPLE.COM')).toBe(
       `https://acme.example/account/${EMAIL_SEGMENT}`,
     );
+    // A handle isn't an email: the page keeps its key.
+    expect(eventUrl('https://acme.example/@acme/post')).toBe('https://acme.example/@acme/post');
     // The first visit's landing page is read the same way.
     expect(
       eventRow(

@@ -109,6 +109,9 @@ describe('ConversionsCard', () => {
       "ansvisor('conversion', { type: 'demo' });",
       expect.stringContaining("type: 'order'"),
     ]);
+    // The refusal under its own line, below the grant.
+    expect(container.textContent).toContain('When the visitor agrees');
+    expect(container.textContent).toContain('When the visitor refuses');
     // Each copy button says what it copies.
     expect(container.querySelector('button[aria-label="Copy the tag"]')).not.toBeNull();
     expect(container.textContent).toContain("What it can't see");

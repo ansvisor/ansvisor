@@ -74,6 +74,15 @@ create table if not exists public.ai_traffic_events (
   )
 );
 
+-- A database that ran this file before the keys were added gets them, and
+-- loses the brand-time index nothing reads.
+alter table public.ai_traffic_events
+  add column if not exists page_key text
+    generated always as (lower(public.normalize_page_path(url))) stored,
+  add column if not exists first_key text
+    generated always as (lower(public.normalize_page_path(first_url))) stored;
+drop index if exists public.ai_traffic_events_brand_time;
+
 -- An order counts once however often its visitor's browser sends it.
 create unique index if not exists ai_traffic_events_order
   on public.ai_traffic_events (brand_id, visitor_id, order_ref)
