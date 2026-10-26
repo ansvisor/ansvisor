@@ -5846,6 +5846,22 @@ describe('the side panel', () => {
         (b) => b.textContent === label,
       )!;
 
+    it('says when a change would break a rule the page meets now, on it and on the card', async () => {
+      getContentDraft.mockResolvedValue(traced);
+      // Its new words make the page's one sentence run past 150 characters.
+      getDraftSuggestions.mockResolvedValue([
+        { ...agentSuggestion, afterText: `look ${'very '.repeat(35)}closely at` },
+      ]);
+      await renderPage();
+      await act(async () => {});
+      expect(container.querySelector('.ProseMirror')!.textContent).toContain(
+        'Would break Max sentence length',
+      );
+      expect(
+        container.querySelector('[role="region"][aria-label="Agent suggestions"]')!.textContent,
+      ).toContain('would break Max sentence length');
+    });
+
     it('says the month’s AI usage is used up before anything else, and runs nothing', async () => {
       aiUsage.usage = usageAt(100);
       getContentDraft.mockResolvedValue(traced);

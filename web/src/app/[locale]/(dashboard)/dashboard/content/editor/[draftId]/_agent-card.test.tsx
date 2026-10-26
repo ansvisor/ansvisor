@@ -316,6 +316,34 @@ describe('AgentCard', () => {
     expect(container.textContent).not.toContain('All suggestions reviewed');
   });
 
+  it('reads the gain from the page with the changes in, and names a rule they would break', async () => {
+    await render([suggestion()], false, {
+      rules: { ...rules, after: { now: 9, met: 8, breaks: 'Internal links' } },
+    });
+    expect(container.textContent).toContain('Rules 9 → 8 of 14 · would break Internal links');
+    // Counted from the page as it is now, not a read a beat behind it.
+    await render([suggestion()], false, {
+      rules: { ...rules, met: 7, after: { now: 9, met: 10, breaks: null } },
+    });
+    expect(container.textContent).toContain('Rules 9 → 10 of 14');
+    // A whole page rewritten: its count beside its characters.
+    await render(
+      [
+        suggestion({
+          kind: 'page',
+          beforeHtml: '<h1>Old</h1><p>Long.</p>',
+          afterText: '<h1>New</h1><p>Short.</p>',
+          reason: 'answered each heading first',
+        }),
+      ],
+      false,
+      { rules: { ...rules, after: { now: 9, met: 8, breaks: 'FAQ' } } },
+    );
+    expect(container.textContent).toContain(
+      'answered each heading first · Rules 9 → 8 of 14 · would break FAQ',
+    );
+  });
+
   it('says it is working, with nothing to press', async () => {
     await render([], true);
     const card = container.querySelector('[role="region"]')!;

@@ -40,6 +40,13 @@ export interface CardRules {
   total: number;
   /** The keys of the rules on that the page doesn't meet now. */
   open: Set<string>;
+  /**
+   * What accepting the open result would do, checked on a copy of the page
+   * (editor test 2026-10-25): the rules met then, and those met now it would
+   * break, named. Without it, the gain is read from what each change says
+   * it fixes (rulesAfter).
+   */
+  after?: { now: number; met: number; breaks: string | null };
 }
 
 /**
@@ -299,7 +306,16 @@ export function AgentCard({
   const { open, accepted } = suggestionCounts(suggestions);
   const openOnes = suggestions.filter((s) => s.status === 'open');
   const action = suggestions.find((s) => s.actionId && s.actionNo !== null);
-  const after = rulesAfter(suggestions, rules);
+  // From the page as it is now when checked so: never a count a beat behind it.
+  const from = rules.after?.now ?? rules.met;
+  const after = rules.after?.met ?? rulesAfter(suggestions, rules);
+  // Rules met now that accepting it would break: said, never left to find after.
+  const breaks = rules.after?.breaks ? (
+    <span className="text-amber-700 dark:text-amber-400">
+      {' · '}
+      {t('breaks', { names: rules.after.breaks })}
+    </span>
+  ) : null;
   const stillOpen = Math.max(0, rules.total - rules.met);
   // Run Agent shows once nothing is left to decide; why it can't run is
   // written in the card, never only on hover (as the Rules card does, CE-028).
@@ -412,6 +428,22 @@ export function AgentCard({
             page.reason
           )}
           {pageLeft > 0 && ` · ${t('placeholders', { count: pageLeft })}`}
+          {rules.after && rules.after.met !== from && (
+            <>
+              {' · '}
+              <span
+                className={cn(
+                  'font-medium',
+                  rules.after.met > from
+                    ? 'text-emerald-700 dark:text-emerald-400'
+                    : 'text-amber-700 dark:text-amber-400',
+                )}
+              >
+                {t('gain', { met: from, after: rules.after.met, total: rules.total })}
+              </span>
+            </>
+          )}
+          {breaks}
           {builtFrom}
         </>
       ) : page.status === 'accepted' && stillOpen > 0 ? (
@@ -435,14 +467,23 @@ export function AgentCard({
         {sentence(openOnes[0]?.reason ?? '', locale)}
         {openOnes.length > 1 && ` · ${t('more', { count: openOnes.length - 1 })}`}
         {batchLeft > 0 && ` · ${t('placeholders', { count: batchLeft })}`}
-        {after > rules.met && (
+        {after > from && (
           <>
             {' · '}
             <span className="font-medium text-emerald-700 dark:text-emerald-400">
-              {t('gain', { met: rules.met, after, total: rules.total })}
+              {t('gain', { met: from, after, total: rules.total })}
             </span>
           </>
         )}
+        {after < from && (
+          <>
+            {' · '}
+            <span className="font-medium text-amber-700 dark:text-amber-400">
+              {t('gain', { met: from, after, total: rules.total })}
+            </span>
+          </>
+        )}
+        {breaks}
         {builtFrom}
         {action && (
           <>
