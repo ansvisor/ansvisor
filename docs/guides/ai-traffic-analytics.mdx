@@ -227,7 +227,7 @@ Conversions are off by default. A brand that doesn't turn them on keeps the tag 
     ```js
     ansvisor('consent', 'granted');
     ```
-    When the visitor says no, or takes consent back, call `ansvisor('consent', 'denied');`, with **Don't wait** too, and with **Don't wait** on every page while their answer is no (a visitor who comes back from an AI assistant is otherwise given a new id at once): it deletes the id kept in their browser, and nothing more is sent. The snippet takes an id kept earlier as consent given, so without this call a visitor who changes their mind is still followed. Google Consent Mode set with `gtag()` needs no call; a banner set up in Google Tag Manager does: see [Consent](#consent).
+    When the visitor says no, or takes consent back, call `ansvisor('consent', 'denied');` in both modes, and with **Don't wait** on every page after, while they say no (a visitor who comes back from an AI assistant is otherwise given a new id at once): it deletes the id kept in their browser, and nothing more is sent. The snippet takes an id kept earlier as consent given, so without this call a visitor who changes their mind is still followed. Google Consent Mode set with `gtag()` needs no call; a banner set up in Google Tag Manager does: see [Consent](#consent).
   </Step>
   <Step title="Count your conversions">
     Forms with an email field count on their own (see [Forms](#forms)). For anything else, such as a thank-you page or a purchase, call `ansvisor('conversion', …)` from your own code (see [Conversion calls](#conversion-calls)). On Shopify, add the [Shopify pixel](#shopify) for orders.
