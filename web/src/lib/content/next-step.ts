@@ -37,7 +37,9 @@ export type NextAction =
   | 'showTodos'
   | 'beforePublish'
   | 'markReady'
-  | 'export';
+  | 'export'
+  // CE-013: the address the page went live at.
+  | 'markPublished';
 
 /**
  * The most open rules "If you see…" names for Fix open rules alone: from
@@ -223,7 +225,8 @@ function steps(s: NextStepState): NextStep[] {
 /**
  * The step to take now (the first whose state calls for it and that wasn't
  * skipped at that state), the path, and the tips. A page marked ready or
- * published is ready to publish: Export.
+ * published is ready to publish: Export; marked ready, Mark published beside
+ * it, for its live address (CE-013).
  */
 export function nextStep(s: NextStepState): NextPath {
   const due = s.open ? steps(s) : [];
@@ -234,7 +237,12 @@ export function nextStep(s: NextStepState): NextPath {
         alternative: null,
         skippable: false,
       }
-    : { id: 'ready', primary: 'export', alternative: null, skippable: false };
+    : {
+        id: 'ready',
+        primary: 'export',
+        alternative: s.published ? null : 'markPublished',
+        skippable: false,
+      };
   const step = due.find((d) => !d.skippable || s.skipped[d.id] !== stepState(d.id, s)) ?? check;
 
   // The third step is the one the page needs: its Length, or its open rules
