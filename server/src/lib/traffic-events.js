@@ -10,6 +10,7 @@
  * future) is dropped, not stored as unattributed.
  */
 
+import { createHash } from 'node:crypto';
 import { z } from 'zod';
 import { classifyAiSource } from './ai-sources.js';
 
@@ -22,8 +23,20 @@ export const CONVERSION_ORIGINS = ['call', 'form', 'shopify'];
 /** How long after the first AI visit a journey is still credited to it (first touch). */
 export const ATTRIBUTION_DAYS = 30;
 
+const DAY_MS = 24 * 60 * 60 * 1000;
+
 /** A browser's clock may run a little ahead of ours. */
-const CLOCK_SKEW_MS = 24 * 60 * 60 * 1000;
+const CLOCK_SKEW_MS = DAY_MS;
+
+/**
+ * The most one visitor id stores (routes/traffic.js), by kind: pageviews in
+ * the attribution window, conversions in a day. Far above what a person
+ * does, so a journey's reads stay bounded whatever a sender does.
+ */
+export const VISITOR_LIMITS = {
+  page: { max: 300, windowMs: ATTRIBUTION_DAYS * DAY_MS },
+  conversion: { max: 10, windowMs: DAY_MS },
+};
 
 const visitorId = z.string().regex(/^[A-Za-z0-9_-]{16,64}$/);
 // Long ad and tracking tags are cut off with the query string (eventUrl).
@@ -48,16 +61,25 @@ const eventBody = z.object({
   ref: z.string().max(200).optional(),
 });
 
+/** What a path segment holding an email is stored as. */
+export const EMAIL_SEGMENT = '[email]';
+
 /**
  * A page's address as stored: its origin and path, no query string or
- * fragment (a thank-you page's ?email=… never gets in). Null when it isn't
- * an http(s) address.
+ * fragment (a thank-you page's ?email=… never gets in), and a path segment
+ * that holds an email, raw or encoded (/unsubscribe/ann%40example.com), as
+ * EMAIL_SEGMENT: the page still counts, the address stays out. Null when it
+ * isn't an http(s) address.
  */
 export function eventUrl(raw) {
   try {
     const url = new URL(raw);
     if (url.protocol !== 'http:' && url.protocol !== 'https:') return null;
-    return `${url.origin}${url.pathname}`.slice(0, 2048);
+    const path = url.pathname
+      .split('/')
+      .map((segment) => (/@|%40/i.test(segment) ? EMAIL_SEGMENT : segment))
+      .join('/');
+    return `${url.origin}${path}`.slice(0, 2048);
   } catch {
     return null;
   }
@@ -80,6 +102,16 @@ export function eventLabel(value) {
 export function orderRef(value) {
   const text = typeof value === 'string' ? value.trim() : '';
   return /^[A-Za-z0-9_#:/.-]{1,128}$/.test(text) ? text : null;
+}
+
+/**
+ * An order's id as stored: a hash of the brand and the shop's id. It is only
+ * ever compared (an order counts once, 00286's unique index), never read
+ * back, so the id itself is never kept. Null without a valid id.
+ */
+export function orderKey(brandId, value) {
+  const ref = orderRef(value);
+  return ref ? createHash('sha256').update(`${brandId}:${ref}`).digest('hex') : null;
 }
 
 /**
@@ -120,6 +152,6 @@ export function eventRow(brandId, body, now = Date.now()) {
     // A currency only with an amount, and only a three-letter code.
     currency: event.val !== undefined && /^[A-Z]{3}$/.test(currency) ? currency : null,
     units: event.q ?? null,
-    order_ref: orderRef(event.ref),
+    order_ref: orderKey(brandId, event.ref),
   };
 }
