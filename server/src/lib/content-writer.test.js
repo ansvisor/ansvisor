@@ -96,6 +96,7 @@ vi.mock('./content-agent.js', async (importOriginal) => ({
 const {
   WRITE_SYSTEM_PROMPT,
   buildWritePrompt,
+  headingCase,
   briefText,
   renderPage,
   rewriteSystemPrompt,
@@ -194,6 +195,34 @@ describe('renderPage', () => {
         '<h2>Step by step</h2><p>Rinse, bloom, pour.</p>' +
         '<h2>FAQ</h2><h3>How long?</h3><p>[time] minutes.</p>',
     );
+  });
+
+  it('starts each heading with a capital, as a fan-out’s words come lowercase', () => {
+    const html = renderPage({
+      ...page,
+      sections: [{ heading: 'latest news ChatGPT', paragraphs: ['News.'], bullets: [] }],
+      faqHeading: 'questions',
+      faq: [{ question: 'how long does it take?', answer: 'Four minutes.' }],
+    });
+    expect(html).toContain('<h2>Latest news ChatGPT</h2>');
+    expect(html).toContain('<h2>Questions</h2><h3>How long does it take?</h3>');
+  });
+});
+
+describe('headingCase', () => {
+  it('capitalizes a lowercase first word, in the page’s language', () => {
+    expect(headingCase('latest news ChatGPT', 'en')).toBe('Latest news ChatGPT');
+    expect(headingCase('istanbul’da kahve', 'tr')).toBe('İstanbul’da kahve');
+    expect(headingCase('  çay rehberi ', 'tr')).toBe('Çay rehberi');
+  });
+
+  it('keeps a name written lowercase on purpose, a number and a heading already capitalized', () => {
+    expect(headingCase('iPhone tips for writers', 'en')).toBe('iPhone tips for writers');
+    expect(headingCase('eBay sellers', 'en')).toBe('eBay sellers');
+    expect(headingCase('2026 guide', 'en')).toBe('2026 guide');
+    expect(headingCase('Best CRM tools', 'en')).toBe('Best CRM tools');
+    // A language the runtime can't read still gets a capital.
+    expect(headingCase('latest news', 'not a locale!')).toBe('Latest news');
   });
 });
 
