@@ -9,7 +9,6 @@ import {
 } from '../config/plans.js';
 import { anchoredPeriodStart, shiftMonthClamped } from './quota-period.js';
 import {
-  IMPROVE_BUDGET_SHARE,
   estimateGenerationsLeft,
   generationCostUsd,
   medianCost,
@@ -38,12 +37,13 @@ export class PlanLimitError extends Error {
  * Enterprise orgs can have per-customer limit overrides stored in
  * organizations.plan_overrides (jsonb) — mirrors web getOrgPlan().
  *
- * `contractMonthlyUsd` is the contract's monthly value, entered when the deal
- * is signed. It sets the Improve budget to 1% of the contract (never below
- * the plan default), unless `improveMonthlyBudgetUsd` is set explicitly,
- * which wins. The relevance
- * budget (VIS-011) follows the same rule at 0.1%, rounded down so it never
- * passes the share.
+ * The AI budget is the plan's $50 unless Ansvisor sets a customer's own in
+ * `improveMonthlyBudgetUsd` (2026-10-27: over $50, set per customer); the
+ * contract's value doesn't raise it. `contractMonthlyUsd` is the contract's
+ * monthly value, entered when the deal is signed. It sets the relevance
+ * budget (VIS-011) to 0.1% of the contract (never below the plan default),
+ * rounded down so it never passes the share, unless
+ * `relevanceMonthlyBudgetUsd` is set explicitly, which wins.
  */
 export function applyPlanOverrides(plan, org) {
   if (
@@ -55,12 +55,6 @@ export function applyPlanOverrides(plan, org) {
     const overrides = org.plan_overrides;
     const limits = { ...plan.limits, ...overrides };
     const usd = Number(overrides.contractMonthlyUsd);
-    if (overrides.improveMonthlyBudgetUsd === undefined && Number.isFinite(usd) && usd > 0) {
-      limits.improveMonthlyBudgetUsd = Math.max(
-        plan.limits.improveMonthlyBudgetUsd ?? 0,
-        Math.round(usd * IMPROVE_BUDGET_SHARE * 100) / 100,
-      );
-    }
     if (overrides.relevanceMonthlyBudgetUsd === undefined && Number.isFinite(usd) && usd > 0) {
       limits.relevanceMonthlyBudgetUsd = Math.max(
         plan.limits.relevanceMonthlyBudgetUsd ?? 0,
@@ -103,7 +97,7 @@ async function resolveOrgPlanByOrgId(orgId) {
  * The free trial's AI budget: while the subscription is trialing, the plan's
  * AI budget is TRIAL_AI_BUDGET_USD at most, and the plan's own comes once it
  * is paid; `trial` marks the plan so what reads it can say so. Enterprise
- * keeps its own: its trials are a deal's, with its budget or contract.
+ * keeps its own: its trials are a deal's, with its budget.
  */
 export function applyTrialAiBudget(plan, org) {
   if (org?.subscription_status !== 'trialing' || org.plan === 'enterprise') return plan;
@@ -346,7 +340,7 @@ async function improveSpendThisPeriod(orgId) {
 /**
  * Improve-tab budget (PROMPT-003): a monthly USD budget per organization
  * (plan.limits.improveMonthlyBudgetUsd: Starter $5, Growth $25, Enterprise
- * $50 or 1% of its contract, the free trial $1), charged with each
+ * $50 or a customer's own set by Ansvisor, the free trial $1), charged with each
  * generation's real token cost so the budget holds for any model. Users see
  * an estimate of generations left, not dollars. -1 is unlimited.
  */
