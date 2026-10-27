@@ -56,6 +56,7 @@ export function SendDialog({
   byline,
   onFillNow,
   onClose,
+  onSent,
 }: {
   draftId: string;
   brandId: string;
@@ -71,6 +72,8 @@ export function SendDialog({
   /** Goes to the first placeholder, to fill it. */
   onFillNow: () => void;
   onClose: () => void;
+  /** The page went: where, and how it stands (the editor's header says so). */
+  onSent?: (last: NonNullable<DraftCms['last']>) => void;
 }) {
   const t = useTranslations('contentEditor.editor.send');
   const tFailure = useTranslations('apiFailure');
@@ -180,6 +183,12 @@ export function SendDialog({
       return;
     }
     keepTarget(target);
+    onSent?.({
+      status: delivery?.status ?? 'sent',
+      target,
+      at: new Date().toISOString(),
+      error: null,
+    });
     if (target === 'webflow') {
       // What of the page Webflow's rich text couldn't keep: tables went as lists, images not yet.
       const changed = delivery?.changed;

@@ -189,7 +189,8 @@ vi.mock('mammoth', () => ({
 vi.mock('sonner', () => ({ toast }));
 const saveBlob = vi.hoisted(() => vi.fn());
 vi.mock('@/lib/download', () => ({ saveBlob }));
-const readDraftCms = vi.hoisted(() => vi.fn());
+// The header reads the page's last send as it opens: none, unless a test says.
+const readDraftCms = vi.hoisted(() => vi.fn(async () => null as unknown));
 const sendPagesToCms = vi.hoisted(() => vi.fn());
 vi.mock('@/lib/content/cms-send-client', () => ({ readDraftCms, sendPagesToCms }));
 // The brand's Webflow connection (#1331, phase 2): none here.
@@ -5826,10 +5827,33 @@ describe('the side panel', () => {
       );
     });
 
+    it('says in the header where the page went, once sent', async () => {
+      getContentDraft.mockResolvedValue(draft());
+      await renderPage();
+      expect(container.textContent).not.toContain('Sent to your CMS');
+      await act(async () => button('Send to CMS')!.click());
+      await act(async () => {});
+      await act(async () => inDialog('Send').click());
+      expect(container.textContent).toContain('Sent to your CMS');
+    });
+
+    it('says in the header, as the page opens, that it is in Webflow as a draft', async () => {
+      readDraftCms.mockResolvedValue({
+        fields: {},
+        publishedUrl: null,
+        last: { status: 'sent', target: 'webflow', at: '2026-10-27T09:00:00Z', error: null },
+      });
+      getContentDraft.mockResolvedValue(draft());
+      await renderPage();
+      expect(container.textContent).toContain('In Webflow · draft');
+    });
+
     it('opens Before you publish first while Quality is on', async () => {
       process.env.NEXT_PUBLIC_CONTENT_QUALITY_PHASE = '1';
       getContentDraft.mockResolvedValue(draft({ pageType: 'blog_post' }));
       await renderPage();
+      // The header's read, as the page opened: the dialog's own comes after.
+      readDraftCms.mockClear();
       await act(async () => button('Send to CMS')!.click());
       expect(dialog()!.textContent).toContain('Before you publish');
       expect(readDraftCms).not.toHaveBeenCalled();
@@ -5857,6 +5881,7 @@ describe('the side panel', () => {
     it('saves what is waiting before it sends, as Mark ready does', async () => {
       getContentDraft.mockResolvedValue(draft());
       await renderPage();
+      readDraftCms.mockClear();
       await editAsHtml('<h1>Pipeline forecasting</h1><p>Edited.</p>');
       expect(saveContentDraft).not.toHaveBeenCalled();
       await act(async () => button('Send to CMS')!.click());
@@ -5880,6 +5905,7 @@ describe('the side panel', () => {
       saveContentDraft.mockResolvedValue({ ok: false, reason: 'conflict' });
       getContentDraft.mockResolvedValue(draft());
       await renderPage();
+      readDraftCms.mockClear();
       await editAsHtml('<h1>Pipeline forecasting</h1><p>Edited.</p>');
       await act(async () => button('Send to CMS')!.click());
       await act(async () => {});

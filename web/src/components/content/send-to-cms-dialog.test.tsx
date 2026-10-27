@@ -99,7 +99,8 @@ afterEach(() => {
 
 describe('SendDialog', () => {
   it('fills the fields from the page and sends it without its H1', async () => {
-    await render({ byline: 'By Ada Lovelace' });
+    const onSent = vi.fn();
+    await render({ byline: 'By Ada Lovelace', onSent });
     expect(readDraftCms).toHaveBeenCalledWith('d1');
     expect(field('cms-slug').value).toBe('pour-over');
     expect(field('cms-meta-title').value).toBe('Pour-over');
@@ -126,6 +127,10 @@ describe('SendDialog', () => {
     );
     expect(toast.success).toHaveBeenCalledWith('Sent to your CMS');
     expect(onClose).toHaveBeenCalled();
+    // The editor's header says where it went.
+    expect(onSent).toHaveBeenCalledWith(
+      expect.objectContaining({ status: 'sent', target: 'webhook', error: null }),
+    );
   });
 
   it('starts from what the draft kept and says where the page went live', async () => {

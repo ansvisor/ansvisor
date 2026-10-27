@@ -33,6 +33,8 @@ import { DraftMethodBadge, DraftStatusBadge } from '@/components/content/draft-b
 import { PublishDialog } from '@/components/content/publish-dialog';
 import { readLiveUrl } from '@/lib/content/publish-client';
 import { SendDialog } from '@/components/content/send-to-cms-dialog';
+import { CmsSentChip } from '@/components/content/cms-sent-chip';
+import { readDraftCms, type DraftCms } from '@/lib/content/cms-send-client';
 import { updateBrand } from '@/lib/actions/brand';
 import {
   decideDraftSuggestions,
@@ -3097,6 +3099,19 @@ export function DraftEditor({
   // Quality is live.
   const { canManage } = useUserRole();
   const [sendOpen, setSendOpen] = useState<{ html: string } | null>(null);
+  // The page's last send to a CMS, for the header (#1331): read once, then as sent.
+  const [cmsLast, setCmsLast] = useState<DraftCms['last']>(null);
+  useEffect(() => {
+    let cancelled = false;
+    readDraftCms(draft.id)
+      .then((read) => {
+        if (!cancelled && read?.last) setCmsLast(read.last);
+      })
+      .catch((err) => console.error('Failed to read the page’s last send:', err));
+    return () => {
+      cancelled = true;
+    };
+  }, [draft.id]);
   const [preparing, setPreparing] = useState(false);
   // HTML edited in the HTML view and not applied isn't in the page to save.
   const htmlUnapplied = htmlSource !== null && htmlEdited;
@@ -3890,6 +3905,7 @@ export function DraftEditor({
           )}
           <DraftMethodBadge method={draft.method} />
           <DraftStatusBadge status={status} />
+          {cmsLast && <CmsSentChip last={cmsLast} />}
           <button
             type="button"
             onClick={() => openPanelTab('rules')}
@@ -4290,6 +4306,7 @@ export function DraftEditor({
             fillFirstPlaceholder();
           }}
           onClose={() => setSendOpen(null)}
+          onSent={setCmsLast}
         />
       )}
 
