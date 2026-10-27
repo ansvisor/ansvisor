@@ -40,6 +40,7 @@ export function fakeDb({ maxRows = Infinity } = {}) {
     if (table === 'catalog_categories') return `${row.brand_id}|${row.name}`;
     if (table === 'catalog_source_credentials') return row.source_id;
     if (table === 'catalog_category_pages') return `${row.brand_id}|${row.category}`;
+    if (table === 'content_shopping_checks') return row.draft_id;
     return `${row.brand_id}|${row.source}|${row.external_id}`;
   };
   // The unique keys' rows, by table, as the database's unique indexes find them.
@@ -67,6 +68,7 @@ export function fakeDb({ maxRows = Infinity } = {}) {
           if (kind === 'eq') return at === value;
           if (kind === 'neq') return at !== value;
           if (kind === 'is') return value === null ? at == null : at === value;
+          if (kind === 'not_is') return value === null ? at != null : at !== value;
           return value.includes(at);
         });
       if (state.op === 'select') {
@@ -131,6 +133,12 @@ export function fakeDb({ maxRows = Infinity } = {}) {
       },
       is: (column, value) => {
         state.filters.push(['is', column, value]);
+        return builder;
+      },
+      // Only `.not(column, 'is', value)`: a draft with a shopping path.
+      not: (column, operator, value) => {
+        if (operator !== 'is') throw new Error(`unexpected not.${operator}`);
+        state.filters.push(['not_is', column, value]);
         return builder;
       },
       single: () => {

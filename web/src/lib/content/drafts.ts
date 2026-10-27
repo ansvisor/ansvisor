@@ -6,6 +6,7 @@
 
 import type { SiteType } from './page-types';
 import type { DraftRules } from '@/lib/content/rules';
+import type { DraftShopping } from '@/lib/content/shopping-check';
 
 /** Draft → In review (an agent's draft waiting for a person) → Ready → Published. */
 export const DRAFT_STATUSES = ['draft', 'in_review', 'ready', 'published'] as const;
@@ -135,6 +136,8 @@ export interface ContentDraftListItem {
   updatedAt: string;
   /** When an admin or manager archived it (00233); null when it isn't archived. */
   archivedAt: string | null;
+  /** Its shopping path's links as the last catalog sync left them (00352); none when absent. */
+  shopping?: DraftShopping;
 }
 
 /**

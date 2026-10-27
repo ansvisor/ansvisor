@@ -1,0 +1,412 @@
+import { describe, expect, it, vi } from 'vitest';
+
+vi.mock('../config/supabase.js', () => ({ default: {} }));
+vi.mock('./logger.js', () => ({
+  logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+}));
+
+import { fakeDb } from './catalog/__fixtures__/fake-db.js';
+import { logger } from './logger.js';
+import { htmlBlockElement } from './shopping-blocks.js';
+import {
+  DRAFT_BATCH,
+  MAX_LIVE_PAGES,
+  checkShoppingLinks,
+  linkCheck,
+  livePage,
+  pageHrefs,
+  productStates,
+  queueShoppingCheck,
+} from './shopping-check.js';
+
+/** Whether a page's shopping links still sell (shopping path, part 7, 00352). */
+
+const BRAND = 'brand-1';
+const NOW = new Date('2026-10-27T09:00:00Z');
+
+const product = (id, extra = {}) => ({
+  id,
+  title: `Boot ${id}`,
+  url: `https://shop.example/products/${id}`,
+  price: 189,
+  salePrice: null,
+  currency: 'USD',
+  availability: 'in_stock',
+  image: null,
+  issues: [],
+  score: 1,
+  ...extra,
+});
+
+/** A path as a build leaves it (00351). */
+const path = (
+  products,
+  categories = [{ name: 'Boots', url: 'https://shop.example/c/boots', title: 'Boots' }],
+) => ({
+  version: 1,
+  builtAt: '2026-10-26T09:00:00.000Z',
+  pageType: 'buying_guide',
+  categories,
+  products,
+  leftOut: [],
+  locked: [],
+  removed: [],
+  added: [],
+});
+
+/** A catalog with each product's variants: [availability, external id]. */
+function catalog(fake, products) {
+  for (const [id, variants, removed = null] of products) {
+    fake.rows('catalog_products').push({ id, brand_id: BRAND, removed_at: removed });
+    for (const [availability, externalId] of variants) {
+      fake.rows('catalog_variants').push({
+        id: `v-${externalId}`,
+        product_id: id,
+        external_id: externalId,
+        availability,
+        removed_at: null,
+      });
+    }
+  }
+}
+
+const link = (id) =>
+  `<a href="https://shop.example/products/${id}?utm_source=guide">Boot ${id}</a>`;
+
+describe('pageHrefs', () => {
+  it("reads every link, the HTML blocks' too, and a live page's relative ones against it", () => {
+    const html = `<p>${link('p1')} <a href="/products/p2">two</a> <a href="mailto:a@b.c">mail</a></p>${htmlBlockElement(
+      '<div><a href="https://shop.example/products/p3">three</a></div>',
+    )}`;
+    expect(pageHrefs(html)).toEqual([
+      'https://shop.example/products/p1?utm_source=guide',
+      'mailto:a@b.c',
+      'https://shop.example/products/p3',
+    ]);
+    expect(pageHrefs(html, 'https://shop.example/blog/boots')).toContain(
+      'https://shop.example/products/p2',
+    );
+  });
+
+  it('reads no link from nothing, or from a block that is no HTML', () => {
+    expect(pageHrefs(null)).toEqual([]);
+    expect(pageHrefs('<div data-html-block="!!!"></div>')).toEqual([]);
+  });
+});
+
+describe('productStates', () => {
+  it('reads each product as sold out, refused, gone or fine, by its variants in stock', async () => {
+    const fake = fakeDb();
+    catalog(fake, [
+      [
+        'p-ok',
+        [
+          ['in stock', 'o1'],
+          ['out_of_stock', 'o2'],
+        ],
+      ],
+      ['p-limited', [['Limited-Availability', 'l1']]],
+      [
+        'p-sold',
+        [
+          ['out_of_stock', 's1'],
+          ['preorder', 's2'],
+        ],
+      ],
+      ['p-refused', [['in_stock', 'r1']]],
+      ['p-ads', [['in_stock', 'a1']]],
+      ['p-removed', [['in_stock', 'x1']], '2026-10-26T00:00:00Z'],
+    ]);
+    fake.rows('catalog_item_issues').push(
+      {
+        id: 'i1',
+        brand_id: BRAND,
+        external_id: 'r1',
+        severity: 'disapproved',
+        reporting_context: 'FREE_LISTINGS',
+      },
+      // A disapproval for ads leaves the product in the free listings.
+      {
+        id: 'i2',
+        brand_id: BRAND,
+        external_id: 'a1',
+        severity: 'disapproved',
+        reporting_context: 'SHOPPING_ADS',
+      },
+      // Another brand's issue for the same offer id isn't this one's.
+      {
+        id: 'i3',
+        brand_id: 'brand-2',
+        external_id: 'o1',
+        severity: 'disapproved',
+        reporting_context: '',
+      },
+    );
+    const states = await productStates(fake.db, BRAND, [
+      'p-ok',
+      'p-limited',
+      'p-sold',
+      'p-refused',
+      'p-ads',
+      'p-removed',
+      'p-unknown',
+    ]);
+    expect(Object.fromEntries(states)).toEqual({
+      'p-ok': 'ok',
+      'p-limited': 'ok',
+      'p-sold': 'sold_out',
+      'p-refused': 'refused',
+      'p-ads': 'ok',
+      'p-removed': 'gone',
+      'p-unknown': 'gone',
+    });
+  });
+
+  it("reads past PostgREST's 1000-row cap", async () => {
+    const fake = fakeDb({ maxRows: 1000 });
+    catalog(fake, [
+      [
+        'p1',
+        Array.from({ length: 1200 }, (_, i) => ['out_of_stock', `x${String(i).padStart(4, '0')}`]),
+      ],
+    ]);
+    // The one variant in stock sorts after the first 1000.
+    fake.rows('catalog_variants').push({
+      id: 'v-zzzz',
+      product_id: 'p1',
+      external_id: 'zzzz',
+      availability: 'in_stock',
+      removed_at: null,
+    });
+    expect((await productStates(fake.db, BRAND, ['p1'])).get('p1')).toBe('ok');
+  });
+});
+
+describe('linkCheck', () => {
+  it("counts the path's linked category pages and products, and the linked ones that don't sell", () => {
+    const states = new Map([
+      ['p1', 'ok'],
+      ['p2', 'sold_out'],
+      ['p3', 'refused'],
+    ]);
+    const check = linkCheck(
+      [
+        'https://www.shop.example/c/boots/',
+        'https://shop.example/products/p1',
+        'https://shop.example/products/p2?utm_campaign=x',
+        'https://shop.example/products/p2',
+      ],
+      path([product('p1'), product('p2'), product('p3'), product('p4')]),
+      states,
+    );
+    expect(check).toEqual({
+      categories: 1,
+      categoriesLinked: 1,
+      products: 4,
+      productsLinked: 2,
+      bad: [{ id: 'p2', title: 'Boot p2', state: 'sold_out' }],
+    });
+  });
+});
+
+describe('livePage', () => {
+  it("is a published page's CMS address, or an optimized page's own, and nothing before", () => {
+    const published = {
+      status: 'published',
+      method: 'create',
+      published_url: 'https://shop.example/blog/a',
+    };
+    expect(livePage(published)).toBe('https://shop.example/blog/a');
+    expect(livePage({ ...published, status: 'ready' })).toBeNull();
+    expect(
+      livePage({
+        status: 'published',
+        method: 'optimize',
+        published_url: null,
+        source_url: 'https://shop.example/b',
+      }),
+    ).toBe('https://shop.example/b');
+    expect(
+      livePage({
+        status: 'published',
+        method: 'create',
+        published_url: null,
+        source_url: 'https://x.example',
+      }),
+    ).toBeNull();
+  });
+});
+
+describe('checkShoppingLinks', () => {
+  function setup({ maxRows } = {}) {
+    const fake = fakeDb({ maxRows });
+    catalog(fake, [
+      ['p1', [['in_stock', 'a']]],
+      ['p2', [['out_of_stock', 'b']]],
+    ]);
+    return fake;
+  }
+  const draft = (id, extra = {}) => ({
+    id,
+    brand_id: BRAND,
+    status: 'draft',
+    method: 'create',
+    source_url: null,
+    published_url: null,
+    archived_at: null,
+    body_html: `<p><a href="https://shop.example/c/boots">Boots</a> ${link('p1')} ${link('p2')}</p>`,
+    shopping_path: path([product('p1'), product('p2')]),
+    ...extra,
+  });
+
+  it("keeps each draft's check, read from its live page when published, else from the draft", async () => {
+    const fake = setup();
+    fake
+      .rows('content_drafts')
+      .push(
+        draft('d1'),
+        draft('d2', { status: 'published', published_url: 'https://shop.example/blog/boots' }),
+        draft('d3', { shopping_path: null }),
+        draft('d4', { archived_at: '2026-10-20T00:00:00Z' }),
+        draft('d5', { brand_id: 'brand-2' }),
+      );
+    // The live page was fixed in the CMS: it links only p1.
+    const readPage = vi.fn().mockResolvedValue({
+      url: 'https://shop.example/blog/boots',
+      status: 200,
+      html: '<a href="/products/p1">one</a>',
+    });
+    const result = await checkShoppingLinks(BRAND, { db: fake.db, now: NOW, readPage });
+    expect(result).toEqual({ drafts: 2, live: 1, attention: 1, dropped: 0 });
+    expect(readPage).toHaveBeenCalledOnce();
+    expect(readPage.mock.calls[0][0]).toBe('https://shop.example/blog/boots');
+    const rows = Object.fromEntries(
+      fake.rows('content_shopping_checks').map((r) => [r.draft_id, r]),
+    );
+    expect(Object.keys(rows).sort()).toEqual(['d1', 'd2']);
+    expect(rows.d1).toMatchObject({
+      brand_id: BRAND,
+      read_from: 'draft',
+      page_url: null,
+      categories: 1,
+      categories_linked: 1,
+      products: 2,
+      products_linked: 2,
+      bad: [{ id: 'p2', title: 'Boot p2', state: 'sold_out' }],
+      checked_at: NOW.toISOString(),
+    });
+    expect(rows.d2).toMatchObject({
+      read_from: 'page',
+      page_url: 'https://shop.example/blog/boots',
+      categories_linked: 0,
+      products_linked: 1,
+      bad: [],
+    });
+  });
+
+  it("reads a live page it can't reach, or one that answers an error, from its draft", async () => {
+    const fake = setup();
+    fake
+      .rows('content_drafts')
+      .push(
+        draft('d1', { status: 'published', published_url: 'https://shop.example/a' }),
+        draft('d2', { status: 'published', published_url: 'https://shop.example/b' }),
+      );
+    const readPage = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('timeout'))
+      .mockResolvedValueOnce({ url: 'https://shop.example/b', status: 404, html: '' });
+    await checkShoppingLinks(BRAND, { db: fake.db, now: NOW, readPage });
+    expect(fake.rows('content_shopping_checks').map((r) => [r.read_from, r.bad.length])).toEqual([
+      ['draft', 1],
+      ['draft', 1],
+    ]);
+  });
+
+  it('reads at most its live pages a run; the rest from their drafts', async () => {
+    const fake = setup();
+    fake
+      .rows('content_drafts')
+      .push(
+        ...Array.from({ length: 3 }, (_, i) =>
+          draft(`d${i}`, { status: 'published', published_url: `https://shop.example/${i}` }),
+        ),
+      );
+    const readPage = vi.fn(async (url) => ({ url, status: 200, html: link('p1') }));
+    const result = await checkShoppingLinks(BRAND, {
+      db: fake.db,
+      now: NOW,
+      readPage,
+      livePages: 2,
+    });
+    expect(readPage).toHaveBeenCalledTimes(2);
+    expect(result.live).toBe(2);
+    expect(fake.rows('content_shopping_checks').map((r) => r.read_from)).toEqual([
+      'page',
+      'page',
+      'draft',
+    ]);
+    expect(MAX_LIVE_PAGES).toBeGreaterThan(2);
+  });
+
+  it('drops the rows of drafts that lost their path or were archived, and keeps the others', async () => {
+    const fake = setup();
+    fake.rows('content_drafts').push(draft('d1'), draft('d2'));
+    await checkShoppingLinks(BRAND, { db: fake.db, now: NOW });
+    expect(fake.rows('content_shopping_checks')).toHaveLength(2);
+    fake.rows('content_drafts').find((d) => d.id === 'd2').shopping_path = null;
+    fake.rows('content_shopping_checks').push({ draft_id: 'other', brand_id: 'brand-2' });
+    const result = await checkShoppingLinks(BRAND, { db: fake.db, now: NOW });
+    expect(result.dropped).toBe(1);
+    expect(
+      fake
+        .rows('content_shopping_checks')
+        .map((r) => r.draft_id)
+        .sort(),
+    ).toEqual(['d1', 'other']);
+  });
+
+  it('reads the drafts a batch at a time, every one of them', async () => {
+    const fake = setup({ maxRows: 1000 });
+    fake
+      .rows('content_drafts')
+      .push(
+        ...Array.from({ length: DRAFT_BATCH + 3 }, (_, i) =>
+          draft(`d${String(i).padStart(3, '0')}`),
+        ),
+      );
+    const result = await checkShoppingLinks(BRAND, { db: fake.db, now: NOW });
+    expect(result.drafts).toBe(DRAFT_BATCH + 3);
+    expect(fake.rows('content_shopping_checks')).toHaveLength(DRAFT_BATCH + 3);
+  });
+
+  it("reads a path it can't read as none, and logs it", async () => {
+    const fake = setup();
+    fake
+      .rows('content_drafts')
+      .push(draft('d1', { shopping_path: { version: 1, products: [null] } }));
+    const result = await checkShoppingLinks(BRAND, { db: fake.db, now: NOW });
+    expect(result.drafts).toBe(0);
+    expect(logger.warn).toHaveBeenCalled();
+  });
+});
+
+describe('queueShoppingCheck', () => {
+  it('checks the brands one at a time, a brand queued twice once, and logs a failure', async () => {
+    const fake = fakeDb();
+    const broken = {
+      from: () => {
+        throw new Error('down');
+      },
+    };
+    queueShoppingCheck('brand-a', { db: fake.db });
+    // Queued twice while brand-a is checked: checked once.
+    queueShoppingCheck('brand-b', { db: broken });
+    await queueShoppingCheck('brand-b', { db: broken });
+    expect(logger.error).toHaveBeenCalledWith(
+      { err: { name: 'Error', message: 'down' }, brandId: 'brand-b' },
+      '[shopping-check] check failed',
+    );
+    expect(logger.error).toHaveBeenCalledTimes(1);
+  });
+});

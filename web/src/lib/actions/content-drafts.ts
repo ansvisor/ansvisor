@@ -48,6 +48,7 @@ import {
   type PageRead,
 } from '@/lib/content/page-read';
 import { MAX_SOURCE_SITES, type AiSourceClass } from '@/lib/content/source-class';
+import { draftShopping } from '@/lib/content/shopping-check';
 import {
   NO_DRAFT_RULES,
   draftRulesFit,
@@ -165,7 +166,7 @@ export async function getContentDrafts(brandId: string): Promise<ContentLibrary>
     supabase
       .from('content_drafts')
       .select(
-        'id, title, page_type, method, status, author, created_by, agent_state, agent_state_at, created_at, updated_at, archived_at',
+        'id, title, page_type, method, status, author, created_by, agent_state, agent_state_at, created_at, updated_at, archived_at, shopping_built:shopping_path->>builtAt, content_shopping_checks(read_from, checked_at, categories, categories_linked, products, products_linked, bad)',
       )
       .eq('brand_id', brandId)
       .order('updated_at', { ascending: false })
@@ -197,6 +198,7 @@ export async function getContentDrafts(brandId: string): Promise<ContentLibrary>
       createdAt: row.created_at,
       updatedAt: row.updated_at,
       archivedAt: row.archived_at,
+      shopping: draftShopping(row.shopping_built, row.content_shopping_checks),
     }),
   );
   // Under the cap the rows are every draft; at it, each tab is counted on its own.

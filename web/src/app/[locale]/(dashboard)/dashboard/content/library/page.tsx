@@ -54,6 +54,11 @@ import {
   type LibraryTab,
 } from '@/lib/content/drafts';
 import { siteTypeOf } from '@/lib/content/page-types';
+import {
+  SHOPPING_FILTERS,
+  draftsByShopping,
+  type ShoppingFilter,
+} from '@/lib/content/shopping-check';
 import { formatNumber } from '@/lib/format';
 import { readUrlChoice, readUrlParam, writeUrlParams } from '@/lib/url-state';
 import { useBrandStore } from '@/stores/use-brand-store';
@@ -79,6 +84,8 @@ interface LibraryRead {
  * send it to the CMS (#1331), archive, restore and delete. The tab lives in
  * the URL (?tab=in_review), so a link can open "Library › In review";
  * ?new=1 opens New content (Content › Editor with no draft to go back to).
+ * An online shop's pages show their shopping path's links, and a filter
+ * lists the ones that need attention (?shopping=attention, 00352).
  */
 export default function ContentLibraryPage() {
   const t = useTranslations('contentEditor.library');
@@ -88,6 +95,8 @@ export default function ContentLibraryPage() {
   const [tab, setTab] = useState<LibraryTab>('all');
   // When the drafts listed (and exported) were created: ?created=30d.
   const [created, setCreated] = useState<CreatedRange>('all');
+  // Which shopping paths are listed, on an online shop: ?shopping=attention.
+  const [shoppingFilter, setShoppingFilter] = useState<ShoppingFilter>('all');
   const [read, setRead] = useState<LibraryRead | null>(null);
   const [attempt, setAttempt] = useState(0);
   const [starting, setStarting] = useState(false);
@@ -119,6 +128,7 @@ export default function ContentLibraryPage() {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- one read of the URL after mount
     setTab(readUrlChoice('tab', LIBRARY_TABS, 'all'));
     setCreated(readUrlChoice('created', CREATED_RANGES, 'all'));
+    setShoppingFilter(readUrlChoice('shopping', SHOPPING_FILTERS, 'all'));
     // Once: closed, it doesn't open again on a reload.
     if (readUrlParam('new') === '1') {
       setStarting(true);
@@ -290,6 +300,11 @@ export default function ContentLibraryPage() {
     clearPicked();
     writeUrlParams({ created: next }, { created: 'all' });
   };
+  const changeShopping = (next: ShoppingFilter) => {
+    setShoppingFilter(next);
+    clearPicked();
+    writeUrlParams({ shopping: next }, { shopping: 'all' });
+  };
 
   if (!activeBrandId) {
     return (
@@ -304,7 +319,10 @@ export default function ContentLibraryPage() {
   const drafts = current?.drafts ?? null;
   const counts = current?.counts ?? null;
   const inTab = drafts ? draftsInTab(drafts, tab) : [];
-  const listed = draftsCreatedIn(inTab, created);
+  const inPeriod = draftsCreatedIn(inTab, created);
+  // Shopping paths are an online shop's (shopping path, 00351).
+  const isShop = siteTypeOf(activeBrand ?? {}) === 'ecommerce';
+  const listed = isShop ? draftsByShopping(inPeriod, shoppingFilter) : inPeriod;
   // Picked rows still listed (a read may have moved some), never archived ones.
   const pickedIds = picked.brandId === activeBrandId ? picked.ids : new Set<string>();
   const pickedDrafts = listed.filter((draft) => pickedIds.has(draft.id) && !draft.archivedAt);
@@ -384,6 +402,27 @@ export default function ContentLibraryPage() {
             ))}
           </SelectContent>
         </Select>
+        {isShop && (
+          <Select
+            value={shoppingFilter}
+            onValueChange={(value) => changeShopping(value as ShoppingFilter)}
+            items={SHOPPING_FILTERS.map((filter) => ({
+              value: filter,
+              label: `${t('shopping.label')}: ${t(`shopping.filters.${filter}`)}`,
+            }))}
+          >
+            <SelectTrigger size="sm" aria-label={t('shopping.label')}>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent align="end">
+              {SHOPPING_FILTERS.map((filter) => (
+                <SelectItem key={filter} value={filter}>
+                  {t(`shopping.filters.${filter}`)}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
       </div>
 
       <Card className="py-0">
@@ -442,7 +481,7 @@ export default function ContentLibraryPage() {
             </div>
           ) : listed.length === 0 && inTab.length > 0 ? (
             <p className="px-6 py-12 text-center text-sm text-muted-foreground">
-              {t('created.empty')}
+              {inPeriod.length === 0 ? t('created.empty') : t('shopping.empty')}
             </p>
           ) : (
             <LibraryTable
@@ -451,6 +490,7 @@ export default function ContentLibraryPage() {
               actions={rowActions}
               cms={cms}
               selection={selection}
+              shopping={isShop}
             />
           )}
         </CardContent>

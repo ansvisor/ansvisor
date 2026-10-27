@@ -111,6 +111,40 @@ describe('getContentDrafts', () => {
     expect(counts).toMatchObject({ all: 1, published: 0, archived: 1 });
   });
 
+  it("reads each draft's shopping path as the last catalog sync's check left it (00352)", async () => {
+    const check = {
+      read_from: 'page',
+      checked_at: '2026-10-27T03:00:00Z',
+      categories: 1,
+      categories_linked: 1,
+      products: 5,
+      products_linked: 4,
+      bad: [{ id: 'p2', title: 'Storm Shell 2', state: 'sold_out' }],
+    };
+    rows = [
+      row(1),
+      { ...row(2), shopping_built: '2026-10-26T09:00:00Z', content_shopping_checks: null },
+      { ...row(3), shopping_built: '2026-10-26T09:00:00Z', content_shopping_checks: check },
+      {
+        ...row(4),
+        shopping_built: '2026-10-26T09:00:00Z',
+        content_shopping_checks: { ...check, bad: [] },
+      },
+    ];
+    const { drafts } = await getContentDrafts(BRAND);
+    expect(drafts.map((d) => d.shopping?.state)).toEqual(['none', 'unchecked', 'attention', 'ok']);
+    expect(drafts[2].shopping).toEqual({
+      state: 'attention',
+      readFrom: 'page',
+      checkedAt: '2026-10-27T03:00:00Z',
+      categories: 1,
+      categoriesLinked: 1,
+      products: 5,
+      productsLinked: 4,
+      bad: [{ id: 'p2', title: 'Storm Shell 2', state: 'sold_out' }],
+    });
+  });
+
   it('counts each tab on its own at the cap', async () => {
     rows = Array.from({ length: 500 }, (_, i) => row(i));
     const { drafts, counts } = await getContentDrafts(BRAND);
