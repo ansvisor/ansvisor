@@ -26,6 +26,7 @@ const CHECK: ShoppingCheck = {
     product('r', 'sold_out', false),
   ],
   site: 'https://www.shop.example/blog/boots',
+  merchantCenter: false,
 };
 
 describe('shoppingLinks', () => {
@@ -74,6 +75,11 @@ describe('shoppingLinks', () => {
     expect(read.bad.map((p) => p.title)).toEqual(['C']);
     // "products/d" is read beside the page: /blog/products/d, not the product.
     expect(shoppingLinks(['/products/a'], { ...CHECK, site: null }, 3).linked).toEqual([]);
+  });
+
+  it("passes on whether the brand has a Merchant Center account, for what's said", () => {
+    expect(shoppingLinks([], CHECK).merchantCenter).toBe(false);
+    expect(shoppingLinks([], { ...CHECK, merchantCenter: true }).merchantCenter).toBe(true);
   });
 
   it('asks for the number given, or all that sell when fewer do; none for 0', () => {

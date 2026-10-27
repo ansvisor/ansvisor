@@ -35,6 +35,11 @@ export interface ShoppingCheck {
    * page's address, else the brand's site; null when neither is known.
    */
   site: string | null;
+  /**
+   * The brand reads a Google Merchant Center account into its catalog: only
+   * then is a product said to be accepted by Merchant Center.
+   */
+  merchantCenter: boolean;
 }
 
 /** What a page's links do with its shopping path. */
@@ -50,6 +55,8 @@ export interface ShoppingLinks {
   want: number;
   /** The path's category pages. */
   categories: number;
+  /** The check's `merchantCenter`: whether "accepted by Merchant Center" is said. */
+  merchantCenter: boolean;
 }
 
 /** A link's key, a relative one read against `site`; null when it leads to no page. */
@@ -94,6 +101,7 @@ export function shoppingLinks(
     products: selling.length,
     want: Math.min(Math.max(0, n), selling.length),
     categories: check.categories.length,
+    merchantCenter: check.merchantCenter,
   };
 }
 

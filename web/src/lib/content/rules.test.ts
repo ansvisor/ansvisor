@@ -471,6 +471,7 @@ describe('shopping path rules (shopping path, part 6)', () => {
       item(4, 'Alpine', 'ok'),
     ],
     site: 'https://shop.example/blog/boots',
+    merchantCenter: true,
   };
   const shopRule = (key: string, value?: string) => {
     const found = activeRules(

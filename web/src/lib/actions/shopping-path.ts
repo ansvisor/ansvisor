@@ -2,6 +2,7 @@
 
 import { z } from 'zod';
 import { API_BASE_URL } from '@/config/api';
+import { MERCHANT_CENTER_KIND } from '@/lib/catalog';
 import { createClient } from '@/lib/supabase/server';
 import { jsonbBytes } from '@/lib/content/draft-inputs';
 import { variantStock } from '@/lib/content/feed-match';
@@ -381,10 +382,30 @@ async function pageSite(
 }
 
 /**
+ * Whether the brand reads a Google Merchant Center account into its catalog:
+ * only then does the check say a product is accepted by Merchant Center.
+ * None when it can't be read: the check then says less, never more.
+ */
+async function hasMerchantCenter(supabase: Client, brandId: string): Promise<boolean> {
+  const { data, error } = await supabase
+    .from('catalog_sources')
+    .select('id')
+    .eq('brand_id', brandId)
+    .eq('kind', MERCHANT_CENTER_KIND)
+    .limit(1);
+  if (error) {
+    console.error('Failed to read the brand’s catalog sources:', error.message);
+    return false;
+  }
+  return (data ?? []).length > 0;
+}
+
+/**
  * The draft's shopping path read against the catalog now (shopping path,
  * part 6): each of its products sold out, refused by Merchant Center, gone,
  * or fine; the ones removed from it or left out that no longer sell, in
- * case the page still links them; and the category pages. Read for the
+ * case the page still links them; the category pages; and whether the
+ * brand has a Merchant Center account to say they're accepted. Read for the
  * draft's own brand, whatever brand the tab has open. Null without a path;
  * throws when the draft or the catalog can't be read.
  */
@@ -407,7 +428,7 @@ export async function getShoppingCheck(draftId: string): Promise<ShoppingCheck |
     (id) => !inPath.has(id),
   );
   const ids = [...inPath, ...others].filter((id) => guid.safeParse(id).success);
-  const [products, variants, site] = await Promise.all([
+  const [products, variants, site, merchantCenter] = await Promise.all([
     readByIds(ids, (chunk, from, to) =>
       supabase
         .from('catalog_products')
@@ -428,6 +449,8 @@ export async function getShoppingCheck(draftId: string): Promise<ShoppingCheck |
         .range(from, to),
     ),
     pageSite(supabase, draft),
+    // Nothing to check, nothing to say about it: no catalog read.
+    ids.length ? hasMerchantCenter(supabase, brandId) : false,
   ]);
   // A refusal matters only for a variant in stock: the others are sold out anyway.
   const inStock = variants.filter((v) => variantStock(v.availability) === 'in');
@@ -493,6 +516,7 @@ export async function getShoppingCheck(draftId: string): Promise<ShoppingCheck |
       .filter((k): k is string => !!k),
     products: [...pathProducts, ...otherProducts],
     site,
+    merchantCenter,
   };
 }
 

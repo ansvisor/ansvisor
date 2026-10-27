@@ -199,6 +199,7 @@ describe('BeforePublish', () => {
       products: 4,
       want: 0,
       categories: 1,
+      merchantCenter: true,
       ...over,
     });
     const shoppingRow = () => rows().find((r) => r?.startsWith('Shopping links'));
@@ -246,6 +247,26 @@ describe('BeforePublish', () => {
       const none = rows().find((r) => r?.startsWith('Shopping links work'));
       expect(none).toContain('No product linked yet.');
       expect(none).not.toContain('category page');
+    });
+
+    it('says the products are accepted by Merchant Center only when the brand has it', async () => {
+      const summit = [product('Summit', 'ok')];
+      await render(quality(), {
+        shopping: links({ linked: summit, want: 1, merchantCenter: false }),
+      });
+      const one = rows().find((r) => r?.startsWith('Shopping links work'));
+      expect(one).toContain('1 product linked, in stock.');
+      expect(one).not.toContain('Merchant Center');
+
+      const two = [...summit, product('Ridge', 'ok')];
+      await render(quality(), { shopping: links({ linked: two, want: 2, merchantCenter: false }) });
+      expect(rows().find((r) => r?.startsWith('Shopping links work'))).toContain(
+        '2 products linked, in stock.',
+      );
+      await render(quality(), { shopping: links({ linked: two, want: 2 }) });
+      expect(rows().find((r) => r?.startsWith('Shopping links work'))).toContain(
+        '2 products linked, in stock and accepted by Merchant Center.',
+      );
     });
 
     it('says the catalog is being read, or couldn’t be, and shows no row without a path', async () => {

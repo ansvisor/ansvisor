@@ -112,6 +112,7 @@ export function IntegrationsSection() {
             icon={<ShoppingBag className="h-5 w-5 text-muted-foreground" />}
             authConfigEnv="COMPOSIO_GMC_AUTH_CONFIG_ID"
             hideUnavailable
+            comingSoon={t('merchantCenter.comingSoon')}
           >
             <MerchantCenterAccounts
               sources={catalogSources}
@@ -156,6 +157,11 @@ function IntegrationGroup({ title, children }: { title: string; children: ReactN
  * `hideUnavailable`: a newer integration's card isn't shown while its status
  * can't be read (an API older than the web), nor on the cloud while it isn't
  * set up there; a self-hosted server keeps the set-up line.
+ *
+ * `comingSoon`: while the server isn't set up for it, the card says Coming
+ * soon and this line instead, on the cloud too, with nothing to connect
+ * (Google Merchant Center, until Google approves the connection). Sources
+ * a brand added before stay in Product catalog, where they're removed.
  */
 function IntegrationCard({
   provider,
@@ -164,6 +170,7 @@ function IntegrationCard({
   icon,
   authConfigEnv,
   hideUnavailable = false,
+  comingSoon,
   children,
 }: {
   provider: IntegrationProvider;
@@ -172,6 +179,7 @@ function IntegrationCard({
   icon: ReactNode;
   authConfigEnv: string;
   hideUnavailable?: boolean;
+  comingSoon?: string;
   children?: ReactNode;
 }) {
   const t = useTranslations('settings');
@@ -216,7 +224,10 @@ function IntegrationCard({
     }
   };
 
-  if (hideUnavailable && (unreadable || (status === 'not_configured' && isCloud()))) return null;
+  const soon = comingSoon !== undefined && status === 'not_configured';
+  if (hideUnavailable && (unreadable || (status === 'not_configured' && isCloud() && !soon))) {
+    return null;
+  }
 
   return (
     <div className="space-y-4">
@@ -236,12 +247,17 @@ function IntegrationCard({
                   {t('integrations_connected')}
                 </Badge>
               )}
+              {soon && (
+                <Badge variant="secondary" className="bg-muted text-muted-foreground">
+                  {t('integrations_comingSoon')}
+                </Badge>
+              )}
             </div>
             <p className="text-xs text-muted-foreground truncate">{description}</p>
           </div>
         </div>
 
-        {status === null ? (
+        {soon ? null : status === null ? (
           <Skeleton className="h-8 w-24" />
         ) : status === 'not_configured' ? (
           <Badge variant="outline" className="text-muted-foreground shrink-0">
@@ -293,7 +309,9 @@ function IntegrationCard({
         )}
       </div>
 
-      {status === 'not_configured' && (
+      {soon && <p className="text-xs text-muted-foreground">{comingSoon}</p>}
+
+      {status === 'not_configured' && !soon && (
         <p className="text-xs text-muted-foreground">
           This server has no Composio credentials for {label}. Set{' '}
           <code className="rounded bg-muted px-1">COMPOSIO_API_KEY</code> and{' '}
