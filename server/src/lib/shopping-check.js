@@ -1,5 +1,8 @@
 import * as cheerio from 'cheerio';
 import supabaseAdmin from '../config/supabase.js';
+import { isBrandActive } from './active-subscriptions.js';
+import { onBrandDomain } from './audit/host.js';
+import { brandSite } from './catalog/category-pages.js';
 import { isInStock } from './catalog/stock.js';
 import { selectInChunks } from './chunked-in.js';
 import { linkKey } from './content-links.js';
@@ -20,6 +23,11 @@ import { readIn, readShoppingPath, refuses } from './shopping-path.js';
  * listings) or gone from the catalog. What it finds is kept per draft in
  * content_shopping_checks, for the Content Library's Shopping path column.
  *
+ * A live page is read only on the brand's site (brandSite), and only when
+ * it reads as the page: one with fewer than MIN_WORDS words (an empty
+ * shell, bot protection's page), or that links none of the path while its
+ * draft does, is read from its draft instead.
+ *
  * Only the path's products are checked: a product linked by hand from
  * outside the path isn't known to be one.
  */
@@ -33,6 +41,11 @@ export const MAX_LIVE_PAGES = 50;
 /** A live page's read: its links are in its first megabyte. */
 const PAGE_TIMEOUT_MS = 10_000;
 const PAGE_BYTES = 1024 * 1024;
+/**
+ * A live page with fewer words than this isn't the page: an empty shell, or
+ * bot protection's (as the Action Center's automatic checks read one).
+ */
+export const MIN_WORDS = 20;
 /** A check stops reading live pages after this, and reads the rest from their drafts. */
 export const LIVE_PAGES_DEADLINE_MS = 3 * 60 * 1000;
 
@@ -70,24 +83,44 @@ export function pageHrefs(html, base = null) {
   return hrefs;
 }
 
+/** A page's words outside its code (scripts, styles, frames). */
+export function pageWords(html) {
+  const $ = cheerio.load(String(html ?? ''));
+  $('script, style, noscript, template, iframe, svg').remove();
+  const body = $('body');
+  return (body.length ? body : $.root())
+    .text()
+    .split(/[^\p{L}\p{N}]+/u)
+    .filter(Boolean).length;
+}
+
 /**
  * Each product's state as the catalog has it now, by id: 'gone' (not in the
  * brand's catalog, or removed from it), 'sold_out' (no variant in stock),
  * 'refused' (Merchant Center refuses every variant in stock) or 'ok'; and
- * its page in the catalog (its link, else a variant's), for a product the
- * path keeps no link for.
+ * its page and title in the catalog (its link, else a variant's), for a
+ * product the path keeps neither for (one the person removed).
  *
- * @returns {Promise<{ states: Map<string, string>, pages: Map<string, string> }>}
+ * @returns {Promise<{ states: Map<string, string>, pages: Map<string, string>,
+ *   titles: Map<string, string> }>}
  */
 export async function productStates(db, brandId, ids) {
   const unique = [...new Set(ids)];
   const states = new Map(unique.map((id) => [id, 'gone']));
   const pages = new Map();
-  if (!unique.length) return { states, pages };
-  const products = await readIn(db, 'catalog_products', 'id, url, removed_at', 'id', unique, {
-    order: 'id',
-    more: (q) => q.eq('brand_id', brandId),
-  });
+  const titles = new Map();
+  if (!unique.length) return { states, pages, titles };
+  const products = await readIn(
+    db,
+    'catalog_products',
+    'id, title, url, removed_at',
+    'id',
+    unique,
+    {
+      order: 'id',
+      more: (q) => q.eq('brand_id', brandId),
+    },
+  );
   const live = products.filter((p) => !p.removed_at).map((p) => p.id);
   const variants = await readIn(
     db,
@@ -100,6 +133,7 @@ export async function productStates(db, brandId, ids) {
   for (const product of products) {
     const url = product.url ?? variants.find((v) => v.product_id === product.id && v.url)?.url;
     if (url) pages.set(product.id, url);
+    if (product.title) titles.set(product.id, product.title);
   }
   const inStock = variants.filter((v) => isInStock(v.availability));
   const issues = await readIn(
@@ -122,7 +156,7 @@ export async function productStates(db, brandId, ids) {
           : 'ok',
     );
   }
-  return { states, pages };
+  return { states, pages, titles };
 }
 
 /** A path's products and the ones the person removed or it left out: every id to read. */
@@ -143,9 +177,10 @@ export function pathProductIds(path) {
  * longer sell. A product the person removed or the path left out counts
  * only when it no longer sells: the page may still link it.
  *
- * @param {{ states: Map<string, string>, pages: Map<string, string> }} catalog
+ * @param {{ states: Map<string, string>, pages: Map<string, string>,
+ *   titles?: Map<string, string> }} catalog
  */
-export function linkCheck(hrefs, path, { states, pages }) {
+export function linkCheck(hrefs, path, { states, pages, titles = new Map() }) {
   const keys = new Set(hrefs.map((href) => linkKey(href)).filter(Boolean));
   const categories = [...new Set(path.categories.map((c) => linkKey(c.url)).filter(Boolean))];
   const inPath = new Set(path.products.map((p) => p.id));
@@ -156,7 +191,7 @@ export function linkCheck(hrefs, path, { states, pages }) {
       .filter((id) => !inPath.has(id))
       .map((id) => ({
         id,
-        title: leftOutTitles.get(id) ?? null,
+        title: leftOutTitles.get(id) ?? titles.get(id) ?? null,
         url: pages.get(id),
         inPath: false,
       })),
@@ -190,6 +225,11 @@ export function linkCheck(hrefs, path, { states, pages }) {
   };
 }
 
+/** Whether a check found any of the path's links: a category page, or a product it names. */
+export function linksPath(check) {
+  return check.categoriesLinked > 0 || check.productsLinked > 0 || check.bad.length > 0;
+}
+
 /** Where a draft is live: its CMS's address, or an optimized page's own, once published. */
 export function livePage(draft) {
   if (draft.status !== 'published') return null;
@@ -197,8 +237,12 @@ export function livePage(draft) {
   return typeof url === 'string' && /^https?:\/\//i.test(url) ? url : null;
 }
 
-/** A live page's links, or null when it can't be read (the draft's are read instead). */
-async function liveHrefs(url, readPage) {
+/**
+ * A live page's links, or null when it can't be read (the draft's are read
+ * instead): no answer, an error, a redirect off the brand's site, or too
+ * few words to be the page.
+ */
+async function liveHrefs(url, readPage, domains) {
   try {
     const page = await readPage(url, {
       timeoutMs: PAGE_TIMEOUT_MS,
@@ -206,9 +250,20 @@ async function liveHrefs(url, readPage) {
       truncate: true,
     });
     if (page.status >= 400) return null;
+    if (!onBrandDomain(page.url, domains)) return null;
+    if (pageWords(page.html) < MIN_WORDS) return null;
     return pageHrefs(page.html, page.url);
   } catch {
     return null;
+  }
+}
+
+/** The brand's site (brandSite), for the live pages read; none when it can't be read. */
+async function siteDomains(db, brandId) {
+  try {
+    return await brandSite(db, brandId);
+  } catch {
+    return [];
   }
 }
 
@@ -271,6 +326,7 @@ export async function checkShoppingLinks(
 ) {
   const started = Date.now();
   const site = await primarySite(db, brandId);
+  const domains = await siteDomains(db, brandId);
   const kept = new Set();
   let live = 0;
   let attention = 0;
@@ -290,12 +346,22 @@ export async function checkShoppingLinks(
     const rows = [];
     for (const { draft, path } of paths) {
       const url = livePage(draft);
-      const canRead = url && live < livePages && Date.now() - started < LIVE_PAGES_DEADLINE_MS;
-      const fromPage = canRead ? await liveHrefs(url, readPage) : null;
+      const canRead =
+        url &&
+        onBrandDomain(url, domains) &&
+        live < livePages &&
+        Date.now() - started < LIVE_PAGES_DEADLINE_MS;
+      const read = canRead ? await liveHrefs(url, readPage, domains) : null;
       if (canRead) live += 1;
       // A draft's relative link ("/products/x") is read against its page, else the brand's site.
       const base = url ?? draft.source_url ?? site;
-      const check = linkCheck(fromPage ?? pageHrefs(draft.body_html, base), path, catalog);
+      const inDraft = linkCheck(pageHrefs(draft.body_html, base), path, catalog);
+      const onPage = read ? linkCheck(read, path, catalog) : null;
+      // A live page that links none of the path while its draft does wasn't
+      // read as it is (a shell its script fills, a page served to bots): its
+      // draft is read.
+      const fromPage = Boolean(onPage) && (linksPath(onPage) || !linksPath(inDraft));
+      const check = fromPage ? onPage : inDraft;
       if (check.bad.length) attention += 1;
       kept.add(draft.id);
       rows.push({
@@ -333,7 +399,8 @@ let draining = null;
 /**
  * Checks a brand's pages after a catalog sync, behind the API's other work:
  * one brand at a time, and a brand synced again while it waits is checked
- * once. A failure is logged; the next sync checks again.
+ * once. A brand whose workspace's plan ended isn't checked (#1608). A
+ * failure is logged; the next sync checks again.
  */
 export function queueShoppingCheck(brandId, opts = {}) {
   queued.set(brandId, opts);
@@ -343,6 +410,8 @@ export function queueShoppingCheck(brandId, opts = {}) {
         const [[next, options]] = queued;
         queued.delete(next);
         try {
+          // A workspace whose plan ended gets no check: it reads live pages (#1608).
+          if (!(await isBrandActive(next))) continue;
           const result = await checkShoppingLinks(next, options);
           if (result.drafts || result.dropped) {
             logger.info({ brandId: next, ...result }, '[shopping-check] pages checked');
